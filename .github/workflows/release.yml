@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers on pushes to tags like v1.0.0, v1.1.0-beta, etc.
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create a GitHub Release
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22' # Specify the Go version you are using
+
+    - name: Get the version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Build for Linux (AMD64)
+      run: |
+        GOOS=linux GOARCH=amd64 go build -o ledit-linux-amd64 main.go
+        tar -czvf ledit-linux-amd64.tar.gz ledit-linux-amd64
+    - name: Build for Linux (ARM64)
+      run: |
+        GOOS=linux GOARCH=arm64 go build -o ledit-linux-arm64 main.go
+        tar -czvf ledit-linux-arm64.tar.gz ledit-linux-arm64
+
+    - name: Build for Windows (AMD64)
+      run: |
+        GOOS=windows GOARCH=amd64 go build -o ledit-windows-amd64.exe main.go
+        zip ledit-windows-amd64.zip ledit-windows-amd64.exe
+    - name: Build for macOS (AMD64)
+      run: |
+        GOOS=darwin GOARCH=amd64 go build -o ledit-darwin-amd64 main.go
+        tar -czvf ledit-darwin-amd64.tar.gz ledit-darwin-amd64
+    - name: Build for macOS (ARM64)
+      run: |
+        GOOS=darwin GOARCH=arm64 go build -o ledit-darwin-arm64 main.go
+        tar -czvf ledit-darwin-arm64.tar.gz ledit-darwin-arm64
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          ledit-linux-amd64.tar.gz
+          ledit-linux-arm64.tar.gz
+          ledit-windows-amd64.zip
+          ledit-darwin-amd64.tar.gz
+          ledit-darwin-arm64.tar.gz
+        name: Release ${{ steps.get_version.outputs.VERSION }}
+        tag_name: ${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ## Release ${{ steps.get_version.outputs.VERSION }}
+
+          This release includes the following binaries:
+          - `ledit-linux-amd64.tar.gz`
+          - `ledit-linux-arm64.tar.gz`
+          - `ledit-windows-amd64.zip`
+          - `ledit-darwin-amd64.tar.gz`
+          - `ledit-darwin-arm64.tar.gz`
+
+          For installation instructions, please refer to the `install.sh` script or the `GETTING_STARTED.md` documentation.
+        draft: false
+        prerelease: false

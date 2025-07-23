@@ -20,6 +20,7 @@ Features:
 - Detailed failure reporting with extracted reasons for quick diagnosis.
 - Clean output formatting with ANSI color codes for readability.
 - Test numbering is based on the current run's discovered test order.
+- Each test runs in its own isolated subdirectory within the 'testing' folder.
 
 This script is a Python replacement for the original test.sh script,
 providing more robust state management, clearer output, and enhanced error handling.
@@ -94,6 +95,9 @@ Examples:
 
   View available tests and their numbers:
     {sys.argv[0]} --list-tests
+
+  Run tests and keep the 'testing' directory for inspection (e.g., after failures):
+    {sys.argv[0]} --keep-testing-dir
 """
     )
     parser.add_argument(
@@ -116,18 +120,24 @@ Examples:
         action='store_true',
         help="List all discovered tests and their assigned numbers, then exit."
     )
+    parser.add_argument(
+        '--keep-testing-dir',
+        action='store_true',
+        help="Do not remove the 'testing' directory after tests complete. Useful for debugging failures."
+    )
     args = parser.parse_args()
     
     # Log parsed arguments for debugging
-    logging.debug(f"Parsed arguments: single={args.single}, test_number={args.test_number}, list_tests={args.list_tests}")
+    logging.debug(f"Parsed arguments: single={args.single}, test_number={args.test_number}, list_tests={args.list_tests}, keep_testing_dir={args.keep_testing_dir}")
 
     model_name = args.model
     # If -t is provided, implicitly enable single_mode.
     single_mode = args.single or (args.test_number is not None)
     test_number_arg = args.test_number
     list_tests_only = args.list_tests
+    keep_testing_dir = args.keep_testing_dir
 
-    logging.debug(f"Calculated modes: single_mode={single_mode}, test_number_arg={test_number_arg}, list_tests_only={list_tests_only}")
+    logging.debug(f"Calculated modes: single_mode={single_mode}, test_number_arg={test_number_arg}, list_tests_only={list_tests_only}, keep_testing_dir={keep_testing_dir}")
 
     # --- 0. SETUP ---
     print("--- 0. SETUP: Cleaning up and building the tool ---")
@@ -142,7 +152,9 @@ Examples:
     if testing_dir.exists():
         print(f"Removing existing '{testing_dir}' directory...")
         shutil.rmtree(testing_dir)
-    
+    # Create the main testing directory. Individual test directories will be created inside it.
+    testing_dir.mkdir()
+
     # Run go build in project root to compile the 'ledit' tool
     print("Building the 'ledit' tool...")
     try:
@@ -150,11 +162,12 @@ Examples:
         build_result = subprocess.run(
             ['go', 'build'], 
             check=True, 
-            cwd=project_root, 
+            cwd=project_root, # Build in the project root
             capture_output=True, 
             text=True
         )
         print(f"Go build successful:\n{build_result.stdout.strip()}")
+        subprocess.run(['cp', 'ledit', 'testing/'], check=True, cwd=project_root) # Ensure go.mod is tidy
     except subprocess.CalledProcessError as e:
         logging.error(f"{RED}Error: 'go build' failed.{RESET}")
         logging.error(f"STDOUT:\n{e.stdout}")
@@ -164,9 +177,9 @@ Examples:
         logging.error(f"{RED}Error: 'go' command not found. Is Go installed and in your PATH?{RESET}")
         sys.exit(1)
 
-    # Create the testing directory and change into it for test execution
-    testing_dir.mkdir()
-    os.chdir(testing_dir)
+
+    # IMPORTANT: We no longer change into testing_dir here.
+    # Each test will run in its own subdirectory within testing_dir.
     
     # Ensure the test_scripts directory exists, though it should if scripts are present
     test_scripts_dir.mkdir(exist_ok=True)
@@ -273,21 +286,36 @@ Examples:
     # --- Test Execution & Monitoring ---
     results = OrderedDict() # Stores final results: test_name -> 'PASS'/'FAIL'/'FAIL (Timeout)'
     failure_reasons = {}    # Stores detailed reasons for failed tests
-    processes = {}          # Dictionary to track active subprocesses: pid -> {process, name, start_time, stdout_file, stderr_file}
+    processes = {}          # Dictionary to track active subprocesses: pid -> {process, name, start_time, stdout_file, stderr_file, stdout_file_path, stderr_file_path, test_workspace_path}
     
     # Start all selected tests as subprocesses
     for test in selected_tests_for_execution:
         test_name = test['name']
         print(f"--- Starting test: {test_name} ---")
         
+        # Create a unique directory for this test to ensure isolation
+        current_test_workspace = testing_dir / test_name
+        current_test_workspace.mkdir(parents=True, exist_ok=True)
+        logging.debug(f"Created test workspace: {current_test_workspace}")
+
         # Construct the command to run the test logic within the shell script
         # The 'run_test_logic' function is expected to be defined in each test_*.sh script.
+        # We don't pass the ledit path explicitly to the script, but modify PATH for the subprocess.
         cmd = f". {test['path'].resolve()} && run_test_logic '{model_name}'"
         
-        # Redirect stdout/stderr to temporary files to prevent blocking pipes
-        # and allow reading output after process completion.
-        stdout_file = open(f"{test_name}.stdout", "w")
-        stderr_file = open(f"{test_name}.stderr", "w")
+        # Redirect stdout/stderr to temporary files within the test's workspace
+        stdout_file_path = current_test_workspace / f"{test_name}.stdout"
+        stderr_file_path = current_test_workspace / f"{test_name}.stderr"
+
+        stdout_file = open(stdout_file_path, "w")
+        stderr_file = open(stderr_file_path, "w")
+
+        # Prepare environment for the subprocess: add project_root to PATH
+        # This allows the test scripts to find the 'ledit' executable by name
+        # (e.g., `ledit init`) even when run from a subdirectory.
+        env = os.environ.copy()
+        env['PATH'] = str(project_root) + os.pathsep + env.get('PATH', '')
+        logging.debug(f"PATH for {test_name}: {env['PATH']}")
 
         process = subprocess.Popen(
             cmd,
@@ -295,6 +323,8 @@ Examples:
             executable='/bin/bash', # Ensure bash is used for sourcing
             stdout=stdout_file,
             stderr=stderr_file,
+            cwd=current_test_workspace, # Run the test script within its dedicated directory
+            env=env, # Pass the modified environment
         )
         
         processes[process.pid] = {
@@ -303,6 +333,9 @@ Examples:
             'start_time': time.time(),
             'stdout_file': stdout_file,
             'stderr_file': stderr_file,
+            'stdout_file_path': stdout_file_path, # Store path for reading later
+            'stderr_file_path': stderr_file_path, # Store path for reading later
+            'test_workspace_path': current_test_workspace, # Store for debugging/info
         }
         results[test_name] = 'RUNNING' # Initial status
 
@@ -349,12 +382,12 @@ Examples:
                 stdout = ""
                 stderr = ""
                 try:
-                    with open(f"{info['name']}.stdout", "r") as f:
+                    with open(info['stdout_file_path'], "r") as f:
                         stdout = f.read()
-                    with open(f"{info['name']}.stderr", "r") as f:
+                    with open(info['stderr_file_path'], "r") as f:
                         stderr = f.read()
                 except FileNotFoundError:
-                    logging.warning(f"Output files for {info['name']} not found. Could not retrieve detailed failure reason.")
+                    logging.warning(f"Output files for {info['name']} not found at {info['stdout_file_path']}. Could not retrieve detailed failure reason.")
 
                 # Extract and store a concise failure reason
                 if results[info['name']] != 'FAIL (Timeout)': # Don't overwrite timeout reason
@@ -362,7 +395,7 @@ Examples:
                 
                 # Print full output for failed tests
                 if stdout or stderr:
-                    print(f"--- Output for failed test: {info['name']} ---")
+                    print(f"--- Output for failed test: {info['name']} (in {info['test_workspace_path']}) ---")
                     if stdout:
                         print("--- STDOUT ---")
                         print(stdout)
@@ -371,10 +404,10 @@ Examples:
                         print(stderr)
                     print("------------------------------------------")
 
-            # Clean up temporary output files
+            # Clean up temporary output files (stdout/stderr files)
             try:
-                os.remove(f"{info['name']}.stdout")
-                os.remove(f"{info['name']}.stderr")
+                os.remove(info['stdout_file_path'])
+                os.remove(info['stderr_file_path'])
             except OSError as e:
                 logging.warning(f"Could not remove temporary output files for {info['name']}: {e}")
             
@@ -387,9 +420,17 @@ Examples:
     print("--------------------------------")
 
     # --- CLEANUP ---
-    print("--- CLEANUP: Returning to parent directory ---")
-    # Change back to the project root directory
-    os.chdir(project_root)
+    print("--- CLEANUP: Removing testing artifacts ---")
+    # The script remains in project_root throughout execution.
+    # Clean up the main testing directory which contains all sub-test directories.
+    if not keep_testing_dir:
+        if testing_dir.exists():
+            print(f"Removing '{testing_dir}' directory...")
+            shutil.rmtree(testing_dir)
+        else:
+            print(f"'{testing_dir}' directory not found, no cleanup needed.")
+    else:
+        print(f"Skipping cleanup of '{testing_dir}' directory as --keep-testing-dir flag was set.")
     print("----------------------------------------------------")
     print()
 

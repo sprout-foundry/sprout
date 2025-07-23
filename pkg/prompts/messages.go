@@ -5,12 +5,44 @@ import (
 	"time"
 )
 
-// --- General CLI Messages ---
-
+// --- Config Prompts ---
 func ConfigLoadFailed(err error) string {
-	return fmt.Sprintf("Failed to load configuration: %v. Please run 'ledit init'.", err)
+	return fmt.Sprintf("Failed to load config: %v. Using default values.", err)
 }
 
+func EnterEditingModel(defaultModel string) string {
+	return fmt.Sprintf("Enter your preferred editing model (e.g., %s): ", defaultModel)
+}
+
+func EnterSummaryModel(defaultModel string) string {
+	return fmt.Sprintf("Enter your preferred summary model (e.g., %s): ", defaultModel)
+}
+
+func EnterWorkspaceModel(defaultModel string) string {
+	return fmt.Sprintf("Enter your preferred workspace analysis model (e.g., %s): ", defaultModel)
+}
+
+func EnterOrchestrationModel(defaultModel string) string {
+	return fmt.Sprintf("Enter your preferred orchestration model (e.g., %s): ", defaultModel)
+}
+
+func TrackGitPrompt() string {
+	return "Automatically track changes with Git? (yes/no): "
+}
+
+func EnableSecurityChecksPrompt() string {
+	return "Enable checking for leaked keys and passwords in all files?\n Note that this can take a long time when enabled (yes/no): "
+}
+
+func NoConfigFound() string {
+	return "No config found. Creating a new one."
+}
+
+func ConfigSaved(path string) string {
+	return fmt.Sprintf("Config saved to %s", path)
+}
+
+// --- Code Generation Prompts ---
 func InstructionsRequired() string {
 	return "Instructions are required for the 'code' command. Please provide a description of the changes you want to make."
 }
@@ -46,7 +78,7 @@ func GeneratedSetupScriptHeader() string {
 }
 
 func ScriptSeparator() string {
-	return "--------------------------------------------"
+	return "---------------"
 }
 
 func RunningSetupScript() string {
@@ -143,8 +175,7 @@ func LLMMaxContextRequestsReached() string {
 	return "Maximum number of context requests reached. Forcing code generation."
 }
 
-// --- Editor Messages ---
-
+// --- Workspace Prompts ---
 func LoadingWorkspaceData() string {
 	return "--- Loading in workspace data ---"
 }
@@ -154,9 +185,19 @@ func URLFetchError(url string, err error) string {
 }
 
 func FileLoadError(path string, err error) string {
-	return fmt.Sprintf("Error loading content from path %s: %v. Continuing without it.\n", path, err)
+	return fmt.Sprintf("Could not load content from path %s: %v. Continuing without it.\n", path, err)
 }
 
+// Renamed and updated prompt for security checks
+func PerformingSecurityCheck() string {
+	return "Performing regex-based security check for leaked credential patterns. This may take a moment..."
+}
+
+func SkippingLLMSummarizationDueToSecurity(filename string) string {
+	return fmt.Sprintf("File %s contains confirmed security concerns. Skipping LLM summarization.", filename)
+}
+
+// --- Editor Prompts ---
 func ModelReturned(modelName, content string) string {
 	return fmt.Sprintf("%s model returned:\n%s\n", modelName, content)
 }
@@ -208,27 +249,29 @@ func SearchError(query string, err error) string {
 // --- LLM API Messages ---
 
 func TokenEstimate(tokens int, modelName string) string {
-	return fmt.Sprintf("This request will take approximately %d tokens with model %s. \n", tokens, modelName)
+	return fmt.Sprintf("Estimated tokens for %s: %d\n", modelName, tokens)
 }
 
 func TokenLimitWarning(currentTokens, defaultLimit int) string {
-	return fmt.Sprintf("NOTE: This request at %d tokens is over the default token limit of %d, do you want to continue? (y/n): ", currentTokens, defaultLimit)
+	return fmt.Sprintf("Warning: Current context (%d tokens) exceeds default token limit (%d tokens). This may lead to truncated responses.", currentTokens, defaultLimit)
 }
 
+// --- General User Interaction Prompts ---
 func OperationCancelled() string {
-	return "Operation cancelled by user."
+	return "Operation cancelled."
 }
 
 func ContinuingRequest() string {
-	return "Ok, continuing with request\n:"
+	return "Continuing request..."
 }
 
+// --- LLM API Error Prompts ---
 func APIKeyError(err error) string {
-	return fmt.Sprintf("Error getting API key: %v\n", err)
+	return fmt.Sprintf("API Key error: %v", err)
 }
 
 func RequestMarshalError(err error) string {
-	return fmt.Sprintf("Error marshaling request body: %v\n", err)
+	return fmt.Sprintf("Error marshaling request: %v\n", err)
 }
 
 func RequestCreationError(err error) string {
@@ -260,53 +303,23 @@ func NoOrchestrationModel(modelName string) string {
 }
 
 func ProviderNotRecognized() string {
-	return "Provider not recognized, falling back to local Ollama model."
+	return "LLM provider not recognized."
 }
 
 func LLMResponseError(err error) string {
-	return fmt.Sprintf("\nError getting LLM response: %v\n", err)
+	return fmt.Sprintf("Error getting LLM response: %v", err)
 }
 
-// --- Config Messages ---
-
+// --- System Info Prompts ---
 func MemoryDetectionError(defaultModel string, err error) string {
 	return fmt.Sprintf("Could not determine system memory, defaulting to %s: %v", defaultModel, err)
 }
 
 func SystemMemoryFallback(gb int, model string) string {
-	return fmt.Sprintf("System memory: %d GB, using %s for local fallback", gb, model)
+	return fmt.Sprintf("Detected %dGB of system memory. Falling back to %s.", gb, model)
 }
 
-func EnterEditingModel(defaultModel string) string {
-	return fmt.Sprintf("Enter the editing model or press enter to use default (e.g., openai:gpt-4o) [default: %s]: ", defaultModel)
-}
-
-func EnterSummaryModel(defaultModel string) string {
-	return fmt.Sprintf("Enter the summary model or press enter to use default (used for file summaries) [default: %s]: ", defaultModel)
-}
-
-func EnterWorkspaceModel(defaultModel string) string {
-	return fmt.Sprintf("Enter the workspace model or press enter to use default (used for overall workspace analysis) [default: %s]: ", defaultModel)
-}
-
-func EnterOrchestrationModel(defaultModel string) string {
-	return fmt.Sprintf("Enter the orchestration model or press enter to use default (used for planning complex changes) [default: %s]: ", defaultModel)
-}
-
-func TrackGitPrompt() string {
-	return "Automatically track changes to git when files are modified? (yes/no): "
-}
-
-func NoConfigFound() string {
-	return "No configuration file found. Initializing..."
-}
-
-func ConfigSaved(path string) string {
-	return fmt.Sprintf("Configuration saved to %s", path)
-}
-
-// --- Orchestrator Messages ---
-
+// --- Orchestration Prompts ---
 func LeditDirCreationError(err error) string {
 	return fmt.Sprintf("Could not create .ledit directory: %v", err)
 }
@@ -320,7 +333,7 @@ func UnfinishedPlanFound() string {
 }
 
 func ContinueOrchestrationPrompt() string {
-	return "Do you want to continue where you left off? (y/n): "
+	return "Do you want to continue where you left off?"
 }
 
 func ResumingOrchestration() string {
@@ -336,7 +349,7 @@ func GenerateRequirementsFailed(err error) string {
 }
 
 func EmptyOrchestrationPlan() string {
-	return "The orchestration plan is empty. Nothing to do."
+	return "LLM returned an empty orchestration plan. Nothing to do."
 }
 
 func GeneratedPlanHeader() string {
@@ -344,7 +357,7 @@ func GeneratedPlanHeader() string {
 }
 
 func PlanStep(index int, filepath, instruction string) string {
-	return fmt.Sprintf("%d. File: %s\n   Instruction: %s", index+1, filepath, instruction)
+	return fmt.Sprintf("  %d. File: %s, Instruction: %s", index+1, filepath, instruction)
 }
 
 func ApplyPlanPrompt() string {
@@ -356,33 +369,31 @@ func OrchestrationCancelled() string {
 }
 
 func OrchestrationError(err error) string {
-	return fmt.Sprintf("Error during orchestration: %v", err)
+	return fmt.Sprintf("Orchestration failed: %v", err)
 }
 
 func OrchestrationFinishedSuccessfully() string {
-	return "Orchestration finished successfully."
+	return "Orchestration finished successfully!"
 }
-
-// --- Requirement Processor Messages ---
 
 func SkippingCompletedStep(instruction string) string {
 	return fmt.Sprintf("Skipping completed step: %s", instruction)
 }
 
 func RetryingFailedStep(instruction string) string {
-	return fmt.Sprintf("\n--- Retrying Failed Step: %s ---", instruction)
+	return fmt.Sprintf("Retrying failed step: %s", instruction)
 }
 
 func ExecutingStep(instruction string) string {
-	return fmt.Sprintf("\n--- Executing Step: %s ---", instruction)
+	return fmt.Sprintf("Executing step: %s", instruction)
 }
 
 func ProcessingFile(filepath string) string {
-	return fmt.Sprintf("File: %s", filepath)
+	return fmt.Sprintf("Processing file: %s", filepath)
 }
 
 func RetryAttempt(attempt, maxAttempts int, instruction string) string {
-	return fmt.Sprintf("\n--- Retry Attempt %d/%d for: %s ---", attempt, maxAttempts, instruction)
+	return fmt.Sprintf("Retry attempt %d/%d for instruction: %s", attempt, maxAttempts, instruction)
 }
 
 func ProcessInstructionFailed(filepath string, err error) string {
@@ -394,11 +405,11 @@ func ProcessRequirementFailed(filepath string, err error) string {
 }
 
 func SetupStepCompleted(instruction string) string {
-	return fmt.Sprintf("--- Setup Step Completed: %s ---", instruction)
+	return fmt.Sprintf("Setup step completed: %s", instruction)
 }
 
 func SetupFailedAttempt(attempt int, err error) string {
-	return fmt.Sprintf("--- Setup failed on attempt %d. Error: %v ---", attempt, err)
+	return fmt.Sprintf("Setup failed on attempt %d: %v", attempt, err)
 }
 
 func ValidationFailureContextSetupScriptFailed(err error) string {
@@ -418,11 +429,11 @@ func StepFailedAfterAttempts(instruction string, maxAttempts int, err error) str
 }
 
 func GeneratedSearchQuery(query string) string {
-	return fmt.Sprintf("--- Generated search query for grounding: \"%s\" ---", query)
+	return fmt.Sprintf("Generated search query: \"%s\"", query)
 }
 
 func SearchQueryGenerationWarning(err error) string {
-	return fmt.Sprintf("Warning: Failed to generate search query for grounding: %v", err)
+	return fmt.Sprintf("Warning: Failed to generate search query: %v", err)
 }
 
 func AddedSearchGrounding(query string) string {
@@ -430,23 +441,17 @@ func AddedSearchGrounding(query string) string {
 }
 
 func AddingValidationFailureContext() string {
-	return "--- Adding validation failure context to retry prompt ---"
+	return "Adding validation failure context to LLM request..."
 }
 
 func RetryPromptWithDiff(originalInstruction, filepath, validationError, lastLLMResponse string) string {
-	return fmt.Sprintf(
-		"The previous attempt to apply the instruction \"%s\" to file \"%s\" failed validation. The validation error was:\n\n%s\n\nHere is the diff of the changes from the last attempt that produced the failing code:\n\n---\n%s\n---\n\nPlease analyze the error and the previous diff, then provide a corrected version of the code, the setup script, or the validation script. The original instruction was: \"%s\"",
-		originalInstruction, filepath, validationError, lastLLMResponse, originalInstruction,
-	)
+	return fmt.Sprintf("The previous attempt to apply the instruction '%s' to file '%s' failed with validation error: %s\n\nHere was the last LLM response:\n```\n%s\n```\n\nPlease provide the corrected code for '%s' or a new plan to address the issue.", originalInstruction, filepath, validationError, lastLLMResponse, filepath)
 }
 
 func RetryPromptWithoutDiff(originalInstruction, filepath, validationError string) string {
-	return fmt.Sprintf(
-		"The previous attempt to apply the instruction \"%s\" to file \"%s\" failed validation. The validation error was:\n\n%s\n\nPlease analyze the error, then provide a corrected version of the code, the setup script, or the validation script. The original instruction was: \"%s\"",
-		originalInstruction, filepath, validationError, originalInstruction,
-	)
+	return fmt.Sprintf("The previous attempt to apply the instruction '%s' to file '%s' failed with validation error: %s\n\nPlease provide the corrected code for '%s' or a new plan to address the issue.", originalInstruction, filepath, validationError, filepath)
 }
 
 func AllOrchestrationStepsCompleted() string {
-	return "All orchestration steps completed successfully."
+	return "All orchestration steps completed."
 }

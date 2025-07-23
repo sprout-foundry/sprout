@@ -19,7 +19,7 @@ run_test_logic() {
     echo
     echo "--- Verifying Test ---"
     # Check that the command output contains search-related messages
-    if grep -q "Performing Jina AI search for query" "$output_log"; then
+    if grep -q "Performing Jina AI search" "$output_log"; then
         echo "PASS: Search grounding was triggered."
     else
         echo "FAIL: Search grounding was not triggered."

@@ -9,7 +9,7 @@ import (
 
 func main() {
 	// Get the logger instance
-	logger := utils.GetLogger(false)
+	logger := utils.GetLogger(true)
 	// Defer closing the logger to ensure all buffered logs are written
 	defer func() {
 		if err := logger.Close(); err != nil {

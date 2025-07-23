@@ -24,7 +24,7 @@ var (
 
 // GetLogger returns the singleton instance of Logger.
 // It initializes the logger with a file handler that rotates logs.
-func GetLogger(userInteractionEnabled bool) *Logger {
+func GetLogger(skipPrompts bool) *Logger {
 	once.Do(func() {
 		logFile := &lumberjack.Logger{
 			Filename:   ".ledit/workspace.log",
@@ -35,7 +35,7 @@ func GetLogger(userInteractionEnabled bool) *Logger {
 		}
 		globalLogger = &Logger{
 			logger:                 log.New(logFile, "", log.LstdFlags),
-			userInteractionEnabled: userInteractionEnabled,
+			userInteractionEnabled: !skipPrompts,
 		}
 	})
 	return globalLogger
@@ -88,12 +88,14 @@ func (w *Logger) LogError(err error) {
 // AskForConfirmation prompts the user with a message and waits for a 'yes' or 'no' response.
 // It returns true for 'yes' and false for 'no'.
 func (w *Logger) AskForConfirmation(prompt string, required bool) bool {
-	if !w.userInteractionEnabled && required {
-		w.LogUserInteraction("Skipping confirmation in non-interactive mode.")
-		os.Exit(1) // Exit if confirmation is required but user interaction is disabled
-	}
+	// if !w.userInteractionEnabled && required {
+	// 	w.Log("User interaction is disabled, but confirmation is required.")
+	// 	w.Log(fmt.Sprintf("We were going to ask the user: '%s'", prompt))
+	// 	w.Log("Exiting due to lack of confirmation in prompt-skipping mode.")
+	// 	os.Exit(1) // Exit if confirmation is required but user interaction is disabled
+	// }
 	if !w.userInteractionEnabled {
-		w.LogUserInteraction("Skipping user confirmation in non-interactive mode.")
+		w.Log("Skipping user confirmation in non-interactive mode.")
 		return true // Default to true if not interactive
 	}
 	reader := bufio.NewReader(os.Stdin)

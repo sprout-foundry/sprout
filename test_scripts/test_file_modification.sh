@@ -17,7 +17,7 @@ run_test_logic() {
     original_file1_content=$(cat file1.txt)
 
     # Run ledit again. It should use the cached info for other files but re-analyze script.py.
-    ../ledit code "In file1.txt, write a comment describing what the python script does now. #WORKSPACE" --skip-prompt -m "$model_name"
+    ../ledit code "In file1.txt, write a comment describing what the python script does now. #WORKSPACE" -m "$model_name" --non-interactive  --skip-prompt
 
     echo
     echo "--- Verifying Test ---"

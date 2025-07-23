@@ -29,8 +29,9 @@ type Config struct {
 	EmbeddingModel           string `json:"embedding_model"`     // New field for embeddings
 	LocalModel               string `json:"local_model"`
 	TrackWithGit             bool   `json:"track_with_git"`
-	SkipPrompt               bool   `json:"-"` // Internal use, not saved to config
-	Interactive              bool   `json:"-"` // Internal use, not saved to config
+	EnableSecurityChecks     bool   `json:"enable_security_checks"` // New field for security checks
+	SkipPrompt               bool   `json:"-"`                      // Internal use, not saved to config
+	Interactive              bool   `json:"-"`                      // Internal use, not saved to config
 	OllamaServerURL          string `json:"ollama_server_url"`
 	OrchestrationMaxAttempts int    `json:"orchestration_max_attempts"` // New field for max attempts
 }
@@ -102,6 +103,8 @@ func (cfg *Config) setDefaultValues() {
 	if cfg.LocalModel == "" {
 		cfg.LocalModel = getLocalModel(cfg.SkipPrompt) // Set local model based on system memory
 	}
+	// Ensure EnableSecurityChecks is explicitly set to false if not present in loaded config
+	cfg.EnableSecurityChecks = true
 }
 
 func loadConfig(filePath string) (*Config, error) {
@@ -111,13 +114,15 @@ func loadConfig(filePath string) (*Config, error) {
 	}
 	var cfg Config
 	// Provide default values for new fields if they are missing in older configs
+	// These defaults will be overridden if the fields exist in the JSON.
 	cfg.WorkspaceModel = ""                        // Default to empty, will fall back to SummaryModel
 	cfg.OllamaServerURL = "http://localhost:11434" // Default Ollama URL
+	cfg.EnableSecurityChecks = false               // Default to false for existing configs
 
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
-	// Use WorkspaceModel if defined, otherwise fall back to SummaryModel
+	// Use setDefaultValues to ensure all fields have a value, especially new ones not in older configs.
 	cfg.setDefaultValues()
 	return &cfg, nil
 }
@@ -170,6 +175,10 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 	autoTrackGitStr, _ := reader.ReadString('\n')
 	autoTrackGit := strings.TrimSpace(strings.ToLower(autoTrackGitStr)) == "yes"
 
+	fmt.Print(prompts.EnableSecurityChecksPrompt()) // New prompt for security checks
+	enableSecurityChecksStr, _ := reader.ReadString('\n')
+	enableSecurityChecks := strings.TrimSpace(strings.ToLower(enableSecurityChecksStr)) == "yes"
+
 	cfg := &Config{
 		EditingModel:             editingModel,
 		SummaryModel:             summaryModel,
@@ -177,6 +186,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		OrchestrationModel:       orchestrationModel,
 		LocalModel:               getLocalModel(skipPrompt),
 		TrackWithGit:             autoTrackGit,
+		EnableSecurityChecks:     enableSecurityChecks, // Set from user input
 		OllamaServerURL:          "http://localhost:11434",
 		EmbeddingModel:           "mxbai-embed-large", // Default embedding model
 		OrchestrationMaxAttempts: 6,                   // Default max attempts for orchestration

@@ -24,7 +24,9 @@ func GetCodeGenMessages() []Message {
 			Role: "system",
 			Content: "You are an assistant that can generate updated code based on provided instructions. " +
 				"Provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
-				"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n",
+				"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
+				"The syntax of the code blocks must exactly match these instructions and the code must be complete. " +
+				"ONLY make the changes that are necessary to satisfy the instructions.\n",
 		},
 	}
 }
@@ -36,6 +38,8 @@ func GetCodeOrRequestMessages() []Message {
 			Content: "You are an assistant that can generate updated code based on provided instructions. You have two response options:\n\n" +
 				"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
 				"    For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
+				"    If you are generating code, the syntax of the code blocks must exactly match these instructions and the code must be complete. " +
+				"    If you are generating code, ONLY make the changes that are necessary to satisfy the instructions.\n\n" +
 				"2.  **Request Context:** *do not make guesses* If you need more information, respond *only* with a JSON array of context requests with no other text. The required format is:\n" +
 				"    `{\"context_requests\":[{ \"type\": \"TYPE\", \"query\": \"QUERY\" }]}`\n" +
 				"    -   `type`: Can be `search` (web search), `user_prompt` (ask the user a question), `file` (request file content, needs to be a filename, otherwise ask the user), or `shell` (request a shell command execution).\n" +

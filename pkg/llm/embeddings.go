@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math" // Import math for dot product and magnitude
 	"net/http"
 
 	"ledit/pkg/config"
@@ -37,8 +38,8 @@ func GenerateEmbedding(input string, cfg *config.Config) ([]float64, error) {
 		return nil, fmt.Errorf("failed to marshal embedding request: %w", err)
 	}
 
-	// Assuming ollama is running on localhost:11434
-	resp, err := http.Post("http://localhost:11434/api/embed", "application/json", bytes.NewBuffer(jsonData))
+	// Use cfg.OllamaServerURL for the Ollama API endpoint
+	resp, err := http.Post(cfg.OllamaServerURL+"/api/embed", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call ollama embedding api: %w. Make sure ollama is running and the model '%s' is pulled", err, embeddingModel)
 	}
@@ -55,4 +56,30 @@ func GenerateEmbedding(input string, cfg *config.Config) ([]float64, error) {
 	}
 
 	return embResp.Embedding, nil
+}
+
+// CosineSimilarity calculates the cosine similarity between two vectors.
+func CosineSimilarity(vec1, vec2 []float64) (float64, error) {
+	if len(vec1) != len(vec2) {
+		return 0.0, fmt.Errorf("vectors must have the same dimension")
+	}
+
+	dotProduct := 0.0
+	magnitude1 := 0.0
+	magnitude2 := 0.0
+
+	for i := 0; i < len(vec1); i++ {
+		dotProduct += vec1[i] * vec2[i]
+		magnitude1 += vec1[i] * vec1[i]
+		magnitude2 += vec2[i] * vec2[i]
+	}
+
+	magnitude1 = math.Sqrt(magnitude1)
+	magnitude2 = math.Sqrt(magnitude2)
+
+	if magnitude1 == 0 || magnitude2 == 0 {
+		return 0.0, fmt.Errorf("one or both vectors have zero magnitude")
+	}
+
+	return dotProduct / (magnitude1 * magnitude2), nil
 }

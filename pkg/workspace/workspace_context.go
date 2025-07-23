@@ -60,6 +60,9 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 				if fileInfo.Exports != "" {
 					b.WriteString(fmt.Sprintf("Exports: %s\n", fileInfo.Exports))
 				}
+				if len(fileInfo.SecurityConcerns) > 0 { // New: Add security concerns
+					b.WriteString(fmt.Sprintf("Security Concerns: %s\n", strings.Join(fileInfo.SecurityConcerns, ", ")))
+				}
 				b.WriteString("\n")
 				fullContextAdded = true // Mark as added even if only summary is provided due to size
 				continue
@@ -73,7 +76,11 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 
 			lang := getLanguageFromFilename(filePath)
 			b.WriteString(fmt.Sprintf("%s\n", filePath))
-			b.WriteString(fmt.Sprintf("```%s\n%s\n```\n\n", lang, string(content)))
+			b.WriteString(fmt.Sprintf("```%s\n%s\n```\n", lang, string(content))) // Added newline after code block
+			if len(fileInfo.SecurityConcerns) > 0 { // New: Add security concerns
+				b.WriteString(fmt.Sprintf("Security Concerns: %s\n", strings.Join(fileInfo.SecurityConcerns, ", ")))
+			}
+			b.WriteString("\n") // Added newline after security concerns
 			fullContextAdded = true
 		}
 	}
@@ -96,6 +103,9 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 			b.WriteString(fmt.Sprintf("Summary: %s\n", fileInfo.Summary))
 			if fileInfo.Exports != "" {
 				b.WriteString(fmt.Sprintf("Exports: %s\n", fileInfo.Exports))
+			}
+			if len(fileInfo.SecurityConcerns) > 0 { // New: Add security concerns
+				b.WriteString(fmt.Sprintf("Security Concerns: %s\n", strings.Join(fileInfo.SecurityConcerns, ", ")))
 			}
 			b.WriteString("\n")
 			summaryContextAdded = true

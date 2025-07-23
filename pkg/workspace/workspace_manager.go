@@ -4,23 +4,36 @@ import (
 	"fmt"
 	"ledit/pkg/config"
 	"ledit/pkg/llm"
-	"ledit/pkg/utils" // Import the utils package for logger
+	"ledit/pkg/prompts" // Import the prompts package
+	"ledit/pkg/utils"   // Import the utils package for logger
 	"os"
-	"path/filepath"
-	"sort" // For sorting top directories
+	"path/filepath" // New import for security concern detection
+	"regexp"        // New import for regex
+	"sort"          // For sorting top directories and string slices
 	"strings"
 	"sync"
 )
 
 // processResult is used to pass analysis results from goroutines back to the main thread.
 type processResult struct {
+	relativePath            string
+	summary                 string
+	exports                 string
+	hash                    string
+	references              string
+	tokenCount              int
+	securityConcerns        []string // New field
+	ignoredSecurityConcerns []string // New field
+	err                     error
+}
+
+// fileToProcess holds information about a file that needs to be analyzed by the LLM.
+type fileToProcess struct {
+	path         string
 	relativePath string
-	summary      string
-	exports      string
+	content      string
 	hash         string
-	references   string
 	tokenCount   int
-	err          error
 }
 
 var (
@@ -34,15 +47,133 @@ var (
 		".kt": true, ".scala": true, ".rs": true, ".dart": true, ".pl": true,
 		".pm": true, ".lua": true, ".vim": true, ".toml": true,
 	}
+
+	// Regex patterns for common security concerns.
+	// The first capturing group should ideally capture the "value" part if applicable.
+	// Patterns are designed to be robust and capture common key/value formats.
+	securityConcernRegexes = map[string][]*regexp.Regexp{
+		"API Key": {
+			regexp.MustCompile(`(?i)(?:api_key|apikey|api-key|client_id|client_secret|auth_token|access_token|bearer_token|token)\s*[:=]\s*['"]?([a-zA-Z0-9+/=._-]{16,})['"]?`),
+			regexp.MustCompile(`(?i)x-api-key:\s*([a-zA-Z0-9+/=._-]{16,})`),
+		},
+		"Password": {
+			regexp.MustCompile(`(?i)(?:password|pass|pwd|db_password|db_pass)\s*[:=]\s*['"]?([a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~` + "`" + `]{8,})['"]?`),
+		},
+		"Secret": {
+			regexp.MustCompile(`(?i)(?:secret_key|secretkey|secret-key|app_secret|client_secret)\s*[:=]\s*['"]?([a-zA-Z0-9+/=._-]{16,})['"]?`),
+		},
+		"AWS Key": {
+			regexp.MustCompile(`AKIA[0-9A-Z]{16}`),                                                 // AWS Access Key ID format
+			regexp.MustCompile(`(?i)aws_secret_access_key\s*[:=]\s*['"]?([0-9a-zA-Z/+]{40})['"]?`), // AWS Secret Access Key format
+		},
+		"Azure Key": {
+			regexp.MustCompile(`(?i)(?:azure_client_secret|azure_subscription_key)\s*[:=]\s*['"]?([a-zA-Z0-9+/=._-]{16,})['"]?`),
+		},
+		"Database Creds": {
+			regexp.MustCompile(`(?i)(?:db_user|db_host|db_name)\s*[:=]\s*['"]?([a-zA-Z0-9_.-]{1,})['"]?`), // Catching these might indicate a connection string
+			regexp.MustCompile(`(?i)jdbc:mysql://(?:[^/]+)/([^?]+)\?user=([^&]+)&password=([^&]+)`),       // JDBC connection string
+			regexp.MustCompile(`(?i)mongodb://(?:[^:]+):([^@]+)@`),                                        // MongoDB password
+		},
+		"SSH Key": {
+			regexp.MustCompile(`BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY`),
+		},
+		"Encryption Key": {
+			regexp.MustCompile(`(?i)(?:encryption_key|decryption_key|aes_key|rsa_private_key)\s*[:=]\s*['"]?([a-zA-Z0-9+/=._-]{16,})['"]?`),
+		},
+	}
+
+	// Regex patterns for common placeholder values to ignore.
+	commonPlaceholderRegexes = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)your_api_key`),
+		regexp.MustCompile(`(?i)your_secret_key`),
+		regexp.MustCompile(`(?i)your_password`),
+		regexp.MustCompile(`(?i)your_token`),
+		regexp.MustCompile(`(?i)dummy`),
+		regexp.MustCompile(`(?i)placeholder`),
+		regexp.MustCompile(`(?i)example`),
+		regexp.MustCompile(`(?i)test`),
+		regexp.MustCompile(`(?i)changeme`),
+		regexp.MustCompile(`null`),
+		regexp.MustCompile(`nil`),
+		regexp.MustCompile(`""`),
+		regexp.MustCompile(`''`),
+		regexp.MustCompile(`0000`),
+		regexp.MustCompile(`xxxx`),
+		regexp.MustCompile(`yyyy`),
+		regexp.MustCompile(`zzzz`),
+		regexp.MustCompile(`1234567890`),
+		regexp.MustCompile(`abcdefghij`),
+		regexp.MustCompile(`[a-f0-9]{32}`), // Common hash-like placeholders (MD5)
+		regexp.MustCompile(`[a-f0-9]{40}`), // Common hash-like placeholders (SHA1)
+		regexp.MustCompile(`[a-f0-9]{64}`), // Common hash-like placeholders (SHA256)
+	}
 )
 
-// fileToProcess holds information about a file that needs analysis.
-type fileToProcess struct {
-	path         string
-	relativePath string
-	content      string
-	hash         string
-	tokenCount   int
+// detectSecurityConcerns scans file content for security-sensitive patterns using robust regex.
+// It attempts to find common patterns for keys and ignores common placeholder values.
+func detectSecurityConcerns(content string, cfg *config.Config) []string {
+	var concerns []string
+	detectedConcernsMap := make(map[string]bool) // Use a map to store unique concerns
+
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == "" {
+			continue
+		}
+
+		for concernType, patterns := range securityConcernRegexes {
+			for _, re := range patterns {
+				matches := re.FindStringSubmatch(trimmedLine)
+				if len(matches) > 0 {
+					// If the regex has a capturing group (i.e., it's trying to extract a value)
+					if len(matches) > 1 {
+						value := matches[1]
+						isPlaceholder := false
+						for _, placeholderRe := range commonPlaceholderRegexes {
+							if placeholderRe.MatchString(value) {
+								isPlaceholder = true
+								break
+							}
+						}
+						if !isPlaceholder {
+							if !detectedConcernsMap[concernType] {
+								concerns = append(concerns, concernType)
+								detectedConcernsMap[concernType] = true
+							}
+						}
+					} else {
+						// No capturing group, meaning the presence of the pattern itself is a concern (e.g., "BEGIN PRIVATE KEY")
+						if !detectedConcernsMap[concernType] {
+							concerns = append(concerns, concernType)
+							detectedConcernsMap[concernType] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	sort.Strings(concerns) // Sort for consistent output
+	return concerns
+}
+
+// stringSliceEqual checks if two string slices are equal, ignoring order.
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	aCopy := make([]string, len(a))
+	bCopy := make([]string, len(b))
+	copy(aCopy, a)
+	copy(bCopy, b)
+	sort.Strings(aCopy)
+	sort.Strings(bCopy)
+	for i := range aCopy {
+		if aCopy[i] != bCopy[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // validateAndUpdateWorkspace checks the current file system against the workspace.json file,
@@ -66,6 +197,11 @@ func validateAndUpdateWorkspace(rootDir, workspaceFilePath string, cfg *config.C
 	var filesToAnalyzeList []fileToProcess
 	newFilesCount := 0
 	newFilesTopDirs := make(map[string]int) // Map to store count of new files per top-level directory
+
+	// Maps to temporarily store security concerns and ignored ones for the current run
+	// These will be used to update the workspace.Files map after LLM analysis (if any)
+	fileSecurityConcernsMap := make(map[string][]string)
+	fileIgnoredSecurityConcernsMap := make(map[string][]string)
 
 	err = filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -112,32 +248,163 @@ func validateAndUpdateWorkspace(rootDir, workspaceFilePath string, cfg *config.C
 		newHash := generateFileHash(fileContent)
 
 		existingFileInfo, exists := workspace.Files[relativePath]
-		if exists {
-			if existingFileInfo.Hash == newHash {
-				return nil // File exists and is unchanged, no analysis needed
+		isChanged := exists && existingFileInfo.Hash != newHash
+		isNew := !exists
+
+		var detectedConcerns []string
+		var concernsForThisFile []string
+		var ignoredConcernsForThisFile []string
+		skipLLMSummarization := false // New flag to control LLM summarization
+
+		// --- Security Concern Detection and User Interaction ---
+		if cfg.EnableSecurityChecks { // Only perform security checks if the flag is enabled
+			if isNew || isChanged {
+				// Only run security detection for new or changed files
+				detectedConcerns = detectSecurityConcerns(fileContent, cfg)
+				// If file exists and is changed, start with previously ignored concerns
+				if exists {
+					ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, existingFileInfo.IgnoredSecurityConcerns...)
+				}
+			} else {
+				// File is unchanged. Use existing security concerns and ignored concerns.
+				concernsForThisFile = append(concernsForThisFile, existingFileInfo.SecurityConcerns...)
+				ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, existingFileInfo.IgnoredSecurityConcerns...)
+				// detectedConcerns is not strictly needed here, but for consistency in the following logic,
+				// we can set it to the previously identified issues.
+				detectedConcerns = existingFileInfo.SecurityConcerns
 			}
-			logger.LogProcessStep(fmt.Sprintf("File %s has changed. Marking for re-analysis...", relativePath))
+
+			// Filter out concerns that were previously ignored (only applies if isNew or isChanged)
+			newlyDetectedConcerns := []string{}
+			if isNew || isChanged { // Only prompt for new detections on new/changed files
+				for _, concern := range detectedConcerns {
+					isAlreadyIgnored := false
+					for _, ignored := range ignoredConcernsForThisFile {
+						if ignored == concern {
+							isAlreadyIgnored = true
+							break
+						}
+					}
+					if !isAlreadyIgnored {
+						newlyDetectedConcerns = append(newlyDetectedConcerns, concern)
+					}
+				}
+			}
+
+			// Prompt user for newly detected, unignored concerns
+			for _, concern := range newlyDetectedConcerns {
+				prompt := fmt.Sprintf("Security concern detected in %s: '%s'. Is this an issue?", relativePath, concern)
+				if logger.AskForConfirmation(prompt, true) { // This is a required check
+					concernsForThisFile = append(concernsForThisFile, concern)
+					logger.Logf("Security concern '%s' in %s noted as an issue.", concern, relativePath)
+				} else {
+					ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, concern)
+					logger.Logf("Security concern '%s' in %s noted as unimportant.", concern, relativePath)
+				}
+			}
+
+			// Add back any concerns that were previously marked as issues and are still detected
+			// This applies only if the file content changed, as for unchanged files, concernsForThisFile already holds them.
+			if isNew || isChanged {
+				if exists { // Only if it's an existing file that changed
+					for _, prevConcern := range existingFileInfo.SecurityConcerns {
+						isStillDetected := false
+						for _, currentDetected := range detectedConcerns { // `detectedConcerns` is fresh for new/changed files
+							if prevConcern == currentDetected {
+								isStillDetected = true
+								break
+							}
+						}
+						if isStillDetected {
+							// Ensure it's not already added to concernsForThisFile (e.g., if it was also in newlyDetectedConcerns)
+							found := false
+							for _, c := range concernsForThisFile {
+								if c == prevConcern {
+									found = true
+									break
+								}
+							}
+							if !found {
+								concernsForThisFile = append(concernsForThisFile, prevConcern)
+							}
+						}
+					}
+				}
+			}
+			sort.Strings(concernsForThisFile)
+			sort.Strings(ignoredConcernsForThisFile)
+
+			// If there are confirmed security concerns, mark for skipping LLM summarization
+			if len(concernsForThisFile) > 0 {
+				skipLLMSummarization = true
+				logger.LogProcessStep(prompts.SkippingLLMSummarizationDueToSecurity(relativePath))
+			}
 		} else {
-			logger.LogProcessStep(fmt.Sprintf("New file %s found. Marking for analysis...", relativePath))
-			newFilesCount++
-			// Determine top-level directory
-			parts := strings.Split(relativePath, string(os.PathSeparator))
-			if len(parts) > 0 {
-				topDir := parts[0]
-				newFilesTopDirs[topDir]++
+			// If security checks are disabled, ensure no security concerns are stored.
+			concernsForThisFile = []string{}
+			ignoredConcernsForThisFile = []string{}
+		}
+
+		// Store the determined security status for this file
+		fileSecurityConcernsMap[relativePath] = concernsForThisFile
+		fileIgnoredSecurityConcernsMap[relativePath] = ignoredConcernsForThisFile
+		// --- End Security Concern Detection ---
+
+		needsLLMSummarization := false
+		if isNew || isChanged {
+			if !skipLLMSummarization { // Only summarize if no security concerns confirmed
+				needsLLMSummarization = true
+			} else {
+				// If skipped due to security, update workspace info with placeholder summary
+				workspace.Files[relativePath] = WorkspaceFileInfo{
+					Hash:                    newHash,
+					Summary:                 "Skipped due to confirmed security concerns.",
+					Exports:                 "",                              // Clear exports
+					References:              "",                              // Clear references
+					TokenCount:              llm.EstimateTokens(fileContent), // Still estimate tokens
+					SecurityConcerns:        concernsForThisFile,
+					IgnoredSecurityConcerns: ignoredConcernsForThisFile,
+				}
+				return nil // Skip LLM analysis for this file
+			}
+		} else {
+			// File is unchanged. Check if security concerns or ignored concerns have changed.
+			// If they changed, update the workspace.Files directly without LLM analysis.
+			if !stringSliceEqual(existingFileInfo.SecurityConcerns, concernsForThisFile) ||
+				!stringSliceEqual(existingFileInfo.IgnoredSecurityConcerns, ignoredConcernsForThisFile) {
+				logger.Logf("Updating security concerns for unchanged file %s.", relativePath)
+				// Preserve existing summary/exports/references if content is unchanged
+				workspace.Files[relativePath] = WorkspaceFileInfo{
+					Hash:                    newHash,
+					Summary:                 existingFileInfo.Summary,
+					Exports:                 existingFileInfo.Exports,
+					References:              existingFileInfo.References,
+					TokenCount:              existingFileInfo.TokenCount,
+					SecurityConcerns:        concernsForThisFile,
+					IgnoredSecurityConcerns: ignoredConcernsForThisFile,
+				}
+				return nil // No LLM analysis needed, continue to next file
 			}
 		}
 
+		if !needsLLMSummarization {
+			return nil // File exists, unchanged, security concerns stable, and no new summarization needed.
+		}
+
+		// If we reach here, it means the file is new or its content has changed, AND it's not skipped due to security.
+		// So, it needs LLM summarization.
 		tokenCount := llm.EstimateTokens(fileContent)
 
 		if tokenCount > maxTokenCount {
 			logger.Logf("Skipping analysis of large file %s (%d tokens > %d). Adding as 'too large'.\n", relativePath, tokenCount, maxTokenCount)
 			workspace.Files[relativePath] = WorkspaceFileInfo{
-				Hash:       newHash,
-				Summary:    "File is too large to analyze.",
-				Exports:    "",
-				References: "",
-				TokenCount: tokenCount,
+				Hash:                    newHash,
+				Summary:                 "File is too large to analyze.",
+				Exports:                 "",
+				References:              "",
+				TokenCount:              tokenCount,
+				SecurityConcerns:        concernsForThisFile,
+				IgnoredSecurityConcerns: ignoredConcernsForThisFile,
 			}
 			return nil
 		}
@@ -149,6 +416,16 @@ func validateAndUpdateWorkspace(rootDir, workspaceFilePath string, cfg *config.C
 			hash:         newHash,
 			tokenCount:   tokenCount,
 		})
+
+		if isNew {
+			newFilesCount++
+			// Determine top-level directory
+			parts := strings.Split(relativePath, string(os.PathSeparator))
+			if len(parts) > 0 {
+				topDir := parts[0]
+				newFilesTopDirs[topDir]++
+			}
+		}
 
 		return nil
 	})
@@ -206,13 +483,15 @@ func validateAndUpdateWorkspace(rootDir, workspaceFilePath string, cfg *config.C
 			}
 
 			resultsChan <- processResult{
-				relativePath: f.relativePath,
-				summary:      fileSummary,
-				exports:      fileExports,
-				references:   fileReferences,
-				hash:         f.hash,
-				tokenCount:   f.tokenCount,
-				err:          llmErr,
+				relativePath:            f.relativePath,
+				summary:                 fileSummary,
+				exports:                 fileExports,
+				references:              fileReferences,
+				hash:                    f.hash,
+				tokenCount:              f.tokenCount,
+				securityConcerns:        fileSecurityConcernsMap[f.relativePath],        // Retrieve from map
+				ignoredSecurityConcerns: fileIgnoredSecurityConcernsMap[f.relativePath], // Retrieve from map
+				err:                     llmErr,
 			}
 		}(file, cfg)
 	}
@@ -227,11 +506,13 @@ func validateAndUpdateWorkspace(rootDir, workspaceFilePath string, cfg *config.C
 			logger.Logf("Warning: could not analyze file %s: %v. Proceeding with empty summary/exports.\n", result.relativePath, result.err)
 		}
 		workspace.Files[result.relativePath] = WorkspaceFileInfo{
-			Hash:       result.hash,
-			Summary:    result.summary,
-			Exports:    result.exports,
-			References: result.references,
-			TokenCount: result.tokenCount,
+			Hash:                    result.hash,
+			Summary:                 result.summary,
+			Exports:                 result.exports,
+			References:              result.references,
+			TokenCount:              result.tokenCount,
+			SecurityConcerns:        result.securityConcerns,
+			IgnoredSecurityConcerns: result.ignoredSecurityConcerns,
 		}
 	}
 
@@ -254,6 +535,11 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	logger.LogProcessStep("--- Loading in workspace data ---")
 	workspaceFilePath := "./.ledit/workspace.json"
+
+	// If security checks are enabled, log the start of the check.
+	if cfg.EnableSecurityChecks {
+		logger.LogProcessStep(prompts.PerformingSecurityCheck())
+	}
 
 	if err := os.MkdirAll(filepath.Dir(workspaceFilePath), os.ModePerm); err != nil {
 		logger.Logf("Error creating .ledit directory for WORKSPACE: %v. Continuing without it.\n", err)
@@ -292,6 +578,10 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 		}
 		if fileInfo.Summary == "File is too large to analyze." {
 			logger.LogUserInteraction(fmt.Sprintf("----- ERROR!!! -----:\n\n The file %s is too large to include in full context. Please pass it directly if needed.\n", file))
+			continue
+		}
+		if fileInfo.Summary == "Skipped due to confirmed security concerns." { // New check
+			logger.LogUserInteraction(fmt.Sprintf("----- WARNING!!! -----:\n\n The file %s was selected for full context but was skipped due to confirmed security concerns. Its content will not be provided to the LLM.\n", file))
 			continue
 		}
 	}

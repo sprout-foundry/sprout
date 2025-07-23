@@ -16,6 +16,7 @@
 
 - **Feature Orchestration**: Decomposes high-level feature requests into a detailed, executable plan.
 - **Smart Workspace Context**: Automatically builds and maintains an index of your workspace. An LLM selects the most relevant files to include as context for any given task.
+- **Leaked Credentials Check**: Automatically performs a check for potential credentials in files before sending the file to the workspace analysis process. This reduces the chance that sensitive credentials are sent to an llm via an api.
 - **Search Grounding**: Augments prompts with fresh information from the web using the `#SG "query"` directive.
 - **Interactive and Automated Modes**: Confirm each change manually, or run in a fully automated mode with `--skip-prompt`.
 - **Multi-Provider LLM Support**: Works with OpenAI, Groq, Gemini, Ollama, and more.

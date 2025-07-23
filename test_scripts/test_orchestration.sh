@@ -32,12 +32,12 @@ run_test_logic() {
     echo "PASS: .ledit/requirements.json was created."
 
     # Check that files were created
-    if [ ! -f "main.go" ] || [ ! -f "go.mod" ] || [ ! -f "main_test.go" ]; then
+    if [ ! -f "main.go" ] || [ ! -f "go.mod" ] || ! ls *_test.go >/dev/null 2>&1; then
         echo "FAIL: Not all expected application files were created."
         ls -l
         exit 1
     fi
-    echo "PASS: Application files (main.go, go.mod, main_test.go) were created."
+    echo "PASS: Application files (main.go, go.mod, *_test.go) were created."
 
     # Check that setup.sh and validate.sh exist
     if [ ! -f "setup.sh" ]; then

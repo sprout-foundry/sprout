@@ -253,7 +253,7 @@ func TokenEstimate(tokens int, modelName string) string {
 }
 
 func TokenLimitWarning(currentTokens, defaultLimit int) string {
-	return fmt.Sprintf("Warning: Current context (%d tokens) exceeds default token limit (%d tokens). This may lead to truncated responses.", currentTokens, defaultLimit)
+	return fmt.Sprintf("NOTE: This request at %d tokens is over the default token limit of %d, do you want to continue? (y/n): ", currentTokens, defaultLimit)
 }
 
 // --- General User Interaction Prompts ---

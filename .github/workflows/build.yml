@@ -28,14 +28,32 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
-    - name: Build
+    - name: Set build variables
+      id: set_vars
+      shell: bash
       run: |
-        GOOS=${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
-        GOARCH=${{ matrix.arch }}
-        go build -o ledit-${GOOS}-${GOARCH} .
+        OS_NAME=""
+        EXT=""
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          OS_NAME="windows"
+          EXT=".exe"
+        elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+          OS_NAME="darwin"
+        else
+          OS_NAME="linux"
+        fi
+        echo "os_name=${OS_NAME}" >> $GITHUB_OUTPUT
+        echo "ext=${EXT}" >> $GITHUB_OUTPUT
+        echo "binary_name=ledit-${OS_NAME}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
+
+    - name: Build
+      env:
+        GOOS: ${{ steps.set_vars.outputs.os_name }}
+        GOARCH: ${{ matrix.arch }}
+      run: go build -o ${{ steps.set_vars.outputs.binary_name }} .
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ledit-${{ matrix.os }}-${{ matrix.arch }}
-        path: ledit-${{ matrix.os }}-${{ matrix.arch }}
+        name: ${{ steps.set_vars.outputs.binary_name }}
+        path: ${{ steps.set_vars.outputs.binary_name }}${{ steps.set_vars.outputs.ext }}

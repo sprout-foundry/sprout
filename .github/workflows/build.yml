@@ -32,7 +32,7 @@ jobs:
       run: |
         GOOS=${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
         GOARCH=${{ matrix.arch }}
-        go build -o ledit-${GOOS}-${GOARCH} ./...
+        go build -o ledit-${GOOS}-${GOARCH} .
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4

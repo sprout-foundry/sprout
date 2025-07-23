@@ -35,7 +35,7 @@ jobs:
         go build -o ledit-${GOOS}-${GOARCH} ./...
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ledit-${{ matrix.os }}-${{ matrix.arch }}
         path: ledit-${{ matrix.os }}-${{ matrix.arch }}

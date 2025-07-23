@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# Function to return the test name
+get_test_name() {
+    echo "Orchestration Feature"
+}
+
+# Function to run the test logic
+run_test_logic() {
+    local model_name=$1 # Capture the model_name passed from test.sh
+    echo "--- TEST: Orchestration Feature ---"
+    # Create initial files for the orchestration test
+    mkdir -p orchestration_test
+    cd orchestration_test
+    # Define the orchestration prompt
+    ORCHESTRATION_PROMPT="Create a simple Go HTTP server application. The package name should be hello and it should have a /hello endpoint that returns a localized greeting."
+
+    echo "Running ledit orchestrate with prompt: \"$ORCHESTRATION_PROMPT\""
+
+    # Run ledit orchestrate. Pipe 'y' to confirm the plan execution.
+    orchestrate_output_log="orchestrate_output.log"
+    ../../ledit orchestrate "$ORCHESTRATION_PROMPT" --model "$model_name" --skip-prompt
+
+    echo
+    echo "--- Verifying Test ---"
+
+    # Check that the requirements.json file was created
+    if [ ! -f ".ledit/requirements.json" ]; then
+        echo "FAIL: .ledit/requirements.json was not created."
+        exit 1
+    fi
+    echo "PASS: .ledit/requirements.json was created."
+
+    # Check that files were created
+    if [ ! -f "main.go" ] || [ ! -f "go.mod" ] || [ ! -f "main_test.go" ]; then
+        echo "FAIL: Not all expected application files were created."
+        ls -l
+        exit 1
+    fi
+    echo "PASS: Application files (main.go, go.mod, main_test.go) were created."
+
+    # Check that setup.sh and validate.sh exist
+    if [ ! -f "setup.sh" ]; then
+        echo "FAIL: setup.sh was not created."
+        exit 1
+    fi
+    echo "PASS: setup.sh was created."
+    echo "--- Content of final setup.sh: ---"
+    cat setup.sh
+    echo "-------------------------------------"
+
+    if [ ! -f "validate.sh" ]; then
+        echo "FAIL: validate.sh was not created."
+        exit 1
+    fi
+    echo "PASS: validate.sh was created."
+    echo "--- Content of final validate.sh: ---"
+    cat validate.sh
+    echo "-------------------------------------"
+
+    # Check that all steps are marked as completed
+    if grep -q '"status": "failed"' .ledit/requirements.json; then
+        echo "FAIL: One or more orchestration steps failed."
+        exit 1
+    fi
+    if ! grep -q '"status": "completed"' .ledit/requirements.json; then
+        echo "FAIL: No steps were marked as completed."
+        exit 1
+    fi
+    echo "PASS: All orchestration steps completed successfully."
+
+    cd ../
+    echo "----------------------------------------------------"
+    echo
+}

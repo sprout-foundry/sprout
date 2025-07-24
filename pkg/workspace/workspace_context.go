@@ -75,9 +75,8 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 			}
 
 			lang := getLanguageFromFilename(filePath)
-			b.WriteString(fmt.Sprintf("%s\n", filePath))
-			b.WriteString(fmt.Sprintf("```%s\n%s\n```\n", lang, string(content))) // Added newline after code block
-			if len(fileInfo.SecurityConcerns) > 0 { // New: Add security concerns
+			b.WriteString(fmt.Sprintf("```%s #%s\n%s\n```END\n", lang, filePath, string(content))) // Added newline after code block
+			if len(fileInfo.SecurityConcerns) > 0 {                                                // New: Add security concerns
 				b.WriteString(fmt.Sprintf("Security Concerns: %s\n", strings.Join(fileInfo.SecurityConcerns, ", ")))
 			}
 			b.WriteString("\n") // Added newline after security concerns

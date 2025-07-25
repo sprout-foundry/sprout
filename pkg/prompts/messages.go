@@ -175,6 +175,22 @@ func LLMMaxContextRequestsReached() string {
 	return "Maximum number of context requests reached. Forcing code generation."
 }
 
+func LLMShellSkippingPrompt() string {
+	return "--- Skipping user prompt for shell command due to --skip-prompt flag. Performing risk analysis... ---"
+}
+
+func LLMScriptAnalysisFailed(err error) string {
+	return fmt.Sprintf("--- Script risk analysis failed: %v. Will not execute automatically. ---", err)
+}
+
+func LLMScriptNotRisky() string {
+	return "--- Script analysis determined it is NOT risky. Executing automatically. ---"
+}
+
+func LLMScriptRisky(analysis string) string {
+	return fmt.Sprintf("--- Script analysis determined it IS risky. Analysis: %s. User confirmation required. ---", analysis)
+}
+
 // --- Workspace Prompts ---
 func LoadingWorkspaceData() string {
 	return "--- Loading in workspace data ---"
@@ -300,6 +316,10 @@ func NoGeminiContent() string {
 
 func NoOrchestrationModel(modelName string) string {
 	return fmt.Sprintf("No orchestration model specified, falling back to editing model: %s\n", modelName)
+}
+
+func NoSummaryModelFallback(modelName string) string {
+	return fmt.Sprintf("No summary model specified in config, falling back to editing model: %s for script analysis.\n", modelName)
 }
 
 func ProviderNotRecognized() string {

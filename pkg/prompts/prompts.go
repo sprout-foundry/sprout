@@ -16,8 +16,6 @@ type Message struct {
 	Content string `json:"content"`
 }
 
-// --- Message Building ---
-
 func GetCodeGenMessages() []Message {
 	return []Message{
 		{
@@ -140,5 +138,13 @@ Only output a comma-separated list of numbers, e.g., "1, 3, 4".
 	return []Message{
 		{Role: "system", Content: "You are an expert at analyzing search results and picking the most relevant links."},
 		{Role: "user", Content: prompt},
+	}
+}
+
+// BuildScriptRiskAnalysisMessages creates messages for script risk analysis.
+func BuildScriptRiskAnalysisMessages(scriptContent string) []Message {
+	return []Message{
+		{Role: "system", Content: "You are a security expert tasked with analyzing shell scripts for potential risks. Evaluate the provided script and determine if it is 'risky' or 'not risky' to execute in a development environment. Provide a concise explanation for your assessment. If it's not risky, explicitly state 'not risky'. If it's risky, explain why and suggest potential dangers."},
+		{Role: "user", Content: fmt.Sprintf("Analyze the following shell script:\n\n```bash\n%s\n```\n\nIs this script risky to execute? Explain your reasoning.", scriptContent)},
 	}
 }

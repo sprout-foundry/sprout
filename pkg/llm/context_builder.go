@@ -46,22 +46,47 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 			}
 			responses = append(responses, fmt.Sprintf("Here is the content of the file `%s`:\n\n%s", req.Query, string(content)))
 		case "shell":
-			fmt.Printf(prompts.LLMShellCommandRequest(req.Query)) // Use prompt
-			fmt.Println(prompts.LLMShellWarning())                // Use prompt
-			fmt.Print(prompts.LLMShellConfirmation())             // Use prompt
-			reader := bufio.NewReader(os.Stdin)
-			confirm, _ := reader.ReadString('\n')
-			if strings.TrimSpace(strings.ToLower(confirm)) != "y" {
-				responses = append(responses, "User denied execution of shell command.")
-				continue
+			shouldExecute := false
+			if cfg.SkipPrompt {
+				fmt.Println(prompts.LLMShellSkippingPrompt())              // New prompt
+				riskAnalysis, err := GetScriptRiskAnalysis(cfg, req.Query) // New function call
+				if err != nil {
+					responses = append(responses, fmt.Sprintf("Failed to get script risk analysis: %v. User denied execution.", err))
+					fmt.Println(prompts.LLMScriptAnalysisFailed(err)) // New prompt
+					continue                                          // Do not run if analysis fails
+				}
+
+				// Define what "not risky" means. For now, a simple string check.
+				// A more robust solution might involve a structured JSON response from the summary model.
+				if strings.Contains(strings.ToLower(riskAnalysis), "not risky") || strings.Contains(strings.ToLower(riskAnalysis), "safe") {
+					fmt.Println(prompts.LLMScriptNotRisky()) // New prompt
+					shouldExecute = true
+				} else {
+					fmt.Println(prompts.LLMScriptRisky(riskAnalysis)) // New prompt
+					// If risky, fall through to prompt the user
+				}
 			}
 
-			cmd := exec.Command("sh", "-c", req.Query)
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				responses = append(responses, fmt.Sprintf("Shell command failed with error: %v\nOutput:\n%s", err, string(output)))
-			} else {
-				responses = append(responses, fmt.Sprintf("The shell command `%s` produced the following output:\n\n%s", req.Query, string(output)))
+			if !shouldExecute { // If not already decided to execute (either skipPrompt was false, or it was risky)
+				fmt.Println(prompts.LLMShellWarning())    // Use prompt
+				fmt.Print(prompts.LLMShellConfirmation()) // Use prompt
+				reader := bufio.NewReader(os.Stdin)
+				confirm, _ := reader.ReadString('\n')
+				if strings.TrimSpace(strings.ToLower(confirm)) != "y" {
+					responses = append(responses, "User denied execution of shell command.")
+					continue
+				}
+				shouldExecute = true
+			}
+
+			if shouldExecute {
+				cmd := exec.Command("sh", "-c", req.Query)
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					responses = append(responses, fmt.Sprintf("Shell command failed with error: %v\nOutput:\n%s", err, string(output)))
+				} else {
+					responses = append(responses, fmt.Sprintf("The shell command `%s` produced the following output:\n\n%s", req.Query, string(output)))
+				}
 			}
 		default:
 			return "", fmt.Errorf("unknown context request type: %s", req.Type)
@@ -130,7 +155,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string)
 			}
 			if len(contextResponse.ContextRequests) == 0 {
 				fmt.Println(prompts.LLMNoContextRequests()) // Use prompt
-				return modelName, response, nil              // No context requests, return the response
+				return modelName, response, nil             // No context requests, return the response
 			}
 			fmt.Printf(prompts.LLMContextRequestsFound(len(contextResponse.ContextRequests))) // Use prompt
 			contextRequestCount++

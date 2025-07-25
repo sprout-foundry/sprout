@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	fixModelFlag            string
-	fixSkipPromptFlag       bool
-	fixOptionalInstructions string // New flag for optional instructions
+	fixModelFlag                string
+	fixSkipPromptFlag           bool
+	fixOptionalInstructions     string // New flag for optional instructions
+	fixSkipWorkspaceContextFlag bool   // Flag to control workspace usage
 )
 
 var fixCmd = &cobra.Command{
@@ -62,8 +63,10 @@ var fixCmd = &cobra.Command{
 		}
 		cfg.SkipPrompt = fixSkipPromptFlag
 
-		// Base instructions for fixing the command output
-		instructions := fmt.Sprintf("Solve these errors: \n-------\n%s\n-------\n  making sure to include all files that have errors and files they reference. #WS", output)
+		instructions := fmt.Sprintf("Fix the following command output: \n-------\n%s\n-------\n  making sure to include all files that have errors and files they reference. #WS", output)
+		if fixSkipWorkspaceContextFlag {
+			instructions = fmt.Sprintf("Fix the following command output: \n-------\n%s\n-------\n ", output)
+		}
 
 		// Prepend optional instructions if provided
 		if fixOptionalInstructions != "" {
@@ -85,6 +88,7 @@ var fixCmd = &cobra.Command{
 func init() {
 	fixCmd.Flags().StringVarP(&fixModelFlag, "model", "m", "", "Model name to use with the LLM")
 	fixCmd.Flags().BoolVar(&fixSkipPromptFlag, "skip-prompt", false, "Skip user prompt for applying changes")
+	fixCmd.Flags().BoolVar(&fixSkipWorkspaceContextFlag, "skip-workspace", false, "Skip adding the workspace context (default is false)")
 	// New flag for optional instructions
 	fixCmd.Flags().StringVarP(&fixOptionalInstructions, "instructions", "i", "", "Additional instructions for the LLM to consider when fixing")
 }

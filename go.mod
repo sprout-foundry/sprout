@@ -1,4 +1,4 @@
-module ledit
+module github.com/alantheprice/ledit
 
 go 1.23.0
 

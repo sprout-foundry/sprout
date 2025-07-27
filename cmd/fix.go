@@ -3,8 +3,8 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"ledit/pkg/config"
-	"ledit/pkg/editor"
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/editor"
 	"log"
 	"os/exec"
 	"strings"

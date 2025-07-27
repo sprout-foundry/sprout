@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/llm"
 	"net/http"
 	"strings"
 )

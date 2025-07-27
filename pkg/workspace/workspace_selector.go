@@ -3,13 +3,14 @@ package workspace
 import (
 	"encoding/json"
 	"fmt"
-	"ledit/pkg/config"
-	"ledit/pkg/llm"
-	"ledit/pkg/prompts"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"
 )
 
 const fileBatchSize = 50

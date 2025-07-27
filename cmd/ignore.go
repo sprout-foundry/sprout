@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"ledit/pkg/workspace"
+	"github.com/alantheprice/ledit/pkg/workspace"
 	"os"
 	"path/filepath"
 

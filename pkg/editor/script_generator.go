@@ -2,8 +2,8 @@ package editor
 
 import (
 	"fmt"
-	"ledit/pkg/config"
-	"ledit/pkg/prompts" // Import the new prompts package
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
 	"os"
 	"os/exec"
 	"strings"

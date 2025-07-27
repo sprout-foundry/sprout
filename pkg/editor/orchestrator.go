@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"ledit/pkg/config"
-	"ledit/pkg/llm"
-	"ledit/pkg/prompts" // Import the new prompts package
-	"ledit/pkg/utils"
-	"ledit/pkg/workspace"
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
+	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/workspace"
 	"os"
 	"path/filepath"
 	"strings"

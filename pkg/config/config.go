@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ledit/pkg/prompts" // Import the new prompts package
-	"ledit/pkg/utils"   // Import workspace for logger
+	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
+	"github.com/alantheprice/ledit/pkg/utils"   // Import workspace for logger
 
 	"github.com/shirou/gopsutil/v3/mem"
 )

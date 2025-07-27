@@ -8,7 +8,7 @@ import (
 	"math" // Import math for dot product and magnitude
 	"net/http"
 
-	"ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/config"
 )
 
 type EmbeddingRequest struct {

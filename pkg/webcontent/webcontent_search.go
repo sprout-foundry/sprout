@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"ledit/pkg/config"
-	"ledit/pkg/llm"
-	"ledit/pkg/prompts"
-	"ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 const jinaSearchURL = "https://s.jina.ai/search"

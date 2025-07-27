@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"ledit/pkg/changetracker"
+	"github.com/alantheprice/ledit/pkg/changetracker"
 	"log"
 
 	"github.com/spf13/cobra"

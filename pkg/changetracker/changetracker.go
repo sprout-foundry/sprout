@@ -3,7 +3,7 @@ package changetracker
 import (
 	"bufio"
 	"fmt"
-	"ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/utils"
 	"log"
 	"os"
 	"strings"

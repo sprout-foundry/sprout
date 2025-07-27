@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"ledit/pkg/config"
-	"ledit/pkg/editor"
-	"ledit/pkg/prompts" // Add this import
-	"ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/editor"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/utils"
 	"log"
 	"os"
 

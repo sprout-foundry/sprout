@@ -3,7 +3,7 @@ package webcontent
 import (
 	"encoding/json"
 	"fmt"
-	"ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/utils"
 	"os"
 	"path/filepath"
 	"time"

@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/config"
 	"log"
 
 	"github.com/spf13/cobra"

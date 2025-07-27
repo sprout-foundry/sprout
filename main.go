@@ -1,8 +1,8 @@
 package main
 
 import (
-	"ledit/cmd"
-	"ledit/pkg/utils" // Import the utils package
+	"github.com/alantheprice/ledit/cmd"
+	"github.com/alantheprice/ledit/pkg/utils" // Import the utils package
 
 	"os" // Import os for os.Exit
 )

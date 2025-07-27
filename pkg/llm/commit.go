@@ -2,8 +2,8 @@ package llm
 
 import (
 	"fmt"
-	"ledit/pkg/config"
-	"ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/prompts"
 	"time"
 )
 

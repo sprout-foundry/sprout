@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 func loadOriginalCode(filename string) (string, error) {

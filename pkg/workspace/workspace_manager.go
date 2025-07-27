@@ -2,10 +2,10 @@ package workspace
 
 import (
 	"fmt"
-	"ledit/pkg/config"
-	"ledit/pkg/llm"
-	"ledit/pkg/prompts" // Import the prompts package
-	"ledit/pkg/utils"   // Import the utils package for logger
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts" // Import the prompts package
+	"github.com/alantheprice/ledit/pkg/utils"   // Import the utils package for logger
 	"os"
 	"path/filepath" // New import for security concern detection
 	"regexp"        // New import for regex

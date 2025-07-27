@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"ledit/pkg/config"
-	"ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/spf13/cobra"
 )

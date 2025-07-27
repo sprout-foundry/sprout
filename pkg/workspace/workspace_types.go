@@ -1,6 +1,6 @@
 package workspace
 
-import "ledit/pkg/config"
+import "github.com/alantheprice/ledit/pkg/config"
 
 // WorkspaceContext represents the context of the current workspace
 // that can be used for orchestration planning.

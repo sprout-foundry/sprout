@@ -2,9 +2,9 @@ package webcontent
 
 import (
 	"fmt"
-	"ledit/pkg/config"
-	"ledit/pkg/llm"
-	"ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/utils"
 	"math"
 	"sort"
 	"strings"

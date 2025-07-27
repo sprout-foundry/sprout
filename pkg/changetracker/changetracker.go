@@ -79,15 +79,11 @@ func PrintRevisionHistory() error {
 					fmt.Println("Change is not active, cannot revert.")
 				}
 			case "restore":
-				if change.Status == "active" {
-					if err := handleRestore(change); err != nil {
-						log.Printf("Error during restore: %v", err)
-					}
-				} else {
-					fmt.Println("Change is not active, cannot restore.")
+				if err := handleRestore(change); err != nil {
+					log.Printf("Error during restore: %v", err)
 				}
 			default:
-				break
+				fmt.Println("Invalid option. Please try again.")
 			}
 			if input == "" || input == "x" || input == "exit" {
 				break

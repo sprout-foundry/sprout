@@ -33,12 +33,12 @@ To get started with `ledit`, you can install it via `go install` or download a p
 - Go 1.20+ (if installing from source)
 - Git (for version control integration)
 
-### From Source (Recommended)
+### From Source
 
 Make sure you have Go installed and configured.
 
 ```bash
-go install github.com/your-org/ledit@latest # Replace with the actual repository path
+go install github.com/alantheprice/ledit@latest # Replace with the actual repository path
 ```
 
 This will install the `ledit` executable in your `GOPATH/bin` directory. Ensure `GOPATH/bin` is in your system's PATH.

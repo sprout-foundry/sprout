@@ -25,6 +25,9 @@ var orchestrateCmd = &cobra.Command{
 		prompt := args[0]
 		logger := utils.GetLogger(skipPrompt) // Get the logger instance
 
+		// Add the alpha warning for orchestration
+		logger.LogProcessStep(prompts.OrchestrationAlphaWarning())
+
 		cfg, err := config.LoadOrInitConfig(skipPrompt)
 		if err != nil {
 			logger.LogProcessStep(prompts.ConfigLoadFailed(err)) // Use prompt

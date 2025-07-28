@@ -3,6 +3,8 @@ package prompts
 import (
 	"fmt"
 	"time"
+
+	"github.com/fatih/color" // Import the color package
 )
 
 // --- Config Prompts ---
@@ -184,7 +186,7 @@ func LLMScriptAnalysisFailed(err error) string {
 }
 
 func LLMScriptNotRisky() string {
-	return "--- Script analysis determined it is NOT risky. Executing automatically. ---"
+	return "--- Script analysis determined it is NOT risky. Executing automatically."
 }
 
 func LLMScriptRisky(analysis string) string {
@@ -340,6 +342,11 @@ func SystemMemoryFallback(gb int, model string) string {
 }
 
 // --- Orchestration Prompts ---
+func OrchestrationAlphaWarning() string {
+	boldYellow := color.New(color.FgYellow, color.Bold).SprintFunc()
+	return boldYellow("WARNING: Orchestration is currently an early alpha feature and is NOT recommended for general use. For a more robust and controllable process, please see examples/process_todos.py for how to implement similar functionality.")
+}
+
 func LeditDirCreationError(err error) string {
 	return fmt.Sprintf("Could not create .ledit directory: %v", err)
 }

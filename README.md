@@ -26,14 +26,14 @@
 
 ## Installation
 
-To get started with `ledit`, you can install it via `go install` or download a pre-built binary.
+To get started with `ledit`, the preferred method is to install it via `go install`.
 
 ### Prerequisites
 
-- Go 1.20+ (if installing from source)
+- Go 1.20+
 - Git (for version control integration)
 
-### From Source
+### From Source (Preferred Method)
 
 Make sure you have Go installed and configured.
 
@@ -41,11 +41,14 @@ Make sure you have Go installed and configured.
 go install github.com/alantheprice/ledit@latest # Replace with the actual repository path
 ```
 
-This will install the `ledit` executable in your `GOPATH/bin` directory. Ensure `GOPATH/bin` is in your system's PATH.
+This will install the `ledit` executable in your `GOPATH/bin` directory (e.g., `~/go/bin` on Linux/macOS).
 
-### Pre-built Binaries
+**Note on PATH:** If `ledit` is not found after installation, you may need to add your `GOPATH/bin` directory to your system's PATH environment variable. For example, you can add the following line to your shell's configuration file (e.g., `.bashrc`, `.zshrc`, or `.profile`):
 
-Pre-built binaries for various operating systems will be available on the [Releases page](https://github.com/your-org/ledit/releases) (replace with the actual link to your project's releases). Download the appropriate binary for your system, extract it, and place it in a directory included in your system's PATH.
+```bash
+export PATH=$PATH:$(go env GOPATH)/bin
+```
+After adding this, restart your terminal or run `source ~/.bashrc` (or your respective config file) for the changes to take effect.
 
 ## Getting Started
 

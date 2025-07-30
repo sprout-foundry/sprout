@@ -21,7 +21,8 @@ func GetCommitMessage(cfg *config.Config, changelog string, originalPrompt strin
 	// The third is the error.
 	// The filename parameter is not relevant for this task, so we pass an empty string.
 	// Adding a timeout of 1 minute for generating the commit message.
-	_, commitMessage, err := GetLLMResponse(modelName, messages, filename, cfg, 1*time.Minute)
+	// Add the missing 'useSearchGrounding' boolean argument, set to false as it's not relevant for commit messages.
+	_, commitMessage, err := GetLLMResponse(modelName, messages, filename, cfg, 1*time.Minute, false)
 	if err != nil {
 		return "", fmt.Errorf("failed to get commit message from LLM: %w", err)
 	}

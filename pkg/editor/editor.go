@@ -21,8 +21,12 @@ import (
 	"github.com/fatih/color"
 )
 
-func processInstructions(instructions string, cfg *config.Config) (string, error) {
+func processInstructions(instructions string, cfg *config.Config) (string, bool, error) {
 	originalInstructions := instructions // Capture original instructions for LLM-generated queries
+	useGeminiSearchGrounding := false
+
+	// Check if the editing model is a Gemini model
+	isGemini := llm.IsGeminiModel(cfg.EditingModel)
 
 	// Handle #SG "search query" pattern first
 	sgPattern := regexp.MustCompile(`(?s)#SG\s*"(.*?)"`)
@@ -30,13 +34,20 @@ func processInstructions(instructions string, cfg *config.Config) (string, error
 		submatches := sgPattern.FindStringSubmatch(match)
 		if len(submatches) > 1 {
 			query := submatches[1]
-			fmt.Print(prompts.PerformingSearch(query)) // Use prompt
-			content, err := webcontent.FetchContextFromSearch(query, cfg)
-			if err != nil {
-				fmt.Print(prompts.SearchError(query, err)) // Use prompt
-				return ""
+			if isGemini {
+				// If Gemini, just remove the #SG tag. Gemini will handle the search internally.
+				useGeminiSearchGrounding = true
+				return "" // Remove the tag from instructions
+			} else {
+				// If not Gemini, use Jina search
+				fmt.Print(prompts.PerformingSearch(query)) // Use prompt
+				content, err := webcontent.FetchContextFromSearch(query, cfg)
+				if err != nil {
+					fmt.Print(prompts.SearchError(query, err)) // Use prompt
+					return ""
+				}
+				return content
 			}
-			return content
 		}
 		return match
 	})
@@ -56,32 +67,38 @@ func processInstructions(instructions string, cfg *config.Config) (string, error
 			}
 		}
 
-		// Use the original instructions to generate the search query
-		fmt.Printf("Ledit is generating a search query using LLM based on your instructions...\n")
-		generatedQueries, err := llm.GenerateSearchQuery(cfg, originalInstructions)
-		if err != nil {
-			fmt.Printf("Error generating search queries with LLM: %v\n", err)
-			return ""
-		}
-
-		var allFetchedContent strings.Builder
-		searchCount := 0
-		for _, query := range generatedQueries {
-			if searchCount >= 2 { // Limit to a maximum of two searches
-				break
-			}
-			fmt.Printf("Performing LLM-generated search for: %s\n", query)
-			content, err := webcontent.FetchContextFromSearch(query, cfg)
+		if isGemini {
+			// If Gemini, just remove the #SG tag. Gemini will handle the search internally.
+			useGeminiSearchGrounding = true
+			return "" // Remove the tag from instructions
+		} else {
+			// If not Gemini, use Jina search
+			fmt.Printf("Ledit is generating a search query using LLM based on your instructions...\n")
+			generatedQueries, err := llm.GenerateSearchQuery(cfg, originalInstructions)
 			if err != nil {
-				fmt.Print(prompts.SearchError(query, err))
-				// Continue to the next query even if one fails
-				continue
+				fmt.Printf("Error generating search queries with LLM: %v\n", err)
+				return ""
 			}
-			allFetchedContent.WriteString(content)
-			allFetchedContent.WriteString("\n\n") // Add a separator between contents from different searches
-			searchCount++
+
+			var allFetchedContent strings.Builder
+			searchCount := 0
+			for _, query := range generatedQueries {
+				if searchCount >= 2 { // Limit to a maximum of two searches
+					break
+				}
+				fmt.Printf("Performing LLM-generated search for: %s\n", query)
+				content, err := webcontent.FetchContextFromSearch(query, cfg)
+				if err != nil {
+					fmt.Print(prompts.SearchError(query, err))
+					// Continue to the next query even if one fails
+					continue
+				}
+				allFetchedContent.WriteString(content)
+				allFetchedContent.WriteString("\n\n") // Add a separator between contents from different searches
+				searchCount++
+			}
+			return allFetchedContent.String()
 		}
-		return allFetchedContent.String()
 	})
 
 	filePattern := regexp.MustCompile(`\s+#(\S+)(?:(\d+),(\d+))?`)
@@ -118,11 +135,11 @@ func processInstructions(instructions string, cfg *config.Config) (string, error
 		}
 		instructions = strings.Replace(instructions, "#"+match[1], content, 1)
 	}
-	return instructions, nil
+	return instructions, useGeminiSearchGrounding, nil
 }
 
-func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config) (map[string]string, string, error) {
-	modelName, llmContent, err := llm.GetLLMCodeResponse(cfg, originalCode, instructions, filename)
+func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config, useGeminiSearchGrounding bool) (map[string]string, string, error) {
+	modelName, llmContent, err := llm.GetLLMCodeResponse(cfg, originalCode, instructions, filename, useGeminiSearchGrounding)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get LLM response: %w", err)
 	}
@@ -299,14 +316,14 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (s
 		}
 	}
 
-	processedInstructions, err := processInstructions(instructions, cfg)
+	processedInstructions, useGeminiSearchGrounding, err := processInstructions(instructions, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to process instructions: %w", err)
 	}
 	fmt.Print(prompts.ProcessedInstructionsSeparator(processedInstructions)) // Use prompt
 
 	requestHash := utils.GenerateRequestHash(processedInstructions)
-	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, filename, cfg)
+	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, filename, cfg, useGeminiSearchGrounding)
 	if err != nil {
 		return "", err
 	}

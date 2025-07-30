@@ -57,7 +57,7 @@ func (p *RequirementProcessor) Process(plan *OrchestrationPlan) error {
 
 			currentInstruction := p.getCurrentInstructionForAttempt(req, fullInstruction)
 
-			processedInstruction, err := processInstructions(currentInstruction, p.cfg)
+			processedInstruction, _, err := processInstructions(currentInstruction, p.cfg)
 			if err != nil {
 				req.Status = "failed"
 				req.LastLLMResponse = ""

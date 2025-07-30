@@ -122,7 +122,8 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 		*skipPromptConfig = *cfg
 		skipPromptConfig.SkipPrompt = true
 
-		_, err := llm.GetLLMResponseStream(skipPromptConfig.EditingModel, messages, "question", skipPromptConfig, 3*time.Minute, writer)
+		// Fix: Added 'false' for useSearchGrounding as it's a question about the workspace
+		_, err := llm.GetLLMResponseStream(skipPromptConfig.EditingModel, messages, "question", skipPromptConfig, 3*time.Minute, writer, false)
 		if err != nil {
 			// Error is already printed by the LLM function
 			// Remove the failed user message from history

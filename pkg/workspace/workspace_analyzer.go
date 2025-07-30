@@ -30,7 +30,19 @@ func getSummary(content, filename string, cfg *config.Config) (string, string, s
 
 	// Tweak the prompt for better results and explicit JSON format
 	prompt := fmt.Sprintf("Analyze the following code from the file '%s'.\n", filename)
-	prompt += "Your task is to provide three pieces of information in JSON format:\n1.  A CONCISE summary of the file's overall purpose and functionality.\n2.  A list of all exported (publicly accessible) functions, types, and variables. For each exported item, include its name, or method signature and a very brief description when needed.\n3.  List of referenced files with their workspace relative path and extension.\nThe output MUST be a JSON object with three keys: 'summary' (string), 'exports' (string), and 'references' (array of strings).\nExample JSON structure:\n{\n  \"summary\": \"This file manages user authentication and session handling.\",\n  \"exports\": \"Login(username, password) - Authenticates a user; Logout() - Ends the current session; User struct - Represents a user profile.\",\n  \"references\": [\"file-path1\", \"file-path2\"]\n}\n\n"
+	prompt += `Your task is to provide three pieces of information in JSON format:
+1.  A CONCISE summary of the file's overall purpose and functionality.
+2.  A list of all exported (publicly accessible) functions, types, and variables. For each exported item, include its name, or method signature and a very brief description when needed.
+3.  List of referenced files with their workspace relative path and extension.
+The output MUST be a JSON object with three keys: 'summary' (string), 'exports' (string), and 'references' (array of strings).
+Example JSON structure:
+{
+  "summary": "This file manages user authentication and session handling.",
+  "exports": "Login(username, password) - Authenticates a user; Logout() - Ends the current session; User struct - Represents a user profile.",
+  "references": ["file-path1", "file-path2"]
+}
+
+`
 
 	finalPrompt := fmt.Sprintf("%s```\n%s\n```", prompt, content)
 	messages := []prompts.Message{
@@ -45,7 +57,7 @@ func getSummary(content, filename string, cfg *config.Config) (string, string, s
 	}
 
 	// Set 40-second timeout for workspace summary requests
-	_, response, err := llm.GetLLMResponse(cfg.SummaryModel, messages, filename, cfg, 40*time.Second)
+	_, response, err := llm.GetLLMResponse(cfg.SummaryModel, messages, filename, cfg, 40*time.Second, false)
 	if err != nil {
 		return "", "", "", fmt.Errorf("LLM request failed: %w", err)
 	}

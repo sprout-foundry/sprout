@@ -205,7 +205,7 @@ func selectRelevantURLsWithLLM(query string, results []JinaSearchResult, cfg *co
 	messages := prompts.BuildSearchResultsQueryMessages(sb.String(), query)
 
 	logger.Log("Sending URL selection request to LLM")
-	_, resp, err := llm.GetLLMResponse(cfg.WorkspaceModel, messages, "search_results_selector", cfg, 2*time.Minute)
+	_, resp, err := llm.GetLLMResponse(cfg.WorkspaceModel, messages, "search_results_selector", cfg, 2*time.Minute, false)
 	if err != nil {
 		logger.Logf("LLM URL selection failed: %v", err)
 		return nil, err

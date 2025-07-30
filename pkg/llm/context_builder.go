@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
 )
 
 // --- Message Structs ---
@@ -39,7 +40,7 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 			}
 			responses = append(responses, fmt.Sprintf("The user responded: %s", strings.TrimSpace(answer)))
 		case "file":
-			fmt.Printf(prompts.LLMFileRequest(req.Query)) // Use prompt
+			fmt.Print(prompts.LLMFileRequest(req.Query))
 			content, err := os.ReadFile(req.Query)
 			if err != nil {
 				return "", fmt.Errorf("failed to read file '%s': %w", req.Query, err)
@@ -48,21 +49,21 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 		case "shell":
 			shouldExecute := false
 			if cfg.SkipPrompt {
-				fmt.Println(prompts.LLMShellSkippingPrompt())              // New prompt
-				riskAnalysis, err := GetScriptRiskAnalysis(cfg, req.Query) // New function call
+				fmt.Println(prompts.LLMShellSkippingPrompt())
+				riskAnalysis, err := GetScriptRiskAnalysis(cfg, req.Query)
 				if err != nil {
 					responses = append(responses, fmt.Sprintf("Failed to get script risk analysis: %v. User denied execution.", err))
-					fmt.Println(prompts.LLMScriptAnalysisFailed(err)) // New prompt
-					continue                                          // Do not run if analysis fails
+					fmt.Println(prompts.LLMScriptAnalysisFailed(err))
+					continue
 				}
 
 				// Define what "not risky" means. For now, a simple string check.
 				// A more robust solution might involve a structured JSON response from the summary model.
 				if strings.Contains(strings.ToLower(riskAnalysis), "not risky") || strings.Contains(strings.ToLower(riskAnalysis), "safe") {
-					fmt.Println(prompts.LLMScriptNotRisky()) // New prompt
+					fmt.Println(prompts.LLMScriptNotRisky())
 					shouldExecute = true
 				} else {
-					fmt.Println(prompts.LLMScriptRisky(riskAnalysis)) // New prompt
+					fmt.Println(prompts.LLMScriptRisky(riskAnalysis))
 					// If risky, fall through to prompt the user
 				}
 			}
@@ -95,14 +96,14 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 	return strings.Join(responses, "\n"), nil
 }
 
-func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string) (string, string, error) {
+func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string, useGeminiSearchGrounding bool) (string, string, error) {
 	modelName := cfg.EditingModel
-	fmt.Printf(prompts.UsingModel(modelName)) // Use prompt
+	fmt.Print(prompts.UsingModel(modelName))
 
 	messages := prompts.BuildCodeMessages(code, instructions, filename, cfg.Interactive)
 
 	if !cfg.Interactive {
-		_, response, err := GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
+		_, response, err := GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute, useGeminiSearchGrounding)
 		if err != nil {
 			return modelName, "", err
 		}
@@ -119,7 +120,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string)
 		}
 
 		// Default timeout for code generation is 6 minutes
-		_, response, err := GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
+		_, response, err := GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute, useGeminiSearchGrounding)
 		if err != nil {
 			return modelName, "", err
 		}
@@ -150,18 +151,18 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string)
 
 			var contextResponse ContextResponse
 			if err := json.Unmarshal([]byte(jsonStr), &contextResponse); err != nil {
-				fmt.Printf(prompts.LLMContextParseError(err, response)) // Use prompt
-				return modelName, response, nil                         // Return the raw response if parsing fails
+				fmt.Print(prompts.LLMContextParseError(err, response)) // Use prompt
+				return modelName, response, nil                        // Return the raw response if parsing fails
 			}
 			if len(contextResponse.ContextRequests) == 0 {
 				fmt.Println(prompts.LLMNoContextRequests()) // Use prompt
 				return modelName, response, nil             // No context requests, return the response
 			}
-			fmt.Printf(prompts.LLMContextRequestsFound(len(contextResponse.ContextRequests))) // Use prompt
+			fmt.Print(prompts.LLMContextRequestsFound(len(contextResponse.ContextRequests))) // Use prompt
 			contextRequestCount++
 			additionalContext, err := handleContextRequest(contextResponse.ContextRequests, cfg)
 			if err != nil {
-				fmt.Printf(prompts.LLMContextRequestError(err)) // Use prompt
+				fmt.Print(prompts.LLMContextRequestError(err)) // Use prompt
 				messages = append(messages, prompts.Message{
 					Role:    "assistant",
 					Content: response,
@@ -170,7 +171,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string)
 					Content: fmt.Sprintf("There was an error handling your request: %v. Please try a different request or generate the code.", err),
 				})
 			} else {
-				fmt.Printf(prompts.LLMAddingContext(additionalContext)) // Use prompt
+				fmt.Print(prompts.LLMAddingContext(additionalContext)) // Use prompt
 				messages = append(messages, prompts.Message{
 					Role:    "assistant",
 					Content: response,

@@ -107,3 +107,9 @@ func removeThinkTags(content string) string {
 
 	return thinkTagPattern.ReplaceAllString(content, "")
 }
+
+// IsGeminiModel checks if the given model name corresponds to a Gemini model.
+func IsGeminiModel(modelName string) bool {
+	lowerModelName := strings.ToLower(modelName)
+	return strings.HasPrefix(lowerModelName, "gemini") || strings.HasPrefix(lowerModelName, "google")
+}

@@ -25,7 +25,7 @@ func createAndRunSetupScript(req *OrchestrationRequirement, originalCfg *config.
 		"Only output the raw script content inside a single markdown code block for `setup.sh`. Do not include any other text or explanation. #WS", req.Instruction, req.Filepath)
 
 	// Process the setup prompt for search grounding or workspace context
-	processedSetupPrompt, err := processInstructions(setupPrompt, originalCfg) // Use originalCfg for processing prompt
+	processedSetupPrompt, _, err := processInstructions(setupPrompt, originalCfg) // Use originalCfg for processing prompt
 	if err != nil {
 		return fmt.Errorf("failed to process setup script prompt: %w", err)
 	}
@@ -104,7 +104,7 @@ func createAndRunValidationScript(req *OrchestrationRequirement, originalCfg *co
 		"Only output the raw script content inside a single markdown code block for `validate.sh`. Do not include any other text or explanation. #WS", req.Instruction, req.Filepath)
 
 	// Process the validation prompt for search grounding or workspace context
-	processedValidationPrompt, err := processInstructions(validationPrompt, originalCfg) // Use originalCfg for processing prompt
+	processedValidationPrompt, _, err := processInstructions(validationPrompt, originalCfg) // Use originalCfg for processing prompt
 	if err != nil {
 		return fmt.Errorf("failed to process validation script prompt: %w", err)
 	}

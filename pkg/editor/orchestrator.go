@@ -80,7 +80,7 @@ func hasPendingRequirements(plan *OrchestrationPlan) bool {
 
 func generateRequirements(prompt string, cfg *config.Config) (*OrchestrationPlan, error) {
 	// Process the initial prompt for search grounding or workspace context
-	processedPrompt, err := processInstructions(prompt, cfg)
+	processedPrompt, _, err := processInstructions(prompt, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to process initial prompt for orchestration: %w", err)
 	}

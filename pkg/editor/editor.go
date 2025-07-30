@@ -3,6 +3,12 @@ package editor
 import (
 	"bufio"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
@@ -11,16 +17,12 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/webcontent"
 	"github.com/alantheprice/ledit/pkg/workspace"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
-	"strings"
 
 	"github.com/fatih/color"
 )
 
 func processInstructions(instructions string, cfg *config.Config) (string, error) {
+	originalInstructions := instructions // Capture original instructions for LLM-generated queries
 
 	// Handle #SG "search query" pattern first
 	sgPattern := regexp.MustCompile(`(?s)#SG\s*"(.*?)"`)
@@ -28,16 +30,60 @@ func processInstructions(instructions string, cfg *config.Config) (string, error
 		submatches := sgPattern.FindStringSubmatch(match)
 		if len(submatches) > 1 {
 			query := submatches[1]
-			fmt.Printf(prompts.PerformingSearch(query)) // Use prompt
+			fmt.Print(prompts.PerformingSearch(query)) // Use prompt
 			content, err := webcontent.FetchContextFromSearch(query, cfg)
 			if err != nil {
-				fmt.Printf(prompts.SearchError(query, err)) // Use prompt
+				fmt.Print(prompts.SearchError(query, err)) // Use prompt
 				return ""
 			}
 			return content
 		}
 		return match
 	})
+
+	// New: Handle #SG when it's not followed by a quoted string, indicating an LLM-generated search query
+	// This pattern matches #SG followed by a word boundary, and not followed by optional whitespace and a double quote.
+	sgLLMQueryPattern := regexp.MustCompile(`(?s)#SG\b`)
+	instructions = sgLLMQueryPattern.ReplaceAllStringFunc(instructions, func(match string) string {
+		// Check if this #SG is followed by a quoted string by looking at the context
+		matchIndex := strings.Index(instructions, match)
+		if matchIndex != -1 {
+			afterMatch := instructions[matchIndex+len(match):]
+			// If it starts with optional whitespace followed by a quote, skip it
+			trimmed := strings.TrimSpace(afterMatch)
+			if strings.HasPrefix(trimmed, `"`) {
+				return match // Don't replace, let the quoted version handle it
+			}
+		}
+
+		// Use the original instructions to generate the search query
+		fmt.Printf("Ledit is generating a search query using LLM based on your instructions...\n")
+		generatedQueries, err := llm.GenerateSearchQuery(cfg, originalInstructions)
+		if err != nil {
+			fmt.Printf("Error generating search queries with LLM: %v\n", err)
+			return ""
+		}
+
+		var allFetchedContent strings.Builder
+		searchCount := 0
+		for _, query := range generatedQueries {
+			if searchCount >= 2 { // Limit to a maximum of two searches
+				break
+			}
+			fmt.Printf("Performing LLM-generated search for: %s\n", query)
+			content, err := webcontent.FetchContextFromSearch(query, cfg)
+			if err != nil {
+				fmt.Print(prompts.SearchError(query, err))
+				// Continue to the next query even if one fails
+				continue
+			}
+			allFetchedContent.WriteString(content)
+			allFetchedContent.WriteString("\n\n") // Add a separator between contents from different searches
+			searchCount++
+		}
+		return allFetchedContent.String()
+	})
+
 	filePattern := regexp.MustCompile(`\s+#(\S+)(?:(\d+),(\d+))?`)
 	matches := filePattern.FindAllStringSubmatch(instructions, -1)
 
@@ -60,13 +106,13 @@ func processInstructions(instructions string, cfg *config.Config) (string, error
 
 			content, err = webcontent.NewWebContentFetcher().FetchWebContent(path)
 			if err != nil {
-				fmt.Printf(prompts.URLFetchError(path, err)) // Use prompt
+				fmt.Print(prompts.URLFetchError(path, err)) // Use prompt
 				continue
 			}
 		} else {
 			content, err = LoadFileContent(path)
 			if err != nil {
-				fmt.Printf(prompts.FileLoadError(path, err)) // Use prompt
+				fmt.Print(prompts.FileLoadError(path, err)) // Use prompt
 				continue
 			}
 		}
@@ -93,7 +139,7 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 	return updatedCode, llmContent, nil
 }
 
-func parseCommitMessage(commitMessage string, attempts int) (string, string, error) {
+func parseCommitMessage(commitMessage string) (string, string, error) {
 	lines := strings.Split(commitMessage, "\n")
 	if len(lines) < 2 {
 		return "", "", fmt.Errorf("failed to parse commit message")
@@ -183,7 +229,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 			if err := changetracker.RecordChange(revisionID, newFilename, originalCode, newCode, description, note); err != nil {
 				return fmt.Errorf("failed to record change: %w", err)
 			}
-			fmt.Printf(prompts.ChangesApplied(newFilename)) // Use prompt
+			fmt.Print(prompts.ChangesApplied(newFilename)) // Use prompt
 
 			if cfg.TrackWithGit {
 				// get the filename path from the root of the git repository
@@ -208,18 +254,18 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				}
 			}
 		} else {
-			fmt.Printf(prompts.ChangesNotApplied(newFilename)) // Use prompt
+			fmt.Print(prompts.ChangesNotApplied(newFilename)) // Use prompt
 		}
 	}
 	return nil
 }
 
-func getChangeSummaries(cfg *config.Config, newCode string, instructions string, newFilename string, reader *bufio.Reader) (string, string, string, error) {
-	note := "Changes made by ledit based on LLM suggestions."
-	description := ""
+func getChangeSummaries(cfg *config.Config, newCode string, instructions string, newFilename string, reader *bufio.Reader) (note string, description string, commit string, err error) {
+	note = "Changes made by ledit based on LLM suggestions."
+	description = ""
 	generatedDescription, err := llm.GetCommitMessage(cfg, newCode, instructions, newFilename)
 	if err == nil && generatedDescription != "" {
-		note, description, err := parseCommitMessage(generatedDescription, 0)
+		note, description, err := parseCommitMessage(generatedDescription)
 		if err == nil {
 			return note, description, generatedDescription, nil
 		}
@@ -227,13 +273,13 @@ func getChangeSummaries(cfg *config.Config, newCode string, instructions string,
 	// It failed in the process, lets try one more time.
 	generatedDescription, err = llm.GetCommitMessage(cfg, newCode, instructions, newFilename)
 	if err == nil && generatedDescription != "" {
-		note, description, err := parseCommitMessage(generatedDescription, 0)
+		note, description, err = parseCommitMessage(generatedDescription)
 		if err == nil {
 			return note, description, generatedDescription, nil
 		}
 	}
 	// falling back to manual input
-	fmt.Printf(prompts.EnterDescriptionPrompt(newFilename)) // Use prompt
+	fmt.Print(prompts.EnterDescriptionPrompt(newFilename)) // Use prompt
 	note, _ = reader.ReadString('\n')
 	note = strings.TrimSpace(note)
 	generatedDescription = ""
@@ -257,7 +303,7 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (s
 	if err != nil {
 		return "", fmt.Errorf("failed to process instructions: %w", err)
 	}
-	fmt.Printf(prompts.ProcessedInstructionsSeparator(processedInstructions)) // Use prompt
+	fmt.Print(prompts.ProcessedInstructionsSeparator(processedInstructions)) // Use prompt
 
 	requestHash := utils.GenerateRequestHash(processedInstructions)
 	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, filename, cfg)

@@ -286,36 +286,34 @@ Examples:
     # --- Test Execution & Monitoring ---
     results = OrderedDict() # Stores final results: test_name -> 'PASS'/'FAIL'/'FAIL (Timeout)'
     failure_reasons = {}    # Stores detailed reasons for failed tests
-    processes = {}          # Dictionary to track active subprocesses: pid -> {process, name, start_time, stdout_file, stderr_file, stdout_file_path, stderr_file_path, test_workspace_path}
+    processes = {}          # Dictionary to track active subprocesses: pid -> {process, name, sanitized_name, start_time, stdout_file, stderr_file, stdout_file_path, stderr_file_path, test_workspace_path}
     
     # Start all selected tests as subprocesses
     for test in selected_tests_for_execution:
         test_name = test['name']
+        sanitized_test_name = test_name.replace(' ', '_') # Sanitize name for file paths
         print(f"--- Starting test: {test_name} ---")
         
         # Create a unique directory for this test to ensure isolation
-        current_test_workspace = testing_dir / test_name
+        current_test_workspace = testing_dir / sanitized_test_name
         current_test_workspace.mkdir(parents=True, exist_ok=True)
         logging.debug(f"Created test workspace: {current_test_workspace}")
 
         # Construct the command to run the test logic within the shell script
         # The 'run_test_logic' function is expected to be defined in each test_*.sh script.
         # We don't pass the ledit path explicitly to the script, but modify PATH for the subprocess.
-        cmd = f". {test['path'].resolve()} && run_test_logic '{model_name}'"
-        
-        # Redirect stdout/stderr to temporary files within the test's workspace
-        stdout_file_path = current_test_workspace / f"{test_name}.stdout"
-        stderr_file_path = current_test_workspace / f"{test_name}.stderr"
-
-        stdout_file = open(stdout_file_path, "w")
-        stderr_file = open(stderr_file_path, "w")
-
-        # Prepare environment for the subprocess: add project_root to PATH
-        # This allows the test scripts to find the 'ledit' executable by name
-        # (e.g., `ledit init`) even when run from a subdirectory.
         env = os.environ.copy()
         env['PATH'] = str(project_root) + os.pathsep + env.get('PATH', '')
         logging.debug(f"PATH for {test_name}: {env['PATH']}")
+
+        cmd = f". {test['path'].resolve()} && run_test_logic '{model_name}'"
+        
+        # Redirect stdout/stderr to temporary files within the test's workspace
+        stdout_file_path = current_test_workspace / f"{sanitized_test_name}.stdout"
+        stderr_file_path = current_test_workspace / f"{sanitized_test_name}.stderr"
+
+        stdout_file = open(stdout_file_path, "w")
+        stderr_file = open(stderr_file_path, "w")
 
         process = subprocess.Popen(
             cmd,
@@ -330,6 +328,7 @@ Examples:
         processes[process.pid] = {
             'process': process,
             'name': test_name,
+            'sanitized_name': sanitized_test_name, # Store sanitized name for file operations
             'start_time': time.time(),
             'stdout_file': stdout_file,
             'stderr_file': stderr_file,
@@ -403,6 +402,25 @@ Examples:
                         print("--- STDERR ---")
                         print(stderr)
                     print("------------------------------------------")
+
+                # NEW: Write full context of failed test to a file
+                sanitized_name_for_log = info['sanitized_name']
+                failure_log_filename = f"test_failure_{sanitized_name_for_log}.log"
+                failure_log_path = info['test_workspace_path'] / failure_log_filename
+                
+                # Ensure the reason is available, defaulting if somehow not set
+                reason_for_log = failure_reasons.get(info['name'], "Reason not available")
+
+                with open(failure_log_path, "w") as f:
+                    f.write(f"--- Test Failure Log for: {info['name']} ---\n")
+                    f.write(f"Result: {results[info['name']]}\n")
+                    f.write(f"Reason: {reason_for_log}\n\n")
+                    f.write(f"--- Full STDOUT ---\n")
+                    f.write(stdout if stdout else "[No STDOUT]\n")
+                    f.write("\n--- Full STDERR ---\n")
+                    f.write(stderr if stderr else "[No STDERR]\n")
+                    f.write("\n--- End of Log ---\n")
+                logging.info(f"Full failure context saved to: {failure_log_path}")
 
             # Clean up temporary output files (stdout/stderr files)
             try:

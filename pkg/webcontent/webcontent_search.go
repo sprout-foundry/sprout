@@ -22,6 +22,11 @@ func FetchContextFromSearch(query string, cfg *config.Config) (string, error) {
 	logger.LogProcessStep(fmt.Sprintf("Starting web content search for query: %s", query))
 	defer logger.LogProcessStep("Completed web content search")
 
+	if strings.TrimSpace(query) == "" {
+		logger.Log("No relevant content found for the query")
+		return "", nil
+	}
+
 	// Fetch search results and content using Jina AI Search API
 	results, err := fetchJinaSearchResults(query, cfg)
 	if err != nil {
@@ -81,7 +86,8 @@ func getSearchResults(query string, cfg *config.Config) ([]JinaSearchResult, err
 	q.Add("q", query)
 	req.URL.RawQuery = q.Encode()
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// Increase the timeout for search grounding
+	client := &http.Client{Timeout: 120 * time.Second} // Increased from 10 seconds to 120 seconds
 	logger.Logf("Making HTTP request to Jina API: %s", req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {

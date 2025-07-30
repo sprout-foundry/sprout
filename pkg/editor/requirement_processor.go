@@ -2,14 +2,14 @@ package editor
 
 import (
 	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
+
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
-	"path/filepath"
-	"regexp"
-	"strings"
-	"time"
 )
 
 type RequirementProcessor struct {
@@ -139,21 +139,22 @@ func (p *RequirementProcessor) getCurrentInstructionForAttempt(req *Orchestratio
 		originalInstructionWithoutTag := strings.TrimSpace(re.ReplaceAllString(fullInstruction, ""))
 
 		var contextPrompt string
-		var generatedSearchQuery string
+		var generatedSearchQueries []string // Changed to slice of strings
 
-		searchQueryMessages := []prompts.Message{
-			{Role: "system", Content: "You are an expert at generating concise search queries to resolve software development issues. Your output should ONLY be the search query, enclosed in double quotes."},
-			{Role: "user", Content: fmt.Sprintf(
-				"Based on the following error and context, generate a concise search query (2-15 words) that would help find relevant information to resolve this issue:\n\nError: %s\n\nContext: %s",
-				req.ValidationFailureContext, originalInstructionWithoutTag,
-			)},
-		}
+		// Construct the context string for GenerateSearchQuery
+		searchContext := fmt.Sprintf(
+			"Error: %s\nContext: %s",
+			req.ValidationFailureContext, originalInstructionWithoutTag,
+		)
 
-		_, searchQueryRaw, err := llm.GetLLMResponse(p.cfg.WorkspaceModel, searchQueryMessages, "search_query_generator", p.cfg, 1*time.Minute)
-		if err == nil && searchQueryRaw != "" {
-			generatedSearchQuery = strings.Trim(searchQueryRaw, `"`)
-			generatedSearchQuery = strings.TrimSpace(generatedSearchQuery)
-			logger.LogProcessStep(prompts.GeneratedSearchQuery(generatedSearchQuery)) // Use prompt
+		// Call the dedicated GenerateSearchQuery function which uses p.cfg.EditingModel internally
+		queries, err := llm.GenerateSearchQuery(p.cfg, searchContext)
+		if err == nil && len(queries) > 0 {
+			generatedSearchQueries = queries
+			// Log each generated query
+			for _, q := range generatedSearchQueries {
+				logger.LogProcessStep(prompts.GeneratedSearchQuery(q)) // Use prompt
+			}
 		} else {
 			logger.LogProcessStep(prompts.SearchQueryGenerationWarning(err)) // Use prompt
 		}
@@ -164,9 +165,14 @@ func (p *RequirementProcessor) getCurrentInstructionForAttempt(req *Orchestratio
 			contextPrompt = prompts.RetryPromptWithoutDiff(originalInstructionWithoutTag, req.Filepath, req.ValidationFailureContext) // Use prompt
 		}
 
-		if generatedSearchQuery != "" {
-			contextPrompt = fmt.Sprintf("#SG \"%s\"\n%s", generatedSearchQuery, contextPrompt)
-			logger.LogProcessStep(prompts.AddedSearchGrounding(generatedSearchQuery)) // Use prompt
+		// Prepend #SG tags for all generated search queries
+		if len(generatedSearchQueries) > 0 {
+			var sgTags strings.Builder
+			for _, query := range generatedSearchQueries {
+				sgTags.WriteString(fmt.Sprintf("#SG \"%s\"\n", query))
+				logger.LogProcessStep(prompts.AddedSearchGrounding(query)) // Use prompt
+			}
+			contextPrompt = sgTags.String() + contextPrompt
 		}
 
 		logger.LogProcessStep(prompts.AddingValidationFailureContext()) // Use prompt

@@ -358,3 +358,37 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 
 	return strings.TrimSpace(response), nil
 }
+
+// GenerateSearchQuery uses an LLM to generate a concise search query based on the provided context.
+func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert at generating concise search queries to resolve software development issues. Your output should be a JSON array of 1 to 3 concise search queries (2-15 words each), based on the provided context. For example: `[\"query one\", \"query two\"]`"},
+		{Role: "user", Content: fmt.Sprintf("Generate search queries based on the following context: %s", context)},
+	}
+
+	modelName := cfg.EditingModel // Use the editing model for generating search queries
+
+	// Use a short timeout for generating a search query
+	_, queryResponse, err := GetLLMResponse(modelName, messages, "", cfg, 30*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate search query from LLM: %w", err)
+	}
+
+	// The response might be inside a code block, let's be robust.
+	if strings.Contains(queryResponse, "```json") {
+		parts := strings.SplitN(queryResponse, "```json", 2)
+		if len(parts) > 1 {
+			queryResponse = strings.Split(parts[1], "```")[0]
+		}
+	} else if strings.HasPrefix(queryResponse, "```") && strings.HasSuffix(queryResponse, "```") {
+		queryResponse = strings.TrimPrefix(queryResponse, "```")
+		queryResponse = strings.TrimSuffix(queryResponse, "```")
+	}
+
+	var searchQueries []string
+	if err := json.Unmarshal([]byte(queryResponse), &searchQueries); err != nil {
+		return nil, fmt.Errorf("failed to parse search queries from LLM response: %w, response: %s", err, queryResponse)
+	}
+
+	return searchQueries, nil
+}

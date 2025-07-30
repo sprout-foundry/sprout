@@ -103,11 +103,12 @@ func (w *Logger) AskForConfirmation(prompt string, required bool) bool {
 		w.LogUserInteraction(fmt.Sprintf("%s (yes/no): ", prompt))
 		response, _ := reader.ReadString('\n')
 		response = strings.ToLower(strings.TrimSpace(response))
-		if response == "yes" || response == "y" {
+		switch response {
+		case "yes", "y":
 			return true
-		} else if response == "no" || response == "n" {
+		case "no", "n":
 			return false
-		} else {
+		default:
 			w.LogUserInteraction("Invalid input. Please type 'yes' or 'no'.")
 		}
 	}

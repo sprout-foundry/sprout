@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"fmt"
+	"strings"
 )
 
 var (
@@ -38,7 +39,7 @@ func GetCodeOrRequestMessages() []Message {
 				"    For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
 				"    If you are generating code, the syntax of the code blocks must exactly match these instructions and the code must be complete. " +
 				"    If you are generating code, ONLY make the changes that are necessary to satisfy the instructions.\n\n" +
-				"2.  **Request Context:** *do not make guesses* If you need more information, respond *only* with a JSON array of context requests with no other text. The required format is:\n" +
+				"2.  **Request Context:** *do not make guesses* If you need more information, respond *only* with a JSON array of context requests with no other text. The required format:\n" +
 				"    `{\"context_requests\":[{ \"type\": \"TYPE\", \"query\": \"QUERY\" }]}`\n" +
 				"    -   `type`: Can be `search` (web search), `user_prompt` (ask the user a question), `file` (request file content, needs to be a filename, otherwise ask the user), or `shell` (request a shell command execution).\n" +
 				"    -   `query`: The search term, question, file path, or command.\n\n" +
@@ -141,10 +142,37 @@ Only output a comma-separated list of numbers, e.g., "1, 3, 4".
 	}
 }
 
+// BuildMultiSearchQueryMessages creates messages for generating multiple search queries.
+func BuildMultiSearchQueryMessages(userRequest string) []Message {
+	systemPrompt := "You are an expert at identifying information gaps in a user's request and formulating precise search queries to fill those gaps. " +
+		"Your task is to analyze the user's request and identify any parts that require fresh, external data to be fully addressed. " +
+		"Based on these identified needs, generate up to two concise and distinct search queries. " +
+		"Output these queries as a JSON array of strings. " +
+		"For example: `[\"search query one\", \"search query two\"]`. " +
+		"If no search queries are needed, output an empty JSON array: `[]`."
+
+	userPrompt := fmt.Sprintf("User request: \"%s\"\n\nGenerate search queries:", userRequest)
+
+	return []Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+}
+
 // BuildScriptRiskAnalysisMessages creates messages for script risk analysis.
 func BuildScriptRiskAnalysisMessages(scriptContent string) []Message {
 	return []Message{
 		{Role: "system", Content: "You are a security expert tasked with analyzing shell scripts for potential risks. Evaluate the provided script and determine if it is 'risky' or 'not risky' to execute in a development environment. Provide a concise explanation for your assessment. If it's not risky, explicitly state 'not risky'. If it's risky, explain why and suggest potential dangers."},
 		{Role: "user", Content: fmt.Sprintf("Analyze the following shell script:\n\n```bash\n%s\n```\n\nIs this script risky to execute? Explain your reasoning.", scriptContent)},
 	}
+}
+
+// LLMSearchQueryGenerationError provides a message for when the LLM fails to generate a search query.
+func LLMSearchQueryGenerationError(err error) string {
+	return fmt.Sprintf("Ledit failed to generate a search query using the LLM. This might be due to API issues or an inability to understand the request. Please try again or provide a specific search query using #SG \"your query\". Error: %v\n", err)
+}
+
+// MultiSearchQueriesGeneratedLog provides a message for logging when multiple search queries are generated.
+func MultiSearchQueriesGeneratedLog(queries []string) string {
+	return fmt.Sprintf("Generated multiple search queries: %s. Using these queries to gather more context.", strings.Join(queries, ", "))
 }

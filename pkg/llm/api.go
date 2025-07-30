@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
 )
 
 var (
@@ -362,7 +363,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 // GenerateSearchQuery uses an LLM to generate a concise search query based on the provided context.
 func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
 	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert at generating concise search queries to resolve software development issues. Your output should be a JSON array of 1 to 3 concise search queries (2-15 words each), based on the provided context. For example: `[\"query one\", \"query two\"]`"},
+		{Role: "system", Content: "You are an expert at generating concise search queries to resolve software development issues. Your output should be a JSON array of 1 to 2 concise search queries (2-15 words each), based on the provided context. For example: `[\"query one\", \"query two\"]`"},
 		{Role: "user", Content: fmt.Sprintf("Generate search queries based on the following context: %s", context)},
 	}
 

@@ -2,94 +2,77 @@ package prompts
 
 import (
 	"fmt"
-	"strings"
+	"strings" // Added for getLanguageFromFilename
 )
 
 var (
-	// DefaultTokenLimit is the default token limit for API calls
-	DefaultTokenLimit = 42000
+	DefaultTokenLimit = 42096 // Default token limit for LLM requests
 )
 
-// --- Message Structs ---
-
+// Message represents a single message in a chat-like conversation with the LLM.
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-func GetCodeGenMessages() []Message {
-	return []Message{
-		{
-			Role: "system",
-			Content: "You are an assistant that can generate updated code based on provided instructions. " +
-				"Provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
-				"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
-				"The syntax of the code blocks must exactly match these instructions and the code must be complete. " +
-				"ONLY make the changes that are necessary to satisfy the instructions.\n",
-		},
-	}
+// --- LLM Message Builders ---
+
+// GetBaseCodeGenSystemMessage returns the core system prompt for code generation.
+func GetBaseCodeGenSystemMessage() string {
+	return "You are an assistant that can generate updated code based on provided instructions. " +
+		"Provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
+		"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
+		"The syntax of the code blocks must exactly match these instructions and the code must be complete. " +
+		"ONLY make the changes that are necessary to satisfy the instructions.\n"
 }
 
-func GetCodeOrRequestMessages() []Message {
-	return []Message{
-		{
-			Role: "system",
-			Content: "You are an assistant that can generate updated code based on provided instructions. You have two response options:\n\n" +
-				"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
-				"    For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
-				"    If you are generating code, the syntax of the code blocks must exactly match these instructions and the code must be complete. " +
-				"    If you are generating code, ONLY make the changes that are necessary to satisfy the instructions.\n\n" +
-				"2.  **Request Context:** *do not make guesses* If you need more information, respond *only* with a JSON array of context requests with no other text. The required format:\n" +
-				"    `{\"context_requests\":[{ \"type\": \"TYPE\", \"query\": \"QUERY\" }]}`\n" +
-				"    -   `type`: Can be `search` (web search), `user_prompt` (ask the user a question), `file` (request file content, needs to be a filename, otherwise ask the user), or `shell` (request a shell command execution).\n" +
-				"    -   `query`: The search term, question, file path, or command.\n\n" +
-				"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* request the file's contents using the `file` type.\n\n" +
-				"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then request the file contents using the `file` type.\n\n" +
-				"After your context request is fulfilled, you will be prompted again to generate the code. Do not continue asking for context; generate the code as soon as you have enough information.\n" +
-				"Do not generate code until you have all the necessary context. If you do not have enough information, ask for it using the context request format.\n",
-		},
-	}
-}
+// BuildCodeMessages constructs the messages for the LLM to generate code.
+func BuildCodeMessages(code, instructions, filename string, interactive bool) []Message {
+	var messages []Message
 
-func BuildCodeMessages(code, instructions, filename string, canAddContext bool) []Message {
-	messages := GetCodeGenMessages()
-	if canAddContext {
-		messages[0] = GetCodeOrRequestMessages()[0]
+	systemPrompt := GetBaseCodeGenSystemMessage() // Use the base message
+
+	if interactive {
+		systemPrompt = "You are an assistant that can generate updated code based on provided instructions. You have two response options:\n\n" +
+			"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
+			"    For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
+			"    If you are generating code, the syntax of the code blocks must exactly match these instructions and the code must be complete. " +
+			"    If you are generating code, ONLY make the changes that are necessary to satisfy the instructions.\n\n" +
+			"2.  **Request Context:** *do not make guesses* If you need more information, respond *only* with a JSON array of context requests with no other text. The required format:\n" +
+			"    `{\"context_requests\":[{ \"type\": \"TYPE\", \"query\": \"QUERY\" }]}`\n" +
+			"    -   `type`: Can be `search` (web search), `user_prompt` (ask the user a question), `file` (request file content, needs to be a filename, otherwise ask the user), or `shell` (request a shell command execution).\n" +
+			"    -   `query`: The search term, question, file path, or command.\n\n" +
+			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* request the file's contents using the `file` type.\n\n" +
+			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then request the file contents using the `file` type.\n\n" +
+			"After your context request is fulfilled, you will be prompted again to generate the code. Do not continue asking for context; generate the code as soon as you have enough information.\n" +
+			"Do not generate code until you have all the necessary context. If you do not have enough information, ask for it using the context request format.\n"
 	}
-	if code != "" && filename != "" {
-		messages = append(messages, Message{
-			Role:    "user",
-			Content: fmt.Sprintf("Here is the existing code in `%s`:\n\n%s\n\nPlease update it to satisfy these instructions: %s", filename, code, instructions),
-		})
+
+	messages = append(messages, Message{Role: "system", Content: systemPrompt})
+
+	if code != "" {
+		messages = append(messages, Message{Role: "user", Content: fmt.Sprintf("Here is the current content of `%s`:\n\n```%s\n%s\n```\n\nInstructions: %s", filename, getLanguageFromFilename(filename), code, instructions)})
 	} else {
-		messages = append(messages, Message{
-			Role:    "user",
-			Content: fmt.Sprintf("Based on these instructions: %s, suggest filenames and the full contents of each new file.", instructions),
-		})
+		messages = append(messages, Message{Role: "user", Content: fmt.Sprintf("Instructions: %s", instructions)})
 	}
 	return messages
 }
 
-func BuildOrchestrationMessages(prompt, workspaceContext string) []Message {
+// BuildScriptRiskAnalysisMessages constructs the messages for the LLM to analyze script risk.
+func BuildScriptRiskAnalysisMessages(scriptContent string) []Message {
+	systemPrompt := `You are an expert in shell script security analysis. Your task is to review a provided shell script and determine if it poses any significant security risks (e.g., deleting critical files, installing untrusted software, exposing sensitive information).
+Respond with a concise analysis, stating whether the script is "not risky" or detailing any identified risks.
+Do not execute the script. Focus solely on static analysis.
+`
+	userPrompt := fmt.Sprintf("Analyze the following shell script for security risks:\n\n```bash\n%s\n```", scriptContent)
+
 	return []Message{
-		{
-			Role: "system",
-			Content: "You are a senior software engineer planning a feature implementation. " +
-				"Based on the user's request and the provided workspace context, generate a JSON object. " +
-				"This object should contain a single key 'requirements' which is an array of change objects. " +
-				"Each change object must have a 'filepath' (the path to the file to be modified or created), " +
-				"an 'instruction' (a detailed description of the change for a mid-level developer that is not too prescriptive, but provides enough context), " +
-				"and a 'status' (which should be initialized to 'pending'). " +
-				"For requirements that can be met by running a command (e.g., installing dependencies, initializing a project), use 'setup.sh' as the filepath and describe the command in the instruction. " +
-				"The output must be only the raw JSON, without any surrounding text or code fences.",
-		},
-		{
-			Role:    "user",
-			Content: fmt.Sprintf("User request: %s\n\nWorkspace context:\n%s", prompt, workspaceContext),
-		},
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
 	}
 }
 
+// BuildCommitMessages constructs the messages for the LLM to generate a commit message.
 func BuildCommitMessages(changelog, originalPrompt string) []Message {
 	systemPrompt := "You are an expert at writing git commit messages. " +
 		"Based on the provided code changes (diff) and the original user request, " +
@@ -112,45 +95,20 @@ func BuildCommitMessages(changelog, originalPrompt string) []Message {
 	)
 
 	return []Message{
-		{
-			Role:    "system",
-			Content: systemPrompt,
-		},
-		{
-			Role:    "user",
-			Content: userPrompt,
-		},
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
 	}
 }
 
-func BuildSearchResultsQueryMessages(results, query string) []Message {
-
-	prompt := fmt.Sprintf(`
-Based on the search query and the following search results, identify the 1-3 most relevant URLs (max 3).
-You should select URLs that are most likely to contain the answer to the query.
-List the numbers of the URLs that are most likely to contain the answer to the query.
-If none of the results seem relevant, output "none".
-Only output a comma-separated list of numbers, e.g., "1, 3, 4".
-
-%s
-`, results)
-
-	return []Message{
-		{Role: "system", Content: "You are an expert at analyzing search results and picking the most relevant links."},
-		{Role: "user", Content: prompt},
-	}
-}
-
-// BuildMultiSearchQueryMessages creates messages for generating multiple search queries.
-func BuildMultiSearchQueryMessages(userRequest string) []Message {
-	systemPrompt := "You are an expert at identifying information gaps in a user's request and formulating precise search queries to fill those gaps. " +
-		"Your task is to analyze the user's request and identify any parts that require fresh, external data to be fully addressed. " +
-		"Based on these identified needs, generate up to two concise and distinct search queries. " +
-		"Output these queries as a JSON array of strings. " +
-		"For example: `[\"search query one\", \"search query two\"]`. " +
-		"If no search queries are needed, output an empty JSON array: `[]`."
-
-	userPrompt := fmt.Sprintf("User request: \"%s\"\n\nGenerate search queries:", userRequest)
+// BuildSearchQueryMessages constructs the messages for the LLM to generate search queries.
+func BuildSearchQueryMessages(context string) []Message {
+	systemPrompt := `You are an expert at formulating precise web search queries.
+Your task is to generate a single, highly effective search query based on the provided context, which includes an error message and relevant code/instruction.
+The query should be designed to find solutions or relevant information to resolve the error or understand the context better.
+Respond with ONLY the search query string. Do not include any other text, explanations, or conversational filler.
+Example: "golang http server connection refused"
+`
+	userPrompt := fmt.Sprintf("Generate a search query based on the following context:\n\n%s", context)
 
 	return []Message{
 		{Role: "system", Content: systemPrompt},
@@ -158,55 +116,213 @@ func BuildMultiSearchQueryMessages(userRequest string) []Message {
 	}
 }
 
-// BuildScriptRiskAnalysisMessages creates messages for script risk analysis.
-func BuildScriptRiskAnalysisMessages(scriptContent string) []Message {
+// BuildSearchResultsQueryMessages constructs messages for the LLM to select relevant URLs from search results.
+func BuildSearchResultsQueryMessages(searchResultsContext, originalQuery string) []Message {
+	systemPrompt := `You are an expert at identifying the most relevant URLs from a list of search results based on an original search query.
+Your task is to review the provided search query and the list of search results (including URL, title, and description).
+From the search results, identify the 1-3 most relevant URLs that are most likely to contain the information needed to answer the original query.
+Respond with ONLY a comma-separated list of the result numbers (e.g., "1,3,5").
+If no results are relevant, respond with "none".
+Do not include any other text, explanations, or conversational filler.
+`
+	userPrompt := fmt.Sprintf("Original Search Query: \"%s\"\n\nSearch Results:\n%s\n\nWhich result numbers are most relevant?", originalQuery, searchResultsContext)
+
 	return []Message{
-		{Role: "system", Content: "You are a security expert tasked with analyzing shell scripts for potential risks. Evaluate the provided script and determine if it is 'risky' or 'not risky' to execute in a development environment. Provide a concise explanation for your assessment. If it's not risky, explicitly state 'not risky'. If it's risky, explain why and suggest potential dangers."},
-		{Role: "user", Content: fmt.Sprintf("Analyze the following shell script:\n\n```bash\n%s\n```\n\nIs this script risky to execute? Explain your reasoning.", scriptContent)},
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
 	}
 }
 
-// BuildProjectGoalsMessages creates messages for generating project goals.
+// RetryPromptWithDiff constructs a prompt for retrying with diff context.
+func RetryPromptWithDiff(originalInstruction, filename, validationFailureContext, lastLLMResponse string) string {
+	return fmt.Sprintf("The previous attempt to fulfill the instruction '%s' for file '%s' failed. "+
+		"Validation failed with the following context:\n%s\n\n"+
+		"Here was the last LLM response (diff):\n```diff\n%s\n```\n\n"+
+		"Please provide the corrected code, taking into account the validation failure and the previous response.",
+		originalInstruction, filename, validationFailureContext, lastLLMResponse)
+}
+
+// RetryPromptWithoutDiff constructs a prompt for retrying without diff context.
+func RetryPromptWithoutDiff(originalInstruction, filename, validationFailureContext string) string {
+	return fmt.Sprintf("The previous attempt to fulfill the instruction '%s' for file '%s' failed. "+
+		"Validation failed with the following context:\n%s\n\n"+
+		"Please provide the corrected code, taking into account the validation failure.",
+		originalInstruction, filename, validationFailureContext)
+}
+
+// BuildOrchestrationPlanMessages constructs the messages for the LLM to generate a high-level orchestration plan.
+func BuildOrchestrationPlanMessages(overallTask, workspaceContext string) []Message {
+	systemPrompt := `You are an expert software developer. Your task is to break down a complex development task into a list of high-level, actionable requirements.
+Each requirement should describe a distinct, logical step towards completing the overall task.
+Your response MUST be a JSON object with a single key "requirements" which is an array of objects, each with an "instruction" key.
+Do not include any filepaths in these high-level instructions. File-specific changes will be determined in a later step.
+Do not include any other text or explanation outside the JSON.
+
+Example JSON format:
+{
+  "requirements": [
+    {
+      "instruction": "Implement user authentication, including signup and login."
+    },
+    {
+      "instruction": "Develop a new API endpoint for managing user profiles."
+    },
+    {
+      "instruction": "Integrate a payment gateway for subscription management."
+    }
+  ]
+}
+
+Consider the provided workspace context to understand the project structure and existing code.
+`
+	userPrompt := fmt.Sprintf("Overall task: \"%s\"\n\nWorkspace Context:\n%s", overallTask, workspaceContext)
+
+	return []Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+}
+
+// BuildChangesForRequirementMessages constructs the messages for the LLM to generate file-specific changes for a high-level requirement.
+func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext string) []Message {
+	systemPrompt := `You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes.
+For each change, you must provide the 'filepath' and a detailed 'instruction' for what needs to be done in that file.
+If a file needs to be created, specify its full path.
+If a file needs to be deleted, specify its full path and an instruction like "Delete this file."
+Your response MUST be a JSON object with a single key "changes" which is an array of objects, each with "filepath" and "instruction" keys.
+Do not include any other text or explanation outside the JSON.
+
+Example JSON format:
+{
+  "changes": [
+    {
+      "filepath": "src/main.go",
+      "instruction": "Add a new function 'calculateSum' that takes two integers and returns their sum."
+    },
+    {
+      "filepath": "tests/main_test.go",
+      "instruction": "Write a unit test for the 'calculateSum' function in 'src/main.go'."
+    },
+    {
+      "filepath": "docs/api.md",
+      "instruction": "Update the API documentation to include details about the new 'calculateSum' function."
+    }
+  ]
+}
+
+Consider the provided workspace context to understand the project structure and existing code.
+`
+	userPrompt := fmt.Sprintf("High-level requirement: \"%s\"\n\nWorkspace Context:\n%s", requirementInstruction, workspaceContext)
+
+	return []Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+}
+
+// BuildProjectGoalsMessages constructs messages for the LLM to generate project goals.
 func BuildProjectGoalsMessages(workspaceSummary string) []Message {
+	systemPrompt := `You are an expert at defining clear and concise project goals.
+Your task is to analyze the provided workspace summary and infer the overall goals, key features, target audience, and technical vision for the project.
+Your response MUST be a JSON object with the following keys:
+- "OverallGoal": A concise statement of the project's main objective.
+- "KeyFeatures": A list of the most important functionalities or capabilities.
+- "TargetAudience": Who the project is intended for.
+- "TechnicalVision": The high-level technical approach or philosophy.
+Do not include any other text or explanation outside the JSON.
+
+Example JSON format:
+{
+  "OverallGoal": "Develop a secure and scalable e-commerce platform.",
+  "KeyFeatures": ["Product catalog", "Shopping cart", "Payment processing", "User authentication"],
+  "TargetAudience": "Small to medium-sized businesses selling online.",
+  "TechnicalVision": "Microservices architecture with cloud-native deployment."
+}
+
+`
+	userPrompt := fmt.Sprintf("Based on the following workspace summary, generate the project goals:\n\n%s", workspaceSummary)
+
 	return []Message{
-		{
-			Role: "system",
-			Content: "You are an expert at inferring project goals and preferences from a given workspace context. " +
-				"Based on the provided workspace summary, autogenerate a concise set of long-term project goals and preferences. " +
-				"Focus on the overall purpose, key features, target audience, and technical vision of the project. " +
-				"Respond with a JSON object containing the following keys: 'overall_goal', 'key_features', 'target_audience', 'technical_vision'. " +
-				"Each value should be a concise string. If information is not explicitly available, make reasonable inferences based on common software development practices. " +
-				"Your response MUST be only the raw JSON, without any surrounding text or code fences.",
-		},
-		{
-			Role:    "user",
-			Content: fmt.Sprintf("Workspace context summary:\n%s\n\nAutogenerate project goals:", workspaceSummary),
-		},
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
 	}
 }
 
-// LLMSearchQueryGenerationError provides a message for when the LLM fails to generate a search query.
-func LLMSearchQueryGenerationError(err error) string {
-	return fmt.Sprintf("Ledit failed to generate a search query using the LLM. This might be due to API issues or an inability to understand the request. Please try again or provide a specific search query using #SG \"your query\". Error: %v\n", err)
-}
+// --- User Interaction Prompts ---
 
-// MultiSearchQueriesGeneratedLog provides a message for logging when multiple search queries are generated.
-func MultiSearchQueriesGeneratedLog(queries []string) string {
-	return fmt.Sprintf("Generated multiple search queries: %s. Using these queries to gather more context.", strings.Join(queries, ", "))
-}
-
-// UseGeminiSearchGroundingPrompt provides a prompt for enabling Gemini Search Grounding.
+// UseGeminiSearchGroundingPrompt prompts the user about enabling Gemini Search Grounding.
 func UseGeminiSearchGroundingPrompt() string {
-	return "Enable Gemini Search Grounding (experimental, requires Gemini API key)? (yes/no) [no]: "
+	return "Do you want to enable Gemini Search Grounding for web searches? (yes/no): "
 }
 
-// SecurityConcernDetectedPrompt provides a detailed prompt for a detected security concern.
+// SecurityConcernDetectedPrompt prompts the user about a detected security concern.
 func SecurityConcernDetectedPrompt(filename, concern string) string {
-	return fmt.Sprintf(
-		"A security concern '%s' was detected in file '%s'.\n"+
-			"If this is a legitimate issue, Ledit will mark it and skip LLM summarization for this file to prevent potential data exposure.\n"+
-			"If this is not an issue (e.g., a false positive or intentional code), Ledit will ignore it for this file.\n"+
-			"Do you want to mark this as a security issue? (yes/no) [yes]: ",
-		concern, filename,
-	)
+	return fmt.Sprintf("Security concern '%s' detected in file '%s'. Do you want to proceed? (yes/no): ", concern, filename)
+}
+
+// EnterLLMProvider prompts the user to enter their preferred LLM provider.
+func EnterLLMProvider(defaultProvider string) string {
+	return fmt.Sprintf("Enter your preferred LLM provider (e.g., anthropic, openai, gemini, ollama) (default: %s): ", defaultProvider)
+}
+
+// getLanguageFromFilename infers the programming language from the file extension.
+func getLanguageFromFilename(filename string) string {
+	if strings.HasSuffix(filename, ".go") {
+		return "go"
+	}
+	if strings.HasSuffix(filename, ".py") {
+		return "python"
+	}
+	if strings.HasSuffix(filename, ".js") || strings.HasSuffix(filename, ".ts") {
+		return "javascript"
+	}
+	if strings.HasSuffix(filename, ".java") {
+		return "java"
+	}
+	if strings.HasSuffix(filename, ".c") || strings.HasSuffix(filename, ".cpp") || strings.HasSuffix(filename, ".h") {
+		return "c"
+	}
+	if strings.HasSuffix(filename, ".sh") {
+		return "bash"
+	}
+	if strings.HasSuffix(filename, ".md") {
+		return "markdown"
+	}
+	if strings.HasSuffix(filename, ".json") {
+		return "json"
+	}
+	if strings.HasSuffix(filename, ".xml") {
+		return "xml"
+	}
+	if strings.HasSuffix(filename, ".html") {
+		return "html"
+	}
+	if strings.HasSuffix(filename, ".css") {
+		return "css"
+	}
+	if strings.HasSuffix(filename, ".yaml") || strings.HasSuffix(filename, ".yml") {
+		return "yaml"
+	}
+	if strings.HasSuffix(filename, ".sql") {
+		return "sql"
+	}
+	if strings.HasSuffix(filename, ".rb") {
+		return "ruby"
+	}
+	if strings.HasSuffix(filename, ".php") {
+		return "php"
+	}
+	if strings.HasSuffix(filename, ".rs") {
+		return "rust"
+	}
+	if strings.HasSuffix(filename, ".swift") {
+		return "swift"
+	}
+	if strings.HasSuffix(filename, ".kt") {
+		return "kotlin"
+	}
+	if strings.HasSuffix(filename, ".cs") {
+		return "csharp"
+	}
+	return "" // Unknown language
 }

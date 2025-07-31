@@ -9,7 +9,9 @@ import (
 	"strings"
 )
 
-func createAndRunSetupScript(req *OrchestrationRequirement, originalCfg *config.Config) error {
+// createAndRunSetupScript generates, updates, and runs a setup.sh script.
+// It now takes the instruction and filepath directly, rather than an OrchestrationRequirement.
+func createAndRunSetupScript(instruction, filepath string, originalCfg *config.Config) error {
 	fmt.Println(prompts.GeneratingSetupScript()) // Use prompt
 	setupPrompt := fmt.Sprintf("You are an expert software developer. Your task is to write a setup script. "+
 		"An instruction has just been executed to modify the codebase. The instruction was: \"%s\" which primarily affected the file: \"%s\". "+
@@ -22,7 +24,7 @@ func createAndRunSetupScript(req *OrchestrationRequirement, originalCfg *config.
 		"Do not include any validation steps in this script; it should only handle setup tasks. "+
 		"Do include a build step if the project requires it, such as compiling code or generating assets, but don't include it before the project has enough scaffolding to compile. "+
 		"If no setup is needed, output an empty script or a script with only comments. "+
-		"Only output the raw script content inside a single markdown code block for `setup.sh`. Do not include any other text or explanation. #WS", req.Instruction, req.Filepath)
+		"Only output the raw script content inside a single markdown code block for `setup.sh`. Do not include any other text or explanation. #WS", instruction, filepath) // Use passed instruction and filepath
 
 	// Process the setup prompt for search grounding or workspace context
 	processedSetupPrompt, _, err := processInstructions(setupPrompt, originalCfg) // Use originalCfg for processing prompt
@@ -89,7 +91,9 @@ func createAndRunSetupScript(req *OrchestrationRequirement, originalCfg *config.
 	return nil
 }
 
-func createAndRunValidationScript(req *OrchestrationRequirement, originalCfg *config.Config) error {
+// createAndRunValidationScript generates, updates, and runs a validate.sh script.
+// It now takes the instruction and filepath directly, rather than an OrchestrationRequirement.
+func createAndRunValidationScript(instruction, filepath string, originalCfg *config.Config) error {
 	fmt.Println(prompts.GeneratingValidationScript()) // Use prompt
 	validationPrompt := fmt.Sprintf("You are an expert software developer. Your task is to write a validation script. "+
 		"An instruction has just been executed to modify the codebase. The instruction was: \"%s\" which primarily affected the file(s): \"%s\". "+
@@ -101,7 +105,7 @@ func createAndRunValidationScript(req *OrchestrationRequirement, originalCfg *co
 		"For instance, don't assume you can start a server if the files for the server have not yet been created, but you could add a comment for future functionality. "+
 		"The script should be self-contained, executable, and should exit with a non-zero status code on failure. "+
 		"The script will be run from the root of the project. "+
-		"Only output the raw script content inside a single markdown code block for `validate.sh`. Do not include any other text or explanation. #WS", req.Instruction, req.Filepath)
+		"Only output the raw script content inside a single markdown code block for `validate.sh`. Do not include any other text or explanation. #WS", instruction, filepath) // Use passed instruction and filepath
 
 	// Process the validation prompt for search grounding or workspace context
 	processedValidationPrompt, _, err := processInstructions(validationPrompt, originalCfg) // Use originalCfg for processing prompt

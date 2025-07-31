@@ -4,10 +4,10 @@ import "github.com/alantheprice/ledit/pkg/config"
 
 // ProjectGoals represents the long-term goals and vision for the project.
 type ProjectGoals struct {
-	OverallGoal      string `json:"overall_goal"`
-	KeyFeatures      string `json:"key_features"`
-	TargetAudience   string `json:"target_audience"`
-	TechnicalVision  string `json:"technical_vision"`
+	OverallGoal     string `json:"overall_goal"`
+	KeyFeatures     string `json:"key_features"`
+	TargetAudience  string `json:"target_audience"`
+	TechnicalVision string `json:"technical_vision"`
 	// Add more fields as needed for comprehensive goals
 }
 

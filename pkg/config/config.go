@@ -33,20 +33,19 @@ type CodeStylePreferences struct {
 }
 
 type Config struct {
-	EditingModel             string `json:"editing_model"`
-	SummaryModel             string `json:"summary_model"`
-	OrchestrationModel       string `json:"orchestration_model"` // new field for orchestration tasks
-	WorkspaceModel           string `json:"workspace_model"`     // New field for workspace analysis
-	EmbeddingModel           string `json:"embedding_model"`     // New field for embeddings
-	LocalModel               string `json:"local_model"`
-	TrackWithGit             bool   `json:"track_with_git"`
-	EnableSecurityChecks     bool   `json:"enable_security_checks"`      // New field for security checks
-	UseGeminiSearchGrounding bool   `json:"use_gemini_search_grounding"` // New field for Gemini Search Grounding
-	SkipPrompt               bool   `json:"-"`                           // Internal use, not saved to config
-	Interactive              bool   `json:"-"`                           // Internal use, not saved to config
-	OllamaServerURL          string `json:"ollama_server_url"`
-	OrchestrationMaxAttempts int    `json:"orchestration_max_attempts"` // New field for max attempts
-	CodeStyle                CodeStylePreferences `json:"code_style"` // New field for code style preferences
+	EditingModel             string               `json:"editing_model"`
+	SummaryModel             string               `json:"summary_model"`
+	OrchestrationModel       string               `json:"orchestration_model"` // new field for orchestration tasks
+	WorkspaceModel           string               `json:"workspace_model"`     // New field for workspace analysis
+	LocalModel               string               `json:"local_model"`
+	TrackWithGit             bool                 `json:"track_with_git"`
+	EnableSecurityChecks     bool                 `json:"enable_security_checks"`      // New field for security checks
+	UseGeminiSearchGrounding bool                 `json:"use_gemini_search_grounding"` // New field for Gemini Search Grounding
+	SkipPrompt               bool                 `json:"-"`                           // Internal use, not saved to config
+	Interactive              bool                 `json:"-"`                           // Internal use, not saved to config
+	OllamaServerURL          string               `json:"ollama_server_url"`
+	OrchestrationMaxAttempts int                  `json:"orchestration_max_attempts"` // New field for max attempts
+	CodeStyle                CodeStylePreferences `json:"code_style"`                 // New field for code style preferences
 }
 
 func getHomeConfigPath() (string, string) {
@@ -103,9 +102,6 @@ func (cfg *Config) setDefaultValues() {
 	}
 	if cfg.OrchestrationModel == "" {
 		cfg.OrchestrationModel = cfg.EditingModel // Fallback to editing model if not specified
-	}
-	if cfg.EmbeddingModel == "" {
-		cfg.EmbeddingModel = "mxbai-embed-large" // Default embedding model
 	}
 	if cfg.OllamaServerURL == "" {
 		cfg.OllamaServerURL = "http://localhost:11434"
@@ -223,6 +219,8 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 	useGeminiSearchGroundingStr, _ := reader.ReadString('\n')
 	useGeminiSearchGrounding := strings.TrimSpace(strings.ToLower(useGeminiSearchGroundingStr)) == "yes"
 
+	fmt.Print(prompts.EnterLLMProvider("anthropic")) // NEW PROMPT for LLM Provider
+
 	cfg := &Config{
 		EditingModel:             editingModel,
 		SummaryModel:             summaryModel,
@@ -233,8 +231,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		EnableSecurityChecks:     enableSecurityChecks,     // Set from user input
 		UseGeminiSearchGrounding: useGeminiSearchGrounding, // Set from user input
 		OllamaServerURL:          "http://localhost:11434",
-		EmbeddingModel:           "mxbai-embed-large", // Default embedding model
-		OrchestrationMaxAttempts: 6,                   // Default max attempts for orchestration
+		OrchestrationMaxAttempts: 6,                      // Default max attempts for orchestration
 		CodeStyle:                CodeStylePreferences{}, // Initialize to be populated by setDefaultValues
 	}
 

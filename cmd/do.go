@@ -12,10 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// orchestrateCmd represents the orchestrate command
-var orchestrateCmd = &cobra.Command{
-	Use:   "orchestrate [prompt]",
-	Short: "Orchestrates a large feature implementation based on a prompt.",
+// doCmd represents the do command
+var doCmd = &cobra.Command{
+	Use:   "do [prompt]",
+	Short: "Executes a large feature implementation based on a prompt.",
 	Long: `Based on a prompt, this command will:
 1. Analyze your current workspace.
 2. Form a plan to implement the feature.
@@ -53,7 +53,7 @@ var orchestrateCmd = &cobra.Command{
 }
 
 func init() {
-	orchestrateCmd.Flags().StringVarP(&model, "model", "m", "", "Model to use for orchestration and editing.")
-	orchestrateCmd.Flags().BoolVar(&skipPrompt, "skip-prompt", false, "Skip the confirmation prompt and proceed with the plan")
-	rootCmd.AddCommand(orchestrateCmd)
+	doCmd.Flags().StringVarP(&model, "model", "m", "", "Model to use for orchestration and editing.")
+	doCmd.Flags().BoolVar(&skipPrompt, "skip-prompt", false, "Skip the confirmation prompt and proceed with the plan")
+	rootCmd.AddCommand(doCmd)
 }

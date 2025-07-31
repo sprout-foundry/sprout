@@ -80,6 +80,28 @@ func LogUserPrompt(prompt string) {
 	}
 }
 
+// LogLLMResponse logs the LLM's response to a file in the .ledit/llm_responses directory.
+func LogLLMResponse(filename, response string) {
+	logDir := ".ledit/llm_responses"
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		GetLogger(true).LogError(fmt.Errorf("failed to create LLM response log directory: %w", err))
+		return
+	}
+
+	// Sanitize filename for use in path
+	sanitizedFilename := strings.ReplaceAll(filename, string(filepath.Separator), "_")
+	if sanitizedFilename == "" {
+		sanitizedFilename = "no_filename"
+	}
+
+	timestamp := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(GetTimestamp(), " ", "_"), ":", "-"), ".", "")
+	logFilename := filepath.Join(logDir, fmt.Sprintf("response_%s_%s.txt", timestamp, sanitizedFilename))
+
+	if err := os.WriteFile(logFilename, []byte(response), 0644); err != nil {
+		GetLogger(true).LogError(fmt.Errorf("failed to write LLM response to file: %w", err))
+	}
+}
+
 // StringSliceEqual checks if two string slices are equal, ignoring order.
 func StringSliceEqual(a, b []string) bool {
 	if len(a) != len(b) {

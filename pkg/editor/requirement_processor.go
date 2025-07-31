@@ -2,14 +2,15 @@ package editor
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/orchestration/types" // Added for OrchestrationPlan type
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/workspace" // Added for workspace context
 )
 
 type RequirementProcessor struct {
@@ -20,163 +21,193 @@ func NewRequirementProcessor(cfg *config.Config) *RequirementProcessor {
 	return &RequirementProcessor{cfg: cfg}
 }
 
-func (p *RequirementProcessor) Process(plan *OrchestrationPlan) error {
+func (p *RequirementProcessor) Process(plan *types.OrchestrationPlan) error {
 	logger := utils.GetLogger(true) // Get the logger instance
 	execCfg := *p.cfg
 	execCfg.SkipPrompt = true
 
 	maxAttempts := p.cfg.OrchestrationMaxAttempts
-	// No fallback needed here, as config.Config now initializes OrchestrationMaxAttempts with a default.
-	// If a user has an old config file without this field, it will default to 0,
-	// which means the user would need to update their config or the default in config.go
-	// should be set to a non-zero value. It's already set to 4 in createConfig.
 
 	for i := range plan.Requirements {
 		req := &plan.Requirements[i]
-
-		fullInstruction := p.getFullInstructionForRequirement(req)
 
 		if req.Status == "completed" {
 			logger.LogProcessStep(prompts.SkippingCompletedStep(req.Instruction)) // Use prompt
 			continue
 		}
 
-		if req.Status == "failed" {
-			logger.LogProcessStep(prompts.RetryingFailedStep(req.Instruction)) // Use prompt
-		} else {
-			logger.LogProcessStep(prompts.ExecutingStep(req.Instruction)) // Use prompt
+		logger.LogProcessStep(prompts.ExecutingStep(req.Instruction)) // Use prompt
+
+		// Step 1: Get file-specific changes for the high-level requirement
+		// Regenerate changes if not already present or if previous attempt failed
+		if len(req.Changes) == 0 || req.Status == "failed" {
+			logger.LogProcessStep(prompts.GeneratingFileChanges(req.Instruction))
+			// Get workspace context for the LLM to generate relevant changes
+			workspaceContext := workspace.GetWorkspaceContext(req.Instruction, p.cfg)
+			changes, err := llm.GetChangesForRequirement(p.cfg, req.Instruction, workspaceContext)
+			if err != nil {
+				req.Status = "failed"
+				saveOrchestrationPlan(plan)
+				logger.LogProcessStep(prompts.GenerateChangesFailed(req.Instruction, err))
+				return fmt.Errorf("failed to generate file changes for requirement '%s': %w", req.Instruction, err)
+			}
+			req.Changes = changes
+			// Initialize status for new changes
+			for j := range req.Changes {
+				req.Changes[j].Status = "pending"
+			}
+			saveOrchestrationPlan(plan) // Save the plan with generated changes
 		}
-		logger.LogProcessStep(prompts.ProcessingFile(req.Filepath)) // Use prompt
 
-		var lastValidationErr error
+		// Step 2: Process each file-specific change
+		var requirementFailed bool
+		for j := range req.Changes {
+			change := &req.Changes[j]
 
-		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			if attempt > 1 {
-				logger.LogProcessStep(prompts.RetryAttempt(attempt, maxAttempts, req.Instruction)) // Use prompt
-			}
-
-			currentInstruction := p.getCurrentInstructionForAttempt(req, fullInstruction)
-
-			processedInstruction, _, err := processInstructions(currentInstruction, p.cfg)
-			if err != nil {
-				req.Status = "failed"
-				req.LastLLMResponse = ""
-				saveOrchestrationPlan(plan)
-				logger.LogProcessStep(prompts.ProcessInstructionFailed(req.Filepath, err)) // Use prompt
-				return fmt.Errorf("failed to process instruction for file %s: %v", req.Filepath, err)
-			}
-
-			diffForTargetFile, err := ProcessCodeGeneration(req.Filepath, processedInstruction, &execCfg)
-			if err != nil {
-				req.Status = "failed"
-				req.LastLLMResponse = diffForTargetFile
-				saveOrchestrationPlan(plan)
-				logger.LogProcessStep(prompts.ProcessRequirementFailed(req.Filepath, err)) // Use prompt
-				return fmt.Errorf("failed to process requirement for file %s: %w", req.Filepath, err)
-			}
-
-			if strings.Contains(req.Filepath, "setup.sh") {
-				logger.LogProcessStep(prompts.SetupStepCompleted(req.Instruction)) // Use prompt
-				req.Status = "completed"
-				req.ValidationFailureContext = ""
-				req.LastLLMResponse = ""
-				saveOrchestrationPlan(plan)
-				break
-			}
-
-			setupErr := createAndRunSetupScript(req, &execCfg)
-			if setupErr != nil {
-				logger.LogProcessStep(prompts.SetupFailedAttempt(attempt, setupErr)) // Use prompt
-				req.Status = "failed"
-				req.ValidationFailureContext = prompts.ValidationFailureContextSetupScriptFailed(setupErr) // Use prompt
-				req.LastLLMResponse = diffForTargetFile
-				saveOrchestrationPlan(plan)
-				lastValidationErr = setupErr
+			if change.Status == "completed" {
+				logger.LogProcessStep(prompts.SkippingCompletedFileChange(change.Filepath, change.Instruction))
 				continue
 			}
 
-			lastValidationErr = createAndRunValidationScript(req, &execCfg)
-			req.Status = "completed"
-			req.ValidationFailureContext = ""
-			req.LastLLMResponse = ""
-			if err := saveOrchestrationPlan(plan); err != nil {
-				logger.LogProcessStep(prompts.SaveProgressFailed(req.Filepath, err)) // Use prompt
-				return fmt.Errorf("step for %s completed, but failed to save progress: %w", req.Filepath, err)
+			logger.LogProcessStep(prompts.ProcessingFile(change.Filepath))
+			logger.LogProcessStep(prompts.ExecutingFileChange(change.Instruction))
+
+			var lastValidationErr error
+
+			for attempt := 1; attempt <= maxAttempts; attempt++ {
+				if attempt > 1 {
+					logger.LogProcessStep(prompts.RetryAttempt(attempt, maxAttempts, change.Instruction))
+				}
+
+				currentInstruction := p.getCurrentInstructionForAttempt(change.Instruction, change.Filepath, change.ValidationFailureContext, change.LastLLMResponse)
+
+				processedInstruction, _, err := processInstructions(currentInstruction, p.cfg)
+				if err != nil {
+					change.Status = "failed"
+					change.LastLLMResponse = ""
+					change.ValidationFailureContext = fmt.Sprintf("Failed to process instruction: %v", err)
+					saveOrchestrationPlan(plan)
+					logger.LogProcessStep(prompts.ProcessInstructionFailed(change.Filepath, err))
+					lastValidationErr = err // Mark this as the reason for failure
+					break // Break from attempt loop, move to next change or mark requirement failed
+				}
+
+				diffForTargetFile, err := ProcessCodeGeneration(change.Filepath, processedInstruction, &execCfg)
+				if err != nil {
+					change.Status = "failed"
+					change.LastLLMResponse = diffForTargetFile
+					change.ValidationFailureContext = fmt.Sprintf("Code generation failed: %v", err)
+					saveOrchestrationPlan(plan)
+					logger.LogProcessStep(prompts.ProcessRequirementFailed(change.Filepath, err))
+					continue // Continue to next attempt
+				}
+
+				// Always run setup.sh and validate.sh after each code generation step
+				setupErr := createAndRunSetupScript(change.Instruction, change.Filepath, &execCfg) // Pass change details
+				if setupErr != nil {
+					logger.LogProcessStep(prompts.SetupFailedAttempt(attempt, setupErr))
+					change.Status = "failed"
+					change.ValidationFailureContext = prompts.ValidationFailureContextSetupScriptFailed(setupErr)
+					change.LastLLMResponse = diffForTargetFile
+					saveOrchestrationPlan(plan)
+					lastValidationErr = setupErr
+					continue // Continue to next attempt
+				}
+
+				lastValidationErr = createAndRunValidationScript(change.Instruction, change.Filepath, &execCfg) // Pass change details
+				if lastValidationErr != nil {
+					logger.LogProcessStep(prompts.ValidationFailedAttempt(attempt, lastValidationErr))
+					change.Status = "failed"
+					change.ValidationFailureContext = prompts.ValidationFailureContextValidationScriptFailed(lastValidationErr)
+					change.LastLLMResponse = diffForTargetFile
+					saveOrchestrationPlan(plan)
+					continue // Continue to next attempt
+				}
+
+				change.Status = "completed"
+				change.ValidationFailureContext = ""
+				change.LastLLMResponse = ""
+				if err := saveOrchestrationPlan(plan); err != nil {
+					logger.LogProcessStep(prompts.SaveProgressFailed(change.Filepath, err))
+					return fmt.Errorf("file change for %s completed, but failed to save progress: %w", change.Filepath, err)
+				}
+				logger.LogProcessStep(prompts.FileChangeCompleted(change.Filepath, change.Instruction))
+				break // Break from attempt loop, this change is completed
 			}
-			logger.LogProcessStep(prompts.StepCompleted(req.Instruction)) // Use prompt
-			break
+
+			if lastValidationErr != nil {
+				logger.LogProcessStep(prompts.FileChangeFailedAfterAttempts(change.Filepath, change.Instruction, maxAttempts, lastValidationErr))
+				requirementFailed = true
+				break // Break from changes loop, mark requirement as failed
+			}
 		}
 
-		if lastValidationErr != nil {
-			logger.LogProcessStep(prompts.StepFailedAfterAttempts(req.Instruction, maxAttempts, lastValidationErr)) // Use prompt
-			return fmt.Errorf("step '%s' failed after %d attempts: %w", req.Instruction, maxAttempts, lastValidationErr)
+		if requirementFailed {
+			req.Status = "failed"
+			// The ValidationFailureContext and LastLLMResponse for the *requirement* itself
+			// are less relevant now, as the failure context is on the specific change.
+			// We could aggregate, but for now, just mark the requirement failed.
+			if err := saveOrchestrationPlan(plan); err != nil {
+				logger.LogProcessStep(prompts.SaveProgressFailed("requirement", err))
+				return fmt.Errorf("requirement '%s' failed, but failed to save progress: %w", req.Instruction, err)
+			}
+			return fmt.Errorf("requirement '%s' failed due to issues with its file changes", req.Instruction)
 		}
+
+		req.Status = "completed"
+		if err := saveOrchestrationPlan(plan); err != nil {
+			logger.LogProcessStep(prompts.SaveProgressFailed("requirement", err))
+			return fmt.Errorf("requirement '%s' completed, but failed to save progress: %w", req.Instruction, err)
+		}
+		logger.LogProcessStep(prompts.StepCompleted(req.Instruction))
 	}
 
-	logger.LogProcessStep(prompts.AllOrchestrationStepsCompleted()) // Use prompt
+	logger.LogProcessStep(prompts.AllOrchestrationStepsCompleted())
 	return nil
 }
 
-func (p *RequirementProcessor) getFullInstructionForRequirement(req *OrchestrationRequirement) string {
-	if strings.Contains(req.Filepath, ".") && testableFileTypes()[filepath.Ext(req.Filepath)] {
-		return fmt.Sprintf(
-			"As a TDD developer, you should write tests and write the associated code to accomplish the requirements: '%s'",
-			req.Instruction,
-		)
-	} else if strings.Contains(req.Filepath, "setup.sh") {
-		return fmt.Sprintf(
-			"Update the setup script, but make sure to keep the file idempotent so it can be run multiple times: '%s'",
-			req.Instruction,
-		)
-	}
-	return req.Instruction
-}
-
-func (p *RequirementProcessor) getCurrentInstructionForAttempt(req *OrchestrationRequirement, fullInstruction string) string {
-	logger := utils.GetLogger(true) // Get the logger instance for this method too
-	if req.ValidationFailureContext != "" {
+// getCurrentInstructionForAttempt now takes specific instruction and file details for a change.
+func (p *RequirementProcessor) getCurrentInstructionForAttempt(instruction, filepath, validationFailureContext, lastLLMResponse string) string {
+	logger := utils.GetLogger(true)
+	if validationFailureContext != "" {
 		re := regexp.MustCompile(`(?i)\s*#WS\s*$`)
-		originalInstructionWithoutTag := strings.TrimSpace(re.ReplaceAllString(fullInstruction, ""))
+		originalInstructionWithoutTag := strings.TrimSpace(re.ReplaceAllString(instruction, ""))
 
 		var contextPrompt string
-		var generatedSearchQueries []string // Changed to slice of strings
+		var generatedSearchQueries []string
 
-		// Construct the context string for GenerateSearchQuery
 		searchContext := fmt.Sprintf(
 			"Error: %s\nContext: %s",
-			req.ValidationFailureContext, originalInstructionWithoutTag,
+			validationFailureContext, originalInstructionWithoutTag,
 		)
 
-		// Call the dedicated GenerateSearchQuery function which uses p.cfg.EditingModel internally
 		queries, err := llm.GenerateSearchQuery(p.cfg, searchContext)
 		if err == nil && len(queries) > 0 {
 			generatedSearchQueries = queries
-			// Log each generated query
 			for _, q := range generatedSearchQueries {
-				logger.LogProcessStep(prompts.GeneratedSearchQuery(q)) // Use prompt
+				logger.LogProcessStep(prompts.GeneratedSearchQuery(q))
 			}
 		} else {
-			logger.LogProcessStep(prompts.SearchQueryGenerationWarning(err)) // Use prompt
+			logger.LogProcessStep(prompts.SearchQueryGenerationWarning(err))
 		}
 
-		if req.LastLLMResponse != "" {
-			contextPrompt = prompts.RetryPromptWithDiff(originalInstructionWithoutTag, req.Filepath, req.ValidationFailureContext, req.LastLLMResponse) // Use prompt
+		if lastLLMResponse != "" {
+			contextPrompt = prompts.RetryPromptWithDiff(originalInstructionWithoutTag, filepath, validationFailureContext, lastLLMResponse)
 		} else {
-			contextPrompt = prompts.RetryPromptWithoutDiff(originalInstructionWithoutTag, req.Filepath, req.ValidationFailureContext) // Use prompt
+			contextPrompt = prompts.RetryPromptWithoutDiff(originalInstructionWithoutTag, filepath, validationFailureContext)
 		}
 
-		// Prepend #SG tags for all generated search queries
 		if len(generatedSearchQueries) > 0 {
 			var sgTags strings.Builder
 			for _, query := range generatedSearchQueries {
 				sgTags.WriteString(fmt.Sprintf("#SG \"%s\"\n", query))
-				logger.LogProcessStep(prompts.AddedSearchGrounding(query)) // Use prompt
+				logger.LogProcessStep(prompts.AddedSearchGrounding(query))
 			}
 			contextPrompt = sgTags.String() + contextPrompt
 		}
 
-		logger.LogProcessStep(prompts.AddingValidationFailureContext()) // Use prompt
+		logger.LogProcessStep(prompts.AddingValidationFailureContext())
 		return contextPrompt
 	}
-	return fullInstruction
+	return instruction
 }

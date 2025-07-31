@@ -13,6 +13,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/apikeys" // New import
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
 	"github.com/alantheprice/ledit/pkg/utils"   // New import for EstimateTokens
 )
@@ -275,33 +276,33 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 
 // --- Main Dispatcher ---
 
-func GetOrchestrationPlan(cfg *config.Config, prompt, workspaceContext string) (string, error) {
-	messages := prompts.BuildOrchestrationMessages(prompt, workspaceContext)
-	// Using a longer timeout for planning
-	modelName := cfg.OrchestrationModel
-	if modelName == "" {
-		modelName = cfg.EditingModel
-		fmt.Print(prompts.NoOrchestrationModel(modelName)) // Use prompt
-	}
-	// Orchestration planning does not use search grounding
-	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 5*time.Minute, false)
-	if err != nil {
-		return "", err
-	}
+// func GetOrchestrationPlan(cfg *config.Config, prompt, workspaceContext string) (string, error) {
+// 	messages := prompts.BuildOrchestrationMessages(prompt, workspaceContext)
+// 	// Using a longer timeout for planning
+// 	modelName := cfg.OrchestrationModel
+// 	if modelName == "" {
+// 		modelName = cfg.EditingModel
+// 		fmt.Print(prompts.NoOrchestrationModel(modelName)) // Use prompt
+// 	}
+// 	// Orchestration planning does not use search grounding
+// 	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 5*time.Minute, false)
+// 	if err != nil {
+// 		return "", err
+// 	}
 
-	// The response might be inside a code block, let's be robust.
-	if strings.Contains(response, "```json") {
-		parts := strings.SplitN(response, "```json", 2)
-		if len(parts) > 1 {
-			response = strings.Split(parts[1], "```")[0]
-		} else if strings.HasPrefix(response, "```") && strings.HasSuffix(response, "```") {
-			response = strings.TrimPrefix(response, "```")
-			response = strings.TrimSuffix(response, "```")
-		}
-	}
+// 	// The response might be inside a code block, let's be robust.
+// 	if strings.Contains(response, "```json") {
+// 		parts := strings.SplitN(response, "```json", 2)
+// 		if len(parts) > 1 {
+// 			response = strings.Split(parts[1], "```")[0]
+// 		} else if strings.HasPrefix(response, "```") && strings.HasSuffix(response, "```") {
+// 			response = strings.TrimPrefix(response, "```")
+// 			response = strings.TrimSuffix(response, "```")
+// 		}
+// 	}
 
-	return strings.TrimSpace(response), nil
-}
+// 	return strings.TrimSpace(response), nil
+// }
 
 func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, useSearchGrounding bool) (string, error) {
 	var totalInputTokens int
@@ -453,4 +454,70 @@ func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
 	}
 
 	return searchQueries, nil
+}
+
+// GetChangesForRequirement asks the LLM to break down a high-level requirement into file-specific changes.
+func GetChangesForRequirement(cfg *config.Config, requirementInstruction string, workspaceContext string) ([]types.OrchestrationChange, error) {
+	modelName := cfg.EditingModel // Or a specific orchestration model if configured
+	fmt.Print(prompts.UsingModel(modelName))
+
+	messages := prompts.BuildChangesForRequirementMessages(requirementInstruction, workspaceContext)
+
+	// Use a longer timeout for this, as it's a planning step
+	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute, false) // No search grounding for this planning step
+	if err != nil {
+		return nil, fmt.Errorf("failed to get changes for requirement from LLM: %w", err)
+	}
+
+	if response == "" {
+		return nil, fmt.Errorf("LLM returned an empty response for changes")
+	}
+
+	// Try to extract JSON from response (handles both raw JSON and code block JSON)
+	var jsonStr string
+	if strings.Contains(response, "```json") {
+		// Handle code block JSON
+		parts := strings.Split(response, "```json")
+		if len(parts) > 1 {
+			jsonPart := parts[1]
+			end := strings.Index(jsonPart, "```")
+			if end > 0 {
+				jsonStr = strings.TrimSpace(jsonPart[:end])
+			} else {
+				jsonStr = strings.TrimSpace(jsonPart)
+			}
+		}
+	} else if strings.Contains(response, `"changes"`) { // Heuristic to detect raw JSON
+		jsonStr = response
+	}
+
+	if jsonStr == "" {
+		return nil, fmt.Errorf("LLM response did not contain expected JSON for changes: %s", response)
+	}
+
+	var changesList types.OrchestrationChangesList
+	if err := json.Unmarshal([]byte(jsonStr), &changesList); err != nil {
+		return nil, fmt.Errorf("failed to parse changes JSON from LLM response: %w\nResponse was: %s", err, response)
+	}
+
+	return changesList.Changes, nil
+}
+
+// GetCommitMessage generates a git commit message based on code changes and the original prompt using an LLM.
+// This function is the canonical GetCommitMessage, replacing the one in pkg/llm/commit.go.
+func GetCommitMessage(cfg *config.Config, changelog string, originalPrompt string, filename string) (string, error) {
+	modelName := cfg.SummaryModel
+	if modelName == "" {
+		modelName = cfg.EditingModel // Fallback if summary model is not configured
+		fmt.Printf(prompts.NoSummaryModelFallback(modelName))
+	}
+
+	messages := prompts.BuildCommitMessages(changelog, originalPrompt)
+
+	_, response, err := GetLLMResponse(modelName, messages, filename, cfg, 1*time.Minute, false) // Commit message generation does not use search grounding
+	if err != nil {
+		return "", fmt.Errorf("failed to get commit message from LLM: %w", err)
+	}
+
+	return strings.TrimSpace(response), nil
 }

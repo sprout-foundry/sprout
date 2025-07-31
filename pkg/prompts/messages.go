@@ -443,6 +443,14 @@ func ValidationFailureContextSetupScriptFailed(err error) string {
 	return fmt.Sprintf("The setup script failed, which may indicate an issue with the generated code (e.g., incorrect dependencies) or the setup script itself. Error: %s", err.Error())
 }
 
+func ValidationFailedAttempt(attempt int, err error) string {
+	return fmt.Sprintf("Validation script failed on attempt %d: %v", attempt, err)
+}
+
+func ValidationFailureContextValidationScriptFailed(err error) string {
+	return fmt.Sprintf("The validation script failed, which may indicate an issue with the generated code. Error: %s", err.Error())
+}
+
 func SaveProgressFailed(filepath string, err error) string {
 	return fmt.Sprintf("Step for %s completed, but failed to save progress: %v", filepath, err)
 }
@@ -471,14 +479,32 @@ func AddingValidationFailureContext() string {
 	return "Adding validation failure context to LLM request..."
 }
 
-func RetryPromptWithDiff(originalInstruction, filepath, validationError, lastLLMResponse string) string {
-	return fmt.Sprintf("The previous attempt to apply the instruction '%s' to file '%s' failed with validation error: %s\n\nHere was the last LLM response:\n```\n%s\n```\n\nPlease provide the corrected code for '%s' or a new plan to address the issue.", originalInstruction, filepath, validationError, lastLLMResponse, filepath)
-}
-
-func RetryPromptWithoutDiff(originalInstruction, filepath, validationError string) string {
-	return fmt.Sprintf("The previous attempt to apply the instruction '%s' to file '%s' failed with validation error: %s\n\nPlease provide the corrected code for '%s' or a new plan to address the issue.", originalInstruction, filepath, validationError, filepath)
-}
-
 func AllOrchestrationStepsCompleted() string {
 	return "All orchestration steps completed."
+}
+
+// --- New prompts for orchestration changes ---
+
+func GeneratingFileChanges(instruction string) string {
+	return fmt.Sprintf("Generating file-specific changes for requirement: '%s'...", instruction)
+}
+
+func GenerateChangesFailed(instruction string, err error) string {
+	return fmt.Sprintf("Failed to generate file-specific changes for requirement '%s': %v", instruction, err)
+}
+
+func SkippingCompletedFileChange(filepath, instruction string) string {
+	return fmt.Sprintf("Skipping completed file change for '%s': '%s'", filepath, instruction)
+}
+
+func ExecutingFileChange(instruction string) string {
+	return fmt.Sprintf("Executing file change: '%s'", instruction)
+}
+
+func FileChangeCompleted(filepath, instruction string) string {
+	return fmt.Sprintf("File change for '%s' completed: '%s'", filepath, instruction)
+}
+
+func FileChangeFailedAfterAttempts(filepath, instruction string, attempts int, err error) string {
+	return fmt.Sprintf("File change for '%s' ('%s') failed after %d attempts: %v", filepath, instruction, attempts, err)
 }

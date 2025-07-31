@@ -125,7 +125,8 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string,
 	for {
 		if contextRequestCount >= maxContextRequests {
 			fmt.Println(prompts.LLMMaxContextRequestsReached()) // Use prompt
-			messages[0] = prompts.GetCodeGenMessages()[0]       // Reset to code generation message
+			// Reset the system message to the base code generation prompt, forcing the LLM to generate code.
+			messages[0] = prompts.Message{Role: "system", Content: prompts.GetBaseCodeGenSystemMessage()}
 		}
 
 		// Default timeout for code generation is 6 minutes

@@ -93,14 +93,13 @@ func BuildOrchestrationMessages(prompt, workspaceContext string) []Message {
 func BuildCommitMessages(changelog, originalPrompt string) []Message {
 	systemPrompt := "You are an expert at writing git commit messages. " +
 		"Based on the provided code changes (diff) and the original user request, " +
-
 		"generate a CONCISE and conventional git commit message. " +
-		"The message must follow the standard format: a subject line (less than 72 characters), a blank line, " +
-		"and a more detailed body explaining the 'what' and 'why' of the changes. " +
+		"The message must follow the standard format: a concise first line (less than 72 characters), a blank line, " +
+		"and a succinct description explaining the 'what' and 'why' of the changes. " +
 		"Use ONLY the user's original request to explain the 'why'. " +
 		"Do not include any personal opinions or additional context. " +
 		"Ensure the message is clear, CONCISE, and follows best practices for commit messages. " +
-		"Use imperative mood for the subject line, e.g., 'Fix bug' instead of 'Fixed bug'. " +
+		"Use imperative mood for the first line, e.g., 'Fix bug' instead of 'Fixed bug'. " +
 		"Do not include any reference to the commit message generation process, or the user message itself. " +
 		"Avoid any references to the 'user request or prompt' in the commit message. " +
 		"Do not include any additional information that is not directly related to the code changes. " +

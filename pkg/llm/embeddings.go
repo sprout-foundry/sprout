@@ -7,55 +7,85 @@ import (
 	"io"
 	"math" // Import math for dot product and magnitude
 	"net/http"
+	"os" // Import os for environment variable check
 
 	"github.com/alantheprice/ledit/pkg/config"
 )
 
-type EmbeddingRequest struct {
-	Model string `json:"model"`
-	Input string `json:"input"`
+const jinaEmbeddingsURL = "https://api.jina.ai/v1/embeddings"
+
+// JinaEmbeddingRequest represents the request body for the Jina AI Embeddings API.
+type JinaEmbeddingRequest struct {
+	Model string   `json:"model"`
+	Input []string `json:"input"` // Jina expects an array of strings
 }
 
-type EmbeddingResponse struct {
-	Embedding []float64 `json:"embedding"`
+// JinaEmbeddingResponse represents the response body from the Jina AI Embeddings API.
+type JinaEmbeddingResponse struct {
+	Data []struct {
+		Embedding []float64 `json:"embedding"`
+	} `json:"data"`
+	Usage struct {
+		TotalTokens int `json:"total_tokens"`
+	} `json:"usage"`
 }
 
-// GenerateEmbedding generates an embedding for the given input using Ollama.
+// GenerateEmbedding generates an embedding for the given input using Jina AI.
 func GenerateEmbedding(input string, cfg *config.Config) ([]float64, error) {
-	embeddingModel := cfg.EmbeddingModel
-	if embeddingModel == "" {
-		// A sensible default from https://ollama.com/blog/embedding-models
-		embeddingModel = "mxbai-embed-large"
+	// Get your Jina AI API key for free: https://jina.ai/?sui=apikey
+	apiKey, err := GetAPIKey("JinaAI")
+	if err != nil || apiKey == "" {
+		// Fallback to environment variable if GetAPIKey fails or returns empty
+		apiKey = os.Getenv("JINA_API_KEY")
+		if apiKey == "" {
+			return nil, fmt.Errorf("Jina AI API key not found. Please set JINA_API_KEY environment variable or provide it when prompted.")
+		}
 	}
 
-	reqData := EmbeddingRequest{
+	// Jina AI recommends jina-embeddings-v4 for general use
+	embeddingModel := "jina-embeddings-v4"
+
+	reqData := JinaEmbeddingRequest{
 		Model: embeddingModel,
-		Input: input,
+		Input: []string{input}, // Wrap the single input string in an array
 	}
 
 	jsonData, err := json.Marshal(reqData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal embedding request: %w", err)
+		return nil, fmt.Errorf("failed to marshal Jina embedding request: %w", err)
 	}
 
-	// Use cfg.OllamaServerURL for the Ollama API endpoint
-	resp, err := http.Post(cfg.OllamaServerURL+"/api/embed", "application/json", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", jinaEmbeddingsURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("failed to call ollama embedding api: %w. Make sure ollama is running and the model '%s' is pulled", err, embeddingModel)
+		return nil, fmt.Errorf("failed to create Jina embedding request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call Jina embedding API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("ollama embedding api returned non-200 status: %s, body: %s", resp.Status, string(body))
+		return nil, fmt.Errorf("Jina embedding API returned non-200 status: %s, body: %s", resp.Status, string(body))
 	}
 
-	var embResp EmbeddingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&embResp); err != nil {
-		return nil, fmt.Errorf("failed to decode ollama embedding response: %w", err)
+	var jinaResp JinaEmbeddingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&jinaResp); err != nil {
+		return nil, fmt.Errorf("failed to decode Jina embedding response: %w", err)
 	}
 
-	return embResp.Embedding, nil
+	if len(jinaResp.Data) == 0 || len(jinaResp.Data[0].Embedding) == 0 {
+		return nil, fmt.Errorf("Jina embedding response did not contain expected embedding data")
+	}
+
+	return jinaResp.Data[0].Embedding, nil
 }
 
 // CosineSimilarity calculates the cosine similarity between two vectors.

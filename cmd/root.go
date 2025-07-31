@@ -24,7 +24,7 @@ var rootCmd = &cobra.Command{
 				return
 			}
 			logger.LogUserInteraction("Configuration loaded. Defaulting to 'code' command.")
-			logger.LogUserInteraction("Usage: ledit code \"your instructions\" [--filename <file>]")
+			logger.LogUserInteraction(fmt.Sprintf("Usage: ledit code \"your instructions\" [--filename <file>]"))
 			logger.LogUserInteraction(fmt.Sprintf("Editing Model: %s", cfg.EditingModel))
 		}
 	},
@@ -41,4 +41,5 @@ func init() {
 	rootCmd.AddCommand(questionCmd)
 	rootCmd.AddCommand(orchestrateCmd)
 	rootCmd.AddCommand(fixCmd)
+	rootCmd.AddCommand(commitCmd) // Add the new commit command
 }

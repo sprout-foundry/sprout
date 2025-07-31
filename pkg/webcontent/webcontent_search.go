@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/apikeys"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
@@ -65,7 +66,7 @@ func getSearchResults(query string, cfg *config.Config) ([]JinaSearchResult, err
 	}
 
 	// Get Jina API Key. This will prompt the user if the key is not found.
-	jinaAPIKey, err := llm.GetAPIKey("JinaAI")
+	jinaAPIKey, err := apikeys.GetAPIKey("JinaAI")
 	if err != nil {
 		logger.Logf("Could not get Jina API key: %v. Proceeding without it, but may be rate limited.", err)
 	} else {
@@ -147,7 +148,7 @@ func fetchJinaSearchResults(query string, cfg *config.Config) (map[string]string
 		go func(url string) {
 			defer wg.Done()
 			logger.LogProcessStep(fmt.Sprintf("Fetching content from %s", url))
-			content, err := fetcher.FetchWebContent(url)
+			content, err := fetcher.FetchWebContent(url, cfg)
 			if err != nil {
 				logger.Logf("Failed to fetch content from %s: %v", url, err)
 				return

@@ -7,7 +7,7 @@ import (
 
 var (
 	// DefaultTokenLimit is the default token limit for API calls
-	DefaultTokenLimit = 30000
+	DefaultTokenLimit = 42000
 )
 
 // --- Message Structs ---
@@ -174,4 +174,20 @@ func LLMSearchQueryGenerationError(err error) string {
 // MultiSearchQueriesGeneratedLog provides a message for logging when multiple search queries are generated.
 func MultiSearchQueriesGeneratedLog(queries []string) string {
 	return fmt.Sprintf("Generated multiple search queries: %s. Using these queries to gather more context.", strings.Join(queries, ", "))
+}
+
+// UseGeminiSearchGroundingPrompt provides a prompt for enabling Gemini Search Grounding.
+func UseGeminiSearchGroundingPrompt() string {
+	return "Enable Gemini Search Grounding (experimental, requires Gemini API key)? (yes/no) [no]: "
+}
+
+// SecurityConcernDetectedPrompt provides a detailed prompt for a detected security concern.
+func SecurityConcernDetectedPrompt(filename, concern string) string {
+	return fmt.Sprintf(
+		"A security concern '%s' was detected in file '%s'.\n"+
+			"If this is a legitimate issue, Ledit will mark it and skip LLM summarization for this file to prevent potential data exposure.\n"+
+			"If this is not an issue (e.g., a false positive or intentional code), Ledit will ignore it for this file.\n"+
+			"Do you want to mark this as a security issue? (yes/no) [yes]: ",
+		concern, filename,
+	)
 }

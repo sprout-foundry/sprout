@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"os" // Import os for environment variable check
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/apikeys" // Changed import from pkg/config to pkg/apikeys
 )
 
 const jinaEmbeddingsURL = "https://api.jina.ai/v1/embeddings"
@@ -31,12 +31,12 @@ type JinaEmbeddingResponse struct {
 }
 
 // GenerateEmbedding generates an embedding for the given input using Jina AI.
-func GenerateEmbedding(input string, cfg *config.Config) ([]float64, error) {
+func GenerateEmbedding(input string) ([]float64, error) {
 	// Get your Jina AI API key for free: https://jina.ai/?sui=apikey
-	apiKey, err := GetAPIKey("JinaAI")
+	apiKey, err := apikeys.GetAPIKey("JinaAI") // Changed call to apikeys.GetAPIKey and passed cfg
 	if err != nil || apiKey == "" {
 		// Fallback to environment variable if GetAPIKey fails or returns empty
-		apiKey = os.Getenv("JINA_API_KEY")
+		apiKey = os.Getenv("JINA_API_KEY") // This fallback is now redundant if GetAPIKey handles env vars
 		if apiKey == "" {
 			return nil, fmt.Errorf("Jina AI API key not found. Please set JINA_API_KEY environment variable or provide it when prompted.")
 		}

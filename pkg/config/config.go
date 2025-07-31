@@ -29,9 +29,10 @@ type Config struct {
 	EmbeddingModel           string `json:"embedding_model"`     // New field for embeddings
 	LocalModel               string `json:"local_model"`
 	TrackWithGit             bool   `json:"track_with_git"`
-	EnableSecurityChecks     bool   `json:"enable_security_checks"` // New field for security checks
-	SkipPrompt               bool   `json:"-"`                      // Internal use, not saved to config
-	Interactive              bool   `json:"-"`                      // Internal use, not saved to config
+	EnableSecurityChecks     bool   `json:"enable_security_checks"`      // New field for security checks
+	UseGeminiSearchGrounding bool   `json:"use_gemini_search_grounding"` // New field for Gemini Search Grounding
+	SkipPrompt               bool   `json:"-"`                           // Internal use, not saved to config
+	Interactive              bool   `json:"-"`                           // Internal use, not saved to config
 	OllamaServerURL          string `json:"ollama_server_url"`
 	OrchestrationMaxAttempts int    `json:"orchestration_max_attempts"` // New field for max attempts
 }
@@ -103,8 +104,9 @@ func (cfg *Config) setDefaultValues() {
 	if cfg.LocalModel == "" {
 		cfg.LocalModel = getLocalModel(cfg.SkipPrompt) // Set local model based on system memory
 	}
-	// Ensure EnableSecurityChecks is explicitly set to false if not present in loaded config
+	// Ensure EnableSecurityChecks is explicitly set to true by default, but can be overridden by config file
 	cfg.EnableSecurityChecks = true
+	// UseGeminiSearchGrounding defaults to false (zero value), no explicit setting needed here unless default was true.
 }
 
 func loadConfig(filePath string) (*Config, error) {
@@ -118,6 +120,7 @@ func loadConfig(filePath string) (*Config, error) {
 	cfg.WorkspaceModel = ""                        // Default to empty, will fall back to SummaryModel
 	cfg.OllamaServerURL = "http://localhost:11434" // Default Ollama URL
 	cfg.EnableSecurityChecks = false               // Default to false for existing configs
+	cfg.UseGeminiSearchGrounding = false           // Default to false for existing configs
 
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, err
@@ -179,6 +182,10 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 	enableSecurityChecksStr, _ := reader.ReadString('\n')
 	enableSecurityChecks := strings.TrimSpace(strings.ToLower(enableSecurityChecksStr)) == "yes"
 
+	fmt.Print(prompts.UseGeminiSearchGroundingPrompt()) // New prompt for Gemini Search Grounding
+	useGeminiSearchGroundingStr, _ := reader.ReadString('\n')
+	useGeminiSearchGrounding := strings.TrimSpace(strings.ToLower(useGeminiSearchGroundingStr)) == "yes"
+
 	cfg := &Config{
 		EditingModel:             editingModel,
 		SummaryModel:             summaryModel,
@@ -186,7 +193,8 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		OrchestrationModel:       orchestrationModel,
 		LocalModel:               getLocalModel(skipPrompt),
 		TrackWithGit:             autoTrackGit,
-		EnableSecurityChecks:     enableSecurityChecks, // Set from user input
+		EnableSecurityChecks:     enableSecurityChecks,     // Set from user input
+		UseGeminiSearchGrounding: useGeminiSearchGrounding, // Set from user input
 		OllamaServerURL:          "http://localhost:11434",
 		EmbeddingModel:           "mxbai-embed-large", // Default embedding model
 		OrchestrationMaxAttempts: 6,                   // Default max attempts for orchestration

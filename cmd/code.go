@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	filename       string
-	model          string
-	skipPrompt     bool
-	nonInteractive bool
+	filename                 string
+	model                    string
+	skipPrompt               bool
+	nonInteractive           bool
+	useGeminiSearchGrounding bool // New flag for Gemini Search Grounding
 )
 
 var codeCmd = &cobra.Command{
@@ -50,6 +51,11 @@ var codeCmd = &cobra.Command{
 		cfg.SkipPrompt = skipPrompt
 		cfg.Interactive = !nonInteractive
 
+		// Set the config value from the command line flag if it was provided
+		if cmd.Flags().Changed("gemini-search-grounding") {
+			cfg.UseGeminiSearchGrounding = useGeminiSearchGrounding
+		}
+
 		fmt.Println(prompts.ProcessingCodeGeneration()) // Use prompt
 		startTime := time.Now()
 
@@ -67,4 +73,5 @@ func init() {
 	codeCmd.Flags().StringVarP(&model, "model", "m", "", "Model name to use with the LLM")
 	codeCmd.Flags().BoolVar(&skipPrompt, "skip-prompt", false, "Skip user prompt for applying changes")
 	codeCmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "Disable interactive context requests from the LLM")
+	codeCmd.Flags().BoolVar(&useGeminiSearchGrounding, "gemini-search-grounding", false, "Enable Gemini Search Grounding (experimental)") // New flag
 }

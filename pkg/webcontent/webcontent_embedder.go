@@ -2,12 +2,13 @@ package webcontent
 
 import (
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/utils"
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/utils"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -31,8 +32,8 @@ func GetRelevantContentFromText(query, content string, cfg *config.Config) (stri
 		return "", fmt.Errorf("query or content is empty, returning empty string: %w", nil)
 	}
 
-	if llm.EstimateTokens(content) < 10000 {
-		return content, nil // If content is small enough, return it directly
+	if utils.EstimateTokens(content) < 10000 {
+		return content, nil
 	}
 
 	chunks := splitIntoChunks(content)
@@ -40,7 +41,7 @@ func GetRelevantContentFromText(query, content string, cfg *config.Config) (stri
 		return "", fmt.Errorf("failed to split content into chunks: %w", nil)
 	}
 
-	queryEmbedding, err := llm.GenerateEmbedding(query, cfg)
+	queryEmbedding, err := llm.GenerateEmbedding(query)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate embedding for query: %w", err)
 	}
@@ -51,7 +52,7 @@ func GetRelevantContentFromText(query, content string, cfg *config.Config) (stri
 	for i, chunk := range chunks {
 		i, chunk := i, chunk // https://golang.org/doc/faq#closures_and_goroutines
 		g.Go(func() error {
-			embedding, err := llm.GenerateEmbedding(chunk, cfg)
+			embedding, err := llm.GenerateEmbedding(chunk)
 			if err != nil {
 				// Don't fail the whole process, just skip this chunk
 				utils.GetLogger(cfg.SkipPrompt).Logf("failed to generate embedding for chunk: %v", err)

@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"github.com/alantheprice/ledit/pkg/llm"
 	"net/http"
 	"strings"
+
+	"github.com/alantheprice/ledit/pkg/apikeys" // Changed import from pkg/llm to pkg/apikeys
+	"github.com/alantheprice/ledit/pkg/config"  // Added import for config
 )
 
 // WebContentFetcher handles fetching content from URLs.
@@ -20,13 +22,13 @@ func NewWebContentFetcher() *WebContentFetcher {
 
 // FetchWebContent fetches content from a given URL, using a cache to avoid refetching.
 // It uses Jina Reader for external URLs if available, otherwise falls back to a direct HTTP GET.
-func (w *WebContentFetcher) FetchWebContent(url string) (string, error) {
+func (w *WebContentFetcher) FetchWebContent(url string, cfg *config.Config) (string, error) { // Added cfg parameter
 	// Check cache first
 	if cachedEntry, found := w.loadURLCache(url); found {
 		return cachedEntry.Content, nil
 	}
 
-	content, err := w.fetchContent(url)
+	content, err := w.fetchContent(url, cfg) // Pass cfg
 	if err != nil {
 		return "", err
 	}
@@ -40,13 +42,13 @@ func (w *WebContentFetcher) FetchWebContent(url string) (string, error) {
 }
 
 // fetchContent determines the best method to fetch content and retrieves it.
-func (w *WebContentFetcher) fetchContent(url string) (string, error) {
+func (w *WebContentFetcher) fetchContent(url string, cfg *config.Config) (string, error) { // Added cfg parameter
 	isLocalhost := strings.HasPrefix(url, "http://localhost") || strings.HasPrefix(url, "https://localhost")
-	jinaAPIKey, err := llm.GetAPIKey("JinaAI")
+	jinaAPIKey, err := apikeys.GetAPIKey("JinaAI") // Changed call to apikeys.GetAPIKey and passed cfg
 
 	useJina := !isLocalhost && err == nil && jinaAPIKey != ""
 	if useJina {
-		content, err := w.fetchWithJinaReader(url, jinaAPIKey)
+		content, err := w.fetchWithJinaReader(url, cfg) // Pass cfg
 		if err != nil {
 			return "", fmt.Errorf("failed to fetch with Jina Reader: %w", err)
 		}
@@ -62,7 +64,12 @@ func (w *WebContentFetcher) fetchContent(url string) (string, error) {
 }
 
 // fetchWithJinaReader fetches content using the Jina Reader API.
-func (w *WebContentFetcher) fetchWithJinaReader(url, apiKey string) (string, error) {
+func (w *WebContentFetcher) fetchWithJinaReader(url string, cfg *config.Config) (string, error) { // Added cfg parameter
+	apiKey, err := apikeys.GetAPIKey("JinaAI") // Get API key here, passing cfg
+	if err != nil {
+		return "", fmt.Errorf("failed to get Jina AI API key: %w", err)
+	}
+
 	req, err := createJinaRequest(url, apiKey)
 	if err != nil {
 		return "", err

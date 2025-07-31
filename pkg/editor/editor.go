@@ -11,6 +11,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/context"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/parser"
 	"github.com/alantheprice/ledit/pkg/prompts"
@@ -121,7 +122,7 @@ func processInstructions(instructions string, cfg *config.Config) (string, bool,
 			content = workspace.GetWorkspaceContext(instructions, cfg)
 		} else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 
-			content, err = webcontent.NewWebContentFetcher().FetchWebContent(path)
+			content, err = webcontent.NewWebContentFetcher().FetchWebContent(path, cfg) // Pass cfg here
 			if err != nil {
 				fmt.Print(prompts.URLFetchError(path, err)) // Use prompt
 				continue
@@ -139,12 +140,12 @@ func processInstructions(instructions string, cfg *config.Config) (string, bool,
 }
 
 func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config, useGeminiSearchGrounding bool) (map[string]string, string, error) {
-	modelName, llmContent, err := llm.GetLLMCodeResponse(cfg, originalCode, instructions, filename, useGeminiSearchGrounding)
+	modelName, llmContent, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, filename, useGeminiSearchGrounding)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get LLM response: %w", err)
 	}
 
-	fmt.Printf(prompts.ModelReturned(modelName, llmContent)) // Use prompt
+	fmt.Print(prompts.ModelReturned(modelName, llmContent)) // Use prompt
 
 	updatedCode, err := parser.GetUpdatedCodeFromResponse(llmContent)
 	if err != nil {
@@ -207,7 +208,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 		originalCode, _ := loadOriginalCode(newFilename)
 
 		if originalCode == newCode {
-			fmt.Printf(prompts.NoChangesDetected(newFilename)) // Use prompt
+			fmt.Print(prompts.NoChangesDetected(newFilename)) // Use prompt
 			continue
 		}
 
@@ -220,7 +221,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 		if cfg.SkipPrompt {
 			applyChanges = true
 		} else {
-			fmt.Printf(prompts.ApplyChangesPrompt(newFilename)) // Use prompt
+			fmt.Print(prompts.ApplyChangesPrompt(newFilename)) // Use prompt
 			userInput, _ := reader.ReadString('\n')
 			userInput = strings.TrimSpace(strings.ToLower(userInput))
 			applyChanges = userInput == "y" || userInput == "yes"

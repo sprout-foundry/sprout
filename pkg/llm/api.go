@@ -11,13 +11,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/apikeys" // New import
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
+	"github.com/alantheprice/ledit/pkg/utils"   // New import for EstimateTokens
 )
 
 var (
 	// DefaultTokenLimit is the default token limit for API calls
-	DefaultTokenLimit = 30000
+	DefaultTokenLimit = prompts.DefaultTokenLimit
 )
 
 // --- Request/Response Structs for APIs ---
@@ -86,7 +88,7 @@ type GeminiCitationMetadata struct {
 // --- API Callers ---
 
 func callGeminiAPI(model string, messages []prompts.Message, timeout time.Duration, useSearchGrounding bool) (string, error) {
-	apiKey, err := GetAPIKey("gemini")
+	apiKey, err := apikeys.GetAPIKey("gemini") // Use apikeys package
 	if err != nil {
 		fmt.Print(prompts.APIKeyError(err)) // Use prompt
 		return "", err
@@ -304,7 +306,7 @@ func GetOrchestrationPlan(cfg *config.Config, prompt, workspaceContext string) (
 func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, useSearchGrounding bool) (string, error) {
 	var totalInputTokens int
 	for _, msg := range messages {
-		totalInputTokens += EstimateTokens(msg.Content)
+		totalInputTokens += utils.EstimateTokens(msg.Content) // Use utils.EstimateTokens
 	}
 	fmt.Print(prompts.TokenEstimate(totalInputTokens, modelName)) // Use prompt
 	if totalInputTokens > DefaultTokenLimit && !cfg.SkipPrompt {
@@ -337,14 +339,14 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 
 	switch provider {
 	case "openai":
-		apiKey, err := GetAPIKey("openai")
+		apiKey, err := apikeys.GetAPIKey("openai") // Use apikeys package
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err)) // Use prompt
 			return modelName, err
 		}
 		err = callOpenAICompatibleStream("https://api.openai.com/v1/chat/completions", apiKey, model, messages, timeout, writer)
 	case "groq":
-		apiKey, err := GetAPIKey("groq")
+		apiKey, err := apikeys.GetAPIKey("groq") // Use apikeys package
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err)) // Use prompt
 			return modelName, err
@@ -359,21 +361,21 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			_, err = writer.Write([]byte(content))
 		}
 	case "lambda-ai":
-		apiKey, err := GetAPIKey("lambda-ai")
+		apiKey, err := apikeys.GetAPIKey("lambda-ai") // Use apikeys package
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err)) // Use prompt
 			return modelName, err
 		}
 		err = callOpenAICompatibleStream("https://api.lambda.ai/v1/chat/completions", apiKey, model, messages, timeout, writer)
 	case "cerebras":
-		apiKey, err := GetAPIKey("cerebras")
+		apiKey, err := apikeys.GetAPIKey("cerebras") // Use apikeys package
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err)) // Use prompt
 			return modelName, err
 		}
 		err = callOpenAICompatibleStream("https://api.cerebras.ai/v1/chat/completions", apiKey, model, messages, timeout, writer)
 	case "deepseek":
-		apiKey, err := GetAPIKey("deepseek")
+		apiKey, err := apikeys.GetAPIKey("deepseek") // Use apikeys package
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err)) // Use prompt
 			return modelName, err
@@ -417,24 +419,6 @@ func GetLLMResponse(modelName string, messages []prompts.Message, filename strin
 	content = removeThinkTags(content)
 
 	return newModelName, content, nil
-}
-
-// GetScriptRiskAnalysis sends a shell script to the summary model for risk analysis.
-func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, error) {
-	messages := prompts.BuildScriptRiskAnalysisMessages(scriptContent)
-	modelName := cfg.SummaryModel // Use the summary model for this task
-	if modelName == "" {
-		// Fallback if summary model is not configured
-		modelName = cfg.EditingModel
-		fmt.Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
-	}
-
-	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute, false) // Analysis does not use search grounding
-	if err != nil {
-		return "", fmt.Errorf("failed to get script risk analysis from LLM: %w", err)
-	}
-
-	return strings.TrimSpace(response), nil
 }
 
 // GenerateSearchQuery uses an LLM to generate a concise search query based on the provided context.

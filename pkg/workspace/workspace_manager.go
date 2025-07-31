@@ -2,16 +2,17 @@ package workspace
 
 import (
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/prompts" // Import the prompts package
-	"github.com/alantheprice/ledit/pkg/utils"   // Import the utils package for logger
 	"os"
 	"path/filepath" // New import for security concern detection
-	"regexp"        // New import for regex
 	"sort"          // For sorting top directories and string slices
 	"strings"
 	"sync"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"  // Import the prompts package
+	"github.com/alantheprice/ledit/pkg/security" // New import for security checks
+	"github.com/alantheprice/ledit/pkg/utils"    // Import the utils package for logger
 )
 
 // processResult is used to pass analysis results from goroutines back to the main thread.
@@ -47,134 +48,7 @@ var (
 		".kt": true, ".scala": true, ".rs": true, ".dart": true, ".pl": true,
 		".pm": true, ".lua": true, ".vim": true, ".toml": true,
 	}
-
-	// Regex patterns for common security concerns.
-	// The first capturing group should ideally capture the "value" part if applicable.
-	// Patterns are designed to be robust and capture common key/value formats.
-	securityConcernRegexes = map[string][]*regexp.Regexp{
-		"API Key": {
-			regexp.MustCompile(`(?i)(?:api_key|apikey|api-key|client_id|client_secret|auth_token|access_token|bearer_token|token)\s*[:=]\s*['"]?([a-zA-Z0-9+/=._-]{16,})['"]?`),
-			regexp.MustCompile(`(?i)x-api-key:\s*([a-zA-Z0-9+/=._-]{16,})`),
-		},
-		"Password": {
-			regexp.MustCompile(`(?i)(?:password|pass|pwd|db_password|db_pass)\s*[:=]\s*['"]?([a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~` + "`" + `]{8,})['"]?`),
-		},
-		"Secret": {
-			regexp.MustCompile(`(?i)(?:secret_key|secretkey|secret-key|app_secret|client_secret)\s*[:=]\s*['"]?([a-zA-Z0-9+/=._-]{16,})['"]?`),
-		},
-		"AWS Key": {
-			regexp.MustCompile(`AKIA[0-9A-Z]{16}`),                                                 // AWS Access Key ID format
-			regexp.MustCompile(`(?i)aws_secret_access_key\s*[:=]\s*['"]?([0-9a-zA-Z/+]{40})['"]?`), // AWS Secret Access Key format
-		},
-		"Azure Key": {
-			regexp.MustCompile(`(?i)(?:azure_client_secret|azure_subscription_key)\s*[:=]\s*['"]?([a-zA-Z0-9+/=._-]{16,})['"]?`),
-		},
-		"Database Creds": {
-			regexp.MustCompile(`(?i)(?:db_user|db_host|db_name)\s*[:=]\s*['"]?([a-zA-Z0-9_.-]{1,})['"]?`), // Catching these might indicate a connection string
-			regexp.MustCompile(`(?i)jdbc:mysql://(?:[^/]+)/([^?]+)\?user=([^&]+)&password=([^&]+)`),       // JDBC connection string
-			regexp.MustCompile(`(?i)mongodb://(?:[^:]+):([^@]+)@`),                                        // MongoDB password
-		},
-		"SSH Key": {
-			regexp.MustCompile(`BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY`),
-		},
-		"Encryption Key": {
-			regexp.MustCompile(`(?i)(?:encryption_key|decryption_key|aes_key|rsa_private_key)\s*[:=]\s*['"]?([a-zA-Z0-9+/=._-]{16,})['"]?`),
-		},
-	}
-
-	// Regex patterns for common placeholder values to ignore.
-	commonPlaceholderRegexes = []*regexp.Regexp{
-		regexp.MustCompile(`(?i)your_api_key`),
-		regexp.MustCompile(`(?i)your_secret_key`),
-		regexp.MustCompile(`(?i)your_password`),
-		regexp.MustCompile(`(?i)your_token`),
-		regexp.MustCompile(`(?i)dummy`),
-		regexp.MustCompile(`(?i)placeholder`),
-		regexp.MustCompile(`(?i)example`),
-		regexp.MustCompile(`(?i)test`),
-		regexp.MustCompile(`(?i)changeme`),
-		regexp.MustCompile(`null`),
-		regexp.MustCompile(`nil`),
-		regexp.MustCompile(`""`),
-		regexp.MustCompile(`''`),
-		regexp.MustCompile(`0000`),
-		regexp.MustCompile(`xxxx`),
-		regexp.MustCompile(`yyyy`),
-		regexp.MustCompile(`zzzz`),
-		regexp.MustCompile(`1234567890`),
-		regexp.MustCompile(`abcdefghij`),
-		regexp.MustCompile(`[a-f0-9]{32}`), // Common hash-like placeholders (MD5)
-		regexp.MustCompile(`[a-f0-9]{40}`), // Common hash-like placeholders (SHA1)
-		regexp.MustCompile(`[a-f0-9]{64}`), // Common hash-like placeholders (SHA256)
-	}
 )
-
-// detectSecurityConcerns scans file content for security-sensitive patterns using robust regex.
-// It attempts to find common patterns for keys and ignores common placeholder values.
-func detectSecurityConcerns(content string, cfg *config.Config) []string {
-	var concerns []string
-	detectedConcernsMap := make(map[string]bool) // Use a map to store unique concerns
-
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine == "" {
-			continue
-		}
-
-		for concernType, patterns := range securityConcernRegexes {
-			for _, re := range patterns {
-				matches := re.FindStringSubmatch(trimmedLine)
-				if len(matches) > 0 {
-					// If the regex has a capturing group (i.e., it's trying to extract a value)
-					if len(matches) > 1 {
-						value := matches[1]
-						isPlaceholder := false
-						for _, placeholderRe := range commonPlaceholderRegexes {
-							if placeholderRe.MatchString(value) {
-								isPlaceholder = true
-								break
-							}
-						}
-						if !isPlaceholder {
-							if !detectedConcernsMap[concernType] {
-								concerns = append(concerns, concernType)
-								detectedConcernsMap[concernType] = true
-							}
-						}
-					} else {
-						// No capturing group, meaning the presence of the pattern itself is a concern (e.g., "BEGIN PRIVATE KEY")
-						if !detectedConcernsMap[concernType] {
-							concerns = append(concerns, concernType)
-							detectedConcernsMap[concernType] = true
-						}
-					}
-				}
-			}
-		}
-	}
-	sort.Strings(concerns) // Sort for consistent output
-	return concerns
-}
-
-// stringSliceEqual checks if two string slices are equal, ignoring order.
-func stringSliceEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	aCopy := make([]string, len(a))
-	bCopy := make([]string, len(b))
-	copy(aCopy, a)
-	copy(bCopy, b)
-	sort.Strings(aCopy)
-	sort.Strings(bCopy)
-	for i := range aCopy {
-		if aCopy[i] != bCopy[i] {
-			return false
-		}
-	}
-	return true
-}
 
 // validateAndUpdateWorkspace checks the current file system against the workspace.json file,
 // analyzes new or changed files, removes deleted files, and saves the updated workspace.
@@ -197,11 +71,6 @@ func validateAndUpdateWorkspace(rootDir, workspaceFilePath string, cfg *config.C
 	var filesToAnalyzeList []fileToProcess
 	newFilesCount := 0
 	newFilesTopDirs := make(map[string]int) // Map to store count of new files per top-level directory
-
-	// Maps to temporarily store security concerns and ignored ones for the current run
-	// These will be used to update the workspace.Files map after LLM analysis (if any)
-	fileSecurityConcernsMap := make(map[string][]string)
-	fileIgnoredSecurityConcernsMap := make(map[string][]string)
 
 	err = filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -251,104 +120,37 @@ func validateAndUpdateWorkspace(rootDir, workspaceFilePath string, cfg *config.C
 		isChanged := exists && existingFileInfo.Hash != newHash
 		isNew := !exists
 
-		var detectedConcerns []string
-		var concernsForThisFile []string
-		var ignoredConcernsForThisFile []string
-		skipLLMSummarization := false // New flag to control LLM summarization
+		var (
+			concernsForThisFile        []string
+			ignoredConcernsForThisFile []string
+			skipLLMSummarization       bool
+		)
 
 		// --- Security Concern Detection and User Interaction ---
-		if cfg.EnableSecurityChecks { // Only perform security checks if the flag is enabled
-			if isNew || isChanged {
-				// Only run security detection for new or changed files
-				detectedConcerns = detectSecurityConcerns(fileContent, cfg)
-				// If file exists and is changed, start with previously ignored concerns
-				if exists {
-					ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, existingFileInfo.IgnoredSecurityConcerns...)
-				}
-			} else {
-				// File is unchanged. Use existing security concerns and ignored concerns.
-				concernsForThisFile = append(concernsForThisFile, existingFileInfo.SecurityConcerns...)
-				ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, existingFileInfo.IgnoredSecurityConcerns...)
-				// detectedConcerns is not strictly needed here, but for consistency in the following logic,
-				// we can set it to the previously identified issues.
-				detectedConcerns = existingFileInfo.SecurityConcerns
-			}
+		if cfg.EnableSecurityChecks {
+			concernsForThisFile, ignoredConcernsForThisFile, skipLLMSummarization = security.CheckFileSecurity(
+				relativePath,
+				fileContent,
+				isNew,
+				isChanged,
+				existingFileInfo.SecurityConcerns,
+				existingFileInfo.IgnoredSecurityConcerns,
+				cfg,
+			)
 
-			// Filter out concerns that were previously ignored (only applies if isNew or isChanged)
-			newlyDetectedConcerns := []string{}
-			if isNew || isChanged { // Only prompt for new detections on new/changed files
-				for _, concern := range detectedConcerns {
-					isAlreadyIgnored := false
-					for _, ignored := range ignoredConcernsForThisFile {
-						if ignored == concern {
-							isAlreadyIgnored = true
-							break
-						}
-					}
-					if !isAlreadyIgnored {
-						newlyDetectedConcerns = append(newlyDetectedConcerns, concern)
-					}
-				}
-			}
-
-			// Prompt user for newly detected, unignored concerns
-			for _, concern := range newlyDetectedConcerns {
-				prompt := fmt.Sprintf("Security concern detected in %s: '%s'. Is this an issue?", relativePath, concern)
-				if logger.AskForConfirmation(prompt, true) { // This is a required check
-					concernsForThisFile = append(concernsForThisFile, concern)
-					logger.Logf("Security concern '%s' in %s noted as an issue.", concern, relativePath)
-				} else {
-					ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, concern)
-					logger.Logf("Security concern '%s' in %s noted as unimportant.", concern, relativePath)
-				}
-			}
-
-			// Add back any concerns that were previously marked as issues and are still detected
-			// This applies only if the file content changed, as for unchanged files, concernsForThisFile already holds them.
-			if isNew || isChanged {
-				if exists { // Only if it's an existing file that changed
-					for _, prevConcern := range existingFileInfo.SecurityConcerns {
-						isStillDetected := false
-						for _, currentDetected := range detectedConcerns { // `detectedConcerns` is fresh for new/changed files
-							if prevConcern == currentDetected {
-								isStillDetected = true
-								break
-							}
-						}
-						if isStillDetected {
-							// Ensure it's not already added to concernsForThisFile (e.g., if it was also in newlyDetectedConcerns)
-							found := false
-							for _, c := range concernsForThisFile {
-								if c == prevConcern {
-									found = true
-									break
-								}
-							}
-							if !found {
-								concernsForThisFile = append(concernsForThisFile, prevConcern)
-							}
-						}
-					}
-				}
-			}
-			sort.Strings(concernsForThisFile)
-			sort.Strings(ignoredConcernsForThisFile)
-
-			// If there are confirmed security concerns, mark for skipping LLM summarization
-			if len(concernsForThisFile) > 0 {
-				skipLLMSummarization = true
-				logger.LogProcessStep(prompts.SkippingLLMSummarizationDueToSecurity(relativePath))
+			// If file is unchanged and security concerns/ignored concerns are also unchanged,
+			// then no further action is needed for this file.
+			if !isNew && !isChanged &&
+				utils.StringSliceEqual(existingFileInfo.SecurityConcerns, concernsForThisFile) &&
+				utils.StringSliceEqual(existingFileInfo.IgnoredSecurityConcerns, ignoredConcernsForThisFile) {
+				return nil // File exists, unchanged, security concerns stable.
 			}
 		} else {
 			// If security checks are disabled, ensure no security concerns are stored.
 			concernsForThisFile = []string{}
 			ignoredConcernsForThisFile = []string{}
+			skipLLMSummarization = false
 		}
-
-		// Store the determined security status for this file
-		fileSecurityConcernsMap[relativePath] = concernsForThisFile
-		fileIgnoredSecurityConcernsMap[relativePath] = ignoredConcernsForThisFile
-		// --- End Security Concern Detection ---
 
 		needsLLMSummarization := false
 		if isNew || isChanged {
@@ -368,10 +170,10 @@ func validateAndUpdateWorkspace(rootDir, workspaceFilePath string, cfg *config.C
 				return nil // Skip LLM analysis for this file
 			}
 		} else {
-			// File is unchanged. Check if security concerns or ignored concerns have changed.
-			// If they changed, update the workspace.Files directly without LLM analysis.
-			if !stringSliceEqual(existingFileInfo.SecurityConcerns, concernsForThisFile) ||
-				!stringSliceEqual(existingFileInfo.IgnoredSecurityConcerns, ignoredConcernsForThisFile) {
+			// File is unchanged, but security concerns might have been updated (e.g., user changed mind on a prompt).
+			// In this case, we update the workspace info but don't re-summarize.
+			if !utils.StringSliceEqual(existingFileInfo.SecurityConcerns, concernsForThisFile) ||
+				!utils.StringSliceEqual(existingFileInfo.IgnoredSecurityConcerns, ignoredConcernsForThisFile) {
 				logger.Logf("Updating security concerns for unchanged file %s.", relativePath)
 				// Preserve existing summary/exports/references if content is unchanged
 				workspace.Files[relativePath] = WorkspaceFileInfo{
@@ -482,6 +284,22 @@ func validateAndUpdateWorkspace(rootDir, workspaceFilePath string, cfg *config.C
 				fileSummary, fileExports, fileReferences, llmErr = getSummary(f.content, f.path, cfg)
 			}
 
+			// Re-fetch security concerns and ignored concerns from the workspace map
+			// This is important because the security check might have updated them
+			// even if LLM summarization was skipped.
+			currentFileInfo, exists := workspace.Files[f.relativePath]
+			var finalSecurityConcerns []string
+			var finalIgnoredSecurityConcerns []string
+			if exists {
+				finalSecurityConcerns = currentFileInfo.SecurityConcerns
+				finalIgnoredSecurityConcerns = currentFileInfo.IgnoredSecurityConcerns
+			} else {
+				// This case should ideally not happen if the file was added to filesToAnalyzeList
+				// after the security check, but as a fallback, use empty slices.
+				finalSecurityConcerns = []string{}
+				finalIgnoredSecurityConcerns = []string{}
+			}
+
 			resultsChan <- processResult{
 				relativePath:            f.relativePath,
 				summary:                 fileSummary,
@@ -489,8 +307,8 @@ func validateAndUpdateWorkspace(rootDir, workspaceFilePath string, cfg *config.C
 				references:              fileReferences,
 				hash:                    f.hash,
 				tokenCount:              f.tokenCount,
-				securityConcerns:        fileSecurityConcernsMap[f.relativePath],        // Retrieve from map
-				ignoredSecurityConcerns: fileIgnoredSecurityConcernsMap[f.relativePath], // Retrieve from map
+				securityConcerns:        finalSecurityConcerns,
+				ignoredSecurityConcerns: finalIgnoredSecurityConcerns,
 				err:                     llmErr,
 			}
 		}(file, cfg)

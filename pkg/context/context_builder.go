@@ -1,4 +1,4 @@
-package llm
+package context
 
 import (
 	"bufio"
@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"    // Import the new prompts package
+	"github.com/alantheprice/ledit/pkg/webcontent" // Import webcontent package
 )
 
 // --- Message Structs ---
@@ -27,12 +29,19 @@ type ContextResponse struct {
 func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, error) {
 	var responses []string
 	for _, req := range reqs {
-		fmt.Printf(prompts.LLMContextRequest(req.Type, req.Query)) // Use prompt
+		fmt.Print(prompts.LLMContextRequest(req.Type, req.Query)) // Use prompt
 		switch req.Type {
 		case "search":
-			responses = append(responses, "Web search is not yet implemented.")
+			searchResult, err := webcontent.FetchContextFromSearch(req.Query, cfg)
+			if err != nil {
+				responses = append(responses, fmt.Sprintf("Failed to perform web search for '%s': %v", req.Query, err))
+			} else if searchResult == "" {
+				responses = append(responses, fmt.Sprintf("No relevant content found for search query: '%s'", req.Query))
+			} else {
+				responses = append(responses, fmt.Sprintf("Here are the search results for '%s':\n\n%s", req.Query, searchResult))
+			}
 		case "user_prompt":
-			fmt.Printf(prompts.LLMUserQuestion(req.Query)) // Use prompt
+			fmt.Print(prompts.LLMUserQuestion(req.Query)) // Use prompt
 			reader := bufio.NewReader(os.Stdin)
 			answer, err := reader.ReadString('\n')
 			if err != nil {
@@ -103,7 +112,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string,
 	messages := prompts.BuildCodeMessages(code, instructions, filename, cfg.Interactive)
 
 	if !cfg.Interactive {
-		_, response, err := GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute, useGeminiSearchGrounding)
+		_, response, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute, useGeminiSearchGrounding)
 		if err != nil {
 			return modelName, "", err
 		}
@@ -120,7 +129,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string,
 		}
 
 		// Default timeout for code generation is 6 minutes
-		_, response, err := GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute, useGeminiSearchGrounding)
+		_, response, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute, useGeminiSearchGrounding)
 		if err != nil {
 			return modelName, "", err
 		}
@@ -185,4 +194,22 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string,
 			return modelName, response, nil // No context requests, return the response
 		}
 	}
+}
+
+// GetScriptRiskAnalysis sends a shell script to the summary model for risk analysis.
+func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, error) {
+	messages := prompts.BuildScriptRiskAnalysisMessages(scriptContent)
+	modelName := cfg.SummaryModel // Use the summary model for this task
+	if modelName == "" {
+		// Fallback if summary model is not configured
+		modelName = cfg.EditingModel
+		fmt.Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
+	}
+
+	_, response, err := llm.GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute, false) // Analysis does not use search grounding
+	if err != nil {
+		return "", fmt.Errorf("failed to get script risk analysis from LLM: %w", err)
+	}
+
+	return strings.TrimSpace(response), nil
 }

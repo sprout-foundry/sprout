@@ -39,7 +39,7 @@ func init() {
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(questionCmd)
-	rootCmd.AddCommand(orchestrateCmd)
+	rootCmd.AddCommand(doCmd) // Changed from orchestrateCmd to doCmd
 	rootCmd.AddCommand(fixCmd)
 	rootCmd.AddCommand(commitCmd) // Add the new commit command
 }

@@ -135,7 +135,7 @@ Examples:
     single_mode = args.single or (args.test_number is not None)
     test_number_arg = args.test_number
     list_tests_only = args.list_tests
-    keep_testing_dir = args.keep_testing_dir
+    keep_testing_dir = args.keep_testing_dir # Initial value based on command-line arg
 
     logging.debug(f"Calculated modes: single_mode={single_mode}, test_number_arg={test_number_arg}, list_tests_only={list_tests_only}, keep_testing_dir={keep_testing_dir}")
 
@@ -441,6 +441,12 @@ Examples:
     print("--- CLEANUP: Removing testing artifacts ---")
     # The script remains in project_root throughout execution.
     # Clean up the main testing directory which contains all sub-test directories.
+    
+    # Determine if testing directory should be kept based on failures
+    if not all_passed:
+        logging.info(f"{RED}One or more tests failed. Keeping '{testing_dir}' directory for inspection.{RESET}")
+        keep_testing_dir = True # Override to keep directory if tests failed
+
     if not keep_testing_dir:
         if testing_dir.exists():
             print(f"Removing '{testing_dir}' directory...")
@@ -448,7 +454,7 @@ Examples:
         else:
             print(f"'{testing_dir}' directory not found, no cleanup needed.")
     else:
-        print(f"Skipping cleanup of '{testing_dir}' directory as --keep-testing-dir flag was set.")
+        print(f"Skipping cleanup of '{testing_dir}' directory as --keep-testing-dir flag was set or tests failed.")
     print("----------------------------------------------------")
     print()
 

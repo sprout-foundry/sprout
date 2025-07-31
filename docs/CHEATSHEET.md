@@ -1,56 +1,68 @@
-# ledit Command Cheat Sheet
+# Ledit Cheatsheet
+
+This document provides a quick reference for `ledit` commands and concepts.
 
 ## Core Commands
 
-| Command             | Description                 | Example                        |
-| ------------------- | --------------------------- | ------------------------------ |
-| `ledit init`        | Initialize project          | `ledit init`                   |
-| `ledit code`        | Generate/edit code          | `ledit code "Add feature"`     |
-| `ledit fix`         | Apply suggested fixes       | `ledit fix "Fix linting errors"`|
-| `ledit orchestrate` | Plan complex feature        | `ledit orchestrate "Add auth"` |
-| `ledit log`         | View change history         | `ledit log`                    |
-| `ledit question`    | Interactive chat            | `ledit question`               |
-| `ledit ignore`      | Add patterns to ignore list | `ledit ignore "*.log"`         |
+| Command | Description | Example |
+|---|---|---|
+| `ledit code` | Generate or modify code based on instructions. | `ledit code "Add a new function to calculate factorial" -f math.go` |
+| `ledit do` | Orchestrate a complex feature implementation. | `ledit do "Implement user authentication with JWT"` |
+| `ledit init` | Initialize `ledit` in a project directory. | `ledit init` |
+| `ledit log` | View the history of changes made by `ledit`. | `ledit log` |
+| `ledit question` | Ask `ledit` a question about your code or general topics. | `ledit question "Explain the main function in main.go"` |
+| `ledit fix` | Attempt to fix a problem in your code based on an error message. | `ledit fix "Error: undefined variable 'user_id' in main.go"` |
+| `ledit ignore` | Add patterns to `.ledit/leditignore` to exclude files from workspace analysis. | `ledit ignore "temp_files/"` |
+| `ledit commit` | Manually commit changes with an AI-generated message. | `ledit commit` |
 
 ## Common Options
 
-| Option          | Description                |
-| --------------- | -------------------------- |
-| `--filename`    | Target file path           |
-| `--model`       | Override default model     |
-| `--skip-prompt` | Apply without confirmation |
-| `--verbose`     | Show detailed output       |
+| Option | Description | Example |
+|---|---|---|
+| `-f, --filename <path>` | Specify the target file for `code` command. If omitted, `ledit` may create a new file. | `ledit code "Add a new route" -f server.go` |
+| `-m, --model <provider:model>` | Override the default LLM model for the command. | `ledit code "..." -m openai:gpt-4-turbo` |
+| `--skip-prompt` | Bypass all user confirmation prompts (use with caution). | `ledit do "..." --skip-prompt` |
 
 ## Context Directives
 
-| Tag             | Purpose                                         | Example                                |
-| --------------- | ----------------------------------------------- | -------------------------------------- |
-| `#SG`           | Search grounding                                | `"#SG \"react native\" Start project"` |
-| `#WORKSPACE`    | Include project context                         | `"Refactor #WORKSPACE"`                |
-| `#WS`           | Alias for #WORKSPACE                            | `"Update #WS"`                         |
-| `#<file \ url>` | Include specific file or content from a webpage | `"Use functions from #utils.go"`       |
+Use these special directives in your prompts to control the context provided to the LLM.
+
+| Directive | Description | Example |
+|---|---|---|
+| `#<filepath>` | Include the full content of a specific file. | `ledit code "Refactor based on #./old_code.go" -f new_code.go` |
+| `#WORKSPACE` or `#WS` | Automatically select and include relevant files (full content or summary) from your workspace. | `ledit code "Add user roles. #WS"` |
+| `#SG "query"` | Perform a web search and ground the LLM's response with relevant snippets. | `ledit code "Use the latest React hook form. #SG \"react hook form latest version\""` |
 
 ## Supported LLM Providers
 
-| Provider  | Example Model Specifier               |
-| --------- | ------------------------------------- |
-| Lambda AI | `lambda-ai:qwen25-coder-32b-instruct` |
-| OpenAI    | `openai:gpt-4o`                       |
-| Groq      | `groq:llama-3.3-70b`                  |
-| Gemini    | `gemini:gemini-1.5-pro`               |
-| Ollama    | `ollama:llama3`                       |
+Specify provider and model using `<provider>:<model_name>`.
+
+-   `openai`: `openai:gpt-4-turbo`
+-   `groq`: `groq:llama3-70b-8192`
+-   `gemini`: `gemini:gemini-pro`
+-   `ollama`: `ollama:llama3`
+-   `lambda-ai`: `lambda-ai:deepseek-v3-0324`
+-   `cerebras`: `cerebras:cerebras-gpt`
+-   `deepseek`: `deepseek:deepseek-coder`
 
 ## Workspace Files
 
-- `.ledit/workspace.json` - File summaries and exports
-- `.ledit/leditignore` - Custom ignore patterns
-- `.ledit/changelog.db` - Change history database
-- `.ledit/config.json` - Project configuration
+`ledit` maintains these files in your `.ledit/` directory:
 
-## Orchestration Process
+-   `.ledit/workspace.json`: Index of your project's files and their summaries.
+-   `.ledit/requirements.json`: Stores the current orchestration plan.
+-   `.ledit/config.json`: Project-specific configuration settings.
+-   `.ledit/leditignore`: Patterns for files/directories to ignore.
+-   `.ledit/setup.sh`: Generated setup script for orchestration.
+-   `.ledit/validate.sh`: Generated validation script for orchestration.
 
-1. Analysis of prompt and workspace
-2. LLM generates JSON plan
-3. User review and approval
-4. Step-by-step execution
-5. Validation and self-correction
+## Orchestration Process (using `ledit do`)
+
+1.  **Analysis**: `ledit` analyzes your prompt and workspace.
+2.  **Planning**: An LLM generates a JSON plan of required changes.
+3.  **Review**: You review and approve the plan.
+4.  **Execution**: `ledit` executes each step: generates code, applies changes, runs setup/validation scripts.
+5.  **Self-Correction**: If a step fails, `ledit` analyzes the error, optionally performs web search, re-prompts the LLM for a fix, and retries.
+
+---
+[Back to README](../README.md)

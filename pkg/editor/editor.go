@@ -12,6 +12,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/context"
+	"github.com/alantheprice/ledit/pkg/git" // NEW IMPORT: Import the new git package
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/parser"
 	"github.com/alantheprice/ledit/pkg/prompts"
@@ -261,7 +262,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 
 			if cfg.TrackWithGit {
 				// get the filename path from the root of the git repository
-				filePath, err := getFileGitPath(newFilename)
+				filePath, err := git.GetFileGitPath(newFilename) // CHANGED: Call git.GetFileGitPath
 				if err != nil {
 					return err
 				}
@@ -277,7 +278,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				}
 				commitMessage := fmt.Sprintf("%s %s - %s", changeTypeName, filePath, message)
 
-				if err := addAndCommitFile(newFilename, commitMessage); err != nil {
+				if err := git.AddAndCommitFile(newFilename, commitMessage); err != nil { // CHANGED: Call git.AddAndCommitFile
 					return err
 				}
 			}

@@ -14,7 +14,7 @@ run_test_logic() {
     echo "Creating a Python script with a syntax error..."
     cat <<EOF > fixable_script.py
 def main()
-    print("This is a broken script")
+    print("Hello, World!")
 
 if __name__ == "__main__":
     main()
@@ -59,7 +59,7 @@ EOF
     echo "PASS: The fixed script ran successfully."
 
     # 6. Check the output
-    expected_output="This is a broken script"
+    expected_output="Hello, World!"
     if [ "$output" != "$expected_output" ]; then
         echo "FAIL: The script output is not what was expected."
         echo "Expected: '$expected_output'"

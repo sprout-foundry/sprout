@@ -294,10 +294,10 @@ func GetOrchestrationPlan(cfg *config.Config, prompt, workspaceContext string) (
 		parts := strings.SplitN(response, "```json", 2)
 		if len(parts) > 1 {
 			response = strings.Split(parts[1], "```")[0]
+		} else if strings.HasPrefix(response, "```") && strings.HasSuffix(response, "```") {
+			response = strings.TrimPrefix(response, "```")
+			response = strings.TrimSuffix(response, "```")
 		}
-	} else if strings.HasPrefix(response, "```") && strings.HasSuffix(response, "```") {
-		response = strings.TrimPrefix(response, "```")
-		response = strings.TrimSuffix(response, "```")
 	}
 
 	return strings.TrimSpace(response), nil
@@ -441,10 +441,10 @@ func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
 		parts := strings.SplitN(queryResponse, "```json", 2)
 		if len(parts) > 1 {
 			queryResponse = strings.Split(parts[1], "```")[0]
+		} else if strings.HasPrefix(queryResponse, "```") && strings.HasSuffix(queryResponse, "```") {
+			queryResponse = strings.TrimPrefix(queryResponse, "```")
+			queryResponse = strings.TrimSuffix(queryResponse, "```")
 		}
-	} else if strings.HasPrefix(queryResponse, "```") && strings.HasSuffix(queryResponse, "```") {
-		queryResponse = strings.TrimPrefix(queryResponse, "```")
-		queryResponse = strings.TrimSuffix(queryResponse, "```")
 	}
 
 	var searchQueries []string

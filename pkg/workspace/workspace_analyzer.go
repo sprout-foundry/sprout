@@ -106,3 +106,33 @@ func isTextFile(filename string) bool {
 	}
 	return false
 }
+
+// GetProjectGoals uses an LLM to autogenerate project goals based on the workspace summary.
+func GetProjectGoals(cfg *config.Config, workspaceSummary string) (ProjectGoals, error) {
+	messages := prompts.BuildProjectGoalsMessages(workspaceSummary)
+
+	modelName := cfg.WorkspaceModel // Use the workspace model for generating project goals
+
+	_, response, err := llm.GetLLMResponse(modelName, messages, "", cfg, 2*time.Minute, false)
+	if err != nil {
+		return ProjectGoals{}, fmt.Errorf("failed to get project goals from LLM: %w", err)
+	}
+
+	// Clean the response from markdown code blocks
+	if strings.Contains(response, "```json") {
+		parts := strings.SplitN(response, "```json", 2)
+		if len(parts) > 1 {
+			response = strings.Split(parts[1], "```")[0]
+		} else if strings.HasPrefix(response, "```") && strings.HasSuffix(response, "```") {
+			response = strings.TrimPrefix(response, "```")
+			response = strings.TrimSuffix(response, "```")
+		}
+	}
+
+	var goals ProjectGoals
+	if err := json.Unmarshal([]byte(response), &goals); err != nil {
+		return ProjectGoals{}, fmt.Errorf("failed to parse project goals JSON from LLM response: %w\nResponse was: %s", err, response)
+	}
+
+	return goals, nil
+}

@@ -21,6 +21,17 @@ const (
 	MicroCoder  = "qwen2.5-coder:3b"
 )
 
+// CodeStylePreferences defines the preferred code style guidelines for the project.
+type CodeStylePreferences struct {
+	FunctionSize      string `json:"function_size"`
+	FileSize          string `json:"file_size"`
+	NamingConventions string `json:"naming_conventions"`
+	ErrorHandling     string `json:"error_handling"`
+	TestingApproach   string `json:"testing_approach"`
+	Modularity        string `json:"modularity"`
+	Readability       string `json:"readability"`
+}
+
 type Config struct {
 	EditingModel             string `json:"editing_model"`
 	SummaryModel             string `json:"summary_model"`
@@ -35,6 +46,7 @@ type Config struct {
 	Interactive              bool   `json:"-"`                           // Internal use, not saved to config
 	OllamaServerURL          string `json:"ollama_server_url"`
 	OrchestrationMaxAttempts int    `json:"orchestration_max_attempts"` // New field for max attempts
+	CodeStyle                CodeStylePreferences `json:"code_style"` // New field for code style preferences
 }
 
 func getHomeConfigPath() (string, string) {
@@ -107,6 +119,29 @@ func (cfg *Config) setDefaultValues() {
 	// Ensure EnableSecurityChecks is explicitly set to true by default, but can be overridden by config file
 	cfg.EnableSecurityChecks = true
 	// UseGeminiSearchGrounding defaults to false (zero value), no explicit setting needed here unless default was true.
+
+	// Set default code style preferences
+	if cfg.CodeStyle.FunctionSize == "" {
+		cfg.CodeStyle.FunctionSize = "Aim for smaller, single-purpose functions (under 50 lines)."
+	}
+	if cfg.CodeStyle.FileSize == "" {
+		cfg.CodeStyle.FileSize = "Prefer smaller files, breaking down large components into multiple files (under 500 lines)."
+	}
+	if cfg.CodeStyle.NamingConventions == "" {
+		cfg.CodeStyle.NamingConventions = "Use clear, descriptive names for variables, functions, and types. Follow Go conventions (camelCase for local, PascalCase for exported)."
+	}
+	if cfg.CodeStyle.ErrorHandling == "" {
+		cfg.CodeStyle.ErrorHandling = "Handle errors explicitly, returning errors as the last return value. Avoid panics for recoverable errors."
+	}
+	if cfg.CodeStyle.TestingApproach == "" {
+		cfg.CodeStyle.TestingApproach = "Write unit tests for all critical logic. Aim for high test coverage."
+	}
+	if cfg.CodeStyle.Modularity == "" {
+		cfg.CodeStyle.Modularity = "Design components to be loosely coupled and highly cohesive."
+	}
+	if cfg.CodeStyle.Readability == "" {
+		cfg.CodeStyle.Readability = "Prioritize code readability and maintainability. Use comments where necessary to explain complex logic."
+	}
 }
 
 func loadConfig(filePath string) (*Config, error) {
@@ -121,6 +156,8 @@ func loadConfig(filePath string) (*Config, error) {
 	cfg.OllamaServerURL = "http://localhost:11434" // Default Ollama URL
 	cfg.EnableSecurityChecks = false               // Default to false for existing configs
 	cfg.UseGeminiSearchGrounding = false           // Default to false for existing configs
+	// Initialize CodeStyle to ensure setDefaultValues can populate it
+	cfg.CodeStyle = CodeStylePreferences{}
 
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, err
@@ -198,6 +235,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		OllamaServerURL:          "http://localhost:11434",
 		EmbeddingModel:           "mxbai-embed-large", // Default embedding model
 		OrchestrationMaxAttempts: 6,                   // Default max attempts for orchestration
+		CodeStyle:                CodeStylePreferences{}, // Initialize to be populated by setDefaultValues
 	}
 
 	cfg.setDefaultValues()

@@ -166,6 +166,25 @@ func BuildScriptRiskAnalysisMessages(scriptContent string) []Message {
 	}
 }
 
+// BuildProjectGoalsMessages creates messages for generating project goals.
+func BuildProjectGoalsMessages(workspaceSummary string) []Message {
+	return []Message{
+		{
+			Role: "system",
+			Content: "You are an expert at inferring project goals and preferences from a given workspace context. " +
+				"Based on the provided workspace summary, autogenerate a concise set of long-term project goals and preferences. " +
+				"Focus on the overall purpose, key features, target audience, and technical vision of the project. " +
+				"Respond with a JSON object containing the following keys: 'overall_goal', 'key_features', 'target_audience', 'technical_vision'. " +
+				"Each value should be a concise string. If information is not explicitly available, make reasonable inferences based on common software development practices. " +
+				"Your response MUST be only the raw JSON, without any surrounding text or code fences.",
+		},
+		{
+			Role:    "user",
+			Content: fmt.Sprintf("Workspace context summary:\n%s\n\nAutogenerate project goals:", workspaceSummary),
+		},
+	}
+}
+
 // LLMSearchQueryGenerationError provides a message for when the LLM fails to generate a search query.
 func LLMSearchQueryGenerationError(err error) string {
 	return fmt.Sprintf("Ledit failed to generate a search query using the LLM. This might be due to API issues or an inability to understand the request. Please try again or provide a specific search query using #SG \"your query\". Error: %v\n", err)

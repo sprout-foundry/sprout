@@ -8,7 +8,7 @@ import (
 var (
 	// startOfBlockRegex matches the beginning of a code block, e.g., ``` or ```go.
 	// It now captures the language identifier (if present) in the first submatch.
-	startOfBlockRegex = regexp.MustCompile("^\\s*[>|]*```(\\S*)")
+	startOfBlockRegex    = regexp.MustCompile("^\\s*[>|]*```(\\S*)")
 	hardEndOfBlockString = "```END" // Explicit end marker
 )
 

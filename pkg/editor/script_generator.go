@@ -34,7 +34,7 @@ func createAndRunSetupScript(instruction, filepath string, originalCfg *config.C
 
 	// Create a temporary config for this specific call to ProcessCodeGeneration
 	// to allow editing of setup.sh if the user didn't explicitly skip prompts for orchestration.
-	tempCfg := *originalCfg // Make a copy
+	tempCfg := *originalCfg      // Make a copy
 	if !originalCfg.SkipPrompt { // If the user *didn't* use --skip-prompt for orchestration
 		tempCfg.SkipPrompt = false // Allow prompting for setup.sh
 	}
@@ -114,7 +114,7 @@ func createAndRunValidationScript(instruction, filepath string, originalCfg *con
 	}
 
 	// Create a temporary config for this specific call to ProcessCodeGeneration
-	tempCfg := *originalCfg // Make a copy
+	tempCfg := *originalCfg      // Make a copy
 	if !originalCfg.SkipPrompt { // If the user *didn't* use --skip-prompt for orchestration
 		tempCfg.SkipPrompt = false // Allow prompting for validate.sh
 	}

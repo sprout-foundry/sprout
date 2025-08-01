@@ -5,7 +5,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
-	"github.com/alantheprice/ledit/pkg/utils" // Import the utils package
+	"github.com/alantheprice/ledit/pkg/utils"   // Import the utils package
 	"log"
 	"time"
 

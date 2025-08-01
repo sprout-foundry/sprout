@@ -307,6 +307,12 @@ func getChangeSummaries(cfg *config.Config, newCode string, instructions string,
 			return note, description, generatedDescription, nil
 		}
 	}
+
+	// If skip-prompt is true, do not ask the user for a description.
+	if cfg.SkipPrompt {
+		return "Changes made by ledit (skipped prompt)", "", "", nil
+	}
+
 	// falling back to manual input
 	fmt.Print(prompts.EnterDescriptionPrompt(newFilename)) // Use prompt
 	note, _ = reader.ReadString('\n')

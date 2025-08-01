@@ -89,7 +89,7 @@ func (p *RequirementProcessor) Process(plan *types.OrchestrationPlan) error {
 					saveOrchestrationPlan(plan)
 					logger.LogProcessStep(prompts.ProcessInstructionFailed(change.Filepath, err))
 					lastValidationErr = err // Mark this as the reason for failure
-					break // Break from attempt loop, move to next change or mark requirement failed
+					break
 				}
 
 				diffForTargetFile, err := ProcessCodeGeneration(change.Filepath, processedInstruction, &execCfg)

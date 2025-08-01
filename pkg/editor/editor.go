@@ -26,6 +26,14 @@ import (
 
 // loadOriginalCode function removed from here. It's moved to pkg/filesystem/loader.go
 
+func ProcessInstructionsWithWorkspace(instructions string, cfg *config.Config) (string, bool, error) {
+	// Replace any existing #WS or #WORKSPACE tags with a single #WS tag
+	re := regexp.MustCompile(`(?i)\s*#(WS|WORKSPACE)\s*$`)
+	instructions = re.ReplaceAllString(instructions, "") + " #WS"
+
+	return ProcessInstructions(instructions, cfg)
+}
+
 func ProcessInstructions(instructions string, cfg *config.Config) (string, bool, error) {
 	originalInstructions := instructions // Capture original instructions for LLM-generated queries
 	useGeminiSearchGrounding := false
@@ -325,6 +333,14 @@ func getChangeSummaries(cfg *config.Config, newCode string, instructions string,
 	generatedDescription = ""
 
 	return note, description, generatedDescription, nil
+}
+
+func ProcessWorkspaceCodeGeneration(filename, instructions string, cfg *config.Config) (string, error) {
+	// Replace any existing #WS or #WORKSPACE tags with a single #WS tag
+	re := regexp.MustCompile(`(?i)\s*#(WS|WORKSPACE)\s*$`)
+	instructions = re.ReplaceAllString(instructions, "") + " #WS" // Ensure we have a single #WS tag
+
+	return ProcessCodeGeneration(filename, instructions, cfg)
 }
 
 // ProcessCodeGeneration generates code based on instructions and returns the diff for the target file.

@@ -51,7 +51,7 @@ ledit question
 ### Orchestration
 
 ```bash
-ledit orchestrate "Implement REST API with authentication"
+ledit process "Implement REST API with authentication"
 ```
 
 ### Multi-file Operations using workspace selection

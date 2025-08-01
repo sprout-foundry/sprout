@@ -123,10 +123,10 @@ ledit code "Create a python script that prints 'Hello, World!'"
 
 **NOTE**: Currently the orchestration process should be considered in an alpha state and not ready for production use
 
-For larger tasks, use the `orchestrate` command. This is the most powerful feature of `ledit`.
+For larger tasks, use the `process` command. This is the most powerful feature of `ledit`.
 
 ```bash
-ledit orchestrate "Implement a REST API for a user model with create, read, and delete endpoints. Use Gin framework."
+ledit process "Implement a REST API for a user model with create, read, and delete endpoints. Use Gin framework."
 ```
 
 **The Orchestration Process:**
@@ -237,6 +237,8 @@ We welcome contributions to `ledit`! Please see our [CONTRIBUTING.md](CONTRIBUTI
 -   `.ledit/workspace.json` - Workspace analysis data
 -   `.ledit/requirements.json` - Orchestration plans
 -   `.ledit/config.json` - Project configuration
+-   `.ledit/setup.sh` - Generated setup script
+-   `.ledit/validate.sh` - Generated validation script
 
 ## License
 

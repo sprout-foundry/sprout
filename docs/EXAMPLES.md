@@ -24,7 +24,7 @@ ledit code "Create sklearn text classification pipeline" --filename model.py
 ledit code "Rewrite using goroutines" --filename worker.go
 
 # CLI tool
-ledit orchestrate "Create disk usage monitor"
+ledit process "Create disk usage monitor"
 ```
 
 ## Database
@@ -42,7 +42,7 @@ ledit code "Create Product model" --filename models/Product.js
 ledit code "Optimized Node.js Dockerfile" --filename Dockerfile
 
 # CI pipeline
-ledit orchestrate "Setup GitHub Actions for Python"
+ledit process "Setup GitHub Actions for Python"
 ```
 
 ## Mobile
@@ -56,7 +56,7 @@ ledit code "Settings screen with toggles" --filename SettingsView.swift
 
 ## Full Feature
 ```bash
-ledit orchestrate "Implement JWT authentication with:
+ledit process "Implement JWT authentication with:
 - User model
 - Login endpoint
 - Protected routes

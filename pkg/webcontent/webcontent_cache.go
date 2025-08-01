@@ -3,10 +3,12 @@ package webcontent
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/utils"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 const (
@@ -69,7 +71,7 @@ func (w *WebContentFetcher) loadURLCache(url string) (*URLCacheEntry, bool) {
 		return nil, false
 	}
 
-	data, err := utils.ReadFile(filePath)
+	data, err := filesystem.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false // Cache file does not exist
@@ -118,7 +120,7 @@ func (w *WebContentFetcher) saveURLCache(url string, content string) error {
 		return fmt.Errorf("failed to marshal URL cache entry: %w", err)
 	}
 
-	if err := utils.SaveFile(filePath, string(data)); err != nil {
+	if err := filesystem.SaveFile(filePath, string(data)); err != nil {
 		return fmt.Errorf("failed to save URL cache file %s: %w", filePath, err)
 	}
 	fmt.Printf("Saved URL content to cache: %s\n", filePath)
@@ -134,7 +136,7 @@ func (w *WebContentFetcher) loadReferenceCache(query string) (*ReferenceCacheEnt
 		return nil, err
 	}
 
-	data, err := utils.ReadFile(filePath)
+	data, err := filesystem.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, err // Cache file does not exist
@@ -180,7 +182,7 @@ func (w *WebContentFetcher) saveReferenceCache(query string, entry *ReferenceCac
 		return fmt.Errorf("failed to marshal cache entry: %w", err)
 	}
 
-	if err := utils.SaveFile(filePath, string(data)); err != nil {
+	if err := filesystem.SaveFile(filePath, string(data)); err != nil {
 		return fmt.Errorf("failed to save cache file %s: %w", filePath, err)
 	}
 	fmt.Printf("Saved search results to cache: %s\n", filePath)

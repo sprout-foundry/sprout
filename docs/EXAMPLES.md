@@ -54,10 +54,26 @@ ledit code "Animated button widget" --filename lib/button.dart
 ledit code "Settings screen with toggles" --filename SettingsView.swift
 ```
 
-## Full Feature
+## Git Integration
+```bash
+# Generate a commit message for staged changes
+ledit commit
+```
+
+## Interactive Questioning
+```bash
+# Start an interactive chat about your codebase
+ledit question
+
+# Ask a specific question directly
+ledit question "How does the authentication flow work in this project?"
+```
+
+## Full Feature Orchestration
 ```bash
 ledit process "Implement JWT authentication with:
 - User model
 - Login endpoint
 - Protected routes
 - Token refresh"
+```

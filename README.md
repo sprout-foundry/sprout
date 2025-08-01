@@ -6,23 +6,23 @@
 
 `ledit` is more than just a code generator. It's a development partner that can:
 
-- **Implement complex features**: Take a high-level prompt and break it down into a step-by-step plan of file changes.
-- **Intelligently use context**: Automatically determines which files in your workspace are relevant to a task, including either their full content or just a summary to optimize the context provided to the LLM.
-- **Self-correct**: When orchestrating changes, it can validate its own work, and if an error occurs, it retries with an understanding of the failure.
-- **Stay up-to-date**: Use real-time web search to ground its knowledge and answer questions about new technologies or libraries.
-- **Work with your tools**: Integrates with Git for automatic commits and respects your `.gitignore` files.
+-   **Implement complex features**: Take a high-level prompt and break it down into a step-by-step plan of file changes.
+-   **Intelligently use context**: Automatically determines which files in your workspace are relevant to a task, including either their full content or just a summary to optimize the context provided to the LLM.
+-   **Self-correct**: When orchestrating changes, it can validate its own work, and if an error occurs, it retries with an understanding of the failure.
+-   **Stay up-to-date**: Use real-time web search to ground its knowledge and answer questions about new technologies or libraries.
+-   **Work with your tools**: Integrates with Git for automatic commits and respects your `.gitignore` files.
 
 ## Features
 
-- **Feature Orchestration**: Decomposes high-level feature requests into a detailed, executable plan.
-- **Smart Workspace Context**: Automatically builds and maintains an index of your workspace. An LLM selects the most relevant files to include as context for any given task.
-- **Leaked Credentials Check**: Automatically performs a check for potential credentials in files before sending the file to the workspace analysis process. This reduces the chance that sensitive credentials are sent to an llm via an api.
-- **Search Grounding**: Augments prompts with fresh information from the web using the `#SG "query"` directive.
-- **Interactive and Automated Modes**: Confirm each change manually, or run in a fully automated mode with `--skip-prompt`.
-- **Multi-Provider LLM Support**: Works with OpenAI, Groq, Gemini, Ollama, and more.
-- **Change Tracking**: Keeps a local history of all changes made.
-- **Git Integration**: Can automatically commit applied changes with generated messages.
-- **Self-Correction Loop**: In orchestration mode, it attempts to fix its own errors by analyzing validation failures and retrying.
+-   **Feature Orchestration**: Decomposes high-level feature requests into a detailed, executable plan.
+-   **Smart Workspace Context**: Automatically builds and maintains an index of your workspace. An LLM selects the most relevant files to include as context for any given task.
+-   **Leaked Credentials Check**: Automatically performs a check for potential credentials in files before sending the file to the workspace analysis process. This reduces the chance that sensitive credentials are sent to an llm via an api.
+-   **Search Grounding**: Augments prompts with fresh information from the web using the `#SG "query"` directive.
+-   **Interactive and Automated Modes**: Confirm each change manually, or run in a fully automated mode with `--skip-prompt`.
+-   **Multi-Provider LLM Support**: Works with OpenAI, Groq, Gemini, Ollama, and more.
+-   **Change Tracking**: Keeps a local history of all changes made.
+-   **Git Integration**: Can automatically commit applied changes with generated messages.
+-   **Self-Correction Loop**: In orchestration mode, it attempts to fix its own errors by analyzing validation failures and retrying.
 
 ## Installation
 
@@ -30,8 +30,8 @@ To get started with `ledit`, the preferred method is to install it via `go insta
 
 ### Prerequisites
 
-- Go 1.20+
-- Git (for version control integration)
+-   Go 1.20+
+-   Git (for version control integration)
 
 ### From Source (Preferred Method)
 
@@ -61,6 +61,21 @@ ledit init
 # Ask ledit to create a simple Python script
 ledit code "Create a python script that prints 'Hello, World!'"
 
+# Ask ledit a question about your workspace
+ledit question "What does the main function in main.go do?"
+
+# Generate a conventional commit message for staged changes
+ledit commit
+
+# View the history of changes made by ledit
+ledit log
+
+# Attempt to fix a problem in your code based on an error message
+ledit fix "Error: undefined variable 'user_id' in main.go"
+
+# Ignore a directory from workspace analysis
+ledit ignore "dist/"
+
 # For more detailed examples and a comprehensive guide, see the documentation:
 # [Getting Started Guide](docs/GETTING_STARTED.md)
 ```
@@ -81,17 +96,33 @@ ledit code "Create a python script that prints 'Hello, World!'"
   "WorkspaceModel": "lambda-ai:qwen25-coder-32b-instruct",
   "OllamaServerURL": "http://localhost:11434",
   "TrackWithGit": false,
-  "SkipPrompt": false
+  "SkipPrompt": false,
+  "EnableSecurityChecks": true,
+  "UseGeminiSearchGrounding": false,
+  "OrchestrationMaxAttempts": 6,
+  "CodeStyle": {
+    "FunctionSize": "Aim for smaller, single-purpose functions (under 50 lines).",
+    "FileSize": "Prefer smaller files, breaking down large components into multiple files (under 500 lines).",
+    "NamingConventions": "Use clear, descriptive names for variables, functions, and types. Follow Go conventions (camelCase for local, PascalCase for exported).",
+    "ErrorHandling": "Handle errors explicitly, returning errors as the last return value. Avoid panics for recoverable errors.",
+    "TestingApproach": "Write unit tests for all critical logic. Aim for high test coverage.",
+    "Modularity": "Design components to be loosely coupled and highly cohesive.",
+    "Readability": "Prioritize code readability and maintainability. Use comments where necessary to explain complex logic."
+  }
 }
 ```
 
-- **`EditingModel`**: The primary model for generating and modifying code.
-- **`SummaryModel`**: The model used for summarizing files for the workspace index.
-- **`OrchestrationModel`**: The model used to generate the high-level feature plan.
-- **`WorkspaceModel`**: The model used to select relevant files for context.
-- **`OllamaServerURL`**: The URL for your local Ollama server, if used.
-- **`TrackWithGit`**: If `true`, automatically commit changes to Git.
-- **`SkipPrompt`**: If `true`, bypasses all user confirmation prompts.
+-   **`EditingModel`**: The primary model for generating and modifying code.
+-   **`SummaryModel`**: The model used for summarizing files for the workspace index.
+-   **`OrchestrationModel`**: The model used to generate the high-level feature plan.
+-   **`WorkspaceModel`**: The model used to select relevant files for context.
+-   **`OllamaServerURL`**: The URL for your local Ollama server, if used.
+-   **`TrackWithGit`**: If `true`, automatically commit changes to Git.
+-   **`SkipPrompt`**: If `true`, bypasses all user confirmation prompts.
+-   **`EnableSecurityChecks`**: If `true`, enables checks for potential credentials before sending files to LLM.
+-   **`UseGeminiSearchGrounding`**: If `true`, enables experimental Gemini-powered search grounding.
+-   **`OrchestrationMaxAttempts`**: The maximum number of retries for a failed orchestration step.
+-   **`CodeStyle`**: Defines preferred code style guidelines for the project, influencing LLM generation.
 
 ## Usage and Commands
 
@@ -99,17 +130,17 @@ ledit code "Create a python script that prints 'Hello, World!'"
 
 The first time you run `ledit` in a project, it will create a `.ledit` directory. This directory contains:
 
-- `workspace.json`: An index of your project's files, including summaries and exports, used for context selection.
-- `leditignore`: A file for patterns to ignore, in addition to `.gitignore`.
-- `config.json`: (Optional) Project-specific configuration.
-- `setup.sh` - Generated setup script
-- `validate.sh` - Generated validation script
+-   `workspace.json`: An index of your project's files, including summaries and exports, used for context selection.
+-   `leditignore`: A file for patterns to ignore, in addition to `.gitignore`.
+-   `config.json`: (Optional) Project-specific configuration.
+-   `setup.sh` - Generated setup script
+-   `validate.sh` - Generated validation script
 
 The workspace index is automatically updated whenever you run a command, ensuring the context is always fresh.
 
-### Basic Editing (Question and Coding)
+### Basic Editing and Interaction
 
-To edit a file or generate a new one, use the default command.
+`ledit` provides several commands for direct code manipulation and interaction.
 
 ```bash
 # Edit an existing file
@@ -117,6 +148,21 @@ ledit code "Add a function to reverse a string" -f path/to/your/file.go
 
 # Create a new file (omit the -f flag)
 ledit code "Create a python script that prints 'Hello, World!'"
+
+# Start an interactive chat about your workspace
+ledit question
+
+# Generate a conventional commit message for staged changes
+ledit commit
+
+# View the history of changes made by ledit
+ledit log
+
+# Attempt to fix a problem in your code based on an error message
+ledit fix "Error: undefined variable 'user_id' in main.go"
+
+# Add a pattern to .ledit/leditignore
+ledit ignore "temp_files/"
 ```
 
 ### Orchestration

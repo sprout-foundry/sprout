@@ -7,7 +7,7 @@ This document provides a quick reference for `ledit` commands and concepts.
 | Command | Description | Example |
 |---|---|---|
 | `ledit code` | Generate or modify code based on instructions. | `ledit code "Add a new function to calculate factorial" -f math.go` |
-| `ledit do` | Orchestrate a complex feature implementation. | `ledit do "Implement user authentication with JWT"` |
+| `ledit process` | Orchestrate a complex feature implementation. | `ledit process "Implement user authentication with JWT"` |
 | `ledit init` | Initialize `ledit` in a project directory. | `ledit init` |
 | `ledit log` | View the history of changes made by `ledit`. | `ledit log` |
 | `ledit question` | Ask `ledit` a question about your code or general topics. | `ledit question "Explain the main function in main.go"` |
@@ -21,7 +21,7 @@ This document provides a quick reference for `ledit` commands and concepts.
 |---|---|---|
 | `-f, --filename <path>` | Specify the target file for `code` command. If omitted, `ledit` may create a new file. | `ledit code "Add a new route" -f server.go` |
 | `-m, --model <provider:model>` | Override the default LLM model for the command. | `ledit code "..." -m openai:gpt-4-turbo` |
-| `--skip-prompt` | Bypass all user confirmation prompts (use with caution). | `ledit do "..." --skip-prompt` |
+| `--skip-prompt` | Bypass all user confirmation prompts (use with caution). | `ledit process "..." --skip-prompt` |
 
 ## Context Directives
 
@@ -56,7 +56,7 @@ Specify provider and model using `<provider>:<model_name>`.
 -   `.ledit/setup.sh`: Generated setup script for orchestration.
 -   `.ledit/validate.sh`: Generated validation script for orchestration.
 
-## Orchestration Process (using `ledit do`)
+## Orchestration Process (using `ledit process`)
 
 1.  **Analysis**: `ledit` analyzes your prompt and workspace.
 2.  **Planning**: An LLM generates a JSON plan of required changes.

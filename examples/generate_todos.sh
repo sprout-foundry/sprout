@@ -31,7 +31,7 @@ echo "Calling ledit to generate content..."
 # The '--skip-prompt' flag tells ledit not to ask for initial confirmation.
 # The 'echo "y" |' pipes 'y' to ledit's stdin, handling any potential interactive prompts.
 # The output of ledit is redirected to the TODO_FILE.
-ledit code \"${FULL_LEDIT_PROMPT}\" --skip-prompt -m gemini:gemini-2.5-flash
+ledit code \"${FULL_LEDIT_PROMPT}\" --skip-prompt -m gemini:gemini-2.5-pro
 
 # Check the exit status of the ledit command
 if [ $? -eq 0 ]; then

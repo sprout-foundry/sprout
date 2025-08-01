@@ -184,8 +184,41 @@ Consider the provided workspace context to understand the project structure and 
 }
 
 // BuildChangesForRequirementMessages constructs the messages for the LLM to generate file-specific changes for a high-level requirement.
-func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext string) []Message {
-	systemPrompt := `You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes.
+func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext string, interactive bool) []Message {
+	var systemPrompt string
+
+	if interactive {
+		systemPrompt = "You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes. You have two response options:\n\n" +
+			"1.  **Generate Changes:** If you have enough information and all context files, provide the complete list of changes. For each change, you must provide the 'filepath' and a detailed 'instruction' for what needs to be done in that file. If a file needs to be created, specify its full path. If a file needs to be deleted, specify its full path and an instruction like \"Delete this file.\"\n" +
+			"    Your response MUST be a JSON object with a single key \"changes\" which is an array of objects, each with \"filepath\" and \"instruction\" keys. Do not include any other text or explanation outside the JSON.\n\n" +
+			"    Example JSON format:\n" +
+			"    {\n" +
+			"      \"changes\": [\n" +
+			"        {\n" +
+			"          \"filepath\": \"src/main.go\",\n" +
+			"          \"instruction\": \"Add a new function 'calculateSum' that takes two integers and returns their sum.\"\n" +
+			"        },\n" +
+			"        {\n" +
+			"          \"filepath\": \"tests/main_test.go\",\n" +
+			"          \"instruction\": \"Write a unit test for the 'calculateSum' function in 'src/main.go'.\"\n" +
+			"        },\n" +
+			"        {\n" +
+			"          \"filepath\": \"docs/api.md\",\n" +
+			"          \"instruction\": \"Update the API documentation to include details about the new 'calculateSum' function.\"\n" +
+			"        }\n" +
+			"      ]\n" +
+			"    }\n\n" +
+			"2.  **Request Context:** *do not make guesses* If you need more information, respond *only* with a JSON array of context requests with no other text. The required format:\n" +
+			"    `{\"context_requests\":[{ \"type\": \"TYPE\", \"query\": \"QUERY\" }]}`\n" +
+			"    -   `type`: Can be `search` (web search), `user_prompt` (ask the user a question), `file` (request file content, needs to be a filename, otherwise ask the user), or `shell` (request a shell command execution).\n" +
+			"    -   `query`: The search term, question, file path, or command.\n\n" +
+			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* request the file's contents using the `file` type.\n\n" +
+			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then request the file contents using the `file` type.\n\n" +
+			"After your context request is fulfilled, you will be prompted again to generate the changes. Do not continue asking for context; generate the changes as soon as you have enough information.\n" +
+			"Do not generate changes until you have all the necessary context. If you do not have enough information, ask for it using the context request format.\n" +
+			"Consider the provided workspace context to understand the project structure and existing code.\n"
+	} else {
+		systemPrompt = `You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes.
 For each change, you must provide the 'filepath' and a detailed 'instruction' for what needs to be done in that file.
 If a file needs to be created, specify its full path.
 If a file needs to be deleted, specify its full path and an instruction like "Delete this file."
@@ -212,6 +245,8 @@ Example JSON format:
 
 Consider the provided workspace context to understand the project structure and existing code.
 `
+	}
+
 	userPrompt := fmt.Sprintf("High-level requirement: \"%s\"\n\nWorkspace Context:\n%s", requirementInstruction, workspaceContext)
 
 	return []Message{

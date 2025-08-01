@@ -3,11 +3,11 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/workspace"
+	"io"
 	"log"
 	"os"
 	"strings"

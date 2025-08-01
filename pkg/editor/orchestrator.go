@@ -53,6 +53,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 		workspaceContext := workspace.GetWorkspaceContext(req.Instruction, cfg)
 
 		// Ask LLM to break down requirement into file-specific changes
+		// The cfg object is passed, and GetChangesForRequirement will internally use cfg.Interactive
 		changes, err := llm.GetChangesForRequirement(cfg, req.Instruction, workspaceContext)
 		if err != nil {
 			req.Attempts++

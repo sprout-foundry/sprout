@@ -392,16 +392,16 @@ Examples:
                 if results[info['name']] != 'FAIL (Timeout)': # Don't overwrite timeout reason
                     failure_reasons[info['name']] = extract_failure_reason(stdout, stderr)
                 
-                # Print full output for failed tests
+                # Log full output for failed tests
                 if stdout or stderr:
-                    print(f"--- Output for failed test: {info['name']} (in {info['test_workspace_path']}) ---")
+                    logging.info(f"--- Output for failed test: {info['name']} (in {info['test_workspace_path']}) ---")
                     if stdout:
-                        print("--- STDOUT ---")
-                        print(stdout)
+                        logging.info("--- STDOUT ---")
+                        logging.info(stdout)
                     if stderr:
-                        print("--- STDERR ---")
-                        print(stderr)
-                    print("------------------------------------------")
+                        logging.info("--- STDERR ---")
+                        logging.info(stderr)
+                    logging.info("------------------------------------------")
 
                 # NEW: Write full context of failed test to a file
                 sanitized_name_for_log = info['sanitized_name']
@@ -437,6 +437,13 @@ Examples:
 
     print("--------------------------------")
 
+    # Determine overall test pass/fail status after all tests have completed
+    all_passed = True
+    for test_name, status in results.items():
+        if 'FAIL' in status: # Check for 'FAIL' or 'FAIL (Timeout)'
+            all_passed = False
+            break # Found a failure, no need to check further
+
     # --- CLEANUP ---
     print("--- CLEANUP: Removing testing artifacts ---")
     # The script remains in project_root throughout execution.
@@ -471,7 +478,7 @@ Examples:
     print(f"{'Test Name':<44} {'Result'}")
     print("-" * 51)
     
-    all_passed = True
+    # all_passed is already determined above, no need to re-initialize or re-calculate here
     # Iterate through the original discovered test order for consistent reporting
     for test in tests:
         name = test['name']
@@ -485,7 +492,7 @@ Examples:
             print(f"{GREEN}{truncated_name:<44} {result}{RESET}")
         elif 'FAIL' in result: # Catches 'FAIL' and 'FAIL (Timeout)'
             print(f"{RED}{truncated_name:<44} {result}{RESET}")
-            all_passed = False
+            # all_passed is already set to False if any test failed, no need to update here
         else: # For "NOT RUN" or any other unexpected status
             print(f"{truncated_name:<44} {result}")
 

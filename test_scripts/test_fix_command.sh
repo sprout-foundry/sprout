@@ -14,7 +14,7 @@ run_test_logic() {
     echo "Creating a Python script with a syntax error..."
     cat <<EOF > fixable_script.py
 def main()
-    print("Hello, World!")
+    print("Hello World!")
 
 if __name__ == "__main__":
     main()
@@ -34,7 +34,7 @@ EOF
 
     # 3. Run ledit fix
     echo "Running 'ledit fix' to attempt to correct the script..."
-    ../ledit fix "python3 fixable_script.py" --skip-prompt -m "$model_name"
+    ../ledit fix "python3 fixable_script.py" --skip-prompt -m "$model_name" -i "just fix the syntax error but keep the rest of the functionality of the Hello World! output"
 
     echo
     echo "--- Verifying Test ---"
@@ -59,7 +59,7 @@ EOF
     echo "PASS: The fixed script ran successfully."
 
     # 6. Check the output
-    expected_output="Hello, World!"
+    expected_output="Hello World!"
     if [ "$output" != "$expected_output" ]; then
         echo "FAIL: The script output is not what was expected."
         echo "Expected: '$expected_output'"

@@ -39,7 +39,7 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, bool,
 		submatches := sgPattern.FindStringSubmatch(match)
 		if len(submatches) > 1 {
 			query := submatches[1]
-			if isGemini {
+			if isGemini && cfg.UseGeminiSearchGrounding {
 				// If Gemini, just remove the #SG tag. Gemini will handle the search internally.
 				useGeminiSearchGrounding = true
 				return "" // Remove the tag from instructions

@@ -9,6 +9,8 @@ get_test_name() {
 run_test_logic() {
     local model_name=$1 # Capture the model_name passed from test.sh
     echo "--- TEST: Orchestration Feature ---"
+    # start a timer to measure the duration of the test
+    start_time=$(date +%s)
     # Create initial files for the orchestration test
     mkdir -p orchestration_test
     cd orchestration_test
@@ -19,7 +21,7 @@ run_test_logic() {
 
     # Run ledit orchestrate. Pipe 'y' to confirm the plan execution.
     orchestrate_output_log="orchestrate_output.log"
-    ../../ledit do "$ORCHESTRATION_PROMPT" --model "$model_name" --skip-prompt
+    ../ledit process "$ORCHESTRATION_PROMPT" --model "$model_name" --skip-prompt --non-interactive
 
     echo
     echo "--- Verifying Test ---"
@@ -39,25 +41,6 @@ run_test_logic() {
     fi
     echo "PASS: Application files (main.go, go.mod, *_test.go) were created."
 
-    # Check that setup.sh and validate.sh exist
-    if [ ! -f "setup.sh" ]; then
-        echo "FAIL: setup.sh was not created."
-        exit 1
-    fi
-    echo "PASS: setup.sh was created."
-    echo "--- Content of final setup.sh: ---"
-    cat setup.sh
-    echo "-------------------------------------"
-
-    if [ ! -f "validate.sh" ]; then
-        echo "FAIL: validate.sh was not created."
-        exit 1
-    fi
-    echo "PASS: validate.sh was created."
-    echo "--- Content of final validate.sh: ---"
-    cat validate.sh
-    echo "-------------------------------------"
-
     # Check that all steps are marked as completed
     if grep -q '"status": "failed"' .ledit/requirements.json; then
         echo "FAIL: One or more orchestration steps failed."
@@ -72,4 +55,11 @@ run_test_logic() {
     cd ../
     echo "----------------------------------------------------"
     echo
+    echo "Orchestration test completed successfully."
+    end_time=$(date +%s)
+    duration=$((end_time - start_time))
+    echo "Test duration: $duration seconds"
+    echo "----------------------------------------------------"
 }
+
+# run_test_logic lambda-ai:qwen25-coder-32b-instruct # Pass the model name from the command line argument

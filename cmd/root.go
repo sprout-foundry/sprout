@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/utils"
 
@@ -24,7 +25,7 @@ var rootCmd = &cobra.Command{
 				return
 			}
 			logger.LogUserInteraction("Configuration loaded. Defaulting to 'code' command.")
-			logger.LogUserInteraction(fmt.Sprintf("Usage: ledit code \"your instructions\" [--filename <file>]"))
+			logger.LogUserInteraction("Usage: ledit code \"your instructions\" [-f <file-name>] [-m <model>] [--skip-prompt]")
 			logger.LogUserInteraction(fmt.Sprintf("Editing Model: %s", cfg.EditingModel))
 		}
 	},
@@ -39,7 +40,7 @@ func init() {
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(questionCmd)
-	rootCmd.AddCommand(doCmd) // Changed from orchestrateCmd to doCmd
+	rootCmd.AddCommand(processCmd)
 	rootCmd.AddCommand(fixCmd)
-	rootCmd.AddCommand(commitCmd) // Add the new commit command
+	rootCmd.AddCommand(commitCmd)
 }

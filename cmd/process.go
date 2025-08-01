@@ -2,19 +2,20 @@ package cmd
 
 import (
 	"fmt"
+	"log"
+	"os"
+
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
-	"log"
-	"os"
 
 	"github.com/spf13/cobra"
 )
 
-// doCmd represents the do command
-var doCmd = &cobra.Command{
-	Use:   "do [prompt]",
+// processCmd represents the process command
+var processCmd = &cobra.Command{
+	Use:   "process [prompt]",
 	Short: "Executes a large feature implementation based on a prompt.",
 	Long: `Based on a prompt, this command will:
 1. Analyze your current workspace.
@@ -53,7 +54,7 @@ var doCmd = &cobra.Command{
 }
 
 func init() {
-	doCmd.Flags().StringVarP(&model, "model", "m", "", "Model to use for orchestration and editing.")
-	doCmd.Flags().BoolVar(&skipPrompt, "skip-prompt", false, "Skip the confirmation prompt and proceed with the plan")
-	rootCmd.AddCommand(doCmd)
+	processCmd.Flags().StringVarP(&model, "model", "m", "", "Model to use for orchestration and editing.")
+	processCmd.Flags().BoolVar(&skipPrompt, "skip-prompt", false, "Skip the confirmation prompt and proceed with the plan")
+	rootCmd.AddCommand(processCmd)
 }

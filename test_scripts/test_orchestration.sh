@@ -21,7 +21,7 @@ run_test_logic() {
 
     # Run ledit orchestrate. Pipe 'y' to confirm the plan execution.
     orchestrate_output_log="orchestrate_output.log"
-    ../ledit process "$ORCHESTRATION_PROMPT" --model "$model_name" --skip-prompt --non-interactive
+    ../../ledit process "$ORCHESTRATION_PROMPT" --model "$model_name" --skip-prompt
 
     echo
     echo "--- Verifying Test ---"

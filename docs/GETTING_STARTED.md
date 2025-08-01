@@ -5,7 +5,7 @@
 ### Create or modify files
 
 ```bash
-# Create a file or set of files with a command -- Note that that first command will initialize your environment and help you setup your configuration.
+# Create a file or set of files
 ledit code "Create Python factorial function"
 
 # Update a specific file
@@ -34,9 +34,18 @@ ledit log
 ### Interrogate the code
 
 ```bash
-
 # This command will start a chat based on the code in your workspace (current directory)
 ledit question
+
+# Ask a specific question directly
+ledit question "Explain the main function in main.go"
+```
+
+### Commit staged changes
+
+```bash
+# Generate a conventional commit message and commit staged changes
+ledit commit
 ```
 
 ## Key Features
@@ -49,6 +58,8 @@ ledit question
 ## Advanced Usage
 
 ### Orchestration
+
+**NOTE**: Currently the orchestration process should be considered in an alpha state and not ready for production use.
 
 ```bash
 ledit process "Implement REST API with authentication"

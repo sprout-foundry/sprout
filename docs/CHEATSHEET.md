@@ -7,13 +7,13 @@ This document provides a quick reference for `ledit` commands and concepts.
 | Command | Description | Example |
 |---|---|---|
 | `ledit code` | Generate or modify code based on instructions. | `ledit code "Add a new function to calculate factorial" -f math.go` |
-| `ledit process` | Orchestrate a complex feature implementation. | `ledit process "Implement user authentication with JWT"` |
+| `ledit process` | Orchestrate a complex feature implementation. **(Alpha State)** | `ledit process "Implement user authentication with JWT"` |
 | `ledit init` | Initialize `ledit` in a project directory. | `ledit init` |
 | `ledit log` | View the history of changes made by `ledit`. | `ledit log` |
-| `ledit question` | Ask `ledit` a question about your code or general topics. | `ledit question "Explain the main function in main.go"` |
-| `ledit fix` | Attempt to fix a problem in your code based on an error message. | `ledit fix "Error: undefined variable 'user_id' in main.go"` |
+| `ledit question` | Ask `ledit` a question about your code or general topics in an interactive chat. | `ledit question "Explain the main function in main.go"` |
+| `ledit fix` | Attempt to fix a problem in your code based on a script that is erroring. | `ledit fix "go build"` |
 | `ledit ignore` | Add patterns to `.ledit/leditignore` to exclude files from workspace analysis. | `ledit ignore "temp_files/"` |
-| `ledit commit` | Manually commit changes with an AI-generated message. | `ledit commit` |
+| `ledit commit` | Generate a conventional git commit message and complete a git commit for staged changes. | `ledit commit` |
 
 ## Common Options
 

@@ -70,11 +70,14 @@ User Instructions:
 %s
 
 Respond with a JSON object containing two keys:
-1. "full_context_files": A list of file paths that require their full content to be included.
-2. "summary_context_files": A list of file paths for which only the summary is sufficient.
+1. "full_context_files": A list of file paths that require their full content to be included for implementing the user's request.
+2. "summary_context_files": A list of file paths for which only the summary is sufficient to understand their role and context.
+
+- Use "full_context_files" for files that will likely need to be modified or contain core logic relevant to the request.
+- Use "summary_context_files" for files that provide helpful context but are not central to the task.
+- If a file is not relevant, do not include it in either list.
 
 Only include files from the provided "Workspace Summary". Do not include files not in the list.
-If a file is not relevant, do not include it in either list, if it is relevant, or portion of it is relevant, include it in the appropriate list.
 If no files are relevant, return an empty JSON object or JSON with empty lists.
 Your response MUST be only the raw JSON, without any surrounding text or code fences.`, instructions, batchSummary.String())
 
@@ -105,8 +108,7 @@ Your response MUST be only the raw JSON, without any surrounding text or code fe
 			}
 
 			if err := json.Unmarshal([]byte(response), &selection); err != nil {
-				fmt.Printf("Warning: could not unmarshal file selection response: %v. Response was: %s\n", err, response)
-				resultsChan <- llmFileSelectionResponse{}
+				errChan <- fmt.Errorf("could not unmarshal file selection response: %w. Response was: %s", err, response)
 				return
 			}
 
@@ -126,8 +128,10 @@ Your response MUST be only the raw JSON, without any surrounding text or code fe
 
 	for err := range errChan {
 		if err != nil {
-			fmt.Printf("Error during file selection: %v\n", err)
-			lastErr = err
+			// The first error is usually the most informative.
+			if lastErr == nil {
+				lastErr = err
+			}
 		}
 	}
 

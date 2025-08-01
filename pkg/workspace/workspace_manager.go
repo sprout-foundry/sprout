@@ -464,8 +464,12 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	fullContextFiles, summaryContextFiles, err := getFilesForContext(instructions, workspace, cfg)
 	if err != nil {
 		logger.Logf("Warning: could not determine which files to load for context: %v. Proceeding with all summaries.\n", err)
-		// If LLM fails to select files, provide the full file list but no specific full/summary context.
-		return getWorkspaceInfo(workspace, nil, nil, workspace.ProjectGoals, cfg.CodeStyle)
+		// If LLM fails to select files, fallback to using all file summaries for context.
+		var allFilesAsSummaries []string
+		for file := range workspace.Files {
+			allFilesAsSummaries = append(allFilesAsSummaries, file)
+		}
+		return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg.CodeStyle)
 	}
 
 	if len(fullContextFiles) > 0 {

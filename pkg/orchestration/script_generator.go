@@ -1,12 +1,14 @@
-package editor
+package orchestration
 
 import (
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/editor"  // NEW IMPORT: Import editor package for ProcessCodeGeneration and processInstructions
+	"github.com/alantheprice/ledit/pkg/prompts" // Import the new prompts package
 )
 
 // createAndRunSetupScript generates, updates, and runs a setup.sh script.
@@ -22,12 +24,12 @@ func createAndRunSetupScript(instruction, filepath string, originalCfg *config.C
 		"The script will be run from the root of the project. "+
 		"If an autoformatter is available for the language, include a command to run it. "+
 		"Do not include any validation steps in this script; it should only handle setup tasks. "+
-		"Do include a build step if the project requires it, such as compiling code or generating assets, but don't include it before the project has enough scaffolding to compile. "+
+		"Do include a build step if the project requires it, such as compiling code or generating assets (e.g., `go mod tidy` for Go projects), but don't include it before the project has enough scaffolding to compile. "+
 		"If no setup is needed, output an empty script or a script with only comments. "+
 		"Only output the raw script content inside a single markdown code block for `setup.sh`. Do not include any other text or explanation. #WS", instruction, filepath) // Use passed instruction and filepath
 
 	// Process the setup prompt for search grounding or workspace context
-	processedSetupPrompt, _, err := processInstructions(setupPrompt, originalCfg) // Use originalCfg for processing prompt
+	processedSetupPrompt, _, err := editor.ProcessInstructions(setupPrompt, originalCfg) // Use originalCfg for processing prompt
 	if err != nil {
 		return fmt.Errorf("failed to process setup script prompt: %w", err)
 	}
@@ -41,7 +43,7 @@ func createAndRunSetupScript(instruction, filepath string, originalCfg *config.C
 
 	// Call ProcessCodeGeneration for setup.sh. This handles LLM call, parsing, diffing, user prompt (y/n/e), saving, and git tracking.
 	// The returned diffForTargetFile is not directly used here, but ProcessCodeGeneration handles the file writing.
-	_, err = ProcessCodeGeneration("setup.sh", processedSetupPrompt, &tempCfg)
+	_, err = editor.ProcessCodeGeneration("setup.sh", processedSetupPrompt, &tempCfg)
 	if err != nil {
 		return fmt.Errorf("failed to generate/update setup.sh: %w", err)
 	}
@@ -108,7 +110,7 @@ func createAndRunValidationScript(instruction, filepath string, originalCfg *con
 		"Only output the raw script content inside a single markdown code block for `validate.sh`. Do not include any other text or explanation. #WS", instruction, filepath) // Use passed instruction and filepath
 
 	// Process the validation prompt for search grounding or workspace context
-	processedValidationPrompt, _, err := processInstructions(validationPrompt, originalCfg) // Use originalCfg for processing prompt
+	processedValidationPrompt, _, err := editor.ProcessInstructions(validationPrompt, originalCfg) // Use originalCfg for processing prompt
 	if err != nil {
 		return fmt.Errorf("failed to process validation script prompt: %w", err)
 	}
@@ -120,7 +122,7 @@ func createAndRunValidationScript(instruction, filepath string, originalCfg *con
 	}
 
 	// Call ProcessCodeGeneration for validate.sh. This handles LLM call, parsing, diffing, user prompt (y/n/e), saving, and git tracking.
-	_, err = ProcessCodeGeneration("validate.sh", processedValidationPrompt, &tempCfg)
+	_, err = editor.ProcessCodeGeneration("validate.sh", processedValidationPrompt, &tempCfg)
 	if err != nil {
 		return fmt.Errorf("failed to generate/update validate.sh: %w", err)
 	}

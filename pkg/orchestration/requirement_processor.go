@@ -1,4 +1,4 @@
-package editor
+package orchestration
 
 import (
 	"fmt"
@@ -6,11 +6,12 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/editor" // NEW IMPORT: Import editor package for code generation functions
 	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/orchestration/types" // Added for OrchestrationPlan type
+	"github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
-	"github.com/alantheprice/ledit/pkg/workspace" // Added for workspace context
+	"github.com/alantheprice/ledit/pkg/workspace"
 )
 
 type RequirementProcessor struct {
@@ -47,7 +48,7 @@ func (p *RequirementProcessor) Process(plan *types.OrchestrationPlan) error {
 			changes, err := llm.GetChangesForRequirement(p.cfg, req.Instruction, workspaceContext)
 			if err != nil {
 				req.Status = "failed"
-				saveOrchestrationPlan(plan)
+				SaveOrchestrationPlan(plan) // Save the plan with generated changes
 				logger.LogProcessStep(prompts.GenerateChangesFailed(req.Instruction, err))
 				return fmt.Errorf("failed to generate file changes for requirement '%s': %w", req.Instruction, err)
 			}
@@ -56,7 +57,7 @@ func (p *RequirementProcessor) Process(plan *types.OrchestrationPlan) error {
 			for j := range req.Changes {
 				req.Changes[j].Status = "pending"
 			}
-			saveOrchestrationPlan(plan) // Save the plan with generated changes
+			SaveOrchestrationPlan(plan) // Save the plan with generated changes
 		}
 
 		// Step 2: Process each file-specific change
@@ -81,53 +82,53 @@ func (p *RequirementProcessor) Process(plan *types.OrchestrationPlan) error {
 
 				currentInstruction := p.getCurrentInstructionForAttempt(change.Instruction, change.Filepath, change.ValidationFailureContext, change.LastLLMResponse)
 
-				processedInstruction, _, err := processInstructions(currentInstruction, p.cfg)
+				processedInstruction, _, err := editor.ProcessInstructions(currentInstruction, p.cfg) // MODIFIED: Call editor.processInstructions
 				if err != nil {
 					change.Status = "failed"
 					change.LastLLMResponse = ""
 					change.ValidationFailureContext = fmt.Sprintf("Failed to process instruction: %v", err)
-					saveOrchestrationPlan(plan)
+					SaveOrchestrationPlan(plan)
 					logger.LogProcessStep(prompts.ProcessInstructionFailed(change.Filepath, err))
 					lastValidationErr = err // Mark this as the reason for failure
 					break
 				}
 
-				diffForTargetFile, err := ProcessCodeGeneration(change.Filepath, processedInstruction, &execCfg)
+				diffForTargetFile, err := editor.ProcessCodeGeneration(change.Filepath, processedInstruction, &execCfg) // MODIFIED: Call editor.ProcessCodeGeneration
 				if err != nil {
 					change.Status = "failed"
 					change.LastLLMResponse = diffForTargetFile
 					change.ValidationFailureContext = fmt.Sprintf("Code generation failed: %v", err)
-					saveOrchestrationPlan(plan)
+					SaveOrchestrationPlan(plan)
 					logger.LogProcessStep(prompts.ProcessRequirementFailed(change.Filepath, err))
 					continue // Continue to next attempt
 				}
 
 				// Always run setup.sh and validate.sh after each code generation step
-				setupErr := createAndRunSetupScript(change.Instruction, change.Filepath, &execCfg) // Pass change details
+				setupErr := createAndRunSetupScript(change.Instruction, change.Filepath, &execCfg) // MODIFIED: Call createAndRunSetupScript from current package
 				if setupErr != nil {
 					logger.LogProcessStep(prompts.SetupFailedAttempt(attempt, setupErr))
 					change.Status = "failed"
 					change.ValidationFailureContext = prompts.ValidationFailureContextSetupScriptFailed(setupErr)
 					change.LastLLMResponse = diffForTargetFile
-					saveOrchestrationPlan(plan)
+					SaveOrchestrationPlan(plan)
 					lastValidationErr = setupErr
 					continue // Continue to next attempt
 				}
 
-				lastValidationErr = createAndRunValidationScript(change.Instruction, change.Filepath, &execCfg) // Pass change details
+				lastValidationErr = createAndRunValidationScript(change.Instruction, change.Filepath, &execCfg) // MODIFIED: Call createAndRunValidationScript from current package
 				if lastValidationErr != nil {
 					logger.LogProcessStep(prompts.ValidationFailedAttempt(attempt, lastValidationErr))
 					change.Status = "failed"
 					change.ValidationFailureContext = prompts.ValidationFailureContextValidationScriptFailed(lastValidationErr)
 					change.LastLLMResponse = diffForTargetFile
-					saveOrchestrationPlan(plan)
+					SaveOrchestrationPlan(plan)
 					continue // Continue to next attempt
 				}
 
 				change.Status = "completed"
 				change.ValidationFailureContext = ""
 				change.LastLLMResponse = ""
-				if err := saveOrchestrationPlan(plan); err != nil {
+				if err := SaveOrchestrationPlan(plan); err != nil { // MODIFIED: Use exported function
 					logger.LogProcessStep(prompts.SaveProgressFailed(change.Filepath, err))
 					return fmt.Errorf("file change for %s completed, but failed to save progress: %w", change.Filepath, err)
 				}
@@ -147,7 +148,7 @@ func (p *RequirementProcessor) Process(plan *types.OrchestrationPlan) error {
 			// The ValidationFailureContext and LastLLMResponse for the *requirement* itself
 			// are less relevant now, as the failure context is on the specific change.
 			// We could aggregate, but for now, just mark the requirement failed.
-			if err := saveOrchestrationPlan(plan); err != nil {
+			if err := SaveOrchestrationPlan(plan); err != nil {
 				logger.LogProcessStep(prompts.SaveProgressFailed("requirement", err))
 				return fmt.Errorf("requirement '%s' failed, but failed to save progress: %w", req.Instruction, err)
 			}
@@ -155,7 +156,7 @@ func (p *RequirementProcessor) Process(plan *types.OrchestrationPlan) error {
 		}
 
 		req.Status = "completed"
-		if err := saveOrchestrationPlan(plan); err != nil {
+		if err := SaveOrchestrationPlan(plan); err != nil {
 			logger.LogProcessStep(prompts.SaveProgressFailed("requirement", err))
 			return fmt.Errorf("requirement '%s' completed, but failed to save progress: %w", req.Instruction, err)
 		}

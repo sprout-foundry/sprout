@@ -1,4 +1,4 @@
-package context
+package context // Changed from contexthandler to context
 
 import (
 	"bufio"
@@ -59,7 +59,7 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 			shouldExecute := false
 			if cfg.SkipPrompt {
 				fmt.Println(prompts.LLMShellSkippingPrompt())
-				riskAnalysis, err := GetScriptRiskAnalysis(cfg, req.Query)
+				riskAnalysis, err := GetScriptRiskAnalysis(cfg, req.Query) // Call to GetScriptRiskAnalysis remains unqualified as it's now in the same package
 				if err != nil {
 					responses = append(responses, fmt.Sprintf("Failed to get script risk analysis: %v. User denied execution.", err))
 					fmt.Println(prompts.LLMScriptAnalysisFailed(err))

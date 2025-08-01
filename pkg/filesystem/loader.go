@@ -1,4 +1,4 @@
-package editor
+package filesystem
 
 import (
 	"fmt"
@@ -6,22 +6,24 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/alantheprice/ledit/pkg/utils"
 )
 
-func loadOriginalCode(filename string) (string, error) {
+// LoadOriginalCode loads the content of a file.
+// This function is intended for loading the current state of a file before modification.
+func LoadOriginalCode(filename string) (string, error) {
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		fmt.Printf("File %s not found. Continuing without it.\n", filename)
 		return "", nil
 	}
-	content, err := utils.ReadFile(filename)
+	content, err := os.ReadFile(filename)
 	if err != nil {
 		return "", fmt.Errorf("error loading file %s: %w", filename, err)
 	}
-	return content, nil
+	return string(content), nil
 }
 
+// LoadFileContent loads and returns the content of a file or directory,
+// with support for loading specific line ranges and glob patterns.
 func LoadFileContent(path string) (string, error) {
 	var content string
 
@@ -41,11 +43,11 @@ func LoadFileContent(path string) (string, error) {
 					fmt.Printf("Skipping directory %s\n", file)
 					continue
 				}
-				fileContent, err := utils.ReadFile(file)
+				fileContent, err := os.ReadFile(file)
 				if err != nil {
 					return "", err
 				}
-				content += fmt.Sprintf("\n--- Start of content from %s ---\n\n%s\n\n--- End of content from %s ---\n", file, fileContent, file)
+				content += fmt.Sprintf("\n--- Start of content from %s ---\n\n%s\n\n--- End of content from %s ---\n", file, string(fileContent), file)
 			}
 		}
 	} else if strings.HasSuffix(path, "/**/*") {
@@ -64,11 +66,11 @@ func LoadFileContent(path string) (string, error) {
 					fmt.Printf("Skipping directory %s\n", file)
 					continue
 				}
-				fileContent, err := utils.ReadFile(file)
+				fileContent, err := os.ReadFile(file)
 				if err != nil {
 					return "", err
 				}
-				content += fmt.Sprintf("\n--- Start of content from %s ---\n\n%s\n\n--- End of content from %s ---\n", file, fileContent, file)
+				content += fmt.Sprintf("\n--- Start of content from %s ---\n\n%s\n\n--- End of content from %s ---\n", file, string(fileContent), file)
 			}
 		}
 	} else {
@@ -81,19 +83,26 @@ func LoadFileContent(path string) (string, error) {
 			fmt.Printf("Skipping directory %s\n", parts[0])
 			return "", nil
 		}
-		content, err = utils.ReadFile(parts[0])
+		contentBytes, err := os.ReadFile(parts[0])
 		if err != nil {
 			return "", err
 		}
+		content = string(contentBytes)
 		if len(parts) > 1 {
 			lineNumbers := strings.Split(parts[1], "-")
 			if len(lineNumbers) == 2 {
 				startLine, _ := strconv.Atoi(lineNumbers[0])
 				endLine, _ := strconv.Atoi(lineNumbers[1])
 				lines := strings.Split(content, "\n")
-				if startLine > 0 && endLine > 0 && endLine <= len(lines) && startLine < endLine {
-					content = fmt.Sprintf("\n--- Start of partial content from %s ---\n\n%s\n\n--- End of partial content from %s ---\n", parts[0], strings.Join(lines[startLine-1:endLine-1], "\n"), parts[0])
+				if startLine > 0 && endLine > 0 && endLine <= len(lines) && startLine <= endLine {
+					content = fmt.Sprintf("\n--- Start of partial content from %s ---\n\n%s\n\n--- End of partial content from %s ---\n", parts[0], strings.Join(lines[startLine-1:endLine], "\n"), parts[0])
+				} else {
+					// If line numbers are invalid, return full content as per original logic
+					content = fmt.Sprintf("\n--- Start of full content from %s ---\n\n%s\n\n--- End of full content from %s ---\n", parts[0], content, parts[0])
 				}
+			} else {
+				// If lineNumbers is not 2 parts (e.g., "filename:1"), treat as full content
+				content = fmt.Sprintf("\n--- Start of full content from %s ---\n\n%s\n\n--- End of full content from %s ---\n", path, content, path)
 			}
 		} else {
 			content = fmt.Sprintf("\n--- Start of full content from %s ---\n\n%s\n\n--- End of full content from %s ---\n", path, content, path)

@@ -170,11 +170,29 @@ func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
 	}
 
 	var searchQueries []string
-	if err := json.Unmarshal([]byte(queryResponse), &searchQueries); err != nil {
+	if err := json.Unmarshal([]byte([]byte(queryResponse)), &searchQueries); err != nil {
 		return nil, fmt.Errorf("failed to parse search queries from LLM response: %w, response: %s", err, queryResponse)
 	}
 
 	return searchQueries, nil
+}
+
+// GetScriptRiskAnalysis sends a shell script to the summary model for risk analysis.
+func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, error) {
+	messages := prompts.BuildScriptRiskAnalysisMessages(scriptContent)
+	modelName := cfg.SummaryModel // Use the summary model for this task
+	if modelName == "" {
+		// Fallback if summary model is not configured
+		modelName = cfg.EditingModel
+		fmt.Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
+	}
+
+	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute, false) // Analysis does not use search grounding
+	if err != nil {
+		return "", fmt.Errorf("failed to get script risk analysis from LLM: %w", err)
+	}
+
+	return strings.TrimSpace(response), nil
 }
 
 // GetChangesForRequirement asks the LLM to break down a high-level requirement into file-specific changes.

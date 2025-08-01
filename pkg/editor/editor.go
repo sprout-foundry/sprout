@@ -12,7 +12,8 @@ import (
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/context"
-	"github.com/alantheprice/ledit/pkg/git" // NEW IMPORT: Import the new git package
+	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/alantheprice/ledit/pkg/git"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/parser"
 	"github.com/alantheprice/ledit/pkg/prompts"
@@ -23,7 +24,9 @@ import (
 	"github.com/fatih/color"
 )
 
-func processInstructions(instructions string, cfg *config.Config) (string, bool, error) {
+// loadOriginalCode function removed from here. It's moved to pkg/filesystem/loader.go
+
+func ProcessInstructions(instructions string, cfg *config.Config) (string, bool, error) {
 	originalInstructions := instructions // Capture original instructions for LLM-generated queries
 	useGeminiSearchGrounding := false
 
@@ -129,7 +132,7 @@ func processInstructions(instructions string, cfg *config.Config) (string, bool,
 				continue
 			}
 		} else {
-			content, err = LoadFileContent(path)
+			content, err = filesystem.LoadFileContent(path) // CHANGED: Call filesystem.LoadFileContent
 			if err != nil {
 				fmt.Print(prompts.FileLoadError(path, err)) // Use prompt
 				continue
@@ -140,8 +143,10 @@ func processInstructions(instructions string, cfg *config.Config) (string, bool,
 	return instructions, useGeminiSearchGrounding, nil
 }
 
+// GetLLMCodeResponse function removed from here, as it's now in pkg/context/context_builder.go
+
 func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config, useGeminiSearchGrounding bool) (map[string]string, string, error) {
-	modelName, llmContent, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, filename, useGeminiSearchGrounding)
+	modelName, llmContent, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, filename, useGeminiSearchGrounding) // Updated call site
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get LLM response: %w", err)
 	}
@@ -206,7 +211,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 	reader := bufio.NewReader(os.Stdin)
 
 	for newFilename, newCode := range updatedCode {
-		originalCode, _ := loadOriginalCode(newFilename)
+		originalCode, _ := filesystem.LoadOriginalCode(newFilename) // CHANGED: Call filesystem.LoadOriginalCode
 
 		if originalCode == newCode {
 			fmt.Print(prompts.NoChangesDetected(newFilename)) // Use prompt
@@ -246,7 +251,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				}
 			}
 
-			if err := utils.SaveFile(newFilename, newCode); err != nil {
+			if err := filesystem.SaveFile(newFilename, newCode); err != nil { // CHANGED: Call filesystem.SaveFile
 				return fmt.Errorf("failed to save file: %w", err)
 			}
 
@@ -328,13 +333,13 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (s
 	var originalCode string
 	var err error
 	if filename != "" {
-		originalCode, err = loadOriginalCode(filename)
+		originalCode, err = filesystem.LoadOriginalCode(filename) // CHANGED: Call filesystem.LoadOriginalCode
 		if err != nil {
 			return "", err
 		}
 	}
 
-	processedInstructions, useGeminiSearchGrounding, err := processInstructions(instructions, cfg)
+	processedInstructions, useGeminiSearchGrounding, err := ProcessInstructions(instructions, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to process instructions: %w", err)
 	}

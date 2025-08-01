@@ -3,11 +3,12 @@ package changetracker
 import (
 	"bufio"
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/utils"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
 
 	"github.com/fatih/color"
 )
@@ -95,7 +96,7 @@ func PrintRevisionHistory() error {
 
 func handleRollback(change ChangeLog) error {
 	fmt.Printf("Rolling back changes for %s...\n", change.Filename)
-	if err := utils.SaveFile(change.Filename, change.OriginalCode); err != nil {
+	if err := filesystem.SaveFile(change.Filename, change.OriginalCode); err != nil {
 		return err
 	}
 	if err := updateChangeStatus(change.FileRevisionHash, "reverted"); err != nil {
@@ -107,7 +108,7 @@ func handleRollback(change ChangeLog) error {
 
 func handleRestore(change ChangeLog) error {
 	fmt.Printf("Restoring changes for %s...\n", change.Filename)
-	if err := utils.SaveFile(change.Filename, change.NewCode); err != nil {
+	if err := filesystem.SaveFile(change.Filename, change.NewCode); err != nil {
 		return err
 	}
 	// Typically restore would be used on a reverted change, but here we just re-apply.

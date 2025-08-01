@@ -1,8 +1,11 @@
 package orchestration
 
 import (
+	"bytes" // Added import for bytes package
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -77,7 +80,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 			// The ProcessCodeGeneration function handles loading, LLM call, diff, user prompt, saving, and git commit
 			// It expects instructions and an optional filename.
 			// The change.Instruction should be specific enough for ProcessCodeGeneration.
-			_, err := editor.ProcessCodeGeneration(change.Filepath, change.Instruction, cfg) // Use editor.ProcessCodeGeneration
+			_, err := editor.ProcessWorkspaceCodeGeneration(change.Filepath, change.Instruction, cfg)
 			if err != nil {
 				change.Status = "failed"
 				change.Error = err.Error()
@@ -87,7 +90,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 				change.Status = "applied"
 				logger.LogProcessStep(fmt.Sprintf("  Successfully applied change to %s.", change.Filepath))
 			}
-			req.Changes[j] = change // Update the change in the slice
+			req.Changes[j] = change                             // Update the change in the slice
 			if err := SaveOrchestrationPlan(plan); err != nil { // Use SaveOrchestrationPlan from current package
 				logger.LogError(fmt.Errorf("failed to save orchestration plan after applying change: %w", err))
 			}
@@ -107,8 +110,62 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 	}
 
 	if !hasPendingRequirements(plan) {
-		plan.Status = "completed"
-		logger.LogProcessStep("\nAll orchestration requirements completed!")
+		maxValidationAttempts := 7
+		validationSuccess := false
+		for attempt := 1; attempt <= maxValidationAttempts; attempt++ {
+			logger.LogProcessStep(fmt.Sprintf("\nAttempt %d/%d: Validating changes by running build command...", attempt, maxValidationAttempts))
+			plan.Attempts = attempt // Update attempts on the plan
+			validationErr := validateChanges()
+			if validationErr == nil {
+				logger.LogProcessStep("Validation successful!")
+				validationSuccess = true
+				break // Validation passed, exit retry loop
+			}
+
+			logger.LogError(fmt.Errorf("validation failed: %w", validationErr))
+			plan.LastError = validationErr.Error()
+
+			if attempt < maxValidationAttempts {
+				logger.LogProcessStep("Attempting to fix validation errors with LLM...")
+				// The fix prompt should be general, as the validation failure might not be tied to a single file.
+				// The #WS tag ensures workspace context is included.
+				fixInstructions := fmt.Sprintf("The previous attempt to complete the orchestration failed validation. The build command failed with the following error:\n-------\n%s\n-------\n Please fix the code to resolve this issue. #WS", validationErr.Error())
+
+				// Use ProcessCodeGeneration to attempt a fix.
+				// Pass an empty filename as the fix might involve multiple files.
+				_, fixErr := editor.ProcessCodeGeneration("", fixInstructions, cfg)
+				if fixErr != nil {
+					logger.LogError(fmt.Errorf("error during LLM fix attempt %d: %w", attempt, fixErr))
+					// If the fix itself fails, we still continue to the next validation attempt
+					// or exit if max attempts reached.
+				} else {
+					logger.LogProcessStep(fmt.Sprintf("LLM fix attempt %d completed. Retrying validation...", attempt))
+				}
+			} else {
+				plan.Status = "failed" // Mark as failed if max attempts reached
+				logger.LogProcessStep(fmt.Sprintf("\nMax validation attempts (%d) reached. Orchestration failed.", maxValidationAttempts))
+				if err := SaveOrchestrationPlan(plan); err != nil {
+					logger.LogError(fmt.Errorf("failed to save final orchestration plan after max validation attempts: %w", err))
+				}
+				os.Exit(1) // Exit with error code
+			}
+
+			if err := SaveOrchestrationPlan(plan); err != nil {
+				logger.LogError(fmt.Errorf("failed to save orchestration plan after validation attempt: %w", err))
+			}
+		}
+
+		if validationSuccess {
+			plan.Status = "completed"
+			logger.LogProcessStep("\nAll orchestration requirements and final validation completed successfully!")
+		} else {
+			// This else block should only be reached if max attempts were reached and os.Exit(1) was not called
+			// (e.g., if there was an error saving the plan after max attempts).
+			// In normal flow, os.Exit(1) would have been called.
+			plan.Status = "failed"
+			logger.LogProcessStep("\nOrchestration failed after multiple validation attempts. Please review the plan.")
+		}
+
 	} else {
 		plan.Status = "in_progress" // Or "partially_completed"
 		logger.LogProcessStep("\nOrchestration completed with pending or failed requirements. Please review the plan.")
@@ -191,4 +248,26 @@ func generateRequirements(prompt string, cfg *config.Config) (*types.Orchestrati
 	plan.Status = "pending"
 
 	return &plan, nil
+}
+
+func validateChanges() error {
+	// load in workspace json file
+	workspaceFile, err := workspace.LoadWorkspaceFile()
+	if err != nil {
+		return fmt.Errorf("failed to load workspace file: %w", err)
+	}
+	build := workspaceFile.BuildCommand
+	if build == "" {
+		return fmt.Errorf("no build script found in workspace file")
+	}
+
+	cmd := exec.Command("sh", "-c", build)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err = cmd.Run() // Run the build script to ensure it works
+	if err != nil {
+		return fmt.Errorf("build command failed: %w\nOutput:\n%s", err, stderr.String())
+	}
+
+	return nil
 }

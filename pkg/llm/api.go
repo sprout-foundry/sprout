@@ -197,7 +197,12 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 
 // GetChangesForRequirement asks the LLM to break down a high-level requirement into file-specific changes.
 func GetChangesForRequirement(cfg *config.Config, requirementInstruction string, workspaceContext string) ([]types.OrchestrationChange, error) {
-	modelName := cfg.EditingModel // Or a specific orchestration model if configured
+
+	modelName := cfg.OrchestrationModel
+	if modelName == "" {
+		modelName = cfg.EditingModel             // Fallback to editing model if orchestration model is not configured
+		fmt.Print(prompts.UsingModel(modelName)) // Use prompt
+	}
 	fmt.Print(prompts.UsingModel(modelName))
 
 	messages := prompts.BuildChangesForRequirementMessages(requirementInstruction, workspaceContext, cfg.Interactive)

@@ -3,6 +3,7 @@ package workspace
 import (
 	"encoding/json" // New import for package.json parsing
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath" // New import for security concern detection
 	"sort"          // For sorting top directories and string slices
@@ -41,7 +42,7 @@ type fileToProcess struct {
 var (
 	maxTokenCount  = 20096
 	textExtensions = map[string]bool{
-		".txt": true, ".go": true, ".py": true, ".js": true, ".java": true,
+		".txt": true, ".go": true, ".py": true, ".js": true, ".jsx": true, ".java": true,
 		".c": true, ".cpp": true, ".h": true, ".hpp": true, ".md": true,
 		".json": true, ".yaml": true, ".yml": true, ".sh": true, ".bash": true,
 		".sql": true, ".html": true, ".css": true, ".xml": true, ".csv": true,
@@ -56,15 +57,15 @@ var (
 func detectBuildCommand(rootDir string) string {
 	// Check for Go project
 	goFilesFound := false
-	filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+	filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		// Skip common ignored directories
-		if info.IsDir() && (info.Name() == "vendor" || info.Name() == "node_modules" || info.Name() == ".git" || info.Name() == "build" || info.Name() == "dist") {
+		if d.IsDir() && (d.Name() == "vendor" || d.Name() == "node_modules" || d.Name() == ".git" || d.Name() == "build" || d.Name() == "dist") {
 			return filepath.SkipDir
 		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), ".go") {
+		if !d.IsDir() && strings.HasSuffix(d.Name(), ".go") {
 			goFilesFound = true
 			return fmt.Errorf("found go file") // Use a custom error to stop walking
 		}
@@ -122,13 +123,13 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 	newFilesCount := 0
 	newFilesTopDirs := make(map[string]int) // Map to store count of new files per top-level directory
 
-	err = filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if info.Name() != "." && strings.HasPrefix(info.Name(), ".") {
-			if info.IsDir() {
+		if d.Name() != "." && strings.HasPrefix(d.Name(), ".") {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
@@ -139,13 +140,13 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 			return err
 		}
 		if ignoreRules != nil && ignoreRules.MatchesPath(relativePath) {
-			if info.IsDir() {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if info.IsDir() {
+		if d.IsDir() {
 			return nil
 		}
 

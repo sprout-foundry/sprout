@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -52,27 +53,33 @@ func LoadFileContent(path string) (string, error) {
 		}
 	} else if strings.HasSuffix(path, "/**/*") {
 		dirPath := strings.TrimSuffix(path, "/**/*")
-		files, err := filepath.Glob(filepath.Join(dirPath, "**", "*"))
-		if err != nil {
-			return "", err
-		}
-		for _, file := range files {
-			if !strings.HasPrefix(filepath.Base(file), ".") { // Ignore hidden files
-				fileInfo, err := os.Stat(file)
-				if err != nil {
-					return "", err
-				}
-				if fileInfo.IsDir() {
-					fmt.Printf("Skipping directory %s\n", file)
-					continue
-				}
-				fileContent, err := os.ReadFile(file)
-				if err != nil {
-					return "", err
-				}
-				content += fmt.Sprintf("\n--- Start of content from %s ---\n\n%s\n\n--- End of content from %s ---\n", file, string(fileContent), file)
+		var contentBuilder strings.Builder
+		walkErr := filepath.WalkDir(dirPath, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
 			}
+
+			if d.Name() != "." && strings.HasPrefix(d.Name(), ".") {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil // Is a hidden file, skip.
+			}
+
+			if !d.IsDir() {
+				fileContent, readErr := os.ReadFile(p)
+				if readErr != nil {
+					return readErr
+				}
+				contentBuilder.WriteString(fmt.Sprintf("\n--- Start of content from %s ---\n\n%s\n\n--- End of content from %s ---\n", p, string(fileContent), p))
+			}
+			return nil
+		})
+
+		if walkErr != nil {
+			return "", walkErr
 		}
+		content = contentBuilder.String()
 	} else {
 		parts := strings.Split(path, ":")
 		fileInfo, err := os.Stat(parts[0])

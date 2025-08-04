@@ -46,6 +46,8 @@ type Config struct {
 	OllamaServerURL          string               `json:"ollama_server_url"`
 	OrchestrationMaxAttempts int                  `json:"orchestration_max_attempts"` // New field for max attempts
 	CodeStyle                CodeStylePreferences `json:"code_style"`                 // New field for code style preferences
+	SearchModel              string               `json:"search_model"`               // NEW: Field for search model
+	Temperature              float64              `json:"temperature"`                // NEW: Field for LLM temperature
 }
 
 func getHomeConfigPath() (string, string) {
@@ -116,6 +118,16 @@ func (cfg *Config) setDefaultValues() {
 	cfg.EnableSecurityChecks = true
 	// UseGeminiSearchGrounding defaults to false (zero value), no explicit setting needed here unless default was true.
 
+	// NEW: Set default for SearchModel
+	if cfg.SearchModel == "" {
+		cfg.SearchModel = cfg.SummaryModel // Default to summary model for search
+	}
+
+	// NEW: Set default for Temperature
+	if cfg.Temperature == 0 { // 0 is the zero value for float64, so this works for uninitialized or explicitly 0
+		cfg.Temperature = 0.7 // Default temperature
+	}
+
 	// Set default code style preferences
 	if cfg.CodeStyle.FunctionSize == "" {
 		cfg.CodeStyle.FunctionSize = "Aim for smaller, single-purpose functions (under 50 lines)."
@@ -130,7 +142,7 @@ func (cfg *Config) setDefaultValues() {
 		cfg.CodeStyle.ErrorHandling = "Handle errors explicitly, returning errors as the last return value. Avoid panics for recoverable errors."
 	}
 	if cfg.CodeStyle.TestingApproach == "" {
-		cfg.CodeStyle.TestingApproach = "Write unit tests for all critical logic. Aim for high test coverage."
+		cfg.CodeStyle.TestingApproach = "Write unit tests when practical."
 	}
 	if cfg.CodeStyle.Modularity == "" {
 		cfg.CodeStyle.Modularity = "Design components to be loosely coupled and highly cohesive."
@@ -152,6 +164,7 @@ func loadConfig(filePath string) (*Config, error) {
 	cfg.OllamaServerURL = "http://localhost:11434" // Default Ollama URL
 	cfg.EnableSecurityChecks = false               // Default to false for existing configs
 	cfg.UseGeminiSearchGrounding = false           // Default to false for existing configs
+	cfg.Temperature = 0.0                          // NEW: Initialize Temperature to its zero value
 	// Initialize CodeStyle to ensure setDefaultValues can populate it
 	cfg.CodeStyle = CodeStylePreferences{}
 
@@ -233,6 +246,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		OllamaServerURL:          "http://localhost:11434",
 		OrchestrationMaxAttempts: 6,                      // Default max attempts for orchestration
 		CodeStyle:                CodeStylePreferences{}, // Initialize to be populated by setDefaultValues
+		// SearchModel and Temperature will be set by setDefaultValues
 	}
 
 	cfg.setDefaultValues()

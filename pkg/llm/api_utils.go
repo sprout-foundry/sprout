@@ -16,3 +16,8 @@ func IsGeminiModel(modelName string) bool {
 	lowerModelName := strings.ToLower(modelName)
 	return strings.Contains(lowerModelName, "gemini")
 }
+
+// IsOllamaModel checks if the given model name is an Ollama model.
+func IsOllamaModel(modelName string) bool {
+	return strings.HasPrefix(strings.ToLower(modelName), "ollama:")
+}

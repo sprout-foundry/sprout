@@ -226,6 +226,16 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 			continue
 		}
 
+		// Check if this is a partial response by looking for the partial content marker pattern
+		if parser.IsPartialResponse(newCode) {
+			// Handle partial response by merging with original code
+			mergedCode, err := mergePartialCode(originalCode, newCode)
+			if err != nil {
+				return fmt.Errorf("failed to merge partial code for %s: %w", newFilename, err)
+			}
+			newCode = mergedCode
+		}
+
 		color.Yellow(prompts.OriginalFileHeader(newFilename)) // Use prompt
 		color.Yellow(prompts.UpdatedFileHeader(newFilename))  // Use prompt
 		changetracker.PrintDiff(newFilename, originalCode, newCode)
@@ -370,7 +380,16 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (s
 	// Calculate the diff for the target file (filename)
 	var diffForTargetFile string
 	if newCode, ok := updatedCodeFiles[filename]; ok {
-		diffForTargetFile = changetracker.GetDiff(filename, originalCode, newCode)
+		// Check if this is a partial response and merge if needed
+		if parser.IsPartialResponse(newCode) {
+			mergedCode, mergeErr := mergePartialCode(originalCode, newCode)
+			if mergeErr != nil {
+				return "", fmt.Errorf("failed to merge partial code: %w", mergeErr)
+			}
+			diffForTargetFile = changetracker.GetDiff(filename, originalCode, mergedCode)
+		} else {
+			diffForTargetFile = changetracker.GetDiff(filename, originalCode, newCode)
+		}
 	} else {
 		// If the LLM did not output the target file, the diff is empty.
 		// This indicates the LLM did not produce changes for the expected file.
@@ -390,4 +409,54 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (s
 	}
 
 	return diffForTargetFile, nil
+}
+
+// mergePartialCode merges a partial code response with the original code
+func mergePartialCode(originalCode, partialCode string) (string, error) {
+	if originalCode == "" {
+		return partialCode, nil
+	}
+
+	lines := strings.Split(partialCode, "\n")
+	originalLines := strings.Split(originalCode, "\n")
+	
+	var resultLines []string
+	lineIndex := 0
+	
+	for _, line := range lines {
+		if parser.IsPartialContentMarker(line) {
+			// Find the next unchanged marker or the end of the block
+			nextIndex := findNextUnchangedMarker(lines, lineIndex+1)
+			if nextIndex == -1 {
+				// If no next marker, append remaining original lines
+				if lineIndex < len(originalLines) {
+					resultLines = append(resultLines, originalLines[lineIndex:]...)
+				}
+			} else {
+				// Append original lines between current position and next marker position
+				if lineIndex < nextIndex && lineIndex < len(originalLines) {
+					endIndex := nextIndex
+					if endIndex > len(originalLines) {
+						endIndex = len(originalLines)
+					}
+					resultLines = append(resultLines, originalLines[lineIndex:endIndex]...)
+				}
+				lineIndex = nextIndex
+			}
+		} else {
+			resultLines = append(resultLines, line)
+		}
+	}
+	
+	return strings.Join(resultLines, "\n"), nil
+}
+
+// findNextUnchangedMarker finds the next line that contains an unchanged marker
+func findNextUnchangedMarker(lines []string, startIndex int) int {
+	for i := startIndex; i < len(lines); i++ {
+		if parser.IsPartialContentMarker(lines[i]) {
+			return i
+		}
+	}
+	return -1
 }

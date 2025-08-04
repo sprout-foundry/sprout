@@ -105,9 +105,9 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		err = callOpenAICompatibleStream("https://api.deepseek.com/v1/chat/completions", apiKey, model, messages, timeout, writer)
 
 	case "ollama":
-		err = callOpenAICompatibleStream(ollamaUrl, "ollama", model, messages, timeout, writer)
+		err = callOllamaAPI(model, messages, cfg, timeout, writer)
 	default:
-		// Fallback to Ollama
+		// Fallback to openai-compatible ollama api
 		fmt.Println(prompts.ProviderNotRecognized()) // Use prompt
 		modelName = cfg.LocalModel
 		err = callOpenAICompatibleStream(ollamaUrl, "ollama", modelName, messages, timeout, writer)

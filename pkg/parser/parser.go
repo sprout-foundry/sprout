@@ -46,7 +46,11 @@ func isEndOfCodeBlock(line string, currentLanguage string) bool {
 	return false
 }
 
-func isPartialContentMarker(line string) bool {
+// IsPartialContentMarker checks if a line is a partial content marker.
+// A line that contains `...` on on the same line as the text below. Splitting it into two lines here to makes sure that this comment doesn't trigger this detection.
+// then `unchanged` is a partial content marker.
+// This is case-insensitive for "unchanged".
+func IsPartialContentMarker(line string) bool {
 	// A line that contains `...` on on the same line as the text below. Splitting it into two lines here to makes sure that this comment doesn't trigger this detection.
 	// then `unchanged` is a partial content marker.
 	// This is case-insensitive for "unchanged".
@@ -54,6 +58,17 @@ func isPartialContentMarker(line string) bool {
 	if idx := strings.Index(lowerLine, "..."); idx != -1 {
 		// check for "unchanged" in the rest of the string
 		return strings.Contains(lowerLine[idx:], "unchanged")
+	}
+	return false
+}
+
+// IsPartialResponse checks if the code contains partial response markers
+func IsPartialResponse(code string) bool {
+	lines := strings.Split(code, "\n")
+	for _, line := range lines {
+		if IsPartialContentMarker(line) {
+			return true
+		}
 	}
 	return false
 }

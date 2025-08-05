@@ -9,6 +9,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/git"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // fileTreeNode represents a node in the file system tree structure.
@@ -87,6 +88,7 @@ func printFileTree(node *fileTreeNode, b *strings.Builder, prefix string, isLast
 // getWorkspaceInfo formats the workspace information for the LLM.
 // It lists all files, provides full content for selected files, and summaries for others.
 func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextFiles []string, projectGoals ProjectGoals, codeStyle config.CodeStylePreferences) string {
+	logger := utils.GetLogger(false) // Get logger instance
 	var b strings.Builder
 	b.WriteString("--- Start of full content from workspace ---\n")
 
@@ -257,6 +259,15 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 		b.WriteString("No files selected for summary context.\n\n")
 	}
 	b.WriteString("--- End of full content from workspace ---\n")
+	logger.Log(b.String())
+
+	// Return a brief summary for the console
+	var summary strings.Builder
+	summary.WriteString("Workspace context has been loaded and logged.\n")
+	summary.WriteString(fmt.Sprintf("- %d files in workspace\n", len(allFilePaths)))
+	summary.WriteString(fmt.Sprintf("- %d files selected for full context\n", len(fullContextFiles)))
+	summary.WriteString(fmt.Sprintf("- %d files selected for summary context\n", len(summaryContextFiles)))
+
 	return b.String()
 }
 

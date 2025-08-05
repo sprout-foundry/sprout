@@ -369,7 +369,7 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (s
 	if err != nil {
 		return "", fmt.Errorf("failed to process instructions: %w", err)
 	}
-	fmt.Print(prompts.ProcessedInstructionsSeparator(processedInstructions)) // Use prompt
+	// fmt.Print(prompts.ProcessedInstructionsSeparator(processedInstructions)) // Use prompt
 
 	requestHash := utils.GenerateRequestHash(processedInstructions)
 	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, filename, cfg, useGeminiSearchGrounding)
@@ -419,10 +419,10 @@ func mergePartialCode(originalCode, partialCode string) (string, error) {
 
 	lines := strings.Split(partialCode, "\n")
 	originalLines := strings.Split(originalCode, "\n")
-	
+
 	var resultLines []string
 	lineIndex := 0
-	
+
 	for _, line := range lines {
 		if parser.IsPartialContentMarker(line) {
 			// Find the next unchanged marker or the end of the block
@@ -447,7 +447,7 @@ func mergePartialCode(originalCode, partialCode string) (string, error) {
 			resultLines = append(resultLines, line)
 		}
 	}
-	
+
 	return strings.Join(resultLines, "\n"), nil
 }
 

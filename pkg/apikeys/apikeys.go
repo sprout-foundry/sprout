@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-
-	"github.com/alantheprice/ledit/pkg/config"
 )
 
 const apiKeysFile = ".ledit/api_keys.json"
@@ -23,7 +21,8 @@ var (
 // GetAPIKey retrieves the API key for the specified provider.
 // It first checks in-memory cache, then the config file, then environment variables,
 // and finally prompts the user if not found and interactive mode is enabled.
-func GetAPIKey(provider string) (string, error) {
+// The 'interactive' parameter determines if the user should be prompted for the key.
+func GetAPIKey(provider string, interactive bool) (string, error) {
 	apiKeysOnce.Do(func() {
 		apiKeys = make(map[string]string)
 		// Attempt to load from file on first access
@@ -58,14 +57,16 @@ func GetAPIKey(provider string) (string, error) {
 		return key, nil
 	}
 
-	// If not found, prompt the user
-	key = promptForAPIKey(provider)
-	if key != "" {
-		apiKeysMu.Lock()
-		apiKeys[provider] = key
-		apiKeysMu.Unlock()
-		saveAPIKeys(apiKeys) // Save to file for future use
-		return key, nil
+	// If not found and interactive, prompt the user
+	if interactive {
+		key = promptForAPIKey(provider, interactive)
+		if key != "" {
+			apiKeysMu.Lock()
+			apiKeys[provider] = key
+			apiKeysMu.Unlock()
+			saveAPIKeys(apiKeys) // Save to file for future use
+			return key, nil
+		}
 	}
 
 	return "", fmt.Errorf("API key for %s not found and not provided", provider)
@@ -118,10 +119,9 @@ func saveAPIKeys(keys map[string]string) error {
 	return nil
 }
 
-// promptForAPIKey prompts the user for an API key if not already provided.
-func promptForAPIKey(provider string) string {
-	cfg, err := config.LoadOrInitConfig(false) // Load config to check interactive mode
-	if err != nil || !cfg.Interactive {
+// promptForAPIKey prompts the user for an API key if interactive mode is enabled.
+func promptForAPIKey(provider string, interactive bool) string {
+	if !interactive {
 		fmt.Printf("API key for %s not found. Please set %s_API_KEY environment variable.\n", provider, strings.ToUpper(provider))
 		return ""
 	}

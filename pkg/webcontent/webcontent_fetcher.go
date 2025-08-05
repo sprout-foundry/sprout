@@ -44,7 +44,7 @@ func (w *WebContentFetcher) FetchWebContent(url string, cfg *config.Config) (str
 // fetchContent determines the best method to fetch content and retrieves it.
 func (w *WebContentFetcher) fetchContent(url string, cfg *config.Config) (string, error) { // Added cfg parameter
 	isLocalhost := strings.HasPrefix(url, "http://localhost") || strings.HasPrefix(url, "https://localhost")
-	jinaAPIKey, err := apikeys.GetAPIKey("JinaAI") // Changed call to apikeys.GetAPIKey and passed cfg
+	jinaAPIKey, err := apikeys.GetAPIKey("JinaAI", !cfg.SkipPrompt) // Changed call to apikeys.GetAPIKey and passed cfg
 
 	useJina := !isLocalhost && err == nil && jinaAPIKey != ""
 	if useJina {
@@ -65,7 +65,7 @@ func (w *WebContentFetcher) fetchContent(url string, cfg *config.Config) (string
 
 // fetchWithJinaReader fetches content using the Jina Reader API.
 func (w *WebContentFetcher) fetchWithJinaReader(url string, cfg *config.Config) (string, error) { // Added cfg parameter
-	apiKey, err := apikeys.GetAPIKey("JinaAI") // Get API key here, passing cfg
+	apiKey, err := apikeys.GetAPIKey("JinaAI", !cfg.SkipPrompt) // Get API key here, passing cfg
 	if err != nil {
 		return "", fmt.Errorf("failed to get Jina AI API key: %w", err)
 	}

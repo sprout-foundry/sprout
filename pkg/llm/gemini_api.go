@@ -14,7 +14,8 @@ import (
 )
 
 func callGeminiAPI(model string, messages []prompts.Message, timeout time.Duration, useSearchGrounding bool) (string, error) {
-	apiKey, err := apikeys.GetAPIKey("gemini") // Use apikeys package
+	// Pass 'false' for interactive, as API calls should typically not prompt the user directly.
+	apiKey, err := apikeys.GetAPIKey("gemini", false) // Use apikeys package and pass false for interactive
 	if err != nil {
 		fmt.Print(prompts.APIKeyError(err)) // Use prompt
 		return "", err

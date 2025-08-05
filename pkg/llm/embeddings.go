@@ -33,10 +33,12 @@ type JinaEmbeddingResponse struct {
 // GenerateEmbedding generates an embedding for the given input using Jina AI.
 func GenerateEmbedding(input string) ([]float64, error) {
 	// Get your Jina AI API key for free: https://jina.ai/?sui=apikey
-	apiKey, err := apikeys.GetAPIKey("JinaAI") // Changed call to apikeys.GetAPIKey and passed cfg
+	// Pass 'false' for interactive, as embedding generation is typically non-interactive.
+	apiKey, err := apikeys.GetAPIKey("JinaAI", false) // Changed call to apikeys.GetAPIKey and passed false for interactive
 	if err != nil || apiKey == "" {
 		// Fallback to environment variable if GetAPIKey fails or returns empty
-		apiKey = os.Getenv("JINA_API_KEY") // This fallback is now redundant if GetAPIKey handles env vars
+		// This fallback is now redundant if GetAPIKey handles env vars, but kept for robustness.
+		apiKey = os.Getenv("JINA_API_KEY")
 		if apiKey == "" {
 			return nil, fmt.Errorf("Jina AI API key not found. Please set JINA_API_KEY environment variable or provide it when prompted.")
 		}

@@ -260,18 +260,18 @@ func BuildProjectGoalsMessages(workspaceSummary string) []Message {
 	systemPrompt := `You are an expert at defining clear and concise project goals.
 Your task is to analyze the provided workspace summary and infer the overall goals, key features, target audience, and technical vision for the project.
 Your response MUST be a JSON object with the following keys:
-- "OverallGoal": A concise statement of the project's main objective.
-- "KeyFeatures": A list of the most important functionalities or capabilities.
-- "TargetAudience": Who the project is intended for.
-- "TechnicalVision": The high-level technical approach or philosophy.
+- "overall_goal": A concise statement of the project's main objective.
+- "key_features": A paragraph describing the most important functionalities or capabilities.
+- "target_audience": Who the project is intended for.
+- "technical_vision": The high-level technical approach or philosophy.
 Do not include any other text or explanation outside the JSON.
 
 Example JSON format:
 {
-  "OverallGoal": "Develop a secure and scalable e-commerce platform.",
-  "KeyFeatures": ["Product catalog", "Shopping cart", "Payment processing", "User authentication"],
-  "TargetAudience": "Small to medium-sized businesses selling online.",
-  "TechnicalVision": "Microservices architecture with cloud-native deployment."
+  "overall_goal": "Develop a secure and scalable e-commerce platform.",
+  "key_features": "Product catalog, Shopping cart, Payment processing, User authentication",
+  "target_audience": "Small to medium-sized businesses selling online.",
+  "technical_vision": "Microservices architecture with cloud-native deployment."
 }
 
 `

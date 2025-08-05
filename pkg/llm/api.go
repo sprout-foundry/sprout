@@ -23,25 +23,25 @@ var (
 
 // --- Main Dispatcher ---
 
-func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, useSearchGrounding bool) (string, error) {
+func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer) (string, error) {
 	var totalInputTokens int
 	for _, msg := range messages {
 		totalInputTokens += utils.EstimateTokens(msg.Content) // Use utils.EstimateTokens
 	}
-	fmt.Print(prompts.TokenEstimate(totalInputTokens, modelName)) // Use prompt
+	fmt.Print(prompts.TokenEstimate(totalInputTokens, modelName))
 	if totalInputTokens > DefaultTokenLimit && !cfg.SkipPrompt {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Print(prompts.TokenLimitWarning(totalInputTokens, DefaultTokenLimit)) // Use prompt
+		fmt.Print(prompts.TokenLimitWarning(totalInputTokens, DefaultTokenLimit))
 		confirm, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err)) // Use prompt
+			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
 		if strings.TrimSpace(confirm) != "y" {
-			fmt.Println(prompts.OperationCancelled()) // Use prompt
+			fmt.Println(prompts.OperationCancelled())
 			return modelName, nil
 		}
-		fmt.Print(prompts.ContinuingRequest()) // Use prompt
+		fmt.Print(prompts.ContinuingRequest())
 
 		// User confirmed, continue with the request
 	}
@@ -61,21 +61,21 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	case "openai":
 		apiKey, err := apikeys.GetAPIKey("openai", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err)) // Use prompt
+			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
 		err = callOpenAICompatibleStream("https://api.openai.com/v1/chat/completions", apiKey, model, messages, timeout, writer)
 	case "groq":
 		apiKey, err := apikeys.GetAPIKey("groq", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err)) // Use prompt
+			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
 		err = callOpenAICompatibleStream("https://api.groq.com/openai/v1/chat/completions", apiKey, model, messages, timeout, writer)
 	case "gemini":
 		// Gemini streaming not implemented, using non-streaming call and writing the whole response.
 		var content string
-		content, err = callGeminiAPI(model, messages, timeout, useSearchGrounding)
+		content, err = callGeminiAPI(model, messages, timeout, false) // Removed undefined useSearchGrounding variable
 		if err == nil && content != "" {
 			logger := utils.GetLogger(cfg.SkipPrompt)
 			logger.Log(fmt.Sprintf("Gemini API response: %s", content)) // Log the response
@@ -85,28 +85,28 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	case "lambda-ai":
 		apiKey, err := apikeys.GetAPIKey("lambda-ai", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err)) // Use prompt
+			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
 		err = callOpenAICompatibleStream("https://api.lambda.ai/v1/chat/completions", apiKey, model, messages, timeout, writer)
 	case "cerebras":
 		apiKey, err := apikeys.GetAPIKey("cerebras", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err)) // Use prompt
+			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
 		err = callOpenAICompatibleStream("https://api.cerebras.ai/v1/chat/completions", apiKey, model, messages, timeout, writer)
 	case "deepseek":
 		apiKey, err := apikeys.GetAPIKey("deepseek", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err)) // Use prompt
+			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
 		err = callOpenAICompatibleStream("https://api.deepseek.com/v1/chat/completions", apiKey, model, messages, timeout, writer)
 	case "deepinfra":
 		apiKey, err := apikeys.GetAPIKey("deepinfra", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err)) // Use prompt
+			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
 		err = callOpenAICompatibleStream("https://api.deepinfra.com/v1/openai/chat/completions", apiKey, model, messages, timeout, writer)
@@ -115,23 +115,23 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		err = callOllamaAPI(model, messages, cfg, timeout, writer)
 	default:
 		// Fallback to openai-compatible ollama api
-		fmt.Println(prompts.ProviderNotRecognized()) // Use prompt
+		fmt.Println(prompts.ProviderNotRecognized())
 		modelName = cfg.LocalModel
 		err = callOpenAICompatibleStream(ollamaUrl, "ollama", modelName, messages, timeout, writer)
 	}
 
 	if err != nil {
-		fmt.Printf(prompts.LLMResponseError(err)) // Use prompt
+		fmt.Printf(prompts.LLMResponseError(err))
 		return modelName, err
 	}
 
 	return modelName, nil
 }
 
-func GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, useSearchGrounding bool) (string, string, error) {
+func GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration) (string, string, error) {
 	var contentBuffer strings.Builder
 	// GetLLMResponseStream handles the token limit prompt and provider logic
-	newModelName, err := GetLLMResponseStream(modelName, messages, filename, cfg, timeout, &contentBuffer, useSearchGrounding)
+	newModelName, err := GetLLMResponseStream(modelName, messages, filename, cfg, timeout, &contentBuffer)
 	if err != nil {
 		// GetLLMResponseStream already prints the error if it happens
 		return newModelName, "", err
@@ -160,7 +160,7 @@ func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
 	modelName := cfg.EditingModel // Use the editing model for generating search queries
 
 	// Use a short timeout for generating a search query
-	_, queryResponse, err := GetLLMResponse(modelName, messages, "", cfg, 30*time.Second, false) // Query generation does not use search grounding
+	_, queryResponse, err := GetLLMResponse(modelName, messages, "", cfg, 30*time.Second) // Query generation does not use search grounding
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate search query from LLM: %w", err)
 	}
@@ -194,7 +194,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 		fmt.Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 
-	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute, false) // Analysis does not use search grounding
+	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute) // Analysis does not use search grounding
 	if err != nil {
 		return "", fmt.Errorf("failed to get script risk analysis from LLM: %w", err)
 	}
@@ -207,15 +207,15 @@ func GetChangesForRequirement(cfg *config.Config, requirementInstruction string,
 
 	modelName := cfg.OrchestrationModel
 	if modelName == "" {
-		modelName = cfg.EditingModel             // Fallback to editing model if orchestration model is not configured
-		fmt.Print(prompts.UsingModel(modelName)) // Use prompt
+		modelName = cfg.EditingModel // Fallback to editing model if orchestration model is not configured
+		fmt.Print(prompts.UsingModel(modelName))
 	}
 	fmt.Print(prompts.UsingModel(modelName))
 
 	messages := prompts.BuildChangesForRequirementMessages(requirementInstruction, workspaceContext, cfg.Interactive)
 
 	// Use a longer timeout for this, as it's a planning step
-	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute, false) // No search grounding for this planning step
+	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute) // No search grounding for this planning step
 	if err != nil {
 		return nil, fmt.Errorf("failed to get changes for requirement from LLM: %w", err)
 	}

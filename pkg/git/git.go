@@ -18,6 +18,34 @@ func GetGitRootDir() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// GetGitRemoteURL returns the remote URL of the current Git repository.
+func GetGitRemoteURL() (string, error) {
+	cmd := exec.Command("git", "remote", "get-url", "origin")
+	var out []byte
+	var err error
+	if out, err = cmd.CombinedOutput(); err != nil {
+		// Try to get any remote if origin doesn't exist
+		cmd = exec.Command("git", "remote")
+		remotesOut, err := cmd.CombinedOutput()
+		if err != nil {
+			return "", fmt.Errorf("could not find git remotes: %v", string(remotesOut))
+		}
+		
+		remotes := strings.Split(strings.TrimSpace(string(remotesOut)), "\n")
+		if len(remotes) == 0 || remotes[0] == "" {
+			return "", nil // No remotes configured
+		}
+		
+		// Get URL for the first remote
+		cmd = exec.Command("git", "remote", "get-url", remotes[0])
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			return "", fmt.Errorf("could not get git remote URL: %v", string(out))
+		}
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // GetFileGitPath returns the path of the given filename relative to the Git repository root.
 func GetFileGitPath(filename string) (string, error) {
 	gitRoot, err := GetGitRootDir()
@@ -95,4 +123,50 @@ func GetGitStatus() (currentBranch string, uncommittedChanges int, stagedChanges
 	}
 
 	return currentBranch, uncommittedChanges, stagedChanges, nil
+}
+
+// GetUncommittedChanges returns detailed information about uncommitted changes in the repository.
+func GetUncommittedChanges() (string, error) {
+	// Get the diff of uncommitted changes
+	cmd := exec.Command("git", "diff", "--no-color", "--no-ext-diff")
+	diffOut, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get git diff: %v", string(diffOut))
+	}
+	
+	diff := strings.TrimSpace(string(diffOut))
+	if diff == "" {
+		return "", nil // No uncommitted changes
+	}
+	
+	// Truncate if too long to keep under token limit
+	const maxDiffLength = 5000 // Limit diff length to help stay under 2000 tokens
+	if len(diff) > maxDiffLength {
+		diff = diff[:maxDiffLength] + "\n... (diff truncated for brevity)"
+	}
+	
+	return diff, nil
+}
+
+// GetStagedChanges returns detailed information about staged changes in the repository.
+func GetStagedChanges() (string, error) {
+	// Get the diff of staged changes
+	cmd := exec.Command("git", "diff", "--cached", "--no-color", "--no-ext-diff")
+	diffOut, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get staged git diff: %v", string(diffOut))
+	}
+	
+	diff := strings.TrimSpace(string(diffOut))
+	if diff == "" {
+		return "", nil // No staged changes
+	}
+	
+	// Truncate if too long to keep under token limit
+	const maxDiffLength = 5000 // Limit diff length to help stay under 2000 tokens
+	if len(diff) > maxDiffLength {
+		diff = diff[:maxDiffLength] + "\n... (diff truncated for brevity)"
+	}
+	
+	return diff, nil
 }

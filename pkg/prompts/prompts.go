@@ -285,11 +285,6 @@ Example JSON format:
 
 // --- User Interaction Prompts ---
 
-// UseGeminiSearchGroundingPrompt prompts the user about enabling Gemini Search Grounding.
-func UseGeminiSearchGroundingPrompt() string {
-	return "Do you want to enable Gemini Search Grounding for web searches? (yes/no): "
-}
-
 // SecurityConcernDetectedPrompt prompts the user about a detected security concern.
 func SecurityConcernDetectedPrompt(filename, concern string) string {
 	return fmt.Sprintf("Security concern '%s' detected in file '%s'. Do you want to proceed? (yes/no): ", concern, filename)

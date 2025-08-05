@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -12,6 +13,16 @@ import (
 
 	"github.com/fatih/color"
 )
+
+// RevisionGroup represents a group of changes that belong to the same revision
+type RevisionGroup struct {
+	RevisionID   string
+	Instructions string
+	Response     string
+	Changes      []ChangeLog
+	Timestamp    time.Time
+	EditingModel string // Added: Editing model used for this revision
+}
 
 func PrintRevisionHistory() error {
 	changes, err := fetchAllChanges() // fetchAllChanges now returns sorted data
@@ -22,10 +33,110 @@ func PrintRevisionHistory() error {
 		fmt.Println("No changes recorded.")
 		return nil
 	}
-	reader := bufio.NewReader(os.Stdin)
 
-	for _, change := range changes {
-		fmt.Println(strings.Repeat("-", 80))
+	// Group changes by revision ID
+	revisionGroups := groupChangesByRevision(changes)
+	
+	if len(revisionGroups) == 0 {
+		fmt.Println("No revisions found.")
+		return nil
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	currentIndex := 0
+
+	// Display the first revision
+	displayRevision(revisionGroups[currentIndex])
+
+	for {
+		fmt.Print("\nEnter: Show next revision | b: Show previous revision | x: Exit | d: Show all diffs | revert: Rollback revision | restore: Restore revision | p: Show original prompt | l: Show LLM details -> ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+
+		switch input {
+		case "x", "exit":
+			return nil
+		case "b", "back":
+			if currentIndex > 0 {
+				currentIndex--
+				displayRevision(revisionGroups[currentIndex])
+			} else {
+				fmt.Println("Already at the first revision.")
+			}
+		case "d":
+			fmt.Println("\n\033[1mAll File Diffs for this Revision:\033[0m")
+			for _, change := range revisionGroups[currentIndex].Changes {
+				fmt.Printf("\n--- Diff for %s ---\n", change.Filename)
+				diff := GetDiff(change.Filename, change.OriginalCode, change.NewCode)
+				fmt.Println(diff)
+			}
+		case "revert":
+			activeChanges := getActiveChanges(revisionGroups[currentIndex].Changes)
+			if len(activeChanges) > 0 {
+				if err := handleRevisionRollback(revisionGroups[currentIndex]); err != nil {
+					log.Printf("Error during revision rollback: %v", err)
+				}
+			} else {
+				fmt.Println("No active changes in this revision, cannot revert.")
+			}
+		case "restore":
+			if err := handleRevisionRestore(revisionGroups[currentIndex]); err != nil {
+				log.Printf("Error during revision restore: %v", err)
+			}
+		case "p": // Show original prompt
+			if revisionGroups[currentIndex].Instructions != "" {
+				fmt.Printf("\n\033[1mOriginal Prompt:\033[0m\n%s\n", revisionGroups[currentIndex].Instructions)
+			} else {
+				fmt.Println("\nNo original prompt recorded.")
+			}
+		case "l": // Show LLM details
+			fmt.Printf("\n\033[1mEditing Model:\033[0m %s\n", revisionGroups[currentIndex].EditingModel)
+			if revisionGroups[currentIndex].Response != "" {
+				fmt.Printf("\n\033[1mFull LLM Response:\033[0m\n%s\n", revisionGroups[currentIndex].Response)
+			} else {
+				fmt.Println("\nNo LLM response recorded.")
+			}
+		case "":
+			// Show next revision
+			if currentIndex < len(revisionGroups)-1 {
+				currentIndex++
+				displayRevision(revisionGroups[currentIndex])
+			} else {
+				fmt.Println("No more revisions to show.")
+				fmt.Print("x: Exit | b: Show previous revision -> ")
+				exitInput, _ := reader.ReadString('\n')
+				exitInput = strings.TrimSpace(strings.ToLower(exitInput))
+				if exitInput == "x" || exitInput == "exit" {
+					return nil
+				} else if exitInput == "b" || exitInput == "back" {
+					if currentIndex > 0 {
+						currentIndex--
+						displayRevision(revisionGroups[currentIndex])
+					}
+				}
+			}
+		default:
+			fmt.Println("Invalid option. Please try again.")
+		}
+	}
+}
+
+func displayRevision(group RevisionGroup) {
+	fmt.Printf("\n\033[1mEditing Model:\033[0m %s\n", group.EditingModel)
+	fmt.Println(strings.Repeat("=", 80))
+	color.New(color.FgCyan).Printf("Revision ID: %s\n", group.RevisionID)
+	fmt.Printf("Time: %s\n", group.Timestamp.Format(time.RFC1123))
+
+	// Display the editing model used for this revision
+	if group.EditingModel != "" {
+		fmt.Printf("Model: %s\n\n", group.EditingModel)
+	} else {
+		fmt.Printf("Model: Not specified\n\n")
+	}
+
+	fmt.Printf("\033[1mFile Changes (%d):\033[0m\n", len(group.Changes))
+	for _, change := range group.Changes {
+		fmt.Println(strings.Repeat("-", 40))
 		color.New(color.FgYellow).Printf("(%s)", change.Filename)
 		fmt.Printf(" -- \033[1m%s\033[0m", change.FileRevisionHash)
 		if change.Status != "active" {
@@ -33,18 +144,20 @@ func PrintRevisionHistory() error {
 		} else {
 			color.Green(" - %s\n", change.Status)
 		}
-		fmt.Printf("\033[1mTime:\033[0m %s\n\n", change.Timestamp.Format(time.RFC1123))
+
 		if change.Note.Valid {
 			fmt.Printf("    \033[1m%s\033[0m\n\n", change.Note.String)
 		}
-		// Wrap the description at 100 characters and indent with 4 spaces
-		wrappedDesc := wrapAndIndent(change.Description, 72, 4)
-		fmt.Print(wrappedDesc + "\n\n")
 
+		// Wrap the description at 72 characters and indent with 4 spaces
+		wrappedDesc := wrapAndIndent(change.Description, 72, 4)
+		fmt.Print(wrappedDesc + "\n")
+
+		// Show a preview of the diff
 		diff := GetDiff(change.Filename, change.OriginalCode, change.NewCode)
 		diffLines := strings.Split(diff, "\n")
-		if len(diffLines) > 5 {
-			for _, line := range diffLines[:5] {
+		if len(diffLines) > 3 {
+			for _, line := range diffLines[:3] {
 				fmt.Println(line)
 			}
 			fmt.Println("...")
@@ -53,69 +166,97 @@ func PrintRevisionHistory() error {
 				fmt.Println(line)
 			}
 		}
+	}
+}
 
-		for {
-			fmt.Print("\nEnter: Show next | x: Exit | o: Original | u: Updated | d: Full Diff | revert: Rollback | restore: Restore -> ")
-			input, _ := reader.ReadString('\n')
-			input = strings.TrimSpace(strings.ToLower(input))
+func groupChangesByRevision(changes []ChangeLog) []RevisionGroup {
+	// Group changes by RequestHash (revision ID)
+	groupMap := make(map[string]*RevisionGroup)
 
-			switch input {
-			case "x", "exit":
-				return nil
-			case "o":
-				fmt.Println("\n\033[1mOriginal Code:\033[0m")
-				fmt.Println(change.OriginalCode)
-			case "u":
-				fmt.Println("\n\033[1mUpdated Code:\033[0m")
-				fmt.Println(change.NewCode)
-			case "d":
-				fmt.Println("\n\033[1mFull Diff:\033[0m")
-				fmt.Println(diff)
-			case "revert":
-				if change.Status == "active" {
-					if err := handleRollback(change); err != nil {
-						log.Printf("Error during rollback: %v", err)
-					}
-				} else {
-					fmt.Println("Change is not active, cannot revert.")
-				}
-			case "restore":
-				if err := handleRestore(change); err != nil {
-					log.Printf("Error during restore: %v", err)
-				}
-			default:
-				fmt.Println("Invalid option. Please try again.")
+	for _, change := range changes {
+		revisionID := change.RequestHash
+		if group, exists := groupMap[revisionID]; exists {
+			group.Changes = append(group.Changes, change)
+			// Keep the earliest timestamp for the group
+			if change.Timestamp.Before(group.Timestamp) {
+				group.Timestamp = change.Timestamp
 			}
-			if input == "" || input == "x" || input == "exit" {
-				break
+		} else {
+			groupMap[revisionID] = &RevisionGroup{
+				RevisionID:   revisionID,
+				Instructions: change.Instructions,
+				Response:     change.Response,
+				Changes:      []ChangeLog{change},
+				Timestamp:    change.Timestamp,
+				EditingModel: change.EditingModel, // Added: Include editing model in group
 			}
 		}
 	}
+
+	// Convert map to slice
+	var groups []RevisionGroup
+	for _, group := range groupMap {
+		// Sort changes within each group by timestamp
+		sortChangesByTimestamp(group.Changes)
+		groups = append(groups, *group)
+	}
+
+	// Sort groups by timestamp in descending order (most recent first)
+	sort.Slice(groups, func(i, j int) bool {
+		return groups[i].Timestamp.After(groups[j].Timestamp)
+	})
+
+	return groups
+}
+
+func sortChangesByTimestamp(changes []ChangeLog) {
+	sort.Slice(changes, func(i, j int) bool {
+		return changes[i].Timestamp.After(changes[j].Timestamp)
+	})
+}
+
+func getActiveChanges(changes []ChangeLog) []ChangeLog {
+	var active []ChangeLog
+	for _, change := range changes {
+		if change.Status == "active" {
+			active = append(active, change)
+		}
+	}
+	return active
+}
+
+func handleRevisionRollback(group RevisionGroup) error {
+	fmt.Printf("Rolling back all changes in revision %s...\n", group.RevisionID)
+
+	activeChanges := getActiveChanges(group.Changes)
+	for _, change := range activeChanges {
+		fmt.Printf("  Rolling back %s...\n", change.Filename)
+		if err := filesystem.SaveFile(change.Filename, change.OriginalCode); err != nil {
+			return fmt.Errorf("failed to rollback %s: %w", change.Filename, err)
+		}
+		if err := updateChangeStatus(change.FileRevisionHash, "reverted"); err != nil {
+			return fmt.Errorf("failed to update status for %s: %w", change.Filename, err)
+		}
+	}
+
+	fmt.Println("Revision rollback successful.")
 	return nil
 }
 
-func handleRollback(change ChangeLog) error {
-	fmt.Printf("Rolling back changes for %s...\n", change.Filename)
-	if err := filesystem.SaveFile(change.Filename, change.OriginalCode); err != nil {
-		return err
-	}
-	if err := updateChangeStatus(change.FileRevisionHash, "reverted"); err != nil {
-		return err
-	}
-	fmt.Println("Rollback successful.")
-	return nil
-}
+func handleRevisionRestore(group RevisionGroup) error {
+	fmt.Printf("Restoring all changes in revision %s...\n", group.RevisionID)
 
-func handleRestore(change ChangeLog) error {
-	fmt.Printf("Restoring changes for %s...\n", change.Filename)
-	if err := filesystem.SaveFile(change.Filename, change.NewCode); err != nil {
-		return err
+	for _, change := range group.Changes {
+		fmt.Printf("  Restoring %s...\n", change.Filename)
+		if err := filesystem.SaveFile(change.Filename, change.NewCode); err != nil {
+			return fmt.Errorf("failed to restore %s: %w", change.Filename, err)
+		}
+		// Update status to restored regardless of previous status
+		if err := updateChangeStatus(change.FileRevisionHash, "restored"); err != nil {
+			return fmt.Errorf("failed to update status for %s: %w", change.Filename, err)
+		}
 	}
-	// Typically restore would be used on a reverted change, but here we just re-apply.
-	// The status logic might need refinement based on desired workflow.
-	if err := updateChangeStatus(change.FileRevisionHash, "restored"); err != nil {
-		return err
-	}
-	fmt.Println("Restore successful.")
+
+	fmt.Println("Revision restore successful.")
 	return nil
 }

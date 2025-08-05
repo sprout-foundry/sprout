@@ -254,7 +254,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				}
 			}
 
-			if err := filesystem.SaveFile(newFilename, newCode); err != nil { // CHANGED: Call filesystem.SaveFile
+			if err := filesystem.SaveFile(newFilename, newCode); err != nil {
 				return fmt.Errorf("failed to save file: %w", err)
 			}
 
@@ -263,7 +263,13 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				return fmt.Errorf("failed to get change summaries: %w", err)
 			}
 
-			if err := changetracker.RecordChange(revisionID, newFilename, originalCode, newCode, description, note); err != nil {
+			// Get the LLM message that was sent for this specific file change
+			_, llmMessage, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, newFilename)
+			if err != nil {
+				llmMessage = "" // If we can't get it, just leave it empty
+			}
+
+			if err := changetracker.RecordChangeWithDetails(revisionID, newFilename, originalCode, newCode, description, note, instructions, llmMessage, cfg.EditingModel); err != nil {
 				return fmt.Errorf("failed to record change: %w", err)
 			}
 			fmt.Print(prompts.ChangesApplied(newFilename))

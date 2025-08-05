@@ -92,7 +92,7 @@ Your response MUST be only the raw JSON, without any surrounding text or code fe
 				},
 			}
 
-			_, response, err := llm.GetLLMResponse(cfg.WorkspaceModel, messages, "workspace_selector", cfg, 2*time.Minute, false)
+			_, response, err := llm.GetLLMResponse(cfg.WorkspaceModel, messages, "workspace_selector", cfg, 2*time.Minute)
 			if err != nil {
 				errChan <- fmt.Errorf("LLM request for file selection batch failed: %w", err)
 				return

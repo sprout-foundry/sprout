@@ -32,7 +32,6 @@ func CallLLMWithInteractiveContext(
 	filename string,
 	cfg *config.Config,
 	timeout time.Duration,
-	useGeminiSearchGrounding bool,
 	contextHandler ContextHandler, // This is the key: it takes a handler function
 ) (string, error) {
 	currentMessages := initialMessages
@@ -40,7 +39,7 @@ func CallLLMWithInteractiveContext(
 
 	for i := 0; i < maxRetries; i++ {
 		// Call the main LLM response function (which is in api.go, same package)
-		_, response, err := GetLLMResponse(modelName, currentMessages, filename, cfg, timeout, useGeminiSearchGrounding)
+		_, response, err := GetLLMResponse(modelName, currentMessages, filename, cfg, timeout)
 		if err != nil {
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}

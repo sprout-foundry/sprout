@@ -76,15 +76,15 @@ def get_report_filename(ts_file_relative_to_git_root):
     """
     # Remove leading/trailing slashes and replace internal ones
     base_name = ts_file_relative_to_git_root.replace(os.sep, '_').replace('/', '_')
-    return f"{base_name}.txt"
+    return f"{base_name}_type_validation.txt"
 
 def generate_summary_report(conversion_results, report_dir):
     """
-    Generates and prints a summary report of the conversion validation process.
+    Generates and prints a summary report of the type-only change validation process.
     Also writes the summary to a file in the report directory.
     """
     print("\n" + "=" * 70)
-    print("                 TypeScript Conversion Validation Summary Report")
+    print("                 TypeScript Type-Only Change Validation Summary Report")
     print("=" * 70)
 
     total_files = len(conversion_results)
@@ -108,8 +108,8 @@ def generate_summary_report(conversion_results, report_dir):
             other_issues.append(result)
 
     summary_lines = []
-    summary_lines.append(f"Total Deleted JS/JSX Files Processed: {total_files}")
-    summary_lines.append(f"Successfully Validated Conversions: {success_count}")
+    summary_lines.append(f"Total Modified TS/TSX Files Processed: {total_files}")
+    summary_lines.append(f"Successfully Validated Type-Only Changes: {success_count}")
     summary_lines.append(f"Files Requiring Manual Check: {len(manual_check_required)}")
     summary_lines.append(f"Files Skipped (e.g., original content not found): {len(skipped_files)}")
     summary_lines.append(f"Files where Ledit Command Failed: {len(ledit_failed_files)}")
@@ -121,7 +121,6 @@ def generate_summary_report(conversion_results, report_dir):
     if manual_check_required:
         summary_lines.append("\n--- Files Requiring Manual Check ---")
         for item in manual_check_required:
-            summary_lines.append(f"  JS: {item['js_file']}")
             summary_lines.append(f"  TS: {item['ts_file']}")
             summary_lines.append(f"  Status: {item['status']}")
             summary_lines.append(f"  Reason: {item['reason']}")
@@ -132,7 +131,6 @@ def generate_summary_report(conversion_results, report_dir):
     if ledit_failed_files:
         summary_lines.append("\n--- Files Where Ledit Command Failed ---")
         for item in ledit_failed_files:
-            summary_lines.append(f"  JS: {item['js_file']}")
             summary_lines.append(f"  TS: {item['ts_file']}")
             summary_lines.append(f"  Status: {item['status']}")
             summary_lines.append(f"  Reason: {item['reason']}")
@@ -143,7 +141,6 @@ def generate_summary_report(conversion_results, report_dir):
     if skipped_files:
         summary_lines.append("\n--- Skipped Files ---")
         for item in skipped_files:
-            summary_lines.append(f"  JS: {item['js_file']}")
             summary_lines.append(f"  TS: {item['ts_file']}")
             summary_lines.append(f"  Status: {item['status']}")
             summary_lines.append(f"  Reason: {item['reason']}")
@@ -154,7 +151,6 @@ def generate_summary_report(conversion_results, report_dir):
     if other_issues:
         summary_lines.append("\n--- Files with Other Issues ---")
         for item in other_issues:
-            summary_lines.append(f"  JS: {item['js_file']}")
             summary_lines.append(f"  TS: {item['ts_file']}")
             summary_lines.append(f"  Status: {item['status']}")
             summary_lines.append(f"  Reason: {item['reason']}")
@@ -164,18 +160,18 @@ def generate_summary_report(conversion_results, report_dir):
 
     summary_lines.append("\n" + "=" * 70)
     summary_lines.append("Next Steps:")
-    summary_lines.append("1.  Review 'Files Requiring Manual Check': Examine the individual reports for these files in the 'conversion_report' directory. Address any identified issues in the corresponding TypeScript files.")
+    summary_lines.append("1.  Review 'Files Requiring Manual Check': Examine the individual reports for these files in the 'type_validation_report' directory. Address any identified issues in the corresponding TypeScript files.")
     summary_lines.append("2.  Investigate 'Files Where Ledit Command Failed': Check the reports for these files to understand why 'ledit' failed (e.g., environment issues, command syntax). Rerun the validation for these files if necessary after resolving the underlying problem.")
     summary_lines.append("3.  Verify Skipped Files: If any files were unexpectedly skipped, investigate the reasons provided in their reports.")
-    summary_lines.append("4.  Commit Validated Conversions: Once you are confident that the TypeScript conversions are correct and complete for the successfully validated files, you can proceed with committing the new TypeScript files and the deletion of the original JavaScript files.")
-    summary_lines.append("5.  Clean Up: You may delete the 'conversion_report' directory after reviewing all reports and taking necessary actions.")
+    summary_lines.append("4.  Commit Validated Changes: Once you are confident that the TypeScript type-only changes are correct and complete for the successfully validated files, you can proceed with committing them.")
+    summary_lines.append("5.  Clean Up: You may delete the 'type_validation_report' directory after reviewing all reports and taking necessary actions.")
     summary_lines.append("=" * 70)
 
 
     summary_output = "\n".join(summary_lines)
     print(summary_output)
 
-    summary_filepath = os.path.join(report_dir, "conversion_summary_report.txt")
+    summary_filepath = os.path.join(report_dir, "type_validation_summary_report.txt")
     try:
         with open(summary_filepath, "w") as f:
             f.write(summary_output)
@@ -189,9 +185,9 @@ def generate_summary_report(conversion_results, report_dir):
 
 def generate_html_summary_report(conversion_results, report_dir):
     """
-    Generates an HTML summary report of the conversion validation process.
+    Generates an HTML summary report of the type-only change validation process.
     """
-    html_filepath = os.path.join(report_dir, "conversion_summary_report.html")
+    html_filepath = os.path.join(report_dir, "type_validation_summary_report.html")
 
     # Prepare data similar to the text report
     total_files = len(conversion_results)
@@ -200,13 +196,13 @@ def generate_html_summary_report(conversion_results, report_dir):
     skipped_files = []
     ledit_failed_files = []
     other_issues = []
-    successful_conversions = []
+    successful_validations = []
 
     for result in conversion_results:
         status = result['status'].lower()
         if "success" in status:
             success_count += 1
-            successful_conversions.append(result)
+            successful_validations.append(result)
         elif "manual check required" in status or "no ledit output" in status or "parse error" in status:
             manual_check_required.append(result)
         elif "skipped" in status:
@@ -222,7 +218,7 @@ def generate_html_summary_report(conversion_results, report_dir):
     html_content.append("<head>")
     html_content.append("    <meta charset='UTF-8'>")
     html_content.append("    <meta name='viewport' content='width=device-width, initial-scale=1.0'>")
-    html_content.append("    <title>TypeScript Conversion Validation Summary</title>")
+    html_content.append("    <title>TypeScript Type-Only Change Validation Summary</title>")
     html_content.append("    <style>")
     html_content.append("        body {")
     html_content.append("            font-family: Arial, sans-serif;")
@@ -291,10 +287,10 @@ def generate_html_summary_report(conversion_results, report_dir):
     html_content.append("</head>")
     html_content.append("<body>")
     html_content.append("    <div class='summary-panel'>")
-    html_content.append("        <h1>TypeScript Conversion Validation Summary Report</h1>")
+    html_content.append("        <h1>TypeScript Type-Only Change Validation Summary Report</h1>")
     html_content.append("        <div class='summary-box'>")
-    html_content.append(f"            <p><strong>Total Deleted JS/JSX Files Processed:</strong> {total_files}</p>")
-    html_content.append(f"            <p><strong>Successfully Validated Conversions:</strong> <span class='status-success'>{success_count}</span></p>")
+    html_content.append(f"            <p><strong>Total Modified TS/TSX Files Processed:</strong> {total_files}</p>")
+    html_content.append(f"            <p><strong>Successfully Validated Type-Only Changes:</strong> <span class='status-success'>{success_count}</span></p>")
     html_content.append(f"            <p><strong>Files Requiring Manual Check:</strong> <span class='status-manual'>{len(manual_check_required)}</span></p>")
     html_content.append(f"            <p><strong>Files Skipped (e.g., original content not found):</strong> <span class='status-skipped'>{len(skipped_files)}</span></p>")
     html_content.append(f"            <p><strong>Files where Ledit Command Failed:</strong> <span class='status-failed'>{len(ledit_failed_files)}</span></p>")
@@ -311,7 +307,6 @@ def generate_html_summary_report(conversion_results, report_dir):
                 # Get relative path for the report link (assuming HTML and TXT reports are in the same directory)
                 report_relative_path = os.path.basename(item['report_path'])
                 section_parts.append(f"            <div class='file-item'>")
-                section_parts.append(f"                <p><strong>JS:</strong> {item['js_file']}</p>")
                 section_parts.append(f"                <p><strong>TS:</strong> {item['ts_file']}</p>")
                 section_parts.append(f"                <p><strong>Status:</strong> <span class='{status_class}'>{item['status']}</span></p>")
                 section_parts.append(f"                <p><strong>Reason:</strong> {item['reason']}</p>")
@@ -329,8 +324,8 @@ def generate_html_summary_report(conversion_results, report_dir):
     # Show manual check files first
     html_content.append(add_file_section_html("Files Requiring Manual Check", manual_check_required, "status-manual"))
     
-    # Show successful conversions
-    html_content.append(add_file_section_html("Successfully Converted Files", successful_conversions, "status-success"))
+    # Show successful validations
+    html_content.append(add_file_section_html("Successfully Validated Files", successful_validations, "status-success"))
     
     # Show other sections
     html_content.append(add_file_section_html("Files Where Ledit Command Failed", ledit_failed_files, "status-failed"))
@@ -340,11 +335,11 @@ def generate_html_summary_report(conversion_results, report_dir):
     html_content.append("        <div class='next-steps'>")
     html_content.append("            <h2>Next Steps</h2>")
     html_content.append("            <ol>")
-    html_content.append("                <li><strong>Review 'Files Requiring Manual Check'</strong>: Examine the individual reports for these files in the <code>conversion_report</code> directory. Address any identified issues in the corresponding TypeScript files.</li>")
+    html_content.append("                <li><strong>Review 'Files Requiring Manual Check'</strong>: Examine the individual reports for these files in the <code>type_validation_report</code> directory. Address any identified issues in the corresponding TypeScript files.</li>")
     html_content.append("                <li><strong>Investigate 'Files Where Ledit Command Failed'</strong>: Check the reports for these files to understand why <code>ledit</code> failed (e.g., environment issues, command syntax). Rerun the validation for these files if necessary after resolving the underlying problem.</li>")
     html_content.append("                <li><strong>Verify Skipped Files</strong>: If any files were unexpectedly skipped, investigate the reasons provided in their reports.</li>")
-    html_content.append("                <li><strong>Commit Validated Conversions</strong>: Once you are confident that the TypeScript conversions are correct and complete for the successfully validated files, you can proceed with committing the new TypeScript files and the deletion of the original JavaScript files.</li>")
-    html_content.append("                <li><strong>Clean Up</strong>: You may delete the <code>conversion_report</code> directory after reviewing all reports and taking necessary actions.</li>")
+    html_content.append("                <li><strong>Commit Validated Changes</strong>: Once you are confident that the TypeScript type-only changes are correct and complete for the successfully validated files, you can proceed with committing them.</li>")
+    html_content.append("                <li><strong>Clean Up</strong>: You may delete the <code>type_validation_report</code> directory after reviewing all reports and taking necessary actions.</li>")
     html_content.append("            </ol>")
     html_content.append("        </div>")
     html_content.append("    </div>") # End of summary-panel
@@ -405,47 +400,27 @@ def generate_html_summary_report(conversion_results, report_dir):
         print(f"Error: Could not write HTML summary report to {html_filepath}: {e}", file=sys.stderr)
 
 
-def process_single_file(js_file_relative_to_git_root, git_root_dir, conversion_report_dir):
+def process_single_file(ts_file_relative_to_git_root, git_root_dir, type_validation_report_dir):
     """
-    Processes a single deleted JS/JSX file to validate its TypeScript conversion.
+    Processes a single modified TS/TSX file to validate that only type changes were made.
     Returns a dictionary containing the result for this file.
     """
-    print(f"  Processing deleted file: {js_file_relative_to_git_root}")
+    print(f"  Processing modified file: {ts_file_relative_to_git_root}")
 
     # Initialize result dictionary for this file
     file_result = {
-        'js_file': js_file_relative_to_git_root,
-        'ts_file': 'N/A', # This will be updated to the found TS/TSX file
+        'ts_file': ts_file_relative_to_git_root,
         'status': 'Unknown',
         'reason': 'Processing not completed.',
         'report_path': 'N/A',
         'recommendation': 'N/A' # Initialize recommendation
     }
 
-    # Determine potential TS/TSX file paths based on original JS/JSX extension
-    potential_ts_file_for_js = None
-    potential_tsx_file_for_js = None
-    potential_tsx_file_for_jsx = None
-
-    if js_file_relative_to_git_root.endswith(".js"):
-        potential_ts_file_for_js = js_file_relative_to_git_root[:-3] + ".ts"
-        potential_tsx_file_for_js = js_file_relative_to_git_root[:-3] + ".tsx"
-    elif js_file_relative_to_git_root.endswith(".jsx"):
-        potential_tsx_file_for_jsx = js_file_relative_to_git_root[:-4] + ".tsx"
-    else:
-        file_result.update({
-            'status': 'Skipped (Unsupported Extension)',
-            'reason': f"File has unexpected extension: {os.path.splitext(js_file_relative_to_git_root)[1]}",
-            'report_path': 'N/A'
-        })
-        print(f"  Warning: {file_result['reason']} for '{js_file_relative_to_git_root}'.", file=sys.stderr)
-        return file_result
-
-    # Get the content of the original JS/JSX file from HEAD.
-    js_file_contents = None
+    # Get the content of the original TS/TSX file from HEAD.
+    ts_file_contents_head = None
     try:
         git_show_result = subprocess.run(
-            ["git", "show", f"HEAD:{js_file_relative_to_git_root}"],
+            ["git", "show", f"HEAD:{ts_file_relative_to_git_root}"],
             capture_output=True,
             text=True,
             check=False # Do not raise CalledProcessError here, handle return code
@@ -454,23 +429,22 @@ def process_single_file(js_file_relative_to_git_root, git_root_dir, conversion_r
             file_result.update({
                 'status': "Skipped",
                 'reason': (
-                    f"Could not retrieve content for '{js_file_relative_to_git_root}' from HEAD. "
-                    f"This might happen if the file was deleted in an earlier commit not covered by 'HEAD' or was never tracked. "
+                    f"Could not retrieve content for '{ts_file_relative_to_git_root}' from HEAD. "
+                    f"This might happen if the file was added in this commit or was never tracked. "
                     f"Git stderr: {git_show_result.stderr.strip()}"
                 )
             })
             print(f"  Error: {file_result['reason']}", file=sys.stderr)
             # Write report for skipped file
-            report_filename = get_report_filename(js_file_relative_to_git_root + "_skipped") # Use original JS name + suffix for report
-            report_filepath = os.path.join(conversion_report_dir, report_filename)
+            report_filename = get_report_filename(ts_file_relative_to_git_root + "_skipped") # Use TS name + suffix for report
+            report_filepath = os.path.join(type_validation_report_dir, report_filename)
             file_result['report_path'] = report_filepath
             with open(report_filepath, "w") as f:
-                f.write(f"Original JS/JSX File: {js_file_relative_to_git_root}\n")
-                f.write(f"Corresponding TS/TSX File: N/A (Skipped)\n")
+                f.write(f"Modified TS/TSX File: {ts_file_relative_to_git_root}\n")
                 f.write(f"Status: {file_result['status']}\n")
                 f.write(f"Reason: {file_result['reason']}\n")
             return file_result
-        js_file_contents = git_show_result.stdout.strip()
+        ts_file_contents_head = git_show_result.stdout.strip()
 
     except FileNotFoundError:
         file_result.update({
@@ -482,103 +456,43 @@ def process_single_file(js_file_relative_to_git_root, git_root_dir, conversion_r
     except Exception as e:
         file_result.update({
             'status': 'Failed (Unexpected Error)',
-            'reason': f"An unexpected error occurred while retrieving JS content: {e}"
+            'reason': f"An unexpected error occurred while retrieving TS content from HEAD: {e}"
         })
         print(f"  Critical Error: {file_result['reason']}", file=sys.stderr)
         return file_result
 
-    # Now, check for the existence of the corresponding TS/TSX file(s)
-    ts_file_relative_to_git_root = None # This will hold the path of the found TS/TSX file
-    ts_file_absolute_path = None
-
-    if potential_ts_file_for_js and os.path.exists(os.path.join(git_root_dir, potential_ts_file_for_js)):
-        ts_file_relative_to_git_root = potential_ts_file_for_js
-    elif potential_tsx_file_for_js and os.path.exists(os.path.join(git_root_dir, potential_tsx_file_for_js)):
-        ts_file_relative_to_git_root = potential_tsx_file_for_js
-    elif potential_tsx_file_for_jsx and os.path.exists(os.path.join(git_root_dir, potential_tsx_file_for_jsx)):
-        ts_file_relative_to_git_root = potential_tsx_file_for_jsx
-
-    # Set the report filename early.
-    # If a TS/TSX file was found, use its name for the report.
-    # If no TS/TSX file was found, use the original JS/JSX name with a suffix.
-    if ts_file_relative_to_git_root:
-        report_filename = get_report_filename(ts_file_relative_to_git_root)
-    else:
-        # For cases where no corresponding TS/TSX file is found,
-        # create a report name based on the original JS/JSX file.
-        # This ensures a unique report name even if the TS/TSX file doesn't exist.
-        report_filename = get_report_filename(js_file_relative_to_git_root + "_no_ts_found")
-
-    report_filepath = os.path.join(conversion_report_dir, report_filename)
-    file_result['report_path'] = report_filepath # Update report_path early
-
-    # Handle case where no corresponding TS/TSX file is found
-    if not ts_file_relative_to_git_root:
-        expected_files_str = []
-        if potential_ts_file_for_js: expected_files_str.append(f"'{potential_ts_file_for_js}'")
-        if potential_tsx_file_for_js: expected_files_str.append(f"'{potential_tsx_file_for_js}'")
-        if potential_tsx_file_for_jsx: expected_files_str.append(f"'{potential_tsx_file_for_jsx}'")
-        expected_files_str = " or ".join(expected_files_str)
-
-        file_result.update({
-            'status': "Manual Check Required",
-            'reason': (
-                f"Corresponding TypeScript file for '{js_file_relative_to_git_root}' not found. "
-                f"Expected {expected_files_str}. "
-                f"This indicates a potential issue with the conversion."
-            )
-        })
-        print(f"  Critical Error: {file_result['reason']}", file=sys.stderr)
-
-        # Write the critical error to the specific file's report
-        try:
-            with open(report_filepath, "w") as f:
-                f.write(f"Original JS/JSX File: {js_file_relative_to_git_root}\n")
-                f.write(f"Corresponding TS/TSX File: N/A (Not Found)\n")
-                f.write(f"Status: {file_result['status']}\n")
-                f.write(f"Reason: {file_result['reason']}\n")
-                f.write("\nOriginal JS/JSX Content:\n")
-                f.write(f"```javascript\n{js_file_contents}\n```\n")
-        except IOError as e:
-            print(f"  Error: Could not write to {report_filepath}: {e}", file=sys.stderr)
-
-        return file_result
-
-    # If a corresponding TS/TSX file was found, update file_result and proceed
-    file_result['ts_file'] = ts_file_relative_to_git_root
+    # Read the content of the current TS/TSX file
     ts_file_absolute_path = os.path.join(git_root_dir, ts_file_relative_to_git_root)
-
-    print(f"  Corresponding TypeScript file found: {ts_file_relative_to_git_root} (absolute: {ts_file_absolute_path})")
-
-    # Read the content of the TS/TSX file
-    ts_file_contents = None
+    ts_file_contents_current = None
     try:
         with open(ts_file_absolute_path, 'r', encoding='utf-8') as f:
-            ts_file_contents = f.read()
+            ts_file_contents_current = f.read()
     except Exception as e:
         file_result.update({
             'status': 'Failed (TS File Read Error)',
-            'reason': f"Could not read content of TS/TSX file '{ts_file_relative_to_git_root}': {e}"
+            'reason': f"Could not read content of current TS/TSX file '{ts_file_relative_to_git_root}': {e}"
         })
         # Write a minimal report for this failure
+        report_filename = get_report_filename(ts_file_relative_to_git_root)
+        report_filepath = os.path.join(type_validation_report_dir, report_filename)
+        file_result['report_path'] = report_filepath
         try:
             with open(report_filepath, "w") as f:
-                f.write(f"Original JS/JSX File: {js_file_relative_to_git_root}\n")
-                f.write(f"Corresponding TS/TSX File: {ts_file_relative_to_git_root}\n")
+                f.write(f"Modified TS/TSX File: {ts_file_relative_to_git_root}\n")
                 f.write(f"Status: {file_result['status']}\n")
                 f.write(f"Reason: {file_result['reason']}\n")
-                f.write("\nOriginal JS/JSX Content:\n")
-                f.write(f"```javascript\n{js_file_contents}\n```\n")
+                f.write("\nOriginal TS/TSX Content (from HEAD):\n")
+                f.write(f"```typescript\n{ts_file_contents_head}\n```\n")
         except IOError as io_e:
             print(f"  Error: Could not write to {report_filepath} after TS file read error: {io_e}", file=sys.stderr)
         return file_result
 
-    # Generate diff between JS and TS files to show to the user
-    js_lines = js_file_contents.splitlines(keepends=True)
-    ts_lines = ts_file_contents.splitlines(keepends=True)
-    diff = list(difflib.unified_diff(js_lines, ts_lines,
-                                     fromfile=js_file_relative_to_git_root,
-                                     tofile=ts_file_relative_to_git_root,
+    # Generate diff between HEAD and current TS files to show to the user
+    head_lines = ts_file_contents_head.splitlines(keepends=True)
+    current_lines = ts_file_contents_current.splitlines(keepends=True)
+    diff = list(difflib.unified_diff(head_lines, current_lines,
+                                     fromfile=f"{ts_file_relative_to_git_root} (HEAD)",
+                                     tofile=f"{ts_file_relative_to_git_root} (Current)",
                                      lineterm=''))
 
     # Print diff to console with colors
@@ -604,11 +518,16 @@ def process_single_file(js_file_relative_to_git_root, git_root_dir, conversion_r
                 print(f"  {line_content}")
         print("  --- End Diff ---")
     else:
-        print(f"  No textual differences found between '{js_file_relative_to_git_root}' and '{ts_file_relative_to_git_root}'.")
+        print(f"  No differences found in '{ts_file_relative_to_git_root}'.")
+
+    # Set the report filename
+    report_filename = get_report_filename(ts_file_relative_to_git_root)
+    report_filepath = os.path.join(type_validation_report_dir, report_filename)
+    file_result['report_path'] = report_filepath # Update report_path
 
     # Recovery support: Check if file already processed
     if os.path.exists(report_filepath):
-        print(f"  Skipping '{js_file_relative_to_git_root}': Report already exists at '{report_filepath}'.")
+        print(f"  Skipping '{ts_file_relative_to_git_root}': Report already exists at '{report_filepath}'.")
         existing_status = "Unknown (Existing Report)"
         existing_reason = "Report already exists, status not re-evaluated."
         existing_recommendation = "N/A" # Also retrieve recommendation if exists
@@ -632,7 +551,7 @@ def process_single_file(js_file_relative_to_git_root, git_root_dir, conversion_r
         # If the existing report indicates a non-success status and missing info,
         # we should re-process it.
         if existing_status.lower() != "success" and (not existing_reason or existing_reason == "No specific reason provided by ledit output." or not existing_recommendation or existing_recommendation == "No recommendation provided."):
-            print(f"  Existing report for '{js_file_relative_to_git_root}' has non-success status or missing details. Reprocessing...")
+            print(f"  Existing report for '{ts_file_relative_to_git_root}' has non-success status or missing details. Reprocessing...")
             # Continue with the rest of the function to re-run ledit
         else:
             return file_result # Skip if already processed successfully or with sufficient detail
@@ -648,22 +567,21 @@ def process_single_file(js_file_relative_to_git_root, git_root_dir, conversion_r
     ts_lang = "typescript" if ts_file_relative_to_git_root.endswith(".ts") else "tsx"
 
     for attempt in range(max_ledit_retries + 1):
-        print(f"  Running ledit for comparison (Attempt {attempt + 1}/{max_ledit_retries + 1})...")
+        print(f"  Running ledit for validation (Attempt {attempt + 1}/{max_ledit_retries + 1})...")
 
         ledit_instruction_prompt = (
-            f"Comparing the original, now deleted, file '{js_file_relative_to_git_root}' to the new TypeScript file '{ts_file_relative_to_git_root}'.\n"
-            f"Was any functionality lost or are there any other issues?\n"
+            f"Comparing the original TypeScript file '{ts_file_relative_to_git_root}' from HEAD to the current version.\n"
+            f"Was any functionality lost or are there any other issues beyond just type annotations?\n"
             f"Please provide the validation result in the following exact format (copy-paste and modify):\n"
             f"  Status: Success\n"
-            f"  Reason: No issues found during comparison.\n"
+            f"  Reason: No issues found during comparison. Only type annotations were changed.\n"
             f"OR\n"
             f"  Status: Manual Check Required\n"
-            f"  Reason: <Describe the issue here here all on a single line, e.g., 'Functionality X is missing', 'Type Y is incorrect'>\n\n"
+            f"  Reason: <Describe the issue here all on a single line, e.g., 'Functionality X is missing', 'Type Y is incorrect'>\n\n"
             f"  Recommendation: <Describe the recommended fix or workaround here all on a single line>\n"
-            f"Your input will be saved directly to the report file for this conversion.\n\n"
-            f"Original JS file content:\n```javascript\n{js_file_contents}\n```\n"
-            f"Updated File: #{ts_file_relative_to_git_root}\n"
-            f"Updated TS/TSX file content:\n```{ts_lang}\n{ts_file_contents}\n```"
+            f"Your input will be saved directly to the report file for this validation.\n\n"
+            f"Original TS file content (from HEAD):\n```typescript\n{ts_file_contents_head}\n```\n"
+            f"Current TS/TSX file content:\n```{ts_lang}\n{ts_file_contents_current}\n```"
         )
 
         quoted_instruction_prompt = shlex.quote(ledit_instruction_prompt)
@@ -717,7 +635,7 @@ def process_single_file(js_file_relative_to_git_root, git_root_dir, conversion_r
                 not found_recommendation or recommendation_from_ledit.strip() == "" or recommendation_from_ledit == "No recommendation provided."
             ):
                 if attempt < max_ledit_retries:
-                    print(f"  Warning: Ledit output for '{js_file_relative_to_git_root}' has non-success status but missing Reason or Recommendation. Retrying...")
+                    print(f"  Warning: Ledit output for '{ts_file_relative_to_git_root}' has non-success status but missing Reason or Recommendation. Retrying...")
                     time.sleep(1) # Small delay before retry
                     continue # Go to next attempt
                 else:
@@ -731,27 +649,26 @@ def process_single_file(js_file_relative_to_git_root, git_root_dir, conversion_r
     # Write the ledit result to the specific file's report
     try:
         with open(report_filepath, "w") as f:
-            f.write(f"Original JS/JSX File: {js_file_relative_to_git_root}\n")
-            f.write(f"Corresponding TS/TSX File: {ts_file_relative_to_git_root}\n")
+            f.write(f"Modified TS/TSX File: {ts_file_relative_to_git_root}\n")
             f.write(f"Status: {status_from_ledit}\n")
             f.write(f"Reason: {reason_from_ledit}\n")
             if found_recommendation and recommendation_from_ledit != "No recommendation provided.": # Only write if a meaningful recommendation was found
                 f.write(f"Recommendation: {recommendation_from_ledit}\n")
-            f.write("\nDiff (JS -> TS):\n") # Moved diff to appear first
+            f.write("\nOriginal TS/TSX Content (from HEAD):\n")
+            f.write(f"```typescript\n{ts_file_contents_head}\n```\n")
+            f.write(f"\nCurrent TS/TSX Content:\n")
+            f.write(f"```{ts_lang}\n{ts_file_contents_current}\n```\n")
+            f.write("\nDiff (HEAD -> Current):\n")
             f.write("```diff\n")
             f.write(''.join(diff))
             f.write("\n```\n")
-            f.write("\nOriginal JS/JSX Content:\n")
-            f.write(f"```javascript\n{js_file_contents}\n```\n")
-            f.write(f"\nCorresponding TS/TSX Content:\n")
-            f.write(f"```{ts_lang}\n{ts_file_contents}\n```\n")
             if ledit_error:
                 f.write("\nLedit Stderr:\n")
                 f.write(f"```\n{ledit_error}\n```\n")
     except IOError as e:
         print(f"  Error: Could not write to {report_filepath}: {e}", file=sys.stderr)
 
-    print(f"  Finished processing: {js_file_relative_to_git_root}. Report saved to {report_filepath}")
+    print(f"  Finished processing: {ts_file_relative_to_git_root}. Report saved to {report_filepath}")
 
     file_result.update({
         'status': status_from_ledit,
@@ -762,7 +679,7 @@ def process_single_file(js_file_relative_to_git_root, git_root_dir, conversion_r
 
 
 def main():
-    print("Starting TypeScript conversion validation script...")
+    print("Starting TypeScript type-only change validation script...")
 
     # --- Determine Git root and CWD for robust path handling ---
     try:
@@ -784,9 +701,9 @@ def main():
         print("Error: 'git' command not found. Please ensure it's installed and in your PATH.", file=sys.stderr)
         sys.exit(1)
 
-    print("Looking for deleted .js or .jsx files in the current non-committed changeset...")
+    print("Looking for modified .ts or .tsx files in the current non-committed changeset...")
 
-    # Get deleted .js and .jsx files from the current non-committed changeset.
+    # Get modified .ts and .tsx files from the current non-committed changeset.
     # Paths from 'git diff' are relative to the git repository root.
     try:
         git_diff_output = run_command(["git", "diff", "--name-status", "HEAD"])
@@ -796,31 +713,31 @@ def main():
         print("Error: 'git' command not found. Please ensure it's installed and in your PATH.", file=sys.stderr)
         sys.exit(1)
 
-    deleted_files = []
+    modified_files = []
     for line in git_diff_output.splitlines():
-        if line.startswith("D\t"):
+        if line.startswith("M\t"):
             filename = line[2:].strip()
-            if filename.endswith(".js") or filename.endswith(".jsx"):
-                deleted_files.append(filename) # These paths are relative to the git root
+            if filename.endswith(".ts") or filename.endswith(".tsx"):
+                modified_files.append(filename) # These paths are relative to the git root
 
-    if not deleted_files:
-        print("No deleted .js or .jsx files found in the current non-committed changeset.")
+    if not modified_files:
+        print("No modified .ts or .tsx files found in the current non-committed changeset.")
         print("Script finished.")
         sys.exit(0)
 
-    # Create conversion_report folder
-    conversion_report_dir = os.path.join(current_working_dir, "conversion_report")
-    print(f"Creating conversion_report directory: {conversion_report_dir}")
+    # Create type_validation_report folder
+    type_validation_report_dir = os.path.join(current_working_dir, "type_validation_report")
+    print(f"Creating type_validation_report directory: {type_validation_report_dir}")
     try:
-        os.makedirs(conversion_report_dir, exist_ok=True)
+        os.makedirs(type_validation_report_dir, exist_ok=True)
     except OSError as e:
-        print(f"Error: Could not create conversion_report directory: {e}", file=sys.stderr)
+        print(f"Error: Could not create type_validation_report directory: {e}", file=sys.stderr)
         sys.exit(1)
 
-    print("Found deleted JavaScript/JSX files. Processing them:")
+    print("Found modified TypeScript files. Processing them:")
 
     # List to store results for the final summary report
-    conversion_results = []
+    validation_results = []
 
     # Process files in parallel using ThreadPoolExecutor
     # The batch_size is now more about how many files to submit at once,
@@ -831,15 +748,15 @@ def main():
     # Using ThreadPoolExecutor for I/O-bound tasks (subprocess calls)
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
-        total_batches = len(deleted_files) // batch_size + (1 if len(deleted_files) % batch_size > 0 else 0)
+        total_batches = len(modified_files) // batch_size + (1 if len(modified_files) % batch_size > 0 else 0)
 
-        for i in range(0, len(deleted_files), batch_size):
-            batch = deleted_files[i:i+batch_size]
+        for i in range(0, len(modified_files), batch_size):
+            batch = modified_files[i:i+batch_size]
             print(f"\n--- Submitting batch {i//batch_size + 1} of {total_batches} for processing ({len(batch)} files) ---")
 
-            for js_file_relative_to_git_root in batch:
+            for ts_file_relative_to_git_root in batch:
                 # Submit each file to the executor
-                future = executor.submit(process_single_file, js_file_relative_to_git_root, git_root_dir, conversion_report_dir)
+                future = executor.submit(process_single_file, ts_file_relative_to_git_root, git_root_dir, type_validation_report_dir)
                 futures.append(future)
 
         # Collect results as they complete
@@ -847,17 +764,16 @@ def main():
         for future in concurrent.futures.as_completed(futures):
             try:
                 result = future.result() # This will re-raise any exception from the worker thread
-                conversion_results.append(result)
+                validation_results.append(result)
                 # Print a concise update for completed files
-                print(f"  Collected result for {result['js_file']} (Status: {result['status']})")
+                print(f"  Collected result for {result['ts_file']} (Status: {result['status']})")
             except Exception as exc:
                 # This catches exceptions that might have occurred during the execution of process_single_file
                 # and were not handled within process_single_file itself.
                 print(f"  An unexpected error occurred while processing a file: {exc}", file=sys.stderr)
                 # It's good practice to add a generic error result if an unhandled exception occurs
-                conversion_results.append({
-                    'js_file': 'Unknown (Error in Thread)',
-                    'ts_file': 'N/A',
+                validation_results.append({
+                    'ts_file': 'Unknown (Error in Thread)',
                     'status': 'Failed (Unhandled Exception)',
                     'reason': f"An unhandled exception occurred: {exc}",
                     'report_path': 'N/A',
@@ -865,24 +781,24 @@ def main():
                 })
 
     print("-" * 50)
-    print("Script finished processing all deleted JavaScript/JSX files.")
-    print(f"Please check the '{conversion_report_dir}' folder for detailed reports on each file.")
+    print("Script finished processing all modified TypeScript files.")
+    print(f"Please check the '{type_validation_report_dir}' folder for detailed reports on each file.")
 
     # Generate and print the final summary report (text)
-    generate_summary_report(conversion_results, conversion_report_dir)
+    generate_summary_report(validation_results, type_validation_report_dir)
 
     # Generate the HTML summary report
-    generate_html_summary_report(conversion_results, conversion_report_dir)
+    generate_html_summary_report(validation_results, type_validation_report_dir)
 
     # Start the HTTP server
     server = None
     try:
-        server_port = 3540 # port
-        server = start_report_server(conversion_report_dir, server_port)
-        html_url = f"http://localhost:{server_port}/conversion_summary_report.html"
+        server_port = 3541 # port
+        server = start_report_server(type_validation_report_dir, server_port)
+        html_url = f"http://localhost:{server_port}/type_validation_summary_report.html"
 
         # Open the HTML report in a web browser
-        if os.path.exists(os.path.join(conversion_report_dir, "conversion_summary_report.html")):
+        if os.path.exists(os.path.join(type_validation_report_dir, "type_validation_summary_report.html")):
             print(f"\nOpening HTML summary report in browser: {html_url}")
             try:
                 webbrowser.open(html_url)

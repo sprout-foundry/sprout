@@ -121,6 +121,36 @@ func PrintRevisionHistory() error {
 	}
 }
 
+// PrintRevisionHistoryBuffer displays the revision history to a buffer for seamless console experience
+func PrintRevisionHistoryBuffer() (string, error) {
+	changes, err := fetchAllChanges() // fetchAllChanges now returns sorted data
+	if err != nil {
+		return "", err
+	}
+	if len(changes) == 0 {
+		return "No changes recorded.\n", nil
+	}
+
+	// Group changes by revision ID
+	revisionGroups := groupChangesByRevision(changes)
+	
+	if len(revisionGroups) == 0 {
+		return "No revisions found.\n", nil
+	}
+
+	var buffer strings.Builder
+	
+	// Display all revisions in the buffer
+	for i, group := range revisionGroups {
+		if i > 0 {
+			buffer.WriteString("\n" + strings.Repeat("-", 80) + "\n\n")
+		}
+		buffer.WriteString(formatRevision(group))
+	}
+
+	return buffer.String(), nil
+}
+
 func displayRevision(group RevisionGroup) {
 	fmt.Printf("\n\033[1mEditing Model:\033[0m %s\n", group.EditingModel)
 	fmt.Println(strings.Repeat("=", 80))
@@ -167,6 +197,58 @@ func displayRevision(group RevisionGroup) {
 			}
 		}
 	}
+}
+
+func formatRevision(group RevisionGroup) string {
+	var buffer strings.Builder
+	
+	buffer.WriteString(fmt.Sprintf("\nEditing Model: %s\n", group.EditingModel))
+	buffer.WriteString(strings.Repeat("=", 80) + "\n")
+	buffer.WriteString(fmt.Sprintf("Revision ID: %s\n", group.RevisionID))
+	buffer.WriteString(fmt.Sprintf("Time: %s\n", group.Timestamp.Format(time.RFC1123)))
+
+	// Display the editing model used for this revision
+	if group.EditingModel != "" {
+		buffer.WriteString(fmt.Sprintf("Model: %s\n\n", group.EditingModel))
+	} else {
+		buffer.WriteString("Model: Not specified\n\n")
+	}
+
+	buffer.WriteString(fmt.Sprintf("File Changes (%d):\n", len(group.Changes)))
+	for _, change := range group.Changes {
+		buffer.WriteString(strings.Repeat("-", 40) + "\n")
+		buffer.WriteString(fmt.Sprintf("(%s)", change.Filename))
+		buffer.WriteString(fmt.Sprintf(" -- %s", change.FileRevisionHash))
+		if change.Status != "active" {
+			buffer.WriteString(fmt.Sprintf(" - %s\n", change.Status))
+		} else {
+			buffer.WriteString(fmt.Sprintf(" - %s\n", change.Status))
+		}
+
+		if change.Note.Valid {
+			buffer.WriteString(fmt.Sprintf("    %s\n\n", change.Note.String))
+		}
+
+		// Wrap the description at 72 characters and indent with 4 spaces
+		wrappedDesc := wrapAndIndent(change.Description, 72, 4)
+		buffer.WriteString(wrappedDesc + "\n")
+
+		// Show a preview of the diff
+		diff := GetDiff(change.Filename, change.OriginalCode, change.NewCode)
+		diffLines := strings.Split(diff, "\n")
+		if len(diffLines) > 3 {
+			for _, line := range diffLines[:3] {
+				buffer.WriteString(line + "\n")
+			}
+			buffer.WriteString("...\n")
+		} else {
+			for _, line := range diffLines {
+				buffer.WriteString(line + "\n")
+			}
+		}
+	}
+	
+	return buffer.String()
 }
 
 func groupChangesByRevision(changes []ChangeLog) []RevisionGroup {

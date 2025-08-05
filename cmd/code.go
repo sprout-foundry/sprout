@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/editor"
-	"github.com/alantheprice/ledit/pkg/prompts"    // Import the new prompts package
-	"github.com/alantheprice/ledit/pkg/utils"     // Import the utils package
 	"log"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/editor"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/spf13/cobra"
 )
@@ -55,10 +56,10 @@ var codeCmd = &cobra.Command{
 
 		_, err = editor.ProcessCodeGeneration(filename, instructions, cfg)
 		if err != nil {
-			log.Fatalf(prompts.CodeGenerationError(err)) // Use prompt
+			log.Fatal(prompts.CodeGenerationError(err)) // Use prompt
 		}
 		duration := time.Since(startTime)
-		fmt.Printf(prompts.CodeGenerationFinished(duration)) // Use prompt
+		fmt.Print(prompts.CodeGenerationFinished(duration)) // Use prompt
 	},
 }
 

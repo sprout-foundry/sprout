@@ -200,7 +200,7 @@ func OpenInEditor(content, fileExtension string) (string, error) {
 	return string(editedContent), nil
 }
 
-func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *config.Config, instructions string) error {
+func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *config.Config, instructions string, llmResponseRaw string) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	for newFilename, newCode := range updatedCode {
@@ -263,11 +263,8 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				return fmt.Errorf("failed to get change summaries: %w", err)
 			}
 
-			// Get the LLM message that was sent for this specific file change
-			_, llmMessage, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, newFilename)
-			if err != nil {
-				llmMessage = "" // If we can't get it, just leave it empty
-			}
+			// Use the passed llmResponseRaw directly for llmMessage
+			llmMessage := llmResponseRaw
 
 			if err := changetracker.RecordChangeWithDetails(revisionID, newFilename, originalCode, newCode, description, note, instructions, llmMessage, cfg.EditingModel); err != nil {
 				return fmt.Errorf("failed to record change: %w", err)
@@ -394,7 +391,7 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (s
 	}
 
 	// Handle file updates (write to disk, record individual file changes, git commit)
-	err = handleFileUpdates(updatedCodeFiles, revisionID, cfg, instructions)
+	err = handleFileUpdates(updatedCodeFiles, revisionID, cfg, instructions, llmResponseRaw)
 	if err != nil {
 		return diffForTargetFile, err
 	}

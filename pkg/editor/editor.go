@@ -152,6 +152,7 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 	}
 	if len(updatedCode) == 0 {
 		fmt.Println(prompts.NoCodeBlocksParsed())
+		fmt.Printf("%s\n", llmContent) // Print the raw LLM response since it may be used directly by the user
 	}
 	return updatedCode, llmContent, nil
 }

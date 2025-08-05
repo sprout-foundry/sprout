@@ -310,6 +310,10 @@ def generate_html_summary_report(conversion_results, report_dir):
             for item in file_list:
                 # Get relative path for the report link (assuming HTML and TXT reports are in the same directory)
                 report_relative_path = os.path.basename(item['report_path'])
+                # Sanitize js_file for use in HTML ID and localStorage key
+                sanitized_js_file = item['js_file'].replace('.', '_').replace('/', '_').replace('\\', '_').replace('-', '_')
+                checkbox_id = f"review-{sanitized_js_file}"
+
                 section_parts.append(f"            <div class='file-item'>")
                 section_parts.append(f"                <p><strong>JS:</strong> {item['js_file']}</p>")
                 section_parts.append(f"                <p><strong>TS:</strong> {item['ts_file']}</p>")
@@ -322,6 +326,8 @@ def generate_html_summary_report(conversion_results, report_dir):
                     # Escape double quotes in the recommendation for HTML display and for the command string
                     escaped_recommendation = item['recommendation'].replace('"', '\\&quot;')
                     section_parts.append(f"                <p><strong>Ledit Command for Recommendation:</strong> <code>ledit code &quot;{escaped_recommendation}&quot; -f {item['ts_file']} -m lambda-ai:qwen25-coder-32b-instruct --skip-prompt</code></p>")
+                # Add the checkbox for manual review
+                section_parts.append(f"                <p><strong>Manual Review Complete:</strong> <input type='checkbox' id='{checkbox_id}' data-file-path='{item['js_file']}' onchange='saveCheckboxState(this)'></p>")
                 section_parts.append(f"            </div>")
             section_parts.append(f"        </div>")
         return "\n".join(section_parts)
@@ -392,6 +398,25 @@ def generate_html_summary_report(conversion_results, report_dir):
     html_content.append("                    document.getElementById('report-content').textContent = 'Error loading report: ' + error;")
     html_content.append("                });")
     html_content.append("        }")
+    html_content.append("")
+    html_content.append("        function saveCheckboxState(checkbox) {")
+    html_content.append("            const filePath = checkbox.dataset.filePath;")
+    html_content.append("            const isChecked = checkbox.checked;")
+    html_content.append("            localStorage.setItem(`ts_conversion_review_${filePath}`, isChecked);")
+    html_content.append("        }")
+    html_content.append("")
+    html_content.append("        function loadCheckboxStates() {")
+    html_content.append("            document.querySelectorAll('input[type=\"checkbox\"][data-file-path]').forEach(checkbox => {")
+    html_content.append("                const filePath = checkbox.dataset.filePath;")
+    html_content.append("                const savedState = localStorage.getItem(`ts_conversion_review_${filePath}`);")
+    html_content.append("                if (savedState !== null) {")
+    html_content.append("                    checkbox.checked = (savedState === 'true');")
+    html_content.append("                }")
+    html_content.append("            });")
+    html_content.append("        }")
+    html_content.append("")
+    html_content.append("        // Call loadCheckboxStates when the page loads")
+    html_content.append("        document.addEventListener('DOMContentLoaded', loadCheckboxStates);")
     html_content.append("    </script>")
 
     html_content.append("</body>")
@@ -651,7 +676,8 @@ def process_single_file(js_file_relative_to_git_root, git_root_dir, conversion_r
         print(f"  Running ledit for comparison (Attempt {attempt + 1}/{max_ledit_retries + 1})...")
 
         ledit_instruction_prompt = (
-            f"Comparing the original, now deleted, file '{js_file_relative_to_git_root}' to the new TypeScript file '{ts_file_relative_to_git_root}'.\n"
+            f"Comparing the original, now deleted, file '{js_file_relative_to_git_root}'.\n"
+            f"To the new TypeScript file '{ts_file_relative_to_git_root}'.\n"
             f"Was any functionality lost or are there any other issues?\n"
             f"Please provide the validation result in the following exact format (copy-paste and modify):\n"
             f"  Status: Success\n"

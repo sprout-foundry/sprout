@@ -34,7 +34,7 @@ func init() {
 	rootCmd.AddCommand(logCmd)
 }
 
-// displayVerboseLog reads and interactively displays the last 100 lines of the verbose log.
+// displayVerboseLog reads and displays the verbose log to a buffer for seamless console experience
 func displayVerboseLog() {
 	// The log file path is hardcoded in pkg/utils/logger.go
 	// We need to ensure the .ledit directory exists before trying to open the log file.
@@ -71,7 +71,7 @@ func displayVerboseLog() {
 		return
 	}
 
-	// Get the last 5000 lines
+	// Get the last 20000 lines
 	const maxLinesToDisplay = 20000
 	startIndex := 0
 	if len(lines) > maxLinesToDisplay {
@@ -79,40 +79,17 @@ func displayVerboseLog() {
 	}
 	displayLines := lines[startIndex:]
 
-	const linesPerChunk = 100
-	currentLineIndex := 0
-	reader := bufio.NewReader(os.Stdin)
+	// Write to buffer instead of interactive display
+	var buffer strings.Builder
+	buffer.WriteString(fmt.Sprintf("Displaying last %d lines of %s (total %d lines available):\n", len(displayLines), logFilePath, len(lines)))
+	buffer.WriteString(strings.Repeat("=", 80) + "\n")
 
-	fmt.Printf("Displaying last %d lines of %s (total %d lines available):\n", len(displayLines), logFilePath, len(lines))
-	fmt.Println(strings.Repeat("=", 80))
-
-	for {
-		if currentLineIndex >= len(displayLines) {
-			fmt.Println("\nEnd of log.")
-			break
-		}
-
-		endIndex := currentLineIndex + linesPerChunk
-		if endIndex > len(displayLines) {
-			endIndex = len(displayLines)
-		}
-
-		for i := currentLineIndex; i < endIndex; i++ {
-			fmt.Println(displayLines[i])
-		}
-		currentLineIndex = endIndex
-
-		if currentLineIndex < len(displayLines) {
-			fmt.Print("\nPress Enter to show more, or 'x' to exit: ")
-			input, _ := reader.ReadString('\n')
-			input = strings.TrimSpace(strings.ToLower(input))
-			if input == "x" || input == "exit" {
-				break
-			}
-		} else {
-			// All lines displayed, no need to prompt for more
-			break
-		}
+	for _, line := range displayLines {
+		buffer.WriteString(line + "\n")
 	}
-	fmt.Println(strings.Repeat("=", 80))
+
+	buffer.WriteString(strings.Repeat("=", 80) + "\n")
+
+	// Output the entire buffer at once
+	fmt.Print(buffer.String())
 }

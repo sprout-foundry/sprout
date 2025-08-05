@@ -35,6 +35,9 @@ type ChangeMetadata struct {
 	Status           string    `json:"status"`
 	Note             string    `json:"note"`
 	Description      string    `json:"description"`
+	OriginalPrompt   string    `json:"original_prompt,omitempty"`   // Added: Original user prompt
+	LLMMessage       string    `json:"llm_message,omitempty"`       // Added: Full message sent to LLM
+	EditingModel     string    `json:"editing_model,omitempty"`     // Added: Editing model used
 }
 
 // ChangeLog represents a logged change, including context from the base revision.
@@ -50,6 +53,9 @@ type ChangeLog struct {
 	Note             sql.NullString
 	Status           string
 	Timestamp        time.Time
+	OriginalPrompt   string         // Added: Original user prompt
+	LLMMessage       string         // Added: Full message sent to LLM
+	EditingModel     string         // Added: Editing model used
 }
 
 func ensureChangesDirs() error {
@@ -84,8 +90,8 @@ func RecordBaseRevision(requestHash, instructions, response string) (string, err
 	return revisionID, nil
 }
 
-// RecordChange saves a specific file change against a base revision.
-func RecordChange(baseRevisionID string, filename, originalCode, newCode, description, note string) error {
+// RecordChangeWithDetails saves a specific file change against a base revision with additional details.
+func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newCode, description, note string, originalPrompt string, llmMessage string, editingModel string) error {
 	if err := ensureChangesDirs(); err != nil {
 		return err
 	}
@@ -116,6 +122,9 @@ func RecordChange(baseRevisionID string, filename, originalCode, newCode, descri
 		Status:           activeStatus,
 		Note:             note,
 		Description:      description,
+		OriginalPrompt:   originalPrompt,
+		LLMMessage:       llmMessage,
+		EditingModel:     editingModel,
 	}
 
 	metadataBytes, err := json.MarshalIndent(metadata, "", "  ")
@@ -128,6 +137,11 @@ func RecordChange(baseRevisionID string, filename, originalCode, newCode, descri
 	}
 
 	return nil
+}
+
+// RecordChange saves a specific file change against a base revision.
+func RecordChange(baseRevisionID string, filename, originalCode, newCode, description, note string) error {
+	return RecordChangeWithDetails(baseRevisionID, filename, originalCode, newCode, description, note, "", "", "")
 }
 
 // updateChangeStatus updates the status of a change record.
@@ -237,6 +251,9 @@ func fetchAllChanges() ([]ChangeLog, error) {
 			Note:             sql.NullString{String: metadata.Note, Valid: metadata.Note != ""},
 			Status:           metadata.Status,
 			Timestamp:        metadata.Timestamp,
+			OriginalPrompt:   metadata.OriginalPrompt,
+			LLMMessage:       metadata.LLMMessage,
+			EditingModel:     metadata.EditingModel,
 		})
 	}
 

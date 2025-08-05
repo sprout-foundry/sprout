@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp" // Added import for regexp package
 	"strings"
 	"time"
 
@@ -135,47 +136,48 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string,
 			return modelName, "", err
 		}
 
-		// Try to extract JSON from response (handles both raw JSON and code block JSON)
-		var jsonStr string
-		if strings.Contains(response, "```json") {
-			// Handle code block JSON
-			parts := strings.Split(response, "```json")
-			if len(parts) > 1 {
-				jsonPart := parts[1]
-				end := strings.Index(jsonPart, "```")
-				if end > 0 {
-					jsonStr = strings.TrimSpace(jsonPart[:end])
-				} else {
-					jsonStr = strings.TrimSpace(jsonPart)
+		var allContextRequests []ContextRequest
+		var rawResponseForReturn string = response // Store the original response to return if no context requests
+
+		// Regex to find JSON objects, potentially preceded by [TOOL_CALLS] or within ```json
+		// This regex tries to capture a JSON object. It's not perfect for nested structures but good for top-level.
+		// It looks for { ... }
+		jsonRegex := regexp.MustCompile("(?s)(?:\\[TOOL_CALLS\\]|```json\\s*)?({(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*})")
+
+		// Find all matches
+		matches := jsonRegex.FindAllStringSubmatch(response, -1)
+
+		for _, match := range matches {
+			if len(match) > 1 {
+				jsonCandidate := strings.TrimSpace(match[1])
+				var tempContextResponse ContextResponse
+				if err := json.Unmarshal([]byte(jsonCandidate), &tempContextResponse); err == nil {
+					allContextRequests = append(allContextRequests, tempContextResponse.ContextRequests...)
+					// If we successfully parsed a context request, the original response was a tool call,
+					// so we should not return it as code.
+					rawResponseForReturn = ""
 				}
 			}
-		} else if strings.Contains(response, "context_requests") {
-			// Handle raw JSON
-			jsonStr = response
 		}
 
-		if jsonStr != "" {
-			// Clean up the JSON string by removing any remaining backticks or whitespace
-			jsonStr = strings.TrimSpace(jsonStr)
-			jsonStr = strings.Trim(jsonStr, "`")
+		// If no specific JSON blocks were found by regex, try to parse the whole response as raw JSON
+		if len(allContextRequests) == 0 && strings.Contains(response, "context_requests") {
+			var tempContextResponse ContextResponse
+			if err := json.Unmarshal([]byte(strings.TrimSpace(response)), &tempContextResponse); err == nil {
+				allContextRequests = append(allContextRequests, tempContextResponse.ContextRequests...)
+				rawResponseForReturn = ""
+			}
+		}
 
-			var contextResponse ContextResponse
-			if err := json.Unmarshal([]byte(jsonStr), &contextResponse); err != nil {
-				fmt.Print(prompts.LLMContextParseError(err, response)) // Use prompt
-				return modelName, response, nil                        // Return the raw response if parsing fails
-			}
-			if len(contextResponse.ContextRequests) == 0 {
-				fmt.Println(prompts.LLMNoContextRequests()) // Use prompt
-				return modelName, response, nil             // No context requests, return the response
-			}
-			fmt.Print(prompts.LLMContextRequestsFound(len(contextResponse.ContextRequests))) // Use prompt
+		if len(allContextRequests) > 0 {
+			fmt.Print(prompts.LLMContextRequestsFound(len(allContextRequests))) // Use prompt
 			contextRequestCount++
-			additionalContext, err := handleContextRequest(contextResponse.ContextRequests, cfg)
+			additionalContext, err := handleContextRequest(allContextRequests, cfg) // Pass the aggregated requests
 			if err != nil {
 				fmt.Print(prompts.LLMContextRequestError(err)) // Use prompt
 				messages = append(messages, prompts.Message{
 					Role:    "assistant",
-					Content: response,
+					Content: response, // Original response from LLM
 				}, prompts.Message{
 					Role:    "user",
 					Content: fmt.Sprintf("There was an error handling your request: %v. Please try a different request or generate the code.", err),
@@ -184,7 +186,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string,
 				fmt.Print(prompts.LLMAddingContext(additionalContext)) // Use prompt
 				messages = append(messages, prompts.Message{
 					Role:    "assistant",
-					Content: response,
+					Content: response, // Original response from LLM
 				}, prompts.Message{
 					Role:    "user",
 					Content: additionalContext,
@@ -192,7 +194,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string,
 			}
 			continue // Loop to ask LLM again with new context
 		} else {
-			return modelName, response, nil // No context requests, return the response
+			return modelName, rawResponseForReturn, nil // No context requests, return the (potentially empty) raw response
 		}
 	}
 }

@@ -66,7 +66,7 @@ func getSearchResults(query string, cfg *config.Config) ([]JinaSearchResult, err
 	}
 
 	// Get Jina API Key. This will prompt the user if the key is not found.
-	jinaAPIKey, err := apikeys.GetAPIKey("JinaAI")
+	jinaAPIKey, err := apikeys.GetAPIKey("JinaAI", !cfg.SkipPrompt)
 	if err != nil {
 		logger.Logf("Could not get Jina API key: %v. Proceeding without it, but may be rate limited.", err)
 	} else {

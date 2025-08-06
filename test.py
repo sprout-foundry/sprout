@@ -36,6 +36,28 @@ GREEN = '\033[32m'
 RED = '\033[31m'
 RESET = '\033[0m'
 
+def get_expected_test_time(test_name):
+    """
+    Returns the expected test duration for a given test name.
+    This function replaces reading from test_times.json.
+    """
+    times = {
+        "Check the log": 10.01680040359497,
+        "Missing File Context Test": 10.013010025024414,
+        "Security Credentials Detection": 10.002689361572266,
+        "File Deletion": 20.02725124359131,
+        "Cached Workspace & Modifying a File": 20.02650237083435,
+        "Fix Command": 20.025620698928833,
+        "Advanced Ignore Handling (.gitignore & .leditignore)": 20.02127766609192,
+        "Verify JSON Output Format": 20.019028902053833,
+        "Multi-file Edit & Selective Context": 20.00952124595642,
+        "Initial Workspace Creation & Analysis": 20.002187967300415,
+        "Search Grounding Test": 120.0153260231018,
+        "Empty Search Grounding Query Test": 120.05268406867981,
+        "Orchestration Feature": 210.02731728553772
+    }
+    return times.get(test_name, 100.0)
+
 def extract_failure_reason(stdout, stderr):
     """Extract a short, concise failure reason from test output.
     
@@ -98,6 +120,12 @@ Examples:
 
   Run tests and keep the 'testing' directory for inspection (e.g., after failures):
     {sys.argv[0]} --keep-testing-dir
+
+  Run only tests expected to complete within 60 seconds:
+    {sys.argv[0]} --max-duration 60
+
+  Run all tests, ignoring expected durations:
+    {sys.argv[0]} --ignore-duration
 """
     )
     parser.add_argument(
@@ -125,10 +153,21 @@ Examples:
         action='store_true',
         help="Do not remove the 'testing' directory after tests complete. Useful for debugging failures."
     )
+    parser.add_argument(
+        '--max-duration',
+        type=float,
+        default=100.0, # Default to 100 seconds
+        help='Maximum expected duration (in seconds) for tests to be included in the run. Only applies in parallel mode.'
+    )
+    parser.add_argument(
+        '--ignore-duration',
+        action='store_true',
+        help='Run all tests regardless of their expected duration. Overrides --max-duration.'
+    )
     args = parser.parse_args()
     
     # Log parsed arguments for debugging
-    logging.debug(f"Parsed arguments: single={args.single}, test_number={args.test_number}, list_tests={args.list_tests}, keep_testing_dir={args.keep_testing_dir}")
+    logging.debug(f"Parsed arguments: single={args.single}, test_number={args.test_number}, list_tests={args.list_tests}, keep_testing_dir={args.keep_testing_dir}, max_duration={args.max_duration}, ignore_duration={args.ignore_duration}")
 
     model_name = args.model
     # If -t is provided, implicitly enable single_mode.
@@ -188,7 +227,7 @@ Examples:
 
     # --- Test Discovery ---
     print("--- Discovering tests ---")
-    tests = [] # List to store discovered test dictionaries: {'name': '...', 'path': Path(...)}
+    tests = [] # List to store discovered test dictionaries: {'name': '...', 'path': Path(...), 'expected_time': float}
     # Find all test scripts following the 'test_*.sh' pattern and sort them alphabetically
     test_script_paths = sorted(test_scripts_dir.glob('test_*.sh'))
 
@@ -213,8 +252,10 @@ Examples:
             if not test_name:
                 logging.warning(f"'get_test_name' in {script_path.name} returned an empty name. Skipping this test.")
                 continue
-            tests.append({'name': test_name, 'path': script_path})
-            print(f"Discovered Test: {test_name}")
+            
+            expected_time = get_expected_test_time(test_name)
+            tests.append({'name': test_name, 'path': script_path, 'expected_time': expected_time})
+            print(f"Discovered Test: {test_name} (Expected Time: {expected_time:.1f}s)")
         except subprocess.CalledProcessError as e:
             logging.error(f"{RED}Error discovering test name from {script_path.name}: {e.stderr.strip()}. Skipping.{RESET}")
         except FileNotFoundError:
@@ -236,7 +277,10 @@ Examples:
     if list_tests_only:
         print("--- Available Tests and Numbers ---")
         for num, test_name in tests_mapping.items():
-            print(f"{num}: {test_name}")
+            # Find the test object to get its expected time
+            test_obj = next((t for t in tests if t['name'] == test_name), None)
+            expected_time_str = f" (Expected: {test_obj['expected_time']:.1f}s)" if test_obj else ""
+            print(f"{num}: {test_name}{expected_time_str}")
         print("-----------------------------------")
         sys.exit(0) # Exit after listing tests
 
@@ -246,7 +290,9 @@ Examples:
         logging.info("--- Single Test Mode Activated ---")
         print("Available tests:")
         for num, test_name in tests_mapping.items():
-            print(f"{num}: {test_name}")
+            test_obj = next((t for t in tests if t['name'] == test_name), None)
+            expected_time_str = f" (Expected: {test_obj['expected_time']:.1f}s)" if test_obj else ""
+            print(f"{num}: {test_name}{expected_time_str}")
         
         selected_test_number = None
         if test_number_arg:
@@ -280,19 +326,38 @@ Examples:
             logging.error(f"{RED}Error: No test number entered or selected. Exiting single test mode. To run a specific test without prompting, use -t <test_number>.{RESET}")
             sys.exit(1)
     else:
-        logging.info("--- Running all discovered tests (Parallel Mode) ---")
-        selected_tests_for_execution = tests # Run all discovered tests
+        # Filter tests based on duration if not in single mode and not ignoring duration
+        if not args.ignore_duration:
+            filtered_tests = []
+            skipped_tests = []
+            for test in tests:
+                if test['expected_time'] <= args.max_duration:
+                    filtered_tests.append(test)
+                else:
+                    skipped_tests.append(test)
+            selected_tests_for_execution = filtered_tests
+            if skipped_tests:
+                logging.info(f"Skipping {len(skipped_tests)} tests due to --max-duration {args.max_duration}s limit:")
+                for test in skipped_tests:
+                    logging.info(f"  - {test['name']} (Expected: {test['expected_time']:.1f}s)")
+            if not selected_tests_for_execution:
+                logging.warning(f"{RED}No tests selected for execution after applying --max-duration filter. Consider increasing --max-duration or using --ignore-duration.{RESET}")
+                sys.exit(0) # Exit gracefully if no tests to run
+        else:
+            logging.info("--- Running all discovered tests (Parallel Mode, ignoring duration) ---")
+            selected_tests_for_execution = tests # Run all discovered tests
 
     # --- Test Execution & Monitoring ---
     results = OrderedDict() # Stores final results: test_name -> 'PASS'/'FAIL'/'FAIL (Timeout)'
     failure_reasons = {}    # Stores detailed reasons for failed tests
     processes = {}          # Dictionary to track active subprocesses: pid -> {process, name, sanitized_name, start_time, stdout_file, stderr_file, stdout_file_path, stderr_file_path, test_workspace_path}
+    actual_test_durations = {} # New dictionary to store actual durations of run tests
     
     # Start all selected tests as subprocesses
     for test in selected_tests_for_execution:
         test_name = test['name']
         sanitized_test_name = test_name.replace(' ', '_') # Sanitize name for file paths
-        print(f"--- Starting test: {test_name} ---")
+        print(f"--- Starting test: {test_name} (Expected: {test['expected_time']:.1f}s) ---")
         
         # Create a unique directory for this test to ensure isolation
         current_test_workspace = testing_dir / sanitized_test_name
@@ -358,15 +423,18 @@ Examples:
                     process.kill() # Terminate the process
                     results[test_name] = 'FAIL (Timeout)'
                     failure_reasons[test_name] = f"Test timed out after {timeout} seconds"
+                    actual_test_durations[test_name] = elapsed_time # Record duration even on timeout
                     pids_to_remove.append(pid)
                 else:
                     print(f"- {test_name} ({int(elapsed_time)}s elapsed)")
             else: # Process has finished
                 exit_code = process.poll()
+                elapsed_time = time.time() - start_time # Calculate final elapsed time
                 result = 'PASS' if exit_code == 0 else 'FAIL'
-                print(f"Test '{test_name}' (PID {pid}) finished with result: {result} (exit code: {exit_code}).")
+                print(f"Test '{test_name}' (PID {pid}) finished with result: {result} (exit code: {exit_code}). Took {elapsed_time:.1f}s.")
                 
                 results[test_name] = result
+                actual_test_durations[test_name] = elapsed_time # Record actual duration
                 pids_to_remove.append(pid)
 
         # Process finished/timed-out tests
@@ -437,6 +505,9 @@ Examples:
 
     print("--------------------------------")
 
+    # No longer saving test times to a file as they are hardcoded.
+    # The actual_test_durations are still collected for reporting purposes.
+
     # Determine overall test pass/fail status after all tests have completed
     all_passed = True
     for test_name, status in results.items():
@@ -475,8 +546,8 @@ Examples:
 
     # --- Final Reporting ---
     print("--- Test Results Summary ---")
-    print(f"{'Test Name':<44} {'Result'}")
-    print("-" * 51)
+    print(f"{'Test Name':<44} {'Result':<15} {'Time (s)':<10} {'Expected (s)'}") # Updated header
+    print("-" * 85) # Adjusted line length
     
     # all_passed is already determined above, no need to re-initialize or re-calculate here
     # Iterate through the original discovered test order for consistent reporting
@@ -484,19 +555,26 @@ Examples:
         name = test['name']
         # Get the result, defaulting to "NOT RUN" if a test was skipped or not processed
         result = results.get(name, "NOT RUN")
+        actual_time = actual_test_durations.get(name, 0.0) # Get actual time if run, else 0
+        expected_time = test['expected_time'] # Get expected time from the test object
         
         # Truncate test name for clean formatting
         truncated_name = (name[:42] + '..') if len(name) > 44 else name
         
+        actual_time_str = f"{actual_time:.1f}" if actual_time > 0 else "N/A"
+        expected_time_str = f"{expected_time:.1f}"
+
+        line = f"{truncated_name:<44} {result:<15} {actual_time_str:<10} {expected_time_str}"
+
         if result == 'PASS':
-            print(f"{GREEN}{truncated_name:<44} {result}{RESET}")
+            print(f"{GREEN}{line}{RESET}")
         elif 'FAIL' in result: # Catches 'FAIL' and 'FAIL (Timeout)'
-            print(f"{RED}{truncated_name:<44} {result}{RESET}")
+            print(f"{RED}{line}{RESET}")
             # all_passed is already set to False if any test failed, no need to update here
         else: # For "NOT RUN" or any other unexpected status
-            print(f"{truncated_name:<44} {result}")
+            print(f"{line}")
 
-    print("-" * 51)
+    print("-" * 85) # Adjusted line length
     print(" ledit TESTING COMPLETE ---")
 
     # Exit with a non-zero status code if any test failed

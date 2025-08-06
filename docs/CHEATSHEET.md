@@ -8,10 +8,10 @@ This document provides a quick reference for `ledit` commands and concepts.
 |---|---|---|
 | `ledit code` | Generate or modify code based on instructions. | `ledit code "Add a new function to calculate factorial" -f math.go` |
 | `ledit process` | Orchestrate a complex feature implementation. **(Alpha State)** | `ledit process "Implement user authentication with JWT"` |
-| `ledit init` | Initialize `ledit` in a project directory. | `ledit init` |
-| `ledit log` | View the history of changes made by `ledit`. | `ledit log` |
+| `ledit init` | Initialize a specific configuration for `ledit` in your project, separate from the main global configuration. | `ledit init` |
+| `ledit log` | View the history of changes made by `ledit` and revert changes by prompt. | `ledit log` |
 | `ledit question` | Ask `ledit` a question about your code or general topics in an interactive chat. | `ledit question "Explain the main function in main.go"` |
-| `ledit fix` | Attempt to fix a problem in your code based on a script that is erroring. | `ledit fix "go build"` |
+| `ledit fix` | Attempt to fix a problem in your code by running a command and letting `ledit` attempt to fix the error. | `ledit fix "go build"` |
 | `ledit ignore` | Add patterns to `.ledit/leditignore` to exclude files from workspace analysis. | `ledit ignore "temp_files/"` |
 | `ledit commit` | Generate a conventional git commit message and complete a git commit for staged changes. | `ledit commit` |
 

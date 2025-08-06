@@ -5,13 +5,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/prompts"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // generateFileHash creates a SHA256 hash of the file content.
@@ -23,6 +25,7 @@ func generateFileHash(content string) string {
 
 // getSummary uses an LLM to generate a summary, exports, and references for a given file content.
 func getSummary(content, filename string, cfg *config.Config) (string, string, string, error) {
+	log := utils.GetLogger(cfg.SkipPrompt)
 	// Check if the file is a text file
 	if !isTextFile(filename) {
 		return "", "", "", fmt.Errorf("file type not supported for analysis")
@@ -57,13 +60,13 @@ Example JSON structure:
 	}
 
 	// Set 40-second timeout for workspace summary requests
-	_, response, err := llm.GetLLMResponse(cfg.SummaryModel, messages, filename, cfg, 40*time.Second, false)
+	_, response, err := llm.GetLLMResponse(cfg.SummaryModel, messages, filename, cfg, 40*time.Second)
 	if err != nil {
 		return "", "", "", fmt.Errorf("LLM request failed: %w", err)
 	}
 
 	// Log the raw LLM response for troubleshooting
-	fmt.Printf("DEBUG: Raw LLM Response for %s:\n%s\n", filename, response)
+	log.Logf("DEBUG: Raw LLM Response for %s:\n%s\n", filename, response)
 
 	// Attempt to extract JSON from markdown code blocks if present
 	if strings.Contains(response, "```json") {
@@ -109,14 +112,18 @@ func isTextFile(filename string) bool {
 
 // GetProjectGoals uses an LLM to autogenerate project goals based on the workspace summary.
 func GetProjectGoals(cfg *config.Config, workspaceSummary string) (ProjectGoals, error) {
+	log := utils.GetLogger(cfg.SkipPrompt)
+
 	messages := prompts.BuildProjectGoalsMessages(workspaceSummary)
 
 	modelName := cfg.WorkspaceModel // Use the workspace model for generating project goals
 
-	_, response, err := llm.GetLLMResponse(modelName, messages, "", cfg, 2*time.Minute, false)
+	_, response, err := llm.GetLLMResponse(modelName, messages, "", cfg, 2*time.Minute)
 	if err != nil {
 		return ProjectGoals{}, fmt.Errorf("failed to get project goals from LLM: %w", err)
 	}
+	// Log the raw LLM response for troubleshooting
+	log.Logf("DEBUG: Raw LLM Response for project goals:\n%s\n", response)
 
 	// Clean the response from markdown code blocks
 	if strings.Contains(response, "```json") {
@@ -129,8 +136,11 @@ func GetProjectGoals(cfg *config.Config, workspaceSummary string) (ProjectGoals,
 		}
 	}
 
+	log.Log(fmt.Sprintf("DEBUG: Cleaned LLM Response for project goals:\n%s\n", response))
+
 	var goals ProjectGoals
 	if err := json.Unmarshal([]byte(response), &goals); err != nil {
+		log.Logf("DEBUG: Failed to unmarshal project goals JSON: %s\n", response)
 		return ProjectGoals{}, fmt.Errorf("failed to parse project goals JSON from LLM response: %w\nResponse was: %s", err, response)
 	}
 

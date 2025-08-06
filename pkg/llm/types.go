@@ -13,7 +13,10 @@ type OpenAIRequest struct {
 
 type OpenAIResponse struct {
 	Choices []struct {
-		Delta prompts.Message `json:"delta"`
+		Delta struct {
+			Role    string `json:"role,omitempty"`
+			Content string `json:"content,omitempty"` // For streaming, content is always a string
+		} `json:"delta"`
 	} `json:"choices"`
 }
 

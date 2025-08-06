@@ -23,10 +23,10 @@ var (
 
 // --- Main Dispatcher ---
 
-func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer) (string, error) {
+func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (string, error) {
 	var totalInputTokens int
 	for _, msg := range messages {
-		totalInputTokens += utils.EstimateTokens(msg.Content) // Use utils.EstimateTokens
+		totalInputTokens += utils.EstimateTokens(GetMessageText(msg.Content)) // Use GetMessageText helper
 	}
 	fmt.Print(prompts.TokenEstimate(totalInputTokens, modelName))
 	if totalInputTokens > DefaultTokenLimit && !cfg.SkipPrompt {
@@ -128,10 +128,10 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	return modelName, nil
 }
 
-func GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration) (string, string, error) {
+func GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, string, error) {
 	var contentBuffer strings.Builder
 	// GetLLMResponseStream handles the token limit prompt and provider logic
-	newModelName, err := GetLLMResponseStream(modelName, messages, filename, cfg, timeout, &contentBuffer)
+	newModelName, err := GetLLMResponseStream(modelName, messages, filename, cfg, timeout, &contentBuffer, imagePath...)
 	if err != nil {
 		// GetLLMResponseStream already prints the error if it happens
 		return newModelName, "", err

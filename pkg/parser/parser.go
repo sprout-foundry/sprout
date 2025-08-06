@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -96,6 +97,9 @@ func validateFilename(filename string) bool {
 }
 
 func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
+	fmt.Printf("=== Parser Debug ===\n")
+	fmt.Printf("Response length: %d characters\n", len(response))
+
 	updatedCode := make(map[string]string)
 	var currentFileContent strings.Builder
 	var currentFileName string
@@ -103,6 +107,7 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 	inCodeBlock := false
 
 	lines := strings.Split(response, "\n")
+	fmt.Printf("Split into %d lines\n", len(lines))
 
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
@@ -146,6 +151,12 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 			currentFileContent.WriteString(line + "\n")
 		}
 	}
+
+	fmt.Printf("Found %d code blocks:\n", len(updatedCode))
+	for filename := range updatedCode {
+		fmt.Printf("  - %s\n", filename)
+	}
+	fmt.Printf("=== End Parser Debug ===\n")
 
 	return updatedCode, nil
 }

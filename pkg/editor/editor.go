@@ -137,9 +137,9 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 
 // GetLLMCodeResponse function removed from here, as it's now in pkg/context/context_builder.go
 
-func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config) (map[string]string, string, error) {
+func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config, imagePath string) (map[string]string, string, error) {
 	log := utils.GetLogger(cfg.SkipPrompt)
-	modelName, llmContent, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, filename) // Updated call site
+	modelName, llmContent, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, filename, imagePath) // Updated call site
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get LLM response: %w", err)
 	}
@@ -339,12 +339,12 @@ func ProcessWorkspaceCodeGeneration(filename, instructions string, cfg *config.C
 	re := regexp.MustCompile(`(?i)\s*#(WS|WORKSPACE)\s*$`)
 	instructions = re.ReplaceAllString(instructions, "") + " #WS" // Ensure we have a single #WS tag
 
-	return ProcessCodeGeneration(filename, instructions, cfg)
+	return ProcessCodeGeneration(filename, instructions, cfg, "")
 }
 
 // ProcessCodeGeneration generates code based on instructions and returns the diff for the target file.
 // The full raw LLM response is still recorded in the changelog for auditing.
-func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (string, error) {
+func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, imagePath string) (string, error) {
 	var originalCode string
 	var err error
 	if filename != "" {
@@ -361,7 +361,7 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (s
 	// fmt.Print(prompts.ProcessedInstructionsSeparator(processedInstructions))
 
 	requestHash := utils.GenerateRequestHash(processedInstructions)
-	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, filename, cfg)
+	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, filename, cfg, imagePath)
 	if err != nil {
 		return "", err
 	}

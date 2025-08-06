@@ -37,26 +37,27 @@ Use these special directives in your prompts to control the context provided to 
 
 Specify provider and model using `<provider>:<model_name>`.
 
--   `openai`: `openai:gpt-4-turbo`
+-   `lambda-ai`: `lambda-ai:deepseek-v3-0324`, `lambda-ai:hermes3-8b`, `lambda-ai:llama3.3-70b-instruct-fp8`, `lambda-ai:qwen25-coder-32b-instruct`
+-   `gemini`: `gemini:gemini-2.5-flash`, `gemini:gemini-2.5-pro`
+-   `openai`: `openai:gpt-4o`
 -   `groq`: `groq:llama3-70b-8192`
--   `gemini`: `gemini:gemini-pro`
--   `ollama`: `ollama:llama3`
--   `lambda-ai`: `lambda-ai:deepseek-v3-0324`
--   `cerebras`: `cerebras:cerebras-gpt`
+-   `ollama`: `ollama:qwen2.5-coder` (locally run, cant handle workspace context in most cases)
+-   `cerebras`: `cerebras:qwen-3-coder-480b`
 -   `deepseek`: `deepseek:deepseek-coder`
+-   `deepinfra`: `deepinfra:google/gemini-2.5-flash`
 
 ## Workspace Files
 
 `ledit` maintains these files in your `.ledit/` directory:
 
--   `.ledit/workspace.json`: Index of your project's files and their summaries.
+-   `.ledit/workspace.json`: Index of your project's files and their summaries and additional workspace context.
 -   `.ledit/requirements.json`: Stores the current orchestration plan.
 -   `.ledit/config.json`: Project-specific configuration settings.
 -   `.ledit/leditignore`: Patterns for files/directories to ignore.
 -   `.ledit/setup.sh`: Generated setup script for orchestration.
 -   `.ledit/validate.sh`: Generated validation script for orchestration.
 
-## Orchestration Process (using `ledit process`)
+## Orchestration Process (using `ledit process`) -- NOT READY FOR REAL WORLD USE!!!
 
 1.  **Analysis**: `ledit` analyzes your prompt and workspace.
 2.  **Planning**: An LLM generates a JSON plan of required changes.

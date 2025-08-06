@@ -16,6 +16,9 @@ ledit code "Update this logic with this requirements: #requirements.txt" -f math
 
 # Leverage workspace context to reference and update the correct files automatically
 ledit code "Update the math logic based on the new requirements text file. #WS"
+
+# Use a different editing model
+ledit code "Generate an accurate readme #WS" -m gemini:gemini-2.5-flash
 ```
 
 ### Fix code issues

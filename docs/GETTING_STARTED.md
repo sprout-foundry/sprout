@@ -21,13 +21,14 @@ ledit code "Update the math logic based on the new requirements text file. #WS"
 ### Fix code issues
 
 ```bash
-# Automatically fix common code issues (e.g., linting, formatting)
-ledit fix "Fix all linting errors in src/"
+# Attempt to fix a problem in your code by running a command and letting ledit attempt to fix the error
+ledit fix "go build"
 ```
 
 ### View changes
 
 ```bash
+# View the history of changes made by ledit and revert changes by prompt
 ledit log
 ```
 
@@ -50,10 +51,10 @@ ledit commit
 
 ## Key Features
 
-- **Smart Context**: Automatically includes relevant files using `#WORKSPACE`
-- **Search Grounding**: Augment with web results using `#SG "query"`
-- **Multi-Model Support**: Switch between LLM providers
-- **Change Tracking**: Built-in version history
+-   **Smart Context**: Automatically builds and maintains an index of your workspace. An LLM selects the most relevant files to include as context for any given task using `#WORKSPACE` or `#WS`.
+-   **Search Grounding**: Augment prompts with fresh information from the web using `#SG "query"`.
+-   **Multi-Model Support**: Switch between LLM providers (e.g., OpenAI, Groq, Gemini, Ollama).
+-   **Change Tracking**: Built-in version history and the ability to revert changes via `ledit log`.
 
 ## Advanced Usage
 
@@ -80,7 +81,7 @@ ledit code "Explain this" --model groq:llama-3.3-70b
 
 ## Best Practices
 
-1. Start with small changes
-2. Review diffs before applying
-3. Use search grounding for current info
-4. Leverage workspace context for better results
+1.  Start with small changes
+2.  Review diffs before applying
+3.  Use search grounding for current info
+4.  Leverage workspace context for better results

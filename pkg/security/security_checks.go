@@ -1,57 +1,69 @@
 package security
 
 import (
+	"regexp" // Import the regexp package
 	"sort"
-	"strings"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
+// Define regex patterns for security concerns
+var (
+	// API Key/Token patterns: looks for common key names followed by assignment and a string of 16-64 alphanumeric/symbol chars
+	// This is a more robust pattern to avoid false positives from just "key" or "token"
+	apiKeyRegex = regexp.MustCompile(`(?i)(api_key|apikey|api-key|access_key|access-key|secret_key|secret-key|auth_token|auth-token|bearer_token|bearer-token|client_secret|client-secret|consumer_key|consumer-key|consumer_secret|consumer-secret|private_key|private-key|public_key|public-key|token|key|secret)\s*(=|:|is)\s*['"]?[a-zA-Z0-9_.-]{16,64}['"]?`)
+
+	// Password patterns: looks for common password names followed by assignment and a string of 8-64 alphanumeric/symbol chars
+	passwordRegex = regexp.MustCompile(`(?i)(password|passwd|pass|pwd)\s*(=|:|is)\s*['"]?[a-zA-Z0-9_.-]{8,64}['"]?`)
+
+	// Database/Service URL patterns: looks for common protocol prefixes followed by :// and non-whitespace/quote characters
+	dbUrlRegex = regexp.MustCompile(`(?i)(jdbc|mongodb|mysql|postgresql|sqlite|sqlserver|redis|amqp|kafka|mqtt):\/\/[^\s'"]+`)
+
+	// SSH Private Key patterns: looks for standard PEM headers
+	sshPrivateKeyRegex = regexp.MustCompile(`(?i)BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY`)
+
+	// AWS Credentials patterns: specific patterns for AWS Access Key ID and Secret Access Key
+	awsAccessKeyIDRegex     = regexp.MustCompile(`(AKIA|AROA|AIDA|ASIA)[0-9A-Z]{16}`)
+	awsSecretAccessKeyRegex = regexp.MustCompile(`(?i)aws_secret_access_key\s*=\s*['"]?[a-zA-Z0-9\/+=]{40}['"]?`)
+)
+
 // DetectSecurityConcerns analyzes the given content for common security-related patterns.
-// This is a simplified example and should be expanded with more robust detection logic.
-func DetectSecurityConcerns(content string) []string {
+// It returns a list of detected concern types and a map linking each concern type to its first matched snippet.
+func DetectSecurityConcerns(content string) ([]string, map[string]string) {
 	var concerns []string
-	contentLower := strings.ToLower(content)
+	snippets := make(map[string]string) // Stores the first matched snippet for each concern type
 
-	// Example patterns (these are very basic and need to be comprehensive for real use)
-	if strings.Contains(contentLower, "api_key") || strings.Contains(contentLower, "apikey") {
-		concerns = append(concerns, "API Key Exposure")
-	}
-	if strings.Contains(contentLower, "password") || strings.Contains(contentLower, "passwd") {
-		concerns = append(concerns, "Password Exposure")
-	}
-	if strings.Contains(contentLower, "secret") {
-		concerns = append(concerns, "Secret Exposure")
-	}
-	if strings.Contains(contentLower, "database_url") || strings.Contains(contentLower, "db_url") {
-		concerns = append(concerns, "Database Creds")
-	}
-	if strings.Contains(contentLower, "ssh_private_key") || strings.Contains(contentLower, "id_rsa") {
-		concerns = append(concerns, "SSH Private Key Exposure")
-	}
-	if strings.Contains(contentLower, "aws_access_key_id") || strings.Contains(contentLower, "aws_secret_access_key") {
-		concerns = append(concerns, "AWS Credentials Exposure")
-	}
-	if strings.Contains(contentLower, "exec(") || strings.Contains(contentLower, "system(") {
-		concerns = append(concerns, "Arbitrary Command Execution")
-	}
-	if strings.Contains(contentLower, "eval(") {
-		concerns = append(concerns, "Code Injection Vulnerability")
-	}
-
-	// Deduplicate concerns
-	uniqueConcerns := make(map[string]bool)
-	var result []string
-	for _, c := range concerns {
-		if !uniqueConcerns[c] {
-			uniqueConcerns[c] = true
-			result = append(result, c)
+	// Helper function to add concern and its first matched snippet
+	addConcern := func(concernType string, regex *regexp.Regexp) {
+		if match := regex.FindString(content); match != "" {
+			concerns = append(concerns, concernType)
+			if _, ok := snippets[concernType]; !ok { // Only store the first snippet found for this type
+				snippets[concernType] = match
+			}
 		}
 	}
-	sort.Strings(result)
-	return result
+
+	addConcern("API Key Exposure", apiKeyRegex)
+	addConcern("Password Exposure", passwordRegex)
+	addConcern("Database/Service Creds Exposure", dbUrlRegex)
+	addConcern("SSH Private Key Exposure", sshPrivateKeyRegex)
+	addConcern("AWS Access Key ID Exposure", awsAccessKeyIDRegex)
+	addConcern("AWS Secret Access Key Exposure", awsSecretAccessKeyRegex)
+
+	// Deduplicate concerns list and sort it
+	uniqueConcernsMap := make(map[string]bool)
+	var uniqueConcernsList []string
+	for _, c := range concerns {
+		if !uniqueConcernsMap[c] {
+			uniqueConcernsMap[c] = true
+			uniqueConcernsList = append(uniqueConcernsList, c)
+		}
+	}
+	sort.Strings(uniqueConcernsList)
+
+	return uniqueConcernsList, snippets
 }
 
 // CheckFileSecurity analyzes a file's content for security concerns,
@@ -73,7 +85,6 @@ func CheckFileSecurity(
 ) {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 
-	var detectedConcerns []string
 	concernsForThisFile := make([]string, 0)
 	ignoredConcernsForThisFile := make([]string, 0)
 
@@ -89,11 +100,11 @@ func CheckFileSecurity(
 	}
 
 	// Only run security detection for new or changed files
-	detectedConcerns = DetectSecurityConcerns(fileContent)
+	detectedConcernsList, detectedSnippetsMap := DetectSecurityConcerns(fileContent)
 
 	// Filter out concerns that were previously ignored
 	newlyDetectedConcerns := []string{}
-	for _, concern := range detectedConcerns {
+	for _, concern := range detectedConcernsList {
 		isAlreadyIgnored := false
 		for _, ignored := range ignoredConcernsForThisFile {
 			if ignored == concern {
@@ -108,7 +119,8 @@ func CheckFileSecurity(
 
 	// Prompt user for newly detected, unignored concerns
 	for _, concern := range newlyDetectedConcerns {
-		prompt := prompts.SecurityConcernDetectedPrompt(relativePath, concern)
+		snippet := detectedSnippetsMap[concern] // Retrieve the snippet for this concern type
+		prompt := prompts.PotentialSecurityConcernsFound(relativePath, concern, snippet)
 		if logger.AskForConfirmation(prompt, true) { // This is a required check
 			concernsForThisFile = append(concernsForThisFile, concern)
 			logger.Logf("Security concern '%s' in %s noted as an issue.", concern, relativePath)
@@ -119,11 +131,10 @@ func CheckFileSecurity(
 	}
 
 	// Add back any concerns that were previously marked as issues and are still detected
-	// This applies only if the file content changed, as for unchanged files, concernsForThisFile already holds them.
 	if !isNew && isChanged {
 		for _, prevConcern := range existingSecurityConcerns {
 			isStillDetected := false
-			for _, currentDetected := range detectedConcerns { // `detectedConcerns` is fresh for new/changed files
+			for _, currentDetected := range detectedConcernsList { // Use the newly detected list
 				if prevConcern == currentDetected {
 					isStillDetected = true
 					break

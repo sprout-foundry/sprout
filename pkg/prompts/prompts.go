@@ -298,11 +298,6 @@ Example JSON format:
 
 // --- User Interaction Prompts ---
 
-// SecurityConcernDetectedPrompt prompts the user about a detected security concern.
-func SecurityConcernDetectedPrompt(filename, concern string) string {
-	return fmt.Sprintf("Security concern '%s' detected in file '%s'. Do you want to proceed? (yes/no): ", concern, filename)
-}
-
 // EnterLLMProvider prompts the user to enter their preferred LLM provider.
 func EnterLLMProvider(defaultProvider string) string {
 	return fmt.Sprintf("Enter your preferred LLM provider (e.g., anthropic, openai, gemini, ollama) (default: %s): ", defaultProvider)

@@ -3,12 +3,13 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/editor"
 	"log"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/editor"
 
 	"github.com/spf13/cobra"
 )
@@ -76,7 +77,7 @@ var fixCmd = &cobra.Command{
 		fmt.Println("Attempting to fix errors with LLM...")
 		startTime := time.Now()
 
-		_, err = editor.ProcessCodeGeneration("", instructions, cfg)
+		_, err = editor.ProcessCodeGeneration("", instructions, cfg, "")
 		if err != nil {
 			log.Fatalf("Error during code generation: %v", err)
 		}

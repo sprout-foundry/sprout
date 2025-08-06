@@ -22,7 +22,7 @@ func callOllamaAPI(modelName string, messages []prompts.Message, cfg *config.Con
 	for i, msg := range messages {
 		ollamaMessages[i] = ollama.Message{
 			Role:    msg.Role,
-			Content: msg.Content,
+			Content: GetMessageText(msg.Content), // Use helper function
 		}
 	}
 
@@ -32,9 +32,9 @@ func callOllamaAPI(modelName string, messages []prompts.Message, cfg *config.Con
 	// Calculate total token count for all messages
 	totalTokens := 0
 	for _, msg := range messages {
-		totalTokens += EstimateTokens(msg.Content)
+		totalTokens += EstimateTokens(GetMessageText(msg.Content)) // Use helper function
 	}
-	
+
 	// Set num_ctx to be slightly larger than the total token count to provide buffer
 	// but with a minimum value to ensure adequate context
 	numCtx := totalTokens + 1000

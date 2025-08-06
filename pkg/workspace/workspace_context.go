@@ -9,6 +9,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/git"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // fileTreeNode represents a node in the file system tree structure.
@@ -80,40 +81,62 @@ func printFileTree(node *fileTreeNode, b *strings.Builder, prefix string, isLast
 
 	for i, name := range sortedChildNames {
 		child := node.Children[name]
-		printFileTree(child, b, prefix, i == len(sortedChildNames)-1)
+		printFileTree(child, b, prefix, i == len(sortedChildNames)-1) // FIX: Changed &b to b
 	}
 }
 
 // getWorkspaceInfo formats the workspace information for the LLM.
 // It lists all files, provides full content for selected files, and summaries for others.
 func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextFiles []string, projectGoals ProjectGoals, codeStyle config.CodeStylePreferences) string {
+	logger := utils.GetLogger(false) // Get logger instance
 	var b strings.Builder
 	b.WriteString("--- Start of full content from workspace ---\n")
 
 	// Add Git Repository Information
-	gitRoot, err := git.GetGitRootDir()
-	if err == nil {
-		b.WriteString("--- Git Repository Information ---\n")
-		b.WriteString(fmt.Sprintf("Git Root Directory: %s\n", gitRoot))
-		b.WriteString("This is the root directory of the current Git repository.\n\n")
+	b.WriteString("--- Git Repository Information ---\n")
+	remoteURL, err := git.GetGitRemoteURL()
+	if err == nil && remoteURL != "" {
+		b.WriteString(fmt.Sprintf("Git Remote URL: %s\n", remoteURL))
+	} else if err != nil {
+		b.WriteString(fmt.Sprintf("Could not retrieve Git remote URL: %v\n", err))
+	} else {
+		b.WriteString("No Git remote configured.\n")
+	}
+	b.WriteString("This provides information about the current Git repository.\n\n")
 
-		// Add Git Status Information
-		branch, uncommitted, staged, statusErr := git.GetGitStatus()
-		if statusErr == nil {
-			b.WriteString("--- Git Status Information ---\n")
-			b.WriteString(fmt.Sprintf("Current Branch: %s\n", branch))
-			b.WriteString(fmt.Sprintf("Uncommitted Changes: %d\n", uncommitted))
-			b.WriteString(fmt.Sprintf("Staged Changes: %d\n", staged))
-			b.WriteString("This provides an overview of the current Git status.\n\n")
-		} else {
-			b.WriteString("--- Git Status Information ---\n")
-			b.WriteString(fmt.Sprintf("Could not retrieve Git status: %v\n", statusErr))
-			b.WriteString("This may indicate no changes, or an issue with Git.\n\n")
+	// Add Git Status Information
+	branch, uncommitted, staged, statusErr := git.GetGitStatus()
+	if statusErr == nil {
+		b.WriteString("--- Git Status Information ---\n")
+		b.WriteString(fmt.Sprintf("Current Branch: %s\n", branch))
+		b.WriteString(fmt.Sprintf("Uncommitted Changes: %d\n", uncommitted))
+		b.WriteString(fmt.Sprintf("Staged Changes: %d\n", staged))
+
+		// Add detailed information about uncommitted changes
+		if uncommitted > 0 {
+			uncommittedChanges, diffErr := git.GetUncommittedChanges()
+			if diffErr == nil && uncommittedChanges != "" {
+				b.WriteString(fmt.Sprintf("Uncommitted Changes Diff:\n%s\n", uncommittedChanges))
+			} else if diffErr != nil {
+				b.WriteString(fmt.Sprintf("Could not retrieve uncommitted changes diff: %v\n", diffErr))
+			}
 		}
 
+		// Add detailed information about staged changes
+		if staged > 0 {
+			stagedChanges, diffErr := git.GetStagedChanges()
+			if diffErr == nil && stagedChanges != "" {
+				b.WriteString(fmt.Sprintf("Staged Changes Diff:\n%s\n", stagedChanges))
+			} else if diffErr != nil {
+				b.WriteString(fmt.Sprintf("Could not retrieve staged changes diff: %v\n", diffErr))
+			}
+		}
+
+		b.WriteString("This provides an overview of the current Git status and changes.\n\n")
 	} else {
-		b.WriteString("--- Git Repository Information ---\n")
-		b.WriteString("Not currently in a Git repository, or Git root could not be determined.\n\n")
+		b.WriteString("--- Git Status Information ---\n")
+		b.WriteString(fmt.Sprintf("Could not retrieve Git status: %v\n", statusErr))
+		b.WriteString("This may indicate no changes, or an issue with Git.\n\n")
 	}
 
 	// Add Project Goals if available
@@ -257,6 +280,15 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 		b.WriteString("No files selected for summary context.\n\n")
 	}
 	b.WriteString("--- End of full content from workspace ---\n")
+	logger.Log(b.String())
+
+	// Return a brief summary for the console
+	var summary strings.Builder
+	summary.WriteString("Workspace context has been loaded and logged.\n")
+	summary.WriteString(fmt.Sprintf("- %d files in workspace\n", len(allFilePaths)))
+	summary.WriteString(fmt.Sprintf("- %d files selected for full context\n", len(fullContextFiles)))
+	summary.WriteString(fmt.Sprintf("- %d files selected for summary context\n", len(summaryContextFiles)))
+
 	return b.String()
 }
 

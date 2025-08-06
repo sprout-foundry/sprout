@@ -26,7 +26,7 @@ import (
 
 // loadOriginalCode function removed from here. It's moved to pkg/filesystem/loader.go
 
-func ProcessInstructionsWithWorkspace(instructions string, cfg *config.Config) (string, bool, error) {
+func ProcessInstructionsWithWorkspace(instructions string, cfg *config.Config) (string, error) {
 	// Replace any existing #WS or #WORKSPACE tags with a single #WS tag
 	re := regexp.MustCompile(`(?i)\s*#(WS|WORKSPACE)\s*$`)
 	instructions = re.ReplaceAllString(instructions, "") + " #WS"
@@ -34,12 +34,8 @@ func ProcessInstructionsWithWorkspace(instructions string, cfg *config.Config) (
 	return ProcessInstructions(instructions, cfg)
 }
 
-func ProcessInstructions(instructions string, cfg *config.Config) (string, bool, error) {
+func ProcessInstructions(instructions string, cfg *config.Config) (string, error) {
 	originalInstructions := instructions // Capture original instructions for LLM-generated queries
-	useGeminiSearchGrounding := false
-
-	// Check if the editing model is a Gemini model
-	isGemini := llm.IsGeminiModel(cfg.EditingModel)
 
 	// Handle #SG "search query" pattern first
 	sgPattern := regexp.MustCompile(`(?s)#SG\s*"(.*?)"`)
@@ -47,20 +43,14 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, bool,
 		submatches := sgPattern.FindStringSubmatch(match)
 		if len(submatches) > 1 {
 			query := submatches[1]
-			if isGemini && cfg.UseGeminiSearchGrounding {
-				// If Gemini, just remove the #SG tag. Gemini will handle the search internally.
-				useGeminiSearchGrounding = true
-				return "" // Remove the tag from instructions
-			} else {
-				// If not Gemini, use Jina search
-				fmt.Print(prompts.PerformingSearch(query)) // Use prompt
-				content, err := webcontent.FetchContextFromSearch(query, cfg)
-				if err != nil {
-					fmt.Print(prompts.SearchError(query, err)) // Use prompt
-					return ""
-				}
-				return content
+			// Always use Jina search regardless of model type
+			fmt.Print(prompts.PerformingSearch(query))
+			content, err := webcontent.FetchContextFromSearch(query, cfg)
+			if err != nil {
+				fmt.Print(prompts.SearchError(query, err))
+				return ""
 			}
+			return content
 		}
 		return match
 	})
@@ -80,38 +70,32 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, bool,
 			}
 		}
 
-		if isGemini && cfg.UseGeminiSearchGrounding {
-			// If Gemini, just remove the #SG tag. Gemini will handle the search internally.
-			useGeminiSearchGrounding = true
-			return "" // Remove the tag from instructions
-		} else {
-			// If not Gemini, use Jina search
-			fmt.Printf("Ledit is generating a search query using LLM based on your instructions...\n")
-			generatedQueries, err := llm.GenerateSearchQuery(cfg, originalInstructions)
-			if err != nil {
-				fmt.Printf("Error generating search queries with LLM: %v\n", err)
-				return ""
-			}
-
-			var allFetchedContent strings.Builder
-			searchCount := 0
-			for _, query := range generatedQueries {
-				if searchCount >= 2 { // Limit to a maximum of two searches
-					break
-				}
-				fmt.Printf("Performing LLM-generated search for: %s\n", query)
-				content, err := webcontent.FetchContextFromSearch(query, cfg)
-				if err != nil {
-					fmt.Print(prompts.SearchError(query, err))
-					// Continue to the next query even if one fails
-					continue
-				}
-				allFetchedContent.WriteString(content)
-				allFetchedContent.WriteString("\n\n") // Add a separator between contents from different searches
-				searchCount++
-			}
-			return allFetchedContent.String()
+		// Always use Jina search regardless of model type
+		fmt.Printf("Ledit is generating a search query using LLM based on your instructions...\n")
+		generatedQueries, err := llm.GenerateSearchQuery(cfg, originalInstructions)
+		if err != nil {
+			fmt.Printf("Error generating search queries with LLM: %v\n", err)
+			return ""
 		}
+
+		var allFetchedContent strings.Builder
+		searchCount := 0
+		for _, query := range generatedQueries {
+			if searchCount >= 2 { // Limit to a maximum of two searches
+				break
+			}
+			fmt.Printf("Performing LLM-generated search for: %s\n", query)
+			content, err := webcontent.FetchContextFromSearch(query, cfg)
+			if err != nil {
+				fmt.Print(prompts.SearchError(query, err))
+				// Continue to the next query even if one fails
+				continue
+			}
+			allFetchedContent.WriteString(content)
+			allFetchedContent.WriteString("\n\n") // Add a separator between contents from different searches
+			searchCount++
+		}
+		return allFetchedContent.String()
 	})
 
 	filePattern := regexp.MustCompile(`\s+#(\S+)(?:(\d+),(\d+))?`)
@@ -130,43 +114,45 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, bool,
 		fmt.Printf("Processing path: %s\n", path) // Logging the path being processed
 
 		if path == "WORKSPACE" || path == "WS" {
-			fmt.Println(prompts.LoadingWorkspaceData()) // Use prompt
+			fmt.Println(prompts.LoadingWorkspaceData())
 			content = workspace.GetWorkspaceContext(instructions, cfg)
 		} else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 
 			content, err = webcontent.NewWebContentFetcher().FetchWebContent(path, cfg) // Pass cfg here
 			if err != nil {
-				fmt.Print(prompts.URLFetchError(path, err)) // Use prompt
+				fmt.Print(prompts.URLFetchError(path, err))
 				continue
 			}
 		} else {
 			content, err = filesystem.LoadFileContent(path) // CHANGED: Call filesystem.LoadFileContent
 			if err != nil {
-				fmt.Print(prompts.FileLoadError(path, err)) // Use prompt
+				fmt.Print(prompts.FileLoadError(path, err))
 				continue
 			}
 		}
 		instructions = strings.Replace(instructions, "#"+match[1], content, 1)
 	}
-	return instructions, useGeminiSearchGrounding, nil
+	return instructions, nil
 }
 
 // GetLLMCodeResponse function removed from here, as it's now in pkg/context/context_builder.go
 
-func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config, useGeminiSearchGrounding bool) (map[string]string, string, error) {
-	modelName, llmContent, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, filename, useGeminiSearchGrounding) // Updated call site
+func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config) (map[string]string, string, error) {
+	log := utils.GetLogger(cfg.SkipPrompt)
+	modelName, llmContent, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, filename) // Updated call site
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get LLM response: %w", err)
 	}
 
-	fmt.Print(prompts.ModelReturned(modelName, llmContent)) // Use prompt
+	log.Log(prompts.ModelReturned(modelName, llmContent))
 
 	updatedCode, err := parser.GetUpdatedCodeFromResponse(llmContent)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to parse updated code from response: %w", err)
 	}
 	if len(updatedCode) == 0 {
-		fmt.Println(prompts.NoCodeBlocksParsed()) // Use prompt
+		fmt.Println(prompts.NoCodeBlocksParsed())
+		fmt.Printf("%s\n", llmContent) // Print the raw LLM response since it may be used directly by the user
 	}
 	return updatedCode, llmContent, nil
 }
@@ -215,14 +201,14 @@ func OpenInEditor(content, fileExtension string) (string, error) {
 	return string(editedContent), nil
 }
 
-func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *config.Config, instructions string) error {
+func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *config.Config, instructions string, llmResponseRaw string) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	for newFilename, newCode := range updatedCode {
 		originalCode, _ := filesystem.LoadOriginalCode(newFilename) // CHANGED: Call filesystem.LoadOriginalCode
 
 		if originalCode == newCode {
-			fmt.Print(prompts.NoChangesDetected(newFilename)) // Use prompt
+			fmt.Print(prompts.NoChangesDetected(newFilename))
 			continue
 		}
 
@@ -236,8 +222,8 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 			newCode = mergedCode
 		}
 
-		color.Yellow(prompts.OriginalFileHeader(newFilename)) // Use prompt
-		color.Yellow(prompts.UpdatedFileHeader(newFilename))  // Use prompt
+		color.Yellow(prompts.OriginalFileHeader(newFilename))
+		color.Yellow(prompts.UpdatedFileHeader(newFilename))
 		changetracker.PrintDiff(newFilename, originalCode, newCode)
 
 		applyChanges := false
@@ -245,7 +231,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 		if cfg.SkipPrompt {
 			applyChanges = true
 		} else {
-			fmt.Print(prompts.ApplyChangesPrompt(newFilename)) // Use prompt
+			fmt.Print(prompts.ApplyChangesPrompt(newFilename))
 			userInput, _ := reader.ReadString('\n')
 			userInput = strings.TrimSpace(strings.ToLower(userInput))
 			applyChanges = userInput == "y" || userInput == "yes"
@@ -269,7 +255,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				}
 			}
 
-			if err := filesystem.SaveFile(newFilename, newCode); err != nil { // CHANGED: Call filesystem.SaveFile
+			if err := filesystem.SaveFile(newFilename, newCode); err != nil {
 				return fmt.Errorf("failed to save file: %w", err)
 			}
 
@@ -278,10 +264,13 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				return fmt.Errorf("failed to get change summaries: %w", err)
 			}
 
-			if err := changetracker.RecordChange(revisionID, newFilename, originalCode, newCode, description, note); err != nil {
+			// Use the passed llmResponseRaw directly for llmMessage
+			llmMessage := llmResponseRaw
+
+			if err := changetracker.RecordChangeWithDetails(revisionID, newFilename, originalCode, newCode, description, note, instructions, llmMessage, cfg.EditingModel); err != nil {
 				return fmt.Errorf("failed to record change: %w", err)
 			}
-			fmt.Print(prompts.ChangesApplied(newFilename)) // Use prompt
+			fmt.Print(prompts.ChangesApplied(newFilename))
 
 			if cfg.TrackWithGit {
 				// get the filename path from the root of the git repository
@@ -306,7 +295,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				}
 			}
 		} else {
-			fmt.Print(prompts.ChangesNotApplied(newFilename)) // Use prompt
+			fmt.Print(prompts.ChangesNotApplied(newFilename))
 		}
 	}
 	return nil
@@ -337,7 +326,7 @@ func getChangeSummaries(cfg *config.Config, newCode string, instructions string,
 	}
 
 	// falling back to manual input
-	fmt.Print(prompts.EnterDescriptionPrompt(newFilename)) // Use prompt
+	fmt.Print(prompts.EnterDescriptionPrompt(newFilename))
 	note, _ = reader.ReadString('\n')
 	note = strings.TrimSpace(note)
 	generatedDescription = ""
@@ -365,14 +354,14 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (s
 		}
 	}
 
-	processedInstructions, useGeminiSearchGrounding, err := ProcessInstructions(instructions, cfg)
+	processedInstructions, err := ProcessInstructions(instructions, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to process instructions: %w", err)
 	}
-	fmt.Print(prompts.ProcessedInstructionsSeparator(processedInstructions)) // Use prompt
+	// fmt.Print(prompts.ProcessedInstructionsSeparator(processedInstructions))
 
 	requestHash := utils.GenerateRequestHash(processedInstructions)
-	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, filename, cfg, useGeminiSearchGrounding)
+	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, filename, cfg)
 	if err != nil {
 		return "", err
 	}
@@ -403,7 +392,7 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config) (s
 	}
 
 	// Handle file updates (write to disk, record individual file changes, git commit)
-	err = handleFileUpdates(updatedCodeFiles, revisionID, cfg, instructions)
+	err = handleFileUpdates(updatedCodeFiles, revisionID, cfg, instructions, llmResponseRaw)
 	if err != nil {
 		return diffForTargetFile, err
 	}
@@ -419,10 +408,10 @@ func mergePartialCode(originalCode, partialCode string) (string, error) {
 
 	lines := strings.Split(partialCode, "\n")
 	originalLines := strings.Split(originalCode, "\n")
-	
+
 	var resultLines []string
 	lineIndex := 0
-	
+
 	for _, line := range lines {
 		if parser.IsPartialContentMarker(line) {
 			// Find the next unchanged marker or the end of the block
@@ -447,7 +436,7 @@ func mergePartialCode(originalCode, partialCode string) (string, error) {
 			resultLines = append(resultLines, line)
 		}
 	}
-	
+
 	return strings.Join(resultLines, "\n"), nil
 }
 

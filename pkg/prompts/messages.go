@@ -36,6 +36,10 @@ func EnableSecurityChecksPrompt() string {
 	return "Enable checking for leaked keys and passwords in all files?\n Note that this can take a long time when enabled (yes/no): "
 }
 
+func PotentialSecurityConcernsFound(filePath string, concerns string, snippetInQuestion string) string {
+	return fmt.Sprintf("Potential security concerns detected in the file %s:\n- %s\nSnippet in question:\n%s\nIs this a valid concern that we should avoid summarization for this file?", filePath, concerns, snippetInQuestion)
+}
+
 func NoConfigFound() string {
 	return "No config found. Creating a new one."
 }

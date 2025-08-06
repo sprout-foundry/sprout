@@ -133,7 +133,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 
 				// Use ProcessCodeGeneration to attempt a fix.
 				// Pass an empty filename as the fix might involve multiple files.
-				_, fixErr := editor.ProcessCodeGeneration("", fixInstructions, cfg)
+				_, fixErr := editor.ProcessCodeGeneration("", fixInstructions, cfg, "")
 				if fixErr != nil {
 					logger.LogError(fmt.Errorf("error during LLM fix attempt %d: %w", attempt, fixErr))
 					// If the fix itself fails, we still continue to the next validation attempt

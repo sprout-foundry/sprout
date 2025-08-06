@@ -3,15 +3,16 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/prompts"
-	"github.com/alantheprice/ledit/pkg/workspace"
 	"io"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/workspace"
 
 	"github.com/spf13/cobra"
 	// Removed golang.org/x/term as we are no longer using raw mode for input
@@ -87,7 +88,7 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 		// Check token limit and ask for confirmation if needed
 		var totalInputTokens int
 		for _, msg := range messages {
-			totalInputTokens += llm.EstimateTokens(msg.Content)
+			totalInputTokens += llm.EstimateTokens(llm.GetMessageText(msg.Content))
 		}
 
 		if totalInputTokens > llm.DefaultTokenLimit && !cfg.SkipPrompt {

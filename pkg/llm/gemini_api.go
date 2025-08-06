@@ -33,7 +33,7 @@ func callGeminiAPI(model string, messages []prompts.Message, timeout time.Durati
 			Parts: []struct {
 				Text string `json:"text"`
 			}{
-				{Text: msg.Content},
+				{Text: GetMessageText(msg.Content)}, // Use helper function
 			},
 		})
 	}

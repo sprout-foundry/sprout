@@ -39,10 +39,9 @@ type Config struct {
 	WorkspaceModel           string               `json:"workspace_model"`     // New field for workspace analysis
 	LocalModel               string               `json:"local_model"`
 	TrackWithGit             bool                 `json:"track_with_git"`
-	EnableSecurityChecks     bool                 `json:"enable_security_checks"`      // New field for security checks
-	UseGeminiSearchGrounding bool                 `json:"use_gemini_search_grounding"` // New field for Gemini Search Grounding
-	SkipPrompt               bool                 `json:"-"`                           // Internal use, not saved to config
-	Interactive              bool                 `json:"-"`                           // Internal use, not saved to config
+	EnableSecurityChecks     bool                 `json:"enable_security_checks"` // New field for security checks
+	SkipPrompt               bool                 `json:"-"`                      // Internal use, not saved to config
+	Interactive              bool                 `json:"-"`                      // Internal use, not saved to config
 	OllamaServerURL          string               `json:"ollama_server_url"`
 	OrchestrationMaxAttempts int                  `json:"orchestration_max_attempts"` // New field for max attempts
 	CodeStyle                CodeStylePreferences `json:"code_style"`                 // New field for code style preferences
@@ -116,7 +115,6 @@ func (cfg *Config) setDefaultValues() {
 	}
 	// Ensure EnableSecurityChecks is explicitly set to true by default, but can be overridden by config file
 	cfg.EnableSecurityChecks = true
-	// UseGeminiSearchGrounding defaults to false (zero value), no explicit setting needed here unless default was true.
 
 	// NEW: Set default for SearchModel
 	if cfg.SearchModel == "" {
@@ -163,7 +161,6 @@ func loadConfig(filePath string) (*Config, error) {
 	cfg.WorkspaceModel = ""                        // Default to empty, will fall back to SummaryModel
 	cfg.OllamaServerURL = "http://localhost:11434" // Default Ollama URL
 	cfg.EnableSecurityChecks = false               // Default to false for existing configs
-	cfg.UseGeminiSearchGrounding = false           // Default to false for existing configs
 	cfg.Temperature = 0.0                          // NEW: Initialize Temperature to its zero value
 	// Initialize CodeStyle to ensure setDefaultValues can populate it
 	cfg.CodeStyle = CodeStylePreferences{}
@@ -228,10 +225,6 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 	enableSecurityChecksStr, _ := reader.ReadString('\n')
 	enableSecurityChecks := strings.TrimSpace(strings.ToLower(enableSecurityChecksStr)) == "yes"
 
-	fmt.Print(prompts.UseGeminiSearchGroundingPrompt()) // New prompt for Gemini Search Grounding
-	useGeminiSearchGroundingStr, _ := reader.ReadString('\n')
-	useGeminiSearchGrounding := strings.TrimSpace(strings.ToLower(useGeminiSearchGroundingStr)) == "yes"
-
 	fmt.Print(prompts.EnterLLMProvider("anthropic")) // NEW PROMPT for LLM Provider
 
 	cfg := &Config{
@@ -241,8 +234,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		OrchestrationModel:       orchestrationModel,
 		LocalModel:               getLocalModel(skipPrompt),
 		TrackWithGit:             autoTrackGit,
-		EnableSecurityChecks:     enableSecurityChecks,     // Set from user input
-		UseGeminiSearchGrounding: useGeminiSearchGrounding, // Set from user input
+		EnableSecurityChecks:     enableSecurityChecks, // Set from user input
 		OllamaServerURL:          "http://localhost:11434",
 		OrchestrationMaxAttempts: 6,                      // Default max attempts for orchestration
 		CodeStyle:                CodeStylePreferences{}, // Initialize to be populated by setDefaultValues

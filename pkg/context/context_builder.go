@@ -106,14 +106,14 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 	return strings.Join(responses, "\n"), nil
 }
 
-func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string, useGeminiSearchGrounding bool) (string, string, error) {
+func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string) (string, string, error) {
 	modelName := cfg.EditingModel
 	fmt.Print(prompts.UsingModel(modelName))
 
 	messages := prompts.BuildCodeMessages(code, instructions, filename, cfg.Interactive)
 
 	if !cfg.Interactive {
-		_, response, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute, useGeminiSearchGrounding)
+		_, response, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
 		if err != nil {
 			return modelName, "", err
 		}
@@ -131,7 +131,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename string,
 		}
 
 		// Default timeout for code generation is 6 minutes
-		_, response, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute, useGeminiSearchGrounding)
+		_, response, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
 		if err != nil {
 			return modelName, "", err
 		}
@@ -209,7 +209,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 		fmt.Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 
-	_, response, err := llm.GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute, false) // Analysis does not use search grounding
+	_, response, err := llm.GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute) // Analysis does not use search grounding
 	if err != nil {
 		return "", fmt.Errorf("failed to get script risk analysis from LLM: %w", err)
 	}

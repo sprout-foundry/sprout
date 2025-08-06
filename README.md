@@ -98,7 +98,6 @@ ledit ignore "dist/"
   "TrackWithGit": false,
   "SkipPrompt": false,
   "EnableSecurityChecks": true,
-  "UseGeminiSearchGrounding": false,
   "OrchestrationMaxAttempts": 6,
   "CodeStyle": {
     "FunctionSize": "Aim for smaller, single-purpose functions (under 50 lines).",
@@ -120,7 +119,6 @@ ledit ignore "dist/"
 -   **`TrackWithGit`**: If `true`, automatically commit changes to Git.
 -   **`SkipPrompt`**: If `true`, bypasses all user confirmation prompts.
 -   **`EnableSecurityChecks`**: If `true`, enables checks for potential credentials before sending files to LLM.
--   **`UseGeminiSearchGrounding`**: If `true`, enables experimental Gemini-powered search grounding.
 -   **`OrchestrationMaxAttempts`**: The maximum number of retries for a failed orchestration step.
 -   **`CodeStyle`**: Defines preferred code style guidelines for the project, influencing LLM generation.
 

@@ -344,7 +344,7 @@ func SystemMemoryFallback(gb int, model string) string {
 // --- Orchestration Prompts ---
 func OrchestrationAlphaWarning() string {
 	boldYellow := color.New(color.FgYellow, color.Bold).SprintFunc()
-	return boldYellow("WARNING: Orchestration is currently an early alpha feature and is NOT recommended for general use. For a more robust and controllable process, please see examples/process_todos.py for how to implement similar functionality.")
+	return boldYellow("WARNING: Orchestration is currently an early alpha feature and is NOT recommended for general use. For a more robust and controllable process, please see examples/generate_todos.sh and examples/process_todos.sh for how to implement similar functionality.")
 }
 
 func LeditDirCreationError(err error) string {

@@ -56,7 +56,8 @@ Please be aware that using `ledit` involves interactions with Large Language Mod
 -   **Interactive and Automated Modes**: Confirm each change manually, or run in a fully automated mode with `--skip-prompt`.
 -   **Multi-Provider LLM Support**: Works with OpenAI, Groq, Gemini, Ollama, and more.
 -   **Change Tracking**: Keeps a local history of all changes made.
--   **Git Integration**: Can automatically commit applied changes with generated messages.
+-   **Git Integration**: Can automatically commit changes to Git with AI-generated conventional commit messages.
+-   **Automated Code Review**: When running in automated mode (`--skip-prompt`), performs LLM-based code reviews of changes before committing.
 -   **Self-Correction Loop**: In orchestration mode, it attempts to fix its own errors by analyzing validation failures and retrying.
 
 ## Installation
@@ -107,8 +108,6 @@ ledit log
 
 # Attempt to fix a problem in your code by running a command and letting ledit attempt to fix the error messages that are a result of the command.
 ledit fix "go build"
-
-ledit 
 
 # Ignore a directory from workspace analysis
 ledit ignore "dist/"
@@ -190,6 +189,9 @@ ledit question
 # Generate a conventional commit message for staged changes
 ledit commit
 
+# Generate a conventional commit message and automatically commit (with optional code review)
+ledit commit --skip-prompt
+
 # View the history of changes made by ledit
 ledit log
 
@@ -208,6 +210,9 @@ For larger tasks, use the `process` command. This is the most powerful feature o
 
 ```bash
 ledit process "Implement a REST API for a user model with create, read, and delete endpoints. Use Gin framework."
+
+# Run orchestration in automated mode with code review
+ledit process "Implement a REST API for a user model" --skip-prompt
 ```
 
 **The Orchestration Process:**
@@ -225,6 +230,10 @@ ledit process "Implement a REST API for a user model with create, read, and dele
     -   Optionally perform a web search for solutions.
     -   Re-prompt the LLM with the error context to generate a fix.
     -   Retry the step up to 4 times before halting.
+6.  **Automated Code Review**: When running with `--skip-prompt`, an LLM-based code review is performed on all changes:
+    -   If approved, changes are committed automatically
+    -   If revisions are needed, the tool will automatically apply suggested changes and re-validate
+    -   If rejected, the tool will provide feedback and a more detailed prompt suggestion for re-execution
 
 ### Ignoring Files
 

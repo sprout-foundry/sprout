@@ -304,6 +304,48 @@ Example JSON format:
 	}
 }
 
+// BuildCodeReviewMessages constructs the messages for the LLM to review code changes.
+func BuildCodeReviewMessages(combinedDiff, originalPrompt string) []Message {
+	systemPrompt := `You are an expert code reviewer. Your task is to review a combined diff of code changes against the original user prompt.
+Analyze the changes for correctness, security, and adherence to best practices.
+Your response MUST be a JSON object with the following keys:
+- "status": Either "approved", "needs_revision", or "rejected".
+- "feedback": A concise explanation of your review decision.
+- "instructions": (Only required if status is "needs_revision" or "rejected") Detailed instructions for what needs to be fixed or improved.
+- "new_prompt": (Only required if status is "rejected") A more detailed prompt that addresses the issues found.
+
+Example JSON format for approval:
+{
+  "status": "approved",
+  "feedback": "The changes correctly implement the requested feature and follow best practices."
+}
+
+Example JSON format for revision:
+{
+  "status": "needs_revision",
+  "feedback": "The implementation has a potential security vulnerability in the authentication logic.",
+  "instructions": "Review the authentication function in src/auth.go and ensure proper input validation is implemented."
+}
+
+Example JSON format for rejection:
+{
+  "status": "rejected",
+  "feedback": "The changes do not address the core requirements and introduce several bugs.",
+  "new_prompt": "Please implement a proper user authentication system with secure password handling and session management."
+}
+`
+	userPrompt := fmt.Sprintf(
+		"Original user prompt:\n\"%s\"\n\nCode changes (diff):\n```diff\n%s\n```\n\nPlease review these changes and provide your assessment.",
+		originalPrompt,
+		combinedDiff,
+	)
+
+	return []Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+}
+
 // --- User Interaction Prompts ---
 
 // EnterLLMProvider prompts the user to enter their preferred LLM provider.

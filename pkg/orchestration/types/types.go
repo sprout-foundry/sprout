@@ -36,3 +36,11 @@ type OrchestrationChange struct {
 type OrchestrationChangesList struct {
 	Changes []OrchestrationChange `json:"changes"`
 }
+
+// CodeReviewResult represents the result of an automated code review.
+type CodeReviewResult struct {
+	Status       string `json:"status"`                 // "approved", "needs_revision", "rejected"
+	Feedback     string `json:"feedback"`               // Explanation for the status
+	Instructions string `json:"instructions,omitempty"` // Instructions for `ledit` if status is "needs_revision"
+	NewPrompt    string `json:"new_prompt,omitempty"`   // A new, more detailed prompt if status is "rejected"
+}

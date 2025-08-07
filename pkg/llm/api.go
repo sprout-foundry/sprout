@@ -253,3 +253,53 @@ func GetChangesForRequirement(cfg *config.Config, requirementInstruction string,
 
 	return changesList.Changes, nil
 }
+
+// GetCodeReview asks the LLM to review a combined diff of changes against the original prompt.
+func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt string) (*types.CodeReviewResult, error) {
+	modelName := cfg.OrchestrationModel
+	if modelName == "" {
+		modelName = cfg.EditingModel // Fallback
+	}
+
+	messages := prompts.BuildCodeReviewMessages(combinedDiff, originalPrompt)
+
+	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get code review from LLM: %w", err)
+	}
+
+	if response == "" {
+		return nil, fmt.Errorf("LLM returned an empty response for code review")
+	}
+
+	// Try to extract JSON from response (handles both raw JSON and code block JSON)
+	var jsonStr string
+	if strings.Contains(response, "```json") {
+		parts := strings.Split(response, "```json")
+		if len(parts) > 1 {
+			jsonPart := parts[1]
+			end := strings.Index(jsonPart, "```")
+			if end > 0 {
+				jsonStr = strings.TrimSpace(jsonPart[:end])
+			} else {
+				jsonStr = strings.TrimSpace(jsonPart)
+			}
+		}
+	} else {
+		// Simple heuristic to find the start of a JSON object
+		start := strings.Index(response, "{")
+		end := strings.LastIndex(response, "}")
+		if start != -1 && end != -1 && end > start {
+			jsonStr = response[start : end+1]
+		} else {
+			jsonStr = response
+		}
+	}
+
+	var reviewResult types.CodeReviewResult
+	if err := json.Unmarshal([]byte(jsonStr), &reviewResult); err != nil {
+		return nil, fmt.Errorf("failed to parse code review JSON from LLM response: %w\nResponse was: %s", err, response)
+	}
+
+	return &reviewResult, nil
+}

@@ -41,6 +41,10 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 
 	var allOrchestrationDiffs strings.Builder
 
+	// Get workspace context for the overall orchestration prompt
+	// This context will be passed to the final automated review.
+	workspaceContextForReview := workspace.GetWorkspaceContext(prompt, cfg)
+
 	// 2. Process each requirement
 	for i := plan.CurrentStep; i < len(plan.Requirements); i++ {
 		req := &plan.Requirements[i] // Get a pointer to modify the original slice element
@@ -122,7 +126,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 
 			// Perform automated review regardless of validation result when skipPrompt is active
 			if cfg.SkipPrompt {
-				reviewErr := performAutomatedReview(allOrchestrationDiffs.String(), prompt, cfg, logger)
+				reviewErr := performAutomatedReview(allOrchestrationDiffs.String(), prompt, workspaceContextForReview, cfg, logger)
 				if reviewErr != nil {
 					// If review fails, we should consider this as part of validation failure
 					if validationErr == nil {
@@ -291,10 +295,10 @@ func validateChanges() error {
 }
 
 // performAutomatedReview performs an LLM-based code review of the combined diff.
-func performAutomatedReview(combinedDiff, originalPrompt string, cfg *config.Config, logger *utils.Logger) error {
+func performAutomatedReview(combinedDiff, originalPrompt, workspaceContext string, cfg *config.Config, logger *utils.Logger) error {
 	logger.LogProcessStep("Performing automated code review...")
 
-	review, err := llm.GetCodeReview(cfg, combinedDiff, originalPrompt)
+	review, err := llm.GetCodeReview(cfg, combinedDiff, originalPrompt, workspaceContext)
 	if err != nil {
 		return fmt.Errorf("failed to get code review from LLM: %w", err)
 	}

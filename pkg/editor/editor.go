@@ -201,7 +201,7 @@ func OpenInEditor(content, fileExtension string) (string, error) {
 	return string(editedContent), nil
 }
 
-func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *config.Config, instructions string, llmResponseRaw string) (string, error) {
+func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *config.Config, originalInstructions string, processedInstructions string, llmResponseRaw string) (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 	var allDiffs strings.Builder
 
@@ -268,7 +268,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				return "", fmt.Errorf("failed to save file: %w", err)
 			}
 
-			note, description, commit, err := getChangeSummaries(cfg, newCode, instructions, newFilename, reader)
+			note, description, commit, err := getChangeSummaries(cfg, newCode, originalInstructions, newFilename, reader)
 			if err != nil {
 				return "", fmt.Errorf("failed to get change summaries: %w", err)
 			}
@@ -276,7 +276,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 			// Use the passed llmResponseRaw directly for llmMessage
 			llmMessage := llmResponseRaw
 
-			if err := changetracker.RecordChangeWithDetails(revisionID, newFilename, originalCode, newCode, description, note, instructions, llmMessage, cfg.EditingModel); err != nil {
+			if err := changetracker.RecordChangeWithDetails(revisionID, newFilename, originalCode, newCode, description, note, originalInstructions, llmMessage, cfg.EditingModel); err != nil {
 				return "", fmt.Errorf("failed to record change: %w", err)
 			}
 			fmt.Print(prompts.ChangesApplied(newFilename))
@@ -313,7 +313,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 		combinedDiff := allDiffs.String()
 		if combinedDiff != "" {
 			logger := utils.GetLogger(cfg.SkipPrompt)
-			reviewErr := performAutomatedReview(combinedDiff, instructions, cfg, logger)
+			reviewErr := performAutomatedReview(combinedDiff, originalInstructions, processedInstructions, cfg, logger, revisionID)
 			if reviewErr != nil {
 				return "", reviewErr
 			}
@@ -357,10 +357,10 @@ func getChangeSummaries(cfg *config.Config, newCode string, instructions string,
 }
 
 // performAutomatedReview performs an LLM-based code review of the combined diff.
-func performAutomatedReview(combinedDiff, originalPrompt string, cfg *config.Config, logger *utils.Logger) error {
+func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions string, cfg *config.Config, logger *utils.Logger, revisionID string) error {
 	logger.LogProcessStep("Performing automated code review...")
 
-	review, err := llm.GetCodeReview(cfg, combinedDiff, originalPrompt)
+	review, err := llm.GetCodeReview(cfg, combinedDiff, originalPrompt, processedInstructions)
 	if err != nil {
 		return fmt.Errorf("failed to get code review from LLM: %w", err)
 	}
@@ -389,6 +389,12 @@ func performAutomatedReview(combinedDiff, originalPrompt string, cfg *config.Con
 		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
 		// The instruction says "reject the changes and create a more detailed prompt for the code changes to address the issue."
 		// We fail the orchestration and tell the user to re-run with the new prompt.
+		// we need to actually rollback the changes made in this iteration.
+		rollbackErr := changetracker.RevertChangeByRevisionID(revisionID)
+		if rollbackErr != nil {
+			logger.LogError(fmt.Errorf("failed to rollback changes for revision %s: %w", revisionID, rollbackErr))
+			return fmt.Errorf("changes rejected by automated review, but rollback failed. Feedback: %s. New prompt suggestion: %s. Rollback error: %w", review.Feedback, review.NewPrompt, rollbackErr)
+		}
 		return fmt.Errorf("changes rejected by automated review. Feedback: %s. New prompt suggestion: %s", review.Feedback, review.NewPrompt)
 	default:
 		return fmt.Errorf("unknown review status from LLM: %s. Full feedback: %s", review.Status, review.Feedback)
@@ -435,7 +441,7 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 
 	// Handle file updates (write to disk, record individual file changes, git commit)
 	// This now returns the combined diff of all changes.
-	combinedDiff, err := handleFileUpdates(updatedCodeFiles, revisionID, cfg, instructions, llmResponseRaw)
+	combinedDiff, err := handleFileUpdates(updatedCodeFiles, revisionID, cfg, instructions, processedInstructions, llmResponseRaw)
 	if err != nil {
 		return "", err
 	}

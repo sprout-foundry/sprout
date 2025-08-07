@@ -24,6 +24,42 @@ type RevisionGroup struct {
 	EditingModel string // Added: Editing model used for this revision
 }
 
+// RevertChangeByRevisionID reverts all changes associated with a given revision ID.
+func RevertChangeByRevisionID(revisionID string) error {
+	changes, err := fetchAllChanges()
+	if err != nil {
+		return fmt.Errorf("failed to fetch all changes: %w", err)
+	}
+	if len(changes) == 0 {
+		return fmt.Errorf("no changes recorded to revert")
+	}
+
+	revisionGroups := groupChangesByRevision(changes)
+
+	var targetGroup *RevisionGroup
+	for i := range revisionGroups {
+		if revisionGroups[i].RevisionID == revisionID {
+			targetGroup = &revisionGroups[i]
+			break
+		}
+	}
+
+	if targetGroup == nil {
+		return fmt.Errorf("revision ID '%s' not found", revisionID)
+	}
+
+	activeChanges := getActiveChanges(targetGroup.Changes)
+	if len(activeChanges) == 0 {
+		return fmt.Errorf("no active changes found for revision ID '%s' to revert", revisionID)
+	}
+
+	if err := handleRevisionRollback(*targetGroup); err != nil {
+		return fmt.Errorf("error during revision rollback for ID '%s': %w", revisionID, err)
+	}
+
+	return nil
+}
+
 func PrintRevisionHistory() error {
 	changes, err := fetchAllChanges() // fetchAllChanges now returns sorted data
 	if err != nil {
@@ -36,7 +72,7 @@ func PrintRevisionHistory() error {
 
 	// Group changes by revision ID
 	revisionGroups := groupChangesByRevision(changes)
-	
+
 	if len(revisionGroups) == 0 {
 		fmt.Println("No revisions found.")
 		return nil
@@ -133,13 +169,13 @@ func PrintRevisionHistoryBuffer() (string, error) {
 
 	// Group changes by revision ID
 	revisionGroups := groupChangesByRevision(changes)
-	
+
 	if len(revisionGroups) == 0 {
 		return "No revisions found.\n", nil
 	}
 
 	var buffer strings.Builder
-	
+
 	// Display all revisions in the buffer
 	for i, group := range revisionGroups {
 		if i > 0 {
@@ -201,7 +237,7 @@ func displayRevision(group RevisionGroup) {
 
 func formatRevision(group RevisionGroup) string {
 	var buffer strings.Builder
-	
+
 	buffer.WriteString(fmt.Sprintf("\nEditing Model: %s\n", group.EditingModel))
 	buffer.WriteString(strings.Repeat("=", 80) + "\n")
 	buffer.WriteString(fmt.Sprintf("Revision ID: %s\n", group.RevisionID))
@@ -247,7 +283,7 @@ func formatRevision(group RevisionGroup) string {
 			}
 		}
 	}
-	
+
 	return buffer.String()
 }
 

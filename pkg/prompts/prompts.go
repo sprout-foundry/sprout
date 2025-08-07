@@ -28,12 +28,23 @@ type ImageURL struct {
 	Detail string `json:"detail,omitempty"` // "low", "high", or "auto"
 }
 
+// CodeReviewResponse represents the structure of the LLM's code review response.
+// This struct is used by the llm package to unmarshal the LLM's response.
+// It is placed here for visibility to other packages that might need to know its structure,
+// but its primary use is within the llm package.
+type CodeReviewResponse struct {
+	Status       string `json:"status"`
+	Feedback     string `json:"feedback"`
+	Instructions string `json:"instructions,omitempty"`
+	NewPrompt    string `json:"new_prompt,omitempty"`
+}
+
 // --- LLM Message Builders ---
 
 func getBaseCodeMessageSystemMessage() string {
 	return "Provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
 		"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
-		"The syntax of the code blocks must exactly match these instructions and the code must be complete. " +
+		"The syntax of the code blocks must exactly match these instructions and the code is complete. " +
 		"ONLY make the changes that are necessary to satisfy the instructions. " +
 		"Do not include any additional text, explanations, or comments outside the code blocks. " +
 		"Update all files that are necessary to fulfill the requirements and any code that is affected by the changes. " +
@@ -305,7 +316,7 @@ Example JSON format:
 }
 
 // BuildCodeReviewMessages constructs the messages for the LLM to review code changes.
-func BuildCodeReviewMessages(combinedDiff, originalPrompt string) []Message {
+func BuildCodeReviewMessages(combinedDiff, originalPrompt, processedInstructions string) []Message {
 	systemPrompt := `You are an expert code reviewer. Your task is to review a combined diff of code changes against the original user prompt.
 Analyze the changes for correctness, security, and adherence to best practices.
 Your response MUST be a JSON object with the following keys:
@@ -334,16 +345,43 @@ Example JSON format for rejection:
   "new_prompt": "Please implement a proper user authentication system with secure password handling and session management."
 }
 `
-	userPrompt := fmt.Sprintf(
+	var userPromptBuilder strings.Builder
+	// Pull the workspace context out of the processed instructions if available
+	// the start of the workspace context is marked by: --- Full content from workspace ---
+	// the end of the workspace context is marked by: --- End of full content from workspace ---
+	workspaceContext := extractWorkspaceContext(processedInstructions)
+
+	if workspaceContext != "" {
+		userPromptBuilder.WriteString("--- Workspace Context ---\n")
+		userPromptBuilder.WriteString(workspaceContext)
+		userPromptBuilder.WriteString("\n--- End Workspace Context ---\n\n")
+	}
+
+	userPromptBuilder.WriteString(fmt.Sprintf(
 		"Original user prompt:\n\"%s\"\n\nCode changes (diff):\n```diff\n%s\n```\n\nPlease review these changes and provide your assessment.",
 		originalPrompt,
 		combinedDiff,
-	)
+	))
 
 	return []Message{
 		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userPrompt},
+		{Role: "user", Content: userPromptBuilder.String()},
 	}
+}
+
+func extractWorkspaceContext(processedInstructions string) string {
+	// Pull the workspace context out of the processed instructions if available
+	// the start of the workspace context is marked by: --- Full content from workspace ---
+	// the end of the workspace context is marked by: --- End of full content from workspace ---
+	startMarker := "--- Full content from workspace ---"
+	endMarker := "--- End of full content from workspace ---"
+	startIndex := strings.Index(processedInstructions, startMarker)
+	endIndex := strings.Index(processedInstructions, endMarker)
+
+	if startIndex != -1 && endIndex != -1 && startIndex < endIndex {
+		return processedInstructions[startIndex+len(startMarker) : endIndex]
+	}
+	return ""
 }
 
 // --- User Interaction Prompts ---

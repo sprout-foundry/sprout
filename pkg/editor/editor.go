@@ -377,7 +377,7 @@ func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions 
 
 		// The review gives new instructions. We execute them.
 		// This is like a fix.
-		_, fixErr := ProcessCodeGeneration("", review.Instructions, cfg, "")
+		_, fixErr := ProcessCodeGeneration("", review.Instructions+" #WS", cfg, "")
 		if fixErr != nil {
 			return fmt.Errorf("failed to apply review revisions: %w", fixErr)
 		}

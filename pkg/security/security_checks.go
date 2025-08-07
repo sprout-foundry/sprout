@@ -126,70 +126,41 @@ func CheckFileSecurity(
 	concernsForThisFile := make([]string, 0)
 	ignoredConcernsForThisFile := make([]string, 0)
 
-	// If file exists and is changed, start with previously ignored concerns
-	if !isNew && isChanged {
-		ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, existingIgnoredSecurityConcerns...)
-	} else if !isNew && !isChanged {
-		// File is unchanged. Use existing security concerns and ignored concerns.
+	// If file is unchanged, return existing security concerns and ignored concerns directly.
+	if !isNew && !isChanged {
 		concernsForThisFile = append(concernsForThisFile, existingSecurityConcerns...)
 		ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, existingIgnoredSecurityConcerns...)
-		// No new detection needed, return current state
 		return concernsForThisFile, ignoredConcernsForThisFile, len(concernsForThisFile) > 0
 	}
 
-	// Only run security detection for new or changed files
+	// For new or changed files, perform detection and user interaction.
 	detectedConcernsList, detectedSnippetsMap := DetectSecurityConcerns(fileContent)
 
-	// Filter out concerns that were previously ignored
-	newlyDetectedConcerns := []string{}
-	for _, concern := range detectedConcernsList {
-		isAlreadyIgnored := false
-		for _, ignored := range ignoredConcernsForThisFile {
-			if ignored == concern {
-				isAlreadyIgnored = true
+	// Build concernsForThisFile and ignoredConcernsForThisFile based on current detection
+	// and previous ignore choices.
+	for _, detectedConcern := range detectedConcernsList {
+		wasPreviouslyIgnored := false
+		for _, ignored := range existingIgnoredSecurityConcerns {
+			if ignored == detectedConcern {
+				wasPreviouslyIgnored = true
 				break
 			}
 		}
-		if !isAlreadyIgnored {
-			newlyDetectedConcerns = append(newlyDetectedConcerns, concern)
-		}
-	}
 
-	// Prompt user for newly detected, unignored concerns
-	for _, concern := range newlyDetectedConcerns {
-		snippet := detectedSnippetsMap[concern] // Retrieve the snippet for this concern type
-		prompt := prompts.PotentialSecurityConcernsFound(relativePath, concern, snippet)
-		if logger.AskForConfirmation(prompt, true, false) { // We default to not ignoring new concerns
-			concernsForThisFile = append(concernsForThisFile, concern)
-			logger.Logf("Security concern '%s' in %s noted as an issue.", concern, relativePath)
+		if wasPreviouslyIgnored {
+			// If it was previously ignored and is still detected, keep it ignored.
+			ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, detectedConcern)
 		} else {
-			ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, concern)
-			logger.Logf("Security concern '%s' in %s noted as unimportant.", concern, relativePath)
-		}
-	}
-
-	// Add back any concerns that were previously marked as issues and are still detected
-	if !isNew && isChanged {
-		for _, prevConcern := range existingSecurityConcerns {
-			isStillDetected := false
-			for _, currentDetected := range detectedConcernsList { // Use the newly detected list
-				if prevConcern == currentDetected {
-					isStillDetected = true
-					break
-				}
-			}
-			if isStillDetected {
-				// Ensure it's not already added to concernsForThisFile (e.g., if it was also in newlyDetectedConcerns)
-				found := false
-				for _, c := range concernsForThisFile {
-					if c == prevConcern {
-						found = true
-						break
-					}
-				}
-				if !found {
-					concernsForThisFile = append(concernsForThisFile, prevConcern)
-				}
+			// This concern was either new, or previously marked as an issue.
+			// Prompt the user for a decision.
+			snippet := detectedSnippetsMap[detectedConcern]
+			prompt := prompts.PotentialSecurityConcernsFound(relativePath, detectedConcern, snippet)
+			if logger.AskForConfirmation(prompt, true, false) { // Default to NOT ignoring (i.e., mark as issue)
+				concernsForThisFile = append(concernsForThisFile, detectedConcern)
+				logger.Logf("Security concern '%s' in %s noted as an issue.", detectedConcern, relativePath)
+			} else { // User chose to ignore this specific detected concern
+				ignoredConcernsForThisFile = append(ignoredConcernsForThisFile, detectedConcern)
+				logger.Logf("Security concern '%s' in %s noted as unimportant.", detectedConcern, relativePath)
 			}
 		}
 	}

@@ -309,7 +309,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 			newFilesCount, topDirsMessage.String(),
 		)
 
-		if !logger.AskForConfirmation(warningMessage, true) { // this is a required confirmation and will exit if in a non-interactive mode
+		if !logger.AskForConfirmation(warningMessage, false, true) { // this is a required confirmation and will exit if in a non-interactive mode
 			return WorkspaceFile{}, fmt.Errorf("workspace update cancelled by user due to too many new files")
 		}
 	}

@@ -91,7 +91,7 @@ func (w *Logger) LogError(err error) {
 
 // AskForConfirmation prompts the user with a message and waits for a 'yes' or 'no' response.
 // It returns true for 'yes' and false for 'no'.
-func (w *Logger) AskForConfirmation(prompt string, required bool) bool {
+func (w *Logger) AskForConfirmation(prompt string, default_response bool, required bool) bool {
 	if !w.userInteractionEnabled && required {
 		w.Log("User interaction is disabled, but confirmation is required.")
 		w.Log(fmt.Sprintf("We were going to ask the user: '%s'", prompt))
@@ -100,7 +100,7 @@ func (w *Logger) AskForConfirmation(prompt string, required bool) bool {
 	}
 	if !w.userInteractionEnabled {
 		w.Log("Skipping user confirmation in non-interactive mode.")
-		return false // Default to true if not interactive
+		return default_response
 	}
 	reader := bufio.NewReader(os.Stdin)
 	for {

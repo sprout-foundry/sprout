@@ -39,6 +39,8 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 		logger.LogProcessStep(fmt.Sprintf("  %d. [Status: %s] %s", i+1, req.Status, req.Instruction))
 	}
 
+	var allOrchestrationDiffs strings.Builder
+
 	// 2. Process each requirement
 	for i := plan.CurrentStep; i < len(plan.Requirements); i++ {
 		req := &plan.Requirements[i] // Get a pointer to modify the original slice element
@@ -80,7 +82,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 			// The ProcessCodeGeneration function handles loading, LLM call, diff, user prompt, saving, and git commit
 			// It expects instructions and an optional filename.
 			// The change.Instruction should be specific enough for ProcessCodeGeneration.
-			_, err := editor.ProcessWorkspaceCodeGeneration(change.Filepath, change.Instruction, cfg)
+			diff, err := editor.ProcessCodeGeneration(change.Filepath, change.Instruction, cfg, "")
 			if err != nil {
 				change.Status = "failed"
 				change.Error = err.Error()
@@ -88,6 +90,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 				allChangesApplied = false
 			} else {
 				change.Status = "applied"
+				allOrchestrationDiffs.WriteString(diff)
 				logger.LogProcessStep(fmt.Sprintf("  Successfully applied change to %s.", change.Filepath))
 			}
 			req.Changes[j] = change                             // Update the change in the slice
@@ -116,6 +119,20 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 			logger.LogProcessStep(fmt.Sprintf("\nAttempt %d/%d: Validating changes by running build command...", attempt, maxValidationAttempts))
 			plan.Attempts = attempt // Update attempts on the plan
 			validationErr := validateChanges()
+
+			// Perform automated review regardless of validation result when skipPrompt is active
+			if cfg.SkipPrompt {
+				reviewErr := performAutomatedReview(allOrchestrationDiffs.String(), prompt, cfg, logger)
+				if reviewErr != nil {
+					// If review fails, we should consider this as part of validation failure
+					if validationErr == nil {
+						validationErr = reviewErr
+					} else {
+						validationErr = fmt.Errorf("%v; %w", validationErr, reviewErr)
+					}
+				}
+			}
+
 			if validationErr == nil {
 				logger.LogProcessStep("Validation successful!")
 				validationSuccess = true
@@ -133,12 +150,13 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 
 				// Use ProcessCodeGeneration to attempt a fix.
 				// Pass an empty filename as the fix might involve multiple files.
-				_, fixErr := editor.ProcessCodeGeneration("", fixInstructions, cfg, "")
+				fixDiff, fixErr := editor.ProcessCodeGeneration("", fixInstructions, cfg, "")
 				if fixErr != nil {
 					logger.LogError(fmt.Errorf("error during LLM fix attempt %d: %w", attempt, fixErr))
 					// If the fix itself fails, we still continue to the next validation attempt
 					// or exit if max attempts reached.
 				} else {
+					allOrchestrationDiffs.WriteString(fixDiff)
 					logger.LogProcessStep(fmt.Sprintf("LLM fix attempt %d completed. Retrying validation...", attempt))
 				}
 			} else {
@@ -270,4 +288,43 @@ func validateChanges() error {
 	}
 
 	return nil
+}
+
+// performAutomatedReview performs an LLM-based code review of the combined diff.
+func performAutomatedReview(combinedDiff, originalPrompt string, cfg *config.Config, logger *utils.Logger) error {
+	logger.LogProcessStep("Performing automated code review...")
+
+	review, err := llm.GetCodeReview(cfg, combinedDiff, originalPrompt)
+	if err != nil {
+		return fmt.Errorf("failed to get code review from LLM: %w", err)
+	}
+
+	switch review.Status {
+	case "approved":
+		logger.LogProcessStep("Code review approved.")
+		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
+		return nil
+	case "needs_revision":
+		logger.LogProcessStep("Code review requires revisions.")
+		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
+		logger.LogProcessStep("Applying suggested revisions...")
+
+		// The review gives new instructions. We execute them.
+		// This is like a fix.
+		_, fixErr := editor.ProcessCodeGeneration("", review.Instructions, cfg, "")
+		if fixErr != nil {
+			return fmt.Errorf("failed to apply review revisions: %w", fixErr)
+		}
+		// After applying, the next iteration of validation loop will run.
+		// We need to signal a failure to re-validate.
+		return fmt.Errorf("revisions applied, re-validating. Feedback: %s", review.Feedback)
+	case "rejected":
+		logger.LogProcessStep("Code review rejected.")
+		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
+		// The instruction says "reject the changes and create a more detailed prompt for the code changes to address the issue."
+		// We fail the orchestration and tell the user to re-run with the new prompt.
+		return fmt.Errorf("changes rejected by automated review. Feedback: %s. New prompt suggestion: %s", review.Feedback, review.NewPrompt)
+	default:
+		return fmt.Errorf("unknown review status from LLM: %s. Full feedback: %s", review.Status, review.Feedback)
+	}
 }

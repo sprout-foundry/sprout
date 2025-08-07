@@ -201,8 +201,9 @@ func OpenInEditor(content, fileExtension string) (string, error) {
 	return string(editedContent), nil
 }
 
-func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *config.Config, instructions string, llmResponseRaw string) error {
+func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *config.Config, instructions string, llmResponseRaw string) (string, error) {
 	reader := bufio.NewReader(os.Stdin)
+	var allDiffs strings.Builder
 
 	for newFilename, newCode := range updatedCode {
 		originalCode, _ := filesystem.LoadOriginalCode(newFilename) // CHANGED: Call filesystem.LoadOriginalCode
@@ -217,14 +218,22 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 			// Handle partial response by merging with original code
 			mergedCode, err := mergePartialCode(originalCode, newCode)
 			if err != nil {
-				return fmt.Errorf("failed to merge partial code for %s: %w", newFilename, err)
+				return "", fmt.Errorf("failed to merge partial code for %s: %w", newFilename, err)
 			}
 			newCode = mergedCode
 		}
 
 		color.Yellow(prompts.OriginalFileHeader(newFilename))
 		color.Yellow(prompts.UpdatedFileHeader(newFilename))
-		changetracker.PrintDiff(newFilename, originalCode, newCode)
+
+		diff := changetracker.GetDiff(newFilename, originalCode, newCode)
+		if diff == "" {
+			fmt.Print("No changes detected.")
+		} else {
+			fmt.Print(diff)
+		}
+		allDiffs.WriteString(diff)
+		allDiffs.WriteString("\n")
 
 		applyChanges := false
 		editChoice := false
@@ -242,7 +251,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 			if editChoice {
 				editedCode, err := OpenInEditor(newCode, filepath.Ext(newFilename))
 				if err != nil {
-					return fmt.Errorf("error editing file: %w", err)
+					return "", fmt.Errorf("error editing file: %w", err)
 				}
 				newCode = editedCode
 			}
@@ -251,24 +260,24 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 			dir := filepath.Dir(newFilename)
 			if dir != "" {
 				if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-					return fmt.Errorf("could not create directory %s: %w", dir, err)
+					return "", fmt.Errorf("could not create directory %s: %w", dir, err)
 				}
 			}
 
 			if err := filesystem.SaveFile(newFilename, newCode); err != nil {
-				return fmt.Errorf("failed to save file: %w", err)
+				return "", fmt.Errorf("failed to save file: %w", err)
 			}
 
 			note, description, commit, err := getChangeSummaries(cfg, newCode, instructions, newFilename, reader)
 			if err != nil {
-				return fmt.Errorf("failed to get change summaries: %w", err)
+				return "", fmt.Errorf("failed to get change summaries: %w", err)
 			}
 
 			// Use the passed llmResponseRaw directly for llmMessage
 			llmMessage := llmResponseRaw
 
 			if err := changetracker.RecordChangeWithDetails(revisionID, newFilename, originalCode, newCode, description, note, instructions, llmMessage, cfg.EditingModel); err != nil {
-				return fmt.Errorf("failed to record change: %w", err)
+				return "", fmt.Errorf("failed to record change: %w", err)
 			}
 			fmt.Print(prompts.ChangesApplied(newFilename))
 
@@ -276,7 +285,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				// get the filename path from the root of the git repository
 				filePath, err := git.GetFileGitPath(newFilename) // CHANGED: Call git.GetFileGitPath
 				if err != nil {
-					return err
+					return "", err
 				}
 				changeTypeName := "Update"
 				if originalCode == "" {
@@ -291,14 +300,27 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 				commitMessage := fmt.Sprintf("%s %s - %s", changeTypeName, filePath, message)
 
 				if err := git.AddAndCommitFile(newFilename, commitMessage); err != nil { // CHANGED: Call git.AddAndCommitFile
-					return err
+					return "", err
 				}
 			}
 		} else {
 			fmt.Print(prompts.ChangesNotApplied(newFilename))
 		}
 	}
-	return nil
+
+	// Perform automated review when skipPrompt is active
+	if cfg.SkipPrompt {
+		combinedDiff := allDiffs.String()
+		if combinedDiff != "" {
+			logger := utils.GetLogger(cfg.SkipPrompt)
+			reviewErr := performAutomatedReview(combinedDiff, instructions, cfg, logger)
+			if reviewErr != nil {
+				return "", reviewErr
+			}
+		}
+	}
+
+	return allDiffs.String(), nil
 }
 
 func getChangeSummaries(cfg *config.Config, newCode string, instructions string, newFilename string, reader *bufio.Reader) (note string, description string, commit string, err error) {
@@ -334,6 +356,45 @@ func getChangeSummaries(cfg *config.Config, newCode string, instructions string,
 	return note, description, generatedDescription, nil
 }
 
+// performAutomatedReview performs an LLM-based code review of the combined diff.
+func performAutomatedReview(combinedDiff, originalPrompt string, cfg *config.Config, logger *utils.Logger) error {
+	logger.LogProcessStep("Performing automated code review...")
+
+	review, err := llm.GetCodeReview(cfg, combinedDiff, originalPrompt)
+	if err != nil {
+		return fmt.Errorf("failed to get code review from LLM: %w", err)
+	}
+
+	switch review.Status {
+	case "approved":
+		logger.LogProcessStep("Code review approved.")
+		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
+		return nil
+	case "needs_revision":
+		logger.LogProcessStep("Code review requires revisions.")
+		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
+		logger.LogProcessStep("Applying suggested revisions...")
+
+		// The review gives new instructions. We execute them.
+		// This is like a fix.
+		_, fixErr := ProcessCodeGeneration("", review.Instructions, cfg, "")
+		if fixErr != nil {
+			return fmt.Errorf("failed to apply review revisions: %w", fixErr)
+		}
+		// After applying, the next iteration of validation loop will run.
+		// We need to signal a failure to re-validate.
+		return fmt.Errorf("revisions applied, re-validating. Feedback: %s", review.Feedback)
+	case "rejected":
+		logger.LogProcessStep("Code review rejected.")
+		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
+		// The instruction says "reject the changes and create a more detailed prompt for the code changes to address the issue."
+		// We fail the orchestration and tell the user to re-run with the new prompt.
+		return fmt.Errorf("changes rejected by automated review. Feedback: %s. New prompt suggestion: %s", review.Feedback, review.NewPrompt)
+	default:
+		return fmt.Errorf("unknown review status from LLM: %s. Full feedback: %s", review.Status, review.Feedback)
+	}
+}
+
 func ProcessWorkspaceCodeGeneration(filename, instructions string, cfg *config.Config) (string, error) {
 	// Replace any existing #WS or #WORKSPACE tags with a single #WS tag
 	re := regexp.MustCompile(`(?i)\s*#(WS|WORKSPACE)\s*$`)
@@ -342,7 +403,7 @@ func ProcessWorkspaceCodeGeneration(filename, instructions string, cfg *config.C
 	return ProcessCodeGeneration(filename, instructions, cfg, "")
 }
 
-// ProcessCodeGeneration generates code based on instructions and returns the diff for the target file.
+// ProcessCodeGeneration generates code based on instructions and returns the combined diff for all changed files.
 // The full raw LLM response is still recorded in the changelog for auditing.
 func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, imagePath string) (string, error) {
 	var originalCode string
@@ -366,38 +427,20 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 		return "", err
 	}
 
-	// Calculate the diff for the target file (filename)
-	var diffForTargetFile string
-	if newCode, ok := updatedCodeFiles[filename]; ok {
-		// Check if this is a partial response and merge if needed
-		if parser.IsPartialResponse(newCode) {
-			mergedCode, mergeErr := mergePartialCode(originalCode, newCode)
-			if mergeErr != nil {
-				return "", fmt.Errorf("failed to merge partial code: %w", mergeErr)
-			}
-			diffForTargetFile = changetracker.GetDiff(filename, originalCode, mergedCode)
-		} else {
-			diffForTargetFile = changetracker.GetDiff(filename, originalCode, newCode)
-		}
-	} else {
-		// If the LLM did not output the target file, the diff is empty.
-		// This indicates the LLM did not produce changes for the expected file.
-		diffForTargetFile = ""
-	}
-
 	// Record the base revision with the full raw LLM response for auditing
 	revisionID, err := changetracker.RecordBaseRevision(requestHash, processedInstructions, llmResponseRaw)
 	if err != nil {
-		return diffForTargetFile, fmt.Errorf("failed to record base revision: %w", err)
+		return "", fmt.Errorf("failed to record base revision: %w", err)
 	}
 
 	// Handle file updates (write to disk, record individual file changes, git commit)
-	err = handleFileUpdates(updatedCodeFiles, revisionID, cfg, instructions, llmResponseRaw)
+	// This now returns the combined diff of all changes.
+	combinedDiff, err := handleFileUpdates(updatedCodeFiles, revisionID, cfg, instructions, llmResponseRaw)
 	if err != nil {
-		return diffForTargetFile, err
+		return "", err
 	}
 
-	return diffForTargetFile, nil
+	return combinedDiff, nil
 }
 
 // mergePartialCode merges a partial code response with the original code

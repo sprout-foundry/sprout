@@ -30,13 +30,22 @@ type ImageURL struct {
 
 // --- LLM Message Builders ---
 
+func getBaseCodeMessageSystemMessage() string {
+	return "Provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
+		"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
+		"The syntax of the code blocks must exactly match these instructions and the code must be complete. " +
+		"ONLY make the changes that are necessary to satisfy the instructions. " +
+		"Do not include any additional text, explanations, or comments outside the code blocks. " +
+		"Update all files that are necessary to fulfill the requirements and any code that is affected by the changes. " +
+		"Do not include any file paths in the code blocks. " +
+		"Do not include any other text or explanations outside the code blocks. " +
+		"Ensure that the code is syntactically correct and follows best practices for the specified language. "
+}
+
 // GetBaseCodeGenSystemMessage returns the core system prompt for code generation.
 func GetBaseCodeGenSystemMessage() string {
 	return "You are an assistant that can generate updated code based on provided instructions. " +
-		"Provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
-		"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
-		"The syntax of the code blocks must exactly match these instructions and the code must be complete. " +
-		"ONLY make the changes that are necessary to satisfy the instructions.\n"
+		getBaseCodeMessageSystemMessage()
 }
 
 // BuildCodeMessages constructs the messages for the LLM to generate code.
@@ -47,18 +56,17 @@ func BuildCodeMessages(code, instructions, filename string, interactive bool) []
 
 	if interactive {
 		systemPrompt = "You are an assistant that can generate updated code based on provided instructions. You have two response options:\n\n" +
-			"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
-			"    For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
-			"    If you are generating code, the syntax of the code blocks must exactly match these instructions and the code must be complete. " +
-			"    If you are generating code, ONLY make the changes that are necessary to satisfy the instructions.\n\n" +
+			"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. " +
+			getBaseCodeMessageSystemMessage() +
+			"\n\n" +
 			"2.  **Request Context:** *do not make guesses* If you need more information, respond *only* with a JSON array of context requests with no other text. The required format:\n" +
 			"    `{\"context_requests\":[{ \"type\": \"TYPE\", \"query\": \"QUERY\" }]}`\n" +
 			"    -   `type`: Can be `search` (web search), `user_prompt` (ask the user a question), `file` (request file content, needs to be a filename, otherwise ask the user), or `shell` (request a shell command execution).\n" +
 			"    -   `query`: The search term, question, file path, or command.\n\n" +
 			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* request the file's contents using the `file` type.\n\n" +
 			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then request the file contents using the `file` type.\n\n" +
-			"After your context request is fulfilled, you will be prompted again to generate the code. Do not continue asking for context; generate the code as soon as you have enough information.\n" +
-			"Do not generate code until you have all the necessary context. If you do not have enough information, ask for it using the context request format.\n"
+			" Do not generate code until you have all the necessary context. If you do not have enough information, ask for it using the context request format.\n" +
+			"After your context request is fulfilled, you will be prompted again to generate the code. Do not continue asking for context; generate the code as soon as you have enough information.\n"
 	}
 
 	messages = append(messages, Message{Role: "system", Content: systemPrompt})

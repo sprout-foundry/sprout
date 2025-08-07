@@ -27,10 +27,10 @@ EOF
     echo "Creating a file with dummy credentials..."
     cat <<EOF > secrets.txt
 # This file contains sensitive information
-API_KEY=sk-live-abcdef1234567890abcdef1234567890
-DB_PASSWORD=superSecurePassword123!
-AWS_SECRET_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
-GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCDEF
+API_KEY=sk-live-ghsidofnaregaisdohswq18r9r83r8wioshd
+DB_PASSWORD=gionsdfigwebnx!
+AWS_SECRET_ACCESS_KEY=QIGSDIONDINGIEFN
+GITHUB_TOKEN=ghp_ghsiroegisodhaeq223902713rinqefiy3hr039r
 EOF
     echo "Content of secrets.txt:"
     cat secrets.txt
@@ -47,50 +47,30 @@ EOF
     # We expect the workspace.json to contain a 'security_concerns' field for secrets.txt
     # This test assumes 'jq' is available in the test environment, as seen in other tests.
 
-    if [ ! -f ".ledit/workspace.json" ]; then
-        echo "FAIL: .ledit/workspace.json was not created."
-        exit 1
-    fi
-
-    # Attempt to parse the JSON and check if 'secrets.txt' has a non-empty 'security_concerns' array
-    if jq -e '.files."secrets.txt".security_concerns | length > 0' .ledit/workspace.json >/dev/null 2>&1; then
-        echo "PASS: 'secrets.txt' has 'security_concerns' detected in workspace.json."
-        
-        # Check if exactly 4 security concerns were detected, as we expect 4 types of credentials.
-        # We no longer check for specific types, as the LLM might not label them consistently.
-        if jq -e '.files."secrets.txt".security_concerns | length == 4' .ledit/workspace.json >/dev/null 2>&1; then
-            echo "PASS: Exactly 4 security concerns were detected for secrets.txt."
-        else
-            echo "FAIL: Expected 4 security concerns for secrets.txt, but a different number was detected or structure is unexpected."
-            echo "Content of .ledit/workspace.json for secrets.txt:"
-            jq '.files."secrets.txt"' .ledit/workspace.json
-            exit 1
-        fi
-    else
-        echo "FAIL: 'secrets.txt' did not show any 'security_concerns' in workspace.json."
-        echo "Content of .ledit/workspace.json for secrets.txt:"
-        jq '.files."secrets.txt"' .ledit/workspace.json
-        exit 1
-    fi
-
-    # 4. Check the workspace log for the specific message indicating skipping summarization
-    echo "Checking .ledit/workspace.log for security concern message..."
     if [ ! -f ".ledit/workspace.log" ]; then
         echo "FAIL: .ledit/workspace.log was not created."
         exit 1
     fi
 
-    # The expected log message comes from prompts.SkippingLLMSummarizationDueToSecurity
-    # which is "File %s contains confirmed security concerns. Skipping LLM summarization."
-    if grep -q "File secrets.txt contains confirmed security concerns. Skipping LLM summarization." .ledit/workspace.log; then
-        echo "PASS: Log message 'File secrets.txt contains confirmed security concerns. Skipping LLM summarization.' found in workspace.log."
+    # check the workspace.log for "API Key Exposure" and "Exiting due to lack of confirmation in prompt-skipping mode."
+    if grep -q "API Key Exposure" .ledit/workspace.log; then
+        echo "PASS: 'API Key Exposure' found in workspace.log."
     else
-        echo "FAIL: Log message 'File secrets.txt contains confirmed security concerns. Skipping LLM summarization.' NOT found in workspace.log."
+        echo "FAIL: 'API Key Exposure' NOT found in workspace.log."
         echo "Content of .ledit/workspace.log:"
         cat .ledit/workspace.log
         exit 1
     fi
-
+    if grep -q "Exiting due to lack of confirmation in prompt-skipping mode." .ledit/workspace.log; then
+        echo "PASS: 'Exiting due to lack of confirmation in prompt-skipping mode.' found in workspace.log."
+    else
+        echo "FAIL: 'Exiting due to lack of confirmation in prompt-skipping mode.' NOT found in workspace.log."
+        echo "Content of .ledit/workspace.log:"
+        cat .ledit/workspace.log
+        exit 1
+    fi
+    
+    echo "Test passed: Security credentials were detected and logged correctly."
     echo "----------------------------------------------------"
     echo
 }

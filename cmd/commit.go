@@ -8,8 +8,9 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/editor" // For editor functions like opening vim
+	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/spf13/cobra"
@@ -63,6 +64,26 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 			return
 		}
 		stagedDiff := string(stagedDiffBytes)
+
+		// Security check on staged files
+		if cfg.EnableSecurityChecks {
+			logger.LogProcessStep("Checking staged files for security credentials...")
+			securityIssuesFound := checkStagedFilesForSecurityCredentials(logger, cfg)
+			if securityIssuesFound {
+				if !commitSkipPrompt {
+					logger.LogUserInteraction("Security issues detected in staged files. Do you want to proceed with commit? (y/n): ")
+					reader := bufio.NewReader(os.Stdin)
+					userInput, _ := reader.ReadString('\n')
+					userInput = strings.TrimSpace(strings.ToLower(userInput))
+					if userInput != "y" && userInput != "yes" {
+						logger.LogUserInteraction("Commit aborted due to security concerns.")
+						return
+					}
+				} else {
+					logger.LogProcessStep("Security issues detected but proceeding due to skip-prompt flag.")
+				}
+			}
+		}
 
 		reader := bufio.NewReader(os.Stdin)
 
@@ -145,6 +166,47 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 			}
 		}
 	},
+}
+
+// checkStagedFilesForSecurityCredentials checks staged files for security credentials
+func checkStagedFilesForSecurityCredentials(logger *utils.Logger, cfg *config.Config) bool {
+	// Get list of staged files
+	cmd := exec.Command("git", "diff", "--cached", "--name-only")
+	output, err := cmd.Output()
+	if err != nil {
+		logger.LogError(fmt.Errorf("failed to get staged files: %w", err))
+		return false
+	}
+
+	stagedFiles := strings.Split(strings.TrimSpace(string(output)), "\n")
+	securityIssuesFound := false
+
+	for _, filePath := range stagedFiles {
+		if filePath == "" {
+			continue
+		}
+
+		// Get the content of staged changes for this file
+		cmd := exec.Command("git", "show", ":"+filePath)
+		contentBytes, err := cmd.Output()
+		if err != nil {
+			logger.LogError(fmt.Errorf("failed to get content of staged file %s: %w", filePath, err))
+			continue
+		}
+
+		content := string(contentBytes)
+		concerns, _ := security.DetectSecurityConcerns(content)
+
+		if len(concerns) > 0 {
+			securityIssuesFound = true
+			logger.LogUserInteraction(fmt.Sprintf("Security concerns detected in staged file %s:", filePath))
+			for _, concern := range concerns {
+				logger.LogUserInteraction(fmt.Sprintf("  - %s", concern))
+			}
+		}
+	}
+
+	return securityIssuesFound
 }
 
 func performGitCommit(message string) error {

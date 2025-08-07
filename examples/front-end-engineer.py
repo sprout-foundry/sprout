@@ -9,6 +9,8 @@ def get_prompt(user_input: str) -> str:
         "There should be one todo per line and each line should be able to stand alone as a complete thought, "
         "providing all the information needed to accomplish the todo without relying on the context of other lines. " 
         "Note that the todos should be written in a way that they can be completed in a single commit without needing the context of the image to be understood. "
+        "Make sure to consider all aspects of the front-end update, including layout, styling, responsiveness, and any necessary adjustments to existing components and existing dependent code. "
+        "Do not recommend using any new libraries or frameworks unless absolutely necessary and don't recommend changes to any existing functionality unless it is required to meet the requirements. "
         "REQUIREMENTS: "
         "Update the look and feel of the front end to match the layout and styling shown in the provided image. "
     )

@@ -43,16 +43,13 @@ EOF
     echo
     echo "--- Verifying Test ---"
 
-    # 3. Check .ledit/workspace.json for security concerns related to secrets.txt
-    # We expect the workspace.json to contain a 'security_concerns' field for secrets.txt
-    # This test assumes 'jq' is available in the test environment, as seen in other tests.
-
+    # 3. Check .ledit/workspace.log for security concerns related to secrets.txt
     if [ ! -f ".ledit/workspace.log" ]; then
         echo "FAIL: .ledit/workspace.log was not created."
         exit 1
     fi
 
-    # check the workspace.log for "API Key Exposure" and "Exiting due to lack of confirmation in prompt-skipping mode."
+    # check the workspace.log for "API Key Exposure"
     if grep -q "API Key Exposure" .ledit/workspace.log; then
         echo "PASS: 'API Key Exposure' found in workspace.log."
     else
@@ -61,16 +58,19 @@ EOF
         cat .ledit/workspace.log
         exit 1
     fi
-    if grep -q "Exiting due to lack of confirmation in prompt-skipping mode." .ledit/workspace.log; then
-        echo "PASS: 'Exiting due to lack of confirmation in prompt-skipping mode.' found in workspace.log."
+
+    # Check for the specific message about skipping LLM summarization due to security concerns
+    # This message is defined in pkg/prompts/messages.go: SkippingLLMSummarizationDueToSecurity
+    if grep -q "Skipping LLM summarization for 'secrets.txt' due to detected security concerns and lack of confirmation." .ledit/workspace.log; then
+        echo "PASS: 'Skipping LLM summarization for 'secrets.txt' due to detected security concerns and lack of confirmation.' found in workspace.log."
     else
-        echo "FAIL: 'Exiting due to lack of confirmation in prompt-skipping mode.' NOT found in workspace.log."
+        echo "FAIL: 'Skipping LLM summarization for 'secrets.txt' due to detected security concerns and lack of confirmation.' NOT found in workspace.log."
         echo "Content of .ledit/workspace.log:"
         cat .ledit/workspace.log
         exit 1
     fi
     
-    echo "Test passed: Security credentials were detected and logged correctly."
+    echo "Test passed: Security credentials were detected and logged correctly, and LLM summarization was skipped."
     echo "----------------------------------------------------"
     echo
 }

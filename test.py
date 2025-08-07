@@ -3,592 +3,382 @@
 import argparse
 import subprocess
 import os
-import shutil
-import time
 import sys
-from collections import OrderedDict
-from pathlib import Path
-import logging # Import logging module
+import json
+import time
+import re
 
-"""
-This script performs a robust test of the `ledit` workspace functionality.
-It can run all tests in parallel to speed up validation or run a single test interactively.
+# ANSI escape codes for colors
+RED = "\033[91m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+BLUE = "\033[94m"
+MAGENTA = "\033[95m"
+CYAN = "\033[96m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
 
-Features:
-- Parallel test execution with timeout handling for robust testing.
-- Interactive single test selection mode for focused debugging.
-- Detailed failure reporting with extracted reasons for quick diagnosis.
-- Clean output formatting with ANSI color codes for readability.
-- Test numbering is based on the current run's discovered test order.
-- Each test runs in its own isolated subdirectory within the 'testing' folder.
+def print_color(text, color):
+    print(f"{color}{text}{RESET}")
 
-This script is a Python replacement for the original test.sh script,
-providing more robust state management, clearer output, and enhanced error handling.
-"""
-
-# Configure logging
-# Set level to logging.INFO for general flow messages.
-# Change to logging.DEBUG for more verbose internal state tracking.
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-
-# ANSI color codes for pretty printing in the terminal
-GREEN = '\033[32m'
-RED = '\033[31m'
-RESET = '\033[0m'
-
-def get_expected_test_time(test_name):
+def run_command(command, cwd=None, shell=False, capture_output=True, text=True, check=True, timeout=None):
     """
-    Returns the expected test duration for a given test name.
-    This function replaces reading from test_times.json.
+    Runs a shell command and returns its output.
     """
-    times = {
-        "Check the log": 10.01680040359497,
-        "Missing File Context Test": 10.013010025024414,
-        "Security Credentials Detection": 10.002689361572266,
-        "File Deletion": 20.02725124359131,
-        "Cached Workspace & Modifying a File": 20.02650237083435,
-        "Fix Command": 20.025620698928833,
-        "Advanced Ignore Handling (.gitignore & .leditignore)": 20.02127766609192,
-        "Verify JSON Output Format": 20.019028902053833,
-        "Multi-file Edit & Selective Context": 20.00952124595642,
-        "Initial Workspace Creation & Analysis": 20.002187967300415,
-        "Search Grounding Test": 120.0153260231018,
-        "Empty Search Grounding Query Test": 120.05268406867981,
-        "Orchestration Feature": 210.02731728553772
+    print_color(f"Running command: {command}", BLUE)
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            shell=shell,
+            capture_output=capture_output,
+            text=text,
+            check=check,
+            timeout=timeout
+        )
+        if capture_output:
+            if result.stdout:
+                print_color("STDOUT:", DIM)
+                print(result.stdout)
+            if result.stderr:
+                print_color("STDERR:", RED)
+                print(result.stderr)
+        return result
+    except subprocess.CalledProcessError as e:
+        print_color(f"Command failed with exit code {e.returncode}", RED)
+        if e.stdout:
+            print_color("STDOUT:", DIM)
+            print(e.stdout)
+        if e.stderr:
+            print_color("STDERR:", RED)
+            print(e.stderr)
+        raise
+    except subprocess.TimeoutExpired as e:
+        print_color(f"Command timed out after {timeout} seconds", RED)
+        if e.stdout:
+            print_color("STDOUT:", DIM)
+            print(e.stdout)
+        if e.stderr:
+            print_color("STDERR:", RED)
+            print(e.stderr)
+        raise
+
+def setup_test_environment(test_dir):
+    """
+    Sets up a temporary test environment.
+    """
+    print_color(f"Setting up test environment in {test_dir}...", YELLOW)
+    os.makedirs(test_dir, exist_ok=True)
+    os.chdir(test_dir)
+    run_command(["git", "init"], check=False)
+    run_command(["git", "config", "user.name", "Test User"])
+    run_command(["git", "config", "user.email", "test@example.com"])
+    # Create a dummy file and commit it to have a clean state
+    with open("dummy.txt", "w") as f:
+        f.write("initial content")
+    run_command(["git", "add", "dummy.txt"])
+    run_command(["git", "commit", "-m", "Initial commit"])
+    print_color("Test environment setup complete.", GREEN)
+
+def cleanup_test_environment(original_cwd):
+    """
+    Cleans up the temporary test environment.
+    """
+    print_color("Cleaning up test environment...", YELLOW)
+    os.chdir(original_cwd)
+    # Remove the test directory
+    try:
+        subprocess.run(["rm", "-rf", "test_env"], check=True)
+        print_color("Test environment cleaned up.", GREEN)
+    except subprocess.CalledProcessError as e:
+        print_color(f"Error during cleanup: {e}", RED)
+
+def run_test(name, test_func, *args, **kwargs):
+    """
+    Runs a single test function and reports its status.
+    """
+    print_color(f"\n--- Running Test: {name} ---", CYAN)
+    start_time = time.time()
+    try:
+        test_func(*args, **kwargs)
+        end_time = time.time()
+        print_color(f"--- Test '{name}' PASSED in {end_time - start_time:.2f} seconds ---", GREEN)
+        return True
+    except Exception as e:
+        end_time = time.time()
+        print_color(f"--- Test '{name}' FAILED in {end_time - start_time:.2f} seconds ---", RED)
+        print_color(f"Error: {e}", RED)
+        return False
+
+def test_code_command(model_name):
+    """
+    Tests the 'ledit code' command.
+    """
+    file_name = "test_code.go"
+    initial_content = """package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, Ledit!")
+}
+"""
+    with open(file_name, "w") as f:
+        f.write(initial_content)
+
+    # Use the 'code' command to add a new function
+    instructions = "Add a function called 'greet' that takes a name (string) and prints 'Hello, [name]!'."
+    run_command([
+        "../ledit", "code", instructions,
+        "-f", file_name,
+        "-m", model_name,
+        "--skip-prompt"
+    ])
+
+    # Verify the file content
+    with open(file_name, "r") as f:
+        content = f.read()
+        assert "func greet(name string)" in content, "greet function not added"
+        assert "fmt.Println(\"Hello, \" + name + \"!\")" in content, "greet function content incorrect"
+        print_color(f"File '{file_name}' updated successfully with new function.", GREEN)
+
+    # Verify git status
+    git_status = run_command(["git", "status", "--porcelain"]).stdout
+    assert " M " in git_status or "A  " in git_status, "Changes not staged or committed by ledit"
+    print_color("Git status shows changes.", GREEN)
+
+    # Verify commit message
+    git_log = run_command(["git", "log", "-1", "--pretty=%B"]).stdout
+    assert "Add test_code.go - Add greet function" in git_log or "Update test_code.go - Add greet function" in git_log, "Commit message not as expected"
+    print_color("Commit message verified.", GREEN)
+
+def test_fix_command(model_name):
+    """
+    Tests the 'ledit fix' command.
+    """
+    file_name = "test_fix.py"
+    initial_content = """def divide(a, b):
+    return a / b
+
+print(divide(10, 0)) # This will cause a ZeroDivisionError
+"""
+    with open(file_name, "w") as f:
+        f.write(initial_content)
+
+    # Run the 'fix' command on the Python script
+    # We expect ledit to fix the ZeroDivisionError
+    run_command([
+        "../ledit", "fix",
+        "-f", file_name,
+        "-m", model_name,
+        "--skip-prompt",
+        "--", "python3", file_name # Command to run and fix
+    ])
+
+    # Verify the file content
+    with open(file_name, "r") as f:
+        content = f.read()
+        assert "try" in content and "except ZeroDivisionError" in content, "Error handling not added"
+        print_color(f"File '{file_name}' fixed successfully with error handling.", GREEN)
+
+def test_commit_command():
+    """
+    Tests the 'ledit commit' command.
+    """
+    file_name = "test_commit.txt"
+    with open(file_name, "w") as f:
+        f.write("This is a new file for commit test.")
+    run_command(["git", "add", file_name])
+
+    # Use the 'commit' command to generate a commit message
+    run_command(["../ledit", "commit", "--skip-prompt"])
+
+    # Verify the commit message
+    git_log = run_command(["git", "log", "-1", "--pretty=%B"]).stdout
+    assert "Add test_commit.txt" in git_log, "Commit message not generated or incorrect"
+    print_color("Commit command verified.", GREEN)
+
+def test_log_command():
+    """
+    Tests the 'ledit log' command.
+    """
+    # Ensure there's at least one ledit-generated change
+    file_name = "test_log.txt"
+    with open(file_name, "w") as f:
+        f.write("Content for log test.")
+    run_command(["../ledit", "code", "Add content to test_log.txt", "-f", file_name, "--skip-prompt"])
+
+    # Run the 'log' command
+    result = run_command(["../ledit", "log", "--buffer"])
+    assert "Revision ID:" in result.stdout, "Log command did not show revision history"
+    assert "File Changes (1):" in result.stdout, "Log command did not show file changes"
+    print_color("Log command verified.", GREEN)
+
+def test_process_command(model_name):
+    """
+    Tests the 'ledit process' command for orchestration.
+    """
+    # Create a dummy workspace.json for the test
+    workspace_content = {
+        "build_command": "echo 'Build successful!'",
+        "files": {}
     }
-    return times.get(test_name, 100.0)
+    os.makedirs(".ledit", exist_ok=True)
+    with open(".ledit/workspace.json", "w") as f:
+        json.dump(workspace_content, f)
 
-def extract_failure_reason(stdout, stderr):
-    """Extract a short, concise failure reason from test output.
-    
-    This function attempts to parse common error messages from stdout and stderr
-    to provide a more human-readable reason for test failures.
-    
-    Args:
-        stdout (str): Standard output from the test process.
-        stderr (str): Standard error from the test process.
-    
-    Returns:
-        str: A concise failure reason, truncated to 1000 characters,
-             or "Unknown failure reason" if no specific pattern is found.
+    # Define a simple process instruction
+    process_instruction = "Create a new file named 'orchestrated.txt' with the content 'This file was created by ledit process command.'"
+
+    # Run the 'process' command
+    run_command([
+        "../ledit", "process", process_instruction,
+        "-m", model_name,
+        "--skip-prompt"
+    ])
+
+    # Verify the new file was created
+    assert os.path.exists("orchestrated.txt"), "orchestrated.txt was not created by process command"
+    with open("orchestrated.txt", "r") as f:
+        content = f.read()
+        assert "This file was created by ledit process command." in content, "orchestrated.txt content is incorrect"
+    print_color("Process command verified: file created and content checked.", GREEN)
+
+def test_review_staged_command(model_name):
     """
-    # Prioritize specific error keywords in stderr
-    if "error:" in stderr.lower():
-        return stderr.split("error:")[-1].strip()[:1000]
-    if "failed:" in stdout.lower():
-        return stdout.split("failed:")[-1].strip()[:1000]
-    if "assertion failed" in stderr.lower():
-        return stderr.split("assertion failed")[-1].strip()[:1000]
-    # Fallback to general stderr or stdout if specific errors aren't found
-    if stderr.strip():
-        return stderr.strip()[:1000]
-    if stdout.strip():
-        return stdout.strip()[:1000]
-    return "Unknown failure reason"
+    Tests the 'ledit review-staged' command.
+    """
+    file_name = "test_review_staged.go"
+    initial_content = """package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, Ledit!")
+}
+"""
+    with open(file_name, "w") as f:
+        f.write(initial_content)
+    run_command(["git", "add", file_name])
+    run_command(["git", "commit", "-m", "Add initial test_review_staged.go"])
+
+    # Modify the file and stage the changes
+    modified_content = """package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, Ledit! This is an update.")
+    // A new comment
+}
+"""
+    with open(file_name, "w") as f:
+        f.write(modified_content)
+    run_command(["git", "add", file_name])
+
+    # Run the 'review-staged' command
+    result = run_command([
+        "../ledit", "review-staged",
+        "-m", model_name
+    ])
+
+    # Verify the output contains review information
+    assert "--- LLM Code Review Result ---" in result.stdout, "Review result header not found"
+    assert "Status:" in result.stdout, "Review status not found"
+    assert "Feedback:" in result.stdout, "Review feedback not found"
+    print_color("Review-staged command verified: review output found.", GREEN)
+
 
 def main():
-    """Main function to orchestrate the test workflow.
-    
-    This function handles argument parsing, project setup, test discovery,
-    execution (parallel or single), monitoring, and final reporting.
-    """
-    # 1. Argument Parsing
     parser = argparse.ArgumentParser(
-        description="Run workspace functionality tests for ledit.",
+        description="Run ledit integration tests.",
         formatter_class=argparse.RawTextHelpFormatter,
-        epilog=f"""\
-Examples:
-  Run all tests:
-    {sys.argv[0]}
+        epilog="""Examples:
+  Run all tests with a specific model:
+    python3 test.py -m openai:gpt-4o
 
-  Run with a specific model:
-    {sys.argv[0]} -m my-custom-model
+  Run only the 'code' test:
+    python3 test.py --test code -m ollama:llama3
 
-  Run in interactive single test mode (prompts for test number):
-    {sys.argv[0]} --single
-    # When using --single without -t, the script will prompt you to enter a test number.
-    # Ensure you are running in an interactive terminal for this to work.
-
-  Run a specific test by number (e.g., test #2):
-    {sys.argv[0]} -t 2
-
-  Run a specific test by number in explicit single mode:
-    {sys.argv[0]} --single -t 2
-
-  View available tests and their numbers:
-    {sys.argv[0]} --list-tests
-
-  Run tests and keep the 'testing' directory for inspection (e.g., after failures):
-    {sys.argv[0]} --keep-testing-dir
-
-  Run only tests expected to complete within 60 seconds:
-    {sys.argv[0]} --max-duration 60
-
-  Run all tests, ignoring expected durations:
-    {sys.argv[0]} --ignore-duration
-"""
+  Run tests without cleaning up the environment (for debugging):
+    python3 test.py --no-cleanup -m openai:gpt-4o
+    """
     )
     parser.add_argument(
         '-m', '--model',
-        default='lambda-ai:qwen25-coder-32b-instruct',
-        help='Specify the model name to use for tests (default: lambda-ai:qwen25-coder-32b-instruct).'
+        default='deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct',
+        help='Specify the model name to use for tests (default: deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct).'
     )
     parser.add_argument(
-        '--single',
+        '--test',
+        help='Run only a specific test (e.g., "code", "fix", "commit", "log", "process", "review_staged").'
+    )
+    parser.add_argument(
+        '--no-cleanup',
         action='store_true',
-        help="Enable single test mode. If -t is not provided, it will prompt for a test number."
-    )
-    parser.add_argument(
-        '-t', '--test-number',
-        type=str,
-        help="Specify a single test number to run. This implicitly enables single test mode."
-    )
-    parser.add_argument(
-        '--list-tests',
-        action='store_true',
-        help="List all discovered tests and their assigned numbers, then exit."
-    )
-    parser.add_argument(
-        '--keep-testing-dir',
-        action='store_true',
-        help="Do not remove the 'testing' directory after tests complete. Useful for debugging failures."
-    )
-    parser.add_argument(
-        '--max-duration',
-        type=float,
-        default=100.0, # Default to 100 seconds
-        help='Maximum expected duration (in seconds) for tests to be included in the run. Only applies in parallel mode.'
-    )
-    parser.add_argument(
-        '--ignore-duration',
-        action='store_true',
-        help='Run all tests regardless of their expected duration. Overrides --max-duration.'
+        help='Do not clean up the test environment after running tests.'
     )
     args = parser.parse_args()
-    
-    # Log parsed arguments for debugging
-    logging.debug(f"Parsed arguments: single={args.single}, test_number={args.test_number}, list_tests={args.list_tests}, keep_testing_dir={args.keep_testing_dir}, max_duration={args.max_duration}, ignore_duration={args.ignore_duration}")
 
-    model_name = args.model
-    # If -t is provided, implicitly enable single_mode.
-    single_mode = args.single or (args.test_number is not None)
-    test_number_arg = args.test_number
-    list_tests_only = args.list_tests
-    keep_testing_dir = args.keep_testing_dir # Initial value based on command-line arg
+    original_cwd = os.getcwd()
+    test_dir = os.path.join(original_cwd, "test_env")
 
-    logging.debug(f"Calculated modes: single_mode={single_mode}, test_number_arg={test_number_arg}, list_tests_only={list_tests_only}, keep_testing_dir={keep_testing_dir}")
-
-    # --- 0. SETUP ---
-    print("--- 0. SETUP: Cleaning up and building the tool ---")
-    
-    # Get the root directory of the project (where this script is located)
-    project_root = Path(__file__).parent.resolve()
-    
-    testing_dir = project_root / 'testing'
-    test_scripts_dir = project_root / 'test_scripts'
-
-    # Clean up previous testing artifacts if they exist
-    if testing_dir.exists():
-        print(f"Removing existing '{testing_dir}' directory...")
-        shutil.rmtree(testing_dir)
-    # Create the main testing directory. Individual test directories will be created inside it.
-    testing_dir.mkdir()
-
-    # Run go build in project root to compile the 'ledit' tool
-    print("Building the 'ledit' tool...")
+    # Build the ledit binary
+    print_color("Building ledit binary...", YELLOW)
     try:
-        # Capture output for better error reporting
-        build_result = subprocess.run(
-            ['go', 'build'], 
-            check=True, 
-            cwd=project_root, # Build in the project root
-            capture_output=True, 
-            text=True
-        )
-        print(f"Go build successful:\n{build_result.stdout.strip()}")
-        subprocess.run(['cp', 'ledit', 'testing/'], check=True, cwd=project_root) # Ensure go.mod is tidy
-    except subprocess.CalledProcessError as e:
-        logging.error(f"{RED}Error: 'go build' failed.{RESET}")
-        logging.error(f"STDOUT:\n{e.stdout}")
-        logging.error(f"STDERR:\n{e.stderr}")
-        sys.exit(1)
-    except FileNotFoundError:
-        logging.error(f"{RED}Error: 'go' command not found. Is Go installed and in your PATH?{RESET}")
+        run_command(["go", "build", "-o", "ledit", "../main.go"], cwd=original_cwd)
+        print_color("Ledit binary built successfully.", GREEN)
+    except Exception as e:
+        print_color(f"Failed to build ledit: {e}", RED)
         sys.exit(1)
 
+    setup_test_environment(test_dir)
 
-    # IMPORTANT: We no longer change into testing_dir here.
-    # Each test will run in its own subdirectory within testing_dir.
-    
-    # Ensure the test_scripts directory exists, though it should if scripts are present
-    test_scripts_dir.mkdir(exist_ok=True)
-    print("----------------------------------------------------")
-    print()
+    tests = {
+        "code": test_code_command,
+        "fix": test_fix_command,
+        "commit": test_commit_command,
+        "log": test_log_command,
+        "process": test_process_command,
+        "review_staged": test_review_staged_command,
+    }
 
-    # --- Test Discovery ---
-    print("--- Discovering tests ---")
-    tests = [] # List to store discovered test dictionaries: {'name': '...', 'path': Path(...), 'expected_time': float}
-    # Find all test scripts following the 'test_*.sh' pattern and sort them alphabetically
-    test_script_paths = sorted(test_scripts_dir.glob('test_*.sh'))
-
-    if not test_script_paths:
-        logging.error(f"{RED}Error: No test scripts found in '{test_scripts_dir}'. Ensure your test scripts are named 'test_*.sh'.{RESET}")
-        sys.exit(1)
-
-    for script_path in test_script_paths:
-        try:
-            # Execute 'get_test_name' function from each script to retrieve its logical name
-            # This is done in a subshell to avoid affecting the current script's environment.
-            cmd = f". {script_path.resolve()} && get_test_name"
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                executable='/bin/bash', # Explicitly use bash for sourcing
-                capture_output=True,
-                text=True,
-                check=True # Raise CalledProcessError if the command returns a non-zero exit code
-            )
-            test_name = result.stdout.strip()
-            if not test_name:
-                logging.warning(f"'get_test_name' in {script_path.name} returned an empty name. Skipping this test.")
-                continue
-            
-            expected_time = get_expected_test_time(test_name)
-            tests.append({'name': test_name, 'path': script_path, 'expected_time': expected_time})
-            print(f"Discovered Test: {test_name} (Expected Time: {expected_time:.1f}s)")
-        except subprocess.CalledProcessError as e:
-            logging.error(f"{RED}Error discovering test name from {script_path.name}: {e.stderr.strip()}. Skipping.{RESET}")
-        except FileNotFoundError:
-            logging.error(f"{RED}Error: Bash not found. Ensure /bin/bash is available.{RESET}")
-            sys.exit(1)
-    
-    if not tests:
-        logging.error(f"{RED}Error: No valid tests discovered after processing all scripts.{RESET}")
-        sys.exit(1)
-    
-    # Create tests_mapping for consistent test numbering within this run
-    # Test numbers are 1-indexed strings for user-friendliness
-    tests_mapping = {str(i+1): test['name'] for i, test in enumerate(tests)}
-    
-    print("-------------------------")
-    print()
-
-    # --- Test Listing Mode ---
-    if list_tests_only:
-        print("--- Available Tests and Numbers ---")
-        for num, test_name in tests_mapping.items():
-            # Find the test object to get its expected time
-            test_obj = next((t for t in tests if t['name'] == test_name), None)
-            expected_time_str = f" (Expected: {test_obj['expected_time']:.1f}s)" if test_obj else ""
-            print(f"{num}: {test_name}{expected_time_str}")
-        print("-----------------------------------")
-        sys.exit(0) # Exit after listing tests
-
-    # --- Test Selection for Execution ---
-    selected_tests_for_execution = []
-    if single_mode:
-        logging.info("--- Single Test Mode Activated ---")
-        print("Available tests:")
-        for num, test_name in tests_mapping.items():
-            test_obj = next((t for t in tests if t['name'] == test_name), None)
-            expected_time_str = f" (Expected: {test_obj['expected_time']:.1f}s)" if test_obj else ""
-            print(f"{num}: {test_name}{expected_time_str}")
-        
-        selected_test_number = None
-        if test_number_arg:
-            # Use specified test number if provided via -t
-            selected_test_number = test_number_arg
-            logging.info(f"Using test number '{selected_test_number}' from command-line argument (-t).")
+    results = {}
+    if args.test:
+        if args.test in tests:
+            results[args.test] = run_test(args.test, tests[args.test], args.model)
         else:
-            # Otherwise, prompt the user for input
-            logging.info("No test number provided via -t. Prompting user for input.")
-            try:
-                selected_test_number = input("Enter the number of the test to run: ").strip()
-            except EOFError:
-                logging.error(f"{RED}Error: Input stream closed (EOF). Cannot prompt for test number in non-interactive mode. Please use -t <test_number> when running in non-interactive environments.{RESET}")
-                sys.exit(1)
-            except Exception as e:
-                logging.error(f"{RED}An unexpected error occurred while reading input: {e}{RESET}")
-                sys.exit(1)
-        
-        if selected_test_number:
-            selected_test_name = tests_mapping.get(selected_test_number)
-            if not selected_test_name:
-                logging.error(f"{RED}Error: Invalid test number '{selected_test_number}'. Please choose from the list above.{RESET}")
-                sys.exit(1)
-            # Filter the 'tests' list to include only the selected test
-            selected_tests_for_execution = [test for test in tests if test['name'] == selected_test_name]
-            if not selected_tests_for_execution:
-                logging.error(f"{RED}Error: Test '{selected_test_name}' (number {selected_test_number}) was found in mapping but not in discovered scripts. This should not happen.{RESET}")
-                sys.exit(1)
-            logging.info(f"Selected test for execution: '{selected_test_name}' (Number: {selected_test_number})")
-        else:
-            logging.error(f"{RED}Error: No test number entered or selected. Exiting single test mode. To run a specific test without prompting, use -t <test_number>.{RESET}")
+            print_color(f"Error: Test '{args.test}' not found.", RED)
             sys.exit(1)
     else:
-        # Filter tests based on duration if not in single mode and not ignoring duration
-        if not args.ignore_duration:
-            filtered_tests = []
-            skipped_tests = []
-            for test in tests:
-                if test['expected_time'] <= args.max_duration:
-                    filtered_tests.append(test)
-                else:
-                    skipped_tests.append(test)
-            selected_tests_for_execution = filtered_tests
-            if skipped_tests:
-                logging.info(f"Skipping {len(skipped_tests)} tests due to --max-duration {args.max_duration}s limit:")
-                for test in skipped_tests:
-                    logging.info(f"  - {test['name']} (Expected: {test['expected_time']:.1f}s)")
-            if not selected_tests_for_execution:
-                logging.warning(f"{RED}No tests selected for execution after applying --max-duration filter. Consider increasing --max-duration or using --ignore-duration.{RESET}")
-                sys.exit(0) # Exit gracefully if no tests to run
-        else:
-            logging.info("--- Running all discovered tests (Parallel Mode, ignoring duration) ---")
-            selected_tests_for_execution = tests # Run all discovered tests
+        for name, func in tests.items():
+            # Pass model_name only to tests that require it
+            if name in ["code", "fix", "process", "review_staged"]:
+                results[name] = run_test(name, func, args.model)
+            else:
+                results[name] = run_test(name, func)
 
-    # --- Test Execution & Monitoring ---
-    results = OrderedDict() # Stores final results: test_name -> 'PASS'/'FAIL'/'FAIL (Timeout)'
-    failure_reasons = {}    # Stores detailed reasons for failed tests
-    processes = {}          # Dictionary to track active subprocesses: pid -> {process, name, sanitized_name, start_time, stdout_file, stderr_file, stdout_file_path, stderr_file_path, test_workspace_path}
-    actual_test_durations = {} # New dictionary to store actual durations of run tests
-    
-    # Start all selected tests as subprocesses
-    for test in selected_tests_for_execution:
-        test_name = test['name']
-        sanitized_test_name = test_name.replace(' ', '_') # Sanitize name for file paths
-        print(f"--- Starting test: {test_name} (Expected: {test['expected_time']:.1f}s) ---")
-        
-        # Create a unique directory for this test to ensure isolation
-        current_test_workspace = testing_dir / sanitized_test_name
-        current_test_workspace.mkdir(parents=True, exist_ok=True)
-        logging.debug(f"Created test workspace: {current_test_workspace}")
-
-        # Construct the command to run the test logic within the shell script
-        # The 'run_test_logic' function is expected to be defined in each test_*.sh script.
-        # We don't pass the ledit path explicitly to the script, but modify PATH for the subprocess.
-        env = os.environ.copy()
-        env['PATH'] = str(project_root) + os.pathsep + env.get('PATH', '')
-        logging.debug(f"PATH for {test_name}: {env['PATH']}")
-
-        cmd = f". {test['path'].resolve()} && run_test_logic '{model_name}'"
-        
-        # Redirect stdout/stderr to temporary files within the test's workspace
-        stdout_file_path = current_test_workspace / f"{sanitized_test_name}.stdout"
-        stderr_file_path = current_test_workspace / f"{sanitized_test_name}.stderr"
-
-        stdout_file = open(stdout_file_path, "w")
-        stderr_file = open(stderr_file_path, "w")
-
-        process = subprocess.Popen(
-            cmd,
-            shell=True,
-            executable='/bin/bash', # Ensure bash is used for sourcing
-            stdout=stdout_file,
-            stderr=stderr_file,
-            cwd=current_test_workspace, # Run the test script within its dedicated directory
-            env=env, # Pass the modified environment
-        )
-        
-        processes[process.pid] = {
-            'process': process,
-            'name': test_name,
-            'sanitized_name': sanitized_test_name, # Store sanitized name for file operations
-            'start_time': time.time(),
-            'stdout_file': stdout_file,
-            'stderr_file': stderr_file,
-            'stdout_file_path': stdout_file_path, # Store path for reading later
-            'stderr_file_path': stderr_file_path, # Store path for reading later
-            'test_workspace_path': current_test_workspace, # Store for debugging/info
-        }
-        results[test_name] = 'RUNNING' # Initial status
-
-    print("\n--- Monitoring running tests ---")
-    timeout = 210 # 3.5 minutes timeout for each individual test
-
-    # Loop while there are active processes to monitor
-    while processes:
-        print(f"Currently running tests: ({len(processes)} remaining)")
-        
-        pids_to_remove = [] # List to collect PIDs of finished or timed-out processes
-        for pid, info in list(processes.items()): # Iterate over a copy to allow modification
-            process = info['process']
-            test_name = info['name']
-            start_time = info['start_time']
-            
-            if process.poll() is None: # Process is still running
-                elapsed_time = time.time() - start_time
-                if elapsed_time > timeout:
-                    logging.warning(f"{RED}Test '{test_name}' (PID {pid}) exceeded {timeout}s timeout and will be terminated.{RESET}")
-                    process.kill() # Terminate the process
-                    results[test_name] = 'FAIL (Timeout)'
-                    failure_reasons[test_name] = f"Test timed out after {timeout} seconds"
-                    actual_test_durations[test_name] = elapsed_time # Record duration even on timeout
-                    pids_to_remove.append(pid)
-                else:
-                    print(f"- {test_name} ({int(elapsed_time)}s elapsed)")
-            else: # Process has finished
-                exit_code = process.poll()
-                elapsed_time = time.time() - start_time # Calculate final elapsed time
-                result = 'PASS' if exit_code == 0 else 'FAIL'
-                print(f"Test '{test_name}' (PID {pid}) finished with result: {result} (exit code: {exit_code}). Took {elapsed_time:.1f}s.")
-                
-                results[test_name] = result
-                actual_test_durations[test_name] = elapsed_time # Record actual duration
-                pids_to_remove.append(pid)
-
-        # Process finished/timed-out tests
-        for pid in pids_to_remove:
-            info = processes[pid]
-            # Close file handles before reading to ensure all data is flushed
-            info['stdout_file'].close()
-            info['stderr_file'].close()
-            
-            # If the test failed or timed out, read its output for debugging
-            if results[info['name']] != 'PASS':
-                stdout = ""
-                stderr = ""
-                try:
-                    with open(info['stdout_file_path'], "r") as f:
-                        stdout = f.read()
-                    with open(info['stderr_file_path'], "r") as f:
-                        stderr = f.read()
-                except FileNotFoundError:
-                    logging.warning(f"Output files for {info['name']} not found at {info['stdout_file_path']}. Could not retrieve detailed failure reason.")
-
-                # Extract and store a concise failure reason
-                if results[info['name']] != 'FAIL (Timeout)': # Don't overwrite timeout reason
-                    failure_reasons[info['name']] = extract_failure_reason(stdout, stderr)
-                
-                # Log full output for failed tests
-                if stdout or stderr:
-                    logging.info(f"--- Output for failed test: {info['name']} (in {info['test_workspace_path']}) ---")
-                    if stdout:
-                        logging.info("--- STDOUT ---")
-                        logging.info(stdout)
-                    if stderr:
-                        logging.info("--- STDERR ---")
-                        logging.info(stderr)
-                    logging.info("------------------------------------------")
-
-                # NEW: Write full context of failed test to a file
-                sanitized_name_for_log = info['sanitized_name']
-                failure_log_filename = f"test_failure_{sanitized_name_for_log}.log"
-                failure_log_path = info['test_workspace_path'] / failure_log_filename
-                
-                # Ensure the reason is available, defaulting if somehow not set
-                reason_for_log = failure_reasons.get(info['name'], "Reason not available")
-
-                with open(failure_log_path, "w") as f:
-                    f.write(f"--- Test Failure Log for: {info['name']} ---\n")
-                    f.write(f"Result: {results[info['name']]}\n")
-                    f.write(f"Reason: {reason_for_log}\n\n")
-                    f.write(f"--- Full STDOUT ---\n")
-                    f.write(stdout if stdout else "[No STDOUT]\n")
-                    f.write("\n--- Full STDERR ---\n")
-                    f.write(stderr if stderr else "[No STDERR]\n")
-                    f.write("\n--- End of Log ---\n")
-                logging.info(f"Full failure context saved to: {failure_log_path}")
-
-            # Clean up temporary output files (stdout/stderr files)
-            try:
-                os.remove(info['stdout_file_path'])
-                os.remove(info['stderr_file_path'])
-            except OSError as e:
-                logging.warning(f"Could not remove temporary output files for {info['name']}: {e}")
-            
-            del processes[pid] # Remove from active processes
-
-        # Wait before checking processes again, only if there are still active processes
-        if processes:
-            time.sleep(10)
-
-    print("--------------------------------")
-
-    # No longer saving test times to a file as they are hardcoded.
-    # The actual_test_durations are still collected for reporting purposes.
-
-    # Determine overall test pass/fail status after all tests have completed
+    print_color("\n--- Test Summary ---", MAGENTA)
     all_passed = True
-    for test_name, status in results.items():
-        if 'FAIL' in status: # Check for 'FAIL' or 'FAIL (Timeout)'
-            all_passed = False
-            break # Found a failure, no need to check further
-
-    # --- CLEANUP ---
-    print("--- CLEANUP: Removing testing artifacts ---")
-    # The script remains in project_root throughout execution.
-    # Clean up the main testing directory which contains all sub-test directories.
-    
-    # Determine if testing directory should be kept based on failures
-    if not all_passed:
-        logging.info(f"{RED}One or more tests failed. Keeping '{testing_dir}' directory for inspection.{RESET}")
-        keep_testing_dir = True # Override to keep directory if tests failed
-
-    if not keep_testing_dir:
-        if testing_dir.exists():
-            print(f"Removing '{testing_dir}' directory...")
-            shutil.rmtree(testing_dir)
+    for test_name, passed in results.items():
+        if passed:
+            print_color(f"Test '{test_name}': PASSED", GREEN)
         else:
-            print(f"'{testing_dir}' directory not found, no cleanup needed.")
+            print_color(f"Test '{test_name}': FAILED", RED)
+            all_passed = False
+
+    if not args.no_cleanup:
+        cleanup_test_environment(original_cwd)
     else:
-        print(f"Skipping cleanup of '{testing_dir}' directory as --keep-testing-dir flag was set or tests failed.")
-    print("----------------------------------------------------")
-    print()
+        print_color(f"\nSkipping cleanup. Test environment remains at: {test_dir}", YELLOW)
 
-    # --- Failure Reasons Summary ---
-    if failure_reasons:
-        print("--- Test Failure Reasons Summary ---")
-        for test_name, reason in failure_reasons.items(): 
-            print(f"{RED}{test_name}:{RESET} {reason}")
-        print("------------------------------------")
-        print()
-
-    # --- Final Reporting ---
-    print("--- Test Results Summary ---")
-    print(f"{'Test Name':<44} {'Result':<15} {'Time (s)':<10} {'Expected (s)'}") # Updated header
-    print("-" * 85) # Adjusted line length
-    
-    # all_passed is already determined above, no need to re-initialize or re-calculate here
-    # Iterate through the original discovered test order for consistent reporting
-    for test in tests:
-        name = test['name']
-        # Get the result, defaulting to "NOT RUN" if a test was skipped or not processed
-        result = results.get(name, "NOT RUN")
-        actual_time = actual_test_durations.get(name, 0.0) # Get actual time if run, else 0
-        expected_time = test['expected_time'] # Get expected time from the test object
-        
-        # Truncate test name for clean formatting
-        truncated_name = (name[:42] + '..') if len(name) > 44 else name
-        
-        actual_time_str = f"{actual_time:.1f}" if actual_time > 0 else "N/A"
-        expected_time_str = f"{expected_time:.1f}"
-
-        line = f"{truncated_name:<44} {result:<15} {actual_time_str:<10} {expected_time_str}"
-
-        if result == 'PASS':
-            print(f"{GREEN}{line}{RESET}")
-        elif 'FAIL' in result: # Catches 'FAIL' and 'FAIL (Timeout)'
-            print(f"{RED}{line}{RESET}")
-            # all_passed is already set to False if any test failed, no need to update here
-        else: # For "NOT RUN" or any other unexpected status
-            print(f"{line}")
-
-    print("-" * 85) # Adjusted line length
-    print(" ledit TESTING COMPLETE ---")
-
-    # Exit with a non-zero status code if any test failed
-    if not all_passed:
+    if all_passed:
+        print_color("\nAll selected tests PASSED!", GREEN + BOLD)
+        sys.exit(0)
+    else:
+        print_color("\nSome tests FAILED!", RED + BOLD)
         sys.exit(1)
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        # Handle Ctrl+C gracefully
-        logging.info("\nTest execution interrupted by user. Exiting.")
-        sys.exit(1)
-    except Exception as e:
-        # Catch any unexpected exceptions
-        logging.critical(f"{RED}An unexpected error occurred: {e}{RESET}", exc_info=True) # exc_info=True to print traceback
-        sys.exit(1)
+    main()

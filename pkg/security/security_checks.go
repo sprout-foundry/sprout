@@ -13,10 +13,10 @@ import (
 var (
 	// API Key/Token patterns: looks for common key names followed by assignment and a string of 16-128 alphanumeric/symbol chars
 	// This is a more robust pattern to avoid false positives from just "key" or "token"
-	apiKeyRegex = regexp.MustCompile(`(?i)(api_key|apikey|api-key|access_key|access-key|secret_key|secret-key|auth_token|auth-token|bearer_token|bearer-token|client_secret|client-secret|consumer_key|consumer-key|consumer_secret|consumer-secret|private_key|private-key|public_key|public-key|token|key|secret|client_id|app_id|api_secret|auth_key|api_secret_key)\s*(=|:|is)\s*['"]?[a-zA-Z0-9_.\-=/+]{16,128}['"]?`)
+	apiKeyRegex = regexp.MustCompile(`(?i)(api_key|apikey|api-key|access_key|access-key|secret_key|secret-key|auth_token|auth-token|bearer_token|bearer-token|client_secret|client-secret|consumer_key|consumer-key|consumer_secret|consumer-secret|private_key|private-key|public_key|public-key|token|key|secret|client_id|app_id|api_secret|auth_key|api_secret_key)\s*(=|:)\s*['"]?[a-zA-Z0-9_.\-=/+]{16,128}['"]?`)
 
 	// Password patterns: looks for common password names followed by assignment and a string of 8-64 alphanumeric/symbol chars
-	passwordRegex = regexp.MustCompile(`(?i)(password|passwd|pass|pwd|passphrase)\s*(=|:|is)\s*['"]?[a-zA-Z0-9_.\-=/+]{8,64}['"]?`)
+	passwordRegex = regexp.MustCompile(`(?i)(password|passwd|pass|pwd|passphrase)\s*(=|:)\s*['"]?[a-zA-Z0-9_.\-=/+]{8,64}['"]?`)
 
 	// Database/Service URL patterns: looks for common protocol prefixes followed by :// and non-whitespace/quote characters
 	dbUrlRegex = regexp.MustCompile(`(?i)(jdbc|mongodb|mysql|postgresql|sqlite|sqlserver|redis|amqp|kafka|mqtt|sftp|ftp|smb|ldap|rdp):\/\/[^\s'"]+`)

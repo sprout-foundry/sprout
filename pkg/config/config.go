@@ -47,6 +47,7 @@ type Config struct {
 	CodeStyle                CodeStylePreferences `json:"code_style"`                 // New field for code style preferences
 	SearchModel              string               `json:"search_model"`               // NEW: Field for search model
 	Temperature              float64              `json:"temperature"`                // NEW: Field for LLM temperature
+	RetryAttemptCount        int                  `json:"-"`                          // Internal field to track retry attempts
 }
 
 func getHomeConfigPath() (string, string) {
@@ -238,6 +239,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		OllamaServerURL:          "http://localhost:11434",
 		OrchestrationMaxAttempts: 6,                      // Default max attempts for orchestration
 		CodeStyle:                CodeStylePreferences{}, // Initialize to be populated by setDefaultValues
+		RetryAttemptCount:        0,                      // Initialize retry attempt count to zero
 		// SearchModel and Temperature will be set by setDefaultValues
 	}
 

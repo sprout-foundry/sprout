@@ -53,6 +53,16 @@ load_meaningful_tasks() {
 
 # Main script logic starts here
 
+# Check for an optional command-line argument
+OPTIONAL_CHECK_COMMAND="$1"
+if [[ -n "$OPTIONAL_CHECK_COMMAND" ]]; then
+    echo "An optional check command was provided: '$OPTIONAL_CHECK_COMMAND'"
+    echo "This command will be run after each 'ledit code' call."
+    echo "If it fails, 'ledit fix' will be called to address the issue."
+else
+    echo "No optional check command provided. Script will proceed without post-change checks."
+fi
+
 # Perform initial check for todo.txt file existence
 if ! check_todo_file_exists; then
     exit 1
@@ -77,7 +87,23 @@ for i in {1..3}; do
         echo "Calling ledit for: \"$task_line\""
         # Call ledit with the content of the line
         # The --skip-prompt flag prevents ledit from asking for confirmation
-        ledit code "Make the following change, or if it is already done, remove this request from the todo.txt file. Requested Change: '$task_line' #WS" --skip-prompt
+        ledit code "Make the following change, or if it is already done, remove this request from the todo.txt file. Analyze dependencies and ensure the project remains in a working state after this change by updating dependent code Requested Change: '$task_line' #WS" --skip-prompt
+
+        # If an optional check command was provided, run it
+        if [[ -n "$OPTIONAL_CHECK_COMMAND" ]]; then
+            echo "Running post-change check command: '$OPTIONAL_CHECK_COMMAND'"
+            # Use eval to execute the command string
+            eval "$OPTIONAL_CHECK_COMMAND"
+            local check_status=$?
+
+            if [[ "$check_status" -ne 0 ]]; then
+                echo "Check command failed with exit status $check_status."
+                echo "Calling ledit fix to address the issue caused by the previous change."
+                ledit fix "$OPTIONAL_CHECK_COMMAND" --skip-prompt
+            else
+                echo "Check command succeeded."
+            fi
+        fi
     done
 
     echo "Iteration $i complete."

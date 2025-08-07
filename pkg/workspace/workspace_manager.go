@@ -464,7 +464,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	}
 
 	logger.LogProcessStep("--- Asking LLM to select relevant files for context ---")
-	fullContextFiles, summaryContextFiles, err := getFilesForContext(instructions, workspace, cfg)
+	fullContextFiles, summaryContextFiles, err := getFilesForContext(instructions, workspace, cfg, logger) // Pass logger
 	if err != nil {
 		logger.Logf("Warning: could not determine which files to load for context: %v. Proceeding with all summaries.\n", err)
 		// If LLM fails to select files, fallback to using all file summaries for context.

@@ -255,13 +255,13 @@ func GetChangesForRequirement(cfg *config.Config, requirementInstruction string,
 }
 
 // GetCodeReview asks the LLM to review a combined diff of changes against the original prompt.
-func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt string) (*types.CodeReviewResult, error) {
+func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceContext string) (*types.CodeReviewResult, error) {
 	modelName := cfg.OrchestrationModel
 	if modelName == "" {
 		modelName = cfg.EditingModel // Fallback
 	}
 
-	messages := prompts.BuildCodeReviewMessages(combinedDiff, originalPrompt)
+	messages := prompts.BuildCodeReviewMessages(combinedDiff, originalPrompt, workspaceContext)
 
 	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute)
 	if err != nil {

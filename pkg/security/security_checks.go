@@ -159,7 +159,7 @@ func CheckFileSecurity(
 	for _, concern := range newlyDetectedConcerns {
 		snippet := detectedSnippetsMap[concern] // Retrieve the snippet for this concern type
 		prompt := prompts.PotentialSecurityConcernsFound(relativePath, concern, snippet)
-		if logger.AskForConfirmation(prompt, true) { // This is a required check
+		if logger.AskForConfirmation(prompt, true, false) { // We default to not ignoring new concerns
 			concernsForThisFile = append(concernsForThisFile, concern)
 			logger.Logf("Security concern '%s' in %s noted as an issue.", concern, relativePath)
 		} else {

@@ -16,10 +16,9 @@ import (
 // GetCommitMessage generates a git commit message based on code changes and the original prompt using an LLM.
 // This function is the canonical GetCommitMessage, replacing the one in pkg/llm/commit.go.
 func GetCommitMessage(cfg *config.Config, changelog string, originalPrompt string, filename string) (string, error) {
-	modelName := cfg.SummaryModel
+	modelName := cfg.WorkspaceModel
 	if modelName == "" {
-		modelName = cfg.EditingModel // Fallback if summary model is not configured
-		fmt.Print(prompts.NoSummaryModelFallback(modelName))
+		modelName = cfg.EditingModel // Fallback if workspace model is not configured
 	}
 
 	messages := prompts.BuildCommitMessages(changelog, originalPrompt)

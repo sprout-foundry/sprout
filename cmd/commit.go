@@ -37,7 +37,7 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 
 		// Override model if specified by flag
 		if commitModel != "" {
-			cfg.SummaryModel = commitModel
+			cfg.WorkspaceModel = commitModel
 		}
 
 		// Check for staged changes

@@ -100,6 +100,7 @@ func runAgentMode(userIntent string) error {
 
 // runOptimizedAgent runs the agent with minimal context to reduce costs
 func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *TokenUsage) error {
+	logger.LogProcessStep("CHECKPOINT: Starting runOptimizedAgent")
 	startTime := time.Now()
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -121,8 +122,23 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 	logger.LogProcessStep(fmt.Sprintf("Intent Category: %s", intentAnalysis.Category))
 	logger.LogProcessStep(fmt.Sprintf("Complexity: %s", intentAnalysis.Complexity))
 	logger.LogProcessStep(fmt.Sprintf("Estimated Files: %d", len(intentAnalysis.EstimatedFiles)))
+	logger.LogProcessStep("CHECKPOINT: After estimated files log")
 	if len(intentAnalysis.EstimatedFiles) > 0 {
 		logger.LogProcessStep(fmt.Sprintf("Files: %s", strings.Join(intentAnalysis.EstimatedFiles, ", ")))
+	}
+
+	// Force code review requests to use editing model instead of orchestration
+	intentLower := strings.ToLower(userIntent)
+	useEditingModel := strings.Contains(intentLower, "editing model") || 
+					  strings.Contains(intentLower, "code review") || 
+					  strings.Contains(intentLower, "codereview")
+	
+	logger.LogProcessStep(fmt.Sprintf("DEBUG: useEditingModel=%v, complexity=%s", useEditingModel, intentAnalysis.Complexity))
+	
+	// Force override for testing
+	if useEditingModel {
+		logger.LogProcessStep("🔧 Forcing code review task to use editing model instead of orchestration...")
+		intentAnalysis.Complexity = "moderate"  // Override LLM decision
 	}
 
 	// Phase 2: Use orchestration model to create detailed edit plan
@@ -136,6 +152,7 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 
 	// Phase 3: Context loading is now handled by edit plan (files from orchestration model)
 	logger.LogProcessStep("🔍 Phase 3: Edit plan specifies target files...")
+	
 	switch intentAnalysis.Complexity {
 	case "simple":
 		logger.LogProcessStep(fmt.Sprintf("Using %d files from edit plan for simple task", len(editPlan.FilesToEdit)))
@@ -203,38 +220,129 @@ type EditPlan struct {
 	FilesToEdit    []string        // Files that need to be modified
 	EditOperations []EditOperation // Specific operations to perform
 	Context        string          // Additional context for the edits
+	ScopeStatement string          // Clear statement of what this plan addresses
 }
 
 // EditOperation represents a single file edit operation
 type EditOperation struct {
-	FilePath     string // Path to the file to edit
-	Description  string // What change to make
-	Instructions string // Detailed instructions for the editing model
+	FilePath           string // Path to the file to edit
+	Description        string // What change to make
+	Instructions       string // Detailed instructions for the editing model
+	ScopeJustification string // Explanation of how this change serves the user request
 }
 
-// analyzeIntentWithMinimalContext analyzes user intent without loading full workspace
+// analyzeIntentWithMinimalContext analyzes user intent with proper workspace context
 func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logger *utils.Logger) (*IntentAnalysis, int, error) {
 	startTime := time.Now()
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: analyzeIntentWithMinimalContext started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
-	// Get basic file listing without full analysis
-	files, err := getBasicFileListing(logger)
+	// STEP 1: Load workspace file for embeddings
+	logger.Logf("STEP 1: Loading workspace file...")
+	workspaceFile, err := workspace.LoadWorkspaceFile()
 	if err != nil {
-		logger.LogError(fmt.Errorf("failed to get basic file listing for intent analysis: %w", err))
-		duration := time.Since(startTime)
-		runtime.ReadMemStats(&m)
-		logger.Logf("PERF: analyzeIntentWithMinimalContext completed (error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-		return nil, 0, fmt.Errorf("failed to get file listing: %w", err)
+		logger.LogError(fmt.Errorf("failed to load workspace file: %w", err))
+		return nil, 0, fmt.Errorf("failed to load workspace: %w", err)
+	}
+	logger.Logf("STEP 1: Successfully loaded workspace with %d files", len(workspaceFile.Files))
+
+	// STEP 1.5: Build basic workspace analysis BEFORE any LLM decisions
+	logger.Logf("STEP 1.5: Analyzing workspace structure...")
+	workspaceAnalysis, err := buildWorkspaceStructure(logger)
+	if err != nil {
+		logger.Logf("Warning: Could not build workspace analysis: %v", err)
+		workspaceAnalysis = &WorkspaceInfo{
+			ProjectType: "go", // Default assumption
+			AllFiles:    []string{},
+		}
+	}
+	logger.Logf("STEP 1.5: Detected project type: %s with %d files", workspaceAnalysis.ProjectType, len(workspaceAnalysis.AllFiles))
+
+	// STEP 2: Use embeddings to find relevant files
+	logger.Logf("STEP 2: Starting embedding search for intent: %s", userIntent)
+	logger.Logf("STEP 2: About to call GetFilesForContextUsingEmbeddings...")
+	
+	fullContextFiles, summaryContextFiles, err := workspace.GetFilesForContextUsingEmbeddings(userIntent, workspaceFile, cfg, logger)
+	logger.Logf("STEP 2: GetFilesForContextUsingEmbeddings returned: full=%d, summary=%d", len(fullContextFiles), len(summaryContextFiles))
+	
+	if err != nil {
+		logger.LogError(fmt.Errorf("embedding search failed: %w", err))
+		// Fallback to basic file listing
+		logger.Logf("STEP 2: Falling back to basic file discovery...")
+		fullContextFiles, summaryContextFiles = []string{}, []string{}
+	}
+
+	// Combine full context and summary files
+	relevantFiles := append(fullContextFiles, summaryContextFiles...)
+	logger.Logf("Found %d full context files: %v", len(fullContextFiles), fullContextFiles)
+	logger.Logf("Found %d summary context files: %v", len(summaryContextFiles), summaryContextFiles)
+	logger.Logf("Total relevant files (%d): %v", len(relevantFiles), relevantFiles)
+
+	// STEP 2.5: If embeddings found few/no files, try workspace model rewording
+	if len(relevantFiles) < 3 {
+		logger.Logf("STEP 2.5: Few files found (%d), trying workspace model to reword prompt...", len(relevantFiles))
+		rewordedIntent, rewordErr := rewordPromptForBetterSearch(userIntent, workspaceAnalysis, cfg, logger)
+		if rewordErr == nil && rewordedIntent != userIntent {
+			logger.Logf("STEP 2.5: Reworded intent: '%s' -> '%s'", userIntent, rewordedIntent)
+			
+			// Try embeddings again with reworded intent
+			fullContextFiles2, summaryContextFiles2, err2 := workspace.GetFilesForContextUsingEmbeddings(rewordedIntent, workspaceFile, cfg, logger)
+			if err2 == nil && len(fullContextFiles2)+len(summaryContextFiles2) > len(relevantFiles) {
+				logger.Logf("STEP 2.5: Reworded search found more files! Using new results.")
+				fullContextFiles = fullContextFiles2
+				summaryContextFiles = summaryContextFiles2
+				relevantFiles = append(fullContextFiles, summaryContextFiles...)
+			}
+		}
+	}
+
+	// STEP 2.7: If still few files, try shell commands to find files
+	if len(relevantFiles) < 2 {
+		logger.Logf("STEP 2.7: Still few files (%d), trying shell commands to find relevant files...", len(relevantFiles))
+		shellFoundFiles := findFilesUsingShellCommands(userIntent, workspaceAnalysis, logger)
+		if len(shellFoundFiles) > 0 {
+			logger.Logf("STEP 2.7: Shell commands found %d additional files: %v", len(shellFoundFiles), shellFoundFiles)
+			relevantFiles = append(relevantFiles, shellFoundFiles...)
+		}
+	}
+
+	// If still no files found, try content-based search as final fallback
+	if len(relevantFiles) == 0 {
+		logger.Logf("No files found by embeddings or basic listing, trying content search...")
+		relevantFiles = findRelevantFilesByContent(userIntent, logger)
+		logger.Logf("Content search found %d files: %v", len(relevantFiles), relevantFiles)
+	}
+
+	// Final safety net - ensure we always have some files to analyze
+	if len(relevantFiles) == 0 {
+		logger.Logf("WARNING: No relevant files found by any method! Using fallback files...")
+		// Force include the most likely files for code reviews
+		candidateFiles := []string{"pkg/llm/api.go", "pkg/editor/editor.go", "cmd/review_staged.go", "pkg/orchestration/orchestrator.go"}
+		for _, file := range candidateFiles {
+			if _, err := os.Stat(file); err == nil {
+				relevantFiles = append(relevantFiles, file)
+			}
+		}
+		logger.Logf("Fallback selected %d files: %v", len(relevantFiles), relevantFiles)
 	}
 
 	prompt := fmt.Sprintf(`Analyze this user intent and classify it for optimal execution:
 
 User Intent: %s
 
-Available Files (basic listing):
+WORKSPACE ANALYSIS:
+Project Type: %s
+Total Files: %d
+Available Go Files in Workspace:
 %s
+
+CRITICAL WORKSPACE CONSTRAINTS:
+- This is a %s project - do NOT suggest non-%s files
+- All file paths must be relative to project root
+- Only suggest modifications to EXISTING files shown above
+- Do NOT create new files unless explicitly requested
+- Verify file extensions match project type (.go for Go projects)
 
 Respond with JSON:
 {
@@ -249,8 +357,15 @@ Classification Guidelines:
 - "moderate": 2-5 files, some analysis needed, well-defined scope
 - "complex": Multiple files, requires planning, unclear scope
 
-Only include files in estimated_files that are highly likely to be modified.`,
-		userIntent, strings.Join(files, "\n"))
+Only include files in estimated_files that are highly likely to be modified.
+ALL files must be existing %s files from the workspace above.`,
+		userIntent, 
+		workspaceAnalysis.ProjectType,
+		len(relevantFiles),
+		strings.Join(relevantFiles, "\n"),
+		workspaceAnalysis.ProjectType,
+		workspaceAnalysis.ProjectType,
+		workspaceAnalysis.ProjectType)
 
 	messages := []prompts.Message{
 		{Role: "system", Content: "You are an expert at analyzing programming tasks. Respond only with valid JSON."},
@@ -268,7 +383,7 @@ Only include files in estimated_files that are highly likely to be modified.`,
 		return &IntentAnalysis{
 			Category:        inferCategory(userIntent),
 			Complexity:      inferComplexity(userIntent),
-			EstimatedFiles:  inferFiles(userIntent),
+			EstimatedFiles:  []string{}, // Don't try to infer files in fallback
 			RequiresContext: true,
 		}, 0, nil // No tokens used if LLM failed
 	}
@@ -289,7 +404,7 @@ Only include files in estimated_files that are highly likely to be modified.`,
 		return &IntentAnalysis{
 			Category:        inferCategory(userIntent),
 			Complexity:      inferComplexity(userIntent),
-			EstimatedFiles:  inferFiles(userIntent),
+			EstimatedFiles:  []string{}, // Don't try to infer files in fallback
 			RequiresContext: true,
 		}, totalTokens, nil
 	}
@@ -315,7 +430,7 @@ Only include files in estimated_files that are highly likely to be modified.`,
 		return &IntentAnalysis{
 			Category:        inferCategory(userIntent),
 			Complexity:      inferComplexity(userIntent),
-			EstimatedFiles:  inferFiles(userIntent),
+			EstimatedFiles:  []string{}, // Don't try to infer files in fallback
 			RequiresContext: true,
 		}, totalTokens, nil
 	}
@@ -323,10 +438,10 @@ Only include files in estimated_files that are highly likely to be modified.`,
 	// Debug: log the parsed analysis
 	logger.Logf("Parsed analysis - Category: %s, Complexity: %s, Files: %v", analysis.Category, analysis.Complexity, analysis.EstimatedFiles)
 
-	// If LLM didn't provide files, fall back to inference
+	// If LLM didn't provide files, fall back to content-based search
 	if len(analysis.EstimatedFiles) == 0 {
-		analysis.EstimatedFiles = inferFiles(userIntent)
-		logger.Logf("LLM provided no files, using inferred files: %v", analysis.EstimatedFiles)
+		analysis.EstimatedFiles = findRelevantFilesByContent(userIntent, logger)
+		logger.Logf("LLM provided no files, using content-based search: %v", analysis.EstimatedFiles)
 	}
 
 	duration := time.Since(startTime)
@@ -347,49 +462,89 @@ func createDetailedEditPlan(userIntent string, intentAnalysis *IntentAnalysis, c
 	if len(intentAnalysis.EstimatedFiles) > 0 {
 		contextFiles = intentAnalysis.EstimatedFiles
 	} else {
-		contextFiles = inferFiles(userIntent)
+		// Use our new robust file finding approach
+		logger.Logf("No estimated files from analysis, using robust file discovery for: %s", userIntent)
+		contextFiles = findRelevantFilesRobust(userIntent, cfg, logger)
+		
+		// If still no files found, try content search as additional fallback
+		if len(contextFiles) == 0 {
+			logger.Logf("Robust discovery found no files, trying content search as final fallback...")
+			contextFiles = findRelevantFilesByContent(userIntent, logger)
+		}
 	}
 
 	// Load context for the files
 	context := buildMinimalContext(contextFiles, logger)
+	
+	// Debug: log contextFiles to see what we have
+	logger.Logf("DEBUG: createDetailedEditPlan contextFiles: %v (length: %d)", contextFiles, len(contextFiles))
 
-	prompt := fmt.Sprintf(`You are an expert software architect and developer. Create a detailed edit plan for implementing the requested changes.
+	prompt := fmt.Sprintf(`You are an expert Go software architect and developer. Create a MINIMAL and FOCUSED edit plan for this Go codebase.
 
 USER REQUEST: %s
+
+WORKSPACE ANALYSIS:
+Project Type: Go
+Total Context Files: %d
 
 TASK ANALYSIS:
 - Category: %s
 - Complexity: %s
-- Estimated Files: %s
+- Context Files: %s
 
-CURRENT CODE CONTEXT:
+CURRENT GO CODEBASE CONTEXT:
 %s
 
+CRITICAL WORKSPACE VALIDATION:
+- This is a GO PROJECT - You must ONLY work with .go files
+- ALL files in "files_to_edit" must be EXISTING .go files from the context above
+- Do NOT create new files unless explicitly requested by user
+- Do NOT suggest .ts, .js, .py, or any non-Go files
+- File paths must be relative to project root
+- Verify each file exists in the provided context before including it
+
+THIS IS A GO PROJECT - DO NOT CREATE NON-GO FILES!
+
+CRITICAL CONSTRAINTS:
+1. **STAY STRICTLY WITHIN SCOPE**: Only make changes that directly fulfill the user's exact request
+2. **NO SCOPE CREEP**: Do not add improvements, optimizations, or features not explicitly requested
+3. **MINIMAL CHANGES**: Make the smallest possible changes to achieve the goal
+4. **SINGLE PURPOSE**: Each edit should serve only the user's stated objective
+5. **GO FILES ONLY**: This is a Go project. Only modify existing .go files. Do NOT create .ts, .js, or other non-Go files
+6. **EXISTING FILES ONLY**: You MUST use existing files from the context above. Do NOT create new files
+7. **VERIFY FILE EXISTENCE**: All files in "files_to_edit" must be actual Go files that exist in the codebase context
+
 PLANNING REQUIREMENTS:
-1. **File Analysis**: Identify exactly which files need to be modified
+1. **File Analysis**: Identify exactly which EXISTING .go files need to be modified 
 2. **Edit Operations**: For each file, specify the exact changes needed
-3. **Implementation Strategy**: Provide clear, actionable instructions for each edit
+3. **Scope Justification**: Explain how each change directly serves the user request
+4. **File Verification**: Only include .go files that exist in the current codebase context
 
 RESPONSE FORMAT (JSON):
 {
-  "files_to_edit": ["file1.go", "file2.go"],
+  "files_to_edit": ["path/to/existing/file.go"],
   "edit_operations": [
     {
-      "file_path": "file1.go",
-      "description": "Add comment to main function",
-      "instructions": "Add a descriptive comment above the main function that explains its purpose and key responsibilities"
+      "file_path": "path/to/existing/file.go", 
+      "description": "Specific change to make",
+      "instructions": "Detailed instructions for the exact modification needed",
+      "scope_justification": "How this change directly serves the user's request"
     }
   ],
-  "context": "Overall strategy and approach for implementing these changes"
+  "context": "Minimal strategy focused only on the user's exact request",
+  "scope_statement": "This plan addresses only: [restate user request]"
 }
 
-GUIDELINES:
-- Each edit operation should be specific to ONE file
+STRICT GUIDELINES:
+- Each edit operation should target ONE existing file
 - Instructions should be clear enough for a fast editing model to execute
-- Focus on minimal, targeted changes that achieve the user's goal
-- Consider existing code patterns and conventions
-- Ensure changes are cohesive and well-integrated`,
+- Focus ONLY on what the user explicitly requested
+- Do NOT add related improvements or "nice to have" features
+- Do NOT create new files or new directory structures
+- Only modify existing code to achieve the specific goal
+- Justify every change against the original user request`,
 		userIntent,
+		len(contextFiles),
 		intentAnalysis.Category,
 		intentAnalysis.Complexity,
 		strings.Join(contextFiles, ", "),
@@ -406,16 +561,31 @@ GUIDELINES:
 		duration := time.Since(startTime)
 		runtime.ReadMemStats(&m)
 		logger.Logf("PERF: createDetailedEditPlan completed (error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+		
 		// Fallback to simple plan based on intent analysis
-		return &EditPlan{
-			FilesToEdit: contextFiles,
-			EditOperations: []EditOperation{
+		var fallbackOperations []EditOperation
+		if len(contextFiles) > 0 {
+			fallbackOperations = []EditOperation{
 				{
 					FilePath:     contextFiles[0],
 					Description:  userIntent,
 					Instructions: userIntent,
 				},
-			},
+			}
+		} else {
+			// No context files available
+			fallbackOperations = []EditOperation{
+				{
+					FilePath:     "main.go", // Generic fallback
+					Description:  userIntent,
+					Instructions: userIntent,
+				},
+			}
+		}
+		
+		return &EditPlan{
+			FilesToEdit: contextFiles,
+			EditOperations: fallbackOperations,
 			Context: "Fallback plan due to orchestration model failure",
 		}, 0, nil
 	}
@@ -442,11 +612,13 @@ GUIDELINES:
 	var planData struct {
 		FilesToEdit    []string `json:"files_to_edit"`
 		EditOperations []struct {
-			FilePath     string `json:"file_path"`
-			Description  string `json:"description"`
-			Instructions string `json:"instructions"`
+			FilePath           string `json:"file_path"`
+			Description        string `json:"description"`
+			Instructions       string `json:"instructions"`
+			ScopeJustification string `json:"scope_justification"`
 		} `json:"edit_operations"`
-		Context string `json:"context"`
+		Context        string `json:"context"`
+		ScopeStatement string `json:"scope_statement"`
 	}
 
 	if err := json.Unmarshal([]byte(response), &planData); err != nil {
@@ -455,16 +627,34 @@ GUIDELINES:
 		duration := time.Since(startTime)
 		runtime.ReadMemStats(&m)
 		logger.Logf("PERF: createDetailedEditPlan completed (JSON error, fallback). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-		return &EditPlan{
-			FilesToEdit: contextFiles,
-			EditOperations: []EditOperation{
+
+		// Handle empty contextFiles to avoid index out of range panic
+		var fallbackOperations []EditOperation
+		if len(contextFiles) > 0 {
+			fallbackOperations = []EditOperation{
 				{
-					FilePath:     contextFiles[0],
-					Description:  userIntent,
-					Instructions: userIntent,
+					FilePath:           contextFiles[0],
+					Description:        userIntent,
+					Instructions:       userIntent,
+					ScopeJustification: "Fallback operation due to JSON parsing failure",
 				},
-			},
-			Context: "Fallback plan due to JSON parsing failure",
+			}
+		} else {
+			// No context files available, create a generic operation
+			fallbackOperations = []EditOperation{
+				{
+					FilePath:           "",
+					Description:        userIntent,
+					Instructions:       userIntent,
+					ScopeJustification: "Fallback operation with no context files available",
+				},
+			}
+		}
+
+		return &EditPlan{
+			FilesToEdit:    contextFiles,
+			EditOperations: fallbackOperations,
+			Context:        "Fallback plan due to JSON parsing failure",
 		}, totalTokens, nil
 	}
 
@@ -472,9 +662,10 @@ GUIDELINES:
 	var operations []EditOperation
 	for _, op := range planData.EditOperations {
 		operations = append(operations, EditOperation{
-			FilePath:     op.FilePath,
-			Description:  op.Description,
-			Instructions: op.Instructions,
+			FilePath:           op.FilePath,
+			Description:        op.Description,
+			Instructions:       op.Instructions,
+			ScopeJustification: op.ScopeJustification,
 		})
 	}
 
@@ -482,6 +673,7 @@ GUIDELINES:
 		FilesToEdit:    planData.FilesToEdit,
 		EditOperations: operations,
 		Context:        planData.Context,
+		ScopeStatement: planData.ScopeStatement,
 	}
 
 	duration := time.Since(startTime)
@@ -489,7 +681,14 @@ GUIDELINES:
 	logger.Logf("PERF: createDetailedEditPlan completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
 	logger.LogProcessStep(fmt.Sprintf("📋 Edit plan created: %d files, %d operations", len(editPlan.FilesToEdit), len(editPlan.EditOperations)))
+	logger.LogProcessStep(fmt.Sprintf("🎯 Scope: %s", editPlan.ScopeStatement))
 	logger.LogProcessStep(fmt.Sprintf("Strategy: %s", editPlan.Context))
+
+	// Log each operation with its scope justification
+	for i, op := range editPlan.EditOperations {
+		logger.LogProcessStep(fmt.Sprintf("📝 Operation %d: %s", i+1, op.Description))
+		logger.LogProcessStep(fmt.Sprintf("   📋 Justification: %s", op.ScopeJustification))
+	}
 
 	return editPlan, totalTokens, nil
 }
@@ -514,8 +713,13 @@ func inferCategory(userIntent string) string {
 
 func inferComplexity(userIntent string) string {
 	intentLower := strings.ToLower(userIntent)
-	complexWords := []string{"refactor", "architect", "multiple", "system", "design"}
+	complexWords := []string{"refactor", "architect", "multiple", "design"}  // Removed "system"
 	simpleWords := []string{"add", "comment", "fix typo", "single"}
+
+	// Force certain requests to use editing model instead of orchestration
+	if strings.Contains(intentLower, "editing model") || strings.Contains(intentLower, "code review") || strings.Contains(intentLower, "codereview") {
+		return "moderate"  // Use editing path instead of orchestration
+	}
 
 	for _, word := range complexWords {
 		if strings.Contains(intentLower, word) {
@@ -532,47 +736,335 @@ func inferComplexity(userIntent string) string {
 	return "moderate"
 }
 
-func inferFiles(userIntent string) []string {
+// findRelevantFilesRobust uses embeddings and fallback strategies to find relevant files
+func findRelevantFilesRobust(userIntent string, cfg *config.Config, logger *utils.Logger) []string {
+	// Try embeddings first
+	workspaceFile, err := workspace.LoadWorkspaceFile()
+	if err != nil {
+		logger.LogError(fmt.Errorf("failed to load workspace for file discovery: %w", err))
+	} else {
+		fullFiles, _, embErr := workspace.GetFilesForContextUsingEmbeddings(userIntent, workspaceFile, cfg, logger)
+		if embErr != nil {
+			logger.LogError(fmt.Errorf("embedding search failed: %w", embErr))
+		} else if len(fullFiles) > 0 {
+			logger.Logf("Embeddings found %d relevant files", len(fullFiles))
+			return fullFiles
+		}
+	}
+	
+	// If embeddings failed, try content-based search
+	logger.Logf("Embeddings found no files, trying content search...")
+	contentFiles := findRelevantFilesByContent(userIntent, logger)
+	if len(contentFiles) > 0 {
+		return contentFiles
+	}
+	
+	// If all else fails, use shell commands to find files
+	logger.Logf("Content search found no files, trying shell-based discovery...")
+	
+	// We need workspace info for shell commands, but keep it lightweight
+	workspaceInfo := &WorkspaceInfo{
+		ProjectType: "go", // Default for this project
+		RootFiles: []string{},
+		AllFiles: []string{},
+		FilesByDir: map[string][]string{},
+		RelevantFiles: map[string]string{},
+	}
+	
+	shellFiles := findFilesUsingShellCommands(userIntent, workspaceInfo, logger)
+	if len(shellFiles) > 0 {
+		return shellFiles
+	}
+	
+	// Absolute fallback - return empty slice, let caller handle
+	logger.Logf("All file discovery methods failed")
+	return []string{}
+}
+
+// findRelevantFilesByContent searches for files containing relevant content based on the user intent
+func findRelevantFilesByContent(userIntent string, logger *utils.Logger) []string {
 	intentLower := strings.ToLower(userIntent)
-	filesSet := make(map[string]bool) // Use a set to avoid duplicates
 
-	if strings.Contains(intentLower, "main") {
-		filesSet["main.go"] = true
-	}
-	if strings.Contains(intentLower, "agent") {
-		filesSet["cmd/agent.go"] = true
-	}
-	if strings.Contains(intentLower, "test") {
-		// Would add test files
-	}
-	if strings.Contains(intentLower, "helper") || strings.Contains(intentLower, "util") {
-		// Look for existing utils files
-		filesSet["pkg/utils/utils.go"] = true
-	}
-	if strings.Contains(intentLower, "validate") || strings.Contains(intentLower, "validation") {
-		filesSet["pkg/utils/utils.go"] = true
+	// Extract key terms from the intent
+	searchTerms := extractSearchTerms(intentLower)
+	if len(searchTerms) == 0 {
+		logger.Logf("No search terms extracted from intent, returning empty list")
+		return []string{} // Return empty instead of using project-specific inference
 	}
 
-	// Embedding-related file detection
-	if strings.Contains(intentLower, "embedding") || strings.Contains(intentLower, "embeddings") {
-		filesSet["pkg/llm/embeddings.go"] = true
-		filesSet["pkg/embedding/embedding.go"] = true
-	}
-	if strings.Contains(intentLower, "jina") || strings.Contains(intentLower, "deepinfra") {
-		filesSet["pkg/llm/embeddings.go"] = true
-		filesSet["pkg/config/config.go"] = true
-	}
-	if strings.Contains(intentLower, "api key") || strings.Contains(intentLower, "apikey") {
-		filesSet["pkg/config/config.go"] = true
+	logger.Logf("Searching for files containing terms: %v", searchTerms)
+
+	// Search for files containing these terms
+	relevantFiles := make(map[string]int) // file -> relevance score
+
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Continue walking despite errors
+		}
+
+		// Skip non-source files and directories
+		if info.IsDir() || !isSourceFile(path) {
+			return nil
+		}
+
+		// Skip hidden files and common ignore patterns
+		if strings.HasPrefix(filepath.Base(path), ".") {
+			return nil
+		}
+
+		// Read file content
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil // Continue despite read errors
+		}
+
+		contentLower := strings.ToLower(string(content))
+		score := 0
+
+		// Score based on search terms found in content
+		for _, term := range searchTerms {
+			if strings.Contains(contentLower, term) {
+				score += 10
+				// Bonus for terms in function names, types, etc.
+				if strings.Contains(contentLower, "func "+term) ||
+					strings.Contains(contentLower, "type "+term) ||
+					strings.Contains(contentLower, term+"(") {
+					score += 20
+				}
+			}
+		}
+
+		// Bonus for file path relevance
+		pathLower := strings.ToLower(path)
+		for _, term := range searchTerms {
+			if strings.Contains(pathLower, term) {
+				score += 15
+			}
+		}
+
+		if score > 0 {
+			relevantFiles[path] = score
+			logger.Logf("Found relevant file: %s (score: %d)", path, score)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		logger.LogError(fmt.Errorf("error walking directory for content search: %w", err))
+		return []string{} // Return empty instead of using project-specific inference
 	}
 
-	// Convert set back to slice
-	var files []string
-	for file := range filesSet {
-		files = append(files, file)
+	// Sort files by relevance score
+	type fileScore struct {
+		path  string
+		score int
 	}
 
-	return files
+	var scored []fileScore
+	for file, score := range relevantFiles {
+		scored = append(scored, fileScore{file, score})
+	}
+
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].score > scored[j].score
+	})
+
+	// Return top 5 most relevant files
+	var result []string
+	maxFiles := 5
+	for i, fs := range scored {
+		if i >= maxFiles {
+			break
+		}
+		result = append(result, fs.path)
+	}
+
+	if len(result) == 0 {
+		logger.Logf("No files found by content search")
+		return []string{} // Return empty instead of using project-specific inference
+	}
+
+	logger.Logf("Content search found %d relevant files: %v", len(result), result)
+	return result
+}
+
+// WorkspaceInfo represents comprehensive workspace structure
+type WorkspaceInfo struct {
+	ProjectType   string              // "go", "typescript", "python", etc.
+	RootFiles     []string            // Files in root directory
+	AllFiles      []string            // All source files
+	FilesByDir    map[string][]string // Files organized by directory
+	RelevantFiles map[string]string   // file path -> brief content summary
+}
+
+// buildWorkspaceStructure creates comprehensive workspace analysis
+func buildWorkspaceStructure(logger *utils.Logger) (*WorkspaceInfo, error) {
+	logger.Logf("Building comprehensive workspace structure...")
+
+	info := &WorkspaceInfo{
+		FilesByDir:    make(map[string][]string),
+		RelevantFiles: make(map[string]string),
+	}
+
+	// Detect project type
+	if _, err := os.Stat("go.mod"); err == nil {
+		info.ProjectType = "go"
+	} else if _, err := os.Stat("package.json"); err == nil {
+		info.ProjectType = "typescript"
+	} else if _, err := os.Stat("requirements.txt"); err == nil || hasFile("setup.py") {
+		info.ProjectType = "python"
+	} else {
+		info.ProjectType = "other"
+	}
+
+	logger.Logf("Detected project type: %s", info.ProjectType)
+
+	// Walk directory structure
+	err := filepath.Walk(".", func(path string, fileInfo os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Continue despite errors
+		}
+
+		// Skip hidden and common ignore directories
+		if strings.HasPrefix(filepath.Base(path), ".") ||
+			strings.Contains(path, "node_modules") ||
+			strings.Contains(path, "vendor") ||
+			strings.Contains(path, "__pycache__") {
+			if fileInfo.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if !fileInfo.IsDir() && isSourceFile(path) {
+			dir := filepath.Dir(path)
+			info.AllFiles = append(info.AllFiles, path)
+			info.FilesByDir[dir] = append(info.FilesByDir[dir], path)
+
+			// Add root files
+			if dir == "." {
+				info.RootFiles = append(info.RootFiles, path)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk directory: %w", err)
+	}
+
+	logger.Logf("Found %d source files across %d directories", len(info.AllFiles), len(info.FilesByDir))
+	return info, nil
+}
+
+// findRelevantFilesComprehensive uses multiple strategies to find relevant files
+func findRelevantFilesComprehensive(userIntent string, workspaceInfo *WorkspaceInfo, logger *utils.Logger) ([]string, error) {
+	logger.Logf("Finding relevant files for: %s", userIntent)
+
+	var relevantFiles []string
+	intentLower := strings.ToLower(userIntent)
+
+	// Strategy 1: Direct grep search for key terms
+	searchTerms := extractSearchTermsImproved(intentLower)
+	logger.Logf("Searching for terms: %v", searchTerms)
+
+	grepResults, err := runGrepSearch(searchTerms, workspaceInfo, logger)
+	if err != nil {
+		logger.LogError(fmt.Errorf("grep search failed: %w", err))
+	} else {
+		relevantFiles = append(relevantFiles, grepResults...)
+		logger.Logf("Grep search found %d files: %v", len(grepResults), grepResults)
+	}
+
+	// Strategy 2: Filename pattern matching
+	patternResults := findFilesByPattern(intentLower, workspaceInfo, logger)
+	relevantFiles = append(relevantFiles, patternResults...)
+	logger.Logf("Pattern matching found %d additional files: %v", len(patternResults), patternResults)
+
+	// Strategy 3: If still no results, try embeddings (if available)
+	if len(relevantFiles) == 0 {
+		logger.Logf("No files found by grep/pattern, attempting embedding search...")
+		embeddingResults, err := tryEmbeddingSearch(userIntent, logger)
+		if err != nil {
+			logger.Logf("Embedding search failed: %v", err)
+		} else {
+			relevantFiles = append(relevantFiles, embeddingResults...)
+			logger.Logf("Embedding search found %d files: %v", len(embeddingResults), embeddingResults)
+		}
+	}
+
+	// Remove duplicates and limit results
+	seen := make(map[string]bool)
+	var unique []string
+	for _, file := range relevantFiles {
+		if !seen[file] && len(unique) < 10 { // Limit to 10 files
+			seen[file] = true
+			unique = append(unique, file)
+		}
+	}
+
+	if len(unique) == 0 {
+		logger.Logf("WARNING: No relevant files found for intent: %s", userIntent)
+		// Fallback to most common patterns
+		return getFallbackFiles(workspaceInfo, logger), nil
+	}
+
+	logger.Logf("Final relevant files (%d): %v", len(unique), unique)
+	return unique, nil
+}
+
+// extractSearchTerms extracts key search terms from user intent
+func extractSearchTerms(intentLower string) []string {
+	var terms []string
+
+	// Direct keyword extraction from intent
+	words := strings.Fields(intentLower)
+	for _, word := range words {
+		// Clean punctuation
+		word = strings.Trim(word, ".,!?;:")
+
+		// Include relevant technical terms
+		if len(word) > 3 && (strings.Contains(word, "orchestration") ||
+			strings.Contains(word, "editing") ||
+			strings.Contains(word, "model") ||
+			strings.Contains(word, "review") ||
+			strings.Contains(word, "code") ||
+			strings.Contains(word, "llm") ||
+			strings.Contains(word, "api") ||
+			strings.Contains(word, "config") ||
+			strings.Contains(word, "prompt") ||
+			strings.Contains(word, "editor") ||
+			strings.Contains(word, "embedding")) {
+			terms = append(terms, word)
+		}
+	}
+
+	// Add compound terms that might be written as one word
+	if strings.Contains(intentLower, "codereviews") || strings.Contains(intentLower, "codereview") {
+		terms = append(terms, "review", "code", "getcodereview")
+	}
+
+	if strings.Contains(intentLower, "orchestration model") {
+		terms = append(terms, "orchestration", "model")
+	}
+
+	if strings.Contains(intentLower, "editing model") {
+		terms = append(terms, "editing", "model", "editor")
+	}
+
+	// Remove duplicates
+	uniqueTerms := make(map[string]bool)
+	var result []string
+	for _, term := range terms {
+		if !uniqueTerms[term] && len(term) > 2 {
+			uniqueTerms[term] = true
+			result = append(result, term)
+		}
+	}
+
+	return result
 } // getBasicFileListing returns a simple list of files without full analysis
 func getBasicFileListing(logger *utils.Logger) ([]string, error) {
 	// This is a simplified version that just lists files without full workspace analysis
@@ -836,13 +1328,22 @@ func executeEditPlan(editPlan *EditPlan, cfg *config.Config, logger *utils.Logge
 
 	totalTokens := 0
 
-	logger.LogProcessStep(fmt.Sprintf("Executing %d edit operations from orchestration plan", len(editPlan.EditOperations)))
+	logger.LogProcessStep(fmt.Sprintf("⚡ Executing %d edit operations from orchestration plan", len(editPlan.EditOperations)))
+	logger.LogProcessStep(fmt.Sprintf("🎯 Scope: %s", editPlan.ScopeStatement))
 	logger.LogProcessStep(fmt.Sprintf("Strategy: %s", editPlan.Context))
+
+	// Track changes for final review
+	var changesLog []string
 
 	// For now, execute edits sequentially
 	// TODO: Implement parallel execution for independent file edits
 	for i, operation := range editPlan.EditOperations {
 		logger.LogProcessStep(fmt.Sprintf("🔧 Edit %d/%d: %s (%s)", i+1, len(editPlan.EditOperations), operation.Description, operation.FilePath))
+		logger.LogProcessStep(fmt.Sprintf("   📋 Scope Justification: %s", operation.ScopeJustification))
+
+		// Track this change
+		changesLog = append(changesLog, fmt.Sprintf("File: %s | Change: %s | Justification: %s",
+			operation.FilePath, operation.Description, operation.ScopeJustification))
 
 		// Create focused instructions for this specific edit
 		editInstructions := buildFocusedEditInstructions(operation, logger)
@@ -875,6 +1376,13 @@ func executeEditPlan(editPlan *EditPlan, cfg *config.Config, logger *utils.Logge
 	logger.Logf("PERF: executeEditPlan completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
 	logger.LogProcessStep(fmt.Sprintf("🎉 All %d edit operations completed successfully", len(editPlan.EditOperations)))
+
+	// Log summary of all changes made
+	logger.LogProcessStep("📋 Summary of Changes Made:")
+	for _, changeLog := range changesLog {
+		logger.LogProcessStep(fmt.Sprintf("   • %s", changeLog))
+	}
+
 	return totalTokens, nil
 }
 
@@ -888,8 +1396,16 @@ func buildFocusedEditInstructions(operation EditOperation, logger *utils.Logger)
 	// Add file-specific context
 	instructions.WriteString(fmt.Sprintf("Target File: %s\n\n", operation.FilePath))
 
+	// Add scope constraint
+	instructions.WriteString(fmt.Sprintf("SCOPE REQUIREMENT: %s\n\n", operation.ScopeJustification))
+
 	// Add focused guidance for fast editing model
-	instructions.WriteString(`EDITING GUIDELINES:
+	instructions.WriteString(`CRITICAL EDITING CONSTRAINTS:
+- Make ONLY the changes specified in the task - NO ADDITIONAL IMPROVEMENTS
+- Do NOT add features, optimizations, or enhancements not explicitly requested  
+- Do NOT refactor code unless that was the specific request
+- Do NOT fix unrelated issues or add "nice to have" changes
+- STAY STRICTLY within the scope defined above
 - Make TARGETED, PRECISE edits to achieve the specified goal
 - Follow existing code patterns and conventions in the file
 - Preserve all existing functionality unless explicitly changing it
@@ -1030,6 +1546,11 @@ func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent
 		logger.Logf("DEBUG: Running %d validation steps...", len(validationStrategy.Steps))
 		for _, step := range validationStrategy.Steps {
 			stepStartTime := time.Now()
+
+			// Notify user about what validation is being run
+			fmt.Printf("🔍 Running validation: %s\n", step.Description)
+			fmt.Printf("   Command: %s\n", step.Command)
+
 			logger.LogProcessStep(fmt.Sprintf("Running validation: %s (Command: %s)", step.Description, step.Command))
 
 			result := ""
@@ -1051,10 +1572,12 @@ func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent
 
 			if stepErr != nil {
 				validationResults = append(validationResults, fmt.Sprintf("❌ %s: %v (took %v)", step.Description, stepErr, stepDuration))
+				fmt.Printf("   ❌ FAILED in %v: %v\n", stepDuration, stepErr)
 				logger.Logf("Validation step '%s' FAILED (took %v): %v", step.Description, stepDuration, stepErr)
 				hasFailures = true // Mark failure but continue to next validation step
 			} else {
 				validationResults = append(validationResults, fmt.Sprintf("✅ %s: %s (took %v)", step.Description, result, stepDuration))
+				fmt.Printf("   ✅ PASSED in %v\n", stepDuration)
 				logger.Logf("Validation step '%s' PASSED (took %v): %s", step.Description, stepDuration, result)
 			}
 		}
@@ -1573,4 +2096,260 @@ func printTokenUsageSummary(tokenUsage *TokenUsage, duration time.Duration) {
 	// Performance metrics
 	tokensPerSecond := float64(tokenUsage.Total) / duration.Seconds()
 	fmt.Printf("⚡ Performance: %.1f tokens/second\n", tokensPerSecond)
+}
+
+// runGrepSearch performs grep-based search for relevant files
+func runGrepSearch(searchTerms []string, workspaceInfo *WorkspaceInfo, logger *utils.Logger) ([]string, error) {
+	if len(searchTerms) == 0 {
+		return nil, fmt.Errorf("no search terms provided")
+	}
+
+	// Create grep pattern with OR logic
+	pattern := strings.Join(searchTerms, "|")
+
+	// Run grep command
+	cmd := exec.Command("grep", "-r", "-l", "-i", pattern, "--include=*.go", ".")
+	output, err := cmd.Output()
+	if err != nil {
+		// grep returns exit code 1 when no matches found, which is not an error for us
+		if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
+			logger.Logf("Grep found no matches for pattern: %s", pattern)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("grep command failed: %w", err)
+	}
+
+	// Parse results
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	var files []string
+	for _, line := range lines {
+		if line != "" && strings.HasSuffix(line, ".go") {
+			// Clean up path (remove ./ prefix)
+			cleanPath := strings.TrimPrefix(line, "./")
+			files = append(files, cleanPath)
+		}
+	}
+
+	logger.Logf("Grep search with pattern '%s' found %d files", pattern, len(files))
+	return files, nil
+}
+
+// findFilesByPattern finds files based on filename patterns
+func findFilesByPattern(intentLower string, workspaceInfo *WorkspaceInfo, logger *utils.Logger) []string {
+	var results []string
+
+	// Pattern matching logic
+	patterns := map[string][]string{
+		"review":        {"review", "codereview"},
+		"orchestration": {"orchestration", "orchestrator"},
+		"editing":       {"edit", "editor"},
+		"model":         {"llm", "api"},
+		"config":        {"config"},
+		"prompt":        {"prompt"},
+	}
+
+	for term, filePatterns := range patterns {
+		if strings.Contains(intentLower, term) {
+			for _, file := range workspaceInfo.AllFiles {
+				fileName := strings.ToLower(filepath.Base(file))
+				for _, pattern := range filePatterns {
+					if strings.Contains(fileName, pattern) {
+						results = append(results, file)
+						logger.Logf("Pattern match: %s matches %s (term: %s)", file, pattern, term)
+					}
+				}
+			}
+		}
+	}
+
+	return results
+}
+
+// tryEmbeddingSearch attempts to use embedding search as fallback
+func tryEmbeddingSearch(userIntent string, logger *utils.Logger) ([]string, error) {
+	// This is a placeholder - use existing workspace embedding functionality if available
+	logger.Logf("Embedding search not implemented yet, skipping...")
+	return nil, nil
+}
+
+// getFallbackFiles returns sensible defaults when no specific files are found
+func getFallbackFiles(workspaceInfo *WorkspaceInfo, logger *utils.Logger) []string {
+	var fallback []string
+
+	// Look for common important files based on project type
+	if workspaceInfo.ProjectType == "go" {
+		candidates := []string{"main.go", "cmd/agent.go", "pkg/llm/api.go", "pkg/editor/editor.go"}
+		for _, candidate := range candidates {
+			if contains(workspaceInfo.AllFiles, candidate) {
+				fallback = append(fallback, candidate)
+			}
+		}
+	}
+
+	logger.Logf("Using fallback files: %v", fallback)
+	return fallback
+}
+
+// extractSearchTermsImproved extracts better search terms from user intent
+func extractSearchTermsImproved(intentLower string) []string {
+	// Extract key technical terms
+	terms := []string{}
+
+	// Direct extraction of important terms
+	importantTerms := []string{
+		"orchestration", "orchestrator", "editing", "editor", "model",
+		"review", "codereview", "code", "llm", "api", "config", "prompt",
+	}
+
+	for _, term := range importantTerms {
+		if strings.Contains(intentLower, term) {
+			terms = append(terms, term)
+		}
+	}
+
+	// Add function-like patterns
+	if strings.Contains(intentLower, "review") {
+		terms = append(terms, "GetCodeReview", "performAutomatedReview", "CodeReviewResult")
+	}
+
+	if strings.Contains(intentLower, "orchestration") {
+		terms = append(terms, "orchestration", "OrchestrationModel", "OrchestrateFeature")
+	}
+
+	return terms
+}
+
+// helper function
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+// rewordPromptForBetterSearch uses workspace model to reword the user prompt for better file discovery
+func rewordPromptForBetterSearch(userIntent string, workspaceInfo *WorkspaceInfo, cfg *config.Config, logger *utils.Logger) (string, error) {
+	logger.Logf("Using workspace model to reword prompt for better file discovery...")
+	
+	prompt := fmt.Sprintf(`You are a %s codebase expert. The user wants to: "%s"
+
+WORKSPACE CONTEXT:
+Project Type: %s
+Available files include: %v
+
+The initial file search found very few relevant files. Rewrite the user's intent using technical terms and patterns that would be found in a %s codebase to help find the right files.
+
+Focus on:
+- Function names that might exist
+- File naming patterns in %s projects  
+- Technical terms specific to this domain
+- Package/module names that might be relevant
+
+Respond with ONLY the reworded search query, no explanation:`, 
+		workspaceInfo.ProjectType, userIntent, workspaceInfo.ProjectType, 
+		workspaceInfo.AllFiles[:min(10, len(workspaceInfo.AllFiles))], // Show sample files
+		workspaceInfo.ProjectType, workspaceInfo.ProjectType)
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert at understanding codebases and creating effective search queries."},
+		{Role: "user", Content: prompt},
+	}
+
+	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
+	if err != nil {
+		logger.LogError(fmt.Errorf("workspace model failed to reword prompt: %w", err))
+		return userIntent, err // Return original on failure
+	}
+
+	reworded := strings.TrimSpace(response)
+	if reworded == "" {
+		return userIntent, fmt.Errorf("empty reworded response")
+	}
+
+	return reworded, nil
+}
+
+// findFilesUsingShellCommands uses shell commands to find relevant files when other methods fail
+func findFilesUsingShellCommands(userIntent string, workspaceInfo *WorkspaceInfo, logger *utils.Logger) []string {
+	logger.Logf("Using shell commands to find files for: %s", userIntent)
+	
+	var foundFiles []string
+	intentLower := strings.ToLower(userIntent)
+	
+	// Extract search terms from intent
+	searchTerms := extractSearchTerms(intentLower)
+	logger.Logf("Shell search terms: %v", searchTerms)
+	
+	for _, term := range searchTerms {
+		if len(term) < 3 {
+			continue // Skip very short terms
+		}
+		
+		// Use grep to find files containing the term
+		logger.Logf("Searching for files containing: %s", term)
+		cmd := exec.Command("grep", "-r", "-l", "-i", term, "--include=*.go", ".")
+		output, err := cmd.Output()
+		
+		if err != nil {
+			logger.Logf("Grep search for '%s' failed: %v", term, err)
+			continue
+		}
+		
+		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		for _, line := range lines {
+			if line != "" && strings.HasSuffix(line, ".go") {
+				cleanPath := strings.TrimPrefix(line, "./")
+				foundFiles = append(foundFiles, cleanPath)
+				logger.Logf("Shell search found: %s (contains '%s')", cleanPath, term)
+			}
+		}
+	}
+	
+	// Remove duplicates and limit results
+	seen := make(map[string]bool)
+	var unique []string
+	for _, file := range foundFiles {
+		if !seen[file] && len(unique) < 5 { // Limit to 5 files
+			seen[file] = true
+			unique = append(unique, file)
+		}
+	}
+	
+	// If no files found with content search, try filename search
+	if len(unique) == 0 {
+		logger.Logf("No content matches, trying filename search...")
+		for _, term := range searchTerms {
+			cmd := exec.Command("find", ".", "-name", "*.go", "-path", fmt.Sprintf("*%s*", term))
+			output, err := cmd.Output()
+			
+			if err != nil {
+				continue
+			}
+			
+			lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+			for _, line := range lines {
+				if line != "" && strings.HasSuffix(line, ".go") {
+					cleanPath := strings.TrimPrefix(line, "./")
+					if !seen[cleanPath] && len(unique) < 5 {
+						seen[cleanPath] = true
+						unique = append(unique, cleanPath)
+						logger.Logf("Filename search found: %s", cleanPath)
+					}
+				}
+			}
+		}
+	}
+	
+	logger.Logf("Shell commands found %d unique files: %v", len(unique), unique)
+	return unique
+}
+
+// min helper function
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

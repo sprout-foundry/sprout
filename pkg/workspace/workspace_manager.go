@@ -463,26 +463,44 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 		}
 	}
 
-	logger.LogProcessStep("--- Asking LLM to select relevant files for context ---")
-	fullContextFiles, summaryContextFiles, err := getFilesForContext(instructions, workspace, cfg, logger) // Pass logger
-	if err != nil {
-		logger.Logf("Warning: could not determine which files to load for context: %v. Proceeding with all summaries.\n", err)
-		// If LLM fails to select files, fallback to using all file summaries for context.
-		var allFilesAsSummaries []string
-		for file := range workspace.Files {
-			allFilesAsSummaries = append(allFilesAsSummaries, file)
+	// Use embedding-based file selection if enabled
+	var fullContextFiles, summaryContextFiles []string
+	var fileSelectionErr error
+	
+	if cfg.UseEmbeddings {
+		logger.LogProcessStep("--- Using embedding-based file selection ---")
+		fullContextFiles, summaryContextFiles, fileSelectionErr = GetFilesForContextUsingEmbeddings(instructions, workspace, cfg, logger)
+		if fileSelectionErr != nil {
+			logger.Logf("Warning: could not determine which files to load for context using embeddings: %v. Proceeding with all summaries.\n", fileSelectionErr)
+			// If embedding-based selection fails, fallback to using all file summaries for context.
+			var allFilesAsSummaries []string
+			for file := range workspace.Files {
+				allFilesAsSummaries = append(allFilesAsSummaries, file)
+			}
+			return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg.CodeStyle)
 		}
-		return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg.CodeStyle)
+	} else {
+		logger.LogProcessStep("--- Asking LLM to select relevant files for context ---")
+		fullContextFiles, summaryContextFiles, fileSelectionErr = getFilesForContext(instructions, workspace, cfg, logger) // Pass logger
+		if fileSelectionErr != nil {
+			logger.Logf("Warning: could not determine which files to load for context: %v. Proceeding with all summaries.\n", fileSelectionErr)
+			// If LLM fails to select files, fallback to using all file summaries for context.
+			var allFilesAsSummaries []string
+			for file := range workspace.Files {
+				allFilesAsSummaries = append(allFilesAsSummaries, file)
+			}
+			return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg.CodeStyle)
+		}
 	}
 
 	if len(fullContextFiles) > 0 {
-		logger.LogProcessStep(fmt.Sprintf("--- LLM selected the following files for full context: %s ---", strings.Join(fullContextFiles, ", ")))
+		logger.LogProcessStep(fmt.Sprintf("--- Selected the following files for full context: %s ---", strings.Join(fullContextFiles, ", ")))
 	}
 	if len(summaryContextFiles) > 0 {
-		logger.LogProcessStep(fmt.Sprintf("--- LLM selected the following files for summary context: %s ---", strings.Join(summaryContextFiles, ", ")))
+		logger.LogProcessStep(fmt.Sprintf("--- Selected the following files for summary context: %s ---", strings.Join(summaryContextFiles, ", ")))
 	}
 	if len(fullContextFiles) == 0 && len(summaryContextFiles) == 0 {
-		logger.LogProcessStep("--- LLM decided no files are relevant for context. ---")
+		logger.LogProcessStep("--- No files were selected as relevant for context. ---")
 	}
 
 	for _, file := range fullContextFiles {

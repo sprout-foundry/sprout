@@ -377,7 +377,7 @@ ALL files must be existing %s files from the workspace above.`,
 
 	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 60*time.Second)
 	if err != nil {
-		logger.LogError(fmt.Errorf("Orchestration model failed to analyze intent: %w", err))
+		logger.LogError(fmt.Errorf("orchestration model failed to analyze intent: %w", err))
 		// Use fallback analysis since LLM failed
 		logger.Logf("Using fallback heuristic analysis due to orchestration model failure")
 		duration := time.Since(startTime)
@@ -477,7 +477,7 @@ func createDetailedEditPlan(userIntent string, intentAnalysis *IntentAnalysis, c
 	}
 
 	// Load context for the files
-	context := buildMinimalContext(contextFiles, logger)
+	context := buildBasicFileContext(contextFiles, logger)
 
 	// Debug: log contextFiles to see what we have
 	logger.Logf("DEBUG: createDetailedEditPlan contextFiles: %v (length: %d)", contextFiles, len(contextFiles))
@@ -520,6 +520,45 @@ CRITICAL WORKSPACE VALIDATION:
 
 INTELLIGENT REFACTORING GUIDANCE:
 %s
+
+AVAILABLE TOOLS AND CAPABILITIES:
+The agent has access to the following tools during the editing process:
+1. File editing (primary capability) - both full file and partial section editing
+2. Terminal command execution - can run shell commands when needed
+3. File system operations (read, write, check existence)
+4. Go compilation and testing tools
+5. Git operations for version control
+6. File validation tools (syntax checking, compilation verification)
+7. Automatic issue fixing capabilities
+
+INTELLIGENT TOOL USAGE:
+The orchestration model should leverage these tools strategically:
+- Use validate_file tool to check syntax and compilation after changes
+- Use edit_file_section tool for efficient targeted edits
+- Use fix_validation_issues tool to automatically resolve common problems
+- Use run_shell_command tool for build verification and testing
+- Use read_file tool to examine current state before making changes
+
+WHEN TO USE TERMINAL COMMANDS:
+- To check dependencies or imports: go mod tidy, go list -m all
+- To run tests after changes: go test ./...
+- To check compilation: go build ./...
+- To verify tools are available: which go, go version
+- To examine file contents: cat, grep, find
+- To check git status: git status, git diff
+
+INTELLIGENT WORKFLOW PLANNING:
+In your edit plan, you can specify if terminal commands should be run before or after certain edits.
+For example:
+- Check current dependencies before adding new imports
+- Run tests after adding new functionality
+- Verify compilation after structural changes
+
+However, the PREFERRED approach is to let the agent use the appropriate tools during execution:
+- The agent can call validate_file after each edit to ensure quality
+- The agent can use edit_file_section for efficient partial edits
+- The agent can automatically fix issues with fix_validation_issues
+- Terminal commands should only be specified when they're essential to the workflow
 
 THIS IS A GO PROJECT - DO NOT CREATE NON-GO FILES!
 
@@ -579,7 +618,7 @@ STRICT GUIDELINES:
 
 	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 3*time.Minute)
 	if err != nil {
-		logger.LogError(fmt.Errorf("Orchestration model failed to create edit plan: %w", err))
+		logger.LogError(fmt.Errorf("orchestration model failed to create edit plan: %w", err))
 		duration := time.Since(startTime)
 		runtime.ReadMemStats(&m)
 		logger.Logf("PERF: createDetailedEditPlan completed (error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
@@ -984,62 +1023,6 @@ func buildWorkspaceStructure(logger *utils.Logger) (*WorkspaceInfo, error) {
 	return info, nil
 }
 
-// findRelevantFilesComprehensive uses multiple strategies to find relevant files
-func findRelevantFilesComprehensive(userIntent string, workspaceInfo *WorkspaceInfo, logger *utils.Logger) ([]string, error) {
-	logger.Logf("Finding relevant files for: %s", userIntent)
-
-	var relevantFiles []string
-	intentLower := strings.ToLower(userIntent)
-
-	// Strategy 1: Direct grep search for key terms
-	searchTerms := extractSearchTermsImproved(intentLower)
-	logger.Logf("Searching for terms: %v", searchTerms)
-
-	grepResults, err := runGrepSearch(searchTerms, workspaceInfo, logger)
-	if err != nil {
-		logger.LogError(fmt.Errorf("grep search failed: %w", err))
-	} else {
-		relevantFiles = append(relevantFiles, grepResults...)
-		logger.Logf("Grep search found %d files: %v", len(grepResults), grepResults)
-	}
-
-	// Strategy 2: Filename pattern matching
-	patternResults := findFilesByPattern(intentLower, workspaceInfo, logger)
-	relevantFiles = append(relevantFiles, patternResults...)
-	logger.Logf("Pattern matching found %d additional files: %v", len(patternResults), patternResults)
-
-	// Strategy 3: If still no results, try embeddings (if available)
-	if len(relevantFiles) == 0 {
-		logger.Logf("No files found by grep/pattern, attempting embedding search...")
-		embeddingResults, err := tryEmbeddingSearch(userIntent, logger)
-		if err != nil {
-			logger.Logf("Embedding search failed: %v", err)
-		} else {
-			relevantFiles = append(relevantFiles, embeddingResults...)
-			logger.Logf("Embedding search found %d files: %v", len(embeddingResults), embeddingResults)
-		}
-	}
-
-	// Remove duplicates and limit results
-	seen := make(map[string]bool)
-	var unique []string
-	for _, file := range relevantFiles {
-		if !seen[file] && len(unique) < 10 { // Limit to 10 files
-			seen[file] = true
-			unique = append(unique, file)
-		}
-	}
-
-	if len(unique) == 0 {
-		logger.Logf("WARNING: No relevant files found for intent: %s", userIntent)
-		// Fallback to most common patterns
-		return getFallbackFiles(workspaceInfo, logger), nil
-	}
-
-	logger.Logf("Final relevant files (%d): %v", len(unique), unique)
-	return unique, nil
-}
-
 // extractSearchTerms extracts key search terms from user intent
 func extractSearchTerms(intentLower string) []string {
 	var terms []string
@@ -1145,205 +1128,6 @@ func isSourceFile(path string) bool {
 	return false
 }
 
-// getOptimizedContext uses embeddings or simple heuristics to get minimal relevant context
-func getOptimizedContext(userIntent string, estimatedFiles []string, cfg *config.Config, maxFiles int, logger *utils.Logger) ([]string, error) {
-	startTime := time.Now()
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	logger.Logf("PERF: getOptimizedContext started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-
-	logger.Logf("DEBUG: getOptimizedContext called with %d estimated files, maxFiles=%d", len(estimatedFiles), maxFiles)
-
-	// If we have specific files from intent analysis, use those first
-	if len(estimatedFiles) > 0 && len(estimatedFiles) <= maxFiles {
-		logger.Logf("DEBUG: Using %d estimated files from intent analysis", len(estimatedFiles))
-		duration := time.Since(startTime)
-		runtime.ReadMemStats(&m)
-		logger.Logf("PERF: getOptimizedContext completed (estimated files). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-		return estimatedFiles, nil
-	}
-
-	logger.Logf("DEBUG: No usable estimated files, trying embedding search")
-	// Force embeddings for agent mode since they provide much better file selection
-	// Try embedding search first, fall back to pattern matching if it fails
-	relevantFiles, err := getTopRelevantFiles(userIntent, maxFiles, cfg, logger)
-	duration := time.Since(startTime)
-	runtime.ReadMemStats(&m)
-	logger.Logf("PERF: getOptimizedContext completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-	return relevantFiles, err
-}
-
-// getTopRelevantFiles uses embeddings to find most relevant files
-func getTopRelevantFiles(userIntent string, maxFiles int, cfg *config.Config, logger *utils.Logger) ([]string, error) {
-	logger.Logf("DEBUG: Starting embedding search for intent: %s", userIntent)
-
-	// Load workspace structure first
-	workspaceFile, err := workspace.LoadWorkspaceFile()
-	if err != nil {
-		logger.LogError(fmt.Errorf("failed to load workspace for embedding search: %w", err))
-		logger.Logf("Falling back to pattern matching due to workspace loading error")
-		return getRelevantFilesByPattern(userIntent, maxFiles, logger)
-	}
-
-	logger.Logf("DEBUG: Loaded workspace with %d files", len(workspaceFile.Files))
-
-	// Use the existing embedding-based file selection
-	fullContextFiles, summaryContextFiles, err := workspace.GetFilesForContextUsingEmbeddings(userIntent, workspaceFile, cfg, logger)
-	if err != nil {
-		logger.LogError(fmt.Errorf("embedding search failed: %w", err))
-		logger.Logf("Falling back to pattern matching due to embedding search error")
-		return getRelevantFilesByPattern(userIntent, maxFiles, logger)
-	}
-
-	logger.Logf("DEBUG: Embedding search returned %d full context files, %d summary files", len(fullContextFiles), len(summaryContextFiles))
-
-	// Combine full context and summary context files, prioritizing full context
-	var relevantFiles []string
-	relevantFiles = append(relevantFiles, fullContextFiles...)
-	relevantFiles = append(relevantFiles, summaryContextFiles...)
-
-	// Limit to maxFiles
-	if len(relevantFiles) > maxFiles {
-		relevantFiles = relevantFiles[:maxFiles]
-	}
-
-	logger.Logf("Embedding search found %d relevant files (limited to %d): %v", len(relevantFiles), maxFiles, relevantFiles)
-	return relevantFiles, nil
-}
-
-// getRelevantFilesByPattern uses simple pattern matching to find relevant files
-func getRelevantFilesByPattern(userIntent string, maxFiles int, logger *utils.Logger) ([]string, error) {
-	files, err := getBasicFileListing(logger)
-	if err != nil {
-		logger.LogError(fmt.Errorf("failed to get basic file listing for pattern matching: %w", err))
-		return nil, err
-	}
-
-	// Score files based on simple heuristics
-	type fileScore struct {
-		path  string
-		score int
-	}
-
-	var scoredFiles []fileScore
-	intentLower := strings.ToLower(userIntent)
-
-	for _, file := range files {
-		score := 0
-		fileName := strings.ToLower(filepath.Base(file))
-
-		// High priority for main function references
-		if strings.Contains(intentLower, "main function") || strings.Contains(intentLower, "main()") {
-			if fileName == "main.go" || strings.Contains(fileName, "main") {
-				score += 50
-			}
-			// Also check if file contains main function
-			if content, err := os.ReadFile(file); err == nil {
-				if strings.Contains(string(content), "func main()") {
-					score += 40
-				}
-			} else {
-				logger.Logf("Could not read file %s for content check: %v", file, err)
-			}
-		}
-
-		// Score based on keywords in intent
-		keywords := []string{"main", "error", "test", "config", "handler", "service", "model", "util", "embedding", "embeddings"}
-		for _, keyword := range keywords {
-			if strings.Contains(intentLower, keyword) && strings.Contains(fileName, keyword) {
-				score += 10
-			}
-		}
-
-		// Special scoring for embedding-related terms
-		if strings.Contains(intentLower, "embedding") || strings.Contains(intentLower, "jina") || strings.Contains(intentLower, "deepinfra") {
-			if strings.Contains(file, "embedding") || strings.Contains(file, "llm") {
-				score += 20
-			}
-		}
-
-		// Special scoring for API provider changes (jina/deepinfra)
-		if strings.Contains(intentLower, "jina") || strings.Contains(intentLower, "deepinfra") {
-			if strings.Contains(file, "llm") || strings.Contains(file, "config") || strings.Contains(file, "api") {
-				score += 15
-			}
-		}
-
-		// Score based on file type relevance
-		if strings.Contains(intentLower, "test") && strings.Contains(fileName, "test") {
-			score += 15
-		}
-		if strings.Contains(intentLower, "comment") && fileName == "main.go" {
-			score += 20
-		}
-
-		if score > 0 {
-			scoredFiles = append(scoredFiles, fileScore{file, score})
-		}
-	}
-
-	// If no scored files and this looks like a main function task, include main.go
-	if len(scoredFiles) == 0 && strings.Contains(intentLower, "main") {
-		for _, file := range files {
-			if filepath.Base(file) == "main.go" {
-				scoredFiles = append(scoredFiles, fileScore{file, 30})
-				break
-			}
-		}
-	}
-
-	// Sort by score and return top files
-	sort.Slice(scoredFiles, func(i, j int) bool {
-		return scoredFiles[i].score > scoredFiles[j].score
-	})
-
-	var result []string
-	for i, sf := range scoredFiles {
-		if i >= maxFiles {
-			break
-		}
-		result = append(result, sf.path)
-	}
-
-	return result, nil
-}
-
-// executeWithMinimalContext executes the task with only the specified context files
-func executeWithMinimalContext(userIntent string, contextFiles []string, cfg *config.Config, logger *utils.Logger) (int, error) {
-	startTime := time.Now()
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	logger.Logf("PERF: executeWithMinimalContext started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-
-	logger.LogProcessStep(fmt.Sprintf("Executing with %d context files: %s", len(contextFiles), strings.Join(contextFiles, ", ")))
-
-	// Build enhanced instructions that include context and clear guidance
-	enhancedInstructions := buildEnhancedInstructions(userIntent, contextFiles, logger)
-
-	// Estimate tokens for the enhanced instructions
-	tokenEstimate := utils.EstimateTokens(enhancedInstructions)
-
-	// Use the editor package for simple code generation
-	_, err := editor.ProcessCodeGeneration("", enhancedInstructions, cfg, "")
-	if err != nil {
-		// Check if this is a "revisions applied" signal from the editor's review process
-		if strings.Contains(err.Error(), "revisions applied, re-validating") {
-			logger.LogProcessStep("✅ Editor completed revision cycle successfully")
-			logger.Logf("Final status: %s", err.Error())
-		} else {
-			logger.LogError(fmt.Errorf("code generation failed during minimal context execution: %w", err))
-			duration := time.Since(startTime)
-			runtime.ReadMemStats(&m)
-			logger.Logf("PERF: executeWithMinimalContext completed (error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-			return tokenEstimate, err
-		}
-	}
-	duration := time.Since(startTime)
-	runtime.ReadMemStats(&m)
-	logger.Logf("PERF: executeWithMinimalContext completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-	return tokenEstimate, nil
-}
-
 // executeEditPlan executes the detailed edit plan using the fast editing model
 func executeEditPlan(editPlan *EditPlan, cfg *config.Config, logger *utils.Logger) (int, error) {
 	startTime := time.Now()
@@ -1397,6 +1181,7 @@ func executeEditPlan(editPlan *EditPlan, cfg *config.Config, logger *utils.Logge
 			logger.Logf("Using full file edit for %s", operation.FilePath)
 			_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, cfg, "")
 		}
+
 		if err != nil {
 			// Check if this is a "revisions applied" signal from the editor's review process
 			if strings.Contains(err.Error(), "revisions applied, re-validating") {
@@ -1539,130 +1324,6 @@ func buildFocusedEditInstructions(operation EditOperation, logger *utils.Logger)
 	instructions.WriteString("Please implement the requested change efficiently and precisely.\n")
 
 	return instructions.String()
-}
-
-// buildEnhancedInstructions creates enhanced instructions with context and guidance
-func buildEnhancedInstructions(userIntent string, contextFiles []string, logger *utils.Logger) string {
-	var instructions strings.Builder
-
-	// Start with the main intent
-	instructions.WriteString(fmt.Sprintf("Task: %s\n\n", userIntent))
-
-	// Add specific guidance for code editing
-	instructions.WriteString(`IMPORTANT EDITING GUIDELINES:
-- Make TARGETED, PRECISE edits - do not rewrite entire files
-- For adding flags to CLI commands, follow the existing patterns in the codebase
-- When adding a new flag variable, also add the corresponding flag registration in init()
-- Always preserve existing code structure and formatting
-- If adding flag support, look at how other commands implement --skip-prompt
-
-`)
-
-	// Add context if available
-	if len(contextFiles) > 0 {
-		instructions.WriteString("RELEVANT CODE CONTEXT:\n")
-		context := buildMinimalContext(contextFiles, logger)
-		instructions.WriteString(context)
-		instructions.WriteString("\n")
-	}
-
-	// Add examples of existing patterns if the intent involves flags
-	if strings.Contains(strings.ToLower(userIntent), "flag") || strings.Contains(strings.ToLower(userIntent), "skip") {
-		instructions.WriteString(addFlagPatternExamples(logger))
-	}
-
-	return instructions.String()
-}
-
-// addFlagPatternExamples adds examples of how flags are implemented in other commands
-func addFlagPatternExamples(logger *utils.Logger) string {
-	var examples strings.Builder
-
-	examples.WriteString("EXISTING FLAG IMPLEMENTATION PATTERNS:\n")
-	examples.WriteString("Example from code.go:\n")
-	examples.WriteString(`var (
-	skipPrompt     bool
-)
-
-func init() {
-	codeCmd.Flags().BoolVar(&skipPrompt, "skip-prompt", false, "Skip user prompt for applying changes")
-}
-
-// In the command function:
-cfg, err := config.LoadOrInitConfig(skipPrompt)
-cfg.SkipPrompt = skipPrompt
-
-`)
-
-	examples.WriteString("Follow this exact pattern for implementing skip-prompt flag.\n\n")
-
-	return examples.String()
-}
-
-// buildMinimalContext creates a minimal context string from the specified files
-func buildMinimalContext(contextFiles []string, logger *utils.Logger) string {
-	if len(contextFiles) == 0 {
-		return ""
-	}
-
-	// Load workspace.json to get summaries and exports
-	workspaceFile, err := workspace.LoadWorkspaceFile()
-	if err != nil {
-		logger.Logf("Could not load workspace.json, falling back to basic file listing: %v", err)
-		return buildBasicFileContext(contextFiles, logger)
-	}
-
-	var context strings.Builder
-	context.WriteString("=== SELECTED FILES CONTEXT ===\n")
-	context.WriteString("IMPORTANT: This context contains only summaries and public function exports.\n")
-	context.WriteString("NO full file contents are provided. Use the read_file tool to load specific files when needed.\n\n")
-
-	context.WriteString("=== RELEVANT FILES (MINIMAL SYNTAX TREES) ===\n")
-	context.WriteString("Use this information to identify which files to read with read_file tool.\n\n")
-
-	for _, filePath := range contextFiles {
-		fileInfo, exists := workspaceFile.Files[filePath]
-		if !exists {
-			// File not in workspace.json, try to read it directly (fallback)
-			logger.Logf("File %s not found in workspace.json, skipping", filePath)
-			continue
-		}
-
-		context.WriteString(fmt.Sprintf("📁 %s\n", filePath))
-
-		// Add summary (critical for understanding what the file does)
-		if fileInfo.Summary != "" && fileInfo.Summary != "File is too large to analyze." {
-			context.WriteString(fmt.Sprintf("   Summary: %s\n", fileInfo.Summary))
-		} else if fileInfo.Summary == "File is too large to analyze." {
-			context.WriteString("   Summary: Large file - use read_file with offset/limit if needed\n")
-		}
-
-		// Add exports (critical for understanding available functions)
-		if fileInfo.Exports != "" && fileInfo.Exports != "None" {
-			context.WriteString(fmt.Sprintf("   Public Functions: %s\n", fileInfo.Exports))
-		}
-
-		// Add references if available (shows dependencies)
-		if fileInfo.References != "" {
-			context.WriteString(fmt.Sprintf("   Uses: %s\n", fileInfo.References))
-		}
-
-		// Add security concerns if any
-		if len(fileInfo.SecurityConcerns) > 0 {
-			context.WriteString(fmt.Sprintf("   Security Concerns: %s\n", strings.Join(fileInfo.SecurityConcerns, ", ")))
-		}
-
-		context.WriteString("\n")
-	}
-
-	context.WriteString("=== INSTRUCTIONS FOR ANALYSIS ===\n")
-	context.WriteString("1. Use the summaries and exports above to identify which files are relevant to your task\n")
-	context.WriteString("2. Use read_file tool to load ONLY the specific files you need to understand\n")
-	context.WriteString("3. Focus on making minimal changes - prefer modifying existing functions over creating new ones\n")
-	context.WriteString("4. When changing model usage, look for assignments like 'modelName := cfg.OrchestrationModel'\n")
-	context.WriteString("5. Make the smallest change that solves the specific problem described\n\n")
-
-	return context.String()
 }
 
 // buildBasicFileContext is a fallback when workspace.json is not available
@@ -2030,7 +1691,7 @@ Guidelines:
 
 	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
 	if err != nil {
-		return nil, 0, fmt.Errorf("Orchestration model failed to determine validation strategy: %w", err)
+		return nil, 0, fmt.Errorf("orchestration model failed to determine validation strategy: %w", err)
 	}
 
 	// Parse the response
@@ -2329,137 +1990,6 @@ func printTokenUsageSummary(tokenUsage *TokenUsage, duration time.Duration) {
 	// Performance metrics
 	tokensPerSecond := float64(tokenUsage.Total) / duration.Seconds()
 	fmt.Printf("⚡ Performance: %.1f tokens/second\n", tokensPerSecond)
-}
-
-// runGrepSearch performs grep-based search for relevant files
-func runGrepSearch(searchTerms []string, workspaceInfo *WorkspaceInfo, logger *utils.Logger) ([]string, error) {
-	if len(searchTerms) == 0 {
-		return nil, fmt.Errorf("no search terms provided")
-	}
-
-	// Create grep pattern with OR logic
-	pattern := strings.Join(searchTerms, "|")
-
-	// Run grep command
-	cmd := exec.Command("grep", "-r", "-l", "-i", pattern, "--include=*.go", ".")
-	output, err := cmd.Output()
-	if err != nil {
-		// grep returns exit code 1 when no matches found, which is not an error for us
-		if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
-			logger.Logf("Grep found no matches for pattern: %s", pattern)
-			return nil, nil
-		}
-		return nil, fmt.Errorf("grep command failed: %w", err)
-	}
-
-	// Parse results
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	var files []string
-	for _, line := range lines {
-		if line != "" && strings.HasSuffix(line, ".go") {
-			// Clean up path (remove ./ prefix)
-			cleanPath := strings.TrimPrefix(line, "./")
-			files = append(files, cleanPath)
-		}
-	}
-
-	logger.Logf("Grep search with pattern '%s' found %d files", pattern, len(files))
-	return files, nil
-}
-
-// findFilesByPattern finds files based on filename patterns
-func findFilesByPattern(intentLower string, workspaceInfo *WorkspaceInfo, logger *utils.Logger) []string {
-	var results []string
-
-	// Pattern matching logic
-	patterns := map[string][]string{
-		"review":        {"review", "codereview"},
-		"orchestration": {"orchestration", "orchestrator"},
-		"editing":       {"edit", "editor"},
-		"model":         {"llm", "api"},
-		"config":        {"config"},
-		"prompt":        {"prompt"},
-	}
-
-	for term, filePatterns := range patterns {
-		if strings.Contains(intentLower, term) {
-			for _, file := range workspaceInfo.AllFiles {
-				fileName := strings.ToLower(filepath.Base(file))
-				for _, pattern := range filePatterns {
-					if strings.Contains(fileName, pattern) {
-						results = append(results, file)
-						logger.Logf("Pattern match: %s matches %s (term: %s)", file, pattern, term)
-					}
-				}
-			}
-		}
-	}
-
-	return results
-}
-
-// tryEmbeddingSearch attempts to use embedding search as fallback
-func tryEmbeddingSearch(userIntent string, logger *utils.Logger) ([]string, error) {
-	// This is a placeholder - use existing workspace embedding functionality if available
-	logger.Logf("Embedding search not implemented yet, skipping...")
-	return nil, nil
-}
-
-// getFallbackFiles returns sensible defaults when no specific files are found
-func getFallbackFiles(workspaceInfo *WorkspaceInfo, logger *utils.Logger) []string {
-	var fallback []string
-
-	// Look for common important files based on project type
-	if workspaceInfo.ProjectType == "go" {
-		candidates := []string{"main.go", "cmd/agent.go", "pkg/llm/api.go", "pkg/editor/editor.go"}
-		for _, candidate := range candidates {
-			if contains(workspaceInfo.AllFiles, candidate) {
-				fallback = append(fallback, candidate)
-			}
-		}
-	}
-
-	logger.Logf("Using fallback files: %v", fallback)
-	return fallback
-}
-
-// extractSearchTermsImproved extracts better search terms from user intent
-func extractSearchTermsImproved(intentLower string) []string {
-	// Extract key technical terms
-	terms := []string{}
-
-	// Direct extraction of important terms
-	importantTerms := []string{
-		"orchestration", "orchestrator", "editing", "editor", "model",
-		"review", "codereview", "code", "llm", "api", "config", "prompt",
-	}
-
-	for _, term := range importantTerms {
-		if strings.Contains(intentLower, term) {
-			terms = append(terms, term)
-		}
-	}
-
-	// Add function-like patterns
-	if strings.Contains(intentLower, "review") {
-		terms = append(terms, "GetCodeReview", "performAutomatedReview", "CodeReviewResult")
-	}
-
-	if strings.Contains(intentLower, "orchestration") {
-		terms = append(terms, "orchestration", "OrchestrationModel", "OrchestrateFeature")
-	}
-
-	return terms
-}
-
-// helper function
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 // rewordPromptForBetterSearch uses workspace model to reword the user prompt for better file discovery

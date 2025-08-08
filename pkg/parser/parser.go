@@ -52,12 +52,12 @@ func isEndOfCodeBlock(line string, currentLanguage string) bool {
 // - "...unchanged..." or "// ...unchanged..."
 // - "... rest of file ..." or "// rest of file"
 // - "... existing code ..." or "// existing code"
-// - "... (content unchanged) ..." 
+// - "... (content unchanged) ..."
 // - "// ... other methods unchanged ..."
 // This is case-insensitive for better detection.
 func IsPartialContentMarker(line string) bool {
 	lowerLine := strings.ToLower(strings.TrimSpace(line))
-	
+
 	// Check for ellipsis patterns with common partial content indicators
 	partialIndicators := []string{
 		"unchanged", "rest of file", "existing code", "content unchanged",
@@ -65,7 +65,7 @@ func IsPartialContentMarker(line string) bool {
 		"same as before", "no changes", "keep existing", "rest unchanged",
 		"other imports", "existing imports", "previous imports",
 	}
-	
+
 	// Look for ellipsis (...) followed by any of the partial indicators
 	if strings.Contains(lowerLine, "...") {
 		for _, indicator := range partialIndicators {
@@ -74,7 +74,7 @@ func IsPartialContentMarker(line string) bool {
 			}
 		}
 	}
-	
+
 	// Also check for comment patterns like "// rest of file" without ellipsis
 	if strings.HasPrefix(lowerLine, "//") || strings.HasPrefix(lowerLine, "#") {
 		for _, indicator := range partialIndicators {
@@ -83,7 +83,7 @@ func IsPartialContentMarker(line string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -168,14 +168,14 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 			inCodeBlock = false
 			if currentFileName != "" {
 				fileContent := strings.TrimSuffix(currentFileContent.String(), "\n")
-				
+
 				// Check for partial content markers in the file
 				if IsPartialResponse(fileContent) {
 					fmt.Printf("⚠️  WARNING: Detected partial content in file %s\n", currentFileName)
 					fmt.Printf("File contains partial content markers that indicate incomplete code.\n")
 					fmt.Printf("This may cause issues when applying changes.\n")
 				}
-				
+
 				updatedCode[currentFileName] = fileContent
 				currentFileName = ""
 				currentLanguage = "" // Reset language after block ends

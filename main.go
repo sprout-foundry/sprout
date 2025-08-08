@@ -1,3 +1,5 @@
+// ledit is a command-line tool designed for managing and editing LED configurations.
+// It provides various commands to interact with LED setups.
 package main
 
 import (
@@ -10,14 +12,10 @@ import (
 	"os" // Import os for os.Exit
 )
 
-// ledit is a command-line tool for editing LED configurations.
-// main is the entry point of the application.
 func main() {
 	// Get the logger instance
 	logger := utils.GetLogger(true)
 
-	// BUG FIX: Check if logger initialization failed and returned a nil logger.
-	// If GetLogger can return nil without an error, subsequent calls to logger methods would panic.
 	if logger == nil {
 		// If the logger cannot be initialized, we cannot log, so print to stderr and exit.
 		if _, err := fmt.Fprintln(os.Stderr, "FATAL: Failed to initialize logger. Exiting."); err != nil {

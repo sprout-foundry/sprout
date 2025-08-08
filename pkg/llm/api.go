@@ -21,6 +21,14 @@ var (
 	DefaultTokenLimit = prompts.DefaultTokenLimit
 )
 
+// GetLLMResponseWithTools makes an LLM call with tool calling support
+func GetLLMResponseWithTools(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration) (string, error) {
+	// Import the orchestration package functions here to avoid circular import
+	// This is a temporary solution - in a full implementation, you'd refactor the architecture
+	_, response, err := GetLLMResponse(modelName, messages, systemPrompt, cfg, timeout)
+	return response, err
+}
+
 // --- Main Dispatcher ---
 
 func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (string, error) {

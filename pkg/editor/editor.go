@@ -82,68 +82,8 @@ func ProcessInstructionsWithWorkspace(instructions string, cfg *config.Config) (
 }
 
 func ProcessInstructions(instructions string, cfg *config.Config) (string, error) {
-	originalInstructions := instructions // Capture original instructions for LLM-generated queries
-
-	// Handle #SG "search query" pattern first
-	sgPattern := regexp.MustCompile(`(?s)#SG\s*"(.*?)"`)
-	instructions = sgPattern.ReplaceAllStringFunc(instructions, func(match string) string {
-		submatches := sgPattern.FindStringSubmatch(match)
-		if len(submatches) > 1 {
-			query := submatches[1]
-			// Always use Jina search regardless of model type
-			fmt.Print(prompts.PerformingSearch(query))
-			content, err := webcontent.FetchContextFromSearch(query, cfg)
-			if err != nil {
-				fmt.Print(prompts.SearchError(query, err))
-				return ""
-			}
-			return content
-		}
-		return match
-	})
-
-	// New: Handle #SG when it's not followed by a quoted string, indicating an LLM-generated search query
-	// This pattern matches #SG followed by a word boundary, and not followed by optional whitespace and a double quote.
-	sgLLMQueryPattern := regexp.MustCompile(`(?s)#SG\b`)
-	instructions = sgLLMQueryPattern.ReplaceAllStringFunc(instructions, func(match string) string {
-		// Check if this #SG is followed by a quoted string by looking at the context
-		matchIndex := strings.Index(instructions, match)
-		if matchIndex != -1 {
-			afterMatch := instructions[matchIndex+len(match):]
-			// If it starts with optional whitespace followed by a quote, skip it
-			trimmed := strings.TrimSpace(afterMatch)
-			if strings.HasPrefix(trimmed, `"`) {
-				return match // Don't replace, let the quoted version handle it
-			}
-		}
-
-		// Always use Jina search regardless of model type
-		fmt.Printf("Ledit is generating a search query using LLM based on your instructions...\n")
-		generatedQueries, err := llm.GenerateSearchQuery(cfg, originalInstructions)
-		if err != nil {
-			fmt.Printf("Error generating search queries with LLM: %v\n", err)
-			return ""
-		}
-
-		var allFetchedContent strings.Builder
-		searchCount := 0
-		for _, query := range generatedQueries {
-			if searchCount >= 2 { // Limit to a maximum of two searches
-				break
-			}
-			fmt.Printf("Performing LLM-generated search for: %s\n", query)
-			content, err := webcontent.FetchContextFromSearch(query, cfg)
-			if err != nil {
-				fmt.Print(prompts.SearchError(query, err))
-				// Continue to the next query even if one fails
-				continue
-			}
-			allFetchedContent.WriteString(content)
-			allFetchedContent.WriteString("\n\n") // Add a separator between contents from different searches
-			searchCount++
-		}
-		return allFetchedContent.String()
-	})
+	// Note: Search grounding is now handled via explicit tool calls instead of #SG flags
+	// This prevents accidental triggering by LLM responses and provides better control
 
 	filePattern := regexp.MustCompile(`\s+#(\S+)(?:(\d+),(\d+))?`)
 	matches := filePattern.FindAllStringSubmatch(instructions, -1)

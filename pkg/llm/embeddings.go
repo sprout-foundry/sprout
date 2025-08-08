@@ -73,18 +73,26 @@ func generateDeepInfraEmbedding(input string, model string) ([]float64, error) {
 	}
 	defer resp.Body.Close()
 
+	// Read the entire response body first to allow for logging on JSON decode failure
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read DeepInfra embedding response body: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("DeepInfra embedding API returned non-200 status: %s, body: %s", resp.Status, string(body))
+		// Use the already read bodyBytes for the error message
+		return nil, fmt.Errorf("DeepInfra embedding API returned non-200 status: %s, body: %s", resp.Status, string(bodyBytes))
 	}
 
 	var deepInfraResp OpenAIEmbeddingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&deepInfraResp); err != nil {
-		return nil, fmt.Errorf("failed to decode DeepInfra embedding response: %w", err)
+	// Decode from the read bodyBytes
+	if err := json.NewDecoder(bytes.NewReader(bodyBytes)).Decode(&deepInfraResp); err != nil {
+		// Include the raw body in the error message for debugging JSON parsing issues
+		return nil, fmt.Errorf("failed to decode DeepInfra embedding response: %w, raw body: %s", err, string(bodyBytes))
 	}
 
 	if len(deepInfraResp.Data) == 0 || len(deepInfraResp.Data[0].Embedding) == 0 {
-		return nil, fmt.Errorf("DeepInfra embedding response did not contain expected embedding data")
+		return nil, fmt.Errorf("DeepInfra embedding response did not contain expected embedding data, raw body: %s", string(bodyBytes))
 	}
 
 	return deepInfraResp.Data[0].Embedding, nil

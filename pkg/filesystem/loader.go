@@ -25,6 +25,51 @@ func LoadOriginalCode(filename string) (string, error) {
 
 // LoadFileContent loads and returns the content of a file or directory,
 // with support for loading specific line ranges and glob patterns.
+// LoadFileContentWithRange loads specific lines from a file
+// If startLine is 0, loads from beginning. If endLine is 0, loads to end.
+// Line numbers are 1-indexed.
+func LoadFileContentWithRange(path string, startLine, endLine int) (string, error) {
+	// For glob patterns, fall back to full content
+	if strings.Contains(path, "*") {
+		return LoadFileContent(path)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(content), "\n")
+	totalLines := len(lines)
+
+	// Validate and adjust line numbers
+	if startLine <= 0 {
+		startLine = 1
+	}
+	if endLine <= 0 || endLine > totalLines {
+		endLine = totalLines
+	}
+	if startLine > totalLines {
+		return "", fmt.Errorf("start line %d exceeds file length %d", startLine, totalLines)
+	}
+	if startLine > endLine {
+		return "", fmt.Errorf("start line %d is greater than end line %d", startLine, endLine)
+	}
+
+	// Extract the requested range (convert to 0-indexed)
+	selectedLines := lines[startLine-1 : endLine]
+	result := strings.Join(selectedLines, "\n")
+
+	// Add context information about the partial content
+	if startLine > 1 || endLine < totalLines {
+		header := fmt.Sprintf("--- Partial content from %s (lines %d-%d of %d) ---\n", path, startLine, endLine, totalLines)
+		footer := fmt.Sprintf("\n--- End of partial content from %s ---", path)
+		result = header + result + footer
+	}
+
+	return result, nil
+}
+
 func LoadFileContent(path string) (string, error) {
 	var content string
 

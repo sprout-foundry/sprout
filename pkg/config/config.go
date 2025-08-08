@@ -37,6 +37,7 @@ type Config struct {
 	SummaryModel             string               `json:"summary_model"`
 	OrchestrationModel       string               `json:"orchestration_model"` // new field for orchestration tasks
 	WorkspaceModel           string               `json:"workspace_model"`     // New field for workspace analysis
+	EmbeddingModel           string               `json:"embedding_model"`     // New field for embedding model
 	LocalModel               string               `json:"local_model"`
 	TrackWithGit             bool                 `json:"track_with_git"`
 	EnableSecurityChecks     bool                 `json:"enable_security_checks"` // New field for security checks
@@ -106,6 +107,9 @@ func (cfg *Config) setDefaultValues() {
 	if cfg.OrchestrationModel == "" {
 		cfg.OrchestrationModel = cfg.EditingModel // Fallback to editing model if not specified
 	}
+	if cfg.EmbeddingModel == "" {
+		cfg.EmbeddingModel = "jina:jina-embeddings-v4" // Default embedding model
+	}
 	if cfg.OllamaServerURL == "" {
 		cfg.OllamaServerURL = "http://localhost:11434"
 	}
@@ -168,6 +172,7 @@ func loadConfig(filePath string) (*Config, error) {
 	cfg.EnableSecurityChecks = false               // Default to false for existing configs
 	cfg.UseEmbeddings = false                      // Default to false for existing configs
 	cfg.Temperature = 0.0                          // NEW: Initialize Temperature to its zero value
+	cfg.EmbeddingModel = ""                        // NEW: Initialize EmbeddingModel to its zero value
 	// Initialize CodeStyle to ensure setDefaultValues can populate it
 	cfg.CodeStyle = CodeStylePreferences{}
 
@@ -223,6 +228,13 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		orchestrationModel = editingModel
 	}
 
+	fmt.Print("Enter Embedding Model (e.g., jina:jina-embeddings-v4 or deepinfra:Qwen/Qwen3-Embedding-4B): ")
+	embeddingModel, _ := reader.ReadString('\n')
+	embeddingModel = strings.TrimSpace(embeddingModel)
+	if embeddingModel == "" {
+		embeddingModel = "jina:jina-embeddings-v4"
+	}
+
 	fmt.Print(prompts.TrackGitPrompt()) // Use prompt
 	autoTrackGitStr, _ := reader.ReadString('\n')
 	autoTrackGit := strings.TrimSpace(strings.ToLower(autoTrackGitStr)) == "yes"
@@ -242,6 +254,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		SummaryModel:             summaryModel,
 		WorkspaceModel:           workspaceModel,
 		OrchestrationModel:       orchestrationModel,
+		EmbeddingModel:           embeddingModel,       // Set from user input
 		LocalModel:               getLocalModel(skipPrompt),
 		TrackWithGit:             autoTrackGit,
 		EnableSecurityChecks:     enableSecurityChecks, // Set from user input

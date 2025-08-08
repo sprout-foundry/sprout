@@ -32,6 +32,10 @@ func TrackGitPrompt() string {
 	return "Automatically track changes with Git? (yes/no): "
 }
 
+func EnterLLMProvider(defaultProvider string) string {
+	return fmt.Sprintf("Enter your preferred LLM provider (e.g., openai, gemini, ollama) (default: %s): ", defaultProvider)
+}
+
 func EnableSecurityChecksPrompt() string {
 	return "Enable checking for leaked keys and passwords in all files?\n Note that this can take a long time when enabled (yes/no): "
 }
@@ -476,7 +480,7 @@ func SearchQueryGenerationWarning(err error) string {
 }
 
 func AddedSearchGrounding(query string) string {
-	return fmt.Sprintf("--- Added search grounding to retry prompt with query: \"%s\" ---", query)
+	return fmt.Sprintf("--- Added search grounding to retry prompt with query: \"%s\" ---", query)
 }
 
 func AddingValidationFailureContext() string {
@@ -487,7 +491,7 @@ func AllOrchestrationStepsCompleted() string {
 	return "All orchestration steps completed."
 }
 
-// --- New prompts for orchestration changes ---
+// --- New prompts for orchestration changes ---
 
 func GeneratingFileChanges(instruction string) string {
 	return fmt.Sprintf("Generating file-specific changes for requirement: '%s'...", instruction)
@@ -511,4 +515,53 @@ func FileChangeCompleted(filepath, instruction string) string {
 
 func FileChangeFailedAfterAttempts(filepath, instruction string, attempts int, err error) string {
 	return fmt.Sprintf("File change for '%s' ('%s') failed after %d attempts: %v", filepath, instruction, attempts, err)
+}
+
+// --- Code Review Prompts ---
+func CodeReviewStagedPrompt() string {
+	return `You are an expert code reviewer. Please analyze the provided Git diff of staged changes and provide a comprehensive code review.
+
+Your review should include:
+
+1. **Code Quality Assessment**: 
+   - Check for code clarity, readability, and maintainability
+   - Identify any code smells or anti-patterns
+   - Assess adherence to best practices and conventions
+
+2. **Potential Issues**:
+   - Look for bugs, logic errors, or edge cases
+   - Identify performance concerns
+   - Check for security vulnerabilities
+   - Look for potential race conditions or concurrency issues
+
+3. **Architecture & Design**:
+   - Evaluate if the changes fit well with the existing codebase
+   - Check for proper separation of concerns
+   - Assess if the implementation is consistent with the project's patterns
+
+4. **Testing & Documentation**:
+   - Check if tests are included or updated appropriately
+   - Verify if documentation needs to be updated
+   - Assess test coverage for the changes
+
+5. **Dependencies & Compatibility**:
+   - Review any new dependencies or version changes
+   - Check for breaking changes or compatibility issues
+
+Please provide your feedback in the following format:
+
+**Status**: [APPROVED/NEEDS_REVISION/REJECTED]
+
+**Summary**: Brief overall assessment of the changes
+
+**Detailed Feedback**:
+- **Strengths**: What was done well
+- **Issues**: Specific problems that need to be addressed (if any)
+- **Suggestions**: Recommendations for improvement
+- **Security Concerns**: Any security-related issues (if any)
+
+**Action Items** (if status is not APPROVED):
+List specific changes that should be made before approval
+
+Be constructive and specific in your feedback. Focus on actionable suggestions that will improve the code quality and maintainability.`
 }

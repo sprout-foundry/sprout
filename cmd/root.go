@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 )
 
@@ -13,19 +11,23 @@ var rootCmd = &cobra.Command{
 	Long: `Ledit is a command-line tool that leverages Large Language Models (LLMs)
 to automate and assist in software development tasks. It can understand your
 entire workspace, generate code, orchestrate complex features, and ground its
-responses with live web search results.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+responses with live web search results.
+
+Available commands:
+  code     - Generate/edit code based on instructions
+  agent    - AI agent mode (analyzes intent and decides actions)
+  process  - Orchestrate complex features
+  commit   - Generate commit messages
+  fix      - Fix common issues
+  ...and more
+
+For autonomous operation, try: ledit agent "your intent here"`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
-	}
+func Execute() error {
+	return rootCmd.Execute()
 }
 
 func init() {
@@ -39,6 +41,7 @@ func init() {
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
+	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(codeCmd)
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(fixCmd)

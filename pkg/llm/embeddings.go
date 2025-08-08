@@ -10,27 +10,10 @@ import (
 	"os" // Import os for environment variable check
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/apikeys" // Changed import from pkg/config to pkg/apikeys
+	"github.com/alantheprice/ledit/pkg/apikeys"
 )
 
-const jinaEmbeddingsURL = "https://api.jina.ai/v1/embeddings"
 const deepInfraEmbeddingsURL = "https://api.deepinfra.com/v1/openai/embeddings"
-
-// JinaEmbeddingRequest represents the request body for the Jina AI Embeddings API.
-type JinaEmbeddingRequest struct {
-	Model string   `json:"model"`
-	Input []string `json:"input"` // Jina expects an array of strings
-}
-
-// JinaEmbeddingResponse represents the response body from the Jina AI Embeddings API.
-type JinaEmbeddingResponse struct {
-	Data []struct {
-		Embedding []float64 `json:"embedding"`
-	} `json:"data"`
-	Usage struct {
-		TotalTokens int `json:"total_tokens"`
-	} `json:"usage"`
-}
 
 // OpenAIEmbeddingRequest represents the request body for OpenAI-compatible Embeddings API.
 type OpenAIEmbeddingRequest struct {
@@ -48,63 +31,8 @@ type OpenAIEmbeddingResponse struct {
 	} `json:"usage"`
 }
 
-// generateJinaEmbedding generates an embedding for the given input using Jina AI.
-func generateJinaEmbedding(input string) ([]float64, error) {
-	apiKey, err := apikeys.GetAPIKey("JinaAI", false)
-	if err != nil || apiKey == "" {
-		apiKey = os.Getenv("JINA_API_KEY")
-		if apiKey == "" {
-			return nil, fmt.Errorf("Jina AI API key not found. Please set JINA_API_KEY environment variable or provide it when prompted.")
-		}
-	}
-
-	embeddingModel := "jina-embeddings-v4"
-
-	reqData := JinaEmbeddingRequest{
-		Model: embeddingModel,
-		Input: []string{input},
-	}
-
-	jsonData, err := json.Marshal(reqData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Jina embedding request: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", jinaEmbeddingsURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Jina embedding request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call Jina embedding API: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Jina embedding API returned non-200 status: %s, body: %s", resp.Status, string(body))
-	}
-
-	var jinaResp JinaEmbeddingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&jinaResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Jina embedding response: %w", err)
-	}
-
-	if len(jinaResp.Data) == 0 || len(jinaResp.Data[0].Embedding) == 0 {
-		return nil, fmt.Errorf("Jina embedding response did not contain expected embedding data")
-	}
-
-	return jinaResp.Data[0].Embedding, nil
-}
-
 // generateDeepInfraEmbedding generates an embedding for the given input using DeepInfra.
-func generateDeepInfraEmbedding(input string) ([]float64, error) {
+func generateDeepInfraEmbedding(input string, model string) ([]float64, error) {
 	apiKey, err := apikeys.GetAPIKey("deepinfra", false)
 	if err != nil || apiKey == "" {
 		apiKey = os.Getenv("DEEPINFRA_API_KEY")
@@ -113,7 +41,11 @@ func generateDeepInfraEmbedding(input string) ([]float64, error) {
 		}
 	}
 
-	embeddingModel := "Qwen/Qwen3-Embedding-4B"
+	// Use the provided model, or default if empty
+	embeddingModel := model
+	if embeddingModel == "" {
+		embeddingModel = "Qwen/Qwen3-Embedding-4B"
+	}
 
 	reqData := OpenAIEmbeddingRequest{
 		Model: embeddingModel,
@@ -159,17 +91,26 @@ func generateDeepInfraEmbedding(input string) ([]float64, error) {
 }
 
 // GenerateEmbedding generates an embedding for the given input using the specified model.
+// It currently only supports DeepInfra embeddings.
 func GenerateEmbedding(input, modelName string) ([]float64, error) {
-	parts := strings.SplitN(modelName, ":", 2)
-	provider := parts[0]
+	provider := "deepinfra" // Default provider
+	model := ""
+
+	if modelName != "" {
+		parts := strings.SplitN(modelName, ":", 2)
+		if len(parts) > 0 && parts[0] != "" {
+			provider = parts[0]
+		}
+		if len(parts) > 1 {
+			model = parts[1]
+		}
+	}
 
 	switch provider {
-	case "jina":
-		return generateJinaEmbedding(input)
 	case "deepinfra":
-		return generateDeepInfraEmbedding(input)
+		return generateDeepInfraEmbedding(input, model)
 	default:
-		return nil, fmt.Errorf("unsupported embedding provider: %s", provider)
+		return nil, fmt.Errorf("unsupported embedding provider: %s. Only 'deepinfra' is currently supported.", provider)
 	}
 }
 

@@ -517,6 +517,12 @@ func FileChangeFailedAfterAttempts(filepath, instruction string, attempts int, e
 	return fmt.Sprintf("File change for '%s' ('%s') failed after %d attempts: %v", filepath, instruction, attempts, err)
 }
 
+// --- Application Error Prompts ---
+func FatalError(err error) string {
+	boldRed := color.New(color.FgRed, color.Bold).SprintFunc()
+	return fmt.Sprintf("%s: %v\n\nThis is a fatal error. Please check .ledit/workspace.log for more details and consider reporting an issue on GitHub.", boldRed("A FATAL ERROR OCCURRED"), err)
+}
+
 // --- Code Review Prompts ---
 func CodeReviewStagedPrompt() string {
 	return `You are an expert code reviewer. Please analyze the provided Git diff of staged changes and provide a comprehensive code review.

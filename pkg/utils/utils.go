@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // GenerateRequestHash generates a SHA256 hash for a given set of instructions.
@@ -95,4 +98,22 @@ func EstimateTokens(text string) int {
 	// A common heuristic is 4 characters per token for English text.
 	// This is a rough estimate and can vary significantly by model and language.
 	return len(text) / 4
+}
+
+// IsValidFileExtension checks if the given filename has one of the allowed extensions.
+// Extensions should be provided with a leading dot, e.g., ".go", ".txt".
+func IsValidFileExtension(filename string, allowedExtensions []string) bool {
+	ext := filepath.Ext(filename)
+	for _, allowedExt := range allowedExtensions {
+		if strings.EqualFold(ext, allowedExt) {
+			return true
+		}
+	}
+	return false
+}
+
+// CapitalizeWords capitalizes the first letter of each word in a string.
+func CapitalizeWords(s string) string {
+	// Using golang.org/x/text/cases for robust capitalization, as strings.Title is deprecated.
+	return cases.Title(language.Und, cases.NoLower).String(s)
 }

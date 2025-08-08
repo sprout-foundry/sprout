@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/changetracker"
@@ -85,7 +86,8 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 	// Note: Search grounding is now handled via explicit tool calls instead of #SG flags
 	// This prevents accidental triggering by LLM responses and provides better control
 
-	filePattern := regexp.MustCompile(`\s+#(\S+)(?:(\d+),(\d+))?`)
+	// Updated pattern to capture line ranges: #filename:start-end or #filename:start,end
+	filePattern := regexp.MustCompile(`\s+#(\S+?)(?::(\d+)[-,](\d+))?`)
 	matches := filePattern.FindAllStringSubmatch(instructions, -1)
 
 	fmt.Println("Found patterns:", matches) // Logging the patterns found
@@ -95,29 +97,53 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 			continue
 		}
 		path := match[1]
-		var content string
+		var startLine, endLine int
 		var err error
+		var content string
 
-		fmt.Printf("Processing path: %s\n", path) // Logging the path being processed
+		// Parse line range if provided
+		if len(match) >= 4 && match[2] != "" && match[3] != "" {
+			if startLine, err = strconv.Atoi(match[2]); err != nil {
+				fmt.Printf("Warning: Invalid start line number '%s' for %s, using full file\n", match[2], path)
+				startLine = 0
+			}
+			if endLine, err = strconv.Atoi(match[3]); err != nil {
+				fmt.Printf("Warning: Invalid end line number '%s' for %s, using full file\n", match[3], path)
+				endLine = 0
+			}
+		}
+
+		fmt.Printf("Processing path: %s", path) // Logging the path being processed
+		if startLine > 0 && endLine > 0 {
+			fmt.Printf(" (lines %d-%d)", startLine, endLine)
+		}
+		fmt.Println()
 
 		if path == "WORKSPACE" || path == "WS" {
 			fmt.Println(prompts.LoadingWorkspaceData())
 			content = workspace.GetWorkspaceContext(instructions, cfg)
 		} else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
-
 			content, err = webcontent.NewWebContentFetcher().FetchWebContent(path, cfg) // Pass cfg here
 			if err != nil {
 				fmt.Print(prompts.URLFetchError(path, err))
 				continue
 			}
 		} else {
-			content, err = filesystem.LoadFileContent(path) // CHANGED: Call filesystem.LoadFileContent
+			// Use partial loading if line range is specified
+			if startLine > 0 && endLine > 0 {
+				content, err = filesystem.LoadFileContentWithRange(path, startLine, endLine)
+			} else {
+				content, err = filesystem.LoadFileContent(path) // CHANGED: Call filesystem.LoadFileContent
+			}
 			if err != nil {
 				fmt.Print(prompts.FileLoadError(path, err))
 				continue
 			}
 		}
-		instructions = strings.Replace(instructions, "#"+match[1], content, 1)
+		
+		// Replace the original pattern (including line range) with content
+		originalPattern := match[0] // Full match including whitespace and line range
+		instructions = strings.Replace(instructions, originalPattern, content, 1)
 	}
 	return instructions, nil
 }

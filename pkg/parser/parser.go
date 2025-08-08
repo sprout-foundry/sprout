@@ -48,18 +48,42 @@ func isEndOfCodeBlock(line string, currentLanguage string) bool {
 }
 
 // IsPartialContentMarker checks if a line is a partial content marker.
-// A line that contains `...` on on the same line as the text below. Splitting it into two lines here to makes sure that this comment doesn't trigger this detection.
-// then `unchanged` is a partial content marker.
-// This is case-insensitive for "unchanged".
+// Common patterns that indicate partial content:
+// - "...unchanged..." or "// ...unchanged..."
+// - "... rest of file ..." or "// rest of file"
+// - "... existing code ..." or "// existing code"
+// - "... (content unchanged) ..." 
+// - "// ... other methods unchanged ..."
+// This is case-insensitive for better detection.
 func IsPartialContentMarker(line string) bool {
-	// A line that contains `...` on on the same line as the text below. Splitting it into two lines here to makes sure that this comment doesn't trigger this detection.
-	// then `unchanged` is a partial content marker.
-	// This is case-insensitive for "unchanged".
 	lowerLine := strings.ToLower(strings.TrimSpace(line))
-	if idx := strings.Index(lowerLine, "..."); idx != -1 {
-		// check for "unchanged" in the rest of the string
-		return strings.Contains(lowerLine[idx:], "unchanged")
+	
+	// Check for ellipsis patterns with common partial content indicators
+	partialIndicators := []string{
+		"unchanged", "rest of file", "existing code", "content unchanged",
+		"other methods", "other functions", "remaining code", "previous code",
+		"same as before", "no changes", "keep existing", "rest unchanged",
+		"other imports", "existing imports", "previous imports",
 	}
+	
+	// Look for ellipsis (...) followed by any of the partial indicators
+	if strings.Contains(lowerLine, "...") {
+		for _, indicator := range partialIndicators {
+			if strings.Contains(lowerLine, indicator) {
+				return true
+			}
+		}
+	}
+	
+	// Also check for comment patterns like "// rest of file" without ellipsis
+	if strings.HasPrefix(lowerLine, "//") || strings.HasPrefix(lowerLine, "#") {
+		for _, indicator := range partialIndicators {
+			if strings.Contains(lowerLine, indicator) {
+				return true
+			}
+		}
+	}
+	
 	return false
 }
 
@@ -143,7 +167,16 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 		} else if inCodeBlock && isEndOfCodeBlock(line, currentLanguage) { // Pass currentLanguage to the check
 			inCodeBlock = false
 			if currentFileName != "" {
-				updatedCode[currentFileName] = strings.TrimSuffix(currentFileContent.String(), "\n")
+				fileContent := strings.TrimSuffix(currentFileContent.String(), "\n")
+				
+				// Check for partial content markers in the file
+				if IsPartialResponse(fileContent) {
+					fmt.Printf("⚠️  WARNING: Detected partial content in file %s\n", currentFileName)
+					fmt.Printf("File contains partial content markers that indicate incomplete code.\n")
+					fmt.Printf("This may cause issues when applying changes.\n")
+				}
+				
+				updatedCode[currentFileName] = fileContent
 				currentFileName = ""
 				currentLanguage = "" // Reset language after block ends
 			}
@@ -153,8 +186,12 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 	}
 
 	fmt.Printf("Found %d code blocks:\n", len(updatedCode))
-	for filename := range updatedCode {
-		fmt.Printf("  - %s\n", filename)
+	for filename, content := range updatedCode {
+		fmt.Printf("  - %s (%d chars)\n", filename, len(content))
+		// Check if any file seems suspiciously short (possible truncation)
+		if len(content) < 50 {
+			fmt.Printf("⚠️  WARNING: File %s is very short (%d chars) - possible truncation\n", filename, len(content))
+		}
 	}
 	fmt.Printf("=== End Parser Debug ===\n")
 

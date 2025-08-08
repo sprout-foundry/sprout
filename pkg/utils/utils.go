@@ -117,3 +117,8 @@ func CapitalizeWords(s string) string {
 	// Using golang.org/x/text/cases for robust capitalization, as strings.Title is deprecated.
 	return cases.Title(language.Und, cases.NoLower).String(s)
 }
+
+// IsEmptyString checks if a string is empty.
+func IsEmptyString(s string) bool {
+	return s == ""
+}

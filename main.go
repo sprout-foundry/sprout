@@ -19,9 +19,5 @@ func main() {
 		}
 	}()
 
-	if err := cmd.Execute(); err != nil {
-		// Log the error before exiting
-		logger.Logf("Application error: %v", err)
-		os.Exit(1)
-	}
+	cmd.Execute()
 }

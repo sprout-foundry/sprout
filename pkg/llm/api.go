@@ -303,3 +303,74 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 
 	return &reviewResult, nil
 }
+
+// GetStagedCodeReview performs a code review on staged Git changes using a human-readable prompt.
+// This is specifically designed for the review-staged command.
+func GetStagedCodeReview(cfg *config.Config, stagedDiff, reviewPrompt, workspaceContext string) (*types.CodeReviewResult, error) {
+	modelName := cfg.EditingModel
+	if modelName == "" {
+		return nil, fmt.Errorf("no editing model specified in config")
+	}
+
+	// Build messages for the staged code review
+	var messages []prompts.Message
+
+	// Add system message with the review prompt
+	messages = append(messages, prompts.Message{
+		Role:    "system",
+		Content: reviewPrompt,
+	})
+
+	// Add user message with the staged diff and optional workspace context
+	userContent := fmt.Sprintf("Please review the following staged Git changes:\n\n```diff\n%s\n```", stagedDiff)
+	if strings.TrimSpace(workspaceContext) != "" {
+		userContent = fmt.Sprintf("Workspace Context:\n%s\n\n%s", workspaceContext, userContent)
+	}
+
+	messages = append(messages, prompts.Message{
+		Role:    "user",
+		Content: userContent,
+	})
+
+	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get staged code review from LLM: %w", err)
+	}
+
+	if response == "" {
+		return nil, fmt.Errorf("LLM returned an empty response for staged code review")
+	}
+
+	// Parse the response to extract status and feedback
+	// Since we're using a human-readable prompt, we need to parse the text response
+	return parseStagedCodeReviewResponse(response)
+}
+
+// parseStagedCodeReviewResponse parses the human-readable code review response
+func parseStagedCodeReviewResponse(response string) (*types.CodeReviewResult, error) {
+	result := &types.CodeReviewResult{}
+
+	// Look for status indicators in the response
+	responseLower := strings.ToLower(response)
+
+	if strings.Contains(responseLower, "status") && strings.Contains(responseLower, "approved") {
+		result.Status = "approved"
+	} else if strings.Contains(responseLower, "status") && strings.Contains(responseLower, "needs_revision") {
+		result.Status = "needs_revision"
+	} else if strings.Contains(responseLower, "status") && strings.Contains(responseLower, "rejected") {
+		result.Status = "rejected"
+	} else {
+		// Default to needs_revision if we can't determine status
+		result.Status = "needs_revision"
+	}
+
+	// The entire response is the feedback
+	result.Feedback = strings.TrimSpace(response)
+
+	// For rejected status, suggest a new prompt (this is a simple implementation)
+	if result.Status == "rejected" {
+		result.NewPrompt = "Please address the issues identified in the code review and resubmit the changes."
+	}
+
+	return result, nil
+}

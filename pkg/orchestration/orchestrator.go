@@ -1,7 +1,7 @@
 package orchestration
 
 import (
-	"bytes" // Added import for bytes package
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/editor" // NEW IMPORT: Import editor package for ProcessCodeGeneration
+	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/alantheprice/ledit/pkg/prompts"
@@ -30,7 +30,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 	}
 
 	// Save the initial plan
-	if err := SaveOrchestrationPlan(plan); err != nil { // Use SaveOrchestrationPlan from current package
+	if err := SaveOrchestrationPlan(plan); err != nil {
 		logger.LogError(fmt.Errorf("failed to save initial orchestration plan: %w", err))
 	}
 
@@ -55,7 +55,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 		logger.LogProcessStep(fmt.Sprintf("\nProcessing requirement %d/%d: %s", i+1, len(plan.Requirements), req.Instruction))
 		req.Status = "in_progress"
 		plan.CurrentStep = i
-		if err := SaveOrchestrationPlan(plan); err != nil { // Use SaveOrchestrationPlan from current package
+		if err := SaveOrchestrationPlan(plan); err != nil {
 			logger.LogError(fmt.Errorf("failed to save orchestration plan during processing: %w", err))
 		}
 
@@ -70,7 +70,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 			req.LastError = err.Error()
 			req.Status = "failed"
 			logger.LogError(fmt.Errorf("failed to get changes for requirement '%s': %w", req.Instruction, err))
-			if err := SaveOrchestrationPlan(plan); err != nil { // Use SaveOrchestrationPlan from current package
+			if err := SaveOrchestrationPlan(plan); err != nil {
 				logger.LogError(fmt.Errorf("failed to save orchestration plan after requirement failure: %w", err))
 			}
 			continue // Move to next requirement or retry if logic allows
@@ -97,8 +97,8 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 				allOrchestrationDiffs.WriteString(diff)
 				logger.LogProcessStep(fmt.Sprintf("  Successfully applied change to %s.", change.Filepath))
 			}
-			req.Changes[j] = change                             // Update the change in the slice
-			if err := SaveOrchestrationPlan(plan); err != nil { // Use SaveOrchestrationPlan from current package
+			req.Changes[j] = change
+			if err := SaveOrchestrationPlan(plan); err != nil {
 				logger.LogError(fmt.Errorf("failed to save orchestration plan after applying change: %w", err))
 			}
 		}
@@ -111,7 +111,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 			logger.LogProcessStep(fmt.Sprintf("Requirement '%s' failed to complete all changes.", req.Instruction))
 		}
 
-		if err := SaveOrchestrationPlan(plan); err != nil { // Use SaveOrchestrationPlan from current package
+		if err := SaveOrchestrationPlan(plan); err != nil {
 			logger.LogError(fmt.Errorf("failed to save orchestration plan after requirement completion: %w", err))
 		}
 	}
@@ -193,7 +193,7 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 		logger.LogProcessStep("\nOrchestration completed with pending or failed requirements. Please review the plan.")
 	}
 
-	if err := SaveOrchestrationPlan(plan); err != nil { // Use SaveOrchestrationPlan from current package
+	if err := SaveOrchestrationPlan(plan); err != nil {
 		logger.LogError(fmt.Errorf("failed to save final orchestration plan: %w", err))
 	}
 

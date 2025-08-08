@@ -41,9 +41,8 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 
 	var allOrchestrationDiffs strings.Builder
 
-	// Get workspace context for the overall orchestration prompt
-	// This context will be passed to the final automated review.
-	workspaceContextForReview := workspace.GetWorkspaceContext(prompt, cfg)
+	// Get minimal workspace context for the overall orchestration prompt (for final review)
+	workspaceContextForReview := workspace.GetMinimalWorkspaceContext(prompt, cfg)
 
 	// 2. Process each requirement
 	for i := plan.CurrentStep; i < len(plan.Requirements); i++ {
@@ -59,8 +58,8 @@ func OrchestrateFeature(prompt string, cfg *config.Config) error {
 			logger.LogError(fmt.Errorf("failed to save orchestration plan during processing: %w", err))
 		}
 
-		// Get workspace context for the current requirement
-		workspaceContext := workspace.GetWorkspaceContext(req.Instruction, cfg)
+		// Get minimal workspace context for the current requirement (summaries + exports only)
+		workspaceContext := workspace.GetMinimalWorkspaceContext(req.Instruction, cfg)
 
 		// Ask LLM to break down requirement into file-specific changes
 		// The cfg object is passed, and GetChangesForRequirement will internally use cfg.Interactive
@@ -219,7 +218,7 @@ func generateRequirements(prompt string, cfg *config.Config) (*types.Orchestrati
 	}
 	logger.LogProcessStep(fmt.Sprintf("Using model %s for orchestration planning.", modelName))
 
-	workspaceContext := workspace.GetWorkspaceContext(prompt, cfg)
+	workspaceContext := workspace.GetMinimalWorkspaceContext(prompt, cfg)
 	messages := prompts.BuildOrchestrationPlanMessages(prompt, workspaceContext)
 
 	// Use a longer timeout for this, as it's a planning step

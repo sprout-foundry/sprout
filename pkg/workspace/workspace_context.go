@@ -350,3 +350,93 @@ func getLanguageFromFilename(filename string) string {
 		return "text"
 	}
 }
+
+// GetMinimalWorkspaceContext generates a lightweight context with only summaries and exports from workspace.json
+// This approach significantly reduces token usage and forces the LLM to make targeted file reads
+func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string {
+	logger := utils.GetLogger(cfg.SkipPrompt)
+	logger.LogProcessStep("--- Loading minimal workspace context (summaries and exports only) ---")
+
+	workspace, err := validateAndUpdateWorkspace("./", cfg)
+	if err != nil {
+		logger.Logf("Error loading workspace: %v. Continuing with empty context.\n", err)
+		return "No workspace context available. Use read_file tool to load specific files as needed."
+	}
+
+	var b strings.Builder
+	b.WriteString("=== MINIMAL WORKSPACE CONTEXT ===\n")
+	b.WriteString("IMPORTANT: This context contains only file summaries and public function exports.\n")
+	b.WriteString("NO full file contents are provided. Use the read_file tool to load specific files when needed.\n\n")
+
+	// Add Git Repository Information (minimal)
+	remoteURL, err := git.GetGitRemoteURL()
+	if err == nil && remoteURL != "" {
+		b.WriteString(fmt.Sprintf("Git Remote: %s\n", remoteURL))
+	}
+
+	branch, uncommitted, staged, statusErr := git.GetGitStatus()
+	if statusErr == nil {
+		b.WriteString(fmt.Sprintf("Git Status: Branch=%s, Uncommitted=%d, Staged=%d\n", branch, uncommitted, staged))
+	}
+	b.WriteString("\n")
+
+	// Add Project Goals (if available)
+	if workspace.ProjectGoals.OverallGoal != "" {
+		b.WriteString("=== PROJECT GOALS ===\n")
+		if workspace.ProjectGoals.OverallGoal != "" {
+			b.WriteString(fmt.Sprintf("Goal: %s\n", workspace.ProjectGoals.OverallGoal))
+		}
+		if workspace.ProjectGoals.KeyFeatures != "" {
+			b.WriteString(fmt.Sprintf("Features: %s\n", workspace.ProjectGoals.KeyFeatures))
+		}
+		b.WriteString("\n")
+	}
+
+	// Build minimal file structure with summaries and exports
+	b.WriteString("=== FILE STRUCTURE WITH SUMMARIES AND EXPORTS ===\n")
+	b.WriteString("Use this information to identify which files to read with read_file tool.\n\n")
+
+	// Sort files for consistent output
+	var sortedFiles []string
+	for filePath := range workspace.Files {
+		sortedFiles = append(sortedFiles, filePath)
+	}
+	sort.Strings(sortedFiles)
+
+	for _, filePath := range sortedFiles {
+		fileInfo := workspace.Files[filePath]
+
+		b.WriteString(fmt.Sprintf("📁 %s\n", filePath))
+
+		// Add summary (critical for understanding what the file does)
+		if fileInfo.Summary != "" && fileInfo.Summary != "File is too large to analyze." {
+			b.WriteString(fmt.Sprintf("   Summary: %s\n", fileInfo.Summary))
+		} else if fileInfo.Summary == "File is too large to analyze." {
+			b.WriteString("   Summary: Large file - use read_file with offset/limit if needed\n")
+		}
+
+		// Add exports (critical for understanding available functions)
+		if fileInfo.Exports != "" && fileInfo.Exports != "None" {
+			b.WriteString(fmt.Sprintf("   Public Functions: %s\n", fileInfo.Exports))
+		}
+
+		// Add references if available (shows dependencies)
+		if fileInfo.References != "" {
+			b.WriteString(fmt.Sprintf("   Uses: %s\n", fileInfo.References))
+		}
+
+		b.WriteString("\n")
+	}
+
+	b.WriteString("=== INSTRUCTIONS FOR LLM ===\n")
+	b.WriteString("1. Use the summaries and exports above to identify relevant files\n")
+	b.WriteString("2. Use read_file tool to load ONLY the specific files you need to understand\n")
+	b.WriteString("3. Focus on making minimal changes - prefer modifying existing functions over creating new ones\n")
+	b.WriteString("4. When changing model usage, look for assignments like 'modelName := cfg.OrchestrationModel'\n")
+	b.WriteString("5. Make the smallest change that solves the specific problem described\n\n")
+
+	// Log the full minimal context for debugging
+	logger.Log(b.String())
+
+	return b.String()
+}

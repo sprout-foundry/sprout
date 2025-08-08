@@ -1471,8 +1471,70 @@ func buildMinimalContext(contextFiles []string, logger *utils.Logger) string {
 		return ""
 	}
 
+	// Load workspace.json to get summaries and exports
+	workspaceFile, err := workspace.LoadWorkspaceFile()
+	if err != nil {
+		logger.Logf("Could not load workspace.json, falling back to basic file listing: %v", err)
+		return buildBasicFileContext(contextFiles, logger)
+	}
+
 	var context strings.Builder
-	context.WriteString("Relevant Files:\n")
+	context.WriteString("=== SELECTED FILES CONTEXT ===\n")
+	context.WriteString("IMPORTANT: This context contains only summaries and public function exports.\n")
+	context.WriteString("NO full file contents are provided. Use the read_file tool to load specific files when needed.\n\n")
+
+	context.WriteString("=== RELEVANT FILES (MINIMAL SYNTAX TREES) ===\n")
+	context.WriteString("Use this information to identify which files to read with read_file tool.\n\n")
+
+	for _, filePath := range contextFiles {
+		fileInfo, exists := workspaceFile.Files[filePath]
+		if !exists {
+			// File not in workspace.json, try to read it directly (fallback)
+			logger.Logf("File %s not found in workspace.json, skipping", filePath)
+			continue
+		}
+
+		context.WriteString(fmt.Sprintf("📁 %s\n", filePath))
+
+		// Add summary (critical for understanding what the file does)
+		if fileInfo.Summary != "" && fileInfo.Summary != "File is too large to analyze." {
+			context.WriteString(fmt.Sprintf("   Summary: %s\n", fileInfo.Summary))
+		} else if fileInfo.Summary == "File is too large to analyze." {
+			context.WriteString("   Summary: Large file - use read_file with offset/limit if needed\n")
+		}
+
+		// Add exports (critical for understanding available functions)
+		if fileInfo.Exports != "" && fileInfo.Exports != "None" {
+			context.WriteString(fmt.Sprintf("   Public Functions: %s\n", fileInfo.Exports))
+		}
+
+		// Add references if available (shows dependencies)
+		if fileInfo.References != "" {
+			context.WriteString(fmt.Sprintf("   Uses: %s\n", fileInfo.References))
+		}
+
+		// Add security concerns if any
+		if len(fileInfo.SecurityConcerns) > 0 {
+			context.WriteString(fmt.Sprintf("   Security Concerns: %s\n", strings.Join(fileInfo.SecurityConcerns, ", ")))
+		}
+
+		context.WriteString("\n")
+	}
+
+	context.WriteString("=== INSTRUCTIONS FOR ANALYSIS ===\n")
+	context.WriteString("1. Use the summaries and exports above to identify which files are relevant to your task\n")
+	context.WriteString("2. Use read_file tool to load ONLY the specific files you need to understand\n")
+	context.WriteString("3. Focus on making minimal changes - prefer modifying existing functions over creating new ones\n")
+	context.WriteString("4. When changing model usage, look for assignments like 'modelName := cfg.OrchestrationModel'\n")
+	context.WriteString("5. Make the smallest change that solves the specific problem described\n\n")
+
+	return context.String()
+}
+
+// buildBasicFileContext is a fallback when workspace.json is not available
+func buildBasicFileContext(contextFiles []string, logger *utils.Logger) string {
+	var context strings.Builder
+	context.WriteString("Relevant Files (Basic Context):\n")
 
 	for _, file := range contextFiles {
 		if content, err := os.ReadFile(file); err == nil {
@@ -1546,10 +1608,16 @@ func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent
 			stepDuration := time.Since(stepStartTime)
 
 			if stepErr != nil {
-				validationResults = append(validationResults, fmt.Sprintf("❌ %s: %v (took %v)", step.Description, stepErr, stepDuration))
-				fmt.Printf("   ❌ FAILED in %v: %v\n", stepDuration, stepErr)
-				logger.Logf("Validation step '%s' FAILED (took %v): %v", step.Description, stepDuration, stepErr)
-				hasFailures = true // Mark failure but continue to next validation step
+				if step.Required {
+					validationResults = append(validationResults, fmt.Sprintf("❌ %s: %v (took %v)", step.Description, stepErr, stepDuration))
+					fmt.Printf("   ❌ FAILED in %v: %v\n", stepDuration, stepErr)
+					logger.Logf("Validation step '%s' FAILED (took %v): %v", step.Description, stepDuration, stepErr)
+					hasFailures = true // Only mark as failure if step is required
+				} else {
+					validationResults = append(validationResults, fmt.Sprintf("⚠️ %s: %v (took %v) [OPTIONAL]", step.Description, stepErr, stepDuration))
+					fmt.Printf("   ⚠️ WARNING in %v: %v (optional step)\n", stepDuration, stepErr)
+					logger.Logf("Validation step '%s' WARNING (took %v): %v [OPTIONAL - not blocking]", step.Description, stepDuration, stepErr)
+				}
 			} else {
 				validationResults = append(validationResults, fmt.Sprintf("✅ %s: %s (took %v)", step.Description, result, stepDuration))
 				fmt.Printf("   ✅ PASSED in %v\n", stepDuration)
@@ -1753,6 +1821,29 @@ func hasFile(path string) bool {
 	return err == nil
 }
 
+// hasTestFiles checks if test files exist in the given directory for the specified language
+func hasTestFiles(dir, language string) bool {
+	var testPatterns []string
+	switch language {
+	case "go":
+		testPatterns = []string{"*_test.go"}
+	case "js", "ts":
+		testPatterns = []string{"*.test.js", "*.spec.js"}
+	case "py":
+		testPatterns = []string{"test_*.py", "*_test.py"}
+	default:
+		return false
+	}
+
+	for _, pattern := range testPatterns {
+		matches, _ := filepath.Glob(pattern)
+		if len(matches) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // determineValidationStrategy uses LLM to determine the best validation approach
 func determineValidationStrategy(intentAnalysis *IntentAnalysis, cfg *config.Config, logger *utils.Logger) (*ValidationStrategy, int, error) {
 	// Detect basic project characteristics
@@ -1783,11 +1874,16 @@ Respond with JSON:
 }
 
 Guidelines:
-- For Go projects: typically need "go build" and "go vet" at minimum
-- For Python: "python -m py_compile" for syntax, "pytest" for tests
-- For Node.js: "npm run build", "npm test", "npm run lint"
-- Always prioritize essential checks (syntax, build) over optional ones (tests, linting)
-- Consider the change type: docs changes need minimal validation, code changes need thorough validation`,
+- **REQUIRED vs OPTIONAL**: Mark steps as required=true ONLY if failure prevents deployment/usage
+- **Build failures**: Always required=true (prevents basic functionality)
+- **Syntax errors**: Always required=true (code won't run)
+- **Lint warnings**: Always required=false (pre-existing issues shouldn't block changes)
+- **Missing tests**: Always required=false (absence of tests is not a failure)
+- **Existing test failures**: Use required=false unless directly related to the change
+- For Go projects: "go build ./..." (required=true), "go vet ./..." (required=false)
+- For Python: "python -m py_compile" (required=true), "pytest" (required=false)
+- For Node.js: "npm run build" (required=true), "npm test" (required=false), "npm run lint" (required=false)
+- Consider the change type: docs/comments/small fixes need minimal required validation`,
 		strings.Join(projectInfo.AvailableFiles, ", "),
 		intentAnalysis.Category,
 		intentAnalysis.Complexity,
@@ -1888,18 +1984,35 @@ func getBasicValidationStrategy(intentAnalysis *IntentAnalysis, logger *utils.Lo
 	if hasFile("go.mod") {
 		strategy.ProjectType = "go"
 		strategy.Steps = []ValidationStep{
-			{Type: "build", Command: "go build ./...", Description: "Build Go project", Required: true},
-			{Type: "lint", Command: "go vet ./...", Description: "Go static analysis", Required: false},
+			{Type: "syntax", Command: "go mod tidy", Description: "Ensures the go.mod file matches the source code's dependencies.", Required: false},
+			{Type: "build", Command: "go build ./...", Description: "Compiles all packages in the project to ensure there are no build errors.", Required: true},
+			{Type: "lint", Command: "go vet ./...", Description: "Runs the Go vet tool to check for suspicious constructs and potential errors.", Required: false},
+		}
+		// Add tests only if test files exist
+		if hasTestFiles(".", "go") {
+			strategy.Steps = append(strategy.Steps, ValidationStep{
+				Type: "test", Command: "go test ./...", Description: "Runs all unit tests to verify functionality and prevent regressions.", Required: false,
+			})
 		}
 	} else if hasFile("package.json") {
 		strategy.ProjectType = "node"
 		strategy.Steps = []ValidationStep{
 			{Type: "syntax", Command: "node --check *.js", Description: "JavaScript syntax check", Required: true},
 		}
+		if hasTestFiles(".", "js") {
+			strategy.Steps = append(strategy.Steps, ValidationStep{
+				Type: "test", Command: "npm test", Description: "Runs Node.js tests", Required: false,
+			})
+		}
 	} else if hasFile("requirements.txt") || hasFile("pyproject.toml") {
 		strategy.ProjectType = "python"
 		strategy.Steps = []ValidationStep{
 			{Type: "syntax", Command: "python -m py_compile *.py", Description: "Python syntax check", Required: true},
+		}
+		if hasTestFiles(".", "py") {
+			strategy.Steps = append(strategy.Steps, ValidationStep{
+				Type: "test", Command: "python -m pytest", Description: "Runs Python tests", Required: false,
+			})
 		}
 	} else {
 		// Generic validation
@@ -1974,9 +2087,20 @@ ANALYSIS REQUIRED:
 3. **Decision**: Should the validation pass, fail, or require fixes?
 
 DECISION CRITERIA:
-- If errors are unrelated to recent changes (e.g., existing lint issues, unrelated test failures): RECOMMEND PASS
-- If errors affect the new functionality or indicate the recent changes broke something: RECOMMEND FAIL
-- If errors can be quickly fixed and are related to the task: RECOMMEND FIX
+- **REQUIRED failures**: Only these should trigger FIX or FAIL decisions
+- **OPTIONAL failures** (marked with ⚠️): These should typically be PASS (ignore pre-existing issues)
+- **Build/syntax errors** (required=true): Must be addressed → FAIL if severe, FIX if simple
+- **Lint warnings** (required=false): Usually pre-existing → PASS unless directly caused by changes
+- **Missing or failing tests** (required=false): Not a blocker → PASS (missing tests ≠ failure)
+- **Vet warnings** (required=false): Pre-existing linting issues → PASS
+
+SPECIFIC EXAMPLES:
+- "go vet" warnings about format strings → PASS (pre-existing lint issues)
+- "go build" failures → FAIL or FIX (prevents functionality)
+- "tests not found" or "no tests" → PASS (absence is not failure)
+- Existing test failures unrelated to changes → PASS
+
+Focus on: Did the changes work correctly? Ignore pre-existing project issues.
 
 RESPONSE FORMAT:
 DECISION: [PASS|FAIL|FIX]

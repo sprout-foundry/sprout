@@ -140,7 +140,7 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 				continue
 			}
 		}
-		
+
 		// Replace the original pattern (including line range) with content
 		originalPattern := match[0] // Full match including whitespace and line range
 		instructions = strings.Replace(instructions, originalPattern, content, 1)
@@ -511,4 +511,275 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 	}
 
 	return combinedDiff, nil
+}
+
+// ProcessPartialEdit performs a targeted edit on a specific file using partial content and instructions
+// This is more efficient than full file replacement for small, focused changes
+func ProcessPartialEdit(filePath, targetInstructions string, cfg *config.Config, logger *utils.Logger) (string, error) {
+	// Read the current file content
+	originalContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+
+	// For Go files, try to identify the relevant function/struct/section to edit
+	relevantSection, sectionStart, sectionEnd, err := extractRelevantSection(string(originalContent), targetInstructions, filePath)
+	if err != nil {
+		logger.Logf("Could not extract relevant section, falling back to full file edit: %v", err)
+		return ProcessCodeGeneration(filePath, targetInstructions, cfg, "")
+	}
+
+	// Create focused instructions that work with just the relevant section
+	partialInstructions := buildPartialEditInstructions(targetInstructions, relevantSection, filePath, sectionStart, sectionEnd)
+
+	// Get the updated section from the LLM
+	_, llmResponse, err := getUpdatedCodeSection(relevantSection, partialInstructions, filePath, cfg)
+	if err != nil {
+		logger.Logf("Partial edit failed, falling back to full file edit: %v", err)
+		return ProcessCodeGeneration(filePath, targetInstructions, cfg, "")
+	}
+
+	// Extract the updated code from the LLM response
+	updatedSection, err := parser.ExtractCodeFromResponse(llmResponse, getLanguageFromExtension(filePath))
+	if err != nil || updatedSection == "" {
+		logger.Logf("Could not extract updated section from LLM response, falling back to full file edit: %v", err)
+		return ProcessCodeGeneration(filePath, targetInstructions, cfg, "")
+	}
+
+	// Apply the partial edit to the original file
+	updatedContent := applyPartialEdit(string(originalContent), updatedSection, sectionStart, sectionEnd)
+
+	// Write the updated content back to the file
+	if err := os.WriteFile(filePath, []byte(updatedContent), 0644); err != nil {
+		return "", fmt.Errorf("failed to write updated file %s: %w", filePath, err)
+	}
+
+	// Generate diff for display
+	diff, err := generateDiff(string(originalContent), updatedContent, filePath)
+	if err != nil {
+		logger.Logf("Warning: could not generate diff: %v", err)
+		return fmt.Sprintf("Updated %s (diff generation failed)", filePath), nil
+	}
+
+	logger.Logf("Successfully applied partial edit to %s", filePath)
+	return diff, nil
+}
+
+// extractRelevantSection identifies the specific section of a file that needs to be edited
+// Returns the section content, start line, end line, and any error
+func extractRelevantSection(content, instructions, filePath string) (string, int, int, error) {
+	lines := strings.Split(content, "\n")
+	lang := getLanguageFromExtension(filePath)
+
+	// For Go files, try to identify functions, types, or logical blocks
+	if lang == "go" {
+		return extractGoSection(lines, instructions)
+	}
+
+	// For other languages, use simpler heuristics
+	return extractGenericSection(lines, instructions)
+}
+
+// extractGoSection extracts relevant Go code sections (functions, types, etc.)
+func extractGoSection(lines []string, instructions string) (string, int, int, error) {
+	instructionsLower := strings.ToLower(instructions)
+
+	// Try to find function names mentioned in instructions
+	funcPattern := regexp.MustCompile(`func\s+(\w+)`)
+	typePattern := regexp.MustCompile(`type\s+(\w+)`)
+
+	for i, line := range lines {
+		// Check for function declarations
+		if matches := funcPattern.FindStringSubmatch(line); len(matches) > 1 {
+			funcName := strings.ToLower(matches[1])
+			if strings.Contains(instructionsLower, funcName) {
+				// Find the end of this function
+				endLine := findGoFunctionEnd(lines, i)
+				section := strings.Join(lines[i:endLine+1], "\n")
+				return section, i, endLine, nil
+			}
+		}
+
+		// Check for type declarations
+		if matches := typePattern.FindStringSubmatch(line); len(matches) > 1 {
+			typeName := strings.ToLower(matches[1])
+			if strings.Contains(instructionsLower, typeName) {
+				// Find the end of this type
+				endLine := findGoTypeEnd(lines, i)
+				section := strings.Join(lines[i:endLine+1], "\n")
+				return section, i, endLine, nil
+			}
+		}
+	}
+
+	// If no specific function/type found, try to find a logical block
+	return extractGenericSection(lines, instructions)
+}
+
+// findGoFunctionEnd finds the end line of a Go function starting at startLine
+func findGoFunctionEnd(lines []string, startLine int) int {
+	braceCount := 0
+	foundOpenBrace := false
+
+	for i := startLine; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+
+		for _, char := range line {
+			if char == '{' {
+				braceCount++
+				foundOpenBrace = true
+			} else if char == '}' {
+				braceCount--
+				if foundOpenBrace && braceCount == 0 {
+					return i
+				}
+			}
+		}
+	}
+
+	// If we couldn't find the end, return a reasonable default
+	return startLine + 20 // Arbitrary limit
+}
+
+// findGoTypeEnd finds the end line of a Go type declaration starting at startLine
+func findGoTypeEnd(lines []string, startLine int) int {
+	line := strings.TrimSpace(lines[startLine])
+
+	// If it's a simple type (no braces), it's just one line
+	if !strings.Contains(line, "{") {
+		return startLine
+	}
+
+	// Otherwise, find the matching closing brace
+	return findGoFunctionEnd(lines, startLine)
+}
+
+// extractGenericSection extracts a relevant section using simple heuristics
+func extractGenericSection(lines []string, instructions string) (string, int, int, error) {
+	instructionsLower := strings.ToLower(instructions)
+	words := strings.Fields(instructionsLower)
+
+	// Look for lines that contain keywords from the instructions
+	bestMatch := -1
+	bestScore := 0
+
+	for i, line := range lines {
+		lineLower := strings.ToLower(line)
+		score := 0
+
+		for _, word := range words {
+			if len(word) > 3 && strings.Contains(lineLower, word) {
+				score++
+			}
+		}
+
+		if score > bestScore {
+			bestScore = score
+			bestMatch = i
+		}
+	}
+
+	if bestMatch == -1 {
+		return "", 0, 0, fmt.Errorf("could not find relevant section")
+	}
+
+	// Extract a reasonable context around the best match
+	start := bestMatch - 5
+	if start < 0 {
+		start = 0
+	}
+
+	end := bestMatch + 15
+	if end >= len(lines) {
+		end = len(lines) - 1
+	}
+
+	section := strings.Join(lines[start:end+1], "\n")
+	return section, start, end, nil
+}
+
+// buildPartialEditInstructions creates instructions specifically for partial editing
+func buildPartialEditInstructions(originalInstructions, sectionContent, filePath string, startLine, endLine int) string {
+	return fmt.Sprintf(`You are editing a specific section of %s (lines %d-%d).
+
+ORIGINAL TASK: %s
+
+CURRENT SECTION TO EDIT:
+%s
+
+CRITICAL INSTRUCTIONS:
+1. Return ONLY the updated version of this section
+2. Maintain proper indentation and formatting
+3. Keep line numbers and context consistent
+4. Do NOT include the entire file - just the updated section
+5. Make ONLY the changes specified in the original task
+6. Preserve all existing functionality not being changed
+
+Format your response as:
+`+"```"+`go
+[updated section here]
+`+"```"+`
+
+Focus on making precise, targeted changes to achieve the goal.`, filePath, startLine+1, endLine+1, originalInstructions, sectionContent)
+}
+
+// getUpdatedCodeSection gets LLM response for just a section of code
+func getUpdatedCodeSection(sectionContent, instructions, filePath string, cfg *config.Config) (string, string, error) {
+	return context.GetLLMCodeResponse(cfg, sectionContent, instructions, filePath, "")
+}
+
+// applyPartialEdit applies the updated section to the original content
+func applyPartialEdit(originalContent, updatedSection string, startLine, endLine int) string {
+	lines := strings.Split(originalContent, "\n")
+
+	// Replace the lines from startLine to endLine with the updated section
+	before := lines[:startLine]
+	after := lines[endLine+1:]
+
+	updatedLines := strings.Split(updatedSection, "\n")
+
+	// Combine: before + updated + after
+	result := append(before, updatedLines...)
+	result = append(result, after...)
+
+	return strings.Join(result, "\n")
+}
+
+// generateDiff creates a simple diff representation
+func generateDiff(original, updated, filePath string) (string, error) {
+	originalLines := strings.Split(original, "\n")
+	updatedLines := strings.Split(updated, "\n")
+
+	var diff strings.Builder
+	diff.WriteString(fmt.Sprintf("--- %s (original)\n", filePath))
+	diff.WriteString(fmt.Sprintf("+++ %s (updated)\n", filePath))
+
+	// Simple line-by-line diff
+	maxLines := len(originalLines)
+	if len(updatedLines) > maxLines {
+		maxLines = len(updatedLines)
+	}
+
+	for i := 0; i < maxLines; i++ {
+		originalLine := ""
+		updatedLine := ""
+
+		if i < len(originalLines) {
+			originalLine = originalLines[i]
+		}
+		if i < len(updatedLines) {
+			updatedLine = updatedLines[i]
+		}
+
+		if originalLine != updatedLine {
+			if originalLine != "" {
+				diff.WriteString(fmt.Sprintf("-%s\n", originalLine))
+			}
+			if updatedLine != "" {
+				diff.WriteString(fmt.Sprintf("+%s\n", updatedLine))
+			}
+		}
+	}
+
+	return diff.String(), nil
 }

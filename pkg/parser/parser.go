@@ -140,18 +140,18 @@ func MergePartialEdit(originalContent, partialContent string, startLine, endLine
 // Looks for markers like "// Editing lines 10-20" or "# Lines 5-15 only"
 func ExtractPartialEditInfo(content string) (startLine, endLine int, hasRange bool) {
 	lines := strings.Split(content, "\n")
-	
+
 	// Check first few lines for range indicators
 	for i := 0; i < len(lines) && i < 5; i++ {
 		line := strings.TrimSpace(lines[i])
-		
+
 		// Look for patterns like "Lines 10-20", "Editing lines 5-15", etc.
 		patterns := []string{
 			`(?i)lines?\s+(\d+)[-–](\d+)`,
 			`(?i)editing\s+lines?\s+(\d+)[-–](\d+)`,
 			`(?i)range\s+(\d+)[-–](\d+)`,
 		}
-		
+
 		for _, pattern := range patterns {
 			re := regexp.MustCompile(pattern)
 			matches := re.FindStringSubmatch(line)
@@ -164,7 +164,7 @@ func ExtractPartialEditInfo(content string) (startLine, endLine int, hasRange bo
 			}
 		}
 	}
-	
+
 	return 0, 0, false
 }
 
@@ -266,4 +266,42 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 	fmt.Printf("=== End Parser Debug ===\n")
 
 	return updatedCode, nil
+}
+
+// ExtractCodeFromResponse extracts a single code block from an LLM response for a specific language
+// This is used for partial editing where we expect just one updated section
+func ExtractCodeFromResponse(response, expectedLanguage string) (string, error) {
+	lines := strings.Split(response, "\n")
+	var codeContent strings.Builder
+	inCodeBlock := false
+	var currentLanguage string
+
+	for _, line := range lines {
+		isStart, lang := isStartOfCodeBlock(line)
+
+		if !inCodeBlock && isStart {
+			// Accept the block if it matches the expected language or if no language is specified
+			if expectedLanguage == "" || lang == expectedLanguage || lang == "" {
+				inCodeBlock = true
+				currentLanguage = lang
+				continue
+			}
+		} else if inCodeBlock && isEndOfCodeBlock(line, currentLanguage) {
+			// Found the end of the code block
+			break
+		} else if inCodeBlock {
+			// Add this line to the code content
+			if codeContent.Len() > 0 {
+				codeContent.WriteString("\n")
+			}
+			codeContent.WriteString(line)
+		}
+	}
+
+	code := codeContent.String()
+	if code == "" {
+		return "", fmt.Errorf("no code block found for language %s", expectedLanguage)
+	}
+
+	return code, nil
 }

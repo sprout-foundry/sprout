@@ -124,6 +124,74 @@ func GetAvailableTools() []Tool {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "validate_file",
+				Description: "Validate a file for syntax errors, compilation issues, or other problems",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"file_path": {
+							Type:        "string",
+							Description: "The path to the file to validate",
+						},
+						"validation_type": {
+							Type:        "string",
+							Description: "Type of validation to perform",
+							Enum:        []string{"syntax", "compilation", "basic", "full"},
+						},
+					},
+					Required: []string{"file_path"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "edit_file_section",
+				Description: "Edit a specific section of a file efficiently (function, struct, etc.)",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"file_path": {
+							Type:        "string",
+							Description: "The path to the file to edit",
+						},
+						"instructions": {
+							Type:        "string",
+							Description: "Detailed instructions for what changes to make",
+						},
+						"target_section": {
+							Type:        "string",
+							Description: "Optional: specific function/struct name or section to target",
+						},
+					},
+					Required: []string{"file_path", "instructions"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "fix_validation_issues",
+				Description: "Attempt to automatically fix validation issues in a file",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"file_path": {
+							Type:        "string",
+							Description: "The path to the file with validation issues",
+						},
+						"error_description": {
+							Type:        "string",
+							Description: "Description of the validation errors to fix",
+						},
+					},
+					Required: []string{"file_path", "error_description"},
+				},
+			},
+		},
 	}
 }
 
@@ -223,6 +291,24 @@ When you need to use tools, respond with a JSON object in this EXACT format:
 4. **ask_user** - REQUIRED when instructions are unclear
    - Parameters: {"question": "your question"}
    - Use: When you need clarification or additional information
+
+5. **validate_file** - ESSENTIAL for quality assurance
+   - Parameters: {"file_path": "path/to/file", "validation_type": "syntax|compilation|basic|full"}
+   - Use: After making changes to verify correctness and catch issues early
+
+6. **edit_file_section** - EFFICIENT for targeted edits
+   - Parameters: {"file_path": "path/to/file", "instructions": "what to change", "target_section": "optional function/struct name"}
+   - Use: For precise edits to specific functions or sections
+
+7. **fix_validation_issues** - AUTOMATED problem resolution
+   - Parameters: {"file_path": "path/to/file", "error_description": "description of the issue"}
+   - Use: When validation finds issues that can be automatically resolved
+
+**WORKFLOW BEST PRACTICES:**
+- After editing files, ALWAYS use validate_file to check for issues
+- Use edit_file_section for targeted changes rather than rewriting entire files
+- When validation fails, try fix_validation_issues before manual intervention
+- Use run_shell_command for build/test verification and dependency checks
 
 **CRITICAL:** Do NOT proceed without necessary information. Use tools first, then provide your response.`
 }

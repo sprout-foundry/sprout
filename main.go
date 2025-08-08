@@ -7,6 +7,7 @@ import (
 	"os" // Import os for os.Exit
 )
 
+// ledit is a command-line tool for editing LED configurations.
 func main() {
 	// Get the logger instance
 	logger := utils.GetLogger(true)

@@ -2,11 +2,9 @@ package context // Changed from contexthandler to context
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp" // Added import for regexp package
 	"strings"
 	"time"
 
@@ -139,8 +137,22 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	}
 
 	if !cfg.Interactive {
-		logger.Log("Taking non-interactive path")
-		_, response, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute, imagePath)
+		logger.Log("Taking non-interactive path with tool calling support")
+		// Create a wrapper to convert between context request types
+		contextHandlerWrapper := func(llmRequests []llm.ContextRequest, cfg *config.Config) (string, error) {
+			// Convert llm.ContextRequest to local ContextRequest
+			var localRequests []ContextRequest
+			for _, req := range llmRequests {
+				localRequests = append(localRequests, ContextRequest{
+					Type:  req.Type,
+					Query: req.Query,
+				})
+			}
+			return handleContextRequest(localRequests, cfg)
+		}
+
+		// Use the new tool calling system even for non-interactive mode
+		response, err := llm.CallLLMWithInteractiveContext(modelName, messages, filename, cfg, 6*time.Minute, contextHandlerWrapper)
 		if err != nil {
 			logger.Log(fmt.Sprintf("Non-interactive LLM call failed: %v", err))
 			return modelName, "", err
@@ -150,102 +162,31 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		return modelName, response, nil
 	}
 
-	logger.Log("Taking interactive path")
-	const maxContextRequests = 5
-	contextRequestCount := 0
+	logger.Log("Taking interactive path with enhanced tool calling support")
 
-	for {
-		logger.Log(fmt.Sprintf("Interactive loop iteration %d", contextRequestCount))
-
-		if contextRequestCount >= maxContextRequests {
-			logger.Log("Maximum context requests reached, forcing code generation")
-			fmt.Println(prompts.LLMMaxContextRequestsReached()) // Use prompt
-			// Reset the system message to the base code generation prompt, forcing the LLM to generate code.
-			messages[0] = prompts.Message{Role: "system", Content: prompts.GetBaseCodeGenSystemMessage()}
+	// Create a wrapper to convert between context request types
+	contextHandlerWrapper := func(llmRequests []llm.ContextRequest, cfg *config.Config) (string, error) {
+		// Convert llm.ContextRequest to local ContextRequest
+		var localRequests []ContextRequest
+		for _, req := range llmRequests {
+			localRequests = append(localRequests, ContextRequest{
+				Type:  req.Type,
+				Query: req.Query,
+			})
 		}
-
-		// Default timeout for code generation is 6 minutes
-		logger.Log("Calling LLM for response...")
-		_, response, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute, imagePath)
-		if err != nil {
-			logger.Log(fmt.Sprintf("LLM call failed: %v", err))
-			return modelName, "", err
-		}
-		logger.Log(fmt.Sprintf("Got LLM response, length: %d chars", len(response)))
-
-		var allContextRequests []ContextRequest
-		var rawResponseForReturn string = response // Store the original response to return if no context requests
-
-		logger.Log("Parsing response for context requests...")
-		// Regex to find JSON objects, potentially preceded by [TOOL_CALLS] or within ```json
-		// This regex tries to capture a JSON object. It's not perfect for nested structures but good for top-level.
-		// It looks for { ... }
-		jsonRegex := regexp.MustCompile("(?s)(?:\\[TOOL_CALLS\\]|```json\\s*)?({(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*})")
-
-		// Find all matches
-		matches := jsonRegex.FindAllStringSubmatch(response, -1)
-		logger.Log(fmt.Sprintf("Found %d potential JSON matches", len(matches)))
-
-		for _, match := range matches {
-			if len(match) > 1 {
-				jsonCandidate := strings.TrimSpace(match[1])
-				var tempContextResponse ContextResponse
-				if err := json.Unmarshal([]byte(jsonCandidate), &tempContextResponse); err == nil {
-					logger.Log(fmt.Sprintf("Successfully parsed context requests: %d requests", len(tempContextResponse.ContextRequests)))
-					allContextRequests = append(allContextRequests, tempContextResponse.ContextRequests...)
-					// If we successfully parsed a context request, the original response was a tool call,
-					// so we should not return it as code.
-					rawResponseForReturn = ""
-				} else {
-					logger.Log(fmt.Sprintf("Failed to parse JSON candidate: %v", err))
-				}
-			}
-		}
-
-		// If no specific JSON blocks were found by regex, try to parse the whole response as raw JSON
-		if len(allContextRequests) == 0 && strings.Contains(response, "context_requests") {
-			logger.Log("Trying to parse entire response as JSON...")
-			var tempContextResponse ContextResponse
-			if err := json.Unmarshal([]byte(strings.TrimSpace(response)), &tempContextResponse); err == nil {
-				logger.Log(fmt.Sprintf("Successfully parsed entire response: %d requests", len(tempContextResponse.ContextRequests)))
-				allContextRequests = append(allContextRequests, tempContextResponse.ContextRequests...)
-				rawResponseForReturn = ""
-			} else {
-				logger.Log(fmt.Sprintf("Failed to parse entire response as JSON: %v", err))
-			}
-		}
-
-		logger.Log(fmt.Sprintf("Total context requests found: %d", len(allContextRequests)))
-		if len(allContextRequests) > 0 {
-			fmt.Print(prompts.LLMContextRequestsFound(len(allContextRequests))) // Use prompt
-			contextRequestCount++
-			additionalContext, err := handleContextRequest(allContextRequests, cfg) // Pass the aggregated requests
-			if err != nil {
-				fmt.Print(prompts.LLMContextRequestError(err)) // Use prompt
-				messages = append(messages, prompts.Message{
-					Role:    "assistant",
-					Content: response, // Original response from LLM
-				}, prompts.Message{
-					Role:    "user",
-					Content: fmt.Sprintf("There was an error handling your request: %v. Please try a different request or generate the code.", err),
-				})
-			} else {
-				fmt.Print(prompts.LLMAddingContext(additionalContext)) // Use prompt
-				messages = append(messages, prompts.Message{
-					Role:    "assistant",
-					Content: response, // Original response from LLM
-				}, prompts.Message{
-					Role:    "user",
-					Content: additionalContext,
-				})
-			}
-			continue // Loop to ask LLM again with new context
-		} else {
-			logger.Log(fmt.Sprintf("No context requests found, returning response (length: %d)", len(rawResponseForReturn)))
-			logger.Log("=== End GetLLMCodeResponse Debug ===")
-			return modelName, rawResponseForReturn, nil // No context requests, return the (potentially empty) raw response
-		}
+		return handleContextRequest(localRequests, cfg)
 	}
+
+	// Use the new tool calling system for interactive mode
+	response, err := llm.CallLLMWithInteractiveContext(modelName, messages, filename, cfg, 6*time.Minute, contextHandlerWrapper)
+	if err != nil {
+		logger.Log(fmt.Sprintf("Interactive LLM call failed: %v", err))
+		return modelName, "", err
+	}
+
+	logger.Log(fmt.Sprintf("Interactive response length: %d chars", len(response)))
+	logger.Log("=== End GetLLMCodeResponse Debug ===")
+	return modelName, response, nil
 }
 
 // GetScriptRiskAnalysis sends a shell script to the summary model for risk analysis.

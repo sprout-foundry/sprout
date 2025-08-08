@@ -66,18 +66,20 @@ func BuildCodeMessages(code, instructions, filename string, interactive bool) []
 	systemPrompt := GetBaseCodeGenSystemMessage() // Use the base message
 
 	if interactive {
-		systemPrompt = "You are an assistant that can generate updated code based on provided instructions. You have two response options:\n\n" +
+		systemPrompt = "You are an assistant that can generate updated code based on provided instructions. You have access to tools for gathering additional information when needed:\n\n" +
 			"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. " +
 			getBaseCodeMessageSystemMessage() +
 			"\n\n" +
-			"2.  **Request Context:** *do not make guesses* If you need more information, respond *only* with a JSON array of context requests with no other text. The required format:\n" +
-			"    `{\"context_requests\":[{ \"type\": \"TYPE\", \"query\": \"QUERY\" }]}`\n" +
-			"    -   `type`: Can be `search` (web search), `user_prompt` (ask the user a question), `file` (request file content, needs to be a filename, otherwise ask the user), or `shell` (request a shell command execution).\n" +
-			"    -   `query`: The search term, question, file path, or command.\n\n" +
-			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* request the file's contents using the `file` type.\n\n" +
-			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then request the file contents using the `file` type.\n\n" +
-			" Do not generate code until you have all the necessary context. If you do not have enough information, ask for it using the context request format.\n" +
-			"After your context request is fulfilled, you will be prompted again to generate the code. Do not continue asking for context; generate the code as soon as you have enough information.\n"
+			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
+			"    - **search_web**: Search the web for information\n" +
+			"    - **read_file**: Read a file from the workspace\n" +
+			"    - **run_shell_command**: Execute shell commands\n" +
+			"    - **ask_user**: Ask the user for clarification\n\n" +
+			"    Tools will be automatically executed and results provided to you.\n\n" +
+			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* read the file using the read_file tool.\n\n" +
+			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then read the file using the read_file tool.\n\n" +
+			" Do not generate code until you have all the necessary context. Use tools to gather information as needed.\n" +
+			"After tools provide you with information, generate the code based on all available context.\n"
 	}
 
 	messages = append(messages, Message{Role: "system", Content: systemPrompt})
@@ -240,14 +242,16 @@ func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext
 			"        }\n" +
 			"      ]\n" +
 			"    }\n\n" +
-			"2.  **Request Context:** *do not make guesses* If you need more information, respond *only* with a JSON array of context requests with no other text. The required format:\n" +
-			"    `{\"context_requests\":[{ \"type\": \"TYPE\", \"query\": \"QUERY\" }]}`\n" +
-			"    -   `type`: Can be `search` (web search), `user_prompt` (ask the user a question), `file` (request file content, needs to be a filename, otherwise ask the user), or `shell` (request a shell command execution).\n" +
-			"    -   `query`: The search term, question, file path, or command.\n\n" +
-			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* request the file's contents using the `file` type.\n\n" +
-			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then request the file contents using the `file` type.\n\n" +
-			"After your context request is fulfilled, you will be prompted again to generate the changes. Do not continue asking for context; generate the changes as soon as you have enough information.\n" +
-			"Do not generate changes until you have all the necessary context. If you do not have enough information, ask for it using the context request format.\n" +
+			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
+			"    - **search_web**: Search the web for information\n" +
+			"    - **read_file**: Read a file from the workspace\n" +
+			"    - **run_shell_command**: Execute shell commands\n" +
+			"    - **ask_user**: Ask the user for clarification\n\n" +
+			"    Tools will be automatically executed and results provided to you.\n\n" +
+			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* read the file using the read_file tool.\n\n" +
+			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then read the file using the read_file tool.\n\n" +
+			"After tools provide you with information, generate the changes based on all available context.\n" +
+			"Do not generate changes until you have all the necessary context. Use tools to gather information as needed.\n" +
 			"Consider the provided workspace context to understand the project structure and existing code.\n"
 	} else {
 		systemPrompt = `You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes.

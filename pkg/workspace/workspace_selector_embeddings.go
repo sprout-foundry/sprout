@@ -17,28 +17,17 @@ const (
 // are relevant to the user's instructions. It returns two lists: one for files
 // to be included with full content, and one for files to be included as summaries.
 func GetFilesForContextUsingEmbeddings(instructions string, workspace WorkspaceFile, cfg *config.Config, logger *utils.Logger) ([]string, []string, error) {
-	// Load or create vector database
 	db := embedding.NewVectorDB()
-	if err := db.Load(embeddingDBPath); err != nil {
-		logger.Logf("Warning: could not load embeddings database: %v. Proceeding with empty database.\n", err)
-	}
 
-	// Check if we need to regenerate embeddings (e.g., if workspace has changed)
-	// For now, we'll regenerate embeddings every time as a simple approach
-	// In a production system, we'd want to check if files have changed
-	logger.LogProcessStep("--- Generating embeddings for workspace files ---")
-	if err := embedding.GenerateWorkspaceEmbeddings(workspace, db); err != nil {
-		return nil, nil, fmt.Errorf("failed to generate workspace embeddings: %w", err)
-	}
-
-	// Save the embeddings database
-	if err := db.Save(embeddingDBPath); err != nil {
-		logger.Logf("Warning: could not save embeddings database: %v\n", err)
+	// GenerateWorkspaceEmbeddings now handles loading, generating, and saving embeddings
+	logger.LogProcessStep("--- Generating/Updating embeddings for workspace files ---")
+	if err := embedding.GenerateWorkspaceEmbeddings(workspace, db, cfg); err != nil {
+		return nil, nil, fmt.Errorf("failed to generate/update workspace embeddings: %w", err)
 	}
 
 	// Search for relevant files using embeddings
 	logger.LogProcessStep("--- Searching for relevant files using embeddings ---")
-	relevantEmbeddings, scores, err := embedding.SearchRelevantFiles(instructions, db, topKFiles)
+	relevantEmbeddings, scores, err := embedding.SearchRelevantFiles(instructions, db, topKFiles, cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to search for relevant files: %w", err)
 	}

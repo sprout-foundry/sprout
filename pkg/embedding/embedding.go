@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
@@ -37,49 +39,45 @@ func NewVectorDB() *VectorDB {
 	}
 }
 
-// Load loads embeddings from a file
-func (vdb *VectorDB) Load(filepath string) error {
-	vdb.mu.Lock()
-	defer vdb.mu.Unlock()
-
-	data, err := os.ReadFile(filepath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// File doesn't exist, initialize empty embeddings map
-			vdb.embeddings = make(map[string]*CodeEmbedding)
-			return nil
-		}
-		return err
-	}
-
-	if len(data) == 0 {
-		vdb.embeddings = make(map[string]*CodeEmbedding)
-		return nil
-	}
-
-	return json.Unmarshal(data, &vdb.embeddings)
+// GetEmbeddingFilePath returns the file path for a given embedding ID.
+func GetEmbeddingFilePath(id string) string {
+	// Use a simple hash or sanitized version of the ID for the filename
+	// For now, we'll just use the ID directly, assuming it's safe for filenames
+	// and replace problematic characters.
+	sanitizedID := strings.ReplaceAll(id, "/", "_")
+	sanitizedID = strings.ReplaceAll(sanitizedID, ":", "-")
+	return filepath.Join(".ledit", "embeddings", sanitizedID+".json")
 }
 
-// Save saves embeddings to a file
-func (vdb *VectorDB) Save(filePath string) error {
-	vdb.mu.RLock()
-	defer vdb.mu.RUnlock()
+// LoadEmbedding loads a single CodeEmbedding from a file.
+func LoadEmbedding(id string) (*CodeEmbedding, error) {
+	filePath := GetEmbeddingFilePath(id)
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	var emb CodeEmbedding
+	if err := json.Unmarshal(data, &emb); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal embedding from %s: %w", filePath, err)
+	}
+	return &emb, nil
+}
 
-	// Ensure directory exists
+// SaveEmbedding saves a single CodeEmbedding to a file.
+func SaveEmbedding(emb *CodeEmbedding) error {
+	filePath := GetEmbeddingFilePath(emb.ID)
 	dir := filepath.Dir(filePath)
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		return err
+		return fmt.Errorf("failed to create directory for embedding %s: %w", filePath, err)
 	}
-
-	data, err := json.Marshal(vdb.embeddings)
+	data, err := json.MarshalIndent(emb, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal embedding for %s: %w", emb.ID, err)
 	}
-
 	return os.WriteFile(filePath, data, 0644)
 }
 
-// Add adds an embedding to the database
+// Add adds an embedding to the in-memory database.
 func (vdb *VectorDB) Add(embedding *CodeEmbedding) {
 	vdb.mu.Lock()
 	defer vdb.mu.Unlock()
@@ -87,7 +85,7 @@ func (vdb *VectorDB) Add(embedding *CodeEmbedding) {
 	vdb.embeddings[embedding.ID] = embedding
 }
 
-// Get retrieves an embedding by ID
+// Get retrieves an embedding by ID.
 func (vdb *VectorDB) Get(id string) (*CodeEmbedding, bool) {
 	vdb.mu.RLock()
 	defer vdb.mu.RUnlock()
@@ -96,25 +94,53 @@ func (vdb *VectorDB) Get(id string) (*CodeEmbedding, bool) {
 	return emb, exists
 }
 
-// Remove removes an embedding by ID
-func (vdb *VectorDB) Remove(id string) {
+// Remove removes an embedding from the database and deletes its file from disk.
+func (vdb *VectorDB) Remove(id string) error {
 	vdb.mu.Lock()
 	defer vdb.mu.Unlock()
 
 	delete(vdb.embeddings, id)
+	filePath := GetEmbeddingFilePath(id)
+	err := os.Remove(filePath)
+	if err != nil && os.IsNotExist(err) {
+		return nil // File already doesn't exist, consider it removed successfully
+	}
+	return err
 }
 
-// GetAll returns all embeddings
-func (vdb *VectorDB) GetAll() []*CodeEmbedding {
-	vdb.mu.RLock()
-	defer vdb.mu.RUnlock()
+// GetAll returns all embeddings, loading them from disk if not already in memory.
+func (vdb *VectorDB) GetAll() ([]*CodeEmbedding, error) {
+	vdb.mu.Lock() // Use Lock since we might be modifying the map
+	defer vdb.mu.Unlock()
 
-	embeddings := make([]*CodeEmbedding, 0, len(vdb.embeddings))
-	for _, emb := range vdb.embeddings {
-		embeddings = append(embeddings, emb)
+	// Clear existing in-memory embeddings to ensure fresh load
+	vdb.embeddings = make(map[string]*CodeEmbedding)
+
+	embeddingsDir := filepath.Join(".ledit", "embeddings")
+	files, err := os.ReadDir(embeddingsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []*CodeEmbedding{}, nil // Directory doesn't exist, no embeddings
+		}
+		return nil, fmt.Errorf("failed to read embeddings directory: %w", err)
 	}
 
-	return embeddings
+	var allEmbeddings []*CodeEmbedding
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+			id := strings.TrimSuffix(file.Name(), ".json")
+			emb, err := LoadEmbedding(id)
+			if err != nil {
+				// Log error but continue with other embeddings
+				fmt.Printf("Warning: failed to load embedding %s: %v\n", id, err)
+				continue
+			}
+			vdb.embeddings[emb.ID] = emb // Add to in-memory cache
+			allEmbeddings = append(allEmbeddings, emb)
+		}
+	}
+
+	return allEmbeddings, nil
 }
 
 // Search finds the top K most similar embeddings to the query vector
@@ -165,13 +191,15 @@ func (vdb *VectorDB) Search(queryVector []float64, topK int) ([]*CodeEmbedding, 
 }
 
 // GenerateFileEmbedding generates an embedding for a file
-func GenerateFileEmbedding(filePath string, fileInfo workspaceinfo.WorkspaceFileInfo) (*CodeEmbedding, error) {
+func GenerateFileEmbedding(filePath string, fileInfo workspaceinfo.WorkspaceFileInfo, cfg *config.Config) (*CodeEmbedding, error) {
 	// For files, we'll use a combination of the file path, summary, and exports for the embedding
 	// This gives us semantic information about the file's purpose and contents
-	textForEmbedding := fmt.Sprintf("File: %s\nSummary: %s\nExports: %s", 
+	textForEmbedding := fmt.Sprintf(`File: %s
+Summary: %s
+Exports: %s`,
 		filePath, fileInfo.Summary, fileInfo.Exports)
-	
-	vector, err := llm.GenerateEmbedding(textForEmbedding)
+
+	vector, err := llm.GenerateEmbedding(textForEmbedding, cfg.EmbeddingModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding for file %s: %w", filePath, err)
 	}
@@ -187,38 +215,67 @@ func GenerateFileEmbedding(filePath string, fileInfo workspaceinfo.WorkspaceFile
 	}, nil
 }
 
-// GenerateWorkspaceEmbeddings generates embeddings for all files in a workspace
-func GenerateWorkspaceEmbeddings(workspace workspaceinfo.WorkspaceFile, db *VectorDB) error {
-	// Remove all existing file embeddings
-	var toRemove []string
-	for id := range db.embeddings {
-		if emb, exists := db.Get(id); exists && emb.Type == "file" {
-			toRemove = append(toRemove, id)
-		}
-	}
-	
-	for _, id := range toRemove {
-		db.Remove(id)
+// GenerateWorkspaceEmbeddings generates embeddings for all files in a workspace.
+// It uses a caching mechanism to avoid re-generating embeddings for unchanged files.
+func GenerateWorkspaceEmbeddings(workspace workspaceinfo.WorkspaceFile, db *VectorDB, cfg *config.Config) error {
+	// Get all existing embeddings from the database (which now loads from disk)
+	existingEmbeddings, err := db.GetAll()
+	if err != nil {
+		return fmt.Errorf("failed to get existing embeddings: %w", err)
 	}
 
-	// Generate new embeddings for all files
+	// Create a map for quick lookup of existing embeddings by file path
+	existingEmbeddingsMap := make(map[string]*CodeEmbedding)
+	for _, emb := range existingEmbeddings {
+		existingEmbeddingsMap[emb.Path] = emb
+	}
+
+	// Track files that are no longer in the workspace
+	var toRemove []string
+	for filePath, emb := range existingEmbeddingsMap {
+		if _, exists := workspace.Files[filePath]; !exists {
+			toRemove = append(toRemove, emb.ID)
+		}
+	}
+
+	// Remove embeddings for files that no longer exist
+	for _, id := range toRemove {
+		if err := db.Remove(id); err != nil {
+			fmt.Printf("Warning: failed to remove embedding for %s: %v\n", id, err)
+		}
+	}
+
+	// Generate or update embeddings for current workspace files
 	for filePath, fileInfo := range workspace.Files {
-		embedding, err := GenerateFileEmbedding(filePath, fileInfo)
+		// Check if embedding exists and is up-to-date
+		if existingEmb, exists := existingEmbeddingsMap[filePath]; exists {
+			fileModTime, err := os.Stat(filePath)
+			if err == nil && !fileModTime.ModTime().After(existingEmb.LastUpdated) {
+				// Embedding is up-to-date, add to in-memory DB and skip generation
+				db.Add(existingEmb) // Add back to in-memory map
+				continue
+			}
+		}
+
+		// Generate new embedding if not found or outdated
+		embedding, err := GenerateFileEmbedding(filePath, fileInfo, cfg)
 		if err != nil {
-			// Log error but continue with other files
 			fmt.Printf("Warning: failed to generate embedding for file %s: %v\n", filePath, err)
 			continue
 		}
 		db.Add(embedding)
+		if err := SaveEmbedding(embedding); err != nil {
+			fmt.Printf("Warning: failed to add embedding for file %s to DB: %v\n", filePath, err)
+		}
 	}
 
 	return nil
 }
 
 // SearchRelevantFiles finds the most relevant files for a given query
-func SearchRelevantFiles(query string, db *VectorDB, topK int) ([]*CodeEmbedding, []float64, error) {
+func SearchRelevantFiles(query string, db *VectorDB, topK int, cfg *config.Config) ([]*CodeEmbedding, []float64, error) {
 	// Generate embedding for the query
-	queryVector, err := llm.GenerateEmbedding(query)
+	queryVector, err := llm.GenerateEmbedding(query, cfg.EmbeddingModel)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate embedding for query: %w", err)
 	}

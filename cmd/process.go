@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/orchestration" // MODIFIED: Changed import from pkg/editor to pkg/orchestration
+	"github.com/alantheprice/ledit/pkg/orchestration"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
 
@@ -43,7 +43,7 @@ var processCmd = &cobra.Command{
 		}
 		cfg.SkipPrompt = skipPrompt
 
-		if err := orchestration.OrchestrateFeature(prompt, cfg); err != nil { // MODIFIED: Changed editor.OrchestrateFeature to orchestration.OrchestrateFeature
+		if err := orchestration.OrchestrateFeature(prompt, cfg); err != nil {
 			logger.LogProcessStep(prompts.OrchestrationError(err)) // Use prompt
 			log.Fatalf("Error during orchestration: %v", err)
 		}

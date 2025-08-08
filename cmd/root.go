@@ -1,46 +1,51 @@
 package cmd
 
 import (
-	"fmt"
-
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"os"
 
 	"github.com/spf13/cobra"
 )
 
+// rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "ledit",
-	Short: "ledit is an AI-powered code editor CLI",
-	Long:  `A command-line tool to process code with LLM instructions, track changes, and manage configurations.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		logger := utils.GetLogger(skipPrompt) // Get the logger instance
-
-		// If no command is specified, show help
-		if len(args) == 0 {
-			cfg, err := config.LoadOrInitConfig(skipPrompt)
-			if err != nil {
-				logger.LogUserInteraction("Configuration not found. Please run 'ledit init'.")
-				cmd.Help()
-				return
-			}
-			logger.LogUserInteraction("Configuration loaded. Defaulting to 'code' command.")
-			logger.LogUserInteraction("Usage: ledit code \"your instructions\" [-f <file-name>] [-m <model>] [--skip-prompt]")
-			logger.LogUserInteraction(fmt.Sprintf("Editing Model: %s", cfg.EditingModel))
-		}
-	},
+	Short: "AI-powered code editor and orchestrator",
+	Long: `Ledit is a command-line tool that leverages Large Language Models (LLMs)
+to automate and assist in software development tasks. It can understand your
+entire workspace, generate code, orchestrate complex features, and ground its
+responses with live web search results.`,
+	// Uncomment the following line if your bare application
+	// has an action associated with it:
+	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+// Execute adds all child commands to the root command and sets flags appropriately.
+// This is called by main.main(). It only needs to happen once to the rootCmd.
+func Execute() {
+	err := rootCmd.Execute()
+	if err != nil {
+		os.Exit(1)
+	}
 }
 
 func init() {
+	// Here you will define your flags and configuration settings.
+	// Cobra supports persistent flags, which, if defined here,
+	// will be available to all subcommands in the application.
+
+	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ledit.yaml)")
+
+	// Cobra also supports local flags, which will only run
+	// when this action is called directly.
+	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
 	rootCmd.AddCommand(codeCmd)
-	rootCmd.AddCommand(logCmd)
-	rootCmd.AddCommand(initCmd)
-	rootCmd.AddCommand(questionCmd)
-	rootCmd.AddCommand(processCmd)
-	rootCmd.AddCommand(fixCmd)
 	rootCmd.AddCommand(commitCmd)
+	rootCmd.AddCommand(fixCmd)
+	rootCmd.AddCommand(ignoreCmd)
+	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(logCmd)
+	rootCmd.AddCommand(processCmd)
+	rootCmd.AddCommand(questionCmd)
+	rootCmd.AddCommand(reviewStagedCmd) // Add the new command
 }

@@ -11,9 +11,9 @@ import (
 	"github.com/alantheprice/ledit/pkg/prompts"
 )
 
-// removeThinkTags removes <think>...</think> blocks from the content.
+// removeThinkTags removes  blocks from the content.
 func removeThinkTags(content string) string {
-	re := regexp.MustCompile(`(?s)<think>.*?</think>`)
+	re := regexp.MustCompile(`(?s)`)
 	return re.ReplaceAllString(content, "")
 }
 

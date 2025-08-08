@@ -386,11 +386,6 @@ func extractWorkspaceContext(processedInstructions string) string {
 
 // --- User Interaction Prompts ---
 
-// EnterLLMProvider prompts the user to enter their preferred LLM provider.
-func EnterLLMProvider(defaultProvider string) string {
-	return fmt.Sprintf("Enter your preferred LLM provider (e.g., anthropic, openai, gemini, ollama) (default: %s): ", defaultProvider)
-}
-
 // getLanguageFromFilename infers the programming language from the file extension.
 func getLanguageFromFilename(filename string) string {
 	if strings.HasSuffix(filename, ".go") {

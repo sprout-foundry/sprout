@@ -41,7 +41,7 @@ func GetRelevantContentFromText(query, content string, cfg *config.Config) (stri
 		return "", fmt.Errorf("failed to split content into chunks: %w", nil)
 	}
 
-	queryEmbedding, err := llm.GenerateEmbedding(query)
+	queryEmbedding, err := llm.GenerateEmbedding(query, cfg.EmbeddingModel)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate embedding for query: %w", err)
 	}
@@ -52,7 +52,7 @@ func GetRelevantContentFromText(query, content string, cfg *config.Config) (stri
 	for i, chunk := range chunks {
 		i, chunk := i, chunk // https://golang.org/doc/faq#closures_and_goroutines
 		g.Go(func() error {
-			embedding, err := llm.GenerateEmbedding(chunk)
+			embedding, err := llm.GenerateEmbedding(chunk, cfg.EmbeddingModel)
 			if err != nil {
 				// Don't fail the whole process, just skip this chunk
 				utils.GetLogger(cfg.SkipPrompt).Logf("failed to generate embedding for chunk: %v", err)

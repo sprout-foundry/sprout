@@ -44,8 +44,14 @@ type CodeReviewResponse struct {
 func getBaseCodeMessageSystemMessage() string {
 	return "You MUST provide the COMPLETE and FULL file contents for each file you modify. Each file must be in a separate fenced code block, starting with the language, a space, then `# <filename>` ON THE SAME LINE above the code, and ending with '```END'.\n" +
 		"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
+		"PARTIAL FILE EDITING SUPPORT:\n" +
+		"- If you received partial file content (marked with 'Partial content from filename (lines X-Y)'), you can provide just the modified portion\n" +
+		"- For partial edits, start your code block with a comment indicating the line range being modified\n" +
+		"- Example: '```go # myfile.go\n// Editing lines 15-25\nfunc modifiedFunction() {\n  // new implementation\n}\n```END'\n" +
+		"- Only use partial editing when the input context explicitly shows partial content\n" +
+		"- When in doubt, provide the complete file to avoid merge issues\n\n" +
 		"CRITICAL REQUIREMENTS:\n" +
-		"- You MUST include the ENTIRE file content from beginning to end\n" +
+		"- You MUST include the ENTIRE file content from beginning to end (unless working with explicitly partial input)\n" +
 		"- NEVER use partial content markers like '...unchanged...', '// rest of file...', or similar\n" +
 		"- NEVER truncate or abbreviate any part of the file\n" +
 		"- Include ALL imports, functions, classes, and code - both modified AND unmodified sections\n" +

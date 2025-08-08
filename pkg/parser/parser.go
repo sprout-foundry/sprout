@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -96,6 +97,75 @@ func IsPartialResponse(code string) bool {
 		}
 	}
 	return false
+}
+
+// MergePartialEdit merges partial file content with the original file
+// Returns the full file content with the partial edit applied
+func MergePartialEdit(originalContent, partialContent string, startLine, endLine int) (string, error) {
+	if startLine <= 0 || endLine <= 0 {
+		return partialContent, nil // If no range specified, return as-is
+	}
+
+	originalLines := strings.Split(originalContent, "\n")
+	partialLines := strings.Split(partialContent, "\n")
+	totalOriginalLines := len(originalLines)
+
+	// Validate range
+	if startLine > totalOriginalLines+1 {
+		return "", fmt.Errorf("start line %d exceeds original file length %d", startLine, totalOriginalLines)
+	}
+	if endLine > totalOriginalLines+1 {
+		endLine = totalOriginalLines + 1 // Allow appending to end
+	}
+
+	var result []string
+
+	// Add lines before the edit range
+	if startLine > 1 {
+		result = append(result, originalLines[:startLine-1]...)
+	}
+
+	// Add the partial content
+	result = append(result, partialLines...)
+
+	// Add lines after the edit range
+	if endLine <= totalOriginalLines {
+		result = append(result, originalLines[endLine:]...)
+	}
+
+	return strings.Join(result, "\n"), nil
+}
+
+// ExtractPartialEditInfo extracts line range information from file content comments
+// Looks for markers like "// Editing lines 10-20" or "# Lines 5-15 only"
+func ExtractPartialEditInfo(content string) (startLine, endLine int, hasRange bool) {
+	lines := strings.Split(content, "\n")
+	
+	// Check first few lines for range indicators
+	for i := 0; i < len(lines) && i < 5; i++ {
+		line := strings.TrimSpace(lines[i])
+		
+		// Look for patterns like "Lines 10-20", "Editing lines 5-15", etc.
+		patterns := []string{
+			`(?i)lines?\s+(\d+)[-–](\d+)`,
+			`(?i)editing\s+lines?\s+(\d+)[-–](\d+)`,
+			`(?i)range\s+(\d+)[-–](\d+)`,
+		}
+		
+		for _, pattern := range patterns {
+			re := regexp.MustCompile(pattern)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) >= 3 {
+				if start, err := strconv.Atoi(matches[1]); err == nil {
+					if end, err := strconv.Atoi(matches[2]); err == nil {
+						return start, end, true
+					}
+				}
+			}
+		}
+	}
+	
+	return 0, 0, false
 }
 
 func extractFilename(line string) string {

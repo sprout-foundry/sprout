@@ -52,6 +52,13 @@ ledit question "Explain the main function in main.go"
 ledit commit
 ```
 
+### Review staged changes
+
+```bash
+# Perform an AI-powered code review on your currently staged Git changes
+ledit review
+```
+
 ## Key Features
 
 -   **Smart Context**: Automatically builds and maintains an index of your workspace. An LLM selects the most relevant files to include as context for any given task using `#WORKSPACE` or `#WS`.

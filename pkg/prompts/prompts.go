@@ -58,6 +58,31 @@ func getBaseCodeMessageSystemMessage() string {
 		"- Logger API: Use GetLogger(bool).Log(string) for info messages, NOT LogInfo()\n" +
 		"- Check existing code patterns in the project before implementing new functionality\n" +
 		"- Follow established naming conventions used throughout the codebase\n\n" +
+		"CODE MODIFICATION BEST PRACTICES:\n" +
+		"- PREFER modifying existing functions/methods over creating new ones when possible\n" +
+		"- Before adding new functionality, analyze existing code to identify modification opportunities\n" +
+		"- Look for existing functions that perform similar tasks and extend them rather than duplicate\n" +
+		"- When modifying existing functions, preserve the original function signature unless specifically requested to change it\n" +
+		"- If you need to change behavior in an existing function, modify the implementation rather than creating wrapper functions\n" +
+		"- Only create new functions when the requested functionality is genuinely distinct from existing code\n\n" +
+		"FUNCTION IDENTIFICATION GUIDELINES:\n" +
+		"- When asked to fix/change a specific behavior, search for function names that match the behavior\n" +
+		"- Look for functions with names like 'GetX', 'BuildX', 'ProcessX' that relate to the issue\n" +
+		"- If the issue mentions a specific model or configuration, find functions that use that model\n" +
+		"- Pay attention to variable names and model references (e.g., cfg.OrchestrationModel vs cfg.EditingModel)\n" +
+		"- Read function signatures and bodies to understand what each function actually does\n" +
+		"- Match the problem description to the function's actual purpose, not just its name\n\n" +
+		"MINIMAL CHANGE PRINCIPLE:\n" +
+		"- Make the SMALLEST change that solves the specific problem described\n" +
+		"- If the issue can be fixed with a 1-2 line change, do NOT suggest additional modifications\n" +
+		"- Only propose related changes if they are REQUIRED for your primary fix to function\n" +
+		"- Ask yourself: 'Will my primary fix work without these additional changes?' If yes, omit them\n" +
+		"- Focus on the exact problem statement rather than general improvements\n\n" +
+		"VALIDATION AND BUILD CHECKING:\n" +
+		"- After making changes, always consider running 'go build' to validate syntax\n" +
+		"- For Go projects, ensure imports are correct and modules are properly referenced\n" +
+		"- Check that modified functions maintain their original contracts unless explicitly requested to change them\n" +
+		"- Verify that changes align with existing code patterns and architectural decisions\n\n" +
 		"The syntax of the code blocks must exactly match these instructions. " +
 		"Do not include any additional text, explanations, or comments outside the code blocks. " +
 		"Update all files that are necessary to fulfill the requirements and any code that is affected by the changes. " +
@@ -80,12 +105,18 @@ func BuildCodeMessages(code, instructions, filename string, interactive bool) []
 
 	if interactive {
 		systemPrompt = "You are an assistant that can generate updated code based on provided instructions. You have access to tools for gathering additional information when needed:\n\n" +
-			"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. " +
+			"1.  **Analyze Before Acting:** Before making changes, carefully analyze the provided code to:\n" +
+			"    - Identify the EXACT function(s) that relate to the problem described\n" +
+			"    - Read function implementations to understand what they currently do\n" +
+			"    - Look for variable names, model references, and configuration usage patterns\n" +
+			"    - Match the problem statement to specific functions by their actual behavior\n" +
+			"    - Determine the MINIMAL change needed to solve the specific issue\n\n" +
+			"2.  **Generate Code:** If you have enough information and all context files, provide the complete code. " +
 			getBaseCodeMessageSystemMessage() +
 			"\n\n" +
-			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
+			"3.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
+			"    - **read_file**: Read files to understand existing implementations before making changes\n" +
 			"    - **search_web**: Search the web for information\n" +
-			"    - **read_file**: Read a file from the workspace\n" +
 			"    - **run_shell_command**: Execute shell commands\n" +
 			"    - **ask_user**: Ask the user for clarification\n\n" +
 			"    Tools will be automatically executed and results provided to you.\n\n" +
@@ -235,37 +266,56 @@ func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext
 	var systemPrompt string
 
 	if interactive {
-		systemPrompt = "You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes. You have two response options:\n\n" +
-			"1.  **Generate Changes:** If you have enough information and all context files, provide the complete list of changes. For each change, you must provide the 'filepath' and a detailed 'instruction' for what needs to be done in that file. If a file needs to be created, specify its full path. If a file needs to be deleted, specify its full path and an instruction like \"Delete this file.\"\n" +
-			"    Your response MUST be a JSON object with a single key \"changes\" which is an array of objects, each with \"filepath\" and \"instruction\" keys. Do not include any other text or explanation outside the JSON.\n\n" +
-			"    Example JSON format:\n" +
+		systemPrompt = "You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes with strong preference for modifying existing code over creating new code.\n\n" +
+			"WORKSPACE CONTEXT PROVIDED:\n" +
+			"You are provided with a MINIMAL workspace context containing only:\n" +
+			"- File summaries (what each file does)\n" +
+			"- Public function exports (available functions/methods)\n" +
+			"- Basic project structure\n" +
+			"- NO full file contents are provided initially\n\n" +
+			"CRITICAL ANALYSIS APPROACH:\n" +
+			"1. FIRST: Analyze the minimal context to identify which files likely contain relevant functionality\n" +
+			"2. SECOND: Use the read_file tool to load ONLY the specific files you need to understand\n" +
+			"3. THIRD: Focus on the exact problem - make minimal changes to solve the specific issue\n" +
+			"4. AVOID: Reading multiple files unless absolutely necessary for your analysis\n\n" +
+			"FUNCTION TARGETING:\n" +
+			"- When the problem mentions specific models (e.g., OrchestrationModel vs EditingModel), find functions that use those models\n" +
+			"- Look for functions whose purpose matches the problem domain (e.g., 'GetCodeReview' for code review issues)\n" +
+			"- Use the 'exports' information to identify candidate functions without reading full files\n" +
+			"- CRITICAL: When told to change model usage in a function, read the function BODY to see the current model assignment\n" +
+			"- Don't assume function parameters are the model - look for assignments like 'modelName := cfg.OrchestrationModel'\n\n" +
+			"MINIMAL CHANGE TARGETING:\n" +
+			"- Make the SMALLEST change that solves the specific problem described\n" +
+			"- If the issue can be fixed with a 1-2 line change, do NOT suggest additional modifications\n" +
+			"- Only propose related changes if they are REQUIRED for your primary fix to function\n" +
+			"- Ask yourself: 'Will my primary fix work without these additional changes?' If yes, omit them\n" +
+			"- Focus on the exact problem statement rather than general improvements\n\n" +
+			"RESPONSE OPTIONS:\n" +
+			"1.  **Use Tools to Analyze:** When you need to understand specific implementations:\n" +
+			"    - **read_file**: Read specific files to understand current implementations\n" +
+			"    - Use this ONLY when the minimal context suggests a file is relevant\n" +
+			"    - Read the minimal number of files needed to understand the problem\n\n" +
+			"2.  **Generate Changes:** After you understand the exact change needed, provide the complete list of changes.\n" +
+			"    Your response MUST be a JSON object with a single key \"changes\" which is an array of objects, each with \"filepath\" and \"instruction\" keys.\n\n" +
+			"    PREFER SINGLE CHANGE (most common and correct approach):\n" +
+			"    {\n" +
+			"      \"changes\": [\n" +
+			"        {\n" +
+			"          \"filepath\": \"pkg/llm/api.go\",\n" +
+			"          \"instruction\": \"In the GetCodeReview function, change 'modelName := cfg.OrchestrationModel' to 'modelName := cfg.EditingModel' on line 266.\"\n" +
+			"        }\n" +
+			"      ]\n" +
+			"    }\n\n" +
+			"    Use multi-change responses ONLY when genuinely necessary:\n" +
 			"    {\n" +
 			"      \"changes\": [\n" +
 			"        {\n" +
 			"          \"filepath\": \"src/main.go\",\n" +
-			"          \"instruction\": \"Add a new function 'calculateSum' that takes two integers and returns their sum.\"\n" +
-			"        },\n" +
-			"        {\n" +
-			"          \"filepath\": \"tests/main_test.go\",\n" +
-			"          \"instruction\": \"Write a unit test for the 'calculateSum' function in 'src/main.go'.\"\n" +
-			"        },\n" +
-			"        {\n" +
-			"          \"filepath\": \"docs/api.md\",\n" +
-			"          \"instruction\": \"Update the API documentation to include details about the new 'calculateSum' function.\"\n" +
+			"          \"instruction\": \"Modify the existing calculateTotal function to also handle sum calculations by adding a new parameter 'operation' and extending the logic.\"\n" +
 			"        }\n" +
 			"      ]\n" +
 			"    }\n\n" +
-			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
-			"    - **search_web**: Search the web for information\n" +
-			"    - **read_file**: Read a file from the workspace\n" +
-			"    - **run_shell_command**: Execute shell commands\n" +
-			"    - **ask_user**: Ask the user for clarification\n\n" +
-			"    Tools will be automatically executed and results provided to you.\n\n" +
-			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* read the file using the read_file tool.\n\n" +
-			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then read the file using the read_file tool.\n\n" +
-			"After tools provide you with information, generate the changes based on all available context.\n" +
-			"Do not generate changes until you have all the necessary context. Use tools to gather information as needed.\n" +
-			"Consider the provided workspace context to understand the project structure and existing code.\n"
+			"REMEMBER: The minimal context approach means you must actively choose which files to read. Don't read files unless the exports or summary clearly indicate relevance to your specific problem.\n"
 	} else {
 		systemPrompt = `You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes.
 For each change, you must provide the 'filepath' and a detailed 'instruction' for what needs to be done in that file.

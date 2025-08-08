@@ -42,10 +42,16 @@ type CodeReviewResponse struct {
 // --- LLM Message Builders ---
 
 func getBaseCodeMessageSystemMessage() string {
-	return "Provide the complete code. Each file must be in a separate fenced code block, starting with with the language, a space, then `# <filename>` ON THE SAME LINE above the code., and ending with '```END'.\n" +
+	return "You MUST provide the COMPLETE and FULL file contents for each file you modify. Each file must be in a separate fenced code block, starting with the language, a space, then `# <filename>` ON THE SAME LINE above the code, and ending with '```END'.\n" +
 		"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
-		"The syntax of the code blocks must exactly match these instructions and the code is complete. " +
-		"ONLY make the changes that are necessary to satisfy the instructions. " +
+		"CRITICAL REQUIREMENTS:\n" +
+		"- You MUST include the ENTIRE file content from beginning to end\n" +
+		"- NEVER use partial content markers like '...unchanged...', '// rest of file...', or similar\n" +
+		"- NEVER truncate or abbreviate any part of the file\n" +
+		"- Include ALL imports, functions, classes, and code - both modified AND unmodified sections\n" +
+		"- The code blocks must contain the complete, full, working file that can be saved and executed\n" +
+		"- Make only the specific changes requested, but include ALL surrounding code\n\n" +
+		"The syntax of the code blocks must exactly match these instructions. " +
 		"Do not include any additional text, explanations, or comments outside the code blocks. " +
 		"Update all files that are necessary to fulfill the requirements and any code that is affected by the changes. " +
 		"Do not include any file paths in the code blocks. " +

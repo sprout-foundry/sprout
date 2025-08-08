@@ -51,6 +51,13 @@ func getBaseCodeMessageSystemMessage() string {
 		"- Include ALL imports, functions, classes, and code - both modified AND unmodified sections\n" +
 		"- The code blocks must contain the complete, full, working file that can be saved and executed\n" +
 		"- Make only the specific changes requested, but include ALL surrounding code\n\n" +
+		"PROJECT-SPECIFIC CONTEXT FOR GO:\n" +
+		"- This is a Go project with module name 'github.com/alantheprice/ledit'\n" +
+		"- ALL import paths must use the full module path: 'github.com/alantheprice/ledit/pkg/...'\n" +
+		"- NEVER use relative import paths like 'ledit/pkg/...' - they will cause build failures\n" +
+		"- Logger API: Use GetLogger(bool).Log(string) for info messages, NOT LogInfo()\n" +
+		"- Check existing code patterns in the project before implementing new functionality\n" +
+		"- Follow established naming conventions used throughout the codebase\n\n" +
 		"The syntax of the code blocks must exactly match these instructions. " +
 		"Do not include any additional text, explanations, or comments outside the code blocks. " +
 		"Update all files that are necessary to fulfill the requirements and any code that is affected by the changes. " +

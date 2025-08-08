@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime" // Import runtime for memory stats
 	"sort"
 	"strings"
 	"time"
@@ -73,6 +74,9 @@ func runAgentMode(userIntent string) error {
 	logger.LogProcessStep("🚀 Starting cost-optimized agent execution...")
 
 	startTime := time.Now()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: runAgentMode started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
 	// Initialize token usage tracking
 	tokenUsage := &TokenUsage{}
@@ -84,6 +88,8 @@ func runAgentMode(userIntent string) error {
 	}
 
 	duration := time.Since(startTime)
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: runAgentMode completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
 	// Print token usage summary
 	printTokenUsageSummary(tokenUsage, duration)
@@ -94,6 +100,12 @@ func runAgentMode(userIntent string) error {
 
 // runOptimizedAgent runs the agent with minimal context to reduce costs
 func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *TokenUsage) error {
+	startTime := time.Now()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: runOptimizedAgent started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+
+	logger.Logf("DEBUG: Starting optimized agent execution at %s for intent: %s", time.Now().Format(time.RFC3339), userIntent)
 	// Phase 1: Intent analysis with minimal context
 	logger.LogProcessStep("📋 Phase 1: Analyzing intent and determining scope...")
 
@@ -143,6 +155,9 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 			logger.LogError(fmt.Errorf("orchestration failed for complex task: %w", err))
 			return fmt.Errorf("orchestration failed: %w", err)
 		}
+		duration := time.Since(startTime)
+		runtime.ReadMemStats(&m)
+		logger.Logf("PERF: runOptimizedAgent completed (complex path). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 		return nil // Orchestration handles the execution
 	}
 
@@ -166,6 +181,9 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 	tokenUsage.Validation = validationTokens
 	tokenUsage.Total = tokenUsage.IntentAnalysis + tokenUsage.CodeGeneration + tokenUsage.Validation
 
+	duration := time.Since(startTime)
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: runOptimizedAgent completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 	return nil
 }
 
@@ -187,10 +205,18 @@ type IntentAnalysis struct {
 
 // analyzeIntentWithMinimalContext analyzes user intent without loading full workspace
 func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logger *utils.Logger) (*IntentAnalysis, int, error) {
+	startTime := time.Now()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: analyzeIntentWithMinimalContext started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+
 	// Get basic file listing without full analysis
 	files, err := getBasicFileListing(logger)
 	if err != nil {
 		logger.LogError(fmt.Errorf("failed to get basic file listing for intent analysis: %w", err))
+		duration := time.Since(startTime)
+		runtime.ReadMemStats(&m)
+		logger.Logf("PERF: analyzeIntentWithMinimalContext completed (error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 		return nil, 0, fmt.Errorf("failed to get file listing: %w", err)
 	}
 
@@ -227,6 +253,9 @@ Only include files in estimated_files that are highly likely to be modified.`,
 		logger.LogError(fmt.Errorf("LLM failed to analyze intent: %w", err))
 		// Use fallback analysis since LLM failed
 		logger.Logf("Using fallback heuristic analysis due to LLM failure")
+		duration := time.Since(startTime)
+		runtime.ReadMemStats(&m)
+		logger.Logf("PERF: analyzeIntentWithMinimalContext completed (LLM error, fallback). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 		return &IntentAnalysis{
 			Category:        inferCategory(userIntent),
 			Complexity:      inferComplexity(userIntent),
@@ -245,6 +274,9 @@ Only include files in estimated_files that are highly likely to be modified.`,
 	if response == "" {
 		logger.Logf("LLM returned empty response for intent analysis. Falling back to heuristic analysis.")
 		// Fallback to simple analysis if LLM fails
+		duration := time.Since(startTime)
+		runtime.ReadMemStats(&m)
+		logger.Logf("PERF: analyzeIntentWithMinimalContext completed (empty response, fallback). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 		return &IntentAnalysis{
 			Category:        inferCategory(userIntent),
 			Complexity:      inferComplexity(userIntent),
@@ -268,6 +300,9 @@ Only include files in estimated_files that are highly likely to be modified.`,
 	if err := json.Unmarshal([]byte(response), &analysis); err != nil {
 		logger.LogError(fmt.Errorf("failed to parse intent analysis JSON from LLM: %w\nRaw response: %s", err, response))
 		// Fallback to heuristic analysis if JSON parsing fails
+		duration := time.Since(startTime)
+		runtime.ReadMemStats(&m)
+		logger.Logf("PERF: analyzeIntentWithMinimalContext completed (JSON error, fallback). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 		return &IntentAnalysis{
 			Category:        inferCategory(userIntent),
 			Complexity:      inferComplexity(userIntent),
@@ -285,6 +320,9 @@ Only include files in estimated_files that are highly likely to be modified.`,
 		logger.Logf("LLM provided no files, using inferred files: %v", analysis.EstimatedFiles)
 	}
 
+	duration := time.Since(startTime)
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: analyzeIntentWithMinimalContext completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 	return &analysis, totalTokens, nil
 }
 
@@ -424,18 +462,30 @@ func isSourceFile(path string) bool {
 
 // getOptimizedContext uses embeddings or simple heuristics to get minimal relevant context
 func getOptimizedContext(userIntent string, estimatedFiles []string, cfg *config.Config, maxFiles int, logger *utils.Logger) ([]string, error) {
+	startTime := time.Now()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: getOptimizedContext started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+
 	logger.Logf("DEBUG: getOptimizedContext called with %d estimated files, maxFiles=%d", len(estimatedFiles), maxFiles)
 
 	// If we have specific files from intent analysis, use those first
 	if len(estimatedFiles) > 0 && len(estimatedFiles) <= maxFiles {
 		logger.Logf("DEBUG: Using %d estimated files from intent analysis", len(estimatedFiles))
+		duration := time.Since(startTime)
+		runtime.ReadMemStats(&m)
+		logger.Logf("PERF: getOptimizedContext completed (estimated files). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 		return estimatedFiles, nil
 	}
 
 	logger.Logf("DEBUG: No usable estimated files, trying embedding search")
 	// Force embeddings for agent mode since they provide much better file selection
 	// Try embedding search first, fall back to pattern matching if it fails
-	return getTopRelevantFiles(userIntent, maxFiles, cfg, logger)
+	relevantFiles, err := getTopRelevantFiles(userIntent, maxFiles, cfg, logger)
+	duration := time.Since(startTime)
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: getOptimizedContext completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+	return relevantFiles, err
 }
 
 // getTopRelevantFiles uses embeddings to find most relevant files
@@ -575,6 +625,11 @@ func getRelevantFilesByPattern(userIntent string, maxFiles int, logger *utils.Lo
 
 // executeWithMinimalContext executes the task with only the specified context files
 func executeWithMinimalContext(userIntent string, contextFiles []string, cfg *config.Config, logger *utils.Logger) (int, error) {
+	startTime := time.Now()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: executeWithMinimalContext started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+
 	logger.LogProcessStep(fmt.Sprintf("Executing with %d context files: %s", len(contextFiles), strings.Join(contextFiles, ", ")))
 
 	// Build enhanced instructions that include context and clear guidance
@@ -586,9 +641,21 @@ func executeWithMinimalContext(userIntent string, contextFiles []string, cfg *co
 	// Use the editor package for simple code generation
 	_, err := editor.ProcessCodeGeneration("", enhancedInstructions, cfg, "")
 	if err != nil {
-		logger.LogError(fmt.Errorf("code generation failed during minimal context execution: %w", err))
-		return tokenEstimate, err
+		// Check if this is a "revisions applied" signal from the editor's review process
+		if strings.Contains(err.Error(), "revisions applied, re-validating") {
+			logger.LogProcessStep("✅ Editor completed revision cycle successfully")
+			logger.Logf("Final status: %s", err.Error())
+		} else {
+			logger.LogError(fmt.Errorf("code generation failed during minimal context execution: %w", err))
+			duration := time.Since(startTime)
+			runtime.ReadMemStats(&m)
+			logger.Logf("PERF: executeWithMinimalContext completed (error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+			return tokenEstimate, err
+		}
 	}
+	duration := time.Since(startTime)
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: executeWithMinimalContext completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 	return tokenEstimate, nil
 }
 
@@ -684,211 +751,216 @@ func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent
 	for iteration := 1; iteration <= maxIterations; iteration++ {
 		logger.LogProcessStep(fmt.Sprintf("🔄 Validation iteration %d/%d", iteration, maxIterations))
 
-		// Use LLM to determine appropriate validation strategy for this project
+		// Phase: Determine validation strategy
+		strategyStartTime := time.Now()
+		logger.Logf("DEBUG: Determining validation strategy...")
 		validationStrategy, strategyTokens, err := determineValidationStrategy(intentAnalysis, cfg, logger)
+		strategyDuration := time.Since(strategyStartTime)
 		if err != nil {
-			logger.LogError(fmt.Errorf("failed to determine validation strategy: %w", err))
+			logger.LogError(fmt.Errorf("failed to determine validation strategy (took %v): %w", strategyDuration, err))
 			// Fall back to basic validation
 			validationStrategy = getBasicValidationStrategy(intentAnalysis, logger)
+			logger.Logf("DEBUG: Falling back to basic validation strategy.")
+		} else {
+			logger.Logf("DEBUG: Validation strategy determined (took %v). Project Type: %s, Steps: %d", strategyDuration, validationStrategy.ProjectType, len(validationStrategy.Steps))
 		}
 		totalValidationTokens += strategyTokens
 
 		var validationResults []string
 		var hasFailures bool
 
-		// Run validation steps
+		// Phase: Run validation steps
+		logger.Logf("DEBUG: Running %d validation steps...", len(validationStrategy.Steps))
 		for _, step := range validationStrategy.Steps {
-			logger.LogProcessStep(fmt.Sprintf("Running validation: %s", step.Description))
+			stepStartTime := time.Now()
+			logger.LogProcessStep(fmt.Sprintf("Running validation: %s (Command: %s)", step.Description, step.Command))
 
-			result, err := runValidationStep(step, logger)
-			if err != nil {
-				validationResults = append(validationResults, fmt.Sprintf("❌ %s: %v", step.Description, err))
-				logger.Logf("Validation step failed: %s - %v", step.Description, err)
-				hasFailures = true
+			result := ""
+			stepErr := error(nil)
+
+			// Go's equivalent of try-catch for unexpected panics during a validation step
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						stepErr = fmt.Errorf("panic during validation step '%s': %v", step.Description, r)
+						logger.LogError(stepErr)
+					}
+				}()
+				// Actual call to run the validation step
+				result, stepErr = runValidationStep(step, logger)
+			}()
+
+			stepDuration := time.Since(stepStartTime)
+
+			if stepErr != nil {
+				validationResults = append(validationResults, fmt.Sprintf("❌ %s: %v (took %v)", step.Description, stepErr, stepDuration))
+				logger.Logf("Validation step '%s' FAILED (took %v): %v", step.Description, stepDuration, stepErr)
+				hasFailures = true // Mark failure but continue to next validation step
 			} else {
-				validationResults = append(validationResults, fmt.Sprintf("✅ %s: %s", step.Description, result))
-				logger.Logf("Validation step passed: %s", step.Description)
+				validationResults = append(validationResults, fmt.Sprintf("✅ %s: %s (took %v)", step.Description, result, stepDuration))
+				logger.Logf("Validation step '%s' PASSED (took %v): %s", step.Description, stepDuration, result)
 			}
 		}
 
-		// If no failures, we're done
+		// Phase: Analyze results and decide next action
 		if !hasFailures {
 			logger.LogProcessStep("✅ All validation steps passed!")
 			return totalValidationTokens, nil
 		}
 
-		// If this is the last iteration, don't try to fix
+		// If this is the last iteration, don't try to fix, just report failure
 		if iteration == maxIterations {
-			logger.LogProcessStep("❌ Max iterations reached, validation still failing")
-			analysisTokens, _ := analyzeValidationResults(validationResults, intentAnalysis, validationStrategy, cfg, logger)
+			logger.LogProcessStep("❌ Max iterations reached, validation still failing. Final analysis...")
+			analysisStartTime := time.Now()
+			analysisTokens, err := analyzeValidationResults(validationResults, intentAnalysis, validationStrategy, cfg, logger)
+			analysisDuration := time.Since(analysisStartTime)
+			if err != nil {
+				logger.LogError(fmt.Errorf("failed to analyze final validation results (took %v): %w", analysisDuration, err))
+			} else {
+				logger.Logf("DEBUG: Final validation analysis completed (took %v).", analysisDuration)
+			}
 			totalValidationTokens += analysisTokens
 			return totalValidationTokens, fmt.Errorf("validation failed after %d iterations", maxIterations)
 		}
 
-		// Try to fix the issues automatically
+		// Phase: Attempt to fix issues automatically
 		logger.LogProcessStep(fmt.Sprintf("🔧 Attempting to fix validation issues (iteration %d)", iteration))
+		fixStartTime := time.Now()
 		fixTokens, err := fixValidationIssues(validationResults, originalIntent, intentAnalysis, cfg, logger)
+		fixDuration := time.Since(fixStartTime)
 		totalValidationTokens += fixTokens
 
 		if err != nil {
-			logger.LogError(fmt.Errorf("failed to auto-fix validation issues: %w", err))
-			// Continue to next iteration anyway
+			logger.LogError(fmt.Errorf("failed to auto-fix validation issues (took %v): %w", fixDuration, err))
+			// Continue to next iteration anyway, as some fixes might have been applied or it might be a transient error
 		} else {
-			logger.LogProcessStep("✅ Applied potential fixes, re-validating...")
+			logger.LogProcessStep(fmt.Sprintf("✅ Applied potential fixes (took %v), re-validating...", fixDuration))
 		}
 	}
 
 	return totalValidationTokens, fmt.Errorf("validation failed after %d iterations", maxIterations)
 }
 
-// fixValidationIssues attempts to automatically fix common validation failures
+// fixValidationIssues attempts to automatically fix validation failures using LLM analysis
 func fixValidationIssues(validationResults []string, originalIntent string, intentAnalysis *IntentAnalysis, cfg *config.Config, logger *utils.Logger) (int, error) {
-	// Analyze the failures to understand what needs fixing
-	failureAnalysis := analyzeFailures(validationResults, logger)
+	startTime := time.Now()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: fixValidationIssues started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
-	if len(failureAnalysis) == 0 {
-		logger.Logf("No fixable issues identified")
+	// Check if there are any failures to fix
+	hasFailures := false
+	for _, result := range validationResults {
+		if strings.HasPrefix(result, "❌") {
+			hasFailures = true
+			break
+		}
+	}
+
+	if !hasFailures {
+		logger.Logf("No validation failures to fix")
+		duration := time.Since(startTime)
+		runtime.ReadMemStats(&m)
+		logger.Logf("PERF: fixValidationIssues completed (no issues). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 		return 0, nil
 	}
 
-	// Create a fix prompt based on the specific failures
-	fixPrompt := buildFixPrompt(failureAnalysis, originalIntent, validationResults)
-
-	logger.LogProcessStep(fmt.Sprintf("🔧 Applying fixes for: %s", strings.Join(failureAnalysis, ", ")))
-
-	// Use the editor to apply fixes
-	_, err := editor.ProcessCodeGeneration("", fixPrompt, cfg, "")
+	// Use LLM to analyze the build output and create a fix prompt
+	fixPrompt, tokens, err := analyzeBuildErrorsAndCreateFix(validationResults, originalIntent, intentAnalysis, cfg, logger)
 	if err != nil {
-		return 0, fmt.Errorf("failed to apply fixes: %w", err)
+		duration := time.Since(startTime)
+		runtime.ReadMemStats(&m)
+		logger.Logf("PERF: fixValidationIssues completed (analysis error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+		return tokens, fmt.Errorf("failed to analyze build errors: %w", err)
 	}
 
-	// Estimate tokens used for the fix
-	tokens := utils.EstimateTokens(fixPrompt)
+	logger.LogProcessStep("🔧 Applying LLM-analyzed fixes...")
+
+	// Use the editor to apply fixes
+	_, err = editor.ProcessCodeGeneration("", fixPrompt, cfg, "")
+	if err != nil {
+		duration := time.Since(startTime)
+		runtime.ReadMemStats(&m)
+		logger.Logf("PERF: fixValidationIssues completed (error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+		return tokens, fmt.Errorf("failed to apply fixes: %w", err)
+	}
+
+	duration := time.Since(startTime)
+	runtime.ReadMemStats(&m)
+	logger.Logf("PERF: fixValidationIssues completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 	return tokens, nil
 }
 
-// analyzeFailures categorizes validation failures into fixable types
-func analyzeFailures(validationResults []string, logger *utils.Logger) []string {
-	var issues []string
-
-	for _, result := range validationResults {
-		if !strings.HasPrefix(result, "❌") {
-			continue
-		}
-
-		resultLower := strings.ToLower(result)
-
-		// Check for common build issues
-		if strings.Contains(resultLower, "redeclared") || strings.Contains(resultLower, "already declared") {
-			issues = append(issues, "variable_redeclaration")
-		}
-		if strings.Contains(resultLower, "undefined:") {
-			issues = append(issues, "undefined_variable")
-		}
-		if strings.Contains(resultLower, "cannot find") || strings.Contains(resultLower, "does not exist") {
-			issues = append(issues, "missing_import")
-		}
-		if strings.Contains(resultLower, "syntax error") {
-			issues = append(issues, "syntax_error")
-		}
-		if strings.Contains(resultLower, "unused") {
-			issues = append(issues, "unused_variable")
-		}
-	}
-
-	// Remove duplicates
-	seen := make(map[string]bool)
-	var unique []string
-	for _, issue := range issues {
-		if !seen[issue] {
-			seen[issue] = true
-			unique = append(unique, issue)
-		}
-	}
-
-	logger.Logf("Identified fixable issues: %v", unique)
-	return unique
-}
-
-// buildFixPrompt creates a focused prompt to fix specific validation issues
-func buildFixPrompt(issues []string, originalIntent string, validationResults []string) string {
-	var prompt strings.Builder
-
-	prompt.WriteString("VALIDATION ISSUE FIX REQUIRED:\n\n")
-	prompt.WriteString(fmt.Sprintf("Original task: %s\n\n", originalIntent))
-
-	prompt.WriteString("VALIDATION FAILURES:\n")
+// analyzeBuildErrorsAndCreateFix uses LLM to understand build errors and create targeted fixes
+func analyzeBuildErrorsAndCreateFix(validationResults []string, originalIntent string, intentAnalysis *IntentAnalysis, cfg *config.Config, logger *utils.Logger) (string, int, error) {
+	// Extract the actual error messages from validation results
+	var errorMessages []string
 	for _, result := range validationResults {
 		if strings.HasPrefix(result, "❌") {
-			prompt.WriteString(fmt.Sprintf("- %s\n", result))
-		}
-	}
-	prompt.WriteString("\n")
-
-	prompt.WriteString("ISSUES TO FIX:\n")
-	for _, issue := range issues {
-		switch issue {
-		case "variable_redeclaration":
-			prompt.WriteString("- VARIABLE REDECLARATION: Use command-specific variable names (e.g., agentSkipPrompt instead of skipPrompt)\n")
-		case "undefined_variable":
-			prompt.WriteString("- UNDEFINED VARIABLE: Ensure all variables are properly declared before use\n")
-		case "missing_import":
-			prompt.WriteString("- MISSING IMPORT: Add required import statements\n")
-		case "syntax_error":
-			prompt.WriteString("- SYNTAX ERROR: Fix Go syntax issues\n")
-		case "unused_variable":
-			prompt.WriteString("- UNUSED VARIABLE: Remove or use declared variables\n")
+			// Remove the ❌ prefix and add to error messages
+			errorMsg := strings.TrimPrefix(result, "❌ ")
+			errorMessages = append(errorMessages, errorMsg)
 		}
 	}
 
-	prompt.WriteString("\nFIXING GUIDELINES:\n")
-	prompt.WriteString("- Make MINIMAL, TARGETED fixes to resolve the specific build errors\n")
-	prompt.WriteString("- For variable naming conflicts, use command-specific prefixes (e.g., agentSkipPrompt, codeSkipPrompt)\n")
-	prompt.WriteString("- Preserve all existing functionality\n")
-	prompt.WriteString("- Only fix the reported errors, don't make unnecessary changes\n")
-	prompt.WriteString("- Follow Go naming conventions\n\n")
+	if len(errorMessages) == 0 {
+		return "", 0, fmt.Errorf("no error messages found in validation results")
+	}
 
-	prompt.WriteString("Please fix ONLY the validation errors reported above.\n")
+	prompt := fmt.Sprintf(`You are an expert Go developer helping to fix build errors and improve code quality.
 
-	return prompt.String()
-}
+ORIGINAL TASK: %s
+TASK CATEGORY: %s
 
-// validateChanges validates the changes made by running appropriate build/test commands
-func validateChanges(intentAnalysis *IntentAnalysis, cfg *config.Config, logger *utils.Logger) (int, error) {
-	// Use LLM to determine appropriate validation strategy for this project
-	validationStrategy, strategyTokens, err := determineValidationStrategy(intentAnalysis, cfg, logger)
+BUILD/VALIDATION ERRORS:
+%s
+
+PROJECT CONTEXT:
+- This is a Go project with module "github.com/alantheprice/ledit"
+- All import paths must use the full module path (e.g., "github.com/alantheprice/ledit/pkg/utils")
+- Key APIs available:
+  * Logger: GetLogger(bool).Log(string) for logging messages
+  * Filesystem: use "github.com/alantheprice/ledit/pkg/filesystem" package for file operations
+  * Follow existing patterns and conventions in the codebase
+
+ANALYSIS INSTRUCTIONS:
+1. **Primary Fix**: Analyze the build/validation errors and determine minimal fixes needed
+2. **Error Classification**: Are these errors related to the recent changes or pre-existing issues?
+3. **Test Assessment**: Based on the original task, determine if tests are needed:
+   - For new utility functions (like CreateBackup): suggest unit tests
+   - For new features/commands: suggest integration tests  
+   - For bug fixes: suggest regression tests
+4. **Code Quality**: Identify any obvious quality improvements that align with the original task
+
+RESPONSE FORMAT:
+Provide a comprehensive fix prompt that addresses:
+- Immediate build errors (highest priority)
+- Missing tests if appropriate for the task
+- Any quality improvements that directly support the original task
+
+Focus on making the code production-ready while maintaining minimal scope.
+
+Create a detailed fix prompt:`,
+		originalIntent,
+		intentAnalysis.Category,
+		strings.Join(errorMessages, "\n"))
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert Go developer who excels at diagnosing and fixing build errors. Respond with a clear, actionable fix prompt."},
+		{Role: "user", Content: prompt},
+	}
+
+	_, response, err := llm.GetLLMResponse(cfg.WorkspaceModel, messages, "", cfg, 30*time.Second)
 	if err != nil {
-		logger.LogError(fmt.Errorf("failed to determine validation strategy: %w", err))
-		// Fall back to basic validation
-		validationStrategy = getBasicValidationStrategy(intentAnalysis, logger)
+		return "", 0, fmt.Errorf("failed to get LLM analysis of build errors: %w", err)
 	}
 
-	var totalValidationTokens int = strategyTokens
-	var validationResults []string
+	// Estimate tokens used
+	tokens := utils.EstimateTokens(prompt + response)
 
-	for _, step := range validationStrategy.Steps {
-		logger.LogProcessStep(fmt.Sprintf("Running validation: %s", step.Description))
+	logger.Logf("LLM build error analysis: %s", response)
 
-		result, err := runValidationStep(step, logger)
-		if err != nil {
-			validationResults = append(validationResults, fmt.Sprintf("❌ %s: %v", step.Description, err))
-			logger.Logf("Validation step failed: %s - %v", step.Description, err)
-		} else {
-			validationResults = append(validationResults, fmt.Sprintf("✅ %s: %s", step.Description, result))
-			logger.Logf("Validation step passed: %s", step.Description)
-		}
-	}
-
-	// Use LLM to analyze validation results and suggest fixes if needed
-	if len(validationResults) > 0 {
-		analysisTokens, err := analyzeValidationResults(validationResults, intentAnalysis, validationStrategy, cfg, logger)
-		totalValidationTokens += analysisTokens
-		if err != nil {
-			logger.LogError(fmt.Errorf("failed to analyze validation results: %w", err))
-		}
-	}
-
-	return totalValidationTokens, nil
+	return response, tokens, nil
 }
 
 // ProjectContext represents the detected project characteristics
@@ -1112,7 +1184,7 @@ func runValidationStep(step ValidationStep, logger *utils.Logger) (string, error
 	return outputStr, nil
 }
 
-// analyzeValidationResults uses LLM to analyze validation results and suggest fixes
+// analyzeValidationResults uses LLM to analyze validation results and decide whether to proceed
 func analyzeValidationResults(validationResults []string, intentAnalysis *IntentAnalysis, validationStrategy *ValidationStrategy, cfg *config.Config, logger *utils.Logger) (int, error) {
 	// Check if there are any failures
 	hasFailures := false
@@ -1128,32 +1200,38 @@ func analyzeValidationResults(validationResults []string, intentAnalysis *Intent
 		return 0, nil
 	}
 
-	prompt := fmt.Sprintf(`The following validation steps were run after making code changes:
+	prompt := fmt.Sprintf(`You are an expert developer analyzing validation failures after implementing changes.
 
-Original Intent: %s
-Change Category: %s
-Project Type: %s
-Validation Context: %s
+RECENT TASK: %s
+TASK CATEGORY: %s
+PROJECT TYPE: %s
 
-Validation Results:
+VALIDATION RESULTS:
 %s
 
-Please analyze these results and provide:
-1. Assessment of the failures - are they related to the recent changes?
-2. Whether the failures are critical or can be ignored (e.g., pre-existing issues)
-3. Specific fixes needed (if any)
-4. Whether the changes should be rolled back
+ANALYSIS REQUIRED:
+1. **Error Classification**: Are these failures related to the recent task, or pre-existing issues?
+2. **Impact Assessment**: Do these failures affect the functionality added/modified by the recent task?
+3. **Decision**: Should the validation pass, fail, or require fixes?
 
-Consider that some failures might be pre-existing issues not related to the current changes.
-Keep your response concise and actionable.`,
+DECISION CRITERIA:
+- If errors are unrelated to recent changes (e.g., existing lint issues, unrelated test failures): RECOMMEND PASS
+- If errors affect the new functionality or indicate the recent changes broke something: RECOMMEND FAIL
+- If errors can be quickly fixed and are related to the task: RECOMMEND FIX
+
+RESPONSE FORMAT:
+DECISION: [PASS|FAIL|FIX]
+REASONING: [One sentence explaining why]
+ACTION: [What should be done next, if anything]
+
+Focus on whether the recent changes achieved their goal successfully, not on fixing unrelated pre-existing issues.`,
 		intentAnalysis.Category,
 		intentAnalysis.Category,
 		validationStrategy.ProjectType,
-		validationStrategy.Context,
 		strings.Join(validationResults, "\n"))
 
 	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert developer analyzing build/test failures. Focus on whether failures are related to recent changes."},
+		{Role: "system", Content: "You are an expert developer who understands the difference between task-related failures and pre-existing issues. Make practical decisions about validation."},
 		{Role: "user", Content: prompt},
 	}
 
@@ -1166,9 +1244,51 @@ Keep your response concise and actionable.`,
 	logger.LogProcessStep("🔍 Validation Analysis:")
 	logger.Logf("%s", response)
 
-	// Estimate tokens used
-	tokens := utils.EstimateTokens(prompt + response)
-	return tokens, nil
+	// Parse the decision from the response
+	decision := parseValidationDecision(response, logger)
+
+	// Act on the decision
+	switch decision {
+	case "PASS":
+		logger.LogProcessStep("✅ LLM recommends proceeding despite validation failures (unrelated issues)")
+		return utils.EstimateTokens(prompt + response), nil
+	case "FIX":
+		logger.LogProcessStep("🔧 LLM recommends attempting fixes for task-related issues")
+		return utils.EstimateTokens(prompt + response), fmt.Errorf("validation failures require fixes")
+	case "FAIL":
+		logger.LogProcessStep("❌ LLM recommends failing due to critical task-related issues")
+		return utils.EstimateTokens(prompt + response), fmt.Errorf("validation failed with critical task-related issues")
+	default:
+		logger.LogProcessStep("⚠️ Could not parse LLM decision, defaulting to conservative failure")
+		return utils.EstimateTokens(prompt + response), fmt.Errorf("validation failed - could not determine if issues are task-related")
+	}
+}
+
+// parseValidationDecision extracts the decision from the LLM response
+func parseValidationDecision(response string, logger *utils.Logger) string {
+	responseLower := strings.ToLower(response)
+
+	// Look for decision indicators
+	if strings.Contains(responseLower, "decision: pass") || strings.Contains(responseLower, "recommend pass") {
+		return "PASS"
+	}
+	if strings.Contains(responseLower, "decision: fail") || strings.Contains(responseLower, "recommend fail") {
+		return "FAIL"
+	}
+	if strings.Contains(responseLower, "decision: fix") || strings.Contains(responseLower, "recommend fix") {
+		return "FIX"
+	}
+
+	// Fallback parsing based on keywords
+	if strings.Contains(responseLower, "unrelated") || strings.Contains(responseLower, "pre-existing") {
+		return "PASS"
+	}
+	if strings.Contains(responseLower, "critical") || strings.Contains(responseLower, "broke") {
+		return "FAIL"
+	}
+
+	logger.Logf("Could not parse validation decision from response: %s", response)
+	return "UNKNOWN"
 }
 
 // printTokenUsageSummary prints a summary of token usage for the agent execution

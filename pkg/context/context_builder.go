@@ -137,22 +137,10 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	}
 
 	if !cfg.Interactive {
-		logger.Log("Taking non-interactive path with tool calling support")
-		// Create a wrapper to convert between context request types
-		contextHandlerWrapper := func(llmRequests []llm.ContextRequest, cfg *config.Config) (string, error) {
-			// Convert llm.ContextRequest to local ContextRequest
-			var localRequests []ContextRequest
-			for _, req := range llmRequests {
-				localRequests = append(localRequests, ContextRequest{
-					Type:  req.Type,
-					Query: req.Query,
-				})
-			}
-			return handleContextRequest(localRequests, cfg)
-		}
-
-		// Use the new tool calling system even for non-interactive mode
-		response, err := llm.CallLLMWithInteractiveContext(modelName, messages, filename, cfg, 6*time.Minute, contextHandlerWrapper)
+		logger.Log("Taking non-interactive path without tool calling (cost optimization)")
+		// For non-interactive mode (like agent mode), use the standard LLM response without tool calling
+		// This prevents expensive context requests and forces the model to provide code directly
+		_, response, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
 		if err != nil {
 			logger.Log(fmt.Sprintf("Non-interactive LLM call failed: %v", err))
 			return modelName, "", err

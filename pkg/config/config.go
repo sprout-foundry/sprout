@@ -108,7 +108,7 @@ func (cfg *Config) setDefaultValues() {
 		cfg.OrchestrationModel = cfg.EditingModel // Fallback to editing model if not specified
 	}
 	if cfg.EmbeddingModel == "" {
-		cfg.EmbeddingModel = "jina:jina-embeddings-v4" // Default embedding model
+		cfg.EmbeddingModel = "deepinfra:Qwen/Qwen3-Embedding-4B" // Default embedding model
 	}
 	if cfg.OllamaServerURL == "" {
 		cfg.OllamaServerURL = "http://localhost:11434"
@@ -228,11 +228,11 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		orchestrationModel = editingModel
 	}
 
-	fmt.Print("Enter Embedding Model (e.g., jina:jina-embeddings-v4 or deepinfra:Qwen/Qwen3-Embedding-4B): ")
+	fmt.Print("Enter Embedding Model (e.g., deepinfra:Qwen/Qwen3-Embedding-4B): ")
 	embeddingModel, _ := reader.ReadString('\n')
 	embeddingModel = strings.TrimSpace(embeddingModel)
 	if embeddingModel == "" {
-		embeddingModel = "jina:jina-embeddings-v4"
+		embeddingModel = "deepinfra:Qwen/Qwen3-Embedding-4B"
 	}
 
 	fmt.Print(prompts.TrackGitPrompt()) // Use prompt

@@ -24,7 +24,54 @@ import (
 	"github.com/fatih/color"
 )
 
-// loadOriginalCode function removed from here. It's moved to pkg/filesystem/loader.go
+// getLanguageFromExtension infers the programming language from the file extension.
+func getLanguageFromExtension(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".go":
+		return "go"
+	case ".py":
+		return "python"
+	case ".js", ".ts":
+		return "javascript"
+	case ".java":
+		return "java"
+	case ".c", ".cpp", ".h":
+		return "c"
+	case ".sh":
+		return "bash"
+	case ".md":
+		return "markdown"
+	case ".json":
+		return "json"
+	case ".xml":
+		return "xml"
+	case ".html":
+		return "html"
+	case ".css":
+		return "css"
+	case ".yaml", ".yml":
+		return "yaml"
+	case ".sql":
+		return "sql"
+	case ".rb":
+		return "ruby"
+	case ".php":
+		return "php"
+	case ".rs":
+		return "rust"
+	case ".swift":
+		return "swift"
+	case ".kt":
+		return "kotlin"
+	case ".cs":
+		return "csharp"
+	default:
+		return "text"
+	}
+}
+
+// ProcessInstructionsWithWorkspace function removed from here. It's moved to pkg/filesystem/loader.go
 
 func ProcessInstructionsWithWorkspace(instructions string, cfg *config.Config) (string, error) {
 	// Replace any existing #WS or #WORKSPACE tags with a single #WS tag
@@ -215,12 +262,46 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 
 		// Check if this is a partial response by looking for the partial content marker pattern
 		if parser.IsPartialResponse(newCode) {
-			// Handle partial response by merging with original code
-			mergedCode, err := mergePartialCode(originalCode, newCode)
+			// Instead of trying to merge, reject the partial response and ask for the full file
+			fmt.Printf("⚠️  Detected partial response for %s. The LLM provided incomplete code with markers like '...unchanged...'.\n", newFilename)
+			fmt.Printf("Requesting the LLM to provide the complete file content...\n")
+			
+			// Create a more specific prompt asking for the complete file
+			retryPrompt := fmt.Sprintf(`The previous response contained partial content markers (like "...unchanged..." or "// rest of file") for the file %s. 
+This is not acceptable as I need the COMPLETE file content.
+
+Please provide the ENTIRE file content for %s from beginning to end, including:
+- ALL imports and package declarations
+- ALL existing functions and methods (both modified and unmodified)
+- ALL variable declarations and constants
+- ALL comments and documentation
+- The specific changes requested in the original instructions
+
+Do NOT use any partial content markers like "...unchanged...", "// rest of file", or similar abbreviations.
+The file must be complete and ready to save and execute.
+
+Original instructions: %s
+
+Here is the current content of %s for reference:
+` + "```" + `%s
+%s
+` + "```" + `
+
+Please provide the complete updated file content.`, newFilename, newFilename, originalInstructions, newFilename, getLanguageFromExtension(newFilename), originalCode)
+
+			// Use the editor to get a complete response
+			retryResult, err := ProcessCodeGeneration(newFilename, retryPrompt, cfg, "")
 			if err != nil {
-				return "", fmt.Errorf("failed to merge partial code for %s: %w", newFilename, err)
+				return "", fmt.Errorf("failed to get complete file content after partial response: %w", err)
 			}
-			newCode = mergedCode
+			
+			if retryResult != "" {
+				fmt.Printf("✅ Received complete file content for %s\n", newFilename)
+				// The retry should have updated the file properly, continue with the next file
+				continue
+			} else {
+				return "", fmt.Errorf("failed to get complete file content for %s after retry", newFilename)
+			}
 		}
 
 		color.Yellow(prompts.OriginalFileHeader(newFilename))
@@ -466,52 +547,4 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 	return combinedDiff, nil
 }
 
-// mergePartialCode merges a partial code response with the original code
-func mergePartialCode(originalCode, partialCode string) (string, error) {
-	if originalCode == "" {
-		return partialCode, nil
-	}
 
-	lines := strings.Split(partialCode, "\n")
-	originalLines := strings.Split(originalCode, "\n")
-
-	var resultLines []string
-	lineIndex := 0
-
-	for _, line := range lines {
-		if parser.IsPartialContentMarker(line) {
-			// Find the next unchanged marker or the end of the block
-			nextIndex := findNextUnchangedMarker(lines, lineIndex+1)
-			if nextIndex == -1 {
-				// If no next marker, append remaining original lines
-				if lineIndex < len(originalLines) {
-					resultLines = append(resultLines, originalLines[lineIndex:]...)
-				}
-			} else {
-				// Append original lines between current position and next marker position
-				if lineIndex < nextIndex && lineIndex < len(originalLines) {
-					endIndex := nextIndex
-					if endIndex > len(originalLines) {
-						endIndex = len(originalLines)
-					}
-					resultLines = append(resultLines, originalLines[lineIndex:endIndex]...)
-				}
-				lineIndex = nextIndex
-			}
-		} else {
-			resultLines = append(resultLines, line)
-		}
-	}
-
-	return strings.Join(resultLines, "\n"), nil
-}
-
-// findNextUnchangedMarker finds the next line that contains an unchanged marker
-func findNextUnchangedMarker(lines []string, startIndex int) int {
-	for i := startIndex; i < len(lines); i++ {
-		if parser.IsPartialContentMarker(lines[i]) {
-			return i
-		}
-	}
-	return -1
-}

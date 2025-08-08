@@ -8,12 +8,14 @@ import (
 	"path/filepath"
 	"runtime" // Import runtime for memory stats
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/orchestration"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/workspace"
@@ -70,7 +72,7 @@ func runAgentMode(userIntent string) error {
 	fmt.Printf("🎯 Intent: %s\n", userIntent)
 
 	logger := utils.GetLogger(cfg.SkipPrompt)
-	logger.LogProcessStep("🚀 Starting cost-optimized agent execution...")
+	logger.LogProcessStep("🚀 Starting agent execution with escalation fallback...")
 
 	startTime := time.Now()
 	var m runtime.MemStats
@@ -80,10 +82,27 @@ func runAgentMode(userIntent string) error {
 	// Initialize token usage tracking
 	tokenUsage := &TokenUsage{}
 
-	// Use optimized agent logic instead of full orchestration
-	if err := runOptimizedAgent(userIntent, cfg, logger, tokenUsage); err != nil {
-		logger.LogError(fmt.Errorf("agent execution failed: %w", err))
-		return fmt.Errorf("agent execution failed: %w", err)
+	// Try optimized agent first
+	logger.LogProcessStep("🔄 Phase 1: Attempting optimized agent execution...")
+	err = runOptimizedAgent(userIntent, cfg, logger, tokenUsage)
+
+	if err != nil {
+		logger.LogProcessStep("⚠️ Phase 1 failed, checking if escalation is needed...")
+
+		// Check if this is a validation failure with required steps failing
+		if shouldEscalateToOrchestration(err, logger) {
+			logger.LogProcessStep("🚀 Phase 2: Escalating to full orchestration model...")
+
+			// Use full orchestration for complex cases
+			err = runFullOrchestration(userIntent, cfg, logger)
+			if err != nil {
+				logger.LogError(fmt.Errorf("both optimized agent and orchestration failed: %w", err))
+				return fmt.Errorf("both optimized agent and orchestration failed: %w", err)
+			}
+		} else {
+			logger.LogError(fmt.Errorf("agent execution failed: %w", err))
+			return fmt.Errorf("agent execution failed: %w", err)
+		}
 	}
 
 	duration := time.Since(startTime)
@@ -130,6 +149,11 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 	logger.LogProcessStep("🎯 Phase 2: Creating detailed edit plan with orchestration model...")
 	editPlan, planTokens, err := createDetailedEditPlan(userIntent, intentAnalysis, cfg, logger)
 	if err != nil {
+		// Check if this is an escalation request
+		if strings.Contains(err.Error(), "escalation required") {
+			logger.Logf("Escalating to full orchestration due to edit plan creation failure")
+			return runFullOrchestration(userIntent, cfg, logger)
+		}
 		logger.LogError(fmt.Errorf("failed to create edit plan: %w", err))
 		return fmt.Errorf("failed to create edit plan: %w", err)
 	}
@@ -458,6 +482,17 @@ func createDetailedEditPlan(userIntent string, intentAnalysis *IntentAnalysis, c
 	// Debug: log contextFiles to see what we have
 	logger.Logf("DEBUG: createDetailedEditPlan contextFiles: %v (length: %d)", contextFiles, len(contextFiles))
 
+	// Analyze workspace patterns for intelligent task decomposition
+	workspacePatterns := analyzeWorkspacePatterns(logger)
+	refactoringGuidance := ""
+
+	// Check if this is a large file refactoring task
+	if isLargeFileRefactoringTask(userIntent, contextFiles, logger) {
+		refactoringGuidance = generateRefactoringStrategy(userIntent, contextFiles, workspacePatterns, logger)
+	} else {
+		refactoringGuidance = "Standard single-file or small-scope changes"
+	}
+
 	prompt := fmt.Sprintf(`You are an expert Go software architect and developer. Create a MINIMAL and FOCUSED edit plan for this Go codebase.
 
 USER REQUEST: %s
@@ -465,6 +500,7 @@ USER REQUEST: %s
 WORKSPACE ANALYSIS:
 Project Type: Go
 Total Context Files: %d
+Workspace Patterns: Average file size: %d lines, Modularity: %s
 
 TASK ANALYSIS:
 - Category: %s
@@ -481,6 +517,9 @@ CRITICAL WORKSPACE VALIDATION:
 - Do NOT suggest .ts, .js, .py, or any non-Go files
 - File paths must be relative to project root
 - Verify each file exists in the provided context before including it
+
+INTELLIGENT REFACTORING GUIDANCE:
+%s
 
 THIS IS A GO PROJECT - DO NOT CREATE NON-GO FILES!
 
@@ -525,17 +564,20 @@ STRICT GUIDELINES:
 - Justify every change against the original user request`,
 		userIntent,
 		len(contextFiles),
+		workspacePatterns.AverageFileSize,
+		workspacePatterns.ModularityLevel,
 		intentAnalysis.Category,
 		intentAnalysis.Complexity,
 		strings.Join(contextFiles, ", "),
-		context)
+		context,
+		refactoringGuidance)
 
 	messages := []prompts.Message{
 		{Role: "system", Content: "You are an expert software architect. Create detailed, actionable edit plans. Respond only with valid JSON."},
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 90*time.Second)
+	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 3*time.Minute)
 	if err != nil {
 		logger.LogError(fmt.Errorf("Orchestration model failed to create edit plan: %w", err))
 		duration := time.Since(startTime)
@@ -603,6 +645,14 @@ STRICT GUIDELINES:
 
 	if err := json.Unmarshal([]byte(response), &planData); err != nil {
 		logger.LogError(fmt.Errorf("failed to parse edit plan JSON: %w\nRaw response: %s", err, response))
+
+		// Check if we should escalate instead of falling back to poor quality raw user intent
+		if shouldEscalateToOrchestration(err, logger) {
+			logger.Logf("Escalating due to JSON parsing failure in createDetailedEditPlan")
+			// Return nil plan and escalation error to trigger orchestration at higher level
+			return nil, 0, fmt.Errorf("escalation required due to JSON parsing failure: %w", err)
+		}
+
 		// Fallback to simple plan
 		duration := time.Since(startTime)
 		runtime.ReadMemStats(&m)
@@ -1327,8 +1377,26 @@ func executeEditPlan(editPlan *EditPlan, cfg *config.Config, logger *utils.Logge
 		tokenEstimate := utils.EstimateTokens(editInstructions)
 		totalTokens += tokenEstimate
 
-		// Execute the edit using the fast editing model (search grounding now disabled)
-		_, err := editor.ProcessCodeGeneration(operation.FilePath, editInstructions, cfg, "")
+		// Execute the edit using partial editing for efficiency, fallback to full file editing
+		var err error
+
+		// Try partial editing first for better efficiency
+		if shouldUsePartialEdit(operation, logger) {
+			logger.Logf("Attempting partial edit for %s", operation.FilePath)
+			_, err = editor.ProcessPartialEdit(operation.FilePath, operation.Instructions, cfg, logger)
+			if err != nil {
+				logger.Logf("Partial edit failed, falling back to full file edit: %v", err)
+				// Fall back to full file editing
+				_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, cfg, "")
+			} else {
+				logger.LogProcessStep(fmt.Sprintf("✅ Edit %d completed with partial editing (efficient)", i+1))
+				continue
+			}
+		} else {
+			// Use full file editing directly
+			logger.Logf("Using full file edit for %s", operation.FilePath)
+			_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, cfg, "")
+		}
 		if err != nil {
 			// Check if this is a "revisions applied" signal from the editor's review process
 			if strings.Contains(err.Error(), "revisions applied, re-validating") {
@@ -1359,6 +1427,72 @@ func executeEditPlan(editPlan *EditPlan, cfg *config.Config, logger *utils.Logge
 	}
 
 	return totalTokens, nil
+}
+
+// shouldUsePartialEdit determines whether to use partial editing or full file editing
+// based on the operation characteristics and file size
+func shouldUsePartialEdit(operation EditOperation, logger *utils.Logger) bool {
+	// Check if file exists and get its size
+	fileInfo, err := os.Stat(operation.FilePath)
+	if err != nil {
+		logger.Logf("Cannot stat file %s, using full file edit: %v", operation.FilePath, err)
+		return false
+	}
+
+	// For very small files (< 1KB), partial editing overhead isn't worth it
+	if fileInfo.Size() < 1024 {
+		logger.Logf("File %s is small (%d bytes), using full file edit", operation.FilePath, fileInfo.Size())
+		return false
+	}
+
+	// For very large files (> 50KB), partial editing is more efficient
+	if fileInfo.Size() > 50*1024 {
+		logger.Logf("File %s is large (%d bytes), using partial edit", operation.FilePath, fileInfo.Size())
+		return true
+	}
+
+	// For medium files, check if the operation seems focused/targeted
+	instructionsLower := strings.ToLower(operation.Instructions)
+	description := strings.ToLower(operation.Description)
+
+	// Keywords that suggest focused changes suitable for partial editing
+	focusedKeywords := []string{
+		"function", "method", "struct", "type", "variable",
+		"add", "modify", "update", "change", "fix",
+		"import", "constant", "field",
+	}
+
+	// Keywords that suggest broad changes requiring full file context
+	broadKeywords := []string{
+		"refactor", "restructure", "rewrite", "reorganize",
+		"architecture", "design pattern", "interface",
+		"multiple", "throughout", "entire",
+	}
+
+	focusedScore := 0
+	broadScore := 0
+
+	for _, keyword := range focusedKeywords {
+		if strings.Contains(instructionsLower, keyword) || strings.Contains(description, keyword) {
+			focusedScore++
+		}
+	}
+
+	for _, keyword := range broadKeywords {
+		if strings.Contains(instructionsLower, keyword) || strings.Contains(description, keyword) {
+			broadScore++
+		}
+	}
+
+	// If it seems focused, use partial editing
+	if focusedScore > broadScore {
+		logger.Logf("Operation seems focused (score: %d vs %d), using partial edit", focusedScore, broadScore)
+		return true
+	}
+
+	// Default to full file editing for ambiguous cases
+	logger.Logf("Operation seems broad or ambiguous (score: %d vs %d), using full file edit", focusedScore, broadScore)
+	return false
 }
 
 // buildFocusedEditInstructions creates targeted instructions for a single file edit
@@ -2445,11 +2579,267 @@ func findFilesUsingShellCommands(userIntent string, workspaceInfo *WorkspaceInfo
 	return unique
 }
 
-// min helper function
+// WorkspacePatterns holds analysis of workspace organization patterns
+type WorkspacePatterns struct {
+	AverageFileSize      int
+	PreferredPackageSize int
+	ModularityLevel      string
+	GoSpecificPatterns   map[string]string
+}
+
+// analyzeWorkspacePatterns analyzes the codebase to understand organizational preferences
+func analyzeWorkspacePatterns(logger *utils.Logger) *WorkspacePatterns {
+	patterns := &WorkspacePatterns{
+		AverageFileSize:    0,
+		ModularityLevel:    "medium",
+		GoSpecificPatterns: make(map[string]string),
+	}
+
+	// Analyze Go files in the workspace
+	goFiles, err := findGoFiles(".")
+	if err != nil {
+		logger.Logf("Warning: Could not analyze workspace patterns: %v", err)
+		// Set sensible defaults for Go projects
+		patterns.AverageFileSize = 200
+		patterns.PreferredPackageSize = 500
+		patterns.ModularityLevel = "high"
+		patterns.GoSpecificPatterns["file_organization"] = "prefer_small_focused_files"
+		patterns.GoSpecificPatterns["package_structure"] = "pkg_separation"
+		return patterns
+	}
+
+	totalLines := 0
+	largeFiles := 0
+
+	for _, file := range goFiles {
+		lines := countLines(file)
+		totalLines += lines
+
+		if lines > 500 {
+			largeFiles++
+		}
+	}
+
+	if len(goFiles) > 0 {
+		patterns.AverageFileSize = totalLines / len(goFiles)
+	}
+
+	// Determine modularity preference based on file sizes
+	if largeFiles > len(goFiles)/3 {
+		patterns.ModularityLevel = "low"
+		patterns.GoSpecificPatterns["refactoring_preference"] = "break_large_files"
+	} else {
+		patterns.ModularityLevel = "high"
+		patterns.GoSpecificPatterns["refactoring_preference"] = "maintain_separation"
+	}
+
+	// Analyze package structure
+	pkgDirs := findPackageDirectories(".")
+	if len(pkgDirs) > 3 {
+		patterns.GoSpecificPatterns["package_structure"] = "highly_modular"
+	} else {
+		patterns.GoSpecificPatterns["package_structure"] = "simple_structure"
+	}
+
+	patterns.PreferredPackageSize = patterns.AverageFileSize * 3 // Prefer packages with 3 average-sized files
+
+	logger.Logf("Workspace Analysis: Avg file size: %d, Modularity: %s, Large files: %d/%d",
+		patterns.AverageFileSize, patterns.ModularityLevel, largeFiles, len(goFiles))
+
+	return patterns
+}
+
+// isLargeFileRefactoringTask determines if the task involves refactoring large files
+func isLargeFileRefactoringTask(userIntent string, contextFiles []string, logger *utils.Logger) bool {
+	intentLower := strings.ToLower(userIntent)
+
+	// Check for refactoring keywords
+	refactoringKeywords := []string{"refactor", "split", "break down", "reorganize", "move", "extract"}
+	hasRefactoringIntent := false
+	for _, keyword := range refactoringKeywords {
+		if strings.Contains(intentLower, keyword) {
+			hasRefactoringIntent = true
+			break
+		}
+	}
+
+	if !hasRefactoringIntent {
+		return false
+	}
+
+	// Check if any of the context files are large
+	for _, file := range contextFiles {
+		if lines := countLines(file); lines > 1000 {
+			logger.Logf("Detected large file refactoring task: %s has %d lines", file, lines)
+			return true
+		}
+	}
+
+	return false
+}
+
+// generateRefactoringStrategy creates a strategy for complex refactoring tasks
+func generateRefactoringStrategy(userIntent string, contextFiles []string, patterns *WorkspacePatterns, logger *utils.Logger) string {
+	strategy := []string{
+		"INTELLIGENT REFACTORING STRATEGY:",
+		fmt.Sprintf("- Workspace prefers files with ~%d lines (current average)", patterns.AverageFileSize),
+		fmt.Sprintf("- Modularity level: %s", patterns.ModularityLevel),
+	}
+
+	// Analyze the target files
+	for _, file := range contextFiles {
+		lines := countLines(file)
+		if lines > 1000 {
+			strategy = append(strategy, fmt.Sprintf("- File %s (%d lines) should be broken into ~%d smaller files",
+				file, lines, (lines/patterns.PreferredPackageSize)+1))
+		}
+	}
+
+	// Add Go-specific guidance
+	strategy = append(strategy, []string{
+		"",
+		"GO BEST PRACTICES FOR REFACTORING:",
+		"1. Group related types and functions into logical packages",
+		"2. Separate interfaces from implementations",
+		"3. Create focused files: types.go, handlers.go, utils.go, etc.",
+		"4. Maintain clear import dependencies",
+		"5. Use meaningful package and file names",
+		"",
+		"EXECUTION APPROACH:",
+		"- Create step-by-step plan with dependency order",
+		"- Move types first, then interfaces, then implementations",
+		"- Update imports in dependent files",
+		"- Verify compilation after each major step",
+	}...)
+
+	return strings.Join(strategy, "\n")
+}
+
+// Helper functions for workspace analysis
+func findGoFiles(dir string) ([]string, error) {
+	var goFiles []string
+
+	cmd := exec.Command("find", dir, "-name", "*.go", "-type", "f")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		if line != "" && !strings.Contains(line, "vendor/") && !strings.Contains(line, ".git/") {
+			goFiles = append(goFiles, strings.TrimPrefix(line, "./"))
+		}
+	}
+
+	return goFiles, nil
+}
+
+func countLines(filePath string) int {
+	cmd := exec.Command("wc", "-l", filePath)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	parts := strings.Fields(string(output))
+	if len(parts) > 0 {
+		if lines, err := strconv.Atoi(parts[0]); err == nil {
+			return lines
+		}
+	}
+
+	return 0
+}
+
+func findPackageDirectories(dir string) []string {
+	var pkgDirs []string
+
+	cmd := exec.Command("find", dir, "-name", "*.go", "-type", "f", "-exec", "dirname", "{}", ";")
+	output, err := cmd.Output()
+	if err != nil {
+		return pkgDirs
+	}
+
+	seen := make(map[string]bool)
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		dir := strings.TrimPrefix(line, "./")
+		if dir != "" && !seen[dir] && !strings.Contains(dir, "vendor/") && !strings.Contains(dir, ".git/") {
+			seen[dir] = true
+			pkgDirs = append(pkgDirs, dir)
+		}
+	}
+
+	return pkgDirs
+}
+
 // min helper function
 func min(a, b int) int {
 	if a < b {
 		return a
 	}
 	return b
+}
+
+// shouldEscalateToOrchestration determines if we should escalate to full orchestration
+// based on the type of error encountered
+func shouldEscalateToOrchestration(err error, logger *utils.Logger) bool {
+	errorStr := err.Error()
+
+	// Check for validation failures that indicate build/compilation issues
+	validationFailureIndicators := []string{
+		"validation failed",
+		"command failed: exit status 1",
+		"no required module provides package",
+		"import cycle",
+		"build failed",
+		"compilation error",
+		"undefined:",
+		"undeclared name",
+		"failed to create edit plan",
+		"JSON parsing failure",
+		"orchestration model failed",
+	}
+
+	for _, indicator := range validationFailureIndicators {
+		if strings.Contains(errorStr, indicator) {
+			logger.LogProcessStep(fmt.Sprintf("🔍 Detected escalation trigger: %s", indicator))
+			return true
+		}
+	}
+
+	// Also escalate for complex refactoring tasks that might need better coordination
+	complexTaskIndicators := []string{
+		"multiple files",
+		"refactor",
+		"restructure",
+		"move",
+		"split",
+		"extract",
+	}
+
+	for _, indicator := range complexTaskIndicators {
+		if strings.Contains(strings.ToLower(errorStr), indicator) {
+			logger.LogProcessStep(fmt.Sprintf("🔍 Detected complex task requiring orchestration: %s", indicator))
+			return true
+		}
+	}
+
+	return false
+}
+
+// runFullOrchestration runs the complete orchestration workflow for complex tasks
+func runFullOrchestration(userIntent string, cfg *config.Config, logger *utils.Logger) error {
+	logger.LogProcessStep("🎯 Starting full orchestration workflow...")
+
+	// Use the existing orchestration system
+	err := orchestration.OrchestrateFeature(userIntent, cfg)
+	if err != nil {
+		logger.LogError(fmt.Errorf("orchestration execution failed: %w", err))
+		return fmt.Errorf("orchestration execution failed: %w", err)
+	}
+
+	logger.LogProcessStep("✅ Full orchestration completed successfully")
+	return nil
 }

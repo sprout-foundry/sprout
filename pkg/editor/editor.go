@@ -265,7 +265,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 			// Instead of trying to merge, reject the partial response and ask for the full file
 			fmt.Printf("⚠️  Detected partial response for %s. The LLM provided incomplete code with markers like '...unchanged...'.\n", newFilename)
 			fmt.Printf("Requesting the LLM to provide the complete file content...\n")
-			
+
 			// Create a more specific prompt asking for the complete file
 			retryPrompt := fmt.Sprintf(`The previous response contained partial content markers (like "...unchanged..." or "// rest of file") for the file %s. 
 This is not acceptable as I need the COMPLETE file content.
@@ -283,9 +283,9 @@ The file must be complete and ready to save and execute.
 Original instructions: %s
 
 Here is the current content of %s for reference:
-` + "```" + `%s
+`+"```"+`%s
 %s
-` + "```" + `
+`+"```"+`
 
 Please provide the complete updated file content.`, newFilename, newFilename, originalInstructions, newFilename, getLanguageFromExtension(newFilename), originalCode)
 
@@ -294,7 +294,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			if err != nil {
 				return "", fmt.Errorf("failed to get complete file content after partial response: %w", err)
 			}
-			
+
 			if retryResult != "" {
 				fmt.Printf("✅ Received complete file content for %s\n", newFilename)
 				// The retry should have updated the file properly, continue with the next file
@@ -546,5 +546,3 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 
 	return combinedDiff, nil
 }
-
-

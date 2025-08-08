@@ -40,6 +40,7 @@ type Config struct {
 	LocalModel               string               `json:"local_model"`
 	TrackWithGit             bool                 `json:"track_with_git"`
 	EnableSecurityChecks     bool                 `json:"enable_security_checks"` // New field for security checks
+	UseEmbeddings            bool                 `json:"use_embeddings"`         // New field for using embeddings
 	SkipPrompt               bool                 `json:"-"`                      // Internal use, not saved to config
 	Interactive              bool                 `json:"-"`                      // Internal use, not saved to config
 	OllamaServerURL          string               `json:"ollama_server_url"`
@@ -149,6 +150,9 @@ func (cfg *Config) setDefaultValues() {
 	if cfg.CodeStyle.Readability == "" {
 		cfg.CodeStyle.Readability = "Prioritize code readability and maintainability. Use comments where necessary to explain complex logic."
 	}
+
+	// Set default for UseEmbeddings
+	cfg.UseEmbeddings = true
 }
 
 func loadConfig(filePath string) (*Config, error) {
@@ -162,6 +166,7 @@ func loadConfig(filePath string) (*Config, error) {
 	cfg.WorkspaceModel = ""                        // Default to empty, will fall back to SummaryModel
 	cfg.OllamaServerURL = "http://localhost:11434" // Default Ollama URL
 	cfg.EnableSecurityChecks = false               // Default to false for existing configs
+	cfg.UseEmbeddings = false                      // Default to false for existing configs
 	cfg.Temperature = 0.0                          // NEW: Initialize Temperature to its zero value
 	// Initialize CodeStyle to ensure setDefaultValues can populate it
 	cfg.CodeStyle = CodeStylePreferences{}
@@ -226,6 +231,10 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 	enableSecurityChecksStr, _ := reader.ReadString('\n')
 	enableSecurityChecks := strings.TrimSpace(strings.ToLower(enableSecurityChecksStr)) == "yes"
 
+	fmt.Print("Enable semantic file selection using embeddings? (yes/no, recommended): ")
+	useEmbeddingsStr, _ := reader.ReadString('\n')
+	useEmbeddings := strings.TrimSpace(strings.ToLower(useEmbeddingsStr)) != "no"
+
 	fmt.Print(prompts.EnterLLMProvider("anthropic")) // NEW PROMPT for LLM Provider
 
 	cfg := &Config{
@@ -236,6 +245,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		LocalModel:               getLocalModel(skipPrompt),
 		TrackWithGit:             autoTrackGit,
 		EnableSecurityChecks:     enableSecurityChecks, // Set from user input
+		UseEmbeddings:            useEmbeddings,        // Set from user input
 		OllamaServerURL:          "http://localhost:11434",
 		OrchestrationMaxAttempts: 6,                      // Default max attempts for orchestration
 		CodeStyle:                CodeStylePreferences{}, // Initialize to be populated by setDefaultValues

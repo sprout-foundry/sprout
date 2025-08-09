@@ -2,14 +2,12 @@ package workspace
 
 import (
 	"fmt"
-	"os" // New import
+	"os"            // New import
 	"path/filepath" // New import
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/utils" // New import for logger
 )
-
-
 
 // normalizeLLMPath attempts to correct an LLM-returned file path to match a key in workspace.Files.
 // It returns the corrected path and a boolean indicating if a correction was made.
@@ -72,6 +70,3 @@ func normalizeLLMPath(llmPath string, cwd string, gitRoot string, workspaceFiles
 	// No correction found, return original path. Caller should check if it exists in workspaceFiles.
 	return llmPath, false
 }
-
-
-

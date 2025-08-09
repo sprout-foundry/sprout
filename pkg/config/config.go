@@ -254,7 +254,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		SummaryModel:             summaryModel,
 		WorkspaceModel:           workspaceModel,
 		OrchestrationModel:       orchestrationModel,
-		EmbeddingModel:           embeddingModel,       // Set from user input
+		EmbeddingModel:           embeddingModel, // Set from user input
 		LocalModel:               getLocalModel(skipPrompt),
 		TrackWithGit:             autoTrackGit,
 		EnableSecurityChecks:     enableSecurityChecks, // Set from user input

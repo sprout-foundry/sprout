@@ -466,7 +466,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	// Use embedding-based file selection if enabled
 	var fullContextFiles, summaryContextFiles []string
 	var fileSelectionErr error
-	
+
 	if cfg.UseEmbeddings {
 		logger.LogProcessStep("--- Using embedding-based file selection ---")
 		fullContextFiles, summaryContextFiles, fileSelectionErr = GetFilesForContextUsingEmbeddings(instructions, workspace, cfg, logger)

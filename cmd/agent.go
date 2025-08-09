@@ -1,3 +1,4 @@
+// Agent command implementation
 package cmd
 
 import (
@@ -1214,6 +1215,8 @@ func executeEditPlan(editPlan *EditPlan, cfg *config.Config, logger *utils.Logge
 	return totalTokens, nil
 }
 
+// shouldUsePartialEdit determines whether to use partial editing or full file editing
+// based on the operation characteristics and file size
 // shouldUsePartialEdit determines whether to use partial editing or full file editing
 // based on the operation characteristics and file size
 func shouldUsePartialEdit(operation EditOperation, logger *utils.Logger) bool {

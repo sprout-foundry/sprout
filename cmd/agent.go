@@ -242,12 +242,29 @@ func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logg
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: analyzeIntentWithMinimalContext started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
-	// STEP 1: Load workspace file for embeddings
+	// STEP 1: Load workspace file for embeddings (create if it doesn't exist)
 	logger.Logf("STEP 1: Loading workspace file...")
 	workspaceFile, err := workspace.LoadWorkspaceFile()
 	if err != nil {
-		logger.LogError(fmt.Errorf("failed to load workspace file: %w", err))
-		return nil, 0, fmt.Errorf("failed to load workspace: %w", err)
+		if os.IsNotExist(err) {
+			logger.Logf("STEP 1: No workspace file found, creating and populating workspace...")
+			// Ensure .ledit directory exists
+			if err := os.MkdirAll(".ledit", os.ModePerm); err != nil {
+				logger.LogError(fmt.Errorf("failed to create .ledit directory: %w", err))
+				return nil, 0, fmt.Errorf("failed to create workspace directory: %w", err)
+			}
+			// Use GetWorkspaceContext to trigger workspace creation and population
+			_ = workspace.GetWorkspaceContext("", cfg)
+			// Now try to load the workspace file again
+			workspaceFile, err = workspace.LoadWorkspaceFile()
+			if err != nil {
+				logger.LogError(fmt.Errorf("failed to load workspace after creation: %w", err))
+				return nil, 0, fmt.Errorf("failed to load workspace after creation: %w", err)
+			}
+		} else {
+			logger.LogError(fmt.Errorf("failed to load workspace file: %w", err))
+			return nil, 0, fmt.Errorf("failed to load workspace: %w", err)
+		}
 	}
 	logger.Logf("STEP 1: Successfully loaded workspace with %d files", len(workspaceFile.Files))
 
@@ -806,7 +823,11 @@ func findRelevantFilesRobust(userIntent string, cfg *config.Config, logger *util
 	// Try embeddings first
 	workspaceFile, err := workspace.LoadWorkspaceFile()
 	if err != nil {
-		logger.LogError(fmt.Errorf("failed to load workspace for file discovery: %w", err))
+		if os.IsNotExist(err) {
+			logger.Logf("No workspace file found for embeddings, will use fallback methods")
+		} else {
+			logger.LogError(fmt.Errorf("failed to load workspace for file discovery: %w", err))
+		}
 	} else {
 		fullFiles, _, embErr := workspace.GetFilesForContextUsingEmbeddings(userIntent, workspaceFile, cfg, logger)
 		if embErr != nil {

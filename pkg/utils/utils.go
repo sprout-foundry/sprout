@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -206,25 +207,121 @@ func TruncateString(s string, maxLength int) string {
 
 // ExtractJSONFromLLMResponse extracts JSON from an LLM response that may contain markdown formatting
 // This is a centralized utility to handle the common issue of LLMs wrapping JSON in code blocks
+// It intelligently handles cases where backticks appear within JSON property values
 func ExtractJSONFromLLMResponse(response string) (string, error) {
-	// First try to extract from markdown code blocks
+	response = strings.TrimSpace(response)
+
+	// First, check if the entire response is already valid JSON
+	if isValidJSON(response) {
+		return response, nil
+	}
+
+	// Handle markdown-wrapped JSON with improved backtick detection
 	if strings.Contains(response, "```json") {
-		parts := strings.Split(response, "```json")
-		if len(parts) > 1 {
-			jsonPart := parts[1]
-			end := strings.Index(jsonPart, "```")
-			if end > 0 {
-				jsonStr := strings.TrimSpace(jsonPart[:end])
-				if jsonStr != "" {
-					return jsonStr, nil
+		return extractFromMarkdownJSON(response)
+	}
+
+	// Handle cases where JSON might be wrapped in plain ``` blocks
+	if strings.Contains(response, "```") && (strings.Contains(response, "{") || strings.Contains(response, "[")) {
+		return extractFromMarkdownGeneric(response)
+	}
+
+	// Fallback: try to find JSON object boundaries directly in the response
+	return extractJSONByBoundaries(response)
+}
+
+// isValidJSON checks if a string is valid JSON
+func isValidJSON(s string) bool {
+	var js interface{}
+	return json.Unmarshal([]byte(s), &js) == nil
+}
+
+// extractFromMarkdownJSON handles ```json blocks with robust backtick detection
+func extractFromMarkdownJSON(response string) (string, error) {
+	// Find the start of the JSON block
+	jsonStart := strings.Index(response, "```json")
+	if jsonStart == -1 {
+		return "", fmt.Errorf("no ```json marker found")
+	}
+
+	// Move past the ```json marker (and any newline)
+	contentStart := jsonStart + 7 // len("```json")
+	if contentStart < len(response) && response[contentStart] == '\n' {
+		contentStart++
+	}
+
+	// Find the last ``` that could close this block
+	// We need to find ALL occurrences of ``` after the json marker
+	afterJSON := response[contentStart:]
+	backtickIndices := findAllBacktickOccurrences(afterJSON)
+
+	if len(backtickIndices) == 0 {
+		return "", fmt.Errorf("no closing ``` found for json block")
+	}
+
+	// Try each potential closing backtick from last to first
+	for i := len(backtickIndices) - 1; i >= 0; i-- {
+		endPos := backtickIndices[i]
+		candidate := strings.TrimSpace(afterJSON[:endPos])
+
+		if candidate != "" && isValidJSON(candidate) {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("no valid JSON found in ```json block")
+}
+
+// extractFromMarkdownGeneric handles ``` blocks that might contain JSON
+func extractFromMarkdownGeneric(response string) (string, error) {
+	backticks := "```"
+
+	// Find all backtick positions
+	var positions []int
+	pos := 0
+	for {
+		idx := strings.Index(response[pos:], backticks)
+		if idx == -1 {
+			break
+		}
+		positions = append(positions, pos+idx)
+		pos = pos + idx + 3
+	}
+
+	if len(positions) < 2 {
+		return "", fmt.Errorf("insufficient backtick pairs found")
+	}
+
+	// Try different combinations, preferring later closing backticks
+	for i := len(positions) - 1; i >= 1; i-- {
+		for j := 0; j < i; j++ {
+			start := positions[j] + 3
+			end := positions[i]
+
+			// Skip the language identifier line if present
+			if start < len(response) && response[start] == '\n' {
+				start++
+			} else {
+				// Find the next newline after the opening backticks
+				if newlinePos := strings.Index(response[start:], "\n"); newlinePos != -1 {
+					start = start + newlinePos + 1
+				}
+			}
+
+			if start < end {
+				candidate := strings.TrimSpace(response[start:end])
+				if candidate != "" && isValidJSON(candidate) {
+					return candidate, nil
 				}
 			}
 		}
 	}
 
-	// Try to find JSON object boundaries if no markdown blocks
-	response = strings.TrimSpace(response)
+	return "", fmt.Errorf("no valid JSON found in backtick blocks")
+}
 
+// extractJSONByBoundaries tries to find JSON by looking for braces/brackets
+func extractJSONByBoundaries(response string) (string, error) {
 	// Look for first opening brace or bracket
 	startBrace := strings.Index(response, "{")
 	startBracket := strings.Index(response, "[")
@@ -259,10 +356,32 @@ func ExtractJSONFromLLMResponse(response string) (string, error) {
 	// Extract the JSON substring
 	jsonStr := strings.TrimSpace(response[start : end+1])
 
-	// Validate it's not empty
+	// Validate it's not empty and is valid JSON
 	if jsonStr == "" {
 		return "", fmt.Errorf("extracted JSON is empty")
 	}
 
+	if !isValidJSON(jsonStr) {
+		return "", fmt.Errorf("extracted string is not valid JSON")
+	}
+
 	return jsonStr, nil
+}
+
+// findAllBacktickOccurrences finds all positions of ``` in a string
+func findAllBacktickOccurrences(s string) []int {
+	var positions []int
+	backticks := "```"
+	pos := 0
+
+	for {
+		idx := strings.Index(s[pos:], backticks)
+		if idx == -1 {
+			break
+		}
+		positions = append(positions, pos+idx)
+		pos = pos + idx + 3
+	}
+
+	return positions
 }

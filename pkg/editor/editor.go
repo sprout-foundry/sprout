@@ -550,17 +550,26 @@ func ProcessPartialEdit(filePath, targetInstructions string, cfg *config.Config,
 	// Apply the partial edit to the original file
 	updatedContent := applyPartialEdit(string(originalContent), updatedSection, sectionStart, sectionEnd)
 
-	// Write the updated content directly to the file
-	err = os.WriteFile(filePath, []byte(updatedContent), 0644)
+	// Create a revision tracking system like ProcessCodeGeneration
+	requestHash := utils.GenerateRequestHash(partialInstructions)
+	revisionID, err := changetracker.RecordBaseRevision(requestHash, partialInstructions, llmResponse)
 	if err != nil {
-		return "", fmt.Errorf("failed to write updated content to %s: %w", filePath, err)
+		return "", fmt.Errorf("failed to record base revision: %w", err)
+	}
+
+	// Create updatedCodeFiles map for handleFileUpdates
+	updatedCodeFiles := map[string]string{
+		filePath: updatedContent,
+	}
+
+	// Use handleFileUpdates to apply changes and trigger automated review
+	combinedDiff, err := handleFileUpdates(updatedCodeFiles, revisionID, cfg, targetInstructions, partialInstructions, llmResponse)
+	if err != nil {
+		return "", err
 	}
 
 	logger.Logf("Successfully processed partial edit for %s", filePath)
-
-	// Generate a simple diff for user feedback
-	diff := fmt.Sprintf("Applied partial edit to %s (section lines %d-%d)", filePath, sectionStart+1, sectionEnd+1)
-	return diff, nil
+	return combinedDiff, nil
 }
 
 // extractRelevantSection identifies the specific section of a file that needs to be edited

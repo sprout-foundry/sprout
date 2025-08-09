@@ -36,11 +36,22 @@ var agentCmd = &cobra.Command{
 	Use:   "agent [intent]",
 	Short: "AI agent mode - analyzes intent and autonomously decides what actions to take",
 	Long: `Agent mode allows the LLM to analyze your intent and autonomously decide what actions to take.
-Instead of using specific commands like 'code' or 'process', the agent will:
+The agent uses adaptive decision-making to evaluate progress and respond to changing conditions.
 
-1. Analyze your intent
-2. Decide what tools and processes are needed
-3. Execute the appropriate sequence of actions
+Features:
+• Progressive evaluation after each major step
+• Intelligent error escalation and recovery
+• Adaptive plan revision based on learnings
+• Context summarization to maintain efficiency
+• Smart action selection (continue, revise, validate, escalate)
+
+The agent will:
+1. Analyze your intent and assess complexity
+2. Create a detailed execution plan
+3. Execute operations with progress monitoring
+4. Evaluate outcomes and decide next actions
+5. Handle errors intelligently with context-aware recovery
+6. Validate changes and ensure quality
 
 Examples:
   ledit agent "Add better error handling to the main function"
@@ -117,88 +128,103 @@ func runAgentMode(userIntent string) error {
 	return nil
 }
 
-// runOptimizedAgent runs the agent with minimal context to reduce costs
+// runOptimizedAgent runs the agent with adaptive decision-making and progress evaluation
 func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *TokenUsage) error {
-	logger.LogProcessStep("CHECKPOINT: Starting runOptimizedAgent")
-	startTime := time.Now()
+	logger.LogProcessStep("CHECKPOINT: Starting adaptive agent execution")
+	
+	// Initialize agent context
+	context := &AgentContext{
+		UserIntent:         userIntent,
+		ExecutedOperations: []string{},
+		Errors:             []string{},
+		ValidationResults:  []string{},
+		IterationCount:     0,
+		MaxIterations:      5, // Prevent infinite loops
+		StartTime:          time.Now(),
+		TokenUsage:         tokenUsage,
+		Config:             cfg,
+		Logger:             logger,
+	}
+
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: runOptimizedAgent started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
-	logger.Logf("DEBUG: Starting optimized agent execution at %s for intent: %s", time.Now().Format(time.RFC3339), userIntent)
-	// Phase 1: Intent analysis with minimal context
-	logger.LogProcessStep("📋 Phase 1: Analyzing intent and determining scope...")
+	logger.Logf("DEBUG: Starting adaptive agent execution at %s for intent: %s", time.Now().Format(time.RFC3339), userIntent)
 
-	intentAnalysis, intentTokens, err := analyzeIntentWithMinimalContext(userIntent, cfg, logger)
-	if err != nil {
-		logger.LogError(fmt.Errorf("failed to analyze intent: %w", err))
-		return fmt.Errorf("failed to analyze intent: %w", err)
-	}
+	// Main adaptive execution loop
+	for context.IterationCount < context.MaxIterations {
+		context.IterationCount++
+		logger.LogProcessStep(fmt.Sprintf("� Agent Iteration %d/%d", context.IterationCount, context.MaxIterations))
 
-	// Track intent analysis tokens
-	tokenUsage.IntentAnalysis = intentTokens
-
-	logger.LogProcessStep(fmt.Sprintf("Intent Category: %s", intentAnalysis.Category))
-	logger.LogProcessStep(fmt.Sprintf("Complexity: %s", intentAnalysis.Complexity))
-	logger.LogProcessStep(fmt.Sprintf("Estimated Files: %d", len(intentAnalysis.EstimatedFiles)))
-	logger.LogProcessStep("CHECKPOINT: After estimated files log")
-	if len(intentAnalysis.EstimatedFiles) > 0 {
-		logger.LogProcessStep(fmt.Sprintf("Files: %s", strings.Join(intentAnalysis.EstimatedFiles, ", ")))
-	}
-
-	// Phase 2: Use orchestration model to create detailed edit plan
-	logger.LogProcessStep("🎯 Phase 2: Creating detailed edit plan with orchestration model...")
-	editPlan, planTokens, err := createDetailedEditPlan(userIntent, intentAnalysis, cfg, logger)
-	if err != nil {
-		// Check if this is an escalation request
-		if strings.Contains(err.Error(), "escalation required") {
-			logger.Logf("Escalating to full orchestration due to edit plan creation failure")
-			return runFullOrchestration(userIntent, cfg, logger)
+		// Step 1: Evaluate current progress and decide next action
+		evaluation, evalTokens, err := evaluateProgress(context)
+		if err != nil {
+			logger.LogError(fmt.Errorf("failed to evaluate progress: %w", err))
+			context.Errors = append(context.Errors, fmt.Sprintf("Progress evaluation failed: %v", err))
+			// Continue with fallback behavior rather than failing completely
+			evaluation = &ProgressEvaluation{
+				Status:     "needs_adjustment",
+				NextAction: "continue",
+				Reasoning:  "Fallback due to evaluation failure",
+			}
 		}
-		logger.LogError(fmt.Errorf("failed to create edit plan: %w", err))
-		return fmt.Errorf("failed to create edit plan: %w", err)
+		context.TokenUsage.ProgressEvaluation += evalTokens
+
+		logger.LogProcessStep(fmt.Sprintf("📊 Progress Status: %s (%d%% complete)", evaluation.Status, evaluation.CompletionPercentage))
+		logger.LogProcessStep(fmt.Sprintf("🎯 Next Action: %s", evaluation.NextAction))
+		logger.LogProcessStep(fmt.Sprintf("🤔 Reasoning: %s", evaluation.Reasoning))
+
+		// Handle concerns if any
+		if len(evaluation.Concerns) > 0 {
+			logger.LogProcessStep("⚠️ Concerns identified:")
+			for _, concern := range evaluation.Concerns {
+				logger.LogProcessStep(fmt.Sprintf("   • %s", concern))
+			}
+		}
+
+		// Step 2: Execute the decided action
+		err = executeAdaptiveAction(context, evaluation)
+		if err != nil {
+			context.Errors = append(context.Errors, fmt.Sprintf("Action execution failed: %v", err))
+			
+			// Try error escalation
+			escalationResult, escalationTokens, escalationErr := handleErrorEscalation(context, err)
+			context.TokenUsage.ErrorEscalation += escalationTokens
+			
+			if escalationErr != nil {
+				logger.LogError(fmt.Errorf("error escalation also failed: %w", escalationErr))
+				return fmt.Errorf("agent execution failed with escalation failure: %w", escalationErr)
+			}
+			
+			logger.LogProcessStep(fmt.Sprintf("🔧 Error escalation successful: %s", escalationResult))
+			continue
+		}
+
+		// Step 3: Check for completion
+		if evaluation.Status == "completed" {
+			logger.LogProcessStep("✅ Agent determined task is completed successfully")
+			break
+		}
+
+		// Step 4: Summarize context if it's getting too large
+		err = summarizeContextIfNeeded(context)
+		if err != nil {
+			logger.LogProcessStep(fmt.Sprintf("⚠️ Context summarization failed: %v", err))
+		}
+
+		// Prevent infinite loops
+		if context.IterationCount == context.MaxIterations {
+			logger.LogProcessStep("⚠️ Maximum iterations reached, completing execution")
+			break
+		}
 	}
-	tokenUsage.CodeGeneration += planTokens
 
-	// Phase 3: Context loading is now handled by edit plan (files from orchestration model)
-	logger.LogProcessStep("🔍 Phase 3: Edit plan specifies target files...")
-
-	// TEMPORARY: Force all complexities to use agent workflow until orchestration is optimized
-	switch intentAnalysis.Complexity {
-	case "simple":
-		logger.LogProcessStep(fmt.Sprintf("Using %d files from edit plan for simple task", len(editPlan.FilesToEdit)))
-	case "moderate":
-		logger.LogProcessStep(fmt.Sprintf("Using %d files from edit plan for moderate task", len(editPlan.FilesToEdit)))
-	case "complex":
-		// TEMPORARY: Use agent workflow instead of orchestration for complex tasks
-		logger.LogProcessStep("� Complex task detected, but using agent workflow instead of orchestration (temporary)")
-		logger.LogProcessStep(fmt.Sprintf("Using %d files from edit plan for complex task", len(editPlan.FilesToEdit)))
-	}
-
-	// Phase 4: Execute edit plan with fast editing model
-	logger.LogProcessStep("⚡ Phase 4: Executing edit plan with fast editing model...")
-	codeGenTokens, err := executeEditPlan(editPlan, cfg, logger)
-	if err != nil {
-		return err
-	}
-
-	// Phase 5: Validate changes with iterative fixing
-	logger.LogProcessStep("🔍 Phase 5: Validating changes...")
-	validationTokens, err := validateChangesWithIteration(intentAnalysis, userIntent, cfg, logger, tokenUsage)
-	if err != nil {
-		logger.LogError(fmt.Errorf("validation failed after iterations: %w", err))
-		return fmt.Errorf("validation failed: %w", err)
-	}
-
-	// Track all token usage
-	tokenUsage.Planning = planTokens
-	tokenUsage.CodeGeneration = codeGenTokens
-	tokenUsage.Validation = validationTokens
-	tokenUsage.Total = tokenUsage.IntentAnalysis + tokenUsage.Planning + tokenUsage.CodeGeneration + tokenUsage.Validation
-
-	duration := time.Since(startTime)
+	duration := time.Since(context.StartTime)
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: runOptimizedAgent completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+
+	logger.LogProcessStep(fmt.Sprintf("🎉 Adaptive agent execution completed in %d iterations", context.IterationCount))
 	return nil
 }
 
@@ -208,7 +234,36 @@ type TokenUsage struct {
 	Planning       int // Tokens used by orchestration model for detailed planning
 	CodeGeneration int
 	Validation     int
+	ProgressEvaluation int
+	ErrorEscalation int
 	Total          int
+}
+
+// AgentContext maintains state and context throughout agent execution
+type AgentContext struct {
+	UserIntent         string
+	CurrentPlan        *EditPlan
+	IntentAnalysis     *IntentAnalysis
+	ExecutedOperations []string // Track what has been completed
+	Errors             []string // Track errors encountered
+	ValidationResults  []string // Track validation outcomes
+	IterationCount     int
+	MaxIterations      int
+	StartTime          time.Time
+	TokenUsage         *TokenUsage
+	Config             *config.Config
+	Logger             *utils.Logger
+}
+
+// ProgressEvaluation represents the agent's assessment of current progress
+type ProgressEvaluation struct {
+	Status               string   `json:"status"`               // "on_track", "needs_adjustment", "critical_error", "completed"
+	CompletionPercentage int      `json:"completion_percentage"` // 0-100
+	NextAction           string   `json:"next_action"`           // "continue", "revise_plan", "run_command", "escalate", "validate"
+	Reasoning            string   `json:"reasoning"`             // Why this decision was made
+	Concerns             []string `json:"concerns"`              // Any issues identified
+	Commands             []string `json:"commands"`              // Shell commands to run if next_action is "run_command"
+	NewPlan              *string  `json:"new_plan"`              // New plan if next_action is "revise_plan"
 }
 
 // IntentAnalysis represents the analysis of user intent
@@ -414,46 +469,28 @@ ALL files must be existing %s files from the workspace above.`,
 	responseTokens := utils.EstimateTokens(response)
 	totalTokens := promptTokens + responseTokens
 
-	// Clean response and parse JSON
-	response = strings.TrimSpace(response)
-	if response == "" {
-		logger.Logf("LLM returned empty response for intent analysis. Falling back to heuristic analysis.")
-		// Fallback to simple analysis if LLM fails
+	// Clean response and parse JSON using centralized utility
+	cleanedResponse, err := utils.ExtractJSONFromLLMResponse(response)
+	if err != nil {
+		logger.LogError(fmt.Errorf("CRITICAL: Failed to extract JSON from intent analysis response: %w\nRaw response: %s", err, response))
+		// Use fallback analysis since JSON extraction failed
+		logger.Logf("Using fallback heuristic analysis due to JSON extraction failure")
 		duration := time.Since(startTime)
 		runtime.ReadMemStats(&m)
-		logger.Logf("PERF: analyzeIntentWithMinimalContext completed (empty response, fallback). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+		logger.Logf("PERF: analyzeIntentWithMinimalContext completed (JSON extraction error, fallback). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 		return &IntentAnalysis{
 			Category:        inferCategory(userIntent),
 			Complexity:      inferComplexity(userIntent),
 			EstimatedFiles:  []string{}, // Don't try to infer files in fallback
 			RequiresContext: true,
 		}, totalTokens, nil
-	}
-
-	if strings.Contains(response, "```json") {
-		parts := strings.Split(response, "```json")
-		if len(parts) > 1 {
-			jsonPart := parts[1]
-			end := strings.Index(jsonPart, "```")
-			if end > 0 {
-				response = strings.TrimSpace(jsonPart[:end])
-			}
-		}
 	}
 
 	var analysis IntentAnalysis
-	if err := json.Unmarshal([]byte(response), &analysis); err != nil {
-		logger.LogError(fmt.Errorf("failed to parse intent analysis JSON from LLM: %w\nRaw response: %s", err, response))
-		// Fallback to heuristic analysis if JSON parsing fails
-		duration := time.Since(startTime)
-		runtime.ReadMemStats(&m)
-		logger.Logf("PERF: analyzeIntentWithMinimalContext completed (JSON error, fallback). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-		return &IntentAnalysis{
-			Category:        inferCategory(userIntent),
-			Complexity:      inferComplexity(userIntent),
-			EstimatedFiles:  []string{}, // Don't try to infer files in fallback
-			RequiresContext: true,
-		}, totalTokens, nil
+	if err := json.Unmarshal([]byte(cleanedResponse), &analysis); err != nil {
+		// JSON parsing failure is an unrecoverable error - the LLM should always return valid JSON
+		logger.LogError(fmt.Errorf("CRITICAL: Failed to parse intent analysis JSON from LLM: %w\nCleaned JSON: %s\nRaw response: %s", err, cleanedResponse, response))
+		return nil, 0, fmt.Errorf("unrecoverable JSON parsing error in intent analysis: %w\nCleaned JSON: %s\nRaw Response: %s", err, cleanedResponse, response)
 	}
 
 	// Debug: log the parsed analysis
@@ -735,17 +772,11 @@ STRICT GUIDELINES:
 	responseTokens := utils.EstimateTokens(response)
 	totalTokens := promptTokens + responseTokens
 
-	// Clean and parse response
-	response = strings.TrimSpace(response)
-	if strings.Contains(response, "```json") {
-		parts := strings.Split(response, "```json")
-		if len(parts) > 1 {
-			jsonPart := parts[1]
-			end := strings.Index(jsonPart, "```")
-			if end > 0 {
-				response = strings.TrimSpace(jsonPart[:end])
-			}
-		}
+	// Clean and parse response using centralized JSON extraction utility
+	cleanedResponse, err := utils.ExtractJSONFromLLMResponse(response)
+	if err != nil {
+		logger.LogError(fmt.Errorf("CRITICAL: Failed to extract JSON from edit plan response: %w\nRaw response: %s", err, response))
+		return nil, 0, fmt.Errorf("failed to extract JSON from edit plan response: %w\nLLM Response: %s", err, response)
 	}
 
 	// Parse the response into a temporary structure for JSON unmarshaling
@@ -761,49 +792,10 @@ STRICT GUIDELINES:
 		ScopeStatement string `json:"scope_statement"`
 	}
 
-	if err := json.Unmarshal([]byte(response), &planData); err != nil {
-		logger.LogError(fmt.Errorf("failed to parse edit plan JSON: %w\nRaw response: %s", err, response))
-
-		// Check if we should escalate instead of falling back to poor quality raw user intent
-		if shouldEscalateToOrchestration(err, logger) {
-			logger.Logf("Escalating due to JSON parsing failure in createDetailedEditPlan")
-			// Return nil plan and escalation error to trigger orchestration at higher level
-			return nil, 0, fmt.Errorf("escalation required due to JSON parsing failure: %w", err)
-		}
-
-		// Fallback to simple plan
-		duration := time.Since(startTime)
-		runtime.ReadMemStats(&m)
-		logger.Logf("PERF: createDetailedEditPlan completed (JSON error, fallback). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-
-		// Handle empty contextFiles to avoid index out of range panic
-		var fallbackOperations []EditOperation
-		if len(contextFiles) > 0 {
-			fallbackOperations = []EditOperation{
-				{
-					FilePath:           contextFiles[0],
-					Description:        userIntent,
-					Instructions:       userIntent,
-					ScopeJustification: "Fallback operation due to JSON parsing failure",
-				},
-			}
-		} else {
-			// No context files available, create a generic operation
-			fallbackOperations = []EditOperation{
-				{
-					FilePath:           "",
-					Description:        userIntent,
-					Instructions:       userIntent,
-					ScopeJustification: "Fallback operation with no context files available",
-				},
-			}
-		}
-
-		return &EditPlan{
-			FilesToEdit:    contextFiles,
-			EditOperations: fallbackOperations,
-			Context:        "Fallback plan due to JSON parsing failure",
-		}, totalTokens, nil
+	if err := json.Unmarshal([]byte(cleanedResponse), &planData); err != nil {
+		// JSON parsing failure is an unrecoverable error - the LLM should always return valid JSON
+		logger.LogError(fmt.Errorf("CRITICAL: Failed to parse edit plan JSON from LLM: %w\nCleaned JSON: %s\nRaw response: %s", err, cleanedResponse, response))
+		return nil, 0, fmt.Errorf("unrecoverable JSON parsing error in edit plan creation: %w\nCleaned JSON: %s\nRaw Response: %s", err, cleanedResponse, response)
 	}
 
 	// Convert to our EditPlan structure
@@ -1731,14 +1723,9 @@ Respond with a JSON object containing your analysis and fix plan:
 	var fixPlan ValidationFixPlan
 	err = json.Unmarshal([]byte(response), &fixPlan)
 	if err != nil {
-		logger.Logf("Failed to parse JSON response, using fallback: %v", err)
-		// Create a fallback plan
-		fixPlan = ValidationFixPlan{
-			ErrorAnalysis: "JSON parsing failed, using fallback analysis",
-			AffectedFiles: relevantFiles,
-			FixStrategy:   "Apply general fixes based on error patterns",
-			Instructions:  []string{response}, // Use raw response as instruction
-		}
+		// JSON parsing failure is an unrecoverable error - the LLM should always return valid JSON
+		logger.LogError(fmt.Errorf("CRITICAL: Failed to parse validation fix plan JSON from LLM: %w\nRaw response: %s", err, response))
+		return nil, 0, fmt.Errorf("unrecoverable JSON parsing error in validation fix plan: %w\nLLM Response: %s", err, response)
 	}
 
 	tokens := utils.EstimateTokens(prompt + response)
@@ -2096,22 +2083,15 @@ Guidelines:
 		return nil, 0, fmt.Errorf("orchestration model failed to determine validation strategy: %w", err)
 	}
 
-	// Parse the response
-	response = strings.TrimSpace(response)
-	if strings.Contains(response, "```json") {
-		parts := strings.Split(response, "```json")
-		if len(parts) > 1 {
-			jsonPart := parts[1]
-			end := strings.Index(jsonPart, "```")
-			if end > 0 {
-				response = strings.TrimSpace(jsonPart[:end])
-			}
-		}
+	// Parse the response using centralized JSON extraction utility
+	cleanedResponse, err := utils.ExtractJSONFromLLMResponse(response)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to extract JSON from validation strategy response: %w\nRaw response: %s", err, response)
 	}
 
 	var strategy ValidationStrategy
-	if err := json.Unmarshal([]byte(response), &strategy); err != nil {
-		return nil, 0, fmt.Errorf("failed to parse validation strategy JSON: %w", err)
+	if err := json.Unmarshal([]byte(cleanedResponse), &strategy); err != nil {
+		return nil, 0, fmt.Errorf("failed to parse validation strategy JSON: %w\nCleaned JSON: %s\nRaw response: %s", err, cleanedResponse, response)
 	}
 
 	// Estimate tokens used
@@ -2378,6 +2358,15 @@ func printTokenUsageSummary(tokenUsage *TokenUsage, duration time.Duration) {
 	fmt.Printf("├─ Planning (Orchestration): %d tokens\n", tokenUsage.Planning)
 	fmt.Printf("├─ Code Generation (Editing): %d tokens\n", tokenUsage.CodeGeneration)
 	fmt.Printf("├─ Validation: %d tokens\n", tokenUsage.Validation)
+	fmt.Printf("├─ Progress Evaluation: %d tokens\n", tokenUsage.ProgressEvaluation)
+	fmt.Printf("├─ Error Escalation: %d tokens\n", tokenUsage.ErrorEscalation)
+	
+	// Calculate total if not already set
+	if tokenUsage.Total == 0 {
+		tokenUsage.Total = tokenUsage.IntentAnalysis + tokenUsage.Planning + tokenUsage.CodeGeneration + 
+			tokenUsage.Validation + tokenUsage.ProgressEvaluation + tokenUsage.ErrorEscalation
+	}
+	
 	fmt.Printf("└─ Total Usage: %d tokens\n", tokenUsage.Total)
 
 	// Estimate cost (rough approximation for popular models)
@@ -2774,4 +2763,626 @@ func runFullOrchestration(userIntent string, cfg *config.Config, logger *utils.L
 
 	logger.LogProcessStep("✅ Full orchestration completed successfully")
 	return nil
+}
+
+// evaluateProgress evaluates the current state and decides what to do next
+func evaluateProgress(context *AgentContext) (*ProgressEvaluation, int, error) {
+	// Build a comprehensive context summary for the LLM
+	var contextSummary strings.Builder
+	
+	contextSummary.WriteString("AGENT EXECUTION CONTEXT:\n")
+	contextSummary.WriteString(fmt.Sprintf("User Intent: %s\n", context.UserIntent))
+	contextSummary.WriteString(fmt.Sprintf("Iteration: %d/%d\n", context.IterationCount, context.MaxIterations))
+	contextSummary.WriteString(fmt.Sprintf("Elapsed Time: %v\n", time.Since(context.StartTime)))
+	
+	if context.IntentAnalysis != nil {
+		contextSummary.WriteString(fmt.Sprintf("Intent Analysis: Category=%s, Complexity=%s\n", 
+			context.IntentAnalysis.Category, context.IntentAnalysis.Complexity))
+	}
+	
+	if context.CurrentPlan != nil {
+		contextSummary.WriteString(fmt.Sprintf("Current Plan: %d files to edit, %d operations\n", 
+			len(context.CurrentPlan.FilesToEdit), len(context.CurrentPlan.EditOperations)))
+		contextSummary.WriteString(fmt.Sprintf("Plan Context: %s\n", context.CurrentPlan.Context))
+	}
+	
+	contextSummary.WriteString(fmt.Sprintf("Executed Operations (%d):\n", len(context.ExecutedOperations)))
+	for i, op := range context.ExecutedOperations {
+		contextSummary.WriteString(fmt.Sprintf("  %d. %s\n", i+1, op))
+	}
+	
+	contextSummary.WriteString(fmt.Sprintf("Errors Encountered (%d):\n", len(context.Errors)))
+	for i, err := range context.Errors {
+		contextSummary.WriteString(fmt.Sprintf("  %d. %s\n", i+1, err))
+	}
+	
+	contextSummary.WriteString(fmt.Sprintf("Validation Results (%d):\n", len(context.ValidationResults)))
+	for i, result := range context.ValidationResults {
+		contextSummary.WriteString(fmt.Sprintf("  %d. %s\n", i+1, result))
+	}
+
+	prompt := fmt.Sprintf(`You are an intelligent agent evaluating progress on a software development task. 
+
+%s
+
+TASK: Evaluate the current progress and decide the next action.
+
+ANALYSIS REQUIREMENTS:
+1. **Progress Assessment**: What percentage of the original task is complete?
+2. **Current Status**: Is the agent on track, needs adjustment, has critical errors, or is completed?
+3. **Next Action Decision**: Based on the current state, what should happen next?
+4. **Reasoning**: Why is this the best next action?
+5. **Risk Assessment**: What concerns or potential issues exist?
+
+AVAILABLE NEXT ACTIONS:
+- "continue": Proceed with the current plan (if we have one and no major issues)
+- "analyze_intent": Start with intent analysis (if no analysis has been done)
+- "create_plan": Create or recreate an edit plan (if no plan or plan needs revision)
+- "execute_edits": Execute the planned edit operations (if plan exists but edits not started)
+- "run_command": Execute shell commands for investigation or validation (specify commands)
+- "validate": Run validation checks on completed work
+- "escalate": Hand off to full orchestration for complex issues
+- "revise_plan": Create a new plan based on learnings (if current plan is inadequate)
+- "completed": Task is successfully completed
+
+DECISION LOGIC:
+- If iteration 1 and no intent analysis: "analyze_intent"
+- If intent analysis done but no plan: "create_plan"  
+- If plan exists but no edits executed: "execute_edits"
+- If edits done but not validated: "validate"
+- If errors occurred: assess if they can be handled or need "escalate"/"revise_plan"
+- If task appears complete: "completed"
+- If investigation needed: "run_command" with specific commands
+- If critical issues or max iterations approached: "escalate"
+
+Respond with JSON:
+{
+  "status": "on_track|needs_adjustment|critical_error|completed",
+  "completion_percentage": 0-100,
+  "next_action": "continue|analyze_intent|create_plan|execute_edits|run_command|validate|escalate|revise_plan|completed",
+  "reasoning": "detailed explanation of why this action is best",
+  "concerns": ["concern1", "concern2"],
+  "commands": ["command1", "command2"] // only if next_action is "run_command"
+}`, contextSummary.String())
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert software development agent that excels at evaluating progress and making smart decisions. Always respond with valid JSON."},
+		{Role: "user", Content: prompt},
+	}
+
+	_, response, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 60*time.Second)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get progress evaluation: %w", err)
+	}
+
+	// Clean and validate the JSON response
+	cleanedResponse, cleanErr := cleanAndValidateJSONResponse(response, []string{"status", "completion_percentage", "next_action", "reasoning"})
+	if cleanErr != nil {
+		context.Logger.LogError(fmt.Errorf("CRITICAL: LLM returned invalid JSON for progress evaluation: %w\nRaw response: %s", cleanErr, response))
+		return nil, 0, fmt.Errorf("unrecoverable JSON validation error in progress evaluation: %w\nLLM Response: %s", cleanErr, response)
+	}
+
+	// Parse the cleaned JSON response
+	var evaluation ProgressEvaluation
+	err = json.Unmarshal([]byte(cleanedResponse), &evaluation)
+	if err != nil {
+		// JSON parsing failure is an unrecoverable error - the LLM should always return valid JSON
+		context.Logger.LogError(fmt.Errorf("CRITICAL: Failed to parse progress evaluation JSON from LLM: %w\nCleaned response: %s", err, cleanedResponse))
+		return nil, 0, fmt.Errorf("unrecoverable JSON parsing error in progress evaluation: %w\nCleaned Response: %s", err, cleanedResponse)
+	}
+
+	tokens := utils.EstimateTokens(prompt + response)
+	return &evaluation, tokens, nil
+}
+
+// getDefaultNextAction provides a fallback decision when LLM evaluation fails
+func getDefaultNextAction(context *AgentContext) string {
+	if context.IntentAnalysis == nil {
+		return "analyze_intent"
+	}
+	if context.CurrentPlan == nil {
+		return "create_plan"
+	}
+	if len(context.ExecutedOperations) == 0 {
+		return "execute_edits"
+	}
+	if len(context.ValidationResults) == 0 {
+		return "validate"
+	}
+	return "completed"
+}
+
+// executeAdaptiveAction executes the action decided by the progress evaluator
+func executeAdaptiveAction(context *AgentContext, evaluation *ProgressEvaluation) error {
+	context.Logger.LogProcessStep(fmt.Sprintf("🎯 Executing action: %s", evaluation.NextAction))
+	
+	switch evaluation.NextAction {
+	case "analyze_intent":
+		return executeIntentAnalysis(context)
+	
+	case "create_plan":
+		return executeCreatePlan(context)
+	
+	case "execute_edits":
+		return executeEditOperations(context)
+	
+	case "run_command":
+		return executeShellCommands(context, evaluation.Commands)
+	
+	case "validate":
+		return executeValidation(context)
+	
+	case "revise_plan":
+		return executeRevisePlan(context, evaluation)
+	
+	case "escalate":
+		return fmt.Errorf("escalation required: %s", evaluation.Reasoning)
+	
+	case "completed":
+		context.Logger.LogProcessStep("✅ Task marked as completed by agent evaluation")
+		return nil
+	
+	case "continue":
+		context.Logger.LogProcessStep("▶️ Continuing with current plan")
+		return nil
+	
+	default:
+		return fmt.Errorf("unknown action: %s", evaluation.NextAction)
+	}
+}
+
+// executeIntentAnalysis performs intent analysis
+func executeIntentAnalysis(context *AgentContext) error {
+	context.Logger.LogProcessStep("📋 Executing intent analysis...")
+	
+	intentAnalysis, tokens, err := analyzeIntentWithMinimalContext(context.UserIntent, context.Config, context.Logger)
+	if err != nil {
+		return fmt.Errorf("intent analysis failed: %w", err)
+	}
+	
+	context.IntentAnalysis = intentAnalysis
+	context.TokenUsage.IntentAnalysis += tokens
+	context.ExecutedOperations = append(context.ExecutedOperations, "Intent analysis completed")
+	
+	context.Logger.LogProcessStep(fmt.Sprintf("✅ Intent analyzed: %s complexity, %s category", 
+		intentAnalysis.Complexity, intentAnalysis.Category))
+	return nil
+}
+
+// executeCreatePlan creates a detailed edit plan
+func executeCreatePlan(context *AgentContext) error {
+	context.Logger.LogProcessStep("🎯 Creating detailed edit plan...")
+	
+	if context.IntentAnalysis == nil {
+		return fmt.Errorf("cannot create plan without intent analysis")
+	}
+	
+	editPlan, tokens, err := createDetailedEditPlan(context.UserIntent, context.IntentAnalysis, context.Config, context.Logger)
+	if err != nil {
+		return fmt.Errorf("plan creation failed: %w", err)
+	}
+	
+	context.CurrentPlan = editPlan
+	context.TokenUsage.Planning += tokens
+	context.ExecutedOperations = append(context.ExecutedOperations, 
+		fmt.Sprintf("Created plan with %d operations for %d files", len(editPlan.EditOperations), len(editPlan.FilesToEdit)))
+	
+	context.Logger.LogProcessStep(fmt.Sprintf("✅ Plan created: %d files, %d operations", 
+		len(editPlan.FilesToEdit), len(editPlan.EditOperations)))
+	return nil
+}
+
+// executeEditOperations executes the planned edit operations
+func executeEditOperations(context *AgentContext) error {
+	context.Logger.LogProcessStep("⚡ Executing planned edit operations...")
+	
+	if context.CurrentPlan == nil {
+		return fmt.Errorf("cannot execute edits without a plan")
+	}
+	
+	tokens, err := executeEditPlanWithErrorHandling(context.CurrentPlan, context)
+	if err != nil {
+		return fmt.Errorf("edit execution failed: %w", err)
+	}
+	
+	context.TokenUsage.CodeGeneration += tokens
+	context.ExecutedOperations = append(context.ExecutedOperations, 
+		fmt.Sprintf("Executed %d edit operations", len(context.CurrentPlan.EditOperations)))
+	
+	context.Logger.LogProcessStep(fmt.Sprintf("✅ Completed %d edit operations", len(context.CurrentPlan.EditOperations)))
+	return nil
+}
+
+// executeShellCommands runs the specified shell commands
+func executeShellCommands(context *AgentContext, commands []string) error {
+	context.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing %d shell commands...", len(commands)))
+	
+	for i, command := range commands {
+		context.Logger.LogProcessStep(fmt.Sprintf("Running command %d: %s", i+1, command))
+		
+		// Split command into parts for exec.Command
+		parts := strings.Fields(command)
+		if len(parts) == 0 {
+			continue
+		}
+		
+		cmd := exec.Command(parts[0], parts[1:]...)
+		output, err := cmd.CombinedOutput()
+		
+		if err != nil {
+			errorMsg := fmt.Sprintf("Command failed: %s (output: %s)", err.Error(), string(output))
+			context.Errors = append(context.Errors, errorMsg)
+			context.Logger.LogProcessStep(fmt.Sprintf("❌ Command %d failed: %s", i+1, errorMsg))
+		} else {
+			result := fmt.Sprintf("Command %d succeeded: %s", i+1, string(output))
+			context.ExecutedOperations = append(context.ExecutedOperations, result)
+			context.Logger.LogProcessStep(fmt.Sprintf("✅ Command %d: %s", i+1, string(output)))
+		}
+	}
+	
+	return nil
+}
+
+// executeValidation runs validation checks
+func executeValidation(context *AgentContext) error {
+	context.Logger.LogProcessStep("🔍 Executing validation checks...")
+	
+	if context.IntentAnalysis == nil {
+		return fmt.Errorf("cannot validate without intent analysis")
+	}
+	
+	tokens, err := validateChangesWithIteration(context.IntentAnalysis, context.UserIntent, context.Config, context.Logger, context.TokenUsage)
+	if err != nil {
+		context.Errors = append(context.Errors, fmt.Sprintf("Validation failed: %v", err))
+		context.ValidationResults = append(context.ValidationResults, fmt.Sprintf("❌ Validation failed: %v", err))
+		return fmt.Errorf("validation failed: %w", err)
+	}
+	
+	context.TokenUsage.Validation += tokens
+	context.ValidationResults = append(context.ValidationResults, "✅ Validation passed")
+	context.ExecutedOperations = append(context.ExecutedOperations, "Validation completed successfully")
+	
+	context.Logger.LogProcessStep("✅ Validation completed successfully")
+	return nil
+}
+
+// executeRevisePlan creates a new plan based on current learnings
+func executeRevisePlan(context *AgentContext, evaluation *ProgressEvaluation) error {
+	context.Logger.LogProcessStep("🔄 Revising plan based on current state...")
+	
+	if context.IntentAnalysis == nil {
+		return fmt.Errorf("cannot revise plan without intent analysis")
+	}
+	
+	// If evaluation provided a new plan, use it; otherwise create a fresh one
+	if evaluation.NewPlan != nil {
+		context.Logger.LogProcessStep("Using revised plan from evaluation")
+		// Parse the new plan if it's JSON, otherwise treat as context
+		// For now, just create a new plan since parsing arbitrary plan format is complex
+	}
+	
+	// Create a fresh plan incorporating lessons learned
+	editPlan, tokens, err := createDetailedEditPlan(context.UserIntent, context.IntentAnalysis, context.Config, context.Logger)
+	if err != nil {
+		return fmt.Errorf("plan revision failed: %w", err)
+	}
+	
+	context.CurrentPlan = editPlan
+	context.TokenUsage.Planning += tokens
+	context.ExecutedOperations = append(context.ExecutedOperations, 
+		fmt.Sprintf("Revised plan: %d operations for %d files", len(editPlan.EditOperations), len(editPlan.FilesToEdit)))
+	
+	context.Logger.LogProcessStep(fmt.Sprintf("✅ Plan revised: %d files, %d operations", 
+		len(editPlan.FilesToEdit), len(editPlan.EditOperations)))
+	return nil
+}
+
+// executeEditPlanWithErrorHandling executes edit plan with proper error handling for agent context
+func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext) (int, error) {
+	totalTokens := 0
+	
+	// Track changes for context
+	var operationResults []string
+
+	for i, operation := range editPlan.EditOperations {
+		context.Logger.LogProcessStep(fmt.Sprintf("🔧 Edit %d/%d: %s (%s)", i+1, len(editPlan.EditOperations), operation.Description, operation.FilePath))
+		
+		// Create focused instructions for this specific edit
+		editInstructions := buildFocusedEditInstructions(operation, context.Logger)
+		tokenEstimate := utils.EstimateTokens(editInstructions)
+		totalTokens += tokenEstimate
+
+		// Execute the edit with error handling
+		var err error
+		if shouldUsePartialEdit(operation, context.Logger) {
+			context.Logger.Logf("Attempting partial edit for %s", operation.FilePath)
+			_, err = editor.ProcessPartialEdit(operation.FilePath, operation.Instructions, context.Config, context.Logger)
+			if err != nil {
+				context.Logger.Logf("Partial edit failed, falling back to full file edit: %v", err)
+				_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
+			}
+		} else {
+			context.Logger.Logf("Using full file edit for %s", operation.FilePath)
+			_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
+		}
+
+		if err != nil {
+			// Check if this is a "revisions applied" signal from the editor's review process
+			if strings.Contains(err.Error(), "revisions applied, re-validating") {
+				operationResult := fmt.Sprintf("✅ Edit %d completed with revision cycle", i+1)
+				operationResults = append(operationResults, operationResult)
+				context.Logger.LogProcessStep(operationResult)
+			} else {
+				// This is a real error - let the agent handle it
+				errorMsg := fmt.Sprintf("Edit operation %d failed: %v", i+1, err)
+				context.Errors = append(context.Errors, errorMsg)
+				context.Logger.LogProcessStep(fmt.Sprintf("❌ Edit %d failed: %v", i+1, err))
+				return totalTokens, fmt.Errorf("edit operation %d failed: %w", i+1, err)
+			}
+		} else {
+			operationResult := fmt.Sprintf("✅ Edit %d completed successfully", i+1)
+			operationResults = append(operationResults, operationResult)
+			context.Logger.LogProcessStep(operationResult)
+		}
+	}
+
+	// Update agent context with results
+	context.ExecutedOperations = append(context.ExecutedOperations, operationResults...)
+	
+	return totalTokens, nil
+}
+
+// handleErrorEscalation handles errors by using the agent's context to make intelligent decisions
+func handleErrorEscalation(context *AgentContext, err error) (string, int, error) {
+	context.Logger.LogProcessStep("🚨 Handling error escalation with agent context...")
+	
+	// Build context about the error and current state
+	errorContext := fmt.Sprintf(`ERROR ESCALATION CONTEXT:
+Original Intent: %s
+Current Iteration: %d/%d
+Error: %v
+
+Executed Operations:
+%s
+
+Previous Errors:
+%s
+
+Validation Results:
+%s
+
+Current Plan Status: %s
+`, 
+		context.UserIntent,
+		context.IterationCount, context.MaxIterations,
+		err,
+		strings.Join(context.ExecutedOperations, "\n"),
+		strings.Join(context.Errors, "\n"),
+		strings.Join(context.ValidationResults, "\n"),
+		getPlanStatus(context.CurrentPlan))
+
+	prompt := fmt.Sprintf(`You are an expert software development agent handling an error escalation.
+
+%s
+
+TASK: Analyze this error in context and determine the best recovery strategy.
+
+AVAILABLE RECOVERY STRATEGIES:
+1. "retry_with_adjustment": Modify the approach and retry the failed operation
+2. "skip_and_continue": Skip this operation and continue with remaining tasks
+3. "revise_plan": Create a completely new plan based on learnings
+4. "escalate_to_orchestration": Hand off to the full orchestration system
+5. "abort_with_summary": Stop execution and provide a summary of what was accomplished
+
+ANALYSIS REQUIREMENTS:
+1. **Error Classification**: Is this a transient error, configuration issue, or fundamental problem?
+2. **Impact Assessment**: How critical is this error to the overall task?
+3. **Recovery Feasibility**: Can this be recovered from automatically?
+4. **Resource Consideration**: How much time/effort has been invested vs remaining?
+
+Respond with your analysis and recommended recovery strategy:`, errorContext)
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert at error recovery and intelligent escalation in software development workflows."},
+		{Role: "user", Content: prompt},
+	}
+
+	_, response, err2 := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 60*time.Second)
+	if err2 != nil {
+		// If we can't even get escalation advice, use a simple fallback
+		return "Escalation analysis failed, using fallback recovery", 0, fmt.Errorf("escalation analysis failed: %w", err2)
+	}
+
+	tokens := utils.EstimateTokens(prompt + response)
+	
+	// For now, return the analysis. In a more sophisticated implementation,
+	// we could parse the response and execute the recommended strategy
+	context.Logger.LogProcessStep(fmt.Sprintf("🔧 Error escalation analysis: %s", response))
+	
+	return response, tokens, nil
+}
+
+// getPlanStatus returns a string describing the current plan status
+func getPlanStatus(plan *EditPlan) string {
+	if plan == nil {
+		return "No plan created"
+	}
+	return fmt.Sprintf("Plan with %d files and %d operations: %s", 
+		len(plan.FilesToEdit), len(plan.EditOperations), plan.Context)
+}
+
+// summarizeContextIfNeeded summarizes agent context if it gets too large
+func summarizeContextIfNeeded(context *AgentContext) error {
+	const maxOperations = 20
+	const maxErrors = 10
+	const maxValidationResults = 10
+	
+	// Check if summarization is needed
+	needsSummary := len(context.ExecutedOperations) > maxOperations ||
+		len(context.Errors) > maxErrors ||
+		len(context.ValidationResults) > maxValidationResults
+	
+	if !needsSummary {
+		return nil
+	}
+	
+	context.Logger.LogProcessStep("📝 Summarizing agent context to prevent overflow...")
+	
+	// Build summarization prompt
+	prompt := fmt.Sprintf(`Summarize this agent execution context to keep only the most important information:
+
+EXECUTED OPERATIONS (%d):
+%s
+
+ERRORS (%d):
+%s
+
+VALIDATION RESULTS (%d):
+%s
+
+TASK: Create a concise summary that preserves:
+1. Key milestones and achievements
+2. Critical errors and their impact
+3. Important validation outcomes
+4. Overall progress status
+
+Respond with JSON:
+{
+  "operations_summary": "concise summary of key operations",
+  "errors_summary": "summary of critical errors",
+  "validation_summary": "summary of validation outcomes",
+  "key_achievements": ["achievement1", "achievement2"],
+  "critical_issues": ["issue1", "issue2"]
+}`,
+		len(context.ExecutedOperations), strings.Join(context.ExecutedOperations, "\n"),
+		len(context.Errors), strings.Join(context.Errors, "\n"),
+		len(context.ValidationResults), strings.Join(context.ValidationResults, "\n"))
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert at summarizing complex execution contexts while preserving critical information. Always respond with valid JSON."},
+		{Role: "user", Content: prompt},
+	}
+
+	_, response, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 30*time.Second)
+	if err != nil {
+		context.Logger.Logf("Context summarization failed: %v", err)
+		// Fallback: just truncate the arrays
+		context.ExecutedOperations = context.ExecutedOperations[len(context.ExecutedOperations)-maxOperations/2:]
+		context.Errors = context.Errors[len(context.Errors)-maxErrors/2:]
+		context.ValidationResults = context.ValidationResults[len(context.ValidationResults)-maxValidationResults/2:]
+		return nil
+	}
+
+	// Parse the summary and replace the context
+	var summary struct {
+		OperationsSummary  string   `json:"operations_summary"`
+		ErrorsSummary      string   `json:"errors_summary"`
+		ValidationSummary  string   `json:"validation_summary"`
+		KeyAchievements    []string `json:"key_achievements"`
+		CriticalIssues     []string `json:"critical_issues"`
+	}
+
+	err = json.Unmarshal([]byte(response), &summary)
+	if err != nil {
+		context.Logger.Logf("Failed to parse summary JSON: %v", err)
+		// Fallback: simple truncation
+		context.ExecutedOperations = context.ExecutedOperations[len(context.ExecutedOperations)-maxOperations/2:]
+		context.Errors = context.Errors[len(context.Errors)-maxErrors/2:]
+		context.ValidationResults = context.ValidationResults[len(context.ValidationResults)-maxValidationResults/2:]
+		return nil
+	}
+
+	// Replace context arrays with summarized versions
+	context.ExecutedOperations = []string{
+		"=== SUMMARIZED OPERATIONS ===",
+		summary.OperationsSummary,
+		"=== KEY ACHIEVEMENTS ===",
+	}
+	context.ExecutedOperations = append(context.ExecutedOperations, summary.KeyAchievements...)
+
+	context.Errors = []string{
+		"=== SUMMARIZED ERRORS ===",
+		summary.ErrorsSummary,
+		"=== CRITICAL ISSUES ===",
+	}
+	context.Errors = append(context.Errors, summary.CriticalIssues...)
+
+	context.ValidationResults = []string{
+		"=== SUMMARIZED VALIDATION ===",
+		summary.ValidationSummary,
+	}
+
+	tokens := utils.EstimateTokens(prompt + response)
+	context.TokenUsage.ProgressEvaluation += tokens
+
+	context.Logger.LogProcessStep("✅ Context summarized successfully")
+	return nil
+}
+
+// cleanAndValidateJSONResponse cleans and validates JSON responses from LLMs
+func cleanAndValidateJSONResponse(response string, expectedFields []string) (string, error) {
+	// Remove common non-JSON prefixes/suffixes that LLMs sometimes add
+	response = strings.TrimSpace(response)
+	
+	// Remove markdown code blocks if present
+	if strings.Contains(response, "```json") {
+		parts := strings.Split(response, "```json")
+		if len(parts) > 1 {
+			jsonPart := parts[1]
+			end := strings.Index(jsonPart, "```")
+			if end > 0 {
+				response = strings.TrimSpace(jsonPart[:end])
+			}
+		}
+	}
+	
+	// Remove any text before the first { or [
+	firstBrace := strings.Index(response, "{")
+	firstBracket := strings.Index(response, "[")
+	
+	var startIdx int = -1
+	if firstBrace >= 0 && (firstBracket < 0 || firstBrace < firstBracket) {
+		startIdx = firstBrace
+	} else if firstBracket >= 0 {
+		startIdx = firstBracket
+	}
+	
+	if startIdx >= 0 {
+		response = response[startIdx:]
+	}
+	
+	// Remove any text after the last } or ]
+	lastBrace := strings.LastIndex(response, "}")
+	lastBracket := strings.LastIndex(response, "]")
+	
+	var endIdx int = -1
+	if lastBrace >= 0 && (lastBracket < 0 || lastBrace > lastBracket) {
+		endIdx = lastBrace + 1
+	} else if lastBracket >= 0 {
+		endIdx = lastBracket + 1
+	}
+	
+	if endIdx > 0 && endIdx <= len(response) {
+		response = response[:endIdx]
+	}
+	
+	// Validate that it's valid JSON
+	var jsonTest interface{}
+	if err := json.Unmarshal([]byte(response), &jsonTest); err != nil {
+		return "", fmt.Errorf("cleaned response is still not valid JSON: %w", err)
+	}
+	
+	// Check for expected fields if provided
+	if len(expectedFields) > 0 {
+		var jsonMap map[string]interface{}
+		if err := json.Unmarshal([]byte(response), &jsonMap); err == nil {
+			for _, field := range expectedFields {
+				if _, exists := jsonMap[field]; !exists {
+					return "", fmt.Errorf("required field '%s' is missing from JSON response", field)
+				}
+			}
+		}
+	}
+	
+	return response, nil
 }

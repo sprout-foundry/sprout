@@ -26,6 +26,112 @@ import (
 	"github.com/fatih/color"
 )
 
+// isIncompleteTruncatedResponse checks if a response is genuinely incomplete/truncated
+// This is much more conservative than the old IsPartialResponse to avoid false positives
+func isIncompleteTruncatedResponse(code, filename string) bool {
+	// Check for obvious truncation markers that indicate the LLM gave up
+	truncationMarkers := []string{
+		"... (rest of file unchanged)",
+		"... rest of the file ...",
+		"... content truncated ...",
+		"... full file content ...",
+		"[TRUNCATED]",
+		"[INCOMPLETE]",
+		"// ... (truncated)",
+	}
+
+	codeLower := strings.ToLower(code)
+	for _, marker := range truncationMarkers {
+		if strings.Contains(codeLower, marker) {
+			return true
+		}
+	}
+
+	// Check if the file appears to end abruptly (no proper closing braces for Go files)
+	if strings.HasSuffix(filename, ".go") {
+		// Count opening and closing braces - if severely unbalanced, likely truncated
+		openBraces := strings.Count(code, "{")
+		closeBraces := strings.Count(code, "}")
+		
+		// Allow some imbalance for partial code, but large imbalances suggest truncation
+		if openBraces > closeBraces+5 {
+			return true
+		}
+		
+		// Check if it looks like it ends mid-function (very short and ends with incomplete syntax)
+		lines := strings.Split(strings.TrimSpace(code), "\n")
+		if len(lines) < 10 { // Very short response
+			lastLine := strings.TrimSpace(lines[len(lines)-1])
+			// Ends with incomplete syntax patterns
+			incompleteSyntax := []string{"{", "if ", "for ", "func ", "var ", "const "}
+			for _, syntax := range incompleteSyntax {
+				if strings.HasSuffix(lastLine, syntax) {
+					return true
+				}
+			}
+		}
+	}
+
+	// Default to accepting the response - better to process partial code than loop forever
+	return false
+}
+
+// isIntentionalPartialCode determines if partial code is intentional vs truncated
+func isIntentionalPartialCode(code, instructions string) bool {
+	instructionsLower := strings.ToLower(instructions)
+
+	// If instructions specifically ask for partial/targeted changes, accept partial code
+	partialIntentKeywords := []string{
+		"add function", "add method", "add import", "add constant",
+		"modify function", "update function", "change function",
+		"add to", "insert", "create function", "new function",
+		"add the following", "implement the following",
+	}
+
+	for _, keyword := range partialIntentKeywords {
+		if strings.Contains(instructionsLower, keyword) {
+			return true
+		}
+	}
+
+	// If the code looks structurally complete for what was asked
+	lines := strings.Split(strings.TrimSpace(code), "\n")
+	if len(lines) == 0 {
+		return false
+	}
+
+	// Check if it's a complete function/method/struct
+	firstLine := strings.TrimSpace(lines[0])
+	lastLine := strings.TrimSpace(lines[len(lines)-1])
+
+	// For Go code, check if it looks like a complete structure
+	if strings.HasPrefix(firstLine, "func ") {
+		// Should end with } or similar
+		return strings.HasSuffix(lastLine, "}") || strings.Contains(lastLine, "return")
+	}
+
+	if strings.HasPrefix(firstLine, "type ") {
+		// Should end with } for structs/interfaces
+		return strings.HasSuffix(lastLine, "}")
+	}
+
+	if strings.HasPrefix(firstLine, "import ") || strings.Contains(firstLine, `"`) {
+		// Import statements are naturally short and partial
+		return true
+	}
+
+	if strings.HasPrefix(firstLine, "const ") || strings.HasPrefix(firstLine, "var ") {
+		// Variable/constant declarations are naturally short
+		return true
+	}
+
+	// If none of the above, be conservative and assume it's intentional
+	// (better to handle partial code than loop forever)
+	return true
+}
+
+// getFirstNLines returns the first N lines of content
+
 // getLanguageFromExtension infers the programming language from the file extension.
 func getLanguageFromExtension(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
@@ -227,15 +333,16 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 			continue
 		}
 
-		// Check if this is a partial response by looking for the partial content marker pattern
-		if parser.IsPartialResponse(newCode) {
-			// Instead of trying to merge, reject the partial response and ask for the full file
-			fmt.Printf("⚠️  Detected partial response for %s. The LLM provided incomplete code with markers like '...unchanged...'.\n", newFilename)
+		// Check if this is a TRULY incomplete response (not just partial code snippets)
+		// We need to be much more conservative here to avoid infinite retry loops
+		if isIncompleteTruncatedResponse(newCode, newFilename) {
+			// Only retry if the response is genuinely incomplete/truncated
+			fmt.Printf("⚠️  Detected incomplete/truncated response for %s. The LLM provided genuinely incomplete code.\n", newFilename)
 			fmt.Printf("Requesting the LLM to provide the complete file content...\n")
 
 			// Create a more specific prompt asking for the complete file
-			retryPrompt := fmt.Sprintf(`The previous response contained partial content markers (like "...unchanged..." or "// rest of file") for the file %s. 
-This is not acceptable as I need the COMPLETE file content.
+			retryPrompt := fmt.Sprintf(`The previous response was incomplete or truncated for the file %s. 
+This appears to be a genuine truncation issue (not intentional partial code).
 
 Please provide the ENTIRE file content for %s from beginning to end, including:
 - ALL imports and package declarations
@@ -244,7 +351,7 @@ Please provide the ENTIRE file content for %s from beginning to end, including:
 - ALL comments and documentation
 - The specific changes requested in the original instructions
 
-Do NOT use any partial content markers like "...unchanged...", "// rest of file", or similar abbreviations.
+Do NOT use any truncation markers like "... (rest of file unchanged)" or similar.
 The file must be complete and ready to save and execute.
 
 Original instructions: %s
@@ -259,7 +366,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			// Use the editor to get a complete response
 			retryResult, err := ProcessCodeGeneration(newFilename, retryPrompt, cfg, "")
 			if err != nil {
-				return "", fmt.Errorf("failed to get complete file content after partial response: %w", err)
+				return "", fmt.Errorf("failed to get complete file content after truncated response: %w", err)
 			}
 
 			if retryResult != "" {
@@ -547,6 +654,19 @@ func ProcessPartialEdit(filePath, targetInstructions string, cfg *config.Config,
 		return ProcessCodeGeneration(filePath, targetInstructions, cfg, "")
 	}
 
+	// Smart handling of partial code snippets - don't reject them if they look intentional
+	if parser.IsPartialResponse(updatedSection) {
+		// Check if this looks like an intentional partial code snippet vs truncation
+		if isIntentionalPartialCode(updatedSection, targetInstructions) {
+			logger.Logf("LLM provided intentional partial code snippet for targeted edit")
+			// Clean and proceed with the partial code
+			updatedSection = cleanPartialCodeSnippet(updatedSection)
+		} else {
+			logger.Logf("LLM provided truncated/incomplete code, falling back to full file edit")
+			return ProcessCodeGeneration(filePath, targetInstructions, cfg, "")
+		}
+	}
+
 	// Apply the partial edit to the original file
 	updatedContent := applyPartialEdit(string(originalContent), updatedSection, sectionStart, sectionEnd)
 
@@ -734,13 +854,14 @@ CRITICAL INSTRUCTIONS:
 3. Return ONLY the updated version of this top section
 4. Maintain proper indentation and formatting
 5. Do NOT include the entire file - just the updated top section
+6. Do NOT use placeholder comments like "// existing code" or "// unchanged"
 
 Format your response as:
 `+"```"+`go
 [updated top section here]
 `+"```"+`
 
-Make sure to add the requested content at the very beginning.`, filePath, startLine+1, endLine+1, originalInstructions, sectionContent)
+Provide ONLY the actual code for this section, no placeholders or truncation markers.`, filePath, startLine+1, endLine+1, originalInstructions, sectionContent)
 	}
 
 	// Standard partial edit instructions for other sections
@@ -749,22 +870,33 @@ Make sure to add the requested content at the very beginning.`, filePath, startL
 ORIGINAL TASK: %s
 
 CURRENT SECTION TO EDIT:
+`+"```"+`go
 %s
+`+"```"+`
 
-CRITICAL INSTRUCTIONS:
-1. Return ONLY the updated version of this section
-2. Maintain proper indentation and formatting
-3. Keep line numbers and context consistent
-4. Do NOT include the entire file - just the updated section
-5. Make ONLY the changes specified in the original task
-6. Preserve all existing functionality not being changed
+CRITICAL PARTIAL EDIT INSTRUCTIONS:
+1. Make the requested changes to this specific section ONLY
+2. Return ONLY the modified version of this section
+3. Do NOT include the entire file - just this section with your changes
+4. Do NOT use placeholder comments like "// unchanged", "// existing code", or "// rest of file"
+5. Do NOT add truncation markers like "..." or "// (content continues)"
+6. Provide complete, working code for this section
+7. Maintain proper Go syntax and formatting
+8. If adding new functions/methods, include them completely
+9. If modifying existing functions, include the complete modified function
+
+WHAT TO RETURN:
+- Only the specific code section that needs to be changed
+- Complete and syntactically correct
+- No placeholders or "..." markers
+- Ready to be inserted directly into the file
 
 Format your response as:
 `+"```"+`go
-[updated section here]
+[complete updated section here]
 `+"```"+`
 
-Focus on making precise, targeted changes to achieve the goal.`, filePath, startLine+1, endLine+1, originalInstructions, sectionContent)
+Remember: Return ONLY the actual code for this section, make it complete and functional.`, filePath, startLine+1, endLine+1, originalInstructions, sectionContent)
 }
 
 // getUpdatedCodeSection gets LLM response for just a section of code
@@ -773,20 +905,112 @@ func getUpdatedCodeSection(sectionContent, instructions, filePath string, cfg *c
 }
 
 // applyPartialEdit applies the updated section to the original content
+// Improved version that handles partial code snippets better and cleans up comments
 func applyPartialEdit(originalContent, updatedSection string, startLine, endLine int) string {
 	lines := strings.Split(originalContent, "\n")
+	
+	// Clean the updated section of problematic comments that could cause issues
+	cleanedUpdatedSection := cleanPartialCodeSnippet(updatedSection)
+	updatedLines := strings.Split(cleanedUpdatedSection, "\n")
+
+	// Validate and adjust the line range to avoid issues
+	if startLine < 0 {
+		startLine = 0
+	}
+	if endLine >= len(lines) {
+		endLine = len(lines) - 1
+	}
+	if startLine > endLine {
+		// If range is invalid, try to find a better insertion point
+		betterStart, betterEnd := findBetterInsertionPoint(lines, updatedLines, startLine)
+		startLine = betterStart
+		endLine = betterEnd
+	}
 
 	// Replace the lines from startLine to endLine with the updated section
 	before := lines[:startLine]
 	after := lines[endLine+1:]
-
-	updatedLines := strings.Split(updatedSection, "\n")
 
 	// Combine: before + updated + after
 	result := append(before, updatedLines...)
 	result = append(result, after...)
 
 	return strings.Join(result, "\n")
+}
+
+// cleanPartialCodeSnippet removes problematic comments and markers from partial code
+func cleanPartialCodeSnippet(code string) string {
+	lines := strings.Split(code, "\n")
+	var cleanedLines []string
+
+	for _, line := range lines {
+		lineToCheck := strings.ToLower(strings.TrimSpace(line))
+		
+		// Skip obvious placeholder comments that could cause issues
+		problematicComments := []string{
+			"// existing code",
+			"// unchanged",
+			"// rest of",
+			"// other functions",
+			"// previous code",
+			"// ... (truncated)",
+			"/* existing",
+			"/* unchanged",
+		}
+		
+		shouldSkip := false
+		for _, problematic := range problematicComments {
+			if strings.Contains(lineToCheck, problematic) {
+				shouldSkip = true
+				break
+			}
+		}
+		
+		if !shouldSkip {
+			cleanedLines = append(cleanedLines, line)
+		}
+	}
+
+	return strings.Join(cleanedLines, "\n")
+}
+
+// findBetterInsertionPoint tries to find a more appropriate place to insert code
+// when the provided line range is invalid or problematic
+func findBetterInsertionPoint(originalLines, updatedLines []string, preferredStart int) (int, int) {
+	// If we have function-like content in the update, try to find where it belongs
+	firstUpdatedLine := ""
+	if len(updatedLines) > 0 {
+		firstUpdatedLine = strings.TrimSpace(updatedLines[0])
+	}
+
+	// For Go code, try to place functions in appropriate locations
+	if strings.HasPrefix(firstUpdatedLine, "func ") {
+		// Find other function definitions to place this near
+		for i, line := range originalLines {
+			if strings.Contains(strings.TrimSpace(line), "func ") && i >= preferredStart {
+				// Insert before this function
+				return i, i
+			}
+		}
+	}
+
+	// For imports, place with other imports
+	if strings.HasPrefix(firstUpdatedLine, "import ") || strings.Contains(firstUpdatedLine, `"`) {
+		for i, line := range originalLines {
+			if strings.Contains(line, "import") {
+				// Insert after existing imports
+				return i + 1, i + 1
+			}
+		}
+	}
+
+	// Default: try to place at the end of the file before the last few lines
+	safeEnd := len(originalLines) - 3
+	if safeEnd < 0 {
+		safeEnd = 0
+	}
+	
+	return safeEnd, safeEnd
 }
 
 // handleTopOfFileEdit handles edits that add content at the top of a file

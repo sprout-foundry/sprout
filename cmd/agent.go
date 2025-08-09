@@ -844,15 +844,15 @@ STRICT GUIDELINES:
 	cleanedResponse, err := utils.ExtractJSONFromLLMResponse(response)
 	if err != nil {
 		logger.LogError(fmt.Errorf("CRITICAL: Failed to extract JSON from edit plan response: %w\nRaw response: %s", err, response))
-		
+
 		// Check if this looks like a truncated response and retry with different approach
 		if strings.Contains(err.Error(), "no matching closing brace") || strings.Contains(err.Error(), "unexpected end of JSON input") {
 			logger.LogProcessStep(fmt.Sprintf("⚠️ Response truncated (length: %d chars), retrying with optimized prompt...", len(response)))
-			
+
 			// Retry up to 3 times with progressively shorter prompts
 			return retryEditPlanWithShorterPrompt(userIntent, intentAnalysis, contextFiles, cfg, logger, 1)
 		}
-		
+
 		return nil, 0, fmt.Errorf("failed to extract JSON from edit plan response: %w\nLLM Response: %s", err, response)
 	}
 
@@ -954,13 +954,13 @@ func retryEditPlanWithShorterPrompt(userIntent string, intentAnalysis *IntentAna
 		if attempt >= 3 && i >= 1 { // Only first file on retry 3
 			break
 		}
-		
+
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			logger.LogError(fmt.Errorf("could not read file %s for context: %w", filePath, err))
 			continue
 		}
-		
+
 		// Truncate file content on retries to reduce prompt size
 		maxContentLength := 2000 // Full content on first retry
 		if attempt >= 2 {
@@ -969,12 +969,12 @@ func retryEditPlanWithShorterPrompt(userIntent string, intentAnalysis *IntentAna
 		if attempt >= 3 {
 			maxContentLength = 500 // Very short on retry 3
 		}
-		
+
 		fileContent := string(content)
 		if len(fileContent) > maxContentLength {
 			fileContent = fileContent[:maxContentLength] + "\n... [truncated for retry]"
 		}
-		
+
 		contextContent.WriteString(fmt.Sprintf("## File: %s\n```\n%s\n```\n\n", filePath, fileContent))
 	}
 
@@ -1006,10 +1006,10 @@ IMPORTANT:
 - Use minimal but complete JSON`
 
 	prompt := fmt.Sprintf(promptTemplate, userIntent, contextContent.String(), attempt)
-	
+
 	// Use shorter timeout on retries
 	timeout := time.Duration(120-attempt*20) * time.Second
-	
+
 	messages := []prompts.Message{
 		{Role: "user", Content: prompt},
 	}
@@ -1029,7 +1029,7 @@ IMPORTANT:
 			logger.LogProcessStep(fmt.Sprintf("⚠️ Retry %d still truncated (length: %d), trying again...", attempt, len(response)))
 			return retryEditPlanWithShorterPrompt(userIntent, intentAnalysis, contextFiles, cfg, logger, attempt+1)
 		}
-		
+
 		logger.LogError(fmt.Errorf("retry %d JSON extraction failed: %w", attempt, err))
 		return retryEditPlanWithShorterPrompt(userIntent, intentAnalysis, contextFiles, cfg, logger, attempt+1)
 	}
@@ -1069,7 +1069,7 @@ IMPORTANT:
 	}
 
 	logger.LogProcessStep(fmt.Sprintf("✅ Retry %d successful! Edit plan created with %d operations", attempt, len(operations)))
-	
+
 	return editPlan, utils.EstimateTokens(response), nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
@@ -549,19 +550,16 @@ func ProcessPartialEdit(filePath, targetInstructions string, cfg *config.Config,
 	// Apply the partial edit to the original file
 	updatedContent := applyPartialEdit(string(originalContent), updatedSection, sectionStart, sectionEnd)
 
-	// Write the updated content back to the file
-	if err := os.WriteFile(filePath, []byte(updatedContent), 0644); err != nil {
-		return "", fmt.Errorf("failed to write updated file %s: %w", filePath, err)
-	}
-
-	// Generate diff for display
-	diff, err := generateDiff(string(originalContent), updatedContent, filePath)
+	// Write the updated content directly to the file
+	err = os.WriteFile(filePath, []byte(updatedContent), 0644)
 	if err != nil {
-		logger.Logf("Warning: could not generate diff: %v", err)
-		return fmt.Sprintf("Updated %s (diff generation failed)", filePath), nil
+		return "", fmt.Errorf("failed to write updated content to %s: %w", filePath, err)
 	}
 
-	logger.Logf("Successfully applied partial edit to %s", filePath)
+	logger.Logf("Successfully processed partial edit for %s", filePath)
+
+	// Generate a simple diff for user feedback
+	diff := fmt.Sprintf("Applied partial edit to %s (section lines %d-%d)", filePath, sectionStart+1, sectionEnd+1)
 	return diff, nil
 }
 
@@ -583,6 +581,18 @@ func extractRelevantSection(content, instructions, filePath string) (string, int
 // extractGoSection extracts relevant Go code sections (functions, types, etc.)
 func extractGoSection(lines []string, instructions string) (string, int, int, error) {
 	instructionsLower := strings.ToLower(instructions)
+
+	// Handle "top of file" requests specially
+	if strings.Contains(instructionsLower, "top of") || strings.Contains(instructionsLower, "beginning of") ||
+		strings.Contains(instructionsLower, "start of") {
+		// Return the first few lines of the file including package declaration and imports
+		endLine := 10 // Get first 10 lines to include package and initial imports
+		if len(lines) < endLine {
+			endLine = len(lines) - 1
+		}
+		section := strings.Join(lines[0:endLine+1], "\n")
+		return section, 0, endLine, nil
+	}
 
 	// Try to find function names mentioned in instructions
 	funcPattern := regexp.MustCompile(`func\s+(\w+)`)
@@ -700,6 +710,31 @@ func extractGenericSection(lines []string, instructions string) (string, int, in
 
 // buildPartialEditInstructions creates instructions specifically for partial editing
 func buildPartialEditInstructions(originalInstructions, sectionContent, filePath string, startLine, endLine int) string {
+	// Special handling for top-of-file edits
+	if startLine == 0 {
+		return fmt.Sprintf(`You are editing the top of %s (lines %d-%d), including the package declaration and initial imports.
+
+ORIGINAL TASK: %s
+
+CURRENT TOP SECTION:
+%s
+
+CRITICAL INSTRUCTIONS:
+1. Add the requested content at the very top of the file (before package declaration)
+2. Keep the package declaration and all existing imports exactly as they are
+3. Return ONLY the updated version of this top section
+4. Maintain proper indentation and formatting
+5. Do NOT include the entire file - just the updated top section
+
+Format your response as:
+`+"```"+`go
+[updated top section here]
+`+"```"+`
+
+Make sure to add the requested content at the very beginning.`, filePath, startLine+1, endLine+1, originalInstructions, sectionContent)
+	}
+
+	// Standard partial edit instructions for other sections
 	return fmt.Sprintf(`You are editing a specific section of %s (lines %d-%d).
 
 ORIGINAL TASK: %s
@@ -745,41 +780,65 @@ func applyPartialEdit(originalContent, updatedSection string, startLine, endLine
 	return strings.Join(result, "\n")
 }
 
-// generateDiff creates a simple diff representation
-func generateDiff(original, updated, filePath string) (string, error) {
-	originalLines := strings.Split(original, "\n")
-	updatedLines := strings.Split(updated, "\n")
+// handleTopOfFileEdit handles edits that add content at the top of a file
+func handleTopOfFileEdit(filePath, targetInstructions, originalContent string, cfg *config.Config, logger *utils.Logger) (string, error) {
+	// Create instructions specifically for adding content at the top
+	instructions := fmt.Sprintf(`You need to add content at the very top of the file %s.
 
-	var diff strings.Builder
-	diff.WriteString(fmt.Sprintf("--- %s (original)\n", filePath))
-	diff.WriteString(fmt.Sprintf("+++ %s (updated)\n", filePath))
+ORIGINAL TASK: %s
 
-	// Simple line-by-line diff
-	maxLines := len(originalLines)
-	if len(updatedLines) > maxLines {
-		maxLines = len(updatedLines)
+CURRENT FILE CONTENT (first 10 lines):
+%s
+
+INSTRUCTIONS:
+1. Add the requested content at the very top of the file
+2. Keep all existing content exactly as it is
+3. Return the COMPLETE updated file content
+4. Make sure the new content is properly formatted for the file type
+
+Format your response as:
+`+"```"+`go
+[complete updated file content here]
+`+"```"+`
+
+The new content should be added at the very beginning, before any existing content.`,
+		filePath, targetInstructions, getFirstNLines(originalContent, 10))
+
+	// Get the updated file content from LLM
+	_, llmResponse, err := context.GetLLMCodeResponse(cfg, originalContent, instructions, filePath, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to get LLM response for top-of-file edit: %w", err)
 	}
 
-	for i := 0; i < maxLines; i++ {
-		originalLine := ""
-		updatedLine := ""
-
-		if i < len(originalLines) {
-			originalLine = originalLines[i]
-		}
-		if i < len(updatedLines) {
-			updatedLine = updatedLines[i]
-		}
-
-		if originalLine != updatedLine {
-			if originalLine != "" {
-				diff.WriteString(fmt.Sprintf("-%s\n", originalLine))
-			}
-			if updatedLine != "" {
-				diff.WriteString(fmt.Sprintf("+%s\n", updatedLine))
-			}
-		}
+	// Extract the updated code from the LLM response
+	updatedContent, err := parser.ExtractCodeFromResponse(llmResponse, getLanguageFromExtension(filePath))
+	if err != nil || updatedContent == "" {
+		return "", fmt.Errorf("could not extract updated content from LLM response: %w", err)
 	}
 
-	return diff.String(), nil
+	// Use the same handleFileUpdates workflow to ensure consistency
+	updatedCode := map[string]string{
+		filePath: updatedContent,
+	}
+
+	// Generate a revision ID for change tracking
+	revisionID := fmt.Sprintf("top-edit-%d", time.Now().Unix())
+
+	// Use the standard approval workflow
+	diff, err := handleFileUpdates(updatedCode, revisionID, cfg, targetInstructions, targetInstructions, llmResponse)
+	if err != nil {
+		return "", fmt.Errorf("failed to handle top-of-file updates: %w", err)
+	}
+
+	logger.Logf("Successfully processed top-of-file edit for %s", filePath)
+	return diff, nil
+}
+
+// getFirstNLines returns the first n lines of a string
+func getFirstNLines(content string, n int) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) <= n {
+		return content
+	}
+	return strings.Join(lines[:n], "\n")
 }

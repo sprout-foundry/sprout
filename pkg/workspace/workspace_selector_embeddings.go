@@ -55,4 +55,3 @@ func GetFilesForContextUsingEmbeddings(instructions string, workspace WorkspaceF
 
 	return fullContextFiles, summaryContextFiles, nil
 }
-

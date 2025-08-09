@@ -59,14 +59,34 @@ var fixCmd = &cobra.Command{
 			log.Fatalf("Failed to load configuration: %v. Please run 'ledit init'.", err)
 		}
 
+// Editing lines 62-82
 		if fixModelFlag != "" {
 			cfg.EditingModel = fixModelFlag
 		}
 		cfg.SkipPrompt = fixSkipPromptFlag
 
-		instructions := fmt.Sprintf("Fix the following command output: \n-------\n%s\n-------\n  making sure to include all files that have errors and files they reference. #WS", output)
+		var problemDescriptionBuilder strings.Builder
+		if err != nil {
+			problemDescriptionBuilder.WriteString("Error encountered:\n-------\n")
+			problemDescriptionBuilder.WriteString(err.Error())
+			problemDescriptionBuilder.WriteString("\n-------\n")
+		}
+		if output != "" {
+			if problemDescriptionBuilder.Len() > 0 {
+				problemDescriptionBuilder.WriteString("Command Output:\n-------\n")
+			} else {
+				problemDescriptionBuilder.WriteString("Output:\n-------\n")
+			}
+			problemDescriptionBuilder.WriteString(output)
+			problemDescriptionBuilder.WriteString("\n-------\n")
+		}
+		problemDescription := problemDescriptionBuilder.String()
+
+		var instructions string
 		if fixSkipWorkspaceContextFlag {
-			instructions = fmt.Sprintf("Fix the following command output: \n-------\n%s\n-------\n ", output)
+			instructions = fmt.Sprintf("Fix the following command output: \n%s\n ", problemDescription)
+		} else {
+			instructions = fmt.Sprintf("Fix the following command output: \n%s\n  making sure to include all files that have errors and files they reference. #WS", problemDescription)
 		}
 
 		// Prepend optional instructions if provided

@@ -125,7 +125,15 @@ func (vdb *VectorDB) GetAll() ([]*CodeEmbedding, error) {
 	var allEmbeddings []*CodeEmbedding
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-			id := strings.TrimSuffix(file.Name(), ".json")
+			encodedID := strings.TrimSuffix(file.Name(), ".json")
+			// Decode the base64 filename to get the actual ID
+			idBytes, err := base64.URLEncoding.DecodeString(encodedID)
+			if err != nil {
+				fmt.Printf("Warning: failed to decode embedding filename %s: %v\n", encodedID, err)
+				continue
+			}
+			id := string(idBytes)
+
 			emb, err := LoadEmbedding(id)
 			if err != nil {
 				// Log error but continue with other embeddings

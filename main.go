@@ -1,3 +1,4 @@
+// Test comment
 // ledit is a command-line tool designed for managing and editing LED configurations.
 // It provides various commands to interact with LED setups.
 package main
@@ -8,8 +9,7 @@ import (
 	"github.com/alantheprice/ledit/cmd"
 	"github.com/alantheprice/ledit/pkg/prompts" // Import prompts for user-friendly error messages
 	"github.com/alantheprice/ledit/pkg/utils"   // Import the utils package
-
-	"os" // Import os for os.Exit
+	"os"                                        // Import os for os.Exit
 )
 
 func main() {

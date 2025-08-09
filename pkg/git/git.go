@@ -30,12 +30,12 @@ func GetGitRemoteURL() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("could not find git remotes: %v", string(remotesOut))
 		}
-		
+
 		remotes := strings.Split(strings.TrimSpace(string(remotesOut)), "\n")
 		if len(remotes) == 0 || remotes[0] == "" {
 			return "", nil // No remotes configured
 		}
-		
+
 		// Get URL for the first remote
 		cmd = exec.Command("git", "remote", "get-url", remotes[0])
 		out, err = cmd.CombinedOutput()
@@ -133,18 +133,18 @@ func GetUncommittedChanges() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get git diff: %v", string(diffOut))
 	}
-	
+
 	diff := strings.TrimSpace(string(diffOut))
 	if diff == "" {
 		return "", nil // No uncommitted changes
 	}
-	
+
 	// Truncate if too long to keep under token limit
 	const maxDiffLength = 5000 // Limit diff length to help stay under 2000 tokens
 	if len(diff) > maxDiffLength {
 		diff = diff[:maxDiffLength] + "\n... (diff truncated for brevity)"
 	}
-	
+
 	return diff, nil
 }
 
@@ -156,17 +156,17 @@ func GetStagedChanges() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get staged git diff: %v", string(diffOut))
 	}
-	
+
 	diff := strings.TrimSpace(string(diffOut))
 	if diff == "" {
 		return "", nil // No staged changes
 	}
-	
+
 	// Truncate if too long to keep under token limit
 	const maxDiffLength = 5000 // Limit diff length to help stay under 2000 tokens
 	if len(diff) > maxDiffLength {
 		diff = diff[:maxDiffLength] + "\n... (diff truncated for brevity)"
 	}
-	
+
 	return diff, nil
 }

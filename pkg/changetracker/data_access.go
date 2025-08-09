@@ -35,9 +35,9 @@ type ChangeMetadata struct {
 	Status           string    `json:"status"`
 	Note             string    `json:"note"`
 	Description      string    `json:"description"`
-	OriginalPrompt   string    `json:"original_prompt,omitempty"`   // Added: Original user prompt
-	LLMMessage       string    `json:"llm_message,omitempty"`       // Added: Full message sent to LLM
-	EditingModel     string    `json:"editing_model,omitempty"`     // Added: Editing model used
+	OriginalPrompt   string    `json:"original_prompt,omitempty"` // Added: Original user prompt
+	LLMMessage       string    `json:"llm_message,omitempty"`     // Added: Full message sent to LLM
+	EditingModel     string    `json:"editing_model,omitempty"`   // Added: Editing model used
 }
 
 // ChangeLog represents a logged change, including context from the base revision.
@@ -53,9 +53,9 @@ type ChangeLog struct {
 	Note             sql.NullString
 	Status           string
 	Timestamp        time.Time
-	OriginalPrompt   string         // Added: Original user prompt
-	LLMMessage       string         // Added: Full message sent to LLM
-	EditingModel     string         // Added: Editing model used
+	OriginalPrompt   string // Added: Original user prompt
+	LLMMessage       string // Added: Full message sent to LLM
+	EditingModel     string // Added: Editing model used
 }
 
 func ensureChangesDirs() error {

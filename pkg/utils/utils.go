@@ -203,3 +203,66 @@ func TruncateString(s string, maxLength int) string {
 	}
 	return s[:maxLength-3] + "..."
 }
+
+// ExtractJSONFromLLMResponse extracts JSON from an LLM response that may contain markdown formatting
+// This is a centralized utility to handle the common issue of LLMs wrapping JSON in code blocks
+func ExtractJSONFromLLMResponse(response string) (string, error) {
+	// First try to extract from markdown code blocks
+	if strings.Contains(response, "```json") {
+		parts := strings.Split(response, "```json")
+		if len(parts) > 1 {
+			jsonPart := parts[1]
+			end := strings.Index(jsonPart, "```")
+			if end > 0 {
+				jsonStr := strings.TrimSpace(jsonPart[:end])
+				if jsonStr != "" {
+					return jsonStr, nil
+				}
+			}
+		}
+	}
+
+	// Try to find JSON object boundaries if no markdown blocks
+	response = strings.TrimSpace(response)
+	
+	// Look for first opening brace or bracket
+	startBrace := strings.Index(response, "{")
+	startBracket := strings.Index(response, "[")
+	
+	var start int = -1
+	var isArray bool = false
+	
+	if startBrace >= 0 && (startBracket < 0 || startBrace < startBracket) {
+		start = startBrace
+		isArray = false
+	} else if startBracket >= 0 {
+		start = startBracket
+		isArray = true
+	}
+	
+	if start == -1 {
+		return "", fmt.Errorf("no JSON object or array found (no opening brace or bracket)")
+	}
+
+	// Look for matching closing brace/bracket from the end
+	var end int = -1
+	if isArray {
+		end = strings.LastIndex(response, "]")
+	} else {
+		end = strings.LastIndex(response, "}")
+	}
+	
+	if end == -1 || end <= start {
+		return "", fmt.Errorf("no matching closing brace/bracket found")
+	}
+
+	// Extract the JSON substring
+	jsonStr := strings.TrimSpace(response[start : end+1])
+	
+	// Validate it's not empty
+	if jsonStr == "" {
+		return "", fmt.Errorf("extracted JSON is empty")
+	}
+
+	return jsonStr, nil
+}

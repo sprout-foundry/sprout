@@ -302,9 +302,26 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 		}
 	}
 
+	// Extract JSON from response with improved error handling
+	jsonStr, extractErr := extractJSONFromResponse(response)
+	
+	// Validate that we have a non-empty JSON string
+	if jsonStr == "" {
+		if extractErr != nil {
+			return nil, fmt.Errorf("failed to extract JSON from LLM response: %w. Full response: %s", extractErr, response)
+		}
+		return nil, fmt.Errorf("failed to extract JSON from LLM response. Full response: %s", response)
+	}
+
+	// Add debug logging for JSON parsing issues
+	if os.Getenv("DEBUG_JSON_PARSING") == "true" {
+		fmt.Printf("DEBUG: Extracted JSON string: %s\n", jsonStr)
+		fmt.Printf("DEBUG: JSON length: %d\n", len(jsonStr))
+	}
+
 	var reviewResult types.CodeReviewResult
 	if err := json.Unmarshal([]byte(jsonStr), &reviewResult); err != nil {
-		return nil, fmt.Errorf("failed to parse code review JSON from LLM response: %w\nResponse was: %s", err, response)
+		return nil, fmt.Errorf("failed to parse code review JSON from LLM response: %w\nExtracted JSON was: %s\nFull response was: %s", err, jsonStr, response)
 	}
 
 	return &reviewResult, nil
@@ -379,4 +396,53 @@ func parseStagedCodeReviewResponse(response string) (*types.CodeReviewResult, er
 	}
 
 	return result, nil
+}
+
+// extractJSONFromResponse extracts JSON from an LLM response that may contain markdown formatting
+func extractJSONFromResponse(response string) (string, error) {
+	// First try to extract from markdown code blocks
+	if strings.Contains(response, "```json") {
+		parts := strings.Split(response, "```json")
+		if len(parts) > 1 {
+			jsonPart := parts[1]
+			end := strings.Index(jsonPart, "```")
+			if end > 0 {
+				jsonStr := strings.TrimSpace(jsonPart[:end])
+				if jsonStr != "" {
+					return jsonStr, nil
+				}
+			}
+		}
+	}
+
+	// Try to find JSON object boundaries
+	response = strings.TrimSpace(response)
+	
+	// Look for first opening brace
+	start := strings.Index(response, "{")
+	if start == -1 {
+		return "", fmt.Errorf("no JSON object found (no opening brace)")
+	}
+
+	// Look for matching closing brace from the end
+	end := strings.LastIndex(response, "}")
+	if end == -1 || end <= start {
+		return "", fmt.Errorf("no matching closing brace found")
+	}
+
+	// Extract the JSON substring
+	jsonStr := strings.TrimSpace(response[start : end+1])
+	
+	// Validate it's not empty
+	if jsonStr == "" {
+		return "", fmt.Errorf("extracted JSON is empty")
+	}
+
+	// Quick validation - try to parse as JSON
+	var test interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &test); err != nil {
+		return "", fmt.Errorf("extracted string is not valid JSON: %w", err)
+	}
+
+	return jsonStr, nil
 }

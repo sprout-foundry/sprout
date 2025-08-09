@@ -231,26 +231,10 @@ func generateRequirements(prompt string, cfg *config.Config) (*types.Orchestrati
 		return nil, fmt.Errorf("LLM returned an empty response for orchestration plan")
 	}
 
-	// Try to extract JSON from response (handles both raw JSON and code block JSON)
-	var jsonStr string
-	if strings.Contains(response, "```json") {
-		// Handle code block JSON
-		parts := strings.Split(response, "```json")
-		if len(parts) > 1 {
-			jsonPart := parts[1]
-			end := strings.Index(jsonPart, "```")
-			if end > 0 {
-				jsonStr = strings.TrimSpace(jsonPart[:end])
-			} else {
-				jsonStr = strings.TrimSpace(jsonPart)
-			}
-		}
-	} else if strings.Contains(response, `"requirements"`) { // Heuristic to detect raw JSON
-		jsonStr = response
-	}
-
-	if jsonStr == "" {
-		return nil, fmt.Errorf("LLM response did not contain expected JSON for orchestration plan: %s", response)
+	// Try to extract JSON from response using centralized utility
+	jsonStr, err := utils.ExtractJSONFromLLMResponse(response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract JSON from orchestration plan response: %w\nResponse was: %s", err, response)
 	}
 
 	var plan types.OrchestrationPlan

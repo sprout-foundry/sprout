@@ -304,7 +304,7 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 
 	// Extract JSON from response with improved error handling
 	jsonStr, extractErr := extractJSONFromResponse(response)
-	
+
 	// Validate that we have a non-empty JSON string
 	if jsonStr == "" {
 		if extractErr != nil {
@@ -417,7 +417,7 @@ func extractJSONFromResponse(response string) (string, error) {
 
 	// Try to find JSON object boundaries
 	response = strings.TrimSpace(response)
-	
+
 	// Look for first opening brace
 	start := strings.Index(response, "{")
 	if start == -1 {
@@ -432,7 +432,7 @@ func extractJSONFromResponse(response string) (string, error) {
 
 	// Extract the JSON substring
 	jsonStr := strings.TrimSpace(response[start : end+1])
-	
+
 	// Validate it's not empty
 	if jsonStr == "" {
 		return "", fmt.Errorf("extracted JSON is empty")

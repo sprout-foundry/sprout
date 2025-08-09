@@ -459,10 +459,27 @@ ALL files must be existing %s files from the workspace above.`,
 	// Debug: log the parsed analysis
 	logger.Logf("Parsed analysis - Category: %s, Complexity: %s, Files: %v", analysis.Category, analysis.Complexity, analysis.EstimatedFiles)
 
-	// If LLM didn't provide files, fall back to content-based search
+	// If LLM didn't provide files, fall back to embedding-based search
 	if len(analysis.EstimatedFiles) == 0 {
-		analysis.EstimatedFiles = findRelevantFilesByContent(userIntent, logger)
-		logger.Logf("LLM provided no files, using content-based search: %v", analysis.EstimatedFiles)
+		// Try embeddings first, fall back to content search if embeddings fail  
+		workspaceFileData, embErr := workspace.LoadWorkspaceFile()
+		if embErr == nil {
+			fullContextFiles, summaryContextFiles, embErr := workspace.GetFilesForContextUsingEmbeddings(userIntent, workspaceFileData, cfg, logger)
+			embeddingFiles := append(fullContextFiles, summaryContextFiles...)
+			
+			if embErr != nil || len(embeddingFiles) == 0 {
+				logger.Logf("Embedding search failed or returned no results, falling back to content search: %v", embErr)
+				analysis.EstimatedFiles = findRelevantFilesByContent(userIntent, logger)
+				logger.Logf("LLM provided no files, using content-based search: %v", analysis.EstimatedFiles)
+			} else {
+				analysis.EstimatedFiles = embeddingFiles
+				logger.Logf("LLM provided no files, using embedding-based search: %v", analysis.EstimatedFiles)
+			}
+		} else {
+			logger.Logf("Could not load workspace file, falling back to content search: %v", embErr)
+			analysis.EstimatedFiles = findRelevantFilesByContent(userIntent, logger)
+			logger.Logf("LLM provided no files, using content-based search: %v", analysis.EstimatedFiles)
+		}
 	}
 
 	duration := time.Since(startTime)
@@ -1511,30 +1528,307 @@ func fixValidationIssues(validationResults []string, originalIntent string, inte
 		return 0, nil
 	}
 
-	// Use LLM to analyze the build output and create a fix prompt
-	fixPrompt, tokens, err := analyzeBuildErrorsAndCreateFix(validationResults, originalIntent, intentAnalysis, cfg, logger)
+	logger.LogProcessStep("🔧 Applying LLM-analyzed fixes...")
+
+	// Step 1: Use orchestration model to analyze errors and create fix plan
+	fixPlan, analysisTokens, err := analyzeValidationErrorsWithContext(validationResults, originalIntent, intentAnalysis, cfg, logger)
 	if err != nil {
 		duration := time.Since(startTime)
 		runtime.ReadMemStats(&m)
 		logger.Logf("PERF: fixValidationIssues completed (analysis error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-		return tokens, fmt.Errorf("failed to analyze build errors: %w", err)
+		return analysisTokens, fmt.Errorf("failed to analyze validation errors: %w", err)
 	}
 
-	logger.LogProcessStep("🔧 Applying LLM-analyzed fixes...")
-
-	// Use the editor to apply fixes
-	_, err = editor.ProcessCodeGeneration("", fixPrompt, cfg, "")
+	// Step 2: Execute the fix plan using the editing model
+	execTokens, err := executeValidationFixPlan(fixPlan, cfg, logger)
 	if err != nil {
 		duration := time.Since(startTime)
 		runtime.ReadMemStats(&m)
-		logger.Logf("PERF: fixValidationIssues completed (error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-		return tokens, fmt.Errorf("failed to apply fixes: %w", err)
+		logger.Logf("PERF: fixValidationIssues completed (execution error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+		return analysisTokens + execTokens, fmt.Errorf("failed to execute fix plan: %w", err)
 	}
 
+	totalTokens := analysisTokens + execTokens
 	duration := time.Since(startTime)
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: fixValidationIssues completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-	return tokens, nil
+	return totalTokens, nil
+}
+
+// ValidationFixPlan represents a plan to fix validation errors
+type ValidationFixPlan struct {
+	ErrorAnalysis string   `json:"error_analysis"`
+	AffectedFiles []string `json:"affected_files"`
+	FixStrategy   string   `json:"fix_strategy"`
+	Instructions  []string `json:"instructions"`
+}
+
+// analyzeValidationErrorsWithContext uses orchestration model to analyze validation errors and create a comprehensive fix plan
+func analyzeValidationErrorsWithContext(validationResults []string, originalIntent string, intentAnalysis *IntentAnalysis, cfg *config.Config, logger *utils.Logger) (*ValidationFixPlan, int, error) {
+	// Extract error messages
+	var errorMessages []string
+	for _, result := range validationResults {
+		if strings.HasPrefix(result, "❌") {
+			errorMsg := strings.TrimPrefix(result, "❌ ")
+			errorMessages = append(errorMessages, errorMsg)
+		}
+	}
+
+	if len(errorMessages) == 0 {
+		return nil, 0, fmt.Errorf("no error messages found in validation results")
+	}
+
+	// Use embeddings to find files related to the errors
+	relevantFiles, err := findFilesRelatedToErrors(errorMessages, cfg, logger)
+	if err != nil {
+		logger.Logf("Warning: Could not find files using embeddings for errors: %v", err)
+		relevantFiles = []string{}
+	}
+
+	// Get project file tree for context
+	fileTree, err := getProjectFileTree()
+	if err != nil {
+		logger.Logf("Warning: Could not get project file tree: %v", err)
+		fileTree = "Unable to load project structure"
+	}
+
+	// Build comprehensive analysis prompt
+	prompt := fmt.Sprintf(`You are an expert Go developer analyzing validation errors to create a targeted fix plan.
+
+ORIGINAL TASK: %s
+TASK CATEGORY: %s
+
+VALIDATION ERRORS:
+%s
+
+PROJECT FILE TREE:
+%s
+
+POTENTIALLY RELEVANT FILES (from embedding search):
+%s
+
+CONTEXT:
+- This is a Go project with module "github.com/alantheprice/ledit"
+- All imports must use full module paths
+- Focus on minimal, targeted fixes that resolve the specific errors
+- Consider both direct fixes and dependency issues
+
+ANALYSIS REQUIREMENTS:
+1. **Error Classification**: What type of errors are these? (import, syntax, missing functions, etc.)
+2. **Root Cause**: What is the underlying cause of each error?
+3. **Affected Files**: Which specific files need changes to fix these errors?
+4. **Fix Strategy**: What is the minimal approach to resolve all errors?
+5. **Implementation Plan**: Specific instructions for each file change needed
+
+Respond with a JSON object containing your analysis and fix plan:
+{
+  "error_analysis": "Detailed analysis of what went wrong",
+  "affected_files": ["list", "of", "files", "that", "need", "changes"],
+  "fix_strategy": "High-level strategy for fixing the errors",
+  "instructions": ["specific instruction 1", "specific instruction 2", "..."]
+}`,
+		originalIntent,
+		intentAnalysis.Category,
+		strings.Join(errorMessages, "\n"),
+		fileTree,
+		strings.Join(relevantFiles, "\n"))
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert Go developer who excels at analyzing validation errors and creating targeted fix plans. Always respond with valid JSON."},
+		{Role: "user", Content: prompt},
+	}
+
+	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 60*time.Second)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get orchestration model analysis: %w", err)
+	}
+
+	// Parse the JSON response
+	var fixPlan ValidationFixPlan
+	err = json.Unmarshal([]byte(response), &fixPlan)
+	if err != nil {
+		logger.Logf("Failed to parse JSON response, using fallback: %v", err)
+		// Create a fallback plan
+		fixPlan = ValidationFixPlan{
+			ErrorAnalysis: "JSON parsing failed, using fallback analysis",
+			AffectedFiles: relevantFiles,
+			FixStrategy:   "Apply general fixes based on error patterns",
+			Instructions:  []string{response}, // Use raw response as instruction
+		}
+	}
+
+	tokens := utils.EstimateTokens(prompt + response)
+	logger.Logf("Validation error analysis complete: %d affected files, strategy: %s", len(fixPlan.AffectedFiles), fixPlan.FixStrategy)
+
+	return &fixPlan, tokens, nil
+}
+
+// executeValidationFixPlan executes the fix plan using the editing model
+func executeValidationFixPlan(plan *ValidationFixPlan, cfg *config.Config, logger *utils.Logger) (int, error) {
+	logger.Logf("Executing fix plan: %s", plan.FixStrategy)
+	
+	totalTokens := 0
+	
+	// If we have specific files to fix, target them individually
+	if len(plan.AffectedFiles) > 0 {
+		for _, filePath := range plan.AffectedFiles {
+			// Check if file exists
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				logger.Logf("Skipping non-existent file: %s", filePath)
+				continue
+			}
+
+			// Create targeted fix instructions for this file
+			fileInstructions := fmt.Sprintf(`Fix validation errors in this file based on the following analysis and strategy:
+
+ERROR ANALYSIS: %s
+
+FIX STRATEGY: %s
+
+SPECIFIC INSTRUCTIONS:
+%s
+
+Focus only on changes needed to resolve validation errors. Make minimal, targeted fixes.`,
+				plan.ErrorAnalysis,
+				plan.FixStrategy,
+				strings.Join(plan.Instructions, "\n"))
+
+			// Apply fix using partial edit
+			logger.Logf("Applying fixes to file: %s", filePath)
+			_, err := editor.ProcessPartialEdit(filePath, fileInstructions, cfg, logger)
+			if err != nil {
+				logger.Logf("Failed to apply fixes to %s: %v", filePath, err)
+				// Try full file processing as fallback
+				_, err = editor.ProcessCodeGeneration(filePath, fileInstructions, cfg, "")
+				if err != nil {
+					logger.Logf("Failed full file fix for %s: %v", filePath, err)
+					continue
+				}
+			}
+
+			// Estimate tokens used (rough approximation)
+			totalTokens += utils.EstimateTokens(fileInstructions) / 2 // Divide by 2 since response is typically shorter
+		}
+	} else {
+		// No specific files identified, use general fix approach
+		generalInstructions := fmt.Sprintf(`Fix the validation errors based on this analysis:
+
+ERROR ANALYSIS: %s
+FIX STRATEGY: %s
+
+INSTRUCTIONS:
+%s
+
+Apply fixes to resolve all validation errors.`,
+			plan.ErrorAnalysis,
+			plan.FixStrategy,
+			strings.Join(plan.Instructions, "\n"))
+
+		_, err := editor.ProcessCodeGeneration("", generalInstructions, cfg, "")
+		if err != nil {
+			return totalTokens, fmt.Errorf("failed to apply general fixes: %w", err)
+		}
+
+		totalTokens += utils.EstimateTokens(generalInstructions) / 2
+	}
+
+	logger.Logf("Fix plan execution completed for %d files", len(plan.AffectedFiles))
+	return totalTokens, nil
+}
+
+// findFilesRelatedToErrors uses embeddings to find files that might be related to the validation errors
+func findFilesRelatedToErrors(errorMessages []string, cfg *config.Config, logger *utils.Logger) ([]string, error) {
+	// Load workspace file for embeddings
+	workspaceFileData, err := workspace.LoadWorkspaceFile()
+	if err != nil {
+		return nil, fmt.Errorf("could not load workspace file: %w", err)
+	}
+
+	var allRelevantFiles []string
+	
+	// Search for files related to each error message
+	for _, errorMsg := range errorMessages {
+		// Extract key terms from error message for embedding search
+		searchQuery := fmt.Sprintf("Error: %s", errorMsg)
+		
+		fullContextFiles, summaryContextFiles, err := workspace.GetFilesForContextUsingEmbeddings(searchQuery, workspaceFileData, cfg, logger)
+		if err != nil {
+			logger.Logf("Embedding search failed for error: %v", err)
+			continue
+		}
+		
+		// Combine and deduplicate files
+		relevantFiles := append(fullContextFiles, summaryContextFiles...)
+		for _, file := range relevantFiles {
+			// Simple deduplication
+			found := false
+			for _, existing := range allRelevantFiles {
+				if existing == file {
+					found = true
+					break
+				}
+			}
+			if !found {
+				allRelevantFiles = append(allRelevantFiles, file)
+			}
+		}
+	}
+
+	// Limit to reasonable number of files
+	maxFiles := 10
+	if len(allRelevantFiles) > maxFiles {
+		allRelevantFiles = allRelevantFiles[:maxFiles]
+	}
+
+	return allRelevantFiles, nil
+}
+
+// getProjectFileTree returns a representation of the project file structure
+func getProjectFileTree() (string, error) {
+	var tree strings.Builder
+	
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Continue despite errors
+		}
+		
+		// Skip hidden files and common ignore patterns
+		if strings.HasPrefix(filepath.Base(path), ".") && path != "." {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		
+		// Skip common build/temp directories
+		skipDirs := []string{"vendor", "node_modules", "target", "build", "dist"}
+		for _, skipDir := range skipDirs {
+			if strings.Contains(path, skipDir) {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+		}
+		
+		// Build tree representation
+		depth := strings.Count(path, string(os.PathSeparator))
+		indent := strings.Repeat("  ", depth)
+		
+		if info.IsDir() {
+			tree.WriteString(fmt.Sprintf("%s%s/\n", indent, filepath.Base(path)))
+		} else {
+			tree.WriteString(fmt.Sprintf("%s%s\n", indent, filepath.Base(path)))
+		}
+		
+		return nil
+	})
+	
+	if err != nil {
+		return "", err
+	}
+	
+	return tree.String(), nil
 }
 
 // analyzeBuildErrorsAndCreateFix uses LLM to understand build errors and create targeted fixes

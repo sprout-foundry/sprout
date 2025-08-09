@@ -3132,23 +3132,6 @@ Respond with JSON:
 	return &evaluation, tokens, nil
 }
 
-// getDefaultNextAction provides a fallback decision when LLM evaluation fails
-func getDefaultNextAction(context *AgentContext) string {
-	if context.IntentAnalysis == nil {
-		return "analyze_intent"
-	}
-	if context.CurrentPlan == nil {
-		return "create_plan"
-	}
-	if len(context.ExecutedOperations) == 0 {
-		return "execute_edits"
-	}
-	if len(context.ValidationResults) == 0 {
-		return "validate"
-	}
-	return "completed"
-}
-
 // executeAdaptiveAction executes the action decided by the progress evaluator
 func executeAdaptiveAction(context *AgentContext, evaluation *ProgressEvaluation) error {
 	context.Logger.LogProcessStep(fmt.Sprintf("🎯 Executing action: %s", evaluation.NextAction))

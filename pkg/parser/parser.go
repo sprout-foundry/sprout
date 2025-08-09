@@ -49,41 +49,32 @@ func isEndOfCodeBlock(line string, currentLanguage string) bool {
 }
 
 // IsPartialContentMarker checks if a line is a partial content marker.
-// Common patterns that indicate partial content:
-// - "...unchanged..." or "// ...unchanged..."
-// - "... rest of file ..." or "// rest of file"
-// - "... existing code ..." or "// existing code"
-// - "... (content unchanged) ..."
-// - "// ... other methods unchanged ..."
-// This is case-insensitive for better detection.
+// This function is now MUCH MORE CONSERVATIVE to avoid false positives that cause
+// infinite retry loops. It only detects very obvious placeholder patterns.
 func IsPartialContentMarker(line string) bool {
 	lowerLine := strings.ToLower(strings.TrimSpace(line))
 
-	// Check for ellipsis patterns with common partial content indicators
-	partialIndicators := []string{
-		"unchanged", "rest of file", "existing code", "content unchanged",
-		"other methods", "other functions", "remaining code", "previous code",
-		"same as before", "no changes", "keep existing", "rest unchanged",
-		"other imports", "existing imports", "previous imports",
+	// Only detect extremely obvious placeholder patterns that are clearly incomplete
+	// These are patterns that indicate the LLM gave up or truncated the response
+	obviosPlaceholderPatterns := []string{
+		"... (rest of file unchanged)", // Very specific placeholder
+		"... rest of the file ...",     // Common truncation pattern
+		"// ... rest unchanged ...",    // Obvious placeholder comment
+		"/* ... unchanged ... */",      // Block comment placeholder
+		"... content truncated ...",    // Explicit truncation marker
+		"... full file content ...",    // Obvious incomplete marker
 	}
 
-	// Look for ellipsis (...) followed by any of the partial indicators
-	if strings.Contains(lowerLine, "...") {
-		for _, indicator := range partialIndicators {
-			if strings.Contains(lowerLine, indicator) {
-				return true
-			}
+	// Only flag as partial if we find these very specific patterns
+	for _, pattern := range obviosPlaceholderPatterns {
+		if strings.Contains(lowerLine, pattern) {
+			return true
 		}
 	}
 
-	// Also check for comment patterns like "// rest of file" without ellipsis
-	if strings.HasPrefix(lowerLine, "//") || strings.HasPrefix(lowerLine, "#") {
-		for _, indicator := range partialIndicators {
-			if strings.Contains(lowerLine, indicator) {
-				return true
-			}
-		}
-	}
+	// REMOVED: The overly aggressive detection that was causing loops
+	// We no longer detect general patterns like "unchanged", "existing code", etc.
+	// because legitimate partial code snippets often contain these words
 
 	return false
 }

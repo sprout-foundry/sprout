@@ -1,6 +1,7 @@
 package embedding
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -41,12 +42,8 @@ func NewVectorDB() *VectorDB {
 
 // GetEmbeddingFilePath returns the file path for a given embedding ID.
 func GetEmbeddingFilePath(id string) string {
-	// Use a simple hash or sanitized version of the ID for the filename
-	// For now, we'll just use the ID directly, assuming it's safe for filenames
-	// and replace problematic characters.
-	sanitizedID := strings.ReplaceAll(id, "/", "_")
-	sanitizedID = strings.ReplaceAll(sanitizedID, ":", "-")
-	return filepath.Join(".ledit", "embeddings", sanitizedID+".json")
+	encodedID := base64.URLEncoding.EncodeToString([]byte(id))
+	return filepath.Join(".ledit", "embeddings", encodedID+".json")
 }
 
 // LoadEmbedding loads a single CodeEmbedding from a file.

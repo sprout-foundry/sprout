@@ -176,6 +176,12 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 			return fmt.Errorf("agent execution failed: %w", err)
 		}
 
+		// Check for immediate completion (e.g., from immediate execution)
+		if context.IsCompleted {
+			logger.LogProcessStep("✅ Agent determined task is completed successfully")
+			break
+		}
+
 		// Step 3: Check for completion
 		if evaluation.Status == "completed" {
 			logger.LogProcessStep("✅ Agent determined task is completed successfully")
@@ -228,6 +234,7 @@ type AgentContext struct {
 	TokenUsage         *TokenUsage
 	Config             *config.Config
 	Logger             *utils.Logger
+	IsCompleted        bool // Flag to indicate task completion (e.g., via immediate execution)
 }
 
 // ProgressEvaluation represents the agent's assessment of current progress
@@ -243,10 +250,12 @@ type ProgressEvaluation struct {
 
 // IntentAnalysis represents the analysis of user intent
 type IntentAnalysis struct {
-	Category        string   // "code", "fix", "docs", "test", "review"
-	Complexity      string   // "simple", "moderate", "complex"
-	EstimatedFiles  []string // Files likely to be involved
-	RequiresContext bool     // Whether workspace context is needed
+	Category         string   // "code", "fix", "docs", "test", "review"
+	Complexity       string   // "simple", "moderate", "complex"
+	EstimatedFiles   []string // Files likely to be involved
+	RequiresContext  bool     // Whether workspace context is needed
+	ImmediateCommand string   // Optional command to execute immediately for simple tasks
+	CanExecuteNow    bool     // Whether the task can be completed immediately
 }
 
 // TaskComplexityLevel represents the complexity level of a task for optimization
@@ -277,6 +286,19 @@ type EditOperation struct {
 // determineTaskComplexity determines the complexity level for optimization routing
 func determineTaskComplexity(intent string, analysis *IntentAnalysis) TaskComplexityLevel {
 	intentLower := strings.ToLower(intent)
+
+	// Investigative/search tasks - require tools and should use moderate/complex path
+	investigativeKeywords := []string{
+		"find", "search", "grep", "list", "show", "check", "analyze", "investigate",
+		"look for", "locate", "identify", "discover", "scan", "examine",
+		"use grep", "use find", "run command", "execute", "shell",
+	}
+
+	for _, keyword := range investigativeKeywords {
+		if strings.Contains(intentLower, keyword) {
+			return TaskModerate // Use moderate to enable tool calling
+		}
+	}
 
 	// Simple task indicators - use fast path
 	simpleKeywords := []string{
@@ -322,9 +344,7 @@ func determineTaskComplexity(intent string, analysis *IntentAnalysis) TaskComple
 
 	// Default to moderate for everything else
 	return TaskModerate
-}
-
-// analyzeIntentWithMinimalContext analyzes user intent with proper workspace context
+} // analyzeIntentWithMinimalContext analyzes user intent with proper workspace context
 func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logger *utils.Logger) (*IntentAnalysis, int, error) {
 	startTime := time.Now()
 	var m runtime.MemStats
@@ -454,12 +474,26 @@ CRITICAL WORKSPACE CONSTRAINTS:
 - Do NOT create new files unless explicitly requested
 - Verify file extensions match project type (.go for Go projects)
 
+IMMEDIATE EXECUTION OPTIMIZATION:
+If the user's intent is a simple, direct command that can be executed immediately (like searching, listing, finding files, showing directory structure, counting lines, etc.), provide:
+1. Set "CanExecuteNow": true
+2. Provide the exact shell command in "ImmediateCommand"
+
+Examples of immediate execution tasks:
+- "find all TODO comments" → "grep -r -i -n 'TODO' ."
+- "show directory structure of pkg" → "ls -R pkg/"
+- "list Go files in cmd directory" → "ls -la cmd/*.go"
+- "find Go files with more than 200 lines" → "find . -type f -name '*.go' -print0 | xargs -0 wc -l | awk '$1 > 200'"
+- "count total lines of code" → "find . -name '*.go' -exec wc -l {} + | awk 'END {print $1}'"
+
 Respond with JSON:
 {
-  "category": "code|fix|docs|test|review",
-  "complexity": "simple|moderate|complex",
-  "estimated_files": ["file1.go", "file2.go"],
-  "requires_context": true|false
+  "Category": "code|fix|docs|test|review",
+  "Complexity": "simple|moderate|complex",
+  "EstimatedFiles": ["file1.go", "file2.go"],
+  "RequiresContext": true|false,
+  "CanExecuteNow": false,
+  "ImmediateCommand": ""
 }
 
 Classification Guidelines:
@@ -2753,6 +2787,19 @@ func evaluateProgress(context *AgentContext) (*ProgressEvaluation, int, error) {
 func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, error) {
 	// Simple rule-based evaluation to avoid LLM calls
 
+	// Check if task was completed via immediate execution during intent analysis
+	for _, op := range context.ExecutedOperations {
+		if strings.Contains(op, "Task completed via immediate command execution") {
+			return &ProgressEvaluation{
+				Status:               "completed",
+				CompletionPercentage: 100,
+				NextAction:           "completed",
+				Reasoning:            "Task completed via immediate command execution during intent analysis",
+				Concerns:             []string{},
+			}, 0, nil
+		}
+	}
+
 	// If no intent analysis, analyze first
 	if context.IntentAnalysis == nil {
 		return &ProgressEvaluation{
@@ -2885,13 +2932,18 @@ AVAILABLE NEXT ACTIONS:
 
 DECISION LOGIC:
 - If iteration 1 and no intent analysis: "analyze_intent"
-- If intent analysis done but no plan: "create_plan"  
+- If investigation/search/analysis task: "run_command" with specific commands (grep, find, etc.)
+- If intent analysis done but no plan AND task requires code changes: "create_plan"  
 - If plan exists but no edits executed: "execute_edits"
 - If edits done but not validated: "validate"
-- If errors occurred: assess if they can be handled or need "escalate"/"revise_plan"
+- If errors occurred: assess if they can be handled or need "revise_plan"
 - If task appears complete: "completed"
-- If investigation needed: "run_command" with specific commands
-- If critical issues or max iterations approached: "escalate"
+- If current approach isn't working: "run_command" for investigation or "revise_plan"
+
+TOOL USAGE PRIORITY:
+- Tasks with words like "find", "search", "grep", "list", "show", "check" should use "run_command"
+- Only use "create_plan" for tasks that require code modifications
+- Investigation and analysis tasks should use tools first, then create plans if changes are needed
 
 Respond with JSON:
 {
@@ -3013,6 +3065,24 @@ func executeIntentAnalysis(context *AgentContext) error {
 
 	context.Logger.LogProcessStep(fmt.Sprintf("✅ Intent analyzed: %s complexity, %s category, optimization: %s",
 		intentAnalysis.Complexity, intentAnalysis.Category, complexityStr))
+
+	// IMMEDIATE EXECUTION OPTIMIZATION: If analysis detected a command that can be executed immediately
+	if intentAnalysis.CanExecuteNow && intentAnalysis.ImmediateCommand != "" {
+		context.Logger.LogProcessStep(fmt.Sprintf("🚀 Immediate execution detected: %s", intentAnalysis.ImmediateCommand))
+
+		// Execute the command immediately
+		err := executeShellCommands(context, []string{intentAnalysis.ImmediateCommand})
+		if err != nil {
+			context.Logger.LogProcessStep("⚠️ Immediate execution failed, falling back to standard workflow")
+		} else {
+			// Mark task as completed since immediate execution succeeded
+			context.Logger.LogProcessStep("✅ Task completed via immediate execution")
+			context.ExecutedOperations = append(context.ExecutedOperations, "Task completed via immediate command execution")
+			context.IsCompleted = true
+			return nil
+		}
+	}
+
 	return nil
 }
 
@@ -3131,23 +3201,29 @@ func executeShellCommands(context *AgentContext, commands []string) error {
 	for i, command := range commands {
 		context.Logger.LogProcessStep(fmt.Sprintf("Running command %d: %s", i+1, command))
 
-		// Split command into parts for exec.Command
-		parts := strings.Fields(command)
-		if len(parts) == 0 {
+		if command == "" {
 			continue
 		}
 
-		cmd := exec.Command(parts[0], parts[1:]...)
+		// Use shell to execute command to handle pipes, redirects, etc.
+		cmd := exec.Command("sh", "-c", command)
 		output, err := cmd.CombinedOutput()
 
+		// Truncate output immediately to prevent huge outputs from overwhelming the system
+		outputStr := string(output)
+		const maxOutputSize = 10000 // 10KB limit
+		if len(outputStr) > maxOutputSize {
+			outputStr = outputStr[:maxOutputSize] + "\n... (output truncated - limit 10KB)"
+		}
+
 		if err != nil {
-			errorMsg := fmt.Sprintf("Command failed: %s (output: %s)", err.Error(), string(output))
+			errorMsg := fmt.Sprintf("Command failed: %s (output: %s)", err.Error(), outputStr)
 			context.Errors = append(context.Errors, errorMsg)
 			context.Logger.LogProcessStep(fmt.Sprintf("❌ Command %d failed: %s", i+1, errorMsg))
 		} else {
-			result := fmt.Sprintf("Command %d succeeded: %s", i+1, string(output))
+			result := fmt.Sprintf("Command %d succeeded: %s", i+1, outputStr)
 			context.ExecutedOperations = append(context.ExecutedOperations, result)
-			context.Logger.LogProcessStep(fmt.Sprintf("✅ Command %d: %s", i+1, string(output)))
+			context.Logger.LogProcessStep(fmt.Sprintf("✅ Command %d: %s", i+1, outputStr))
 		}
 	}
 

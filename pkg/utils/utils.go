@@ -224,14 +224,14 @@ func ExtractJSONFromLLMResponse(response string) (string, error) {
 
 	// Try to find JSON object boundaries if no markdown blocks
 	response = strings.TrimSpace(response)
-	
+
 	// Look for first opening brace or bracket
 	startBrace := strings.Index(response, "{")
 	startBracket := strings.Index(response, "[")
-	
+
 	var start int = -1
 	var isArray bool = false
-	
+
 	if startBrace >= 0 && (startBracket < 0 || startBrace < startBracket) {
 		start = startBrace
 		isArray = false
@@ -239,7 +239,7 @@ func ExtractJSONFromLLMResponse(response string) (string, error) {
 		start = startBracket
 		isArray = true
 	}
-	
+
 	if start == -1 {
 		return "", fmt.Errorf("no JSON object or array found (no opening brace or bracket)")
 	}
@@ -251,14 +251,14 @@ func ExtractJSONFromLLMResponse(response string) (string, error) {
 	} else {
 		end = strings.LastIndex(response, "}")
 	}
-	
+
 	if end == -1 || end <= start {
 		return "", fmt.Errorf("no matching closing brace/bracket found")
 	}
 
 	// Extract the JSON substring
 	jsonStr := strings.TrimSpace(response[start : end+1])
-	
+
 	// Validate it's not empty
 	if jsonStr == "" {
 		return "", fmt.Errorf("extracted JSON is empty")

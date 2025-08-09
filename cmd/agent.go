@@ -461,12 +461,12 @@ ALL files must be existing %s files from the workspace above.`,
 
 	// If LLM didn't provide files, fall back to embedding-based search
 	if len(analysis.EstimatedFiles) == 0 {
-		// Try embeddings first, fall back to content search if embeddings fail  
+		// Try embeddings first, fall back to content search if embeddings fail
 		workspaceFileData, embErr := workspace.LoadWorkspaceFile()
 		if embErr == nil {
 			fullContextFiles, summaryContextFiles, embErr := workspace.GetFilesForContextUsingEmbeddings(userIntent, workspaceFileData, cfg, logger)
 			embeddingFiles := append(fullContextFiles, summaryContextFiles...)
-			
+
 			if embErr != nil || len(embeddingFiles) == 0 {
 				logger.Logf("Embedding search failed or returned no results, falling back to content search: %v", embErr)
 				analysis.EstimatedFiles = findRelevantFilesByContent(userIntent, logger)
@@ -513,6 +513,20 @@ func createDetailedEditPlan(userIntent string, intentAnalysis *IntentAnalysis, c
 
 	// Load context for the files
 	context := buildBasicFileContext(contextFiles, logger)
+
+	// Log what context is being provided to the orchestration model
+	logger.LogProcessStep("🎯 ORCHESTRATION MODEL CONTEXT:")
+	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	logger.LogProcessStep(fmt.Sprintf("User Intent: %s", userIntent))
+	logger.LogProcessStep(fmt.Sprintf("Context Files Count: %d", len(contextFiles)))
+	logger.LogProcessStep(fmt.Sprintf("Context Size: %d characters", len(context)))
+	if len(contextFiles) > 0 {
+		logger.LogProcessStep("Files included in orchestration context:")
+		for i, file := range contextFiles {
+			logger.LogProcessStep(fmt.Sprintf("  %d. %s", i+1, file))
+		}
+	}
+	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	// Debug: log contextFiles to see what we have
 	logger.Logf("DEBUG: createDetailedEditPlan contextFiles: %v (length: %d)", contextFiles, len(contextFiles))
@@ -612,15 +626,31 @@ PLANNING REQUIREMENTS:
 2. **Edit Operations**: For each file, specify the exact changes needed
 3. **Scope Justification**: Explain how each change directly serves the user request
 4. **File Verification**: Only include .go files that exist in the current codebase context
+5. **CONTEXT FILES**: Include ALL files that the editing model will need to understand interfaces, dependencies, or patterns referenced in the edit operations. The "files_to_edit" list will be used to provide context to the editing model.
+
+CRITICAL CONTEXT REQUIREMENT:
+Edit operations should be granular and self-contained with all necessary context included in the instructions. When referencing files, functions, interfaces, or types from other files, include the file path using hashtag syntax (e.g., #path/to/file.go) at the END of the instructions. This allows the downstream editing process to automatically provide those files as context.
+
+INSTRUCTION QUALITY REQUIREMENTS:
+1. **Self-Contained**: Each instruction should contain all details needed to implement the change
+2. **Granular**: Break down complex changes into specific, actionable steps
+3. **File References**: Use hashtag syntax (#path/to/file.go) for any files that need to be referenced
+4. **Context-Rich**: Include function names, interface details, and patterns to follow
+5. **No Assumptions**: Don't assume the editing model knows about other parts of the codebase
+
+HASHTAG FILE REFERENCE SYNTAX:
+- End instructions with: #path/to/file1.go #path/to/file2.go
+- Use this for any file containing interfaces, types, patterns, or examples to follow
+- The editing process will automatically load these files as context
 
 RESPONSE FORMAT (JSON):
 {
-  "files_to_edit": ["path/to/existing/file.go"],
+  "files_to_edit": ["path/to/existing/file.go"],   // Only files that will be MODIFIED
   "edit_operations": [
     {
       "file_path": "path/to/existing/file.go", 
       "description": "Specific change to make",
-      "instructions": "Detailed instructions for the exact modification needed",
+      "instructions": "Detailed, self-contained instructions with hashtag file references at the end: #path/to/context/file.go",
       "scope_justification": "How this change directly serves the user's request"
     }
   ],
@@ -630,7 +660,9 @@ RESPONSE FORMAT (JSON):
 
 STRICT GUIDELINES:
 - Each edit operation should target ONE existing file
-- Instructions should be clear enough for a fast editing model to execute
+- Instructions should be GRANULAR and SELF-CONTAINED with all necessary details
+- Include specific function names, interface details, and implementation patterns
+- Use hashtag syntax (#file.go) at the end of instructions for file references
 - Focus ONLY on what the user explicitly requested
 - Do NOT add related improvements or "nice to have" features
 - Do NOT create new files or new directory structures
@@ -685,6 +717,18 @@ STRICT GUIDELINES:
 			Context:        "Fallback plan due to orchestration model failure",
 		}, 0, nil
 	}
+
+	// Log the orchestration model response for debugging
+	logger.LogProcessStep("🎯 ORCHESTRATION MODEL RESPONSE:")
+	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	logger.LogProcessStep(fmt.Sprintf("Response length: %d characters", len(response)))
+	// Show a preview of the response (first 500 chars)
+	if len(response) > 500 {
+		logger.LogProcessStep(fmt.Sprintf("Response preview: %s...", response[:500]))
+	} else {
+		logger.LogProcessStep(fmt.Sprintf("Full response: %s", response))
+	}
+	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	// Estimate tokens used
 	promptTokens := utils.EstimateTokens(prompt)
@@ -788,11 +832,36 @@ STRICT GUIDELINES:
 	logger.LogProcessStep(fmt.Sprintf("🎯 Scope: %s", editPlan.ScopeStatement))
 	logger.LogProcessStep(fmt.Sprintf("Strategy: %s", editPlan.Context))
 
+	// Log detailed edit plan contents
+	logger.LogProcessStep("📚 EDIT PLAN DETAILS (Self-Contained with Hashtag References):")
+	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+	// Log files to edit
+	logger.LogProcessStep(fmt.Sprintf("Files to Edit (%d):", len(editPlan.FilesToEdit)))
+	for i, file := range editPlan.FilesToEdit {
+		logger.LogProcessStep(fmt.Sprintf("  %d. %s", i+1, file))
+	}
+
 	// Log each operation with its scope justification
+	logger.LogProcessStep(fmt.Sprintf("Edit Operations (%d):", len(editPlan.EditOperations)))
 	for i, op := range editPlan.EditOperations {
 		logger.LogProcessStep(fmt.Sprintf("📝 Operation %d: %s", i+1, op.Description))
+		logger.LogProcessStep(fmt.Sprintf("   🎯 Target: %s", op.FilePath))
 		logger.LogProcessStep(fmt.Sprintf("   📋 Justification: %s", op.ScopeJustification))
+
+		// Check for hashtag file references in instructions
+		if strings.Contains(op.Instructions, "#") {
+			logger.LogProcessStep("   ✅ Contains hashtag file references for context")
+		} else {
+			logger.LogProcessStep("   ℹ️  Self-contained instructions (no file references)")
+		}
+
+		logger.LogProcessStep(fmt.Sprintf("   📖 Instructions: %s", op.Instructions))
+		if i < len(editPlan.EditOperations)-1 {
+			logger.LogProcessStep("   ───────────────────────────────")
+		}
 	}
+	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	return editPlan, totalTokens, nil
 }
@@ -1194,6 +1263,7 @@ func executeEditPlan(editPlan *EditPlan, cfg *config.Config, logger *utils.Logge
 			operation.FilePath, operation.Description, operation.ScopeJustification))
 
 		// Create focused instructions for this specific edit
+		// The orchestration model should provide self-contained instructions with hashtag file references
 		editInstructions := buildFocusedEditInstructions(operation, logger)
 
 		// Estimate tokens for this edit
@@ -1322,7 +1392,14 @@ func shouldUsePartialEdit(operation EditOperation, logger *utils.Logger) bool {
 }
 
 // buildFocusedEditInstructions creates targeted instructions for a single file edit
+// The orchestration model should provide self-contained instructions with hashtag file references
 func buildFocusedEditInstructions(operation EditOperation, logger *utils.Logger) string {
+	// Log inputs for debugging
+	logger.LogProcessStep("🔧 BUILDING EDIT INSTRUCTIONS:")
+	logger.LogProcessStep(fmt.Sprintf("Operation: %s", operation.Description))
+	logger.LogProcessStep(fmt.Sprintf("Target File: %s", operation.FilePath))
+	logger.LogProcessStep(fmt.Sprintf("Scope Justification: %s", operation.ScopeJustification))
+
 	var instructions strings.Builder
 
 	// Start with the specific operation instructions
@@ -1349,22 +1426,29 @@ func buildFocusedEditInstructions(operation EditOperation, logger *utils.Logger)
 
 `)
 
-	// Add file-specific context if we can read it
-	if content, err := os.ReadFile(operation.FilePath); err == nil {
-		// Limit content size for fast model efficiency
-		contentStr := string(content)
-		if len(contentStr) > 3000 { // Smaller limit for fast model
-			contentStr = contentStr[:3000] + "\n... (content truncated for efficiency)"
-		}
-		instructions.WriteString(fmt.Sprintf("CURRENT FILE CONTENT:\n```\n%s\n```\n\n", contentStr))
-	} else {
-		logger.Logf("Could not read file %s for edit context: %v", operation.FilePath, err)
-		instructions.WriteString("Note: File content could not be loaded. Please create or modify the file as needed.\n\n")
-	}
-
+	// The orchestration model should have provided self-contained instructions
+	// with hashtag file references that the downstream editing process will handle
+	instructions.WriteString("Note: Any file references with hashtag syntax will be automatically loaded as context.\n\n")
 	instructions.WriteString("Please implement the requested change efficiently and precisely.\n")
 
-	return instructions.String()
+	// Log the full context being sent to the LLM for debugging
+	fullInstructions := instructions.String()
+	logger.LogProcessStep("📋 FULL INSTRUCTIONS SENT TO EDITING MODEL:")
+	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	logger.LogProcessStep(fmt.Sprintf("Target File: %s", operation.FilePath))
+	logger.LogProcessStep(fmt.Sprintf("Instructions Size: %d characters", len(fullInstructions)))
+	logger.LogProcessStep("Self-contained: Using hashtag file references for context")
+
+	// Check if instructions contain hashtag references
+	if strings.Contains(operation.Instructions, "#") {
+		logger.LogProcessStep("✅ Instructions contain hashtag file references - context will be loaded automatically")
+	} else {
+		logger.LogProcessStep("ℹ️  No hashtag file references found - instructions should be self-contained")
+	}
+
+	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+	return fullInstructions
 }
 
 // buildBasicFileContext is a fallback when workspace.json is not available
@@ -1614,8 +1698,8 @@ CONTEXT:
 - Consider both direct fixes and dependency issues
 
 ANALYSIS REQUIREMENTS:
-1. **Error Classification**: What type of errors are these? (import, syntax, missing functions, etc.)
-2. **Root Cause**: What is the underlying cause of each error?
+1. **Root Cause**: What is the underlying cause of these validation errors?
+2. **Error Classification**: Are these errors related to the recent changes or pre-existing issues?
 3. **Affected Files**: Which specific files need changes to fix these errors?
 4. **Fix Strategy**: What is the minimal approach to resolve all errors?
 5. **Implementation Plan**: Specific instructions for each file change needed
@@ -1666,9 +1750,9 @@ Respond with a JSON object containing your analysis and fix plan:
 // executeValidationFixPlan executes the fix plan using the editing model
 func executeValidationFixPlan(plan *ValidationFixPlan, cfg *config.Config, logger *utils.Logger) (int, error) {
 	logger.Logf("Executing fix plan: %s", plan.FixStrategy)
-	
+
 	totalTokens := 0
-	
+
 	// If we have specific files to fix, target them individually
 	if len(plan.AffectedFiles) > 0 {
 		for _, filePath := range plan.AffectedFiles {
@@ -1745,18 +1829,18 @@ func findFilesRelatedToErrors(errorMessages []string, cfg *config.Config, logger
 	}
 
 	var allRelevantFiles []string
-	
+
 	// Search for files related to each error message
 	for _, errorMsg := range errorMessages {
 		// Extract key terms from error message for embedding search
 		searchQuery := fmt.Sprintf("Error: %s", errorMsg)
-		
+
 		fullContextFiles, summaryContextFiles, err := workspace.GetFilesForContextUsingEmbeddings(searchQuery, workspaceFileData, cfg, logger)
 		if err != nil {
 			logger.Logf("Embedding search failed for error: %v", err)
 			continue
 		}
-		
+
 		// Combine and deduplicate files
 		relevantFiles := append(fullContextFiles, summaryContextFiles...)
 		for _, file := range relevantFiles {
@@ -1786,12 +1870,12 @@ func findFilesRelatedToErrors(errorMessages []string, cfg *config.Config, logger
 // getProjectFileTree returns a representation of the project file structure
 func getProjectFileTree() (string, error) {
 	var tree strings.Builder
-	
+
 	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Continue despite errors
 		}
-		
+
 		// Skip hidden files and common ignore patterns
 		if strings.HasPrefix(filepath.Base(path), ".") && path != "." {
 			if info.IsDir() {
@@ -1799,7 +1883,7 @@ func getProjectFileTree() (string, error) {
 			}
 			return nil
 		}
-		
+
 		// Skip common build/temp directories
 		skipDirs := []string{"vendor", "node_modules", "target", "build", "dist"}
 		for _, skipDir := range skipDirs {
@@ -1810,24 +1894,24 @@ func getProjectFileTree() (string, error) {
 				return nil
 			}
 		}
-		
+
 		// Build tree representation
 		depth := strings.Count(path, string(os.PathSeparator))
 		indent := strings.Repeat("  ", depth)
-		
+
 		if info.IsDir() {
 			tree.WriteString(fmt.Sprintf("%s%s/\n", indent, filepath.Base(path)))
 		} else {
 			tree.WriteString(fmt.Sprintf("%s%s\n", indent, filepath.Base(path)))
 		}
-		
+
 		return nil
 	})
-	
+
 	if err != nil {
 		return "", err
 	}
-	
+
 	return tree.String(), nil
 }
 

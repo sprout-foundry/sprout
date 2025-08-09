@@ -87,7 +87,7 @@ for i in {1..3}; do
         echo "Calling ledit for: \"$task_line\""
         # Call ledit with the content of the line
         # The --skip-prompt flag prevents ledit from asking for confirmation
-        ledit code "Make the following change, or if it is already done, remove this request from the todo.txt file. Analyze dependencies and ensure the project remains in a working state after this change by updating dependent code Requested Change: '$task_line' #WS" --skip-prompt
+        ledit agent "Make the following change, or if it is already done, remove this request from the todo.txt file. Analyze dependencies and ensure the project remains in a working state after this change by updating dependent code Requested Change: '$task_line' #WS" --skip-prompt
 
         # If an optional check command was provided, run it
         if [[ -n "$OPTIONAL_CHECK_COMMAND" ]]; then

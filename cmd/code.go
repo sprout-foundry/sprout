@@ -73,6 +73,6 @@ func init() {
 	codeCmd.Flags().StringVarP(&filename, "filename", "f", "", "The filename to process (optional)")
 	codeCmd.Flags().StringVarP(&model, "model", "m", "", "Model name to use with the LLM")
 	codeCmd.Flags().BoolVar(&skipPrompt, "skip-prompt", false, "Skip user prompt for applying changes")
-	codeCmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "Disable interactive context requests from the LLM")
+	codeCmd.Flags().BoolVar(&nonInteractive, "non-interactive", true, "Disable interactive context requests from the LLM")
 	codeCmd.Flags().StringVarP(&imagePath, "image", "i", "", "Path to an image file to use as UI reference")
 }

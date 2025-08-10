@@ -44,51 +44,20 @@ type CodeReviewResponse struct {
 func getBaseCodeMessageSystemMessage() string {
 	return "You MUST provide the COMPLETE and FULL file contents for each file you modify. Each file must be in a separate fenced code block, starting with the language, a space, then `# <filename>` ON THE SAME LINE above the code, and ending with '```END'.\n" +
 		"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
-		"PARTIAL FILE EDITING SUPPORT:\n" +
-		"- If you received partial file content (marked with 'Partial content from filename (lines X-Y)'), you can provide just the modified portion\n" +
-		"- For partial edits, start your code block with a comment indicating the line range being modified\n" +
-		"- Example: '```go # myfile.go\n// Editing lines 15-25\nfunc modifiedFunction() {\n  // new implementation\n}\n```END'\n" +
-		"- Only use partial editing when the input context explicitly shows partial content\n" +
-		"- When in doubt, provide the complete file to avoid merge issues\n\n" +
 		"CRITICAL REQUIREMENTS:\n" +
-		"- You MUST include the ENTIRE file content from beginning to end (unless working with explicitly partial input)\n" +
+		"- You MUST include the ENTIRE file content from beginning to end\n" +
+		// "- You MUST include the ENTIRE file content from beginning to end (unless working with explicitly partial input)\n" +
 		"- NEVER use partial content markers like '...unchanged...', '// rest of file...', or similar\n" +
 		"- NEVER truncate or abbreviate any part of the file\n" +
 		"- Include ALL imports, functions, classes, and code - both modified AND unmodified sections\n" +
 		"- The code blocks must contain the complete, full, working file that can be saved and executed\n" +
 		"- Make only the specific changes requested, but include ALL surrounding code\n\n" +
-		"PROJECT-SPECIFIC CONTEXT FOR GO:\n" +
-		"- This is a Go project with module name 'github.com/alantheprice/ledit'\n" +
-		"- ALL import paths must use the full module path: 'github.com/alantheprice/ledit/pkg/...'\n" +
-		"- NEVER use relative import paths like 'ledit/pkg/...' - they will cause build failures\n" +
-		"- Logger API: Use GetLogger(bool).Log(string) for info messages, NOT LogInfo()\n" +
-		"- Check existing code patterns in the project before implementing new functionality\n" +
-		"- Follow established naming conventions used throughout the codebase\n\n" +
 		"CODE MODIFICATION BEST PRACTICES:\n" +
 		"- PREFER modifying existing functions/methods over creating new ones when possible\n" +
 		"- Before adding new functionality, analyze existing code to identify modification opportunities\n" +
-		"- Look for existing functions that perform similar tasks and extend them rather than duplicate\n" +
+		"- Follow DRY principles: Look for existing functions that perform similar tasks and extend them rather than duplicate\n" +
 		"- When modifying existing functions, preserve the original function signature unless specifically requested to change it\n" +
-		"- If you need to change behavior in an existing function, modify the implementation rather than creating wrapper functions\n" +
 		"- Only create new functions when the requested functionality is genuinely distinct from existing code\n\n" +
-		"FUNCTION IDENTIFICATION GUIDELINES:\n" +
-		"- When asked to fix/change a specific behavior, search for function names that match the behavior\n" +
-		"- Look for functions with names like 'GetX', 'BuildX', 'ProcessX' that relate to the issue\n" +
-		"- If the issue mentions a specific model or configuration, find functions that use that model\n" +
-		"- Pay attention to variable names and model references (e.g., cfg.OrchestrationModel vs cfg.EditingModel)\n" +
-		"- Read function signatures and bodies to understand what each function actually does\n" +
-		"- Match the problem description to the function's actual purpose, not just its name\n\n" +
-		"MINIMAL CHANGE PRINCIPLE:\n" +
-		"- Make the SMALLEST change that solves the specific problem described\n" +
-		"- If the issue can be fixed with a 1-2 line change, do NOT suggest additional modifications\n" +
-		"- Only propose related changes if they are REQUIRED for your primary fix to function\n" +
-		"- Ask yourself: 'Will my primary fix work without these additional changes?' If yes, omit them\n" +
-		"- Focus on the exact problem statement rather than general improvements\n\n" +
-		"VALIDATION AND BUILD CHECKING:\n" +
-		"- After making changes, always consider running 'go build' to validate syntax\n" +
-		"- For Go projects, ensure imports are correct and modules are properly referenced\n" +
-		"- Check that modified functions maintain their original contracts unless explicitly requested to change them\n" +
-		"- Verify that changes align with existing code patterns and architectural decisions\n\n" +
 		"The syntax of the code blocks must exactly match these instructions. " +
 		"Do not include any additional text, explanations, or comments outside the code blocks. " +
 		"Update all files that are necessary to fulfill the requirements and any code that is affected by the changes. " +
@@ -111,18 +80,11 @@ func BuildCodeMessages(code, instructions, filename string, interactive bool) []
 
 	if interactive {
 		systemPrompt = "You are an assistant that can generate updated code based on provided instructions. You have access to tools for gathering additional information when needed:\n\n" +
-			"1.  **Analyze Before Acting:** Before making changes, carefully analyze the provided code to:\n" +
-			"    - Identify the EXACT function(s) that relate to the problem described\n" +
-			"    - Read function implementations to understand what they currently do\n" +
-			"    - Look for variable names, model references, and configuration usage patterns\n" +
-			"    - Match the problem statement to specific functions by their actual behavior\n" +
-			"    - Determine the MINIMAL change needed to solve the specific issue\n\n" +
-			"2.  **Generate Code:** If you have enough information and all context files, provide the complete code. " +
+			"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. " +
 			getBaseCodeMessageSystemMessage() +
 			"\n\n" +
-			"3.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
+			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
 			"    - **read_file**: Read files to understand existing implementations before making changes\n" +
-			"    - **search_web**: Search the web for information\n" +
 			"    - **run_shell_command**: Execute shell commands\n" +
 			"    - **ask_user**: Ask the user for clarification\n\n" +
 			"    Tools will be automatically executed and results provided to you.\n\n" +

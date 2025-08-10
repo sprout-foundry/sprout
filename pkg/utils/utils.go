@@ -29,10 +29,6 @@ func GenerateFileRevisionHash(filename, code string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// SaveFile function removed. It's moved to pkg/filesystem/io.go
-
-// ReadFile function removed. It's moved to pkg/filesystem/io.go
-
 // GetTimestamp returns a formatted timestamp string suitable for filenames.
 func GetTimestamp() string {
 	return time.Now().Format("2006-01-02 15:04:05.000")
@@ -69,7 +65,6 @@ func CreateBackup(filePath string) error {
 	// Construct backup filename
 	backupFilename := fmt.Sprintf("%s_%s.bak", baseFilename, timestamp)
 	backupPath := filepath.Join(backupDir, backupFilename)
-
 	// Save the content to the backup file
 	if err := filesystem.SaveFile(backupPath, content); err != nil {
 		return fmt.Errorf("failed to save backup file '%s': %w", backupPath, err)
@@ -384,4 +379,72 @@ func findAllBacktickOccurrences(s string) []int {
 	}
 
 	return positions
+}
+
+// CleanAndValidateJSONResponse cleans and validates JSON responses from LLMs with field validation
+func CleanAndValidateJSONResponse(response string, expectedFields []string) (string, error) {
+	// Remove common non-JSON prefixes/suffixes that LLMs sometimes add
+	response = strings.TrimSpace(response)
+
+	// Remove markdown code blocks if present
+	if strings.Contains(response, "```json") {
+		parts := strings.Split(response, "```json")
+		if len(parts) > 1 {
+			jsonPart := parts[1]
+			end := strings.Index(jsonPart, "```")
+			if end > 0 {
+				response = strings.TrimSpace(jsonPart[:end])
+			}
+		}
+	}
+
+	// Remove any text before the first { or [
+	firstBrace := strings.Index(response, "{")
+	firstBracket := strings.Index(response, "[")
+
+	var startIdx int = -1
+	if firstBrace >= 0 && (firstBracket < 0 || firstBrace < firstBracket) {
+		startIdx = firstBrace
+	} else if firstBracket >= 0 {
+		startIdx = firstBracket
+	}
+
+	if startIdx >= 0 {
+		response = response[startIdx:]
+	}
+
+	// Remove any text after the last } or ]
+	lastBrace := strings.LastIndex(response, "}")
+	lastBracket := strings.LastIndex(response, "]")
+
+	var endIdx int = -1
+	if lastBrace >= 0 && (lastBracket < 0 || lastBrace > lastBracket) {
+		endIdx = lastBrace + 1
+	} else if lastBracket >= 0 {
+		endIdx = lastBracket + 1
+	}
+
+	if endIdx > 0 && endIdx <= len(response) {
+		response = response[:endIdx]
+	}
+
+	// Validate that it's valid JSON
+	var jsonTest interface{}
+	if err := json.Unmarshal([]byte(response), &jsonTest); err != nil {
+		return "", fmt.Errorf("cleaned response is still not valid JSON: %w", err)
+	}
+
+	// Check for expected fields if provided
+	if len(expectedFields) > 0 {
+		var jsonMap map[string]interface{}
+		if err := json.Unmarshal([]byte(response), &jsonMap); err == nil {
+			for _, field := range expectedFields {
+				if _, exists := jsonMap[field]; !exists {
+					return "", fmt.Errorf("required field '%s' is missing from JSON response", field)
+				}
+			}
+		}
+	}
+
+	return response, nil
 }

@@ -40,7 +40,7 @@ type fileToProcess struct {
 }
 
 var (
-	maxTokenCount  = 60096
+	maxTokenCount  = 80096
 	textExtensions = map[string]bool{
 		".txt": true, ".go": true, ".py": true, ".js": true, ".jsx": true, ".java": true,
 		".c": true, ".cpp": true, ".h": true, ".hpp": true, ".md": true,

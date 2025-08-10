@@ -124,7 +124,7 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 		Errors:             []string{},
 		ValidationResults:  []string{},
 		IterationCount:     0,
-		MaxIterations:      5, // Prevent infinite loops
+		MaxIterations:      25, // Prevent infinite loops
 		StartTime:          time.Now(),
 		TokenUsage:         tokenUsage,
 		Config:             cfg,
@@ -328,10 +328,21 @@ func determineTaskComplexity(intent string, analysis *IntentAnalysis) TaskComple
 		}
 	}
 
-	// Complex task keywords
-	complexKeywords := []string{
+	// Force complex classification for refactoring tasks regardless of LLM analysis
+	refactorKeywords := []string{
 		"refactor", "restructure", "redesign", "architecture",
 		"migrate", "convert", "rewrite", "overhaul",
+		"extract", "move code", "split file", "organize code",
+	}
+
+	for _, keyword := range refactorKeywords {
+		if strings.Contains(intentLower, keyword) {
+			return TaskComplex // Force complex for refactoring
+		}
+	}
+
+	// Complex task keywords
+	complexKeywords := []string{
 		"implement feature", "add feature", "new feature",
 		"remove feature", "delete module",
 	}
@@ -643,7 +654,7 @@ func createDetailedEditPlan(userIntent string, intentAnalysis *IntentAnalysis, c
 	// Check if this is a large file refactoring task
 	if isLargeFileRefactoringTask(userIntent, contextFiles, logger) {
 		refactoringGuidance = generateRefactoringStrategy(userIntent, contextFiles, workspacePatterns, logger)
-		
+
 		// For large file refactoring, also analyze source file functions
 		sourceFile := extractSourceFileFromIntent(userIntent, contextFiles)
 		if sourceFile != "" {
@@ -2874,19 +2885,19 @@ func isLargeFileRefactoringTask(userIntent string, contextFiles []string, logger
 // extractSourceFileFromIntent extracts the main source file from user intent
 func extractSourceFileFromIntent(userIntent string, contextFiles []string) string {
 	intentLower := strings.ToLower(userIntent)
-	
+
 	// Look for explicit file mentions
 	if strings.Contains(intentLower, "cmd/agent.go") {
 		return "cmd/agent.go"
 	}
-	
+
 	// Look for large files in context
 	for _, file := range contextFiles {
 		if countLines(file) > 1000 {
 			return file
 		}
 	}
-	
+
 	return ""
 }
 
@@ -2897,15 +2908,15 @@ func analyzeFunctionsInFile(filePath string, logger *utils.Logger) string {
 		logger.Logf("Could not read file %s for function analysis: %v", filePath, err)
 		return "Could not analyze functions in source file"
 	}
-	
+
 	lines := strings.Split(string(content), "\n")
 	var functions []string
 	var types []string
 	var structs []string
-	
+
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Find function definitions
 		if strings.HasPrefix(trimmed, "func ") && !strings.Contains(trimmed, "//") {
 			// Extract function name
@@ -2918,7 +2929,7 @@ func analyzeFunctionsInFile(filePath string, logger *utils.Logger) string {
 				functions = append(functions, fmt.Sprintf("Line %d: func %s", i+1, funcName))
 			}
 		}
-		
+
 		// Find type definitions
 		if strings.HasPrefix(trimmed, "type ") && !strings.Contains(trimmed, "//") {
 			parts := strings.Fields(trimmed)
@@ -2933,7 +2944,7 @@ func analyzeFunctionsInFile(filePath string, logger *utils.Logger) string {
 			}
 		}
 	}
-	
+
 	var result []string
 	if len(functions) > 0 {
 		result = append(result, fmt.Sprintf("FUNCTIONS (%d found):", len(functions)))
@@ -2949,25 +2960,25 @@ func analyzeFunctionsInFile(filePath string, logger *utils.Logger) string {
 			result = append(result, fmt.Sprintf("... and %d more functions", len(functions)-20))
 		}
 	}
-	
+
 	if len(structs) > 0 {
 		result = append(result, fmt.Sprintf("\nSTRUCTS (%d found):", len(structs)))
 		for _, s := range structs {
 			result = append(result, "- "+s)
 		}
 	}
-	
+
 	if len(types) > 0 {
 		result = append(result, fmt.Sprintf("\nTYPES (%d found):", len(types)))
 		for _, t := range types {
 			result = append(result, "- "+t)
 		}
 	}
-	
+
 	if len(result) == 0 {
 		return "No functions, types, or structs found for extraction"
 	}
-	
+
 	return strings.Join(result, "\n")
 }
 
@@ -3167,17 +3178,26 @@ func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, 
 
 	// If validation done, check if the actual goal was achieved
 	if hasValidation {
-		// For refactoring tasks, check if the original file was actually reduced
+		// For refactoring tasks, check if we're in the early stages (file copying) vs later stages (actual extraction)
 		if strings.Contains(strings.ToLower(context.UserIntent), "refactor") ||
 			strings.Contains(strings.ToLower(context.UserIntent), "extract") {
-			// Check if we've actually achieved the refactoring goal
-			goalAchieved := checkRefactoringGoalAchieved(context)
-			if !goalAchieved {
+			// Check refactoring progress more intelligently
+			refactoringStage := evaluateRefactoringStage(context)
+			if refactoringStage == "initial_copy_complete" {
+				// Files have been copied, now proceed to next refactoring steps
+				return &ProgressEvaluation{
+					Status:               "on_track",
+					CompletionPercentage: 40,
+					NextAction:           "run_command",
+					Reasoning:            "Refactoring task: initial file copy complete, proceeding to package modification",
+					Concerns:             []string{},
+				}, 0, nil
+			} else if refactoringStage == "needs_extraction" {
 				return &ProgressEvaluation{
 					Status:               "needs_adjustment",
 					CompletionPercentage: 60,
 					NextAction:           "create_plan",
-					Reasoning:            "Refactoring task: files created but extraction not complete - original file unchanged",
+					Reasoning:            "Refactoring task: files created but actual extraction not complete - original file unchanged",
 					Concerns:             []string{"Original large file still contains most of the code that should be extracted"},
 				}, 0, nil
 			}
@@ -3201,6 +3221,45 @@ func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, 
 		Reasoning:            "Simple task: edits complete, running basic validation",
 		Concerns:             []string{},
 	}, 0, nil
+}
+
+// evaluateRefactoringStage determines what stage of refactoring we're in
+func evaluateRefactoringStage(context *AgentContext) string {
+	// Check if we're in the initial file copy stage
+	sourceFileExists := false
+	targetFileExists := false
+	packageChanged := false
+
+	// Check if source file exists and is large
+	if _, err := os.Stat("cmd/agent.go"); err == nil {
+		if info, err := os.Stat("cmd/agent.go"); err == nil && info.Size() > 100000 {
+			sourceFileExists = true
+		}
+	}
+
+	// Check if target file was created
+	if _, err := os.Stat("pkg/agent/agent.go"); err == nil {
+		targetFileExists = true
+		
+		// Check if package was changed in target file
+		if content, err := os.ReadFile("pkg/agent/agent.go"); err == nil {
+			if strings.Contains(string(content), "package agent") {
+				packageChanged = true
+			}
+		}
+	}
+
+	// Determine stage based on file states
+	if sourceFileExists && targetFileExists && !packageChanged {
+		return "initial_copy_complete"
+	} else if sourceFileExists && targetFileExists && packageChanged {
+		// Check if actual extraction has happened (source file reduced)
+		return "needs_extraction"
+	} else if !sourceFileExists || !targetFileExists {
+		return "needs_file_setup"
+	}
+
+	return "unknown"
 }
 
 // checkRefactoringGoalAchieved checks if a refactoring task has actually achieved its goal
@@ -3359,12 +3418,16 @@ AVAILABLE NEXT ACTIONS:
 
 DECISION LOGIC:
 - If iteration 1 and no intent analysis: "analyze_intent"
-- If investigation/search/analysis task: "run_command" with specific commands (grep, find, etc.)
+- REFACTORING TASKS: If intent contains "refactor", "extract", "move", "split", "reorganize" AND intent analysis done: proceed to "create_plan" 
+- If investigation/search/analysis task WITHOUT refactoring intent: "run_command" with specific commands (grep, find, etc.)
 - If intent analysis done but no plan AND task requires code changes: "create_plan"  
-- If plan exists but no edits executed: "execute_edits"
+- CRITICAL: If plan exists but no edits executed (no "Edit operation completed" in executed operations): "execute_edits"
+- If plan exists AND multiple "Plan created/revised" operations but no actual edits: "execute_edits" (stop planning loop)
 - If edits done but not validated: "validate"
 - If errors occurred: assess if they can be handled or need "revise_plan"
 - If task appears complete: "completed"
+- If current approach isn't working after 5+ iterations of analysis: "create_plan" to force progress
+- If stuck in planning loop (3+ revise_plan actions): "execute_edits" to force execution
 - If current approach isn't working: "run_command" for investigation or "revise_plan"
 
 TOOL USAGE PRIORITY:
@@ -3894,10 +3957,16 @@ Respond with JSON:
 	_, response, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 30*time.Second)
 	if err != nil {
 		context.Logger.Logf("Context summarization failed: %v", err)
-		// Fallback: just truncate the arrays
-		context.ExecutedOperations = context.ExecutedOperations[len(context.ExecutedOperations)-maxOperations/2:]
-		context.Errors = context.Errors[len(context.Errors)-maxErrors/2:]
-		context.ValidationResults = context.ValidationResults[len(context.ValidationResults)-maxValidationResults/2:]
+		// Fallback: just truncate the arrays with bounds checking
+		if len(context.ExecutedOperations) > maxOperations/2 {
+			context.ExecutedOperations = context.ExecutedOperations[len(context.ExecutedOperations)-maxOperations/2:]
+		}
+		if len(context.Errors) > maxErrors/2 {
+			context.Errors = context.Errors[len(context.Errors)-maxErrors/2:]
+		}
+		if len(context.ValidationResults) > maxValidationResults/2 {
+			context.ValidationResults = context.ValidationResults[len(context.ValidationResults)-maxValidationResults/2:]
+		}
 		return nil
 	}
 
@@ -3913,10 +3982,16 @@ Respond with JSON:
 	err = json.Unmarshal([]byte(response), &summary)
 	if err != nil {
 		context.Logger.Logf("Failed to parse summary JSON: %v", err)
-		// Fallback: simple truncation
-		context.ExecutedOperations = context.ExecutedOperations[len(context.ExecutedOperations)-maxOperations/2:]
-		context.Errors = context.Errors[len(context.Errors)-maxErrors/2:]
-		context.ValidationResults = context.ValidationResults[len(context.ValidationResults)-maxValidationResults/2:]
+		// Fallback: simple truncation with bounds checking
+		if len(context.ExecutedOperations) > maxOperations/2 {
+			context.ExecutedOperations = context.ExecutedOperations[len(context.ExecutedOperations)-maxOperations/2:]
+		}
+		if len(context.Errors) > maxErrors/2 {
+			context.Errors = context.Errors[len(context.Errors)-maxErrors/2:]
+		}
+		if len(context.ValidationResults) > maxValidationResults/2 {
+			context.ValidationResults = context.ValidationResults[len(context.ValidationResults)-maxValidationResults/2:]
+		}
 		return nil
 	}
 
@@ -3927,6 +4002,13 @@ Respond with JSON:
 		"=== KEY ACHIEVEMENTS ===",
 	}
 	context.ExecutedOperations = append(context.ExecutedOperations, summary.KeyAchievements...)
+
+	// Preserve important context: add plan status to operations if plan exists
+	if context.CurrentPlan != nil {
+		context.ExecutedOperations = append(context.ExecutedOperations, 
+			fmt.Sprintf("ACTIVE PLAN: %d files to edit, %d operations (%s)", 
+				len(context.CurrentPlan.FilesToEdit), len(context.CurrentPlan.EditOperations), context.CurrentPlan.Context))
+	}
 
 	context.Errors = []string{
 		"=== SUMMARIZED ERRORS ===",

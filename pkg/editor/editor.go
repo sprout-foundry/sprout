@@ -194,9 +194,9 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 	// This prevents accidental triggering by LLM responses and provides better control
 
 	// Updated pattern to capture line ranges: #filename:start-end or #filename:start,end
-	filePattern := regexp.MustCompile(`\s+#(\S+?)(?::(\d+)[-,](\d+))?`)
+	filePattern := regexp.MustCompile(`\s+#(\S+)(?::(\d+)[-,](\d+))?`)
 	matches := filePattern.FindAllStringSubmatch(instructions, -1)
-
+	fmt.Printf("full instructions: %s\n", instructions)
 	fmt.Println("Found patterns:", matches) // Logging the patterns found
 
 	for _, match := range matches {

@@ -183,8 +183,9 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 		}
 
 		// Step 3: Check for completion
-		if evaluation.Status == "completed" {
+		if evaluation.Status == "completed" || evaluation.NextAction == "completed" {
 			logger.LogProcessStep("✅ Agent determined task is completed successfully")
+			context.IsCompleted = true
 			break
 		}
 
@@ -394,7 +395,7 @@ func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logg
 	if err != nil {
 		logger.Logf("Warning: Could not build workspace analysis: %v", err)
 		workspaceAnalysis = &WorkspaceInfo{
-			ProjectType: "go", // Default assumption
+			ProjectType: "other", // Default when detection fails
 			AllFiles:    []string{},
 		}
 	}
@@ -458,8 +459,13 @@ func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logg
 	// Final safety net - ensure we always have some files to analyze
 	if len(relevantFiles) == 0 {
 		logger.Logf("WARNING: No relevant files found by any method! Using fallback files...")
-		// Force include the most likely files for code reviews
-		candidateFiles := []string{"pkg/llm/api.go", "pkg/editor/editor.go", "cmd/review_staged.go", "pkg/orchestration/orchestrator.go"}
+		// Get recently modified files as fallback candidates
+		candidateFiles := getRecentlyModifiedSourceFiles(workspaceAnalysis, logger)
+		if len(candidateFiles) == 0 {
+			// Final fallback: get common entry points based on project type
+			candidateFiles = getCommonEntryPointFiles(workspaceAnalysis.ProjectType, logger)
+		}
+
 		for _, file := range candidateFiles {
 			if _, err := os.Stat(file); err == nil {
 				relevantFiles = append(relevantFiles, file)
@@ -475,15 +481,15 @@ User Intent: %s
 WORKSPACE ANALYSIS:
 Project Type: %s
 Total Files: %d
-Available Go Files in Workspace:
+Available Source Files in Workspace:
 %s
 
 CRITICAL WORKSPACE CONSTRAINTS:
-- This is a %s project - do NOT suggest non-%s files
+- This is a %s project - do NOT suggest files with mismatched extensions
 - All file paths must be relative to project root
 - Only suggest modifications to EXISTING files shown above
 - Do NOT create new files unless explicitly requested
-- Verify file extensions match project type (.go for Go projects)
+- Verify file extensions match project type
 
 IMMEDIATE EXECUTION OPTIMIZATION:
 IMPORTANT: Be VERY conservative with immediate execution. Only use for tasks that are:
@@ -492,9 +498,13 @@ IMPORTANT: Be VERY conservative with immediate execution. Only use for tasks tha
 3. Don't require any code analysis or understanding
 
 ONLY set "CanExecuteNow": true for these VERY LIMITED cases:
-- Explicit file listing requests: "list Go files in cmd directory" → "ls -la cmd/*.go"
+- Explicit file listing requests: "list source files in directory" → "find . -name '*.ext' -type f"
 - Direct search queries: "find all TODO comments" → "grep -r -i -n 'TODO' ."
-- Simple directory structure: "show directory structure of pkg" → "ls -R pkg/"
+- Simple directory structure: "show directory structure" → "ls -R"
+- Count queries: "how many files" → "find . -name '*.ext' | wc -l"
+- Function listing: "show functions in file.go" → "grep -n '^func ' file.go"
+- Import viewing: "show imports in main.go" → "grep -A 10 '^import' main.go"
+- Basic file inspection: "check if go.mod exists" → "ls -la go.mod"
 
 DO NOT use immediate execution for:
 - ANY code modification tasks
@@ -507,7 +517,7 @@ Respond with JSON:
 {
   "Category": "code|fix|docs|test|review",
   "Complexity": "simple|moderate|complex",
-  "EstimatedFiles": ["file1.go", "file2.go"],
+  "EstimatedFiles": ["file1.ext", "file2.ext"],
   "RequiresContext": true|false,
   "CanExecuteNow": false,
   "ImmediateCommand": ""
@@ -521,13 +531,11 @@ Classification Guidelines:
 - "complex": Multiple files, requires planning, unclear scope
 
 Only include files in estimated_files that are highly likely to be modified.
-ALL files must be existing %s files from the workspace above.`,
+ALL files must be existing source files from the workspace above.`,
 		userIntent,
 		workspaceAnalysis.ProjectType,
 		len(relevantFiles),
 		strings.Join(relevantFiles, "\n"),
-		workspaceAnalysis.ProjectType,
-		workspaceAnalysis.ProjectType,
 		workspaceAnalysis.ProjectType)
 
 	messages := []prompts.Message{
@@ -691,7 +699,7 @@ CURRENT GO CODEBASE CONTEXT:
 %s
 
 CRITICAL WORKSPACE VALIDATION:
-- This is a GO PROJECT - You must ONLY work with .go files
+- This is a PROJECT - You must ONLY work with source files
 - ALL files in "files_to_edit" must be EXISTING .go files from the context above
 - Do NOT create new files unless explicitly requested by user
 - Do NOT suggest .ts, .js, .py, or any non-Go files
@@ -757,23 +765,23 @@ However, the PREFERRED approach is to let the agent use the appropriate tools du
 - The agent can automatically fix issues with fix_validation_issues
 - Terminal commands should only be specified when they're essential to the workflow
 
-THIS IS A GO PROJECT - DO NOT CREATE NON-GO FILES!
+PROJECT FILES ONLY - DO NOT CREATE INCOMPATIBLE FILES!
 
 CRITICAL CONSTRAINTS:
 1. **STAY STRICTLY WITHIN SCOPE**: Only make changes that directly fulfill the user's exact request
 2. **NO SCOPE CREEP**: Do not add improvements, optimizations, or features not explicitly requested
 3. **MINIMAL CHANGES**: Make the smallest possible changes to achieve the goal
 4. **SINGLE PURPOSE**: Each edit should serve only the user's stated objective
-5. **GO FILES ONLY**: This is a Go project. Only modify existing .go files. Do NOT create .ts, .js, or other non-Go files
+5. **PROJECT FILES ONLY**: Only modify existing source files with correct extensions. Do NOT create incompatible files
 6. **EXISTING FILES ONLY**: You MUST use existing files from the context above. Do NOT create new files
-7. **VERIFY FILE EXISTENCE**: All files in "files_to_edit" must be actual Go files that exist in the codebase context
+7. **VERIFY FILE EXISTENCE**: All files in "files_to_edit" must be actual source files that exist in the codebase context
 8. **NO SEARCH FLAGS**: Do NOT include #SG, #SEARCH, or similar flags in your response. Search grounding is handled separately via explicit tool calls.
 
 PLANNING REQUIREMENTS:
-1. **File Analysis**: Identify exactly which EXISTING .go files need to be modified 
+1. **File Analysis**: Identify exactly which EXISTING source files need to be modified 
 2. **Edit Operations**: For each file, specify the exact changes needed
 3. **Scope Justification**: Explain how each change directly serves the user request
-4. **File Verification**: Only include .go files that exist in the current codebase context
+4. **File Verification**: Only include source files that exist in the current codebase context
 5. **CONTEXT FILES**: Include ALL files that the editing model will need to understand interfaces, dependencies, or patterns referenced in the edit operations. The "files_to_edit" list will be used to provide context to the editing model.
 
 CRITICAL CONTEXT REQUIREMENT:
@@ -1220,7 +1228,7 @@ func findRelevantFilesRobust(userIntent string, cfg *config.Config, logger *util
 
 	// We need workspace info for shell commands, but keep it lightweight
 	workspaceInfo := &WorkspaceInfo{
-		ProjectType:   "go", // Default for this project
+		ProjectType:   "other", // Default fallback
 		RootFiles:     []string{},
 		AllFiles:      []string{},
 		FilesByDir:    map[string][]string{},
@@ -1363,13 +1371,17 @@ func buildWorkspaceStructure(logger *utils.Logger) (*WorkspaceInfo, error) {
 		RelevantFiles: make(map[string]string),
 	}
 
-	// Detect project type
+	// Detect project type based on files present
 	if _, err := os.Stat("go.mod"); err == nil {
 		info.ProjectType = "go"
 	} else if _, err := os.Stat("package.json"); err == nil {
-		info.ProjectType = "typescript"
+		info.ProjectType = "javascript"
 	} else if _, err := os.Stat("requirements.txt"); err == nil || hasFile("setup.py") {
 		info.ProjectType = "python"
+	} else if _, err := os.Stat("Cargo.toml"); err == nil {
+		info.ProjectType = "rust"
+	} else if _, err := os.Stat("pom.xml"); err == nil {
+		info.ProjectType = "java"
 	} else {
 		info.ProjectType = "other"
 	}
@@ -1505,6 +1517,61 @@ func getBasicFileListing(logger *utils.Logger) ([]string, error) {
 	})
 
 	return files, err
+}
+
+// getRecentlyModifiedSourceFiles returns a list of recently modified source files as fallback candidates
+func getRecentlyModifiedSourceFiles(workspaceInfo *WorkspaceInfo, logger *utils.Logger) []string {
+	if len(workspaceInfo.AllFiles) == 0 {
+		return []string{}
+	}
+
+	// Sort files by modification time and return the 5 most recent
+	type fileInfo struct {
+		path    string
+		modTime time.Time
+	}
+
+	var files []fileInfo
+	for _, file := range workspaceInfo.AllFiles {
+		if stat, err := os.Stat(file); err == nil {
+			files = append(files, fileInfo{path: file, modTime: stat.ModTime()})
+		}
+	}
+
+	// Sort by modification time (most recent first)
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].modTime.After(files[j].modTime)
+	})
+
+	// Return up to 5 most recent files
+	var result []string
+	for i, file := range files {
+		if i >= 5 {
+			break
+		}
+		result = append(result, file.path)
+	}
+
+	return result
+}
+
+// getCommonEntryPointFiles returns common entry point files based on project type
+func getCommonEntryPointFiles(projectType string, logger *utils.Logger) []string {
+	switch projectType {
+	case "go":
+		return []string{"main.go", "cmd/main.go", "app/main.go"}
+	case "javascript":
+		return []string{"index.js", "app.js", "server.js", "src/index.js"}
+	case "python":
+		return []string{"main.py", "app.py", "__init__.py", "src/main.py"}
+	case "java":
+		return []string{"Main.java", "App.java", "src/main/java/Main.java"}
+	case "rust":
+		return []string{"main.rs", "lib.rs", "src/main.rs", "src/lib.rs"}
+	default:
+		// Generic fallback for unknown project types
+		return []string{"README.md", "index.*", "main.*", "app.*"}
+	}
 }
 
 // isSourceFile checks if a file is likely a source code file
@@ -1976,8 +2043,8 @@ POTENTIALLY RELEVANT FILES (from embedding search):
 %s
 
 CONTEXT:
-- This is a Go project with module "github.com/alantheprice/ledit"
-- All imports must use full module paths
+- This project has detected dependencies and module structure
+- All imports must use proper module paths
 - Focus on minimal, targeted fixes that resolve the specific errors
 - Consider both direct fixes and dependency issues
 
@@ -2219,11 +2286,11 @@ BUILD/VALIDATION ERRORS:
 %s
 
 PROJECT CONTEXT:
-- This is a Go project with module "github.com/alantheprice/ledit"
-- All import paths must use the full module path (e.g., "github.com/alantheprice/ledit/pkg/utils")
+- This project has detected dependencies and module structure
+- All import paths must use proper module paths
 - Key APIs available:
-  * Logger: GetLogger(bool).Log(string) for logging messages
-  * Filesystem: use "github.com/alantheprice/ledit/pkg/filesystem" package for file operations
+  * Logger: Available logging functionality for debugging
+  * Filesystem: Use appropriate file operations for this project type
   * Follow existing patterns and conventions in the codebase
 
 ANALYSIS INSTRUCTIONS:
@@ -2356,7 +2423,7 @@ Guidelines:
 - **Lint warnings**: Always required=false (pre-existing issues shouldn't block changes)
 - **Missing tests**: Always required=false (absence of tests is not a failure)
 - **Existing test failures**: Use required=false unless directly related to the change
-- For Go projects: "go build ./..." (required=true), "go vet ./..." (required=false)
+- Examples based on project type: build tools, test commands, linting tools
 - For Python: "python -m py_compile" (required=true), "pytest" (required=false)
 - For Node.js: "npm run build" (required=true), "npm test" (required=false), "npm run lint" (required=false)
 - Consider the change type: docs/comments/small fixes need minimal required validation`,
@@ -2811,7 +2878,7 @@ func analyzeWorkspacePatterns(logger *utils.Logger) *WorkspacePatterns {
 	goFiles, err := findGoFiles(".")
 	if err != nil {
 		logger.Logf("Warning: Could not analyze workspace patterns: %v", err)
-		// Set sensible defaults for Go projects
+		// Set sensible defaults based on detected project type
 		patterns.AverageFileSize = 200
 		patterns.PreferredPackageSize = 500
 		patterns.ModularityLevel = "high"
@@ -3294,11 +3361,12 @@ AVAILABLE NEXT ACTIONS:
 - "completed": Task is successfully completed
 
 DECISION LOGIC:
+- **EARLY TERMINATION**: For "review"/"analysis" tasks that don't modify code: if investigation completed successfully, choose "completed"
 - **ABSOLUTE PRIORITY**: If plan exists (CurrentPlan != nil) but no edits executed (no "Edit operation completed" in executed operations): MUST return "execute_edits" 
 - **ABSOLUTE PRIORITY**: If plan exists AND multiple "Plan created/revised" operations but no actual edits: MUST return "execute_edits" (stop planning loop)
 - If iteration 1 and no intent analysis: "analyze_intent"
 - REFACTORING TASKS: If intent contains "refactor", "extract", "move", "split", "reorganize" AND intent analysis done: proceed to "create_plan" 
-- If investigation/search/analysis task WITHOUT refactoring intent: "run_command" with specific commands (grep, find, etc.)
+- If investigation/search/analysis task WITHOUT refactoring intent AND commands already executed: "completed"
 - If intent analysis done but no plan AND task requires code changes: "create_plan"  
 - If edits done but not validated: "validate"
 - If errors occurred: assess if they can be handled or need "revise_plan"
@@ -3377,6 +3445,7 @@ func executeAdaptiveAction(context *AgentContext, evaluation *ProgressEvaluation
 
 	case "completed":
 		context.Logger.LogProcessStep("✅ Task marked as completed by agent evaluation")
+		context.IsCompleted = true
 		return nil
 
 	case "continue":
@@ -3586,6 +3655,14 @@ func executeValidation(context *AgentContext) error {
 
 	if context.IntentAnalysis == nil {
 		return fmt.Errorf("cannot validate without intent analysis")
+	}
+
+	// Skip validation for read-only/analysis tasks
+	if context.IntentAnalysis.Category == "review" && !strings.Contains(strings.ToLower(context.UserIntent), "refactor") {
+		context.Logger.LogProcessStep("✅ Skipping validation for read-only analysis task")
+		context.ValidationResults = append(context.ValidationResults, "✅ Validation skipped (read-only task)")
+		context.ExecutedOperations = append(context.ExecutedOperations, "Validation skipped (read-only task)")
+		return nil
 	}
 
 	// Fast-path validation for simple tasks

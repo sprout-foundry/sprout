@@ -3007,14 +3007,98 @@ func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, 
 		}, 0, nil
 	}
 
-	// If validation done, complete
+	// If validation done, check if the actual goal was achieved
+	if hasValidation {
+		// For refactoring tasks, check if the original file was actually reduced
+		if strings.Contains(strings.ToLower(context.UserIntent), "refactor") || 
+		   strings.Contains(strings.ToLower(context.UserIntent), "extract") {
+			// Check if we've actually achieved the refactoring goal
+			goalAchieved := checkRefactoringGoalAchieved(context)
+			if !goalAchieved {
+				return &ProgressEvaluation{
+					Status:               "needs_adjustment",
+					CompletionPercentage: 60,
+					NextAction:           "create_plan",
+					Reasoning:            "Refactoring task: files created but extraction not complete - original file unchanged",
+					Concerns:             []string{"Original large file still contains most of the code that should be extracted"},
+				}, 0, nil
+			}
+		}
+		
+		// Standard completion for other tasks
+		return &ProgressEvaluation{
+			Status:               "completed",
+			CompletionPercentage: 100,
+			NextAction:           "completed",
+			Reasoning:            "Simple task: all steps completed successfully",
+			Concerns:             []string{},
+		}, 0, nil
+	}
+	
+	// Fallback if no validation was done yet
 	return &ProgressEvaluation{
-		Status:               "completed",
-		CompletionPercentage: 100,
-		NextAction:           "completed",
-		Reasoning:            "Simple task: all steps completed successfully",
+		Status:               "on_track",
+		CompletionPercentage: 90,
+		NextAction:           "validate",
+		Reasoning:            "Simple task: edits complete, running basic validation",
 		Concerns:             []string{},
 	}, 0, nil
+}
+
+// checkRefactoringGoalAchieved checks if a refactoring task has actually achieved its goal
+func checkRefactoringGoalAchieved(context *AgentContext) bool {
+	// Look for patterns in the user intent to understand what should be refactored
+	intent := strings.ToLower(context.UserIntent)
+	
+	// Extract source file from intent (e.g., "refactor cmd/agent.go")
+	var sourceFile string
+	if strings.Contains(intent, "cmd/agent.go") {
+		sourceFile = "cmd/agent.go"
+	} else if strings.Contains(intent, "agent.go") {
+		sourceFile = "cmd/agent.go" // assume cmd/agent.go
+	}
+	
+	if sourceFile == "" {
+		context.Logger.Logf("DEBUG: No specific source file identified for refactoring goal check")
+		return true // Can't check specific metrics, assume success
+	}
+	
+	// Check if the source file still has most of its original size
+	if _, err := os.Stat(sourceFile); err == nil {
+		// Get current file info
+		info, err := os.Stat(sourceFile)
+		if err != nil {
+			context.Logger.Logf("DEBUG: Could not stat source file %s: %v", sourceFile, err)
+			return true // Can't verify, assume success
+		}
+		
+		currentSize := info.Size()
+		
+		// For large files (>3000 lines), extraction should significantly reduce size
+		if currentSize > 100000 { // roughly 3000+ lines
+			context.Logger.Logf("DEBUG: Source file %s is still very large (%d bytes) after refactoring", sourceFile, currentSize)
+			
+			// Check if we actually created the extraction target files
+			extractedFiles := 0
+			if _, err := os.Stat("pkg/agent/agent.go"); err == nil {
+				extractedFiles++
+			}
+			if _, err := os.Stat("pkg/agent/orchestrator.go"); err == nil {
+				extractedFiles++
+			}
+			if _, err := os.Stat("pkg/agent/utilities.go"); err == nil {
+				extractedFiles++
+			}
+			
+			// If we created files but source is still huge, extraction is incomplete
+			if extractedFiles > 0 {
+				context.Logger.Logf("DEBUG: Created %d extracted files but source file still large - refactoring incomplete", extractedFiles)
+				return false
+			}
+		}
+	}
+	
+	return true
 }
 
 // evaluateProgressWithLLM performs full LLM-based progress evaluation for complex tasks
@@ -3053,11 +3137,49 @@ func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, e
 		contextSummary.WriteString(fmt.Sprintf("  %d. %s\n", i+1, result))
 	}
 
+	// Add refactoring-specific context
+	if strings.Contains(strings.ToLower(context.UserIntent), "refactor") || 
+	   strings.Contains(strings.ToLower(context.UserIntent), "extract") {
+		contextSummary.WriteString("\nREFACTORING GOAL ANALYSIS:\n")
+		
+		// Check current state of source file
+		if _, err := os.Stat("cmd/agent.go"); err == nil {
+			content, readErr := os.ReadFile("cmd/agent.go")
+			if readErr == nil {
+				lines := len(strings.Split(string(content), "\n"))
+				contextSummary.WriteString(fmt.Sprintf("cmd/agent.go current size: %d lines\n", lines))
+				
+				if lines > 1000 {
+					contextSummary.WriteString("WARNING: Source file still very large - extraction likely incomplete\n")
+				}
+			}
+		}
+		
+		// Check what files were created
+		extractedFiles := []string{}
+		if _, err := os.Stat("pkg/agent/agent.go"); err == nil {
+			extractedFiles = append(extractedFiles, "pkg/agent/agent.go")
+		}
+		if _, err := os.Stat("pkg/agent/orchestrator.go"); err == nil {
+			extractedFiles = append(extractedFiles, "pkg/agent/orchestrator.go")
+		}
+		if _, err := os.Stat("pkg/agent/utilities.go"); err == nil {
+			extractedFiles = append(extractedFiles, "pkg/agent/utilities.go")
+		}
+		contextSummary.WriteString(fmt.Sprintf("Extracted files created: %s\n", strings.Join(extractedFiles, ", ")))
+	}
+
 	prompt := fmt.Sprintf(`You are an intelligent agent evaluating progress on a software development task. 
 
 %s
 
 TASK: Evaluate the current progress and decide the next action.
+
+CRITICAL FOR REFACTORING TASKS:
+- Creating skeleton files is only 20%% of the work
+- The actual functionality must be MOVED from the source file to the new files
+- A refactoring is NOT complete until the source file is significantly reduced
+- If cmd/agent.go is still 1000+ lines after "extraction", the task is incomplete
 
 ANALYSIS REQUIREMENTS:
 1. **Progress Assessment**: What percentage of the original task is complete?
@@ -3393,6 +3515,12 @@ func executeValidation(context *AgentContext) error {
 func executeSimpleValidation(context *AgentContext) error {
 	context.Logger.LogProcessStep("🚀 Fast validation for simple task...")
 
+	// Enhanced validation for refactoring tasks
+	if strings.Contains(strings.ToLower(context.UserIntent), "refactor") || 
+	   strings.Contains(strings.ToLower(context.UserIntent), "extract") {
+		return executeRefactoringValidation(context)
+	}
+
 	// For simple tasks (like adding comments), just check basic syntax
 	if context.IntentAnalysis.Category == "docs" {
 		// Just run a basic build check for documentation changes
@@ -3416,6 +3544,53 @@ func executeSimpleValidation(context *AgentContext) error {
 	context.ValidationResults = append(context.ValidationResults, "✅ Simple validation skipped (minimal risk change)")
 	context.ExecutedOperations = append(context.ExecutedOperations, "Simple validation completed")
 	context.Logger.LogProcessStep("✅ Simple validation completed - minimal risk change")
+	return nil
+}
+
+// executeRefactoringValidation performs thorough validation for refactoring tasks
+func executeRefactoringValidation(context *AgentContext) error {
+	context.Logger.LogProcessStep("🔍 Enhanced validation for refactoring task...")
+	
+	// First, run basic compilation check
+	cmd := exec.Command("go", "build", "./...")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		errorMsg := fmt.Sprintf("Compilation check failed: %v\nOutput: %s", err, string(output))
+		context.Errors = append(context.Errors, errorMsg)
+		context.ValidationResults = append(context.ValidationResults, fmt.Sprintf("❌ %s", errorMsg))
+		return fmt.Errorf("refactoring validation failed: %w", err)
+	}
+	
+	// Check if refactoring goal was achieved
+	goalAchieved := checkRefactoringGoalAchieved(context)
+	if !goalAchieved {
+		errorMsg := "Refactoring goal not achieved: source file still contains most original code"
+		context.Errors = append(context.Errors, errorMsg)
+		context.ValidationResults = append(context.ValidationResults, fmt.Sprintf("❌ %s", errorMsg))
+		return fmt.Errorf("refactoring incomplete: %s", errorMsg)
+	}
+	
+	// Count lines in cmd/agent.go to ensure it was actually reduced
+	if _, err := os.Stat("cmd/agent.go"); err == nil {
+		// Read file to count lines
+		content, readErr := os.ReadFile("cmd/agent.go")
+		if readErr == nil {
+			lines := len(strings.Split(string(content), "\n"))
+			context.Logger.LogProcessStep(fmt.Sprintf("📊 cmd/agent.go current size: %d lines", lines))
+			
+			// If still over 1000 lines after "extraction", it's likely incomplete
+			if lines > 1000 {
+				errorMsg := fmt.Sprintf("Refactoring incomplete: cmd/agent.go still has %d lines (should be significantly reduced)", lines)
+				context.Errors = append(context.Errors, errorMsg)
+				context.ValidationResults = append(context.ValidationResults, fmt.Sprintf("❌ %s", errorMsg))
+				return fmt.Errorf("refactoring validation failed: %s", errorMsg)
+			}
+		}
+	}
+	
+	context.ValidationResults = append(context.ValidationResults, "✅ Refactoring validation passed (compilation + goal achieved)")
+	context.ExecutedOperations = append(context.ExecutedOperations, "Refactoring validation completed")
+	context.Logger.LogProcessStep("✅ Refactoring validation completed successfully")
 	return nil
 }
 

@@ -486,16 +486,22 @@ CRITICAL WORKSPACE CONSTRAINTS:
 - Verify file extensions match project type (.go for Go projects)
 
 IMMEDIATE EXECUTION OPTIMIZATION:
-If the user's intent is a simple, direct command that can be executed immediately (like searching, listing, finding files, showing directory structure, counting lines, etc.), provide:
-1. Set "CanExecuteNow": true
-2. Provide the exact shell command in "ImmediateCommand"
+IMPORTANT: Be VERY conservative with immediate execution. Only use for tasks that are:
+1. Pure information gathering (no code modification)
+2. Can be completed with a single shell command
+3. Don't require any code analysis or understanding
 
-Examples of immediate execution tasks:
-- "find all TODO comments" → "grep -r -i -n 'TODO' ."
-- "show directory structure of pkg" → "ls -R pkg/"
-- "list Go files in cmd directory" → "ls -la cmd/*.go"
-- "find Go files with more than 200 lines" → "find . -type f -name '*.go' -print0 | xargs -0 wc -l | awk '$1 > 200'"
-- "count total lines of code" → "find . -name '*.go' -exec wc -l {} + | awk 'END {print $1}'"
+ONLY set "CanExecuteNow": true for these VERY LIMITED cases:
+- Explicit file listing requests: "list Go files in cmd directory" → "ls -la cmd/*.go"
+- Direct search queries: "find all TODO comments" → "grep -r -i -n 'TODO' ."
+- Simple directory structure: "show directory structure of pkg" → "ls -R pkg/"
+
+DO NOT use immediate execution for:
+- ANY code modification tasks
+- ANY analysis tasks ("analyze", "review", "check", "fix")
+- ANY tasks requiring understanding of code content
+- ANY tasks that might need file editing
+- Any ambiguous requests that could involve code changes
 
 Respond with JSON:
 {
@@ -506,6 +512,8 @@ Respond with JSON:
   "CanExecuteNow": false,
   "ImmediateCommand": ""
 }
+
+CRITICAL: Default to "CanExecuteNow": false unless the task is clearly a simple shell command for information gathering.
 
 Classification Guidelines:
 - "simple": Single file edit, clear target, specific change
@@ -3141,7 +3149,7 @@ func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, 
 	// If plan exists but no edits executed, execute them
 	hasExecutedEdits := false
 	for _, op := range context.ExecutedOperations {
-		if strings.Contains(op, "edit") || strings.Contains(op, "Edit") {
+		if strings.Contains(op, "Edit") && strings.Contains(op, "completed successfully") {
 			hasExecutedEdits = true
 			break
 		}
@@ -3206,12 +3214,12 @@ func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, e
 	if context.CurrentPlan != nil {
 		hasExecutedEdits := false
 		for _, op := range context.ExecutedOperations {
-			if strings.Contains(op, "Edit operation completed") || strings.Contains(op, "edit completed") {
+			if strings.Contains(op, "Edit") && strings.Contains(op, "completed successfully") {
 				hasExecutedEdits = true
 				break
 			}
 		}
-		
+
 		if !hasExecutedEdits {
 			return &ProgressEvaluation{
 				Status:               "on_track",
@@ -3838,12 +3846,28 @@ Respond with JSON:
 	}
 
 	// Replace context arrays with summarized versions
+	// First, preserve critical state indicators before replacement
+	originalOps := make([]string, len(context.ExecutedOperations))
+	copy(originalOps, context.ExecutedOperations)
+
 	context.ExecutedOperations = []string{
 		"=== SUMMARIZED OPERATIONS ===",
 		summary.OperationsSummary,
 		"=== KEY ACHIEVEMENTS ===",
 	}
 	context.ExecutedOperations = append(context.ExecutedOperations, summary.KeyAchievements...)
+
+	// Preserve critical execution state indicators for evaluation logic
+	hasExecutedEdits := false
+	for _, op := range originalOps {
+		if strings.Contains(op, "Edit") && strings.Contains(op, "completed successfully") {
+			hasExecutedEdits = true
+			break
+		}
+	}
+	if hasExecutedEdits {
+		context.ExecutedOperations = append(context.ExecutedOperations, "✅ Edits completed successfully (preserved after summarization)")
+	}
 
 	// Preserve important context: add plan status to operations if plan exists
 	if context.CurrentPlan != nil {

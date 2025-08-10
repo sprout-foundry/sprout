@@ -1,5 +1,10 @@
 package types
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 // OrchestrationPlan represents the overall plan for a feature, broken down into requirements.
 type OrchestrationPlan struct {
 	Prompt       string        `json:"prompt"`
@@ -41,6 +46,44 @@ type OrchestrationChangesList struct {
 type CodeReviewResult struct {
 	Status       string `json:"status"`                 // "approved", "needs_revision", "rejected"
 	Feedback     string `json:"feedback"`               // Explanation for the status
-	Instructions string `json:"instructions,omitempty"` // Instructions for `ledit` if status is "needs_revision"
+	Instructions string `json:"-"`                      // Instructions for `ledit` if status is "needs_revision"
 	NewPrompt    string `json:"new_prompt,omitempty"`   // A new, more detailed prompt if status is "rejected"
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling to handle instructions field
+// that can be either a string or an array of strings
+func (c *CodeReviewResult) UnmarshalJSON(data []byte) error {
+	// First unmarshal into a temporary struct with raw JSON for instructions
+	type Alias CodeReviewResult
+	aux := &struct {
+		Instructions json.RawMessage `json:"instructions,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(c),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Handle the instructions field - it could be a string or array of strings
+	if len(aux.Instructions) > 0 {
+		// Try to unmarshal as string first
+		var instructionsStr string
+		if err := json.Unmarshal(aux.Instructions, &instructionsStr); err == nil {
+			c.Instructions = instructionsStr
+		} else {
+			// Try to unmarshal as array of strings
+			var instructionsArray []string
+			if err := json.Unmarshal(aux.Instructions, &instructionsArray); err == nil {
+				// Join array elements with newlines
+				c.Instructions = strings.Join(instructionsArray, "\n")
+			} else {
+				// If both fail, convert the raw JSON to string
+				c.Instructions = string(aux.Instructions)
+			}
+		}
+	}
+
+	return nil
 }

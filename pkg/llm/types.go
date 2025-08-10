@@ -23,7 +23,10 @@ type OpenAIResponse struct {
 type GeminiRequest struct {
 	Contents         []GeminiContent `json:"contents"`
 	GenerationConfig struct {
-		Temperature float64 `json:"temperature"`
+		Temperature     float64  `json:"temperature"`
+		MaxOutputTokens int      `json:"maxOutputTokens,omitempty"`
+		TopP            float64  `json:"topP,omitempty"`
+		StopSequences   []string `json:"stopSequences,omitempty"`
 	} `json:"generationConfig"`
 	Tools []GeminiTool `json:"tools,omitempty"` // Add this for search grounding
 }

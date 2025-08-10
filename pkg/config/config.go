@@ -49,6 +49,10 @@ type Config struct {
 	CodeStyle                CodeStylePreferences `json:"code_style"`                 // New field for code style preferences
 	SearchModel              string               `json:"search_model"`               // NEW: Field for search model
 	Temperature              float64              `json:"temperature"`                // NEW: Field for LLM temperature
+	MaxTokens                int                  `json:"max_tokens"`                 // NEW: Field for max output tokens
+	TopP                     float64              `json:"top_p"`                      // NEW: Field for nucleus sampling
+	PresencePenalty          float64              `json:"presence_penalty"`           // NEW: Field for presence penalty
+	FrequencyPenalty         float64              `json:"frequency_penalty"`          // NEW: Field for frequency penalty
 	RetryAttemptCount        int                  `json:"-"`                          // Internal field to track retry attempts
 }
 
@@ -129,7 +133,27 @@ func (cfg *Config) setDefaultValues() {
 
 	// NEW: Set default for Temperature
 	if cfg.Temperature == 0 { // 0 is the zero value for float64, so this works for uninitialized or explicitly 0
-		cfg.Temperature = 0.7 // Default temperature
+		cfg.Temperature = 0.1 // Very low temperature for consistency
+	}
+
+	// NEW: Set default for MaxTokens
+	if cfg.MaxTokens == 0 {
+		cfg.MaxTokens = 8600 // Reasonable limit for output length
+	}
+
+	// NEW: Set default for TopP
+	if cfg.TopP == 0 {
+		cfg.TopP = 0.9 // Focus on high-probability tokens
+	}
+
+	// NEW: Set default for PresencePenalty
+	if cfg.PresencePenalty == 0 {
+		cfg.PresencePenalty = 0.1 // Light penalty to discourage repetition
+	}
+
+	// NEW: Set default for FrequencyPenalty
+	if cfg.FrequencyPenalty == 0 {
+		cfg.FrequencyPenalty = 0.1 // Light penalty to discourage repeated phrases
 	}
 
 	// Set default code style preferences
@@ -171,7 +195,11 @@ func loadConfig(filePath string) (*Config, error) {
 	cfg.OllamaServerURL = "http://localhost:11434" // Default Ollama URL
 	cfg.EnableSecurityChecks = false               // Default to false for existing configs
 	cfg.UseEmbeddings = false                      // Default to false for existing configs
-	cfg.Temperature = 0.0                          // NEW: Initialize Temperature to its zero value
+	cfg.Temperature = 0.1                          // NEW: Initialize Temperature to very low value for consistency
+	cfg.MaxTokens = 4096                           // NEW: Initialize MaxTokens
+	cfg.TopP = 0.9                                 // NEW: Initialize TopP
+	cfg.PresencePenalty = 0.1                      // NEW: Initialize PresencePenalty
+	cfg.FrequencyPenalty = 0.1                     // NEW: Initialize FrequencyPenalty
 	cfg.EmbeddingModel = ""                        // NEW: Initialize EmbeddingModel to its zero value
 	// Initialize CodeStyle to ensure setDefaultValues can populate it
 	cfg.CodeStyle = CodeStylePreferences{}

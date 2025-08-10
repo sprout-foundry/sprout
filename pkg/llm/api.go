@@ -72,14 +72,14 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
-		err = callOpenAICompatibleStream("https://api.openai.com/v1/chat/completions", apiKey, model, messages, timeout, writer)
+		err = callOpenAICompatibleStream("https://api.openai.com/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "groq":
 		apiKey, err := apikeys.GetAPIKey("groq", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
-		err = callOpenAICompatibleStream("https://api.groq.com/openai/v1/chat/completions", apiKey, model, messages, timeout, writer)
+		err = callOpenAICompatibleStream("https://api.groq.com/openai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "gemini":
 		// Gemini streaming not implemented, using non-streaming call and writing the whole response.
 		var content string
@@ -96,28 +96,28 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
-		err = callOpenAICompatibleStream("https://api.lambda.ai/v1/chat/completions", apiKey, model, messages, timeout, writer)
+		err = callOpenAICompatibleStream("https://api.lambda.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "cerebras":
 		apiKey, err := apikeys.GetAPIKey("cerebras", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
-		err = callOpenAICompatibleStream("https://api.cerebras.ai/v1/chat/completions", apiKey, model, messages, timeout, writer)
+		err = callOpenAICompatibleStream("https://api.cerebras.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "deepseek":
 		apiKey, err := apikeys.GetAPIKey("deepseek", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
-		err = callOpenAICompatibleStream("https://api.deepseek.com/v1/chat/completions", apiKey, model, messages, timeout, writer)
+		err = callOpenAICompatibleStream("https://api.deepseek.com/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "deepinfra":
 		apiKey, err := apikeys.GetAPIKey("deepinfra", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
 			return modelName, err
 		}
-		err = callOpenAICompatibleStream("https://api.deepinfra.com/v1/openai/chat/completions", apiKey, model, messages, timeout, writer)
+		err = callOpenAICompatibleStream("https://api.deepinfra.com/v1/openai/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 
 	case "ollama":
 		err = callOllamaAPI(model, messages, cfg, timeout, writer)
@@ -125,7 +125,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		// Fallback to openai-compatible ollama api
 		fmt.Println(prompts.ProviderNotRecognized())
 		modelName = cfg.LocalModel
-		err = callOpenAICompatibleStream(ollamaUrl, "ollama", modelName, messages, timeout, writer)
+		err = callOpenAICompatibleStream(ollamaUrl, "ollama", modelName, messages, cfg, timeout, writer)
 	}
 
 	if err != nil {

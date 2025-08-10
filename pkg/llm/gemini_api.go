@@ -41,9 +41,15 @@ func callGeminiAPI(model string, messages []prompts.Message, timeout time.Durati
 	reqBodyStruct := GeminiRequest{
 		Contents: geminiContents,
 		GenerationConfig: struct {
-			Temperature float64 `json:"temperature"`
+			Temperature     float64  `json:"temperature"`
+			MaxOutputTokens int      `json:"maxOutputTokens,omitempty"`
+			TopP            float64  `json:"topP,omitempty"`
+			StopSequences   []string `json:"stopSequences,omitempty"`
 		}{
-			Temperature: 0.0,
+			Temperature:     0.1,                                  // Very low for consistency
+			MaxOutputTokens: 4096,                                 // Limit output length
+			TopP:            0.9,                                  // Focus on high-probability tokens
+			StopSequences:   []string{"\n\n\n", "```\n\n", "END"}, // Stop sequences
 		},
 	}
 

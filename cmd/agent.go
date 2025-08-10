@@ -643,6 +643,13 @@ func createDetailedEditPlan(userIntent string, intentAnalysis *IntentAnalysis, c
 	// Check if this is a large file refactoring task
 	if isLargeFileRefactoringTask(userIntent, contextFiles, logger) {
 		refactoringGuidance = generateRefactoringStrategy(userIntent, contextFiles, workspacePatterns, logger)
+		
+		// For large file refactoring, also analyze source file functions
+		sourceFile := extractSourceFileFromIntent(userIntent, contextFiles)
+		if sourceFile != "" {
+			functionInventory := analyzeFunctionsInFile(sourceFile, logger)
+			refactoringGuidance += "\n\nFUNCTION INVENTORY FOR EXTRACTION:\n" + functionInventory
+		}
 	} else {
 		refactoringGuidance = "Standard single-file or small-scope changes"
 	}
@@ -674,6 +681,23 @@ CRITICAL WORKSPACE VALIDATION:
 
 INTELLIGENT REFACTORING GUIDANCE:
 %s
+
+FOR LARGE FILE REFACTORING (when extracting functions to new files):
+1. **ANALYZE SOURCE**: Examine the function inventory above to understand what needs extraction
+2. **CREATE SPECIFIC OPERATIONS**: Instead of generic "refactor file", create separate operations for:
+   - Creating each new target file (pkg/agent/agent.go, pkg/agent/orchestrator.go, etc.)
+   - Moving specific functions from source to target files
+   - Updating the source file to remove extracted functions and add imports
+3. **FUNCTION-LEVEL INSTRUCTIONS**: For each operation, specify exactly which functions/types to move:
+   Example: "Move functions NewAgent, (*Agent).Run, and AgentContext type from cmd/agent.go to pkg/agent/agent.go"
+4. **DEPENDENCY ORDER**: Create files in order - types first, then functions that use them
+5. **IMPORT MANAGEMENT**: Ensure each operation includes proper import statements
+
+REFACTORING OPERATION TEMPLATE FOR LARGE FILES:
+When refactoring large files, create multiple granular operations like:
+- Operation 1: "Create pkg/agent/agent.go with core Agent types and constructor"
+- Operation 2: "Move specific orchestration functions to pkg/agent/orchestrator.go"  
+- Operation 3: "Update cmd/agent.go to use extracted packages and remove moved functions"
 
 AVAILABLE TOOLS AND CAPABILITIES:
 The agent has access to the following tools during the editing process:
@@ -739,9 +763,16 @@ Edit operations should be granular and self-contained with all necessary context
 INSTRUCTION QUALITY REQUIREMENTS:
 1. **Self-Contained**: Each instruction should contain all details needed to implement the change
 2. **Granular**: Break down complex changes into specific, actionable steps
-3. **File References**: Use hashtag syntax (#path/to/file.go) for any files that need to be referenced
-4. **Context-Rich**: Include function names, interface details, and patterns to follow
-5. **No Assumptions**: Don't assume the editing model knows about other parts of the codebase
+3. **Function-Specific**: For refactoring, specify exactly which functions/types to move (use function inventory above)
+4. **File References**: Use hashtag syntax (#path/to/file.go) for any files that need to be referenced
+5. **Context-Rich**: Include function names, interface details, and patterns to follow
+6. **No Assumptions**: Don't assume the editing model knows about other parts of the codebase
+7. **Dependency Aware**: For refactoring, order operations to handle dependencies correctly
+
+FOR REFACTORING TASKS - REQUIRED INSTRUCTION FORMAT:
+Instead of: "Refactor cmd/agent.go to extract functions"
+Use: "Create pkg/agent/agent.go and move the following specific functions from cmd/agent.go: [list exact function names from inventory]"
+Include: "Remove these functions from cmd/agent.go and add appropriate import statements"
 
 HASHTAG FILE REFERENCE SYNTAX:
 - End instructions with: #path/to/file1.go #path/to/file2.go
@@ -761,6 +792,33 @@ RESPONSE FORMAT (JSON):
   ],
   "context": "Minimal strategy focused only on the user's exact request",
   "scope_statement": "This plan addresses only: [restate user request]"
+}
+
+FOR LARGE FILE REFACTORING - EXAMPLE OPERATIONS:
+{
+  "files_to_edit": ["pkg/agent/agent.go", "pkg/agent/orchestrator.go", "cmd/agent.go"],
+  "edit_operations": [
+    {
+      "file_path": "pkg/agent/agent.go",
+      "description": "Create core agent types and constructor",
+      "instructions": "Create new file pkg/agent/agent.go. Move the following specific items from cmd/agent.go: Agent struct (line X), AgentContext struct (line Y), NewAgent function (line Z), TokenUsage type (line W). Include proper package declaration and imports. #cmd/agent.go",
+      "scope_justification": "Extracts core agent types as requested in refactoring"
+    },
+    {
+      "file_path": "pkg/agent/orchestrator.go", 
+      "description": "Extract orchestration functions",
+      "instructions": "Create new file pkg/agent/orchestrator.go. Move specific orchestration functions from cmd/agent.go: evaluateProgress (line A), executeAdaptiveAction (line B), createDetailedEditPlan (line C). Include proper imports and package declaration. #cmd/agent.go #pkg/agent/agent.go",
+      "scope_justification": "Separates orchestration logic as requested"
+    },
+    {
+      "file_path": "cmd/agent.go",
+      "description": "Convert to thin wrapper importing extracted packages", 
+      "instructions": "Remove the extracted functions and types (Agent, AgentContext, evaluateProgress, etc.) and replace with imports to pkg/agent. Keep only main CLI entry point and update function calls to use pkg/agent prefix. #pkg/agent/agent.go #pkg/agent/orchestrator.go",
+      "scope_justification": "Completes refactoring by updating source file"
+    }
+  ],
+  "context": "Function-by-function extraction to create modular agent package",
+  "scope_statement": "Extract functions from large cmd/agent.go into organized pkg/agent package structure"
 }
 
 STRICT GUIDELINES:
@@ -2813,6 +2871,106 @@ func isLargeFileRefactoringTask(userIntent string, contextFiles []string, logger
 	return false
 }
 
+// extractSourceFileFromIntent extracts the main source file from user intent
+func extractSourceFileFromIntent(userIntent string, contextFiles []string) string {
+	intentLower := strings.ToLower(userIntent)
+	
+	// Look for explicit file mentions
+	if strings.Contains(intentLower, "cmd/agent.go") {
+		return "cmd/agent.go"
+	}
+	
+	// Look for large files in context
+	for _, file := range contextFiles {
+		if countLines(file) > 1000 {
+			return file
+		}
+	}
+	
+	return ""
+}
+
+// analyzeFunctionsInFile analyzes a Go file to extract function and type information
+func analyzeFunctionsInFile(filePath string, logger *utils.Logger) string {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		logger.Logf("Could not read file %s for function analysis: %v", filePath, err)
+		return "Could not analyze functions in source file"
+	}
+	
+	lines := strings.Split(string(content), "\n")
+	var functions []string
+	var types []string
+	var structs []string
+	
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		
+		// Find function definitions
+		if strings.HasPrefix(trimmed, "func ") && !strings.Contains(trimmed, "//") {
+			// Extract function name
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 2 {
+				funcName := parts[1]
+				if idx := strings.Index(funcName, "("); idx > 0 {
+					funcName = funcName[:idx]
+				}
+				functions = append(functions, fmt.Sprintf("Line %d: func %s", i+1, funcName))
+			}
+		}
+		
+		// Find type definitions
+		if strings.HasPrefix(trimmed, "type ") && !strings.Contains(trimmed, "//") {
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 3 {
+				typeName := parts[1]
+				typeKind := parts[2]
+				if typeKind == "struct" {
+					structs = append(structs, fmt.Sprintf("Line %d: type %s struct", i+1, typeName))
+				} else {
+					types = append(types, fmt.Sprintf("Line %d: type %s %s", i+1, typeName, typeKind))
+				}
+			}
+		}
+	}
+	
+	var result []string
+	if len(functions) > 0 {
+		result = append(result, fmt.Sprintf("FUNCTIONS (%d found):", len(functions)))
+		// Limit to first 20 functions to avoid overwhelming the prompt
+		limit := len(functions)
+		if limit > 20 {
+			limit = 20
+		}
+		for i := 0; i < limit; i++ {
+			result = append(result, "- "+functions[i])
+		}
+		if len(functions) > 20 {
+			result = append(result, fmt.Sprintf("... and %d more functions", len(functions)-20))
+		}
+	}
+	
+	if len(structs) > 0 {
+		result = append(result, fmt.Sprintf("\nSTRUCTS (%d found):", len(structs)))
+		for _, s := range structs {
+			result = append(result, "- "+s)
+		}
+	}
+	
+	if len(types) > 0 {
+		result = append(result, fmt.Sprintf("\nTYPES (%d found):", len(types)))
+		for _, t := range types {
+			result = append(result, "- "+t)
+		}
+	}
+	
+	if len(result) == 0 {
+		return "No functions, types, or structs found for extraction"
+	}
+	
+	return strings.Join(result, "\n")
+}
+
 // generateRefactoringStrategy creates a strategy for complex refactoring tasks
 func generateRefactoringStrategy(userIntent string, contextFiles []string, patterns *WorkspacePatterns, logger *utils.Logger) string {
 	strategy := []string{
@@ -3010,8 +3168,8 @@ func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, 
 	// If validation done, check if the actual goal was achieved
 	if hasValidation {
 		// For refactoring tasks, check if the original file was actually reduced
-		if strings.Contains(strings.ToLower(context.UserIntent), "refactor") || 
-		   strings.Contains(strings.ToLower(context.UserIntent), "extract") {
+		if strings.Contains(strings.ToLower(context.UserIntent), "refactor") ||
+			strings.Contains(strings.ToLower(context.UserIntent), "extract") {
 			// Check if we've actually achieved the refactoring goal
 			goalAchieved := checkRefactoringGoalAchieved(context)
 			if !goalAchieved {
@@ -3024,7 +3182,7 @@ func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, 
 				}, 0, nil
 			}
 		}
-		
+
 		// Standard completion for other tasks
 		return &ProgressEvaluation{
 			Status:               "completed",
@@ -3034,7 +3192,7 @@ func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, 
 			Concerns:             []string{},
 		}, 0, nil
 	}
-	
+
 	// Fallback if no validation was done yet
 	return &ProgressEvaluation{
 		Status:               "on_track",
@@ -3049,7 +3207,7 @@ func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, 
 func checkRefactoringGoalAchieved(context *AgentContext) bool {
 	// Look for patterns in the user intent to understand what should be refactored
 	intent := strings.ToLower(context.UserIntent)
-	
+
 	// Extract source file from intent (e.g., "refactor cmd/agent.go")
 	var sourceFile string
 	if strings.Contains(intent, "cmd/agent.go") {
@@ -3057,12 +3215,12 @@ func checkRefactoringGoalAchieved(context *AgentContext) bool {
 	} else if strings.Contains(intent, "agent.go") {
 		sourceFile = "cmd/agent.go" // assume cmd/agent.go
 	}
-	
+
 	if sourceFile == "" {
 		context.Logger.Logf("DEBUG: No specific source file identified for refactoring goal check")
 		return true // Can't check specific metrics, assume success
 	}
-	
+
 	// Check if the source file still has most of its original size
 	if _, err := os.Stat(sourceFile); err == nil {
 		// Get current file info
@@ -3071,13 +3229,13 @@ func checkRefactoringGoalAchieved(context *AgentContext) bool {
 			context.Logger.Logf("DEBUG: Could not stat source file %s: %v", sourceFile, err)
 			return true // Can't verify, assume success
 		}
-		
+
 		currentSize := info.Size()
-		
+
 		// For large files (>3000 lines), extraction should significantly reduce size
 		if currentSize > 100000 { // roughly 3000+ lines
 			context.Logger.Logf("DEBUG: Source file %s is still very large (%d bytes) after refactoring", sourceFile, currentSize)
-			
+
 			// Check if we actually created the extraction target files
 			extractedFiles := 0
 			if _, err := os.Stat("pkg/agent/agent.go"); err == nil {
@@ -3089,7 +3247,7 @@ func checkRefactoringGoalAchieved(context *AgentContext) bool {
 			if _, err := os.Stat("pkg/agent/utilities.go"); err == nil {
 				extractedFiles++
 			}
-			
+
 			// If we created files but source is still huge, extraction is incomplete
 			if extractedFiles > 0 {
 				context.Logger.Logf("DEBUG: Created %d extracted files but source file still large - refactoring incomplete", extractedFiles)
@@ -3097,7 +3255,7 @@ func checkRefactoringGoalAchieved(context *AgentContext) bool {
 			}
 		}
 	}
-	
+
 	return true
 }
 
@@ -3138,23 +3296,23 @@ func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, e
 	}
 
 	// Add refactoring-specific context
-	if strings.Contains(strings.ToLower(context.UserIntent), "refactor") || 
-	   strings.Contains(strings.ToLower(context.UserIntent), "extract") {
+	if strings.Contains(strings.ToLower(context.UserIntent), "refactor") ||
+		strings.Contains(strings.ToLower(context.UserIntent), "extract") {
 		contextSummary.WriteString("\nREFACTORING GOAL ANALYSIS:\n")
-		
+
 		// Check current state of source file
 		if _, err := os.Stat("cmd/agent.go"); err == nil {
 			content, readErr := os.ReadFile("cmd/agent.go")
 			if readErr == nil {
 				lines := len(strings.Split(string(content), "\n"))
 				contextSummary.WriteString(fmt.Sprintf("cmd/agent.go current size: %d lines\n", lines))
-				
+
 				if lines > 1000 {
 					contextSummary.WriteString("WARNING: Source file still very large - extraction likely incomplete\n")
 				}
 			}
 		}
-		
+
 		// Check what files were created
 		extractedFiles := []string{}
 		if _, err := os.Stat("pkg/agent/agent.go"); err == nil {
@@ -3516,8 +3674,8 @@ func executeSimpleValidation(context *AgentContext) error {
 	context.Logger.LogProcessStep("🚀 Fast validation for simple task...")
 
 	// Enhanced validation for refactoring tasks
-	if strings.Contains(strings.ToLower(context.UserIntent), "refactor") || 
-	   strings.Contains(strings.ToLower(context.UserIntent), "extract") {
+	if strings.Contains(strings.ToLower(context.UserIntent), "refactor") ||
+		strings.Contains(strings.ToLower(context.UserIntent), "extract") {
 		return executeRefactoringValidation(context)
 	}
 
@@ -3550,7 +3708,7 @@ func executeSimpleValidation(context *AgentContext) error {
 // executeRefactoringValidation performs thorough validation for refactoring tasks
 func executeRefactoringValidation(context *AgentContext) error {
 	context.Logger.LogProcessStep("🔍 Enhanced validation for refactoring task...")
-	
+
 	// First, run basic compilation check
 	cmd := exec.Command("go", "build", "./...")
 	output, err := cmd.CombinedOutput()
@@ -3560,7 +3718,7 @@ func executeRefactoringValidation(context *AgentContext) error {
 		context.ValidationResults = append(context.ValidationResults, fmt.Sprintf("❌ %s", errorMsg))
 		return fmt.Errorf("refactoring validation failed: %w", err)
 	}
-	
+
 	// Check if refactoring goal was achieved
 	goalAchieved := checkRefactoringGoalAchieved(context)
 	if !goalAchieved {
@@ -3569,7 +3727,7 @@ func executeRefactoringValidation(context *AgentContext) error {
 		context.ValidationResults = append(context.ValidationResults, fmt.Sprintf("❌ %s", errorMsg))
 		return fmt.Errorf("refactoring incomplete: %s", errorMsg)
 	}
-	
+
 	// Count lines in cmd/agent.go to ensure it was actually reduced
 	if _, err := os.Stat("cmd/agent.go"); err == nil {
 		// Read file to count lines
@@ -3577,7 +3735,7 @@ func executeRefactoringValidation(context *AgentContext) error {
 		if readErr == nil {
 			lines := len(strings.Split(string(content), "\n"))
 			context.Logger.LogProcessStep(fmt.Sprintf("📊 cmd/agent.go current size: %d lines", lines))
-			
+
 			// If still over 1000 lines after "extraction", it's likely incomplete
 			if lines > 1000 {
 				errorMsg := fmt.Sprintf("Refactoring incomplete: cmd/agent.go still has %d lines (should be significantly reduced)", lines)
@@ -3587,7 +3745,7 @@ func executeRefactoringValidation(context *AgentContext) error {
 			}
 		}
 	}
-	
+
 	context.ValidationResults = append(context.ValidationResults, "✅ Refactoring validation passed (compilation + goal achieved)")
 	context.ExecutedOperations = append(context.ExecutedOperations, "Refactoring validation completed")
 	context.Logger.LogProcessStep("✅ Refactoring validation completed successfully")

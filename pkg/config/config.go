@@ -38,6 +38,7 @@ type Config struct {
 	OrchestrationModel       string               `json:"orchestration_model"` // new field for orchestration tasks
 	WorkspaceModel           string               `json:"workspace_model"`     // New field for workspace analysis
 	EmbeddingModel           string               `json:"embedding_model"`     // New field for embedding model
+	CodeReviewModel          string               `json:"code_review_model"`   // New field for code review tasks
 	LocalModel               string               `json:"local_model"`
 	TrackWithGit             bool                 `json:"track_with_git"`
 	EnableSecurityChecks     bool                 `json:"enable_security_checks"` // New field for security checks
@@ -110,6 +111,9 @@ func (cfg *Config) setDefaultValues() {
 	}
 	if cfg.OrchestrationModel == "" {
 		cfg.OrchestrationModel = cfg.EditingModel // Fallback to editing model if not specified
+	}
+	if cfg.CodeReviewModel == "" {
+		cfg.CodeReviewModel = cfg.EditingModel // Default to editing model, but can be overridden for reliability
 	}
 	if cfg.EmbeddingModel == "" {
 		cfg.EmbeddingModel = "deepinfra:Qwen/Qwen3-Embedding-4B" // Default embedding model
@@ -256,6 +260,13 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		orchestrationModel = editingModel
 	}
 
+	fmt.Print("Enter Code Review Model (e.g., same as editing model): ")
+	codeReviewModel, _ := reader.ReadString('\n')
+	codeReviewModel = strings.TrimSpace(codeReviewModel)
+	if codeReviewModel == "" {
+		codeReviewModel = editingModel
+	}
+
 	fmt.Print("Enter Embedding Model (e.g., deepinfra:Qwen/Qwen3-Embedding-4B): ")
 	embeddingModel, _ := reader.ReadString('\n')
 	embeddingModel = strings.TrimSpace(embeddingModel)
@@ -282,6 +293,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		SummaryModel:             summaryModel,
 		WorkspaceModel:           workspaceModel,
 		OrchestrationModel:       orchestrationModel,
+		CodeReviewModel:          codeReviewModel,
 		EmbeddingModel:           embeddingModel, // Set from user input
 		LocalModel:               getLocalModel(skipPrompt),
 		TrackWithGit:             autoTrackGit,

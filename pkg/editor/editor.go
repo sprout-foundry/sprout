@@ -52,12 +52,12 @@ func isIncompleteTruncatedResponse(code, filename string) bool {
 		// Count opening and closing braces - if severely unbalanced, likely truncated
 		openBraces := strings.Count(code, "{")
 		closeBraces := strings.Count(code, "}")
-		
+
 		// Allow some imbalance for partial code, but large imbalances suggest truncation
 		if openBraces > closeBraces+5 {
 			return true
 		}
-		
+
 		// Check if it looks like it ends mid-function (very short and ends with incomplete syntax)
 		lines := strings.Split(strings.TrimSpace(code), "\n")
 		if len(lines) < 10 { // Very short response
@@ -908,7 +908,7 @@ func getUpdatedCodeSection(sectionContent, instructions, filePath string, cfg *c
 // Improved version that handles partial code snippets better and cleans up comments
 func applyPartialEdit(originalContent, updatedSection string, startLine, endLine int) string {
 	lines := strings.Split(originalContent, "\n")
-	
+
 	// Clean the updated section of problematic comments that could cause issues
 	cleanedUpdatedSection := cleanPartialCodeSnippet(updatedSection)
 	updatedLines := strings.Split(cleanedUpdatedSection, "\n")
@@ -945,7 +945,7 @@ func cleanPartialCodeSnippet(code string) string {
 
 	for _, line := range lines {
 		lineToCheck := strings.ToLower(strings.TrimSpace(line))
-		
+
 		// Skip obvious placeholder comments that could cause issues
 		problematicComments := []string{
 			"// existing code",
@@ -957,7 +957,7 @@ func cleanPartialCodeSnippet(code string) string {
 			"/* existing",
 			"/* unchanged",
 		}
-		
+
 		shouldSkip := false
 		for _, problematic := range problematicComments {
 			if strings.Contains(lineToCheck, problematic) {
@@ -965,7 +965,7 @@ func cleanPartialCodeSnippet(code string) string {
 				break
 			}
 		}
-		
+
 		if !shouldSkip {
 			cleanedLines = append(cleanedLines, line)
 		}
@@ -1009,7 +1009,7 @@ func findBetterInsertionPoint(originalLines, updatedLines []string, preferredSta
 	if safeEnd < 0 {
 		safeEnd = 0
 	}
-	
+
 	return safeEnd, safeEnd
 }
 

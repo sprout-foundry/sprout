@@ -46,10 +46,13 @@ func callOllamaAPI(modelName string, messages []prompts.Message, cfg *config.Con
 		Model:    actualModelName,
 		Messages: ollamaMessages,
 		Options: map[string]interface{}{
-			"temperature": cfg.Temperature,
-			"top_p":       1.0,
-			"num_ctx":     numCtx, // Dynamically calculated context size
-			"stream":      true,   // Enable streaming for Ollama
+			"temperature":    0.1,                                  // Very low for consistency
+			"top_p":          0.9,                                  // Focus on high-probability tokens
+			"num_ctx":        numCtx,                               // Dynamically calculated context size
+			"num_predict":    4096,                                 // Limit output length
+			"repeat_penalty": 1.1,                                  // Discourage repetition
+			"stop":           []string{"\n\n\n", "```\n\n", "END"}, // Stop sequences
+			"stream":         true,                                 // Enable streaming for Ollama
 		},
 	}
 

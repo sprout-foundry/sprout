@@ -10,15 +10,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts"
 )
 
-func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts.Message, timeout time.Duration, writer io.Writer) error {
-	reqBody, err := json.Marshal(OpenAIRequest{
-		Model:       model,
-		Messages:    messages,
-		Temperature: 0.0,
-		Stream:      true,
+func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts.Message, cfg *config.Config, timeout time.Duration, writer io.Writer) error {
+	reqBody, err := json.Marshal(map[string]interface{}{
+		"model":             model,
+		"messages":          messages,
+		"temperature":       cfg.Temperature,      // Use config value
+		"max_tokens":        cfg.MaxTokens,        // Use config value
+		"top_p":             cfg.TopP,             // Use config value
+		"presence_penalty":  cfg.PresencePenalty,  // Use config value
+		"frequency_penalty": cfg.FrequencyPenalty, // Use config value
+		"stream":            true,
+		"stop":              []string{"\n\n\n", "```\n\n", "END"}, // Stop sequences
 	})
 	if err != nil {
 		fmt.Print(prompts.RequestMarshalError(err)) // Use prompt

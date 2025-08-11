@@ -129,7 +129,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	}
 
 	if err != nil {
-		fmt.Printf(prompts.LLMResponseError(err))
+		fmt.Print(prompts.LLMResponseError(err))
 		return modelName, err
 	}
 

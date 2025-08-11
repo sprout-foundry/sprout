@@ -142,7 +142,7 @@ func (cfg *Config) setDefaultValues() {
 
 	// NEW: Set default for MaxTokens
 	if cfg.MaxTokens == 0 {
-		cfg.MaxTokens = 8600 // Reasonable limit for output length
+		cfg.MaxTokens = 30000 // Reasonable limit for output length
 	}
 
 	// NEW: Set default for TopP

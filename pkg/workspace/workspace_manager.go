@@ -478,7 +478,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 			for file := range workspace.Files {
 				allFilesAsSummaries = append(allFilesAsSummaries, file)
 			}
-			return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg.CodeStyle)
+			return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg)
 		}
 	} else {
 		logger.LogProcessStep("--- Asking LLM to select relevant files for context ---")
@@ -490,7 +490,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 			for file := range workspace.Files {
 				allFilesAsSummaries = append(allFilesAsSummaries, file)
 			}
-			return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg.CodeStyle)
+			return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg)
 		}
 	}
 
@@ -520,5 +520,5 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 		}
 	}
 
-	return getWorkspaceInfo(workspace, fullContextFiles, summaryContextFiles, workspace.ProjectGoals, cfg.CodeStyle)
+	return getWorkspaceInfo(workspace, fullContextFiles, summaryContextFiles, workspace.ProjectGoals, cfg)
 }

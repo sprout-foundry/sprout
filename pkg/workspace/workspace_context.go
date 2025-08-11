@@ -87,7 +87,7 @@ func printFileTree(node *fileTreeNode, b *strings.Builder, prefix string, isLast
 
 // getWorkspaceInfo formats the workspace information for the LLM.
 // It lists all files, provides full content for selected files, and summaries for others.
-func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextFiles []string, projectGoals ProjectGoals, codeStyle config.CodeStylePreferences) string {
+func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextFiles []string, projectGoals ProjectGoals, cfg *config.Config) string {
 	logger := utils.GetLogger(false) // Get logger instance
 	var b strings.Builder
 	b.WriteString("--- Start of full content from workspace ---\n")
@@ -159,13 +159,12 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 
 	// Add Code Style Preferences
 	b.WriteString("--- Code Style Preferences ---\n")
-	b.WriteString(fmt.Sprintf("Function Size: %s\n", codeStyle.FunctionSize))
-	b.WriteString(fmt.Sprintf("File Size: %s\n", codeStyle.FileSize))
-	b.WriteString(fmt.Sprintf("Naming Conventions: %s\n", codeStyle.NamingConventions))
-	b.WriteString(fmt.Sprintf("Error Handling: %s\n", codeStyle.ErrorHandling))
-	b.WriteString(fmt.Sprintf("Testing Approach: %s\n", codeStyle.TestingApproach))
-	b.WriteString(fmt.Sprintf("Modularity: %s\n", codeStyle.Modularity))
-	b.WriteString(fmt.Sprintf("Readability: %s\n", codeStyle.Readability))
+	b.WriteString(fmt.Sprintf("Function Size: %s\n", cfg.CodeStyle.FunctionSize))
+	b.WriteString(fmt.Sprintf("File Size: %s\n", cfg.CodeStyle.FileSize))
+	b.WriteString(fmt.Sprintf("Naming Conventions: %s\n", cfg.CodeStyle.NamingConventions))
+	b.WriteString(fmt.Sprintf("Error Handling: %s\n", cfg.CodeStyle.ErrorHandling))
+	b.WriteString(fmt.Sprintf("Testing Approach: %s\n", cfg.CodeStyle.TestingApproach))
+	b.WriteString(fmt.Sprintf("Modularity: %s\n", cfg.CodeStyle.Modularity))
 	b.WriteString("\n")
 
 	// Convert slices to maps for efficient lookup
@@ -290,6 +289,15 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 	summary.WriteString(fmt.Sprintf("- %d files selected for summary context\n", len(summaryContextFiles)))
 
 	return b.String()
+}
+
+// GetWorkspaceTree returns a formatted string representation of the file tree from the workspace.
+func GetWorkspaceTree() (string, error) {
+	ws, err := LoadWorkspaceFile() // Load the workspace
+	if err != nil {
+		return "", fmt.Errorf("failed to load workspace file: %w", err)
+	}
+	return GetFormattedFileTree(ws)
 }
 
 // getLanguageFromFilename infers the programming language from the file extension.
@@ -439,4 +447,47 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 	logger.Log(b.String())
 
 	return b.String()
+}
+
+// GetFormattedFileTree generates a string representation of the file tree from the workspace.
+func GetFormattedFileTree(ws WorkspaceFile) (string, error) {
+	var allFilePaths []string
+	for filePath := range ws.Files {
+		allFilePaths = append(allFilePaths, filePath)
+	}
+	sort.Strings(allFilePaths) // Sort for consistent output
+
+	rootNode := buildFileTree(allFilePaths)
+	var b strings.Builder
+	// Print the root node's children, starting with no prefix and not as the last child of a non-existent parent
+	// The root node itself is represented by ".", so we iterate its children directly.
+	var sortedRootChildNames []string
+	for name := range rootNode.Children {
+		sortedRootChildNames = append(sortedRootChildNames, name)
+	}
+	sort.Strings(sortedRootChildNames)
+
+	for i, name := range sortedRootChildNames {
+		child := rootNode.Children[name]
+		printFileTree(child, &b, "", i == len(sortedRootChildNames)-1)
+	}
+	return b.String(), nil
+}
+
+// GetFullWorkspaceSummary generates the full workspace information string for the LLM,
+// including all files as summary context.
+func GetFullWorkspaceSummary(ws WorkspaceFile, codeStyle config.CodeStylePreferences, cfg *config.Config, logger *utils.Logger) (string, error) {
+	var allFilePaths []string
+	for filePath := range ws.Files {
+		allFilePaths = append(allFilePaths, filePath)
+	}
+	sort.Strings(allFilePaths) // Ensure consistent order
+
+	var allFilesAsSummaries []string
+	for _, file := range allFilePaths {
+		allFilesAsSummaries = append(allFilesAsSummaries, file)
+	}
+	// Pass a generic instruction for the embedding model to select files for a "full" summary.
+	// The embedding model will decide which files are most relevant for a general overview.
+	return getWorkspaceInfo(ws, nil, allFilesAsSummaries, ws.ProjectGoals, cfg), nil
 }

@@ -3,7 +3,9 @@ package orchestration
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
@@ -12,6 +14,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/webcontent"
+	"github.com/alantheprice/ledit/pkg/workspace"
 )
 
 type ToolExecutor struct {
@@ -41,6 +44,8 @@ func (te *ToolExecutor) ExecuteToolCall(toolCall llm.ToolCall) (string, error) {
 		return te.executeShellCommand(args)
 	case "ask_user":
 		return te.executeAskUser(args)
+	case "workspace_context":
+		return te.executeWorkspaceContext(args)
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolCall.Function.Name)
 	}
@@ -130,6 +135,82 @@ func (te *ToolExecutor) executeAskUser(args map[string]interface{}) (string, err
 	return fmt.Sprintf("%t", response), nil
 }
 
+// executeWorkspaceContext handles the "workspace_context" tool call.
+func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (string, error) {
+	action, ok := args["action"].(string)
+	if !ok {
+		return "", fmt.Errorf("workspace_context requires 'action' parameter")
+	}
+
+	logger := utils.GetLogger(te.cfg.SkipPrompt)
+
+	// Load workspace once, as it's needed for all actions
+	ws, err := workspace.LoadWorkspaceFile()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("workspace.json not found. Please run 'ledit init' or ensure you are in a ledir project.")
+		}
+		return "", fmt.Errorf("failed to load workspace: %w", err)
+	}
+
+	switch action {
+	case "search_embeddings":
+		query, ok := args["query"].(string)
+		if !ok {
+			return "", fmt.Errorf("workspace_context action 'search_embeddings' requires 'query' parameter")
+		}
+		fmt.Printf("🧠 Searching workspace embeddings for: %s\n", query)
+		fullContextFiles, summaryContextFiles, err := workspace.GetFilesForContextUsingEmbeddings(query, ws, te.cfg, logger)
+		if err != nil {
+			fmt.Printf("   ❌ Embedding search failed: %v\n", err)
+			return "", fmt.Errorf("embedding search failed: %w", err)
+		}
+
+		var result strings.Builder
+		result.WriteString("Files found via embedding search:\n")
+		if len(fullContextFiles) > 0 {
+			result.WriteString("  Full Context Files:\n")
+			for _, f := range fullContextFiles {
+				result.WriteString(fmt.Sprintf("    - %s\n", f))
+			}
+		}
+		if len(summaryContextFiles) > 0 {
+			result.WriteString("  Summary Context Files:\n")
+			for _, f := range summaryContextFiles {
+				result.WriteString(fmt.Sprintf("    - %s\n", f))
+			}
+		}
+		if len(fullContextFiles) == 0 && len(summaryContextFiles) == 0 {
+			result.WriteString("  No relevant files found.\n")
+		}
+		fmt.Printf("   ✅ Embedding search completed.\n")
+		return result.String(), nil
+
+	case "load_tree":
+		fmt.Printf("🌳 Loading workspace file tree.\n")
+		tree, err := workspace.GetFormattedFileTree(ws)
+		if err != nil {
+			fmt.Printf("   ❌ Failed to load file tree: %v\n", err)
+			return "", fmt.Errorf("failed to load file tree: %w", err)
+		}
+		fmt.Printf("   ✅ File tree loaded.\n")
+		return tree, nil
+
+	case "load_summary":
+		fmt.Printf("📝 Loading full workspace summary.\n")
+		summary, err := workspace.GetFullWorkspaceSummary(ws, te.cfg.CodeStyle, te.cfg, logger)
+		if err != nil {
+			fmt.Printf("   ❌ Failed to load workspace summary: %v\n", err)
+			return "", fmt.Errorf("failed to load workspace summary: %w", err)
+		}
+		fmt.Printf("   ✅ Workspace summary loaded.\n")
+		return summary, nil
+
+	default:
+		return "", fmt.Errorf("unknown action for workspace_context: %s. Valid actions are 'search_embeddings', 'load_tree', 'load_summary'.", action)
+	}
+}
+
 // CallLLMWithToolSupport makes an LLM call with tool calling support
 func CallLLMWithToolSupport(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration) (string, error) {
 	// Enhance the system prompt with tool information
@@ -186,13 +267,13 @@ func containsToolCall(response string) bool {
 		jsonContains(response, "search_web") ||
 		jsonContains(response, "read_file") ||
 		jsonContains(response, "run_shell_command") ||
-		jsonContains(response, "ask_user"))
+		jsonContains(response, "ask_user") ||
+		jsonContains(response, "workspace_context"))
 }
 
 func jsonContains(response, key string) bool {
 	// Simple JSON key detection
-	return fmt.Sprintf(`"%s"`, key) != "" &&
-		(fmt.Sprintf(`"%s":`, key) != "" || fmt.Sprintf(`'%s':`, key) != "")
+	return strings.Contains(response, fmt.Sprintf(`"%s"`, key)) || strings.Contains(response, fmt.Sprintf(`'%s'`, key))
 }
 
 func parseToolCalls(response string) ([]llm.ToolCall, error) {
@@ -208,11 +289,23 @@ func parseToolCalls(response string) ([]llm.ToolCall, error) {
 	}
 
 	// If that fails, try to extract JSON from markdown code blocks
-	if jsonStart := fmt.Sprintf("```json"); jsonStart != "" {
-		// Extract JSON from code blocks - simplified implementation
-		// In a full implementation, you'd use proper regex or string parsing
+	jsonStart := "```json"
+	if strings.Contains(response, jsonStart) {
+		startIndex := strings.Index(response, jsonStart)
+		if startIndex != -1 {
+			// Find the end of the JSON block
+			endBlockMarker := "```"
+			// Search for "```" after the start of the JSON block
+			endIndex := strings.Index(response[startIndex+len(jsonStart):], endBlockMarker)
+			if endIndex != -1 {
+				jsonBlock := response[startIndex+len(jsonStart) : startIndex+len(jsonStart)+endIndex]
+				if err := json.Unmarshal([]byte(jsonBlock), &result); err == nil {
+					return result.ToolCalls, nil
+				}
+			}
+		}
 	}
 
-	// For now, return empty slice - this would be enhanced in a full implementation
+	// If no tool calls found or parsing failed, return empty slice
 	return []llm.ToolCall{}, nil
 }

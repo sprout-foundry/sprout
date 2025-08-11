@@ -123,7 +123,6 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 		*skipPromptConfig = *cfg
 		skipPromptConfig.SkipPrompt = true
 
-		// Fix: Removed the extra boolean parameter that was causing the "too many arguments" error
 		_, err := llm.GetLLMResponseStream(skipPromptConfig.EditingModel, messages, "question", skipPromptConfig, 3*time.Minute, writer)
 		if err != nil {
 			// Error is already printed by the LLM function

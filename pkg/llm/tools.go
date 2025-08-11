@@ -280,7 +280,7 @@ When you need to use tools, respond with a JSON object in this EXACT format:
    - Use: ANY time a file is referenced but not provided
    - Example: User says "update main.go" but main.go content not shown
 
-2. **search_web** - REQUIRED for current info or unknown topics
+2. **search_web** - Useful for ensuring access to current info or unknown topics
    - Parameters: {"query": "search terms"}
    - Use: When you need documentation, current info, or help with unfamiliar topics
 
@@ -291,18 +291,6 @@ When you need to use tools, respond with a JSON object in this EXACT format:
 4. **ask_user** - REQUIRED when instructions are unclear
    - Parameters: {"question": "your question"}
    - Use: When you need clarification or additional information
-
-5. **validate_file** - ESSENTIAL for quality assurance
-   - Parameters: {"file_path": "path/to/file", "validation_type": "syntax|compilation|basic|full"}
-   - Use: After making changes to verify correctness and catch issues early
-
-6. **edit_file_section** - EFFICIENT for targeted edits
-   - Parameters: {"file_path": "path/to/file", "instructions": "what to change", "target_section": "optional function/struct name"}
-   - Use: For precise edits to specific functions or sections
-
-7. **fix_validation_issues** - AUTOMATED problem resolution
-   - Parameters: {"file_path": "path/to/file", "error_description": "description of the issue"}
-   - Use: When validation finds issues that can be automatically resolved
 
 **WORKFLOW BEST PRACTICES:**
 - After editing files, ALWAYS use validate_file to check for issues

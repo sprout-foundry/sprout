@@ -755,14 +755,15 @@ CRITICAL CONSTRAINTS:
 8. **NO SEARCH FLAGS**: Do NOT include #SG, #SEARCH, or similar flags in your response. Search grounding is handled separately via explicit tool calls.
 
 PLANNING REQUIREMENTS:
-1. **File Analysis**: Identify exactly which EXISTING source files need to be modified 
+1. **File Analysis**: Identify exactly which EXISTING source files need to be modified and what new files need to be created
 2. **Edit Operations**: For each file, specify the exact changes needed
 3. **Scope Justification**: Explain how each change directly serves the user request
 4. **File Verification**: Only include source files that exist in the current codebase context
 5. **CONTEXT FILES**: Include ALL files that the editing model will need to understand interfaces, dependencies, or patterns referenced in the edit operations. The "files_to_edit" list will be used to provide context to the editing model.
 
 CRITICAL CONTEXT REQUIREMENT:
-Edit operations should be granular and self-contained with all necessary context included in the instructions. When referencing files, functions, interfaces, or types from other files, include the file path using hashtag syntax (e.g., #path/to/file.go) at the END of the instructions. This allows the downstream editing process to automatically provide those files as context.
+- Edit operations should be granular and self-contained with all necessary context included in the instructions. When referencing files, functions, interfaces, or types from other files, include the file path using hashtag syntax (e.g., #path/to/file.go) at the END of the instructions. This allows the downstream editing process to automatically provide those files as context.
+- Each Edit should target a specific file. For instance, if you are moving a function from one file to another, that it two edit operations: one to remove the function from the old file and another to add it to the new file.
 
 INSTRUCTION QUALITY REQUIREMENTS:
 1. **Self-Contained**: Each instruction should contain all details needed to implement the change
@@ -770,18 +771,19 @@ INSTRUCTION QUALITY REQUIREMENTS:
 3. **Function-Specific**: For refactoring, specify exactly which functions/types to move (use function inventory above)
 4. **File References**: Use hashtag syntax (#path/to/file.go) for any files that need to be referenced
 5. **Context-Rich**: Include function names, interface details, and patterns to follow
-6. **No Assumptions**: Don't assume the editing model knows about other parts of the codebase
+6. **No Assumptions**: Don't assume the editing model knows about other parts of the codebase, if they need to know something add it to the prompt
 7. **Dependency Aware**: For refactoring, order operations to handle dependencies correctly
 
 FOR REFACTORING TASKS - REQUIRED INSTRUCTION FORMAT:
 Instead of: "Refactor cmd/agent.go to extract functions"
-Use: "Create pkg/agent/agent.go and move the following specific functions from cmd/agent.go: [list exact function names from inventory]"
-Include: "Remove these functions from cmd/agent.go and add appropriate import statements"
+Use: "Create <new-file-path> and move the following specific functions from <old-file-path>: [list exact function names from inventory]"
+Include: "Reminder to add the appropriate file syntax like import statements"
 
 HASHTAG FILE REFERENCE SYNTAX:
-- End instructions with: #path/to/file1.go #path/to/file2.go
-- Use this for any file containing interfaces, types, patterns, or examples to follow
+- End instructions with: #<reference-file1-path> #<reference-file2-path>
+- Use this for any file containing interfaces, references, types, patterns, or examples to follow
 - The editing process will automatically load these files as context
+- Exclude the file that will be added to the file_path for that edit operation
 
 RESPONSE FORMAT (JSON):
 {
@@ -790,7 +792,7 @@ RESPONSE FORMAT (JSON):
     {
       "file_path": "path/to/existing/file.go", 
       "description": "Specific change to make",
-      "instructions": "Detailed, self-contained instructions with hashtag file references at the end: #path/to/context/file.go",
+      "instructions": "Detailed, self-contained instructions with hashtag file references at the end: Files to reference, create, or modify: #path/to/context/file.go",
       "scope_justification": "How this change directly serves the user's request"
     }
   ],
@@ -1564,97 +1566,11 @@ func isSourceFile(path string) bool {
 	return false
 }
 
-// executeEditPlan executes the detailed edit plan using the fast editing model
-func executeEditPlan(editPlan *EditPlan, cfg *config.Config, logger *utils.Logger) (int, error) {
-	startTime := time.Now()
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	logger.Logf("PERF: executeEditPlan started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-
-	totalTokens := 0
-
-	logger.LogProcessStep(fmt.Sprintf("⚡ Executing %d edit operations from orchestration plan", len(editPlan.EditOperations)))
-	logger.LogProcessStep(fmt.Sprintf("🎯 Scope: %s", editPlan.ScopeStatement))
-	logger.LogProcessStep(fmt.Sprintf("Strategy: %s", editPlan.Context))
-
-	// Track changes for final review
-	var changesLog []string
-
-	// For now, execute edits sequentially
-	// TODO: Implement parallel execution for independent file edits
-	for i, operation := range editPlan.EditOperations {
-		logger.LogProcessStep(fmt.Sprintf("🔧 Edit %d/%d: %s (%s)", i+1, len(editPlan.EditOperations), operation.Description, operation.FilePath))
-		logger.LogProcessStep(fmt.Sprintf("   📋 Scope Justification: %s", operation.ScopeJustification))
-
-		// Track this change
-		changesLog = append(changesLog, fmt.Sprintf("File: %s | Change: %s | Justification: %s",
-			operation.FilePath, operation.Description, operation.ScopeJustification))
-
-		// Create focused instructions for this specific edit
-		// The orchestration model should provide self-contained instructions with hashtag file references
-		editInstructions := buildFocusedEditInstructions(operation, logger)
-
-		// Estimate tokens for this edit
-		tokenEstimate := utils.EstimateTokens(editInstructions)
-		totalTokens += tokenEstimate
-
-		// Execute the edit using partial editing for efficiency, fallback to full file editing
-		var err error
-
-		// Try partial editing first for better efficiency
-		if shouldUsePartialEdit(operation, logger) {
-			logger.Logf("Attempting partial edit for %s", operation.FilePath)
-			_, err = editor.ProcessPartialEdit(operation.FilePath, operation.Instructions, cfg, logger)
-			if err != nil {
-				logger.Logf("Partial edit failed, falling back to full file edit: %v", err)
-				// Fall back to full file editing
-				_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, cfg, "")
-			} else {
-				logger.LogProcessStep(fmt.Sprintf("✅ Edit %d completed with partial editing (efficient)", i+1))
-				continue
-			}
-		} else {
-			// Use full file editing directly
-			logger.Logf("Using full file edit for %s", operation.FilePath)
-			_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, cfg, "")
-		}
-
-		if err != nil {
-			// Check if this is a "revisions applied" signal from the editor's review process
-			if strings.Contains(err.Error(), "revisions applied, re-validating") {
-				logger.LogProcessStep(fmt.Sprintf("✅ Edit %d completed with revision cycle", i+1))
-				logger.Logf("Final status: %s", err.Error())
-			} else {
-				logger.LogError(fmt.Errorf("edit operation %d failed: %w", i+1, err))
-				duration := time.Since(startTime)
-				runtime.ReadMemStats(&m)
-				logger.Logf("PERF: executeEditPlan completed (error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-				return totalTokens, fmt.Errorf("edit operation %d failed: %w", i+1, err)
-			}
-		} else {
-			logger.LogProcessStep(fmt.Sprintf("✅ Edit %d completed successfully", i+1))
-		}
-	}
-
-	duration := time.Since(startTime)
-	runtime.ReadMemStats(&m)
-	logger.Logf("PERF: executeEditPlan completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-
-	logger.LogProcessStep(fmt.Sprintf("🎉 All %d edit operations completed successfully", len(editPlan.EditOperations)))
-
-	// Log summary of all changes made
-	logger.LogProcessStep("📋 Summary of Changes Made:")
-	for _, changeLog := range changesLog {
-		logger.LogProcessStep(fmt.Sprintf("   • %s", changeLog))
-	}
-
-	return totalTokens, nil
-}
-
 // shouldUsePartialEdit determines whether to use partial editing or full file editing
 // based on the operation characteristics and file size
 // shouldUsePartialEdit determines whether to use partial editing or full file editing
 // based on the operation characteristics and file size
+// THIS IS NOT READY TO USE, NEEDS IMPROVEMENTS
 func shouldUsePartialEdit(operation EditOperation, logger *utils.Logger) bool {
 	// Check if file exists and get its size
 	fileInfo, err := os.Stat(operation.FilePath)
@@ -1755,8 +1671,6 @@ func buildFocusedEditInstructions(operation EditOperation, logger *utils.Logger)
 `)
 
 	// The orchestration model should have provided self-contained instructions
-	// with hashtag file references that the downstream editing process will handle
-	instructions.WriteString("Note: Any file references with hashtag syntax will be automatically loaded as context.\n\n")
 	instructions.WriteString("Please implement the requested change efficiently and precisely.\n")
 
 	// Log the full context being sent to the LLM for debugging
@@ -3838,53 +3752,74 @@ func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext)
 		tokenEstimate := utils.EstimateTokens(editInstructions)
 		totalTokens += tokenEstimate
 
-		// Execute the edit with error handling
+		// Retry logic: attempt the operation up to 3 times (1 initial + 2 retries)
+		const maxRetries = 2
 		var err error
-		if shouldUsePartialEdit(operation, context.Logger) {
-			context.Logger.Logf("Attempting partial edit for %s", operation.FilePath)
-			_, err = editor.ProcessPartialEdit(operation.FilePath, operation.Instructions, context.Config, context.Logger)
-			if err != nil {
-				context.Logger.Logf("Partial edit failed, falling back to full file edit: %v", err)
+		var success bool
+
+		for attempt := 0; attempt <= maxRetries; attempt++ {
+			if attempt > 0 {
+				context.Logger.LogProcessStep(fmt.Sprintf("🔄 Retry attempt %d/%d for edit %d", attempt, maxRetries, i+1))
+			}
+
+			// Execute the edit with error handling
+			if shouldUsePartialEdit(operation, context.Logger) {
+				context.Logger.Logf("Attempting partial edit for %s (attempt %d)", operation.FilePath, attempt+1)
+				_, err = editor.ProcessPartialEdit(operation.FilePath, operation.Instructions, context.Config, context.Logger)
+				if err != nil {
+					context.Logger.Logf("Partial edit failed, falling back to full file edit: %v", err)
+					_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
+				}
+			} else {
+				context.Logger.Logf("Using full file edit for %s (attempt %d)", operation.FilePath, attempt+1)
 				_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
 			}
-		} else {
-			context.Logger.Logf("Using full file edit for %s", operation.FilePath)
-			_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
-		}
 
-		if err != nil {
-			// Check if this is a "revisions applied" signal from the editor's review process
-			if strings.Contains(err.Error(), "revisions applied, re-validating") {
-				operationResult := "✅ Edit operation completed (with review cycle)"
+			if err != nil {
+				// Check if this is a "revisions applied" signal from the editor's review process
+				if strings.Contains(err.Error(), "revisions applied, re-validating") {
+					success = true
+					operationResult := "✅ Edit operation completed (with review cycle)"
+					operationResults = append(operationResults, operationResult)
+					context.Logger.LogProcessStep(operationResult)
+					break
+				} else {
+					// Log the attempt failure
+					context.Logger.LogProcessStep(fmt.Sprintf("❌ Edit %d attempt %d failed: %v", i+1, attempt+1, err))
+
+					// If this was the last attempt, record the failure
+					if attempt == maxRetries {
+						errorMsg := fmt.Sprintf("Edit operation %d failed after %d attempts: %v", i+1, maxRetries+1, err)
+						context.Errors = append(context.Errors, errorMsg)
+						context.Logger.LogProcessStep(fmt.Sprintf("💥 Edit %d failed permanently after %d attempts", i+1, maxRetries+1))
+
+						// Track the failed operation
+						operationResult := fmt.Sprintf("❌ Edit operation %d failed after %d attempts: %v", i+1, maxRetries+1, err)
+						operationResults = append(operationResults, operationResult)
+					}
+					// Continue to next retry attempt or next operation
+				}
+			} else {
+				success = true
+				operationResult := "✅ Edit operation completed successfully"
 				operationResults = append(operationResults, operationResult)
 				context.Logger.LogProcessStep(operationResult)
-			} else {
-				// Log the error but continue with remaining operations
-				errorMsg := fmt.Sprintf("Edit operation %d failed: %v", i+1, err)
-				context.Errors = append(context.Errors, errorMsg)
-				context.Logger.LogProcessStep(fmt.Sprintf("❌ Edit %d failed: %v", i+1, err))
-				
-				// Track the failed operation but continue
-				operationResult := fmt.Sprintf("❌ Edit operation %d failed: %v", i+1, err)
-				operationResults = append(operationResults, operationResult)
-				
-				// Continue to next operation instead of returning early
+				break
 			}
-		} else {
-			operationResult := "✅ Edit operation completed successfully"
-			operationResults = append(operationResults, operationResult)
-			context.Logger.LogProcessStep(operationResult)
 		}
-	}
 
-	// Update agent context with results
+		// If the operation failed all attempts, log final failure
+		if !success && err != nil {
+			context.Logger.LogProcessStep(fmt.Sprintf("🚫 Edit %d exhausted all retry attempts", i+1))
+		}
+	} // Update agent context with results
 	context.ExecutedOperations = append(context.ExecutedOperations, operationResults...)
 
 	// Check if any operations failed
 	hasFailures := false
 	successCount := 0
 	failureCount := 0
-	
+
 	for _, result := range operationResults {
 		if strings.HasPrefix(result, "❌") {
 			hasFailures = true
@@ -3895,7 +3830,7 @@ func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext)
 	}
 
 	// Log execution summary
-	context.Logger.LogProcessStep(fmt.Sprintf("📊 Edit execution summary: %d successful, %d failed out of %d total operations", 
+	context.Logger.LogProcessStep(fmt.Sprintf("📊 Edit execution summary: %d successful, %d failed out of %d total operations",
 		successCount, failureCount, len(editPlan.EditOperations)))
 
 	// If all operations failed, return an error

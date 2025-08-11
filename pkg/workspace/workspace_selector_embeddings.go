@@ -33,23 +33,40 @@ func GetFilesForContextUsingEmbeddings(instructions string, workspace WorkspaceF
 	}
 
 	// Separate into full context and summary context files
-	// For now, we'll put the top 50% in full context and the rest in summary context
-	// This is a simple heuristic that could be improved
+	// Use scores to determine context allocation
 	var fullContextFiles []string
 	var summaryContextFiles []string
 
-	halfPoint := len(relevantEmbeddings) / 2
-	if halfPoint == 0 && len(relevantEmbeddings) > 0 {
-		halfPoint = 1
-	}
+	// Always include at least one file with full context
+	if len(relevantEmbeddings) > 0 {
+		// Find the highest scoring file for full context
+		maxScoreIndex := 0
+		maxScore := scores[0]
+		for i, score := range scores {
+			if score > maxScore {
+				maxScore = score
+				maxScoreIndex = i
+			}
+		}
 
-	for i, emb := range relevantEmbeddings {
-		if i < halfPoint {
-			fullContextFiles = append(fullContextFiles, emb.Path)
-			logger.Logf("Selected for full context (%.4f): %s\n", scores[i], emb.Path)
-		} else {
-			summaryContextFiles = append(summaryContextFiles, emb.Path)
-			logger.Logf("Selected for summary context (%.4f): %s\n", scores[i], emb.Path)
+		fullContextFiles = append(fullContextFiles, relevantEmbeddings[maxScoreIndex].Path)
+		logger.Logf("Selected for full context (%.4f): %s\n", scores[maxScoreIndex], relevantEmbeddings[maxScoreIndex].Path)
+
+		// Use remaining scores to decide on other files
+		scoreThreshold := maxScore * 0.7 // Use 70% of max score as threshold
+
+		for i, emb := range relevantEmbeddings {
+			if i == maxScoreIndex {
+				continue // Already handled above
+			}
+
+			if scores[i] >= scoreThreshold {
+				fullContextFiles = append(fullContextFiles, emb.Path)
+				logger.Logf("Selected for full context (%.4f): %s\n", scores[i], emb.Path)
+			} else {
+				summaryContextFiles = append(summaryContextFiles, emb.Path)
+				logger.Logf("Selected for summary context (%.4f): %s\n", scores[i], emb.Path)
+			}
 		}
 	}
 

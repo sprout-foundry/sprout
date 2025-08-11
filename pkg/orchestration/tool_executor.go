@@ -23,6 +23,9 @@ func NewToolExecutor(cfg *config.Config) *ToolExecutor {
 }
 
 func (te *ToolExecutor) ExecuteToolCall(toolCall llm.ToolCall) (string, error) {
+	// Log the tool being used
+	fmt.Printf("🤖 LLM is using tool: %s\n", toolCall.Function.Name)
+
 	// Parse the arguments from JSON string to map
 	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {

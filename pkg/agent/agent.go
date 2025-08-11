@@ -708,15 +708,13 @@ The agent has access to the following tools during the editing process:
 1. File editing (primary capability) - both full file and partial section editing
 2. Terminal command execution - can run shell commands when needed
 3. File system operations (read, write, check existence)
-4. Go compilation and testing tools
+4. Compilation and testing tools via the shell
 5. Git operations for version control
 6. File validation tools (syntax checking, compilation verification)
 7. Automatic issue fixing capabilities
 
 INTELLIGENT TOOL USAGE:
 The orchestration model should leverage these tools strategically:
-- Use validate_file tool to check syntax and compilation after changes
-- Use edit_file_section tool for efficient targeted edits
 - Use fix_validation_issues tool to automatically resolve common problems
 - Use run_shell_command tool for build verification and testing
 - Use read_file tool to examine current state before making changes
@@ -735,12 +733,6 @@ For example:
 - Check current dependencies before adding new imports
 - Run tests after adding new functionality
 - Verify compilation after structural changes
-
-However, the PREFERRED approach is to let the agent use the appropriate tools during execution:
-- The agent can call validate_file after each edit to ensure quality
-- The agent can use edit_file_section for efficient partial edits
-- The agent can automatically fix issues with fix_validation_issues
-- Terminal commands should only be specified when they're essential to the workflow
 
 PROJECT FILES ONLY - DO NOT CREATE INCOMPATIBLE FILES!
 
@@ -775,7 +767,7 @@ INSTRUCTION QUALITY REQUIREMENTS:
 7. **Dependency Aware**: For refactoring, order operations to handle dependencies correctly
 
 FOR REFACTORING TASKS - REQUIRED INSTRUCTION FORMAT:
-Instead of: "Refactor cmd/agent.go to extract functions"
+Instead of: "Refactor <current_file_path> to extract functions"
 Use: "Create <new-file-path> and move the following specific functions from <old-file-path>: [list exact function names from inventory]"
 Include: "Reminder to add the appropriate file syntax like import statements"
 
@@ -829,13 +821,11 @@ FOR LARGE FILE REFACTORING - EXAMPLE OPERATIONS:
 
 STRICT GUIDELINES:
 - Each edit operation should target ONE existing file
-- Instructions should be GRANULAR and SELF-CONTAINED with all necessary details
+- Instructions should be GRANULAR and SELF-CONTAINED with all necessary details and required context
 - Include specific function names, interface details, and implementation patterns
 - Use hashtag syntax (#file.go) at the end of instructions for file references
 - Focus ONLY on what the user explicitly requested
 - Do NOT add related improvements or "nice to have" features
-- Do NOT create new files or new directory structures
-- Only modify existing code to achieve the specific goal
 - Justify every change against the original user request`,
 		userIntent,
 		len(contextFiles),

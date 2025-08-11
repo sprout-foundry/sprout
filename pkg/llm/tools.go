@@ -192,6 +192,28 @@ func GetAvailableTools() []Tool {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "workspace_context",
+				Description: "Access workspace context information including file tree, embeddings search, or full workspace summary",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"action": {
+							Type:        "string",
+							Description: "One of: search_embeddings, load_tree, load_summary",
+							Enum:        []string{"search_embeddings", "load_tree", "load_summary"},
+						},
+						"query": {
+							Type:        "string",
+							Description: "Search query for embeddings search (required when action=\"search_embeddings\")",
+						},
+					},
+					Required: []string{"action"},
+				},
+			},
+		},
 	}
 }
 

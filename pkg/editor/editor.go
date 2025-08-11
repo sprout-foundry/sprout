@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
@@ -621,9 +620,16 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 	return combinedDiff, nil
 }
 
+func ProcessPartialEdit(filePath, targetInstructions string, cfg *config.Config, logger *utils.Logger) (string, error) {
+	// TODO: Update to use the new processPartialEdit function when we have it fully working
+	// Process the partial edit using the existing ProcessCodeGeneration function
+	return ProcessCodeGeneration(filePath, targetInstructions, cfg, "")
+}
+
 // ProcessPartialEdit performs a targeted edit on a specific file using partial content and instructions
 // This is more efficient than full file replacement for small, focused changes
-func ProcessPartialEdit(filePath, targetInstructions string, cfg *config.Config, logger *utils.Logger) (string, error) {
+func processPartialEdit(filePath, targetInstructions string, cfg *config.Config, logger *utils.Logger) (string, error) {
+	// Not using for now.
 	// Read the current file content
 	originalContent, err := os.ReadFile(filePath)
 	if err != nil {
@@ -1014,64 +1020,64 @@ func findBetterInsertionPoint(originalLines, updatedLines []string, preferredSta
 }
 
 // handleTopOfFileEdit handles edits that add content at the top of a file
-func handleTopOfFileEdit(filePath, targetInstructions, originalContent string, cfg *config.Config, logger *utils.Logger) (string, error) {
-	// Create instructions specifically for adding content at the top
-	instructions := fmt.Sprintf(`You need to add content at the very top of the file %s.
+// func handleTopOfFileEdit(filePath, targetInstructions, originalContent string, cfg *config.Config, logger *utils.Logger) (string, error) {
+// 	// Create instructions specifically for adding content at the top
+// 	instructions := fmt.Sprintf(`You need to add content at the very top of the file %s.
 
-ORIGINAL TASK: %s
+// ORIGINAL TASK: %s
 
-CURRENT FILE CONTENT (first 10 lines):
-%s
+// CURRENT FILE CONTENT (first 10 lines):
+// %s
 
-INSTRUCTIONS:
-1. Add the requested content at the very top of the file
-2. Keep all existing content exactly as it is
-3. Return the COMPLETE updated file content
-4. Make sure the new content is properly formatted for the file type
+// INSTRUCTIONS:
+// 1. Add the requested content at the very top of the file
+// 2. Keep all existing content exactly as it is
+// 3. Return the COMPLETE updated file content
+// 4. Make sure the new content is properly formatted for the file type
 
-Format your response as:
-`+"```"+`go
-[complete updated file content here]
-`+"```"+`
+// Format your response as:
+// `+"```"+`go
+// [complete updated file content here]
+// `+"```"+`
 
-The new content should be added at the very beginning, before any existing content.`,
-		filePath, targetInstructions, getFirstNLines(originalContent, 10))
+// The new content should be added at the very beginning, before any existing content.`,
+// 		filePath, targetInstructions, getFirstNLines(originalContent, 10))
 
-	// Get the updated file content from LLM
-	_, llmResponse, err := context.GetLLMCodeResponse(cfg, originalContent, instructions, filePath, "")
-	if err != nil {
-		return "", fmt.Errorf("failed to get LLM response for top-of-file edit: %w", err)
-	}
+// 	// Get the updated file content from LLM
+// 	_, llmResponse, err := context.GetLLMCodeResponse(cfg, originalContent, instructions, filePath, "")
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to get LLM response for top-of-file edit: %w", err)
+// 	}
 
-	// Extract the updated code from the LLM response
-	updatedContent, err := parser.ExtractCodeFromResponse(llmResponse, getLanguageFromExtension(filePath))
-	if err != nil || updatedContent == "" {
-		return "", fmt.Errorf("could not extract updated content from LLM response: %w", err)
-	}
+// 	// Extract the updated code from the LLM response
+// 	updatedContent, err := parser.ExtractCodeFromResponse(llmResponse, getLanguageFromExtension(filePath))
+// 	if err != nil || updatedContent == "" {
+// 		return "", fmt.Errorf("could not extract updated content from LLM response: %w", err)
+// 	}
 
-	// Use the same handleFileUpdates workflow to ensure consistency
-	updatedCode := map[string]string{
-		filePath: updatedContent,
-	}
+// 	// Use the same handleFileUpdates workflow to ensure consistency
+// 	updatedCode := map[string]string{
+// 		filePath: updatedContent,
+// 	}
 
-	// Generate a revision ID for change tracking
-	revisionID := fmt.Sprintf("top-edit-%d", time.Now().Unix())
+// 	// Generate a revision ID for change tracking
+// 	revisionID := fmt.Sprintf("top-edit-%d", time.Now().Unix())
 
-	// Use the standard approval workflow
-	diff, err := handleFileUpdates(updatedCode, revisionID, cfg, targetInstructions, targetInstructions, llmResponse)
-	if err != nil {
-		return "", fmt.Errorf("failed to handle top-of-file updates: %w", err)
-	}
+// 	// Use the standard approval workflow
+// 	diff, err := handleFileUpdates(updatedCode, revisionID, cfg, targetInstructions, targetInstructions, llmResponse)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to handle top-of-file updates: %w", err)
+// 	}
 
-	logger.Logf("Successfully processed top-of-file edit for %s", filePath)
-	return diff, nil
-}
+// 	logger.Logf("Successfully processed top-of-file edit for %s", filePath)
+// 	return diff, nil
+// }
 
 // getFirstNLines returns the first n lines of a string
-func getFirstNLines(content string, n int) string {
-	lines := strings.Split(content, "\n")
-	if len(lines) <= n {
-		return content
-	}
-	return strings.Join(lines[:n], "\n")
-}
+// func getFirstNLines(content string, n int) string {
+// 	lines := strings.Split(content, "\n")
+// 	if len(lines) <= n {
+// 		return content
+// 	}
+// 	return strings.Join(lines[:n], "\n")
+// }

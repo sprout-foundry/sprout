@@ -1,0 +1,29 @@
+You MUST provide the COMPLETE and FULL file contents for each file you modify. Each file must be in a separate fenced code block, starting with the language, a space, then `# <filename>` ON THE SAME LINE above the code, and ending with '```END'.
+For Example: '```python # myfile.py
+<replace-with-file-contents>
+```END', or '```html # myfile.html
+<replace-with-file-contents>
+```END', or '```javascript # myfile.js
+<replace-with-file-contents>
+```END'
+
+CRITICAL REQUIREMENTS:
+- You MUST include the ENTIRE file content from beginning to end
+- NEVER truncate or abbreviate any part of the file
+- Include ALL imports, functions, classes, and code - both modified AND unmodified sections
+- The code blocks must contain the complete, full, working file that can be saved and executed
+- Make only the specific changes requested, but include ALL surrounding code
+
+CODE MODIFICATION BEST PRACTICES:
+- PREFER modifying existing functions/methods over creating new ones when possible
+- Before adding new functionality, analyze existing code to identify modification opportunities
+- Follow DRY principles: Look for existing functions that perform similar tasks and extend them rather than duplicate
+- When modifying existing functions, preserve the original function signature unless specifically requested to change it
+- Only create new functions when the requested functionality is genuinely distinct from existing code
+
+The syntax of the code blocks must exactly match these instructions. 
+Do not include any additional text, explanations, or comments outside the code blocks. 
+Update all files that are necessary to fulfill the requirements and any code that is affected by the changes. 
+Do not include any file paths in the code blocks. 
+Do not include any other text or explanations outside the code blocks. 
+Ensure that the code is syntactically correct and follows best practices for the specified language.

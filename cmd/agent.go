@@ -3302,7 +3302,6 @@ func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, e
 			}, 0, nil // 0 tokens - deterministic decision
 		}
 
-		// CRITICAL: Force validation after edits are completed for Go projects
 		if hasExecutedEdits && !hasRunValidation {
 			return &ProgressEvaluation{
 				Status:               "on_track",
@@ -3553,11 +3552,6 @@ func executeCreatePlan(context *AgentContext) error {
 		return fmt.Errorf("cannot create plan without intent analysis")
 	}
 
-	// Fast-path planning for simple tasks
-	if context.TaskComplexity == TaskSimple {
-		return executeSimplePlanCreation(context)
-	}
-
 	// Full orchestration for moderate and complex tasks
 	editPlan, tokens, err := createDetailedEditPlan(context.UserIntent, context.IntentAnalysis, context.Config, context.Logger)
 	if err != nil {
@@ -3571,82 +3565,6 @@ func executeCreatePlan(context *AgentContext) error {
 
 	context.Logger.LogProcessStep(fmt.Sprintf("✅ Plan created: %d files, %d operations",
 		len(editPlan.FilesToEdit), len(editPlan.EditOperations)))
-	return nil
-}
-
-// executeSimplePlanCreation creates a simple plan for basic tasks to avoid heavy orchestration
-func executeSimplePlanCreation(context *AgentContext) error {
-	context.Logger.LogProcessStep("🚀 Creating simple plan for basic task...")
-
-	// Create a simple plan based on the intent and analysis
-	intentLower := strings.ToLower(context.UserIntent)
-
-	// Determine target file from intent or analysis
-	targetFile := "main.go" // default
-	if len(context.IntentAnalysis.EstimatedFiles) > 0 {
-		targetFile = context.IntentAnalysis.EstimatedFiles[0]
-	}
-
-	// Extract file from intent if specified
-	if strings.Contains(intentLower, "main.go") {
-		targetFile = "main.go"
-	} else if strings.Contains(intentLower, "readme") {
-		targetFile = "README.md"
-	} else if strings.Contains(intentLower, "test_complex_refactor.go") {
-		targetFile = "test_complex_refactor.go"
-	} else if strings.Contains(intentLower, ".go") {
-		// Extract Go file name from intent
-		words := strings.Fields(context.UserIntent)
-		for _, word := range words {
-			if strings.Contains(word, ".go") {
-				// Clean up the word (remove quotes, etc.)
-				cleanWord := strings.Trim(word, "\"'`")
-				if _, err := os.Stat(cleanWord); err == nil {
-					targetFile = cleanWord
-					break
-				}
-			}
-		}
-	}
-
-	// Create simple edit operation based on category
-	var description, instructions string
-
-	if strings.Contains(intentLower, "comment") {
-		description = fmt.Sprintf("Add a comment to %s", targetFile)
-		instructions = fmt.Sprintf("Add a simple comment to the %s file as requested by the user: %s. #%s", targetFile, context.UserIntent, targetFile)
-	} else if strings.Contains(intentLower, "refactor") {
-		description = fmt.Sprintf("Refactor code in %s", targetFile)
-		instructions = fmt.Sprintf("Refactor the code in %s as requested: %s. Focus on improving function names, removing duplication, and code organization. #%s", targetFile, context.UserIntent, targetFile)
-	} else if context.IntentAnalysis.Category == "docs" {
-		description = fmt.Sprintf("Update documentation in %s", targetFile)
-		instructions = fmt.Sprintf("Update the documentation in %s as requested: %s. #%s", targetFile, context.UserIntent, targetFile)
-	} else {
-		description = fmt.Sprintf("Make simple change to %s", targetFile)
-		instructions = fmt.Sprintf("Make the requested change to %s: %s. #%s", targetFile, context.UserIntent, targetFile)
-	}
-
-	// Create the simple plan
-	editPlan := &EditPlan{
-		FilesToEdit: []string{targetFile},
-		EditOperations: []EditOperation{
-			{
-				FilePath:           targetFile,
-				Description:        description,
-				Instructions:       instructions,
-				ScopeJustification: "Simple task - direct implementation of user request",
-			},
-		},
-		Context:        "Simple task requiring minimal planning",
-		ScopeStatement: fmt.Sprintf("This plan addresses: %s", context.UserIntent),
-	}
-
-	context.CurrentPlan = editPlan
-	// No tokens used for simple planning
-	context.ExecutedOperations = append(context.ExecutedOperations,
-		fmt.Sprintf("Created simple plan: 1 operation for %s", targetFile))
-
-	context.Logger.LogProcessStep("✅ Simple plan created: 1 file, 1 operation (fast-path)")
 	return nil
 }
 

@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"fmt"
+	"os"
 	"strings" // Added for getLanguageFromFilename
 )
 
@@ -41,35 +42,34 @@ type CodeReviewResponse struct {
 
 // --- LLM Message Builders ---
 
-func getBaseCodeMessageSystemMessage() string {
-	return "You MUST provide the COMPLETE and FULL file contents for each file you modify. Each file must be in a separate fenced code block, starting with the language, a space, then `# <filename>` ON THE SAME LINE above the code, and ending with '```END'.\n" +
-		"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
-		"CRITICAL REQUIREMENTS:\n" +
-		"- You MUST include the ENTIRE file content from beginning to end\n" +
-		// "- You MUST include the ENTIRE file content from beginning to end (unless working with explicitly partial input)\n" +
-		"- NEVER use partial content markers like '...unchanged...', '// rest of file...', or similar\n" +
-		"- NEVER truncate or abbreviate any part of the file\n" +
-		"- Include ALL imports, functions, classes, and code - both modified AND unmodified sections\n" +
-		"- The code blocks must contain the complete, full, working file that can be saved and executed\n" +
-		"- Make only the specific changes requested, but include ALL surrounding code\n\n" +
-		"CODE MODIFICATION BEST PRACTICES:\n" +
-		"- PREFER modifying existing functions/methods over creating new ones when possible\n" +
-		"- Before adding new functionality, analyze existing code to identify modification opportunities\n" +
-		"- Follow DRY principles: Look for existing functions that perform similar tasks and extend them rather than duplicate\n" +
-		"- When modifying existing functions, preserve the original function signature unless specifically requested to change it\n" +
-		"- Only create new functions when the requested functionality is genuinely distinct from existing code\n\n" +
-		"The syntax of the code blocks must exactly match these instructions. " +
-		"Do not include any additional text, explanations, or comments outside the code blocks. " +
-		"Update all files that are necessary to fulfill the requirements and any code that is affected by the changes. " +
-		"Do not include any file paths in the code blocks. " +
-		"Do not include any other text or explanations outside the code blocks. " +
-		"Ensure that the code is syntactically correct and follows best practices for the specified language. "
+func LoadPromptFromFile(filename string) (string, error) {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return "", fmt.Errorf("failed to read prompt file %s: %w", filename, err)
+	}
+	return string(content), nil
 }
 
-// GetBaseCodeGenSystemMessage returns the core system prompt for code generation.
 func GetBaseCodeGenSystemMessage() string {
-	return "You are an assistant that can generate updated code based on provided instructions. " +
-		getBaseCodeMessageSystemMessage()
+	content, err := LoadPromptFromFile("prompts/base_code_editing.txt")
+	if err != nil {
+		// Fallback to hardcoded string if file reading fails
+		return "You MUST provide the COMPLETE and FULL file contents for each file you modify. Each file must be in a separate fenced code block, starting with the language, a space, then `# <filename>` ON THE SAME LINE above the code, and ending with '```END'.\n" +
+			"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
+			"CRITICAL REQUIREMENTS:\n" +
+			"- You MUST include the ENTIRE file content from beginning to end\n" +
+			"- NEVER truncate or abbreviate any part of the file\n" +
+			"- Include ALL imports, functions, classes, and code - both modified AND unmodified sections\n" +
+			"- The code blocks must contain the complete, full, working file that can be saved and executed\n" +
+			"- Make only the specific changes requested, but include ALL surrounding code\n\n" +
+			"CODE MODIFICATION BEST PRACTICES:\n" +
+			"- PREFER modifying existing functions/methods over creating new ones when possible\n" +
+			"- Before adding new functionality, analyze existing code to identify modification opportunities\n" +
+			"- Follow DRY principles: Look for existing functions that perform similar tasks and extend them rather than duplicate\n" +
+			"- When modifying existing functions, preserve the original function signature unless specifically requested to change it\n" +
+			"- Only create new functions when the requested functionality is genuinely distinct from existing code\n\n"
+	}
+	return content
 }
 
 // BuildCodeMessages constructs the messages for the LLM to generate code.
@@ -81,7 +81,7 @@ func BuildCodeMessages(code, instructions, filename string, interactive bool) []
 	if interactive {
 		systemPrompt = "You are an assistant that can generate updated code based on provided instructions. You have access to tools for gathering additional information when needed:\n\n" +
 			"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. " +
-			getBaseCodeMessageSystemMessage() +
+			GetBaseCodeGenSystemMessage() +
 			"\n\n" +
 			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
 			"    - **read_file**: Read files to understand existing implementations before making changes\n" +
@@ -244,14 +244,11 @@ func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext
 			"CRITICAL ANALYSIS APPROACH:\n" +
 			"1. FIRST: Analyze the minimal context to identify which files likely contain relevant functionality\n" +
 			"2. SECOND: Use the read_file tool to load ONLY the specific files you need to understand\n" +
-			"3. THIRD: Focus on the exact problem - make minimal changes to solve the specific issue\n" +
-			"4. AVOID: Reading multiple files unless absolutely necessary for your analysis\n\n" +
+			"3. THIRD: Focus on the exact problem - make changes to solve the specific issue\n" +
+			// "4. AVOID: Reading multiple files unless absolutely necessary for your analysis\n\n" +
 			"FUNCTION TARGETING:\n" +
-			"- When the problem mentions specific models (e.g., OrchestrationModel vs EditingModel), find functions that use those models\n" +
 			"- Look for functions whose purpose matches the problem domain (e.g., 'GetCodeReview' for code review issues)\n" +
 			"- Use the 'exports' information to identify candidate functions without reading full files\n" +
-			"- CRITICAL: When told to change model usage in a function, read the function BODY to see the current model assignment\n" +
-			"- Don't assume function parameters are the model - look for assignments like 'modelName := cfg.OrchestrationModel'\n\n" +
 			"MINIMAL CHANGE TARGETING:\n" +
 			"- Make the SMALLEST change that solves the specific problem described\n" +
 			"- If the issue can be fixed with a 1-2 line change, do NOT suggest additional modifications\n" +
@@ -262,7 +259,7 @@ func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext
 			"1.  **Use Tools to Analyze:** When you need to understand specific implementations:\n" +
 			"    - **read_file**: Read specific files to understand current implementations\n" +
 			"    - Use this ONLY when the minimal context suggests a file is relevant\n" +
-			"    - Read the minimal number of files needed to understand the problem\n\n" +
+			// "    - Read the minimal number of files needed to understand the problem\n\n" +
 			"2.  **Generate Changes:** After you understand the exact change needed, provide the complete list of changes.\n" +
 			"    Your response MUST be a JSON object with a single key \"changes\" which is an array of objects, each with \"filepath\" and \"instruction\" keys.\n\n" +
 			"    PREFER SINGLE CHANGE (most common and correct approach):\n" +
@@ -282,8 +279,8 @@ func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext
 			"          \"instruction\": \"Modify the existing calculateTotal function to also handle sum calculations by adding a new parameter 'operation' and extending the logic.\"\n" +
 			"        }\n" +
 			"      ]\n" +
-			"    }\n\n" +
-			"REMEMBER: The minimal context approach means you must actively choose which files to read. Don't read files unless the exports or summary clearly indicate relevance to your specific problem.\n"
+			"    }\n\n"
+		// "REMEMBER: The minimal context approach means you must actively choose which files to read. Don't read files unless the exports or summary clearly indicate relevance to your specific problem.\n"
 	} else {
 		systemPrompt = `You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes.
 For each change, you must provide the 'filepath' and a detailed 'instruction' for what needs to be done in that file.

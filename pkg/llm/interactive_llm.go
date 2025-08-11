@@ -92,7 +92,7 @@ func CallLLMWithInteractiveContext(
 	}
 
 	currentMessages := enhancedMessages
-	maxRetries := 5 // Limit the number of interactive turns
+	maxRetries := 8 // Limit the number of interactive turns
 
 	for i := 0; i < maxRetries; i++ {
 		// Call the main LLM response function (which is in api.go, same package)

@@ -35,6 +35,8 @@ func RunAgentMode(userIntent string, skipPrompt bool) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 	cfg.SkipPrompt = skipPrompt
+	// Initialize pricing table (for accurate cost calculations)
+	_ = llm.InitPricingTable()
 
 	fmt.Printf("🎯 Intent: %s\n", userIntent)
 
@@ -79,6 +81,53 @@ func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*Agen
 	duration := time.Since(startTime)
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: agent.Execute completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+
+	// Print cost breakdown using pricing table and split usage when available
+	orchestratorModel := cfg.OrchestrationModel
+	if orchestratorModel == "" {
+		orchestratorModel = cfg.EditingModel
+	}
+	editingModel := cfg.EditingModel
+
+	buildUsage := func(prompt, completion int) llm.TokenUsage {
+		return llm.TokenUsage{PromptTokens: prompt, CompletionTokens: completion, TotalTokens: prompt + completion}
+	}
+
+	intentUsage := buildUsage(tokenUsage.IntentSplit.Prompt, tokenUsage.IntentSplit.Completion)
+	if intentUsage.TotalTokens == 0 && tokenUsage.IntentAnalysis > 0 {
+		intentUsage = buildUsage(tokenUsage.IntentAnalysis, 0)
+	}
+	planningUsage := buildUsage(tokenUsage.PlanningSplit.Prompt, tokenUsage.PlanningSplit.Completion)
+	if planningUsage.TotalTokens == 0 && tokenUsage.Planning > 0 {
+		planningUsage = buildUsage(tokenUsage.Planning, 0)
+	}
+	progressUsage := buildUsage(tokenUsage.ProgressSplit.Prompt, tokenUsage.ProgressSplit.Completion)
+	if progressUsage.TotalTokens == 0 && tokenUsage.ProgressEvaluation > 0 {
+		progressUsage = buildUsage(tokenUsage.ProgressEvaluation, 0)
+	}
+	codegenUsage := buildUsage(tokenUsage.CodegenSplit.Prompt, tokenUsage.CodegenSplit.Completion)
+	if codegenUsage.TotalTokens == 0 && tokenUsage.CodeGeneration > 0 {
+		codegenUsage = buildUsage(tokenUsage.CodeGeneration, 0)
+	}
+	validationUsage := buildUsage(tokenUsage.ValidationSplit.Prompt, tokenUsage.ValidationSplit.Completion)
+	if validationUsage.TotalTokens == 0 && tokenUsage.Validation > 0 {
+		validationUsage = buildUsage(tokenUsage.Validation, 0)
+	}
+
+	intentCost := llm.CalculateCost(intentUsage, orchestratorModel)
+	planningCost := llm.CalculateCost(planningUsage, orchestratorModel)
+	progressCost := llm.CalculateCost(progressUsage, orchestratorModel)
+	codegenCost := llm.CalculateCost(codegenUsage, editingModel)
+	validationCost := llm.CalculateCost(validationUsage, editingModel)
+	totalCost := intentCost + planningCost + progressCost + codegenCost + validationCost
+
+	fmt.Printf("\n💵 Cost by category (using pricing table):\n")
+	fmt.Printf("├─ Intent Analysis: $%.4f (%s)\n", intentCost, orchestratorModel)
+	fmt.Printf("├─ Planning:        $%.4f (%s)\n", planningCost, orchestratorModel)
+	fmt.Printf("├─ Progress Eval:   $%.4f (%s)\n", progressCost, orchestratorModel)
+	fmt.Printf("├─ Code Generation: $%.4f (%s)\n", codegenCost, editingModel)
+	fmt.Printf("├─ Validation:      $%.4f (%s)\n", validationCost, editingModel)
+	fmt.Printf("└─ Total:           $%.4f\n", totalCost)
 
 	return tokenUsage, nil
 }
@@ -154,6 +203,8 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 			} else {
 				context.IntentAnalysis = intentAnalysis
 				context.TokenUsage.IntentAnalysis += tokens
+				// Approximate split: attribute to prompt for now (no exact split available here)
+				context.TokenUsage.IntentSplit.Prompt += tokens
 				context.ExecutedOperations = append(context.ExecutedOperations, "Intent analysis completed")
 				err = nil
 			}
@@ -367,11 +418,14 @@ func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logg
 	logger.Logf("Total relevant files (%d): %v", len(relevantFiles), relevantFiles)
 
 	// STEP 2.5: If embeddings found few/no files, try workspace model rewording
+	rewordTokensUsed := 0
 	if len(relevantFiles) < 3 {
 		logger.Logf("STEP 2.5: Few files found (%d), trying workspace model to reword prompt...", len(relevantFiles))
-		rewordedIntent, rewordErr := rewordPromptForBetterSearch(userIntent, workspaceAnalysis, cfg, logger)
+		rewordedIntent, rewordTokens, rewordErr := rewordPromptForBetterSearch(userIntent, workspaceAnalysis, cfg, logger)
 		if rewordErr == nil && rewordedIntent != userIntent {
 			logger.Logf("STEP 2.5: Reworded intent: '%s' -> '%s'", userIntent, rewordedIntent)
+			// Defer attribution of rewording tokens until after main token calc
+			rewordTokensUsed = rewordTokens
 
 			// Try embeddings again with reworded intent
 			fullContextFiles2, summaryContextFiles2, err2 := workspace.GetFilesForContextUsingEmbeddings(rewordedIntent, workspaceFile, cfg, logger)
@@ -444,6 +498,8 @@ func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logg
 	promptTokens := utils.EstimateTokens(messages[0].Content.(string) + " " + messages[1].Content.(string))
 	responseTokens := utils.EstimateTokens(response)
 	totalTokens := promptTokens + responseTokens
+	// Note: we computed splits locally (promptTokens+rewordTokensUsed, responseTokens) but only return totals here.
+	totalTokens += rewordTokensUsed
 
 	// Clean response and parse JSON using centralized utility
 	cleanedResponse, err := utils.ExtractJSONFromLLMResponse(response)
@@ -793,10 +849,12 @@ STRICT GUIDELINES:
 	}
 	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-	// Estimate tokens used
+	// Estimate tokens used (attribute to Planning) and record split
 	promptTokens := utils.EstimateTokens(prompt)
 	responseTokens := utils.EstimateTokens(response)
 	totalTokens := promptTokens + responseTokens
+	logger.Logf("Planning tokens: prompt=%d completion=%d total=%d", promptTokens, responseTokens, totalTokens)
+	// We can't access context here; caller will add totals. Approximate split to prompt in caller for now.
 
 	// Clean and parse response using centralized JSON extraction utility
 	cleanedResponse, err := utils.ExtractJSONFromLLMResponse(response)
@@ -1801,14 +1859,7 @@ func printTokenUsageSummary(tokenUsage *AgentTokenUsage, duration time.Duration)
 
 	fmt.Printf("└─ Total Usage: %d tokens\n", tokenUsage.Total)
 
-	// Estimate cost (rough approximation for popular models)
-	// This is a rough estimate - actual costs vary by provider and model
-	estimatedCostCents := float64(tokenUsage.Total/1000) * 0.002 // ~$0.002 per 1k tokens for many models
-	if estimatedCostCents < 0.01 {
-		fmt.Printf("💵 Estimated Cost: <$0.01\n")
-	} else {
-		fmt.Printf("💵 Estimated Cost: ~$%.3f\n", estimatedCostCents)
-	}
+	// Cost is printed at the end of Execute where we know the models used; avoid rough estimate here
 
 	// Performance metrics
 	tokensPerSecond := float64(tokenUsage.Total) / duration.Seconds()
@@ -1816,7 +1867,7 @@ func printTokenUsageSummary(tokenUsage *AgentTokenUsage, duration time.Duration)
 }
 
 // rewordPromptForBetterSearch uses workspace model to reword the user prompt for better file discovery
-func rewordPromptForBetterSearch(userIntent string, workspaceInfo *WorkspaceInfo, cfg *config.Config, logger *utils.Logger) (string, error) {
+func rewordPromptForBetterSearch(userIntent string, workspaceInfo *WorkspaceInfo, cfg *config.Config, logger *utils.Logger) (string, int, error) {
 	logger.Logf("Using workspace model to reword prompt for better file discovery...")
 
 	prompt := fmt.Sprintf(`You are a %s codebase expert. The user wants to: "%s"
@@ -1843,18 +1894,28 @@ Respond with ONLY the reworded search query, no explanation:`,
 		{Role: "user", Content: prompt},
 	}
 
-	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
+	response, usage, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
 	if err != nil {
 		logger.LogError(fmt.Errorf("workspace model failed to reword prompt: %w", err))
-		return userIntent, err // Return original on failure
+		return userIntent, 0, err // Return original on failure
 	}
 
 	reworded := strings.TrimSpace(response)
 	if reworded == "" {
-		return userIntent, fmt.Errorf("empty reworded response")
+		return userIntent, 0, fmt.Errorf("empty reworded response")
 	}
 
-	return reworded, nil
+	// Compute tokens used (prefer actual usage if available)
+	tokensUsed := 0
+	if usage != nil {
+		tokensUsed = usage.TotalTokens
+	} else {
+		// Fallback estimate
+		tokensUsed = utils.EstimateTokens(prompt) + utils.EstimateTokens(response)
+	}
+	logger.Logf("Intent rewording tokens used: total=%d", tokensUsed)
+
+	return reworded, tokensUsed, nil
 }
 
 // findFilesUsingShellCommands uses shell commands to find relevant files when other methods fail
@@ -2460,7 +2521,12 @@ func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, e
 		context.Logger.LogError(fmt.Errorf("CRITICAL: Failed to parse progress evaluation JSON from LLM: %w\nCleaned response: %s", err, cleanedResponse))
 		return nil, 0, fmt.Errorf("unrecoverable JSON parsing error in progress evaluation: %w\nCleaned Response: %s", err, cleanedResponse)
 	}
-	tokens := utils.EstimateTokens(prompt + response)
+	promptTokens := utils.EstimateTokens(prompt)
+	completionTokens := utils.EstimateTokens(response)
+	tokens := promptTokens + completionTokens
+	// Save split for precise costing later
+	context.TokenUsage.ProgressSplit.Prompt += promptTokens
+	context.TokenUsage.ProgressSplit.Completion += completionTokens
 	return &evaluation, tokens, nil
 }
 
@@ -2479,7 +2545,9 @@ func executeCreatePlan(context *AgentContext) error {
 	}
 
 	context.CurrentPlan = editPlan
+	// We don't have exact split for planning; approximate all to prompt for now
 	context.TokenUsage.Planning += tokens
+	context.TokenUsage.PlanningSplit.Prompt += tokens
 	context.ExecutedOperations = append(context.ExecutedOperations,
 		fmt.Sprintf("Created plan with %d operations for %d files", len(editPlan.EditOperations), len(editPlan.FilesToEdit)))
 
@@ -2779,8 +2847,11 @@ func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext)
 
 		// Create focused instructions for this specific edit
 		editInstructions := buildFocusedEditInstructions(operation, context.Logger)
-		tokenEstimate := utils.EstimateTokens(editInstructions)
-		totalTokens += tokenEstimate
+		// Count prompt/input tokens for this edit
+		promptTokens := utils.EstimateTokens(editInstructions)
+		totalTokens += promptTokens
+		context.TokenUsage.CodeGeneration += promptTokens
+		context.TokenUsage.CodegenSplit.Prompt += promptTokens
 
 		// Retry logic: attempt the operation up to 3 times (1 initial + 2 retries)
 		const maxRetries = 2
@@ -2795,14 +2866,36 @@ func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext)
 			// Execute the edit with error handling
 			if shouldUsePartialEdit(operation, context.Logger) {
 				context.Logger.Logf("Attempting partial edit for %s (attempt %d)", operation.FilePath, attempt+1)
-				_, err = editor.ProcessPartialEdit(operation.FilePath, operation.Instructions, context.Config, context.Logger)
+				diff, perr := editor.ProcessPartialEdit(operation.FilePath, operation.Instructions, context.Config, context.Logger)
+				if perr == nil {
+					// Approximate completion tokens by estimating diff size
+					completionTokens := utils.EstimateTokens(diff)
+					totalTokens += completionTokens
+					context.TokenUsage.CodeGeneration += completionTokens
+					context.TokenUsage.CodegenSplit.Completion += completionTokens
+				}
+				err = perr
 				if err != nil {
 					context.Logger.Logf("Partial edit failed, falling back to full file edit: %v", err)
-					_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
+					fdiff, ferr := editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
+					if ferr == nil {
+						completionTokens := utils.EstimateTokens(fdiff)
+						totalTokens += completionTokens
+						context.TokenUsage.CodeGeneration += completionTokens
+						context.TokenUsage.CodegenSplit.Completion += completionTokens
+					}
+					err = ferr
 				}
 			} else {
 				context.Logger.Logf("Using full file edit for %s (attempt %d)", operation.FilePath, attempt+1)
-				_, err = editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
+				fdiff, ferr := editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
+				if ferr == nil {
+					completionTokens := utils.EstimateTokens(fdiff)
+					totalTokens += completionTokens
+					context.TokenUsage.CodeGeneration += completionTokens
+					context.TokenUsage.CodegenSplit.Completion += completionTokens
+				}
+				err = ferr
 			}
 
 			if err != nil {

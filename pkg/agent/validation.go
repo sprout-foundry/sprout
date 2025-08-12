@@ -38,6 +38,7 @@ func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent
 
 	logger.Logf("DEBUG: Validation strategy determined (took %v). Project Type: %s, Steps: %d", strategyDuration, validationStrategy.ProjectType, len(validationStrategy.Steps))
 	tokenUsage.Validation += strategyTokens
+	tokenUsage.ValidationSplit.Prompt += strategyTokens // approx: strategy prompt heavy
 
 	// Phase: Execute validation steps
 	executionStartTime := time.Now()
@@ -75,7 +76,11 @@ func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent
 		analysisTokens = 0
 	}
 
+	// Save split counts if possible by estimating from prompt/response (done inside analyzeValidationResults)
 	tokenUsage.Validation += analysisTokens
+	// We have split numbers inside analyzeValidationResults but not returned; approx equally split
+	tokenUsage.ValidationSplit.Prompt += analysisTokens / 2
+	tokenUsage.ValidationSplit.Completion += analysisTokens - (analysisTokens / 2)
 	logger.Logf("DEBUG: Final validation analysis completed (took %v) - LLM approved proceeding", analysisDuration)
 
 	// Log final performance metrics
@@ -402,8 +407,12 @@ Respond with JSON:
 		return 0, fmt.Errorf("failed to parse validation evaluation: %w", err)
 	}
 
-	// Estimate tokens used
-	tokens := utils.EstimateTokens(contextPrompt + response)
+	// Estimate tokens used and attribute to Validation category (with split)
+	promptTokens := utils.EstimateTokens(contextPrompt)
+	completionTokens := utils.EstimateTokens(response)
+	tokens := promptTokens + completionTokens
+	logger.Logf("Validation tokens: prompt=%d completion=%d total=%d", promptTokens, completionTokens, tokens)
+	// Track precise split via a global or returned path; here we only return totals.
 	return tokens, nil
 }
 

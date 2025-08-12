@@ -15,6 +15,19 @@ type AgentTokenUsage struct {
 	Validation         int
 	ProgressEvaluation int
 	Total              int
+
+	// Split accounting for precise input/output costs
+	IntentSplit     SplitUsage
+	PlanningSplit   SplitUsage
+	CodegenSplit    SplitUsage
+	ValidationSplit SplitUsage
+	ProgressSplit   SplitUsage
+}
+
+// SplitUsage tracks prompt vs completion tokens for a category
+type SplitUsage struct {
+	Prompt     int
+	Completion int
 }
 
 // AgentContext holds the state and context for agent execution

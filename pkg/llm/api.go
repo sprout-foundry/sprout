@@ -57,11 +57,14 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	var err error
 	var tokenUsage *TokenUsage
 
-	parts := strings.SplitN(modelName, ":", 2)
+	parts := strings.SplitN(modelName, ":", 3) // Changed from 2 to 3
 	provider := parts[0]
 	model := ""
 	if len(parts) > 1 {
 		model = parts[1]
+	}
+	if len(parts) > 2 { // If there are 3 parts, the last one is the model
+		model = parts[2]
 	}
 
 	ollamaUrl := fmt.Sprintf("%s/v1/chat/completions", cfg.OllamaServerURL)
@@ -123,7 +126,31 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			return nil, err
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.deepinfra.com/v1/openai/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+	case "custom": // New case for custom provider:url:model
+		var endpointURL string
 
+		customParts := strings.SplitN(modelName, ":", 4)
+
+		if len(customParts) == 4 {
+			// Format: custom:base_url:path_suffix:model
+			endpointURL = customParts[1] + customParts[2]
+			model = customParts[3]
+		} else if len(customParts) == 3 {
+			// Format: custom:full_url:model
+			endpointURL = customParts[1]
+			model = customParts[2]
+		} else {
+			err = fmt.Errorf("invalid model name format for 'custom' provider. Expected 'custom:base_url:path_suffix:model' or 'custom:full_url:model', got '%s'", modelName)
+			fmt.Print(prompts.LLMResponseError(err))
+			return nil, err
+		}
+
+		apiKey, err := apikeys.GetAPIKey("custom", cfg.Interactive) // Use "custom" as the provider for API key lookup
+		if err != nil {
+			fmt.Print(prompts.APIKeyError(err))
+			return nil, err
+		}
+		tokenUsage, err = callOpenAICompatibleStream(endpointURL, apiKey, model, messages, cfg, timeout, writer)
 	case "ollama":
 		tokenUsage, err = callOllamaAPI(model, messages, cfg, timeout, writer)
 	default:

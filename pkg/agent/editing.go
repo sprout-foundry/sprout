@@ -15,6 +15,9 @@ func executeEditOperations(context *AgentContext) error {
 	if context.CurrentPlan == nil {
 		return fmt.Errorf("cannot execute edits without a plan")
 	}
+	if len(context.CurrentPlan.EditOperations) == 0 {
+		return fmt.Errorf("cannot execute edits: plan contains 0 operations")
+	}
 
 	tokens, err := executeEditPlanWithErrorHandling(context.CurrentPlan, context)
 	if err != nil {

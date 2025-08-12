@@ -61,6 +61,17 @@ func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, 
 		}, 0, nil
 	}
 
+	// If plan exists but no edits executed, execute them; if plan is empty, fail fast
+	if len(context.CurrentPlan.EditOperations) == 0 {
+		return &ProgressEvaluation{
+			Status:               "critical_error",
+			CompletionPercentage: 0,
+			NextAction:           "completed",
+			Reasoning:            "Plan contains 0 operations; aborting to avoid no-op loops",
+			Concerns:             []string{"Empty plan produced by planner"},
+		}, 0, nil
+	}
+
 	// If plan exists but no edits executed, execute them
 	hasExecutedEdits := false
 	for _, op := range context.ExecutedOperations {

@@ -87,61 +87,7 @@ func GetConversationTokens(messages []struct{ Role, Content string }) int {
 
 // --- Model Pricing ---
 
-// GetModelPricing returns the cost per 1K tokens for different models
-func GetModelPricing(model string) ModelPricing {
-	modelLower := strings.ToLower(model)
-
-	switch {
-	case strings.Contains(modelLower, "gpt-4o"):
-		return ModelPricing{
-			InputCostPer1K:  0.005, // $0.005 per 1K input tokens
-			OutputCostPer1K: 0.015, // $0.015 per 1K output tokens
-		}
-	case strings.Contains(modelLower, "gpt-4-turbo"):
-		return ModelPricing{
-			InputCostPer1K:  0.01, // $0.01 per 1K input tokens
-			OutputCostPer1K: 0.03, // $0.03 per 1K output tokens
-		}
-	case strings.Contains(modelLower, "gpt-4"):
-		return ModelPricing{
-			InputCostPer1K:  0.03, // $0.03 per 1K input tokens
-			OutputCostPer1K: 0.06, // $0.06 per 1K output tokens
-		}
-	case strings.Contains(modelLower, "gpt-3.5-turbo"):
-		return ModelPricing{
-			InputCostPer1K:  0.0005, // $0.0005 per 1K input tokens
-			OutputCostPer1K: 0.0015, // $0.0015 per 1K output tokens
-		}
-	case strings.Contains(modelLower, "claude-3.5-sonnet"):
-		return ModelPricing{
-			InputCostPer1K:  0.003, // $0.003 per 1K input tokens
-			OutputCostPer1K: 0.015, // $0.015 per 1K output tokens
-		}
-	case strings.Contains(modelLower, "claude-3-haiku"):
-		return ModelPricing{
-			InputCostPer1K:  0.00025, // $0.00025 per 1K input tokens
-			OutputCostPer1K: 0.00125, // $0.00125 per 1K output tokens
-		}
-	case strings.Contains(modelLower, "gemini"):
-		return ModelPricing{
-			InputCostPer1K:  0.00025, // $0.00025 per 1K input tokens
-			OutputCostPer1K: 0.0005,  // $0.0005 per 1K output tokens
-		}
-	case strings.Contains(modelLower, "ollama"):
-		return ModelPricing{
-			InputCostPer1K:  0.0, // Free (local)
-			OutputCostPer1K: 0.0, // Free (local)
-		}
-	default:
-		// Default pricing for unknown models
-		return ModelPricing{
-			InputCostPer1K:  0.002, // Generic estimate
-			OutputCostPer1K: 0.002, // Generic estimate
-		}
-	}
-}
-
-// CalculateCost calculates the actual cost for a given token usage and model
+// CalculateCost calculates the actual cost for a given token usage and model using the pricing table
 func CalculateCost(usage TokenUsage, model string) float64 {
 	pricing := GetModelPricing(model)
 

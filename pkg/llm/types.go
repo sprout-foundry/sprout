@@ -17,6 +17,11 @@ type ModelPricing struct {
 	OutputCostPer1K float64 // Cost per 1K output tokens
 }
 
+// PricingTable holds per-model pricing that can be loaded from disk
+type PricingTable struct {
+	Models map[string]ModelPricing `json:"models"`
+}
+
 // OpenAIRequest represents a request to OpenAI-compatible APIs
 type OpenAIRequest struct {
 	Model       string            `json:"model"`

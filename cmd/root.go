@@ -51,4 +51,5 @@ func init() {
 	rootCmd.AddCommand(processCmd)
 	rootCmd.AddCommand(questionCmd)
 	rootCmd.AddCommand(reviewStagedCmd) // Add the new command
+	rootCmd.AddCommand(pricingCmd)
 }

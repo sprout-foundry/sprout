@@ -4,6 +4,20 @@ import (
 	"github.com/alantheprice/ledit/pkg/prompts"
 )
 
+// TokenUsage represents actual token usage from an API response
+type TokenUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
+// ModelPricing represents cost per 1K tokens for different models
+type ModelPricing struct {
+	InputCostPer1K  float64 // Cost per 1K input tokens
+	OutputCostPer1K float64 // Cost per 1K output tokens
+}
+
+// OpenAIRequest represents a request to OpenAI-compatible APIs
 type OpenAIRequest struct {
 	Model       string            `json:"model"`
 	Messages    []prompts.Message `json:"messages"`
@@ -11,6 +25,7 @@ type OpenAIRequest struct {
 	Stream      bool              `json:"stream"`
 }
 
+// OpenAIResponse represents a streaming response from OpenAI-compatible APIs
 type OpenAIResponse struct {
 	Choices []struct {
 		Delta struct {
@@ -20,6 +35,19 @@ type OpenAIResponse struct {
 	} `json:"choices"`
 }
 
+// OpenAIUsageResponse represents the final response with usage information
+type OpenAIUsageResponse struct {
+	Choices []struct {
+		Message struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+	Usage TokenUsage `json:"usage"`
+}
+
+// GeminiRequest represents a request to Gemini API
 type GeminiRequest struct {
 	Contents         []GeminiContent `json:"contents"`
 	GenerationConfig struct {
@@ -31,6 +59,7 @@ type GeminiRequest struct {
 	Tools []GeminiTool `json:"tools,omitempty"` // Add this for search grounding
 }
 
+// GeminiContent represents content in a Gemini request/response
 type GeminiContent struct {
 	Role  string `json:"role"`
 	Parts []struct {
@@ -50,6 +79,14 @@ type GeminiResponse struct {
 		GroundingMetadata *GeminiGroundingMetadata `json:"groundingMetadata,omitempty"` // Added for grounding info
 		CitationMetadata  *GeminiCitationMetadata  `json:"citationMetadata,omitempty"`  // Added for citations
 	} `json:"candidates"`
+	UsageMetadata *GeminiUsageMetadata `json:"usageMetadata,omitempty"` // Add usage metadata
+}
+
+// GeminiUsageMetadata holds token usage information from Gemini API
+type GeminiUsageMetadata struct {
+	PromptTokenCount     int `json:"promptTokenCount"`
+	CandidatesTokenCount int `json:"candidatesTokenCount"`
+	TotalTokenCount      int `json:"totalTokenCount"`
 }
 
 // GeminiGroundingMetadata holds information about the web search queries and retrieved chunks.

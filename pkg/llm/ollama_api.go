@@ -12,10 +12,10 @@ import (
 	ollama "github.com/ollama/ollama/api"
 )
 
-func callOllamaAPI(modelName string, messages []prompts.Message, cfg *config.Config, timeout time.Duration, writer io.Writer) error {
+func callOllamaAPI(modelName string, messages []prompts.Message, cfg *config.Config, timeout time.Duration, writer io.Writer) (*TokenUsage, error) {
 	client, err := ollama.ClientFromEnvironment()
 	if err != nil {
-		return fmt.Errorf("could not create ollama client: %w", err)
+		return nil, fmt.Errorf("could not create ollama client: %w", err)
 	}
 
 	ollamaMessages := make([]ollama.Message, len(messages))
@@ -56,6 +56,13 @@ func callOllamaAPI(modelName string, messages []prompts.Message, cfg *config.Con
 		},
 	}
 
+	// For Ollama, we'll estimate token usage since it doesn't provide detailed usage data
+	estimatedUsage := &TokenUsage{
+		PromptTokens:     totalTokens,
+		CompletionTokens: totalTokens / 3, // Rough estimate
+		TotalTokens:      totalTokens + (totalTokens / 3),
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -66,8 +73,8 @@ func callOllamaAPI(modelName string, messages []prompts.Message, cfg *config.Con
 
 	err = client.Chat(ctx, req, respFunc)
 	if err != nil {
-		return fmt.Errorf("ollama chat failed: %w", err)
+		return estimatedUsage, fmt.Errorf("ollama chat failed: %w", err)
 	}
 
-	return nil
+	return estimatedUsage, nil
 }

@@ -23,7 +23,7 @@ func GetCommitMessage(cfg *config.Config, changelog string, originalPrompt strin
 
 	messages := prompts.BuildCommitMessages(changelog, originalPrompt)
 
-	_, response, err := GetLLMResponse(modelName, messages, filename, cfg, 1*time.Minute)
+	response, _, err := GetLLMResponse(modelName, messages, filename, cfg, 1*time.Minute)
 	if err != nil {
 		return "", fmt.Errorf("failed to get commit message from LLM: %w", err)
 	}

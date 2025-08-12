@@ -222,7 +222,7 @@ func generateRequirements(prompt string, cfg *config.Config) (*types.Orchestrati
 	messages := prompts.BuildOrchestrationPlanMessages(prompt, workspaceContext)
 
 	// Use a longer timeout for this, as it's a planning step
-	_, response, err := llm.GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute) // No search grounding for this planning step
+	response, _, err := llm.GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute) // No search grounding for this planning step
 	if err != nil {
 		return nil, fmt.Errorf("failed to get orchestration plan from LLM: %w", err)
 	}

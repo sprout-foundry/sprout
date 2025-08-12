@@ -44,10 +44,10 @@ type OrchestrationChangesList struct {
 
 // CodeReviewResult represents the result of an automated code review.
 type CodeReviewResult struct {
-	Status       string `json:"status"`                 // "approved", "needs_revision", "rejected"
-	Feedback     string `json:"feedback"`               // Explanation for the status
-	Instructions string `json:"-"`                      // Instructions for `ledit` if status is "needs_revision"
-	NewPrompt    string `json:"new_prompt,omitempty"`   // A new, more detailed prompt if status is "rejected"
+	Status       string `json:"status"`               // "approved", "needs_revision", "rejected"
+	Feedback     string `json:"feedback"`             // Explanation for the status
+	Instructions string `json:"-"`                    // Instructions for `ledit` if status is "needs_revision"
+	NewPrompt    string `json:"new_prompt,omitempty"` // A new, more detailed prompt if status is "rejected"
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling to handle instructions field

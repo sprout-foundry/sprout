@@ -96,7 +96,7 @@ func CallLLMWithInteractiveContext(
 
 	for i := 0; i < maxRetries; i++ {
 		// Call the main LLM response function (which is in api.go, same package)
-		_, response, err := GetLLMResponse(modelName, currentMessages, filename, cfg, timeout)
+		response, _, err := GetLLMResponse(modelName, currentMessages, filename, cfg, timeout)
 		if err != nil {
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}

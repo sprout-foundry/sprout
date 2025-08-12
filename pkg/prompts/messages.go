@@ -275,7 +275,7 @@ func SearchError(query string, err error) string {
 // --- LLM API Messages ---
 
 func TokenEstimate(tokens int, modelName string) string {
-	return fmt.Sprintf("Estimated tokens for %s: %d\n", modelName, tokens)
+	return "" // Removed verbose token estimation output
 }
 
 func TokenLimitWarning(currentTokens, defaultLimit int) string {

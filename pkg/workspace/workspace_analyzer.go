@@ -60,7 +60,7 @@ Example JSON structure:
 	}
 
 	// Set 40-second timeout for workspace summary requests
-	_, response, err := llm.GetLLMResponse(cfg.SummaryModel, messages, filename, cfg, 40*time.Second)
+	response, _, err := llm.GetLLMResponse(cfg.SummaryModel, messages, filename, cfg, 40*time.Second)
 	if err != nil {
 		return "", "", "", fmt.Errorf("LLM request failed: %w", err)
 	}
@@ -118,7 +118,7 @@ func GetProjectGoals(cfg *config.Config, workspaceSummary string) (ProjectGoals,
 
 	modelName := cfg.WorkspaceModel // Use the workspace model for generating project goals
 
-	_, response, err := llm.GetLLMResponse(modelName, messages, "", cfg, 2*time.Minute)
+	response, _, err := llm.GetLLMResponse(modelName, messages, "", cfg, 2*time.Minute)
 	if err != nil {
 		return ProjectGoals{}, fmt.Errorf("failed to get project goals from LLM: %w", err)
 	}

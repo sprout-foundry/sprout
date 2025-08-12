@@ -25,16 +25,16 @@ var (
 func GetLLMResponseWithTools(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration) (string, error) {
 	// Import the orchestration package functions here to avoid circular import
 	// This is a temporary solution - in a full implementation, you'd refactor the architecture
-	_, response, err := GetLLMResponse(modelName, messages, systemPrompt, cfg, timeout)
+	response, _, err := GetLLMResponse(modelName, messages, systemPrompt, cfg, timeout)
 	return response, err
 }
 
 // --- Main Dispatcher ---
 
-func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (string, error) {
+func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (*TokenUsage, error) {
 	var totalInputTokens int
 	for _, msg := range messages {
-		totalInputTokens += utils.EstimateTokens(GetMessageText(msg.Content)) // Use GetMessageText helper
+		totalInputTokens += EstimateTokens(GetMessageText(msg.Content)) // Use GetMessageText helper
 	}
 	fmt.Print(prompts.TokenEstimate(totalInputTokens, modelName))
 	if totalInputTokens > DefaultTokenLimit && !cfg.SkipPrompt {
@@ -43,11 +43,11 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		confirm, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
-			return modelName, err
+			return nil, err
 		}
 		if strings.TrimSpace(confirm) != "y" {
 			fmt.Println(prompts.OperationCancelled())
-			return modelName, nil
+			return nil, nil
 		}
 		fmt.Print(prompts.ContinuingRequest())
 
@@ -55,6 +55,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	}
 
 	var err error
+	var tokenUsage *TokenUsage
 
 	parts := strings.SplitN(modelName, ":", 2)
 	provider := parts[0]
@@ -70,16 +71,16 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		apiKey, err := apikeys.GetAPIKey("openai", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
-			return modelName, err
+			return nil, err
 		}
-		err = callOpenAICompatibleStream("https://api.openai.com/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+		tokenUsage, err = callOpenAICompatibleStream("https://api.openai.com/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "groq":
 		apiKey, err := apikeys.GetAPIKey("groq", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
-			return modelName, err
+			return nil, err
 		}
-		err = callOpenAICompatibleStream("https://api.groq.com/openai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+		tokenUsage, err = callOpenAICompatibleStream("https://api.groq.com/openai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "gemini":
 		// Gemini streaming not implemented, using non-streaming call and writing the whole response.
 		var content string
@@ -90,64 +91,68 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			content = removeThinkTags(content)
 			_, err = writer.Write([]byte(content))
 		}
+		// Estimate token usage for Gemini
+		if err == nil {
+			tokenUsage = estimateUsageFromMessages(messages)
+		}
 	case "lambda-ai":
 		apiKey, err := apikeys.GetAPIKey("lambda-ai", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
-			return modelName, err
+			return nil, err
 		}
-		err = callOpenAICompatibleStream("https://api.lambda.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+		tokenUsage, err = callOpenAICompatibleStream("https://api.lambda.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "cerebras":
 		apiKey, err := apikeys.GetAPIKey("cerebras", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
-			return modelName, err
+			return nil, err
 		}
-		err = callOpenAICompatibleStream("https://api.cerebras.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+		tokenUsage, err = callOpenAICompatibleStream("https://api.cerebras.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "deepseek":
 		apiKey, err := apikeys.GetAPIKey("deepseek", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
-			return modelName, err
+			return nil, err
 		}
-		err = callOpenAICompatibleStream("https://api.deepseek.com/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+		tokenUsage, err = callOpenAICompatibleStream("https://api.deepseek.com/openai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "deepinfra":
 		apiKey, err := apikeys.GetAPIKey("deepinfra", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
-			return modelName, err
+			return nil, err
 		}
-		err = callOpenAICompatibleStream("https://api.deepinfra.com/v1/openai/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+		tokenUsage, err = callOpenAICompatibleStream("https://api.deepinfra.com/openai/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 
 	case "ollama":
-		err = callOllamaAPI(model, messages, cfg, timeout, writer)
+		tokenUsage, err = callOllamaAPI(model, messages, cfg, timeout, writer)
 	default:
 		// Fallback to openai-compatible ollama api
 		fmt.Println(prompts.ProviderNotRecognized())
 		modelName = cfg.LocalModel
-		err = callOpenAICompatibleStream(ollamaUrl, "ollama", modelName, messages, cfg, timeout, writer)
+		tokenUsage, err = callOpenAICompatibleStream(ollamaUrl, "ollama", modelName, messages, cfg, timeout, writer)
 	}
 
 	if err != nil {
 		fmt.Print(prompts.LLMResponseError(err))
-		return modelName, err
+		return tokenUsage, err
 	}
 
-	return modelName, nil
+	return tokenUsage, nil
 }
 
-func GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, string, error) {
+func GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, *TokenUsage, error) {
 	var contentBuffer strings.Builder
 	// GetLLMResponseStream handles the token limit prompt and provider logic
-	newModelName, err := GetLLMResponseStream(modelName, messages, filename, cfg, timeout, &contentBuffer, imagePath...)
+	tokenUsage, err := GetLLMResponseStream(modelName, messages, filename, cfg, timeout, &contentBuffer, imagePath...)
 	if err != nil {
 		// GetLLMResponseStream already prints the error if it happens
-		return newModelName, "", err
+		return modelName, tokenUsage, err
 	}
 
 	// This can happen if user cancels at the prompt in GetLLMResponseStream
 	if contentBuffer.Len() == 0 {
-		return newModelName, "", nil
+		return modelName, tokenUsage, nil
 	}
 
 	content := contentBuffer.String()
@@ -155,7 +160,7 @@ func GetLLMResponse(modelName string, messages []prompts.Message, filename strin
 	// Remove any think tags before returning the content
 	content = removeThinkTags(content)
 
-	return newModelName, content, nil
+	return content, tokenUsage, nil
 }
 
 // GenerateSearchQuery uses an LLM to generate a concise search query based on the provided context.
@@ -168,7 +173,7 @@ func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
 	modelName := cfg.EditingModel // Use the editing model for generating search queries
 
 	// Use a short timeout for generating a search query
-	_, queryResponse, err := GetLLMResponse(modelName, messages, "", cfg, 30*time.Second) // Query generation does not use search grounding
+	queryResponse, _, err := GetLLMResponse(modelName, messages, "", cfg, 30*time.Second) // Query generation does not use search grounding
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate search query from LLM: %w", err)
 	}
@@ -202,7 +207,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 		fmt.Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 
-	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute) // Analysis does not use search grounding
+	response, _, err := GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute) // Analysis does not use search grounding
 	if err != nil {
 		return "", fmt.Errorf("failed to get script risk analysis from LLM: %w", err)
 	}
@@ -223,7 +228,7 @@ func GetChangesForRequirement(cfg *config.Config, requirementInstruction string,
 	messages := prompts.BuildChangesForRequirementMessages(requirementInstruction, workspaceContext, cfg.Interactive)
 
 	// Use a longer timeout for this, as it's a planning step
-	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute) // No search grounding for this planning step
+	response, _, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute) // No search grounding for this planning step
 	if err != nil {
 		return nil, fmt.Errorf("failed to get changes for requirement from LLM: %w", err)
 	}
@@ -272,7 +277,7 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 
 	messages := prompts.BuildCodeReviewMessages(combinedDiff, originalPrompt, workspaceContext)
 
-	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute)
+	response, _, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get code review from LLM: %w", err)
 	}
@@ -358,7 +363,7 @@ func GetStagedCodeReview(cfg *config.Config, stagedDiff, reviewPrompt, workspace
 		Content: userContent,
 	})
 
-	_, response, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute)
+	response, _, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get staged code review from LLM: %w", err)
 	}

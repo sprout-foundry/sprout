@@ -218,7 +218,7 @@ func CallLLMWithToolSupport(modelName string, messages []prompts.Message, system
 
 	// For now, we'll use the existing GetLLMResponse function and parse tool calls manually
 	// In a full implementation, you'd modify the LLM API calls to support native tool calling
-	_, response, err := llm.GetLLMResponse(modelName, messages, enhancedSystemPrompt, cfg, timeout)
+	response, _, err := llm.GetLLMResponse(modelName, messages, enhancedSystemPrompt, cfg, timeout)
 	if err != nil {
 		return "", err
 	}
@@ -253,7 +253,7 @@ func CallLLMWithToolSupport(modelName string, messages []prompts.Message, system
 	}
 
 	messages = append(messages, toolResultMessage)
-	_, finalResponse, err := llm.GetLLMResponse(modelName, messages, enhancedSystemPrompt, cfg, timeout)
+	finalResponse, _, err := llm.GetLLMResponse(modelName, messages, enhancedSystemPrompt, cfg, timeout)
 
 	return finalResponse, err
 }

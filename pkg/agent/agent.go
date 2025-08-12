@@ -57,7 +57,7 @@ func RunAgentMode(userIntent string, skipPrompt bool) error {
 }
 
 // Execute is the main public interface for running the agent
-func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*TokenUsage, error) {
+func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*AgentTokenUsage, error) {
 	logger.LogProcessStep("🚀 Starting optimized agent execution...")
 
 	startTime := time.Now()
@@ -66,7 +66,7 @@ func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*Toke
 	logger.Logf("PERF: agent.Execute started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
 	// Initialize token usage tracking
-	tokenUsage := &TokenUsage{}
+	tokenUsage := &AgentTokenUsage{}
 
 	// Run optimized agent
 	logger.LogProcessStep("🔄 Executing optimized agent...")
@@ -85,12 +85,12 @@ func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*Toke
 }
 
 // PrintTokenUsageSummary prints a summary of token usage
-func PrintTokenUsageSummary(tokenUsage *TokenUsage, duration time.Duration) {
+func PrintTokenUsageSummary(tokenUsage *AgentTokenUsage, duration time.Duration) {
 	printTokenUsageSummary(tokenUsage, duration)
 }
 
 // runOptimizedAgent runs the agent with adaptive decision-making and progress evaluation
-func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *TokenUsage) error {
+func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *AgentTokenUsage) error {
 	logger.LogProcessStep("CHECKPOINT: Starting adaptive agent execution")
 
 	// Initialize agent context
@@ -111,7 +111,7 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: runOptimizedAgent started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
-	logger.Logf("DEBUG: Starting adaptive agent execution at %s for intent: %s", time.Now().Format(time.RFC3339), userIntent)
+	// Debug logging removed for cleaner output
 
 	// Main adaptive execution loop
 	for context.IterationCount < context.MaxIterations {
@@ -186,8 +186,8 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 	return nil
 }
 
-// TokenUsage tracks token consumption throughout agent execution
-type TokenUsage struct {
+// AgentTokenUsage tracks token consumption throughout agent execution
+type AgentTokenUsage struct {
 	IntentAnalysis     int
 	Planning           int // Tokens used by orchestration model for detailed planning
 	CodeGeneration     int
@@ -209,7 +209,7 @@ type AgentContext struct {
 	IterationCount     int
 	MaxIterations      int
 	StartTime          time.Time
-	TokenUsage         *TokenUsage
+	TokenUsage         *AgentTokenUsage
 	Config             *config.Config
 	Logger             *utils.Logger
 	IsCompleted        bool // Flag to indicate task completion (e.g., via immediate execution)
@@ -520,7 +520,7 @@ ALL files must be existing source files from the workspace above.`,
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 60*time.Second)
+	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 60*time.Second)
 	if err != nil {
 		logger.LogError(fmt.Errorf("orchestration model failed to analyze intent: %w", err))
 		// Use fallback analysis since LLM failed
@@ -638,7 +638,7 @@ func createDetailedEditPlan(userIntent string, intentAnalysis *IntentAnalysis, c
 	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	// Debug: log contextFiles to see what we have
-	logger.Logf("DEBUG: createDetailedEditPlan contextFiles: %v (length: %d)", contextFiles, len(contextFiles))
+	// Debug logging removed for cleaner output
 
 	// Analyze workspace patterns for intelligent task decomposition
 	workspacePatterns := analyzeWorkspacePatterns(logger)
@@ -842,7 +842,7 @@ STRICT GUIDELINES:
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 3*time.Minute)
+	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 3*time.Minute)
 	if err != nil {
 		logger.LogError(fmt.Errorf("orchestration model failed to create edit plan: %w", err))
 		duration := time.Since(startTime)
@@ -1068,7 +1068,7 @@ IMPORTANT:
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, timeout)
+	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, timeout)
 	if err != nil {
 		logger.LogError(fmt.Errorf("retry %d orchestration model failed: %w", attempt, err))
 		// Try next retry or fail
@@ -1706,7 +1706,7 @@ func buildBasicFileContext(contextFiles []string, logger *utils.Logger) string {
 }
 
 // validateChangesWithIteration validates changes and iteratively fixes issues
-func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *TokenUsage) (int, error) {
+func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *AgentTokenUsage) (int, error) {
 	const maxIterations = 3
 	totalValidationTokens := 0
 
@@ -1715,7 +1715,7 @@ func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent
 
 		// Phase: Determine validation strategy
 		strategyStartTime := time.Now()
-		logger.Logf("DEBUG: Determining validation strategy...")
+		// Debug logging removed for cleaner output
 		validationStrategy, strategyTokens, err := determineValidationStrategy(intentAnalysis, cfg, logger)
 		strategyDuration := time.Since(strategyStartTime)
 		if err != nil {
@@ -1954,7 +1954,7 @@ Respond with a JSON object containing your analysis and fix plan:
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 60*time.Second)
+	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 60*time.Second)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get orchestration model analysis: %w", err)
 	}
@@ -2201,7 +2201,7 @@ Create a detailed fix prompt:`,
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
+	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to get orchestration model analysis of build errors: %w", err)
 	}
@@ -2318,7 +2318,7 @@ Guidelines:
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
+	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
 	if err != nil {
 		return nil, 0, fmt.Errorf("orchestration model failed to determine validation strategy: %w", err)
 	}
@@ -2535,7 +2535,7 @@ Focus on whether the recent changes achieved their goal successfully, not on fix
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
+	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get orchestration model analysis of validation results: %w", err)
 	}
@@ -2592,7 +2592,7 @@ func parseValidationDecision(response string, logger *utils.Logger) string {
 }
 
 // printTokenUsageSummary prints a summary of token usage for the agent execution
-func printTokenUsageSummary(tokenUsage *TokenUsage, duration time.Duration) {
+func printTokenUsageSummary(tokenUsage *AgentTokenUsage, duration time.Duration) {
 	fmt.Printf("\n💰 Token Usage Summary:\n")
 	fmt.Printf("├─ Intent Analysis: %d tokens\n", tokenUsage.IntentAnalysis)
 	fmt.Printf("├─ Planning (Orchestration): %d tokens\n", tokenUsage.Planning)
@@ -2650,7 +2650,7 @@ Respond with ONLY the reworded search query, no explanation:`,
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
+	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
 	if err != nil {
 		logger.LogError(fmt.Errorf("workspace model failed to reword prompt: %w", err))
 		return userIntent, err // Return original on failure
@@ -3314,7 +3314,7 @@ Respond with JSON:
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 60*time.Second)
+	response, _, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 60*time.Second)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get progress evaluation: %w", err)
 	}
@@ -3890,7 +3890,7 @@ Respond with JSON:
 		{Role: "user", Content: prompt},
 	}
 
-	_, response, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 30*time.Second)
+	response, _, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 30*time.Second)
 	if err != nil {
 		context.Logger.Logf("Context summarization failed: %v", err)
 		// Fallback: just truncate the arrays with bounds checking
@@ -3974,7 +3974,7 @@ Respond with JSON:
 		summary.ValidationSummary,
 	}
 
-	tokens := utils.EstimateTokens(prompt + response)
+	tokens := utils.EstimateTokens(prompt)
 	context.TokenUsage.ProgressEvaluation += tokens
 
 	context.Logger.LogProcessStep("✅ Context summarized successfully")

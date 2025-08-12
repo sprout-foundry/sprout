@@ -140,7 +140,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		logger.Log("Taking non-interactive path without tool calling (cost optimization)")
 		// For non-interactive mode (like agent mode), use the standard LLM response without tool calling
 		// This prevents expensive context requests and forces the model to provide code directly
-		_, response, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
+		response, _, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
 		if err != nil {
 			logger.Log(fmt.Sprintf("Non-interactive LLM call failed: %v", err))
 			return modelName, "", err
@@ -187,7 +187,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 		fmt.Print(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 
-	_, response, err := llm.GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute) // Analysis does not use search grounding
+	response, _, err := llm.GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute) // Analysis does not use search grounding
 	if err != nil {
 		return "", fmt.Errorf("failed to get script risk analysis from LLM: %w", err)
 	}

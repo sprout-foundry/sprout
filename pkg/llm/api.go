@@ -122,7 +122,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			fmt.Print(prompts.APIKeyError(err))
 			return nil, err
 		}
-		tokenUsage, err = callOpenAICompatibleStream("https://api.deepinfra.com/openai/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+		tokenUsage, err = callOpenAICompatibleStream("https://api.deepinfra.com/v1/openai/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 
 	case "ollama":
 		tokenUsage, err = callOllamaAPI(model, messages, cfg, timeout, writer)

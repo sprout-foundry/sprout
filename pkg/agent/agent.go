@@ -49,7 +49,7 @@ func isSimpleShellCommand(s string) bool {
 }
 
 // RunAgentMode is the main public interface for command line usage
-func RunAgentMode(userIntent string, skipPrompt bool) error {
+func RunAgentMode(userIntent string, skipPrompt bool, model string) error {
 	fmt.Printf("🤖 Agent mode: Analyzing your intent...\n")
 
 	// Log the original user prompt
@@ -62,6 +62,10 @@ func RunAgentMode(userIntent string, skipPrompt bool) error {
 		logger.LogError(fmt.Errorf("failed to load config: %w", err))
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+	// If a model is provided via command-line flag, it takes precedence
+	if model != "" {
+		cfg.OrchestrationModel = model
+	}
 	cfg.SkipPrompt = skipPrompt
 	// Initialize pricing table (for accurate cost calculations)
 	_ = llm.InitPricingTable()
@@ -70,16 +74,16 @@ func RunAgentMode(userIntent string, skipPrompt bool) error {
 
 	logger := utils.GetLogger(cfg.SkipPrompt)
 
-	// Execute the agent
+	// Execute the agent, tracking total wall time for accurate performance stats
+	overallStart := time.Now()
 	tokenUsage, err := Execute(userIntent, cfg, logger)
 	if err != nil {
 		return err
 	}
 
-	// Print token usage summary
-	startTime := time.Now() // Approximate start time for display
-	duration := time.Since(startTime)
-	PrintTokenUsageSummary(tokenUsage, duration)
+	// Print token usage summary using the actual overall duration
+	overallDuration := time.Since(overallStart)
+	PrintTokenUsageSummary(tokenUsage, overallDuration)
 
 	fmt.Printf("✅ Agent execution completed\n")
 	return nil
@@ -156,6 +160,7 @@ func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*Agen
 	fmt.Printf("├─ Code Generation: $%.4f (%s)\n", codegenCost, editingModel)
 	fmt.Printf("├─ Validation:      $%.4f (%s)\n", validationCost, editingModel)
 	fmt.Printf("└─ Total:           $%.4f\n", totalCost)
+	fmt.Printf("⏱️  Total time:     %v\n", duration)
 
 	return tokenUsage, nil
 }
@@ -192,7 +197,7 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 	// Main adaptive execution loop
 	for context.IterationCount < context.MaxIterations {
 		context.IterationCount++
-		logger.LogProcessStep(fmt.Sprintf("� Agent Iteration %d/%d", context.IterationCount, context.MaxIterations))
+		logger.LogProcessStep(fmt.Sprintf(" Agent Iteration %d/%d", context.IterationCount, context.MaxIterations))
 
 		// Step 1: Evaluate current progress and decide next action
 		evaluation, evalTokens, err := evaluateProgress(context)
@@ -1958,22 +1963,46 @@ func executeCreatePlan(context *AgentContext) error {
 		return fmt.Errorf("cannot create plan without intent analysis")
 	}
 
-	// Full orchestration for moderate and complex tasks
-	editPlan, tokens, err := createDetailedEditPlan(context.UserIntent, context.IntentAnalysis, context.Config, context.Logger)
-	if err != nil {
-		return fmt.Errorf("plan creation failed: %w", err)
+	// Try planning up to 3 attempts total (initial + 2 retries). If still empty/fails, abort.
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			context.Logger.LogProcessStep(fmt.Sprintf("🔁 Plan attempt %d/%d", attempt, maxAttempts))
+		}
+		editPlan, tokens, err := createDetailedEditPlan(context.UserIntent, context.IntentAnalysis, context.Config, context.Logger)
+		if err != nil {
+			lastErr = err
+			if attempt == maxAttempts {
+				return fmt.Errorf("plan creation failed after %d attempts: %w", attempt, err)
+			}
+			continue
+		}
+
+		// Validate plan has actionable operations
+		if editPlan == nil || len(editPlan.EditOperations) == 0 {
+			lastErr = fmt.Errorf("empty plan: no edit operations produced")
+			if attempt == maxAttempts {
+				return fmt.Errorf("plan creation produced no operations after %d attempts", attempt)
+			}
+			continue
+		}
+
+		// Success: record plan and token usage
+		context.CurrentPlan = editPlan
+		context.TokenUsage.Planning += tokens
+		context.TokenUsage.PlanningSplit.Prompt += tokens
+		context.ExecutedOperations = append(context.ExecutedOperations,
+			fmt.Sprintf("Created plan with %d operations for %d files", len(editPlan.EditOperations), len(editPlan.FilesToEdit)))
+
+		context.Logger.LogProcessStep(fmt.Sprintf("✅ Plan created: %d files, %d operations",
+			len(editPlan.FilesToEdit), len(editPlan.EditOperations)))
+		return nil
 	}
-
-	context.CurrentPlan = editPlan
-	// We don't have exact split for planning; approximate all to prompt for now
-	context.TokenUsage.Planning += tokens
-	context.TokenUsage.PlanningSplit.Prompt += tokens
-	context.ExecutedOperations = append(context.ExecutedOperations,
-		fmt.Sprintf("Created plan with %d operations for %d files", len(editPlan.EditOperations), len(editPlan.FilesToEdit)))
-
-	context.Logger.LogProcessStep(fmt.Sprintf("✅ Plan created: %d files, %d operations",
-		len(editPlan.FilesToEdit), len(editPlan.EditOperations)))
-	return nil
+	if lastErr != nil {
+		return lastErr
+	}
+	return fmt.Errorf("plan creation failed for unknown reasons")
 }
 
 // moved to editing.go

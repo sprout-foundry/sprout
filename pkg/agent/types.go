@@ -81,18 +81,18 @@ const (
 
 // EditPlan represents a plan for editing files
 type EditPlan struct {
-	FilesToEdit    []string        // Files that need to be modified
-	EditOperations []EditOperation // Specific operations to perform
-	Context        string          // Additional context for the edits
-	ScopeStatement string          // Clear statement of what this plan addresses
+	FilesToEdit    []string        `json:"files_to_edit"`   // Files that need to be modified
+	EditOperations []EditOperation `json:"edit_operations"` // Specific operations to perform
+	Context        string          `json:"context"`         // Additional context for the edits
+	ScopeStatement string          `json:"scope_statement"` // Clear statement of what this plan addresses
 }
 
 // EditOperation represents a specific edit operation
 type EditOperation struct {
-	FilePath           string // Path to the file to edit
-	Description        string // What change to make
-	Instructions       string // Detailed instructions for the editing model
-	ScopeJustification string // Explanation of how this change serves the user request
+	FilePath           string `json:"file_path"`           // Path to the file to edit
+	Description        string `json:"description"`         // What change to make
+	Instructions       string `json:"instructions"`        // Detailed instructions for the editing model
+	ScopeJustification string `json:"scope_justification"` // Explanation of how this change serves the user request
 }
 
 // ValidationFixPlan represents a plan to fix validation issues

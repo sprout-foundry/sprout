@@ -10,10 +10,13 @@ import (
 
 var (
 	agentSkipPrompt bool
+	agentModel      string // Declare agentModel variable
 )
 
 func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompt for applying changes")
+	// Add a flag to allow users to specify and override the LLM model for agent operations
+	agentCmd.Flags().StringVar(&agentModel, "model", "", "Specify the LLM model to use (e.g., gpt-4o, claude-3-opus-20240229)")
 }
 
 // agentCmd represents the agent command
@@ -46,7 +49,7 @@ Examples:
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		userIntent := strings.Join(args, " ")
-		// Call the RunAgentMode function from the new pkg/agent package
-		return agent.RunAgentMode(userIntent, agentSkipPrompt)
+		// Call the RunAgentMode function from the new pkg/agent package, passing agentModel
+		return agent.RunAgentMode(userIntent, agentSkipPrompt, agentModel)
 	},
 }

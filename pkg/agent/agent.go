@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime" // Import runtime for memory stats
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -145,7 +144,39 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 		}
 
 		// Step 2: Execute the decided action
-		err = executeAdaptiveAction(context, evaluation)
+		// Inline executeAdaptiveAction (function moved during refactor)
+		switch evaluation.NextAction {
+		case "analyze_intent":
+			// executeIntentAnalysis was removed; fall back to analyzing intent inline via existing call path
+			intentAnalysis, tokens, e := analyzeIntentWithMinimalContext(context.UserIntent, context.Config, context.Logger)
+			if e != nil {
+				err = fmt.Errorf("intent analysis failed: %w", e)
+			} else {
+				context.IntentAnalysis = intentAnalysis
+				context.TokenUsage.IntentAnalysis += tokens
+				context.ExecutedOperations = append(context.ExecutedOperations, "Intent analysis completed")
+				err = nil
+			}
+		case "create_plan":
+			err = executeCreatePlan(context)
+		case "execute_edits":
+			err = executeEditOperations(context)
+		case "run_command":
+			err = executeShellCommands(context, evaluation.Commands)
+		case "validate":
+			err = executeValidation(context)
+		case "revise_plan":
+			err = executeRevisePlan(context, evaluation)
+		case "completed":
+			context.Logger.LogProcessStep("✅ Task marked as completed by agent evaluation")
+			context.IsCompleted = true
+			err = nil
+		case "continue":
+			context.Logger.LogProcessStep("▶️ Continuing with current plan")
+			err = nil
+		default:
+			err = fmt.Errorf("unknown action: %s", evaluation.NextAction)
+		}
 		if err != nil {
 			context.Errors = append(context.Errors, fmt.Sprintf("Action execution failed: %v", err))
 			logger.LogError(fmt.Errorf("action execution failed: %w", err))
@@ -186,80 +217,17 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 	return nil
 }
 
-// AgentTokenUsage tracks token consumption throughout agent execution
-type AgentTokenUsage struct {
-	IntentAnalysis     int
-	Planning           int // Tokens used by orchestration model for detailed planning
-	CodeGeneration     int
-	Validation         int
-	ProgressEvaluation int
-	Total              int
-}
+// Types moved to types.go
 
 // AgentContext maintains state and context throughout agent execution
-type AgentContext struct {
-	UserIntent         string
-	CurrentPlan        *EditPlan
-	IntentAnalysis     *IntentAnalysis
-	TaskComplexity     TaskComplexityLevel // For optimization routing
-	ExecutedOperations []string            // Track what has been completed
-	Errors             []string            // Track errors encountered
-	ValidationResults  []string            // Track validation outcomes
-	ValidationFailed   bool                // Flag to indicate validation failure that needs fixing
-	IterationCount     int
-	MaxIterations      int
-	StartTime          time.Time
-	TokenUsage         *AgentTokenUsage
-	Config             *config.Config
-	Logger             *utils.Logger
-	IsCompleted        bool // Flag to indicate task completion (e.g., via immediate execution)
-}
 
 // ProgressEvaluation represents the agent's assessment of current progress
-type ProgressEvaluation struct {
-	Status               string   `json:"status"`                // "on_track", "needs_adjustment", "critical_error", "completed"
-	CompletionPercentage int      `json:"completion_percentage"` // 0-100
-	NextAction           string   `json:"next_action"`           // "continue", "revise_plan", "run_command", "validate"
-	Reasoning            string   `json:"reasoning"`             // Why this decision was made
-	Concerns             []string `json:"concerns"`              // Any issues identified
-	Commands             []string `json:"commands"`              // Shell commands to run if next_action is "run_command"
-	NewPlan              *string  `json:"new_plan"`              // New plan if next_action is "revise_plan"
-}
 
 // IntentAnalysis represents the analysis of user intent
-type IntentAnalysis struct {
-	Category         string   // "code", "fix", "docs", "test", "review"
-	Complexity       string   // "simple", "moderate", "complex"
-	EstimatedFiles   []string // Files likely to be involved
-	RequiresContext  bool     // Whether workspace context is needed
-	ImmediateCommand string   // Optional command to execute immediately for simple tasks
-	CanExecuteNow    bool     // Whether the task can be completed immediately
-}
 
 // TaskComplexityLevel represents the complexity level of a task for optimization
-type TaskComplexityLevel int
-
-const (
-	TaskSimple   TaskComplexityLevel = iota // Single file, docs, comments - fast path
-	TaskModerate                            // Multi-file, logic changes - standard path
-	TaskComplex                             // Architecture, refactoring - full orchestration
-)
-
-// EditPlan represents a detailed plan for code changes created by the orchestration model
-type EditPlan struct {
-	FilesToEdit    []string        // Files that need to be modified
-	EditOperations []EditOperation // Specific operations to perform
-	Context        string          // Additional context for the edits
-	ScopeStatement string          // Clear statement of what this plan addresses
-}
 
 // EditOperation represents a single file edit operation
-type EditOperation struct {
-	FilePath           string // Path to the file to edit
-	Description        string // What change to make
-	Instructions       string // Detailed instructions for the editing model
-	ScopeJustification string // Explanation of how this change serves the user request
-}
 
 // determineTaskComplexity determines the complexity level for optimization routing
 func determineTaskComplexity(intent string, analysis *IntentAnalysis) TaskComplexityLevel {
@@ -451,75 +419,11 @@ func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logg
 		logger.Logf("Fallback selected %d files: %v", len(relevantFiles), relevantFiles)
 	}
 
-	prompt := fmt.Sprintf(`Analyze this user intent and classify it for optimal execution:
-
-User Intent: %s
-
-WORKSPACE ANALYSIS:
-Project Type: %s
-Total Files: %d
-Available Source Files in Workspace:
-%s
-
-CRITICAL WORKSPACE CONSTRAINTS:
-- This is a %s project - do NOT suggest files with mismatched extensions
-- All file paths must be relative to project root
-- Only suggest modifications to EXISTING files shown above
-- Do NOT create new files unless explicitly requested
-- Verify file extensions match project type
-
-IMMEDIATE EXECUTION OPTIMIZATION:
-IMPORTANT: Be VERY conservative with immediate execution. Only use for tasks that are:
-1. Pure information gathering (no code modification)
-2. Can be completed with a single shell command
-3. Don't require any code analysis or understanding
-
-ONLY set "CanExecuteNow": true for these VERY LIMITED cases:
-- Explicit file listing requests: "list source files in directory" → "find . -name '*.ext' -type f"
-- Direct search queries: "find all TODO comments" → "grep -r -i -n 'TODO' ."
-- Simple directory structure: "show directory structure" → "ls -R"
-- Count queries: "how many files" → "find . -name '*.ext' | wc -l"
-- Function listing: "show functions in file.go" → "grep -n '^func ' file.go"
-- Import viewing: "show imports in main.go" → "grep -A 10 '^import' main.go"
-- Basic file inspection: "check if go.mod exists" → "ls -la go.mod"
-
-DO NOT use immediate execution for:
-- ANY code modification tasks
-- ANY analysis tasks ("analyze", "review", "check", "fix")
-- ANY tasks requiring understanding of code content
-- ANY tasks that might need file editing
-- Any ambiguous requests that could involve code changes
-
-Respond with JSON:
-{
-  "Category": "code|fix|docs|test|review",
-  "Complexity": "simple|moderate|complex",
-  "EstimatedFiles": ["file1.ext", "file2.ext"],
-  "RequiresContext": true|false,
-  "CanExecuteNow": false,
-  "ImmediateCommand": ""
-}
-
-CRITICAL: Default to "CanExecuteNow": false unless the task is clearly a simple shell command for information gathering.
-
-Classification Guidelines:
-- "simple": Single file edit, clear target, specific change
-- "moderate": 2-5 files, some analysis needed, well-defined scope
-- "complex": Multiple files, requires planning, unclear scope
-
-Only include files in estimated_files that are highly likely to be modified.
-ALL files must be existing source files from the workspace above.`,
-		userIntent,
-		workspaceAnalysis.ProjectType,
-		len(relevantFiles),
-		strings.Join(relevantFiles, "\n"),
-		workspaceAnalysis.ProjectType)
-
+	prompt := BuildIntentAnalysisPrompt(userIntent, workspaceAnalysis.ProjectType, relevantFiles)
 	messages := []prompts.Message{
 		{Role: "system", Content: "You are an expert at analyzing programming tasks. Respond only with valid JSON."},
 		{Role: "user", Content: prompt},
 	}
-
 	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 60*time.Second)
 	if err != nil {
 		logger.LogError(fmt.Errorf("orchestration model failed to analyze intent: %w", err))
@@ -1323,13 +1227,6 @@ func findRelevantFilesByContent(userIntent string, logger *utils.Logger) []strin
 }
 
 // WorkspaceInfo represents comprehensive workspace structure
-type WorkspaceInfo struct {
-	ProjectType   string              // "go", "typescript", "python", etc.
-	RootFiles     []string            // Files in root directory
-	AllFiles      []string            // All source files
-	FilesByDir    map[string][]string // Files organized by directory
-	RelevantFiles map[string]string   // file path -> brief content summary
-}
 
 // buildWorkspaceStructure creates comprehensive workspace analysis
 func buildWorkspaceStructure(logger *utils.Logger) (*WorkspaceInfo, error) {
@@ -1489,7 +1386,8 @@ func getBasicFileListing(logger *utils.Logger) ([]string, error) {
 }
 
 // getRecentlyModifiedSourceFiles returns a list of recently modified source files as fallback candidates
-func getRecentlyModifiedSourceFiles(workspaceInfo *WorkspaceInfo, logger *utils.Logger) []string {
+// moved to workspace_helpers.go
+/*func getRecentlyModifiedSourceFiles(workspaceInfo *WorkspaceInfo, logger *utils.Logger) []string {
 	if len(workspaceInfo.AllFiles) == 0 {
 		return []string{}
 	}
@@ -1522,10 +1420,11 @@ func getRecentlyModifiedSourceFiles(workspaceInfo *WorkspaceInfo, logger *utils.
 	}
 
 	return result
-}
+}*/
 
 // getCommonEntryPointFiles returns common entry point files based on project type
-func getCommonEntryPointFiles(projectType string, logger *utils.Logger) []string {
+// moved to workspace_helpers.go
+/*func getCommonEntryPointFiles(projectType string, logger *utils.Logger) []string {
 	switch projectType {
 	case "go":
 		return []string{"main.go", "cmd/main.go", "app/main.go"}
@@ -1541,10 +1440,11 @@ func getCommonEntryPointFiles(projectType string, logger *utils.Logger) []string
 		// Generic fallback for unknown project types
 		return []string{"README.md", "index.*", "main.*", "app.*"}
 	}
-}
+}*/
 
 // isSourceFile checks if a file is likely a source code file
-func isSourceFile(path string) bool {
+// moved to workspace_helpers.go
+/*func isSourceFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	sourceExts := []string{".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".rs", ".rb", ".php", ".scala", ".kt"}
 
@@ -1554,7 +1454,7 @@ func isSourceFile(path string) bool {
 		}
 	}
 	return false
-}
+}*/
 
 // shouldUsePartialEdit determines whether to use partial editing or full file editing
 // based on the operation characteristics and file size
@@ -1705,394 +1605,9 @@ func buildBasicFileContext(contextFiles []string, logger *utils.Logger) string {
 	return context.String()
 }
 
-// validateChangesWithIteration validates changes and iteratively fixes issues
-func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *AgentTokenUsage) (int, error) {
-	const maxIterations = 3
-	totalValidationTokens := 0
-
-	for iteration := 1; iteration <= maxIterations; iteration++ {
-		logger.LogProcessStep(fmt.Sprintf("🔄 Validation iteration %d/%d", iteration, maxIterations))
-
-		// Phase: Determine validation strategy
-		strategyStartTime := time.Now()
-		// Debug logging removed for cleaner output
-		validationStrategy, strategyTokens, err := determineValidationStrategy(intentAnalysis, cfg, logger)
-		strategyDuration := time.Since(strategyStartTime)
-		if err != nil {
-			logger.LogError(fmt.Errorf("failed to determine validation strategy (took %v): %w", strategyDuration, err))
-			// Fall back to basic validation
-			validationStrategy = getBasicValidationStrategy(intentAnalysis, logger)
-			logger.Logf("DEBUG: Falling back to basic validation strategy.")
-		} else {
-			logger.Logf("DEBUG: Validation strategy determined (took %v). Project Type: %s, Steps: %d", strategyDuration, validationStrategy.ProjectType, len(validationStrategy.Steps))
-		}
-		totalValidationTokens += strategyTokens
-
-		var validationResults []string
-		var hasFailures bool
-
-		// Phase: Run validation steps
-		logger.Logf("DEBUG: Running %d validation steps...", len(validationStrategy.Steps))
-		for _, step := range validationStrategy.Steps {
-			stepStartTime := time.Now()
-
-			// Notify user about what validation is being run
-			fmt.Printf("🔍 Running validation: %s\n", step.Description)
-			fmt.Printf("   Command: %s\n", step.Command)
-
-			logger.LogProcessStep(fmt.Sprintf("Running validation: %s (Command: %s)", step.Description, step.Command))
-
-			result := ""
-			stepErr := error(nil)
-
-			// Go's equivalent of try-catch for unexpected panics during a validation step
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						stepErr = fmt.Errorf("panic during validation step '%s': %v", step.Description, r)
-						logger.LogError(stepErr)
-					}
-				}()
-				// Actual call to run the validation step
-				result, stepErr = runValidationStep(step, logger)
-			}()
-
-			stepDuration := time.Since(stepStartTime)
-
-			if stepErr != nil {
-				if step.Required {
-					validationResults = append(validationResults, fmt.Sprintf("❌ %s: %v (took %v)", step.Description, stepErr, stepDuration))
-					fmt.Printf("   ❌ FAILED in %v: %v\n", stepDuration, stepErr)
-					logger.Logf("Validation step '%s' FAILED (took %v): %v", step.Description, stepDuration, stepErr)
-					hasFailures = true // Only mark as failure if step is required
-				} else {
-					validationResults = append(validationResults, fmt.Sprintf("⚠️ %s: %v (took %v) [OPTIONAL]", step.Description, stepErr, stepDuration))
-					fmt.Printf("   ⚠️ WARNING in %v: %v (optional step)\n", stepDuration, stepErr)
-					logger.Logf("Validation step '%s' WARNING (took %v): %v [OPTIONAL - not blocking]", step.Description, stepDuration, stepErr)
-				}
-			} else {
-				validationResults = append(validationResults, fmt.Sprintf("✅ %s: %s (took %v)", step.Description, result, stepDuration))
-				fmt.Printf("   ✅ PASSED in %v\n", stepDuration)
-				logger.Logf("Validation step '%s' PASSED (took %v): %s", step.Description, stepDuration, result)
-			}
-		}
-
-		// Phase: Analyze results and decide next action
-		if !hasFailures {
-			logger.LogProcessStep("✅ All validation steps passed!")
-			return totalValidationTokens, nil
-		}
-
-		// If this is the last iteration, don't try to fix, just report failure
-		if iteration == maxIterations {
-			logger.LogProcessStep("❌ Max iterations reached, validation still failing. Final analysis...")
-			analysisStartTime := time.Now()
-			analysisTokens, err := analyzeValidationResults(validationResults, intentAnalysis, validationStrategy, cfg, logger)
-			analysisDuration := time.Since(analysisStartTime)
-			totalValidationTokens += analysisTokens
-
-			if err != nil {
-				// If analysis failed, treat as failure
-				logger.LogError(fmt.Errorf("failed to analyze final validation results (took %v): %w", analysisDuration, err))
-				return totalValidationTokens, fmt.Errorf("validation failed after %d iterations", maxIterations)
-			} else {
-				// Analysis succeeded - this means LLM determined we can proceed despite validation failures
-				logger.Logf("DEBUG: Final validation analysis completed (took %v) - LLM approved proceeding", analysisDuration)
-				return totalValidationTokens, nil
-			}
-		}
-
-		// Phase: Attempt to fix issues automatically
-		logger.LogProcessStep(fmt.Sprintf("🔧 Attempting to fix validation issues (iteration %d)", iteration))
-		fixStartTime := time.Now()
-		fixTokens, err := fixValidationIssues(validationResults, originalIntent, intentAnalysis, cfg, logger)
-		fixDuration := time.Since(fixStartTime)
-		totalValidationTokens += fixTokens
-
-		if err != nil {
-			logger.LogError(fmt.Errorf("failed to auto-fix validation issues (took %v): %w", fixDuration, err))
-			// Continue to next iteration anyway, as some fixes might have been applied or it might be a transient error
-		} else {
-			logger.LogProcessStep(fmt.Sprintf("✅ Applied potential fixes (took %v), re-validating...", fixDuration))
-		}
-	}
-
-	return totalValidationTokens, fmt.Errorf("validation failed after %d iterations", maxIterations)
-}
-
-// fixValidationIssues attempts to automatically fix validation failures using LLM analysis
-func fixValidationIssues(validationResults []string, originalIntent string, intentAnalysis *IntentAnalysis, cfg *config.Config, logger *utils.Logger) (int, error) {
-	startTime := time.Now()
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	logger.Logf("PERF: fixValidationIssues started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-
-	// Check if there are any failures to fix
-	hasFailures := false
-	for _, result := range validationResults {
-		if strings.HasPrefix(result, "❌") {
-			hasFailures = true
-			break
-		}
-	}
-
-	if !hasFailures {
-		logger.Logf("No validation failures to fix")
-		duration := time.Since(startTime)
-		runtime.ReadMemStats(&m)
-		logger.Logf("PERF: fixValidationIssues completed (no issues). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-		return 0, nil
-	}
-
-	logger.LogProcessStep("🔧 Applying LLM-analyzed fixes...")
-
-	// Step 1: Use orchestration model to analyze errors and create fix plan
-	fixPlan, analysisTokens, err := analyzeValidationErrorsWithContext(validationResults, originalIntent, intentAnalysis, cfg, logger)
-	if err != nil {
-		duration := time.Since(startTime)
-		runtime.ReadMemStats(&m)
-		logger.Logf("PERF: fixValidationIssues completed (analysis error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-		return analysisTokens, fmt.Errorf("failed to analyze validation errors: %w", err)
-	}
-
-	// Step 2: Execute the fix plan using the editing model
-	execTokens, err := executeValidationFixPlan(fixPlan, cfg, logger)
-	if err != nil {
-		duration := time.Since(startTime)
-		runtime.ReadMemStats(&m)
-		logger.Logf("PERF: fixValidationIssues completed (execution error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-		return analysisTokens + execTokens, fmt.Errorf("failed to execute fix plan: %w", err)
-	}
-
-	totalTokens := analysisTokens + execTokens
-	duration := time.Since(startTime)
-	runtime.ReadMemStats(&m)
-	logger.Logf("PERF: fixValidationIssues completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-	return totalTokens, nil
-}
-
-// ValidationFixPlan represents a plan to fix validation errors
-type ValidationFixPlan struct {
-	ErrorAnalysis string   `json:"error_analysis"`
-	AffectedFiles []string `json:"affected_files"`
-	FixStrategy   string   `json:"fix_strategy"`
-	Instructions  []string `json:"instructions"`
-}
-
-// analyzeValidationErrorsWithContext uses orchestration model to analyze validation errors and create a comprehensive fix plan
-func analyzeValidationErrorsWithContext(validationResults []string, originalIntent string, intentAnalysis *IntentAnalysis, cfg *config.Config, logger *utils.Logger) (*ValidationFixPlan, int, error) {
-	// Extract error messages
-	var errorMessages []string
-	for _, result := range validationResults {
-		if strings.HasPrefix(result, "❌") {
-			errorMsg := strings.TrimPrefix(result, "❌ ")
-			errorMessages = append(errorMessages, errorMsg)
-		}
-	}
-
-	if len(errorMessages) == 0 {
-		return nil, 0, fmt.Errorf("no error messages found in validation results")
-	}
-
-	// Use embeddings to find files related to the errors
-	relevantFiles, err := findFilesRelatedToErrors(errorMessages, cfg, logger)
-	if err != nil {
-		logger.Logf("Warning: Could not find files using embeddings for errors: %v", err)
-		relevantFiles = []string{}
-	}
-
-	// Get project file tree for context
-	fileTree, err := getProjectFileTree()
-	if err != nil {
-		logger.Logf("Warning: Could not get project file tree: %v", err)
-		fileTree = "Unable to load project structure"
-	}
-
-	// Build comprehensive analysis prompt
-	prompt := fmt.Sprintf(`You are an expert Go developer analyzing validation errors to create a targeted fix plan.
-
-ORIGINAL TASK: %s
-TASK CATEGORY: %s
-
-VALIDATION ERRORS:
-%s
-
-PROJECT FILE TREE:
-%s
-
-POTENTIALLY RELEVANT FILES (from embedding search):
-%s
-
-CONTEXT:
-- This project has detected dependencies and module structure
-- All imports must use proper module paths
-- Focus on minimal, targeted fixes that resolve the specific errors
-- Consider both direct fixes and dependency issues
-
-ANALYSIS REQUIREMENTS:
-1. **Root Cause**: What is the underlying cause of these validation errors?
-2. **Error Classification**: Are these errors related to the recent changes or pre-existing issues?
-3. **Affected Files**: Which specific files need changes to fix these errors?
-4. **Fix Strategy**: What is the minimal approach to resolve all errors?
-5. **Implementation Plan**: Specific instructions for each file change needed
-
-Respond with a JSON object containing your analysis and fix plan:
-{
-  "error_analysis": "Detailed analysis of what went wrong",
-  "affected_files": ["list", "of", "files", "that", "need", "changes"],
-  "fix_strategy": "High-level strategy for fixing the errors",
-  "instructions": ["specific instruction 1", "specific instruction 2", "..."]
-}`,
-		originalIntent,
-		intentAnalysis.Category,
-		strings.Join(errorMessages, "\n"),
-		fileTree,
-		strings.Join(relevantFiles, "\n"))
-
-	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert Go developer who excels at analyzing validation errors and creating targeted fix plans. Always respond with valid JSON."},
-		{Role: "user", Content: prompt},
-	}
-
-	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 60*time.Second)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to get orchestration model analysis: %w", err)
-	}
-
-	// Parse the JSON response
-	var fixPlan ValidationFixPlan
-	err = json.Unmarshal([]byte(response), &fixPlan)
-	if err != nil {
-		// JSON parsing failure is an unrecoverable error - the LLM should always return valid JSON
-		logger.LogError(fmt.Errorf("CRITICAL: Failed to parse validation fix plan JSON from LLM: %w\nRaw response: %s", err, response))
-		return nil, 0, fmt.Errorf("unrecoverable JSON parsing error in validation fix plan: %w\nLLM Response: %s", err, response)
-	}
-
-	tokens := utils.EstimateTokens(prompt + response)
-	logger.Logf("Validation error analysis complete: %d affected files, strategy: %s", len(fixPlan.AffectedFiles), fixPlan.FixStrategy)
-
-	return &fixPlan, tokens, nil
-}
-
 // executeValidationFixPlan executes the fix plan using the editing model
-func executeValidationFixPlan(plan *ValidationFixPlan, cfg *config.Config, logger *utils.Logger) (int, error) {
-	logger.Logf("Executing fix plan: %s", plan.FixStrategy)
-
-	totalTokens := 0
-
-	// If we have specific files to fix, target them individually
-	if len(plan.AffectedFiles) > 0 {
-		for _, filePath := range plan.AffectedFiles {
-			// Check if file exists
-			if _, err := os.Stat(filePath); os.IsNotExist(err) {
-				logger.Logf("Skipping non-existent file: %s", filePath)
-				continue
-			}
-
-			// Create targeted fix instructions for this file
-			fileInstructions := fmt.Sprintf(`Fix validation errors in this file based on the following analysis and strategy:
-
-ERROR ANALYSIS: %s
-
-FIX STRATEGY: %s
-
-SPECIFIC INSTRUCTIONS:
-%s
-
-Focus only on changes needed to resolve validation errors. Make minimal, targeted fixes.`,
-				plan.ErrorAnalysis,
-				plan.FixStrategy,
-				strings.Join(plan.Instructions, "\n"))
-
-			// Apply fix using partial edit
-			logger.Logf("Applying fixes to file: %s", filePath)
-			_, err := editor.ProcessPartialEdit(filePath, fileInstructions, cfg, logger)
-			if err != nil {
-				logger.Logf("Failed to apply fixes to %s: %v", filePath, err)
-				// Try full file processing as fallback
-				_, err = editor.ProcessCodeGeneration(filePath, fileInstructions, cfg, "")
-				if err != nil {
-					logger.Logf("Failed full file fix for %s: %v", filePath, err)
-					continue
-				}
-			}
-
-			// Estimate tokens used (rough approximation)
-			totalTokens += utils.EstimateTokens(fileInstructions) / 2 // Divide by 2 since response is typically shorter
-		}
-	} else {
-		// No specific files identified, use general fix approach
-		generalInstructions := fmt.Sprintf(`Fix the validation errors based on this analysis:
-
-ERROR ANALYSIS: %s
-FIX STRATEGY: %s
-
-INSTRUCTIONS:
-%s
-
-Apply fixes to resolve all validation errors.`,
-			plan.ErrorAnalysis,
-			plan.FixStrategy,
-			strings.Join(plan.Instructions, "\n"))
-
-		_, err := editor.ProcessCodeGeneration("", generalInstructions, cfg, "")
-		if err != nil {
-			return totalTokens, fmt.Errorf("failed to apply general fixes: %w", err)
-		}
-
-		totalTokens += utils.EstimateTokens(generalInstructions) / 2
-	}
-
-	logger.Logf("Fix plan execution completed for %d files", len(plan.AffectedFiles))
-	return totalTokens, nil
-}
 
 // findFilesRelatedToErrors uses embeddings to find files that might be related to the validation errors
-func findFilesRelatedToErrors(errorMessages []string, cfg *config.Config, logger *utils.Logger) ([]string, error) {
-	// Load workspace file for embeddings
-	workspaceFileData, err := workspace.LoadWorkspaceFile()
-	if err != nil {
-		return nil, fmt.Errorf("could not load workspace file: %w", err)
-	}
-
-	var allRelevantFiles []string
-
-	// Search for files related to each error message
-	for _, errorMsg := range errorMessages {
-		// Extract key terms from error message for embedding search
-		searchQuery := fmt.Sprintf("Error: %s", errorMsg)
-
-		fullContextFiles, summaryContextFiles, err := workspace.GetFilesForContextUsingEmbeddings(searchQuery, workspaceFileData, cfg, logger)
-		if err != nil {
-			logger.Logf("Embedding search failed for error: %v", err)
-			continue
-		}
-
-		// Combine and deduplicate files
-		relevantFiles := append(fullContextFiles, summaryContextFiles...)
-		for _, file := range relevantFiles {
-			// Simple deduplication
-			found := false
-			for _, existing := range allRelevantFiles {
-				if existing == file {
-					found = true
-					break
-				}
-			}
-			if !found {
-				allRelevantFiles = append(allRelevantFiles, file)
-			}
-		}
-	}
-
-	// Limit to reasonable number of files
-	maxFiles := 10
-	if len(allRelevantFiles) > maxFiles {
-		allRelevantFiles = allRelevantFiles[:maxFiles]
-	}
-
-	return allRelevantFiles, nil
-}
 
 // getProjectFileTree returns a representation of the project file structure
 func getProjectFileTree() (string, error) {
@@ -2215,141 +1730,12 @@ Create a detailed fix prompt:`,
 }
 
 // ProjectContext represents the detected project characteristics
-type ProjectContext struct {
-	Type         string // "go", "python", "node", "other"
-	HasTests     bool
-	HasLinting   bool
-	BuildCommand string
-	TestCommand  string
-	LintCommand  string
-}
 
 // ValidationStep represents a single validation action
-type ValidationStep struct {
-	Type        string // "build", "test", "lint", "syntax"
-	Command     string
-	Description string
-	Required    bool // If false, failure won't block
-}
 
 // ValidationStrategy represents the complete validation approach for a project
-type ValidationStrategy struct {
-	ProjectType string
-	Steps       []ValidationStep
-	Context     string // Additional context about why these steps were chosen
-}
-
-// hasFile checks if a file or directory exists
-func hasFile(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-// hasTestFiles checks if test files exist in the given directory for the specified language
-func hasTestFiles(dir, language string) bool {
-	var testPatterns []string
-	switch language {
-	case "go":
-		testPatterns = []string{"*_test.go"}
-	case "js", "ts":
-		testPatterns = []string{"*.test.js", "*.spec.js"}
-	case "py":
-		testPatterns = []string{"test_*.py", "*_test.py"}
-	default:
-		return false
-	}
-
-	for _, pattern := range testPatterns {
-		matches, _ := filepath.Glob(pattern)
-		if len(matches) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// determineValidationStrategy uses LLM to determine the best validation approach
-func determineValidationStrategy(intentAnalysis *IntentAnalysis, cfg *config.Config, logger *utils.Logger) (*ValidationStrategy, int, error) {
-	// Detect basic project characteristics
-	projectInfo := detectProjectInfo(logger)
-
-	prompt := fmt.Sprintf(`You are an expert DevOps engineer. Analyze this project and determine the optimal validation strategy.
-
-Project Information:
-- Files present: %s
-- Change category: %s
-- Change complexity: %s
-- Files being modified: %s
-
-Based on this information, determine what validation commands should be run to ensure the changes are correct.
-
-Respond with JSON:
-{
-  "project_type": "go|python|node|java|other",
-  "steps": [
-    {
-      "type": "build|test|lint|syntax",
-      "command": "exact command to run",
-      "description": "human readable description",
-      "required": true|false
-    }
-  ],
-  "context": "explanation of why these steps were chosen"
-}
-
-Guidelines:
-- **REQUIRED vs OPTIONAL**: Mark steps as required=true ONLY if failure prevents deployment/usage
-- **Build failures**: Always required=true (prevents basic functionality)
-- **Syntax errors**: Always required=true (code won't run)
-- **Lint warnings**: Always required=false (pre-existing issues shouldn't block changes)
-- **Missing tests**: Always required=false (absence of tests is not a failure)
-- **Existing test failures**: Use required=false unless directly related to the change
-- Examples based on project type: build tools, test commands, linting tools
-- For Python: "python -m py_compile" (required=true), "pytest" (required=false)
-- For Node.js: "npm run build" (required=true), "npm test" (required=false), "npm run lint" (required=false)
-- Consider the change type: docs/comments/small fixes need minimal required validation`,
-		strings.Join(projectInfo.AvailableFiles, ", "),
-		intentAnalysis.Category,
-		intentAnalysis.Complexity,
-		strings.Join(intentAnalysis.EstimatedFiles, ", "))
-
-	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert at DevOps and project validation. Respond only with valid JSON."},
-		{Role: "user", Content: prompt},
-	}
-
-	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
-	if err != nil {
-		return nil, 0, fmt.Errorf("orchestration model failed to determine validation strategy: %w", err)
-	}
-
-	// Parse the response using centralized JSON extraction utility
-	cleanedResponse, err := utils.ExtractJSONFromLLMResponse(response)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to extract JSON from validation strategy response: %w\nRaw response: %s", err, response)
-	}
-
-	var strategy ValidationStrategy
-	if err := json.Unmarshal([]byte(cleanedResponse), &strategy); err != nil {
-		return nil, 0, fmt.Errorf("failed to parse validation strategy JSON: %w\nCleaned JSON: %s\nRaw response: %s", err, cleanedResponse, response)
-	}
-
-	// Estimate tokens used
-	tokens := utils.EstimateTokens(prompt + response)
-
-	logger.Logf("LLM-determined validation strategy: %s project with %d steps", strategy.ProjectType, len(strategy.Steps))
-
-	return &strategy, tokens, nil
-}
 
 // ProjectInfo represents detected project characteristics
-type ProjectInfo struct {
-	AvailableFiles  []string
-	HasGoMod        bool
-	HasPackageJSON  bool
-	HasRequirements bool
-	HasMakefile     bool
-}
 
 // detectProjectInfo gathers basic project information for LLM analysis
 func detectProjectInfo(logger *utils.Logger) ProjectInfo {
@@ -2391,205 +1777,12 @@ func detectProjectInfo(logger *utils.Logger) ProjectInfo {
 }
 
 // getBasicValidationStrategy provides fallback validation when LLM fails
-func getBasicValidationStrategy(intentAnalysis *IntentAnalysis, logger *utils.Logger) *ValidationStrategy {
-	strategy := &ValidationStrategy{
-		ProjectType: "unknown",
-		Context:     "Fallback strategy when LLM analysis failed",
-	}
-
-	// Detect project type with simple heuristics
-	if hasFile("go.mod") {
-		strategy.ProjectType = "go"
-		strategy.Steps = []ValidationStep{
-			{Type: "syntax", Command: "go mod tidy", Description: "Ensures the go.mod file matches the source code's dependencies.", Required: false},
-			{Type: "build", Command: "go build ./...", Description: "Compiles all packages in the project to ensure there are no build errors.", Required: true},
-			{Type: "lint", Command: "go vet ./...", Description: "Runs the Go vet tool to check for suspicious constructs and potential errors.", Required: false},
-		}
-		// Add tests only if test files exist
-		if hasTestFiles(".", "go") {
-			strategy.Steps = append(strategy.Steps, ValidationStep{
-				Type: "test", Command: "go test ./...", Description: "Runs all unit tests to verify functionality and prevent regressions.", Required: false,
-			})
-		}
-	} else if hasFile("package.json") {
-		strategy.ProjectType = "node"
-		strategy.Steps = []ValidationStep{
-			{Type: "syntax", Command: "node --check *.js", Description: "JavaScript syntax check", Required: true},
-		}
-		if hasTestFiles(".", "js") {
-			strategy.Steps = append(strategy.Steps, ValidationStep{
-				Type: "test", Command: "npm test", Description: "Runs Node.js tests", Required: false,
-			})
-		}
-	} else if hasFile("requirements.txt") || hasFile("pyproject.toml") {
-		strategy.ProjectType = "python"
-		strategy.Steps = []ValidationStep{
-			{Type: "syntax", Command: "python -m py_compile *.py", Description: "Python syntax check", Required: true},
-		}
-		if hasTestFiles(".", "py") {
-			strategy.Steps = append(strategy.Steps, ValidationStep{
-				Type: "test", Command: "python -m pytest", Description: "Runs Python tests", Required: false,
-			})
-		}
-	} else {
-		// Generic validation
-		strategy.Steps = []ValidationStep{
-			{Type: "syntax", Command: "echo 'No specific validation available'", Description: "Basic check", Required: false},
-		}
-	}
-
-	logger.Logf("Using fallback validation strategy for %s project", strategy.ProjectType)
-	return strategy
-}
 
 // runValidationStep executes a single validation step
-func runValidationStep(step ValidationStep, logger *utils.Logger) (string, error) {
-	// Split command into parts
-	parts := strings.Fields(step.Command)
-	if len(parts) == 0 {
-		return "", fmt.Errorf("empty command")
-	}
-
-	logger.Logf("Running command: %s", step.Command)
-
-	// Execute the command
-	cmd := exec.Command(parts[0], parts[1:]...)
-	cmd.Dir = "." // Run in current directory
-
-	output, err := cmd.CombinedOutput()
-	outputStr := strings.TrimSpace(string(output))
-
-	logger.Logf("Command output: %s", outputStr)
-	logger.Logf("Command error: %v", err)
-
-	if err != nil {
-		return outputStr, fmt.Errorf("command failed: %w", err)
-	}
-
-	if outputStr == "" {
-		return "Success (no output)", nil
-	}
-
-	return outputStr, nil
-}
 
 // analyzeValidationResults uses LLM to analyze validation results and decide whether to proceed
-func analyzeValidationResults(validationResults []string, intentAnalysis *IntentAnalysis, validationStrategy *ValidationStrategy, cfg *config.Config, logger *utils.Logger) (int, error) {
-	// Check if there are any failures
-	hasFailures := false
-	for _, result := range validationResults {
-		if strings.HasPrefix(result, "❌") {
-			hasFailures = true
-			break
-		}
-	}
-
-	if !hasFailures {
-		logger.Logf("All validation steps passed successfully")
-		return 0, nil
-	}
-
-	prompt := fmt.Sprintf(`You are an expert developer analyzing validation failures after implementing changes.
-
-RECENT TASK: %s
-TASK CATEGORY: %s
-PROJECT TYPE: %s
-
-VALIDATION RESULTS:
-%s
-
-ANALYSIS REQUIRED:
-1. **Error Classification**: Are these failures related to the recent task, or pre-existing issues?
-2. **Impact Assessment**: Do these failures affect the functionality added/modified by the recent task?
-3. **Decision**: Should the validation pass, fail, or require fixes?
-
-DECISION CRITERIA:
-- **REQUIRED failures**: Only these should trigger FIX or FAIL decisions
-- **OPTIONAL failures** (marked with ⚠️): These should typically be PASS (ignore pre-existing issues)
-- **Build/syntax errors** (required=true): Must be addressed → FAIL if severe, FIX if simple
-- **Lint warnings** (required=false): Usually pre-existing → PASS unless directly caused by changes
-- **Missing or failing tests** (required=false): Not a blocker → PASS (missing tests ≠ failure)
-- **Vet warnings** (required=false): Pre-existing linting issues → PASS
-
-SPECIFIC EXAMPLES:
-- "go vet" warnings about format strings → PASS (pre-existing lint issues)
-- "go build" failures → FAIL or FIX (prevents functionality)
-- "tests not found" or "no tests" → PASS (absence is not failure)
-- Existing test failures unrelated to changes → PASS
-
-Focus on: Did the changes work correctly? Ignore pre-existing project issues.
-
-RESPONSE FORMAT:
-DECISION: [PASS|FAIL|FIX]
-REASONING: [One sentence explaining why]
-ACTION: [What should be done next, if anything]
-
-Focus on whether the recent changes achieved their goal successfully, not on fixing unrelated pre-existing issues.`,
-		intentAnalysis.Category,
-		intentAnalysis.Category,
-		validationStrategy.ProjectType,
-		strings.Join(validationResults, "\n"))
-
-	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert developer who understands the difference between task-related failures and pre-existing issues. Make practical decisions about validation."},
-		{Role: "user", Content: prompt},
-	}
-
-	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 30*time.Second)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get orchestration model analysis of validation results: %w", err)
-	}
-
-	// Log the analysis
-	logger.LogProcessStep("🔍 Validation Analysis:")
-	logger.Logf("%s", response)
-
-	// Parse the decision from the response
-	decision := parseValidationDecision(response, logger)
-
-	// Act on the decision
-	switch decision {
-	case "PASS":
-		logger.LogProcessStep("✅ LLM recommends proceeding despite validation failures (unrelated issues)")
-		return utils.EstimateTokens(prompt + response), nil
-	case "FIX":
-		logger.LogProcessStep("🔧 LLM recommends attempting fixes for task-related issues")
-		return utils.EstimateTokens(prompt + response), fmt.Errorf("validation failures require fixes")
-	case "FAIL":
-		logger.LogProcessStep("❌ LLM recommends failing due to critical task-related issues")
-		return utils.EstimateTokens(prompt + response), fmt.Errorf("validation failed with critical task-related issues")
-	default:
-		logger.LogProcessStep("⚠️ Could not parse LLM decision, defaulting to conservative failure")
-		return utils.EstimateTokens(prompt + response), fmt.Errorf("validation failed - could not determine if issues are task-related")
-	}
-}
 
 // parseValidationDecision extracts the decision from the LLM response
-func parseValidationDecision(response string, logger *utils.Logger) string {
-	responseLower := strings.ToLower(response)
-
-	// Look for decision indicators
-	if strings.Contains(responseLower, "decision: pass") || strings.Contains(responseLower, "recommend pass") {
-		return "PASS"
-	}
-	if strings.Contains(responseLower, "decision: fail") || strings.Contains(responseLower, "recommend fail") {
-		return "FAIL"
-	}
-	if strings.Contains(responseLower, "decision: fix") || strings.Contains(responseLower, "recommend fix") {
-		return "FIX"
-	}
-
-	// Fallback parsing based on keywords
-	if strings.Contains(responseLower, "unrelated") || strings.Contains(responseLower, "pre-existing") {
-		return "PASS"
-	}
-	if strings.Contains(responseLower, "critical") || strings.Contains(responseLower, "broke") {
-		return "FAIL"
-	}
-
-	logger.Logf("Could not parse validation decision from response: %s", response)
-	return "UNKNOWN"
-}
 
 // printTokenUsageSummary prints a summary of token usage for the agent execution
 func printTokenUsageSummary(tokenUsage *AgentTokenUsage, duration time.Duration) {
@@ -2740,12 +1933,6 @@ func findFilesUsingShellCommands(userIntent string, workspaceInfo *WorkspaceInfo
 }
 
 // WorkspacePatterns holds analysis of workspace organization patterns
-type WorkspacePatterns struct {
-	AverageFileSize      int
-	PreferredPackageSize int
-	ModularityLevel      string
-	GoSpecificPatterns   map[string]string
-}
 
 // analyzeWorkspacePatterns analyzes the codebase to understand organizational preferences
 func analyzeWorkspacePatterns(logger *utils.Logger) *WorkspacePatterns {
@@ -2976,7 +2163,8 @@ func generateRefactoringStrategy(userIntent string, contextFiles []string, patte
 }
 
 // Helper functions for workspace analysis
-func findGoFiles(dir string) ([]string, error) {
+// moved to workspace_helpers.go
+/*func findGoFiles(dir string) ([]string, error) {
 	var goFiles []string
 
 	cmd := exec.Command("find", dir, "-name", "*.go", "-type", "f")
@@ -2993,9 +2181,10 @@ func findGoFiles(dir string) ([]string, error) {
 	}
 
 	return goFiles, nil
-}
+}*/
 
-func countLines(filePath string) int {
+// moved to workspace_helpers.go
+/*func countLines(filePath string) int {
 	cmd := exec.Command("wc", "-l", filePath)
 	output, err := cmd.Output()
 	if err != nil {
@@ -3010,9 +2199,10 @@ func countLines(filePath string) int {
 	}
 
 	return 0
-}
+}*/
 
-func findPackageDirectories(dir string) []string {
+// moved to workspace_helpers.go
+/*func findPackageDirectories(dir string) []string {
 	var pkgDirs []string
 
 	cmd := exec.Command("find", dir, "-name", "*.go", "-type", "f", "-exec", "dirname", "{}", ";")
@@ -3032,15 +2222,16 @@ func findPackageDirectories(dir string) []string {
 	}
 
 	return pkgDirs
-}
+}*/
 
 // min helper function
-func min(a, b int) int {
+// moved to workspace_helpers.go
+/*func min(a, b int) int {
 	if a < b {
 		return a
 	}
 	return b
-}
+}*/
 
 // shouldEscalateToOrchestration determines if we should escalate to full orchestration
 // based on the type of error encountered
@@ -3249,179 +2440,28 @@ func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, e
 	for i, result := range context.ValidationResults {
 		contextSummary.WriteString(fmt.Sprintf("  %d. %s\n", i+1, result))
 	}
-	prompt := fmt.Sprintf(`You are an intelligent agent evaluating progress on a software development task. 
-
-%s
-
-TASK: Evaluate the current progress and decide the next action.
-
-CRITICAL FOR REFACTORING TASKS:
-- Creating skeleton files is only 20%% of the work
-- A refactoring is NOT complete until the source file is significantly reduced
-
-ANALYSIS REQUIREMENTS:
-1. **Progress Assessment**: What percentage of the original task is complete?
-2. **Current Status**: Is the agent on track, needs adjustment, has critical errors, or is completed?
-3. **Next Action Decision**: Based on the current state, what should happen next?
-4. **Reasoning**: Why is this the best next action?
-
-NOTE: Only report concerns for critical_error status - avoid unnecessary warnings about normal progress.
-
-AVAILABLE NEXT ACTIONS:
-- "continue": Proceed with the current plan (if we have one and no major issues)
-- "analyze_intent": Start with intent analysis (if no analysis has been done)
-- "create_plan": Create or recreate an edit plan (if no plan or plan needs revision)
-- "execute_edits": Execute the planned edit operations (if plan exists but edits not started)
-- "run_command": Execute shell commands for investigation or validation (specify commands)
-- "validate": Run validation checks on completed work
-- "escalate": Hand off to full orchestration for complex issues
-- "revise_plan": Create a new plan based on learnings (if current plan is inadequate)
-- "completed": Task is successfully completed
-
-DECISION LOGIC:
-- **EARLY TERMINATION**: For "review"/"analysis" tasks that don't modify code: if investigation completed successfully, choose "completed"
-- **EDIT EXECUTION PRIORITY**: If plan exists AND no edits executed (no "Edit operation completed" in operations): MUST return "execute_edits"
-- **STOP PLANNING LOOPS**: If plan exists AND multiple "Plan created/revised" operations but no actual edits: MUST return "execute_edits"
-- **PREVENT VALIDATION LOOPS**: If edits completed but validation failed: consider "completed" if main task accomplished
-- If iteration 1 and no intent analysis: "analyze_intent"
-- REFACTORING TASKS: If intent contains "refactor", "extract", "move", "split", "reorganize" AND intent analysis done: proceed to "create_plan" 
-- If investigation/search/analysis task WITHOUT refactoring intent AND commands already executed: "completed"
-- If intent analysis done but no plan AND task requires code changes: "create_plan"  
-- If edits done and simple task: "completed" (skip validation for simple changes)
-- If errors occurred: assess if they can be handled or need "revise_plan"
-- If task appears complete: "completed"
-- If current approach isn't working after 5+ iterations of analysis: "create_plan" to force progress
-- If stuck in planning loop (3+ revise_plan actions): "execute_edits" to force execution
-- If current approach isn't working: "run_command" for investigation or "revise_plan"
-
-TOOL USAGE PRIORITY:
-- Tasks with words like "find", "search", "grep", "list", "show", "check" should use "run_command"
-- Only use "create_plan" for tasks that require code modifications
-- Investigation and analysis tasks should use tools first, then create plans if changes are needed
-
-Respond with JSON:
-{
-  "status": "on_track|needs_adjustment|critical_error|completed",
-  "completion_percentage": 0-100,
-  "next_action": "continue|analyze_intent|create_plan|execute_edits|run_command|validate|revise_plan|completed",
-  "reasoning": "detailed explanation of why this action is best",
-  "concerns": [], // only include for critical_error status
-  "commands": ["command1", "command2"] // only if next_action is "run_command"
-}`, contextSummary.String())
-
+	prompt := BuildProgressEvaluationPrompt(contextSummary.String())
 	messages := []prompts.Message{
 		{Role: "system", Content: "You are an expert software development agent that excels at evaluating progress and making smart decisions. Always respond with valid JSON."},
 		{Role: "user", Content: prompt},
 	}
-
 	response, _, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 60*time.Second)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get progress evaluation: %w", err)
 	}
-
-	// Clean and validate the JSON response (concerns are optional now)
 	cleanedResponse, cleanErr := utils.CleanAndValidateJSONResponse(response, []string{"status", "completion_percentage", "next_action", "reasoning"})
 	if cleanErr != nil {
 		context.Logger.LogError(fmt.Errorf("CRITICAL: LLM returned invalid JSON for progress evaluation: %w\nRaw response: %s", cleanErr, response))
 		return nil, 0, fmt.Errorf("unrecoverable JSON validation error in progress evaluation: %w\nLLM Response: %s", cleanErr, response)
 	}
-
-	// Parse the cleaned JSON response
 	var evaluation ProgressEvaluation
 	err = json.Unmarshal([]byte(cleanedResponse), &evaluation)
 	if err != nil {
-		// JSON parsing failure is an unrecoverable error - the LLM should always return valid JSON
 		context.Logger.LogError(fmt.Errorf("CRITICAL: Failed to parse progress evaluation JSON from LLM: %w\nCleaned response: %s", err, cleanedResponse))
 		return nil, 0, fmt.Errorf("unrecoverable JSON parsing error in progress evaluation: %w\nCleaned Response: %s", err, cleanedResponse)
 	}
-
 	tokens := utils.EstimateTokens(prompt + response)
 	return &evaluation, tokens, nil
-}
-
-// executeAdaptiveAction executes the action decided by the progress evaluator
-func executeAdaptiveAction(context *AgentContext, evaluation *ProgressEvaluation) error {
-	context.Logger.LogProcessStep(fmt.Sprintf("🎯 Executing action: %s", evaluation.NextAction))
-
-	switch evaluation.NextAction {
-	case "analyze_intent":
-		return executeIntentAnalysis(context)
-
-	case "create_plan":
-		return executeCreatePlan(context)
-
-	case "execute_edits":
-		return executeEditOperations(context)
-
-	case "run_command":
-		return executeShellCommands(context, evaluation.Commands)
-
-	case "validate":
-		return executeValidation(context)
-
-	case "revise_plan":
-		return executeRevisePlan(context, evaluation)
-
-	case "completed":
-		context.Logger.LogProcessStep("✅ Task marked as completed by agent evaluation")
-		context.IsCompleted = true
-		return nil
-
-	case "continue":
-		context.Logger.LogProcessStep("▶️ Continuing with current plan")
-		return nil
-
-	default:
-		return fmt.Errorf("unknown action: %s", evaluation.NextAction)
-	}
-}
-
-// executeIntentAnalysis performs intent analysis
-func executeIntentAnalysis(context *AgentContext) error {
-	context.Logger.LogProcessStep("📋 Executing intent analysis...")
-
-	intentAnalysis, tokens, err := analyzeIntentWithMinimalContext(context.UserIntent, context.Config, context.Logger)
-	if err != nil {
-		return fmt.Errorf("intent analysis failed: %w", err)
-	}
-
-	context.IntentAnalysis = intentAnalysis
-	context.TokenUsage.IntentAnalysis += tokens
-	context.ExecutedOperations = append(context.ExecutedOperations, "Intent analysis completed")
-
-	// Determine task complexity for optimization
-	complexity := determineTaskComplexity(context.UserIntent, intentAnalysis)
-
-	// Store complexity in context for later use
-	context.TaskComplexity = complexity
-
-	complexityStr := map[TaskComplexityLevel]string{
-		TaskSimple:   "simple (fast-path)",
-		TaskModerate: "moderate (standard)",
-		TaskComplex:  "complex (full)",
-	}[complexity]
-
-	context.Logger.LogProcessStep(fmt.Sprintf("✅ Intent analyzed: %s complexity, %s category, optimization: %s",
-		intentAnalysis.Complexity, intentAnalysis.Category, complexityStr))
-
-	// IMMEDIATE EXECUTION OPTIMIZATION: If analysis detected a command that can be executed immediately
-	if intentAnalysis.CanExecuteNow && intentAnalysis.ImmediateCommand != "" {
-		context.Logger.LogProcessStep(fmt.Sprintf("🚀 Immediate execution detected: %s", intentAnalysis.ImmediateCommand))
-
-		// Execute the command immediately
-		err := executeShellCommands(context, []string{intentAnalysis.ImmediateCommand})
-		if err != nil {
-			context.Logger.LogProcessStep("⚠️ Immediate execution failed, falling back to standard workflow")
-		} else {
-			// Mark task as completed since immediate execution succeeded
-			context.Logger.LogProcessStep("✅ Task completed via immediate execution")
-			context.ExecutedOperations = append(context.ExecutedOperations, "Task completed via immediate command execution")
-			context.IsCompleted = true
-			return nil
-		}
-	}
-
-	return nil
 }
 
 // executeCreatePlan creates a detailed edit plan

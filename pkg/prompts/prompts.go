@@ -266,8 +266,8 @@ func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext
 			"    {\n" +
 			"      \"changes\": [\n" +
 			"        {\n" +
-			"          \"filepath\": \"pkg/llm/api.go\",\n" +
-			"          \"instruction\": \"In the GetCodeReview function, change 'modelName := cfg.OrchestrationModel' to 'modelName := cfg.EditingModel' on line 266.\"\n" +
+			"          \"filepath\": " + "`" + "pkg/llm/api.go" + "`" + ",\n" +
+			"          \"instruction\": " + "`" + "In the GetCodeReview function, change 'modelName := cfg.OrchestrationModel' to 'modelName := cfg.EditingModel' on line 266." + "`" + "\n" +
 			"        }\n" +
 			"      ]\n" +
 			"    }\n\n" +
@@ -275,8 +275,8 @@ func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext
 			"    {\n" +
 			"      \"changes\": [\n" +
 			"        {\n" +
-			"          \"filepath\": \"src/main.go\",\n" +
-			"          \"instruction\": \"Modify the existing calculateTotal function to also handle sum calculations by adding a new parameter 'operation' and extending the logic.\"\n" +
+			"          \"filepath\": " + "`" + "src/main.go" + "`" + ",\n" +
+			"          \"instruction\": " + "`" + "Modify the existing calculateTotal function to also handle sum calculations by adding a new parameter 'operation' and extending the logic." + "`" + "\n" +
 			"        }\n" +
 			"      ]\n" +
 			"    }\n\n"

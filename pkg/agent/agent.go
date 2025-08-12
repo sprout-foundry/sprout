@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -1296,7 +1295,8 @@ func buildFocusedEditInstructions(operation EditOperation, logger *utils.Logger)
 }
 
 // buildBasicFileContext is a fallback when workspace.json is not available
-func buildBasicFileContext(contextFiles []string, logger *utils.Logger) string {
+// moved to workspace_helpers.go
+/*func buildBasicFileContext(contextFiles []string, logger *utils.Logger) string {
 	var context strings.Builder
 	context.WriteString("Relevant Files (Basic Context):\n")
 
@@ -1315,7 +1315,7 @@ func buildBasicFileContext(contextFiles []string, logger *utils.Logger) string {
 	}
 
 	return context.String()
-}
+}*/
 
 // executeValidationFixPlan executes the fix plan using the editing model
 
@@ -1650,7 +1650,7 @@ func findFilesUsingShellCommands(userIntent string, workspaceInfo *WorkspaceInfo
 // WorkspacePatterns holds analysis of workspace organization patterns
 
 // analyzeWorkspacePatterns analyzes the codebase to understand organizational preferences
-func analyzeWorkspacePatterns(logger *utils.Logger) *WorkspacePatterns {
+/*func analyzeWorkspacePatterns(logger *utils.Logger) *WorkspacePatterns {
 	patterns := &WorkspacePatterns{
 		AverageFileSize:    0,
 		ModularityLevel:    "medium",
@@ -1709,10 +1709,10 @@ func analyzeWorkspacePatterns(logger *utils.Logger) *WorkspacePatterns {
 		patterns.AverageFileSize, patterns.ModularityLevel, largeFiles, len(goFiles))
 
 	return patterns
-}
+}*/
 
 // isLargeFileRefactoringTask determines if the task involves refactoring large files
-func isLargeFileRefactoringTask(userIntent string, contextFiles []string, logger *utils.Logger) bool {
+/*func isLargeFileRefactoringTask(userIntent string, contextFiles []string, logger *utils.Logger) bool {
 	intentLower := strings.ToLower(userIntent)
 
 	// Check for refactoring keywords
@@ -1738,10 +1738,10 @@ func isLargeFileRefactoringTask(userIntent string, contextFiles []string, logger
 	}
 
 	return false
-}
+}*/
 
 // extractSourceFileFromIntent extracts the main source file from user intent
-func extractSourceFileFromIntent(userIntent string, contextFiles []string) string {
+/*func extractSourceFileFromIntent(userIntent string, contextFiles []string) string {
 	intentLower := strings.ToLower(userIntent)
 
 	// Look for explicit file mentions
@@ -1757,10 +1757,10 @@ func extractSourceFileFromIntent(userIntent string, contextFiles []string) strin
 	}
 
 	return ""
-}
+}*/
 
 // analyzeFunctionsInFile analyzes a Go file to extract function and type information
-func analyzeFunctionsInFile(filePath string, logger *utils.Logger) string {
+/*func analyzeFunctionsInFile(filePath string, logger *utils.Logger) string {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		logger.Logf("Could not read file %s for function analysis: %v", filePath, err)
@@ -1838,10 +1838,10 @@ func analyzeFunctionsInFile(filePath string, logger *utils.Logger) string {
 	}
 
 	return strings.Join(result, "\n")
-}
+}*/
 
 // generateRefactoringStrategy creates a strategy for complex refactoring tasks
-func generateRefactoringStrategy(userIntent string, contextFiles []string, patterns *WorkspacePatterns, logger *utils.Logger) string {
+/*func generateRefactoringStrategy(userIntent string, contextFiles []string, patterns *WorkspacePatterns, logger *utils.Logger) string {
 	strategy := []string{
 		"INTELLIGENT REFACTORING STRATEGY:",
 		fmt.Sprintf("- Workspace prefers files with ~%d lines (current average)", patterns.AverageFileSize),
@@ -1875,7 +1875,7 @@ func generateRefactoringStrategy(userIntent string, contextFiles []string, patte
 	}...)
 
 	return strings.Join(strategy, "\n")
-}
+}*/
 
 // Helper functions for workspace analysis
 // moved to workspace_helpers.go
@@ -1976,191 +1976,17 @@ func executeCreatePlan(context *AgentContext) error {
 	return nil
 }
 
-// executeEditOperations executes the planned edit operations
-func executeEditOperations(context *AgentContext) error {
-	context.Logger.LogProcessStep("⚡ Executing planned edit operations...")
+// moved to editing.go
 
-	if context.CurrentPlan == nil {
-		return fmt.Errorf("cannot execute edits without a plan")
-	}
+// moved to shell.go
 
-	tokens, err := executeEditPlanWithErrorHandling(context.CurrentPlan, context)
-	if err != nil {
-		// Check if this is a non-critical error that shouldn't fail the entire task
-		if strings.Contains(err.Error(), "no changes detected") ||
-			strings.Contains(err.Error(), "file already") ||
-			strings.Contains(err.Error(), "minimal change") {
-			context.Logger.LogProcessStep("⚠️ Edit operation had minor issues but task may be complete")
-			context.ExecutedOperations = append(context.ExecutedOperations, "Edit operation completed with minor issues")
-			context.TokenUsage.CodeGeneration += tokens
-			return nil
-		}
-		return fmt.Errorf("edit execution failed: %w", err)
-	}
-
-	context.TokenUsage.CodeGeneration += tokens
-	context.ExecutedOperations = append(context.ExecutedOperations,
-		fmt.Sprintf("Executed %d edit operations", len(context.CurrentPlan.EditOperations)))
-
-	context.Logger.LogProcessStep(fmt.Sprintf("✅ Completed %d edit operations", len(context.CurrentPlan.EditOperations)))
-	return nil
-}
-
-// executeShellCommands runs the specified shell commands
-func executeShellCommands(context *AgentContext, commands []string) error {
-	context.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing %d shell commands...", len(commands)))
-
-	for i, command := range commands {
-		context.Logger.LogProcessStep(fmt.Sprintf("Running command %d: %s", i+1, command))
-
-		if command == "" {
-			continue
-		}
-
-		// Use shell to execute command to handle pipes, redirects, etc.
-		cmd := exec.Command("sh", "-c", command)
-		output, err := cmd.CombinedOutput()
-
-		// Truncate output immediately to prevent huge outputs from overwhelming the system
-		outputStr := string(output)
-		const maxOutputSize = 10000 // 10KB limit
-		if len(outputStr) > maxOutputSize {
-			outputStr = outputStr[:maxOutputSize] + "\n... (output truncated - limit 10KB)"
-		}
-
-		if err != nil {
-			errorMsg := fmt.Sprintf("Command failed: %s (output: %s)", err.Error(), outputStr)
-			context.Errors = append(context.Errors, errorMsg)
-			context.Logger.LogProcessStep(fmt.Sprintf("❌ Command %d failed: %s", i+1, errorMsg))
-		} else {
-			result := fmt.Sprintf("Command %d succeeded: %s", i+1, outputStr)
-			context.ExecutedOperations = append(context.ExecutedOperations, result)
-			context.Logger.LogProcessStep(fmt.Sprintf("✅ Command %d: %s", i+1, outputStr))
-		}
-	}
-
-	return nil
-}
-
-// executeValidation runs validation checks
-func executeValidation(context *AgentContext) error {
-	context.Logger.LogProcessStep("🔍 Executing validation checks...")
-
-	if context.IntentAnalysis == nil {
-		return fmt.Errorf("cannot validate without intent analysis")
-	}
-
-	// Skip validation for read-only/analysis tasks
-	if context.IntentAnalysis.Category == "review" && !strings.Contains(strings.ToLower(context.UserIntent), "refactor") {
-		context.Logger.LogProcessStep("✅ Skipping validation for read-only analysis task")
-		context.ValidationResults = append(context.ValidationResults, "✅ Validation skipped (read-only task)")
-		context.ExecutedOperations = append(context.ExecutedOperations, "Validation skipped (read-only task)")
-		return nil
-	}
-
-	// Skip validation for documentation-only changes to avoid build failures
-	if context.IntentAnalysis.Category == "docs" && context.TaskComplexity == TaskSimple {
-		context.Logger.LogProcessStep("✅ Skipping validation for documentation-only changes")
-		context.ValidationResults = append(context.ValidationResults, "✅ Validation skipped (docs-only)")
-		context.ExecutedOperations = append(context.ExecutedOperations, "Validation skipped (docs-only)")
-		return nil
-	}
-
-	// Fast-path validation for simple tasks
-	if context.TaskComplexity == TaskSimple {
-		return executeSimpleValidation(context)
-	}
-
-	// Full validation for moderate and complex tasks
-	tokens, err := validateChangesWithIteration(context.IntentAnalysis, context.UserIntent, context.Config, context.Logger, context.TokenUsage)
-	if err != nil {
-		context.Errors = append(context.Errors, fmt.Sprintf("Validation failed: %v", err))
-		context.ValidationResults = append(context.ValidationResults, fmt.Sprintf("❌ Validation failed: %v", err))
-		context.ValidationFailed = true
-		context.Logger.LogProcessStep("❌ Validation failed - marking for recovery")
-		return nil // Don't fail the agent - let it handle the validation failure
-	}
-
-	context.TokenUsage.Validation += tokens
-	context.ValidationResults = append(context.ValidationResults, "✅ Validation passed")
-	context.ExecutedOperations = append(context.ExecutedOperations, "Validation completed successfully")
-
-	context.Logger.LogProcessStep("✅ Validation completed successfully")
-	return nil
-}
+// moved to validation_exec.go
 
 // executeSimpleValidation performs minimal validation for simple tasks to avoid overhead
-func executeSimpleValidation(context *AgentContext) error {
-	context.Logger.LogProcessStep("🚀 Fast validation for simple task...")
-
-	// Enhanced validation for refactoring tasks
-	if strings.Contains(strings.ToLower(context.UserIntent), "refactor") ||
-		strings.Contains(strings.ToLower(context.UserIntent), "extract") {
-		return executeRefactoringValidation(context)
-	}
-
-	// For simple tasks (like adding comments), just check basic syntax
-	if context.IntentAnalysis.Category == "docs" {
-		// Just run a basic build check for documentation changes
-		cmd := exec.Command("go", "build", ".")
-		output, err := cmd.CombinedOutput()
-
-		if err != nil {
-			errorMsg := fmt.Sprintf("Validation failed - compilation errors detected: %v\nOutput: %s", err, string(output))
-			context.Errors = append(context.Errors, errorMsg)
-			context.ValidationResults = append(context.ValidationResults, fmt.Sprintf("❌ %s", errorMsg))
-			context.Logger.LogProcessStep("❌ Validation failed - compilation errors found")
-			context.ValidationFailed = true
-			return nil // Don't fail the agent - let it handle the validation failure
-		}
-
-		context.ValidationResults = append(context.ValidationResults, "✅ Simple validation passed (syntax check)")
-		context.ExecutedOperations = append(context.ExecutedOperations, "Simple validation completed")
-		context.Logger.LogProcessStep("✅ Simple validation completed - syntax check passed")
-		return nil
-	}
-
-	// For ALL other tasks involving Go code, run compilation check
-	context.Logger.LogProcessStep("🔍 Running compilation check for code changes...")
-
-	cmd := exec.Command("go", "build", "./...")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		errorMsg := fmt.Sprintf("Validation failed - compilation errors detected: %v\nOutput: %s", err, string(output))
-		context.Errors = append(context.Errors, errorMsg)
-		context.ValidationResults = append(context.ValidationResults, fmt.Sprintf("❌ %s", errorMsg))
-		context.Logger.LogProcessStep("❌ Validation failed - compilation errors found")
-		context.ValidationFailed = true
-		return nil // Don't fail the agent - let it handle the validation failure
-	}
-
-	context.ValidationResults = append(context.ValidationResults, "✅ Simple validation passed (compilation check)")
-	context.ExecutedOperations = append(context.ExecutedOperations, "Simple validation completed")
-	context.Logger.LogProcessStep("✅ Simple validation completed - compilation check passed")
-	return nil
-}
+// moved to validation_exec.go
 
 // executeRefactoringValidation performs thorough validation for refactoring tasks
-func executeRefactoringValidation(context *AgentContext) error {
-	context.Logger.LogProcessStep("🔍 Enhanced validation for refactoring task...")
-
-	// First, run basic compilation check
-	cmd := exec.Command("go", "build", "./...")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		errorMsg := fmt.Sprintf("Validation failed - refactoring introduced compilation errors: %v\nOutput: %s", err, string(output))
-		context.Errors = append(context.Errors, errorMsg)
-		context.ValidationResults = append(context.ValidationResults, fmt.Sprintf("❌ %s", errorMsg))
-		context.Logger.LogProcessStep("❌ Refactoring validation failed - compilation errors found")
-		context.ValidationFailed = true
-		return nil // Don't fail the agent - let it handle the validation failure
-	}
-
-	context.ValidationResults = append(context.ValidationResults, "✅ Refactoring validation passed (compilation + goal achieved)")
-	context.ExecutedOperations = append(context.ExecutedOperations, "Refactoring validation completed")
-	context.Logger.LogProcessStep("✅ Refactoring validation completed successfully")
-	return nil
-}
+// moved to validation_exec.go
 
 // executeRevisePlan creates a new plan based on current learnings
 func executeRevisePlan(context *AgentContext, evaluation *ProgressEvaluation) error {
@@ -2200,63 +2026,10 @@ func executeRevisePlan(context *AgentContext, evaluation *ProgressEvaluation) er
 }
 
 // executeValidationFailureRecovery analyzes validation failures and creates targeted fixes
-func executeValidationFailureRecovery(context *AgentContext) error {
-	context.Logger.LogProcessStep("🔧 Analyzing validation failures and creating recovery plan...")
-
-	// Extract compilation errors from validation results
-	var compilationErrors []string
-	for _, result := range context.ValidationResults {
-		if strings.Contains(result, "❌") && (strings.Contains(result, "compilation") || strings.Contains(result, "Compilation")) {
-			compilationErrors = append(compilationErrors, result)
-		}
-	}
-
-	if len(compilationErrors) == 0 {
-		return fmt.Errorf("validation failed but no compilation errors found in results")
-	}
-
-	// Create a fix plan using the error analysis
-	fixInstructions := fmt.Sprintf(`VALIDATION FAILURE RECOVERY
-
-Original Intent: %s
-
-COMPILATION ERRORS DETECTED:
-%s
-
-TASK: Analyze these compilation errors and create targeted fixes to resolve the syntax/compilation issues.
-
-The previous edits introduced compilation errors. Please:
-1. Identify the specific syntax issues
-2. Create targeted edits to fix the compilation problems  
-3. Ensure the fixes maintain the original intent of the changes
-4. Focus only on fixing compilation errors, don't add new features
-
-Please create a fix plan that addresses these compilation issues.`,
-		context.UserIntent,
-		strings.Join(compilationErrors, "\n"))
-
-	// Create fix plan using orchestration model
-	editPlan, tokens, err := createDetailedEditPlan(fixInstructions, context.IntentAnalysis, context.Config, context.Logger)
-	if err != nil {
-		return fmt.Errorf("failed to create validation fix plan: %w", err)
-	}
-
-	// Replace current plan with fix plan
-	context.CurrentPlan = editPlan
-	context.TokenUsage.Planning += tokens
-	context.ValidationFailed = false // Reset flag since we're addressing it
-
-	context.ExecutedOperations = append(context.ExecutedOperations,
-		fmt.Sprintf("Created validation fix plan: %d operations to resolve compilation errors", len(editPlan.EditOperations)))
-
-	context.Logger.LogProcessStep(fmt.Sprintf("✅ Validation fix plan created: %d operations for %d files",
-		len(editPlan.EditOperations), len(editPlan.FilesToEdit)))
-
-	return nil
-}
+// moved to validation_exec.go
 
 // executeEditPlanWithErrorHandling executes edit plan with proper error handling for agent context
-func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext) (int, error) {
+/*func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext) (int, error) {
 	totalTokens := 0
 
 	// Track changes for context
@@ -2388,7 +2161,7 @@ func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext)
 	}
 
 	return totalTokens, nil
-}
+}*/
 
 // handleErrorEscalation handles errors by using the agent's context to make intelligent decisions
 // summarizeContextIfNeeded summarizes agent context if it gets too large

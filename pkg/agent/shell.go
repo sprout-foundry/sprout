@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 // executeShellCommands runs the specified shell commands
@@ -39,4 +40,33 @@ func executeShellCommands(context *AgentContext, commands []string) error {
 	}
 
 	return nil
+}
+
+// isSimpleShellCommand returns true for trivial, safe commands we allow for fast-path execution
+func isSimpleShellCommand(s string) bool {
+	t := strings.TrimSpace(strings.ToLower(s))
+	if t == "" {
+		return false
+	}
+	// Very conservative allowlist patterns
+	if strings.HasPrefix(t, "echo ") {
+		return true
+	}
+	if t == "ls" || strings.HasPrefix(t, "ls ") {
+		return true
+	}
+	if strings.HasPrefix(t, "pwd") {
+		return true
+	}
+	if strings.HasPrefix(t, "whoami") {
+		return true
+	}
+	// Basic grep/find read-only searches
+	if strings.HasPrefix(t, "grep ") {
+		return true
+	}
+	if strings.HasPrefix(t, "find ") {
+		return true
+	}
+	return false
 }

@@ -242,58 +242,6 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 	return strings.TrimSpace(response), nil
 }
 
-// GetChangesForRequirement asks the LLM to break down a high-level requirement into file-specific changes.
-func GetChangesForRequirement(cfg *config.Config, requirementInstruction string, workspaceContext string) ([]types.OrchestrationChange, error) {
-
-	modelName := cfg.OrchestrationModel
-	if modelName == "" {
-		modelName = cfg.EditingModel // Fallback to editing model if orchestration model is not configured
-		fmt.Print(prompts.UsingModel(modelName))
-	}
-	fmt.Print(prompts.UsingModel(modelName))
-
-	messages := prompts.BuildChangesForRequirementMessages(requirementInstruction, workspaceContext, cfg.Interactive)
-
-	// Use a longer timeout for this, as it's a planning step
-	response, _, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute) // No search grounding for this planning step
-	if err != nil {
-		return nil, fmt.Errorf("failed to get changes for requirement from LLM: %w", err)
-	}
-
-	if response == "" {
-		return nil, fmt.Errorf("LLM returned an empty response for changes")
-	}
-
-	// Try to extract JSON from response (handles both raw JSON and code block JSON)
-	var jsonStr string
-	if strings.Contains(response, "```json") {
-		// Handle code block JSON
-		parts := strings.Split(response, "```json")
-		if len(parts) > 1 {
-			jsonPart := parts[1]
-			end := strings.Index(jsonPart, "```")
-			if end > 0 {
-				jsonStr = strings.TrimSpace(jsonPart[:end])
-			} else {
-				jsonStr = strings.TrimSpace(jsonPart)
-			}
-		}
-	} else if strings.Contains(response, `"changes"`) { // Heuristic to detect raw JSON
-		jsonStr = response
-	}
-
-	if jsonStr == "" {
-		return nil, fmt.Errorf("LLM response did not contain expected JSON for changes: %s", response)
-	}
-
-	var changesList types.OrchestrationChangesList
-	if err := json.Unmarshal([]byte(jsonStr), &changesList); err != nil {
-		return nil, fmt.Errorf("failed to parse changes JSON from LLM response: %w\nResponse was: %s", err, response)
-	}
-
-	return changesList.Changes, nil
-}
-
 // GetCodeReview asks the LLM to review a combined diff of changes against the original prompt.
 func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceContext string) (*types.CodeReviewResult, error) {
 	// Use a dedicated CodeReviewModel if available, otherwise fall back to EditingModel

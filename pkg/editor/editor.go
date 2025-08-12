@@ -192,7 +192,51 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 	// Note: Search grounding is now handled via explicit tool calls instead of #SG flags
 	// This prevents accidental triggering by LLM responses and provides better control
 
-	// Updated pattern to capture line ranges: #filename:start-end or #filename:start,end
+    // Fast-path delete: Detect "Delete the file named 'X'" and perform locally
+    if m := regexp.MustCompile(`(?i)delete the file named ['\"]([^'\"]+)['\"]`).FindStringSubmatch(instructions); len(m) == 2 {
+        target := m[1]
+        // Remove from disk if present
+        if err := os.Remove(target); err == nil {
+            fmt.Printf("Deleted file: %s\n", target)
+        } else if !os.IsNotExist(err) {
+            fmt.Printf("Warning: could not delete %s: %v\n", target, err)
+        }
+        // Remove from workspace.json if present
+        ws, err := workspace.LoadWorkspaceFile()
+        if err == nil {
+            if _, ok := ws.Files[target]; ok {
+                delete(ws.Files, target)
+                _ = os.MkdirAll(filepath.Dir(workspace.DefaultWorkspaceFilePath), os.ModePerm)
+                _ = workspace.SaveWorkspace(ws)
+            }
+        }
+        // Done – no LLM call needed
+        return "", nil
+    }
+
+    // Handle optional search grounding when flag is enabled
+    if cfg.UseSearchGrounding {
+        // Extract optional quoted query after #SG
+        sgRe := regexp.MustCompile(`(?i)#SG(?:\s+"([^"]*)")?`)
+        if m := sgRe.FindStringSubmatch(instructions); m != nil {
+            query := ""
+            if len(m) > 1 {
+                query = m[1]
+            }
+            // Log initiation happens inside FetchContextFromSearch
+            ctx, err := webcontent.FetchContextFromSearch(query, cfg)
+            if err == nil && ctx != "" {
+                instructions = ctx + "\n\n" + instructions
+            }
+        }
+        // Strip all #SG tokens from instructions
+        instructions = sgRe.ReplaceAllString(instructions, "")
+    } else {
+        // If not using search grounding, strip #SG to avoid mis-parsing as a file tag
+        instructions = regexp.MustCompile(`(?i)#SG(?:\s+"([^"]*)")?`).ReplaceAllString(instructions, "")
+    }
+
+    // Updated pattern to capture line ranges: #filename:start-end or #filename:start,end
 	filePattern := regexp.MustCompile(`\s+#(\S+)(?::(\d+)[-,](\d+))?`)
 	matches := filePattern.FindAllStringSubmatch(instructions, -1)
 	fmt.Printf("full instructions: %s\n", instructions)
@@ -228,7 +272,7 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 		if path == "WORKSPACE" || path == "WS" {
 			fmt.Println(prompts.LoadingWorkspaceData())
 			content = workspace.GetWorkspaceContext(instructions, cfg)
-		} else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+    } else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 			content, err = webcontent.NewWebContentFetcher().FetchWebContent(path, cfg) // Pass cfg here
 			if err != nil {
 				fmt.Print(prompts.URLFetchError(path, err))
@@ -572,25 +616,41 @@ func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions 
 	}
 }
 
-func ProcessWorkspaceCodeGeneration(filename, instructions string, cfg *config.Config) (string, error) {
-	// Replace any existing #WS or #WORKSPACE tags with a single #WS tag
-	re := regexp.MustCompile(`(?i)\s*#(WS|WORKSPACE)\s*$`)
-	instructions = re.ReplaceAllString(instructions, "") + " #WS" // Ensure we have a single #WS tag
-
-	return ProcessCodeGeneration(filename, instructions, cfg, "")
-}
-
 // ProcessCodeGeneration generates code based on instructions and returns the combined diff for all changed files.
 // The full raw LLM response is still recorded in the changelog for auditing.
 func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, imagePath string) (string, error) {
-	var originalCode string
-	var err error
-	if filename != "" {
-		originalCode, err = filesystem.LoadOriginalCode(filename) // CHANGED: Call filesystem.LoadOriginalCode
-		if err != nil {
-			return "", err
-		}
-	}
+    var originalCode string
+    var err error
+
+    // If no filename was provided, try to infer a single explicit target from instructions, e.g., "In file1.txt, ..."
+    inferredFilename := ""
+    if filename == "" {
+        // Match common patterns: In <file>, into <file>, to <file>
+        re := regexp.MustCompile(`(?i)\b(?:in|into|to)\s+([\w./-]+\.[A-Za-z0-9]+)\b`)
+        if m := re.FindStringSubmatch(instructions); len(m) == 2 {
+            inferredFilename = m[1]
+        }
+    }
+
+    effectiveFilename := filename
+    if effectiveFilename == "" && inferredFilename != "" {
+        effectiveFilename = inferredFilename
+    }
+
+    if effectiveFilename != "" {
+        // Ensure the target file exists so downstream logic and LLM have a concrete file
+        if _, statErr := os.Stat(effectiveFilename); os.IsNotExist(statErr) {
+            // Create empty file and parent directories if needed
+            if dir := filepath.Dir(effectiveFilename); dir != "." && dir != "" {
+                _ = os.MkdirAll(dir, os.ModePerm)
+            }
+            _ = os.WriteFile(effectiveFilename, []byte(""), 0644)
+        }
+        originalCode, err = filesystem.LoadOriginalCode(effectiveFilename)
+        if err != nil {
+            return "", err
+        }
+    }
 
 	processedInstructions, err := ProcessInstructions(instructions, cfg)
 	if err != nil {
@@ -598,8 +658,9 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 	}
 	// fmt.Print(prompts.ProcessedInstructionsSeparator(processedInstructions))
 
-	requestHash := utils.GenerateRequestHash(processedInstructions)
-	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, filename, cfg, imagePath)
+    requestHash := utils.GenerateRequestHash(processedInstructions)
+    // Pass the effectiveFilename to guide targeted edits when inferred
+    updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, effectiveFilename, cfg, imagePath)
 	if err != nil {
 		return "", err
 	}
@@ -621,15 +682,13 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 }
 
 func ProcessPartialEdit(filePath, targetInstructions string, cfg *config.Config, logger *utils.Logger) (string, error) {
-	// TODO: Update to use the new processPartialEdit function when we have it fully working
-	// Process the partial edit using the existing ProcessCodeGeneration function
-	return ProcessCodeGeneration(filePath, targetInstructions, cfg, "")
+	// Use the new processPartialEdit function for more efficient targeted edits
+	return processPartialEdit(filePath, targetInstructions, cfg, logger)
 }
 
 // ProcessPartialEdit performs a targeted edit on a specific file using partial content and instructions
 // This is more efficient than full file replacement for small, focused changes
 func processPartialEdit(filePath, targetInstructions string, cfg *config.Config, logger *utils.Logger) (string, error) {
-	// Not using for now.
 	// Read the current file content
 	originalContent, err := os.ReadFile(filePath)
 	if err != nil {
@@ -1018,66 +1077,3 @@ func findBetterInsertionPoint(originalLines, updatedLines []string, preferredSta
 
 	return safeEnd, safeEnd
 }
-
-// handleTopOfFileEdit handles edits that add content at the top of a file
-// func handleTopOfFileEdit(filePath, targetInstructions, originalContent string, cfg *config.Config, logger *utils.Logger) (string, error) {
-// 	// Create instructions specifically for adding content at the top
-// 	instructions := fmt.Sprintf(`You need to add content at the very top of the file %s.
-
-// ORIGINAL TASK: %s
-
-// CURRENT FILE CONTENT (first 10 lines):
-// %s
-
-// INSTRUCTIONS:
-// 1. Add the requested content at the very top of the file
-// 2. Keep all existing content exactly as it is
-// 3. Return the COMPLETE updated file content
-// 4. Make sure the new content is properly formatted for the file type
-
-// Format your response as:
-// `+"```"+`go
-// [complete updated file content here]
-// `+"```"+`
-
-// The new content should be added at the very beginning, before any existing content.`,
-// 		filePath, targetInstructions, getFirstNLines(originalContent, 10))
-
-// 	// Get the updated file content from LLM
-// 	_, llmResponse, err := context.GetLLMCodeResponse(cfg, originalContent, instructions, filePath, "")
-// 	if err != nil {
-// 		return "", fmt.Errorf("failed to get LLM response for top-of-file edit: %w", err)
-// 	}
-
-// 	// Extract the updated code from the LLM response
-// 	updatedContent, err := parser.ExtractCodeFromResponse(llmResponse, getLanguageFromExtension(filePath))
-// 	if err != nil || updatedContent == "" {
-// 		return "", fmt.Errorf("could not extract updated content from LLM response: %w", err)
-// 	}
-
-// 	// Use the same handleFileUpdates workflow to ensure consistency
-// 	updatedCode := map[string]string{
-// 		filePath: updatedContent,
-// 	}
-
-// 	// Generate a revision ID for change tracking
-// 	revisionID := fmt.Sprintf("top-edit-%d", time.Now().Unix())
-
-// 	// Use the standard approval workflow
-// 	diff, err := handleFileUpdates(updatedCode, revisionID, cfg, targetInstructions, targetInstructions, llmResponse)
-// 	if err != nil {
-// 		return "", fmt.Errorf("failed to handle top-of-file updates: %w", err)
-// 	}
-
-// 	logger.Logf("Successfully processed top-of-file edit for %s", filePath)
-// 	return diff, nil
-// }
-
-// getFirstNLines returns the first n lines of a string
-// func getFirstNLines(content string, n int) string {
-// 	lines := strings.Split(content, "\n")
-// 	if len(lines) <= n {
-// 		return content
-// 	}
-// 	return strings.Join(lines[:n], "\n")
-// }

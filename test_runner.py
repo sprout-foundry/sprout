@@ -102,8 +102,8 @@ Examples:
     )
     parser.add_argument(
         '-m', '--model',
-        default='lambda-ai:qwen25-coder-32b-instruct',
-        help='Specify the model name to use for tests (default: lambda-ai:qwen25-coder-32b-instruct).'
+        default='deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct',
+        help='Specify the model name to use for tests (default: deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct).'
     )
     parser.add_argument(
         '--single',
@@ -212,6 +212,10 @@ Examples:
             test_name = result.stdout.strip()
             if not test_name:
                 logging.warning(f"'get_test_name' in {script_path.name} returned an empty name. Skipping this test.")
+                continue
+            # Temporarily skip Orchestration Feature test per user instruction
+            if test_name == 'Orchestration Feature':
+                logging.info("Skipping test 'Orchestration Feature' temporarily")
                 continue
             tests.append({'name': test_name, 'path': script_path})
             print(f"Discovered Test: {test_name}")

@@ -71,16 +71,21 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 			break
 		}
 
-		// Load fresh workspace context for each question
-		fmt.Println("\nAnalyzing workspace to answer your question...")
-		workspaceContext := workspace.GetWorkspaceContext(question, cfg)
-		if workspaceContext == "" {
-			fmt.Println("Warning: Could not load workspace context for this question.")
-		}
-		fmt.Println("Workspace analysis complete.")
+		var workspaceContext string
+		var userPrompt string
 
-		// Combine question and context into a single user message
-		userPrompt := fmt.Sprintf("My question is: '%s'\n\nHere is the relevant context from my workspace:\n\n--- Workspace Context ---\n%s\n\n--- End Workspace Context ---", question, workspaceContext)
+		// Load fresh workspace context for each question, unless skipping is requested
+		// Default behavior: include workspace context (feature flag can be added later)
+		if true { // Always include context for now
+			fmt.Println("\nAnalyzing workspace to answer your question...")
+			workspaceContext = workspace.GetWorkspaceContext(question, cfg)
+			if workspaceContext == "" {
+				fmt.Println("Warning: Could not load workspace context for this question.")
+			}
+			fmt.Println("Workspace analysis complete.")
+			// Combine question and context into a single user message
+			userPrompt = fmt.Sprintf("My question is: '%s'\n\nHere is the relevant context from my workspace:\n\n--- Workspace Context ---\n%s\n\n--- End Workspace Context ---", question, workspaceContext)
+		}
 
 		// Add combined user message to history
 		messages = append(messages, prompts.Message{Role: "user", Content: userPrompt})
@@ -141,17 +146,14 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 	fmt.Println("\nGoodbye!")
 }
 
-// readUserInput reads a single line of input using a buffered reader.
-// This replaces the complex raw mode handling with standard line input.
+// readUserInput reads a single line from the provided reader and trims whitespace.
+// Returns "exit" on EOF or read error to gracefully terminate the loop.
 func readUserInput(reader *bufio.Reader) string {
-	fmt.Print("\nYou: ")
 	input, err := reader.ReadString('\n')
+	if err == io.EOF {
+		return "exit"
+	}
 	if err != nil {
-		// If there's an error (like EOF, Ctrl+D), treat it as an exit command
-		if err == io.EOF {
-			return "exit"
-		}
-		// Log other errors but still return "exit" to stop the loop
 		log.Printf("Error reading input: %v", err)
 		return "exit"
 	}

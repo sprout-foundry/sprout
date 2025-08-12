@@ -19,6 +19,7 @@ var (
 	skipPrompt     bool
 	nonInteractive bool
 	imagePath      string
+    useSearchGrounding bool
 )
 
 var codeCmd = &cobra.Command{
@@ -56,6 +57,7 @@ When using the --image flag, ensure your model supports vision input. Vision-cap
 		}
 		cfg.SkipPrompt = skipPrompt
 		cfg.Interactive = !nonInteractive
+        cfg.UseSearchGrounding = useSearchGrounding
 
 		fmt.Println(prompts.ProcessingCodeGeneration()) // Use prompt
 		startTime := time.Now()
@@ -75,4 +77,5 @@ func init() {
 	codeCmd.Flags().BoolVar(&skipPrompt, "skip-prompt", false, "Skip user prompt for applying changes")
 	codeCmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "Disable interactive context requests from the LLM")
 	codeCmd.Flags().StringVarP(&imagePath, "image", "i", "", "Path to an image file to use as UI reference")
+    codeCmd.Flags().BoolVar(&useSearchGrounding, "use-search-grounding", false, "Enable web content search grounding when instructions contain #SG [optional query]")
 }

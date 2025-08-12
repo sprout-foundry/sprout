@@ -383,92 +383,12 @@ func GenerateRequirementsFailed(err error) string {
 	return fmt.Sprintf("Failed to generate requirements: %v", err)
 }
 
-func EmptyOrchestrationPlan() string {
-	return "LLM returned an empty orchestration plan. Nothing to do."
-}
-
-func GeneratedPlanHeader() string {
-	return "Generated Plan:"
-}
-
-func PlanStep(index int, filepath, instruction string) string {
-	return fmt.Sprintf("  %d. File: %s, Instruction: %s", index+1, filepath, instruction)
-}
-
-func ApplyPlanPrompt() string {
-	return "\nDo you want to apply these changes? (y/n): "
-}
-
-func OrchestrationCancelled() string {
-	return "Orchestration cancelled by user."
-}
-
 func OrchestrationError(err error) string {
 	return fmt.Sprintf("Orchestration failed: %v", err)
 }
 
 func OrchestrationFinishedSuccessfully() string {
 	return "Orchestration finished successfully!"
-}
-
-func SkippingCompletedStep(instruction string) string {
-	return fmt.Sprintf("Skipping completed step: %s", instruction)
-}
-
-func RetryingFailedStep(instruction string) string {
-	return fmt.Sprintf("Retrying failed step: %s", instruction)
-}
-
-func ExecutingStep(instruction string) string {
-	return fmt.Sprintf("Executing step: %s", instruction)
-}
-
-func ProcessingFile(filepath string) string {
-	return fmt.Sprintf("Processing file: %s", filepath)
-}
-
-func RetryAttempt(attempt, maxAttempts int, instruction string) string {
-	return fmt.Sprintf("Retry attempt %d/%d for instruction: %s", attempt, maxAttempts, instruction)
-}
-
-func ProcessInstructionFailed(filepath string, err error) string {
-	return fmt.Sprintf("Failed to process instruction for file %s: %v", filepath, err)
-}
-
-func ProcessRequirementFailed(filepath string, err error) string {
-	return fmt.Sprintf("Failed to process requirement for file %s: %v", filepath, err)
-}
-
-func SetupStepCompleted(instruction string) string {
-	return fmt.Sprintf("Setup step completed: %s", instruction)
-}
-
-func SetupFailedAttempt(attempt int, err error) string {
-	return fmt.Sprintf("Setup failed on attempt %d: %v", attempt, err)
-}
-
-func ValidationFailureContextSetupScriptFailed(err error) string {
-	return fmt.Sprintf("The setup script failed, which may indicate an issue with the generated code (e.g., incorrect dependencies) or the setup script itself. Error: %s", err.Error())
-}
-
-func ValidationFailedAttempt(attempt int, err error) string {
-	return fmt.Sprintf("Validation script failed on attempt %d: %v", attempt, err)
-}
-
-func ValidationFailureContextValidationScriptFailed(err error) string {
-	return fmt.Sprintf("The validation script failed, which may indicate an issue with the generated code. Error: %s", err.Error())
-}
-
-func SaveProgressFailed(filepath string, err error) string {
-	return fmt.Sprintf("Step for %s completed, but failed to save progress: %v", filepath, err)
-}
-
-func StepCompleted(instruction string) string {
-	return fmt.Sprintf("--- Step Completed: %s ---", instruction)
-}
-
-func StepFailedAfterAttempts(instruction string, maxAttempts int, err error) string {
-	return fmt.Sprintf("Step '%s' failed after %d attempts: %v", instruction, maxAttempts, err)
 }
 
 func GeneratedSearchQuery(query string) string {

@@ -34,7 +34,7 @@ run_test_logic() {
     # 3. Run ledit again. It should use the cached info for other files but re-analyze script.py.
     # The model_name is passed from the test runner (e.g., test.sh)
     echo "Running 'ledit code' to update file1.txt based on script.py using model: $model_name"
-    ../../ledit code "In file1.txt, write a comment describing what the python script does now. #WORKSPACE" -f file1.txt -m "$model_name" --non-interactive --skip-prompt
+    ../../ledit code "Update file1.txt by inserting a single comment at the top describing what script.py does now. Return ONLY a fenced code block for file1.txt containing the complete updated file contents. #WORKSPACE" -f file1.txt -m "$model_name" --non-interactive --skip-prompt
 
     echo
     echo "--- Verifying Test ---"

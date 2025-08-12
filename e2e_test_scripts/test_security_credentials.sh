@@ -13,10 +13,10 @@ run_test_logic() {
     mkdir -p .ledit
     cat <<EOF > .ledit/config.json
 {
-    "editing_model": "lambda-ai:llama3.3-70b-instruct-fp8",
-    "summary_model": "lambda-ai:hermes3-8b",
-    "workspace_model": "lambda-ai:llama3.3-70b-instruct-fp8",
-    "orchestration_model": "lambda-ai:llama3.3-70b-instruct-fp8",
+    "editing_model": "deepinfra:deepseek-ai/DeepSeek-V3-0324",
+    "summary_model": "deepinfra:mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+    "workspace_model": "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "orchestration_model": "deepinfra:Qwen/Qwen3-Coder-480B-A35B-Instruct",
     "local_model": "qwen2.5-coder:32b",
     "enable_security_checks": true,
     "track_with_git": false

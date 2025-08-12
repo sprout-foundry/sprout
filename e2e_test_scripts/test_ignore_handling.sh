@@ -60,8 +60,8 @@ run_test_logic() {
     cat .ledit/leditignore
     echo "-----------------------------------"
 
-    # Run ledit again to trigger workspace update with all new rules.
-    ../ledit code "Acknowledge new ignore rules. #WORKSPACE" --skip-prompt -m "$model_name" --non-interactive
+    # Trigger a lightweight workspace refresh without asking for code changes
+    ../ledit code "#WORKSPACE" --skip-prompt -m "$model_name" --non-interactive
 
     echo
     echo "--- Verifying Test ---"

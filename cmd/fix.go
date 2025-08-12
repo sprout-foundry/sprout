@@ -81,13 +81,8 @@ var fixCmd = &cobra.Command{
 			problemDescriptionBuilder.WriteString("\n-------\n")
 		}
 		problemDescription := problemDescriptionBuilder.String()
-
 		var instructions string
-		if fixSkipWorkspaceContextFlag {
-			instructions = fmt.Sprintf("Fix the following command output: \n%s\n ", problemDescription)
-		} else {
-			instructions = fmt.Sprintf("Fix the following command output: \n%s\n  making sure to include all files that have errors and files they reference. #WS", problemDescription)
-		}
+		instructions = fmt.Sprintf("Fix the following command output: \n%s\n ", problemDescription)
 
 		// Prepend optional instructions if provided
 		if fixOptionalInstructions != "" {
@@ -97,7 +92,11 @@ var fixCmd = &cobra.Command{
 		fmt.Println("Attempting to fix errors with LLM...")
 		startTime := time.Now()
 
-		_, err = editor.ProcessCodeGeneration("", instructions, cfg, "")
+        // Optionally include workspace context via instruction tag
+        if !fixSkipWorkspaceContextFlag {
+            instructions = instructions + " #WORKSPACE"
+        }
+        _, err = editor.ProcessCodeGeneration("", instructions, cfg, "")
 		if err != nil {
 			log.Fatalf("Error during code generation: %v", err)
 		}

@@ -55,6 +55,7 @@ type Config struct {
 	PresencePenalty          float64              `json:"presence_penalty"`           // NEW: Field for presence penalty
 	FrequencyPenalty         float64              `json:"frequency_penalty"`          // NEW: Field for frequency penalty
 	RetryAttemptCount        int                  `json:"-"`                          // Internal field to track retry attempts
+    UseSearchGrounding       bool                 `json:"-"`                          // Command-scoped flag to enable search grounding
 }
 
 func getHomeConfigPath() (string, string) {
@@ -101,16 +102,16 @@ func getLocalModel(skipPrompt bool) string {
 
 func (cfg *Config) setDefaultValues() {
 	if cfg.SummaryModel == "" {
-		cfg.SummaryModel = "lambda-ai:llama3.1-8b-instruct"
+		cfg.SummaryModel = "deepinfra:meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
 	}
 	if cfg.WorkspaceModel == "" {
-		cfg.WorkspaceModel = "lambda-ai:deepseek-llama3.3-70b"
+		cfg.WorkspaceModel = "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo"
 	}
 	if cfg.EditingModel == "" {
-		cfg.EditingModel = "lambda-ai:deepseek-v3-0324" // Cheap decent model option would be "lambda-ai:qwen25-coder-32b-instruct"
+		cfg.EditingModel = "deepinfra:deepseek-ai/DeepSeek-V3-0324" // Cheap, capable model; alternatives: deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo
 	}
 	if cfg.OrchestrationModel == "" {
-		cfg.OrchestrationModel = cfg.EditingModel // Fallback to editing model if not specified
+		cfg.OrchestrationModel = "deepinfra:moonshotai/Kimi-K2-Instruct"
 	}
 	if cfg.CodeReviewModel == "" {
 		cfg.CodeReviewModel = cfg.EditingModel // Default to editing model, but can be overridden for reliability
@@ -232,25 +233,25 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 	reader := bufio.NewReader(os.Stdin)
 	// No logger needed here, as these are direct prompts for user input
 
-	fmt.Print(prompts.EnterEditingModel("lambda-ai:deepseek-v3-0324")) // Use prompt
+	fmt.Print(prompts.EnterEditingModel("deepinfra:deepseek-ai/DeepSeek-V3-0324")) // Use prompt
 	editingModel, _ := reader.ReadString('\n')
 	editingModel = strings.TrimSpace(editingModel)
 	if editingModel == "" {
-		editingModel = "lambda-ai:deepseek-v3-0324"
+		editingModel = "deepinfra:deepseek-ai/DeepSeek-V3-0324"
 	}
 
-	fmt.Print(prompts.EnterSummaryModel("lambda-ai:hermes3-8b")) // Use prompt
+	fmt.Print(prompts.EnterSummaryModel("deepinfra:mistralai/Mistral-Small-3.2-24B-Instruct-2506")) // Use prompt
 	summaryModel, _ := reader.ReadString('\n')
 	summaryModel = strings.TrimSpace(summaryModel)
 	if summaryModel == "" {
-		summaryModel = "lambda-ai:hermes3-8b"
+		summaryModel = "deepinfra:mistralai/Mistral-Small-3.2-24B-Instruct-2506"
 	}
 
-	fmt.Print(prompts.EnterWorkspaceModel("lambda-ai:qwen25-coder-32b-instruct")) // Use prompt
+	fmt.Print(prompts.EnterWorkspaceModel("deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo")) // Use prompt
 	workspaceModel, _ := reader.ReadString('\n')
 	workspaceModel = strings.TrimSpace(workspaceModel)
 	if workspaceModel == "" {
-		workspaceModel = "lambda-ai:qwen25-coder-32b-instruct"
+		workspaceModel = "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo"
 	}
 
 	fmt.Print(prompts.EnterOrchestrationModel("same as editing model")) // Use prompt

@@ -26,7 +26,7 @@ run_test_logic() {
     echo "----------------------------------------------------------------"
 
     # Run ledit with #WORKSPACE to trigger the initial analysis.
-    ../ledit code "Based on the files you see, create a 'manifest.txt' listing the text, python, and json files available. #WORKSPACE" --skip-prompt -m "$model_name"
+    ../ledit code "Create a file named manifest.txt listing, one per line, the filenames of all .txt, .py, and .json files found in the workspace root. Output ONLY a fenced code block containing the exact content for manifest.txt. #WORKSPACE" --skip-prompt -m "$model_name"
 
     echo
     echo "--- Verifying Test ---"

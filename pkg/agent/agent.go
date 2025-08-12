@@ -20,6 +20,35 @@ import (
 	"github.com/alantheprice/ledit/pkg/workspace"
 )
 
+// isSimpleShellCommand returns true for trivial, safe commands we allow for fast-path execution
+func isSimpleShellCommand(s string) bool {
+	t := strings.TrimSpace(strings.ToLower(s))
+	if t == "" {
+		return false
+	}
+	// Very conservative allowlist patterns
+	if strings.HasPrefix(t, "echo ") {
+		return true
+	}
+	if t == "ls" || strings.HasPrefix(t, "ls ") {
+		return true
+	}
+	if strings.HasPrefix(t, "pwd") {
+		return true
+	}
+	if strings.HasPrefix(t, "whoami") {
+		return true
+	}
+	// Basic grep/find read-only searches
+	if strings.HasPrefix(t, "grep ") {
+		return true
+	}
+	if strings.HasPrefix(t, "find ") {
+		return true
+	}
+	return false
+}
+
 // RunAgentMode is the main public interface for command line usage
 func RunAgentMode(userIntent string, skipPrompt bool) error {
 	fmt.Printf("🤖 Agent mode: Analyzing your intent...\n")
@@ -206,6 +235,23 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 				// Approximate split: attribute to prompt for now (no exact split available here)
 				context.TokenUsage.IntentSplit.Prompt += tokens
 				context.ExecutedOperations = append(context.ExecutedOperations, "Intent analysis completed")
+
+				// Fast path: execute immediate shell command when safe
+				cmdToRun := ""
+				if intentAnalysis != nil && intentAnalysis.CanExecuteNow && strings.TrimSpace(intentAnalysis.ImmediateCommand) != "" {
+					cmdToRun = strings.TrimSpace(intentAnalysis.ImmediateCommand)
+				} else if isSimpleShellCommand(context.UserIntent) {
+					cmdToRun = strings.TrimSpace(context.UserIntent)
+				}
+				if cmdToRun != "" {
+					context.Logger.LogProcessStep("🚀 Fast path: executing immediate shell command")
+					if err := executeShellCommands(context, []string{cmdToRun}); err != nil {
+						context.Logger.LogError(fmt.Errorf("immediate command failed: %w", err))
+					} else {
+						context.ExecutedOperations = append(context.ExecutedOperations, "Task completed via immediate command execution: "+cmdToRun)
+						context.IsCompleted = true
+					}
+				}
 				err = nil
 			}
 		case "create_plan":
@@ -557,399 +603,7 @@ func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logg
 	return &analysis, totalTokens, nil
 }
 
-// createDetailedEditPlan uses the orchestration model to create a detailed plan for code changes
-func createDetailedEditPlan(userIntent string, intentAnalysis *IntentAnalysis, cfg *config.Config, logger *utils.Logger) (*EditPlan, int, error) {
-	startTime := time.Now()
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	logger.Logf("PERF: createDetailedEditPlan started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-
-	// Get basic context for the files we need to understand
-	var contextFiles []string
-	if len(intentAnalysis.EstimatedFiles) > 0 {
-		contextFiles = intentAnalysis.EstimatedFiles
-	} else {
-		// Use our new robust file finding approach
-		logger.Logf("No estimated files from analysis, using robust file discovery for: %s", userIntent)
-		contextFiles = findRelevantFilesRobust(userIntent, cfg, logger)
-
-		// If still no files found, try content search as additional fallback
-		if len(contextFiles) == 0 {
-			logger.Logf("Robust discovery found no files, trying content search as final fallback...")
-			contextFiles = findRelevantFilesByContent(userIntent, logger)
-		}
-	}
-
-	// Load context for the files
-	context := buildBasicFileContext(contextFiles, logger)
-
-	// Log what context is being provided to the orchestration model
-	logger.LogProcessStep("🎯 ORCHESTRATION MODEL CONTEXT:")
-	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	logger.LogProcessStep(fmt.Sprintf("User Intent: %s", userIntent))
-	logger.LogProcessStep(fmt.Sprintf("Context Files Count: %d", len(contextFiles)))
-	logger.LogProcessStep(fmt.Sprintf("Context Size: %d characters", len(context)))
-	if len(contextFiles) > 0 {
-		logger.LogProcessStep("Files included in orchestration context:")
-		for i, file := range contextFiles {
-			logger.LogProcessStep(fmt.Sprintf("  %d. %s", i+1, file))
-		}
-	}
-	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-	// Debug: log contextFiles to see what we have
-	// Debug logging removed for cleaner output
-
-	// Analyze workspace patterns for intelligent task decomposition
-	workspacePatterns := analyzeWorkspacePatterns(logger)
-	refactoringGuidance := ""
-
-	// Check if this is a large file refactoring task
-	if isLargeFileRefactoringTask(userIntent, contextFiles, logger) {
-		refactoringGuidance = generateRefactoringStrategy(userIntent, contextFiles, workspacePatterns, logger)
-
-		// For large file refactoring, also analyze source file functions
-		sourceFile := extractSourceFileFromIntent(userIntent, contextFiles)
-		if sourceFile != "" {
-			functionInventory := analyzeFunctionsInFile(sourceFile, logger)
-			refactoringGuidance += "\n\nFUNCTION INVENTORY FOR EXTRACTION:\n" + functionInventory
-		}
-	} else {
-		refactoringGuidance = "Standard single-file or small-scope changes"
-	}
-
-	prompt := fmt.Sprintf(`You are an expert Go software architect and developer. Create a MINIMAL and FOCUSED edit plan for this Go codebase.
-
-USER REQUEST: %s
-
-WORKSPACE ANALYSIS:
-Project Type: Go
-Total Context Files: %d
-Workspace Patterns: Average file size: %d lines, Modularity: %s
-
-TASK ANALYSIS:
-- Category: %s
-- Complexity: %s
-- Context Files: %s
-
-CURRENT GO CODEBASE CONTEXT:
-%s
-
-CRITICAL WORKSPACE VALIDATION:
-- This is a PROJECT - You must ONLY work with source files
-- ALL files in "files_to_edit" must be EXISTING .go files from the context above
-- Do NOT create new files unless explicitly requested by user
-- Do NOT suggest .ts, .js, .py, or any non-Go files
-- File paths must be relative to project root
-- Verify each file exists in the provided context before including it
-
-INTELLIGENT REFACTORING GUIDANCE:
-%s
-
-FOR LARGE FILE REFACTORING (when extracting functions to new files):
-1. **ANALYZE SOURCE**: Examine the function inventory above to understand what needs extraction
-2. **CREATE SPECIFIC OPERATIONS**: Instead of generic "refactor file", create separate operations for:
-   - Creating each new target file (pkg/agent/agent.go, pkg/agent/orchestrator.go, etc.)
-   - Moving specific functions from source to target files
-   - Updating the source file to remove extracted functions and add imports
-3. **FUNCTION-LEVEL INSTRUCTIONS**: For each operation, specify exactly which functions/types to move:
-   Example: "Move functions NewAgent, (*Agent).Run, and AgentContext type from cmd/agent.go to pkg/agent/agent.go"
-4. **DEPENDENCY ORDER**: Create files in order - types first, then functions that use them
-5. **IMPORT MANAGEMENT**: Ensure each operation includes proper import statements
-
-REFACTORING OPERATION TEMPLATE FOR LARGE FILES:
-When refactoring large files, create multiple granular operations like:
-- Operation 1: "Create pkg/agent/agent.go with core Agent types and constructor"
-- Operation 2: "Move specific orchestration functions to pkg/agent/orchestrator.go"  
-- Operation 3: "Update cmd/agent.go to use extracted packages and remove moved functions"
-
-AVAILABLE TOOLS AND CAPABILITIES:
-The agent has access to the following tools during the editing process:
-1. File editing (primary capability) - both full file and partial section editing
-2. Terminal command execution - can run shell commands when needed
-3. File system operations (read, write, check existence)
-4. Compilation and testing tools via the shell
-5. Git operations for version control
-6. File validation tools (syntax checking, compilation verification)
-7. Automatic issue fixing capabilities
-
-INTELLIGENT TOOL USAGE:
-The orchestration model should leverage these tools strategically:
-- Use fix_validation_issues tool to automatically resolve common problems
-- Use run_shell_command tool for build verification and testing
-- Use read_file tool to examine current state before making changes
-
-WHEN TO USE TERMINAL COMMANDS:
-- To check dependencies or imports: go mod tidy, go list -m all
-- To run tests after changes: go test ./...
-- To check compilation: go build ./...
-- To verify tools are available: which go, go version
-- To examine file contents: cat, grep, find
-- To check git status: git status, git diff
-
-INTELLIGENT WORKFLOW PLANNING:
-In your edit plan, you can specify if terminal commands should be run before or after certain edits.
-For example:
-- Check current dependencies before adding new imports
-- Run tests after adding new functionality
-- Verify compilation after structural changes
-
-PROJECT FILES ONLY - DO NOT CREATE INCOMPATIBLE FILES!
-
-CRITICAL CONSTRAINTS:
-1. **STAY STRICTLY WITHIN SCOPE**: Only make changes that directly fulfill the user's exact request
-2. **NO SCOPE CREEP**: Do not add improvements, optimizations, or features not explicitly requested
-3. **MINIMAL CHANGES**: Make the smallest possible changes to achieve the goal
-4. **SINGLE PURPOSE**: Each edit should serve only the user's stated objective
-5. **PROJECT FILES ONLY**: Only modify existing source files with correct extensions. Do NOT create incompatible files
-6. **EXISTING FILES ONLY**: You MUST use existing files from the context above. Do NOT create new files
-7. **VERIFY FILE EXISTENCE**: All files in "files_to_edit" must be actual source files that exist in the codebase context
-8. **NO SEARCH FLAGS**: Do NOT include #SG, #SEARCH, or similar flags in your response. Search grounding is handled separately via explicit tool calls.
-
-PLANNING REQUIREMENTS:
-1. **File Analysis**: Identify exactly which EXISTING source files need to be modified and what new files need to be created
-2. **Edit Operations**: For each file, specify the exact changes needed
-3. **Scope Justification**: Explain how each change directly serves the user request
-4. **File Verification**: Only include source files that exist in the current codebase context
-5. **CONTEXT FILES**: Include ALL files that the editing model will need to understand interfaces, dependencies, or patterns referenced in the edit operations. The "files_to_edit" list will be used to provide context to the editing model.
-
-CRITICAL CONTEXT REQUIREMENT:
-- Edit operations should be granular and self-contained with all necessary context included in the instructions. When referencing files, functions, interfaces, or types from other files, include the file path using hashtag syntax (e.g., #path/to/file.go) at the END of the instructions. This allows the downstream editing process to automatically provide those files as context.
-- Each Edit should target a specific file. For instance, if you are moving a function from one file to another, that it two edit operations: one to remove the function from the old file and another to add it to the new file.
-
-INSTRUCTION QUALITY REQUIREMENTS:
-1. **Self-Contained**: Each instruction should contain all details needed to implement the change
-2. **Granular**: Break down complex changes into specific, actionable steps
-3. **Function-Specific**: For refactoring, specify exactly which functions/types to move (use function inventory above)
-4. **File References**: Use hashtag syntax (#path/to/file.go) for any files that need to be referenced
-5. **Context-Rich**: Include function names, interface details, and patterns to follow
-6. **No Assumptions**: Don't assume the editing model knows about other parts of the codebase, if they need to know something add it to the prompt
-7. **Dependency Aware**: For refactoring, order operations to handle dependencies correctly
-
-FOR REFACTORING TASKS - REQUIRED INSTRUCTION FORMAT:
-Instead of: "Refactor <current_file_path> to extract functions"
-Use: "Create <new-file-path> and move the following specific functions from <old-file-path>: [list exact function names from inventory]"
-Include: "Reminder to add the appropriate file syntax like import statements"
-
-HASHTAG FILE REFERENCE SYNTAX:
-- End instructions with: #<reference-file1-path> #<reference-file2-path>
-- Use this for any file containing interfaces, references, types, patterns, or examples to follow
-- The editing process will automatically load these files as context
-- Exclude the file that will be added to the file_path for that edit operation
-
-RESPONSE FORMAT (JSON):
-{
-  "files_to_edit": ["path/to/existing/file.go"],   // Only files that will be MODIFIED
-  "edit_operations": [
-    {
-      "file_path": "path/to/existing/file.go", 
-      "description": "Specific change to make",
-      "instructions": "Detailed, self-contained instructions with hashtag file references at the end: Files to reference, create, or modify: #path/to/context/file.go",
-      "scope_justification": "How this change directly serves the user's request"
-    }
-  ],
-  "context": "Minimal strategy focused only on the user's exact request",
-  "scope_statement": "This plan addresses only: [restate user request]"
-}
-
-FOR LARGE FILE REFACTORING - EXAMPLE OPERATIONS:
-{
-  "files_to_edit": ["pkg/agent/agent.go", "pkg/agent/orchestrator.go", "cmd/agent.go"],
-  "edit_operations": [
-    {
-      "file_path": "pkg/agent/agent.go",
-      "description": "Create core agent types and constructor",
-      "instructions": "Create new file pkg/agent/agent.go. Move the following specific items from cmd/agent.go: Agent struct (line X), AgentContext struct (line Y), NewAgent function (line Z), TokenUsage type (line W). Include proper package declaration and imports. #cmd/agent.go",
-      "scope_justification": "Extracts core agent types as requested in refactoring"
-    },
-    {
-      "file_path": "pkg/agent/orchestrator.go", 
-      "description": "Extract orchestration functions",
-      "instructions": "Create new file pkg/agent/orchestrator.go. Move specific orchestration functions from cmd/agent.go: evaluateProgress (line A), executeAdaptiveAction (line B), createDetailedEditPlan (line C). Include proper imports and package declaration. #cmd/agent.go #pkg/agent/agent.go",
-      "scope_justification": "Separates orchestration logic as requested"
-    },
-    {
-      "file_path": "cmd/agent.go",
-      "description": "Convert to thin wrapper importing extracted packages", 
-      "instructions": "Remove the extracted functions and types (Agent, AgentContext, evaluateProgress, etc.) and replace with imports to pkg/agent. Keep only main CLI entry point and update function calls to use pkg/agent prefix. #pkg/agent/agent.go #pkg/agent/orchestrator.go",
-      "scope_justification": "Completes refactoring by updating source file"
-    }
-  ],
-  "context": "Function-by-function extraction to create modular agent package",
-  "scope_statement": "Extract functions from large cmd/agent.go into organized pkg/agent package structure"
-}
-
-STRICT GUIDELINES:
-- Each edit operation should target ONE existing file
-- Instructions should be GRANULAR and SELF-CONTAINED with all necessary details and required context
-- Include specific function names, interface details, and implementation patterns
-- Use hashtag syntax (#file.go) at the end of instructions for file references
-- Focus ONLY on what the user explicitly requested
-- Do NOT add related improvements or "nice to have" features
-- Justify every change against the original user request`,
-		userIntent,
-		len(contextFiles),
-		workspacePatterns.AverageFileSize,
-		workspacePatterns.ModularityLevel,
-		intentAnalysis.Category,
-		intentAnalysis.Complexity,
-		strings.Join(contextFiles, ", "),
-		context,
-		refactoringGuidance)
-
-	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert software architect. Create detailed, actionable edit plans. Respond only with valid JSON."},
-		{Role: "user", Content: prompt},
-	}
-
-	response, _, err := llm.GetLLMResponse(cfg.OrchestrationModel, messages, "", cfg, 3*time.Minute)
-	if err != nil {
-		logger.LogError(fmt.Errorf("orchestration model failed to create edit plan: %w", err))
-		duration := time.Since(startTime)
-		runtime.ReadMemStats(&m)
-		logger.Logf("PERF: createDetailedEditPlan completed (error). Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-
-		// Fallback to simple plan based on intent analysis
-		var fallbackOperations []EditOperation
-		if len(contextFiles) > 0 {
-			fallbackOperations = []EditOperation{
-				{
-					FilePath:     contextFiles[0],
-					Description:  userIntent,
-					Instructions: userIntent,
-				},
-			}
-		} else {
-			// No context files available
-			fallbackOperations = []EditOperation{
-				{
-					FilePath:     "main.go", // Generic fallback
-					Description:  userIntent,
-					Instructions: userIntent,
-				},
-			}
-		}
-
-		return &EditPlan{
-			FilesToEdit:    contextFiles,
-			EditOperations: fallbackOperations,
-			Context:        "Fallback plan due to orchestration model failure",
-		}, 0, nil
-	}
-
-	// Log the orchestration model response for debugging
-	logger.LogProcessStep("🎯 ORCHESTRATION MODEL RESPONSE:")
-	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	logger.LogProcessStep(fmt.Sprintf("Response length: %d characters", len(response)))
-	// Show a preview of the response (first 500 chars)
-	if len(response) > 500 {
-		logger.LogProcessStep(fmt.Sprintf("Response preview: %s...", response[:500]))
-	} else {
-		logger.LogProcessStep(fmt.Sprintf("Full response: %s", response))
-	}
-	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-	// Estimate tokens used (attribute to Planning) and record split
-	promptTokens := utils.EstimateTokens(prompt)
-	responseTokens := utils.EstimateTokens(response)
-	totalTokens := promptTokens + responseTokens
-	logger.Logf("Planning tokens: prompt=%d completion=%d total=%d", promptTokens, responseTokens, totalTokens)
-	// We can't access context here; caller will add totals. Approximate split to prompt in caller for now.
-
-	// Clean and parse response using centralized JSON extraction utility
-	cleanedResponse, err := utils.ExtractJSONFromLLMResponse(response)
-	if err != nil {
-		logger.LogError(fmt.Errorf("CRITICAL: Failed to extract JSON from edit plan response: %w\nRaw response: %s", err, response))
-
-		// Check if this looks like a truncated response and retry with different approach
-		if strings.Contains(err.Error(), "no matching closing brace") || strings.Contains(err.Error(), "unexpected end of JSON input") {
-			logger.LogProcessStep(fmt.Sprintf("⚠️ Response truncated (length: %d chars), retrying with optimized prompt...", len(response)))
-
-			// Retry up to 3 times with progressively shorter prompts
-			return retryEditPlanWithShorterPrompt(userIntent, intentAnalysis, contextFiles, cfg, logger, 1)
-		}
-
-		return nil, 0, fmt.Errorf("failed to extract JSON from edit plan response: %w\nLLM Response: %s", err, response)
-	}
-
-	// Parse the response into a temporary structure for JSON unmarshaling
-	var planData struct {
-		FilesToEdit    []string `json:"files_to_edit"`
-		EditOperations []struct {
-			FilePath           string `json:"file_path"`
-			Description        string `json:"description"`
-			Instructions       string `json:"instructions"`
-			ScopeJustification string `json:"scope_justification"`
-		} `json:"edit_operations"`
-		Context        string `json:"context"`
-		ScopeStatement string `json:"scope_statement"`
-	}
-
-	if err := json.Unmarshal([]byte(cleanedResponse), &planData); err != nil {
-		// JSON parsing failure is an unrecoverable error - the LLM should always return valid JSON
-		logger.LogError(fmt.Errorf("CRITICAL: Failed to parse edit plan JSON from LLM: %w\nCleaned JSON: %s\nRaw response: %s", err, cleanedResponse, response))
-		return nil, 0, fmt.Errorf("unrecoverable JSON parsing error in edit plan creation: %w\nCleaned JSON: %s\nRaw Response: %s", err, cleanedResponse, response)
-	}
-
-	// Convert to our EditPlan structure
-	var operations []EditOperation
-	for _, op := range planData.EditOperations {
-		operations = append(operations, EditOperation{
-			FilePath:           op.FilePath,
-			Description:        op.Description,
-			Instructions:       op.Instructions,
-			ScopeJustification: op.ScopeJustification,
-		})
-	}
-
-	editPlan := &EditPlan{
-		FilesToEdit:    planData.FilesToEdit,
-		EditOperations: operations,
-		Context:        planData.Context,
-		ScopeStatement: planData.ScopeStatement,
-	}
-
-	duration := time.Since(startTime)
-	runtime.ReadMemStats(&m)
-	logger.Logf("PERF: createDetailedEditPlan completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
-
-	logger.LogProcessStep(fmt.Sprintf("📋 Edit plan created: %d files, %d operations", len(editPlan.FilesToEdit), len(editPlan.EditOperations)))
-	logger.LogProcessStep(fmt.Sprintf("🎯 Scope: %s", editPlan.ScopeStatement))
-	logger.LogProcessStep(fmt.Sprintf("Strategy: %s", editPlan.Context))
-
-	// Log detailed edit plan contents
-	logger.LogProcessStep("📚 EDIT PLAN DETAILS (Self-Contained with Hashtag References):")
-	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-	// Log files to edit
-	logger.LogProcessStep(fmt.Sprintf("Files to Edit (%d):", len(editPlan.FilesToEdit)))
-	for i, file := range editPlan.FilesToEdit {
-		logger.LogProcessStep(fmt.Sprintf("  %d. %s", i+1, file))
-	}
-
-	// Log each operation with its scope justification
-	logger.LogProcessStep(fmt.Sprintf("Edit Operations (%d):", len(editPlan.EditOperations)))
-	for i, op := range editPlan.EditOperations {
-		logger.LogProcessStep(fmt.Sprintf("📝 Operation %d: %s", i+1, op.Description))
-		logger.LogProcessStep(fmt.Sprintf("   🎯 Target: %s", op.FilePath))
-		logger.LogProcessStep(fmt.Sprintf("   📋 Justification: %s", op.ScopeJustification))
-
-		// Check for hashtag file references in instructions
-		if strings.Contains(op.Instructions, "#") {
-			logger.LogProcessStep("   ✅ Contains hashtag file references for context")
-		} else {
-			logger.LogProcessStep("   ℹ️  Self-contained instructions (no file references)")
-		}
-
-		logger.LogProcessStep(fmt.Sprintf("   📖 Instructions: %s", op.Instructions))
-		if i < len(editPlan.EditOperations)-1 {
-			logger.LogProcessStep("   ───────────────────────────────")
-		}
-	}
-	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-	return editPlan, totalTokens, nil
-}
+// Planning function moved to planning.go
 
 // retryEditPlanWithShorterPrompt attempts to retry the edit plan creation with progressively shorter prompts
 func retryEditPlanWithShorterPrompt(userIntent string, intentAnalysis *IntentAnalysis, contextFiles []string, cfg *config.Config, logger *utils.Logger, attempt int) (*EditPlan, int, error) {
@@ -2294,241 +1948,7 @@ func generateRefactoringStrategy(userIntent string, contextFiles []string, patte
 	return b
 }*/
 
-// shouldEscalateToOrchestration determines if we should escalate to full orchestration
-// based on the type of error encountered
-// evaluateProgress evaluates the current state and decides what to do next
-func evaluateProgress(context *AgentContext) (*ProgressEvaluation, int, error) {
-	// Fast-path for simple tasks - avoid expensive LLM evaluations
-	if context.TaskComplexity == TaskSimple {
-		return evaluateProgressFastPath(context)
-	}
-
-	// Standard LLM-based evaluation for moderate and complex tasks
-	return evaluateProgressWithLLM(context)
-}
-
-// evaluateProgressFastPath provides deterministic progress evaluation for simple tasks
-func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, error) {
-	// Simple rule-based evaluation to avoid LLM calls
-
-	// Check if task was completed via immediate execution during intent analysis
-	for _, op := range context.ExecutedOperations {
-		if strings.Contains(op, "Task completed via immediate command execution") {
-			return &ProgressEvaluation{
-				Status:               "completed",
-				CompletionPercentage: 100,
-				NextAction:           "completed",
-				Reasoning:            "Task completed via immediate command execution during intent analysis",
-				Concerns:             []string{},
-			}, 0, nil
-		}
-	}
-
-	// If no intent analysis, analyze first
-	if context.IntentAnalysis == nil {
-		return &ProgressEvaluation{
-			Status:               "on_track",
-			CompletionPercentage: 10,
-			NextAction:           "analyze_intent",
-			Reasoning:            "Simple task: need to analyze intent first",
-			Concerns:             []string{},
-		}, 0, nil // 0 tokens used
-	}
-
-	// If no plan, create one
-	if context.CurrentPlan == nil {
-		return &ProgressEvaluation{
-			Status:               "on_track",
-			CompletionPercentage: 30,
-			NextAction:           "create_plan",
-			Reasoning:            "Simple task: intent analyzed, now need to create execution plan",
-			Concerns:             []string{},
-		}, 0, nil
-	}
-
-	// If plan exists but no edits executed, execute them
-	hasExecutedEdits := false
-	for _, op := range context.ExecutedOperations {
-		if strings.Contains(op, "Edit") && strings.Contains(op, "completed successfully") {
-			hasExecutedEdits = true
-			break
-		}
-	}
-
-	if !hasExecutedEdits {
-		return &ProgressEvaluation{
-			Status:               "on_track",
-			CompletionPercentage: 70,
-			NextAction:           "execute_edits",
-			Reasoning:            "Simple task: plan ready, executing edits now",
-			Concerns:             []string{},
-		}, 0, nil
-	}
-
-	// If edits executed, validate (simplified validation for simple tasks)
-	hasValidation := false
-	for _, result := range context.ValidationResults {
-		if len(result) > 0 {
-			hasValidation = true
-			break
-		}
-	}
-
-	if !hasValidation {
-		return &ProgressEvaluation{
-			Status:               "on_track",
-			CompletionPercentage: 90,
-			NextAction:           "validate",
-			Reasoning:            "Simple task: edits complete, running basic validation",
-			Concerns:             []string{},
-		}, 0, nil
-	}
-
-	// If validation done, check if the actual goal was achieved
-	if hasValidation {
-		// TODO: Validate that the agent also thinks that we have completed successfully
-
-		// Standard completion for other tasks
-		return &ProgressEvaluation{
-			Status:               "completed",
-			CompletionPercentage: 100,
-			NextAction:           "completed",
-			Reasoning:            "Simple task: all steps completed successfully",
-			Concerns:             []string{},
-		}, 0, nil
-	}
-
-	// Fallback if no validation was done yet
-	return &ProgressEvaluation{
-		Status:               "on_track",
-		CompletionPercentage: 90,
-		NextAction:           "validate",
-		Reasoning:            "Simple task: edits complete, running basic validation",
-		Concerns:             []string{},
-	}, 0, nil
-}
-
-// evaluateProgressWithLLM performs full LLM-based progress evaluation for complex tasks
-func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, error) {
-	// CRITICAL: Deterministic check - if plan exists but no edits executed, ALWAYS execute first
-	if context.CurrentPlan != nil {
-		hasExecutedEdits := false
-		hasRunValidation := false
-
-		for _, op := range context.ExecutedOperations {
-			if strings.Contains(op, "Edit") && strings.Contains(op, "completed successfully") {
-				hasExecutedEdits = true
-			}
-			if strings.Contains(op, "validation") || strings.Contains(op, "Validation") {
-				hasRunValidation = true
-			}
-		}
-
-		if !hasExecutedEdits {
-			return &ProgressEvaluation{
-				Status:               "on_track",
-				CompletionPercentage: 50,
-				NextAction:           "execute_edits",
-				Reasoning:            "Plan exists but no edits executed - executing plan immediately to avoid analysis loops",
-				Concerns:             []string{},
-			}, 0, nil // 0 tokens - deterministic decision
-		}
-
-		if hasExecutedEdits && !hasRunValidation {
-			return &ProgressEvaluation{
-				Status:               "on_track",
-				CompletionPercentage: 90,
-				NextAction:           "validate",
-				Reasoning:            "Edits completed but validation not run - mandatory validation required before completion",
-				Concerns:             []string{},
-			}, 0, nil // 0 tokens - deterministic decision
-		}
-	}
-
-	// CRITICAL: Handle validation failures - create fix plans for compilation errors
-	if context.ValidationFailed {
-		// Check if we have compilation errors that can be fixed
-		hasCompilationErrors := false
-		for _, result := range context.ValidationResults {
-			if strings.Contains(result, "compilation errors") || strings.Contains(result, "Compilation check failed") {
-				hasCompilationErrors = true
-				break
-			}
-		}
-
-		if hasCompilationErrors {
-			return &ProgressEvaluation{
-				Status:               "needs_adjustment",
-				CompletionPercentage: 70,
-				NextAction:           "revise_plan",
-				Reasoning:            "Validation failed due to compilation errors - need to analyze and fix the syntax/compilation issues",
-				Concerns:             []string{"Compilation errors detected after edits", "Code changes introduced syntax errors"},
-				NewPlan:              nil, // Will be generated by LLM in revise_plan action
-			}, 0, nil // 0 tokens - deterministic decision
-		}
-	}
-
-	// Build a comprehensive context summary for the LLM
-	var contextSummary strings.Builder
-
-	contextSummary.WriteString("AGENT EXECUTION CONTEXT:\n")
-	contextSummary.WriteString(fmt.Sprintf("User Intent: %s\n", context.UserIntent))
-	contextSummary.WriteString(fmt.Sprintf("Iteration: %d/%d\n", context.IterationCount, context.MaxIterations))
-	contextSummary.WriteString(fmt.Sprintf("Elapsed Time: %v\n", time.Since(context.StartTime)))
-
-	if context.IntentAnalysis != nil {
-		contextSummary.WriteString(fmt.Sprintf("Intent Analysis: Category=%s, Complexity=%s\n",
-			context.IntentAnalysis.Category, context.IntentAnalysis.Complexity))
-	}
-
-	if context.CurrentPlan != nil {
-		contextSummary.WriteString(fmt.Sprintf("Current Plan: %d files to edit, %d operations\n",
-			len(context.CurrentPlan.FilesToEdit), len(context.CurrentPlan.EditOperations)))
-		contextSummary.WriteString(fmt.Sprintf("Plan Context: %s\n", context.CurrentPlan.Context))
-	}
-
-	contextSummary.WriteString(fmt.Sprintf("Executed Operations (%d):\n", len(context.ExecutedOperations)))
-	for i, op := range context.ExecutedOperations {
-		contextSummary.WriteString(fmt.Sprintf("  %d. %s\n", i+1, op))
-	}
-
-	contextSummary.WriteString(fmt.Sprintf("Errors Encountered (%d):\n", len(context.Errors)))
-	for i, err := range context.Errors {
-		contextSummary.WriteString(fmt.Sprintf("  %d. %s\n", i+1, err))
-	}
-
-	contextSummary.WriteString(fmt.Sprintf("Validation Results (%d):\n", len(context.ValidationResults)))
-	for i, result := range context.ValidationResults {
-		contextSummary.WriteString(fmt.Sprintf("  %d. %s\n", i+1, result))
-	}
-	prompt := BuildProgressEvaluationPrompt(contextSummary.String())
-	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert software development agent that excels at evaluating progress and making smart decisions. Always respond with valid JSON."},
-		{Role: "user", Content: prompt},
-	}
-	response, _, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 60*time.Second)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to get progress evaluation: %w", err)
-	}
-	cleanedResponse, cleanErr := utils.CleanAndValidateJSONResponse(response, []string{"status", "completion_percentage", "next_action", "reasoning"})
-	if cleanErr != nil {
-		context.Logger.LogError(fmt.Errorf("CRITICAL: LLM returned invalid JSON for progress evaluation: %w\nRaw response: %s", cleanErr, response))
-		return nil, 0, fmt.Errorf("unrecoverable JSON validation error in progress evaluation: %w\nLLM Response: %s", cleanErr, response)
-	}
-	var evaluation ProgressEvaluation
-	err = json.Unmarshal([]byte(cleanedResponse), &evaluation)
-	if err != nil {
-		context.Logger.LogError(fmt.Errorf("CRITICAL: Failed to parse progress evaluation JSON from LLM: %w\nCleaned response: %s", err, cleanedResponse))
-		return nil, 0, fmt.Errorf("unrecoverable JSON parsing error in progress evaluation: %w\nCleaned Response: %s", err, cleanedResponse)
-	}
-	promptTokens := utils.EstimateTokens(prompt)
-	completionTokens := utils.EstimateTokens(response)
-	tokens := promptTokens + completionTokens
-	// Save split for precise costing later
-	context.TokenUsage.ProgressSplit.Prompt += promptTokens
-	context.TokenUsage.ProgressSplit.Completion += completionTokens
-	return &evaluation, tokens, nil
-}
+// progress-related functions moved to progress.go
 
 // executeCreatePlan creates a detailed edit plan
 func executeCreatePlan(context *AgentContext) error {

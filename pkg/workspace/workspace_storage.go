@@ -19,6 +19,11 @@ func saveWorkspaceFile(workspace WorkspaceFile) error {
 	return os.WriteFile(DefaultWorkspaceFilePath, data, 0644)
 }
 
+// SaveWorkspace is an exported helper to persist the workspace file from other packages
+func SaveWorkspace(workspace WorkspaceFile) error {
+    return saveWorkspaceFile(workspace)
+}
+
 func LoadWorkspaceFile() (WorkspaceFile, error) {
 	// Load the workspace file from the default path
 	return loadWorkspaceFile(DefaultWorkspaceFilePath)

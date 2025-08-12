@@ -10,6 +10,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/apikeys" // Changed import from pkg/llm to pkg/apikeys
 	"github.com/alantheprice/ledit/pkg/config"  // Added import for config
+    "github.com/alantheprice/ledit/pkg/utils"
 )
 
 // WebContentFetcher handles fetching content from URLs.
@@ -23,6 +24,7 @@ func NewWebContentFetcher() *WebContentFetcher {
 // FetchWebContent fetches content from a given URL, using a cache to avoid refetching.
 // It uses Jina Reader for external URLs if available, otherwise falls back to a direct HTTP GET.
 func (w *WebContentFetcher) FetchWebContent(url string, cfg *config.Config) (string, error) { // Added cfg parameter
+    utils.GetLogger(cfg.SkipPrompt).LogProcessStep(fmt.Sprintf("Starting web content search for query: %s", url))
 	// Check cache first
 	if cachedEntry, found := w.loadURLCache(url); found {
 		return cachedEntry.Content, nil

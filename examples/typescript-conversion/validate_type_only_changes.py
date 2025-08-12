@@ -319,7 +319,7 @@ def generate_html_summary_report(conversion_results, report_dir):
                 if item.get('recommendation') and item['recommendation'] != 'N/A' and item['recommendation'] != 'No recommendation provided.':
                     # Escape double quotes in the recommendation for HTML display and for the command string
                     escaped_recommendation = item['recommendation'].replace('"', '\\&quot;')
-                    section_parts.append(f"                <p><strong>Ledit Command for Recommendation:</strong> <code>ledit code &quot;{escaped_recommendation}&quot; -f {item['ts_file']} -m lambda-ai:qwen25-coder-32b-instruct --skip-prompt</code></p>")
+                    section_parts.append(f"                <p><strong>Ledit Command for Recommendation:</strong> <code>ledit code &quot;{escaped_recommendation}&quot; -f {item['ts_file']} -m deepinfra:Qwen/Qwen3-Coder-480B-A35B-Instruct --skip-prompt</code></p>")
                 # Add checkbox for manual review
                 if "manual check required" in item['status'].lower() or "no ledit output" in item['status'].lower() or "parse error" in item['status'].lower():
                     section_parts.append(f"                <div class='checkbox-container'>")
@@ -608,7 +608,7 @@ def process_single_file(ts_file_relative_to_git_root, git_root_dir, type_validat
         quoted_instruction_prompt = shlex.quote(ledit_instruction_prompt)
         quoted_ts_file_for_ledit = shlex.quote(ts_file_absolute_path)
 
-        ledit_command_str = f"ledit code {quoted_instruction_prompt} -f {quoted_ts_file_for_ledit} --skip-prompt -m lambda-ai:deepseek-v3-0324"
+        ledit_command_str = f"ledit code {quoted_instruction_prompt} -f {quoted_ts_file_for_ledit} --skip-prompt -m deepinfra:deepseek-ai/DeepSeek-V3-0324"
         full_zsh_command = f"source ~/.zshrc && {ledit_command_str}"
 
         ledit_result = subprocess.run(

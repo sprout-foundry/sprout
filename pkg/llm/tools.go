@@ -196,18 +196,18 @@ func GetAvailableTools() []Tool {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "workspace_context",
-				Description: "Access workspace context information including file tree, embeddings search, or full workspace summary",
+				Description: "Access workspace information: file tree, embeddings search, or keyword search across the codebase",
 				Parameters: ToolParameters{
 					Type: "object",
 					Properties: map[string]ToolProperty{
 						"action": {
 							Type:        "string",
-							Description: "One of: search_embeddings, load_tree, load_summary",
-							Enum:        []string{"search_embeddings", "load_tree", "load_summary"},
+							Description: "One of: search_embeddings, search_keywords, load_tree, load_summary",
+							Enum:        []string{"search_embeddings", "search_keywords", "load_tree", "load_summary"},
 						},
 						"query": {
 							Type:        "string",
-							Description: "Search query for embeddings search (required when action=\"search_embeddings\")",
+							Description: "Search terms for embeddings or keyword search (required for search actions)",
 						},
 					},
 					Required: []string{"action"},
@@ -278,6 +278,9 @@ func FormatToolsForPrompt() string {
 - If you need current information or documentation, you MUST use search_web
 - If you need to check system state or run commands, you MUST use run_shell_command
 - If you need clarification from the user, you MUST use ask_user
+- If you need to locate relevant files or symbols in the workspace, you MUST use workspace_context:
+  - Use action "search_embeddings" for intent-level, semantic matches
+  - Use action "search_keywords" for exact keyword/function/class matches
 
 **TOOL CALL FORMAT:**
 When you need to use tools, respond with a JSON object in this EXACT format:
@@ -314,11 +317,20 @@ When you need to use tools, respond with a JSON object in this EXACT format:
    - Parameters: {"question": "your question"}
    - Use: When you need clarification or additional information
 
+5. **workspace_context** - REQUIRED for finding relevant code files
+   - Parameters: {"action": "search_embeddings|search_keywords|load_tree|load_summary", "query": "terms"}
+   - Use:
+     - "search_embeddings": find semantically relevant files from embeddings
+     - "search_keywords": grep-like search for exact keywords/symbols
+     - "load_tree": get a list of files/directories
+     - "load_summary": brief workspace summary if available
+
 **WORKFLOW BEST PRACTICES:**
 - After editing files, ALWAYS use validate_file to check for issues
 - Use edit_file_section for targeted changes rather than rewriting entire files
 - When validation fails, try fix_validation_issues before manual intervention
 - Use run_shell_command for build/test verification and dependency checks
+- For codebase understanding tasks: first call workspace_context (both embeddings and keyword search as needed), then read_file for the top candidates before proposing edits
 
 **CRITICAL:** Do NOT proceed without necessary information. Use tools first, then provide your response.`
 }

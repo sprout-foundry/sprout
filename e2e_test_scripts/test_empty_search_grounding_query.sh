@@ -13,7 +13,7 @@ run_test_logic() {
     # Run ledit with an empty search grounding prompt
     output_log="empty_search_test_output.log"
     # Using --non-interactive to prevent any prompts from blocking the test
-    echo "" | ../ledit code "Create a hello world app using echo and huma v2 in go. #SG" --skip-prompt --non-interactive -m "$model_name" > "$output_log" 2>&1
+    echo "" | ../ledit code "Create a hello world app using echo and huma v2 in go. #SG" --skip-prompt --non-interactive --use-search-grounding -m "$model_name" > "$output_log" 2>&1
 
     # echo "Output of ledit command:"
     # echo "$(cat "$output_log")" > ../../output.log

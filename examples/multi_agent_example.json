@@ -1,0 +1,148 @@
+{
+  "version": "1.0",
+  "goal": "Implement a complete web application with frontend and backend",
+  "description": "This process demonstrates multi-agent orchestration where different agents with specialized personas work together to build a complete application.",
+  "base_model": "gpt-4",
+  "agents": [
+    {
+      "id": "architect",
+      "name": "System Architect",
+      "persona": "system_architect",
+      "description": "Designs the overall system architecture and database schema",
+      "skills": ["system_design", "database_design", "api_design"],
+      "model": "gpt-4",
+      "priority": 1,
+      "depends_on": [],
+      "config": {"skip_prompt": "false"},
+      "budget": {
+        "max_tokens": 100000,
+        "max_cost": 10.0,
+        "token_warning": 80000,
+        "cost_warning": 8.0,
+        "alert_on_limit": true,
+        "stop_on_limit": false
+      }
+    },
+    {
+      "id": "backend_dev",
+      "name": "Backend Developer",
+      "persona": "backend_developer",
+      "description": "Implements the backend API and business logic",
+      "skills": ["api_development", "business_logic", "database_operations"],
+      "model": "gpt-4",
+      "priority": 2,
+      "depends_on": ["architect"],
+      "config": {"skip_prompt": "false"},
+      "budget": {
+        "max_tokens": 150000,
+        "max_cost": 15.0,
+        "token_warning": 120000,
+        "cost_warning": 12.0,
+        "alert_on_limit": true,
+        "stop_on_limit": false
+      }
+    },
+    {
+      "id": "frontend_dev",
+      "name": "Frontend Developer",
+      "persona": "frontend_developer",
+      "description": "Creates the user interface and frontend components",
+      "skills": ["ui_design", "frontend_framework", "user_experience"],
+      "model": "gpt-4",
+      "priority": 2,
+      "depends_on": ["architect"],
+      "config": {"skip_prompt": "false"},
+      "budget": {
+        "max_tokens": 120000,
+        "max_cost": 12.0,
+        "token_warning": 96000,
+        "cost_warning": 9.6,
+        "alert_on_limit": true,
+        "stop_on_limit": false
+      }
+    },
+    {
+      "id": "qa_engineer",
+      "name": "QA Engineer",
+      "persona": "qa_engineer",
+      "description": "Tests the application and ensures quality",
+      "skills": ["testing", "quality_assurance", "bug_tracking"],
+      "model": "gpt-4",
+      "priority": 3,
+      "depends_on": ["backend_dev", "frontend_dev"],
+      "config": {"skip_prompt": "false"},
+      "budget": {
+        "max_tokens": 80000,
+        "max_cost": 8.0,
+        "token_warning": 64000,
+        "cost_warning": 6.4,
+        "alert_on_limit": true,
+        "stop_on_limit": false
+      }
+    }
+  ],
+  "steps": [
+    {
+      "id": "design_architecture",
+      "name": "Design System Architecture",
+      "description": "Create the overall system architecture including database schema, API design, and component structure",
+      "agent_id": "architect",
+      "input": {"requirements": "web application with user management and data storage"},
+      "expected_output": "System architecture document with database schema and API specifications",
+      "status": "pending",
+      "depends_on": [],
+      "timeout": 600,
+      "retries": 2
+    },
+    {
+      "id": "implement_backend",
+      "name": "Implement Backend API",
+      "description": "Build the backend API endpoints, business logic, and database operations",
+      "agent_id": "backend_dev",
+      "input": {"architecture": "Use the architecture from previous step"},
+      "expected_output": "Working backend API with all endpoints and database operations",
+      "status": "pending",
+      "depends_on": ["design_architecture"],
+      "timeout": 900,
+      "retries": 3
+    },
+    {
+      "id": "implement_frontend",
+      "name": "Implement Frontend UI",
+      "description": "Create the user interface components and frontend application",
+      "agent_id": "frontend_dev",
+      "input": {"architecture": "Use the architecture from previous step"},
+      "expected_output": "Working frontend application with all UI components",
+      "status": "pending",
+      "depends_on": ["design_architecture"],
+      "timeout": 900,
+      "retries": 3
+    },
+    {
+      "id": "test_application",
+      "name": "Test Complete Application",
+      "description": "Perform comprehensive testing including unit tests, integration tests, and user acceptance testing",
+      "agent_id": "qa_engineer",
+      "input": {"backend": "Test the backend API", "frontend": "Test the frontend UI"},
+      "expected_output": "Test results report with any issues found and recommendations",
+      "status": "pending",
+      "depends_on": ["implement_backend", "implement_frontend"],
+      "timeout": 600,
+      "retries": 2
+    }
+  ],
+  "validation": {
+    "build_command": "npm run build",
+    "test_command": "npm test",
+    "lint_command": "npm run lint",
+    "custom_checks": ["npm run security-check"],
+    "required": true
+  },
+  "settings": {
+    "max_retries": 3,
+    "step_timeout": 900,
+    "parallel_execution": false,
+    "stop_on_failure": true,
+    "log_level": "info"
+  }
+}

@@ -57,7 +57,7 @@ def process_file_to_typescript(js_file_path):
         # Run the 'ledit code' command.
         # Source ~/.zshrc first, then pipe the original code to ledit's stdin.
         # Capture ledit's stdout and stderr.
-        command = f'source ~/.zshrc && ledit code "{prompt}" -f {js_file_path} -m lambda-ai:qwen25-coder-32b-instruct --skip-prompt'
+        command = f'source ~/.zshrc && ledit code "{prompt}" -f {js_file_path} -m deepinfra:Qwen/Qwen3-Coder-480B-A35B-Instruct --skip-prompt'
         
         process = subprocess.run(
             ['zsh', '-c', command],

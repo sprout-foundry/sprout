@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,23 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 	for context.IterationCount < context.MaxIterations {
 		context.IterationCount++
 		logger.LogProcessStep(fmt.Sprintf(" Agent Iteration %d/%d", context.IterationCount, context.MaxIterations))
+
+		// Opportunistically run lightweight tools before LLM evaluation
+		if context.IterationCount == 1 && (context.IntentAnalysis == nil || len(context.IntentAnalysis.EstimatedFiles) == 0) {
+			_ = executeWorkspaceInfo(context)
+			_ = executeListFiles(context, 10)
+		}
+		// If the user intent looks like search/investigation, try a quick grep
+		lower := strings.ToLower(context.UserIntent)
+		if strings.Contains(lower, "find") || strings.Contains(lower, "search") || strings.Contains(lower, "grep") {
+			terms := []string{}
+			for _, w := range strings.Fields(lower) {
+				if len(w) > 2 {
+					terms = append(terms, w)
+				}
+			}
+			_ = executeGrepSearch(context, terms)
+		}
 
 		evaluation, evalTokens, err := evaluateProgress(context)
 		if err != nil {
@@ -91,6 +109,21 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 			err = executeValidation(context)
 		case "revise_plan":
 			err = executeRevisePlan(context, evaluation)
+		case "workspace_info":
+			err = executeWorkspaceInfo(context)
+		case "grep_search":
+			err = executeGrepSearch(context, evaluation.Commands)
+		case "list_files":
+			// commands[0] may specify a limit; default 10
+			limit := 10
+			if len(evaluation.Commands) > 0 {
+				if v, perr := strconv.Atoi(strings.TrimSpace(evaluation.Commands[0])); perr == nil && v > 0 {
+					limit = v
+				}
+			}
+			err = executeListFiles(context, limit)
+		case "micro_edit":
+			err = executeMicroEdit(context)
 		case "completed":
 			context.Logger.LogProcessStep("✅ Task marked as completed by agent evaluation")
 			context.IsCompleted = true

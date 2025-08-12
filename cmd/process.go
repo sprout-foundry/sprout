@@ -3,14 +3,10 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"os"
-	"strings"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/orchestration"
-	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
-
 	"github.com/spf13/cobra"
 )
 
@@ -18,21 +14,16 @@ var createExample bool
 
 // processCmd represents the process command
 var processCmd = &cobra.Command{
-	Use:   "process [prompt|process-file]",
-	Short: "Executes a large feature implementation or multi-agent orchestration process.",
-	Long: `This command supports two modes:
-
-1. Single Prompt Mode: Provide a prompt to analyze and implement a feature
-2. Multi-Agent Process Mode: Provide a process file to orchestrate multiple agents with different personas
-
-Multi-Agent Process Mode:
+	Use:   "process [process-file]",
+	Short: "Executes a multi-agent orchestration process.",
+	Long: `Multi-Agent Process Mode:
 - Loads a process file defining agents, steps, and dependencies
 - Coordinates multiple agents with specialized personas (e.g., frontend developer, backend architect, QA engineer)
 - Executes steps in dependency order
 - Tracks progress and agent status
+- Supports budget controls and cost management per agent
 
 Examples:
-  ledit process "Implement user authentication system"
   ledit process process.json
   ledit process --create-example process.json`,
 	Args: cobra.MinimumNArgs(1),
@@ -49,16 +40,10 @@ Examples:
 			return
 		}
 
-		// Check if this is a process file or a prompt
-		if strings.HasSuffix(input, ".json") || strings.HasSuffix(input, ".process") {
-			// Multi-agent process mode
-			if err := runMultiAgentProcess(input, logger); err != nil {
-				logger.LogProcessStep(fmt.Sprintf("Multi-agent process failed: %v", err))
-				log.Fatalf("Error during multi-agent process: %v", err)
-			}
-		} else {
-			// Single prompt mode (legacy)
-			runSinglePromptProcess(input, logger)
+		// Multi-agent process mode
+		if err := runMultiAgentProcess(input, logger); err != nil {
+			logger.LogProcessStep(fmt.Sprintf("Multi-agent process failed: %v", err))
+			log.Fatalf("Error during multi-agent process: %v", err)
 		}
 	},
 }
@@ -98,36 +83,6 @@ func runMultiAgentProcess(processFilePath string, logger *utils.Logger) error {
 
 	logger.LogProcessStep("✅ Multi-agent orchestration completed successfully")
 	return nil
-}
-
-// runSinglePromptProcess executes the legacy single-prompt orchestration
-func runSinglePromptProcess(prompt string, logger *utils.Logger) {
-	logger.LogProcessStep("🚀 Starting single-prompt orchestration process")
-	logger.LogProcessStep(fmt.Sprintf("Prompt: %s", prompt))
-
-	// Add the alpha warning for orchestration
-	logger.LogProcessStep(prompts.OrchestrationAlphaWarning())
-
-	cfg, err := config.LoadOrInitConfig(skipPrompt)
-	if err != nil {
-		logger.LogProcessStep(prompts.ConfigLoadFailed(err))
-		fmt.Printf("Error loading config: %v\n", err)
-		os.Exit(1)
-	}
-	logger.Logf("Using configuration: %+v and model: %s", cfg, model)
-
-	if model != "" {
-		cfg.EditingModel = model
-		cfg.OrchestrationModel = model
-	}
-	cfg.SkipPrompt = skipPrompt
-
-	if err := orchestration.OrchestrateFeature(prompt, cfg); err != nil {
-		logger.LogProcessStep(prompts.OrchestrationError(err))
-		log.Fatalf("Error during orchestration: %v", err)
-	}
-
-	logger.LogProcessStep(prompts.OrchestrationFinishedSuccessfully())
 }
 
 // createExampleProcessFile creates an example process file

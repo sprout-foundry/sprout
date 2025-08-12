@@ -11,7 +11,7 @@ prompt use to with the ledit command to initially generate the script, there wer
 """
 
 model = "deepinfra:Qwen/Qwen3-Coder-480B-A35B-Instruct" # Model to use for ledit, can be changed as needed
-fallback_model = "lambda-ai:deepseek-v3-0324" # Fallback model if the main one fails
+fallback_model = "deepinfra:deepseek-ai/DeepSeek-V3-0324" # Fallback model if the main one fails
 
 
 def parse_tsc_output(tsc_output):
@@ -59,7 +59,7 @@ def call_ledit_for_file(filename, errors, base_prompt):
     # Construct the ledit command string to be run within zsh
     # shlex.quote is used to properly escape the prompt and filename for the shell command
     ledit_cmd_str = (
-        # f"ledit code {shlex.quote(full_ledit_prompt)} -f {shlex.quote(filename)} -m lambda-ai:deepseek-v3-0324 --skip-prompt"
+        # f"ledit code {shlex.quote(full_ledit_prompt)} -f {shlex.quote(filename)} -m deepinfra:deepseek-ai/DeepSeek-V3-0324 --skip-prompt"
         f"ledit code {shlex.quote(full_ledit_prompt)} -f {shlex.quote(filename)} -m {model} --skip-prompt"
     )
     

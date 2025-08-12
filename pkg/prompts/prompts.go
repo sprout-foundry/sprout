@@ -85,12 +85,15 @@ func BuildCodeMessages(code, instructions, filename string, interactive bool) []
 			"\n\n" +
 			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
 			"    - **read_file**: Read files to understand existing implementations before making changes\n" +
+			"    - **workspace_context**:\n" +
+			"        - action=search_embeddings: find semantically relevant files via embeddings\n" +
+			"        - action=search_keywords: find files containing exact keywords/symbols (grep-like)\n" +
 			"    - **run_shell_command**: Execute shell commands\n" +
 			"    - **ask_user**: Ask the user for clarification\n\n" +
 			"    Tools will be automatically executed and results provided to you.\n\n" +
 			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* read the file using the read_file tool.\n\n" +
 			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then read the file using the read_file tool.\n\n" +
-			" Do not generate code until you have all the necessary context. Use tools to gather information as needed.\n" +
+			" Do not generate code until you have all the necessary context. Use both embeddings and keyword search to find relevant files, then read_file the top candidates before editing.\n" +
 			"After tools provide you with information, generate the code based on all available context.\n"
 	}
 
@@ -194,39 +197,6 @@ func RetryPromptWithoutDiff(originalInstruction, filename, validationFailureCont
 		"Validation failed with the following context:\n%s\n\n"+
 		"Please provide the corrected code, taking into account the validation failure.",
 		originalInstruction, filename, validationFailureContext)
-}
-
-// BuildOrchestrationPlanMessages constructs the messages for the LLM to generate a high-level orchestration plan.
-func BuildOrchestrationPlanMessages(overallTask, workspaceContext string) []Message {
-	systemPrompt := `You are an expert software developer. Your task is to break down a complex development task into a list of high-level, actionable requirements.
-Each requirement should describe a distinct, logical step towards completing the overall task.
-Your response MUST be a JSON object with a single key "requirements" which is an array of objects, each with an "instruction" key.
-Do not include any filepaths in these high-level instructions. File-specific changes will be determined in a later step.
-Do not include any other text or explanation outside the JSON.
-
-Example JSON format:
-{
-  "requirements": [
-    {
-      "instruction": "Implement user authentication, including signup and login."
-    },
-    {
-      "instruction": "Develop a new API endpoint for managing user profiles."
-    },
-    {
-      "instruction": "Integrate a payment gateway for subscription management."
-    }
-  ]
-}
-
-Consider the provided workspace context to understand the project structure and existing code.
-`
-	userPrompt := fmt.Sprintf("Overall task: \"%s\"\n\nWorkspace Context:\n%s", overallTask, workspaceContext)
-
-	return []Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userPrompt},
-	}
 }
 
 // BuildChangesForRequirementMessages constructs the messages for the LLM to generate file-specific changes for a high-level requirement.

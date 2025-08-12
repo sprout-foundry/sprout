@@ -57,6 +57,12 @@ DO NOT use immediate execution for:
 - ANY tasks that might need file editing
 - Any ambiguous requests that could involve code changes
 
+WORKSPACE DISCOVERY BEST PRACTICES:
+- Before proposing edits, combine BOTH of these when needed:
+  1) Embedding search to find semantically relevant files
+  2) Keyword search to find exact symbol/keyword matches
+- Then read_file the top candidates to ground your plan
+
 Respond with JSON:
 {
   "Category": "code|fix|docs|test|review",

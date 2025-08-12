@@ -37,14 +37,13 @@ Use these special directives in your prompts to control the context provided to 
 
 Specify provider and model using `<provider>:<model_name>`.
 
--   `lambda-ai`: `lambda-ai:deepseek-v3-0324`, `lambda-ai:hermes3-8b`, `lambda-ai:llama3.3-70b-instruct-fp8`, `lambda-ai:qwen25-coder-32b-instruct`
+-   `deepinfra`: `deepinfra:deepseek-ai/DeepSeek-V3-0324`, `deepinfra:mistralai/Mistral-Small-3.2-24B-Instruct-2506`, `deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo`, `deepinfra:Qwen/Qwen3-Coder-480B-A35B-Instruct`
 -   `gemini`: `gemini:gemini-2.5-flash`, `gemini:gemini-2.5-pro`
 -   `openai`: `openai:gpt-4o`
 -   `groq`: `groq:llama3-70b-8192`
 -   `ollama`: `ollama:qwen2.5-coder` (locally run, cant handle workspace context in most cases)
--   `cerebras`: `cerebras:qwen-3-coder-480b`
--   `deepseek`: `deepseek:deepseek-coder`
--   `deepinfra`: `deepinfra:google/gemini-2.5-flash`
+    -   `cerebras`: `cerebras:qwen-3-coder-480b`
+    -   `deepseek`: `deepseek:deepseek-coder`
 
 ## Workspace Files
 

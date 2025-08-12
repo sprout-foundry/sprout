@@ -186,6 +186,40 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 		fmt.Printf("   ✅ Embedding search completed.\n")
 		return result.String(), nil
 
+	case "search_keywords":
+		query, ok := args["query"].(string)
+		if !ok || strings.TrimSpace(query) == "" {
+			return "", fmt.Errorf("workspace_context action 'search_keywords' requires non-empty 'query' parameter")
+		}
+		fmt.Printf("🔎 Keyword searching workspace for: %s\n", query)
+		// Use a ripgrep fallback to grep for keywords across Go files; include fallback to grep if rg not available
+		cmd := exec.Command("sh", "-c", fmt.Sprintf("command -v rg >/dev/null 2>&1 && rg -n -l -i --glob '*.go' %q . || grep -r -n -l -i --include=*.go %q .", query, query))
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Printf("   ❌ Keyword search failed: %v\n", err)
+			return "", fmt.Errorf("keyword search failed: %w", err)
+		}
+		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		var result strings.Builder
+		result.WriteString("Files found via keyword search:\n")
+		count := 0
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			// Strip line numbers if present
+			if idx := strings.Index(line, ":"); idx > -1 {
+				line = line[:idx]
+			}
+			result.WriteString(fmt.Sprintf("  - %s\n", strings.TrimPrefix(line, "./")))
+			count++
+		}
+		if count == 0 {
+			result.WriteString("  No matches found.\n")
+		}
+		fmt.Printf("   ✅ Keyword search completed (%d files).\n", count)
+		return result.String(), nil
+
 	case "load_tree":
 		fmt.Printf("🌳 Loading workspace file tree.\n")
 		tree, err := workspace.GetFormattedFileTree(ws)
@@ -207,7 +241,7 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 		return summary, nil
 
 	default:
-		return "", fmt.Errorf("unknown action for workspace_context: %s. Valid actions are 'search_embeddings', 'load_tree', 'load_summary'.", action)
+		return "", fmt.Errorf("unknown action for workspace_context: %s. Valid actions are 'search_embeddings', 'search_keywords', 'load_tree', 'load_summary'.", action)
 	}
 }
 

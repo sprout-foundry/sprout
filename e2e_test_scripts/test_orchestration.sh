@@ -62,4 +62,4 @@ run_test_logic() {
     echo "----------------------------------------------------"
 }
 
-# run_test_logic lambda-ai:qwen25-coder-32b-instruct # Pass the model name from the command line argument
+# run_test_logic deepinfra:Qwen/Qwen3-Coder-480B-A35B-Instruct # Pass the model name from the command line argument

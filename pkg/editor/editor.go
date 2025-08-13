@@ -39,9 +39,10 @@ func isIncompleteTruncatedResponse(code, filename string) bool {
 		"// ... (truncated)",
 	}
 
-	codeLower := strings.ToLower(code)
+	// Only flag markers that appear outside of string literals to avoid
+	// false positives when editing code that defines these markers.
 	for _, marker := range truncationMarkers {
-		if strings.Contains(codeLower, marker) {
+		if containsMarkerOutsideQuotes(code, marker) {
 			return true
 		}
 	}
@@ -72,6 +73,45 @@ func isIncompleteTruncatedResponse(code, filename string) bool {
 	}
 
 	// Default to accepting the response - better to process partial code than loop forever
+	return false
+}
+
+// containsMarkerOutsideQuotes returns true if marker appears outside of
+// simple string literals (double-quoted or backtick raw strings). This is a
+// heuristic to avoid flagging markers that are present as string constants
+// inside source code.
+func containsMarkerOutsideQuotes(text, marker string) bool {
+	// Fast-path reject
+	if !strings.Contains(strings.ToLower(text), strings.ToLower(marker)) {
+		return false
+	}
+	// Scan line by line and track quote state per line
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		// Track whether we're inside a double-quoted or backtick raw string
+		inDouble := false
+		inBacktick := false
+		for i := 0; i < len(line); i++ {
+			ch := line[i]
+			// Toggle backtick raw string state
+			if ch == '`' && !inDouble {
+				inBacktick = !inBacktick
+			}
+			// Toggle double quote state (ignore escaped quotes)
+			if ch == '"' && !inBacktick {
+				// check escape
+				if i == 0 || line[i-1] != '\\' {
+					inDouble = !inDouble
+				}
+			}
+			// Check for marker at this position when not in a string
+			if !inDouble && !inBacktick {
+				if i+len(marker) <= len(line) && strings.EqualFold(line[i:i+len(marker)], marker) {
+					return true
+				}
+			}
+		}
+	}
 	return false
 }
 
@@ -188,55 +228,58 @@ func ProcessInstructionsWithWorkspace(instructions string, cfg *config.Config) (
 	return ProcessInstructions(instructions, cfg)
 }
 
+// ProcessInstructions processes the tags found in the editor's context,
+// interpreting them to perform various operations such as applying code changes,
+// generating new content, or interacting with external tools.
 func ProcessInstructions(instructions string, cfg *config.Config) (string, error) {
 	// Note: Search grounding is now handled via explicit tool calls instead of #SG flags
 	// This prevents accidental triggering by LLM responses and provides better control
 
-    // Fast-path delete: Detect "Delete the file named 'X'" and perform locally
-    if m := regexp.MustCompile(`(?i)delete the file named ['\"]([^'\"]+)['\"]`).FindStringSubmatch(instructions); len(m) == 2 {
-        target := m[1]
-        // Remove from disk if present
-        if err := os.Remove(target); err == nil {
-            fmt.Printf("Deleted file: %s\n", target)
-        } else if !os.IsNotExist(err) {
-            fmt.Printf("Warning: could not delete %s: %v\n", target, err)
-        }
-        // Remove from workspace.json if present
-        ws, err := workspace.LoadWorkspaceFile()
-        if err == nil {
-            if _, ok := ws.Files[target]; ok {
-                delete(ws.Files, target)
-                _ = os.MkdirAll(filepath.Dir(workspace.DefaultWorkspaceFilePath), os.ModePerm)
-                _ = workspace.SaveWorkspace(ws)
-            }
-        }
-        // Done – no LLM call needed
-        return "", nil
-    }
+	// Fast-path delete: Detect "Delete the file named 'X'" and perform locally
+	if m := regexp.MustCompile(`(?i)delete the file named ['"]([^'"]+)['"]`).FindStringSubmatch(instructions); len(m) == 2 {
+		target := m[1]
+		// Remove from disk if present
+		if err := os.Remove(target); err == nil {
+			fmt.Printf("Deleted file: %s\n", target)
+		} else if !os.IsNotExist(err) {
+			fmt.Printf("Warning: could not delete %s: %v\n", target, err)
+		}
+		// Remove from workspace.json if present
+		ws, err := workspace.LoadWorkspaceFile()
+		if err == nil {
+			if _, ok := ws.Files[target]; ok {
+				delete(ws.Files, target)
+				_ = os.MkdirAll(filepath.Dir(workspace.DefaultWorkspaceFilePath), os.ModePerm)
+				_ = workspace.SaveWorkspace(ws)
+			}
+		}
+		// Done – no LLM call needed
+		return "", nil
+	}
 
-    // Handle optional search grounding when flag is enabled
-    if cfg.UseSearchGrounding {
-        // Extract optional quoted query after #SG
-        sgRe := regexp.MustCompile(`(?i)#SG(?:\s+"([^"]*)")?`)
-        if m := sgRe.FindStringSubmatch(instructions); m != nil {
-            query := ""
-            if len(m) > 1 {
-                query = m[1]
-            }
-            // Log initiation happens inside FetchContextFromSearch
-            ctx, err := webcontent.FetchContextFromSearch(query, cfg)
-            if err == nil && ctx != "" {
-                instructions = ctx + "\n\n" + instructions
-            }
-        }
-        // Strip all #SG tokens from instructions
-        instructions = sgRe.ReplaceAllString(instructions, "")
-    } else {
-        // If not using search grounding, strip #SG to avoid mis-parsing as a file tag
-        instructions = regexp.MustCompile(`(?i)#SG(?:\s+"([^"]*)")?`).ReplaceAllString(instructions, "")
-    }
+	// Handle optional search grounding when flag is enabled
+	if cfg.UseSearchGrounding {
+		// Extract optional quoted query after #SG
+		sgRe := regexp.MustCompile(`(?i)#SG(?:\s+"([^"]*)")?`)
+		if m := sgRe.FindStringSubmatch(instructions); m != nil {
+			query := ""
+			if len(m) > 1 {
+				query = m[1]
+			}
+			// Log initiation happens inside FetchContextFromSearch
+			ctx, err := webcontent.FetchContextFromSearch(query, cfg)
+			if err == nil && ctx != "" {
+				instructions = ctx + "\n\n" + instructions
+			}
+		}
+		// Strip all #SG tokens from instructions
+		instructions = sgRe.ReplaceAllString(instructions, "")
+	} else {
+		// If not using search grounding, strip #SG to avoid mis-parsing as a file tag
+		instructions = regexp.MustCompile(`(?i)#SG(?:\s+"([^"]*)")?`).ReplaceAllString(instructions, "")
+	}
 
-    // Updated pattern to capture line ranges: #filename:start-end or #filename:start,end
+	// Updated pattern to capture line ranges: #filename:start-end or #filename:start,end
 	filePattern := regexp.MustCompile(`\s+#(\S+)(?::(\d+)[-,](\d+))?`)
 	matches := filePattern.FindAllStringSubmatch(instructions, -1)
 	fmt.Printf("full instructions: %s\n", instructions)
@@ -272,7 +315,7 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 		if path == "WORKSPACE" || path == "WS" {
 			fmt.Println(prompts.LoadingWorkspaceData())
 			content = workspace.GetWorkspaceContext(instructions, cfg)
-    } else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		} else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 			content, err = webcontent.NewWebContentFetcher().FetchWebContent(path, cfg) // Pass cfg here
 			if err != nil {
 				fmt.Print(prompts.URLFetchError(path, err))
@@ -619,38 +662,38 @@ func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions 
 // ProcessCodeGeneration generates code based on instructions and returns the combined diff for all changed files.
 // The full raw LLM response is still recorded in the changelog for auditing.
 func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, imagePath string) (string, error) {
-    var originalCode string
-    var err error
+	var originalCode string
+	var err error
 
-    // If no filename was provided, try to infer a single explicit target from instructions, e.g., "In file1.txt, ..."
-    inferredFilename := ""
-    if filename == "" {
-        // Match common patterns: In <file>, into <file>, to <file>
-        re := regexp.MustCompile(`(?i)\b(?:in|into|to)\s+([\w./-]+\.[A-Za-z0-9]+)\b`)
-        if m := re.FindStringSubmatch(instructions); len(m) == 2 {
-            inferredFilename = m[1]
-        }
-    }
+	// If no filename was provided, try to infer a single explicit target from instructions, e.g., "In file1.txt, ..."
+	inferredFilename := ""
+	if filename == "" {
+		// Match common patterns: In <file>, into <file>, to <file>
+		re := regexp.MustCompile(`(?i)\b(?:in|into|to)\s+([\w./-]+\.[A-Za-z0-9]+)\b`)
+		if m := re.FindStringSubmatch(instructions); len(m) == 2 {
+			inferredFilename = m[1]
+		}
+	}
 
-    effectiveFilename := filename
-    if effectiveFilename == "" && inferredFilename != "" {
-        effectiveFilename = inferredFilename
-    }
+	effectiveFilename := filename
+	if effectiveFilename == "" && inferredFilename != "" {
+		effectiveFilename = inferredFilename
+	}
 
-    if effectiveFilename != "" {
-        // Ensure the target file exists so downstream logic and LLM have a concrete file
-        if _, statErr := os.Stat(effectiveFilename); os.IsNotExist(statErr) {
-            // Create empty file and parent directories if needed
-            if dir := filepath.Dir(effectiveFilename); dir != "." && dir != "" {
-                _ = os.MkdirAll(dir, os.ModePerm)
-            }
-            _ = os.WriteFile(effectiveFilename, []byte(""), 0644)
-        }
-        originalCode, err = filesystem.LoadOriginalCode(effectiveFilename)
-        if err != nil {
-            return "", err
-        }
-    }
+	if effectiveFilename != "" {
+		// Ensure the target file exists so downstream logic and LLM have a concrete file
+		if _, statErr := os.Stat(effectiveFilename); os.IsNotExist(statErr) {
+			// Create empty file and parent directories if needed
+			if dir := filepath.Dir(effectiveFilename); dir != "." && dir != "" {
+				_ = os.MkdirAll(dir, os.ModePerm)
+			}
+			_ = os.WriteFile(effectiveFilename, []byte(""), 0644)
+		}
+		originalCode, err = filesystem.LoadOriginalCode(effectiveFilename)
+		if err != nil {
+			return "", err
+		}
+	}
 
 	processedInstructions, err := ProcessInstructions(instructions, cfg)
 	if err != nil {
@@ -658,9 +701,9 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 	}
 	// fmt.Print(prompts.ProcessedInstructionsSeparator(processedInstructions))
 
-    requestHash := utils.GenerateRequestHash(processedInstructions)
-    // Pass the effectiveFilename to guide targeted edits when inferred
-    updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, effectiveFilename, cfg, imagePath)
+	requestHash := utils.GenerateRequestHash(processedInstructions)
+	// Pass the effectiveFilename to guide targeted edits when inferred
+	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, effectiveFilename, cfg, imagePath)
 	if err != nil {
 		return "", err
 	}
@@ -682,7 +725,9 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 }
 
 func ProcessPartialEdit(filePath, targetInstructions string, cfg *config.Config, logger *utils.Logger) (string, error) {
-	// Use the new processPartialEdit function for more efficient targeted edits
+	// Partial edits are only supported via explicit tool calls. This entry point is
+	// reserved for the micro_edit tool path and should not be used by the standard
+	// editing flow directly.
 	return processPartialEdit(filePath, targetInstructions, cfg, logger)
 }
 

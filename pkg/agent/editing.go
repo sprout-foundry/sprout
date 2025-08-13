@@ -16,25 +16,7 @@ func runSingleEditWithRetries(operation EditOperation, editInstructions string, 
 			context.Logger.LogProcessStep(fmt.Sprintf("🔄 Retry attempt %d/%d for edit %d", attempt, maxRetries, attempt))
 		}
 
-		if shouldUsePartialEdit(operation, context.Logger) {
-			context.Logger.Logf("Attempting partial edit for %s (attempt %d)", operation.FilePath, attempt+1)
-			diff, perr := editor.ProcessPartialEdit(operation.FilePath, operation.Instructions, context.Config, context.Logger)
-			if perr == nil {
-				completionTokens += utils.EstimateTokens(diff)
-				success = true
-				opResult = "✅ Edit operation completed successfully"
-				return completionTokens, success, nil, opResult
-			}
-			// Fall back to full file edit on partial failure
-			context.Logger.Logf("Partial edit failed, falling back to full file edit: %v", perr)
-			fdiff, ferr := editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
-			if ferr == nil {
-				completionTokens += utils.EstimateTokens(fdiff)
-				success = true
-				opResult = "✅ Edit operation completed successfully"
-				return completionTokens, success, nil, opResult
-			}
-			err = ferr
+		if false { // Implicit partial edits disabled; use explicit micro_edit tool instead
 		} else {
 			context.Logger.Logf("Using full file edit for %s (attempt %d)", operation.FilePath, attempt+1)
 			fdiff, ferr := editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")

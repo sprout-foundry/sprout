@@ -136,8 +136,12 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		}
 	}
 
-	if !cfg.Interactive {
-		logger.Log("Taking non-interactive path without tool calling (cost optimization)")
+	if !cfg.Interactive || !cfg.CodeToolsEnabled {
+		if !cfg.Interactive {
+			logger.Log("Taking non-interactive path without tool calling (cost optimization)")
+		} else {
+			logger.Log("Tools disabled for code flow. Ignoring any tool_calls; returning code only.")
+		}
 		// For non-interactive mode (like agent mode), use the standard LLM response without tool calling
 		// This prevents expensive context requests and forces the model to provide code directly
 		response, _, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
@@ -145,6 +149,8 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 			logger.Log(fmt.Sprintf("Non-interactive LLM call failed: %v", err))
 			return modelName, "", err
 		}
+		// Strip tool_calls blocks if present
+		response = prompts.StripToolCallsIfPresent(response)
 		logger.Log(fmt.Sprintf("Non-interactive response length: %d chars", len(response)))
 		logger.Log("=== End GetLLMCodeResponse Debug ===")
 		return modelName, response, nil

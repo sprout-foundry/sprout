@@ -72,6 +72,38 @@ func GetBaseCodeGenSystemMessage() string {
 	return content
 }
 
+// StripToolCallsIfPresent removes obvious tool_calls JSON blocks from a model response
+// to ensure code-only handling when tools are disabled.
+func StripToolCallsIfPresent(response string) string {
+	// Quick heuristic: if it contains '"tool_calls"' or a top-level JSON with that key, strip everything between a recognizable block.
+	// Keep it conservative to avoid removing valid code; we just drop the tool_calls stanza if present.
+	if !strings.Contains(response, "\"tool_calls\"") {
+		return response
+	}
+	// Remove minimal blocks that start with '{' containing tool_calls and end at the matching '}'
+	// Fallback: remove lines that look like a tool_calls JSON block
+	var out []string
+	inBlock := false
+	braceDepth := 0
+	for _, line := range strings.Split(response, "\n") {
+		if !inBlock && strings.Contains(line, "\"tool_calls\"") {
+			inBlock = true
+			// Count braces
+			braceDepth += strings.Count(line, "{") - strings.Count(line, "}")
+			continue
+		}
+		if inBlock {
+			braceDepth += strings.Count(line, "{") - strings.Count(line, "}")
+			if braceDepth <= 0 {
+				inBlock = false
+			}
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
 // BuildCodeMessages constructs the messages for the LLM to generate code.
 func BuildCodeMessages(code, instructions, filename string, interactive bool) []Message {
 	var messages []Message

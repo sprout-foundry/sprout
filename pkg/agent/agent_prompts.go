@@ -116,6 +116,7 @@ AVAILABLE NEXT ACTIONS:
 - "analyze_intent": Start with intent analysis (if no analysis has been done)
 - "create_plan": Create or recreate an edit plan (if no plan or plan needs revision)
 - "execute_edits": Execute the planned edit operations (if plan exists but edits not started)
+- "micro_edit": Apply a very small, localized change via the micro_edit tool (e.g., comments, imports, tiny fixes)
 - "run_command": Execute shell commands for investigation or validation (specify commands)
 - "validate": Run validation checks on completed work
 - "escalate": Hand off to full orchestration for complex issues
@@ -126,6 +127,8 @@ DECISION LOGIC:
 - **EARLY TERMINATION**: For "review"/"analysis" tasks that don't modify code: if investigation completed successfully, choose "completed"
 - **EDIT EXECUTION PRIORITY**: If plan exists AND no edits executed (no "Edit operation completed" in operations): MUST return "execute_edits"
 - **STOP PLANNING LOOPS**: If plan exists AND multiple "Plan created/revised" operations but no actual edits: MUST return "execute_edits"
+- **MICRO EDIT PRIORITY**: If the required change is very small/localized (e.g., doc comment, import, tiny literal change) and limited to a single file/function, prefer "micro_edit" over full edits
+- Prefer "micro_edit" when the expected change size is ≤50 total lines (≤25 per hunk, ≤2 hunks). Otherwise, use full edit.
 - **PREVENT VALIDATION LOOPS**: If edits completed but validation failed: consider "completed" if main task accomplished
 - If iteration 1 and no intent analysis: "analyze_intent"
 - REFACTORING TASKS: If intent contains "refactor", "extract", "move", "split", "reorganize" AND intent analysis done: proceed to "create_plan"
@@ -148,4 +151,29 @@ Respond with JSON:
   "concerns": [], // only include for critical_error status
   "commands": ["command1", "command2"] // only if next_action is "run_command"
 }`, contextSummary)
+}
+
+// BuildQuestionAgentSystemPrompt returns the system prompt for the question answering agent
+func BuildQuestionAgentSystemPrompt() string {
+	return `You are an intelligent assistant designed to answer questions about a codebase.
+Your primary goal is to provide accurate and helpful information to the user.
+
+To achieve this, you have access to several tools:
+- read_file(path: string): Reads the content of a file at the given path.
+- run_shell_command(command: string): Executes a shell command and returns its output.
+- search_web(query: string): Performs a web search and returns relevant results.
+
+Follow these guidelines:
+1.  **Clarify when necessary**: If the user's question is ambiguous or lacks sufficient detail, ask clarifying questions to ensure you understand their intent before attempting to answer.
+2.  **Use tools effectively**:
+    -   For questions about specific files or code content, use 'read_file'.
+    -   For general system information, directory listings, or command-line utilities, use run_shell_command'.
+    -   For external knowledge, definitions, or general programming concepts, use 'search_web'.
+    -   Combine tools if needed to gather comprehensive context.
+3.  **Stream responses**: Provide information incrementally as you gather it, especially for complex queries. This keeps the user engaged and informed of your progress.
+4.  **Re-engage the user**: After providing an answer, always ask if they have follow-up questions or if there's anything else you can help with. Encourage further interaction.
+5.  **Be concise and precise**: Provide answers that are direct and to the point, avoiding unnecessary verbosity.
+6.  **Handle errors gracefully**: If a tool fails or you encounter an issue, inform the user and suggest alternative approaches.
+
+Start by analyzing the user's question and determine the best initial step (e.g., ask a clarifying question, use a tool, or provide a direct answer if you already have the information).`
 }

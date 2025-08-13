@@ -55,7 +55,8 @@ type Config struct {
 	PresencePenalty          float64              `json:"presence_penalty"`           // NEW: Field for presence penalty
 	FrequencyPenalty         float64              `json:"frequency_penalty"`          // NEW: Field for frequency penalty
 	RetryAttemptCount        int                  `json:"-"`                          // Internal field to track retry attempts
-    UseSearchGrounding       bool                 `json:"-"`                          // Command-scoped flag to enable search grounding
+	UseSearchGrounding       bool                 `json:"-"`                          // Command-scoped flag to enable search grounding
+	CodeToolsEnabled         bool                 `json:"-"`                          // Allow tool-calls in code flow when true
 }
 
 func getHomeConfigPath() (string, string) {

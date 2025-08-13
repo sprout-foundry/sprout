@@ -92,14 +92,16 @@ func CallLLMWithInteractiveContext(
 	}
 
 	currentMessages := enhancedMessages
-	maxRetries := 8 // Limit the number of interactive turns
+	maxRetries := 6 // Limit the number of interactive turns
 
 	for i := 0; i < maxRetries; i++ {
+		fmt.Printf("[tools] turn %d/%d\n", i+1, maxRetries)
 		// Call the main LLM response function (which is in api.go, same package)
 		response, _, err := GetLLMResponse(modelName, currentMessages, filename, cfg, timeout)
 		if err != nil {
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
+		fmt.Println("[tools] model returned a response")
 
 		// Check if the response contains tool calls (preferred method)
 		if containsToolCall(response) {
@@ -118,6 +120,7 @@ func CallLLMWithInteractiveContext(
 				// Execute tool calls using basic implementation
 				var toolResults []string
 				for _, toolCall := range toolCalls {
+					fmt.Printf("[tools] executing %s\n", toolCall.Function.Name)
 					result, err := executeBasicToolCall(toolCall, cfg)
 					if err != nil {
 						toolResults = append(toolResults, fmt.Sprintf("Tool %s failed: %s", toolCall.Function.Name, err.Error()))

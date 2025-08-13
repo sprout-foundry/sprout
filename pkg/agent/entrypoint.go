@@ -37,7 +37,7 @@ func RunAgentMode(userIntent string, skipPrompt bool, model string) error {
 		return err
 	}
 	overallDuration := time.Since(overallStart)
-	PrintTokenUsageSummary(tokenUsage, overallDuration)
+	PrintTokenUsageSummary(tokenUsage, overallDuration, cfg)
 	fmt.Printf("✅ Agent execution completed\n")
 	return nil
 }

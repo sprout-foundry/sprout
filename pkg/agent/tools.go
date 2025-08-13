@@ -80,9 +80,21 @@ func executeMicroEdit(context *AgentContext) error {
 	}
 
 	context.Logger.LogProcessStep(fmt.Sprintf("micro_edit: attempting minimal change in %s", targetFile))
+	// This tool explicitly performs a micro/partial edit; allowed path
+	// First, perform the partial edit to get a candidate diff
 	diff, err := editor.ProcessPartialEdit(targetFile, instructions, context.Config, context.Logger)
 	if err != nil {
 		context.Logger.LogProcessStep(fmt.Sprintf("micro_edit failed: %v", err))
+		return nil
+	}
+	// Enforce micro edit limits (language-agnostic):
+	// - default: <=50 total changed lines
+	// - per-hunk <=25 lines
+	// - <=2 hunks
+	// If limits exceeded, abort and suggest escalation
+	if exceeded, summary := enforceMicroEditLimits(diff, 50, 25, 2); exceeded {
+		context.Logger.LogProcessStep("micro_edit aborted: diff exceeded safe limits. Escalating to full edit recommended.")
+		context.Logger.LogProcessStep(summary)
 		return nil
 	}
 	// Token accounting approximation from diff size
@@ -92,4 +104,43 @@ func executeMicroEdit(context *AgentContext) error {
 	context.ExecutedOperations = append(context.ExecutedOperations, fmt.Sprintf("micro_edit applied to %s", targetFile))
 	context.Logger.LogProcessStep("micro_edit: change applied")
 	return nil
+}
+
+// enforceMicroEditLimits inspects a unified diff-like string to approximate change size.
+// It returns true if limits are exceeded and a brief summary.
+func enforceMicroEditLimits(diff string, maxTotal int, maxHunk int, maxHunks int) (bool, string) {
+	lines := strings.Split(diff, "\n")
+	totalChanged := 0
+	currentHunk := 0
+	hunks := 0
+	for _, l := range lines {
+		// Count +/- as changes; ignore context lines
+		if strings.HasPrefix(l, "+ ") || strings.HasPrefix(l, "- ") || strings.HasPrefix(l, "+") || strings.HasPrefix(l, "-") {
+			totalChanged++
+			currentHunk++
+			if currentHunk > maxHunk {
+				return true, fmt.Sprintf("Exceeded per-hunk limit: %d > %d", currentHunk, maxHunk)
+			}
+		} else {
+			// End of a change block when we hit a non-change line while in a hunk
+			if currentHunk > 0 {
+				hunks++
+				if hunks > maxHunks {
+					return true, fmt.Sprintf("Exceeded hunk count limit: %d > %d", hunks, maxHunks)
+				}
+				currentHunk = 0
+			}
+		}
+		if totalChanged > maxTotal {
+			return true, fmt.Sprintf("Exceeded total changed lines limit: %d > %d", totalChanged, maxTotal)
+		}
+	}
+	// Close final hunk if diff ends in changes
+	if currentHunk > 0 {
+		hunks++
+		if hunks > maxHunks {
+			return true, fmt.Sprintf("Exceeded hunk count limit at end: %d > %d", hunks, maxHunks)
+		}
+	}
+	return false, fmt.Sprintf("Within limits: total=%d, hunks=%d", totalChanged, hunks)
 }

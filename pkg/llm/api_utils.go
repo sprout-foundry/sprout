@@ -3,10 +3,12 @@ package llm
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/prompts"
 )
@@ -115,5 +117,20 @@ func AddImageToMessage(message *prompts.Message, imagePath string) error {
 	})
 
 	message.Content = parts
+	return nil
+}
+
+// CheckEndpointReachable performs a quick GET to verify the endpoint is reachable
+func CheckEndpointReachable(url string, timeout time.Duration) error {
+	client := &http.Client{Timeout: timeout}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close()
 	return nil
 }

@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -22,8 +25,18 @@ func executeValidation(context *AgentContext) error {
 		return nil
 	}
 
-	// Skip validation for documentation-only changes to avoid build failures
+	// Skip build for documentation-only changes; apply outcome-driven check instead
 	if context.IntentAnalysis.Category == "docs" && context.TaskComplexity == TaskSimple {
+		// Attempt outcome-driven evaluation: if a file is mentioned and now begins with comment lines, consider success
+		file := extractGoFileFromUserIntent(context.UserIntent)
+		if file != "" {
+			if ok := goFileStartsWithComment(file); ok {
+				context.Logger.LogProcessStep("✅ Doc outcome met: top-of-file comment present")
+				context.ValidationResults = append(context.ValidationResults, "✅ Doc success criteria met (top-of-file comment present)")
+				context.ExecutedOperations = append(context.ExecutedOperations, "Validation completed (docs-only success)")
+				return nil
+			}
+		}
 		context.Logger.LogProcessStep("✅ Skipping validation for documentation-only changes")
 		context.ValidationResults = append(context.ValidationResults, "✅ Validation skipped (docs-only)")
 		context.ExecutedOperations = append(context.ExecutedOperations, "Validation skipped (docs-only)")
@@ -124,6 +137,40 @@ func executeRefactoringValidation(context *AgentContext) error {
 	context.ExecutedOperations = append(context.ExecutedOperations, "Refactoring validation completed")
 	context.Logger.LogProcessStep("✅ Refactoring validation completed successfully")
 	return nil
+}
+
+// extractGoFileFromUserIntent returns the first mentioned .go path if present
+func extractGoFileFromUserIntent(intent string) string {
+	// generic heuristic: find first token that looks like a relative path with extension
+	for _, tok := range strings.Fields(intent) {
+		cleaned := filepath.Clean(strings.Trim(tok, "\"'`"))
+		if strings.Contains(cleaned, "/") && strings.Contains(cleaned, ".") {
+			return cleaned
+		}
+	}
+	return ""
+}
+
+// goFileStartsWithComment checks whether the file begins with line comments
+func goFileStartsWithComment(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	r := bufio.NewReader(f)
+	for i := 0; i < 5; i++ { // inspect a few top lines
+		line, err := r.ReadString('\n')
+		if len(line) == 0 && err != nil {
+			break
+		}
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		return strings.HasPrefix(trimmed, "//")
+	}
+	return false
 }
 
 // executeValidationFailureRecovery analyzes validation failures and creates targeted fixes

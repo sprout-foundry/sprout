@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"os"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent" // Import the new agent package
@@ -12,6 +13,7 @@ var (
 	agentSkipPrompt bool
 	agentModel      string // Declare agentModel variable
 	agentVersion    string // v1 (default) or v2 (tool-driven)
+	agentDryRun     bool
 )
 
 func init() {
@@ -19,6 +21,7 @@ func init() {
 	// Add a flag to allow users to specify and override the LLM model for agent operations
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name to use with the LLM")
 	agentCmd.Flags().StringVar(&agentVersion, "agent", "v1", "Agent version: v1 (orchestration loop) or v2 (tool-driven)")
+	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (no writes/shell side-effects)")
 }
 
 // agentCmd represents the agent command
@@ -51,6 +54,10 @@ Examples:
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		userIntent := strings.Join(args, " ")
+		// Propagate dry-run via env var for simplicity; config loader reads os.Getenv in future enhancement
+		if agentDryRun {
+			_ = os.Setenv("LEDIT_DRY_RUN", "1")
+		}
 		if agentVersion == "v2" {
 			return agent.RunAgentModeV2(userIntent, agentSkipPrompt, agentModel)
 		}

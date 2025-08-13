@@ -151,7 +151,7 @@ func extractGoFileFromUserIntent(intent string) string {
 	return ""
 }
 
-// goFileStartsWithComment checks whether the file begins with line comments
+// goFileStartsWithComment checks whether the file begins with comments (line or block)
 func goFileStartsWithComment(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -159,7 +159,8 @@ func goFileStartsWithComment(path string) bool {
 	}
 	defer f.Close()
 	r := bufio.NewReader(f)
-	for i := 0; i < 5; i++ { // inspect a few top lines
+	inBlock := false
+	for i := 0; i < 20; i++ { // inspect up to ~20 lines to catch license headers
 		line, err := r.ReadString('\n')
 		if len(line) == 0 && err != nil {
 			break
@@ -168,9 +169,20 @@ func goFileStartsWithComment(path string) bool {
 		if trimmed == "" {
 			continue
 		}
+		if strings.HasPrefix(trimmed, "/*") {
+			inBlock = true
+		}
+		if inBlock {
+			if strings.Contains(trimmed, "*/") {
+				return true
+			}
+			// still inside top block comment
+			continue
+		}
+		// Not in block; check line comment at the top
 		return strings.HasPrefix(trimmed, "//")
 	}
-	return false
+	return inBlock
 }
 
 // executeValidationFailureRecovery analyzes validation failures and creates targeted fixes

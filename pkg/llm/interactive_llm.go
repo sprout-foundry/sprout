@@ -155,7 +155,14 @@ func CallLLMWithInteractiveContext(
 
 	printSummary := func() {
 		// Compact end-of-run summary
-		fmt.Printf("[tools] summary: turns=%d tools=%d blocks=%d cache_hits=%d\n",
+		// Approximate cost using configured model pricing
+		approxCost := 0.0
+		if approxTokensUsed > 0 {
+			p := GetModelPricing(modelName)
+			avgPer1K := (p.InputCostPer1K + p.OutputCostPer1K) / 2.0
+			approxCost = float64(approxTokensUsed) / 1000.0 * avgPer1K
+		}
+		fmt.Printf("[tools] summary: turns=%d tools=%d blocks=%d cache_hits=%d approx_tokens=%d approx_cost=%.5f\n",
 			len(turnDurations),
 			func() int {
 				c := 0
@@ -172,6 +179,8 @@ func CallLLMWithInteractiveContext(
 				return c
 			}(),
 			cacheHits,
+			approxTokensUsed,
+			approxCost,
 		)
 	}
 
@@ -614,10 +623,10 @@ func CallLLMWithInteractiveContext(
 			}
 		}
 
-		// If no context request, or if all requests were handled, return the response
+		// No tool_calls and no actionable context requests: instruct model to emit plan/tool_calls and try again
+		currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "No tool_calls found. You must emit a PLAN followed by TOOL_CALLS. Use plan_step → execute_step → evaluate_outcome. Avoid prose. If the user requested a simple file change, plan a micro_edit or edit_file_section on that file, then validate_file."})
 		turnDurations = append(turnDurations, time.Since(turnStart))
-		printSummary()
-		return response, nil
+		continue
 	}
 
 	printSummary()

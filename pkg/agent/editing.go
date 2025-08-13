@@ -201,6 +201,9 @@ func executeEditOperations(context *AgentContext) error {
 		return fmt.Errorf("cannot execute edits: plan contains 0 operations")
 	}
 
+	// Apply simple dependency-aware ordering if not already ordered
+	context.CurrentPlan.EditOperations = orderEditOperationsHeuristic(context.CurrentPlan.EditOperations)
+
 	tokens, err := executeEditPlanWithErrorHandling(context.CurrentPlan, context)
 	if err != nil {
 		// Check if this is a non-critical error that shouldn't fail the entire task
@@ -414,4 +417,55 @@ func buildFocusedEditInstructions(operation EditOperation, logger *utils.Logger)
 	logger.LogProcessStep("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	return fullInstructions
+}
+
+// orderEditOperationsHeuristic orders edits so that likely type/interface definitions are edited
+// before their dependents, and root-level files before deeper ones. This is a simple heuristic
+// to reduce transient build failures during multi-file edits without full graph analysis.
+func orderEditOperationsHeuristic(ops []EditOperation) []EditOperation {
+	if len(ops) <= 1 {
+		return ops
+	}
+	scored := make([]struct {
+		op    EditOperation
+		score int
+	}, 0, len(ops))
+	for _, op := range ops {
+		s := 0
+		lower := strings.ToLower(op.Description + " " + op.Instructions)
+		// Prefer definitions
+		if strings.Contains(lower, "type ") || strings.Contains(lower, "interface") || strings.Contains(lower, "struct") {
+			s += 5
+		}
+		if strings.Contains(lower, "define") || strings.Contains(lower, "add new type") {
+			s += 3
+		}
+		// Prefer root/shallower paths
+		depth := strings.Count(op.FilePath, "/")
+		s += max(0, 5-depth)
+		scored = append(scored, struct {
+			op    EditOperation
+			score int
+		}{op: op, score: s})
+	}
+	// Stable sort by score descending
+	for i := 0; i < len(scored)-1; i++ {
+		for j := i + 1; j < len(scored); j++ {
+			if scored[j].score > scored[i].score {
+				scored[i], scored[j] = scored[j], scored[i]
+			}
+		}
+	}
+	out := make([]EditOperation, 0, len(ops))
+	for _, it := range scored {
+		out = append(out, it.op)
+	}
+	return out
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

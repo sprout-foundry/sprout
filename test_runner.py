@@ -213,10 +213,7 @@ Examples:
             if not test_name:
                 logging.warning(f"'get_test_name' in {script_path.name} returned an empty name. Skipping this test.")
                 continue
-            # Temporarily skip Orchestration Feature test per user instruction
-            if test_name == 'Orchestration Feature':
-                logging.info("Skipping test 'Orchestration Feature' temporarily")
-                continue
+            # Keep orchestration test; include new agent v2 tests as well
             tests.append({'name': test_name, 'path': script_path})
             print(f"Discovered Test: {test_name}")
         except subprocess.CalledProcessError as e:
@@ -288,6 +285,13 @@ Examples:
         selected_tests_for_execution = tests # Run all discovered tests
 
     # --- Test Execution & Monitoring ---
+    # Prepare CSV to track performance and results
+    results_csv_path = project_root / 'e2e_results.csv'
+    try:
+        with open(results_csv_path, 'w') as fcsv:
+            fcsv.write('test_name,duration_seconds,passed,failed\n')
+    except Exception as e:
+        logging.warning(f"Could not initialize e2e_results.csv: {e}")
     results = OrderedDict() # Stores final results: test_name -> 'PASS'/'FAIL'/'FAIL (Timeout)'
     failure_reasons = {}    # Stores detailed reasons for failed tests
     processes = {}          # Dictionary to track active subprocesses: pid -> {process, name, sanitized_name, start_time, stdout_file, stderr_file, stdout_file_path, stderr_file_path, test_workspace_path}

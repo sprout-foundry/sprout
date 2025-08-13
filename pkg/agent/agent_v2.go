@@ -99,7 +99,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 		return nil
 	}
 
-	// If intent looks like a doc-only comment change, add header (only when no replacement pattern found)
+	// If intent looks like a doc-only header/summary request, add header via LLM (only when no replacement pattern found)
 	if looksLikeDocOnly(userIntent) && !strings.Contains(strings.ToLower(userIntent), "change ") {
 		// Idempotence: skip if file already starts with a comment block
 		if goFileStartsWithComment(target) {
@@ -107,7 +107,8 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 			fmt.Printf("✅ Agent v2 execution completed\n")
 			return nil
 		}
-		header := buildSummaryParagraph(target)
+		logger.LogProcessStep("v2: generating file header summary via LLM")
+		header := buildSummaryParagraph(target, cfg)
 		if err := insertTopComment(target, header); err != nil {
 			logger.LogError(fmt.Errorf("failed to insert comment in %s: %w", target, err))
 			return err
@@ -152,20 +153,72 @@ func fileExists(path string) bool {
 	return false
 }
 
-func buildSummaryParagraph(path string) string {
-	// TODO: This should use an llm t summarize. The summarize model would be a good candidate.
+func buildSummaryParagraph(path string, cfg *config.Config) string {
+	// Read file and send a concise summarization request to the summary/orchestration model
 	base := filepath.Base(path)
-	dir := filepath.Dir(path)
-	return fmt.Sprintf("%s provides utilities for the %s package. It contains functions and helpers used across the codebase. This comment summarizes the file’s purpose and typical usage.", base, dir)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Sprintf("%s: summary header.", base)
+	}
+	content := string(b)
+	// Trim content to a safe size to control costs
+	const maxChars = 16000
+	if len(content) > maxChars {
+		head := content[:8000]
+		tail := content[len(content)-7000:]
+		content = head + "\n... [truncated for summary]\n" + tail
+	}
+	// Choose a small/fast control model for summarization
+	model := cfg.SummaryModel
+	if model == "" {
+		model = cfg.OrchestrationModel
+	}
+	if model == "" {
+		model = cfg.EditingModel
+	}
+	sys := prompts.Message{Role: "system", Content: "You are a senior engineer. Produce a concise 1-2 sentence file header summarizing purpose and key responsibilities. No code fences, no markdown, no quotes. Keep under 220 characters."}
+	user := prompts.Message{Role: "user", Content: fmt.Sprintf("File: %s\nPlease summarize this file succinctly for a header comment.\n\nBEGIN FILE CONTENT\n%s\nEND FILE CONTENT", base, content)}
+	resp, _, err := llm.GetLLMResponse(model, []prompts.Message{sys, user}, path, cfg, 45*time.Second)
+	if err != nil || strings.TrimSpace(resp) == "" {
+		// Fallback generic summary on failure
+		ext := filepath.Ext(path)
+		dir := filepath.Base(filepath.Dir(path))
+		return fmt.Sprintf("%s (%s) belongs to %s. This header summarizes the file’s purpose and typical usage.", base, ext, dir)
+	}
+	// Normalize whitespace and trim
+	s := strings.TrimSpace(resp)
+	s = strings.ReplaceAll(s, "\n", " ")
+	if len(s) > 260 {
+		s = s[:260]
+	}
+	return s
 }
 
 func looksLikeDocOnly(intent string) bool {
 	lo := strings.ToLower(intent)
+	// Exclusions: inline comments or comment-out requests are not file-header edits
+	if strings.Contains(lo, "comment out") || strings.Contains(lo, "comment-out") || strings.Contains(lo, "inline comment") {
+		return false
+	}
 	// If it looks like a replacement instruction, do NOT treat as doc-only
 	if strings.Contains(lo, "change") && strings.Contains(lo, " to ") {
 		return false
 	}
-	return strings.Contains(lo, "comment") || strings.Contains(lo, "doc") || strings.Contains(lo, "summary") || strings.Contains(lo, "header")
+	// Positive signals for a file-level header/summary request
+	hasHeader := strings.Contains(lo, "header") || strings.Contains(lo, "file header") || strings.Contains(lo, "add header")
+	hasSummary := strings.Contains(lo, "summary") || strings.Contains(lo, "summarize")
+	mentionsTop := strings.Contains(lo, "top of file") || strings.Contains(lo, "top-of-file") || strings.Contains(lo, "at top")
+	mentionsFile := strings.Contains(lo, "file ") || strings.Contains(lo, ".go") || strings.Contains(lo, ".py") || strings.Contains(lo, ".ts") || strings.Contains(lo, ".js") || strings.Contains(lo, ".md")
+
+	// Trigger when it's clearly a header/summary ask
+	if (hasHeader && hasSummary) || (hasHeader && mentionsFile) || (hasSummary && mentionsFile) || (hasHeader && mentionsTop) || (hasSummary && mentionsTop) {
+		return true
+	}
+	// Also allow general phrasing like "file header summary"
+	if strings.Contains(lo, "file header summary") || strings.Contains(lo, "summary header") {
+		return true
+	}
+	return false
 }
 
 func parseSimpleReplacement(intent string) (oldText, newText string, ok bool) {
@@ -253,7 +306,9 @@ func insertTopComment(path, paragraph string) error {
 	} else {
 		lines = strings.Split(content, "\n")
 	}
-	commentLines := toCommentBlock(paragraph)
+	// Choose comment style by extension
+	style := detectCommentStyle(path)
+	commentLines := toCommentBlockWithStyle(paragraph, style)
 	// Build new content preserving EOL style
 	newLines := append(commentLines, append([]string{""}, lines...)...)
 	newContent := strings.Join(newLines, eol)
@@ -262,12 +317,44 @@ func insertTopComment(path, paragraph string) error {
 
 // use validation_exec.go's helper instead
 
-func toCommentBlock(paragraph string) []string {
-	wrapped := wrapText(paragraph, 100)
-	res := make([]string, 0, len(wrapped))
-	for _, line := range wrapped {
-		res = append(res, "// "+strings.TrimRight(line, " "))
+type commentStyle struct {
+	kind       string
+	linePrefix string
+	blockStart string
+	blockEnd   string
+}
+
+func detectCommentStyle(path string) commentStyle {
+	lower := strings.ToLower(path)
+	switch {
+	case strings.HasSuffix(lower, ".go"), strings.HasSuffix(lower, ".js"), strings.HasSuffix(lower, ".ts"), strings.HasSuffix(lower, ".tsx"), strings.HasSuffix(lower, ".jsx"), strings.HasSuffix(lower, ".java"), strings.HasSuffix(lower, ".c"), strings.HasSuffix(lower, ".cc"), strings.HasSuffix(lower, ".cpp"), strings.HasSuffix(lower, ".h"), strings.HasSuffix(lower, ".hpp"), strings.HasSuffix(lower, ".cs"), strings.HasSuffix(lower, ".rs"), strings.HasSuffix(lower, ".kt"), strings.HasSuffix(lower, ".swift"), strings.HasSuffix(lower, ".scala"), strings.HasSuffix(lower, ".php"):
+		return commentStyle{kind: "line", linePrefix: "// "}
+	case strings.HasSuffix(lower, ".py"), strings.HasSuffix(lower, ".rb"), strings.HasSuffix(lower, ".sh"), strings.HasSuffix(lower, ".bash"), strings.HasSuffix(lower, ".zsh"), strings.HasSuffix(lower, ".fish"), strings.HasSuffix(lower, ".toml"), strings.HasSuffix(lower, ".ini"), strings.HasSuffix(lower, "dockerfile"), strings.HasSuffix(lower, ".yml"), strings.HasSuffix(lower, ".yaml"), strings.HasSuffix(lower, ".conf"):
+		return commentStyle{kind: "line", linePrefix: "# "}
+	case strings.HasSuffix(lower, ".css"):
+		return commentStyle{kind: "block", blockStart: "/*", blockEnd: "*/"}
+	case strings.HasSuffix(lower, ".html"), strings.HasSuffix(lower, ".xml"), strings.HasSuffix(lower, ".md"):
+		return commentStyle{kind: "block", blockStart: "<!--", blockEnd: "-->"}
+	default:
+		return commentStyle{kind: "line", linePrefix: "# "}
 	}
+}
+
+func toCommentBlockWithStyle(paragraph string, style commentStyle) []string {
+	wrapped := wrapText(paragraph, 100)
+	if style.kind == "line" {
+		res := make([]string, 0, len(wrapped))
+		for _, line := range wrapped {
+			res = append(res, style.linePrefix+strings.TrimRight(line, " "))
+		}
+		return res
+	}
+	// block style
+	res := []string{style.blockStart}
+	for _, line := range wrapped {
+		res = append(res, strings.TrimRight(line, " "))
+	}
+	res = append(res, style.blockEnd)
 	return res
 }
 

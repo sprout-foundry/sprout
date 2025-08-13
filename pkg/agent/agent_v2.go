@@ -43,6 +43,8 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 		logger.LogError(fmt.Errorf("failed to load config: %w", err))
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+	// Respect CLI skip-prompt for non-interactive flows
+	cfg.SkipPrompt = skipPrompt
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	// Ensure interactive tool-calling enabled for v2 planner/executor/evaluator usage
 	cfg.Interactive = true
@@ -99,6 +101,25 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 		return nil
 	}
 
+	// Deterministic simple append: support pattern like "append the word X to the end of <file>"
+	if toAppend, ok := parseSimpleAppend(userIntent); ok {
+		b, err := os.ReadFile(target)
+		if err != nil {
+			return fmt.Errorf("append read failed: %w", err)
+		}
+		content := string(b)
+		if !strings.HasSuffix(content, "\n") && content != "" {
+			content += "\n"
+		}
+		content += toAppend + "\n"
+		if err := os.WriteFile(target, []byte(content), 0644); err != nil {
+			return fmt.Errorf("append write failed: %w", err)
+		}
+		logger.LogProcessStep(fmt.Sprintf("v2: appended '%s' to end of %s", toAppend, target))
+		fmt.Printf("✅ Agent v2 execution completed\n")
+		return nil
+	}
+
 	// If intent looks like a doc-only header/summary request, add header via LLM (only when no replacement pattern found)
 	if looksLikeDocOnly(userIntent) && !strings.Contains(strings.ToLower(userIntent), "change ") {
 		// Idempotence: skip if file already starts with a comment block
@@ -137,8 +158,8 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 }
 
 func extractExplicitPath(intent string) string {
-	// Generic path extractor for any file type; not Go-specific
-	re := regexp.MustCompile(`(?m)(?:^|\s)([\w./-]+\.[\w]+)`) // crude local path matcher with extension
+	// Generic path extractor for any file type; allow unicode and symbols except whitespace
+	re := regexp.MustCompile(`(?m)(?:^|\s)([^\s]+\.[^\s]+)`) // match token with a dot and no spaces
 	m := re.FindStringSubmatch(intent)
 	if len(m) >= 2 {
 		return filepath.Clean(m[1])
@@ -283,6 +304,26 @@ func parseSimpleReplacement(intent string) (oldText, newText string, ok bool) {
 		}
 	}
 	return "", "", false
+}
+
+// parseSimpleAppend extracts a simple append request like:
+// "append the word delta to the end of <file>" or "append \"delta\" to the end"
+func parseSimpleAppend(intent string) (text string, ok bool) {
+	lo := strings.ToLower(intent)
+	if !strings.Contains(lo, "append") || !strings.Contains(lo, "to the end") {
+		return "", false
+	}
+	// quoted form
+	re := regexp.MustCompile(`(?i)append\s+(?:the\s+word\s+|the\s+text\s+)?["']([^"']+)["']\s+to\s+the\s+end`)
+	if m := re.FindStringSubmatch(intent); len(m) == 2 {
+		return strings.TrimSpace(m[1]), true
+	}
+	// unquoted single token
+	re2 := regexp.MustCompile(`(?i)append\s+(?:the\s+word\s+|the\s+text\s+)?([A-Za-z0-9_.-]+)\s+to\s+the\s+end`)
+	if m := re2.FindStringSubmatch(intent); len(m) == 2 {
+		return strings.TrimSpace(m[1]), true
+	}
+	return "", false
 }
 
 func insertTopComment(path, paragraph string) error {

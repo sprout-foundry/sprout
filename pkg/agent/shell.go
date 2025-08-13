@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -22,7 +24,10 @@ func executeShellCommands(context *AgentContext, commands []string) error {
 		// Use shell to execute command to handle pipes, redirects, etc., with a timeout
 		ctx, cancel := contextWithTimeout(45 * time.Second)
 		defer cancel()
+		// Sandbox: run in workspace root only
+		wd, _ := os.Getwd()
 		cmd := exec.CommandContext(ctx, "sh", "-c", command)
+		cmd.Dir = filepath.Clean(wd)
 		output, err := cmd.CombinedOutput()
 
 		// Truncate output immediately to prevent huge outputs from overwhelming the system

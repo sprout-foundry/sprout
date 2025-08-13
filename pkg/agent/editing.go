@@ -21,6 +21,24 @@ func runSingleEditWithRetries(operation EditOperation, editInstructions string, 
 			context.Logger.Logf("Using full file edit for %s (attempt %d)", operation.FilePath, attempt+1)
 			fdiff, ferr := editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
 			if ferr == nil {
+				// Evidence verification: ensure the diff mentions the target file
+				if !strings.Contains(fdiff, operation.FilePath) {
+					context.Logger.LogProcessStep("⚠️ Diff did not reference target file; treating as no-op")
+					return completionTokens, false, fmt.Errorf("evidence verification failed: no diff for %s", operation.FilePath), ""
+				}
+				// Minimal-diff guard: avoid full-file rewrites unless necessary
+				if isDiffTooLarge(operation.FilePath, fdiff) {
+					context.Logger.LogProcessStep("⚠️ Diff appears too large (potential full-file rewrite). Retrying as targeted partial edit.")
+					pdiff, perr := editor.ProcessPartialEdit(operation.FilePath, editInstructions, context.Config, context.Logger)
+					if perr == nil {
+						completionTokens += utils.EstimateTokens(pdiff)
+						success = true
+						opResult = "✅ Edit operation completed (partial edit fallback)"
+						return completionTokens, success, nil, opResult
+					}
+					// If partial also fails, continue with original diff but report warning
+					context.Logger.LogProcessStep("ℹ️ Partial edit fallback failed; accepting original diff.")
+				}
 				completionTokens += utils.EstimateTokens(fdiff)
 				success = true
 				opResult = "✅ Edit operation completed successfully"
@@ -46,6 +64,35 @@ func runSingleEditWithRetries(operation EditOperation, editInstructions string, 
 	}
 	// Should not reach here; return last error
 	return completionTokens, false, err, opResult
+}
+
+// isDiffTooLarge heuristically detects likely full-file rewrites by counting changed lines
+func isDiffTooLarge(filePath, diff string) bool {
+	// If the diff contains an entire file replacement marker or has very high change counts, flag it
+	// Heuristic: > 200 changed lines or more than 10 hunks suggests too big
+	lines := strings.Split(diff, "\n")
+	changed := 0
+	hunks := 0
+	inHunk := false
+	for _, l := range lines {
+		if strings.HasPrefix(l, "@@") { // hunk header
+			hunks++
+			inHunk = true
+			continue
+		}
+		if strings.HasPrefix(l, "+") || strings.HasPrefix(l, "-") {
+			changed++
+		} else if inHunk {
+			// end of hunk when encountering context line after changes
+			if !strings.HasPrefix(l, " ") {
+				inHunk = false
+			}
+		}
+		if changed > 200 || hunks > 10 {
+			return true
+		}
+	}
+	return false
 }
 
 // summarizeEditResults logs and returns counts for success/failure

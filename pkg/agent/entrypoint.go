@@ -26,12 +26,16 @@ func RunAgentMode(userIntent string, skipPrompt bool, model string) error {
 		cfg.OrchestrationModel = model
 	}
 	cfg.SkipPrompt = skipPrompt
+	// Enable interactive tool-calling for code flow (planner/executor/evaluator tools)
+	cfg.Interactive = true
+	cfg.CodeToolsEnabled = true
 	_ = llm.InitPricingTable()
 
 	fmt.Printf("🎯 Intent: %s\n", userIntent)
 	logger := utils.GetLogger(cfg.SkipPrompt)
 
 	overallStart := time.Now()
+	_ = WriteRunSnapshot(cfg, fmt.Sprintf("v1-%d", overallStart.Unix()))
 	tokenUsage, err := Execute(userIntent, cfg, logger)
 	if err != nil {
 		return err

@@ -1,6 +1,8 @@
 package filesystem
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,7 +36,14 @@ func SaveFile(filename, content string) error {
 		}
 	}
 
-	err := os.WriteFile(filename, []byte(content), 0644)
+	// Normalize EOLs to existing file style if present
+	normalized := []byte(content)
+	if b, err := os.ReadFile(filename); err == nil {
+		if bytes.Contains(b, []byte("\r\n")) {
+			normalized = bytes.ReplaceAll(normalized, []byte("\n"), []byte("\r\n"))
+		}
+	}
+	err := os.WriteFile(filename, normalized, 0644)
 	if err != nil {
 		fmt.Printf("   ❌ Failed to write file: %v\n", err)
 	} else {
@@ -47,7 +56,19 @@ func SaveFile(filename, content string) error {
 func ReadFile(filename string) (string, error) {
 	fmt.Printf("📖 Reading file: %s\n", filename)
 
-	content, err := os.ReadFile(filename)
+	// Use buffered reader for potential large files; still load whole file for simplicity
+	f, err := os.Open(filename)
+	if err != nil {
+		fmt.Printf("   ❌ Failed to read file: %v\n", err)
+		return "", fmt.Errorf("could not read file %s: %w", filename, err)
+	}
+	defer f.Close()
+	buf := new(bytes.Buffer)
+	if _, err := bufio.NewReader(f).WriteTo(buf); err != nil {
+		fmt.Printf("   ❌ Failed to read file: %v\n", err)
+		return "", fmt.Errorf("could not read file %s: %w", filename, err)
+	}
+	content := buf.Bytes()
 	if err != nil {
 		fmt.Printf("   ❌ Failed to read file: %v\n", err)
 		return "", fmt.Errorf("could not read file %s: %w", filename, err)

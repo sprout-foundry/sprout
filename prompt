@@ -1,0 +1,1 @@
+Update the question command to use a very light agent style workflow where the agent gets some basic prompt information that steers it to ask the user what they want and the uses the appropriate context tool calls to get the info needed for a response then stream a response, then re-ask what is needed. done.

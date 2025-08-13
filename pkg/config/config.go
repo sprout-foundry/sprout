@@ -57,6 +57,12 @@ type Config struct {
 	RetryAttemptCount        int                  `json:"-"`                          // Internal field to track retry attempts
 	UseSearchGrounding       bool                 `json:"-"`                          // Command-scoped flag to enable search grounding
 	CodeToolsEnabled         bool                 `json:"-"`                          // Allow tool-calls in code flow when true
+	// New toggles
+	PreapplyReview bool `json:"preapply_review"`
+	DryRun         bool `json:"dry_run"`
+	JsonLogs       bool `json:"json_logs"`
+	HealthChecks   bool `json:"health_checks"`
+	StagedEdits    bool `json:"staged_edits"`
 }
 
 func getHomeConfigPath() (string, string) {
@@ -187,6 +193,16 @@ func (cfg *Config) setDefaultValues() {
 
 	// Set default for UseEmbeddings
 	cfg.UseEmbeddings = true
+
+	// Pre-apply review default: enabled
+	if !cfg.PreapplyReview {
+		cfg.PreapplyReview = true
+	}
+	// Dry-run default: disabled unless explicitly enabled
+	// cfg.DryRun remains false by default
+	// Json logs off by default
+	// Health checks off by default
+	// Staged edits off by default
 }
 
 func loadConfig(filePath string) (*Config, error) {
@@ -207,6 +223,8 @@ func loadConfig(filePath string) (*Config, error) {
 	cfg.PresencePenalty = 0.1                      // NEW: Initialize PresencePenalty
 	cfg.FrequencyPenalty = 0.1                     // NEW: Initialize FrequencyPenalty
 	cfg.EmbeddingModel = ""                        // NEW: Initialize EmbeddingModel to its zero value
+	cfg.PreapplyReview = true                      // NEW: default enable pre-apply review
+	cfg.DryRun = false                             // NEW: default dry-run off
 	// Initialize CodeStyle to ensure setDefaultValues can populate it
 	cfg.CodeStyle = CodeStylePreferences{}
 

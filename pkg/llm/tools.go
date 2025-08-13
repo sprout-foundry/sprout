@@ -59,6 +59,54 @@ func GetAvailableTools() []Tool {
 		{
 			Type: "function",
 			Function: ToolFunction{
+				Name:        "plan_step",
+				Description: "Planner: return a single actionable step with explicit stop_when criteria",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"action":       {Type: "string", Description: "One of: read_file|micro_edit|edit_file_section|validate_file|run_shell_command|workspace_context"},
+						"target_file":  {Type: "string", Description: "Optional file path"},
+						"instructions": {Type: "string", Description: "Optional step instructions"},
+						"stop_when":    {Type: "string", Description: "Explicit completion criteria"},
+					},
+					Required: []string{"action", "stop_when"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "execute_step",
+				Description: "Executor: execute only the specified single step",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"action":       {Type: "string", Description: "Must match the planned action"},
+						"target_file":  {Type: "string", Description: "Optional file path"},
+						"instructions": {Type: "string", Description: "Optional instructions"},
+					},
+					Required: []string{"action"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "evaluate_outcome",
+				Description: "Evaluator: check success against stop_when and signal completed or continue",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"status": {Type: "string", Description: "completed|continue"},
+						"reason": {Type: "string", Description: "Why"},
+					},
+					Required: []string{"status"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
 				Name:        "search_web",
 				Description: "Search the web for information to help answer questions or provide context",
 				Parameters: ToolParameters{
@@ -235,6 +283,23 @@ func GetAvailableTools() []Tool {
 				},
 			},
 		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "preflight",
+				Description: "Verify file exists/writable, clean git state, and required CLIs available",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"file_path": {
+							Type:        "string",
+							Description: "Optional target file to check for existence and writability",
+						},
+					},
+					Required: []string{},
+				},
+			},
+		},
 	}
 }
 
@@ -292,77 +357,37 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 // FormatToolsForPrompt formats the available tools for inclusion in a system prompt
 // This is used for LLMs that don't support native tool calling
 func FormatToolsForPrompt() string {
-	return `IMPORTANT: You have access to the following tools. You MUST use these tools when needed - do not make assumptions or guesses.
+	return `CONTROL MESSAGE (≤300 tokens)
 
-**TOOL USAGE RULES:**
-- If the user mentions a file but you don't have its contents, you MUST use read_file
-- If you need current information or documentation, you MUST use search_web
-- If you need to check system state or run commands, you MUST use run_shell_command
-- If you need clarification from the user, you MUST use ask_user
-- If you need to locate relevant files or symbols in the workspace, you MUST use workspace_context:
-  - Use action "search_embeddings" for intent-level, semantic matches
-  - Use action "search_keywords" for exact keyword/function/class matches
+PLAN:
+{
+  "action": "read_file|micro_edit|edit_file_section|validate_file|workspace_context|run_shell_command|ask_user|search_web",
+  "target_file": "path/to/file (optional)",
+  "instructions": "minimal instruction (optional)",
+  "stop_when": "explicit completion criteria"
+}
 
-**TOOL CALL FORMAT (STRICT):**
-When you need to use tools, respond with a JSON object in this EXACT format:
-
+TOOL_CALLS:
 {
   "tool_calls": [
-    {
-      "id": "call_1",
-      "type": "function",
-      "function": {
-        "name": "tool_name",
-        "arguments": "{\"param\": \"value\"}"
-      }
-    }
+    {"id": "call_1", "type": "function", "function": {"name": "tool_name", "arguments": "{\"param\":\"value\"}"}}
   ]
 }
 
-Responses that are not valid JSON or that omit the "name" field will be rejected. Do not include prose while working; only emit tool_calls JSON until validation passes.
+RULES:
+- Emit PLAN then TOOL_CALLS JSON only (no prose) until stop_when is satisfied
+- If user mentions a file you don’t have: use read_file first
+- Prefer micro_edit for tiny changes; otherwise edit_file_section
+- Validate after edits; for docs-only, consider success without build/test
+- Hard caps: workspace_context ≤2, shell ≤5; dedupe exact shell commands
 
-**AVAILABLE TOOLS:**
-
-1. **read_file** - REQUIRED when user mentions files you don't have
-   - Parameters: {"file_path": "path/to/file"}
-   - Use: ANY time a file is referenced but not provided
-   - Example: User says "update main.go" but main.go content not shown
-
-2. **search_web** - Useful for ensuring access to current info or unknown topics
-   - Parameters: {"query": "search terms"}
-   - Use: When you need documentation, current info, or help with unfamiliar topics
-
-3. **run_shell_command** - REQUIRED for system operations
-   - Parameters: {"command": "shell command"}
-   - Use: When you need to check files, run tests, or examine system state
-
-4. **ask_user** - REQUIRED when instructions are unclear
-   - Parameters: {"question": "your question"}
-   - Use: When you need clarification or additional information
-
-5. **workspace_context** - REQUIRED for finding relevant code files
-   - Parameters: {"action": "search_embeddings|search_keywords|load_tree|load_summary", "query": "terms"}
-   - Use:
-     - "search_embeddings": find semantically relevant files from embeddings
-     - "search_keywords": grep-like search for exact keywords/symbols
-     - "load_tree": get a list of files/directories
-     - "load_summary": brief workspace summary if available
-
-6. **edit_file_section** - Targeted edits to a function/struct/section (partial edit)
-   - Parameters: {"file_path": "path/to/file", "instructions": "exact change to make", "target_section": "optional hint"}
-   - Use: When you know the file and the specific change; avoids rewriting full file
-
-7. **micro_edit** - Very small, surgical change with strict size limits (partial edit)
-   - Parameters: {"file_path": "path/to/file" (optional), "instructions": "minimal change" (optional)}
-   - Use: When a tiny change is sufficient (comments, imports, literals). If parameters omitted, the agent will pick the most relevant file/spot.
-
-**WORKFLOW BEST PRACTICES:**
-- After editing files, ALWAYS use validate_file to check for issues
-- Prefer micro_edit for ≤50-line diffs (≤25 per hunk, ≤2 hunks). Otherwise use edit_file_section.
-- Use edit_file_section for targeted changes rather than rewriting entire files
-- When validation fails, try fix_validation_issues before manual intervention
-- Use run_shell_command for build/test verification and dependency checks
-- For codebase understanding tasks: first call workspace_context (both embeddings and keyword search as needed), then read_file for the top candidates before proposing edits
-
-**CRITICAL:** Do NOT proceed without necessary information. Use tools first, then provide your response.`
+AVAILABLE TOOLS:
+- read_file {file_path}
+- edit_file_section {file_path,instructions,target_section?}
+- micro_edit {file_path?,instructions?}
+- validate_file {file_path,validation_type?}
+- workspace_context {action,query?}
+- run_shell_command {command}
+- ask_user {question}
+- search_web {query}`
 }

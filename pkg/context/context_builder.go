@@ -106,7 +106,16 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 }
 
 func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imagePath string) (string, string, error) {
+	// Simple routing: docs-only/comment tasks use control model, otherwise editing model
 	modelName := cfg.EditingModel
+	lower := strings.ToLower(instructions)
+	if strings.Contains(lower, "comment") || strings.Contains(lower, "summary") || strings.Contains(lower, "header") {
+		if cfg.SummaryModel != "" {
+			modelName = cfg.SummaryModel
+		} else if cfg.OrchestrationModel != "" {
+			modelName = cfg.OrchestrationModel
+		}
+	}
 	fmt.Print(prompts.UsingModel(modelName))
 
 	// Log key parameters
@@ -172,7 +181,15 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	}
 
 	// Use the new tool calling system for interactive mode
-	response, err := llm.CallLLMWithInteractiveContext(modelName, messages, filename, cfg, 6*time.Minute, contextHandlerWrapper)
+	// Use small/fast model for control turns in interactive loop
+	controlModel := cfg.SummaryModel
+	if controlModel == "" {
+		controlModel = cfg.OrchestrationModel
+	}
+	if controlModel == "" {
+		controlModel = modelName
+	}
+	response, err := llm.CallLLMWithInteractiveContext(controlModel, messages, filename, cfg, 6*time.Minute, contextHandlerWrapper)
 	if err != nil {
 		logger.Log(fmt.Sprintf("Interactive LLM call failed: %v", err))
 		return modelName, "", err

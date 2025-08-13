@@ -1,3 +1,6 @@
+// question.go provides utilities for the cmd package. It contains functions and helpers used across
+// the codebase. This comment summarizes the file’s purpose and typical usage.
+
 package cmd
 
 import (

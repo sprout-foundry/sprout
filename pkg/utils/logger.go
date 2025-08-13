@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -15,6 +16,8 @@ import (
 type Logger struct {
 	logger                 *log.Logger
 	userInteractionEnabled bool // Flag to control user interaction
+	jsonMode               bool
+	correlationID          string
 }
 
 var (
@@ -42,6 +45,12 @@ func GetLogger(skipPrompts bool) *Logger {
 	})
 	// Always update userInteractionEnabled, allowing it to be overridden
 	globalLogger.userInteractionEnabled = !skipPrompts
+	if os.Getenv("LEDIT_JSON_LOGS") == "1" {
+		globalLogger.jsonMode = true
+	}
+	if cid := os.Getenv("LEDIT_CORRELATION_ID"); cid != "" {
+		globalLogger.correlationID = cid
+	}
 	return globalLogger
 }
 
@@ -77,15 +86,27 @@ func (w *Logger) LogProcessStep(step string) {
 
 // Log logs a general message only to the log file.
 func (w *Logger) Log(message string) {
+	if w.jsonMode {
+		_ = json.NewEncoder(w.logger.Writer()).Encode(map[string]any{"level": "info", "msg": message, "cid": w.correlationID})
+		return
+	}
 	w.logger.Print(message)
 }
 
 // Logf logs a formatted general message only to the log file.
 func (w *Logger) Logf(format string, v ...interface{}) {
+	if w.jsonMode {
+		w.Log(fmt.Sprintf(format, v...))
+		return
+	}
 	w.logger.Printf(format, v...)
 }
 
 func (w *Logger) LogError(err error) {
+	if w.jsonMode {
+		_ = json.NewEncoder(w.logger.Writer()).Encode(map[string]any{"level": "error", "error": err.Error(), "cid": w.correlationID})
+		return
+	}
 	w.logger.Printf("Error: %s", err)
 }
 

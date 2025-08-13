@@ -71,6 +71,9 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 
 	switch provider {
 	case "openai":
+		if cfg.HealthChecks {
+			_ = CheckEndpointReachable("https://api.openai.com/v1/models", 2*time.Second)
+		}
 		apiKey, err := apikeys.GetAPIKey("openai", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
@@ -78,6 +81,9 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.openai.com/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "groq":
+		if cfg.HealthChecks {
+			_ = CheckEndpointReachable("https://api.groq.com/", 2*time.Second)
+		}
 		apiKey, err := apikeys.GetAPIKey("groq", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
@@ -99,6 +105,9 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			tokenUsage = estimateUsageFromMessages(messages)
 		}
 	case "lambda-ai":
+		if cfg.HealthChecks {
+			_ = CheckEndpointReachable("https://api.lambda.ai/", 2*time.Second)
+		}
 		apiKey, err := apikeys.GetAPIKey("lambda-ai", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
@@ -106,6 +115,9 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.lambda.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "cerebras":
+		if cfg.HealthChecks {
+			_ = CheckEndpointReachable("https://api.cerebras.ai/", 2*time.Second)
+		}
 		apiKey, err := apikeys.GetAPIKey("cerebras", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
@@ -113,6 +125,9 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.cerebras.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "deepseek":
+		if cfg.HealthChecks {
+			_ = CheckEndpointReachable("https://api.deepseek.com/", 2*time.Second)
+		}
 		apiKey, err := apikeys.GetAPIKey("deepseek", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
@@ -120,6 +135,9 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.deepseek.com/openai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "deepinfra":
+		if cfg.HealthChecks {
+			_ = CheckEndpointReachable("https://api.deepinfra.com/", 2*time.Second)
+		}
 		apiKey, err := apikeys.GetAPIKey("deepinfra", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))

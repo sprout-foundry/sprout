@@ -93,8 +93,21 @@ func executeMicroEdit(context *AgentContext) error {
 	// - <=2 hunks
 	// If limits exceeded, abort and suggest escalation
 	if exceeded, summary := enforceMicroEditLimits(diff, 50, 25, 2); exceeded {
-		context.Logger.LogProcessStep("micro_edit aborted: diff exceeded safe limits. Escalating to full edit recommended.")
+		context.Logger.LogProcessStep("micro_edit aborted: diff exceeded safe limits. Escalating to edit_file_section.")
 		context.Logger.LogProcessStep(summary)
+		// Escalate deterministically with targeted instructions
+		escalated := fmt.Sprintf("Targeted change (section-level) for %s: %s. Keep the diff focused; avoid unrelated edits.", targetFile, context.UserIntent)
+		diff2, err := editor.ProcessPartialEdit(targetFile, escalated, context.Config, context.Logger)
+		if err != nil {
+			context.Logger.LogProcessStep(fmt.Sprintf("edit_file_section escalation failed: %v", err))
+			return nil
+		}
+		// Accept escalation result without re-checking micro limits
+		completionTokens := utils.EstimateTokens(diff2)
+		context.TokenUsage.CodeGeneration += completionTokens
+		context.TokenUsage.CodegenSplit.Completion += completionTokens
+		context.ExecutedOperations = append(context.ExecutedOperations, fmt.Sprintf("edit_file_section applied to %s", targetFile))
+		context.Logger.LogProcessStep("edit_file_section: change applied after micro_edit exceeded limits")
 		return nil
 	}
 	// Token accounting approximation from diff size
@@ -102,7 +115,7 @@ func executeMicroEdit(context *AgentContext) error {
 	context.TokenUsage.CodeGeneration += completionTokens
 	context.TokenUsage.CodegenSplit.Completion += completionTokens
 	context.ExecutedOperations = append(context.ExecutedOperations, fmt.Sprintf("micro_edit applied to %s", targetFile))
-	context.Logger.LogProcessStep("micro_edit: change applied")
+	context.Logger.LogProcessStep("micro_edit: applied")
 	return nil
 }
 

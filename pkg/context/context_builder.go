@@ -106,16 +106,13 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 }
 
 func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imagePath string) (string, string, error) {
-	// Simple routing: docs-only/comment tasks use control model, otherwise editing model
-	modelName := cfg.EditingModel
+	// Routing: select models by task type and approx size
+	category := "code"
 	lower := strings.ToLower(instructions)
-	if strings.Contains(lower, "comment") || strings.Contains(lower, "summary") || strings.Contains(lower, "header") {
-		if cfg.SummaryModel != "" {
-			modelName = cfg.SummaryModel
-		} else if cfg.OrchestrationModel != "" {
-			modelName = cfg.OrchestrationModel
-		}
+	if strings.Contains(lower, "comment") || strings.Contains(lower, "summary") || strings.Contains(lower, "header") || strings.Contains(lower, "docs") {
+		category = "docs"
 	}
+	controlModel, modelName, reason := llm.RouteModels(cfg, category, len(code))
 	fmt.Print(prompts.UsingModel(modelName))
 
 	// Log key parameters
@@ -123,6 +120,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	logger.Log(fmt.Sprintf("=== GetLLMCodeResponse Debug ==="))
 	logger.Log(fmt.Sprintf("Model: %s", modelName))
 	logger.Log(fmt.Sprintf("Filename: %s", filename))
+	logger.Log(fmt.Sprintf("Routing: category=%s approxSize=%d control=%s editing=%s reason=%s", category, len(code), controlModel, modelName, reason))
 	logger.Log(fmt.Sprintf("Interactive: %t", cfg.Interactive))
 	logger.Log(fmt.Sprintf("Instructions length: %d chars", len(instructions)))
 	logger.Log(fmt.Sprintf("Code length: %d chars", len(code)))
@@ -182,13 +180,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 
 	// Use the new tool calling system for interactive mode
 	// Use small/fast model for control turns in interactive loop
-	controlModel := cfg.SummaryModel
-	if controlModel == "" {
-		controlModel = cfg.OrchestrationModel
-	}
-	if controlModel == "" {
-		controlModel = modelName
-	}
+	// Use routed control model for interactive loop
 	response, err := llm.CallLLMWithInteractiveContext(controlModel, messages, filename, cfg, 6*time.Minute, contextHandlerWrapper)
 	if err != nil {
 		logger.Log(fmt.Sprintf("Interactive LLM call failed: %v", err))

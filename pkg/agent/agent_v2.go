@@ -52,13 +52,13 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 	target := extractExplicitPath(userIntent)
 	if target == "" || !fileExists(target) {
 		// No explicit file path: fall back to planner→executor→evaluator interactive flow
-		controlModel := cfg.SummaryModel
-		if controlModel == "" {
-			controlModel = cfg.OrchestrationModel
+		// Route control/editing models based on task type (rough heuristic) and small size
+		category := "code"
+		lo := strings.ToLower(userIntent)
+		if strings.Contains(lo, "comment") || strings.Contains(lo, "docs") || strings.Contains(lo, "summary") || strings.Contains(lo, "header") {
+			category = "docs"
 		}
-		if controlModel == "" {
-			controlModel = model
-		}
+		controlModel, _, _ := llm.RouteModels(cfg, category, len(userIntent))
 		msgs := []prompts.Message{{Role: "user", Content: fmt.Sprintf("Goal: %s", userIntent)}}
 		// Minimal legacy context handler (unused in tool-first flow)
 		ch := func(reqs []llm.ContextRequest, cfg *config.Config) (string, error) {
@@ -118,13 +118,12 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 	}
 
 	// Fallback: run planner→executor→evaluator interactive flow for general tasks
-	controlModel := cfg.SummaryModel
-	if controlModel == "" {
-		controlModel = cfg.OrchestrationModel
+	category2 := "code"
+	lo2 := strings.ToLower(userIntent)
+	if strings.Contains(lo2, "comment") || strings.Contains(lo2, "docs") || strings.Contains(lo2, "summary") || strings.Contains(lo2, "header") {
+		category2 = "docs"
 	}
-	if controlModel == "" {
-		controlModel = model
-	}
+	controlModel, _, _ := llm.RouteModels(cfg, category2, len(userIntent))
 	msgs := []prompts.Message{{Role: "user", Content: fmt.Sprintf("Goal: %s", userIntent)}}
 	ch := func(reqs []llm.ContextRequest, cfg *config.Config) (string, error) { return "", nil }
 	logger.LogProcessStep("v2: invoking interactive planner→executor→evaluator loop (fallback)")
@@ -238,9 +237,26 @@ func insertTopComment(path, paragraph string) error {
 		return err
 	}
 	content := string(b)
-	lines := strings.Split(content, "\n")
+	// Detect original EOL style
+	eol := "\n"
+	if strings.Contains(content, "\r\n") {
+		eol = "\r\n"
+	} else if strings.Contains(content, "\r") {
+		eol = "\r"
+	}
+	// Split using detected EOL
+	var lines []string
+	if eol == "\r\n" {
+		lines = strings.Split(content, "\r\n")
+	} else if eol == "\r" {
+		lines = strings.Split(content, "\r")
+	} else {
+		lines = strings.Split(content, "\n")
+	}
 	commentLines := toCommentBlock(paragraph)
-	newContent := strings.Join(append(commentLines, append([]string{""}, lines...)...), "\n")
+	// Build new content preserving EOL style
+	newLines := append(commentLines, append([]string{""}, lines...)...)
+	newContent := strings.Join(newLines, eol)
 	return os.WriteFile(path, []byte(newContent), 0644)
 }
 

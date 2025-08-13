@@ -102,7 +102,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 	// If intent looks like a doc-only header/summary request, add header via LLM (only when no replacement pattern found)
 	if looksLikeDocOnly(userIntent) && !strings.Contains(strings.ToLower(userIntent), "change ") {
 		// Idempotence: skip if file already starts with a comment block
-		if goFileStartsWithComment(target) {
+		if fileStartsWithComment(target) {
 			logger.LogProcessStep("v2: header already present; skipping doc insertion")
 			fmt.Printf("✅ Agent v2 execution completed\n")
 			return nil
@@ -208,7 +208,8 @@ func looksLikeDocOnly(intent string) bool {
 	hasHeader := strings.Contains(lo, "header") || strings.Contains(lo, "file header") || strings.Contains(lo, "add header")
 	hasSummary := strings.Contains(lo, "summary") || strings.Contains(lo, "summarize")
 	mentionsTop := strings.Contains(lo, "top of file") || strings.Contains(lo, "top-of-file") || strings.Contains(lo, "at top")
-	mentionsFile := strings.Contains(lo, "file ") || strings.Contains(lo, ".go") || strings.Contains(lo, ".py") || strings.Contains(lo, ".ts") || strings.Contains(lo, ".js") || strings.Contains(lo, ".md")
+	// Consider it referencing a file if it mentions "file" or includes a path-like token
+	mentionsFile := strings.Contains(lo, "file ") || strings.Contains(lo, "/")
 
 	// Trigger when it's clearly a header/summary ask
 	if (hasHeader && hasSummary) || (hasHeader && mentionsFile) || (hasSummary && mentionsFile) || (hasHeader && mentionsTop) || (hasSummary && mentionsTop) {

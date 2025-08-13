@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+    "time"
 )
 
 // GetGitRootDir returns the absolute path to the root directory of the current Git repository.
@@ -73,6 +74,29 @@ func AddAndCommitFile(newFilename, message string) error {
 	}
 	fmt.Printf("Changes committed to git for %s\n", newFilename)
 	return nil
+}
+
+// AddAllAndCommit commits all staged changes with the provided message (non-interactive).
+func AddAllAndCommit(message string, timeoutSeconds int) error {
+    cmd := exec.Command("git", "commit", "-m", message)
+    if timeoutSeconds > 0 {
+        done := make(chan error, 1)
+        go func() { done <- cmd.Run() }()
+        select {
+        case err := <-done:
+            if err != nil {
+                return fmt.Errorf("error committing changes to git: %v", err)
+            }
+        case <-time.After(time.Duration(timeoutSeconds) * time.Second):
+            _ = cmd.Process.Kill()
+            return fmt.Errorf("git commit timed out after %ds", timeoutSeconds)
+        }
+    } else {
+        if err := cmd.Run(); err != nil {
+            return fmt.Errorf("error committing changes to git: %v", err)
+        }
+    }
+    return nil
 }
 
 // GetGitStatus returns the current branch, number of uncommitted changes, and number of staged changes.

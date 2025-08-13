@@ -89,7 +89,7 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Accept: Risky diffs flagged; user can require approval flag to proceed
 
 ### 19) Model/task routing
-- [ ] Route by task type (docs/code/test) and file size; swap models with suitable context limits
+- [x] Route by task type (docs/code/test) and file size; swap models with suitable context limits
   - Accept: Router selects control/editing models based on task; logs routing decision
 
 ### 20) Evidence cache and dedupe
@@ -124,7 +124,7 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Accept: Detects outages early and switches model or aborts fast
 
 ### 27) Provider failover
-- [ ] Failover to alternate provider/local model on outage/errors
+- [x] Failover to alternate provider/local model on outage/errors
   - Accept: Router retries with fallback model; logs failover
 
 ### 28) Security scanning pre-commit
@@ -136,8 +136,8 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Accept: Diff sizer reports reductions; full rewrites only when unavoidable
 
 ### 30) File encoding/EOL safety
-- [ ] Normalize encodings and EOLs; preserve original style
-  - Accept: Edits retain file encoding/EOL; lints pass formatting checks
+- [x] Normalize EOLs and preserve original style
+  - Accept: Edits retain file EOL style; lints pass formatting checks
 
 ### 31) Concurrency for independent steps
 - [x] Parallelize independent read_file calls; keep dependent steps sequential

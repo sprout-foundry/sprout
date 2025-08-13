@@ -179,6 +179,17 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	}
 
 	if err != nil {
+		// Provider failover: try local/ollama fallback once
+		fallbackModel := cfg.LocalModel
+		if fallbackModel != "" && provider != "ollama" {
+			fmt.Printf("[llm] provider '%s' failed; attempting failover to local model via ollama: %s\n", provider, fallbackModel)
+			ollamaURL := fmt.Sprintf("%s/v1/chat/completions", cfg.OllamaServerURL)
+			if tu, ferr := callOpenAICompatibleStream(ollamaURL, "ollama", fallbackModel, messages, cfg, timeout, writer); ferr == nil {
+				return tu, nil
+			} else {
+				fmt.Printf("[llm] failover to ollama failed: %v\n", ferr)
+			}
+		}
 		fmt.Print(prompts.LLMResponseError(err))
 		return tokenUsage, err
 	}

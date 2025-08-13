@@ -3,10 +3,17 @@ package agent
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/git"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -108,6 +115,67 @@ func trimForCommit(s string, max int) string {
 	return t[:max-3] + "..."
 }
 
+// automatedSecurityRiskGate scans added lines that matched secret heuristics and
+// uses a small/cheap local model (ollama if available) to score risk 0-100.
+// Blocks auto-commit when score >= 70.
+func automatedSecurityRiskGate(cfg *config.Config, logger *utils.Logger) (bool, int, error) {
+	diff, err := git.GetUncommittedChanges()
+	if err != nil {
+		return false, 0, fmt.Errorf("failed to get uncommitted diff: %w", err)
+	}
+	if strings.TrimSpace(diff) == "" {
+		return true, 0, nil
+	}
+	// Collect added lines only
+	var added []string
+	for _, line := range strings.Split(diff, "\n") {
+		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
+			added = append(added, strings.TrimPrefix(line, "+"))
+		}
+	}
+	if len(added) == 0 {
+		return true, 0, nil
+	}
+	content := strings.Join(added, "\n")
+	// Quick heuristic prefilter; if no patterns matched, skip LLM call
+	concerns, _ := security.DetectSecurityConcerns(content)
+	if len(concerns) == 0 {
+		return true, 0, nil
+	}
+	// Choose a small local/cheap model
+	model := cfg.LocalModel
+	if strings.TrimSpace(model) == "" {
+		model = cfg.SummaryModel
+		if strings.TrimSpace(model) == "" {
+			model = cfg.OrchestrationModel
+		}
+	}
+	sys := prompts.Message{Role: "system", Content: "Return ONLY an integer 0-100: likelihood that the following added lines contain a real credential/secret. No text, no symbols. Consider typical secret formats and context. Be conservative."}
+	user := prompts.Message{Role: "user", Content: fmt.Sprintf("Added lines flagged by heuristics:\n\n%s\n\nReply with a single integer 0-100.", content)}
+	resp, _, err := llm.GetLLMResponse(model, []prompts.Message{sys, user}, "", cfg, 10*time.Second)
+	if err != nil {
+		return false, 0, err
+	}
+	// Parse first integer 0-100
+	re := regexp.MustCompile(`\b(\d{1,3})\b`)
+	m := re.FindStringSubmatch(resp)
+	if len(m) < 2 {
+		return true, 0, nil
+	}
+	n, _ := strconv.Atoi(m[1])
+	if n < 0 {
+		n = 0
+	}
+	if n > 100 {
+		n = 100
+	}
+	logger.LogProcessStep(fmt.Sprintf("Automated security risk score: %d", n))
+	if n >= 70 {
+		return false, n, nil
+	}
+	return true, n, nil
+}
+
 // summarizeEditResults logs and returns counts for success/failure
 func summarizeEditResults(context *AgentContext, editPlan *EditPlan, operationResults []string) (successCount, failureCount int, hasFailures bool) {
 	for _, result := range operationResults {
@@ -155,6 +223,15 @@ func executeEditOperations(context *AgentContext) error {
 
 	// Non-interactive git integration: auto-commit staged edits when TrackWithGit is enabled
 	if context.Config.TrackWithGit {
+		proceed, score, serr := automatedSecurityRiskGate(context.Config, context.Logger)
+		if serr != nil {
+			context.Logger.LogProcessStep(fmt.Sprintf("⚠️ Security risk review failed (skipping auto-commit): %v", serr))
+			return nil
+		}
+		if !proceed {
+			context.Logger.LogProcessStep(fmt.Sprintf("❌ Auto-commit blocked by security risk gate (score=%d)", score))
+			return nil
+		}
 		// Use a deterministic, informative commit message
 		msg := fmt.Sprintf("ledit: apply %d planned edit(s) for: %s", len(context.CurrentPlan.EditOperations), trimForCommit(context.UserIntent, 80))
 		// Respect shell timeout from config

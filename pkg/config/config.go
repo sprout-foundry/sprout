@@ -63,6 +63,11 @@ type Config struct {
 	JsonLogs       bool `json:"json_logs"`
 	HealthChecks   bool `json:"health_checks"`
 	StagedEdits    bool `json:"staged_edits"`
+	// Budgets and limits
+	MaxRunSeconds    int     `json:"max_run_seconds"`
+	MaxRunTokens     int     `json:"max_run_tokens"`
+	MaxRunCostUSD    float64 `json:"max_run_cost_usd"`
+	ShellTimeoutSecs int     `json:"shell_timeout_secs"`
 }
 
 func getHomeConfigPath() (string, string) {
@@ -203,6 +208,11 @@ func (cfg *Config) setDefaultValues() {
 	// Json logs off by default
 	// Health checks off by default
 	// Staged edits off by default
+
+	// Defaults for budgets/limits
+	if cfg.ShellTimeoutSecs == 0 {
+		cfg.ShellTimeoutSecs = 20
+	}
 }
 
 func loadConfig(filePath string) (*Config, error) {

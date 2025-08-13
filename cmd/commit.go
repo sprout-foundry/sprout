@@ -17,8 +17,9 @@ import (
 )
 
 var (
-	commitSkipPrompt bool
-	commitModel      string
+	commitSkipPrompt   bool
+	commitModel        string
+	commitAllowSecrets bool
 )
 
 var commitCmd = &cobra.Command{
@@ -70,7 +71,9 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 			logger.LogProcessStep("Checking staged files for security credentials...")
 			securityIssuesFound := checkStagedFilesForSecurityCredentials(logger, cfg)
 			if securityIssuesFound {
-				if !commitSkipPrompt {
+				if commitAllowSecrets {
+					logger.LogProcessStep("Security issues detected but proceeding due to --allow-secrets override.")
+				} else if !commitSkipPrompt {
 					logger.LogUserInteraction("Security issues detected in staged files. Do you want to proceed with commit? (y/n): ")
 					reader := bufio.NewReader(os.Stdin)
 					userInput, _ := reader.ReadString('\n')
@@ -80,7 +83,7 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 						return
 					}
 				} else {
-					logger.LogProcessStep("Security issues detected but proceeding due to skip-prompt flag.")
+					logger.LogProcessStep("Security issues detected but proceeding due to --skip-prompt flag.")
 				}
 			}
 		}
@@ -230,5 +233,6 @@ func performGitCommit(message string) error {
 func init() {
 	commitCmd.Flags().BoolVar(&commitSkipPrompt, "skip-prompt", false, "Skip confirmation prompts and automatically commit")
 	commitCmd.Flags().StringVar(&commitModel, "model", "", "Specify the LLM model to use for commit message generation (e.g., 'ollama:llama3')")
+	commitCmd.Flags().BoolVar(&commitAllowSecrets, "allow-secrets", false, "Allow committing even if potential secrets are detected (override)")
 	rootCmd.AddCommand(commitCmd)
 }

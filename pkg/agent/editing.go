@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/editor"
+	"github.com/alantheprice/ledit/pkg/git"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -95,6 +96,18 @@ func isDiffTooLarge(filePath, diff string) bool {
 	return false
 }
 
+// trimForCommit returns a compact string suitable for commit messages
+func trimForCommit(s string, max int) string {
+	t := strings.TrimSpace(s)
+	if len(t) <= max {
+		return t
+	}
+	if max <= 3 {
+		return t[:max]
+	}
+	return t[:max-3] + "..."
+}
+
 // summarizeEditResults logs and returns counts for success/failure
 func summarizeEditResults(context *AgentContext, editPlan *EditPlan, operationResults []string) (successCount, failureCount int, hasFailures bool) {
 	for _, result := range operationResults {
@@ -139,6 +152,19 @@ func executeEditOperations(context *AgentContext) error {
 		fmt.Sprintf("Executed %d edit operations", len(context.CurrentPlan.EditOperations)))
 
 	context.Logger.LogProcessStep(fmt.Sprintf("✅ Completed %d edit operations", len(context.CurrentPlan.EditOperations)))
+
+	// Non-interactive git integration: auto-commit staged edits when TrackWithGit is enabled
+	if context.Config.TrackWithGit {
+		// Use a deterministic, informative commit message
+		msg := fmt.Sprintf("ledit: apply %d planned edit(s) for: %s", len(context.CurrentPlan.EditOperations), trimForCommit(context.UserIntent, 80))
+		// Respect shell timeout from config
+		timeout := context.Config.ShellTimeoutSecs
+		if err := git.AddAllAndCommit(msg, timeout); err != nil {
+			context.Logger.LogProcessStep(fmt.Sprintf("⚠️ Git auto-commit failed: %v", err))
+		} else {
+			context.Logger.LogProcessStep("📝 Auto-committed changes via non-interactive git integration")
+		}
+	}
 	return nil
 }
 

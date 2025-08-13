@@ -68,8 +68,8 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 
 		// Security check on staged files
 		if cfg.EnableSecurityChecks {
-			logger.LogProcessStep("Checking staged files for security credentials...")
-			securityIssuesFound := checkStagedFilesForSecurityCredentials(logger, cfg)
+			logger.LogProcessStep("Checking staged files for security credentials (added lines only)...")
+			securityIssuesFound := checkStagedFilesForSecurityCredentialsDiffOnly(logger, cfg)
 			if securityIssuesFound {
 				if commitAllowSecrets {
 					logger.LogProcessStep("Security issues detected but proceeding due to --allow-secrets override.")
@@ -172,7 +172,7 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 }
 
 // checkStagedFilesForSecurityCredentials checks staged files for security credentials
-func checkStagedFilesForSecurityCredentials(logger *utils.Logger, cfg *config.Config) bool {
+func checkStagedFilesForSecurityCredentialsDiffOnly(logger *utils.Logger, cfg *config.Config) bool {
 	// Get list of staged files
 	cmd := exec.Command("git", "diff", "--cached", "--name-only")
 	output, err := cmd.Output()
@@ -189,15 +189,19 @@ func checkStagedFilesForSecurityCredentials(logger *utils.Logger, cfg *config.Co
 			continue
 		}
 
-		// Get the content of staged changes for this file
-		cmd := exec.Command("git", "show", ":"+filePath)
-		contentBytes, err := cmd.Output()
+		// Get the staged diff and analyze only added lines to reduce false positives
+		cmd := exec.Command("git", "diff", "--cached", "-U0", "--", filePath)
+		diffBytes, err := cmd.Output()
 		if err != nil {
-			logger.LogError(fmt.Errorf("failed to get content of staged file %s: %w", filePath, err))
+			logger.LogError(fmt.Errorf("failed to get staged diff for %s: %w", filePath, err))
 			continue
 		}
-
-		content := string(contentBytes)
+		content := ""
+		for _, line := range strings.Split(string(diffBytes), "\n") {
+			if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") { // only added lines (ignore diff headers)
+				content += strings.TrimPrefix(line, "+") + "\n"
+			}
+		}
 		concerns, _ := security.DetectSecurityConcerns(content)
 
 		if len(concerns) > 0 {

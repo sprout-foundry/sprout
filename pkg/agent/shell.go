@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // executeShellCommands runs the specified shell commands
@@ -17,8 +19,10 @@ func executeShellCommands(context *AgentContext, commands []string) error {
 			continue
 		}
 
-		// Use shell to execute command to handle pipes, redirects, etc.
-		cmd := exec.Command("sh", "-c", command)
+		// Use shell to execute command to handle pipes, redirects, etc., with a timeout
+		ctx, cancel := contextWithTimeout(45 * time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "sh", "-c", command)
 		output, err := cmd.CombinedOutput()
 
 		// Truncate output immediately to prevent huge outputs from overwhelming the system
@@ -40,6 +44,12 @@ func executeShellCommands(context *AgentContext, commands []string) error {
 	}
 
 	return nil
+}
+
+// contextWithTimeout provides a cancellable context with the given timeout.
+// Declared as a helper to keep call sites concise.
+func contextWithTimeout(d time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), d)
 }
 
 // isSimpleShellCommand returns true for trivial, safe commands we allow for fast-path execution

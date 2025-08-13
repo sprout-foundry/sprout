@@ -174,6 +174,27 @@ func GetAvailableTools() []Tool {
 		{
 			Type: "function",
 			Function: ToolFunction{
+				Name:        "micro_edit",
+				Description: "Apply a very small, targeted change to a file (limited sized diff).",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"file_path": {
+							Type:        "string",
+							Description: "The path to the file to edit",
+						},
+						"instructions": {
+							Type:        "string",
+							Description: "Minimal instructions for the small edit",
+						},
+					},
+					Required: []string{},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
 				Name:        "fix_validation_issues",
 				Description: "Attempt to automatically fix validation issues in a file",
 				Parameters: ToolParameters{
@@ -282,7 +303,7 @@ func FormatToolsForPrompt() string {
   - Use action "search_embeddings" for intent-level, semantic matches
   - Use action "search_keywords" for exact keyword/function/class matches
 
-**TOOL CALL FORMAT:**
+**TOOL CALL FORMAT (STRICT):**
 When you need to use tools, respond with a JSON object in this EXACT format:
 
 {
@@ -297,6 +318,8 @@ When you need to use tools, respond with a JSON object in this EXACT format:
     }
   ]
 }
+
+Responses that are not valid JSON or that omit the "name" field will be rejected. Do not include prose while working; only emit tool_calls JSON until validation passes.
 
 **AVAILABLE TOOLS:**
 
@@ -325,8 +348,17 @@ When you need to use tools, respond with a JSON object in this EXACT format:
      - "load_tree": get a list of files/directories
      - "load_summary": brief workspace summary if available
 
+6. **edit_file_section** - Targeted edits to a function/struct/section (partial edit)
+   - Parameters: {"file_path": "path/to/file", "instructions": "exact change to make", "target_section": "optional hint"}
+   - Use: When you know the file and the specific change; avoids rewriting full file
+
+7. **micro_edit** - Very small, surgical change with strict size limits (partial edit)
+   - Parameters: {"file_path": "path/to/file" (optional), "instructions": "minimal change" (optional)}
+   - Use: When a tiny change is sufficient (comments, imports, literals). If parameters omitted, the agent will pick the most relevant file/spot.
+
 **WORKFLOW BEST PRACTICES:**
 - After editing files, ALWAYS use validate_file to check for issues
+- Prefer micro_edit for ≤50-line diffs (≤25 per hunk, ≤2 hunks). Otherwise use edit_file_section.
 - Use edit_file_section for targeted changes rather than rewriting entire files
 - When validation fails, try fix_validation_issues before manual intervention
 - Use run_shell_command for build/test verification and dependency checks

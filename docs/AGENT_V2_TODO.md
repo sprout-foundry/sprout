@@ -112,7 +112,7 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Accept: Executor prints planned actions and would-be results; no file changes or shell effects occur
 
 ### 24) Budget/timeout policies
-- [ ] Configurable per-run cost/time/token budgets with early stop and summary
+- [x] Configurable per-run cost/time/token budgets with early stop and summary
   - Accept: Run stops when any budget is hit; summary includes which budget triggered
 
 ### 25) Structured logging
@@ -128,8 +128,8 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Accept: Router retries with fallback model; logs failover
 
 ### 28) Security scanning pre-commit
-- [ ] Scan for secrets in modified files; block committing leaks
-  - Accept: Fails with guidance if secret patterns detected
+- [x] Scan for secrets in modified files; block committing leaks
+  - Accept: Fails with guidance if secret patterns detected (override via --allow-secrets)
 
 ### 29) Minimal diff application
 - [x] Ensure smallest possible edits are generated/applied; avoid full-file rewrites unless necessary
@@ -164,8 +164,8 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Accept: Risky commands are constrained by ulimits/working dir; logs note sandbox mode
 
 ### 37) Persistent evidence cache with invalidation
-- [ ] Persist evidence across runs; invalidate on file/hash change
-  - Accept: Cache hits survive process restarts; invalidates on diffs
+- [x] Persist evidence across runs; invalidate on file/hash change
+  - Accept: Cache hits survive process restarts; invalidates on diffs (implemented in evidence_cache with file-hash guard)
 
 ### 38) Staged workspace edits
 - [x] Apply edits in a temp workspace and merge when validated

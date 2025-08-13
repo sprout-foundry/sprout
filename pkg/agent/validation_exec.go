@@ -28,9 +28,9 @@ func executeValidation(context *AgentContext) error {
 	// Skip build for documentation-only changes; apply outcome-driven check instead
 	if context.IntentAnalysis.Category == "docs" && context.TaskComplexity == TaskSimple {
 		// Attempt outcome-driven evaluation: if a file is mentioned and now begins with comment lines, consider success
-		file := extractGoFileFromUserIntent(context.UserIntent)
+		file := extractPathFromUserIntent(context.UserIntent)
 		if file != "" {
-			if ok := goFileStartsWithComment(file); ok {
+			if ok := fileStartsWithComment(file); ok {
 				context.Logger.LogProcessStep("✅ Doc outcome met: top-of-file comment present")
 				context.ValidationResults = append(context.ValidationResults, "✅ Doc success criteria met (top-of-file comment present)")
 				context.ExecutedOperations = append(context.ExecutedOperations, "Validation completed (docs-only success)")
@@ -139,9 +139,9 @@ func executeRefactoringValidation(context *AgentContext) error {
 	return nil
 }
 
-// extractGoFileFromUserIntent returns the first mentioned .go path if present
-func extractGoFileFromUserIntent(intent string) string {
-	// generic heuristic: find first token that looks like a relative path with extension
+// extractPathFromUserIntent returns the first token that looks like a path with an extension
+func extractPathFromUserIntent(intent string) string {
+	// generic heuristic: find first token that looks like a relative or absolute path with extension
 	for _, tok := range strings.Fields(intent) {
 		cleaned := filepath.Clean(strings.Trim(tok, "\"'`"))
 		if strings.Contains(cleaned, "/") && strings.Contains(cleaned, ".") {
@@ -151,8 +151,8 @@ func extractGoFileFromUserIntent(intent string) string {
 	return ""
 }
 
-// goFileStartsWithComment checks whether the file begins with comments (line or block)
-func goFileStartsWithComment(path string) bool {
+// fileStartsWithComment checks whether the file begins with comments (line or block)
+func fileStartsWithComment(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
 		return false

@@ -124,6 +124,35 @@ func CallLLMWithInteractiveContext(
 	const turnBudgetChars = 8000
 	usedBudgetChars := 0
 
+	// Budgets: track run time, tokens, and approximate cost
+	runStart := time.Now()
+	approxTokensUsed := 0
+	pricing := GetModelPricing(modelName)
+
+	checkBudgets := func() (bool, string) {
+		// Time budget
+		if cfg.MaxRunSeconds > 0 {
+			if time.Since(runStart) >= time.Duration(cfg.MaxRunSeconds)*time.Second {
+				return true, "time"
+			}
+		}
+		// Token budget (approximate: 4 chars per token)
+		if cfg.MaxRunTokens > 0 {
+			if approxTokensUsed >= cfg.MaxRunTokens {
+				return true, "tokens"
+			}
+		}
+		// Cost budget (rough approximation)
+		if cfg.MaxRunCostUSD > 0 {
+			avgPer1K := (pricing.InputCostPer1K + pricing.OutputCostPer1K) / 2.0
+			estCost := float64(approxTokensUsed) / 1000.0 * avgPer1K
+			if estCost >= cfg.MaxRunCostUSD {
+				return true, "cost"
+			}
+		}
+		return false, ""
+	}
+
 	printSummary := func() {
 		// Compact end-of-run summary
 		fmt.Printf("[tools] summary: turns=%d tools=%d blocks=%d cache_hits=%d\n",
@@ -178,6 +207,14 @@ func CallLLMWithInteractiveContext(
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
 		fmt.Println("[tools] model returned a response")
+
+		// Update token approximation from response length
+		approxTokensUsed = (usedBudgetChars + len(response)) / 4
+		// Early stop if any budget exceeded
+		if stop, reason := checkBudgets(); stop {
+			printSummary()
+			return fmt.Sprintf("stopped due to %s budget", reason), nil
+		}
 
 		// Check if the response contains tool calls (preferred method)
 		if containsToolCall(response) {
@@ -502,6 +539,14 @@ func CallLLMWithInteractiveContext(
 				// Add tool results to messages and continue (apply budget compression if needed)
 				combined := strings.Join(toolResults, "\n")
 				usedBudgetChars += len(combined)
+				approxTokensUsed = usedBudgetChars / 4
+				if stop, reason := checkBudgets(); stop {
+					toolResultMessage := prompts.Message{Role: "system", Content: fmt.Sprintf("Tool execution results (partial):\n%s", combined)}
+					currentMessages = append(currentMessages, toolResultMessage)
+					turnDurations = append(turnDurations, time.Since(turnStart))
+					printSummary()
+					return fmt.Sprintf("stopped due to %s budget", reason), nil
+				}
 				if usedBudgetChars > turnBudgetChars {
 					// Compress by truncating middle to keep head and tail context
 					head := combined

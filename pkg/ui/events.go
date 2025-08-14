@@ -36,6 +36,9 @@ type ProgressSnapshotEvent struct {
 	BaseModel   string
 }
 
+// StatusEvent carries a concise current activity/status message for the TUI header/body
+type StatusEvent struct{ Text string }
+
 // StreamStartedEvent indicates a streaming operation has begun
 type StreamStartedEvent struct{}
 
@@ -44,8 +47,10 @@ type StreamEndedEvent struct{}
 
 // PromptRequestEvent asks the UI to collect user input
 type PromptRequestEvent struct {
-	ID           string
-	Prompt       string
+	ID     string
+	Prompt string
+	// Optional long-form context (e.g., code diff) to display in a scrollable viewport
+	Context      string
 	RequireYesNo bool
 	DefaultYes   bool
 }
@@ -82,6 +87,9 @@ func Log(text string) { Publish(LogEvent{Level: "info", Text: text, Time: time.N
 
 // Logf publishes a formatted log line.
 func Logf(format string, args ...any) { Log(fmt.Sprintf(format, args...)) }
+
+// PublishStatus sends a concise status message for display in the UI
+func PublishStatus(text string) { Publish(StatusEvent{Text: text}) }
 
 // PublishProgress broadcasts a progress snapshot to the UI
 func PublishProgress(completed, total int, rows []ProgressRow) {
@@ -131,7 +139,7 @@ func SubmitPromptResponse(id string, text string, confirmed bool) {
 func PromptYesNo(prompt string, defaultYes bool) (bool, error) {
 	id := fmt.Sprintf("p-%d", time.Now().UnixNano())
 	ch := RegisterPromptWaiter(id)
-	Publish(PromptRequestEvent{ID: id, Prompt: prompt, RequireYesNo: true, DefaultYes: defaultYes})
+	Publish(PromptRequestEvent{ID: id, Prompt: prompt, Context: "", RequireYesNo: true, DefaultYes: defaultYes})
 	select {
 	case resp := <-ch:
 		return resp.Confirmed, nil
@@ -144,7 +152,33 @@ func PromptYesNo(prompt string, defaultYes bool) (bool, error) {
 func PromptText(prompt string) (string, error) {
 	id := fmt.Sprintf("p-%d", time.Now().UnixNano())
 	ch := RegisterPromptWaiter(id)
-	Publish(PromptRequestEvent{ID: id, Prompt: prompt, RequireYesNo: false})
+	Publish(PromptRequestEvent{ID: id, Prompt: prompt, Context: "", RequireYesNo: false})
+	select {
+	case resp := <-ch:
+		return resp.Text, nil
+	case <-time.After(30 * time.Minute):
+		return "", fmt.Errorf("prompt timed out")
+	}
+}
+
+// PromptYesNoWithContext displays a yes/no modal with a scrollable context area
+func PromptYesNoWithContext(prompt string, context string, defaultYes bool) (bool, error) {
+	id := fmt.Sprintf("p-%d", time.Now().UnixNano())
+	ch := RegisterPromptWaiter(id)
+	Publish(PromptRequestEvent{ID: id, Prompt: prompt, Context: context, RequireYesNo: true, DefaultYes: defaultYes})
+	select {
+	case resp := <-ch:
+		return resp.Confirmed, nil
+	case <-time.After(5 * time.Minute):
+		return defaultYes, fmt.Errorf("prompt timed out")
+	}
+}
+
+// PromptTextWithContext displays a free-text modal with a scrollable context area
+func PromptTextWithContext(prompt string, context string) (string, error) {
+	id := fmt.Sprintf("p-%d", time.Now().UnixNano())
+	ch := RegisterPromptWaiter(id)
+	Publish(PromptRequestEvent{ID: id, Prompt: prompt, Context: context, RequireYesNo: false})
 	select {
 	case resp := <-ch:
 		return resp.Text, nil

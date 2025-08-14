@@ -14,6 +14,10 @@ func extractRelevantSection(content, instructions, filePath string) (string, int
 	ext := strings.ToLower(filepath.Ext(filePath))
 	switch ext {
 	case ".go":
+		// Prefer AST-backed span detection; fallback to regex/heuristics
+		if sec, s, e, err := extractGoSectionAST(strings.Join(lines, "\n"), instructions); err == nil && sec != "" {
+			return sec, s, e, nil
+		}
 		if sec, s, e, err := extractGoSection(lines, instructions); err == nil {
 			return sec, s, e, nil
 		}

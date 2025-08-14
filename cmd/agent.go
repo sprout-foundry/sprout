@@ -20,7 +20,7 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompt for applying changes")
 	// Add a flag to allow users to specify and override the LLM model for agent operations
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name to use with the LLM")
-	agentCmd.Flags().StringVar(&agentVersion, "agent", "v1", "Agent version: v1 (orchestration loop) or v2 (tool-driven)")
+	agentCmd.Flags().StringVar(&agentVersion, "agent", "v2", "Agent version: v2 (tool-driven)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (no writes/shell side-effects)")
 }
 
@@ -58,10 +58,7 @@ Examples:
 		if agentDryRun {
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")
 		}
-		if agentVersion == "v2" {
-			return agent.RunAgentModeV2(userIntent, agentSkipPrompt, agentModel)
-		}
-		// Default to v1
-		return agent.RunAgentMode(userIntent, agentSkipPrompt, agentModel)
+		// Default to v2; v1 has been removed/deprecated
+		return agent.RunAgentModeV2(userIntent, agentSkipPrompt, agentModel)
 	},
 }

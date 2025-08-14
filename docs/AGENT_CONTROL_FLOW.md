@@ -4,14 +4,14 @@ This document is the authoritative description of the agent control flow impleme
 
 ### Overview
 
-Single-agent runs are initiated via `pkg/agent/entrypoint.go` and executed by the adaptive loop in `pkg/agent/orchestrator.go`. The agent iteratively evaluates progress, selects the next action, and executes until completion, error, or iteration cap.
+Single-agent runs are initiated via `pkg/agent/agent_v2.go` (v2 default) and executed by the adaptive loop in `pkg/agent/orchestrator.go`. The agent iteratively evaluates progress, selects the next action, and executes until completion, error, or iteration cap.
 
 ### Entry Points
 
-- `RunAgentMode(userIntent, skipPrompt, model)`
-  - Loads config, initializes pricing table, logs intent
-  - Calls `Execute(userIntent, cfg, logger)`
-  - On return, prints token and cost summary via `PrintTokenUsageSummary(...)`
+- `RunAgentModeV2(userIntent, skipPrompt, model)`
+  - Loads config, initializes pricing, sets up v2 tool-driven loop
+  - Calls interactive PEE loop via `agent_v2` → `orchestrator` execution
+  - Prints token and cost summary via `PrintTokenUsageSummary(...)`
 
 - `Execute(userIntent, cfg, logger) -> (*AgentTokenUsage, error)`
   - Perf logging (start/end)

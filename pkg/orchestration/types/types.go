@@ -93,6 +93,19 @@ type OrchestrationStep struct {
 	DependsOn      []string          `json:"depends_on"`      // Step IDs this step depends on
 	Timeout        int               `json:"timeout"`         // Timeout in seconds
 	Retries        int               `json:"retries"`         // Number of retries allowed
+	Attempts       int               `json:"attempts"`        // Attempt counter
+	LastAttemptAt  string            `json:"last_attempt_at,omitempty"`
+	History        []StepAttempt     `json:"history,omitempty"` // Per-attempt records
+}
+
+// StepAttempt records a single attempt to execute a step
+type StepAttempt struct {
+	Attempt    int      `json:"attempt"`
+	Status     string   `json:"status"`          // status after attempt
+	Error      string   `json:"error,omitempty"` // error, if any
+	StartedAt  string   `json:"started_at"`
+	FinishedAt string   `json:"finished_at"`
+	Files      []string `json:"files,omitempty"`
 }
 
 // StepResult represents the result of executing a step

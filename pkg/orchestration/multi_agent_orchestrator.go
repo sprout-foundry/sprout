@@ -697,10 +697,13 @@ func (o *MultiAgentOrchestrator) runValidationStage() error {
 		}
 		o.logger.LogProcessStep(fmt.Sprintf("🧪 Running %s: %s", name, cmd))
 		c := exec.Command("sh", "-c", cmd)
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
-		if err := c.Run(); err != nil {
-			return fmt.Errorf("%s failed: %w", name, err)
+		out, err := c.CombinedOutput()
+		outputStr := strings.TrimSpace(string(out))
+		if outputStr != "" {
+			o.logger.LogProcessStep(fmt.Sprintf("   ⮑ Output (%s):\n%s", name, outputStr))
+		}
+		if err != nil {
+			return fmt.Errorf("%s failed", name)
 		}
 		return nil
 	}
@@ -716,8 +719,18 @@ func (o *MultiAgentOrchestrator) runValidationStage() error {
 		errs = append(errs, err.Error())
 	}
 	for i, check := range o.validation.CustomChecks {
-		if err := run(fmt.Sprintf("custom_check_%d", i+1), check); err != nil {
-			errs = append(errs, err.Error())
+		nonBlocking := false
+		trimmed := strings.TrimSpace(check)
+		if strings.HasPrefix(trimmed, "!") {
+			nonBlocking = true
+			trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "!"))
+		}
+		if err := run(fmt.Sprintf("custom_check_%d", i+1), trimmed); err != nil {
+			if nonBlocking {
+				o.logger.LogProcessStep("⚠️ Non-blocking validation failed: " + err.Error())
+			} else {
+				errs = append(errs, err.Error())
+			}
 		}
 	}
 	if len(errs) > 0 {

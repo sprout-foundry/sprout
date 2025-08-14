@@ -111,3 +111,51 @@ func TestProgressTablePublishesUIEvent(t *testing.T) {
 	// The function should not panic
 	o.printProgressTable()
 }
+
+func TestValidationStage_NonBlockingCustomCheck(t *testing.T) {
+	o := &MultiAgentOrchestrator{
+		validation: &types.ValidationConfig{
+			BuildCommand: "",
+			TestCommand:  "",
+			LintCommand:  "",
+			CustomChecks: []string{"!echo nonblocking && false"},
+			Required:     true,
+		},
+		logger: utils.GetLogger(true),
+		plan:   &types.MultiAgentOrchestrationPlan{},
+	}
+	// Should not error because the custom check is marked non-blocking with '!'
+	if err := o.runValidationStage(); err != nil {
+		t.Fatalf("expected no error for non-blocking custom check, got %v", err)
+	}
+}
+
+func TestValidationStage_BlockingCustomCheckFails(t *testing.T) {
+	o := &MultiAgentOrchestrator{
+		validation: &types.ValidationConfig{
+			CustomChecks: []string{"false"},
+			Required:     true,
+		},
+		logger: utils.GetLogger(true),
+		plan:   &types.MultiAgentOrchestrationPlan{},
+	}
+	if err := o.runValidationStage(); err == nil {
+		t.Fatalf("expected error for blocking custom check")
+	}
+}
+
+func TestValidationStage_BuildAndLintNonRequired(t *testing.T) {
+	o := &MultiAgentOrchestrator{
+		validation: &types.ValidationConfig{
+			BuildCommand: "false",
+			TestCommand:  "",
+			LintCommand:  "false",
+			Required:     false,
+		},
+		logger: utils.GetLogger(true),
+		plan:   &types.MultiAgentOrchestrationPlan{},
+	}
+	if err := o.runValidationStage(); err != nil {
+		t.Fatalf("did not expect error when validation is non-required, got %v", err)
+	}
+}

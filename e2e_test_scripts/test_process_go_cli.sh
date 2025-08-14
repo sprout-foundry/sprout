@@ -72,6 +72,17 @@ JSON
         ls -la
         exit 1
     fi
+    # Strict, concrete checks
+    if ! grep -q "module \w\+" go.mod; then
+        echo "FAIL: go.mod missing module declaration."
+        cat go.mod
+        exit 1
+    fi
+    if ! grep -q "package main" main.go; then
+        echo "FAIL: main.go missing package main."
+        cat main.go
+        exit 1
+    fi
     if ! grep -q "package main" main.go; then
         echo "FAIL: main.go missing package main."
         exit 1

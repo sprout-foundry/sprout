@@ -16,6 +16,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/workspace"
+    ui "github.com/alantheprice/ledit/pkg/ui"
 )
 
 // preflightQuick checks existence and writability of a file
@@ -36,8 +37,8 @@ func preflightQuick(path string) error {
 // summary comment at the top of the file. This avoids tool-loop overhead for trivial tasks.
 func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 	// TODO: We should be able to be more intelligent about finding the correct file.
-	fmt.Printf("🤖 Agent v2 mode: Tool-driven execution\n")
-	fmt.Printf("🎯 Intent: %s\n", userIntent)
+    ui.Out().Print("🤖 Agent v2 mode: Tool-driven execution\n")
+    ui.Out().Printf("🎯 Intent: %s\n", userIntent)
 
 	cfg, err := config.LoadOrInitConfig(skipPrompt)
 	if err != nil {
@@ -90,7 +91,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 				instr := userIntent
 				if _, err := editor.ProcessPartialEdit(discovered, instr, cfg, logger); err == nil {
 					logger.LogProcessStep(fmt.Sprintf("v2: discovered and edited %s via workspace search", discovered))
-					fmt.Printf("✅ Agent v2 execution completed\n")
+                    ui.Out().Print("✅ Agent v2 execution completed\n")
 					return nil
 				} else {
 					logger.LogProcessStep(fmt.Sprintf("v2: partial edit after discovery failed: %v", err))
@@ -118,7 +119,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 			logger.LogError(fmt.Errorf("interactive v2 flow failed: %w", err))
 			return err
 		}
-		fmt.Printf("✅ Agent v2 execution completed\n")
+        ui.Out().Print("✅ Agent v2 execution completed\n")
 		return nil
 	}
 
@@ -133,7 +134,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 		// Try deterministic in-file replacement first (no LLM), interpreting common escapes in newText
 		if err := replaceFirstInFile(target, oldText, interpretEscapes(newText)); err == nil {
 			logger.LogProcessStep(fmt.Sprintf("v2: direct replace applied to %s (replaced '%s' → '%s')", target, oldText, newText))
-			fmt.Printf("✅ Agent v2 execution completed\n")
+            ui.Out().Print("✅ Agent v2 execution completed\n")
 			return nil
 		}
 		// Fallback to partial-edit flow via LLM
@@ -142,7 +143,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 			return fmt.Errorf("micro_edit failed: %w", err)
 		}
 		logger.LogProcessStep(fmt.Sprintf("v2: micro_edit applied to %s (replaced '%s' → '%s')", target, oldText, newText))
-		fmt.Printf("✅ Agent v2 execution completed\n")
+        ui.Out().Print("✅ Agent v2 execution completed\n")
 		return nil
 	}
 
@@ -161,7 +162,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 			return fmt.Errorf("append write failed: %w", err)
 		}
 		logger.LogProcessStep(fmt.Sprintf("v2: appended '%s' to end of %s", toAppend, target))
-		fmt.Printf("✅ Agent v2 execution completed\n")
+        ui.Out().Print("✅ Agent v2 execution completed\n")
 		return nil
 	}
 
@@ -182,7 +183,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 			}
 			_ = os.WriteFile(target, []byte(strings.Join(lines, "\n")), 0644)
 			logger.LogProcessStep("v2: applied enthusiasm boost (added '!')")
-			fmt.Printf("✅ Agent v2 execution completed\n")
+        ui.Out().Print("✅ Agent v2 execution completed\n")
 			return nil
 		}
 	}

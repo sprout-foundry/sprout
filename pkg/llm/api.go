@@ -16,6 +16,31 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
+// simple provider health state (in-memory)
+var providerFailures = map[string]int{}
+var providerLastFail = map[string]time.Time{}
+
+const failureThreshold = 3
+const openAfter = 2 * time.Minute
+
+func providerOpen(provider string) bool {
+	n := providerFailures[provider]
+	if n < failureThreshold {
+		return true
+	}
+	if time.Since(providerLastFail[provider]) > openAfter {
+		providerFailures[provider] = 0
+		return true
+	}
+	return false
+}
+
+func recordFailure(provider string) {
+	providerFailures[provider]++
+	providerLastFail[provider] = time.Now()
+}
+func recordSuccess(provider string) { providerFailures[provider] = 0 }
+
 var (
 	// DefaultTokenLimit is the default token limit for API calls
 	DefaultTokenLimit = prompts.DefaultTokenLimit
@@ -67,6 +92,16 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	}
 
 	ollamaUrl := fmt.Sprintf("%s/v1/chat/completions", cfg.OllamaServerURL)
+
+	if !providerOpen(provider) {
+		// short-circuit to fallback if available
+		fallbackModel := cfg.LocalModel
+		if fallbackModel != "" && provider != "ollama" {
+			fmt.Printf("[llm] provider '%s' circuit open; using local fallback %s\n", provider, fallbackModel)
+			tu, ferr := callOpenAICompatibleStream(ollamaUrl, "ollama", fallbackModel, messages, cfg, timeout, writer)
+			return tu, ferr
+		}
+	}
 
 	switch provider {
 	case "openai":
@@ -178,6 +213,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	}
 
 	if err != nil {
+		recordFailure(provider)
 		// Provider failover: try local/ollama fallback once
 		fallbackModel := cfg.LocalModel
 		if fallbackModel != "" && provider != "ollama" {
@@ -192,6 +228,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		fmt.Print(prompts.LLMResponseError(err))
 		return tokenUsage, err
 	}
+	recordSuccess(provider)
 
 	return tokenUsage, nil
 }

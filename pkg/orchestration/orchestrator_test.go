@@ -81,3 +81,20 @@ func TestEnsureCompatibility(t *testing.T) {
 		t.Fatalf("expected incompatibility due to step set mismatch")
 	}
 }
+
+func TestListRunnableStepIDs(t *testing.T) {
+	plan := &types.MultiAgentOrchestrationPlan{
+		Agents: []types.AgentDefinition{{ID: "a1"}},
+		Steps: []types.OrchestrationStep{
+			{ID: "s1", AgentID: "a1", Status: "completed"},
+			{ID: "s2", AgentID: "a1", Status: "pending", DependsOn: []string{"s1"}},
+			{ID: "s3", AgentID: "a1", Status: "pending", DependsOn: []string{"s2"}},
+		},
+		AgentStatuses: map[string]types.AgentStatus{"a1": {}},
+	}
+	o := &MultiAgentOrchestrator{plan: plan, logger: utils.GetLogger(true)}
+	ids := o.listRunnableStepIDs()
+	if len(ids) != 1 || ids[0] != "s2" {
+		t.Fatalf("expected only s2 runnable, got %v", ids)
+	}
+}

@@ -117,7 +117,21 @@ func (o *MultiAgentOrchestrator) Execute() error {
 	// Attempt resume from previous state if requested
 	if o.resume {
 		if err := o.loadStateIfCompatible(); err == nil {
+			// Log brief resume summary
+			completed := 0
+			for _, s := range o.plan.Steps {
+				if s.Status == "completed" {
+					completed++
+				}
+			}
 			o.logger.LogProcessStep("♻️ Loaded previous orchestration state; resuming...")
+			o.logger.LogProcessStep(fmt.Sprintf("   Progress: %d/%d steps completed", completed, len(o.plan.Steps)))
+			runnable := o.listRunnableStepIDs()
+			if len(runnable) > 0 {
+				o.logger.LogProcessStep(fmt.Sprintf("   Next runnable steps: %s", strings.Join(runnable, ", ")))
+			} else {
+				o.logger.LogProcessStep("   No steps currently runnable (waiting on dependencies or all done)")
+			}
 		} else if !os.IsNotExist(err) {
 			o.logger.LogProcessStep(fmt.Sprintf("ℹ️ Could not resume from state: %v (starting fresh)", err))
 		}
@@ -563,6 +577,14 @@ func (o *MultiAgentOrchestrator) runAgent(agentRunner *AgentRunner, task string)
 		st.Cost += cost
 		st.TokenUsage += tokenUsage.Total
 		o.plan.AgentStatuses[agentRunner.definition.ID] = st
+		// Update per-step tokens and cost
+		if result != nil {
+			result.Tokens = tokenUsage.Total
+			result.Cost = cost
+		}
+		// Update plan aggregates
+		o.plan.TotalTokens += tokenUsage.Total
+		o.plan.TotalCost += cost
 	}
 
 	return result, err
@@ -803,7 +825,23 @@ func (o *MultiAgentOrchestrator) printProgressTable() {
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
 
-	// Header
+	// If UI is enabled, publish structured progress snapshot
+	if ui.Enabled() {
+		evRows := make([]ui.ProgressRow, 0, len(rows))
+		for _, r := range rows {
+			evRows = append(evRows, ui.ProgressRow{
+				Name:   r.Name,
+				Status: r.Status,
+				Step:   r.Step,
+				Tokens: r.Tokens,
+				Cost:   r.Cost,
+			})
+		}
+		ui.PublishProgress(completed, total, evRows)
+		return
+	}
+
+	// Fallback to stdout printing
 	ui.Out().Printf("\n%-24s %-12s %-22s %8s %10s\n", "Agent", "Status", "Current Step", "Tokens", "Cost($)")
 	ui.Out().Printf("%s\n", strings.Repeat("-", 80))
 	for _, r := range rows {
@@ -861,6 +899,21 @@ func (o *MultiAgentOrchestrator) canExecuteStep(step *types.OrchestrationStep) b
 	}
 
 	return true
+}
+
+// listRunnableStepIDs returns IDs of steps that are pending and whose dependencies are all completed
+func (o *MultiAgentOrchestrator) listRunnableStepIDs() []string {
+	var ids []string
+	for i := range o.plan.Steps {
+		s := &o.plan.Steps[i]
+		if s.Status != "pending" {
+			continue
+		}
+		if o.canExecuteStep(s) {
+			ids = append(ids, s.ID)
+		}
+	}
+	return ids
 }
 
 func (o *MultiAgentOrchestrator) shouldStopOnFailure() bool {
@@ -983,6 +1036,17 @@ func (o *MultiAgentOrchestrator) updateAgentBudget(agentRunner *AgentRunner, tok
 	if budget.CostWarning > 0 && status.Cost >= budget.CostWarning {
 		o.logger.LogProcessStep(fmt.Sprintf("⚠️ Agent '%s' approaching cost limit: $%.4f/$%.4f",
 			agentRunner.definition.Name, status.Cost, budget.MaxCost))
+	}
+
+	// Enforce hard limits
+	if (budget.MaxTokens > 0 && status.TokenUsage > budget.MaxTokens) || (budget.MaxCost > 0 && status.Cost > budget.MaxCost) {
+		status.Halted = true
+		status.HaltReason = fmt.Sprintf("budget exceeded (tokens %d/%d, cost $%.4f/$%.4f)", status.TokenUsage, budget.MaxTokens, status.Cost, budget.MaxCost)
+		if budget.StopOnLimit {
+			o.logger.LogProcessStep(fmt.Sprintf("🛑 Agent '%s' halted: %s", agentRunner.definition.Name, status.HaltReason))
+		} else {
+			o.logger.LogProcessStep(fmt.Sprintf("⚠️ Agent '%s' exceeded budget but continuing: %s", agentRunner.definition.Name, status.HaltReason))
+		}
 	}
 
 	// Log budget status

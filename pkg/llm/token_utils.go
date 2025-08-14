@@ -2,14 +2,52 @@ package llm
 
 import (
 	"strings"
+	"sync"
 )
 
-// --- Token Counting ---
+// --- Token Counting with simple caching ---
+
+var (
+	tokenCache   = map[string]int{}
+	tokenCacheMu sync.RWMutex
+	cacheStats   TokenCacheStats
+)
+
+type TokenCacheStats struct {
+	Hits   int
+	Misses int
+}
+
+// ClearTokenCache resets the token estimation cache and stats.
+func ClearTokenCache() {
+	tokenCacheMu.Lock()
+	defer tokenCacheMu.Unlock()
+	tokenCache = map[string]int{}
+	cacheStats = TokenCacheStats{}
+}
+
+// GetCacheStats returns a snapshot of cache statistics.
+func GetCacheStats() TokenCacheStats {
+	tokenCacheMu.RLock()
+	defer tokenCacheMu.RUnlock()
+	return cacheStats
+}
 
 // EstimateTokens provides a more accurate token estimation based on OpenAI's tiktoken approach
 func EstimateTokens(text string) int {
 	if text == "" {
 		return 0
+	}
+
+	// Fast path: cached
+	tokenCacheMu.RLock()
+	cached, ok := tokenCache[text]
+	tokenCacheMu.RUnlock()
+	if ok {
+		tokenCacheMu.Lock()
+		cacheStats.Hits++
+		tokenCacheMu.Unlock()
+		return cached
 	}
 
 	// Count words and characters for better estimation
@@ -55,6 +93,11 @@ func EstimateTokens(text string) int {
 		totalTokens = 1
 	}
 
+	// Store in cache
+	tokenCacheMu.Lock()
+	tokenCache[text] = totalTokens
+	cacheStats.Misses++
+	tokenCacheMu.Unlock()
 	return totalTokens
 }
 

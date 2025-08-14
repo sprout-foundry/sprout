@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/ui"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -25,19 +26,22 @@ type model struct {
 	promptText     string
 	promptYesNo    bool
 	promptDefault  bool
+	promptInput    string
 	// summary
 	baseModel   string
 	totalTokens int
 	totalCost   float64
 	// logs pane controls
 	logsCollapsed bool
-	logsOffset    int // number of lines scrolled up from bottom (0 means stick to bottom)
+	vp            viewport.Model
 }
 
 type tickMsg time.Time
 
 func initialModel() model {
-	return model{start: time.Now(), logs: make([]string, 0, 256)}
+	m := model{start: time.Now(), logs: make([]string, 0, 256)}
+	m.vp = viewport.Model{}
+	return m
 }
 
 func (m model) Init() tea.Cmd {
@@ -74,12 +78,128 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.vp.Width = max(0, m.width-2)
+		// height is set later based on reserved rows
+		return m, nil
+	case tea.KeyMsg:
+		// Prompt-aware handling first
+		if m.awaitingPrompt && m.promptYesNo {
+			// Single-key quick responses
+			switch msg.String() {
+			case "y", "Y":
+				ui.SubmitPromptResponse(m.promptID, "yes", true)
+				m.awaitingPrompt = false
+				m.promptInput = ""
+				return m, subscribeEvents()
+			case "n", "N":
+				ui.SubmitPromptResponse(m.promptID, "no", false)
+				m.awaitingPrompt = false
+				m.promptInput = ""
+				return m, subscribeEvents()
+			case "enter":
+				ui.SubmitPromptResponse(m.promptID, "", m.promptDefault)
+				m.awaitingPrompt = false
+				m.promptInput = ""
+				return m, subscribeEvents()
+			}
+			// Typed input workflow
+			switch msg.Type {
+			case tea.KeyRunes:
+				m.promptInput += strings.ToLower(string(msg.Runes))
+				return m, nil
+			case tea.KeyBackspace, tea.KeyCtrlH:
+				if len(m.promptInput) > 0 {
+					m.promptInput = m.promptInput[:len(m.promptInput)-1]
+				}
+				return m, nil
+			case tea.KeyCtrlU: // clear line
+				m.promptInput = ""
+				return m, nil
+			case tea.KeyCtrlK: // clear to end of line (same as clear in single-line)
+				m.promptInput = ""
+				return m, nil
+			case tea.KeyCtrlW: // delete last word
+				trimmed := strings.TrimRight(m.promptInput, " \t")
+				i := len(trimmed) - 1
+				for i >= 0 && trimmed[i] != ' ' && trimmed[i] != '\t' {
+					i--
+				}
+				if i < 0 {
+					m.promptInput = ""
+				} else {
+					m.promptInput = strings.TrimRight(trimmed[:i], " \t")
+				}
+				return m, nil
+			case tea.KeyEnter:
+				in := strings.TrimSpace(strings.ToLower(m.promptInput))
+				switch in {
+				case "y", "yes":
+					ui.SubmitPromptResponse(m.promptID, "yes", true)
+					m.awaitingPrompt = false
+					m.promptInput = ""
+					return m, subscribeEvents()
+				case "n", "no":
+					ui.SubmitPromptResponse(m.promptID, "no", false)
+					m.awaitingPrompt = false
+					m.promptInput = ""
+					return m, subscribeEvents()
+				case "":
+					ui.SubmitPromptResponse(m.promptID, "", m.promptDefault)
+					m.awaitingPrompt = false
+					m.promptInput = ""
+					return m, subscribeEvents()
+				default:
+					ui.Log("Please type 'yes' or 'no', or press Enter for default")
+					return m, nil
+				}
+			}
+		}
+		// General key handling
+		switch msg.String() {
+		case "q", "Q", "esc", "ctrl+c":
+			return m, tea.Quit
+		case "l", "L":
+			m.logsCollapsed = !m.logsCollapsed
+			return m, nil
+		case "ctrl+l": // clear logs
+			m.logs = m.logs[:0]
+			m.vp.SetContent("")
+			return m, nil
+		case "up", "k":
+			if !m.logsCollapsed {
+				m.vp.LineUp(1)
+			}
+			return m, nil
+		case "down", "j":
+			if !m.logsCollapsed {
+				m.vp.LineDown(1)
+			}
+			return m, nil
+		// PageUp/PageDown, arrows, mouse will be handled by viewport.Update below
+		case "home":
+			if !m.logsCollapsed {
+				m.vp.GotoTop()
+			}
+			return m, nil
+		case "end":
+			if !m.logsCollapsed {
+				m.vp.GotoBottom()
+			}
+			return m, nil
+		}
+		// Pass through to viewport for mouse and other keys
+		if !m.logsCollapsed {
+			var cmd tea.Cmd
+			m.vp, cmd = m.vp.Update(msg)
+			return m, cmd
+		}
 		return m, nil
 	case ui.LogEvent:
 		m.logs = append(m.logs, fmt.Sprintf("%s", msg.Text))
 		if len(m.logs) > 500 {
 			m.logs = m.logs[len(m.logs)-500:]
 		}
+		m.vp.SetContent(strings.Join(m.logs, "\n"))
 		return m, subscribeEvents()
 	case ui.ProgressSnapshotEvent:
 		m.progress = msg
@@ -113,83 +233,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, subscribeEvents()
 	case tickMsg:
 		return m, tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "Q", "esc", "ctrl+c":
-			return m, tea.Quit
-		case "l", "L":
-			m.logsCollapsed = !m.logsCollapsed
-			return m, nil
-		case "up", "k":
-			if !m.logsCollapsed && len(m.logs) > 0 {
-				if m.logsOffset < len(m.logs)-1 {
-					m.logsOffset++
-				}
-			}
-			return m, nil
-		case "down", "j":
-			if !m.logsCollapsed && m.logsOffset > 0 {
-				m.logsOffset--
-			}
-			return m, nil
-		case "pgup":
-			if !m.logsCollapsed && len(m.logs) > 0 {
-				m.logsOffset += 10
-				if m.logsOffset > len(m.logs)-1 {
-					m.logsOffset = len(m.logs) - 1
-				}
-			}
-			return m, nil
-		case "pgdown":
-			if !m.logsCollapsed && m.logsOffset > 0 {
-				m.logsOffset -= 10
-				if m.logsOffset < 0 {
-					m.logsOffset = 0
-				}
-			}
-			return m, nil
-		case "home":
-			if !m.logsCollapsed {
-				m.logsOffset = len(m.logs) - 1
-			}
-			return m, nil
-		case "end":
-			if !m.logsCollapsed {
-				m.logsOffset = 0
-			}
-			return m, nil
-		case "y", "Y":
-			if m.awaitingPrompt && m.promptYesNo {
-				ui.SubmitPromptResponse(m.promptID, "yes", true)
-				m.awaitingPrompt = false
-				return m, subscribeEvents()
-			}
-		case "n", "N":
-			if m.awaitingPrompt && m.promptYesNo {
-				ui.SubmitPromptResponse(m.promptID, "no", false)
-				m.awaitingPrompt = false
-				return m, subscribeEvents()
-			}
-		case "enter":
-			if m.awaitingPrompt && m.promptYesNo {
-				ui.SubmitPromptResponse(m.promptID, "", m.promptDefault)
-				m.awaitingPrompt = false
-				return m, subscribeEvents()
-			}
-		}
-		return m, nil
 	default:
 		return m, nil
 	}
 }
 
 func (m model) View() string {
-	hdr := "Ledit UI"
-	if m.streaming {
-		hdr += "  [streaming…]"
-	}
-	header := lipgloss.NewStyle().Bold(true).Padding(0, 1).Render(hdr)
-	uptime := time.Since(m.start).Round(time.Second)
+	header := m.renderHeader()
 	// Compute how many log lines can fit given the current terminal height
 	progLines := countLines(m.renderProgress())
 	promptLines := 0
@@ -200,28 +250,16 @@ func (m model) View() string {
 			promptLines = 2
 		}
 	}
-	// header(1) + summary(1) + spacing(2) + footer(1)
-	reserved := 1 + 1 + 2 + 1 + progLines + promptLines
+	// header(1) + spacing(2) + footer(1)
+	reserved := 1 + 2 + 1 + progLines + promptLines
 	availableLogLines := m.height - reserved
 	if availableLogLines < 1 {
 		availableLogLines = 1
 	}
-	// Optional collapsible logs
-	logs := ""
-	if !m.logsCollapsed && len(m.logs) > 0 {
-		// compute starting index honoring scroll offset
-		start := len(m.logs) - availableLogLines - m.logsOffset
-		if start < 0 {
-			start = 0
-		}
-		end := start + availableLogLines
-		if end > len(m.logs) {
-			end = len(m.logs)
-		}
-		for i := start; i < end; i++ {
-			logs += m.logs[i] + "\n"
-		}
-	}
+	// update viewport dims and content
+	m.vp.Width = max(0, m.width-2)
+	m.vp.Height = max(1, availableLogLines)
+	m.vp.SetContent(strings.Join(m.logs, "\n"))
 	prompt := ""
 	if m.awaitingPrompt {
 		if m.promptYesNo {
@@ -229,17 +267,56 @@ func (m model) View() string {
 			if m.promptDefault {
 				def = "yes"
 			}
-			prompt = fmt.Sprintf("\nPrompt: %s [y/n] (default %s)\n", m.promptText, def)
+			if m.promptInput != "" {
+				prompt = fmt.Sprintf("\nPrompt: %s [y/n] (default %s) > %s\n", m.promptText, def, m.promptInput)
+			} else {
+				prompt = fmt.Sprintf("\nPrompt: %s [y/n] (default %s)\n", m.promptText, def)
+			}
 		} else {
 			prompt = fmt.Sprintf("\nPrompt: %s\n", m.promptText)
 		}
 	}
-	summary := fmt.Sprintf("Model: %s | Tokens: %d | Cost: $%.4f | Uptime: %s", m.baseModel, m.totalTokens, m.totalCost, uptime)
-	body := lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("%s\nWidth: %d  Height: %d\n\n%s%s\nLogs (l to toggle, arrows/PgUp/PgDn to scroll):\n%s\nPress q to quit.", summary, m.width, m.height, m.renderProgress(), prompt, logs))
+	logsView := "[logs collapsed]"
+	if !m.logsCollapsed {
+		logsView = m.vp.View()
+	}
+	body := lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("Width: %d  Height: %d\n\n%s%s\nLogs (l to toggle, arrows/PgUp/PgDn, mouse; ctrl+l clear):\n%s\nPress q to quit.", m.width, m.height, m.renderProgress(), prompt, logsView))
 	footer := lipgloss.NewStyle().Faint(true).Padding(0, 1).Render("© Ledit")
 
 	vertical := lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 	return vertical
+}
+
+func (m model) renderHeader() string {
+	// Build a single-line status header that adapts to width
+	streaming := ""
+	if m.streaming {
+		streaming = " [streaming…]"
+	}
+	uptime := time.Since(m.start).Round(time.Second)
+	parts := []string{
+		fmt.Sprintf("Model: %s", m.baseModel),
+		fmt.Sprintf("Tokens: %d", m.totalTokens),
+		fmt.Sprintf("Cost: $%.4f", m.totalCost),
+		fmt.Sprintf("Uptime: %s", uptime),
+	}
+	line := strings.Join(parts, " | ") + streaming
+	// trim to width
+	if m.width > 0 {
+		line = trimToWidth(line, m.width-2)
+	}
+	return lipgloss.NewStyle().Bold(true).Padding(0, 1).Render(line)
+}
+
+func trimToWidth(s string, w int) string {
+	if w <= 0 || len(s) <= w {
+		return s
+	}
+	if w <= 1 {
+		return s[:w]
+	}
+	// leave room for ellipsis
+	return s[:w-1] + "…"
 }
 
 func (m model) renderProgress() string {

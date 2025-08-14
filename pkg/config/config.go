@@ -97,23 +97,23 @@ func getLocalModel(skipPrompt bool) string {
 	logger := utils.GetLogger(skipPrompt)
 	v, err := mem.VirtualMemory()
 	if err != nil {
-		logger.Logf(prompts.MemoryDetectionError(MicroCoder, err))
+		logger.Log(prompts.MemoryDetectionError(MicroCoder, err))
 		return MicroCoder
 	}
 	gb := v.Total / (1024 * 1024 * 1024)
 	if gb >= 48 {
-		logger.Logf(prompts.SystemMemoryFallback(int(gb), LargeCoder))
+		logger.Log(prompts.SystemMemoryFallback(int(gb), LargeCoder))
 		return LargeCoder
 	}
 	if gb >= 38 {
-		logger.Logf(prompts.SystemMemoryFallback(int(gb), MediumCoder))
+		logger.Log(prompts.SystemMemoryFallback(int(gb), MediumCoder))
 		return MediumCoder
 	}
 	if gb >= 20 {
-		logger.Logf(prompts.SystemMemoryFallback(int(gb), SmallCoder))
+		logger.Log(prompts.SystemMemoryFallback(int(gb), SmallCoder))
 		return SmallCoder
 	}
-	logger.Logf(prompts.SystemMemoryFallback(int(gb), MicroCoder))
+	logger.Log(prompts.SystemMemoryFallback(int(gb), MicroCoder))
 	return MicroCoder
 }
 

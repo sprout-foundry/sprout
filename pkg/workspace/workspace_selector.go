@@ -2,11 +2,11 @@ package workspace
 
 import (
 	"fmt"
-	"os"            // New import
-	"path/filepath" // New import
+	"os"
+	"path/filepath"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/utils" // New import for logger
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // normalizeLLMPath attempts to correct an LLM-returned file path to match a key in workspace.Files.

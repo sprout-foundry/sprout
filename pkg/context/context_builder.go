@@ -10,9 +10,9 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
-    "github.com/alantheprice/ledit/pkg/prompts"
-    "github.com/alantheprice/ledit/pkg/utils"
-    "github.com/alantheprice/ledit/pkg/webcontent"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/webcontent"
 )
 
 // --- Message Structs ---
@@ -29,7 +29,7 @@ type ContextResponse struct {
 func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, error) {
 	var responses []string
 	for _, req := range reqs {
-		fmt.Print(prompts.LLMContextRequest(req.Type, req.Query)) // Use prompt
+		fmt.Print(prompts.LLMContextRequest(req.Type, req.Query))
 		switch req.Type {
 		case "search":
 			searchResult, err := webcontent.FetchContextFromSearch(req.Query, cfg)
@@ -41,7 +41,7 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 				responses = append(responses, fmt.Sprintf("Here are the search results for '%s':\n\n%s", req.Query, searchResult))
 			}
 		case "user_prompt":
-			fmt.Print(prompts.LLMUserQuestion(req.Query)) // Use prompt
+			fmt.Print(prompts.LLMUserQuestion(req.Query))
 			reader := bufio.NewReader(os.Stdin)
 			answer, err := reader.ReadString('\n')
 			if err != nil {
@@ -78,8 +78,8 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 			}
 
 			if !shouldExecute { // If not already decided to execute (either skipPrompt was false, or it was risky)
-				fmt.Println(prompts.LLMShellWarning())    // Use prompt
-				fmt.Print(prompts.LLMShellConfirmation()) // Use prompt
+				fmt.Println(prompts.LLMShellWarning())
+				fmt.Print(prompts.LLMShellConfirmation())
 				reader := bufio.NewReader(os.Stdin)
 				confirm, _ := reader.ReadString('\n')
 				if strings.TrimSpace(strings.ToLower(confirm)) != "y" {

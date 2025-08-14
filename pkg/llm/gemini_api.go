@@ -9,15 +9,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/apikeys" // Import the apikeys package
+	"github.com/alantheprice/ledit/pkg/apikeys"
 	"github.com/alantheprice/ledit/pkg/prompts"
 )
 
 func callGeminiAPI(model string, messages []prompts.Message, timeout time.Duration, useSearchGrounding bool) (string, error) {
 	// Pass 'false' for interactive, as API calls should typically not prompt the user directly.
-	apiKey, err := apikeys.GetAPIKey("gemini", false) // Use apikeys package and pass false for interactive
+	apiKey, err := apikeys.GetAPIKey("gemini", false)
 	if err != nil {
-		fmt.Print(prompts.APIKeyError(err)) // Use prompt
+		fmt.Print(prompts.APIKeyError(err))
 		return "", err
 	}
 	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
@@ -33,7 +33,7 @@ func callGeminiAPI(model string, messages []prompts.Message, timeout time.Durati
 			Parts: []struct {
 				Text string `json:"text"`
 			}{
-				{Text: GetMessageText(msg.Content)}, // Use helper function
+				{Text: GetMessageText(msg.Content)},
 			},
 		})
 	}
@@ -64,31 +64,31 @@ func callGeminiAPI(model string, messages []prompts.Message, timeout time.Durati
 
 	reqBody, err := json.Marshal(reqBodyStruct)
 	if err != nil {
-		fmt.Print(prompts.RequestMarshalError(err)) // Use prompt
+		fmt.Print(prompts.RequestMarshalError(err))
 		return "", err
 	}
 
 	client := &http.Client{Timeout: timeout}
 	resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
-		fmt.Print(prompts.HTTPRequestError(err)) // Use prompt
+		fmt.Print(prompts.HTTPRequestError(err))
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Print(prompts.ResponseBodyError(err)) // Use prompt
+		fmt.Print(prompts.ResponseBodyError(err))
 		return "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		fmt.Print(prompts.APIError(string(body), resp.StatusCode)) // Use prompt
+		fmt.Print(prompts.APIError(string(body), resp.StatusCode))
 		return "", fmt.Errorf(prompts.APIError(string(body), resp.StatusCode))
 	}
 
 	var geminiResp GeminiResponse
 	if err := json.Unmarshal(body, &geminiResp); err != nil {
-		fmt.Print(prompts.ResponseUnmarshalError(err)) // Use prompt
+		fmt.Print(prompts.ResponseUnmarshalError(err))
 		return "", err
 	}
 
@@ -129,6 +129,6 @@ func callGeminiAPI(model string, messages []prompts.Message, timeout time.Durati
 		}
 	}
 
-	fmt.Println(prompts.NoGeminiContent()) // Use prompt
+	fmt.Println(prompts.NoGeminiContent())
 	return "", fmt.Errorf("no content in response")
 }

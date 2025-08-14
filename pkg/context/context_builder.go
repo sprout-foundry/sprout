@@ -11,6 +11,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/webcontent"
 )
@@ -29,7 +30,7 @@ type ContextResponse struct {
 func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, error) {
 	var responses []string
 	for _, req := range reqs {
-		fmt.Print(prompts.LLMContextRequest(req.Type, req.Query))
+		ui.Out().Print(prompts.LLMContextRequest(req.Type, req.Query))
 		switch req.Type {
 		case "search":
 			searchResult, err := webcontent.FetchContextFromSearch(req.Query, cfg)
@@ -41,7 +42,7 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 				responses = append(responses, fmt.Sprintf("Here are the search results for '%s':\n\n%s", req.Query, searchResult))
 			}
 		case "user_prompt":
-			fmt.Print(prompts.LLMUserQuestion(req.Query))
+			ui.Out().Print(prompts.LLMUserQuestion(req.Query))
 			reader := bufio.NewReader(os.Stdin)
 			answer, err := reader.ReadString('\n')
 			if err != nil {
@@ -49,7 +50,7 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 			}
 			responses = append(responses, fmt.Sprintf("The user responded: %s", strings.TrimSpace(answer)))
 		case "file":
-			fmt.Print(prompts.LLMFileRequest(req.Query))
+			ui.Out().Print(prompts.LLMFileRequest(req.Query))
 			content, err := os.ReadFile(req.Query)
 			if err != nil {
 				return "", fmt.Errorf("failed to read file '%s': %w", req.Query, err)
@@ -58,28 +59,28 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 		case "shell":
 			shouldExecute := false
 			if cfg.SkipPrompt {
-				fmt.Println(prompts.LLMShellSkippingPrompt())
+				ui.Out().Print(prompts.LLMShellSkippingPrompt() + "\n")
 				riskAnalysis, err := GetScriptRiskAnalysis(cfg, req.Query) // Call to GetScriptRiskAnalysis remains unqualified as it's now in the same package
 				if err != nil {
 					responses = append(responses, fmt.Sprintf("Failed to get script risk analysis: %v. User denied execution.", err))
-					fmt.Println(prompts.LLMScriptAnalysisFailed(err))
+					ui.Out().Print(prompts.LLMScriptAnalysisFailed(err) + "\n")
 					continue
 				}
 
 				// Define what "not risky" means. For now, a simple string check.
 				// A more robust solution might involve a structured JSON response from the summary model.
 				if strings.Contains(strings.ToLower(riskAnalysis), "not risky") || strings.Contains(strings.ToLower(riskAnalysis), "safe") {
-					fmt.Println(prompts.LLMScriptNotRisky())
+					ui.Out().Print(prompts.LLMScriptNotRisky() + "\n")
 					shouldExecute = true
 				} else {
-					fmt.Println(prompts.LLMScriptRisky(riskAnalysis))
+					ui.Out().Print(prompts.LLMScriptRisky(riskAnalysis) + "\n")
 					// If risky, fall through to prompt the user
 				}
 			}
 
 			if !shouldExecute { // If not already decided to execute (either skipPrompt was false, or it was risky)
-				fmt.Println(prompts.LLMShellWarning())
-				fmt.Print(prompts.LLMShellConfirmation())
+				ui.Out().Print(prompts.LLMShellWarning() + "\n")
+				ui.Out().Print(prompts.LLMShellConfirmation())
 				reader := bufio.NewReader(os.Stdin)
 				confirm, _ := reader.ReadString('\n')
 				if strings.TrimSpace(strings.ToLower(confirm)) != "y" {
@@ -113,7 +114,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		category = "docs"
 	}
 	controlModel, modelName, reason := llm.RouteModels(cfg, category, len(code))
-	fmt.Print(prompts.UsingModel(modelName))
+	ui.Out().Print(prompts.UsingModel(modelName))
 
 	// Log key parameters
 	logger := utils.GetLogger(cfg.SkipPrompt)
@@ -137,7 +138,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 				if err := llm.AddImageToMessage(&messages[i], imagePath); err != nil {
 					return modelName, "", fmt.Errorf("failed to add image to message: %w. Please ensure the image file exists and is in a supported format (JPEG, PNG, GIF, WebP)", err)
 				}
-				fmt.Printf("Added image to message. Note: If the model doesn't support vision, the request may fail. Consider using a vision-capable model like 'openai:gpt-4o', 'gemini:gemini-1.5-flash', or 'anthropic:claude-3-sonnet'.\n")
+				ui.Out().Printf("Added image to message. Note: If the model doesn't support vision, the request may fail. Consider using a vision-capable model like 'openai:gpt-4o', 'gemini:gemini-1.5-flash', or 'anthropic:claude-3-sonnet'.\n")
 				break
 			}
 		}
@@ -199,7 +200,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 	if modelName == "" {
 		// Fallback if summary model is not configured
 		modelName = cfg.EditingModel
-		fmt.Print(prompts.NoSummaryModelFallback(modelName)) // New prompt
+		ui.Out().Print(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 
 	response, _, err := llm.GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute) // Analysis does not use search grounding

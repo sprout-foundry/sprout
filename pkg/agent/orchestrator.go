@@ -94,6 +94,14 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 			}
 		}
 
+		// Telemetry hook
+		if context.Config.TelemetryEnabled {
+			logTelemetry(context.Config.TelemetryFile, telemetryEvent{
+				Timestamp: time.Now(), Policy: PolicyVersion, Variant: context.Config.PolicyVariant,
+				Intent: context.UserIntent, Iteration: context.IterationCount, Action: evaluation.NextAction, Status: evaluation.Status,
+			})
+		}
+
 		switch evaluation.NextAction {
 		case "analyze_intent":
 			intentAnalysis, tokens, e := analyzeIntentWithMinimalContext(context.UserIntent, context.Config, context.Logger)

@@ -58,12 +58,15 @@ type Config struct {
 	UseSearchGrounding       bool                 `json:"-"`                          // Command-scoped flag to enable search grounding
 	CodeToolsEnabled         bool                 `json:"-"`                          // Allow tool-calls in code flow when true
 	// New toggles
-	PreapplyReview    bool `json:"preapply_review"`
-	DryRun            bool `json:"dry_run"`
-	JsonLogs          bool `json:"json_logs"`
-	HealthChecks      bool `json:"health_checks"`
-	StagedEdits       bool `json:"staged_edits"`
-	AutoGenerateTests bool `json:"auto_generate_tests"`
+	PreapplyReview    bool   `json:"preapply_review"`
+	DryRun            bool   `json:"dry_run"`
+	JsonLogs          bool   `json:"json_logs"`
+	HealthChecks      bool   `json:"health_checks"`
+	StagedEdits       bool   `json:"staged_edits"`
+	AutoGenerateTests bool   `json:"auto_generate_tests"`
+	TelemetryEnabled  bool   `json:"telemetry_enabled"`
+	TelemetryFile     string `json:"telemetry_file"`
+	PolicyVariant     string `json:"policy_variant"`
 	// Budgets and limits
 	MaxRunSeconds    int     `json:"max_run_seconds"`
 	MaxRunTokens     int     `json:"max_run_tokens"`
@@ -213,6 +216,9 @@ func (cfg *Config) setDefaultValues() {
 	// Defaults for budgets/limits
 	if cfg.ShellTimeoutSecs == 0 {
 		cfg.ShellTimeoutSecs = 20
+	}
+	if cfg.TelemetryFile == "" {
+		cfg.TelemetryFile = ".ledit/telemetry.jsonl"
 	}
 	// Default off for auto test generation
 	// cfg.AutoGenerateTests remains false unless explicitly enabled

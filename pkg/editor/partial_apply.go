@@ -25,9 +25,15 @@ func applyPartialEdit(originalContent, updatedSection string, startLine, endLine
 		endLine = betterEnd
 	}
 
-	// Replace the lines from startLine to endLine with the updated section
+	// Replace the lines from startLine to endLine with the updated section (idempotent guard)
 	before := lines[:startLine]
 	after := lines[endLine+1:]
+
+	// Idempotent guard: avoid duplicate insertion if updated already present
+	joined := strings.Join(lines, "\n")
+	if strings.Contains(joined, cleanedUpdatedSection) {
+		return joined
+	}
 
 	// Combine: before + updated + after
 	result := append(before, updatedLines...)

@@ -144,8 +144,9 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Accept: Measurable latency reduction on multi-file inspections; no dependency hazards
 
 ### 32) Test harness integration
-- [ ] Generate/run minimal tests for changed code where missing; prioritize fast path
+- [x] Generate/run minimal tests for changed code where missing; prioritize fast path
   - Accept: For functions touched, a smoke test can be auto-generated/executed with a flag
+  - Implemented: When `AutoGenerateTests` is enabled, minimal Go/Python smoke tests are generated for changed files. After edits, smoke tests are executed non-fatally (Go: `go test -run TestSmoke`; Python: `pytest -k smoke` fallback). Logs record pass/fail.
 
 ### 33) State serialization and resume
 - [ ] Persist planner/executor/evaluator state to disk and support resume on next run
@@ -173,15 +174,15 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Accept: Validation runs against staged area; merge only on success
 
 ### 39) Multi-file dependency ordering
-- [ ] Order multi-file edits by import/use graph
+- [x] Order multi-file edits by import/use graph
   - Accept: Planner emits an order; executor respects it
 
 ### 40) Git context awareness
-- [ ] Use blame and recent changes to reduce risky modifications
+- [x] Use blame and recent changes to reduce risky modifications
   - Accept: Planner/evaluator consider blame info in guidance
 
 ### 41) AST-aware edits (optional)
-- [ ] Add function/struct span detection to anchor micro/section edits
+- [x] Add function/struct span detection to anchor micro/section edits
   - Accept: Edits target AST spans; smaller diffs; higher success rate
 
 ### 42) Planner → Executor → Evaluator split

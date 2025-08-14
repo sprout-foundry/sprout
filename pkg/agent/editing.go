@@ -236,6 +236,8 @@ func executeEditOperations(context *AgentContext) error {
 		changedFiles = append(changedFiles, op.FilePath)
 	}
 	generateSmokeTestsIfEnabled(changedFiles, context.Config, context.Logger)
+	// Optionally run smoke tests if enabled (non-fatal)
+	runSmokeTestsIfEnabled(changedFiles, context.Config, context.Logger)
 
 	// Non-interactive git integration: auto-commit staged edits when TrackWithGit is enabled
 	if context.Config.TrackWithGit {

@@ -73,6 +73,17 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 		color.Yellow(prompts.OriginalFileHeader(newFilename))
 		color.Yellow(prompts.UpdatedFileHeader(newFilename))
 
+		// Three-way merge to avoid stomping concurrent changes
+		currentBytes, _ := os.ReadFile(newFilename)
+		current := string(currentBytes)
+		merged, hadConflicts, mErr := ApplyThreeWayMerge(originalCode, current, newCode)
+		if mErr != nil && hadConflicts {
+			return "", fmt.Errorf("merge conflict applying changes to %s: %v", newFilename, mErr)
+		}
+		if merged != "" {
+			newCode = merged
+		}
+
 		diff := changetracker.GetDiff(newFilename, originalCode, newCode)
 		if diff == "" {
 			fmt.Print("No changes detected.")

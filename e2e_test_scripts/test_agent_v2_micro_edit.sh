@@ -27,7 +27,7 @@ func Hello() {
 EOF
 
     # Run agent v2 deterministic micro edit
-    ../../ledit agent --agent v2 --skip-prompt "In $(pwd)/file.go change \"foo\" to \"bar\""
+    ../../ledit agent --agent v2 -m "$model_name" --skip-prompt "In $(pwd)/file.go change \"foo\" to \"bar\""
 
     echo
     echo "--- Verifying Test ---"

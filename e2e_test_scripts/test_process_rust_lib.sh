@@ -14,9 +14,40 @@ run_test_logic() {
     mkdir -p "$workdir"
     cd "$workdir" || exit 1
 
-    PROMPT="Create a Rust library crate named utils with a function greet(name: &str) -> String returning 'Hello, {name}!'. Include Cargo.toml, src/lib.rs, and a README."
+    cat > process.json << 'JSON'
+{
+  "version": "1.0",
+  "goal": "Create Rust lib crate utils with greet(name)->String",
+  "description": "Single-agent Rust lib",
+  "agents": [{
+    "id": "rustacean",
+    "name": "Rust Dev",
+    "persona": "backend_developer",
+    "description": "Implements small Rust libraries",
+    "skills": ["rust"],
+    "model": "",
+    "priority": 1,
+    "depends_on": [],
+    "config": {"skip_prompt": "true"}
+  }],
+  "steps": [{
+    "id": "init",
+    "name": "Init crate",
+    "description": "Create Cargo.toml and src/lib.rs with greet(name: &str) -> String",
+    "agent_id": "rustacean",
+    "input": {},
+    "expected_output": "Cargo.toml and src/lib.rs exist",
+    "status": "pending",
+    "depends_on": [],
+    "timeout": 60,
+    "retries": 0
+  }],
+  "validation": {"required": false},
+  "settings": {"max_retries": 0, "step_timeout": 120, "parallel_execution": false, "stop_on_failure": true, "log_level": "info"}
+}
+JSON
 
-    ../../ledit process "$PROMPT" --model "$model_name" --skip-prompt
+    ../../ledit process process.json --model "$model_name" --skip-prompt
 
     echo
     echo "--- Verifying Test ---"

@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
+	uiPkg "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -57,6 +59,11 @@ Examples:
 		// Propagate dry-run via env var for simplicity; config loader reads os.Getenv in future enhancement
 		if agentDryRun {
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")
+		}
+		// If UI is enabled, start TUI in background and route output
+		if uiPkg.Enabled() {
+			uiPkg.SetDefaultSink(uiPkg.TuiSink{})
+			go func() { _ = tuiPkg.Run() }()
 		}
 		// Default to v2; v1 has been removed/deprecated
 		return agent.RunAgentModeV2(userIntent, agentSkipPrompt, agentModel)

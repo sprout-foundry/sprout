@@ -5,19 +5,19 @@
   - **Plan**: Introduce Bubble Tea-based TUI scaffold with header, body panes, footer, and keybindings
   - **Deliverable**: `ledit ui` command that launches a basic dashboard shell
 
-- [ ] Introduce a global `--ui` flag and `LEDIT_UI=1` env var
+- [x] Introduce a global `--ui` flag and `LEDIT_UI=1` env var
   - **Goal**: Enable TUI for existing commands without changing their semantics by default
   - **Plan**: Add persistent flag to `root` and a simple switch in long-running commands to spawn TUI
 
-- [ ] Define a UI abstraction layer
+- [x] Define a UI abstraction layer
   - **Goal**: Replace scattered `fmt.Print*` with an interface that can route to stdout or the TUI
   - **Plan**: Create `pkg/ui/output.go` with interfaces: `OutputSink`, `StdoutSink`, `TuiSink`
 
-- [ ] Event bus for progress updates
+- [x] Event bus for progress updates
   - **Goal**: Stream state from orchestrators/workers to UI reactively
   - **Plan**: Define `pkg/ui/events.go` with typed events (header, progress, log, table rows, footer)
 
-- [ ] Wire TUI to the orchestrator
+- [x] Wire TUI to the orchestrator
   - **Goal**: Visualize multi-agent progress (status, step, tokens, cost) in a table that updates live
   - **Plan**: Publish progress events from `pkg/orchestration/*` and render in a Bubble Tea table/panels
 

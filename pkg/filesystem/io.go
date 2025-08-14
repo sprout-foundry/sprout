@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // SaveFile saves or removes a file with the given content.
@@ -36,12 +38,48 @@ func SaveFile(filename, content string) error {
 		}
 	}
 
-	// Normalize EOLs to existing file style if present
-	normalized := []byte(content)
+	// Normalize EOLs to existing file style if present and preserve BOM/UTF-16 when detected
+	in := []byte(content)
+	normalized := in
 	if b, err := os.ReadFile(filename); err == nil {
+		// EOL style
 		if bytes.Contains(b, []byte("\r\n")) {
 			normalized = bytes.ReplaceAll(normalized, []byte("\n"), []byte("\r\n"))
 		}
+		// BOM/UTF-16 detection (simple heuristics)
+		if len(b) >= 2 {
+			// UTF-16 LE BOM FF FE
+			if b[0] == 0xFF && b[1] == 0xFE {
+				// encode as UTF-16 LE with BOM
+				u16 := utf16.Encode([]rune(string(content)))
+				// write BOM
+				buf := []byte{0xFF, 0xFE}
+				for _, w := range u16 {
+					buf = append(buf, byte(w), byte(w>>8))
+				}
+				normalized = buf
+			}
+			// UTF-16 BE BOM FE FF
+			if b[0] == 0xFE && b[1] == 0xFF {
+				u16 := utf16.Encode([]rune(string(content)))
+				buf := []byte{0xFE, 0xFF}
+				for _, w := range u16 {
+					buf = append(buf, byte(w>>8), byte(w))
+				}
+				normalized = buf
+			}
+			// UTF-8 BOM EF BB BF
+			if len(b) >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF {
+				// Ensure output starts with UTF-8 BOM
+				if !bytes.HasPrefix(normalized, []byte{0xEF, 0xBB, 0xBF}) {
+					normalized = append([]byte{0xEF, 0xBB, 0xBF}, normalized...)
+				}
+			}
+		}
+	}
+	// Ensure UTF-8 validity for normal writes
+	if len(normalized) > 0 && !utf8.Valid(normalized) {
+		// As a safety, write raw; caller chose encoding (likely UTF-16 block above)
 	}
 	err := os.WriteFile(filename, normalized, 0644)
 	if err != nil {

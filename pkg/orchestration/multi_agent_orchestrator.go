@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -485,31 +486,40 @@ func (o *MultiAgentOrchestrator) runAgent(agentRunner *AgentRunner, task string)
 		}, err
 	}
 
-	// Create a temporary agent context for this execution
-	agentCtx := &agent.AgentContext{
-		UserIntent:         task,
-		ExecutedOperations: []string{},
-		Errors:             []string{},
-		ValidationResults:  []string{},
-		IterationCount:     0,
-		MaxIterations:      10, // Limit iterations for orchestrated agents
-		StartTime:          time.Now(),
-		TokenUsage:         &agent.AgentTokenUsage{},
-		Config:             agentRunner.config,
-		Logger:             agentRunner.logger,
+	// Capture current log file size for tailing logs produced during this run
+	logPath := ".ledit/workspace.log"
+	var startSize int64
+	if fi, err := os.Stat(logPath); err == nil {
+		startSize = fi.Size()
 	}
 
 	// Execute the agent
 	tokenUsage, err := agent.Execute(task, agentRunner.config, agentRunner.logger)
 
 	// Build the result
+	// Tail logs since startSize
+	logs := []string{}
+	if f, e := os.Open(logPath); e == nil {
+		defer f.Close()
+		if _, e2 := f.Seek(startSize, 0); e2 == nil {
+			if b, e3 := io.ReadAll(f); e3 == nil {
+				for _, line := range strings.Split(string(b), "\n") {
+					l := strings.TrimSpace(line)
+					if l != "" {
+						logs = append(logs, l)
+					}
+				}
+			}
+		}
+	}
+
 	result := &types.StepResult{
 		Status:   "success",
 		Output:   make(map[string]string),
 		Files:    []string{},
 		Errors:   []string{},
 		Warnings: []string{},
-		Logs:     agentCtx.ExecutedOperations,
+		Logs:     logs,
 	}
 
 	if err != nil {
@@ -529,6 +539,29 @@ func (o *MultiAgentOrchestrator) runAgent(agentRunner *AgentRunner, task string)
 
 		// Update agent status with budget tracking
 		o.updateAgentBudget(agentRunner, result.TokenUsage)
+
+		// Improve cost using category splits and pricing
+		// Orchestrator model for intent/planning/progress
+		orchModel := agentRunner.config.OrchestrationModel
+		if strings.TrimSpace(orchModel) == "" {
+			orchModel = agentRunner.config.EditingModel
+		}
+		editModel := agentRunner.config.EditingModel
+		var cost float64
+		// Intent
+		cost += llm.CalculateCost(llm.TokenUsage{PromptTokens: tokenUsage.IntentSplit.Prompt, CompletionTokens: tokenUsage.IntentSplit.Completion}, orchModel)
+		// Planning
+		cost += llm.CalculateCost(llm.TokenUsage{PromptTokens: tokenUsage.PlanningSplit.Prompt, CompletionTokens: tokenUsage.PlanningSplit.Completion}, orchModel)
+		// Progress evaluation
+		cost += llm.CalculateCost(llm.TokenUsage{PromptTokens: tokenUsage.ProgressSplit.Prompt, CompletionTokens: tokenUsage.ProgressSplit.Completion}, orchModel)
+		// Codegen
+		cost += llm.CalculateCost(llm.TokenUsage{PromptTokens: tokenUsage.CodegenSplit.Prompt, CompletionTokens: tokenUsage.CodegenSplit.Completion}, editModel)
+		// Validation
+		cost += llm.CalculateCost(llm.TokenUsage{PromptTokens: tokenUsage.ValidationSplit.Prompt, CompletionTokens: tokenUsage.ValidationSplit.Completion}, editModel)
+		st := o.plan.AgentStatuses[agentRunner.definition.ID]
+		st.Cost += cost
+		st.TokenUsage += tokenUsage.Total
+		o.plan.AgentStatuses[agentRunner.definition.ID] = st
 	}
 
 	return result, err

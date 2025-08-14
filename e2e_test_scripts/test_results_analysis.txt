@@ -1,0 +1,42 @@
+Test run analysis (timestamped run):
+
+Summary:
+- Total: 25
+- Passed: 16
+- Failed: 9
+
+Failures and root causes:
+1) Orchestration Feature
+   - Cause: `ledit process` expects a JSON process file path, but the test provided a freeform prompt.
+   - Symptom: "failed to read process file"; no `.ledit/requirements.json` produced.
+
+2) Process - Go CLI Tool
+3) Process - Node Express API
+4) Process - Python CLI App
+5) Process - Rust Library
+6) Process - Static Website
+   - Cause: same as (1): passed a prompt instead of a process file path.
+   - Symptom: identical error; no orchestration state/requirements output.
+
+7) Agent v2 - Discover file and edit via workspace search
+   - Cause: LLM inserted desired line then introduced an extra `}`; revision loop hit max retries without recovery.
+   - Symptom: fatal error "max interactive LLM retries reached (6)"; missing final expected code state.
+
+8) Multi-file Edit & Selective Context
+   - Cause: Review/revision loop produced incomplete diffs, oscillating between files and failing to apply both changes.
+   - Symptom: repeated revision requests; final state only modified `greeter.py` while `main.py` unchanged.
+
+9) Cached Workspace & Modifying a File
+   - Cause: Test assumed `file1.txt` existed from prior test; it did not in isolated workspace.
+   - Symptom: `cat: file1.txt: No such file or directory`.
+
+Recommendations (actionable):
+- Update process tests to create a minimal `process.json` and call `ledit process --skip-prompt process.json`; validate `.ledit/orchestration_state.json`.
+- Optionally implement `ledit process --prompt "..."` to synthesize a transient process file and align README examples.
+- Harden Agent v2 review/revision loop: auto-fix trivial syntax errors (e.g., remove extra brace), cap retries, fallback to deterministic micro-edits when parser finds 0 code blocks.
+- Make e2e tests self-contained: seed all required files per test, and prime workspace index before `#WORKSPACE` prompts.
+
+Model considerations:
+- Several failures may be sensitive to model reliability (diff completeness, revision parsing). Re-run with the main orchestration model from `.ledit/config.json` to separate model variance from code issues.
+
+

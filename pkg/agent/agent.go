@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -67,9 +68,43 @@ func findRelevantFilesRobust(userIntent string, cfg *config.Config, logger *util
 		fullFiles, _, embErr := workspace.GetFilesForContextUsingEmbeddings(userIntent, workspaceFile, cfg, logger)
 		if embErr != nil {
 			logger.LogError(fmt.Errorf("embedding search failed: %w", embErr))
-		} else if len(fullFiles) > 0 {
-			logger.Logf("Embeddings found %d relevant files", len(fullFiles))
-			return fullFiles
+		} else {
+			// Rerank using symbol index overlap
+			root, _ := os.Getwd()
+			symHits := map[string]int{}
+			if idx, err := index.BuildSymbols(root); err == nil && idx != nil {
+				tokens := strings.Fields(userIntent)
+				for _, f := range index.SearchSymbols(idx, tokens) {
+					symHits[filepath.ToSlash(f)]++
+				}
+			}
+			if len(fullFiles) > 0 {
+				type scored struct {
+					file  string
+					score int
+				}
+				var res []scored
+				for _, f := range fullFiles {
+					s := symHits[filepath.ToSlash(f)]
+					res = append(res, scored{file: f, score: s})
+				}
+				// stable sort by score desc
+				for i := 0; i < len(res); i++ {
+					for j := i + 1; j < len(res); j++ {
+						if res[j].score > res[i].score {
+							res[i], res[j] = res[j], res[i]
+						}
+					}
+				}
+				out := make([]string, 0, len(res))
+				for _, r := range res {
+					out = append(out, r.file)
+				}
+				if len(out) > 0 {
+					logger.Logf("Embeddings+symbols selected %d files (reranked)", len(out))
+					return out
+				}
+			}
 		}
 	}
 

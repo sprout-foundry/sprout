@@ -1,17 +1,17 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
-	"bufio"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/orchestration"
+	"github.com/alantheprice/ledit/pkg/prompts"
 	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
 	uiPkg "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -44,7 +44,11 @@ var processCmd = &cobra.Command{
 
 		// Handle create-example flag
 		if createExample {
-			if err := createExampleProcessFile(input, logger); err != nil {
+			out := "process.json"
+			if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
+				out = args[0]
+			}
+			if err := createExampleProcessFile(out, logger); err != nil {
 				logger.LogProcessStep(fmt.Sprintf("Failed to create example process file: %v", err))
 				log.Fatalf("Error creating example process file: %v", err)
 			}
@@ -142,94 +146,98 @@ func init() {
 
 // interactiveAuthorProcessFile guides the user through creating a process file via an LLM chat
 func interactiveAuthorProcessFile(logger *utils.Logger) (string, error) {
-    if skipPrompt {
-        return "", fmt.Errorf("no process file provided in non-interactive mode; pass a file or use --create-example <path>")
-    }
-    // Load config to get models and enable tool support
-    cfg, err := config.LoadOrInitConfig(false)
-    if err != nil {
-        return "", fmt.Errorf("failed to load config: %w", err)
-    }
-    cfg.SkipPrompt = false
+	if skipPrompt {
+		return "", fmt.Errorf("no process file provided in non-interactive mode; pass a file or use --create-example <path>")
+	}
+	// Load config to get models and enable tool support
+	cfg, err := config.LoadOrInitConfig(false)
+	if err != nil {
+		return "", fmt.Errorf("failed to load config: %w", err)
+	}
+	cfg.SkipPrompt = false
 
-    // Choose default output path
-    outPath := "process.json"
-    reader := bufio.NewReader(os.Stdin)
+	// Choose default output path
+	outPath := "process.json"
+	reader := bufio.NewReader(os.Stdin)
 
-    // Simple prompt to let the user override filename
-    logger.LogUserInteraction("Enter output file path for the process (default: process.json): ")
-    if line, _ := reader.ReadString('\n'); strings.TrimSpace(line) != "" {
-        outPath = strings.TrimSpace(line)
-    }
+	// Simple prompt to let the user override filename
+	logger.LogUserInteraction("Enter output file path for the process (default: process.json): ")
+	if line, _ := reader.ReadString('\n'); strings.TrimSpace(line) != "" {
+		outPath = strings.TrimSpace(line)
+	}
 
-    // Compose interactive system prompt
-    sys := "You are a Process Designer for a multi-agent code orchestration tool.\n" +
-        "Your job is to interview the user (use ask_user tool) and then output a complete JSON process file that matches the ProcessFile schema.\n" +
-        "Schema keys: version, goal, description, base_model, agents[], steps[], validation, settings.\n" +
-        "Agents must include id, name, persona, description, skills, model, priority, depends_on, config, budget.\n" +
-        "Steps must include id, name, description, agent_id, input, expected_output, depends_on, timeout, retries.\n" +
-        "When you have enough info, output ONLY the final JSON (no prose)."
+	// Compose interactive system prompt
+	sys := "You are a Process Designer for a multi-agent code orchestration tool.\n" +
+		"Your job is to interview the user (use ask_user tool) and then output a complete JSON process file that matches the ProcessFile schema.\n" +
+		"Schema keys: version, goal, description, base_model, agents[], steps[], validation, settings.\n" +
+		"Agents must include id, name, persona, description, skills, model, priority, depends_on, config, budget.\n" +
+		"Steps must include id, name, description, agent_id, input, expected_output, depends_on, timeout, retries.\n" +
+		"When you have enough info, output ONLY the final JSON (no prose)."
 
-    // Seed conversation asking the model to collect requirements first, then produce JSON
-    msgs := []prompts.Message{
-        {Role: "system", Content: sys},
-        {Role: "user", Content: "Help me author a process.json for my goal. Ask me questions as needed, then output JSON only when ready."},
-    }
+	// Seed conversation asking the model to collect requirements first, then produce JSON
+	msgs := []prompts.Message{
+		{Role: "system", Content: sys},
+		{Role: "user", Content: "Help me author a process.json for my goal. Ask me questions as needed, then output JSON only when ready."},
+	}
 
-    // Use the interactive tools loop so the model can ask the user questions via ask_user
-    response, err := llm.CallLLMWithInteractiveContext(cfg.OrchestrationModel, msgs, "process_authoring", cfg, 0, func(_ []llm.ContextRequest, _ *config.Config) (string, error) {
-        return "", nil
-    })
-    if err != nil {
-        return "", fmt.Errorf("LLM interactive authoring failed: %w", err)
-    }
+	// Use the interactive tools loop so the model can ask the user questions via ask_user
+	response, err := llm.CallLLMWithInteractiveContext(cfg.OrchestrationModel, msgs, "process_authoring", cfg, 0, func(_ []llm.ContextRequest, _ *config.Config) (string, error) {
+		return "", nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("LLM interactive authoring failed: %w", err)
+	}
 
-    // Extract JSON from response
-    jsonStr := extractFirstJSON(response)
-    if strings.TrimSpace(jsonStr) == "" {
-        return "", fmt.Errorf("did not receive JSON process definition from the LLM")
-    }
+	// Extract JSON from response
+	jsonStr := extractFirstJSON(response)
+	if strings.TrimSpace(jsonStr) == "" {
+		return "", fmt.Errorf("did not receive JSON process definition from the LLM")
+	}
 
-    // Validate using ProcessLoader
-    loader := orchestration.NewProcessLoader()
-    if _, err := loader.LoadProcessFromBytes([]byte(jsonStr)); err != nil {
-        logger.LogProcessStep(fmt.Sprintf("Generated process JSON did not validate: %v", err))
-        logger.LogProcessStep("You can copy the JSON above, fix it, and try again.")
-        return "", fmt.Errorf("invalid generated process.json: %w", err)
-    }
+	// Validate using ProcessLoader
+	loader := orchestration.NewProcessLoader()
+	if _, err := loader.LoadProcessFromBytes([]byte(jsonStr)); err != nil {
+		logger.LogProcessStep(fmt.Sprintf("Generated process JSON did not validate: %v", err))
+		logger.LogProcessStep("You can copy the JSON above, fix it, and try again.")
+		return "", fmt.Errorf("invalid generated process.json: %w", err)
+	}
 
-    // Show a brief confirmation and write
-    logger.LogProcessStep("A valid process.json was generated. Proceed to save and start the run?")
-    if !logger.AskForConfirmation("Save and start now?", true, true) {
-        return "", fmt.Errorf("user aborted before saving process file")
-    }
-    if err := filesystem.SaveFile(outPath, jsonStr); err != nil {
-        return "", fmt.Errorf("failed to write %s: %w", outPath, err)
-    }
-    return outPath, nil
+	// Show a brief confirmation and write
+	logger.LogProcessStep("A valid process.json was generated. Proceed to save and start the run?")
+	if !logger.AskForConfirmation("Save and start now?", true, true) {
+		return "", fmt.Errorf("user aborted before saving process file")
+	}
+	if err := filesystem.SaveFile(outPath, jsonStr); err != nil {
+		return "", fmt.Errorf("failed to write %s: %w", outPath, err)
+	}
+	return outPath, nil
 }
 
 // extractFirstJSON tries to extract the first JSON object from a string (plain or fenced)
 func extractFirstJSON(s string) string {
-    trimmed := strings.TrimSpace(s)
-    // Code fence block
-    if strings.Contains(trimmed, "```json") {
-        start := strings.Index(trimmed, "```json") + len("```json")
-        end := strings.Index(trimmed[start:], "```")
-        if end > 0 {
-            return strings.TrimSpace(trimmed[start : start+end])
-        }
-    }
-    // Plain JSON starting with '{'
-    if idx := strings.Index(trimmed, "{"); idx >= 0 {
-        depth := 0
-        for i := idx; i < len(trimmed); i++ {
-            if trimmed[i] == '{' { depth++ }
-            if trimmed[i] == '}' { depth-- }
-            if depth == 0 {
-                return strings.TrimSpace(trimmed[idx : i+1])
-            }
-        }
-    }
-    return ""
+	trimmed := strings.TrimSpace(s)
+	// Code fence block
+	if strings.Contains(trimmed, "```json") {
+		start := strings.Index(trimmed, "```json") + len("```json")
+		end := strings.Index(trimmed[start:], "```")
+		if end > 0 {
+			return strings.TrimSpace(trimmed[start : start+end])
+		}
+	}
+	// Plain JSON starting with '{'
+	if idx := strings.Index(trimmed, "{"); idx >= 0 {
+		depth := 0
+		for i := idx; i < len(trimmed); i++ {
+			if trimmed[i] == '{' {
+				depth++
+			}
+			if trimmed[i] == '}' {
+				depth--
+			}
+			if depth == 0 {
+				return strings.TrimSpace(trimmed[idx : i+1])
+			}
+		}
+	}
+	return ""
 }

@@ -1,8 +1,15 @@
 package orchestration
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
@@ -13,11 +20,16 @@ import (
 
 // MultiAgentOrchestrator manages the execution of multiple agents with different personas
 type MultiAgentOrchestrator struct {
-	plan     *types.MultiAgentOrchestrationPlan
-	config   *config.Config
-	logger   *utils.Logger
-	agents   map[string]*AgentRunner
-	stepDeps map[string][]string // step ID -> dependent step IDs
+	plan        *types.MultiAgentOrchestrationPlan
+	config      *config.Config
+	logger      *utils.Logger
+	agents      map[string]*AgentRunner
+	stepDeps    map[string][]string // step ID -> dependent step IDs
+	settings    *types.ProcessSettings
+	validation  *types.ValidationConfig
+	statePath   string
+	concurrency int
+	resume      bool
 }
 
 // AgentRunner manages a single agent instance
@@ -29,7 +41,7 @@ type AgentRunner struct {
 }
 
 // NewMultiAgentOrchestrator creates a new orchestrator for multi-agent processes
-func NewMultiAgentOrchestrator(processFile *types.ProcessFile, cfg *config.Config, logger *utils.Logger) *MultiAgentOrchestrator {
+func NewMultiAgentOrchestrator(processFile *types.ProcessFile, cfg *config.Config, logger *utils.Logger, resume bool, statePath string) *MultiAgentOrchestrator {
 	// Initialize agent statuses
 	agentStatuses := make(map[string]types.AgentStatus)
 	for _, agentDef := range processFile.Agents {
@@ -61,13 +73,34 @@ func NewMultiAgentOrchestrator(processFile *types.ProcessFile, cfg *config.Confi
 	// Build dependency graph for steps
 	stepDeps := buildStepDependencies(processFile.Steps)
 
-	return &MultiAgentOrchestrator{
-		plan:     plan,
-		config:   cfg,
-		logger:   logger,
-		agents:   make(map[string]*AgentRunner),
-		stepDeps: stepDeps,
+	orch := &MultiAgentOrchestrator{
+		plan:       plan,
+		config:     cfg,
+		logger:     logger,
+		agents:     make(map[string]*AgentRunner),
+		stepDeps:   stepDeps,
+		settings:   processFile.Settings,
+		validation: processFile.Validation,
+		statePath:  filepath.Join(".ledit", "orchestration_state.json"),
+		resume:     resume,
 	}
+	if strings.TrimSpace(statePath) != "" {
+		orch.statePath = statePath
+	}
+	// Concurrency: if parallel execution is enabled, default to min(4, NumCPU)
+	if orch.settings != nil && orch.settings.ParallelExecution {
+		max := runtime.NumCPU()
+		if max > 4 {
+			max = 4
+		}
+		if max < 1 {
+			max = 1
+		}
+		orch.concurrency = max
+	} else {
+		orch.concurrency = 1
+	}
+	return orch
 }
 
 // Execute runs the multi-agent orchestration process
@@ -76,12 +109,17 @@ func (o *MultiAgentOrchestrator) Execute() error {
 	o.logger.LogProcessStep(fmt.Sprintf("Goal: %s", o.plan.Goal))
 	o.logger.LogProcessStep(fmt.Sprintf("Agents: %d, Steps: %d", len(o.plan.Agents), len(o.plan.Steps)))
 
+	// Attempt resume from previous state
+	if err := o.loadStateIfCompatible(); err == nil {
+		o.logger.LogProcessStep("♻️ Loaded previous orchestration state; resuming...")
+	}
+
 	// Initialize all agents
 	if err := o.initializeAgents(); err != nil {
 		return fmt.Errorf("failed to initialize agents: %w", err)
 	}
 
-	// Execute steps in dependency order
+	// Execute steps with dependency handling, retries, timeouts, and optional parallelism
 	if err := o.executeSteps(); err != nil {
 		return fmt.Errorf("failed to execute steps: %w", err)
 	}
@@ -91,9 +129,17 @@ func (o *MultiAgentOrchestrator) Execute() error {
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
+	// Run configured validation commands
+	if err := o.runValidationStage(); err != nil {
+		return err
+	}
+
 	o.plan.Status = "completed"
 	o.plan.CompletedAt = time.Now().Format(time.RFC3339)
 	o.logger.LogProcessStep("✅ Multi-agent orchestration completed successfully")
+
+	// Persist final state
+	_ = o.saveState()
 
 	return nil
 }
@@ -150,33 +196,156 @@ func (o *MultiAgentOrchestrator) createAgentConfig(agentDef *types.AgentDefiniti
 func (o *MultiAgentOrchestrator) executeSteps() error {
 	o.logger.LogProcessStep("📋 Executing orchestration steps...")
 
-	// Sort steps by priority and dependencies
-	sortedSteps := o.sortStepsByDependencies(o.plan.Steps)
+	// Build quick index of steps
+	stepByID := make(map[string]*types.OrchestrationStep)
+	for i := range o.plan.Steps {
+		stepByID[o.plan.Steps[i].ID] = &o.plan.Steps[i]
+	}
 
-	for i := range sortedSteps {
-		step := &sortedSteps[i]
-		o.logger.LogProcessStep(fmt.Sprintf("\n🔄 Step %d/%d: %s", i+1, len(sortedSteps), step.Name))
-		o.logger.LogProcessStep(fmt.Sprintf("   Agent: %s", o.getAgentName(step.AgentID)))
-		o.logger.LogProcessStep(fmt.Sprintf("   Description: %s", step.Description))
+	// Progress-making loop
+	for {
+		runnable := []*types.OrchestrationStep{}
+		pending := 0
+		for i := range o.plan.Steps {
+			s := &o.plan.Steps[i]
+			if s.Status == "pending" || s.Status == "in_progress" {
+				// Only in_progress if previous run left it; treat as pending again
+				if s.Status != "in_progress" {
+					pending++
+				} else {
+					s.Status = "pending"
+					pending++
+				}
+			}
+		}
 
-		// Check if step can run (dependencies satisfied)
-		if !o.canExecuteStep(step) {
-			o.logger.LogProcessStep(fmt.Sprintf("   ⏳ Waiting for dependencies..."))
+		// Collect runnable (deps satisfied)
+		for i := range o.plan.Steps {
+			s := &o.plan.Steps[i]
+			if s.Status != "pending" {
+				continue
+			}
+			if o.canExecuteStep(s) {
+				runnable = append(runnable, s)
+			}
+		}
+
+		if len(runnable) == 0 {
+			// No runnable steps. Check if all done
+			allDone := true
+			for i := range o.plan.Steps {
+				if o.plan.Steps[i].Status != "completed" && o.plan.Steps[i].Status != "failed" {
+					allDone = false
+					break
+				}
+			}
+			if allDone {
+				return nil
+			}
+			// Deadlock: pending but no runnable
+			var unmet []string
+			for i := range o.plan.Steps {
+				s := &o.plan.Steps[i]
+				if s.Status == "pending" {
+					unmet = append(unmet, s.ID)
+				}
+			}
+			return fmt.Errorf("no runnable steps; unmet dependencies for: %s", strings.Join(unmet, ", "))
+		}
+
+		// Execute runnable steps (sequentially or in parallel)
+		if o.concurrency <= 1 || len(runnable) == 1 {
+			for _, s := range runnable {
+				if err := o.runStepWithRetryAndTimeout(s); err != nil {
+					if o.shouldStopOnFailure() {
+						return err
+					}
+				}
+				_ = o.saveState()
+			}
 			continue
 		}
 
-		// Execute the step
-		if err := o.executeStep(step); err != nil {
-			if o.shouldStopOnFailure() {
-				return fmt.Errorf("step '%s' failed: %w", step.Name, err)
-			}
-			o.logger.LogProcessStep(fmt.Sprintf("   ❌ Step failed but continuing: %v", err))
-		} else {
-			o.logger.LogProcessStep(fmt.Sprintf("   ✅ Step completed successfully"))
+		// Parallel batch with bounded workers
+		sem := make(chan struct{}, o.concurrency)
+		var wg sync.WaitGroup
+		var firstErr error
+		var mu sync.Mutex
+		for _, s := range runnable {
+			wg.Add(1)
+			sem <- struct{}{}
+			step := s
+			go func() {
+				defer wg.Done()
+				defer func() { <-sem }()
+				if err := o.runStepWithRetryAndTimeout(step); err != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					mu.Unlock()
+				}
+				_ = o.saveState()
+			}()
+		}
+		wg.Wait()
+		if firstErr != nil && o.shouldStopOnFailure() {
+			return firstErr
 		}
 	}
+}
 
-	return nil
+func (o *MultiAgentOrchestrator) runStepWithRetryAndTimeout(step *types.OrchestrationStep) error {
+	retries := step.Retries
+	if retries == 0 && o.settings != nil {
+		retries = o.settings.MaxRetries
+	}
+	if retries < 0 {
+		retries = 0
+	}
+
+	timeoutSecs := step.Timeout
+	if timeoutSecs == 0 && o.settings != nil {
+		timeoutSecs = o.settings.StepTimeout
+	}
+	if timeoutSecs <= 0 {
+		timeoutSecs = 0
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= retries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(500*(1<<uint(attempt-1))) * time.Millisecond
+			o.logger.LogProcessStep(fmt.Sprintf("   🔁 Retry %d/%d after %s", attempt, retries, backoff))
+			time.Sleep(backoff)
+		}
+
+		done := make(chan error, 1)
+		// Run the step
+		go func() { done <- o.executeStep(step) }()
+
+		if timeoutSecs == 0 {
+			lastErr = <-done
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSecs)*time.Second)
+			defer cancel()
+			select {
+			case err := <-done:
+				lastErr = err
+			case <-ctx.Done():
+				lastErr = fmt.Errorf("step '%s' timed out after %ds", step.Name, timeoutSecs)
+				// Mark as failed immediately
+				step.Status = "failed"
+				o.updateAgentStatus(step.AgentID, "failed", "", 0)
+			}
+		}
+
+		if lastErr == nil {
+			return nil
+		}
+		o.logger.LogProcessStep(fmt.Sprintf("   ❌ Step error: %v", lastErr))
+	}
+	return lastErr
 }
 
 // executeStep runs a single step using the appropriate agent
@@ -336,6 +505,79 @@ func (o *MultiAgentOrchestrator) validateResults() error {
 
 	o.logger.LogProcessStep("  ✅ All steps completed successfully")
 	return nil
+}
+
+// runValidationStage executes build/test/lint/custom checks when configured
+func (o *MultiAgentOrchestrator) runValidationStage() error {
+	if o.validation == nil {
+		return nil
+	}
+	run := func(name, cmd string) error {
+		if strings.TrimSpace(cmd) == "" {
+			return nil
+		}
+		o.logger.LogProcessStep(fmt.Sprintf("🧪 Running %s: %s", name, cmd))
+		c := exec.Command("sh", "-c", cmd)
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+		if err := c.Run(); err != nil {
+			return fmt.Errorf("%s failed: %w", name, err)
+		}
+		return nil
+	}
+
+	var errs []string
+	if err := run("build", o.validation.BuildCommand); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if err := run("test", o.validation.TestCommand); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if err := run("lint", o.validation.LintCommand); err != nil {
+		errs = append(errs, err.Error())
+	}
+	for i, check := range o.validation.CustomChecks {
+		if err := run(fmt.Sprintf("custom_check_%d", i+1), check); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if len(errs) > 0 {
+		msg := fmt.Sprintf("validation failures: %s", strings.Join(errs, "; "))
+		if o.validation.Required {
+			return fmt.Errorf("%s", msg)
+		}
+		o.logger.LogProcessStep("⚠️ " + msg)
+	}
+	return nil
+}
+
+// --- Persistence ---
+func (o *MultiAgentOrchestrator) loadStateIfCompatible() error {
+	b, err := os.ReadFile(o.statePath)
+	if err != nil {
+		return err
+	}
+	var saved types.MultiAgentOrchestrationPlan
+	if err := json.Unmarshal(b, &saved); err != nil {
+		return err
+	}
+	// Basic compatibility check: goal and number of steps
+	if saved.Goal != o.plan.Goal || len(saved.Steps) != len(o.plan.Steps) {
+		return fmt.Errorf("state incompatible")
+	}
+	o.plan = &saved
+	return nil
+}
+
+func (o *MultiAgentOrchestrator) saveState() error {
+	if err := os.MkdirAll(filepath.Dir(o.statePath), 0755); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(o.plan, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(o.statePath, b, 0644)
 }
 
 // Helper methods

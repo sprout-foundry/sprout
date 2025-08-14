@@ -15,6 +15,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -729,10 +730,11 @@ func (o *MultiAgentOrchestrator) updateAgentBudget(agentRunner *AgentRunner, tok
 	// Update token usage
 	status.TokenUsage += tokenUsage.Total
 
-	// Calculate and update cost (rough estimate based on model pricing)
-	// This is a simplified calculation - in practice you'd use actual pricing tables
-	costPerToken := 0.00001 // Rough estimate: $0.00001 per token
-	status.Cost += float64(tokenUsage.Total) * costPerToken
+    // Calculate and update cost using pricing helpers
+    // We don't have prompt/completion split per step here; approximate using totals
+    // Treat all tokens as prompt for a conservative lower-bound
+    tu := llm.TokenUsage{PromptTokens: tokenUsage.Total, CompletionTokens: 0, TotalTokens: tokenUsage.Total}
+    status.Cost += llm.CalculateCost(tu, agentRunner.config.EditingModel)
 
 	// Check for warnings
 	if budget.TokenWarning > 0 && status.TokenUsage >= budget.TokenWarning {

@@ -1,9 +1,12 @@
 package orchestration
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/alantheprice/ledit/pkg/orchestration/types"
 )
 
 func writeTempFile(t *testing.T, dir, name, content string) string {
@@ -119,5 +122,20 @@ func TestProcessLoader_DefaultsApplied(t *testing.T) {
 	}
 	if pf.Settings == nil {
 		t.Fatalf("expected settings defaults")
+	}
+}
+
+func TestLoadProcessFromBytes_MinimalValid(t *testing.T) {
+	l := NewProcessLoader()
+	pf := types.ProcessFile{
+		Version:   "1.0",
+		Goal:      "Test",
+		BaseModel: "gpt-4",
+		Agents:    []types.AgentDefinition{{ID: "a1", Name: "A", Persona: "dev", Description: "d", Skills: []string{"x"}, Model: "gpt-4"}},
+		Steps:     []types.OrchestrationStep{{ID: "s1", Name: "S1", Description: "d", AgentID: "a1"}},
+	}
+	b, _ := json.Marshal(pf)
+	if _, err := l.LoadProcessFromBytes(b); err != nil {
+		t.Fatalf("expected valid minimal process, got %v", err)
 	}
 }

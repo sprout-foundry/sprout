@@ -43,14 +43,14 @@ When using the --image flag, ensure your model supports vision input. Vision-cap
 
 		// Check if instructions are provided
 		if instructions == "" {
-			fmt.Println(prompts.InstructionsRequired()) // Use new prompt
-			cmd.Help()                                  // Print help for the code command
-			return                                      // Exit the command execution
+			fmt.Println(prompts.InstructionsRequired())
+			cmd.Help() // Print help for the code command
+			return     // Exit the command execution
 		}
 
 		cfg, err := config.LoadOrInitConfig(skipPrompt)
 		if err != nil {
-			log.Fatal(prompts.ConfigLoadFailed(err)) // Use prompt
+			log.Fatal(prompts.ConfigLoadFailed(err))
 		}
 
 		if model != "" {
@@ -61,15 +61,15 @@ When using the --image flag, ensure your model supports vision input. Vision-cap
 		cfg.UseSearchGrounding = useSearchGrounding
 		cfg.CodeToolsEnabled = enableCodeTools
 
-		fmt.Println(prompts.ProcessingCodeGeneration()) // Use prompt
+		fmt.Println(prompts.ProcessingCodeGeneration())
 		startTime := time.Now()
 
 		_, err = editor.ProcessCodeGeneration(filename, instructions, cfg, imagePath)
 		if err != nil {
-			log.Fatal(prompts.CodeGenerationError(err)) // Use prompt
+			log.Fatal(prompts.CodeGenerationError(err))
 		}
 		duration := time.Since(startTime)
-		fmt.Print(prompts.CodeGenerationFinished(duration)) // Use prompt
+		fmt.Print(prompts.CodeGenerationFinished(duration))
 	},
 }
 

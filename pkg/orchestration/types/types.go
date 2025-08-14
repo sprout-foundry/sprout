@@ -64,6 +64,8 @@ type MultiAgentOrchestrationPlan struct {
 	LastError     string                 `json:"last_error"`     // Last error encountered
 	CreatedAt     string                 `json:"created_at"`     // When the plan was created
 	CompletedAt   string                 `json:"completed_at"`   // When the plan was completed
+	TotalTokens   int                    `json:"total_tokens"`   // Aggregate tokens across agents
+	TotalCost     float64                `json:"total_cost"`     // Aggregate cost across agents
 }
 
 // AgentDefinition defines an agent with a specific persona and responsibilities
@@ -111,14 +113,16 @@ type StepAttempt struct {
 
 // StepResult represents the result of executing a step
 type StepResult struct {
-	Status     string            `json:"status"`      // "success", "failure", "partial_success"
-	Output     map[string]string `json:"output"`      // Output data from the agent
-	Files      []string          `json:"files"`       // Files created/modified
-	Errors     []string          `json:"errors"`      // Any errors encountered
-	Warnings   []string          `json:"warnings"`    // Any warnings
-	Duration   float64           `json:"duration"`    // Time taken in seconds
-	TokenUsage *AgentTokenUsage  `json:"token_usage"` // Token usage for this step
-	Logs       []string          `json:"logs"`        // Execution logs
+	Status     string            `json:"status"`           // "success", "failure", "partial_success"
+	Output     map[string]string `json:"output"`           // Output data from the agent
+	Files      []string          `json:"files"`            // Files created/modified
+	Errors     []string          `json:"errors"`           // Any errors encountered
+	Warnings   []string          `json:"warnings"`         // Any warnings
+	Duration   float64           `json:"duration"`         // Time taken in seconds
+	TokenUsage *AgentTokenUsage  `json:"token_usage"`      // Token usage for this step
+	Logs       []string          `json:"logs"`             // Execution logs
+	Tokens     int               `json:"tokens,omitempty"` // Total tokens consumed in this step
+	Cost       float64           `json:"cost,omitempty"`   // Cost incurred for this step
 }
 
 // AgentStatus tracks the current status of an agent
@@ -131,6 +135,8 @@ type AgentStatus struct {
 	Output      map[string]string `json:"output"`       // Latest output from the agent
 	TokenUsage  int               `json:"token_usage"`  // Total tokens used by this agent
 	Cost        float64           `json:"cost"`         // Total cost incurred by this agent
+	Halted      bool              `json:"halted"`       // Whether execution is halted due to budget
+	HaltReason  string            `json:"halt_reason"`  // Reason for halt
 }
 
 // AgentTokenUsage tracks token usage for a specific agent

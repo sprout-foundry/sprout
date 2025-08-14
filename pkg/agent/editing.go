@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -224,6 +225,13 @@ func executeEditOperations(context *AgentContext) error {
 
 	context.Logger.LogProcessStep(fmt.Sprintf("✅ Completed %d edit operations", len(context.CurrentPlan.EditOperations)))
 
+	// Optionally generate minimal smoke tests for changed files
+	var changedFiles []string
+	for _, op := range context.CurrentPlan.EditOperations {
+		changedFiles = append(changedFiles, op.FilePath)
+	}
+	generateSmokeTestsIfEnabled(changedFiles, context.Config, context.Logger)
+
 	// Non-interactive git integration: auto-commit staged edits when TrackWithGit is enabled
 	if context.Config.TrackWithGit {
 		proceed, score, serr := automatedSecurityRiskGate(context.Config, context.Logger)
@@ -432,17 +440,29 @@ func orderEditOperationsHeuristic(ops []EditOperation) []EditOperation {
 	}, 0, len(ops))
 	for _, op := range ops {
 		s := 0
-		lower := strings.ToLower(op.Description + " " + op.Instructions)
-		// Prefer definitions
-		if strings.Contains(lower, "type ") || strings.Contains(lower, "interface") || strings.Contains(lower, "struct") {
-			s += 5
+		lower := strings.ToLower(op.Description + " " + op.Instructions + " " + op.FilePath)
+		// Prefer likely definitions across languages
+		if strings.Contains(lower, "type ") || strings.Contains(lower, "interface") || strings.Contains(lower, "struct") ||
+			strings.Contains(lower, "class ") || strings.Contains(lower, "enum ") || strings.Contains(lower, "trait ") ||
+			strings.Contains(lower, "module ") || strings.Contains(lower, "export ") || strings.Contains(lower, "declare ") {
+			s += 6
 		}
-		if strings.Contains(lower, "define") || strings.Contains(lower, "add new type") {
-			s += 3
+		if strings.Contains(lower, "define") || strings.Contains(lower, "add new type") || strings.Contains(lower, "public ") || strings.Contains(lower, "fn ") || strings.Contains(lower, "def ") {
+			s += 2
 		}
 		// Prefer root/shallower paths
 		depth := strings.Count(op.FilePath, "/")
-		s += max(0, 5-depth)
+		s += max(0, 6-depth)
+		// Prefer files named models/types/interfaces/utils being edited first
+		if strings.Contains(lower, "model") || strings.Contains(lower, "types") || strings.Contains(lower, "interfaces") || strings.Contains(lower, "util") {
+			s += 2
+		}
+		// If operation mentions another file path, assume dependency and boost this one
+		for _, other := range ops {
+			if other.FilePath != op.FilePath && strings.Contains(strings.ToLower(other.Instructions+" "+other.Description), strings.ToLower(filepath.Base(op.FilePath))) {
+				s += 1
+			}
+		}
 		scored = append(scored, struct {
 			op    EditOperation
 			score int

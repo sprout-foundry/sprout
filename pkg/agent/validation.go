@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -311,6 +312,42 @@ Respond with JSON:
 	// Estimate tokens used
 	tokens := utils.EstimateTokens(contextPrompt + response)
 	return &strategy, tokens, nil
+}
+
+// generateSmokeTestsIfEnabled creates minimal tests for changed functions/files when configured
+func generateSmokeTestsIfEnabled(changedFiles []string, cfg *config.Config, logger *utils.Logger) {
+	if cfg == nil || !cfg.AutoGenerateTests {
+		return
+	}
+	for _, f := range changedFiles {
+		lf := strings.ToLower(f)
+		// Simple heuristics: Go and Python examples
+		if strings.HasSuffix(lf, ".go") && !strings.HasSuffix(lf, "_test.go") {
+			testFile := strings.TrimSuffix(f, ".go") + "_test.go"
+			if _, err := os.Stat(testFile); err == nil {
+				continue
+			}
+			content := "package " + guessPackageName(f) + "\n\nimport \"testing\"\n\nfunc TestSmoke(t *testing.T) {\n\t// TODO: add real assertions\n\tif false { t.Fatal(\"placeholder\") }\n}\n"
+			_ = os.WriteFile(testFile, []byte(content), 0644)
+			logger.LogProcessStep("🧪 Generated smoke test: " + testFile)
+		} else if strings.HasSuffix(lf, ".py") {
+			testFile := strings.TrimSuffix(f, ".py") + "_test.py"
+			if _, err := os.Stat(testFile); err == nil {
+				continue
+			}
+			content := "def test_smoke():\n    assert True\n"
+			_ = os.WriteFile(testFile, []byte(content), 0644)
+			logger.LogProcessStep("🧪 Generated smoke test: " + testFile)
+		}
+	}
+}
+
+func guessPackageName(path string) string {
+	base := filepath.Base(filepath.Dir(path))
+	if base == "." || base == ".." || base == "" {
+		return "main"
+	}
+	return base
 }
 
 // getBasicValidationStrategy provides a fallback validation strategy

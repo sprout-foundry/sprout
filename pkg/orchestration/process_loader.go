@@ -42,6 +42,19 @@ func (l *ProcessLoader) LoadProcessFile(filePath string) (*types.ProcessFile, er
 	return &processFile, nil
 }
 
+// LoadProcessFromBytes parses and validates a process file from raw JSON bytes
+func (l *ProcessLoader) LoadProcessFromBytes(data []byte) (*types.ProcessFile, error) {
+    var processFile types.ProcessFile
+    if err := json.Unmarshal(data, &processFile); err != nil {
+        return nil, fmt.Errorf("failed to parse process file JSON: %w", err)
+    }
+    if err := l.validateProcessFile(&processFile); err != nil {
+        return nil, fmt.Errorf("process file validation failed: %w", err)
+    }
+    l.setDefaults(&processFile)
+    return &processFile, nil
+}
+
 // validateProcessFile validates the structure and content of a process file
 func (l *ProcessLoader) validateProcessFile(processFile *types.ProcessFile) error {
 	// Check required fields

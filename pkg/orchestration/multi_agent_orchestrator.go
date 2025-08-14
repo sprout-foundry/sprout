@@ -329,6 +329,8 @@ func (o *MultiAgentOrchestrator) runStepWithRetryAndTimeout(step *types.Orchestr
 
 	var lastErr error
 	for attempt := 0; attempt <= retries; attempt++ {
+		step.Attempts = attempt + 1
+		step.LastAttemptAt = time.Now().Format(time.RFC3339)
 		if attempt > 0 {
 			backoff := time.Duration(500*(1<<uint(attempt-1))) * time.Millisecond
 			o.logger.LogProcessStep(fmt.Sprintf("   🔁 Retry %d/%d after %s", attempt, retries, backoff))
@@ -337,6 +339,7 @@ func (o *MultiAgentOrchestrator) runStepWithRetryAndTimeout(step *types.Orchestr
 
 		done := make(chan error, 1)
 		// Run the step
+		startedAt := time.Now()
 		go func() { done <- o.executeStep(step) }()
 
 		if timeoutSecs == 0 {
@@ -356,9 +359,26 @@ func (o *MultiAgentOrchestrator) runStepWithRetryAndTimeout(step *types.Orchestr
 		}
 
 		if lastErr == nil {
+			// Append successful attempt history
+			step.History = append(step.History, types.StepAttempt{
+				Attempt:    attempt + 1,
+				Status:     "completed",
+				Error:      "",
+				StartedAt:  startedAt.Format(time.RFC3339),
+				FinishedAt: time.Now().Format(time.RFC3339),
+				Files:      step.Result.Files,
+			})
 			return nil
 		}
 		o.logger.LogProcessStep(fmt.Sprintf("   ❌ Step error: %v", lastErr))
+		step.History = append(step.History, types.StepAttempt{
+			Attempt:    attempt + 1,
+			Status:     "failed",
+			Error:      lastErr.Error(),
+			StartedAt:  startedAt.Format(time.RFC3339),
+			FinishedAt: time.Now().Format(time.RFC3339),
+			Files:      nil,
+		})
 	}
 	return lastErr
 }
@@ -376,6 +396,9 @@ func (o *MultiAgentOrchestrator) executeStep(step *types.OrchestrationStep) erro
 	if !exists {
 		return fmt.Errorf("agent '%s' not found", step.AgentID)
 	}
+
+	// Optionally enrich input with tool-derived context
+	o.enrichStepWithToolContext(step)
 
 	// Prepare the agent's task
 	task := o.buildAgentTask(step)
@@ -525,11 +548,70 @@ func (o *MultiAgentOrchestrator) validateResults() error {
 	}
 
 	if !allStepsCompleted {
+		// Print a concise failure summary
+		o.logger.LogProcessStep("❌ Some steps failed or did not complete:")
+		for _, step := range o.plan.Steps {
+			if step.Status != "completed" {
+				msg := step.Status
+				if step.Result != nil && len(step.Result.Errors) > 0 {
+					msg = msg + ": " + strings.Join(step.Result.Errors, "; ")
+				}
+				o.logger.LogProcessStep(fmt.Sprintf(" - %s (%s)", step.Name, msg))
+			}
+		}
 		return fmt.Errorf("not all steps completed successfully")
 	}
 
 	o.logger.LogProcessStep("  ✅ All steps completed successfully")
 	return nil
+}
+
+// enrichStepWithToolContext allows configured steps to pull in tool-based context
+func (o *MultiAgentOrchestrator) enrichStepWithToolContext(step *types.OrchestrationStep) {
+	if o.config == nil || !o.config.CodeToolsEnabled {
+		return
+	}
+	if step.Input == nil {
+		return
+	}
+
+	te := NewToolExecutor(o.config)
+
+	// Workspace summary
+	if strings.EqualFold(strings.TrimSpace(step.Input["workspace_summary"]), "true") {
+		if res, err := te.executeWorkspaceContext(map[string]interface{}{"action": "load_summary"}); err == nil {
+			step.Input["workspace_summary_content"] = res
+			o.logger.LogProcessStep("📥 Added workspace summary to step input")
+		}
+	}
+	// Workspace tree
+	if strings.EqualFold(strings.TrimSpace(step.Input["workspace_tree"]), "true") {
+		if res, err := te.executeWorkspaceContext(map[string]interface{}{"action": "load_tree"}); err == nil {
+			step.Input["workspace_tree_content"] = res
+			o.logger.LogProcessStep("📥 Added workspace file tree to step input")
+		}
+	}
+	// Workspace keyword search
+	if q := strings.TrimSpace(step.Input["workspace_search"]); q != "" {
+		if res, err := te.executeWorkspaceContext(map[string]interface{}{"action": "search_keywords", "query": q}); err == nil {
+			step.Input["workspace_search_results"] = res
+			o.logger.LogProcessStep("🔎 Added workspace search results to step input")
+		}
+	}
+	// Workspace embeddings search
+	if q := strings.TrimSpace(step.Input["workspace_embeddings"]); q != "" {
+		if res, err := te.executeWorkspaceContext(map[string]interface{}{"action": "search_embeddings", "query": q}); err == nil {
+			step.Input["workspace_embeddings_results"] = res
+			o.logger.LogProcessStep("🧠 Added workspace embeddings results to step input")
+		}
+	}
+	// Web search
+	if q := strings.TrimSpace(step.Input["web_search"]); q != "" {
+		if res, err := te.executeWebSearch(map[string]interface{}{"query": q}); err == nil {
+			step.Input["web_search_results"] = res
+			o.logger.LogProcessStep("🌐 Added web search results to step input")
+		}
+	}
 }
 
 // runValidationStage executes build/test/lint/custom checks when configured
@@ -641,6 +723,10 @@ func (o *MultiAgentOrchestrator) ensureCompatibility(saved *types.MultiAgentOrch
 
 // printProgressTable renders a concise status table of agents and overall progress
 func (o *MultiAgentOrchestrator) printProgressTable() {
+	// Respect environment flag to suppress progress output when requested via CLI
+	if os.Getenv("LEDIT_NO_PROGRESS") == "1" {
+		return
+	}
 	total := len(o.plan.Steps)
 	completed := 0
 	for _, s := range o.plan.Steps {

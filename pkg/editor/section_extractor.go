@@ -25,7 +25,14 @@ func extractRelevantSection(content, instructions, filePath string) (string, int
 		if sec, s, e, err := extractPythonSection(lines, instructions); err == nil {
 			return sec, s, e, nil
 		}
-	case ".js", ".ts", ".java", ".c", ".cpp", ".h", ".cs", ".swift":
+	case ".js", ".ts":
+		if sec, s, e, err := extractJSSection(lines, instructions); err == nil && sec != "" {
+			return sec, s, e, nil
+		}
+		if sec, s, e, err := extractCLikeSection(lines, instructions); err == nil {
+			return sec, s, e, nil
+		}
+	case ".java", ".c", ".cpp", ".h", ".cs", ".swift":
 		if sec, s, e, err := extractCLikeSection(lines, instructions); err == nil {
 			return sec, s, e, nil
 		}
@@ -176,6 +183,52 @@ func pythonBlockEnd(lines []string, start int) int {
 func expandPythonBlock(lines []string, start int) string {
 	end := pythonBlockEnd(lines, start)
 	return strings.Join(lines[start:end+1], "\n")
+}
+
+// extractJSSection attempts to capture function/class blocks in JS/TS with better anchors
+func extractJSSection(lines []string, instructions string) (string, int, int, error) {
+	lower := strings.ToLower(instructions)
+	// Top-of-file
+	if strings.Contains(lower, "top of") || strings.Contains(lower, "beginning of") || strings.Contains(lower, "start of") {
+		end := 15
+		if end >= len(lines) {
+			end = len(lines) - 1
+		}
+		if end < 0 {
+			end = 0
+		}
+		return strings.Join(lines[0:end+1], "\n"), 0, end, nil
+	}
+	// Patterns: function foo() { ... }, const foo = () => { ... }, class Name { ... }
+	reFunc := regexp.MustCompile(`(?i)^\s*(?:export\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
+	reArrow := regexp.MustCompile(`(?i)^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\([^)]*\)\s*=>\s*\{`)
+	reClass := regexp.MustCompile(`(?i)^\s*(?:export\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
+	// search for named target first
+	for i, ln := range lines {
+		if m := reFunc.FindStringSubmatch(ln); len(m) > 1 {
+			name := strings.ToLower(m[1])
+			if strings.Contains(lower, name) {
+				e := matchBracesEnd(lines, i)
+				return strings.Join(lines[i:e+1], "\n"), i, e, nil
+			}
+		}
+		if m := reArrow.FindStringSubmatch(ln); len(m) > 1 {
+			name := strings.ToLower(m[1])
+			if strings.Contains(lower, name) {
+				e := matchBracesEnd(lines, i)
+				return strings.Join(lines[i:e+1], "\n"), i, e, nil
+			}
+		}
+		if m := reClass.FindStringSubmatch(ln); len(m) > 1 {
+			name := strings.ToLower(m[1])
+			if strings.Contains(lower, name) {
+				e := matchBracesEnd(lines, i)
+				return strings.Join(lines[i:e+1], "\n"), i, e, nil
+			}
+		}
+	}
+	// fallback to generic C-like
+	return extractCLikeSection(lines, instructions)
 }
 
 // extractCLikeSection anchors to function/class with brace matching

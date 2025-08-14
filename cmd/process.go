@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/orchestration"
@@ -13,6 +14,7 @@ import (
 var createExample bool
 var resume bool
 var statePath string
+var noProgress bool
 
 // processCmd represents the process command
 var processCmd = &cobra.Command{
@@ -67,6 +69,9 @@ func runMultiAgentProcess(processFilePath string, logger *utils.Logger) error {
 		cfg.OrchestrationModel = model
 	}
 	cfg.SkipPrompt = skipPrompt
+	if noProgress {
+		_ = os.Setenv("LEDIT_NO_PROGRESS", "1")
+	}
 
 	// Load the process file
 	loader := orchestration.NewProcessLoader()
@@ -108,5 +113,6 @@ func init() {
 	processCmd.Flags().BoolVar(&createExample, "create-example", false, "Create an example process file instead of executing")
 	processCmd.Flags().BoolVar(&resume, "resume", false, "Resume from a previous orchestration state if compatible")
 	processCmd.Flags().StringVar(&statePath, "state", "", "Path to orchestration state file (default .ledit/orchestration_state.json)")
+	processCmd.Flags().BoolVar(&noProgress, "no-progress", false, "Suppress progress table output during orchestration")
 	rootCmd.AddCommand(processCmd)
 }

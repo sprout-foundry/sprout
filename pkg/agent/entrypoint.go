@@ -49,6 +49,7 @@ func RunAgentMode(userIntent string, skipPrompt bool, model string) error {
 // Execute is the main public interface for running the agent
 func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*AgentTokenUsage, error) {
 	logger.LogProcessStep("🚀 Starting optimized agent execution...")
+	logger.LogProcessStep("🛡️ Policy version: " + PolicyVersion)
 
 	startTime := time.Now()
 	var m runtime.MemStats

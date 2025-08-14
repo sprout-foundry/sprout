@@ -124,6 +124,14 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 		w.Log("Skipping user confirmation in non-interactive mode.")
 		return default_response
 	}
+	// If UI is enabled, ask via TUI prompt events
+	if ui.Enabled() {
+		confirmed, err := ui.PromptYesNo(prompt, default_response)
+		if err != nil {
+			return default_response
+		}
+		return confirmed
+	}
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		w.LogUserInteraction(fmt.Sprintf("%s (yes/no): ", prompt))

@@ -55,6 +55,7 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 
 	requestHash := utils.GenerateRequestHash(processedInstructions)
 	// Pass the effectiveFilename to guide targeted edits when inferred
+	// Indicate streaming when UI is enabled (getUpdatedCode handles LLM; we surface activity in TUI logs via other sinks)
 	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, effectiveFilename, cfg, imagePath)
 	if err != nil {
 		return "", err

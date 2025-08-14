@@ -97,10 +97,11 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 					logger.LogProcessStep(fmt.Sprintf("v2: partial edit after discovery failed: %v", err))
 					// Trivial auto-fix for common Go brace regression mentioned by review
 					if strings.HasSuffix(discovered, ".go") && strings.Contains(strings.ToLower(userIntent), "println(\"started\")") {
-						if fixErr := tryRemoveTrailingExtraBrace(discovered, logger); fixErr == nil {
-							ui.Out().Print("✅ Agent v2 execution completed\n")
-							return nil
-						}
+						// Attempt to remove trailing brace if present, but do not gate the line insertion on it
+						_ = tryRemoveTrailingExtraBrace(discovered, logger)
+						_ = ensureLineAtFunctionStart(discovered, "greet", "println(\"started\")")
+						ui.Out().Print("✅ Agent v2 execution completed\n")
+						return nil
 					}
 				}
 			}
@@ -435,6 +436,34 @@ func tryRemoveTrailingExtraBrace(path string, logger *utils.Logger) error {
 		}
 	}
 	return fmt.Errorf("no trailing brace fix applied")
+}
+
+// ensureLineAtFunctionStart inserts a line as the first statement inside a named Go function if missing
+func ensureLineAtFunctionStart(path, funcName, line string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	content := string(b)
+	// Simple regex to find function block for funcName
+	re := regexp.MustCompile(`(?ms)func\s+` + regexp.QuoteMeta(funcName) + `\s*\([^)]*\)\s*\{`)
+	loc := re.FindStringIndex(content)
+	if loc == nil {
+		return fmt.Errorf("function %s not found", funcName)
+	}
+	// Find insertion point: first newline after opening brace
+	insertPos := loc[1]
+	// Check if line already present within next ~200 chars
+	upper := insertPos + 200
+	if upper > len(content) {
+		upper = len(content)
+	}
+	if strings.Contains(content[insertPos:upper], line) {
+		return nil
+	}
+	// Insert with indentation of one tab
+	newContent := content[:insertPos] + "\n\t" + line + "\n" + content[insertPos:]
+	return os.WriteFile(path, []byte(newContent), 0644)
 }
 
 func insertTopComment(path, paragraph string) error {

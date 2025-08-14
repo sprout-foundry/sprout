@@ -39,7 +39,14 @@ func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions 
 		logger.LogProcessStep("Code review rejected.")
 		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
 
-		// Only rollback if there are active changes recorded under this revision
+		// In non-interactive flows, prefer not to roll back applied changes to avoid losing progress
+		if cfg.SkipPrompt {
+			logger.LogProcessStep("⚠️ Skipping rollback in non-interactive mode; proceeding to validation/revision loop")
+			// Signal to re-validate rather than abort
+			return fmt.Errorf("revisions applied, re-validating. Feedback: %s", review.Feedback)
+		}
+
+		// Interactive: Only rollback if there are active changes recorded under this revision
 		if hasActive, _ := changetracker.HasActiveChangesForRevision(revisionID); hasActive {
 			if err := changetracker.RevertChangeByRevisionID(revisionID); err != nil {
 				logger.LogError(fmt.Errorf("failed to rollback changes for revision %s: %w", revisionID, err))

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -26,13 +27,43 @@ type ProgressRow struct {
 
 // ProgressSnapshotEvent represents a full table snapshot
 type ProgressSnapshotEvent struct {
-	Completed int
-	Total     int
-	Rows      []ProgressRow
-	Time      time.Time
+	Completed   int
+	Total       int
+	Rows        []ProgressRow
+	Time        time.Time
+	TotalTokens int
+	TotalCost   float64
+	BaseModel   string
+}
+
+// StreamStartedEvent indicates a streaming operation has begun
+type StreamStartedEvent struct{}
+
+// StreamEndedEvent indicates a streaming operation has ended
+type StreamEndedEvent struct{}
+
+// PromptRequestEvent asks the UI to collect user input
+type PromptRequestEvent struct {
+	ID           string
+	Prompt       string
+	RequireYesNo bool
+	DefaultYes   bool
+}
+
+// PromptResponseEvent carries the user's response
+type PromptResponseEvent struct {
+	ID        string
+	Text      string
+	Confirmed bool
 }
 
 var eventChan = make(chan Event, 2048)
+
+// waiter registry for prompt responses
+var (
+	waitersMu       sync.Mutex
+	responseWaiters = map[string]chan PromptResponseEvent{}
+)
 
 // Events exposes a receive-only channel of events.
 func Events() <-chan Event { return eventChan }
@@ -60,4 +91,64 @@ func PublishProgress(completed, total int, rows []ProgressRow) {
 		Rows:      rows,
 		Time:      time.Now(),
 	})
+}
+
+// ModelInfoEvent announces the active or base model name
+type ModelInfoEvent struct{ Name string }
+
+// PublishModel informs the UI about the current model
+func PublishModel(name string) { Publish(ModelInfoEvent{Name: name}) }
+
+// PublishStreamStarted signals that a stream started
+func PublishStreamStarted() { Publish(StreamStartedEvent{}) }
+
+// PublishStreamEnded signals that a stream ended
+func PublishStreamEnded() { Publish(StreamEndedEvent{}) }
+
+// RegisterPromptWaiter creates a channel to wait for a prompt response
+func RegisterPromptWaiter(id string) chan PromptResponseEvent {
+	waitersMu.Lock()
+	defer waitersMu.Unlock()
+	ch := make(chan PromptResponseEvent, 1)
+	responseWaiters[id] = ch
+	return ch
+}
+
+// SubmitPromptResponse delivers a response to any waiter and publishes the event
+func SubmitPromptResponse(id string, text string, confirmed bool) {
+	resp := PromptResponseEvent{ID: id, Text: text, Confirmed: confirmed}
+	waitersMu.Lock()
+	if ch, ok := responseWaiters[id]; ok {
+		ch <- resp
+		close(ch)
+		delete(responseWaiters, id)
+	}
+	waitersMu.Unlock()
+	Publish(resp)
+}
+
+// PromptYesNo requests a yes/no answer from the user via UI when enabled
+func PromptYesNo(prompt string, defaultYes bool) (bool, error) {
+	id := fmt.Sprintf("p-%d", time.Now().UnixNano())
+	ch := RegisterPromptWaiter(id)
+	Publish(PromptRequestEvent{ID: id, Prompt: prompt, RequireYesNo: true, DefaultYes: defaultYes})
+	select {
+	case resp := <-ch:
+		return resp.Confirmed, nil
+	case <-time.After(5 * time.Minute):
+		return defaultYes, fmt.Errorf("prompt timed out")
+	}
+}
+
+// PromptText requests a line of input from the user via UI
+func PromptText(prompt string) (string, error) {
+	id := fmt.Sprintf("p-%d", time.Now().UnixNano())
+	ch := RegisterPromptWaiter(id)
+	Publish(PromptRequestEvent{ID: id, Prompt: prompt, RequireYesNo: false})
+	select {
+	case resp := <-ch:
+		return resp.Text, nil
+	case <-time.After(30 * time.Minute):
+		return "", fmt.Errorf("prompt timed out")
+	}
 }

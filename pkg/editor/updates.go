@@ -86,16 +86,16 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 		}
 
 		diff := changetracker.GetDiff(newFilename, originalCode, newCode)
-        if diff == "" {
-            ui.Out().Print("No changes detected.")
-        } else {
+		if diff == "" {
+			ui.Out().Print("No changes detected.")
+		} else {
 			ui.Out().Print(diff)
 		}
 		allDiffs.WriteString(diff)
 		allDiffs.WriteString("\n")
 
 		// Pre-apply diff review when enabled
-        if cfg.PreapplyReview && diff != "" {
+		if cfg.PreapplyReview && diff != "" {
 			logger := utils.GetLogger(cfg.SkipPrompt)
 			if err := performAutomatedReview(diff, originalInstructions, processedInstructions, cfg, logger, revisionID); err != nil {
 				// If review requested revisions, allow subsequent iterations to handle it,

@@ -30,3 +30,6 @@ func SetDefaultSink(s OutputSink) { defaultSink = s }
 
 // Out returns the current default output sink.
 func Out() OutputSink { return defaultSink }
+
+// UseStdoutSink switches default output back to stdout.
+func UseStdoutSink() { defaultSink = StdoutSink{} }

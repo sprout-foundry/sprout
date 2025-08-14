@@ -59,8 +59,19 @@ func verifyOperationPostconditions(op EditOperation, instructions string) (bool,
 		if ok, reason := verifyPHPStructure(text, names); !ok {
 			return false, reason
 		}
+		if ok, reason := astVerifyPHP(op.FilePath, names); !ok {
+			return false, reason
+		}
 	case ".rs":
 		if ok, reason := verifyRustStructure(text, names); !ok {
+			return false, reason
+		}
+	case ".java":
+		if ok, reason := astVerifyJava(op.FilePath, names); !ok {
+			return false, reason
+		}
+	case ".cs":
+		if ok, reason := astVerifyCSharp(op.FilePath, names); !ok {
 			return false, reason
 		}
 	}

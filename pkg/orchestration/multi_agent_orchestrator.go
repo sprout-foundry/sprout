@@ -893,6 +893,17 @@ func (o *MultiAgentOrchestrator) updateAgentStatus(agentID, status, currentStep 
 
 func (o *MultiAgentOrchestrator) canExecuteStep(step *types.OrchestrationStep) bool {
 	if len(step.DependsOn) == 0 {
+		// If agent is halted with stop-on-limit, do not allow step to run
+		if st, ok := o.plan.AgentStatuses[step.AgentID]; ok {
+			if st.Halted {
+				// find budget stop flag
+				for _, a := range o.plan.Agents {
+					if a.ID == step.AgentID && a.Budget != nil && a.Budget.StopOnLimit {
+						return false
+					}
+				}
+			}
+		}
 		return true
 	}
 
@@ -908,6 +919,17 @@ func (o *MultiAgentOrchestrator) canExecuteStep(step *types.OrchestrationStep) b
 
 		if depStep == nil || depStep.Status != "completed" {
 			return false
+		}
+	}
+
+	// If agent is halted with stop-on-limit, do not allow step to run
+	if st, ok := o.plan.AgentStatuses[step.AgentID]; ok {
+		if st.Halted {
+			for _, a := range o.plan.Agents {
+				if a.ID == step.AgentID && a.Budget != nil && a.Budget.StopOnLimit {
+					return false
+				}
+			}
 		}
 	}
 

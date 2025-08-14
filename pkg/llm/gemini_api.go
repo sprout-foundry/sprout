@@ -11,13 +11,14 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/apikeys"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 )
 
 func callGeminiAPI(model string, messages []prompts.Message, timeout time.Duration, useSearchGrounding bool) (string, error) {
 	// Pass 'false' for interactive, as API calls should typically not prompt the user directly.
 	apiKey, err := apikeys.GetAPIKey("gemini", false)
 	if err != nil {
-		fmt.Print(prompts.APIKeyError(err))
+		ui.Out().Print(prompts.APIKeyError(err))
 		return "", err
 	}
 	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
@@ -64,31 +65,31 @@ func callGeminiAPI(model string, messages []prompts.Message, timeout time.Durati
 
 	reqBody, err := json.Marshal(reqBodyStruct)
 	if err != nil {
-		fmt.Print(prompts.RequestMarshalError(err))
+		ui.Out().Print(prompts.RequestMarshalError(err))
 		return "", err
 	}
 
 	client := &http.Client{Timeout: timeout}
 	resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
-		fmt.Print(prompts.HTTPRequestError(err))
+		ui.Out().Print(prompts.HTTPRequestError(err))
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Print(prompts.ResponseBodyError(err))
+		ui.Out().Print(prompts.ResponseBodyError(err))
 		return "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		fmt.Print(prompts.APIError(string(body), resp.StatusCode))
+		ui.Out().Print(prompts.APIError(string(body), resp.StatusCode))
 		return "", fmt.Errorf(prompts.APIError(string(body), resp.StatusCode))
 	}
 
 	var geminiResp GeminiResponse
 	if err := json.Unmarshal(body, &geminiResp); err != nil {
-		fmt.Print(prompts.ResponseUnmarshalError(err))
+		ui.Out().Print(prompts.ResponseUnmarshalError(err))
 		return "", err
 	}
 
@@ -98,30 +99,30 @@ func callGeminiAPI(model string, messages []prompts.Message, timeout time.Durati
 		// Print grounding metadata if available
 		if candidate.GroundingMetadata != nil {
 			if len(candidate.GroundingMetadata.WebSearchQueries) > 0 {
-				fmt.Println("\n--- Grounding Details (Web Search Queries) ---")
+				ui.Out().Print("\n--- Grounding Details (Web Search Queries) ---\n")
 				for _, query := range candidate.GroundingMetadata.WebSearchQueries {
-					fmt.Printf("  Query: %s\n", query)
+					ui.Out().Printf("  Query: %s\n", query)
 				}
 			}
 			if len(candidate.GroundingMetadata.GroundingChunks) > 0 {
-				fmt.Println("\n--- Grounding Details (Sources) ---")
+				ui.Out().Print("\n--- Grounding Details (Sources) ---\n")
 				for i, chunk := range candidate.GroundingMetadata.GroundingChunks {
-					fmt.Printf("  [%d] Title: %s, URI: %s\n", i+1, chunk.Title, chunk.URI)
+					ui.Out().Printf("  [%d] Title: %s, URI: %s\n", i+1, chunk.Title, chunk.URI)
 				}
 			}
 		}
 
 		// Print citation metadata if available
 		if candidate.CitationMetadata != nil && len(candidate.CitationMetadata.Citations) > 0 {
-			fmt.Println("\n--- Citations ---")
+			ui.Out().Print("\n--- Citations ---\n")
 			for _, citation := range candidate.CitationMetadata.Citations {
-				fmt.Printf("  Text Span: %d-%d, Title: %s, URI: %s\n",
+				ui.Out().Printf("  Text Span: %d-%d, Title: %s, URI: %s\n",
 					citation.StartIndex, citation.EndIndex, citation.Title, citation.URI)
 			}
 		}
 		// Add a separator for clarity after grounding/citation details
 		if candidate.GroundingMetadata != nil || (candidate.CitationMetadata != nil && len(candidate.CitationMetadata.Citations) > 0) {
-			fmt.Println("----------------------------------------")
+			ui.Out().Print("----------------------------------------\n")
 		}
 
 		if len(candidate.Content.Parts) > 0 {
@@ -129,6 +130,6 @@ func callGeminiAPI(model string, messages []prompts.Message, timeout time.Durati
 		}
 	}
 
-	fmt.Println(prompts.NoGeminiContent())
+	ui.Out().Print(prompts.NoGeminiContent() + "\n")
 	return "", fmt.Errorf("no content in response")
 }

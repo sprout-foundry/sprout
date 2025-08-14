@@ -2,12 +2,12 @@ package orchestration
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"sort"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/orchestration/types"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 )
 
 // LoadState loads an orchestration plan state from the given path
@@ -26,14 +26,14 @@ func LoadState(path string) (*types.MultiAgentOrchestrationPlan, error) {
 // PrintStateSummary prints a concise summary of the current orchestration state
 func PrintStateSummary(plan *types.MultiAgentOrchestrationPlan) {
 	if plan == nil {
-		fmt.Println("No orchestration state loaded")
+		ui.Out().Print("No orchestration state loaded\n")
 		return
 	}
-	fmt.Printf("Goal: %s\n", plan.Goal)
-	fmt.Printf("Status: %s\n", plan.Status)
-	fmt.Printf("Created: %s\n", plan.CreatedAt)
+	ui.Out().Printf("Goal: %s\n", plan.Goal)
+	ui.Out().Printf("Status: %s\n", plan.Status)
+	ui.Out().Printf("Created: %s\n", plan.CreatedAt)
 	if strings.TrimSpace(plan.CompletedAt) != "" {
-		fmt.Printf("Completed: %s\n", plan.CompletedAt)
+		ui.Out().Printf("Completed: %s\n", plan.CompletedAt)
 	}
 	// Steps progress
 	total := len(plan.Steps)
@@ -43,7 +43,7 @@ func PrintStateSummary(plan *types.MultiAgentOrchestrationPlan) {
 			completed++
 		}
 	}
-	fmt.Printf("Progress: %d/%d steps completed\n\n", completed, total)
+	ui.Out().Printf("Progress: %d/%d steps completed\n\n", completed, total)
 
 	// Agents table
 	type row struct {
@@ -63,10 +63,10 @@ func PrintStateSummary(plan *types.MultiAgentOrchestrationPlan) {
 		rows = append(rows, row{Name: name, Status: st.Status, Step: st.CurrentStep, Tokens: st.TokenUsage, Cost: st.Cost})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
-	fmt.Printf("%-24s %-12s %-22s %8s %10s\n", "Agent", "Status", "Current Step", "Tokens", "Cost($)")
-	fmt.Printf("%s\n", strings.Repeat("-", 80))
+	ui.Out().Printf("%-24s %-12s %-22s %8s %10s\n", "Agent", "Status", "Current Step", "Tokens", "Cost($)")
+	ui.Out().Printf("%s\n", strings.Repeat("-", 80))
 	for _, r := range rows {
-		fmt.Printf("%-24s %-12s %-22s %8d %10.4f\n", r.Name, r.Status, r.Step, r.Tokens, r.Cost)
+		ui.Out().Printf("%-24s %-12s %-22s %8d %10.4f\n", r.Name, r.Status, r.Step, r.Tokens, r.Cost)
 	}
-	fmt.Println()
+	ui.Out().Print("\n")
 }

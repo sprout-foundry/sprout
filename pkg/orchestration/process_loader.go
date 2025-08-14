@@ -69,20 +69,20 @@ func (l *ProcessLoader) validateProcessFile(processFile *types.ProcessFile) erro
 		agentIDs[agent.ID] = true
 	}
 
-    // Build step ID set for dependency validation
-    stepIDs := make(map[string]bool)
-    for _, s := range processFile.Steps {
-        if s.ID != "" {
-            stepIDs[s.ID] = true
-        }
-    }
+	// Build step ID set for dependency validation
+	stepIDs := make(map[string]bool)
+	for _, s := range processFile.Steps {
+		if s.ID != "" {
+			stepIDs[s.ID] = true
+		}
+	}
 
-    // Validate steps
-    for i, step := range processFile.Steps {
-        if err := l.validateStep(&step, i, agentIDs, stepIDs); err != nil {
-            return fmt.Errorf("step %d: %w", i+1, err)
-        }
-    }
+	// Validate steps
+	for i, step := range processFile.Steps {
+		if err := l.validateStep(&step, i, agentIDs, stepIDs); err != nil {
+			return fmt.Errorf("step %d: %w", i+1, err)
+		}
+	}
 
 	// Check for circular dependencies
 	if err := l.checkCircularDependencies(processFile.Steps); err != nil {
@@ -143,15 +143,15 @@ func (l *ProcessLoader) validateStep(step *types.OrchestrationStep, index int, a
 		return fmt.Errorf("agent ID '%s' not found", step.AgentID)
 	}
 
-    // Validate dependencies
-    for _, depID := range step.DependsOn {
-        if depID == step.ID {
-            return fmt.Errorf("step cannot depend on itself")
-        }
-        if !stepIDs[depID] {
-            return fmt.Errorf("depends_on references missing step id '%s'", depID)
-        }
-    }
+	// Validate dependencies
+	for _, depID := range step.DependsOn {
+		if depID == step.ID {
+			return fmt.Errorf("step cannot depend on itself")
+		}
+		if !stepIDs[depID] {
+			return fmt.Errorf("depends_on references missing step id '%s'", depID)
+		}
+	}
 
 	return nil
 }

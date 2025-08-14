@@ -23,6 +23,13 @@ func runSingleEditWithRetries(operation EditOperation, editInstructions string, 
 	// Lightweight risk gate using blame/size/sensitive paths
 	if isHighRiskEdit(operation.FilePath) {
 		context.Logger.LogProcessStep("🛑 High-risk edit detected (auth/config/ci or heavy file). Proceeding with caution.")
+		// If interactive, require confirmation
+		if !context.Config.SkipPrompt {
+			prompt := fmt.Sprintf("This edit is considered high-risk: %s\nDescription: %s\nProceed with the change?", operation.FilePath, trimForCommit(operation.Description, 140))
+			if !context.Logger.AskForConfirmation(prompt, false, false) {
+				return 0, false, fmt.Errorf("user declined high-risk edit"), "⚠️ Edit skipped by user"
+			}
+		}
 	}
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {

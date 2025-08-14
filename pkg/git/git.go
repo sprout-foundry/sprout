@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+    ui "github.com/alantheprice/ledit/pkg/ui"
 )
 
 // GetGitRootDir returns the absolute path to the root directory of the current Git repository.
@@ -72,7 +73,7 @@ func AddAndCommitFile(newFilename, message string) error {
 	if err := exec.Command("git", "commit", "-m", message).Run(); err != nil {
 		return fmt.Errorf("error committing changes to git: %v", err)
 	}
-	fmt.Printf("Changes committed to git for %s\n", newFilename)
+    ui.Out().Printf("Changes committed to git for %s\n", newFilename)
 	return nil
 }
 

@@ -1,12 +1,13 @@
 package main
 
 import (
-    "fmt"
+	"fmt"
+
+	"os"
 
 	"github.com/alantheprice/ledit/cmd"
-    "github.com/alantheprice/ledit/pkg/prompts"
-    "github.com/alantheprice/ledit/pkg/utils"
-    "os"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 func main() {
@@ -26,7 +27,7 @@ func main() {
 	}()
 
 	if err := cmd.Execute(); err != nil {
-        logger.LogError(err)
+		logger.LogError(err)
 		if _, printErr := fmt.Fprintln(os.Stderr, prompts.FatalError(err)); printErr != nil {
 		}
 		os.Exit(1)

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-    "github.com/alantheprice/ledit/pkg/prompts"
-    "github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/shirou/gopsutil/v3/mem"
 )
@@ -94,26 +94,26 @@ func getCurrentConfigPath() (string, string) {
 }
 
 func getLocalModel(skipPrompt bool) string {
-	logger := utils.GetLogger(skipPrompt) // Get the logger instance
+	logger := utils.GetLogger(skipPrompt)
 	v, err := mem.VirtualMemory()
 	if err != nil {
-		logger.Logf(prompts.MemoryDetectionError(MicroCoder, err)) // Use prompt
+		logger.Logf(prompts.MemoryDetectionError(MicroCoder, err))
 		return MicroCoder
 	}
 	gb := v.Total / (1024 * 1024 * 1024)
 	if gb >= 48 {
-		logger.Logf(prompts.SystemMemoryFallback(int(gb), LargeCoder)) // Use prompt
+		logger.Logf(prompts.SystemMemoryFallback(int(gb), LargeCoder))
 		return LargeCoder
 	}
 	if gb >= 38 {
-		logger.Logf(prompts.SystemMemoryFallback(int(gb), MediumCoder)) // Use prompt
+		logger.Logf(prompts.SystemMemoryFallback(int(gb), MediumCoder))
 		return MediumCoder
 	}
 	if gb >= 20 {
-		logger.Logf(prompts.SystemMemoryFallback(int(gb), SmallCoder)) // Use prompt
+		logger.Logf(prompts.SystemMemoryFallback(int(gb), SmallCoder))
 		return SmallCoder
 	}
-	logger.Logf(prompts.SystemMemoryFallback(int(gb), MicroCoder)) // Use prompt
+	logger.Logf(prompts.SystemMemoryFallback(int(gb), MicroCoder))
 	return MicroCoder
 }
 
@@ -371,7 +371,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 }
 
 func LoadOrInitConfig(skipPrompt bool) (*Config, error) {
-	logger := utils.GetLogger(skipPrompt) // Get the logger instance
+	logger := utils.GetLogger(skipPrompt)
 
 	_, currentConfigPath := getCurrentConfigPath()
 	_, homeConfigPath := getHomeConfigPath()
@@ -383,24 +383,24 @@ func LoadOrInitConfig(skipPrompt bool) (*Config, error) {
 		return loadConfig(homeConfigPath)
 	}
 
-	logger.LogUserInteraction(prompts.NoConfigFound()) // Use prompt
+	logger.LogUserInteraction(prompts.NoConfigFound())
 	_, homeConfigPath = getHomeConfigPath()
 	cfg, err := createConfig(homeConfigPath, skipPrompt)
 	if err != nil {
 		return nil, fmt.Errorf("could not create initial config: %w", err)
 	}
-	logger.LogUserInteraction(prompts.ConfigSaved(homeConfigPath)) // Use prompt
+	logger.LogUserInteraction(prompts.ConfigSaved(homeConfigPath))
 	return cfg, nil
 }
 
 func InitConfig(skipPrompt bool) error {
-	logger := utils.GetLogger(skipPrompt) // Get the logger instance
+	logger := utils.GetLogger(skipPrompt)
 
 	_, currentConfigPath := getCurrentConfigPath()
 	_, err := createConfig(currentConfigPath, skipPrompt)
 	if err != nil {
 		return err
 	}
-	logger.LogUserInteraction(prompts.ConfigSaved(currentConfigPath)) // Use prompt
+	logger.LogUserInteraction(prompts.ConfigSaved(currentConfigPath))
 	return nil
 }

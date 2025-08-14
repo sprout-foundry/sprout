@@ -2,11 +2,11 @@
 package cmd
 
 import (
-    "os"
-    "strings"
+	"os"
+	"strings"
 
-    "github.com/alantheprice/ledit/pkg/agent"
-    "github.com/spf13/cobra"
+	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/spf13/cobra"
 )
 
 var (

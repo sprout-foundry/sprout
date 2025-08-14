@@ -1,16 +1,16 @@
 package llm
 
 import (
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "io"
-    "math"
-    "net/http"
-    "os"
-    "strings"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"math"
+	"net/http"
+	"os"
+	"strings"
 
-    "github.com/alantheprice/ledit/pkg/apikeys"
+	"github.com/alantheprice/ledit/pkg/apikeys"
 )
 
 const deepInfraEmbeddingsURL = "https://api.deepinfra.com/v1/openai/embeddings"

@@ -23,8 +23,7 @@ var (
 
 // GetLLMResponseWithTools makes an LLM call with tool calling support
 func GetLLMResponseWithTools(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration) (string, error) {
-	// Import the orchestration package functions here to avoid circular import
-	// This is a temporary solution - in a full implementation, you'd refactor the architecture
+	// Temporary workaround to avoid circular import with orchestration package
 	response, _, err := GetLLMResponse(modelName, messages, systemPrompt, cfg, timeout)
 	return response, err
 }

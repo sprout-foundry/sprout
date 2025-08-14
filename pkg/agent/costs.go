@@ -1,10 +1,10 @@
 package agent
 
 import (
-	"encoding/json" // New import for JSON operations
+	"encoding/json"
 	"fmt"
-	"os"            // New import for file system operations
-	"path/filepath" // New import for path manipulation
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"

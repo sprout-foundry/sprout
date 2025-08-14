@@ -18,6 +18,14 @@ import (
 func executeShellCommands(context *AgentContext, commands []string) error {
 	context.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing %d shell commands...", len(commands)))
 
+	// One-time sandbox mode note
+	effTimeout := 45
+	if context.Config != nil && context.Config.ShellTimeoutSecs > 0 {
+		effTimeout = context.Config.ShellTimeoutSecs
+	}
+	cwd, _ := os.Getwd()
+	context.Logger.LogProcessStep(fmt.Sprintf("🛡️ Sandbox: cwd=%s timeout=%ds env=sanitized ulimit=enabled", filepath.Clean(cwd), effTimeout))
+
 	for i, command := range commands {
 		context.Logger.LogProcessStep(fmt.Sprintf("Running command %d: %s", i+1, command))
 

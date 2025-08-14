@@ -290,8 +290,18 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 
 func GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, *TokenUsage, error) {
 	var contentBuffer strings.Builder
+	// Stream to UI when enabled, while also capturing content in buffer
+	var writer io.Writer = &contentBuffer
+	var stream *ui.StreamWriter
+	if ui.Enabled() {
+		stream = ui.NewStreamWriter()
+		writer = io.MultiWriter(stream, &contentBuffer)
+	}
 	// GetLLMResponseStream handles the token limit prompt and provider logic
-	tokenUsage, err := GetLLMResponseStream(modelName, messages, filename, cfg, timeout, &contentBuffer, imagePath...)
+	tokenUsage, err := GetLLMResponseStream(modelName, messages, filename, cfg, timeout, writer, imagePath...)
+	if stream != nil {
+		stream.Flush()
+	}
 	if err != nil {
 		// GetLLMResponseStream already prints the error if it happens
 		return modelName, tokenUsage, err

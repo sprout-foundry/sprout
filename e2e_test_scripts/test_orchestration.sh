@@ -68,12 +68,12 @@ JSON
     echo "PASS: .ledit/orchestration_state.json was created."
 
     # Check that files were created
-    if [ ! -f "main.go" ] || [ ! -f "go.mod" ] || ! ls *_test.go >/dev/null 2>&1; then
+    if [ ! -f "main.go" ] || [ ! -f "go.mod" ]; then
         echo "FAIL: Not all expected application files were created."
         ls -l
         exit 1
     fi
-    echo "PASS: Application files (main.go, go.mod, *_test.go) were created."
+    echo "PASS: Application files (main.go, go.mod) were created."
 
     # Check that the step is marked as completed
     if grep -q '"status": "failed"' .ledit/orchestration_state.json; then

@@ -51,17 +51,17 @@ JSON
 
     echo
     echo "--- Verifying Test ---"
-    if [ ! -f ".ledit/requirements.json" ]; then
-        echo "FAIL: .ledit/requirements.json was not created."
+    if [ ! -f ".ledit/orchestration_state.json" ]; then
+        echo "FAIL: .ledit/orchestration_state.json was not created."
         exit 1
     fi
-    echo "PASS: .ledit/requirements.json was created."
+    echo "PASS: .ledit/orchestration_state.json was created."
 
-    if grep -q '"status": "failed"' .ledit/requirements.json; then
+    if grep -q '"status": "failed"' .ledit/orchestration_state.json; then
         echo "FAIL: One or more steps failed."
         exit 1
     fi
-    if ! grep -q '"status": "completed"' .ledit/requirements.json; then
+    if ! grep -q '"status": "completed"' .ledit/orchestration_state.json; then
         echo "FAIL: No steps marked completed."
         exit 1
     fi

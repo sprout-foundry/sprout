@@ -115,6 +115,14 @@ func GenerateEmbedding(input, modelName string) ([]float64, error) {
 	}
 
 	switch provider {
+	case "test":
+		// Deterministic, offline embedding for tests: 16-dim bag-of-chars
+		vec := make([]float64, 16)
+		for i := 0; i < len(input); i++ {
+			idx := int(input[i]) % 16
+			vec[idx] += 1.0
+		}
+		return vec, nil
 	case "deepinfra":
 		return generateDeepInfraEmbedding(input, model)
 	default:

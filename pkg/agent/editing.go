@@ -203,7 +203,12 @@ func executeEditOperations(context *AgentContext) error {
 	}
 
 	// Apply simple dependency-aware ordering if not already ordered
-	context.CurrentPlan.EditOperations = orderEditOperationsHeuristic(context.CurrentPlan.EditOperations)
+	// Try import/use graph ordering first; fallback to heuristic when no edges inferred
+	if ordered := orderEditsByImportGraph(context.CurrentPlan.EditOperations); ordered != nil {
+		context.CurrentPlan.EditOperations = ordered
+	} else {
+		context.CurrentPlan.EditOperations = orderEditOperationsHeuristic(context.CurrentPlan.EditOperations)
+	}
 
 	tokens, err := executeEditPlanWithErrorHandling(context.CurrentPlan, context)
 	if err != nil {

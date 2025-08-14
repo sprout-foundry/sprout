@@ -12,6 +12,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/git"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/fatih/color"
@@ -26,14 +27,14 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 		originalCode, _ := filesystem.LoadOriginalCode(newFilename)
 
 		if originalCode == newCode {
-			fmt.Print(prompts.NoChangesDetected(newFilename))
+			ui.Out().Print(prompts.NoChangesDetected(newFilename))
 			continue
 		}
 
 		// Check if this is a TRULY incomplete response (not just partial code snippets)
 		if isIncompleteTruncatedResponse(newCode, newFilename) {
-			fmt.Printf("⚠️  Detected incomplete/truncated response for %s. The LLM provided genuinely incomplete code.\n", newFilename)
-			fmt.Printf("Requesting the LLM to provide the complete file content...\n")
+			ui.Out().Printf("⚠️  Detected incomplete/truncated response for %s. The LLM provided genuinely incomplete code.\n", newFilename)
+			ui.Out().Printf("Requesting the LLM to provide the complete file content...\n")
 
 			retryPrompt := fmt.Sprintf(`The previous response was incomplete or truncated for the file %s. 
 This appears to be a genuine truncation issue (not intentional partial code).
@@ -63,7 +64,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			}
 
 			if retryResult != "" {
-				fmt.Printf("✅ Received complete file content for %s\n", newFilename)
+				ui.Out().Printf("✅ Received complete file content for %s\n", newFilename)
 				continue
 			} else {
 				return "", fmt.Errorf("failed to get complete file content for %s after retry", newFilename)
@@ -86,9 +87,9 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 
 		diff := changetracker.GetDiff(newFilename, originalCode, newCode)
 		if diff == "" {
-			fmt.Print("No changes detected.")
+			ui.Out().Print("No changes detected.")
 		} else {
-			fmt.Print(diff)
+			ui.Out().Print(diff)
 		}
 		allDiffs.WriteString(diff)
 		allDiffs.WriteString("\n")
@@ -106,7 +107,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 		if cfg.SkipPrompt {
 			applyChanges = true
 		} else {
-			fmt.Print(prompts.ApplyChangesPrompt(newFilename))
+			ui.Out().Print(prompts.ApplyChangesPrompt(newFilename))
 			userInput, _ := reader.ReadString('\n')
 			userInput = strings.TrimSpace(strings.ToLower(userInput))
 			applyChanges = userInput == "y" || userInput == "yes"
@@ -138,7 +139,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 					return "", fmt.Errorf("could not create staged directory %s: %w", filepath.Dir(stagedPath), err)
 				}
 				if cfg.DryRun || os.Getenv("LEDIT_DRY_RUN") == "1" {
-					fmt.Printf("[dry-run] Skipping staged write for %s\n", stagedPath)
+					ui.Out().Printf("[dry-run] Skipping staged write for %s\n", stagedPath)
 				} else if err := os.WriteFile(stagedPath, []byte(newCode), 0644); err != nil {
 					return "", fmt.Errorf("failed to save staged file: %w", err)
 				}
@@ -148,7 +149,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			} else {
 				// Dry-run mode: skip write
 				if cfg.DryRun || os.Getenv("LEDIT_DRY_RUN") == "1" {
-					fmt.Printf("[dry-run] Skipping write for %s\n", newFilename)
+					ui.Out().Printf("[dry-run] Skipping write for %s\n", newFilename)
 				} else if err := filesystem.SaveFile(newFilename, newCode); err != nil {
 					return "", fmt.Errorf("failed to save file: %w", err)
 				}
@@ -165,7 +166,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			if err := changetracker.RecordChangeWithDetails(revisionID, newFilename, originalCode, newCode, description, note, originalInstructions, llmMessage, cfg.EditingModel); err != nil {
 				return "", fmt.Errorf("failed to record change: %w", err)
 			}
-			fmt.Print(prompts.ChangesApplied(newFilename))
+			ui.Out().Print(prompts.ChangesApplied(newFilename))
 
 			if cfg.TrackWithGit {
 				filePath, err := git.GetFileGitPath(newFilename)
@@ -189,7 +190,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 				}
 			}
 		} else {
-			fmt.Print(prompts.ChangesNotApplied(newFilename))
+			ui.Out().Print(prompts.ChangesNotApplied(newFilename))
 		}
 	}
 

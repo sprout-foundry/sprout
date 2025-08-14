@@ -44,6 +44,13 @@ func extractRelevantSection(content, instructions, filePath string) (string, int
 		if sec, s, e, err := extractPHPSection(lines, instructions); err == nil {
 			return sec, s, e, nil
 		}
+	case ".rs":
+		if sec, s, e, err := extractRustSection(lines, instructions); err == nil && sec != "" {
+			return sec, s, e, nil
+		}
+		if sec, s, e, err := extractCLikeSection(lines, instructions); err == nil {
+			return sec, s, e, nil
+		}
 	}
 	// Fallback
 	return extractGenericSection(lines, instructions)
@@ -412,6 +419,40 @@ func extractPHPSection(lines []string, instructions string) (string, int, int, e
 	}
 	// Fallback
 	return extractCLikeSection(lines, instructions)
+}
+
+// extractRustSection anchors to fn/module blocks in Rust using brace matching
+func extractRustSection(lines []string, instructions string) (string, int, int, error) {
+	lower := strings.ToLower(instructions)
+	if strings.Contains(lower, "top of") || strings.Contains(lower, "beginning of") || strings.Contains(lower, "start of") {
+		end := 15
+		if end >= len(lines) {
+			end = len(lines) - 1
+		}
+		if end < 0 {
+			end = 0
+		}
+		return strings.Join(lines[0:end+1], "\n"), 0, end, nil
+	}
+	reFn := regexp.MustCompile(`(?m)^\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
+	reMod := regexp.MustCompile(`(?m)^\s*mod\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
+	for i, ln := range lines {
+		if m := reFn.FindStringSubmatch(ln); len(m) > 1 {
+			name := strings.ToLower(m[1])
+			if strings.Contains(lower, name) {
+				e := matchBracesEnd(lines, i)
+				return strings.Join(lines[i:e+1], "\n"), i, e, nil
+			}
+		}
+		if m := reMod.FindStringSubmatch(ln); len(m) > 1 {
+			name := strings.ToLower(m[1])
+			if strings.Contains(lower, name) {
+				e := matchBracesEnd(lines, i)
+				return strings.Join(lines[i:e+1], "\n"), i, e, nil
+			}
+		}
+	}
+	return "", 0, 0, fmt.Errorf("no rust section identified")
 }
 
 // findGoFunctionEnd finds the end line of a Go function starting at startLine

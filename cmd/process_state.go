@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/alantheprice/ledit/pkg/orchestration"
+    ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -35,10 +36,10 @@ var processClearStateCmd = &cobra.Command{
 		if path == "" {
 			path = ".ledit/orchestration_state.json"
 		}
-		if err := os.Remove(path); err != nil {
+        if err := os.Remove(path); err != nil {
 			return fmt.Errorf("failed to remove %s: %w", path, err)
 		}
-		fmt.Printf("Removed state: %s\n", path)
+        ui.Out().Printf("Removed state: %s\n", path)
 		return nil
 	},
 }

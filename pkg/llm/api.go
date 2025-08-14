@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,27 +21,80 @@ import (
 // simple provider health state (in-memory)
 var providerFailures = map[string]int{}
 var providerLastFail = map[string]time.Time{}
+var healthLoaded = false
+
+const providerHealthPath = ".ledit/provider_health.json"
 
 const failureThreshold = 3
 const openAfter = 2 * time.Minute
 
 func providerOpen(provider string) bool {
+	ensureHealthLoaded()
 	n := providerFailures[provider]
 	if n < failureThreshold {
 		return true
 	}
 	if time.Since(providerLastFail[provider]) > openAfter {
 		providerFailures[provider] = 0
+		_ = saveProviderHealth()
 		return true
 	}
 	return false
 }
 
 func recordFailure(provider string) {
+	ensureHealthLoaded()
 	providerFailures[provider]++
 	providerLastFail[provider] = time.Now()
+	_ = saveProviderHealth()
 }
-func recordSuccess(provider string) { providerFailures[provider] = 0 }
+func recordSuccess(provider string) {
+	ensureHealthLoaded()
+	providerFailures[provider] = 0
+	_ = saveProviderHealth()
+}
+
+type providerHealthFile struct {
+	Failures map[string]int    `json:"failures"`
+	LastFail map[string]string `json:"last_fail"`
+}
+
+func ensureHealthLoaded() {
+	if healthLoaded {
+		return
+	}
+	data, err := os.ReadFile(providerHealthPath)
+	if err == nil {
+		var pf providerHealthFile
+		if json.Unmarshal(data, &pf) == nil {
+			if pf.Failures != nil {
+				providerFailures = pf.Failures
+			}
+			if pf.LastFail != nil {
+				providerLastFail = map[string]time.Time{}
+				for k, v := range pf.LastFail {
+					if t, perr := time.Parse(time.RFC3339, v); perr == nil {
+						providerLastFail[k] = t
+					}
+				}
+			}
+		}
+	}
+	healthLoaded = true
+}
+
+func saveProviderHealth() error {
+	_ = os.MkdirAll(filepath.Dir(providerHealthPath), 0755)
+	pf := providerHealthFile{Failures: providerFailures, LastFail: map[string]string{}}
+	for k, t := range providerLastFail {
+		pf.LastFail[k] = t.Format(time.RFC3339)
+	}
+	b, err := json.MarshalIndent(pf, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(providerHealthPath, b, 0644)
+}
 
 var (
 	// DefaultTokenLimit is the default token limit for API calls

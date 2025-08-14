@@ -43,7 +43,16 @@ func runSingleEditWithRetries(operation EditOperation, editInstructions string, 
 			if ferr == nil {
 				// Evidence verification: ensure the diff mentions the target file
 				if !strings.Contains(fdiff, operation.FilePath) {
-					context.Logger.LogProcessStep("⚠️ Diff did not reference target file; treating as no-op")
+					context.Logger.LogProcessStep("⚠️ Diff did not reference target file; attempting partial-edit fallback")
+					// Try partial-edit fallback when the model returned a code block without a diff header
+					pdiff, perr := editor.ProcessPartialEdit(operation.FilePath, editInstructions, context.Config, context.Logger)
+					if perr == nil {
+						completionTokens += utils.EstimateTokens(pdiff)
+						success = true
+						opResult = "✅ Edit operation completed (partial edit fallback: no diff header)"
+						return completionTokens, success, nil, opResult
+					}
+					context.Logger.LogProcessStep("ℹ️ Partial edit fallback after missing diff header failed; treating as failure")
 					return completionTokens, false, fmt.Errorf("evidence verification failed: no diff for %s", operation.FilePath), ""
 				}
 				// Minimal-diff guard: avoid full-file rewrites unless necessary

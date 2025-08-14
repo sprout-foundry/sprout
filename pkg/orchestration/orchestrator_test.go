@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -157,5 +158,58 @@ func TestValidationStage_BuildAndLintNonRequired(t *testing.T) {
 	}
 	if err := o.runValidationStage(); err != nil {
 		t.Fatalf("did not expect error when validation is non-required, got %v", err)
+	}
+}
+
+func TestAgentHaltPreventsExecutionWhenStopOnLimit(t *testing.T) {
+	plan := &types.MultiAgentOrchestrationPlan{
+		Agents: []types.AgentDefinition{{ID: "a1", Budget: &types.AgentBudget{StopOnLimit: true}}},
+		Steps: []types.OrchestrationStep{
+			{ID: "s1", AgentID: "a1", Status: "pending"},
+		},
+		AgentStatuses: map[string]types.AgentStatus{"a1": {Halted: true, HaltReason: "budget exceeded"}},
+	}
+	o := &MultiAgentOrchestrator{plan: plan, logger: utils.GetLogger(true)}
+	if ids := o.listRunnableStepIDs(); len(ids) != 0 {
+		t.Fatalf("expected no runnable steps when agent is halted, got %v", ids)
+	}
+}
+
+func TestEnrichStepWithToolContext_GatedOff_NoChanges(t *testing.T) {
+	o := &MultiAgentOrchestrator{config: &config.Config{CodeToolsEnabled: false}, logger: utils.GetLogger(true)}
+	step := &types.OrchestrationStep{
+		Input: map[string]string{
+			"workspace_tree":       "true",
+			"workspace_summary":    "true",
+			"workspace_search":     "TODO",
+			"workspace_embeddings": "TODO",
+			"web_search":           "golang testing",
+		},
+		Tools: map[string]string{
+			"workspace_tree":       "true",
+			"workspace_summary":    "true",
+			"workspace_search":     "TODO",
+			"workspace_embeddings": "TODO",
+			"web_search":           "golang testing",
+		},
+	}
+
+	// Call enrichment; with tools disabled, inputs should remain unchanged (no *_content/_results keys)
+	o.enrichStepWithToolContext(step)
+
+	if _, ok := step.Input["workspace_tree_content"]; ok {
+		t.Fatalf("unexpected enrichment when tools disabled: workspace_tree_content present")
+	}
+	if _, ok := step.Input["workspace_summary_content"]; ok {
+		t.Fatalf("unexpected enrichment when tools disabled: workspace_summary_content present")
+	}
+	if _, ok := step.Input["workspace_search_results"]; ok {
+		t.Fatalf("unexpected enrichment when tools disabled: workspace_search_results present")
+	}
+	if _, ok := step.Input["workspace_embeddings_results"]; ok {
+		t.Fatalf("unexpected enrichment when tools disabled: workspace_embeddings_results present")
+	}
+	if _, ok := step.Input["web_search_results"]; ok {
+		t.Fatalf("unexpected enrichment when tools disabled: web_search_results present")
 	}
 }

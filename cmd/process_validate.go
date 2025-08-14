@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alantheprice/ledit/pkg/orchestration"
+    ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -37,17 +38,17 @@ var processValidateCmd = &cobra.Command{
 			_ = enc.Encode(out)
 			return nil
 		}
-		fmt.Printf("Process file is valid.\n")
-		fmt.Printf("Version: %s\n", pf.Version)
-		fmt.Printf("Goal: %s\n", pf.Goal)
-		fmt.Printf("Agents: %d\n", len(pf.Agents))
-		fmt.Printf("Steps: %d\n", len(pf.Steps))
+        ui.Out().Print("Process file is valid.\n")
+        ui.Out().Printf("Version: %s\n", pf.Version)
+        ui.Out().Printf("Goal: %s\n", pf.Goal)
+        ui.Out().Printf("Agents: %d\n", len(pf.Agents))
+        ui.Out().Printf("Steps: %d\n", len(pf.Steps))
 		if pf.Settings != nil {
-			fmt.Printf("Parallel: %t, MaxRetries: %d, StepTimeout: %d, StopOnFailure: %t\n",
+            ui.Out().Printf("Parallel: %t, MaxRetries: %d, StepTimeout: %d, StopOnFailure: %t\n",
 				pf.Settings.ParallelExecution, pf.Settings.MaxRetries, pf.Settings.StepTimeout, pf.Settings.StopOnFailure)
 		}
 		if pf.Validation != nil {
-			fmt.Printf("Validation - required: %t\n", pf.Validation.Required)
+            ui.Out().Printf("Validation - required: %t\n", pf.Validation.Required)
 		}
 		return nil
 	},

@@ -20,6 +20,10 @@ import (
 
 // runSingleEditWithRetries attempts a single operation with partial/full strategies and retry logic
 func runSingleEditWithRetries(operation EditOperation, editInstructions string, context *AgentContext, maxRetries int) (completionTokens int, success bool, err error, opResult string) {
+	// Lightweight risk gate using blame/size/sensitive paths
+	if isHighRiskEdit(operation.FilePath) {
+		context.Logger.LogProcessStep("🛑 High-risk edit detected (auth/config/ci or heavy file). Proceeding with caution.")
+	}
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			context.Logger.LogProcessStep(fmt.Sprintf("🔄 Retry attempt %d/%d for edit %d", attempt, maxRetries, attempt))
@@ -98,6 +102,22 @@ func isDiffTooLarge(filePath, diff string) bool {
 			}
 		}
 		if changed > 200 || hunks > 10 {
+			return true
+		}
+	}
+	return false
+}
+
+// isHighRiskEdit flags edits in sensitive areas or large files
+func isHighRiskEdit(path string) bool {
+	lower := strings.ToLower(path)
+	if strings.Contains(lower, "/auth") || strings.Contains(lower, "security") || strings.Contains(lower, "ci/") ||
+		strings.Contains(lower, ".github/") || strings.HasSuffix(lower, ".yml") || strings.HasSuffix(lower, ".yaml") {
+		return true
+	}
+	// Rough size check via git blame availability (fallback to true on error)
+	if _, err := os.Stat(path); err == nil {
+		if fi, err := os.Stat(path); err == nil && fi.Size() > 200*1024 { // >200KB
 			return true
 		}
 	}

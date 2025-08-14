@@ -38,12 +38,21 @@ func verifyOperationPostconditions(op EditOperation, instructions string) (bool,
 		if ok, reason := verifyPythonStructure(text, names); !ok {
 			return false, reason
 		}
+		if ok, reason := astVerifyPython(op.FilePath, names); !ok {
+			return false, reason
+		}
 	case ".js", ".ts":
 		if ok, reason := verifyJSStructure(text, names); !ok {
 			return false, reason
 		}
+		if ok, reason := astVerifyJS(op.FilePath, names); !ok {
+			return false, reason
+		}
 	case ".rb":
 		if ok, reason := verifyRubyStructure(text, names); !ok {
+			return false, reason
+		}
+		if ok, reason := astVerifyRuby(op.FilePath, names); !ok {
 			return false, reason
 		}
 	case ".php":

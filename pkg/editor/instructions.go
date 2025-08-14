@@ -1,7 +1,6 @@
 package editor
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +10,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/webcontent"
 	"github.com/alantheprice/ledit/pkg/workspace"
 )
@@ -36,9 +36,9 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 		target := m[1]
 		// Remove from disk if present
 		if err := os.Remove(target); err == nil {
-			fmt.Printf("Deleted file: %s\n", target)
+			ui.Out().Printf("Deleted file: %s\n", target)
 		} else if !os.IsNotExist(err) {
-			fmt.Printf("Warning: could not delete %s: %v\n", target, err)
+			ui.Out().Printf("Warning: could not delete %s: %v\n", target, err)
 		}
 		// Remove from workspace.json if present
 		ws, err := workspace.LoadWorkspaceFile()
@@ -78,8 +78,9 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 	// Updated pattern to capture line ranges: #filename:start-end or #filename:start,end
 	filePattern := regexp.MustCompile(`\s+#(\S+)(?::(\d+)[-,](\d+))?`)
 	matches := filePattern.FindAllStringSubmatch(instructions, -1)
-	fmt.Printf("full instructions: %s\n", instructions)
-	fmt.Println("Found patterns:", matches) // Logging the patterns found
+	ui.Out().Printf("full instructions: %s\n", instructions)
+	ui.Out().Print("Found patterns:")
+	ui.Out().Printf(" %v\n", matches) // Logging the patterns found
 
 	for _, match := range matches {
 		if len(match) < 2 {
@@ -93,28 +94,28 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 		// Parse line range if provided
 		if len(match) >= 4 && match[2] != "" && match[3] != "" {
 			if startLine, err = strconv.Atoi(match[2]); err != nil {
-				fmt.Printf("Warning: Invalid start line number '%s' for %s, using full file\n", match[2], path)
+				ui.Out().Printf("Warning: Invalid start line number '%s' for %s, using full file\n", match[2], path)
 				startLine = 0
 			}
 			if endLine, err = strconv.Atoi(match[3]); err != nil {
-				fmt.Printf("Warning: Invalid end line number '%s' for %s, using full file\n", match[3], path)
+				ui.Out().Printf("Warning: Invalid end line number '%s' for %s, using full file\n", match[3], path)
 				endLine = 0
 			}
 		}
 
-		fmt.Printf("Processing path: %s", path) // Logging the path being processed
+		ui.Out().Printf("Processing path: %s", path) // Logging the path being processed
 		if startLine > 0 && endLine > 0 {
-			fmt.Printf(" (lines %d-%d)", startLine, endLine)
+			ui.Out().Printf(" (lines %d-%d)", startLine, endLine)
 		}
-		fmt.Println()
+		ui.Out().Print("\n")
 
 		if path == "WORKSPACE" || path == "WS" {
-			fmt.Println(prompts.LoadingWorkspaceData())
+			ui.Out().Print(prompts.LoadingWorkspaceData() + "\n")
 			content = workspace.GetWorkspaceContext(instructions, cfg)
 		} else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 			content, err = webcontent.NewWebContentFetcher().FetchWebContent(path, cfg) // Pass cfg here
 			if err != nil {
-				fmt.Print(prompts.URLFetchError(path, err))
+				ui.Out().Print(prompts.URLFetchError(path, err))
 				continue
 			}
 		} else {
@@ -125,7 +126,7 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 				content, err = filesystem.LoadFileContent(path)
 			}
 			if err != nil {
-				fmt.Print(prompts.FileLoadError(path, err))
+				ui.Out().Print(prompts.FileLoadError(path, err))
 				continue
 			}
 		}

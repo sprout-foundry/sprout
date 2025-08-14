@@ -15,7 +15,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts"
-    ui "github.com/alantheprice/ledit/pkg/ui"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 )
 
 // ContextHandler is a function type that defines how context requests are handled.
@@ -102,7 +102,7 @@ func CallLLMWithInteractiveContext(
 	if len(enhancedMessages) > 0 && enhancedMessages[0].Role == "system" {
 		contentStr, _ := enhancedMessages[0].Content.(string)
 		h := sha1.Sum([]byte(contentStr))
-        ui.Out().Printf("[tools] system_prompt_hash: %x\n", h)
+		ui.Out().Printf("[tools] system_prompt_hash: %x\n", h)
 	}
 	maxRetries := 6 // Limit the number of interactive turns
 
@@ -151,6 +151,7 @@ func CallLLMWithInteractiveContext(
 				return true, "cost"
 			}
 		}
+		// Predictive: if no progress in last 2 turns and remaining budget low, force next action to execute_edits/validate
 		return false, ""
 	}
 
@@ -163,7 +164,7 @@ func CallLLMWithInteractiveContext(
 			avgPer1K := (p.InputCostPer1K + p.OutputCostPer1K) / 2.0
 			approxCost = float64(approxTokensUsed) / 1000.0 * avgPer1K
 		}
-        ui.Out().Printf("[tools] summary: turns=%d tools=%d blocks=%d cache_hits=%d approx_tokens=%d approx_cost=%.5f\n",
+		ui.Out().Printf("[tools] summary: turns=%d tools=%d blocks=%d cache_hits=%d approx_tokens=%d approx_cost=%.5f\n",
 			len(turnDurations),
 			func() int {
 				c := 0
@@ -193,7 +194,7 @@ func CallLLMWithInteractiveContext(
 
 	for i := 0; i < maxRetries; i++ {
 		turnStart := time.Now()
-        ui.Out().Printf("[tools] turn %d/%d\n", i+1, maxRetries)
+		ui.Out().Printf("[tools] turn %d/%d\n", i+1, maxRetries)
 		// Call the main LLM response function (with simple backoff on transient/provider errors)
 		var response string
 		var err error
@@ -216,7 +217,7 @@ func CallLLMWithInteractiveContext(
 			printSummary()
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
-        ui.Out().Print("[tools] model returned a response\n")
+		ui.Out().Print("[tools] model returned a response\n")
 
 		// Update token approximation from response length
 		approxTokensUsed = (usedBudgetChars + len(response)) / 4
@@ -234,7 +235,7 @@ func CallLLMWithInteractiveContext(
 				toolCalls, err = extractToolCallsFromResponse(response)
 				if err != nil {
 					// Log the response that failed to parse for debugging
-                    ui.Out().Printf("Failed to parse tool calls from response (length %d chars): %.100s...\n", len(response), response)
+					ui.Out().Printf("Failed to parse tool calls from response (length %d chars): %.100s...\n", len(response), response)
 					return "", fmt.Errorf("failed to parse tool calls: %w", err)
 				}
 			}
@@ -301,7 +302,7 @@ func CallLLMWithInteractiveContext(
 					continue
 				}
 				for _, toolCall := range toolCalls {
-                    ui.Out().Printf("[tools] executing %s\n", toolCall.Function.Name)
+					ui.Out().Printf("[tools] executing %s\n", toolCall.Function.Name)
 					// Pre-validate and enforce caps/dedupes
 					var args map[string]interface{}
 					_ = json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
@@ -785,8 +786,8 @@ func executeBasicToolCall(toolCall ToolCall, cfg *config.Config) (string, error)
 			if cfg.SkipPrompt {
 				return "User interaction skipped in non-interactive mode", nil
 			}
-            ui.Out().Printf("\n🤖 Question: %s\n", question)
-            ui.Out().Print("Your answer: ")
+			ui.Out().Printf("\n🤖 Question: %s\n", question)
+			ui.Out().Print("Your answer: ")
 			reader := bufio.NewReader(os.Stdin)
 			answer, err := reader.ReadString('\n')
 			if err != nil {

@@ -213,3 +213,37 @@ func TestEnrichStepWithToolContext_GatedOff_NoChanges(t *testing.T) {
 		t.Fatalf("unexpected enrichment when tools disabled: web_search_results present")
 	}
 }
+
+func TestShouldUseLLMToolsFlag(t *testing.T) {
+	cases := []struct {
+		val  string
+		want bool
+	}{
+		{"true", true}, {"TRUE", true}, {"enabled", true}, {"1", true},
+		{"false", false}, {"", false}, {"no", false},
+	}
+	for _, c := range cases {
+		step := &types.OrchestrationStep{Tools: map[string]string{"llm_tools": c.val}}
+		got := shouldUseLLMTools(step)
+		if got != c.want {
+			t.Fatalf("llm_tools=%q want %v got %v", c.val, c.want, got)
+		}
+	}
+}
+
+func TestEnrichStepWithToolContext_ReadFileAndShell(t *testing.T) {
+	o := &MultiAgentOrchestrator{config: &config.Config{CodeToolsEnabled: true}, logger: utils.GetLogger(true)}
+	step := &types.OrchestrationStep{
+		Input: map[string]string{
+			"read_file": "/etc/hosts",
+			"run_shell": "echo hello",
+		},
+	}
+	o.enrichStepWithToolContext(step)
+	if _, ok := step.Input["read_file_content"]; !ok {
+		t.Fatalf("expected read_file_content to be populated")
+	}
+	if out, ok := step.Input["shell_command_output"]; !ok || !strings.Contains(out, "hello") {
+		t.Fatalf("expected shell_command_output to contain 'hello', got %q", out)
+	}
+}

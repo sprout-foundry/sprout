@@ -19,6 +19,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/orchestration/types"
+	"github.com/alantheprice/ledit/pkg/prompts"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -419,6 +420,14 @@ func (o *MultiAgentOrchestrator) executeStep(step *types.OrchestrationStep) erro
 	// Prepare the agent's task
 	task := o.buildAgentTask(step)
 
+	// If tool-assisted LLM calls are enabled, optionally enrich via a tool call round-trip
+	if o.config != nil && o.config.CodeToolsEnabled && shouldUseLLMTools(step) {
+		if enhanced, err := o.toolAssistTask(task); err == nil && strings.TrimSpace(enhanced) != "" {
+			task = enhanced
+			o.logger.LogProcessStep("🛠️ Applied tool-assisted analysis to task input")
+		}
+	}
+
 	// Execute the agent
 	result, err := o.runAgent(agentRunner, task)
 
@@ -446,6 +455,34 @@ func (o *MultiAgentOrchestrator) executeStep(step *types.OrchestrationStep) erro
 	o.updateAgentStatus(step.AgentID, "completed", "", 100)
 
 	return nil
+}
+
+// shouldUseLLMTools determines if tool-calling path should be attempted for this step
+func shouldUseLLMTools(step *types.OrchestrationStep) bool {
+	if step == nil {
+		return false
+	}
+	if step.Tools == nil {
+		return false
+	}
+	v := strings.TrimSpace(step.Tools["llm_tools"])
+	return strings.EqualFold(v, "true") || strings.EqualFold(v, "enabled") || v == "1"
+}
+
+// toolAssistTask performs an LLM round with tool-call support to refine the task text
+func (o *MultiAgentOrchestrator) toolAssistTask(task string) (string, error) {
+	model := o.config.OrchestrationModel
+	if strings.TrimSpace(model) == "" {
+		model = o.config.EditingModel
+	}
+	sys := "You are refining an orchestration step task. If tools are helpful, call them. Return the improved task text only."
+	msgs := []prompts.Message{{Role: "user", Content: task}}
+	ctxTimeout := 30 * time.Second
+	refined, err := CallLLMWithToolSupport(model, msgs, sys, o.config, ctxTimeout)
+	if err != nil {
+		return "", err
+	}
+	return refined, nil
 }
 
 // collectChangedFilesSince inspects the change tracker to identify files modified after the given time.
@@ -666,6 +703,30 @@ func (o *MultiAgentOrchestrator) enrichStepWithToolContext(step *types.Orchestra
 		if res, err := te.executeWebSearch(map[string]interface{}{"query": q}); err == nil {
 			step.Input["web_search_results"] = res
 			o.logger.LogProcessStep("🌐 Added web search results to step input")
+		}
+	}
+
+	// Read file content
+	if p := firstNonEmpty(step.Input["read_file"], opt(step.Tools, "read_file")); strings.TrimSpace(p) != "" {
+		if res, err := te.executeReadFile(map[string]interface{}{"file_path": p}); err == nil {
+			step.Input["read_file_content"] = res
+			o.logger.LogProcessStep("📄 Added read_file content to step input")
+		}
+	}
+
+	// Run shell command (use with care)
+	if cmd := firstNonEmpty(step.Input["run_shell"], opt(step.Tools, "run_shell")); strings.TrimSpace(cmd) != "" {
+		if res, err := te.executeShellCommand(map[string]interface{}{"command": cmd}); err == nil {
+			step.Input["shell_command_output"] = res
+			o.logger.LogProcessStep("🔧 Added shell command output to step input")
+		}
+	}
+
+	// Ask user (respects non-interactive mode)
+	if q := firstNonEmpty(step.Input["ask_user"], opt(step.Tools, "ask_user")); strings.TrimSpace(q) != "" {
+		if res, err := te.executeAskUser(map[string]interface{}{"question": q}); err == nil {
+			step.Input["ask_user_response"] = res
+			o.logger.LogProcessStep("🙋 Added ask_user response to step input")
 		}
 	}
 }

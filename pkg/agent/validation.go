@@ -28,6 +28,7 @@ func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent
 	// Phase: Determine validation strategy
 	strategyStartTime := time.Now()
 	logger.Logf("DEBUG: Determining validation strategy...")
+	// Prefer deterministic strategy based on workspace signals; fall back to LLM when unknown
 	validationStrategy, strategyTokens, err := determineValidationStrategy(intentAnalysis, cfg, logger)
 	strategyDuration := time.Since(strategyStartTime)
 
@@ -398,24 +399,88 @@ func guessPackageName(path string) string {
 func getBasicValidationStrategy(intentAnalysis *IntentAnalysis, logger *utils.Logger) *ValidationStrategy {
 	logger.LogProcessStep("🔍 Using basic validation strategy...")
 
-	return &ValidationStrategy{
-		ProjectType: "go",
-		Steps: []ValidationStep{
-			{
-				Type:        "build",
-				Command:     "go build ./...",
-				Description: "Build the project to check for compilation errors",
-				Required:    true,
+	// Heuristic project detection
+	project := detectProjectType()
+	switch project {
+	case "node":
+		return &ValidationStrategy{ProjectType: "node", Steps: []ValidationStep{
+			{Type: "build", Command: "npm -s run -q build || tsc -p .", Description: "Type-check/build the project", Required: false},
+			{Type: "lint", Command: "npx -y eslint . -f unix || true", Description: "Lint source files", Required: false},
+			{Type: "test", Command: "npm -s test -w 2 --silent || jest -w 2 || true", Description: "Run unit tests (if present)", Required: false},
+		}, Context: "Node.js project validation"}
+	case "python":
+		return &ValidationStrategy{ProjectType: "python", Steps: []ValidationStep{
+			{Type: "lint", Command: "ruff . || true", Description: "Lint Python", Required: false},
+			{Type: "syntax", Command: "python -m py_compile $(git ls-files '*.py') || true", Description: "Syntax check", Required: false},
+			{Type: "test", Command: "pytest -q || true", Description: "Run pytest if present", Required: false},
+		}, Context: "Python project validation"}
+	case "rust":
+		return &ValidationStrategy{ProjectType: "rust", Steps: []ValidationStep{
+			{Type: "build", Command: "cargo check -q", Description: "Type/check Rust project", Required: true},
+			{Type: "test", Command: "cargo test -q || true", Description: "Run Rust tests", Required: false},
+		}, Context: "Rust project validation"}
+	case "java":
+		return &ValidationStrategy{ProjectType: "java", Steps: []ValidationStep{
+			{Type: "build", Command: "mvn -q -DskipITs test || ./gradlew test --quiet || true", Description: "Compile and unit test", Required: false},
+		}, Context: "Java project validation"}
+	case "php":
+		return &ValidationStrategy{ProjectType: "php", Steps: []ValidationStep{
+			{Type: "syntax", Command: "php -l $(git ls-files '*.php') || true", Description: "PHP syntax check", Required: false},
+			{Type: "test", Command: "phpunit --colors=never || true", Description: "Run PHPUnit if present", Required: false},
+		}, Context: "PHP project validation"}
+	case "ruby":
+		return &ValidationStrategy{ProjectType: "ruby", Steps: []ValidationStep{
+			{Type: "lint", Command: "rubocop -f quiet || true", Description: "Lint Ruby files", Required: false},
+			{Type: "test", Command: "rspec --format progress || true", Description: "Run RSpec if present", Required: false},
+		}, Context: "Ruby project validation"}
+	default:
+		return &ValidationStrategy{
+			ProjectType: "go",
+			Steps: []ValidationStep{
+				{Type: "build", Command: "go build ./...", Description: "Build the project to check for compilation errors", Required: true},
+				{Type: "test", Command: "go test ./...", Description: "Run tests to ensure functionality", Required: false},
 			},
-			{
-				Type:        "test",
-				Command:     "go test ./...",
-				Description: "Run tests to ensure functionality",
-				Required:    false,
-			},
-		},
-		Context: "Basic Go project validation strategy",
+			Context: "Basic Go project validation strategy",
+		}
 	}
+}
+
+// detectProjectType uses simple file presence heuristics
+func detectProjectType() string {
+	// Node
+	if _, err := os.Stat("package.json"); err == nil {
+		return "node"
+	}
+	// Python
+	if _, err := os.Stat("pyproject.toml"); err == nil {
+		return "python"
+	}
+	if _, err := os.Stat("requirements.txt"); err == nil {
+		return "python"
+	}
+	// Rust
+	if _, err := os.Stat("Cargo.toml"); err == nil {
+		return "rust"
+	}
+	// Java
+	if _, err := os.Stat("pom.xml"); err == nil {
+		return "java"
+	}
+	if _, err := os.Stat("build.gradle"); err == nil {
+		return "java"
+	}
+	if _, err := os.Stat("build.gradle.kts"); err == nil {
+		return "java"
+	}
+	// PHP
+	if _, err := os.Stat("composer.json"); err == nil {
+		return "php"
+	}
+	// Ruby
+	if _, err := os.Stat("Gemfile"); err == nil {
+		return "ruby"
+	}
+	return "go"
 }
 
 // runValidationStep runs a single validation step

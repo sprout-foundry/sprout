@@ -28,6 +28,28 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 		Logger:             logger,
 	}
 
+	// Resume support: if a prior state exists, resume in skip-prompt mode automatically
+	if HasSavedAgentState() {
+		if cfg.SkipPrompt {
+			if st, err := LoadAgentState(); err == nil {
+				logger.LogProcessStep("🔁 Resuming prior agent state from .ledit/run_state.json")
+				st.applyTo(context)
+			} else {
+				logger.LogProcessStep("⚠️ Failed to load prior agent state; starting fresh")
+			}
+		} else {
+			// Interactive: ask user
+			if logger.AskForConfirmation("Resume prior agent run from .ledit/run_state.json?", true, false) {
+				if st, err := LoadAgentState(); err == nil {
+					logger.LogProcessStep("🔁 Resuming prior agent state from .ledit/run_state.json")
+					st.applyTo(context)
+				} else {
+					logger.LogProcessStep("⚠️ Failed to load prior agent state; starting fresh")
+				}
+			}
+		}
+	}
+
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: runOptimizedAgent started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
@@ -142,11 +164,13 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 
 		if context.IsCompleted {
 			logger.LogProcessStep("✅ Agent determined task is completed successfully")
+			_ = ClearAgentState()
 			break
 		}
 		if evaluation.Status == "completed" || evaluation.NextAction == "completed" {
 			context.Logger.LogProcessStep("✅ Agent determined task is completed successfully")
 			context.IsCompleted = true
+			_ = ClearAgentState()
 			break
 		}
 
@@ -156,6 +180,11 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 		if context.IterationCount == context.MaxIterations {
 			logger.LogProcessStep("⚠️ Maximum iterations reached, completing execution")
 			break
+		}
+
+		// Persist resumable state each iteration
+		if err := SaveAgentState(context); err != nil {
+			logger.LogProcessStep("⚠️ Failed to save agent run state: " + err.Error())
 		}
 	}
 

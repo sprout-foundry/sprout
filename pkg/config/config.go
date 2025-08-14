@@ -58,15 +58,16 @@ type Config struct {
 	UseSearchGrounding       bool                 `json:"-"`                          // Command-scoped flag to enable search grounding
 	CodeToolsEnabled         bool                 `json:"-"`                          // Allow tool-calls in code flow when true
 	// New toggles
-	PreapplyReview    bool   `json:"preapply_review"`
-	DryRun            bool   `json:"dry_run"`
-	JsonLogs          bool   `json:"json_logs"`
-	HealthChecks      bool   `json:"health_checks"`
-	StagedEdits       bool   `json:"staged_edits"`
-	AutoGenerateTests bool   `json:"auto_generate_tests"`
-	TelemetryEnabled  bool   `json:"telemetry_enabled"`
-	TelemetryFile     string `json:"telemetry_file"`
-	PolicyVariant     string `json:"policy_variant"`
+	PreapplyReview    bool     `json:"preapply_review"`
+	DryRun            bool     `json:"dry_run"`
+	JsonLogs          bool     `json:"json_logs"`
+	HealthChecks      bool     `json:"health_checks"`
+	StagedEdits       bool     `json:"staged_edits"`
+	AutoGenerateTests bool     `json:"auto_generate_tests"`
+	ShellAllowlist    []string `json:"shell_allowlist"`
+	TelemetryEnabled  bool     `json:"telemetry_enabled"`
+	TelemetryFile     string   `json:"telemetry_file"`
+	PolicyVariant     string   `json:"policy_variant"`
 	// Budgets and limits
 	MaxRunSeconds    int     `json:"max_run_seconds"`
 	MaxRunTokens     int     `json:"max_run_tokens"`
@@ -222,6 +223,22 @@ func (cfg *Config) setDefaultValues() {
 	}
 	// Default off for auto test generation
 	// cfg.AutoGenerateTests remains false unless explicitly enabled
+
+	// Default shell allowlist (safe, common cleanups)
+	if len(cfg.ShellAllowlist) == 0 {
+		cfg.ShellAllowlist = []string{
+			"rm -rf node_modules",
+			"rm -fr node_modules",
+			"rm -rf ./node_modules",
+			"rm -fr ./node_modules",
+			"rm -rf node_modules/",
+			"rm -fr node_modules/",
+			"rm -rf ./node_modules/",
+			"rm -fr ./node_modules/",
+			"rm -f package-lock.json",
+			"rm -f ./package-lock.json",
+		}
+	}
 }
 
 func loadConfig(filePath string) (*Config, error) {

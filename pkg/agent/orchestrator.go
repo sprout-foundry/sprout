@@ -102,6 +102,9 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 			})
 		}
 
+		// AB hook: allow switching small behaviors based on PolicyVariant (placeholder for future)
+		_ = context.Config.PolicyVariant
+
 		switch evaluation.NextAction {
 		case "analyze_intent":
 			intentAnalysis, tokens, e := analyzeIntentWithMinimalContext(context.UserIntent, context.Config, context.Logger)

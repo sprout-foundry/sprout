@@ -69,6 +69,15 @@ func processPartialEdit(filePath, targetInstructions string, cfg *config.Config,
 
 	// Apply the partial edit to the original file
 	updatedContent := applyPartialEdit(string(originalContent), updatedSection, sectionStart, sectionEnd)
+	// Three-way merge guard: rebase the section change onto current on-disk content
+	currentBytes, _ := os.ReadFile(filePath)
+	current := string(currentBytes)
+	merged, hadConflicts, mErr := ApplyThreeWayMerge(string(originalContent), current, updatedContent)
+	if mErr == nil && merged != "" {
+		updatedContent = merged
+	} else if hadConflicts {
+		return "", fmt.Errorf("merge conflict applying partial edit to %s: %v", filePath, mErr)
+	}
 
 	// Create a revision tracking system like ProcessCodeGeneration
 	requestHash := utils.GenerateRequestHash(partialInstructions)

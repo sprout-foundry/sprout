@@ -12,6 +12,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 )
 
 // callOpenAICompatibleStream calls OpenAI-compatible APIs and returns token usage information
@@ -29,7 +30,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 		"stream": true,
 	})
 	if err != nil {
-		fmt.Print(prompts.RequestMarshalError(err))
+		ui.Out().Print(prompts.RequestMarshalError(err))
 		return nil, err
 	}
 
@@ -37,7 +38,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
-		fmt.Print(prompts.RequestCreationError(err))
+		ui.Out().Print(prompts.RequestCreationError(err))
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -47,8 +48,8 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 	// Debug logging removed for cleaner output
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("DEBUG: HTTP request failed: %v\n", err)
-		fmt.Print(prompts.HTTPRequestError(err))
+		ui.Out().Printf("DEBUG: HTTP request failed: %v\n", err)
+		ui.Out().Print(prompts.HTTPRequestError(err))
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -57,7 +58,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		// Debug logging removed for cleaner output
-		fmt.Print(prompts.APIError(string(body), resp.StatusCode))
+		ui.Out().Print(prompts.APIError(string(body), resp.StatusCode))
 		return nil, fmt.Errorf(prompts.APIError(string(body), resp.StatusCode))
 	}
 
@@ -97,7 +98,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Print(prompts.ResponseBodyError(err))
+		ui.Out().Print(prompts.ResponseBodyError(err))
 		return usage, err
 	}
 

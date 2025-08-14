@@ -136,6 +136,10 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 			err = executeCreatePlan(context)
 		case "execute_edits":
 			err = executeEditOperations(context)
+			// Validate that operations were recorded; otherwise, evaluator must not advance
+			if err == nil && (context.CurrentPlan == nil || len(context.CurrentPlan.EditOperations) == 0) {
+				return fmt.Errorf("executor JSON/plan invariant violation: no operations available post-execution")
+			}
 		case "run_command":
 			err = executeShellCommands(context, evaluation.Commands)
 		case "validate":

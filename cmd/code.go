@@ -1,13 +1,13 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/spf13/cobra"
@@ -43,7 +43,7 @@ When using the --image flag, ensure your model supports vision input. Vision-cap
 
 		// Check if instructions are provided
 		if instructions == "" {
-			fmt.Println(prompts.InstructionsRequired())
+			ui.Out().Print(prompts.InstructionsRequired() + "\n")
 			cmd.Help() // Print help for the code command
 			return     // Exit the command execution
 		}
@@ -61,7 +61,7 @@ When using the --image flag, ensure your model supports vision input. Vision-cap
 		cfg.UseSearchGrounding = useSearchGrounding
 		cfg.CodeToolsEnabled = enableCodeTools
 
-		fmt.Println(prompts.ProcessingCodeGeneration())
+		ui.Out().Print(prompts.ProcessingCodeGeneration() + "\n")
 		startTime := time.Now()
 
 		_, err = editor.ProcessCodeGeneration(filename, instructions, cfg, imagePath)
@@ -69,7 +69,7 @@ When using the --image flag, ensure your model supports vision input. Vision-cap
 			log.Fatal(prompts.CodeGenerationError(err))
 		}
 		duration := time.Since(startTime)
-		fmt.Print(prompts.CodeGenerationFinished(duration))
+		ui.Out().Print(prompts.CodeGenerationFinished(duration))
 	},
 }
 

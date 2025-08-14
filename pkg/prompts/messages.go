@@ -1,10 +1,10 @@
 package prompts
 
 import (
-	"fmt"
-	"time"
+    "fmt"
+    "time"
 
-	"github.com/fatih/color" // Import the color package
+    "github.com/fatih/color"
 )
 
 // --- Config Prompts ---

@@ -148,16 +148,41 @@ type AddUnitTestsPlaybook struct{}
 func (p AddUnitTestsPlaybook) Name() string { return "add_tests" }
 func (p AddUnitTestsPlaybook) Matches(userIntent string, category string) bool {
 	lo := strings.ToLower(userIntent)
-	return category == "test" || strings.Contains(lo, "add test") || strings.Contains(lo, "write test") || strings.Contains(lo, "increase coverage")
+	if category == "test" {
+		return true
+	}
+	phrases := []string{"add test", "write test", "increase coverage", "tests for", "unit test", "integration test"}
+	for _, ph := range phrases {
+		if strings.Contains(lo, ph) {
+			return true
+		}
+	}
+	// e.g., mentions of TestFoo or _test.go
+	if regexp.MustCompile(`\bTest[A-Za-z0-9_]+\b`).FindString(lo) != "" || strings.Contains(lo, "_test.go") {
+		return true
+	}
+	return false
 }
 func (p AddUnitTestsPlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Create concise, reliable unit tests that capture expected behavior."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+	candidates := make([]string, 0, len(estimatedFiles)+64)
+	candidates = append(candidates, estimatedFiles...)
+	if len(candidates) == 0 {
+		// Prefer adding tests where none exist yet
+		candidates = append(candidates, findSourceFilesWithoutTests(60)...)
+		// Also include files explicitly mentioned by path or symbol
+		explicit := extractFilePathsFromIntent(userIntent, 10)
+		candidates = append(candidates, explicit...)
+		if sym := parseSymbolNameFromIntent(userIntent); sym != "" {
+			candidates = append(candidates, findFilesWithSymbol(sym)...)
+		}
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+	for _, f := range plan.Files {
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Add or extend unit tests",
-			Instructions:       "Add tests for critical paths and edge cases. Keep them deterministic and minimal.",
+			Instructions:       "Add tests for critical and edge cases. Keep tests deterministic and focused. Prefer table-driven tests where suitable.",
 			ScopeJustification: "Improves robustness via testing.",
 		})
 	}
@@ -567,16 +592,27 @@ type CIUpdatePlaybook struct{}
 func (p CIUpdatePlaybook) Name() string { return "ci_update" }
 func (p CIUpdatePlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "ci") || strings.Contains(lo, "pipeline") || strings.Contains(lo, "workflow")
+	phrases := []string{"ci", "pipeline", "workflow", "github actions", "actions", "gha", "travis", "circleci", "jenkins"}
+	for _, ph := range phrases {
+		if strings.Contains(lo, ph) {
+			return true
+		}
+	}
+	return false
 }
 func (p CIUpdatePlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Adjust CI workflows for reliability, speed, or policy changes."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+	candidates := make([]string, 0, len(estimatedFiles)+32)
+	candidates = append(candidates, estimatedFiles...)
+	if len(candidates) == 0 {
+		candidates = append(candidates, listCIConfigFiles(40)...)
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+	for _, f := range plan.Files {
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Update CI workflow step(s)",
-			Instructions:       "Keep changes minimal and documented. Ensure compatibility with current project setup.",
+			Instructions:       "Apply minimal, well-documented changes to CI steps (caching, setup-go, matrix, permissions). Keep compatibility with the project.",
 			ScopeJustification: "Improves delivery pipeline.",
 		})
 	}
@@ -589,16 +625,27 @@ type CodeCommentSyncPlaybook struct{}
 func (p CodeCommentSyncPlaybook) Name() string { return "code_comment_sync" }
 func (p CodeCommentSyncPlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "comment only") || strings.Contains(lo, "update comments") || strings.Contains(lo, "comment clarity")
+	phrases := []string{"comment only", "update comments", "comment clarity", "docstring", "docs in code", "outdated comments", "clarify comments"}
+	for _, ph := range phrases {
+		if strings.Contains(lo, ph) {
+			return true
+		}
+	}
+	return false
 }
 func (p CodeCommentSyncPlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Align code comments with actual behavior; no logic changes."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+	candidates := make([]string, 0, len(estimatedFiles)+50)
+	candidates = append(candidates, estimatedFiles...)
+	if len(candidates) == 0 {
+		candidates = append(candidates, findCommentHeavyFiles(40)...)
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+	for _, f := range plan.Files {
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Update comments for accuracy",
-			Instructions:       "Review code and ensure comments are accurate and helpful. Avoid editing logic.",
+			Instructions:       "Review code and ensure comments accurately reflect behavior and constraints. Do not change logic. Prefer concise, high-signal comments.",
 			ScopeJustification: "Improves clarity with zero behavior change.",
 		})
 	}
@@ -692,17 +739,46 @@ type TypesMigrationPlaybook struct{}
 func (p TypesMigrationPlaybook) Name() string { return "types_migration" }
 func (p TypesMigrationPlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "migrate type") || strings.Contains(lo, "replace type") || strings.Contains(lo, "interface change")
+	phrases := []string{"migrate type", "replace type", "interface change", "rename struct", "rename type", "rename interface", "field rename"}
+	for _, ph := range phrases {
+		if strings.Contains(lo, ph) {
+			return true
+		}
+	}
+	if regexp.MustCompile(`(?i)rename\s+[A-Za-z0-9_]+\s+to\s+[A-Za-z0-9_]+`).MatchString(lo) ||
+		regexp.MustCompile(`\b[A-Za-z0-9_]+\s*->\s*[A-Za-z0-9_]+`).MatchString(lo) {
+		return true
+	}
+	return false
 }
 func (p TypesMigrationPlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Mechanically migrate to new types or interfaces across the codebase."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+	oldType, newType := parseTypeRenameFromIntent(userIntent)
+	oldField, newField := parseFieldRenameFromIntent(userIntent)
+
+	candidates := make([]string, 0, len(estimatedFiles)+32)
+	candidates = append(candidates, estimatedFiles...)
+	if oldType != "" {
+		candidates = append(candidates, findFilesWithSymbol(oldType)...)
+	}
+	if oldField != "" {
+		candidates = append(candidates, findFilesWithSymbol(oldField)...)
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+
+	for _, f := range plan.Files {
+		instr := "Adjust type names/usages and imports. Keep behavior unchanged."
+		if oldType != "" && newType != "" {
+			instr = "Rename type '" + oldType + "' to '" + newType + "' and update references, constructors, and method receivers if applicable."
+		}
+		if oldField != "" && newField != "" {
+			instr += " Also rename field '" + oldField + "' to '" + newField + "' in struct literals and selectors."
+		}
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Update references for new types/interfaces",
-			Instructions:       "Adjust type names/usages and imports. Keep behavior unchanged.",
-			ScopeJustification: "Ensures consistency after type migration.",
+			Instructions:       instr,
+			ScopeJustification: "Ensures consistency after type or field migration.",
 		})
 	}
 	return plan
@@ -1154,4 +1230,176 @@ func findSecurityRiskCandidates() []string {
 		return nil
 	})
 	return dedupeStrings(results)
+}
+
+// Test/CI helpers
+func findSourceFilesWithoutTests(limit int) []string {
+	var results []string
+	hasTest := map[string]bool{}
+	// First record test files
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, "_test.go") {
+			base := strings.TrimSuffix(filepath.ToSlash(path), "_test.go") + ".go"
+			hasTest[base] = true
+		}
+		return nil
+	})
+	// Now find source files without tests
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
+			p := filepath.ToSlash(path)
+			if !hasTest[p] {
+				results = append(results, p)
+				if len(results) >= limit {
+					return errors.New("limit")
+				}
+			}
+		}
+		return nil
+	})
+	return dedupeStrings(results)
+}
+
+func listCIConfigFiles(limit int) []string {
+	var res []string
+	candidates := []string{
+		".github/workflows", ".github/workflows/ci.yml", ".github/workflows/test.yml",
+		".travis.yml", ".circleci/config.yml", "Jenkinsfile", "azure-pipelines.yml",
+	}
+	for _, c := range candidates {
+		if st, err := os.Stat(c); err == nil {
+			if st.IsDir() {
+				// List yml files inside
+				_ = filepath.WalkDir(c, func(path string, d fs.DirEntry, err error) error {
+					if err != nil {
+						return nil
+					}
+					if d.IsDir() {
+						return nil
+					}
+					if strings.HasSuffix(path, ".yml") || strings.HasSuffix(path, ".yaml") {
+						res = append(res, filepath.ToSlash(path))
+						if len(res) >= limit {
+							return errors.New("limit")
+						}
+					}
+					return nil
+				})
+			} else {
+				res = append(res, filepath.ToSlash(c))
+			}
+		}
+		if len(res) >= limit {
+			break
+		}
+	}
+	return dedupeStrings(res)
+}
+
+// Type/field rename parsing
+func parseTypeRenameFromIntent(intent string) (oldType, newType string) {
+	re := regexp.MustCompile(`(?i)(?:type|struct|interface)?\s*rename\s+([A-Za-z_][A-Za-z0-9_]*)\s+to\s+([A-Za-z_][A-Za-z0-9_]*)`)
+	if m := re.FindStringSubmatch(intent); len(m) == 3 {
+		return m[1], m[2]
+	}
+	re2 := regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)\s*->\s*([A-Za-z_][A-Za-z0-9_]*)\b`)
+	if m := re2.FindStringSubmatch(intent); len(m) == 3 {
+		return m[1], m[2]
+	}
+	return "", ""
+}
+
+func parseFieldRenameFromIntent(intent string) (oldField, newField string) {
+	re := regexp.MustCompile(`(?i)field\s+([A-Za-z_][A-Za-z0-9_]*)\s+to\s+([A-Za-z_][A-Za-z0-9_]*)`)
+	if m := re.FindStringSubmatch(intent); len(m) == 3 {
+		return m[1], m[2]
+	}
+	re2 := regexp.MustCompile(`(?i)rename\s+field\s+([A-Za-z_][A-Za-z0-9_]*)\s+to\s+([A-Za-z_][A-Za-z0-9_]*)`)
+	if m := re2.FindStringSubmatch(intent); len(m) == 3 {
+		return m[1], m[2]
+	}
+	return "", ""
+}
+
+// Find files with dense comments to sync
+func findCommentHeavyFiles(limit int) []string {
+	type entry struct {
+		p     string
+		ratio float64
+	}
+	var arr []entry
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		lines := strings.Split(string(b), "\n")
+		if len(lines) == 0 {
+			return nil
+		}
+		comment := 0
+		code := 0
+		for _, ln := range lines {
+			t := strings.TrimSpace(ln)
+			if t == "" {
+				continue
+			}
+			if strings.HasPrefix(t, "//") || strings.HasPrefix(t, "/*") || strings.HasPrefix(t, "* ") {
+				comment++
+			} else {
+				code++
+			}
+		}
+		total := comment + code
+		if total == 0 {
+			return nil
+		}
+		ratio := float64(comment) / float64(total)
+		if ratio >= 0.20 { // at least 20% comments
+			arr = append(arr, entry{p: filepath.ToSlash(path), ratio: ratio})
+		}
+		return nil
+	})
+	sort.Slice(arr, func(i, j int) bool { return arr[i].ratio > arr[j].ratio })
+	if len(arr) > limit {
+		arr = arr[:limit]
+	}
+	res := make([]string, 0, len(arr))
+	for _, e := range arr {
+		res = append(res, e.p)
+	}
+	return res
 }

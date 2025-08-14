@@ -136,6 +136,11 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	var err error
 	var tokenUsage *TokenUsage
 
+	// Inform UI of the active model so the header can render it persistently
+	if ui.Enabled() && strings.TrimSpace(modelName) != "" {
+		ui.PublishModel(modelName)
+	}
+
 	parts := strings.SplitN(modelName, ":", 3) // Changed from 2 to 3
 	provider := parts[0]
 	model := ""
@@ -284,6 +289,13 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		return tokenUsage, err
 	}
 	recordSuccess(provider)
+
+	// After a successful call, publish token/cost aggregates so the TUI header can persistently show them
+	if ui.Enabled() && tokenUsage != nil {
+		cost := CalculateCost(*tokenUsage, modelName)
+		// Use a ProgressSnapshotEvent with only totals to update the header
+		ui.Publish(ui.ProgressSnapshotEvent{Completed: 0, Total: 0, Rows: nil, Time: time.Now(), TotalTokens: tokenUsage.TotalTokens, TotalCost: cost, BaseModel: modelName})
+	}
 
 	return tokenUsage, nil
 }

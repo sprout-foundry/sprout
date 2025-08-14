@@ -115,8 +115,13 @@ Respond with STRICT JSON using this schema:
 
 	cleanedResponse, err := utils.ExtractJSONFromLLMResponse(response)
 	if err != nil {
-		logger.LogError(fmt.Errorf("failed to extract JSON from orchestration response: %w", err))
-		return nil, totalTokens, fmt.Errorf("failed to extract JSON from orchestration response: %w", err)
+		// Final tolerance: try a simpler cleaner that strips everything before first {/[ and after last }/]
+		if alt, altErr := utils.CleanAndValidateJSONResponse(response, []string{"edit_operations"}); altErr == nil && strings.Contains(alt, "edit_operations") {
+			cleanedResponse = alt
+		} else {
+			logger.LogError(fmt.Errorf("failed to extract JSON from orchestration response: %w", err))
+			return nil, totalTokens, fmt.Errorf("failed to extract JSON from orchestration response: %w", err)
+		}
 	}
 
 	// Parse JSON to EditPlan

@@ -9,6 +9,7 @@ import sys
 from collections import OrderedDict
 from pathlib import Path
 import logging # Import logging module
+import json
 
 """
 This script performs a robust test of the `ledit` workspace functionality.
@@ -102,8 +103,8 @@ Examples:
     )
     parser.add_argument(
         '-m', '--model',
-        default='deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct',
-        help='Specify the model name to use for tests (default: deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct).'
+        default='',
+        help='Specify the model name to use for tests. If omitted, uses `.ledit/config.json` orchestration_model (or editing_model) when available.'
     )
     parser.add_argument(
         '--single',
@@ -130,7 +131,7 @@ Examples:
     # Log parsed arguments for debugging
     logging.debug(f"Parsed arguments: single={args.single}, test_number={args.test_number}, list_tests={args.list_tests}, keep_testing_dir={args.keep_testing_dir}")
 
-    model_name = args.model
+    # model_name will be resolved after locating project_root so we can read .ledit/config.json
     # If -t is provided, implicitly enable single_mode.
     single_mode = args.single or (args.test_number is not None)
     test_number_arg = args.test_number
@@ -147,6 +148,31 @@ Examples:
     
     testing_dir = project_root / 'testing'
     e2e_test_scripts_dir = project_root / 'e2e_test_scripts'
+
+    # Resolve model name: prefer CLI arg; otherwise read orchestration model from .ledit/config.json
+    def resolve_default_model() -> str:
+        candidates = [project_root / '.ledit' / 'config.json', Path.home() / '.ledit' / 'config.json']
+        for p in candidates:
+            try:
+                if p.exists():
+                    with open(p, 'r') as f:
+                        cfg = json.load(f)
+                    # Prefer orchestration_model; fallback to editing_model; final fallback to legacy keys
+                    if isinstance(cfg, dict):
+                        m = (
+                            cfg.get('orchestration_model')
+                            or cfg.get('editing_model')
+                            or cfg.get('SummaryModel')  # unlikely casing variants
+                        )
+                        if m and isinstance(m, str) and m.strip():
+                            return m.strip()
+            except Exception:
+                # Ignore and continue to next candidate
+                pass
+        # Fallback to previous hardcoded default if nothing found
+        return 'deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct'
+
+    model_name = args.model if args.model else resolve_default_model()
 
     # Clean up previous testing artifacts if they exist
     if testing_dir.exists():

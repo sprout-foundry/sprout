@@ -1,13 +1,14 @@
 package filesystem
 
 import (
-	"bufio"
-	"bytes"
-	"fmt"
-	"os"
-	"path/filepath"
-	"unicode/utf16"
-	"unicode/utf8"
+    "bufio"
+    "bytes"
+    "fmt"
+    "os"
+    "path/filepath"
+    "unicode/utf16"
+    "unicode/utf8"
+    "github.com/alantheprice/ledit/pkg/ui"
 )
 
 // SaveFile saves or removes a file with the given content.
@@ -16,7 +17,7 @@ func SaveFile(filename, content string) error {
 	if content == "" {
 		if _, err := os.Stat(filename); err == nil {
 			// File exists, remove it
-			fmt.Printf("🗑️  Removing file: %s\n", filename)
+            ui.Out().Printf("🗑️  Removing file: %s\n", filename)
 			return os.Remove(filename)
 		} else if os.IsNotExist(err) {
 			// File does not exist, nothing to do
@@ -28,7 +29,7 @@ func SaveFile(filename, content string) error {
 	}
 
 	// Notify user about file being written
-	fmt.Printf("💾 Writing file: %s (%d bytes)\n", filename, len(content))
+    ui.Out().Printf("💾 Writing file: %s (%d bytes)\n", filename, len(content))
 
 	// Ensure the directory exists
 	dir := filepath.Dir(filename)
@@ -82,36 +83,36 @@ func SaveFile(filename, content string) error {
 		// As a safety, write raw; caller chose encoding (likely UTF-16 block above)
 	}
 	err := os.WriteFile(filename, normalized, 0644)
-	if err != nil {
-		fmt.Printf("   ❌ Failed to write file: %v\n", err)
-	} else {
-		fmt.Printf("   ✅ File written successfully\n")
-	}
+    if err != nil {
+        ui.Out().Printf("   ❌ Failed to write file: %v\n", err)
+    } else {
+        ui.Out().Printf("   ✅ File written successfully\n")
+    }
 	return err
 }
 
 // ReadFile reads the content of a file.
 func ReadFile(filename string) (string, error) {
-	fmt.Printf("📖 Reading file: %s\n", filename)
+    ui.Out().Printf("📖 Reading file: %s\n", filename)
 
 	// Use buffered reader for potential large files; still load whole file for simplicity
 	f, err := os.Open(filename)
-	if err != nil {
-		fmt.Printf("   ❌ Failed to read file: %v\n", err)
-		return "", fmt.Errorf("could not read file %s: %w", filename, err)
-	}
+    if err != nil {
+        ui.Out().Printf("   ❌ Failed to read file: %v\n", err)
+        return "", fmt.Errorf("could not read file %s: %w", filename, err)
+    }
 	defer f.Close()
 	buf := new(bytes.Buffer)
-	if _, err := bufio.NewReader(f).WriteTo(buf); err != nil {
-		fmt.Printf("   ❌ Failed to read file: %v\n", err)
-		return "", fmt.Errorf("could not read file %s: %w", filename, err)
-	}
+    if _, err := bufio.NewReader(f).WriteTo(buf); err != nil {
+        ui.Out().Printf("   ❌ Failed to read file: %v\n", err)
+        return "", fmt.Errorf("could not read file %s: %w", filename, err)
+    }
 	content := buf.Bytes()
-	if err != nil {
-		fmt.Printf("   ❌ Failed to read file: %v\n", err)
-		return "", fmt.Errorf("could not read file %s: %w", filename, err)
-	}
+    if err != nil {
+        ui.Out().Printf("   ❌ Failed to read file: %v\n", err)
+        return "", fmt.Errorf("could not read file %s: %w", filename, err)
+    }
 
-	fmt.Printf("   ✅ File read successfully (%d bytes)\n", len(content))
+    ui.Out().Printf("   ✅ File read successfully (%d bytes)\n", len(content))
 	return string(content), nil
 }

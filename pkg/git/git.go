@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-    "time"
+	"time"
 )
 
 // GetGitRootDir returns the absolute path to the root directory of the current Git repository.
@@ -78,25 +78,25 @@ func AddAndCommitFile(newFilename, message string) error {
 
 // AddAllAndCommit commits all staged changes with the provided message (non-interactive).
 func AddAllAndCommit(message string, timeoutSeconds int) error {
-    cmd := exec.Command("git", "commit", "-m", message)
-    if timeoutSeconds > 0 {
-        done := make(chan error, 1)
-        go func() { done <- cmd.Run() }()
-        select {
-        case err := <-done:
-            if err != nil {
-                return fmt.Errorf("error committing changes to git: %v", err)
-            }
-        case <-time.After(time.Duration(timeoutSeconds) * time.Second):
-            _ = cmd.Process.Kill()
-            return fmt.Errorf("git commit timed out after %ds", timeoutSeconds)
-        }
-    } else {
-        if err := cmd.Run(); err != nil {
-            return fmt.Errorf("error committing changes to git: %v", err)
-        }
-    }
-    return nil
+	cmd := exec.Command("git", "commit", "-m", message)
+	if timeoutSeconds > 0 {
+		done := make(chan error, 1)
+		go func() { done <- cmd.Run() }()
+		select {
+		case err := <-done:
+			if err != nil {
+				return fmt.Errorf("error committing changes to git: %v", err)
+			}
+		case <-time.After(time.Duration(timeoutSeconds) * time.Second):
+			_ = cmd.Process.Kill()
+			return fmt.Errorf("git commit timed out after %ds", timeoutSeconds)
+		}
+	} else {
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("error committing changes to git: %v", err)
+		}
+	}
+	return nil
 }
 
 // GetGitStatus returns the current branch, number of uncommitted changes, and number of staged changes.
@@ -193,4 +193,52 @@ func GetStagedChanges() (string, error) {
 	}
 
 	return diff, nil
+}
+
+// GetRecentTouchedFiles returns a de-duplicated list of files touched in the last N commits
+func GetRecentTouchedFiles(numCommits int) ([]string, error) {
+	if numCommits <= 0 {
+		numCommits = 5
+	}
+	cmd := exec.Command("git", "log", "-n", fmt.Sprintf("%d", numCommits), "--name-only", "--pretty=format:")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recent files: %v", string(out))
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	seen := map[string]bool{}
+	var files []string
+	for _, ln := range lines {
+		ln = strings.TrimSpace(ln)
+		if ln == "" {
+			continue
+		}
+		if !seen[ln] {
+			seen[ln] = true
+			files = append(files, ln)
+		}
+	}
+	return files, nil
+}
+
+// GetRecentFileLog returns a short summary of recent commits for a file
+func GetRecentFileLog(filePath string, limit int) (string, error) {
+	if limit <= 0 {
+		limit = 3
+	}
+	cmd := exec.Command("git", "log", "-n", fmt.Sprintf("%d", limit), "--pretty=format:%h %ad %an %s", "--date=short", "--", filePath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get file log: %v", string(out))
+	}
+	log := strings.TrimSpace(string(out))
+	if log == "" {
+		return "(no recent commits)", nil
+	}
+	// Limit lines to avoid prompt bloat
+	lines := strings.Split(log, "\n")
+	if len(lines) > limit {
+		lines = lines[:limit]
+	}
+	return strings.Join(lines, "\n"), nil
 }

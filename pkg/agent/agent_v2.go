@@ -11,6 +11,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/embedding"
+	"github.com/alantheprice/ledit/pkg/git"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -106,6 +107,10 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 		msgs := []prompts.Message{{Role: "user", Content: fmt.Sprintf("Goal: %s", userIntent)}}
 		if pre := buildWorkspacePrelude(cfg); pre != "" {
 			msgs = append([]prompts.Message{{Role: "system", Content: pre}}, msgs...)
+		}
+		if br, u, s, err := gitStatusSummary(); err == nil {
+			gitPrelude := fmt.Sprintf("Git: branch=%s staged=%d modified=%d", br, s, u)
+			msgs = append([]prompts.Message{{Role: "system", Content: gitPrelude}}, msgs...)
 		}
 		ch := func(reqs []llm.ContextRequest, cfg *config.Config) (string, error) { return "", nil }
 		logger.LogProcessStep("v2: invoking interactive planner→executor→evaluator loop")
@@ -520,6 +525,15 @@ func buildWorkspacePrelude(cfg *config.Config) string {
 		return ""
 	}
 	return "Workspace context: " + strings.Join(parts, "; ") + ". Prefer using workspace_context/read_file before editing."
+}
+
+// gitStatusSummary returns brief git status for prelude
+func gitStatusSummary() (branch string, uncommitted, staged int, err error) {
+	br, un, st, e := git.GetGitStatus()
+	if e != nil {
+		return "", 0, 0, e
+	}
+	return br, un, st, nil
 }
 
 // discoverLikelyTargetFile uses simple keyword search across workspace to find a likely file to edit

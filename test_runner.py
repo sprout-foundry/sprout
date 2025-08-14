@@ -322,6 +322,14 @@ Examples:
     failure_reasons = {}    # Stores detailed reasons for failed tests
     processes = {}          # Dictionary to track active subprocesses: pid -> {process, name, sanitized_name, start_time, stdout_file, stderr_file, stdout_file_path, stderr_file_path, test_workspace_path}
     
+    # Helper: select model per test when no explicit model was provided
+    def select_model_for_test(test_name: str) -> str:
+        # Agent and Orchestration process tests use DeepSeek V3
+        if test_name.startswith('Agent v2') or test_name.startswith('Process -') or test_name == 'Orchestration Feature':
+            return 'deepinfra:deepseek-ai/DeepSeek-V3-0324'
+        # Everything else uses the previous default
+        return 'deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct'
+
     # Start all selected tests as subprocesses
     for test in selected_tests_for_execution:
         test_name = test['name']
@@ -340,7 +348,9 @@ Examples:
         env['PATH'] = str(project_root) + os.pathsep + env.get('PATH', '')
         logging.debug(f"PATH for {test_name}: {env['PATH']}")
 
-        cmd = f". {test['path'].resolve()} && run_test_logic '{model_name}'"
+        # Choose model per test if not explicitly provided via CLI
+        chosen_model = model_name if model_name else select_model_for_test(test_name)
+        cmd = f". {test['path'].resolve()} && run_test_logic '{chosen_model}'"
         
         # Redirect stdout/stderr to temporary files within the test's workspace
         stdout_file_path = current_test_workspace / f"{sanitized_test_name}.stdout"

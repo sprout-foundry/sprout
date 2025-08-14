@@ -292,6 +292,12 @@ func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext)
 		if opResult != "" {
 			operationResults = append(operationResults, opResult)
 		}
+		// Postconditions: verify expected result heuristically
+		if success {
+			if ok, reason := verifyOperationPostconditions(operation, editInstructions); !ok {
+				context.Logger.LogProcessStep("⚠️ Postcondition check failed: " + reason)
+			}
+		}
 		if !success && err != nil {
 			context.Logger.LogProcessStep(fmt.Sprintf("🚫 Edit %d exhausted all retry attempts", i+1))
 			context.Errors = append(context.Errors, err.Error())

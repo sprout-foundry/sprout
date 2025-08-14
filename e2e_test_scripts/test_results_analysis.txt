@@ -39,4 +39,15 @@ Recommendations (actionable):
 Model considerations:
 - Several failures may be sensitive to model reliability (diff completeness, revision parsing). Re-run with the main orchestration model from `.ledit/config.json` to separate model variance from code issues.
 
+Latest run (per-test model routing: DeepSeek-V3-0324 for Agent/Process/Orchestration; Qwen-32B for others):
+
+- Overall results comparable to prior run: core failures persist in the same areas (Agent v2 discovery, multi-file refactor, process scenarios, orchestration). Deterministic agent v2 tests still pass.
+- Orchestration/Process: advanced farther (created files) but steps frequently failed on plan creation or timed out during validation; state file created as expected.
+- Multi-file refactor: same revision-loop incompleteness (missing combined diffs) → failed.
+- Agent v2 discovery: extra-brace regression not self-corrected → failed after retries.
+- Ollama test: still unreliable due to small local models → failed.
+- Initial workspace creation: flaky this run (failed on manifest content/format); previously passed. Indicates non-determinism in review/revision path.
+
+Actionable next steps remain as in TODO: harden revision loop (fallback micro-edits, trivial syntax auto-fix), make process tests file-based (done), and consider emitting a concise orchestrator summary for assertions.
+
 

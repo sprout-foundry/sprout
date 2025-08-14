@@ -11,6 +11,8 @@ import (
 )
 
 var createExample bool
+var resume bool
+var statePath string
 
 // processCmd represents the process command
 var processCmd = &cobra.Command{
@@ -75,7 +77,7 @@ func runMultiAgentProcess(processFilePath string, logger *utils.Logger) error {
 	}
 
 	// Create and execute the multi-agent orchestrator
-	orchestrator := orchestration.NewMultiAgentOrchestrator(processFile, cfg, logger)
+	orchestrator := orchestration.NewMultiAgentOrchestrator(processFile, cfg, logger, resume, statePath)
 	if err := orchestrator.Execute(); err != nil {
 		logger.LogProcessStep(fmt.Sprintf("Multi-agent orchestration failed: %v", err))
 		return fmt.Errorf("multi-agent orchestration failed: %w", err)
@@ -104,5 +106,7 @@ func init() {
 	processCmd.Flags().StringVarP(&model, "model", "m", "", "Model to use for orchestration and editing.")
 	processCmd.Flags().BoolVar(&skipPrompt, "skip-prompt", false, "Skip the confirmation prompt and proceed with the plan")
 	processCmd.Flags().BoolVar(&createExample, "create-example", false, "Create an example process file instead of executing")
+	processCmd.Flags().BoolVar(&resume, "resume", false, "Resume from a previous orchestration state if compatible")
+	processCmd.Flags().StringVar(&statePath, "state", "", "Path to orchestration state file (default .ledit/orchestration_state.json)")
 	rootCmd.AddCommand(processCmd)
 }

@@ -57,9 +57,9 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 	// Debug logging removed for cleaner output
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		// Debug logging removed for cleaner output
-		ui.Out().Print(prompts.APIError(string(body), resp.StatusCode))
-		return nil, fmt.Errorf(prompts.APIError(string(body), resp.StatusCode))
+		msg := prompts.APIError(string(body), resp.StatusCode)
+		ui.Out().Print(msg)
+		return nil, fmt.Errorf("%s", msg)
 	}
 
 	// For streaming responses, we need to make a separate call to get usage data

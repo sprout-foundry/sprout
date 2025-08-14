@@ -1,10 +1,12 @@
 package playbooks
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -20,14 +22,14 @@ func (p HeaderSummaryPlaybook) Matches(userIntent string, category string) bool 
 	return strings.Contains(lo, "header summary") || strings.Contains(lo, "file header") || strings.Contains(lo, "top comment")
 }
 func (p HeaderSummaryPlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
-    plan := &PlanSpec{Scope: "Insert or refresh concise header summaries at the top of relevant files."}
-    candidates := make([]string, 0, len(estimatedFiles))
-    candidates = append(candidates, estimatedFiles...)
-    if len(candidates) == 0 {
-        candidates = append(candidates, findFilesNeedingHeaderComments()...)
-    }
-    plan.Files = append(plan.Files, candidates...)
-    for _, f := range candidates {
+	plan := &PlanSpec{Scope: "Insert or refresh concise header summaries at the top of relevant files."}
+	candidates := make([]string, 0, len(estimatedFiles))
+	candidates = append(candidates, estimatedFiles...)
+	if len(candidates) == 0 {
+		candidates = append(candidates, findFilesNeedingHeaderComments()...)
+	}
+	plan.Files = append(plan.Files, candidates...)
+	for _, f := range candidates {
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Add or update a short header summary comment",
@@ -168,16 +170,33 @@ type RefactorSmallPlaybook struct{}
 func (p RefactorSmallPlaybook) Name() string { return "refactor_small" }
 func (p RefactorSmallPlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "refactor") || strings.Contains(lo, "rename") || strings.Contains(lo, "extract function")
+	phrases := []string{"refactor", "rename", "extract function", "extract method", "inline variable", "simplify", "dead code"}
+	for _, ph := range phrases {
+		if strings.Contains(lo, ph) {
+			return true
+		}
+	}
+	return false
 }
 func (p RefactorSmallPlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Apply small, safe refactors without changing behavior."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+	candidates := make([]string, 0, len(estimatedFiles)+32)
+	candidates = append(candidates, estimatedFiles...)
+
+	// Try to target by symbol if mentioned
+	if sym := parseSymbolNameFromIntent(userIntent); sym != "" {
+		candidates = append(candidates, findFilesWithSymbol(sym)...)
+	}
+	if len(candidates) == 0 {
+		// Fallback: consider larger source files first, where refactors usually help readability
+		candidates = append(candidates, listGoFilesBySizeDesc(30)...)
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+	for _, f := range plan.Files {
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Perform small mechanical refactor",
-			Instructions:       "Apply renames, extractions, or reformatting that do not alter behavior. Keep diffs clear and localized.",
+			Instructions:       "Apply renames, extractions, or formatting that do not alter behavior. Keep diffs clear and localized.",
 			ScopeJustification: "Improves clarity with minimal risk.",
 		})
 	}
@@ -212,16 +231,47 @@ type DependencyUpdatePlaybook struct{}
 func (p DependencyUpdatePlaybook) Name() string { return "dependency_update" }
 func (p DependencyUpdatePlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "update dependency") || strings.Contains(lo, "bump") || strings.Contains(lo, "upgrade package")
+	phrases := []string{"update dependency", "bump", "upgrade package", "go get ", "go mod", "pin version", "upgrade dependency"}
+	for _, ph := range phrases {
+		if strings.Contains(lo, ph) {
+			return true
+		}
+	}
+	// crude detection of module@version mention
+	if regexp.MustCompile(`[a-z0-9\./_-]+@[vV]?\d+\.`).FindString(lo) != "" {
+		return true
+	}
+	return false
 }
 func (p DependencyUpdatePlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Safely update a dependency and adapt minimal necessary code changes."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+
+	mod, ver := parseGoModuleFromIntent(userIntent)
+	candidates := make([]string, 0, len(estimatedFiles)+8)
+	candidates = append(candidates, estimatedFiles...)
+
+	// Always include go.mod if present
+	if _, err := os.Stat("go.mod"); err == nil {
+		candidates = append(candidates, "go.mod")
+	}
+	if mod != "" {
+		candidates = append(candidates, findFilesImportingModule(mod)...)
+	}
+
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+	for _, f := range plan.Files {
+		instr := "Modify imports or small call-site changes required by the update. Avoid broad refactors."
+		if f == "go.mod" && mod != "" {
+			if ver != "" {
+				instr = "Update the required version for " + mod + " to " + ver + "; then run `go mod tidy`."
+			} else {
+				instr = "Upgrade or pin the required version for " + mod + "; then run `go mod tidy`."
+			}
+		}
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Adjust code for dependency update if needed",
-			Instructions:       "Modify imports or small call-site changes required by the update. Avoid broad refactors.",
+			Instructions:       instr,
 			ScopeJustification: "Keeps the project current with minimal edits.",
 		})
 	}
@@ -234,16 +284,38 @@ type LintFixPlaybook struct{}
 func (p LintFixPlaybook) Name() string { return "lint_fix" }
 func (p LintFixPlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "lint") || strings.Contains(lo, "format") || strings.Contains(lo, "style fix")
+	phrases := []string{"lint", "format", "style fix", "gofmt", "go fmt", "golangci", "staticcheck", "go vet"}
+	for _, ph := range phrases {
+		if strings.Contains(lo, ph) {
+			return true
+		}
+	}
+	return false
 }
 func (p LintFixPlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Apply linter/style fixes while preserving semantics."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+	candidates := make([]string, 0, len(estimatedFiles)+64)
+	candidates = append(candidates, estimatedFiles...)
+	if len(candidates) == 0 {
+		// Prefer smaller, targeted pass: limit number of files to reduce noise
+		candidates = append(candidates, findGoFilesLimited(150)...)
+		// Include common config files
+		for _, f := range []string{".golangci.yml", ".golangci.yaml"} {
+			if _, err := os.Stat(f); err == nil {
+				candidates = append(candidates, f)
+			}
+		}
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+	for _, f := range plan.Files {
+		instr := "Perform minimal changes to satisfy linter without behavior changes."
+		if strings.HasSuffix(f, ".yml") || strings.HasSuffix(f, ".yaml") {
+			instr = "Adjust linter configuration minimally to align with project conventions."
+		}
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Fix lint/style issues",
-			Instructions:       "Perform minimal changes to satisfy linter without behavior changes.",
+			Instructions:       instr,
 			ScopeJustification: "Improves consistency and maintainability.",
 		})
 	}
@@ -256,16 +328,30 @@ type PerformanceOptimizeHotPathPlaybook struct{}
 func (p PerformanceOptimizeHotPathPlaybook) Name() string { return "perf_opt_hotpath" }
 func (p PerformanceOptimizeHotPathPlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "optimize") || strings.Contains(lo, "performance") || strings.Contains(lo, "speed up")
+	phrases := []string{"optimize", "performance", "speed up", "slow", "latency", "cpu", "memory", "pprof", "allocations"}
+	for _, ph := range phrases {
+		if strings.Contains(lo, ph) {
+			return true
+		}
+	}
+	return false
 }
 func (p PerformanceOptimizeHotPathPlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Make targeted, measurable optimizations to hot paths without altering external behavior."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+	candidates := make([]string, 0, len(estimatedFiles)+32)
+	candidates = append(candidates, estimatedFiles...)
+	if len(candidates) == 0 {
+		candidates = append(candidates, findPerfHotCandidates(userIntent)...)
+		if len(candidates) == 0 {
+			candidates = append(candidates, listGoFilesBySizeDesc(20)...) // heuristic fallback
+		}
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+	for _, f := range plan.Files {
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Apply small performance optimization",
-			Instructions:       "Use simpler algorithms, reduce allocations, or short-circuit conditions. Add comments describing the tradeoff.",
+			Instructions:       "Reduce allocations and unnecessary work; simplify tight loops; avoid repeated computations; keep behavior identical. Document tradeoffs.",
 			ScopeJustification: "Improves performance with localized change.",
 		})
 	}
@@ -278,16 +364,31 @@ type SecurityAuditFixPlaybook struct{}
 func (p SecurityAuditFixPlaybook) Name() string { return "security_fix" }
 func (p SecurityAuditFixPlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "security") || strings.Contains(lo, "sanitize") || strings.Contains(lo, "credential")
+	phrases := []string{"security", "sanitize", "credential", "token", "password", "secret", "xss", "injection", "csrf", "insecure"}
+	for _, ph := range phrases {
+		if strings.Contains(lo, ph) {
+			return true
+		}
+	}
+	// Specific weak crypto / http patterns
+	if strings.Contains(lo, "md5") || strings.Contains(lo, "sha1") || strings.Contains(lo, "http://") {
+		return true
+	}
+	return false
 }
 func (p SecurityAuditFixPlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Eliminate common insecure patterns with minimal behavior impact."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+	candidates := make([]string, 0, len(estimatedFiles)+64)
+	candidates = append(candidates, estimatedFiles...)
+	if len(candidates) == 0 {
+		candidates = append(candidates, findSecurityRiskCandidates()...)
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+	for _, f := range plan.Files {
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Fix simple security issue",
-			Instructions:       "Add input validation, avoid hardcoded secrets, and prefer safe APIs. Keep change minimal.",
+			Instructions:       "Replace insecure constructs (e.g., md5/sha1, http://, InsecureSkipVerify) with safer alternatives; avoid logging secrets; add validation. Keep change minimal.",
 			ScopeJustification: "Reduces security risk safely.",
 		})
 	}
@@ -300,20 +401,142 @@ type APIChangePropagationPlaybook struct{}
 func (p APIChangePropagationPlaybook) Name() string { return "api_change_propagation" }
 func (p APIChangePropagationPlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "api change") || strings.Contains(lo, "signature change") || strings.Contains(lo, "rename function")
+	phrases := []string{"api change", "signature change", "rename function", "rename method", "breaking change", "rename type"}
+	for _, ph := range phrases {
+		if strings.Contains(lo, ph) {
+			return true
+		}
+	}
+	// Detect pattern "rename Old to New" or "Old -> New"
+	if regexp.MustCompile(`\brename\s+[A-Za-z0-9_]+\s+to\s+[A-Za-z0-9_]+`).MatchString(lo) ||
+		regexp.MustCompile(`\b[A-Za-z0-9_]+\s*->\s*[A-Za-z0-9_]+`).MatchString(lo) {
+		return true
+	}
+	return false
 }
 func (p APIChangePropagationPlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Propagate API/signature changes across call sites with mechanical edits."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+
+	oldName, newName := parseAPIRenameFromIntent(userIntent)
+	candidates := make([]string, 0, len(estimatedFiles)+16)
+	candidates = append(candidates, estimatedFiles...)
+	if oldName != "" {
+		candidates = append(candidates, findFilesWithSymbol(oldName)...)
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+
+	for _, f := range plan.Files {
+		instr := "Update imports and call sites to match the new API shape. No behavioral changes."
+		if oldName != "" && newName != "" {
+			instr = "Rename symbol '" + oldName + "' to '" + newName + "' in references and definitions as needed. Ensure consistency and successful build."
+		}
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Adjust call sites for API change",
-			Instructions:       "Update imports and call sites to match the new API shape. No behavioral changes.",
+			Instructions:       instr,
 			ScopeJustification: "Keeps code compiling after API updates.",
 		})
 	}
 	return plan
+}
+
+// Dependency/API helpers
+
+func parseGoModuleFromIntent(intent string) (module string, version string) {
+	// Try to extract patterns like: module@v1.2.3 or mention in quotes
+	lo := intent
+	re := regexp.MustCompile(`([a-zA-Z0-9_./\-]+)@([vV]?\d+\.[\d]+(\.[\d]+)?)`)
+	if m := re.FindStringSubmatch(lo); len(m) >= 3 {
+		return m[1], m[2]
+	}
+	// Try go get module or upgrade module mentions
+	re2 := regexp.MustCompile(`go\s+get\s+([a-zA-Z0-9_./\-]+)(?:@([vV]?\d+\.[\d]+(\.[\d]+)?))?`)
+	if m := re2.FindStringSubmatch(lo); len(m) >= 2 {
+		mod := m[1]
+		ver := ""
+		if len(m) >= 3 {
+			ver = m[2]
+		}
+		return mod, ver
+	}
+	return "", ""
+}
+
+func findFilesImportingModule(module string) []string {
+	var results []string
+	if module == "" {
+		return results
+	}
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		if strings.Contains(string(b), module) {
+			results = append(results, filepath.ToSlash(path))
+		}
+		return nil
+	})
+	return dedupeStrings(results)
+}
+
+func parseAPIRenameFromIntent(intent string) (oldName, newName string) {
+	// Handle "rename Old to New"
+	re := regexp.MustCompile(`(?i)rename\s+([A-Za-z0-9_]+)\s+to\s+([A-Za-z0-9_]+)`)
+	if m := re.FindStringSubmatch(intent); len(m) == 3 {
+		return m[1], m[2]
+	}
+	// Handle "Old -> New"
+	re2 := regexp.MustCompile(`\b([A-Za-z0-9_]+)\s*->\s*([A-Za-z0-9_]+)\b`)
+	if m := re2.FindStringSubmatch(intent); len(m) == 3 {
+		return m[1], m[2]
+	}
+	return "", ""
+}
+
+func findFilesWithSymbol(symbol string) []string {
+	var results []string
+	if symbol == "" {
+		return results
+	}
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		content := string(b)
+		if strings.Contains(content, symbol) {
+			results = append(results, filepath.ToSlash(path))
+		}
+		return nil
+	})
+	return dedupeStrings(results)
 }
 
 // ConfigChangePlaybook updates configuration defaults and wiring.
@@ -388,16 +611,37 @@ type FileRenamePlaybook struct{}
 func (p FileRenamePlaybook) Name() string { return "file_rename" }
 func (p FileRenamePlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "rename file") || strings.Contains(lo, "move file") || strings.Contains(lo, "relocate")
+	if strings.Contains(lo, "rename file") || strings.Contains(lo, "move file") || strings.Contains(lo, "relocate") || strings.Contains(lo, "mv ") {
+		return true
+	}
+	// Generic rename with path-like tokens
+	if regexp.MustCompile(`(?i)rename\s+[A-Za-z0-9_./\-]+\s+(to|->)\s+[A-Za-z0-9_./\-]+`).MatchString(lo) {
+		return true
+	}
+	return false
 }
 func (p FileRenamePlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Perform file rename/move and adjust minimal references accordingly."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+	from, to := parseFileRenameFromIntent(userIntent)
+	candidates := make([]string, 0, len(estimatedFiles)+16)
+	candidates = append(candidates, estimatedFiles...)
+	if from != "" {
+		candidates = append(candidates, from)
+		// Find files that mention the old file path or base name
+		base := filepath.Base(from)
+		mentionRefs := findFilesMentioningString(base, 50)
+		candidates = append(candidates, mentionRefs...)
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+	for _, f := range plan.Files {
+		instr := "Move/rename file as requested and update imports/references. Keep changes minimal and compiling."
+		if f == from && to != "" {
+			instr = "Rename/move this file to '" + to + "' and update any build tags or package references as needed."
+		}
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Rename or move file and update references",
-			Instructions:       "Move/rename file as requested and update imports/references. Keep changes minimal and compiling.",
+			Instructions:       instr,
 			ScopeJustification: "Maintains integrity after file relocation.",
 		})
 	}
@@ -410,12 +654,28 @@ type MultiFileEditPlaybook struct{}
 func (p MultiFileEditPlaybook) Name() string { return "multi_file_edit" }
 func (p MultiFileEditPlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
-	return strings.Contains(lo, "multiple files") || strings.Contains(lo, "several files") || strings.Contains(lo, "across files")
+	if strings.Contains(lo, "multiple files") || strings.Contains(lo, "several files") || strings.Contains(lo, "across files") {
+		return true
+	}
+	// If the intent includes more than one file path, treat as multi-file
+	fps := extractFilePathsFromIntent(userIntent, 3)
+	return len(fps) >= 2
 }
 func (p MultiFileEditPlaybook) BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec {
 	plan := &PlanSpec{Scope: "Apply coordinated edits across related files while keeping each change minimal."}
-	plan.Files = append(plan.Files, estimatedFiles...)
-	for _, f := range estimatedFiles {
+	candidates := make([]string, 0, len(estimatedFiles)+32)
+	candidates = append(candidates, estimatedFiles...)
+	// Add files explicitly mentioned in the intent
+	explicit := extractFilePathsFromIntent(userIntent, 20)
+	candidates = append(candidates, explicit...)
+	// If still narrow, add symbol-targeted files
+	if len(candidates) < 2 {
+		if sym := parseSymbolNameFromIntent(userIntent); sym != "" {
+			candidates = append(candidates, findFilesWithSymbol(sym)...)
+		}
+	}
+	plan.Files = append(plan.Files, dedupeStrings(candidates)...)
+	for _, f := range plan.Files {
 		plan.Ops = append(plan.Ops, PlanOp{
 			FilePath:           f,
 			Description:        "Apply coordinated change",
@@ -629,48 +889,269 @@ func dedupeStrings(in []string) []string {
 	return out
 }
 
+// Utility helpers for discovery
+func findGoFilesLimited(limit int) []string {
+	var files []string
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") {
+			files = append(files, filepath.ToSlash(path))
+			if len(files) >= limit {
+				return errors.New("limit reached")
+			}
+		}
+		return nil
+	})
+	if len(files) > limit {
+		files = files[:limit]
+	}
+	return files
+}
+
+func listGoFilesBySizeDesc(limit int) []string {
+	type fsz struct {
+		p string
+		s int64
+	}
+	var arr []fsz
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") {
+			if info, err := os.Stat(path); err == nil {
+				arr = append(arr, fsz{p: filepath.ToSlash(path), s: info.Size()})
+			}
+		}
+		return nil
+	})
+	sort.Slice(arr, func(i, j int) bool { return arr[i].s > arr[j].s })
+	if len(arr) > limit {
+		arr = arr[:limit]
+	}
+	res := make([]string, 0, len(arr))
+	for _, a := range arr {
+		res = append(res, a.p)
+	}
+	return res
+}
+
+func parseSymbolNameFromIntent(intent string) string {
+	// Look for simple symbol name patterns after common verbs
+	re := regexp.MustCompile(`(?i)(rename|refactor|extract)\s+([A-Za-z_][A-Za-z0-9_]*)`)
+	if m := re.FindStringSubmatch(intent); len(m) == 3 {
+		return m[2]
+	}
+	return ""
+}
+
+// File path helpers
+func extractFilePathsFromIntent(intent string, limit int) []string {
+	var res []string
+	// Match path-like tokens with extensions
+	re := regexp.MustCompile(`([A-Za-z0-9_./\\\-]+\.[A-Za-z0-9_]+)`) // simple
+	for _, m := range re.FindAllString(intent, -1) {
+		res = append(res, filepath.ToSlash(m))
+		if len(res) >= limit {
+			break
+		}
+	}
+	return dedupeStrings(res)
+}
+
+func parseFileRenameFromIntent(intent string) (from string, to string) {
+	// Patterns: rename a/b.go to c/d.go  | a/b.go -> c/d.go  | mv a/b.go c/d.go
+	re1 := regexp.MustCompile(`(?i)rename\s+([A-Za-z0-9_./\\\-]+)\s+to\s+([A-Za-z0-9_./\\\-]+)`) // rename X to Y
+	if m := re1.FindStringSubmatch(intent); len(m) == 3 {
+		return filepath.ToSlash(m[1]), filepath.ToSlash(m[2])
+	}
+	re2 := regexp.MustCompile(`([A-Za-z0-9_./\\\-]+)\s*->\s*([A-Za-z0-9_./\\\-]+)`) // X -> Y
+	if m := re2.FindStringSubmatch(intent); len(m) == 3 {
+		return filepath.ToSlash(m[1]), filepath.ToSlash(m[2])
+	}
+	re3 := regexp.MustCompile(`(?i)\bmv\s+([A-Za-z0-9_./\\\-]+)\s+([A-Za-z0-9_./\\\-]+)`) // mv X Y
+	if m := re3.FindStringSubmatch(intent); len(m) == 3 {
+		return filepath.ToSlash(m[1]), filepath.ToSlash(m[2])
+	}
+	return "", ""
+}
+
+func findFilesMentioningString(substr string, limit int) []string {
+	var results []string
+	if substr == "" {
+		return results
+	}
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		if strings.Contains(string(b), substr) {
+			results = append(results, filepath.ToSlash(path))
+			if len(results) >= limit {
+				return errors.New("limit")
+			}
+		}
+		return nil
+	})
+	return dedupeStrings(results)
+}
+
 // findFilesNeedingHeaderComments scans for Go source files that do not start with a comment block.
 func findFilesNeedingHeaderComments() []string {
-    var results []string
-    _ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
-        if err != nil {
-            return nil
-        }
-        if d.IsDir() {
-            name := d.Name()
-            if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
-                return filepath.SkipDir
-            }
-            return nil
-        }
-        if !strings.HasSuffix(path, ".go") {
-            return nil
-        }
-        if startsWithGoComment(path) {
-            return nil
-        }
-        results = append(results, filepath.ToSlash(path))
-        return nil
-    })
-    return dedupeStrings(results)
+	var results []string
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		if startsWithGoComment(path) {
+			return nil
+		}
+		results = append(results, filepath.ToSlash(path))
+		return nil
+	})
+	return dedupeStrings(results)
 }
 
 func startsWithGoComment(path string) bool {
-    b, err := os.ReadFile(path)
-    if err != nil {
-        return false
-    }
-    content := string(b)
-    lines := strings.Split(content, "\n")
-    for _, ln := range lines {
-        t := strings.TrimSpace(ln)
-        if t == "" {
-            continue
-        }
-        if strings.HasPrefix(t, "//") || strings.HasPrefix(t, "/*") {
-            return true
-        }
-        return false
-    }
-    return false
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	content := string(b)
+	lines := strings.Split(content, "\n")
+	for _, ln := range lines {
+		t := strings.TrimSpace(ln)
+		if t == "" {
+			continue
+		}
+		if strings.HasPrefix(t, "//") || strings.HasPrefix(t, "/*") {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+// perf/security candidate discovery
+func findPerfHotCandidates(userIntent string) []string {
+	var results []string
+	// If the intent mentions a symbol, try finding it
+	if sym := parseSymbolNameFromIntent(userIntent); sym != "" {
+		results = append(results, findFilesWithSymbol(sym)...)
+	}
+	// Heuristics: look for hotspots (many appends/allocations/tight loops)
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		s := string(b)
+		score := 0
+		// simple scoring
+		score += strings.Count(s, "append(")
+		score += strings.Count(s, "make(")
+		score += strings.Count(s, "for ")
+		if strings.Contains(s, "pprof") {
+			score += 5
+		}
+		if score >= 8 { // heuristic threshold
+			results = append(results, filepath.ToSlash(path))
+		}
+		return nil
+	})
+	return dedupeStrings(results)
+}
+
+func findSecurityRiskCandidates() []string {
+	var results []string
+	weakRe := []*regexp.Regexp{
+		regexp.MustCompile(`\bmd5\.`),
+		regexp.MustCompile(`\bsha1\.`),
+		regexp.MustCompile(`http://`),
+		regexp.MustCompile(`InsecureSkipVerify\s*:\s*true`),
+		regexp.MustCompile(`(?i)password`),
+		regexp.MustCompile(`(?i)secret`),
+		regexp.MustCompile(`(?i)token`),
+	}
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "assets" || name == "debug" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		s := string(b)
+		for _, re := range weakRe {
+			if re.FindStringIndex(s) != nil {
+				results = append(results, filepath.ToSlash(path))
+				break
+			}
+		}
+		return nil
+	})
+	return dedupeStrings(results)
 }

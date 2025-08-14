@@ -1,20 +1,20 @@
 package workspace
 
 import (
-	"encoding/json" // New import for package.json parsing
-	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath" // New import for security concern detection
-	"sort"          // For sorting top directories and string slices
-	"strings"
-	"sync"
+    "encoding/json"
+    "fmt"
+    "io/fs"
+    "os"
+    "path/filepath"
+    "sort"
+    "strings"
+    "sync"
 
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/prompts"  // Import the prompts package
-	"github.com/alantheprice/ledit/pkg/security" // New import for security checks
-	"github.com/alantheprice/ledit/pkg/utils"    // Import the utils package for logger
+    "github.com/alantheprice/ledit/pkg/config"
+    "github.com/alantheprice/ledit/pkg/llm"
+    "github.com/alantheprice/ledit/pkg/prompts"
+    "github.com/alantheprice/ledit/pkg/security"
+    "github.com/alantheprice/ledit/pkg/utils"
 )
 
 // processResult is used to pass analysis results from goroutines back to the main thread.

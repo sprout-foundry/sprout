@@ -14,6 +14,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/security"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -545,11 +546,14 @@ func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	logger.LogProcessStep("--- Loading in workspace data ---")
+	// UI shimmer: workspace context building
+	ui.PublishStatus("Building workspace context (files, summaries, embeddings)…")
 	workspaceFilePath := "./.ledit/workspace.json"
 
 	// If security checks are enabled, log the start of the check.
 	if cfg.EnableSecurityChecks {
 		logger.LogProcessStep(prompts.PerformingSecurityCheck())
+		ui.PublishStatus("Running security checks…")
 	}
 
 	if err := os.MkdirAll(filepath.Dir(workspaceFilePath), os.ModePerm); err != nil {
@@ -599,6 +603,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 
 	if cfg.UseEmbeddings {
 		logger.LogProcessStep("--- Using embedding-based file selection ---")
+		ui.PublishStatus("Selecting relevant files via embeddings…")
 		fullContextFiles, summaryContextFiles, fileSelectionErr = GetFilesForContextUsingEmbeddings(instructions, workspace, cfg, logger)
 		if fileSelectionErr != nil {
 			logger.Logf("Warning: could not determine which files to load for context using embeddings: %v. Proceeding with all summaries.\n", fileSelectionErr)
@@ -611,6 +616,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 		}
 	} else {
 		logger.LogProcessStep("--- Asking LLM to select relevant files for context ---")
+		ui.PublishStatus("Selecting relevant files via LLM…")
 		fullContextFiles, summaryContextFiles, fileSelectionErr = getFilesForContext(instructions, workspace, cfg, logger) // Pass logger
 		if fileSelectionErr != nil {
 			logger.Logf("Warning: could not determine which files to load for context: %v. Proceeding with all summaries.\n", fileSelectionErr)
@@ -634,6 +640,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	}
 
 	for _, file := range fullContextFiles {
+		ui.PublishStatus("Reading selected files for full context…")
 		fileInfo, exists := workspace.Files[file]
 		if !exists {
 			logger.Logf("Warning: file %s selected for full context not found in workspace. Skipping.\n", file)

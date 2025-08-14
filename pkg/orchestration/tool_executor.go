@@ -60,6 +60,7 @@ func (te *ToolExecutor) executeWebSearch(args map[string]interface{}) (string, e
 
 	// Notify user about web search being performed
 	ui.Out().Printf("🔍 Searching web for: %s\n", query)
+	ui.PublishStatus("Searching the web…")
 
 	// Use the FetchContextFromSearch function that exists in webcontent package
 	result, err := webcontent.FetchContextFromSearch(query, te.cfg)
@@ -85,6 +86,7 @@ func (te *ToolExecutor) executeReadFile(args map[string]interface{}) (string, er
 
 	// Notify user about file being read
 	ui.Out().Printf("📖 Reading file: %s\n", path)
+	ui.PublishStatus("Reading file content…")
 
 	content, err := filesystem.ReadFile(path)
 	if err != nil {
@@ -104,6 +106,7 @@ func (te *ToolExecutor) executeShellCommand(args map[string]interface{}) (string
 
 	// Notify user about what command is being executed
 	ui.Out().Printf("🔧 Executing shell command: %s\n", command)
+	ui.PublishStatus("Running a shell command…")
 
 	cmd := exec.Command("sh", "-c", command)
 	output, err := cmd.CombinedOutput()
@@ -161,6 +164,7 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 			return "", fmt.Errorf("workspace_context action 'search_embeddings' requires 'query' parameter")
 		}
 		ui.Out().Printf("🧠 Searching workspace embeddings for: %s\n", query)
+		ui.PublishStatus("Searching workspace embeddings…")
 		fullContextFiles, summaryContextFiles, err := workspace.GetFilesForContextUsingEmbeddings(query, ws, te.cfg, logger)
 		if err != nil {
 			ui.Out().Printf("   ❌ Embedding search failed: %v\n", err)
@@ -193,6 +197,7 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 			return "", fmt.Errorf("workspace_context action 'search_keywords' requires non-empty 'query' parameter")
 		}
 		ui.Out().Printf("🔎 Keyword searching workspace for: %s\n", query)
+		ui.PublishStatus("Searching workspace by keywords…")
 		// Use a ripgrep fallback to grep for keywords across Go files; include fallback to grep if rg not available
 		cmd := exec.Command("sh", "-c", fmt.Sprintf("command -v rg >/dev/null 2>&1 && rg -n -l -i --glob '*.go' %q . || grep -r -n -l -i --include=*.go %q .", query, query))
 		output, err := cmd.Output()
@@ -223,6 +228,7 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 
 	case "load_tree":
 		ui.Out().Printf("🌳 Loading workspace file tree.\n")
+		ui.PublishStatus("Loading workspace tree…")
 		tree, err := workspace.GetFormattedFileTree(ws)
 		if err != nil {
 			ui.Out().Printf("   ❌ Failed to load file tree: %v\n", err)
@@ -233,6 +239,7 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 
 	case "load_summary":
 		ui.Out().Printf("📝 Loading full workspace summary.\n")
+		ui.PublishStatus("Building workspace summary…")
 		summary, err := workspace.GetFullWorkspaceSummary(ws, te.cfg.CodeStyle, te.cfg, logger)
 		if err != nil {
 			ui.Out().Printf("   ❌ Failed to load workspace summary: %v\n", err)

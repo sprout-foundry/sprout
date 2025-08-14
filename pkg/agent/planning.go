@@ -126,8 +126,40 @@ Respond with STRICT JSON using this schema:
 		return nil, totalTokens, fmt.Errorf("failed to parse edit plan JSON: %w", err)
 	}
 
+	// Minimal schema validation
+	if vErr := validateEditPlan(&plan); vErr != nil {
+		logger.LogError(fmt.Errorf("invalid edit plan: %w", vErr))
+		return nil, totalTokens, fmt.Errorf("invalid edit plan: %w", vErr)
+	}
+
 	duration := time.Since(startTime)
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: createDetailedEditPlan completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 	return &plan, totalTokens, nil
+}
+
+// validateEditPlan performs light schema checks without external deps
+func validateEditPlan(p *EditPlan) error {
+	if p == nil {
+		return fmt.Errorf("plan is nil")
+	}
+	if len(p.EditOperations) == 0 {
+		return fmt.Errorf("plan has no edit_operations")
+	}
+	// files_to_edit is optional but recommended; if present, must be strings
+	for _, f := range p.FilesToEdit {
+		if strings.TrimSpace(f) == "" {
+			return fmt.Errorf("empty entry in files_to_edit")
+		}
+	}
+	// operation fields must be present
+	for i, op := range p.EditOperations {
+		if strings.TrimSpace(op.FilePath) == "" {
+			return fmt.Errorf("operation %d missing file_path", i)
+		}
+		if strings.TrimSpace(op.Instructions) == "" {
+			return fmt.Errorf("operation %d missing instructions", i)
+		}
+	}
+	return nil
 }

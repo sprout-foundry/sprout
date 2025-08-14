@@ -654,26 +654,38 @@ func (o *MultiAgentOrchestrator) shouldStopOnFailure() bool {
 }
 
 func (o *MultiAgentOrchestrator) sortStepsByDependencies(steps []types.OrchestrationStep) []types.OrchestrationStep {
-	// Simple topological sort - in practice, you might want a more sophisticated algorithm
-	var sorted []types.OrchestrationStep
-	visited := make(map[string]bool)
-
-	// First add steps with no dependencies
-	for _, step := range steps {
-		if len(step.DependsOn) == 0 {
-			sorted = append(sorted, step)
-			visited[step.ID] = true
-		}
-	}
-
-	// Then add dependent steps
-	for _, step := range steps {
-		if !visited[step.ID] {
-			sorted = append(sorted, step)
-		}
-	}
-
-	return sorted
+    // Kahn's algorithm for topological sort
+    inDegree := map[string]int{}
+    adj := map[string][]string{}
+    idToStep := map[string]types.OrchestrationStep{}
+    for _, s := range steps {
+        idToStep[s.ID] = s
+        if _, ok := inDegree[s.ID]; !ok { inDegree[s.ID] = 0 }
+        for _, dep := range s.DependsOn {
+            inDegree[s.ID]++
+            adj[dep] = append(adj[dep], s.ID)
+        }
+    }
+    queue := []string{}
+    for id, d := range inDegree {
+        if d == 0 { queue = append(queue, id) }
+    }
+    var order []types.OrchestrationStep
+    for len(queue) > 0 {
+        id := queue[0]
+        queue = queue[1:]
+        order = append(order, idToStep[id])
+        for _, nbr := range adj[id] {
+            inDegree[nbr]--
+            if inDegree[nbr] == 0 { queue = append(queue, nbr) }
+        }
+    }
+    // If cycle exists, fall back to original order with a warning
+    if len(order) != len(steps) {
+        o.logger.LogProcessStep("⚠️ Cycle or unresolved dependencies detected; using original step order")
+        return steps
+    }
+    return order
 }
 
 func buildStepDependencies(steps []types.OrchestrationStep) map[string][]string {
@@ -730,11 +742,11 @@ func (o *MultiAgentOrchestrator) updateAgentBudget(agentRunner *AgentRunner, tok
 	// Update token usage
 	status.TokenUsage += tokenUsage.Total
 
-    // Calculate and update cost using pricing helpers
-    // We don't have prompt/completion split per step here; approximate using totals
-    // Treat all tokens as prompt for a conservative lower-bound
-    tu := llm.TokenUsage{PromptTokens: tokenUsage.Total, CompletionTokens: 0, TotalTokens: tokenUsage.Total}
-    status.Cost += llm.CalculateCost(tu, agentRunner.config.EditingModel)
+	// Calculate and update cost using pricing helpers
+	// We don't have prompt/completion split per step here; approximate using totals
+	// Treat all tokens as prompt for a conservative lower-bound
+	tu := llm.TokenUsage{PromptTokens: tokenUsage.Total, CompletionTokens: 0, TotalTokens: tokenUsage.Total}
+	status.Cost += llm.CalculateCost(tu, agentRunner.config.EditingModel)
 
 	// Check for warnings
 	if budget.TokenWarning > 0 && status.TokenUsage >= budget.TokenWarning {

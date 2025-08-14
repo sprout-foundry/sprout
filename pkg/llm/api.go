@@ -13,6 +13,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -60,20 +61,20 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	for _, msg := range messages {
 		totalInputTokens += EstimateTokens(GetMessageText(msg.Content)) // Use GetMessageText helper
 	}
-	fmt.Print(prompts.TokenEstimate(totalInputTokens, modelName))
+	ui.Out().Print(prompts.TokenEstimate(totalInputTokens, modelName))
 	if totalInputTokens > DefaultTokenLimit && !cfg.SkipPrompt {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Print(prompts.TokenLimitWarning(totalInputTokens, DefaultTokenLimit))
+		ui.Out().Print(prompts.TokenLimitWarning(totalInputTokens, DefaultTokenLimit))
 		confirm, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err))
+			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
 		}
 		if strings.TrimSpace(confirm) != "y" {
-			fmt.Println(prompts.OperationCancelled())
+			ui.Out().Print(prompts.OperationCancelled() + "\n")
 			return nil, nil
 		}
-		fmt.Print(prompts.ContinuingRequest())
+		ui.Out().Print(prompts.ContinuingRequest())
 
 		// User confirmed, continue with the request
 	}
@@ -97,7 +98,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		// short-circuit to fallback if available
 		fallbackModel := cfg.LocalModel
 		if fallbackModel != "" && provider != "ollama" {
-			fmt.Printf("[llm] provider '%s' circuit open; using local fallback %s\n", provider, fallbackModel)
+			ui.Out().Printf("[llm] provider '%s' circuit open; using local fallback %s\n", provider, fallbackModel)
 			tu, ferr := callOpenAICompatibleStream(ollamaUrl, "ollama", fallbackModel, messages, cfg, timeout, writer)
 			return tu, ferr
 		}
@@ -110,7 +111,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		apiKey, err := apikeys.GetAPIKey("openai", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err))
+			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.openai.com/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
@@ -120,7 +121,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		apiKey, err := apikeys.GetAPIKey("groq", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err))
+			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.groq.com/openai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
@@ -144,7 +145,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		apiKey, err := apikeys.GetAPIKey("lambda-ai", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err))
+			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.lambda.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
@@ -154,7 +155,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		apiKey, err := apikeys.GetAPIKey("cerebras", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err))
+			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.cerebras.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
@@ -164,7 +165,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		apiKey, err := apikeys.GetAPIKey("deepseek", cfg.Interactive) // Pass cfg.Interactive
 		if err != nil {
-			fmt.Print(prompts.APIKeyError(err))
+			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.deepseek.com/openai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
@@ -193,7 +194,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			model = customParts[2]
 		} else {
 			err = fmt.Errorf("invalid model name format for 'custom' provider. Expected 'custom:base_url:path_suffix:model' or 'custom:full_url:model', got '%s'", modelName)
-			fmt.Print(prompts.LLMResponseError(err))
+			ui.Out().Print(prompts.LLMResponseError(err))
 			return nil, err
 		}
 
@@ -207,7 +208,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		tokenUsage, err = callOllamaAPI(model, messages, cfg, timeout, writer)
 	default:
 		// Fallback to openai-compatible ollama api
-		fmt.Println(prompts.ProviderNotRecognized())
+		ui.Out().Print(prompts.ProviderNotRecognized() + "\n")
 		modelName = cfg.LocalModel
 		tokenUsage, err = callOpenAICompatibleStream(ollamaUrl, "ollama", modelName, messages, cfg, timeout, writer)
 	}
@@ -217,15 +218,15 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		// Provider failover: try local/ollama fallback once
 		fallbackModel := cfg.LocalModel
 		if fallbackModel != "" && provider != "ollama" {
-			fmt.Printf("[llm] provider '%s' failed; attempting failover to local model via ollama: %s\n", provider, fallbackModel)
+			ui.Out().Printf("[llm] provider '%s' failed; attempting failover to local model via ollama: %s\n", provider, fallbackModel)
 			ollamaURL := fmt.Sprintf("%s/v1/chat/completions", cfg.OllamaServerURL)
 			if tu, ferr := callOpenAICompatibleStream(ollamaURL, "ollama", fallbackModel, messages, cfg, timeout, writer); ferr == nil {
 				return tu, nil
 			} else {
-				fmt.Printf("[llm] failover to ollama failed: %v\n", ferr)
+				ui.Out().Printf("[llm] failover to ollama failed: %v\n", ferr)
 			}
 		}
-		fmt.Print(prompts.LLMResponseError(err))
+		ui.Out().Print(prompts.LLMResponseError(err))
 		return tokenUsage, err
 	}
 	recordSuccess(provider)
@@ -296,7 +297,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 	if modelName == "" {
 		// Fallback if summary model is not configured
 		modelName = cfg.EditingModel
-		fmt.Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
+		ui.Out().Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 
 	response, _, err := GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute) // Analysis does not use search grounding
@@ -339,8 +340,8 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 
 	// Add debug logging for JSON parsing issues
 	if os.Getenv("DEBUG_JSON_PARSING") == "true" {
-		fmt.Printf("DEBUG: Extracted JSON string: %s\n", jsonStr)
-		fmt.Printf("DEBUG: JSON length: %d\n", len(jsonStr))
+		ui.Out().Printf("DEBUG: Extracted JSON string: %s\n", jsonStr)
+		ui.Out().Printf("DEBUG: JSON length: %d\n", len(jsonStr))
 	}
 
 	var reviewResult types.CodeReviewResult

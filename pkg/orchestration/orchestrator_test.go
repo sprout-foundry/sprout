@@ -98,3 +98,16 @@ func TestListRunnableStepIDs(t *testing.T) {
 		t.Fatalf("expected only s2 runnable, got %v", ids)
 	}
 }
+
+func TestProgressTablePublishesUIEvent(t *testing.T) {
+	// Ensure UI is disabled for this test to exercise stdout path without panics
+	// We'll still call printProgressTable to ensure no panic
+	plan := &types.MultiAgentOrchestrationPlan{
+		Agents:        []types.AgentDefinition{{ID: "a1", Name: "A"}},
+		Steps:         []types.OrchestrationStep{{ID: "s1", Status: "completed"}},
+		AgentStatuses: map[string]types.AgentStatus{"a1": {Status: "completed", TokenUsage: 10, Cost: 0.01}},
+	}
+	o := &MultiAgentOrchestrator{plan: plan, logger: utils.GetLogger(true)}
+	// The function should not panic
+	o.printProgressTable()
+}

@@ -247,6 +247,15 @@ func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, e
 		context.Logger.LogError(fmt.Errorf("CRITICAL: Failed to parse progress evaluation JSON from LLM: %w\nCleaned response: %s", err, cleanedResponse))
 		return nil, 0, fmt.Errorf("unrecoverable JSON parsing error in progress evaluation: %w\nCleaned Response: %s", err, cleanedResponse)
 	}
+	// JSON schema guards: required fields & allowed next actions
+	if evaluation.Status == "" || evaluation.NextAction == "" || evaluation.CompletionPercentage < 0 || evaluation.CompletionPercentage > 100 {
+		return nil, 0, fmt.Errorf("invalid evaluator JSON: missing/invalid required fields")
+	}
+	allowed := map[string]bool{"analyze_intent": true, "create_plan": true, "execute_edits": true, "run_command": true, "validate": true, "revise_plan": true, "workspace_info": true, "grep_search": true, "list_files": true, "micro_edit": true, "completed": true, "continue": true}
+	if !allowed[strings.ToLower(evaluation.NextAction)] {
+		return nil, 0, fmt.Errorf("invalid evaluator next_action: %s", evaluation.NextAction)
+	}
+
 	promptTokens := utils.EstimateTokens(prompt)
 	completionTokens := utils.EstimateTokens(response)
 	tokens := promptTokens + completionTokens

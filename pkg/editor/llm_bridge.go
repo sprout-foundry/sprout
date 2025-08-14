@@ -2,11 +2,13 @@ package editor
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/context"
 	"github.com/alantheprice/ledit/pkg/parser"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -25,8 +27,16 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 		return nil, "", fmt.Errorf("failed to parse updated code from response: %w", err)
 	}
 	if len(updatedCode) == 0 {
-		fmt.Println(prompts.NoCodeBlocksParsed())
-		fmt.Printf("%s\n", llmContent)
+		ui.Out().Print(prompts.NoCodeBlocksParsed() + "\n")
+		ui.Out().Printf("%s\n", llmContent)
+		// Fallback: if a filename was provided and the response contains a single code block
+		// without filename headers, extract code by language and assign to that filename
+		if strings.TrimSpace(filename) != "" {
+			lang := getLanguageFromExtension(filename)
+			if codeOnly, perr := parser.ExtractCodeFromResponse(llmContent, lang); perr == nil && strings.TrimSpace(codeOnly) != "" {
+				updatedCode = map[string]string{filename: codeOnly}
+			}
+		}
 	}
 	return updatedCode, llmContent, nil
 }

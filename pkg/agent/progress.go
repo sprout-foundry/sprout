@@ -110,11 +110,18 @@ func evaluateProgressFastPath(context *AgentContext) (*ProgressEvaluation, int, 
 		}, 0, nil
 	}
 
-	// If validation done, check if the actual goal was achieved
+	// If validation done, check result: do not mark completed if ValidationFailed flag is set
 	if hasValidation {
-		// TODO: Validate that the agent also thinks that we have completed successfully
-
-		// Standard completion for other tasks
+		if context.ValidationFailed {
+			return &ProgressEvaluation{
+				Status:               "needs_adjustment",
+				CompletionPercentage: 70,
+				NextAction:           "revise_plan",
+				Reasoning:            "Validation failed - need to create and apply a fix plan",
+				Concerns:             []string{"Validation failed in simple flow"},
+			}, 0, nil
+		}
+		// Standard completion when validation passed
 		return &ProgressEvaluation{
 			Status:               "completed",
 			CompletionPercentage: 100,

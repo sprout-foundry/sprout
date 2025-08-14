@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/filesystem"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 
 	"github.com/fatih/color"
 )
@@ -85,7 +86,7 @@ func PrintRevisionHistory() error {
 		return err
 	}
 	if len(changes) == 0 {
-		fmt.Println("No changes recorded.")
+		ui.Out().Print("No changes recorded.\n")
 		return nil
 	}
 
@@ -93,7 +94,7 @@ func PrintRevisionHistory() error {
 	revisionGroups := groupChangesByRevision(changes)
 
 	if len(revisionGroups) == 0 {
-		fmt.Println("No revisions found.")
+		ui.Out().Print("No revisions found.\n")
 		return nil
 	}
 
@@ -104,7 +105,7 @@ func PrintRevisionHistory() error {
 	displayRevision(revisionGroups[currentIndex])
 
 	for {
-		fmt.Print("\nEnter: Show next revision | b: Show previous revision | x: Exit | d: Show all diffs | revert: Rollback revision | restore: Restore revision | p: Show original prompt | l: Show LLM details -> ")
+		ui.Out().Print("\nEnter: Show next revision | b: Show previous revision | x: Exit | d: Show all diffs | revert: Rollback revision | restore: Restore revision | p: Show original prompt | l: Show LLM details -> ")
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(strings.ToLower(input))
 
@@ -116,14 +117,14 @@ func PrintRevisionHistory() error {
 				currentIndex--
 				displayRevision(revisionGroups[currentIndex])
 			} else {
-				fmt.Println("Already at the first revision.")
+				ui.Out().Print("Already at the first revision.\n")
 			}
 		case "d":
-			fmt.Println("\n\033[1mAll File Diffs for this Revision:\033[0m")
+			ui.Out().Print("\n\033[1mAll File Diffs for this Revision:\033[0m\n")
 			for _, change := range revisionGroups[currentIndex].Changes {
-				fmt.Printf("\n--- Diff for %s ---\n", change.Filename)
+				ui.Out().Printf("\n--- Diff for %s ---\n", change.Filename)
 				diff := GetDiff(change.Filename, change.OriginalCode, change.NewCode)
-				fmt.Println(diff)
+				ui.Out().Print(diff + "\n")
 			}
 		case "revert":
 			activeChanges := getActiveChanges(revisionGroups[currentIndex].Changes)
@@ -132,7 +133,7 @@ func PrintRevisionHistory() error {
 					log.Printf("Error during revision rollback: %v", err)
 				}
 			} else {
-				fmt.Println("No active changes in this revision, cannot revert.")
+				ui.Out().Print("No active changes in this revision, cannot revert.\n")
 			}
 		case "restore":
 			if err := handleRevisionRestore(revisionGroups[currentIndex]); err != nil {
@@ -140,16 +141,16 @@ func PrintRevisionHistory() error {
 			}
 		case "p": // Show original prompt
 			if revisionGroups[currentIndex].Instructions != "" {
-				fmt.Printf("\n\033[1mOriginal Prompt:\033[0m\n%s\n", revisionGroups[currentIndex].Instructions)
+				ui.Out().Printf("\n\033[1mOriginal Prompt:\033[0m\n%s\n", revisionGroups[currentIndex].Instructions)
 			} else {
-				fmt.Println("\nNo original prompt recorded.")
+				ui.Out().Print("\nNo original prompt recorded.\n")
 			}
 		case "l": // Show LLM details
-			fmt.Printf("\n\033[1mEditing Model:\033[0m %s\n", revisionGroups[currentIndex].EditingModel)
+			ui.Out().Printf("\n\033[1mEditing Model:\033[0m %s\n", revisionGroups[currentIndex].EditingModel)
 			if revisionGroups[currentIndex].Response != "" {
-				fmt.Printf("\n\033[1mFull LLM Response:\033[0m\n%s\n", revisionGroups[currentIndex].Response)
+				ui.Out().Printf("\n\033[1mFull LLM Response:\033[0m\n%s\n", revisionGroups[currentIndex].Response)
 			} else {
-				fmt.Println("\nNo LLM response recorded.")
+				ui.Out().Print("\nNo LLM response recorded.\n")
 			}
 		case "":
 			// Show next revision
@@ -157,8 +158,8 @@ func PrintRevisionHistory() error {
 				currentIndex++
 				displayRevision(revisionGroups[currentIndex])
 			} else {
-				fmt.Println("No more revisions to show.")
-				fmt.Print("x: Exit | b: Show previous revision -> ")
+				ui.Out().Print("No more revisions to show.\n")
+				ui.Out().Print("x: Exit | b: Show previous revision -> ")
 				exitInput, _ := reader.ReadString('\n')
 				exitInput = strings.TrimSpace(strings.ToLower(exitInput))
 				if exitInput == "x" || exitInput == "exit" {
@@ -171,7 +172,7 @@ func PrintRevisionHistory() error {
 				}
 			}
 		default:
-			fmt.Println("Invalid option. Please try again.")
+			ui.Out().Print("Invalid option. Please try again.\n")
 		}
 	}
 }

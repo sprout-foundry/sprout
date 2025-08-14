@@ -98,7 +98,11 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 		if cfg.PreapplyReview && diff != "" {
 			logger := utils.GetLogger(cfg.SkipPrompt)
 			if err := performAutomatedReview(diff, originalInstructions, processedInstructions, cfg, logger, revisionID); err != nil {
-				return "", err
+				// If review requested revisions, allow subsequent iterations to handle it,
+				// but do not abort the current write path for initial creation edits.
+				if !strings.Contains(err.Error(), "revisions applied, re-validating") {
+					return "", err
+				}
 			}
 		}
 

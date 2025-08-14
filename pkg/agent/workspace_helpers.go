@@ -118,19 +118,82 @@ func getCommonEntryPointFiles(projectType string, logger *utils.Logger) []string
 
 // buildBasicFileContext concatenates contents of context files into a string for prompts
 func buildBasicFileContext(contextFiles []string, logger *utils.Logger) string {
-	var b strings.Builder
-	for _, file := range contextFiles {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			logger.Logf("Could not read %s for context: %v", file, err)
+	// Backwards compatible default: cap to 8 files and ~40k chars using concurrent reads
+	return buildBasicFileContextCapped(contextFiles, logger, 8, 40000)
+}
+
+// buildBasicFileContextCapped reads up to maxFiles concurrently and caps total bytes
+func buildBasicFileContextCapped(contextFiles []string, logger *utils.Logger, maxFiles int, maxBytes int) string {
+	if maxFiles <= 0 {
+		maxFiles = 8
+	}
+	if maxBytes <= 0 {
+		maxBytes = 40000
+	}
+	// Deduplicate and limit
+	seen := map[string]bool{}
+	var files []string
+	for _, f := range contextFiles {
+		if f == "" || seen[f] {
 			continue
 		}
-		const max = 4000
-		s := string(content)
-		if len(s) > max {
-			s = s[:max] + "\n... [truncated]"
+		seen[f] = true
+		files = append(files, f)
+		if len(files) >= maxFiles {
+			break
 		}
-		b.WriteString(fmt.Sprintf("\n\n## File: %s\n````\n%s\n````\n", file, s))
+	}
+	type result struct {
+		path    string
+		content string
+	}
+	outCh := make(chan result, len(files))
+	// concurrency limit
+	sem := make(chan struct{}, 6)
+	for _, f := range files {
+		sem <- struct{}{}
+		go func(path string) {
+			defer func() { <-sem }()
+			b, err := os.ReadFile(path)
+			if err != nil {
+				logger.Logf("Could not read %s for context: %v", path, err)
+				outCh <- result{path: path, content: ""}
+				return
+			}
+			outCh <- result{path: path, content: string(b)}
+		}(f)
+	}
+	// drain semaphore
+	for i := 0; i < cap(sem); i++ {
+		sem <- struct{}{}
+	}
+	close(outCh)
+	var b strings.Builder
+	used := 0
+	for r := range outCh {
+		if r.content == "" {
+			continue
+		}
+		s := r.content
+		if used+len(s) > maxBytes {
+			// trim to remaining budget
+			remain := maxBytes - used
+			if remain <= 0 {
+				break
+			}
+			if remain < len(s) {
+				s = s[:remain] + "\n... [truncated]"
+			}
+		}
+		const perFileMax = 4000
+		if len(s) > perFileMax {
+			s = s[:perFileMax] + "\n... [truncated]"
+		}
+		b.WriteString(fmt.Sprintf("\n\n## File: %s\n````\n%s\n````\n", r.path, s))
+		used += len(s)
+		if used >= maxBytes {
+			break
+		}
 	}
 	return b.String()
 }

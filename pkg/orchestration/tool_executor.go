@@ -12,6 +12,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/webcontent"
 	"github.com/alantheprice/ledit/pkg/workspace"
@@ -27,7 +28,7 @@ func NewToolExecutor(cfg *config.Config) *ToolExecutor {
 
 func (te *ToolExecutor) ExecuteToolCall(toolCall llm.ToolCall) (string, error) {
 	// Log the tool being used
-	fmt.Printf("🤖 LLM is using tool: %s\n", toolCall.Function.Name)
+	ui.Out().Printf("🤖 LLM is using tool: %s\n", toolCall.Function.Name)
 
 	// Parse the arguments from JSON string to map
 	var args map[string]interface{}
@@ -58,21 +59,21 @@ func (te *ToolExecutor) executeWebSearch(args map[string]interface{}) (string, e
 	}
 
 	// Notify user about web search being performed
-	fmt.Printf("🔍 Searching web for: %s\n", query)
+	ui.Out().Printf("🔍 Searching web for: %s\n", query)
 
 	// Use the FetchContextFromSearch function that exists in webcontent package
 	result, err := webcontent.FetchContextFromSearch(query, te.cfg)
 	if err != nil {
-		fmt.Printf("   ❌ Web search failed: %v\n", err)
+		ui.Out().Printf("   ❌ Web search failed: %v\n", err)
 		return "", fmt.Errorf("web search failed: %w", err)
 	}
 
 	if result == "" {
-		fmt.Printf("   ⚠️  No relevant web content found\n")
+		ui.Out().Printf("   ⚠️  No relevant web content found\n")
 		return "No relevant web content found for the query.", nil
 	}
 
-	fmt.Printf("   ✅ Web search completed (%d bytes of content)\n", len(result))
+	ui.Out().Printf("   ✅ Web search completed (%d bytes of content)\n", len(result))
 	return result, nil
 }
 
@@ -83,15 +84,15 @@ func (te *ToolExecutor) executeReadFile(args map[string]interface{}) (string, er
 	}
 
 	// Notify user about file being read
-	fmt.Printf("📖 Reading file: %s\n", path)
+	ui.Out().Printf("📖 Reading file: %s\n", path)
 
 	content, err := filesystem.ReadFile(path)
 	if err != nil {
-		fmt.Printf("   ❌ Failed to read file: %v\n", err)
+		ui.Out().Printf("   ❌ Failed to read file: %v\n", err)
 		return "", fmt.Errorf("failed to read file %s: %w", path, err)
 	}
 
-	fmt.Printf("   ✅ File read successfully (%d bytes)\n", len(content))
+	ui.Out().Printf("   ✅ File read successfully (%d bytes)\n", len(content))
 	return string(content), nil
 }
 
@@ -102,16 +103,16 @@ func (te *ToolExecutor) executeShellCommand(args map[string]interface{}) (string
 	}
 
 	// Notify user about what command is being executed
-	fmt.Printf("🔧 Executing shell command: %s\n", command)
+	ui.Out().Printf("🔧 Executing shell command: %s\n", command)
 
 	cmd := exec.Command("sh", "-c", command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Printf("   ❌ Command failed: %v\n", err)
+		ui.Out().Printf("   ❌ Command failed: %v\n", err)
 		return "", fmt.Errorf("command failed: %w\nOutput: %s", err, string(output))
 	}
 
-	fmt.Printf("   ✅ Command completed successfully\n")
+	ui.Out().Printf("   ✅ Command completed successfully\n")
 	return string(output), nil
 }
 
@@ -159,10 +160,10 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 		if !ok {
 			return "", fmt.Errorf("workspace_context action 'search_embeddings' requires 'query' parameter")
 		}
-		fmt.Printf("🧠 Searching workspace embeddings for: %s\n", query)
+		ui.Out().Printf("🧠 Searching workspace embeddings for: %s\n", query)
 		fullContextFiles, summaryContextFiles, err := workspace.GetFilesForContextUsingEmbeddings(query, ws, te.cfg, logger)
 		if err != nil {
-			fmt.Printf("   ❌ Embedding search failed: %v\n", err)
+			ui.Out().Printf("   ❌ Embedding search failed: %v\n", err)
 			return "", fmt.Errorf("embedding search failed: %w", err)
 		}
 
@@ -183,7 +184,7 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 		if len(fullContextFiles) == 0 && len(summaryContextFiles) == 0 {
 			result.WriteString("  No relevant files found.\n")
 		}
-		fmt.Printf("   ✅ Embedding search completed.\n")
+		ui.Out().Printf("   ✅ Embedding search completed.\n")
 		return result.String(), nil
 
 	case "search_keywords":
@@ -191,12 +192,12 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 		if !ok || strings.TrimSpace(query) == "" {
 			return "", fmt.Errorf("workspace_context action 'search_keywords' requires non-empty 'query' parameter")
 		}
-		fmt.Printf("🔎 Keyword searching workspace for: %s\n", query)
+		ui.Out().Printf("🔎 Keyword searching workspace for: %s\n", query)
 		// Use a ripgrep fallback to grep for keywords across Go files; include fallback to grep if rg not available
 		cmd := exec.Command("sh", "-c", fmt.Sprintf("command -v rg >/dev/null 2>&1 && rg -n -l -i --glob '*.go' %q . || grep -r -n -l -i --include=*.go %q .", query, query))
 		output, err := cmd.Output()
 		if err != nil {
-			fmt.Printf("   ❌ Keyword search failed: %v\n", err)
+			ui.Out().Printf("   ❌ Keyword search failed: %v\n", err)
 			return "", fmt.Errorf("keyword search failed: %w", err)
 		}
 		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -217,27 +218,27 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 		if count == 0 {
 			result.WriteString("  No matches found.\n")
 		}
-		fmt.Printf("   ✅ Keyword search completed (%d files).\n", count)
+		ui.Out().Printf("   ✅ Keyword search completed (%d files).\n", count)
 		return result.String(), nil
 
 	case "load_tree":
-		fmt.Printf("🌳 Loading workspace file tree.\n")
+		ui.Out().Printf("🌳 Loading workspace file tree.\n")
 		tree, err := workspace.GetFormattedFileTree(ws)
 		if err != nil {
-			fmt.Printf("   ❌ Failed to load file tree: %v\n", err)
+			ui.Out().Printf("   ❌ Failed to load file tree: %v\n", err)
 			return "", fmt.Errorf("failed to load file tree: %w", err)
 		}
-		fmt.Printf("   ✅ File tree loaded.\n")
+		ui.Out().Printf("   ✅ File tree loaded.\n")
 		return tree, nil
 
 	case "load_summary":
-		fmt.Printf("📝 Loading full workspace summary.\n")
+		ui.Out().Printf("📝 Loading full workspace summary.\n")
 		summary, err := workspace.GetFullWorkspaceSummary(ws, te.cfg.CodeStyle, te.cfg, logger)
 		if err != nil {
-			fmt.Printf("   ❌ Failed to load workspace summary: %v\n", err)
+			ui.Out().Printf("   ❌ Failed to load workspace summary: %v\n", err)
 			return "", fmt.Errorf("failed to load workspace summary: %w", err)
 		}
-		fmt.Printf("   ✅ Workspace summary loaded.\n")
+		ui.Out().Printf("   ✅ Workspace summary loaded.\n")
 		return summary, nil
 
 	default:

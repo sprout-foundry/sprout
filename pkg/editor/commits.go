@@ -8,6 +8,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 )
 
 func parseCommitMessage(commitMessage string) (string, string, error) {
@@ -48,7 +49,7 @@ func getChangeSummaries(cfg *config.Config, newCode string, instructions string,
 	}
 
 	// falling back to manual input
-	fmt.Print(prompts.EnterDescriptionPrompt(newFilename))
+	ui.Out().Print(prompts.EnterDescriptionPrompt(newFilename))
 	note, _ = reader.ReadString('\n')
 	note = strings.TrimSpace(note)
 	generatedDescription = ""

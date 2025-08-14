@@ -15,6 +15,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/workspace"
 
 	"github.com/spf13/cobra"
@@ -56,7 +57,7 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 	})
 
 	// Print the initial assistant message
-	fmt.Println("\nAssistant: OK, I understand. I will use the context provided with each question to give my answer. What is your question?")
+	ui.Out().Print("\nAssistant: OK, I understand. I will use the context provided with each question to give my answer. What is your question?\n")
 
 	question := initialQuestion
 
@@ -80,12 +81,12 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 		// Load fresh workspace context for each question, unless skipping is requested
 		// Default behavior: include workspace context (feature flag can be added later)
 		if true { // Always include context for now
-			fmt.Println("\nAnalyzing workspace to answer your question...")
+			ui.Out().Print("\nAnalyzing workspace to answer your question...\n")
 			workspaceContext = workspace.GetWorkspaceContext(question, cfg)
 			if workspaceContext == "" {
-				fmt.Println("Warning: Could not load workspace context for this question.")
+				ui.Out().Print("Warning: Could not load workspace context for this question.\n")
 			}
-			fmt.Println("Workspace analysis complete.")
+			ui.Out().Print("Workspace analysis complete.\n")
 			// Combine question and context into a single user message
 			userPrompt = fmt.Sprintf("My question is: '%s'\n\nHere is the relevant context from my workspace:\n\n--- Workspace Context ---\n%s\n\n--- End Workspace Context ---", question, workspaceContext)
 		}
@@ -100,8 +101,8 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 		}
 
 		if totalInputTokens > llm.DefaultTokenLimit && !cfg.SkipPrompt {
-			fmt.Printf("\nThis request will take approximately %d tokens with model %s.\n\n", totalInputTokens, cfg.EditingModel)
-			fmt.Printf("NOTE: This request at %d tokens is over the default token limit of %d, do you want to continue? (y/n): ", totalInputTokens, llm.DefaultTokenLimit)
+			ui.Out().Printf("\nThis request will take approximately %d tokens with model %s.\n\n", totalInputTokens, cfg.EditingModel)
+			ui.Out().Printf("NOTE: This request at %d tokens is over the default token limit of %d, do you want to continue? (y/n): ", totalInputTokens, llm.DefaultTokenLimit)
 
 			confirm, err := reader.ReadString('\n') // Use the same buffered reader
 			if err != nil {
@@ -109,14 +110,14 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 			}
 
 			if strings.TrimSpace(strings.ToLower(confirm)) != "y" {
-				fmt.Println("Operation cancelled by user.")
+				ui.Out().Print("Operation cancelled by user.\n")
 				messages = messages[:len(messages)-1] // remove last question
 				question = ""
 				continue
 			}
 		}
 
-		fmt.Print("\nAssistant: ")
+		ui.Out().Print("\nAssistant: ")
 
 		// Use a string builder to capture the response for history
 		var responseBuilder strings.Builder
@@ -142,11 +143,11 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 			// Add assistant response to history
 			messages = append(messages, prompts.Message{Role: "assistant", Content: responseBuilder.String()})
 		}
-		fmt.Println()
+		ui.Out().Print("\n")
 
 		question = "" // Reset for next loop
 	}
-	fmt.Println("\nGoodbye!")
+	ui.Out().Print("\nGoodbye!\n")
 }
 
 // readUserInput reads a single line from the provided reader and trims whitespace.

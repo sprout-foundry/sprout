@@ -1,12 +1,14 @@
 package agent
 
 import (
-	"context"
+	stdctx "context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
@@ -31,12 +33,25 @@ func executeShellCommands(context *AgentContext, commands []string) error {
 		}
 
 		// Use shell to execute command to handle pipes, redirects, etc., with a timeout
-		ctx, cancel := contextWithTimeout(45 * time.Second)
+		// Timeout is configurable; default to 45s
+		timeout := 45 * time.Second
+		if context.Config != nil && context.Config.ShellTimeoutSecs > 0 {
+			timeout = time.Duration(context.Config.ShellTimeoutSecs) * time.Second
+		}
+		ctx, cancel := contextWithTimeout(timeout)
 		defer cancel()
 		// Sandbox: run in workspace root only
 		wd, _ := os.Getwd()
-		cmd := exec.CommandContext(ctx, "sh", "-c", command)
+		// Apply lightweight resource limits via ulimit when available (sh built-in)
+		limitedCmd := withUlimitPrefix(command, timeout)
+		cmd := exec.CommandContext(ctx, "sh", "-c", limitedCmd)
 		cmd.Dir = filepath.Clean(wd)
+		// Kill entire process group on timeout; set PGID
+		if runtime.GOOS != "windows" {
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		}
+		// Sanitize environment to reduce credential leakage
+		cmd.Env = sanitizeEnv(os.Environ())
 		output, err := cmd.CombinedOutput()
 
 		// Truncate output immediately to prevent huge outputs from overwhelming the system
@@ -50,6 +65,10 @@ func executeShellCommands(context *AgentContext, commands []string) error {
 			errorMsg := fmt.Sprintf("Command failed: %s (output: %s)", err.Error(), outputStr)
 			context.Errors = append(context.Errors, errorMsg)
 			context.Logger.LogProcessStep(fmt.Sprintf("❌ Command %d failed: %s", i+1, errorMsg))
+			// Extra cleanup on timeout: kill the process group
+			if ctx.Err() == stdctx.DeadlineExceeded && cmd.Process != nil && runtime.GOOS != "windows" {
+				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			}
 		} else {
 			result := fmt.Sprintf("Command %d succeeded: %s", i+1, outputStr)
 			context.ExecutedOperations = append(context.ExecutedOperations, result)
@@ -62,8 +81,8 @@ func executeShellCommands(context *AgentContext, commands []string) error {
 
 // contextWithTimeout provides a cancellable context with the given timeout.
 // Declared as a helper to keep call sites concise.
-func contextWithTimeout(d time.Duration) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), d)
+func contextWithTimeout(d time.Duration) (stdctx.Context, stdctx.CancelFunc) {
+	return stdctx.WithTimeout(stdctx.Background(), d)
 }
 
 // isSimpleShellCommand returns true for trivial, safe commands we allow for fast-path execution
@@ -109,6 +128,12 @@ func containsRiskyShell(s string) bool {
 	}
 	// disallow absolute path writes
 	if strings.Contains(t, ">/") {
+		return true
+	}
+	if strings.Contains(t, ">>/") {
+		return true
+	}
+	if strings.Contains(t, " tee /") || strings.Contains(t, " tee ../") {
 		return true
 	}
 	return false
@@ -172,4 +197,53 @@ func isAllowedDestructive(s string, cfg *config.Config) bool {
 		return true
 	}
 	return false
+}
+
+// withUlimitPrefix prefixes the command with conservative ulimit settings when supported.
+// Uses CPU time roughly equal to timeout seconds and caps open files and file size.
+func withUlimitPrefix(cmd string, timeout time.Duration) string {
+	// On POSIX shells, 'ulimit' is a built-in. Keep portable subset.
+	secs := int(timeout.Seconds())
+	if secs <= 0 {
+		secs = 45
+	}
+	// Limit CPU seconds and open files; cap file size (~10MB blocks of 512 bytes ≈ 20480)
+	prefix := fmt.Sprintf("ulimit -t %d; ulimit -n 256; ulimit -f 20480; ", secs)
+	return prefix + cmd
+}
+
+// sanitizeEnv removes common sensitive variables and constrains PATH to safe defaults.
+func sanitizeEnv(environ []string) []string {
+	blockedPrefixes := []string{
+		"AWS_", "AZURE_", "GCP_", "GOOGLE_", "OPENAI_", "ANTHROPIC_", "HUGGINGFACE_",
+		"GITHUB_", "GH_", "NPM_TOKEN", "API_KEY", "SECRET", "KEY", "TOKEN",
+	}
+	out := make([]string, 0, len(environ))
+	havePath := false
+	for _, kv := range environ {
+		parts := strings.SplitN(kv, "=", 2)
+		key := parts[0]
+		blocked := false
+		for _, p := range blockedPrefixes {
+			if strings.HasPrefix(strings.ToUpper(key), p) {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue
+		}
+		if strings.EqualFold(key, "PATH") {
+			havePath = true
+			// Constrain PATH to common system bins plus current PATH tail (best effort)
+			// Avoid completely wiping in case tools are needed
+			out = append(out, "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin")
+			continue
+		}
+		out = append(out, kv)
+	}
+	if !havePath {
+		out = append(out, "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin")
+	}
+	return out
 }

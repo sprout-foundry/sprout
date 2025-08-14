@@ -93,14 +93,16 @@ func extractSearchTerms(intentLower string) []string {
 	words := strings.Fields(intentLower)
 	for _, word := range words {
 		word = strings.Trim(word, ".,!?;:")
-		if len(word) > 3 && (strings.Contains(word, "orchestration") ||
-			strings.Contains(word, "editing") || strings.Contains(word, "model") ||
-			strings.Contains(word, "review") || strings.Contains(word, "code") ||
-			strings.Contains(word, "llm") || strings.Contains(word, "api") ||
-			strings.Contains(word, "config") || strings.Contains(word, "prompt") ||
-			strings.Contains(word, "editor") || strings.Contains(word, "embedding")) {
+		if len(word) > 2 {
 			terms = append(terms, word)
 		}
+	}
+	// Add crude function name heuristics when phrases are present
+	if strings.Contains(intentLower, "greet") {
+		terms = append(terms, "greet")
+	}
+	if strings.Contains(intentLower, "println") {
+		terms = append(terms, "println")
 	}
 	if strings.Contains(intentLower, "codereviews") || strings.Contains(intentLower, "codereview") {
 		terms = append(terms, "review", "code", "getcodereview")

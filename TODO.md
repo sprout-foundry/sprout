@@ -4,8 +4,11 @@ Prioritized best-practice improvements for the Agent → Code Editing workflow.
 
 ## Editing fidelity and safety
 - AST-backed edits via tree-sitter across Go/TS/JS/Python/Ruby/PHP/Rust/Java: select precise spans, emit minimal diffs.
+  - Status: Go implemented using stdlib AST; others pending.
 - Three-way, context-aware patch apply: generate unified diffs with generous context; detect/rebase conflicts.
+  - Status: basic three-way merge integrated into full/partial edit flows.
 - Idempotent micro-edits: avoid duplicating insertions; check AST presence/markers before applying.
+  - Status: duplicate-insertion guard added for partial edits.
 - Stronger postconditions: regex + AST assertions (symbol added, imports resolved, signatures preserved).
 
 ## Planning and risk management

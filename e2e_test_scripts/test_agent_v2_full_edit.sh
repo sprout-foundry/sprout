@@ -20,7 +20,7 @@ run_test_logic() {
     # Deterministic instruction for full replacement
     # We pass an explicit target file and direct replacement content
     expected=$'alpha\nbeta\ngamma\n'
-    ../../ledit agent --agent v2 --skip-prompt "In $(pwd)/data.txt change 'old content' to 'alpha\nbeta\ngamma'"
+    ../../ledit agent --agent v2 -m "$model_name" --skip-prompt "In $(pwd)/data.txt change 'old content' to 'alpha\nbeta\ngamma'"
 
     echo
     echo "--- Verifying Test ---"

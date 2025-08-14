@@ -7,6 +7,8 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/orchestration"
+	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
+	uiPkg "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -45,6 +47,10 @@ Examples:
 		}
 
 		// Multi-agent process mode
+		if uiPkg.Enabled() {
+			uiPkg.SetDefaultSink(uiPkg.TuiSink{})
+			go func() { _ = tuiPkg.Run() }()
+		}
 		if err := runMultiAgentProcess(input, logger); err != nil {
 			logger.LogProcessStep(fmt.Sprintf("Multi-agent process failed: %v", err))
 			log.Fatalf("Error during multi-agent process: %v", err)

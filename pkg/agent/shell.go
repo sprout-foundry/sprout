@@ -58,8 +58,13 @@ func executeShellCommands(context *AgentContext, commands []string) error {
 		if runtime.GOOS != "windows" {
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		}
-		// Sanitize environment to reduce credential leakage
-		cmd.Env = sanitizeEnv(os.Environ())
+		// Sanitize environment to reduce credential leakage and force a sandboxed TMPDIR
+		// Create per-workspace temp directory
+		tmpDir := filepath.Join(wd, ".ledit", "tmp")
+		_ = os.MkdirAll(tmpDir, 0755)
+		env := sanitizeEnv(os.Environ())
+		env = append(env, "TMPDIR="+tmpDir)
+		cmd.Env = env
 		output, err := cmd.CombinedOutput()
 
 		// Truncate output immediately to prevent huge outputs from overwhelming the system

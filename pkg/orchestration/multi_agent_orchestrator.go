@@ -19,6 +19,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/orchestration/types"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -605,46 +606,62 @@ func (o *MultiAgentOrchestrator) enrichStepWithToolContext(step *types.Orchestra
 		return
 	}
 	if step.Input == nil {
-		return
+		step.Input = map[string]string{}
 	}
 
 	te := NewToolExecutor(o.config)
 
-	// Workspace summary
-	if strings.EqualFold(strings.TrimSpace(step.Input["workspace_summary"]), "true") {
+	// Workspace summary (from input or tools)
+	if strings.EqualFold(strings.TrimSpace(step.Input["workspace_summary"]), "true") || (step.Tools != nil && strings.EqualFold(strings.TrimSpace(step.Tools["workspace_summary"]), "true")) {
 		if res, err := te.executeWorkspaceContext(map[string]interface{}{"action": "load_summary"}); err == nil {
 			step.Input["workspace_summary_content"] = res
 			o.logger.LogProcessStep("📥 Added workspace summary to step input")
 		}
 	}
-	// Workspace tree
-	if strings.EqualFold(strings.TrimSpace(step.Input["workspace_tree"]), "true") {
+	// Workspace tree (from input or tools)
+	if strings.EqualFold(strings.TrimSpace(step.Input["workspace_tree"]), "true") || (step.Tools != nil && strings.EqualFold(strings.TrimSpace(step.Tools["workspace_tree"]), "true")) {
 		if res, err := te.executeWorkspaceContext(map[string]interface{}{"action": "load_tree"}); err == nil {
 			step.Input["workspace_tree_content"] = res
 			o.logger.LogProcessStep("📥 Added workspace file tree to step input")
 		}
 	}
 	// Workspace keyword search
-	if q := strings.TrimSpace(step.Input["workspace_search"]); q != "" {
+	if q := firstNonEmpty(step.Input["workspace_search"], opt(step.Tools, "workspace_search")); strings.TrimSpace(q) != "" {
 		if res, err := te.executeWorkspaceContext(map[string]interface{}{"action": "search_keywords", "query": q}); err == nil {
 			step.Input["workspace_search_results"] = res
 			o.logger.LogProcessStep("🔎 Added workspace search results to step input")
 		}
 	}
 	// Workspace embeddings search
-	if q := strings.TrimSpace(step.Input["workspace_embeddings"]); q != "" {
+	if q := firstNonEmpty(step.Input["workspace_embeddings"], opt(step.Tools, "workspace_embeddings")); strings.TrimSpace(q) != "" {
 		if res, err := te.executeWorkspaceContext(map[string]interface{}{"action": "search_embeddings", "query": q}); err == nil {
 			step.Input["workspace_embeddings_results"] = res
 			o.logger.LogProcessStep("🧠 Added workspace embeddings results to step input")
 		}
 	}
 	// Web search
-	if q := strings.TrimSpace(step.Input["web_search"]); q != "" {
+	if q := firstNonEmpty(step.Input["web_search"], opt(step.Tools, "web_search")); strings.TrimSpace(q) != "" {
 		if res, err := te.executeWebSearch(map[string]interface{}{"query": q}); err == nil {
 			step.Input["web_search_results"] = res
 			o.logger.LogProcessStep("🌐 Added web search results to step input")
 		}
 	}
+}
+
+func opt(m map[string]string, k string) string {
+	if m == nil {
+		return ""
+	}
+	return m[k]
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // runValidationStage executes build/test/lint/custom checks when configured
@@ -787,12 +804,12 @@ func (o *MultiAgentOrchestrator) printProgressTable() {
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
 
 	// Header
-	fmt.Printf("\n%-24s %-12s %-22s %8s %10s\n", "Agent", "Status", "Current Step", "Tokens", "Cost($)")
-	fmt.Printf("%s\n", strings.Repeat("-", 80))
+	ui.Out().Printf("\n%-24s %-12s %-22s %8s %10s\n", "Agent", "Status", "Current Step", "Tokens", "Cost($)")
+	ui.Out().Printf("%s\n", strings.Repeat("-", 80))
 	for _, r := range rows {
-		fmt.Printf("%-24s %-12s %-22s %8d %10.4f\n", r.Name, r.Status, r.Step, r.Tokens, r.Cost)
+		ui.Out().Printf("%-24s %-12s %-22s %8d %10.4f\n", r.Name, r.Status, r.Step, r.Tokens, r.Cost)
 	}
-	fmt.Println()
+	ui.Out().Printf("\n")
 }
 
 // Helper methods

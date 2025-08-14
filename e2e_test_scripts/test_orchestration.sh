@@ -15,23 +15,57 @@ run_test_logic() {
     mkdir -p orchestration_test
     cd orchestration_test
     # Define the orchestration prompt
-    ORCHESTRATION_PROMPT="Create a simple Go HTTP server application. The package name should be hello and it should have a /hello endpoint that returns a localized greeting."
+    # Create a minimal process.json for orchestration instead of passing a freeform prompt
+    cat > process.json << 'JSON'
+{
+  "version": "1.0",
+  "goal": "Create a simple Go HTTP server application with /hello endpoint",
+  "description": "Single-agent demo to validate orchestration pipeline end-to-end",
+  "base_model": "",
+  "agents": [
+    {
+      "id": "dev",
+      "name": "Developer",
+      "persona": "backend_developer",
+      "description": "Implements small Go services",
+      "skills": ["go", "http"],
+      "model": "",
+      "priority": 1,
+      "depends_on": [],
+      "config": {"skip_prompt": "true"}
+    }
+  ],
+  "steps": [
+    {
+      "id": "init",
+      "name": "Init server",
+      "description": "Create go.mod and main.go with /hello endpoint returning 'hello'",
+      "agent_id": "dev",
+      "input": {},
+      "expected_output": "main.go and go.mod present",
+      "status": "pending",
+      "depends_on": [],
+      "timeout": 60,
+      "retries": 0
+    }
+  ],
+  "validation": {"required": false},
+  "settings": {"max_retries": 0, "step_timeout": 120, "parallel_execution": false, "stop_on_failure": true, "log_level": "info"}
+}
+JSON
 
-    echo "Running ledit orchestrate with prompt: \"$ORCHESTRATION_PROMPT\""
-
-    # Run ledit orchestrate. Pipe 'y' to confirm the plan execution.
-    orchestrate_output_log="orchestrate_output.log"
-    ../../ledit process "$ORCHESTRATION_PROMPT" --model "$model_name" --skip-prompt
+    echo "Running ledit process with process.json"
+    ../../ledit process process.json --model "$model_name" --skip-prompt
 
     echo
     echo "--- Verifying Test ---"
 
-    # Check that the requirements.json file was created
-    if [ ! -f ".ledit/requirements.json" ]; then
-        echo "FAIL: .ledit/requirements.json was not created."
+    # Check that the state file was created
+    if [ ! -f ".ledit/orchestration_state.json" ]; then
+        echo "FAIL: .ledit/orchestration_state.json was not created."
         exit 1
     fi
-    echo "PASS: .ledit/requirements.json was created."
+    echo "PASS: .ledit/orchestration_state.json was created."
 
     # Check that files were created
     if [ ! -f "main.go" ] || [ ! -f "go.mod" ] || ! ls *_test.go >/dev/null 2>&1; then
@@ -41,16 +75,16 @@ run_test_logic() {
     fi
     echo "PASS: Application files (main.go, go.mod, *_test.go) were created."
 
-    # Check that all steps are marked as completed
-    if grep -q '"status": "failed"' .ledit/requirements.json; then
+    # Check that the step is marked as completed
+    if grep -q '"status": "failed"' .ledit/orchestration_state.json; then
         echo "FAIL: One or more orchestration steps failed."
         exit 1
     fi
-    if ! grep -q '"status": "completed"' .ledit/requirements.json; then
+    if ! grep -q '"status": "completed"' .ledit/orchestration_state.json; then
         echo "FAIL: No steps were marked as completed."
         exit 1
     fi
-    echo "PASS: All orchestration steps completed successfully."
+    echo "PASS: Orchestration step completed successfully."
 
     cd ../
     echo "----------------------------------------------------"

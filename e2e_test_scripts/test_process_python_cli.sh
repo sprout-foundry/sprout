@@ -14,29 +14,61 @@ run_test_logic() {
     mkdir -p "$workdir"
     cd "$workdir" || exit 1
 
-    PROMPT="Create a small Python CLI tool named greet that accepts a --name argument and prints 'Hello, NAME!'. Use argparse and include a simple README. Provide a minimal project layout."
+    # Create a minimal single-step process file
+    cat > process.json << 'JSON'
+{
+  "version": "1.0",
+  "goal": "Create a Python CLI using argparse",
+  "description": "Single-agent small Python CLI",
+  "agents": [{
+    "id": "pydev",
+    "name": "Python Dev",
+    "persona": "backend_developer",
+    "description": "Implements small Python CLIs",
+    "skills": ["python", "argparse"],
+    "model": "",
+    "priority": 1,
+    "depends_on": [],
+    "config": {"skip_prompt": "true"}
+  }],
+  "steps": [{
+    "id": "init",
+    "name": "Init CLI",
+    "description": "Create greet.py using argparse with --name and a README",
+    "agent_id": "pydev",
+    "input": {},
+    "expected_output": "greet.py and README.md exist",
+    "status": "pending",
+    "depends_on": [],
+    "timeout": 60,
+    "retries": 0
+  }],
+  "validation": {"required": false},
+  "settings": {"max_retries": 0, "step_timeout": 120, "parallel_execution": false, "stop_on_failure": true, "log_level": "info"}
+}
+JSON
 
-    ../../ledit process "$PROMPT" --model "$model_name" --skip-prompt
+    ../../ledit process process.json --model "$model_name" --skip-prompt
 
     echo
     echo "--- Verifying Test ---"
     # requirements.json should exist
-    if [ ! -f ".ledit/requirements.json" ]; then
-        echo "FAIL: .ledit/requirements.json was not created."
+    if [ ! -f ".ledit/orchestration_state.json" ]; then
+        echo "FAIL: .ledit/orchestration_state.json was not created."
         exit 1
     fi
-    echo "PASS: .ledit/requirements.json was created."
+    echo "PASS: .ledit/orchestration_state.json was created."
 
     # Ensure at least one step completed and none failed
-    if grep -q '"status": "failed"' .ledit/requirements.json; then
+    if grep -q '"status": "failed"' .ledit/orchestration_state.json; then
         echo "FAIL: One or more steps failed according to requirements.json"
         exit 1
     fi
-    if ! grep -q '"status": "completed"' .ledit/requirements.json; then
+    if ! grep -q '"status": "completed"' .ledit/orchestration_state.json; then
         echo "FAIL: No steps marked completed in requirements.json"
         exit 1
     fi
-    echo "PASS: requirements.json indicates completed steps and no failures."
+    echo "PASS: orchestration_state.json indicates completed steps and no failures."
 
     # Check key files for a Python CLI project
     if [ ! -f "README.md" ]; then

@@ -290,7 +290,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 	}
 
 	// --- Warning and Confirmation for too many new files ---
-	if newFilesCount > 30 {
+	if newFilesCount > 500 {
 		var topDirsList []string
 		for dir := range newFilesTopDirs {
 			topDirsList = append(topDirsList, dir)

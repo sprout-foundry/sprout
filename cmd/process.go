@@ -22,6 +22,7 @@ var createExample bool
 var resume bool
 var statePath string
 var noProgress bool
+var dryRun bool
 
 // processCmd represents the process command
 var processCmd = &cobra.Command{
@@ -55,8 +56,15 @@ var processCmd = &cobra.Command{
 			return
 		}
 
-		// Fallback: if no process file provided, enter interactive authoring flow
+		// Fallback: if no process file provided, either interactive dry-run or interactive authoring flow
 		if len(args) == 0 {
+			if dryRun {
+				if err := interactiveAuthorProcessDryRun(logger); err != nil {
+					logger.LogProcessStep(fmt.Sprintf("Interactive dry-run failed: %v", err))
+					log.Fatalf("Error during interactive dry-run: %v", err)
+				}
+				return
+			}
 			input, err := interactiveAuthorProcessFile(logger)
 			if err != nil {
 				logger.LogProcessStep(fmt.Sprintf("Interactive authoring failed: %v", err))
@@ -66,6 +74,15 @@ var processCmd = &cobra.Command{
 		}
 
 		input := args[0]
+
+		// If dry-run with provided file: validate only and exit
+		if dryRun {
+			if err := validateProcessOnly(input, logger); err != nil {
+				logger.LogProcessStep(fmt.Sprintf("Dry-run validation failed: %v", err))
+				log.Fatalf("Dry-run validation failed: %v", err)
+			}
+			return
+		}
 
 		// Multi-agent process mode
 		if uiPkg.Enabled() {
@@ -141,7 +158,48 @@ func init() {
 	processCmd.Flags().BoolVar(&resume, "resume", false, "Resume from a previous orchestration state if compatible")
 	processCmd.Flags().StringVar(&statePath, "state", "", "Path to orchestration state file (default .ledit/orchestration_state.json)")
 	processCmd.Flags().BoolVar(&noProgress, "no-progress", false, "Suppress progress table output during orchestration")
+	processCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate process file (or interactively author a draft) without executing")
 	rootCmd.AddCommand(processCmd)
+}
+
+// validateProcessOnly loads and validates a process.json without executing
+func validateProcessOnly(processFilePath string, logger *utils.Logger) error {
+	loader := orchestration.NewProcessLoader()
+	logger.LogProcessStep("🔎 Dry-run: validating process file")
+	if _, err := loader.LoadProcessFile(processFilePath); err != nil {
+		return err
+	}
+	logger.LogProcessStep("✅ Process file is valid")
+	return nil
+}
+
+// interactiveAuthorProcessDryRun runs the interactive authoring but does not write or execute
+func interactiveAuthorProcessDryRun(logger *utils.Logger) error {
+	if skipPrompt {
+		return fmt.Errorf("interactive dry-run requires prompts; pass a file or omit --skip-prompt")
+	}
+	cfg, err := config.LoadOrInitConfig(false)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	cfg.SkipPrompt = false
+	sys := "You are a Process Designer for a multi-agent code orchestration tool. Ask the user questions using ask_user and then output ONLY a valid JSON process file."
+	msgs := []prompts.Message{{Role: "system", Content: sys}, {Role: "user", Content: "Help me author a process.json for my goal. Ask me questions, then output JSON only when ready."}}
+	response, err := llm.CallLLMWithInteractiveContext(cfg.OrchestrationModel, msgs, "process_authoring_dry_run", cfg, 0, func(_ []llm.ContextRequest, _ *config.Config) (string, error) { return "", nil })
+	if err != nil {
+		return fmt.Errorf("LLM interactive authoring failed: %w", err)
+	}
+	jsonStr := extractFirstJSON(response)
+	if strings.TrimSpace(jsonStr) == "" {
+		return fmt.Errorf("did not receive JSON process definition from the LLM")
+	}
+	loader := orchestration.NewProcessLoader()
+	if _, err := loader.LoadProcessFromBytes([]byte(jsonStr)); err != nil {
+		logger.LogProcessStep("❌ Generated process JSON did not validate")
+		return err
+	}
+	logger.LogProcessStep("✅ Dry-run OK: generated process.json is valid (not saved)")
+	return nil
 }
 
 // interactiveAuthorProcessFile guides the user through creating a process file via an LLM chat

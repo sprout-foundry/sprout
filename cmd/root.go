@@ -64,12 +64,14 @@ func init() {
 		// consider env first
 		if ui.FromEnv() {
 			ui.SetEnabled(true)
+			ui.SetDefaultSink(ui.TuiSink{})
 			return
 		}
 		// then flag
 		if f := rootCmd.PersistentFlags().Lookup("ui"); f != nil {
 			if v, err := rootCmd.Flags().GetBool("ui"); err == nil && v {
 				ui.SetEnabled(true)
+				ui.SetDefaultSink(ui.TuiSink{})
 				return
 			}
 		}

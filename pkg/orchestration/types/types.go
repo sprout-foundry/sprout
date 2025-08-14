@@ -96,6 +96,7 @@ type OrchestrationStep struct {
 	Attempts       int               `json:"attempts"`        // Attempt counter
 	LastAttemptAt  string            `json:"last_attempt_at,omitempty"`
 	History        []StepAttempt     `json:"history,omitempty"` // Per-attempt records
+	Tools          map[string]string `json:"tools,omitempty"`   // Optional tool directives for enrichment
 }
 
 // StepAttempt records a single attempt to execute a step

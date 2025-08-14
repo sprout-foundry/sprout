@@ -14,23 +14,54 @@ run_test_logic() {
     mkdir -p "$workdir"
     cd "$workdir" || exit 1
 
-    PROMPT="Generate a minimal static website with index.html, styles.css, and script.js. The page should show 'Hello, Web!' in the body and log a console message. Include a short README."
+    cat > process.json << 'JSON'
+{
+  "version": "1.0",
+  "goal": "Generate minimal static site",
+  "description": "Index + CSS + JS",
+  "agents": [{
+    "id": "web",
+    "name": "Web Dev",
+    "persona": "frontend_developer",
+    "description": "Creates static sites",
+    "skills": ["html", "css", "js"],
+    "model": "",
+    "priority": 1,
+    "depends_on": [],
+    "config": {"skip_prompt": "true"}
+  }],
+  "steps": [{
+    "id": "init",
+    "name": "Init site",
+    "description": "Create index.html with 'Hello, Web!', styles.css, script.js logging to console",
+    "agent_id": "web",
+    "input": {},
+    "expected_output": "index.html, styles.css, script.js exist",
+    "status": "pending",
+    "depends_on": [],
+    "timeout": 60,
+    "retries": 0
+  }],
+  "validation": {"required": false},
+  "settings": {"max_retries": 0, "step_timeout": 120, "parallel_execution": false, "stop_on_failure": true, "log_level": "info"}
+}
+JSON
 
-    ../../ledit process "$PROMPT" --model "$model_name" --skip-prompt
+    ../../ledit process process.json --model "$model_name" --skip-prompt
 
     echo
     echo "--- Verifying Test ---"
-    if [ ! -f ".ledit/requirements.json" ]; then
-        echo "FAIL: .ledit/requirements.json was not created."
+    if [ ! -f ".ledit/orchestration_state.json" ]; then
+        echo "FAIL: .ledit/orchestration_state.json was not created."
         exit 1
     fi
-    echo "PASS: .ledit/requirements.json was created."
+    echo "PASS: .ledit/orchestration_state.json was created."
 
-    if grep -q '"status": "failed"' .ledit/requirements.json; then
+    if grep -q '"status": "failed"' .ledit/orchestration_state.json; then
         echo "FAIL: One or more steps failed."
         exit 1
     fi
-    if ! grep -q '"status": "completed"' .ledit/requirements.json; then
+    if ! grep -q '"status": "completed"' .ledit/orchestration_state.json; then
         echo "FAIL: No steps marked completed."
         exit 1
     fi

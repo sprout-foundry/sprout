@@ -14,9 +14,40 @@ run_test_logic() {
     mkdir -p "$workdir"
     cd "$workdir" || exit 1
 
-    PROMPT="Create a small Go CLI named echoer that prints provided args. Include go.mod, main.go, and a README. Keep it in package main and use flag for parsing."
+    cat > process.json << 'JSON'
+{
+  "version": "1.0",
+  "goal": "Create a Go CLI named echoer",
+  "description": "Single-agent Go CLI",
+  "agents": [{
+    "id": "godev",
+    "name": "Go Dev",
+    "persona": "backend_developer",
+    "description": "Implements small Go CLIs",
+    "skills": ["go"],
+    "model": "",
+    "priority": 1,
+    "depends_on": [],
+    "config": {"skip_prompt": "true"}
+  }],
+  "steps": [{
+    "id": "init",
+    "name": "Init CLI",
+    "description": "Create go.mod and main.go in package main using flag to echo args",
+    "agent_id": "godev",
+    "input": {},
+    "expected_output": "go.mod and main.go exist",
+    "status": "pending",
+    "depends_on": [],
+    "timeout": 60,
+    "retries": 0
+  }],
+  "validation": {"required": false},
+  "settings": {"max_retries": 0, "step_timeout": 120, "parallel_execution": false, "stop_on_failure": true, "log_level": "info"}
+}
+JSON
 
-    ../../ledit process "$PROMPT" --model "$model_name" --skip-prompt
+    ../../ledit process process.json --model "$model_name" --skip-prompt
 
     echo
     echo "--- Verifying Test ---"

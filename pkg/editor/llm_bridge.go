@@ -31,12 +31,14 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 		ui.Out().Printf("%s\n", llmContent)
 		// Fallback: if a filename was provided and the response contains a single code block
 		// without filename headers, extract code by language and assign to that filename
-		if strings.TrimSpace(filename) != "" {
-			lang := getLanguageFromExtension(filename)
-			if codeOnly, perr := parser.ExtractCodeFromResponse(llmContent, lang); perr == nil && strings.TrimSpace(codeOnly) != "" {
-				updatedCode = map[string]string{filename: codeOnly}
-			}
-		}
+        if strings.TrimSpace(filename) != "" {
+            lang := getLanguageFromExtension(filename)
+            if codeOnly, perr := parser.ExtractCodeFromResponse(llmContent, lang); perr == nil && strings.TrimSpace(codeOnly) != "" {
+                updatedCode = map[string]string{filename: codeOnly}
+            } else if anyCode, perr2 := parser.ExtractCodeFromResponse(llmContent, ""); perr2 == nil && strings.TrimSpace(anyCode) != "" {
+                updatedCode = map[string]string{filename: anyCode}
+            }
+        }
 	}
 	return updatedCode, llmContent, nil
 }

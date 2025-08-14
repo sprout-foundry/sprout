@@ -1,4 +1,4 @@
-package context // Changed from contexthandler to context
+package context
 
 import (
 	"bufio"
@@ -10,9 +10,9 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/prompts"    // Import the new prompts package
-	"github.com/alantheprice/ledit/pkg/utils"      // Import utils for logging
-	"github.com/alantheprice/ledit/pkg/webcontent" // Import webcontent package
+    "github.com/alantheprice/ledit/pkg/prompts"
+    "github.com/alantheprice/ledit/pkg/utils"
+    "github.com/alantheprice/ledit/pkg/webcontent"
 )
 
 // --- Message Structs ---

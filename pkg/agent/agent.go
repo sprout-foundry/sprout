@@ -1,4 +1,3 @@
-// Core agent functionality package
 package agent
 
 import (

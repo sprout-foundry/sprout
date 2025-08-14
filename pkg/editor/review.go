@@ -9,7 +9,6 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
-// performAutomatedReview performs an LLM-based code review of the combined diff.
 func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions string, cfg *config.Config, logger *utils.Logger, revisionID string) error {
 	logger.LogProcessStep("Performing automated code review...")
 

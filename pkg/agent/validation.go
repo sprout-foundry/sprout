@@ -342,6 +342,50 @@ func generateSmokeTestsIfEnabled(changedFiles []string, cfg *config.Config, logg
 	}
 }
 
+// runSmokeTestsIfEnabled executes minimal smoke tests when configured.
+// It attempts fast, language-appropriate commands and treats failures as non-fatal.
+func runSmokeTestsIfEnabled(changedFiles []string, cfg *config.Config, logger *utils.Logger) {
+	if cfg == nil || !cfg.AutoGenerateTests {
+		return
+	}
+	// Heuristic: prefer Go if any .go files changed, otherwise try Python.
+	hasGo := false
+	hasPy := false
+	for _, f := range changedFiles {
+		lf := strings.ToLower(f)
+		if strings.HasSuffix(lf, ".go") {
+			hasGo = true
+		}
+		if strings.HasSuffix(lf, ".py") {
+			hasPy = true
+		}
+	}
+	if hasGo {
+		logger.LogProcessStep("🧪 Running Go smoke tests (TestSmoke only)...")
+		cmd := exec.Command("sh", "-c", "go test ./... -run TestSmoke -count=1")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			logger.LogProcessStep("⚠️ Go smoke tests failed (non-fatal): " + err.Error())
+			logger.Logf("Output: %s", string(out))
+		} else {
+			logger.LogProcessStep("✅ Go smoke tests passed")
+		}
+		return
+	}
+	if hasPy {
+		// Try pytest first; if unavailable, try running the file directly
+		logger.LogProcessStep("🧪 Attempting Python smoke tests (pytest -k smoke)...")
+		cmd := exec.Command("sh", "-c", "pytest -q -k smoke || python -m pytest -q -k smoke")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			logger.LogProcessStep("⚠️ Python smoke tests failed or pytest unavailable (non-fatal)")
+			logger.Logf("Output: %s", string(out))
+		} else {
+			logger.LogProcessStep("✅ Python smoke tests passed")
+		}
+	}
+}
+
 func guessPackageName(path string) string {
 	base := filepath.Base(filepath.Dir(path))
 	if base == "." || base == ".." || base == "" {

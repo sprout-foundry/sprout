@@ -290,39 +290,15 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 		return nil, fmt.Errorf("LLM returned an empty response for code review")
 	}
 
-	// Try to extract JSON from response (handles both raw JSON and code block JSON)
-	var jsonStr string
-	if strings.Contains(response, "```json") {
-		parts := strings.Split(response, "```json")
-		if len(parts) > 1 {
-			jsonPart := parts[1]
-			end := strings.Index(jsonPart, "```")
-			if end > 0 {
-				jsonStr = strings.TrimSpace(jsonPart[:end])
-			} else {
-				jsonStr = strings.TrimSpace(jsonPart)
-			}
+	// Robust JSON extraction: prefer centralized utils extractor, then fallback cleaner with required fields
+	jsonStr, extractErr := utils.ExtractJSONFromLLMResponse(response)
+	if jsonStr == "" || extractErr != nil {
+		// Fallback: clean and validate presence of required fields
+		cleaned, cleanErr := utils.CleanAndValidateJSONResponse(response, []string{"status", "feedback"})
+		if cleanErr != nil {
+			return nil, fmt.Errorf("failed to extract JSON from LLM response: %v; fallback clean failed: %v. Full response: %s", extractErr, cleanErr, response)
 		}
-	} else {
-		// Simple heuristic to find the start of a JSON object
-		start := strings.Index(response, "{")
-		end := strings.LastIndex(response, "}")
-		if start != -1 && end != -1 && end > start {
-			jsonStr = response[start : end+1]
-		} else {
-			jsonStr = response
-		}
-	}
-
-	// Extract JSON from response with improved error handling
-	jsonStr, extractErr := extractJSONFromResponse(response)
-
-	// Validate that we have a non-empty JSON string
-	if jsonStr == "" {
-		if extractErr != nil {
-			return nil, fmt.Errorf("failed to extract JSON from LLM response: %w. Full response: %s", extractErr, response)
-		}
-		return nil, fmt.Errorf("failed to extract JSON from LLM response. Full response: %s", response)
+		jsonStr = cleaned
 	}
 
 	// Add debug logging for JSON parsing issues
@@ -334,6 +310,18 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 	var reviewResult types.CodeReviewResult
 	if err := json.Unmarshal([]byte(jsonStr), &reviewResult); err != nil {
 		return nil, fmt.Errorf("failed to parse code review JSON from LLM response: %w\nExtracted JSON was: %s\nFull response was: %s", err, jsonStr, response)
+	}
+
+	// Ensure required fields are minimally present
+	if reviewResult.Status == "" {
+		reviewResult.Status = "needs_revision"
+	}
+	if reviewResult.Feedback == "" {
+		reviewResult.Feedback = "No feedback provided."
+	}
+	// If instructions missing on needs_revision, provide a safe nudge
+	if reviewResult.Status == "needs_revision" && strings.TrimSpace(reviewResult.Instructions) == "" {
+		reviewResult.Instructions = "Apply the minimal changes required by the original prompt and ensure output format strictly matches the prompt."
 	}
 
 	return &reviewResult, nil
@@ -412,12 +400,15 @@ func parseStagedCodeReviewResponse(response string) (*types.CodeReviewResult, er
 
 // extractJSONFromResponse extracts JSON from an LLM response that may contain markdown formatting
 func extractJSONFromResponse(response string) (string, error) {
-	// First try to extract from markdown code blocks
+	// First try to extract from markdown code blocks. Use last fence to avoid early cut when content contains ``` inside strings.
 	if strings.Contains(response, "```json") {
 		parts := strings.Split(response, "```json")
 		if len(parts) > 1 {
 			jsonPart := parts[1]
-			end := strings.Index(jsonPart, "```")
+			end := strings.LastIndex(jsonPart, "```")
+			if end == -1 {
+				end = strings.Index(jsonPart, "```")
+			}
 			if end > 0 {
 				jsonStr := strings.TrimSpace(jsonPart[:end])
 				if jsonStr != "" {

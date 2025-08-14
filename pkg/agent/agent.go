@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	pb "github.com/alantheprice/ledit/pkg/agent/playbooks"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
@@ -158,6 +159,28 @@ func executeCreatePlan(context *AgentContext) error {
 
 	if context.IntentAnalysis == nil {
 		return fmt.Errorf("cannot create plan without intent analysis")
+	}
+
+	// Playbook fast-path: if a registered playbook matches, let it build the plan
+	if sel := pb.Select(context.UserIntent, context.IntentAnalysis.Category); sel != nil {
+		context.Logger.LogProcessStep("📘 Using playbook: " + sel.Name())
+		spec := sel.BuildPlan(context.UserIntent, context.IntentAnalysis.EstimatedFiles)
+		if spec != nil && (len(spec.Ops) > 0 || len(spec.Files) > 0) {
+			// Convert PlanSpec → EditPlan
+			ep := &EditPlan{FilesToEdit: append([]string{}, spec.Files...), ScopeStatement: spec.Scope}
+			for _, op := range spec.Ops {
+				ep.EditOperations = append(ep.EditOperations, EditOperation{
+					FilePath:           op.FilePath,
+					Description:        op.Description,
+					Instructions:       op.Instructions,
+					ScopeJustification: op.ScopeJustification,
+				})
+			}
+			context.CurrentPlan = ep
+			context.ExecutedOperations = append(context.ExecutedOperations, "Plan created via playbook: "+sel.Name())
+			context.Logger.LogProcessStep(fmt.Sprintf("✅ Plan created via playbook: %d files, %d operations", len(ep.FilesToEdit), len(ep.EditOperations)))
+			return nil
+		}
 	}
 
 	// Try planning up to 3 attempts total (initial + 2 retries). If still empty/fails, abort.

@@ -10,14 +10,7 @@ import (
 // Returns the section content, start line, end line, and any error
 func extractRelevantSection(content, instructions, filePath string) (string, int, int, error) {
 	lines := strings.Split(content, "\n")
-	lang := getLanguageFromExtension(filePath)
-
-	// For Go files, try to identify functions, types, or logical blocks
-	if lang == "go" {
-		return extractGoSection(lines, instructions)
-	}
-
-	// For other languages, use simpler heuristics
+	// Use language-agnostic extraction so partial edits work consistently across languages
 	return extractGenericSection(lines, instructions)
 }
 
@@ -29,9 +22,16 @@ func extractGoSection(lines []string, instructions string) (string, int, int, er
 	if strings.Contains(instructionsLower, "top of") || strings.Contains(instructionsLower, "beginning of") ||
 		strings.Contains(instructionsLower, "start of") {
 		// Return the first few lines of the file including package declaration and imports
-		endLine := 10 // Get first 10 lines to include package and initial imports
-		if len(lines) < endLine {
+		maxLines := 10 // capture roughly package + imports
+		if len(lines) == 0 {
+			return "", 0, 0, fmt.Errorf("empty file")
+		}
+		endLine := maxLines - 1
+		if endLine >= len(lines) {
 			endLine = len(lines) - 1
+		}
+		if endLine < 0 { // safety
+			endLine = 0
 		}
 		section := strings.Join(lines[0:endLine+1], "\n")
 		return section, 0, endLine, nil

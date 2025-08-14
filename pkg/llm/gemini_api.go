@@ -83,8 +83,9 @@ func callGeminiAPI(model string, messages []prompts.Message, timeout time.Durati
 		return "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		ui.Out().Print(prompts.APIError(string(body), resp.StatusCode))
-		return "", fmt.Errorf(prompts.APIError(string(body), resp.StatusCode))
+		msg := prompts.APIError(string(body), resp.StatusCode)
+		ui.Out().Print(msg)
+		return "", fmt.Errorf("%s", msg)
 	}
 
 	var geminiResp GeminiResponse

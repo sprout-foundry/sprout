@@ -162,8 +162,9 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Accept: Metrics include success rate, cost per goal, edits/turn, duplicate blocks; opt-in
 
 ### 36) Shell sandboxing
-- [ ] Run shell commands in a restricted sandbox (working dir jail, resource limits)
+- [x] Run shell commands in a restricted sandbox (working dir jail, resource limits)
   - Accept: Risky commands are constrained by ulimits/working dir; logs note sandbox mode
+  - Implemented: Commands run from workspace root with configurable timeout, conservative ulimit caps, environment sanitization, denylist + small allowlist, process-group kill on timeout, and verbose sandbox logging.
 
 ### 37) Persistent evidence cache with invalidation
 - [x] Persist evidence across runs; invalidate on file/hash change

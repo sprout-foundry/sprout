@@ -10,45 +10,10 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
-// RunAgentMode is the main public interface for command line usage
-func RunAgentMode(userIntent string, skipPrompt bool, model string) error {
-	fmt.Printf("🤖 Agent mode: Analyzing your intent...\n")
-
-	utils.LogUserPrompt(userIntent)
-
-	cfg, err := config.LoadOrInitConfig(skipPrompt)
-	if err != nil {
-		logger := utils.GetLogger(false)
-		logger.LogError(fmt.Errorf("failed to load config: %w", err))
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-	if model != "" {
-		cfg.OrchestrationModel = model
-	}
-	cfg.SkipPrompt = skipPrompt
-	// Enable interactive tool-calling for code flow (planner/executor/evaluator tools)
-	cfg.Interactive = true
-	cfg.CodeToolsEnabled = true
-	_ = llm.InitPricingTable()
-
-	fmt.Printf("🎯 Intent: %s\n", userIntent)
-	logger := utils.GetLogger(cfg.SkipPrompt)
-
-	overallStart := time.Now()
-	_ = WriteRunSnapshot(cfg, fmt.Sprintf("v1-%d", overallStart.Unix()))
-	tokenUsage, err := Execute(userIntent, cfg, logger)
-	if err != nil {
-		return err
-	}
-	overallDuration := time.Since(overallStart)
-	PrintTokenUsageSummary(tokenUsage, overallDuration, cfg)
-	fmt.Printf("✅ Agent execution completed\n")
-	return nil
-}
-
-// Execute is the main public interface for running the agent
+// Execute is the main public interface for running the agent loop programmatically.
+// Retained for orchestration and multi-agent callers; routes to the optimized v2 loop.
 func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*AgentTokenUsage, error) {
-	logger.LogProcessStep("🚀 Starting optimized agent execution...")
+	logger.LogProcessStep("🚀 Starting optimized agent execution (v2)...")
 	logger.LogProcessStep("🛡️ Policy version: " + PolicyVersion)
 
 	startTime := time.Now()
@@ -98,11 +63,10 @@ func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*Agen
 		validationUsage = buildUsage(tokenUsage.Validation, 0)
 	}
 
-	intentCost := llm.CalculateCost(intentUsage, orchestratorModel)
-	planningCost := llm.CalculateCost(planningUsage, orchestratorModel)
-	progressCost := llm.CalculateCost(progressUsage, orchestratorModel)
-	codegenCost := llm.CalculateCost(codegenUsage, editingModel)
-	validationCost := llm.CalculateCost(validationUsage, editingModel)
-	_ = intentCost + planningCost + progressCost + codegenCost + validationCost // computations done in PrintTokenUsageSummary too
+	_ = llm.CalculateCost(intentUsage, orchestratorModel)
+	_ = llm.CalculateCost(planningUsage, orchestratorModel)
+	_ = llm.CalculateCost(progressUsage, orchestratorModel)
+	_ = llm.CalculateCost(codegenUsage, editingModel)
+	_ = llm.CalculateCost(validationUsage, editingModel)
 	return tokenUsage, nil
 }

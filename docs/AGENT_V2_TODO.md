@@ -149,8 +149,9 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Implemented: When `AutoGenerateTests` is enabled, minimal Go/Python smoke tests are generated for changed files. After edits, smoke tests are executed non-fatally (Go: `go test -run TestSmoke`; Python: `pytest -k smoke` fallback). Logs record pass/fail.
 
 ### 33) State serialization and resume
-- [ ] Persist planner/executor/evaluator state to disk and support resume on next run
+- [x] Persist planner/executor/evaluator state to disk and support resume on next run
   - Accept: Interrupted runs can resume with prior plan and evidence cache
+  - Implemented: `pkg/agent/run_state.go` saves/loads/clears `.ledit/run_state.json`; `pkg/agent/orchestrator.go` loads on start (auto with `--skip-prompt`, prompt otherwise), saves after each iteration, clears on completion.
 
 ### 34) Policy versioning and canaries
 - [x] Version control prompts/policies and add a quick canary task suite
@@ -158,8 +159,9 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Implemented: PolicyVersion logged at start; run snapshot includes policy_version. Canary hook ready (use existing e2e minimal tasks as canaries).
 
 ### 35) AB testing and telemetry
-- [ ] Add lightweight metrics and AB hooks for planner/policy variants
+- [x] Add lightweight metrics and AB hooks for planner/policy variants
   - Accept: Metrics include success rate, cost per goal, edits/turn, duplicate blocks; opt-in
+  - Implemented: Telemetry events logged to configurable file with policy version/variant per iteration; hook present for AB variant (`PolicyVariant`).
 
 ### 36) Shell sandboxing
 - [x] Run shell commands in a restricted sandbox (working dir jail, resource limits)

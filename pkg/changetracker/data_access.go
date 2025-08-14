@@ -264,3 +264,41 @@ func fetchAllChanges() ([]ChangeLog, error) {
 
 	return changes, nil
 }
+
+// GetAllChanges returns all recorded changes (most recent first).
+func GetAllChanges() ([]ChangeLog, error) {
+	return fetchAllChanges()
+}
+
+// GetChangesSince returns changes whose timestamp is strictly after the provided time.
+func GetChangesSince(since time.Time) ([]ChangeLog, error) {
+	changes, err := fetchAllChanges()
+	if err != nil {
+		return nil, err
+	}
+	var filtered []ChangeLog
+	for _, c := range changes {
+		if c.Timestamp.After(since) {
+			filtered = append(filtered, c)
+		}
+	}
+	return filtered, nil
+}
+
+// GetChangedFilesSince returns a unique list of filenames changed after the given time.
+func GetChangedFilesSince(since time.Time) ([]string, error) {
+	changes, err := GetChangesSince(since)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	files := []string{}
+	for _, c := range changes {
+		if !seen[c.Filename] {
+			seen[c.Filename] = true
+			files = append(files, c.Filename)
+		}
+	}
+	// Keep file list stable order by timestamp order already provided
+	return files, nil
+}

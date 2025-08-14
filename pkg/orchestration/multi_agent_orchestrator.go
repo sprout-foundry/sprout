@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -373,7 +374,7 @@ func (o *MultiAgentOrchestrator) executeStep(step *types.OrchestrationStep) erro
 	step.Result = &types.StepResult{
 		Status:     result.Status,
 		Output:     result.Output,
-		Files:      result.Files,
+		Files:      o.collectChangedFilesSince(startTime),
 		Errors:     result.Errors,
 		Warnings:   result.Warnings,
 		Duration:   duration,
@@ -392,6 +393,16 @@ func (o *MultiAgentOrchestrator) executeStep(step *types.OrchestrationStep) erro
 	o.updateAgentStatus(step.AgentID, "completed", "", 100)
 
 	return nil
+}
+
+// collectChangedFilesSince inspects the change tracker to identify files modified after the given time.
+func (o *MultiAgentOrchestrator) collectChangedFilesSince(since time.Time) []string {
+	files, err := changetracker.GetChangedFilesSince(since)
+	if err != nil {
+		o.logger.LogProcessStep(fmt.Sprintf("⚠️ Failed to collect changed files: %v", err))
+		return []string{}
+	}
+	return files
 }
 
 // buildAgentTask creates a task description for the agent based on the step

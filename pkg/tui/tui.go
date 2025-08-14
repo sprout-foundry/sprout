@@ -13,11 +13,22 @@ import (
 
 // Basic model scaffold: header, body, footer with ticking clock
 type model struct {
-	start    time.Time
-	width    int
-	height   int
-	logs     []string
-	progress ui.ProgressSnapshotEvent
+	start     time.Time
+	width     int
+	height    int
+	logs      []string
+	progress  ui.ProgressSnapshotEvent
+	streaming bool
+	// simple prompt state
+	awaitingPrompt bool
+	promptID       string
+	promptText     string
+	promptYesNo    bool
+	promptDefault  bool
+	// summary
+	baseModel   string
+	totalTokens int
+	totalCost   float64
 }
 
 type tickMsg time.Time
@@ -41,6 +52,14 @@ func subscribeEvents() tea.Cmd {
 				return e
 			case ui.ProgressSnapshotEvent:
 				return e
+			case ui.StreamStartedEvent:
+				return e
+			case ui.StreamEndedEvent:
+				return e
+			case ui.PromptRequestEvent:
+				return e
+			case ui.PromptResponseEvent:
+				return e
 			}
 		}
 		return nil
@@ -61,12 +80,58 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, subscribeEvents()
 	case ui.ProgressSnapshotEvent:
 		m.progress = msg
+		if msg.BaseModel != "" {
+			m.baseModel = msg.BaseModel
+		}
+		if msg.TotalTokens > 0 {
+			m.totalTokens = msg.TotalTokens
+		}
+		if msg.TotalCost > 0 {
+			m.totalCost = msg.TotalCost
+		}
+		return m, subscribeEvents()
+	case ui.ModelInfoEvent:
+		if strings.TrimSpace(msg.Name) != "" {
+			m.baseModel = msg.Name
+		}
+		return m, subscribeEvents()
+	case ui.StreamStartedEvent:
+		m.streaming = true
+		return m, subscribeEvents()
+	case ui.StreamEndedEvent:
+		m.streaming = false
+		return m, subscribeEvents()
+	case ui.PromptRequestEvent:
+		m.awaitingPrompt = true
+		m.promptID = msg.ID
+		m.promptText = msg.Prompt
+		m.promptYesNo = msg.RequireYesNo
+		m.promptDefault = msg.DefaultYes
 		return m, subscribeEvents()
 	case tickMsg:
 		return m, tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
 	case tea.KeyMsg:
-		if msg.String() == "q" || msg.String() == "ctrl+c" {
+		switch msg.String() {
+		case "q", "Q", "esc", "ctrl+c":
 			return m, tea.Quit
+		case "y", "Y":
+			if m.awaitingPrompt && m.promptYesNo {
+				ui.SubmitPromptResponse(m.promptID, "yes", true)
+				m.awaitingPrompt = false
+				return m, subscribeEvents()
+			}
+		case "n", "N":
+			if m.awaitingPrompt && m.promptYesNo {
+				ui.SubmitPromptResponse(m.promptID, "no", false)
+				m.awaitingPrompt = false
+				return m, subscribeEvents()
+			}
+		case "enter":
+			if m.awaitingPrompt && m.promptYesNo {
+				ui.SubmitPromptResponse(m.promptID, "", m.promptDefault)
+				m.awaitingPrompt = false
+				return m, subscribeEvents()
+			}
 		}
 		return m, nil
 	default:
@@ -75,13 +140,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	header := lipgloss.NewStyle().Bold(true).Padding(0, 1).Render("Ledit UI")
+	hdr := "Ledit UI"
+	if m.streaming {
+		hdr += "  [streaming…]"
+	}
+	header := lipgloss.NewStyle().Bold(true).Padding(0, 1).Render(hdr)
 	uptime := time.Since(m.start).Round(time.Second)
 	logs := ""
 	for i := range m.logs {
 		logs += m.logs[i] + "\n"
 	}
-	body := lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("Uptime: %s\nWidth: %d  Height: %d\n\n%s\nLogs:\n%s\nPress q to quit.", uptime, m.width, m.height, m.renderProgress(), logs))
+	prompt := ""
+	if m.awaitingPrompt {
+		if m.promptYesNo {
+			def := "no"
+			if m.promptDefault {
+				def = "yes"
+			}
+			prompt = fmt.Sprintf("\nPrompt: %s [y/n] (default %s)\n", m.promptText, def)
+		} else {
+			prompt = fmt.Sprintf("\nPrompt: %s\n", m.promptText)
+		}
+	}
+	summary := fmt.Sprintf("Model: %s | Tokens: %d | Cost: $%.4f | Uptime: %s", m.baseModel, m.totalTokens, m.totalCost, uptime)
+	body := lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("%s\nWidth: %d  Height: %d\n\n%s%s\nLogs:\n%s\nPress q to quit.", summary, m.width, m.height, m.renderProgress(), prompt, logs))
 	footer := lipgloss.NewStyle().Faint(true).Padding(0, 1).Render("© Ledit")
 
 	vertical := lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
@@ -105,5 +187,7 @@ func (m model) renderProgress() string {
 func Run() error {
 	p := tea.NewProgram(initialModel(), tea.WithContext(context.Background()), tea.WithAltScreen())
 	_, err := p.Run()
+	// On exit, restore default sink to stdout so subsequent output isn't lost
+	ui.UseStdoutSink()
 	return err
 }

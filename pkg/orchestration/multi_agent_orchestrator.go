@@ -911,7 +911,19 @@ func (o *MultiAgentOrchestrator) printProgressTable() {
 				Cost:   r.Cost,
 			})
 		}
-		ui.PublishProgress(completed, total, evRows)
+		// Aggregate tokens and cost from agent statuses
+		totalTokens := 0
+		totalCost := 0.0
+		for _, st := range o.plan.AgentStatuses {
+			totalTokens += st.TokenUsage
+			totalCost += st.Cost
+		}
+		// Publish base model when known
+		if strings.TrimSpace(o.plan.BaseModel) != "" {
+			ui.PublishModel(o.plan.BaseModel)
+		}
+		// Send progress snapshot with aggregates
+		ui.Publish(ui.ProgressSnapshotEvent{Completed: completed, Total: total, Rows: evRows, Time: time.Now(), TotalTokens: totalTokens, TotalCost: totalCost, BaseModel: o.plan.BaseModel})
 		return
 	}
 

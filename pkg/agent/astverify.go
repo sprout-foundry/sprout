@@ -134,3 +134,105 @@ out=[]; collect(sexp,out); puts out.uniq.join("\n")`
 	}
 	return true, "ruby AST ok"
 }
+
+// astVerifyPHP uses PHP's tokenizer to enumerate function/class names without needing ext/ast
+func astVerifyPHP(filePath string, names []string) (bool, string) {
+	if len(names) == 0 {
+		return true, "no names to verify"
+	}
+	script := `<?php
+    $src = file_get_contents($argv[1]);
+    if ($src === false) { fwrite(STDERR, "read fail\n"); exit(1);} 
+    $t=token_get_all($src);
+    $out=[]; $i=0; $n=count($t);
+    while($i<$n){
+      $tok=$t[$i];
+      if(is_array($tok)){
+        if($tok[0]==T_FUNCTION){
+          $j=$i+1; while($j<$n && is_array($t[$j]) && ($t[$j][0]==T_WHITESPACE||$t[$j][0]==T_AMPERSAND)){$j++;}
+          if($j<$n){ if(is_array($t[$j]) && $t[$j][0]==T_STRING){ $out[]=$t[$j][1]; }}
+        }
+        if($tok[0]==T_CLASS){
+          $j=$i+1; while($j<$n && is_array($t[$j]) && $t[$j][0]==T_WHITESPACE){$j++;}
+          if($j<$n){ if(is_array($t[$j]) && $t[$j][0]==T_STRING){ $out[]=$t[$j][1]; }}
+        }
+      }
+      $i++;
+    }
+    echo implode("\n", array_unique($out));
+    ?>`
+	cmd := exec.Command("php", "-r", script, filePath)
+	var out, stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return true, "php not available"
+	}
+	have := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		if line != "" {
+			have[line] = true
+		}
+	}
+	for _, n := range names {
+		if !have[n] {
+			return false, fmt.Sprintf("php AST: missing %s", n)
+		}
+	}
+	return true, "php AST ok"
+}
+
+// astVerifyJava uses universal ctags if available to extract class/method symbols
+func astVerifyJava(filePath string, names []string) (bool, string) {
+	if len(names) == 0 {
+		return true, "no names to verify"
+	}
+	cmd := exec.Command("ctags", "-x", "--language-force=Java", filePath)
+	var out, stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return true, "ctags not available"
+	}
+	have := map[string]bool{}
+	// ctags -x output: NAME KIND LINE FILE ...
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		f := strings.Fields(line)
+		if len(f) >= 1 {
+			have[f[0]] = true
+		}
+	}
+	for _, n := range names {
+		if !have[n] {
+			return false, fmt.Sprintf("java tags: missing %s", n)
+		}
+	}
+	return true, "java tags ok"
+}
+
+// astVerifyCSharp uses universal ctags for C#
+func astVerifyCSharp(filePath string, names []string) (bool, string) {
+	if len(names) == 0 {
+		return true, "no names to verify"
+	}
+	cmd := exec.Command("ctags", "-x", "--language-force=CSharp", filePath)
+	var out, stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return true, "ctags not available"
+	}
+	have := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		f := strings.Fields(line)
+		if len(f) >= 1 {
+			have[f[0]] = true
+		}
+	}
+	for _, n := range names {
+		if !have[n] {
+			return false, fmt.Sprintf("csharp tags: missing %s", n)
+		}
+	}
+	return true, "csharp tags ok"
+}

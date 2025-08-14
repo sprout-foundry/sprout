@@ -14,6 +14,8 @@ type StreamWriter struct {
 
 // NewStreamWriter creates a new StreamWriter.
 func NewStreamWriter() *StreamWriter {
+	// Notify UI that a stream has started
+	PublishStreamStarted()
 	return &StreamWriter{}
 }
 
@@ -57,8 +59,10 @@ func (w *StreamWriter) Flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.buffer.Len() == 0 {
+		PublishStreamEnded()
 		return
 	}
 	Log(w.buffer.String())
 	w.buffer.Reset()
+	PublishStreamEnded()
 }

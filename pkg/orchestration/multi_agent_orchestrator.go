@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -111,15 +112,25 @@ func (o *MultiAgentOrchestrator) Execute() error {
 	o.logger.LogProcessStep(fmt.Sprintf("Goal: %s", o.plan.Goal))
 	o.logger.LogProcessStep(fmt.Sprintf("Agents: %d, Steps: %d", len(o.plan.Agents), len(o.plan.Steps)))
 
-	// Attempt resume from previous state
-	if err := o.loadStateIfCompatible(); err == nil {
-		o.logger.LogProcessStep("♻️ Loaded previous orchestration state; resuming...")
+	// Attempt resume from previous state if requested
+	if o.resume {
+		if err := o.loadStateIfCompatible(); err == nil {
+			o.logger.LogProcessStep("♻️ Loaded previous orchestration state; resuming...")
+		} else if !os.IsNotExist(err) {
+			o.logger.LogProcessStep(fmt.Sprintf("ℹ️ Could not resume from state: %v (starting fresh)", err))
+		}
+	} else {
+		// Not resuming; if a state file exists, inform that it will be ignored
+		if _, err := os.Stat(o.statePath); err == nil {
+			o.logger.LogProcessStep("ℹ️ State file detected but --resume not set; ignoring previous state")
+		}
 	}
 
 	// Initialize all agents
 	if err := o.initializeAgents(); err != nil {
 		return fmt.Errorf("failed to initialize agents: %w", err)
 	}
+	o.printProgressTable()
 
 	// Execute steps with dependency handling, retries, timeouts, and optional parallelism
 	if err := o.executeSteps(); err != nil {
@@ -264,6 +275,7 @@ func (o *MultiAgentOrchestrator) executeSteps() error {
 					}
 				}
 				_ = o.saveState()
+				o.printProgressTable()
 			}
 			continue
 		}
@@ -294,6 +306,7 @@ func (o *MultiAgentOrchestrator) executeSteps() error {
 		if firstErr != nil && o.shouldStopOnFailure() {
 			return firstErr
 		}
+		o.printProgressTable()
 	}
 }
 
@@ -573,9 +586,8 @@ func (o *MultiAgentOrchestrator) loadStateIfCompatible() error {
 	if err := json.Unmarshal(b, &saved); err != nil {
 		return err
 	}
-	// Basic compatibility check: goal and number of steps
-	if saved.Goal != o.plan.Goal || len(saved.Steps) != len(o.plan.Steps) {
-		return fmt.Errorf("state incompatible")
+	if err := o.ensureCompatibility(&saved); err != nil {
+		return fmt.Errorf("state incompatible: %w", err)
 	}
 	o.plan = &saved
 	return nil
@@ -590,6 +602,78 @@ func (o *MultiAgentOrchestrator) saveState() error {
 		return err
 	}
 	return os.WriteFile(o.statePath, b, 0644)
+}
+
+// ensureCompatibility checks that the saved plan matches the current process definition
+func (o *MultiAgentOrchestrator) ensureCompatibility(saved *types.MultiAgentOrchestrationPlan) error {
+	if saved.Goal != o.plan.Goal {
+		return fmt.Errorf("goal differs")
+	}
+	// Compare agent ID sets
+	curAgents := map[string]bool{}
+	for _, a := range o.plan.Agents {
+		curAgents[a.ID] = true
+	}
+	for _, a := range saved.Agents {
+		if !curAgents[a.ID] {
+			return fmt.Errorf("agent set differs (missing %s)", a.ID)
+		}
+	}
+	if len(saved.Agents) != len(curAgents) {
+		return fmt.Errorf("agent set size differs")
+	}
+
+	// Compare step ID sets
+	curSteps := map[string]bool{}
+	for _, s := range o.plan.Steps {
+		curSteps[s.ID] = true
+	}
+	for _, s := range saved.Steps {
+		if !curSteps[s.ID] {
+			return fmt.Errorf("step set differs (missing %s)", s.ID)
+		}
+	}
+	if len(saved.Steps) != len(curSteps) {
+		return fmt.Errorf("step set size differs")
+	}
+	return nil
+}
+
+// printProgressTable renders a concise status table of agents and overall progress
+func (o *MultiAgentOrchestrator) printProgressTable() {
+	total := len(o.plan.Steps)
+	completed := 0
+	for _, s := range o.plan.Steps {
+		if s.Status == "completed" {
+			completed++
+		}
+	}
+	o.logger.LogProcessStep(fmt.Sprintf("📊 Progress: %d/%d steps completed", completed, total))
+
+	// Stable ordering of agents by name
+	type row struct {
+		Name, Status, Step string
+		Progress, Tokens   int
+		Cost               float64
+	}
+	var rows []row
+	for id, st := range o.plan.AgentStatuses {
+		name := id
+		if def := o.getAgentDefinition(id); def != nil && strings.TrimSpace(def.Name) != "" {
+			name = def.Name
+		}
+		step := st.CurrentStep
+		rows = append(rows, row{Name: name, Status: st.Status, Step: step, Progress: st.Progress, Tokens: st.TokenUsage, Cost: st.Cost})
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
+
+	// Header
+	fmt.Printf("\n%-24s %-12s %-22s %8s %10s\n", "Agent", "Status", "Current Step", "Tokens", "Cost($)")
+	fmt.Printf("%s\n", strings.Repeat("-", 80))
+	for _, r := range rows {
+		fmt.Printf("%-24s %-12s %-22s %8d %10.4f\n", r.Name, r.Status, r.Step, r.Tokens, r.Cost)
+	}
+	fmt.Println()
 }
 
 // Helper methods
@@ -654,38 +738,44 @@ func (o *MultiAgentOrchestrator) shouldStopOnFailure() bool {
 }
 
 func (o *MultiAgentOrchestrator) sortStepsByDependencies(steps []types.OrchestrationStep) []types.OrchestrationStep {
-    // Kahn's algorithm for topological sort
-    inDegree := map[string]int{}
-    adj := map[string][]string{}
-    idToStep := map[string]types.OrchestrationStep{}
-    for _, s := range steps {
-        idToStep[s.ID] = s
-        if _, ok := inDegree[s.ID]; !ok { inDegree[s.ID] = 0 }
-        for _, dep := range s.DependsOn {
-            inDegree[s.ID]++
-            adj[dep] = append(adj[dep], s.ID)
-        }
-    }
-    queue := []string{}
-    for id, d := range inDegree {
-        if d == 0 { queue = append(queue, id) }
-    }
-    var order []types.OrchestrationStep
-    for len(queue) > 0 {
-        id := queue[0]
-        queue = queue[1:]
-        order = append(order, idToStep[id])
-        for _, nbr := range adj[id] {
-            inDegree[nbr]--
-            if inDegree[nbr] == 0 { queue = append(queue, nbr) }
-        }
-    }
-    // If cycle exists, fall back to original order with a warning
-    if len(order) != len(steps) {
-        o.logger.LogProcessStep("⚠️ Cycle or unresolved dependencies detected; using original step order")
-        return steps
-    }
-    return order
+	// Kahn's algorithm for topological sort
+	inDegree := map[string]int{}
+	adj := map[string][]string{}
+	idToStep := map[string]types.OrchestrationStep{}
+	for _, s := range steps {
+		idToStep[s.ID] = s
+		if _, ok := inDegree[s.ID]; !ok {
+			inDegree[s.ID] = 0
+		}
+		for _, dep := range s.DependsOn {
+			inDegree[s.ID]++
+			adj[dep] = append(adj[dep], s.ID)
+		}
+	}
+	queue := []string{}
+	for id, d := range inDegree {
+		if d == 0 {
+			queue = append(queue, id)
+		}
+	}
+	var order []types.OrchestrationStep
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		order = append(order, idToStep[id])
+		for _, nbr := range adj[id] {
+			inDegree[nbr]--
+			if inDegree[nbr] == 0 {
+				queue = append(queue, nbr)
+			}
+		}
+	}
+	// If cycle exists, fall back to original order with a warning
+	if len(order) != len(steps) {
+		o.logger.LogProcessStep("⚠️ Cycle or unresolved dependencies detected; using original step order")
+		return steps
+	}
+	return order
 }
 
 func buildStepDependencies(steps []types.OrchestrationStep) map[string][]string {

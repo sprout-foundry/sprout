@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -328,7 +329,21 @@ func generateSmokeTestsIfEnabled(changedFiles []string, cfg *config.Config, logg
 			if _, err := os.Stat(testFile); err == nil {
 				continue
 			}
-			content := "package " + guessPackageName(f) + "\n\nimport \"testing\"\n\nfunc TestSmoke(t *testing.T) {\n\t// TODO: add real assertions\n\tif false { t.Fatal(\"placeholder\") }\n}\n"
+			// Try to extract a couple of function names to scaffold specific tests
+			funcNames := extractGoFuncNames(f, 2)
+			var builder strings.Builder
+			builder.WriteString("package ")
+			builder.WriteString(guessPackageName(f))
+			builder.WriteString("\n\nimport \"testing\"\n\n")
+			builder.WriteString("func TestSmoke(t *testing.T) {\n\t// TODO: add real assertions\n}\n\n")
+			for _, fn := range funcNames {
+				builder.WriteString("func Test_")
+				builder.WriteString(fn)
+				builder.WriteString("(t *testing.T) {\n\t// TODO: call ")
+				builder.WriteString(fn)
+				builder.WriteString(" and assert expected behavior\n}\n\n")
+			}
+			content := builder.String()
 			_ = os.WriteFile(testFile, []byte(content), 0644)
 			logger.LogProcessStep("🧪 Generated smoke test: " + testFile)
 		} else if strings.HasSuffix(lf, ".py") {
@@ -336,7 +351,18 @@ func generateSmokeTestsIfEnabled(changedFiles []string, cfg *config.Config, logg
 			if _, err := os.Stat(testFile); err == nil {
 				continue
 			}
-			content := "def test_smoke():\n    assert True\n"
+			// Extract a couple of def names to scaffold tests
+			pyTests := extractPyFuncNames(f, 2)
+			var builder strings.Builder
+			builder.WriteString("def test_smoke():\n    assert True\n\n")
+			for _, fn := range pyTests {
+				builder.WriteString("def test_")
+				builder.WriteString(fn)
+				builder.WriteString("():\n    # TODO: call ")
+				builder.WriteString(fn)
+				builder.WriteString(" and assert expected behavior\n\n")
+			}
+			content := builder.String()
 			_ = os.WriteFile(testFile, []byte(content), 0644)
 			logger.LogProcessStep("🧪 Generated smoke test: " + testFile)
 		}
@@ -393,6 +419,44 @@ func guessPackageName(path string) string {
 		return "main"
 	}
 	return base
+}
+
+// extractGoFuncNames pulls up to max function names from a Go source file for scaffolding tests
+func extractGoFuncNames(path string, max int) []string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	re := regexp.MustCompile(`(?m)^\s*func\s+(?:\([^)]*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
+	names := []string{}
+	for _, m := range re.FindAllStringSubmatch(string(b), -1) {
+		if len(m) >= 2 {
+			names = append(names, m[1])
+			if len(names) >= max {
+				break
+			}
+		}
+	}
+	return names
+}
+
+// extractPyFuncNames pulls up to max def names from a Python source file for scaffolding tests
+func extractPyFuncNames(path string, max int) []string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	re := regexp.MustCompile(`(?m)^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
+	names := []string{}
+	for _, m := range re.FindAllStringSubmatch(string(b), -1) {
+		if len(m) >= 2 {
+			names = append(names, m[1])
+			if len(names) >= max {
+				break
+			}
+		}
+	}
+	return names
 }
 
 // getBasicValidationStrategy provides a fallback validation strategy

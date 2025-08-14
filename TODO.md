@@ -35,3 +35,31 @@ Prioritized best-practice improvements for the Agent → Code Editing workflow.
 - Remove Agent v1 and default to Agent v2 (done). Ensure CLI help/docs reflect v2 by default. Clean up v1 code paths where safe.
 
 
+## E2E test coverage and stability – follow-ups
+
+- Process command tests:
+  - The `process` CLI expects a path to a JSON process file, not a freeform prompt. Update `e2e_test_scripts/test_orchestration.sh` and new `test_process_*.sh` scenarios to:
+    - Generate a minimal `process.json` in the test workspace (or call `ledit process --create-example process.json` and trim it).
+    - Run `ledit process --skip-prompt process.json`.
+    - Verify `.ledit/orchestration_state.json` exists and all steps have `"status": "completed"` (instead of checking `.ledit/requirements.json`).
+  - Docs alignment:
+    - README currently shows `ledit process "..."` with a freeform prompt. Replace with file-based examples or add a supported flag (e.g., `--prompt`) to generate a transient process file from a prompt.
+
+- Agent v2 revision loop robustness (test failures: discover file/edit, multi-file edit, cached workspace):
+  - Strengthen review/revision application when no code blocks are parsed or when the LLM produces incomplete diffs.
+    - If parser finds 0 blocks, retry once with stricter instructions; then fall back to deterministic micro-edits or AST-based fix where feasible.
+    - Preserve previously applied changes when revisions fail; do not regress files to prior state.
+  - Auto-fix trivial syntactic regressions detected by review (e.g., extra closing brace in Go) via a language-aware micro-edit pass before re-invoking the LLM.
+  - Reduce interactive retries that stall the loop; prefer a bounded, deterministic correction path after N failed revision attempts.
+
+- Self-contained workspace tests:
+  - `test_file_modification.sh` assumes `file1.txt` exists; create it explicitly in the test setup to avoid cross-test coupling. Ensure each test seeds its own workspace artifacts.
+  - Before issuing `#WORKSPACE` prompts, trigger an initial index if needed (e.g., a no-op `ledit code` run) so `.ledit/workspace.json` exists deterministically.
+
+- New examples to support tests and users:
+  - Add minimal `examples/process/*.json` templates for Python CLI, Node Express API, Static site, Go CLI, and Rust lib (single-agent, 1–2 small steps). Point e2e tests to these templates to reduce flakiness and LLM variance.
+
+- Orchestrator validation and UX:
+  - Consider writing a concise `.ledit/requirements.json`-like summary from the orchestrator with step statuses to simplify test assertions.
+  - Expose `--prompt` to accept inline goals and synthesize a temporary `process.json` (opt-in), matching README convenience while keeping `process_loader` JSON as the canonical path.
+

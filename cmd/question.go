@@ -122,10 +122,13 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 		// Use a string builder to capture the response for history
 		var responseBuilder strings.Builder
 
-		// Use a multiwriter to write to both stdout and the builder
-		// Note: Formatting of the LLM response content is handled by the LLM streaming function,
-		// which is not part of this file. This file only directs the stream to stdout.
-		writer := io.MultiWriter(os.Stdout, &responseBuilder)
+		// Stream to UI when enabled so users see live tokens; fallback to stdout otherwise
+		var writer io.Writer
+		if ui.Enabled() {
+			writer = io.MultiWriter(ui.NewStreamWriter(), &responseBuilder)
+		} else {
+			writer = io.MultiWriter(os.Stdout, &responseBuilder)
+		}
 
 		// Duplicate the config to avoid modifying the original and set the skipPrompt flag to true
 		skipPromptConfig := &config.Config{}

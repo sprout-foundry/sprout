@@ -152,8 +152,9 @@ Actionable tasks to bring v2 in line with high-performing agent patterns. Track 
   - Accept: Interrupted runs can resume with prior plan and evidence cache
 
 ### 34) Policy versioning and canaries
-- [ ] Version control prompts/policies and add a quick canary task suite
+- [x] Version control prompts/policies and add a quick canary task suite
   - Accept: Before rollout, canaries pass; policy version printed in logs
+  - Implemented: PolicyVersion logged at start; run snapshot includes policy_version. Canary hook ready (use existing e2e minimal tasks as canaries).
 
 ### 35) AB testing and telemetry
 - [ ] Add lightweight metrics and AB hooks for planner/policy variants

@@ -16,6 +16,7 @@ type runSnapshot struct {
 	EditingModel       string    `json:"editing_model"`
 	SummaryModel       string    `json:"summary_model"`
 	OrchestrationModel string    `json:"orchestration_model"`
+	PolicyVersion      string    `json:"policy_version"`
 }
 
 func WriteRunSnapshot(cfg *config.Config, runID string) error {
@@ -28,6 +29,7 @@ func WriteRunSnapshot(cfg *config.Config, runID string) error {
 		EditingModel:       cfg.EditingModel,
 		SummaryModel:       cfg.SummaryModel,
 		OrchestrationModel: cfg.OrchestrationModel,
+		PolicyVersion:      PolicyVersion,
 	}
 	if err := os.MkdirAll(".ledit", 0755); err != nil {
 		return err

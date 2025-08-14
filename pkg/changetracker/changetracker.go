@@ -24,6 +24,25 @@ type RevisionGroup struct {
 	EditingModel string // Added: Editing model used for this revision
 }
 
+// HasActiveChangesForRevision returns whether a revision ID exists and has any active changes
+func HasActiveChangesForRevision(revisionID string) (bool, error) {
+	changes, err := fetchAllChanges()
+	if err != nil {
+		return false, fmt.Errorf("failed to fetch all changes: %w", err)
+	}
+	if len(changes) == 0 {
+		return false, nil
+	}
+	revisionGroups := groupChangesByRevision(changes)
+	for i := range revisionGroups {
+		if revisionGroups[i].RevisionID == revisionID {
+			active := getActiveChanges(revisionGroups[i].Changes)
+			return len(active) > 0, nil
+		}
+	}
+	return false, nil
+}
+
 // RevertChangeByRevisionID reverts all changes associated with a given revision ID.
 func RevertChangeByRevisionID(revisionID string) error {
 	changes, err := fetchAllChanges()

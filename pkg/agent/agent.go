@@ -8,6 +8,7 @@ import (
 
 	pb "github.com/alantheprice/ledit/pkg/agent/playbooks"
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/index"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -72,7 +73,17 @@ func findRelevantFilesRobust(userIntent string, cfg *config.Config, logger *util
 		}
 	}
 
-	// If embeddings failed, try content-based search
+	// If embeddings failed, try symbol index
+	root, _ := os.Getwd()
+	if idx, err := index.BuildSymbols(root); err == nil && idx != nil {
+		tokens := strings.Fields(userIntent)
+		if sym := index.SearchSymbols(idx, tokens); len(sym) > 0 {
+			logger.Logf("Symbol index found %d candidate files", len(sym))
+			return sym
+		}
+	}
+
+	// If embeddings and symbols failed, try content-based search
 	logger.Logf("Embeddings found no files, trying content search...")
 	contentFiles := findRelevantFilesByContent(userIntent, logger)
 	if len(contentFiles) > 0 {

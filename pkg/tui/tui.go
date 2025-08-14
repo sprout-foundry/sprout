@@ -29,6 +29,9 @@ type model struct {
 	baseModel   string
 	totalTokens int
 	totalCost   float64
+	// logs pane controls
+	logsCollapsed bool
+	logsOffset    int // number of lines scrolled up from bottom (0 means stick to bottom)
 }
 
 type tickMsg time.Time
@@ -114,6 +117,47 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "Q", "esc", "ctrl+c":
 			return m, tea.Quit
+		case "l", "L":
+			m.logsCollapsed = !m.logsCollapsed
+			return m, nil
+		case "up", "k":
+			if !m.logsCollapsed && len(m.logs) > 0 {
+				if m.logsOffset < len(m.logs)-1 {
+					m.logsOffset++
+				}
+			}
+			return m, nil
+		case "down", "j":
+			if !m.logsCollapsed && m.logsOffset > 0 {
+				m.logsOffset--
+			}
+			return m, nil
+		case "pgup":
+			if !m.logsCollapsed && len(m.logs) > 0 {
+				m.logsOffset += 10
+				if m.logsOffset > len(m.logs)-1 {
+					m.logsOffset = len(m.logs) - 1
+				}
+			}
+			return m, nil
+		case "pgdown":
+			if !m.logsCollapsed && m.logsOffset > 0 {
+				m.logsOffset -= 10
+				if m.logsOffset < 0 {
+					m.logsOffset = 0
+				}
+			}
+			return m, nil
+		case "home":
+			if !m.logsCollapsed {
+				m.logsOffset = len(m.logs) - 1
+			}
+			return m, nil
+		case "end":
+			if !m.logsCollapsed {
+				m.logsOffset = 0
+			}
+			return m, nil
 		case "y", "Y":
 			if m.awaitingPrompt && m.promptYesNo {
 				ui.SubmitPromptResponse(m.promptID, "yes", true)
@@ -146,9 +190,37 @@ func (m model) View() string {
 	}
 	header := lipgloss.NewStyle().Bold(true).Padding(0, 1).Render(hdr)
 	uptime := time.Since(m.start).Round(time.Second)
+	// Compute how many log lines can fit given the current terminal height
+	progLines := countLines(m.renderProgress())
+	promptLines := 0
+	if m.awaitingPrompt {
+		if m.promptYesNo {
+			promptLines = 1
+		} else {
+			promptLines = 2
+		}
+	}
+	// header(1) + summary(1) + spacing(2) + footer(1)
+	reserved := 1 + 1 + 2 + 1 + progLines + promptLines
+	availableLogLines := m.height - reserved
+	if availableLogLines < 1 {
+		availableLogLines = 1
+	}
+	// Optional collapsible logs
 	logs := ""
-	for i := range m.logs {
-		logs += m.logs[i] + "\n"
+	if !m.logsCollapsed && len(m.logs) > 0 {
+		// compute starting index honoring scroll offset
+		start := len(m.logs) - availableLogLines - m.logsOffset
+		if start < 0 {
+			start = 0
+		}
+		end := start + availableLogLines
+		if end > len(m.logs) {
+			end = len(m.logs)
+		}
+		for i := start; i < end; i++ {
+			logs += m.logs[i] + "\n"
+		}
 	}
 	prompt := ""
 	if m.awaitingPrompt {
@@ -163,7 +235,7 @@ func (m model) View() string {
 		}
 	}
 	summary := fmt.Sprintf("Model: %s | Tokens: %d | Cost: $%.4f | Uptime: %s", m.baseModel, m.totalTokens, m.totalCost, uptime)
-	body := lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("%s\nWidth: %d  Height: %d\n\n%s%s\nLogs:\n%s\nPress q to quit.", summary, m.width, m.height, m.renderProgress(), prompt, logs))
+	body := lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("%s\nWidth: %d  Height: %d\n\n%s%s\nLogs (l to toggle, arrows/PgUp/PgDn to scroll):\n%s\nPress q to quit.", summary, m.width, m.height, m.renderProgress(), prompt, logs))
 	footer := lipgloss.NewStyle().Faint(true).Padding(0, 1).Render("© Ledit")
 
 	vertical := lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
@@ -181,6 +253,18 @@ func (m model) renderProgress() string {
 		out += fmt.Sprintf("%-24s %-12s %-22s %8d %10.4f\n", r.Name, r.Status, r.Step, r.Tokens, r.Cost)
 	}
 	return out
+}
+
+func countLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	// ensure consistent counting regardless of trailing newline
+	c := strings.Count(s, "\n")
+	if strings.HasSuffix(s, "\n") {
+		return c
+	}
+	return c + 1
 }
 
 // Run starts the TUI program with sane options.

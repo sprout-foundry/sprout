@@ -18,9 +18,13 @@ type WorkspaceFileInfo struct {
 
 // WorkspaceFile represents the entire workspace with all file information.
 type WorkspaceFile struct {
-	Files        map[string]WorkspaceFileInfo `json:"files"`
-	BuildCommand string                       `json:"build_command"`
-	ProjectGoals ProjectGoals                 `json:"project_goals"`
+	Files           map[string]WorkspaceFileInfo `json:"files"`
+	BuildCommand    string                       `json:"build_command"`
+	TestCommand     string                       `json:"test_command"`
+	Languages       []string                     `json:"languages"`
+	BuildRunners    []string                     `json:"build_runners"`
+	TestRunnerPaths []string                     `json:"test_runner_paths"`
+	ProjectGoals    ProjectGoals                 `json:"project_goals"`
 }
 
 // ProjectGoals represents the goals and vision for the project.

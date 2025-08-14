@@ -40,11 +40,14 @@ func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions 
 		logger.LogProcessStep("Code review rejected.")
 		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
 
-		// Rollback the changes first
-		rollbackErr := changetracker.RevertChangeByRevisionID(revisionID)
-		if rollbackErr != nil {
-			logger.LogError(fmt.Errorf("failed to rollback changes for revision %s: %w", revisionID, rollbackErr))
-			return fmt.Errorf("changes rejected by automated review, but rollback failed. Feedback: %s. New prompt suggestion: %s. Rollback error: %w", review.Feedback, review.NewPrompt, rollbackErr)
+		// Only rollback if there are active changes recorded under this revision
+		if hasActive, _ := changetracker.HasActiveChangesForRevision(revisionID); hasActive {
+			if err := changetracker.RevertChangeByRevisionID(revisionID); err != nil {
+				logger.LogError(fmt.Errorf("failed to rollback changes for revision %s: %w", revisionID, err))
+				return fmt.Errorf("changes rejected by automated review, but rollback failed. Feedback: %s. New prompt suggestion: %s. Rollback error: %w", review.Feedback, review.NewPrompt, err)
+			}
+		} else {
+			logger.LogProcessStep("No active changes recorded for this revision; skipping rollback.")
 		}
 
 		// Check if we've already retried once

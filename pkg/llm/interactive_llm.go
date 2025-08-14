@@ -623,8 +623,8 @@ func CallLLMWithInteractiveContext(
 			}
 		}
 
-		// No tool_calls and no actionable context requests: instruct model to emit plan/tool_calls and try again
-		currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "No tool_calls found. You must emit a PLAN followed by TOOL_CALLS. Use plan_step → execute_step → evaluate_outcome. Avoid prose. If the user requested a simple file change, plan a micro_edit or edit_file_section on that file, then validate_file."})
+		// No tool_calls and no actionable context requests: instruct model to emit plan/tool_calls and try again, including guidance to discover files
+		currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "No tool_calls found. You must emit a PLAN followed by TOOL_CALLS. Use plan_step → execute_step → evaluate_outcome. Avoid prose. If no file is specified, first use workspace_context.search_keywords to find the most relevant file, then read_file it, then micro_edit or edit_file_section, then validate_file."})
 		turnDurations = append(turnDurations, time.Since(turnStart))
 		continue
 	}

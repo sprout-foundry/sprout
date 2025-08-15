@@ -370,13 +370,19 @@ Example JSON format:
 
 // BuildCodeReviewMessages constructs the messages for the LLM to review code changes.
 func BuildCodeReviewMessages(combinedDiff, originalPrompt, processedInstructions string) []Message {
-	systemPrompt := `You are an expert code reviewer. Your task is to review a combined diff of code changes against the original user prompt.
-Analyze the changes for correctness, security, and adherence to best practices.
+	systemPrompt := `You are an expert code reviewer. Your task is to review a combined diff representing the ENTIRE changeset across one or more files against the original user prompt.
+Analyze the changes HOLISTICALLY across files for correctness, security, cross-file consistency, and adherence to best practices.
+
+CRITICAL: Consider the whole changeset together. Do NOT request a change that already exists in any file within the provided diff. If a requirement is satisfied in another file, acknowledge it and avoid redundant recommendations.
+
+OPTIONAL PER-FILE RECOMMENDATIONS: You may include file-specific suggestions, but the overall status MUST reflect the entire changeset.
+
 Your response MUST be a JSON object with the following keys:
 - "status": Either "approved", "needs_revision", or "rejected".
 - "feedback": A concise explanation of your review decision.
-- "instructions": (Only required if status is "needs_revision" or "rejected") Detailed instructions for what needs to be fixed or improved.
+- "instructions": (Only required if status is "needs_revision" or "rejected") Detailed instructions for what needs to be fixed or improved (these can reference multiple files).
 - "new_prompt": (Only required if status is "rejected") A more detailed prompt that addresses the issues found.
+- "file_recommendations": (Optional) An array of objects with keys {"filepath", "recommendation"} for file-scoped pointers.
 
 Example JSON format for approval:
 {

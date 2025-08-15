@@ -51,6 +51,10 @@ func extractRelevantSection(content, instructions, filePath string) (string, int
 		if sec, s, e, err := extractCLikeSection(lines, instructions); err == nil {
 			return sec, s, e, nil
 		}
+	case ".md", ".markdown", ".txt":
+		if sec, s, e, err := extractMarkdownSection(lines, instructions); err == nil {
+			return sec, s, e, nil
+		}
 	}
 	// Fallback
 	return extractGenericSection(lines, instructions)
@@ -305,6 +309,73 @@ func extractCLikeSection(lines []string, instructions string) (string, int, int,
 		}
 	}
 	return sec, start, end, nil
+}
+
+// extractMarkdownSection targets a heading-delimited block relevant to the instructions.
+// It looks for the best-matching heading based on instruction keywords and returns that section.
+func extractMarkdownSection(lines []string, instructions string) (string, int, int, error) {
+	lowerInstr := strings.ToLower(instructions)
+	words := strings.Fields(lowerInstr)
+	isHeading := func(s string) bool {
+		t := strings.TrimSpace(s)
+		if strings.HasPrefix(t, "#") {
+			i := 0
+			for i < len(t) && t[i] == '#' {
+				i++
+			}
+			return i > 0 && i < len(t) && t[i] == ' '
+		}
+		return false
+	}
+	type hdr struct {
+		idx   int
+		score int
+	}
+	var headers []hdr
+	for i, ln := range lines {
+		if isHeading(ln) {
+			s := strings.ToLower(ln)
+			sc := 0
+			for _, w := range words {
+				if len(w) < 3 {
+					continue
+				}
+				if strings.Contains(s, w) {
+					sc++
+				}
+			}
+			headers = append(headers, hdr{idx: i, score: sc})
+		}
+	}
+	if len(headers) == 0 {
+		return extractGenericSection(lines, instructions)
+	}
+	best := headers[0]
+	for _, h := range headers[1:] {
+		if h.score > best.score {
+			best = h
+		}
+	}
+	start := best.idx
+	end := len(lines) - 1
+	for i := start + 1; i < len(lines); i++ {
+		if isHeading(lines[i]) {
+			end = i - 1
+			break
+		}
+	}
+	if start < 0 {
+		start = 0
+	}
+	if end < start {
+		if start+40 < len(lines) {
+			end = start + 40
+		} else {
+			end = len(lines) - 1
+		}
+	}
+	section := strings.Join(lines[start:end+1], "\n")
+	return section, start, end, nil
 }
 
 func matchBracesEnd(lines []string, start int) int {

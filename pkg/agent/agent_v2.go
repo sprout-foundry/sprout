@@ -1,6 +1,9 @@
+//go:build !agent2refactor
+
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	pb "github.com/alantheprice/ledit/pkg/agent/playbooks"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/embedding"
@@ -35,7 +39,7 @@ func preflightQuick(path string) error {
 // RunAgentModeV2: deterministic fast-path for doc-only edits (top-of-file comment insertion).
 // If the user intent includes an explicit existing .go file path, insert a one-paragraph
 // summary comment at the top of the file. This avoids tool-loop overhead for trivial tasks.
-func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
+func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directApply bool) error {
 	// TODO: We should be able to be more intelligent about finding the correct file.
 	ui.Out().Print("🤖 Agent v2 mode: Tool-driven execution\n")
 	ui.Out().Printf("🎯 Intent: %s\n", userIntent)
@@ -52,6 +56,15 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 	// Ensure interactive tool-calling enabled for v2 planner/executor/evaluator usage
 	cfg.Interactive = true
 	cfg.CodeToolsEnabled = true
+
+	// Routing overview
+	ctrlModel := cfg.OrchestrationModel
+	if ctrlModel == "" {
+		ctrlModel = cfg.EditingModel
+	}
+	edtModel := cfg.EditingModel
+	ui.Out().Printf("controlModel %s\n", ctrlModel)
+	ui.Out().Printf("editingModel %s\n", edtModel)
 
 	// Optional workspace analysis upfront.
 	// If a workspace file already exists, assume prior consent and run by default.
@@ -80,40 +93,58 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 		}
 	}
 
-	// TODO: We should be able to be more intelligent about finding the correct file. if the user mentions a file, but doesn't include a path, we should be able to grep to find the likely file and use file contents to validate that it could be referenced file.
-	target := extractExplicitPath(userIntent)
-	if target == "" || !fileExists(target) {
-		// No explicit file path: attempt deterministic discovery of likely target file, then apply a partial edit
-		if discovered := discoverLikelyTargetFile(userIntent, "."); discovered != "" {
-			logger.LogProcessStep(fmt.Sprintf("v2: discovered candidate file: %s", discovered))
-			if err := preflightQuick(discovered); err == nil {
-				// Fallback to partial-edit with the original instruction
-				instr := userIntent
-				if _, err := editor.ProcessPartialEdit(discovered, instr, cfg, logger); err == nil {
-					logger.LogProcessStep(fmt.Sprintf("v2: discovered and edited %s via workspace search", discovered))
-					ui.Out().Print("✅ Agent v2 execution completed\n")
-					return nil
-				} else {
-					logger.LogProcessStep(fmt.Sprintf("v2: partial edit after discovery failed: %v", err))
-					// Trivial auto-fix for common Go brace regression mentioned by review
-					if strings.HasSuffix(discovered, ".go") && strings.Contains(strings.ToLower(userIntent), "println(\"started\")") {
-						// Attempt to remove trailing brace if present, but do not gate the line insertion on it
-						_ = tryRemoveTrailingExtraBrace(discovered, logger)
-						_ = ensureLineAtFunctionStart(discovered, "greet", "println(\"started\")")
-						ui.Out().Print("✅ Agent v2 execution completed\n")
-						return nil
+	// Phase 1: Intent analysis + planning (no edits). Provide a compact workspace synopsis for grounding.
+	logger.LogProcessStep("🧭 Analyzing intent and planning changes (no edits yet)...")
+	if wfSnap, err := workspace.LoadWorkspaceFile(); err == nil {
+		if prelude, err := workspace.GetFullWorkspaceSummary(wfSnap, cfg.CodeStyle, cfg, logger); err == nil && prelude != "" {
+			// Truncate to a safe size to avoid prompt bloat
+			const maxPrelude = 16000
+			if len(prelude) > maxPrelude {
+				prelude = prelude[:maxPrelude]
+			}
+			// Log and surface as a planning prelude
+			logger.LogProcessStep("Including workspace synopsis in planning prelude")
+			// Attach as a system message in the interactive planning call below by augmenting msgs
+		}
+	}
+	intentAnalysis, _, err := analyzeIntentWithMinimalContext(userIntent, cfg, logger)
+	if err != nil {
+		logger.LogError(fmt.Errorf("intent analysis failed: %w", err))
+	}
+	// Select a playbook when possible
+	var planOps []struct{ file, instructions, desc string }
+	if intentAnalysis != nil {
+		if sel := pb.Select(userIntent, intentAnalysis.Category); sel != nil {
+			logger.LogProcessStep("📘 Using playbook: " + sel.Name())
+			spec := sel.BuildPlan(userIntent, intentAnalysis.EstimatedFiles)
+			if spec != nil {
+				// Convert spec ops → planOps, filter to real files only
+				for _, op := range spec.Ops {
+					// Skip directories; only operate on files
+					if st, err := os.Stat(op.FilePath); err == nil && !st.IsDir() {
+						planOps = append(planOps, struct{ file, instructions, desc string }{file: op.FilePath, instructions: op.Instructions, desc: op.Description})
 					}
 				}
 			}
 		}
-		// Fall back to planner→executor→evaluator interactive flow
-		category := "code"
-		lo := strings.ToLower(userIntent)
-		if strings.Contains(lo, "comment") || strings.Contains(lo, "docs") || strings.Contains(lo, "summary") || strings.Contains(lo, "header") {
-			category = "docs"
+	}
+	// If no playbook produced ops, fall back to interactive planning (still no edits at this point)
+	if len(planOps) == 0 {
+		controlModel := cfg.OrchestrationModel
+		if controlModel == "" {
+			controlModel = cfg.EditingModel
 		}
-		controlModel, _, _ := llm.RouteModels(cfg, category, len(userIntent))
 		msgs := []prompts.Message{{Role: "user", Content: fmt.Sprintf("Goal: %s", userIntent)}}
+		// Best-effort: include small workspace synopsis if available
+		if wfSnap, err := workspace.LoadWorkspaceFile(); err == nil {
+			if prelude, err := workspace.GetFullWorkspaceSummary(wfSnap, cfg.CodeStyle, cfg, logger); err == nil && prelude != "" {
+				const maxPrelude = 16000
+				if len(prelude) > maxPrelude {
+					prelude = prelude[:maxPrelude]
+				}
+				msgs = append([]prompts.Message{{Role: "system", Content: "Workspace Synopsis (truncated):\n" + prelude}}, msgs...)
+			}
+		}
 		if pre := buildWorkspacePrelude(cfg); pre != "" {
 			msgs = append([]prompts.Message{{Role: "system", Content: pre}}, msgs...)
 		}
@@ -121,119 +152,127 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string) error {
 			gitPrelude := fmt.Sprintf("Git: branch=%s staged=%d modified=%d", br, s, u)
 			msgs = append([]prompts.Message{{Role: "system", Content: gitPrelude}}, msgs...)
 		}
+		// Let the interactive loop propose a plan; we will still gate edits below
 		ch := func(reqs []llm.ContextRequest, cfg *config.Config) (string, error) { return "", nil }
-		logger.LogProcessStep("v2: invoking interactive planner→executor→evaluator loop")
-		if _, err := llm.CallLLMWithInteractiveContext(controlModel, msgs, "", cfg, 6*time.Minute, ch); err != nil {
-			logger.LogError(fmt.Errorf("interactive v2 flow failed: %w", err))
-			return err
+		logger.LogProcessStep("📝 Creating plan via interactive controller (no edits)")
+		if _, err := llm.CallLLMWithInteractiveContext(controlModel, msgs, "", cfg, 5*time.Minute, ch); err != nil {
+			logger.LogError(fmt.Errorf("interactive planning failed: %w", err))
 		}
-		ui.Out().Print("✅ Agent v2 execution completed\n")
-		return nil
-	}
-
-	// Preflight: ensure file exists and is writable
-	if err := preflightQuick(target); err != nil {
-		logger.LogError(fmt.Errorf("preflight failed: %w", err))
-		return err
-	}
-
-	// Deterministic micro edit: support pattern "change 'old' to 'new'" (executes via partial edit path)
-	if oldText, newText, ok := parseSimpleReplacement(userIntent); ok {
-		// Try deterministic in-file replacement first (no LLM), interpreting common escapes in newText
-		if err := replaceFirstInFile(target, oldText, interpretEscapes(newText)); err == nil {
-			logger.LogProcessStep(fmt.Sprintf("v2: direct replace applied to %s (replaced '%s' → '%s')", target, oldText, newText))
-			ui.Out().Print("✅ Agent v2 execution completed\n")
-			return nil
-		}
-		// Fallback to partial-edit flow via LLM
-		instr := fmt.Sprintf("Replace the first occurrence of '%s' with '%s'. Do not modify anything else.", oldText, newText)
-		if _, err := editor.ProcessPartialEdit(target, instr, cfg, logger); err != nil {
-			return fmt.Errorf("micro_edit failed: %w", err)
-		}
-		logger.LogProcessStep(fmt.Sprintf("v2: micro_edit applied to %s (replaced '%s' → '%s')", target, oldText, newText))
-		ui.Out().Print("✅ Agent v2 execution completed\n")
-		return nil
-	}
-
-	// Deterministic simple append: support pattern like "append the word X to the end of <file>"
-	if toAppend, ok := parseSimpleAppend(userIntent); ok {
-		b, err := os.ReadFile(target)
-		if err != nil {
-			return fmt.Errorf("append read failed: %w", err)
-		}
-		content := string(b)
-		if !strings.HasSuffix(content, "\n") && content != "" {
-			content += "\n"
-		}
-		content += toAppend + "\n"
-		if err := os.WriteFile(target, []byte(content), 0644); err != nil {
-			return fmt.Errorf("append write failed: %w", err)
-		}
-		logger.LogProcessStep(fmt.Sprintf("v2: appended '%s' to end of %s", toAppend, target))
-		ui.Out().Print("✅ Agent v2 execution completed\n")
-		return nil
-	}
-
-	// Deterministic tone tweak: vague prompts like "make it more enthusiastic" → add an exclamation mark
-	if wantsEnthusiasmBoost(userIntent) {
-		b, err := os.ReadFile(target)
-		if err == nil {
-			lines := strings.Split(string(b), "\n")
-			for i := 0; i < len(lines); i++ {
-				line := strings.TrimSpace(lines[i])
-				if line == "" {
-					continue
+		// As a minimal fallback, try to ground on EstimatedFiles if present
+		if intentAnalysis != nil && len(intentAnalysis.EstimatedFiles) > 0 {
+			for _, f := range intentAnalysis.EstimatedFiles {
+				if st, err := os.Stat(f); err == nil && !st.IsDir() {
+					planOps = append(planOps, struct{ file, instructions, desc string }{file: f, instructions: userIntent, desc: "Apply requested change"})
 				}
-				if !strings.HasSuffix(lines[i], "!") {
-					lines[i] = lines[i] + "!"
-				}
-				break
 			}
-			_ = os.WriteFile(target, []byte(strings.Join(lines, "\n")), 0644)
-			logger.LogProcessStep("v2: applied enthusiasm boost (added '!')")
-			ui.Out().Print("✅ Agent v2 execution completed\n")
-			return nil
 		}
 	}
 
-	// If intent looks like a doc-only header/summary request, add header via LLM (only when no replacement pattern found)
-	if looksLikeDocOnly(userIntent) && !strings.Contains(strings.ToLower(userIntent), "change ") {
-		// Idempotence: skip if file already starts with a comment block
-		if fileStartsWithComment(target) {
-			logger.LogProcessStep("v2: header already present; skipping doc insertion")
-			fmt.Printf("✅ Agent v2 execution completed\n")
-			return nil
-		}
-		logger.LogProcessStep("v2: generating file header summary via LLM")
-		header := buildSummaryParagraph(target, cfg)
-		if err := insertTopComment(target, header); err != nil {
-			logger.LogError(fmt.Errorf("failed to insert comment in %s: %w", target, err))
-			return err
-		}
-		logger.LogProcessStep(fmt.Sprintf("v2: added summary comment to %s", target))
-		fmt.Printf("✅ Agent v2 execution completed\n")
-		return nil
+	if len(planOps) == 0 {
+		logger.LogProcessStep("⚠️ No actionable plan produced; aborting without edits")
+		return fmt.Errorf("no actionable plan produced for intent")
 	}
 
-	// Fallback: run planner→executor→evaluator interactive flow for general tasks
-	category2 := "code"
-	lo2 := strings.ToLower(userIntent)
-	if strings.Contains(lo2, "comment") || strings.Contains(lo2, "docs") || strings.Contains(lo2, "summary") || strings.Contains(lo2, "header") {
-		category2 = "docs"
+	// Phase 2: Execute plan with guardrails (verify → edit; preflight each file, minimal edits per op)
+	logger.LogProcessStep("🛠️ Executing plan with guarded edits...")
+	applied := 0
+	for _, op := range planOps {
+		if err := preflightQuick(op.file); err != nil {
+			logger.Logf("Skipping %s (preflight failed: %v)", op.file, err)
+			continue
+		}
+		// For documentation files, first generate a claim→citation map by asking for minimal reads
+		if strings.HasSuffix(strings.ToLower(op.file), ".md") || strings.Contains(strings.ToLower(op.file), "/docs/") {
+			verifyInstr := "Before editing, enumerate outdated claims in this doc and provide a claim→citation map with file:line references from this repository only. Use workspace_context/read_file to fetch minimal evidence. If evidence is insufficient, request more files. Then propose the precise changes."
+			// Use interactive controller for verification to allow tool calls
+			verifyModel := cfg.OrchestrationModel
+			if verifyModel == "" {
+				verifyModel = cfg.EditingModel
+			}
+			msgs := []prompts.Message{
+				{Role: "system", Content: "You must verify documentation claims using repository files only. No external web sources."},
+				{Role: "user", Content: fmt.Sprintf("Doc: %s\nTask: %s\n%s", op.file, op.desc, verifyInstr)},
+			}
+			ch := func(reqs []llm.ContextRequest, cfg *config.Config) (string, error) { return "", nil }
+			if _, err := llm.CallLLMWithInteractiveContext(verifyModel, msgs, op.file, cfg, 3*time.Minute, ch); err != nil {
+				logger.Logf("Verification step failed for %s: %v", op.file, err)
+				// Continue but keep edit conservative
+			}
+			// Always try deterministic proposer for docs
+			if plan, perr := proposeDocReplacements(op.file, cfg, logger); perr == nil && len(plan.Edits) > 0 {
+				if directApply {
+					if aerr := applyDocReplacements(op.file, plan, logger); aerr == nil {
+						applied++
+						continue
+					}
+				}
+			} else if perr != nil {
+				logger.Logf("Doc proposer failed for %s: %v", op.file, perr)
+			}
+		}
+		if _, err := editor.ProcessPartialEdit(op.file, op.instructions, cfg, logger); err != nil {
+			logger.Logf("Partial edit failed for %s: %v; trying full-file edit", op.file, err)
+			if _, err2 := editor.ProcessCodeGeneration(op.file, op.instructions, cfg, ""); err2 != nil {
+				logger.Logf("Full-file edit failed for %s: %v", op.file, err2)
+				continue
+			}
+		}
+		applied++
 	}
-	controlModel, _, _ := llm.RouteModels(cfg, category2, len(userIntent))
-	msgs := []prompts.Message{{Role: "user", Content: fmt.Sprintf("Goal: %s", userIntent)}}
-	if pre := buildWorkspacePrelude(cfg); pre != "" {
-		msgs = append([]prompts.Message{{Role: "system", Content: pre}}, msgs...)
+	if applied == 0 {
+		return fmt.Errorf("plan produced no successful edits")
 	}
-	ch := func(reqs []llm.ContextRequest, cfg *config.Config) (string, error) { return "", nil }
-	logger.LogProcessStep("v2: invoking interactive planner→executor→evaluator loop (fallback)")
-	if _, err := llm.CallLLMWithInteractiveContext(controlModel, msgs, target, cfg, 6*time.Minute, ch); err != nil {
-		logger.LogError(fmt.Errorf("interactive v2 flow failed: %w", err))
+	ui.Out().Print("✅ Agent v2 execution completed\n")
+	return nil
+}
+
+// proposeDocReplacements asks the orchestration model to return a deterministic JSON of find/replace edits.
+type DocReplacementPlan struct {
+	Edits []struct {
+		Find      string `json:"find"`
+		Replace   string `json:"replace"`
+		WhereHint string `json:"where_hint"`
+	} `json:"edits"`
+}
+
+func proposeDocReplacements(path string, cfg *config.Config, logger *utils.Logger) (DocReplacementPlan, error) {
+	var plan DocReplacementPlan
+	model := cfg.OrchestrationModel
+	if model == "" {
+		model = cfg.EditingModel
+	}
+	sys := prompts.Message{Role: "system", Content: "You output only JSON. Propose minimal, grounded documentation replacements as {\"edits\":[{\"find\":...,\"replace\":...,\"where_hint\":...}]} based solely on repository evidence. No prose."}
+	user := prompts.Message{Role: "user", Content: fmt.Sprintf("Doc file: %s\nReturn only JSON with replacements.", path)}
+	resp, _, err := llm.GetLLMResponse(model, []prompts.Message{sys, user}, path, cfg, 45*time.Second)
+	if err != nil {
+		return plan, err
+	}
+	clean, cerr := utils.ExtractJSONFromLLMResponse(resp)
+	if cerr != nil {
+		return plan, cerr
+	}
+	if err := json.Unmarshal([]byte(clean), &plan); err != nil {
+		return plan, err
+	}
+	return plan, nil
+}
+
+func applyDocReplacements(path string, plan DocReplacementPlan, logger *utils.Logger) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
 		return err
 	}
-	fmt.Printf("✅ Agent v2 execution completed\n")
-	return nil
+	s := string(b)
+	for _, e := range plan.Edits {
+		if e.Find == "" {
+			continue
+		}
+		if !strings.Contains(s, e.Find) {
+			continue
+		}
+		s = strings.Replace(s, e.Find, e.Replace, 1)
+	}
+	return os.WriteFile(path, []byte(s), 0644)
 }
 
 func extractExplicitPath(intent string) string {

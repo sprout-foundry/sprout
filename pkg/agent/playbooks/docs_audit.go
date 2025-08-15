@@ -39,9 +39,11 @@ func (p DocsAuditPlaybook) BuildPlan(userIntent string, estimatedFiles []string)
 	plan.Scope = "Audit documentation against actual code behavior; update/remove sections as needed."
 	for _, d := range docs {
 		plan.Ops = append(plan.Ops, PlanOp{
-			FilePath:           d,
-			Description:        "Verify and update documentation section(s) to match code",
-			Instructions:       "Read this doc and cross-check key claims against code using workspace_context and read_file. Replace outdated or inaccurate parts with concise, correct descriptions. Do not invent features. Keep changes minimal and precise.",
+			FilePath:    d,
+			Description: "Verify and update documentation section(s) to match code",
+			Instructions: "You must ground every change in repository files only.\n" +
+				"Process: (1) Identify doc claims that may be outdated; (2) For each claim, request the minimal set of files via workspace_context/read_file to verify; (3) Produce a short claim→citation map (file:line) before editing; (4) Apply minimal, precise edits.\n" +
+				"Rules: Do not use external web sources. Do not invent features. Keep diffs minimal. If evidence is insufficient, request additional files instead of guessing.",
 			ScopeJustification: "Keeps documentation aligned with current code behavior.",
 		})
 	}

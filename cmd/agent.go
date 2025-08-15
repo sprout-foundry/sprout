@@ -12,10 +12,11 @@ import (
 )
 
 var (
-	agentSkipPrompt bool
-	agentModel      string // Declare agentModel variable
-	agentVersion    string // v1 (default) or v2 (tool-driven)
-	agentDryRun     bool
+	agentSkipPrompt  bool
+	agentModel       string // Declare agentModel variable
+	agentVersion     string // v1 (default) or v2 (tool-driven)
+	agentDryRun      bool
+	agentDirectApply bool
 )
 
 func init() {
@@ -24,6 +25,7 @@ func init() {
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name to use with the LLM")
 	agentCmd.Flags().StringVar(&agentVersion, "agent", "v2", "Agent version: v2 (tool-driven)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (no writes/shell side-effects)")
+	agentCmd.Flags().BoolVar(&agentDirectApply, "direct-apply", false, "Let the orchestration model directly apply changes via tools (experimental)")
 }
 
 // agentCmd represents the agent command
@@ -66,6 +68,6 @@ Examples:
 			go func() { _ = tuiPkg.Run() }()
 		}
 		// Default to v2; v1 has been removed/deprecated
-		return agent.RunAgentModeV2(userIntent, agentSkipPrompt, agentModel)
+		return agent.RunAgentModeV2(userIntent, agentSkipPrompt, agentModel, agentDirectApply)
 	},
 }

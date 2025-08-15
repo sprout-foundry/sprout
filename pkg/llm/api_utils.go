@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts"
 )
 
@@ -139,70 +138,4 @@ func CheckEndpointReachable(url string, timeout time.Duration) error {
 // RouteModels selects control and editing models based on task category and approximate size.
 // category: "docs" | "code" | "test" | "review" (others map to "code").
 // approxSize: approximate content size in characters or bytes.
-func RouteModels(cfg *config.Config, category string, approxSize int) (controlModel string, editingModel string, reason string) {
-	// Defaults
-	controlModel = cfg.SummaryModel
-	if controlModel == "" {
-		controlModel = cfg.OrchestrationModel
-	}
-	if controlModel == "" {
-		controlModel = cfg.EditingModel
-	}
-	editingModel = cfg.EditingModel
-
-	cat := strings.ToLower(strings.TrimSpace(category))
-	if cat == "" {
-		cat = "code"
-	}
-
-	// Heuristics for routing
-	switch cat {
-	case "docs":
-		// For documentation-only tasks, we can use smaller/cheaper models
-		if cfg.SummaryModel != "" {
-			controlModel = cfg.SummaryModel
-			editingModel = cfg.SummaryModel
-		}
-	case "test":
-		// Prefer editing model; control can be orchestration
-		if cfg.OrchestrationModel != "" {
-			controlModel = cfg.OrchestrationModel
-		}
-		editingModel = cfg.EditingModel
-	case "review":
-		// Use code review or orchestration for control; editing can be code review
-		if cfg.OrchestrationModel != "" {
-			controlModel = cfg.OrchestrationModel
-		}
-		if cfg.CodeReviewModel != "" {
-			editingModel = cfg.CodeReviewModel
-		}
-	default:
-		// code
-		if cfg.OrchestrationModel != "" {
-			controlModel = cfg.OrchestrationModel
-		}
-		editingModel = cfg.EditingModel
-	}
-
-	// Size-based nudges
-	if approxSize > 200_000 { // very large
-		if cfg.OrchestrationModel != "" {
-			controlModel = cfg.OrchestrationModel
-		}
-		editingModel = cfg.EditingModel
-		reason = "large-size routing"
-	} else if approxSize > 60_000 {
-		reason = "medium-size routing"
-	} else {
-		reason = "small-size routing"
-	}
-
-	if controlModel == "" {
-		controlModel = editingModel
-	}
-	if editingModel == "" {
-		editingModel = controlModel
-	}
-	return controlModel, editingModel, reason
-}
+// RouteModels has been removed. Control/edit model selection is done directly at call sites.

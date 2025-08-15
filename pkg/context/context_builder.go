@@ -33,6 +33,11 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 		ui.Out().Print(prompts.LLMContextRequest(req.Type, req.Query))
 		switch req.Type {
 		case "search":
+			// Gate external web search behind config flag to avoid ungrounded context by default
+			if !cfg.UseSearchGrounding {
+				responses = append(responses, fmt.Sprintf("Web search disabled by configuration. Skipping search for '%s'.", req.Query))
+				break
+			}
 			searchResult, err := webcontent.FetchContextFromSearch(req.Query, cfg)
 			if err != nil {
 				responses = append(responses, fmt.Sprintf("Failed to perform web search for '%s': %v", req.Query, err))
@@ -113,12 +118,18 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	if strings.Contains(lower, "comment") || strings.Contains(lower, "summary") || strings.Contains(lower, "header") || strings.Contains(lower, "docs") {
 		category = "docs"
 	}
-	controlModel, modelName, reason := llm.RouteModels(cfg, category, len(code))
+	// Use orchestration model for control turns, editing model for code output
+	controlModel := cfg.OrchestrationModel
+	if controlModel == "" {
+		controlModel = cfg.EditingModel
+	}
+	modelName := cfg.EditingModel
+	reason := "direct routing"
 	ui.Out().Print(prompts.UsingModel(modelName))
 
 	// Log key parameters
 	logger := utils.GetLogger(cfg.SkipPrompt)
-	logger.Log(fmt.Sprintf("=== GetLLMCodeResponse Debug ==="))
+	logger.Log("=== GetLLMCodeResponse Debug ===")
 	logger.Log(fmt.Sprintf("Model: %s", modelName))
 	logger.Log(fmt.Sprintf("Filename: %s", filename))
 	logger.Log(fmt.Sprintf("Routing: category=%s approxSize=%d control=%s editing=%s reason=%s", category, len(code), controlModel, modelName, reason))

@@ -30,6 +30,49 @@ func IsOllamaModel(modelName string) bool {
 	return strings.HasPrefix(strings.ToLower(modelName), "ollama:")
 }
 
+// ShouldUseJSONResponse inspects the messages to determine if the prompt
+// explicitly requires strict JSON output. When true, callers may enable
+// provider JSON mode (e.g., DeepInfra/OpenAI response_format {type: "json_object"}).
+func ShouldUseJSONResponse(messages []prompts.Message) bool {
+	// Scan both system and user messages for explicit JSON-only directives
+	var haystack []string
+	for _, m := range messages {
+		switch v := m.Content.(type) {
+		case string:
+			haystack = append(haystack, v)
+		case []prompts.ContentPart:
+			// Collect text parts
+			for _, p := range v {
+				if p.Type == "text" && strings.TrimSpace(p.Text) != "" {
+					haystack = append(haystack, p.Text)
+				}
+			}
+		}
+	}
+	if len(haystack) == 0 {
+		return false
+	}
+
+	indicators := []string{
+		"Respond only with valid JSON",
+		"Always respond with valid JSON",
+		"Respond with STRICT JSON",
+		"Your response MUST be a JSON object",
+		"Your response MUST be a JSON array",
+		"Respond with ONLY JSON",
+		"Return JSON only",
+		"Output should be a JSON array",
+		"Output should be JSON",
+	}
+	blob := strings.ToLower(strings.Join(haystack, "\n"))
+	for _, s := range indicators {
+		if strings.Contains(blob, strings.ToLower(s)) {
+			return true
+		}
+	}
+	return false
+}
+
 // EncodeImageToBase64 reads an image file and encodes it as base64
 func EncodeImageToBase64(imagePath string) (string, error) {
 	imageData, err := os.ReadFile(imagePath)

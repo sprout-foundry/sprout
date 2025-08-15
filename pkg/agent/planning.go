@@ -130,8 +130,11 @@ Respond with STRICT JSON using this schema:
 	}
 
 	// Estimate tokens for cost accounting
-	promptTokens := utils.EstimateTokens(prompt)
-	responseTokens := utils.EstimateTokens(response)
+	promptTokens := llm.GetConversationTokens([]struct{ Role, Content string }{
+		{Role: messages[0].Role, Content: messages[0].Content.(string)},
+		{Role: messages[1].Role, Content: messages[1].Content.(string)},
+	})
+	responseTokens := llm.EstimateTokens(response)
 	totalTokens := promptTokens + responseTokens
 	logger.Logf("Planning tokens: prompt=%d completion=%d total=%d", promptTokens, responseTokens, totalTokens)
 

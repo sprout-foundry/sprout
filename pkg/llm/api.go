@@ -2,9 +2,11 @@ package llm
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,27 +70,43 @@ func ensureHealthLoaded() {
 		var pf providerHealthFile
 		if json.Unmarshal(data, &pf) == nil {
 			if pf.Failures != nil {
-				providerFailures = pf.Failures
+				fresh := map[string]int{}
+				for k, v := range pf.Failures {
+					fresh[k] = v
+				}
+				providerFailures = fresh
 			}
 			if pf.LastFail != nil {
-				providerLastFail = map[string]time.Time{}
+				freshLast := map[string]time.Time{}
 				for k, v := range pf.LastFail {
 					if t, perr := time.Parse(time.RFC3339, v); perr == nil {
-						providerLastFail[k] = t
+						freshLast[k] = t
 					}
 				}
+				providerLastFail = freshLast
 			}
 		}
+	}
+	if providerFailures == nil {
+		providerFailures = map[string]int{}
+	}
+	if providerLastFail == nil {
+		providerLastFail = map[string]time.Time{}
 	}
 	healthLoaded = true
 }
 
 func saveProviderHealth() error {
 	_ = os.MkdirAll(filepath.Dir(providerHealthPath), 0755)
-	pf := providerHealthFile{Failures: providerFailures, LastFail: map[string]string{}}
-	for k, t := range providerLastFail {
-		pf.LastFail[k] = t.Format(time.RFC3339)
+	failCopy := map[string]int{}
+	for k, v := range providerFailures {
+		failCopy[k] = v
 	}
+	lastCopy := map[string]string{}
+	for k, t := range providerLastFail {
+		lastCopy[k] = t.Format(time.RFC3339)
+	}
+	pf := providerHealthFile{Failures: failCopy, LastFail: lastCopy}
 	b, err := json.MarshalIndent(pf, "", "  ")
 	if err != nil {
 		return err
@@ -103,9 +121,156 @@ var (
 
 // GetLLMResponseWithTools makes an LLM call with tool calling support
 func GetLLMResponseWithTools(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration) (string, error) {
-	// Temporary workaround to avoid circular import with orchestration package
-	response, _, err := GetLLMResponse(modelName, messages, systemPrompt, cfg, timeout)
-	return response, err
+	// Use OpenAI-compatible function calling for providers that support it; otherwise fallback
+	parts := strings.SplitN(modelName, ":", 3)
+	provider := parts[0]
+	model := ""
+	if len(parts) > 1 {
+		model = parts[1]
+	}
+	if len(parts) > 2 {
+		model = parts[1] + parts[2]
+	}
+
+	toOpenAITools := func() []map[string]any {
+		var out []map[string]any
+		for _, t := range GetAvailableTools() {
+			if strings.ToLower(t.Type) != "function" {
+				continue
+			}
+			params := map[string]any{
+				"type":       t.Function.Parameters.Type,
+				"properties": t.Function.Parameters.Properties,
+			}
+			if len(t.Function.Parameters.Required) > 0 {
+				params["required"] = t.Function.Parameters.Required
+			}
+			out = append(out, map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name":        t.Function.Name,
+					"description": t.Function.Description,
+					"parameters":  params,
+				},
+			})
+		}
+		return out
+	}
+
+	var apiURL string
+	var apiKey string
+	var err error
+	switch provider {
+	case "openai":
+		apiURL = "https://api.openai.com/v1/chat/completions"
+		apiKey, err = apikeys.GetAPIKey("openai", cfg.Interactive)
+	case "groq":
+		apiURL = "https://api.groq.com/openai/v1/chat/completions"
+		apiKey, err = apikeys.GetAPIKey("groq", cfg.Interactive)
+	case "deepseek":
+		apiURL = "https://api.deepseek.com/openai/v1/chat/completions"
+		apiKey, err = apikeys.GetAPIKey("deepseek", cfg.Interactive)
+	case "deepinfra":
+		apiURL = "https://api.deepinfra.com/v1/openai/chat/completions"
+		apiKey, err = apikeys.GetAPIKey("deepinfra", cfg.Interactive)
+	case "lambda-ai":
+		apiURL = "https://api.lambda.ai/v1/chat/completions"
+		apiKey, err = apikeys.GetAPIKey("lambda-ai", cfg.Interactive)
+	default:
+		// Fallback to non-tools path
+		resp, _, e := GetLLMResponse(modelName, messages, systemPrompt, cfg, timeout)
+		return resp, e
+	}
+	if err != nil {
+		return "", err
+	}
+
+	payload := map[string]any{
+		"model":       model,
+		"messages":    messages,
+		"stream":      false,
+		"tool_choice": "auto",
+		"tools":       toOpenAITools(),
+	}
+	// Enable JSON mode when prompts explicitly require strict JSON output
+	if ShouldUseJSONResponse(messages) {
+		payload["response_format"] = map[string]any{"type": "json_object"}
+	}
+	if cfg.Temperature != 0 {
+		payload["temperature"] = cfg.Temperature
+	}
+	if systemPrompt != "" {
+		// Prepend a system message if provided
+		messages = append([]prompts.Message{{Role: "system", Content: systemPrompt}}, messages...)
+		payload["messages"] = messages
+	}
+	body, merr := json.Marshal(payload)
+	if merr != nil {
+		return "", merr
+	}
+
+	req, rerr := http.NewRequest("POST", apiURL, bytes.NewBuffer(body))
+	if rerr != nil {
+		return "", rerr
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	client := &http.Client{Timeout: timeout}
+	resp, derr := client.Do(req)
+	if derr != nil {
+		return "", derr
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(resp.Body)
+		lower := strings.ToLower(string(raw))
+		// Retry once without response_format for providers that don't support JSON mode
+		if strings.Contains(lower, "response_format") || strings.Contains(lower, "unsupported") {
+			delete(payload, "response_format")
+			body2, _ := json.Marshal(payload)
+			req2, _ := http.NewRequest("POST", apiURL, bytes.NewBuffer(body2))
+			req2.Header.Set("Content-Type", "application/json")
+			req2.Header.Set("Authorization", "Bearer "+apiKey)
+			resp2, derr2 := client.Do(req2)
+			if derr2 == nil {
+				defer resp2.Body.Close()
+				if resp2.StatusCode == 200 {
+					resp = resp2
+					// fallthrough to decoding below
+				} else {
+					raw2, _ := io.ReadAll(resp2.Body)
+					return "", fmt.Errorf("provider error %d: %s", resp2.StatusCode, string(raw2))
+				}
+			} else {
+				return "", derr2
+			}
+		} else {
+			return "", fmt.Errorf("provider error %d: %s", resp.StatusCode, string(raw))
+		}
+	}
+	var full struct {
+		Choices []struct {
+			Message struct {
+				Role      string     `json:"role"`
+				Content   string     `json:"content"`
+				ToolCalls []ToolCall `json:"tool_calls"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage TokenUsage `json:"usage"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&full); err != nil {
+		return "", err
+	}
+	if len(full.Choices) > 0 {
+		msg := full.Choices[0].Message
+		if len(msg.ToolCalls) > 0 {
+			wrapper := map[string]any{"tool_calls": msg.ToolCalls}
+			b, _ := json.Marshal(wrapper)
+			return string(b), nil
+		}
+		return msg.Content, nil
+	}
+	return "", nil
 }
 
 // --- Main Dispatcher ---
@@ -113,7 +278,7 @@ func GetLLMResponseWithTools(modelName string, messages []prompts.Message, syste
 func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (*TokenUsage, error) {
 	var totalInputTokens int
 	for _, msg := range messages {
-		totalInputTokens += EstimateTokens(GetMessageText(msg.Content)) // Use GetMessageText helper
+		totalInputTokens += GetMessageTokens(msg.Role, GetMessageText(msg.Content))
 	}
 	ui.Out().Print(prompts.TokenEstimate(totalInputTokens, modelName))
 	if totalInputTokens > DefaultTokenLimit && !cfg.SkipPrompt {
@@ -163,6 +328,12 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 	}
 
+	// Run-log the outbound request (messages are marshaled for readability)
+	if rl := utils.GetRunLogger(); rl != nil {
+		msgDump, _ := json.Marshal(messages)
+		rl.LogEvent("llm_request", map[string]any{"provider": provider, "model": modelName, "filename": filename, "messages": string(msgDump)})
+	}
+
 	switch provider {
 	case "openai":
 		if cfg.HealthChecks {
@@ -192,7 +363,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			logger := utils.GetLogger(cfg.SkipPrompt)
 			logger.Log(fmt.Sprintf("Gemini API response: %s", content)) // Log the response
 			content = removeThinkTags(content)
-			_, err = writer.Write([]byte(content))
+			_, _ = writer.Write([]byte(content))
 		}
 		// Estimate token usage for Gemini
 		if err == nil {
@@ -290,8 +461,29 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	}
 	recordSuccess(provider)
 
+	// Run-log the raw content returned (already streamed into writer). We also include usage.
+	if rl := utils.GetRunLogger(); rl != nil {
+		// We cannot easily capture full stream here; GetLLMResponse wraps and returns full content.
+		// Log token usage as a proxy and note the model used.
+		rl.LogEvent("llm_response_meta", map[string]any{"provider": provider, "model": modelName, "usage": tokenUsage})
+	}
+
 	// After a successful call, publish token/cost aggregates so the TUI header can persistently show them
 	if ui.Enabled() && tokenUsage != nil {
+		// If provider returned usage, trust it. Otherwise, estimate from messages
+		if tokenUsage.TotalTokens == 0 {
+			est := 0
+			for _, m := range messages {
+				est += GetMessageTokens(m.Role, GetMessageText(m.Content))
+			}
+			if est < 1 {
+				est = 1
+			}
+			tokenUsage.TotalTokens = est
+			if tokenUsage.PromptTokens == 0 && tokenUsage.CompletionTokens == 0 {
+				tokenUsage.PromptTokens = est
+			}
+		}
 		cost := CalculateCost(*tokenUsage, modelName)
 		// Use a ProgressSnapshotEvent with only totals to update the header
 		ui.Publish(ui.ProgressSnapshotEvent{Completed: 0, Total: 0, Rows: nil, Time: time.Now(), TotalTokens: tokenUsage.TotalTokens, TotalCost: cost, BaseModel: modelName})
@@ -325,6 +517,11 @@ func GetLLMResponse(modelName string, messages []prompts.Message, filename strin
 	}
 
 	content := contentBuffer.String()
+
+	// Run-log the full response content for this call for forensic analysis
+	if rl := utils.GetRunLogger(); rl != nil {
+		rl.LogEvent("llm_response", map[string]any{"model": modelName, "filename": filename, "response": content})
+	}
 
 	// Remove any think tags before returning the content
 	content = removeThinkTags(content)

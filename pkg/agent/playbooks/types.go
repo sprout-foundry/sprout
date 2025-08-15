@@ -22,6 +22,12 @@ type Playbook interface {
 	BuildPlan(userIntent string, estimatedFiles []string) *PlanSpec
 }
 
+// ContextAware lets a playbook declare if it requires broader workspace context.
+// If not implemented, the agent will assume context is required.
+type ContextAware interface {
+	RequiresContext() bool
+}
+
 var registry []Playbook
 
 // Register adds a playbook to the registry

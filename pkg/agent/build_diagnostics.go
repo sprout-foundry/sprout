@@ -91,7 +91,7 @@ Create a detailed fix prompt:`, originalIntent, intentAnalysis.Category, strings
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to get orchestration model analysis of build errors: %w", err)
 	}
-	tokens := utils.EstimateTokens(prompt + response)
+	tokens := llm.EstimateTokens(prompt) + llm.EstimateTokens(response)
 	logger.Logf("LLM build error analysis: %s", response)
 	return response, tokens, nil
 }

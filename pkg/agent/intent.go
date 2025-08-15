@@ -110,8 +110,11 @@ func analyzeIntentWithMinimalContext(userIntent string, cfg *config.Config, logg
 		}, 0, nil
 	}
 
-	promptTokens := utils.EstimateTokens(messages[0].Content.(string) + " " + messages[1].Content.(string))
-	responseTokens := utils.EstimateTokens(response)
+	promptTokens := llm.GetConversationTokens([]struct{ Role, Content string }{
+		{Role: messages[0].Role, Content: messages[0].Content.(string)},
+		{Role: messages[1].Role, Content: messages[1].Content.(string)},
+	})
+	responseTokens := llm.EstimateTokens(response)
 	totalTokens := promptTokens + responseTokens + rewordTokensUsed
 
 	cleanedResponse, err := utils.ExtractJSONFromLLMResponse(response)

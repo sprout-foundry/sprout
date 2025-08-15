@@ -194,7 +194,7 @@ Respond with JSON:
 	}
 
 	// Estimate tokens used
-	tokens := utils.EstimateTokens(contextPrompt + response)
+	tokens := llm.EstimateTokens(contextPrompt) + llm.EstimateTokens(response)
 	return &fixPlan, tokens, nil
 }
 
@@ -212,7 +212,7 @@ func executeValidationFixPlan(plan *ValidationFixPlan, cfg *config.Config, logge
 		logger.Logf("Would execute: %s", instruction)
 
 		// Estimate tokens for this instruction
-		tokens := utils.EstimateTokens(instruction)
+		tokens := llm.EstimateTokens(instruction)
 		totalTokens += tokens
 	}
 
@@ -312,7 +312,7 @@ Respond with JSON:
 	}
 
 	// Estimate tokens used
-	tokens := utils.EstimateTokens(contextPrompt + response)
+	tokens := llm.EstimateTokens(contextPrompt) + llm.EstimateTokens(response)
 	return &strategy, tokens, nil
 }
 
@@ -618,8 +618,8 @@ Respond with JSON:
 	}
 
 	// Estimate tokens used and attribute to Validation category (with split)
-	promptTokens := utils.EstimateTokens(contextPrompt)
-	completionTokens := utils.EstimateTokens(response)
+	promptTokens := llm.EstimateTokens(contextPrompt)
+	completionTokens := llm.EstimateTokens(response)
 	tokens := promptTokens + completionTokens
 	logger.Logf("Validation tokens: prompt=%d completion=%d total=%d", promptTokens, completionTokens, tokens)
 	// Track precise split via a global or returned path; here we only return totals.

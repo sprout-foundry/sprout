@@ -7,6 +7,9 @@ type NodeExpressPlaybook struct{}
 
 func (p NodeExpressPlaybook) Name() string { return "node_express_scaffold" }
 
+// Deterministic scaffold; does not require broader workspace context
+func (p NodeExpressPlaybook) RequiresContext() bool { return false }
+
 func (p NodeExpressPlaybook) Matches(userIntent string, category string) bool {
 	lo := strings.ToLower(userIntent)
 	if strings.Contains(lo, "express") || strings.Contains(lo, "/health") {

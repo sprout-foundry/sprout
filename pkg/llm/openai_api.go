@@ -17,44 +17,68 @@ import (
 
 // callOpenAICompatibleStream calls OpenAI-compatible APIs and returns token usage information
 func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts.Message, cfg *config.Config, timeout time.Duration, writer io.Writer) (*TokenUsage, error) {
-	// Debug logging removed for cleaner output
+	// Build request with optional temperature; retry once without it if provider rejects
+	buildBody := func(includeTemp bool) ([]byte, error) {
+		payload := map[string]interface{}{
+			"model":    model,
+			"messages": messages,
+			"stream":  true,
+		}
+		if includeTemp {
+			payload["temperature"] = cfg.Temperature
+		}
+		return json.Marshal(payload)
+	}
 
-	reqBody, err := json.Marshal(map[string]interface{}{
-		"model":       model,
-		"messages":    messages,
-		"temperature": cfg.Temperature, // Use config value
-		// "max_tokens":  cfg.MaxTokens,   // Use config value
-		// "top_p":       cfg.TopP,        // Use config value
-		// "presence_penalty": cfg.PresencePenalty, // Use config value
-		// "frequency_penalty": cfg.FrequencyPenalty, // Use config value
-		"stream": true,
-	})
+	tryOnce := func(reqBody []byte) (*http.Response, error) {
+		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
+		if err != nil {
+			ui.Out().Print(prompts.RequestCreationError(err))
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		client := &http.Client{Timeout: timeout}
+		return client.Do(req)
+	}
+
+	bodyWithTemp, err := buildBody(true)
 	if err != nil {
 		ui.Out().Print(prompts.RequestMarshalError(err))
 		return nil, err
 	}
-
-	// Debug logging removed for cleaner output
-
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
-	if err != nil {
-		ui.Out().Print(prompts.RequestCreationError(err))
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{Timeout: timeout}
-	// Debug logging removed for cleaner output
-	resp, err := client.Do(req)
+	resp, err := tryOnce(bodyWithTemp)
 	if err != nil {
 		ui.Out().Printf("DEBUG: HTTP request failed: %v\n", err)
 		ui.Out().Print(prompts.HTTPRequestError(err))
 		return nil, err
 	}
-	defer resp.Body.Close()
 
-	// Debug logging removed for cleaner output
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		lower := strings.ToLower(string(raw))
+		if strings.Contains(lower, "temperature") || strings.Contains(lower, "unsupported") {
+			// Retry without temperature
+			bodyNoTemp, merr := buildBody(false)
+			if merr != nil {
+				ui.Out().Print(prompts.RequestMarshalError(merr))
+				return nil, merr
+			}
+			if r2, r2err := tryOnce(bodyNoTemp); r2err == nil {
+				resp = r2
+			} else {
+				ui.Out().Print(prompts.HTTPRequestError(r2err))
+				return nil, r2err
+			}
+		} else {
+			msg := prompts.APIError(string(raw), resp.StatusCode)
+			ui.Out().Print(msg)
+			return nil, fmt.Errorf("%s", msg)
+		}
+	}
+
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		msg := prompts.APIError(string(body), resp.StatusCode)
@@ -76,9 +100,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 		if line == "" {
 			continue
 		}
-		if strings.HasPrefix(line, "data: ") {
-			line = line[6:]
-		}
+		line = strings.TrimPrefix(line, "data: ")
 		if line == "[DONE]" {
 			break
 		}
@@ -107,31 +129,60 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 
 // getUsageFromNonStreamingCall makes a non-streaming call to get usage information
 func getUsageFromNonStreamingCall(apiURL, apiKey, model string, messages []prompts.Message, cfg *config.Config, timeout time.Duration) (*TokenUsage, error) {
-	reqBody, err := json.Marshal(map[string]interface{}{
-		"model":       model,
-		"messages":    messages,
-		"temperature": cfg.Temperature,
-		"stream":      false,
-		"max_tokens":  1, // Minimal tokens to get usage data
-	})
+	buildBody := func(includeTemp bool) ([]byte, error) {
+		payload := map[string]interface{}{
+			"model":      model,
+			"messages":   messages,
+			"stream":     false,
+			"max_tokens": 1, // Minimal tokens to get usage data
+		}
+		if includeTemp {
+			payload["temperature"] = cfg.Temperature
+		}
+		return json.Marshal(payload)
+	}
+
+	tryOnce := func(reqBody []byte) (*http.Response, error) {
+		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		client := &http.Client{Timeout: timeout}
+		return client.Do(req)
+	}
+
+	bodyWithTemp, err := buildBody(true)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := tryOnce(bodyWithTemp)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, err
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		lower := strings.ToLower(string(raw))
+		if strings.Contains(lower, "temperature") || strings.Contains(lower, "unsupported") {
+			// Retry without temperature
+			bodyNoTemp, merr := buildBody(false)
+			if merr != nil {
+				return nil, merr
+			}
+			if r2, r2err := tryOnce(bodyNoTemp); r2err == nil {
+				resp = r2
+			} else {
+				return nil, r2err
+			}
+		} else {
+			return nil, fmt.Errorf("failed to get usage data: %d", resp.StatusCode)
+		}
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get usage data: %d", resp.StatusCode)
 	}

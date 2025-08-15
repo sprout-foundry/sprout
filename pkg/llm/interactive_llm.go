@@ -104,7 +104,11 @@ func CallLLMWithInteractiveContext(
 		h := sha1.Sum([]byte(contentStr))
 		ui.Out().Printf("[tools] system_prompt_hash: %x\n", h)
 	}
-	maxRetries := 6 // Limit the number of interactive turns
+	// Limit the number of interactive turns. Prefer configured attempts when provided
+	maxRetries := cfg.OrchestrationMaxAttempts
+	if maxRetries <= 0 {
+		maxRetries = 4
+	}
 
 	// Anti-loop and cap enforcement state
 	workspaceContextCalls := 0
@@ -112,6 +116,9 @@ func CallLLMWithInteractiveContext(
 	shellCalls := 0
 	executedShell := map[string]bool{}
 	noProgressStreak := 0
+	// Additional guardrails for speed
+	maxWorkspaceContextCalls := 2
+	maxReadFileCalls := 12
 
 	// Observability and caching
 	toolCounts := map[string]int{}
@@ -311,6 +318,12 @@ func CallLLMWithInteractiveContext(
 					if name != "" {
 						toolCounts[name]++
 					}
+					// Global caps to reduce slow looping
+					if name == "read_file" && toolCounts["read_file"] > maxReadFileCalls {
+						toolResults = append(toolResults, "Tool read_file blocked: usage cap reached")
+						blockedCounts["read_file_cap"]++
+						continue
+					}
 
 					// Enforce Planner→Executor→Evaluator protocol
 					switch name {
@@ -429,7 +442,7 @@ func CallLLMWithInteractiveContext(
 							toolResults = append(toolResults, fmt.Sprintf("Tool workspace_context result (served from cache): %s", entry.Value))
 							continue
 						}
-						if workspaceContextCalls >= 2 {
+						if workspaceContextCalls >= maxWorkspaceContextCalls {
 							toolResults = append(toolResults, "Tool workspace_context blocked: usage cap reached")
 							blockedCounts["workspace_context_cap"]++
 							workspaceCapTripped = true

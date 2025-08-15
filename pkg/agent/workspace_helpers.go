@@ -65,7 +65,7 @@ func findPackageDirectories(dir string) []string {
 
 func isSourceFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
-	sourceExts := []string{".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".rs", ".rb", ".php", ".scala", ".kt"}
+	sourceExts := []string{".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".rs", ".rb", ".php", ".scala", ".kt", ".md", ".txt"}
 	for _, sourceExt := range sourceExts {
 		if ext == sourceExt {
 			return true

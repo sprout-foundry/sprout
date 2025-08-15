@@ -136,7 +136,8 @@ func findFilesUsingShellCommands(userIntent string, workspaceInfo *WorkspaceInfo
 			continue
 		}
 		logger.Logf("Searching for files containing: %s", term)
-		cmd := exec.Command("sh", "-c", fmt.Sprintf("command -v rg >/dev/null 2>&1 && rg -n -l -i --glob '*.go' %q . || grep -r -n -l -i --include=*.go %q .", term, term))
+		// Search both code and docs (go and markdown/text)
+		cmd := exec.Command("sh", "-c", fmt.Sprintf("command -v rg >/dev/null 2>&1 && rg -n -l -i --glob '*.go' --glob '*.md' --glob '*.txt' %q . || (grep -r -n -l -i --include=*.go --include=*.md --include=*.txt %q .)", term, term))
 		output, err := cmd.Output()
 		if err != nil {
 			logger.Logf("Search for '%s' failed: %v", term, err)
@@ -150,7 +151,7 @@ func findFilesUsingShellCommands(userIntent string, workspaceInfo *WorkspaceInfo
 			if idx := strings.Index(line, ":"); idx > -1 {
 				line = line[:idx]
 			}
-			if strings.HasSuffix(line, ".go") {
+			if strings.HasSuffix(line, ".go") || strings.HasSuffix(strings.ToLower(line), ".md") || strings.HasSuffix(strings.ToLower(line), ".txt") {
 				cleanPath := strings.TrimPrefix(line, "./")
 				foundFiles = append(foundFiles, cleanPath)
 				logger.Logf("Shell search found: %s (contains '%s')", cleanPath, term)

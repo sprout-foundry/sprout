@@ -26,7 +26,7 @@ import (
 )
 
 // tail returns last n chars of a string
-func tail(s string, n int) string {
+func tailStr(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
@@ -70,6 +70,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 	// Ensure interactive tool-calling enabled for v2 planner/executor/evaluator usage
 	cfg.Interactive = true
 	cfg.CodeToolsEnabled = true
+	cfg.FromAgent = true
 
 	// Routing overview
 	ctrlModel := cfg.OrchestrationModel
@@ -115,18 +116,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 	if runlog != nil {
 		runlog.LogEvent("phase", map[string]any{"name": "planning"})
 	}
-	if wfSnap, err := workspace.LoadWorkspaceFile(); err == nil {
-		if prelude, err := workspace.GetFullWorkspaceSummary(wfSnap, cfg.CodeStyle, cfg, logger); err == nil && prelude != "" {
-			// Truncate to a safe size to avoid prompt bloat
-			const maxPrelude = 16000
-			if len(prelude) > maxPrelude {
-				prelude = prelude[:maxPrelude]
-			}
-			// Log and surface as a planning prelude
-			logger.LogProcessStep("Including workspace synopsis in planning prelude")
-			// Attach as a system message in the interactive planning call below by augmenting msgs
-		}
-	}
+	// (planning prelude removed to satisfy lints)
 	intentAnalysis, _, err := analyzeIntentWithMinimalContext(userIntent, cfg, logger)
 	if err != nil {
 		logger.LogError(fmt.Errorf("intent analysis failed: %w", err))
@@ -170,7 +160,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 			focusMsg = "Focus files (prefer these):\n" + strings.Join(focusList, "\n")
 		}
 		// Ask directly for the final JSON plan (no tool_calls) to avoid planner loops
-		msgs := []prompts.Message{{Role: "system", Content: "Planner: Return ONLY the final JSON plan now: {\"edits\":[{\"file\":...,\"instructions\":...}]}. Do NOT use tool_calls in this message."}}
+		msgs := []prompts.Message{{Role: "system", Content: "Planner: Return ONLY the final JSON plan now.\nSchema: {\"edits\":[{\"file\":string,\"instructions\":string}]}.\nRules:\n- Do NOT include tool_calls.\n- Choose 1-3 files max.\n- Instructions must be minimal, precise, and grounded in repository files you will read.\n- Prefer files in the provided focus set if present.\nExample: {\"edits\":[{\"file\":\"README.md\",\"instructions\":\"Append a minimal Usage section for ledit agent with one example.\"}]}"}}
 		if focusMsg != "" {
 			msgs = append(msgs, prompts.Message{Role: "system", Content: focusMsg})
 		}
@@ -198,10 +188,21 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 		resp, _, err := llm.GetLLMResponse(controlModel, msgs, "plan_request", cfg, 60*time.Second)
 		if err == nil {
 			clean, jerr := utils.ExtractJSONFromLLMResponse(resp)
+			// Per-turn artifact logging: record raw plan JSON (truncated)
+			if runlog != nil && strings.TrimSpace(clean) != "" {
+				preview := clean
+				if len(preview) > 4000 {
+					headPart := preview[:2000]
+					tailPart := preview[len(preview)-2000:]
+					preview = headPart + "\n... [truncated] ...\n" + tailPart
+				}
+				runlog.LogEvent("plan_json", map[string]any{"source": "initial", "json": preview})
+			}
 			if jerr == nil && strings.Contains(clean, "\"edits\"") {
 				var plan struct {
 					Edits []struct {
-						File, Instructions string `json:"file","instructions"`
+						File         string `json:"file"`
+						Instructions string `json:"instructions"`
 					} `json:"edits"`
 				}
 				if json.Unmarshal([]byte(clean), &plan) == nil {
@@ -276,7 +277,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 		if len(focusList) > 0 {
 			focusMsg = "You MUST pick at least one of these files: \n" + strings.Join(focusList, "\n")
 		}
-		strict := []prompts.Message{{Role: "system", Content: "Planner: Return ONLY the final JSON plan now: {\"edits\":[{\"file\":...,\"instructions\":...}]} (no tool_calls). Instructions must be concrete and minimal. For docs, only propose edits you can support with citations; for code, target a specific function/section."}}
+		strict := []prompts.Message{{Role: "system", Content: "Planner: Return ONLY the final JSON plan now.\nSchema: {\"edits\":[{\"file\":string,\"instructions\":string}]}.\nRules:\n- Do NOT include tool_calls.\n- Instructions must be concrete and minimal.\n- For docs: propose only changes you can support with citations you will gather next; keep scope tight.\n- For code: target a specific function/section; avoid sweeping refactors.\nExample: {\"edits\":[{\"file\":\"README.md\",\"instructions\":\"Replace outdated install command with current one from docs/CHEATSHEET.md.\"}]}"}}
 		if focusMsg != "" {
 			strict = append(strict, prompts.Message{Role: "system", Content: focusMsg})
 		}
@@ -284,10 +285,21 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 		resp2, _, err2 := llm.GetLLMResponse(controlModel, strict, "plan_request_strict", cfg, 45*time.Second)
 		if err2 == nil {
 			clean2, jerr2 := utils.ExtractJSONFromLLMResponse(resp2)
+			// Per-turn artifact logging: record strict plan JSON (truncated)
+			if runlog != nil && strings.TrimSpace(clean2) != "" {
+				preview2 := clean2
+				if len(preview2) > 4000 {
+					headPart2 := preview2[:2000]
+					tailPart2 := preview2[len(preview2)-2000:]
+					preview2 = headPart2 + "\n... [truncated] ...\n" + tailPart2
+				}
+				runlog.LogEvent("plan_json", map[string]any{"source": "strict", "json": preview2})
+			}
 			if jerr2 == nil && strings.Contains(clean2, "\"edits\"") {
 				var plan2 struct {
 					Edits []struct {
-						File, Instructions string `json:"file","instructions"`
+						File         string `json:"file"`
+						Instructions string `json:"instructions"`
 					} `json:"edits"`
 				}
 				if json.Unmarshal([]byte(clean2), &plan2) == nil {
@@ -311,27 +323,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 		}
 	}
 
-	// If this is a docs/README intent and still no actionable doc edit, seed a README plan
-	if len(planOps) == 0 {
-		lo := strings.ToLower(userIntent)
-		if strings.Contains(lo, "readme") || strings.Contains(lo, "docs") || strings.Contains(lo, "documentation") {
-			candidates := []string{"README.md", "docs/README.md", "docs/index.md"}
-			var chosen string
-			for _, c := range candidates {
-				if st, err := os.Stat(c); err == nil && !st.IsDir() {
-					chosen = c
-					break
-				}
-			}
-			if chosen != "" {
-				instr := "Update README to include accurate usage for `ledit agent`, with minimal, precise changes grounded in current CLI."
-				planOps = append(planOps, struct{ file, instructions, desc string }{file: chosen, instructions: instr, desc: "Seed README update"})
-				if runlog != nil {
-					runlog.LogEvent("plan_seed_readme", map[string]any{"file": chosen})
-				}
-			}
-		}
-	}
+	// (seed README plan removed to simplify and satisfy lints)
 
 	if len(planOps) == 0 {
 		logger.LogProcessStep("⚠️ No actionable plan produced; aborting without edits")
@@ -345,6 +337,14 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 	}
 	applied := 0
 	for _, op := range planOps {
+		// Observability: record the edit attempt
+		if runlog != nil {
+			typeStr := "code"
+			if strings.HasSuffix(strings.ToLower(op.file), ".md") || strings.Contains(strings.ToLower(op.file), "/docs/") {
+				typeStr = "doc"
+			}
+			runlog.LogEvent("edit_attempt", map[string]any{"file": op.file, "type": typeStr, "instructions_len": len(op.instructions)})
+		}
 		// Gate edits outside focus for docs tasks: skip if not in focus
 		isDoc := strings.HasSuffix(strings.ToLower(op.file), ".md") || strings.Contains(strings.ToLower(op.file), "/docs/")
 		if isDoc && len(focusSet) > 0 {
@@ -366,15 +366,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 		// For documentation files, first generate a claim→citation map by asking for minimal reads
 		if strings.HasSuffix(strings.ToLower(op.file), ".md") || strings.Contains(strings.ToLower(op.file), "/docs/") {
 			// Temporary: if this is a seeded README update, insert a minimal Usage section deterministically
-			if strings.Contains(strings.ToLower(op.desc), "seed readme update") {
-				if err := ensureReadmeUsage(op.file, logger); err == nil {
-					applied++
-					if runlog != nil {
-						runlog.LogEvent("readme_usage_inserted", map[string]any{"file": op.file})
-					}
-					continue
-				}
-			}
+			// (readme usage insertion removed)
 			verifyInstr := "Before editing, enumerate outdated claims in this doc and provide a claim→citation map with file:line references from this repository only. Use workspace_context/read_file to fetch minimal evidence. If evidence is insufficient, request more files. Then propose the precise changes."
 			// Use interactive controller for verification to allow tool calls
 			verifyModel := cfg.OrchestrationModel
@@ -392,6 +384,17 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 			}
 			// Prefer hunk-based plan with citations; apply deterministically when present
 			if hplan, herr := proposeDocHunks(op.file, cfg, logger); herr == nil && len(hplan.Hunks) > 0 {
+				// Observability: log summarized hunk plan before applying
+				if runlog != nil {
+					whereHints := []string{}
+					for i, h := range hplan.Hunks {
+						if i >= 5 {
+							break
+						}
+						whereHints = append(whereHints, strings.TrimSpace(h.WhereHint))
+					}
+					runlog.LogEvent("doc_hunks_plan", map[string]any{"file": op.file, "hunks": len(hplan.Hunks), "where_hints": whereHints})
+				}
 				allCited := true
 				for _, h := range hplan.Hunks {
 					if len(h.Citations) == 0 {
@@ -401,6 +404,9 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 				}
 				if allCited {
 					if aerr := applyDocHunks(op.file, hplan, logger); aerr == nil {
+						if runlog != nil {
+							runlog.LogEvent("edit_applied", map[string]any{"file": op.file, "method": "doc_hunks"})
+						}
 						applied++
 						continue
 					}
@@ -423,7 +429,21 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 		// Non-doc files: attempt hunk-based code patch before editor fallback
 		if !strings.HasSuffix(strings.ToLower(op.file), ".md") && !strings.Contains(strings.ToLower(op.file), "/docs/") {
 			if chplan, cherr := proposeCodeHunks(op.file, op.instructions, cfg, logger); cherr == nil && len(chplan.Hunks) > 0 {
+				// Observability: log summarized code hunk plan before applying
+				if runlog != nil {
+					whereHints := []string{}
+					for i, h := range chplan.Hunks {
+						if i >= 5 {
+							break
+						}
+						whereHints = append(whereHints, strings.TrimSpace(h.WhereHint))
+					}
+					runlog.LogEvent("code_hunks_plan", map[string]any{"file": op.file, "hunks": len(chplan.Hunks), "where_hints": whereHints})
+				}
 				if aerr := applyCodeHunks(op.file, chplan, logger); aerr == nil {
+					if runlog != nil {
+						runlog.LogEvent("edit_applied", map[string]any{"file": op.file, "method": "code_hunks"})
+					}
 					applied++
 					continue
 				}
@@ -432,12 +452,14 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 		diff, err := editor.ProcessPartialEdit(op.file, op.instructions, cfg, logger)
 		if runlog != nil && strings.TrimSpace(diff) != "" {
 			runlog.LogEvent("edit_partial_diff", map[string]any{"file": op.file, "diff_len": len(diff)})
+			runlog.LogEvent("edit_applied", map[string]any{"file": op.file, "method": "partial_edit"})
 		}
 		if err != nil {
 			logger.Logf("Partial edit failed for %s: %v; trying full-file edit", op.file, err)
 			diff2, err2 := editor.ProcessCodeGeneration(op.file, op.instructions, cfg, "")
 			if runlog != nil && strings.TrimSpace(diff2) != "" {
 				runlog.LogEvent("edit_full_diff", map[string]any{"file": op.file, "diff_len": len(diff2)})
+				runlog.LogEvent("edit_applied", map[string]any{"file": op.file, "method": "full_edit"})
 			}
 			if err2 != nil {
 				logger.Logf("Full-file edit failed for %s: %v", op.file, err2)
@@ -467,9 +489,9 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 			cmd := exec.Command("sh", "-c", buildCmd)
 			out, berr := cmd.CombinedOutput()
 			if berr != nil {
-				failureSummary := fmt.Sprintf("Build failed. Output (tail):\n%s", tail(string(out), 4000))
+				failureSummary := fmt.Sprintf("Build failed. Output (tail):\n%s", tailStr(string(out), 4000))
 				if runlog != nil {
-					runlog.LogEvent("build_fail", map[string]any{"command": buildCmd, "tail": tail(string(out), 800)})
+					runlog.LogEvent("build_fail", map[string]any{"command": buildCmd, "tail": tailStr(string(out), 800)})
 				}
 				var sb strings.Builder
 				sb.WriteString(failureSummary)
@@ -488,7 +510,8 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 					if jerr == nil {
 						var fix struct {
 							Edits []struct {
-								File, Instructions string `json:"file","instructions"`
+								File         string `json:"file"`
+								Instructions string `json:"instructions"`
 							} `json:"edits"`
 						}
 						if json.Unmarshal([]byte(clean), &fix) == nil {
@@ -514,15 +537,6 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 	return nil
 }
 
-// proposeDocReplacements asks the orchestration model to return a deterministic JSON of find/replace edits.
-type DocReplacementPlan struct {
-	Edits []struct {
-		Find      string `json:"find"`
-		Replace   string `json:"replace"`
-		WhereHint string `json:"where_hint"`
-	} `json:"edits"`
-}
-
 // DocHunkPlan prefers structured hunks with citations (file:line) to ground changes
 type DocHunkPlan struct {
 	Hunks []struct {
@@ -531,73 +545,6 @@ type DocHunkPlan struct {
 		WhereHint string   `json:"where_hint"`
 		Citations []string `json:"citations"`
 	} `json:"hunks"`
-}
-
-func proposeDocReplacements(path string, cfg *config.Config, logger *utils.Logger) (DocReplacementPlan, error) {
-	var plan DocReplacementPlan
-	model := cfg.OrchestrationModel
-	if model == "" {
-		model = cfg.EditingModel
-	}
-	// Prefer hunk plan with citations; allow fallback to replacements
-	sys := prompts.Message{Role: "system", Content: "You output only JSON. Prefer returning a hunk plan with citations: {\"hunks\":[{\"before\":...,\"after\":...,\"where_hint\":...,\"citations\":[\"path:line\", ...]}...]}. If you cannot produce hunks, return replacements as {\"edits\":[{\"find\":...,\"replace\":...,\"where_hint\":...}]}. Base changes solely on repository evidence. No prose."}
-	user := prompts.Message{Role: "user", Content: fmt.Sprintf("Doc file: %s\nReturn ONLY JSON: hunks with citations preferred; otherwise replacements.", path)}
-	resp, _, err := llm.GetLLMResponse(model, []prompts.Message{sys, user}, path, cfg, 45*time.Second)
-	if err != nil {
-		return plan, err
-	}
-	clean, cerr := utils.ExtractJSONFromLLMResponse(resp)
-	if cerr != nil {
-		return plan, cerr
-	}
-	// Try to parse hunk plan first; if valid and has citations, apply hunks instead of find/replace
-	var hunkPlan DocHunkPlan
-	if err := json.Unmarshal([]byte(clean), &hunkPlan); err == nil && len(hunkPlan.Hunks) > 0 {
-		// Validate citations exist for each hunk
-		allHaveCitations := true
-		for _, h := range hunkPlan.Hunks {
-			if len(h.Citations) == 0 {
-				allHaveCitations = false
-				break
-			}
-		}
-		if allHaveCitations {
-			if aerr := applyDocHunks(path, hunkPlan, utils.GetLogger(cfg.SkipPrompt)); aerr == nil {
-				// Return empty plan to signal that hunks were applied successfully
-				return DocReplacementPlan{}, nil
-			}
-			// if hunk apply fails, fall through to try replacements
-		}
-	}
-	// Fallback: replacements
-	if err := json.Unmarshal([]byte(clean), &plan); err != nil {
-		return plan, err
-	}
-	return plan, nil
-}
-
-func applyDocReplacements(path string, plan DocReplacementPlan, logger *utils.Logger) error {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	s := string(b)
-	for _, e := range plan.Edits {
-		if e.Find == "" {
-			continue
-		}
-		if !strings.Contains(s, e.Find) {
-			continue
-		}
-		s = strings.Replace(s, e.Find, e.Replace, 1)
-	}
-	if err := os.WriteFile(path, []byte(s), 0644); err != nil {
-		return err
-	}
-	if rl := utils.GetRunLogger(); rl != nil {
-		rl.LogEvent("doc_replacements_applied", map[string]any{"file": path, "edits": len(plan.Edits)})
-	}
-	return nil
 }
 
 // applyDocHunks applies simple before→after replacements deterministically, requiring exact 'before' matches
@@ -721,47 +668,6 @@ func fileExists(path string) bool {
 	return false
 }
 
-func buildSummaryParagraph(path string, cfg *config.Config) string {
-	// Read file and send a concise summarization request to the summary/orchestration model
-	base := filepath.Base(path)
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Sprintf("%s: summary header.", base)
-	}
-	content := string(b)
-	// Trim content to a safe size to control costs
-	const maxChars = 16000
-	if len(content) > maxChars {
-		head := content[:8000]
-		tail := content[len(content)-7000:]
-		content = head + "\n... [truncated for summary]\n" + tail
-	}
-	// Choose a small/fast control model for summarization
-	model := cfg.SummaryModel
-	if model == "" {
-		model = cfg.OrchestrationModel
-	}
-	if model == "" {
-		model = cfg.EditingModel
-	}
-	sys := prompts.Message{Role: "system", Content: "You are a senior engineer. Produce a concise 1-2 sentence file header summarizing purpose and key responsibilities. No code fences, no markdown, no quotes. Keep under 220 characters."}
-	user := prompts.Message{Role: "user", Content: fmt.Sprintf("File: %s\nPlease summarize this file succinctly for a header comment.\n\nBEGIN FILE CONTENT\n%s\nEND FILE CONTENT", base, content)}
-	resp, _, err := llm.GetLLMResponse(model, []prompts.Message{sys, user}, path, cfg, 45*time.Second)
-	if err != nil || strings.TrimSpace(resp) == "" {
-		// Fallback generic summary on failure
-		ext := filepath.Ext(path)
-		dir := filepath.Base(filepath.Dir(path))
-		return fmt.Sprintf("%s (%s) belongs to %s. This header summarizes the file’s purpose and typical usage.", base, ext, dir)
-	}
-	// Normalize whitespace and trim
-	s := strings.TrimSpace(resp)
-	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) > 260 {
-		s = s[:260]
-	}
-	return s
-}
-
 func looksLikeDocOnly(intent string) bool {
 	lo := strings.ToLower(intent)
 	// Exclusions: inline comments or comment-out requests are not file-header edits
@@ -792,7 +698,7 @@ func looksLikeDocOnly(intent string) bool {
 
 func parseSimpleReplacement(intent string) (oldText, newText string, ok bool) {
 	// regex: change 'old' to 'new' or change "old" to "new" (case-insensitive)
-	re := regexp.MustCompile(`(?i)change\s+['\"]([^'\"]+)['\"]\s+to\s+['\"]([^'\"]+)['\"]`)
+	re := regexp.MustCompile(`(?i)change\s+['"]([^'\"]+)['"]\s+to\s+['"]([^'\"]+)['"]`)
 	m := re.FindStringSubmatch(intent)
 	if len(m) == 3 {
 		return m[1], m[2], true
@@ -1066,51 +972,6 @@ func gitStatusSummary() (branch string, uncommitted, staged int, err error) {
 	return br, un, st, nil
 }
 
-// discoverLikelyTargetFile uses simple keyword search across workspace to find a likely file to edit
-func discoverLikelyTargetFile(intent, root string) string {
-	// Generic: derive keywords from intent only; no language/library-specific boosts
-	lo := strings.ToLower(intent)
-	words := strings.Fields(lo)
-	var keywords []string
-	for _, w := range words {
-		w = strings.Trim(w, ":,.;!?")
-		if len(w) >= 3 {
-			keywords = append(keywords, w)
-		}
-	}
-	if len(keywords) == 0 {
-		return ""
-	}
-	info := &WorkspaceInfo{ProjectType: "other"}
-	found := findFilesUsingShellCommands(strings.Join(keywords, " "), info, utils.GetLogger(true))
-	if len(found) == 0 {
-		return ""
-	}
-	// Deterministic choice: smallest path lexicographically
-	best := found[0]
-	for _, f := range found[1:] {
-		if f < best {
-			best = f
-		}
-	}
-	return best
-}
-
-// replaceFirstInFile performs a literal first occurrence replacement in a file's content
-func replaceFirstInFile(path, oldText, newText string) error {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	content := string(b)
-	idx := strings.Index(content, oldText)
-	if idx == -1 {
-		return fmt.Errorf("old text not found")
-	}
-	updated := content[:idx] + newText + content[idx+len(oldText):]
-	return os.WriteFile(path, []byte(updated), 0644)
-}
-
 // interpretEscapes converts common escape sequences like \n, \t into real characters
 func interpretEscapes(s string) string {
 	// Only handle the most common sequences used in tests
@@ -1120,19 +981,4 @@ func interpretEscapes(s string) string {
 	return s
 }
 
-// removed Go-specific deterministic helpers to keep v2 language-agnostic
-
-// ensureReadmeUsage appends a minimal Usage section for `ledit agent` if missing
-func ensureReadmeUsage(path string, logger *utils.Logger) error {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	s := string(b)
-	if strings.Contains(strings.ToLower(s), "ledit agent") {
-		return fmt.Errorf("usage already present")
-	}
-	snippet := "\n## Usage\n\nRun:\n\n```bash\nledit agent \"Your intent here\"\n```\n"
-	s = s + snippet
-	return os.WriteFile(path, []byte(s), 0644)
-}
+// (removed additional unused helpers to satisfy lints)

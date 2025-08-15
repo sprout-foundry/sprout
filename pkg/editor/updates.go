@@ -107,7 +107,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 	}
 
 	// Run a single pre-apply automated review across the combined diff to consider all files together
-	if cfg.PreapplyReview {
+	if cfg.PreapplyReview && (cfg.SkipPrompt || cfg.FromAgent) {
 		combined := allDiffs.String()
 		if combined != "" {
 			logger := utils.GetLogger(cfg.SkipPrompt)

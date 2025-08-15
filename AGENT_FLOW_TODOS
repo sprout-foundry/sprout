@@ -1,0 +1,77 @@
+Agent v2 Playbook Flows — TODO tracker
+
+Status: initial scaffolding added and registered. Each flow needs stronger Matches heuristics and richer BuildPlan logic using workspace context and symbol/embedding hints.
+
+Planned flows (20):
+1) docs_audit — implemented (existing)
+2) header_summary — implemented (scaffold)
+3) code_comment_sync — implemented (scaffold)
+4) simple_replace — implemented (scaffold)
+5) file_rename — implemented (scaffold)
+6) multi_file_edit — implemented (scaffold)
+7) fix_build — implemented (scaffold)
+8) lint_fix — implemented (scaffold)
+9) security_fix — implemented (scaffold)
+10) fix_tests — implemented (scaffold)
+11) add_tests — implemented (scaffold)
+12) refactor_small — implemented (scaffold)
+13) api_change_propagation — implemented (scaffold)
+14) types_migration — implemented (scaffold)
+15) feature_toggle_small — implemented (scaffold)
+16) dependency_update — implemented (scaffold)
+17) config_change — implemented (scaffold)
+18) ci_update — implemented (scaffold)
+19) perf_opt_hotpath — implemented (scaffold)
+20) logging_improve — implemented (scaffold)
+
+Next steps:
+- Expand Matches() to be precise and avoid collisions; consider category weighting.
+- In BuildPlan(), query workspace context to identify exact files instead of relying on estimatedFiles fallback.
+- Add validations per flow (pre/post conditions) and targeted run commands (e.g., `go build`, `go test`).
+- Write concise instructions per op including guardrails for minimal diffs.
+- Integrate flow selection telemetry to measure effectiveness.
+
+Updates (most recent first):
+- Enhanced `fix_build` and `fix_tests`:
+  - More robust Matches() with common error phrases.
+  - BuildPlan() now discovers candidate files when `estimatedFiles` is empty via lightweight on-disk scan and regex extraction of file/symbol/test names.
+- Enhanced `header_summary`:
+  - Auto-discovers Go source files lacking top comments and targets them for concise header summaries.
+- Enhanced `dependency_update`:
+  - Matches recognizes module@version, go get lines, and upgrade phrases.
+  - BuildPlan adds `go.mod` and files importing the module; tailored instructions include running `go mod tidy`.
+- Enhanced `api_change_propagation`:
+  - Matches recognizes rename patterns and signature change phrasing.
+  - BuildPlan discovers files referencing the old symbol and issues mechanical rename instructions.
+- Enhanced `lint_fix`:
+  - Matches covers common linter and tool names.
+  - BuildPlan discovers a limited set of Go files and linter config files for targeted changes.
+- Enhanced `refactor_small`:
+  - Matches for common refactor phrasing.
+  - BuildPlan finds files by symbol mention or by size (top N), focusing refactors where most impactful.
+- Enhanced `perf_opt_hotpath`:
+  - Matches latency/CPU/memory/perf phrases.
+  - BuildPlan discovers hot candidates based on symbol hints and simple allocation/loop heuristics; falls back to large files.
+- Enhanced `security_fix`:
+  - Matches security/insecure pattern terms.
+  - BuildPlan discovers candidates via regex for weak constructs (md5/sha1/http://, InsecureSkipVerify, password/secret/token).
+- Enhanced `file_rename`:
+  - Matches rename/move/mv patterns and path-like rename instructions.
+  - BuildPlan parses from/to and adds files referencing the old path/base name for reference updates.
+- Enhanced `multi_file_edit`:
+  - Matches “multiple files” phrasing or detects multiple file paths in intent.
+  - BuildPlan aggregates explicit paths, symbol-linked files, and estimatedFiles.
+- Enhanced `types_migration`:
+  - Matches include rename/migration phrasing for types and fields.
+  - BuildPlan parses type/field renames and finds referencing files; crafts rename instructions.
+- Enhanced `code_comment_sync`:
+  - Matches broader comment-sync phrasing.
+  - BuildPlan discovers comment-heavy files to target for accuracy updates.
+- Enhanced `add_tests`:
+  - Matches unit/integration test phrasing and TestName patterns.
+  - BuildPlan finds source files lacking tests, plus explicit/symbol-linked files.
+- Enhanced `ci_update`:
+  - Matches mentions of CI systems (GitHub Actions, Travis, CircleCI, Jenkins).
+  - BuildPlan discovers workflow/config files under `.github/workflows/` and common CI files.
+
+

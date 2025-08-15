@@ -58,6 +58,8 @@ Examples:
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		userIntent := strings.Join(args, " ")
+		// Mark this invocation as coming from agent for downstream logic (e.g., automated review policy)
+		_ = os.Setenv("LEDIT_FROM_AGENT", "1")
 		// Propagate dry-run via env var for simplicity; config loader reads os.Getenv in future enhancement
 		if agentDryRun {
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")

@@ -25,6 +25,11 @@ func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions 
 	case "needs_revision":
 		logger.LogProcessStep("Code review requires revisions.")
 		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
+		// In pre-apply review phase, provide advisory feedback only to avoid loops
+		if cfg.PreapplyReview && !cfg.SkipPrompt {
+			logger.LogProcessStep("Pre-apply review: advisory only (no auto-fixes applied)")
+			return nil
+		}
 		logger.LogProcessStep("Applying suggested revisions...")
 
 		// The review gives new instructions. We execute them.
@@ -38,6 +43,11 @@ func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions 
 	case "rejected":
 		logger.LogProcessStep("Code review rejected.")
 		logger.LogProcessStep(fmt.Sprintf("Feedback: %s", review.Feedback))
+		// In pre-apply review phase, provide advisory feedback only to avoid loops
+		if cfg.PreapplyReview && !cfg.SkipPrompt {
+			logger.LogProcessStep("Pre-apply review: advisory only (no rollback/retry)")
+			return nil
+		}
 
 		// In non-interactive flows, prefer not to roll back applied changes to avoid losing progress
 		if cfg.SkipPrompt {

@@ -53,6 +53,10 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 	// Respect CLI skip-prompt for non-interactive flows
 	cfg.SkipPrompt = skipPrompt
 	logger := utils.GetLogger(cfg.SkipPrompt)
+	runlog := utils.GetRunLogger()
+	if runlog != nil {
+		runlog.LogEvent("agent_start", map[string]any{"intent": userIntent, "orchestration_model": cfg.OrchestrationModel, "editing_model": cfg.EditingModel})
+	}
 	// Ensure interactive tool-calling enabled for v2 planner/executor/evaluator usage
 	cfg.Interactive = true
 	cfg.CodeToolsEnabled = true
@@ -95,6 +99,9 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 
 	// Phase 1: Intent analysis + planning (no edits). Provide a compact workspace synopsis for grounding.
 	logger.LogProcessStep("🧭 Analyzing intent and planning changes (no edits yet)...")
+	if runlog != nil {
+		runlog.LogEvent("phase", map[string]any{"name": "planning"})
+	}
 	if wfSnap, err := workspace.LoadWorkspaceFile(); err == nil {
 		if prelude, err := workspace.GetFullWorkspaceSummary(wfSnap, cfg.CodeStyle, cfg, logger); err == nil && prelude != "" {
 			// Truncate to a safe size to avoid prompt bloat
@@ -116,6 +123,25 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 	if intentAnalysis != nil {
 		if sel := pb.Select(userIntent, intentAnalysis.Category); sel != nil {
 			logger.LogProcessStep("📘 Using playbook: " + sel.Name())
+			// Most playbooks should receive workspace context unless they explicitly opt out
+			requiresCtx := true
+			if ca, ok := any(sel).(pb.ContextAware); ok {
+				requiresCtx = ca.RequiresContext()
+			}
+			if requiresCtx {
+				if wfSnap, err := workspace.LoadWorkspaceFile(); err == nil {
+					if prelude, err := workspace.GetFullWorkspaceSummary(wfSnap, cfg.CodeStyle, cfg, logger); err == nil && prelude != "" {
+						const maxPrelude = 16000
+						if len(prelude) > maxPrelude {
+							prelude = prelude[:maxPrelude]
+						}
+						logger.LogProcessStep("Including workspace synopsis for playbook")
+						if runlog != nil {
+							runlog.LogEvent("playbook_context", map[string]any{"playbook": sel.Name(), "bytes": len(prelude)})
+						}
+					}
+				}
+			}
 			spec := sel.BuildPlan(userIntent, intentAnalysis.EstimatedFiles)
 			if spec != nil {
 				// Convert spec ops → planOps, filter to real files only
@@ -134,7 +160,7 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 		if controlModel == "" {
 			controlModel = cfg.EditingModel
 		}
-		msgs := []prompts.Message{{Role: "user", Content: fmt.Sprintf("Goal: %s", userIntent)}}
+		msgs := []prompts.Message{{Role: "system", Content: "Planner guidance: Use tool_calls to discover and read repository files. Do NOT return a final plan/content in the same turn as tool_calls. First emit tool_calls, wait for tool execution results, then in the NEXT turn return ONLY the final JSON plan."}, {Role: "user", Content: fmt.Sprintf("Goal: %s", userIntent)}}
 		// Best-effort: include small workspace synopsis if available
 		if wfSnap, err := workspace.LoadWorkspaceFile(); err == nil {
 			if prelude, err := workspace.GetFullWorkspaceSummary(wfSnap, cfg.CodeStyle, cfg, logger); err == nil && prelude != "" {
@@ -175,10 +201,16 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 
 	// Phase 2: Execute plan with guardrails (verify → edit; preflight each file, minimal edits per op)
 	logger.LogProcessStep("🛠️ Executing plan with guarded edits...")
+	if runlog != nil {
+		runlog.LogEvent("phase", map[string]any{"name": "execution", "ops": len(planOps)})
+	}
 	applied := 0
 	for _, op := range planOps {
 		if err := preflightQuick(op.file); err != nil {
 			logger.Logf("Skipping %s (preflight failed: %v)", op.file, err)
+			if runlog != nil {
+				runlog.LogEvent("preflight_skip", map[string]any{"file": op.file, "error": err.Error()})
+			}
 			continue
 		}
 		// For documentation files, first generate a claim→citation map by asking for minimal reads
@@ -200,29 +232,47 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 			}
 			// Always try deterministic proposer for docs
 			if plan, perr := proposeDocReplacements(op.file, cfg, logger); perr == nil && len(plan.Edits) > 0 {
+				if runlog != nil {
+					runlog.LogEvent("doc_proposer_plan", map[string]any{"file": op.file, "edits": len(plan.Edits)})
+				}
 				if directApply {
 					if aerr := applyDocReplacements(op.file, plan, logger); aerr == nil {
 						applied++
+						if runlog != nil {
+							runlog.LogEvent("doc_apply", map[string]any{"file": op.file, "applied": len(plan.Edits)})
+						}
 						continue
 					}
 				}
 			} else if perr != nil {
 				logger.Logf("Doc proposer failed for %s: %v", op.file, perr)
+				if runlog != nil {
+					runlog.LogEvent("doc_proposer_error", map[string]any{"file": op.file, "error": perr.Error()})
+				}
 			}
 		}
 		if _, err := editor.ProcessPartialEdit(op.file, op.instructions, cfg, logger); err != nil {
 			logger.Logf("Partial edit failed for %s: %v; trying full-file edit", op.file, err)
 			if _, err2 := editor.ProcessCodeGeneration(op.file, op.instructions, cfg, ""); err2 != nil {
 				logger.Logf("Full-file edit failed for %s: %v", op.file, err2)
+				if runlog != nil {
+					runlog.LogEvent("edit_failure", map[string]any{"file": op.file, "error": err2.Error()})
+				}
 				continue
 			}
 		}
 		applied++
 	}
 	if applied == 0 {
+		if runlog != nil {
+			runlog.LogEvent("agent_end", map[string]any{"status": "no_edits"})
+		}
 		return fmt.Errorf("plan produced no successful edits")
 	}
 	ui.Out().Print("✅ Agent v2 execution completed\n")
+	if runlog != nil {
+		runlog.LogEvent("agent_end", map[string]any{"status": "ok", "applied": applied})
+	}
 	return nil
 }
 

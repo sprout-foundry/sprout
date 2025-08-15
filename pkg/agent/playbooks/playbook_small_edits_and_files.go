@@ -10,6 +10,9 @@ import (
 type SimpleReplacePlaybook struct{}
 
 func (p SimpleReplacePlaybook) Name() string { return "simple_replace" }
+
+// Simple textual replacements do not need broader workspace context
+func (p SimpleReplacePlaybook) RequiresContext() bool { return false }
 func (p SimpleReplacePlaybook) Matches(userIntent string, _ string) bool {
 	lo := strings.ToLower(userIntent)
 	return strings.Contains(lo, "change '") || strings.Contains(lo, "replace '") || strings.Contains(lo, "s/")

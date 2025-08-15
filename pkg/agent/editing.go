@@ -312,7 +312,7 @@ func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext)
 		// Create focused instructions for this specific edit
 		editInstructions := buildFocusedEditInstructions(operation, context.Logger)
 		// Count prompt/input tokens for this edit
-		promptTokens := utils.EstimateTokens(editInstructions)
+		promptTokens := llm.GetConversationTokens([]struct{ Role, Content string }{{Role: "user", Content: editInstructions}})
 		totalTokens += promptTokens
 		context.TokenUsage.CodeGeneration += promptTokens
 		context.TokenUsage.CodegenSplit.Prompt += promptTokens

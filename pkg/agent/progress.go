@@ -263,8 +263,11 @@ func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, e
 		return nil, 0, fmt.Errorf("invalid evaluator next_action: %s", evaluation.NextAction)
 	}
 
-	promptTokens := utils.EstimateTokens(prompt)
-	completionTokens := utils.EstimateTokens(response)
+	promptTokens := llm.GetConversationTokens([]struct{ Role, Content string }{
+		{Role: messages[0].Role, Content: messages[0].Content.(string)},
+		{Role: messages[1].Role, Content: messages[1].Content.(string)},
+	})
+	completionTokens := llm.EstimateTokens(response)
 	tokens := promptTokens + completionTokens
 	// Save split for precise costing later
 	context.TokenUsage.ProgressSplit.Prompt += promptTokens

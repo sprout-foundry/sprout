@@ -16,6 +16,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	ui "github.com/alantheprice/ledit/pkg/ui"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // ContextHandler is a function type that defines how context requests are handled.
@@ -103,11 +104,15 @@ func CallLLMWithInteractiveContext(
 		contentStr, _ := enhancedMessages[0].Content.(string)
 		h := sha1.Sum([]byte(contentStr))
 		ui.Out().Printf("[tools] system_prompt_hash: %x\n", h)
+		if rl := utils.GetRunLogger(); rl != nil {
+			msgDump, _ := json.Marshal(enhancedMessages)
+			rl.LogEvent("interactive_start", map[string]any{"model": modelName, "messages": string(msgDump)})
+		}
 	}
 	// Limit the number of interactive turns. Prefer configured attempts when provided
 	maxRetries := cfg.OrchestrationMaxAttempts
 	if maxRetries <= 0 {
-		maxRetries = 4
+		maxRetries = 8
 	}
 
 	// Anti-loop and cap enforcement state
@@ -117,7 +122,7 @@ func CallLLMWithInteractiveContext(
 	executedShell := map[string]bool{}
 	noProgressStreak := 0
 	// Additional guardrails for speed
-	maxWorkspaceContextCalls := 2
+	maxWorkspaceContextCalls := 1
 	maxReadFileCalls := 12
 
 	// Observability and caching
@@ -191,6 +196,9 @@ func CallLLMWithInteractiveContext(
 			approxTokensUsed,
 			approxCost,
 		)
+		if rl := utils.GetRunLogger(); rl != nil {
+			rl.LogEvent("interactive_summary", map[string]any{"turns": len(turnDurations), "tools": toolCounts, "blocked": blockedCounts, "cache_hits": cacheHits, "approx_tokens": approxTokensUsed, "approx_cost": approxCost})
+		}
 	}
 
 	// Planner/Executor/Evaluator state
@@ -199,6 +207,8 @@ func CallLLMWithInteractiveContext(
 	plannedInstructions := ""
 	plannedStopWhen := ""
 
+	// Cache a plan JSON if model returns edits alongside tool_calls
+	cachedPlanJSON := ""
 	for i := 0; i < maxRetries; i++ {
 		turnStart := time.Now()
 		ui.Out().Printf("[tools] turn %d/%d\n", i+1, maxRetries)
@@ -206,7 +216,7 @@ func CallLLMWithInteractiveContext(
 		var response string
 		var err error
 		for attempt := 0; attempt < 3; attempt++ {
-			response, _, err = GetLLMResponse(modelName, currentMessages, filename, cfg, timeout)
+			response, err = GetLLMResponseWithTools(modelName, currentMessages, "", cfg, timeout)
 			if err == nil {
 				break
 			}
@@ -225,6 +235,15 @@ func CallLLMWithInteractiveContext(
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
 		ui.Out().Print("[tools] model returned a response\n")
+		if rl := utils.GetRunLogger(); rl != nil {
+			lastMsg := ""
+			if len(currentMessages) > 0 {
+				last := currentMessages[len(currentMessages)-1]
+				lastMsgBytes, _ := json.Marshal(last)
+				lastMsg = string(lastMsgBytes)
+			}
+			rl.LogEvent("interactive_turn", map[string]any{"turn": i + 1, "model": modelName, "last_message": lastMsg, "raw_response": response})
+		}
 
 		// Update token approximation from response length
 		approxTokensUsed = (usedBudgetChars + len(response)) / 4
@@ -236,18 +255,38 @@ func CallLLMWithInteractiveContext(
 
 		// Check if the response contains tool calls (preferred method)
 		if containsToolCall(response) {
+			// If the response also includes an edits JSON, cache it for potential fallback
+			for _, obj := range splitTopLevelJSONObjects(response) {
+				if strings.Contains(obj, "\"edits\"") {
+					// validate it is JSON
+					var probe map[string]any
+					if json.Unmarshal([]byte(obj), &probe) == nil {
+						cachedPlanJSON = obj
+						break
+					}
+				}
+			}
 			// Parse and execute tool calls
 			toolCalls, err := parseToolCalls(response)
 			if err != nil || len(toolCalls) == 0 {
-				toolCalls, err = extractToolCallsFromResponse(response)
-				if err != nil {
-					// Log the response that failed to parse for debugging
-					ui.Out().Printf("Failed to parse tool calls from response (length %d chars): %.100s...\n", len(response), response)
-					return "", fmt.Errorf("failed to parse tool calls: %w", err)
+				// Log the response that failed to parse for debugging
+				ui.Out().Printf("Failed to parse tool calls from response (length %d chars): %.100s...\n", len(response), response)
+				if rl := utils.GetRunLogger(); rl != nil {
+					rl.LogEvent("tool_call_parse_error", map[string]any{"length": len(response), "raw_response": response})
 				}
+				_ = os.MkdirAll(".ledit/runlogs", 0755)
+				fn := fmt.Sprintf(".ledit/runlogs/tool_call_parse_error_%d.json", time.Now().UnixNano())
+				_ = os.WriteFile(fn, []byte(response), 0644)
+				ui.Out().Printf("[tools] wrote raw tool_call response to %s\n", fn)
+				return "", fmt.Errorf("failed to parse tool calls")
 			}
 
 			if len(toolCalls) > 0 {
+				// Log parsed tool calls
+				if rl := utils.GetRunLogger(); rl != nil {
+					b, _ := json.Marshal(toolCalls)
+					rl.LogEvent("tool_calls_parsed", map[string]any{"count": len(toolCalls), "tool_calls": string(b)})
+				}
 				// Execute tool calls using basic implementation
 				var toolResults []string
 				editedOrValidated := false
@@ -310,6 +349,9 @@ func CallLLMWithInteractiveContext(
 				}
 				for _, toolCall := range toolCalls {
 					ui.Out().Printf("[tools] executing %s\n", toolCall.Function.Name)
+					if rl := utils.GetRunLogger(); rl != nil {
+						rl.LogEvent("tool_call", map[string]any{"name": toolCall.Function.Name, "args": toolCall.Function.Arguments})
+					}
 					// Pre-validate and enforce caps/dedupes
 					var args map[string]interface{}
 					_ = json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
@@ -375,6 +417,9 @@ func CallLLMWithInteractiveContext(
 						result, err := executeBasicToolCall(merged, cfg)
 						if err != nil {
 							toolResults = append(toolResults, fmt.Sprintf("Tool %s failed (%s): %s", merged.Function.Name, classifyError(err), sanitizeOutput(err.Error())))
+							if rl := utils.GetRunLogger(); rl != nil {
+								rl.LogEvent("tool_result", map[string]any{"name": merged.Function.Name, "status": "error", "error": err.Error()})
+							}
 						} else {
 							const maxLen = 2000
 							norm := sanitizeOutput(result)
@@ -382,6 +427,9 @@ func CallLLMWithInteractiveContext(
 								norm = norm[:maxLen] + "\n... [truncated]"
 							}
 							toolResults = append(toolResults, fmt.Sprintf("Tool %s result: %s", merged.Function.Name, norm))
+							if rl := utils.GetRunLogger(); rl != nil {
+								rl.LogEvent("tool_result", map[string]any{"name": merged.Function.Name, "status": "ok"})
+							}
 						}
 						if name == "execute_step" {
 							// Mark edited/validated if underlying action did so
@@ -414,11 +462,11 @@ func CallLLMWithInteractiveContext(
 						plannedStopWhen = ""
 						continue
 					default:
-						// Block direct use of underlying tools when not via execute_step
-						underlying := map[string]bool{
-							"read_file": true, "micro_edit": true, "edit_file_section": true, "validate_file": true, "workspace_context": true, "run_shell_command": true,
+						// Block direct use of write/exec tools when not via execute_step; allow read/discovery tools
+						blockedUnderlying := map[string]bool{
+							"micro_edit": true, "edit_file_section": true, "validate_file": true, "run_shell_command": true,
 						}
-						if underlying[name] {
+						if blockedUnderlying[name] {
 							toolResults = append(toolResults, "Tool blocked: use plan_step → execute_step → evaluate_outcome. Do not call underlying tools directly.")
 							blockedCounts["direct_tool_blocked"]++
 							continue
@@ -519,6 +567,9 @@ func CallLLMWithInteractiveContext(
 					result, err := executeBasicToolCall(toolCall, cfg)
 					if err != nil {
 						toolResults = append(toolResults, fmt.Sprintf("Tool %s failed (%s): %s", toolCall.Function.Name, classifyError(err), sanitizeOutput(err.Error())))
+						if rl := utils.GetRunLogger(); rl != nil {
+							rl.LogEvent("tool_result", map[string]any{"name": toolCall.Function.Name, "status": "error", "error": err.Error()})
+						}
 					} else {
 						// Normalize/cap outputs with truncation markers
 						const maxLen = 2000
@@ -527,6 +578,9 @@ func CallLLMWithInteractiveContext(
 							norm = norm[:maxLen] + "\n... [truncated]"
 						}
 						toolResults = append(toolResults, fmt.Sprintf("Tool %s result: %s", toolCall.Function.Name, norm))
+						if rl := utils.GetRunLogger(); rl != nil {
+							rl.LogEvent("tool_result", map[string]any{"name": toolCall.Function.Name, "status": "ok"})
+						}
 						// Populate cache for read_file
 						if name == "read_file" {
 							if fp, ok := args["file_path"].(string); ok && fp != "" {
@@ -552,7 +606,37 @@ func CallLLMWithInteractiveContext(
 							key := strings.TrimSpace(action) + "::" + strings.TrimSpace(query)
 							persisted.Put(EvidenceEntry{Tool: "workspace_context", Key: key, Value: result, Updated: NowUnix()})
 							_ = persisted.Save()
+							// Auto-follow: if this was a search_keywords result with a top_file, read it now to provide evidence
+							if strings.EqualFold(strings.TrimSpace(action), "search_keywords") {
+								var sr map[string]any
+								if json.Unmarshal([]byte(result), &sr) == nil {
+									if tf, ok := sr["top_file"].(string); ok && tf != "" {
+										// Respect read_file cap
+										if toolCounts["read_file"] < maxReadFileCalls {
+											// Avoid duplicate reads
+											if _, ok := readFileCache[tf]; !ok {
+												rfArgs := map[string]any{"file_path": tf}
+												rfBytes, _ := json.Marshal(rfArgs)
+												rfCall := ToolCall{Type: "function", Function: ToolCallFunction{Name: "read_file", Arguments: string(rfBytes)}}
+												rfRes, rfErr := executeBasicToolCall(rfCall, cfg)
+												if rfErr == nil {
+													toolCounts["read_file"]++
+													toolResults = append(toolResults, fmt.Sprintf("Tool read_file result: %s", rfRes))
+													readFileCache[tf] = rfRes
+													if h, err := ComputeFileHash(tf); err == nil {
+														persisted.Put(EvidenceEntry{Tool: "read_file", Key: tf, Value: rfRes, FilePath: tf, FileHash: h, Updated: NowUnix()})
+														_ = persisted.Save()
+													}
+												} else {
+													toolResults = append(toolResults, fmt.Sprintf("Tool read_file failed: %v", rfErr))
+												}
+											}
+										}
+									}
+								}
+							}
 						}
+
 					}
 
 					if name == "micro_edit" || name == "edit_file_section" || name == "validate_file" {
@@ -580,7 +664,11 @@ func CallLLMWithInteractiveContext(
 						tail = combined[len(combined)-600:]
 						combined = head + "\n... [compressed due to turn budget] ...\n" + tail
 					} else {
-						combined = combined[:turnBudgetChars] + "\n... [compressed due to turn budget]"
+						end := turnBudgetChars
+						if end > len(combined) {
+							end = len(combined)
+						}
+						combined = combined[:end] + "\n... [compressed due to turn budget]"
 					}
 					usedBudgetChars = turnBudgetChars
 				}
@@ -596,13 +684,38 @@ func CallLLMWithInteractiveContext(
 					})
 				}
 
+				// If very first turn yields only workspace_context without any read_file, synthesize a single read on README.md or top_file to provide evidence
+				if i == 0 && !editedOrValidated && toolCounts["read_file"] == 0 {
+					// Try README.md first
+					candidate := "README.md"
+					// If we saw a workspace_context result with top_file, use it
+					if entry, ok := persisted.Get("workspace_context", "search_keywords::"); ok && strings.Contains(entry.Value, "top_file") {
+						var sr map[string]any
+						if json.Unmarshal([]byte(entry.Value), &sr) == nil {
+							if tf, ok := sr["top_file"].(string); ok && tf != "" {
+								candidate = tf
+							}
+						}
+					}
+					if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
+						rfArgs := map[string]any{"file_path": candidate}
+						rfBytes, _ := json.Marshal(rfArgs)
+						rfCall := ToolCall{Type: "function", Function: ToolCallFunction{Name: "read_file", Arguments: string(rfBytes)}}
+						if rfRes, rfErr := executeBasicToolCall(rfCall, cfg); rfErr == nil {
+							toolCounts["read_file"]++
+							toolResults = append(toolResults, fmt.Sprintf("Tool read_file result: %s", rfRes))
+							readFileCache[candidate] = rfRes
+						}
+					}
+				}
+
 				// No-progress detector: if no edit/validate for 2 turns, force deterministic step
 				if !editedOrValidated {
 					noProgressStreak++
 					if noProgressStreak >= 2 {
 						currentMessages = append(currentMessages, prompts.Message{
 							Role:    "system",
-							Content: "You are stuck. Select a concrete file, read_file it, propose a minimal change with micro_edit or edit_file_section, then run validate_file. Avoid further workspace_context calls.",
+							Content: "Stop searching. Choose the top relevant file (e.g., README.md or the last search result), use read_file now, then produce a minimal JSON plan of edits. Do not call workspace_context again.",
 						})
 						noProgressStreak = 0
 					}
@@ -645,6 +758,9 @@ func CallLLMWithInteractiveContext(
 	}
 
 	printSummary()
+	if strings.TrimSpace(cachedPlanJSON) != "" {
+		return cachedPlanJSON, nil
+	}
 	return "", fmt.Errorf("max interactive LLM retries reached (%d)", maxRetries)
 }
 
@@ -679,36 +795,98 @@ func containsToolCall(response string) bool {
 }
 
 func parseToolCalls(response string) ([]ToolCall, error) {
-	// First try to parse as a direct tool call structure (without role)
-	var directToolCall struct {
-		ToolCalls []struct {
-			ID       string `json:"id"`
-			Type     string `json:"type"`
-			Function struct {
-				Name      string                 `json:"name"`
-				Arguments map[string]interface{} `json:"arguments"`
-			} `json:"function"`
-		} `json:"tool_calls"`
+	// Tolerant parse: tool_calls may have arguments as string or object, may use 'parameters',
+	// or may place {name, arguments} at the call level under 'arguments'.
+	normalize := func(m map[string]any) (ToolCall, bool) {
+		id, _ := m["id"].(string)
+		typ, _ := m["type"].(string)
+		var fn map[string]any
+		if x, ok := m["function"].(map[string]any); ok {
+			fn = x
+		} else if x, ok := m["arguments"].(map[string]any); ok { // Kimi variant
+			fn = x
+		}
+		if fn == nil {
+			return ToolCall{}, false
+		}
+		name, _ := fn["name"].(string)
+		var rawArgs any
+		if v, ok := fn["arguments"]; ok {
+			rawArgs = v
+		} else if v, ok := fn["parameters"]; ok {
+			rawArgs = v
+		}
+		argsStr := "{}"
+		switch a := rawArgs.(type) {
+		case string:
+			argsStr = a
+		case map[string]any:
+			if b, err := json.Marshal(a); err == nil {
+				argsStr = string(b)
+			}
+		default:
+			if b, err := json.Marshal(a); err == nil {
+				argsStr = string(b)
+			}
+		}
+		return ToolCall{ID: id, Type: typ, Function: ToolCallFunction{Name: name, Arguments: argsStr}}, true
 	}
 
-	if err := json.Unmarshal([]byte(response), &directToolCall); err == nil && len(directToolCall.ToolCalls) > 0 {
-		// Convert to our ToolCall structure with Arguments as JSON string
-		var toolCalls []ToolCall
-		for _, tc := range directToolCall.ToolCalls {
-			argsBytes, err := json.Marshal(tc.Function.Arguments)
-			if err != nil {
-				continue
+	tryParse := func(s string) ([]ToolCall, bool) {
+		var raw map[string]any
+		if err := json.Unmarshal([]byte(s), &raw); err == nil {
+			if tcs, ok := raw["tool_calls"].([]any); ok && len(tcs) > 0 {
+				var toolCalls []ToolCall
+				for _, it := range tcs {
+					m, _ := it.(map[string]any)
+					if tc, ok := normalize(m); ok {
+						toolCalls = append(toolCalls, tc)
+					}
+				}
+				if len(toolCalls) > 0 {
+					return toolCalls, true
+				}
 			}
-			toolCalls = append(toolCalls, ToolCall{
-				ID:   tc.ID,
-				Type: tc.Type,
-				Function: ToolCallFunction{
-					Name:      tc.Function.Name,
-					Arguments: string(argsBytes),
-				},
-			})
 		}
-		return toolCalls, nil
+		return nil, false
+	}
+
+	if tcs, ok := tryParse(response); ok {
+		return tcs, nil
+	}
+
+	// Fallback: split multiple concatenated top-level JSON objects and try each
+	for _, obj := range splitTopLevelJSONObjects(response) {
+		if tcs, ok := tryParse(obj); ok {
+			return tcs, nil
+		}
+	}
+
+	// Last-resort fallback: extract the tool_calls array manually and wrap it
+	if idx := strings.Index(response, "\"tool_calls\""); idx != -1 {
+		// Find the first '[' after "tool_calls"
+		arrStart := strings.Index(response[idx:], "[")
+		if arrStart != -1 {
+			arrStart += idx
+			// Scan forward to find matching ']' accounting for nested braces/brackets in arguments
+			depth := 0
+			for i := arrStart; i < len(response); i++ {
+				ch := response[i]
+				if ch == '[' {
+					depth++
+				} else if ch == ']' {
+					depth--
+					if depth == 0 {
+						arr := strings.TrimSpace(response[arrStart : i+1])
+						wrapper := "{\"tool_calls\": " + arr + "}"
+						if tcs, ok := tryParse(wrapper); ok {
+							return tcs, nil
+						}
+						break
+					}
+				}
+			}
+		}
 	}
 
 	// Try to parse the response as a full tool message (with role)
@@ -717,54 +895,11 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 		return toolMessage.ToolCalls, nil
 	}
 
-	return []ToolCall{}, nil
-}
-
-func extractToolCallsFromResponse(response string) ([]ToolCall, error) {
-	// Look for JSON blocks in the response
-	if strings.Contains(response, "```json") {
-		start := strings.Index(response, "```json") + 7
-		end := strings.Index(response[start:], "```")
-		if end > 0 {
-			jsonStr := strings.TrimSpace(response[start : start+end])
-
-			// First try direct tool call structure with object arguments
-			var directToolCall struct {
-				ToolCalls []struct {
-					ID       string `json:"id"`
-					Type     string `json:"type"`
-					Function struct {
-						Name      string                 `json:"name"`
-						Arguments map[string]interface{} `json:"arguments"`
-					} `json:"function"`
-				} `json:"tool_calls"`
-			}
-
-			if err := json.Unmarshal([]byte(jsonStr), &directToolCall); err == nil && len(directToolCall.ToolCalls) > 0 {
-				// Convert to our ToolCall structure with Arguments as JSON string
-				var toolCalls []ToolCall
-				for _, tc := range directToolCall.ToolCalls {
-					argsBytes, err := json.Marshal(tc.Function.Arguments)
-					if err != nil {
-						continue
-					}
-					toolCalls = append(toolCalls, ToolCall{
-						ID:   tc.ID,
-						Type: tc.Type,
-						Function: ToolCallFunction{
-							Name:      tc.Function.Name,
-							Arguments: string(argsBytes),
-						},
-					})
-				}
-				return toolCalls, nil
-			}
-
-			// Try full tool message structure
-			var toolMessage ToolMessage
-			if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
-				return toolMessage.ToolCalls, nil
-			}
+	// Last resort: try splitting concatenated top-level objects
+	for _, obj := range splitTopLevelJSONObjects(response) {
+		var tm ToolMessage
+		if err := json.Unmarshal([]byte(obj), &tm); err == nil && len(tm.ToolCalls) > 0 {
+			return tm.ToolCalls, nil
 		}
 	}
 
@@ -775,10 +910,14 @@ func executeBasicToolCall(toolCall ToolCall, cfg *config.Config) (string, error)
 	// Parse the arguments - they might be a JSON string or already parsed object
 	var args map[string]interface{}
 
+	// Prefer Arguments if present; fallback to Parameters
+	argSource := toolCall.Function.Arguments
+	if strings.TrimSpace(argSource) == "" && len(toolCall.Function.Parameters) > 0 {
+		argSource = string(toolCall.Function.Parameters)
+	}
+
 	// First try to unmarshal as JSON string
-	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-		// If that fails, the arguments might already be parsed and stored as string
-		// This handles cases where the JSON was parsed incorrectly during tool call extraction
+	if err := json.Unmarshal([]byte(argSource), &args); err != nil {
 		return "", fmt.Errorf("failed to parse tool arguments: %w", err)
 	}
 
@@ -932,10 +1071,11 @@ func executeBasicToolCall(toolCall ToolCall, cfg *config.Config) (string, error)
 		return "preflight ok; git not available", nil
 
 	case "search_web":
+		if !cfg.UseSearchGrounding {
+			return "", fmt.Errorf("web search disabled by configuration")
+		}
 		if query, ok := args["query"].(string); ok {
-			// This would require importing webcontent package, which creates circular import
-			// For now, return a message indicating the tool needs to be implemented
-			return fmt.Sprintf("Web search for '%s' - tool implementation needed", query), nil
+			return fmt.Sprintf("Web search for '%s' - not implemented in this build", query), nil
 		}
 		return "", fmt.Errorf("search_web requires 'query' parameter")
 
@@ -1033,4 +1173,53 @@ func extractContextRequests(response string) ([]ContextRequest, error) {
 	}
 
 	return []ContextRequest{}, nil
+}
+
+// splitTopLevelJSONObjects splits a string that may contain multiple concatenated
+// top-level JSON objects and returns each object string.
+func splitTopLevelJSONObjects(s string) []string {
+	var parts []string
+	inStr := false
+	esc := false
+	depth := 0
+	start := -1
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inStr {
+			if esc {
+				esc = false
+				continue
+			}
+			if ch == '\\' {
+				esc = true
+				continue
+			}
+			if ch == '"' {
+				inStr = false
+			}
+			continue
+		}
+		if ch == '"' {
+			inStr = true
+			continue
+		}
+		if ch == '{' {
+			if depth == 0 {
+				start = i
+			}
+			depth++
+			continue
+		}
+		if ch == '}' {
+			if depth > 0 {
+				depth--
+			}
+			if depth == 0 && start != -1 {
+				parts = append(parts, strings.TrimSpace(s[start:i+1]))
+				start = -1
+			}
+			continue
+		}
+	}
+	return parts
 }

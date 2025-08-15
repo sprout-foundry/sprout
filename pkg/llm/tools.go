@@ -41,8 +41,9 @@ type ToolCall struct {
 
 // ToolCallFunction represents the function call details
 type ToolCallFunction struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
+	Name       string          `json:"name"`
+	Arguments  string          `json:"arguments,omitempty"`
+	Parameters json.RawMessage `json:"parameters,omitempty"`
 }
 
 // ToolMessage represents a tool call message in the conversation
@@ -104,23 +105,23 @@ func GetAvailableTools() []Tool {
 				},
 			},
 		},
-		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "search_web",
-				Description: "Search the web for information to help answer questions or provide context",
-				Parameters: ToolParameters{
-					Type: "object",
-					Properties: map[string]ToolProperty{
-						"query": {
-							Type:        "string",
-							Description: "The search query to find relevant information",
-						},
-					},
-					Required: []string{"query"},
-				},
-			},
-		},
+		// {
+		// 	Type: "function",
+		// 	Function: ToolFunction{
+		// 		Name:        "search_web",
+		// 		Description: "Search the web for information to help answer questions or provide context",
+		// 		Parameters: ToolParameters{
+		// 			Type: "object",
+		// 			Properties: map[string]ToolProperty{
+		// 				"query": {
+		// 					Type:        "string",
+		// 					Description: "The search query to find relevant information",
+		// 				},
+		// 			},
+		// 			Required: []string{"query"},
+		// 		},
+		// 	},
+		// },
 		{
 			Type: "function",
 			Function: ToolFunction{
@@ -388,6 +389,6 @@ AVAILABLE TOOLS:
 - validate_file {file_path,validation_type?}
 - workspace_context {action,query?}
 - run_shell_command {command}
-- ask_user {question}
-- search_web {query}`
+- ask_user {question}`
+	// - search_web {query}`
 }

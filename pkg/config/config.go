@@ -57,6 +57,7 @@ type Config struct {
 	RetryAttemptCount        int                  `json:"-"`                          // Internal field to track retry attempts
 	UseSearchGrounding       bool                 `json:"-"`                          // Command-scoped flag to enable search grounding
 	CodeToolsEnabled         bool                 `json:"-"`                          // Allow tool-calls in code flow when true
+	FromAgent                bool                 `json:"-"`                          // Internal: true when invoked from agent mode
 	// New toggles
 	PreapplyReview    bool     `json:"preapply_review"`
 	DryRun            bool     `json:"dry_run"`
@@ -377,10 +378,24 @@ func LoadOrInitConfig(skipPrompt bool) (*Config, error) {
 	_, homeConfigPath := getHomeConfigPath()
 
 	if _, err := os.Stat(currentConfigPath); err == nil {
-		return loadConfig(currentConfigPath)
+		cfg, lerr := loadConfig(currentConfigPath)
+		if lerr != nil {
+			return nil, lerr
+		}
+		if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+			cfg.FromAgent = true
+		}
+		return cfg, nil
 	}
 	if _, err := os.Stat(homeConfigPath); err == nil {
-		return loadConfig(homeConfigPath)
+		cfg, lerr := loadConfig(homeConfigPath)
+		if lerr != nil {
+			return nil, lerr
+		}
+		if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+			cfg.FromAgent = true
+		}
+		return cfg, nil
 	}
 
 	logger.LogUserInteraction(prompts.NoConfigFound())
@@ -388,6 +403,9 @@ func LoadOrInitConfig(skipPrompt bool) (*Config, error) {
 	cfg, err := createConfig(homeConfigPath, skipPrompt)
 	if err != nil {
 		return nil, fmt.Errorf("could not create initial config: %w", err)
+	}
+	if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+		cfg.FromAgent = true
 	}
 	logger.LogUserInteraction(prompts.ConfigSaved(homeConfigPath))
 	return cfg, nil

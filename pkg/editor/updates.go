@@ -23,6 +23,14 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 	reader := bufio.NewReader(os.Stdin)
 	var allDiffs strings.Builder
 
+	// Collect edits first to enable a combined review across the entire changeset
+	type preparedEdit struct {
+		filename     string
+		originalCode string
+		newCode      string
+	}
+	var edits []preparedEdit
+
 	for newFilename, newCode := range updatedCode {
 		originalCode, _ := filesystem.LoadOriginalCode(newFilename)
 
@@ -94,17 +102,28 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 		allDiffs.WriteString(diff)
 		allDiffs.WriteString("\n")
 
-		// Pre-apply diff review when enabled
-		if cfg.PreapplyReview && diff != "" {
+		// Queue the edit for post-review application
+		edits = append(edits, preparedEdit{filename: newFilename, originalCode: originalCode, newCode: newCode})
+	}
+
+	// Run a single pre-apply automated review across the combined diff to consider all files together
+	if cfg.PreapplyReview {
+		combined := allDiffs.String()
+		if combined != "" {
 			logger := utils.GetLogger(cfg.SkipPrompt)
-			if err := performAutomatedReview(diff, originalInstructions, processedInstructions, cfg, logger, revisionID); err != nil {
-				// If review requested revisions, allow subsequent iterations to handle it,
-				// but do not abort the current write path for initial creation edits.
+			if err := performAutomatedReview(combined, originalInstructions, processedInstructions, cfg, logger, revisionID); err != nil {
 				if !strings.Contains(err.Error(), "revisions applied, re-validating") {
 					return "", err
 				}
 			}
 		}
+	}
+
+	// Apply queued edits per file (prompt/write/record)
+	for _, e := range edits {
+		newFilename := e.filename
+		originalCode := e.originalCode
+		newCode := e.newCode
 
 		applyChanges := false
 		editChoice := false
@@ -197,7 +216,6 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			ui.Out().Print(prompts.ChangesNotApplied(newFilename))
 		}
 	}
-
 	// Perform automated review when skipPrompt is active
 	if cfg.SkipPrompt {
 		combinedDiff := allDiffs.String()

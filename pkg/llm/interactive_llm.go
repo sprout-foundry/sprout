@@ -207,16 +207,41 @@ func CallLLMWithInteractiveContext(
 	plannedInstructions := ""
 	plannedStopWhen := ""
 
+	// Artifact enforcement state
+	expectPlanNext := false
+	noPlanTurns := 0
+
 	// Cache a plan JSON if model returns edits alongside tool_calls
 	cachedPlanJSON := ""
+	planJSONDetected := ""
 	for i := 0; i < maxRetries; i++ {
 		turnStart := time.Now()
 		ui.Out().Printf("[tools] turn %d/%d\n", i+1, maxRetries)
+		// Phase guidance: restrict allowed tools by phase to reduce loops
+		phase := "plan"
+		if plannedAction != "" {
+			phase = "execute"
+		}
+		if phase == "plan" {
+			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=PLAN. Allowed tools: plan_step, workspace_context, read_file. Do not call edit/validate/shell tools. Produce a plan next."})
+		} else {
+			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=EXECUTE. Allowed tools: execute_step (with previously planned action), edit_file_section, micro_edit, validate_file, read_file, evaluate_outcome. Do not call workspace_context unless strictly necessary."})
+		}
+		// If we are expecting a plan now, push a strong system requirement
+		if expectPlanNext {
+			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "You must now return ONLY the final JSON plan: {\"edits\":[{\"file\":...,\"instructions\":...}...]}. No more tool_calls."})
+		}
+
 		// Call the main LLM response function (with simple backoff on transient/provider errors)
 		var response string
 		var err error
 		for attempt := 0; attempt < 3; attempt++ {
-			response, err = GetLLMResponseWithTools(modelName, currentMessages, "", cfg, timeout)
+			// Restrict tools by phase
+			allowed := []string{"plan_step", "workspace_context", "read_file"}
+			if phase == "execute" {
+				allowed = []string{"execute_step", "edit_file_section", "micro_edit", "validate_file", "read_file", "evaluate_outcome"}
+			}
+			response, err = GetLLMResponseWithToolsScoped(modelName, currentMessages, "", cfg, timeout, allowed)
 			if err == nil {
 				break
 			}
@@ -262,10 +287,13 @@ func CallLLMWithInteractiveContext(
 					var probe map[string]any
 					if json.Unmarshal([]byte(obj), &probe) == nil {
 						cachedPlanJSON = obj
+						planJSONDetected = obj
 						break
 					}
 				}
 			}
+			// After executing tool calls we will require a plan on the next turn
+			expectPlanNext = true
 			// Parse and execute tool calls
 			toolCalls, err := parseToolCalls(response)
 			if err != nil || len(toolCalls) == 0 {
@@ -469,6 +497,7 @@ func CallLLMWithInteractiveContext(
 						if blockedUnderlying[name] {
 							toolResults = append(toolResults, "Tool blocked: use plan_step → execute_step → evaluate_outcome. Do not call underlying tools directly.")
 							blockedCounts["direct_tool_blocked"]++
+							currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "You attempted a write/exec tool in PLAN phase. Call plan_step to produce a plan, then execute_step with that action."})
 							continue
 						}
 					}
@@ -610,26 +639,43 @@ func CallLLMWithInteractiveContext(
 							if strings.EqualFold(strings.TrimSpace(action), "search_keywords") {
 								var sr map[string]any
 								if json.Unmarshal([]byte(result), &sr) == nil {
+									// Collect up to two candidate files: top_file and first in matches
+									candidates := []string{}
 									if tf, ok := sr["top_file"].(string); ok && tf != "" {
-										// Respect read_file cap
-										if toolCounts["read_file"] < maxReadFileCalls {
-											// Avoid duplicate reads
-											if _, ok := readFileCache[tf]; !ok {
-												rfArgs := map[string]any{"file_path": tf}
-												rfBytes, _ := json.Marshal(rfArgs)
-												rfCall := ToolCall{Type: "function", Function: ToolCallFunction{Name: "read_file", Arguments: string(rfBytes)}}
-												rfRes, rfErr := executeBasicToolCall(rfCall, cfg)
-												if rfErr == nil {
-													toolCounts["read_file"]++
-													toolResults = append(toolResults, fmt.Sprintf("Tool read_file result: %s", rfRes))
-													readFileCache[tf] = rfRes
-													if h, err := ComputeFileHash(tf); err == nil {
-														persisted.Put(EvidenceEntry{Tool: "read_file", Key: tf, Value: rfRes, FilePath: tf, FileHash: h, Updated: NowUnix()})
-														_ = persisted.Save()
-													}
-												} else {
-													toolResults = append(toolResults, fmt.Sprintf("Tool read_file failed: %v", rfErr))
-												}
+										candidates = append(candidates, tf)
+									}
+									if arr, ok := sr["matches"].([]any); ok {
+										for _, v := range arr {
+											if p, ok := v.(string); ok {
+												candidates = append(candidates, p)
+												break
+											}
+										}
+									}
+									// Dedup and read up to 2
+									seen := map[string]bool{}
+									readCount := 0
+									for _, cf := range candidates {
+										if seen[cf] {
+											continue
+										}
+										seen[cf] = true
+										if toolCounts["read_file"] >= maxReadFileCalls {
+											break
+										}
+										if _, ok := readFileCache[cf]; ok {
+											continue
+										}
+										rfArgs := map[string]any{"file_path": cf}
+										rfBytes, _ := json.Marshal(rfArgs)
+										rfCall := ToolCall{Type: "function", Function: ToolCallFunction{Name: "read_file", Arguments: string(rfBytes)}}
+										if rfRes, rfErr := executeBasicToolCall(rfCall, cfg); rfErr == nil {
+											toolCounts["read_file"]++
+											toolResults = append(toolResults, fmt.Sprintf("Tool read_file result: %s", rfRes))
+											readFileCache[cf] = rfRes
+											readCount++
+											if readCount >= 2 {
+												break
 											}
 										}
 									}
@@ -751,6 +797,56 @@ func CallLLMWithInteractiveContext(
 			}
 		}
 
+		// If no tool_calls: check whether a plan JSON was produced
+		if !containsToolCall(response) {
+			editsFound := false
+			for _, obj := range splitTopLevelJSONObjects(response) {
+				if strings.Contains(obj, "\"edits\"") {
+					var probe map[string]any
+					if json.Unmarshal([]byte(obj), &probe) == nil {
+						editsFound = true
+						planJSONDetected = obj
+						break
+					}
+				}
+			}
+			if expectPlanNext && !editsFound {
+				noPlanTurns++
+				// Nudge immediately on the first miss
+				currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Stop searching. Read the top relevant file if needed, then return ONLY the final JSON plan now."})
+				if noPlanTurns >= 2 {
+					// Synthesize a minimal plan from available evidence and return it
+					// Choose a candidate file: prefer README.md, otherwise any cached read_file key
+					candidate := "README.md"
+					if fi, err := os.Stat(candidate); err != nil || fi.IsDir() {
+						for k := range readFileCache {
+							candidate = k
+							break
+						}
+					}
+					plan := map[string]any{"edits": []map[string]string{{"file": candidate, "instructions": "Verify and update outdated documentation to match current code behavior (minimal precise changes)."}}}
+					b, _ := json.Marshal(plan)
+					printSummary()
+					return string(b), nil
+				}
+				// Continue loop to give model one more chance
+				turnDurations = append(turnDurations, time.Since(turnStart))
+				continue
+			}
+			// Plan found or not expected
+			if editsFound {
+				if rl := utils.GetRunLogger(); rl != nil {
+					preview := planJSONDetected
+					if len(preview) > 2000 {
+						preview = preview[:2000] + "..."
+					}
+					rl.LogEvent("plan_json_detected", map[string]any{"turn": i + 1, "plan": preview})
+				}
+				expectPlanNext = false
+				noPlanTurns = 0
+			}
+		}
+
 		// No tool_calls and no actionable context requests: instruct model to emit plan/tool_calls and try again, including guidance to discover files
 		currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "No tool_calls found. You must emit a PLAN followed by TOOL_CALLS. Use plan_step → execute_step → evaluate_outcome. Avoid prose. If no file is specified, first use workspace_context.search_keywords to find the most relevant file, then read_file it, then micro_edit or edit_file_section, then validate_file."})
 		turnDurations = append(turnDurations, time.Since(turnStart))
@@ -759,6 +855,13 @@ func CallLLMWithInteractiveContext(
 
 	printSummary()
 	if strings.TrimSpace(cachedPlanJSON) != "" {
+		if rl := utils.GetRunLogger(); rl != nil {
+			preview := cachedPlanJSON
+			if len(preview) > 2000 {
+				preview = preview[:2000] + "..."
+			}
+			rl.LogEvent("plan_json_fallback", map[string]any{"plan": preview})
+		}
 		return cachedPlanJSON, nil
 	}
 	return "", fmt.Errorf("max interactive LLM retries reached (%d)", maxRetries)

@@ -121,6 +121,11 @@ var (
 
 // GetLLMResponseWithTools makes an LLM call with tool calling support
 func GetLLMResponseWithTools(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration) (string, error) {
+	return GetLLMResponseWithToolsScoped(modelName, messages, systemPrompt, cfg, timeout, nil)
+}
+
+// GetLLMResponseWithToolsScoped is like GetLLMResponseWithTools but restricts tools to an allowlist
+func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration, allowed []string) (string, error) {
 	// Use OpenAI-compatible function calling for providers that support it; otherwise fallback
 	parts := strings.SplitN(modelName, ":", 3)
 	provider := parts[0]
@@ -134,9 +139,21 @@ func GetLLMResponseWithTools(modelName string, messages []prompts.Message, syste
 
 	toOpenAITools := func() []map[string]any {
 		var out []map[string]any
+		nameAllowed := map[string]bool{}
+		if len(allowed) > 0 {
+			for _, n := range allowed {
+				nameAllowed[strings.ToLower(strings.TrimSpace(n))] = true
+			}
+		}
 		for _, t := range GetAvailableTools() {
 			if strings.ToLower(t.Type) != "function" {
 				continue
+			}
+			if len(nameAllowed) > 0 {
+				lname := strings.ToLower(strings.TrimSpace(t.Function.Name))
+				if !nameAllowed[lname] {
+					continue
+				}
 			}
 			params := map[string]any{
 				"type":       t.Function.Parameters.Type,
@@ -265,8 +282,8 @@ func GetLLMResponseWithTools(modelName string, messages []prompts.Message, syste
 		msg := full.Choices[0].Message
 		if len(msg.ToolCalls) > 0 {
 			wrapper := map[string]any{"tool_calls": msg.ToolCalls}
-			b, _ := json.Marshal(wrapper)
-			return string(b), nil
+			wb, _ := json.Marshal(wrapper)
+			return string(wb), nil
 		}
 		return msg.Content, nil
 	}

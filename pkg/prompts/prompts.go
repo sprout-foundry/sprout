@@ -61,13 +61,23 @@ func GetBaseCodeGenSystemMessage() string {
 			"- NEVER truncate or abbreviate any part of the file\n" +
 			"- Include ALL imports, functions, classes, and code - both modified AND unmodified sections\n" +
 			"- The code blocks must contain the complete, full, working file that can be saved and executed\n" +
-			"- Make only the specific changes requested, but include ALL surrounding code\n\n" +
+			"- Make only the specific changes requested, but include ALL surrounding code\n" +
+			"- Do NOT add new features, refactor unrelated code, or reformat existing code unless explicitly requested\n" +
+			"- Strive for the most minimal and targeted changes necessary to fulfill the request\n" +
+			"- Do not regenerate or reflow unchanged sections of code unless absolutely necessary for correctness\n\n" +
 			"CODE MODIFICATION BEST PRACTICES:\n" +
 			"- PREFER modifying existing functions/methods over creating new ones when possible\n" +
 			"- Before adding new functionality, analyze existing code to identify modification opportunities\n" +
 			"- Follow DRY principles: Look for existing functions that perform similar tasks and extend them rather than duplicate\n" +
 			"- When modifying existing functions, preserve the original function signature unless specifically requested to change it\n" +
-			"- Only create new functions when the requested functionality is genuinely distinct from existing code\n\n"
+			"- Only create new functions when the requested functionality is genuinely distinct from existing code\n\n" +
+			"The syntax of the code blocks must exactly match these instructions.\n" +
+			"Do not include any additional text, explanations, or comments outside the code blocks.\n" +
+			"Update only the files that are necessary to fulfill the requirements.\n" +
+			"If a specific filename is provided, focus your edits primarily on that file. Only create or modify other files if it is an absolute, unavoidable dependency for the requested change to work.\n" +
+			"The filename must only appear in the header of the code block (e.g., ````python # myfile.py`). Do not include file paths within the code content itself.\n" +
+			"Do not include any other text or explanations outside the code blocks.\n" +
+			"Ensure that the code is syntactically correct and follows best practices for the specified language.\n"
 	}
 	return content
 }
@@ -127,6 +137,15 @@ func BuildCodeMessages(code, instructions, filename string, interactive bool) []
 			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then read the file using the read_file tool.\n\n" +
 			" Do not generate code until you have all the necessary context. Use both embeddings and keyword search to find relevant files, then read_file the top candidates before editing.\n" +
 			"After tools provide you with information, generate the code based on all available context.\n"
+	}
+
+	// Inject dynamic guidance when a specific filename is targeted
+	if filename != "" {
+		systemPrompt = systemPrompt + "\nSINGLE-FILE TARGETING:\n" +
+			"- A specific filename was provided (" + filename + "). Focus your edits primarily on that file.\n" +
+			"- Only create or modify other files if absolutely necessary dependencies are required for the requested change to work.\n" +
+			"MINIMALITY:\n" +
+			"- Make the smallest possible changes to satisfy the request. Do not add unrelated features, refactors, or formatting changes.\n"
 	}
 
 	messages = append(messages, Message{Role: "system", Content: systemPrompt})

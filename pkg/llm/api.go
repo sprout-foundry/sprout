@@ -210,9 +210,9 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 		"tools":       toOpenAITools(),
 	}
 	// Enable JSON mode when prompts explicitly require strict JSON output
-	if ShouldUseJSONResponse(messages) {
-		payload["response_format"] = map[string]any{"type": "json_object"}
-	}
+	// if ShouldUseJSONResponse(messages) {
+	// 	payload["response_format"] = map[string]any{"type": "json_object"}
+	// }
 	if cfg.Temperature != 0 {
 		payload["temperature"] = cfg.Temperature
 	}

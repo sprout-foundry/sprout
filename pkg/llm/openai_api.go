@@ -18,7 +18,7 @@ import (
 // callOpenAICompatibleStream calls OpenAI-compatible APIs and returns token usage information
 func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts.Message, cfg *config.Config, timeout time.Duration, writer io.Writer) (*TokenUsage, error) {
 	// Build request with optional temperature; retry once without it if provider rejects
-	buildBody := func(includeTemp bool, includeJSONFormat bool) ([]byte, error) {
+	buildBody := func(includeTemp bool) ([]byte, error) {
 		payload := map[string]interface{}{
 			"model":    model,
 			"messages": messages,
@@ -26,9 +26,6 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 		}
 		if includeTemp {
 			payload["temperature"] = cfg.Temperature
-		}
-		if includeJSONFormat {
-			payload["response_format"] = map[string]any{"type": "json_object"}
 		}
 		return json.Marshal(payload)
 	}
@@ -45,10 +42,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 		return client.Do(req)
 	}
 
-	// Decide whether to request strict JSON
-	useJSON := ShouldUseJSONResponse(messages)
-
-	bodyWithTemp, err := buildBody(true, useJSON)
+	bodyWithTemp, err := buildBody(true)
 	if err != nil {
 		ui.Out().Print(prompts.RequestMarshalError(err))
 		return nil, err
@@ -66,7 +60,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 		lower := strings.ToLower(string(raw))
 		if strings.Contains(lower, "temperature") || strings.Contains(lower, "unsupported") || strings.Contains(lower, "response_format") {
 			// Retry without temperature
-			bodyNoTemp, merr := buildBody(false, false)
+			bodyNoTemp, merr := buildBody(false)
 			if merr != nil {
 				ui.Out().Print(prompts.RequestMarshalError(merr))
 				return nil, merr

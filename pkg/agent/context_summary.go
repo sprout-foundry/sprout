@@ -121,8 +121,8 @@ Respond with JSON:
 
 	if context.CurrentPlan != nil {
 		context.ExecutedOperations = append(context.ExecutedOperations,
-			fmt.Sprintf("ACTIVE PLAN: %d files to edit, %d operations (%s)",
-				len(context.CurrentPlan.FilesToEdit), len(context.CurrentPlan.EditOperations), context.CurrentPlan.Context))
+			fmt.Sprintf("ACTIVE PLAN: %d operations",
+				len(context.CurrentPlan.Edits)))
 	}
 
 	context.Errors = []string{

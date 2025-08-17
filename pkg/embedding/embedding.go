@@ -251,6 +251,12 @@ func GenerateWorkspaceEmbeddings(workspace workspaceinfo.WorkspaceFile, db *Vect
 	}
 
 	// Generate or update embeddings for current workspace files
+	var filesToProcess []struct {
+		filePath string
+		fileInfo workspaceinfo.WorkspaceFileInfo
+	}
+
+	// Collect files that need processing
 	for filePath, fileInfo := range workspace.Files {
 		// Check if embedding exists and is up-to-date
 		if existingEmb, exists := existingEmbeddingsMap[filePath]; exists {
@@ -262,15 +268,61 @@ func GenerateWorkspaceEmbeddings(workspace workspaceinfo.WorkspaceFile, db *Vect
 			}
 		}
 
-		// Generate new embedding if not found or outdated
-		embedding, err := GenerateFileEmbedding(filePath, fileInfo, cfg)
-		if err != nil {
-			fmt.Printf("Warning: failed to generate embedding for file %s: %v\n", filePath, err)
-			continue
+		filesToProcess = append(filesToProcess, struct {
+			filePath string
+			fileInfo workspaceinfo.WorkspaceFileInfo
+		}{filePath, fileInfo})
+	}
+
+	// Process files in batches to avoid rate limits
+	batchSize := cfg.EmbeddingBatchSize
+	if batchSize <= 0 {
+		batchSize = 5 // Default fallback
+	}
+
+	for i := 0; i < len(filesToProcess); i += batchSize {
+		end := i + batchSize
+		if end > len(filesToProcess) {
+			end = len(filesToProcess)
 		}
-		db.Add(embedding)
-		if err := SaveEmbedding(embedding); err != nil {
-			fmt.Printf("Warning: failed to add embedding for file %s to DB: %v\n", filePath, err)
+		batch := filesToProcess[i:end]
+
+		// Process batch concurrently with limited concurrency
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, cfg.MaxConcurrentRequests)
+		if sem == nil {
+			sem = make(chan struct{}, 3) // Default fallback
+		}
+
+		for _, fileData := range batch {
+			wg.Add(1)
+			go func(fd struct {
+				filePath string
+				fileInfo workspaceinfo.WorkspaceFileInfo
+			}) {
+				defer wg.Done()
+				sem <- struct{}{} // Acquire semaphore
+				defer func() { <-sem }() // Release semaphore
+
+				// Generate new embedding
+				embedding, err := GenerateFileEmbedding(fd.filePath, fd.fileInfo, cfg)
+				if err != nil {
+					fmt.Printf("Warning: failed to generate embedding for file %s: %v\n", fd.filePath, err)
+					return
+				}
+				db.Add(embedding)
+				if err := SaveEmbedding(embedding); err != nil {
+					fmt.Printf("Warning: failed to add embedding for file %s to DB: %v\n", fd.filePath, err)
+				}
+			}(fileData)
+		}
+
+		// Wait for batch to complete
+		wg.Wait()
+
+		// Add delay between batches to avoid rate limits
+		if cfg.RequestDelayMs > 0 && i+batchSize < len(filesToProcess) {
+			time.Sleep(time.Duration(cfg.RequestDelayMs) * time.Millisecond)
 		}
 	}
 

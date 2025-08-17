@@ -11,6 +11,9 @@ import (
 func GetIgnoreRules(rootDir string) *ignore.GitIgnore {
 	var allLines []string
 
+	// Always include essential ledit patterns first (these should never be overridden)
+	allLines = append(allLines, getEssentialLeditPatterns()...)
+
 	// Load .gitignore rules
 	gitIgnorePath := filepath.Join(rootDir, ".gitignore")
 	if gitIgnoreContent, err := os.ReadFile(gitIgnorePath); err == nil {
@@ -23,11 +26,19 @@ func GetIgnoreRules(rootDir string) *ignore.GitIgnore {
 		allLines = append(allLines, strings.Split(string(leditIgnoreContent), "\n")...)
 	}
 
-	if len(allLines) > 0 {
-		return ignore.CompileIgnoreLines(allLines...)
+	// Always include fallback patterns for common files that should be ignored
+	allLines = append(allLines, getFallbackIgnorePatterns()...)
+
+	// Filter out empty lines and comments
+	var filteredLines []string
+	for _, line := range allLines {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			filteredLines = append(filteredLines, line)
+		}
 	}
 
-	return getFallbackIgnore()
+	return ignore.CompileIgnoreLines(filteredLines...)
 }
 
 func AddToLeditIgnore(ignoreFilePath, path string) error {
@@ -46,9 +57,23 @@ func AddToLeditIgnore(ignoreFilePath, path string) error {
 	return nil
 }
 
-// getFallbackIgnore remains unchanged from previous implementation
-func getFallbackIgnore() *ignore.GitIgnore {
-	lines := []string{
+// getEssentialLeditPatterns returns patterns that should always be ignored by ledit
+// These patterns ensure workspace isolation and prevent ledit from analyzing its own files
+func getEssentialLeditPatterns() []string {
+	return []string{
+		".ledit/",           // Ledit workspace directory (always ignore)
+		".ledit/*",          // All contents of ledit directory
+		"ledit",             // Ledit binary (if present in workspace)
+		"testing/",          // Testing directory (if present)
+		"test_results.txt",  // Test results file
+		"e2e_results.csv",   // E2E test results
+	}
+}
+
+// getFallbackIgnorePatterns returns common patterns that should be ignored
+// These are the same as before but separated for clarity
+func getFallbackIgnorePatterns() []string {
+	return []string{
 		// Operating System Files and Thumbnails
 		".DS_Store",        // macOS directory metadata
 		"Thumbs.db",        // Windows thumbnail cache
@@ -263,7 +288,10 @@ func getFallbackIgnore() *ignore.GitIgnore {
 		".cvsignore",     // CVS ignore file
 		"spsv_targets/",  // Some specific build system files
 		"*.pydevproject", // PyDev project files
-
 	}
-	return ignore.CompileIgnoreLines(lines...)
+}
+
+// getFallbackIgnore remains for backward compatibility but now just calls the new function
+func getFallbackIgnore() *ignore.GitIgnore {
+	return ignore.CompileIgnoreLines(getFallbackIgnorePatterns()...)
 }

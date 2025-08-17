@@ -16,7 +16,8 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
-const fileBatchSize = 50
+// Remove the hardcoded constant and use config instead
+// const fileBatchSize = 50
 
 type llmFileSelectionResponse struct {
 	FullContextFiles    []string `json:"full_context_files"`
@@ -50,12 +51,12 @@ func getFilesForContext(instructions string, workspace WorkspaceFile, cfg *confi
 	}
 
 	var wg sync.WaitGroup
-	numBatches := (len(allFiles) + fileBatchSize - 1) / fileBatchSize
+	numBatches := (len(allFiles) + cfg.FileBatchSize - 1) / cfg.FileBatchSize
 	resultsChan := make(chan llmFileSelectionResponse, numBatches)
 	errChan := make(chan error, numBatches)
 
-	for i := 0; i < len(allFiles); i += fileBatchSize {
-		end := i + fileBatchSize
+	for i := 0; i < len(allFiles); i += cfg.FileBatchSize {
+		end := i + cfg.FileBatchSize
 		if end > len(allFiles) {
 			end = len(allFiles)
 		}
@@ -130,6 +131,11 @@ Your response MUST be only the raw JSON, without any surrounding text or code fe
 
 			resultsChan <- selection
 		}(batch)
+		
+		// Add a delay between batches to avoid rate limits
+		if cfg.RequestDelayMs > 0 {
+			time.Sleep(time.Duration(cfg.RequestDelayMs) * time.Millisecond)
+		}
 	}
 
 	go func() {

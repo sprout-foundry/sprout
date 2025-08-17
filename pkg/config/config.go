@@ -74,6 +74,11 @@ type Config struct {
 	MaxRunTokens     int     `json:"max_run_tokens"`
 	MaxRunCostUSD    float64 `json:"max_run_cost_usd"`
 	ShellTimeoutSecs int     `json:"shell_timeout_secs"`
+	// Rate limiting and batch size controls
+	FileBatchSize            int                  `json:"file_batch_size"`             // Batch size for file processing
+	EmbeddingBatchSize       int                  `json:"embedding_batch_size"`        // Batch size for embedding generation
+	MaxConcurrentRequests    int                  `json:"max_concurrent_requests"`     // Max concurrent API requests
+	RequestDelayMs           int                  `json:"request_delay_ms"`            // Delay between requests in milliseconds
 }
 
 func getHomeConfigPath() (string, string) {
@@ -239,6 +244,20 @@ func (cfg *Config) setDefaultValues() {
 			"rm -f package-lock.json",
 			"rm -f ./package-lock.json",
 		}
+	}
+
+	// Set defaults for rate limiting and batch size controls
+	if cfg.FileBatchSize == 0 {
+		cfg.FileBatchSize = 30 // Reduced from 50 to avoid rate limits
+	}
+	if cfg.EmbeddingBatchSize == 0 {
+		cfg.EmbeddingBatchSize = 30 // Small batch size for embeddings to avoid rate limits
+	}
+	if cfg.MaxConcurrentRequests == 0 {
+		cfg.MaxConcurrentRequests = 3 // Reduced from 6 to avoid rate limits
+	}
+	if cfg.RequestDelayMs == 0 {
+		cfg.RequestDelayMs = 100 // 100ms delay between requests
 	}
 }
 

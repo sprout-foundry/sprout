@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
@@ -319,62 +320,103 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 	}
 	// --- End of Warning and Confirmation ---
 
-	var wg sync.WaitGroup
-	resultsChan := make(chan processResult, len(filesToAnalyzeList)) // Buffer channel for all results
-
 	if len(filesToAnalyzeList) > 0 {
 		logger.LogProcessStep(fmt.Sprintf("Waiting for analysis of %d files to complete...", len(filesToAnalyzeList)))
 	}
 
-	for _, file := range filesToAnalyzeList {
-		wg.Add(1)
-		go func(f fileToProcess, cfg *config.Config) {
-			defer wg.Done()
-
-			var fileSummary, fileExports, fileReferences string
-			var llmErr error
-
-			if len(f.content) > 0 {
-				logger.Logf("Analyzing %s for workspace...", f.path)
-				fileSummary, fileExports, fileReferences, llmErr = getSummary(f.content, f.path, cfg)
-			}
-
-			// Re-fetch security concerns and ignored concerns from the workspace map
-			// This is important because the security check might have updated them
-			// even if LLM summarization was skipped.
-			currentFileInfo, exists := workspace.Files[f.relativePath]
-			var finalSecurityConcerns []string
-			var finalIgnoredSecurityConcerns []string
-			if exists {
-				finalSecurityConcerns = currentFileInfo.SecurityConcerns
-				finalIgnoredSecurityConcerns = currentFileInfo.IgnoredSecurityConcerns
-			} else {
-				// This case should ideally not happen if the file was added to filesToAnalyzeList
-				// after the security check, but as a fallback, use empty slices.
-				finalSecurityConcerns = []string{}
-				finalIgnoredSecurityConcerns = []string{}
-			}
-
-			resultsChan <- processResult{
-				relativePath:            f.relativePath,
-				summary:                 fileSummary,
-				exports:                 fileExports,
-				references:              fileReferences,
-				hash:                    f.hash,
-				tokenCount:              f.tokenCount,
-				securityConcerns:        finalSecurityConcerns,
-				ignoredSecurityConcerns: finalIgnoredSecurityConcerns,
-				err:                     llmErr,
-			}
-		}(file, cfg)
+	// Process files in batches to avoid rate limits
+	batchSize := cfg.FileBatchSize
+	if batchSize <= 0 {
+		batchSize = 10 // Default fallback
 	}
 
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
+	var allResults []processResult
 
-	for result := range resultsChan {
+	for i := 0; i < len(filesToAnalyzeList); i += batchSize {
+		end := i + batchSize
+		if end > len(filesToAnalyzeList) {
+			end = len(filesToAnalyzeList)
+		}
+		batch := filesToAnalyzeList[i:end]
+
+		logger.LogProcessStep(fmt.Sprintf("Processing batch %d/%d (%d files)...", (i/batchSize)+1, (len(filesToAnalyzeList)+batchSize-1)/batchSize, len(batch)))
+
+		var wg sync.WaitGroup
+		resultsChan := make(chan processResult, len(batch))
+
+		// Limit concurrency within each batch
+		maxConcurrent := cfg.MaxConcurrentRequests
+		if maxConcurrent <= 0 {
+			maxConcurrent = 3 // Default fallback
+		}
+		sem := make(chan struct{}, maxConcurrent)
+
+		for _, file := range batch {
+			wg.Add(1)
+			go func(f fileToProcess, cfg *config.Config) {
+				defer wg.Done()
+
+				// Acquire semaphore
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				var fileSummary, fileExports, fileReferences string
+				var llmErr error
+
+				if len(f.content) > 0 {
+					logger.Logf("Analyzing %s for workspace...", f.path)
+					fileSummary, fileExports, fileReferences, llmErr = getSummary(f.content, f.path, cfg)
+				}
+
+				// Re-fetch security concerns and ignored concerns from the workspace map
+				// This is important because the security check might have updated them
+				// even if LLM summarization was skipped.
+				currentFileInfo, exists := workspace.Files[f.relativePath]
+				var finalSecurityConcerns []string
+				var finalIgnoredSecurityConcerns []string
+				if exists {
+					finalSecurityConcerns = currentFileInfo.SecurityConcerns
+					finalIgnoredSecurityConcerns = currentFileInfo.IgnoredSecurityConcerns
+				} else {
+					// This case should ideally not happen if the file was added to filesToAnalyzeList
+					// after the security check, but as a fallback, use empty slices.
+					finalSecurityConcerns = []string{}
+					finalIgnoredSecurityConcerns = []string{}
+				}
+
+				resultsChan <- processResult{
+					relativePath:            f.relativePath,
+					summary:                 fileSummary,
+					exports:                 fileExports,
+					references:              fileReferences,
+					hash:                    f.hash,
+					tokenCount:              f.tokenCount,
+					securityConcerns:        finalSecurityConcerns,
+					ignoredSecurityConcerns: finalIgnoredSecurityConcerns,
+					err:                     llmErr,
+				}
+			}(file, cfg)
+		}
+
+		go func() {
+			wg.Wait()
+			close(resultsChan)
+		}()
+
+		// Collect results from this batch
+		for result := range resultsChan {
+			allResults = append(allResults, result)
+		}
+
+		// Add delay between batches to avoid rate limits
+		if cfg.RequestDelayMs > 0 && i+batchSize < len(filesToAnalyzeList) {
+			logger.LogProcessStep(fmt.Sprintf("Waiting %dms before next batch...", cfg.RequestDelayMs))
+			time.Sleep(time.Duration(cfg.RequestDelayMs) * time.Millisecond)
+		}
+	}
+
+	// Process all collected results
+	for _, result := range allResults {
 		if result.err != nil {
 			logger.Logf("Warning: could not analyze file %s: %v. Proceeding with empty summary/exports.\n", result.relativePath, result.err)
 		}

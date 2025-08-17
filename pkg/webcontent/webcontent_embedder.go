@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
@@ -48,10 +49,21 @@ func GetRelevantContentFromText(query, content string, cfg *config.Config) (stri
 
 	textChunks := make([]*textChunk, len(chunks))
 	var g errgroup.Group
+	
+	// Use semaphore to limit concurrent embedding requests to avoid rate limits
+	maxConcurrent := cfg.MaxConcurrentRequests
+	if maxConcurrent <= 0 {
+		maxConcurrent = 3 // Default fallback
+	}
+	sem := make(chan struct{}, maxConcurrent)
 
 	for i, chunk := range chunks {
 		i, chunk := i, chunk // https://golang.org/doc/faq#closures_and_goroutines
 		g.Go(func() error {
+			// Acquire semaphore
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			
 			embedding, err := llm.GenerateEmbedding(chunk, cfg.EmbeddingModel)
 			if err != nil {
 				// Don't fail the whole process, just skip this chunk
@@ -63,6 +75,12 @@ func GetRelevantContentFromText(query, content string, cfg *config.Config) (stri
 				embedding: embedding,
 				index:     i,
 			}
+			
+			// Add small delay between requests to avoid rate limits
+			if cfg.RequestDelayMs > 0 {
+				time.Sleep(time.Duration(cfg.RequestDelayMs) * time.Millisecond)
+			}
+			
 			return nil
 		})
 	}

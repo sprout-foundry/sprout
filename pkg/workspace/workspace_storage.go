@@ -21,7 +21,7 @@ func saveWorkspaceFile(workspace WorkspaceFile) error {
 
 // SaveWorkspace is an exported helper to persist the workspace file from other packages
 func SaveWorkspace(workspace WorkspaceFile) error {
-    return saveWorkspaceFile(workspace)
+	return saveWorkspaceFile(workspace)
 }
 
 func LoadWorkspaceFile() (WorkspaceFile, error) {

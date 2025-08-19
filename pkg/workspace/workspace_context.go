@@ -96,7 +96,9 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 	if (workspace.ProjectInsights != ProjectInsights{}) {
 		b.WriteString("--- Project Insights ---\n")
 		appendIf := func(name, val string) {
-			if strings.TrimSpace(val) != "" { b.WriteString(fmt.Sprintf("%s: %s\n", name, val)) }
+			if strings.TrimSpace(val) != "" {
+				b.WriteString(fmt.Sprintf("%s: %s\n", name, val))
+			}
 		}
 		appendIf("Primary Frameworks", workspace.ProjectInsights.PrimaryFrameworks)
 		appendIf("Key Dependencies", workspace.ProjectInsights.KeyDependencies)
@@ -401,7 +403,9 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 		b.WriteString("Insights: ")
 		parts := []string{}
 		appendIf := func(name, val string) {
-			if strings.TrimSpace(val) != "" { parts = append(parts, fmt.Sprintf("%s=%s", name, val)) }
+			if strings.TrimSpace(val) != "" {
+				parts = append(parts, fmt.Sprintf("%s=%s", name, val))
+			}
 		}
 		appendIf("frameworks", workspace.ProjectInsights.PrimaryFrameworks)
 		appendIf("ci", workspace.ProjectInsights.CIProviders)
@@ -410,7 +414,9 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 		appendIf("deploy", workspace.ProjectInsights.DeploymentTargets)
 		appendIf("monorepo", workspace.ProjectInsights.Monorepo)
 		appendIf("layout", workspace.ProjectInsights.RepoLayout)
-		if len(parts) > 0 { b.WriteString(strings.Join(parts, "; ")) }
+		if len(parts) > 0 {
+			b.WriteString(strings.Join(parts, "; "))
+		}
 		b.WriteString("\n\n")
 	}
 

@@ -61,12 +61,12 @@ func AddToLeditIgnore(ignoreFilePath, path string) error {
 // These patterns ensure workspace isolation and prevent ledit from analyzing its own files
 func getEssentialLeditPatterns() []string {
 	return []string{
-		".ledit/",           // Ledit workspace directory (always ignore)
-		".ledit/*",          // All contents of ledit directory
-		"ledit",             // Ledit binary (if present in workspace)
-		"testing/",          // Testing directory (if present)
-		"test_results.txt",  // Test results file
-		"e2e_results.csv",   // E2E test results
+		".ledit/",          // Ledit workspace directory (always ignore)
+		".ledit/*",         // All contents of ledit directory
+		"ledit",            // Ledit binary (if present in workspace)
+		"testing/",         // Testing directory (if present)
+		"test_results.txt", // Test results file
+		"e2e_results.csv",  // E2E test results
 	}
 }
 

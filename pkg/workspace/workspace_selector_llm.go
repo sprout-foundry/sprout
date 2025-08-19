@@ -131,7 +131,7 @@ Your response MUST be only the raw JSON, without any surrounding text or code fe
 
 			resultsChan <- selection
 		}(batch)
-		
+
 		// Add a delay between batches to avoid rate limits
 		if cfg.RequestDelayMs > 0 {
 			time.Sleep(time.Duration(cfg.RequestDelayMs) * time.Millisecond)

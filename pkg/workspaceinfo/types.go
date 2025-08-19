@@ -25,7 +25,7 @@ type WorkspaceFile struct {
 	BuildRunners    []string                     `json:"build_runners"`
 	TestRunnerPaths []string                     `json:"test_runner_paths"`
 	ProjectGoals    ProjectGoals                 `json:"project_goals"`
-	ProjectInsights ProjectInsights               `json:"project_insights"`
+	ProjectInsights ProjectInsights              `json:"project_insights"`
 }
 
 // ProjectGoals represents the goals and vision for the project.
@@ -45,10 +45,10 @@ type ProjectInsights struct {
 	Architecture      string `json:"architecture"`
 
 	// New helpful fields
-	Monorepo          string `json:"monorepo"`            // "yes"/"no"/"unknown"
-	CIProviders       string `json:"ci_providers"`        // e.g., GitHub Actions, GitLab CI
-	RuntimeTargets    string `json:"runtime_targets"`     // e.g., Node.js, JVM, Browser, Python
-	DeploymentTargets string `json:"deployment_targets"`  // e.g., Docker/K8s/Serverless/VMs
-	PackageManagers   string `json:"package_managers"`    // e.g., npm/yarn/pnpm/go modules/pip/poetry
-	RepoLayout        string `json:"repo_layout"`         // e.g., apps/ and packages/, cmd/ and internal/
+	Monorepo          string `json:"monorepo"`           // "yes"/"no"/"unknown"
+	CIProviders       string `json:"ci_providers"`       // e.g., GitHub Actions, GitLab CI
+	RuntimeTargets    string `json:"runtime_targets"`    // e.g., Node.js, JVM, Browser, Python
+	DeploymentTargets string `json:"deployment_targets"` // e.g., Docker/K8s/Serverless/VMs
+	PackageManagers   string `json:"package_managers"`   // e.g., npm/yarn/pnpm/go modules/pip/poetry
+	RepoLayout        string `json:"repo_layout"`        // e.g., apps/ and packages/, cmd/ and internal/
 }

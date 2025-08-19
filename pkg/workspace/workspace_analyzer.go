@@ -207,7 +207,9 @@ func extractPythonExports(content string) string {
 		}
 	}
 	var out []string
-	for k := range names { out = append(out, k) }
+	for k := range names {
+		out = append(out, k)
+	}
 	sort.Strings(out)
 	return strings.Join(out, "; ")
 }
@@ -217,11 +219,15 @@ func extractPythonReferences(content string) string {
 	set := map[string]bool{}
 	for _, m := range re.FindAllStringSubmatch(content, -1) {
 		for i := 1; i < len(m); i++ {
-			if m[i] != "" { set[m[i]] = true }
+			if m[i] != "" {
+				set[m[i]] = true
+			}
 		}
 	}
 	var out []string
-	for k := range set { out = append(out, k) }
+	for k := range set {
+		out = append(out, k)
+	}
 	sort.Strings(out)
 	return strings.Join(out, ", ")
 }
@@ -245,12 +251,18 @@ func extractJSExports(content string) string {
 	} {
 		ms := re.FindAllStringSubmatch(content, -1)
 		for _, m := range ms {
-			if len(m) > 1 { names = append(names, m[1]) }
+			if len(m) > 1 {
+				names = append(names, m[1])
+			}
 		}
 	}
 	sort.Strings(names)
-	if len(names) == 0 { return "" }
-	for i, n := range names { names[i] = "export " + n }
+	if len(names) == 0 {
+		return ""
+	}
+	for i, n := range names {
+		names[i] = "export " + n
+	}
 	return strings.Join(names, "; ")
 }
 
@@ -258,10 +270,20 @@ func extractJSReferences(content string) string {
 	set := map[string]bool{}
 	re1 := regexp.MustCompile(`(?m)^\s*import\s+.*?from\s+['\"]([^'\"]+)['\"]`)
 	re2 := regexp.MustCompile(`require\(['\"]([^'\"]+)['\"]\)`)
-	for _, m := range re1.FindAllStringSubmatch(content, -1) { if len(m) > 1 { set[m[1]] = true } }
-	for _, m := range re2.FindAllStringSubmatch(content, -1) { if len(m) > 1 { set[m[1]] = true } }
+	for _, m := range re1.FindAllStringSubmatch(content, -1) {
+		if len(m) > 1 {
+			set[m[1]] = true
+		}
+	}
+	for _, m := range re2.FindAllStringSubmatch(content, -1) {
+		if len(m) > 1 {
+			set[m[1]] = true
+		}
+	}
 	var out []string
-	for k := range set { out = append(out, k) }
+	for k := range set {
+		out = append(out, k)
+	}
 	sort.Strings(out)
 	return strings.Join(out, ", ")
 }
@@ -270,10 +292,14 @@ func analyzeJSONFile(content, filename string) string {
 	re := regexp.MustCompile(`(?m)^[\s\t]*\"([^\"]+)\"\s*:`)
 	keys := map[string]bool{}
 	for _, m := range re.FindAllStringSubmatch(content, -1) {
-		if len(m) > 1 { keys[m[1]] = true }
+		if len(m) > 1 {
+			keys[m[1]] = true
+		}
 	}
 	var k []string
-	for key := range keys { k = append(k, key) }
+	for key := range keys {
+		k = append(k, key)
+	}
 	sort.Strings(k)
 	if len(k) > 0 {
 		return fmt.Sprintf("JSON with top-level keys: %s.", strings.Join(k, ", "))
@@ -286,10 +312,14 @@ func analyzeYAMLFile(content, filename string) string {
 	re := regexp.MustCompile(`(?m)^([A-Za-z0-9_\-\.]+):\s`)
 	keys := map[string]bool{}
 	for _, m := range re.FindAllStringSubmatch(content, -1) {
-		if len(m) > 1 { keys[m[1]] = true }
+		if len(m) > 1 {
+			keys[m[1]] = true
+		}
 	}
 	var out []string
-	for k := range keys { out = append(out, k) }
+	for k := range keys {
+		out = append(out, k)
+	}
 	sort.Strings(out)
 	if len(out) == 0 {
 		lines := strings.Split(content, "\n")
@@ -301,39 +331,61 @@ func analyzeYAMLFile(content, filename string) string {
 func analyzeMarkdownFile(content, filename string) string {
 	re := regexp.MustCompile(`(?m)^(#\s+.+|##\s+.+|###\s+.+)`)
 	hs := []string{}
-	for _, m := range re.FindAllString(content, -1) { hs = append(hs, strings.TrimSpace(m)) }
+	for _, m := range re.FindAllString(content, -1) {
+		hs = append(hs, strings.TrimSpace(m))
+	}
 	if len(hs) == 0 {
 		lines := strings.Split(content, "\n")
 		return fmt.Sprintf("Markdown file with %d lines.", len(lines))
 	}
-	if len(hs) > 5 { hs = hs[:5] }
+	if len(hs) > 5 {
+		hs = hs[:5]
+	}
 	return "Markdown headings: " + strings.Join(hs, "; ")
 }
 
 func analyzeShellFile(content, filename string) string {
 	funcs := regexp.MustCompile(`(?m)^(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{`).FindAllStringSubmatch(content, -1)
 	names := []string{}
-	for _, m := range funcs { if len(m) > 1 { names = append(names, m[1]) } }
+	for _, m := range funcs {
+		if len(m) > 1 {
+			names = append(names, m[1])
+		}
+	}
 	sort.Strings(names)
-	if len(names) == 0 { return "Shell script." }
+	if len(names) == 0 {
+		return "Shell script."
+	}
 	return "Shell script with functions: " + strings.Join(names, ", ")
 }
 
 func extractShellExports(content string) string {
 	funcs := regexp.MustCompile(`(?m)^(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{`).FindAllStringSubmatch(content, -1)
 	names := []string{}
-	for _, m := range funcs { if len(m) > 1 { names = append(names, m[1]) } }
+	for _, m := range funcs {
+		if len(m) > 1 {
+			names = append(names, m[1])
+		}
+	}
 	sort.Strings(names)
-	for i, n := range names { names[i] = "func " + n }
+	for i, n := range names {
+		names[i] = "func " + n
+	}
 	return strings.Join(names, "; ")
 }
 
 func extractShellReferences(content string) string {
 	re := regexp.MustCompile(`(?m)^\s*(?:source|\.)\s+([^\s#]+)`)
 	set := map[string]bool{}
-	for _, m := range re.FindAllStringSubmatch(content, -1) { if len(m) > 1 { set[m[1]] = true } }
+	for _, m := range re.FindAllStringSubmatch(content, -1) {
+		if len(m) > 1 {
+			set[m[1]] = true
+		}
+	}
 	var out []string
-	for k := range set { out = append(out, k) }
+	for k := range set {
+		out = append(out, k)
+	}
 	sort.Strings(out)
 	return strings.Join(out, ", ")
 }
@@ -347,10 +399,16 @@ func analyzeHTMLFile(content, filename string) string {
 	}
 	var parts []string
 	for _, t := range tags {
-		if counts[t] > 0 { parts = append(parts, fmt.Sprintf("%s:%d", t, counts[t])) }
+		if counts[t] > 0 {
+			parts = append(parts, fmt.Sprintf("%s:%d", t, counts[t]))
+		}
 	}
-	if len(parts) == 0 { return "HTML file." }
-	if len(parts) > 6 { parts = parts[:6] }
+	if len(parts) == 0 {
+		return "HTML file."
+	}
+	if len(parts) > 6 {
+		parts = parts[:6]
+	}
 	return "HTML tags: " + strings.Join(parts, ", ")
 }
 

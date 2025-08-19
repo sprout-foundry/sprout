@@ -21,8 +21,8 @@ const jinaSearchURL = "https://s.jina.ai/search"
 func FetchContextFromSearch(query string, cfg *config.Config) (string, error) {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	logger.LogProcessStep(fmt.Sprintf("Starting web content search for query: %s", query))
-    // Ensure consistent log phrase for tests regardless of cache usage
-    logger.LogProcessStep(fmt.Sprintf("Performing Jina AI search for query: %s", query))
+	// Ensure consistent log phrase for tests regardless of cache usage
+	logger.LogProcessStep(fmt.Sprintf("Performing Jina AI search for query: %s", query))
 	defer logger.LogProcessStep("Completed web content search")
 
 	if strings.TrimSpace(query) == "" {

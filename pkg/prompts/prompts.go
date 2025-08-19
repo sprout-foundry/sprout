@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	DefaultTokenLimit = 42096 // Default token limit for LLM requests
+	DefaultTokenLimit = 100000 // Default token limit for LLM requests
 )
 
 // Message represents a single message in a chat-like conversation with the LLM.

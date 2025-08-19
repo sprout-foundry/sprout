@@ -91,9 +91,13 @@ func buildSyntacticOverview(ws WorkspaceFile) string {
 	b.WriteString("\nFiles (path, overview, exports, references):\n")
 	const maxFiles = 400
 	var files []string
-	for p := range ws.Files { files = append(files, p) }
+	for p := range ws.Files {
+		files = append(files, p)
+	}
 	sort.Strings(files)
-	if len(files) > maxFiles { files = files[:maxFiles] }
+	if len(files) > maxFiles {
+		files = files[:maxFiles]
+	}
 	for _, p := range files {
 		fi := ws.Files[p]
 		b.WriteString(p)
@@ -126,96 +130,191 @@ func detectProjectInsightsHeuristics(rootDir string, ws WorkspaceFile) ProjectIn
 		pkgCount := 0
 		gomodCount := 0
 		filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil { return nil }
+			if err != nil {
+				return nil
+			}
 			if d.IsDir() {
 				name := d.Name()
-				if name == ".git" || name == "node_modules" || name == "vendor" || name == "dist" || name == "build" { return filepath.SkipDir }
+				if name == ".git" || name == "node_modules" || name == "vendor" || name == "dist" || name == "build" {
+					return filepath.SkipDir
+				}
 				return nil
 			}
 			base := filepath.Base(path)
-			if base == "package.json" { pkgCount++ }
-			if base == "go.mod" { gomodCount++ }
+			if base == "package.json" {
+				pkgCount++
+			}
+			if base == "go.mod" {
+				gomodCount++
+			}
 			return nil
 		})
-		if pkgCount > 1 || gomodCount > 1 { ins.Monorepo = "yes" } else { ins.Monorepo = "no" }
+		if pkgCount > 1 || gomodCount > 1 {
+			ins.Monorepo = "yes"
+		} else {
+			ins.Monorepo = "no"
+		}
 	}
 
 	// CI providers
 	ci := []string{}
-	if exists(filepath.Join(rootDir, ".github", "workflows")) { ci = append(ci, "GitHub Actions") }
-	if exists(filepath.Join(rootDir, ".gitlab-ci.yml")) { ci = append(ci, "GitLab CI") }
-	if exists(filepath.Join(rootDir, ".circleci", "config.yml")) { ci = append(ci, "CircleCI") }
-	if exists(filepath.Join(rootDir, ".azure-pipelines.yml")) { ci = append(ci, "Azure Pipelines") }
-	if exists(filepath.Join(rootDir, ".drone.yml")) { ci = append(ci, "Drone") }
-	if exists(filepath.Join(rootDir, ".travis.yml")) { ci = append(ci, "TravisCI") }
+	if exists(filepath.Join(rootDir, ".github", "workflows")) {
+		ci = append(ci, "GitHub Actions")
+	}
+	if exists(filepath.Join(rootDir, ".gitlab-ci.yml")) {
+		ci = append(ci, "GitLab CI")
+	}
+	if exists(filepath.Join(rootDir, ".circleci", "config.yml")) {
+		ci = append(ci, "CircleCI")
+	}
+	if exists(filepath.Join(rootDir, ".azure-pipelines.yml")) {
+		ci = append(ci, "Azure Pipelines")
+	}
+	if exists(filepath.Join(rootDir, ".drone.yml")) {
+		ci = append(ci, "Drone")
+	}
+	if exists(filepath.Join(rootDir, ".travis.yml")) {
+		ci = append(ci, "TravisCI")
+	}
 	ins.CIProviders = strings.Join(ci, ", ")
 
 	// Package managers
 	pm := []string{}
-	if exists(filepath.Join(rootDir, "package-lock.json")) { pm = append(pm, "npm") }
-	if exists(filepath.Join(rootDir, "yarn.lock")) { pm = append(pm, "yarn") }
-	if exists(filepath.Join(rootDir, "pnpm-lock.yaml")) { pm = append(pm, "pnpm") }
-	if exists(filepath.Join(rootDir, "go.mod")) { pm = append(pm, "go modules") }
-	if exists(filepath.Join(rootDir, "requirements.txt")) || exists(filepath.Join(rootDir, "Pipfile")) || exists(filepath.Join(rootDir, "poetry.lock")) || exists(filepath.Join(rootDir, "pyproject.toml")) { pm = append(pm, "pip/poetry") }
-	if exists(filepath.Join(rootDir, "Cargo.toml")) { pm = append(pm, "cargo") }
-	if exists(filepath.Join(rootDir, "Gemfile")) { pm = append(pm, "bundler") }
+	if exists(filepath.Join(rootDir, "package-lock.json")) {
+		pm = append(pm, "npm")
+	}
+	if exists(filepath.Join(rootDir, "yarn.lock")) {
+		pm = append(pm, "yarn")
+	}
+	if exists(filepath.Join(rootDir, "pnpm-lock.yaml")) {
+		pm = append(pm, "pnpm")
+	}
+	if exists(filepath.Join(rootDir, "go.mod")) {
+		pm = append(pm, "go modules")
+	}
+	if exists(filepath.Join(rootDir, "requirements.txt")) || exists(filepath.Join(rootDir, "Pipfile")) || exists(filepath.Join(rootDir, "poetry.lock")) || exists(filepath.Join(rootDir, "pyproject.toml")) {
+		pm = append(pm, "pip/poetry")
+	}
+	if exists(filepath.Join(rootDir, "Cargo.toml")) {
+		pm = append(pm, "cargo")
+	}
+	if exists(filepath.Join(rootDir, "Gemfile")) {
+		pm = append(pm, "bundler")
+	}
 	ins.PackageManagers = strings.Join(pm, ", ")
 
 	// Runtime targets based on languages
 	rts := []string{}
 	langset := map[string]bool{}
-	for _, l := range ws.Languages { langset[l] = true }
-	if langset["javascript"] || langset["typescript"] { rts = append(rts, "Node.js", "Browser") }
-	if langset["python"] { rts = append(rts, "Python") }
-	if langset["java"] || langset["kotlin"] { rts = append(rts, "JVM") }
-	if langset["go"] { rts = append(rts, "Go") }
-	if langset["rust"] { rts = append(rts, "Rust") }
+	for _, l := range ws.Languages {
+		langset[l] = true
+	}
+	if langset["javascript"] || langset["typescript"] {
+		rts = append(rts, "Node.js", "Browser")
+	}
+	if langset["python"] {
+		rts = append(rts, "Python")
+	}
+	if langset["java"] || langset["kotlin"] {
+		rts = append(rts, "JVM")
+	}
+	if langset["go"] {
+		rts = append(rts, "Go")
+	}
+	if langset["rust"] {
+		rts = append(rts, "Rust")
+	}
 	ins.RuntimeTargets = strings.Join(uniqueStrings(rts), ", ")
 
 	// Deployment targets
 	dt := []string{}
-	if exists(filepath.Join(rootDir, "Dockerfile")) || exists(filepath.Join(rootDir, "docker-compose.yml")) || exists(filepath.Join(rootDir, "docker-compose.yaml")) { dt = append(dt, "Docker") }
+	if exists(filepath.Join(rootDir, "Dockerfile")) || exists(filepath.Join(rootDir, "docker-compose.yml")) || exists(filepath.Join(rootDir, "docker-compose.yaml")) {
+		dt = append(dt, "Docker")
+	}
 	// Kubernetes manifests
 	k8s := false
 	filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil { return nil }
+		if err != nil {
+			return nil
+		}
 		if d.IsDir() {
-			name := d.Name(); if name == ".git" || name == "node_modules" || name == "vendor" { return filepath.SkipDir }
+			name := d.Name()
+			if name == ".git" || name == "node_modules" || name == "vendor" {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		base := filepath.Base(path)
-		if strings.Contains(strings.ToLower(base), "deployment.yaml") || strings.Contains(strings.ToLower(base), "deployment.yml") || strings.Contains(strings.ToLower(base), "kustomization.yaml") { k8s = true }
+		if strings.Contains(strings.ToLower(base), "deployment.yaml") || strings.Contains(strings.ToLower(base), "deployment.yml") || strings.Contains(strings.ToLower(base), "kustomization.yaml") {
+			k8s = true
+		}
 		return nil
 	})
-	if k8s { dt = append(dt, "Kubernetes") }
-	if exists(filepath.Join(rootDir, "serverless.yml")) || exists(filepath.Join(rootDir, "serverless.yaml")) { dt = append(dt, "Serverless") }
-	if exists(filepath.Join(rootDir, "main.tf")) || exists(filepath.Join(rootDir, "terraform")) { dt = append(dt, "Terraform") }
+	if k8s {
+		dt = append(dt, "Kubernetes")
+	}
+	if exists(filepath.Join(rootDir, "serverless.yml")) || exists(filepath.Join(rootDir, "serverless.yaml")) {
+		dt = append(dt, "Serverless")
+	}
+	if exists(filepath.Join(rootDir, "main.tf")) || exists(filepath.Join(rootDir, "terraform")) {
+		dt = append(dt, "Terraform")
+	}
 	ins.DeploymentTargets = strings.Join(uniqueStrings(dt), ", ")
 
 	// Repo layout
 	layouts := []string{}
-	if exists(filepath.Join(rootDir, "apps")) && exists(filepath.Join(rootDir, "packages")) { layouts = append(layouts, "apps+packages") }
-	if exists(filepath.Join(rootDir, "cmd")) { layouts = append(layouts, "cmd/") }
-	if exists(filepath.Join(rootDir, "internal")) { layouts = append(layouts, "internal/") }
-	if exists(filepath.Join(rootDir, "src")) { layouts = append(layouts, "src/") }
+	if exists(filepath.Join(rootDir, "apps")) && exists(filepath.Join(rootDir, "packages")) {
+		layouts = append(layouts, "apps+packages")
+	}
+	if exists(filepath.Join(rootDir, "cmd")) {
+		layouts = append(layouts, "cmd/")
+	}
+	if exists(filepath.Join(rootDir, "internal")) {
+		layouts = append(layouts, "internal/")
+	}
+	if exists(filepath.Join(rootDir, "src")) {
+		layouts = append(layouts, "src/")
+	}
 	ins.RepoLayout = strings.Join(layouts, ", ")
 
 	// Build system and test strategy
 	bs := []string{}
-	if exists(filepath.Join(rootDir, "Makefile")) { bs = append(bs, "make") }
-	if exists(filepath.Join(rootDir, "justfile")) { bs = append(bs, "just") }
-	if exists(filepath.Join(rootDir, "Taskfile.yml")) || exists(filepath.Join(rootDir, "Taskfile.yaml")) { bs = append(bs, "task") }
-	if exists(filepath.Join(rootDir, "package.json")) { bs = append(bs, "npm scripts") }
-	if exists(filepath.Join(rootDir, "build.gradle")) || exists(filepath.Join(rootDir, "pom.xml")) { bs = append(bs, "gradle/maven") }
-	if exists(filepath.Join(rootDir, "Cargo.toml")) { bs = append(bs, "cargo") }
+	if exists(filepath.Join(rootDir, "Makefile")) {
+		bs = append(bs, "make")
+	}
+	if exists(filepath.Join(rootDir, "justfile")) {
+		bs = append(bs, "just")
+	}
+	if exists(filepath.Join(rootDir, "Taskfile.yml")) || exists(filepath.Join(rootDir, "Taskfile.yaml")) {
+		bs = append(bs, "task")
+	}
+	if exists(filepath.Join(rootDir, "package.json")) {
+		bs = append(bs, "npm scripts")
+	}
+	if exists(filepath.Join(rootDir, "build.gradle")) || exists(filepath.Join(rootDir, "pom.xml")) {
+		bs = append(bs, "gradle/maven")
+	}
+	if exists(filepath.Join(rootDir, "Cargo.toml")) {
+		bs = append(bs, "cargo")
+	}
 	ins.BuildSystem = strings.Join(uniqueStrings(bs), ", ")
 
 	ts := []string{}
-	if exists(filepath.Join(rootDir, "jest.config.js")) || exists(filepath.Join(rootDir, "jest.config.ts")) { ts = append(ts, "jest") }
-	if exists(filepath.Join(rootDir, "vitest.config.ts")) || exists(filepath.Join(rootDir, "vitest.config.js")) { ts = append(ts, "vitest") }
-	if exists(filepath.Join(rootDir, "pytest.ini")) { ts = append(ts, "pytest") }
-	if exists(filepath.Join(rootDir, "go.mod")) { ts = append(ts, "go test") }
-	if exists(filepath.Join(rootDir, "Cargo.toml")) { ts = append(ts, "cargo test") }
+	if exists(filepath.Join(rootDir, "jest.config.js")) || exists(filepath.Join(rootDir, "jest.config.ts")) {
+		ts = append(ts, "jest")
+	}
+	if exists(filepath.Join(rootDir, "vitest.config.ts")) || exists(filepath.Join(rootDir, "vitest.config.js")) {
+		ts = append(ts, "vitest")
+	}
+	if exists(filepath.Join(rootDir, "pytest.ini")) {
+		ts = append(ts, "pytest")
+	}
+	if exists(filepath.Join(rootDir, "go.mod")) {
+		ts = append(ts, "go test")
+	}
+	if exists(filepath.Join(rootDir, "Cargo.toml")) {
+		ts = append(ts, "cargo test")
+	}
 	ins.TestStrategy = strings.Join(uniqueStrings(ts), ", ")
 
 	// Primary frameworks / key dependencies via package.json
@@ -227,14 +326,20 @@ func detectProjectInsightsHeuristics(rootDir string, ws WorkspaceFile) ProjectIn
 			_ = json.Unmarshal(b, &pkg)
 			for _, k := range []string{"dependencies", "devDependencies"} {
 				if m, ok := pkg[k].(map[string]any); ok {
-					for name := range m { pkgs[name] = struct{}{} }
+					for name := range m {
+						pkgs[name] = struct{}{}
+					}
 				}
 			}
 		}
 	}
 	fw := []string{}
 	a := []string{}
-	addIf := func(dep string, label string) { if _, ok := pkgs[dep]; ok { fw = append(fw, label) } }
+	addIf := func(dep string, label string) {
+		if _, ok := pkgs[dep]; ok {
+			fw = append(fw, label)
+		}
+	}
 	addIf("react", "React")
 	addIf("next", "Next.js")
 	addIf("vue", "Vue")
@@ -266,8 +371,13 @@ func uniqueStrings(in []string) []string {
 	seen := map[string]bool{}
 	out := []string{}
 	for _, s := range in {
-		if s == "" { continue }
-		if !seen[s] { seen[s] = true; out = append(out, s) }
+		if s == "" {
+			continue
+		}
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
 	}
 	return out
 }
@@ -275,7 +385,9 @@ func uniqueStrings(in []string) []string {
 func intersectKeys(m map[string]struct{}, candidates []string) []string {
 	out := []string{}
 	for _, c := range candidates {
-		if _, ok := m[c]; ok { out = append(out, c) }
+		if _, ok := m[c]; ok {
+			out = append(out, c)
+		}
 	}
 	return out
 }
@@ -731,17 +843,39 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	// Seed insights from heuristics
 	heur := detectProjectInsightsHeuristics("./", workspace)
 	mergeInsights := func(dst *ProjectInsights, src ProjectInsights) {
-		if dst.PrimaryFrameworks == "" { dst.PrimaryFrameworks = src.PrimaryFrameworks }
-		if dst.KeyDependencies == "" { dst.KeyDependencies = src.KeyDependencies }
-		if dst.BuildSystem == "" { dst.BuildSystem = src.BuildSystem }
-		if dst.TestStrategy == "" { dst.TestStrategy = src.TestStrategy }
-		if dst.Architecture == "" { dst.Architecture = src.Architecture }
-		if dst.Monorepo == "" || dst.Monorepo == "unknown" { dst.Monorepo = src.Monorepo }
-		if dst.CIProviders == "" { dst.CIProviders = src.CIProviders }
-		if dst.RuntimeTargets == "" { dst.RuntimeTargets = src.RuntimeTargets }
-		if dst.DeploymentTargets == "" { dst.DeploymentTargets = src.DeploymentTargets }
-		if dst.PackageManagers == "" { dst.PackageManagers = src.PackageManagers }
-		if dst.RepoLayout == "" { dst.RepoLayout = src.RepoLayout }
+		if dst.PrimaryFrameworks == "" {
+			dst.PrimaryFrameworks = src.PrimaryFrameworks
+		}
+		if dst.KeyDependencies == "" {
+			dst.KeyDependencies = src.KeyDependencies
+		}
+		if dst.BuildSystem == "" {
+			dst.BuildSystem = src.BuildSystem
+		}
+		if dst.TestStrategy == "" {
+			dst.TestStrategy = src.TestStrategy
+		}
+		if dst.Architecture == "" {
+			dst.Architecture = src.Architecture
+		}
+		if dst.Monorepo == "" || dst.Monorepo == "unknown" {
+			dst.Monorepo = src.Monorepo
+		}
+		if dst.CIProviders == "" {
+			dst.CIProviders = src.CIProviders
+		}
+		if dst.RuntimeTargets == "" {
+			dst.RuntimeTargets = src.RuntimeTargets
+		}
+		if dst.DeploymentTargets == "" {
+			dst.DeploymentTargets = src.DeploymentTargets
+		}
+		if dst.PackageManagers == "" {
+			dst.PackageManagers = src.PackageManagers
+		}
+		if dst.RepoLayout == "" {
+			dst.RepoLayout = src.RepoLayout
+		}
 	}
 	mergeInsights(&workspace.ProjectInsights, heur)
 

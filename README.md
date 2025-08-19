@@ -109,6 +109,9 @@ ledit log
 # Attempt to fix a problem in your code by running a command and letting ledit attempt to fix the error messages that are a result of the command.
 ledit fix "go build"
 
+# Execute a shell command, or have an LLM generate it from an intent
+ledit exec "list all go files recursively"
+
 # Ignore a directory from workspace analysis
 ledit ignore "dist/"
 

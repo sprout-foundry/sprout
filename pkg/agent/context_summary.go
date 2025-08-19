@@ -122,7 +122,7 @@ Respond with JSON:
 	if context.CurrentPlan != nil {
 		context.ExecutedOperations = append(context.ExecutedOperations,
 			fmt.Sprintf("ACTIVE PLAN: %d operations",
-				len(context.CurrentPlan.Edits)))
+				len(context.CurrentPlan.EditOperations)))
 	}
 
 	context.Errors = []string{

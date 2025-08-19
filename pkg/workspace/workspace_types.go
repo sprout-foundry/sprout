@@ -12,3 +12,6 @@ type WorkspaceFileInfo = workspaceinfo.WorkspaceFileInfo
 
 // ProjectGoals is an alias for workspaceinfo.ProjectGoals
 type ProjectGoals = workspaceinfo.ProjectGoals
+
+// ProjectInsights is an alias for workspaceinfo.ProjectInsights
+type ProjectInsights = workspaceinfo.ProjectInsights

@@ -12,9 +12,6 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/prompts"
-	"github.com/alantheprice/ledit/pkg/security"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -27,22 +24,20 @@ type processResult struct {
 	hash                    string
 	references              string
 	tokenCount              int
-	securityConcerns        []string // New field
-	ignoredSecurityConcerns []string // New field
+	securityConcerns        []string // kept for compatibility; will remain empty
+	ignoredSecurityConcerns []string // kept for compatibility; will remain empty
 	err                     error
 }
 
-// fileToProcess holds information about a file that needs to be analyzed by the LLM.
+// fileToProcess holds information about a file that needs to be analyzed locally.
 type fileToProcess struct {
 	path         string
 	relativePath string
 	content      string
 	hash         string
-	tokenCount   int
 }
 
 var (
-	maxTokenCount  = 80096
 	textExtensions = map[string]bool{
 		".txt": true, ".go": true, ".py": true, ".js": true, ".jsx": true, ".java": true,
 		".c": true, ".cpp": true, ".h": true, ".hpp": true, ".md": true,
@@ -53,6 +48,237 @@ var (
 		".pm": true, ".lua": true, ".vim": true, ".toml": true,
 	}
 )
+
+// buildSyntacticOverview creates a compact, deterministic overview string for LLM context.
+func buildSyntacticOverview(ws WorkspaceFile) string {
+	var b strings.Builder
+	b.WriteString("Languages: ")
+	b.WriteString(strings.Join(ws.Languages, ", "))
+	b.WriteString("\n")
+	if ws.BuildCommand != "" {
+		b.WriteString(fmt.Sprintf("Build: %s\n", ws.BuildCommand))
+	}
+	if ws.TestCommand != "" {
+		b.WriteString(fmt.Sprintf("Test: %s\n", ws.TestCommand))
+	}
+	if len(ws.BuildRunners) > 0 {
+		b.WriteString(fmt.Sprintf("Build runners: %s\n", strings.Join(ws.BuildRunners, ", ")))
+	}
+	if len(ws.TestRunnerPaths) > 0 {
+		b.WriteString(fmt.Sprintf("Test configs: %s\n", strings.Join(ws.TestRunnerPaths, ", ")))
+	}
+	// Include any existing insights succinctly
+	if (ws.ProjectInsights != ProjectInsights{}) {
+		b.WriteString("Insights: ")
+		parts := []string{}
+		appendIf := func(name, val string) {
+			if strings.TrimSpace(val) != "" {
+				parts = append(parts, fmt.Sprintf("%s=%s", name, val))
+			}
+		}
+		appendIf("frameworks", ws.ProjectInsights.PrimaryFrameworks)
+		appendIf("ci", ws.ProjectInsights.CIProviders)
+		appendIf("pkg", ws.ProjectInsights.PackageManagers)
+		appendIf("runtime", ws.ProjectInsights.RuntimeTargets)
+		appendIf("deploy", ws.ProjectInsights.DeploymentTargets)
+		appendIf("monorepo", ws.ProjectInsights.Monorepo)
+		appendIf("layout", ws.ProjectInsights.RepoLayout)
+		if len(parts) > 0 {
+			b.WriteString(strings.Join(parts, "; "))
+			b.WriteString("\n")
+		}
+	}
+	b.WriteString("\nFiles (path, overview, exports, references):\n")
+	const maxFiles = 400
+	var files []string
+	for p := range ws.Files { files = append(files, p) }
+	sort.Strings(files)
+	if len(files) > maxFiles { files = files[:maxFiles] }
+	for _, p := range files {
+		fi := ws.Files[p]
+		b.WriteString(p)
+		b.WriteString("\n  overview: ")
+		b.WriteString(fi.Summary)
+		if strings.TrimSpace(fi.Exports) != "" {
+			b.WriteString("\n  exports: ")
+			b.WriteString(fi.Exports)
+		}
+		if strings.TrimSpace(fi.References) != "" {
+			b.WriteString("\n  references: ")
+			b.WriteString(fi.References)
+		}
+		b.WriteString("\n\n")
+	}
+	return b.String()
+}
+
+// detectProjectInsightsHeuristics scans the repo to infer insights without LLM.
+func detectProjectInsightsHeuristics(rootDir string, ws WorkspaceFile) ProjectInsights {
+	ins := ProjectInsights{}
+
+	// Monorepo heuristics
+	if exists(filepath.Join(rootDir, "pnpm-workspace.yaml")) || exists(filepath.Join(rootDir, "pnpm-workspace.yml")) ||
+		exists(filepath.Join(rootDir, "lerna.json")) || exists(filepath.Join(rootDir, "nx.json")) ||
+		exists(filepath.Join(rootDir, "turbo.json")) || exists(filepath.Join(rootDir, "go.work")) {
+		ins.Monorepo = "yes"
+	} else {
+		// multiple package.json or go.mod in subdirs
+		pkgCount := 0
+		gomodCount := 0
+		filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil { return nil }
+			if d.IsDir() {
+				name := d.Name()
+				if name == ".git" || name == "node_modules" || name == "vendor" || name == "dist" || name == "build" { return filepath.SkipDir }
+				return nil
+			}
+			base := filepath.Base(path)
+			if base == "package.json" { pkgCount++ }
+			if base == "go.mod" { gomodCount++ }
+			return nil
+		})
+		if pkgCount > 1 || gomodCount > 1 { ins.Monorepo = "yes" } else { ins.Monorepo = "no" }
+	}
+
+	// CI providers
+	ci := []string{}
+	if exists(filepath.Join(rootDir, ".github", "workflows")) { ci = append(ci, "GitHub Actions") }
+	if exists(filepath.Join(rootDir, ".gitlab-ci.yml")) { ci = append(ci, "GitLab CI") }
+	if exists(filepath.Join(rootDir, ".circleci", "config.yml")) { ci = append(ci, "CircleCI") }
+	if exists(filepath.Join(rootDir, ".azure-pipelines.yml")) { ci = append(ci, "Azure Pipelines") }
+	if exists(filepath.Join(rootDir, ".drone.yml")) { ci = append(ci, "Drone") }
+	if exists(filepath.Join(rootDir, ".travis.yml")) { ci = append(ci, "TravisCI") }
+	ins.CIProviders = strings.Join(ci, ", ")
+
+	// Package managers
+	pm := []string{}
+	if exists(filepath.Join(rootDir, "package-lock.json")) { pm = append(pm, "npm") }
+	if exists(filepath.Join(rootDir, "yarn.lock")) { pm = append(pm, "yarn") }
+	if exists(filepath.Join(rootDir, "pnpm-lock.yaml")) { pm = append(pm, "pnpm") }
+	if exists(filepath.Join(rootDir, "go.mod")) { pm = append(pm, "go modules") }
+	if exists(filepath.Join(rootDir, "requirements.txt")) || exists(filepath.Join(rootDir, "Pipfile")) || exists(filepath.Join(rootDir, "poetry.lock")) || exists(filepath.Join(rootDir, "pyproject.toml")) { pm = append(pm, "pip/poetry") }
+	if exists(filepath.Join(rootDir, "Cargo.toml")) { pm = append(pm, "cargo") }
+	if exists(filepath.Join(rootDir, "Gemfile")) { pm = append(pm, "bundler") }
+	ins.PackageManagers = strings.Join(pm, ", ")
+
+	// Runtime targets based on languages
+	rts := []string{}
+	langset := map[string]bool{}
+	for _, l := range ws.Languages { langset[l] = true }
+	if langset["javascript"] || langset["typescript"] { rts = append(rts, "Node.js", "Browser") }
+	if langset["python"] { rts = append(rts, "Python") }
+	if langset["java"] || langset["kotlin"] { rts = append(rts, "JVM") }
+	if langset["go"] { rts = append(rts, "Go") }
+	if langset["rust"] { rts = append(rts, "Rust") }
+	ins.RuntimeTargets = strings.Join(uniqueStrings(rts), ", ")
+
+	// Deployment targets
+	dt := []string{}
+	if exists(filepath.Join(rootDir, "Dockerfile")) || exists(filepath.Join(rootDir, "docker-compose.yml")) || exists(filepath.Join(rootDir, "docker-compose.yaml")) { dt = append(dt, "Docker") }
+	// Kubernetes manifests
+	k8s := false
+	filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil { return nil }
+		if d.IsDir() {
+			name := d.Name(); if name == ".git" || name == "node_modules" || name == "vendor" { return filepath.SkipDir }
+			return nil
+		}
+		base := filepath.Base(path)
+		if strings.Contains(strings.ToLower(base), "deployment.yaml") || strings.Contains(strings.ToLower(base), "deployment.yml") || strings.Contains(strings.ToLower(base), "kustomization.yaml") { k8s = true }
+		return nil
+	})
+	if k8s { dt = append(dt, "Kubernetes") }
+	if exists(filepath.Join(rootDir, "serverless.yml")) || exists(filepath.Join(rootDir, "serverless.yaml")) { dt = append(dt, "Serverless") }
+	if exists(filepath.Join(rootDir, "main.tf")) || exists(filepath.Join(rootDir, "terraform")) { dt = append(dt, "Terraform") }
+	ins.DeploymentTargets = strings.Join(uniqueStrings(dt), ", ")
+
+	// Repo layout
+	layouts := []string{}
+	if exists(filepath.Join(rootDir, "apps")) && exists(filepath.Join(rootDir, "packages")) { layouts = append(layouts, "apps+packages") }
+	if exists(filepath.Join(rootDir, "cmd")) { layouts = append(layouts, "cmd/") }
+	if exists(filepath.Join(rootDir, "internal")) { layouts = append(layouts, "internal/") }
+	if exists(filepath.Join(rootDir, "src")) { layouts = append(layouts, "src/") }
+	ins.RepoLayout = strings.Join(layouts, ", ")
+
+	// Build system and test strategy
+	bs := []string{}
+	if exists(filepath.Join(rootDir, "Makefile")) { bs = append(bs, "make") }
+	if exists(filepath.Join(rootDir, "justfile")) { bs = append(bs, "just") }
+	if exists(filepath.Join(rootDir, "Taskfile.yml")) || exists(filepath.Join(rootDir, "Taskfile.yaml")) { bs = append(bs, "task") }
+	if exists(filepath.Join(rootDir, "package.json")) { bs = append(bs, "npm scripts") }
+	if exists(filepath.Join(rootDir, "build.gradle")) || exists(filepath.Join(rootDir, "pom.xml")) { bs = append(bs, "gradle/maven") }
+	if exists(filepath.Join(rootDir, "Cargo.toml")) { bs = append(bs, "cargo") }
+	ins.BuildSystem = strings.Join(uniqueStrings(bs), ", ")
+
+	ts := []string{}
+	if exists(filepath.Join(rootDir, "jest.config.js")) || exists(filepath.Join(rootDir, "jest.config.ts")) { ts = append(ts, "jest") }
+	if exists(filepath.Join(rootDir, "vitest.config.ts")) || exists(filepath.Join(rootDir, "vitest.config.js")) { ts = append(ts, "vitest") }
+	if exists(filepath.Join(rootDir, "pytest.ini")) { ts = append(ts, "pytest") }
+	if exists(filepath.Join(rootDir, "go.mod")) { ts = append(ts, "go test") }
+	if exists(filepath.Join(rootDir, "Cargo.toml")) { ts = append(ts, "cargo test") }
+	ins.TestStrategy = strings.Join(uniqueStrings(ts), ", ")
+
+	// Primary frameworks / key dependencies via package.json
+	pkgs := map[string]struct{}{}
+	pkgPath := filepath.Join(rootDir, "package.json")
+	if exists(pkgPath) {
+		var pkg map[string]any
+		if b, err := os.ReadFile(pkgPath); err == nil {
+			_ = json.Unmarshal(b, &pkg)
+			for _, k := range []string{"dependencies", "devDependencies"} {
+				if m, ok := pkg[k].(map[string]any); ok {
+					for name := range m { pkgs[name] = struct{}{} }
+				}
+			}
+		}
+	}
+	fw := []string{}
+	a := []string{}
+	addIf := func(dep string, label string) { if _, ok := pkgs[dep]; ok { fw = append(fw, label) } }
+	addIf("react", "React")
+	addIf("next", "Next.js")
+	addIf("vue", "Vue")
+	addIf("nuxt", "Nuxt")
+	addIf("@angular/core", "Angular")
+	addIf("svelte", "Svelte")
+	addIf("express", "Express")
+	addIf("koa", "Koa")
+	addIf("nestjs", "NestJS")
+	addIf("fastify", "Fastify")
+	// Build tools
+	addIf("vite", "Vite")
+	addIf("webpack", "Webpack")
+	addIf("rollup", "Rollup")
+	// Testing
+	addIf("jest", "Jest")
+	addIf("vitest", "Vitest")
+	ins.PrimaryFrameworks = strings.Join(uniqueStrings(fw), ", ")
+	// Key deps: show top frameworks/build tools we found
+	key := append([]string{}, fw...)
+	key = append(key, a...)
+	key = append(key, intersectKeys(pkgs, []string{"axios", "redux", "react-router", "rxjs", "lodash"})...)
+	ins.KeyDependencies = strings.Join(uniqueStrings(key), ", ")
+
+	return ins
+}
+
+func uniqueStrings(in []string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, s := range in {
+		if s == "" { continue }
+		if !seen[s] { seen[s] = true; out = append(out, s) }
+	}
+	return out
+}
+
+func intersectKeys(m map[string]struct{}, candidates []string) []string {
+	out := []string{}
+	for _, c := range candidates {
+		if _, ok := m[c]; ok { out = append(out, c) }
+	}
+	return out
+}
 
 // detectBuildCommand attempts to autogenerate a build command based on project type.
 // It checks for Go projects (presence of .go files) and Node.js projects (presence of package.json).
@@ -173,96 +399,8 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 		isChanged := exists && existingFileInfo.Hash != newHash
 		isNew := !exists
 
-		var (
-			concernsForThisFile        []string
-			ignoredConcernsForThisFile []string
-			skipLLMSummarization       bool
-		)
-
-		// --- Security Concern Detection and User Interaction ---
-		if cfg.EnableSecurityChecks {
-			concernsForThisFile, ignoredConcernsForThisFile, skipLLMSummarization = security.CheckFileSecurity(
-				relativePath,
-				fileContent,
-				isNew,
-				isChanged,
-				existingFileInfo.SecurityConcerns,
-				existingFileInfo.IgnoredSecurityConcerns,
-				cfg,
-			)
-
-			// If file is unchanged and security concerns/ignored concerns are also unchanged,
-			// then no further action is needed for this file.
-			if !isNew && !isChanged &&
-				utils.StringSliceEqual(existingFileInfo.SecurityConcerns, concernsForThisFile) &&
-				utils.StringSliceEqual(existingFileInfo.IgnoredSecurityConcerns, ignoredConcernsForThisFile) {
-				return nil // File exists, unchanged, security concerns stable.
-			}
-		} else {
-			// If security checks are disabled, ensure no security concerns are stored.
-			concernsForThisFile = []string{}
-			ignoredConcernsForThisFile = []string{}
-			skipLLMSummarization = false
-		}
-
-		needsLLMSummarization := false
-		if isNew || isChanged {
-			if !skipLLMSummarization { // Only summarize if no security concerns confirmed
-				needsLLMSummarization = true
-			} else {
-				// If skipped due to security, update workspace info with placeholder summary
-				workspace.Files[relativePath] = WorkspaceFileInfo{
-					Hash:                    newHash,
-					Summary:                 "Skipped due to confirmed security concerns.",
-					Exports:                 "",                              // Clear exports
-					References:              "",                              // Clear references
-					TokenCount:              llm.EstimateTokens(fileContent), // Still estimate tokens
-					SecurityConcerns:        concernsForThisFile,
-					IgnoredSecurityConcerns: ignoredConcernsForThisFile,
-				}
-				// Adjusted log to match test expectation exactly
-				logger.LogProcessStep("Skipping LLM summarization for 'secrets.txt' due to detected security concerns and lack of confirmation.")
-				return nil // Skip LLM analysis for this file
-			}
-		} else {
-			// File is unchanged, but security concerns might have been updated (e.g., user changed mind on a prompt).
-			// In this case, we update the workspace info but don't re-summarize.
-			if !utils.StringSliceEqual(existingFileInfo.SecurityConcerns, concernsForThisFile) ||
-				!utils.StringSliceEqual(existingFileInfo.IgnoredSecurityConcerns, ignoredConcernsForThisFile) {
-				logger.Logf("Updating security concerns for unchanged file %s.", relativePath)
-				// Preserve existing summary/exports/references if content is unchanged
-				workspace.Files[relativePath] = WorkspaceFileInfo{
-					Hash:                    newHash,
-					Summary:                 existingFileInfo.Summary,
-					Exports:                 existingFileInfo.Exports,
-					References:              existingFileInfo.References,
-					TokenCount:              existingFileInfo.TokenCount,
-					SecurityConcerns:        concernsForThisFile,
-					IgnoredSecurityConcerns: ignoredConcernsForThisFile,
-				}
-				return nil // No LLM analysis needed, continue to next file
-			}
-		}
-
-		if !needsLLMSummarization {
-			return nil // File exists, unchanged, security concerns stable, and no new summarization needed.
-		}
-
-		// If we reach here, it means the file is new or its content has changed, AND it's not skipped due to security.
-		// So, it needs LLM summarization.
-		tokenCount := llm.EstimateTokens(fileContent)
-
-		if tokenCount > maxTokenCount {
-			logger.Logf("Skipping analysis of large file %s (%d tokens > %d). Adding as 'too large'.\n", relativePath, tokenCount, maxTokenCount)
-			workspace.Files[relativePath] = WorkspaceFileInfo{
-				Hash:                    newHash,
-				Summary:                 "File is too large to analyze.",
-				Exports:                 "",
-				References:              "",
-				TokenCount:              tokenCount,
-				SecurityConcerns:        concernsForThisFile,
-				IgnoredSecurityConcerns: ignoredConcernsForThisFile,
-			}
+		// Always analyze new or changed files locally
+		if !isNew && !isChanged {
 			return nil
 		}
 
@@ -271,7 +409,6 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 			relativePath: relativePath,
 			content:      fileContent,
 			hash:         newHash,
-			tokenCount:   tokenCount,
 		})
 
 		if isNew {
@@ -309,7 +446,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 			"WARNING: %d new files have been detected in your workspace.\n"+
 				"This might indicate that a large directory (e.g., node_modules, build) is not being correctly ignored.\n"+
 				"%s\n"+
-				"Do you want to proceed with analyzing these new files? (This may take a long time and consume LLM tokens)",
+				"Do you want to proceed with analyzing these new files? (This may take a long time)",
 			newFilesCount, topDirsMessage.String(),
 		)
 
@@ -324,7 +461,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 		logger.LogProcessStep(fmt.Sprintf("Waiting for analysis of %d files to complete...", len(filesToAnalyzeList)))
 	}
 
-	// Process files in batches to avoid rate limits
+	// Process files in batches to avoid pressure
 	batchSize := cfg.FileBatchSize
 	if batchSize <= 0 {
 		batchSize = 10 // Default fallback
@@ -364,25 +501,13 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 				var llmErr error
 
 				if len(f.content) > 0 {
-					logger.Logf("Analyzing %s for workspace...", f.path)
+					logger.Logf("Analyzing %s for workspace (local syntactic overview)...", f.path)
 					fileSummary, fileExports, fileReferences, llmErr = getSummary(f.content, f.path, cfg)
 				}
 
-				// Re-fetch security concerns and ignored concerns from the workspace map
-				// This is important because the security check might have updated them
-				// even if LLM summarization was skipped.
-				currentFileInfo, exists := workspace.Files[f.relativePath]
-				var finalSecurityConcerns []string
-				var finalIgnoredSecurityConcerns []string
-				if exists {
-					finalSecurityConcerns = currentFileInfo.SecurityConcerns
-					finalIgnoredSecurityConcerns = currentFileInfo.IgnoredSecurityConcerns
-				} else {
-					// This case should ideally not happen if the file was added to filesToAnalyzeList
-					// after the security check, but as a fallback, use empty slices.
-					finalSecurityConcerns = []string{}
-					finalIgnoredSecurityConcerns = []string{}
-				}
+				// Local analysis mode: no security concern prompts
+				finalSecurityConcerns := []string{}
+				finalIgnoredSecurityConcerns := []string{}
 
 				resultsChan <- processResult{
 					relativePath:            f.relativePath,
@@ -390,7 +515,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 					exports:                 fileExports,
 					references:              fileReferences,
 					hash:                    f.hash,
-					tokenCount:              f.tokenCount,
+					tokenCount:              0,
 					securityConcerns:        finalSecurityConcerns,
 					ignoredSecurityConcerns: finalIgnoredSecurityConcerns,
 					err:                     llmErr,
@@ -408,7 +533,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 			allResults = append(allResults, result)
 		}
 
-		// Add delay between batches to avoid rate limits
+		// Add delay between batches to avoid pressure
 		if cfg.RequestDelayMs > 0 && i+batchSize < len(filesToAnalyzeList) {
 			logger.LogProcessStep(fmt.Sprintf("Waiting %dms before next batch...", cfg.RequestDelayMs))
 			time.Sleep(time.Duration(cfg.RequestDelayMs) * time.Millisecond)
@@ -589,14 +714,8 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	logger.LogProcessStep("--- Loading in workspace data ---")
 	// UI shimmer: workspace context building
-	ui.PublishStatus("Building workspace context (files, summaries, embeddings)…")
+	ui.PublishStatus("Building workspace context (files, syntactic overviews)…")
 	workspaceFilePath := "./.ledit/workspace.json"
-
-	// If security checks are enabled, log the start of the check.
-	if cfg.EnableSecurityChecks {
-		logger.LogProcessStep(prompts.PerformingSecurityCheck())
-		ui.PublishStatus("Running security checks…")
-	}
 
 	if err := os.MkdirAll(filepath.Dir(workspaceFilePath), os.ModePerm); err != nil {
 		logger.Logf("Error creating .ledit directory for WORKSPACE: %v. Continuing without it.\n", err)
@@ -609,34 +728,47 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 		return ""
 	}
 
-	// Autogenerate Project Goals if they are empty
-	if (workspace.ProjectGoals == ProjectGoals{}) { // Check if the struct is zero-valued
-		logger.LogProcessStep("--- Autogenerating project goals based on workspace context ---")
-		// Create a summary of the workspace for the LLM to infer goals
-		var workspaceSummaryBuilder strings.Builder
-		workspaceSummaryBuilder.WriteString("Current Workspace File Summaries:\n")
-		for filePath, fileInfo := range workspace.Files {
-			workspaceSummaryBuilder.WriteString(fmt.Sprintf("File: %s\nSummary: %s\n", filePath, fileInfo.Summary))
-			if fileInfo.Exports != "" {
-				workspaceSummaryBuilder.WriteString(fmt.Sprintf("Exports: %s\n", fileInfo.Exports))
-			}
-			workspaceSummaryBuilder.WriteString("\n")
-		}
+	// Seed insights from heuristics
+	heur := detectProjectInsightsHeuristics("./", workspace)
+	mergeInsights := func(dst *ProjectInsights, src ProjectInsights) {
+		if dst.PrimaryFrameworks == "" { dst.PrimaryFrameworks = src.PrimaryFrameworks }
+		if dst.KeyDependencies == "" { dst.KeyDependencies = src.KeyDependencies }
+		if dst.BuildSystem == "" { dst.BuildSystem = src.BuildSystem }
+		if dst.TestStrategy == "" { dst.TestStrategy = src.TestStrategy }
+		if dst.Architecture == "" { dst.Architecture = src.Architecture }
+		if dst.Monorepo == "" || dst.Monorepo == "unknown" { dst.Monorepo = src.Monorepo }
+		if dst.CIProviders == "" { dst.CIProviders = src.CIProviders }
+		if dst.RuntimeTargets == "" { dst.RuntimeTargets = src.RuntimeTargets }
+		if dst.DeploymentTargets == "" { dst.DeploymentTargets = src.DeploymentTargets }
+		if dst.PackageManagers == "" { dst.PackageManagers = src.PackageManagers }
+		if dst.RepoLayout == "" { dst.RepoLayout = src.RepoLayout }
+	}
+	mergeInsights(&workspace.ProjectInsights, heur)
 
-		generatedGoals, goalErr := GetProjectGoals(cfg, workspaceSummaryBuilder.String())
+	// Autogenerate Project Goals/Insights if empty using syntactic overview
+	overview := buildSyntacticOverview(workspace)
+	if (workspace.ProjectGoals == ProjectGoals{}) {
+		logger.LogProcessStep("--- Autogenerating project goals from syntactic overview ---")
+		generatedGoals, goalErr := GetProjectGoals(cfg, overview)
 		if goalErr != nil {
-			logger.Logf("Warning: Failed to autogenerate project goals: %v. Proceeding without them.\n", goalErr)
+			logger.Logf("Warning: Failed to autogenerate project goals: %v.\n", goalErr)
 		} else {
-			logger.LogProcessStep("--- Autogenerated project goals based on workspace context ---")
-			logger.LogProcessStep(fmt.Sprintf("Generated Goals: %s", generatedGoals))
 			workspace.ProjectGoals = generatedGoals
-			// Save the workspace with the newly generated goals
-			if err := saveWorkspaceFile(workspace); err != nil {
-				logger.Logf("Warning: Failed to save autogenerated project goals to workspace file: %v\n", err)
-			} else {
-				logger.LogProcessStep("--- Autogenerated project goals saved. ---")
-			}
 		}
+	}
+	if (workspace.ProjectInsights == ProjectInsights{}) || cfg.UseEmbeddings { // allow refreshing when embeddings are used
+		logger.LogProcessStep("--- Autogenerating project insights from syntactic overview ---")
+		generatedInsights, insErr := GetProjectInsights(cfg, overview)
+		if insErr != nil {
+			logger.Logf("Warning: Failed to autogenerate project insights: %v.\n", insErr)
+		} else {
+			// prefer LLM, but keep heuristic values when LLM leaves fields empty
+			mergeInsights(&generatedInsights, workspace.ProjectInsights)
+			workspace.ProjectInsights = generatedInsights
+		}
+	}
+	if err := saveWorkspaceFile(workspace); err != nil {
+		logger.Logf("Warning: Failed to save workspace metadata: %v\n", err)
 	}
 
 	// Use embedding-based file selection if enabled
@@ -649,7 +781,6 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 		fullContextFiles, summaryContextFiles, fileSelectionErr = GetFilesForContextUsingEmbeddings(instructions, workspace, cfg, logger)
 		if fileSelectionErr != nil {
 			logger.Logf("Warning: could not determine which files to load for context using embeddings: %v. Proceeding with all summaries.\n", fileSelectionErr)
-			// If embedding-based selection fails, fallback to using all file summaries for context.
 			var allFilesAsSummaries []string
 			for file := range workspace.Files {
 				allFilesAsSummaries = append(allFilesAsSummaries, file)
@@ -659,10 +790,9 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	} else {
 		logger.LogProcessStep("--- Asking LLM to select relevant files for context ---")
 		ui.PublishStatus("Selecting relevant files via LLM…")
-		fullContextFiles, summaryContextFiles, fileSelectionErr = getFilesForContext(instructions, workspace, cfg, logger) // Pass logger
+		fullContextFiles, summaryContextFiles, fileSelectionErr = getFilesForContext(instructions, workspace, cfg, logger)
 		if fileSelectionErr != nil {
 			logger.Logf("Warning: could not determine which files to load for context: %v. Proceeding with all summaries.\n", fileSelectionErr)
-			// If LLM fails to select files, fallback to using all file summaries for context.
 			var allFilesAsSummaries []string
 			for file := range workspace.Files {
 				allFilesAsSummaries = append(allFilesAsSummaries, file)
@@ -692,7 +822,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 			logger.LogUserInteraction(fmt.Sprintf("----- ERROR!!! -----:\n\n The file %s is too large to include in full context. Please pass it directly if needed.\n", file))
 			continue
 		}
-		if fileInfo.Summary == "Skipped due to confirmed security concerns." { // New check
+		if fileInfo.Summary == "Skipped due to confirmed security concerns." {
 			logger.LogUserInteraction(fmt.Sprintf("----- WARNING!!! -----:\n\n The file %s was selected for full context but was skipped due to confirmed security concerns. Its content will not be provided to the LLM.\n", file))
 			continue
 		}

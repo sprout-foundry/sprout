@@ -92,6 +92,26 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 	var b strings.Builder
 	b.WriteString("--- Start of full content from workspace ---\n")
 
+	// Add Project Insights (high-signal, up front)
+	if (workspace.ProjectInsights != ProjectInsights{}) {
+		b.WriteString("--- Project Insights ---\n")
+		appendIf := func(name, val string) {
+			if strings.TrimSpace(val) != "" { b.WriteString(fmt.Sprintf("%s: %s\n", name, val)) }
+		}
+		appendIf("Primary Frameworks", workspace.ProjectInsights.PrimaryFrameworks)
+		appendIf("Key Dependencies", workspace.ProjectInsights.KeyDependencies)
+		appendIf("Build System", workspace.ProjectInsights.BuildSystem)
+		appendIf("Test Strategy", workspace.ProjectInsights.TestStrategy)
+		appendIf("Architecture", workspace.ProjectInsights.Architecture)
+		appendIf("Monorepo", workspace.ProjectInsights.Monorepo)
+		appendIf("CI Providers", workspace.ProjectInsights.CIProviders)
+		appendIf("Runtime Targets", workspace.ProjectInsights.RuntimeTargets)
+		appendIf("Deployment Targets", workspace.ProjectInsights.DeploymentTargets)
+		appendIf("Package Managers", workspace.ProjectInsights.PackageManagers)
+		appendIf("Repo Layout", workspace.ProjectInsights.RepoLayout)
+		b.WriteString("\n")
+	}
+
 	// Add Git Repository Information
 	b.WriteString("--- Git Repository Information ---\n")
 	remoteURL, err := git.GetGitRemoteURL()
@@ -375,6 +395,24 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 	b.WriteString("=== MINIMAL WORKSPACE CONTEXT ===\n")
 	b.WriteString("IMPORTANT: This context contains only file summaries and public function exports.\n")
 	b.WriteString("NO full file contents are provided. Use the read_file tool to load specific files when needed.\n\n")
+
+	// Add Project Insights (compact)
+	if (workspace.ProjectInsights != ProjectInsights{}) {
+		b.WriteString("Insights: ")
+		parts := []string{}
+		appendIf := func(name, val string) {
+			if strings.TrimSpace(val) != "" { parts = append(parts, fmt.Sprintf("%s=%s", name, val)) }
+		}
+		appendIf("frameworks", workspace.ProjectInsights.PrimaryFrameworks)
+		appendIf("ci", workspace.ProjectInsights.CIProviders)
+		appendIf("pkg", workspace.ProjectInsights.PackageManagers)
+		appendIf("runtime", workspace.ProjectInsights.RuntimeTargets)
+		appendIf("deploy", workspace.ProjectInsights.DeploymentTargets)
+		appendIf("monorepo", workspace.ProjectInsights.Monorepo)
+		appendIf("layout", workspace.ProjectInsights.RepoLayout)
+		if len(parts) > 0 { b.WriteString(strings.Join(parts, "; ")) }
+		b.WriteString("\n\n")
+	}
 
 	// Add Git Repository Information (minimal)
 	remoteURL, err := git.GetGitRemoteURL()

@@ -48,6 +48,7 @@ func init() {
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(codeCmd)
 	rootCmd.AddCommand(commitCmd)
+	rootCmd.AddCommand(execCmd)
 	rootCmd.AddCommand(fixCmd)
 	rootCmd.AddCommand(ignoreCmd)
 	rootCmd.AddCommand(initCmd)

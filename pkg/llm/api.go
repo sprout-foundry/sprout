@@ -120,12 +120,36 @@ var (
 )
 
 // GetLLMResponseWithTools makes an LLM call with tool calling support
-func GetLLMResponseWithTools(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration) (string, error) {
-	return GetLLMResponseWithToolsScoped(modelName, messages, systemPrompt, cfg, timeout, nil)
+func GetLLMResponseWithTools(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration) (string, *TokenUsage, error) {
+	response, tokenUsage, err := GetLLMResponseWithToolsScoped(modelName, messages, systemPrompt, cfg, timeout, nil)
+	return response, tokenUsage, err
 }
 
 // GetLLMResponseWithToolsScoped is like GetLLMResponseWithTools but restricts tools to an allowlist
-func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration, allowed []string) (string, error) {
+func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration, allowed []string) (string, *TokenUsage, error) {
+	// Debug: Log function entry
+	log := utils.GetLogger(cfg.SkipPrompt)
+	log.Log("=== GetLLMResponseWithToolsScoped Debug ===")
+	log.Log(fmt.Sprintf("Model: %s", modelName))
+	log.Log(fmt.Sprintf("Messages count: %d", len(messages)))
+	log.Log(fmt.Sprintf("System prompt length: %d", len(systemPrompt)))
+	log.Log(fmt.Sprintf("Allowed tools: %v", allowed))
+	log.Log(fmt.Sprintf("Tools enabled: %t", cfg.CodeToolsEnabled))
+
+	// Check messages for detokenize before processing
+	for i, msg := range messages {
+		contentStr := fmt.Sprintf("%v", msg.Content)
+		if strings.Contains(contentStr, "detokenize") {
+			log.Log(fmt.Sprintf("ERROR: Found 'detokenize' in input message %d!", i))
+		}
+	}
+
+	// Debug: Check message marshaling
+	for i, msg := range messages {
+		msgBytes, _ := json.Marshal(msg)
+		log.Log(fmt.Sprintf("Message %d JSON: %s", i, string(msgBytes)))
+	}
+
 	// Use OpenAI-compatible function calling for providers that support it; otherwise fallback
 	parts := strings.SplitN(modelName, ":", 3)
 	provider := parts[0]
@@ -179,15 +203,19 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	var err error
 	switch provider {
 	case "openai":
+		ui.Out().Printf("DEBUG: Using OpenAI provider: %s\n", modelName)
 		apiURL = "https://api.openai.com/v1/chat/completions"
 		apiKey, err = apikeys.GetAPIKey("openai", cfg.Interactive)
 	case "groq":
+		ui.Out().Printf("DEBUG: Using Groq provider: %s\n", modelName)
 		apiURL = "https://api.groq.com/openai/v1/chat/completions"
 		apiKey, err = apikeys.GetAPIKey("groq", cfg.Interactive)
 	case "deepseek":
+		ui.Out().Printf("DEBUG: Using DeepSeek provider: %s\n", modelName)
 		apiURL = "https://api.deepseek.com/openai/v1/chat/completions"
 		apiKey, err = apikeys.GetAPIKey("deepseek", cfg.Interactive)
 	case "deepinfra":
+		ui.Out().Printf("DEBUG: Using DeepInfra provider: %s\n", modelName)
 		apiURL = "https://api.deepinfra.com/v1/openai/chat/completions"
 		apiKey, err = apikeys.GetAPIKey("deepinfra", cfg.Interactive)
 	case "lambda-ai":
@@ -195,11 +223,11 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 		apiKey, err = apikeys.GetAPIKey("lambda-ai", cfg.Interactive)
 	default:
 		// Fallback to non-tools path
-		resp, _, e := GetLLMResponse(modelName, messages, systemPrompt, cfg, timeout)
-		return resp, e
+		resp, tokenUsage, e := GetLLMResponse(modelName, messages, systemPrompt, cfg, timeout)
+		return resp, tokenUsage, e
 	}
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	payload := map[string]any{
@@ -221,26 +249,59 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 		messages = append([]prompts.Message{{Role: "system", Content: systemPrompt}}, messages...)
 		payload["messages"] = messages
 	}
+
 	body, merr := json.Marshal(payload)
 	if merr != nil {
-		return "", merr
+		return "", nil, merr
+	}
+
+	// Debug: Log the actual JSON payload being sent
+	logger := utils.GetLogger(cfg.SkipPrompt)
+	logger.Log(fmt.Sprintf("DEBUG: LLM Request Payload: %s", string(body)))
+	logger.Log(fmt.Sprintf("DEBUG: Request URL: %s", apiURL))
+	logger.Log(fmt.Sprintf("DEBUG: Model: %s", model))
+
+	// Debug: Check for detokenize field
+	if strings.Contains(string(body), "detokenize") {
+		logger.Log("ERROR: Found 'detokenize' field in request payload!")
+		// Let's also check if it's a DeepInfra request
+		if strings.Contains(apiURL, "deepinfra.com") {
+			logger.Log("ERROR: detokenize field found in DeepInfra request - this is the source of the validation error!")
+		}
+	}
+
+	// Also check for any suspicious fields that might be causing issues
+	suspiciousFields := []string{"detokenize", "tokenize", "_token", "token_"}
+	for _, field := range suspiciousFields {
+		if strings.Contains(string(body), field) {
+			logger.Log(fmt.Sprintf("WARNING: Found suspicious field '%s' in request payload", field))
+		}
 	}
 
 	req, rerr := http.NewRequest("POST", apiURL, bytes.NewBuffer(body))
 	if rerr != nil {
-		return "", rerr
+		return "", nil, rerr
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	client := &http.Client{Timeout: timeout}
 	resp, derr := client.Do(req)
 	if derr != nil {
-		return "", derr
+		return "", nil, derr
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		raw, _ := io.ReadAll(resp.Body)
+		logger := utils.GetLogger(cfg.SkipPrompt)
+		logger.Log(fmt.Sprintf("DEBUG: HTTP error response: status=%d, body=%s", resp.StatusCode, string(raw)))
+
 		lower := strings.ToLower(string(raw))
+		// Check if this is the detokenize error
+		if strings.Contains(lower, "detokenize") {
+			logger.Log("ERROR: DeepInfra detokenize validation error detected in HTTP response!")
+			return "", nil, fmt.Errorf("DeepInfra detokenize validation error: %s", string(raw))
+		}
+
 		// Retry once without response_format for providers that don't support JSON mode
 		if strings.Contains(lower, "response_format") || strings.Contains(lower, "unsupported") {
 			delete(payload, "response_format")
@@ -256,13 +317,13 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 					// fallthrough to decoding below
 				} else {
 					raw2, _ := io.ReadAll(resp2.Body)
-					return "", fmt.Errorf("provider error %d: %s", resp2.StatusCode, string(raw2))
+					return "", nil, fmt.Errorf("provider error %d: %s", resp2.StatusCode, string(raw2))
 				}
 			} else {
-				return "", derr2
+				return "", nil, derr2
 			}
 		} else {
-			return "", fmt.Errorf("provider error %d: %s", resp.StatusCode, string(raw))
+			return "", nil, fmt.Errorf("provider error %d: %s", resp.StatusCode, string(raw))
 		}
 	}
 	var full struct {
@@ -276,18 +337,18 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 		Usage TokenUsage `json:"usage"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&full); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if len(full.Choices) > 0 {
 		msg := full.Choices[0].Message
 		if len(msg.ToolCalls) > 0 {
 			wrapper := map[string]any{"tool_calls": msg.ToolCalls}
 			wb, _ := json.Marshal(wrapper)
-			return string(wb), nil
+			return string(wb), &full.Usage, nil
 		}
-		return msg.Content, nil
+		return msg.Content, &full.Usage, nil
 	}
-	return "", nil
+	return "", &full.Usage, nil
 }
 
 // --- Main Dispatcher ---
@@ -417,6 +478,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.deepseek.com/openai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "deepinfra":
+		ui.Out().Printf("DEBUG: Routing to DeepInfra provider\n")
 		if cfg.HealthChecks {
 			_ = CheckEndpointReachable("https://api.deepinfra.com/", 2*time.Second)
 		}
@@ -425,6 +487,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			fmt.Print(prompts.APIKeyError(err))
 			return nil, err
 		}
+		ui.Out().Printf("DEBUG: About to call callOpenAICompatibleStream for DeepInfra\n")
 		tokenUsage, err = callOpenAICompatibleStream("https://api.deepinfra.com/v1/openai/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "custom": // New case for custom provider:url:model
 		var endpointURL string

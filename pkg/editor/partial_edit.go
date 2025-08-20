@@ -14,9 +14,6 @@ import (
 // ProcessPartialEdit performs a targeted edit on a specific file using partial content and instructions
 // This is more efficient than full file replacement for small, focused changes
 func ProcessPartialEdit(filePath, targetInstructions string, cfg *config.Config, logger *utils.Logger) (string, error) {
-	// Partial edits are only supported via explicit tool calls. This entry point is
-	// reserved for the micro_edit tool path and should not be used by the standard
-	// editing flow directly.
 	return processPartialEdit(filePath, targetInstructions, cfg, logger)
 }
 
@@ -165,5 +162,6 @@ Remember: Return ONLY the actual code for this section, make it complete and fun
 
 // getUpdatedCodeSection gets LLM response for just a section of code
 func getUpdatedCodeSection(sectionContent, instructions, filePath string, cfg *config.Config) (string, string, error) {
-	return context.GetLLMCodeResponse(cfg, sectionContent, instructions, filePath, "")
+	_, response, _, err := context.GetLLMCodeResponse(cfg, sectionContent, instructions, filePath, "")
+	return response, "", err
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/editor"
+	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -30,8 +31,7 @@ var codeCmd = &cobra.Command{
 
 When using the --image flag, ensure your model supports vision input. Vision-capable models include:
   - openai:gpt-4o, openai:gpt-4-turbo, openai:gpt-4-vision-preview
-  - gemini:gemini-1.5-flash, gemini:gemini-1.5-pro
-  - anthropic:claude-3-sonnet, anthropic:claude-3-haiku, anthropic:claude-3-opus`,
+  - deepinfra:google/gemini-2.5-flash, deepinfra:google/gemini-2.5-pro`,
 	Run: func(cmd *cobra.Command, args []string) {
 		instructions := ""
 		if len(args) > 0 {
@@ -69,7 +69,19 @@ When using the --image flag, ensure your model supports vision input. Vision-cap
 			log.Fatal(prompts.CodeGenerationError(err))
 		}
 		duration := time.Since(startTime)
+
+		// Display completion message with timing
 		ui.Out().Print(prompts.CodeGenerationFinished(duration))
+
+		// If we have token usage information, display it
+		if cfg.LastTokenUsage != nil {
+			cost := llm.CalculateCost(llm.TokenUsage(*cfg.LastTokenUsage), cfg.EditingModel)
+			ui.Out().Printf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
+				cfg.LastTokenUsage.PromptTokens,
+				cfg.LastTokenUsage.CompletionTokens,
+				cfg.LastTokenUsage.TotalTokens,
+				cost)
+		}
 	},
 }
 
@@ -80,5 +92,5 @@ func init() {
 	codeCmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "Disable interactive context requests from the LLM")
 	codeCmd.Flags().StringVarP(&imagePath, "image", "i", "", "Path to an image file to use as UI reference")
 	codeCmd.Flags().BoolVar(&useSearchGrounding, "use-search-grounding", false, "Enable web content search grounding when instructions contain #SG [optional query]")
-	codeCmd.Flags().BoolVar(&enableCodeTools, "enable-code-tools", false, "Allow tool-calls during code generation (e.g., search, file reads). Default: disabled.")
+	codeCmd.Flags().BoolVar(&enableCodeTools, "enable-code-tools", true, "Allow tool-calls during code generation (e.g., search, file reads). Default: disabled.")
 }

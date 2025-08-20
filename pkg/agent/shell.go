@@ -92,6 +92,104 @@ func executeShellCommands(context *AgentContext, commands []string) error {
 	return nil
 }
 
+// executeCommandPlan executes commands from a plan that was created for command execution
+func executeCommandPlan(context *AgentContext) error {
+	if context.CurrentPlan == nil || len(context.CurrentPlan.EditOperations) == 0 {
+		return fmt.Errorf("no command plan to execute")
+	}
+
+	context.Logger.LogProcessStep("🤖 Executing command-based plan...")
+	wd, _ := os.Getwd()
+	context.Logger.LogProcessStep(fmt.Sprintf("🛡️ Sandbox: cwd=%s timeout=45s env=sanitized ulimit=enabled", wd))
+
+	commandsExecuted := 0
+	for i, op := range context.CurrentPlan.EditOperations {
+		if op.FilePath != "command" {
+			continue // Skip non-command operations
+		}
+
+		context.Logger.LogProcessStep(fmt.Sprintf("Step %d: %s", i+1, op.Description))
+
+		// Extract command from instructions
+		// Instructions format: "Run command: <command> (Purpose: <purpose>)"
+		instructions := op.Instructions
+		command := ""
+		if strings.Contains(instructions, "Run command: ") {
+			parts := strings.Split(instructions, "(Purpose:")
+			if len(parts) > 0 {
+				command = strings.TrimSpace(strings.TrimPrefix(parts[0], "Run command: "))
+			}
+		}
+
+		if command == "" {
+			context.Logger.LogProcessStep(fmt.Sprintf("Could not extract command from: %s", instructions))
+			continue
+		}
+
+		// Quick sandbox checks: deny risky patterns (with limited allowlist exceptions)
+		if containsRiskyShell(command) && !isAllowedDestructive(command, context.Config) {
+			context.Logger.LogProcessStep(fmt.Sprintf("⛔ Blocked risky command: %s", command))
+			context.Errors = append(context.Errors, "blocked_risky_command: "+command)
+			continue
+		}
+
+		context.Logger.LogProcessStep(fmt.Sprintf("Executing: %s", command))
+
+		// Use shell to execute command to handle pipes, redirects, etc., with a timeout
+		timeout := 45 * time.Second
+		if context.Config != nil && context.Config.ShellTimeoutSecs > 0 {
+			timeout = time.Duration(context.Config.ShellTimeoutSecs) * time.Second
+		}
+		ctx, cancel := contextWithTimeout(timeout)
+		defer cancel()
+
+		// Sandbox: run in workspace root only
+		wd, _ := os.Getwd()
+
+		// Apply lightweight resource limits via ulimit when available (sh built-in)
+		limitedCmd := withUlimitPrefix(command, timeout)
+		cmd := exec.CommandContext(ctx, "sh", "-c", limitedCmd)
+		cmd.Dir = filepath.Clean(wd)
+
+		// Kill entire process group on timeout; set PGID
+		if runtime.GOOS != "windows" {
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		}
+
+		// Sanitize environment to reduce credential leakage and force a sandboxed TMPDIR
+		tmpDir := filepath.Join(wd, ".ledit", "tmp")
+		_ = os.MkdirAll(tmpDir, 0755)
+		env := sanitizeEnv(os.Environ())
+		env = append(env, "TMPDIR="+tmpDir)
+		cmd.Env = env
+
+		// Run the command
+		output, err := cmd.CombinedOutput()
+		outputStr := strings.TrimSpace(string(output))
+
+		if err != nil {
+			context.Logger.LogError(fmt.Errorf("command failed: %s, output: %s", command, outputStr))
+			context.ExecutedOperations = append(context.ExecutedOperations,
+				fmt.Sprintf("Command failed: %s (Error: %s)", command, err))
+		} else {
+			context.Logger.LogProcessStep(fmt.Sprintf("✅ Command completed successfully"))
+			if len(outputStr) > 0 {
+				context.Logger.LogProcessStep(fmt.Sprintf("Output: %s", outputStr))
+			}
+			context.ExecutedOperations = append(context.ExecutedOperations,
+				fmt.Sprintf("Successfully executed: %s", command))
+			commandsExecuted++
+		}
+	}
+
+	if commandsExecuted == 0 {
+		return fmt.Errorf("no commands were successfully executed")
+	}
+
+	context.Logger.LogProcessStep(fmt.Sprintf("✅ Command plan execution completed (%d commands executed)", commandsExecuted))
+	return nil
+}
+
 // contextWithTimeout provides a cancellable context with the given timeout.
 // Declared as a helper to keep call sites concise.
 func contextWithTimeout(d time.Duration) (stdctx.Context, stdctx.CancelFunc) {

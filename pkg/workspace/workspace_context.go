@@ -200,72 +200,97 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 		summaryContextMap[f] = true
 	}
 
-	// 1. List all files in the workspace as a tree structure
-	b.WriteString("--- Workspace File System Structure ---\n")
+	// 1. Efficient file listing with semantic grouping
+	b.WriteString("--- Workspace Structure (Token-Efficient) ---\n")
 	var allFilePaths []string
 	for filePath := range workspace.Files {
 		allFilePaths = append(allFilePaths, filePath)
 	}
-	// Sort for consistent output
-	sort.Strings(allFilePaths) // Sort paths before building tree for consistent tree structure
+	sort.Strings(allFilePaths)
 
-	rootNode := buildFileTree(allFilePaths)
-	// Print the root node's children, starting with no prefix and not as the last child of a non-existent parent
-	// The root node itself is represented by ".", so we iterate its children directly.
-	var sortedRootChildNames []string
-	for name := range rootNode.Children {
-		sortedRootChildNames = append(sortedRootChildNames, name)
-	}
-	sort.Strings(sortedRootChildNames)
-
-	for i, name := range sortedRootChildNames {
-		child := rootNode.Children[name]
-		printFileTree(child, &b, "", i == len(sortedRootChildNames)-1)
-	}
-	b.WriteString("\n")
-
-	// 2. Add selected file context
-	b.WriteString("--- Selected File Context ---\n\n")
-
-	// Full Context Files
-	b.WriteString("### Full Context Files:\n")
-	fullContextAdded := false
-	// Iterate through allFilePaths to maintain a consistent order for context files
+	// Group files by type and directory for better organization
+	fileGroups := make(map[string][]string)
 	for _, filePath := range allFilePaths {
-		if fullContextMap[filePath] {
+		// Extract the primary directory or file type
+		parts := strings.Split(filePath, "/")
+		var groupKey string
+		if len(parts) <= 1 {
+			groupKey = "root"
+		} else {
+			// Use the first directory as group key
+			groupKey = parts[0]
+		}
+		fileGroups[groupKey] = append(fileGroups[groupKey], filePath)
+	}
+
+	// Sort groups and print efficiently
+	var sortedGroups []string
+	for group := range fileGroups {
+		sortedGroups = append(sortedGroups, group)
+	}
+	sort.Strings(sortedGroups)
+
+	for _, group := range sortedGroups {
+		files := fileGroups[group]
+		sort.Strings(files) // Sort files within group
+
+		b.WriteString(fmt.Sprintf("%s/ (%d files):\n", group, len(files)))
+		for _, file := range files {
+			b.WriteString(fmt.Sprintf("  %s\n", file))
+		}
+		b.WriteString("\n")
+	}
+
+	// 2. Prioritized context with intelligent content selection
+	b.WriteString("--- Prioritized Context (Token-Optimized) ---\n\n")
+
+	// Calculate content budget based on available context
+	const maxContextTokens = 10000 // Conservative limit for context
+	usedTokens := 0
+
+	// Full Context Files (high priority, limited)
+	b.WriteString("### High-Priority Files (Full Content):\n")
+	fullContextAdded := false
+	for _, filePath := range allFilePaths {
+		if fullContextMap[filePath] && usedTokens < maxContextTokens {
 			fileInfo, exists := workspace.Files[filePath]
 			if !exists {
-				// This should ideally not happen if workspace is consistent
-				b.WriteString(fmt.Sprintf("Warning: File %s selected for full context not found in workspace.\n", filePath))
 				continue
 			}
 
-			if fileInfo.Summary == "File is too large to analyze." {
-				b.WriteString(fmt.Sprintf("Warning: File %s was selected for full context but is too large. Only summary provided:\n", filePath))
-				b.WriteString(fmt.Sprintf("Summary: %s\n", fileInfo.Summary))
+			// Skip if file would exceed token budget
+			if fileInfo.TokenCount > 1000 { // Use actual token count
+				b.WriteString(fmt.Sprintf("📄 %s (large file - summary only)\n", filePath))
+				b.WriteString(fmt.Sprintf("   Summary: %s\n", fileInfo.Summary))
 				if fileInfo.Exports != "" {
-					b.WriteString(fmt.Sprintf("Exports: %s\n", fileInfo.Exports))
-				}
-				if len(fileInfo.SecurityConcerns) > 0 { // New: Add security concerns
-					b.WriteString(fmt.Sprintf("Security Concerns: %s\n", strings.Join(fileInfo.SecurityConcerns, ", ")))
+					b.WriteString(fmt.Sprintf("   Exports: %s\n", fileInfo.Exports))
 				}
 				b.WriteString("\n")
-				fullContextAdded = true // Mark as added even if only summary is provided due to size
+				fullContextAdded = true
 				continue
 			}
 
 			content, err := os.ReadFile(filePath)
 			if err != nil {
-				b.WriteString(fmt.Sprintf("Warning: Could not read content for %s: %v. Skipping full context.\n", filePath, err))
+				b.WriteString(fmt.Sprintf("⚠️  Could not read %s: %v\n", filePath, err))
 				continue
 			}
 
-			lang := getLanguageFromFilename(filePath)
-			b.WriteString(fmt.Sprintf("```%s #%s\n%s\n```END\n", lang, filePath, string(content))) // Added newline after code block
-			if len(fileInfo.SecurityConcerns) > 0 {                                                // New: Add security concerns
-				b.WriteString(fmt.Sprintf("Security Concerns: %s\n", strings.Join(fileInfo.SecurityConcerns, ", ")))
+			// Estimate tokens for this content
+			contentTokens := len(content) / 3 // Rough approximation
+			if usedTokens+contentTokens > maxContextTokens {
+				// Switch to summary mode
+				b.WriteString(fmt.Sprintf("📄 %s (summary - token limit reached)\n", filePath))
+				b.WriteString(fmt.Sprintf("   Summary: %s\n", fileInfo.Summary))
+				b.WriteString("\n")
+				fullContextAdded = true
+				break
 			}
-			b.WriteString("\n") // Added newline after security concerns
+
+			lang := getLanguageFromFilename(filePath)
+			b.WriteString(fmt.Sprintf("📄 %s\n", filePath))
+			b.WriteString(fmt.Sprintf("```%s\n%s\n```\n", lang, string(content)))
+			usedTokens += contentTokens
 			fullContextAdded = true
 		}
 	}
@@ -273,32 +298,48 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 		b.WriteString("No files selected for full context.\n\n")
 	}
 
-	// Summary Context Files
-	b.WriteString("### Summary Context Files:\n")
+	// Summary Context Files (compact format)
+	b.WriteString("### Supporting Files (Summaries):\n")
 	summaryContextAdded := false
-	// Iterate through allFilePaths to maintain a consistent order for context files
+	const maxSummaries = 10 // Limit to prevent token explosion
+	summaryCount := 0
+
 	for _, filePath := range allFilePaths {
-		// Only add as summary if it wasn't already added as full context (or attempted as full context)
+		if summaryCount >= maxSummaries {
+			remaining := 0
+			for _, remainingPath := range allFilePaths[summaryCount:] {
+				if summaryContextMap[remainingPath] && !fullContextMap[remainingPath] {
+					remaining++
+				}
+			}
+			if remaining > 0 {
+				b.WriteString(fmt.Sprintf("... and %d more files (truncated for token efficiency)\n", remaining))
+			}
+			break
+		}
+
 		if summaryContextMap[filePath] && !fullContextMap[filePath] {
 			fileInfo, exists := workspace.Files[filePath]
 			if !exists {
-				b.WriteString(fmt.Sprintf("Warning: File %s selected for summary context not found in workspace.\n", filePath))
 				continue
 			}
-			b.WriteString(fmt.Sprintf("%s\n", filePath))
-			b.WriteString(fmt.Sprintf("Summary: %s\n", fileInfo.Summary))
+
+			// Compact format to save tokens
+			summaryLine := fmt.Sprintf("📁 %s: %s", filePath, fileInfo.Summary)
 			if fileInfo.Exports != "" {
-				b.WriteString(fmt.Sprintf("Exports: %s\n", fileInfo.Exports))
+				summaryLine += fmt.Sprintf(" (Exports: %s)", fileInfo.Exports)
 			}
-			if len(fileInfo.SecurityConcerns) > 0 { // New: Add security concerns
-				b.WriteString(fmt.Sprintf("Security Concerns: %s\n", strings.Join(fileInfo.SecurityConcerns, ", ")))
+			if len(fileInfo.SecurityConcerns) > 0 {
+				summaryLine += fmt.Sprintf(" ⚠️ %s", strings.Join(fileInfo.SecurityConcerns, ", "))
 			}
-			b.WriteString("\n")
+			b.WriteString(summaryLine + "\n")
+
 			summaryContextAdded = true
+			summaryCount++
 		}
 	}
 	if !summaryContextAdded {
-		b.WriteString("No files selected for summary context.\n\n")
+		b.WriteString("No additional files selected for summary context.\n\n")
 	}
 	b.WriteString("--- End of full content from workspace ---\n")
 	logger.Log(b.String())

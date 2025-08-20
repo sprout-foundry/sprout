@@ -9,6 +9,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/filesystem"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -48,6 +49,7 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 		}
 	}
 
+	// this parses the workspace and filename tags and returns the enriched instructions
 	processedInstructions, err := ProcessInstructions(instructions, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to process instructions: %w", err)
@@ -56,10 +58,14 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 	requestHash := utils.GenerateRequestHash(processedInstructions)
 	// Pass the effectiveFilename to guide targeted edits when inferred
 	// Indicate streaming when UI is enabled (getUpdatedCode handles LLM; we surface activity in TUI logs via other sinks)
-	updatedCodeFiles, llmResponseRaw, err := getUpdatedCode(originalCode, processedInstructions, effectiveFilename, cfg, imagePath)
+	ui.Out().Printf("DEBUG: About to call getUpdatedCode\n")
+	updatedCodeFiles, llmResponseRaw, tokenUsage, err := getUpdatedCode(originalCode, processedInstructions, effectiveFilename, cfg, imagePath)
 	if err != nil {
 		return "", err
 	}
+
+	// Store token usage in config for later display
+	cfg.LastTokenUsage = tokenUsage
 
 	// Record the base revision with the full raw LLM response for auditing
 	revisionID, err := changetracker.RecordBaseRevision(requestHash, processedInstructions, llmResponseRaw)

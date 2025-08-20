@@ -92,64 +92,96 @@ ALL files must be existing source files from the workspace above.`,
 
 // BuildProgressEvaluationPrompt returns the prompt for progress evaluation
 func BuildProgressEvaluationPrompt(contextSummary string) string {
-	return fmt.Sprintf(`You are an intelligent agent evaluating progress on a software development task.
+	return fmt.Sprintf(`You are an intelligent software development agent. Your job is to efficiently accomplish tasks using the most appropriate method available.
 
-
+CURRENT CONTEXT:
 %s
 
-TASK: Evaluate the current progress and decide the next action.
+TASK: Analyze the current situation and choose the most effective next action to make progress toward the user's goal.
 
-CRITICAL FOR REFACTORING TASKS:
-- Creating skeleton files is only 20%% of the work
-- A refactoring is NOT complete until the source file is significantly reduced
+=== AVAILABLE ACTIONS & WHEN TO USE THEM ===
 
-ANALYSIS REQUIREMENTS:
-1. **Progress Assessment**: What percentage of the original task is complete?
-2. **Current Status**: Is the agent on track, needs adjustment, has critical errors, or is completed?
-3. **Next Action Decision**: Based on the current state, what should happen next?
-4. **Reasoning**: Why is this the best next action?
+"analyze_intent" - Use FIRST if no intent analysis exists yet
+  → When: This is iteration 1 and we haven't analyzed what the user wants
+  → Why: We need to understand the task before we can proceed effectively
 
-NOTE: Only report concerns for critical_error status - avoid unnecessary warnings about normal progress.
+"run_command" - Use for investigation, setup, or direct execution
+  → When: Task needs shell commands, file operations, or system investigation
+  → Examples:
+    * "find all TODO comments" → "grep -r 'TODO' ."
+    * "check if service is running" → "systemctl status myapp"
+    * "install dependencies" → "npm install" or "pip install -r requirements.txt"
+    * "check file permissions" → "ls -la filename"
+    * "run tests" → "go test ./..." or "npm test"
+    * "build the project" → "make build" or "cargo build"
+  → Why: Many development tasks are solved directly with the right command
 
-AVAILABLE NEXT ACTIONS:
-- "continue": Proceed with the current plan (if we have one and no major issues)
-- "analyze_intent": Start with intent analysis (if no analysis has been done)
-- "create_plan": Create or recreate an edit plan (if no plan or plan needs revision)
-- "execute_edits": Execute the planned edit operations (if plan exists but edits not started)
-- "micro_edit": Apply a very small, localized change via the micro_edit tool (e.g., comments, imports, tiny fixes)
-- "run_command": Execute shell commands for investigation or validation (specify commands)
-- "validate": Run validation checks on completed work
-- "escalate": Hand off to full orchestration for complex issues
-- "revise_plan": Create a new plan based on learnings (if current plan is inadequate)
-- "completed": Task is successfully completed
+"create_plan" - Use when task requires structured code changes
+  → When: Task involves editing multiple files or complex refactoring
+  → Why: We need a detailed plan before making file modifications
+  → Note: Only use if "run_command" or "micro_edit" won't solve it
 
-DECISION LOGIC:
-- **EARLY TERMINATION**: For "review"/"analysis" tasks that don't modify code: if investigation completed successfully, choose "completed"
-- **EDIT EXECUTION PRIORITY**: If plan exists AND no edits executed (no "Edit operation completed" in operations): MUST return "execute_edits"
-- **STOP PLANNING LOOPS**: If plan exists AND multiple "Plan created/revised" operations but no actual edits: MUST return "execute_edits"
-- **MICRO EDIT PRIORITY**: If the required change is very small/localized (e.g., doc comment, import, tiny literal change) and limited to a single file/function, prefer "micro_edit" over full edits
-- Prefer "micro_edit" when the expected change size is ≤50 total lines (≤25 per hunk, ≤2 hunks). Otherwise, use full edit.
-- **PREVENT VALIDATION LOOPS**: If edits completed but validation failed: consider "completed" if main task accomplished
-- If iteration 1 and no intent analysis: "analyze_intent"
-- REFACTORING TASKS: If intent contains "refactor", "extract", "move", "split", "reorganize" AND intent analysis done: proceed to "create_plan"
-- If investigation/search/analysis task WITHOUT refactoring intent AND commands already executed: "completed"
-- If intent analysis done but no plan AND task requires code changes: "create_plan"  
-- If edits done and simple task: "completed" (skip validation for simple changes)
-- If errors occurred: assess if they can be handled or need "revise_plan"
-- If task appears complete: "completed"
-- If current approach isn't working after 5+ iterations of analysis: "create_plan" to force progress
-- If stuck in planning loop (3+ revise_plan actions): "execute_edits" to force execution
-- If current approach isn't working: "run_command" for investigation or "revise_plan"
+"execute_edits" - Use when we have a plan but haven't executed it
+  → When: We have edit operations defined but no "Edit operation completed" in operations
+  → Why: We should execute the plan we already created
+
+"micro_edit" - Use for simple, single-file changes
+  → When: Change is very small (≤50 lines, ≤2 hunks) and localized
+  → Examples: Add comment, fix import, change variable name, update string literal
+  → Why: Faster than creating a full plan for tiny changes
+
+"validate" - Use after making changes to ensure they work
+  → When: We've made edits and want to verify they compile/run correctly
+  → Why: Quality assurance before declaring task complete
+
+"revise_plan" - Use when current approach isn't working
+  → When: We've tried something and it failed, or we have new information
+  → Why: We need to adapt based on what we've learned
+
+"completed" - Use when task is successfully finished
+  → When: The user's goal has been achieved
+  → Examples:
+    * Information requested has been provided
+    * Files have been successfully modified
+    * Commands have executed and produced desired results
+    * Analysis has been completed and communicated
+
+=== SMART DECISION MAKING ===
+
+1. **Prefer Direct Action**: If a single command or simple edit will solve the problem, do that immediately
+2. **Start Simple**: Don't over-engineer - try the simplest approach first
+3. **Use Information Gathered**: If we've already run commands or done analysis, use those results
+4. **Avoid Loops**: Don't get stuck in plan→execute→plan cycles without making progress
+5. **Know When Done**: Don't do unnecessary validation for simple tasks
+
+=== SPECIFIC GUIDANCE ===
+
+For "run_command":
+- Choose specific, executable commands that will actually help
+- Prefer common development tools (grep, find, ls, git, build tools)
+- Include proper arguments and flags
+- Consider the project type and available tools
+
+For "create_plan":
+- Only use when task genuinely requires structured multi-step changes
+- Focus on essential files and changes
+- Keep plans minimal and focused
+
+For "micro_edit":
+- Reserve for changes that are truly tiny and isolated
+- Good for: comments, imports, single line fixes, small string changes
+- Bad for: function refactoring, multi-file changes, complex logic
+
+=== RESPONSE FORMAT ===
 
 Respond with JSON:
 {
   "status": "on_track|needs_adjustment|critical_error|completed",
   "completion_percentage": 0-100,
-  "next_action": "continue|analyze_intent|create_plan|execute_edits|run_command|validate|revise_plan|completed",
-
-  "reasoning": "detailed explanation of why this action is best",
-  "concerns": [], // only include for critical_error status
-  "commands": ["command1", "command2"] // only if next_action is "run_command"
+  "next_action": "analyze_intent|run_command|create_plan|execute_edits|micro_edit|validate|revise_plan|completed",
+  "reasoning": "Clear explanation of why this action is most effective now",
+  "concerns": ["only", "if", "critical_error"],
+  "commands": ["specific", "commands", "to", "execute"] // for run_command only
 }`, contextSummary)
 }
 

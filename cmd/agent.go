@@ -14,7 +14,6 @@ import (
 var (
 	agentSkipPrompt  bool
 	agentModel       string // Declare agentModel variable
-	agentVersion     string // v1 (default) or v2 (tool-driven)
 	agentDryRun      bool
 	agentDirectApply bool
 )
@@ -23,7 +22,6 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompt for applying changes")
 	// Add a flag to allow users to specify and override the LLM model for agent operations
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name to use with the LLM")
-	agentCmd.Flags().StringVar(&agentVersion, "agent", "v2", "Agent version: v2 (tool-driven)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (no writes/shell side-effects)")
 	agentCmd.Flags().BoolVar(&agentDirectApply, "direct-apply", false, "Let the orchestration model directly apply changes via tools (experimental)")
 }

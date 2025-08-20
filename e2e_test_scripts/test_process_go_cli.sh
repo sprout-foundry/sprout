@@ -17,33 +17,53 @@ run_test_logic() {
     cat > process.json << 'JSON'
 {
   "version": "1.0",
-  "goal": "Create a Go CLI named echoer",
-  "description": "Single-agent Go CLI",
+  "goal": "Create a Go CLI named echoer that uses command line flags to echo arguments",
+  "description": "Single-agent Go CLI implementation with proper package structure",
+  "base_model": "",
   "agents": [{
     "id": "godev",
-    "name": "Go Dev",
+    "name": "Go Developer",
     "persona": "backend_developer",
-    "description": "Implements small Go CLIs",
-    "skills": ["go"],
+    "description": "Implements Go applications and command-line tools",
+    "skills": ["go", "cli_development"],
     "model": "",
     "priority": 1,
     "depends_on": [],
-    "config": {"skip_prompt": "true"}
+    "config": {"skip_prompt": "true"},
+    "budget": {
+      "max_tokens": 100000,
+      "max_cost": 5.0,
+      "token_warning": 80000,
+      "cost_warning": 4.0,
+      "alert_on_limit": true,
+      "stop_on_limit": false
+    }
   }],
   "steps": [{
-    "id": "init",
-    "name": "Init CLI",
-    "description": "Create go.mod and main.go in package main using flag to echo args",
+    "id": "init_cli",
+    "name": "Initialize Go CLI Project",
+    "description": "Create go.mod and main.go with proper package structure and flag parsing to echo command line arguments",
     "agent_id": "godev",
     "input": {},
-    "expected_output": "go.mod and main.go exist",
+    "expected_output": "Working Go CLI that accepts arguments and echoes them using flags",
     "status": "pending",
     "depends_on": [],
-    "timeout": 60,
-    "retries": 0
+    "timeout": 120,
+    "retries": 2
   }],
-  "validation": {"required": false},
-  "settings": {"max_retries": 0, "step_timeout": 120, "parallel_execution": false, "stop_on_failure": true, "log_level": "info"}
+  "validation": {
+    "required": false,
+    "build_command": "go build",
+    "test_command": "go test ./...",
+    "custom_checks": ["go vet ./..."]
+  },
+  "settings": {
+    "max_retries": 2,
+    "step_timeout": 300,
+    "parallel_execution": false,
+    "stop_on_failure": true,
+    "log_level": "info"
+  }
 }
 JSON
 

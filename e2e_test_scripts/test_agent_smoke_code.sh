@@ -22,7 +22,7 @@ Keep this line unchanged.
 EOF
 
     # Run agent to replace marker via minimal change
-    ../../ledit agent --agent v2 -m "$model_name" --skip-prompt "In $(pwd)/sample.txt, replace 'AAA_MARKER' with 'BBB_MARKER'"
+    ../../ledit agent -m "$model_name" --skip-prompt "In $(pwd)/sample.txt, replace 'AAA_MARKER' with 'BBB_MARKER'"
 
     echo
     echo "--- Verifying Test ---"

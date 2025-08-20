@@ -50,34 +50,32 @@ func LoadPromptFromFile(filename string) (string, error) {
 	return string(content), nil
 }
 
+// GetBaseCodeGenSystemMessage returns the base system message for code generation
+// This function now supports both legacy full-file format and new patch format
 func GetBaseCodeGenSystemMessage() string {
+	return GetBaseCodeGenSystemMessageWithFormat(false)
+}
+
+// GetBaseCodeGenSystemMessageWithFormat returns the base system message with format selection
+func GetBaseCodeGenSystemMessageWithFormat(usePatchFormat bool) string {
+	if usePatchFormat {
+		return GetBaseCodePatchSystemMessage()
+	}
+
 	content, err := LoadPromptFromFile("prompts/base_code_editing.txt")
 	if err != nil {
-		// Fallback to hardcoded string if file reading fails
-		return "You MUST provide the COMPLETE and FULL file contents for each file you modify. Each file must be in a separate fenced code block, starting with the language, a space, then `# <filename>` ON THE SAME LINE above the code, and ending with '```END'.\n" +
-			"For Example: '```python # myfile.py\n<replace-with-file-contents>\n```END', or '```html # myfile.html\n<replace-with-file-contents>\n```END', or '```javascript # myfile.js\n<replace-with-file-contents>\n```END'\n\n" +
-			"CRITICAL REQUIREMENTS:\n" +
-			"- You MUST include the ENTIRE file content from beginning to end\n" +
-			"- NEVER truncate or abbreviate any part of the file\n" +
-			"- Include ALL imports, functions, classes, and code - both modified AND unmodified sections\n" +
-			"- The code blocks must contain the complete, full, working file that can be saved and executed\n" +
-			"- Make only the specific changes requested, but include ALL surrounding code\n" +
-			"- Do NOT add new features, refactor unrelated code, or reformat existing code unless explicitly requested\n" +
-			"- Strive for the most minimal and targeted changes necessary to fulfill the request\n" +
-			"- Do not regenerate or reflow unchanged sections of code unless absolutely necessary for correctness\n\n" +
-			"CODE MODIFICATION BEST PRACTICES:\n" +
-			"- PREFER modifying existing functions/methods over creating new ones when possible\n" +
-			"- Before adding new functionality, analyze existing code to identify modification opportunities\n" +
-			"- Follow DRY principles: Look for existing functions that perform similar tasks and extend them rather than duplicate\n" +
-			"- When modifying existing functions, preserve the original function signature unless specifically requested to change it\n" +
-			"- Only create new functions when the requested functionality is genuinely distinct from existing code\n\n" +
-			"The syntax of the code blocks must exactly match these instructions.\n" +
-			"Do not include any additional text, explanations, or comments outside the code blocks.\n" +
-			"Update only the files that are necessary to fulfill the requirements.\n" +
-			"If a specific filename is provided, focus your edits primarily on that file. Only create or modify other files if it is an absolute, unavoidable dependency for the requested change to work.\n" +
-			"The filename must only appear in the header of the code block (e.g., ````python # myfile.py`). Do not include file paths within the code content itself.\n" +
-			"Do not include any other text or explanations outside the code blocks.\n" +
-			"Ensure that the code is syntactically correct and follows best practices for the specified language.\n"
+		// we need to exit, this is a critical error
+		os.Exit(1)
+	}
+	return content
+}
+
+// GetBaseCodePatchSystemMessage returns the system message for patch-based code editing
+func GetBaseCodePatchSystemMessage() string {
+	content, err := LoadPromptFromFile("prompts/base_code_editing_patch.txt")
+	if err != nil {
+		// we need to exit, this is a critical error
+		os.Exit(1)
 	}
 	return content
 }
@@ -116,14 +114,19 @@ func StripToolCallsIfPresent(response string) string {
 
 // BuildCodeMessages constructs the messages for the LLM to generate code.
 func BuildCodeMessages(code, instructions, filename string, interactive bool) []Message {
+	return BuildCodeMessagesWithFormat(code, instructions, filename, interactive, false)
+}
+
+// BuildCodeMessagesWithFormat constructs the messages with format selection (legacy or patch)
+func BuildCodeMessagesWithFormat(code, instructions, filename string, interactive bool, usePatchFormat bool) []Message {
 	var messages []Message
 
-	systemPrompt := GetBaseCodeGenSystemMessage() // Use the base message
+	systemPrompt := GetBaseCodeGenSystemMessageWithFormat(usePatchFormat) // Use the base message with format selection
 
 	if interactive {
 		systemPrompt = "You are an assistant that can generate updated code based on provided instructions. You have access to tools for gathering additional information when needed:\n\n" +
 			"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. " +
-			GetBaseCodeGenSystemMessage() +
+			GetBaseCodeGenSystemMessageWithFormat(usePatchFormat) +
 			"\n\n" +
 			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
 			"    - **read_file**: Read files to understand existing implementations before making changes\n" +
@@ -151,11 +154,20 @@ func BuildCodeMessages(code, instructions, filename string, interactive bool) []
 	messages = append(messages, Message{Role: "system", Content: systemPrompt})
 
 	if code != "" {
-		messages = append(messages, Message{Role: "user", Content: fmt.Sprintf("Here is the current content of `%s`:\n\n```%s\n%s\n```\n\nInstructions: %s", filename, getLanguageFromFilename(filename), code, instructions)})
+		if usePatchFormat {
+			messages = append(messages, Message{Role: "user", Content: fmt.Sprintf("Here is the current content of `%s`:\n\n```\n%s\n```\n\nInstructions: %s", filename, code, instructions)})
+		} else {
+			messages = append(messages, Message{Role: "user", Content: fmt.Sprintf("Here is the current content of `%s`:\n\n```%s\n%s\n```\n\nInstructions: %s", filename, getLanguageFromFilename(filename), code, instructions)})
+		}
 	} else {
 		messages = append(messages, Message{Role: "user", Content: fmt.Sprintf("Instructions: %s", instructions)})
 	}
 	return messages
+}
+
+// BuildPatchMessages constructs the messages for the LLM to generate patches.
+func BuildPatchMessages(code, instructions, filename string, interactive bool) []Message {
+	return BuildCodeMessagesWithFormat(code, instructions, filename, interactive, true)
 }
 
 // BuildScriptRiskAnalysisMessages constructs the messages for the LLM to analyze script risk.

@@ -3,8 +3,11 @@ package agent
 import (
 	"fmt"
 	"strings"
+	"time"
 
-	"github.com/alantheprice/ledit/pkg/editor"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/parser"
+	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -57,7 +60,7 @@ func executeGrepSearch(context *AgentContext, terms []string) error {
 	return nil
 }
 
-// executeMicroEdit attempts a very small targeted edit using partial-edit flow
+// executeMicroEdit attempts a very small targeted edit using patch-based editing
 func executeMicroEdit(context *AgentContext) error {
 	// Choose a target file and instruction
 	var targetFile string
@@ -80,38 +83,48 @@ func executeMicroEdit(context *AgentContext) error {
 	}
 
 	context.Logger.LogProcessStep(fmt.Sprintf("micro_edit: attempting minimal change in %s", targetFile))
-	// This tool explicitly performs a micro/partial edit; allowed path
-	// First, perform the partial edit to get a candidate diff
-	diff, err := editor.ProcessPartialEdit(targetFile, instructions, context.Config, context.Logger)
+
+	// Use patch-based editing instead of partial editing
+	// Create messages for patch-based editing
+	messages := []prompts.Message{
+		{Role: "system", Content: prompts.GetBaseCodePatchSystemMessage()},
+		{Role: "user", Content: fmt.Sprintf("Target file: %s\n\nInstructions: %s", targetFile, instructions)},
+	}
+
+	// Get patch response from LLM
+	response, _, err := llm.GetLLMResponse(context.Config.EditingModel, messages, targetFile, context.Config, 30*time.Second)
 	if err != nil {
 		context.Logger.LogProcessStep(fmt.Sprintf("micro_edit failed: %v", err))
 		return nil
 	}
-	// Enforce micro edit limits (language-agnostic):
-	// - default: <=50 total changed lines
-	// - per-hunk <=25 lines
-	// - <=2 hunks
-	// If limits exceeded, abort and suggest escalation
-	if exceeded, summary := enforceMicroEditLimits(diff, 50, 25, 2); exceeded {
-		context.Logger.LogProcessStep("micro_edit aborted: diff exceeded safe limits. Escalating to edit_file_section.")
-		context.Logger.LogProcessStep(summary)
-		// Escalate deterministically with targeted instructions
-		escalated := fmt.Sprintf("Targeted change (section-level) for %s: %s. Keep the diff focused; avoid unrelated edits.", targetFile, context.UserIntent)
-		diff2, err := editor.ProcessPartialEdit(targetFile, escalated, context.Config, context.Logger)
-		if err != nil {
-			context.Logger.LogProcessStep(fmt.Sprintf("edit_file_section escalation failed: %v", err))
-			return nil
-		}
-		// Accept escalation result without re-checking micro limits
-		completionTokens := utils.EstimateTokens(diff2)
-		context.TokenUsage.CodeGeneration += completionTokens
-		context.TokenUsage.CodegenSplit.Completion += completionTokens
-		context.ExecutedOperations = append(context.ExecutedOperations, fmt.Sprintf("edit_file_section applied to %s", targetFile))
-		context.Logger.LogProcessStep("edit_file_section: change applied after micro_edit exceeded limits")
+
+	// Parse patches from response
+	patches, err := parser.GetUpdatedCodeFromPatchResponse(response)
+	if err != nil {
+		context.Logger.LogProcessStep(fmt.Sprintf("Failed to parse patches: %v", err))
 		return nil
 	}
-	// Token accounting approximation from diff size
-	completionTokens := utils.EstimateTokens(diff)
+
+	if len(patches) == 0 {
+		context.Logger.LogProcessStep("No patches generated")
+		return nil
+	}
+
+	// Apply the patch
+	filePatch, exists := patches[targetFile]
+	if !exists {
+		context.Logger.LogProcessStep(fmt.Sprintf("No patch found for target file %s", targetFile))
+		return nil
+	}
+
+	err = parser.ApplyPatchToFile(filePatch, targetFile)
+	if err != nil {
+		context.Logger.LogProcessStep(fmt.Sprintf("Failed to apply patch: %v", err))
+		return nil
+	}
+
+	// Token accounting approximation
+	completionTokens := utils.EstimateTokens(response)
 	context.TokenUsage.CodeGeneration += completionTokens
 	context.TokenUsage.CodegenSplit.Completion += completionTokens
 	context.ExecutedOperations = append(context.ExecutedOperations, fmt.Sprintf("micro_edit applied to %s", targetFile))

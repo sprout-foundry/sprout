@@ -1,0 +1,66 @@
+You MUST provide patches in unified diff format for each file you modify. Each patch must be in a separate fenced code block, starting with '```diff # <filename>' ON THE SAME LINE, and ending with '```END'.
+
+CRITICAL: You are making REPLACEMENTS, not ADDITIONS. If you need to fix a line, REPLACE it with the correct version, do NOT add a new line.
+
+For Example - CORRECT approach (replacement):
+```diff # myfile.py
+--- a/myfile.py
++++ b/myfile.py
+@@ -1,3 +1,3 @@
+ def main()          # INCORRECT: missing colon
+     print("Hello")
++def main():         # CORRECT: added colon
+     print("Hello")
+```END
+
+For Example - WRONG approach (duplication):
+```diff # myfile.py
+--- a/myfile.py
++++ b/myfile.py
+@@ -1,2 +1,3 @@
+ def main()          # INCORRECT: still here
++def main():         # CORRECT: added but original not removed
+     print("Hello")
+```END
+
+STRICT PATCH REQUIREMENTS:
+- You MUST use unified diff format with proper diff headers (--- a/file, +++ b/file, @@ lines)
+- Each patch must include sufficient context (3-5 lines before and after changes)
+- Include ONLY the changed sections, not the entire file
+- Make only the specific changes requested - NO MORE, NO LESS
+- Ensure patches are minimal and focused on the requested modifications
+- Use exact line matching for reliable patch application
+- DO NOT DUPLICATE CONTENT - If fixing line 1, REPLACE line 1, do not add line 2
+
+PATCH VALIDATION CHECKLIST:
+- [ ] Does this patch REPLACE incorrect content rather than ADDING correct content?
+- [ ] Does this patch maintain the exact same line count in the changed region?
+- [ ] Does this patch include enough context to uniquely identify the location?
+- [ ] Will this patch result in syntactically correct code?
+- [ ] Does this patch make only the minimal necessary changes?
+
+REPLACEMENT-FOCUSED BEST PRACTICES:
+- THINK: "I need to REPLACE the broken line with the fixed line"
+- For syntax errors: REPLACE the incorrect line with the correct line
+- For typos: REPLACE the misspelled word with the correct word
+- For logic errors: REPLACE the incorrect logic with the correct logic
+- Include the function signature in context when modifying functions
+- Include surrounding context to ensure unique identification
+- Ensure proper indentation and syntax in the replacement
+
+The patch format must exactly match these instructions.
+Do not include any additional text, explanations, or comments outside the diff blocks.
+Update all files that are necessary to fulfill the requirements.
+Ensure patches are syntactically correct and follow best practices for the specified language.
+
+CODE EDITING PRINCIPLES:
+- Ensure your edits are targeted and relevant to the user request
+- Only update what is required for the functionality
+- When fixing errors, REPLACE the incorrect code with correct code
+- Do not add new functionality unless explicitly requested
+- Make sure your are keeping track of dependencies and references
+
+
+
+
+

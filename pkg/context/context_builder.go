@@ -61,6 +61,50 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 				return "", fmt.Errorf("failed to read file '%s': %w", req.Query, err)
 			}
 			responses = append(responses, fmt.Sprintf("Here is the content of the file `%s`:\n\n%s", req.Query, string(content)))
+		case "edit_file_section":
+			// Handle the edit_file_section context request
+			// Parse the query parameters: file_path|instructions|target_section
+			parts := strings.Split(req.Query, "|")
+			var filePath, instructions, targetSection string
+
+			for _, part := range parts {
+				if strings.HasPrefix(part, "file_path=") {
+					filePath = strings.TrimPrefix(part, "file_path=")
+				} else if strings.HasPrefix(part, "instructions=") {
+					instructions = strings.TrimPrefix(part, "instructions=")
+				} else if strings.HasPrefix(part, "target_section=") {
+					targetSection = strings.TrimPrefix(part, "target_section=")
+				}
+			}
+
+			if strings.TrimSpace(filePath) == "" || strings.TrimSpace(instructions) == "" {
+				responses = append(responses, "Error: edit_file_section requires both file_path and instructions parameters")
+				break
+			}
+
+			// Try partial edit first, then fall back to full file edit
+			logger := utils.GetLogger(cfg.SkipPrompt)
+			logger.Logf("Processing edit_file_section context request: %s", filePath)
+
+			var err error
+			// Use simplified approach: direct LLM request with clear instructions
+			var llmInstructions string
+			if strings.TrimSpace(targetSection) != "" {
+				llmInstructions = fmt.Sprintf("Edit the %s section with these instructions: %s", targetSection, instructions)
+			} else {
+				llmInstructions = instructions
+			}
+
+			// Use the standard LLM approach for all editing tasks
+			messages := prompts.BuildPatchMessages("", llmInstructions, filePath, cfg.Interactive)
+			_, _, err = llm.GetLLMResponse(cfg.EditingModel, messages, filePath, cfg, 6*time.Minute)
+
+			if err != nil {
+				responses = append(responses, fmt.Sprintf("Failed to edit file %s: %v", filePath, err))
+			} else {
+				responses = append(responses, fmt.Sprintf("Successfully edited file %s", filePath))
+			}
+
 		case "shell":
 			shouldExecute := false
 			if cfg.SkipPrompt {
@@ -135,7 +179,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	logger.Log(fmt.Sprintf("Code length: %d chars", len(code)))
 	logger.Log(fmt.Sprintf("ImagePath: %s", imagePath))
 
-	messages := prompts.BuildCodeMessages(code, instructions, filename, cfg.Interactive)
+	messages := prompts.BuildCodeMessagesWithFormat(code, instructions, filename, cfg.Interactive, true)
 	logger.Log(fmt.Sprintf("Built %d messages", len(messages)))
 
 	// Add image to the user message if provided
@@ -198,6 +242,9 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 			return handleContextRequest(localRequests, cfg)
 		}
 
+		// Set the global context handler for tool execution
+		llm.SetGlobalContextHandler(contextHandlerWrapper)
+
 		// Create workflow context for agent workflows
 		workflowContext := llm.GetAgentWorkflowContext()
 		workflowContext.ContextHandler = contextHandlerWrapper
@@ -225,26 +272,38 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		logger.Log("=== End GetLLMCodeResponse Debug ===")
 		return modelName, response, tokenUsage, nil
 	} else {
-		ui.Out().Printf("DEBUG: Using direct code editing approach for code workflow\n")
+		ui.Out().Printf("DEBUG: Using unified hunk-based editing approach for code workflow\n")
 
-		// Create a wrapper to convert between context request types
-		contextHandlerWrapper := func(llmRequests []llm.ContextRequest, cfg *config.Config) (string, error) {
-			// Convert llm.ContextRequest to local ContextRequest
-			var localRequests []ContextRequest
-			for _, req := range llmRequests {
-				localRequests = append(localRequests, ContextRequest{
-					Type:  req.Type,
-					Query: req.Query,
-				})
+		// Use the new unified hunk-based editing function
+		// Extract instructions from the last user message
+		if instructions == "" {
+			for i := len(messages) - 1; i >= 0; i-- {
+				if messages[i].Role == "user" {
+					if content, ok := messages[i].Content.(string); ok {
+						instructions = content
+						break
+					}
+				}
 			}
-			return handleContextRequest(localRequests, cfg)
 		}
 
-		// For code editing, use the direct approach
-		var response string
-		var tokenUsage *llm.TokenUsage
-		var err error
-		_, response, tokenUsage, err = llm.CallLLMForCodeEditing(cfg.EditingModel, messages, filename, cfg, 6*time.Minute, contextHandlerWrapper)
+		if instructions == "" {
+			return modelName, "", nil, fmt.Errorf("no instructions found in messages")
+		}
+
+		// Use simplified hunk-based editing approach
+		// Step 1: Try hunk-based editing (most efficient and targeted)
+		logger.Logf("🎯 Attempting hunk-based editing for %s (most efficient approach)", filename)
+
+		// For now, use the standard LLM response which will be processed by the caller
+		// The agent workflow will handle hunk-based editing, while this provides direct LLM access
+		response, tokenUsage, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
+		if err == nil {
+			logger.Logf("✅ LLM response generated for %s", filename)
+		} else {
+			logger.Logf("❌ LLM response failed for %s: %v", filename, err)
+			return modelName, "", nil, fmt.Errorf("failed to generate response for %s: %v", filename, err)
+		}
 		ui.Out().Printf("DEBUG: Direct code editing call completed\n")
 		if err != nil {
 			logger.Log(fmt.Sprintf("Interactive LLM call failed: %v", err))

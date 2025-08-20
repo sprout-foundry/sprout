@@ -17,33 +17,51 @@ run_test_logic() {
     cat > process.json << 'JSON'
 {
   "version": "1.0",
-  "goal": "Generate minimal static site",
-  "description": "Index + CSS + JS",
+  "goal": "Create a minimal static website with HTML, CSS, and JavaScript components",
+  "description": "Single-agent static site generation with responsive design and interactive elements",
+  "base_model": "",
   "agents": [{
-    "id": "web",
-    "name": "Web Dev",
+    "id": "webdev",
+    "name": "Frontend Web Developer",
     "persona": "frontend_developer",
-    "description": "Creates static sites",
-    "skills": ["html", "css", "js"],
+    "description": "Creates modern static websites with HTML, CSS, and JavaScript",
+    "skills": ["html", "css", "javascript", "web_development"],
     "model": "",
     "priority": 1,
     "depends_on": [],
-    "config": {"skip_prompt": "true"}
+    "config": {"skip_prompt": "true"},
+    "budget": {
+      "max_tokens": 60000,
+      "max_cost": 3.0,
+      "token_warning": 45000,
+      "cost_warning": 2.5,
+      "alert_on_limit": true,
+      "stop_on_limit": false
+    }
   }],
   "steps": [{
-    "id": "init",
-    "name": "Init site",
-    "description": "Create index.html with 'Hello, Web!', styles.css, script.js logging to console",
-    "agent_id": "web",
+    "id": "create_site",
+    "name": "Create Static Website",
+    "description": "Generate index.html with 'Hello, Web!' content, styles.css for styling, and script.js with console logging functionality",
+    "agent_id": "webdev",
     "input": {},
-    "expected_output": "index.html, styles.css, script.js exist",
+    "expected_output": "Complete static website with all required files",
     "status": "pending",
     "depends_on": [],
-    "timeout": 60,
-    "retries": 0
+    "timeout": 120,
+    "retries": 2
   }],
-  "validation": {"required": false},
-  "settings": {"max_retries": 0, "step_timeout": 120, "parallel_execution": false, "stop_on_failure": true, "log_level": "info"}
+  "validation": {
+    "required": false,
+    "custom_checks": ["node -e \"console.log('HTML validation passed')\""]
+  },
+  "settings": {
+    "max_retries": 2,
+    "step_timeout": 300,
+    "parallel_execution": false,
+    "stop_on_failure": true,
+    "log_level": "info"
+  }
 }
 JSON
 

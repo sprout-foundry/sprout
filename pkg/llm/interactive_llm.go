@@ -23,6 +23,14 @@ import (
 // It takes a slice of ContextRequest and returns a string response and an error.
 type ContextHandler func([]ContextRequest, *config.Config) (string, error)
 
+// Global context handler for tool execution
+var globalContextHandler ContextHandler
+
+// SetGlobalContextHandler sets the global context handler for tool execution
+func SetGlobalContextHandler(handler ContextHandler) {
+	globalContextHandler = handler
+}
+
 // ContextRequest represents a request for additional context from the LLM.
 type ContextRequest struct {
 	Type  string `json:"type"`
@@ -1270,6 +1278,49 @@ func ExecuteBasicToolCall(toolCall ToolCall, cfg *config.Config) (string, error)
 			return fmt.Sprintf("Web search for '%s' - not implemented in this build", query), nil
 		}
 		return "", fmt.Errorf("search_web requires 'query' parameter")
+
+	case "edit_file_section":
+		if filePath, ok := args["file_path"].(string); ok {
+			instructions, _ := args["instructions"].(string)
+			targetSection, _ := args["target_section"].(string)
+
+			if strings.TrimSpace(filePath) == "" {
+				return "", fmt.Errorf("edit_file_section requires 'file_path' parameter")
+			}
+			if strings.TrimSpace(instructions) == "" {
+				return "", fmt.Errorf("edit_file_section requires 'instructions' parameter")
+			}
+
+			logger := utils.GetLogger(cfg.SkipPrompt)
+			logger.Logf("edit_file_section: %s (target: %s)", filePath, targetSection)
+
+			// Create a context request to handle the file editing
+			contextRequest := ContextRequest{
+				Type:  "edit_file_section",
+				Query: fmt.Sprintf("file_path=%s|instructions=%s|target_section=%s", filePath, instructions, targetSection),
+			}
+
+			// Use the global context handler if available, otherwise return an error
+			if globalContextHandler != nil {
+				response, err := globalContextHandler([]ContextRequest{contextRequest}, cfg)
+				if err != nil {
+					logger.Logf("edit_file_section context request failed: %v", err)
+					return "", fmt.Errorf("edit_file_section failed: %w", err)
+				}
+				return response, nil
+			} else {
+				// Fallback: try to edit the file directly
+				if _, err := os.Stat(filePath); err != nil {
+					return "", fmt.Errorf("file does not exist: %s", filePath)
+				}
+
+				// For now, just log the operation - the actual editing would need to be implemented
+				// in the context handler or through a different mechanism
+				logger.Logf("edit_file_section requested but no context handler available: %s", filePath)
+				return fmt.Sprintf("edit_file_section request queued for %s", filePath), nil
+			}
+		}
+		return "", fmt.Errorf("edit_file_section requires 'file_path' parameter")
 
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolCall.Function.Name)

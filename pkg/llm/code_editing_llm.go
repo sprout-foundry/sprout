@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/parser"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -325,4 +326,68 @@ func isLikelyCodeFile(path string) bool {
 		}
 	}
 	return false
+}
+
+// CallLLMForCodeEditingWithPatches handles LLM calls for code editing using patch syntax
+func CallLLMForCodeEditingWithPatches(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, contextHandler ContextHandler) (string, string, *TokenUsage, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
+	ui.Out().Printf("=== PATCH-BASED CODE EDITING LLM FUNCTION CALLED ===\n")
+	logger.Log("=== PATCH-BASED CODE EDITING LLM FUNCTION CALLED ===")
+
+	// For patch-based editing, use simpler approach without tool loops
+	response, tokenUsage, err := GetLLMResponse(modelName, messages, filename, cfg, timeout)
+	if err != nil {
+		logger.Log(fmt.Sprintf("Direct LLM call failed: %v", err))
+		return "", "", nil, err
+	}
+
+	logger.Log(fmt.Sprintf("Direct response length: %d chars", len(response)))
+
+	// Parse patches from response
+	patches, err := parser.GetUpdatedCodeFromPatchResponse(response)
+	if err != nil {
+		logger.Log(fmt.Sprintf("Failed to parse patches: %v", err))
+		return "", "", nil, fmt.Errorf("failed to parse patches: %w", err)
+	}
+
+	if len(patches) == 0 {
+		logger.Log("No patches found in response")
+		return "", "", nil, fmt.Errorf("no patches found in LLM response")
+	}
+
+	logger.Log(fmt.Sprintf("Found %d patches to apply", len(patches)))
+
+	// Apply patches to files
+	appliedFiles := []string{}
+	for filename, patch := range patches {
+		logger.Log(fmt.Sprintf("Applying patch to %s (%d hunks)", filename, len(patch.Hunks)))
+
+		// Check if file exists
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			logger.Log(fmt.Sprintf("File does not exist: %s", filename))
+			continue
+		}
+
+		// Apply the patch with enhanced error handling
+		if err := parser.EnhancedApplyPatchToFile(patch, filename); err != nil {
+			logger.Log(fmt.Sprintf("Failed to apply patch to %s: %v", filename, err))
+			// Check if it's a custom patch error with suggestions
+			if patchErr, ok := err.(*parser.PatchError); ok {
+				logger.Log(fmt.Sprintf("Error type: %s, Suggestion: %s", patchErr.Type, patchErr.Suggestion))
+			}
+			return "", "", nil, fmt.Errorf("failed to apply patch to %s: %w", filename, err)
+		}
+
+		appliedFiles = append(appliedFiles, filename)
+		logger.Log(fmt.Sprintf("Successfully applied patch to %s", filename))
+	}
+
+	if len(appliedFiles) == 0 {
+		return "", "", nil, fmt.Errorf("no patches were successfully applied")
+	}
+
+	// Return summary of applied changes
+	summary := fmt.Sprintf("Applied patches to %d files: %s", len(appliedFiles), strings.Join(appliedFiles, ", "))
+	logger.Log("=== End Patch-Based Code Editing LLM Debug ===")
+	return summary, modelName, tokenUsage, nil
 }

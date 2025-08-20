@@ -19,6 +19,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/embedding"
 	"github.com/alantheprice/ledit/pkg/git"
 	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/parser"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -520,53 +521,100 @@ func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directAppl
 			continue
 		}
 
-		// Non-doc files: attempt hunk-based code patch before editor fallback
-		if !strings.HasSuffix(strings.ToLower(op.file), ".md") && !strings.Contains(strings.ToLower(op.file), "/docs/") {
-			if chplan, cherr := proposeCodeHunks(op.file, op.instructions, cfg, logger); cherr == nil && len(chplan.Hunks) > 0 {
-				// Observability: log summarized code hunk plan before applying
+		// Prioritize hunk-based edits for all file types - they're more efficient than full file edits
+		logger.Logf("🧩 Attempting hunk-based edit for %s (most efficient approach)", op.file)
+
+		// Try hunk-based edits first for all file types
+		if strings.HasSuffix(strings.ToLower(op.file), ".md") || strings.Contains(strings.ToLower(op.file), "/docs/") {
+			// For documentation files
+			if hplan, herr := proposeDocHunks(op.file, cfg, logger); herr == nil && len(hplan.Hunks) > 0 {
+				// Observability: log summarized hunk plan before applying
 				if runlog != nil {
 					whereHints := []string{}
-					for i, h := range chplan.Hunks {
+					for i, h := range hplan.Hunks {
 						if i >= 5 {
 							break
 						}
 						whereHints = append(whereHints, strings.TrimSpace(h.WhereHint))
 					}
-					runlog.LogEvent("code_hunks_plan", map[string]any{"file": op.file, "hunks": len(chplan.Hunks), "where_hints": whereHints})
+					runlog.LogEvent("doc_hunks_plan", map[string]any{"file": op.file, "hunks": len(hplan.Hunks), "where_hints": whereHints})
 				}
-				if aerr := applyCodeHunks(op.file, chplan, logger); aerr == nil {
-					if runlog != nil {
-						runlog.LogEvent("edit_applied", map[string]any{"file": op.file, "method": "code_hunks"})
+				allCited := true
+				for _, h := range hplan.Hunks {
+					if len(h.Citations) == 0 {
+						allCited = false
+						break
 					}
-					applied++
-					continue
 				}
+				if allCited {
+					if aerr := applyDocHunks(op.file, hplan, logger); aerr == nil {
+						if runlog != nil {
+							runlog.LogEvent("edit_applied", map[string]any{"file": op.file, "method": "doc_hunks"})
+						}
+						applied++
+						continue
+					}
+				}
+				// If hunks lack citations, log and skip this doc edit (hard-reject)
+				logger.Logf("Doc hunks missing citations for %s; skipping edit to enforce evidence-first policy", op.file)
+				if runlog != nil {
+					runlog.LogEvent("doc_skip_no_citations", map[string]any{"file": op.file})
+				}
+				continue
+			}
+			// If no hunks returned at all, do not apply replacements without citations; skip
+			logger.Logf("No hunk plan returned for %s; skipping edit to enforce citations requirement", op.file)
+			if runlog != nil {
+				runlog.LogEvent("doc_skip_no_hunks", map[string]any{"file": op.file})
+			}
+			continue
+		}
+
+		// For code files, attempt hunk-based code patch before editor fallback
+		if chplan, cherr := proposeCodeHunks(op.file, op.instructions, cfg, logger); cherr == nil && len(chplan.Hunks) > 0 {
+			// Observability: log summarized code hunk plan before applying
+			if runlog != nil {
+				whereHints := []string{}
+				for i, h := range chplan.Hunks {
+					if i >= 5 {
+						break
+					}
+					whereHints = append(whereHints, strings.TrimSpace(h.WhereHint))
+				}
+				runlog.LogEvent("code_hunks_plan", map[string]any{"file": op.file, "hunks": len(chplan.Hunks), "where_hints": whereHints})
+			}
+			if aerr := applyCodeHunks(op.file, chplan, logger); aerr == nil {
+				if runlog != nil {
+					runlog.LogEvent("edit_applied", map[string]any{"file": op.file, "method": "code_hunks"})
+				}
+				applied++
+				continue
 			}
 		}
-		logger.Logf("🛠️ Attempting partial edit for %s", op.file)
-		diff, err := editor.ProcessPartialEdit(op.file, op.instructions, cfg, logger)
-		if err != nil {
-			logger.Logf("🛠️ Partial edit failed for %s: %v", op.file, err)
-			logger.Logf("🛠️ Trying full-file edit for %s", op.file)
-			diff2, err2 := editor.ProcessCodeGeneration(op.file, op.instructions, cfg, "")
-			if err2 != nil {
-				logger.Logf("🛠️ Full-file edit also failed for %s: %v", op.file, err2)
+		// Try patch-based editing first (most efficient)
+		logger.Logf("🧩 Attempting patch-based edit for %s (most efficient approach)", op.file)
+		if err := attemptPatchBasedEdit(op.file, op.instructions, cfg, logger); err != nil {
+			logger.Logf("❌ Patch-based edit failed for %s: %v", op.file, err)
+			logger.Logf("🎯 Falling back to full-file edit for %s", op.file)
+			diff, err := editor.ProcessCodeGeneration(op.file, op.instructions, cfg, "")
+			if err != nil {
+				logger.Logf("❌ Full-file edit also failed for %s: %v", op.file, err)
 				if runlog != nil {
-					runlog.LogEvent("edit_failure", map[string]any{"file": op.file, "error": err2.Error()})
+					runlog.LogEvent("edit_failure", map[string]any{"file": op.file, "error": err.Error()})
 				}
 				continue
 			} else {
-				logger.Logf("🛠️ Full-file edit succeeded for %s", op.file)
-				if runlog != nil && strings.TrimSpace(diff2) != "" {
-					runlog.LogEvent("edit_full_diff", map[string]any{"file": op.file, "diff_len": len(diff2)})
+				logger.Logf("✅ Full-file edit succeeded for %s", op.file)
+				if runlog != nil && strings.TrimSpace(diff) != "" {
+					runlog.LogEvent("edit_full_diff", map[string]any{"file": op.file, "diff_len": len(diff)})
 					runlog.LogEvent("edit_applied", map[string]any{"file": op.file, "method": "full_edit"})
 				}
+				applied++
 			}
 		} else {
-			logger.Logf("🛠️ Partial edit succeeded for %s", op.file)
-			if runlog != nil && strings.TrimSpace(diff) != "" {
-				runlog.LogEvent("edit_partial_diff", map[string]any{"file": op.file, "diff_len": len(diff)})
-				runlog.LogEvent("edit_applied", map[string]any{"file": op.file, "method": "partial_edit"})
+			logger.Logf("✅ Patch-based edit succeeded for %s", op.file)
+			if runlog != nil {
+				runlog.LogEvent("edit_applied", map[string]any{"file": op.file, "method": "patch_edit"})
 			}
 			applied++
 		}
@@ -713,19 +761,58 @@ func proposeDocHunks(path string, cfg *config.Config, logger *utils.Logger) (Doc
 	if model == "" {
 		model = cfg.EditingModel
 	}
-	sys := prompts.Message{Role: "system", Content: "You output only JSON.\nSchema: {\"hunks\":[{\"before\":string,\"after\":string,\"where_hint\":string,\"citations\":[\"path:line\"]}]}\nExample: {\"hunks\":[{\"before\":\"Old sentence.\",\"after\":\"New sentence.\",\"where_hint\":\"README intro\",\"citations\":[\"pkg/agent/agent_v2.go:120\"]}]}\nBase solely on repository evidence. No prose."}
-	user := prompts.Message{Role: "user", Content: fmt.Sprintf("Doc file: %s\nReturn ONLY JSON: hunks-with-citations.", path)}
-	resp, _, err := llm.GetLLMResponse(model, []prompts.Message{sys, user}, path, cfg, 45*time.Second)
+
+	// Read the file content to provide context for better hunk generation
+	fileContent, err := os.ReadFile(path)
 	if err != nil {
+		logger.Logf("Could not read file for doc hunk generation: %v", err)
 		return plan, err
 	}
+
+	// Limit file content to avoid token limits while providing context
+	contentStr := string(fileContent)
+	if len(contentStr) > 8000 {
+		contentStr = contentStr[:8000] + "\n...[truncated]..."
+	}
+
+	sys := prompts.Message{Role: "system", Content: `You are an expert at creating precise documentation patches. Generate minimal, targeted hunks that update documentation based on repository evidence.
+
+Return JSON: {"hunks":[{"before":"exact text to replace","after":"replacement text","where_hint":"brief location description","citations":["path:line"]}]}
+
+Guidelines:
+- Create small, focused hunks for documentation updates
+- Use exact text matching for reliable replacement
+- Include repository citations for each change
+- Prefer multiple small hunks over one large change
+- Each hunk should be independently applicable
+- Base changes only on repository evidence`}
+
+	user := prompts.Message{Role: "user", Content: fmt.Sprintf(`Doc file: %s
+
+Current file content:
+%s
+
+Generate precise hunks to update this documentation based on current repository state. Include citations for each change. Return ONLY valid JSON.`, path, contentStr)}
+
+	resp, _, err := llm.GetLLMResponse(model, []prompts.Message{sys, user}, path, cfg, 60*time.Second)
+	if err != nil {
+		logger.Logf("Doc hunk proposal failed: %v", err)
+		return plan, err
+	}
+
+	logger.Logf("Doc hunk proposal response length: %d chars", len(resp))
 	clean, cerr := utils.ExtractJSONFromLLMResponse(resp)
 	if cerr != nil {
+		logger.Logf("Could not extract JSON from doc hunk response: %v", cerr)
 		return plan, cerr
 	}
+
 	if err := json.Unmarshal([]byte(clean), &plan); err != nil {
+		logger.Logf("Could not parse doc hunk JSON: %v", err)
 		return plan, err
 	}
+
+	logger.Logf("Generated %d doc hunks for %s", len(plan.Hunks), path)
 	return plan, nil
 }
 
@@ -744,19 +831,58 @@ func proposeCodeHunks(path, instructions string, cfg *config.Config, logger *uti
 	if model == "" {
 		model = cfg.EditingModel
 	}
-	sys := prompts.Message{Role: "system", Content: "You output only JSON. Return code hunks as {\"hunks\":[{\"before\":...,\"after\":...,\"where_hint\":...}]}. Base solely on the provided file and instructions. No prose."}
-	user := prompts.Message{Role: "user", Content: fmt.Sprintf("Code file: %s\nInstructions: %s\nReturn ONLY JSON hunks.", path, instructions)}
-	resp, _, err := llm.GetLLMResponse(model, []prompts.Message{sys, user}, path, cfg, 45*time.Second)
+
+	// Read the file content to provide context for better hunk generation
+	fileContent, err := os.ReadFile(path)
 	if err != nil {
+		logger.Logf("Could not read file for hunk generation: %v", err)
 		return plan, err
 	}
+
+	// Limit file content to avoid token limits while providing context
+	contentStr := string(fileContent)
+	if len(contentStr) > 8000 {
+		contentStr = contentStr[:8000] + "\n...[truncated]..."
+	}
+
+	sys := prompts.Message{Role: "system", Content: `You are an expert at creating precise code patches. Generate minimal, targeted hunks that make only the necessary changes.
+
+Return JSON: {"hunks":[{"before":"exact text to replace","after":"replacement text","where_hint":"brief location description"}]}
+
+Guidelines:
+- Create small, focused hunks (typically 1-5 lines changed)
+- Use exact text matching for reliable replacement
+- Include enough context (3-5 lines before/after) for unique identification
+- Prefer multiple small hunks over one large change
+- Each hunk should be independently applicable`}
+
+	user := prompts.Message{Role: "user", Content: fmt.Sprintf(`File: %s
+Instructions: %s
+
+Current file content:
+%s
+
+Generate precise hunks for these changes. Return ONLY valid JSON.`, path, instructions, contentStr)}
+
+	resp, _, err := llm.GetLLMResponse(model, []prompts.Message{sys, user}, path, cfg, 60*time.Second)
+	if err != nil {
+		logger.Logf("Hunk proposal failed: %v", err)
+		return plan, err
+	}
+
+	logger.Logf("Hunk proposal response length: %d chars", len(resp))
 	clean, cerr := utils.ExtractJSONFromLLMResponse(resp)
 	if cerr != nil {
+		logger.Logf("Could not extract JSON from hunk response: %v", cerr)
 		return plan, cerr
 	}
+
 	if err := json.Unmarshal([]byte(clean), &plan); err != nil {
+		logger.Logf("Could not parse hunk JSON: %v", err)
 		return plan, err
 	}
+
+	logger.Logf("Generated %d code hunks for %s", len(plan.Hunks), path)
 	return plan, nil
 }
 
@@ -765,16 +891,31 @@ func applyCodeHunks(path string, plan CodeHunkPlan, logger *utils.Logger) error 
 	if err != nil {
 		return err
 	}
-	s := string(b)
-	for _, h := range plan.Hunks {
+	original := string(b)
+	s := original
+	applied := 0
+
+	for i, h := range plan.Hunks {
 		if h.Before == "" {
+			logger.Logf("Skipping hunk %d for %s: empty 'before' field", i+1, path)
 			continue
 		}
 		if !strings.Contains(s, h.Before) {
+			logger.Logf("Skipping hunk %d for %s: 'before' text not found in file", i+1, path)
 			continue
 		}
+		logger.Logf("Applying hunk %d for %s: replacing %d chars with %d chars", i+1, path, len(h.Before), len(h.After))
 		s = strings.Replace(s, h.Before, h.After, 1)
+		applied++
 	}
+
+	if applied == 0 {
+		logger.Logf("No hunks could be applied to %s", path)
+		return fmt.Errorf("no hunks could be applied")
+	}
+
+	logger.Logf("Successfully applied %d/%d hunks to %s", applied, len(plan.Hunks), path)
+
 	if err := os.WriteFile(path, []byte(s), 0644); err != nil {
 		return err
 	}
@@ -1115,3 +1256,90 @@ func interpretEscapes(s string) string {
 }
 
 // (removed additional unused helpers to satisfy lints)
+
+// attemptPatchBasedEdit attempts to edit a file using patch syntax
+func attemptPatchBasedEdit(filePath, instructions string, cfg *config.Config, logger *utils.Logger) error {
+	// Read the current file content
+	currentContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+
+	// Create messages for patch-based editing
+	messages := createPatchEditMessages(filePath, string(currentContent), instructions)
+
+	// Use the orchestration model for patch generation
+	controlModel := cfg.OrchestrationModel
+	if controlModel == "" {
+		controlModel = cfg.EditingModel
+	}
+
+	// Get LLM response with patch instructions
+	response, _, err := llm.GetLLMResponse(controlModel, messages, filePath, cfg, 60*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to get patch response: %w", err)
+	}
+
+	// Parse patches from response
+	patches, err := parser.GetUpdatedCodeFromPatchResponse(response)
+	if err != nil {
+		return fmt.Errorf("failed to parse patches: %w", err)
+	}
+
+	// Find patch for this specific file
+	filePatch, exists := patches[filePath]
+	if !exists {
+		return fmt.Errorf("no patch found for file %s", filePath)
+	}
+
+	// Apply the patch with enhanced error handling
+	if err := parser.EnhancedApplyPatchToFile(filePatch, filePath); err != nil {
+		return fmt.Errorf("failed to apply patch: %w", err)
+	}
+
+	return nil
+}
+
+// createPatchEditMessages creates messages for patch-based editing
+func createPatchEditMessages(filePath, currentContent, instructions string) []prompts.Message {
+	// Limit content size to avoid token limits
+	if len(currentContent) > 8000 {
+		currentContent = currentContent[:8000] + "\n...[truncated]..."
+	}
+
+	systemPrompt := `You are an expert code editor. Generate precise patches in unified diff format.
+
+CRITICAL REQUIREMENTS:
+- Use unified diff format with proper diff headers
+- Each patch must include sufficient context (3-5 lines before and after changes)
+- Include ONLY the changed sections, not the entire file
+- Make only the specific changes requested
+- Use exact line matching for reliable patch application
+
+Format your response as:
+` + "```diff # " + filePath + `
+--- a/` + filePath + `
++++ b/` + filePath + `
+@@ -10,7 +10,7 @@
+     old line 1
+     old line 2
+-    line to remove
++    line to add
+     old line 4
+    old line 5
+` + "```END"
+
+	userPrompt := fmt.Sprintf(`File to edit: %s
+
+Current file content:
+%s
+
+Instructions: %s
+
+Generate a precise patch for these changes. Return ONLY the diff block.`, filePath, currentContent, instructions)
+
+	return []prompts.Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+}

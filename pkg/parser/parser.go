@@ -1,10 +1,13 @@
 package parser
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -90,75 +93,6 @@ func IsPartialResponse(code string) bool {
 	return false
 }
 
-// MergePartialEdit merges partial file content with the original file
-// Returns the full file content with the partial edit applied
-func MergePartialEdit(originalContent, partialContent string, startLine, endLine int) (string, error) {
-	if startLine <= 0 || endLine <= 0 {
-		return partialContent, nil // If no range specified, return as-is
-	}
-
-	originalLines := strings.Split(originalContent, "\n")
-	partialLines := strings.Split(partialContent, "\n")
-	totalOriginalLines := len(originalLines)
-
-	// Validate range
-	if startLine > totalOriginalLines+1 {
-		return "", fmt.Errorf("start line %d exceeds original file length %d", startLine, totalOriginalLines)
-	}
-	if endLine > totalOriginalLines+1 {
-		endLine = totalOriginalLines + 1 // Allow appending to end
-	}
-
-	var result []string
-
-	// Add lines before the edit range
-	if startLine > 1 {
-		result = append(result, originalLines[:startLine-1]...)
-	}
-
-	// Add the partial content
-	result = append(result, partialLines...)
-
-	// Add lines after the edit range
-	if endLine <= totalOriginalLines {
-		result = append(result, originalLines[endLine:]...)
-	}
-
-	return strings.Join(result, "\n"), nil
-}
-
-// ExtractPartialEditInfo extracts line range information from file content comments
-// Looks for markers like "// Editing lines 10-20" or "# Lines 5-15 only"
-func ExtractPartialEditInfo(content string) (startLine, endLine int, hasRange bool) {
-	lines := strings.Split(content, "\n")
-
-	// Check first few lines for range indicators
-	for i := 0; i < len(lines) && i < 5; i++ {
-		line := strings.TrimSpace(lines[i])
-
-		// Look for patterns like "Lines 10-20", "Editing lines 5-15", etc.
-		patterns := []string{
-			`(?i)lines?\s+(\d+)[-–](\d+)`,
-			`(?i)editing\s+lines?\s+(\d+)[-–](\d+)`,
-			`(?i)range\s+(\d+)[-–](\d+)`,
-		}
-
-		for _, pattern := range patterns {
-			re := regexp.MustCompile(pattern)
-			matches := re.FindStringSubmatch(line)
-			if len(matches) >= 3 {
-				if start, err := strconv.Atoi(matches[1]); err == nil {
-					if end, err := strconv.Atoi(matches[2]); err == nil {
-						return start, end, true
-					}
-				}
-			}
-		}
-	}
-
-	return 0, 0, false
-}
-
 func extractFilename(line string) string {
 	parts := strings.Split(line, "#")
 	if len(parts) < 2 {
@@ -185,6 +119,23 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 	fmt.Printf("=== Parser Debug ===\n")
 	fmt.Printf("Response length: %d characters\n", len(response))
 
+	// First, try to parse as patches (new format)
+	patches, err := GetUpdatedCodeFromPatchResponse(response)
+	if err == nil && len(patches) > 0 {
+		fmt.Printf("Found %d patches in response:\n", len(patches))
+		updatedCode := make(map[string]string)
+		for filename, patch := range patches {
+			fmt.Printf("  - %s (%d hunks)\n", filename, len(patch.Hunks))
+			// For backward compatibility, convert patches to full file content
+			// This allows existing code to work with the new patch format
+			updatedCode[filename] = patchToFullContent(patch, filename)
+		}
+		fmt.Printf("=== End Parser Debug ===\n")
+		return updatedCode, nil
+	}
+
+	// Fall back to original parsing for full file content (old format)
+	fmt.Printf("No patches found, falling back to legacy code block parsing\n")
 	updatedCode := make(map[string]string)
 	var currentFileContent strings.Builder
 	var currentFileName string
@@ -259,6 +210,98 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 	return updatedCode, nil
 }
 
+// patchToFullContent converts a patch to full file content for backward compatibility
+func patchToFullContent(patch *Patch, filename string) string {
+	// This function now reads the original file and applies the patch to it
+	// to produce the complete updated file content
+
+	if len(patch.Hunks) == 0 {
+		return ""
+	}
+
+	// Read the original file content
+	originalContent, err := os.ReadFile(filename)
+	if err != nil {
+		// If we can't read the original file, fall back to the old behavior
+		// but with improved reconstruction
+		fmt.Printf("Warning: Could not read original file %s: %v\n", filename, err)
+		return fallbackReconstruction(patch)
+	}
+
+	// Apply the patch to the original content using the existing patch application logic
+	updatedContent, err := applyPatchToContent(patch, string(originalContent))
+	if err != nil {
+		// If patch application fails, fall back to the improved reconstruction
+		fmt.Printf("Warning: Failed to apply patch to %s: %v\n", filename, err)
+		fmt.Printf("Debug: Original content length: %d bytes\n", len(originalContent))
+		fmt.Printf("Debug: Patch has %d hunks\n", len(patch.Hunks))
+		for i, hunk := range patch.Hunks {
+			fmt.Printf("Debug: Hunk %d: OldStart=%d, OldLines=%d, NewStart=%d, NewLines=%d\n",
+				i, hunk.OldStart, hunk.OldLines, hunk.NewStart, hunk.NewLines)
+		}
+		return fallbackReconstruction(patch)
+	}
+
+	fmt.Printf("Debug: Successfully applied patch to %s\n", filename)
+	return updatedContent
+}
+
+// fallbackReconstruction provides improved reconstruction when we can't read the original file
+func fallbackReconstruction(patch *Patch) string {
+	return reconstructWithBestEffort(patch)
+}
+
+// reconstructWithBestEffort attempts to reconstruct the file content as accurately as possible
+// when we can't apply the patch to the original file
+func reconstructWithBestEffort(patch *Patch) string {
+	if len(patch.Hunks) == 0 {
+		return ""
+	}
+
+	// For single hunk patches, we can do a reasonable reconstruction
+	if len(patch.Hunks) == 1 {
+		return reconstructSingleHunk(patch.Hunks[0])
+	}
+
+	// For multiple hunks, try a different approach
+	// Instead of estimating missing lines, we'll concatenate the hunks
+	// but preserve the context lines to maintain some structure
+	result := []string{}
+
+	for i, hunk := range patch.Hunks {
+		if i > 0 {
+			result = append(result, "") // Add spacing between hunks
+		}
+
+		// Add the hunk content with preserved context
+		hunkContent := reconstructSingleHunk(hunk)
+		result = append(result, hunkContent)
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// reconstructSingleHunk reconstructs content from a single hunk
+func reconstructSingleHunk(hunk Hunk) string {
+	lines := []string{}
+
+	for _, hunkLine := range hunk.Lines {
+		switch {
+		case strings.HasPrefix(hunkLine, "+"):
+			// Add new line
+			lines = append(lines, strings.TrimPrefix(hunkLine, "+"))
+		case strings.HasPrefix(hunkLine, "-"):
+			// Skip removed lines (they're not in the final content)
+			continue
+		default:
+			// Context line - preserve as-is
+			lines = append(lines, hunkLine)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
 // ExtractCodeFromResponse extracts a single code block from an LLM response for a specific language
 // This is used for partial editing where we expect just one updated section
 func ExtractCodeFromResponse(response, expectedLanguage string) (string, error) {
@@ -295,4 +338,572 @@ func ExtractCodeFromResponse(response, expectedLanguage string) (string, error) 
 	}
 
 	return code, nil
+}
+
+// Patch represents a unified diff patch
+type Patch struct {
+	Filename string
+	OldFile  string
+	NewFile  string
+	Hunks    []Hunk
+}
+
+// Hunk represents a single diff hunk
+type Hunk struct {
+	OldStart int
+	OldLines int
+	NewStart int
+	NewLines int
+	Lines    []string
+}
+
+// ParsePatchFromDiff parses a unified diff string into a Patch struct
+func ParsePatchFromDiff(diffContent, filename string) (*Patch, error) {
+	scanner := bufio.NewScanner(strings.NewReader(diffContent))
+	patch := &Patch{
+		Filename: filename,
+		Hunks:    []Hunk{},
+	}
+
+	var currentHunk *Hunk
+	var inHunk bool
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Parse diff header lines
+		if strings.HasPrefix(line, "--- ") {
+			patch.OldFile = strings.TrimPrefix(line, "--- ")
+			continue
+		}
+		if strings.HasPrefix(line, "+++ ") {
+			patch.NewFile = strings.TrimPrefix(line, "+++ ")
+			continue
+		}
+
+		// Parse hunk header
+		if strings.HasPrefix(line, "@@ ") {
+			if currentHunk != nil {
+				patch.Hunks = append(patch.Hunks, *currentHunk)
+			}
+
+			hunk, err := parseHunkHeader(line)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse hunk header: %w", err)
+			}
+			currentHunk = &hunk
+			inHunk = true
+			continue
+		}
+
+		// Parse hunk content
+		if inHunk && currentHunk != nil {
+			// Unified diff lines inside a hunk can start with:
+			//  ' ' (space) for context lines
+			//  '+' for additions
+			//  '-' for deletions
+			//  '\\ No newline at end of file' special marker which we ignore
+			if strings.HasPrefix(line, "\\ No newline at end of file") {
+				continue
+			}
+			if strings.HasPrefix(line, " ") {
+				// Context line: store without the leading space to match actual file content
+				currentHunk.Lines = append(currentHunk.Lines, strings.TrimPrefix(line, " "))
+				continue
+			}
+			// Additions and deletions are kept as-is (with their +/- prefix)
+			currentHunk.Lines = append(currentHunk.Lines, line)
+		}
+	}
+
+	// Add the last hunk
+	if currentHunk != nil {
+		patch.Hunks = append(patch.Hunks, *currentHunk)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading diff content: %w", err)
+	}
+
+	return patch, nil
+}
+
+// parseHunkHeader parses a hunk header line like "@@ -10,7 +10,7 @@"
+func parseHunkHeader(header string) (Hunk, error) {
+	// Remove @@ markers
+	content := strings.TrimPrefix(strings.TrimSuffix(header, " @@"), "@@ ")
+	parts := strings.Fields(content)
+
+	if len(parts) != 2 {
+		return Hunk{}, fmt.Errorf("invalid hunk header format: %s", header)
+	}
+
+	oldRange := parts[0]
+	newRange := parts[1]
+
+	oldStart, oldLines, err := parseRange(oldRange)
+	if err != nil {
+		return Hunk{}, fmt.Errorf("failed to parse old range: %w", err)
+	}
+
+	newStart, newLines, err := parseRange(newRange)
+	if err != nil {
+		return Hunk{}, fmt.Errorf("failed to parse new range: %w", err)
+	}
+
+	return Hunk{
+		OldStart: oldStart,
+		OldLines: oldLines,
+		NewStart: newStart,
+		NewLines: newLines,
+		Lines:    []string{},
+	}, nil
+}
+
+// parseRange parses a range string like "-10,7" or "+10,7"
+func parseRange(rangeStr string) (start, count int, err error) {
+	// Remove +/- prefix
+	rangeStr = strings.TrimPrefix(strings.TrimPrefix(rangeStr, "-"), "+")
+
+	parts := strings.Split(rangeStr, ",")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("invalid range format: %s", rangeStr)
+	}
+
+	start, err = strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid start line: %s", parts[0])
+	}
+
+	count, err = strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid line count: %s", parts[1])
+	}
+
+	return start, count, nil
+}
+
+// GetUpdatedCodeFromPatchResponse extracts patches from an LLM response
+func GetUpdatedCodeFromPatchResponse(response string) (map[string]*Patch, error) {
+	// Optional debug logging of the raw LLM response
+	if os.Getenv("LEDIT_DEBUG_PATCH") == "1" {
+		_ = os.MkdirAll(".ledit/debug", 0755)
+		ts := time.Now().Format("20060102_150405")
+		path := fmt.Sprintf(".ledit/debug/llm_patch_response_%s.txt", ts)
+		_ = os.WriteFile(path, []byte(response), 0644)
+		fmt.Printf("Debug: wrote raw patch response to %s (len=%d)\n", path, len(response))
+	}
+	patches := make(map[string]*Patch)
+	var currentPatchContent strings.Builder
+	var currentFilename string
+	inDiffBlock := false
+
+	lines := strings.Split(response, "\n")
+
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+
+		// Check for diff block start
+		if strings.HasPrefix(line, "```diff") {
+			filename := extractFilenameFromDiffLine(line)
+			if filename != "" {
+				inDiffBlock = true
+				currentFilename = filename
+				currentPatchContent.Reset()
+				continue
+			}
+		}
+
+		// Check for block end
+		if inDiffBlock && (line == "```END" || line == "```") {
+			inDiffBlock = false
+			if currentFilename != "" && currentPatchContent.Len() > 0 {
+				patch, err := ParsePatchFromDiff(currentPatchContent.String(), currentFilename)
+				if err != nil {
+					fmt.Printf("⚠️  WARNING: Failed to parse patch for %s: %v\n", currentFilename, err)
+					continue
+				}
+				patches[currentFilename] = patch
+				if os.Getenv("LEDIT_DEBUG_PATCH") == "1" {
+					// Write per-file diff content for debugging
+					_ = os.MkdirAll(".ledit/debug", 0755)
+					ts := time.Now().Format("20060102_150405")
+					fpath := fmt.Sprintf(".ledit/debug/diff_%s_%s.diff", ts, strings.ReplaceAll(currentFilename, string(os.PathSeparator), "_"))
+					_ = os.WriteFile(fpath, []byte(currentPatchContent.String()), 0644)
+					fmt.Printf("Debug: wrote parsed diff for %s to %s\n", currentFilename, fpath)
+				}
+			}
+			currentFilename = ""
+			continue
+		}
+
+		// Collect patch content
+		if inDiffBlock {
+			if currentPatchContent.Len() > 0 {
+				currentPatchContent.WriteString("\n")
+			}
+			currentPatchContent.WriteString(line)
+		}
+	}
+
+	return patches, nil
+}
+
+// extractFilenameFromDiffLine extracts filename from a line like "```diff # myfile.py"
+func extractFilenameFromDiffLine(line string) string {
+	parts := strings.Split(line, "#")
+	if len(parts) < 2 {
+		return ""
+	}
+	filename := strings.TrimSpace(parts[len(parts)-1])
+	if filename == "" {
+		return ""
+	}
+	return strings.Fields(filename)[0]
+}
+
+// ApplyPatchToFile applies a patch to a file safely with validation
+func ApplyPatchToFile(patch *Patch, filePath string) error {
+	// Read the current file content
+	currentContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+
+	// Apply the patch
+	updatedContent, err := applyPatchToContent(patch, string(currentContent))
+	if err != nil {
+		return fmt.Errorf("failed to apply patch to %s: %w", filePath, err)
+	}
+
+	// Validate the patch was applied correctly
+	if err := validatePatchApplication(patch, string(currentContent), updatedContent); err != nil {
+		return fmt.Errorf("patch validation failed for %s: %w", filePath, err)
+	}
+
+	// Write the updated content
+	if err := os.WriteFile(filePath, []byte(updatedContent), 0644); err != nil {
+		return fmt.Errorf("failed to write updated file %s: %w", filePath, err)
+	}
+
+	return nil
+}
+
+// applyPatchToContent applies a patch to file content and returns the updated content
+func applyPatchToContent(patch *Patch, content string) (string, error) {
+	lines := strings.Split(content, "\n")
+	result := make([]string, len(lines))
+	copy(result, lines)
+
+	// Sort hunks by old start line to process them in order
+	sortedHunks := make([]Hunk, len(patch.Hunks))
+	copy(sortedHunks, patch.Hunks)
+	for i := 0; i < len(sortedHunks)-1; i++ {
+		for j := i + 1; j < len(sortedHunks); j++ {
+			if sortedHunks[j].OldStart < sortedHunks[i].OldStart {
+				sortedHunks[i], sortedHunks[j] = sortedHunks[j], sortedHunks[i]
+			}
+		}
+	}
+
+	// Apply hunks in reverse order to maintain line number accuracy
+	for i := len(sortedHunks) - 1; i >= 0; i-- {
+		hunk := sortedHunks[i]
+		updatedResult, err := applyHunkToLines(result, hunk)
+		if err != nil {
+			return "", fmt.Errorf("failed to apply hunk at line %d: %w", hunk.OldStart, err)
+		}
+		result = updatedResult
+	}
+
+	return strings.Join(result, "\n"), nil
+}
+
+// applyHunkToLines applies a single hunk to the lines array
+func applyHunkToLines(lines []string, hunk Hunk) ([]string, error) {
+	// Find the matching context in the file
+	matchStart, err := findContextMatch(lines, hunk, hunk.OldStart-1)
+	if err != nil {
+		return lines, fmt.Errorf("context match failed: %w", err)
+	}
+
+	// Apply hunk changes directly to the lines
+	return applyHunkChanges(lines, hunk, matchStart), nil
+}
+
+// findContextMatch finds the exact location where the hunk context matches
+func findContextMatch(lines []string, hunk Hunk, startHint int) (int, error) {
+	// Extract context lines from hunk (excluding +/- lines)
+	var contextLines []string
+	for _, line := range hunk.Lines {
+		if !strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "-") {
+			// Normalize by trimming trailing whitespace for robust matching
+			contextLines = append(contextLines, strings.TrimRight(line, " \t"))
+		}
+	}
+
+	// If no context lines, use the start hint
+	if len(contextLines) == 0 {
+		return startHint, nil
+	}
+
+	// Look for matching context near the hint with a larger window
+	windowStart := startHint - 25
+	if windowStart < 0 {
+		windowStart = 0
+	}
+	windowEnd := startHint + 25
+	if windowEnd >= len(lines) {
+		windowEnd = len(lines) - 1
+	}
+
+	tryMatch := func(from, to int, ctx []string) (int, bool) {
+		for i := from; i <= to; i++ {
+			if i+len(ctx) > len(lines) {
+				break
+			}
+			matched := true
+			for j, contextLine := range ctx {
+				var fileLine string
+				if i+j < len(lines) {
+					fileLine = strings.TrimRight(lines[i+j], " \t")
+				}
+				if i+j >= len(lines) || fileLine != contextLine {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				return i, true
+			}
+		}
+		return 0, false
+	}
+
+	if pos, ok := tryMatch(windowStart, windowEnd, contextLines); ok {
+		return pos, nil
+	}
+
+	// Fallback: scan the whole file for the full context
+	if pos, ok := tryMatch(0, len(lines)-1, contextLines); ok {
+		return pos, nil
+	}
+
+	// Sliding-window fallback: try smaller consecutive context blocks (5,3,2,1)
+	blockSizes := []int{5, 3, 2, 1}
+	for _, k := range blockSizes {
+		if k > len(contextLines) {
+			continue
+		}
+		for start := 0; start+k <= len(contextLines); start++ {
+			block := contextLines[start : start+k]
+			if pos, ok := tryMatch(windowStart, windowEnd, block); ok {
+				return pos, nil
+			}
+			if pos, ok := tryMatch(0, len(lines)-1, block); ok {
+				return pos, nil
+			}
+		}
+	}
+
+	// Debug log on failure when enabled
+	if os.Getenv("LEDIT_DEBUG_PATCH") == "1" {
+		_ = os.MkdirAll(".ledit/debug", 0755)
+		ts := time.Now().Format("20060102_150405")
+		preview := strings.Join(contextLines, "\n")
+		_ = os.WriteFile(
+			fmt.Sprintf(".ledit/debug/context_miss_%s.txt", ts),
+			[]byte(preview), 0644,
+		)
+	}
+
+	return 0, fmt.Errorf("could not find matching context for hunk at line %d", hunk.OldStart)
+}
+
+// applyHunkChanges applies the actual changes from the hunk
+func applyHunkChanges(lines []string, hunk Hunk, matchStart int) []string {
+	// Build updated hunk segment by consuming original lines and inserting additions
+	updated := []string{}
+	consumed := 0
+
+	for _, hunkLine := range hunk.Lines {
+		switch {
+		case strings.HasPrefix(hunkLine, "-"):
+			// deletion consumes one line from original
+			consumed++
+		case strings.HasPrefix(hunkLine, "+"):
+			// addition inserts new line
+			updated = append(updated, strings.TrimPrefix(hunkLine, "+"))
+		default:
+			// context: copy original and consume one
+			if matchStart+consumed < len(lines) {
+				updated = append(updated, lines[matchStart+consumed])
+			}
+			consumed++
+		}
+	}
+
+	// Assemble: prefix + updated + suffix to preserve entire file content
+	result := make([]string, 0, len(lines)-consumed+len(updated))
+	// prefix
+	result = append(result, lines[:matchStart]...)
+	// updated region
+	result = append(result, updated...)
+	// suffix
+	suffixStart := matchStart + consumed
+	if suffixStart < len(lines) {
+		result = append(result, lines[suffixStart:]...)
+	}
+	return result
+}
+
+// validatePatchApplication validates that the patch was applied correctly
+func validatePatchApplication(patch *Patch, originalContent, newContent string) error {
+	// Basic validation: ensure content changed
+	if originalContent == newContent {
+		return fmt.Errorf("patch application resulted in no changes")
+	}
+
+	// Validate each hunk was applied
+	lines := strings.Split(newContent, "\n")
+	for _, hunk := range patch.Hunks {
+		if err := validateHunkApplication(hunk, lines); err != nil {
+			return fmt.Errorf("hunk validation failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// validateHunkApplication validates that a specific hunk was applied correctly
+func validateHunkApplication(hunk Hunk, lines []string) error {
+	// Find added lines in the hunk
+	var addedLines []string
+	for _, line := range hunk.Lines {
+		if strings.HasPrefix(line, "+") {
+			addedLines = append(addedLines, strings.TrimPrefix(line, "+"))
+		}
+	}
+
+	// Verify added lines exist in the new content
+	for _, addedLine := range addedLines {
+		found := false
+		for _, line := range lines {
+			if line == addedLine {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("added line not found in new content: %s", addedLine)
+		}
+	}
+
+	return nil
+}
+
+// PatchError represents different types of patch application errors
+type PatchError struct {
+	Type        string
+	File        string
+	Description string
+	Suggestion  string
+	Err         error
+}
+
+func (pe *PatchError) Error() string {
+	return fmt.Sprintf("%s error in %s: %s. %s", pe.Type, pe.File, pe.Description, pe.Suggestion)
+}
+
+func (pe *PatchError) Unwrap() error {
+	return pe.Err
+}
+
+// NewPatchError creates a new patch error with helpful suggestions
+func NewPatchError(errorType, file, description, suggestion string, err error) *PatchError {
+	return &PatchError{
+		Type:        errorType,
+		File:        file,
+		Description: description,
+		Suggestion:  suggestion,
+		Err:         err,
+	}
+}
+
+// EnhancedApplyPatchToFile applies a patch with enhanced error handling and recovery
+func EnhancedApplyPatchToFile(patch *Patch, filePath string) error {
+	// Read the current file content
+	currentContent, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return NewPatchError("FileNotFound", filePath, "Target file does not exist", "Ensure the file path is correct and the file exists", err)
+		}
+		return NewPatchError("ReadError", filePath, "Failed to read file", "Check file permissions and path", err)
+	}
+
+	// Validate patch before applying
+	if err := validatePatchBeforeApply(patch, filePath); err != nil {
+		return err
+	}
+
+	// Apply the patch
+	updatedContent, err := applyPatchToContent(patch, string(currentContent))
+	if err != nil {
+		return NewPatchError("ApplyError", filePath, "Failed to apply patch", "The patch may be malformed or conflict with file content", err)
+	}
+
+	// Validate the patch was applied correctly
+	if err := validatePatchApplication(patch, string(currentContent), updatedContent); err != nil {
+		return NewPatchError("ValidationError", filePath, "Patch validation failed", "The patch may not have been applied correctly", err)
+	}
+
+	// Create backup before writing
+	backupPath := filePath + ".patch_backup"
+	if err := os.WriteFile(backupPath, currentContent, 0644); err != nil {
+		return NewPatchError("BackupError", filePath, "Failed to create backup", "Ensure write permissions in the directory", err)
+	}
+
+	// Write the updated content
+	if err := os.WriteFile(filePath, []byte(updatedContent), 0644); err != nil {
+		// Try to restore from backup
+		os.WriteFile(filePath, currentContent, 0644)
+		return NewPatchError("WriteError", filePath, "Failed to write updated file", "Check file permissions. Backup restored", err)
+	}
+
+	// Clean up backup on success
+	os.Remove(backupPath)
+
+	return nil
+}
+
+// validatePatchBeforeApply performs pre-application validation
+func validatePatchBeforeApply(patch *Patch, filePath string) error {
+	if patch == nil {
+		return NewPatchError("InvalidPatch", filePath, "Patch is nil", "Ensure the patch was parsed correctly", nil)
+	}
+
+	if len(patch.Hunks) == 0 {
+		return NewPatchError("EmptyPatch", filePath, "Patch contains no hunks", "The patch may be empty or malformed", nil)
+	}
+
+	// Validate each hunk
+	for i, hunk := range patch.Hunks {
+		if len(hunk.Lines) == 0 {
+			return NewPatchError("EmptyHunk", filePath, fmt.Sprintf("Hunk %d is empty", i), "Remove empty hunks from the patch", nil)
+		}
+
+		// Check for context lines
+		hasContext := false
+		for _, line := range hunk.Lines {
+			if !strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "-") {
+				hasContext = true
+				break
+			}
+		}
+		if !hasContext {
+			return NewPatchError("NoContext", filePath, fmt.Sprintf("Hunk %d has no context lines", i), "Add context lines around changes for reliable application", nil)
+		}
+	}
+
+	return nil
 }

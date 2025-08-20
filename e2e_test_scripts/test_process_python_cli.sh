@@ -18,33 +18,52 @@ run_test_logic() {
     cat > process.json << 'JSON'
 {
   "version": "1.0",
-  "goal": "Create a Python CLI using argparse",
-  "description": "Single-agent small Python CLI",
+  "goal": "Create a Python CLI application using argparse with command-line argument handling",
+  "description": "Single-agent Python CLI implementation with proper argparse usage and documentation",
+  "base_model": "",
   "agents": [{
     "id": "pydev",
-    "name": "Python Dev",
+    "name": "Python Developer",
     "persona": "backend_developer",
-    "description": "Implements small Python CLIs",
-    "skills": ["python", "argparse"],
+    "description": "Implements Python command-line applications and scripts",
+    "skills": ["python", "argparse", "cli_development"],
     "model": "",
     "priority": 1,
     "depends_on": [],
-    "config": {"skip_prompt": "true"}
+    "config": {"skip_prompt": "true"},
+    "budget": {
+      "max_tokens": 60000,
+      "max_cost": 3.0,
+      "token_warning": 45000,
+      "cost_warning": 2.5,
+      "alert_on_limit": true,
+      "stop_on_limit": false
+    }
   }],
   "steps": [{
-    "id": "init",
-    "name": "Init CLI",
-    "description": "Create greet.py using argparse with --name and a README",
+    "id": "create_cli",
+    "name": "Create Python CLI Application",
+    "description": "Create greet.py using argparse with --name flag and README.md with usage instructions",
     "agent_id": "pydev",
     "input": {},
-    "expected_output": "greet.py and README.md exist",
+    "expected_output": "Working Python CLI with argparse and documentation",
     "status": "pending",
     "depends_on": [],
-    "timeout": 60,
-    "retries": 0
+    "timeout": 120,
+    "retries": 2
   }],
-  "validation": {"required": false},
-  "settings": {"max_retries": 0, "step_timeout": 120, "parallel_execution": false, "stop_on_failure": true, "log_level": "info"}
+  "validation": {
+    "required": false,
+    "test_command": "python -m py_compile greet.py",
+    "custom_checks": ["python -c \"import ast; ast.parse(open('greet.py').read())\""]
+  },
+  "settings": {
+    "max_retries": 2,
+    "step_timeout": 300,
+    "parallel_execution": false,
+    "stop_on_failure": true,
+    "log_level": "info"
+  }
 }
 JSON
 

@@ -525,8 +525,7 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 	b.WriteString("1. Use the summaries and exports above to identify relevant files\n")
 	b.WriteString("2. Use read_file tool to load ONLY the specific files you need to understand\n")
 	b.WriteString("3. Focus on making minimal changes - prefer modifying existing functions over creating new ones\n")
-	b.WriteString("4. When changing model usage, look for assignments like 'modelName := cfg.OrchestrationModel'\n")
-	b.WriteString("5. Make the smallest change that solves the specific problem described\n\n")
+	b.WriteString("4. Make the smallest change that solves the specific problem described\n\n")
 
 	// Log the full minimal context for debugging
 	logger.Log(b.String())

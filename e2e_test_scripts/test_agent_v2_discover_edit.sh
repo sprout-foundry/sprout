@@ -27,7 +27,7 @@ func greet() {
 EOF
 
     # Do not mention file name; ask to modify greet function
-    ../../ledit agent --agent v2 -m "$model_name" --skip-prompt "At the beginning of the greet function, add a log line println(\"started\")."
+    ../../ledit agent -m "$model_name" --skip-prompt "At the beginning of the greet function, add a log line println(\"started\")."
 
     echo
     echo "--- Verifying Test ---"

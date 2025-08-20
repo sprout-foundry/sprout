@@ -27,7 +27,7 @@ func TestBuildIntentAnalysisPrompt_Basic(t *testing.T) {
 func TestBuildProgressEvaluationPrompt_EmbedsContext(t *testing.T) {
 	ctx := "Current plan: 3 files"
 	p := BuildProgressEvaluationPrompt(ctx)
-	if p == "" || !containsAll(p, []string{"Current plan: 3 files", "AVAILABLE NEXT ACTIONS", "DECISION LOGIC"}) {
+	if p == "" || !containsAll(p, []string{"Current plan: 3 files", "AVAILABLE ACTIONS & WHEN TO USE THEM", "SMART DECISION MAKING"}) {
 		t.Fatalf("unexpected prompt: %q", p)
 	}
 }

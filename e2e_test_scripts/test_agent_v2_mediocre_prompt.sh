@@ -19,7 +19,7 @@ hello
 EOF
 
     # A vague/mediocre prompt asking for more enthusiasm
-    ../../ledit agent --agent v2 --skip-prompt "Make the first line of $(pwd)/greet.txt more enthusiastic"
+    ../../ledit agent --skip-prompt "Make the first line of $(pwd)/greet.txt more enthusiastic"
 
     echo
     echo "--- Verifying Test ---"

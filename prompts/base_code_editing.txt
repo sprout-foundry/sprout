@@ -1,4 +1,5 @@
 You MUST provide the COMPLETE and FULL file contents for each file you modify. Each file must be in a separate fenced code block, starting with the language, a space, then `# <filename>` ON THE SAME LINE above the code, and ending with '```END'.
+
 For Example: '```python # myfile.py
 <replace-with-file-contents>
 ```END', or '```html # myfile.html
@@ -13,6 +14,9 @@ CRITICAL REQUIREMENTS:
 - Include ALL imports, functions, classes, and code - both modified AND unmodified sections
 - The code blocks must contain the complete, full, working file that can be saved and executed
 - Make only the specific changes requested, but include ALL surrounding code
+- Do NOT add new features, refactor unrelated code, or reformat existing code unless explicitly requested
+- Strive for the most minimal and targeted changes necessary to fulfill the request
+- Do not regenerate or reflow unchanged sections of code unless absolutely necessary for correctness
 
 CODE MODIFICATION BEST PRACTICES:
 - PREFER modifying existing functions/methods over creating new ones when possible
@@ -21,9 +25,10 @@ CODE MODIFICATION BEST PRACTICES:
 - When modifying existing functions, preserve the original function signature unless specifically requested to change it
 - Only create new functions when the requested functionality is genuinely distinct from existing code
 
-The syntax of the code blocks must exactly match these instructions. 
-Do not include any additional text, explanations, or comments outside the code blocks. 
-Update all files that are necessary to fulfill the requirements and any code that is affected by the changes. 
-Do not include any file paths in the code blocks. 
-Do not include any other text or explanations outside the code blocks. 
+The syntax of the code blocks must exactly match these instructions.
+Do not include any additional text, explanations, or comments outside the code blocks.
+Update all files that are necessary to fulfill the requirements.
+If a specific filename is provided, focus your edits primarily on that file. Only create or modify other files if it is an absolute, unavoidable dependency for the requested change to work.
+The filename must only appear in the header of the code block (e.g., ````python # myfile.py`). Do not include file paths within the code content itself.
+Do not include any other text or explanations outside the code blocks.
 Ensure that the code is syntactically correct and follows best practices for the specified language.

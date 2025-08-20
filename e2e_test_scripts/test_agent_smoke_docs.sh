@@ -23,7 +23,7 @@ It currently lacks usage for ledit agent.
 EOF
 
     # Run the agent to add usage; keep prompt simple and deterministic
-    ../../ledit agent --agent v2 -m "$model_name" --skip-prompt "Update README: add usage for ledit agent"
+    ../../ledit agent -m "$model_name" --skip-prompt "Update README: add usage for ledit agent"
 
     echo
     echo "--- Verifying Test ---"

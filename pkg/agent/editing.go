@@ -13,12 +13,13 @@ import (
 	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/git"
 	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/parser"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
-// runSingleEditWithRetries attempts a single operation with partial/full strategies and retry logic
+// runSingleEditWithRetries attempts a single operation using patch-based editing
 func runSingleEditWithRetries(operation EditOperation, editInstructions string, context *AgentContext, maxRetries int) (completionTokens int, success bool, err error, opResult string) {
 	// Lightweight risk gate using blame/size/sensitive paths
 	if isHighRiskEdit(operation.FilePath) {
@@ -31,59 +32,54 @@ func runSingleEditWithRetries(operation EditOperation, editInstructions string, 
 			}
 		}
 	}
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			context.Logger.LogProcessStep(fmt.Sprintf("🔄 Retry attempt %d/%d for edit %d", attempt, maxRetries, attempt))
 		}
 
-		if false { // Implicit partial edits disabled; use explicit micro_edit tool instead
-		} else {
-			context.Logger.Logf("Using full file edit for %s (attempt %d)", operation.FilePath, attempt+1)
-			fdiff, ferr := editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
-			if ferr == nil {
-				// Evidence verification: ensure the diff mentions the target file
-				if !strings.Contains(fdiff, operation.FilePath) {
-					context.Logger.LogProcessStep("⚠️ Diff did not reference target file; attempting partial-edit fallback")
-					// Try partial-edit fallback when the model returned a code block without a diff header
-					pdiff, perr := editor.ProcessPartialEdit(operation.FilePath, editInstructions, context.Config, context.Logger)
-					if perr == nil {
-						completionTokens += utils.EstimateTokens(pdiff)
-						success = true
-						opResult = "✅ Edit operation completed (partial edit fallback: no diff header)"
-						return completionTokens, success, nil, opResult
-					}
-					context.Logger.LogProcessStep("ℹ️ Partial edit fallback after missing diff header failed; treating as failure")
-					return completionTokens, false, fmt.Errorf("evidence verification failed: no diff for %s", operation.FilePath), ""
-				}
-				// Minimal-diff guard: avoid full-file rewrites unless necessary
-				if isDiffTooLarge(operation.FilePath, fdiff) {
-					context.Logger.LogProcessStep("⚠️ Diff appears too large (potential full-file rewrite). Retrying as targeted partial edit.")
-					pdiff, perr := editor.ProcessPartialEdit(operation.FilePath, editInstructions, context.Config, context.Logger)
-					if perr == nil {
-						completionTokens += utils.EstimateTokens(pdiff)
-						success = true
-						opResult = "✅ Edit operation completed (partial edit fallback)"
-						return completionTokens, success, nil, opResult
-					}
-					// If partial also fails, continue with original diff but report warning
-					context.Logger.LogProcessStep("ℹ️ Partial edit fallback failed; accepting original diff.")
-				}
-				completionTokens += utils.EstimateTokens(fdiff)
-				success = true
-				opResult = "✅ Edit operation completed successfully"
-				return completionTokens, success, nil, opResult
-			}
-			err = ferr
+		// Use patch-based editing as the primary approach
+		context.Logger.Logf("Using patch-based editing for %s (attempt %d)", operation.FilePath, attempt+1)
+
+		// Create messages for patch-based editing
+		messages := []prompts.Message{
+			{Role: "system", Content: prompts.GetBaseCodePatchSystemMessage()},
+			{Role: "user", Content: fmt.Sprintf("Target file: %s\n\nInstructions: %s", operation.FilePath, editInstructions)},
 		}
 
-		if err != nil {
-			// Special success signal
-			if strings.Contains(err.Error(), "revisions applied, re-validating") {
-				success = true
-				opResult = "✅ Edit operation completed (with review cycle)"
-				return completionTokens, success, nil, opResult
+		// Get patch response from LLM
+		response, _, err := llm.GetLLMResponse(context.Config.EditingModel, messages, operation.FilePath, context.Config, 45*time.Second)
+		if err == nil {
+			// Parse patches from response
+			patches, parseErr := parser.GetUpdatedCodeFromPatchResponse(response)
+			if parseErr == nil && len(patches) > 0 {
+				// Apply the patch
+				filePatch, exists := patches[operation.FilePath]
+				if exists {
+					err = parser.ApplyPatchToFile(filePatch, operation.FilePath)
+					if err == nil {
+						completionTokens += utils.EstimateTokens(response)
+						success = true
+						opResult = "✅ Edit operation completed with patch-based editing"
+						return completionTokens, success, nil, opResult
+					}
+				}
 			}
+			context.Logger.LogProcessStep("⚠️ Patch-based editing failed, falling back to full file edit")
+		}
 
+		// Fallback to full file editing if patch-based editing fails
+		context.Logger.Logf("Using full file edit for %s (attempt %d)", operation.FilePath, attempt+1)
+		fdiff, ferr := editor.ProcessCodeGeneration(operation.FilePath, editInstructions, context.Config, "")
+		if ferr == nil {
+			completionTokens += utils.EstimateTokens(fdiff)
+			success = true
+			opResult = "✅ Edit operation completed with full file editing"
+			return completionTokens, success, nil, opResult
+		}
+
+		err = ferr
+		if err != nil {
 			context.Logger.LogProcessStep(fmt.Sprintf("❌ Edit attempt %d failed: %v", attempt+1, err))
 			if attempt == maxRetries {
 				opResult = fmt.Sprintf("❌ Edit operation failed after %d attempts: %v", maxRetries+1, err)
@@ -93,35 +89,6 @@ func runSingleEditWithRetries(operation EditOperation, editInstructions string, 
 	}
 	// Should not reach here; return last error
 	return completionTokens, false, err, opResult
-}
-
-// isDiffTooLarge heuristically detects likely full-file rewrites by counting changed lines
-func isDiffTooLarge(filePath, diff string) bool {
-	// If the diff contains an entire file replacement marker or has very high change counts, flag it
-	// Heuristic: > 200 changed lines or more than 10 hunks suggests too big
-	lines := strings.Split(diff, "\n")
-	changed := 0
-	hunks := 0
-	inHunk := false
-	for _, l := range lines {
-		if strings.HasPrefix(l, "@@") { // hunk header
-			hunks++
-			inHunk = true
-			continue
-		}
-		if strings.HasPrefix(l, "+") || strings.HasPrefix(l, "-") {
-			changed++
-		} else if inHunk {
-			// end of hunk when encountering context line after changes
-			if !strings.HasPrefix(l, " ") {
-				inHunk = false
-			}
-		}
-		if changed > 200 || hunks > 10 {
-			return true
-		}
-	}
-	return false
 }
 
 // isHighRiskEdit flags edits in sensitive areas or large files
@@ -351,72 +318,8 @@ func executeEditPlanWithErrorHandling(editPlan *EditPlan, context *AgentContext)
 	return totalTokens, nil
 }
 
-// shouldUsePartialEdit determines whether to use partial editing or full file editing
-// based on the operation characteristics and file size
-// THIS IS NOT READY TO USE, NEEDS IMPROVEMENTS
-func shouldUsePartialEdit(operation EditOperation, logger *utils.Logger) bool {
-	// Check if file exists and get its size
-	fileInfo, err := os.Stat(operation.FilePath)
-	if err != nil {
-		logger.Logf("Cannot stat file %s, using full file edit: %v", operation.FilePath, err)
-		return false
-	}
-
-	// For very small files (< 1KB), partial editing overhead isn't worth it
-	if fileInfo.Size() < 1024 {
-		logger.Logf("File %s is small (%d bytes), using full file edit", operation.FilePath, fileInfo.Size())
-		return false
-	}
-
-	// For very large files (> 50KB), partial editing is more efficient
-	if fileInfo.Size() > 50*1024 {
-		logger.Logf("File %s is large (%d bytes), using partial edit", operation.FilePath, fileInfo.Size())
-		return true
-	}
-
-	// For medium files, check if the operation seems focused/targeted
-	instructionsLower := strings.ToLower(operation.Instructions)
-	description := strings.ToLower(operation.Description)
-
-	// Keywords that suggest focused changes suitable for partial editing
-	focusedKeywords := []string{
-		"function", "method", "struct", "type", "variable",
-		"add", "modify", "update", "change", "fix",
-		"import", "constant", "field",
-	}
-
-	// Keywords that suggest broad changes requiring full file context
-	broadKeywords := []string{
-		"refactor", "restructure", "rewrite", "reorganize",
-		"architecture", "design pattern", "interface",
-		"multiple", "throughout", "entire",
-	}
-
-	focusedScore := 0
-	broadScore := 0
-
-	for _, keyword := range focusedKeywords {
-		if strings.Contains(instructionsLower, keyword) || strings.Contains(description, keyword) {
-			focusedScore++
-		}
-	}
-
-	for _, keyword := range broadKeywords {
-		if strings.Contains(instructionsLower, keyword) || strings.Contains(description, keyword) {
-			broadScore++
-		}
-	}
-
-	// If it seems focused, use partial editing
-	if focusedScore > broadScore {
-		logger.Logf("Operation seems focused (score: %d vs %d), using partial edit", focusedScore, broadScore)
-		return true
-	}
-
-	// Default to full file editing for ambiguous cases
-	logger.Logf("Operation seems broad or ambiguous (score: %d vs %d), using full file edit", focusedScore, broadScore)
-	return false
-}
+// shouldUsePatchEdit determines whether to use patch-based editing
+// Since patch-based editing is now the default, this function is simplified
 
 // buildFocusedEditInstructions creates targeted instructions for a single file edit
 // The orchestration model should provide self-contained instructions with hashtag file references

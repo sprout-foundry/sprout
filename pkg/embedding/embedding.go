@@ -301,7 +301,7 @@ func GenerateWorkspaceEmbeddings(workspace workspaceinfo.WorkspaceFile, db *Vect
 				fileInfo workspaceinfo.WorkspaceFileInfo
 			}) {
 				defer wg.Done()
-				sem <- struct{}{} // Acquire semaphore
+				sem <- struct{}{}        // Acquire semaphore
 				defer func() { <-sem }() // Release semaphore
 
 				// Generate new embedding

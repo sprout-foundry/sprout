@@ -19,38 +19,57 @@ run_test_logic() {
     cat > process.json << 'JSON'
 {
   "version": "1.0",
-  "goal": "Create a simple Go HTTP server application with /hello endpoint",
+  "goal": "Create a simple Go HTTP server application with /hello endpoint that returns 'Hello, World!'",
   "description": "Single-agent demo to validate orchestration pipeline end-to-end",
   "base_model": "",
   "agents": [
     {
       "id": "dev",
-      "name": "Developer",
+      "name": "Go Backend Developer",
       "persona": "backend_developer",
-      "description": "Implements small Go services",
-      "skills": ["go", "http"],
+      "description": "Implements Go HTTP services and REST APIs",
+      "skills": ["go", "http", "web_servers"],
       "model": "",
       "priority": 1,
       "depends_on": [],
-      "config": {"skip_prompt": "true"}
+      "config": {"skip_prompt": "true"},
+      "budget": {
+        "max_tokens": 80000,
+        "max_cost": 4.0,
+        "token_warning": 60000,
+        "cost_warning": 3.0,
+        "alert_on_limit": true,
+        "stop_on_limit": false
+      }
     }
   ],
   "steps": [
     {
-      "id": "init",
-      "name": "Init server",
-      "description": "Create go.mod and main.go with /hello endpoint returning 'hello'",
+      "id": "create_server",
+      "name": "Create HTTP Server",
+      "description": "Create go.mod and main.go with HTTP server that listens on port 8080 and responds to /hello with 'Hello, World!'",
       "agent_id": "dev",
       "input": {},
-      "expected_output": "main.go and go.mod present",
+      "expected_output": "Working HTTP server with /hello endpoint",
       "status": "pending",
       "depends_on": [],
-      "timeout": 60,
-      "retries": 0
+      "timeout": 120,
+      "retries": 2
     }
   ],
-  "validation": {"required": false},
-  "settings": {"max_retries": 0, "step_timeout": 120, "parallel_execution": false, "stop_on_failure": true, "log_level": "info"}
+  "validation": {
+    "required": false,
+    "build_command": "go build",
+    "test_command": "go test ./...",
+    "custom_checks": ["go vet ./..."]
+  },
+  "settings": {
+    "max_retries": 2,
+    "step_timeout": 300,
+    "parallel_execution": false,
+    "stop_on_failure": true,
+    "log_level": "info"
+  }
 }
 JSON
 

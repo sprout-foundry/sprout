@@ -22,7 +22,7 @@ export function add(a: number, b: number): number {
 EOF
 
     # Request a file header summary
-    ../../ledit agent --agent v2 --skip-prompt "Add a file header summary to $(pwd)/sample.ts"
+    ../../ledit agent --skip-prompt "Add a file header summary to $(pwd)/sample.ts"
 
     echo
     echo "--- Verifying Test ---"

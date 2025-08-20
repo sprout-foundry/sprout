@@ -21,7 +21,7 @@ beta
 gamma
 EOF
 
-    ../../ledit agent --agent v2 -m "$model_name" --skip-prompt "Append the word delta to the end of $(pwd)/data.txt"
+    ../../ledit agent -m "$model_name" --skip-prompt "Append the word delta to the end of $(pwd)/data.txt"
 
     echo
     echo "--- Verifying Test ---"

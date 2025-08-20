@@ -37,6 +37,8 @@ GREEN = '\033[32m'
 RED = '\033[31m'
 RESET = '\033[0m'
 
+DEFAULT_MODEL = 'deepinfra:mistralai/Devstral-Small-2507'
+
 def extract_failure_reason(stdout, stderr):
     """Extract a short, concise failure reason from test output.
     
@@ -170,7 +172,7 @@ Examples:
                 # Ignore and continue to next candidate
                 pass
         # Fallback to previous hardcoded default if nothing found
-        return 'deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct'
+        return DEFAULT_MODEL
 
     model_name = args.model if args.model else resolve_default_model()
 
@@ -328,7 +330,7 @@ Examples:
         if test_name.startswith('Agent v2') or test_name.startswith('Process -') or test_name == 'Orchestration Feature':
             return 'deepinfra:deepseek-ai/DeepSeek-V3-0324'
         # Everything else uses the previous default
-        return 'deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct'
+        return DEFAULT_MODEL
 
     # Start all selected tests as subprocesses
     for test in selected_tests_for_execution:

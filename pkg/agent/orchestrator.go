@@ -63,8 +63,24 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 			_ = executeWorkspaceInfo(context)
 			_ = executeListFiles(context, 10)
 		}
-		// If the user intent looks like search/investigation, try a quick grep
+
+		// Smart early action selection based on user intent patterns
 		lower := strings.ToLower(context.UserIntent)
+		userIntent := context.UserIntent
+
+		// Pattern 1: Direct command execution - if it looks like a command or simple operation
+		if isDirectCommandPattern(lower) {
+			if commands := extractDirectCommands(userIntent); len(commands) > 0 {
+				context.Logger.LogProcessStep("🚀 Detected direct command pattern - executing immediately")
+				if err := executeShellCommands(context, commands); err == nil {
+					context.ExecutedOperations = append(context.ExecutedOperations, "Direct command execution completed")
+					context.IsCompleted = true
+					break
+				}
+			}
+		}
+
+		// Pattern 2: Search/investigation - quick grep for obvious search terms
 		if strings.Contains(lower, "find") || strings.Contains(lower, "search") || strings.Contains(lower, "grep") {
 			terms := []string{}
 			for _, w := range strings.Fields(lower) {
@@ -72,7 +88,21 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 					terms = append(terms, w)
 				}
 			}
-			_ = executeGrepSearch(context, terms)
+			if len(terms) > 0 {
+				_ = executeGrepSearch(context, terms)
+			}
+		}
+
+		// Pattern 3: Simple file operations - direct execution
+		if isSimpleFileOperation(lower) {
+			if commands := extractFileOperationCommands(userIntent); len(commands) > 0 {
+				context.Logger.LogProcessStep("📁 Detected simple file operation - executing immediately")
+				if err := executeShellCommands(context, commands); err == nil {
+					context.ExecutedOperations = append(context.ExecutedOperations, "Direct file operation completed")
+					context.IsCompleted = true
+					break
+				}
+			}
 		}
 
 		evaluation, evalTokens, err := evaluateProgress(context)
@@ -135,7 +165,18 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 		case "create_plan":
 			err = executeCreatePlan(context)
 		case "execute_edits":
-			err = executeEditOperations(context)
+			// Check if this is actually a command execution plan
+			if context.CurrentPlan != nil && len(context.CurrentPlan.EditOperations) > 0 {
+				if context.CurrentPlan.EditOperations[0].FilePath == "command" {
+					// This is a command execution plan, not file editing
+					err = executeCommandPlan(context)
+				} else {
+					// Regular file editing plan
+					err = executeEditOperations(context)
+				}
+			} else {
+				err = executeEditOperations(context)
+			}
 			// Validate that operations were recorded; otherwise, evaluator must not advance
 			if err == nil && (context.CurrentPlan == nil || len(context.CurrentPlan.EditOperations) == 0) {
 				return fmt.Errorf("executor JSON/plan invariant violation: no operations available post-execution")
@@ -208,4 +249,136 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 	logger.Logf("PERF: runOptimizedAgent completed. Took %v, Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", duration, m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 	logger.LogProcessStep(fmt.Sprintf("🎉 Adaptive agent execution completed in %d iterations", context.IterationCount))
 	return nil
+}
+
+// isDirectCommandPattern detects if user intent looks like a direct command
+func isDirectCommandPattern(lowerIntent string) bool {
+	// Direct command patterns
+	directPatterns := []string{
+		"run ", "execute ", "start ", "stop ", "restart ", "kill ",
+		"install ", "uninstall ", "update ", "upgrade ", "build ", "compile ",
+		"test ", "check ", "verify ", "validate ",
+		"list ", "show ", "display ", "print ",
+		"create ", "make ", "generate ", "setup ",
+		"delete ", "remove ", "clean ", "clear ",
+		"find ", "search ", "grep ", "locate ",
+		"copy ", "move ", "rename ", "backup ",
+		"git ", "npm ", "yarn ", "pip ", "go ", "cargo ",
+	}
+
+	for _, pattern := range directPatterns {
+		if strings.Contains(lowerIntent, pattern) {
+			return true
+		}
+	}
+
+	// Command-like patterns (starts with common commands)
+	if strings.HasPrefix(lowerIntent, "git ") ||
+		strings.HasPrefix(lowerIntent, "npm ") ||
+		strings.HasPrefix(lowerIntent, "yarn ") ||
+		strings.HasPrefix(lowerIntent, "pip ") ||
+		strings.HasPrefix(lowerIntent, "go ") ||
+		strings.HasPrefix(lowerIntent, "cargo ") ||
+		strings.HasPrefix(lowerIntent, "docker ") ||
+		strings.HasPrefix(lowerIntent, "kubectl ") {
+		return true
+	}
+
+	return false
+}
+
+// extractDirectCommands extracts executable commands from user intent
+func extractDirectCommands(userIntent string) []string {
+	// Simple extraction - if it looks like a command, treat it as such
+	lower := strings.ToLower(userIntent)
+
+	// Common command mappings
+	commandMap := map[string]string{
+		"list files":        "ls -la",
+		"show files":        "ls -la",
+		"check status":      "systemctl status",
+		"show processes":    "ps aux",
+		"check disk usage":  "df -h",
+		"show disk space":   "df -h",
+		"check memory":      "free -h",
+		"show memory usage": "free -h",
+		"list processes":    "ps aux",
+		"show running jobs": "jobs",
+		"check git status":  "git status",
+		"show git status":   "git status",
+		"run tests":         "go test ./...", // or npm test, etc.
+		"build project":     "make build",    // or go build, etc.
+	}
+
+	for phrase, command := range commandMap {
+		if strings.Contains(lower, phrase) {
+			return []string{command}
+		}
+	}
+
+	// If it starts with a known command prefix, use it as-is
+	if strings.HasPrefix(lower, "git ") ||
+		strings.HasPrefix(lower, "npm ") ||
+		strings.HasPrefix(lower, "yarn ") ||
+		strings.HasPrefix(lower, "pip ") ||
+		strings.HasPrefix(lower, "go ") ||
+		strings.HasPrefix(lower, "cargo ") ||
+		strings.HasPrefix(lower, "docker ") ||
+		strings.HasPrefix(lower, "kubectl ") {
+		return []string{userIntent}
+	}
+
+	return []string{}
+}
+
+// isSimpleFileOperation detects basic file operations
+func isSimpleFileOperation(lowerIntent string) bool {
+	fileOps := []string{
+		"create file", "make file", "new file",
+		"delete file", "remove file", "rm file",
+		"copy file", "cp file",
+		"move file", "mv file", "rename file",
+		"show file", "display file", "cat file", "view file",
+		"edit file", "modify file", "change file",
+	}
+
+	for _, op := range fileOps {
+		if strings.Contains(lowerIntent, op) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// extractFileOperationCommands converts file operation intent to commands
+func extractFileOperationCommands(userIntent string) []string {
+	lower := strings.ToLower(userIntent)
+
+	// Simple file operation mappings
+	if strings.Contains(lower, "show file") || strings.Contains(lower, "display file") || strings.Contains(lower, "view file") {
+		if strings.Contains(userIntent, "README") {
+			return []string{"cat README.md"}
+		}
+		if strings.Contains(userIntent, "package.json") {
+			return []string{"cat package.json"}
+		}
+		if strings.Contains(userIntent, "go.mod") {
+			return []string{"cat go.mod"}
+		}
+	}
+
+	if strings.Contains(lower, "list files") || strings.Contains(lower, "show files") {
+		return []string{"ls -la"}
+	}
+
+	if strings.Contains(lower, "check permissions") || strings.Contains(lower, "show permissions") {
+		return []string{"ls -la"}
+	}
+
+	if strings.Contains(lower, "check size") || strings.Contains(lower, "show size") {
+		return []string{"ls -lh"}
+	}
+
+	return []string{}
 }

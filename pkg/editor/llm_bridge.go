@@ -6,6 +6,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/context"
+	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/parser"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	ui "github.com/alantheprice/ledit/pkg/ui"
@@ -13,18 +14,21 @@ import (
 )
 
 // getUpdatedCode bridges to the LLM and parses the response into file map.
-func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config, imagePath string) (map[string]string, string, error) {
+func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config, imagePath string) (map[string]string, string, *llm.TokenUsage, error) {
 	log := utils.GetLogger(cfg.SkipPrompt)
-	modelName, llmContent, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, filename, imagePath)
+	log.Log("=== getUpdatedCode Debug ===")
+	log.Log(fmt.Sprintf("Calling GetLLMCodeResponse with model: %s", cfg.EditingModel))
+
+	modelName, llmContent, tokenUsage, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, filename, imagePath)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to get LLM response: %w", err)
+		return nil, "", nil, fmt.Errorf("failed to get LLM response: %w", err)
 	}
 
 	log.Log(prompts.ModelReturned(modelName, llmContent))
 
 	updatedCode, err := parser.GetUpdatedCodeFromResponse(llmContent)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to parse updated code from response: %w", err)
+		return nil, "", nil, fmt.Errorf("failed to parse updated code from response: %w", err)
 	}
 	if len(updatedCode) == 0 {
 		ui.Out().Print(prompts.NoCodeBlocksParsed() + "\n")
@@ -40,5 +44,5 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 			}
 		}
 	}
-	return updatedCode, llmContent, nil
+	return updatedCode, llmContent, tokenUsage, nil
 }

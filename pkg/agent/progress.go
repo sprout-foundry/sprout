@@ -239,7 +239,17 @@ func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, e
 		{Role: "system", Content: "You are an expert software development agent that excels at evaluating progress and making smart decisions. Always respond with valid JSON."},
 		{Role: "user", Content: prompt},
 	}
-	response, _, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 60*time.Second)
+	// Use the unified interactive LLM handler with agent workflow context
+	workflowContext := llm.GetAgentWorkflowContext()
+	unifiedConfig := &llm.UnifiedInteractiveConfig{
+		ModelName:       context.Config.OrchestrationModel,
+		Messages:        messages,
+		Filename:        "",
+		WorkflowContext: workflowContext,
+		Config:          context.Config,
+		Timeout:         60 * time.Second,
+	}
+	_, response, _, err := llm.CallLLMWithUnifiedInteractive(unifiedConfig)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get progress evaluation: %w", err)
 	}

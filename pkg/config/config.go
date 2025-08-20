@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/shirou/gopsutil/v3/mem"
@@ -58,6 +59,7 @@ type Config struct {
 	UseSearchGrounding       bool                 `json:"-"`                          // Command-scoped flag to enable search grounding
 	CodeToolsEnabled         bool                 `json:"-"`                          // Allow tool-calls in code flow when true
 	FromAgent                bool                 `json:"-"`                          // Internal: true when invoked from agent mode
+	LastTokenUsage           *types.TokenUsage    `json:"-"`                          // Last token usage from LLM call
 	// New toggles
 	PreapplyReview    bool     `json:"preapply_review"`
 	DryRun            bool     `json:"dry_run"`
@@ -75,10 +77,10 @@ type Config struct {
 	MaxRunCostUSD    float64 `json:"max_run_cost_usd"`
 	ShellTimeoutSecs int     `json:"shell_timeout_secs"`
 	// Rate limiting and batch size controls
-	FileBatchSize            int                  `json:"file_batch_size"`             // Batch size for file processing
-	EmbeddingBatchSize       int                  `json:"embedding_batch_size"`        // Batch size for embedding generation
-	MaxConcurrentRequests    int                  `json:"max_concurrent_requests"`     // Max concurrent API requests
-	RequestDelayMs           int                  `json:"request_delay_ms"`            // Delay between requests in milliseconds
+	FileBatchSize         int `json:"file_batch_size"`         // Batch size for file processing
+	EmbeddingBatchSize    int `json:"embedding_batch_size"`    // Batch size for embedding generation
+	MaxConcurrentRequests int `json:"max_concurrent_requests"` // Max concurrent API requests
+	RequestDelayMs        int `json:"request_delay_ms"`        // Delay between requests in milliseconds
 }
 
 func getHomeConfigPath() (string, string) {
@@ -146,7 +148,7 @@ func (cfg *Config) setDefaultValues() {
 		cfg.OllamaServerURL = "http://localhost:11434"
 	}
 	if cfg.OrchestrationMaxAttempts == 0 {
-		cfg.OrchestrationMaxAttempts = 6 // Default max attempts for orchestration
+		cfg.OrchestrationMaxAttempts = 12 // Default max attempts for orchestration
 	}
 	if cfg.LocalModel == "" {
 		cfg.LocalModel = getLocalModel(cfg.SkipPrompt) // Set local model based on system memory

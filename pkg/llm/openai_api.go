@@ -17,6 +17,11 @@ import (
 
 // callOpenAICompatibleStream calls OpenAI-compatible APIs and returns token usage information
 func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts.Message, cfg *config.Config, timeout time.Duration, writer io.Writer) (*TokenUsage, error) {
+	// Debug: Log function entry
+	ui.Out().Printf("DEBUG: callOpenAICompatibleStream called with URL: %s, model: %s\n", apiURL, model)
+	ui.Out().Printf("DEBUG: Messages count: %d\n", len(messages))
+	ui.Out().Printf("DEBUG: Temperature: %f\n", cfg.Temperature)
+
 	// Build request with optional temperature; retry once without it if provider rejects
 	buildBody := func(includeTemp bool) ([]byte, error) {
 		payload := map[string]interface{}{
@@ -27,10 +32,21 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 		if includeTemp {
 			payload["temperature"] = cfg.Temperature
 		}
+
 		return json.Marshal(payload)
 	}
 
 	tryOnce := func(reqBody []byte) (*http.Response, error) {
+		// Debug: Log the actual JSON payload being sent
+		ui.Out().Printf("DEBUG: About to send HTTP request to: %s\n", apiURL)
+		ui.Out().Printf("DEBUG: Request payload length: %d bytes\n", len(reqBody))
+		ui.Out().Printf("DEBUG: Request payload: %s\n", string(reqBody))
+
+		// Check for detokenize field in the actual request body
+		if strings.Contains(string(reqBody), "detokenize") {
+			ui.Out().Printf("ERROR: Found 'detokenize' field in request to %s\n", apiURL)
+		}
+
 		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
 		if err != nil {
 			ui.Out().Print(prompts.RequestCreationError(err))
@@ -38,7 +54,19 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+apiKey)
-		client := &http.Client{Timeout: timeout}
+
+		// Create a custom transport to intercept the request
+		transport := &http.Transport{}
+		client := &http.Client{
+			Timeout:   timeout,
+			Transport: transport,
+		}
+
+		// Log the final request details
+		ui.Out().Printf("DEBUG: Final request URL: %s\n", req.URL)
+		ui.Out().Printf("DEBUG: Final request method: %s\n", req.Method)
+		ui.Out().Printf("DEBUG: Final request headers: %v\n", req.Header)
+
 		return client.Do(req)
 	}
 
@@ -143,6 +171,9 @@ func getUsageFromNonStreamingCall(apiURL, apiKey, model string, messages []promp
 	}
 
 	tryOnce := func(reqBody []byte) (*http.Response, error) {
+		// Debug: Log the actual JSON payload being sent
+		ui.Out().Printf("DEBUG: Usage Request Payload: %s\n", string(reqBody))
+
 		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
 		if err != nil {
 			return nil, err

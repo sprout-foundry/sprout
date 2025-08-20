@@ -412,7 +412,7 @@ func detectBuildCommand(rootDir string) string {
 		return nil
 	})
 	if goFilesFound {
-		return "gomft -w . && go build"
+		return "go build ."
 	}
 
 	// Check for JavaScript/Node.js project

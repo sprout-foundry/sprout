@@ -54,7 +54,7 @@ Ensure patches are syntactically correct and follow best practices for the speci
 CODE EDITING PRINCIPLES:
 - Ensure your edits are targeted and relevant to the user request
 - Only update what is required for the requested functionality
-- DO NOT remove functionality or code unless it is required by the request
+- DO NOT REMOVE functionality or code unless it is required by the request
 - When fixing errors, REPLACE the incorrect code with correct code
 - Do not add new functionality unless explicitly requested
 - Make sure your are keeping track of dependencies and references

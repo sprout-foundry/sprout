@@ -7,6 +7,13 @@ import (
 	"strings"
 )
 
+func fileExists(path string) bool {
+	if _, err := os.Stat(path); err == nil {
+		return true
+	}
+	return false
+}
+
 // orderEditsByImportGraph tries to topologically order edits by simple import/use relationships
 // across common ecosystems (TS/JS, Python). If it cannot infer any edges, returns nil to signal fallback.
 func orderEditsByImportGraph(ops []EditOperation) []EditOperation {

@@ -32,7 +32,7 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 	// Prefer patch parsing first and materialize to full file contents
 	if patches, perr := parser.GetUpdatedCodeFromPatchResponse(llmContent); perr == nil && len(patches) > 0 {
 		for fname, p := range patches {
-			content := parser.PatchToFullContent(p, originalCode)
+			content := parser.PatchToFullContent(p, fname)
 			if strings.TrimSpace(content) != "" {
 				updatedCode[fname] = content
 			}

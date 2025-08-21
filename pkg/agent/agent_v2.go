@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -392,10 +393,17 @@ Context from overall task: "%s"
 
 Please analyze and provide insights on: %s
 
-Focus on understanding the current state, identifying patterns, and providing specific findings that will inform the next steps of the task.`, ctx.UserIntent, todo.Content, todo.Description)
+FIRST, use tools to ground your analysis:
+- Call workspace_context with action=load_tree to understand the file structure.
+- Call workspace_context with action=load_summary to get a project summary.
+- Call workspace_context with action=search_keywords and a concise query to locate relevant files and function names.
+- Then call read_file for the top one or two files that are most relevant.
+
+AFTER you gather evidence, summarize your findings. Provide concrete file references (paths and function names) where applicable.
+`, ctx.UserIntent, todo.Content, todo.Description)
 
 	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert code analyst. Prefer using tools to read files, search code, and inspect the workspace before answering. Provide detailed analysis without making changes."},
+		{Role: "system", Content: "You are an expert code analyst. Prefer using tools (workspace_context, read_file) to gather grounded evidence before answering. Provide detailed analysis without making changes."},
 		{Role: "user", Content: prompt},
 	}
 
@@ -403,12 +411,15 @@ Focus on understanding the current state, identifying patterns, and providing sp
 	if model == "" {
 		model = ctx.Config.EditingModel
 	}
+	analysisCfg := *ctx.Config
+	analysisCfg.Interactive = true
+	analysisCfg.CodeToolsEnabled = true
 	_, response, _, err := llm.CallLLMWithUnifiedInteractive(&llm.UnifiedInteractiveConfig{
 		ModelName:       model,
 		Messages:        messages,
 		Filename:        "",
 		WorkflowContext: llm.GetAgentWorkflowContext(),
-		Config:          ctx.Config,
+		Config:          &analysisCfg,
 		Timeout:         60 * time.Second,
 	})
 	if err != nil {
@@ -484,7 +495,8 @@ func executeCodeCommandTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	// Ensure we're in non-interactive mode for agent workflows
 	agentConfig := *ctx.Config // Create a copy to avoid modifying the original
 	agentConfig.SkipPrompt = true
-	agentConfig.Interactive = false
+	agentConfig.Interactive = true
+	agentConfig.CodeToolsEnabled = true
 	agentConfig.FromAgent = true
 
 	// Set environment variables to ensure non-interactive mode
@@ -828,9 +840,62 @@ func extractCommandFromIntent(intent string) string {
 	return strings.TrimSpace(intent)
 }
 
-// RunAgentModeV2: deterministic fast-path for doc-only edits (top-of-file comment insertion).
-// If the user intent includes an explicit existing .go file path, insert a one-paragraph
-// summary comment at the top of the file. This avoids tool-loop overhead for trivial tasks.
-func RunAgentModeV2(userIntent string, skipPrompt bool, model string, directApply bool) error {
-	return fmt.Errorf("RunAgentModeV2 is removed; use simplified agent")
+// refineTodosWithAnalysis updates remaining todos based on analysis results.
+// It can add file paths discovered in analysis and optionally insert follow-up todos.
+func refineTodosWithAnalysis(ctx *SimplifiedAgentContext, completedTodo *TodoItem) {
+	analysis := strings.TrimSpace(ctx.AnalysisResults[completedTodo.ID])
+	if analysis == "" {
+		return
+	}
+	// Heuristic: try to extract likely file paths mentioned in the analysis output
+	// This is lightweight and avoids extra dependencies; it catches patterns like pkg/.../file.go
+	pathRe := regexp.MustCompile(`(?m)(?:^|\s)([\w./-]+\.[A-Za-z0-9]+)`) // basic file token with extension
+	matches := pathRe.FindAllStringSubmatch(analysis, -1)
+	foundFiles := map[string]bool{}
+	for _, m := range matches {
+		if len(m) >= 2 {
+			p := strings.TrimSpace(m[1])
+			if p != "" && !strings.HasSuffix(p, "/") {
+				foundFiles[p] = true
+			}
+		}
+	}
+	// Update pending todos that lack file_path with discovered files when content seems related
+	for i := range ctx.Todos {
+		t := &ctx.Todos[i]
+		if t.Status != "pending" && t.Status != "in_progress" {
+			continue
+		}
+		if strings.TrimSpace(t.FilePath) == "" {
+			for f := range foundFiles {
+				// simple relevance check: mention of filename stem in todo text
+				stem := f
+				if idx := strings.LastIndex(stem, "/"); idx != -1 {
+					stem = stem[idx+1:]
+				}
+				if strings.Contains(strings.ToLower(analysis), strings.ToLower(stem)) || strings.Contains(strings.ToLower(t.Content), strings.ToLower(stem)) {
+					t.FilePath = f
+					break
+				}
+			}
+		}
+	}
+	// Optionally, if analysis suggests a clear next step and no todo exists, append a follow-up
+	// Heuristic: look for phrases like "add", "implement", "update" with a file path
+	if len(foundFiles) > 0 {
+		suggestRe := regexp.MustCompile(`(?i)\b(add|implement|update|modify|refactor|create)\b`)
+		if suggestRe.MatchString(analysis) {
+			for f := range foundFiles {
+				ctx.Todos = append(ctx.Todos, TodoItem{
+					ID:          generateTodoID(),
+					Content:     "Apply changes based on analysis",
+					Description: "Implement the changes identified by the analysis for: " + f,
+					Status:      "pending",
+					FilePath:    f,
+					Priority:    5,
+				})
+				break
+			}
+		}
+	}
 }

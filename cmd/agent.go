@@ -17,7 +17,6 @@ var (
 	agentDryRun      bool
 	agentDirectApply bool
 	agentSimplified  bool
-	agentUseV2       bool
 )
 
 func init() {

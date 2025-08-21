@@ -9,7 +9,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
-    ui "github.com/alantheprice/ledit/pkg/ui"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // AgentRunCost represents the cost and token usage for a single agent run.
@@ -30,19 +30,20 @@ func PrintTokenUsageSummary(tokenUsage *AgentTokenUsage, duration time.Duration,
 
 // printTokenUsageSummary prints a summary of token usage and costs for the agent execution
 func printTokenUsageSummary(tokenUsage *AgentTokenUsage, duration time.Duration, cfg *config.Config) {
-    ui.Out().Print("\n💰 Token Usage Summary:\n")
-    ui.Out().Printf("├─ Intent Analysis: %d tokens\n", tokenUsage.IntentAnalysis)
-    ui.Out().Printf("├─ Planning (Orchestration): %d tokens\n", tokenUsage.Planning)
-    ui.Out().Printf("├─ Code Generation (Editing): %d tokens\n", tokenUsage.CodeGeneration)
-    ui.Out().Printf("├─ Validation: %d tokens\n", tokenUsage.Validation)
-    ui.Out().Printf("├─ Progress Evaluation: %d tokens\n", tokenUsage.ProgressEvaluation)
+	logger := utils.GetLogger(cfg.SkipPrompt)
+	logger.Log("\n💰 Token Usage Summary:")
+	logger.Logf("├─ Intent Analysis: %d tokens", tokenUsage.IntentAnalysis)
+	logger.Logf("├─ Planning (Orchestration): %d tokens", tokenUsage.Planning)
+	logger.Logf("├─ Code Generation (Editing): %d tokens", tokenUsage.CodeGeneration)
+	logger.Logf("├─ Validation: %d tokens", tokenUsage.Validation)
+	logger.Logf("├─ Progress Evaluation: %d tokens", tokenUsage.ProgressEvaluation)
 
 	if tokenUsage.Total == 0 {
 		tokenUsage.Total = tokenUsage.IntentAnalysis + tokenUsage.Planning + tokenUsage.CodeGeneration + tokenUsage.Validation + tokenUsage.ProgressEvaluation
 	}
-    ui.Out().Printf("└─ Total Usage: %d tokens\n", tokenUsage.Total)
+	logger.Logf("└─ Total Usage: %d tokens", tokenUsage.Total)
 	tokensPerSecond := float64(tokenUsage.Total) / duration.Seconds()
-    ui.Out().Printf("⚡ Performance: %.1f tokens/second\n", tokensPerSecond)
+	logger.Logf("⚡ Performance: %.1f tokens/second", tokensPerSecond)
 
 	// --- Cost Summary ---
 	orchestratorModel := cfg.OrchestrationModel
@@ -82,16 +83,16 @@ func printTokenUsageSummary(tokenUsage *AgentTokenUsage, duration time.Duration,
 	validationCost := llm.CalculateCost(validationUsage, editingModel)
 	totalCost := intentCost + planningCost + progressCost + codegenCost + validationCost
 
-    ui.Out().Print("\n💵 Cost Summary:\n")
-    ui.Out().Printf("├─ Intent Analysis (%s): $%.4f\n", orchestratorModel, intentCost)
-    ui.Out().Printf("├─ Planning (%s): $%.4f\n", orchestratorModel, planningCost)
-    ui.Out().Printf("├─ Progress Evaluation (%s): $%.4f\n", orchestratorModel, progressCost)
-    ui.Out().Printf("├─ Code Generation (%s): $%.4f\n", editingModel, codegenCost)
-    ui.Out().Printf("├─ Validation (%s): $%.4f\n", editingModel, validationCost)
+	logger.Log("\n💵 Cost Summary:")
+	logger.Logf("├─ Intent Analysis (%s): $%.4f", orchestratorModel, intentCost)
+	logger.Logf("├─ Planning (%s): $%.4f", orchestratorModel, planningCost)
+	logger.Logf("├─ Progress Evaluation (%s): $%.4f", orchestratorModel, progressCost)
+	logger.Logf("├─ Code Generation (%s): $%.4f", editingModel, codegenCost)
+	logger.Logf("├─ Validation (%s): $%.4f", editingModel, validationCost)
 
 	// Calculate current run cost and add to history
 	currentRunCost := totalCost
-    ui.Out().Printf("├─ Current Run Cost: $%.4f\n", currentRunCost)
+	logger.Logf("├─ Current Run Cost: $%.4f", currentRunCost)
 
 	runCostEntry := AgentRunCost{
 		Timestamp:   time.Now(),
@@ -101,16 +102,16 @@ func printTokenUsageSummary(tokenUsage *AgentTokenUsage, duration time.Duration,
 	}
 
 	history, err := loadAgentCostHistory()
-    if err != nil {
-        ui.Out().Printf("Error loading cost history: %v\n", err)
+	if err != nil {
+		logger.Logf("Error loading cost history: %v", err)
 		// If loading fails, history will be nil. append will create a new slice.
 		// This means only the current run will be saved if previous history was unreadable.
 	}
 
 	history = append(history, runCostEntry)
 
-    if err := saveAgentCostHistory(history); err != nil {
-        ui.Out().Printf("Error saving cost history: %v\n", err)
+	if err := saveAgentCostHistory(history); err != nil {
+		logger.Logf("Error saving cost history: %v", err)
 	}
 
 	// Calculate aggregated total cost from history
@@ -119,7 +120,7 @@ func printTokenUsageSummary(tokenUsage *AgentTokenUsage, duration time.Duration,
 		aggregatedTotalCost += entry.TotalCost
 	}
 
-    ui.Out().Printf("└─ Aggregated Total Cost: $%.4f\n", aggregatedTotalCost)
+	logger.Logf("└─ Aggregated Total Cost: $%.4f", aggregatedTotalCost)
 }
 
 // getAgentCostFilePath returns the full path to the agent cost history file.

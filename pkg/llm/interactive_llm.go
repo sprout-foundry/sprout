@@ -52,6 +52,8 @@ func CallLLMWithInteractiveContext(
 	timeout time.Duration,
 	contextHandler ContextHandler, // This is the key: it takes a handler function
 ) (string, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
+
 	// Create file detector for automatic file detection
 	detector := NewFileDetector()
 
@@ -64,34 +66,34 @@ func CallLLMWithInteractiveContext(
 	}
 
 	// Debug: Log function entry
-	ui.Out().Printf("DEBUG: CallLLMWithInteractiveContext called with model: %s\n", modelName)
-	ui.Out().Printf("DEBUG: User prompt: %s\n", userPrompt)
-	ui.Out().Printf("DEBUG: Interactive mode: %t\n", cfg.Interactive)
-	ui.Out().Printf("DEBUG: Code tools enabled: %t\n", cfg.CodeToolsEnabled)
-	ui.Out().Printf("DEBUG: Initial messages count: %d\n", len(initialMessages))
+	logger.Logf("DEBUG: CallLLMWithInteractiveContext called with model: %s", modelName)
+	logger.Logf("DEBUG: User prompt: %s", userPrompt)
+	logger.Logf("DEBUG: Interactive mode: %t", cfg.Interactive)
+	logger.Logf("DEBUG: Code tools enabled: %t", cfg.CodeToolsEnabled)
+	logger.Logf("DEBUG: Initial messages count: %d", len(initialMessages))
 
 	// Log initial messages
 	for i, msg := range initialMessages {
-		ui.Out().Printf("DEBUG: Initial message %d: role=%s, content_type=%T\n", i, msg.Role, msg.Content)
+		logger.Logf("DEBUG: Initial message %d: role=%s, content_type=%T", i, msg.Role, msg.Content)
 	}
 
 	mentionedFiles := detector.DetectMentionedFiles(userPrompt)
 
 	// Enhance the system prompt with tool information
 	var enhancedMessages []prompts.Message
-	ui.Out().Printf("DEBUG: Starting message enhancement process\n")
+	logger.Log("DEBUG: Starting message enhancement process")
 
 	// Add tool information to the system message if it exists
 	for i, msg := range initialMessages {
 		if i == 0 && msg.Role == "system" {
-			ui.Out().Printf("DEBUG: Enhancing system message with tools\n")
+			logger.Log("DEBUG: Enhancing system message with tools")
 			originalContent := msg.Content
 			toolInfo := FormatToolsForPrompt()
 			enhancedContent := fmt.Sprintf("%s\n\n%s", originalContent, toolInfo)
 
-			ui.Out().Printf("DEBUG: Original system content length: %d\n", len(fmt.Sprintf("%v", originalContent)))
-			ui.Out().Printf("DEBUG: Tool info length: %d\n", len(toolInfo))
-			ui.Out().Printf("DEBUG: Enhanced content length: %d\n", len(enhancedContent))
+			logger.Logf("DEBUG: Original system content length: %d", len(fmt.Sprintf("%v", originalContent)))
+			logger.Logf("DEBUG: Tool info length: %d", len(toolInfo))
+			logger.Logf("DEBUG: Enhanced content length: %d", len(enhancedContent))
 
 			// Add file detection warning if files were mentioned
 			if len(mentionedFiles) > 0 {
@@ -138,9 +140,9 @@ func CallLLMWithInteractiveContext(
 		}
 	}
 
-	ui.Out().Printf("DEBUG: Final enhanced messages count: %d\n", len(enhancedMessages))
+	logger.Logf("DEBUG: Final enhanced messages count: %d", len(enhancedMessages))
 	for i, msg := range enhancedMessages {
-		ui.Out().Printf("DEBUG: Enhanced message %d: role=%s, content_length=%d\n", i, msg.Role, len(fmt.Sprintf("%v", msg.Content)))
+		logger.Logf("DEBUG: Enhanced message %d: role=%s, content_length=%d", i, msg.Role, len(fmt.Sprintf("%v", msg.Content)))
 		// Check for detokenize in message content
 		contentStr := fmt.Sprintf("%v", msg.Content)
 		if strings.Contains(contentStr, "detokenize") {
@@ -164,7 +166,7 @@ func CallLLMWithInteractiveContext(
 	if maxToolCalls <= 0 {
 		maxToolCalls = 7 // Default to 7 if config is not set or invalid
 	}
-	ui.Out().Printf("DEBUG: Tool call limit set to %d (OrchestrationMaxAttempts: %d)\n", maxToolCalls, cfg.OrchestrationMaxAttempts)
+	logger.Logf("DEBUG: Tool call limit set to %d (OrchestrationMaxAttempts: %d)", maxToolCalls, cfg.OrchestrationMaxAttempts)
 	executedShell := map[string]bool{}
 	noProgressStreak := 0
 	// Additional guardrails for speed
@@ -287,18 +289,18 @@ func CallLLMWithInteractiveContext(
 			if phase == "execute" {
 				allowed = []string{"execute_step", "edit_file_section", "micro_edit", "validate_file", "read_file", "evaluate_outcome"}
 			}
-			ui.Out().Printf("DEBUG: About to call GetLLMResponseWithToolsScoped with model: %s\n", modelName)
-			ui.Out().Printf("DEBUG: Current messages count: %d\n", len(currentMessages))
-			ui.Out().Printf("DEBUG: Allowed tools: %v\n", allowed)
+			logger.Logf("DEBUG: About to call GetLLMResponseWithToolsScoped with model: %s", modelName)
+			logger.Logf("DEBUG: Current messages count: %d", len(currentMessages))
+			logger.Logf("DEBUG: Allowed tools: %v", allowed)
 
-			ui.Out().Printf("DEBUG: First message role: %s\n", currentMessages[0].Role)
-			ui.Out().Printf("DEBUG: First message content preview: %s\n", fmt.Sprintf("%v", currentMessages[0].Content)[:100])
+			logger.Logf("DEBUG: First message role: %s", currentMessages[0].Role)
+			logger.Logf("DEBUG: First message content preview: %s", fmt.Sprintf("%v", currentMessages[0].Content)[:100])
 
 			response, _, err = GetLLMResponseWithToolsScoped(modelName, currentMessages, "", cfg, timeout, allowed)
 			if err == nil {
 				break
 			}
-			ui.Out().Printf("DEBUG: Turn %d LLM call failed with error: %v\n", i+1, err)
+			logger.Logf("DEBUG: Turn %d LLM call failed with error: %v", i+1, err)
 
 			// Check if this is the detokenize error
 			if strings.Contains(err.Error(), "detokenize") {
@@ -319,7 +321,7 @@ func CallLLMWithInteractiveContext(
 			turnDurations = append(turnDurations, time.Since(turnStart))
 			printSummary()
 			// Debug: Log the actual error
-			ui.Out().Printf("DEBUG: Final error from interactive loop: %v\n", err)
+			logger.Logf("DEBUG: Final error from interactive loop: %v", err)
 			// Check if this was a detokenize error and surface it specifically
 			if strings.Contains(err.Error(), "detokenize") {
 				ui.Out().Printf("ERROR: Found detokenize error in final error handling\n")
@@ -328,12 +330,12 @@ func CallLLMWithInteractiveContext(
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
 		ui.Out().Print("[tools] model returned a response\n")
-		ui.Out().Printf("DEBUG: Response length: %d\n", len(response))
+		logger.Logf("DEBUG: Response length: %d", len(response))
 		previewLen := 100
 		if len(response) < previewLen {
 			previewLen = len(response)
 		}
-		ui.Out().Printf("DEBUG: Response preview: %s\n", response[:previewLen])
+		logger.Logf("DEBUG: Response preview: %s", response[:previewLen])
 
 		if rl := utils.GetRunLogger(); rl != nil {
 			lastMsg := ""
@@ -358,14 +360,14 @@ func CallLLMWithInteractiveContext(
 			// Parse tool calls first to count them
 			toolCalls, err := parseToolCalls(response)
 			if err != nil {
-				ui.Out().Printf("DEBUG: Failed to parse tool calls: %v\n", err)
+				logger.Logf("DEBUG: Failed to parse tool calls: %v", err)
 				continue
 			}
 			totalToolCalls += len(toolCalls)
 
 			// Check if we've exceeded the maximum tool calls limit
 			if totalToolCalls > maxToolCalls {
-				ui.Out().Printf("DEBUG: Maximum tool calls (%d) exceeded, forcing final response\n", maxToolCalls)
+				logger.Logf("DEBUG: Maximum tool calls (%d) exceeded, forcing final response", maxToolCalls)
 				// Force a final response by adding a system message that disables tools
 				currentMessages = append(currentMessages, prompts.Message{
 					Role:    "system",
@@ -373,7 +375,7 @@ func CallLLMWithInteractiveContext(
 				})
 				// Clear allowed tools to prevent further tool calls
 				// Note: allowed variable is defined inside the loop, so we need to modify it there
-				ui.Out().Printf("DEBUG: Tool limit exceeded, tools will be disabled on next iteration\n")
+				logger.Log("DEBUG: Tool limit exceeded, tools will be disabled on next iteration")
 				// Skip tool execution and go directly to next LLM call
 				continue
 			}

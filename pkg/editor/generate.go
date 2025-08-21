@@ -9,13 +9,14 @@ import (
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/filesystem"
-	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // ProcessCodeGeneration generates code based on instructions and returns the combined diff for all changed files.
 // The full raw LLM response is still recorded in the changelog for auditing.
 func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, imagePath string) (string, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
+
 	var originalCode string
 	var err error
 
@@ -58,7 +59,7 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 	requestHash := utils.GenerateRequestHash(processedInstructions)
 	// Pass the effectiveFilename to guide targeted edits when inferred
 	// Indicate streaming when UI is enabled (getUpdatedCode handles LLM; we surface activity in TUI logs via other sinks)
-	ui.Out().Printf("DEBUG: About to call getUpdatedCode\n")
+	logger.Log("DEBUG: About to call getUpdatedCode")
 	updatedCodeFiles, llmResponseRaw, tokenUsage, err := getUpdatedCode(originalCode, processedInstructions, effectiveFilename, cfg, imagePath)
 	if err != nil {
 		return "", err

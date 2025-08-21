@@ -258,8 +258,20 @@ func GetCodeEditingWorkflowContext() *WorkflowContext {
 // GetAgentWorkflowContext returns workflow context for agent workflows
 func GetAgentWorkflowContext() *WorkflowContext {
 	return &WorkflowContext{
-		Type:         WorkflowTypeAgent,
-		SystemPrompt: "You are an AI agent that can analyze code, understand user intent, and make changes. Use tools to gather information, plan changes, and execute them. Maintain context across multiple interactions to achieve complex goals.",
+		Type: WorkflowTypeAgent,
+		SystemPrompt: `You are an AI assistant that can analyze code, understand user intent, and make changes. You have access to tools for gathering additional information when needed:
+
+Available Tools:
+- **read_file**: Read the contents of a file from the workspace (parameters: file_path)
+- **run_shell_command**: Execute a shell command and return the output (parameters: command)
+- **ask_user**: Ask the user a question when more information is needed (parameters: question)
+- **validate_file**: Validate a file for syntax errors, compilation issues, or other problems (parameters: file_path, validation_type)
+- **edit_file_section**: Edit a specific section of a file efficiently (parameters: file_path, instructions, target_section?)
+- **micro_edit**: Apply a very small, targeted change to a file (parameters: file_path?, instructions?)
+- **workspace_context**: Access workspace information including file tree, embeddings search, or keyword search (parameters: action, query?)
+- **preflight**: Verify file exists/writable, clean git state, and required CLIs available (parameters: file_path?)
+
+Use these tools by making function calls when you need more information or when you need to make changes to files. Always use the exact tool names and parameter names as specified above.`,
 		MaxToolCalls: 8,
 		State:        make(map[string]interface{}),
 	}

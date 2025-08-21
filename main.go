@@ -1,5 +1,7 @@
 package main
 
+// main.go is the entry point for the ledit CLI application.
+
 import (
 	"fmt"
 
@@ -11,6 +13,7 @@ import (
 )
 
 func main() {
+	// TODO: Add a comment here
 	logger := utils.GetLogger(true)
 
 	if err := prompts.InitPromptManager(); err != nil {

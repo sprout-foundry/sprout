@@ -3,3 +3,5 @@ Your task is to generate a single, highly effective search query based on the pr
 The query should be designed to find solutions or relevant information to resolve the error or understand the context better.
 Respond with ONLY the search query string. Do not include any other text, explanations, or conversational filler.
 Example: "golang http server connection refused"
+
+pwd

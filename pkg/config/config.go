@@ -60,9 +60,7 @@ type Config struct {
 	CodeToolsEnabled         bool                 `json:"-"`                          // Allow tool-calls in code flow when true
 	FromAgent                bool                 `json:"-"`                          // Internal: true when invoked from agent mode
 	LastTokenUsage           *types.TokenUsage    `json:"-"`                          // Last token usage from LLM call
-	// Workspace context control (command-scoped)
-	SkipWorkspace           bool                 `json:"-"`                          // If true, do not include workspace context by default
-	// New toggles
+	SkipWorkspace            bool                 `json:"-"`                          // If true, do not include workspace context by default
 	PreapplyReview    bool     `json:"preapply_review"`
 	DryRun            bool     `json:"dry_run"`
 	JsonLogs          bool     `json:"json_logs"`
@@ -79,11 +77,11 @@ type Config struct {
 	MaxRunCostUSD    float64 `json:"max_run_cost_usd"`
 	ShellTimeoutSecs int     `json:"shell_timeout_secs"`
 	// Rate limiting and batch size controls
-	FileBatchSize         int `json:"file_batch_size"`         // Batch size for file processing
-	EmbeddingBatchSize    int `json:"embedding_batch_size"`    // Batch size for embedding generation
-	MaxConcurrentRequests int `json:"max_concurrent_requests"` // Max concurrent API requests
-	RequestDelayMs        int `json:"request_delay_ms"`        // Delay between requests in milliseconds
-	AllowedTools          []string `json:"allowed_tools"` // NEW: List of allowed tool names
+	FileBatchSize         int      `json:"file_batch_size"`         // Batch size for file processing
+	EmbeddingBatchSize    int      `json:"embedding_batch_size"`    // Batch size for embedding generation
+	MaxConcurrentRequests int      `json:"max_concurrent_requests"` // Max concurrent API requests
+	RequestDelayMs        int      `json:"request_delay_ms"`        // Delay between requests in milliseconds
+	AllowedTools          []string `json:"allowed_tools"`           // NEW: List of allowed tool names
 }
 
 func getHomeConfigPath() (string, string) {
@@ -376,8 +374,6 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		}
 	}
 
-
-	fmt.Print(prompts.EnterLLMProvider("anthropic")) // NEW PROMPT for LLM Provider
 
 	cfg := &Config{
 		EditingModel:             editingModel,

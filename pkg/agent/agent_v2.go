@@ -3,12 +3,14 @@
 package agent
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +26,35 @@ import (
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/workspace"
+)
+
+// TodoItem represents a task to be executed
+type TodoItem struct {
+	ID          string `json:"id"`
+	Content     string `json:"content"`
+	Description string `json:"description"`
+	Status      string `json:"status"` // pending, in_progress, completed, failed
+	FilePath    string `json:"file_path,omitempty"`
+	Priority    int    `json:"priority"`
+}
+
+// SimplifiedAgentContext holds the simplified agent state
+type SimplifiedAgentContext struct {
+	UserIntent   string
+	Todos        []TodoItem
+	Config       *config.Config
+	Logger       *utils.Logger
+	CurrentTodo  *TodoItem
+	BuildCommand string
+}
+
+// IntentType represents the type of user intent
+type IntentType string
+
+const (
+	IntentTypeCodeUpdate IntentType = "code_update"
+	IntentTypeQuestion   IntentType = "question"
+	IntentTypeCommand    IntentType = "command"
 )
 
 // tail returns last n chars of a string
@@ -45,6 +76,333 @@ func preflightQuick(path string) error {
 	}
 	_ = f.Close()
 	return nil
+}
+
+// RunSimplifiedAgent: New simplified agent workflow
+func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error {
+	startTime := time.Now()
+	ui.Out().Print("🤖 Simplified Agent Mode\n")
+	ui.Out().Printf("🎯 Intent: %s\n", userIntent)
+
+	cfg, err := config.LoadOrInitConfig(skipPrompt)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if model != "" {
+		cfg.EditingModel = model
+	}
+	cfg.SkipPrompt = skipPrompt
+	cfg.Interactive = true
+	cfg.CodeToolsEnabled = true
+	os.Setenv("LEDIT_FROM_AGENT", "1")
+
+	logger := utils.GetLogger(cfg.SkipPrompt)
+
+	// Analyze intent type
+	intentType := analyzeIntentType(userIntent, logger)
+
+	ctx := &SimplifiedAgentContext{
+		UserIntent: userIntent,
+		Config:     cfg,
+		Logger:     logger,
+		Todos:      []TodoItem{},
+	}
+
+	switch intentType {
+	case IntentTypeCodeUpdate:
+		return handleCodeUpdate(ctx, startTime)
+	case IntentTypeQuestion:
+		return handleQuestion(ctx)
+	case IntentTypeCommand:
+		return handleCommand(ctx)
+	default:
+		return fmt.Errorf("unknown intent type")
+	}
+}
+
+// analyzeIntentType determines what type of request this is
+func analyzeIntentType(userIntent string, logger *utils.Logger) IntentType {
+	intentLower := strings.ToLower(userIntent)
+
+	// Check for questions - be more specific to avoid false positives
+	questionWords := []string{"what is", "what are", "how do", "how does", "how can", "how to", "why is", "why does", "when is", "where is", "which is", "who is", "can you explain", "can you describe"}
+	for _, phrase := range questionWords {
+		if strings.Contains(intentLower, phrase) {
+			return IntentTypeQuestion
+		}
+	}
+
+	// Also check for common question starters
+	questionStarters := []string{"what ", "how ", "why ", "when ", "where ", "which ", "who "}
+	for _, starter := range questionStarters {
+		if strings.HasPrefix(intentLower, starter) {
+			return IntentTypeQuestion
+		}
+	}
+
+	// Check for commands - be more specific to avoid false positives
+	commandPrefixes := []string{"run ", "execute ", "start ", "stop ", "build ", "test ", "deploy ", "install ", "uninstall "}
+	for _, prefix := range commandPrefixes {
+		if strings.HasPrefix(intentLower, prefix) || strings.Contains(intentLower, " "+prefix) {
+			return IntentTypeCommand
+		}
+	}
+
+	// Check for code-related keywords that indicate code updates
+	codeWords := []string{"add ", "create ", "implement ", "fix ", "update ", "change ", "modify ", "refactor ", "delete ", "remove ", "rename ", "move ", "extract "}
+	for _, word := range codeWords {
+		if strings.Contains(intentLower, word) {
+			return IntentTypeCodeUpdate
+		}
+	}
+
+	// Default to code update for anything else
+	return IntentTypeCodeUpdate
+}
+
+// handleCodeUpdate manages the code update workflow with todos
+func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
+	ctx.Logger.LogProcessStep("🧭 Analyzing intent and creating plan...")
+
+	// Create todos based on user intent
+	err := createTodos(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create todos: %w", err)
+	}
+
+	if len(ctx.Todos) == 0 {
+		ctx.Logger.LogProcessStep("⚠️ No actionable todos created")
+		return fmt.Errorf("no actionable todos could be created")
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Created %d todos", len(ctx.Todos)))
+
+	// Execute todos sequentially
+	for i, todo := range ctx.Todos {
+		ctx.Logger.LogProcessStep(fmt.Sprintf("📋 Executing todo %d/%d: %s", i+1, len(ctx.Todos), todo.Content))
+
+		// Update todo status
+		ctx.CurrentTodo = &todo
+		ctx.Todos[i].Status = "in_progress"
+
+		// Execute via code command with skip prompt
+		err := executeTodo(ctx, &ctx.Todos[i])
+		if err != nil {
+			ctx.Todos[i].Status = "failed"
+			ctx.Logger.LogError(fmt.Errorf("todo failed: %w", err))
+			return fmt.Errorf("todo execution failed: %w", err)
+		}
+
+		ctx.Todos[i].Status = "completed"
+
+		// Validate build after each todo
+		err = validateBuild(ctx)
+		if err != nil {
+			ctx.Logger.LogError(fmt.Errorf("build validation failed after todo %d: %w", i+1, err))
+			return fmt.Errorf("build validation failed: %w", err)
+		}
+
+		ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Todo %d completed and validated", i+1))
+	}
+
+	// Final summary
+	duration := time.Since(startTime)
+	ui.Out().Print("\n✅ Simplified Agent completed successfully\n")
+	ui.Out().Printf("├─ Duration: %.2f seconds\n", duration.Seconds())
+	ui.Out().Printf("├─ Todos completed: %d\n", len(ctx.Todos))
+	ui.Out().Printf("└─ Status: All changes validated\n")
+
+	return nil
+}
+
+// createTodos generates a list of todos based on user intent
+func createTodos(ctx *SimplifiedAgentContext) error {
+	prompt := fmt.Sprintf(`You are an expert software developer. Break down this user request into specific, actionable todos:
+
+User Request: "%s"
+
+Please create a JSON array of todos that accomplish this request. Each todo should be:
+- Specific and actionable
+- Focused on a single task
+- Include a clear description
+- Prioritized (lower number = higher priority)
+
+Format:
+[
+  {
+    "content": "Brief, actionable description",
+    "description": "Detailed explanation of what this todo accomplishes",
+    "priority": 1
+  }
+]
+
+Focus on concrete changes that can be made to the codebase. Return ONLY the JSON array.`, ctx.UserIntent)
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You create specific, actionable development todos. Always return valid JSON."},
+		{Role: "user", Content: prompt},
+	}
+
+	response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to get todo response: %w", err)
+	}
+
+	// Parse JSON response
+	clean, err := utils.ExtractJSONFromLLMResponse(response)
+	if err != nil {
+		return fmt.Errorf("failed to extract JSON from response: %w", err)
+	}
+
+	var todos []struct {
+		Content     string `json:"content"`
+		Description string `json:"description"`
+		Priority    int    `json:"priority"`
+	}
+
+	if err := json.Unmarshal([]byte(clean), &todos); err != nil {
+		return fmt.Errorf("failed to parse todos JSON: %w", err)
+	}
+
+	// Convert to TodoItem slice
+	for _, todo := range todos {
+		ctx.Todos = append(ctx.Todos, TodoItem{
+			ID:          generateTodoID(),
+			Content:     todo.Content,
+			Description: todo.Description,
+			Status:      "pending",
+			Priority:    todo.Priority,
+		})
+	}
+
+	// Sort by priority
+	sort.Slice(ctx.Todos, func(i, j int) bool {
+		return ctx.Todos[i].Priority < ctx.Todos[j].Priority
+	})
+
+	return nil
+}
+
+// generateTodoID creates a unique ID for a todo
+func generateTodoID() string {
+	bytes := make([]byte, 4)
+	rand.Read(bytes)
+	return strconv.FormatUint(uint64(bytes[0])<<24|uint64(bytes[1])<<16|uint64(bytes[2])<<8|uint64(bytes[3]), 16)
+}
+
+// executeTodo executes a todo via the code command
+func executeTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	ctx.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing: %s", todo.Content))
+
+	// Create a temporary file to pass instructions to the code command
+	instructions := fmt.Sprintf("%s\n\n%s", todo.Content, todo.Description)
+
+	// Use the editor directly instead of shelling out
+	_, err := editor.ProcessCodeGeneration("", instructions, ctx.Config, "")
+	if err != nil {
+		return fmt.Errorf("code generation failed: %w", err)
+	}
+
+	return nil
+}
+
+// validateBuild runs build validation after todo execution
+func validateBuild(ctx *SimplifiedAgentContext) error {
+	ctx.Logger.LogProcessStep("🔍 Validating build after changes...")
+
+	// Get build command from workspace
+	workspaceFile, err := workspace.LoadWorkspaceFile()
+	if err != nil {
+		ctx.Logger.LogProcessStep("⚠️ No workspace file found, skipping build validation")
+		return nil
+	}
+
+	buildCmd := strings.TrimSpace(workspaceFile.BuildCommand)
+	if buildCmd == "" {
+		ctx.Logger.LogProcessStep("⚠️ No build command configured, skipping validation")
+		return nil
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("🏗️ Running build: %s", buildCmd))
+
+	cmd := exec.Command("sh", "-c", buildCmd)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		failureMsg := fmt.Sprintf("Build failed:\n%s", string(output))
+		ctx.Logger.LogError(fmt.Errorf("build failed: %s", failureMsg))
+		return fmt.Errorf("build validation failed: %s", failureMsg)
+	}
+
+	ctx.Logger.LogProcessStep("✅ Build validation passed")
+	return nil
+}
+
+// handleQuestion responds directly to user questions
+func handleQuestion(ctx *SimplifiedAgentContext) error {
+	ctx.Logger.LogProcessStep("❓ Handling question directly...")
+
+	prompt := fmt.Sprintf(`You are an expert software developer. Please answer this question:
+
+Question: "%s"
+
+Provide a clear, helpful answer. If this involves code or technical details, be specific and include examples where appropriate.`, ctx.UserIntent)
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are a helpful software development assistant."},
+		{Role: "user", Content: prompt},
+	}
+
+	response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to get answer: %w", err)
+	}
+
+	ui.Out().Print("\n🤖 Answer:\n")
+	ui.Out().Print(response + "\n")
+	return nil
+}
+
+// handleCommand executes user commands directly
+func handleCommand(ctx *SimplifiedAgentContext) error {
+	ctx.Logger.LogProcessStep("⚡ Handling command directly...")
+
+	// Extract command from intent
+	command := extractCommandFromIntent(ctx.UserIntent)
+	if command == "" {
+		return fmt.Errorf("could not extract command from intent")
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("🚀 Executing: %s", command))
+
+	cmd := exec.Command("sh", "-c", command)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		ctx.Logger.LogError(fmt.Errorf("command failed: %s", string(output)))
+		return fmt.Errorf("command execution failed: %s", string(output))
+	}
+
+	ui.Out().Print("\n📋 Command Output:\n")
+	ui.Out().Print(string(output) + "\n")
+	return nil
+}
+
+// extractCommandFromIntent extracts a command from user intent
+func extractCommandFromIntent(intent string) string {
+	// Simple extraction - look for commands after "run", "execute", etc.
+	intentLower := strings.ToLower(intent)
+
+	commands := []string{"run ", "execute ", "start ", "stop ", "build ", "test ", "deploy ", "install ", "uninstall "}
+	for _, prefix := range commands {
+		if idx := strings.Index(intentLower, prefix); idx != -1 {
+			return strings.TrimSpace(intent[idx+len(prefix):])
+		}
+	}
+
+	// If no prefix found, return the whole intent as a command
+	return strings.TrimSpace(intent)
 }
 
 // RunAgentModeV2: deterministic fast-path for doc-only edits (top-of-file comment insertion).

@@ -259,7 +259,7 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 			}
 
 			// Skip if file would exceed token budget
-			if fileInfo.TokenCount > 1000 { // Use actual token count
+			if fileInfo.TokenCount > 4500 {
 				b.WriteString(fmt.Sprintf("📄 %s (large file - summary only)\n", filePath))
 				b.WriteString(fmt.Sprintf("   Summary: %s\n", fileInfo.Summary))
 				if fileInfo.Exports != "" {
@@ -311,8 +311,8 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 
 	// Summary Context Files (compact format)
 	b.WriteString("### Supporting Files (Summaries):\n")
-	summaryContextAdded := false
-	const maxSummaries = 10 // Limit to prevent token explosion
+	summaryContextAdded := false // Limit to prevent token explosion
+	const maxSummaries = 50
 	summaryCount := 0
 
 	for _, filePath := range allFilePaths {

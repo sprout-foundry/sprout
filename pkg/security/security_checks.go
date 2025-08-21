@@ -107,7 +107,7 @@ func DetectSecurityConcerns(content string) ([]string, map[string]string) {
 // CheckFileSecurity analyzes a file's content for security concerns,
 // prompts the user for confirmation on new detections, and returns
 // the updated lists of security concerns and ignored concerns,
-// along with a boolean indicating if LLM summarization should be skipped.
+// along with a boolean indicating if local summarization should be skipped.
 func CheckFileSecurity(
 	relativePath string,
 	fileContent string,
@@ -168,7 +168,6 @@ func CheckFileSecurity(
 	sort.Strings(concernsForThisFile)
 	sort.Strings(ignoredConcernsForThisFile)
 
-	// If there are confirmed security concerns, mark for skipping LLM summarization
 	if len(concernsForThisFile) > 0 {
 		skipLLMSummarization = true
 		logger.LogProcessStep(prompts.SkippingLLMSummarizationDueToSecurity(relativePath))

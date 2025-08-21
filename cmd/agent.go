@@ -16,6 +16,8 @@ var (
 	agentModel       string // Declare agentModel variable
 	agentDryRun      bool
 	agentDirectApply bool
+	agentSimplified  bool
+	agentUseV2       bool
 )
 
 func init() {
@@ -24,35 +26,33 @@ func init() {
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name to use with the LLM")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (no writes/shell side-effects)")
 	agentCmd.Flags().BoolVar(&agentDirectApply, "direct-apply", false, "Let the orchestration model directly apply changes via tools (experimental)")
+	agentCmd.Flags().BoolVar(&agentSimplified, "simplified", true, "Use simplified agent workflow with todos and direct execution (default: true)")
+	agentCmd.Flags().BoolVar(&agentUseV2, "v2", false, "Use the original v2 agent workflow instead of simplified mode")
 }
 
 // agentCmd represents the agent command
 var agentCmd = &cobra.Command{
 	Use:   "agent [intent]",
 	Short: "AI agent mode - analyzes intent and autonomously decides what actions to take",
-	Long: `Agent mode allows the LLM to analyze your intent and autonomously decide what actions to take.
-The agent uses adaptive decision-making to evaluate progress and respond to changing conditions.
+	Long: `Simplified Agent mode with streamlined workflow for code updates, questions, and commands.
 
-Features:
-• Progressive evaluation after each major step
-• Intelligent error handling and recovery
-• Adaptive plan revision based on learnings
-• Context summarization to maintain efficiency
-• Smart action selection (continue, revise, validate, complete)
+The agent uses a simplified approach:
+• For code updates: Creates todos, executes them via the code command with auto-review, validates builds
+• For questions: Responds directly without complex planning
+• For commands: Executes commands directly without todo overhead
 
-The agent will:
-1. Analyze your intent and assess complexity
-2. Create a detailed execution plan
-3. Execute operations with progress monitoring
-4. Evaluate outcomes and decide next actions
-5. Handle errors intelligently with context-aware recovery
-6. Validate changes and ensure quality
+Workflow:
+1. Analyze your intent (code update, question, or command)
+2. For code updates: Create prioritized todos and execute them sequentially
+3. Each todo is executed via the code command with skip-prompt for auto review
+4. Build validation runs after each todo to ensure changes work
+5. Questions and commands are handled directly without todos
 
 Examples:
   ledit agent "Add better error handling to the main function"
-  ledit agent "Refactor the user authentication system"
-  ledit agent "Fix the bug where users can't login"
-  ledit agent "Add unit tests for the payment processing"`,
+  ledit agent "How does the authentication system work?"
+  ledit agent "run build command"
+  ledit agent "Fix the bug where users can't login"`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		userIntent := strings.Join(args, " ")
@@ -67,7 +67,13 @@ Examples:
 			uiPkg.SetDefaultSink(uiPkg.TuiSink{})
 			go func() { _ = tuiPkg.Run() }()
 		}
-		// Default to v2; v1 has been removed/deprecated
-		return agent.RunAgentModeV2(userIntent, agentSkipPrompt, agentModel, agentDirectApply)
+
+		// Use v2 agent if explicitly requested, otherwise use simplified (default)
+		if agentUseV2 {
+			return agent.RunAgentModeV2(userIntent, agentSkipPrompt, agentModel, agentDirectApply)
+		}
+
+		// Default to simplified agent
+		return agent.RunSimplifiedAgent(userIntent, agentSkipPrompt, agentModel)
 	},
 }

@@ -638,13 +638,13 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 					finalSecurityConcerns = securityConcerns
 					finalIgnoredSecurityConcerns = ignoredSecurityConcerns
 
-					// If security concerns found and LLM summarization should be skipped
+					// If security concerns found and local summarization should be skipped
 					if skipLLMSummarization && len(securityConcerns) > 0 {
-						// Clear the summary to prevent LLM processing of sensitive content
+						// Clear the summary to prevent processing of sensitive content
 						fileSummary = ""
 						fileExports = ""
 						fileReferences = ""
-						logger.LogProcessStep(fmt.Sprintf("Skipped LLM summarization for %s due to security concerns", f.relativePath))
+						logger.LogProcessStep(fmt.Sprintf("Skipped local summarization for %s due to security concerns", f.relativePath))
 					}
 				}
 
@@ -915,6 +915,11 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 			logger.Logf("Warning: Failed to autogenerate project goals: %v.\n", goalErr)
 		} else {
 			workspace.ProjectGoals = generatedGoals
+			// Cache a baseline hash for change detection
+			if workspace.GoalsBaseline == nil {
+				workspace.GoalsBaseline = map[string]string{}
+			}
+			workspace.GoalsBaseline["syntactic_overview_hash"] = generateFileHash(overview)
 		}
 	}
 	if (workspace.ProjectInsights == ProjectInsights{}) || cfg.UseEmbeddings { // allow refreshing when embeddings are used
@@ -926,6 +931,11 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 			// prefer LLM, but keep heuristic values when LLM leaves fields empty
 			mergeInsights(&generatedInsights, workspace.ProjectInsights)
 			workspace.ProjectInsights = generatedInsights
+			// Cache a baseline hash for change detection
+			if workspace.InsightsBaseline == nil {
+				workspace.InsightsBaseline = map[string]string{}
+			}
+			workspace.InsightsBaseline["syntactic_overview_hash"] = generateFileHash(overview)
 		}
 	}
 	if err := saveWorkspaceFile(workspace); err != nil {

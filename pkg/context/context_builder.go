@@ -243,8 +243,8 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		// Set the global context handler for tool execution
 		llm.SetGlobalContextHandler(contextHandlerWrapper)
 
-		// Create workflow context for agent workflows
-		workflowContext := llm.GetAgentWorkflowContext()
+		// Use code-editing workflow context for code command
+		workflowContext := llm.GetCodeEditingWorkflowContext()
 		workflowContext.ContextHandler = contextHandlerWrapper
 
 		// Create unified interactive config
@@ -308,8 +308,8 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		// Set the global context handler for tool execution
 		llm.SetGlobalContextHandler(contextHandlerWrapper)
 
-		// Create workflow context
-		workflowContext := llm.GetAgentWorkflowContext()
+		// Use code-editing workflow context for code command
+		workflowContext := llm.GetCodeEditingWorkflowContext()
 		workflowContext.ContextHandler = contextHandlerWrapper
 
 		// Create unified interactive config

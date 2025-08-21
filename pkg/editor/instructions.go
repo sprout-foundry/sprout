@@ -15,14 +15,10 @@ import (
 	"github.com/alantheprice/ledit/pkg/workspace"
 )
 
-// ProcessInstructionsWithWorkspace appends the workspace tag and delegates to ProcessInstructions.
+// ProcessInstructionsWithWorkspace delegates to ProcessInstructions (legacy, no tag injection).
 func ProcessInstructionsWithWorkspace(instructions string, cfg *config.Config) (string, error) {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	logger.Logf("DEBUG: ProcessInstructionsWithWorkspace called with: %s", instructions)
-	// Replace any existing #WS or #WORKSPACE tags with a single #WS tag
-	re := regexp.MustCompile(`(?i)\s*#(WS|WORKSPACE)\s*$`)
-	instructions = re.ReplaceAllString(instructions, "") + " #WS"
-
 	return ProcessInstructions(instructions, cfg)
 }
 
@@ -90,6 +86,9 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 		instructions = regexp.MustCompile(`(?i)#SG(?:\s+"([^"]*)")?`).ReplaceAllString(instructions, "")
 	}
 
+	// Strip deprecated workspace tags if provided to avoid accidental processing
+	instructions = regexp.MustCompile(`(?i)\s*#(WS|WORKSPACE)\b`).ReplaceAllString(instructions, "")
+
 	// Updated pattern to capture line ranges: #filename:start-end or #filename:start,end
 	// Made more specific to avoid matching markdown headers by requiring at least one letter before any special chars
 	filePattern := regexp.MustCompile(`\s+#([a-zA-Z][\w.-]*)(?::(\d+)[-,](\d+))?`)
@@ -124,10 +123,7 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 			logger.Logf(" (lines %d-%d)", startLine, endLine)
 		}
 
-		if path == "WORKSPACE" || path == "WS" {
-			logger.Log(prompts.LoadingWorkspaceData())
-			content = workspace.GetWorkspaceContext(instructions, cfg)
-		} else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 			content, err = webcontent.NewWebContentFetcher().FetchWebContent(path, cfg) // Pass cfg here
 			if err != nil {
 				logger.Log(prompts.URLFetchError(path, err))

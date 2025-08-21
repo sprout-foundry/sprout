@@ -30,8 +30,14 @@ Do not include any additional text, explanations, or comments outside the code b
 Update all files that are necessary to fulfill the requirements.
 If a specific filename is provided, focus your edits primarily on that file. Only create or modify other files if it is an absolute, unavoidable dependency for the requested change to work.
 The filename must only appear in the header of the code block (e.g., ````python # myfile.py`). Do not include file paths within the code content itself.
+
+BEFORE YOU EDIT ANY FILE:
+- If you have NOT been shown the full current contents of a file you plan to modify, you MUST request it first using the read_file tool for that exact path.
+- Do NOT rely on summaries or search results for editing; always read the full file(s) before generating changes.
+- If multiple files will be edited, read each file’s full contents prior to producing the final output.
 Do not include any other text or explanations outside the code blocks.
 Ensure that the code is syntactically correct and follows best practices for the specified language.
+Confirm you have read the full content of each file you are modifying (via read_file) before generating your final answer.
 
 CODE EDITING PRINCIPLES:
 - Ensure your edits are targeted and relevant to the user request

@@ -922,7 +922,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 			workspace.GoalsBaseline["syntactic_overview_hash"] = generateFileHash(overview)
 		}
 	}
-	if (workspace.ProjectInsights == ProjectInsights{}) || cfg.UseEmbeddings { // allow refreshing when embeddings are used
+	if (workspace.ProjectInsights == ProjectInsights{}) { // regenerate only when empty (or later heuristic)
 		logger.LogProcessStep("--- Autogenerating project insights from syntactic overview ---")
 		generatedInsights, insErr := GetProjectInsights(cfg, overview)
 		if insErr != nil {
@@ -942,34 +942,20 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 		logger.Logf("Warning: Failed to save workspace metadata: %v\n", err)
 	}
 
-	// Use embedding-based file selection if enabled
+	// Use embedding-based file selection by default
 	var fullContextFiles, summaryContextFiles []string
 	var fileSelectionErr error
 
-	if cfg.UseEmbeddings {
-		logger.LogProcessStep("--- Using embedding-based file selection ---")
-		ui.PublishStatus("Selecting relevant files via embeddings…")
-		fullContextFiles, summaryContextFiles, fileSelectionErr = GetFilesForContextUsingEmbeddings(instructions, workspace, cfg, logger)
-		if fileSelectionErr != nil {
-			logger.Logf("Warning: could not determine which files to load for context using embeddings: %v. Proceeding with all summaries.\n", fileSelectionErr)
-			var allFilesAsSummaries []string
-			for file := range workspace.Files {
-				allFilesAsSummaries = append(allFilesAsSummaries, file)
-			}
-			return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg)
+	logger.LogProcessStep("--- Using embedding-based file selection ---")
+	ui.PublishStatus("Selecting relevant files via embeddings…")
+	fullContextFiles, summaryContextFiles, fileSelectionErr = GetFilesForContextUsingEmbeddings(instructions, workspace, cfg, logger)
+	if fileSelectionErr != nil {
+		logger.Logf("Warning: could not determine which files to load for context using embeddings: %v. Proceeding with all summaries.\n", fileSelectionErr)
+		var allFilesAsSummaries []string
+		for file := range workspace.Files {
+			allFilesAsSummaries = append(allFilesAsSummaries, file)
 		}
-	} else {
-		logger.LogProcessStep("--- Asking LLM to select relevant files for context ---")
-		ui.PublishStatus("Selecting relevant files via LLM…")
-		fullContextFiles, summaryContextFiles, fileSelectionErr = getFilesForContext(instructions, workspace, cfg, logger)
-		if fileSelectionErr != nil {
-			logger.Logf("Warning: could not determine which files to load for context: %v. Proceeding with all summaries.\n", fileSelectionErr)
-			var allFilesAsSummaries []string
-			for file := range workspace.Files {
-				allFilesAsSummaries = append(allFilesAsSummaries, file)
-			}
-			return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg)
-		}
+		return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg)
 	}
 
 	if len(fullContextFiles) > 0 {

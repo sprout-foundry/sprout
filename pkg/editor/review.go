@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
@@ -59,24 +60,25 @@ func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions 
 			logger.LogProcessStep("No active changes recorded for this revision; skipping rollback.")
 		}
 
-		// Check if we've already retried once
-		if cfg.RetryAttemptCount >= 1 {
-			return fmt.Errorf("changes rejected by automated review after retry. Feedback: %s. New prompt suggestion: %s", review.Feedback, review.NewPrompt)
+		// Bounded retries with refined prompts
+		maxRetries := 2
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			cfg.RetryAttemptCount = attempt
+			refined := review.NewPrompt
+			if strings.TrimSpace(refined) == "" {
+				// Synthesize a refined prompt using feedback + original
+				refined = fmt.Sprintf("Refine the previous change. Keep existing functionality intact. Address review feedback: %s. Original intent: %s.", review.Feedback, originalPrompt)
+			}
+			logger.LogProcessStep(fmt.Sprintf("Retrying code generation (%d/%d) with new prompt: %s", attempt, maxRetries, refined))
+			if _, retryErr := ProcessCodeGeneration("", refined, cfg, ""); retryErr != nil {
+				logger.LogProcessStep(fmt.Sprintf("Retry %d failed: %v", attempt, retryErr))
+				continue
+			}
+			logger.LogProcessStep("Retry successful.")
+			return fmt.Errorf("retry applied, re-validating. Feedback: %s", review.Feedback)
 		}
 
-		// Increment retry attempt count
-		cfg.RetryAttemptCount++
-
-		// Automatically retry with the new prompt
-		logger.LogProcessStep(fmt.Sprintf("Retrying code generation with new prompt: %s", review.NewPrompt))
-		_, retryErr := ProcessCodeGeneration("", review.NewPrompt, cfg, "")
-		if retryErr != nil {
-			return fmt.Errorf("retry failed: %w. Original feedback: %s. New prompt: %s", retryErr, review.Feedback, review.NewPrompt)
-		}
-
-		// If we get here, the retry was successful
-		logger.LogProcessStep("Retry successful.")
-		return nil
+		return fmt.Errorf("changes rejected after %d retries. Feedback: %s. Suggested prompt: %s", maxRetries, review.Feedback, review.NewPrompt)
 	default:
 		return fmt.Errorf("unknown review status from LLM: %s. Full feedback: %s", review.Status, review.Feedback)
 	}

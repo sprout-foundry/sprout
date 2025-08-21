@@ -27,7 +27,6 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (no writes/shell side-effects)")
 	agentCmd.Flags().BoolVar(&agentDirectApply, "direct-apply", false, "Let the orchestration model directly apply changes via tools (experimental)")
 	agentCmd.Flags().BoolVar(&agentSimplified, "simplified", true, "Use simplified agent workflow with todos and direct execution (default: true)")
-	agentCmd.Flags().BoolVar(&agentUseV2, "v2", false, "Use the original v2 agent workflow instead of simplified mode")
 }
 
 // agentCmd represents the agent command
@@ -66,11 +65,6 @@ Examples:
 		if uiPkg.Enabled() {
 			uiPkg.SetDefaultSink(uiPkg.TuiSink{})
 			go func() { _ = tuiPkg.Run() }()
-		}
-
-		// Use v2 agent if explicitly requested, otherwise use simplified (default)
-		if agentUseV2 {
-			return agent.RunAgentModeV2(userIntent, agentSkipPrompt, agentModel, agentDirectApply)
 		}
 
 		// Default to simplified agent

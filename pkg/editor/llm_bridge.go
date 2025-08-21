@@ -26,10 +26,30 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 
 	log.Log(prompts.ModelReturned(modelName, llmContent))
 
-	updatedCode, err := parser.GetUpdatedCodeFromResponse(llmContent)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("failed to parse updated code from response: %w", err)
+	updatedCode := map[string]string{}
+	var parseErr error
+
+	// Prefer patch parsing first and materialize to full file contents
+	if patches, perr := parser.GetUpdatedCodeFromPatchResponse(llmContent); perr == nil && len(patches) > 0 {
+		for fname, p := range patches {
+			content := parser.PatchToFullContent(p, originalCode)
+			if strings.TrimSpace(content) != "" {
+				updatedCode[fname] = content
+			}
+		}
+		if len(updatedCode) == 0 {
+			parseErr = fmt.Errorf("patches detected but no content materialized")
+		}
+	} else {
+		parseErr = perr
+		// Legacy extraction
+		if uc, uerr := parser.GetUpdatedCodeFromResponse(llmContent); uerr == nil {
+			updatedCode = uc
+		} else {
+			parseErr = uerr
+		}
 	}
+
 	if len(updatedCode) == 0 {
 		ui.Out().Print(prompts.NoCodeBlocksParsed() + "\n")
 		ui.Out().Printf("%s\n", llmContent)
@@ -44,5 +64,10 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 			}
 		}
 	}
+
+	if len(updatedCode) == 0 && parseErr != nil {
+		return nil, "", tokenUsage, fmt.Errorf("failed to parse model response in patch mode: %w", parseErr)
+	}
+
 	return updatedCode, llmContent, tokenUsage, nil
 }

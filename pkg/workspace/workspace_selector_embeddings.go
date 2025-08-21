@@ -54,13 +54,13 @@ func GetFilesForContextUsingEmbeddings(instructions string, workspace WorkspaceF
 		logger.Logf("Selected for full context (top match %.4f): %s\n", scores[maxScoreIndex], relevantEmbeddings[maxScoreIndex].Path)
 
 		// High-confidence threshold for additional full-context files
-		const absoluteFloor = 0.90
-		relativeFloor := maxScore * 0.95
+		const absoluteFloor = 0.6
+		relativeFloor := maxScore * 0.70
 		highConfidence := relativeFloor
 		if highConfidence < absoluteFloor {
 			highConfidence = absoluteFloor
 		}
-		const maxAdditionalFull = 2
+		const maxAdditionalFull = 6
 		added := 0
 
 		for i, emb := range relevantEmbeddings {

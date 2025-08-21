@@ -177,7 +177,11 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	logger.Log(fmt.Sprintf("Code length: %d chars", len(code)))
 	logger.Log(fmt.Sprintf("ImagePath: %s", imagePath))
 
-	messages := prompts.BuildCodeMessagesWithFormat(code, instructions, filename, cfg.Interactive, true)
+	// For agent workflow, use patch format but without interactive tools to avoid confusion
+	isAgentModeEarlyCheck := os.Getenv("LEDIT_FROM_AGENT") == "1"
+	useInteractive := cfg.Interactive && !isAgentModeEarlyCheck
+
+	messages := prompts.BuildCodeMessagesWithFormat(code, instructions, filename, useInteractive, true)
 	logger.Log(fmt.Sprintf("Built %d messages", len(messages)))
 
 	// Add image to the user message if provided

@@ -60,6 +60,8 @@ type Config struct {
 	CodeToolsEnabled         bool                 `json:"-"`                          // Allow tool-calls in code flow when true
 	FromAgent                bool                 `json:"-"`                          // Internal: true when invoked from agent mode
 	LastTokenUsage           *types.TokenUsage    `json:"-"`                          // Last token usage from LLM call
+	// Workspace context control (command-scoped)
+	SkipWorkspace           bool                 `json:"-"`                          // If true, do not include workspace context by default
 	// New toggles
 	PreapplyReview    bool     `json:"preapply_review"`
 	DryRun            bool     `json:"dry_run"`
@@ -81,6 +83,7 @@ type Config struct {
 	EmbeddingBatchSize    int `json:"embedding_batch_size"`    // Batch size for embedding generation
 	MaxConcurrentRequests int `json:"max_concurrent_requests"` // Max concurrent API requests
 	RequestDelayMs        int `json:"request_delay_ms"`        // Delay between requests in milliseconds
+	AllowedTools          []string `json:"allowed_tools"` // NEW: List of allowed tool names
 }
 
 func getHomeConfigPath() (string, string) {
@@ -364,6 +367,16 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 	useEmbeddingsStr, _ := reader.ReadString('\n')
 	useEmbeddings := strings.TrimSpace(strings.ToLower(useEmbeddingsStr)) != "no"
 
+	fmt.Print("Enter comma-separated list of allowed tools (e.g., read_file,run_shell_command,workspace_context): ")
+	allowedToolsStr, _ := reader.ReadString('\n')
+	allowedTools := []string{}
+	if strings.TrimSpace(allowedToolsStr) != "" {
+		for _, tool := range strings.Split(allowedToolsStr, ",") {
+			allowedTools = append(allowedTools, strings.TrimSpace(tool))
+		}
+	}
+
+
 	fmt.Print(prompts.EnterLLMProvider("anthropic")) // NEW PROMPT for LLM Provider
 
 	cfg := &Config{
@@ -380,6 +393,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		OllamaServerURL:          "http://localhost:11434",
 		OrchestrationMaxAttempts: 6,                      // Default max attempts for orchestration
 		CodeStyle:                CodeStylePreferences{}, // Initialize to be populated by setDefaultValues
+		AllowedTools:             allowedTools,           // Set from user input
 		RetryAttemptCount:        0,                      // Initialize retry attempt count to zero
 		// SearchModel and Temperature will be set by setDefaultValues
 	}

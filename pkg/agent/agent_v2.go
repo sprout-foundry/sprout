@@ -291,11 +291,144 @@ func generateTodoID() string {
 	return strconv.FormatUint(uint64(bytes[0])<<24|uint64(bytes[1])<<16|uint64(bytes[2])<<8|uint64(bytes[3]), 16)
 }
 
-// executeTodo executes a todo via the code command
+// executeTodo executes a todo using the most appropriate method based on its content
 func executeTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	ctx.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing: %s", todo.Content))
 
-	// Create a temporary file to pass instructions to the code command
+	// Analyze the todo to determine the best execution method
+	executionType := analyzeTodoExecutionType(todo.Content, todo.Description)
+
+	switch executionType {
+	case ExecutionTypeAnalysis:
+		return executeAnalysisTodo(ctx, todo)
+	case ExecutionTypeDirectEdit:
+		return executeDirectEditTodo(ctx, todo)
+	case ExecutionTypeCodeCommand:
+		return executeCodeCommandTodo(ctx, todo)
+	default:
+		return executeCodeCommandTodo(ctx, todo)
+	}
+}
+
+// ExecutionType represents how a todo should be executed
+type ExecutionType string
+
+const (
+	ExecutionTypeAnalysis    ExecutionType = "analysis"
+	ExecutionTypeDirectEdit  ExecutionType = "direct_edit"
+	ExecutionTypeCodeCommand ExecutionType = "code_command"
+)
+
+// analyzeTodoExecutionType determines the best way to execute a todo
+func analyzeTodoExecutionType(content, description string) ExecutionType {
+	contentLower := strings.ToLower(content)
+	descriptionLower := strings.ToLower(description)
+
+	// Analysis-only todos (read, explore, examine, analyze)
+	analysisKeywords := []string{"analyze", "examine", "explore", "read", "review", "understand", "study", "investigate", "check", "verify", "validate", "list", "show", "display", "find", "search", "discover", "identify"}
+	for _, keyword := range analysisKeywords {
+		if strings.Contains(contentLower, keyword) {
+			return ExecutionTypeAnalysis
+		}
+	}
+
+	// Direct edit todos (simple changes, updates to documentation)
+	directEditKeywords := []string{"update readme", "update documentation", "add comment", "fix typo", "update description", "add example", "update text"}
+	for _, keyword := range directEditKeywords {
+		if strings.Contains(contentLower, keyword) || strings.Contains(descriptionLower, keyword) {
+			return ExecutionTypeDirectEdit
+		}
+	}
+
+	// Default to code command for anything involving code changes
+	return ExecutionTypeCodeCommand
+}
+
+// executeAnalysisTodo handles analysis-only todos with direct LLM exploration
+func executeAnalysisTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	ctx.Logger.LogProcessStep("🔍 Performing analysis (no code changes)")
+
+	prompt := fmt.Sprintf(`You are analyzing the codebase to help with: "%s"
+
+Context from overall task: "%s"
+
+Please analyze and provide insights on: %s
+
+Focus on understanding the current state, identifying patterns, and providing specific findings that will inform the next steps of the task.`, ctx.UserIntent, todo.Content, todo.Description)
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert code analyst. Provide detailed analysis without making changes."},
+		{Role: "user", Content: prompt},
+	}
+
+	response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 60*time.Second)
+	if err != nil {
+		return fmt.Errorf("analysis failed: %w", err)
+	}
+
+	// Store analysis results in context for future todos to reference
+	ctx.Logger.LogProcessStep("📊 Analysis completed and stored")
+	ui.Out().Print(fmt.Sprintf("\n📋 Analysis Result for Todo: %s\n%s\n", todo.Content, response))
+
+	return nil
+}
+
+// executeDirectEditTodo handles simple documentation edits directly
+func executeDirectEditTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	ctx.Logger.LogProcessStep("✏️ Performing direct edit (simple changes)")
+
+	prompt := fmt.Sprintf(`You need to make a simple edit based on this todo:
+
+Todo: %s
+Description: %s
+Overall Task: %s
+
+Please provide the specific file path and the exact changes needed. Respond in JSON format:
+{
+  "file_path": "path/to/file",
+  "changes": "description of what to change",
+  "content": "the new content to use"
+}`, todo.Content, todo.Description, ctx.UserIntent)
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert at making simple, targeted edits. Provide specific file paths and exact content changes."},
+		{Role: "user", Content: prompt},
+	}
+
+	response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 45*time.Second)
+	if err != nil {
+		return fmt.Errorf("direct edit planning failed: %w", err)
+	}
+
+	// Parse the response to get file path and changes
+	var editPlan struct {
+		FilePath string `json:"file_path"`
+		Changes  string `json:"changes"`
+		Content  string `json:"content"`
+	}
+
+	clean, err := utils.ExtractJSONFromLLMResponse(response)
+	if err != nil {
+		return fmt.Errorf("failed to parse edit plan: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(clean), &editPlan); err != nil {
+		return fmt.Errorf("failed to unmarshal edit plan: %w", err)
+	}
+
+	// Apply the direct edit
+	if err := applyDirectEdit(editPlan.FilePath, editPlan.Content, ctx.Logger); err != nil {
+		return fmt.Errorf("direct edit failed: %w", err)
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Direct edit completed: %s", editPlan.FilePath))
+	return nil
+}
+
+// executeCodeCommandTodo handles complex code changes via the full code command workflow
+func executeCodeCommandTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	ctx.Logger.LogProcessStep("🛠️ Using full code command workflow (complex changes)")
+
 	instructions := fmt.Sprintf("%s\n\n%s", todo.Content, todo.Description)
 
 	// Use the editor directly instead of shelling out
@@ -304,6 +437,17 @@ func executeTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 		return fmt.Errorf("code generation failed: %w", err)
 	}
 
+	return nil
+}
+
+// applyDirectEdit applies simple changes directly to files
+func applyDirectEdit(filePath, newContent string, logger *utils.Logger) error {
+	// Write new content
+	if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("failed to write file %s: %w", filePath, err)
+	}
+
+	logger.LogProcessStep(fmt.Sprintf("📝 Updated %s", filePath))
 	return nil
 }
 

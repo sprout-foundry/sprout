@@ -43,7 +43,6 @@ type Config struct {
 	LocalModel               string               `json:"local_model"`
 	TrackWithGit             bool                 `json:"track_with_git"`
 	EnableSecurityChecks     bool                 `json:"enable_security_checks"` // New field for security checks
-	UseEmbeddings            bool                 `json:"use_embeddings"`         // New field for using embeddings
 	SkipPrompt               bool                 `json:"-"`                      // Internal use, not saved to config
 	Interactive              bool                 `json:"-"`                      // Internal use, not saved to config
 	OllamaServerURL          string               `json:"ollama_server_url"`
@@ -60,7 +59,7 @@ type Config struct {
 	CodeToolsEnabled         bool                 `json:"-"`                          // Allow tool-calls in code flow when true
 	FromAgent                bool                 `json:"-"`                          // Internal: true when invoked from agent mode
 	LastTokenUsage           *types.TokenUsage    `json:"-"`                          // Last token usage from LLM call
-	SkipWorkspace            bool                 `json:"-"`                          // If true, do not include workspace context by default
+	// New toggles
 	PreapplyReview    bool     `json:"preapply_review"`
 	DryRun            bool     `json:"dry_run"`
 	JsonLogs          bool     `json:"json_logs"`
@@ -77,11 +76,10 @@ type Config struct {
 	MaxRunCostUSD    float64 `json:"max_run_cost_usd"`
 	ShellTimeoutSecs int     `json:"shell_timeout_secs"`
 	// Rate limiting and batch size controls
-	FileBatchSize         int      `json:"file_batch_size"`         // Batch size for file processing
-	EmbeddingBatchSize    int      `json:"embedding_batch_size"`    // Batch size for embedding generation
-	MaxConcurrentRequests int      `json:"max_concurrent_requests"` // Max concurrent API requests
-	RequestDelayMs        int      `json:"request_delay_ms"`        // Delay between requests in milliseconds
-	AllowedTools          []string `json:"allowed_tools"`           // NEW: List of allowed tool names
+	FileBatchSize         int `json:"file_batch_size"`         // Batch size for file processing
+	EmbeddingBatchSize    int `json:"embedding_batch_size"`    // Batch size for embedding generation
+	MaxConcurrentRequests int `json:"max_concurrent_requests"` // Max concurrent API requests
+	RequestDelayMs        int `json:"request_delay_ms"`        // Delay between requests in milliseconds
 }
 
 func getHomeConfigPath() (string, string) {
@@ -128,7 +126,7 @@ func getLocalModel(skipPrompt bool) string {
 
 func (cfg *Config) setDefaultValues() {
 	if cfg.SummaryModel == "" {
-		cfg.SummaryModel = "deepinfra:meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+		cfg.SummaryModel = "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo"
 	}
 	if cfg.WorkspaceModel == "" {
 		cfg.WorkspaceModel = "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo"
@@ -210,9 +208,6 @@ func (cfg *Config) setDefaultValues() {
 		cfg.CodeStyle.Readability = "Prioritize code readability and maintainability. Use comments where necessary to explain complex logic."
 	}
 
-	// Set default for UseEmbeddings
-	cfg.UseEmbeddings = true
-
 	// Pre-apply review default: enabled
 	if !cfg.PreapplyReview {
 		cfg.PreapplyReview = true
@@ -275,7 +270,6 @@ func loadConfig(filePath string) (*Config, error) {
 	cfg.WorkspaceModel = ""                        // Default to empty, will fall back to SummaryModel
 	cfg.OllamaServerURL = "http://localhost:11434" // Default Ollama URL
 	cfg.EnableSecurityChecks = false               // Default to false for existing configs
-	cfg.UseEmbeddings = false                      // Default to false for existing configs
 	cfg.Temperature = 0.1                          // NEW: Initialize Temperature to very low value for consistency
 	cfg.MaxTokens = 4096                           // NEW: Initialize MaxTokens
 	cfg.TopP = 0.9                                 // NEW: Initialize TopP
@@ -361,19 +355,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 	enableSecurityChecksStr, _ := reader.ReadString('\n')
 	enableSecurityChecks := strings.TrimSpace(strings.ToLower(enableSecurityChecksStr)) == "yes"
 
-	fmt.Print("Enable semantic file selection using embeddings? (yes/no, recommended): ")
-	useEmbeddingsStr, _ := reader.ReadString('\n')
-	useEmbeddings := strings.TrimSpace(strings.ToLower(useEmbeddingsStr)) != "no"
-
-	fmt.Print("Enter comma-separated list of allowed tools (e.g., read_file,run_shell_command,workspace_context): ")
-	allowedToolsStr, _ := reader.ReadString('\n')
-	allowedTools := []string{}
-	if strings.TrimSpace(allowedToolsStr) != "" {
-		for _, tool := range strings.Split(allowedToolsStr, ",") {
-			allowedTools = append(allowedTools, strings.TrimSpace(tool))
-		}
-	}
-
+	fmt.Print(prompts.EnterLLMProvider("anthropic")) // NEW PROMPT for LLM Provider
 
 	cfg := &Config{
 		EditingModel:             editingModel,
@@ -385,11 +367,9 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		LocalModel:               getLocalModel(skipPrompt),
 		TrackWithGit:             autoTrackGit,
 		EnableSecurityChecks:     enableSecurityChecks, // Set from user input
-		UseEmbeddings:            useEmbeddings,        // Set from user input
 		OllamaServerURL:          "http://localhost:11434",
 		OrchestrationMaxAttempts: 6,                      // Default max attempts for orchestration
 		CodeStyle:                CodeStylePreferences{}, // Initialize to be populated by setDefaultValues
-		AllowedTools:             allowedTools,           // Set from user input
 		RetryAttemptCount:        0,                      // Initialize retry attempt count to zero
 		// SearchModel and Temperature will be set by setDefaultValues
 	}

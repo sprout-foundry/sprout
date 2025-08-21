@@ -149,7 +149,7 @@ func evaluateProgressWithLLM(context *AgentContext) (*ProgressEvaluation, int, e
 		hasRunValidation := false
 
 		for _, op := range context.ExecutedOperations {
-			if strings.Contains(op, "Edit") && strings.Contains(op, "completed successfully") {
+			if strings.Contains(op, "Edit") && (strings.Contains(op, "completed successfully") || strings.Contains(op, "Executed") || strings.Contains(op, "Completed")) {
 				hasExecutedEdits = true
 			}
 			if strings.Contains(op, "validation") || strings.Contains(op, "Validation") {

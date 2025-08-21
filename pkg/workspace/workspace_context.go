@@ -270,7 +270,18 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 				continue
 			}
 
-			content, err := os.ReadFile(filePath)
+			// Convert relative path to absolute path
+			absPath := filePath
+			if !filepath.IsAbs(filePath) {
+				cwd, err := os.Getwd()
+				if err != nil {
+					b.WriteString(fmt.Sprintf("⚠️  Could not get current working directory: %v\n", err))
+					continue
+				}
+				absPath = filepath.Join(cwd, filePath)
+			}
+
+			content, err := os.ReadFile(absPath)
 			if err != nil {
 				b.WriteString(fmt.Sprintf("⚠️  Could not read %s: %v\n", filePath, err))
 				continue

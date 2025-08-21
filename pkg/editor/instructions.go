@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,6 +18,7 @@ import (
 
 // ProcessInstructionsWithWorkspace appends the workspace tag and delegates to ProcessInstructions.
 func ProcessInstructionsWithWorkspace(instructions string, cfg *config.Config) (string, error) {
+	fmt.Printf("DEBUG: ProcessInstructionsWithWorkspace called with: %s\n", instructions)
 	// Replace any existing #WS or #WORKSPACE tags with a single #WS tag
 	re := regexp.MustCompile(`(?i)\s*#(WS|WORKSPACE)\s*$`)
 	instructions = re.ReplaceAllString(instructions, "") + " #WS"
@@ -59,9 +61,21 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 		sgRe := regexp.MustCompile(`(?i)#SG(?:\s+"([^"]*)")?`)
 		if m := sgRe.FindStringSubmatch(instructions); m != nil {
 			query := ""
-			if len(m) > 1 {
+			if len(m) > 1 && m[1] != "" {
+				// Use explicit quoted query if provided
 				query = m[1]
+			} else {
+				// Fallback to using the main instruction text as query
+				// Remove the #SG part and use the rest as query
+				queryText := sgRe.ReplaceAllString(instructions, "")
+				query = strings.TrimSpace(queryText)
+				// Limit query length to avoid token limits
+				if len(query) > 200 {
+					query = query[:200]
+				}
 			}
+			// Debug logging
+			fmt.Printf("DEBUG: Search grounding query: '%s'\n", query)
 			// Log initiation happens inside FetchContextFromSearch
 			ctx, err := webcontent.FetchContextFromSearch(query, cfg)
 			if err == nil && ctx != "" {
@@ -76,7 +90,8 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 	}
 
 	// Updated pattern to capture line ranges: #filename:start-end or #filename:start,end
-	filePattern := regexp.MustCompile(`\s+#(\S+)(?::(\d+)[-,](\d+))?`)
+	// Made more specific to avoid matching markdown headers by requiring at least one letter before any special chars
+	filePattern := regexp.MustCompile(`\s+#([a-zA-Z][\w.-]*)(?::(\d+)[-,](\d+))?`)
 	matches := filePattern.FindAllStringSubmatch(instructions, -1)
 	ui.Out().Printf("full instructions: %s\n", instructions)
 	ui.Out().Print("Found patterns:")

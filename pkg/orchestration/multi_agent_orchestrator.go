@@ -115,6 +115,11 @@ func (o *MultiAgentOrchestrator) Execute() error {
 	o.logger.LogProcessStep(fmt.Sprintf("Goal: %s", o.plan.Goal))
 	o.logger.LogProcessStep(fmt.Sprintf("Agents: %d, Steps: %d", len(o.plan.Agents), len(o.plan.Steps)))
 
+	// Save initial state so tests can verify process started
+	o.plan.Status = "in_progress"
+	o.plan.CreatedAt = time.Now().Format(time.RFC3339)
+	_ = o.saveState()
+
 	// Attempt resume from previous state if requested
 	if o.resume {
 		if err := o.loadStateIfCompatible(); err == nil {

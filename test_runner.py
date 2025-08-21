@@ -329,6 +329,9 @@ Examples:
         # Agent and Orchestration process tests use DeepSeek V3
         if test_name.startswith('Agent v2') or test_name.startswith('Process -') or test_name == 'Orchestration Feature':
             return 'deepinfra:deepseek-ai/DeepSeek-V3-0324'
+        # Ollama test uses Ollama model
+        if 'Ollama' in test_name:
+            return 'ollama:qwen2.5-coder'
         # Everything else uses the previous default
         return DEFAULT_MODEL
 

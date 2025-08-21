@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/security"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -617,9 +618,35 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 					fileSummary, fileExports, fileReferences, llmErr = getSummary(f.content, f.path, cfg)
 				}
 
-				// Local analysis mode: no security concern prompts
+				// Perform security checks if enabled
 				finalSecurityConcerns := []string{}
 				finalIgnoredSecurityConcerns := []string{}
+
+				if cfg.EnableSecurityChecks && len(f.content) > 0 {
+					// Import the security package
+					// We need to perform security checks on the file content
+					securityConcerns, ignoredSecurityConcerns, skipLLMSummarization := security.CheckFileSecurity(
+						f.relativePath,
+						f.content,
+						true,       // isNew - assume new for security checks
+						true,       // isChanged - assume changed for security checks
+						[]string{}, // existingSecurityConcerns - none for local analysis
+						[]string{}, // existingIgnoredSecurityConcerns - none for local analysis
+						cfg,
+					)
+
+					finalSecurityConcerns = securityConcerns
+					finalIgnoredSecurityConcerns = ignoredSecurityConcerns
+
+					// If security concerns found and LLM summarization should be skipped
+					if skipLLMSummarization && len(securityConcerns) > 0 {
+						// Clear the summary to prevent LLM processing of sensitive content
+						fileSummary = ""
+						fileExports = ""
+						fileReferences = ""
+						logger.LogProcessStep(fmt.Sprintf("Skipped LLM summarization for %s due to security concerns", f.relativePath))
+					}
+				}
 
 				resultsChan <- processResult{
 					relativePath:            f.relativePath,

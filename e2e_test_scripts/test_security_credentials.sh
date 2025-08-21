@@ -61,10 +61,10 @@ EOF
 
     # Check for the specific message about skipping LLM summarization due to security concerns
     # This message is defined in pkg/prompts/messages.go: SkippingLLMSummarizationDueToSecurity
-    if grep -q "Skipping LLM summarization for 'secrets.txt' due to detected security concerns and lack of confirmation." .ledit/workspace.log; then
-        echo "PASS: 'Skipping LLM summarization for 'secrets.txt' due to detected security concerns and lack of confirmation.' found in workspace.log."
+    if grep -q "Skipped LLM summarization for secrets.txt due to security concerns" .ledit/workspace.log; then
+        echo "PASS: 'Skipped LLM summarization for secrets.txt due to security concerns' found in workspace.log."
     else
-        echo "FAIL: 'Skipping LLM summarization for 'secrets.txt' due to detected security concerns and lack of confirmation.' NOT found in workspace.log."
+        echo "FAIL: 'Skipped LLM summarization for secrets.txt due to security concerns' NOT found in workspace.log."
         echo "Content of .ledit/workspace.log:"
         cat .ledit/workspace.log
         exit 1

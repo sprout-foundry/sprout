@@ -22,6 +22,7 @@ var (
 	imagePath          string
 	useSearchGrounding bool
 	enableCodeTools    bool
+	skipWorkspace      bool
 )
 
 var codeCmd = &cobra.Command{
@@ -60,6 +61,8 @@ When using the --image flag, ensure your model supports vision input. Vision-cap
 		cfg.Interactive = !nonInteractive
 		cfg.UseSearchGrounding = useSearchGrounding
 		cfg.CodeToolsEnabled = enableCodeTools
+		cfg.AllowedTools = []string{"read_file", "run_shell_command", "workspace_context"} // Default allowed tools
+		cfg.SkipWorkspace = skipWorkspace
 
 		ui.Out().Print(prompts.ProcessingCodeGeneration() + "\n")
 		startTime := time.Now()
@@ -93,4 +96,5 @@ func init() {
 	codeCmd.Flags().StringVarP(&imagePath, "image", "i", "", "Path to an image file to use as UI reference")
 	codeCmd.Flags().BoolVar(&useSearchGrounding, "use-search-grounding", false, "Enable web content search grounding when instructions contain #SG [optional query]")
 	codeCmd.Flags().BoolVar(&enableCodeTools, "enable-code-tools", true, "Allow tool-calls during code generation (e.g., search, file reads). Default: disabled.")
+	codeCmd.Flags().BoolVar(&skipWorkspace, "skip-workspace", false, "Do not include workspace context by default")
 }

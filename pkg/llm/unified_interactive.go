@@ -67,32 +67,11 @@ func CallLLMWithUnifiedInteractive(cfg *UnifiedInteractiveConfig) (string, strin
 
 // injectSystemPrompt injects or replaces the system prompt in the messages
 func injectSystemPrompt(messages []prompts.Message, systemPrompt string) []prompts.Message {
-	result := make([]prompts.Message, 0, len(messages))
-
-	// Look for existing system message
-	systemFound := false
-	for _, msg := range messages {
-		if msg.Role == "system" {
-			// Replace existing system message
-			result = append(result, prompts.Message{
-				Role:    "system",
-				Content: systemPrompt,
-			})
-			systemFound = true
-		} else {
-			result = append(result, msg)
-		}
-	}
-
-	// If no system message found, add one at the beginning
-	if !systemFound {
-		result = append([]prompts.Message{{
-			Role:    "system",
-			Content: systemPrompt,
-		}}, result...)
-	}
-
-	return result
+	// Prepend an additional workflow-scoped system message so existing strict prompts (e.g., patch rules) remain intact.
+	return append([]prompts.Message{{
+		Role:    "system",
+		Content: systemPrompt,
+	}}, messages...)
 }
 
 // callLLMWithToolsUnified handles the unified interactive flow with tools

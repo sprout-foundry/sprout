@@ -141,6 +141,7 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 		contentStr := fmt.Sprintf("%v", msg.Content)
 		if strings.Contains(contentStr, "detokenize") {
 			log.Log(fmt.Sprintf("ERROR: Found 'detokenize' in input message %d!", i))
+			log.Log(fmt.Sprintf("Content: %s", contentStr))
 		}
 	}
 

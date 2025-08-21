@@ -59,11 +59,11 @@ var fixCmd = &cobra.Command{
 			log.Fatalf("Failed to load configuration: %v. Please run 'ledit init'.", err)
 		}
 
-// Editing lines 62-82
 		if fixModelFlag != "" {
 			cfg.EditingModel = fixModelFlag
 		}
 		cfg.SkipPrompt = fixSkipPromptFlag
+		cfg.SkipWorkspace = fixSkipWorkspaceContextFlag
 
 		var problemDescriptionBuilder strings.Builder
 		if err != nil {
@@ -92,11 +92,7 @@ var fixCmd = &cobra.Command{
 		fmt.Println("Attempting to fix errors with LLM...")
 		startTime := time.Now()
 
-        // Optionally include workspace context via instruction tag
-        if !fixSkipWorkspaceContextFlag {
-            instructions = instructions + " #WORKSPACE"
-        }
-        _, err = editor.ProcessCodeGeneration("", instructions, cfg, "")
+		_, err = editor.ProcessCodeGeneration("", instructions, cfg, "")
 		if err != nil {
 			log.Fatalf("Error during code generation: %v", err)
 		}

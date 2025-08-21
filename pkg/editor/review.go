@@ -33,7 +33,7 @@ func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions 
 		logger.LogProcessStep("Applying suggested revisions...")
 
 		// The review gives new instructions. We execute them.
-		_, fixErr := ProcessCodeGeneration("", review.Instructions+" #WS", cfg, "")
+		_, fixErr := ProcessCodeGeneration("", review.Instructions, cfg, "")
 		if fixErr != nil {
 			return fmt.Errorf("failed to apply review revisions: %w", fixErr)
 		}

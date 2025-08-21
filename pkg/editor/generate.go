@@ -10,6 +10,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/workspace"
 )
 
 // ProcessCodeGeneration generates code based on instructions and returns the combined diff for all changed files.
@@ -50,7 +51,15 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 		}
 	}
 
-	// this parses the workspace and filename tags and returns the enriched instructions
+	// Prepend workspace context by default when not targeting a specific file and not skipping
+	if !cfg.SkipWorkspace && effectiveFilename == "" {
+		ws := workspace.GetWorkspaceContext(instructions, cfg)
+		if ws != "" {
+			instructions = ws + "\n\n" + instructions
+		}
+	}
+
+	// this parses any file tags and returns the enriched instructions
 	processedInstructions, err := ProcessInstructions(instructions, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to process instructions: %w", err)

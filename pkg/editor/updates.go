@@ -223,7 +223,9 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			logger := utils.GetLogger(cfg.SkipPrompt)
 			reviewErr := performAutomatedReview(combinedDiff, originalInstructions, processedInstructions, cfg, logger, revisionID)
 			if reviewErr != nil {
-				return "", reviewErr
+				if !strings.Contains(reviewErr.Error(), "revisions applied, re-validating") {
+					return "", reviewErr
+				}
 			}
 		}
 	}

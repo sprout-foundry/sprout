@@ -246,6 +246,14 @@ func patchToFullContent(patch *Patch, filename string) string {
 	return updatedContent
 }
 
+// PatchToFullContent converts a parsed Patch to full file content.
+// It reads the original file at filename and applies the patch. If the original
+// file cannot be read or the patch cannot be cleanly applied, it falls back to
+// a best-effort reconstruction that preserves added lines and available context.
+func PatchToFullContent(patch *Patch, filename string) string {
+	return patchToFullContent(patch, filename)
+}
+
 // fallbackReconstruction provides improved reconstruction when we can't read the original file
 func fallbackReconstruction(patch *Patch) string {
 	return reconstructWithBestEffort(patch)

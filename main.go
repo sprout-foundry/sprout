@@ -13,6 +13,15 @@ import (
 func main() {
 	logger := utils.GetLogger(true)
 
+	if err := prompts.InitPromptManager(); err != nil {
+		if logger != nil {
+			logger.LogError(fmt.Errorf("failed to initialize prompt manager: %w", err))
+		}
+		if _, err := fmt.Fprintf(os.Stderr, "FATAL: Failed to initialize prompt manager: %v\n", err); err != nil {
+		}
+		os.Exit(1)
+	}
+
 	if logger == nil {
 		if _, err := fmt.Fprintln(os.Stderr, "FATAL: Failed to initialize logger. Exiting."); err != nil {
 		}

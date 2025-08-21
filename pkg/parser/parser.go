@@ -430,9 +430,20 @@ func ParsePatchFromDiff(diffContent, filename string) (*Patch, error) {
 
 // parseHunkHeader parses a hunk header line like "@@ -10,7 +10,7 @@"
 func parseHunkHeader(header string) (Hunk, error) {
-	// Remove @@ markers
-	content := strings.TrimPrefix(strings.TrimSuffix(header, " @@"), "@@ ")
-	parts := strings.Fields(content)
+	// Remove any leading '+' that might be present
+	header = strings.TrimPrefix(header, "+")
+
+	// Extract just the range part before any content
+	// Format: @@ -old_start,old_count +new_start,new_count @@ [optional content]
+	secondAt := strings.Index(header[2:], "@@")
+	if secondAt == -1 {
+		return Hunk{}, fmt.Errorf("invalid hunk header format: %s", header)
+	}
+	rangeEnd := secondAt + 2 // Adjust for the offset from header[2:]
+
+	// Get the range part (between the first @@ and the second @@)
+	rangePart := strings.TrimSpace(header[2:rangeEnd])
+	parts := strings.Fields(rangePart)
 
 	if len(parts) != 2 {
 		return Hunk{}, fmt.Errorf("invalid hunk header format: %s", header)

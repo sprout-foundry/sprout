@@ -13,14 +13,17 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	ui "github.com/alantheprice/ledit/pkg/ui"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // callOpenAICompatibleStream calls OpenAI-compatible APIs and returns token usage information
 func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts.Message, cfg *config.Config, timeout time.Duration, writer io.Writer) (*TokenUsage, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
+
 	// Debug: Log function entry
-	ui.Out().Printf("DEBUG: callOpenAICompatibleStream called with URL: %s, model: %s\n", apiURL, model)
-	ui.Out().Printf("DEBUG: Messages count: %d\n", len(messages))
-	ui.Out().Printf("DEBUG: Temperature: %f\n", cfg.Temperature)
+	logger.Logf("DEBUG: callOpenAICompatibleStream called with URL: %s, model: %s", apiURL, model)
+	logger.Logf("DEBUG: Messages count: %d", len(messages))
+	logger.Logf("DEBUG: Temperature: %f", cfg.Temperature)
 
 	// Build request with optional temperature; retry once without it if provider rejects
 	buildBody := func(includeTemp bool) ([]byte, error) {
@@ -38,9 +41,9 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 
 	tryOnce := func(reqBody []byte) (*http.Response, error) {
 		// Debug: Log the actual JSON payload being sent
-		ui.Out().Printf("DEBUG: About to send HTTP request to: %s\n", apiURL)
-		ui.Out().Printf("DEBUG: Request payload length: %d bytes\n", len(reqBody))
-		ui.Out().Printf("DEBUG: Request payload: %s\n", string(reqBody))
+		logger.Logf("DEBUG: About to send HTTP request to: %s", apiURL)
+		logger.Logf("DEBUG: Request payload length: %d bytes", len(reqBody))
+		logger.Logf("DEBUG: Request payload: %s", string(reqBody))
 
 		// Check for detokenize field in the actual request body
 		if strings.Contains(string(reqBody), "detokenize") {
@@ -63,9 +66,9 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 		}
 
 		// Log the final request details
-		ui.Out().Printf("DEBUG: Final request URL: %s\n", req.URL)
-		ui.Out().Printf("DEBUG: Final request method: %s\n", req.Method)
-		ui.Out().Printf("DEBUG: Final request headers: %v\n", req.Header)
+		logger.Logf("DEBUG: Final request URL: %s", req.URL)
+		logger.Logf("DEBUG: Final request method: %s", req.Method)
+		logger.Logf("DEBUG: Final request headers: %v", req.Header)
 
 		return client.Do(req)
 	}
@@ -77,7 +80,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 	}
 	resp, err := tryOnce(bodyWithTemp)
 	if err != nil {
-		ui.Out().Printf("DEBUG: HTTP request failed: %v\n", err)
+		logger.Logf("DEBUG: HTTP request failed: %v", err)
 		ui.Out().Print(prompts.HTTPRequestError(err))
 		return nil, err
 	}
@@ -157,6 +160,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 
 // getUsageFromNonStreamingCall makes a non-streaming call to get usage information
 func getUsageFromNonStreamingCall(apiURL, apiKey, model string, messages []prompts.Message, cfg *config.Config, timeout time.Duration) (*TokenUsage, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
 	buildBody := func(includeTemp bool) ([]byte, error) {
 		payload := map[string]interface{}{
 			"model":      model,
@@ -172,7 +176,7 @@ func getUsageFromNonStreamingCall(apiURL, apiKey, model string, messages []promp
 
 	tryOnce := func(reqBody []byte) (*http.Response, error) {
 		// Debug: Log the actual JSON payload being sent
-		ui.Out().Printf("DEBUG: Usage Request Payload: %s\n", string(reqBody))
+		logger.Logf("DEBUG: Usage Request Payload: %s", string(reqBody))
 
 		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
 		if err != nil {

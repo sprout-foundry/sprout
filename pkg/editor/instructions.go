@@ -1,7 +1,6 @@
 package editor
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,14 +10,15 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/prompts"
-	ui "github.com/alantheprice/ledit/pkg/ui"
+	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/webcontent"
 	"github.com/alantheprice/ledit/pkg/workspace"
 )
 
 // ProcessInstructionsWithWorkspace appends the workspace tag and delegates to ProcessInstructions.
 func ProcessInstructionsWithWorkspace(instructions string, cfg *config.Config) (string, error) {
-	fmt.Printf("DEBUG: ProcessInstructionsWithWorkspace called with: %s\n", instructions)
+	logger := utils.GetLogger(cfg.SkipPrompt)
+	logger.Logf("DEBUG: ProcessInstructionsWithWorkspace called with: %s", instructions)
 	// Replace any existing #WS or #WORKSPACE tags with a single #WS tag
 	re := regexp.MustCompile(`(?i)\s*#(WS|WORKSPACE)\s*$`)
 	instructions = re.ReplaceAllString(instructions, "") + " #WS"
@@ -33,14 +33,15 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 	// Note: Search grounding is now handled via explicit tool calls instead of #SG flags
 	// This prevents accidental triggering by LLM responses and provides better control
 
+	logger := utils.GetLogger(cfg.SkipPrompt)
 	// Fast-path delete: Detect "Delete the file named 'X'" and perform locally
 	if m := regexp.MustCompile(`(?i)delete the file named ['"]([^'"]+)['"]`).FindStringSubmatch(instructions); len(m) == 2 {
 		target := m[1]
 		// Remove from disk if present
 		if err := os.Remove(target); err == nil {
-			ui.Out().Printf("Deleted file: %s\n", target)
+			logger.Logf("Deleted file: %s", target)
 		} else if !os.IsNotExist(err) {
-			ui.Out().Printf("Warning: could not delete %s: %v\n", target, err)
+			logger.Logf("Warning: could not delete %s: %v", target, err)
 		}
 		// Remove from workspace.json if present
 		ws, err := workspace.LoadWorkspaceFile()
@@ -75,7 +76,7 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 				}
 			}
 			// Debug logging
-			fmt.Printf("DEBUG: Search grounding query: '%s'\n", query)
+			logger.Logf("DEBUG: Search grounding query: '%s'", query)
 			// Log initiation happens inside FetchContextFromSearch
 			ctx, err := webcontent.FetchContextFromSearch(query, cfg)
 			if err == nil && ctx != "" {
@@ -93,9 +94,9 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 	// Made more specific to avoid matching markdown headers by requiring at least one letter before any special chars
 	filePattern := regexp.MustCompile(`\s+#([a-zA-Z][\w.-]*)(?::(\d+)[-,](\d+))?`)
 	matches := filePattern.FindAllStringSubmatch(instructions, -1)
-	ui.Out().Printf("full instructions: %s\n", instructions)
-	ui.Out().Print("Found patterns:")
-	ui.Out().Printf(" %v\n", matches) // Logging the patterns found
+	logger.Logf("full instructions: %s", instructions)
+	logger.Log("Found patterns:")
+	logger.Logf(" %v", matches) // Logging the patterns found
 
 	for _, match := range matches {
 		if len(match) < 2 {
@@ -109,28 +110,27 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 		// Parse line range if provided
 		if len(match) >= 4 && match[2] != "" && match[3] != "" {
 			if startLine, err = strconv.Atoi(match[2]); err != nil {
-				ui.Out().Printf("Warning: Invalid start line number '%s' for %s, using full file\n", match[2], path)
+				logger.Logf("Warning: Invalid start line number '%s' for %s, using full file", match[2], path)
 				startLine = 0
 			}
 			if endLine, err = strconv.Atoi(match[3]); err != nil {
-				ui.Out().Printf("Warning: Invalid end line number '%s' for %s, using full file\n", match[3], path)
+				logger.Logf("Warning: Invalid end line number '%s' for %s, using full file", match[3], path)
 				endLine = 0
 			}
 		}
 
-		ui.Out().Printf("Processing path: %s", path) // Logging the path being processed
+		logger.Logf("Processing path: %s", path) // Logging the path being processed
 		if startLine > 0 && endLine > 0 {
-			ui.Out().Printf(" (lines %d-%d)", startLine, endLine)
+			logger.Logf(" (lines %d-%d)", startLine, endLine)
 		}
-		ui.Out().Print("\n")
 
 		if path == "WORKSPACE" || path == "WS" {
-			ui.Out().Print(prompts.LoadingWorkspaceData() + "\n")
+			logger.Log(prompts.LoadingWorkspaceData())
 			content = workspace.GetWorkspaceContext(instructions, cfg)
 		} else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 			content, err = webcontent.NewWebContentFetcher().FetchWebContent(path, cfg) // Pass cfg here
 			if err != nil {
-				ui.Out().Print(prompts.URLFetchError(path, err))
+				logger.Log(prompts.URLFetchError(path, err))
 				continue
 			}
 		} else {
@@ -141,7 +141,7 @@ func ProcessInstructions(instructions string, cfg *config.Config) (string, error
 				content, err = filesystem.LoadFileContent(path)
 			}
 			if err != nil {
-				ui.Out().Print(prompts.FileLoadError(path, err))
+				logger.Log(prompts.FileLoadError(path, err))
 				continue
 			}
 		}

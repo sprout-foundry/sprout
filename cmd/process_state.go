@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/alantheprice/ledit/pkg/orchestration"
-    ui "github.com/alantheprice/ledit/pkg/ui"
+	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -36,10 +36,11 @@ var processClearStateCmd = &cobra.Command{
 		if path == "" {
 			path = ".ledit/orchestration_state.json"
 		}
-        if err := os.Remove(path); err != nil {
+		if err := os.Remove(path); err != nil {
 			return fmt.Errorf("failed to remove %s: %w", path, err)
 		}
-        ui.Out().Printf("Removed state: %s\n", path)
+		logger := utils.GetLogger(true) // Use true for skipPrompt since this is internal
+		logger.Logf("Removed state: %s", path)
 		return nil
 	},
 }

@@ -4,3 +4,5 @@ From the search results, identify the 1-3 most relevant URLs that are most likel
 Respond with ONLY a comma-separated list of the result numbers (e.g., "1,3,5").
 If no results are relevant, respond with "none".
 Do not include any other text, explanations, or conversational filler.
+
+run pwd

@@ -26,6 +26,9 @@ type WorkspaceFile struct {
 	TestRunnerPaths []string                     `json:"test_runner_paths"`
 	ProjectGoals    ProjectGoals                 `json:"project_goals"`
 	ProjectInsights ProjectInsights              `json:"project_insights"`
+	// Caching baselines for goal/insight regeneration heuristics
+	GoalsBaseline    map[string]string `json:"goals_baseline,omitempty"`
+	InsightsBaseline map[string]string `json:"insights_baseline,omitempty"`
 }
 
 // ProjectGoals represents the goals and vision for the project.

@@ -6,3 +6,5 @@ Your response MUST be a JSON object with the following keys:
 - "target_audience": Who the project is intended for.
 - "technical_vision": The high-level technical approach or philosophy.
 Do not include any other text or explanation outside the JSON.
+
+Instructions: run pwd

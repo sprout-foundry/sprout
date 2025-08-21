@@ -11,8 +11,23 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
+// isToolAllowed checks if a tool is allowed based on the configuration.
+func isToolAllowed(context *AgentContext, toolName string) bool {
+	for _, allowedTool := range context.Config.AllowedTools {
+		if allowedTool == toolName {
+			return true
+		}
+	}
+	return false
+}
+
 // executeWorkspaceInfo gathers and logs lightweight workspace information
 func executeWorkspaceInfo(context *AgentContext) error {
+	if !isToolAllowed(context, "workspace_info") {
+		context.Logger.LogProcessStep("workspace_info: tool not allowed by configuration")
+		return nil
+	}
+
 	info, err := buildWorkspaceStructure(context.Logger)
 	if err != nil {
 		context.Logger.Logf("Workspace info unavailable: %v", err)
@@ -26,6 +41,11 @@ func executeWorkspaceInfo(context *AgentContext) error {
 
 // executeListFiles lists a small set of workspace files for quick orientation
 func executeListFiles(context *AgentContext, limit int) error {
+	if !isToolAllowed(context, "list_files") {
+		context.Logger.LogProcessStep("list_files: tool not allowed by configuration")
+		return nil
+	}
+
 	info, err := buildWorkspaceStructure(context.Logger)
 	if err != nil {
 		return nil
@@ -45,6 +65,11 @@ func executeListFiles(context *AgentContext, limit int) error {
 
 // executeGrepSearch performs a quick content search for provided terms
 func executeGrepSearch(context *AgentContext, terms []string) error {
+	if !isToolAllowed(context, "grep_search") {
+		context.Logger.LogProcessStep("grep_search: tool not allowed by configuration")
+		return nil
+	}
+
 	if len(terms) == 0 {
 		return nil
 	}
@@ -62,6 +87,11 @@ func executeGrepSearch(context *AgentContext, terms []string) error {
 
 // executeMicroEdit attempts a very small targeted edit using patch-based editing
 func executeMicroEdit(context *AgentContext) error {
+	if !isToolAllowed(context, "micro_edit") {
+		context.Logger.LogProcessStep("micro_edit: tool not allowed by configuration")
+		return nil
+	}
+
 	// Choose a target file and instruction
 	var targetFile string
 	var instructions string

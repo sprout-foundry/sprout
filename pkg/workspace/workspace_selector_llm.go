@@ -190,15 +190,40 @@ Your response MUST be only the raw JSON, without any surrounding text or code fe
 		}
 	}
 
-	var fullFiles, summaryFiles []string
-	for file := range fullContextFiles {
-		fullFiles = append(fullFiles, file)
-	}
-	for file := range summaryContextFiles {
-		summaryFiles = append(summaryFiles, file)
+	var finalFullFiles []string
+	var finalSummaryFiles []string
+
+	// Prioritize a single full context file unless multiple are explicitly indicated by the LLM
+	// (which is not currently supported by the prompt, so we default to one)
+	if len(fullContextFiles) > 0 {
+		// Take the first file from the fullContextFiles map as the primary full context file
+		var primaryFullFile string
+		for file := range fullContextFiles {
+			primaryFullFile = file
+			break // Take the first one
+		}
+		finalFullFiles = append(finalFullFiles, primaryFullFile)
+
+		// Move all other files that were initially marked for full context to summary context
+		for file := range fullContextFiles {
+			if file != primaryFullFile {
+				summaryContextFiles[file] = true // Add to summary map
+			}
+		}
 	}
 
-	return fullFiles, summaryFiles, nil
+	// Add all files from the summaryContextFiles map to finalSummaryFiles, ensuring no duplicates
+	for file := range summaryContextFiles {
+		isPrimaryFullFile := false
+		if len(finalFullFiles) > 0 && file == finalFullFiles[0] { // Check if it's the primary full file
+			isPrimaryFullFile = true
+		}
+		if !isPrimaryFullFile {
+			finalSummaryFiles = append(finalSummaryFiles, file)
+		}
+	}
+
+	return finalFullFiles, finalSummaryFiles, nil
 }
 
 // cleanLLMResponse handles various response formats from the LLM

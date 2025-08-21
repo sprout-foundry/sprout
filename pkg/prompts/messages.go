@@ -220,7 +220,7 @@ func PerformingSecurityCheck() string {
 }
 
 func SkippingLLMSummarizationDueToSecurity(filename string) string {
-	return fmt.Sprintf("File %s contains confirmed security concerns. Skipping LLM summarization.", filename)
+	return fmt.Sprintf("File %s contains confirmed security concerns. Skipping local summarization.", filename)
 }
 
 // --- Editor Prompts ---

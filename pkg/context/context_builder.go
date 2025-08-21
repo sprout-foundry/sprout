@@ -11,7 +11,6 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
-	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/webcontent"
 )
@@ -28,9 +27,10 @@ type ContextResponse struct {
 }
 
 func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
 	var responses []string
 	for _, req := range reqs {
-		ui.Out().Print(prompts.LLMContextRequest(req.Type, req.Query))
+		logger.Log(prompts.LLMContextRequest(req.Type, req.Query))
 		switch req.Type {
 		case "search":
 			// Gate external web search behind config flag to avoid ungrounded context by default
@@ -47,7 +47,7 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 				responses = append(responses, fmt.Sprintf("Here are the search results for '%s':\n\n%s", req.Query, searchResult))
 			}
 		case "user_prompt":
-			ui.Out().Print(prompts.LLMUserQuestion(req.Query))
+			logger.Log(prompts.LLMUserQuestion(req.Query))
 			reader := bufio.NewReader(os.Stdin)
 			answer, err := reader.ReadString('\n')
 			if err != nil {
@@ -55,7 +55,7 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 			}
 			responses = append(responses, fmt.Sprintf("The user responded: %s", strings.TrimSpace(answer)))
 		case "file":
-			ui.Out().Print(prompts.LLMFileRequest(req.Query))
+			logger.Log(prompts.LLMFileRequest(req.Query))
 			content, err := os.ReadFile(req.Query)
 			if err != nil {
 				return "", fmt.Errorf("failed to read file '%s': %w", req.Query, err)
@@ -108,28 +108,28 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 		case "shell":
 			shouldExecute := false
 			if cfg.SkipPrompt {
-				ui.Out().Print(prompts.LLMShellSkippingPrompt() + "\n")
+				logger.Log(prompts.LLMShellSkippingPrompt())
 				riskAnalysis, err := GetScriptRiskAnalysis(cfg, req.Query) // Call to GetScriptRiskAnalysis remains unqualified as it's now in the same package
 				if err != nil {
 					responses = append(responses, fmt.Sprintf("Failed to get script risk analysis: %v. User denied execution.", err))
-					ui.Out().Print(prompts.LLMScriptAnalysisFailed(err) + "\n")
+					logger.Log(prompts.LLMScriptAnalysisFailed(err))
 					continue
 				}
 
 				// Define what "not risky" means. For now, a simple string check.
 				// A more robust solution might involve a structured JSON response from the summary model.
 				if strings.Contains(strings.ToLower(riskAnalysis), "not risky") || strings.Contains(strings.ToLower(riskAnalysis), "safe") {
-					ui.Out().Print(prompts.LLMScriptNotRisky() + "\n")
+					logger.Log(prompts.LLMScriptNotRisky())
 					shouldExecute = true
 				} else {
-					ui.Out().Print(prompts.LLMScriptRisky(riskAnalysis) + "\n")
+					logger.Log(prompts.LLMScriptRisky(riskAnalysis))
 					// If risky, fall through to prompt the user
 				}
 			}
 
 			if !shouldExecute { // If not already decided to execute (either skipPrompt was false, or it was risky)
-				ui.Out().Print(prompts.LLMShellWarning() + "\n")
-				ui.Out().Print(prompts.LLMShellConfirmation())
+				logger.Log(prompts.LLMShellWarning())
+				logger.Log(prompts.LLMShellConfirmation())
 				reader := bufio.NewReader(os.Stdin)
 				confirm, _ := reader.ReadString('\n')
 				if strings.TrimSpace(strings.ToLower(confirm)) != "y" {
@@ -157,19 +157,17 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 
 func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imagePath string) (string, string, *llm.TokenUsage, error) {
 	// Debug: Log function entry
-	ui.Out().Printf("DEBUG: GetLLMCodeResponse called with model: %s\n", cfg.EditingModel)
-	ui.Out().Printf("DEBUG: OrchestrationModel: %s\n", cfg.OrchestrationModel)
-	ui.Out().Printf("DEBUG: Interactive: %t\n", cfg.Interactive)
-	ui.Out().Printf("DEBUG: CodeToolsEnabled: %t\n", cfg.CodeToolsEnabled)
+	logger := utils.GetLogger(cfg.SkipPrompt)
+	logger.Logf("DEBUG: GetLLMCodeResponse called with model: %s", cfg.EditingModel)
+	logger.Logf("DEBUG: OrchestrationModel: %s", cfg.OrchestrationModel)
+	logger.Logf("DEBUG: Interactive: %t", cfg.Interactive)
+	logger.Logf("DEBUG: CodeToolsEnabled: %t", cfg.CodeToolsEnabled)
 
 	// Routing: select models by task type and approx size
 
 	modelName := cfg.EditingModel
 	reason := "direct routing"
-	ui.Out().Print(prompts.UsingModel(modelName))
-
-	// Log key parameters
-	logger := utils.GetLogger(cfg.SkipPrompt)
+	logger.Log(prompts.UsingModel(modelName))
 	logger.Log("=== GetLLMCodeResponse Debug ===")
 	logger.Log(fmt.Sprintf("Model: %s", modelName))
 	logger.Log(fmt.Sprintf("Filename: %s", filename))
@@ -190,15 +188,15 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 				if err := llm.AddImageToMessage(&messages[i], imagePath); err != nil {
 					return modelName, "", nil, fmt.Errorf("failed to add image to message: %w. Please ensure the image file exists and is in a supported format (JPEG, PNG, GIF, WebP)", err)
 				}
-				ui.Out().Printf("Added image to message. Note: If the model doesn't support vision, the request may fail. Consider using a vision-capable model like 'openai:gpt-4o', 'gemini:gemini-1.5-flash', or 'anthropic:claude-3-sonnet'.\n")
+				logger.Logf("Added image to message. Note: If the model doesn't support vision, the request may fail. Consider using a vision-capable model like 'openai:gpt-4o', 'gemini:gemini-1.5-flash', or 'anthropic:claude-3-sonnet'.")
 				break
 			}
 		}
 	}
 
-	ui.Out().Printf("DEBUG: Finished image handling\n")
+	logger.Logf("DEBUG: Finished image handling")
 	logger.Log(fmt.Sprintf("DEBUG: Interactive=%t, CodeToolsEnabled=%t", cfg.Interactive, cfg.CodeToolsEnabled))
-	ui.Out().Printf("DEBUG: About to check condition: !%t || !%t = %t\n", cfg.Interactive, cfg.CodeToolsEnabled, !cfg.Interactive || !cfg.CodeToolsEnabled)
+	logger.Logf("DEBUG: About to check condition: !%t || !%t = %t", cfg.Interactive, cfg.CodeToolsEnabled, !cfg.Interactive || !cfg.CodeToolsEnabled)
 	if !cfg.Interactive || !cfg.CodeToolsEnabled {
 		if !cfg.Interactive {
 			logger.Log("Taking non-interactive path without tool calling (cost optimization)")
@@ -220,14 +218,14 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	}
 
 	logger.Log("Taking interactive path with enhanced tool calling support")
-	ui.Out().Printf("DEBUG: Taking interactive path - about to call new function\n")
+	logger.Logf("DEBUG: Taking interactive path - about to call new function")
 
 	// Check if this is an agent workflow by looking for environment variable
 	isAgentMode := os.Getenv("LEDIT_FROM_AGENT") == "1"
-	ui.Out().Printf("DEBUG: Environment variable LEDIT_FROM_AGENT = '%s', isAgentMode = %t\n", os.Getenv("LEDIT_FROM_AGENT"), isAgentMode)
+	logger.Logf("DEBUG: Environment variable LEDIT_FROM_AGENT = '%s', isAgentMode = %t", os.Getenv("LEDIT_FROM_AGENT"), isAgentMode)
 
 	if isAgentMode {
-		ui.Out().Printf("DEBUG: Using unified interactive LLM handler for agent workflow\n")
+		logger.Logf("DEBUG: Using unified interactive LLM handler for agent workflow")
 
 		// Create a wrapper to convert between context request types
 		contextHandlerWrapper := func(llmRequests []llm.ContextRequest, cfg *config.Config) (string, error) {
@@ -263,7 +261,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		var tokenUsage *llm.TokenUsage
 		var err error
 		_, response, tokenUsage, err = llm.CallLLMWithUnifiedInteractive(unifiedConfig)
-		ui.Out().Printf("DEBUG: Unified interactive call completed\n")
+		logger.Logf("DEBUG: Unified interactive call completed")
 		if err != nil {
 			logger.Log(fmt.Sprintf("Interactive LLM call failed: %v", err))
 			return modelName, "", nil, err
@@ -272,9 +270,8 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		logger.Log("=== End GetLLMCodeResponse Debug ===")
 		return modelName, response, tokenUsage, nil
 	} else {
-		ui.Out().Printf("DEBUG: Using unified hunk-based editing approach for code workflow\n")
+		logger.Logf("DEBUG: Using unified interactive approach for code workflow")
 
-		// Use the new unified hunk-based editing function
 		// Extract instructions from the last user message
 		if instructions == "" {
 			for i := len(messages) - 1; i >= 0; i-- {
@@ -291,24 +288,50 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 			return modelName, "", nil, fmt.Errorf("no instructions found in messages")
 		}
 
-		// Use simplified hunk-based editing approach
-		// Step 1: Try hunk-based editing (most efficient and targeted)
-		logger.Logf("🎯 Attempting hunk-based editing for %s (most efficient approach)", filename)
+		// Use the unified interactive approach for both agent and regular modes
+		// This ensures tool calling works consistently across both modes
+		logger.Logf("🎯 Using unified interactive approach for %s (with tool support)", filename)
 
-		// For now, use the standard LLM response which will be processed by the caller
-		// The agent workflow will handle hunk-based editing, while this provides direct LLM access
-		response, tokenUsage, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
-		if err == nil {
-			logger.Logf("✅ LLM response generated for %s", filename)
-		} else {
-			logger.Logf("❌ LLM response failed for %s: %v", filename, err)
-			return modelName, "", nil, fmt.Errorf("failed to generate response for %s: %v", filename, err)
+		// Create a wrapper to convert between context request types
+		contextHandlerWrapper := func(llmRequests []llm.ContextRequest, cfg *config.Config) (string, error) {
+			// Convert llm.ContextRequest to local ContextRequest
+			var localRequests []ContextRequest
+			for _, req := range llmRequests {
+				localRequests = append(localRequests, ContextRequest{
+					Type:  req.Type,
+					Query: req.Query,
+				})
+			}
+			return handleContextRequest(localRequests, cfg)
 		}
-		ui.Out().Printf("DEBUG: Direct code editing call completed\n")
+
+		// Set the global context handler for tool execution
+		llm.SetGlobalContextHandler(contextHandlerWrapper)
+
+		// Create workflow context
+		workflowContext := llm.GetAgentWorkflowContext()
+		workflowContext.ContextHandler = contextHandlerWrapper
+
+		// Create unified interactive config
+		unifiedConfig := &llm.UnifiedInteractiveConfig{
+			ModelName:       cfg.EditingModel,
+			Messages:        messages,
+			Filename:        filename,
+			WorkflowContext: workflowContext,
+			Config:          cfg,
+			Timeout:         6 * time.Minute,
+		}
+
+		var response string
+		var tokenUsage *llm.TokenUsage
+		var err error
+		_, response, tokenUsage, err = llm.CallLLMWithUnifiedInteractive(unifiedConfig)
+		logger.Logf("DEBUG: Unified interactive call completed")
 		if err != nil {
 			logger.Log(fmt.Sprintf("Interactive LLM call failed: %v", err))
 			return modelName, "", nil, err
 		}
+		logger.Logf("DEBUG: Direct code editing call completed")
 		logger.Log(fmt.Sprintf("Interactive response length: %d chars", len(response)))
 		logger.Log("=== End GetLLMCodeResponse Debug ===")
 		return modelName, response, tokenUsage, nil
@@ -317,12 +340,13 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 
 // GetScriptRiskAnalysis sends a shell script to the summary model for risk analysis.
 func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
 	messages := prompts.BuildScriptRiskAnalysisMessages(scriptContent)
 	modelName := cfg.SummaryModel // Use the summary model for this task
 	if modelName == "" {
 		// Fallback if summary model is not configured
 		modelName = cfg.EditingModel
-		ui.Out().Print(prompts.NoSummaryModelFallback(modelName)) // New prompt
+		logger.Log(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 
 	response, _, err := llm.GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute) // Analysis does not use search grounding

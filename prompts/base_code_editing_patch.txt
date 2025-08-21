@@ -25,12 +25,10 @@ For Example - WRONG approach (duplication):
 
 STRICT PATCH REQUIREMENTS:
 - You MUST use unified diff format with proper diff headers (--- a/file, +++ b/file, @@ lines)
-- Each patch must include sufficient context (3-5 lines before and after changes)
+- Each patch must include sufficient context (5-8 lines before and after changes)
 - Include ONLY the changed sections, not the entire file
-- Make only the specific changes requested - NO MORE, NO LESS
 - Ensure patches are minimal and focused on the requested modifications
-- Use exact line matching for reliable patch application
-- DO NOT DUPLICATE CONTENT - If fixing line 1, REPLACE line 1, do not add line 2
+- Use EXACT line matching for reliable patch application
 
 PATCH VALIDATION CHECKLIST:
 - [ ] Does this patch REPLACE incorrect content rather than ADDING correct content?
@@ -46,19 +44,22 @@ REPLACEMENT-FOCUSED BEST PRACTICES:
 - For logic errors: REPLACE the incorrect logic with the correct logic
 - Include the function signature in context when modifying functions
 - Include surrounding context to ensure unique identification
-- Ensure proper indentation and syntax in the replacement
+- ENSURE proper indentation and syntax in the replacement
 
-The patch format must exactly match these instructions.
+The patch format must exactly match these instructions. 
+The patch MUST syntactically match the language and structures of the insertion point to avoid compilation and runtime errors.
 Do not include any additional text, explanations, or comments outside the diff blocks.
-Update all files that are necessary to fulfill the requirements.
 Ensure patches are syntactically correct and follow best practices for the specified language.
 
 CODE EDITING PRINCIPLES:
 - Ensure your edits are targeted and relevant to the user request
-- Only update what is required for the functionality
+- Only update what is required for the requested functionality
+- DO NOT remove functionality or code unless it is required by the request
 - When fixing errors, REPLACE the incorrect code with correct code
 - Do not add new functionality unless explicitly requested
 - Make sure your are keeping track of dependencies and references
+- Update all files that are necessary to fulfill the requirements
+
 
 
 

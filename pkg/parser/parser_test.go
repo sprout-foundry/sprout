@@ -345,6 +345,12 @@ func TestParseHunkHeader(t *testing.T) {
 			header:  "@@ -a,b +c,d @@",
 			wantErr: true,
 		},
+		{
+			name:    "hunk header with leading plus",
+			header:  "+@@ -10,7 +10,7 @@",
+			want:    Hunk{OldStart: 10, OldLines: 7, NewStart: 10, NewLines: 7},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

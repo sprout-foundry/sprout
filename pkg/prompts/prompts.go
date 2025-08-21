@@ -1,14 +1,304 @@
 package prompts
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
-	"strings" // Added for getLanguageFromFilename
+	"path/filepath"
+	"strings"
+
+	promptassets "github.com/alantheprice/ledit/prompts"
 )
 
 var (
 	DefaultTokenLimit = 100000 // Default token limit for LLM requests
 )
+
+// PromptManager handles prompt loading with user overrides and hash tracking
+type PromptManager struct {
+	userPromptsDir string
+	baselinePath   string
+	baseline       map[string]string // filename -> baseline hash
+}
+
+// PromptInfo contains information about a prompt
+type PromptInfo struct {
+	Content   string
+	Hash      string
+	IsUserMod bool
+}
+
+// NewPromptManager creates a new prompt manager
+func NewPromptManager() *PromptManager {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	return &PromptManager{
+		userPromptsDir: filepath.Join(home, ".ledit", "prompts"),
+		baselinePath:   filepath.Join(home, ".ledit", "prompts", ".baseline_hashes.json"),
+		baseline:       map[string]string{},
+	}
+}
+
+// Initialize creates the prompts directory and copies embedded prompts if needed
+func (pm *PromptManager) Initialize() error {
+	// Create .ledit/prompts directory
+	if err := os.MkdirAll(pm.userPromptsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create prompts directory: %w", err)
+	}
+
+	// Load baseline if present (ignore error if not present)
+	_ = pm.loadBaseline()
+
+	// List embedded prompts
+	entries, err := promptassets.FS.ReadDir(".")
+	if err != nil {
+		return fmt.Errorf("failed to read embedded prompts: %w", err)
+	}
+
+	// For each embedded prompt, install/update if appropriate
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+
+		embeddedContent, err := promptassets.FS.ReadFile(name)
+		if err != nil {
+			return fmt.Errorf("failed to read embedded prompt %s: %w", name, err)
+		}
+		embeddedHash := pm.calculateHash(string(embeddedContent))
+
+		userPath := filepath.Join(pm.userPromptsDir, name)
+		userContent, uerr := os.ReadFile(userPath)
+
+		if uerr != nil {
+			// No user file: install embedded and set baseline to embedded
+			if err := os.WriteFile(userPath, embeddedContent, 0644); err != nil {
+				return fmt.Errorf("failed to write prompt %s: %w", userPath, err)
+			}
+			pm.baseline[name] = embeddedHash
+			continue
+		}
+
+		userHash := pm.calculateHash(string(userContent))
+		prior := pm.baseline[name]
+		if prior == "" {
+			// Pre-existing user file without baseline; treat as user-modified
+			pm.baseline[name] = userHash
+			continue
+		}
+
+		if userHash == prior {
+			// Not modified by user → overwrite with new embedded and advance baseline
+			if err := os.WriteFile(userPath, embeddedContent, 0644); err != nil {
+				return fmt.Errorf("failed to update prompt %s: %w", userPath, err)
+			}
+			pm.baseline[name] = embeddedHash
+		} else {
+			// Modified by user → keep user content; lock baseline to user's current hash
+			pm.baseline[name] = userHash
+		}
+	}
+
+	// Save baseline
+	if err := pm.saveBaseline(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Refresh updates user prompt files from embedded assets.
+// If force is true, overwrite all user files and reset baseline to embedded.
+// If false, only overwrite files that are unmodified relative to baseline; keep user-modified files.
+func (pm *PromptManager) Refresh(force bool) error {
+	if err := os.MkdirAll(pm.userPromptsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create prompts directory: %w", err)
+	}
+
+	// Load baseline if present
+	_ = pm.loadBaseline()
+
+	entries, err := promptassets.FS.ReadDir(".")
+	if err != nil {
+		return fmt.Errorf("failed to read embedded prompts: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		embeddedContent, err := promptassets.FS.ReadFile(name)
+		if err != nil {
+			return fmt.Errorf("failed to read embedded prompt %s: %w", name, err)
+		}
+		embeddedHash := pm.calculateHash(string(embeddedContent))
+
+		userPath := filepath.Join(pm.userPromptsDir, name)
+		userContent, readErr := os.ReadFile(userPath)
+
+		if force {
+			if err := os.WriteFile(userPath, embeddedContent, 0644); err != nil {
+				return fmt.Errorf("failed to write prompt %s: %w", userPath, err)
+			}
+			pm.baseline[name] = embeddedHash
+			continue
+		}
+
+		if readErr != nil {
+			// Not present: write embedded and set baseline
+			if err := os.WriteFile(userPath, embeddedContent, 0644); err != nil {
+				return fmt.Errorf("failed to write prompt %s: %w", userPath, err)
+			}
+			pm.baseline[name] = embeddedHash
+			continue
+		}
+
+		userHash := pm.calculateHash(string(userContent))
+		prior := pm.baseline[name]
+
+		if prior == "" {
+			// Unknown baseline (pre-existing local file). Treat as user-modified; keep user's version
+			pm.baseline[name] = userHash
+			continue
+		}
+
+		if userHash == prior {
+			// Unmodified by user → overwrite with new embedded and advance baseline
+			if err := os.WriteFile(userPath, embeddedContent, 0644); err != nil {
+				return fmt.Errorf("failed to update prompt %s: %w", userPath, err)
+			}
+			pm.baseline[name] = embeddedHash
+		} else {
+			// Modified by user → keep user's version; update baseline to user's current hash
+			pm.baseline[name] = userHash
+		}
+	}
+
+	return pm.saveBaseline()
+}
+
+// loadBaseline loads the baseline hash map from disk
+func (pm *PromptManager) loadBaseline() error {
+	data, err := os.ReadFile(pm.baselinePath)
+	if err != nil {
+		return err
+	}
+	var m map[string]string
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	pm.baseline = m
+	return nil
+}
+
+// saveBaseline persists the baseline hash map to disk
+func (pm *PromptManager) saveBaseline() error {
+	if err := os.MkdirAll(filepath.Dir(pm.baselinePath), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(pm.baseline, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(pm.baselinePath, data, 0644)
+}
+
+// LoadPrompt loads a prompt, preferring user version if it exists and hasn't been modified
+func (pm *PromptManager) LoadPrompt(filename string) (string, error) {
+	// Try to load from user directory first
+	userPath := filepath.Join(pm.userPromptsDir, filename)
+	if content, err := pm.loadFromUserDirectory(userPath); err == nil {
+		return content, nil
+	}
+
+	// Fall back to embedded prompt
+	return pm.loadFromEmbedded(filename)
+}
+
+// loadFromUserDirectory loads a prompt from the user directory if it exists and is valid
+func (pm *PromptManager) loadFromUserDirectory(userPath string) (string, error) {
+	content, err := os.ReadFile(userPath)
+	if err != nil {
+		return "", err
+	}
+
+	return string(content), nil
+}
+
+// loadFromEmbedded loads a prompt from the embedded filesystem
+func (pm *PromptManager) loadFromEmbedded(filename string) (string, error) {
+	content, err := promptassets.FS.ReadFile(filename)
+	if err != nil {
+		return "", fmt.Errorf("failed to read embedded prompt %s: %w", filename, err)
+	}
+	return string(content), nil
+}
+
+// GetPromptInfo returns information about a prompt including its hash and modification status
+func (pm *PromptManager) GetPromptInfo(filename string) (*PromptInfo, error) {
+	userPath := filepath.Join(pm.userPromptsDir, filename)
+
+	// Load user version if it exists
+	userContent, userErr := pm.loadFromUserDirectory(userPath)
+	embeddedContent, embeddedErr := pm.loadFromEmbedded(filename)
+
+	if embeddedErr != nil {
+		return nil, fmt.Errorf("failed to load embedded prompt %s: %w", filename, embeddedErr)
+	}
+
+	// Calculate embedded hash
+	embeddedHash := pm.calculateHash(embeddedContent)
+
+	if userErr != nil {
+		// No user version, return embedded info
+		return &PromptInfo{
+			Content:   embeddedContent,
+			Hash:      embeddedHash,
+			IsUserMod: false,
+		}, nil
+	}
+
+	// Calculate user hash
+	userHash := pm.calculateHash(userContent)
+
+	// Check if user has modified the prompt
+	isUserMod := userHash != embeddedHash
+
+	return &PromptInfo{
+		Content:   userContent,
+		Hash:      userHash,
+		IsUserMod: isUserMod,
+	}, nil
+}
+
+// calculateHash calculates SHA256 hash of content
+func (pm *PromptManager) calculateHash(content string) string {
+	hash := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(hash[:])
+}
+
+// UpdateUserPrompt updates a user prompt and saves the new hash
+func (pm *PromptManager) UpdateUserPrompt(filename, content string) error {
+	userPath := filepath.Join(pm.userPromptsDir, filename)
+
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(userPath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Write the new content
+	if err := os.WriteFile(userPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write prompt file: %w", err)
+	}
+
+	return nil
+}
 
 // Message represents a single message in a chat-like conversation with the LLM.
 type Message struct {
@@ -42,12 +332,37 @@ type CodeReviewResponse struct {
 
 // --- LLM Message Builders ---
 
+// LoadPromptFromFile loads a prompt from file (legacy function, kept for compatibility)
 func LoadPromptFromFile(filename string) (string, error) {
-	content, err := os.ReadFile(filename)
-	if err != nil {
-		return "", fmt.Errorf("failed to read prompt file %s: %w", filename, err)
+	pm := GetPromptManager()
+	return pm.LoadPrompt(filename)
+}
+
+// Global prompt manager instance
+var globalPromptManager *PromptManager
+
+// InitPromptManager initializes the global prompt manager and sets up user prompts directory
+func InitPromptManager() error {
+	globalPromptManager = NewPromptManager()
+	return globalPromptManager.Initialize()
+}
+
+// GetPromptManager returns the global prompt manager
+func GetPromptManager() *PromptManager {
+	if globalPromptManager == nil {
+		globalPromptManager = NewPromptManager()
 	}
-	return string(content), nil
+	return globalPromptManager
+}
+
+// mustLoadPrompt loads a prompt and exits on failure (prompts are embedded so this should not fail)
+func mustLoadPrompt(filename string) string {
+	pm := GetPromptManager()
+	content, err := pm.LoadPrompt(filename)
+	if err != nil {
+		os.Exit(1)
+	}
+	return content
 }
 
 // GetBaseCodeGenSystemMessage returns the base system message for code generation
@@ -62,7 +377,7 @@ func GetBaseCodeGenSystemMessageWithFormat(usePatchFormat bool) string {
 		return GetBaseCodePatchSystemMessage()
 	}
 
-	content, err := LoadPromptFromFile("prompts/base_code_editing.txt")
+	content, err := LoadPromptFromFile("base_code_editing.txt")
 	if err != nil {
 		// we need to exit, this is a critical error
 		os.Exit(1)
@@ -72,7 +387,7 @@ func GetBaseCodeGenSystemMessageWithFormat(usePatchFormat bool) string {
 
 // GetBaseCodePatchSystemMessage returns the system message for patch-based code editing
 func GetBaseCodePatchSystemMessage() string {
-	content, err := LoadPromptFromFile("prompts/base_code_editing_patch.txt")
+	content, err := LoadPromptFromFile("base_code_editing_patch.txt")
 	if err != nil {
 		// we need to exit, this is a critical error
 		os.Exit(1)
@@ -172,10 +487,7 @@ func BuildPatchMessages(code, instructions, filename string, interactive bool) [
 
 // BuildScriptRiskAnalysisMessages constructs the messages for the LLM to analyze script risk.
 func BuildScriptRiskAnalysisMessages(scriptContent string) []Message {
-	systemPrompt := `You are an expert in shell script security analysis. Your task is to review a provided shell script and determine if it poses any significant security risks (e.g., deleting critical files, installing untrusted software, exposing sensitive information).
-Respond with a concise analysis, stating whether the script is "not risky" or detailing any identified risks.
-Do not execute the script. Focus solely on static analysis.
-`
+	systemPrompt := mustLoadPrompt("shell_risk_system.txt")
 	userPrompt := fmt.Sprintf("Analyze the following shell script for security risks:\n\n```bash\n%s\n```", scriptContent)
 
 	return []Message{
@@ -214,12 +526,7 @@ func BuildCommitMessages(changelog, originalPrompt string) []Message {
 
 // BuildSearchQueryMessages constructs the messages for the LLM to generate search queries.
 func BuildSearchQueryMessages(context string) []Message {
-	systemPrompt := `You are an expert at formulating precise web search queries.
-Your task is to generate a single, highly effective search query based on the provided context, which includes an error message and relevant code/instruction.
-The query should be designed to find solutions or relevant information to resolve the error or understand the context better.
-Respond with ONLY the search query string. Do not include any other text, explanations, or conversational filler.
-Example: "golang http server connection refused"
-`
+	systemPrompt := mustLoadPrompt("search_query_system.txt")
 	userPrompt := fmt.Sprintf("Generate a search query based on the following context:\n\n%s", context)
 
 	return []Message{
@@ -230,13 +537,7 @@ Example: "golang http server connection refused"
 
 // BuildSearchResultsQueryMessages constructs messages for the LLM to select relevant URLs from search results.
 func BuildSearchResultsQueryMessages(searchResultsContext, originalQuery string) []Message {
-	systemPrompt := `You are an expert at identifying the most relevant URLs from a list of search results based on an original search query.
-Your task is to review the provided search query and the list of search results (including URL, title, and description).
-From the search results, identify the 1-3 most relevant URLs that are most likely to contain the information needed to answer the original query.
-Respond with ONLY a comma-separated list of the result numbers (e.g., "1,3,5").
-If no results are relevant, respond with "none".
-Do not include any other text, explanations, or conversational filler.
-`
+	systemPrompt := mustLoadPrompt("search_results_select_system.txt")
 	userPrompt := fmt.Sprintf("Original Search Query: \"%s\"\n\nSearch Results:\n%s\n\nWhich result numbers are most relevant?", originalQuery, searchResultsContext)
 
 	return []Message{
@@ -354,24 +655,7 @@ Consider the provided workspace context to understand the project structure and 
 
 // BuildProjectGoalsMessages constructs messages for the LLM to generate project goals.
 func BuildProjectGoalsMessages(workspaceSummary string) []Message {
-	systemPrompt := `You are an expert at defining clear and concise project goals.
-Your task is to analyze the provided workspace summary and infer the overall goals, key features, target audience, and technical vision for the project.
-Your response MUST be a JSON object with the following keys:
-- "overall_goal": A concise statement of the project's main objective.
-- "key_features": A paragraph describing the most important functionalities or capabilities.
-- "target_audience": Who the project is intended for.
-- "technical_vision": The high-level technical approach or philosophy.
-Do not include any other text or explanation outside the JSON.
-
-Example JSON format:
-{
-  "overall_goal": "Develop a secure and scalable e-commerce platform.",
-  "key_features": "Product catalog, Shopping cart, Payment processing, User authentication",
-  "target_audience": "Small to medium-sized businesses selling online.",
-  "technical_vision": "Microservices architecture with cloud-native deployment."
-}
-
-`
+	systemPrompt := mustLoadPrompt("project_goals_system.txt")
 	userPrompt := fmt.Sprintf("Based on the following workspace summary, generate the project goals:\n\n%s", workspaceSummary)
 
 	return []Message{
@@ -382,40 +666,7 @@ Example JSON format:
 
 // BuildCodeReviewMessages constructs the messages for the LLM to review code changes.
 func BuildCodeReviewMessages(combinedDiff, originalPrompt, processedInstructions string) []Message {
-	systemPrompt := `You are an expert code reviewer. Your task is to review a combined diff representing the ENTIRE changeset across one or more files against the original user prompt.
-Analyze the changes HOLISTICALLY across files for correctness, security, cross-file consistency, and adherence to best practices.
-
-CRITICAL: Consider the whole changeset together. Do NOT request a change that already exists in any file within the provided diff. If a requirement is satisfied in another file, acknowledge it and avoid redundant recommendations.
-
-OPTIONAL PER-FILE RECOMMENDATIONS: You may include file-specific suggestions, but the overall status MUST reflect the entire changeset.
-
-Your response MUST be a JSON object with the following keys:
-- "status": Either "approved", "needs_revision", or "rejected".
-- "feedback": A concise explanation of your review decision.
-- "instructions": (Only required if status is "needs_revision" or "rejected") Detailed instructions for what needs to be fixed or improved (these can reference multiple files).
-- "new_prompt": (Only required if status is "rejected") A more detailed prompt that addresses the issues found.
-- "file_recommendations": (Optional) An array of objects with keys {"filepath", "recommendation"} for file-scoped pointers.
-
-Example JSON format for approval:
-{
-  "status": "approved",
-  "feedback": "The changes correctly implement the requested feature and follow best practices."
-}
-
-Example JSON format for revision:
-{
-  "status": "needs_revision",
-  "feedback": "The implementation has a potential security vulnerability in the authentication logic.",
-  "instructions": "Review the authentication function in src/auth.go and ensure proper input validation is implemented."
-}
-
-Example JSON format for rejection:
-{
-  "status": "rejected",
-  "feedback": "The changes do not address the core requirements and introduce several bugs.",
-  "new_prompt": "Please implement a proper user authentication system with secure password handling and session management."
-}
-`
+	systemPrompt := mustLoadPrompt("code_review_system.txt")
 	var userPromptBuilder strings.Builder
 	// Pull the workspace context out of the processed instructions if available
 	// the start of the workspace context is marked by: --- Full content from workspace ---
@@ -521,21 +772,7 @@ func getLanguageFromFilename(filename string) string {
 
 // BuildProjectInsightsMessages constructs messages for the LLM to infer high-level insights.
 func BuildProjectInsightsMessages(workspaceOverview string) []Message {
-	systemPrompt := `You are an expert at quickly inferring high-level technical attributes of a codebase.
-Analyze the provided workspace overview (languages, build/test info, and brief per-file syntactic descriptors) and return a JSON object with:
-- "primary_frameworks": Major frameworks/libraries likely used (concise string)
-- "key_dependencies": Notable third-party dependencies (concise string)
-- "build_system": How the project is built (concise string)
-- "test_strategy": How the project is tested (concise string)
-- "architecture": A brief guess at the overall architecture (concise string)
-- "monorepo": "yes", "no" or "unknown"
-- "ci_providers": Likely CI providers/configs present
-- "runtime_targets": e.g., Node.js, JVM, Browser, Python
-- "deployment_targets": e.g., Docker, Kubernetes, Serverless, VMs
-- "package_managers": e.g., npm/yarn/pnpm, go modules, pip/poetry
-- "repo_layout": e.g., apps/ and packages/, cmd/ and internal/
-Do not include any other text outside of JSON.`
-
+	systemPrompt := mustLoadPrompt("project_insights_system.txt")
 	userPrompt := fmt.Sprintf("Based on the following workspace overview, infer the project insights as a compact JSON object.\n\n%s", workspaceOverview)
 
 	return []Message{

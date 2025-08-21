@@ -58,6 +58,7 @@ func init() {
 	rootCmd.AddCommand(reviewStagedCmd) // Add the new command
 	rootCmd.AddCommand(pricingCmd)
 	rootCmd.AddCommand(uiCmd)
+	rootCmd.AddCommand(promptsCmd)
 }
 
 func init() {

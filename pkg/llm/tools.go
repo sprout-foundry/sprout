@@ -56,55 +56,9 @@ type ToolMessage struct {
 
 // GetAvailableTools returns the list of tools available to the LLM
 func GetAvailableTools() []Tool {
+	// Return only OpenAI-compatible tools, excluding old action-based tools
+	// that can confuse LLMs expecting standard function calling format
 	return []Tool{
-		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "plan_step",
-				Description: "Planner: return a single actionable step with explicit stop_when criteria",
-				Parameters: ToolParameters{
-					Type: "object",
-					Properties: map[string]ToolProperty{
-						"action":       {Type: "string", Description: "One of: read_file|micro_edit|edit_file_section|validate_file|run_shell_command|workspace_context"},
-						"target_file":  {Type: "string", Description: "Optional file path"},
-						"instructions": {Type: "string", Description: "Optional step instructions"},
-						"stop_when":    {Type: "string", Description: "Explicit completion criteria"},
-					},
-					Required: []string{"action", "stop_when"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "execute_step",
-				Description: "Executor: execute only the specified single step",
-				Parameters: ToolParameters{
-					Type: "object",
-					Properties: map[string]ToolProperty{
-						"action":       {Type: "string", Description: "Must match the planned action"},
-						"target_file":  {Type: "string", Description: "Optional file path"},
-						"instructions": {Type: "string", Description: "Optional instructions"},
-					},
-					Required: []string{"action"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "evaluate_outcome",
-				Description: "Evaluator: check success against stop_when and signal completed or continue",
-				Parameters: ToolParameters{
-					Type: "object",
-					Properties: map[string]ToolProperty{
-						"status": {Type: "string", Description: "completed|continue"},
-						"reason": {Type: "string", Description: "Why"},
-					},
-					Required: []string{"status"},
-				},
-			},
-		},
 		// {
 		// 	Type: "function",
 		// 	Function: ToolFunction{

@@ -203,19 +203,19 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	var err error
 	switch provider {
 	case "openai":
-		ui.Out().Printf("DEBUG: Using OpenAI provider: %s\n", modelName)
+		log.Logf("DEBUG: Using OpenAI provider: %s", modelName)
 		apiURL = "https://api.openai.com/v1/chat/completions"
 		apiKey, err = apikeys.GetAPIKey("openai", cfg.Interactive)
 	case "groq":
-		ui.Out().Printf("DEBUG: Using Groq provider: %s\n", modelName)
+		log.Logf("DEBUG: Using Groq provider: %s", modelName)
 		apiURL = "https://api.groq.com/openai/v1/chat/completions"
 		apiKey, err = apikeys.GetAPIKey("groq", cfg.Interactive)
 	case "deepseek":
-		ui.Out().Printf("DEBUG: Using DeepSeek provider: %s\n", modelName)
+		log.Logf("DEBUG: Using DeepSeek provider: %s", modelName)
 		apiURL = "https://api.deepseek.com/openai/v1/chat/completions"
 		apiKey, err = apikeys.GetAPIKey("deepseek", cfg.Interactive)
 	case "deepinfra":
-		ui.Out().Printf("DEBUG: Using DeepInfra provider: %s\n", modelName)
+		log.Logf("DEBUG: Using DeepInfra provider: %s", modelName)
 		apiURL = "https://api.deepinfra.com/v1/openai/chat/completions"
 		apiKey, err = apikeys.GetAPIKey("deepinfra", cfg.Interactive)
 	case "lambda-ai":
@@ -354,6 +354,8 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 // --- Main Dispatcher ---
 
 func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (*TokenUsage, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
+
 	var totalInputTokens int
 	for _, msg := range messages {
 		totalInputTokens += GetMessageTokens(msg.Role, GetMessageText(msg.Content))
@@ -478,7 +480,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.deepseek.com/openai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "deepinfra":
-		ui.Out().Printf("DEBUG: Routing to DeepInfra provider\n")
+		logger.Log("DEBUG: Routing to DeepInfra provider")
 		if cfg.HealthChecks {
 			_ = CheckEndpointReachable("https://api.deepinfra.com/", 2*time.Second)
 		}
@@ -487,7 +489,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			fmt.Print(prompts.APIKeyError(err))
 			return nil, err
 		}
-		ui.Out().Printf("DEBUG: About to call callOpenAICompatibleStream for DeepInfra\n")
+		logger.Log("DEBUG: About to call callOpenAICompatibleStream for DeepInfra")
 		tokenUsage, err = callOpenAICompatibleStream("https://api.deepinfra.com/v1/openai/chat/completions", apiKey, model, messages, cfg, timeout, writer)
 	case "custom": // New case for custom provider:url:model
 		var endpointURL string
@@ -663,6 +665,8 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 
 // GetCodeReview asks the LLM to review a combined diff of changes against the original prompt.
 func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceContext string) (*types.CodeReviewResult, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
+
 	// Use a dedicated CodeReviewModel if available, otherwise fall back to EditingModel
 	modelName := cfg.CodeReviewModel
 	if modelName == "" {
@@ -693,8 +697,8 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 
 	// Add debug logging for JSON parsing issues
 	if os.Getenv("DEBUG_JSON_PARSING") == "true" {
-		ui.Out().Printf("DEBUG: Extracted JSON string: %s\n", jsonStr)
-		ui.Out().Printf("DEBUG: JSON length: %d\n", len(jsonStr))
+		logger.Logf("DEBUG: Extracted JSON string: %s", jsonStr)
+		logger.Logf("DEBUG: JSON length: %d", len(jsonStr))
 	}
 
 	var reviewResult types.CodeReviewResult

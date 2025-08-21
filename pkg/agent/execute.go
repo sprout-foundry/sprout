@@ -63,10 +63,14 @@ func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*Agen
 		validationUsage = buildUsage(tokenUsage.Validation, 0)
 	}
 
-	_ = llm.CalculateCost(intentUsage, orchestratorModel)
-	_ = llm.CalculateCost(planningUsage, orchestratorModel)
-	_ = llm.CalculateCost(progressUsage, orchestratorModel)
-	_ = llm.CalculateCost(codegenUsage, editingModel)
-	_ = llm.CalculateCost(validationUsage, editingModel)
+	// Pricing summary
+	intentCost := llm.CalculateCost(intentUsage, orchestratorModel)
+	planningCost := llm.CalculateCost(planningUsage, orchestratorModel)
+	progressCost := llm.CalculateCost(progressUsage, orchestratorModel)
+	codegenCost := llm.CalculateCost(codegenUsage, editingModel)
+	validationCost := llm.CalculateCost(validationUsage, editingModel)
+	totalCost := intentCost + planningCost + progressCost + codegenCost + validationCost
+	totalTokens := intentUsage.TotalTokens + planningUsage.TotalTokens + progressUsage.TotalTokens + codegenUsage.TotalTokens + validationUsage.TotalTokens
+	logger.LogProcessStep(fmt.Sprintf("💰 Agent total: tokens=%d, cost=$%.4f (intent=%.4f, plan=%.4f, progress=%.4f, code=%.4f, validate=%.4f)", totalTokens, totalCost, intentCost, planningCost, progressCost, codegenCost, validationCost))
 	return tokenUsage, nil
 }

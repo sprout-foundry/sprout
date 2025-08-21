@@ -15,10 +15,9 @@ import (
 )
 
 var (
-	fixModelFlag                string
-	fixSkipPromptFlag           bool
-	fixOptionalInstructions     string // New flag for optional instructions
-	fixSkipWorkspaceContextFlag bool   // Flag to control workspace usage
+	fixModelFlag            string
+	fixSkipPromptFlag       bool
+	fixOptionalInstructions string // New flag for optional instructions
 )
 
 var fixCmd = &cobra.Command{
@@ -63,7 +62,8 @@ var fixCmd = &cobra.Command{
 			cfg.EditingModel = fixModelFlag
 		}
 		cfg.SkipPrompt = fixSkipPromptFlag
-		cfg.SkipWorkspace = fixSkipWorkspaceContextFlag
+		cfg.Interactive = true
+		cfg.CodeToolsEnabled = true
 
 		var problemDescriptionBuilder strings.Builder
 		if err != nil {
@@ -104,7 +104,6 @@ var fixCmd = &cobra.Command{
 func init() {
 	fixCmd.Flags().StringVarP(&fixModelFlag, "model", "m", "", "Model name to use with the LLM")
 	fixCmd.Flags().BoolVar(&fixSkipPromptFlag, "skip-prompt", false, "Skip user prompt for applying changes")
-	fixCmd.Flags().BoolVar(&fixSkipWorkspaceContextFlag, "skip-workspace", false, "Skip adding the workspace context (default is false)")
 	// New flag for optional instructions
 	fixCmd.Flags().StringVarP(&fixOptionalInstructions, "instructions", "i", "", "Additional instructions for the LLM to consider when fixing")
 }

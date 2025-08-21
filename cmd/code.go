@@ -61,9 +61,6 @@ When using the --image flag, ensure your model supports vision input. Vision-cap
 		cfg.Interactive = true
 		cfg.UseSearchGrounding = useSearchGrounding
 		cfg.CodeToolsEnabled = enableCodeTools
-		cfg.AllowedTools = []string{"read_file", "run_shell_command", "workspace_context"} // Default allowed tools
-		cfg.SkipWorkspace = skipWorkspace
-
 		ui.Out().Print(prompts.ProcessingCodeGeneration() + "\n")
 		startTime := time.Now()
 

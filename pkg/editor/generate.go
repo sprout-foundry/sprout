@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
@@ -52,14 +53,21 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 	}
 
 	// Prepend workspace context by default when not targeting a specific file and not skipping
-	if !cfg.SkipWorkspace && effectiveFilename == "" {
+	if effectiveFilename == "" {
 		ws := workspace.GetWorkspaceContext(instructions, cfg)
 		if ws != "" {
 			instructions = ws + "\n\n" + instructions
 		}
 	}
 
-	// this parses any file tags and returns the enriched instructions
+	// this parses the workspace and filename tags and returns the enriched instructions
+	if effectiveFilename == "" {
+		instructionsWithWS, err := ProcessInstructionsWithWorkspace(instructions, cfg)
+		if err == nil && strings.TrimSpace(instructionsWithWS) != "" {
+			instructions = instructionsWithWS
+		}
+	}
+
 	processedInstructions, err := ProcessInstructions(instructions, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to process instructions: %w", err)

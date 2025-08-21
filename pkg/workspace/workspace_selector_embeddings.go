@@ -49,20 +49,29 @@ func GetFilesForContextUsingEmbeddings(instructions string, workspace WorkspaceF
 			}
 		}
 
+		// Include ONLY the top-scoring file by default
 		fullContextFiles = append(fullContextFiles, relevantEmbeddings[maxScoreIndex].Path)
-		logger.Logf("Selected for full context (%.4f): %s\n", scores[maxScoreIndex], relevantEmbeddings[maxScoreIndex].Path)
+		logger.Logf("Selected for full context (top match %.4f): %s\n", scores[maxScoreIndex], relevantEmbeddings[maxScoreIndex].Path)
 
-		// Use remaining scores to decide on other files
-		scoreThreshold := maxScore * 0.7 // Use 70% of max score as threshold
+		// High-confidence threshold for additional full-context files
+		const absoluteFloor = 0.90
+		relativeFloor := maxScore * 0.95
+		highConfidence := relativeFloor
+		if highConfidence < absoluteFloor {
+			highConfidence = absoluteFloor
+		}
+		const maxAdditionalFull = 2
+		added := 0
 
 		for i, emb := range relevantEmbeddings {
 			if i == maxScoreIndex {
 				continue // Already handled above
 			}
 
-			if scores[i] >= scoreThreshold {
+			if scores[i] >= highConfidence && added < maxAdditionalFull {
 				fullContextFiles = append(fullContextFiles, emb.Path)
-				logger.Logf("Selected for full context (%.4f): %s\n", scores[i], emb.Path)
+				added++
+				logger.Logf("Selected for full context (high-confidence %.4f): %s\n", scores[i], emb.Path)
 			} else {
 				summaryContextFiles = append(summaryContextFiles, emb.Path)
 				logger.Logf("Selected for summary context (%.4f): %s\n", scores[i], emb.Path)

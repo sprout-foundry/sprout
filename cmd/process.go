@@ -3,7 +3,6 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -52,8 +51,7 @@ var processCmd = &cobra.Command{
 				out = args[0]
 			}
 			if err := createExampleProcessFile(out, logger); err != nil {
-				logger.LogProcessStep(fmt.Sprintf("Failed to create example process file: %v", err))
-				log.Fatalf("Error creating example process file: %v", err)
+				utils.HandleFatalError(err, "creating example process file")
 			}
 			return
 		}
@@ -63,14 +61,14 @@ var processCmd = &cobra.Command{
 			if dryRun {
 				if err := interactiveAuthorProcessDryRun(logger); err != nil {
 					logger.LogProcessStep(fmt.Sprintf("Interactive dry-run failed: %v", err))
-					log.Fatalf("Error during interactive dry-run: %v", err)
+					utils.HandleFatalError(err, "interactive dry-run")
 				}
 				return
 			}
 			input, err := interactiveAuthorProcessFile(logger)
 			if err != nil {
 				logger.LogProcessStep(fmt.Sprintf("Interactive authoring failed: %v", err))
-				log.Fatalf("Error during interactive process authoring: %v", err)
+				utils.HandleFatalError(err, "interactive process authoring")
 			}
 			args = []string{input}
 		}
@@ -81,7 +79,7 @@ var processCmd = &cobra.Command{
 		if dryRun {
 			if err := validateProcessOnly(input, logger); err != nil {
 				logger.LogProcessStep(fmt.Sprintf("Dry-run validation failed: %v", err))
-				log.Fatalf("Dry-run validation failed: %v", err)
+				utils.HandleFatalError(err, "dry-run validation")
 			}
 			return
 		}
@@ -93,7 +91,7 @@ var processCmd = &cobra.Command{
 		}
 		if err := runMultiAgentProcess(input, logger); err != nil {
 			logger.LogProcessStep(fmt.Sprintf("Multi-agent process failed: %v", err))
-			log.Fatalf("Error during multi-agent process: %v", err)
+			utils.HandleFatalError(err, "multi-agent process")
 		}
 	},
 }

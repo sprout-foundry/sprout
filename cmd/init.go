@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/spf13/cobra"
 )
@@ -19,7 +19,7 @@ var initCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Initializing new configuration in the current directory...")
 		if err := config.InitConfig(initSkipPrompt); err != nil {
-			log.Fatalf("Failed to initialize configuration: %v", err)
+			utils.HandleFatalError(err, "configuration initialization")
 		}
 	},
 }

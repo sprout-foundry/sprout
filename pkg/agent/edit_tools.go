@@ -22,7 +22,7 @@ type MicroEditTool struct {
 // NewMicroEditTool creates a new micro edit tool
 func NewMicroEditTool(maxTotal, maxHunk, maxHunks int) *MicroEditTool {
 	base := NewBaseTool(
-		"micro_edit",
+		"edit_file_section",
 		"Attempts a very small targeted edit using patch-based editing",
 		"edit",
 		[]string{"read", "write"},
@@ -71,7 +71,7 @@ func (t *MicroEditTool) Execute(ctx context.Context, params ToolParameters) (*To
 		}, nil
 	}
 
-	params.Logger.LogProcessStep(fmt.Sprintf("micro_edit: attempting minimal change in %s", targetFile))
+	params.Logger.LogProcessStep(fmt.Sprintf("attempting minimal change in %s", targetFile))
 
 	// Use patch-based editing instead of partial editing
 	// Create messages for patch-based editing
@@ -140,12 +140,12 @@ func (t *MicroEditTool) Execute(ctx context.Context, params ToolParameters) (*To
 	completionTokens := utils.EstimateTokens(response)
 	params.Context.TokenUsage.CodeGeneration += completionTokens
 	params.Context.TokenUsage.CodegenSplit.Completion += completionTokens
-	params.Context.ExecutedOperations = append(params.Context.ExecutedOperations, fmt.Sprintf("micro_edit applied to %s", targetFile))
-	params.Logger.LogProcessStep("micro_edit: applied")
+	params.Context.ExecutedOperations = append(params.Context.ExecutedOperations, fmt.Sprintf("edit applied to %s", targetFile))
+	params.Logger.LogProcessStep("edit applied")
 
 	return &ToolResult{
 		Success: true,
-		Output:  fmt.Sprintf("Successfully applied micro edit to %s", targetFile),
+		Output:  fmt.Sprintf("Successfully applied edit to %s", targetFile),
 		Data: map[string]interface{}{
 			"target_file":  targetFile,
 			"instructions": instructions,

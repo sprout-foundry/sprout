@@ -54,11 +54,11 @@ Example 4: Validate a file (syntax check)
 }
 ```
 
-Example 5: Apply a micro edit
+Example 5: Apply a file edit
 ```json
 {
   "tool_calls": [
-    {"id":"m1","type":"function","function":{"name":"micro_edit","arguments":"{\"file_path\":\"pkg/llm/api.go\",\"instructions\":\"Add a package comment at the top\"}"}}
+    {"id":"m1","type":"function","function":{"name":"edit_file_section","arguments":"{\"file_path\":\"pkg/llm/api.go\",\"instructions\":\"Add a package comment at the top\"}"}}
   ]
 }
 ```

@@ -51,7 +51,14 @@ var processCmd = &cobra.Command{
 				out = args[0]
 			}
 			if err := createExampleProcessFile(out, logger); err != nil {
-				utils.HandleFatalError(err, "creating example process file")
+				gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
+					"Creating example process file",
+					err,
+					nil,
+					"",
+				)
+				fmt.Fprint(os.Stderr, gracefulExitMsg)
+				os.Exit(1)
 			}
 			return
 		}
@@ -61,14 +68,28 @@ var processCmd = &cobra.Command{
 			if dryRun {
 				if err := interactiveAuthorProcessDryRun(logger); err != nil {
 					logger.LogProcessStep(fmt.Sprintf("Interactive dry-run failed: %v", err))
-					utils.HandleFatalError(err, "interactive dry-run")
+					gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
+						"Interactive process authoring dry-run",
+						err,
+						nil,
+						"",
+					)
+					fmt.Fprint(os.Stderr, gracefulExitMsg)
+					os.Exit(1)
 				}
 				return
 			}
 			input, err := interactiveAuthorProcessFile(logger)
 			if err != nil {
 				logger.LogProcessStep(fmt.Sprintf("Interactive authoring failed: %v", err))
-				utils.HandleFatalError(err, "interactive process authoring")
+				gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
+					"Interactive process authoring",
+					err,
+					nil,
+					"",
+				)
+				fmt.Fprint(os.Stderr, gracefulExitMsg)
+				os.Exit(1)
 			}
 			args = []string{input}
 		}
@@ -79,7 +100,14 @@ var processCmd = &cobra.Command{
 		if dryRun {
 			if err := validateProcessOnly(input, logger); err != nil {
 				logger.LogProcessStep(fmt.Sprintf("Dry-run validation failed: %v", err))
-				utils.HandleFatalError(err, "dry-run validation")
+				gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
+					"Process validation (dry-run)",
+					err,
+					nil,
+					"",
+				)
+				fmt.Fprint(os.Stderr, gracefulExitMsg)
+				os.Exit(1)
 			}
 			return
 		}
@@ -91,7 +119,14 @@ var processCmd = &cobra.Command{
 		}
 		if err := runMultiAgentProcess(input, logger); err != nil {
 			logger.LogProcessStep(fmt.Sprintf("Multi-agent process failed: %v", err))
-			utils.HandleFatalError(err, "multi-agent process")
+			gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
+				"Multi-agent orchestration process",
+				err,
+				nil, // Could potentially get token usage from orchestration state
+				"",
+			)
+			fmt.Fprint(os.Stderr, gracefulExitMsg)
+			os.Exit(1)
 		}
 	},
 }

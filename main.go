@@ -4,7 +4,6 @@ package main
 
 import (
 	"fmt"
-
 	"os"
 
 	"github.com/alantheprice/ledit/cmd"
@@ -20,13 +19,41 @@ func main() {
 		if logger != nil {
 			logger.LogError(fmt.Errorf("failed to initialize prompt manager: %w", err))
 		}
-		if _, err := fmt.Fprintf(os.Stderr, "FATAL: Failed to initialize prompt manager: %v\n", err); err != nil {
+
+		// Create a graceful exit message for prompt manager failure
+		exitMsg := prompts.GracefulExitMessage{
+			Context: "Initializing the prompt management system",
+			Error:   err,
+			Accomplished: []string{
+				"Started application",
+			},
+			Resolution: []string{
+				"Check if the home directory is accessible",
+				"Verify file system permissions",
+				"Ensure the .ledit directory can be created",
+			},
+		}
+
+		if _, printErr := fmt.Fprintln(os.Stderr, prompts.GracefulExit(exitMsg)); printErr != nil {
 		}
 		os.Exit(1)
 	}
 
 	if logger == nil {
-		if _, err := fmt.Fprintln(os.Stderr, "FATAL: Failed to initialize logger. Exiting."); err != nil {
+		// Create a graceful exit message for logger failure
+		exitMsg := prompts.GracefulExitMessage{
+			Context: "Initializing the logging system",
+			Error:   fmt.Errorf("failed to initialize logger"),
+			Accomplished: []string{
+				"Started application",
+			},
+			Resolution: []string{
+				"Check system resources and permissions",
+				"Verify the application installation",
+			},
+		}
+
+		if _, printErr := fmt.Fprintln(os.Stderr, prompts.GracefulExit(exitMsg)); printErr != nil {
 		}
 		os.Exit(1)
 	}
@@ -40,7 +67,23 @@ func main() {
 
 	if err := cmd.Execute(); err != nil {
 		logger.LogError(err)
-		if _, printErr := fmt.Fprintln(os.Stderr, prompts.FatalError(err)); printErr != nil {
+
+		// Create a graceful exit message with context
+		exitMsg := prompts.GracefulExitMessage{
+			Context: "Processing your CLI command",
+			Error:   err,
+			Accomplished: []string{
+				"Initialized prompt manager",
+				"Set up logging system",
+			},
+			Resolution: []string{
+				"Check the command syntax and arguments",
+				"Verify file permissions if applicable",
+				"Review the workspace log for more details",
+			},
+		}
+
+		if _, printErr := fmt.Fprintln(os.Stderr, prompts.GracefulExit(exitMsg)); printErr != nil {
 		}
 		os.Exit(1)
 	}

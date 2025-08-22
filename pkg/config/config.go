@@ -44,7 +44,6 @@ type Config struct {
 	TrackWithGit             bool                 `json:"track_with_git"`
 	EnableSecurityChecks     bool                 `json:"enable_security_checks"` // New field for security checks
 	SkipPrompt               bool                 `json:"-"`                      // Internal use, not saved to config
-	Interactive              bool                 `json:"-"`                      // Internal use, not saved to config
 	OllamaServerURL          string               `json:"ollama_server_url"`
 	OrchestrationMaxAttempts int                  `json:"orchestration_max_attempts"` // New field for max attempts
 	CodeStyle                CodeStylePreferences `json:"code_style"`                 // New field for code style preferences
@@ -56,7 +55,6 @@ type Config struct {
 	FrequencyPenalty         float64              `json:"frequency_penalty"`          // NEW: Field for frequency penalty
 	RetryAttemptCount        int                  `json:"-"`                          // Internal field to track retry attempts
 	UseSearchGrounding       bool                 `json:"-"`                          // Command-scoped flag to enable search grounding
-	CodeToolsEnabled         bool                 `json:"-"`                          // Allow tool-calls in code flow when true
 	FromAgent                bool                 `json:"-"`                          // Internal: true when invoked from agent mode
 	LastTokenUsage           *types.TokenUsage    `json:"-"`                          // Last token usage from LLM call
 	// New toggles

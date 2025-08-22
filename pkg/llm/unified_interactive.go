@@ -55,14 +55,8 @@ func CallLLMWithUnifiedInteractive(cfg *UnifiedInteractiveConfig) (string, strin
 	}
 
 	// Check if tools are enabled for this workflow
-	if cfg.Config.Interactive && cfg.Config.CodeToolsEnabled {
-		logger.Log("Using interactive mode with tools")
-		return callLLMWithToolsUnified(cfg)
-	}
-
-	// Fallback to simple response
-	logger.Log("Using simple response mode")
-	return callLLMForSimpleResponseUnified(cfg)
+	logger.Log("Using interactive mode with tools (forced)")
+	return callLLMWithToolsUnified(cfg)
 }
 
 // injectSystemPrompt injects or replaces the system prompt in the messages
@@ -147,6 +141,14 @@ func callLLMWithToolsUnified(cfg *UnifiedInteractiveConfig) (string, string, *To
 
 		// Execute tool calls
 		for _, toolCall := range toolCalls {
+			// Verbose UI/log printing of tool calls for visibility in UI log
+			logger.Log(fmt.Sprintf("TOOL CALL → %s args=%s", toolCall.Function.Name, toolCall.Function.Arguments))
+			if run := utils.GetRunLogger(); run != nil {
+				run.LogEvent("tool_call", map[string]any{
+					"tool": toolCall.Function.Name,
+					"args": toolCall.Function.Arguments,
+				})
+			}
 			logger.Log(fmt.Sprintf("Executing tool: %s", toolCall.Function.Name))
 
 			// Execute the tool call
@@ -175,30 +177,6 @@ func callLLMWithToolsUnified(cfg *UnifiedInteractiveConfig) (string, string, *To
 
 	logger.Log("Maximum retries reached")
 	return "", "", nil, fmt.Errorf("maximum interactive LLM retries reached (%d)", maxRetries)
-}
-
-// callLLMForSimpleResponseUnified handles simple responses without tools
-func callLLMForSimpleResponseUnified(cfg *UnifiedInteractiveConfig) (string, string, *TokenUsage, error) {
-	logger := utils.GetLogger(cfg.Config.SkipPrompt)
-
-	response, tokenUsage, err := GetLLMResponse(
-		cfg.ModelName,
-		cfg.Messages,
-		cfg.Filename,
-		cfg.Config,
-		cfg.Timeout,
-	)
-	if err != nil {
-		logger.Log(fmt.Sprintf("Simple LLM call failed: %v", err))
-		return "", "", nil, err
-	}
-
-	// Strip any tool calls if present (for consistency)
-	response = prompts.StripToolCallsIfPresent(response)
-	logger.Log(fmt.Sprintf("Simple response length: %d chars", len(response)))
-	logger.Log("=== End Unified Interactive LLM Debug ===")
-
-	return cfg.ModelName, response, tokenUsage, nil
 }
 
 // updateAgentState updates the agent workflow state based on tool calls and responses

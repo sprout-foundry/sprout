@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 )
 
 // OpenInEditor opens the provided content in the user's default editor (or vim)
@@ -38,18 +37,4 @@ func OpenInEditor(content, fileExtension string) (string, error) {
 		return "", fmt.Errorf("could not read edited file: %w", err)
 	}
 	return string(editedContent), nil
-}
-
-// getLanguageFromExtension is used by UI and partial editing helpers.
-func getFileExtensionLanguage(filename string) string {
-	return getLanguageFromExtension(filename)
-}
-
-// ensureDir ensures parent directory exists before file operations.
-func ensureDir(path string) error {
-	dir := filepath.Dir(path)
-	if dir == "" {
-		return nil
-	}
-	return os.MkdirAll(dir, os.ModePerm)
 }

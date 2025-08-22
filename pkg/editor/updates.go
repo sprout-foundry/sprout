@@ -23,6 +23,9 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 	reader := bufio.NewReader(os.Stdin)
 	var allDiffs strings.Builder
 
+	// Track whether we already ran a pre-apply review to avoid double-review
+	ranPreapplyReview := false
+
 	// Collect edits first to enable a combined review across the entire changeset
 	type preparedEdit struct {
 		filename     string
@@ -111,6 +114,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 		combined := allDiffs.String()
 		if combined != "" {
 			logger := utils.GetLogger(cfg.SkipPrompt)
+			ranPreapplyReview = true
 			if err := performAutomatedReview(combined, originalInstructions, processedInstructions, cfg, logger, revisionID); err != nil {
 				if !strings.Contains(err.Error(), "revisions applied, re-validating") {
 					return "", err
@@ -147,7 +151,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			}
 
 			// Ensure the directory exists
-			if err := ensureDir(newFilename); err != nil {
+			if err := os.MkdirAll(filepath.Dir(newFilename), os.ModePerm); err != nil {
 				return "", fmt.Errorf("could not create directory for %s: %w", newFilename, err)
 			}
 
@@ -217,7 +221,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 		}
 	}
 	// Perform automated review when skipPrompt is active
-	if cfg.SkipPrompt {
+	if cfg.SkipPrompt && !ranPreapplyReview {
 		combinedDiff := allDiffs.String()
 		if combinedDiff != "" {
 			logger := utils.GetLogger(cfg.SkipPrompt)

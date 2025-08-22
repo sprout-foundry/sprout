@@ -3,10 +3,8 @@ package agent
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -21,54 +19,6 @@ func isSourceFile(path string) bool {
 	default:
 		return false
 	}
-}
-
-func countLines(filePath string) int {
-	cmd := exec.Command("wc", "-l", filePath)
-	output, err := cmd.Output()
-	if err != nil {
-		return 0
-	}
-	parts := strings.Fields(string(output))
-	if len(parts) > 0 {
-		if lines, err := strconv.Atoi(parts[0]); err == nil {
-			return lines
-		}
-	}
-	return 0
-}
-
-func findGoFiles(dir string) ([]string, error) {
-	var goFiles []string
-	cmd := exec.Command("find", dir, "-name", "*.go", "-type", "f")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-		if line != "" && !strings.Contains(line, "vendor/") && !strings.Contains(line, ".git/") {
-			goFiles = append(goFiles, strings.TrimPrefix(line, "./"))
-		}
-	}
-	return goFiles, nil
-}
-
-func findPackageDirectories(dir string) []string {
-	var pkgDirs []string
-	cmd := exec.Command("find", dir, "-name", "*.go", "-type", "f", "-exec", "dirname", "{}", ";")
-	output, err := cmd.Output()
-	if err != nil {
-		return pkgDirs
-	}
-	seen := make(map[string]bool)
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-		d := strings.TrimPrefix(line, "./")
-		if d != "" && !seen[d] && !strings.Contains(d, "vendor/") && !strings.Contains(d, ".git/") {
-			seen[d] = true
-			pkgDirs = append(pkgDirs, d)
-		}
-	}
-	return pkgDirs
 }
 
 func getRecentlyModifiedSourceFiles(workspaceInfo *WorkspaceInfo, logger *utils.Logger) []string {

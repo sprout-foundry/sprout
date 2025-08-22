@@ -86,7 +86,7 @@ func (w *WebContentFetcher) fetchWithJinaReader(url string, cfg *config.Config) 
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("Jina Reader API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+		return "", fmt.Errorf("jina Reader API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	return parseJinaResponse(resp.Body)
@@ -129,7 +129,7 @@ func parseJinaResponse(body io.Reader) (string, error) {
 	}
 
 	if jinaResponse.Data.Content == "" {
-		return "", fmt.Errorf("Jina Reader response did not contain expected 'data.content'")
+		return "", fmt.Errorf("jina Reader response did not contain expected 'data.content'")
 	}
 
 	return jinaResponse.Data.Content, nil

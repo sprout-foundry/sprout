@@ -23,7 +23,7 @@ func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*Agen
 
 	tokenUsage := &AgentTokenUsage{}
 	logger.LogProcessStep("🔄 Executing optimized agent...")
-	err := runOptimizedAgent(userIntent, cfg, logger, tokenUsage)
+	err := RunSimplifiedAgent(userIntent, cfg.SkipPrompt, cfg.OrchestrationModel)
 	if err != nil {
 		logger.LogError(fmt.Errorf("agent execution failed: %w", err))
 		return tokenUsage, fmt.Errorf("agent execution failed: %w", err)

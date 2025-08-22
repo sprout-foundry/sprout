@@ -52,7 +52,7 @@ func executeCodeCommand(cfg *CommandConfig, args []string) error {
 	utils.LogUserPrompt(instructions)
 
 	// Validate input
-	if err := ValidateCommandInput(cfg, args, true); err != nil {
+	if len(args) == 0 {
 		ui.Out().Print(prompts.InstructionsRequired() + "\n")
 		return fmt.Errorf("instructions are required")
 	}

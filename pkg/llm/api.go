@@ -551,11 +551,24 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	}
 
 	// After a successful call, publish token/cost aggregates so the TUI header can persistently show them
-	if ui.Enabled() {
-		tu := normalizeTokenUsage(modelName, messages, tokenUsage, logger)
-		cost := CalculateCost(*tu, modelName)
+	if ui.Enabled() && tokenUsage != nil {
+		// If provider returned usage, trust it. Otherwise, estimate from messages
+		if tokenUsage.TotalTokens == 0 {
+			est := 0
+			for _, m := range messages {
+				est += GetMessageTokens(m.Role, GetMessageText(m.Content))
+			}
+			if est < 1 {
+				est = 1
+			}
+			tokenUsage.TotalTokens = est
+			if tokenUsage.PromptTokens == 0 && tokenUsage.CompletionTokens == 0 {
+				tokenUsage.PromptTokens = est
+			}
+		}
+		cost := CalculateCost(*tokenUsage, modelName)
 		// Use a ProgressSnapshotEvent with only totals to update the header
-		ui.Publish(ui.ProgressSnapshotEvent{Completed: 0, Total: 0, Rows: nil, Time: time.Now(), TotalTokens: tu.TotalTokens, TotalCost: cost, BaseModel: modelName})
+		ui.Publish(ui.ProgressSnapshotEvent{Completed: 0, Total: 0, Rows: nil, Time: time.Now(), TotalTokens: tokenUsage.TotalTokens, TotalCost: cost, BaseModel: modelName})
 	}
 
 	return tokenUsage, nil
@@ -777,31 +790,4 @@ func parseStagedCodeReviewResponse(response string) (*types.CodeReviewResult, er
 	}
 
 	return result, nil
-}
-
-// normalizeTokenUsage trusts provider-reported usage and only estimates if missing
-func normalizeTokenUsage(modelName string, messages []prompts.Message, usage *TokenUsage, logger *utils.Logger) *TokenUsage {
-	if usage == nil {
-		empty := TokenUsage{}
-		usage = &empty
-	}
-	// If provider gave prompt/completion but not total, compute the sum
-	if usage.TotalTokens == 0 && (usage.PromptTokens > 0 || usage.CompletionTokens > 0) {
-		usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
-		return usage
-	}
-	// If provider gave no usage at all, estimate from messages (fallback only)
-	if usage.TotalTokens == 0 && usage.PromptTokens == 0 && usage.CompletionTokens == 0 {
-		est := 0
-		for _, m := range messages {
-			est += GetMessageTokens(m.Role, GetMessageText(m.Content))
-		}
-		if est < 1 {
-			est = 1
-		}
-		logger.Log(fmt.Sprintf("usage_missing: estimating tokens=%d for model=%s", est, modelName))
-		usage.TotalTokens = est
-		usage.PromptTokens = est // best-effort placeholder when nothing is provided
-	}
-	return usage
 }

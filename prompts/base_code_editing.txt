@@ -32,13 +32,12 @@ If a specific filename is provided, focus your edits primarily on that file. Onl
 The filename must only appear in the header of the code block (e.g., ````python # myfile.py`). Do not include file paths within the code content itself.
 
 BEFORE YOU EDIT ANY FILE:
-- You MUST validate targets with tools before editing. If you intend to modify a file, first call the read_file tool for that exact path to load the full contents you will edit.
+- If you have NOT been shown the full current contents of a file you plan to modify, you MUST request it first using the read_file tool for that exact path.
 - Do NOT rely on summaries or search results for editing; always read the full file(s) before generating changes.
-- If multiple files will be edited, read each file’s full contents prior to producing the final output (call read_file for each file).
-- If you are unsure which file to edit, first use workspace_context (e.g., load_tree, search_keywords) to determine the correct file(s), then call read_file.
+- If multiple files will be edited, read each file’s full contents prior to producing the final output.
 Do not include any other text or explanations outside the code blocks.
 Ensure that the code is syntactically correct and follows best practices for the specified language.
-You MUST confirm you have read the full content of each file you are modifying (via read_file) before generating your final answer.
+Confirm you have read the full content of each file you are modifying (via read_file) before generating your final answer.
 
 CODE EDITING PRINCIPLES:
 - Ensure your edits are targeted and relevant to the user request

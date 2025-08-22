@@ -53,11 +53,6 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 	if len(updatedCode) == 0 {
 		ui.Out().Print(prompts.NoCodeBlocksParsed() + "\n")
 		ui.Out().Printf("%s\n", llmContent)
-		// Hard guard: if the response looks like plain prose (e.g., a review), avoid mapping it into a file blindly
-		prose := !strings.Contains(llmContent, "```") && !strings.Contains(llmContent, "diff --git")
-		if prose {
-			return map[string]string{}, llmContent, tokenUsage, nil
-		}
 		// Fallback: if a filename was provided and the response contains a single code block
 		// without filename headers, extract code by language and assign to that filename
 		if strings.TrimSpace(filename) != "" {

@@ -958,12 +958,6 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 		return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg)
 	}
 
-	// Force summaries-only in the initial context so downstream flows must call read_file for full content
-	if len(fullContextFiles) > 0 {
-		logger.LogProcessStep("--- Forcing summaries-only initial context (full file content requires read_file tools) ---")
-		fullContextFiles = nil
-	}
-
 	if len(fullContextFiles) > 0 {
 		logger.LogProcessStep(fmt.Sprintf("--- Selected the following files for full context: %s ---", strings.Join(fullContextFiles, ", ")))
 	}

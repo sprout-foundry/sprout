@@ -26,17 +26,16 @@ type LLMConfig struct {
 // DefaultLLMConfig returns sensible defaults for LLM configuration
 func DefaultLLMConfig() *LLMConfig {
 	return &LLMConfig{
-		EditingModel:       "gpt-4",
-		SummaryModel:       "gpt-3.5-turbo",
-		OrchestrationModel: "gpt-4",
-		WorkspaceModel:     "gpt-4",
-		EmbeddingModel:     "text-embedding-3-small",
-		CodeReviewModel:    "gpt-4",
-		LocalModel:         "",
-		SearchModel:        "gpt-4",
+		EditingModel:       "deepinfra:google/gemini-2.5-flash",
+		SummaryModel:       "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+		OrchestrationModel: "deepinfra:moonshotai/Kimi-K2-Instruct",
+		WorkspaceModel:     "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+		EmbeddingModel:     "deepinfra:Qwen/Qwen3-Embedding-4B",
+		CodeReviewModel:    "deepinfra:google/gemini-2.5-flash",
+		LocalModel:         "ollama:hf.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:UD-Q4_K_XL",
+		SearchModel:        "",
 
 		Temperature:      0.7,
-		MaxTokens:        4096,
 		TopP:             1.0,
 		PresencePenalty:  0.0,
 		FrequencyPenalty: 0.0,
@@ -71,7 +70,7 @@ func (c *LLMConfig) GetPrimaryModel() string {
 	if c.EditingModel != "" {
 		return c.EditingModel
 	}
-	return "gpt-4" // fallback
+	return "deepinfra:google/gemini-2.5-flash" // fallback
 }
 
 // IsLocalModel returns true if the primary model is a local model

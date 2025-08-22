@@ -36,7 +36,12 @@ func (te *ToolExecutor) ExecuteToolCall(toolCall llm.ToolCall) (string, error) {
 		return "", fmt.Errorf("failed to parse tool arguments: %w", err)
 	}
 
-	switch toolCall.Function.Name {
+	name := toolCall.Function.Name
+	start := time.Now()
+	logger := utils.GetLogger(te.cfg.SkipPrompt)
+	logger.LogProcessStep(fmt.Sprintf("TOOL CALL → %s args=%s", name, args))
+
+	switch name {
 	case "search_web":
 		return te.executeWebSearch(args)
 	case "read_file":
@@ -47,9 +52,9 @@ func (te *ToolExecutor) ExecuteToolCall(toolCall llm.ToolCall) (string, error) {
 		return te.executeAskUser(args)
 	case "workspace_context":
 		return te.executeWorkspaceContext(args)
-	default:
-		return "", fmt.Errorf("unknown tool: %s", toolCall.Function.Name)
 	}
+	logger.LogProcessStep(fmt.Sprintf("TOOL DONE ← %s in %s", name, time.Since(start)))
+	return "", fmt.Errorf("unknown tool: %s", name)
 }
 
 func (te *ToolExecutor) executeWebSearch(args map[string]interface{}) (string, error) {

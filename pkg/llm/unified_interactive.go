@@ -2,6 +2,7 @@ package llm
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
@@ -66,6 +67,60 @@ func injectSystemPrompt(messages []prompts.Message, systemPrompt string) []promp
 		Role:    "system",
 		Content: systemPrompt,
 	}}, messages...)
+}
+
+// toolCallKey generates a deterministic key for a tool call for deduping
+func toolCallKey(tc ToolCall) string {
+	args := tc.Function.Arguments
+	if strings.TrimSpace(args) == "" && len(tc.Function.Parameters) > 0 {
+		args = string(tc.Function.Parameters)
+	}
+	payload := tc.Function.Name + "|" + args
+	return utils.GenerateRequestHash(payload)
+}
+
+// executeToolWithPolicies runs a tool call with timeout, dedupe, and structured logs
+func executeToolWithPolicies(tc ToolCall, cfg *UnifiedInteractiveConfig, seen map[string]bool, perCallTimeout time.Duration) (string, bool) {
+	logger := utils.GetLogger(cfg.Config.SkipPrompt)
+	key := toolCallKey(tc)
+	if seen[key] {
+		logger.Log("Skipping duplicate tool call: " + tc.Function.Name)
+		return "", true
+	}
+	seen[key] = true
+
+	// enforce per-call timeout
+	if perCallTimeout <= 0 {
+		perCallTimeout = 45 * time.Second
+	}
+	done := make(chan struct{})
+	var result string
+	var runErr error
+	start := time.Now()
+
+	go func() {
+		defer close(done)
+		result, runErr = ExecuteBasicToolCall(tc, cfg.Config)
+	}()
+
+	select {
+	case <-done:
+		// logged below
+	case <-time.After(perCallTimeout):
+		logger.Log(fmt.Sprintf("Tool %s timed out after %s", tc.Function.Name, perCallTimeout))
+		return fmt.Sprintf("timeout: %s", tc.Function.Name), false
+	}
+
+	dur := time.Since(start)
+	// Truncate large args/output for logs
+	truncatedArgs := utils.TruncateString(tc.Function.Arguments, 400)
+	truncatedOut := utils.TruncateString(result, 800)
+	if runErr != nil {
+		logger.Log(fmt.Sprintf("TOOL RESULT ✖ %s in %s args=%q err=%v", tc.Function.Name, dur, truncatedArgs, runErr))
+		return fmt.Sprintf("error: %v", runErr), false
+	}
+	logger.Log(fmt.Sprintf("TOOL RESULT ✓ %s in %s args=%q out=%q", tc.Function.Name, dur, truncatedArgs, truncatedOut))
+	return result, false
 }
 
 // callLLMWithToolsUnified handles the unified interactive flow with tools
@@ -139,34 +194,19 @@ func callLLMWithToolsUnified(cfg *UnifiedInteractiveConfig) (string, string, *To
 			return cfg.ModelName, finalResponse, finalTokenUsage, nil
 		}
 
-		// Execute tool calls
+		// Execute tool calls with dedup, per-call timeout and structured logs
+		seen := map[string]bool{}
 		for _, toolCall := range toolCalls {
-			// Verbose UI/log printing of tool calls for visibility in UI log
-			logger.Log(fmt.Sprintf("TOOL CALL → %s args=%s", toolCall.Function.Name, toolCall.Function.Arguments))
+			logger.Log(fmt.Sprintf("TOOL CALL → %s args=%s", toolCall.Function.Name, utils.TruncateString(toolCall.Function.Arguments, 400)))
 			if run := utils.GetRunLogger(); run != nil {
-				run.LogEvent("tool_call", map[string]any{
-					"tool": toolCall.Function.Name,
-					"args": toolCall.Function.Arguments,
-				})
+				run.LogEvent("tool_call", map[string]any{"tool": toolCall.Function.Name})
 			}
-			logger.Log(fmt.Sprintf("Executing tool: %s", toolCall.Function.Name))
-
-			// Execute the tool call
-			toolResponse, err := ExecuteBasicToolCall(toolCall, cfg.Config)
-			if err != nil {
-				logger.Log(fmt.Sprintf("Tool call failed: %v", err))
-				toolResponse = fmt.Sprintf("Error executing tool %s: %v", toolCall.Function.Name, err)
+			toolResponse, wasDuplicate := executeToolWithPolicies(toolCall, cfg, seen, 45*time.Second)
+			if wasDuplicate {
+				continue
 			}
-
-			// Add tool response to messages (convert "tool" role to "assistant" for API compatibility)
-			currentMessages = append(currentMessages, prompts.Message{
-				Role:    "assistant",
-				Content: toolResponse,
-			})
-
+			currentMessages = append(currentMessages, prompts.Message{Role: "assistant", Content: toolResponse})
 			totalToolCalls++
-
-			// Update workflow state if this is an agent workflow
 			if cfg.WorkflowContext.Type == WorkflowTypeAgent {
 				updateAgentState(cfg.WorkflowContext, toolCall, toolResponse)
 			}

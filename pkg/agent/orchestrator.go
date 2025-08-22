@@ -1,6 +1,7 @@
 package agent
 
 import (
+	stdctx "context"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -14,6 +15,9 @@ import (
 // runOptimizedAgent runs the agent with adaptive decision-making and progress evaluation
 func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *AgentTokenUsage) error {
 	logger.LogProcessStep("CHECKPOINT: Starting adaptive agent execution")
+
+	// Initialize tool manager
+	toolManager := NewToolManager(logger, cfg)
 
 	context := &AgentContext{
 		UserIntent:         userIntent,
@@ -54,14 +58,16 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: runOptimizedAgent started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
+	ctx := stdctx.Background()
+
 	for context.IterationCount < context.MaxIterations {
 		context.IterationCount++
 		logger.LogProcessStep(fmt.Sprintf(" Agent Iteration %d/%d", context.IterationCount, context.MaxIterations))
 
 		// Opportunistically run lightweight tools before LLM evaluation
 		if context.IterationCount == 1 && (context.IntentAnalysis == nil || len(context.IntentAnalysis.EstimatedFiles) == 0) {
-			_ = executeWorkspaceInfo(context)
-			_ = executeListFiles(context, 10)
+			_, _ = toolManager.ExecuteWorkspaceInfo(ctx, context)
+			_, _ = toolManager.ExecuteListFiles(ctx, context, 10)
 		}
 
 		// Smart early action selection based on user intent patterns
@@ -89,7 +95,7 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 				}
 			}
 			if len(terms) > 0 {
-				_ = executeGrepSearch(context, terms)
+				_, _ = toolManager.ExecuteGrepSearch(ctx, context, terms)
 			}
 		}
 
@@ -188,9 +194,9 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 		case "revise_plan":
 			err = executeRevisePlan(context, evaluation)
 		case "workspace_info":
-			err = executeWorkspaceInfo(context)
+			_, err = toolManager.ExecuteWorkspaceInfo(ctx, context)
 		case "grep_search":
-			err = executeGrepSearch(context, evaluation.Commands)
+			_, err = toolManager.ExecuteGrepSearch(ctx, context, evaluation.Commands)
 		case "list_files":
 			// commands[0] may specify a limit; default 10
 			limit := 10
@@ -199,9 +205,9 @@ func runOptimizedAgent(userIntent string, cfg *config.Config, logger *utils.Logg
 					limit = v
 				}
 			}
-			err = executeListFiles(context, limit)
+			_, err = toolManager.ExecuteListFiles(ctx, context, limit)
 		case "micro_edit":
-			err = executeMicroEdit(context)
+			_, err = toolManager.ExecuteMicroEdit(ctx, context)
 		case "completed":
 			context.Logger.LogProcessStep("✅ Task marked as completed by agent evaluation")
 			context.IsCompleted = true

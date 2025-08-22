@@ -23,6 +23,8 @@ var resume bool
 var statePath string
 var noProgress bool
 var dryRun bool
+var skipPrompt bool // TODO: Migrate to new BaseCommand framework
+var model string    // TODO: Migrate to new BaseCommand framework
 
 // processCmd represents the process command
 var processCmd = &cobra.Command{

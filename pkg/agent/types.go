@@ -4,31 +4,13 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
-// AgentTokenUsage tracks token usage across different agent operations
-type AgentTokenUsage struct {
-	IntentAnalysis     int
-	Planning           int // Tokens used by orchestration model for detailed planning
-	CodeGeneration     int
-	Validation         int
-	ProgressEvaluation int
-	Total              int
-
-	// Split accounting for precise input/output costs
-	IntentSplit     SplitUsage
-	PlanningSplit   SplitUsage
-	CodegenSplit    SplitUsage
-	ValidationSplit SplitUsage
-	ProgressSplit   SplitUsage
-}
-
-// SplitUsage tracks prompt vs completion tokens for a category
-type SplitUsage struct {
-	Prompt     int
-	Completion int
-}
+// Use shared types from the types package
+type AgentTokenUsage = types.AgentTokenUsage
+type SplitUsage = types.SplitUsage
 
 // AgentContext holds the state and context for agent execution
 type AgentContext struct {

@@ -271,7 +271,7 @@ func CallLLMWithInteractiveContext(
 		if phase == "plan" {
 			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=PLAN. Allowed tools: plan_step, workspace_context, read_file. Do not call edit/validate/shell tools. Produce a plan next."})
 		} else {
-			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=EXECUTE. Allowed tools: execute_step (with previously planned action), edit_file_section, micro_edit, validate_file, read_file, evaluate_outcome. Do not call workspace_context unless strictly necessary."})
+			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=EXECUTE. Allowed tools: execute_step (with previously planned action), edit_file_section, validate_file, read_file, evaluate_outcome. Do not call workspace_context unless strictly necessary."})
 		}
 		// If we are expecting a plan now, push a strong system requirement
 		if expectPlanNext {
@@ -285,7 +285,7 @@ func CallLLMWithInteractiveContext(
 			// Restrict tools by phase
 			allowed := []string{"plan_step", "workspace_context", "read_file"}
 			if phase == "execute" {
-				allowed = []string{"execute_step", "edit_file_section", "micro_edit", "validate_file", "read_file", "evaluate_outcome"}
+				allowed = []string{"execute_step", "edit_file_section", "validate_file", "read_file", "evaluate_outcome"}
 			}
 			logger.Logf("DEBUG: About to call GetLLMResponseWithToolsScoped with model: %s", modelName)
 			logger.Logf("DEBUG: Current messages count: %d", len(currentMessages))
@@ -559,7 +559,7 @@ func CallLLMWithInteractiveContext(
 						if name == "execute_step" {
 							// Mark edited/validated if underlying action did so
 							ua, _ := args["action"].(string)
-							if ua == "micro_edit" || ua == "edit_file_section" || ua == "validate_file" {
+							if ua == "edit_file_section" || ua == "validate_file" {
 								editedOrValidated = true
 							}
 						}
@@ -589,7 +589,7 @@ func CallLLMWithInteractiveContext(
 					default:
 						// Block direct use of write/exec tools when not via execute_step; allow read/discovery tools
 						blockedUnderlying := map[string]bool{
-							"micro_edit": true, "edit_file_section": true, "validate_file": true, "run_shell_command": true,
+							"edit_file_section": true, "validate_file": true, "run_shell_command": true,
 						}
 						if blockedUnderlying[name] {
 							toolResults = append(toolResults, "Tool blocked: use plan_step → execute_step → evaluate_outcome. Do not call underlying tools directly.")
@@ -782,7 +782,7 @@ func CallLLMWithInteractiveContext(
 
 					}
 
-					if name == "micro_edit" || name == "edit_file_section" || name == "validate_file" {
+					if name == "edit_file_section" || name == "validate_file" {
 						editedOrValidated = true
 					}
 				}
@@ -823,7 +823,7 @@ func CallLLMWithInteractiveContext(
 				if shellCapTripped || workspaceCapTripped {
 					currentMessages = append(currentMessages, prompts.Message{
 						Role:    "system",
-						Content: "Operational caps reached. Stop exploring. Choose a specific file, use read_file, apply micro_edit or edit_file_section, then validate_file.",
+						Content: "Operational caps reached. Stop exploring. Choose a specific file, use read_file, apply edit_file_section, then validate_file.",
 					})
 				}
 

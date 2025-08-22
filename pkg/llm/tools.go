@@ -175,27 +175,7 @@ func GetAvailableTools() []Tool {
 				},
 			},
 		},
-		{
-			Type: "function",
-			Function: ToolFunction{
-				Name:        "micro_edit",
-				Description: "Apply a very small, targeted change to a file (limited sized diff).",
-				Parameters: ToolParameters{
-					Type: "object",
-					Properties: map[string]ToolProperty{
-						"file_path": {
-							Type:        "string",
-							Description: "The path to the file to edit",
-						},
-						"instructions": {
-							Type:        "string",
-							Description: "Minimal instructions for the small edit",
-						},
-					},
-					Required: []string{},
-				},
-			},
-		},
+
 		{
 			Type: "function",
 			Function: ToolFunction{
@@ -270,11 +250,16 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 	}
 
 	// Try to extract from JSON code blocks
-	if strings.Contains(response, "```json") {
-		start := strings.Index(response, "```json") + 7
-		end := strings.Index(response[start:], "```")
-		if end > 0 {
+	if start := strings.Index(response, "```json"); start >= 0 {
+		start += 7 // Skip "```json"
+		if end := strings.Index(response[start:], "```"); end > 0 {
 			jsonStr := strings.TrimSpace(response[start : start+end])
+			// Try to parse with object arguments first (common LLM variation)
+			if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
+				return toolCalls, nil
+			}
+
+			// Fall back to standard format
 			if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
 				return toolMessage.ToolCalls, nil
 			}
@@ -292,6 +277,12 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 				end := strings.Index(response[start:], "```")
 				if end >= 0 {
 					jsonStr := strings.TrimSpace(response[start : start+end])
+					// Try to parse with object arguments first (common LLM variation)
+					if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
+						return toolCalls, nil
+					}
+
+					// Fall back to standard format
 					if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
 						return toolMessage.ToolCalls, nil
 					}
@@ -320,6 +311,12 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 					depth--
 					if depth == 0 {
 						jsonStr := response[start : i+1]
+						// Try to parse with object arguments first (common LLM variation)
+						if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
+							return toolCalls, nil
+						}
+
+						// Fall back to standard format
 						if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
 							return toolMessage.ToolCalls, nil
 						}
@@ -418,6 +415,57 @@ func parseSimplifiedToolCalls(jsonStr string) []ToolCall {
 	return toolCalls
 }
 
+// convertObjectArgsToString converts tool calls with object arguments to string arguments
+func convertObjectArgsToString(toolCalls []ToolCall) []ToolCall {
+	// We need to use raw JSON parsing to detect object arguments
+	// since ToolCallFunction.Arguments is defined as string
+	type RawFunction struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+
+	type RawToolCall struct {
+		ID       string      `json:"id"`
+		Type     string      `json:"type"`
+		Function RawFunction `json:"function"`
+	}
+
+	type RawToolMessage struct {
+		ToolCalls []RawToolCall `json:"tool_calls"`
+	}
+
+	// Convert to JSON and back to detect object arguments
+	jsonData, err := json.Marshal(map[string]interface{}{"tool_calls": toolCalls})
+	if err != nil {
+		return nil
+	}
+
+	var rawMessage RawToolMessage
+	if err := json.Unmarshal(jsonData, &rawMessage); err != nil {
+		return nil
+	}
+
+	converted := false
+	for i, call := range rawMessage.ToolCalls {
+		// Try to unmarshal arguments as an object to see if it's not a string
+		var argsObj map[string]interface{}
+		if json.Unmarshal(call.Function.Arguments, &argsObj) == nil {
+			// Arguments is an object, convert to JSON string
+			argsJson, err := json.Marshal(argsObj)
+			if err != nil {
+				continue
+			}
+			toolCalls[i].Function.Arguments = string(argsJson)
+			converted = true
+		}
+	}
+
+	if converted {
+		return toolCalls
+	}
+	return nil
+}
+
 // parseObjectArgsToolCalls handles tool calls where arguments are provided as objects instead of JSON strings
 func parseObjectArgsToolCalls(jsonStr string) []ToolCall {
 	var objectArgs struct {
@@ -482,14 +530,14 @@ Example tool call:
 RULES:
 - Emit TOOL_CALLS JSON only (no prose) until you have completed the task.
 - If user mentions a file you don’t have: use read_file first
-- Prefer micro_edit for tiny changes; otherwise edit_file_section
+- Use edit_file_section for file changes
 - Validate after edits; for docs-only, consider success without build/test
 - Hard caps: workspace_context ≤2, shell ≤5; dedupe exact shell commands
 
 AVAILABLE TOOLS:
 - read_file {file_path}
 - edit_file_section {file_path,instructions,target_section?}
-- micro_edit {file_path?,instructions?}
+
 - validate_file {file_path,validation_type?}
 - workspace_context {action,query?}
 - run_shell_command {command}

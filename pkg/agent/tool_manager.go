@@ -109,18 +109,6 @@ func (tm *ToolManager) ExecuteGrepSearch(ctx context.Context, agentCtx *AgentCon
 	return tm.executor.ExecuteToolByName(ctx, "grep_search", params)
 }
 
-// ExecuteMicroEdit executes the micro edit tool
-func (tm *ToolManager) ExecuteMicroEdit(ctx context.Context, agentCtx *AgentContext) (*ToolResult, error) {
-	params := ToolParameters{
-		Context: agentCtx,
-		Config:  tm.config,
-		Logger:  tm.logger,
-		Timeout: 5 * time.Second,
-	}
-
-	return tm.executor.ExecuteToolByName(ctx, "micro_edit", params)
-}
-
 // ExecuteTool executes a tool by name with custom parameters
 func (tm *ToolManager) ExecuteTool(ctx context.Context, name string, params ToolParameters) (*ToolResult, error) {
 	return tm.executor.ExecuteToolByName(ctx, name, params)

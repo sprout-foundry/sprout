@@ -2,8 +2,10 @@ package prompts
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/fatih/color"
 )
 
@@ -441,6 +443,192 @@ func FileChangeFailedAfterAttempts(filepath, instruction string, attempts int, e
 func FatalError(err error) string {
 	boldRed := color.New(color.FgRed, color.Bold).SprintFunc()
 	return fmt.Sprintf("%s: %v\n\nThis is a fatal error. Please check .ledit/workspace.log for more details and consider reporting an issue on GitHub.", boldRed("A FATAL ERROR OCCURRED"), err)
+}
+
+// GracefulExitMessage represents the context for a graceful exit
+type GracefulExitMessage struct {
+	Context      string      // Context about what was happening when the error occurred
+	Error        error       // The error that caused the exit
+	TokenUsage   interface{} // Token usage information (optional)
+	ModelName    string      // The model being used (optional)
+	Accomplished []string    // What was accomplished before the failure (optional)
+	Resolution   []string    // Manual resolution steps (optional)
+}
+
+// GracefulExit generates a positive, informative exit message
+func GracefulExit(msg GracefulExitMessage) string {
+	var output strings.Builder
+
+	// Header with positive framing
+	boldCyan := color.New(color.FgCyan, color.Bold).SprintFunc()
+	output.WriteString(fmt.Sprintf("%s\n\n", boldCyan("🤖 Looks like this is a task for a person, we tried, but we weren't able to move this forward.")))
+
+	// Context about what happened
+	if msg.Context != "" {
+		output.WriteString(fmt.Sprintf("What we were trying to do: %s\n\n", msg.Context))
+	}
+
+	// Token usage and cost information
+	if msg.TokenUsage != nil {
+		// Check if it implements the TokenUsageInterface
+		if usageInterface, ok := msg.TokenUsage.(types.TokenUsageInterface); ok {
+			output.WriteString("📊 Session Summary:\n")
+			output.WriteString(fmt.Sprintf("   • Total tokens used: %d\n", usageInterface.GetTotalTokens()))
+
+			// Calculate cost if we have model information
+			if msg.ModelName != "" {
+				cost := calculateTotalCost(usageInterface, msg.ModelName)
+				if cost > 0 {
+					output.WriteString(fmt.Sprintf("   • Estimated cost: $%.4f\n", cost))
+				}
+			}
+
+			// Try to show detailed breakdown if it's an AgentTokenUsage
+			if agentUsage, ok := msg.TokenUsage.(types.AgentTokenUsage); ok {
+				if agentUsage.IntentAnalysis > 0 {
+					output.WriteString(fmt.Sprintf("   • Intent analysis: %d tokens\n", agentUsage.IntentAnalysis))
+				}
+				if agentUsage.Planning > 0 {
+					output.WriteString(fmt.Sprintf("   • Planning: %d tokens\n", agentUsage.Planning))
+				}
+				if agentUsage.CodeGeneration > 0 {
+					output.WriteString(fmt.Sprintf("   • Code generation: %d tokens\n", agentUsage.CodeGeneration))
+				}
+				if agentUsage.Validation > 0 {
+					output.WriteString(fmt.Sprintf("   • Validation: %d tokens\n", agentUsage.Validation))
+				}
+			}
+			output.WriteString("\n")
+		}
+	}
+
+	// What was accomplished
+	if len(msg.Accomplished) > 0 {
+		output.WriteString("✅ What we accomplished:\n")
+		for _, item := range msg.Accomplished {
+			output.WriteString(fmt.Sprintf("   • %s\n", item))
+		}
+		output.WriteString("\n")
+	}
+
+	// The error that occurred
+	if msg.Error != nil {
+		red := color.New(color.FgRed).SprintFunc()
+		output.WriteString(fmt.Sprintf("❌ What went wrong: %s\n\n", red(msg.Error.Error())))
+	}
+
+	// Manual resolution steps
+	if len(msg.Resolution) > 0 {
+		output.WriteString("🛠️  Next steps for manual resolution:\n")
+		for i, step := range msg.Resolution {
+			output.WriteString(fmt.Sprintf("   %d. %s\n", i+1, step))
+		}
+		output.WriteString("\n")
+	}
+
+	// Footer with helpful information
+	yellow := color.New(color.FgYellow).SprintFunc()
+	output.WriteString(fmt.Sprintf("%s\n", yellow("💡 Check .ledit/workspace.log for detailed logs and context.")))
+	output.WriteString(fmt.Sprintf("%s\n", yellow("🐛 Consider reporting this issue on GitHub if you believe it's a bug.")))
+
+	return output.String()
+}
+
+// calculateTotalCost calculates the total cost based on token usage and model pricing
+// This is a simplified calculation that provides basic cost estimates
+func calculateTotalCost(tokenUsage types.TokenUsageInterface, modelName string) float64 {
+	if tokenUsage == nil || tokenUsage.GetTotalTokens() == 0 {
+		return 0
+	}
+
+	totalTokens := tokenUsage.GetTotalTokens()
+
+	// Simple cost estimation based on common model pricing ranges
+	// This is a rough estimate and actual costs may vary
+	var costPer1K float64
+
+	// Very basic model-based pricing (rough estimates)
+	if strings.Contains(strings.ToLower(modelName), "gpt-4") {
+		costPer1K = 0.03 // GPT-4 average
+	} else if strings.Contains(strings.ToLower(modelName), "gpt-3.5") {
+		costPer1K = 0.002 // GPT-3.5 average
+	} else if strings.Contains(strings.ToLower(modelName), "claude") {
+		costPer1K = 0.015 // Claude average
+	} else if strings.Contains(strings.ToLower(modelName), "deepseek") {
+		costPer1K = 0.001 // DeepSeek average
+	} else if strings.Contains(strings.ToLower(modelName), "gemini") {
+		costPer1K = 0.00025 // Gemini average
+	} else {
+		costPer1K = 0.01 // Default fallback
+	}
+
+	return float64(totalTokens) * costPer1K / 1000
+}
+
+// NewGracefulExitWithTokenUsage creates a graceful exit message with token usage information
+func NewGracefulExitWithTokenUsage(context string, err error, tokenUsage interface{}, modelName string) string {
+	var accomplished []string
+	var resolution []string
+
+	// Set appropriate context-specific messages
+	switch {
+	case strings.Contains(strings.ToLower(context), "agent"):
+		accomplished = []string{
+			"Initialized AI agent",
+			"Analyzed user intent",
+			"Set up workspace context",
+		}
+		resolution = []string{
+			"Check your intent description for clarity",
+			"Verify the workspace has the necessary files",
+			"Ensure the AI model is properly configured",
+			"Review the workspace log for detailed error information",
+		}
+	case strings.Contains(strings.ToLower(context), "code"):
+		accomplished = []string{
+			"Loaded code files",
+			"Analyzed existing code structure",
+			"Prepared code editing tools",
+		}
+		resolution = []string{
+			"Verify the file path and permissions",
+			"Check that the target file exists and is readable",
+			"Ensure the instructions are clear and specific",
+		}
+	case strings.Contains(strings.ToLower(context), "build") || strings.Contains(strings.ToLower(context), "validation"):
+		accomplished = []string{
+			"Generated code changes",
+			"Applied modifications to files",
+			"Started build validation process",
+		}
+		resolution = []string{
+			"Check for syntax errors in the generated code",
+			"Verify build dependencies are installed",
+			"Review the build output for specific error messages",
+			"Consider running the build manually for more details",
+		}
+	default:
+		accomplished = []string{
+			"Started processing your request",
+			"Initialized necessary systems",
+		}
+		resolution = []string{
+			"Check the command syntax and arguments",
+			"Verify file permissions and access",
+			"Review the workspace log for more details",
+		}
+	}
+
+	exitMsg := GracefulExitMessage{
+		Context:      context,
+		Error:        err,
+		TokenUsage:   tokenUsage,
+		ModelName:    modelName,
+		Accomplished: accomplished,
+		Resolution:   resolution,
+	}
+
+	return GracefulExit(exitMsg)
 }
 
 // --- Code Review Prompts ---

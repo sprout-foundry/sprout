@@ -2,12 +2,14 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"
 	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
 	uiPkg "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
@@ -70,7 +72,32 @@ Examples:
 
 		// Default to simplified agent
 		err := agent.RunSimplifiedAgent(userIntent, agentSkipPrompt, agentModel)
-		// Attempt to print token usage summary if available
+
+		// If there's an error, use graceful exit with token usage information
+		if err != nil {
+			// Try to get token usage information from config
+			var tokenUsage interface{}
+			var modelName string
+
+			if cfg, cfgErr := config.LoadOrInitConfig(agentSkipPrompt); cfgErr == nil && cfg != nil {
+				if cfg.LastTokenUsage != nil {
+					tokenUsage = cfg.LastTokenUsage
+				}
+				modelName = cfg.EditingModel
+			}
+
+			// Print graceful exit message
+			gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
+				"AI agent processing your request",
+				err,
+				tokenUsage,
+				modelName,
+			)
+			fmt.Fprint(os.Stderr, gracefulExitMsg)
+			os.Exit(1)
+		}
+
+		// Attempt to print token usage summary if available and no error occurred
 		if cfg, cfgErr := config.LoadOrInitConfig(agentSkipPrompt); cfgErr == nil && cfg != nil && cfg.LastTokenUsage != nil {
 			cost := llm.CalculateCost(llm.TokenUsage(*cfg.LastTokenUsage), cfg.EditingModel)
 			uiPkg.Out().Printf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
@@ -79,6 +106,6 @@ Examples:
 				cfg.LastTokenUsage.TotalTokens,
 				cost)
 		}
-		return err
+		return nil
 	},
 }

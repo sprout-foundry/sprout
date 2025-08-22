@@ -150,6 +150,17 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 				newCode = editedCode
 			}
 
+			// Guard: avoid writing non-code (e.g., review text) into source files
+			if !isPlausibleFileContent(newFilename, newCode) {
+				ui.Out().Printf("⚠️  Skipping write for %s: content does not look like valid %s code.\n", newFilename, getLanguageFromExtension(newFilename))
+				continue
+			}
+			// Guard: avoid writing when there is no meaningful change vs original
+			if !hasMeaningfulDiff(originalCode, newCode) {
+				ui.Out().Printf("⚠️  Skipping write for %s: no meaningful changes detected.\n", newFilename)
+				continue
+			}
+
 			// Ensure the directory exists
 			if err := os.MkdirAll(filepath.Dir(newFilename), os.ModePerm); err != nil {
 				return "", fmt.Errorf("could not create directory for %s: %w", newFilename, err)
@@ -235,4 +246,70 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 	}
 
 	return allDiffs.String(), nil
+}
+
+// isPlausibleFileContent applies lightweight heuristics to avoid writing non-code into source files
+func isPlausibleFileContent(filePath string, content string) bool {
+	// Empty content is allowed (deletions) and handled elsewhere.
+	if strings.TrimSpace(content) == "" {
+		return true
+	}
+	lower := strings.ToLower(filePath)
+	// Go: must contain a package declaration near the top
+	if strings.HasSuffix(lower, ".go") {
+		lines := strings.Split(content, "\n")
+		max := 20
+		if len(lines) < max {
+			max = len(lines)
+		}
+		for i := 0; i < max; i++ {
+			if strings.HasPrefix(strings.TrimSpace(lines[i]), "package ") {
+				return true
+			}
+		}
+		return false
+	}
+	// JSON: must start with { or [
+	if strings.HasSuffix(lower, ".json") {
+		trimmed := strings.TrimSpace(content)
+		return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
+	}
+	// YAML: should contain at least a key: value pattern somewhere
+	if strings.HasSuffix(lower, ".yaml") || strings.HasSuffix(lower, ".yml") {
+		for _, ln := range strings.Split(content, "\n") {
+			t := strings.TrimSpace(ln)
+			if t == "" || strings.HasPrefix(t, "#") {
+				continue
+			}
+			if strings.Contains(t, ":") {
+				return true
+			}
+		}
+		return false
+	}
+	// Block obvious prose/tool narratives mistakenly returned instead of code
+	lowerContent := strings.ToLower(content)
+	if strings.Contains(lowerContent, "i will ") || strings.Contains(lowerContent, "i need to ") || strings.Contains(lowerContent, "workspace_context") || strings.Contains(lowerContent, "read_file(") || strings.Contains(lowerContent, "```tool_code") || strings.Contains(lowerContent, "<|tool_call|") {
+		return false
+	}
+	// For code-like extensions, require at least one semicolon/brace/def/import/etc.
+	codeLike := []string{".js", ".ts", ".jsx", ".tsx", ".py", ".java", ".rb", ".php", ".rs", ".c", ".cpp", ".cs", ".kt", ".swift"}
+	for _, ext := range codeLike {
+		if strings.HasSuffix(lower, ext) {
+			if strings.Contains(content, ";") || strings.Contains(content, "{") || strings.Contains(content, "}") || strings.Contains(content, "def ") || strings.Contains(content, "import ") || strings.Contains(content, "class ") || strings.Contains(content, "function ") {
+				return true
+			}
+			return false
+		}
+	}
+	// For text/markdown and others, allow by default
+	return true
+}
+
+// hasMeaningfulDiff returns false when new content is effectively unchanged vs original
+func hasMeaningfulDiff(original, newContent string) bool {
+	if strings.TrimSpace(original) == strings.TrimSpace(newContent) {
+		return false
+	}
+	return true
 }

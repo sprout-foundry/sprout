@@ -53,6 +53,11 @@ func CallLLMWithUnifiedInteractive(cfg *UnifiedInteractiveConfig) (string, strin
 		logger.Log("Injecting workflow-specific system prompt")
 		// Add or replace system message with workflow-specific prompt
 		cfg.Messages = injectSystemPrompt(cfg.Messages, cfg.WorkflowContext.SystemPrompt)
+		// Provide compact tool schema guidance for models without native tool support
+		cfg.Messages = append([]prompts.Message{{
+			Role:    "system",
+			Content: FormatToolsForPrompt(),
+		}}, cfg.Messages...)
 	}
 
 	// Check if tools are enabled for this workflow
@@ -148,16 +153,29 @@ func callLLMWithToolsUnified(cfg *UnifiedInteractiveConfig) (string, string, *To
 		for i, tool := range availableTools {
 			toolNames[i] = tool.Function.Name
 		}
+		// Log available tools and a brief message dump for visibility
+		logger.Log(fmt.Sprintf("Available tools: %v", toolNames))
+		if len(currentMessages) > 0 {
+			maxDump := len(currentMessages)
+			if maxDump > 6 {
+				maxDump = 6
+			}
+			for i := 0; i < maxDump; i++ {
+				logger.Log(fmt.Sprintf("MSG[%d] role=%s len=%d", i, currentMessages[i].Role, len(GetMessageText(currentMessages[i].Content))))
+			}
+		}
 
 		// Make LLM call with tools
 		response, tokenUsage, err := GetLLMResponseWithToolsScoped(
 			cfg.ModelName,
 			currentMessages,
-			cfg.Filename,
+			"",
 			cfg.Config,
 			cfg.Timeout,
 			toolNames,
 		)
+		// Log the raw response length for debugging
+		logger.Log(fmt.Sprintf("Raw response length: %d", len(response)))
 		if err != nil {
 			logger.Log(fmt.Sprintf("LLM call failed: %v", err))
 			return "", "", nil, fmt.Errorf("LLM call failed: %w", err)
@@ -170,9 +188,22 @@ func callLLMWithToolsUnified(cfg *UnifiedInteractiveConfig) (string, string, *To
 			return cfg.ModelName, response, tokenUsage, nil
 		}
 
-		// If no tool calls, return the response
+		// If no tool calls are parsed from the LLM's response, this block handles the retry logic.
+		// It appends a system message to the current conversation, explicitly instructing the model
+		// to use tools to gather necessary information and to emit tool calls only. This is
+		// attempted up to 3 times if no tool calls have been made yet in the current interaction.
 		if len(toolCalls) == 0 {
-			logger.Log("No tool calls - returning response")
+			if totalToolCalls == 0 && attempts < 3 {
+				logger.Log("No tool calls detected; nudging model to use tools and retrying")
+				currentMessages = append(currentMessages, prompts.Message{
+					Role:    "system",
+					Content: "Your previous reply contained no tool calls. The workspace context may only include summaries. You MUST call tools (e.g., workspace_context, read_file) to gather the necessary file contents before answering. Emit tool_calls only; do not provide a final answer yet.",
+				})
+				// Provide a compact tools schema hint to models without native tool support
+				currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: FormatToolsForPrompt()})
+				continue
+			}
+			logger.Log("No tool calls after retries - returning response")
 			return cfg.ModelName, response, tokenUsage, nil
 		}
 

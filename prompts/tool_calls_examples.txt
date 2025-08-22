@@ -1,6 +1,10 @@
 TOOL_CALLS EXAMPLES (MANDATORY FORMAT):
+🚨 CRITICAL: When using tools, output ONLY the JSON object below. NO text before or after.
+
 - Emit tool calls using OpenAI-style function calling JSON. Arguments must be a JSON string.
 - Do NOT include prose; emit only the JSON object with a top-level "tool_calls" array when requesting tools.
+- If you need tools: output ONLY the JSON. If you have the answer: provide normal text response.
+- DO NOT MIX tool calls with explanatory text - it's either pure JSON or pure text response.
 
 Example 1: Discover and read a target file before editing
 ```json
@@ -113,3 +117,9 @@ Rules Recap:
 - If you haven't read a file, emit only tool_calls; do not generate code or patches yet.
 - Use workspace_context to discover candidates, then read_file them.
 - Arguments payload must be valid JSON encoded as a string.
+
+🚨 RESPONSE MODE DECISION:
+- IF YOU NEED MORE INFORMATION: Output ONLY the JSON tool_calls object
+- IF YOU HAVE THE COMPLETE ANSWER: Provide normal text response (no JSON)
+- NEVER MIX JSON tool calls with explanatory text
+- The choice is binary: either pure tool calls OR pure text response

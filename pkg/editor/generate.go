@@ -78,12 +78,13 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 	// Indicate streaming when UI is enabled (getUpdatedCode handles LLM; we surface activity in TUI logs via other sinks)
 	logger.Log("DEBUG: About to call getUpdatedCode")
 	updatedCodeFiles, llmResponseRaw, tokenUsage, err := getUpdatedCode(originalCode, processedInstructions, effectiveFilename, cfg, imagePath)
+	// Store token usage in config for later display (even if err != nil)
+	if tokenUsage != nil {
+		cfg.LastTokenUsage = tokenUsage
+	}
 	if err != nil {
 		return "", err
 	}
-
-	// Store token usage in config for later display
-	cfg.LastTokenUsage = tokenUsage
 
 	// Record the base revision with the full raw LLM response for auditing
 	revisionID, err := changetracker.RecordBaseRevision(requestHash, processedInstructions, llmResponseRaw)

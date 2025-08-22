@@ -426,7 +426,7 @@ func (o *MultiAgentOrchestrator) executeStep(step *types.OrchestrationStep) erro
 	task := o.buildAgentTask(step)
 
 	// If tool-assisted LLM calls are enabled, optionally enrich via a tool call round-trip
-	if o.config != nil && o.config.CodeToolsEnabled && shouldUseLLMTools(step) {
+	if o.config != nil && shouldUseLLMTools(step) {
 		if enhanced, err := o.toolAssistTask(task); err == nil && strings.TrimSpace(enhanced) != "" {
 			task = enhanced
 			o.logger.LogProcessStep("🛠️ Applied tool-assisted analysis to task input")
@@ -666,7 +666,7 @@ func (o *MultiAgentOrchestrator) validateResults() error {
 
 // enrichStepWithToolContext allows configured steps to pull in tool-based context
 func (o *MultiAgentOrchestrator) enrichStepWithToolContext(step *types.OrchestrationStep) {
-	if o.config == nil || !o.config.CodeToolsEnabled {
+	if o.config == nil {
 		return
 	}
 	if step.Input == nil {

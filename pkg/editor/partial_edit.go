@@ -35,10 +35,7 @@ func processPartialEdit(filePath, targetInstructions string, cfg *config.Config,
 	partialInstructions := buildPartialEditInstructions(targetInstructions, relevantSection, filePath, sectionStart, sectionEnd)
 
 	// Get the updated section from the LLM; prefer non-interactive codegen for reliability
-	cfgCopy := *cfg
-	cfgCopy.Interactive = false
-	cfgCopy.CodeToolsEnabled = false
-	_, llmResponse, err := getUpdatedCodeSection(relevantSection, partialInstructions, filePath, &cfgCopy)
+	_, llmResponse, err := getUpdatedCodeSection(relevantSection, partialInstructions, filePath, cfg)
 	if err != nil {
 		logger.Logf("Partial edit failed, falling back to full file edit: %v", err)
 		return ProcessCodeGeneration(filePath, targetInstructions, cfg, "")

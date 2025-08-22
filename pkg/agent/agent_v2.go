@@ -54,27 +54,6 @@ const (
 	IntentTypeCommand    IntentType = "command"
 )
 
-// tail returns last n chars of a string
-func tailStr(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[len(s)-n:]
-}
-
-// preflightQuick checks existence and writability of a file
-func preflightQuick(path string) error {
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("not_found: %s", path)
-	}
-	f, err := os.OpenFile(path, os.O_WRONLY, 0)
-	if err != nil {
-		return fmt.Errorf("permission: not writable: %s", path)
-	}
-	_ = f.Close()
-	return nil
-}
-
 // RunSimplifiedAgent: New simplified agent workflow
 func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error {
 	startTime := time.Now()
@@ -90,8 +69,6 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 		cfg.EditingModel = model
 	}
 	cfg.SkipPrompt = skipPrompt
-	cfg.Interactive = true
-	cfg.CodeToolsEnabled = true
 	cfg.FromAgent = true
 
 	// Set environment variables to ensure non-interactive mode for all operations
@@ -412,8 +389,6 @@ AFTER you gather evidence, summarize your findings. Provide concrete file refere
 		model = ctx.Config.EditingModel
 	}
 	analysisCfg := *ctx.Config
-	analysisCfg.Interactive = true
-	analysisCfg.CodeToolsEnabled = true
 	_, response, _, err := llm.CallLLMWithUnifiedInteractive(&llm.UnifiedInteractiveConfig{
 		ModelName:       model,
 		Messages:        messages,
@@ -495,8 +470,6 @@ func executeCodeCommandTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	// Ensure we're in non-interactive mode for agent workflows
 	agentConfig := *ctx.Config // Create a copy to avoid modifying the original
 	agentConfig.SkipPrompt = true
-	agentConfig.Interactive = true
-	agentConfig.CodeToolsEnabled = true
 	agentConfig.FromAgent = true
 
 	// Set environment variables to ensure non-interactive mode

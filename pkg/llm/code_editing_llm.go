@@ -27,8 +27,6 @@ func CallLLMForCodeEditing(modelName string, messages []prompts.Message, filenam
 	logger.Log("=== Code Editing LLM Debug ===")
 	logger.Log(fmt.Sprintf("Model: %s", modelName))
 	logger.Log(fmt.Sprintf("Filename: %s", filename))
-	logger.Log(fmt.Sprintf("Interactive: %t", cfg.Interactive))
-	logger.Log(fmt.Sprintf("CodeToolsEnabled: %t", cfg.CodeToolsEnabled))
 	logger.Log(fmt.Sprintf("Initial messages count: %d", len(messages)))
 
 	// Set tool limit to 1 less than orchestration max attempts
@@ -38,27 +36,7 @@ func CallLLMForCodeEditing(modelName string, messages []prompts.Message, filenam
 	}
 	logger.Log(fmt.Sprintf("Max tool calls: %d", maxToolCalls))
 
-	// If not interactive or tools disabled, use simple response
-	if !cfg.Interactive || !cfg.CodeToolsEnabled {
-		if !cfg.Interactive {
-			logger.Log("Using non-interactive mode - direct code generation")
-		} else {
-			logger.Log("Tools disabled - using direct code generation")
-		}
-
-		response, tokenUsage, err := GetLLMResponse(modelName, messages, filename, cfg, timeout)
-		if err != nil {
-			logger.Log(fmt.Sprintf("Direct LLM call failed: %v", err))
-			return "", "", nil, err
-		}
-
-		// Strip any tool calls if present
-		response = prompts.StripToolCallsIfPresent(response)
-		logger.Log(fmt.Sprintf("Direct response length: %d chars", len(response)))
-		logger.Log("=== End Code Editing LLM Debug ===")
-		return response, modelName, tokenUsage, nil
-	}
-
+	// Force tool-calling path for code editing
 	logger.Log("Using interactive mode with code editing focused tool calling")
 
 	// For code editing, we want a more focused approach than the planning workflow

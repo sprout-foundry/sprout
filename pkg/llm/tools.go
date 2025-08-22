@@ -519,28 +519,45 @@ func parseObjectArgsToolCalls(jsonStr string) []ToolCall {
 // FormatToolsForPrompt formats the available tools for inclusion in a system prompt
 // This is used for LLMs that don't support native tool calling
 func FormatToolsForPrompt() string {
-	return `CONTROL MESSAGE (≤300 tokens)
-Example tool call:
+	return `CRITICAL: YOU MUST EMIT TOOL CALLS IN STRICT JSON FORMAT
+
+IMPORTANT: When you need to use tools, output ONLY a JSON object. Do NOT include any text before or after the JSON.
+
+TOOL CALL FORMAT (MANDATORY):
 {
   "tool_calls": [
-    {"id": "call_1", "type": "function", "function": {"name": "tool_name", "arguments": "{\"param\":\"value\"}"}}
+    {
+      "id": "call_1",
+      "type": "function",
+      "function": {
+        "name": "tool_name",
+        "arguments": "{\"param\": \"value\", \"param2\": \"value2\"}"
+      }
+    }
   ]
 }
 
-RULES:
-- Emit TOOL_CALLS JSON only (no prose) until you have completed the task.
-- If user mentions a file you don’t have: use read_file first
-- Use edit_file_section for file changes
-- Validate after edits; for docs-only, consider success without build/test
-- Hard caps: workspace_context ≤2, shell ≤5; dedupe exact shell commands
+STRICT RULES:
+🚫 NEVER mix tool calls with explanatory text
+🚫 NEVER output prose when making tool calls
+🚫 ONLY emit the JSON object when using tools
+✅ Use read_file BEFORE editing any file
+✅ Use workspace_context to discover files
+✅ Use validate_file after making changes
+✅ Keep tool calls under 300 tokens total
 
 AVAILABLE TOOLS:
-- read_file {file_path}
-- edit_file_section {file_path,instructions,target_section?}
+• read_file: Read file contents - {"file_path": "/path/to/file"}
+• edit_file_section: Edit file - {"file_path": "/path/to/file", "instructions": "what to change"}
+• validate_file: Check syntax - {"file_path": "/path/to/file", "validation_type": "syntax"}
+• workspace_context: Explore workspace - {"action": "load_tree|search_keywords", "query": "search term"}
+• run_shell_command: Run terminal commands - {"command": "go build"}
+• ask_user: Get clarification - {"question": "What do you want to do?"}
 
-- validate_file {file_path,validation_type?}
-- workspace_context {action,query?}
-- run_shell_command {command}
-- ask_user {question}`
-	// - search_web {query}`
+WORKFLOW:
+1. If you need to read/modify files, use read_file first
+2. Make changes with edit_file_section
+3. Validate with validate_file
+4. Use workspace_context to explore unknown areas
+5. When you have all info needed, provide your final response WITHOUT tool calls`
 }

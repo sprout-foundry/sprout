@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts"
 )
 
@@ -128,3 +129,42 @@ func CheckEndpointReachable(url string, timeout time.Duration) error {
 // category: "docs" | "code" | "test" | "review" (others map to "code").
 // approxSize: approximate content size in characters or bytes.
 // RouteModels has been removed. Control/edit model selection is done directly at call sites.
+
+// GetSmartTimeout returns an appropriate timeout for the given model and operation type
+// If no specific timeout is configured, it returns a sensible default based on the model characteristics
+func GetSmartTimeout(cfg *config.Config, modelName string, operationType string) time.Duration {
+	if cfg != nil {
+		return cfg.GetSmartTimeout(modelName, operationType)
+	}
+
+	// Fallback logic if config is not available
+	baseTimeout := 120 * time.Second // 2 minutes default
+
+	// Adjust for known slow providers/models
+	if strings.Contains(modelName, "deepinfra") {
+		baseTimeout = 180 * time.Second // 3 minutes for DeepInfra
+	} else if strings.Contains(modelName, "ollama") {
+		baseTimeout = 300 * time.Second // 5 minutes for local models
+	} else if strings.Contains(modelName, "deepseek-r1") || strings.Contains(modelName, "DeepSeek-R1") {
+		baseTimeout = 300 * time.Second // 5 minutes for reasoning models
+	}
+
+	// Adjust for operation type
+	switch operationType {
+	case "code_review", "analysis":
+		return baseTimeout + (30 * time.Second)
+	case "search", "quick":
+		return time.Duration(float64(baseTimeout) * 0.5)
+	case "commit", "summary":
+		return time.Duration(float64(baseTimeout) * 0.75)
+	default:
+		return baseTimeout
+	}
+}
+
+// GetDefaultTimeout returns a sensible default timeout for LLM operations
+// This is used as a fallback when no specific timeout is configured
+func GetDefaultTimeout(modelName string) time.Duration {
+	// Use a conservative default that should work for most cases
+	return GetSmartTimeout(nil, modelName, "default")
+}

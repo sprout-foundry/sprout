@@ -516,6 +516,31 @@ func parseObjectArgsToolCalls(jsonStr string) []ToolCall {
 	return toolCalls
 }
 
+// GetStandardToolDescriptions returns the standard tool descriptions used across the system
+func GetStandardToolDescriptions() string {
+	return `Available tools:
+- read_file: {"file_path": "path/to/file"} - Read a file to understand its content
+- edit_file_section: {"file_path": "path/to/file", "old_text": "text to replace", "new_text": "replacement text"} - Edit a specific part of a file
+- run_shell_command: {"command": "shell command"} - Run shell commands for diagnostics or testing
+- validate_file: {"file_path": "path/to/file"} - Check Go syntax of a file
+- workspace_context: {"action": "action_type", "query": "search_query"} - Access workspace information
+- ask_user: {"question": "question text"} - Ask the user a question when more information is needed`
+}
+
+// GetDetailedToolDescriptions returns detailed tool descriptions for agent workflows
+func GetDetailedToolDescriptions() string {
+	return `Available Tools:
+- **read_file**: Read the contents of a file from the workspace (parameters: file_path)
+- **run_shell_command**: Execute a shell command and return the output (parameters: command)
+- **ask_user**: Ask the user a question when more information is needed (parameters: question)
+- **validate_file**: Validate a file for syntax errors, compilation issues, or other problems (parameters: file_path, validation_type)
+- **edit_file_section**: Edit a specific section of a file efficiently (parameters: file_path, instructions, target_section?)
+- **workspace_context**: Access workspace information including file tree, embeddings search, or keyword search (parameters: action, query?)
+- **preflight**: Verify file exists/writable, clean git state, and required CLIs available (parameters: file_path?)
+
+Use these tools by making function calls when you need more information or when you need to make changes to files. Always use the exact tool names and parameter names as specified above.`
+}
+
 // FormatToolsForPrompt formats the available tools for inclusion in a system prompt
 // This is used for LLMs that don't support native tool calling
 func FormatToolsForPrompt() string {
@@ -546,13 +571,7 @@ STRICT RULES:
 ✅ Use validate_file after making changes
 ✅ Keep tool calls under 300 tokens total
 
-AVAILABLE TOOLS:
-• read_file: Read file contents - {"file_path": "/path/to/file"}
-• edit_file_section: Edit file - {"file_path": "/path/to/file", "instructions": "what to change"}
-• validate_file: Check syntax - {"file_path": "/path/to/file", "validation_type": "syntax"}
-• workspace_context: Explore workspace - {"action": "load_tree|search_keywords", "query": "search term"}
-• run_shell_command: Run terminal commands - {"command": "go build"}
-• ask_user: Get clarification - {"question": "What do you want to do?"}
+` + GetStandardToolDescriptions() + `
 
 WORKFLOW:
 1. If you need to read/modify files, use read_file first

@@ -1,5 +1,10 @@
 package config
 
+import (
+	"strings"
+	"time"
+)
+
 // LLMConfig contains all Large Language Model related configuration
 type LLMConfig struct {
 	// Model Selection
@@ -18,6 +23,11 @@ type LLMConfig struct {
 	TopP             float64 `json:"top_p"`             // Nucleus sampling parameter
 	PresencePenalty  float64 `json:"presence_penalty"`  // Presence penalty
 	FrequencyPenalty float64 `json:"frequency_penalty"` // Frequency penalty
+
+	// Timeout Configuration
+	DefaultTimeoutSecs int            `json:"default_timeout_secs"`        // Default timeout in seconds
+	ModelTimeouts      map[string]int `json:"model_timeouts,omitempty"`    // Model-specific timeouts in seconds
+	ProviderTimeouts   map[string]int `json:"provider_timeouts,omitempty"` // Provider-specific timeouts in seconds
 
 	// Infrastructure
 	OllamaServerURL string `json:"ollama_server_url"` // Ollama server endpoint
@@ -39,6 +49,26 @@ func DefaultLLMConfig() *LLMConfig {
 		TopP:             1.0,
 		PresencePenalty:  0.0,
 		FrequencyPenalty: 0.0,
+
+		// Timeout Configuration - increased defaults for better reliability
+		DefaultTimeoutSecs: 120, // 2 minutes default
+		ProviderTimeouts: map[string]int{
+			"deepinfra": 180, // 3 minutes for DeepInfra (can be slower)
+			"openai":    90,  // 1.5 minutes for OpenAI
+			"groq":      60,  // 1 minute for Groq (fast)
+			"deepseek":  120, // 2 minutes for DeepSeek
+			"ollama":    300, // 5 minutes for local Ollama models
+			"gemini":    90,  // 1.5 minutes for Gemini
+		},
+		ModelTimeouts: map[string]int{
+			// Reasoning models need more time
+			"deepseek-r1":                           300, // 5 minutes for reasoning models
+			"deepinfra:deepseek-ai/DeepSeek-R1":     300,
+			"deepinfra:deepseek-ai/DeepSeek-V3":     240, // 4 minutes for large models
+			"deepinfra:meta-llama/Llama-3.3-70B":    180, // 3 minutes for 70B models
+			"deepinfra:moonshotai/Kimi-K2-Instruct": 240, // 4 minutes for Kimi (can be slow)
+			"ollama:":                               300, // 5 minutes for any Ollama model
+		},
 
 		OllamaServerURL: "http://localhost:11434",
 	}
@@ -77,4 +107,55 @@ func (c *LLMConfig) GetPrimaryModel() string {
 func (c *LLMConfig) IsLocalModel() bool {
 	primary := c.GetPrimaryModel()
 	return primary == c.LocalModel || c.OllamaServerURL != ""
+}
+
+// GetTimeoutForModel returns the appropriate timeout duration for a specific model
+func (c *LLMConfig) GetTimeoutForModel(modelName string) time.Duration {
+	// First check for exact model match
+	if timeoutSecs, exists := c.ModelTimeouts[modelName]; exists {
+		return time.Duration(timeoutSecs) * time.Second
+	}
+
+	// Check for partial model matches (for cases like "ollama:" prefix)
+	for pattern, timeoutSecs := range c.ModelTimeouts {
+		if strings.Contains(modelName, pattern) {
+			return time.Duration(timeoutSecs) * time.Second
+		}
+	}
+
+	// Extract provider from model name (format: "provider:model")
+	parts := strings.SplitN(modelName, ":", 2)
+	if len(parts) > 0 {
+		provider := parts[0]
+		if timeoutSecs, exists := c.ProviderTimeouts[provider]; exists {
+			return time.Duration(timeoutSecs) * time.Second
+		}
+	}
+
+	// Use default timeout
+	defaultTimeout := c.DefaultTimeoutSecs
+	if defaultTimeout <= 0 {
+		defaultTimeout = 120 // 2 minutes fallback
+	}
+	return time.Duration(defaultTimeout) * time.Second
+}
+
+// GetSmartTimeout returns an appropriate timeout based on the operation type and model
+func (c *LLMConfig) GetSmartTimeout(modelName string, operationType string) time.Duration {
+	baseTimeout := c.GetTimeoutForModel(modelName)
+
+	// Adjust timeout based on operation type
+	switch operationType {
+	case "code_review", "analysis":
+		// Code review and analysis operations may need more time
+		return baseTimeout + (30 * time.Second)
+	case "search", "quick":
+		// Quick operations can use shorter timeouts
+		return time.Duration(float64(baseTimeout) * 0.5)
+	case "commit", "summary":
+		// Commit and summary generation is usually quick
+		return time.Duration(float64(baseTimeout) * 0.75)
+	default:
+		return baseTimeout
+	}
 }

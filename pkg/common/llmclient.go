@@ -55,10 +55,11 @@ func (c *LLMClient) ExecuteRequest(ctx context.Context, req *LLMRequest) *LLMRes
 		modelName = req.Filename
 	}
 
-	// Set default timeout if not provided
+	// Set timeout using smart timeout logic if not provided
 	timeout := req.Timeout
 	if timeout == 0 {
-		timeout = 30 * time.Second
+		// Use model-specific timeout from configuration
+		timeout = c.config.GetTimeoutForModel(modelName)
 	}
 
 	var content string
@@ -92,10 +93,11 @@ func (c *LLMClient) ExecuteStreamingRequest(ctx context.Context, req *LLMRequest
 		modelName = req.Filename
 	}
 
-	// Set default timeout if not provided
+	// Set timeout using smart timeout logic if not provided
 	timeout := req.Timeout
 	if timeout == 0 {
-		timeout = 30 * time.Second
+		// Use model-specific timeout from configuration
+		timeout = c.config.GetTimeoutForModel(modelName)
 	}
 
 	var tokenUsage *llm.TokenUsage

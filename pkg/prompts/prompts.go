@@ -16,6 +16,21 @@ var (
 	DefaultTokenLimit = 100000 // Default token limit for LLM requests
 )
 
+// getDetailedToolDescriptions returns detailed tool descriptions for prompts
+// This is a local copy to avoid import cycles with the llm package
+func getDetailedToolDescriptions() string {
+	return `Available Tools:
+- **read_file**: Read the contents of a file from the workspace (parameters: file_path)
+- **run_shell_command**: Execute a shell command and return the output (parameters: command)
+- **ask_user**: Ask the user a question when more information is needed (parameters: question)
+- **validate_file**: Validate a file for syntax errors, compilation issues, or other problems (parameters: file_path, validation_type)
+- **edit_file_section**: Edit a specific section of a file efficiently (parameters: file_path, instructions, target_section?)
+- **workspace_context**: Access workspace information including file tree, embeddings search, or keyword search (parameters: action, query?)
+- **preflight**: Verify file exists/writable, clean git state, and required CLIs available (parameters: file_path?)
+
+Use these tools by making function calls when you need more information or when you need to make changes to files. Always use the exact tool names and parameter names as specified above.`
+}
+
 // PromptManager handles prompt loading with user overrides and hash tracking
 type PromptManager struct {
 	userPromptsDir string
@@ -444,12 +459,8 @@ func BuildCodeMessagesWithFormat(code, instructions, filename string, interactiv
 			GetBaseCodeGenSystemMessageWithFormat(usePatchFormat) +
 			"\n\n" +
 			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
-			"    - **read_file**: Read files to understand existing implementations before making changes\n" +
-			"    - **workspace_context**:\n" +
-			"        - action=search_embeddings: find semantically relevant files via embeddings\n" +
-			"        - action=search_keywords: find files containing exact keywords/symbols (grep-like)\n" +
-			"    - **run_shell_command**: Execute shell commands\n" +
-			"    - **ask_user**: Ask the user for clarification\n\n" +
+			getDetailedToolDescriptions() +
+			"\n\n" +
 			"    Tools will be automatically executed and results provided to you.\n\n" +
 			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* read the file using the read_file tool.\n\n" +
 			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then read the file using the read_file tool.\n\n" +

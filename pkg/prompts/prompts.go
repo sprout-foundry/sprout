@@ -443,17 +443,15 @@ func BuildCodeMessagesWithFormat(code, instructions, filename string, interactiv
 			"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. " +
 			GetBaseCodeGenSystemMessageWithFormat(usePatchFormat) +
 			"\n\n" +
-			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
-			"    - **read_file**: Read files to understand existing implementations before making changes\n" +
-			"    - **workspace_context**:\n" +
-			"        - action=search_embeddings: find semantically relevant files via embeddings\n" +
-			"        - action=search_keywords: find files containing exact keywords/symbols (grep-like)\n" +
-			"    - **run_shell_command**: Execute shell commands\n" +
-			"    - **ask_user**: Ask the user for clarification\n\n" +
-			"    Tools will be automatically executed and results provided to you.\n\n" +
-			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* read the file using the read_file tool.\n\n" +
-			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then read the file using the read_file tool.\n\n" +
-			" Do not generate code until you have all the necessary context. Use both embeddings and keyword search to find relevant files, then read_file the top candidates before editing.\n" +
+			"2.  **Use Tools When Needed (MANDATORY before edits):**\n" +
+			"    - **read_file**(file_path): ALWAYS call before editing any file to load full contents\n" +
+			"    - **workspace_context**(action,query?,dir?): Use search_keywords/load_tree to discover targets, then read_file them\n" +
+			"    - **run_shell_command**(command): Execute safe shell commands when needed\n" +
+			"    - **ask_user**(question): Only if critical info is missing\n\n" +
+			"    Tools are auto-executed and results provided to you. If you haven’t read_file for a file you intend to modify, DO NOT generate code yet; emit tool_calls to read it first.\n\n" +
+			"    If the user's instructions refer to a file but its contents have not been provided, you MUST read it using read_file.\n\n" +
+			"    If a user asked you to update a file but the path is unknown, use workspace_context to locate, then read_file.\n\n" +
+			" Do not generate code until you have all necessary context. Use both embeddings and keyword search to find candidates, then read_file the top candidates before editing.\n" +
 			"After tools provide you with information, generate the code based on all available context.\n"
 	}
 

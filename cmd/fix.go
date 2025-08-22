@@ -62,8 +62,6 @@ var fixCmd = &cobra.Command{
 			cfg.EditingModel = fixModelFlag
 		}
 		cfg.SkipPrompt = fixSkipPromptFlag
-		cfg.Interactive = true
-		cfg.CodeToolsEnabled = true
 
 		var problemDescriptionBuilder strings.Builder
 		if err != nil {

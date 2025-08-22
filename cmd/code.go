@@ -15,13 +15,10 @@ import (
 )
 
 var (
-	filename           string
-	model              string
-	skipPrompt         bool
-	imagePath          string
-	useSearchGrounding bool
-	enableCodeTools    bool
-	skipWorkspace      bool
+	filename   string
+	model      string
+	skipPrompt bool
+	imagePath  string
 )
 
 var codeCmd = &cobra.Command{
@@ -57,10 +54,6 @@ When using the --image flag, ensure your model supports vision input. Vision-cap
 			cfg.EditingModel = model
 		}
 		cfg.SkipPrompt = skipPrompt
-		// Always use interactive flow; tool usage is controlled by CodeToolsEnabled
-		cfg.Interactive = true
-		cfg.UseSearchGrounding = useSearchGrounding
-		cfg.CodeToolsEnabled = enableCodeTools
 		ui.Out().Print(prompts.ProcessingCodeGeneration() + "\n")
 		startTime := time.Now()
 
@@ -90,7 +83,4 @@ func init() {
 	codeCmd.Flags().StringVarP(&model, "model", "m", "", "Model name to use with the LLM")
 	codeCmd.Flags().BoolVar(&skipPrompt, "skip-prompt", false, "Skip user prompt for applying changes")
 	codeCmd.Flags().StringVarP(&imagePath, "image", "i", "", "Path to an image file to use as UI reference")
-	codeCmd.Flags().BoolVar(&useSearchGrounding, "use-search-grounding", false, "Enable web content search grounding when instructions contain #SG [optional query]")
-	codeCmd.Flags().BoolVar(&enableCodeTools, "enable-code-tools", true, "Allow tool-calls during code generation (e.g., search, file reads). Default: enabled.")
-	codeCmd.Flags().BoolVar(&skipWorkspace, "skip-workspace", false, "Do not include workspace context by default")
 }

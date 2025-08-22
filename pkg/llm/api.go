@@ -134,14 +134,13 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	log.Log(fmt.Sprintf("Messages count: %d", len(messages)))
 	log.Log(fmt.Sprintf("System prompt length: %d", len(systemPrompt)))
 	log.Log(fmt.Sprintf("Allowed tools: %v", allowed))
-	log.Log(fmt.Sprintf("Tools enabled: %t", cfg.CodeToolsEnabled))
+	// Tools always enabled (forced)
 
 	// Check messages for detokenize before processing
 	for i, msg := range messages {
 		contentStr := fmt.Sprintf("%v", msg.Content)
 		if strings.Contains(contentStr, "detokenize") {
 			log.Log(fmt.Sprintf("ERROR: Found 'detokenize' in input message %d!", i))
-			log.Log(fmt.Sprintf("Content: %s", contentStr))
 		}
 	}
 
@@ -206,22 +205,22 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	case "openai":
 		log.Logf("DEBUG: Using OpenAI provider: %s", modelName)
 		apiURL = "https://api.openai.com/v1/chat/completions"
-		apiKey, err = apikeys.GetAPIKey("openai", cfg.Interactive)
+		apiKey, err = apikeys.GetAPIKey("openai", true)
 	case "groq":
 		log.Logf("DEBUG: Using Groq provider: %s", modelName)
 		apiURL = "https://api.groq.com/openai/v1/chat/completions"
-		apiKey, err = apikeys.GetAPIKey("groq", cfg.Interactive)
+		apiKey, err = apikeys.GetAPIKey("groq", true)
 	case "deepseek":
 		log.Logf("DEBUG: Using DeepSeek provider: %s", modelName)
 		apiURL = "https://api.deepseek.com/openai/v1/chat/completions"
-		apiKey, err = apikeys.GetAPIKey("deepseek", cfg.Interactive)
+		apiKey, err = apikeys.GetAPIKey("deepseek", true)
 	case "deepinfra":
 		log.Logf("DEBUG: Using DeepInfra provider: %s", modelName)
 		apiURL = "https://api.deepinfra.com/v1/openai/chat/completions"
-		apiKey, err = apikeys.GetAPIKey("deepinfra", cfg.Interactive)
+		apiKey, err = apikeys.GetAPIKey("deepinfra", true)
 	case "lambda-ai":
 		apiURL = "https://api.lambda.ai/v1/chat/completions"
-		apiKey, err = apikeys.GetAPIKey("lambda-ai", cfg.Interactive)
+		apiKey, err = apikeys.GetAPIKey("lambda-ai", true)
 	default:
 		// Fallback to non-tools path
 		resp, tokenUsage, e := GetLLMResponse(modelName, messages, systemPrompt, cfg, timeout)
@@ -420,7 +419,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		if cfg.HealthChecks {
 			_ = CheckEndpointReachable("https://api.openai.com/v1/models", 2*time.Second)
 		}
-		apiKey, err := apikeys.GetAPIKey("openai", cfg.Interactive) // Pass cfg.Interactive
+		apiKey, err := apikeys.GetAPIKey("openai", true) // Pass cfg.Interactive
 		if err != nil {
 			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
@@ -430,7 +429,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		if cfg.HealthChecks {
 			_ = CheckEndpointReachable("https://api.groq.com/", 2*time.Second)
 		}
-		apiKey, err := apikeys.GetAPIKey("groq", cfg.Interactive) // Pass cfg.Interactive
+		apiKey, err := apikeys.GetAPIKey("groq", true) // Pass cfg.Interactive
 		if err != nil {
 			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
@@ -454,7 +453,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		if cfg.HealthChecks {
 			_ = CheckEndpointReachable("https://api.lambda.ai/", 2*time.Second)
 		}
-		apiKey, err := apikeys.GetAPIKey("lambda-ai", cfg.Interactive) // Pass cfg.Interactive
+		apiKey, err := apikeys.GetAPIKey("lambda-ai", true) // Pass cfg.Interactive
 		if err != nil {
 			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
@@ -464,7 +463,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		if cfg.HealthChecks {
 			_ = CheckEndpointReachable("https://api.cerebras.ai/", 2*time.Second)
 		}
-		apiKey, err := apikeys.GetAPIKey("cerebras", cfg.Interactive) // Pass cfg.Interactive
+		apiKey, err := apikeys.GetAPIKey("cerebras", true) // Pass cfg.Interactive
 		if err != nil {
 			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
@@ -474,7 +473,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		if cfg.HealthChecks {
 			_ = CheckEndpointReachable("https://api.deepseek.com/", 2*time.Second)
 		}
-		apiKey, err := apikeys.GetAPIKey("deepseek", cfg.Interactive) // Pass cfg.Interactive
+		apiKey, err := apikeys.GetAPIKey("deepseek", true) // Pass cfg.Interactive
 		if err != nil {
 			ui.Out().Print(prompts.APIKeyError(err))
 			return nil, err
@@ -485,7 +484,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		if cfg.HealthChecks {
 			_ = CheckEndpointReachable("https://api.deepinfra.com/", 2*time.Second)
 		}
-		apiKey, err := apikeys.GetAPIKey("deepinfra", cfg.Interactive) // Pass cfg.Interactive
+		apiKey, err := apikeys.GetAPIKey("deepinfra", true) // Pass cfg.Interactive
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
 			return nil, err
@@ -511,7 +510,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			return nil, err
 		}
 
-		apiKey, err := apikeys.GetAPIKey("custom", cfg.Interactive) // Use "custom" as the provider for API key lookup
+		apiKey, err := apikeys.GetAPIKey("custom", true) // Use "custom" as the provider for API key lookup
 		if err != nil {
 			fmt.Print(prompts.APIKeyError(err))
 			return nil, err
@@ -791,56 +790,4 @@ func parseStagedCodeReviewResponse(response string) (*types.CodeReviewResult, er
 	}
 
 	return result, nil
-}
-
-// extractJSONFromResponse extracts JSON from an LLM response that may contain markdown formatting
-func extractJSONFromResponse(response string) (string, error) {
-	// First try to extract from markdown code blocks. Use last fence to avoid early cut when content contains ``` inside strings.
-	if strings.Contains(response, "```json") {
-		parts := strings.Split(response, "```json")
-		if len(parts) > 1 {
-			jsonPart := parts[1]
-			end := strings.LastIndex(jsonPart, "```")
-			if end == -1 {
-				end = strings.Index(jsonPart, "```")
-			}
-			if end > 0 {
-				jsonStr := strings.TrimSpace(jsonPart[:end])
-				if jsonStr != "" {
-					return jsonStr, nil
-				}
-			}
-		}
-	}
-
-	// Try to find JSON object boundaries
-	response = strings.TrimSpace(response)
-
-	// Look for first opening brace
-	start := strings.Index(response, "{")
-	if start == -1 {
-		return "", fmt.Errorf("no JSON object found (no opening brace)")
-	}
-
-	// Look for matching closing brace from the end
-	end := strings.LastIndex(response, "}")
-	if end == -1 || end <= start {
-		return "", fmt.Errorf("no matching closing brace found")
-	}
-
-	// Extract the JSON substring
-	jsonStr := strings.TrimSpace(response[start : end+1])
-
-	// Validate it's not empty
-	if jsonStr == "" {
-		return "", fmt.Errorf("extracted JSON is empty")
-	}
-
-	// Quick validation - try to parse as JSON
-	var test interface{}
-	if err := json.Unmarshal([]byte(jsonStr), &test); err != nil {
-		return "", fmt.Errorf("extracted string is not valid JSON: %w", err)
-	}
-
-	return jsonStr, nil
 }

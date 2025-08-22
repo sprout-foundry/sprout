@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
 	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
 	uiPkg "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
@@ -67,6 +69,16 @@ Examples:
 		}
 
 		// Default to simplified agent
-		return agent.RunSimplifiedAgent(userIntent, agentSkipPrompt, agentModel)
+		err := agent.RunSimplifiedAgent(userIntent, agentSkipPrompt, agentModel)
+		// Attempt to print token usage summary if available
+		if cfg, cfgErr := config.LoadOrInitConfig(agentSkipPrompt); cfgErr == nil && cfg != nil && cfg.LastTokenUsage != nil {
+			cost := llm.CalculateCost(llm.TokenUsage(*cfg.LastTokenUsage), cfg.EditingModel)
+			uiPkg.Out().Printf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
+				cfg.LastTokenUsage.PromptTokens,
+				cfg.LastTokenUsage.CompletionTokens,
+				cfg.LastTokenUsage.TotalTokens,
+				cost)
+		}
+		return err
 	},
 }

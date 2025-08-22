@@ -68,8 +68,6 @@ func CallLLMWithInteractiveContext(
 	// Debug: Log function entry
 	logger.Logf("DEBUG: CallLLMWithInteractiveContext called with model: %s", modelName)
 	logger.Logf("DEBUG: User prompt: %s", userPrompt)
-	logger.Logf("DEBUG: Interactive mode: %t", cfg.Interactive)
-	logger.Logf("DEBUG: Code tools enabled: %t", cfg.CodeToolsEnabled)
 	logger.Logf("DEBUG: Initial messages count: %d", len(initialMessages))
 
 	// Log initial messages

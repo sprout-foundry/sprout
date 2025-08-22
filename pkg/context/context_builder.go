@@ -96,7 +96,7 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 			}
 
 			// Use the standard LLM approach for all editing tasks
-			messages := prompts.BuildPatchMessages("", llmInstructions, filePath, cfg.Interactive)
+			messages := prompts.BuildPatchMessages("", llmInstructions, filePath, true)
 			_, _, err = llm.GetLLMResponse(cfg.EditingModel, messages, filePath, cfg, 6*time.Minute)
 
 			if err != nil {
@@ -160,28 +160,14 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	logger.Logf("DEBUG: GetLLMCodeResponse called with model: %s", cfg.EditingModel)
 	logger.Logf("DEBUG: OrchestrationModel: %s", cfg.OrchestrationModel)
-	logger.Logf("DEBUG: Interactive: %t", cfg.Interactive)
-	logger.Logf("DEBUG: CodeToolsEnabled: %t", cfg.CodeToolsEnabled)
-
-	// Routing: select models by task type and approx size
-
-	modelName := cfg.EditingModel
-	reason := "direct routing"
-	logger.Log(prompts.UsingModel(modelName))
-	logger.Log("=== GetLLMCodeResponse Debug ===")
-	logger.Log(fmt.Sprintf("Model: %s", modelName))
-	logger.Log(fmt.Sprintf("Filename: %s", filename))
-	logger.Log(fmt.Sprintf("Routing: approxSize=%d editing=%s reason=%s", len(code), modelName, reason))
-	logger.Log(fmt.Sprintf("Interactive: %t", cfg.Interactive))
-	logger.Log(fmt.Sprintf("Instructions length: %d chars", len(instructions)))
-	logger.Log(fmt.Sprintf("Code length: %d chars", len(code)))
+	// Interactive tools forced globally
+	logger.Log(fmt.Sprintf("DEBUG: Code length: %d chars", len(code)))
 	logger.Log(fmt.Sprintf("ImagePath: %s", imagePath))
 
 	// For agent workflow, use patch format but without interactive tools to avoid confusion
-	isAgentModeEarlyCheck := os.Getenv("LEDIT_FROM_AGENT") == "1"
-	useInteractive := cfg.Interactive && !isAgentModeEarlyCheck
+	_ = os.Getenv("LEDIT_FROM_AGENT") == "1"
 
-	messages := prompts.BuildCodeMessagesWithFormat(code, instructions, filename, useInteractive, true)
+	messages := prompts.BuildCodeMessagesWithFormat(code, instructions, filename, true, true)
 	logger.Log(fmt.Sprintf("Built %d messages", len(messages)))
 
 	// Add image to the user message if provided
@@ -190,7 +176,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		for i := len(messages) - 1; i >= 0; i-- {
 			if messages[i].Role == "user" {
 				if err := llm.AddImageToMessage(&messages[i], imagePath); err != nil {
-					return modelName, "", nil, fmt.Errorf("failed to add image to message: %w. Please ensure the image file exists and is in a supported format (JPEG, PNG, GIF, WebP)", err)
+					return cfg.EditingModel, "", nil, fmt.Errorf("failed to add image to message: %w. Please ensure the image file exists and is in a supported format (JPEG, PNG, GIF, WebP)", err)
 				}
 				logger.Logf("Added image to message. Note: If the model doesn't support vision, the request may fail. Consider using a vision-capable model like 'openai:gpt-4o', 'gemini:gemini-1.5-flash', or 'anthropic:claude-3-sonnet'.")
 				break
@@ -199,30 +185,8 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	}
 
 	logger.Logf("DEBUG: Finished image handling")
-	logger.Log(fmt.Sprintf("DEBUG: Interactive=%t, CodeToolsEnabled=%t", cfg.Interactive, cfg.CodeToolsEnabled))
-	logger.Logf("DEBUG: About to check condition: !%t || !%t = %t", cfg.Interactive, cfg.CodeToolsEnabled, !cfg.Interactive || !cfg.CodeToolsEnabled)
-	if !cfg.Interactive || !cfg.CodeToolsEnabled {
-		if !cfg.Interactive {
-			logger.Log("Taking non-interactive path without tool calling (cost optimization)")
-		} else {
-			logger.Log("Tools disabled for code flow. Ignoring any tool_calls; returning code only.")
-		}
-		// For non-interactive mode (like agent mode), use the standard LLM response without tool calling
-		// This prevents expensive context requests and forces the model to provide code directly
-		response, tokenUsage, err := llm.GetLLMResponse(modelName, messages, filename, cfg, 6*time.Minute)
-		if err != nil {
-			logger.Log(fmt.Sprintf("Non-interactive LLM call failed: %v", err))
-			return modelName, "", nil, err
-		}
-		// Strip tool_calls blocks if present
-		response = prompts.StripToolCallsIfPresent(response)
-		logger.Log(fmt.Sprintf("Non-interactive response length: %d chars", len(response)))
-		logger.Log("=== End GetLLMCodeResponse Debug ===")
-		return modelName, response, tokenUsage, nil
-	}
-
-	logger.Log("Taking interactive path with enhanced tool calling support")
-	logger.Logf("DEBUG: Taking interactive path - about to call new function")
+	// Interactive tools forced globally
+	logger.Log("Forcing interactive path with tool calling support")
 
 	// Check if this is an agent workflow by looking for environment variable
 	isAgentMode := os.Getenv("LEDIT_FROM_AGENT") == "1"
@@ -268,13 +232,13 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		logger.Logf("DEBUG: Unified interactive call completed")
 		if err != nil {
 			logger.Log(fmt.Sprintf("Interactive LLM call failed: %v", err))
-			return modelName, "", nil, err
+			return cfg.EditingModel, "", nil, err
 		}
 		logger.Log(fmt.Sprintf("Interactive response length: %d chars", len(response)))
 		logger.Log("=== End GetLLMCodeResponse Debug ===")
-		return modelName, response, tokenUsage, nil
+		return cfg.EditingModel, response, tokenUsage, nil
 	} else {
-		logger.Logf("DEBUG: Using unified interactive approach for code workflow")
+		logger.Logf("DEBUG: Using unified interactive approach for code workflow (forced tools)")
 
 		// Extract instructions from the last user message
 		if instructions == "" {
@@ -289,7 +253,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		}
 
 		if instructions == "" {
-			return modelName, "", nil, fmt.Errorf("no instructions found in messages")
+			return cfg.EditingModel, "", nil, fmt.Errorf("no instructions found in messages")
 		}
 
 		// Use the unified interactive approach for both agent and regular modes
@@ -333,12 +297,12 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		logger.Logf("DEBUG: Unified interactive call completed")
 		if err != nil {
 			logger.Log(fmt.Sprintf("Interactive LLM call failed: %v", err))
-			return modelName, "", nil, err
+			return cfg.EditingModel, "", nil, err
 		}
 		logger.Logf("DEBUG: Direct code editing call completed")
 		logger.Log(fmt.Sprintf("Interactive response length: %d chars", len(response)))
 		logger.Log("=== End GetLLMCodeResponse Debug ===")
-		return modelName, response, tokenUsage, nil
+		return cfg.EditingModel, response, tokenUsage, nil
 	}
 }
 

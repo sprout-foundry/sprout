@@ -55,7 +55,7 @@ func GetFilesForContextUsingEmbeddings(instructions string, workspace WorkspaceF
 
 		// High-confidence threshold for additional full-context files
 		const absoluteFloor = 0.6
-		relativeFloor := maxScore * 0.70
+		relativeFloor := maxScore * 0.5
 		highConfidence := relativeFloor
 		if highConfidence < absoluteFloor {
 			highConfidence = absoluteFloor

@@ -2,6 +2,7 @@ package llm
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -282,7 +283,33 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 
 	// Look for standalone JSON objects containing tool_calls
 	if strings.Contains(response, "tool_calls") {
-		// Find JSON object boundaries
+		// First, try to find JSON wrapped in markdown code blocks
+		if strings.Contains(response, "```json") && strings.Contains(response, "```") {
+			// Extract JSON from markdown code block
+			start := strings.Index(response, "```json")
+			if start >= 0 {
+				start += 7 // Skip "```json"
+				end := strings.Index(response[start:], "```")
+				if end >= 0 {
+					jsonStr := strings.TrimSpace(response[start : start+end])
+					if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
+						return toolMessage.ToolCalls, nil
+					}
+
+					// Try to parse simplified tool call format from markdown code blocks too
+					if toolCalls := parseSimplifiedToolCalls(jsonStr); len(toolCalls) > 0 {
+						return toolCalls, nil
+					}
+
+					// Try to parse tool calls with object arguments (common LLM variation)
+					if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
+						return toolCalls, nil
+					}
+				}
+			}
+		}
+
+		// Fallback: Find JSON object boundaries anywhere in the response
 		start := strings.Index(response, "{")
 		if start >= 0 {
 			depth := 0
@@ -295,6 +322,16 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 						jsonStr := response[start : i+1]
 						if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
 							return toolMessage.ToolCalls, nil
+						}
+
+						// Try to parse simplified tool call format (for models that don't use full OpenAI format)
+						if toolCalls := parseSimplifiedToolCalls(jsonStr); len(toolCalls) > 0 {
+							return toolCalls, nil
+						}
+
+						// Try to parse tool calls with object arguments (common LLM variation)
+						if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
+							return toolCalls, nil
 						}
 						break
 					}
@@ -309,20 +346,133 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 	return toolCalls, nil
 }
 
+// parseSimplifiedToolCalls handles simplified tool call formats that don't follow full OpenAI spec
+func parseSimplifiedToolCalls(jsonStr string) []ToolCall {
+	var simplified struct {
+		ToolCalls []struct {
+			Type     string `json:"type"`
+			FilePath string `json:"file_path,omitempty"`
+			Command  string `json:"command,omitempty"`
+			Question string `json:"question,omitempty"`
+			Action   string `json:"action,omitempty"`
+			Query    string `json:"query,omitempty"`
+		} `json:"tool_calls"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonStr), &simplified); err != nil {
+		return nil
+	}
+
+	var toolCalls []ToolCall
+	for i, call := range simplified.ToolCalls {
+		var toolCall ToolCall
+		toolCall.ID = fmt.Sprintf("simplified_%d", i)
+		toolCall.Type = "function"
+
+		// Map simplified format to function call
+		switch call.Type {
+		case "read_file":
+			toolCall.Function.Name = "read_file"
+			toolCall.Function.Arguments = fmt.Sprintf(`{"file_path":"%s"}`, call.FilePath)
+		case "run_shell_command":
+			toolCall.Function.Name = "run_shell_command"
+			toolCall.Function.Arguments = fmt.Sprintf(`{"command":"%s"}`, call.Command)
+		case "ask_user":
+			toolCall.Function.Name = "ask_user"
+			toolCall.Function.Arguments = fmt.Sprintf(`{"question":"%s"}`, call.Question)
+		case "workspace_context":
+			toolCall.Function.Name = "workspace_context"
+			if call.Action == "search_keywords" {
+				toolCall.Function.Arguments = fmt.Sprintf(`{"action":"search_keywords","query":"%s"}`, call.Query)
+			} else {
+				toolCall.Function.Arguments = fmt.Sprintf(`{"action":"%s"}`, call.Action)
+			}
+		default:
+			// Try to use the type as function name and convert other fields to arguments
+			toolCall.Function.Name = call.Type
+			args := make(map[string]string)
+			if call.FilePath != "" {
+				args["file_path"] = call.FilePath
+			}
+			if call.Command != "" {
+				args["command"] = call.Command
+			}
+			if call.Question != "" {
+				args["question"] = call.Question
+			}
+			if call.Action != "" {
+				args["action"] = call.Action
+			}
+			if call.Query != "" {
+				args["query"] = call.Query
+			}
+			if len(args) > 0 {
+				argsJson, _ := json.Marshal(args)
+				toolCall.Function.Arguments = string(argsJson)
+			}
+		}
+
+		toolCalls = append(toolCalls, toolCall)
+	}
+
+	return toolCalls
+}
+
+// parseObjectArgsToolCalls handles tool calls where arguments are provided as objects instead of JSON strings
+func parseObjectArgsToolCalls(jsonStr string) []ToolCall {
+	var objectArgs struct {
+		ToolCalls []struct {
+			ID       string `json:"id"`
+			Type     string `json:"type"`
+			Function struct {
+				Name      string      `json:"name"`
+				Arguments interface{} `json:"arguments"` // Can be string or object
+			} `json:"function"`
+		} `json:"tool_calls"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonStr), &objectArgs); err != nil {
+		return nil
+	}
+
+	var toolCalls []ToolCall
+	for _, call := range objectArgs.ToolCalls {
+		var toolCall ToolCall
+		toolCall.ID = call.ID
+		toolCall.Type = call.Type
+
+		// Convert arguments to JSON string if it's an object
+		if argsObj, ok := call.Function.Arguments.(map[string]interface{}); ok {
+			// Arguments is an object, convert to JSON string
+			argsJson, err := json.Marshal(argsObj)
+			if err != nil {
+				continue
+			}
+			toolCall.Function.Arguments = string(argsJson)
+		} else if argsStr, ok := call.Function.Arguments.(string); ok {
+			// Arguments is already a string, use as-is
+			toolCall.Function.Arguments = argsStr
+		} else {
+			// Try to convert to string as fallback
+			argsJson, err := json.Marshal(call.Function.Arguments)
+			if err != nil {
+				continue
+			}
+			toolCall.Function.Arguments = string(argsJson)
+		}
+
+		toolCall.Function.Name = call.Function.Name
+		toolCalls = append(toolCalls, toolCall)
+	}
+
+	return toolCalls
+}
+
 // FormatToolsForPrompt formats the available tools for inclusion in a system prompt
 // This is used for LLMs that don't support native tool calling
 func FormatToolsForPrompt() string {
 	return `CONTROL MESSAGE (≤300 tokens)
-
-PLAN:
-{
-  "action": "read_file|micro_edit|edit_file_section|validate_file|workspace_context|run_shell_command|ask_user|search_web",
-  "target_file": "path/to/file (optional)",
-  "instructions": "minimal instruction (optional)",
-  "stop_when": "explicit completion criteria"
-}
-
-TOOL_CALLS:
+Example tool call:
 {
   "tool_calls": [
     {"id": "call_1", "type": "function", "function": {"name": "tool_name", "arguments": "{\"param\":\"value\"}"}}
@@ -330,7 +480,7 @@ TOOL_CALLS:
 }
 
 RULES:
-- Emit PLAN then TOOL_CALLS JSON only (no prose) until stop_when is satisfied
+- Emit TOOL_CALLS JSON only (no prose) until you have completed the task.
 - If user mentions a file you don’t have: use read_file first
 - Prefer micro_edit for tiny changes; otherwise edit_file_section
 - Validate after edits; for docs-only, consider success without build/test

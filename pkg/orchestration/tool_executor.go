@@ -157,7 +157,7 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 	ws, err := workspace.LoadWorkspaceFile()
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("workspace.json not found. Please run 'ledit init' or ensure you are in a ledir project.")
+			return "", fmt.Errorf("workspace.json not found. Please run 'ledit init' or ensure you are in a ledir project")
 		}
 		return "", fmt.Errorf("failed to load workspace: %w", err)
 	}
@@ -254,7 +254,7 @@ func (te *ToolExecutor) executeWorkspaceContext(args map[string]interface{}) (st
 		return summary, nil
 
 	default:
-		return "", fmt.Errorf("unknown action for workspace_context: %s. Valid actions are 'search_embeddings', 'search_keywords', 'load_tree', 'load_summary'.", action)
+		return "", fmt.Errorf("unknown action for workspace_context: %s. Valid actions are 'search_embeddings', 'search_keywords', 'load_tree', 'load_summary'", action)
 	}
 }
 

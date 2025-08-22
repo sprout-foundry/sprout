@@ -259,7 +259,7 @@ Focus on concrete changes that can be made to the codebase. Return ONLY the JSON
 	}
 
 	// Parse JSON response
-	clean, err := utils.ExtractJSONFromLLMResponse(response)
+	clean, err := utils.ExtractJSON(response)
 	if err != nil {
 		return fmt.Errorf("failed to extract JSON from response: %w", err)
 	}
@@ -443,7 +443,7 @@ Please provide the specific file path and the exact changes needed. Respond in J
 		Content  string `json:"content"`
 	}
 
-	clean, err := utils.ExtractJSONFromLLMResponse(response)
+	clean, err := utils.ExtractJSON(response)
 	if err != nil {
 		return fmt.Errorf("failed to parse edit plan: %w", err)
 	}
@@ -609,7 +609,7 @@ Return ONLY the JSON object.`, buildCmd, failureMsg)
 	}
 
 	// Parse the LLM response
-	clean, err := utils.ExtractJSONFromLLMResponse(response)
+	clean, err := utils.ExtractJSON(response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse LLM analysis response: %w", err)
 	}

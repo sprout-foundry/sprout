@@ -219,7 +219,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case ui.LogEvent:
-		m.logs = append(m.logs, fmt.Sprintf("%s", msg.Text))
+		m.logs = append(m.logs, msg.Text)
 		if len(m.logs) > 500 {
 			m.logs = m.logs[len(m.logs)-500:]
 		}

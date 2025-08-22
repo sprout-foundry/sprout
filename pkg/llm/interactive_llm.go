@@ -379,7 +379,7 @@ func CallLLMWithInteractiveContext(
 			}
 
 			// If the response also includes an edits JSON, cache it for potential fallback
-			for _, obj := range splitTopLevelJSONObjects(response) {
+			for _, obj := range utils.SplitTopLevelJSONObjects(response) {
 				if strings.Contains(obj, "\"edits\"") {
 					// validate it is JSON
 					var probe map[string]any
@@ -897,7 +897,7 @@ func CallLLMWithInteractiveContext(
 		// If no tool_calls: check whether a plan JSON was produced
 		if !containsToolCall(response) {
 			editsFound := false
-			for _, obj := range splitTopLevelJSONObjects(response) {
+			for _, obj := range utils.SplitTopLevelJSONObjects(response) {
 				if strings.Contains(obj, "\"edits\"") {
 					var probe map[string]any
 					if json.Unmarshal([]byte(obj), &probe) == nil {
@@ -1056,7 +1056,7 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 	}
 
 	// Fallback: split multiple concatenated top-level JSON objects and try each
-	for _, obj := range splitTopLevelJSONObjects(response) {
+	for _, obj := range utils.SplitTopLevelJSONObjects(response) {
 		if tcs, ok := tryParse(obj); ok {
 			return tcs, nil
 		}
@@ -1096,7 +1096,7 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 	}
 
 	// Last resort: try splitting concatenated top-level objects
-	for _, obj := range splitTopLevelJSONObjects(response) {
+	for _, obj := range utils.SplitTopLevelJSONObjects(response) {
 		var tm ToolMessage
 		if err := json.Unmarshal([]byte(obj), &tm); err == nil && len(tm.ToolCalls) > 0 {
 			return tm.ToolCalls, nil
@@ -1416,53 +1416,4 @@ func extractContextRequests(response string) ([]ContextRequest, error) {
 	}
 
 	return []ContextRequest{}, nil
-}
-
-// splitTopLevelJSONObjects splits a string that may contain multiple concatenated
-// top-level JSON objects and returns each object string.
-func splitTopLevelJSONObjects(s string) []string {
-	var parts []string
-	inStr := false
-	esc := false
-	depth := 0
-	start := -1
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if inStr {
-			if esc {
-				esc = false
-				continue
-			}
-			if ch == '\\' {
-				esc = true
-				continue
-			}
-			if ch == '"' {
-				inStr = false
-			}
-			continue
-		}
-		if ch == '"' {
-			inStr = true
-			continue
-		}
-		if ch == '{' {
-			if depth == 0 {
-				start = i
-			}
-			depth++
-			continue
-		}
-		if ch == '}' {
-			if depth > 0 {
-				depth--
-			}
-			if depth == 0 && start != -1 {
-				parts = append(parts, strings.TrimSpace(s[start:i+1]))
-				start = -1
-			}
-			continue
-		}
-	}
-	return parts
 }

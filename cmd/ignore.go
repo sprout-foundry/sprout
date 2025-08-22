@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/alantheprice/ledit/pkg/workspace"
 	"os"
 	"path/filepath"
+
+	"github.com/alantheprice/ledit/pkg/workspace"
 
 	"github.com/spf13/cobra"
 )

@@ -685,10 +685,13 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 	}
 
 	// Robust JSON extraction: prefer centralized utils extractor, then fallback cleaner with required fields
-	jsonStr, extractErr := utils.ExtractJSONFromLLMResponse(response)
+	jsonStr, extractErr := utils.ExtractJSON(response)
 	if jsonStr == "" || extractErr != nil {
 		// Fallback: clean and validate presence of required fields
-		cleaned, cleanErr := utils.CleanAndValidateJSONResponse(response, []string{"status", "feedback"})
+		cleaned, cleanErr := utils.ExtractJSON(response)
+		if cleanErr == nil {
+			cleanErr = utils.ValidateJSONFields(cleaned, []string{"status", "feedback"})
+		}
 		if cleanErr != nil {
 			return nil, fmt.Errorf("failed to extract JSON from LLM response: %v; fallback clean failed: %v. Full response: %s", extractErr, cleanErr, response)
 		}

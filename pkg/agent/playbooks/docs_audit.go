@@ -29,9 +29,7 @@ func (p DocsAuditPlaybook) BuildPlan(userIntent string, estimatedFiles []string)
 	}
 	// If none estimated, fall back to simple heuristics
 	if len(docs) == 0 {
-		for _, f := range findDocCandidates(nil) {
-			docs = append(docs, f)
-		}
+		docs = append(docs, findDocCandidates(nil)...)
 	}
 
 	plan := &PlanSpec{}
@@ -55,8 +53,6 @@ func findDocCandidates(_ interface{}) []string {
 	var res []string
 	// We don’t have a workspace walk here; rely on EstimatedFiles plus common names
 	common := []string{"README.md", "README", "docs/", "docs/index.md"}
-	for _, c := range common {
-		res = append(res, c)
-	}
+	res = append(res, common...)
 	return res
 }

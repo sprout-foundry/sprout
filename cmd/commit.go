@@ -103,9 +103,7 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 				generatedMessage = strings.TrimPrefix(generatedMessage, "```")
 				generatedMessage = strings.TrimSuffix(generatedMessage, "```")
 				// Remove language specifier if present (e.g., "git")
-				if strings.HasPrefix(generatedMessage, "git\n") {
-					generatedMessage = strings.TrimPrefix(generatedMessage, "git\n")
-				}
+				generatedMessage = strings.TrimPrefix(generatedMessage, "git\n")
 				generatedMessage = strings.TrimSpace(generatedMessage)
 			}
 

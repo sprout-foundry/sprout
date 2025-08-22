@@ -201,3 +201,23 @@ func (o *MultiAgentOrchestrator) createAgentConfig(agentDef *types.AgentDefiniti
 
 	return &agentConfig
 }
+
+// shouldUseLLMTools checks if LLM tools should be used based on step configuration
+func shouldUseLLMTools(step *types.OrchestrationStep) bool {
+	if step == nil || step.Tools == nil {
+		return false
+	}
+
+	llmTools, exists := step.Tools["llm_tools"]
+	if !exists {
+		return false
+	}
+
+	// Check various true values
+	switch strings.ToLower(strings.TrimSpace(llmTools)) {
+	case "true", "1", "enabled", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}

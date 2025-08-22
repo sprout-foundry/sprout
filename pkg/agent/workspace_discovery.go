@@ -2,90 +2,11 @@ package agent
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/utils"
 )
-
-// findRelevantFilesByContent searches for files containing relevant content based on the user intent
-func findRelevantFilesByContent(userIntent string, logger *utils.Logger) []string {
-	intentLower := strings.ToLower(userIntent)
-	searchTerms := extractSearchTerms(intentLower)
-	if len(searchTerms) == 0 {
-		logger.Logf("No search terms extracted from intent, returning empty list")
-		return []string{}
-	}
-	logger.Logf("Searching for files containing terms: %v", searchTerms)
-
-	relevantFiles := make(map[string]int)
-	_ = filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() || !isSourceFile(path) {
-			return nil
-		}
-		if strings.HasPrefix(filepath.Base(path), ".") {
-			return nil
-		}
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return nil
-		}
-		contentLower := strings.ToLower(string(content))
-		score := 0
-		for _, term := range searchTerms {
-			if strings.Contains(contentLower, term) {
-				score += 10
-				if strings.Contains(contentLower, "func "+term) ||
-					strings.Contains(contentLower, "type "+term) ||
-					strings.Contains(contentLower, term+"(") {
-					score += 20
-				}
-			}
-		}
-		pathLower := strings.ToLower(path)
-		for _, term := range searchTerms {
-			if strings.Contains(pathLower, term) {
-				score += 15
-			}
-		}
-		if score > 0 {
-			relevantFiles[path] = score
-			logger.Logf("Found relevant file: %s (score: %d)", path, score)
-		}
-		return nil
-	})
-
-	type fileScore struct {
-		path  string
-		score int
-	}
-	var scored []fileScore
-	for file, score := range relevantFiles {
-		scored = append(scored, fileScore{file, score})
-	}
-	sort.Slice(scored, func(i, j int) bool { return scored[i].score > scored[j].score })
-
-	var result []string
-	maxFiles := 5
-	for i, fs := range scored {
-		if i >= maxFiles {
-			break
-		}
-		result = append(result, fs.path)
-	}
-	if len(result) == 0 {
-		logger.Logf("No files found by content search")
-		return []string{}
-	}
-	logger.Logf("Content search found %d relevant files: %v", len(result), result)
-	return result
-}
 
 // extractSearchTerms extracts key search terms from user intent
 func extractSearchTerms(intentLower string) []string {

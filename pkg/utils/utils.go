@@ -200,66 +200,75 @@ func TruncateString(s string, maxLength int) string {
 	return s[:maxLength-3] + "..."
 }
 
-// ExtractJSONFromLLMResponse extracts JSON from an LLM response that may contain markdown formatting
-// This is a centralized utility to handle the common issue of LLMs wrapping JSON in code blocks
-// It intelligently handles cases where backticks appear within JSON property values
-func ExtractJSONFromLLMResponse(response string) (string, error) {
-	response = strings.TrimSpace(response)
+// JSON Utility Functions
+//
+// This package provides consolidated JSON parsing and extraction utilities for the entire codebase.
+// All JSON operations should use these functions to ensure consistency and maintainability.
+//
+// Available functions:
+// - ExtractJSON: Comprehensive JSON extraction from any source (markdown, plain text, etc.)
+// - ValidateJSONFields: Validate that JSON contains required fields
+// - SplitTopLevelJSONObjects: Split multiple JSON objects from a single string
+// - isValidJSON: Validate JSON string format
 
-	// First, check if the entire response is already valid JSON
-	if isValidJSON(response) {
-		return response, nil
+// ExtractJSON extracts JSON from any source (LLM responses, plain text, markdown, etc.)
+// This is the primary JSON extraction function that handles all common scenarios:
+// - Plain JSON objects/arrays
+// - Markdown code blocks (```json, ```)
+// - Multiple extraction strategies with fallbacks
+// - Robust error handling and validation
+func ExtractJSON(input string) (string, error) {
+	input = strings.TrimSpace(input)
+
+	// Fast path: if the entire input is already valid JSON, return it
+	if isValidJSON(input) {
+		return input, nil
 	}
 
-	// Handle markdown-wrapped JSON with improved backtick detection
-	if strings.Contains(response, "```json") {
-		return extractFromMarkdownJSON(response)
+	// Strategy 1: Extract from ```json blocks (most specific)
+	if strings.Contains(input, "```json") {
+		if result, err := extractFromMarkdownJSON(input); err == nil {
+			return result, nil
+		}
 	}
 
-	// Handle cases where JSON might be wrapped in plain ``` blocks
-	if strings.Contains(response, "```") && (strings.Contains(response, "{") || strings.Contains(response, "[")) {
-		return extractFromMarkdownGeneric(response)
+	// Strategy 2: Extract from generic ``` blocks
+	if strings.Contains(input, "```") && (strings.Contains(input, "{") || strings.Contains(input, "[")) {
+		if result, err := extractFromMarkdownGeneric(input); err == nil {
+			return result, nil
+		}
 	}
 
-	// Fallback: try to find JSON object boundaries directly in the response
-	return extractJSONByBoundaries(response)
+	// Strategy 3: Extract JSON by finding object/array boundaries
+	if result, err := extractJSONByBoundaries(input); err == nil {
+		return result, nil
+	}
+
+	// Strategy 4: Simple extraction (like the old ExtractFirstJSON)
+	if result := extractSimpleJSON(input); result != "" {
+		return result, nil
+	}
+
+	return "", fmt.Errorf("no valid JSON found in input")
 }
 
-// isValidJSON checks if a string is valid JSON
-func isValidJSON(s string) bool {
-	var js interface{}
-	return json.Unmarshal([]byte(s), &js) == nil
-}
-
-// extractFromMarkdownJSON handles ```json blocks with robust backtick detection
-func extractFromMarkdownJSON(response string) (string, error) {
-	// Find the start of the JSON block
-	jsonStart := strings.Index(response, "```json")
+// extractFromMarkdownJSON handles ```json blocks
+func extractFromMarkdownJSON(input string) (string, error) {
+	jsonStart := strings.Index(input, "```json")
 	if jsonStart == -1 {
 		return "", fmt.Errorf("no ```json marker found")
 	}
 
-	// Move past the ```json marker (and any newline)
 	contentStart := jsonStart + 7 // len("```json")
-	if contentStart < len(response) && response[contentStart] == '\n' {
+	if contentStart < len(input) && input[contentStart] == '\n' {
 		contentStart++
 	}
 
-	// Find the last ``` that could close this block
-	// We need to find ALL occurrences of ``` after the json marker
-	afterJSON := response[contentStart:]
-	backtickIndices := findAllBacktickOccurrences(afterJSON)
-
-	if len(backtickIndices) == 0 {
-		return "", fmt.Errorf("no closing ``` found for json block")
-	}
-
-	// Try each potential closing backtick from last to first
-	for i := len(backtickIndices) - 1; i >= 0; i-- {
-		endPos := backtickIndices[i]
-		candidate := strings.TrimSpace(afterJSON[:endPos])
-
-		if candidate != "" && isValidJSON(candidate) {
+	afterJSON := input[contentStart:]
+	end := strings.Index(afterJSON, "```")
+	if end > 0 {
+		candidate := strings.TrimSpace(afterJSON[:end])
+		if isValidJSON(candidate) {
 			return candidate, nil
 		}
 	}
@@ -268,14 +277,12 @@ func extractFromMarkdownJSON(response string) (string, error) {
 }
 
 // extractFromMarkdownGeneric handles ``` blocks that might contain JSON
-func extractFromMarkdownGeneric(response string) (string, error) {
+func extractFromMarkdownGeneric(input string) (string, error) {
 	backticks := "```"
-
-	// Find all backtick positions
 	var positions []int
 	pos := 0
 	for {
-		idx := strings.Index(response[pos:], backticks)
+		idx := strings.Index(input[pos:], backticks)
 		if idx == -1 {
 			break
 		}
@@ -287,28 +294,14 @@ func extractFromMarkdownGeneric(response string) (string, error) {
 		return "", fmt.Errorf("insufficient backtick pairs found")
 	}
 
-	// Try different combinations, preferring later closing backticks
-	for i := len(positions) - 1; i >= 1; i-- {
-		for j := 0; j < i; j++ {
-			start := positions[j] + 3
-			end := positions[i]
+	// Try the most likely combination (first and last backticks)
+	start := positions[0] + 3
+	end := positions[len(positions)-1]
 
-			// Skip the language identifier line if present
-			if start < len(response) && response[start] == '\n' {
-				start++
-			} else {
-				// Find the next newline after the opening backticks
-				if newlinePos := strings.Index(response[start:], "\n"); newlinePos != -1 {
-					start = start + newlinePos + 1
-				}
-			}
-
-			if start < end {
-				candidate := strings.TrimSpace(response[start:end])
-				if candidate != "" && isValidJSON(candidate) {
-					return candidate, nil
-				}
-			}
+	if start < end {
+		candidate := strings.TrimSpace(input[start:end])
+		if isValidJSON(candidate) {
+			return candidate, nil
 		}
 	}
 
@@ -316,10 +309,9 @@ func extractFromMarkdownGeneric(response string) (string, error) {
 }
 
 // extractJSONByBoundaries tries to find JSON by looking for braces/brackets
-func extractJSONByBoundaries(response string) (string, error) {
-	// Look for first opening brace or bracket
-	startBrace := strings.Index(response, "{")
-	startBracket := strings.Index(response, "[")
+func extractJSONByBoundaries(input string) (string, error) {
+	startBrace := strings.Index(input, "{")
+	startBracket := strings.Index(input, "[")
 
 	var start int = -1
 	var isArray bool = false
@@ -333,118 +325,134 @@ func extractJSONByBoundaries(response string) (string, error) {
 	}
 
 	if start == -1 {
-		return "", fmt.Errorf("no JSON object or array found (no opening brace or bracket)")
+		return "", fmt.Errorf("no JSON object or array found")
 	}
 
-	// Look for matching closing brace/bracket from the end
 	var end int = -1
 	if isArray {
-		end = strings.LastIndex(response, "]")
+		end = strings.LastIndex(input, "]")
 	} else {
-		end = strings.LastIndex(response, "}")
+		end = strings.LastIndex(input, "}")
 	}
 
 	if end == -1 || end <= start {
 		return "", fmt.Errorf("no matching closing brace/bracket found")
 	}
 
-	// Extract the JSON substring
-	jsonStr := strings.TrimSpace(response[start : end+1])
+	jsonStr := strings.TrimSpace(input[start : end+1])
 
-	// Validate it's not empty and is valid JSON
-	if jsonStr == "" {
-		return "", fmt.Errorf("extracted JSON is empty")
-	}
-
-	if !isValidJSON(jsonStr) {
+	if jsonStr == "" || !isValidJSON(jsonStr) {
 		return "", fmt.Errorf("extracted string is not valid JSON")
 	}
 
 	return jsonStr, nil
 }
 
-// findAllBacktickOccurrences finds all positions of ``` in a string
-func findAllBacktickOccurrences(s string) []int {
-	var positions []int
-	backticks := "```"
-	pos := 0
+// extractSimpleJSON provides basic JSON extraction for simple cases
+// This is used as a fallback in ExtractJSON when other methods fail
+func extractSimpleJSON(input string) string {
+	trimmed := strings.TrimSpace(input)
 
-	for {
-		idx := strings.Index(s[pos:], backticks)
-		if idx == -1 {
-			break
+	// Try to find and extract a JSON object or array
+	if idx := strings.Index(trimmed, "{"); idx >= 0 {
+		depth := 0
+		for i := idx; i < len(trimmed); i++ {
+			if trimmed[i] == '{' {
+				depth++
+			}
+			if trimmed[i] == '}' {
+				depth--
+			}
+			if depth == 0 {
+				candidate := strings.TrimSpace(trimmed[idx : i+1])
+				if isValidJSON(candidate) {
+					return candidate
+				}
+				break
+			}
 		}
-		positions = append(positions, pos+idx)
-		pos = pos + idx + 3
 	}
 
-	return positions
+	return ""
 }
 
-// CleanAndValidateJSONResponse cleans and validates JSON responses from LLMs with field validation
-func CleanAndValidateJSONResponse(response string, expectedFields []string) (string, error) {
-	// Remove common non-JSON prefixes/suffixes that LLMs sometimes add
-	response = strings.TrimSpace(response)
+// ValidateJSONFields validates that a JSON string contains the required fields
+// This is useful for ensuring API responses have expected structure
+func ValidateJSONFields(jsonStr string, requiredFields []string) error {
+	if len(requiredFields) == 0 {
+		return nil
+	}
 
-	// Remove markdown code blocks if present
-	if strings.Contains(response, "```json") {
-		parts := strings.Split(response, "```json")
-		if len(parts) > 1 {
-			jsonPart := parts[1]
-			end := strings.Index(jsonPart, "```")
-			if end > 0 {
-				response = strings.TrimSpace(jsonPart[:end])
-			}
+	var jsonMap map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &jsonMap); err != nil {
+		return fmt.Errorf("invalid JSON: %w", err)
+	}
+
+	for _, field := range requiredFields {
+		if _, exists := jsonMap[field]; !exists {
+			return fmt.Errorf("required field '%s' is missing from JSON", field)
 		}
 	}
 
-	// Remove any text before the first { or [
-	firstBrace := strings.Index(response, "{")
-	firstBracket := strings.Index(response, "[")
+	return nil
+}
 
-	var startIdx int = -1
-	if firstBrace >= 0 && (firstBracket < 0 || firstBrace < firstBracket) {
-		startIdx = firstBrace
-	} else if firstBracket >= 0 {
-		startIdx = firstBracket
-	}
+// isValidJSON checks if a string is valid JSON
+func isValidJSON(s string) bool {
+	var js interface{}
+	return json.Unmarshal([]byte(s), &js) == nil
+}
 
-	if startIdx >= 0 {
-		response = response[startIdx:]
-	}
+// SplitTopLevelJSONObjects splits a string containing multiple concatenated top-level JSON objects
+// It properly handles string escaping and nested braces/brackets
+func SplitTopLevelJSONObjects(s string) []string {
+	var parts []string
+	inStr := false
+	esc := false
+	depth := 0
+	start := -1
 
-	// Remove any text after the last } or ]
-	lastBrace := strings.LastIndex(response, "}")
-	lastBracket := strings.LastIndex(response, "]")
-
-	var endIdx int = -1
-	if lastBrace >= 0 && (lastBracket < 0 || lastBrace > lastBracket) {
-		endIdx = lastBrace + 1
-	} else if lastBracket >= 0 {
-		endIdx = lastBracket + 1
-	}
-
-	if endIdx > 0 && endIdx <= len(response) {
-		response = response[:endIdx]
-	}
-
-	// Validate that it's valid JSON
-	var jsonTest interface{}
-	if err := json.Unmarshal([]byte(response), &jsonTest); err != nil {
-		return "", fmt.Errorf("cleaned response is still not valid JSON: %w", err)
-	}
-
-	// Check for expected fields if provided
-	if len(expectedFields) > 0 {
-		var jsonMap map[string]interface{}
-		if err := json.Unmarshal([]byte(response), &jsonMap); err == nil {
-			for _, field := range expectedFields {
-				if _, exists := jsonMap[field]; !exists {
-					return "", fmt.Errorf("required field '%s' is missing from JSON response", field)
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inStr {
+			if esc {
+				esc = false
+				continue
+			}
+			if ch == '\\' {
+				esc = true
+				continue
+			}
+			if ch == '"' {
+				inStr = false
+			}
+			continue
+		}
+		if ch == '"' {
+			inStr = true
+			continue
+		}
+		if ch == '{' {
+			if depth == 0 {
+				start = i
+			}
+			depth++
+			continue
+		}
+		if ch == '}' {
+			if depth > 0 {
+				depth--
+			}
+			if depth == 0 && start != -1 {
+				candidate := strings.TrimSpace(s[start : i+1])
+				if isValidJSON(candidate) {
+					parts = append(parts, candidate)
 				}
+				start = -1
 			}
+			continue
 		}
 	}
 
-	return response, nil
+	return parts
 }

@@ -8,8 +8,9 @@ type AgentConfig struct {
 	AutoGenerateTests        bool   `json:"auto_generate_tests"`        // Auto-generate tests after changes
 
 	// Agent Behavior
-	DryRun    bool `json:"dry_run"` // Run agents in dry-run mode
-	FromAgent bool `json:"-"`       // Internal flag: true when invoked from agent mode
+	DryRun           bool `json:"dry_run"`            // Run agents in dry-run mode
+	FromAgent        bool `json:"-"`                  // Internal flag: true when invoked from agent mode
+	CodeToolsEnabled bool `json:"code_tools_enabled"` // Enable/disable code tools enrichment
 
 	// Code Style
 	CodeStyle CodeStylePreferences `json:"code_style"` // Code style preferences
@@ -34,6 +35,7 @@ func DefaultAgentConfig() *AgentConfig {
 		AutoGenerateTests:        false,
 		DryRun:                   false,
 		FromAgent:                false,
+		CodeToolsEnabled:         true, // Enable code tools by default
 		CodeStyle: CodeStylePreferences{
 			FunctionSize:      "medium",
 			FileSize:          "large",

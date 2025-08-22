@@ -78,6 +78,9 @@ type Config struct {
 	MaxRunCostUSD    float64 `json:"max_run_cost_usd,omitempty"`
 	ShellTimeoutSecs int     `json:"shell_timeout_secs,omitempty"`
 
+	// Legacy agent settings (DEPRECATED)
+	CodeToolsEnabled bool `json:"code_tools_enabled,omitempty"` // Moved to AgentConfig.CodeToolsEnabled
+
 	// Legacy rate limiting (DEPRECATED)
 	FileBatchSize         int `json:"file_batch_size,omitempty"`
 	EmbeddingBatchSize    int `json:"embedding_batch_size,omitempty"`
@@ -196,6 +199,10 @@ func (c *Config) GetAgentConfig() *AgentConfig {
 	}
 	if c.FromAgent {
 		agent.FromAgent = true
+	}
+	// Handle legacy CodeToolsEnabled field
+	if c.CodeToolsEnabled {
+		agent.CodeToolsEnabled = true
 	}
 	// CodeStyle is already handled by the legacy field
 

@@ -37,7 +37,7 @@ func generateDeepInfraEmbedding(input string, model string) ([]float64, error) {
 	if err != nil || apiKey == "" {
 		apiKey = os.Getenv("DEEPINFRA_API_KEY")
 		if apiKey == "" {
-			return nil, fmt.Errorf("DeepInfra API key not found. Please set DEEPINFRA_API_KEY environment variable or provide it when prompted.")
+			return nil, fmt.Errorf("DeepInfra API key not found. Please set DEEPINFRA_API_KEY environment variable or provide it when prompted")
 		}
 	}
 
@@ -126,7 +126,7 @@ func GenerateEmbedding(input, modelName string) ([]float64, error) {
 	case "deepinfra":
 		return generateDeepInfraEmbedding(input, model)
 	default:
-		return nil, fmt.Errorf("unsupported embedding provider: %s. Only 'deepinfra' is currently supported.", provider)
+		return nil, fmt.Errorf("unsupported embedding provider: %s. Only 'deepinfra' is currently supported", provider)
 	}
 }
 

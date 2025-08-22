@@ -189,7 +189,10 @@ func interactiveAuthorProcessDryRun(logger *utils.Logger) error {
 	if err != nil {
 		return fmt.Errorf("LLM interactive authoring failed: %w", err)
 	}
-	jsonStr := extractFirstJSON(response)
+	jsonStr, err := utils.ExtractJSON(response)
+	if err != nil {
+		jsonStr = ""
+	}
 	if strings.TrimSpace(jsonStr) == "" {
 		return fmt.Errorf("did not receive JSON process definition from the LLM")
 	}
@@ -247,7 +250,10 @@ func interactiveAuthorProcessFile(logger *utils.Logger) (string, error) {
 	}
 
 	// Extract JSON from response
-	jsonStr := extractFirstJSON(response)
+	jsonStr, err := utils.ExtractJSON(response)
+	if err != nil {
+		jsonStr = ""
+	}
 	if strings.TrimSpace(jsonStr) == "" {
 		return "", fmt.Errorf("did not receive JSON process definition from the LLM")
 	}
@@ -269,33 +275,4 @@ func interactiveAuthorProcessFile(logger *utils.Logger) (string, error) {
 		return "", fmt.Errorf("failed to write %s: %w", outPath, err)
 	}
 	return outPath, nil
-}
-
-// extractFirstJSON tries to extract the first JSON object from a string (plain or fenced)
-func extractFirstJSON(s string) string {
-	trimmed := strings.TrimSpace(s)
-	// Code fence block
-	if strings.Contains(trimmed, "```json") {
-		start := strings.Index(trimmed, "```json") + len("```json")
-		end := strings.Index(trimmed[start:], "```")
-		if end > 0 {
-			return strings.TrimSpace(trimmed[start : start+end])
-		}
-	}
-	// Plain JSON starting with '{'
-	if idx := strings.Index(trimmed, "{"); idx >= 0 {
-		depth := 0
-		for i := idx; i < len(trimmed); i++ {
-			if trimmed[i] == '{' {
-				depth++
-			}
-			if trimmed[i] == '}' {
-				depth--
-			}
-			if depth == 0 {
-				return strings.TrimSpace(trimmed[idx : i+1])
-			}
-		}
-	}
-	return ""
 }

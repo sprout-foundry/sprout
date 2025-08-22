@@ -49,8 +49,6 @@ func callLLMForCodeEditingWithSimpleRetry(modelName string, initialMessages []pr
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	currentMessages := make([]prompts.Message, len(initialMessages))
 	copy(currentMessages, initialMessages)
-	// Prepend compact tool schema guidance to ensure models know exact tool names/args
-	currentMessages = append([]prompts.Message{{Role: "system", Content: FormatToolsForPrompt()}}, currentMessages...)
 
 	// Track tool calls
 	totalToolCalls := 0

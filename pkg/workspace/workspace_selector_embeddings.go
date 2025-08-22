@@ -10,7 +10,7 @@ import (
 
 const (
 	embeddingDBPath = "./.ledit/embeddings.json"
-	topKFiles       = 15 // Number of top files to return
+	topKFiles       = 10 // Number of top files to return
 )
 
 // GetFilesForContextUsingEmbeddings uses vector embeddings to determine which files from the workspace
@@ -60,7 +60,7 @@ func GetFilesForContextUsingEmbeddings(instructions string, workspace WorkspaceF
 		if highConfidence < absoluteFloor {
 			highConfidence = absoluteFloor
 		}
-		const maxAdditionalFull = 4
+		const maxAdditionalFull = 6
 		added := 0
 
 		for i, emb := range relevantEmbeddings {

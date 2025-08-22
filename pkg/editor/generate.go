@@ -46,9 +46,18 @@ func ProcessCodeGeneration(filename, instructions string, cfg *config.Config, im
 			}
 			_ = os.WriteFile(effectiveFilename, []byte(""), 0644)
 		}
-		originalCode, err = filesystem.LoadOriginalCode(effectiveFilename)
-		if err != nil {
-			return "", err
+
+		// Load current file content instead of original code for subsequent edits
+		// This ensures that review iterations build upon previous changes
+		currentBytes, readErr := os.ReadFile(effectiveFilename)
+		if readErr != nil {
+			// Fallback to original code if current file can't be read
+			originalCode, err = filesystem.LoadOriginalCode(effectiveFilename)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			originalCode = string(currentBytes)
 		}
 	}
 

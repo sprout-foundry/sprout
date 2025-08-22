@@ -48,7 +48,6 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 		// Check for detokenize field in the actual request body
 		if strings.Contains(string(reqBody), "detokenize") {
 			ui.Out().Printf("ERROR: Found 'detokenize' field in request to %s\n", apiURL)
-			ui.Out().Printf("Request body: %s\n", string(reqBody))
 		}
 
 		req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))

@@ -7,19 +7,20 @@ import (
 
 // CodeReviewResult represents the result of an automated code review.
 type CodeReviewResult struct {
-	Status       string `json:"status"`               // "approved", "needs_revision", "rejected"
-	Feedback     string `json:"feedback"`             // Explanation for the status
-	Instructions string `json:"-"`                    // Instructions for `ledit` if status is "needs_revision"
-	NewPrompt    string `json:"new_prompt,omitempty"` // A new, more detailed prompt if status is "rejected"
+	Status           string `json:"status"`                      // "approved", "needs_revision", "rejected"
+	Feedback         string `json:"feedback"`                    // Explanation for the status
+	DetailedGuidance string `json:"detailed_guidance,omitempty"` // Detailed guidance for LLM if status is "needs_revision"
+	PatchResolution  string `json:"patch_resolution,omitempty"`  // Complete updated file content if direct patch is provided
+	NewPrompt        string `json:"new_prompt,omitempty"`        // New prompt suggestion if status is "rejected"
 }
 
-// UnmarshalJSON implements custom JSON unmarshaling to handle instructions field
+// UnmarshalJSON implements custom JSON unmarshaling to handle detailed_guidance field
 // that can be either a string or an array of strings
 func (c *CodeReviewResult) UnmarshalJSON(data []byte) error {
-	// First unmarshal into a temporary struct with raw JSON for instructions
+	// First unmarshal into a temporary struct with raw JSON for detailed_guidance
 	type Alias CodeReviewResult
 	aux := &struct {
-		Instructions json.RawMessage `json:"instructions,omitempty"`
+		DetailedGuidance json.RawMessage `json:"detailed_guidance,omitempty"`
 		*Alias
 	}{
 		Alias: (*Alias)(c),
@@ -29,21 +30,21 @@ func (c *CodeReviewResult) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Handle the instructions field - it could be a string or array of strings
-	if len(aux.Instructions) > 0 {
+	// Handle the detailed_guidance field - it could be a string or array of strings
+	if len(aux.DetailedGuidance) > 0 {
 		// Try to unmarshal as string first
-		var instructionsStr string
-		if err := json.Unmarshal(aux.Instructions, &instructionsStr); err == nil {
-			c.Instructions = instructionsStr
+		var guidanceStr string
+		if err := json.Unmarshal(aux.DetailedGuidance, &guidanceStr); err == nil {
+			c.DetailedGuidance = guidanceStr
 		} else {
 			// Try to unmarshal as array of strings
-			var instructionsArray []string
-			if err := json.Unmarshal(aux.Instructions, &instructionsArray); err == nil {
+			var guidanceArray []string
+			if err := json.Unmarshal(aux.DetailedGuidance, &guidanceArray); err == nil {
 				// Join array elements with newlines
-				c.Instructions = strings.Join(instructionsArray, "\n")
+				c.DetailedGuidance = strings.Join(guidanceArray, "\n")
 			} else {
 				// If both fail, convert the raw JSON to string
-				c.Instructions = string(aux.Instructions)
+				c.DetailedGuidance = string(aux.DetailedGuidance)
 			}
 		}
 	}

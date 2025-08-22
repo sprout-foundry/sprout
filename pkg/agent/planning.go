@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	pb "github.com/alantheprice/ledit/pkg/agent/playbooks"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
@@ -502,3 +503,114 @@ func validateEditPlan(p *EditPlan) error {
 	}
 	return nil
 }
+
+// executeCreatePlan creates a detailed edit plan for the user's intent
+func executeCreatePlan(context *AgentContext) error {
+	context.Logger.LogProcessStep("🎯 Creating detailed edit plan...")
+
+	if context.IntentAnalysis == nil {
+		return fmt.Errorf("cannot create plan without intent analysis")
+	}
+
+	// Playbook fast-path: if a registered playbook matches, let it build the plan
+	if sel := pb.Select(context.UserIntent, context.IntentAnalysis.Category); sel != nil {
+		context.Logger.LogProcessStep("📘 Using playbook: " + sel.Name())
+		spec := sel.BuildPlan(context.UserIntent, context.IntentAnalysis.EstimatedFiles)
+		if spec != nil && (len(spec.Ops) > 0 || len(spec.Files) > 0) {
+			// Convert PlanSpec → EditPlan
+			ep := &EditPlan{FilesToEdit: append([]string{}, spec.Files...), ScopeStatement: spec.Scope}
+			for _, op := range spec.Ops {
+				ep.EditOperations = append(ep.EditOperations, EditOperation{
+					FilePath:           op.FilePath,
+					Description:        op.Description,
+					Instructions:       op.Instructions,
+					ScopeJustification: op.ScopeJustification,
+				})
+			}
+			context.CurrentPlan = ep
+			context.ExecutedOperations = append(context.ExecutedOperations, "Plan created via playbook: "+sel.Name())
+			context.Logger.LogProcessStep(fmt.Sprintf("✅ Plan created via playbook: %d files, %d operations", len(ep.FilesToEdit), len(ep.EditOperations)))
+			return nil
+		}
+	}
+
+	// Try planning up to 3 attempts total (initial + 2 retries). If still empty/fails, abort.
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			context.Logger.LogProcessStep(fmt.Sprintf("🔁 Plan attempt %d/%d", attempt, maxAttempts))
+		}
+		editPlan, tokens, err := createDetailedEditPlan(context.UserIntent, context.IntentAnalysis, context.Config, context.Logger)
+		if err != nil {
+			lastErr = err
+			if attempt == maxAttempts {
+				return fmt.Errorf("plan creation failed after %d attempts: %w", attempt, err)
+			}
+			continue
+		}
+
+		// Validate plan has actionable operations
+		if editPlan == nil || len(editPlan.EditOperations) == 0 {
+			lastErr = fmt.Errorf("empty plan: no edit operations produced")
+			if attempt == maxAttempts {
+				return fmt.Errorf("plan creation produced no operations after %d attempts", attempt)
+			}
+			continue
+		}
+
+		// Success: record plan and token usage
+		context.CurrentPlan = editPlan
+		context.TokenUsage.Planning += tokens
+		context.TokenUsage.PlanningSplit.Prompt += tokens
+		context.ExecutedOperations = append(context.ExecutedOperations,
+			fmt.Sprintf("Created plan with %d operations for %d files", len(editPlan.EditOperations), len(editPlan.FilesToEdit)))
+
+		context.Logger.LogProcessStep(fmt.Sprintf("✅ Plan created: %d files, %d operations",
+			len(editPlan.FilesToEdit), len(editPlan.EditOperations)))
+		return nil
+	}
+	if lastErr != nil {
+		return lastErr
+	}
+	return fmt.Errorf("plan creation failed for unknown reasons")
+}
+
+// executeRevisePlan creates a new plan based on current learnings
+func executeRevisePlan(context *AgentContext, evaluation *ProgressEvaluation) error {
+	context.Logger.LogProcessStep("🔄 Revising plan based on current state...")
+
+	if context.IntentAnalysis == nil {
+		return fmt.Errorf("cannot revise plan without intent analysis")
+	}
+
+	// Special handling for validation failures - create compilation error fix plan
+	if context.ValidationFailed {
+		context.Logger.LogProcessStep("🔧 Creating fix plan for validation failures...")
+		return executeValidationFailureRecovery(context)
+	}
+
+	// If evaluation provided a new plan, use it; otherwise create a fresh one
+	if evaluation.NewPlan != nil {
+		context.Logger.LogProcessStep("Using revised plan from evaluation")
+		// Parse the new plan if it's JSON, otherwise treat as context
+		// For now, just create a new plan since parsing arbitrary plan format is complex
+	}
+
+	// Create a fresh plan incorporating lessons learned
+	editPlan, tokens, err := createDetailedEditPlan(context.UserIntent, context.IntentAnalysis, context.Config, context.Logger)
+	if err != nil {
+		return fmt.Errorf("plan revision failed: %w", err)
+	}
+
+	context.CurrentPlan = editPlan
+	context.TokenUsage.Planning += tokens
+	context.ExecutedOperations = append(context.ExecutedOperations,
+		fmt.Sprintf("Revised plan: %d operations for %d files", len(editPlan.EditOperations), len(editPlan.FilesToEdit)))
+
+	context.Logger.LogProcessStep(fmt.Sprintf("✅ Plan revised: %d files, %d operations",
+		len(editPlan.FilesToEdit), len(editPlan.EditOperations)))
+	return nil
+}
+
+// executeValidationFailureRecovery is defined in validation_exec.go

@@ -30,8 +30,14 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	var responses []string
 	for _, req := range reqs {
-		logger.Log(prompts.LLMContextRequest(req.Type, req.Query))
-		switch req.Type {
+		startTool := time.Now()
+		switch strings.ToLower(req.Type) {
+		case "read_file":
+			if content, err := os.ReadFile(req.Query); err == nil {
+				responses = append(responses, fmt.Sprintf("Contents of %s:\n%s", req.Query, string(content)))
+			} else {
+				responses = append(responses, fmt.Sprintf("Failed to read file %s: %v", req.Query, err))
+			}
 		case "search":
 			// Gate external web search behind config flag to avoid ungrounded context by default
 			if !cfg.UseSearchGrounding {
@@ -54,13 +60,6 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 				return "", fmt.Errorf("failed to read user input: %w", err)
 			}
 			responses = append(responses, fmt.Sprintf("The user responded: %s", strings.TrimSpace(answer)))
-		case "file":
-			logger.Log(prompts.LLMFileRequest(req.Query))
-			content, err := os.ReadFile(req.Query)
-			if err != nil {
-				return "", fmt.Errorf("failed to read file '%s': %w", req.Query, err)
-			}
-			responses = append(responses, fmt.Sprintf("Here is the content of the file `%s`:\n\n%s", req.Query, string(content)))
 		case "edit_file_section":
 			// Handle the edit_file_section context request
 			// Parse the query parameters: file_path|instructions|target_section
@@ -151,6 +150,7 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 		default:
 			return "", fmt.Errorf("unknown context request type: %s", req.Type)
 		}
+		logger.Logf("TOOL DONE ← %s in %s", req.Type, time.Since(startTool))
 	}
 	return strings.Join(responses, "\n"), nil
 }

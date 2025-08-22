@@ -3,6 +3,7 @@
 package agent
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 	"github.com/alantheprice/ledit/pkg/editor"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/tools"
+	"github.com/alantheprice/ledit/pkg/types"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/workspace"
@@ -550,15 +553,11 @@ func fixBuildFailure(ctx *SimplifiedAgentContext, buildCmd, failureMsg string) e
 
 	maxIterations := 12
 	messages := []prompts.Message{
-		{Role: "system", Content: `You are an expert software engineer troubleshooting a build failure. 
+		{Role: "system", Content: fmt.Sprintf(`You are an expert software engineer troubleshooting a build failure. 
 
-Available tools:
-- read_file: {"file_path": "path/to/file"} - Read a file to understand its content
-- edit_file_section: {"file_path": "path/to/file", "old_text": "text to replace", "new_text": "replacement text"} - Edit a specific part of a file
-- run_shell_command: {"command": "shell command"} - Run shell commands for diagnostics or testing
-- validate_file: {"file_path": "path/to/file"} - Check Go syntax of a file
+%s
 
-Use these tools to diagnose and fix build issues. Read files to understand errors, edit files to fix syntax problems, and test your changes.`},
+Use these tools to diagnose and fix build issues. Read files to understand errors, edit files to fix syntax problems, and test your changes.`, llm.FormatToolsForPrompt())},
 		{Role: "user", Content: fmt.Sprintf(`The build command '%s' failed with this error:
 
 BUILD ERROR:
@@ -651,102 +650,39 @@ Please fix this build failure by using the available tools. Read files to unders
 	return fmt.Errorf("build fix failed after %d attempts", maxIterations)
 }
 
-// executeEnhancedTool executes a tool call with enhanced functionality including file editing
+// executeEnhancedTool executes a tool call using the unified tool executor
 func executeEnhancedTool(toolCall llm.ToolCall, cfg *config.Config, logger *utils.Logger) (string, error) {
 	// Debug logging
 	logger.LogProcessStep(fmt.Sprintf("Debug: Tool name: %s", toolCall.Function.Name))
 	logger.LogProcessStep(fmt.Sprintf("Debug: Arguments string: '%s'", toolCall.Function.Arguments))
 
-	// Parse the arguments from JSON string
-	var args map[string]interface{}
-	if toolCall.Function.Arguments == "" {
-		return "", fmt.Errorf("tool arguments are empty")
+	// Convert llm.ToolCall to types.ToolCall for the unified executor
+	typesToolCall := types.ToolCall{
+		ID:   toolCall.ID,
+		Type: toolCall.Type,
+		Function: types.ToolCallFunction{
+			Name:      toolCall.Function.Name,
+			Arguments: toolCall.Function.Arguments,
+		},
 	}
 
-	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-		return "", fmt.Errorf("failed to parse tool arguments: %w (arguments were: '%s')", err, toolCall.Function.Arguments)
+	// Use the unified tool executor
+	result, err := tools.ExecuteToolCall(context.Background(), typesToolCall)
+	if err != nil {
+		return "", err
 	}
 
-	switch toolCall.Function.Name {
-	case "read_file":
-		filePath, ok := args["file_path"].(string)
-		if !ok {
-			return "", fmt.Errorf("read_file requires file_path argument")
-		}
-
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
-		}
-
-		return fmt.Sprintf("File content of %s:\n%s", filePath, string(content)), nil
-
-	case "edit_file_section":
-		filePath, ok := args["file_path"].(string)
-		if !ok {
-			return "", fmt.Errorf("%s requires file_path argument", toolCall.Function.Name)
-		}
-
-		oldText, hasOld := args["old_text"].(string)
-		newText, hasNew := args["new_text"].(string)
-
-		if !hasOld || !hasNew {
-			return "", fmt.Errorf("%s requires old_text and new_text arguments", toolCall.Function.Name)
-		}
-
-		// Read current file content
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
-		}
-
-		// Perform replacement
-		currentContent := string(content)
-		if !strings.Contains(currentContent, oldText) {
-			return "", fmt.Errorf("old_text not found in file %s", filePath)
-		}
-
-		newContent := strings.Replace(currentContent, oldText, newText, 1)
-
-		// Write back to file
-		if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
-			return "", fmt.Errorf("failed to write file %s: %w", filePath, err)
-		}
-
-		return fmt.Sprintf("Successfully edited %s: replaced text", filePath), nil
-
-	case "run_shell_command":
-		command, ok := args["command"].(string)
-		if !ok {
-			return "", fmt.Errorf("run_shell_command requires command argument")
-		}
-
-		cmd := exec.Command("sh", "-c", command)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Sprintf("Command failed: %s\nOutput: %s", command, string(output)), nil
-		}
-
-		return fmt.Sprintf("Command executed successfully:\n%s", string(output)), nil
-
-	case "validate_file":
-		filePath, ok := args["file_path"].(string)
-		if !ok {
-			return "", fmt.Errorf("validate_file requires file_path argument")
-		}
-
-		// Run gofmt to check syntax
-		cmd := exec.Command("gofmt", "-e", filePath)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Sprintf("File %s has syntax errors:\n%s", filePath, string(output)), nil
-		}
-
-		return fmt.Sprintf("File %s syntax is valid", filePath), nil
-
-	default:
-		return "", fmt.Errorf("tool %s is not supported in enhanced executor", toolCall.Function.Name)
+	if !result.Success {
+		return "", fmt.Errorf("tool execution failed: %v", strings.Join(result.Errors, "; "))
 	}
+
+	// Convert result to string format expected by existing code
+	if output, ok := result.Output.(string); ok {
+		return output, nil
+	}
+
+	// Fallback for non-string outputs
+	return fmt.Sprintf("%v", result.Output), nil
 }
 
 // handleQuestion responds directly to user questions

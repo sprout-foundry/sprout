@@ -621,7 +621,7 @@ func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
 	modelName := cfg.EditingModel // Use the editing model for generating search queries
 
 	// Use a short timeout for generating a search query
-	queryResponse, _, err := GetLLMResponse(modelName, messages, "", cfg, 30*time.Second) // Query generation does not use search grounding
+	queryResponse, _, err := GetLLMResponse(modelName, messages, "", cfg, GetSmartTimeout(cfg, modelName, "search")) // Query generation does not use search grounding
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate search query from LLM: %w", err)
 	}
@@ -655,7 +655,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 		ui.Out().Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 
-	response, _, err := GetLLMResponse(modelName, messages, "", cfg, 1*time.Minute) // Analysis does not use search grounding
+	response, _, err := GetLLMResponse(modelName, messages, "", cfg, GetSmartTimeout(cfg, modelName, "analysis")) // Analysis does not use search grounding
 	if err != nil {
 		return "", fmt.Errorf("failed to get script risk analysis from LLM: %w", err)
 	}
@@ -675,7 +675,7 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 
 	messages := prompts.BuildCodeReviewMessages(combinedDiff, originalPrompt, workspaceContext, workspaceContext)
 
-	response, _, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute)
+	response, _, err := GetLLMResponse(modelName, messages, "", cfg, GetSmartTimeout(cfg, modelName, "code_review"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get code review from LLM: %w", err)
 	}
@@ -752,7 +752,7 @@ func GetStagedCodeReview(cfg *config.Config, stagedDiff, reviewPrompt, workspace
 		Content: userContent,
 	})
 
-	response, _, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute)
+	response, _, err := GetLLMResponse(modelName, messages, "", cfg, GetSmartTimeout(cfg, modelName, "code_review"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get staged code review from LLM: %w", err)
 	}

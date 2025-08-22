@@ -548,36 +548,19 @@ func validateBuild(ctx *SimplifiedAgentContext) error {
 func fixBuildFailure(ctx *SimplifiedAgentContext, buildCmd, failureMsg string) error {
 	ctx.Logger.LogProcessStep("🔧 Asking LLM to fix build failure...")
 
-	// Get available tools information
-	toolsInfo := `Available tools:
-- read_file {file_path}: Read a file
-- edit_file_section {file_path,instructions,target_section?}: Edit a specific section of a file
-- micro_edit {file_path?,instructions?}: Make small edits
-- validate_file {file_path,validation_type?}: Validate a file
-- workspace_context {action,query?}: Get workspace information
-- run_shell_command {command}: Execute shell commands
-- ask_user {question}: Ask user for input`
+	// Simple tool calling format - just tell the model to emit tool_calls JSON directly
+	systemPrompt := fmt.Sprintf("You are an expert software engineer troubleshooting a build failure. You will use the tools you have to address the build failure.You have access to the following tools: %s", llm.FormatToolsForPrompt())
 
-	prompt := fmt.Sprintf(`You are an expert software engineer. The build command '%s' failed with this error:
+	userPrompt := fmt.Sprintf(`The build command '%s' failed with this error:
 
 BUILD ERROR:
 %s
 
-Please fix this build failure. You have access to these tools:
-
-%s
-
-Use the tools to diagnose and fix the issue. You can:
-1. Read files to understand the codebase
-2. Run shell commands to check system state
-3. Edit files to fix issues
-4. Run the build command again to verify the fix
-
-Keep your response brief and focus on using the available tools to fix the problem.`, buildCmd, failureMsg, toolsInfo)
+Please fix this build failure by using the available tools.`, buildCmd, failureMsg)
 
 	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert software engineer. Use the available tools to fix build failures. Respond with tool calls in JSON format."},
-		{Role: "user", Content: prompt},
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
 	}
 
 	response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 60*time.Second)

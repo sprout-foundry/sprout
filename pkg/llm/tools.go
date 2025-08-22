@@ -1,4 +1,3 @@
-// Package llm provides tool definitions and parsing utilities.
 package llm
 
 import (
@@ -234,10 +233,6 @@ func GetAvailableTools() []Tool {
 							Type:        "string",
 							Description: "Search terms for embeddings or keyword search (required for search actions)",
 						},
-						"dir": {
-							Type:        "string",
-							Description: "Optional directory root to scope load_tree (e.g., pkg/llm)",
-						},
 					},
 					Required: []string{"action"},
 				},
@@ -307,6 +302,10 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 			}
 		}
 	}
+
+	// If that fails, look for tool calls in the response text
+	// This is a fallback for LLMs that don't support proper tool calling format
+	// but can generate structured tool calls in their response
 	return toolCalls, nil
 }
 

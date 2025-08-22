@@ -1,4 +1,3 @@
-// Package llm provides LLM interaction functionalities, including interactive tool support.
 package llm
 
 import (
@@ -1200,13 +1199,8 @@ func ExecuteBasicToolCall(toolCall ToolCall, cfg *config.Config) (string, error)
 			bytes, _ := json.Marshal(res)
 			return string(bytes), nil
 		case "load_tree":
-			// Optional directory scoping
-			root := "."
-			if v, ok := args["dir"].(string); ok && strings.TrimSpace(v) != "" {
-				root = v
-			}
 			var files []string
-			_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 				if err != nil {
 					return nil
 				}
@@ -1226,11 +1220,7 @@ func ExecuteBasicToolCall(toolCall ToolCall, cfg *config.Config) (string, error)
 			if len(files) > 200 {
 				files = files[:200]
 			}
-			// Always return an array (possibly empty), never null
-			if files == nil {
-				files = []string{}
-			}
-			bytes, _ := json.Marshal(map[string]any{"files": files, "root": root})
+			bytes, _ := json.Marshal(map[string]any{"files": files})
 			return string(bytes), nil
 		case "load_summary":
 			return "{\"status\":\"not_implemented\"}", nil

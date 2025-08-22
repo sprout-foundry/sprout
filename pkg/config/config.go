@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/types"
@@ -632,4 +633,22 @@ func InitConfig(skipPrompt bool) error {
 	}
 	logger.LogUserInteraction(prompts.ConfigSaved(currentConfigPath))
 	return nil
+}
+
+// Delegate methods for LLM timeout configuration
+
+// GetTimeoutForModel returns the appropriate timeout duration for a specific model
+func (c *Config) GetTimeoutForModel(modelName string) time.Duration {
+	if c.LLM == nil {
+		c.LLM = DefaultLLMConfig()
+	}
+	return c.LLM.GetTimeoutForModel(modelName)
+}
+
+// GetSmartTimeout returns an appropriate timeout based on the operation type and model
+func (c *Config) GetSmartTimeout(modelName string, operationType string) time.Duration {
+	if c.LLM == nil {
+		c.LLM = DefaultLLMConfig()
+	}
+	return c.LLM.GetSmartTimeout(modelName, operationType)
 }

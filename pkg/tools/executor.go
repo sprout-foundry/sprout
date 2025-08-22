@@ -1,4 +1,4 @@
-package agent
+package tools
 
 import (
 	"context"
@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
-// DefaultToolExecutor is the default implementation of ToolExecutor
-type DefaultToolExecutor struct {
-	registry    ToolRegistry
+// Executor handles the execution of tools with proper error handling, timeouts, and security
+type Executor struct {
+	registry    Registry
 	permissions PermissionChecker
 	logger      *utils.Logger
 	config      *config.Config
@@ -23,12 +24,12 @@ type PermissionChecker interface {
 	HasPermission(permissions []string) bool
 
 	// CheckToolExecution checks if a tool can be executed
-	CheckToolExecution(tool Tool, params ToolParameters) bool
+	CheckToolExecution(tool Tool, params Parameters) bool
 }
 
-// NewToolExecutor creates a new tool executor
-func NewToolExecutor(registry ToolRegistry, permissions PermissionChecker, logger *utils.Logger, config *config.Config) ToolExecutor {
-	return &DefaultToolExecutor{
+// NewExecutor creates a new tool executor
+func NewExecutor(registry Registry, permissions PermissionChecker, logger *utils.Logger, config *config.Config) *Executor {
+	return &Executor{
 		registry:    registry,
 		permissions: permissions,
 		logger:      logger,
@@ -37,14 +38,14 @@ func NewToolExecutor(registry ToolRegistry, permissions PermissionChecker, logge
 }
 
 // ExecuteTool executes a tool with the given parameters
-func (e *DefaultToolExecutor) ExecuteTool(ctx context.Context, tool Tool, params ToolParameters) (*ToolResult, error) {
+func (e *Executor) ExecuteTool(ctx context.Context, tool Tool, params Parameters) (*Result, error) {
 	if tool == nil {
 		return nil, fmt.Errorf("cannot execute nil tool")
 	}
 
 	// Check if tool is available
 	if !tool.IsAvailable() {
-		return &ToolResult{
+		return &Result{
 			Success: false,
 			Errors:  []string{fmt.Sprintf("tool %s is not available", tool.Name())},
 		}, nil
@@ -52,7 +53,7 @@ func (e *DefaultToolExecutor) ExecuteTool(ctx context.Context, tool Tool, params
 
 	// Check permissions
 	if !e.permissions.CheckToolExecution(tool, params) {
-		return &ToolResult{
+		return &Result{
 			Success: false,
 			Errors:  []string{fmt.Sprintf("insufficient permissions to execute tool %s", tool.Name())},
 		}, nil
@@ -60,7 +61,7 @@ func (e *DefaultToolExecutor) ExecuteTool(ctx context.Context, tool Tool, params
 
 	// Check if tool can execute with current context
 	if !tool.CanExecute(ctx, params) {
-		return &ToolResult{
+		return &Result{
 			Success: false,
 			Errors:  []string{fmt.Sprintf("tool %s cannot execute with current context", tool.Name())},
 		}, nil
@@ -104,69 +105,76 @@ func (e *DefaultToolExecutor) ExecuteTool(ctx context.Context, tool Tool, params
 }
 
 // ExecuteToolByName executes a tool by name
-func (e *DefaultToolExecutor) ExecuteToolByName(ctx context.Context, name string, params ToolParameters) (*ToolResult, error) {
-	tool, exists := e.registry.Get(name)
+func (e *Executor) ExecuteToolByName(ctx context.Context, toolName string, params Parameters) (*Result, error) {
+	tool, exists := e.registry.GetTool(toolName)
 	if !exists {
-		return &ToolResult{
+		return &Result{
 			Success: false,
-			Errors:  []string{fmt.Sprintf("tool %s not found", name)},
-		}, fmt.Errorf("tool %s not found", name)
+			Errors:  []string{fmt.Sprintf("tool %s not found in registry", toolName)},
+		}, nil
 	}
 
 	return e.ExecuteTool(ctx, tool, params)
 }
 
-// CanExecute checks if a tool can be executed
-func (e *DefaultToolExecutor) CanExecute(ctx context.Context, tool Tool, params ToolParameters) bool {
-	if tool == nil {
-		return false
+// ExecuteToolCall executes a tool call from an LLM response
+func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall types.ToolCall) (*Result, error) {
+	// Parse the arguments from JSON string to map
+	args, err := ParseToolCallArguments(toolCall.Function.Arguments)
+	if err != nil {
+		return &Result{
+			Success: false,
+			Errors:  []string{fmt.Sprintf("failed to parse tool arguments: %v", err)},
+		}, nil
 	}
 
-	if !tool.IsAvailable() {
-		return false
+	// Create tool parameters
+	params := Parameters{
+		Args:    nil, // Positional args not used in tool calls
+		Kwargs:  args,
+		Config:  e.config,
+		Logger:  e.logger,
+		Timeout: 0, // Use tool default
 	}
 
-	if !e.permissions.CheckToolExecution(tool, params) {
-		return false
+	// Get the tool from registry
+	tool, exists := e.registry.GetTool(toolCall.Function.Name)
+	if !exists {
+		// Fall back to built-in tools for backward compatibility
+		return e.executeBuiltinTool(ctx, toolCall.Function.Name, args)
 	}
 
-	return tool.CanExecute(ctx, params)
+	return e.ExecuteTool(ctx, tool, params)
 }
 
-// GetToolRegistry returns the tool registry
-func (e *DefaultToolExecutor) GetToolRegistry() ToolRegistry {
-	return e.registry
+// ListAvailableTools returns a list of all available tools
+func (e *Executor) ListAvailableTools() []Tool {
+	return e.registry.ListTools()
+}
+
+// GetTool retrieves a specific tool by name
+func (e *Executor) GetTool(name string) (Tool, bool) {
+	return e.registry.GetTool(name)
 }
 
 // SimplePermissionChecker is a basic implementation of PermissionChecker
 type SimplePermissionChecker struct {
-	allowedPermissions []string
-	allowAll           bool
+	allowedPermissions map[string]bool
 }
 
-// NewSimplePermissionChecker creates a new simple permission checker
-func NewSimplePermissionChecker(allowedPermissions []string, allowAll bool) PermissionChecker {
-	return &SimplePermissionChecker{
-		allowedPermissions: allowedPermissions,
-		allowAll:           allowAll,
+// NewSimplePermissionChecker creates a simple permission checker
+func NewSimplePermissionChecker(allowedPermissions []string) *SimplePermissionChecker {
+	perms := make(map[string]bool)
+	for _, perm := range allowedPermissions {
+		perms[perm] = true
 	}
+	return &SimplePermissionChecker{allowedPermissions: perms}
 }
 
 // HasPermission checks if the given permissions are granted
 func (p *SimplePermissionChecker) HasPermission(permissions []string) bool {
-	if p.allowAll {
-		return true
-	}
-
-	for _, required := range permissions {
-		found := false
-		for _, allowed := range p.allowedPermissions {
-			if required == allowed {
-				found = true
-				break
-			}
-		}
-		if !found {
+	for _, perm := range permissions {
+		if !p.allowedPermissions[perm] {
 			return false
 		}
 	}
@@ -174,6 +182,6 @@ func (p *SimplePermissionChecker) HasPermission(permissions []string) bool {
 }
 
 // CheckToolExecution checks if a tool can be executed
-func (p *SimplePermissionChecker) CheckToolExecution(tool Tool, params ToolParameters) bool {
+func (p *SimplePermissionChecker) CheckToolExecution(tool Tool, params Parameters) bool {
 	return p.HasPermission(tool.RequiredPermissions())
 }

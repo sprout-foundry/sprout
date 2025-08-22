@@ -1,20 +1,19 @@
 package llm
 
 import (
-	"bufio"
+	"context"
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/tools"
+	"github.com/alantheprice/ledit/pkg/types"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -1107,227 +1106,39 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 }
 
 func ExecuteBasicToolCall(toolCall ToolCall, cfg *config.Config) (string, error) {
-	// Parse the arguments - they might be a JSON string or already parsed object
-	var args map[string]interface{}
+	// Convert to types.ToolCall for the unified executor
+	typesToolCall := convertToTypesToolCall(toolCall)
 
-	// Prefer Arguments if present; fallback to Parameters
-	argSource := toolCall.Function.Arguments
-	if strings.TrimSpace(argSource) == "" && len(toolCall.Function.Parameters) > 0 {
-		argSource = string(toolCall.Function.Parameters)
+	// Use the new unified tool executor
+	result, err := tools.ExecuteToolCall(context.Background(), typesToolCall)
+	if err != nil {
+		return "", err
 	}
 
-	// First try to unmarshal as JSON string
-	if err := json.Unmarshal([]byte(argSource), &args); err != nil {
-		return "", fmt.Errorf("failed to parse tool arguments: %w", err)
+	if !result.Success {
+		return "", fmt.Errorf("tool execution failed: %v", strings.Join(result.Errors, "; "))
 	}
 
-	switch toolCall.Function.Name {
-	case "read_file":
-		if filePath, ok := args["file_path"].(string); ok {
-			// Use the filesystem package to read the file
-			content, err := os.ReadFile(filePath)
-			if err != nil {
-				return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
-			}
-			return string(content), nil
-		}
-		return "", fmt.Errorf("read_file requires 'file_path' parameter")
-
-	case "ask_user":
-		if question, ok := args["question"].(string); ok {
-			if cfg.SkipPrompt {
-				return "User interaction skipped in non-interactive mode", nil
-			}
-			ui.Out().Printf("\n🤖 Question: %s\n", question)
-			ui.Out().Print("Your answer: ")
-			reader := bufio.NewReader(os.Stdin)
-			answer, err := reader.ReadString('\n')
-			if err != nil {
-				return "", fmt.Errorf("failed to read user input: %w", err)
-			}
-			return strings.TrimSpace(answer), nil
-		}
-		return "", fmt.Errorf("ask_user requires 'question' parameter")
-
-	case "run_shell_command":
-		if command, ok := args["command"].(string); ok {
-			cmd := exec.Command("sh", "-c", command)
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				return "", fmt.Errorf("command failed: %w\nOutput: %s", err, string(output))
-			}
-			return string(output), nil
-		}
-		return "", fmt.Errorf("run_shell_command requires 'command' parameter")
-
-	case "workspace_context":
-		action, _ := args["action"].(string)
-		switch action {
-		case "search_keywords":
-			query, _ := args["query"].(string)
-			if strings.TrimSpace(query) == "" {
-				return "", fmt.Errorf("invalid: search_keywords requires 'query'")
-			}
-			// Walk workspace for likely text/code files and collect matches deterministically
-			var matches []string
-			_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
-				if err != nil {
-					return nil
-				}
-				if d.IsDir() {
-					name := d.Name()
-					if name == ".git" || name == "node_modules" || name == "vendor" || strings.HasPrefix(name, ".") {
-						return filepath.SkipDir
-					}
-					return nil
-				}
-				if !isLikelyTextOrCode(path) {
-					return nil
-				}
-				b, err := os.ReadFile(path)
-				if err == nil && strings.Contains(string(b), query) {
-					matches = append(matches, filepath.Clean(path))
-				}
-				return nil
-			})
-			if len(matches) == 0 {
-				return "{}", nil
-			}
-			sort.Strings(matches)
-			top := matches[0]
-			res := map[string]any{"top_file": top, "matches": matches}
-			bytes, _ := json.Marshal(res)
-			return string(bytes), nil
-		case "load_tree":
-			var files []string
-			_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
-				if err != nil {
-					return nil
-				}
-				if d.IsDir() {
-					name := d.Name()
-					if name == ".git" || name == "node_modules" || name == "vendor" || strings.HasPrefix(name, ".") {
-						return filepath.SkipDir
-					}
-					return nil
-				}
-				if isLikelyTextOrCode(path) {
-					files = append(files, filepath.Clean(path))
-				}
-				return nil
-			})
-			sort.Strings(files)
-			if len(files) > 200 {
-				files = files[:200]
-			}
-			bytes, _ := json.Marshal(map[string]any{"files": files})
-			return string(bytes), nil
-		case "load_summary":
-			return "{\"status\":\"not_implemented\"}", nil
-		case "search_embeddings":
-			return "{\"status\":\"not_implemented\"}", nil
-		default:
-			return "", fmt.Errorf("invalid: unknown workspace_context action")
-		}
-
-	case "plan_step":
-		// Echo back the plan to aid determinism; planner logic is model-driven
-		return toolCall.Function.Arguments, nil
-
-	case "execute_step":
-		// Dispatch a single step to the corresponding existing tool
-		var args map[string]interface{}
-		_ = json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
-		action, _ := args["action"].(string)
-		if strings.TrimSpace(action) == "" {
-			return "", fmt.Errorf("invalid_args: execute_step requires action")
-		}
-		// Build a synthetic ToolCall for the underlying action, passing through other args
-		passArgsBytes, _ := json.Marshal(args)
-		return ExecuteBasicToolCall(ToolCall{Type: "function", Function: ToolCallFunction{Name: action, Arguments: string(passArgsBytes)}}, cfg)
-
-	case "evaluate_outcome":
-		// Pass-through evaluator outcome; encourages the loop to stop or continue
-		return toolCall.Function.Arguments, nil
-
-	case "preflight":
-		// Check optional file existence/writability and basic git cleanliness
-		if fp, ok := args["file_path"].(string); ok && fp != "" {
-			if _, err := os.Stat(fp); err != nil {
-				return "", fmt.Errorf("not_found: %s", fp)
-			}
-			if f, err := os.OpenFile(fp, os.O_WRONLY, 0); err == nil {
-				f.Close()
-			} else {
-				return "", fmt.Errorf("permission: not writable: %s", fp)
-			}
-		}
-		// Git status (best-effort)
-		if _, err := exec.LookPath("git"); err == nil {
-			cmd := exec.Command("git", "status", "--porcelain")
-			out, _ := cmd.CombinedOutput()
-			return fmt.Sprintf("preflight ok; git status: %s", strings.TrimSpace(string(out))), nil
-		}
-		return "preflight ok; git not available", nil
-
-	case "search_web":
-		if !cfg.UseSearchGrounding {
-			return "", fmt.Errorf("web search disabled by configuration")
-		}
-		if query, ok := args["query"].(string); ok {
-			return fmt.Sprintf("Web search for '%s' - not implemented in this build", query), nil
-		}
-		return "", fmt.Errorf("search_web requires 'query' parameter")
-
-	case "edit_file_section":
-		if filePath, ok := args["file_path"].(string); ok {
-			instructions, _ := args["instructions"].(string)
-			targetSection, _ := args["target_section"].(string)
-
-			if strings.TrimSpace(filePath) == "" {
-				return "", fmt.Errorf("edit_file_section requires 'file_path' parameter")
-			}
-			if strings.TrimSpace(instructions) == "" {
-				return "", fmt.Errorf("edit_file_section requires 'instructions' parameter")
-			}
-
-			logger := utils.GetLogger(cfg.SkipPrompt)
-			logger.Logf("edit_file_section: %s (target: %s)", filePath, targetSection)
-
-			// Create a context request to handle the file editing
-			contextRequest := ContextRequest{
-				Type:  "edit_file_section",
-				Query: fmt.Sprintf("file_path=%s|instructions=%s|target_section=%s", filePath, instructions, targetSection),
-			}
-
-			// Use the global context handler if available, otherwise return an error
-			if globalContextHandler != nil {
-				response, err := globalContextHandler([]ContextRequest{contextRequest}, cfg)
-				if err != nil {
-					logger.Logf("edit_file_section context request failed: %v", err)
-					return "", fmt.Errorf("edit_file_section failed: %w", err)
-				}
-				return response, nil
-			} else {
-				// Fallback: try to edit the file directly
-				if _, err := os.Stat(filePath); err != nil {
-					return "", fmt.Errorf("file does not exist: %s", filePath)
-				}
-
-				// For now, just log the operation - the actual editing would need to be implemented
-				// in the context handler or through a different mechanism
-				logger.Logf("edit_file_section requested but no context handler available: %s", filePath)
-				return fmt.Sprintf("edit_file_section request queued for %s", filePath), nil
-			}
-		}
-		return "", fmt.Errorf("edit_file_section requires 'file_path' parameter")
-
-	default:
-		return "", fmt.Errorf("unknown tool: %s", toolCall.Function.Name)
+	// Convert result to string format expected by existing code
+	if output, ok := result.Output.(string); ok {
+		return output, nil
 	}
+
+	// Fallback for non-string outputs
+	return fmt.Sprintf("%v", result.Output), nil
 }
 
-// isLikelyTextOrCode returns true for typical text/code files
+// convertToTypesToolCall converts LLM ToolCall to types.ToolCall
+func convertToTypesToolCall(toolCall ToolCall) types.ToolCall {
+	return types.ToolCall{
+		ID:   toolCall.ID,
+		Type: toolCall.Type,
+		Function: types.ToolCallFunction{
+			Name:      toolCall.Function.Name,
+			Arguments: toolCall.Function.Arguments,
+		},
+	}
+}
 func isLikelyTextOrCode(path string) bool {
 	lower := strings.ToLower(path)
 	// Common source and text extensions

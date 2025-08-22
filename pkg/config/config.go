@@ -22,62 +22,257 @@ const (
 	MicroCoder  = "qwen2.5-coder:3b"
 )
 
-// CodeStylePreferences defines the preferred code style guidelines for the project.
-type CodeStylePreferences struct {
-	FunctionSize      string `json:"function_size"`
-	FileSize          string `json:"file_size"`
-	NamingConventions string `json:"naming_conventions"`
-	ErrorHandling     string `json:"error_handling"`
-	TestingApproach   string `json:"testing_approach"`
-	Modularity        string `json:"modularity"`
-	Readability       string `json:"readability"`
+// CodeStylePreferences is now defined in agent.go
+
+// Config represents the main application configuration
+// This struct maintains backward compatibility while introducing domain-specific configurations
+type Config struct {
+	// Domain-specific configurations (NEW)
+	LLM         *LLMConfig         `json:"llm,omitempty"`         // LLM-related settings
+	UI          *UIConfig          `json:"ui,omitempty"`          // UI and logging settings
+	Agent       *AgentConfig       `json:"agent,omitempty"`       // Agent behavior settings
+	Security    *SecurityConfig    `json:"security,omitempty"`    // Security settings
+	Performance *PerformanceConfig `json:"performance,omitempty"` // Performance settings
+
+	// Legacy fields (DEPRECATED - use domain-specific configs instead)
+	// These are kept for backward compatibility and will be migrated over time
+	EditingModel             string               `json:"editing_model,omitempty"`
+	SummaryModel             string               `json:"summary_model,omitempty"`
+	OrchestrationModel       string               `json:"orchestration_model,omitempty"`
+	WorkspaceModel           string               `json:"workspace_model,omitempty"`
+	EmbeddingModel           string               `json:"embedding_model,omitempty"`
+	CodeReviewModel          string               `json:"code_review_model,omitempty"`
+	LocalModel               string               `json:"local_model,omitempty"`
+	TrackWithGit             bool                 `json:"track_with_git,omitempty"`
+	EnableSecurityChecks     bool                 `json:"enable_security_checks,omitempty"`
+	SkipPrompt               bool                 `json:"-"` // Internal use, not saved to config
+	OllamaServerURL          string               `json:"ollama_server_url,omitempty"`
+	OrchestrationMaxAttempts int                  `json:"orchestration_max_attempts,omitempty"`
+	CodeStyle                CodeStylePreferences `json:"code_style,omitempty"`
+	SearchModel              string               `json:"search_model,omitempty"`
+	Temperature              float64              `json:"temperature,omitempty"`
+	MaxTokens                int                  `json:"max_tokens,omitempty"`
+	TopP                     float64              `json:"top_p,omitempty"`
+	PresencePenalty          float64              `json:"presence_penalty,omitempty"`
+	FrequencyPenalty         float64              `json:"frequency_penalty,omitempty"`
+	RetryAttemptCount        int                  `json:"-"` // Internal field to track retry attempts
+	UseSearchGrounding       bool                 `json:"-"` // Command-scoped flag to enable search grounding
+	FromAgent                bool                 `json:"-"` // Internal: true when invoked from agent mode
+	LastTokenUsage           *types.TokenUsage    `json:"-"` // Last token usage from LLM call
+
+	// Legacy UI toggles (DEPRECATED)
+	PreapplyReview    bool     `json:"preapply_review,omitempty"`
+	DryRun            bool     `json:"dry_run,omitempty"`
+	JsonLogs          bool     `json:"json_logs,omitempty"`
+	HealthChecks      bool     `json:"health_checks,omitempty"`
+	StagedEdits       bool     `json:"staged_edits,omitempty"`
+	AutoGenerateTests bool     `json:"auto_generate_tests,omitempty"`
+	ShellAllowlist    []string `json:"shell_allowlist,omitempty"`
+	TelemetryEnabled  bool     `json:"telemetry_enabled,omitempty"`
+	TelemetryFile     string   `json:"telemetry_file,omitempty"`
+	PolicyVariant     string   `json:"policy_variant,omitempty"`
+
+	// Legacy budget/limits (DEPRECATED)
+	MaxRunSeconds    int     `json:"max_run_seconds,omitempty"`
+	MaxRunTokens     int     `json:"max_run_tokens,omitempty"`
+	MaxRunCostUSD    float64 `json:"max_run_cost_usd,omitempty"`
+	ShellTimeoutSecs int     `json:"shell_timeout_secs,omitempty"`
+
+	// Legacy rate limiting (DEPRECATED)
+	FileBatchSize         int `json:"file_batch_size,omitempty"`
+	EmbeddingBatchSize    int `json:"embedding_batch_size,omitempty"`
+	MaxConcurrentRequests int `json:"max_concurrent_requests,omitempty"`
+	RequestDelayMs        int `json:"request_delay_ms,omitempty"`
 }
 
-type Config struct {
-	EditingModel             string               `json:"editing_model"`
-	SummaryModel             string               `json:"summary_model"`
-	OrchestrationModel       string               `json:"orchestration_model"` // new field for orchestration tasks
-	WorkspaceModel           string               `json:"workspace_model"`     // New field for workspace analysis
-	EmbeddingModel           string               `json:"embedding_model"`     // New field for embedding model
-	CodeReviewModel          string               `json:"code_review_model"`   // New field for code review tasks
-	LocalModel               string               `json:"local_model"`
-	TrackWithGit             bool                 `json:"track_with_git"`
-	EnableSecurityChecks     bool                 `json:"enable_security_checks"` // New field for security checks
-	SkipPrompt               bool                 `json:"-"`                      // Internal use, not saved to config
-	OllamaServerURL          string               `json:"ollama_server_url"`
-	OrchestrationMaxAttempts int                  `json:"orchestration_max_attempts"` // New field for max attempts
-	CodeStyle                CodeStylePreferences `json:"code_style"`                 // New field for code style preferences
-	SearchModel              string               `json:"search_model"`               // NEW: Field for search model
-	Temperature              float64              `json:"temperature"`                // NEW: Field for LLM temperature
-	MaxTokens                int                  `json:"max_tokens"`                 // NEW: Field for max output tokens
-	TopP                     float64              `json:"top_p"`                      // NEW: Field for nucleus sampling
-	PresencePenalty          float64              `json:"presence_penalty"`           // NEW: Field for presence penalty
-	FrequencyPenalty         float64              `json:"frequency_penalty"`          // NEW: Field for frequency penalty
-	RetryAttemptCount        int                  `json:"-"`                          // Internal field to track retry attempts
-	UseSearchGrounding       bool                 `json:"-"`                          // Command-scoped flag to enable search grounding
-	FromAgent                bool                 `json:"-"`                          // Internal: true when invoked from agent mode
-	LastTokenUsage           *types.TokenUsage    `json:"-"`                          // Last token usage from LLM call
-	// New toggles
-	PreapplyReview    bool     `json:"preapply_review"`
-	DryRun            bool     `json:"dry_run"`
-	JsonLogs          bool     `json:"json_logs"`
-	HealthChecks      bool     `json:"health_checks"`
-	StagedEdits       bool     `json:"staged_edits"`
-	AutoGenerateTests bool     `json:"auto_generate_tests"`
-	ShellAllowlist    []string `json:"shell_allowlist"`
-	TelemetryEnabled  bool     `json:"telemetry_enabled"`
-	TelemetryFile     string   `json:"telemetry_file"`
-	PolicyVariant     string   `json:"policy_variant"`
-	// Budgets and limits
-	MaxRunSeconds    int     `json:"max_run_seconds"`
-	MaxRunTokens     int     `json:"max_run_tokens"`
-	MaxRunCostUSD    float64 `json:"max_run_cost_usd"`
-	ShellTimeoutSecs int     `json:"shell_timeout_secs"`
-	// Rate limiting and batch size controls
-	FileBatchSize         int `json:"file_batch_size"`         // Batch size for file processing
-	EmbeddingBatchSize    int `json:"embedding_batch_size"`    // Batch size for embedding generation
-	MaxConcurrentRequests int `json:"max_concurrent_requests"` // Max concurrent API requests
-	RequestDelayMs        int `json:"request_delay_ms"`        // Delay between requests in milliseconds
+// Helper methods for backward compatibility and domain-specific access
+
+// GetLLMConfig returns the LLM configuration, creating defaults if not set
+func (c *Config) GetLLMConfig() *LLMConfig {
+	if c.LLM != nil {
+		return c.LLM
+	}
+
+	// Create from legacy fields
+	llm := DefaultLLMConfig()
+	if c.EditingModel != "" {
+		llm.EditingModel = c.EditingModel
+	}
+	if c.SummaryModel != "" {
+		llm.SummaryModel = c.SummaryModel
+	}
+	if c.OrchestrationModel != "" {
+		llm.OrchestrationModel = c.OrchestrationModel
+	}
+	if c.WorkspaceModel != "" {
+		llm.WorkspaceModel = c.WorkspaceModel
+	}
+	if c.EmbeddingModel != "" {
+		llm.EmbeddingModel = c.EmbeddingModel
+	}
+	if c.CodeReviewModel != "" {
+		llm.CodeReviewModel = c.CodeReviewModel
+	}
+	if c.LocalModel != "" {
+		llm.LocalModel = c.LocalModel
+	}
+	if c.SearchModel != "" {
+		llm.SearchModel = c.SearchModel
+	}
+	if c.OllamaServerURL != "" {
+		llm.OllamaServerURL = c.OllamaServerURL
+	}
+	if c.Temperature != 0 {
+		llm.Temperature = c.Temperature
+	}
+	if c.MaxTokens != 0 {
+		llm.MaxTokens = c.MaxTokens
+	}
+	if c.TopP != 0 {
+		llm.TopP = c.TopP
+	}
+	if c.PresencePenalty != 0 {
+		llm.PresencePenalty = c.PresencePenalty
+	}
+	if c.FrequencyPenalty != 0 {
+		llm.FrequencyPenalty = c.FrequencyPenalty
+	}
+
+	return llm
+}
+
+// GetUIConfig returns the UI configuration, creating defaults if not set
+func (c *Config) GetUIConfig() *UIConfig {
+	if c.UI != nil {
+		return c.UI
+	}
+
+	// Create from legacy fields
+	ui := DefaultUIConfig()
+	if c.JsonLogs {
+		ui.JsonLogs = true
+	}
+	if c.HealthChecks {
+		ui.HealthChecks = true
+	}
+	if c.PreapplyReview {
+		ui.PreapplyReview = true
+	}
+	if c.TelemetryEnabled {
+		ui.TelemetryEnabled = true
+	}
+	if c.TelemetryFile != "" {
+		ui.TelemetryFile = c.TelemetryFile
+	}
+	if c.TrackWithGit {
+		ui.TrackWithGit = true
+	}
+	if c.StagedEdits {
+		ui.StagedEdits = true
+	}
+
+	return ui
+}
+
+// GetAgentConfig returns the agent configuration, creating defaults if not set
+func (c *Config) GetAgentConfig() *AgentConfig {
+	if c.Agent != nil {
+		return c.Agent
+	}
+
+	// Create from legacy fields
+	agent := DefaultAgentConfig()
+	if c.OrchestrationMaxAttempts != 0 {
+		agent.OrchestrationMaxAttempts = c.OrchestrationMaxAttempts
+	}
+	if c.PolicyVariant != "" {
+		agent.PolicyVariant = c.PolicyVariant
+	}
+	if c.AutoGenerateTests {
+		agent.AutoGenerateTests = true
+	}
+	if c.DryRun {
+		agent.DryRun = true
+	}
+	if c.FromAgent {
+		agent.FromAgent = true
+	}
+	// CodeStyle is already handled by the legacy field
+
+	return agent
+}
+
+// GetSecurityConfig returns the security configuration, creating defaults if not set
+func (c *Config) GetSecurityConfig() *SecurityConfig {
+	if c.Security != nil {
+		return c.Security
+	}
+
+	// Create from legacy fields
+	security := DefaultSecurityConfig()
+	if c.EnableSecurityChecks {
+		security.EnableSecurityChecks = true
+	}
+	if len(c.ShellAllowlist) > 0 {
+		security.ShellAllowlist = c.ShellAllowlist
+	}
+
+	return security
+}
+
+// GetPerformanceConfig returns the performance configuration, creating defaults if not set
+func (c *Config) GetPerformanceConfig() *PerformanceConfig {
+	if c.Performance != nil {
+		return c.Performance
+	}
+
+	// Create from legacy fields
+	perf := DefaultPerformanceConfig()
+	if c.FileBatchSize != 0 {
+		perf.FileBatchSize = c.FileBatchSize
+	}
+	if c.EmbeddingBatchSize != 0 {
+		perf.EmbeddingBatchSize = c.EmbeddingBatchSize
+	}
+	if c.MaxConcurrentRequests != 0 {
+		perf.MaxConcurrentRequests = c.MaxConcurrentRequests
+	}
+	if c.RequestDelayMs != 0 {
+		perf.RequestDelayMs = c.RequestDelayMs
+	}
+	if c.ShellTimeoutSecs != 0 {
+		perf.ShellTimeoutSecs = c.ShellTimeoutSecs
+	}
+	if c.MaxRunSeconds != 0 {
+		perf.MaxRunSeconds = c.MaxRunSeconds
+	}
+	if c.MaxRunTokens != 0 {
+		perf.MaxRunTokens = c.MaxRunTokens
+	}
+	if c.MaxRunCostUSD != 0 {
+		perf.MaxRunCostUSD = c.MaxRunCostUSD
+	}
+
+	return perf
+}
+
+// InitializeWithDefaults sets up the domain-specific configurations with sensible defaults
+func (c *Config) InitializeWithDefaults() {
+	if c.LLM == nil {
+		c.LLM = DefaultLLMConfig()
+	}
+	if c.UI == nil {
+		c.UI = DefaultUIConfig()
+	}
+	if c.Agent == nil {
+		c.Agent = DefaultAgentConfig()
+	}
+	if c.Security == nil {
+		c.Security = DefaultSecurityConfig()
+	}
+	if c.Performance == nil {
+		c.Performance = DefaultPerformanceConfig()
+	}
 }
 
 func getHomeConfigPath() (string, string) {

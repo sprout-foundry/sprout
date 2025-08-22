@@ -522,229 +522,74 @@ func validateBuild(ctx *SimplifiedAgentContext) error {
 		failureMsg := string(output)
 		ctx.Logger.LogProcessStep("❌ Build failed, analyzing with LLM for recovery...")
 
-		// Use LLM to analyze the failure and determine recovery strategy
-		recoveryAction, recoveryErr := analyzeBuildFailure(ctx, buildCmd, failureMsg)
-		if recoveryErr != nil {
-			ctx.Logger.LogError(fmt.Errorf("LLM analysis failed: %w", recoveryErr))
-			return fmt.Errorf("build validation failed: %s", failureMsg)
+		// Ask LLM to fix the build failure directly
+		fixErr := fixBuildFailure(ctx, buildCmd, failureMsg)
+		if fixErr != nil {
+			ctx.Logger.LogError(fmt.Errorf("LLM fix attempt failed: %w", fixErr))
+			return fmt.Errorf("build validation failed and fix attempt unsuccessful: %s", failureMsg)
 		}
 
-		// Execute the recovery action
-		success, execErr := executeRecoveryAction(ctx, recoveryAction)
-		if execErr != nil {
-			ctx.Logger.LogError(fmt.Errorf("recovery execution failed: %w", execErr))
-			return fmt.Errorf("build validation failed after recovery attempt: %s", failureMsg)
+		// Try the build again after the fix attempt
+		ctx.Logger.LogProcessStep("🔄 Retrying build after fix...")
+		retryCmd := exec.Command("sh", "-c", buildCmd)
+		if retryOutput, retryErr := retryCmd.CombinedOutput(); retryErr != nil {
+			return fmt.Errorf("build still fails after fix attempt: %s", string(retryOutput))
 		}
 
-		if success {
-			ctx.Logger.LogProcessStep("✅ Build validation passed after automated recovery!")
-			return nil
-		} else {
-			ctx.Logger.LogProcessStep("❌ Recovery attempt unsuccessful")
-			return fmt.Errorf("build validation failed and recovery unsuccessful: %s", failureMsg)
-		}
+		ctx.Logger.LogProcessStep("✅ Build validation passed after LLM fix!")
+		return nil
 	}
 
 	ctx.Logger.LogProcessStep("✅ Build validation passed")
 	return nil
 }
 
-// BuildFailureAnalysis represents the LLM's analysis of a build failure
-type BuildFailureAnalysis struct {
-	ErrorType        string   `json:"error_type"`        // "command_not_found", "syntax_error", "missing_dependency", etc.
-	RootCause        string   `json:"root_cause"`        // Detailed explanation of what went wrong
-	RecoveryStrategy string   `json:"recovery_strategy"` // "fix_build_command", "fix_syntax", "rollback_changes", "install_dependency"
-	CommandsToRun    []string `json:"commands_to_run"`   // Commands to execute for recovery
-	FilesToModify    []struct {
-		Path    string `json:"path"`
-		Changes string `json:"changes"`
-	} `json:"files_to_modify"` // Files that need to be modified
-	RollbackLastChange bool `json:"rollback_last_change"` // Whether to rollback the last change
-}
+// fixBuildFailure asks the LLM to fix the build failure directly using available tools
+func fixBuildFailure(ctx *SimplifiedAgentContext, buildCmd, failureMsg string) error {
+	ctx.Logger.LogProcessStep("🔧 Asking LLM to fix build failure...")
 
-// analyzeBuildFailure uses LLM to analyze build failures and determine recovery strategy
-func analyzeBuildFailure(ctx *SimplifiedAgentContext, buildCmd, failureMsg string) (*BuildFailureAnalysis, error) {
-	ctx.Logger.LogProcessStep("🤖 Analyzing build failure with LLM...")
+	// Get available tools information
+	toolsInfo := `Available tools:
+- read_file {file_path}: Read a file
+- edit_file_section {file_path,instructions,target_section?}: Edit a specific section of a file
+- micro_edit {file_path?,instructions?}: Make small edits
+- validate_file {file_path,validation_type?}: Validate a file
+- workspace_context {action,query?}: Get workspace information
+- run_shell_command {command}: Execute shell commands
+- ask_user {question}: Ask user for input`
 
-	prompt := fmt.Sprintf(`You are an expert software engineer analyzing a build failure. The build command '%s' failed with the following error:
+	prompt := fmt.Sprintf(`You are an expert software engineer. The build command '%s' failed with this error:
 
 BUILD ERROR:
 %s
 
-Your task is to analyze this failure and provide a structured recovery strategy. Consider:
+Please fix this build failure. You have access to these tools:
 
-1. **Command not found errors** (like 'gofmt: command not found') - suggest installing tools or using alternatives
-2. **Syntax errors** - suggest fixing the code or running formatters
-3. **Missing dependencies** - suggest installation commands
-4. **Configuration issues** - suggest config file updates
+%s
 
-Respond with a JSON object containing:
-- error_type: The category of error
-- root_cause: Detailed explanation of what went wrong
-- recovery_strategy: "fix_build_command", "fix_syntax", "rollback_changes", "install_dependency", or "run_commands"
-- commands_to_run: Array of shell commands to execute (if applicable)
-- files_to_modify: Array of {path, changes} objects (if applicable)
-- rollback_last_change: Boolean indicating if the last change should be rolled back
+Use the tools to diagnose and fix the issue. You can:
+1. Read files to understand the codebase
+2. Run shell commands to check system state
+3. Edit files to fix issues
+4. Run the build command again to verify the fix
 
-Example response:
-{
-  "error_type": "command_not_found",
-  "root_cause": "The 'gofmt' command is not installed on this system",
-  "recovery_strategy": "fix_build_command",
-  "commands_to_run": ["which gofmt || echo 'gofmt not found'"],
-  "files_to_modify": [{"path": ".ledit/workspace.json", "changes": "replace gomft with gofmt in build_command"}],
-  "rollback_last_change": false
-}
-
-Return ONLY the JSON object.`, buildCmd, failureMsg)
+Keep your response brief and focus on using the available tools to fix the problem.`, buildCmd, failureMsg, toolsInfo)
 
 	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert at diagnosing and fixing build failures. Always return valid JSON."},
+		{Role: "system", Content: "You are an expert software engineer. Use the available tools to fix build failures. Respond with tool calls in JSON format."},
 		{Role: "user", Content: prompt},
 	}
 
 	response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 60*time.Second)
 	if err != nil {
-		return nil, fmt.Errorf("LLM analysis request failed: %w", err)
+		return fmt.Errorf("LLM fix request failed: %w", err)
 	}
 
-	// Parse the LLM response
-	clean, err := utils.ExtractJSON(response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse LLM analysis response: %w", err)
-	}
+	ctx.Logger.LogProcessStep(fmt.Sprintf("LLM response: %s", response))
 
-	var analysis BuildFailureAnalysis
-	if err := json.Unmarshal([]byte(clean), &analysis); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal build failure analysis: %w", err)
-	}
-
-	return &analysis, nil
-}
-
-// executeRecoveryAction executes the recovery strategy determined by the LLM
-func executeRecoveryAction(ctx *SimplifiedAgentContext, analysis *BuildFailureAnalysis) (bool, error) {
-	ctx.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing recovery strategy: %s", analysis.RecoveryStrategy))
-
-	switch analysis.RecoveryStrategy {
-	case "fix_build_command":
-		return executeBuildCommandFix(ctx, analysis)
-	case "fix_syntax":
-		return executeSyntaxFix(ctx, analysis)
-	case "rollback_changes":
-		return executeRollback(ctx, analysis)
-	case "install_dependency":
-		return executeDependencyInstall(ctx, analysis)
-	case "run_commands":
-		return executeRecoveryCommands(ctx, analysis)
-	default:
-		return false, fmt.Errorf("unknown recovery strategy: %s", analysis.RecoveryStrategy)
-	}
-}
-
-// executeBuildCommandFix updates the build command in workspace.json
-func executeBuildCommandFix(ctx *SimplifiedAgentContext, analysis *BuildFailureAnalysis) (bool, error) {
-	if len(analysis.FilesToModify) == 0 {
-		return false, fmt.Errorf("no files to modify for build command fix")
-	}
-
-	for _, fileMod := range analysis.FilesToModify {
-		if err := applyDirectEdit(fileMod.Path, fileMod.Changes, ctx.Logger); err != nil {
-			return false, fmt.Errorf("failed to modify file %s: %w", fileMod.Path, err)
-		}
-	}
-
-	// Test the updated build command
-	workspaceFile, err := workspace.LoadWorkspaceFile()
-	if err != nil {
-		return false, fmt.Errorf("failed to load workspace file: %w", err)
-	}
-
-	buildCmd := strings.TrimSpace(workspaceFile.BuildCommand)
-	if buildCmd == "" {
-		return false, fmt.Errorf("build command is empty after fix")
-	}
-
-	cmd := exec.Command("sh", "-c", buildCmd)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return false, fmt.Errorf("build still fails after fix: %s", string(output))
-	}
-
-	return true, nil
-}
-
-// executeSyntaxFix applies syntax fixes suggested by the LLM
-func executeSyntaxFix(ctx *SimplifiedAgentContext, analysis *BuildFailureAnalysis) (bool, error) {
-	// Run any commands suggested by the LLM
-	for _, cmdStr := range analysis.CommandsToRun {
-		ctx.Logger.LogProcessStep(fmt.Sprintf("Running: %s", cmdStr))
-		cmd := exec.Command("sh", "-c", cmdStr)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			ctx.Logger.LogError(fmt.Errorf("command failed: %s, output: %s", cmdStr, string(output)))
-			// Continue with other commands even if one fails
-		}
-	}
-
-	// Apply any file modifications
-	for _, fileMod := range analysis.FilesToModify {
-		if err := applyDirectEdit(fileMod.Path, fileMod.Changes, ctx.Logger); err != nil {
-			return false, fmt.Errorf("failed to modify file %s: %w", fileMod.Path, err)
-		}
-	}
-
-	return true, nil
-}
-
-// executeRollback rolls back the last change if requested
-func executeRollback(ctx *SimplifiedAgentContext, analysis *BuildFailureAnalysis) (bool, error) {
-	if !analysis.RollbackLastChange {
-		return true, nil // Nothing to do
-	}
-
-	ctx.Logger.LogProcessStep("🔄 Rolling back last change...")
-	// This would require implementing git rollback or change tracking
-	// For now, we'll implement a basic version using git
-	cmd := exec.Command("git", "checkout", "HEAD~1", "--", ".")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return false, fmt.Errorf("git rollback failed: %s", string(output))
-	}
-
-	ctx.Logger.LogProcessStep("✅ Successfully rolled back last change")
-	return true, nil
-}
-
-// executeDependencyInstall runs dependency installation commands
-func executeDependencyInstall(ctx *SimplifiedAgentContext, analysis *BuildFailureAnalysis) (bool, error) {
-	for _, cmdStr := range analysis.CommandsToRun {
-		ctx.Logger.LogProcessStep(fmt.Sprintf("Installing dependency: %s", cmdStr))
-		cmd := exec.Command("sh", "-c", cmdStr)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return false, fmt.Errorf("dependency installation failed: %s, output: %s", cmdStr, string(output))
-		}
-	}
-
-	return true, nil
-}
-
-// executeRecoveryCommands runs general recovery commands
-func executeRecoveryCommands(ctx *SimplifiedAgentContext, analysis *BuildFailureAnalysis) (bool, error) {
-	for _, cmdStr := range analysis.CommandsToRun {
-		ctx.Logger.LogProcessStep(fmt.Sprintf("Executing recovery command: %s", cmdStr))
-		cmd := exec.Command("sh", "-c", cmdStr)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			ctx.Logger.LogError(fmt.Errorf("recovery command failed: %s, output: %s", cmdStr, string(output)))
-			// Continue with other commands even if one fails
-		}
-	}
-
-	// Apply any file modifications
-	for _, fileMod := range analysis.FilesToModify {
-		if err := applyDirectEdit(fileMod.Path, fileMod.Changes, ctx.Logger); err != nil {
-			return false, fmt.Errorf("failed to modify file %s: %w", fileMod.Path, err)
-		}
-	}
-
-	return true, nil
+	// For now, we'll just log the response since we need to implement tool execution
+	// In a full implementation, we'd parse the tool calls and execute them
+	return fmt.Errorf("build fix attempted but needs tool execution implementation: %s", response)
 }
 
 // handleQuestion responds directly to user questions

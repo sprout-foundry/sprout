@@ -665,45 +665,20 @@ func BuildProjectGoalsMessages(workspaceSummary string) []Message {
 }
 
 // BuildCodeReviewMessages constructs the messages for the LLM to review code changes.
-func BuildCodeReviewMessages(combinedDiff, originalPrompt, processedInstructions string) []Message {
+func BuildCodeReviewMessages(combinedDiff, originalPrompt, processedInstructions, fullFileContext string) []Message {
 	systemPrompt := mustLoadPrompt("code_review_system.txt")
-	var userPromptBuilder strings.Builder
-	// Pull the workspace context out of the processed instructions if available
-	// the start of the workspace context is marked by: --- Full content from workspace ---
-	// the end of the workspace context is marked by: --- End of full content from workspace ---
-	workspaceContext := extractWorkspaceContext(processedInstructions)
 
-	if workspaceContext != "" {
-		userPromptBuilder.WriteString("--- Workspace Context ---\n")
-		userPromptBuilder.WriteString(workspaceContext)
-		userPromptBuilder.WriteString("\n--- End Workspace Context ---\n\n")
-	}
-
-	userPromptBuilder.WriteString(fmt.Sprintf(
-		"Original user prompt:\n\"%s\"\n\nCode changes (diff):\n```diff\n%s\n```\n\nPlease review these changes and provide your assessment.",
+	userPrompt := fmt.Sprintf(
+		"Original user prompt:\n\"%s\"\n\nCode changes (diff):\n```diff\n%s\n```\n\nFull file context:\n```go\n%s\n```\n\nPlease review these changes and provide your assessment. If you need to make changes, provide a patch_resolution field with the complete updated file content.",
 		originalPrompt,
 		combinedDiff,
-	))
+		fullFileContext,
+	)
 
 	return []Message{
 		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userPromptBuilder.String()},
+		{Role: "user", Content: userPrompt},
 	}
-}
-
-func extractWorkspaceContext(processedInstructions string) string {
-	// Pull the workspace context out of the processed instructions if available
-	// the start of the workspace context is marked by: --- Full content from workspace ---
-	// the end of the workspace context is marked by: --- End of full content from workspace ---
-	startMarker := "--- Full content from workspace ---"
-	endMarker := "--- End of full content from workspace ---"
-	startIndex := strings.Index(processedInstructions, startMarker)
-	endIndex := strings.Index(processedInstructions, endMarker)
-
-	if startIndex != -1 && endIndex != -1 && startIndex < endIndex {
-		return processedInstructions[startIndex+len(startMarker) : endIndex]
-	}
-	return ""
 }
 
 // --- User Interaction Prompts ---

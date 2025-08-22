@@ -673,7 +673,7 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 		modelName = cfg.EditingModel
 	}
 
-	messages := prompts.BuildCodeReviewMessages(combinedDiff, originalPrompt, workspaceContext)
+	messages := prompts.BuildCodeReviewMessages(combinedDiff, originalPrompt, workspaceContext, workspaceContext)
 
 	response, _, err := GetLLMResponse(modelName, messages, "", cfg, 3*time.Minute)
 	if err != nil {
@@ -716,9 +716,9 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 	if reviewResult.Feedback == "" {
 		reviewResult.Feedback = "No feedback provided."
 	}
-	// If instructions missing on needs_revision, provide a safe nudge
-	if reviewResult.Status == "needs_revision" && strings.TrimSpace(reviewResult.Instructions) == "" {
-		reviewResult.Instructions = "Apply the minimal changes required by the original prompt and ensure output format strictly matches the prompt."
+	// If detailed guidance missing on needs_revision, provide guidance for the LLM
+	if reviewResult.Status == "needs_revision" && strings.TrimSpace(reviewResult.DetailedGuidance) == "" {
+		reviewResult.DetailedGuidance = "Apply the minimal changes required by the original prompt and ensure output format strictly matches the prompt."
 	}
 
 	return &reviewResult, nil

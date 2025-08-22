@@ -275,7 +275,7 @@ func CallLLMWithInteractiveContext(
 		}
 		// If we are expecting a plan now, push a strong system requirement
 		if expectPlanNext {
-			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "You must now return ONLY the final JSON plan: {\"edits\":[{\"file\":...,\"instructions\":...}...]}. No more tool_calls."})
+			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "You must now return ONLY the final JSON plan: {\"edits\":[{\"file\":...,\"instructions\":...}]}.\n\nDO NOT use tool_calls for this response. Provide only the JSON plan or a normal text response."})
 		}
 
 		// Call the main LLM response function (with simple backoff on transient/provider errors)
@@ -945,7 +945,7 @@ func CallLLMWithInteractiveContext(
 		}
 
 		// No tool_calls and no actionable context requests: instruct model to emit plan/tool_calls and try again, including guidance to discover files
-		currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "No tool_calls found. Please provide your final response. If you need to make tool calls, use the appropriate tools to gather information. If you have all the information you need, provide your complete response."})
+		currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Your previous response did not contain valid tool_calls. You have two options:\n\n1. If you need more information: Output ONLY a JSON tool_calls object\n2. If you have enough information to complete the task: Provide your final response as normal text\n\nChoose ONE approach - either pure tool_calls JSON or pure text response. Do not mix them."})
 		turnDurations = append(turnDurations, time.Since(turnStart))
 		continue
 	}

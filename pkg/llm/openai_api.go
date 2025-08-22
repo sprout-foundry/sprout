@@ -42,6 +42,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 	tryOnce := func(reqBody []byte) (*http.Response, error) {
 		// Debug: Log the actual JSON payload being sent
 		logger.Logf("DEBUG: About to send HTTP request to: %s", apiURL)
+		logger.Logf("DEBUG: Requested tokens: %s\n", EstimateTokens(string(reqBody)))
 		logger.Logf("DEBUG: Request payload length: %d bytes", len(reqBody))
 		logger.Logf("DEBUG: Request payload: %s", string(reqBody))
 

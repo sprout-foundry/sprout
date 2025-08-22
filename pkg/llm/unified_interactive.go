@@ -264,7 +264,7 @@ Available Tools:
 - **ask_user**: Ask the user a question when more information is needed (parameters: question)
 - **validate_file**: Validate a file for syntax errors, compilation issues, or other problems (parameters: file_path, validation_type)
 - **edit_file_section**: Edit a specific section of a file efficiently (parameters: file_path, instructions, target_section?)
-- **micro_edit**: Apply a very small, targeted change to a file (parameters: file_path?, instructions?)
+
 - **workspace_context**: Access workspace information including file tree, embeddings search, or keyword search (parameters: action, query?)
 - **preflight**: Verify file exists/writable, clean git state, and required CLIs available (parameters: file_path?)
 

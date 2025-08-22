@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/prompts"
 
 	"github.com/spf13/cobra"
 )
@@ -19,7 +20,14 @@ var initCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Initializing new configuration in the current directory...")
 		if err := config.InitConfig(initSkipPrompt); err != nil {
-			utils.HandleFatalError(err, "configuration initialization")
+			gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
+				"Initializing configuration",
+				err,
+				nil, // No token usage for config initialization
+				"",
+			)
+			fmt.Fprint(os.Stderr, gracefulExitMsg)
+			os.Exit(1)
 		}
 	},
 }

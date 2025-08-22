@@ -548,31 +548,205 @@ func validateBuild(ctx *SimplifiedAgentContext) error {
 func fixBuildFailure(ctx *SimplifiedAgentContext, buildCmd, failureMsg string) error {
 	ctx.Logger.LogProcessStep("🔧 Asking LLM to fix build failure...")
 
-	// Simple tool calling format - just tell the model to emit tool_calls JSON directly
-	systemPrompt := fmt.Sprintf("You are an expert software engineer troubleshooting a build failure. You will use the tools you have to address the build failure.You have access to the following tools: %s", llm.FormatToolsForPrompt())
+	maxIterations := 12
+	messages := []prompts.Message{
+		{Role: "system", Content: `You are an expert software engineer troubleshooting a build failure. 
 
-	userPrompt := fmt.Sprintf(`The build command '%s' failed with this error:
+Available tools:
+- read_file: {"file_path": "path/to/file"} - Read a file to understand its content
+- edit_file_section: {"file_path": "path/to/file", "old_text": "text to replace", "new_text": "replacement text"} - Edit a specific part of a file
+- run_shell_command: {"command": "shell command"} - Run shell commands for diagnostics or testing
+- validate_file: {"file_path": "path/to/file"} - Check Go syntax of a file
+
+Use these tools to diagnose and fix build issues. Read files to understand errors, edit files to fix syntax problems, and test your changes.`},
+		{Role: "user", Content: fmt.Sprintf(`The build command '%s' failed with this error:
 
 BUILD ERROR:
 %s
 
-Please fix this build failure by using the available tools.`, buildCmd, failureMsg)
-
-	messages := []prompts.Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userPrompt},
+Please fix this build failure by using the available tools. Read files to understand the error, edit files to fix syntax issues, and test your fixes.`, buildCmd, failureMsg)},
 	}
 
-	response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 60*time.Second)
-	if err != nil {
-		return fmt.Errorf("LLM fix request failed: %w", err)
+	for iteration := 1; iteration <= maxIterations; iteration++ {
+		ctx.Logger.LogProcessStep(fmt.Sprintf("🔄 Build fix attempt %d/%d", iteration, maxIterations))
+
+		response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 60*time.Second)
+		if err != nil {
+			return fmt.Errorf("LLM fix request failed: %w", err)
+		}
+
+		ctx.Logger.LogProcessStep(fmt.Sprintf("LLM response: %s", response))
+
+		// Parse and execute tool calls from the response
+		toolCalls, err := llm.ParseToolCalls(response)
+		if err != nil || len(toolCalls) == 0 {
+			ctx.Logger.LogProcessStep("⚠️ No tool calls found in response")
+
+			// Check if the response indicates the build is fixed
+			responseLower := strings.ToLower(response)
+			if strings.Contains(responseLower, "build is now fixed") ||
+				strings.Contains(responseLower, "build has been successfully fixed") ||
+				strings.Contains(responseLower, "build is fixed") ||
+				strings.Contains(responseLower, "successfully fixed") {
+				ctx.Logger.LogProcessStep("🔍 Model indicates build is fixed, testing...")
+
+				// Test the build
+				cmd := exec.Command("sh", "-c", buildCmd)
+				if output, err := cmd.CombinedOutput(); err == nil {
+					ctx.Logger.LogProcessStep("✅ Build confirmed working! Issue resolved.")
+					return nil
+				} else {
+					newFailureMsg := string(output)
+					ctx.Logger.LogProcessStep(fmt.Sprintf("❌ Build still failing despite model's claim: %s", newFailureMsg))
+					messages = append(messages, prompts.Message{Role: "assistant", Content: response})
+					messages = append(messages, prompts.Message{Role: "user", Content: fmt.Sprintf("You said the build is fixed, but it's still failing: %s\nPlease continue fixing.", newFailureMsg)})
+					continue
+				}
+			}
+
+			// Add the response to conversation and continue
+			messages = append(messages, prompts.Message{Role: "assistant", Content: response})
+			continue
+		}
+
+		// Execute the tool calls and collect results
+		var toolResults []string
+		allToolsSucceeded := true
+
+		for _, toolCall := range toolCalls {
+			ctx.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing tool: %s", toolCall.Function.Name))
+
+			// Execute the tool call using enhanced executor
+			result, err := executeEnhancedTool(toolCall, ctx.Config, ctx.Logger)
+			if err != nil {
+				ctx.Logger.LogError(fmt.Errorf("tool execution failed: %w", err))
+				result = fmt.Sprintf("Tool execution failed: %v", err)
+				allToolsSucceeded = false
+			}
+
+			ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Tool result: %s", result))
+			toolResults = append(toolResults, fmt.Sprintf("Tool %s result: %s", toolCall.Function.Name, result))
+		}
+
+		// Add tool results to conversation
+		toolResultsText := strings.Join(toolResults, "\n")
+		messages = append(messages, prompts.Message{Role: "assistant", Content: response})
+		messages = append(messages, prompts.Message{Role: "user", Content: fmt.Sprintf("Tool execution results:\n%s\n\nIf the build is now fixed, respond with 'BUILD_FIXED'. If you need to make more changes, continue with additional tool calls.", toolResultsText)})
+
+		// Test the build after tool execution
+		if allToolsSucceeded {
+			ctx.Logger.LogProcessStep("🏗️ Testing build after fixes...")
+			cmd := exec.Command("sh", "-c", buildCmd)
+			if output, err := cmd.CombinedOutput(); err == nil {
+				ctx.Logger.LogProcessStep("✅ Build succeeded! Issue resolved.")
+				return nil
+			} else {
+				newFailureMsg := string(output)
+				ctx.Logger.LogProcessStep(fmt.Sprintf("❌ Build still failing: %s", newFailureMsg))
+				messages = append(messages, prompts.Message{Role: "user", Content: fmt.Sprintf("Build still failing with: %s\nPlease continue fixing.", newFailureMsg)})
+			}
+		}
 	}
 
-	ctx.Logger.LogProcessStep(fmt.Sprintf("LLM response: %s", response))
+	return fmt.Errorf("build fix failed after %d attempts", maxIterations)
+}
 
-	// For now, we'll just log the response since we need to implement tool execution
-	// In a full implementation, we'd parse the tool calls and execute them
-	return fmt.Errorf("build fix attempted but needs tool execution implementation: %s", response)
+// executeEnhancedTool executes a tool call with enhanced functionality including file editing
+func executeEnhancedTool(toolCall llm.ToolCall, cfg *config.Config, logger *utils.Logger) (string, error) {
+	// Debug logging
+	logger.LogProcessStep(fmt.Sprintf("Debug: Tool name: %s", toolCall.Function.Name))
+	logger.LogProcessStep(fmt.Sprintf("Debug: Arguments string: '%s'", toolCall.Function.Arguments))
+
+	// Parse the arguments from JSON string
+	var args map[string]interface{}
+	if toolCall.Function.Arguments == "" {
+		return "", fmt.Errorf("tool arguments are empty")
+	}
+
+	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
+		return "", fmt.Errorf("failed to parse tool arguments: %w (arguments were: '%s')", err, toolCall.Function.Arguments)
+	}
+
+	switch toolCall.Function.Name {
+	case "read_file":
+		filePath, ok := args["file_path"].(string)
+		if !ok {
+			return "", fmt.Errorf("read_file requires file_path argument")
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
+		}
+
+		return fmt.Sprintf("File content of %s:\n%s", filePath, string(content)), nil
+
+	case "edit_file_section":
+		filePath, ok := args["file_path"].(string)
+		if !ok {
+			return "", fmt.Errorf("%s requires file_path argument", toolCall.Function.Name)
+		}
+
+		oldText, hasOld := args["old_text"].(string)
+		newText, hasNew := args["new_text"].(string)
+
+		if !hasOld || !hasNew {
+			return "", fmt.Errorf("%s requires old_text and new_text arguments", toolCall.Function.Name)
+		}
+
+		// Read current file content
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
+		}
+
+		// Perform replacement
+		currentContent := string(content)
+		if !strings.Contains(currentContent, oldText) {
+			return "", fmt.Errorf("old_text not found in file %s", filePath)
+		}
+
+		newContent := strings.Replace(currentContent, oldText, newText, 1)
+
+		// Write back to file
+		if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+			return "", fmt.Errorf("failed to write file %s: %w", filePath, err)
+		}
+
+		return fmt.Sprintf("Successfully edited %s: replaced text", filePath), nil
+
+	case "run_shell_command":
+		command, ok := args["command"].(string)
+		if !ok {
+			return "", fmt.Errorf("run_shell_command requires command argument")
+		}
+
+		cmd := exec.Command("sh", "-c", command)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Sprintf("Command failed: %s\nOutput: %s", command, string(output)), nil
+		}
+
+		return fmt.Sprintf("Command executed successfully:\n%s", string(output)), nil
+
+	case "validate_file":
+		filePath, ok := args["file_path"].(string)
+		if !ok {
+			return "", fmt.Errorf("validate_file requires file_path argument")
+		}
+
+		// Run gofmt to check syntax
+		cmd := exec.Command("gofmt", "-e", filePath)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Sprintf("File %s has syntax errors:\n%s", filePath, string(output)), nil
+		}
+
+		return fmt.Sprintf("File %s syntax is valid", filePath), nil
+
+	default:
+		return "", fmt.Errorf("tool %s is not supported in enhanced executor", toolCall.Function.Name)
+	}
 }
 
 // handleQuestion responds directly to user questions

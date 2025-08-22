@@ -5,9 +5,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/alantheprice/ledit/pkg/codereview"
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/spf13/cobra"
@@ -67,14 +66,26 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			return
 		}
 
-		// Prepare prompt and context for the LLM review
-		reviewPrompt := prompts.CodeReviewStagedPrompt()
-		// For workspace context, we can pass an empty string or try to get context from staged files.
-		// For simplicity, let's start with an empty workspace context for now, as the diff itself is the primary context.
-		workspaceContext := ""
+		// Create the unified code review service
+		service := codereview.NewCodeReviewService(cfg, logger)
+
+		// Create the review context
+		ctx := &codereview.ReviewContext{
+			Diff:   stagedDiff,
+			Config: cfg,
+			Logger: logger,
+		}
+
+		// Create review options for staged review
+		opts := &codereview.ReviewOptions{
+			Type:             codereview.StagedReview,
+			SkipPrompt:       reviewStagedSkipPrompt,
+			AutoApplyFixes:   false, // Don't auto-apply fixes for staged reviews
+			RollbackOnReject: false, // Don't rollback for staged reviews
+		}
 
 		logger.LogProcessStep("Sending staged changes to LLM for review...")
-		reviewResponse, err := llm.GetStagedCodeReview(cfg, stagedDiff, reviewPrompt, workspaceContext)
+		reviewResponse, err := service.PerformReview(ctx, opts)
 		if err != nil {
 			logger.LogError(fmt.Errorf("failed to get code review from LLM: %w", err))
 			return

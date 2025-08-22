@@ -29,15 +29,28 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 	// Collect edits first to enable a combined review across the entire changeset
 	type preparedEdit struct {
 		filename     string
-		originalCode string
-		newCode      string
+		originalCode string // Original code for change tracking
+		currentCode  string // Current state of the file
+		newCode      string // New code to be applied
 	}
 	var edits []preparedEdit
 
 	for newFilename, newCode := range updatedCode {
+		// Load original code for diff tracking and change recording
 		originalCode, _ := filesystem.LoadOriginalCode(newFilename)
 
-		if originalCode == newCode {
+		// Load current file content to determine what changes have been made
+		currentFileBytes, currentReadErr := os.ReadFile(newFilename)
+		var currentCode string
+		if currentReadErr == nil {
+			currentCode = string(currentFileBytes)
+		} else {
+			// If current file can't be read, use original as baseline
+			currentCode = originalCode
+		}
+
+		// Check if there are meaningful changes from the current state
+		if currentCode == newCode {
 			ui.Out().Print(prompts.NoChangesDetected(newFilename))
 			continue
 		}
@@ -96,9 +109,10 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			newCode = merged
 		}
 
-		diff := changetracker.GetDiff(newFilename, originalCode, newCode)
+		// Show diff from current state to new state for better understanding of incremental changes
+		diff := changetracker.GetDiff(newFilename, currentCode, newCode)
 		if diff == "" {
-			ui.Out().Print("No changes detected.")
+			ui.Out().Print("No changes detected from current state.")
 		} else {
 			ui.Out().Print(diff)
 		}
@@ -106,7 +120,12 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 		allDiffs.WriteString("\n")
 
 		// Queue the edit for post-review application
-		edits = append(edits, preparedEdit{filename: newFilename, originalCode: originalCode, newCode: newCode})
+		edits = append(edits, preparedEdit{
+			filename:     newFilename,
+			originalCode: originalCode,
+			currentCode:  currentCode,
+			newCode:      newCode,
+		})
 	}
 
 	// Run a single pre-apply automated review across the combined diff to consider all files together
@@ -127,6 +146,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 	for _, e := range edits {
 		newFilename := e.filename
 		originalCode := e.originalCode
+		_ = e.currentCode // Available for future enhancements
 		newCode := e.newCode
 
 		applyChanges := false
@@ -190,6 +210,8 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			// Use the passed llmResponseRaw directly for llmMessage
 			llmMessage := llmResponseRaw
 
+			// Record the change from original to final state for proper change tracking
+			// This ensures the changelog shows the complete transformation
 			if err := changetracker.RecordChangeWithDetails(revisionID, newFilename, originalCode, newCode, description, note, originalInstructions, llmMessage, cfg.EditingModel); err != nil {
 				return "", fmt.Errorf("failed to record change: %w", err)
 			}

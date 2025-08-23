@@ -258,6 +258,11 @@ func analyzeTodoExecutionType(content, description string) ExecutionType {
 		}
 	}
 
+	// Check for documentation updates more flexibly (handle README.md, readme files, etc.)
+	if strings.Contains(contentLower, "update") && (strings.Contains(contentLower, "readme") || strings.Contains(contentLower, "documentation") || strings.Contains(contentLower, "docs")) {
+		return ExecutionTypeDirectEdit
+	}
+
 	// Default to code command for anything involving code changes
 	return ExecutionTypeCodeCommand
 }
@@ -299,29 +304,26 @@ AFTER gathering evidence with tools, provide your analysis with:
 Remember: Always use tools first, then analyze based on actual evidence from the codebase.
 `, ctx.UserIntent, todo.Content, minimalContext, todo.Description)
 
+	// Use the unified agent workflow pattern that works reliably with tools
+	prompt = fmt.Sprintf(`Task: %s
+
+Use available tools to complete this analysis task effectively.`, todo.Description)
+
 	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert code analyst. Use tools (workspace_context, run_shell_command, read_file) to gather evidence before analysis. Always verify findings with actual codebase content. Provide evidence-based analysis with concrete file references."},
+		{Role: "system", Content: llm.GetSystemMessageForInformational()},
 		{Role: "user", Content: prompt},
 	}
 
-	model := ctx.Config.OrchestrationModel
-	if model == "" {
-		model = ctx.Config.EditingModel
-	}
-	analysisCfg := *ctx.Config
-	_, response, tokenUsage, err := llm.CallLLMWithUnifiedInteractive(&llm.UnifiedInteractiveConfig{
-		ModelName:       model,
-		Messages:        messages,
-		Filename:        "",
-		WorkflowContext: llm.GetAgentWorkflowContext(),
-		Config:          &analysisCfg,
-		Timeout:         60 * time.Second,
-	})
+	response, tokenUsage, err := executeAgentWorkflowWithTools(ctx, messages, "analysis")
 	if err != nil {
 		return fmt.Errorf("analysis failed: %w", err)
 	}
 
 	// Track token usage and cost
+	model := ctx.Config.OrchestrationModel
+	if model == "" {
+		model = ctx.Config.EditingModel
+	}
 	trackTokenUsage(ctx, tokenUsage, model)
 
 	// Store analysis results in context for future todos to reference

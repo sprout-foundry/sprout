@@ -4,9 +4,9 @@ package agent
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/alantheprice/ledit/pkg/editor"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"
 )
 
 // executeExplorationPhase reads relevant files and gathers context
@@ -194,22 +194,35 @@ Plan: %s
 
 Please implement this carefully, focusing on one logical unit at a time.`, todo.Content, plan)
 
-	agentConfig := *ctx.Config
-	agentConfig.SkipPrompt = true
-	agentConfig.FromAgent = true
+	// Use CallLLMWithUnifiedInteractive for proper tool execution during editing
+	editMessages := []prompts.Message{
+		{Role: "system", Content: llm.GetSystemMessageForEditing()},
+		{Role: "user", Content: editingPrompt},
+	}
 
-	os.Setenv("LEDIT_FROM_AGENT", "1")
-	os.Setenv("LEDIT_SKIP_PROMPT", "1")
+	// Use the same config as analysis todos for tool execution
+	editConfig := *ctx.Config
+	editConfig.SkipPrompt = true
 
 	// Clear any previous token usage
-	agentConfig.LastTokenUsage = nil
+	editConfig.LastTokenUsage = nil
 
-	_, err := editor.ProcessCodeGeneration("", editingPrompt, &agentConfig, "")
+	_, response, tokenUsage, err := llm.CallLLMWithUnifiedInteractive(&llm.UnifiedInteractiveConfig{
+		ModelName:       ctx.Config.EditingModel, // Use editing model for tool execution
+		Messages:        editMessages,
+		Filename:        "",
+		WorkflowContext: llm.GetAgentWorkflowContext(),
+		Config:          &editConfig,
+		Timeout:         llm.GetSmartTimeout(ctx.Config, ctx.Config.EditingModel, "analysis"),
+	})
 
-	// Track token usage from the editor's LLM calls
-	if agentConfig.LastTokenUsage != nil {
-		trackTokenUsage(ctx, agentConfig.LastTokenUsage, agentConfig.EditingModel)
-		ctx.Logger.LogProcessStep(fmt.Sprintf("📊 Tracked %d tokens from editor LLM calls", agentConfig.LastTokenUsage.TotalTokens))
+	// Track token usage from tool execution
+	if tokenUsage != nil {
+		trackTokenUsage(ctx, tokenUsage, ctx.Config.EditingModel)
+		ctx.Logger.LogProcessStep(fmt.Sprintf("📊 Tracked %d tokens from tool execution", tokenUsage.TotalTokens))
 	}
+
+	// Store the response for potential use in verification
+	ctx.AnalysisResults[todo.ID+"_edit"] = response
 	return err
 }

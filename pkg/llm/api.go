@@ -30,37 +30,66 @@ const providerHealthPath = ".ledit/provider_health.json"
 const failureThreshold = 3
 const openAfter = 2 * time.Minute
 
-// retryWithBackoff executes an HTTP request with a single retry on 500 errors
-// with a 200ms backoff delay
+// retryWithBackoff executes an HTTP request with exponential backoff retry logic
+// Handles 5xx errors, network errors, and specific 4xx errors that might be transient
 func retryWithBackoff(req *http.Request, client *http.Client) (*http.Response, error) {
-	resp, err := client.Do(req)
-	if err != nil {
-		return resp, err
-	}
+	const maxRetries = 3
+	const baseDelay = 100 * time.Millisecond
 
-	// If we get a 500 error, wait 200ms and retry once
-	if resp.StatusCode == 500 {
-		// Close the first response body
-		resp.Body.Close()
+	var lastResp *http.Response
+	var lastErr error
 
-		// Create a new request with the same body for retry
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Reset request body for retry
 		var reqBody []byte
-		if req.Body != nil {
+		if req.Body != nil && attempt > 0 {
 			reqBody, _ = io.ReadAll(req.Body)
 			req.Body = io.NopCloser(bytes.NewReader(reqBody))
 		}
 
-		// Wait 200ms before retry
-		time.Sleep(200 * time.Millisecond)
+		resp, err := client.Do(req)
+		lastResp = resp
+		lastErr = err
 
-		// Retry the request
-		if reqBody != nil {
-			req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		if err != nil {
+			// Network errors - retry with exponential backoff
+			if attempt < maxRetries {
+				delay := baseDelay * time.Duration(1<<attempt) // 100ms, 200ms, 400ms
+				time.Sleep(delay)
+				continue
+			}
+			return resp, err
 		}
-		resp, err = client.Do(req)
+
+		// Check for retryable status codes
+		shouldRetry := false
+		switch resp.StatusCode {
+		case 408: // Request Timeout
+			shouldRetry = true
+		case 429: // Too Many Requests
+			shouldRetry = true
+		case 500, 502, 503, 504: // Server errors
+			shouldRetry = true
+		}
+
+		if shouldRetry && attempt < maxRetries {
+			// Close response body before retry
+			resp.Body.Close()
+
+			// Exponential backoff with jitter
+			delay := baseDelay * time.Duration(1<<attempt)
+			jitter := time.Duration(time.Now().UnixNano() % int64(delay) / 2) // Add up to 50% jitter
+			totalDelay := delay + jitter
+
+			time.Sleep(totalDelay)
+			continue
+		}
+
+		// Success or non-retryable error
+		return resp, err
 	}
 
-	return resp, err
+	return lastResp, lastErr
 }
 
 func providerOpen(provider string) bool {

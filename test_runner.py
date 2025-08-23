@@ -77,7 +77,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Run workspace functionality tests for ledit.",
         formatter_class=argparse.RawTextHelpFormatter,
-        epilog=f"""\
+        epilog=f"""
 Examples:
   Run all tests:
     {sys.argv[0]}
@@ -101,6 +101,9 @@ Examples:
 
   Run tests and keep the 'testing' directory for inspection (e.g., after failures):
     {sys.argv[0]} --keep-testing-dir
+
+  Print a custom message and exit (skips tests):
+    {sys.argv[0]} --message "Hello, Ledit!"
 """
     )
     parser.add_argument(
@@ -128,10 +131,20 @@ Examples:
         action='store_true',
         help="Do not remove the 'testing' directory after tests complete. Useful for debugging failures."
     )
+    parser.add_argument(
+        '--message',
+        type=str,
+        help='A custom message to print and then exit. If provided, no tests will be run.'
+    )
     args = parser.parse_args()
     
     # Log parsed arguments for debugging
-    logging.debug(f"Parsed arguments: single={args.single}, test_number={args.test_number}, list_tests={args.list_tests}, keep_testing_dir={args.keep_testing_dir}")
+    logging.debug(f"Parsed arguments: single={args.single}, test_number={args.test_number}, list_tests={args.list_tests}, keep_testing_dir={args.keep_testing_dir}, message={args.message}")
+
+    # If --message is provided, print it and exit immediately.
+    if args.message:
+        print(args.message)
+        sys.exit(0)
 
     # model_name will be resolved after locating project_root so we can read .ledit/config.json
     # If -t is provided, implicitly enable single_mode.

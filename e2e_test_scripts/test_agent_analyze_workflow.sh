@@ -2,7 +2,14 @@
 
 # Function to return the test name
 get_test_name() {
-    echo "Agent - Analyze Workflow Test"
+    local default_name="Agent - Analyze Workflow Test"
+    local custom_name="${CUSTOM_TEST_NAME:-}" # Read from environment variable, default to empty
+    
+    if [ -n "$custom_name" ]; then
+        echo "$custom_name"
+    else
+        echo "$default_name"
+    fi
 }
 
 # Function to run the test logic

@@ -1,10 +1,10 @@
-# Ledit - AI-Powered Code Editor & Orchestrator
+# Ledit - AI-Powered Code Editing and Assistance Tool
 
-`ledit` is a command-line tool that leverages Large Language Models (LLMs) to automate and assist in software development tasks. It can understand your entire workspace, generate code, orchestrate complex features, and ground its responses with live web search results.
+`ledit` is an AI-powered code editing and assistance tool designed to streamline software development by leveraging Large Language Models (LLMs) to understand your entire workspace, generate code, and orchestrate complex features.
 
 ## Table of Contents
 
-- [Ledit - AI-Powered Code Editor \& Orchestrator](#ledit---ai-powered-code-editor--orchestrator)
+- [Ledit - AI-Powered Code Editing and Assistance Tool](#ledit---ai-powered-code-editing-and-assistance-tool)
   - [Table of Contents](#table-of-contents)
   - [Disclaimer](#disclaimer)
   - [Overview](#overview)
@@ -18,8 +18,9 @@
   - [Usage and Commands](#usage-and-commands)
     - [Workspace Initialization](#workspace-initialization)
     - [Basic Editing and Interaction](#basic-editing-and-interaction)
-    - [Orchestration](#orchestration)
     - [Ignoring Files](#ignoring-files)
+    - [`explain` - Explain a concept or code](#explain---explain-a-concept-or-code)
+    - [`config` - Manage ledit configuration](#config---manage-ledit-configuration)
   - [Advanced Concepts: Prompting with Context](#advanced-concepts-prompting-with-context)
     - [`#<filepath>` - Include a File](#filepath---include-a-file)
     - [`#WORKSPACE` / `#WS` - Smart Context](#workspace--ws---smart-context)
@@ -37,6 +38,8 @@
 
 Please be aware that using `ledit` involves interactions with Large Language Models (LLMs) and external services, which may incur costs depending on your chosen providers and usage. We are not responsible for any costs incurred, data usage, or any other potential issues, damages, or liabilities that may arise from the use or misuse of this tool. Users are solely responsible for monitoring their own API usage and costs.
 
+Safety: Currently there are very few, and limited safety checks in place. Use at your own risk and ideally use in a container to reduce risk from unsafe command execution.
+
 ## Overview
 
 `ledit` is more than just a code generator. It's a development partner that can:
@@ -50,6 +53,10 @@ Please be aware that using `ledit` involves interactions with Large Language Mod
 ## Features
 
 -   **Feature Orchestration**: Decomposes high-level feature requests into a detailed, executable plan.
+-   **Intelligent Code Generation**: Generate new code or modify existing code based on natural language prompts, supporting complex feature implementation through orchestration (`ledit code`).
+-   **Automated Code Fixing**: Automatically diagnose and fix code issues based on error messages or command output, leveraging a self-correction loop for robust problem-solving (`ledit fix`).
+-   **Code Explanation**: Provide clear explanations for code snippets, concepts, or error messages, enhancing understanding of your codebase (`ledit explain`).
+-   **Configuration Management**: Easily manage and update `ledit`'s configuration settings directly from the command line (`ledit config`).
 -   **Smart Workspace Context**: Automatically builds and maintains an index of your workspace. An LLM selects the most relevant files to include as context for any given task.
 -   **Leaked Credentials Check**: Automatically scans files for common security concerns like API keys, passwords, database/service URLs, SSH private keys, AWS credentials. This helps prevent accidental exposure of sensitive information.
 -   **Search Grounding**: Augments prompts with fresh information from the web using the `#SG "query"` directive.
@@ -59,6 +66,9 @@ Please be aware that using `ledit` involves interactions with Large Language Mod
 -   **Git Integration**: Can automatically commit changes to Git with AI-generated conventional commit messages.
 -   **Automated Code Review**: When running in automated mode (`--skip-prompt`), performs LLM-based code reviews of changes before committing.
 -   **Self-Correction Loop**: In orchestration mode, it attempts to fix its own errors by analyzing validation failures and retrying.
+
+-   **Code Explanation**: Understand complex code snippets, concepts, or error messages with detailed explanations provided by `ledit explain`.
+-   **Configuration Management**: Easily manage and update `ledit`'s settings directly from the command line using `ledit config`.
 
 ## Installation
 
@@ -179,30 +189,68 @@ The workspace index is automatically updated whenever you run a command, ensurin
 
 `ledit` provides several commands for direct code manipulation and interaction.
 
-```bash
-# Edit an existing file
-ledit code "Add a function to reverse a string" -f path/to/your/file.go
+-   **`ledit code`**: Generate or modify code.
+    ```bash
+    # Edit an existing file
+    ledit code "Add a function to reverse a string" -f path/to/your/file.go
 
-# Create a new file (omit the -f flag)
-ledit code "Create a python script that prints 'Hello, World!'"
+    # Create a new file (omit the -f flag)
+    ledit code "Create a python script that prints 'Hello, World!'"
+    ```
 
-# Start an interactive chat about your workspace
-ledit question
+-   **`ledit question`**: Start an interactive chat or ask a question about your workspace.
+    ```bash
+    ledit question "What does the main function in main.go do?"
+    ```
 
-# Generate a conventional commit message for staged changes
-ledit commit
+-   **`ledit commit`**: Generate a conventional commit message for staged changes, with options for automatic commit and code review.
+    ```bash
+    # Generate a conventional commit message for staged changes
+    ledit commit
 
-# Generate a conventional commit message and automatically commit (with optional code review)
-ledit commit --skip-prompt
+    # Generate a conventional commit message and automatically commit (with optional code review)
+    ledit commit --skip-prompt
+    ```
 
-# View the history of changes made by ledit
-ledit log
+-   **`ledit log`**: View the history of changes made by `ledit` and revert changes.
+    ```bash
+    ledit log
+    ```
 
-# Attempt to fix a problem in your code based on an error message
-ledit fix "Error: undefined variable 'user_id' in main.go"
+-   **`ledit fix`**: Attempt to fix a problem in your code based on an error message or command output.
+    ```bash
+    # Attempt to fix a problem in your code by running a command and letting ledit attempt to fix the error messages that are a result of the command.
+    ledit fix "go build"
 
-# Add a pattern to .ledit/leditignore
-ledit ignore "temp_files/"
+    # Attempt to fix a problem in your code based on an error message
+    ledit fix "Error: undefined variable 'user_id' in main.go"
+    ```
+
+-   **`ledit exec`**: Execute a shell command, or have an LLM generate it from an intent.
+    ```bash
+    ledit exec "list all go files recursively"
+    ```
+
+-   **`ledit ignore`**: Add a pattern to `.ledit/leditignore` to explicitly ignore files or directories from workspace analysis. By default, `ledit` will also respect `.gitignore`.
+    ```bash
+    ledit ignore "dist/"
+    ledit ignore "*.log"
+    ```
+
+-   **`ledit explain`**: Provides explanations for code snippets, concepts, or error messages, leveraging the LLM's understanding.
+    ```bash
+    ledit explain "What does the 'context' package do in Go?"
+    ledit explain "Explain this Go code: #./main.go"
+    ledit explain "What is a goroutine and how is it used in Go?"
+    ledit explain "Explain the function 'parseConfig' in main.go" -f main.go
+    ```
+
+-   **`ledit config`**: Manage `ledit`'s configuration settings directly from the command line.
+    ```bash
+    ledit config set EditingModel openai:gpt-4-turbo
+    ledit config get SkipPrompt
+    ledit config get EditingModel
+    ```
 ```
 
 ### Orchestration
@@ -248,6 +296,22 @@ ledit ignore "*.log"
 ```
 
 This adds the pattern to the `.ledit/leditignore` file.
+
+### `explain` - Explain a concept or code
+
+```bash
+ledit explain "What is a goroutine and how is it used in Go?"
+
+ledit explain "Explain the function 'parseConfig' in main.go" -f main.go
+```
+
+### `config` - Manage ledit configuration
+
+```bash
+ledit config set EditingModel openai:gpt-4-turbo
+
+ledit config get EditingModel
+```
 
 ## Advanced Concepts: Prompting with Context
 
@@ -351,4 +415,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Support and Community
 
-If you encounter any issues or have questions, please open an issue on our [GitHub repository](https://github.com/alantheprice/ledit/issues).
+If you encounter any issues or have questions, please open an issue on our [GitHub repository](https://github.com/alantheprice/ledit/issues).# Test change

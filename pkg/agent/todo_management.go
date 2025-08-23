@@ -116,10 +116,7 @@ Focus on concrete changes that can be made to the codebase. Return ONLY the JSON
 	}
 
 	// Track token usage and cost for todo generation
-	if tokenUsage != nil {
-		ctx.TotalTokensUsed += tokenUsage.TotalTokens
-		ctx.TotalCost += llm.CalculateCost(*tokenUsage, ctx.Config.OrchestrationModel)
-	}
+	trackTokenUsage(ctx, tokenUsage, ctx.Config.OrchestrationModel)
 
 	// Parse JSON response
 	clean, err := utils.ExtractJSON(response)
@@ -233,17 +230,26 @@ Context from overall task: "%s"
 
 Please analyze and provide insights on: %s
 
-FIRST, use tools to ground your analysis:
-- Call workspace_context with action=load_tree to understand the file structure.
-- Call workspace_context with action=load_summary to get a project summary.
-- Call workspace_context with action=search_keywords and a concise query to locate relevant files and function names.
-- Then call read_file for the top one or two files that are most relevant.
+CRITICAL: Use tools to gather evidence before making any analysis or recommendations. Do not make assumptions about the codebase structure or content.
 
-AFTER you gather evidence, summarize your findings. Provide concrete file references (paths and function names) where applicable.
+REQUIRED TOOLS - Use these in order:
+1. **workspace_context(action="load_tree")** - Get complete file/directory structure
+2. **workspace_context(action="search_keywords", query="relevant terms")** - Find files containing specific terms
+3. **run_shell_command(command="ls -la pkg/")** - List contents of specific directories (example: list pkg directory)
+4. **run_shell_command(command="grep -r 'func.*main' .")** - Search for specific patterns (example: find main functions)
+5. **read_file(file_path="main.go")** - Read specific files for detailed analysis
+
+AFTER gathering evidence with tools, provide your analysis with:
+- Concrete file references and line numbers
+- Evidence-based findings, not assumptions
+- Specific recommendations with implementation details
+- Code examples where relevant
+
+Remember: Always use tools first, then analyze based on actual evidence from the codebase.
 `, ctx.UserIntent, todo.Content, minimalContext, todo.Description)
 
 	messages := []prompts.Message{
-		{Role: "system", Content: "You are an expert code analyst. Prefer using tools (workspace_context, read_file) to gather grounded evidence before answering. Provide detailed analysis without making changes."},
+		{Role: "system", Content: "You are an expert code analyst. Use tools (workspace_context, run_shell_command, read_file) to gather evidence before analysis. Always verify findings with actual codebase content. Provide evidence-based analysis with concrete file references."},
 		{Role: "user", Content: prompt},
 	}
 
@@ -265,10 +271,7 @@ AFTER you gather evidence, summarize your findings. Provide concrete file refere
 	}
 
 	// Track token usage and cost
-	if tokenUsage != nil {
-		ctx.TotalTokensUsed += tokenUsage.TotalTokens
-		ctx.TotalCost += llm.CalculateCost(*tokenUsage, model)
-	}
+	trackTokenUsage(ctx, tokenUsage, model)
 
 	// Store analysis results in context for future todos to reference
 	ctx.AnalysisResults[todo.ID] = response
@@ -320,10 +323,7 @@ Please provide the specific file path and the exact changes needed. Respond in J
 	}
 
 	// Track token usage and cost for direct edit planning
-	if tokenUsage != nil {
-		ctx.TotalTokensUsed += tokenUsage.TotalTokens
-		ctx.TotalCost += llm.CalculateCost(*tokenUsage, ctx.Config.OrchestrationModel)
-	}
+	trackTokenUsage(ctx, tokenUsage, ctx.Config.OrchestrationModel)
 
 	// Parse the response to get file path and changes
 	var editPlan struct {

@@ -30,6 +30,39 @@ const providerHealthPath = ".ledit/provider_health.json"
 const failureThreshold = 3
 const openAfter = 2 * time.Minute
 
+// retryWithBackoff executes an HTTP request with a single retry on 500 errors
+// with a 200ms backoff delay
+func retryWithBackoff(req *http.Request, client *http.Client) (*http.Response, error) {
+	resp, err := client.Do(req)
+	if err != nil {
+		return resp, err
+	}
+
+	// If we get a 500 error, wait 200ms and retry once
+	if resp.StatusCode == 500 {
+		// Close the first response body
+		resp.Body.Close()
+
+		// Create a new request with the same body for retry
+		var reqBody []byte
+		if req.Body != nil {
+			reqBody, _ = io.ReadAll(req.Body)
+			req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		}
+
+		// Wait 200ms before retry
+		time.Sleep(200 * time.Millisecond)
+
+		// Retry the request
+		if reqBody != nil {
+			req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		}
+		resp, err = client.Do(req)
+	}
+
+	return resp, err
+}
+
 func providerOpen(provider string) bool {
 	ensureHealthLoaded()
 	n := providerFailures[provider]
@@ -315,7 +348,7 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	client := &http.Client{Timeout: timeout}
-	resp, derr := client.Do(req)
+	resp, derr := retryWithBackoff(req, client)
 	if derr != nil {
 		return "", nil, derr
 	}

@@ -88,10 +88,13 @@ Please fix this build failure by using the available tools. Read files to unders
 	for iteration := 1; iteration <= maxIterations; iteration++ {
 		ctx.Logger.LogProcessStep(fmt.Sprintf("🔄 Build fix attempt %d/%d", iteration, maxIterations))
 
-		response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 60*time.Second)
+		response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 60*time.Second)
 		if err != nil {
 			return fmt.Errorf("LLM fix request failed: %w", err)
 		}
+
+		// Track token usage and cost
+		trackTokenUsage(ctx, tokenUsage, ctx.Config.OrchestrationModel)
 
 		ctx.Logger.LogProcessStep(fmt.Sprintf("LLM response: %s", response))
 

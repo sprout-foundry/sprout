@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -96,6 +97,37 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 				logger.LogError(fmt.Errorf("failed to generate commit message: %w", err))
 				logger.LogUserInteraction("Failed to generate commit message. Retrying...")
 				continue // Retry generation
+			}
+
+			// Clean up function call format if present
+			if strings.Contains(generatedMessage, `"type": "function"`) && strings.Contains(generatedMessage, `"name": "generateCommitMessage"`) {
+				logger.LogProcessStep("Detected function call format in response, extracting parameters...")
+
+				// Try to parse the JSON and extract meaningful content
+				var funcCall map[string]interface{}
+				if err := json.Unmarshal([]byte(generatedMessage), &funcCall); err == nil {
+					if params, ok := funcCall["parameters"].(map[string]interface{}); ok {
+						// Look for any field that might contain the actual commit message
+						if commitMsg, ok := params["commitMessageFormat"].(string); ok && commitMsg != "" {
+							generatedMessage = commitMsg
+							logger.LogProcessStep("Successfully extracted commit message from function call")
+						} else if originalRequest, ok := params["originalUserRequest"].(string); ok && originalRequest != "" {
+							// Generate a simple commit message based on the original request
+							generatedMessage = fmt.Sprintf("feat: %s\n\n- %s", strings.ToLower(strings.TrimSpace(originalRequest)), "Changes based on user request")
+							logger.LogProcessStep("Generated commit message from original request")
+						} else {
+							generatedMessage = "feat: add new files and improvements\n\n- Added new test scripts and agent functionality\n- Enhanced code generation and editing capabilities"
+							logger.LogProcessStep("Using generic commit message due to malformed LLM response")
+						}
+					} else {
+						generatedMessage = "feat: add new files and improvements\n\n- Added new test scripts and agent functionality\n- Enhanced code generation and editing capabilities"
+						logger.LogProcessStep("Using generic commit message due to malformed LLM response")
+					}
+				} else {
+					// Fallback: use a generic message if JSON parsing fails
+					generatedMessage = "feat: add new files and improvements\n\n- Added new test scripts and agent functionality\n- Enhanced code generation and editing capabilities"
+					logger.LogProcessStep("Using fallback commit message due to JSON parsing error")
+				}
 			}
 
 			// Clean up the message: remove markdown fences if present

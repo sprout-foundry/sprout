@@ -95,7 +95,13 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 			}
 
 			// Use the standard LLM approach for all editing tasks
-			messages := prompts.BuildPatchMessages("", llmInstructions, filePath, true)
+			fileContent, readErr := os.ReadFile(filePath)
+			if readErr != nil {
+				responses = append(responses, fmt.Sprintf("Error: Failed to read file %s for editing: %v", filePath, readErr))
+				break
+			}
+			fileContentStr := string(fileContent)
+			messages := prompts.BuildPatchMessages(fileContentStr, llmInstructions, filePath, true)
 			_, _, err = llm.GetLLMResponse(cfg.EditingModel, messages, filePath, cfg, 6*time.Minute)
 
 			if err != nil {

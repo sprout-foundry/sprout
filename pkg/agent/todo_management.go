@@ -29,13 +29,19 @@ func createTodos(ctx *SimplifiedAgentContext) error {
 
 User Request: "%s"
 
-Workspace Context (truncated):
+## Workspace Context
 %s`, ctx.UserIntent, func() string {
-		wc := workspace.GetWorkspaceContext(ctx.UserIntent, ctx.Config)
-		if len(wc) > 16000 {
-			return wc[:16000]
+		// Use minimal workspace context for cleaner, more focused prompts
+		minimalContext := workspace.GetMinimalWorkspaceContext(ctx.UserIntent, ctx.Config)
+		if minimalContext == "" {
+			// Fallback to basic workspace context if minimal context fails
+			wc := workspace.GetWorkspaceContext(ctx.UserIntent, ctx.Config)
+			if len(wc) > 8000 {
+				return wc[:8000]
+			}
+			return wc
 		}
-		return wc
+		return minimalContext
 	}()))
 
 	// Add rollover context from previous analysis if available
@@ -104,9 +110,15 @@ Focus on concrete changes that can be made to the codebase. Return ONLY the JSON
 		{Role: "user", Content: prompt},
 	}
 
-	response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 30*time.Second)
+	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to get todo response: %w", err)
+	}
+
+	// Track token usage and cost for todo generation
+	if tokenUsage != nil {
+		ctx.TotalTokensUsed += tokenUsage.TotalTokens
+		ctx.TotalCost += llm.CalculateCost(*tokenUsage, ctx.Config.OrchestrationModel)
 	}
 
 	// Parse JSON response
@@ -206,9 +218,18 @@ func analyzeTodoExecutionType(content, description string) ExecutionType {
 func executeAnalysisTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	ctx.Logger.LogProcessStep("🔍 Performing analysis (no code changes)")
 
+	// Get minimal workspace context for analysis
+	minimalContext := workspace.GetMinimalWorkspaceContext(ctx.UserIntent, ctx.Config)
+	if minimalContext == "" {
+		minimalContext = "Workspace context not available"
+	}
+
 	prompt := fmt.Sprintf(`You are analyzing the codebase to help with: "%s"
 
 Context from overall task: "%s"
+
+## Workspace Context
+%s
 
 Please analyze and provide insights on: %s
 
@@ -219,7 +240,7 @@ FIRST, use tools to ground your analysis:
 - Then call read_file for the top one or two files that are most relevant.
 
 AFTER you gather evidence, summarize your findings. Provide concrete file references (paths and function names) where applicable.
-`, ctx.UserIntent, todo.Content, todo.Description)
+`, ctx.UserIntent, todo.Content, minimalContext, todo.Description)
 
 	messages := []prompts.Message{
 		{Role: "system", Content: "You are an expert code analyst. Prefer using tools (workspace_context, read_file) to gather grounded evidence before answering. Provide detailed analysis without making changes."},
@@ -231,7 +252,7 @@ AFTER you gather evidence, summarize your findings. Provide concrete file refere
 		model = ctx.Config.EditingModel
 	}
 	analysisCfg := *ctx.Config
-	_, response, _, err := llm.CallLLMWithUnifiedInteractive(&llm.UnifiedInteractiveConfig{
+	_, response, tokenUsage, err := llm.CallLLMWithUnifiedInteractive(&llm.UnifiedInteractiveConfig{
 		ModelName:       model,
 		Messages:        messages,
 		Filename:        "",
@@ -241,6 +262,12 @@ AFTER you gather evidence, summarize your findings. Provide concrete file refere
 	})
 	if err != nil {
 		return fmt.Errorf("analysis failed: %w", err)
+	}
+
+	// Track token usage and cost
+	if tokenUsage != nil {
+		ctx.TotalTokensUsed += tokenUsage.TotalTokens
+		ctx.TotalCost += llm.CalculateCost(*tokenUsage, model)
 	}
 
 	// Store analysis results in context for future todos to reference
@@ -287,9 +314,15 @@ Please provide the specific file path and the exact changes needed. Respond in J
 		{Role: "user", Content: prompt},
 	}
 
-	response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 45*time.Second)
+	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 45*time.Second)
 	if err != nil {
 		return fmt.Errorf("direct edit planning failed: %w", err)
+	}
+
+	// Track token usage and cost for direct edit planning
+	if tokenUsage != nil {
+		ctx.TotalTokensUsed += tokenUsage.TotalTokens
+		ctx.TotalCost += llm.CalculateCost(*tokenUsage, ctx.Config.OrchestrationModel)
 	}
 
 	// Parse the response to get file path and changes

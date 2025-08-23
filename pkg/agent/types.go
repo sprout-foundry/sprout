@@ -34,6 +34,10 @@ type SimplifiedAgentContext struct {
 	ContextManager *ContextManager
 	PersistentCtx  *PersistentContext
 	SessionID      string
+
+	// Token usage and cost tracking
+	TotalTokensUsed int
+	TotalCost       float64
 }
 
 // IntentType represents the type of user intent

@@ -4,11 +4,11 @@ package agent
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/editor"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"
 )
 
 // executeEditStep performs a single granular edit
@@ -24,27 +24,42 @@ Changes to make: %s
 
 Please implement ONLY this specific step. Keep the changes minimal and focused. Do not implement additional features or other steps.`, todo.Content, stepIndex+1, step.Description, strings.Join(step.Files, ", "), step.Changes)
 
-	// Use ProcessCodeGeneration for proper, targeted edits instead of the broken direct edit
-	agentConfig := *ctx.Config
-	agentConfig.SkipPrompt = true
-	agentConfig.FromAgent = true
-
-	// Set environment variables to ensure non-interactive mode
-	os.Setenv("LEDIT_FROM_AGENT", "1")
-	os.Setenv("LEDIT_SKIP_PROMPT", "1")
-
-	// Clear any previous token usage
-	agentConfig.LastTokenUsage = nil
-
-	_, err := editor.ProcessCodeGeneration("", stepPrompt, &agentConfig, "")
-
-	// Track token usage from the editor's LLM calls
-	if agentConfig.LastTokenUsage != nil {
-		trackTokenUsage(ctx, agentConfig.LastTokenUsage, agentConfig.EditingModel)
-		ctx.Logger.LogProcessStep(fmt.Sprintf("📊 Tracked %d tokens from editor LLM calls", agentConfig.LastTokenUsage.TotalTokens))
+	// Use CallLLMWithUnifiedInteractive for proper tool execution (like workspace_context, read_file)
+	stepMessages := []prompts.Message{
+		{Role: "system", Content: llm.GetSystemMessageForStepExecution()},
+		{Role: "user", Content: stepPrompt},
 	}
 
-	return err
+	// Use the same config as analysis todos for tool execution
+	stepConfig := *ctx.Config
+	stepConfig.SkipPrompt = true
+
+	// Clear any previous token usage
+	stepConfig.LastTokenUsage = nil
+
+	_, response, tokenUsage, err := llm.CallLLMWithUnifiedInteractive(&llm.UnifiedInteractiveConfig{
+		ModelName:       ctx.Config.EditingModel, // Use editing model for tool execution
+		Messages:        stepMessages,
+		Filename:        "",
+		WorkflowContext: llm.GetAgentWorkflowContext(),
+		Config:          &stepConfig,
+		Timeout:         llm.GetSmartTimeout(ctx.Config, ctx.Config.EditingModel, "analysis"),
+	})
+
+	if err != nil {
+		return fmt.Errorf("step execution failed: %w", err)
+	}
+
+	// Track token usage from tool execution
+	if tokenUsage != nil {
+		trackTokenUsage(ctx, tokenUsage, ctx.Config.EditingModel)
+		ctx.Logger.LogProcessStep(fmt.Sprintf("📊 Tracked %d tokens from tool execution", tokenUsage.TotalTokens))
+	}
+
+	// Store the response for potential use in next steps
+	ctx.AnalysisResults[fmt.Sprintf("%s_step_%d", todo.ID, stepIndex)] = response
+
+	return nil
 }
 
 // verifyBuildAfterStep ensures code still builds after each edit step

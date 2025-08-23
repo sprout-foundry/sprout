@@ -13,7 +13,7 @@ func analyzeIntentType(userIntent string, logger *utils.Logger) IntentType {
 	intentLower := strings.ToLower(userIntent)
 
 	// Check for questions - be more specific to avoid false positives
-	questionWords := []string{"what is", "what are", "how do", "how does", "how can", "how to", "why is", "why does", "when is", "where is", "which is", "who is", "can you explain", "can you describe"}
+	questionWords := []string{"what is", "what are", "what ", "how do", "how does", "how can", "how to", "why is", "why does", "when is", "where is", "which is", "who is", "can you explain", "can you describe"}
 	for _, phrase := range questionWords {
 		if strings.Contains(intentLower, phrase) {
 			return IntentTypeQuestion
@@ -21,7 +21,7 @@ func analyzeIntentType(userIntent string, logger *utils.Logger) IntentType {
 	}
 
 	// Also check for common question starters
-	questionStarters := []string{"what ", "how ", "why ", "when ", "where ", "which ", "who "}
+	questionStarters := []string{"what ", "how ", "why ", "when ", "where ", "which ", "who ", "list "}
 	for _, starter := range questionStarters {
 		if strings.HasPrefix(intentLower, starter) {
 			return IntentTypeQuestion

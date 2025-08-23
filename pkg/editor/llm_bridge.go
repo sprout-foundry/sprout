@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -25,6 +26,12 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 	}
 
 	log.Log(prompts.ModelReturned(modelName, llmContent))
+	// DEBUG: Print the actual response content to see what's being returned
+	maxLen := 200
+	if len(llmContent) < maxLen {
+		maxLen = len(llmContent)
+	}
+	log.Log(fmt.Sprintf("DEBUG: Raw LLM Content (first %d chars): '%s'", maxLen, llmContent[:maxLen]))
 
 	updatedCode := map[string]string{}
 	var parseErr error
@@ -42,11 +49,19 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 		}
 	} else {
 		parseErr = perr
-		// Legacy extraction
-		if uc, uerr := parser.GetUpdatedCodeFromResponse(llmContent); uerr == nil {
-			updatedCode = uc
+		// Try JSON parsing first
+		if jsonCode, jsonErr := parseJSONResponse(llmContent); jsonErr == nil && len(jsonCode) > 0 {
+			updatedCode = jsonCode
+			log.Log("Successfully parsed JSON response")
 		} else {
-			parseErr = uerr
+			// Legacy extraction fallback
+			if uc, uerr := parser.GetUpdatedCodeFromResponse(llmContent); uerr == nil {
+				updatedCode = uc
+				log.Log("Successfully parsed legacy response")
+			} else {
+				parseErr = uerr
+				log.Log(fmt.Sprintf("All parsing methods failed: patch=%v, json=%v, legacy=%v", perr, jsonErr, uerr))
+			}
 		}
 	}
 
@@ -70,4 +85,39 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 	}
 
 	return updatedCode, llmContent, tokenUsage, nil
+}
+
+// parseJSONResponse parses JSON-formatted code responses
+func parseJSONResponse(llmContent string) (map[string]string, error) {
+	// Try to parse as JSON
+	var jsonResponse struct {
+		FilePath    string `json:"file_path"`
+		FileContent string `json:"file_content"`
+	}
+
+	// Clean up the response - sometimes LLMs add extra text
+	content := strings.TrimSpace(llmContent)
+
+	// Try to extract JSON from the response
+	if err := json.Unmarshal([]byte(content), &jsonResponse); err != nil {
+		// Try to find JSON within the response
+		start := strings.Index(content, "{")
+		end := strings.LastIndex(content, "}")
+		if start >= 0 && end > start {
+			jsonPart := content[start : end+1]
+			if err := json.Unmarshal([]byte(jsonPart), &jsonResponse); err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+
+	if jsonResponse.FilePath == "" || jsonResponse.FileContent == "" {
+		return nil, fmt.Errorf("invalid JSON response: missing file_path or file_content")
+	}
+
+	result := make(map[string]string)
+	result[jsonResponse.FilePath] = jsonResponse.FileContent
+	return result, nil
 }

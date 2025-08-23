@@ -192,11 +192,34 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 
 	logger.Logf("DEBUG: Finished image handling")
 	// Interactive tools forced globally
-	logger.Log("Forcing interactive path with tool calling support")
+	logger.Log("Checking if interactive path should be used")
 
 	// Check if this is an agent workflow by looking for environment variable
 	isAgentMode := os.Getenv("LEDIT_FROM_AGENT") == "1"
 	logger.Logf("DEBUG: Environment variable LEDIT_FROM_AGENT = '%s', isAgentMode = %t", os.Getenv("LEDIT_FROM_AGENT"), isAgentMode)
+
+	// Strategy: Always try direct LLM first for non-agent cases, then fall back to interactive
+	if !isAgentMode {
+		logger.Log("Always trying direct LLM first for non-agent workflow")
+		logger.Logf("DEBUG: Code parameter length: %d chars", len(code))
+		logger.Logf("DEBUG: Instructions: %s", instructions)
+		logger.Logf("DEBUG: Filename: %s", filename)
+
+		// Always try direct LLM call first
+		modelName, response, tokenUsage, err := callLLMDirectly(cfg, code, instructions, filename, imagePath)
+		if err == nil && response != "" {
+			logger.Log("Direct LLM call succeeded")
+			return modelName, response, tokenUsage, nil
+		}
+
+		logger.Logf("Direct LLM call failed or returned empty, falling back to interactive workflow: %v", err)
+		// Fall back to interactive workflow
+	} else {
+		logger.Log("Using interactive path for agent workflow")
+	}
+
+	// For complex cases where direct LLM failed, use the enhanced interactive workflow
+	logger.Log("Using enhanced interactive path with tool calling support")
 
 	if isAgentMode {
 		logger.Logf("DEBUG: Using unified interactive LLM handler for agent workflow")
@@ -329,4 +352,86 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 	}
 
 	return strings.TrimSpace(response), nil
+}
+
+// callLLMDirectly handles simple code generation without interactive tools
+func callLLMDirectly(cfg *config.Config, code, instructions, filename, imagePath string) (string, string, *llm.TokenUsage, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
+	logger.Log("DEBUG: Using direct LLM call path")
+
+	var userContent string
+	var systemPrompt string
+
+	if code != "" {
+		// Handle existing code modification
+		logger.Log("DEBUG: Handling existing code modification")
+		systemPrompt = `You are a code generator. Modify the existing code as requested.
+
+Output format (JSON):
+{
+  "file_path": "path/to/file",
+  "file_content": "the complete modified file content"
+}
+
+Requirements:
+- Generate complete, working code
+- Preserve existing functionality unless explicitly asked to change it
+- Include proper package declarations and imports
+- Follow the existing code style and conventions
+- Do not ask for clarification - just generate the modified code`
+
+		userContent = fmt.Sprintf(`Instructions: %s
+
+Existing code to modify:
+%s
+
+Target file: %s
+
+Generate the complete modified file content.`, instructions, code, filename)
+	} else {
+		// Handle new file creation
+		logger.Log("DEBUG: Handling new file creation")
+		systemPrompt = `You are a code generator. Generate the requested code directly.
+
+Output format (JSON):
+{
+  "file_path": "path/to/file",
+  "file_content": "the complete file content with the generated code"
+}
+
+Requirements:
+- Generate complete, working code
+- Include proper package declarations and imports
+- Follow the existing code style and conventions
+- Do not ask for clarification - just generate the code`
+
+		userContent = fmt.Sprintf("Generate code for: %s\n\nTarget file: %s", instructions, filename)
+	}
+
+	// Build simple messages without tool support
+	messages := []prompts.Message{
+		{
+			Role:    "system",
+			Content: systemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: userContent,
+		},
+	}
+
+	// Call LLM directly without tools
+	llmResponse, tokenUsage, err := llm.GetLLMResponse(cfg.EditingModel, messages, "", cfg, 30*time.Second)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("direct LLM call failed: %w", err)
+	}
+
+	logger.Log(fmt.Sprintf("DEBUG: Direct LLM response length: %d chars", len(llmResponse)))
+
+	// Basic validation - check if response looks like valid JSON
+	if !strings.Contains(llmResponse, `"file_path"`) || !strings.Contains(llmResponse, `"file_content"`) {
+		return "", "", nil, fmt.Errorf("LLM response does not contain expected JSON structure")
+	}
+
+	return cfg.EditingModel, llmResponse, tokenUsage, nil
 }

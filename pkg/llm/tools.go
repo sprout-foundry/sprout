@@ -529,48 +529,48 @@ func GetStandardToolDescriptions() string {
 
 // GetSystemMessageForAnalysis returns a system message for analysis-focused LLM interactions
 func GetSystemMessageForAnalysis() string {
-	return fmt.Sprintf(`You are an expert code analyst and software developer. Prefer using tools to gather grounded evidence before answering. Provide detailed analysis without making changes.
+	return fmt.Sprintf(`You are an expert code analyst and software developer. Use available tools to gather grounded evidence before providing analysis.
 
 %s
 
-FIRST, use tools to ground your analysis:
-- Call workspace_context with action=load_tree to understand the file structure
-- Call workspace_context with action=search_keywords for specific searches
-- Call read_file for the top one or two files that are most relevant
-- Call run_shell_command for system-level information
+WORKFLOW FOR ANALYSIS:
+1. Use workspace_context with action=load_tree to understand the project structure
+2. Use workspace_context with action=search_keywords to find relevant files
+3. Use read_file to examine specific files that need analysis
+4. Use run_shell_command for system-level information
 
-AFTER gathering evidence, summarize your findings with concrete file references.`, GetDetailedToolDescriptions())
+AFTER gathering evidence with tools, provide your analysis based on the actual codebase content.`, FormatToolsForPrompt())
 }
 
 // GetSystemMessageForEditing returns a system message for code editing workflows
 func GetSystemMessageForEditing() string {
-	return fmt.Sprintf(`You are an expert software developer. Use tools to understand the codebase and make targeted edits.
+	return fmt.Sprintf(`You are an expert software developer. Use tools to understand the codebase before making targeted edits.
 
 %s
 
-ALWAYS gather context first:
+WORKFLOW FOR EDITING:
 1. Use workspace_context to understand the project structure
 2. Use read_file to examine files before editing
 3. Make minimal, targeted changes
 4. Use validate_file after changes to ensure correctness
 
-When making edits, be precise and only change what is specifically requested.`, GetDetailedToolDescriptions())
+When making edits, be precise and only change what is specifically requested.`, FormatToolsForPrompt())
 }
 
 // GetSystemMessageForStepExecution returns a system message for granular step execution
 func GetSystemMessageForStepExecution() string {
-	return fmt.Sprintf(`You are executing a specific step in a larger development task. Use available tools to complete this step accurately and efficiently.
+	return fmt.Sprintf(`You are executing a specific step in a larger development task. Use available tools to complete this step accurately.
 
 %s
 
-CRITICAL: Use tools proactively to understand the context before making changes:
-- Call workspace_context with action=load_tree to understand the project structure
-- Call workspace_context with action=search_keywords to find relevant files
-- Call read_file to examine files that need to be modified
-- Call run_shell_command for system operations or file system checks
-- Call validate_file after making changes to ensure they are correct
+WORKFLOW FOR STEP EXECUTION:
+- Use workspace_context with action=load_tree to understand the project structure
+- Use workspace_context with action=search_keywords to find relevant files
+- Use read_file to examine files that need to be modified
+- Use run_shell_command for system operations or file system checks
+- Use validate_file after making changes to ensure they are correct
 
-Focus on completing the specific step assigned to you. Do not implement additional features or other steps.`, GetDetailedToolDescriptions())
+Focus on completing the specific step assigned to you. Do not implement additional features or other steps.`, FormatToolsForPrompt())
 }
 
 // GetSystemMessageForExploration returns a system message for exploration and planning workflows
@@ -586,7 +586,36 @@ EXPLORATION STRATEGY:
 4. Use run_shell_command for system-level information and diagnostics
 5. Build a comprehensive understanding before making any recommendations
 
-Provide detailed analysis with concrete file references and line numbers where applicable.`, GetDetailedToolDescriptions())
+Provide detailed analysis with concrete file references and line numbers where applicable.`, FormatToolsForPrompt())
+}
+
+// GetSystemMessageForInformational returns a system message for simple informational queries
+func GetSystemMessageForInformational() string {
+	return fmt.Sprintf(`You are a helpful assistant that answers questions by using available tools. Always use tools to gather information directly.
+
+%s
+
+CRITICAL: When you need to use tools, output ONLY a JSON object in this exact format. Do NOT include any explanatory text:
+
+{
+  "tool_calls": [
+    {
+      "id": "call_1",
+      "type": "function",
+      "function": {
+        "name": "tool_name",
+        "arguments": "{\"param\": \"value\"}"
+      }
+    }
+  ]
+}
+
+For simple questions, use the appropriate tools immediately:
+- "What files are in the current directory?" → run_shell_command with "ls -la"
+- "Show me the content of main.go" → read_file
+- "What are the available commands?" → workspace_context with action=load_tree
+
+Answer questions directly using tool outputs. Do not generate code or create todos.`, FormatToolsForPrompt())
 }
 
 // GetDetailedToolDescriptions returns detailed tool descriptions for agent workflows

@@ -119,6 +119,35 @@ var (
 	DefaultTokenLimit = prompts.DefaultTokenLimit
 )
 
+// ShouldUseJSONResponse determines if JSON mode should be enabled for the API call
+func ShouldUseJSONResponse(messages []prompts.Message) bool {
+	for _, msg := range messages {
+		// Type assert Content to string
+		contentStr, ok := msg.Content.(string)
+		if !ok {
+			continue
+		}
+
+		content := strings.ToLower(contentStr)
+
+		// Check for explicit JSON format requirements in system/user messages
+		if strings.Contains(content, "return only json") ||
+			strings.Contains(content, "respond with json") ||
+			strings.Contains(content, "json format only") ||
+			strings.Contains(content, "valid json object") ||
+			strings.Contains(content, "return only a json object") ||
+			strings.Contains(content, "you must respond with a valid json object") ||
+			strings.Contains(content, "critical: you must respond with") {
+
+			// Additional check: ensure it's not just mentioning JSON in general
+			if strings.Contains(content, "json") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // GetLLMResponseWithTools makes an LLM call with tool calling support
 func GetLLMResponseWithTools(modelName string, messages []prompts.Message, systemPrompt string, cfg *config.Config, timeout time.Duration) (string, *TokenUsage, error) {
 	response, tokenUsage, err := GetLLMResponseWithToolsScoped(modelName, messages, systemPrompt, cfg, timeout, nil)
@@ -238,9 +267,9 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 		"tools":       toOpenAITools(),
 	}
 	// Enable JSON mode when prompts explicitly require strict JSON output
-	// if ShouldUseJSONResponse(messages) {
-	// 	payload["response_format"] = map[string]any{"type": "json_object"}
-	// }
+	if ShouldUseJSONResponse(messages) {
+		payload["response_format"] = map[string]any{"type": "json_object"}
+	}
 	if cfg.Temperature != 0 {
 		payload["temperature"] = cfg.Temperature
 	}

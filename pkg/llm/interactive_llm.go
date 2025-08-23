@@ -178,6 +178,17 @@ func CallLLMWithInteractiveContext(
 	persisted := LoadEvidenceCache()
 	var turnDurations []time.Duration
 
+	// Session tracking for duplicate request detection
+	sessionTracker := tools.GetGlobalSessionTracker()
+	sessionID := sessionTracker.StartSession()
+	logger.Logf("DEBUG: Started session tracking with ID: %s", sessionID)
+
+	// Clean up session when function exits
+	defer func() {
+		sessionTracker.EndSession(sessionID)
+		logger.Logf("DEBUG: Ended session tracking for ID: %s", sessionID)
+	}()
+
 	// Context budgeting (character-based approximation for control turns)
 	const turnBudgetChars = 8000
 	usedBudgetChars := 0
@@ -538,7 +549,8 @@ func CallLLMWithInteractiveContext(
 						passArgsBytes, _ := json.Marshal(args)
 						merged := ToolCall{Type: "function", Function: ToolCallFunction{Name: name, Arguments: string(passArgsBytes)}}
 						// Delegate to executor which dispatches underlying action
-						result, err := ExecuteBasicToolCall(merged, cfg)
+						ctx := context.WithValue(context.Background(), "session_id", sessionID)
+						result, err := ExecuteBasicToolCallWithContext(ctx, merged, cfg)
 						if err != nil {
 							toolResults = append(toolResults, fmt.Sprintf("Tool %s failed (%s): %s", merged.Function.Name, classifyError(err), sanitizeOutput(err.Error())))
 							if rl := utils.GetRunLogger(); rl != nil {
@@ -689,7 +701,8 @@ func CallLLMWithInteractiveContext(
 					}
 
 					// Execute allowed tools (non-underlying helpers like preflight)
-					result, err := ExecuteBasicToolCall(toolCall, cfg)
+					ctx := context.WithValue(context.Background(), "session_id", sessionID)
+					result, err := ExecuteBasicToolCallWithContext(ctx, toolCall, cfg)
 					if err != nil {
 						toolResults = append(toolResults, fmt.Sprintf("Tool %s failed (%s): %s", toolCall.Function.Name, classifyError(err), sanitizeOutput(err.Error())))
 						if rl := utils.GetRunLogger(); rl != nil {
@@ -765,7 +778,8 @@ func CallLLMWithInteractiveContext(
 										rfArgs := map[string]any{"file_path": cf}
 										rfBytes, _ := json.Marshal(rfArgs)
 										rfCall := ToolCall{Type: "function", Function: ToolCallFunction{Name: "read_file", Arguments: string(rfBytes)}}
-										if rfRes, rfErr := ExecuteBasicToolCall(rfCall, cfg); rfErr == nil {
+										ctx := context.WithValue(context.Background(), "session_id", sessionID)
+										if rfRes, rfErr := ExecuteBasicToolCallWithContext(ctx, rfCall, cfg); rfErr == nil {
 											toolCounts["read_file"]++
 											toolResults = append(toolResults, fmt.Sprintf("Tool read_file result: %s", rfRes))
 											readFileCache[cf] = rfRes
@@ -843,7 +857,8 @@ func CallLLMWithInteractiveContext(
 						rfArgs := map[string]any{"file_path": candidate}
 						rfBytes, _ := json.Marshal(rfArgs)
 						rfCall := ToolCall{Type: "function", Function: ToolCallFunction{Name: "read_file", Arguments: string(rfBytes)}}
-						if rfRes, rfErr := ExecuteBasicToolCall(rfCall, cfg); rfErr == nil {
+						ctx := context.WithValue(context.Background(), "session_id", sessionID)
+						if rfRes, rfErr := ExecuteBasicToolCallWithContext(ctx, rfCall, cfg); rfErr == nil {
 							toolCounts["read_file"]++
 							toolResults = append(toolResults, fmt.Sprintf("Tool read_file result: %s", rfRes))
 							readFileCache[candidate] = rfRes
@@ -990,12 +1005,26 @@ func containsToolCall(response string) bool {
 		}
 	}
 
+	// Debug logging for troubleshooting
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: containsToolCall check failed for response: %s\n", response)
+		fmt.Printf("DEBUG: trimmed: %s\n", trimmed)
+		fmt.Printf("DEBUG: starts with {: %v\n", strings.HasPrefix(trimmed, "{"))
+		fmt.Printf("DEBUG: contains tool_calls: %v\n", strings.Contains(response, `"tool_calls"`))
+	}
+
 	return false
 }
 
 func parseToolCalls(response string) ([]ToolCall, error) {
 	// Tolerant parse: tool_calls may have arguments as string or object, may use 'parameters',
 	// or may place {name, arguments} at the call level under 'arguments'.
+
+	// Debug logging
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: parseToolCalls called with response: %s\n", response)
+	}
+
 	normalize := func(m map[string]any) (ToolCall, bool) {
 		id, _ := m["id"].(string)
 		typ, _ := m["type"].(string)
@@ -1031,10 +1060,92 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 		return ToolCall{ID: id, Type: typ, Function: ToolCallFunction{Name: name, Arguments: argsStr}}, true
 	}
 
+	fixMalformedJSON := func(s string) string {
+		// Handle common JSON formatting issues from LLMs
+
+		// First, let's try a more sophisticated approach using a stack-based parser
+		// to identify and fix structural issues
+
+		// Count braces and brackets to understand the overall structure
+		braceCount := strings.Count(s, "{")
+		closeBraceCount := strings.Count(s, "}")
+		bracketCount := strings.Count(s, "[")
+		closeBracketCount := strings.Count(s, "]")
+
+		// Simple fix: if we have missing braces/brackets, add them at the end
+		if braceCount > closeBraceCount {
+			missingBraces := braceCount - closeBraceCount
+			for i := 0; i < missingBraces; i++ {
+				s += "}"
+			}
+		}
+
+		if bracketCount > closeBracketCount {
+			missingBrackets := bracketCount - closeBracketCount
+			for i := 0; i < missingBrackets; i++ {
+				s += "]"
+			}
+		}
+
+		// Handle the most common LLM JSON issues:
+
+		// 1. Fix trailing commas before closing brackets/braces
+		s = strings.ReplaceAll(s, ",}", "}")
+		s = strings.ReplaceAll(s, ",]", "]")
+
+		// 2. Fix missing commas between array elements
+		// Look for patterns where objects/arrays are not properly separated
+		s = strings.ReplaceAll(s, "}{", "},{")
+		s = strings.ReplaceAll(s, "} {", "}, {")
+		s = strings.ReplaceAll(s, "][", "],[")
+		s = strings.ReplaceAll(s, "] [", "], [")
+
+		// 3. Fix string concatenation issues
+		s = strings.ReplaceAll(s, "\" \"", "")
+		s = strings.ReplaceAll(s, "' '", "")
+
+		// 4. Fix common LLM mistakes with quotes (but preserve valid escaping)
+		s = strings.ReplaceAll(s, "\"{", "{")
+		s = strings.ReplaceAll(s, "}\"", "}")
+		s = strings.ReplaceAll(s, "\"[", "[")
+		s = strings.ReplaceAll(s, "]\"", "]")
+
+		// 5. Handle the specific issue where array elements are missing separators
+		// Look for patterns where array elements are not properly separated
+		if strings.Contains(s, "nil\"]") {
+			s = strings.ReplaceAll(s, "nil\"]", "nil\",]")
+		}
+		if strings.Contains(s, "true\"]") {
+			s = strings.ReplaceAll(s, "true\"]", "true\",]")
+		}
+		if strings.Contains(s, "false\"]") {
+			s = strings.ReplaceAll(s, "false\"]", "false\",]")
+		}
+
+		return s
+	}
+
 	tryParse := func(s string) ([]ToolCall, bool) {
+		// Clean up common JSON formatting issues
+		cleaned := strings.TrimSpace(s)
+
+		// Use a more sophisticated approach to fix JSON structure
+		cleaned = fixMalformedJSON(cleaned)
+
+		if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+			fmt.Printf("DEBUG: Attempting to parse cleaned JSON: %s\n", cleaned)
+		}
+
+		// Try the original cleaned JSON first
 		var raw map[string]any
-		if err := json.Unmarshal([]byte(s), &raw); err == nil {
+		if err := json.Unmarshal([]byte(cleaned), &raw); err == nil {
+			if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+				fmt.Printf("DEBUG: JSON parsed successfully: %+v\n", raw)
+			}
 			if tcs, ok := raw["tool_calls"].([]any); ok && len(tcs) > 0 {
+				if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+					fmt.Printf("DEBUG: Found tool_calls array with %d items\n", len(tcs))
+				}
 				var toolCalls []ToolCall
 				for _, it := range tcs {
 					m, _ := it.(map[string]any)
@@ -1045,16 +1156,71 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 				if len(toolCalls) > 0 {
 					return toolCalls, true
 				}
+			} else if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+				fmt.Printf("DEBUG: tool_calls not found or empty in parsed JSON\n")
+			}
+		} else if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+			fmt.Printf("DEBUG: JSON parsing failed: %v\n", err)
+			fmt.Printf("DEBUG: Attempted to parse: %s\n", cleaned)
+		}
+
+		// If the first attempt failed, try an incremental approach
+		// This handles cases where we need to add more closing braces/brackets
+		if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+			fmt.Printf("DEBUG: Trying incremental JSON fixing\n")
+		}
+
+		testJson := cleaned
+		for i := 0; i < 5; i++ { // Try adding up to 5 extra braces/brackets
+			var testRaw map[string]any
+			if err := json.Unmarshal([]byte(testJson), &testRaw); err == nil {
+				if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+					fmt.Printf("DEBUG: JSON parsed successfully after adding %d braces/brackets\n", i)
+				}
+				if tcs, ok := testRaw["tool_calls"].([]any); ok && len(tcs) > 0 {
+					var toolCalls []ToolCall
+					for _, it := range tcs {
+						m, _ := it.(map[string]any)
+						if tc, ok := normalize(m); ok {
+							toolCalls = append(toolCalls, tc)
+						}
+					}
+					if len(toolCalls) > 0 {
+						return toolCalls, true
+					}
+				}
+				break // Success, stop trying
+			} else {
+				// Add one more closing brace/bracket
+				testJson += "}"
+				if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" && i < 2 {
+					fmt.Printf("DEBUG: Attempt %d failed, adding another brace: %v\n", i+1, err)
+				}
 			}
 		}
+
 		return nil, false
 	}
 
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: parseToolCalls - trying tryParse\n")
+	}
+
 	if tcs, ok := tryParse(response); ok {
+		if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+			fmt.Printf("DEBUG: parseToolCalls - tryParse succeeded with %d tool calls\n", len(tcs))
+		}
 		return tcs, nil
+	} else {
+		if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+			fmt.Printf("DEBUG: parseToolCalls - tryParse failed, trying fallbacks\n")
+		}
 	}
 
 	// Fallback: split multiple concatenated top-level JSON objects and try each
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: parseToolCalls - trying SplitTopLevelJSONObjects fallback\n")
+	}
 	for _, obj := range utils.SplitTopLevelJSONObjects(response) {
 		if tcs, ok := tryParse(obj); ok {
 			return tcs, nil
@@ -1062,6 +1228,9 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 	}
 
 	// Last-resort fallback: extract the tool_calls array manually and wrap it
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: parseToolCalls - trying manual tool_calls extraction\n")
+	}
 	if idx := strings.Index(response, "\"tool_calls\""); idx != -1 {
 		// Find the first '[' after "tool_calls"
 		arrStart := strings.Index(response[idx:], "[")
@@ -1089,12 +1258,18 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 	}
 
 	// Try to parse the response as a full tool message (with role)
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: parseToolCalls - trying ToolMessage parsing\n")
+	}
 	var toolMessage ToolMessage
 	if err := json.Unmarshal([]byte(response), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
 		return toolMessage.ToolCalls, nil
 	}
 
 	// Last resort: try splitting concatenated top-level objects
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: parseToolCalls - trying concatenated objects\n")
+	}
 	for _, obj := range utils.SplitTopLevelJSONObjects(response) {
 		var tm ToolMessage
 		if err := json.Unmarshal([]byte(obj), &tm); err == nil && len(tm.ToolCalls) > 0 {
@@ -1102,15 +1277,268 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 		}
 	}
 
+	// Final fallback: try to extract tool calls using a very robust method
+	// This handles cases where the JSON structure is severely broken but still contains recognizable tool call patterns
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: parseToolCalls - trying robust extraction\n")
+	}
+	toolCalls := extractToolCallsRobust(response)
+	if len(toolCalls) > 0 {
+		if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+			fmt.Printf("DEBUG: parseToolCalls - robust extraction found %d tool calls\n", len(toolCalls))
+		}
+		return toolCalls, nil
+	}
+
 	return []ToolCall{}, fmt.Errorf("no tool calls found in response")
 }
 
+// extractToolCallsRobust provides a very robust fallback for extracting tool calls
+// from malformed JSON responses. This handles cases where the JSON structure is
+// severely broken but still contains recognizable tool call patterns.
+func extractToolCallsRobust(response string) []ToolCall {
+	var toolCalls []ToolCall
+
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: extractToolCallsRobust called with response length: %d\n", len(response))
+	}
+
+	// Look for the tool_calls array pattern
+	toolCallsIdx := strings.Index(response, `"tool_calls"`)
+	if toolCallsIdx == -1 {
+		if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+			fmt.Printf("DEBUG: extractToolCallsRobust - no tool_calls found\n")
+		}
+		return nil
+	}
+
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: extractToolCallsRobust - found tool_calls at index %d\n", toolCallsIdx)
+	}
+
+	// Find the array start
+	arrayStartIdx := strings.Index(response[toolCallsIdx:], "[")
+	if arrayStartIdx == -1 {
+		if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+			fmt.Printf("DEBUG: extractToolCallsRobust - no array start found\n")
+		}
+		return nil
+	}
+	arrayStartIdx += toolCallsIdx
+
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: extractToolCallsRobust - array starts at index %d\n", arrayStartIdx)
+	}
+
+	// Find the array end by looking for the matching closing bracket
+	arrayEndIdx := -1
+	bracketLevel := 0
+
+	for i := arrayStartIdx; i < len(response); i++ {
+		switch response[i] {
+		case '[':
+			bracketLevel++
+		case ']':
+			bracketLevel--
+			if bracketLevel == 0 {
+				arrayEndIdx = i
+				break
+			}
+		}
+	}
+
+	if arrayEndIdx == -1 {
+		if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+			fmt.Printf("DEBUG: extractToolCallsRobust - no matching array end found\n")
+		}
+		return nil
+	}
+
+	// Extract the array content without outer brackets
+	arrayContent := response[arrayStartIdx+1 : arrayEndIdx]
+
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: extractToolCallsRobust - extracted array content: %s\n", arrayContent[:min(100, len(arrayContent))])
+	}
+
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: extractToolCallsRobust - array content length: %d\n", len(arrayContent))
+		fmt.Printf("DEBUG: extractToolCallsRobust - array content: %s\n", arrayContent[:min(100, len(arrayContent))])
+	}
+
+	// Try a different approach: look for complete tool call patterns
+	// Since the JSON is malformed, we'll look for the specific pattern:
+	// {"id": "...", "type": "...", "function": {"name": "...", "arguments": ...}}
+
+	// Find the first tool call by looking for the id field
+	if idIdx := strings.Index(arrayContent, `"id"`); idIdx != -1 {
+		// Look for the start of this object (should be at the beginning)
+		objStart := 0
+		objEnd := len(arrayContent)
+
+		// Try to find a reasonable end point by looking for patterns that indicate the end
+		// Look for the closing brace that would match the opening one
+		braceLevel := 0
+		for i := objStart; i < len(arrayContent) && i < 2000; i++ { // Limit search to avoid infinite loop
+			switch arrayContent[i] {
+			case '{':
+				braceLevel++
+			case '}':
+				braceLevel--
+				if braceLevel == 0 {
+					objEnd = i + 1
+					break
+				}
+			}
+		}
+
+		if objEnd > objStart {
+			objStr := arrayContent[objStart:objEnd]
+			if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+				fmt.Printf("DEBUG: extractToolCallsRobust - trying to parse object: %s\n", objStr[:min(200, len(objStr))])
+			}
+
+			// Try to parse this as a tool call
+			if tc := parseSingleToolCall(objStr); tc != nil {
+				toolCalls = append(toolCalls, *tc)
+				if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+					fmt.Printf("DEBUG: extractToolCallsRobust - successfully parsed tool call\n")
+				}
+			} else {
+				if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+					fmt.Printf("DEBUG: extractToolCallsRobust - failed to parse tool call\n")
+				}
+			}
+		}
+	}
+
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: extractToolCallsRobust - parsed %d tool calls\n", len(toolCalls))
+	}
+
+	return toolCalls
+}
+
+// parseSingleToolCall attempts to parse a single tool call from a string
+func parseSingleToolCall(objStr string) *ToolCall {
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: parseSingleToolCall called with: %s\n", objStr[:min(100, len(objStr))])
+	}
+
+	// Try to extract key components using string parsing
+	id := extractStringValue(objStr, `"id"`, `"`)
+	typ := extractStringValue(objStr, `"type"`, `"`)
+	name := extractStringValue(objStr, `"name"`, `"`)
+
+	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+		fmt.Printf("DEBUG: parseSingleToolCall - extracted id='%s', type='%s', name='%s'\n", id, typ, name)
+	}
+
+	// For arguments, it might be an object or a string
+	var args string
+	if argsStart := strings.Index(objStr, `"arguments"`); argsStart != -1 {
+		argsStart += 12 // length of "arguments":
+
+		// Find the arguments value (could be object or string)
+		if objStr[argsStart] == '{' {
+			// Object - find matching closing brace
+			braceLevel := 1
+			for i := argsStart + 1; i < len(objStr); i++ {
+				switch objStr[i] {
+				case '{':
+					braceLevel++
+				case '}':
+					braceLevel--
+					if braceLevel == 0 {
+						args = objStr[argsStart : i+1]
+						break
+					}
+				}
+			}
+		} else if objStr[argsStart] == '"' {
+			// String - find closing quote
+			for i := argsStart + 1; i < len(objStr); i++ {
+				if objStr[i] == '"' && objStr[i-1] != '\\' {
+					args = objStr[argsStart : i+1]
+					break
+				}
+			}
+		}
+	}
+
+	if id != "" && typ != "" && name != "" {
+		return &ToolCall{
+			ID:   id,
+			Type: typ,
+			Function: ToolCallFunction{
+				Name:      name,
+				Arguments: args,
+			},
+		}
+	}
+
+	return nil
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// extractStringValue extracts a string value from JSON-like text
+func extractStringValue(text, key, quote string) string {
+	keyIdx := strings.Index(text, key)
+	if keyIdx == -1 {
+		return ""
+	}
+
+	// Find the colon after the key
+	colonIdx := strings.Index(text[keyIdx:], ":")
+	if colonIdx == -1 {
+		return ""
+	}
+	colonIdx += keyIdx
+
+	// Skip whitespace after colon
+	valueStart := colonIdx + 1
+	for valueStart < len(text) && (text[valueStart] == ' ' || text[valueStart] == '\t' || text[valueStart] == '\n') {
+		valueStart++
+	}
+
+	if valueStart >= len(text) || text[valueStart] != quote[0] {
+		return ""
+	}
+
+	valueStart++ // Skip the opening quote
+	valueEnd := valueStart
+
+	for i := valueStart; i < len(text); i++ {
+		if text[i] == '"' && (i == 0 || text[i-1] != '\\') {
+			valueEnd = i
+			break
+		}
+	}
+
+	if valueEnd > valueStart {
+		return text[valueStart:valueEnd]
+	}
+
+	return ""
+}
+
 func ExecuteBasicToolCall(toolCall ToolCall, cfg *config.Config) (string, error) {
+	return ExecuteBasicToolCallWithContext(context.Background(), toolCall, cfg)
+}
+
+func ExecuteBasicToolCallWithContext(ctx context.Context, toolCall ToolCall, cfg *config.Config) (string, error) {
 	// Convert to types.ToolCall for the unified executor
 	typesToolCall := convertToTypesToolCall(toolCall)
 
 	// Use the new unified tool executor
-	result, err := tools.ExecuteToolCall(context.Background(), typesToolCall)
+	result, err := tools.ExecuteToolCall(ctx, typesToolCall)
 	if err != nil {
 		return "", err
 	}

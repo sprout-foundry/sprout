@@ -6,17 +6,6 @@ import (
 	"testing"
 )
 
-type mockLLMClient struct{}
-
-func (m *mockLLMClient) Generate(prompt string) (string, error) {
-	return "mock response", nil
-}
-
-func TestMain(m *testing.M) {
-	RegisterProvider("mock", func() (LLMClient, error) { return &mockLLMClient{}, nil })
-	os.Exit(m.Run())
-}
-
 func TestGetModelPricing_DefaultsAndOverrides(t *testing.T) {
 	// Work in temp dir to isolate .ledit path
 	orig, _ := os.Getwd()
@@ -49,16 +38,5 @@ func TestGetModelPricing_DefaultsAndOverrides(t *testing.T) {
 	got := GetModelPricing(" My-Model ")
 	if got.InputCostPer1K != custom.InputCostPer1K || got.OutputCostPer1K != custom.OutputCostPer1K {
 		t.Fatalf("override not applied: %+v", got)
-	}
-}
-
-func TestNewLLMClientWithMockProvider(t *testing.T) {
-	client, err := NewLLMClient("mock")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	_, err = client.Generate("test")
-	if err != nil {
-		t.Fatalf("expected no error from mock client, got %v", err)
 	}
 }

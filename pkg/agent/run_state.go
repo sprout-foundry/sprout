@@ -6,22 +6,24 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/types"
 )
 
 // serializableAgentState captures resumable parts of AgentContext
 type serializableAgentState struct {
-	UserIntent         string           `json:"user_intent"`
-	IterationCount     int              `json:"iteration_count"`
-	MaxIterations      int              `json:"max_iterations"`
-	IsCompleted        bool             `json:"is_completed"`
-	IntentAnalysis     *IntentAnalysis  `json:"intent_analysis,omitempty"`
-	CurrentPlan        *EditPlan        `json:"current_plan,omitempty"`
-	ExecutedOperations []string         `json:"executed_operations"`
-	Errors             []string         `json:"errors"`
-	ValidationResults  []string         `json:"validation_results"`
-	ValidationFailed   bool             `json:"validation_failed"`
-	TokenUsage         *AgentTokenUsage `json:"token_usage,omitempty"`
-	SavedAt            time.Time        `json:"saved_at"`
+	UserIntent         string                 `json:"user_intent"`
+	IterationCount     int                    `json:"iteration_count"`
+	MaxIterations      int                    `json:"max_iterations"`
+	IsCompleted        bool                   `json:"is_completed"`
+	IntentAnalysis     *IntentAnalysis        `json:"intent_analysis,omitempty"`
+	CurrentPlan        *EditPlan              `json:"current_plan,omitempty"`
+	ExecutedOperations []string               `json:"executed_operations"`
+	Errors             []string               `json:"errors"`
+	ValidationResults  []string               `json:"validation_results"`
+	ValidationFailed   bool                   `json:"validation_failed"`
+	TokenUsage         *types.AgentTokenUsage `json:"token_usage,omitempty"`
+	SavedAt            time.Time              `json:"saved_at"`
 }
 
 const runStatePath = ".ledit/run_state.json"

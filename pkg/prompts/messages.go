@@ -461,7 +461,7 @@ func GracefulExit(msg GracefulExitMessage) string {
 
 	// Header with positive framing
 	boldCyan := color.New(color.FgCyan, color.Bold).SprintFunc()
-	output.WriteString(fmt.Sprintf("%s\n\n", boldCyan("🤖 Looks like this is a task for a person, we tried, but we weren't able to move this forward.")))
+	output.WriteString(fmt.Sprintf("\n\n%s\n\n", boldCyan("🤖 Looks like this is a task for a person, we tried, but we weren't able to move this forward.")))
 
 	// Context about what happened
 	if msg.Context != "" {
@@ -633,11 +633,11 @@ func NewGracefulExitWithTokenUsage(context string, err error, tokenUsage interfa
 
 // --- Code Review Prompts ---
 func CodeReviewStagedPrompt() string {
-	return `You are an expert code reviewer. Please analyze the provided Git diff of staged changes and provide a comprehensive code review.
+	return `You are an expert code reviewer. Please analyze the provided Git diff of staged changes and provide a comprehensive code review in JSON format.
 
 Your review should include:
 
-1. **Code Quality Assessment**: 
+1. **Code Quality Assessment**:
    - Check for code clarity, readability, and maintainability
    - Identify any code smells or anti-patterns
    - Assess adherence to best practices and conventions
@@ -662,20 +662,23 @@ Your review should include:
    - Review any new dependencies or version changes
    - Check for breaking changes or compatibility issues
 
-Please provide your feedback in the following format:
+CRITICAL: You MUST respond with a valid JSON object only. No markdown formatting, no explanatory text before or after the JSON.
 
-**Status**: [APPROVED/NEEDS_REVISION/REJECTED]
+Required JSON format:
+{
+  "status": "approved|needs_revision|rejected",
+  "feedback": "Your comprehensive assessment and feedback",
+  "detailed_guidance": "Specific guidance for improvements if needed (optional)",
+  "patch_resolution": "Complete updated file content if direct patch is provided (optional)",
+  "new_prompt": "Suggested new prompt if changes are rejected (optional)"
+}
 
-**Summary**: Brief overall assessment of the changes
+Example response:
+{
+  "status": "needs_revision",
+  "feedback": "The code has good structure but needs error handling improvements",
+  "detailed_guidance": "Add proper error handling in the main function and validate input parameters"
+}
 
-**Detailed Feedback**:
-- **Strengths**: What was done well
-- **Issues**: Specific problems that need to be addressed (if any)
-- **Suggestions**: Recommendations for improvement
-- **Security Concerns**: Any security-related issues (if any)
-
-**Action Items** (if status is not APPROVED):
-List specific changes that should be made before approval
-
-Be constructive and specific in your feedback. Focus on actionable suggestions that will improve the code quality and maintainability.`
+Remember: Return ONLY the JSON object, nothing else.`
 }

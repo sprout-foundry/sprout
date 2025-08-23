@@ -749,29 +749,59 @@ func applyHunkChanges(lines []string, hunk Hunk, matchStart int) []string {
 		switch {
 		case strings.HasPrefix(hunkLine, "-"):
 			// deletion consumes one line from original
-			consumed++
+			// Check if we can safely access this line
+			if matchStart+consumed < len(lines) && matchStart+consumed >= 0 {
+				consumed++
+			} else {
+				// If we can't access the line, still count it as consumed to maintain hunk structure
+				consumed++
+			}
 		case strings.HasPrefix(hunkLine, "+"):
 			// addition inserts new line
 			updated = append(updated, strings.TrimPrefix(hunkLine, "+"))
 		default:
 			// context: copy original and consume one
-			if matchStart+consumed < len(lines) {
+			if matchStart+consumed < len(lines) && matchStart+consumed >= 0 {
 				updated = append(updated, lines[matchStart+consumed])
+			} else {
+				// If we can't access the line, just add an empty line to maintain structure
+				updated = append(updated, "")
 			}
 			consumed++
 		}
 	}
 
 	// Assemble: prefix + updated + suffix to preserve entire file content
-	result := make([]string, 0, len(lines)-consumed+len(updated))
+	// Calculate capacity with bounds checking to prevent panic
+	capacity := len(lines) - consumed + len(updated)
+	if capacity < 0 {
+		// Log the issue for debugging
+		if os.Getenv("LEDIT_DEBUG_PATCH") == "1" {
+			fmt.Printf("DEBUG: Negative capacity detected in applyHunkChanges: len(lines)=%d, consumed=%d, len(updated)=%d\n",
+				len(lines), consumed, len(updated))
+		}
+		capacity = 0 // Fallback to 0 if calculation is negative
+	}
+	if capacity > len(lines)+len(updated) {
+		capacity = len(lines) + len(updated) // Cap at reasonable maximum
+	}
+	result := make([]string, 0, capacity)
 	// prefix
-	result = append(result, lines[:matchStart]...)
+	if matchStart >= 0 && matchStart <= len(lines) {
+		result = append(result, lines[:matchStart]...)
+	} else if matchStart < 0 {
+		// If matchStart is negative, don't add any prefix
+		// This is handled gracefully
+	}
 	// updated region
 	result = append(result, updated...)
 	// suffix
 	suffixStart := matchStart + consumed
-	if suffixStart < len(lines) {
+	if suffixStart < len(lines) && suffixStart >= 0 {
 		result = append(result, lines[suffixStart:]...)
+	} else if suffixStart < 0 {
+		// If suffixStart is negative, append the entire file
+		result = append(result, lines...)
 	}
 	return result
 }

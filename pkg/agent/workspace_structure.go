@@ -9,6 +9,8 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
+// Note: WorkspaceInfo is defined in types.go in this package
+
 // buildWorkspaceStructure creates comprehensive workspace analysis
 func buildWorkspaceStructure(logger *utils.Logger) (*WorkspaceInfo, error) {
 	logger.Logf("Building comprehensive workspace structure...")

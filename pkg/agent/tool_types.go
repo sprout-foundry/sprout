@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -83,7 +84,7 @@ type ToolResult struct {
 	ExecutionTime time.Duration
 
 	// TokenUsage contains token usage information
-	TokenUsage *AgentTokenUsage
+	TokenUsage *types.AgentTokenUsage
 }
 
 // ToolRegistry manages the registration and discovery of tools

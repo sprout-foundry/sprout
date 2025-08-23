@@ -36,13 +36,18 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 			payload["temperature"] = cfg.Temperature
 		}
 
+		// Enable JSON mode when prompts explicitly require strict JSON output
+		if ShouldUseJSONResponse(messages) {
+			payload["response_format"] = map[string]any{"type": "json_object"}
+		}
+
 		return json.Marshal(payload)
 	}
 
 	tryOnce := func(reqBody []byte) (*http.Response, error) {
 		// Debug: Log the actual JSON payload being sent
 		logger.Logf("DEBUG: About to send HTTP request to: %s", apiURL)
-		logger.Logf("DEBUG: Requested tokens: %s\n", EstimateTokens(string(reqBody)))
+		logger.Logf("DEBUG: Requested tokens: %d\n", EstimateTokens(string(reqBody)))
 		logger.Logf("DEBUG: Request payload length: %d bytes", len(reqBody))
 		logger.Logf("DEBUG: Request payload: %s", string(reqBody))
 

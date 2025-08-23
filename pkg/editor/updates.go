@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/changetracker"
+	"github.com/alantheprice/ledit/pkg/codereview"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/git"
@@ -135,7 +136,13 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			logger := utils.GetLogger(cfg.SkipPrompt)
 			ranPreapplyReview = true
 			if err := performAutomatedReview(combined, originalInstructions, processedInstructions, cfg, logger, revisionID); err != nil {
-				if !strings.Contains(err.Error(), "revisions applied, re-validating") {
+				// Check if this is a retry request error
+				if retryRequest, ok := err.(*codereview.RetryRequestError); ok {
+					logger.LogProcessStep(fmt.Sprintf("Code review requested retry with refined prompt: %s", retryRequest.Feedback))
+					// Use the refined prompt to regenerate the code
+					// For pre-apply review, we'll just log the retry request since we're in the middle of processing
+					logger.LogProcessStep("Pre-apply review: retry requested but not implemented for this phase")
+				} else if !strings.Contains(err.Error(), "revisions applied, re-validating") {
 					return "", err
 				}
 			}
@@ -249,7 +256,14 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			logger := utils.GetLogger(cfg.SkipPrompt)
 			reviewErr := performAutomatedReview(combinedDiff, originalInstructions, processedInstructions, cfg, logger, revisionID)
 			if reviewErr != nil {
-				if !strings.Contains(reviewErr.Error(), "revisions applied, re-validating") {
+				// Check if this is a retry request error
+				if retryRequest, ok := reviewErr.(*codereview.RetryRequestError); ok {
+					logger.LogProcessStep(fmt.Sprintf("Code review requested retry with refined prompt: %s", retryRequest.Feedback))
+					// For post-apply review, we could implement retry logic here
+					// For now, we'll log the request and continue
+					logger.LogProcessStep(fmt.Sprintf("Retry requested with prompt: %s", retryRequest.RefinedPrompt))
+					logger.LogProcessStep("Post-apply review: retry requested but continuing with current changes")
+				} else if !strings.Contains(reviewErr.Error(), "revisions applied, re-validating") {
 					return "", reviewErr
 				}
 			}

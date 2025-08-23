@@ -765,3 +765,302 @@ func main() {
 	t.Log("✓ Single hunk reconstruction works correctly")
 	t.Log("✓ Multiple hunk handling improved with better formatting")
 }
+
+func TestApplyHunkChangesCapacityPanic(t *testing.T) {
+	// Test case that would previously cause a panic due to negative capacity
+	lines := []string{"line1", "line2", "line3"}
+
+	// Create a hunk that tries to consume more lines than available
+	hunk := Hunk{
+		OldStart: 1,
+		OldLines: 5, // This is more than available lines
+		NewLines: 1,
+		Lines: []string{
+			"-line1",
+			"-line2",
+			"-line3",
+			"-line4", // This would try to consume a non-existent line
+			"-line5", // This would also try to consume a non-existent line
+			"+new line",
+		},
+	}
+
+	// This should not panic with our fix
+	result := applyHunkChanges(lines, hunk, 0)
+
+	// Verify that we get a valid result (not necessarily correct, but no panic)
+	if result == nil {
+		t.Error("applyHunkChanges returned nil")
+	}
+
+	// The result should contain at least the new line
+	found := false
+	for _, line := range result {
+		if strings.Contains(line, "new line") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected to find the new line in result")
+	}
+}
+
+func TestApplyHunkChangesNegativeMatchStart(t *testing.T) {
+	// Test case with negative matchStart that would cause issues
+	lines := []string{"line1", "line2", "line3"}
+
+	hunk := Hunk{
+		OldStart: 1,
+		OldLines: 2,
+		NewLines: 1,
+		Lines: []string{
+			"-line1",
+			"-line2",
+			"+replacement",
+		},
+	}
+
+	// Test with negative matchStart
+	result := applyHunkChanges(lines, hunk, -1)
+
+	// Should not panic and should return valid result
+	if result == nil {
+		t.Error("applyHunkChanges returned nil with negative matchStart")
+	}
+
+	// Should contain the replacement
+	found := false
+	for _, line := range result {
+		if line == "replacement" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected to find replacement in result")
+	}
+}
+
+func TestApplyHunkChangesBounds(t *testing.T) {
+	// Test bounds checking for consumed > len(lines)
+	lines := []string{"line1", "line2"}
+
+	hunk := Hunk{
+		OldStart: 1,
+		OldLines: 5, // Much larger than available
+		NewLines: 1,
+		Lines: []string{
+			"-line1",
+			"-line2",
+			"-line3", // This would be out of bounds
+			"-line4", // This would be out of bounds
+			"+added line",
+		},
+	}
+
+	// Should not panic
+	result := applyHunkChanges(lines, hunk, 0)
+
+	if result == nil {
+		t.Error("applyHunkChanges returned nil")
+	}
+
+	// Should contain the added line
+	found := false
+	for _, line := range result {
+		if line == "added line" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected to find added line in result")
+	}
+}
+
+func TestApplyHunkChangesNormalOperation(t *testing.T) {
+	// Test normal patch operation to ensure we haven't broken regular functionality
+	lines := []string{"package main", "", "func main() {", "    fmt.Println(\"hello\")", "}"}
+
+	hunk := Hunk{
+		OldStart: 1,
+		OldLines: 5,
+		NewLines: 5,
+		Lines: []string{
+			"package main",
+			"",
+			"func main() {",
+			"-    fmt.Println(\"hello\")",
+			"+    fmt.Println(\"Hello, World!\")",
+			"}",
+		},
+	}
+
+	result := applyHunkChanges(lines, hunk, 0)
+
+	if result == nil {
+		t.Error("applyHunkChanges returned nil")
+	}
+
+	// Should contain the modified line
+	found := false
+	for _, line := range result {
+		if line == "    fmt.Println(\"Hello, World!\")" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected to find modified line in result")
+	}
+
+	// Should not contain the original line
+	for _, line := range result {
+		if line == "    fmt.Println(\"hello\")" {
+			t.Error("Found original line that should have been replaced")
+		}
+	}
+}
+
+func TestEndToEndPatchApplication(t *testing.T) {
+	// Test end-to-end patch application to ensure the full workflow works
+	originalContent := "package main\n\nimport \"fmt\"\n\nfunc main() {\n    fmt.Println(\"hello\")\n}"
+
+	patchContent := `--- a/main.go
++++ b/main.go
+@@ -5,1 +5,1 @@
+ func main() {
+-    fmt.Println("hello")
++    fmt.Println("Hello, World!")
+ }
+`
+
+	patch, err := ParsePatchFromDiff(patchContent, "main.go")
+	if err != nil {
+		t.Fatalf("Failed to parse patch: %v", err)
+	}
+
+	result, err := applyPatchToContent(patch, originalContent)
+	if err != nil {
+		t.Fatalf("Failed to apply patch: %v", err)
+	}
+
+	// Verify the patch was applied correctly
+	if !strings.Contains(result, "fmt.Println(\"Hello, World!\")") {
+		t.Error("Expected modified content not found")
+	}
+
+	if strings.Contains(result, "fmt.Println(\"hello\")") {
+		t.Error("Original content still present after patch application")
+	}
+}
+
+func TestPanicRegressionPrevention(t *testing.T) {
+	// Test that the panic regression is prevented while still allowing valid operations
+	// This tests the specific scenario that would have caused the original panic
+
+	// Scenario 1: Valid normal operation should work
+	lines := []string{"package main", "", "func main() {", "    fmt.Println(\"hello\")", "}"}
+	hunk := Hunk{
+		OldStart: 1,
+		OldLines: 3,
+		NewLines: 3,
+		Lines: []string{
+			"package main",
+			"",
+			"func main() {",
+			"-    fmt.Println(\"hello\")",
+			"+    fmt.Println(\"Hello, World!\")",
+			"}",
+		},
+	}
+
+	// This should work without panic
+	result := applyHunkChanges(lines, hunk, 0)
+	if result == nil {
+		t.Error("Normal operation failed")
+	}
+
+	// Scenario 2: Edge case that could cause negative capacity
+	lines2 := []string{"line1", "line2", "line3"}
+	hunk2 := Hunk{
+		OldStart: 1,
+		OldLines: 10, // Much larger than available lines
+		NewLines: 1,
+		Lines: []string{
+			"-line1",
+			"-line2",
+			"-line3",
+			"-line4", // Out of bounds
+			"-line5", // Out of bounds
+			"+new line",
+		},
+	}
+
+	// This should not panic and should return a valid result
+	result2 := applyHunkChanges(lines2, hunk2, 0)
+	if result2 == nil {
+		t.Error("Edge case handling failed")
+	}
+
+	// Should contain the new line
+	found := false
+	for _, line := range result2 {
+		if line == "new line" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected new line not found in edge case result")
+	}
+}
+
+func TestParserRegressionFixed(t *testing.T) {
+	// This test demonstrates that the regression is fixed
+	// It tests the exact scenario that would have caused code editor to not find changes
+
+	// Original file content
+	originalContent := "package main\n\nfunc main() {\n    fmt.Println(\"original\")\n}"
+
+	// A patch that modifies the file
+	patchContent := `--- a/main.go
++++ b/main.go
+@@ -3,1 +3,1 @@
+ func main() {
+-    fmt.Println("original")
++    fmt.Println("modified")
+ }
+`
+
+	patch, err := ParsePatchFromDiff(patchContent, "main.go")
+	if err != nil {
+		t.Fatalf("Failed to parse patch: %v", err)
+	}
+
+	// Apply the patch
+	result, err := applyPatchToContent(patch, originalContent)
+	if err != nil {
+		t.Fatalf("Failed to apply patch: %v", err)
+	}
+
+	// Verify that changes are detected
+	if !strings.Contains(result, "fmt.Println(\"modified\")") {
+		t.Error("❌ REGRESSION: Modified content not found - code editor would not detect changes!")
+	}
+
+	if strings.Contains(result, "fmt.Println(\"original\")") {
+		t.Error("❌ REGRESSION: Original content still present - changes not applied properly!")
+	}
+
+	// Test that the function returns a non-empty result
+	if len(result) == 0 {
+		t.Error("❌ REGRESSION: Empty result returned - no changes would be detected!")
+	}
+
+	t.Log("✅ SUCCESS: Parser correctly detects and applies code changes")
+	t.Logf("✅ Original length: %d chars", len(originalContent))
+	t.Logf("✅ Modified length: %d chars", len(result))
+	t.Log("✅ Code editor should now be able to find changes!")
+}

@@ -11,6 +11,8 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
+// Note: WorkspaceInfo is defined in types.go in this package
+
 func isSourceFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {

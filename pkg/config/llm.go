@@ -30,7 +30,8 @@ type LLMConfig struct {
 	ProviderTimeouts   map[string]int `json:"provider_timeouts,omitempty"` // Provider-specific timeouts in seconds
 
 	// Infrastructure
-	OllamaServerURL string `json:"ollama_server_url"` // Ollama server endpoint
+	OllamaServerURL   string            `json:"ollama_server_url"`            // Ollama server endpoint
+	ProviderEndpoints map[string]string `json:"provider_endpoints,omitempty"` // Map of provider names to their API endpoints
 }
 
 // DefaultLLMConfig returns sensible defaults for LLM configuration
@@ -71,6 +72,12 @@ func DefaultLLMConfig() *LLMConfig {
 		},
 
 		OllamaServerURL: "http://localhost:11434",
+		ProviderEndpoints: map[string]string{
+			"deepinfra": "https://api.deepinfra.com/v1/openai",
+			"openai":    "https://api.openai.com/v1",
+			"groq":      "https://api.groq.com/openai/v1",
+			"ollama":    "http://localhost:11434/api",
+		},
 	}
 }
 

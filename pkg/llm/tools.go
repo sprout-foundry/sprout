@@ -415,57 +415,6 @@ func parseSimplifiedToolCalls(jsonStr string) []ToolCall {
 	return toolCalls
 }
 
-// convertObjectArgsToString converts tool calls with object arguments to string arguments
-func convertObjectArgsToString(toolCalls []ToolCall) []ToolCall {
-	// We need to use raw JSON parsing to detect object arguments
-	// since ToolCallFunction.Arguments is defined as string
-	type RawFunction struct {
-		Name      string          `json:"name"`
-		Arguments json.RawMessage `json:"arguments"`
-	}
-
-	type RawToolCall struct {
-		ID       string      `json:"id"`
-		Type     string      `json:"type"`
-		Function RawFunction `json:"function"`
-	}
-
-	type RawToolMessage struct {
-		ToolCalls []RawToolCall `json:"tool_calls"`
-	}
-
-	// Convert to JSON and back to detect object arguments
-	jsonData, err := json.Marshal(map[string]interface{}{"tool_calls": toolCalls})
-	if err != nil {
-		return nil
-	}
-
-	var rawMessage RawToolMessage
-	if err := json.Unmarshal(jsonData, &rawMessage); err != nil {
-		return nil
-	}
-
-	converted := false
-	for i, call := range rawMessage.ToolCalls {
-		// Try to unmarshal arguments as an object to see if it's not a string
-		var argsObj map[string]interface{}
-		if json.Unmarshal(call.Function.Arguments, &argsObj) == nil {
-			// Arguments is an object, convert to JSON string
-			argsJson, err := json.Marshal(argsObj)
-			if err != nil {
-				continue
-			}
-			toolCalls[i].Function.Arguments = string(argsJson)
-			converted = true
-		}
-	}
-
-	if converted {
-		return toolCalls
-	}
-	return nil
-}
-
 // parseObjectArgsToolCalls handles tool calls where arguments are provided as objects instead of JSON strings
 func parseObjectArgsToolCalls(jsonStr string) []ToolCall {
 	var objectArgs struct {
@@ -573,42 +522,11 @@ WORKFLOW FOR STEP EXECUTION:
 Focus on completing the specific step assigned to you. Do not implement additional features or other steps.`, FormatToolsForPrompt())
 }
 
-// GetSystemMessageForExploration returns a system message for exploration and planning workflows
-func GetSystemMessageForExploration() string {
-	return fmt.Sprintf(`You are exploring a codebase to understand the current state and plan changes. Use tools to gather comprehensive evidence.
-
-%s
-
-EXPLORATION STRATEGY:
-1. Start with workspace_context action=load_tree to understand the overall structure
-2. Use workspace_context action=search_keywords to find relevant files and functions
-3. Read key files with read_file to understand the current implementation
-4. Use run_shell_command for system-level information and diagnostics
-5. Build a comprehensive understanding before making any recommendations
-
-Provide detailed analysis with concrete file references and line numbers where applicable.`, FormatToolsForPrompt())
-}
-
 // GetSystemMessageForInformational returns a system message for simple informational queries
 func GetSystemMessageForInformational() string {
 	return fmt.Sprintf(`You are a helpful assistant that answers questions by using available tools. Always use tools to gather information directly.
 
 %s
-
-CRITICAL: When you need to use tools, output ONLY a JSON object in this exact format. Do NOT include any explanatory text:
-
-{
-  "tool_calls": [
-    {
-      "id": "call_1",
-      "type": "function",
-      "function": {
-        "name": "tool_name",
-        "arguments": "{\"param\": \"value\"}"
-      }
-    }
-  ]
-}
 
 For simple questions, use the appropriate tools immediately:
 - "What files are in the current directory?" → run_shell_command with "ls -la"
@@ -616,20 +534,6 @@ For simple questions, use the appropriate tools immediately:
 - "What are the available commands?" → workspace_context with action=load_tree
 
 Answer questions directly using tool outputs. Do not generate code or create todos.`, FormatToolsForPrompt())
-}
-
-// GetDetailedToolDescriptions returns detailed tool descriptions for agent workflows
-func GetDetailedToolDescriptions() string {
-	return `Available Tools:
-- **read_file**: Read the contents of a file from the workspace (parameters: file_path)
-- **run_shell_command**: Execute a shell command and return the output (parameters: command)
-- **ask_user**: Ask the user a question when more information is needed (parameters: question)
-- **validate_file**: Validate a file for syntax errors, compilation issues, or other problems (parameters: file_path, validation_type)
-- **edit_file_section**: Edit a specific section of a file efficiently (parameters: file_path, instructions, target_section?)
-- **workspace_context**: Access workspace information including file tree, embeddings search, or keyword search (parameters: action, query?)
-- **preflight**: Verify file exists/writable, clean git state, and required CLIs available (parameters: file_path?)
-
-Use these tools by making function calls when you need more information or when you need to make changes to files. Always use the exact tool names and parameter names as specified above.`
 }
 
 // FormatToolsForPrompt formats the available tools for inclusion in a system prompt

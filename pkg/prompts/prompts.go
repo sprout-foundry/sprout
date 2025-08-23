@@ -16,21 +16,6 @@ var (
 	DefaultTokenLimit = 100000 // Default token limit for LLM requests
 )
 
-// getDetailedToolDescriptions returns detailed tool descriptions for prompts
-// This is a local copy to avoid import cycles with the llm package
-func getDetailedToolDescriptions() string {
-	return `Available Tools:
-- **read_file**: Read the contents of a file from the workspace (parameters: file_path)
-- **run_shell_command**: Execute a shell command and return the output (parameters: command)
-- **ask_user**: Ask the user a question when more information is needed (parameters: question)
-- **validate_file**: Validate a file for syntax errors, compilation issues, or other problems (parameters: file_path, validation_type)
-- **edit_file_section**: Edit a specific section of a file efficiently (parameters: file_path, instructions, target_section?)
-- **workspace_context**: Access workspace information including file tree, embeddings search, or keyword search (parameters: action, query?)
-- **preflight**: Verify file exists/writable, clean git state, and required CLIs available (parameters: file_path?)
-
-Use these tools by making function calls when you need more information or when you need to make changes to files. Always use the exact tool names and parameter names as specified above.`
-}
-
 // PromptManager handles prompt loading with user overrides and hash tracking
 type PromptManager struct {
 	userPromptsDir string
@@ -317,8 +302,9 @@ func (pm *PromptManager) UpdateUserPrompt(filename, content string) error {
 
 // Message represents a single message in a chat-like conversation with the LLM.
 type Message struct {
-	Role    string      `json:"role"`
-	Content interface{} `json:"content"` // Can be string or []ContentPart for multimodal
+	Role       string      `json:"role"`
+	Content    interface{} `json:"content"`                // Can be string or []ContentPart for multimodal
+	ToolCallID *string     `json:"tool_call_id,omitempty"` // For tool response messages
 }
 
 // ContentPart represents a part of multimodal content (text or image)
@@ -454,18 +440,15 @@ func BuildCodeMessagesWithFormat(code, instructions, filename string, interactiv
 	systemPrompt := GetBaseCodeGenSystemMessageWithFormat(usePatchFormat) // Use the base message with format selection
 
 	if interactive {
-		systemPrompt = "You are an assistant that can generate updated code based on provided instructions. You have access to tools for gathering additional information when needed:\n\n" +
-			"1.  **Generate Code:** If you have enough information and all context files, provide the complete code. " +
-			GetBaseCodeGenSystemMessageWithFormat(usePatchFormat) +
-			"\n\n" +
-			"2.  **Use Tools When Needed:** If you need more information, you can use the available tools:\n" +
-			getDetailedToolDescriptions() +
-			"\n\n" +
-			"    Tools will be automatically executed and results provided to you.\n\n" +
-			"    If the user's instructions refer to a file but its contents have not been provided, you *MUST* read the file using the read_file tool.\n\n" +
-			"    If a user has requested that you update a file but it is not included, you *MUST* ask the user for the file name and then read the file using the read_file tool.\n\n" +
-			" Do not generate code until you have all the necessary context. Use both embeddings and keyword search to find relevant files, then read_file the top candidates before editing.\n" +
-			"After tools provide you with information, generate the code based on all available context.\n"
+		// Force non-interactive behavior by overriding the system prompt completely
+		systemPrompt = `You are a CODE GENERATOR. Your ONLY job is to output code.
+
+USER REQUEST: ` + instructions + `
+
+RESPONSE FORMAT:
+` + "```go\nfunc hello() string {\n    return \"hello world\"\n}\n```" + `
+
+IMPORTANT: Do not use any tools. Do not ask questions. Just output the code.`
 	}
 
 	// Inject dynamic guidance when a specific filename is targeted
@@ -521,7 +504,9 @@ func BuildCommitMessages(changelog, originalPrompt string) []Message {
 		"Do not include any reference to the commit message generation process, or the user message itself. " +
 		"Avoid any references to the 'user request or prompt' in the commit message. " +
 		"Do not include any additional information that is not directly related to the code changes. " +
-		"Do not include the '```' or '```git' markdown fences in your response. Your output should be only the raw text of the commit message."
+		"Do not include the '```' or '```git' markdown fences in your response. " +
+		"CRITICAL: Do NOT use any tools or make function calls. " +
+		"Your output should be only the raw text of the commit message, nothing else."
 
 	userPrompt := fmt.Sprintf(
 		"Original user request:\n\"%s\"\n\nCode changes (diff):\n```diff\n%s\n```\n\nPlease generate the git commit message.",
@@ -572,96 +557,6 @@ func RetryPromptWithoutDiff(originalInstruction, filename, validationFailureCont
 		"Validation failed with the following context:\n%s\n\n"+
 		"Please provide the corrected code, taking into account the validation failure.",
 		originalInstruction, filename, validationFailureContext)
-}
-
-// BuildChangesForRequirementMessages constructs the messages for the LLM to generate file-specific changes for a high-level requirement.
-func BuildChangesForRequirementMessages(requirementInstruction, workspaceContext string, interactive bool) []Message {
-	var systemPrompt string
-
-	if interactive {
-		systemPrompt = "You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes with strong preference for modifying existing code over creating new code.\n\n" +
-			"WORKSPACE CONTEXT PROVIDED:\n" +
-			"You are provided with a MINIMAL workspace context containing only:\n" +
-			"- File summaries (what each file does)\n" +
-			"- Public function exports (available functions/methods)\n" +
-			"- Basic project structure\n" +
-			"- NO full file contents are provided initially\n\n" +
-			"CRITICAL ANALYSIS APPROACH:\n" +
-			"1. FIRST: Analyze the minimal context to identify which files likely contain relevant functionality\n" +
-			"2. SECOND: Use the read_file tool to load ONLY the specific files you need to understand\n" +
-			"3. THIRD: Focus on the exact problem - make changes to solve the specific issue\n" +
-			// "4. AVOID: Reading multiple files unless absolutely necessary for your analysis\n\n" +
-			"FUNCTION TARGETING:\n" +
-			"- Look for functions whose purpose matches the problem domain (e.g., 'GetCodeReview' for code review issues)\n" +
-			"- Use the 'exports' information to identify candidate functions without reading full files\n" +
-			"MINIMAL CHANGE TARGETING:\n" +
-			"- Make the SMALLEST change that solves the specific problem described\n" +
-			"- If the issue can be fixed with a 1-2 line change, do NOT suggest additional modifications\n" +
-			"- Only propose related changes if they are REQUIRED for your primary fix to function\n" +
-			"- Ask yourself: 'Will my primary fix work without these additional changes?' If yes, omit them\n" +
-			"- Focus on the exact problem statement rather than general improvements\n\n" +
-			"RESPONSE OPTIONS:\n" +
-			"1.  **Use Tools to Analyze:** When you need to understand specific implementations:\n" +
-			"    - **read_file**: Read specific files to understand current implementations\n" +
-			"    - Use this ONLY when the minimal context suggests a file is relevant\n" +
-			// "    - Read the minimal number of files needed to understand the problem\n\n" +
-			"2.  **Generate Changes:** After you understand the exact change needed, provide the complete list of changes.\n" +
-			"    Your response MUST be a JSON object with a single key \"changes\" which is an array of objects, each with \"filepath\" and \"instruction\" keys.\n\n" +
-			"    PREFER SINGLE CHANGE (most common and correct approach):\n" +
-			"    {\n" +
-			"      \"changes\": [\n" +
-			"        {\n" +
-			"          \"filepath\": " + "`" + "pkg/llm/api.go" + "`" + ",\n" +
-			"          \"instruction\": " + "`" + "In the GetCodeReview function, change 'modelName := cfg.OrchestrationModel' to 'modelName := cfg.EditingModel' on line 266." + "`" + "\n" +
-			"        }\n" +
-			"      ]\n" +
-			"    }\n\n" +
-			"    Use multi-change responses ONLY when genuinely necessary:\n" +
-			"    {\n" +
-			"      \"changes\": [\n" +
-			"        {\n" +
-			"          \"filepath\": " + "`" + "src/main.go" + "`" + ",\n" +
-			"          \"instruction\": " + "`" + "Modify the existing calculateTotal function to also handle sum calculations by adding a new parameter 'operation' and extending the logic." + "`" + "\n" +
-			"        }\n" +
-			"      ]\n" +
-			"    }\n\n"
-		// "REMEMBER: The minimal context approach means you must actively choose which files to read. Don't read files unless the exports or summary clearly indicate relevance to your specific problem.\n"
-	} else {
-		systemPrompt = `You are an expert software developer. Your task is to break down a high-level development requirement into a list of specific, file-level changes.
-For each change, you must provide the 'filepath' and a detailed 'instruction' for what needs to be done in that file.
-If a file needs to be created, specify its full path.
-If a file needs to be deleted, specify its full path and an instruction like "Delete this file."
-Your response MUST be a JSON object with a single key "changes" which is an array of objects, each with "filepath" and "instruction" keys.
-Do not include any other text or explanation outside the JSON.
-
-Example JSON format:
-{
-  "changes": [
-    {
-      "filepath": "src/main.go",
-      "instruction": "Add a new function 'calculateSum' that takes two integers and returns their sum."
-    },
-    {
-      "filepath": "tests/main_test.go",
-      "instruction": "Write a unit test for the 'calculateSum' function in 'src/main.go'."
-    },
-    {
-      "filepath": "docs/api.md",
-      "instruction": "Update the API documentation to include details about the new 'calculateSum' function."
-    }
-  ]
-}
-
-Consider the provided workspace context to understand the project structure and existing code.
-`
-	}
-
-	userPrompt := fmt.Sprintf("High-level requirement: \"%s\"\n\nWorkspace Context:\n%s", requirementInstruction, workspaceContext)
-
-	return []Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userPrompt},
-	}
 }
 
 // BuildProjectGoalsMessages constructs messages for the LLM to generate project goals.

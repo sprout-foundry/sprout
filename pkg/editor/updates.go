@@ -220,7 +220,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 				}
 			}
 
-			note, description, commit, err := getChangeSummaries(cfg, newCode, originalInstructions, newFilename, reader)
+			note, description, commit, err := GetChangeSummaries(cfg, newCode, originalInstructions, newFilename, reader)
 			if err != nil {
 				return "", fmt.Errorf("failed to get change summaries: %w", err)
 			}

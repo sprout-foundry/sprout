@@ -28,10 +28,13 @@ Provide a clear, helpful answer. If this involves code or technical details, be 
 		{Role: "user", Content: prompt},
 	}
 
-	response, _, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 30*time.Second)
+	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to get answer: %w", err)
 	}
+
+	// Track token usage and cost
+	trackTokenUsage(ctx, tokenUsage, ctx.Config.OrchestrationModel)
 
 	ui.Out().Print("\n🤖 Answer:\n")
 	ui.Out().Print(response + "\n")

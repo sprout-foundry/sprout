@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/llm"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/workspace"
@@ -220,4 +221,14 @@ func formatCost(cost float64) string {
 		return "0.00"
 	}
 	return fmt.Sprintf("%.4f", cost)
+}
+
+// trackTokenUsage is a helper function to track token usage and cost from LLM calls
+func trackTokenUsage(ctx *SimplifiedAgentContext, tokenUsage *llm.TokenUsage, modelName string) {
+	if ctx == nil || tokenUsage == nil {
+		return
+	}
+
+	ctx.TotalTokensUsed += tokenUsage.TotalTokens
+	ctx.TotalCost += llm.CalculateCost(*tokenUsage, modelName)
 }

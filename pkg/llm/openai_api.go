@@ -16,6 +16,39 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
+// retryWithBackoffOpenAI executes an HTTP request with a single retry on 500 errors
+// with a 200ms backoff delay
+func retryWithBackoffOpenAI(req *http.Request, client *http.Client) (*http.Response, error) {
+	resp, err := client.Do(req)
+	if err != nil {
+		return resp, err
+	}
+
+	// If we get a 500 error, wait 200ms and retry once
+	if resp.StatusCode == 500 {
+		// Close the first response body
+		resp.Body.Close()
+
+		// Create a new request with the same body for retry
+		var reqBody []byte
+		if req.Body != nil {
+			reqBody, _ = io.ReadAll(req.Body)
+			req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		}
+
+		// Wait 200ms before retry
+		time.Sleep(200 * time.Millisecond)
+
+		// Retry the request
+		if reqBody != nil {
+			req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		}
+		resp, err = client.Do(req)
+	}
+
+	return resp, err
+}
+
 // callOpenAICompatibleStream calls OpenAI-compatible APIs and returns token usage information
 func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts.Message, cfg *config.Config, timeout time.Duration, writer io.Writer) (*TokenUsage, error) {
 	logger := utils.GetLogger(cfg.SkipPrompt)
@@ -76,7 +109,7 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 		logger.Logf("DEBUG: Final request method: %s", req.Method)
 		logger.Logf("DEBUG: Final request headers: %v", req.Header)
 
-		return client.Do(req)
+		return retryWithBackoffOpenAI(req, client)
 	}
 
 	bodyWithTemp, err := buildBody(true)
@@ -191,7 +224,7 @@ func getUsageFromNonStreamingCall(apiURL, apiKey, model string, messages []promp
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		client := &http.Client{Timeout: timeout}
-		return client.Do(req)
+		return retryWithBackoffOpenAI(req, client)
 	}
 
 	bodyWithTemp, err := buildBody(true)

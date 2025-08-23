@@ -605,7 +605,7 @@ func TestPatchToFullContentWithOriginalFile(t *testing.T) {
 	}
 
 	// Show the difference between current (incomplete) and proper (complete) reconstruction
-	if properResult != "ERROR: "+err.Error() && properResult == expectedProperResult {
+	if err == nil && properResult == expectedProperResult {
 		t.Log("✓ Proper patch application produces correct full file content")
 		if !strings.Contains(currentResult, "import \"fmt\"") {
 			t.Error("✗ Current function fails to preserve original file structure")

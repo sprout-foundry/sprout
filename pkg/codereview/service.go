@@ -64,6 +64,7 @@ type CodeReviewService struct {
 	config       *config.Config
 	logger       *utils.Logger
 	reviewConfig *ReviewConfiguration
+	contextStore map[string]*ReviewContext // Store contexts by session ID for persistence
 }
 
 // NewCodeReviewService creates a new code review service instance
@@ -72,6 +73,7 @@ func NewCodeReviewService(cfg *config.Config, logger *utils.Logger) *CodeReviewS
 		config:       cfg,
 		logger:       logger,
 		reviewConfig: DefaultReviewConfiguration(),
+		contextStore: make(map[string]*ReviewContext),
 	}
 }
 
@@ -81,16 +83,53 @@ func NewCodeReviewServiceWithConfig(cfg *config.Config, logger *utils.Logger, re
 		config:       cfg,
 		logger:       logger,
 		reviewConfig: reviewConfig,
+		contextStore: make(map[string]*ReviewContext),
 	}
+}
+
+// storeContext stores a review context for later retrieval
+func (s *CodeReviewService) storeContext(ctx *ReviewContext) {
+	if ctx.SessionID != "" {
+		s.contextStore[ctx.SessionID] = ctx
+	}
+}
+
+// getStoredContext retrieves a previously stored context by session ID
+func (s *CodeReviewService) getStoredContext(sessionID string) (*ReviewContext, bool) {
+	ctx, exists := s.contextStore[sessionID]
+	return ctx, exists
 }
 
 // PerformReview performs a code review based on the provided context and options
 func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOptions) (*orchestration_types.CodeReviewResult, error) {
 	s.logger.LogProcessStep("Performing code review...")
 
-	// Initialize review history if not provided
-	if ctx.History == nil {
-		ctx.History = s.initializeReviewHistory(ctx)
+	// Try to load existing context if session ID is provided
+	var existingCtx *ReviewContext
+	if ctx.SessionID != "" {
+		if storedCtx, exists := s.getStoredContext(ctx.SessionID); exists {
+			existingCtx = storedCtx
+			s.logger.LogProcessStep(fmt.Sprintf("Loaded existing review context for session %s", ctx.SessionID))
+		}
+	}
+
+	// Merge with existing context or initialize new history
+	if existingCtx != nil {
+		// Update existing context with new information
+		existingCtx.Diff = ctx.Diff
+		existingCtx.OriginalPrompt = ctx.OriginalPrompt
+		existingCtx.ProcessedInstructions = ctx.ProcessedInstructions
+		existingCtx.RevisionID = ctx.RevisionID
+		existingCtx.Config = ctx.Config
+		existingCtx.Logger = ctx.Logger
+		existingCtx.CurrentIteration = ctx.CurrentIteration
+		existingCtx.FullFileContext = ctx.FullFileContext
+		ctx = existingCtx
+	} else {
+		// Initialize review history if not provided
+		if ctx.History == nil {
+			ctx.History = s.initializeReviewHistory(ctx)
+		}
 	}
 
 	// Check iteration limits
@@ -121,6 +160,9 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 
 	// Record the iteration
 	s.recordReviewIteration(ctx, result, ctx.Diff)
+
+	// Store the updated context for future iterations
+	s.storeContext(ctx)
 
 	// Handle the review result based on options
 	return s.handleReviewResult(result, ctx, opts)

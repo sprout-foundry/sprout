@@ -29,6 +29,11 @@ type SimplifiedAgentContext struct {
 	CurrentTodo     *TodoItem
 	BuildCommand    string
 	AnalysisResults map[string]string
+
+	// Context management for persistent analysis across todos
+	ContextManager *ContextManager
+	PersistentCtx  *PersistentContext
+	SessionID      string
 }
 
 // IntentType represents the type of user intent

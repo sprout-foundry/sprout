@@ -226,7 +226,7 @@ func (s *CodeReviewService) handleIterationLimitExceeded(ctx *ReviewContext) (*o
 
 // hasConverged checks if the review process has converged (similar iterations)
 func (s *CodeReviewService) hasConverged(ctx *ReviewContext) bool {
-	if len(ctx.History.Iterations) < 2 {
+	if len(ctx.History.Iterations) < 3 {
 		return false
 	}
 

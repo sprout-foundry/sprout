@@ -3,13 +3,16 @@
 package agent
 
 import (
+	"crypto/md5"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/workspace"
 )
 
 // RunSimplifiedAgent: New simplified agent workflow
@@ -35,6 +38,21 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 
 	logger := utils.GetLogger(cfg.SkipPrompt)
 
+	// Initialize context manager for persistent analysis
+	contextManager := NewContextManager(cfg, logger)
+
+	// Generate session ID and project hash
+	sessionID := fmt.Sprintf("%x", md5.Sum([]byte(fmt.Sprintf("%s_%d", userIntent, time.Now().Unix()))))
+	projectHash := generateProjectHash(logger)
+
+	// Initialize persistent context
+	persistentCtx, err := contextManager.InitializeContext(sessionID, userIntent, projectHash)
+	if err != nil {
+		logger.LogError(fmt.Errorf("failed to initialize context: %w", err))
+		// Continue without context - don't fail the entire agent
+		persistentCtx = nil
+	}
+
 	// Analyze intent type
 	intentType := analyzeIntentType(userIntent, logger)
 
@@ -44,6 +62,9 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 		Logger:          logger,
 		Todos:           []TodoItem{},
 		AnalysisResults: make(map[string]string),
+		ContextManager:  contextManager,
+		PersistentCtx:   persistentCtx,
+		SessionID:       sessionID,
 	}
 
 	switch intentType {
@@ -75,7 +96,7 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 
 	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Created %d todos", len(ctx.Todos)))
 
-	// Execute todos sequentially
+	// Execute todos sequentially with context management
 	for i, todo := range ctx.Todos {
 		ctx.Logger.LogProcessStep(fmt.Sprintf("📋 Executing todo %d/%d: %s", i+1, len(ctx.Todos), todo.Content))
 
@@ -93,6 +114,14 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 
 		ctx.Todos[i].Status = "completed"
 
+		// Mark todo as completed in context manager if available
+		if ctx.ContextManager != nil && ctx.PersistentCtx != nil {
+			err := ctx.ContextManager.CompleteTodo(ctx.PersistentCtx, ctx.Todos[i].ID)
+			if err != nil {
+				ctx.Logger.LogError(fmt.Errorf("failed to mark todo as completed in context: %w", err))
+			}
+		}
+
 		// Validate build after each todo
 		err = validateBuild(ctx)
 		if err != nil {
@@ -103,6 +132,23 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 		ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Todo %d completed and validated", i+1))
 	}
 
+	// Generate and save context summary if context manager is available
+	if ctx.ContextManager != nil && ctx.PersistentCtx != nil {
+		_, err := ctx.ContextManager.GenerateSummary(ctx.PersistentCtx)
+		if err != nil {
+			ctx.Logger.LogError(fmt.Errorf("failed to generate analysis summary: %w", err))
+		} else {
+			// Save summary to file
+			summaryPath := fmt.Sprintf(".ledit/analysis_summary_%s.md", ctx.SessionID[:8])
+			err := ctx.ContextManager.WriteSummaryToFile(ctx.PersistentCtx, summaryPath)
+			if err != nil {
+				ctx.Logger.LogError(fmt.Errorf("failed to write summary file: %w", err))
+			} else {
+				ui.Out().Printf("📄 Analysis summary saved to: %s\n", summaryPath)
+			}
+		}
+	}
+
 	// Final summary
 	duration := time.Since(startTime)
 	ui.Out().Print("\n✅ Simplified Agent completed successfully\n")
@@ -111,4 +157,24 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 	ui.Out().Printf("└─ Status: All changes validated\n")
 
 	return nil
+}
+
+// generateProjectHash creates a hash of the current workspace structure
+func generateProjectHash(logger *utils.Logger) string {
+	// Get workspace information
+	wsFile, err := workspace.LoadWorkspaceFile()
+	if err != nil {
+		logger.LogError(fmt.Errorf("failed to get workspace info: %w", err))
+		// Return a default hash if workspace info fails
+		return fmt.Sprintf("%x", md5.Sum([]byte("default_workspace")))
+	}
+
+	// Create hash input from workspace structure
+	hashInput := fmt.Sprintf("%d_%s_%s_%s",
+		len(wsFile.Files),
+		wsFile.ProjectGoals.OverallGoal,
+		strings.Join(wsFile.Languages, ","),
+		strings.Join(wsFile.BuildRunners, ","))
+
+	return fmt.Sprintf("%x", md5.Sum([]byte(hashInput)))
 }

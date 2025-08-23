@@ -4,6 +4,7 @@ package agent
 
 import (
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/prompts"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/workspace"
@@ -93,6 +95,50 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 	}
 }
 
+// executeAgentWorkflowWithTools provides a unified, reliable workflow for agent tasks with tool support
+// This function implements the working pattern from the question handler that can be reused across all workflows
+func executeAgentWorkflowWithTools(ctx *SimplifiedAgentContext, messages []prompts.Message, workflowType string) (string, *llm.TokenUsage, error) {
+	// Use the same configuration pattern that works in question handler
+	workflowCfg := *ctx.Config
+	workflowCfg.SkipPrompt = true
+
+	// Use orchestration model for agent workflows
+	model := ctx.Config.OrchestrationModel
+	if model == "" {
+		model = ctx.Config.EditingModel
+	}
+
+	// Create workflow context with controlled tool limits
+	workflowContext := llm.GetAgentWorkflowContext()
+	workflowContext.MaxToolCalls = 3 // Reasonable limit for agent workflows
+
+	// Execute with the unified interactive system that works reliably
+	_, response, tokenUsage, err := llm.CallLLMWithUnifiedInteractive(&llm.UnifiedInteractiveConfig{
+		ModelName:       model,
+		Messages:        messages,
+		Filename:        "",
+		WorkflowContext: workflowContext,
+		Config:          &workflowCfg,
+		Timeout:         llm.GetSmartTimeout(ctx.Config, model, "analysis"),
+	})
+
+	if err != nil {
+		// Log the error but don't fail completely - try basic approach as fallback
+		ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Agent workflow failed (%v), trying basic approach", err))
+
+		// Fallback to basic LLM response without tools
+		basicResponse, basicTokenUsage, basicErr := llm.GetLLMResponse(model, messages, "", &workflowCfg, 30*time.Second)
+		if basicErr != nil {
+			return "", nil, fmt.Errorf("both agent workflow and basic approach failed: %w", err)
+		}
+
+		ctx.Logger.LogProcessStep("✅ Basic approach succeeded")
+		return basicResponse, basicTokenUsage, nil
+	}
+
+	return response, tokenUsage, nil
+}
+
 // handleCodeUpdate manages the code update workflow with todos
 func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 	ctx.Logger.LogProcessStep("🧭 Analyzing intent and creating plan...")
@@ -136,6 +182,13 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 			}
 		}
 
+		// Summarize analysis results if they get too large (after every few todos)
+		if (i+1)%3 == 0 { // Check every 3rd todo completion
+			if err := summarizeAnalysisResultsIfNeeded(ctx); err != nil {
+				ctx.Logger.LogError(fmt.Errorf("analysis results summarization failed: %w", err))
+			}
+		}
+
 		// Validate build after each todo
 		err = validateBuild(ctx)
 		if err != nil {
@@ -144,6 +197,11 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 		}
 
 		ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Todo %d completed and validated", i+1))
+	}
+
+	// Summarize any remaining analysis results before final summary
+	if err := summarizeAnalysisResultsIfNeeded(ctx); err != nil {
+		ctx.Logger.LogError(fmt.Errorf("final analysis results summarization failed: %w", err))
 	}
 
 	// Generate and save context summary if context manager is available
@@ -231,4 +289,90 @@ func trackTokenUsage(ctx *SimplifiedAgentContext, tokenUsage *llm.TokenUsage, mo
 
 	ctx.TotalTokensUsed += tokenUsage.TotalTokens
 	ctx.TotalCost += llm.CalculateCost(*tokenUsage, modelName)
+}
+
+// summarizeAnalysisResultsIfNeeded summarizes analysis results if they get too large
+func summarizeAnalysisResultsIfNeeded(ctx *SimplifiedAgentContext) error {
+	const maxAnalysisResults = 10
+	const maxResultLength = 2000
+
+	if len(ctx.AnalysisResults) <= maxAnalysisResults {
+		return nil
+	}
+
+	ctx.Logger.LogProcessStep("📝 Summarizing analysis results to prevent memory overflow...")
+
+	// Build a summary of all analysis results
+	var allResults []string
+	for todoID, result := range ctx.AnalysisResults {
+		// Truncate long results
+		if len(result) > maxResultLength {
+			result = result[:maxResultLength] + "..."
+		}
+		allResults = append(allResults, fmt.Sprintf("TODO %s: %s", todoID, result))
+	}
+
+	prompt := fmt.Sprintf(`Summarize these analysis results to preserve key insights while reducing size:
+
+ANALYSIS RESULTS (%d):
+%s
+
+Create a concise summary that captures:
+1. Key findings from each analysis
+2. Important patterns or issues identified
+3. Critical recommendations
+4. Overall progress insights
+
+Respond with JSON:
+{
+  "summary": "concise summary of all analysis results",
+  "key_findings": ["finding1", "finding2", "finding3"],
+  "critical_issues": ["issue1", "issue2"],
+  "recommendations": ["rec1", "rec2"]
+}`,
+		len(allResults), strings.Join(allResults, "\n\n"))
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert at summarizing analysis results while preserving critical insights. Always respond with valid JSON."},
+		{Role: "user", Content: prompt},
+	}
+
+	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis"))
+	if err != nil {
+		return fmt.Errorf("context summarization failed: %w", err)
+	}
+
+	// Track token usage for the summarization
+	if tokenUsage != nil {
+		trackTokenUsage(ctx, tokenUsage, ctx.Config.OrchestrationModel)
+	}
+
+	// Parse the summary
+	var summary struct {
+		Summary         string   `json:"summary"`
+		KeyFindings     []string `json:"key_findings"`
+		CriticalIssues  []string `json:"critical_issues"`
+		Recommendations []string `json:"recommendations"`
+	}
+
+	clean, err := utils.ExtractJSON(response)
+	if err != nil {
+		return fmt.Errorf("failed to parse summary JSON: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(clean), &summary); err != nil {
+		return fmt.Errorf("failed to unmarshal summary: %w", err)
+	}
+
+	// Replace all analysis results with the summary
+	ctx.AnalysisResults = map[string]string{
+		"summary": fmt.Sprintf("SUMMARY: %s\n\nKEY FINDINGS: %s\n\nCRITICAL ISSUES: %s\n\nRECOMMENDATIONS: %s",
+			summary.Summary,
+			strings.Join(summary.KeyFindings, ", "),
+			strings.Join(summary.CriticalIssues, ", "),
+			strings.Join(summary.Recommendations, ", ")),
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Analysis results summarized from %d to 1 entry", len(allResults)))
+	return nil
 }

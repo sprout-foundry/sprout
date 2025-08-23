@@ -197,15 +197,65 @@ func callLLMWithToolsUnified(cfg *UnifiedInteractiveConfig) (string, string, *To
 		// Execute tool calls with dedup, per-call timeout and structured logs
 		seen := map[string]bool{}
 		for _, toolCall := range toolCalls {
-			logger.Log(fmt.Sprintf("TOOL CALL → %s args=%s", toolCall.Function.Name, utils.TruncateString(toolCall.Function.Arguments, 400)))
+			logger.Log(fmt.Sprintf("🔧 TOOL CALL STARTING → %s (ID: %s)", toolCall.Function.Name, toolCall.ID))
+			logger.Log(fmt.Sprintf("   Arguments: %s", utils.TruncateString(toolCall.Function.Arguments, 400)))
+
 			if run := utils.GetRunLogger(); run != nil {
 				run.LogEvent("tool_call", map[string]any{"tool": toolCall.Function.Name})
 			}
-			toolResponse, wasDuplicate := executeToolWithPolicies(toolCall, cfg, seen, 45*time.Second)
+
+			// Execute tools with proper response handling
+			var toolResponse string
+			var wasDuplicate bool
+			var runErr error
+
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Log(fmt.Sprintf("❌ TOOL PANIC in %s: %v", toolCall.Function.Name, r))
+						toolResponse = fmt.Sprintf("Tool %s failed with panic: %v", toolCall.Function.Name, r)
+						runErr = fmt.Errorf("tool panic: %v", r)
+					}
+				}()
+				toolResponse, wasDuplicate = executeToolWithPolicies(toolCall, cfg, seen, 45*time.Second)
+			}()
+
 			if wasDuplicate {
+				logger.Log(fmt.Sprintf("⚠️  TOOL SKIPPED - DUPLICATE: %s", toolCall.Function.Name))
 				continue
 			}
-			currentMessages = append(currentMessages, prompts.Message{Role: "assistant", Content: toolResponse})
+
+			if runErr != nil {
+				logger.Log(fmt.Sprintf("❌ TOOL FAILED: %s - Error: %v", toolCall.Function.Name, runErr))
+			} else {
+				logger.Log(fmt.Sprintf("✅ TOOL COMPLETED: %s", toolCall.Function.Name))
+			}
+
+			// Clean the tool response to ensure valid JSON
+			cleanResponse := strings.TrimSpace(toolResponse)
+			logger.Log(fmt.Sprintf("   Tool Response: '%s'", utils.TruncateString(cleanResponse, 200)))
+
+			if cleanResponse == "" {
+				cleanResponse = fmt.Sprintf("Tool %s executed successfully (no output)", toolCall.Function.Name)
+				logger.Log(fmt.Sprintf("   Using default success message"))
+			}
+
+			// Add tool response in a format compatible with the provider
+			// Some providers don't support the "tool" role, so we include the response as part of the next user message
+			toolInfo := fmt.Sprintf("[Tool Response: %s]\n%s", toolCall.Function.Name, cleanResponse)
+
+			// Create a user message that includes the tool response
+			toolMessage := prompts.Message{
+				Role:    "user",
+				Content: toolInfo,
+			}
+			if toolCall.ID != "" {
+				toolMessage.ToolCallID = &toolCall.ID
+			}
+
+			logger.Log(fmt.Sprintf("📝 ADDING TOOL RESPONSE to conversation (Role: %s)", toolMessage.Role))
+			logger.Log(fmt.Sprintf("   Tool Message Content Preview: '%s'", utils.TruncateString(toolInfo, 100)))
+			currentMessages = append(currentMessages, toolMessage)
 			totalToolCalls++
 			if cfg.WorkflowContext.Type == WorkflowTypeAgent {
 				updateAgentState(cfg.WorkflowContext, toolCall, toolResponse)
@@ -255,10 +305,8 @@ func GetCodeEditingWorkflowContext() *WorkflowContext {
 // GetAgentWorkflowContext returns workflow context for agent workflows
 func GetAgentWorkflowContext() *WorkflowContext {
 	return &WorkflowContext{
-		Type: WorkflowTypeAgent,
-		SystemPrompt: fmt.Sprintf(`You are an AI assistant that can analyze code, understand user intent, and make changes. You have access to tools for gathering additional information when needed:
-
-%s`, GetDetailedToolDescriptions()),
+		Type:         WorkflowTypeAgent,
+		SystemPrompt: "", // Don't override workflow-specific system messages
 		MaxToolCalls: 8,
 		State:        make(map[string]interface{}),
 	}

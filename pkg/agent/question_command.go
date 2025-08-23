@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
@@ -15,34 +14,40 @@ import (
 
 // handleQuestion responds directly to user questions
 func handleQuestion(ctx *SimplifiedAgentContext) error {
-	ctx.Logger.LogProcessStep("❓ Handling question directly...")
+	ctx.Logger.LogProcessStep("❓ Handling question with tool support...")
 
-	prompt := fmt.Sprintf(`You are an expert software developer. Please answer this question:
+	prompt := fmt.Sprintf(`Please answer this question using the available tools to gather evidence:
 
 Question: "%s"
 
-Provide a clear, helpful answer. If this involves code or technical details, be specific and include examples where appropriate.`, ctx.UserIntent)
+Use tools to gather information and provide a clear, helpful answer based on actual evidence from the codebase.`, ctx.UserIntent)
 
 	messages := []prompts.Message{
-		{Role: "system", Content: "You are a helpful software development assistant."},
+		{Role: "system", Content: llm.GetSystemMessageForInformational()},
 		{Role: "user", Content: prompt},
 	}
 
-	// Try primary model with smart timeout
-	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis"))
+	// Use the unified agent workflow pattern that works reliably with tools
+	response, tokenUsage, err := executeAgentWorkflowWithTools(ctx, messages, "question")
 
 	// If primary model fails, try with fallback approach
 	if err != nil {
 		ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Question answering failed (%v), trying fallback", err))
 
-		// Try with a simpler prompt
+		// Try with a simpler prompt but still use tools
+		fallbackPrompt := fmt.Sprintf(`Please answer this question briefly using tools if needed:
+
+Question: "%s"
+
+Keep the answer clear and concise.`, ctx.UserIntent)
+
 		fallbackMessages := []prompts.Message{
-			{Role: "system", Content: "You are a helpful assistant. Answer questions briefly and clearly."},
-			{Role: "user", Content: fmt.Sprintf("Answer briefly: %s", ctx.UserIntent)},
+			{Role: "system", Content: llm.GetSystemMessageForInformational()},
+			{Role: "user", Content: fallbackPrompt},
 		}
 
-		fallbackTimeout := time.Duration(float64(llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis")) * 1.5)
-		response, tokenUsage, err = llm.GetLLMResponse(ctx.Config.OrchestrationModel, fallbackMessages, "", ctx.Config, fallbackTimeout)
+		// Use the unified agent workflow for fallback as well
+		response, tokenUsage, err = executeAgentWorkflowWithTools(ctx, fallbackMessages, "question_fallback")
 
 		if err != nil {
 			return fmt.Errorf("both primary and fallback question answering failed: %w", err)

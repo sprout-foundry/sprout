@@ -139,9 +139,20 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 				// Check if this is a retry request error
 				if retryRequest, ok := err.(*codereview.RetryRequestError); ok {
 					logger.LogProcessStep(fmt.Sprintf("Code review requested retry with refined prompt: %s", retryRequest.Feedback))
-					// Use the refined prompt to regenerate the code
-					// For pre-apply review, we'll just log the retry request since we're in the middle of processing
-					logger.LogProcessStep("Pre-apply review: retry requested but not implemented for this phase")
+					// For pre-apply review, use the refined prompt to regenerate
+					logger.LogProcessStep(fmt.Sprintf("Retrying pre-apply review with refined prompt: %s", retryRequest.RefinedPrompt))
+					// Use the refined prompt as the new processed instructions for retry
+					processedInstructions = retryRequest.RefinedPrompt
+					// Retry the review with the refined prompt
+					if retryErr := performAutomatedReview(combined, originalInstructions, processedInstructions, cfg, logger, revisionID); retryErr != nil {
+						logger.LogProcessStep(fmt.Sprintf("Retry failed: %v", retryErr))
+						// If retry fails, continue with original error handling
+						if !strings.Contains(retryErr.Error(), "revisions applied, re-validating") {
+							return "", retryErr
+						}
+					} else {
+						logger.LogProcessStep("Pre-apply review retry completed successfully")
+					}
 				} else if !strings.Contains(err.Error(), "revisions applied, re-validating") {
 					return "", err
 				}
@@ -259,10 +270,17 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 				// Check if this is a retry request error
 				if retryRequest, ok := reviewErr.(*codereview.RetryRequestError); ok {
 					logger.LogProcessStep(fmt.Sprintf("Code review requested retry with refined prompt: %s", retryRequest.Feedback))
-					// For post-apply review, we could implement retry logic here
-					// For now, we'll log the request and continue
-					logger.LogProcessStep(fmt.Sprintf("Retry requested with prompt: %s", retryRequest.RefinedPrompt))
-					logger.LogProcessStep("Post-apply review: retry requested but continuing with current changes")
+					// For post-apply review, attempt retry with refined prompt
+					logger.LogProcessStep(fmt.Sprintf("Retrying post-apply review with refined prompt: %s", retryRequest.RefinedPrompt))
+					// Use the refined prompt for the retry
+					refinedInstructions := retryRequest.RefinedPrompt
+					if retryErr := performAutomatedReview(combinedDiff, originalInstructions, refinedInstructions, cfg, logger, revisionID); retryErr != nil {
+						logger.LogProcessStep(fmt.Sprintf("Post-apply retry failed: %v", retryErr))
+						// If retry fails, continue with current changes
+						logger.LogProcessStep("Continuing with current changes after failed retry")
+					} else {
+						logger.LogProcessStep("Post-apply review retry completed successfully")
+					}
 				} else if !strings.Contains(reviewErr.Error(), "revisions applied, re-validating") {
 					return "", reviewErr
 				}

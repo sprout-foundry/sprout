@@ -527,6 +527,68 @@ func GetStandardToolDescriptions() string {
 - ask_user: {"question": "question text"} - Ask the user a question when more information is needed`
 }
 
+// GetSystemMessageForAnalysis returns a system message for analysis-focused LLM interactions
+func GetSystemMessageForAnalysis() string {
+	return fmt.Sprintf(`You are an expert code analyst and software developer. Prefer using tools to gather grounded evidence before answering. Provide detailed analysis without making changes.
+
+%s
+
+FIRST, use tools to ground your analysis:
+- Call workspace_context with action=load_tree to understand the file structure
+- Call workspace_context with action=search_keywords for specific searches
+- Call read_file for the top one or two files that are most relevant
+- Call run_shell_command for system-level information
+
+AFTER gathering evidence, summarize your findings with concrete file references.`, GetDetailedToolDescriptions())
+}
+
+// GetSystemMessageForEditing returns a system message for code editing workflows
+func GetSystemMessageForEditing() string {
+	return fmt.Sprintf(`You are an expert software developer. Use tools to understand the codebase and make targeted edits.
+
+%s
+
+ALWAYS gather context first:
+1. Use workspace_context to understand the project structure
+2. Use read_file to examine files before editing
+3. Make minimal, targeted changes
+4. Use validate_file after changes to ensure correctness
+
+When making edits, be precise and only change what is specifically requested.`, GetDetailedToolDescriptions())
+}
+
+// GetSystemMessageForStepExecution returns a system message for granular step execution
+func GetSystemMessageForStepExecution() string {
+	return fmt.Sprintf(`You are executing a specific step in a larger development task. Use available tools to complete this step accurately and efficiently.
+
+%s
+
+CRITICAL: Use tools proactively to understand the context before making changes:
+- Call workspace_context with action=load_tree to understand the project structure
+- Call workspace_context with action=search_keywords to find relevant files
+- Call read_file to examine files that need to be modified
+- Call run_shell_command for system operations or file system checks
+- Call validate_file after making changes to ensure they are correct
+
+Focus on completing the specific step assigned to you. Do not implement additional features or other steps.`, GetDetailedToolDescriptions())
+}
+
+// GetSystemMessageForExploration returns a system message for exploration and planning workflows
+func GetSystemMessageForExploration() string {
+	return fmt.Sprintf(`You are exploring a codebase to understand the current state and plan changes. Use tools to gather comprehensive evidence.
+
+%s
+
+EXPLORATION STRATEGY:
+1. Start with workspace_context action=load_tree to understand the overall structure
+2. Use workspace_context action=search_keywords to find relevant files and functions
+3. Read key files with read_file to understand the current implementation
+4. Use run_shell_command for system-level information and diagnostics
+5. Build a comprehensive understanding before making any recommendations
+
+Provide detailed analysis with concrete file references and line numbers where applicable.`, GetDetailedToolDescriptions())
+}
+
 // GetDetailedToolDescriptions returns detailed tool descriptions for agent workflows
 func GetDetailedToolDescriptions() string {
 	return `Available Tools:

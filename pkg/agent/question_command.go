@@ -28,9 +28,25 @@ Provide a clear, helpful answer. If this involves code or technical details, be 
 		{Role: "user", Content: prompt},
 	}
 
-	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 30*time.Second)
+	// Try primary model with smart timeout
+	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis"))
+
+	// If primary model fails, try with fallback approach
 	if err != nil {
-		return fmt.Errorf("failed to get answer: %w", err)
+		ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Question answering failed (%v), trying fallback", err))
+
+		// Try with a simpler prompt
+		fallbackMessages := []prompts.Message{
+			{Role: "system", Content: "You are a helpful assistant. Answer questions briefly and clearly."},
+			{Role: "user", Content: fmt.Sprintf("Answer briefly: %s", ctx.UserIntent)},
+		}
+
+		fallbackTimeout := time.Duration(float64(llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis")) * 1.5)
+		response, tokenUsage, err = llm.GetLLMResponse(ctx.Config.OrchestrationModel, fallbackMessages, "", ctx.Config, fallbackTimeout)
+
+		if err != nil {
+			return fmt.Errorf("both primary and fallback question answering failed: %w", err)
+		}
 	}
 
 	// Track token usage and cost

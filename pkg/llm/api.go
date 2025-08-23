@@ -228,18 +228,18 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	// Tools always enabled (forced)
 
 	// Check messages for detokenize before processing
-	for i, msg := range messages {
-		contentStr := fmt.Sprintf("%v", msg.Content)
-		if strings.Contains(contentStr, "detokenize") {
-			log.Log(fmt.Sprintf("ERROR: Found 'detokenize' in input message %d!", i))
-		}
-	}
+	// for i, msg := range messages {
+	// 	contentStr := fmt.Sprintf("%v", msg.Content)
+	// 	if strings.Contains(contentStr, "detokenize") {
+	// 		// logger.Log(fmt.Sprintf("ERROR: Found 'detokenize' in input message %d!", i))
+	// 	}
+	// }
 
 	// Debug: Check message marshaling
-	for i, msg := range messages {
-		msgBytes, _ := json.Marshal(msg)
-		log.Log(fmt.Sprintf("Message %d JSON: %s", i, string(msgBytes)))
-	}
+	// for i, msg := range messages {
+	// 	msgBytes, _ := json.Marshal(msg)
+	// 	// logger.Log(fmt.Sprintf("Message %d JSON: %s", i, string(msgBytes)))
+	// }
 
 	// Use OpenAI-compatible function calling for providers that support it; otherwise fallback
 	parts := strings.SplitN(modelName, ":", 3)
@@ -353,20 +353,11 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	logger.Log(fmt.Sprintf("DEBUG: Request URL: %s", apiURL))
 	logger.Log(fmt.Sprintf("DEBUG: Model: %s", model))
 
-	// Debug: Check for detokenize field
-	if strings.Contains(string(body), "detokenize") {
-		logger.Log("ERROR: Found 'detokenize' field in request payload!")
-		// Let's also check if it's a DeepInfra request
-		if strings.Contains(apiURL, "deepinfra.com") {
-			logger.Log("ERROR: detokenize field found in DeepInfra request - this is the source of the validation error!")
-		}
-	}
-
 	// Also check for any suspicious fields that might be causing issues
 	suspiciousFields := []string{"detokenize", "tokenize", "_token", "token_"}
 	for _, field := range suspiciousFields {
 		if strings.Contains(string(body), field) {
-			logger.Log(fmt.Sprintf("WARNING: Found suspicious field '%s' in request payload", field))
+			// logger.Log(fmt.Sprintf("WARNING: Found suspicious field '%s' in request payload", field))
 		}
 	}
 
@@ -384,13 +375,13 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		raw, _ := io.ReadAll(resp.Body)
-		logger := utils.GetLogger(cfg.SkipPrompt)
-		logger.Log(fmt.Sprintf("DEBUG: HTTP error response: status=%d, body=%s", resp.StatusCode, string(raw)))
+
+		// logger.Log(fmt.Sprintf("DEBUG: HTTP error response: status=%d, body=%s", resp.StatusCode, string(raw)))
 
 		lower := strings.ToLower(string(raw))
 		// Check if this is the detokenize error
 		if strings.Contains(lower, "detokenize") {
-			logger.Log("ERROR: DeepInfra detokenize validation error detected in HTTP response!")
+			// logger.Log("ERROR: DeepInfra detokenize validation error detected in HTTP response!")
 			return "", nil, fmt.Errorf("DeepInfra detokenize validation error: %s", string(raw))
 		}
 

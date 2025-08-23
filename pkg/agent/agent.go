@@ -65,7 +65,20 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 		ContextManager:  contextManager,
 		PersistentCtx:   persistentCtx,
 		SessionID:       sessionID,
+		TotalTokensUsed: 0,
+		TotalCost:       0.0,
 	}
+
+	// Ensure token usage and cost are always displayed, even on failure
+	defer func() {
+		if ctx.TotalTokensUsed > 0 {
+			duration := time.Since(startTime)
+			ui.Out().Print("\n📊 Agent Usage Summary\n")
+			ui.Out().Printf("├─ Duration: %.2f seconds\n", duration.Seconds())
+			ui.Out().Printf("├─ Total tokens used: %s\n", formatTokenCount(ctx.TotalTokensUsed))
+			ui.Out().Printf("└─ Total cost: $%s\n", formatCost(ctx.TotalCost))
+		}
+	}()
 
 	switch intentType {
 	case IntentTypeCodeUpdate:
@@ -150,9 +163,7 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 	}
 
 	// Final summary
-	duration := time.Since(startTime)
 	ui.Out().Print("\n✅ Simplified Agent completed successfully\n")
-	ui.Out().Printf("├─ Duration: %.2f seconds\n", duration.Seconds())
 	ui.Out().Printf("├─ Todos completed: %d\n", len(ctx.Todos))
 	ui.Out().Printf("└─ Status: All changes validated\n")
 
@@ -177,4 +188,36 @@ func generateProjectHash(logger *utils.Logger) string {
 		strings.Join(wsFile.BuildRunners, ","))
 
 	return fmt.Sprintf("%x", md5.Sum([]byte(hashInput)))
+}
+
+// formatTokenCount formats token count with thousands separator for readability
+func formatTokenCount(tokens int) string {
+	if tokens == 0 {
+		return "0"
+	}
+
+	// Convert to string and add thousands separators
+	str := fmt.Sprintf("%d", tokens)
+	n := len(str)
+	if n <= 3 {
+		return str
+	}
+
+	// Add commas every 3 digits from the right
+	var result []byte
+	for i, digit := range str {
+		if i > 0 && (n-i)%3 == 0 {
+			result = append(result, ',')
+		}
+		result = append(result, byte(digit))
+	}
+	return string(result)
+}
+
+// formatCost formats cost with appropriate decimal places
+func formatCost(cost float64) string {
+	if cost == 0.0 {
+		return "0.00"
+	}
+	return fmt.Sprintf("%.4f", cost)
 }

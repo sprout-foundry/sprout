@@ -9,11 +9,45 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/apikeys"
 )
 
 const deepInfraEmbeddingsURL = "https://api.deepinfra.com/v1/openai/embeddings"
+
+// retryWithBackoffEmbeddings executes an HTTP request with a single retry on 500 errors
+// with a 200ms backoff delay
+func retryWithBackoffEmbeddings(req *http.Request, client *http.Client) (*http.Response, error) {
+	resp, err := client.Do(req)
+	if err != nil {
+		return resp, err
+	}
+
+	// If we get a 500 error, wait 200ms and retry once
+	if resp.StatusCode == 500 {
+		// Close the first response body
+		resp.Body.Close()
+
+		// Create a new request with the same body for retry
+		var reqBody []byte
+		if req.Body != nil {
+			reqBody, _ = io.ReadAll(req.Body)
+			req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		}
+
+		// Wait 200ms before retry
+		time.Sleep(200 * time.Millisecond)
+
+		// Retry the request
+		if reqBody != nil {
+			req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		}
+		resp, err = client.Do(req)
+	}
+
+	return resp, err
+}
 
 // OpenAIEmbeddingRequest represents the request body for OpenAI-compatible Embeddings API.
 type OpenAIEmbeddingRequest struct {
@@ -67,7 +101,7 @@ func generateDeepInfraEmbedding(input string, model string) ([]float64, error) {
 	req.Header.Set("Accept", "application/json")
 
 	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := retryWithBackoffEmbeddings(req, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call DeepInfra embedding API: %w", err)
 	}

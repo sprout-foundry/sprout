@@ -286,6 +286,7 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 
 	// Debug: Log the actual JSON payload being sent
 	logger := utils.GetLogger(cfg.SkipPrompt)
+	logger.Logf("DEBUG: LLM TOKEN_ESTIMATE: %d", EstimateTokens(string(body)))
 	logger.Log(fmt.Sprintf("DEBUG: LLM Request Payload: %s", string(body)))
 	logger.Log(fmt.Sprintf("DEBUG: Request URL: %s", apiURL))
 	logger.Log(fmt.Sprintf("DEBUG: Model: %s", model))

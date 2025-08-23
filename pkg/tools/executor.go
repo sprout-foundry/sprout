@@ -130,6 +130,9 @@ func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall types.ToolCall)
 		}, nil
 	}
 
+	// Normalize common argument aliases per tool to be resilient to LLM variations
+	args = normalizeArgsForTool(toolCall.Function.Name, args)
+
 	// Check for duplicate requests in the same session
 	sessionID := e.getSessionID(ctx)
 	if sessionID != "" {
@@ -177,6 +180,71 @@ func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall types.ToolCall)
 	}
 
 	return result, err
+}
+
+// normalizeArgsForTool maps common alias parameter names to expected names per tool
+func normalizeArgsForTool(toolName string, args map[string]interface{}) map[string]interface{} {
+	if args == nil {
+		return args
+	}
+	switch toolName {
+	case "read_file":
+		if _, ok := args["file_path"]; !ok {
+			if v, ok := args["target_file"]; ok {
+				args["file_path"] = v
+			}
+			if v, ok := args["path"]; ok {
+				args["file_path"] = v
+			}
+			if v, ok := args["filename"]; ok {
+				args["file_path"] = v
+			}
+		}
+	case "run_shell_command":
+		if _, ok := args["command"]; !ok {
+			if v, ok := args["cmd"]; ok {
+				args["command"] = v
+			}
+		}
+	case "edit_file_section":
+		if _, ok := args["file_path"]; !ok {
+			if v, ok := args["target_file"]; ok {
+				args["file_path"] = v
+			}
+			if v, ok := args["filename"]; ok {
+				args["file_path"] = v
+			}
+		}
+		if _, ok := args["old_text"]; !ok {
+			if v, ok := args["old_string"]; ok {
+				args["old_text"] = v
+			}
+			if v, ok := args["from"]; ok {
+				args["old_text"] = v
+			}
+		}
+		if _, ok := args["new_text"]; !ok {
+			if v, ok := args["new_string"]; ok {
+				args["new_text"] = v
+			}
+			if v, ok := args["to"]; ok {
+				args["new_text"] = v
+			}
+		}
+	case "workspace_context":
+		// Ensure action/query presence if provided via aliases
+		if _, ok := args["action"]; !ok {
+			if v, ok := args["op"]; ok {
+				args["action"] = v
+			}
+		}
+		if _, ok := args["query"]; !ok {
+			if v, ok := args["keywords"]; ok {
+				args["query"] = v
+			}
+		}
+	}
+	return args
 }
 
 // ListAvailableTools returns a list of all available tools

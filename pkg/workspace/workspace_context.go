@@ -437,7 +437,7 @@ func getLanguageFromFilename(filename string) string {
 // This approach significantly reduces token usage and forces the LLM to make targeted file reads
 func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string {
 	logger := utils.GetLogger(cfg.SkipPrompt)
-	logger.LogProcessStep("--- Loading minimal workspace context (summaries and exports only) ---")
+	logger.LogProcessStep("--- Loading ultra-minimal workspace context ---")
 
 	workspace, err := validateAndUpdateWorkspace("./", cfg)
 	if err != nil {
@@ -446,100 +446,114 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 	}
 
 	var b strings.Builder
-	b.WriteString("=== MINIMAL WORKSPACE CONTEXT ===\n")
-	b.WriteString("IMPORTANT: This context contains only file summaries and public function exports.\n")
-	b.WriteString("NO full file contents are provided. Use the read_file tool to load specific files when needed.\n\n")
 
-	// Add Project Insights (compact)
-	if (workspace.ProjectInsights != ProjectInsights{}) {
-		b.WriteString("Insights: ")
-		parts := []string{}
-		appendIf := func(name, val string) {
-			if strings.TrimSpace(val) != "" {
-				parts = append(parts, fmt.Sprintf("%s=%s", name, val))
-			}
+	// Ultra-minimal: Essential project info
+	if workspace.ProjectGoals.OverallGoal != "" {
+		// Truncate long goals to keep it concise
+		goal := workspace.ProjectGoals.OverallGoal
+		if len(goal) > 80 {
+			goal = goal[:77] + "..."
 		}
-		appendIf("frameworks", workspace.ProjectInsights.PrimaryFrameworks)
-		appendIf("ci", workspace.ProjectInsights.CIProviders)
-		appendIf("pkg", workspace.ProjectInsights.PackageManagers)
-		appendIf("runtime", workspace.ProjectInsights.RuntimeTargets)
-		appendIf("deploy", workspace.ProjectInsights.DeploymentTargets)
-		appendIf("monorepo", workspace.ProjectInsights.Monorepo)
-		appendIf("layout", workspace.ProjectInsights.RepoLayout)
-		if len(parts) > 0 {
-			b.WriteString(strings.Join(parts, "; "))
-		}
-		b.WriteString("\n\n")
+		b.WriteString(fmt.Sprintf("Project: %s\n", goal))
+	} else {
+		b.WriteString("Project: Unknown\n")
 	}
 
-	// Add Git Repository Information (minimal)
-	remoteURL, err := git.GetGitRemoteURL()
-	if err == nil && remoteURL != "" {
-		b.WriteString(fmt.Sprintf("Git Remote: %s\n", remoteURL))
+	// Key project insights (very concise)
+	b.WriteString(fmt.Sprintf("Files: %d", len(workspace.Files)))
+
+	insights := []string{}
+	if workspace.ProjectInsights.PrimaryFrameworks != "" {
+		insights = append(insights, fmt.Sprintf("Tech: %s", workspace.ProjectInsights.PrimaryFrameworks))
+	}
+	if workspace.ProjectInsights.Architecture != "" {
+		insights = append(insights, fmt.Sprintf("Arch: %s", workspace.ProjectInsights.Architecture))
+	}
+	if workspace.ProjectInsights.RuntimeTargets != "" {
+		insights = append(insights, fmt.Sprintf("Runtime: %s", workspace.ProjectInsights.RuntimeTargets))
 	}
 
-	branch, uncommitted, staged, statusErr := git.GetGitStatus()
-	if statusErr == nil {
-		b.WriteString(fmt.Sprintf("Git Status: Branch=%s, Uncommitted=%d, Staged=%d\n", branch, uncommitted, staged))
+	if len(insights) > 0 {
+		b.WriteString(fmt.Sprintf(" | %s", strings.Join(insights, " | ")))
 	}
 	b.WriteString("\n")
 
-	// Add Project Goals (if available)
-	if workspace.ProjectGoals.OverallGoal != "" {
-		b.WriteString("=== PROJECT GOALS ===\n")
-		if workspace.ProjectGoals.OverallGoal != "" {
-			b.WriteString(fmt.Sprintf("Goal: %s\n", workspace.ProjectGoals.OverallGoal))
-		}
-		if workspace.ProjectGoals.KeyFeatures != "" {
-			b.WriteString(fmt.Sprintf("Features: %s\n", workspace.ProjectGoals.KeyFeatures))
-		}
-		b.WriteString("\n")
-	}
+	// Show essential directories and key files for project context
+	b.WriteString("\nStructure:\n")
 
-	// Build minimal file structure with summaries and exports
-	b.WriteString("=== FILE STRUCTURE WITH SUMMARIES AND EXPORTS ===\n")
-	b.WriteString("Use this information to identify which files to read with read_file tool.\n\n")
-
-	// Sort files for consistent output
 	var sortedFiles []string
 	for filePath := range workspace.Files {
 		sortedFiles = append(sortedFiles, filePath)
 	}
 	sort.Strings(sortedFiles)
 
-	for _, filePath := range sortedFiles {
-		fileInfo := workspace.Files[filePath]
-
-		b.WriteString(fmt.Sprintf("📁 %s\n", filePath))
-
-		// Add summary (critical for understanding what the file does)
-		if fileInfo.Summary != "" && fileInfo.Summary != "File is too large to analyze." {
-			b.WriteString(fmt.Sprintf("   Summary: %s\n", fileInfo.Summary))
-		} else if fileInfo.Summary == "File is too large to analyze." {
-			b.WriteString("   Summary: Large file - use read_file with offset/limit if needed\n")
-		}
-
-		// Add exports (critical for understanding available functions)
-		if fileInfo.Exports != "" && fileInfo.Exports != "None" {
-			b.WriteString(fmt.Sprintf("   Public Functions: %s\n", fileInfo.Exports))
-		}
-
-		// Add references if available (shows dependencies)
-		if fileInfo.References != "" {
-			b.WriteString(fmt.Sprintf("   Uses: %s\n", fileInfo.References))
-		}
-
-		b.WriteString("\n")
+	// Essential files that provide immediate project context
+	essentialFiles := map[string]bool{
+		"main.go":        true, // Entry point
+		"go.mod":         true, // Dependencies and module
+		"package.json":   true, // Node.js projects
+		"pyproject.toml": true, // Python projects
+		"Cargo.toml":     true, // Rust projects
+		"README.md":      true, // Project documentation
 	}
 
-	b.WriteString("=== INSTRUCTIONS FOR LLM ===\n")
-	b.WriteString("1. Use the summaries and exports above to identify relevant files\n")
-	b.WriteString("2. Use read_file tool to load ONLY the specific files you need to understand\n")
-	b.WriteString("3. Focus on making minimal changes - prefer modifying existing functions over creating new ones\n")
-	b.WriteString("4. Make the smallest change that solves the specific problem described\n\n")
+	// Collect directories and essential files
+	var dirs []string
+	var keyFiles []string
 
-	// Log the full minimal context for debugging
-	logger.Log(b.String())
+	for _, filePath := range sortedFiles {
+		parts := strings.Split(filePath, "/")
+		if len(parts) > 0 {
+			topLevel := parts[0]
+			if strings.Contains(topLevel, ".") { // It's a file in root
+				if essentialFiles[topLevel] {
+					keyFiles = append(keyFiles, topLevel)
+				}
+			} else { // It's a directory
+				dirPath := topLevel + "/"
+				// Only add if not already in list
+				found := false
+				for _, existing := range dirs {
+					if existing == dirPath {
+						found = true
+						break
+					}
+				}
+				if !found {
+					dirs = append(dirs, dirPath)
+				}
+			}
+		}
+	}
+
+	// Sort both lists
+	sort.Strings(dirs)
+	sort.Strings(keyFiles)
+
+	// Show directories first
+	for _, dir := range dirs {
+		b.WriteString(fmt.Sprintf("📁 %s\n", dir))
+	}
+
+	// Show essential files
+	for _, file := range keyFiles {
+		b.WriteString(fmt.Sprintf("📄 %s\n", file))
+	}
+
+	// Show count of additional files if many exist
+	totalRootFiles := 0
+	for _, filePath := range sortedFiles {
+		if !strings.Contains(filePath, "/") {
+			totalRootFiles++
+		}
+	}
+	additionalFiles := totalRootFiles - len(keyFiles)
+	if additionalFiles > 0 {
+		b.WriteString(fmt.Sprintf("📄 ... (%d more files)\n", additionalFiles))
+	}
+
+	// Minimal instruction
+	b.WriteString("\nTip: Use tools to explore specific files as needed.\n")
 
 	return b.String()
 }

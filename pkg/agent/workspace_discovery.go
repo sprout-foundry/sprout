@@ -8,6 +8,8 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
+// Note: WorkspaceInfo is defined in types.go in this package
+
 // extractSearchTerms extracts key search terms from user intent
 func extractSearchTerms(intentLower string) []string {
 	var terms []string

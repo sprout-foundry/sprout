@@ -12,10 +12,20 @@ import (
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/orchestration/types"
+	orchestration_types "github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
+
+// RetryRequestError indicates that a retry is needed with a refined prompt
+type RetryRequestError struct {
+	RefinedPrompt string
+	Feedback      string
+}
+
+func (e *RetryRequestError) Error() string {
+	return fmt.Sprintf("code review requires retry with refined prompt: %s", e.Feedback)
+}
 
 // ReviewContext represents the context for a code review request
 type ReviewContext struct {
@@ -75,7 +85,7 @@ func NewCodeReviewServiceWithConfig(cfg *config.Config, logger *utils.Logger, re
 }
 
 // PerformReview performs a code review based on the provided context and options
-func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
+func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOptions) (*orchestration_types.CodeReviewResult, error) {
 	s.logger.LogProcessStep("Performing code review...")
 
 	// Initialize review history if not provided
@@ -93,7 +103,7 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 		return s.handleConvergence(ctx)
 	}
 
-	var result *types.CodeReviewResult
+	var result *orchestration_types.CodeReviewResult
 	var err error
 
 	switch opts.Type {
@@ -147,7 +157,7 @@ func (s *CodeReviewService) hasExceededIterationLimit(ctx *ReviewContext) bool {
 }
 
 // handleIterationLimitExceeded handles the case when iteration limit is exceeded
-func (s *CodeReviewService) handleIterationLimitExceeded(ctx *ReviewContext) (*types.CodeReviewResult, error) {
+func (s *CodeReviewService) handleIterationLimitExceeded(ctx *ReviewContext) (*orchestration_types.CodeReviewResult, error) {
 	s.logger.LogProcessStep(fmt.Sprintf("Review iteration limit exceeded (%d/%d). Applying fallback strategy.",
 		len(ctx.History.Iterations), s.reviewConfig.MaxIterations))
 
@@ -166,7 +176,7 @@ func (s *CodeReviewService) handleIterationLimitExceeded(ctx *ReviewContext) (*t
 	}
 
 	// If no approved result found, create a fallback result
-	return &types.CodeReviewResult{
+	return &orchestration_types.CodeReviewResult{
 		Status:   "needs_revision",
 		Feedback: fmt.Sprintf("Review process exceeded maximum iterations (%d). Manual intervention required. Consider simplifying the original request or breaking it into smaller parts.", s.reviewConfig.MaxIterations),
 	}, nil
@@ -201,7 +211,7 @@ func (s *CodeReviewService) hasConverged(ctx *ReviewContext) bool {
 }
 
 // handleConvergence handles the case when the review process has converged
-func (s *CodeReviewService) handleConvergence(ctx *ReviewContext) (*types.CodeReviewResult, error) {
+func (s *CodeReviewService) handleConvergence(ctx *ReviewContext) (*orchestration_types.CodeReviewResult, error) {
 	s.logger.LogProcessStep("Review process has converged. Similar feedback detected in recent iterations.")
 
 	ctx.History.Converged = true
@@ -213,14 +223,14 @@ func (s *CodeReviewService) handleConvergence(ctx *ReviewContext) (*types.CodeRe
 		return latest.ReviewResult, nil
 	}
 
-	return &types.CodeReviewResult{
+	return &orchestration_types.CodeReviewResult{
 		Status:   "needs_revision",
 		Feedback: "Review process converged but no valid result found. Manual review required.",
 	}, nil
 }
 
 // recordReviewIteration records a review iteration in the history
-func (s *CodeReviewService) recordReviewIteration(ctx *ReviewContext, result *types.CodeReviewResult, originalDiff string) {
+func (s *CodeReviewService) recordReviewIteration(ctx *ReviewContext, result *orchestration_types.CodeReviewResult, originalDiff string) {
 	iteration := ReviewIteration{
 		IterationNumber: len(ctx.History.Iterations) + 1,
 		OriginalDiff:    originalDiff,
@@ -292,7 +302,7 @@ func (s *CodeReviewService) calculateSimilarity(str1, str2 string) float64 {
 }
 
 // performAutomatedReview handles automated code reviews during code generation workflow
-func (s *CodeReviewService) performAutomatedReview(ctx *ReviewContext) (*types.CodeReviewResult, error) {
+func (s *CodeReviewService) performAutomatedReview(ctx *ReviewContext) (*orchestration_types.CodeReviewResult, error) {
 	// Use the structured JSON-based review for automated workflow
 	// The GetCodeReview function needs to be updated to accept full file context
 	// For now, we'll pass the processed instructions as a substitute
@@ -300,14 +310,14 @@ func (s *CodeReviewService) performAutomatedReview(ctx *ReviewContext) (*types.C
 }
 
 // performStagedReview handles reviews of Git staged changes
-func (s *CodeReviewService) performStagedReview(ctx *ReviewContext) (*types.CodeReviewResult, error) {
+func (s *CodeReviewService) performStagedReview(ctx *ReviewContext) (*orchestration_types.CodeReviewResult, error) {
 	// Use the human-readable review for staged changes
 	reviewPrompt := prompts.CodeReviewStagedPrompt()
 	return llm.GetStagedCodeReview(s.config, ctx.Diff, reviewPrompt, "")
 }
 
 // handleReviewResult processes the review result based on the review options
-func (s *CodeReviewService) handleReviewResult(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
+func (s *CodeReviewService) handleReviewResult(result *orchestration_types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*orchestration_types.CodeReviewResult, error) {
 	switch result.Status {
 	case "approved":
 		s.logger.LogProcessStep("Code review approved.")
@@ -328,7 +338,7 @@ func (s *CodeReviewService) handleReviewResult(result *types.CodeReviewResult, c
 }
 
 // handleNeedsRevision handles the case where the code review requires revisions
-func (s *CodeReviewService) handleNeedsRevision(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
+func (s *CodeReviewService) handleNeedsRevision(result *orchestration_types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*orchestration_types.CodeReviewResult, error) {
 	s.logger.LogProcessStep(fmt.Sprintf("Code review requires revisions (iteration %d/%d).",
 		ctx.CurrentIteration, s.reviewConfig.MaxIterations))
 	s.logger.LogProcessStep(fmt.Sprintf("Feedback: %s", result.Feedback))
@@ -351,24 +361,44 @@ func (s *CodeReviewService) handleNeedsRevision(result *types.CodeReviewResult, 
 	}
 
 	// For automated reviews, apply fixes if enabled and we haven't exceeded limits
-	if opts.Type == AutomatedReview && opts.AutoApplyFixes && result.PatchResolution != "" {
+	if opts.Type == AutomatedReview && opts.AutoApplyFixes && result.PatchResolution != nil && !result.PatchResolution.IsEmpty() {
 		s.logger.LogProcessStep("Applying patch resolution...")
 		return nil, s.applyPatchToContent(result.PatchResolution, result.Feedback)
 	}
 
-	// If detailed guidance is provided but no patch resolution, log it for the LLM to use
-	if opts.Type == AutomatedReview && result.DetailedGuidance != "" {
-		s.logger.LogProcessStep(fmt.Sprintf("Code review guidance: %s", result.DetailedGuidance))
-		if opts.AutoApplyFixes {
-			s.logger.LogProcessStep("No direct patch resolution provided. Guidance should be used by the LLM in the next iteration.")
+	// If detailed guidance is provided but no patch resolution, attempt retry with the feedback
+	if opts.Type == AutomatedReview && opts.AutoApplyFixes && (result.DetailedGuidance != "" || result.Feedback != "") {
+		s.logger.LogProcessStep("No direct patch resolution provided. Attempting retry with review feedback...")
+
+		// Attempt to retry the code generation with refined prompt based on feedback
+		if retryErr := s.attemptRetryForNeedsRevision(result, ctx, opts); retryErr != nil {
+			// Check if this is a retry request error
+			if retryRequest, ok := retryErr.(*RetryRequestError); ok {
+				s.logger.LogProcessStep("Retry requested with refined prompt. Returning to caller for re-generation.")
+				// Return the retry request error to signal the caller to retry with the refined prompt
+				return nil, retryRequest
+			} else {
+				s.logger.LogProcessStep(fmt.Sprintf("Unexpected retry error: %v", retryErr))
+				// Continue with the original result if retry fails
+			}
+		} else {
+			s.logger.LogProcessStep("Retry completed. The code generation process should use the refined prompt for the next iteration.")
+			// Mark that we've attempted to address the issues via retry
+			result.Feedback += " (Retry attempted with refined prompt)"
 		}
+	}
+
+	// If detailed guidance is provided but auto-apply is disabled, log it for manual use
+	if opts.Type == AutomatedReview && result.DetailedGuidance != "" && !opts.AutoApplyFixes {
+		s.logger.LogProcessStep(fmt.Sprintf("Code review guidance: %s", result.DetailedGuidance))
+		s.logger.LogProcessStep("Auto-apply fixes disabled. Guidance provided for manual review.")
 	}
 
 	return result, nil
 }
 
 // handleRejected handles the case where the code review is rejected
-func (s *CodeReviewService) handleRejected(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
+func (s *CodeReviewService) handleRejected(result *orchestration_types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*orchestration_types.CodeReviewResult, error) {
 	s.logger.LogProcessStep("Code review rejected.")
 	s.logger.LogProcessStep(fmt.Sprintf("Feedback: %s", result.Feedback))
 
@@ -515,14 +545,34 @@ func (s *CodeReviewService) cleanupOldBackups(maxBackups int) error {
 }
 
 // applyPatchToContent applies the patch resolution content directly
-func (s *CodeReviewService) applyPatchToContent(patchContent, feedback string) error {
-	// This function would delegate to the code generation process with the full file content
-	// For now, we'll return an error to signal that the patch needs to be applied
-	return fmt.Errorf("patch resolution needs to be applied: %s", patchContent)
+func (s *CodeReviewService) applyPatchToContent(patchResolution *orchestration_types.PatchResolution, feedback string) error {
+	if patchResolution == nil {
+		return fmt.Errorf("patch resolution is nil")
+	}
+
+	// Handle multi-file patches
+	if len(patchResolution.MultiFile) > 0 {
+		s.logger.LogProcessStep(fmt.Sprintf("Applying multi-file patch with %d files", len(patchResolution.MultiFile)))
+		for filePath, _ := range patchResolution.MultiFile {
+			s.logger.LogProcessStep(fmt.Sprintf("Would apply patch to: %s", filePath))
+		}
+		// For now, return an error to signal that multi-file patches need to be applied
+		return fmt.Errorf("multi-file patch resolution needs to be applied: %d files to update", len(patchResolution.MultiFile))
+	}
+
+	// Handle single file patches (backward compatibility)
+	if patchResolution.SingleFile != "" {
+		s.logger.LogProcessStep("Applying single-file patch")
+		// For now, return an error to signal that the patch needs to be applied
+		return fmt.Errorf("single-file patch resolution needs to be applied: %d characters", len(patchResolution.SingleFile))
+	}
+
+	return fmt.Errorf("patch resolution is empty")
 }
 
 // validatePatchContent validates the patch resolution content
 func (s *CodeReviewService) validatePatchContent(content string) error {
+	_ = content // Suppress unused parameter warning for now
 	// Check for extremely short content
 	if len(strings.TrimSpace(content)) < 5 {
 		return fmt.Errorf("patch content is suspiciously short (%d characters)", len(content))
@@ -560,7 +610,7 @@ func (s *CodeReviewService) validatePatchContent(content string) error {
 }
 
 // attemptRetry attempts to retry the code generation with refined prompts
-func (s *CodeReviewService) attemptRetry(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) error {
+func (s *CodeReviewService) attemptRetry(result *orchestration_types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) error {
 	maxRetries := opts.MaxRetries
 	if maxRetries <= 0 {
 		maxRetries = 2 // Default to 2 retries
@@ -586,6 +636,59 @@ func (s *CodeReviewService) attemptRetry(result *types.CodeReviewResult, ctx *Re
 	return fmt.Errorf("changes rejected after %d retries. Feedback: %s. Suggested prompt: %s", maxRetries, result.Feedback, result.NewPrompt)
 }
 
+// createRefinedPromptForRetry creates a refined prompt for retry attempts when revisions are needed
+func (s *CodeReviewService) createRefinedPromptForRetry(result *orchestration_types.CodeReviewResult, ctx *ReviewContext) string {
+	// Use the suggested new prompt if available
+	if strings.TrimSpace(result.NewPrompt) != "" {
+		return result.NewPrompt
+	}
+
+	// Create a refined prompt using feedback and detailed guidance
+	var promptParts []string
+
+	// Start with the original intent
+	if strings.TrimSpace(ctx.OriginalPrompt) != "" {
+		promptParts = append(promptParts, fmt.Sprintf("Original request: %s", ctx.OriginalPrompt))
+	}
+
+	// Add feedback
+	if strings.TrimSpace(result.Feedback) != "" {
+		promptParts = append(promptParts, fmt.Sprintf("Review feedback to address: %s", result.Feedback))
+	}
+
+	// Add detailed guidance if available
+	if strings.TrimSpace(result.DetailedGuidance) != "" {
+		promptParts = append(promptParts, fmt.Sprintf("Detailed guidance: %s", result.DetailedGuidance))
+	}
+
+	// Add instruction to fix the issues
+	promptParts = append(promptParts, "Please revise the code to address these issues while maintaining existing functionality.")
+
+	return strings.Join(promptParts, "\n\n")
+}
+
+// attemptRetryForNeedsRevision attempts to retry code generation when review requires revisions
+func (s *CodeReviewService) attemptRetryForNeedsRevision(result *orchestration_types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) error {
+	// Check if we have meaningful feedback to work with
+	if strings.TrimSpace(result.Feedback) == "" && strings.TrimSpace(result.DetailedGuidance) == "" {
+		s.logger.LogProcessStep("No actionable feedback available for retry. Skipping retry attempt.")
+		return nil
+	}
+
+	s.logger.LogProcessStep("Code review requires retry with refined prompt based on feedback.")
+
+	// Create the refined prompt for retry
+	refinedPrompt := s.createRefinedPromptForRetry(result, ctx)
+
+	s.logger.LogProcessStep("Generated refined prompt for retry attempt.")
+
+	// Return a retry request error to signal to the caller that a retry is needed
+	return &RetryRequestError{
+		RefinedPrompt: refinedPrompt,
+		Feedback:      result.Feedback,
+	}
+}
+
 // hasPreviousApprovedResult checks if there are any previous approved results in history
 func (s *CodeReviewService) hasPreviousApprovedResult(ctx *ReviewContext) bool {
 	for _, iteration := range ctx.History.Iterations {
@@ -597,7 +700,7 @@ func (s *CodeReviewService) hasPreviousApprovedResult(ctx *ReviewContext) bool {
 }
 
 // getMostRecentApprovedResult returns the most recent approved result from history
-func (s *CodeReviewService) getMostRecentApprovedResult(ctx *ReviewContext) (*types.CodeReviewResult, error) {
+func (s *CodeReviewService) getMostRecentApprovedResult(ctx *ReviewContext) (*orchestration_types.CodeReviewResult, error) {
 	for i := len(ctx.History.Iterations) - 1; i >= 0; i-- {
 		iteration := ctx.History.Iterations[i]
 		if iteration.ReviewResult.Status == "approved" {

@@ -14,11 +14,12 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // validateChangesWithIteration validates changes using iterative improvement
-func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *AgentTokenUsage) (int, error) {
+func validateChangesWithIteration(intentAnalysis *IntentAnalysis, originalIntent string, cfg *config.Config, logger *utils.Logger, tokenUsage *types.AgentTokenUsage) (int, error) {
 	logger.LogProcessStep("🔍 Starting validation with iteration...")
 
 	startTime := time.Now()
@@ -204,17 +205,16 @@ func executeValidationFixPlan(plan *ValidationFixPlan, cfg *config.Config, logge
 
 	var totalTokens int
 
-	for i, instruction := range plan.Instructions {
-		logger.LogProcessStep(fmt.Sprintf("🔧 Fix step %d/%d: %s", i+1, len(plan.Instructions), instruction))
+	// Execute the instructions (treat as a single instruction for now)
+	logger.LogProcessStep(fmt.Sprintf("🔧 Executing fix plan instructions: %s", plan.Instructions))
 
-		// For now, just log the instruction
-		// In a full implementation, this would execute the actual fixes
-		logger.Logf("Would execute: %s", instruction)
+	// For now, just log the instruction
+	// In a full implementation, this would execute the actual fixes
+	logger.Logf("Would execute: %s", plan.Instructions)
 
-		// Estimate tokens for this instruction
-		tokens := llm.EstimateTokens(instruction)
-		totalTokens += tokens
-	}
+	// Estimate tokens for this instruction
+	tokens := llm.EstimateTokens(plan.Instructions)
+	totalTokens += tokens
 
 	logger.LogProcessStep("✅ Validation fix plan executed")
 	return totalTokens, nil

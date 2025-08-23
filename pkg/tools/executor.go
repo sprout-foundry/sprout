@@ -12,10 +12,11 @@ import (
 
 // Executor handles the execution of tools with proper error handling, timeouts, and security
 type Executor struct {
-	registry    Registry
-	permissions PermissionChecker
-	logger      *utils.Logger
-	config      *config.Config
+	registry       Registry
+	permissions    PermissionChecker
+	logger         *utils.Logger
+	config         *config.Config
+	sessionTracker *SessionTracker
 }
 
 // PermissionChecker checks if operations are allowed
@@ -30,10 +31,11 @@ type PermissionChecker interface {
 // NewExecutor creates a new tool executor
 func NewExecutor(registry Registry, permissions PermissionChecker, logger *utils.Logger, config *config.Config) *Executor {
 	return &Executor{
-		registry:    registry,
-		permissions: permissions,
-		logger:      logger,
-		config:      config,
+		registry:       registry,
+		permissions:    permissions,
+		logger:         logger,
+		config:         config,
+		sessionTracker: GetGlobalSessionTracker(),
 	}
 }
 
@@ -128,6 +130,14 @@ func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall types.ToolCall)
 		}, nil
 	}
 
+	// Check for duplicate requests in the same session
+	sessionID := e.getSessionID(ctx)
+	if sessionID != "" {
+		if isDuplicate, callInfo := e.sessionTracker.IsDuplicateRequest(sessionID, toolCall.Function.Name, args); isDuplicate {
+			return e.handleDuplicateRequest(toolCall.Function.Name, args, callInfo)
+		}
+	}
+
 	// Create tool parameters
 	params := Parameters{
 		Args:    nil, // Positional args not used in tool calls
@@ -141,10 +151,32 @@ func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall types.ToolCall)
 	tool, exists := e.registry.GetTool(toolCall.Function.Name)
 	if !exists {
 		// Fall back to built-in tools for backward compatibility
-		return e.executeBuiltinTool(ctx, toolCall.Function.Name, args)
+		result, err := e.executeBuiltinTool(ctx, toolCall.Function.Name, args)
+
+		// Record the tool call in session tracker if successful
+		if sessionID != "" && err == nil && result != nil && result.Success {
+			responseStr := ""
+			if output, ok := result.Output.(string); ok {
+				responseStr = output
+			}
+			e.sessionTracker.RecordToolCall(sessionID, toolCall.Function.Name, args, responseStr)
+		}
+
+		return result, err
 	}
 
-	return e.ExecuteTool(ctx, tool, params)
+	result, err := e.ExecuteTool(ctx, tool, params)
+
+	// Record the tool call in session tracker if successful
+	if sessionID != "" && err == nil && result != nil && result.Success {
+		responseStr := ""
+		if output, ok := result.Output.(string); ok {
+			responseStr = output
+		}
+		e.sessionTracker.RecordToolCall(sessionID, toolCall.Function.Name, args, responseStr)
+	}
+
+	return result, err
 }
 
 // ListAvailableTools returns a list of all available tools
@@ -184,4 +216,72 @@ func (p *SimplePermissionChecker) HasPermission(permissions []string) bool {
 // CheckToolExecution checks if a tool can be executed
 func (p *SimplePermissionChecker) CheckToolExecution(tool Tool, params Parameters) bool {
 	return p.HasPermission(tool.RequiredPermissions())
+}
+
+// getSessionID extracts session ID from context
+func (e *Executor) getSessionID(ctx context.Context) string {
+	if sessionID, ok := ctx.Value("session_id").(string); ok {
+		return sessionID
+	}
+	return ""
+}
+
+// handleDuplicateRequest handles duplicate tool call requests
+func (e *Executor) handleDuplicateRequest(toolName string, args map[string]interface{}, callInfo *ToolCallInfo) (*Result, error) {
+	if toolName == "read_file" {
+		// For read_file duplicates, return a special response indicating the file was already requested
+		filePath, _ := args["file_path"].(string)
+		response := fmt.Sprintf("⚡ Duplicate request detected: File '%s' has already been read %d times in this session (first read: %s, last read: %s). You already have this file content available.",
+			filePath, callInfo.CallCount, callInfo.FirstCall.Format("15:04:05"), callInfo.LastCall.Format("15:04:05"))
+
+		if e.logger != nil {
+			e.logger.LogProcessStep(fmt.Sprintf("Duplicate read_file request blocked: %s", filePath))
+		}
+
+		return &Result{
+			Success: true,
+			Output:  response,
+			Metadata: map[string]interface{}{
+				"duplicate_request": true,
+				"tool_name":         toolName,
+				"file_path":         filePath,
+				"call_count":        callInfo.CallCount,
+				"first_call":        callInfo.FirstCall,
+				"last_call":         callInfo.LastCall,
+			},
+		}, nil
+	}
+
+	// For other tools, return a generic duplicate response
+	response := fmt.Sprintf("⚡ Duplicate request detected: This %s call has been made %d times in this session. Please avoid redundant requests.",
+		toolName, callInfo.CallCount)
+
+	if e.logger != nil {
+		e.logger.LogProcessStep(fmt.Sprintf("Duplicate %s request blocked", toolName))
+	}
+
+	return &Result{
+		Success: true,
+		Output:  response,
+		Metadata: map[string]interface{}{
+			"duplicate_request": true,
+			"tool_name":         toolName,
+			"call_count":        callInfo.CallCount,
+		},
+	}, nil
+}
+
+// StartSession starts a new session for tracking tool calls
+func (e *Executor) StartSession() string {
+	return e.sessionTracker.StartSession()
+}
+
+// EndSession ends a session and cleans up tracking data
+func (e *Executor) EndSession(sessionID string) {
+	e.sessionTracker.EndSession(sessionID)
+}
+
+// GetSessionStats returns statistics about a session
+func (e *Executor) GetSessionStats(sessionID string) map[string]interface{} {
+	return e.sessionTracker.GetSessionStats(sessionID)
 }

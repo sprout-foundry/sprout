@@ -7,12 +7,13 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // Execute is the main public interface for running the agent loop programmatically.
 // Retained for orchestration and multi-agent callers; routes to the optimized v2 loop.
-func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*AgentTokenUsage, error) {
+func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*types.AgentTokenUsage, error) {
 	logger.LogProcessStep("🚀 Starting optimized agent execution (v2)...")
 	logger.LogProcessStep("🛡️ Policy version: " + PolicyVersion)
 
@@ -21,7 +22,7 @@ func Execute(userIntent string, cfg *config.Config, logger *utils.Logger) (*Agen
 	runtime.ReadMemStats(&m)
 	logger.Logf("PERF: agent.Execute started. Alloc: %v MiB, TotalAlloc: %v MiB, Sys: %v MiB, NumGC: %v", m.Alloc/1024/1024, m.TotalAlloc/1024/1024, m.Sys/1024/1024, m.NumGC)
 
-	tokenUsage := &AgentTokenUsage{}
+	tokenUsage := &types.AgentTokenUsage{}
 	logger.LogProcessStep("🔄 Executing optimized agent...")
 	err := RunSimplifiedAgent(userIntent, cfg.SkipPrompt, cfg.OrchestrationModel)
 	if err != nil {

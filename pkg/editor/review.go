@@ -36,6 +36,11 @@ func performAutomatedReview(combinedDiff, originalPrompt, processedInstructions 
 	// Perform the review using the unified service
 	_, err := service.PerformReview(ctx, opts)
 	if err != nil {
+		// Check if this is a retry request error - return it as-is so the caller can handle the retry
+		if _, ok := err.(*codereview.RetryRequestError); ok {
+			return err
+		}
+
 		// Check if this is a signal to re-validate (which is expected behavior)
 		if strings.Contains(err.Error(), "re-validating") || strings.Contains(err.Error(), "review instructions need to be applied") {
 			return err

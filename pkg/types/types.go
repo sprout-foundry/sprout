@@ -26,9 +26,10 @@ type ToolMessage struct {
 
 // TokenUsage represents actual token usage from an API response
 type TokenUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokens     int  `json:"prompt_tokens"`
+	CompletionTokens int  `json:"completion_tokens"`
+	TotalTokens      int  `json:"total_tokens"`
+	Estimated        bool `json:"estimated,omitempty"`
 }
 
 // TokenUsageInterface defines methods for accessing token usage information

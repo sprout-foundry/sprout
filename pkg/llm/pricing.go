@@ -124,13 +124,54 @@ func UpdatePricing(model string, pricing ModelPricing) error {
 
 // GetModelPricing consults the persisted pricing table first; falls back to heuristics
 func GetModelPricing(model string) ModelPricing {
+	// Normalize model key: strip provider prefixes and lowercase
+	key := strings.ToLower(strings.TrimSpace(model))
+	// Common provider prefixes to strip
+	prefixes := []string{"deepinfra:", "openai:", "groq:", "gemini:", "cerebras:", "lambda-ai:", "ollama:"}
+	for _, p := range prefixes {
+		if strings.HasPrefix(key, p) {
+			key = strings.TrimPrefix(key, p)
+			break
+		}
+	}
+	// Family normalization (rough mapping)
+	if strings.Contains(key, "gpt-4o") || strings.Contains(key, "gpt-4-turbo") || strings.Contains(key, "gpt-4") {
+		key = "gpt-4"
+	} else if strings.Contains(key, "gpt-3.5") {
+		key = "gpt-3.5-turbo"
+	} else if strings.Contains(key, "gemini") {
+		key = "gemini"
+	} else if strings.Contains(key, "llama") {
+		key = "llama"
+	} else if strings.Contains(key, "deepseek") {
+		key = "deepseek"
+	} else if strings.Contains(key, "qwen") {
+		key = "qwen"
+	}
+
+	// If present in table, return
 	if pricingTable.Models != nil {
-		if p, ok := pricingTable.Models[strings.ToLower(strings.TrimSpace(model))]; ok {
+		if p, ok := pricingTable.Models[key]; ok {
 			return p
 		}
 	}
+	// Attempt a one-time DeepInfra sync if empty
+	_ = InitPricingTable()
+	if pricingTable.Models != nil {
+		if _, ok := pricingTable.Models[key]; !ok {
+			// Best-effort sync; ignore error and fall back to heuristics
+			_ = SyncDeepInfraPricing("")
+			// Normalize keys after sync and persist
+			normalizePricingKeys()
+			_ = SavePricingTable()
+			if p, ok := pricingTable.Models[key]; ok {
+				return p
+			}
+		}
+	}
+
 	// Fallback heuristics for common families
-	modelLower := strings.ToLower(model)
+	modelLower := key
 	switch {
 	case strings.Contains(modelLower, "deepseek"):
 		return ModelPricing{InputCostPer1K: 0.27 / 1000, OutputCostPer1K: 1.1 / 1000} // $0.27/$1.10 per 1M → per 1K
@@ -140,14 +181,10 @@ func GetModelPricing(model string) ModelPricing {
 		return ModelPricing{InputCostPer1K: 0.24 / 1000, OutputCostPer1K: 0.24 / 1000}
 	case strings.Contains(modelLower, "qwen"):
 		return ModelPricing{InputCostPer1K: 0.40 / 1000, OutputCostPer1K: 0.80 / 1000}
-	case strings.Contains(modelLower, "gpt-4o"):
-		return ModelPricing{InputCostPer1K: 0.005, OutputCostPer1K: 0.015}
-	case strings.Contains(modelLower, "gpt-4-turbo"):
-		return ModelPricing{InputCostPer1K: 0.01, OutputCostPer1K: 0.03}
-	case strings.Contains(modelLower, "gpt-4"):
+	case strings.Contains(modelLower, "gpt-4o") || strings.Contains(modelLower, "gpt-4-turbo") || strings.Contains(modelLower, "gpt-4"):
 		return ModelPricing{InputCostPer1K: 0.03, OutputCostPer1K: 0.06}
-	case strings.Contains(modelLower, "gpt-3.5-turbo"):
-		return ModelPricing{InputCostPer1K: 0.0005, OutputCostPer1K: 0.0015}
+	case strings.Contains(modelLower, "gpt-3.5"):
+		return ModelPricing{InputCostPer1K: 0.002, OutputCostPer1K: 0.002}
 	case strings.Contains(modelLower, "gemini"):
 		return ModelPricing{InputCostPer1K: 0.00025, OutputCostPer1K: 0.0005}
 	case strings.Contains(modelLower, "ollama"):

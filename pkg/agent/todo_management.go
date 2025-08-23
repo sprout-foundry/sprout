@@ -545,6 +545,154 @@ func refineTodosWithAnalysis(ctx *SimplifiedAgentContext, completedTodo *TodoIte
 	}
 }
 
+// scoreTodoForDynamicPriority computes a dynamic priority score for a todo.
+// Higher score means higher priority to run next. It considers:
+// - Original priority (lower number gets higher base score)
+// - Presence of critical/high findings related to the todo's file or keywords
+// - Accumulated knowledge pointing to related files
+// - Urgency keywords in the todo text
+func scoreTodoForDynamicPriority(ctx *SimplifiedAgentContext, todo *TodoItem) int {
+	// Base score derives from static priority (1 highest). Keep within [0..100].
+	base := 100 - (todo.Priority * 10)
+	if base < 0 {
+		base = 0
+	}
+
+	score := base
+
+	content := strings.ToLower(todo.Content + " " + todo.Description)
+	filePath := strings.TrimSpace(todo.FilePath)
+
+	// Urgency keyword boosts
+	urgencyKeywords := []string{"fix", "error", "failing", "fail", "build", "lint", "security", "vuln", "panic", "crash", "broken", "blocking"}
+	for _, kw := range urgencyKeywords {
+		if strings.Contains(content, kw) {
+			score += 6
+		}
+	}
+
+	// If we have persistent context, use findings/knowledge to boost relevance
+	if ctx.ContextManager != nil && ctx.PersistentCtx != nil {
+		pc := ctx.PersistentCtx
+
+		// Recent findings: boost if file matches or title mentions todo terms
+		for i := len(pc.Findings) - 1; i >= 0 && i >= len(pc.Findings)-8; i-- {
+			f := pc.Findings[i]
+			if filePath != "" && strings.TrimSpace(f.FilePath) != "" && strings.EqualFold(f.FilePath, filePath) {
+				// Severity-weighted boost
+				switch strings.ToLower(f.Severity) {
+				case "critical":
+					score += 20
+				case "high":
+					score += 12
+				case "medium":
+					score += 6
+				default:
+					score += 3
+				}
+			}
+			// Title/content match to todo text
+			ft := strings.ToLower(f.Title + " " + f.Description)
+			if ft != "" && content != "" && (strings.Contains(ft, todo.Content) || strings.Contains(ft, todo.Description)) {
+				score += 4
+			}
+		}
+
+		// Knowledge items referencing related files
+		for _, k := range pc.KnowledgeBase {
+			if len(k.RelatedFiles) == 0 {
+				continue
+			}
+			for _, rf := range k.RelatedFiles {
+				if filePath != "" && strings.EqualFold(rf, filePath) {
+					score += 5
+				}
+			}
+		}
+	}
+
+	// If analysis summary references this file or todo terms, small boost
+	if summary, ok := ctx.AnalysisResults["summary"]; ok {
+		lsum := strings.ToLower(summary)
+		if filePath != "" && strings.Contains(lsum, strings.ToLower(filePath)) {
+			score += 4
+		}
+		if todo.Content != "" && strings.Contains(lsum, strings.ToLower(todo.Content)) {
+			score += 2
+		}
+	}
+
+	// Ensure a non-negative score
+	if score < 0 {
+		score = 0
+	}
+	return score
+}
+
+// selectNextTodoIndex chooses the next todo to execute based on dynamic scoring.
+// Returns -1 if no pending todos remain. Also logs top candidates for transparency.
+func selectNextTodoIndex(ctx *SimplifiedAgentContext) int {
+	bestIdx := -1
+	bestScore := -1
+
+	// Track top 3 for logging
+	type cand struct{ idx, score int }
+	top := []cand{}
+
+	for i := range ctx.Todos {
+		t := &ctx.Todos[i]
+		if t.Status != "pending" {
+			continue
+		}
+		s := scoreTodoForDynamicPriority(ctx, t)
+		// Maintain top 3
+		inserted := false
+		for j := 0; j < len(top); j++ {
+			if s > top[j].score {
+				top = append(top[:j], append([]cand{{idx: i, score: s}}, top[j:]...)...)
+				inserted = true
+				break
+			}
+		}
+		if !inserted {
+			top = append(top, cand{idx: i, score: s})
+		}
+		if len(top) > 3 {
+			top = top[:3]
+		}
+		if s > bestScore || (s == bestScore && t.Priority < ctx.Todos[bestIdx].Priority) {
+			bestScore = s
+			bestIdx = i
+		}
+	}
+
+	// Log decision
+	if bestIdx != -1 {
+		var b strings.Builder
+		b.WriteString("🔄 Reprioritized next todo based on analysis: ")
+		b.WriteString(ctx.Todos[bestIdx].Content)
+		b.WriteString(" (score=")
+		b.WriteString(strconv.Itoa(bestScore))
+		b.WriteString(")\n")
+		if len(top) > 0 {
+			b.WriteString("   Top candidates: ")
+			for ci, c := range top {
+				if ci > 0 {
+					b.WriteString(", ")
+				}
+				b.WriteString("[")
+				b.WriteString(ctx.Todos[c.idx].Content)
+				b.WriteString(" => ")
+				b.WriteString(strconv.Itoa(c.score))
+				b.WriteString("]")
+			}
+		}
+		ctx.Logger.LogProcessStep(b.String())
+	}
+
+	return bestIdx
+}
+
 // extractFindingsFromAnalysis parses analysis text to extract structured findings
 func extractFindingsFromAnalysis(analysisText string, todo *TodoItem) []AnalysisFinding {
 	var findings []AnalysisFinding

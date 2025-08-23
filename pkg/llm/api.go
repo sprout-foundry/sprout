@@ -694,6 +694,23 @@ func GetLLMResponse(modelName string, messages []prompts.Message, filename strin
 	return content, tokenUsage, nil
 }
 
+// GetCommitMessage generates a git commit message based on code changes using an LLM.
+func GetCommitMessage(cfg *config.Config, changelog string, originalPrompt string, filename string) (string, error) {
+	modelName := cfg.WorkspaceModel
+	if modelName == "" {
+		modelName = cfg.EditingModel // Fallback if workspace model is not configured
+	}
+
+	messages := prompts.BuildCommitMessages(changelog, originalPrompt)
+
+	response, _, err := GetLLMResponse(modelName, messages, filename, cfg, 1*time.Minute)
+	if err != nil {
+		return "", fmt.Errorf("failed to get commit message from LLM: %w", err)
+	}
+
+	return strings.TrimSpace(response), nil
+}
+
 // GenerateSearchQuery uses an LLM to generate a concise search query based on the provided context.
 func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
 	messages := []prompts.Message{

@@ -528,9 +528,11 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			content = removeThinkTags(content)
 			_, _ = writer.Write([]byte(content))
 		}
-		// Estimate token usage for Gemini
+		// Estimate token usage for Gemini (mark as estimated)
 		if err == nil {
-			tokenUsage = estimateUsageFromMessages(messages)
+			est := estimateUsageFromMessages(messages)
+			est.Estimated = true
+			tokenUsage = est
 		}
 	case "lambda-ai":
 		if cfg.HealthChecks {

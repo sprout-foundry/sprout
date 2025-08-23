@@ -279,7 +279,7 @@ func CallLLMWithInteractiveContext(
 			phase = "execute"
 		}
 		if phase == "plan" {
-			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=PLAN. Allowed tools: plan_step, workspace_context, read_file. Do not call edit/validate/shell tools. Produce a plan next."})
+			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=PLAN. Allowed tools: plan_step, workspace_context, read_file, run_shell_command. Do not call edit/validate/shell tools. Produce a plan next."})
 		} else {
 			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=EXECUTE. Allowed tools: execute_step (with previously planned action), edit_file_section, validate_file, read_file, evaluate_outcome. Do not call workspace_context unless strictly necessary."})
 		}
@@ -292,11 +292,8 @@ func CallLLMWithInteractiveContext(
 		var response string
 		var err error
 		for attempt := 0; attempt < 3; attempt++ {
-			// Restrict tools by phase
-			allowed := []string{"plan_step", "workspace_context", "read_file"}
-			if phase == "execute" {
-				allowed = []string{"execute_step", "edit_file_section", "validate_file", "read_file", "evaluate_outcome"}
-			}
+			// Use unified dispatcher policy; do not restrict here
+			var allowed []string = nil
 			logger.Logf("DEBUG: About to call GetLLMResponseWithToolsScoped with model: %s", modelName)
 			logger.Logf("DEBUG: Current messages count: %d", len(currentMessages))
 			logger.Logf("DEBUG: Allowed tools: %v", allowed)
@@ -413,7 +410,11 @@ func CallLLMWithInteractiveContext(
 				fn := fmt.Sprintf(".ledit/runlogs/tool_call_parse_error_%d.json", time.Now().UnixNano())
 				_ = os.WriteFile(fn, []byte(response), 0644)
 				ui.Out().Printf("[tools] wrote raw tool_call response to %s\n", fn)
-				return "", fmt.Errorf("failed to parse tool calls")
+				// Instead of aborting, instruct the model to emit a clean tool_calls JSON and retry this turn
+				guidance := "Your previous response attempted tool calls but could not be parsed. Output ONLY a valid JSON object in this exact format: {\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":{\"file_path\":\"path/to/file\"}}}]} — do not include fences or extra text."
+				currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: guidance})
+				turnDurations = append(turnDurations, time.Since(turnStart))
+				continue
 			}
 
 			if len(toolCalls) > 0 {
@@ -598,9 +599,45 @@ func CallLLMWithInteractiveContext(
 						plannedStopWhen = ""
 						continue
 					default:
-						// Block direct use of write/exec tools when not via execute_step; allow read/discovery tools
+						// Allow read/discovery tools always; for exec/write tools, prompt the user when not in allow list
 						blockedUnderlying := map[string]bool{
-							"edit_file_section": true, "validate_file": true, "run_shell_command": true,
+							"edit_file_section": true, "validate_file": true,
+						}
+						// Special handling for run_shell_command: allow safe diagnostics or ask user approval
+						if name == "run_shell_command" {
+							cmdStr, _ := args["command"].(string)
+							trimmed := strings.TrimSpace(cmdStr)
+							lower := strings.ToLower(trimmed)
+							if trimmed == "" || strings.Contains(lower, "rm -rf") || strings.Contains(lower, "mkfs") || strings.Contains(lower, " :(){ :|:& };:") || strings.Contains(lower, "shutdown") || strings.Contains(lower, "reboot") || strings.Contains(lower, "sudo ") {
+								toolResults = append(toolResults, "Tool run_shell_command blocked: unsafe or empty command")
+								blockedCounts["shell_unsafe"]++
+								continue
+							}
+							allowPrefixes := []string{"ls", "grep", "cat", "wc", "head", "tail"}
+							allowed := false
+							for _, p := range allowPrefixes {
+								if strings.HasPrefix(lower, p+" ") || lower == p {
+									allowed = true
+									break
+								}
+							}
+							if !allowed {
+								if cfg.SkipPrompt {
+									toolResults = append(toolResults, "Tool run_shell_command blocked: not in allow list and --skip-prompt is set")
+									blockedCounts["shell_not_allowed_skip"]++
+									continue
+								}
+								ui.Out().Print(fmt.Sprintf("[tools] run_shell_command not in allow list. Approve to run? (y/n): %s\n", trimmed))
+								var resp string
+								fmt.Scanln(&resp)
+								resp = strings.ToLower(strings.TrimSpace(resp))
+								if resp != "y" && resp != "yes" {
+									toolResults = append(toolResults, "Tool run_shell_command blocked by user")
+									blockedCounts["shell_user_block"]++
+									continue
+								}
+							}
+							// Allowed or approved: fall through to execution
 						}
 						if blockedUnderlying[name] {
 							toolResults = append(toolResults, "Tool blocked: use plan_step → execute_step → evaluate_outcome. Do not call underlying tools directly.")
@@ -980,18 +1017,22 @@ func CallLLMWithInteractiveContext(
 
 // Helper functions for tool calling
 func containsToolCall(response string) bool {
-	// Check for explicit tool call JSON structures with proper context
-	// Must be at the start of the response or in a JSON code block
+	// Loosened detection: accept tool_calls anywhere in the response.
+	// Providers may prepend prose or use unlabeled fences.
 	trimmed := strings.TrimSpace(response)
 
-	// Check if response starts with JSON containing tool_calls
+	// Fast-path: anywhere in the response
+	if strings.Contains(response, `"tool_calls"`) {
+		return true
+	}
+
+	// Starts with JSON containing tool_calls
 	if strings.HasPrefix(trimmed, "{") && strings.Contains(response, `"tool_calls"`) {
 		return true
 	}
 
-	// Check for JSON code blocks that contain tool_calls
+	// JSON code block
 	if strings.Contains(response, "```json") {
-		// Extract JSON blocks and check if they contain tool_calls
 		start := strings.Index(response, "```json")
 		if start >= 0 {
 			start += 7
@@ -999,6 +1040,21 @@ func containsToolCall(response string) bool {
 			if end > 0 {
 				jsonContent := response[start : start+end]
 				if strings.Contains(jsonContent, `"tool_calls"`) {
+					return true
+				}
+			}
+		}
+	}
+
+	// Generic fenced block without language tag
+	if strings.Contains(response, "```") {
+		start := strings.Index(response, "```")
+		if start >= 0 {
+			start += 3
+			end := strings.Index(response[start:], "```")
+			if end > 0 {
+				block := response[start : start+end]
+				if strings.Contains(block, `"tool_calls"`) {
 					return true
 				}
 			}
@@ -1047,7 +1103,19 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 		argsStr := "{}"
 		switch a := rawArgs.(type) {
 		case string:
-			argsStr = a
+			// Some providers double-encode arguments as a JSON string.
+			// Try to unescape and normalize to a canonical JSON object string.
+			candidate := strings.TrimSpace(a)
+			var tmp map[string]any
+			if json.Unmarshal([]byte(candidate), &tmp) == nil {
+				if b, err := json.Marshal(tmp); err == nil {
+					argsStr = string(b)
+				} else {
+					argsStr = candidate
+				}
+			} else {
+				argsStr = candidate
+			}
 		case map[string]any:
 			if b, err := json.Marshal(a); err == nil {
 				argsStr = string(b)
@@ -1200,6 +1268,41 @@ func parseToolCalls(response string) ([]ToolCall, error) {
 		}
 
 		return nil, false
+	}
+
+	// First, attempt to parse any fenced blocks (```json or generic ```)
+	// Models often wrap the JSON in fences; extract and try those first.
+	if strings.Contains(response, "```") {
+		if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+			fmt.Printf("DEBUG: parseToolCalls - scanning fenced blocks for tool_calls JSON\n")
+		}
+		idx := 0
+		for idx < len(response) {
+			startFence := strings.Index(response[idx:], "```")
+			if startFence == -1 {
+				break
+			}
+			startFence += idx + 3
+			endFence := strings.Index(response[startFence:], "```")
+			if endFence == -1 {
+				break
+			}
+			block := response[startFence : startFence+endFence]
+			// Handle a leading language tag (e.g., "json\n")
+			blockTrim := strings.TrimLeft(block, "\n\r\t ")
+			if strings.HasPrefix(blockTrim, "json") {
+				blockTrim = strings.TrimLeft(blockTrim[len("json"):], "\n\r\t ")
+			}
+			if strings.Contains(blockTrim, `"tool_calls"`) {
+				if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {
+					fmt.Printf("DEBUG: parseToolCalls - found fenced block with tool_calls, attempting parse\n")
+				}
+				if tcs, ok := tryParse(blockTrim); ok {
+					return tcs, nil
+				}
+			}
+			idx = startFence + endFence + 3
+		}
 	}
 
 	if os.Getenv("LEDIT_DEBUG_TOOL_CALLS") == "1" {

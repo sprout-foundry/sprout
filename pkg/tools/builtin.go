@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	ui "github.com/alantheprice/ledit/pkg/ui"
+	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
 // executeBuiltinTool handles built-in tools for backward compatibility
@@ -37,11 +39,11 @@ func (e *Executor) executeBuiltinTool(ctx context.Context, toolName string, args
 }
 
 func (e *Executor) executeReadFile(ctx context.Context, args map[string]interface{}) (*Result, error) {
-	filePath, ok := args["file_path"].(string)
+	filePath, ok := args["target_file"].(string)
 	if !ok {
 		return &Result{
 			Success: false,
-			Errors:  []string{"read_file requires 'file_path' parameter"},
+			Errors:  []string{"read_file requires 'target_file' parameter"},
 		}, nil
 	}
 
@@ -57,8 +59,8 @@ func (e *Executor) executeReadFile(ctx context.Context, args map[string]interfac
 		Success: true,
 		Output:  string(content),
 		Metadata: map[string]interface{}{
-			"file_path": filePath,
-			"file_size": len(content),
+			"target_file": filePath,
+			"file_size":   len(content),
 		},
 	}, nil
 }
@@ -142,18 +144,156 @@ func (e *Executor) executeWorkspaceContext(ctx context.Context, args map[string]
 	action, _ := args["action"].(string)
 	query, _ := args["query"].(string)
 
-	// For now, return a placeholder result
-	// TODO: Implement proper workspace context functionality
-	result := fmt.Sprintf("Workspace context action: %s, query: %s", action, query)
+	if strings.TrimSpace(action) == "" {
+		action = "load_tree"
+	}
 
-	return &Result{
-		Success: true,
-		Output:  result,
-		Metadata: map[string]interface{}{
-			"action": action,
-			"query":  query,
-		},
-	}, nil
+	// Load workspace file from .ledit/workspace.json
+	ws, err := loadWorkspaceInfo()
+	if err != nil {
+		return &Result{Success: false, Errors: []string{fmt.Sprintf("failed to load workspace: %v", err)}}, nil
+	}
+
+	switch strings.ToLower(action) {
+	case "load_tree":
+		out := buildCompactTree(ws)
+		return &Result{Success: true, Output: out, Metadata: map[string]interface{}{"action": action}}, nil
+	case "search_keywords":
+		if strings.TrimSpace(query) == "" {
+			return &Result{Success: false, Errors: []string{"search_keywords requires non-empty 'query'"}}, nil
+		}
+		out := searchWorkspaceKeywords(ws, query, 100, 3)
+		return &Result{Success: true, Output: out, Metadata: map[string]interface{}{"action": action, "query": query}}, nil
+	case "load_summary":
+		out := buildWorkspaceOverview(ws)
+		return &Result{Success: true, Output: out, Metadata: map[string]interface{}{"action": action}}, nil
+	default:
+		return &Result{Success: false, Errors: []string{fmt.Sprintf("unknown workspace_context action: %s", action)}}, nil
+	}
+}
+
+// loadWorkspaceInfo reads .ledit/workspace.json into a minimal structure
+func loadWorkspaceInfo() (workspaceinfo.WorkspaceFile, error) {
+	var ws workspaceinfo.WorkspaceFile
+	data, err := os.ReadFile(".ledit/workspace.json")
+	if err != nil {
+		return ws, err
+	}
+	if err := json.Unmarshal(data, &ws); err != nil {
+		return ws, err
+	}
+	return ws, nil
+}
+
+// buildCompactTree prints a compact tree using file paths from workspace info
+func buildCompactTree(ws workspaceinfo.WorkspaceFile) string {
+	var b strings.Builder
+	b.WriteString("--- Workspace Tree ---\n")
+	// Group by top-level directory
+	groups := map[string][]string{}
+	for path := range ws.Files {
+		parts := strings.Split(path, "/")
+		key := "root"
+		if len(parts) > 1 {
+			key = parts[0]
+		}
+		groups[key] = append(groups[key], path)
+	}
+	keys := make([]string, 0, len(groups))
+	for k := range groups {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		files := groups[k]
+		sort.Strings(files)
+		b.WriteString(fmt.Sprintf("%s/ (%d files):\n", k, len(files)))
+		limit := len(files)
+		if limit > 50 {
+			limit = 50
+		}
+		for i := 0; i < limit; i++ {
+			b.WriteString("  ")
+			b.WriteString(files[i])
+			b.WriteString("\n")
+		}
+		if len(files) > limit {
+			b.WriteString("  ...\n")
+		}
+	}
+	return b.String()
+}
+
+// searchWorkspaceKeywords performs a simple substring search across files, returning file paths and snippets
+func searchWorkspaceKeywords(ws workspaceinfo.WorkspaceFile, query string, maxFiles int, maxSnippetsPerFile int) string {
+	q := strings.ToLower(query)
+	var b strings.Builder
+	matches := 0
+	b.WriteString(fmt.Sprintf("Search '%s' results:\n", query))
+	for path := range ws.Files {
+		if matches >= maxFiles {
+			break
+		}
+		// Read small files directly; skip very large files
+		info, err := os.Stat(path)
+		if err != nil || (info != nil && info.Size() > 2*1024*1024) { // skip >2MB
+			continue
+		}
+		contentBytes, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		content := string(contentBytes)
+		if !strings.Contains(strings.ToLower(content), q) {
+			continue
+		}
+		b.WriteString("- ")
+		b.WriteString(path)
+		snips := 0
+		lines := strings.Split(content, "\n")
+		for _, line := range lines {
+			if strings.Contains(strings.ToLower(line), q) {
+				b.WriteString("\n  ")
+				b.WriteString(strings.TrimSpace(line))
+				snips++
+				if snips >= maxSnippetsPerFile {
+					break
+				}
+			}
+		}
+		b.WriteString("\n")
+		matches++
+	}
+	if matches == 0 {
+		b.WriteString("(no matches)\n")
+	}
+	return b.String()
+}
+
+// buildWorkspaceOverview produces a compact overview using workspaceinfo content
+func buildWorkspaceOverview(ws workspaceinfo.WorkspaceFile) string {
+	var b strings.Builder
+	b.WriteString("--- Workspace Overview ---\n")
+	b.WriteString(fmt.Sprintf("Total files indexed: %d\n", len(ws.Files)))
+	// List top directories
+	dirs := map[string]int{}
+	for path := range ws.Files {
+		parts := strings.Split(path, "/")
+		key := "root"
+		if len(parts) > 1 {
+			key = parts[0]
+		}
+		dirs[key]++
+	}
+	keys := make([]string, 0, len(dirs))
+	for k := range dirs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		b.WriteString(fmt.Sprintf("%s: %d files\n", k, dirs[k]))
+	}
+	return b.String()
 }
 
 func (e *Executor) executeWebSearch(ctx context.Context, args map[string]interface{}) (*Result, error) {
@@ -180,11 +320,11 @@ func (e *Executor) executeWebSearch(ctx context.Context, args map[string]interfa
 }
 
 func (e *Executor) executeEditFileSection(ctx context.Context, args map[string]interface{}) (*Result, error) {
-	filePath, ok := args["file_path"].(string)
+	filePath, ok := args["target_file"].(string)
 	if !ok {
 		return &Result{
 			Success: false,
-			Errors:  []string{"edit_file_section requires 'file_path' parameter"},
+			Errors:  []string{"edit_file_section requires 'target_file' parameter"},
 		}, nil
 	}
 
@@ -231,7 +371,7 @@ func (e *Executor) executeEditFileSection(ctx context.Context, args map[string]i
 		Success: true,
 		Output:  fmt.Sprintf("Successfully edited file %s", filePath),
 		Metadata: map[string]interface{}{
-			"file_path":       filePath,
+			"target_file":     filePath,
 			"old_text_length": len(oldText),
 			"new_text_length": len(newText),
 			"content_changed": len(newContent) != len(originalContent),

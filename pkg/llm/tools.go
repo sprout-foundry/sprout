@@ -85,12 +85,12 @@ func GetAvailableTools() []Tool {
 				Parameters: ToolParameters{
 					Type: "object",
 					Properties: map[string]ToolProperty{
-						"file_path": {
+						"target_file": {
 							Type:        "string",
 							Description: "The path to the file to read",
 						},
 					},
-					Required: []string{"file_path"},
+					Required: []string{"target_file"},
 				},
 			},
 		},
@@ -136,7 +136,7 @@ func GetAvailableTools() []Tool {
 				Parameters: ToolParameters{
 					Type: "object",
 					Properties: map[string]ToolProperty{
-						"file_path": {
+						"target_file": {
 							Type:        "string",
 							Description: "The path to the file to validate",
 						},
@@ -146,7 +146,7 @@ func GetAvailableTools() []Tool {
 							Enum:        []string{"syntax", "compilation", "basic", "full"},
 						},
 					},
-					Required: []string{"file_path"},
+					Required: []string{"target_file"},
 				},
 			},
 		},
@@ -158,7 +158,7 @@ func GetAvailableTools() []Tool {
 				Parameters: ToolParameters{
 					Type: "object",
 					Properties: map[string]ToolProperty{
-						"file_path": {
+						"target_file": {
 							Type:        "string",
 							Description: "The path to the file to edit",
 						},
@@ -171,7 +171,7 @@ func GetAvailableTools() []Tool {
 							Description: "Optional: specific function/struct name or section to target",
 						},
 					},
-					Required: []string{"file_path", "instructions"},
+					Required: []string{"target_file", "instructions"},
 				},
 			},
 		},
@@ -184,7 +184,7 @@ func GetAvailableTools() []Tool {
 				Parameters: ToolParameters{
 					Type: "object",
 					Properties: map[string]ToolProperty{
-						"file_path": {
+						"target_file": {
 							Type:        "string",
 							Description: "The path to the file with validation issues",
 						},
@@ -193,7 +193,7 @@ func GetAvailableTools() []Tool {
 							Description: "Description of the validation errors to fix",
 						},
 					},
-					Required: []string{"file_path", "error_description"},
+					Required: []string{"target_file", "error_description"},
 				},
 			},
 		},
@@ -227,7 +227,7 @@ func GetAvailableTools() []Tool {
 				Parameters: ToolParameters{
 					Type: "object",
 					Properties: map[string]ToolProperty{
-						"file_path": {
+						"target_file": {
 							Type:        "string",
 							Description: "Optional target file to check for existence and writability",
 						},
@@ -246,6 +246,7 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 	// Try to parse the response as a tool message
 	var toolMessage ToolMessage
 	if err := json.Unmarshal([]byte(response), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
+		toolMessage.ToolCalls = normalizeToolCallArgs(toolMessage.ToolCalls)
 		return toolMessage.ToolCalls, nil
 	}
 
@@ -256,11 +257,13 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 			jsonStr := strings.TrimSpace(response[start : start+end])
 			// Try to parse with object arguments first (common LLM variation)
 			if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
+				toolCalls = normalizeToolCallArgs(toolCalls)
 				return toolCalls, nil
 			}
 
 			// Fall back to standard format
 			if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
+				toolMessage.ToolCalls = normalizeToolCallArgs(toolMessage.ToolCalls)
 				return toolMessage.ToolCalls, nil
 			}
 		}
@@ -279,68 +282,111 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 					jsonStr := strings.TrimSpace(response[start : start+end])
 					// Try to parse with object arguments first (common LLM variation)
 					if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
+						toolCalls = normalizeToolCallArgs(toolCalls)
 						return toolCalls, nil
 					}
 
 					// Fall back to standard format
 					if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
+						toolMessage.ToolCalls = normalizeToolCallArgs(toolMessage.ToolCalls)
 						return toolMessage.ToolCalls, nil
 					}
 
 					// Try to parse simplified tool call format from markdown code blocks too
 					if toolCalls := parseSimplifiedToolCalls(jsonStr); len(toolCalls) > 0 {
+						toolCalls = normalizeToolCallArgs(toolCalls)
 						return toolCalls, nil
 					}
 
 					// Try to parse tool calls with object arguments (common LLM variation)
 					if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
+						toolCalls = normalizeToolCallArgs(toolCalls)
 						return toolCalls, nil
 					}
 				}
 			}
 		}
 
-		// Fallback: Find JSON object boundaries anywhere in the response
-		start := strings.Index(response, "{")
-		if start >= 0 {
-			depth := 0
-			for i := start; i < len(response); i++ {
-				if response[i] == '{' {
-					depth++
-				} else if response[i] == '}' {
-					depth--
-					if depth == 0 {
-						jsonStr := response[start : i+1]
-						// Try to parse with object arguments first (common LLM variation)
-						if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
-							return toolCalls, nil
-						}
+		// Also try generic fenced blocks without language
+		if strings.Contains(response, "```") {
+			idx := 0
+			for idx < len(response) {
+				start := strings.Index(response[idx:], "```")
+				if start == -1 {
+					break
+				}
+				start += idx + 3
+				end := strings.Index(response[start:], "```")
+				if end == -1 {
+					break
+				}
+				block := strings.TrimSpace(response[start : start+end])
+				if strings.Contains(block, "tool_calls") {
+					if toolCalls := parseObjectArgsToolCalls(block); len(toolCalls) > 0 {
+						toolCalls = normalizeToolCallArgs(toolCalls)
+						return toolCalls, nil
+					}
+					if err := json.Unmarshal([]byte(block), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
+						toolMessage.ToolCalls = normalizeToolCallArgs(toolMessage.ToolCalls)
+						return toolMessage.ToolCalls, nil
+					}
+				}
+				idx = start + end + 3
+			}
+		}
+	}
 
-						// Fall back to standard format
-						if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
-							return toolMessage.ToolCalls, nil
-						}
+	// Fallback: Find JSON object boundaries anywhere in the response
+	start := strings.Index(response, "{")
+	if start >= 0 {
+		depth := 0
+		for i := start; i < len(response); i++ {
+			if response[i] == '{' {
+				depth++
+			} else if response[i] == '}' {
+				depth--
+				if depth == 0 {
+					jsonStr := response[start : i+1]
+					// Try to parse with object arguments first (common LLM variation)
+					if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
+						toolCalls = normalizeToolCallArgs(toolCalls)
+						return toolCalls, nil
+					}
 
-						// Try to parse simplified tool call format (for models that don't use full OpenAI format)
-						if toolCalls := parseSimplifiedToolCalls(jsonStr); len(toolCalls) > 0 {
-							return toolCalls, nil
-						}
+					// Fall back to standard format
+					if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
+						toolMessage.ToolCalls = normalizeToolCallArgs(toolMessage.ToolCalls)
+						return toolCalls, nil
+					}
 
-						// Try to parse tool calls with object arguments (common LLM variation)
-						if toolCalls := parseObjectArgsToolCalls(jsonStr); len(toolCalls) > 0 {
-							return toolCalls, nil
-						}
-						break
+					// Try to parse simplified tool calls
+					if toolCalls := parseSimplifiedToolCalls(jsonStr); len(toolCalls) > 0 {
+						toolCalls = normalizeToolCallArgs(toolCalls)
+						return toolCalls, nil
 					}
 				}
 			}
 		}
 	}
 
-	// If that fails, look for tool calls in the response text
-	// This is a fallback for LLMs that don't support proper tool calling format
-	// but can generate structured tool calls in their response
-	return toolCalls, nil
+	return []ToolCall{}, fmt.Errorf("no tool calls found")
+}
+
+// normalizeToolCallArgs converts string-encoded arguments to canonical JSON objects
+func normalizeToolCallArgs(calls []ToolCall) []ToolCall {
+	for i, tc := range calls {
+		args := strings.TrimSpace(tc.Function.Arguments)
+		if args == "" {
+			continue
+		}
+		var obj map[string]any
+		if json.Unmarshal([]byte(args), &obj) == nil {
+			if b, err := json.Marshal(obj); err == nil {
+				calls[i].Function.Arguments = string(b)
+			}
+		}
+	}
+	return calls
 }
 
 // parseSimplifiedToolCalls handles simplified tool call formats that don't follow full OpenAI spec
@@ -370,7 +416,7 @@ func parseSimplifiedToolCalls(jsonStr string) []ToolCall {
 		switch call.Type {
 		case "read_file":
 			toolCall.Function.Name = "read_file"
-			toolCall.Function.Arguments = fmt.Sprintf(`{"file_path":"%s"}`, call.FilePath)
+			toolCall.Function.Arguments = fmt.Sprintf(`{"target_file":"%s"}`, call.FilePath)
 		case "run_shell_command":
 			toolCall.Function.Name = "run_shell_command"
 			toolCall.Function.Arguments = fmt.Sprintf(`{"command":"%s"}`, call.Command)
@@ -389,7 +435,7 @@ func parseSimplifiedToolCalls(jsonStr string) []ToolCall {
 			toolCall.Function.Name = call.Type
 			args := make(map[string]string)
 			if call.FilePath != "" {
-				args["file_path"] = call.FilePath
+				args["target_file"] = call.FilePath
 			}
 			if call.Command != "" {
 				args["command"] = call.Command
@@ -468,10 +514,10 @@ func parseObjectArgsToolCalls(jsonStr string) []ToolCall {
 // GetStandardToolDescriptions returns the standard tool descriptions used across the system
 func GetStandardToolDescriptions() string {
 	return `Available tools:
-- read_file: {"file_path": "path/to/file"} - Read a file to understand its content
-- edit_file_section: {"file_path": "path/to/file", "old_text": "text to replace", "new_text": "replacement text"} - Edit a specific part of a file
+- read_file: {"target_file": "path/to/file"} - Read a file to understand its content
+- edit_file_section: {"target_file": "path/to/file", "old_text": "text to replace", "new_text": "replacement text"} - Edit a specific part of a file
 - run_shell_command: {"command": "shell command"} - Run shell commands for diagnostics or testing
-- validate_file: {"file_path": "path/to/file"} - Check Go syntax of a file
+- validate_file: {"target_file": "path/to/file"} - Check Go syntax of a file
 - workspace_context: {"action": "action_type", "query": "search_query"} - Access workspace information
 - ask_user: {"question": "question text"} - Ask the user a question when more information is needed`
 }

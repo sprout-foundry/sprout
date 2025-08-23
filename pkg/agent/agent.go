@@ -156,34 +156,43 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 
 	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Created %d todos", len(ctx.Todos)))
 
-	// Execute todos sequentially with context management
-	for i, todo := range ctx.Todos {
-		ctx.Logger.LogProcessStep(fmt.Sprintf("📋 Executing todo %d/%d: %s", i+1, len(ctx.Todos), todo.Content))
+	// Execute todos using dynamic reprioritization after each step
+	completedCount := 0
+	for {
+		// Select next pending todo by dynamic score
+		nextIdx := selectNextTodoIndex(ctx)
+		if nextIdx == -1 {
+			break // no pending todos remain
+		}
+
+		todo := ctx.Todos[nextIdx]
+		ctx.Logger.LogProcessStep(fmt.Sprintf("📋 Executing todo: %s", todo.Content))
 
 		// Update todo status
 		ctx.CurrentTodo = &todo
-		ctx.Todos[i].Status = "in_progress"
+		ctx.Todos[nextIdx].Status = "in_progress"
 
 		// Execute via code command with skip prompt
-		err := executeTodo(ctx, &ctx.Todos[i])
+		err := executeTodo(ctx, &ctx.Todos[nextIdx])
 		if err != nil {
-			ctx.Todos[i].Status = "failed"
+			ctx.Todos[nextIdx].Status = "failed"
 			ctx.Logger.LogError(fmt.Errorf("todo failed: %w", err))
 			return fmt.Errorf("todo execution failed: %w", err)
 		}
 
-		ctx.Todos[i].Status = "completed"
+		ctx.Todos[nextIdx].Status = "completed"
+		completedCount++
 
 		// Mark todo as completed in context manager if available
 		if ctx.ContextManager != nil && ctx.PersistentCtx != nil {
-			err := ctx.ContextManager.CompleteTodo(ctx.PersistentCtx, ctx.Todos[i].ID)
+			err := ctx.ContextManager.CompleteTodo(ctx.PersistentCtx, ctx.Todos[nextIdx].ID)
 			if err != nil {
 				ctx.Logger.LogError(fmt.Errorf("failed to mark todo as completed in context: %w", err))
 			}
 		}
 
-		// Summarize analysis results if they get too large (after every few todos)
-		if (i+1)%3 == 0 { // Check every 3rd todo completion
+		// Summarize analysis results if they get too large every 3 completions
+		if completedCount%3 == 0 {
 			if err := summarizeAnalysisResultsIfNeeded(ctx); err != nil {
 				ctx.Logger.LogError(fmt.Errorf("analysis results summarization failed: %w", err))
 			}
@@ -192,11 +201,11 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 		// Validate build after each todo
 		err = validateBuild(ctx)
 		if err != nil {
-			ctx.Logger.LogError(fmt.Errorf("build validation failed after todo %d: %w", i+1, err))
+			ctx.Logger.LogError(fmt.Errorf("build validation failed after todo: %w", err))
 			return fmt.Errorf("build validation failed: %w", err)
 		}
 
-		ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Todo %d completed and validated", i+1))
+		ctx.Logger.LogProcessStep("✅ Todo completed and validated")
 	}
 
 	// Summarize any remaining analysis results before final summary
@@ -289,12 +298,16 @@ func trackTokenUsage(ctx *SimplifiedAgentContext, tokenUsage *llm.TokenUsage, mo
 
 	ctx.TotalTokensUsed += tokenUsage.TotalTokens
 	ctx.TotalCost += llm.CalculateCost(*tokenUsage, modelName)
+	// If usage is estimated, note it for transparency
+	if tokenUsage.Estimated && ctx.Logger != nil {
+		ctx.Logger.LogProcessStep("ℹ️ Token usage estimated (provider did not return usage)")
+	}
 }
 
 // summarizeAnalysisResultsIfNeeded summarizes analysis results if they get too large
 func summarizeAnalysisResultsIfNeeded(ctx *SimplifiedAgentContext) error {
-	const maxAnalysisResults = 10
-	const maxResultLength = 2000
+	const maxAnalysisResults = 15
+	const resultsToKeep = 5
 
 	if len(ctx.AnalysisResults) <= maxAnalysisResults {
 		return nil
@@ -302,19 +315,25 @@ func summarizeAnalysisResultsIfNeeded(ctx *SimplifiedAgentContext) error {
 
 	ctx.Logger.LogProcessStep("📝 Summarizing analysis results to prevent memory overflow...")
 
-	// Build a summary of all analysis results
-	var allResults []string
+	// Preserve recent results
+	var recentResults []string
+	var resultsToSummarize []string
+	// This is tricky with a map. A better approach would be to store results in a struct with a timestamp.
+	// For now, we will iterate and split. This is not guaranteed to be the "most recent".
+	i := 0
 	for todoID, result := range ctx.AnalysisResults {
-		// Truncate long results
-		if len(result) > maxResultLength {
-			result = result[:maxResultLength] + "..."
+		formattedResult := fmt.Sprintf("TODO %s: %s", todoID, result)
+		if i >= len(ctx.AnalysisResults)-resultsToKeep {
+			recentResults = append(recentResults, formattedResult)
+		} else {
+			resultsToSummarize = append(resultsToSummarize, formattedResult)
 		}
-		allResults = append(allResults, fmt.Sprintf("TODO %s: %s", todoID, result))
+		i++
 	}
 
 	prompt := fmt.Sprintf(`Summarize these analysis results to preserve key insights while reducing size:
 
-ANALYSIS RESULTS (%d):
+ANALYSIS RESULTS TO SUMMARIZE (%d):
 %s
 
 Create a concise summary that captures:
@@ -330,7 +349,7 @@ Respond with JSON:
   "critical_issues": ["issue1", "issue2"],
   "recommendations": ["rec1", "rec2"]
 }`,
-		len(allResults), strings.Join(allResults, "\n\n"))
+		len(resultsToSummarize), strings.Join(resultsToSummarize, "\n\n"))
 
 	messages := []prompts.Message{
 		{Role: "system", Content: "You are an expert at summarizing analysis results while preserving critical insights. Always respond with valid JSON."},
@@ -339,7 +358,15 @@ Respond with JSON:
 
 	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis"))
 	if err != nil {
-		return fmt.Errorf("context summarization failed: %w", err)
+		// Fallback: just truncate
+		newAnalysisResults := make(map[string]string)
+		for todoID, result := range ctx.AnalysisResults {
+			if len(newAnalysisResults) < resultsToKeep {
+				newAnalysisResults[todoID] = result
+			}
+		}
+		ctx.AnalysisResults = newAnalysisResults
+		return fmt.Errorf("context summarization failed, truncated results: %w", err)
 	}
 
 	// Track token usage for the summarization
@@ -365,14 +392,19 @@ Respond with JSON:
 	}
 
 	// Replace all analysis results with the summary
-	ctx.AnalysisResults = map[string]string{
-		"summary": fmt.Sprintf("SUMMARY: %s\n\nKEY FINDINGS: %s\n\nCRITICAL ISSUES: %s\n\nRECOMMENDATIONS: %s",
-			summary.Summary,
-			strings.Join(summary.KeyFindings, ", "),
-			strings.Join(summary.CriticalIssues, ", "),
-			strings.Join(summary.Recommendations, ", ")),
-	}
+	newAnalysisResults := make(map[string]string)
+	newAnalysisResults["summary"] = fmt.Sprintf("SUMMARY: %s\n\nKEY FINDINGS: %s\n\nCRITICAL ISSUES: %s\n\nRECOMMENDATIONS: %s",
+		summary.Summary,
+		strings.Join(summary.KeyFindings, ", "),
+		strings.Join(summary.CriticalIssues, ", "),
+		strings.Join(summary.Recommendations, ", "))
 
-	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Analysis results summarized from %d to 1 entry", len(allResults)))
+	// Add back the recent results
+	for i, result := range recentResults {
+		newAnalysisResults[fmt.Sprintf("recent_result_%d", i)] = result
+	}
+	ctx.AnalysisResults = newAnalysisResults
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Analysis results summarized from %d to %d entries", len(ctx.AnalysisResults), len(newAnalysisResults)))
 	return nil
 }

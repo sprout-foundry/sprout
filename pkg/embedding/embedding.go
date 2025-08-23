@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/math"
 	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
@@ -165,7 +165,7 @@ func (vdb *VectorDB) Search(queryVector []float64, topK int) ([]*CodeEmbedding, 
 	results := make([]result, 0, len(vdb.embeddings))
 
 	for _, emb := range vdb.embeddings {
-		score, err := llm.CosineSimilarity(queryVector, emb.Vector)
+		score, err := math.CosineSimilarity(queryVector, emb.Vector)
 		if err != nil {
 			// Skip embeddings that can't be compared
 			continue

@@ -25,15 +25,22 @@ func retryWithBackoffOpenAI(req *http.Request, client *http.Client) (*http.Respo
 	var lastResp *http.Response
 	var lastErr error
 
+	// Buffer original request body to safely retry with fresh requests
+	var originalBody []byte
+	if req.Body != nil {
+		originalBody, _ = io.ReadAll(req.Body)
+		_ = req.Body.Close()
+		req.Body = io.NopCloser(bytes.NewReader(originalBody))
+	}
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Reset request body for retry
-		var reqBody []byte
-		if req.Body != nil && attempt > 0 {
-			reqBody, _ = io.ReadAll(req.Body)
-			req.Body = io.NopCloser(bytes.NewReader(reqBody))
+		// Clone the request and reset the body for this attempt
+		newReq := req.Clone(req.Context())
+		if originalBody != nil {
+			newReq.Body = io.NopCloser(bytes.NewReader(originalBody))
 		}
 
-		resp, err := client.Do(req)
+		resp, err := client.Do(newReq)
 		lastResp = resp
 		lastErr = err
 
@@ -60,7 +67,9 @@ func retryWithBackoffOpenAI(req *http.Request, client *http.Client) (*http.Respo
 
 		if shouldRetry && attempt < maxRetries {
 			// Close response body before retry
-			resp.Body.Close()
+			if resp != nil && resp.Body != nil {
+				resp.Body.Close()
+			}
 
 			// Exponential backoff with jitter
 			delay := baseDelay * time.Duration(1<<attempt)
@@ -190,7 +199,9 @@ func callOpenAICompatibleStream(apiURL, apiKey, model string, messages []prompts
 	usage, err := getUsageFromNonStreamingCall(apiURL, apiKey, model, messages, cfg, timeout)
 	if err != nil {
 		// If we can't get usage, fall back to estimation
-		usage = estimateUsageFromMessages(messages)
+		est := estimateUsageFromMessages(messages)
+		est.Estimated = true
+		usage = est
 	}
 
 	scanner := bufio.NewScanner(resp.Body)

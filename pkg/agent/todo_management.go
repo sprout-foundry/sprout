@@ -23,17 +23,60 @@ import (
 
 // createTodos generates a list of todos based on user intent
 func createTodos(ctx *SimplifiedAgentContext) error {
-	prompt := fmt.Sprintf(`You are an expert software developer. Break down this user request into specific, actionable todos grounded in the provided workspace context.
+	// Build context-aware prompt
+	var contextInfo strings.Builder
+	contextInfo.WriteString(fmt.Sprintf(`You are an expert software developer. Break down this user request into specific, actionable todos grounded in the provided workspace context.
 
 User Request: "%s"
 
 Workspace Context (truncated):
-%s
+%s`, ctx.UserIntent, func() string {
+		wc := workspace.GetWorkspaceContext(ctx.UserIntent, ctx.Config)
+		if len(wc) > 16000 {
+			return wc[:16000]
+		}
+		return wc
+	}()))
+
+	// Add rollover context from previous analysis if available
+	if ctx.ContextManager != nil && ctx.PersistentCtx != nil {
+		rolloverContext := ctx.ContextManager.GetRolloverContext(ctx.PersistentCtx)
+
+		if recentFindings, ok := rolloverContext["recent_findings"]; ok {
+			if findings, ok := recentFindings.([]AnalysisFinding); ok && len(findings) > 0 {
+				contextInfo.WriteString("\n\nRECENT ANALYSIS FINDINGS:\n")
+				for _, finding := range findings {
+					contextInfo.WriteString(fmt.Sprintf("- %s: %s\n", finding.Type, finding.Title))
+				}
+			}
+		}
+
+		if keyKnowledge, ok := rolloverContext["key_knowledge"]; ok {
+			if knowledge, ok := keyKnowledge.([]KnowledgeItem); ok && len(knowledge) > 0 {
+				contextInfo.WriteString("\n\nACCUMULATED KNOWLEDGE:\n")
+				for _, item := range knowledge {
+					contextInfo.WriteString(fmt.Sprintf("- %s: %s\n", item.Category, item.Title))
+				}
+			}
+		}
+
+		if codePatterns, ok := rolloverContext["code_patterns"]; ok {
+			if patterns, ok := codePatterns.([]CodePattern); ok && len(patterns) > 0 {
+				contextInfo.WriteString("\n\nIDENTIFIED CODE PATTERNS:\n")
+				for _, pattern := range patterns {
+					contextInfo.WriteString(fmt.Sprintf("- %s: %s\n", pattern.Type, pattern.Name))
+				}
+			}
+		}
+	}
+
+	contextInfo.WriteString(`
 
 Guidance:
 - Use tools to validate and ground todos in reality (read files, search code, list files): prefer reading files (workspace_context/read_file), searching code (grep_search), and using workspace_context to find targets.
 - If uncertain about exact locations or details, include an initial "analysis" todo that explicitly uses tools to gather the needed evidence before edits.
 - Avoid speculative or ungrounded todos.
+- Consider the recent analysis findings and accumulated knowledge when creating todos.
 
 Please create a JSON array of todos that accomplish this request. Each todo should be:
 - Specific and actionable
@@ -52,13 +95,9 @@ Format:
   }
 ]
 
-Focus on concrete changes that can be made to the codebase. Return ONLY the JSON array.`, ctx.UserIntent, func() string {
-		wc := workspace.GetWorkspaceContext(ctx.UserIntent, ctx.Config)
-		if len(wc) > 16000 {
-			return wc[:16000]
-		}
-		return wc
-	}())
+Focus on concrete changes that can be made to the codebase. Return ONLY the JSON array.`)
+
+	prompt := contextInfo.String()
 
 	messages := []prompts.Message{
 		{Role: "system", Content: "You create specific, actionable development todos. Ground todos in workspace context and prefer referencing actual files. Strongly prefer using tools (workspace_context, read_file, grep_search) to validate assumptions when planning. If uncertain, include an initial analysis todo that uses tools to gather evidence. Always return valid JSON."},
@@ -206,6 +245,20 @@ AFTER you gather evidence, summarize your findings. Provide concrete file refere
 
 	// Store analysis results in context for future todos to reference
 	ctx.AnalysisResults[todo.ID] = response
+
+	// Extract and store findings in context manager if available
+	if ctx.ContextManager != nil && ctx.PersistentCtx != nil {
+		findings := extractFindingsFromAnalysis(response, todo)
+		for _, finding := range findings {
+			err := ctx.ContextManager.AddFinding(ctx.PersistentCtx, finding)
+			if err != nil {
+				ctx.Logger.LogError(fmt.Errorf("failed to store finding in context: %w", err))
+			} else {
+				ctx.Logger.LogProcessStep(fmt.Sprintf("💡 Finding stored: %s", finding.Title))
+			}
+		}
+	}
+
 	ctx.Logger.LogProcessStep("📊 Analysis completed and stored")
 	ui.Out().Print(fmt.Sprintf("\n📋 Analysis Result for Todo: %s\n%s\n", todo.Content, response))
 
@@ -357,4 +410,64 @@ func refineTodosWithAnalysis(ctx *SimplifiedAgentContext, completedTodo *TodoIte
 			}
 		}
 	}
+}
+
+// extractFindingsFromAnalysis parses analysis text to extract structured findings
+func extractFindingsFromAnalysis(analysisText string, todo *TodoItem) []AnalysisFinding {
+	var findings []AnalysisFinding
+
+	lines := strings.Split(analysisText, "\n")
+	var currentFinding *AnalysisFinding
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Look for patterns that indicate findings
+		if strings.HasPrefix(line, "Key finding:") || strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "• ") {
+			// If we have a current finding, save it
+			if currentFinding != nil {
+				findings = append(findings, *currentFinding)
+			}
+
+			// Start new finding
+			content := strings.TrimPrefix(line, "Key finding:")
+			content = strings.TrimPrefix(content, "- ")
+			content = strings.TrimPrefix(content, "• ")
+			content = strings.TrimSpace(content)
+
+			currentFinding = &AnalysisFinding{
+				Type:        "file_analysis",
+				Severity:    "medium",
+				Title:       content,
+				Description: content,
+				TodoID:      todo.ID,
+				Timestamp:   time.Now(),
+			}
+		} else if currentFinding != nil {
+			// Continue building current finding
+			currentFinding.Description += " " + line
+		}
+	}
+
+	// Save the last finding
+	if currentFinding != nil {
+		findings = append(findings, *currentFinding)
+	}
+
+	// If no structured findings found, create a general one
+	if len(findings) == 0 && len(analysisText) > 50 {
+		findings = append(findings, AnalysisFinding{
+			Type:        "file_analysis",
+			Severity:    "low",
+			Title:       "Analysis completed",
+			Description: "Analysis completed for: " + todo.Content,
+			TodoID:      todo.ID,
+			Timestamp:   time.Now(),
+		})
+	}
+
+	return findings
 }

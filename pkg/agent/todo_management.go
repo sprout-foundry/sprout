@@ -110,18 +110,52 @@ Focus on concrete changes that can be made to the codebase. Return ONLY the JSON
 		{Role: "user", Content: prompt},
 	}
 
-	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 30*time.Second)
+	// Try primary model with smart timeout
+	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis"))
+
+	// If primary model fails, try with fallback model and extended timeout
 	if err != nil {
-		return fmt.Errorf("failed to get todo response: %w", err)
+		ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Primary model failed (%v), trying fallback approach", err))
+
+		// Try with a simpler prompt and extended timeout
+		fallbackMessages := []prompts.Message{
+			{Role: "system", Content: "You create development todos. Keep it simple and return JSON only."},
+			{Role: "user", Content: fmt.Sprintf("Create 1-2 simple todos for: %s\nReturn JSON array only.", ctx.UserIntent)},
+		}
+
+		// Use extended timeout for fallback
+		fallbackTimeout := time.Duration(float64(llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis")) * 1.5)
+		response, tokenUsage, err = llm.GetLLMResponse(ctx.Config.OrchestrationModel, fallbackMessages, "", ctx.Config, fallbackTimeout)
+
+		if err != nil {
+			ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Fallback attempt failed: %v", err))
+			return fmt.Errorf("both primary and fallback attempts failed: %w", err)
+		} else {
+			ctx.Logger.LogProcessStep("✅ Fallback approach succeeded")
+		}
 	}
 
 	// Track token usage and cost for todo generation
 	trackTokenUsage(ctx, tokenUsage, ctx.Config.OrchestrationModel)
 
-	// Parse JSON response
+	// Parse JSON response - handle reasoning model responses that include thinking blocks
 	clean, err := utils.ExtractJSON(response)
 	if err != nil {
-		return fmt.Errorf("failed to extract JSON from response: %w", err)
+		// Try to extract JSON from the end of the response (after thinking blocks)
+		// Look for the last occurrence of '[' or '{' that starts valid JSON
+		if lastBracket := strings.LastIndex(response, "["); lastBracket != -1 {
+			potentialJSON := response[lastBracket:]
+			if json.Valid([]byte(potentialJSON)) {
+				clean = potentialJSON
+				ctx.Logger.LogProcessStep("✅ Successfully extracted JSON from end of response")
+			} else {
+				ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ JSON extraction failed. LLM Response: %s", response))
+				return fmt.Errorf("failed to extract JSON from response: %w", err)
+			}
+		} else {
+			ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ JSON extraction failed. LLM Response: %s", response))
+			return fmt.Errorf("failed to extract JSON from response: %w", err)
+		}
 	}
 
 	var todos []struct {
@@ -132,7 +166,24 @@ Focus on concrete changes that can be made to the codebase. Return ONLY the JSON
 	}
 
 	if err := json.Unmarshal([]byte(clean), &todos); err != nil {
-		return fmt.Errorf("failed to parse todos JSON: %w", err)
+		ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ JSON parsing failed, trying fallback todo creation: %v", err))
+
+		// Create a simple fallback todo
+		todos = []struct {
+			Content     string `json:"content"`
+			Description string `json:"description"`
+			Priority    int    `json:"priority"`
+			FilePath    string `json:"file_path"`
+		}{
+			{
+				Content:     "Analyze user request: " + ctx.UserIntent,
+				Description: "Analyze and understand what the user is asking for: " + ctx.UserIntent,
+				Priority:    1,
+				FilePath:    "",
+			},
+		}
+
+		ctx.Logger.LogProcessStep("✅ Created fallback todo for analysis")
 	}
 
 	// Convert to TodoItem slice
@@ -317,9 +368,25 @@ Please provide the specific file path and the exact changes needed. Respond in J
 		{Role: "user", Content: prompt},
 	}
 
-	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, 45*time.Second)
+	// Try primary model with smart timeout
+	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis"))
+
+	// If primary model fails, try with fallback approach
 	if err != nil {
-		return fmt.Errorf("direct edit planning failed: %w", err)
+		ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Edit planning failed (%v), trying simpler approach", err))
+
+		// Try with a much simpler prompt
+		simpleMessages := []prompts.Message{
+			{Role: "system", Content: "You suggest simple file edits. Return JSON with file_path and changes."},
+			{Role: "user", Content: fmt.Sprintf("Suggest a simple edit for: %s\nReturn JSON: {\"file_path\":\"path/to/file\",\"changes\":\"what to change\"}", todo.Content)},
+		}
+
+		fallbackTimeout := time.Duration(float64(llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis")) * 1.5)
+		response, tokenUsage, err = llm.GetLLMResponse(ctx.Config.OrchestrationModel, simpleMessages, "", ctx.Config, fallbackTimeout)
+
+		if err != nil {
+			return fmt.Errorf("both primary and fallback edit planning failed: %w", err)
+		}
 	}
 
 	// Track token usage and cost for direct edit planning
@@ -341,23 +408,8 @@ Please provide the specific file path and the exact changes needed. Respond in J
 		return fmt.Errorf("failed to unmarshal edit plan: %w", err)
 	}
 
-	// Apply the direct edit
-	if err := applyDirectEdit(editPlan.FilePath, editPlan.Content, ctx.Logger); err != nil {
-		return fmt.Errorf("direct edit failed: %w", err)
-	}
-
-	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Direct edit completed: %s", editPlan.FilePath))
-	return nil
-}
-
-// executeCodeCommandTodo handles complex code changes via the full code command workflow
-func executeCodeCommandTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
-	ctx.Logger.LogProcessStep("🛠️ Using full code command workflow (complex changes)")
-
-	instructions := fmt.Sprintf("%s\n\n%s", todo.Content, todo.Description)
-
-	// Ensure we're in non-interactive mode for agent workflows
-	agentConfig := *ctx.Config // Create a copy to avoid modifying the original
+	// Use ProcessCodeGeneration for safe, targeted edits instead of the broken applyDirectEdit
+	agentConfig := *ctx.Config
 	agentConfig.SkipPrompt = true
 	agentConfig.FromAgent = true
 
@@ -365,10 +417,56 @@ func executeCodeCommandTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	os.Setenv("LEDIT_FROM_AGENT", "1")
 	os.Setenv("LEDIT_SKIP_PROMPT", "1")
 
-	// Use the editor directly instead of shelling out
-	_, err := editor.ProcessCodeGeneration("", instructions, &agentConfig, "")
+	// Clear any previous token usage
+	agentConfig.LastTokenUsage = nil
+
+	// Create a targeted edit prompt
+	editPrompt := fmt.Sprintf(`Please make the following edit:
+
+Task: %s
+Description: %s
+Overall Task: %s
+
+Please implement this as a targeted edit to the file, not a complete file replacement.`, todo.Content, todo.Description, ctx.UserIntent)
+
+	_, err = editor.ProcessCodeGeneration("", editPrompt, &agentConfig, "")
+
+	// Track token usage from the editor's LLM calls
+	if agentConfig.LastTokenUsage != nil {
+		trackTokenUsage(ctx, agentConfig.LastTokenUsage, agentConfig.EditingModel)
+		ctx.Logger.LogProcessStep(fmt.Sprintf("📊 Tracked %d tokens from editor LLM calls", agentConfig.LastTokenUsage.TotalTokens))
+	}
+
 	if err != nil {
-		return fmt.Errorf("code generation failed: %w", err)
+		return fmt.Errorf("direct edit failed: %w", err)
+	}
+
+	ctx.Logger.LogProcessStep("✅ Direct edit completed successfully")
+	return nil
+}
+
+// executeCodeCommandTodo handles complex code changes via the granular editing workflow
+func executeCodeCommandTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	ctx.Logger.LogProcessStep("🛠️ Using granular editing workflow (complex changes)")
+
+	// Phase 1: Exploration & Planning
+	if err := executeExplorationPhase(ctx, todo); err != nil {
+		return fmt.Errorf("exploration phase failed: %w", err)
+	}
+
+	// Phase 2: Detailed Planning
+	if err := executePlanningPhase(ctx, todo); err != nil {
+		return fmt.Errorf("planning phase failed: %w", err)
+	}
+
+	// Phase 3: Granular Execution
+	if err := executeGranularEditingPhase(ctx, todo); err != nil {
+		return fmt.Errorf("editing phase failed: %w", err)
+	}
+
+	// Phase 4: Verification & Review
+	if err := executeVerificationPhase(ctx, todo); err != nil {
+		return fmt.Errorf("verification phase failed: %w", err)
 	}
 
 	return nil

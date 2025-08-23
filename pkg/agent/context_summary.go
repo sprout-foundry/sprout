@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
@@ -60,7 +59,7 @@ Respond with JSON:
 		{Role: "user", Content: prompt},
 	}
 
-	response, _, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, 30*time.Second)
+	response, _, err := llm.GetLLMResponse(context.Config.OrchestrationModel, messages, "", context.Config, llm.GetSmartTimeout(context.Config, context.Config.OrchestrationModel, "analysis"))
 	if err != nil {
 		context.Logger.Logf("Context summarization failed: %v", err)
 		// Fallback: truncate arrays with bounds checking

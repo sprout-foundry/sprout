@@ -29,7 +29,24 @@ func analyzeIntentType(userIntent string, logger *utils.Logger) IntentType {
 	}
 
 	// Check for commands - be more specific to avoid false positives
-	commandPrefixes := []string{"run ", "execute ", "start ", "stop ", "build ", "test ", "deploy ", "install ", "uninstall "}
+	// Only treat as commands if they look like actual shell commands
+	commandPrefixes := []string{"run ", "execute ", "start ", "stop ", "build ", "deploy ", "install ", "uninstall "}
+
+	// Special handling for "test" - only treat as command if followed by actual test commands
+	if strings.HasPrefix(intentLower, "test ") {
+		testCommands := []string{"test run", "test build", "test deploy", "test install", "test start", "test stop"}
+		isActualTestCommand := false
+		for _, cmd := range testCommands {
+			if strings.HasPrefix(intentLower, cmd) {
+				isActualTestCommand = true
+				break
+			}
+		}
+		if !isActualTestCommand {
+			return IntentTypeCodeUpdate // "test the agent" should be a code update, not a command
+		}
+	}
+
 	for _, prefix := range commandPrefixes {
 		if strings.HasPrefix(intentLower, prefix) {
 			return IntentTypeCommand
@@ -43,7 +60,7 @@ func analyzeIntentType(userIntent string, logger *utils.Logger) IntentType {
 	}
 
 	// Check for code-related keywords that indicate code updates
-	codeWords := []string{"add ", "create ", "implement ", "fix ", "update ", "change ", "modify ", "refactor ", "delete ", "remove ", "rename ", "move ", "extract ", "function", "class", "method", "variable"}
+	codeWords := []string{"add ", "create ", "implement ", "fix ", "update ", "change ", "modify ", "refactor ", "delete ", "remove ", "rename ", "move ", "extract ", "test ", "function", "class", "method", "variable"}
 	for _, word := range codeWords {
 		if strings.Contains(intentLower, word) {
 			return IntentTypeCodeUpdate

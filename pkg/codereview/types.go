@@ -3,8 +3,28 @@ package codereview
 import (
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/orchestration/types"
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/types"
 )
+
+// CodeReviewResult represents the result of a code review
+type CodeReviewResult = types.CodeReviewResult
+
+// Reviewer defines the interface for a code reviewer
+type Reviewer interface {
+	Review(cfg *config.Config, combinedDiff, originalPrompt, workspaceContext string) (*types.CodeReviewResult, error)
+}
+
+// NoReviewer is a no-op reviewer
+type NoReviewer struct{}
+
+// Review performs a no-op review
+func (r *NoReviewer) Review(cfg *config.Config, combinedDiff, originalPrompt, workspaceContext string) (*types.CodeReviewResult, error) {
+	return &types.CodeReviewResult{
+		Status:   "approved",
+		Feedback: "No reviewer configured.",
+	}, nil
+}
 
 // ReviewResult represents the result of a code review operation
 // This extends the base types.CodeReviewResult with additional context

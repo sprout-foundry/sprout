@@ -47,6 +47,7 @@ func DefaultLLMConfig() *LLMConfig {
 		SearchModel:        "",
 
 		Temperature:      0.7,
+		MaxTokens:        8192, // Reasonable default that fits within validation range
 		TopP:             1.0,
 		PresencePenalty:  0.0,
 		FrequencyPenalty: 0.0,

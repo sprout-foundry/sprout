@@ -8,12 +8,38 @@ import (
 
 	"github.com/alantheprice/ledit/cmd"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/providers"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 func main() {
-	// TODO: Add a comment here
+	// Initialize the new modular provider system
 	logger := utils.GetLogger(true)
+
+	// Register all default providers (OpenAI, Gemini, Ollama, etc.)
+	if err := providers.RegisterDefaultProviders(); err != nil {
+		if logger != nil {
+			logger.LogError(fmt.Errorf("failed to register default providers: %w", err))
+		}
+		
+		// Create a graceful exit message for provider registration failure
+		exitMsg := prompts.GracefulExitMessage{
+			Context: "Initializing the LLM provider system",
+			Error:   err,
+			Accomplished: []string{
+				"Started application",
+			},
+			Resolution: []string{
+				"Check provider configuration files",
+				"Verify API keys are properly set",
+				"Ensure all provider dependencies are available",
+			},
+		}
+
+		if _, printErr := fmt.Fprintln(os.Stderr, prompts.GracefulExit(exitMsg)); printErr != nil {
+		}
+		os.Exit(1)
+	}
 
 	if err := prompts.InitPromptManager(); err != nil {
 		if logger != nil {
@@ -87,4 +113,8 @@ func main() {
 		}
 		os.Exit(1)
 	}
+}
+
+func multiply(a int, b int) int {
+	return a * b
 }

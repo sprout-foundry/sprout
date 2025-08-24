@@ -1,4 +1,4 @@
-package common
+package llmclient
 
 import (
 	"context"
@@ -8,22 +8,24 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // LLMClient provides a unified interface for LLM operations
 type LLMClient struct {
-	config *config.Config
-	logger *utils.Logger
+	config   *config.Config
+	logger   *utils.Logger
+	provider LLMProvider
 }
 
 // NewLLMClient creates a new LLM client
-func NewLLMClient(cfg *config.Config, logger *utils.Logger) *LLMClient {
+func NewLLMClient(cfg *config.Config, logger *utils.Logger, provider LLMProvider) *LLMClient {
 	return &LLMClient{
-		config: cfg,
-		logger: logger,
+		config:   cfg,
+		logger:   logger,
+		provider: provider,
 	}
 }
 
@@ -40,9 +42,15 @@ type LLMRequest struct {
 // LLMResponse represents a response from the LLM
 type LLMResponse struct {
 	Content    string
-	TokenUsage *llm.TokenUsage
+	TokenUsage *types.TokenUsage
 	Error      error
 	Duration   time.Duration
+}
+
+// LLMProvider defines the interface for an LLM provider
+type LLMProvider interface {
+	GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, *types.TokenUsage, error)
+	GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (*types.TokenUsage, error)
 }
 
 // ExecuteRequest executes a single LLM request
@@ -63,14 +71,14 @@ func (c *LLMClient) ExecuteRequest(ctx context.Context, req *LLMRequest) *LLMRes
 	}
 
 	var content string
-	var tokenUsage *llm.TokenUsage
+	var tokenUsage *types.TokenUsage
 	var err error
 
 	// Execute the request
 	if len(req.ImagePaths) > 0 {
-		content, tokenUsage, err = llm.GetLLMResponse(modelName, req.Messages, req.Filename, c.config, timeout, req.ImagePaths...)
+		content, tokenUsage, err = c.provider.GetLLMResponse(modelName, req.Messages, req.Filename, c.config, timeout, req.ImagePaths...)
 	} else {
-		content, tokenUsage, err = llm.GetLLMResponse(modelName, req.Messages, req.Filename, c.config, timeout)
+		content, tokenUsage, err = c.provider.GetLLMResponse(modelName, req.Messages, req.Filename, c.config, timeout)
 	}
 
 	duration := time.Since(startTime)
@@ -100,14 +108,14 @@ func (c *LLMClient) ExecuteStreamingRequest(ctx context.Context, req *LLMRequest
 		timeout = c.config.GetTimeoutForModel(modelName)
 	}
 
-	var tokenUsage *llm.TokenUsage
+	var tokenUsage *types.TokenUsage
 	var err error
 
 	// Execute the streaming request
 	if len(req.ImagePaths) > 0 {
-		tokenUsage, err = llm.GetLLMResponseStream(modelName, req.Messages, req.Filename, c.config, timeout, writer, req.ImagePaths...)
+		tokenUsage, err = c.provider.GetLLMResponseStream(modelName, req.Messages, req.Filename, c.config, timeout, writer, req.ImagePaths...)
 	} else {
-		tokenUsage, err = llm.GetLLMResponseStream(modelName, req.Messages, req.Filename, c.config, timeout, writer)
+		tokenUsage, err = c.provider.GetLLMResponseStream(modelName, req.Messages, req.Filename, c.config, timeout, writer)
 	}
 
 	duration := time.Since(startTime)
@@ -159,11 +167,11 @@ func (c *LLMClient) ValidateResponse(response *LLMResponse) error {
 }
 
 // GetTokenUsage returns token usage information
-func (c *LLMClient) GetTokenUsage(response *LLMResponse) *llm.TokenUsage {
+func (c *LLMClient) GetTokenUsage(response *LLMResponse) *types.TokenUsage {
 	if response.TokenUsage != nil {
 		return response.TokenUsage
 	}
-	return &llm.TokenUsage{}
+	return &types.TokenUsage{}
 }
 
 // IsResponseEmpty checks if the response is empty

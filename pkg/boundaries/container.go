@@ -4,8 +4,10 @@ import (
 	"context"
 	"sync"
 
-	"github.com/alantheprice/ledit/pkg/common"
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/filediscovery"
+	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/tools"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -27,10 +29,9 @@ type Container interface {
 	GetNotificationRepository() NotificationRepository
 
 	// Utility accessors
-	GetLLMClient() *common.LLMClient
-	GetFileDiscovery() *common.FileDiscovery
-	GetValidator() *common.Validator
-	GetShellExecutor() *common.ShellExecutor
+	GetLLMProvider() llm.LLMProvider
+	GetFileDiscovery() *filediscovery.FileDiscovery
+	GetToolExecutor() *tools.Executor
 
 	// Lifecycle management
 	Initialize(ctx context.Context) error
@@ -72,10 +73,9 @@ type DefaultContainer struct {
 	notificationRepository NotificationRepository
 
 	// Utilities
-	llmClient     *common.LLMClient
-	fileDiscovery *common.FileDiscovery
-	validator     *common.Validator
-	shellExecutor *common.ShellExecutor
+	llmProvider   llm.LLMProvider
+	fileDiscovery *filediscovery.FileDiscovery
+	toolExecutor  *tools.Executor
 	errorManager  *utils.ErrorManager
 
 	// Lifecycle
@@ -122,19 +122,18 @@ func (c *DefaultContainer) Initialize(ctx context.Context) error {
 
 // initializeUtilities initializes utility components
 func (c *DefaultContainer) initializeUtilities() {
-	logger := utils.GetLogger(true)
+	logger := utils.GetLogger(c.config.SkipPrompt)
 
-	// Initialize LLM client
-	c.llmClient = common.NewLLMClient(c.config, logger)
+	// Initialize LLM provider
+	c.llmProvider = llm.NewLLMProvider()
 
 	// Initialize file discovery
-	c.fileDiscovery = common.NewFileDiscovery(c.config, logger)
+	c.fileDiscovery = filediscovery.NewFileDiscovery(c.config, logger)
 
-	// Initialize validator
-	c.validator = common.NewValidator(c.config, logger)
-
-	// Initialize shell executor
-	c.shellExecutor = common.NewShellExecutor(c.config, logger)
+	// Initialize tool executor
+	registry := tools.NewDefaultRegistry()
+	permissions := tools.NewSimplePermissionChecker([]string{})
+	c.toolExecutor = tools.NewExecutor(registry, permissions, logger, c.config)
 }
 
 // initializeRepositories initializes repository components
@@ -301,32 +300,25 @@ func (c *DefaultContainer) GetNotificationRepository() NotificationRepository {
 	return c.notificationRepository
 }
 
-// GetLLMClient implements Container.GetLLMClient
-func (c *DefaultContainer) GetLLMClient() *common.LLMClient {
+// GetLLMProvider implements Container.GetLLMProvider
+func (c *DefaultContainer) GetLLMProvider() llm.LLMProvider {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.llmClient
+	return c.llmProvider
 }
 
 // GetFileDiscovery implements Container.GetFileDiscovery
-func (c *DefaultContainer) GetFileDiscovery() *common.FileDiscovery {
+func (c *DefaultContainer) GetFileDiscovery() *filediscovery.FileDiscovery {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.fileDiscovery
 }
 
-// GetValidator implements Container.GetValidator
-func (c *DefaultContainer) GetValidator() *common.Validator {
+// GetToolExecutor implements Container.GetToolExecutor
+func (c *DefaultContainer) GetToolExecutor() *tools.Executor {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.validator
-}
-
-// GetShellExecutor implements Container.GetShellExecutor
-func (c *DefaultContainer) GetShellExecutor() *common.ShellExecutor {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.shellExecutor
+	return c.toolExecutor
 }
 
 // GetConfig implements Container.GetConfig

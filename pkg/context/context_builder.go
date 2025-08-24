@@ -405,7 +405,12 @@ Requirements:
 - Follow the existing code style and conventions
 - Do not ask for clarification - just generate the code`
 
-		userContent = fmt.Sprintf("Generate code for: %s\n\nTarget file: %s", instructions, filename)
+		// New file generation
+		if len(code) == 0 {
+			userContent = instructions
+		} else {
+			userContent = fmt.Sprintf("Analyze the following code and make the requested changes:\n\n---\n\n%s\n\n---\n\n%s", code, instructions)
+		}
 	}
 
 	// Build simple messages without tool support

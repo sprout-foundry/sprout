@@ -18,6 +18,7 @@ import (
 func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Config, imagePath string) (map[string]string, string, *llm.TokenUsage, error) {
 	log := utils.GetLogger(cfg.SkipPrompt)
 	log.Log("=== getUpdatedCode Debug ===")
+	log.Log(fmt.Sprintf("Instructions: %s", instructions))
 	log.Log(fmt.Sprintf("Calling GetLLMCodeResponse with model: %s", cfg.EditingModel))
 
 	modelName, llmContent, tokenUsage, err := context.GetLLMCodeResponse(cfg, originalCode, instructions, filename, imagePath)
@@ -70,7 +71,10 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 		ui.Out().Printf("%s\n", llmContent)
 		// Fallback: if a filename was provided and the response contains a single code block
 		// without filename headers, extract code by language and assign to that filename
-		if strings.TrimSpace(filename) != "" {
+		if jsonCode, jsonErr := parseJSONResponse(llmContent); jsonErr == nil && len(jsonCode) > 0 {
+			updatedCode = jsonCode
+			log.Log("Successfully parsed JSON response in fallback")
+		} else if strings.TrimSpace(filename) != "" {
 			lang := getLanguageFromExtension(filename)
 			if codeOnly, perr := parser.ExtractCodeFromResponse(llmContent, lang); perr == nil && strings.TrimSpace(codeOnly) != "" {
 				updatedCode = map[string]string{filename: codeOnly}

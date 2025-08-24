@@ -4,9 +4,11 @@ import (
 	"context"
 	"sync"
 
+	"github.com/alantheprice/ledit/pkg/adapters/llm"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/filediscovery"
-	"github.com/alantheprice/ledit/pkg/llm"
+	legacyLLM "github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/providers"
 	"github.com/alantheprice/ledit/pkg/tools"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -29,7 +31,7 @@ type Container interface {
 	GetNotificationRepository() NotificationRepository
 
 	// Utility accessors
-	GetLLMProvider() llm.LLMProvider
+	GetLLMProvider() legacyLLM.LLMProvider
 	GetFileDiscovery() *filediscovery.FileDiscovery
 	GetToolExecutor() *tools.Executor
 
@@ -73,7 +75,7 @@ type DefaultContainer struct {
 	notificationRepository NotificationRepository
 
 	// Utilities
-	llmProvider   llm.LLMProvider
+	llmProvider   legacyLLM.LLMProvider
 	fileDiscovery *filediscovery.FileDiscovery
 	toolExecutor  *tools.Executor
 	errorManager  *utils.ErrorManager
@@ -124,8 +126,16 @@ func (c *DefaultContainer) Initialize(ctx context.Context) error {
 func (c *DefaultContainer) initializeUtilities() {
 	logger := utils.GetLogger(c.config.SkipPrompt)
 
-	// Initialize LLM provider
-	c.llmProvider = llm.NewLLMProvider()
+	// Initialize LLM provider using new modular system
+	newProvider, err := providers.GetProvider(c.config.EditingModel)
+	if err != nil {
+		// Fallback to legacy provider if new provider fails
+		logger.Printf("Warning: Failed to initialize new provider, falling back to legacy: %v", err)
+		c.llmProvider = legacyLLM.NewLLMProvider()
+	} else {
+		// Use adapter to bridge new provider to legacy interface
+		c.llmProvider = llm.NewLLMAdapter(newProvider)
+	}
 
 	// Initialize file discovery
 	c.fileDiscovery = filediscovery.NewFileDiscovery(c.config, logger)
@@ -301,7 +311,7 @@ func (c *DefaultContainer) GetNotificationRepository() NotificationRepository {
 }
 
 // GetLLMProvider implements Container.GetLLMProvider
-func (c *DefaultContainer) GetLLMProvider() llm.LLMProvider {
+func (c *DefaultContainer) GetLLMProvider() legacyLLM.LLMProvider {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.llmProvider

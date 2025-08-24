@@ -8,8 +8,8 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/providers"
 	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
 	uiPkg "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
@@ -99,12 +99,19 @@ Examples:
 
 		// Attempt to print token usage summary if available and no error occurred
 		if cfg, cfgErr := config.LoadOrInitConfig(agentSkipPrompt); cfgErr == nil && cfg != nil && cfg.LastTokenUsage != nil {
-			cost := llm.CalculateCost(llm.TokenUsage(*cfg.LastTokenUsage), cfg.EditingModel)
-			uiPkg.Out().Printf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
-				cfg.LastTokenUsage.PromptTokens,
-				cfg.LastTokenUsage.CompletionTokens,
-				cfg.LastTokenUsage.TotalTokens,
-				cost)
+			// Use provider interface for cost calculation
+			if provider, err := providers.GetProvider(cfg.EditingModel); err == nil {
+				cost := provider.CalculateCost(providers.TokenUsage{
+					PromptTokens:     cfg.LastTokenUsage.PromptTokens,
+					CompletionTokens: cfg.LastTokenUsage.CompletionTokens,
+					TotalTokens:      cfg.LastTokenUsage.TotalTokens,
+				})
+				uiPkg.Out().Printf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
+					cfg.LastTokenUsage.PromptTokens,
+					cfg.LastTokenUsage.CompletionTokens,
+					cfg.LastTokenUsage.TotalTokens,
+					cost)
+			}
 		}
 		return nil
 	},

@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/editor"
-	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/providers"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -83,17 +83,21 @@ func executeCodeCommand(cfg *CommandConfig, args []string) error {
 
 	// Log token usage if available
 	if cfg.Config.LastTokenUsage != nil && cfg.Logger != nil {
-		cost := llm.CalculateCost(llm.TokenUsage{
-			PromptTokens:     cfg.Config.LastTokenUsage.PromptTokens,
-			CompletionTokens: cfg.Config.LastTokenUsage.CompletionTokens,
-			TotalTokens:      cfg.Config.LastTokenUsage.TotalTokens,
-		}, cfg.Config.EditingModel)
+		// Use provider interface for cost calculation
+		provider, err := providers.GetProvider(cfg.Config.EditingModel)
+		if err == nil {
+			cost := provider.CalculateCost(providers.TokenUsage{
+				PromptTokens:     cfg.Config.LastTokenUsage.PromptTokens,
+				CompletionTokens: cfg.Config.LastTokenUsage.CompletionTokens,
+				TotalTokens:      cfg.Config.LastTokenUsage.TotalTokens,
+			})
 
-		cfg.Logger.LogProcessStep(fmt.Sprintf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)",
-			cfg.Config.LastTokenUsage.PromptTokens,
-			cfg.Config.LastTokenUsage.CompletionTokens,
-			cfg.Config.LastTokenUsage.TotalTokens,
-			cost))
+			cfg.Logger.LogProcessStep(fmt.Sprintf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)",
+				cfg.Config.LastTokenUsage.PromptTokens,
+				cfg.Config.LastTokenUsage.CompletionTokens,
+				cfg.Config.LastTokenUsage.TotalTokens,
+				cost))
+		}
 	}
 
 	return nil

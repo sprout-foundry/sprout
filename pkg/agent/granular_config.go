@@ -17,7 +17,7 @@ func DefaultGranularEditingConfig() *GranularEditingConfig {
 	return &GranularEditingConfig{
 		Enabled:              true,
 		MaxStepsPerPlan:      5,
-		VerifyBuildAfterStep: true,
+		VerifyBuildAfterStep: false,
 		EnableFallback:       true,
 		StepTimeoutSeconds:   60,
 		SupportedFileTypes:   []string{".go", ".py", ".js", ".ts", ".md", ".txt"},

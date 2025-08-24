@@ -11,7 +11,11 @@ run_test_logic() {
     echo "--- TEST: Empty Search Grounding Query Test ---"
 
     # Run a code generation command that should trigger a web search
-    output=$(../../ledit code "How do I implement a bubble sort in Go?" --skip-prompt 2>&1)
+    output_log="empty_search_test_output.log"
+    ../../ledit code "How do I implement a bubble sort in Go?" --skip-prompt > "$output_log" 2>&1
+
+    echo
+    echo "--- Verifying Test ---"
 
     # Check if web content search was initiated
     if grep -q "Starting web content search for query: " "$output_log"; then

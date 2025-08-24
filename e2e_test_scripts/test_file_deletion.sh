@@ -10,11 +10,11 @@ run_test_logic() {
     local model_name=$1 # Capture the model_name passed from test.sh
     echo "--- TEST: File Deletion ---"
     # Ensure data.json exists before attempting to delete it
-    echo "test content" > data.json
+    echo '{"key": "value"}' > data.json
     echo "Created data.json for deletion test."
 
     # Run the agent to delete the file
-    output=$(../../ledit code "Delete the data.json file" --skip-prompt 2>&1)
+    output=$(../../ledit code "Use the delete_file tool to remove data.json" --skip-prompt 2>&1)
     echo "$output"
 
     echo

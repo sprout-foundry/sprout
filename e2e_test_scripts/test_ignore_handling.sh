@@ -61,7 +61,7 @@ run_test_logic() {
     echo "-----------------------------------"
 
     # Trigger a lightweight workspace refresh without asking for code changes
-    ../ledit code "#WORKSPACE" --skip-prompt -m "$model_name" --non-interactive
+    ../ledit code "#WORKSPACE" --skip-prompt -m "$model_name"
 
     echo
     echo "--- Verifying Test ---"

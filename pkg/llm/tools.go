@@ -97,6 +97,44 @@ func GetAvailableTools() []Tool {
 		{
 			Type: "function",
 			Function: ToolFunction{
+				Name:        "delete_file",
+				Description: "Delete a file from the workspace",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"target_file": {
+							Type:        "string",
+							Description: "The path of the file to delete",
+						},
+					},
+					Required: []string{"target_file"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "replace_file_content",
+				Description: "Replace the entire content of a file with new content",
+				Parameters: ToolParameters{
+					Type: "object",
+					Properties: map[string]ToolProperty{
+						"target_file": {
+							Type:        "string",
+							Description: "The path of the file to replace",
+						},
+						"new_content": {
+							Type:        "string",
+							Description: "The new content to write to the file",
+						},
+					},
+					Required: []string{"target_file", "new_content"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
 				Name:        "run_shell_command",
 				Description: "Execute a shell command and return the output",
 				Parameters: ToolParameters{

@@ -3,12 +3,14 @@ package types
 import (
 	"encoding/json"
 	"testing"
+
+	mainhTypes "github.com/alantheprice/ledit/pkg/types"
 )
 
 func TestPatchResolutionUnmarshalJSON(t *testing.T) {
 	// Test unmarshaling string format (backward compatibility)
 	stringJSON := `"single file content"`
-	var patch1 PatchResolution
+	var patch1 mainhTypes.PatchResolution
 	err := json.Unmarshal([]byte(stringJSON), &patch1)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal string patch resolution: %v", err)
@@ -27,7 +29,7 @@ func TestPatchResolutionUnmarshalJSON(t *testing.T) {
 		"file1.go": "content of file1",
 		"file2.go": "content of file2"
 	}`
-	var patch2 PatchResolution
+	var patch2 mainhTypes.PatchResolution
 	err = json.Unmarshal([]byte(objectJSON), &patch2)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal object patch resolution: %v", err)
@@ -50,9 +52,9 @@ func TestPatchResolutionUnmarshalJSON(t *testing.T) {
 	}
 }
 
-func TestPatchResolutionMarshalJSON(t *testing.T) {
+func TestmainhTypes.PatchResolutionMarshalJSON(t *testing.T) {
 	// Test marshaling string format
-	patch1 := PatchResolution{
+	patch1 := mainhTypes.PatchResolution{
 		SingleFile: "single file content",
 	}
 
@@ -69,7 +71,7 @@ func TestPatchResolutionMarshalJSON(t *testing.T) {
 	}
 
 	// Test marshaling object format
-	patch2 := PatchResolution{
+	patch2 := mainhTypes.PatchResolution{
 		MultiFile: map[string]string{
 			"file1.go": "content of file1",
 			"file2.go": "content of file2",
@@ -89,21 +91,21 @@ func TestPatchResolutionMarshalJSON(t *testing.T) {
 	}
 }
 
-func TestPatchResolutionIsEmpty(t *testing.T) {
+func TestmainhTypes.PatchResolutionIsEmpty(t *testing.T) {
 	// Test empty patch resolution
-	emptyPatch := PatchResolution{}
+	emptyPatch := mainhTypes.PatchResolution{}
 	if !emptyPatch.IsEmpty() {
 		t.Error("Expected empty patch resolution to be empty")
 	}
 
 	// Test patch with single file
-	singlePatch := PatchResolution{SingleFile: "content"}
+	singlePatch := mainhTypes.PatchResolution{SingleFile: "content"}
 	if singlePatch.IsEmpty() {
 		t.Error("Expected single file patch resolution to not be empty")
 	}
 
 	// Test patch with multi files
-	multiPatch := PatchResolution{
+	multiPatch := mainhTypes.PatchResolution{
 		MultiFile: map[string]string{"file1": "content1"},
 	}
 	if multiPatch.IsEmpty() {
@@ -111,8 +113,8 @@ func TestPatchResolutionIsEmpty(t *testing.T) {
 	}
 }
 
-func TestCodeReviewResultUnmarshalJSON(t *testing.T) {
-	// Test unmarshaling CodeReviewResult with string patch_resolution
+func TestmainhTypes.CodeReviewResultUnmarshalJSON(t *testing.T) {
+	// Test unmarshaling mainhTypes.CodeReviewResult with string patch_resolution
 	jsonStr := `{
 		"status": "needs_revision",
 		"feedback": "Fix the bug",
@@ -120,10 +122,10 @@ func TestCodeReviewResultUnmarshalJSON(t *testing.T) {
 		"patch_resolution": "fixed code content"
 	}`
 
-	var result CodeReviewResult
+	var result mainhTypes.CodeReviewResult
 	err := json.Unmarshal([]byte(jsonStr), &result)
 	if err != nil {
-		t.Fatalf("Failed to unmarshal CodeReviewResult with string patch: %v", err)
+		t.Fatalf("Failed to unmarshal mainhTypes.CodeReviewResult with string patch: %v", err)
 	}
 
 	if result.Status != "needs_revision" {
@@ -134,15 +136,15 @@ func TestCodeReviewResultUnmarshalJSON(t *testing.T) {
 		t.Errorf("Expected feedback to be 'Fix the bug', got '%s'", result.Feedback)
 	}
 
-	if result.PatchResolution == nil {
-		t.Error("Expected PatchResolution to not be nil")
+	if result.mainhTypes.PatchResolution == nil {
+		t.Error("Expected mainhTypes.PatchResolution to not be nil")
 	}
 
-	if result.PatchResolution.SingleFile != "fixed code content" {
-		t.Errorf("Expected SingleFile to be 'fixed code content', got '%s'", result.PatchResolution.SingleFile)
+	if result.mainhTypes.PatchResolution.SingleFile != "fixed code content" {
+		t.Errorf("Expected SingleFile to be 'fixed code content', got '%s'", result.mainhTypes.PatchResolution.SingleFile)
 	}
 
-	// Test unmarshaling CodeReviewResult with object patch_resolution
+	// Test unmarshaling mainhTypes.CodeReviewResult with object patch_resolution
 	jsonObj := `{
 		"status": "approved",
 		"feedback": "Good work",
@@ -152,25 +154,25 @@ func TestCodeReviewResultUnmarshalJSON(t *testing.T) {
 		}
 	}`
 
-	var result2 CodeReviewResult
+	var result2 mainhTypes.CodeReviewResult
 	err = json.Unmarshal([]byte(jsonObj), &result2)
 	if err != nil {
-		t.Fatalf("Failed to unmarshal CodeReviewResult with object patch: %v", err)
+		t.Fatalf("Failed to unmarshal mainhTypes.CodeReviewResult with object patch: %v", err)
 	}
 
 	if result2.Status != "approved" {
 		t.Errorf("Expected status to be 'approved', got '%s'", result2.Status)
 	}
 
-	if result2.PatchResolution == nil {
-		t.Error("Expected PatchResolution to not be nil")
+	if result2.mainhTypes.PatchResolution == nil {
+		t.Error("Expected mainhTypes.PatchResolution to not be nil")
 	}
 
-	if len(result2.PatchResolution.MultiFile) != 2 {
-		t.Errorf("Expected MultiFile to have 2 entries, got %d", len(result2.PatchResolution.MultiFile))
+	if len(result2.mainhTypes.PatchResolution.MultiFile) != 2 {
+		t.Errorf("Expected MultiFile to have 2 entries, got %d", len(result2.mainhTypes.PatchResolution.MultiFile))
 	}
 
-	if result2.PatchResolution.MultiFile["main.go"] != "package main\nfunc main() {}\n" {
-		t.Errorf("Expected main.go content to be correct, got '%s'", result2.PatchResolution.MultiFile["main.go"])
+	if result2.mainhTypes.PatchResolution.MultiFile["main.go"] != "package main\nfunc main() {}\n" {
+		t.Errorf("Expected main.go content to be correct, got '%s'", result2.mainhTypes.PatchResolution.MultiFile["main.go"])
 	}
 }

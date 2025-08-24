@@ -387,3 +387,18 @@ func (s *OptimizedEditingService) strategyName(strategy EditingStrategy) string 
 func (s *OptimizedEditingService) GetMetrics() *EditingMetrics {
 	return s.metrics
 }
+
+// RollbackChanges rolls back changes using the revision IDs
+func (s *OptimizedEditingService) RollbackChanges(revisionIDs []string) error {
+	// Implementation would call the rollback system
+	// For now, return a placeholder error
+	return fmt.Errorf("rollback functionality not yet implemented")
+}
+
+// GetLastRevisionID returns the most recent revision ID
+func (s *OptimizedEditingService) GetLastRevisionID() string {
+	if len(s.metrics.RevisionIDs) == 0 {
+		return ""
+	}
+	return s.metrics.RevisionIDs[len(s.metrics.RevisionIDs)-1]
+}

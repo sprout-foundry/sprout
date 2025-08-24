@@ -652,3 +652,17 @@ func (c *Config) GetSmartTimeout(modelName string, operationType string) time.Du
 	}
 	return c.LLM.GetSmartTimeout(modelName, operationType)
 }
+
+// DefaultConfig returns a complete default configuration
+func DefaultConfig() *Config {
+	cfg := &Config{
+		LLM:         DefaultLLMConfig(),
+		UI:          DefaultUIConfig(),
+		Agent:       DefaultAgentConfig(),
+		Security:    DefaultSecurityConfig(),
+		Performance: DefaultPerformanceConfig(),
+		SkipPrompt:  false,
+	}
+	cfg.setDefaultValues()
+	return cfg
+}

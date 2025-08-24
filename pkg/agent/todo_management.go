@@ -213,7 +213,7 @@ func generateTodoID() string {
 	return strconv.FormatUint(uint64(bytes[0])<<24|uint64(bytes[1])<<16|uint64(bytes[2])<<8|uint64(bytes[3]), 16)
 }
 
-// executeTodo executes a todo using the most appropriate method based on its content
+// executeTodo executes a todo using the optimized editing service
 func executeTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	ctx.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing: %s", todo.Content))
 
@@ -231,9 +231,9 @@ func executeTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	case ExecutionTypeDirectEdit:
 		return executeDirectEditTodo(ctx, todo)
 	case ExecutionTypeCodeCommand:
-		return executeCodeCommandTodo(ctx, todo)
+		return executeOptimizedCodeEditingTodo(ctx, todo)
 	default:
-		return executeCodeCommandTodo(ctx, todo)
+		return executeOptimizedCodeEditingTodo(ctx, todo)
 	}
 }
 
@@ -471,6 +471,50 @@ func executeCodeCommandTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 		return fmt.Errorf("verification phase failed: %w", err)
 	}
 
+	return nil
+}
+
+// executeOptimizedCodeEditingTodo handles code editing todos using the optimized editing service with rollback support
+func executeOptimizedCodeEditingTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	ctx.Logger.LogProcessStep("⚡ Performing optimized code edit with rollback support")
+
+	// Create optimized editing service
+	editingService := NewOptimizedEditingService(ctx.Config, ctx.Logger)
+	
+	// Execute using the optimized editing strategy with rollback support
+	result, err := editingService.ExecuteOptimizedEditWithRollback(todo, ctx)
+	if err != nil {
+		ctx.Logger.LogProcessStep(fmt.Sprintf("❌ Optimized edit failed: %v", err))
+		return err
+	}
+	
+	// Track token usage and costs from the editing service
+	metrics := result.Metrics
+	if metrics.TotalTokens > 0 {
+		// Convert metrics to SimplifiedAgentContext tracking
+		ctx.TotalTokensUsed += metrics.TotalTokens
+		ctx.TotalCost += metrics.TotalCost
+		
+		ctx.Logger.LogProcessStep(fmt.Sprintf("📊 Optimized edit used %d tokens ($%.4f)", 
+			metrics.TotalTokens, metrics.TotalCost))
+	}
+	
+	// Store result and revision IDs for potential rollback
+	if result.Diff != "" {
+		ctx.AnalysisResults[todo.ID+"_edit_result"] = result.Diff
+	}
+	if len(result.RevisionIDs) > 0 {
+		ctx.AnalysisResults[todo.ID+"_revision_ids"] = fmt.Sprintf("%v", result.RevisionIDs)
+		ctx.Logger.LogProcessStep(fmt.Sprintf("🔄 Rollback available with revision IDs: %v", result.RevisionIDs))
+		
+		// Store the editing service instance for potential rollback (could be stored in context if needed)
+		// For now, log that rollback is available via revision IDs
+		for _, revisionID := range result.RevisionIDs {
+			ctx.Logger.LogProcessStep(fmt.Sprintf("💾 Revision stored for rollback: %s", revisionID))
+		}
+	}
+	
+	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Optimized edit completed using %s strategy", result.Strategy))
 	return nil
 }
 

@@ -115,6 +115,146 @@ func validateFilename(filename string) bool {
 	return len(parts) > 1 && parts[0] != ""
 }
 
+// generateDefaultFilename creates a default filename based on language and context
+func generateDefaultFilename(lang, response string) string {
+	// Map languages to extensions
+	extensions := map[string]string{
+		"go":         ".go",
+		"python":     ".py",
+		"py":         ".py",
+		"javascript": ".js",
+		"js":         ".js",
+		"typescript": ".ts",
+		"ts":         ".ts",
+		"java":       ".java",
+		"c":          ".c",
+		"cpp":        ".cpp",
+		"rust":       ".rs",
+		"sh":         ".sh",
+		"bash":       ".sh",
+		"sql":        ".sql",
+		"html":       ".html",
+		"css":        ".css",
+		"json":       ".json",
+		"yaml":       ".yaml",
+		"yml":        ".yml",
+		"xml":        ".xml",
+	}
+	
+	ext, exists := extensions[lang]
+	if !exists {
+		return "" // Don't generate filename for unknown languages
+	}
+	
+	// Try to extract a reasonable filename from the response context
+	// Look for existing filenames mentioned in the response
+	lines := strings.Split(response, "\n")
+	for _, line := range lines {
+		// Look for file references like "in filename.go" or "file filename.go"
+		if strings.Contains(strings.ToLower(line), strings.ToLower(ext)) {
+			words := strings.Fields(line)
+			for _, word := range words {
+				word = strings.Trim(word, ".,!?()[]{}:;")
+				if strings.HasSuffix(strings.ToLower(word), strings.ToLower(ext)) {
+					return word
+				}
+			}
+		}
+	}
+	
+	// Fallback to generic filename
+	return "updated_file" + ext
+}
+
+// tryContentBasedExtraction attempts to extract code from responses without explicit code blocks
+func tryContentBasedExtraction(response string) map[string]string {
+	result := make(map[string]string)
+	
+	// Check if the entire response looks like code
+	lines := strings.Split(response, "\n")
+	codeLines := 0
+	totalLines := len(lines)
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue // Skip empty lines
+		}
+		
+		// Check if line looks like code (contains programming constructs)
+		if looksLikeCode(line) {
+			codeLines++
+		}
+	}
+	
+	// If a significant portion looks like code, extract it
+	if totalLines > 0 && float64(codeLines)/float64(totalLines) > 0.3 {
+		// Try to determine the language from patterns in the code
+		lang := detectLanguageFromContent(response)
+		if lang != "" {
+			filename := generateDefaultFilename(lang, response)
+			if filename != "" {
+				result[filename] = response
+				fmt.Printf("Content-based extraction: treating entire response as %s code\n", lang)
+			}
+		}
+	}
+	
+	return result
+}
+
+// looksLikeCode checks if a line contains programming constructs
+func looksLikeCode(line string) bool {
+	// Common programming patterns
+	patterns := []string{
+		"func ", "function ", "def ", "class ", "import ", "package ",
+		"if (", "for (", "while (", "switch ", "case ", "return ",
+		"var ", "let ", "const ", "public ", "private ", "protected ",
+		"#include", "#define", "using ", "namespace ",
+		":=", "==", "!=", "->", "=>", "<-",
+		"{", "}", "[];", ");" , "();",
+	}
+	
+	for _, pattern := range patterns {
+		if strings.Contains(line, pattern) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// detectLanguageFromContent tries to detect the programming language from content
+func detectLanguageFromContent(content string) string {
+	// Language-specific patterns
+	langPatterns := map[string][]string{
+		"go": {"package ", "func ", "import (", "fmt.", ":=", "interface{"},
+		"python": {"def ", "import ", "from ", "if __name__", "class ", "print("},
+		"javascript": {"function ", "var ", "let ", "const ", "console.log", "=>"},
+		"java": {"public class", "public static", "System.out", "import java"},
+		"c": {"#include", "int main", "printf", "malloc", "struct "},
+		"cpp": {"#include", "std::", "cout <<", "using namespace", "class "},
+		"rust": {"fn ", "let mut", "println!", "use ", "struct ", "impl "},
+		"typescript": {"interface ", "type ", "export ", "import ", "function "},
+	}
+	
+	for lang, patterns := range langPatterns {
+		matches := 0
+		for _, pattern := range patterns {
+			if strings.Contains(content, pattern) {
+				matches++
+			}
+		}
+		
+		// If we find multiple patterns for a language, it's likely that language
+		if matches >= 2 {
+			return lang
+		}
+	}
+	
+	return "" // Unknown language
+}
+
 func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 	fmt.Printf("=== Parser Debug ===\n")
 	fmt.Printf("Response length: %d characters\n", len(response))
@@ -175,7 +315,21 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 					continue
 				}
 			}
-			// If it's a start block without a valid filename on the same or next line, we ignore it.
+			
+			// Enhanced robustness: If it's a code block without explicit filename,
+			// try to use a sensible default based on the language or context
+			if lang != "" && lang != "markdown" && lang != "md" {
+				defaultFilename := generateDefaultFilename(lang, response)
+				if defaultFilename != "" {
+					inCodeBlock = true
+					currentFileName = defaultFilename
+					currentLanguage = lang
+					currentFileContent.Reset()
+					fmt.Printf("Using default filename: %s for %s code block\n", defaultFilename, lang)
+					continue
+				}
+			}
+			// If no valid filename and no default can be generated, we ignore it.
 		} else if inCodeBlock && isEndOfCodeBlock(line, currentLanguage) { // Pass currentLanguage to the check
 			inCodeBlock = false
 			if currentFileName != "" {
@@ -205,6 +359,19 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 			fmt.Printf("⚠️  WARNING: File %s is very short (%d chars) - possible truncation\n", filename, len(content))
 		}
 	}
+	// Final fallback: if no code blocks were found, check if the entire response
+	// looks like structured code content that we can extract
+	if len(updatedCode) == 0 {
+		fmt.Printf("No code blocks found, trying content-based fallback...\n")
+		fallbackContent := tryContentBasedExtraction(response)
+		if len(fallbackContent) > 0 {
+			fmt.Printf("Content-based fallback found %d potential files\n", len(fallbackContent))
+			for filename, content := range fallbackContent {
+				updatedCode[filename] = content
+			}
+		}
+	}
+	
 	fmt.Printf("=== End Parser Debug ===\n")
 
 	return updatedCode, nil

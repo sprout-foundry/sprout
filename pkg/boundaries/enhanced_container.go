@@ -11,7 +11,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/adapters"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/interfaces"
-	"github.com/alantheprice/ledit/pkg/providers/llm"
+	legacyLLM "github.com/alantheprice/ledit/pkg/llm"
 )
 
 // EnhancedContainer extends the basic container with domain services and improved DI
@@ -374,34 +374,13 @@ func (c *enhancedContainerImpl) initializeEnhancedProviders() error {
 	}
 	c.adapterFactory = factory
 	
-	// Initialize LLM provider registry and get default provider
-	registry := llm.NewRegistry()
+	// For now, skip the enhanced LLM provider initialization
+	// This will be implemented when the registry factory methods are available
+	// Use the existing DefaultContainer's LLM provider instead
+	c.llmProviderNew = nil // Will be set up later when needed
 	
-	// Register providers (OpenAI, Gemini, Ollama)
-	if err := registry.RegisterOpenAI(); err != nil {
-		return fmt.Errorf("failed to register OpenAI provider: %w", err)
-	}
-	if err := registry.RegisterGemini(); err != nil {
-		return fmt.Errorf("failed to register Gemini provider: %w", err)
-	}
-	if err := registry.RegisterOllama(); err != nil {
-		return fmt.Errorf("failed to register Ollama provider: %w", err)
-	}
-	
-	// Get the default provider based on config
-	defaultProvider := c.GetConfig().LLMProvider
-	if defaultProvider == "" {
-		defaultProvider = "openai" // Default fallback
-	}
-	
-	provider, err := registry.GetProvider(defaultProvider)
-	if err != nil {
-		return fmt.Errorf("failed to get LLM provider %s: %w", defaultProvider, err)
-	}
-	c.llmProviderNew = provider
-	
-	// Create adapter bundle
-	c.adapterBundle = c.adapterFactory.CreateAdapterBundle(provider)
+	// Create adapter bundle with nil provider for now
+	c.adapterBundle = c.adapterFactory.CreateAdapterBundle(nil)
 	c.configProviderNew = c.adapterBundle.Config
 	
 	return nil
@@ -426,7 +405,7 @@ func (c *enhancedContainerImpl) initializeDomainServices() error {
 	
 	// Initialize other services
 	c.codeGenerator = nil // Placeholder - would implement interfaces.CodeGenerator
-	c.workspaceAnalyzer = c.adapterBundle.Workspace.Interfaces
+	c.workspaceAnalyzer = nil // Placeholder - interface mismatch, will be fixed later
 	
 	return nil
 }
@@ -522,8 +501,14 @@ func (c *enhancedContainerImpl) RegisterLLMProvider(name string, provider interf
 	return c.RegisterSingleton(fmt.Sprintf("llm_provider_%s", name), provider)
 }
 
-// GetLLMProvider gets a specific LLM provider by name
-func (c *enhancedContainerImpl) GetLLMProvider(name string) (interfaces.LLMProvider, error) {
+// GetLLMProvider implements Container.GetLLMProvider - returns the default LLM provider
+func (c *enhancedContainerImpl) GetLLMProvider() legacyLLM.LLMProvider {
+	// Use the embedded DefaultContainer's LLM provider for compatibility
+	return c.DefaultContainer.GetLLMProvider()
+}
+
+// GetLLMProviderByName gets a specific LLM provider by name
+func (c *enhancedContainerImpl) GetLLMProviderByName(name string) (interfaces.LLMProvider, error) {
 	service, err := c.GetRegisteredService(fmt.Sprintf("llm_provider_%s", name))
 	if err != nil {
 		return nil, err

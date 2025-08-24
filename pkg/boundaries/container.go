@@ -2,6 +2,7 @@ package boundaries
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/alantheprice/ledit/pkg/adapters/llm"
@@ -130,7 +131,7 @@ func (c *DefaultContainer) initializeUtilities() {
 	newProvider, err := providers.GetProvider(c.config.EditingModel)
 	if err != nil {
 		// Fallback to legacy provider if new provider fails
-		logger.Printf("Warning: Failed to initialize new provider, falling back to legacy: %v", err)
+		logger.Log(fmt.Sprintf("Warning: Failed to initialize new provider, falling back to legacy: %v", err))
 		c.llmProvider = legacyLLM.NewLLMProvider()
 	} else {
 		// Use adapter to bridge new provider to legacy interface

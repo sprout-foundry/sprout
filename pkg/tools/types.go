@@ -53,22 +53,13 @@ type Parameters struct {
 	Timeout time.Duration
 }
 
-// Result contains the result of a tool execution
+// Result represents the outcome of a tool execution
 type Result struct {
-	// Success indicates if the tool execution was successful
-	Success bool
-
-	// Output contains the output data from the tool
-	Output interface{}
-
-	// Errors contains any error messages
-	Errors []string
-
-	// Metadata contains additional metadata about the execution
-	Metadata map[string]interface{}
-
-	// ExecutionTime is the time it took to execute the tool
-	ExecutionTime time.Duration
+	Success       bool                   `json:"success"`
+	Output        interface{}            `json:"output"`
+	Errors        []string               `json:"errors"`
+	Metadata      map[string]interface{} `json:"metadata"`
+	ExecutionTime time.Duration          `json:"execution_time"`
 }
 
 // Registry manages available tools

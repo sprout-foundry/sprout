@@ -90,7 +90,7 @@ func (e *Executor) executeDeleteFile(ctx context.Context, args map[string]interf
 
 	return &Result{
 		Success: true,
-		Output:  fmt.Sprintf("File %s deleted successfully", filePath),
+		Output:  fmt.Sprintf("File '%s' deleted successfully", filePath),
 	}, nil
 }
 
@@ -111,7 +111,7 @@ func (e *Executor) executeReplaceFileContent(ctx context.Context, args map[strin
 		}, nil
 	}
 
-	err := filesystem.SaveFile(filePath, newContent)
+	err := filesystem.WriteFile(filePath, []byte(newContent))
 	if err != nil {
 		return &Result{
 			Success: false,
@@ -121,7 +121,7 @@ func (e *Executor) executeReplaceFileContent(ctx context.Context, args map[strin
 
 	return &Result{
 		Success: true,
-		Output:  fmt.Sprintf("File %s updated successfully", filePath),
+		Output:  fmt.Sprintf("File '%s' replaced successfully", filePath),
 	}, nil
 }
 

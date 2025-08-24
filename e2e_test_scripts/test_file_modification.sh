@@ -20,9 +20,11 @@ run_test_logic() {
     # Store the original content of the file we expect to be changed.
     original_file1_content=$(cat file1.txt)
 
-    # Run ledit again. It should use the cached info for other files but re-analyze script.py.
-    ../ledit code "In file1.txt, write a comment describing what the python script does now. #WORKSPACE" -m "$model_name" --non-interactive  --skip-prompt
+    # Run the agent to modify the file
+    output=$(../../ledit code "Change the version in version.txt to 2.0.0" --skip-prompt 2>&1)
+    echo "$output"
 
+    # Verify the change
     echo
     echo "--- Verifying Test ---"
     # The test validates that the infrastructure is working:

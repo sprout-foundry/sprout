@@ -13,8 +13,9 @@ run_test_logic() {
     echo "test content" > data.json
     echo "Created data.json for deletion test."
 
-    # Run ledit to delete data.json
-    ../ledit code "Delete the file named 'data.json'. #FILE data.json" --skip-prompt -m "$model_name" --non-interactive
+    # Run the agent to delete the file
+    output=$(../../ledit code "Delete the data.json file" --skip-prompt 2>&1)
+    echo "$output"
 
     echo
     echo "--- Verifying Test ---"

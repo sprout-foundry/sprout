@@ -5,11 +5,11 @@ import (
 	"github.com/alantheprice/ledit/pkg/types"
 )
 
-// TokenUsage represents actual token usage from an API response
-type TokenUsage = types.TokenUsage
-
 // ModelPricing represents cost per 1K tokens for different models
 type ModelPricing = types.ModelPricing
+
+// TokenUsage represents token usage from LLM responses
+type TokenUsage = types.TokenUsage
 
 // PricingTable holds per-model pricing that can be loaded from disk
 type PricingTable = types.PricingTable

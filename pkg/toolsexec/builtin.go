@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/filesystem"
-	ui "github.com/alantheprice/ledit/pkg/ui"
+	"github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
@@ -28,8 +28,14 @@ func (e *Executor) executeBuiltinTool(ctx context.Context, toolName string, args
 		return e.executeWorkspaceContext(ctx, args)
 	case "search_web":
 		return e.executeWebSearch(ctx, args)
+	case "delete_file":
+		return e.executeDeleteFile(ctx, args)
+	case "replace_file_content":
+		return e.executeReplaceFileContent(ctx, args)
 	case "edit_file_section":
 		return e.executeEditFileSection(ctx, args)
+	case "validate_file":
+		return e.executeValidateFile(ctx, args)
 	default:
 		return &Result{
 			Success: false,
@@ -62,6 +68,60 @@ func (e *Executor) executeReadFile(ctx context.Context, args map[string]interfac
 			"target_file": filePath,
 			"file_size":   len(content),
 		},
+	}, nil
+}
+
+func (e *Executor) executeDeleteFile(ctx context.Context, args map[string]interface{}) (*Result, error) {
+	filePath, ok := args["target_file"].(string)
+	if !ok {
+		return &Result{
+			Success: false,
+			Errors:  []string{"delete_file requires 'target_file' parameter"},
+		}, nil
+	}
+
+	err := os.Remove(filePath)
+	if err != nil {
+		return &Result{
+			Success: false,
+			Errors:  []string{fmt.Sprintf("failed to delete file: %v", err)},
+		}, nil
+	}
+
+	return &Result{
+		Success: true,
+		Output:  fmt.Sprintf("File %s deleted successfully", filePath),
+	}, nil
+}
+
+func (e *Executor) executeReplaceFileContent(ctx context.Context, args map[string]interface{}) (*Result, error) {
+	filePath, ok := args["target_file"].(string)
+	if !ok {
+		return &Result{
+			Success: false,
+			Errors:  []string{"replace_file_content requires 'target_file' parameter"},
+		}, nil
+	}
+
+	newContent, ok := args["new_content"].(string)
+	if !ok {
+		return &Result{
+			Success: false,
+			Errors:  []string{"replace_file_content requires 'new_content' parameter"},
+		}, nil
+	}
+
+	err := filesystem.SaveFile(filePath, newContent)
+	if err != nil {
+		return &Result{
+			Success: false,
+			Errors:  []string{fmt.Sprintf("failed to write file: %v", err)},
+		}, nil
+	}
+
+	return &Result{
+		Success: true,
+		Output:  fmt.Sprintf("File %s updated successfully", filePath),
 	}, nil
 }
 
@@ -158,7 +218,7 @@ func (e *Executor) executeWorkspaceContext(ctx context.Context, args map[string]
 	case "load_tree":
 		out := buildCompactTree(ws)
 		return &Result{Success: true, Output: out, Metadata: map[string]interface{}{"action": action}}, nil
-	case "search_keywords":
+	case "search_keywords", "search":
 		if strings.TrimSpace(query) == "" {
 			return &Result{Success: false, Errors: []string{"search_keywords requires non-empty 'query'"}}, nil
 		}
@@ -375,6 +435,69 @@ func (e *Executor) executeEditFileSection(ctx context.Context, args map[string]i
 			"old_text_length": len(oldText),
 			"new_text_length": len(newText),
 			"content_changed": len(newContent) != len(originalContent),
+		},
+	}, nil
+}
+
+func (e *Executor) executeValidateFile(ctx context.Context, args map[string]interface{}) (*Result, error) {
+	target, ok := args["target_file"].(string)
+	if !ok || strings.TrimSpace(target) == "" {
+		return &Result{Success: false, Errors: []string{"validate_file requires 'target_file'"}}, nil
+	}
+	vtype, _ := args["validation_type"].(string)
+	if strings.TrimSpace(vtype) == "" {
+		vtype = "basic"
+	}
+
+	// Decide validation commands based on file type
+	cmds := []string{}
+	if strings.HasSuffix(strings.ToLower(target), ".go") {
+		// syntax check via gofmt
+		cmds = append(cmds, fmt.Sprintf("gofmt -e -l %s", target))
+		// vet the file (package-level); may require package path
+		cmds = append(cmds, fmt.Sprintf("go vet %s", target))
+		// attempt to build the module/package to catch compile errors
+		cmds = append(cmds, "go build")
+	} else {
+		// Generic: just check file exists and is readable
+		if _, err := os.Stat(target); err != nil {
+			return &Result{Success: false, Errors: []string{fmt.Sprintf("file not accessible: %v", err)}}, nil
+		}
+		return &Result{Success: true, Output: fmt.Sprintf("Validated %s (non-Go file): exists and readable", target)}, nil
+	}
+
+	var outputBuilder strings.Builder
+	allOK := true
+	for _, c := range cmds {
+		select {
+		case <-ctx.Done():
+			return &Result{Success: false, Errors: []string{"validation cancelled or timed out"}}, nil
+		default:
+		}
+		cmd := exec.CommandContext(ctx, "sh", "-c", c)
+		out, err := cmd.CombinedOutput()
+		outputBuilder.WriteString("$ ")
+		outputBuilder.WriteString(c)
+		outputBuilder.WriteString("\n")
+		if len(out) > 0 {
+			outputBuilder.Write(out)
+			if out[len(out)-1] != '\n' {
+				outputBuilder.WriteString("\n")
+			}
+		}
+		if err != nil {
+			allOK = false
+			outputBuilder.WriteString(fmt.Sprintf("(error: %v)\n", err))
+		}
+	}
+
+	return &Result{
+		Success: allOK,
+		Output:  outputBuilder.String(),
+		Metadata: map[string]interface{}{
+			"target_file":     target,
+			"validation_type": vtype,
+			"passed":          allOK,
 		},
 	}, nil
 }

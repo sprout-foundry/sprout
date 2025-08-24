@@ -164,6 +164,10 @@ func generateDeepInfraEmbedding(input string, model string) ([]float64, error) {
 // GenerateEmbedding generates an embedding for the given input using the specified model.
 // It currently only supports DeepInfra embeddings.
 func GenerateEmbedding(input, modelName string) ([]float64, error) {
+	// If the embedding package has a provider, prefer it
+	// to avoid direct coupling from embedding->llm and let llm act as default provider.
+	// We avoid circular import by using a local closure when wiring from main/agent.
+	// This function remains as a concrete implementation for DeepInfra and tests.
 	provider := "deepinfra" // Default provider
 	model := ""
 

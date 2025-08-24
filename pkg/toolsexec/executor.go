@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
@@ -236,6 +237,11 @@ func normalizeArgsForTool(toolName string, args map[string]interface{}) map[stri
 		if _, ok := args["action"]; !ok {
 			if v, ok := args["op"]; ok {
 				args["action"] = v
+			}
+		}
+		if v, ok := args["action"].(string); ok {
+			if strings.EqualFold(v, "search") {
+				args["action"] = "search_keywords"
 			}
 		}
 		if _, ok := args["query"]; !ok {

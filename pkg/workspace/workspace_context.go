@@ -162,19 +162,16 @@ func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextF
 	}
 
 	// Add Project Goals if available
-	if projectGoals.OverallGoal != "" || projectGoals.KeyFeatures != "" || projectGoals.TargetAudience != "" || projectGoals.TechnicalVision != "" {
+	if projectGoals.Mission != "" || projectGoals.PrimaryFunctions != "" || projectGoals.SuccessMetrics != "" {
 		b.WriteString("--- Project Goals ---\n")
-		if projectGoals.OverallGoal != "" {
-			b.WriteString(fmt.Sprintf("Overall Goal: %s\n", projectGoals.OverallGoal))
+		if projectGoals.Mission != "" {
+			b.WriteString(fmt.Sprintf("Mission: %s\n", projectGoals.Mission))
 		}
-		if projectGoals.KeyFeatures != "" {
-			b.WriteString(fmt.Sprintf("Key Features: %s\n", projectGoals.KeyFeatures))
+		if projectGoals.PrimaryFunctions != "" {
+			b.WriteString(fmt.Sprintf("Primary Functions: %s\n", projectGoals.PrimaryFunctions))
 		}
-		if projectGoals.TargetAudience != "" {
-			b.WriteString(fmt.Sprintf("Target Audience: %s\n", projectGoals.TargetAudience))
-		}
-		if projectGoals.TechnicalVision != "" {
-			b.WriteString(fmt.Sprintf("Technical Vision: %s\n", projectGoals.TechnicalVision))
+		if projectGoals.SuccessMetrics != "" {
+			b.WriteString(fmt.Sprintf("Success Metrics: %s\n", projectGoals.SuccessMetrics))
 		}
 		b.WriteString("\n")
 	}
@@ -448,9 +445,9 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 	var b strings.Builder
 
 	// Ultra-minimal: Essential project info
-	if workspace.ProjectGoals.OverallGoal != "" {
+	if workspace.ProjectGoals.Mission != "" {
 		// Truncate long goals to keep it concise
-		goal := workspace.ProjectGoals.OverallGoal
+		goal := workspace.ProjectGoals.Mission
 		if len(goal) > 80 {
 			goal = goal[:77] + "..."
 		}

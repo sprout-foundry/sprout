@@ -3,7 +3,6 @@ package workspace
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -12,12 +11,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/prompts"
-	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // generateFileHash creates a SHA256 hash of the file content.
@@ -417,74 +412,4 @@ func analyzeCSSFile(content, filename string) string {
 	classes := regexp.MustCompile(`\.[A-Za-z_][A-Za-z0-9_-]*`).FindAllStringIndex(content, -1)
 	ids := regexp.MustCompile(`#([A-Za-z_][A-Za-z0-9_-]*)`).FindAllStringIndex(content, -1)
 	return fmt.Sprintf("CSS with %d rules, %d classes, %d ids.", len(rules), len(classes), len(ids))
-}
-
-// GetProjectGoals uses an LLM to autogenerate project goals based on the workspace summary.
-func GetProjectGoals(cfg *config.Config, workspaceSummary string) (ProjectGoals, error) {
-	log := utils.GetLogger(cfg.SkipPrompt)
-
-	messages := prompts.BuildProjectGoalsMessages(workspaceSummary)
-
-	modelName := cfg.WorkspaceModel // Use the workspace model for generating project goals
-
-	response, _, err := llm.GetLLMResponse(modelName, messages, "", cfg, 2*time.Minute)
-	if err != nil {
-		return ProjectGoals{}, fmt.Errorf("failed to get project goals from LLM: %w", err)
-	}
-	// Log the raw LLM response for troubleshooting
-	log.Logf("DEBUG: Raw LLM Response for project goals:\n%s\n", response)
-
-	// Clean the response from markdown code blocks
-	if strings.Contains(response, "```json") {
-		parts := strings.SplitN(response, "```json", 2)
-		if len(parts) > 1 {
-			response = strings.Split(parts[1], "```")[0]
-		} else if strings.HasPrefix(response, "```") && strings.HasSuffix(response, "```") {
-			response = strings.TrimPrefix(response, "```")
-			response = strings.TrimSuffix(response, "```")
-		}
-	}
-
-	log.Log(fmt.Sprintf("DEBUG: Cleaned LLM Response for project goals:\n%s\n", response))
-
-	var goals ProjectGoals
-	if err := json.Unmarshal([]byte(response), &goals); err != nil {
-		log.Logf("DEBUG: Failed to unmarshal project goals JSON: %s\n", response)
-		return ProjectGoals{}, fmt.Errorf("failed to parse project goals JSON from LLM response: %w\nResponse was: %s", err, response)
-	}
-
-	return goals, nil
-}
-
-// GetProjectInsights uses an LLM to infer additional project attributes from an overview.
-func GetProjectInsights(cfg *config.Config, workspaceOverview string) (ProjectInsights, error) {
-	logger := utils.GetLogger(cfg.SkipPrompt)
-	messages := prompts.BuildProjectInsightsMessages(workspaceOverview)
-	modelName := cfg.WorkspaceModel
-
-	response, _, err := llm.GetLLMResponse(modelName, messages, "", cfg, 2*time.Minute)
-	if err != nil {
-		return ProjectInsights{}, fmt.Errorf("failed to get project insights from LLM: %w", err)
-	}
-	logger.Logf("DEBUG: Raw LLM Response for project insights:\n%s\n", response)
-
-	// Clean potential code fences
-	if strings.Contains(response, "```json") {
-		parts := strings.SplitN(response, "```json", 2)
-		if len(parts) > 1 {
-			response = strings.Split(parts[1], "```")[0]
-		} else if strings.HasPrefix(response, "```") && strings.HasSuffix(response, "```") {
-			response = strings.TrimPrefix(response, "```")
-			response = strings.TrimSuffix(response, "```")
-		}
-	}
-
-	logger.Log(fmt.Sprintf("DEBUG: Cleaned LLM Response for project insights:\n%s\n", response))
-
-	var insights ProjectInsights
-	if err := json.Unmarshal([]byte(response), &insights); err != nil {
-		logger.Logf("DEBUG: Failed to unmarshal project insights JSON: %s\n", response)
-		return ProjectInsights{}, fmt.Errorf("failed to parse project insights JSON from LLM response: %w\nResponse was: %s", err, response)
-	}
-	return insights, nil
 }

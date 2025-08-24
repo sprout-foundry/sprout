@@ -8,11 +8,34 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
+	"github.com/alantheprice/ledit/pkg/embedding"
+	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 
 	"golang.org/x/sync/errgroup"
 )
+
+// LLMProvider defines the interface for an LLM provider
+type LLMProvider interface {
+	GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, *types.TokenUsage, error)
+}
+
+// Embedder represents a web content embedder.
+type Embedder struct {
+	config *config.Config
+	logger *utils.Logger
+	provider LLMProvider
+}
+
+// NewEmbedder creates a new web content embedder.
+func NewEmbedder(cfg *config.Config, logger *utils.Logger, provider LLMProvider) *Embedder {
+	return &Embedder{
+		config: cfg,
+		logger: logger,
+		provider: provider,
+	}
+}
 
 const (
 	chunkSize    = 1000 // characters
@@ -42,7 +65,7 @@ func GetRelevantContentFromText(query, content string, cfg *config.Config) (stri
 		return "", fmt.Errorf("failed to split content into chunks: %w", nil)
 	}
 
-	queryEmbedding, err := llm.GenerateEmbedding(query, cfg.EmbeddingModel)
+	queryEmbedding, err := embedding.GenerateEmbedding(query, cfg.EmbeddingModel)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate embedding for query: %w", err)
 	}
@@ -64,7 +87,7 @@ func GetRelevantContentFromText(query, content string, cfg *config.Config) (stri
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			embedding, err := llm.GenerateEmbedding(chunk, cfg.EmbeddingModel)
+			embedding, err := embedding.GenerateEmbedding(chunk, cfg.EmbeddingModel)
 			if err != nil {
 				// Don't fail the whole process, just skip this chunk
 				utils.GetLogger(cfg.SkipPrompt).Logf("failed to generate embedding for chunk: %v", err)

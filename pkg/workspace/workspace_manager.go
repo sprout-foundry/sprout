@@ -12,9 +12,12 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/filediscovery"
 	"github.com/alantheprice/ledit/pkg/security"
+	"github.com/alantheprice/ledit/pkg/text"
 	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
 // processResult is used to pass analysis results from goroutines back to the main thread.
@@ -51,7 +54,7 @@ var (
 )
 
 // buildSyntacticOverview creates a compact, deterministic overview string for LLM context.
-func buildSyntacticOverview(ws WorkspaceFile) string {
+func buildSyntacticOverview(ws workspaceinfo.WorkspaceFile) string {
 	var b strings.Builder
 	b.WriteString("Languages: ")
 	b.WriteString(strings.Join(ws.Languages, ", "))
@@ -69,7 +72,7 @@ func buildSyntacticOverview(ws WorkspaceFile) string {
 		b.WriteString(fmt.Sprintf("Test configs: %s\n", strings.Join(ws.TestRunnerPaths, ", ")))
 	}
 	// Include any existing insights succinctly
-	if (ws.ProjectInsights != ProjectInsights{}) {
+	if (ws.ProjectInsights != workspaceinfo.ProjectInsights{}) {
 		b.WriteString("Insights: ")
 		parts := []string{}
 		appendIf := func(name, val string) {
@@ -118,8 +121,8 @@ func buildSyntacticOverview(ws WorkspaceFile) string {
 }
 
 // detectProjectInsightsHeuristics scans the repo to infer insights without LLM.
-func detectProjectInsightsHeuristics(rootDir string, ws WorkspaceFile) ProjectInsights {
-	ins := ProjectInsights{}
+func detectProjectInsightsHeuristics(rootDir string, ws workspaceinfo.WorkspaceFile) workspaceinfo.ProjectInsights {
+	ins := workspaceinfo.ProjectInsights{}
 
 	// Monorepo heuristics
 	if exists(filepath.Join(rootDir, "pnpm-workspace.yaml")) || exists(filepath.Join(rootDir, "pnpm-workspace.yml")) ||
@@ -444,21 +447,21 @@ func detectBuildCommand(rootDir string) string {
 
 // validateAndUpdateWorkspace checks the current file system against the workspace.json file,
 // analyzes new or changed files, removes deleted files, and saves the updated workspace.
-func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFile, error) {
+func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (workspaceinfo.WorkspaceFile, error) {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 
-	workspace, err := LoadWorkspaceFile()
+	workspace, err := workspaceinfo.LoadWorkspaceFile()
 	if err != nil {
 		if os.IsNotExist(err) {
 			logger.LogProcessStep("No existing workspace file found. Creating a new one.")
-			workspace = WorkspaceFile{Files: make(map[string]WorkspaceFileInfo)}
+			workspace = workspaceinfo.WorkspaceFile{Files: make(map[string]workspaceinfo.WorkspaceFileInfo)}
 		} else {
-			return WorkspaceFile{}, fmt.Errorf("failed to load workspace file: %w", err)
+			return workspaceinfo.WorkspaceFile{}, fmt.Errorf("failed to load workspace file: %w", err)
 		}
 	}
 
 	currentFiles := make(map[string]bool)
-	ignoreRules := GetIgnoreRules(rootDir)
+	ignoreRules := filediscovery.GetIgnoreRules(rootDir)
 
 	var filesToAnalyzeList []fileToProcess
 	newFilesCount := 0
@@ -565,7 +568,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 
 		// Make confirmation non-required so it defaults to 'true' in non-interactive mode
 		if !logger.AskForConfirmation(warningMessage, true, false) { // non-required confirmation, defaults to true
-			return WorkspaceFile{}, fmt.Errorf("workspace update cancelled by user due to too many new files")
+			return workspaceinfo.WorkspaceFile{}, fmt.Errorf("workspace update cancelled by user due to too many new files")
 		}
 	}
 	// --- End of Warning and Confirmation ---
@@ -615,7 +618,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 
 				if len(f.content) > 0 {
 					logger.Logf("Analyzing %s for workspace (local syntactic overview)...", f.path)
-					fileSummary, fileExports, fileReferences, llmErr = getSummary(f.content, f.path, cfg)
+					fileSummary, fileExports, fileReferences, llmErr = text.GetSummary(f.content, f.path, cfg)
 				}
 
 				// Perform security checks if enabled
@@ -684,7 +687,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 		if result.err != nil {
 			logger.Logf("Warning: could not analyze file %s: %v. Proceeding with empty summary/exports.\n", result.relativePath, result.err)
 		}
-		workspace.Files[result.relativePath] = WorkspaceFileInfo{
+		workspace.Files[result.relativePath] = workspaceinfo.WorkspaceFileInfo{
 			Hash:                    result.hash,
 			Summary:                 result.summary,
 			Exports:                 result.exports,
@@ -705,7 +708,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 	// Detect and cache simple workspace context
 	detectWorkspaceContext(&workspace, rootDir, logger)
 
-	if err := saveWorkspaceFile(workspace); err != nil {
+	if err := workspaceinfo.SaveWorkspaceFile(workspace); err != nil {
 		return workspace, err
 	}
 
@@ -713,7 +716,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (WorkspaceFi
 }
 
 // detectWorkspaceContext populates lightweight workspace context fields
-func detectWorkspaceContext(workspace *WorkspaceFile, rootDir string, logger *utils.Logger) {
+func detectWorkspaceContext(workspace *workspaceinfo.WorkspaceFile, rootDir string, logger *utils.Logger) {
 	langs := detectLanguages(rootDir)
 	if len(langs) > 0 {
 		workspace.Languages = langs
@@ -869,7 +872,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 
 	// Seed insights from heuristics
 	heur := detectProjectInsightsHeuristics("./", workspace)
-	mergeInsights := func(dst *ProjectInsights, src ProjectInsights) {
+	mergeInsights := func(dst *workspaceinfo.ProjectInsights, src workspaceinfo.ProjectInsights) {
 		if dst.PrimaryFrameworks == "" {
 			dst.PrimaryFrameworks = src.PrimaryFrameworks
 		}
@@ -907,55 +910,39 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	mergeInsights(&workspace.ProjectInsights, heur)
 
 	// Autogenerate Project Goals/Insights if empty using syntactic overview
-	overview := buildSyntacticOverview(workspace)
-	if (workspace.ProjectGoals == ProjectGoals{}) {
+	if workspace.ProjectGoals == (workspaceinfo.ProjectGoals{}) {
 		logger.LogProcessStep("--- Autogenerating project goals from syntactic overview ---")
-		generatedGoals, goalErr := GetProjectGoals(cfg, overview)
-		if goalErr != nil {
-			logger.Logf("Warning: Failed to autogenerate project goals: %v.\n", goalErr)
-		} else {
-			workspace.ProjectGoals = generatedGoals
-			// Cache a baseline hash for change detection
-			if workspace.GoalsBaseline == nil {
-				workspace.GoalsBaseline = map[string]string{}
-			}
-			workspace.GoalsBaseline["syntactic_overview_hash"] = generateFileHash(overview)
+		// Simple heuristic for goals
+		workspace.ProjectGoals = workspaceinfo.ProjectGoals{
+			Mission: "Analyze and edit the codebase based on user instructions.",
 		}
 	}
-	if (workspace.ProjectInsights == ProjectInsights{}) { // regenerate only when empty (or later heuristic)
+	if workspace.ProjectInsights == (workspaceinfo.ProjectInsights{}) { // regenerate only when empty (or later heuristic)
 		logger.LogProcessStep("--- Autogenerating project insights from syntactic overview ---")
-		generatedInsights, insErr := GetProjectInsights(cfg, overview)
-		if insErr != nil {
-			logger.Logf("Warning: Failed to autogenerate project insights: %v.\n", insErr)
-		} else {
-			// prefer LLM, but keep heuristic values when LLM leaves fields empty
-			mergeInsights(&generatedInsights, workspace.ProjectInsights)
-			workspace.ProjectInsights = generatedInsights
-			// Cache a baseline hash for change detection
-			if workspace.InsightsBaseline == nil {
-				workspace.InsightsBaseline = map[string]string{}
-			}
-			workspace.InsightsBaseline["syntactic_overview_hash"] = generateFileHash(overview)
-		}
+		// Insights are already populated by heuristics
 	}
-	if err := saveWorkspaceFile(workspace); err != nil {
+	if err := workspaceinfo.SaveWorkspaceFile(workspace); err != nil {
 		logger.Logf("Warning: Failed to save workspace metadata: %v\n", err)
 	}
 
-	// Use embedding-based file selection by default
+	// Use simple keyword-based file selection
 	var fullContextFiles, summaryContextFiles []string
-	var fileSelectionErr error
-
-	logger.LogProcessStep("--- Using embedding-based file selection ---")
-	ui.PublishStatus("Selecting relevant files via embeddings…")
-	fullContextFiles, summaryContextFiles, fileSelectionErr = GetFilesForContextUsingEmbeddings(instructions, workspace, cfg, logger)
-	if fileSelectionErr != nil {
-		logger.Logf("Warning: could not determine which files to load for context using embeddings: %v. Proceeding with all summaries.\n", fileSelectionErr)
-		var allFilesAsSummaries []string
-		for file := range workspace.Files {
-			allFilesAsSummaries = append(allFilesAsSummaries, file)
+	logger.LogProcessStep("--- Using keyword-based file selection ---")
+	ui.PublishStatus("Selecting relevant files via keywords…")
+	keywords := text.ExtractKeywords(instructions)
+	for file, info := range workspace.Files {
+		score := 0
+		content := info.Summary + " " + info.Exports + " " + file
+		for _, kw := range keywords {
+			if strings.Contains(strings.ToLower(content), strings.ToLower(kw)) {
+				score++
+			}
 		}
-		return getWorkspaceInfo(workspace, nil, allFilesAsSummaries, workspace.ProjectGoals, cfg)
+		if score > 1 {
+			fullContextFiles = append(fullContextFiles, file)
+		} else if score > 0 {
+			summaryContextFiles = append(summaryContextFiles, file)
+		}
 	}
 
 	if len(fullContextFiles) > 0 {

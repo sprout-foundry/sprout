@@ -14,11 +14,30 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/apikeys"
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/alantheprice/ledit/pkg/prompts"
-	ui "github.com/alantheprice/ledit/pkg/ui"
+	"github.com/alantheprice/ledit/pkg/types"
+	"github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
+
+type LLMProvider interface {
+	GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, *types.TokenUsage, error)
+	GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (*types.TokenUsage, error)
+}
+
+type LLMProviderImpl struct{}
+
+func NewLLMProvider() *LLMProviderImpl {
+	return &LLMProviderImpl{}
+}
+
+func (p *LLMProviderImpl) GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, *types.TokenUsage, error) {
+	return GetLLMResponse(modelName, messages, filename, cfg, timeout, imagePath...)
+}
+
+func (p *LLMProviderImpl) GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (*types.TokenUsage, error) {
+	return GetLLMResponseStream(modelName, messages, filename, cfg, timeout, writer, imagePath...)
+}
 
 // simple provider health state (in-memory)
 var providerFailures = map[string]int{}
@@ -436,7 +455,7 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 
 // --- Main Dispatcher ---
 
-func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (*TokenUsage, error) {
+func GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (*types.TokenUsage, error) {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 
 	var totalInputTokens int
@@ -462,7 +481,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	}
 
 	var err error
-	var tokenUsage *TokenUsage
+	var tokenUsage *types.TokenUsage
 
 	// Inform UI of the active model so the header can render it persistently
 	if ui.Enabled() && strings.TrimSpace(modelName) != "" {
@@ -659,7 +678,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	return tokenUsage, nil
 }
 
-func GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, *TokenUsage, error) {
+func GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, *types.TokenUsage, error) {
 	var contentBuffer strings.Builder
 	// Stream to UI when enabled, while also capturing content in buffer
 	var writer io.Writer = &contentBuffer

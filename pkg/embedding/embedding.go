@@ -42,3 +42,18 @@ func GenerateWorkspaceEmbeddings(workspace workspaceinfo.WorkspaceFile, db *Vect
 func SearchRelevantFiles(query string, db *VectorDB, topK int, cfg *config.Config) ([]*CodeEmbedding, []float64, error) {
 	return nil, nil, nil
 }
+
+// GetEmbeddingFilePath returns the path for embedding storage
+func GetEmbeddingFilePath() string {
+	return ".ledit/embeddings.json"
+}
+
+// Add adds an embedding to the database (placeholder)
+func (db *VectorDB) Add(id, content string) error {
+	return nil
+}
+
+// Search searches for similar embeddings (placeholder)
+func (db *VectorDB) Search(query string, topK int) ([]*CodeEmbedding, error) {
+	return nil, nil
+}

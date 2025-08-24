@@ -23,16 +23,16 @@ type LLMProvider interface {
 
 // Embedder represents a web content embedder.
 type Embedder struct {
-	config *config.Config
-	logger *utils.Logger
+	config   *config.Config
+	logger   *utils.Logger
 	provider LLMProvider
 }
 
 // NewEmbedder creates a new web content embedder.
 func NewEmbedder(cfg *config.Config, logger *utils.Logger, provider LLMProvider) *Embedder {
 	return &Embedder{
-		config: cfg,
-		logger: logger,
+		config:   cfg,
+		logger:   logger,
 		provider: provider,
 	}
 }

@@ -37,7 +37,7 @@ GREEN = '\033[32m'
 RED = '\033[31m'
 RESET = '\033[0m'
 
-DEFAULT_MODEL = 'deepinfra:mistralai/Devstral-Small-2507'
+DEFAULT_MODEL = 'deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct'
 
 def extract_failure_reason(stdout, stderr):
     """Extract a short, concise failure reason from test output.
@@ -341,7 +341,7 @@ Examples:
     def select_model_for_test(test_name: str) -> str:
         # Agent and Orchestration process tests use DeepSeek V3
         if test_name.startswith('Agent v2') or test_name.startswith('Process -') or test_name == 'Orchestration Feature':
-            return 'deepinfra:deepseek-ai/DeepSeek-V3-0324'
+            return 'deepinfra:Qwen3-235B-A22B-Thinking-2507'
         # Ollama test uses Ollama model
         if 'Ollama' in test_name:
             return 'ollama:qwen2.5-coder'

@@ -93,7 +93,7 @@ Implemented in `runOptimizedAgent`:
 - `workspace_info` → `executeWorkspaceInfo`
 - `grep_search` → `executeGrepSearch`
 - `list_files` → `executeListFiles(limit)`
-- `micro_edit` → `executeMicroEdit` (size-limited partial edit using `editor.ProcessPartialEdit`)
+
 - `completed` → mark `IsCompleted = true`
 - `continue` → no-op, loop continues
 

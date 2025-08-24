@@ -251,7 +251,7 @@ func generateProjectHash(logger *utils.Logger) string {
 	// Create hash input from workspace structure
 	hashInput := fmt.Sprintf("%d_%s_%s_%s",
 		len(wsFile.Files),
-		wsFile.ProjectGoals.OverallGoal,
+		wsFile.ProjectGoals.Mission,
 		strings.Join(wsFile.Languages, ","),
 		strings.Join(wsFile.BuildRunners, ","))
 

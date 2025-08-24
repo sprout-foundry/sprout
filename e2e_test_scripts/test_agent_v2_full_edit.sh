@@ -17,11 +17,12 @@ run_test_logic() {
     # Seed a text file
     printf "old content\n" > data.txt
 
-    # Deterministic instruction for full replacement
-    # We pass an explicit target file and direct replacement content
-    expected=$'alpha\nbeta\ngamma\n'
-    ../../ledit agent -m "$model_name" --skip-prompt "In $(pwd)/data.txt change 'old content' to 'alpha\nbeta\ngamma'"
+    # Step 1: Run agent to modify the file
+    output=$(../../ledit agent "Use the replace_file_content tool to change the content of data.txt to 'alpha\\nbeta\\ngamma'" --skip-prompt 2>&1)
+    echo "$output"
 
+    # Verify the change
+    expected=$'alpha\nbeta\ngamma'
     echo
     echo "--- Verifying Test ---"
     if diff -u <(cat data.txt) <(printf "%s" "$expected"); then

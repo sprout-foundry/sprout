@@ -108,3 +108,68 @@ type ModelPricing struct {
 type PricingTable struct {
 	Models map[string]ModelPricing `json:"models"`
 }
+
+// PatchResolution can be either a string (single file) or a map (multi-file patches)
+type PatchResolution struct {
+	// Single file patch (backward compatibility)
+	SingleFile string
+	// Multi-file patches
+	MultiFile map[string]string
+}
+
+// IsEmpty returns true if no patch resolution is provided
+func (p *PatchResolution) IsEmpty() bool {
+	return p.SingleFile == "" && len(p.MultiFile) == 0
+}
+
+// GetFiles returns a map of all files and their contents
+func (p *PatchResolution) GetFiles() map[string]string {
+	if p.MultiFile != nil {
+		return p.MultiFile
+	}
+	if p.SingleFile != "" {
+		// For single file patches, we don't have a filename, so return empty map
+		// This might need to be enhanced based on how single file patches are used
+		return make(map[string]string)
+	}
+	return make(map[string]string)
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for PatchResolution
+func (p *PatchResolution) UnmarshalJSON(data []byte) error {
+	// First try to unmarshal as a string (backward compatibility)
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		p.SingleFile = str
+		return nil
+	}
+
+	// If that fails, try to unmarshal as a map
+	var m map[string]string
+	if err := json.Unmarshal(data, &m); err == nil {
+		p.MultiFile = m
+		return nil
+	}
+
+	// If both fail, return the original error
+	return json.Unmarshal(data, &str)
+}
+
+// MarshalJSON implements custom JSON marshaling for PatchResolution
+func (p *PatchResolution) MarshalJSON() ([]byte, error) {
+	// If MultiFile is set, marshal it as an object
+	if len(p.MultiFile) > 0 {
+		return json.Marshal((map[string]string)(p.MultiFile))
+	}
+	// Otherwise, marshal SingleFile as a string
+	return json.Marshal(p.SingleFile)
+}
+
+// CodeReviewResult represents the result of an automated code review.
+type CodeReviewResult struct {
+	Status           string           `json:"status"`                      // "approved", "needs_revision", "rejected"
+	Feedback         string           `json:"feedback"`                    // Explanation for the status
+	DetailedGuidance string           `json:"detailed_guidance,omitempty"` // Detailed guidance for LLM if status is "needs_revision"
+	PatchResolution  *PatchResolution `json:"patch_resolution,omitempty"`  // Complete updated file content if direct patch is provided
+	NewPrompt        string           `json:"new_prompt,omitempty"`        // New prompt suggestion if status is "rejected"
+}

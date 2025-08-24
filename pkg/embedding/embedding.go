@@ -16,6 +16,48 @@ import (
 	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
+// EmbeddingProvider defines a pluggable provider for generating embeddings.
+type EmbeddingProvider interface {
+	Generate(text, model string) ([]float64, error)
+}
+
+// ProviderFunc is a function adapter to allow the use of ordinary functions as providers.
+type ProviderFunc func(text, model string) ([]float64, error)
+
+// Generate calls f(text, model).
+func (f ProviderFunc) Generate(text, model string) ([]float64, error) { return f(text, model) }
+
+var currentProvider EmbeddingProvider
+
+// SetProvider sets the global embedding provider used by this package.
+func SetProvider(p EmbeddingProvider) { currentProvider = p }
+
+// generateEmbedding uses the configured provider, falling back to a simple deterministic embedding if none is set.
+func generateEmbedding(text, model string) ([]float64, error) {
+	if currentProvider != nil {
+		return currentProvider.Generate(text, model)
+	}
+	// Fallback: simple 64-dim character-hash embedding
+	const dims = 64
+	vec := make([]float64, dims)
+	if len(text) == 0 {
+		return vec, nil
+	}
+	for _, r := range text {
+		idx := int(r) % dims
+		if idx < 0 {
+			idx = -idx
+		}
+		vec[idx] += 1
+	}
+	// Normalize
+	inv := 1.0 / float64(len(text))
+	for i := range vec {
+		vec[i] *= inv
+	}
+	return vec, nil
+}
+
 // CodeEmbedding represents a vector embedding for a code entity (file, function, class, etc.)
 type CodeEmbedding struct {
 	ID          string    `json:"id"`
@@ -204,7 +246,7 @@ Summary: %s
 Exports: %s`,
 		filePath, fileInfo.Summary, fileInfo.Exports)
 
-	vector, err := llm.GenerateEmbedding(textForEmbedding, cfg.EmbeddingModel)
+	vector, err := generateEmbedding(textForEmbedding, cfg.EmbeddingModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding for file %s: %w", filePath, err)
 	}
@@ -332,7 +374,7 @@ func GenerateWorkspaceEmbeddings(workspace workspaceinfo.WorkspaceFile, db *Vect
 // SearchRelevantFiles finds the most relevant files for a given query
 func SearchRelevantFiles(query string, db *VectorDB, topK int, cfg *config.Config) ([]*CodeEmbedding, []float64, error) {
 	// Generate embedding for the query
-	queryVector, err := llm.GenerateEmbedding(query, cfg.EmbeddingModel)
+	queryVector, err := generateEmbedding(query, cfg.EmbeddingModel)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate embedding for query: %w", err)
 	}

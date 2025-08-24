@@ -12,8 +12,8 @@ import (
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/llm"
-	orchestration_types "github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/alantheprice/ledit/pkg/prompts"
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -101,7 +101,7 @@ func (s *CodeReviewService) getStoredContext(sessionID string) (*ReviewContext, 
 }
 
 // PerformReview performs a code review based on the provided context and options
-func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOptions) (*orchestration_types.CodeReviewResult, error) {
+func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
 	s.logger.LogProcessStep("Performing code review...")
 
 	// Try to load existing context if session ID is provided
@@ -142,7 +142,7 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 		return s.handleConvergence(ctx)
 	}
 
-	var result *orchestration_types.CodeReviewResult
+	var result *types.CodeReviewResult
 	var err error
 
 	switch opts.Type {
@@ -199,7 +199,7 @@ func (s *CodeReviewService) hasExceededIterationLimit(ctx *ReviewContext) bool {
 }
 
 // handleIterationLimitExceeded handles the case when iteration limit is exceeded
-func (s *CodeReviewService) handleIterationLimitExceeded(ctx *ReviewContext) (*orchestration_types.CodeReviewResult, error) {
+func (s *CodeReviewService) handleIterationLimitExceeded(ctx *ReviewContext) (*types.CodeReviewResult, error) {
 	s.logger.LogProcessStep(fmt.Sprintf("Review iteration limit exceeded (%d/%d). Applying fallback strategy.",
 		len(ctx.History.Iterations), s.reviewConfig.MaxIterations))
 
@@ -218,7 +218,7 @@ func (s *CodeReviewService) handleIterationLimitExceeded(ctx *ReviewContext) (*o
 	}
 
 	// If no approved result found, create a fallback result
-	return &orchestration_types.CodeReviewResult{
+	return &types.CodeReviewResult{
 		Status:   "needs_revision",
 		Feedback: fmt.Sprintf("Review process exceeded maximum iterations (%d). Manual intervention required. Consider simplifying the original request or breaking it into smaller parts.", s.reviewConfig.MaxIterations),
 	}, nil
@@ -253,7 +253,7 @@ func (s *CodeReviewService) hasConverged(ctx *ReviewContext) bool {
 }
 
 // handleConvergence handles the case when the review process has converged
-func (s *CodeReviewService) handleConvergence(ctx *ReviewContext) (*orchestration_types.CodeReviewResult, error) {
+func (s *CodeReviewService) handleConvergence(ctx *ReviewContext) (*types.CodeReviewResult, error) {
 	s.logger.LogProcessStep("Review process has converged. Similar feedback detected in recent iterations.")
 
 	ctx.History.Converged = true
@@ -265,14 +265,14 @@ func (s *CodeReviewService) handleConvergence(ctx *ReviewContext) (*orchestratio
 		return latest.ReviewResult, nil
 	}
 
-	return &orchestration_types.CodeReviewResult{
+	return &types.CodeReviewResult{
 		Status:   "needs_revision",
 		Feedback: "Review process converged but no valid result found. Manual review required.",
 	}, nil
 }
 
 // recordReviewIteration records a review iteration in the history
-func (s *CodeReviewService) recordReviewIteration(ctx *ReviewContext, result *orchestration_types.CodeReviewResult, originalDiff string) {
+func (s *CodeReviewService) recordReviewIteration(ctx *ReviewContext, result *types.CodeReviewResult, originalDiff string) {
 	iteration := ReviewIteration{
 		IterationNumber: len(ctx.History.Iterations) + 1,
 		OriginalDiff:    originalDiff,
@@ -344,7 +344,7 @@ func (s *CodeReviewService) calculateSimilarity(str1, str2 string) float64 {
 }
 
 // performAutomatedReview handles automated code reviews during code generation workflow
-func (s *CodeReviewService) performAutomatedReview(ctx *ReviewContext) (*orchestration_types.CodeReviewResult, error) {
+func (s *CodeReviewService) performAutomatedReview(ctx *ReviewContext) (*types.CodeReviewResult, error) {
 	// Use the structured JSON-based review for automated workflow
 	// The GetCodeReview function needs to be updated to accept full file context
 	// For now, we'll pass the processed instructions as a substitute
@@ -352,14 +352,14 @@ func (s *CodeReviewService) performAutomatedReview(ctx *ReviewContext) (*orchest
 }
 
 // performStagedReview handles reviews of Git staged changes
-func (s *CodeReviewService) performStagedReview(ctx *ReviewContext) (*orchestration_types.CodeReviewResult, error) {
+func (s *CodeReviewService) performStagedReview(ctx *ReviewContext) (*types.CodeReviewResult, error) {
 	// Use the human-readable review for staged changes
 	reviewPrompt := prompts.CodeReviewStagedPrompt()
 	return llm.GetStagedCodeReview(s.config, ctx.Diff, reviewPrompt, "")
 }
 
 // handleReviewResult processes the review result based on the review options
-func (s *CodeReviewService) handleReviewResult(result *orchestration_types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*orchestration_types.CodeReviewResult, error) {
+func (s *CodeReviewService) handleReviewResult(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
 	switch result.Status {
 	case "approved":
 		s.logger.LogProcessStep("Code review approved.")
@@ -380,7 +380,7 @@ func (s *CodeReviewService) handleReviewResult(result *orchestration_types.CodeR
 }
 
 // handleNeedsRevision handles the case where the code review requires revisions
-func (s *CodeReviewService) handleNeedsRevision(result *orchestration_types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*orchestration_types.CodeReviewResult, error) {
+func (s *CodeReviewService) handleNeedsRevision(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
 	s.logger.LogProcessStep(fmt.Sprintf("Code review requires revisions (iteration %d/%d).",
 		ctx.CurrentIteration, s.reviewConfig.MaxIterations))
 	s.logger.LogProcessStep(fmt.Sprintf("Feedback: %s", result.Feedback))
@@ -440,7 +440,7 @@ func (s *CodeReviewService) handleNeedsRevision(result *orchestration_types.Code
 }
 
 // handleRejected handles the case where the code review is rejected
-func (s *CodeReviewService) handleRejected(result *orchestration_types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*orchestration_types.CodeReviewResult, error) {
+func (s *CodeReviewService) handleRejected(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
 	s.logger.LogProcessStep("Code review rejected.")
 	s.logger.LogProcessStep(fmt.Sprintf("Feedback: %s", result.Feedback))
 
@@ -587,7 +587,7 @@ func (s *CodeReviewService) cleanupOldBackups(maxBackups int) error {
 }
 
 // applyPatchToContent applies the patch resolution content directly
-func (s *CodeReviewService) applyPatchToContent(patchResolution *orchestration_types.PatchResolution, feedback string) error {
+func (s *CodeReviewService) applyPatchToContent(patchResolution *types.PatchResolution, feedback string) error {
 	if patchResolution == nil {
 		return fmt.Errorf("patch resolution is nil")
 	}
@@ -652,7 +652,7 @@ func (s *CodeReviewService) validatePatchContent(content string) error {
 }
 
 // attemptRetry attempts to retry the code generation with refined prompts
-func (s *CodeReviewService) attemptRetry(result *orchestration_types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) error {
+func (s *CodeReviewService) attemptRetry(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) error {
 	maxRetries := opts.MaxRetries
 	if maxRetries <= 0 {
 		maxRetries = 2 // Default to 2 retries
@@ -679,7 +679,7 @@ func (s *CodeReviewService) attemptRetry(result *orchestration_types.CodeReviewR
 }
 
 // createRefinedPromptForRetry creates a refined prompt for retry attempts when revisions are needed
-func (s *CodeReviewService) createRefinedPromptForRetry(result *orchestration_types.CodeReviewResult, ctx *ReviewContext) string {
+func (s *CodeReviewService) createRefinedPromptForRetry(result *types.CodeReviewResult, ctx *ReviewContext) string {
 	// Use the suggested new prompt if available
 	if strings.TrimSpace(result.NewPrompt) != "" {
 		return result.NewPrompt
@@ -710,7 +710,7 @@ func (s *CodeReviewService) createRefinedPromptForRetry(result *orchestration_ty
 }
 
 // attemptRetryForNeedsRevision attempts to retry code generation when review requires revisions
-func (s *CodeReviewService) attemptRetryForNeedsRevision(result *orchestration_types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) error {
+func (s *CodeReviewService) attemptRetryForNeedsRevision(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) error {
 	// Check if we have meaningful feedback to work with
 	if strings.TrimSpace(result.Feedback) == "" && strings.TrimSpace(result.DetailedGuidance) == "" {
 		s.logger.LogProcessStep("No actionable feedback available for retry. Skipping retry attempt.")
@@ -742,7 +742,7 @@ func (s *CodeReviewService) hasPreviousApprovedResult(ctx *ReviewContext) bool {
 }
 
 // getMostRecentApprovedResult returns the most recent approved result from history
-func (s *CodeReviewService) getMostRecentApprovedResult(ctx *ReviewContext) (*orchestration_types.CodeReviewResult, error) {
+func (s *CodeReviewService) getMostRecentApprovedResult(ctx *ReviewContext) (*types.CodeReviewResult, error) {
 	for i := len(ctx.History.Iterations) - 1; i >= 0; i-- {
 		iteration := ctx.History.Iterations[i]
 		if iteration.ReviewResult.Status == "approved" {

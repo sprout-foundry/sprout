@@ -1,4 +1,4 @@
-package common
+package filediscovery
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/index"
 	"github.com/alantheprice/ledit/pkg/utils"
-	"github.com/alantheprice/ledit/pkg/workspace"
+	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
 // FileDiscovery provides common file discovery and analysis functionality
@@ -100,7 +100,7 @@ type DiscoveryOptions struct {
 
 // discoverWithEmbeddings uses embeddings to find relevant files
 func (fd *FileDiscovery) discoverWithEmbeddings(userIntent string, options *DiscoveryOptions) *FileResult {
-	workspaceFile, err := workspace.LoadWorkspaceFile()
+	workspaceFile, err := workspaceinfo.LoadWorkspaceFile()
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return &FileResult{Error: fmt.Errorf("failed to load workspace: %w", err)}
@@ -109,7 +109,7 @@ func (fd *FileDiscovery) discoverWithEmbeddings(userIntent string, options *Disc
 		return nil
 	}
 
-	fullFiles, _, err := workspace.GetFilesForContextUsingEmbeddings(userIntent, workspaceFile, fd.config, fd.logger)
+	fullFiles, _, err := workspaceinfo.GetFilesForContextUsingEmbeddings(userIntent, workspaceFile, fd.config, fd.logger)
 	if err != nil {
 		return &FileResult{Error: fmt.Errorf("embedding search failed: %w", err)}
 	}

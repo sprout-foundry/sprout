@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
 
@@ -115,5 +116,50 @@ func ReadFile(filename string) (string, error) {
 	}
 
 	ui.Out().Printf("   ✅ File read successfully (%d bytes)\n", len(content))
+	return string(content), nil
+}
+
+// WriteFile writes data to a file.
+func WriteFile(path string, data []byte) error {
+	return os.WriteFile(path, data, 0644)
+}
+
+func LoadOriginalCode(filename string) (string, error) {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
+}
+
+func LoadFileContentWithRange(path string, startLine, endLine int) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	lineNumber := 1
+	for scanner.Scan() {
+		if lineNumber >= startLine && lineNumber <= endLine {
+			lines = append(lines, scanner.Text())
+		}
+		lineNumber++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+
+	return strings.Join(lines, "\n"), nil
+}
+
+func LoadFileContent(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
 	return string(content), nil
 }

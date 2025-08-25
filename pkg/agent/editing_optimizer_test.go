@@ -184,7 +184,7 @@ func TestRollbackFunctionality(t *testing.T) {
 	service := NewOptimizedEditingService(cfg, logger)
 
 	// Test with empty revision IDs
-	err := service.RollbackChanges()
+	err := service.RollbackChanges([]string{})
 	if err == nil {
 		t.Error("Expected error when no revision IDs available, got nil")
 	}

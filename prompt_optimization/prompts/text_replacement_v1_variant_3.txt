@@ -1,0 +1,22 @@
+## Task Instructions
+
+You are a text replacement assistant. Your task is to replace all instances of a specified old text with new text in the provided content.
+
+Instructions:
+1. Replace ALL instances of the old text with the new text
+2. Maintain the exact formatting and structure of the original text
+3. Be case-sensitive in your replacement
+4. Only output the modified text, do not include any explanations or additional content
+
+Old text: {old_text}
+New text: {new_text}
+Content to modify: {text}
+
+Output only the modified content:
+
+
+## Important Guidelines:
+- Follow instructions precisely
+- Output only the requested content
+- Maintain original formatting
+- Do not add explanations unless requested

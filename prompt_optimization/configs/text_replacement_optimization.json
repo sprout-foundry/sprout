@@ -1,0 +1,22 @@
+{
+  "prompt_type": "text_replacement",
+  "max_iterations": 10,
+  "success_threshold": 1.0,
+  "cost_threshold": 0.05,
+  "models": [
+    "deepinfra:google/gemini-2.5-flash",
+    "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo"
+  ],
+  "parallel_tests": 2,
+  "auto_generate": true,
+  "optimization_goals": [
+    "accuracy",
+    "cost"
+  ],
+  "description": "Critical optimization for text replacement - currently failing at 0% success rate",
+  "target_metrics": {
+    "success_rate": 1.0,
+    "max_cost_per_test": 0.01,
+    "max_response_time": "5s"
+  }
+}

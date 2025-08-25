@@ -1,0 +1,22 @@
+{
+  "id": "text_replacement_003",
+  "name": "Context Preservation", 
+  "description": "Replace text while preserving surrounding context and formatting",
+  "prompt_type": "text_replacement",
+  "inputs": {
+    "file_content": "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"PLACEHOLDER_TEXT\")\n\t// Keep this comment\n\treturn\n}",
+    "old_text": "PLACEHOLDER_TEXT", 
+    "new_text": "Hello, World!",
+    "instruction": "Replace 'PLACEHOLDER_TEXT' with 'Hello, World!' while preserving the code structure"
+  },
+  "expected": {
+    "contains": ["Hello, World!", "package main", "import \"fmt\"", "// Keep this comment"],
+    "not_contains": ["PLACEHOLDER_TEXT"],
+    "patterns": ["fmt\\.Println\\(\"Hello, World!\"\\)"],
+    "valid_code": true,
+    "language": "go",
+    "validator": "text_replacement"
+  },
+  "tags": ["context_preservation", "code_content", "formatting"],
+  "priority": 4
+}

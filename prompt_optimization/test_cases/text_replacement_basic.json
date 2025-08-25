@@ -1,0 +1,18 @@
+{
+  "id": "text_replacement_basic",
+  "name": "Basic Text Replacement",
+  "description": "Test simple text replacement functionality",
+  "prompt_type": "text_replacement",
+  "inputs": {
+    "text": "Hello world, this is a hello message.",
+    "old_text": "hello",
+    "new_text": "hi"
+  },
+  "expected": {
+    "contains": ["hello", "hi"],
+    "not_contains": ["hello"],
+    "format": "text"
+  },
+  "tags": ["basic", "text", "replacement"],
+  "priority": 5
+}

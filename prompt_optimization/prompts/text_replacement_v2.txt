@@ -1,0 +1,10 @@
+TASK: Replace specific text in file content.
+
+INPUT FILE CONTENT:
+{{file_content}}
+
+REPLACEMENT TASK:
+- Find: {{old_text}}
+- Replace with: {{new_text}}
+
+OUTPUT: Return the complete file content with the replacements made. Do not include any explanations, markdown formatting, or additional text. Return only the modified file content.

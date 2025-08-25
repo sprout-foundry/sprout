@@ -1,0 +1,20 @@
+{
+  "id": "text_replacement_004",
+  "name": "No Match Found",
+  "description": "Handle case where the text to replace is not found in the content", 
+  "prompt_type": "text_replacement",
+  "inputs": {
+    "file_content": "This file contains some content but not the target.",
+    "old_text": "NONEXISTENT_TEXT",
+    "new_text": "REPLACEMENT_TEXT",
+    "instruction": "Replace 'NONEXISTENT_TEXT' with 'REPLACEMENT_TEXT'"
+  },
+  "expected": {
+    "contains": ["This file contains some content but not the target."],
+    "not_contains": ["NONEXISTENT_TEXT", "REPLACEMENT_TEXT"],
+    "min_length": 40,
+    "validator": "text_replacement"
+  },
+  "tags": ["edge_case", "no_match", "error_handling"],
+  "priority": 3
+}

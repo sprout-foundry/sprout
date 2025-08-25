@@ -1,0 +1,18 @@
+{
+  "id": "exec_command_001",
+  "name": "Simple File Operations",
+  "description": "Convert plain text file operation requests to shell commands",
+  "prompt_type": "text_replacement", 
+  "inputs": {
+    "user_input": "list all files in the current directory"
+  },
+  "expected": {
+    "contains": ["ls"],
+    "not_contains": ["```", "explanation", "This command"],
+    "patterns": ["^ls.*$"],
+    "max_length": 20,
+    "min_length": 2
+  },
+  "tags": ["simple", "file_operations", "ls"],
+  "priority": 3
+}

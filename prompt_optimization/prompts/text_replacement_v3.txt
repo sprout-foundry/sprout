@@ -1,0 +1,3 @@
+Replace {{old_text}} with {{new_text}} in the following text:
+
+{{file_content}}

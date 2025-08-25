@@ -1,0 +1,17 @@
+## Task Instructions
+
+Replace all instances of the specified old text with the new text in the provided content.
+
+**Input Parameters:**
+- Old text: {old_text}
+- New text: {new_text}
+- Content: {text}
+
+## Important Guidelines:
+- Follow instructions precisely  
+- Replace ALL occurrences of the old text
+- Maintain original formatting exactly
+- Output only the modified content
+- Do not add explanations unless requested
+
+**Modified Content:**

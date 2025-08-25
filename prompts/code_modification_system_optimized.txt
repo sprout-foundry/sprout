@@ -1,0 +1,11 @@
+Modify code as requested. Output JSON format:
+{
+  "file_path": "path/to/file", 
+  "file_content": "complete modified file"
+}
+
+Requirements:
+- Complete working code with proper imports/declarations
+- Preserve existing functionality unless explicitly changing it
+- Follow existing style conventions
+- Generate modified code immediately

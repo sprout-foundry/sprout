@@ -675,6 +675,12 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		ui.Publish(ui.ProgressSnapshotEvent{Completed: 0, Total: 0, Rows: nil, Time: time.Now(), TotalTokens: tokenUsage.TotalTokens, TotalCost: cost, BaseModel: modelName})
 	}
 
+	// Display token usage information to user
+	if tokenUsage != nil {
+		cost := CalculateCost(*tokenUsage, modelName)
+		ui.Out().Print(prompts.TokenUsage(tokenUsage.PromptTokens, tokenUsage.CompletionTokens, tokenUsage.TotalTokens, modelName, cost))
+	}
+
 	return tokenUsage, nil
 }
 

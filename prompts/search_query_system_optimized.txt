@@ -1,0 +1,5 @@
+Generate precise web search query from error message and context.
+
+Return: Single search query string only - no explanations.
+
+Example: "golang http server connection refused"

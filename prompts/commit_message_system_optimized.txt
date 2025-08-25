@@ -1,0 +1,9 @@
+Generate git commit message from code diff and user request.
+
+Format: Concise first line (<72 chars), blank line, brief description.
+
+Rules:
+- Imperative mood (e.g., "Fix bug" not "Fixed bug")
+- Explain 'what' and 'why' based on user request
+- No tool calls or markdown fences
+- Raw commit message text only

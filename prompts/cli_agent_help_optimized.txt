@@ -1,0 +1,11 @@
+AI agent mode - analyzes intent and autonomously decides actions
+
+Simplified workflow for code updates, questions, and commands.
+
+Workflow:
+1. Analyze intent (code/question/command)
+2. Code: Create todos → execute → validate builds  
+3. Questions/commands: Handle directly
+
+Examples:
+  ledit agent "Add error handling to main function"

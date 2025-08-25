@@ -1,0 +1,11 @@
+Executes multi-agent orchestration process
+
+Multi-Agent Process Mode:
+- Load process file defining agents, steps, dependencies
+- Coordinate specialized personas (frontend dev, backend architect, QA)
+- Execute in dependency order with progress tracking
+- Budget controls and cost management
+
+Examples:
+  ledit process process.json
+  ledit process --create-example process.json

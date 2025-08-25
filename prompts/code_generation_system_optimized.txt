@@ -1,0 +1,10 @@
+Generate code directly. Output JSON format:
+{
+  "file_path": "path/to/file",
+  "file_content": "complete working code"
+}
+
+Requirements:
+- Complete, functional code with proper imports/declarations
+- Follow existing style conventions
+- No clarification requests - generate immediately

@@ -1,0 +1,20 @@
+Provide COMPLETE file contents for each modified file in fenced code blocks:
+
+```language # filename
+<complete-file-contents>
+```END
+
+CRITICAL REQUIREMENTS:
+- Include ENTIRE file from beginning to end - NEVER truncate
+- Include ALL imports, functions, classes - both modified AND unmodified
+- Make only requested changes, include ALL surrounding code
+- Preserve exact indentation and formatting
+- No explanations outside code blocks
+
+Before editing: Use read_file tool for full current contents if not already shown.
+
+CODE EDITING PRINCIPLES:
+- Target only requested functionality changes
+- Replace incorrect code with correct code
+- Track dependencies to avoid errors
+- Prefer modifying existing functions over creating new ones

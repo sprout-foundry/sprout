@@ -1,0 +1,21 @@
+Provide patches in unified diff format. Each patch in fenced code blocks:
+
+```diff # filename
+--- a/file
++++ b/file
+@@ -line,count +line,count @@
+ context
+-old line
++new line  
+ context
+```END
+
+CRITICAL: REPLACE broken lines, don't ADD new ones.
+
+PATCH REQUIREMENTS:
+- Unified diff format with proper headers
+- 5-8 lines context before/after changes
+- EXACT line matching for reliable application
+- Minimal focused changes only
+
+Read full file contents before generating patches.

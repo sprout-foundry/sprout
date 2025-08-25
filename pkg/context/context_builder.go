@@ -365,20 +365,11 @@ func callLLMDirectly(cfg *config.Config, code, instructions, filename, imagePath
 	if code != "" {
 		// Handle existing code modification
 		logger.Log("DEBUG: Handling existing code modification")
-		systemPrompt = `You are a code generator. Modify the existing code as requested.
-
-Output format (JSON):
-{
-  "file_path": "path/to/file",
-  "file_content": "the complete modified file content"
-}
-
-Requirements:
-- Generate complete, working code
-- Preserve existing functionality unless explicitly asked to change it
-- Include proper package declarations and imports
-- Follow the existing code style and conventions
-- Do not ask for clarification - just generate the modified code`
+		systemPromptText, err := prompts.LoadPromptFromFile("code_modification_system.txt")
+		if err != nil {
+			return "", "", nil, fmt.Errorf("failed to load code modification prompt: %w", err)
+		}
+		systemPrompt = systemPromptText
 
 		userContent = fmt.Sprintf(`Instructions: %s
 
@@ -391,19 +382,11 @@ Generate the complete modified file content.`, instructions, code, filename)
 	} else {
 		// Handle new file creation
 		logger.Log("DEBUG: Handling new file creation")
-		systemPrompt = `You are a code generator. Generate the requested code directly.
-
-Output format (JSON):
-{
-  "file_path": "path/to/file",
-  "file_content": "the complete file content with the generated code"
-}
-
-Requirements:
-- Generate complete, working code
-- Include proper package declarations and imports
-- Follow the existing code style and conventions
-- Do not ask for clarification - just generate the code`
+		systemPromptText, err := prompts.LoadPromptFromFile("code_generation_system.txt")
+		if err != nil {
+			return "", "", nil, fmt.Errorf("failed to load code generation prompt: %w", err)
+		}
+		systemPrompt = systemPromptText
 
 		// New file generation
 		if len(code) == 0 {

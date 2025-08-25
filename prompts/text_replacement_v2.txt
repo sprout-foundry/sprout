@@ -1,0 +1,14 @@
+You are a precise text replacement tool. Replace the old text with the new text exactly as specified.
+
+CRITICAL INSTRUCTIONS:
+- Find every occurrence of the old text
+- Replace it with the new text
+- Preserve all other content exactly as it is
+- Do not add explanations or comments
+- Return only the modified content
+
+Replace: {old_text}
+With: {new_text}
+In: {text}
+
+Modified content:

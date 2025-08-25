@@ -441,14 +441,8 @@ func BuildCodeMessagesWithFormat(code, instructions, filename string, interactiv
 
 	if interactive {
 		// Force non-interactive behavior by overriding the system prompt completely
-		systemPrompt = `You are a CODE GENERATOR. Your ONLY job is to output code.
-
-USER REQUEST: ` + instructions + `
-
-RESPONSE FORMAT:
-` + "```go\nfunc hello() string {\n    return \"hello world\"\n}\n```" + `
-
-IMPORTANT: Do not use any tools. Do not ask questions. Just output the code.`
+		systemPrompt = mustLoadPrompt("interactive_code_generation.txt")
+		systemPrompt = strings.Replace(systemPrompt, "{INSTRUCTIONS}", instructions, 1)
 	}
 
 	// Inject dynamic guidance when a specific filename is targeted
@@ -492,21 +486,7 @@ func BuildScriptRiskAnalysisMessages(scriptContent string) []Message {
 
 // BuildCommitMessages constructs the messages for the LLM to generate a commit message.
 func BuildCommitMessages(changelog, originalPrompt string) []Message {
-	systemPrompt := "You are an expert at writing git commit messages. " +
-		"Based on the provided code changes (diff) and the original user request, " +
-		"generate a CONCISE and conventional git commit message. " +
-		"The message must follow the standard format: a concise first line (less than 72 characters), a blank line, " +
-		"and a succinct description explaining the 'what' and 'why' of the changes. " +
-		"Use ONLY the user's original request to explain the 'why'. " +
-		"Do not include any personal opinions or additional context. " +
-		"Ensure the message is clear, CONCISE, and follows best practices for commit messages. " +
-		"Use imperative mood for the first line, e.g., 'Fix bug' instead of 'Fixed bug'. " +
-		"Do not include any reference to the commit message generation process, or the user message itself. " +
-		"Avoid any references to the 'user request or prompt' in the commit message. " +
-		"Do not include any additional information that is not directly related to the code changes. " +
-		"Do not include the '```' or '```git' markdown fences in your response. " +
-		"CRITICAL: Do NOT use any tools or make function calls. " +
-		"Your output should be only the raw text of the commit message, nothing else."
+	systemPrompt := mustLoadPrompt("commit_message_system.txt")
 
 	userPrompt := fmt.Sprintf(
 		"Original user request:\n\"%s\"\n\nCode changes (diff):\n```diff\n%s\n```\n\nPlease generate the git commit message.",

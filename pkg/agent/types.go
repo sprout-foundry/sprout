@@ -49,14 +49,7 @@ const (
 	IntentTypeCommand    IntentType = "command"
 )
 
-// ExecutionType represents how a todo should be executed
-type ExecutionType string
-
-const (
-	ExecutionTypeAnalysis    ExecutionType = "analysis"
-	ExecutionTypeDirectEdit  ExecutionType = "direct_edit"
-	ExecutionTypeCodeCommand ExecutionType = "code_command"
-)
+// ExecutionType is now defined in todo_management.go
 
 // AgentContext represents the full agent execution context
 type AgentContext struct {

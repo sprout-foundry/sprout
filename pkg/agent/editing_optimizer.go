@@ -150,6 +150,12 @@ func (s *OptimizedEditingService) determineStrategy(todo *TodoItem, ctx *Simplif
 	// Analysis factors for strategy determination
 	factors := s.analyzeTaskComplexity(todo, ctx)
 
+	// Force full edit for filesystem operations - they need shell commands not code editing
+	if factors.requiresShellCommands {
+		s.logger.LogProcessStep("🔧 Task requires filesystem operations, using full edit strategy")
+		return StrategyFull
+	}
+
 	// Quick edit if:
 	// - Single file mentioned
 	// - Small change description
@@ -178,6 +184,7 @@ type TaskComplexityFactors struct {
 	isMultiFile                 bool
 	isSimpleOperation           bool
 	isComplexOperation          bool
+	requiresShellCommands       bool
 	estimatedSize               int
 	estimatedCost               float64
 	hasArchitectureImplications bool
@@ -200,6 +207,12 @@ func (s *OptimizedEditingService) analyzeTaskComplexity(todo *TodoItem, ctx *Sim
 	// Operation complexity
 	simpleKeywords := []string{"add", "fix", "update", "change", "modify", "remove"}
 	complexKeywords := []string{"refactor", "restructure", "architecture", "design", "migrate", "overhaul"}
+	filesystemKeywords := []string{
+		"create directory", "mkdir", "create folder", "setup project", "initialize", 
+		"install", "setup monorepo", "create backend", "create frontend",
+		"create the", "directory for", "backend directory", "frontend directory",
+		"directory in", "directory called", "directory named", " directory ", "new directory",
+	}
 
 	for _, keyword := range simpleKeywords {
 		if strings.Contains(content, keyword) {
@@ -211,6 +224,14 @@ func (s *OptimizedEditingService) analyzeTaskComplexity(todo *TodoItem, ctx *Sim
 	for _, keyword := range complexKeywords {
 		if strings.Contains(content, keyword) {
 			factors.isComplexOperation = true
+			break
+		}
+	}
+
+	// Check for filesystem operations that require shell commands
+	for _, keyword := range filesystemKeywords {
+		if strings.Contains(content, keyword) {
+			factors.requiresShellCommands = true
 			break
 		}
 	}

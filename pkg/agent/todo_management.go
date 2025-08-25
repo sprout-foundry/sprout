@@ -1,5 +1,3 @@
-//go:build !agent2refactor
-
 package agent
 
 import (
@@ -7,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
@@ -21,6 +20,16 @@ import (
 	"github.com/alantheprice/ledit/pkg/workspace"
 )
 
+// ExecutionType defines the method for executing a todo
+type ExecutionType int
+
+const (
+	ExecutionTypeAnalysis     ExecutionType = iota // Analysis-only, no code changes
+	ExecutionTypeDirectEdit                        // Simple file edits
+	ExecutionTypeCodeCommand                       // Complex code generation
+	ExecutionTypeShellCommand                      // Shell commands for filesystem operations
+)
+
 // createTodos generates a list of todos based on user intent
 func createTodos(ctx *SimplifiedAgentContext) error {
 	// Build context-aware prompt
@@ -31,17 +40,8 @@ User Request: "%s"
 
 ## Workspace Context
 %s`, ctx.UserIntent, func() string {
-		// Use minimal workspace context for cleaner, more focused prompts
-		minimalContext := workspace.GetMinimalWorkspaceContext(ctx.UserIntent, ctx.Config)
-		if minimalContext == "" {
-			// Fallback to basic workspace context if minimal context fails
-			wc := workspace.GetWorkspaceContext(ctx.UserIntent, ctx.Config)
-			if len(wc) > 8000 {
-				return wc[:8000]
-			}
-			return wc
-		}
-		return minimalContext
+		// Use progressive workspace context with smart fallbacks
+		return workspace.GetProgressiveWorkspaceContext(ctx.UserIntent, ctx.Config)
 	}()))
 
 	// Add rollover context from previous analysis if available
@@ -213,6 +213,35 @@ func generateTodoID() string {
 	return strconv.FormatUint(uint64(bytes[0])<<24|uint64(bytes[1])<<16|uint64(bytes[2])<<8|uint64(bytes[3]), 16)
 }
 
+// executeTodoWithSmartRetry executes a todo with context-aware retry logic
+func executeTodoWithSmartRetry(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	const maxRetries = 2
+	
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		err := executeTodo(ctx, todo)
+		if err == nil {
+			return nil
+		}
+		
+		// Parse failure reason and adjust approach
+		if strings.Contains(err.Error(), "code review requires revisions") {
+			// Switch to shell command approach for filesystem tasks on first retry
+			if attempt == 0 && containsFilesystemKeywords(todo.Content) {
+				ctx.Logger.LogProcessStep("🔄 Switching to shell command approach for filesystem task")
+				return executeShellCommandTodo(ctx, todo)
+			}
+		}
+		
+		if attempt < maxRetries {
+			ctx.Logger.LogProcessStep(fmt.Sprintf("🔄 Retry %d/%d: %v", attempt+1, maxRetries, err))
+			// Add small delay between retries
+			time.Sleep(time.Second * 2)
+		}
+	}
+	
+	return fmt.Errorf("failed after %d retries", maxRetries+1)
+}
+
 // executeTodo executes a todo using the optimized editing service
 func executeTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	ctx.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing: %s", todo.Content))
@@ -230,6 +259,8 @@ func executeTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 		return nil
 	case ExecutionTypeDirectEdit:
 		return executeDirectEditTodo(ctx, todo)
+	case ExecutionTypeShellCommand:
+		return executeShellCommandTodo(ctx, todo)
 	case ExecutionTypeCodeCommand:
 		return executeOptimizedCodeEditingTodo(ctx, todo)
 	default:
@@ -242,15 +273,7 @@ func analyzeTodoExecutionType(content, description string) ExecutionType {
 	contentLower := strings.ToLower(content)
 	descriptionLower := strings.ToLower(description)
 
-	// Analysis-only todos (read, explore, examine, analyze)
-	analysisKeywords := []string{"analyze", "examine", "explore", "read", "review", "understand", "study", "investigate", "check", "verify", "validate", "list", "show", "display", "find", "search", "discover", "identify"}
-	for _, keyword := range analysisKeywords {
-		if strings.Contains(contentLower, keyword) {
-			return ExecutionTypeAnalysis
-		}
-	}
-
-	// Direct edit todos (simple changes, updates to documentation)
+	// Direct edit todos (simple changes, updates to documentation) - check first before shell commands
 	directEditKeywords := []string{"update readme", "update documentation", "add comment", "fix typo", "update description", "add example", "update text"}
 	for _, keyword := range directEditKeywords {
 		if strings.Contains(contentLower, keyword) || strings.Contains(descriptionLower, keyword) {
@@ -263,6 +286,28 @@ func analyzeTodoExecutionType(content, description string) ExecutionType {
 		return ExecutionTypeDirectEdit
 	}
 
+	// Shell command todos (filesystem operations) - after direct edit check
+	shellKeywords := []string{
+		"create directory", "mkdir", "create folder", "setup project", "initialize", 
+		"install", "setup monorepo", "create backend", "create frontend", "run", "execute command",
+		"create the", "directory for", "backend directory", "frontend directory",
+		"directory in", "directory called", "directory named", " directory ", "new directory",
+	}
+	for _, keyword := range shellKeywords {
+		if strings.Contains(contentLower, keyword) || strings.Contains(descriptionLower, keyword) {
+			return ExecutionTypeShellCommand
+		}
+	}
+
+	// Analysis-only todos (read, explore, examine, analyze)
+	analysisKeywords := []string{"analyze", "examine", "explore", "read", "review", "understand", "study", "investigate", "check", "verify", "validate", "list", "show", "display", "find", "search", "discover", "identify"}
+	for _, keyword := range analysisKeywords {
+		if strings.Contains(contentLower, keyword) {
+			return ExecutionTypeAnalysis
+		}
+	}
+
+
 	// Default to code command for anything involving code changes
 	return ExecutionTypeCodeCommand
 }
@@ -271,10 +316,10 @@ func analyzeTodoExecutionType(content, description string) ExecutionType {
 func executeAnalysisTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	ctx.Logger.LogProcessStep("🔍 Performing analysis (no code changes)")
 
-	// Get minimal workspace context for analysis
-	minimalContext := workspace.GetMinimalWorkspaceContext(ctx.UserIntent, ctx.Config)
-	if minimalContext == "" {
-		minimalContext = "Workspace context not available"
+	// Get progressive workspace context for analysis with smart fallbacks
+	workspaceContext := workspace.GetProgressiveWorkspaceContext(ctx.UserIntent, ctx.Config)
+	if workspaceContext == "" {
+		workspaceContext = "Workspace context not available"
 	}
 
 	prompt := fmt.Sprintf(`You are analyzing the codebase to help with: "%s"
@@ -302,7 +347,7 @@ AFTER gathering evidence with tools, provide your analysis with:
 - Code examples where relevant
 
 Remember: Always use tools first, then analyze based on actual evidence from the codebase.
-`, ctx.UserIntent, todo.Content, minimalContext, todo.Description)
+`, ctx.UserIntent, todo.Content, workspaceContext, todo.Description)
 
 	// Use the unified agent workflow pattern that works reliably with tools
 	prompt = fmt.Sprintf(`Task: %s
@@ -795,4 +840,192 @@ func extractFindingsFromAnalysis(analysisText string, todo *TodoItem) []Analysis
 	}
 
 	return findings
+}
+
+// containsFilesystemKeywords checks if a todo content contains filesystem operation keywords
+func containsFilesystemKeywords(content string) bool {
+	contentLower := strings.ToLower(content)
+	filesystemKeywords := []string{
+		"create directory", "mkdir", "create folder", "setup project", "initialize", 
+		"install", "setup monorepo", "create backend", "create frontend",
+		"create the", "directory for", "backend directory", "frontend directory",
+		"directory in", "directory called", "directory named", " directory ", "new directory",
+	}
+	
+	for _, keyword := range filesystemKeywords {
+		if strings.Contains(contentLower, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+// executeShellCommandTodo handles filesystem operations through shell commands
+func executeShellCommandTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	ctx.Logger.LogProcessStep("🖥️ Executing shell command todo")
+
+	// Use LLM to generate appropriate shell commands
+	prompt := fmt.Sprintf(`You are an expert system administrator. Generate safe shell commands to accomplish this task:
+
+Task: %s
+Description: %s
+Overall Goal: %s
+
+Generate the appropriate shell commands to complete this task. Be very careful about:
+1. Only use safe commands that won't harm the system
+2. Create directories and files as needed
+3. Follow standard conventions for project structure
+4. Use relative paths from current directory
+5. For multi-line file content, use SINGLE commands with proper heredoc syntax
+6. Each array item should be ONE complete command, not broken into parts
+7. For Go commands (go get, go mod, go build), always run them in the directory with go.mod
+8. Use "cd directory && command" format for commands that need specific working directory
+
+IMPORTANT: 
+- When creating files with content, use: "cat > filename <<'EOF'\ncontent here\nEOF"  
+- For Go module operations, use: "cd backend && go get package" or "cd backend && go mod tidy"
+- Never run Go commands from root if the go.mod is in a subdirectory
+
+Respond with JSON:
+{
+  "commands": ["command1", "command2", "command3"],
+  "explanation": "What these commands accomplish",  
+  "safety_notes": "Any important safety considerations"
+}`, todo.Content, todo.Description, ctx.UserIntent)
+
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are an expert at generating safe shell commands for development tasks. Always respond with valid JSON containing an array of shell commands."},
+		{Role: "user", Content: prompt},
+	}
+
+	// Get LLM response for command generation
+	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis"))
+	if err != nil {
+		return fmt.Errorf("failed to generate shell commands: %w", err)
+	}
+
+	// Track token usage
+	trackTokenUsage(ctx, tokenUsage, ctx.Config.OrchestrationModel)
+
+	// Parse the response
+	var commandPlan struct {
+		Commands     []string `json:"commands"`
+		Explanation  string   `json:"explanation"`
+		SafetyNotes  string   `json:"safety_notes"`
+	}
+
+	clean, err := utils.ExtractJSON(response)
+	if err != nil {
+		return fmt.Errorf("failed to parse command plan: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(clean), &commandPlan); err != nil {
+		return fmt.Errorf("failed to unmarshal command plan: %w", err)
+	}
+
+	// Log the plan
+	ctx.Logger.LogProcessStep(fmt.Sprintf("📋 Execution plan: %s", commandPlan.Explanation))
+	if commandPlan.SafetyNotes != "" {
+		ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Safety notes: %s", commandPlan.SafetyNotes))
+	}
+
+	// Execute commands safely
+	for i, command := range commandPlan.Commands {
+		// Basic safety checks
+		if containsUnsafeCommand(command) {
+			return fmt.Errorf("unsafe command detected and blocked: %s", command)
+		}
+		
+		// Validate shell command syntax
+		if err := validateShellCommand(command); err != nil {
+			ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Skipping invalid command: %s", err.Error()))
+			continue
+		}
+		
+		// Make command idempotent
+		safeCommand := makeCommandIdempotent(command)
+		
+		ctx.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing command %d/%d: %s", i+1, len(commandPlan.Commands), safeCommand))
+
+		// Execute the command
+		cmd := exec.Command("bash", "-c", safeCommand)
+		cmd.Dir = "." // Execute in current directory
+		
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			ctx.Logger.LogProcessStep(fmt.Sprintf("❌ Command failed: %s", string(output)))
+			return fmt.Errorf("command failed: %s - %w", command, err)
+		}
+		
+		if len(output) > 0 {
+			ctx.Logger.LogProcessStep(fmt.Sprintf("📤 Output: %s", string(output)))
+		}
+	}
+
+	// Store results
+	ctx.AnalysisResults[todo.ID+"_shell_result"] = fmt.Sprintf("Successfully executed %d commands: %s", len(commandPlan.Commands), commandPlan.Explanation)
+	
+	ctx.Logger.LogProcessStep("✅ Shell command todo completed successfully")
+	return nil
+}
+
+// containsUnsafeCommand performs basic safety checks on shell commands
+func containsUnsafeCommand(command string) bool {
+	unsafePatterns := []string{
+		"rm -rf /",
+		"rm -rf ~",
+		"rm -rf *",
+		"sudo rm",
+		"format",
+		"del /",
+		"> /dev/",
+		"chmod 777",
+		"curl.*|.*sh",
+		"wget.*|.*sh",
+	}
+	
+	cmdLower := strings.ToLower(strings.TrimSpace(command))
+	for _, pattern := range unsafePatterns {
+		if strings.Contains(cmdLower, strings.ToLower(pattern)) {
+			return true
+		}
+	}
+	return false
+}
+
+// makeCommandIdempotent modifies commands to be idempotent (safe to run multiple times)
+func makeCommandIdempotent(command string) string {
+	// Handle go mod init - check if go.mod already exists
+	if strings.Contains(command, "go mod init") && !strings.Contains(command, "test -f") {
+		parts := strings.Split(command, "&&")
+		for i, part := range parts {
+			part = strings.TrimSpace(part)
+			if strings.HasPrefix(part, "go mod init") {
+				// Make it conditional on go.mod not existing
+				parts[i] = fmt.Sprintf("(test -f go.mod || %s)", part)
+			}
+		}
+		return strings.Join(parts, " && ")
+	}
+	
+	return command
+}
+
+// validateShellCommand performs additional validation on generated shell commands
+func validateShellCommand(command string) error {
+	// Check for common LLM mistakes
+	problematicPatterns := []string{
+		"package main",    // Go source code being treated as shell command
+		"import (",        // Go imports as shell command
+		"func main",       // Go function as shell command  
+		"<<EOF\n",         // Malformed heredoc
+	}
+	
+	for _, pattern := range problematicPatterns {
+		if strings.Contains(command, pattern) {
+			return fmt.Errorf("command appears to contain source code instead of shell syntax: %s", command)
+		}
+	}
+	
+	return nil
 }

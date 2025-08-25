@@ -1,5 +1,3 @@
-//go:build !agent2refactor
-
 package agent
 
 import (
@@ -172,8 +170,8 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 		ctx.CurrentTodo = &todo
 		ctx.Todos[nextIdx].Status = "in_progress"
 
-		// Execute via code command with skip prompt
-		err := executeTodo(ctx, &ctx.Todos[nextIdx])
+		// Execute via code command with skip prompt, with smart retry
+		err := executeTodoWithSmartRetry(ctx, &ctx.Todos[nextIdx])
 		if err != nil {
 			ctx.Todos[nextIdx].Status = "failed"
 			ctx.Logger.LogError(fmt.Errorf("todo failed: %w", err))

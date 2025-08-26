@@ -14,11 +14,11 @@ import (
 // TestTaskComplexityFactors_FilesystemOperations tests the improved strategy selection logic
 func TestTaskComplexityFactors_FilesystemOperations(t *testing.T) {
 	tests := []struct {
-		name                  string
-		todoContent          string
-		todoDescription      string
-		expectShellCommands  bool
-		expectComplexOp      bool
+		name                string
+		todoContent         string
+		todoDescription     string
+		expectShellCommands bool
+		expectComplexOp     bool
 	}{
 		{
 			name:                "Directory creation task",
@@ -116,10 +116,10 @@ func TestDetermineStrategy_FilesystemOperations(t *testing.T) {
 // TestExecutionTypeDetection tests the improved execution type detection
 func TestExecutionTypeDetection(t *testing.T) {
 	tests := []struct {
-		name            string
-		content         string
-		description     string
-		expectedType    ExecutionType
+		name         string
+		content      string
+		description  string
+		expectedType ExecutionType
 	}{
 		{
 			name:         "Shell command detection",
@@ -243,9 +243,9 @@ func TestProgressiveContextLoading(t *testing.T) {
 	tempDir := t.TempDir()
 	originalDir, _ := os.Getwd()
 	defer os.Chdir(originalDir)
-	
+
 	os.Chdir(tempDir)
-	
+
 	// Create some test files and directories
 	os.Mkdir("backend", 0755)
 	os.Mkdir("frontend", 0755)
@@ -253,7 +253,7 @@ func TestProgressiveContextLoading(t *testing.T) {
 	os.WriteFile("README.md", []byte("# Test Project"), 0644)
 
 	cfg := &config.Config{}
-	
+
 	// Test that directory structure context is generated (using workspace package)
 	progressiveContext := workspace.GetProgressiveWorkspaceContext("Create monorepo", cfg)
 	if progressiveContext == "" {
@@ -263,14 +263,14 @@ func TestProgressiveContextLoading(t *testing.T) {
 	// Test intent-based context generation
 	monorepoIntent := "Create a monorepo with backend and frontend"
 	intentContext := workspace.GetProgressiveWorkspaceContext(monorepoIntent, cfg)
-	
+
 	if !strings.Contains(intentContext, "backend/") {
 		t.Error("Intent context should mention backend structure")
 	}
 
 	reactIntent := "Setup React application with Vite"
 	reactContext := workspace.GetProgressiveWorkspaceContext(reactIntent, cfg)
-	
+
 	if !strings.Contains(reactContext, "package.json") {
 		t.Error("React intent context should mention package.json")
 	}
@@ -281,7 +281,7 @@ func BenchmarkStrategyDetermination(b *testing.B) {
 	cfg := &config.Config{}
 	logger := utils.GetLogger(true)
 	service := NewOptimizedEditingService(cfg, logger)
-	
+
 	todo := &TodoItem{
 		Content:     "Create a complex backend API with multiple endpoints",
 		Description: "Implement REST API with user management, authentication, and data validation",
@@ -298,7 +298,7 @@ func BenchmarkStrategyDetermination(b *testing.B) {
 func TestErrorHandling(t *testing.T) {
 	// Test that code review failure error is properly detected
 	codeReviewError := fmt.Errorf("code review requires revisions after 5 iterations: The provided changes only create the `updated_file.go` with the correct content")
-	
+
 	if !strings.Contains(codeReviewError.Error(), "code review requires revisions") {
 		t.Error("Should detect code review failure pattern")
 	}
@@ -314,12 +314,12 @@ func TestErrorHandling(t *testing.T) {
 func TestIntegration_FilesystemTaskFlow(t *testing.T) {
 	cfg := &config.Config{SkipPrompt: true}
 	logger := utils.GetLogger(true)
-	
+
 	ctx := &SimplifiedAgentContext{
-		UserIntent: "Create a monorepo with backend and frontend directories",
-		Config:     cfg,
-		Logger:     logger,
-		Todos:      []TodoItem{},
+		UserIntent:      "Create a monorepo with backend and frontend directories",
+		Config:          cfg,
+		Logger:          logger,
+		Todos:           []TodoItem{},
 		AnalysisResults: make(map[string]string),
 	}
 
@@ -347,6 +347,6 @@ func TestIntegration_FilesystemTaskFlow(t *testing.T) {
 
 	// Test that the todo would be routed to shell command execution
 	// (We can't actually execute without mocking the LLM calls)
-	
+
 	t.Logf("Integration test passed: filesystem task properly detected and routed")
 }

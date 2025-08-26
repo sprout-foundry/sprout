@@ -107,7 +107,7 @@ func (e *EnvironmentConfigSource) Load(ctx context.Context) (*config.Config, err
 
 	// Map environment variables to configuration
 	envVars := e.getEnvironmentVariables()
-	
+
 	for key, value := range envVars {
 		switch strings.ToLower(key) {
 		case "editing_model":
@@ -190,20 +190,20 @@ func (e *EnvironmentConfigSource) Load(ctx context.Context) (*config.Config, err
 // getEnvironmentVariables gets environment variables with the configured prefix
 func (e *EnvironmentConfigSource) getEnvironmentVariables() map[string]string {
 	envVars := make(map[string]string)
-	
+
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		
+
 		key, value := parts[0], parts[1]
 		if strings.HasPrefix(key, e.Prefix) {
 			configKey := strings.TrimPrefix(key, e.Prefix)
 			envVars[strings.ToLower(configKey)] = value
 		}
 	}
-	
+
 	return envVars
 }
 
@@ -271,7 +271,7 @@ func (f *ConfigurationFactory) CreateStandardSetup() (*LayeredConfigProvider, er
 	provider := NewLayeredConfigProvider()
 
 	// Add configuration sources in priority order (lowest to highest)
-	
+
 	// 1. Defaults (lowest priority - 0)
 	defaultsSource := NewDefaultsConfigSource("defaults", 0)
 	if err := provider.AddSource(defaultsSource); err != nil {

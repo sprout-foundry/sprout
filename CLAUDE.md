@@ -17,9 +17,11 @@ go install                      # Install to GOPATH/bin
 ### Testing
 ```bash
 ./test_e2e.sh                  # Run end-to-end tests via Python test runner
-./test_e2e.sh --single         # Run single test mode
-python3 test_runner.py         # Direct test runner execution
+./test_e2e.sh --single         # Run single test mode (interactive selection)
+python3 test_runner.py         # Direct test runner execution with parallel support
 go test ./...                  # Run unit tests
+go test ./... -v               # Run unit tests with verbose output
+go test -race ./...            # Run unit tests with race detection
 ```
 
 ### Development Scripts
@@ -65,11 +67,20 @@ go test ./...                  # Run unit tests
 ### Key Data Flow
 
 1. **User Input** → CLI commands (`cmd/`) parse and route to appropriate handlers
-2. **Agent Processing** → Simplified agent breaks down tasks into todos, selects editing strategy  
+2. **Agent Processing** → Agent system analyzes intent and breaks down tasks, selects editing strategy  
 3. **Context Building** → Workspace analyzer selects relevant files and builds LLM context
 4. **Code Generation** → Editor system generates changes using optimal strategy (quick vs full)
 5. **Change Management** → Change tracker records all modifications with rollback support
 6. **Validation** → Code review and validation systems ensure quality
+
+### Command Architecture
+
+The CLI supports several modes of operation:
+- **`ledit code`**: Direct code generation and editing
+- **`ledit agent`**: Intent-driven autonomous operations with task breakdown
+- **`ledit process`**: Multi-step orchestration for complex features
+- **`ledit question`**: Interactive Q&A about the workspace
+- **`ledit fix`**: Error-driven code fixing with validation loops
 
 ### Multi-Agent Architecture
 
@@ -143,8 +154,10 @@ The system analyzes all workspace files and intelligently determines which files
 
 ## Development Notes
 
+- **Modular Architecture**: Currently undergoing modular architecture refactor on `feat/modular-architecture-refactor` branch
 - **Build Tags**: Some agent components use `//go:build !agent2refactor` to manage refactoring
-- **Provider Support**: Extensive multi-provider LLM support with unified cost tracking
+- **Provider Support**: Extensive multi-provider LLM support with unified cost tracking (OpenAI, Gemini, Groq, Ollama, DeepInfra, Cerebras, DeepSeek)
 - **Security Focus**: Built-in credential scanning and safety checks
 - **Self-Correction**: Orchestration includes retry logic with error analysis and web search
 - **TDD Integration**: Test-driven development workflows in orchestration mode
+- **Testing**: Python-based E2E test runner with parallel execution and timeout handling

@@ -23,21 +23,21 @@ type CodeGenerator interface {
 
 // CodeGenerationRequest represents a request to generate code
 type CodeGenerationRequest struct {
-	Instructions    string                 `json:"instructions"`
-	TargetFile      string                 `json:"target_file,omitempty"`
+	Instructions    string                  `json:"instructions"`
+	TargetFile      string                  `json:"target_file,omitempty"`
 	Context         *types.WorkspaceContext `json:"context,omitempty"`
-	Strategy        string                 `json:"strategy"` // "quick", "full", "auto"
-	MaxTokens       int                    `json:"max_tokens,omitempty"`
-	Model           string                 `json:"model,omitempty"`
-	AdditionalFiles []string               `json:"additional_files,omitempty"`
+	Strategy        string                  `json:"strategy"` // "quick", "full", "auto"
+	MaxTokens       int                     `json:"max_tokens,omitempty"`
+	Model           string                  `json:"model,omitempty"`
+	AdditionalFiles []string                `json:"additional_files,omitempty"`
 }
 
 // CodeGenerationResult represents the result of code generation
 type CodeGenerationResult struct {
-	Changes     types.ChangeSet           `json:"changes"`
-	Metadata    *types.ResponseMetadata   `json:"metadata"`
-	Strategy    string                   `json:"strategy"`
-	Validation  *ValidationResult        `json:"validation,omitempty"`
+	Changes    types.ChangeSet         `json:"changes"`
+	Metadata   *types.ResponseMetadata `json:"metadata"`
+	Strategy   string                  `json:"strategy"`
+	Validation *ValidationResult       `json:"validation,omitempty"`
 }
 
 // ValidationResult represents the result of code validation
@@ -68,15 +68,15 @@ type WorkspaceAnalyzer interface {
 
 // WorkspaceStructure represents the analyzed structure of a workspace
 type WorkspaceStructure struct {
-	RootPath      string             `json:"root_path"`
-	ProjectType   string             `json:"project_type"` // "go", "javascript", "python", etc.
-	Framework     string             `json:"framework,omitempty"`
-	BuildTool     string             `json:"build_tool,omitempty"`
-	TestFramework string             `json:"test_framework,omitempty"`
-	Directories   []DirectoryInfo    `json:"directories"`
-	KeyFiles      []types.FileInfo   `json:"key_files"`
-	ConfigFiles   []types.FileInfo   `json:"config_files"`
-	Metadata      map[string]any     `json:"metadata"`
+	RootPath      string           `json:"root_path"`
+	ProjectType   string           `json:"project_type"` // "go", "javascript", "python", etc.
+	Framework     string           `json:"framework,omitempty"`
+	BuildTool     string           `json:"build_tool,omitempty"`
+	TestFramework string           `json:"test_framework,omitempty"`
+	Directories   []DirectoryInfo  `json:"directories"`
+	KeyFiles      []types.FileInfo `json:"key_files"`
+	ConfigFiles   []types.FileInfo `json:"config_files"`
+	Metadata      map[string]any   `json:"metadata"`
 }
 
 // DirectoryInfo represents information about a directory
@@ -97,8 +97,8 @@ type FileAnalysis struct {
 	Imports      []string       `json:"imports,omitempty"`
 	Exports      []string       `json:"exports,omitempty"`
 	Dependencies []string       `json:"dependencies,omitempty"`
-	Complexity   int           `json:"complexity,omitempty"`
-	LineCount    int           `json:"line_count"`
+	Complexity   int            `json:"complexity,omitempty"`
+	LineCount    int            `json:"line_count"`
 }
 
 // FunctionInfo represents information about a function or method
@@ -149,35 +149,35 @@ type AgentOrchestrator interface {
 
 // AgentTask represents a task to be executed by an agent
 type AgentTask struct {
-	ID           string            `json:"id"`
-	Type         string            `json:"type"` // "code_generation", "analysis", "refactoring", etc.
-	Description  string            `json:"description"`
-	Instructions string            `json:"instructions"`
-	Context      map[string]any    `json:"context,omitempty"`
-	Priority     int              `json:"priority,omitempty"`
-	Timeout      int              `json:"timeout,omitempty"` // seconds
+	ID           string         `json:"id"`
+	Type         string         `json:"type"` // "code_generation", "analysis", "refactoring", etc.
+	Description  string         `json:"description"`
+	Instructions string         `json:"instructions"`
+	Context      map[string]any `json:"context,omitempty"`
+	Priority     int            `json:"priority,omitempty"`
+	Timeout      int            `json:"timeout,omitempty"` // seconds
 }
 
 // AgentResult represents the result of an agent operation
 type AgentResult struct {
-	TaskID       string                  `json:"task_id"`
-	Status       string                  `json:"status"` // "success", "failure", "partial"
-	Result       interface{}             `json:"result,omitempty"`
-	Changes      *types.ChangeSet        `json:"changes,omitempty"`
-	Metadata     *types.ResponseMetadata `json:"metadata,omitempty"`
-	Errors       []string                `json:"errors,omitempty"`
-	Warnings     []string                `json:"warnings,omitempty"`
-	Duration     int64                   `json:"duration"` // milliseconds
+	TaskID   string                  `json:"task_id"`
+	Status   string                  `json:"status"` // "success", "failure", "partial"
+	Result   interface{}             `json:"result,omitempty"`
+	Changes  *types.ChangeSet        `json:"changes,omitempty"`
+	Metadata *types.ResponseMetadata `json:"metadata,omitempty"`
+	Errors   []string                `json:"errors,omitempty"`
+	Warnings []string                `json:"warnings,omitempty"`
+	Duration int64                   `json:"duration"` // milliseconds
 }
 
 // ExecutionPlan represents a plan for executing a complex task
 type ExecutionPlan struct {
-	ID          string      `json:"id"`
-	Goal        string      `json:"goal"`
-	Steps       []PlanStep  `json:"steps"`
-	Dependencies map[string][]string `json:"dependencies"` // step_id -> [dependency_step_ids]
-	EstimatedDuration int   `json:"estimated_duration"` // seconds
-	CreatedAt   int64       `json:"created_at"`
+	ID                string              `json:"id"`
+	Goal              string              `json:"goal"`
+	Steps             []PlanStep          `json:"steps"`
+	Dependencies      map[string][]string `json:"dependencies"`       // step_id -> [dependency_step_ids]
+	EstimatedDuration int                 `json:"estimated_duration"` // seconds
+	CreatedAt         int64               `json:"created_at"`
 }
 
 // PlanStep represents a single step in an execution plan

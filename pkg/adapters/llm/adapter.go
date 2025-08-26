@@ -32,7 +32,7 @@ func NewLLMAdapter(provider interfaces.LLMProvider) llm.LLMProvider {
 func (a *LLMAdapter) GenerateResponse(ctx context.Context, prompt string, options map[string]interface{}) (string, error) {
 	// Convert legacy options to new request options
 	reqOptions := a.convertOptions(options)
-	
+
 	// Create messages from prompt
 	messages := []types.Message{
 		{
@@ -45,7 +45,7 @@ func (a *LLMAdapter) GenerateResponse(ctx context.Context, prompt string, option
 	return response, err
 }
 
-// GetLLMResponse adapts to legacy LLMProvider interface 
+// GetLLMResponse adapts to legacy LLMProvider interface
 func (a *LLMAdapter) GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, *pkgTypes.TokenUsage, error) {
 	// Convert prompts.Message to types.Message
 	var convertedMessages []types.Message
@@ -56,7 +56,7 @@ func (a *LLMAdapter) GetLLMResponse(modelName string, messages []prompts.Message
 		} else if msg.Content != nil {
 			content = fmt.Sprintf("%v", msg.Content)
 		}
-		
+
 		convertedMessages = append(convertedMessages, types.Message{
 			Role:    msg.Role,
 			Content: content,
@@ -96,26 +96,26 @@ func (a *LLMAdapter) GetLLMResponseStream(modelName string, messages []prompts.M
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if _, writeErr := writer.Write([]byte(response)); writeErr != nil {
 		return tokenUsage, writeErr
 	}
-	
+
 	return tokenUsage, nil
 }
 
 // convertOptions converts legacy options map to new RequestOptions
 func (a *LLMAdapter) convertOptions(options map[string]interface{}) types.RequestOptions {
 	reqOptions := types.RequestOptions{}
-	
+
 	if temp, ok := options["temperature"].(float64); ok {
 		reqOptions.Temperature = temp
 	}
-	
+
 	if maxTokens, ok := options["max_tokens"].(int); ok {
 		reqOptions.MaxTokens = maxTokens
 	}
-	
+
 	return reqOptions
 }
 
@@ -135,7 +135,7 @@ func NewDomainLLMAdapter(provider interfaces.LLMProvider) *DomainLLMAdapter {
 func (a *DomainLLMAdapter) GenerateResponse(ctx context.Context, prompt string, options map[string]interface{}) (string, error) {
 	// Convert options
 	reqOptions := a.convertOptions(options)
-	
+
 	// Create messages from prompt
 	messages := []types.Message{
 		{
@@ -160,7 +160,7 @@ Workspace Context:
 - Root Path: %s
 - Summary: %s
 
-Provide analysis as JSON with fields: type, complexity, confidence, keywords, description`, 
+Provide analysis as JSON with fields: type, complexity, confidence, keywords, description`,
 		intent, context.ProjectType, context.RootPath, context.Summary)
 
 	// Generate response
@@ -182,15 +182,15 @@ Provide analysis as JSON with fields: type, complexity, confidence, keywords, de
 // convertOptions converts legacy options to new RequestOptions
 func (a *DomainLLMAdapter) convertOptions(options map[string]interface{}) types.RequestOptions {
 	reqOptions := types.RequestOptions{}
-	
+
 	if temp, ok := options["temperature"].(float64); ok {
 		reqOptions.Temperature = temp
 	}
-	
+
 	if maxTokens, ok := options["max_tokens"].(int); ok {
 		reqOptions.MaxTokens = maxTokens
 	}
-	
+
 	return reqOptions
 }
 
@@ -210,7 +210,7 @@ func NewTodoLLMAdapter(provider interfaces.LLMProvider) todo.LLMProvider {
 func (a *TodoLLMAdapter) GenerateResponse(ctx context.Context, prompt string, options map[string]interface{}) (string, error) {
 	// Convert options
 	reqOptions := a.convertOptions(options)
-	
+
 	// Create messages from prompt
 	messages := []types.Message{
 		{
@@ -226,14 +226,14 @@ func (a *TodoLLMAdapter) GenerateResponse(ctx context.Context, prompt string, op
 // convertOptions converts legacy options to new RequestOptions
 func (a *TodoLLMAdapter) convertOptions(options map[string]interface{}) types.RequestOptions {
 	reqOptions := types.RequestOptions{}
-	
+
 	if temp, ok := options["temperature"].(float64); ok {
 		reqOptions.Temperature = temp
 	}
-	
+
 	if maxTokens, ok := options["max_tokens"].(int); ok {
 		reqOptions.MaxTokens = maxTokens
 	}
-	
+
 	return reqOptions
 }

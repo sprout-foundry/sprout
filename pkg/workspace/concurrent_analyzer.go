@@ -9,13 +9,13 @@ import (
 
 // ConcurrentAnalyzer provides high-performance concurrent workspace analysis
 type ConcurrentAnalyzer struct {
-	config       ConcurrentConfig
-	workerPool   *WorkerPool
-	fileQueue    chan FileAnalysisTask
-	results      chan FileAnalysisResult
-	errors       chan error
-	stats        AnalysisStats
-	mu           sync.RWMutex
+	config     ConcurrentConfig
+	workerPool *WorkerPool
+	fileQueue  chan FileAnalysisTask
+	results    chan FileAnalysisResult
+	errors     chan error
+	stats      AnalysisStats
+	mu         sync.RWMutex
 }
 
 // ConcurrentConfig configures concurrent analysis behavior
@@ -31,27 +31,27 @@ type ConcurrentConfig struct {
 
 // FileAnalysisTask represents a file to be analyzed
 type FileAnalysisTask struct {
-	FilePath    string            `json:"file_path"`
-	FileSize    int64             `json:"file_size"`
-	Priority    int               `json:"priority"` // Higher = more important
-	Metadata    map[string]string `json:"metadata"`
-	StartTime   time.Time         `json:"start_time"`
+	FilePath  string            `json:"file_path"`
+	FileSize  int64             `json:"file_size"`
+	Priority  int               `json:"priority"` // Higher = more important
+	Metadata  map[string]string `json:"metadata"`
+	StartTime time.Time         `json:"start_time"`
 }
 
 // FileAnalysisResult contains analysis results for a file
 type FileAnalysisResult struct {
-	Task        FileAnalysisTask     `json:"task"`
-	Summary     string               `json:"summary"`
-	Exports     []string             `json:"exports"`
-	Imports     []string             `json:"imports"`
-	Functions   []string             `json:"functions"`
-	Classes     []string             `json:"classes"`
-	TokenCount  int                  `json:"token_count"`
-	Complexity  int                  `json:"complexity"`
-	Language    string               `json:"language"`
-	Duration    time.Duration        `json:"duration"`
-	Error       error                `json:"error"`
-	CacheHit    bool                 `json:"cache_hit"`
+	Task       FileAnalysisTask `json:"task"`
+	Summary    string           `json:"summary"`
+	Exports    []string         `json:"exports"`
+	Imports    []string         `json:"imports"`
+	Functions  []string         `json:"functions"`
+	Classes    []string         `json:"classes"`
+	TokenCount int              `json:"token_count"`
+	Complexity int              `json:"complexity"`
+	Language   string           `json:"language"`
+	Duration   time.Duration    `json:"duration"`
+	Error      error            `json:"error"`
+	CacheHit   bool             `json:"cache_hit"`
 }
 
 // AnalysisStats tracks performance metrics
@@ -141,11 +141,11 @@ func NewConcurrentAnalyzer(config ConcurrentConfig) *ConcurrentAnalyzer {
 // AnalyzeWorkspace analyzes an entire workspace concurrently
 func (ca *ConcurrentAnalyzer) AnalyzeWorkspace(ctx context.Context, workspacePath string, files []string) ([]FileAnalysisResult, error) {
 	startTime := time.Now()
-	
+
 	// Start worker pool
 	ctx, cancel := context.WithTimeout(ctx, ca.config.Timeout)
 	defer cancel()
-	
+
 	if err := ca.workerPool.Start(ctx); err != nil {
 		return nil, err
 	}
@@ -153,31 +153,31 @@ func (ca *ConcurrentAnalyzer) AnalyzeWorkspace(ctx context.Context, workspacePat
 
 	// Create analysis tasks
 	tasks := ca.createAnalysisTasks(workspacePath, files)
-	
+
 	// Submit tasks
 	go ca.submitTasks(ctx, tasks)
-	
+
 	// Collect results
 	results, err := ca.collectResults(ctx, len(tasks))
-	
+
 	// Update stats
 	ca.updateFinalStats(startTime, len(tasks), len(results))
-	
+
 	return results, err
 }
 
 // createAnalysisTasks converts file list to analysis tasks with priorities
 func (ca *ConcurrentAnalyzer) createAnalysisTasks(workspacePath string, files []string) []FileAnalysisTask {
 	tasks := make([]FileAnalysisTask, 0, len(files))
-	
+
 	for _, file := range files {
 		if ca.shouldSkipFile(file) {
 			continue
 		}
-		
+
 		priority := ca.calculatePriority(file)
 		size := ca.getFileSize(file)
-		
+
 		task := FileAnalysisTask{
 			FilePath:  file,
 			FileSize:  size,
@@ -188,20 +188,20 @@ func (ca *ConcurrentAnalyzer) createAnalysisTasks(workspacePath string, files []
 				"type":      ca.detectFileType(file),
 			},
 		}
-		
+
 		tasks = append(tasks, task)
 	}
-	
+
 	// Sort by priority (higher priority first)
 	ca.sortTasksByPriority(tasks)
-	
+
 	return tasks
 }
 
 // submitTasks sends tasks to worker queue
 func (ca *ConcurrentAnalyzer) submitTasks(ctx context.Context, tasks []FileAnalysisTask) {
 	defer close(ca.fileQueue)
-	
+
 	for _, task := range tasks {
 		select {
 		case ca.fileQueue <- task:
@@ -219,15 +219,15 @@ func (ca *ConcurrentAnalyzer) submitTasks(ctx context.Context, tasks []FileAnaly
 func (ca *ConcurrentAnalyzer) collectResults(ctx context.Context, expectedCount int) ([]FileAnalysisResult, error) {
 	results := make([]FileAnalysisResult, 0, expectedCount)
 	completed := 0
-	
+
 	timeout := time.After(ca.config.Timeout)
-	
+
 	for completed < expectedCount {
 		select {
 		case result := <-ca.results:
 			results = append(results, result)
 			completed++
-			
+
 			ca.updateStats(func(s *AnalysisStats) {
 				s.CompletedFiles++
 				if result.CacheHit {
@@ -237,14 +237,14 @@ func (ca *ConcurrentAnalyzer) collectResults(ctx context.Context, expectedCount 
 					s.FailedFiles++
 				}
 			})
-			
+
 		case <-ca.errors:
 			ca.updateStats(func(s *AnalysisStats) {
 				s.FailedFiles++
 			})
 			// Continue processing other files even if some fail
 			completed++
-			
+
 		case <-timeout:
 			return results, &AnalysisError{
 				Type:    "timeout",
@@ -255,12 +255,12 @@ func (ca *ConcurrentAnalyzer) collectResults(ctx context.Context, expectedCount 
 					"timeout":   ca.config.Timeout,
 				},
 			}
-			
+
 		case <-ctx.Done():
 			return results, ctx.Err()
 		}
 	}
-	
+
 	return results, nil
 }
 
@@ -272,12 +272,12 @@ func (ca *ConcurrentAnalyzer) shouldSkipFile(filePath string) bool {
 	if size := ca.getFileSize(filePath); size > ca.config.MaxFileSize {
 		return true
 	}
-	
+
 	// Skip binary files if configured
 	if ca.config.SkipBinaryFiles && ca.isBinaryFile(filePath) {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -358,7 +358,7 @@ func (ca *ConcurrentAnalyzer) updateStats(updater func(*AnalysisStats)) {
 // updateFinalStats calculates final performance metrics
 func (ca *ConcurrentAnalyzer) updateFinalStats(startTime time.Time, totalTasks, completedTasks int) {
 	duration := time.Since(startTime)
-	
+
 	ca.updateStats(func(s *AnalysisStats) {
 		s.TotalDuration = duration
 		if completedTasks > 0 {
@@ -390,7 +390,7 @@ func (ca *ConcurrentAnalyzer) Close() error {
 // NewWorkerPool creates a new worker pool
 func NewWorkerPool(config ConcurrentConfig, taskQueue <-chan FileAnalysisTask, resultChan chan<- FileAnalysisResult, errorChan chan<- error) *WorkerPool {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	return &WorkerPool{
 		workers: make([]*AnalysisWorker, config.MaxWorkers),
 		ctx:     ctx,
@@ -416,16 +416,16 @@ func (wp *WorkerPool) Stop() {
 // Run executes the worker main loop
 func (w *AnalysisWorker) Run(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
-	
+
 	for {
 		select {
 		case task, ok := <-w.taskQueue:
 			if !ok {
 				return // Channel closed
 			}
-			
+
 			w.processTask(ctx, task)
-			
+
 		case <-ctx.Done():
 			return
 		}
@@ -436,17 +436,17 @@ func (w *AnalysisWorker) Run(ctx context.Context, wg *sync.WaitGroup) {
 func (w *AnalysisWorker) processTask(ctx context.Context, task FileAnalysisTask) {
 	w.stats.LastActive = time.Now()
 	startTime := time.Now()
-	
+
 	result, err := w.analyzer.AnalyzeFile(ctx, task)
 	if err != nil {
 		w.errorChan <- err
 		return
 	}
-	
+
 	result.Duration = time.Since(startTime)
 	w.stats.FilesProcessed++
 	w.stats.TotalDuration += result.Duration
-	
+
 	w.resultChan <- result
 }
 

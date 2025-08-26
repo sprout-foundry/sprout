@@ -33,9 +33,9 @@ const (
 type Priority int
 
 const (
-	PriorityLow    Priority = 10
-	PriorityNormal Priority = 50
-	PriorityHigh   Priority = 80
+	PriorityLow      Priority = 10
+	PriorityNormal   Priority = 50
+	PriorityHigh     Priority = 80
 	PriorityCritical Priority = 100
 )
 
@@ -64,21 +64,21 @@ type Todo struct {
 	StartedAt    *time.Time             `json:"started_at,omitempty"`
 	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
 	Error        string                 `json:"error,omitempty"`
-	
+
 	// Execution context
-	TargetFiles   []string `json:"target_files,omitempty"`
-	RequiredTools []string `json:"required_tools,omitempty"`
+	TargetFiles      []string      `json:"target_files,omitempty"`
+	RequiredTools    []string      `json:"required_tools,omitempty"`
 	ExpectedDuration time.Duration `json:"expected_duration,omitempty"`
 }
 
 // TodoList represents a collection of todos with metadata
 type TodoList struct {
-	ID        string    `json:"id"`
-	UserIntent string   `json:"user_intent"`
-	Todos     []Todo    `json:"todos"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	
+	ID         string    `json:"id"`
+	UserIntent string    `json:"user_intent"`
+	Todos      []Todo    `json:"todos"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+
 	// Execution metadata
 	TotalTodos     int `json:"total_todos"`
 	CompletedTodos int `json:"completed_todos"`
@@ -87,12 +87,12 @@ type TodoList struct {
 
 // ExecutionResult represents the result of executing a todo
 type ExecutionResult struct {
-	Success   bool                   `json:"success"`
-	Output    string                 `json:"output,omitempty"`
-	Error     error                  `json:"error,omitempty"`
-	Duration  time.Duration          `json:"duration"`
-	Changes   []string               `json:"changes,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Success  bool                   `json:"success"`
+	Output   string                 `json:"output,omitempty"`
+	Error    error                  `json:"error,omitempty"`
+	Duration time.Duration          `json:"duration"`
+	Changes  []string               `json:"changes,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // WorkspaceContext represents the context needed for todo creation and execution
@@ -106,11 +106,11 @@ type WorkspaceContext struct {
 
 // FileInfo represents information about a file in the workspace
 type FileInfo struct {
-	Path        string `json:"path"`
-	Type        string `json:"type"`
-	Language    string `json:"language"`
-	Summary     string `json:"summary,omitempty"`
-	Relevance   float64 `json:"relevance"`
+	Path      string  `json:"path"`
+	Type      string  `json:"type"`
+	Language  string  `json:"language"`
+	Summary   string  `json:"summary,omitempty"`
+	Relevance float64 `json:"relevance"`
 }
 
 // Methods for Todo entity
@@ -159,12 +159,12 @@ func (t *Todo) GetDuration() time.Duration {
 	if t.StartedAt == nil {
 		return 0
 	}
-	
+
 	endTime := time.Now()
 	if t.CompletedAt != nil {
 		endTime = *t.CompletedAt
 	}
-	
+
 	return endTime.Sub(*t.StartedAt)
 }
 
@@ -185,14 +185,14 @@ func (tl *TodoList) GetPendingTodos() []Todo {
 			completedTodos[todo.ID] = true
 		}
 	}
-	
+
 	var pending []Todo
 	for _, todo := range tl.Todos {
 		if todo.CanExecute(completedTodos) {
 			pending = append(pending, todo)
 		}
 	}
-	
+
 	return pending
 }
 
@@ -202,17 +202,17 @@ func (tl *TodoList) GetNextTodo() *Todo {
 	if len(pending) == 0 {
 		return nil
 	}
-	
+
 	// Sort by priority (highest first), then by creation time
 	var best *Todo
 	for i := range pending {
 		todo := &pending[i]
-		if best == nil || todo.Priority > best.Priority || 
-		   (todo.Priority == best.Priority && todo.CreatedAt.Before(best.CreatedAt)) {
+		if best == nil || todo.Priority > best.Priority ||
+			(todo.Priority == best.Priority && todo.CreatedAt.Before(best.CreatedAt)) {
 			best = todo
 		}
 	}
-	
+
 	return best
 }
 
@@ -220,7 +220,7 @@ func (tl *TodoList) GetNextTodo() *Todo {
 func (tl *TodoList) UpdateProgress() {
 	completed := 0
 	failed := 0
-	
+
 	for _, todo := range tl.Todos {
 		switch todo.Status {
 		case StatusCompleted:
@@ -229,7 +229,7 @@ func (tl *TodoList) UpdateProgress() {
 			failed++
 		}
 	}
-	
+
 	tl.CompletedTodos = completed
 	tl.FailedTodos = failed
 	tl.UpdatedAt = time.Now()
@@ -250,7 +250,7 @@ func (tl *TodoList) GetProgress() float64 {
 	if tl.TotalTodos == 0 {
 		return 1.0
 	}
-	
+
 	return float64(tl.CompletedTodos) / float64(tl.TotalTodos)
 }
 
@@ -259,7 +259,7 @@ func (tl *TodoList) GetProgress() float64 {
 // MarshalJSON implements custom JSON marshaling for ExecutionResult
 func (er ExecutionResult) MarshalJSON() ([]byte, error) {
 	type Alias ExecutionResult
-	
+
 	// Convert error to string for JSON serialization
 	result := struct {
 		Alias
@@ -267,32 +267,32 @@ func (er ExecutionResult) MarshalJSON() ([]byte, error) {
 	}{
 		Alias: (Alias)(er),
 	}
-	
+
 	if er.Error != nil {
 		result.ErrorStr = er.Error.Error()
 	}
-	
+
 	return json.Marshal(result)
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for ExecutionResult
 func (er *ExecutionResult) UnmarshalJSON(data []byte) error {
 	type Alias ExecutionResult
-	
+
 	aux := struct {
 		*Alias
 		ErrorStr string `json:"error,omitempty"`
 	}{
 		Alias: (*Alias)(er),
 	}
-	
+
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	
+
 	if aux.ErrorStr != "" {
 		er.Error = fmt.Errorf("%s", aux.ErrorStr)
 	}
-	
+
 	return nil
 }

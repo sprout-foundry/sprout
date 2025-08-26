@@ -58,21 +58,31 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 	intentType := analyzeIntentType(userIntent, logger)
 
 	ctx := &SimplifiedAgentContext{
-		UserIntent:      userIntent,
-		Config:          cfg,
-		Logger:          logger,
-		Todos:           []TodoItem{},
-		AnalysisResults: make(map[string]string),
-		ContextManager:  contextManager,
-		PersistentCtx:   persistentCtx,
-		SessionID:       sessionID,
-		TotalTokensUsed: 0,
-		TotalCost:       0.0,
+		UserIntent:            userIntent,
+		Config:                cfg,
+		Logger:                logger,
+		Todos:                 []TodoItem{},
+		AnalysisResults:       make(map[string]string),
+		ContextManager:        contextManager,
+		PersistentCtx:         persistentCtx,
+		SessionID:             sessionID,
+		TotalTokensUsed:       0,
+		TotalPromptTokens:     0,
+		TotalCompletionTokens: 0,
+		TotalCost:             0.0,
 	}
 
 	// Ensure token usage and cost are always displayed, even on failure
 	defer func() {
 		if ctx.TotalTokensUsed > 0 {
+			// Update config with consolidated token usage for command summary display
+			ctx.Config.LastTokenUsage = &llm.TokenUsage{
+				TotalTokens:      ctx.TotalTokensUsed,
+				PromptTokens:     ctx.TotalPromptTokens,
+				CompletionTokens: ctx.TotalCompletionTokens,
+				Estimated:        false,
+			}
+
 			duration := time.Since(startTime)
 			ui.Out().Print("\n📊 Agent Usage Summary\n")
 			ui.Out().Printf("├─ Duration: %.2f seconds\n", duration.Seconds())
@@ -295,6 +305,8 @@ func trackTokenUsage(ctx *SimplifiedAgentContext, tokenUsage *llm.TokenUsage, mo
 	}
 
 	ctx.TotalTokensUsed += tokenUsage.TotalTokens
+	ctx.TotalPromptTokens += tokenUsage.PromptTokens
+	ctx.TotalCompletionTokens += tokenUsage.CompletionTokens
 	ctx.TotalCost += llm.CalculateCost(*tokenUsage, modelName)
 	// If usage is estimated, note it for transparency
 	if tokenUsage.Estimated && ctx.Logger != nil {

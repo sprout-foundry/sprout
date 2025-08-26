@@ -19,10 +19,10 @@ func main() {
 
 	// Initialize all default providers
 	providers.MustRegisterDefaultProviders()
-	
+
 	// Get the global registry
 	registry := llm.GetGlobalRegistry()
-	
+
 	// List available providers
 	fmt.Println("\n📦 Available LLM Providers:")
 	availableProviders := registry.ListProviders()
@@ -32,7 +32,7 @@ func main() {
 
 	// Create a factory for easy provider creation
 	factory := llm.NewGlobalFactory()
-	
+
 	// Demo provider capabilities
 	fmt.Println("\n🔍 Provider Capabilities:")
 	for _, providerName := range availableProviders {
@@ -41,7 +41,7 @@ func main() {
 			log.Printf("Error getting capabilities for %s: %v", providerName, err)
 			continue
 		}
-		
+
 		fmt.Printf("  %s:\n", capabilities.Name)
 		fmt.Printf("    - Tools: %t\n", capabilities.SupportsTools)
 		fmt.Printf("    - Images: %t\n", capabilities.SupportsImages)
@@ -53,21 +53,21 @@ func main() {
 	// Demo configuration system
 	fmt.Println("\n⚙️  Configuration System Demo:")
 	configProvider := config.NewLayeredProvider()
-	
+
 	// Get various config sections
 	agentConfig := configProvider.GetAgentConfig()
 	fmt.Printf("  Agent Config - Max Retries: %d\n", agentConfig.MaxRetries)
-	
+
 	editorConfig := configProvider.GetEditorConfig()
 	fmt.Printf("  Editor Config - Auto Format: %t\n", editorConfig.AutoFormat)
-	
+
 	uiConfig := configProvider.GetUIConfig()
 	fmt.Printf("  UI Config - Color Output: %t\n", uiConfig.ColorOutput)
 
 	// Demo prompt system
 	fmt.Println("\n📝 Prompt System Demo:")
 	promptManager := prompts.NewManager("")
-	
+
 	// Create a sample prompt
 	samplePrompt := "Hello {{.Name}}, welcome to {{.System}}!"
 	err := promptManager.SavePrompt("welcome", samplePrompt)
@@ -76,27 +76,27 @@ func main() {
 	} else {
 		fmt.Println("  ✓ Saved sample prompt template")
 	}
-	
+
 	// Load and render with variables
 	variables := map[string]string{
 		"Name":   "Developer",
 		"System": "Ledit Modular Architecture",
 	}
-	
+
 	rendered, err := promptManager.LoadPromptWithVariables("welcome", variables)
 	if err != nil {
 		log.Printf("Error rendering prompt: %v", err)
 	} else {
 		fmt.Printf("  Rendered prompt: %s\n", rendered)
 	}
-	
+
 	// List available prompts
 	prompts := promptManager.ListPrompts()
 	fmt.Printf("  Available prompts: %v\n", prompts)
 
 	// Demo provider creation and health check
 	fmt.Println("\n🏥 Provider Health Check Demo:")
-	
+
 	// Create a sample OpenAI provider config
 	openaiConfig := &types.ProviderConfig{
 		Name:    "openai",
@@ -106,21 +106,21 @@ func main() {
 		Enabled: true,
 		Timeout: 30,
 	}
-	
+
 	// Validate configuration
 	if err := factory.ValidateProviderConfig(openaiConfig); err != nil {
 		fmt.Printf("  ❌ OpenAI config validation failed: %v\n", err)
 	} else {
 		fmt.Println("  ✓ OpenAI config validation passed")
 	}
-	
+
 	// Try to create provider (will fail without real API key, but shows the flow)
 	provider, err := factory.CreateProvider(openaiConfig)
 	if err != nil {
 		fmt.Printf("  ❌ Provider creation failed (expected): %v\n", err)
 	} else {
 		fmt.Printf("  ✓ Provider '%s' created successfully\n", provider.GetName())
-		
+
 		// Check health
 		ctx := context.Background()
 		if err := provider.IsAvailable(ctx); err != nil {

@@ -260,7 +260,8 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	// 	// logger.Log(fmt.Sprintf("Message %d JSON: %s", i, string(msgBytes)))
 	// }
 
-	// Use OpenAI-compatible function calling for providers that support it; otherwise fallback
+	// Use provider-specific tool calling strategy
+	strategy := GetToolCallingStrategy(modelName)
 	parts := strings.SplitN(modelName, ":", 3)
 	provider := parts[0]
 	model := ""
@@ -271,41 +272,29 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 		model = parts[1] + parts[2]
 	}
 
-	toOpenAITools := func() []map[string]any {
-		var out []map[string]any
-		nameAllowed := map[string]bool{}
-		if len(allowed) > 0 {
-			for _, n := range allowed {
-				nameAllowed[strings.ToLower(strings.TrimSpace(n))] = true
-			}
+	log.Logf("DEBUG: Using tool calling strategy for %s: native=%v, capability=%d", provider, strategy.UseNative, strategy.Capability)
+
+	// Filter available tools based on allowlist
+	availableTools := GetAvailableTools()
+	var filteredTools []Tool
+	nameAllowed := map[string]bool{}
+	if len(allowed) > 0 {
+		for _, n := range allowed {
+			nameAllowed[strings.ToLower(strings.TrimSpace(n))] = true
 		}
-		for _, t := range GetAvailableTools() {
-			if strings.ToLower(t.Type) != "function" {
+	}
+
+	for _, t := range availableTools {
+		if strings.ToLower(t.Type) != "function" {
+			continue
+		}
+		if len(nameAllowed) > 0 {
+			lname := strings.ToLower(strings.TrimSpace(t.Function.Name))
+			if !nameAllowed[lname] {
 				continue
 			}
-			if len(nameAllowed) > 0 {
-				lname := strings.ToLower(strings.TrimSpace(t.Function.Name))
-				if !nameAllowed[lname] {
-					continue
-				}
-			}
-			params := map[string]any{
-				"type":       t.Function.Parameters.Type,
-				"properties": t.Function.Parameters.Properties,
-			}
-			if len(t.Function.Parameters.Required) > 0 {
-				params["required"] = t.Function.Parameters.Required
-			}
-			out = append(out, map[string]any{
-				"type": "function",
-				"function": map[string]any{
-					"name":        t.Function.Name,
-					"description": t.Function.Description,
-					"parameters":  params,
-				},
-			})
 		}
-		return out
+		filteredTools = append(filteredTools, t)
 	}
 
 	var apiURL string
@@ -341,11 +330,28 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	}
 
 	payload := map[string]any{
-		"model":       model,
-		"messages":    messages,
-		"stream":      false,
-		"tool_choice": "auto",
-		"tools":       toOpenAITools(),
+		"model":    model,
+		"messages": messages,
+		"stream":   false,
+	}
+
+	// Add tools based on provider capability
+	if strategy.UseNative {
+		tools, err := strategy.PrepareToolsForProvider(filteredTools)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to prepare tools for provider: %w", err)
+		}
+		payload["tools"] = tools
+		payload["tool_choice"] = "auto"
+		log.Logf("DEBUG: Added %d native tools for %s", len(filteredTools), provider)
+	} else {
+		// For providers without native tool support, add tool instructions to system prompt
+		if systemPrompt == "" {
+			systemPrompt = strategy.GetSystemPrompt()
+		} else {
+			systemPrompt = systemPrompt + "\n\n" + strategy.GetSystemPrompt()
+		}
+		log.Logf("DEBUG: Using text-based tool calling for %s with %d tools", provider, len(filteredTools))
 	}
 	// Enable JSON mode when prompts explicitly require strict JSON output
 	if ShouldUseJSONResponse(messages) {
@@ -443,11 +449,36 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 	}
 	if len(full.Choices) > 0 {
 		msg := full.Choices[0].Message
-		if len(msg.ToolCalls) > 0 {
-			wrapper := map[string]any{"tool_calls": msg.ToolCalls}
-			wb, _ := json.Marshal(wrapper)
-			return string(wb), &full.Usage, nil
+
+		// Parse tool calls using the appropriate strategy
+		if strategy.UseNative && len(msg.ToolCalls) > 0 {
+			// Native tool calls from provider
+			toolCalls, err := strategy.ParseToolCallsForProvider("", msg.ToolCalls)
+			if err != nil {
+				log.Logf("DEBUG: Failed to parse native tool calls: %v", err)
+				// Fall back to text parsing
+				toolCalls, err = strategy.ParseToolCallsForProvider(msg.Content, nil)
+				if err == nil && len(toolCalls) > 0 {
+					wrapper := map[string]any{"tool_calls": toolCalls}
+					wb, _ := json.Marshal(wrapper)
+					return string(wb), &full.Usage, nil
+				}
+			} else if len(toolCalls) > 0 {
+				wrapper := map[string]any{"tool_calls": toolCalls}
+				wb, _ := json.Marshal(wrapper)
+				return string(wb), &full.Usage, nil
+			}
+		} else if !strategy.UseNative {
+			// Text-based tool calling - parse from content
+			toolCalls, err := strategy.ParseToolCallsForProvider(msg.Content, nil)
+			if err == nil && len(toolCalls) > 0 {
+				wrapper := map[string]any{"tool_calls": toolCalls}
+				wb, _ := json.Marshal(wrapper)
+				log.Logf("DEBUG: Parsed %d tool calls from text for %s", len(toolCalls), provider)
+				return string(wb), &full.Usage, nil
+			}
 		}
+
 		return msg.Content, &full.Usage, nil
 	}
 	return "", &full.Usage, nil

@@ -353,8 +353,8 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 		}
 		log.Logf("DEBUG: Using text-based tool calling for %s with %d tools", provider, len(filteredTools))
 	}
-	// Enable JSON mode when prompts explicitly require strict JSON output
-	if ShouldUseJSONResponse(messages) {
+	// Enable JSON mode when prompts explicitly require strict JSON output, but not when using native tool calling
+	if !strategy.UseNative && ShouldUseJSONResponse(messages) {
 		payload["response_format"] = map[string]any{"type": "json_object"}
 	}
 	if cfg.Temperature != 0 {

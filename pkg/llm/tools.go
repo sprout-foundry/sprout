@@ -238,28 +238,6 @@ func GetAvailableTools() []Tool {
 		{
 			Type: "function",
 			Function: ToolFunction{
-				Name:        "workspace_context",
-				Description: "Access workspace information: file tree, embeddings search, or keyword search across the codebase",
-				Parameters: ToolParameters{
-					Type: "object",
-					Properties: map[string]ToolProperty{
-						"action": {
-							Type:        "string",
-							Description: "One of: search_embeddings, search_keywords, load_tree, load_summary",
-							Enum:        []string{"search_embeddings", "search_keywords", "load_tree", "load_summary"},
-						},
-						"query": {
-							Type:        "string",
-							Description: "Search terms for embeddings or keyword search (required for search actions)",
-						},
-					},
-					Required: []string{"action"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: ToolFunction{
 				Name:        "preflight",
 				Description: "Verify file exists/writable, clean git state, and required CLIs available",
 				Parameters: ToolParameters{
@@ -279,8 +257,6 @@ func GetAvailableTools() []Tool {
 
 // ParseToolCalls extracts tool calls from an LLM response
 func ParseToolCalls(response string) ([]ToolCall, error) {
-	var toolCalls []ToolCall
-
 	// Try to parse the response as a tool message
 	var toolMessage ToolMessage
 	if err := json.Unmarshal([]byte(response), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
@@ -394,7 +370,7 @@ func ParseToolCalls(response string) ([]ToolCall, error) {
 					// Fall back to standard format
 					if err := json.Unmarshal([]byte(jsonStr), &toolMessage); err == nil && len(toolMessage.ToolCalls) > 0 {
 						toolMessage.ToolCalls = normalizeToolCallArgs(toolMessage.ToolCalls)
-						return toolCalls, nil
+						return toolMessage.ToolCalls, nil
 					}
 
 					// Try to parse simplified tool calls
@@ -461,13 +437,6 @@ func parseSimplifiedToolCalls(jsonStr string) []ToolCall {
 		case "ask_user":
 			toolCall.Function.Name = "ask_user"
 			toolCall.Function.Arguments = fmt.Sprintf(`{"question":"%s"}`, call.Question)
-		case "workspace_context":
-			toolCall.Function.Name = "workspace_context"
-			if call.Action == "search_keywords" {
-				toolCall.Function.Arguments = fmt.Sprintf(`{"action":"search_keywords","query":"%s"}`, call.Query)
-			} else {
-				toolCall.Function.Arguments = fmt.Sprintf(`{"action":"%s"}`, call.Action)
-			}
 		default:
 			// Try to use the type as function name and convert other fields to arguments
 			toolCall.Function.Name = call.Type
@@ -556,7 +525,6 @@ func GetStandardToolDescriptions() string {
 - edit_file_section: {"target_file": "path/to/file", "old_text": "text to replace", "new_text": "replacement text"} - Edit a specific part of a file
 - run_shell_command: {"command": "shell command"} - Run shell commands for diagnostics or testing
 - validate_file: {"target_file": "path/to/file"} - Check Go syntax of a file
-- workspace_context: {"action": "action_type", "query": "search_query"} - Access workspace information
 - ask_user: {"question": "question text"} - Ask the user a question when more information is needed`
 }
 
@@ -567,8 +535,8 @@ func GetSystemMessageForAnalysis() string {
 %s
 
 WORKFLOW FOR ANALYSIS:
-1. Use workspace_context with action=load_tree to understand the project structure
-2. Use workspace_context with action=search_keywords to find relevant files
+1. Use run_shell_command with "find . -name '*.go' | head -20" or similar to understand the project structure
+2. Use run_shell_command with "grep -r 'pattern' --include='*.go'" to find relevant files
 3. Use read_file to examine specific files that need analysis
 4. Use run_shell_command for system-level information
 
@@ -582,7 +550,7 @@ func GetSystemMessageForEditing() string {
 %s
 
 WORKFLOW FOR EDITING:
-1. Use workspace_context to understand the project structure
+1. Use run_shell_command to understand the project structure (find, ls, grep)
 2. Use read_file to examine files before editing
 3. Make minimal, targeted changes
 4. Use validate_file after changes to ensure correctness
@@ -597,8 +565,8 @@ func GetSystemMessageForStepExecution() string {
 %s
 
 WORKFLOW FOR STEP EXECUTION:
-- Use workspace_context with action=load_tree to understand the project structure
-- Use workspace_context with action=search_keywords to find relevant files
+- Use run_shell_command with "find . -name '*.go' | head -20" to understand the project structure
+- Use run_shell_command with "grep -r 'pattern' --include='*.go'" to find relevant files
 - Use read_file to examine files that need to be modified
 - Use run_shell_command for system operations or file system checks
 - Use validate_file after making changes to ensure they are correct
@@ -615,7 +583,7 @@ func GetSystemMessageForInformational() string {
 For simple questions, use the appropriate tools immediately:
 - "What files are in the current directory?" → run_shell_command with "ls -la"
 - "Show me the content of main.go" → read_file
-- "What are the available commands?" → workspace_context with action=load_tree
+- "What are the available commands?" → run_shell_command with "ls -la"
 
 Answer questions directly using tool outputs. Do not generate code or create todos.`, FormatToolsForPrompt())
 }
@@ -646,7 +614,7 @@ STRICT RULES:
 🚫 NEVER output prose when making tool calls
 🚫 ONLY emit the JSON object when using tools
 ✅ Use read_file BEFORE editing any file
-✅ Use workspace_context to discover files
+✅ Use run_shell_command (find, grep, ls) to discover files
 ✅ Use validate_file after making changes
 ✅ Keep tool calls under 300 tokens total
 
@@ -656,6 +624,6 @@ WORKFLOW:
 1. If you need to read/modify files, use read_file first
 2. Make changes with edit_file_section
 3. Validate with validate_file
-4. Use workspace_context to explore unknown areas
+4. Use run_shell_command (find, grep, ls) to explore unknown areas
 5. When you have all info needed, provide your final response WITHOUT tool calls`
 }

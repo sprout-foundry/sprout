@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -218,75 +216,6 @@ func executeCodeEditingToolCall(toolCall ToolCall, cfg *config.Config) (string, 
 		}
 		return "", fmt.Errorf("run_shell_command requires 'command' parameter")
 
-	case "workspace_context":
-		action, _ := args["action"].(string)
-		switch action {
-		case "search_keywords":
-			query, _ := args["query"].(string)
-			if strings.TrimSpace(query) == "" {
-				return "", fmt.Errorf("invalid: search_keywords requires 'query'")
-			}
-			// Walk workspace for likely text/code files and collect matches deterministically
-			var matches []string
-			_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
-				if err != nil {
-					return nil
-				}
-				if d.IsDir() {
-					name := d.Name()
-					if name == ".git" || name == "node_modules" || name == "vendor" || strings.HasPrefix(name, ".") {
-						return filepath.SkipDir
-					}
-					return nil
-				}
-				if !isLikelyCodeFile(path) {
-					return nil
-				}
-				b, err := os.ReadFile(path)
-				if err == nil && strings.Contains(string(b), query) {
-					matches = append(matches, filepath.Clean(path))
-				}
-				return nil
-			})
-			if len(matches) == 0 {
-				return "{}", nil
-			}
-			sort.Strings(matches)
-			top := matches[0]
-			res := map[string]any{"top_file": top, "matches": matches}
-			bytes, _ := json.Marshal(res)
-			return string(bytes), nil
-		case "load_tree":
-			var files []string
-			_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
-				if err != nil {
-					return nil
-				}
-				if d.IsDir() {
-					name := d.Name()
-					if name == ".git" || name == "node_modules" || name == "vendor" || strings.HasPrefix(name, ".") {
-						return filepath.SkipDir
-					}
-					return nil
-				}
-				if isLikelyCodeFile(path) {
-					files = append(files, filepath.Clean(path))
-				}
-				return nil
-			})
-			sort.Strings(files)
-			if len(files) > 200 {
-				files = files[:200]
-			}
-			bytes, _ := json.Marshal(map[string]any{"files": files})
-			return string(bytes), nil
-		case "load_summary":
-			return "{\"status\":\"not_implemented\"}", nil
-		case "search_embeddings":
-			return "{\"status\":\"not_implemented\"}", nil
-		default:
-			return "", fmt.Errorf("invalid: unknown workspace_context action")
-		}
 
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolCall.Function.Name)

@@ -16,8 +16,38 @@ import (
 	"github.com/alantheprice/ledit/pkg/workspace"
 )
 
+// isDocumentationTask checks if the task is primarily about documentation
+func isDocumentationTask(intent string) bool {
+	intentLower := strings.ToLower(intent)
+	docKeywords := []string{
+		"document", "documentation", "doc", "docs",
+		"readme", "api documentation", "endpoint documentation",
+		"generate documentation", "create docs", "write documentation",
+	}
+	
+	for _, keyword := range docKeywords {
+		if strings.Contains(intentLower, keyword) {
+			return true
+		}
+	}
+	
+	return false
+}
+
 // validateBuild runs build validation after todo execution with intelligent error recovery
 func validateBuild(ctx *SimplifiedAgentContext) error {
+	// Skip validation if no files were actually modified
+	if !ctx.FilesModified {
+		ctx.Logger.LogProcessStep("⏭️ No files were modified, skipping build validation")
+		return nil
+	}
+	
+	// Skip validation for documentation-only tasks
+	if isDocumentationTask(ctx.UserIntent) {
+		ctx.Logger.LogProcessStep("📄 Documentation task detected, skipping build validation")
+		return nil
+	}
+	
 	ctx.Logger.LogProcessStep("🔍 Validating build after changes...")
 
 	// For monorepo and early setup stages, be more intelligent about build validation

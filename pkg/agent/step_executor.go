@@ -24,7 +24,7 @@ Changes to make: %s
 
 Please implement ONLY this specific step. Keep the changes minimal and focused. Do not implement additional features or other steps.`, todo.Content, stepIndex+1, step.Description, strings.Join(step.Files, ", "), step.Changes)
 
-	// Use CallLLMWithUnifiedInteractive for proper tool execution (like workspace_context, read_file)
+	// Use CallLLMWithUnifiedInteractive for proper tool execution (like read_file, run_shell_command)
 	stepMessages := []prompts.Message{
 		{Role: "system", Content: llm.GetSystemMessageForStepExecution()},
 		{Role: "user", Content: stepPrompt},

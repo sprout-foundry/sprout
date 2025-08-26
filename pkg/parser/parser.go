@@ -44,9 +44,9 @@ func isEndOfCodeBlock(line string, currentLanguage string) bool {
 	if isHardEndOfCodeBlock(line) {
 		return true
 	}
-	// Fallback for 3 backticks, but not for markdown blocks
+	// Fallback for 3 backticks
 	if strings.TrimSpace(line) == "```" {
-		return currentLanguage != "markdown" && currentLanguage != "md"
+		return true
 	}
 	return false
 }
@@ -115,6 +115,37 @@ func validateFilename(filename string) bool {
 	return len(parts) > 1 && parts[0] != ""
 }
 
+// getExtensionForLanguage returns the file extension for a language
+func getExtensionForLanguage(lang string) string {
+	extensions := map[string]string{
+		"go":         "go",
+		"python":     "py",
+		"py":         "py",
+		"javascript": "js",
+		"js":         "js",
+		"typescript": "ts",
+		"ts":         "ts",
+		"java":       "java",
+		"c":          "c",
+		"cpp":        "cpp",
+		"rust":       "rs",
+		"sh":         "sh",
+		"bash":       "sh",
+		"sql":        "sql",
+		"html":       "html",
+		"css":        "css",
+		"json":       "json",
+		"yaml":       "yaml",
+		"yml":        "yml",
+		"xml":        "xml",
+	}
+	
+	if ext, exists := extensions[lang]; exists {
+		return ext
+	}
+	return "txt" // fallback
+}
+
 // generateDefaultFilename creates a default filename based on language and context
 func generateDefaultFilename(lang, response string) string {
 	// Map languages to extensions
@@ -162,8 +193,8 @@ func generateDefaultFilename(lang, response string) string {
 		}
 	}
 
-	// Fallback to generic filename
-	return "updated_file" + ext
+	// Don't generate default filenames - return empty to signal missing filename error
+	return ""
 }
 
 // tryContentBasedExtraction attempts to extract code from responses without explicit code blocks
@@ -327,6 +358,9 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 					currentFileContent.Reset()
 					fmt.Printf("Using default filename: %s for %s code block\n", defaultFilename, lang)
 					continue
+				} else {
+					// No filename could be determined - return error asking LLM to specify filename
+					return nil, fmt.Errorf("Code block with language '%s' found but no filename specified. Please include a filename in the code block header like: ```%s # filename.%s", lang, lang, getExtensionForLanguage(lang))
 				}
 			}
 			// If no valid filename and no default can be generated, we ignore it.

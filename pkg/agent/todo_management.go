@@ -83,7 +83,7 @@ Guidance:
 - LIMIT TO MAX 10 TODOS for complex tasks - break into phases if needed
 - For complex workflows that need >10 steps: create 9 todos for the current phase, then make todo #10 "Continue with next phase of [workflow]" to automatically chain to the next batch
 - For monorepo/multi-component tasks: focus on ONE complete component at a time (e.g., complete backend OR frontend, not both simultaneously)  
-- Use tools to validate and ground todos in reality (read files, search code, list files): prefer reading files (workspace_context/read_file), searching code (grep_search), and using workspace_context to find targets.
+- Use tools to validate and ground todos in reality (read files, search code, list files): prefer reading files (read_file), searching code (grep_search), and using shell commands (find, grep, ls) to find targets.
 - If uncertain about exact locations or details, include an initial "analysis" todo that explicitly uses tools to gather the needed evidence before edits.
 - Avoid speculative or ungrounded todos.
 - Consider the recent analysis findings and accumulated knowledge when creating todos.
@@ -111,7 +111,7 @@ Focus on concrete changes that can be made to the codebase. Return ONLY the JSON
 	prompt := contextInfo.String()
 
 	messages := []prompts.Message{
-		{Role: "system", Content: "You create specific, actionable development todos. Ground todos in workspace context and prefer referencing actual files. Strongly prefer using tools (workspace_context, read_file, grep_search) to validate assumptions when planning. If uncertain, include an initial analysis todo that uses tools to gather evidence. Always return valid JSON."},
+		{Role: "system", Content: "You create specific, actionable development todos. Ground todos in workspace context and prefer referencing actual files. Strongly prefer using tools (read_file, grep_search, run_shell_command) to validate assumptions when planning. If uncertain, include an initial analysis todo that uses tools to gather evidence. Always return valid JSON."},
 		{Role: "user", Content: prompt},
 	}
 
@@ -296,6 +296,27 @@ func analyzeTodoExecutionType(content, description string) ExecutionType {
 		}
 	}
 
+	// File creation/generation tasks - should use Edit/Write tools, not shell commands
+	fileCreationPatterns := []string{
+		"generate.*\\.md", "create.*\\.md", "write.*\\.md", 
+		"generate.*\\.txt", "create.*\\.txt", "write.*\\.txt",
+		"generate.*\\.json", "create.*\\.json", "write.*\\.json",
+		"generate.*\\.yaml", "create.*\\.yaml", "write.*\\.yaml",
+		"generate.*\\.yml", "create.*\\.yml", "write.*\\.yml",
+		"generate.*documentation", "create.*documentation", "write.*documentation",
+		"generate.*api.*doc", "create.*api.*doc", "write.*api.*doc",
+	}
+	for _, pattern := range fileCreationPatterns {
+		matched, _ := regexp.MatchString(pattern, contentLower)
+		if matched {
+			return ExecutionTypeDirectEdit
+		}
+		matched, _ = regexp.MatchString(pattern, descriptionLower)
+		if matched {
+			return ExecutionTypeDirectEdit
+		}
+	}
+
 	// Check for documentation updates more flexibly (handle README.md, readme files, etc.)
 	if strings.Contains(contentLower, "update") && (strings.Contains(contentLower, "readme") || strings.Contains(contentLower, "documentation") || strings.Contains(contentLower, "docs")) {
 		return ExecutionTypeDirectEdit
@@ -348,8 +369,8 @@ Please analyze and provide insights on: %s
 CRITICAL: Use tools to gather evidence before making any analysis or recommendations. Do not make assumptions about the codebase structure or content.
 
 REQUIRED TOOLS - Use these in order:
-1. **workspace_context(action="load_tree")** - Get complete file/directory structure
-2. **workspace_context(action="search_keywords", query="relevant terms")** - Find files containing specific terms
+1. **run_shell_command(command="find . -type f -name '*.go' | head -20")** - Get overview of Go files structure
+2. **run_shell_command(command="grep -r 'relevant terms' --include='*.go' .")** - Find files containing specific terms
 3. **run_shell_command(command="ls -la pkg/")** - List contents of specific directories (example: list pkg directory)
 4. **run_shell_command(command="grep -r 'func.*main' .")** - Search for specific patterns (example: find main functions)
 5. **read_file(file_path="main.go")** - Read specific files for detailed analysis
@@ -568,6 +589,8 @@ func executeOptimizedCodeEditingTodo(ctx *SimplifiedAgentContext, todo *TodoItem
 	// Store result and revision IDs for potential rollback
 	if result.Diff != "" {
 		ctx.AnalysisResults[todo.ID+"_edit_result"] = result.Diff
+		// Mark that files were modified for validation purposes
+		ctx.FilesModified = true
 	}
 	if len(result.RevisionIDs) > 0 {
 		ctx.AnalysisResults[todo.ID+"_revision_ids"] = fmt.Sprintf("%v", result.RevisionIDs)
@@ -585,12 +608,15 @@ func executeOptimizedCodeEditingTodo(ctx *SimplifiedAgentContext, todo *TodoItem
 }
 
 // applyDirectEdit applies simple changes directly to files
-func applyDirectEdit(filePath, newContent string, logger *utils.Logger) error {
+func applyDirectEdit(filePath, newContent string, logger *utils.Logger, ctx *SimplifiedAgentContext) error {
 	// Write new content
 	if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", filePath, err)
 	}
 
+	// Mark that files were modified for validation purposes
+	ctx.FilesModified = true
+	
 	logger.LogProcessStep(fmt.Sprintf("📝 Updated %s", filePath))
 	return nil
 }
@@ -906,6 +932,8 @@ IMPORTANT:
 - When creating files with content, use: "cat > filename <<'EOF'\ncontent here\nEOF"  
 - For Go module operations, use: "cd backend && go get package" or "cd backend && go mod tidy"
 - Never run Go commands from root if the go.mod is in a subdirectory
+- Use 'find' to locate files, 'grep' to search content, 'ls' to list directories
+- Example: "find . -name '*.py' -path '*/routes*'" to find Python files in routes directories
 
 Respond with JSON:
 {
@@ -983,6 +1011,9 @@ Respond with JSON:
 			ctx.Logger.LogProcessStep(fmt.Sprintf("📤 Output: %s", string(output)))
 		}
 	}
+
+	// Mark files as potentially modified since shell commands often create/modify files
+	ctx.FilesModified = true
 
 	// Store results
 	ctx.AnalysisResults[todo.ID+"_shell_result"] = fmt.Sprintf("Successfully executed %d commands: %s", len(commandPlan.Commands), commandPlan.Explanation)
@@ -1229,4 +1260,196 @@ func parseTodosFromResponse(response string) ([]TodoItem, error) {
 	}
 
 	return todoItems, nil
+}
+
+// createDocumentationTodos creates documentation-specific todos
+func createDocumentationTodos(ctx *SimplifiedAgentContext) error {
+	// Build documentation-specific context prompt
+	var contextInfo strings.Builder
+	contextInfo.WriteString(fmt.Sprintf(`You are an expert technical writer and software developer. Create specific todos for generating comprehensive documentation.
+
+User Request: "%s"
+
+## Project Context Information
+`, ctx.UserIntent))
+
+	// Add project context if available
+	if ctx.ProjectContext != nil {
+		projectCtx := ctx.ProjectContext
+		if projectCtx.Language != "" {
+			contextInfo.WriteString(fmt.Sprintf("Language: %s\n", projectCtx.Language))
+		}
+		if projectCtx.Framework != "" {
+			contextInfo.WriteString(fmt.Sprintf("Framework: %s\n", projectCtx.Framework))
+		}
+		if projectCtx.ProjectType != "" {
+			contextInfo.WriteString(fmt.Sprintf("Project Type: %s\n", projectCtx.ProjectType))
+		}
+		if len(projectCtx.Patterns) > 0 {
+			contextInfo.WriteString("Patterns:\n")
+			for key, value := range projectCtx.Patterns {
+				contextInfo.WriteString(fmt.Sprintf("- %s: %s\n", key, value))
+			}
+		}
+	}
+
+	contextInfo.WriteString(fmt.Sprintf(`
+## Workspace Context
+%s
+
+DOCUMENTATION GUIDANCE:
+- Focus on creating comprehensive, well-structured documentation
+- For API projects: Document endpoints, methods, parameters, authentication, responses
+- Use appropriate output formats (Markdown for most cases)
+- Analyze existing code to extract accurate information
+- Include examples where helpful
+- Structure documentation logically
+- Create new documentation files as needed
+
+Please create a JSON array of documentation todos. Each todo should:
+- Be specific to documentation generation
+- Use analysis tasks to gather information first
+- Create documentation files as the final step
+- Include clear file paths for documentation outputs
+- Be prioritized appropriately (analysis first, then creation)
+
+Format:
+[
+  {
+    "content": "Brief description of the todo",
+    "description": "More detailed explanation of what needs to be done",
+    "priority": 1,
+    "file_path": "path/to/file.ext"
+  }
+]`, func() string {
+		return workspace.GetProgressiveWorkspaceContext(ctx.UserIntent, ctx.Config)
+	}()))
+
+	return createTodosFromPrompt(ctx, contextInfo.String())
+}
+
+// createCreationTodos creates file/content creation-specific todos
+func createCreationTodos(ctx *SimplifiedAgentContext) error {
+	// Build creation-specific context prompt
+	var contextInfo strings.Builder
+	contextInfo.WriteString(fmt.Sprintf(`You are an expert software developer. Create specific todos for creating new files, directories, or project structures.
+
+User Request: "%s"
+
+## Project Context Information
+`, ctx.UserIntent))
+
+	// Add project context if available
+	if ctx.ProjectContext != nil {
+		projectCtx := ctx.ProjectContext
+		if projectCtx.Language != "" {
+			contextInfo.WriteString(fmt.Sprintf("Language: %s\n", projectCtx.Language))
+		}
+		if projectCtx.Framework != "" {
+			contextInfo.WriteString(fmt.Sprintf("Framework: %s\n", projectCtx.Framework))
+		}
+		if projectCtx.ProjectType != "" {
+			contextInfo.WriteString(fmt.Sprintf("Project Type: %s\n", projectCtx.ProjectType))
+		}
+	}
+
+	contextInfo.WriteString(fmt.Sprintf(`
+## Workspace Context
+%s
+
+CREATION GUIDANCE:
+- Focus on creating new files, directories, and structures
+- Use appropriate file naming conventions
+- Follow project patterns and conventions
+- Create supporting files as needed (tests, configs, etc.)
+- Ensure proper directory structure
+- Use shell commands for directory creation when needed
+
+Please create a JSON array of creation todos. Each todo should:
+- Be specific to creating new content
+- Create one logical unit at a time
+- Include proper file paths and directory structure
+- Consider dependencies (create directories before files)
+- Be prioritized appropriately
+
+Format:
+[
+  {
+    "content": "Brief description of what to create",
+    "description": "More detailed explanation of the creation task",
+    "priority": 1,
+    "file_path": "path/to/new/file.ext"
+  }
+]`, func() string {
+		return workspace.GetProgressiveWorkspaceContext(ctx.UserIntent, ctx.Config)
+	}()))
+
+	return createTodosFromPrompt(ctx, contextInfo.String())
+}
+
+// createAnalysisTodos creates analysis-specific todos
+func createAnalysisTodos(ctx *SimplifiedAgentContext) error {
+	// Build analysis-specific context prompt
+	var contextInfo strings.Builder
+	contextInfo.WriteString(fmt.Sprintf(`You are an expert software analyzer and code reviewer. Create specific todos for analyzing code, systems, or project structures.
+
+User Request: "%s"
+
+## Workspace Context
+%s
+
+ANALYSIS GUIDANCE:
+- Focus on understanding and analyzing existing code/systems
+- Use tools to explore the codebase thoroughly
+- Identify patterns, issues, opportunities for improvement
+- Provide detailed insights and findings
+- Don't make code changes - analysis only
+- Use grep, file reading, and exploration tools extensively
+
+Please create a JSON array of analysis todos. Each todo should:
+- Be specific to analysis tasks
+- Use appropriate analysis tools and techniques
+- Focus on understanding rather than modifying
+- Build knowledge progressively
+- Be prioritized logically
+
+Format:
+[
+  {
+    "content": "Brief description of analysis task",
+    "description": "More detailed explanation of what to analyze",
+    "priority": 1,
+    "file_path": ""
+  }
+]`, ctx.UserIntent, func() string {
+		return workspace.GetProgressiveWorkspaceContext(ctx.UserIntent, ctx.Config)
+	}()))
+
+	return createTodosFromPrompt(ctx, contextInfo.String())
+}
+
+// createTodosFromPrompt is a helper function to create todos from a given prompt
+func createTodosFromPrompt(ctx *SimplifiedAgentContext, prompt string) error {
+	messages := []prompts.Message{
+		{Role: "user", Content: prompt},
+	}
+
+	response, tokenUsage, err := executeAgentWorkflowWithTools(ctx, messages, "todo_creation")
+	if err != nil {
+		return fmt.Errorf("failed to get todos response: %w", err)
+	}
+
+	// Track token usage
+	if tokenUsage != nil {
+		trackTokenUsage(ctx, tokenUsage, ctx.Config.OrchestrationModel)
+	}
+
+	// Extract and parse todos
+	todoItems, err := parseTodosFromResponse(response)
+	if err != nil {
+		return fmt.Errorf("failed to parse todos from response: %w", err)
+	}
+
+	ctx.Todos = todoItems
+	return nil
 }

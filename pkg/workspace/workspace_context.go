@@ -561,8 +561,12 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 		b.WriteString("Project: Unknown\n")
 	}
 
-	// Key project insights (very concise)
-	b.WriteString(fmt.Sprintf("Files: %d", len(workspace.Files)))
+	// Monorepo-aware project info
+	if workspace.MonorepoType != "" && workspace.MonorepoType != "single" {
+		b.WriteString(fmt.Sprintf(" | Monorepo: %s with %d projects", workspace.MonorepoType, len(workspace.Projects)))
+	} else {
+		b.WriteString(fmt.Sprintf(" | Type: %s project", workspace.MonorepoType))
+	}
 
 	insights := []string{}
 	if workspace.ProjectInsights.PrimaryFrameworks != "" {
@@ -580,8 +584,22 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 	}
 	b.WriteString("\n")
 
-	// Show essential directories and key files for project context
+	// Show essential directories and key files for project context  
 	b.WriteString("\nStructure:\n")
+	
+	// Show detected projects first if it's a monorepo
+	if len(workspace.Projects) > 0 {
+		var projectNames []string
+		for name := range workspace.Projects {
+			projectNames = append(projectNames, name)
+		}
+		sort.Strings(projectNames)
+		
+		for _, name := range projectNames {
+			project := workspace.Projects[name]
+			b.WriteString(fmt.Sprintf("📦 %s/ (%s %s)\n", project.Path, project.Language, project.Type))
+		}
+	}
 
 	var sortedFiles []string
 	for filePath := range workspace.Files {

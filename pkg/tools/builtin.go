@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"sort"
+	"path/filepath"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/ui"
-	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
 // executeBuiltinTool handles built-in tools for backward compatibility
@@ -200,160 +199,49 @@ func (e *Executor) executeShellCommand(ctx context.Context, args map[string]inte
 	}, nil
 }
 
+
+
+
+
+
 func (e *Executor) executeWorkspaceContext(ctx context.Context, args map[string]interface{}) (*Result, error) {
 	action, _ := args["action"].(string)
-	query, _ := args["query"].(string)
-
+	
+	// Default to overview if no action specified
 	if strings.TrimSpace(action) == "" {
-		action = "load_tree"
-	}
-
-	// Load workspace file from .ledit/workspace.json
-	ws, err := loadWorkspaceInfo()
-	if err != nil {
-		return &Result{Success: false, Errors: []string{fmt.Sprintf("failed to load workspace: %v", err)}}, nil
+		action = "overview"
 	}
 
 	switch strings.ToLower(action) {
-	case "load_tree":
-		out := buildCompactTree(ws)
-		return &Result{Success: true, Output: out, Metadata: map[string]interface{}{"action": action}}, nil
-	case "search_keywords", "search":
+	case "overview":
+		output := e.buildWorkspaceOverview()
+		return &Result{
+			Success: true,
+			Output:  output,
+			Metadata: map[string]interface{}{"action": "overview"},
+		}, nil
+		
+	case "search":
+		query, _ := args["query"].(string)
 		if strings.TrimSpace(query) == "" {
-			return &Result{Success: false, Errors: []string{"search_keywords requires non-empty 'query'"}}, nil
+			return &Result{
+				Success: false,
+				Errors:  []string{"workspace_context search requires 'query' parameter"},
+			}, nil
 		}
-		out := searchWorkspaceKeywords(ws, query, 100, 3)
-		return &Result{Success: true, Output: out, Metadata: map[string]interface{}{"action": action, "query": query}}, nil
-	case "load_summary":
-		out := buildWorkspaceOverview(ws)
-		return &Result{Success: true, Output: out, Metadata: map[string]interface{}{"action": action}}, nil
+		output := e.searchWorkspaceFiles(query)
+		return &Result{
+			Success: true,
+			Output:  output,
+			Metadata: map[string]interface{}{"action": "search", "query": query},
+		}, nil
+		
 	default:
-		return &Result{Success: false, Errors: []string{fmt.Sprintf("unknown workspace_context action: %s", action)}}, nil
+		return &Result{
+			Success: false,
+			Errors:  []string{fmt.Sprintf("unknown workspace_context action: %s. Use 'overview' or 'search'", action)},
+		}, nil
 	}
-}
-
-// loadWorkspaceInfo reads .ledit/workspace.json into a minimal structure
-func loadWorkspaceInfo() (workspaceinfo.WorkspaceFile, error) {
-	var ws workspaceinfo.WorkspaceFile
-	data, err := os.ReadFile(".ledit/workspace.json")
-	if err != nil {
-		return ws, err
-	}
-	if err := json.Unmarshal(data, &ws); err != nil {
-		return ws, err
-	}
-	return ws, nil
-}
-
-// buildCompactTree prints a compact tree using file paths from workspace info
-func buildCompactTree(ws workspaceinfo.WorkspaceFile) string {
-	var b strings.Builder
-	b.WriteString("--- Workspace Tree ---\n")
-	// Group by top-level directory
-	groups := map[string][]string{}
-	for path := range ws.Files {
-		parts := strings.Split(path, "/")
-		key := "root"
-		if len(parts) > 1 {
-			key = parts[0]
-		}
-		groups[key] = append(groups[key], path)
-	}
-	keys := make([]string, 0, len(groups))
-	for k := range groups {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		files := groups[k]
-		sort.Strings(files)
-		b.WriteString(fmt.Sprintf("%s/ (%d files):\n", k, len(files)))
-		limit := len(files)
-		if limit > 50 {
-			limit = 50
-		}
-		for i := 0; i < limit; i++ {
-			b.WriteString("  ")
-			b.WriteString(files[i])
-			b.WriteString("\n")
-		}
-		if len(files) > limit {
-			b.WriteString("  ...\n")
-		}
-	}
-	return b.String()
-}
-
-// searchWorkspaceKeywords performs a simple substring search across files, returning file paths and snippets
-func searchWorkspaceKeywords(ws workspaceinfo.WorkspaceFile, query string, maxFiles int, maxSnippetsPerFile int) string {
-	q := strings.ToLower(query)
-	var b strings.Builder
-	matches := 0
-	b.WriteString(fmt.Sprintf("Search '%s' results:\n", query))
-	for path := range ws.Files {
-		if matches >= maxFiles {
-			break
-		}
-		// Read small files directly; skip very large files
-		info, err := os.Stat(path)
-		if err != nil || (info != nil && info.Size() > 2*1024*1024) { // skip >2MB
-			continue
-		}
-		contentBytes, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		content := string(contentBytes)
-		if !strings.Contains(strings.ToLower(content), q) {
-			continue
-		}
-		b.WriteString("- ")
-		b.WriteString(path)
-		snips := 0
-		lines := strings.Split(content, "\n")
-		for _, line := range lines {
-			if strings.Contains(strings.ToLower(line), q) {
-				b.WriteString("\n  ")
-				b.WriteString(strings.TrimSpace(line))
-				snips++
-				if snips >= maxSnippetsPerFile {
-					break
-				}
-			}
-		}
-		b.WriteString("\n")
-		matches++
-	}
-	if matches == 0 {
-		b.WriteString("(no matches)\n")
-	}
-	return b.String()
-}
-
-// buildWorkspaceOverview produces a compact overview using workspaceinfo content
-func buildWorkspaceOverview(ws workspaceinfo.WorkspaceFile) string {
-	var b strings.Builder
-	b.WriteString("--- Workspace Overview ---\n")
-	b.WriteString(fmt.Sprintf("Total files indexed: %d\n", len(ws.Files)))
-	// List top directories
-	dirs := map[string]int{}
-	for path := range ws.Files {
-		parts := strings.Split(path, "/")
-		key := "root"
-		if len(parts) > 1 {
-			key = parts[0]
-		}
-		dirs[key]++
-	}
-	keys := make([]string, 0, len(dirs))
-	for k := range dirs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		b.WriteString(fmt.Sprintf("%s: %d files\n", k, dirs[k]))
-	}
-	return b.String()
 }
 
 func (e *Executor) executeWebSearch(ctx context.Context, args map[string]interface{}) (*Result, error) {
@@ -514,4 +402,168 @@ func ParseToolCallArguments(arguments string) (map[string]interface{}, error) {
 	}
 
 	return args, nil
+}
+
+// buildWorkspaceOverview creates a structured overview of the workspace
+func (e *Executor) buildWorkspaceOverview() string {
+	var builder strings.Builder
+	builder.WriteString("=== Workspace Overview ===\n")
+	
+	// Count files by directory and type
+	dirCounts := make(map[string]int)
+	extCounts := make(map[string]int)
+	totalFiles := 0
+	
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		
+		// Skip common ignore patterns
+		if e.shouldSkipFile(path) {
+			return nil
+		}
+		
+		totalFiles++
+		dir := filepath.Dir(path)
+		if dir == "." {
+			dir = "root"
+		}
+		dirCounts[dir]++
+		
+		ext := filepath.Ext(path)
+		if ext == "" {
+			ext = "no-extension"
+		}
+		extCounts[ext]++
+		
+		return nil
+	})
+	
+	if err != nil {
+		builder.WriteString("Error scanning workspace: " + err.Error() + "\n")
+		return builder.String()
+	}
+	
+	builder.WriteString(fmt.Sprintf("Total files: %d\n\n", totalFiles))
+	
+	// Show top directories
+	builder.WriteString("Files by directory:\n")
+	for dir, count := range dirCounts {
+		if count > 0 {
+			builder.WriteString(fmt.Sprintf("  %s: %d files\n", dir, count))
+		}
+	}
+	
+	// Show file types
+	builder.WriteString("\nFiles by type:\n")
+	for ext, count := range extCounts {
+		if count > 0 {
+			builder.WriteString(fmt.Sprintf("  %s: %d files\n", ext, count))
+		}
+	}
+	
+	return builder.String()
+}
+
+// searchWorkspaceFiles searches for a query across workspace files
+func (e *Executor) searchWorkspaceFiles(query string) string {
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("=== Search Results for '%s' ===\n", query))
+	
+	matchCount := 0
+	queryLower := strings.ToLower(query)
+	
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		
+		if e.shouldSkipFile(path) {
+			return nil
+		}
+		
+		// Limit file size to avoid huge files
+		if info.Size() > 1024*1024 { // 1MB limit
+			return nil
+		}
+		
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		
+		contentStr := string(content)
+		if !strings.Contains(strings.ToLower(contentStr), queryLower) {
+			return nil
+		}
+		
+		matchCount++
+		builder.WriteString(fmt.Sprintf("\n--- %s ---\n", path))
+		
+		// Show matching lines with context
+		lines := strings.Split(contentStr, "\n")
+		for i, line := range lines {
+			if strings.Contains(strings.ToLower(line), queryLower) {
+				lineNum := i + 1
+				builder.WriteString(fmt.Sprintf("%d: %s\n", lineNum, strings.TrimSpace(line)))
+			}
+		}
+		
+		// Limit results to avoid overwhelming output
+		if matchCount >= 10 {
+			return fmt.Errorf("stopping search - max results reached")
+		}
+		
+		return nil
+	})
+	
+	if err != nil && !strings.Contains(err.Error(), "stopping search") {
+		builder.WriteString("Error during search: " + err.Error() + "\n")
+	}
+	
+	if matchCount == 0 {
+		builder.WriteString("No matches found.\n")
+	} else {
+		builder.WriteString(fmt.Sprintf("\nFound %d matching files.\n", matchCount))
+	}
+	
+	return builder.String()
+}
+
+// shouldSkipFile determines if a file should be skipped during workspace operations
+func (e *Executor) shouldSkipFile(path string) bool {
+	// Skip hidden files and directories
+	if strings.Contains(path, "/.") {
+		return true
+	}
+	
+	// Skip common build/cache directories
+	skipDirs := []string{
+		"node_modules", ".git", "vendor", "target", "build", 
+		"dist", "__pycache__", ".vscode", ".idea",
+	}
+	
+	for _, skipDir := range skipDirs {
+		if strings.Contains(path, skipDir) {
+			return true
+		}
+	}
+	
+	// Skip binary/media files
+	ext := strings.ToLower(filepath.Ext(path))
+	binaryExts := []string{
+		".exe", ".bin", ".so", ".dylib", ".dll", ".class",
+		".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg",
+		".mp4", ".avi", ".mov", ".mp3", ".wav", ".pdf",
+		".zip", ".tar", ".gz", ".rar",
+	}
+	
+	for _, binExt := range binaryExts {
+		if ext == binExt {
+			return true
+		}
+	}
+	
+	return false
 }

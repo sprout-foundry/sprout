@@ -17,9 +17,12 @@ import (
 type EditingStrategy int
 
 const (
-	StrategyAuto  EditingStrategy = iota // Automatically choose based on task complexity
-	StrategyQuick                        // Direct file editing with minimal review
-	StrategyFull                         // Full multi-phase editing with comprehensive review
+	StrategyAuto         EditingStrategy = iota // Automatically choose based on task complexity
+	StrategyQuick                               // Direct file editing with minimal review
+	StrategyFull                                // Full multi-phase editing with comprehensive review
+	StrategyCreation                            // File/content creation strategy
+	StrategyDocumentation                       // Documentation generation strategy
+	StrategyAnalysisOnly                        // Analysis without modification
 )
 
 // EditingMetrics tracks cost and performance across editing operations
@@ -118,6 +121,12 @@ func (s *OptimizedEditingService) ExecuteOptimizedEditWithRollback(todo *TodoIte
 		diff, revisionIDs, err = s.executeQuickEdit(todo, ctx)
 	case StrategyFull:
 		diff, revisionIDs, err = s.executeFullEdit(todo, ctx)
+	case StrategyCreation:
+		diff, revisionIDs, err = s.executeCreationStrategy(todo, ctx)
+	case StrategyDocumentation:
+		diff, revisionIDs, err = s.executeDocumentationStrategy(todo, ctx)
+	case StrategyAnalysisOnly:
+		diff, revisionIDs, err = s.executeAnalysisOnly(todo, ctx)
 	default:
 		return nil, fmt.Errorf("unknown editing strategy: %d", strategy)
 	}
@@ -141,13 +150,21 @@ func (s *OptimizedEditingService) ExecuteOptimizedEditWithRollback(todo *TodoIte
 	}, nil
 }
 
-// determineStrategy intelligently chooses the editing strategy based on task complexity
+// determineStrategy intelligently chooses the editing strategy based on task complexity and intent
 func (s *OptimizedEditingService) determineStrategy(todo *TodoItem, ctx *SimplifiedAgentContext) EditingStrategy {
 	if s.config.Strategy != StrategyAuto {
 		return s.config.Strategy
 	}
 
-	// Analysis factors for strategy determination
+	// Use context-aware strategy selection if available
+	if ctx.TaskIntent != "" {
+		strategy := s.determineStrategyByIntent(ctx.TaskIntent, ctx.ProjectContext, todo)
+		if strategy != StrategyAuto {
+			return strategy
+		}
+	}
+
+	// Fallback to legacy complexity analysis
 	factors := s.analyzeTaskComplexity(todo, ctx)
 
 	// Force full edit for filesystem operations - they need shell commands not code editing
@@ -176,6 +193,34 @@ func (s *OptimizedEditingService) determineStrategy(todo *TodoItem, ctx *Simplif
 
 	// Default to quick edit for efficiency
 	return StrategyQuick
+}
+
+// determineStrategyByIntent uses task intent and project context for strategy selection
+func (s *OptimizedEditingService) determineStrategyByIntent(intent TaskIntent, projectCtx *ProjectContext, todo *TodoItem) EditingStrategy {
+	switch intent {
+	case TaskIntentDocumentation:
+		s.logger.LogProcessStep("📚 Documentation task detected, using analysis-only strategy")
+		return StrategyAnalysisOnly
+		
+	case TaskIntentCreation:
+		s.logger.LogProcessStep("🆕 Creation task detected, using creation strategy")
+		return StrategyCreation
+		
+	case TaskIntentAnalysis:
+		s.logger.LogProcessStep("🔍 Analysis task detected, using analysis-only strategy")
+		return StrategyAnalysisOnly
+		
+	case TaskIntentRefactoring:
+		s.logger.LogProcessStep("♻️  Refactoring task detected, using full edit strategy")
+		return StrategyFull
+		
+	case TaskIntentModification:
+		// Use complexity analysis for modification tasks
+		return StrategyAuto
+		
+	default:
+		return StrategyAuto
+	}
 }
 
 // TaskComplexityFactors represents factors used for strategy determination
@@ -266,6 +311,174 @@ func (s *OptimizedEditingService) executeFullEdit(todo *TodoItem, ctx *Simplifie
 		return "", nil, err
 	}
 	return result.Diff, []string{result.RevisionID}, nil
+}
+
+// executeCreationStrategy handles file/content creation tasks
+func (s *OptimizedEditingService) executeCreationStrategy(todo *TodoItem, ctx *SimplifiedAgentContext) (string, []string, error) {
+	// Use creation-focused prompt that emphasizes generating new content
+	prompt := fmt.Sprintf("Create new content for: %s\n\nDescription: %s", todo.Content, todo.Description)
+	
+	result, err := editor.ProcessCodeGenerationWithRollback("", prompt, s.cfg, "")
+	if err != nil {
+		return "", nil, err
+	}
+	return result.Diff, []string{result.RevisionID}, nil
+}
+
+// executeDocumentationStrategy handles documentation generation with context awareness
+func (s *OptimizedEditingService) executeDocumentationStrategy(todo *TodoItem, ctx *SimplifiedAgentContext) (string, []string, error) {
+	// Build context-aware documentation prompt
+	prompt := s.buildDocumentationPrompt(todo, ctx)
+	
+	// Call LLM directly to track token usage for documentation tasks
+	response, tokenUsage, err := llm.GetLLMResponse(
+		s.cfg.EditingModel, // Use editing model for documentation generation
+		[]prompts.Message{{Role: "user", Content: prompt}},
+		"",
+		s.cfg,
+		120*time.Second, // Allow more time for documentation generation
+	)
+
+	if tokenUsage != nil {
+		s.trackTokenUsage(tokenUsage, s.cfg.EditingModel, "documentation")
+	}
+
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate documentation: %w", err)
+	}
+
+	// Use ProcessCodeGenerationWithRollback for file creation but capture the result
+	result, err := editor.ProcessCodeGenerationWithRollback("", response, s.cfg, "")
+	if err != nil {
+		return "", nil, err
+	}
+	return result.Diff, []string{result.RevisionID}, nil
+}
+
+// executeAnalysisOnly performs analysis without making code changes, or creates documentation files if needed
+func (s *OptimizedEditingService) executeAnalysisOnly(todo *TodoItem, ctx *SimplifiedAgentContext) (string, []string, error) {
+	// Check if this is a documentation task that needs file creation
+	isDocumentationTask := ctx.TaskIntent == TaskIntentDocumentation || 
+		strings.Contains(strings.ToLower(todo.Content), "document") ||
+		strings.Contains(strings.ToLower(todo.Content), "docs") ||
+		strings.Contains(strings.ToLower(todo.Content), ".md")
+	
+	if isDocumentationTask {
+		// Use documentation-specific prompt for file creation
+		prompt := s.buildDocumentationPrompt(todo, ctx)
+		
+		response, tokenUsage, err := llm.GetLLMResponse(
+			s.cfg.EditingModel, // Use editing model for documentation creation
+			[]prompts.Message{{Role: "user", Content: prompt}},
+			"",
+			s.cfg,
+			120*time.Second,
+		)
+
+		if tokenUsage != nil {
+			s.trackTokenUsage(tokenUsage, s.cfg.EditingModel, "documentation")
+		}
+
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to generate documentation: %w", err)
+		}
+
+		// Try to create the documentation file
+		result, err := editor.ProcessCodeGenerationWithRollback("", response, s.cfg, "")
+		if err != nil {
+			// If file creation fails, store as analysis result instead
+			s.logger.LogProcessStep("⚠️ File creation failed, storing as analysis result")
+			ctx.AnalysisResults[todo.ID+"_documentation"] = response
+			return fmt.Sprintf("Documentation analysis completed (file creation failed):\n%s", response[:min(500, len(response))]), []string{}, nil
+		}
+		
+		return result.Diff, []string{result.RevisionID}, nil
+	}
+	
+	// For regular analysis tasks, we perform the analysis and store results but don't modify files
+	analysisPrompt := fmt.Sprintf("Analyze the following: %s\n\nDescription: %s\n\nProvide a detailed analysis without making any code changes.", todo.Content, todo.Description)
+	
+	response, tokenUsage, err := llm.GetLLMResponse(
+		s.cfg.OrchestrationModel,
+		[]prompts.Message{{Role: "user", Content: analysisPrompt}},
+		"",
+		s.cfg,
+		60*time.Second,
+	)
+
+	if tokenUsage != nil {
+		s.trackTokenUsage(tokenUsage, s.cfg.OrchestrationModel, "analysis")
+	}
+
+	if err != nil {
+		return "", nil, err
+	}
+
+	// Store analysis results
+	ctx.AnalysisResults[todo.ID+"_analysis"] = response
+	
+	// Return empty diff since no files were modified
+	return fmt.Sprintf("Analysis completed and stored:\n%s", response), []string{}, nil
+}
+
+// buildDocumentationPrompt creates a context-aware prompt for documentation generation
+func (s *OptimizedEditingService) buildDocumentationPrompt(todo *TodoItem, ctx *SimplifiedAgentContext) string {
+	var prompt strings.Builder
+	
+	// Base documentation request
+	prompt.WriteString(fmt.Sprintf("Generate comprehensive documentation for: %s\n\n", todo.Content))
+	prompt.WriteString(fmt.Sprintf("Details: %s\n\n", todo.Description))
+	
+	// Add project context if available
+	if ctx.ProjectContext != nil {
+		projectCtx := ctx.ProjectContext
+		
+		if projectCtx.Language != "" {
+			prompt.WriteString(fmt.Sprintf("Project Language: %s\n", projectCtx.Language))
+		}
+		
+		if projectCtx.Framework != "" {
+			prompt.WriteString(fmt.Sprintf("Framework: %s\n", projectCtx.Framework))
+		}
+		
+		if projectCtx.ProjectType == "api" {
+			prompt.WriteString("Focus on API endpoints, including:\n")
+			prompt.WriteString("- HTTP methods and paths\n")
+			prompt.WriteString("- Request/response parameters\n")
+			prompt.WriteString("- Authentication requirements\n")
+			prompt.WriteString("- Error responses\n\n")
+			
+			// Add framework-specific patterns
+			if routePattern, exists := projectCtx.Patterns["route_decorator"]; exists {
+				prompt.WriteString(fmt.Sprintf("Look for routes using pattern: %s\n", routePattern))
+			}
+			
+			if routeSuffix, exists := projectCtx.Patterns["route_file_suffix"]; exists {
+				prompt.WriteString(fmt.Sprintf("Route files typically end with: %s\n", routeSuffix))
+			}
+		}
+		
+		if projectCtx.OutputFormat == "markdown" {
+			prompt.WriteString("Output format: Generate well-structured Markdown documentation\n")
+		}
+		
+		prompt.WriteString("\n")
+	}
+	
+	// Add specific instructions to prevent language confusion and filename issues
+	prompt.WriteString("IMPORTANT: \n")
+	if ctx.ProjectContext != nil && ctx.ProjectContext.Language == "python" {
+		prompt.WriteString("- This is a Python project. Do not generate Go, JavaScript, or other language code.\n")
+		prompt.WriteString("- Analyze Python files only (.py extension).\n")
+		prompt.WriteString("- Focus on Python-specific patterns and syntax.\n")
+	}
+	prompt.WriteString("- Generate documentation content, not code implementations.\n")
+	prompt.WriteString("- Create a new documentation file if one doesn't exist.\n")
+	prompt.WriteString("- REQUIRED: When creating any file, you MUST specify the filename in the code block header using this format: ```language # filename.ext\n")
+	prompt.WriteString("- Use descriptive names like 'api_endpoints.md', 'dto_models.md', or 'authentication.md'.\n")
+	prompt.WriteString("- Example: ```markdown # api_endpoints.md or ```json # dto_models.json\n")
+	
+	return prompt.String()
 }
 
 // executeAnalysisPhase performs lightweight analysis to inform editing decisions
@@ -399,6 +612,12 @@ func (s *OptimizedEditingService) strategyName(strategy EditingStrategy) string 
 		return "Quick Edit"
 	case StrategyFull:
 		return "Full Edit"
+	case StrategyCreation:
+		return "Creation Strategy"
+	case StrategyDocumentation:
+		return "Documentation Strategy"
+	case StrategyAnalysisOnly:
+		return "Analysis Only"
 	default:
 		return "Auto"
 	}
@@ -423,3 +642,4 @@ func (s *OptimizedEditingService) GetLastRevisionID() string {
 	}
 	return s.metrics.RevisionIDs[len(s.metrics.RevisionIDs)-1]
 }
+

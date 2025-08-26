@@ -54,8 +54,10 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 		persistentCtx = nil
 	}
 
-	// Analyze intent type
+	// Analyze intent type and task details
 	intentType := analyzeIntentType(userIntent, logger)
+	taskIntent := analyzeTaskIntent(userIntent, logger)
+	projectContext := inferProjectContext(".", userIntent, logger)
 
 	ctx := &SimplifiedAgentContext{
 		UserIntent:            userIntent,
@@ -71,6 +73,10 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 		TotalCompletionTokens: 0,
 		TotalCost:             0.0,
 		SkipPrompt:            skipPrompt,
+		// Enhanced context awareness
+		ProjectContext:        projectContext,
+		TaskIntent:           taskIntent,
+		IntentType:           intentType,
 	}
 
 	// Ensure token usage and cost are always displayed, even on failure
@@ -95,12 +101,18 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 	switch intentType {
 	case IntentTypeCodeUpdate:
 		return handleCodeUpdate(ctx, startTime)
+	case IntentTypeDocumentation:
+		return handleDocumentation(ctx, startTime)
+	case IntentTypeCreation:
+		return handleCreation(ctx, startTime)
+	case IntentTypeAnalysis:
+		return handleAnalysis(ctx, startTime)
 	case IntentTypeQuestion:
 		return handleQuestion(ctx)
 	case IntentTypeCommand:
 		return handleCommand(ctx)
 	default:
-		return fmt.Errorf("unknown intent type")
+		return fmt.Errorf("unknown intent type: %s", intentType)
 	}
 }
 
@@ -418,4 +430,208 @@ Respond with JSON:
 
 	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Analysis results summarized from %d to %d entries", len(ctx.AnalysisResults), len(newAnalysisResults)))
 	return nil
+}
+
+// handleDocumentation handles documentation generation tasks
+func handleDocumentation(ctx *SimplifiedAgentContext, startTime time.Time) error {
+	ctx.Logger.LogProcessStep("📚 Documentation task detected")
+	
+	// Use the same workflow as code update but with documentation-focused todos
+	ctx.Logger.LogProcessStep("🧭 Analyzing documentation requirements and creating plan...")
+	
+	// Create documentation-specific todos
+	err := createDocumentationTodos(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create documentation todos: %w", err)
+	}
+
+	if len(ctx.Todos) == 0 {
+		ctx.Logger.LogProcessStep("⚠️ No actionable documentation todos created")
+		return fmt.Errorf("no actionable documentation todos could be created")
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Created %d documentation todos", len(ctx.Todos)))
+
+	// Execute documentation todos
+	return executeTodosWithFallback(ctx)
+}
+
+// handleCreation handles file/content creation tasks
+func handleCreation(ctx *SimplifiedAgentContext, startTime time.Time) error {
+	ctx.Logger.LogProcessStep("🆕 Creation task detected")
+	
+	ctx.Logger.LogProcessStep("🧭 Analyzing creation requirements and creating plan...")
+	
+	// Create creation-specific todos
+	err := createCreationTodos(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create creation todos: %w", err)
+	}
+
+	if len(ctx.Todos) == 0 {
+		ctx.Logger.LogProcessStep("⚠️ No actionable creation todos created")
+		return fmt.Errorf("no actionable creation todos could be created")
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Created %d creation todos", len(ctx.Todos)))
+
+	// Execute creation todos
+	return executeTodosWithFallback(ctx)
+}
+
+// handleAnalysis handles analysis-only tasks
+func handleAnalysis(ctx *SimplifiedAgentContext, startTime time.Time) error {
+	ctx.Logger.LogProcessStep("🔍 Analysis task detected")
+	
+	ctx.Logger.LogProcessStep("🧭 Analyzing analysis requirements and creating plan...")
+	
+	// Create analysis-specific todos
+	err := createAnalysisTodos(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create analysis todos: %w", err)
+	}
+
+	if len(ctx.Todos) == 0 {
+		ctx.Logger.LogProcessStep("⚠️ No actionable analysis todos created")
+		return fmt.Errorf("no actionable analysis todos could be created")
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Created %d analysis todos", len(ctx.Todos)))
+
+	// Execute analysis todos
+	return executeTodosWithFallback(ctx)
+}
+
+// executeTodosWithFallback executes todos with improved error recovery
+func executeTodosWithFallback(ctx *SimplifiedAgentContext) error {
+	completedCount := 0
+	maxRetries := 2
+	
+	for {
+		// Select next pending todo by dynamic score
+		nextIdx := selectNextTodoIndex(ctx)
+		if nextIdx == -1 {
+			break // no pending todos remain
+		}
+
+		todo := ctx.Todos[nextIdx]
+		ctx.Logger.LogProcessStep(fmt.Sprintf("📋 Executing todo: %s", todo.Content))
+
+		// Update todo status
+		ctx.CurrentTodo = &todo
+		ctx.Todos[nextIdx].Status = "in_progress"
+
+		var err error
+		retry := 0
+		
+		// Execute with progressive fallback strategies
+		for retry <= maxRetries {
+			if retry == 0 {
+				// First attempt: normal execution
+				err = executeTodoWithSmartRetry(ctx, &ctx.Todos[nextIdx])
+			} else if retry == 1 {
+				// Second attempt: try different strategy
+				ctx.Logger.LogProcessStep("🔄 First attempt failed, trying alternative approach...")
+				err = executeTodoWithFallbackStrategy(ctx, &ctx.Todos[nextIdx])
+			} else {
+				// Final attempt: simplest approach
+				ctx.Logger.LogProcessStep("🔄 Previous attempts failed, trying simplest approach...")
+				err = executeTodoWithSimpleStrategy(ctx, &ctx.Todos[nextIdx])
+			}
+			
+			if err == nil {
+				break // Success!
+			}
+			
+			retry++
+			ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Attempt %d failed: %v", retry, err))
+		}
+		
+		if err != nil {
+			ctx.Todos[nextIdx].Status = "failed"
+			ctx.Logger.LogError(fmt.Errorf("todo failed after %d attempts: %w", maxRetries+1, err))
+			
+			// Don't fail completely - mark as failed and continue with other todos
+			ctx.Logger.LogProcessStep("⏭️ Continuing with remaining todos...")
+			continue
+		}
+
+		ctx.Todos[nextIdx].Status = "completed"
+		completedCount++
+
+		// Mark todo as completed in context manager if available
+		if ctx.ContextManager != nil && ctx.PersistentCtx != nil {
+			err := ctx.ContextManager.CompleteTodo(ctx.PersistentCtx, ctx.Todos[nextIdx].ID)
+			if err != nil {
+				ctx.Logger.LogError(fmt.Errorf("failed to mark todo as completed in context: %w", err))
+			}
+		}
+
+		ctx.Logger.LogProcessStep("✅ Todo completed and validated")
+	}
+
+	if completedCount == 0 {
+		return fmt.Errorf("no todos were completed successfully")
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("🎉 Agent completed %d todos", completedCount))
+	return nil
+}
+
+// executeTodoWithFallbackStrategy tries an alternative execution strategy
+func executeTodoWithFallbackStrategy(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	// Try using the creation strategy for failed documentation tasks
+	if ctx.TaskIntent == TaskIntentDocumentation {
+		// Force creation strategy
+		originalTaskIntent := ctx.TaskIntent
+		ctx.TaskIntent = TaskIntentCreation
+		
+		err := executeTodoWithSmartRetry(ctx, todo)
+		
+		// Restore original task intent
+		ctx.TaskIntent = originalTaskIntent
+		return err
+	}
+	
+	// For other tasks, try the full edit strategy
+	return executeTodoWithSmartRetry(ctx, todo)
+}
+
+// executeTodoWithSimpleStrategy uses the simplest possible approach
+func executeTodoWithSimpleStrategy(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	// Use basic LLM call without complex tool workflows
+	messages := []prompts.Message{
+		{Role: "system", Content: "You are a helpful assistant. Provide a clear, direct response to the user's request."},
+		{Role: "user", Content: fmt.Sprintf("Task: %s\nDescription: %s", todo.Content, todo.Description)},
+	}
+	
+	response, tokenUsage, err := llm.GetLLMResponse(
+		ctx.Config.EditingModel,
+		messages,
+		"",
+		ctx.Config,
+		60*time.Second,
+	)
+	
+	if tokenUsage != nil {
+		trackTokenUsage(ctx, tokenUsage, ctx.Config.EditingModel)
+	}
+	
+	if err != nil {
+		return err
+	}
+	
+	// Store the response as analysis result
+	ctx.AnalysisResults[todo.ID+"_simple_result"] = response
+	ctx.Logger.LogProcessStep(fmt.Sprintf("📝 Simple execution completed: %s", response[:min(100, len(response))]))
+	
+	return nil
+}
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

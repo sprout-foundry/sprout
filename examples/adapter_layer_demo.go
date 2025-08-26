@@ -36,14 +36,14 @@ func main() {
 	// Test 2: LLM Provider Registry
 	fmt.Println("\n2. Testing LLM Provider Registry...")
 	registry := llm.NewRegistry()
-	
+
 	// Register providers
 	if err := registry.RegisterOpenAI(); err != nil {
 		fmt.Printf("Warning: Failed to register OpenAI: %v\n", err)
 	} else {
 		fmt.Println("✓ OpenAI provider registered")
 	}
-	
+
 	if err := registry.RegisterOllama(); err != nil {
 		fmt.Printf("Warning: Failed to register Ollama: %v\n", err)
 	} else {
@@ -57,7 +57,7 @@ func main() {
 	// Test 3: Enhanced Container with Adapter Layer
 	fmt.Println("\n3. Testing Enhanced Container with Adapter Layer...")
 	container := boundaries.NewEnhancedContainer(cfg)
-	
+
 	// Initialize container
 	ctx := context.Background()
 	if err := container.Start(ctx); err != nil {
@@ -91,15 +91,15 @@ func main() {
 	configProvider := container.GetConfigProvider()
 	if configProvider != nil {
 		fmt.Println("✓ Enhanced config provider available")
-		
+
 		// Test config retrieval
 		if agentConfig := configProvider.GetAgentConfig(); agentConfig != nil {
-			fmt.Printf("✓ Agent config retrieved: retries=%d, validation=%t\n", 
+			fmt.Printf("✓ Agent config retrieved: retries=%d, validation=%t\n",
 				agentConfig.MaxRetries, agentConfig.EnableValidation)
 		}
-		
+
 		if uiConfig := configProvider.GetUIConfig(); uiConfig != nil {
-			fmt.Printf("✓ UI config retrieved: skip_prompts=%t, verbose=%t\n", 
+			fmt.Printf("✓ UI config retrieved: skip_prompts=%t, verbose=%t\n",
 				uiConfig.SkipPrompts, uiConfig.VerboseLogging)
 		}
 	} else {
@@ -138,7 +138,7 @@ func main() {
 	migration := adapters.NewMigrationSupport(factory)
 	flags := migration.GetMigrationFlags()
 	fmt.Printf("✓ Migration flags: domain=%t, container=%t, adapter=%t, config=%t\n",
-		flags.UseDomainServices, flags.UseEnhancedContainer, 
+		flags.UseDomainServices, flags.UseEnhancedContainer,
 		flags.UseAdapterLayer, flags.UseLayeredConfig)
 
 	// Cleanup

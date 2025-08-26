@@ -61,7 +61,7 @@ func (f *Factory) Validate(config *types.ProviderConfig) error {
 	if config.BaseURL == "" {
 		config.BaseURL = "https://api.openai.com/v1"
 	}
-	
+
 	if config.Timeout == 0 {
 		config.Timeout = 60 // 60 seconds default
 	}
@@ -79,24 +79,24 @@ func (p *Provider) GetModels(ctx context.Context) ([]types.ModelInfo, error) {
 	// For now, return static list. Could be made dynamic by calling OpenAI API
 	return []types.ModelInfo{
 		{
-			Name:         "gpt-4",
-			Provider:     "openai",
-			MaxTokens:    8192,
-			SupportsTools: true,
+			Name:           "gpt-4",
+			Provider:       "openai",
+			MaxTokens:      8192,
+			SupportsTools:  true,
 			SupportsImages: false,
 		},
 		{
-			Name:         "gpt-4-turbo",
-			Provider:     "openai",
-			MaxTokens:    128000,
-			SupportsTools: true,
+			Name:           "gpt-4-turbo",
+			Provider:       "openai",
+			MaxTokens:      128000,
+			SupportsTools:  true,
 			SupportsImages: true,
 		},
 		{
-			Name:         "gpt-3.5-turbo",
-			Provider:     "openai",
-			MaxTokens:    16384,
-			SupportsTools: true,
+			Name:           "gpt-3.5-turbo",
+			Provider:       "openai",
+			MaxTokens:      16384,
+			SupportsTools:  true,
 			SupportsImages: false,
 		},
 	}, nil
@@ -154,7 +154,7 @@ func (p *Provider) GenerateResponse(ctx context.Context, messages []types.Messag
 // GenerateResponseStream generates a streaming response from OpenAI
 func (p *Provider) GenerateResponseStream(ctx context.Context, messages []types.Message, options types.RequestOptions, writer io.Writer) (*types.ResponseMetadata, error) {
 	options.Stream = true
-	
+
 	requestBody, err := p.buildRequest(messages, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)
@@ -175,12 +175,12 @@ func (p *Provider) GenerateResponseStream(ctx context.Context, messages []types.
 	// Handle streaming response
 	scanner := bufio.NewScanner(resp.Body)
 	totalTokens := 0
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "data: ") {
 			data := strings.TrimPrefix(line, "data: ")
-			
+
 			if data == "[DONE]" {
 				break
 			}
@@ -220,7 +220,7 @@ func (p *Provider) IsAvailable(ctx context.Context) error {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
-	
+
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to connect to OpenAI API: %w", err)
@@ -244,7 +244,7 @@ func (p *Provider) EstimateTokens(messages []types.Message) (int, error) {
 	for _, msg := range messages {
 		totalChars += len(msg.Content) + len(msg.Role) + 10 // Add some overhead
 	}
-	
+
 	// Rough estimate: ~4 characters per token
 	return totalChars / 4, nil
 }
@@ -253,11 +253,11 @@ func (p *Provider) EstimateTokens(messages []types.Message) (int, error) {
 func (p *Provider) CalculateCost(usage types.TokenUsage) float64 {
 	// OpenAI pricing (approximate, as of 2024)
 	var inputCostPer1K, outputCostPer1K float64
-	
+
 	model := p.config.Model
 	if strings.Contains(model, "gpt-4") {
-		inputCostPer1K = 0.03   // $0.03 per 1K prompt tokens
-		outputCostPer1K = 0.06  // $0.06 per 1K completion tokens
+		inputCostPer1K = 0.03  // $0.03 per 1K prompt tokens
+		outputCostPer1K = 0.06 // $0.06 per 1K completion tokens
 	} else if strings.Contains(model, "gpt-3.5") {
 		inputCostPer1K = 0.001  // $0.001 per 1K prompt tokens
 		outputCostPer1K = 0.002 // $0.002 per 1K completion tokens
@@ -266,10 +266,10 @@ func (p *Provider) CalculateCost(usage types.TokenUsage) float64 {
 		inputCostPer1K = 0.03
 		outputCostPer1K = 0.06
 	}
-	
+
 	inputCost := float64(usage.PromptTokens) * inputCostPer1K / 1000.0
 	outputCost := float64(usage.CompletionTokens) * outputCostPer1K / 1000.0
-	
+
 	return inputCost + outputCost
 }
 
@@ -327,9 +327,9 @@ func (p *Provider) makeRequest(ctx context.Context, body []byte) (*http.Response
 type OpenAIRequest struct {
 	Model       string          `json:"model"`
 	Messages    []OpenAIMessage `json:"messages"`
-	MaxTokens   *int           `json:"max_tokens,omitempty"`
-	Temperature *float64       `json:"temperature,omitempty"`
-	Stream      bool           `json:"stream,omitempty"`
+	MaxTokens   *int            `json:"max_tokens,omitempty"`
+	Temperature *float64        `json:"temperature,omitempty"`
+	Stream      bool            `json:"stream,omitempty"`
 }
 
 type OpenAIMessage struct {
@@ -340,16 +340,16 @@ type OpenAIMessage struct {
 type OpenAIResponse struct {
 	ID      string         `json:"id"`
 	Object  string         `json:"object"`
-	Created int64         `json:"created"`
-	Model   string        `json:"model"`
+	Created int64          `json:"created"`
+	Model   string         `json:"model"`
 	Choices []OpenAIChoice `json:"choices"`
-	Usage   OpenAIUsage   `json:"usage"`
+	Usage   OpenAIUsage    `json:"usage"`
 }
 
 type OpenAIChoice struct {
-	Index        int              `json:"index"`
-	Message      OpenAIMessage    `json:"message"`
-	FinishReason string          `json:"finish_reason"`
+	Index        int           `json:"index"`
+	Message      OpenAIMessage `json:"message"`
+	FinishReason string        `json:"finish_reason"`
 }
 
 type OpenAIUsage struct {
@@ -359,16 +359,16 @@ type OpenAIUsage struct {
 }
 
 type OpenAIStreamChunk struct {
-	ID      string              `json:"id"`
-	Object  string              `json:"object"`
-	Created int64              `json:"created"`
-	Model   string             `json:"model"`
+	ID      string               `json:"id"`
+	Object  string               `json:"object"`
+	Created int64                `json:"created"`
+	Model   string               `json:"model"`
 	Choices []OpenAIStreamChoice `json:"choices"`
 }
 
 type OpenAIStreamChoice struct {
-	Index        int                `json:"index"`
-	Delta        OpenAIStreamDelta  `json:"delta"`
+	Index        int               `json:"index"`
+	Delta        OpenAIStreamDelta `json:"delta"`
 	FinishReason *string           `json:"finish_reason"`
 }
 

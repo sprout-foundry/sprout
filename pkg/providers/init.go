@@ -28,7 +28,7 @@ func RegisterDefaultProviders() error {
 	if err := llm.RegisterProvider(&ollama.Factory{}); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -47,17 +47,17 @@ func GetProvider(modelName string) (interfaces.LLMProvider, error) {
 	if modelName == "" {
 		return nil, fmt.Errorf("model name is required")
 	}
-	
+
 	// Extract provider name from model name (e.g., "openai:gpt-4" -> "openai")
 	providerName := strings.SplitN(modelName, ":", 2)[0]
-	
+
 	// Create a basic configuration
 	config := &types.ProviderConfig{
 		Name:    providerName,
 		Model:   modelName,
 		Enabled: true,
 	}
-	
+
 	// Use the global factory to create the provider
 	factory := llm.NewGlobalFactory()
 	return factory.CreateProvider(config)

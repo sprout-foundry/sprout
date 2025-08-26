@@ -32,9 +32,9 @@ func NewAdapterFactory(cfg *config.Config) (*AdapterFactory, error) {
 
 // CreateLLMAdapters creates LLM adapters for different domains
 type LLMAdapters struct {
-	Legacy llm.LLMProvider              // For existing code
-	Agent  agent.LLMProvider            // For agent domain
-	Todo   todo.LLMProvider             // For todo domain
+	Legacy llm.LLMProvider   // For existing code
+	Agent  agent.LLMProvider // For agent domain
+	Todo   todo.LLMProvider  // For todo domain
 }
 
 // CreateLLMAdapters creates all LLM adapters from a new interfaces.LLMProvider
@@ -48,15 +48,15 @@ func (f *AdapterFactory) CreateLLMAdapters(provider interfaces.LLMProvider) *LLM
 
 // CreateWorkspaceAdapters creates workspace adapters for different domains
 type WorkspaceAdapters struct {
-	Agent      agent.WorkspaceProvider      // For agent domain
-	Todo       *workspaceAdapter.TodoWorkspaceAdapter // For todo domain  
-	Interfaces interfaces.WorkspaceProvider // For interfaces layer
+	Agent      agent.WorkspaceProvider                // For agent domain
+	Todo       *workspaceAdapter.TodoWorkspaceAdapter // For todo domain
+	Interfaces interfaces.WorkspaceProvider           // For interfaces layer
 }
 
 // CreateWorkspaceAdapters creates all workspace adapters
 func (f *AdapterFactory) CreateWorkspaceAdapters() *WorkspaceAdapters {
 	baseAdapter := workspaceAdapter.NewWorkspaceAdapter()
-	
+
 	return &WorkspaceAdapters{
 		Agent:      baseAdapter,
 		Todo:       workspaceAdapter.NewTodoWorkspaceAdapter(baseAdapter),
@@ -89,10 +89,10 @@ func (f *AdapterFactory) CreateAdapterBundle(llmProvider interfaces.LLMProvider)
 func (f *AdapterFactory) WireServices(bundle *AdapterBundle) (*DomainServices, error) {
 	// Create domain services with adapted dependencies
 	todoService := todo.NewTodoService(bundle.LLM.Todo)
-	
+
 	// Create a simple event bus implementation (placeholder)
 	eventBus := &SimpleEventBus{}
-	
+
 	// Create agent workflow
 	agentWorkflow := agent.NewAgentWorkflow(
 		bundle.LLM.Agent,
@@ -150,21 +150,21 @@ func (m *MigrationSupport) CreateBackwardCompatibleLLMProvider(newProvider inter
 
 // GradualMigrationFlags can be used to gradually enable new functionality
 type GradualMigrationFlags struct {
-	UseDomainServices      bool // Enable domain services
-	UseEnhancedContainer   bool // Enable enhanced DI container
-	UseAdapterLayer        bool // Enable adapter layer
-	UseLayeredConfig       bool // Enable layered configuration
+	UseDomainServices    bool // Enable domain services
+	UseEnhancedContainer bool // Enable enhanced DI container
+	UseAdapterLayer      bool // Enable adapter layer
+	UseLayeredConfig     bool // Enable layered configuration
 }
 
 // GetMigrationFlags gets migration flags from config
 func (m *MigrationSupport) GetMigrationFlags() GradualMigrationFlags {
 	// For now, use a default value since EnableExperimentalFeatures doesn't exist yet
 	enableExperimental := true // Would check m.factory.config.EnableExperimentalFeatures when available
-	
+
 	return GradualMigrationFlags{
-		UseDomainServices:      enableExperimental,
-		UseEnhancedContainer:   enableExperimental,
-		UseAdapterLayer:        enableExperimental,
-		UseLayeredConfig:       enableExperimental,
+		UseDomainServices:    enableExperimental,
+		UseEnhancedContainer: enableExperimental,
+		UseAdapterLayer:      enableExperimental,
+		UseLayeredConfig:     enableExperimental,
 	}
 }

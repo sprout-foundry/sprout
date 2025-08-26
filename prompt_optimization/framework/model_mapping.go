@@ -18,29 +18,29 @@ type ModelPromptMapping struct {
 
 // ModelOptimalPrompts stores the best prompt for each task type per model
 type ModelOptimalPrompts struct {
-	ModelName        string                        `json:"model_name"`
+	ModelName        string                          `json:"model_name"`
 	PromptMappings   map[PromptType]*PromptCandidate `json:"prompt_mappings"`
-	PerformanceData  map[PromptType]*ModelMetrics   `json:"performance_data"`
-	LastOptimized    time.Time                     `json:"last_optimized"`
-	OptimizationRuns int                           `json:"optimization_runs"`
+	PerformanceData  map[PromptType]*ModelMetrics    `json:"performance_data"`
+	LastOptimized    time.Time                       `json:"last_optimized"`
+	OptimizationRuns int                             `json:"optimization_runs"`
 }
 
 // ModelMetrics tracks performance metrics for a specific model-prompt combination
 type ModelMetrics struct {
-	SuccessRate      float64       `json:"success_rate"`
-	AverageCost      float64       `json:"average_cost"`
-	AverageLatency   time.Duration `json:"average_latency"`
-	QualityScore     float64       `json:"quality_score"`
-	TestCount        int           `json:"test_count"`
-	LastTested       time.Time     `json:"last_tested"`
-	ConfidenceLevel  float64       `json:"confidence_level"` // Based on test count and consistency
+	SuccessRate     float64       `json:"success_rate"`
+	AverageCost     float64       `json:"average_cost"`
+	AverageLatency  time.Duration `json:"average_latency"`
+	QualityScore    float64       `json:"quality_score"`
+	TestCount       int           `json:"test_count"`
+	LastTested      time.Time     `json:"last_tested"`
+	ConfidenceLevel float64       `json:"confidence_level"` // Based on test count and consistency
 }
 
 // ModelPromptManager handles model-specific prompt optimization and selection
 type ModelPromptManager struct {
-	mappings      *ModelPromptMapping
-	mappingsFile  string
-	promptsDir    string
+	mappings     *ModelPromptMapping
+	mappingsFile string
+	promptsDir   string
 }
 
 // NewModelPromptManager creates a new model-prompt mapping manager
@@ -48,7 +48,7 @@ func NewModelPromptManager(mappingsFile, promptsDir string) *ModelPromptManager 
 	return &ModelPromptManager{
 		mappingsFile: mappingsFile,
 		promptsDir:   promptsDir,
-		mappings:     &ModelPromptMapping{
+		mappings: &ModelPromptMapping{
 			ModelMappings: make(map[string]*ModelOptimalPrompts),
 			Version:       "1.0",
 		},
@@ -103,7 +103,7 @@ func (mpm *ModelPromptManager) SaveMappings() error {
 func (mpm *ModelPromptManager) GetOptimalPrompt(modelName string, promptType PromptType) (*PromptCandidate, *ModelMetrics, error) {
 	// Normalize model name
 	normalizedModel := mpm.normalizeModelName(modelName)
-	
+
 	modelPrompts, exists := mpm.mappings.ModelMappings[normalizedModel]
 	if !exists {
 		return nil, nil, fmt.Errorf("no optimized prompts found for model %s", normalizedModel)
@@ -119,9 +119,9 @@ func (mpm *ModelPromptManager) GetOptimalPrompt(modelName string, promptType Pro
 }
 
 // UpdateOptimalPrompt updates the best prompt for a model-task combination
-func (mpm *ModelPromptManager) UpdateOptimalPrompt(modelName string, promptType PromptType, 
+func (mpm *ModelPromptManager) UpdateOptimalPrompt(modelName string, promptType PromptType,
 	prompt *PromptCandidate, metrics *ModelMetrics) error {
-	
+
 	normalizedModel := mpm.normalizeModelName(modelName)
 
 	// Ensure model entry exists
@@ -136,7 +136,7 @@ func (mpm *ModelPromptManager) UpdateOptimalPrompt(modelName string, promptType 
 	}
 
 	modelPrompts := mpm.mappings.ModelMappings[normalizedModel]
-	
+
 	// Check if this is better than existing prompt
 	if existingMetrics, exists := modelPrompts.PerformanceData[promptType]; exists {
 		if !mpm.isImprovement(metrics, existingMetrics) {
@@ -165,7 +165,7 @@ func (mpm *ModelPromptManager) GetAvailableModels() []string {
 // GetModelSummary provides a summary of optimization status for a model
 func (mpm *ModelPromptManager) GetModelSummary(modelName string) (*ModelOptimalPrompts, error) {
 	normalizedModel := mpm.normalizeModelName(modelName)
-	
+
 	modelPrompts, exists := mpm.mappings.ModelMappings[normalizedModel]
 	if !exists {
 		return nil, fmt.Errorf("no data found for model %s", normalizedModel)
@@ -185,7 +185,7 @@ func (mpm *ModelPromptManager) IdentifyBestModelForTask(promptType PromptType) (
 			// Calculate composite score (success rate weighted by confidence and cost efficiency)
 			costEfficiency := 1.0 / (metrics.AverageCost + 0.001) // Avoid division by zero
 			score := metrics.SuccessRate * metrics.ConfidenceLevel * costEfficiency * 0.1
-			
+
 			if score > bestScore {
 				bestScore = score
 				bestModel = modelName
@@ -225,19 +225,19 @@ func (mpm *ModelPromptManager) adaptPromptForModel(basePrompt *PromptCandidate, 
 	case strings.Contains(normalizedModel, "qwen"):
 		// Qwen models prefer clear, structured instructions
 		content = mpm.addQwenOptimizations(content)
-		
+
 	case strings.Contains(normalizedModel, "deepseek"):
 		// DeepSeek models work well with reasoning-based prompts
 		content = mpm.addDeepSeekOptimizations(content)
-		
+
 	case strings.Contains(normalizedModel, "claude"):
 		// Claude models prefer conversational, detailed instructions
 		content = mpm.addClaudeOptimizations(content)
-		
+
 	case strings.Contains(normalizedModel, "gpt"):
 		// GPT models work well with examples and clear formatting
 		content = mpm.addGPTOptimizations(content)
-		
+
 	case strings.Contains(normalizedModel, "gemini"):
 		// Gemini models prefer structured, step-by-step instructions
 		content = mpm.addGeminiOptimizations(content)
@@ -327,7 +327,7 @@ I will now perform this task following the specified requirements.
 func (mpm *ModelPromptManager) normalizeModelName(modelName string) string {
 	// Remove provider prefixes and normalize
 	name := strings.ToLower(modelName)
-	
+
 	// Remove common prefixes
 	prefixes := []string{"deepinfra:", "ollama:", "openai:", "anthropic:", "google:"}
 	for _, prefix := range prefixes {
@@ -336,11 +336,11 @@ func (mpm *ModelPromptManager) normalizeModelName(modelName string) string {
 			break
 		}
 	}
-	
+
 	// Replace slashes and special characters
 	name = strings.ReplaceAll(name, "/", "_")
 	name = strings.ReplaceAll(name, "-", "_")
-	
+
 	return name
 }
 
@@ -349,24 +349,24 @@ func (mpm *ModelPromptManager) isImprovement(newMetrics, existingMetrics *ModelM
 	// 1. Higher success rate (primary factor)
 	// 2. Similar success rate but lower cost
 	// 3. Similar performance but higher confidence (more test data)
-	
+
 	if newMetrics.SuccessRate > existingMetrics.SuccessRate {
 		return true
 	}
-	
-	if abs(newMetrics.SuccessRate - existingMetrics.SuccessRate) < 0.05 {
+
+	if abs(newMetrics.SuccessRate-existingMetrics.SuccessRate) < 0.05 {
 		// Similar success rates, check cost efficiency
 		if newMetrics.AverageCost < existingMetrics.AverageCost {
 			return true
 		}
-		
+
 		// Similar cost, check confidence
-		if abs(newMetrics.AverageCost - existingMetrics.AverageCost) < 0.001 &&
-		   newMetrics.ConfidenceLevel > existingMetrics.ConfidenceLevel {
+		if abs(newMetrics.AverageCost-existingMetrics.AverageCost) < 0.001 &&
+			newMetrics.ConfidenceLevel > existingMetrics.ConfidenceLevel {
 			return true
 		}
 	}
-	
+
 	return false
 }
 

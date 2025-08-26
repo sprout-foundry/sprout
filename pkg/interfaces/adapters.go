@@ -142,14 +142,14 @@ type GitProvider interface {
 
 // GitStatus represents the status of a Git repository
 type GitStatus struct {
-	Branch        string
-	Ahead         int
-	Behind        int
-	Staged        []string
-	Unstaged      []string
-	Untracked     []string
-	Conflicted    []string
-	Clean         bool
+	Branch     string
+	Ahead      int
+	Behind     int
+	Staged     []string
+	Unstaged   []string
+	Untracked  []string
+	Conflicted []string
+	Clean      bool
 }
 
 // GitCommit represents a Git commit
@@ -176,7 +176,7 @@ type UIProvider interface {
 	// PrintError outputs error text
 	PrintError(text string)
 
-	// PrintWarning outputs warning text  
+	// PrintWarning outputs warning text
 	PrintWarning(text string)
 
 	// PrintSuccess outputs success text

@@ -377,26 +377,26 @@ func (p *LayeredConfigProvider) GetAgentConfig() *types.AgentConfig {
 	agentConfig := merged.GetAgentConfig()
 
 	return &types.AgentConfig{
-		MaxRetries:           agentConfig.OrchestrationMaxAttempts,
-		RetryDelay:           5,
-		MaxContextRequests:   10,
-		EnableValidation:     !merged.SkipPrompt,
-		EnableCodeReview:     !merged.SkipPrompt,
-		ValidationTimeout:    30,
-		DefaultStrategy:      "quick",
-		CostThreshold:        0.1,
+		MaxRetries:         agentConfig.OrchestrationMaxAttempts,
+		RetryDelay:         5,
+		MaxContextRequests: 10,
+		EnableValidation:   !merged.SkipPrompt,
+		EnableCodeReview:   !merged.SkipPrompt,
+		ValidationTimeout:  30,
+		DefaultStrategy:    "quick",
+		CostThreshold:      0.1,
 	}
 }
 
 // GetEditorConfig implements interfaces.ConfigProvider
 func (p *LayeredConfigProvider) GetEditorConfig() *types.EditorConfig {
 	return &types.EditorConfig{
-		BackupEnabled:    true,
-		DiffStyle:        "unified",
-		AutoFormat:       true,
+		BackupEnabled:     true,
+		DiffStyle:         "unified",
+		AutoFormat:        true,
 		PreferredLanguage: "go",
-		IgnorePatterns:   []string{"*.test", "*.tmp"},
-		MaxFileSize:      1024 * 1024,
+		IgnorePatterns:    []string{"*.test", "*.tmp"},
+		MaxFileSize:       1024 * 1024,
 	}
 }
 
@@ -407,9 +407,9 @@ func (p *LayeredConfigProvider) GetSecurityConfig() *types.SecurityConfig {
 
 	return &types.SecurityConfig{
 		EnableCredentialScanning: securityConfig.EnableSecurityChecks,
-		BlockedPatterns:         securityConfig.BlockedCommands, // Map blocked commands to blocked patterns
-		AllowedCommands:         securityConfig.AllowedCommands,
-		RequireConfirmation:     !merged.SkipPrompt,
+		BlockedPatterns:          securityConfig.BlockedCommands, // Map blocked commands to blocked patterns
+		AllowedCommands:          securityConfig.AllowedCommands,
+		RequireConfirmation:      !merged.SkipPrompt,
 	}
 }
 
@@ -419,11 +419,11 @@ func (p *LayeredConfigProvider) GetUIConfig() *types.UIConfig {
 	uiConfig := merged.GetUIConfig()
 
 	return &types.UIConfig{
-		SkipPrompts:      merged.SkipPrompt,
-		ColorOutput:      true, // Default to true
-		VerboseLogging:   uiConfig.JsonLogs, // Map JsonLogs to VerboseLogging
-		ProgressBars:     uiConfig.ShouldDisplayProgress(),
-		OutputFormat:     "text",
+		SkipPrompts:    merged.SkipPrompt,
+		ColorOutput:    true,              // Default to true
+		VerboseLogging: uiConfig.JsonLogs, // Map JsonLogs to VerboseLogging
+		ProgressBars:   uiConfig.ShouldDisplayProgress(),
+		OutputFormat:   "text",
 	}
 }
 

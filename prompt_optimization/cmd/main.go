@@ -67,13 +67,13 @@ func main() {
 	if *optimize && *promptType != "" {
 		// Run optimization mode
 		fmt.Printf("🔄 Running optimization for %s prompts\n", *promptType)
-		
+
 		config := framework.OptimizationConfig{
-			PromptType:          framework.PromptType(*promptType),
-			MaxIterations:       *iterations,
-			SuccessThreshold:    *target,
-			Models:              modelList,
-			OptimizationGoals:   []string{"accuracy", "cost"},
+			PromptType:        framework.PromptType(*promptType),
+			MaxIterations:     *iterations,
+			SuccessThreshold:  *target,
+			Models:            modelList,
+			OptimizationGoals: []string{"accuracy", "cost"},
 		}
 
 		// Create a basic prompt to start with
@@ -93,7 +93,7 @@ func main() {
 
 		// Save results
 		saveOptimizationResult(result, *resultsDir)
-		
+
 	} else if *promptFile != "" {
 		// Test single prompt mode
 		prompt, err := loadPrompt(*promptFile)
@@ -102,23 +102,23 @@ func main() {
 		}
 
 		fmt.Printf("🧪 Testing prompt: %s\n", prompt.ID)
-		
+
 		var allResults []*framework.TestResult
 		for _, model := range modelList {
 			fmt.Printf("📝 Testing with model: %s\n", model)
-			
+
 			results, err := tester.TestPrompt(ctx, prompt, model)
 			if err != nil {
 				fmt.Printf("❌ Error testing with %s: %v\n", model, err)
 				continue
 			}
-			
+
 			allResults = append(allResults, results...)
 		}
 
 		// Save results
 		saveTestResults(allResults, *resultsDir, prompt.ID)
-		
+
 		// Print summary
 		printSummary(allResults)
 	}
@@ -154,7 +154,7 @@ func loadPrompt(file string) (*framework.PromptCandidate, error) {
 	}
 
 	base := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
-	
+
 	return &framework.PromptCandidate{
 		ID:          base,
 		PromptType:  framework.PromptTypeTextReplacement,
@@ -167,28 +167,28 @@ func loadPrompt(file string) (*framework.PromptCandidate, error) {
 
 func saveTestResults(results []*framework.TestResult, dir, promptID string) error {
 	os.MkdirAll(dir, 0755)
-	
+
 	filename := filepath.Join(dir, fmt.Sprintf("test_results_%s_%d.json", promptID, time.Now().Unix()))
-	
+
 	data, err := json.MarshalIndent(results, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(filename, data, 0644)
 }
 
 func saveOptimizationResult(result *framework.OptimizationResult, dir string) error {
 	os.MkdirAll(dir, 0755)
-	
-	filename := filepath.Join(dir, fmt.Sprintf("optimization_%s_%d.json", 
+
+	filename := filepath.Join(dir, fmt.Sprintf("optimization_%s_%d.json",
 		result.OriginalPrompt.PromptType, time.Now().Unix()))
-	
+
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(filename, data, 0644)
 }
 
@@ -200,7 +200,7 @@ func printSummary(results []*framework.TestResult) {
 
 	successful := 0
 	totalCost := 0.0
-	
+
 	for _, result := range results {
 		if result.Success {
 			successful++

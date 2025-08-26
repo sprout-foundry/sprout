@@ -925,11 +925,21 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 		logger.Logf("Warning: Failed to save workspace metadata: %v\n", err)
 	}
 
-	// Use simple keyword-based file selection
-	var fullContextFiles, summaryContextFiles []string
-	logger.LogProcessStep("--- Using keyword-based file selection ---")
+	// Use simple keyword-based file selection with limits to avoid overwhelming context
+	const maxFullContextFiles = 3      // Very focused full context for most relevant files
+	const maxSummaryContextFiles = 20  // Broader summary context for exploration
+	const minScoreForFullContext = 3   // Only files with very high relevance scores get full context
+	
+	var fileScores []struct {
+		file  string
+		score int
+	}
+	
+	logger.LogProcessStep("--- Using hybrid keyword-based file selection (focused full context + broad summaries) ---")
 	ui.PublishStatus("Selecting relevant files via keywords…")
 	keywords := text.ExtractKeywords(instructions)
+	
+	// Calculate scores for all files
 	for file, info := range workspace.Files {
 		score := 0
 		content := info.Summary + " " + info.Exports + " " + file
@@ -938,18 +948,40 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 				score++
 			}
 		}
-		if score > 1 {
-			fullContextFiles = append(fullContextFiles, file)
-		} else if score > 0 {
-			summaryContextFiles = append(summaryContextFiles, file)
+		if score > 0 {
+			fileScores = append(fileScores, struct {
+				file  string
+				score int
+			}{file, score})
+		}
+	}
+	
+	// Sort by score (highest first)
+	sort.Slice(fileScores, func(i, j int) bool {
+		return fileScores[i].score > fileScores[j].score
+	})
+	
+	// Select top files based on limits and score thresholds
+	var fullContextFiles, summaryContextFiles []string
+	for _, fs := range fileScores {
+		if fs.score >= minScoreForFullContext && len(fullContextFiles) < maxFullContextFiles {
+			fullContextFiles = append(fullContextFiles, fs.file)
+		} else if fs.score > 0 && len(summaryContextFiles) < maxSummaryContextFiles {
+			summaryContextFiles = append(summaryContextFiles, fs.file)
 		}
 	}
 
 	if len(fullContextFiles) > 0 {
 		logger.LogProcessStep(fmt.Sprintf("--- Selected the following files for full context: %s ---", strings.Join(fullContextFiles, ", ")))
 	}
+	if len(fullContextFiles) >= maxFullContextFiles {
+		logger.LogProcessStep(fmt.Sprintf("--- Limited to top %d files for full context (score >= %d) ---", maxFullContextFiles, minScoreForFullContext))
+	}
 	if len(summaryContextFiles) > 0 {
 		logger.LogProcessStep(fmt.Sprintf("--- Selected the following files for summary context: %s ---", strings.Join(summaryContextFiles, ", ")))
+	}
+	if len(summaryContextFiles) >= maxSummaryContextFiles {
+		logger.LogProcessStep(fmt.Sprintf("--- Limited to top %d files for summary context to avoid overwhelming LLM ---", maxSummaryContextFiles))
 	}
 	if len(fullContextFiles) == 0 && len(summaryContextFiles) == 0 {
 		logger.LogProcessStep("--- No files were selected as relevant for context. ---")

@@ -15,6 +15,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.4
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/sync v0.15.0
+	golang.org/x/term v0.30.0
 	golang.org/x/text v0.23.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )

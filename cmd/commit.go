@@ -13,6 +13,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -74,6 +75,12 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 					logger.LogProcessStep("Security issues detected but proceeding due to --skip-prompt flag.")
 				}
 			}
+		}
+
+		// Auto-detect non-interactive environment and force skip-prompt mode
+		if !commitSkipPrompt && !term.IsTerminal(int(os.Stdin.Fd())) {
+			logger.LogProcessStep("Non-interactive environment detected. Automatically committing with generated message.")
+			commitSkipPrompt = true
 		}
 
 		reader := bufio.NewReader(os.Stdin)

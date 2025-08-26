@@ -173,7 +173,7 @@ Available tools will be provided in the tools array. When you need to use a tool
 
 Key principles:
 - Always read files before editing them
-- Use workspace_context to discover relevant files
+- Use run_shell_command (find, grep, ls) to discover relevant files
 - Validate changes after making edits
 - Provide clear explanations of your actions`
 }

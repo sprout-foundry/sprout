@@ -241,7 +241,7 @@ func normalizeArgsForTool(toolName string, args map[string]interface{}) map[stri
 		}
 		if v, ok := args["action"].(string); ok {
 			if strings.EqualFold(v, "search") {
-				args["action"] = "search_keywords"
+				args["action"] = "search"
 			}
 		}
 		if _, ok := args["query"]; !ok {

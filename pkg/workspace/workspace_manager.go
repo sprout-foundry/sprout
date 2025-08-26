@@ -398,6 +398,444 @@ func intersectKeys(m map[string]struct{}, candidates []string) []string {
 
 // detectBuildCommand attempts to autogenerate a build command based on project type.
 // It checks for Go projects (presence of .go files) and Node.js projects (presence of package.json).
+// detectMonorepoStructure analyzes the workspace to identify monorepo projects
+func detectMonorepoStructure(rootDir string) (map[string]workspaceinfo.ProjectInfo, string) {
+	projects := make(map[string]workspaceinfo.ProjectInfo)
+	monorepoType := "single"
+
+	// Common monorepo directory patterns
+	commonProjectDirs := []string{
+		"frontend", "backend", "api", "web", "server",
+		"apps", "packages", "services", "libs", "shared", "common",
+		"client", "admin", "dashboard", "mobile",
+	}
+
+	// Check for monorepo tool config files
+	monorepoToolFiles := []string{
+		"lerna.json", "rush.json", "nx.json", "pnpm-workspace.yaml",
+		"workspace.json", "angular.json", ".yarnrc.yml",
+	}
+
+	var foundProjects []string
+	hasMonorepoTools := false
+
+	// Check for monorepo tools first
+	for _, toolFile := range monorepoToolFiles {
+		if _, err := os.Stat(filepath.Join(rootDir, toolFile)); err == nil {
+			hasMonorepoTools = true
+			monorepoType = "multi"
+			break
+		}
+	}
+
+	// Walk through directories to find projects
+	filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			return err
+		}
+
+		// Skip deep nesting and common ignore dirs
+		relPath, _ := filepath.Rel(rootDir, path)
+		depth := strings.Count(relPath, string(os.PathSeparator))
+		if depth > 2 || shouldSkipDir(d.Name()) {
+			return filepath.SkipDir
+		}
+
+		// Skip root directory
+		if path == rootDir {
+			return nil
+		}
+
+		project := analyzeProjectDirectory(path, rootDir)
+		if project.Language != "" || project.Framework != "" {
+			projectName := filepath.Base(path)
+			projects[projectName] = project
+			foundProjects = append(foundProjects, projectName)
+		}
+
+		return nil
+	})
+
+	// Determine monorepo type based on findings
+	if len(foundProjects) > 1 || hasMonorepoTools {
+		monorepoType = "multi"
+	} else if len(foundProjects) == 1 {
+		// Check if the single project is in a subdirectory suggesting monorepo structure
+		for _, project := range projects {
+			for _, commonDir := range commonProjectDirs {
+				if strings.Contains(strings.ToLower(project.Path), commonDir) {
+					monorepoType = "hybrid" // Single project but in monorepo-style structure
+					break
+				}
+			}
+		}
+	}
+
+	return projects, monorepoType
+}
+
+// analyzeProjectDirectory analyzes a directory to determine if it's a project and what type
+func analyzeProjectDirectory(dirPath, rootDir string) workspaceinfo.ProjectInfo {
+	relPath, _ := filepath.Rel(rootDir, dirPath)
+	projectName := filepath.Base(dirPath)
+
+	project := workspaceinfo.ProjectInfo{
+		Path: relPath,
+		Name: projectName,
+	}
+
+	// Check for different project types
+	if hasFile(dirPath, "package.json") {
+		project = analyzeNodeProject(dirPath, project)
+	} else if hasFile(dirPath, "go.mod") {
+		project = analyzeGoProject(dirPath, project)
+	} else if hasFile(dirPath, "pyproject.toml") || hasFile(dirPath, "requirements.txt") || hasFile(dirPath, "setup.py") {
+		project = analyzePythonProject(dirPath, project)
+	} else if hasFile(dirPath, "Cargo.toml") {
+		project = analyzeRustProject(dirPath, project)
+	} else if hasFile(dirPath, "pom.xml") || hasFile(dirPath, "build.gradle") {
+		project = analyzeJavaProject(dirPath, project)
+	}
+
+	// Infer project type from directory name and contents
+	project.Type = inferProjectType(projectName, dirPath)
+
+	return project
+}
+
+// Helper functions for project analysis
+func analyzeNodeProject(dirPath string, project workspaceinfo.ProjectInfo) workspaceinfo.ProjectInfo {
+	project.Language = "javascript"
+	project.PackageManager = detectNodePackageManager(dirPath)
+
+	// Read package.json to get more info
+	packagePath := filepath.Join(dirPath, "package.json")
+	if content, err := os.ReadFile(packagePath); err == nil {
+		var pkg map[string]interface{}
+		if json.Unmarshal(content, &pkg) == nil {
+			// Detect framework
+			if deps, ok := pkg["dependencies"].(map[string]interface{}); ok {
+				project.Framework = detectJSFramework(deps)
+				if strings.Contains(project.Framework, "typescript") {
+					project.Language = "typescript"
+				}
+			}
+
+			// Get commands
+			if scripts, ok := pkg["scripts"].(map[string]interface{}); ok {
+				if _, ok := scripts["build"]; ok {
+					project.BuildCommand = fmt.Sprintf("cd %s && %s run build", project.Path, project.PackageManager)
+				}
+				if _, ok := scripts["test"]; ok {
+					project.TestCommand = fmt.Sprintf("cd %s && %s run test", project.Path, project.PackageManager)
+				}
+				if _, ok := scripts["dev"]; ok {
+					project.DevCommand = fmt.Sprintf("cd %s && %s run dev", project.Path, project.PackageManager)
+				} else if _, ok := scripts["start"]; ok {
+					project.DevCommand = fmt.Sprintf("cd %s && %s run start", project.Path, project.PackageManager)
+				}
+			}
+
+			// Get entry points
+			if main, ok := pkg["main"].(string); ok {
+				project.EntryPoints = append(project.EntryPoints, main)
+			}
+		}
+	}
+
+	project.ConfigFiles = findConfigFiles(dirPath, []string{"package.json", "tsconfig.json", "vite.config.*", "webpack.config.*", "next.config.*"})
+	return project
+}
+
+func analyzeGoProject(dirPath string, project workspaceinfo.ProjectInfo) workspaceinfo.ProjectInfo {
+	project.Language = "go"
+	project.PackageManager = "go mod"
+	project.BuildCommand = fmt.Sprintf("cd %s && go build", project.Path)
+	project.TestCommand = fmt.Sprintf("cd %s && go test ./...", project.Path)
+
+	// Detect Go framework
+	if goMod, err := os.ReadFile(filepath.Join(dirPath, "go.mod")); err == nil {
+		content := string(goMod)
+		if strings.Contains(content, "github.com/gin-gonic/gin") {
+			project.Framework = "gin"
+		} else if strings.Contains(content, "github.com/labstack/echo") {
+			project.Framework = "echo"
+		} else if strings.Contains(content, "github.com/gorilla/mux") {
+			project.Framework = "gorilla/mux"
+		}
+	}
+
+	project.ConfigFiles = findConfigFiles(dirPath, []string{"go.mod", "go.sum"})
+	return project
+}
+
+func analyzePythonProject(dirPath string, project workspaceinfo.ProjectInfo) workspaceinfo.ProjectInfo {
+	project.Language = "python"
+
+	if hasFile(dirPath, "pyproject.toml") {
+		project.PackageManager = "pip" // Could be poetry, but pip is universal
+		project.BuildCommand = fmt.Sprintf("cd %s && python -m build", project.Path)
+	} else if hasFile(dirPath, "setup.py") {
+		project.PackageManager = "pip"
+		project.BuildCommand = fmt.Sprintf("cd %s && python setup.py build", project.Path)
+	}
+
+	project.TestCommand = fmt.Sprintf("cd %s && python -m pytest", project.Path)
+
+	// Detect Python framework
+	if requirementsPath := filepath.Join(dirPath, "requirements.txt"); hasFile(dirPath, "requirements.txt") {
+		if content, err := os.ReadFile(requirementsPath); err == nil {
+			reqs := string(content)
+			if strings.Contains(reqs, "fastapi") {
+				project.Framework = "fastapi"
+			} else if strings.Contains(reqs, "flask") {
+				project.Framework = "flask"
+			} else if strings.Contains(reqs, "django") {
+				project.Framework = "django"
+			}
+		}
+	}
+
+	project.ConfigFiles = findConfigFiles(dirPath, []string{"pyproject.toml", "requirements.txt", "setup.py", "setup.cfg"})
+	return project
+}
+
+func analyzeRustProject(dirPath string, project workspaceinfo.ProjectInfo) workspaceinfo.ProjectInfo {
+	project.Language = "rust"
+	project.PackageManager = "cargo"
+	project.BuildCommand = fmt.Sprintf("cd %s && cargo build", project.Path)
+	project.TestCommand = fmt.Sprintf("cd %s && cargo test", project.Path)
+	project.ConfigFiles = findConfigFiles(dirPath, []string{"Cargo.toml", "Cargo.lock"})
+	return project
+}
+
+func analyzeJavaProject(dirPath string, project workspaceinfo.ProjectInfo) workspaceinfo.ProjectInfo {
+	project.Language = "java"
+
+	if hasFile(dirPath, "pom.xml") {
+		project.PackageManager = "maven"
+		project.BuildCommand = fmt.Sprintf("cd %s && mvn compile", project.Path)
+		project.TestCommand = fmt.Sprintf("cd %s && mvn test", project.Path)
+		project.ConfigFiles = append(project.ConfigFiles, "pom.xml")
+	} else if hasFile(dirPath, "build.gradle") {
+		project.PackageManager = "gradle"
+		project.BuildCommand = fmt.Sprintf("cd %s && ./gradlew build", project.Path)
+		project.TestCommand = fmt.Sprintf("cd %s && ./gradlew test", project.Path)
+		project.ConfigFiles = findConfigFiles(dirPath, []string{"build.gradle", "settings.gradle"})
+	}
+
+	return project
+}
+
+// Helper utility functions
+func inferProjectType(dirName, dirPath string) string {
+	dirNameLower := strings.ToLower(dirName)
+
+	// Check directory name patterns
+	if strings.Contains(dirNameLower, "frontend") || strings.Contains(dirNameLower, "client") || strings.Contains(dirNameLower, "web") || strings.Contains(dirNameLower, "ui") {
+		return "frontend"
+	}
+	if strings.Contains(dirNameLower, "backend") || strings.Contains(dirNameLower, "api") || strings.Contains(dirNameLower, "server") {
+		return "backend"
+	}
+	if strings.Contains(dirNameLower, "shared") || strings.Contains(dirNameLower, "common") || strings.Contains(dirNameLower, "lib") {
+		return "shared"
+	}
+	if strings.Contains(dirNameLower, "service") {
+		return "service"
+	}
+	if strings.Contains(dirNameLower, "package") {
+		return "library"
+	}
+
+	// Check for frontend indicators in the directory
+	frontendIndicators := []string{"public/index.html", "src/App.js", "src/App.tsx", "src/main.ts", "index.html"}
+	for _, indicator := range frontendIndicators {
+		if hasFile(dirPath, indicator) {
+			return "frontend"
+		}
+	}
+
+	// Check for backend indicators
+	backendIndicators := []string{"main.go", "app.py", "server.js", "index.js"}
+	for _, indicator := range backendIndicators {
+		if hasFile(dirPath, indicator) {
+			return "backend"
+		}
+	}
+
+	return "library" // Default fallback
+}
+
+func detectNodePackageManager(dirPath string) string {
+	if hasFile(dirPath, "yarn.lock") {
+		return "yarn"
+	}
+	if hasFile(dirPath, "pnpm-lock.yaml") {
+		return "pnpm"
+	}
+	return "npm" // Default
+}
+
+func detectJSFramework(deps map[string]interface{}) string {
+	if _, hasReact := deps["react"]; hasReact {
+		if _, hasNext := deps["next"]; hasNext {
+			return "next.js"
+		}
+		return "react"
+	}
+	if _, hasVue := deps["vue"]; hasVue {
+		return "vue"
+	}
+	if _, hasAngular := deps["@angular/core"]; hasAngular {
+		return "angular"
+	}
+	if _, hasSvelte := deps["svelte"]; hasSvelte {
+		return "svelte"
+	}
+	if _, hasExpress := deps["express"]; hasExpress {
+		return "express"
+	}
+	if _, hasNest := deps["@nestjs/core"]; hasNest {
+		return "nestjs"
+	}
+
+	// Check for TypeScript
+	if _, hasTS := deps["typescript"]; hasTS {
+		return "typescript"
+	}
+
+	return "javascript"
+}
+
+func hasFile(dirPath, fileName string) bool {
+	// Support glob patterns like "vite.config.*"
+	if strings.Contains(fileName, "*") {
+		matches, _ := filepath.Glob(filepath.Join(dirPath, fileName))
+		return len(matches) > 0
+	}
+
+	_, err := os.Stat(filepath.Join(dirPath, fileName))
+	return err == nil
+}
+
+func findConfigFiles(dirPath string, patterns []string) []string {
+	var found []string
+	for _, pattern := range patterns {
+		if hasFile(dirPath, pattern) {
+			found = append(found, pattern)
+		}
+	}
+	return found
+}
+
+func shouldSkipDir(dirName string) bool {
+	skipDirs := []string{
+		"node_modules", "vendor", ".git", "build", "dist", "target",
+		"__pycache__", ".venv", "venv", ".env", ".next", ".nuxt",
+		"coverage", ".coverage", "tmp", "temp", ".tmp",
+	}
+
+	for _, skip := range skipDirs {
+		if dirName == skip {
+			return true
+		}
+	}
+
+	return strings.HasPrefix(dirName, ".")
+}
+
+// detectRootBuildCommand detects build commands for monorepo root
+func detectRootBuildCommand(rootDir string, projects map[string]workspaceinfo.ProjectInfo) string {
+	// Check for common monorepo build tools
+	if hasFile(rootDir, "lerna.json") {
+		return "lerna run build"
+	}
+	if hasFile(rootDir, "nx.json") {
+		return "nx run-many --target=build --all"
+	}
+	if hasFile(rootDir, "rush.json") {
+		return "rush build"
+	}
+	if hasFile(rootDir, "package.json") {
+		// Check for npm workspace or yarn workspace
+		if content, err := os.ReadFile(filepath.Join(rootDir, "package.json")); err == nil {
+			var pkg map[string]interface{}
+			if json.Unmarshal(content, &pkg) == nil {
+				if scripts, ok := pkg["scripts"].(map[string]interface{}); ok {
+					if _, hasBuildAll := scripts["build:all"]; hasBuildAll {
+						return "npm run build:all"
+					}
+					if _, hasBuild := scripts["build"]; hasBuild {
+						return "npm run build"
+					}
+				}
+				// Check for workspaces
+				if _, ok := pkg["workspaces"]; ok {
+					return "npm run build --workspaces"
+				}
+			}
+		}
+	}
+
+	// Fallback: generate a command to build all detected projects
+	var buildCmds []string
+	for _, project := range projects {
+		if project.BuildCommand != "" {
+			buildCmds = append(buildCmds, project.BuildCommand)
+		}
+	}
+
+	if len(buildCmds) > 0 {
+		return strings.Join(buildCmds, " && ")
+	}
+
+	return ""
+}
+
+// detectRootTestCommand detects test commands for monorepo root
+func detectRootTestCommand(rootDir string, projects map[string]workspaceinfo.ProjectInfo) string {
+	// Check for common monorepo test tools
+	if hasFile(rootDir, "lerna.json") {
+		return "lerna run test"
+	}
+	if hasFile(rootDir, "nx.json") {
+		return "nx run-many --target=test --all"
+	}
+	if hasFile(rootDir, "rush.json") {
+		return "rush test"
+	}
+	if hasFile(rootDir, "package.json") {
+		if content, err := os.ReadFile(filepath.Join(rootDir, "package.json")); err == nil {
+			var pkg map[string]interface{}
+			if json.Unmarshal(content, &pkg) == nil {
+				if scripts, ok := pkg["scripts"].(map[string]interface{}); ok {
+					if _, hasTestAll := scripts["test:all"]; hasTestAll {
+						return "npm run test:all"
+					}
+					if _, hasTest := scripts["test"]; hasTest {
+						return "npm run test"
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback: generate a command to test all detected projects
+	var testCmds []string
+	for _, project := range projects {
+		if project.TestCommand != "" {
+			testCmds = append(testCmds, project.TestCommand)
+		}
+	}
+
+	if len(testCmds) > 0 {
+		return strings.Join(testCmds, " && ")
+	}
+
+	return ""
+}
+
 func detectBuildCommand(rootDir string) string {
 	// Check for Go project
 	goFilesFound := false
@@ -438,6 +876,57 @@ func detectBuildCommand(rootDir string) string {
 			}
 			if _, hasStart := scripts["start"]; hasStart {
 				return "npm start"
+			}
+		}
+	}
+
+	// Check for Python project
+	pythonFilesFound := false
+	requirementsTxt := filepath.Join(rootDir, "requirements.txt")
+	pyprojectToml := filepath.Join(rootDir, "pyproject.toml")
+	setupPy := filepath.Join(rootDir, "setup.py")
+
+	// Check for Python project indicators
+	if _, err := os.Stat(requirementsTxt); err == nil {
+		pythonFilesFound = true
+	} else if _, err := os.Stat(pyprojectToml); err == nil {
+		pythonFilesFound = true
+	} else if _, err := os.Stat(setupPy); err == nil {
+		pythonFilesFound = true
+	} else {
+		// Check for .py files in root or common directories
+		filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			// Skip common ignored directories
+			if d.IsDir() && (d.Name() == "__pycache__" || d.Name() == ".git" || d.Name() == "node_modules" || d.Name() == "venv" || d.Name() == ".env") {
+				return filepath.SkipDir
+			}
+			if !d.IsDir() && strings.HasSuffix(d.Name(), ".py") {
+				pythonFilesFound = true
+				return fmt.Errorf("found python file") // Use a custom error to stop walking
+			}
+			return nil
+		})
+	}
+
+	if pythonFilesFound {
+		// Try to detect common Python build/test commands
+		if _, err := os.Stat(pyprojectToml); err == nil {
+			// Modern Python with pyproject.toml
+			return "python -m build" // or could be "poetry build" but this is more universal
+		} else if _, err := os.Stat(setupPy); err == nil {
+			// Traditional setup.py
+			return "python setup.py build"
+		} else {
+			// Just Python files, likely a script-based project - run tests if available
+			if _, err := os.Stat(filepath.Join(rootDir, "test")); err == nil {
+				return "python -m pytest"
+			} else if _, err := os.Stat(filepath.Join(rootDir, "tests")); err == nil {
+				return "python -m pytest"
+			} else {
+				return "python -m py_compile *.py" // Basic syntax check
 			}
 		}
 	}
@@ -721,6 +1210,41 @@ func detectWorkspaceContext(workspace *workspaceinfo.WorkspaceFile, rootDir stri
 	if len(langs) > 0 {
 		workspace.Languages = langs
 	}
+
+	// Detect monorepo structure
+	logger.LogProcessStep("--- Analyzing workspace structure for monorepo projects ---")
+	projects, monorepoType := detectMonorepoStructure(rootDir)
+
+	if len(projects) > 0 {
+		workspace.Projects = projects
+		workspace.MonorepoType = monorepoType
+		logger.LogProcessStep(fmt.Sprintf("--- Detected %s workspace with %d projects ---", monorepoType, len(projects)))
+
+		// Log detected projects
+		for name, project := range projects {
+			logger.LogProcessStep(fmt.Sprintf("   📦 %s: %s %s project at %s", name, project.Language, project.Type, project.Path))
+		}
+
+		// For monorepos, try to detect root-level build commands
+		if monorepoType == "multi" {
+			if workspace.RootBuildCommand == "" {
+				if rootBC := detectRootBuildCommand(rootDir, projects); rootBC != "" {
+					workspace.RootBuildCommand = rootBC
+					logger.LogProcessStep(fmt.Sprintf("--- Detected root build command: '%s' ---", rootBC))
+				}
+			}
+			if workspace.RootTestCommand == "" {
+				if rootTC := detectRootTestCommand(rootDir, projects); rootTC != "" {
+					workspace.RootTestCommand = rootTC
+					logger.LogProcessStep(fmt.Sprintf("--- Detected root test command: '%s' ---", rootTC))
+				}
+			}
+		}
+	} else {
+		workspace.MonorepoType = "single"
+	}
+
+	// Legacy single-project build command detection for backward compatibility
 	if workspace.BuildCommand == "" {
 		logger.LogProcessStep("--- Attempting to autogenerate build command ---")
 		if bc := detectBuildCommand(rootDir); bc != "" {
@@ -926,19 +1450,24 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	}
 
 	// Use simple keyword-based file selection with limits to avoid overwhelming context
-	const maxFullContextFiles = 3      // Very focused full context for most relevant files
-	const maxSummaryContextFiles = 20  // Broader summary context for exploration
-	const minScoreForFullContext = 3   // Only files with very high relevance scores get full context
-	
+	maxFullContextFiles := 3 // Default: Very focused full context for most relevant files
+	if cfg.FromAgent {
+		maxFullContextFiles = 3 // Keep 3 files for agent runs
+	} else {
+		maxFullContextFiles = 10 // Increase to 10 files for direct code command runs
+	}
+	const maxSummaryContextFiles = 20 // Broader summary context for exploration
+	const minScoreForFullContext = 3  // Only files with very high relevance scores get full context
+
 	var fileScores []struct {
 		file  string
 		score int
 	}
-	
+
 	logger.LogProcessStep("--- Using hybrid keyword-based file selection (focused full context + broad summaries) ---")
 	ui.PublishStatus("Selecting relevant files via keywords…")
 	keywords := text.ExtractKeywords(instructions)
-	
+
 	// Calculate scores for all files
 	for file, info := range workspace.Files {
 		score := 0
@@ -955,12 +1484,12 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 			}{file, score})
 		}
 	}
-	
+
 	// Sort by score (highest first)
 	sort.Slice(fileScores, func(i, j int) bool {
 		return fileScores[i].score > fileScores[j].score
 	})
-	
+
 	// Select top files based on limits and score thresholds
 	var fullContextFiles, summaryContextFiles []string
 	for _, fs := range fileScores {

@@ -43,16 +43,48 @@ type SimplifiedAgentContext struct {
 	
 	// User interaction settings
 	SkipPrompt bool
+	
+	// Change tracking to avoid unnecessary validation
+	FilesModified bool
+
+	// Enhanced context awareness
+	ProjectContext *ProjectContext
+	TaskIntent     TaskIntent
+	IntentType     IntentType
 }
 
 // IntentType represents the type of user intent
 type IntentType string
 
 const (
-	IntentTypeCodeUpdate IntentType = "code_update"
-	IntentTypeQuestion   IntentType = "question"
-	IntentTypeCommand    IntentType = "command"
+	IntentTypeCodeUpdate     IntentType = "code_update"
+	IntentTypeQuestion       IntentType = "question"
+	IntentTypeCommand        IntentType = "command"
+	IntentTypeDocumentation  IntentType = "documentation"
+	IntentTypeCreation       IntentType = "creation"
+	IntentTypeAnalysis       IntentType = "analysis"
 )
+
+// TaskIntent represents more detailed task classification for strategy selection
+type TaskIntent string
+
+const (
+	TaskIntentAnalysis      TaskIntent = "analysis"
+	TaskIntentCreation      TaskIntent = "creation" 
+	TaskIntentModification  TaskIntent = "modification"
+	TaskIntentDocumentation TaskIntent = "documentation"
+	TaskIntentRefactoring   TaskIntent = "refactoring"
+)
+
+// ProjectContext holds information about the project being worked on
+type ProjectContext struct {
+	Language     string            `json:"language"`
+	Framework    string            `json:"framework"`
+	ProjectType  string            `json:"project_type"`
+	OutputFormat string            `json:"output_format"`
+	FileTypes    []string          `json:"file_types"`
+	Patterns     map[string]string `json:"patterns"` // Common patterns like route decorators
+}
 
 // ExecutionType is now defined in todo_management.go
 

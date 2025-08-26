@@ -154,8 +154,6 @@ func CallLLMWithInteractiveContext(
 	}
 
 	// Anti-loop and cap enforcement state
-	workspaceContextCalls := 0
-	workspaceRequests := map[string]bool{}
 	shellCalls := 0
 	totalToolCalls := 0
 	// Set tool limit to 1 less than orchestration max attempts
@@ -167,7 +165,6 @@ func CallLLMWithInteractiveContext(
 	executedShell := map[string]bool{}
 	noProgressStreak := 0
 	// Additional guardrails for speed
-	maxWorkspaceContextCalls := 1
 	maxReadFileCalls := 12
 
 	// Observability and caching
@@ -279,9 +276,9 @@ func CallLLMWithInteractiveContext(
 			phase = "execute"
 		}
 		if phase == "plan" {
-			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=PLAN. Allowed tools: plan_step, workspace_context, read_file, run_shell_command. Do not call edit/validate/shell tools. Produce a plan next."})
+			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=PLAN. Allowed tools: plan_step, read_file, run_shell_command. Do not call edit/validate/shell tools. Produce a plan next."})
 		} else {
-			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=EXECUTE. Allowed tools: execute_step (with previously planned action), edit_file_section, validate_file, read_file, evaluate_outcome. Do not call workspace_context unless strictly necessary."})
+			currentMessages = append(currentMessages, prompts.Message{Role: "system", Content: "Phase=EXECUTE. Allowed tools: execute_step (with previously planned action), edit_file_section, validate_file, read_file, evaluate_outcome."})
 		}
 		// If we are expecting a plan now, push a strong system requirement
 		if expectPlanNext {
@@ -427,7 +424,6 @@ func CallLLMWithInteractiveContext(
 				var toolResults []string
 				editedOrValidated := false
 				shellCapTripped := false
-				workspaceCapTripped := false
 
 				// Optimization: if all tool calls are independent read_file, batch concurrently
 				allRead := true
@@ -647,37 +643,6 @@ func CallLLMWithInteractiveContext(
 						}
 					}
 
-					// Workspace context caps and dedupe
-					if name == "workspace_context" {
-						action, _ := args["action"].(string)
-						query, _ := args["query"].(string)
-						key := strings.TrimSpace(action) + "::" + strings.TrimSpace(query)
-						// Deterministic file targeting: if user mentioned concrete files, prefer read_file over workspace_context
-						if len(mentionedFiles) > 0 {
-							toolResults = append(toolResults, "Tool workspace_context blocked: explicit file(s) mentioned; use read_file instead")
-							blockedCounts["ws_block_explicit_target"]++
-							continue
-						}
-						// Persistent cache lookup
-						if entry, ok := persisted.Get("workspace_context", key); ok {
-							cacheHits++
-							toolResults = append(toolResults, fmt.Sprintf("Tool workspace_context result (served from cache): %s", entry.Value))
-							continue
-						}
-						if workspaceContextCalls >= maxWorkspaceContextCalls {
-							toolResults = append(toolResults, "Tool workspace_context blocked: usage cap reached")
-							blockedCounts["workspace_context_cap"]++
-							workspaceCapTripped = true
-							continue
-						}
-						if workspaceRequests[key] {
-							toolResults = append(toolResults, "Tool workspace_context blocked: duplicate request. You already have this evidence.")
-							blockedCounts["workspace_context_dup"]++
-							continue
-						}
-						workspaceRequests[key] = true
-						workspaceContextCalls++
-					}
 
 					// Shell caps and dedupe
 					if name == "run_shell_command" {
@@ -766,67 +731,13 @@ func CallLLMWithInteractiveContext(
 								}
 							}
 						}
-						// Populate persistent caches for shell/workspace_context
+						// Populate persistent caches for shell commands
 						if name == "run_shell_command" {
 							cmdStr, _ := args["command"].(string)
 							trimmed := strings.TrimSpace(cmdStr)
 							if trimmed != "" {
 								persisted.Put(EvidenceEntry{Tool: "run_shell_command", Key: trimmed, Value: result, Updated: NowUnix()})
 								_ = persisted.Save()
-							}
-						}
-						if name == "workspace_context" {
-							action, _ := args["action"].(string)
-							query, _ := args["query"].(string)
-							key := strings.TrimSpace(action) + "::" + strings.TrimSpace(query)
-							persisted.Put(EvidenceEntry{Tool: "workspace_context", Key: key, Value: result, Updated: NowUnix()})
-							_ = persisted.Save()
-							// Auto-follow: if this was a search_keywords result with a top_file, read it now to provide evidence
-							if strings.EqualFold(strings.TrimSpace(action), "search_keywords") {
-								var sr map[string]any
-								if json.Unmarshal([]byte(result), &sr) == nil {
-									// Collect up to two candidate files: top_file and first in matches
-									candidates := []string{}
-									if tf, ok := sr["top_file"].(string); ok && tf != "" {
-										candidates = append(candidates, tf)
-									}
-									if arr, ok := sr["matches"].([]any); ok {
-										for _, v := range arr {
-											if p, ok := v.(string); ok {
-												candidates = append(candidates, p)
-												break
-											}
-										}
-									}
-									// Dedup and read up to 2
-									seen := map[string]bool{}
-									readCount := 0
-									for _, cf := range candidates {
-										if seen[cf] {
-											continue
-										}
-										seen[cf] = true
-										if toolCounts["read_file"] >= maxReadFileCalls {
-											break
-										}
-										if _, ok := readFileCache[cf]; ok {
-											continue
-										}
-										rfArgs := map[string]any{"file_path": cf}
-										rfBytes, _ := json.Marshal(rfArgs)
-										rfCall := ToolCall{Type: "function", Function: ToolCallFunction{Name: "read_file", Arguments: string(rfBytes)}}
-										ctx := context.WithValue(context.Background(), "session_id", sessionID)
-										if rfRes, rfErr := ExecuteBasicToolCallWithContext(ctx, rfCall, cfg); rfErr == nil {
-											toolCounts["read_file"]++
-											toolResults = append(toolResults, fmt.Sprintf("Tool read_file result: %s", rfRes))
-											readFileCache[cf] = rfRes
-											readCount++
-											if readCount >= 2 {
-												break
-											}
-										}
-									}
-								}
 							}
 						}
 
@@ -870,26 +781,17 @@ func CallLLMWithInteractiveContext(
 				currentMessages = append(currentMessages, toolResultMessage)
 
 				// Inject guidance when caps are tripped
-				if shellCapTripped || workspaceCapTripped {
+				if shellCapTripped {
 					currentMessages = append(currentMessages, prompts.Message{
 						Role:    "system",
 						Content: "Operational caps reached. Stop exploring. Choose a specific file, use read_file, apply edit_file_section, then validate_file.",
 					})
 				}
 
-				// If very first turn yields only workspace_context without any read_file, synthesize a single read on README.md or top_file to provide evidence
+				// If very first turn has no file reads, synthesize a single read on README.md to provide evidence
 				if i == 0 && !editedOrValidated && toolCounts["read_file"] == 0 {
 					// Try README.md first
 					candidate := "README.md"
-					// If we saw a workspace_context result with top_file, use it
-					if entry, ok := persisted.Get("workspace_context", "search_keywords::"); ok && strings.Contains(entry.Value, "top_file") {
-						var sr map[string]any
-						if json.Unmarshal([]byte(entry.Value), &sr) == nil {
-							if tf, ok := sr["top_file"].(string); ok && tf != "" {
-								candidate = tf
-							}
-						}
-					}
 					if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() {
 						rfArgs := map[string]any{"file_path": candidate}
 						rfBytes, _ := json.Marshal(rfArgs)
@@ -909,7 +811,7 @@ func CallLLMWithInteractiveContext(
 					if noProgressStreak >= 2 {
 						currentMessages = append(currentMessages, prompts.Message{
 							Role:    "system",
-							Content: "Stop searching. Choose the top relevant file (e.g., README.md or the last search result), use read_file now, then produce a minimal JSON plan of edits. Do not call workspace_context again.",
+							Content: "Stop searching. Choose the top relevant file (e.g., README.md or the last search result), use read_file now, then produce a minimal JSON plan of edits. Use run_shell_command (find, grep, ls) to explore the codebase if needed.",
 						})
 						noProgressStreak = 0
 					}

@@ -71,7 +71,7 @@ func (a *WorkspaceAdapter) GetRelevantFiles(ctx context.Context, intent string, 
 		if count >= maxFiles {
 			break
 		}
-		
+
 		domainFile := agent.FileInfo{
 			Path:      file,
 			Type:      a.getFileType(file),
@@ -200,21 +200,21 @@ func (a *WorkspaceAdapter) scanWorkspaceFiles() ([]string, error) {
 		if err != nil {
 			return nil // Skip errors
 		}
-		
+
 		// Skip directories and hidden/temp files
 		if info.IsDir() || strings.HasPrefix(info.Name(), ".") || strings.HasSuffix(path, "~") {
 			return nil
 		}
-		
+
 		// Skip large files
 		if info.Size() > 1024*1024 { // 1MB
 			return nil
 		}
-		
+
 		files = append(files, path)
 		return nil
 	})
-	
+
 	return files, err
 }
 

@@ -216,13 +216,13 @@ func generateTodoID() string {
 // executeTodoWithSmartRetry executes a todo with context-aware retry logic
 func executeTodoWithSmartRetry(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	const maxRetries = 2
-	
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		err := executeTodo(ctx, todo)
 		if err == nil {
 			return nil
 		}
-		
+
 		// Parse failure reason and adjust approach
 		if strings.Contains(err.Error(), "code review requires revisions") {
 			// Switch to shell command approach for filesystem tasks on first retry
@@ -231,14 +231,14 @@ func executeTodoWithSmartRetry(ctx *SimplifiedAgentContext, todo *TodoItem) erro
 				return executeShellCommandTodo(ctx, todo)
 			}
 		}
-		
+
 		if attempt < maxRetries {
 			ctx.Logger.LogProcessStep(fmt.Sprintf("🔄 Retry %d/%d: %v", attempt+1, maxRetries, err))
 			// Add small delay between retries
 			time.Sleep(time.Second * 2)
 		}
 	}
-	
+
 	return fmt.Errorf("failed after %d retries", maxRetries+1)
 }
 
@@ -288,7 +288,7 @@ func analyzeTodoExecutionType(content, description string) ExecutionType {
 
 	// Shell command todos (filesystem operations) - after direct edit check
 	shellKeywords := []string{
-		"create directory", "mkdir", "create folder", "setup project", "initialize", 
+		"create directory", "mkdir", "create folder", "setup project", "initialize",
 		"install", "setup monorepo", "create backend", "create frontend", "run", "execute command",
 		"create the", "directory for", "backend directory", "frontend directory",
 		"directory in", "directory called", "directory named", " directory ", "new directory",
@@ -306,7 +306,6 @@ func analyzeTodoExecutionType(content, description string) ExecutionType {
 			return ExecutionTypeAnalysis
 		}
 	}
-
 
 	// Default to code command for anything involving code changes
 	return ExecutionTypeCodeCommand
@@ -539,6 +538,13 @@ func executeOptimizedCodeEditingTodo(ctx *SimplifiedAgentContext, todo *TodoItem
 		// Convert metrics to SimplifiedAgentContext tracking
 		ctx.TotalTokensUsed += metrics.TotalTokens
 		ctx.TotalCost += metrics.TotalCost
+
+		// Estimate token breakdown (rough approximation for editing operations)
+		// Typically editing has ~60% prompt tokens, 40% completion tokens
+		estimatedPromptTokens := int(float64(metrics.TotalTokens) * 0.6)
+		estimatedCompletionTokens := metrics.TotalTokens - estimatedPromptTokens
+		ctx.TotalPromptTokens += estimatedPromptTokens
+		ctx.TotalCompletionTokens += estimatedCompletionTokens
 
 		ctx.Logger.LogProcessStep(fmt.Sprintf("📊 Optimized edit used %d tokens ($%.4f)",
 			metrics.TotalTokens, metrics.TotalCost))
@@ -846,12 +852,12 @@ func extractFindingsFromAnalysis(analysisText string, todo *TodoItem) []Analysis
 func containsFilesystemKeywords(content string) bool {
 	contentLower := strings.ToLower(content)
 	filesystemKeywords := []string{
-		"create directory", "mkdir", "create folder", "setup project", "initialize", 
+		"create directory", "mkdir", "create folder", "setup project", "initialize",
 		"install", "setup monorepo", "create backend", "create frontend",
 		"create the", "directory for", "backend directory", "frontend directory",
 		"directory in", "directory called", "directory named", " directory ", "new directory",
 	}
-	
+
 	for _, keyword := range filesystemKeywords {
 		if strings.Contains(contentLower, keyword) {
 			return true
@@ -909,9 +915,9 @@ Respond with JSON:
 
 	// Parse the response
 	var commandPlan struct {
-		Commands     []string `json:"commands"`
-		Explanation  string   `json:"explanation"`
-		SafetyNotes  string   `json:"safety_notes"`
+		Commands    []string `json:"commands"`
+		Explanation string   `json:"explanation"`
+		SafetyNotes string   `json:"safety_notes"`
 	}
 
 	clean, err := utils.ExtractJSON(response)
@@ -935,28 +941,28 @@ Respond with JSON:
 		if containsUnsafeCommand(command) {
 			return fmt.Errorf("unsafe command detected and blocked: %s", command)
 		}
-		
+
 		// Validate shell command syntax
 		if err := validateShellCommand(command); err != nil {
 			ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Skipping invalid command: %s", err.Error()))
 			continue
 		}
-		
+
 		// Make command idempotent
 		safeCommand := makeCommandIdempotent(command)
-		
+
 		ctx.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing command %d/%d: %s", i+1, len(commandPlan.Commands), safeCommand))
 
 		// Execute the command
 		cmd := exec.Command("bash", "-c", safeCommand)
 		cmd.Dir = "." // Execute in current directory
-		
+
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			ctx.Logger.LogProcessStep(fmt.Sprintf("❌ Command failed: %s", string(output)))
 			return fmt.Errorf("command failed: %s - %w", command, err)
 		}
-		
+
 		if len(output) > 0 {
 			ctx.Logger.LogProcessStep(fmt.Sprintf("📤 Output: %s", string(output)))
 		}
@@ -964,7 +970,7 @@ Respond with JSON:
 
 	// Store results
 	ctx.AnalysisResults[todo.ID+"_shell_result"] = fmt.Sprintf("Successfully executed %d commands: %s", len(commandPlan.Commands), commandPlan.Explanation)
-	
+
 	ctx.Logger.LogProcessStep("✅ Shell command todo completed successfully")
 	return nil
 }
@@ -983,7 +989,7 @@ func containsUnsafeCommand(command string) bool {
 		"curl.*|.*sh",
 		"wget.*|.*sh",
 	}
-	
+
 	cmdLower := strings.ToLower(strings.TrimSpace(command))
 	for _, pattern := range unsafePatterns {
 		if strings.Contains(cmdLower, strings.ToLower(pattern)) {
@@ -1007,7 +1013,7 @@ func makeCommandIdempotent(command string) string {
 		}
 		return strings.Join(parts, " && ")
 	}
-	
+
 	return command
 }
 
@@ -1015,17 +1021,17 @@ func makeCommandIdempotent(command string) string {
 func validateShellCommand(command string) error {
 	// Check for common LLM mistakes
 	problematicPatterns := []string{
-		"package main",    // Go source code being treated as shell command
-		"import (",        // Go imports as shell command
-		"func main",       // Go function as shell command  
-		"<<EOF\n",         // Malformed heredoc
+		"package main", // Go source code being treated as shell command
+		"import (",     // Go imports as shell command
+		"func main",    // Go function as shell command
+		"<<EOF\n",      // Malformed heredoc
 	}
-	
+
 	for _, pattern := range problematicPatterns {
 		if strings.Contains(command, pattern) {
 			return fmt.Errorf("command appears to contain source code instead of shell syntax: %s", command)
 		}
 	}
-	
+
 	return nil
 }

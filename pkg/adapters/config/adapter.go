@@ -72,26 +72,26 @@ func (a *ConfigAdapter) GetProviderConfig(providerName string) (*types.ProviderC
 // GetAgentConfig implements interfaces.ConfigProvider
 func (a *ConfigAdapter) GetAgentConfig() *types.AgentConfig {
 	return &types.AgentConfig{
-		MaxRetries:           3,
-		RetryDelay:           5,
-		MaxContextRequests:   10,
-		EnableValidation:     !a.config.SkipPrompt,
-		EnableCodeReview:     !a.config.SkipPrompt,
-		ValidationTimeout:    30,
-		DefaultStrategy:      "quick",
-		CostThreshold:        0.1,
+		MaxRetries:         3,
+		RetryDelay:         5,
+		MaxContextRequests: 10,
+		EnableValidation:   !a.config.SkipPrompt,
+		EnableCodeReview:   !a.config.SkipPrompt,
+		ValidationTimeout:  30,
+		DefaultStrategy:    "quick",
+		CostThreshold:      0.1,
 	}
 }
 
 // GetEditorConfig implements interfaces.ConfigProvider
 func (a *ConfigAdapter) GetEditorConfig() *types.EditorConfig {
 	return &types.EditorConfig{
-		BackupEnabled:    true,
-		DiffStyle:        "unified",
-		AutoFormat:       true,
+		BackupEnabled:     true,
+		DiffStyle:         "unified",
+		AutoFormat:        true,
 		PreferredLanguage: "go",
-		IgnorePatterns:   []string{"*.test", "*.tmp"},
-		MaxFileSize:      1024 * 1024, // 1MB default
+		IgnorePatterns:    []string{"*.test", "*.tmp"},
+		MaxFileSize:       1024 * 1024, // 1MB default
 	}
 }
 
@@ -99,20 +99,20 @@ func (a *ConfigAdapter) GetEditorConfig() *types.EditorConfig {
 func (a *ConfigAdapter) GetSecurityConfig() *types.SecurityConfig {
 	return &types.SecurityConfig{
 		EnableCredentialScanning: true,
-		BlockedPatterns:         []string{".*_key.*", ".*password.*", ".*secret.*"},
-		AllowedCommands:         []string{"git", "go", "npm", "python"},
-		RequireConfirmation:     !a.config.SkipPrompt,
+		BlockedPatterns:          []string{".*_key.*", ".*password.*", ".*secret.*"},
+		AllowedCommands:          []string{"git", "go", "npm", "python"},
+		RequireConfirmation:      !a.config.SkipPrompt,
 	}
 }
 
 // GetUIConfig implements interfaces.ConfigProvider
 func (a *ConfigAdapter) GetUIConfig() *types.UIConfig {
 	return &types.UIConfig{
-		SkipPrompts:      a.config.SkipPrompt,
-		ColorOutput:      true,
-		VerboseLogging:   false, // Would use config.Debug if available
-		ProgressBars:     !a.config.SkipPrompt,
-		OutputFormat:     "text",
+		SkipPrompts:    a.config.SkipPrompt,
+		ColorOutput:    true,
+		VerboseLogging: false, // Would use config.Debug if available
+		ProgressBars:   !a.config.SkipPrompt,
+		OutputFormat:   "text",
 	}
 }
 

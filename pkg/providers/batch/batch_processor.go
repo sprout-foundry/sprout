@@ -12,27 +12,27 @@ import (
 
 // BatchProcessor provides smart batching for LLM API calls to optimize performance and costs
 type BatchProcessor struct {
-	config     BatchConfig
-	batches    map[string]*Batch
-	mu         sync.RWMutex
-	processor  chan BatchRequest
-	results    map[string]chan BatchResponse
-	stats      BatchStats
-	ticker     *time.Ticker
-	ctx        context.Context
-	cancel     context.CancelFunc
+	config    BatchConfig
+	batches   map[string]*Batch
+	mu        sync.RWMutex
+	processor chan BatchRequest
+	results   map[string]chan BatchResponse
+	stats     BatchStats
+	ticker    *time.Ticker
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 // BatchConfig configures batching behavior
 type BatchConfig struct {
-	MaxBatchSize    int           `json:"max_batch_size"`    // Maximum requests per batch
-	BatchTimeout    time.Duration `json:"batch_timeout"`     // Maximum time to wait before processing batch
-	FlushInterval   time.Duration `json:"flush_interval"`    // Interval for periodic batch flushing
-	MaxConcurrency  int           `json:"max_concurrency"`   // Maximum concurrent batches
-	EnableMetrics   bool          `json:"enable_metrics"`    // Enable batch metrics collection
-	CostThreshold   float64       `json:"cost_threshold"`    // Batch when estimated cost exceeds threshold
-	TokenThreshold  int           `json:"token_threshold"`   // Batch when estimated tokens exceed threshold
-	PriorityBatching bool         `json:"priority_batching"` // Group by request priority
+	MaxBatchSize     int           `json:"max_batch_size"`    // Maximum requests per batch
+	BatchTimeout     time.Duration `json:"batch_timeout"`     // Maximum time to wait before processing batch
+	FlushInterval    time.Duration `json:"flush_interval"`    // Interval for periodic batch flushing
+	MaxConcurrency   int           `json:"max_concurrency"`   // Maximum concurrent batches
+	EnableMetrics    bool          `json:"enable_metrics"`    // Enable batch metrics collection
+	CostThreshold    float64       `json:"cost_threshold"`    // Batch when estimated cost exceeds threshold
+	TokenThreshold   int           `json:"token_threshold"`   // Batch when estimated tokens exceed threshold
+	PriorityBatching bool          `json:"priority_batching"` // Group by request priority
 }
 
 // Batch represents a group of requests to be processed together
@@ -61,11 +61,11 @@ type BatchRequest struct {
 
 // BatchResponse contains the result of a batched request
 type BatchResponse struct {
-	ID       string                   `json:"id"`
-	Response string                   `json:"response"`
-	Metadata *types.ResponseMetadata  `json:"metadata"`
-	Error    error                    `json:"error"`
-	Duration time.Duration            `json:"duration"`
+	ID       string                  `json:"id"`
+	Response string                  `json:"response"`
+	Metadata *types.ResponseMetadata `json:"metadata"`
+	Error    error                   `json:"error"`
+	Duration time.Duration           `json:"duration"`
 }
 
 // BatchStatus represents the processing status of a batch
@@ -416,7 +416,7 @@ func (bp *BatchProcessor) updateBatchEfficiency(batch *Batch, duration time.Dura
 	if batchSize > 1 {
 		// Higher efficiency for larger batches processed quickly
 		efficiency := batchSize / duration.Seconds()
-		
+
 		// Update running average
 		totalBatches := float64(bp.stats.TotalBatches)
 		if totalBatches > 0 {
@@ -424,7 +424,7 @@ func (bp *BatchProcessor) updateBatchEfficiency(batch *Batch, duration time.Dura
 		} else {
 			bp.stats.BatchEfficiency = efficiency
 		}
-		
+
 		bp.stats.AverageBatchSize = (bp.stats.AverageBatchSize*(totalBatches-1) + batchSize) / totalBatches
 	}
 }
@@ -446,10 +446,10 @@ func (bp *BatchProcessor) GetStats() BatchStats {
 // Close shuts down the batch processor
 func (bp *BatchProcessor) Close() error {
 	bp.cancel()
-	
+
 	// Process any remaining batches
 	bp.flushBatches()
-	
+
 	return nil
 }
 

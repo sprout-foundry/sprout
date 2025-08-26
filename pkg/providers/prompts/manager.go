@@ -134,7 +134,7 @@ func (m *Manager) SavePrompt(name, content string) error {
 // DeletePrompt deletes a prompt template
 func (m *Manager) DeletePrompt(name string) error {
 	filename := filepath.Join(m.promptsDir, name+".txt")
-	
+
 	if err := os.Remove(filename); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete prompt '%s': %w", name, err)
 	}
@@ -174,7 +174,7 @@ func (m *Manager) WatchPrompts(callback func(name string)) error {
 // loadPromptFromDisk loads a prompt from disk
 func (m *Manager) loadPromptFromDisk(name string) (string, error) {
 	filename := filepath.Join(m.promptsDir, name+".txt")
-	
+
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -184,7 +184,7 @@ func (m *Manager) loadPromptFromDisk(name string) (string, error) {
 	}
 
 	contentStr := string(content)
-	
+
 	// Cache the content
 	m.mu.Lock()
 	m.rawPrompts[name] = contentStr
@@ -265,7 +265,7 @@ func (m *Manager) GetPromptInfo(name string) (*PromptInfo, error) {
 	// Try to parse as template to check for variables
 	_, parseErr := template.New(name).Parse(content)
 	variables := []string{}
-	
+
 	if parseErr == nil {
 		// Extract variable names from template
 		// This is a simplified approach - a more robust solution would parse the AST
@@ -273,11 +273,11 @@ func (m *Manager) GetPromptInfo(name string) (*PromptInfo, error) {
 	}
 
 	return &PromptInfo{
-		Name:        name,
-		Content:     content,
-		Size:        len(content),
-		Variables:   variables,
-		IsTemplate:  parseErr == nil && len(variables) > 0,
+		Name:       name,
+		Content:    content,
+		Size:       len(content),
+		Variables:  variables,
+		IsTemplate: parseErr == nil && len(variables) > 0,
 	}, nil
 }
 
@@ -293,7 +293,7 @@ type PromptInfo struct {
 // extractTemplateVariables extracts variable names from template content
 func extractTemplateVariables(content string) []string {
 	variables := []string{}
-	
+
 	// Simple regex-based extraction - could be improved
 	// Look for {{.Variable}} patterns
 	parts := strings.Split(content, "{{")
@@ -310,7 +310,7 @@ func extractTemplateVariables(content string) []string {
 			}
 		}
 	}
-	
+
 	return variables
 }
 

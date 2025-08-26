@@ -216,13 +216,13 @@ func isMonorepoOrEarlySetupStage(ctx *SimplifiedAgentContext) bool {
 	// Check user intent for monorepo keywords
 	intentLower := strings.ToLower(ctx.UserIntent)
 	monorepoKeywords := []string{"monorepo", "backend", "frontend", "create directory", "setup"}
-	
+
 	for _, keyword := range monorepoKeywords {
 		if strings.Contains(intentLower, keyword) {
 			return true
 		}
 	}
-	
+
 	// Check if we have minimal project structure (indicates early setup)
 	cmd := exec.Command("sh", "-c", "find . -maxdepth 2 -name 'go.mod' | wc -l")
 	output, err := cmd.CombinedOutput()
@@ -233,7 +233,7 @@ func isMonorepoOrEarlySetupStage(ctx *SimplifiedAgentContext) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -246,13 +246,13 @@ func smartBuildValidation(ctx *SimplifiedAgentContext) error {
 		ctx.Logger.LogProcessStep("⚠️ No Go modules found, skipping build validation")
 		return nil
 	}
-	
+
 	goModPaths := strings.Fields(strings.TrimSpace(string(output)))
 	if len(goModPaths) == 0 {
 		ctx.Logger.LogProcessStep("✅ No Go modules to build yet - validation passed")
 		return nil
 	}
-	
+
 	// Try to build each Go module individually
 	allSucceeded := true
 	for _, goModPath := range goModPaths {
@@ -260,22 +260,22 @@ func smartBuildValidation(ctx *SimplifiedAgentContext) error {
 		if dir == "" {
 			dir = "."
 		}
-		
+
 		ctx.Logger.LogProcessStep(fmt.Sprintf("🏗️ Validating Go module in %s", dir))
-		
+
 		// Check if there are any .go files to build
 		checkCmd := exec.Command("sh", "-c", fmt.Sprintf("find %s -name '*.go' -not -path '*/vendor/*' | head -1", dir))
 		goFiles, _ := checkCmd.CombinedOutput()
-		
+
 		if strings.TrimSpace(string(goFiles)) == "" {
 			ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ No .go files in %s, skipping build", dir))
 			continue
 		}
-		
+
 		// Try to build the module
 		buildCmd := exec.Command("sh", "-c", fmt.Sprintf("cd %s && go build .", dir))
 		buildOutput, buildErr := buildCmd.CombinedOutput()
-		
+
 		if buildErr != nil {
 			ctx.Logger.LogProcessStep(fmt.Sprintf("❌ Build failed in %s: %s", dir, string(buildOutput)))
 			allSucceeded = false
@@ -283,13 +283,13 @@ func smartBuildValidation(ctx *SimplifiedAgentContext) error {
 			ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Build succeeded in %s", dir))
 		}
 	}
-	
+
 	if !allSucceeded {
 		ctx.Logger.LogProcessStep("⚠️ Some builds failed, but continuing (monorepo setup in progress)")
 		// Don't fail the entire agent for partial build failures during setup
 		return nil
 	}
-	
+
 	ctx.Logger.LogProcessStep("✅ Smart build validation passed")
 	return nil
 }

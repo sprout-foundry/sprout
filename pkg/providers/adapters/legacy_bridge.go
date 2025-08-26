@@ -11,8 +11,8 @@ import (
 	"github.com/alantheprice/ledit/pkg/interfaces"
 	"github.com/alantheprice/ledit/pkg/interfaces/types"
 	"github.com/alantheprice/ledit/pkg/prompts"
-	oldTypes "github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/providers/llm"
+	oldTypes "github.com/alantheprice/ledit/pkg/types"
 )
 
 // LegacyLLMBridge bridges the old LLM API to the new interface-based system
@@ -31,25 +31,25 @@ func NewLegacyLLMBridge() *LegacyLLMBridge {
 func (b *LegacyLLMBridge) GetLLMResponse(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, imagePath ...string) (string, *oldTypes.TokenUsage, error) {
 	// Convert old messages to new format
 	newMessages := b.convertMessages(messages)
-	
+
 	// Convert config to provider config
 	providerConfig, err := b.configToProviderConfig(modelName, cfg)
 	if err != nil {
 		return "", nil, err
 	}
-	
+
 	// Create provider
 	provider, err := b.factory.CreateProvider(providerConfig)
 	if err != nil {
 		return "", nil, err
 	}
-	
+
 	// Create request options
 	options := types.RequestOptions{
 		Model:   modelName,
 		Timeout: timeout,
 	}
-	
+
 	// Generate response
 	ctx := context.Background()
 	if timeout > 0 {
@@ -57,12 +57,12 @@ func (b *LegacyLLMBridge) GetLLMResponse(modelName string, messages []prompts.Me
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 	}
-	
+
 	response, metadata, err := provider.GenerateResponse(ctx, newMessages, options)
 	if err != nil {
 		return "", nil, err
 	}
-	
+
 	// Convert token usage back to old format
 	oldUsage := &oldTypes.TokenUsage{
 		PromptTokens:     metadata.TokenUsage.PromptTokens,
@@ -70,7 +70,7 @@ func (b *LegacyLLMBridge) GetLLMResponse(modelName string, messages []prompts.Me
 		TotalTokens:      metadata.TokenUsage.TotalTokens,
 		Estimated:        metadata.TokenUsage.Estimated,
 	}
-	
+
 	return response, oldUsage, nil
 }
 
@@ -78,26 +78,26 @@ func (b *LegacyLLMBridge) GetLLMResponse(modelName string, messages []prompts.Me
 func (b *LegacyLLMBridge) GetLLMResponseStream(modelName string, messages []prompts.Message, filename string, cfg *config.Config, timeout time.Duration, writer io.Writer, imagePath ...string) (*oldTypes.TokenUsage, error) {
 	// Convert old messages to new format
 	newMessages := b.convertMessages(messages)
-	
+
 	// Convert config to provider config
 	providerConfig, err := b.configToProviderConfig(modelName, cfg)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Create provider
 	provider, err := b.factory.CreateProvider(providerConfig)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Create request options
 	options := types.RequestOptions{
 		Model:   modelName,
 		Timeout: timeout,
 		Stream:  true,
 	}
-	
+
 	// Generate streaming response
 	ctx := context.Background()
 	if timeout > 0 {
@@ -105,12 +105,12 @@ func (b *LegacyLLMBridge) GetLLMResponseStream(modelName string, messages []prom
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 	}
-	
+
 	metadata, err := provider.GenerateResponseStream(ctx, newMessages, options, writer)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Convert token usage back to old format
 	oldUsage := &oldTypes.TokenUsage{
 		PromptTokens:     metadata.TokenUsage.PromptTokens,
@@ -118,7 +118,7 @@ func (b *LegacyLLMBridge) GetLLMResponseStream(modelName string, messages []prom
 		TotalTokens:      metadata.TokenUsage.TotalTokens,
 		Estimated:        metadata.TokenUsage.Estimated,
 	}
-	
+
 	return oldUsage, nil
 }
 
@@ -126,7 +126,7 @@ func (b *LegacyLLMBridge) GetLLMResponseStream(modelName string, messages []prom
 
 func (b *LegacyLLMBridge) convertMessages(oldMessages []prompts.Message) []types.Message {
 	newMessages := make([]types.Message, len(oldMessages))
-	
+
 	for i, msg := range oldMessages {
 		newMessages[i] = types.Message{
 			Role:    msg.Role,
@@ -134,7 +134,7 @@ func (b *LegacyLLMBridge) convertMessages(oldMessages []prompts.Message) []types
 			// TODO: Convert tool calls and images if needed
 		}
 	}
-	
+
 	return newMessages
 }
 
@@ -144,10 +144,10 @@ func (b *LegacyLLMBridge) configToProviderConfig(modelName string, cfg *config.C
 	if cfg.LLMProvider != "" {
 		providerName = cfg.LLMProvider
 	}
-	
+
 	// Get API key (this would need to be extracted from your existing config system)
 	apiKey := "" // TODO: Get from actual config/apikeys system
-	
+
 	providerConfig := &types.ProviderConfig{
 		Name:    providerName,
 		Model:   modelName,
@@ -155,7 +155,7 @@ func (b *LegacyLLMBridge) configToProviderConfig(modelName string, cfg *config.C
 		Enabled: true,
 		Timeout: 60, // Default timeout
 	}
-	
+
 	// Set provider-specific defaults
 	switch providerName {
 	case "openai":
@@ -163,7 +163,7 @@ func (b *LegacyLLMBridge) configToProviderConfig(modelName string, cfg *config.C
 	case "gemini":
 		providerConfig.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
 	}
-	
+
 	return providerConfig, nil
 }
 
@@ -171,7 +171,7 @@ func (b *LegacyLLMBridge) inferProviderFromModel(modelName string) string {
 	if modelName == "" {
 		return "openai" // Default
 	}
-	
+
 	// Simple inference based on model name patterns
 	switch {
 	case contains(modelName, "gpt"):
@@ -186,9 +186,9 @@ func (b *LegacyLLMBridge) inferProviderFromModel(modelName string) string {
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		 indexOf(s, substr) >= 0)))
+	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			indexOf(s, substr) >= 0)))
 }
 
 func indexOf(s, substr string) int {

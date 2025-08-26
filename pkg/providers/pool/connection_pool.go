@@ -39,7 +39,7 @@ type ProviderFactory interface {
 // PoolConfig configures the connection pool
 type PoolConfig struct {
 	MaxIdle     int           `json:"max_idle"`     // Maximum idle connections
-	MaxActive   int           `json:"max_active"`   // Maximum active connections  
+	MaxActive   int           `json:"max_active"`   // Maximum active connections
 	IdleTimeout time.Duration `json:"idle_timeout"` // Idle connection timeout
 	MaxLifetime time.Duration `json:"max_lifetime"` // Maximum connection lifetime
 	MaxRequests int64         `json:"max_requests"` // Max requests per connection
@@ -160,17 +160,17 @@ func (p *ConnectionPool) ReturnProvider(providerKey string) {
 // isValidConnection checks if a pooled connection is still valid
 func (p *ConnectionPool) isValidConnection(pooled *PooledProvider) bool {
 	now := time.Now()
-	
+
 	// Check lifetime
 	if now.Sub(pooled.created) > p.maxLifetime {
 		return false
 	}
-	
+
 	// Check usage count
 	if pooled.usageCount >= pooled.maxRequests {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -342,7 +342,7 @@ func (w *PooledProviderWrapper) CalculateCost(usage types.TokenUsage) float64 {
 func (w *PooledProviderWrapper) returnToPool() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	
+
 	if !w.returned {
 		w.pool.ReturnProvider(w.key)
 		w.returned = true

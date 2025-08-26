@@ -24,16 +24,16 @@ type ResponseCache struct {
 
 // CacheEntry represents a cached response
 type CacheEntry struct {
-	Key          string                   `json:"key"`
-	Response     string                   `json:"response"`
-	Metadata     *types.ResponseMetadata  `json:"metadata"`
-	CreatedAt    time.Time                `json:"created_at"`
-	LastAccessed time.Time                `json:"last_accessed"`
-	AccessCount  int64                    `json:"access_count"`
-	Provider     string                   `json:"provider"`
-	Model        string                   `json:"model"`
-	TokenCount   int                      `json:"token_count"`
-	Cost         float64                  `json:"cost"`
+	Key          string                  `json:"key"`
+	Response     string                  `json:"response"`
+	Metadata     *types.ResponseMetadata `json:"metadata"`
+	CreatedAt    time.Time               `json:"created_at"`
+	LastAccessed time.Time               `json:"last_accessed"`
+	AccessCount  int64                   `json:"access_count"`
+	Provider     string                  `json:"provider"`
+	Model        string                  `json:"model"`
+	TokenCount   int                     `json:"token_count"`
+	Cost         float64                 `json:"cost"`
 }
 
 // CacheConfig configures the response cache
@@ -94,7 +94,7 @@ func NewResponseCache(config CacheConfig) *ResponseCache {
 // Get retrieves a cached response
 func (c *ResponseCache) Get(ctx context.Context, messages []types.Message, options types.RequestOptions, providerName string) (*CacheEntry, bool) {
 	key := c.generateKey(messages, options, providerName)
-	
+
 	c.mu.RLock()
 	entry, exists := c.cache[key]
 	c.mu.RUnlock()
@@ -126,7 +126,7 @@ func (c *ResponseCache) Get(ctx context.Context, messages []types.Message, optio
 // Set stores a response in the cache
 func (c *ResponseCache) Set(ctx context.Context, messages []types.Message, options types.RequestOptions, providerName string, response string, metadata *types.ResponseMetadata) error {
 	key := c.generateKey(messages, options, providerName)
-	
+
 	now := time.Now()
 	entry := &CacheEntry{
 		Key:          key,
@@ -158,26 +158,26 @@ func (c *ResponseCache) Set(ctx context.Context, messages []types.Message, optio
 // generateKey creates a unique key for caching
 func (c *ResponseCache) generateKey(messages []types.Message, options types.RequestOptions, providerName string) string {
 	hasher := sha256.New()
-	
+
 	// Hash provider name
 	hasher.Write([]byte(providerName))
-	
+
 	// Hash model
 	hasher.Write([]byte(options.Model))
-	
+
 	// Hash temperature (rounded to avoid cache misses on tiny differences)
 	tempStr := fmt.Sprintf("%.2f", options.Temperature)
 	hasher.Write([]byte(tempStr))
-	
+
 	// Hash max tokens
 	hasher.Write([]byte(fmt.Sprintf("%d", options.MaxTokens)))
-	
+
 	// Hash messages
 	for _, msg := range messages {
 		hasher.Write([]byte(msg.Role))
 		hasher.Write([]byte(msg.Content))
 	}
-	
+
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
@@ -192,13 +192,13 @@ func (c *ResponseCache) shouldEvictBeforeAdd() bool {
 	if len(c.cache) >= c.config.MaxSize {
 		return true
 	}
-	
+
 	// Check memory limit
 	memUsage := c.estimateMemoryUsage()
 	if memUsage > float64(c.config.MaxMemoryMB) {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -210,7 +210,7 @@ func (c *ResponseCache) evictEntries() {
 		entry    *CacheEntry
 		priority float64
 	}
-	
+
 	var priorities []entryPriority
 	for key, entry := range c.cache {
 		totalPriority := 0.0
@@ -227,7 +227,7 @@ func (c *ResponseCache) evictEntries() {
 			})
 		}
 	}
-	
+
 	// Sort by priority (highest first = most likely to evict)
 	for i := 0; i < len(priorities)-1; i++ {
 		for j := i + 1; j < len(priorities); j++ {
@@ -236,18 +236,18 @@ func (c *ResponseCache) evictEntries() {
 			}
 		}
 	}
-	
+
 	// Evict entries until we're under limits
 	evicted := 0
 	for _, p := range priorities {
 		if !c.shouldEvictBeforeAdd() {
 			break
 		}
-		
+
 		delete(c.cache, p.key)
 		evicted++
 		c.stats.Evictions++
-		
+
 		// Don't evict too many at once
 		if evicted >= 100 {
 			break
@@ -356,12 +356,12 @@ func (c *ResponseCache) cleanup() {
 func (c *ResponseCache) GetStats() CacheStats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	// Update real-time stats
 	stats := c.stats
 	stats.Size = len(c.cache)
 	stats.MemoryUsageMB = c.estimateMemoryUsage()
-	
+
 	return stats
 }
 
@@ -369,7 +369,7 @@ func (c *ResponseCache) GetStats() CacheStats {
 func (c *ResponseCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.cache = make(map[string]*CacheEntry)
 	c.stats = CacheStats{}
 }

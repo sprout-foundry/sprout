@@ -16,7 +16,7 @@ func main() {
 	// Test 1: Basic layered configuration setup
 	fmt.Println("\n1. Testing Basic Layered Configuration Setup...")
 	factory := layered.NewConfigurationFactory()
-	
+
 	// Create standard setup (defaults + global + project + environment)
 	_, err := factory.CreateStandardSetup()
 	if err != nil {
@@ -26,7 +26,7 @@ func main() {
 
 	// Test 2: Configuration merging and priority
 	fmt.Println("\n2. Testing Configuration Merging...")
-	
+
 	// Create temp directory for test configs
 	tempDir, err := os.MkdirTemp("", "ledit-config-test")
 	if err != nil {
@@ -40,7 +40,7 @@ func main() {
 
 	// Create custom layered provider with test files
 	testProvider := layered.NewLayeredConfigProvider()
-	
+
 	// Add sources in priority order (lowest to highest)
 	defaultsSource := layered.NewDefaultsConfigSource("defaults", 0)
 	testProvider.AddSource(defaultsSource)
@@ -84,8 +84,8 @@ func main() {
 	fmt.Println("\n3. Testing Configuration Validation...")
 	validator := layered.CreateStandardValidator()
 	validationResult := validator.ValidateConfig(mergedConfig)
-	
-	fmt.Printf("✓ Validation completed - Valid: %t, Errors: %d, Warnings: %d\n", 
+
+	fmt.Printf("✓ Validation completed - Valid: %t, Errors: %d, Warnings: %d\n",
 		validationResult.IsValid(), len(validationResult.Errors), len(validationResult.Warnings))
 
 	if len(validationResult.Errors) > 0 {
@@ -105,23 +105,23 @@ func main() {
 	// Test 4: Validated layered config provider
 	fmt.Println("\n4. Testing Validated Layered Config Provider...")
 	validatedProvider := layered.NewValidatedLayeredConfigProvider(testProvider)
-	
+
 	// Test getting specific configurations
 	agentConfig := validatedProvider.GetAgentConfig()
-	fmt.Printf("✓ Agent config - MaxRetries: %d, EnableValidation: %t\n", 
+	fmt.Printf("✓ Agent config - MaxRetries: %d, EnableValidation: %t\n",
 		agentConfig.MaxRetries, agentConfig.EnableValidation)
 
 	uiConfig := validatedProvider.GetUIConfig()
-	fmt.Printf("✓ UI config - SkipPrompts: %t, VerboseLogging: %t, ColorOutput: %t\n", 
+	fmt.Printf("✓ UI config - SkipPrompts: %t, VerboseLogging: %t, ColorOutput: %t\n",
 		uiConfig.SkipPrompts, uiConfig.VerboseLogging, uiConfig.ColorOutput)
 
 	securityConfig := validatedProvider.GetSecurityConfig()
-	fmt.Printf("✓ Security config - CredentialScanning: %t, RequireConfirmation: %t\n", 
+	fmt.Printf("✓ Security config - CredentialScanning: %t, RequireConfirmation: %t\n",
 		securityConfig.EnableCredentialScanning, securityConfig.RequireConfirmation)
 
 	// Test provider configurations
 	fmt.Println("\n5. Testing Provider Configurations...")
-	
+
 	providers := []string{"openai", "gemini", "ollama"}
 	for _, providerName := range providers {
 		providerConfig, err := validatedProvider.GetProviderConfig(providerName)
@@ -129,7 +129,7 @@ func main() {
 			fmt.Printf("⚠ Error getting %s config: %v\n", providerName, err)
 			continue
 		}
-		fmt.Printf("✓ %s config - Model: %s, Temperature: %.2f, Timeout: %ds\n", 
+		fmt.Printf("✓ %s config - Model: %s, Temperature: %.2f, Timeout: %ds\n",
 			providerName, providerConfig.Model, providerConfig.Temperature, providerConfig.Timeout)
 	}
 
@@ -152,7 +152,7 @@ func main() {
 			log.Printf("Warning: Could not start configuration manager: %v", err)
 		} else {
 			fmt.Println("✓ Configuration manager started")
-			
+
 			// Get current config through manager
 			currentConfig := manager.GetConfig()
 			if currentConfig != nil {
@@ -277,7 +277,7 @@ func writeConfigToFile(filePath string, cfg *config.Config) {
 // displayConfigurationResults shows the merged configuration results
 func displayConfigurationResults(cfg *config.Config) {
 	fmt.Println("\n📋 Merged Configuration Results:")
-	
+
 	if cfg.LLM != nil {
 		fmt.Printf("  LLM Configuration:\n")
 		fmt.Printf("    - Editing Model: %s\n", cfg.LLM.EditingModel)

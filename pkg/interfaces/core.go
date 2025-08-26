@@ -26,7 +26,7 @@ type LLMProvider interface {
 
 	// EstimateTokens estimates the token count for given messages
 	EstimateTokens(messages []types.Message) (int, error)
-	
+
 	// CalculateCost calculates the cost for given token usage
 	CalculateCost(usage types.TokenUsage) float64
 }

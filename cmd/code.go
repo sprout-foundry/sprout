@@ -81,8 +81,8 @@ func executeCodeCommand(cfg *CommandConfig, args []string) error {
 	// Display completion message with timing
 	ui.Out().Print(prompts.CodeGenerationFinished(duration))
 
-	// Log token usage if available
-	if cfg.Config.LastTokenUsage != nil && cfg.Logger != nil {
+	// Display token usage if available
+	if cfg.Config.LastTokenUsage != nil {
 		// Use provider interface for cost calculation
 		provider, err := providers.GetProvider(cfg.Config.EditingModel)
 		if err == nil {
@@ -92,11 +92,20 @@ func executeCodeCommand(cfg *CommandConfig, args []string) error {
 				TotalTokens:      cfg.Config.LastTokenUsage.TotalTokens,
 			})
 
-			cfg.Logger.LogProcessStep(fmt.Sprintf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)",
+			ui.Out().Printf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
 				cfg.Config.LastTokenUsage.PromptTokens,
 				cfg.Config.LastTokenUsage.CompletionTokens,
 				cfg.Config.LastTokenUsage.TotalTokens,
-				cost))
+				cost)
+
+			// Also log for debugging purposes
+			if cfg.Logger != nil {
+				cfg.Logger.LogProcessStep(fmt.Sprintf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)",
+					cfg.Config.LastTokenUsage.PromptTokens,
+					cfg.Config.LastTokenUsage.CompletionTokens,
+					cfg.Config.LastTokenUsage.TotalTokens,
+					cost))
+			}
 		}
 	}
 

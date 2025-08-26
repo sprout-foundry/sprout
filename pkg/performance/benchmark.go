@@ -33,25 +33,25 @@ type BenchmarkConfig struct {
 
 // BenchmarkResults contains comprehensive performance metrics
 type BenchmarkResults struct {
-	TestSuite        string                      `json:"test_suite"`
-	StartTime        time.Time                   `json:"start_time"`
-	Duration         time.Duration               `json:"duration"`
-	SystemInfo       SystemInfo                  `json:"system_info"`
-	ProviderResults  map[string]ProviderMetrics  `json:"provider_results"`
-	FeatureResults   map[string]FeatureMetrics   `json:"feature_results"`
-	ComparisonMatrix ComparisonMatrix            `json:"comparison_matrix"`
-	Summary          BenchmarkSummary            `json:"summary"`
+	TestSuite        string                     `json:"test_suite"`
+	StartTime        time.Time                  `json:"start_time"`
+	Duration         time.Duration              `json:"duration"`
+	SystemInfo       SystemInfo                 `json:"system_info"`
+	ProviderResults  map[string]ProviderMetrics `json:"provider_results"`
+	FeatureResults   map[string]FeatureMetrics  `json:"feature_results"`
+	ComparisonMatrix ComparisonMatrix           `json:"comparison_matrix"`
+	Summary          BenchmarkSummary           `json:"summary"`
 }
 
 // SystemInfo captures system performance characteristics
 type SystemInfo struct {
-	OS              string  `json:"os"`
-	Architecture    string  `json:"architecture"`
-	CPUCores        int     `json:"cpu_cores"`
-	MemoryGB        float64 `json:"memory_gb"`
-	GoVersion       string  `json:"go_version"`
-	CGOEnabled      bool    `json:"cgo_enabled"`
-	MaxGoRoutines   int     `json:"max_go_routines"`
+	OS            string  `json:"os"`
+	Architecture  string  `json:"architecture"`
+	CPUCores      int     `json:"cpu_cores"`
+	MemoryGB      float64 `json:"memory_gb"`
+	GoVersion     string  `json:"go_version"`
+	CGOEnabled    bool    `json:"cgo_enabled"`
+	MaxGoRoutines int     `json:"max_go_routines"`
 }
 
 // ProviderMetrics measures individual provider performance
@@ -72,29 +72,29 @@ type ProviderMetrics struct {
 
 // FeatureMetrics measures performance of specific features
 type FeatureMetrics struct {
-	Name              string            `json:"name"`
-	PerformanceGain   float64           `json:"performance_gain"`   // Multiplier vs baseline
-	CostSavings       float64           `json:"cost_savings"`       // Percentage cost reduction
-	MemoryOverhead    float64           `json:"memory_overhead"`    // Additional memory usage
-	CacheHitRate      float64           `json:"cache_hit_rate"`     // Cache hit percentage
-	BatchEfficiency   float64           `json:"batch_efficiency"`   // Batching effectiveness
-	PoolUtilization   float64           `json:"pool_utilization"`   // Connection pool usage
-	ConcurrencyGain   float64           `json:"concurrency_gain"`   // Concurrent processing benefit
-	DetailedMetrics   map[string]float64 `json:"detailed_metrics"`
+	Name            string             `json:"name"`
+	PerformanceGain float64            `json:"performance_gain"` // Multiplier vs baseline
+	CostSavings     float64            `json:"cost_savings"`     // Percentage cost reduction
+	MemoryOverhead  float64            `json:"memory_overhead"`  // Additional memory usage
+	CacheHitRate    float64            `json:"cache_hit_rate"`   // Cache hit percentage
+	BatchEfficiency float64            `json:"batch_efficiency"` // Batching effectiveness
+	PoolUtilization float64            `json:"pool_utilization"` // Connection pool usage
+	ConcurrencyGain float64            `json:"concurrency_gain"` // Concurrent processing benefit
+	DetailedMetrics map[string]float64 `json:"detailed_metrics"`
 }
 
 // ComparisonMatrix compares different configurations
 type ComparisonMatrix struct {
-	Configurations []string     `json:"configurations"`
-	Metrics        []string     `json:"metrics"`
-	Values         [][]float64  `json:"values"`
-	BestValues     []float64    `json:"best_values"`
-	Winner         []string     `json:"winner"`
+	Configurations []string    `json:"configurations"`
+	Metrics        []string    `json:"metrics"`
+	Values         [][]float64 `json:"values"`
+	BestValues     []float64   `json:"best_values"`
+	Winner         []string    `json:"winner"`
 }
 
 // BenchmarkSummary provides high-level performance insights
 type BenchmarkSummary struct {
-	OverallRating          float64             `json:"overall_rating"`          // 0-100 performance score
+	OverallRating          float64             `json:"overall_rating"` // 0-100 performance score
 	RecommendedConfig      string              `json:"recommended_config"`
 	PerformanceBottlenecks []string            `json:"performance_bottlenecks"`
 	OptimizationGains      map[string]float64  `json:"optimization_gains"`
@@ -141,7 +141,7 @@ func NewBenchmarkSuite(config BenchmarkConfig) *BenchmarkSuite {
 // RunComprehensiveBenchmark executes a full performance test suite
 func (bs *BenchmarkSuite) RunComprehensiveBenchmark(providers []interfaces.LLMProvider) (*BenchmarkResults, error) {
 	fmt.Println("🚀 Starting comprehensive performance benchmark...")
-	
+
 	// Phase 1: Baseline provider performance
 	fmt.Println("📊 Phase 1: Measuring baseline provider performance...")
 	if err := bs.benchmarkProviders(providers); err != nil {
@@ -202,7 +202,7 @@ func (bs *BenchmarkSuite) benchmarkProviders(providers []interfaces.LLMProvider)
 // measureProviderPerformance conducts detailed performance measurement for a provider
 func (bs *BenchmarkSuite) measureProviderPerformance(provider interfaces.LLMProvider) (ProviderMetrics, error) {
 	fmt.Printf("  Testing %s provider...\n", provider.GetName())
-	
+
 	// Prepare test workload
 	messages := []types.Message{
 		{Role: "user", Content: "Write a simple hello world function in Go"},
@@ -226,7 +226,7 @@ func (bs *BenchmarkSuite) measureProviderPerformance(provider interfaces.LLMProv
 	latencies := make([]time.Duration, 0, bs.config.SampleSize)
 	errors := int64(0)
 	requests := int64(0)
-	
+
 	startTime := time.Now()
 	endTime := startTime.Add(bs.config.Duration)
 
@@ -235,12 +235,12 @@ func (bs *BenchmarkSuite) measureProviderPerformance(provider interfaces.LLMProv
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			
+
 			for time.Now().Before(endTime) {
 				reqStart := time.Now()
 				_, _, err := provider.GenerateResponse(context.Background(), messages, options)
 				latency := time.Since(reqStart)
-				
+
 				mu.Lock()
 				requests++
 				latencies = append(latencies, latency)
@@ -248,7 +248,7 @@ func (bs *BenchmarkSuite) measureProviderPerformance(provider interfaces.LLMProv
 					errors++
 				}
 				mu.Unlock()
-				
+
 				// Small delay to prevent overwhelming
 				time.Sleep(time.Millisecond * 10)
 			}
@@ -260,11 +260,11 @@ func (bs *BenchmarkSuite) measureProviderPerformance(provider interfaces.LLMProv
 
 	// Calculate metrics
 	metrics := ProviderMetrics{
-		Name:          provider.GetName(),
+		Name:           provider.GetName(),
 		RequestsPerSec: float64(requests) / totalDuration.Seconds(),
-		TotalRequests: requests,
-		TotalErrors:   errors,
-		ErrorRate:     float64(errors) / float64(requests),
+		TotalRequests:  requests,
+		TotalErrors:    errors,
+		ErrorRate:      float64(errors) / float64(requests),
 	}
 
 	if len(latencies) > 0 {
@@ -274,7 +274,7 @@ func (bs *BenchmarkSuite) measureProviderPerformance(provider interfaces.LLMProv
 	}
 
 	// Estimate token throughput and cost efficiency
-	metrics.AvgTokensPerSec = metrics.RequestsPerSec * 100 // Assuming 100 tokens per request
+	metrics.AvgTokensPerSec = metrics.RequestsPerSec * 100   // Assuming 100 tokens per request
 	metrics.CostEfficiency = metrics.AvgTokensPerSec / 0.001 // Tokens per $0.001
 
 	fmt.Printf("    Results: %.2f req/s, %.2fms avg latency, %.2f%% error rate\n",
@@ -291,7 +291,7 @@ func (bs *BenchmarkSuite) benchmarkConnectionPooling(providers []interfaces.LLMP
 
 	// Test with and without connection pooling
 	provider := providers[0]
-	
+
 	// Baseline without pooling
 	baselineMetrics, err := bs.measureProviderPerformance(provider)
 	if err != nil {
@@ -305,23 +305,23 @@ func (bs *BenchmarkSuite) benchmarkConnectionPooling(providers []interfaces.LLMP
 		IdleTimeout: 5 * time.Minute,
 		MaxLifetime: 30 * time.Minute,
 	}
-	
+
 	// Mock factory for testing
 	factory := &MockProviderFactory{provider: provider}
 	connectionPool := pool.NewConnectionPool(poolConfig, factory)
 	defer connectionPool.Close()
 
 	// Simulate pooled requests and measure performance gain
-	pooledMetrics := baselineMetrics // Placeholder - would measure actual pooled performance
-	pooledMetrics.RequestsPerSec *= 1.3 // Assume 30% improvement
+	pooledMetrics := baselineMetrics                                                  // Placeholder - would measure actual pooled performance
+	pooledMetrics.RequestsPerSec *= 1.3                                               // Assume 30% improvement
 	pooledMetrics.AvgLatency = time.Duration(float64(pooledMetrics.AvgLatency) * 0.8) // 20% latency reduction
 
 	performanceGain := pooledMetrics.RequestsPerSec / baselineMetrics.RequestsPerSec
-	
+
 	bs.results.FeatureResults["connection_pooling"] = FeatureMetrics{
 		Name:            "Connection Pooling",
 		PerformanceGain: performanceGain,
-		MemoryOverhead:  5.0, // 5MB estimated overhead
+		MemoryOverhead:  5.0,  // 5MB estimated overhead
 		PoolUtilization: 0.75, // 75% pool utilization
 		DetailedMetrics: map[string]float64{
 			"baseline_rps": baselineMetrics.RequestsPerSec,
@@ -340,7 +340,7 @@ func (bs *BenchmarkSuite) benchmarkCaching(providers []interfaces.LLMProvider) e
 	}
 
 	provider := providers[0]
-	
+
 	// Create cache
 	cacheConfig := cache.CacheConfig{
 		MaxSize:       1000,
@@ -359,22 +359,22 @@ func (bs *BenchmarkSuite) benchmarkCaching(providers []interfaces.LLMProvider) e
 
 	// Measure cache hit performance
 	startTime := time.Now()
-	
+
 	// First request (cache miss)
 	cachingProvider.GenerateResponse(context.Background(), messages, options)
-	
+
 	// Multiple subsequent requests (cache hits)
 	for i := 0; i < 100; i++ {
 		cachingProvider.GenerateResponse(context.Background(), messages, options)
 	}
-	
+
 	totalTime := time.Since(startTime)
 	stats := responseCache.GetStats()
 
 	bs.results.FeatureResults["response_caching"] = FeatureMetrics{
-		Name:          "Response Caching",
-		CacheHitRate:  stats.HitRate,
-		CostSavings:   stats.HitRate * 0.95, // 95% cost savings on cache hits
+		Name:           "Response Caching",
+		CacheHitRate:   stats.HitRate,
+		CostSavings:    stats.HitRate * 0.95, // 95% cost savings on cache hits
 		MemoryOverhead: stats.MemoryUsageMB,
 		DetailedMetrics: map[string]float64{
 			"cache_hits":   float64(stats.Hits),
@@ -384,7 +384,7 @@ func (bs *BenchmarkSuite) benchmarkCaching(providers []interfaces.LLMProvider) e
 		},
 	}
 
-	fmt.Printf("  Caching: %.1f%% hit rate, %.1f%% cost savings\n", 
+	fmt.Printf("  Caching: %.1f%% hit rate, %.1f%% cost savings\n",
 		stats.HitRate*100, stats.HitRate*95)
 	return nil
 }
@@ -396,7 +396,7 @@ func (bs *BenchmarkSuite) benchmarkBatching(providers []interfaces.LLMProvider) 
 	}
 
 	provider := providers[0]
-	
+
 	batchConfig := batch.BatchConfig{
 		MaxBatchSize:   10,
 		BatchTimeout:   100 * time.Millisecond,
@@ -404,16 +404,16 @@ func (bs *BenchmarkSuite) benchmarkBatching(providers []interfaces.LLMProvider) 
 		MaxConcurrency: 5,
 		EnableMetrics:  true,
 	}
-	
+
 	batchProcessor := batch.NewBatchProcessor(batchConfig)
 	defer batchProcessor.Close()
-	
+
 	batchingProvider := batch.NewBatchingProvider(provider, batchProcessor)
 
 	// Simulate batched requests
 	var wg sync.WaitGroup
 	requestCount := 100
-	
+
 	startTime := time.Now()
 	for i := 0; i < requestCount; i++ {
 		wg.Add(1)
@@ -427,7 +427,7 @@ func (bs *BenchmarkSuite) benchmarkBatching(providers []interfaces.LLMProvider) 
 		}(i)
 	}
 	wg.Wait()
-	
+
 	batchTime := time.Since(startTime)
 	batchStats := batchProcessor.GetStats()
 
@@ -473,20 +473,20 @@ func (bs *BenchmarkSuite) benchmarkConcurrency(providers []interfaces.LLMProvide
 
 	for _, concurrency := range concurrencyLevels {
 		fmt.Printf("  Testing concurrency level: %d\n", concurrency)
-		
+
 		var wg sync.WaitGroup
 		requestCount := 100
-		
+
 		startTime := time.Now()
 		semaphore := make(chan struct{}, concurrency)
-		
+
 		for i := 0; i < requestCount; i++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				semaphore <- struct{}{}
 				defer func() { <-semaphore }()
-				
+
 				messages := []types.Message{
 					{Role: "user", Content: "Simple test request"},
 				}
@@ -495,7 +495,7 @@ func (bs *BenchmarkSuite) benchmarkConcurrency(providers []interfaces.LLMProvide
 			}()
 		}
 		wg.Wait()
-		
+
 		duration := time.Since(startTime)
 		throughput := float64(requestCount) / duration.Seconds()
 		results[concurrency] = throughput
@@ -505,7 +505,7 @@ func (bs *BenchmarkSuite) benchmarkConcurrency(providers []interfaces.LLMProvide
 	baselineThroughput := results[1]
 	maxThroughput := 0.0
 	optimalConcurrency := 1
-	
+
 	for concurrency, throughput := range results {
 		if throughput > maxThroughput {
 			maxThroughput = throughput
@@ -534,13 +534,13 @@ func (bs *BenchmarkSuite) benchmarkConcurrency(providers []interfaces.LLMProvide
 func (bs *BenchmarkSuite) benchmarkEndToEnd(providers []interfaces.LLMProvider) error {
 	// This would test the complete pipeline with all optimizations enabled
 	fmt.Println("  Running integrated performance test...")
-	
+
 	// Placeholder for end-to-end testing
 	bs.results.FeatureResults["end_to_end"] = FeatureMetrics{
 		Name:            "End-to-End Pipeline",
 		PerformanceGain: 2.5,  // Combined 2.5x improvement
-		CostSavings:     0.35,  // 35% cost savings
-		MemoryOverhead:  25.0,  // 25MB total overhead
+		CostSavings:     0.35, // 35% cost savings
+		MemoryOverhead:  25.0, // 25MB total overhead
 	}
 
 	return nil
@@ -549,7 +549,7 @@ func (bs *BenchmarkSuite) benchmarkEndToEnd(providers []interfaces.LLMProvider) 
 // generateAnalysis creates comprehensive performance analysis
 func (bs *BenchmarkSuite) generateAnalysis() {
 	fmt.Println("📈 Generating performance analysis...")
-	
+
 	// Calculate overall performance rating
 	totalGain := 1.0
 	for _, feature := range bs.results.FeatureResults {
@@ -598,7 +598,7 @@ func (bs *BenchmarkSuite) calculateAverage(durations []time.Duration) time.Durat
 	if len(durations) == 0 {
 		return 0
 	}
-	
+
 	var total time.Duration
 	for _, d := range durations {
 		total += d
@@ -611,7 +611,7 @@ func (bs *BenchmarkSuite) calculatePercentile(durations []time.Duration, percent
 	if len(durations) == 0 {
 		return 0
 	}
-	
+
 	// Simple percentile calculation (would use proper sorting in production)
 	index := int(float64(len(durations)) * percentile)
 	if index >= len(durations) {
@@ -623,13 +623,13 @@ func (bs *BenchmarkSuite) calculatePercentile(durations []time.Duration, percent
 // captureSystemInfo gathers system information
 func captureSystemInfo() SystemInfo {
 	return SystemInfo{
-		OS:              runtime.GOOS,
-		Architecture:    runtime.GOARCH,
-		CPUCores:        runtime.NumCPU(),
-		MemoryGB:        8.0, // Would be measured dynamically
-		GoVersion:       runtime.Version(),
-		CGOEnabled:      true,
-		MaxGoRoutines:   10000,
+		OS:            runtime.GOOS,
+		Architecture:  runtime.GOARCH,
+		CPUCores:      runtime.NumCPU(),
+		MemoryGB:      8.0, // Would be measured dynamically
+		GoVersion:     runtime.Version(),
+		CGOEnabled:    true,
+		MaxGoRoutines: 10000,
 	}
 }
 
@@ -660,11 +660,11 @@ func (bs *BenchmarkSuite) printTable() {
 	fmt.Println("================================")
 	fmt.Printf("Overall Performance Rating: %.1f/100\n", bs.results.Summary.OverallRating)
 	fmt.Printf("Test Duration: %v\n", bs.results.Duration)
-	fmt.Printf("System: %s/%s, %d cores\n", 
-		bs.results.SystemInfo.OS, 
-		bs.results.SystemInfo.Architecture, 
+	fmt.Printf("System: %s/%s, %d cores\n",
+		bs.results.SystemInfo.OS,
+		bs.results.SystemInfo.Architecture,
 		bs.results.SystemInfo.CPUCores)
-	
+
 	fmt.Println("\n📊 Provider Performance:")
 	fmt.Println("Provider        | Req/s  | Avg Latency | P95 Latency | Error Rate")
 	fmt.Println("----------------|--------|-------------|-------------|------------")
@@ -676,7 +676,7 @@ func (bs *BenchmarkSuite) printTable() {
 			float64(metrics.P95Latency.Nanoseconds())/1e6,
 			metrics.ErrorRate*100)
 	}
-	
+
 	fmt.Println("\n⚡ Optimization Features:")
 	fmt.Println("Feature              | Performance Gain | Cost Savings | Memory Overhead")
 	fmt.Println("---------------------|------------------|--------------|----------------")
@@ -687,14 +687,14 @@ func (bs *BenchmarkSuite) printTable() {
 			metrics.CostSavings*100,
 			metrics.MemoryOverhead)
 	}
-	
+
 	if len(bs.results.Summary.PerformanceBottlenecks) > 0 {
 		fmt.Println("\n⚠️  Performance Bottlenecks:")
 		for _, bottleneck := range bs.results.Summary.PerformanceBottlenecks {
 			fmt.Printf("  • %s\n", bottleneck)
 		}
 	}
-	
+
 	fmt.Printf("\n💡 Recommended Configuration: %s\n", bs.results.Summary.RecommendedConfig)
 }
 

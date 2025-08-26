@@ -51,7 +51,7 @@ func (f *Factory) Validate(config *types.ProviderConfig) error {
 	if config.BaseURL == "" {
 		config.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
 	}
-	
+
 	if config.Timeout == 0 {
 		config.Timeout = 60
 	}
@@ -120,9 +120,9 @@ func (p *Provider) CalculateCost(usage types.TokenUsage) float64 {
 	// Gemini Pro: $0.0005 per 1K prompt tokens, $0.0015 per 1K completion tokens
 	inputCostPer1K := 0.0005
 	outputCostPer1K := 0.0015
-	
+
 	inputCost := float64(usage.PromptTokens) * inputCostPer1K / 1000.0
 	outputCost := float64(usage.CompletionTokens) * outputCostPer1K / 1000.0
-	
+
 	return inputCost + outputCost
 }

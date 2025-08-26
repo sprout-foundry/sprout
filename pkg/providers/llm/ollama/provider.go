@@ -47,7 +47,7 @@ func (f *Factory) Validate(config *types.ProviderConfig) error {
 	if config.BaseURL == "" {
 		config.BaseURL = "http://localhost:11434"
 	}
-	
+
 	if config.Timeout == 0 {
 		config.Timeout = 120 // Ollama can be slower
 	}

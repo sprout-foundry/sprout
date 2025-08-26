@@ -433,20 +433,20 @@ func getLanguageFromFilename(filename string) string {
 // GetProgressiveWorkspaceContext attempts multiple context loading strategies with fallbacks
 func GetProgressiveWorkspaceContext(instructions string, cfg *config.Config) string {
 	logger := utils.GetLogger(cfg.SkipPrompt)
-	
+
 	// Try minimal context first
 	minimal := GetMinimalWorkspaceContext(instructions, cfg)
 	if minimal != "" && !strings.Contains(minimal, "No workspace context available") {
 		return minimal
 	}
-	
+
 	// Try directory structure if minimal fails
 	dirContext := getDirectoryStructureContext(".")
 	if dirContext != "" {
 		logger.LogProcessStep("Using directory structure context as fallback")
 		return dirContext
 	}
-	
+
 	// Fallback to intent-based suggestions
 	logger.LogProcessStep("Using intent-based context as final fallback")
 	return generateContextFromIntent(instructions)
@@ -455,36 +455,36 @@ func GetProgressiveWorkspaceContext(instructions string, cfg *config.Config) str
 // getDirectoryStructureContext creates basic directory structure context
 func getDirectoryStructureContext(rootDir string) string {
 	var b strings.Builder
-	
+
 	// Walk the directory tree and build a simple structure
 	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors, continue walking
 		}
-		
+
 		// Skip hidden directories and common build artifacts
-		if strings.HasPrefix(info.Name(), ".") || 
-		   info.Name() == "node_modules" || 
-		   info.Name() == "target" ||
-		   info.Name() == "__pycache__" {
+		if strings.HasPrefix(info.Name(), ".") ||
+			info.Name() == "node_modules" ||
+			info.Name() == "target" ||
+			info.Name() == "__pycache__" {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		
+
 		// Only show first 3 levels to avoid overwhelming context
 		depth := strings.Count(path, string(os.PathSeparator))
 		if depth > 2 {
 			return nil
 		}
-		
+
 		relPath, _ := filepath.Rel(rootDir, path)
 		if relPath == "." {
 			b.WriteString("Project root:\n")
 			return nil
 		}
-		
+
 		// Add indentation based on depth
 		indent := strings.Repeat("  ", depth)
 		if info.IsDir() {
@@ -492,46 +492,46 @@ func getDirectoryStructureContext(rootDir string) string {
 		} else {
 			b.WriteString(fmt.Sprintf("%s%s\n", indent, info.Name()))
 		}
-		
+
 		return nil
 	})
-	
+
 	if err != nil || b.Len() == 0 {
 		return ""
 	}
-	
+
 	return fmt.Sprintf("Directory structure:\n%s", b.String())
 }
 
 // generateContextFromIntent creates context based on user intent keywords
 func generateContextFromIntent(intent string) string {
 	intentLower := strings.ToLower(intent)
-	
+
 	var suggestions []string
-	
+
 	if strings.Contains(intentLower, "monorepo") {
 		suggestions = append(suggestions, "- Expected structure: backend/, frontend/, shared/")
 		suggestions = append(suggestions, "- Monorepo typically needs package managers and build scripts")
 	}
-	
+
 	if strings.Contains(intentLower, "react") || strings.Contains(intentLower, "vite") {
 		suggestions = append(suggestions, "- React + Vite setup needs: package.json, vite.config.js, src/")
 		suggestions = append(suggestions, "- Frontend typically in: frontend/ or client/")
 	}
-	
+
 	if strings.Contains(intentLower, "go") || strings.Contains(intentLower, "echo") {
 		suggestions = append(suggestions, "- Go backend needs: go.mod, main.go, handlers/")
 		suggestions = append(suggestions, "- Backend typically in: backend/ or server/")
 	}
-	
+
 	if strings.Contains(intentLower, "sqlite") || strings.Contains(intentLower, "database") {
 		suggestions = append(suggestions, "- Database setup needs: migrations/, models/, db config")
 	}
-	
+
 	if len(suggestions) == 0 {
 		return "Empty workspace - ready for project setup"
 	}
-	
+
 	return fmt.Sprintf("Empty workspace context:\n%s", strings.Join(suggestions, "\n"))
 }
 

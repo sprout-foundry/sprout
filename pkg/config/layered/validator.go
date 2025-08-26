@@ -10,10 +10,10 @@ import (
 
 // ValidationError represents a configuration validation error
 type ValidationError struct {
-	Field   string `json:"field"`
+	Field   string      `json:"field"`
 	Value   interface{} `json:"value"`
-	Message string `json:"message"`
-	Code    string `json:"code"`
+	Message string      `json:"message"`
+	Code    string      `json:"code"`
 }
 
 // Error implements the error interface
@@ -77,7 +77,7 @@ type ValidationSeverity int
 const (
 	SeverityError   ValidationSeverity = iota // Must be fixed
 	SeverityWarning                           // Should be reviewed
-	SeverityInfo                             // Informational only
+	SeverityInfo                              // Informational only
 )
 
 // NewConfigValidator creates a new configuration validator
@@ -338,13 +338,13 @@ func (r *ModelCompatibilityValidationRule) Validate(cfg *config.Config) []Valida
 // CreateStandardValidator creates a validator with standard rules
 func CreateStandardValidator() *ConfigValidator {
 	validator := NewConfigValidator()
-	
+
 	// Add standard validation rules
 	validator.AddRule(&LLMModelValidationRule{})
 	validator.AddRule(&SecurityValidationRule{})
 	validator.AddRule(&PerformanceValidationRule{})
 	validator.AddRule(&ModelCompatibilityValidationRule{})
-	
+
 	return validator
 }
 
@@ -367,10 +367,10 @@ func (v *ValidatedLayeredConfigProvider) GetProviderConfig(providerName string) 
 	// Validate the merged configuration first
 	merged := v.loader.GetMergedConfig()
 	result := v.validator.ValidateConfig(merged)
-	
+
 	if !result.IsValid() {
 		// Log validation errors but don't fail completely
-		fmt.Printf("Configuration validation errors: %d errors, %d warnings\n", 
+		fmt.Printf("Configuration validation errors: %d errors, %d warnings\n",
 			len(result.Errors), len(result.Warnings))
 		for _, err := range result.Errors {
 			fmt.Printf("  ERROR: %s\n", err.Error())

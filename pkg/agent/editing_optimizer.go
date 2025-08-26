@@ -208,7 +208,7 @@ func (s *OptimizedEditingService) analyzeTaskComplexity(todo *TodoItem, ctx *Sim
 	simpleKeywords := []string{"add", "fix", "update", "change", "modify", "remove"}
 	complexKeywords := []string{"refactor", "restructure", "architecture", "design", "migrate", "overhaul"}
 	filesystemKeywords := []string{
-		"create directory", "mkdir", "create folder", "setup project", "initialize", 
+		"create directory", "mkdir", "create folder", "setup project", "initialize",
 		"install", "setup monorepo", "create backend", "create frontend",
 		"create the", "directory for", "backend directory", "frontend directory",
 		"directory in", "directory called", "directory named", " directory ", "new directory",

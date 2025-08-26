@@ -21,12 +21,12 @@ type ConfigWatcher struct {
 
 // FileWatcher monitors a single file for changes
 type FileWatcher struct {
-	FilePath     string
-	LastModTime  time.Time
-	LastSize     int64
+	FilePath      string
+	LastModTime   time.Time
+	LastSize      int64
 	CheckInterval time.Duration
-	stopCh       chan struct{}
-	callback     func()
+	stopCh        chan struct{}
+	callback      func()
 }
 
 // NewConfigWatcher creates a new configuration watcher
@@ -107,7 +107,7 @@ func (cw *ConfigWatcher) Start(ctx context.Context) error {
 	}
 
 	cw.running = true
-	
+
 	// Start all file watchers
 	for _, watcher := range cw.watchers {
 		go watcher.start()
@@ -181,7 +181,7 @@ func (fw *FileWatcher) updateFileState() error {
 	// For now, use a simplified approach
 	fw.LastModTime = time.Now()
 	fw.LastSize = 0
-	
+
 	return nil
 }
 
@@ -218,7 +218,7 @@ type WatchedLayeredConfigProvider struct {
 // NewWatchedLayeredConfigProvider creates a new watched layered config provider
 func NewWatchedLayeredConfigProvider(provider *ValidatedLayeredConfigProvider) *WatchedLayeredConfigProvider {
 	watcher := NewConfigWatcher()
-	
+
 	watched := &WatchedLayeredConfigProvider{
 		ValidatedLayeredConfigProvider: provider,
 		watcher:                        watcher,
@@ -283,10 +283,10 @@ func NewConfigurationManager() (*ConfigurationManager, error) {
 func (cm *ConfigurationManager) Start() error {
 	// Add standard config files to watch
 	configFiles := []string{
-		"~/.ledit/config.json",          // Global config
-		"./.ledit/config.json",          // Project config
-		"./config/development.json",      // Development config
-		"./config/production.json",       // Production config
+		"~/.ledit/config.json",      // Global config
+		"./.ledit/config.json",      // Project config
+		"./config/development.json", // Development config
+		"./config/production.json",  // Production config
 	}
 
 	for _, file := range configFiles {

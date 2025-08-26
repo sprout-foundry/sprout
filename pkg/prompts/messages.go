@@ -282,10 +282,10 @@ func TokenEstimate(tokens int, modelName string) string {
 
 func TokenUsage(promptTokens, completionTokens, totalTokens int, modelName string, cost float64) string {
 	if cost > 0 {
-		return fmt.Sprintf("Tokens used: %d input + %d output = %d total (model: %s, cost: $%.6f)\n", 
+		return fmt.Sprintf("Tokens used: %d input + %d output = %d total (model: %s, cost: $%.6f)\n",
 			promptTokens, completionTokens, totalTokens, modelName, cost)
 	}
-	return fmt.Sprintf("Tokens used: %d input + %d output = %d total (model: %s)\n", 
+	return fmt.Sprintf("Tokens used: %d input + %d output = %d total (model: %s)\n",
 		promptTokens, completionTokens, totalTokens, modelName)
 }
 

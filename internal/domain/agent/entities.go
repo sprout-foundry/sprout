@@ -33,9 +33,9 @@ const (
 type ExecutionStrategy string
 
 const (
-	StrategyQuickEdit ExecutionStrategy = "quick_edit"
-	StrategyFullEdit  ExecutionStrategy = "full_edit"
-	StrategyAnalyze   ExecutionStrategy = "analyze"
+	StrategyQuickEdit   ExecutionStrategy = "quick_edit"
+	StrategyFullEdit    ExecutionStrategy = "full_edit"
+	StrategyAnalyze     ExecutionStrategy = "analyze"
 	StrategyOrchestrate ExecutionStrategy = "orchestrate"
 )
 
@@ -54,37 +54,37 @@ type IntentAnalysis struct {
 
 // ExecutionPlan represents a plan for executing an intent
 type ExecutionPlan struct {
-	ID            string             `json:"id"`
-	IntentID      string             `json:"intent_id"`
-	Analysis      IntentAnalysis     `json:"analysis"`
-	TodoList      *todo.TodoList     `json:"todo_list"`
-	Strategy      ExecutionStrategy  `json:"strategy"`
-	CreatedAt     time.Time          `json:"created_at"`
-	EstimatedTime time.Duration      `json:"estimated_time"`
-	Dependencies  []string           `json:"dependencies"`
+	ID            string            `json:"id"`
+	IntentID      string            `json:"intent_id"`
+	Analysis      IntentAnalysis    `json:"analysis"`
+	TodoList      *todo.TodoList    `json:"todo_list"`
+	Strategy      ExecutionStrategy `json:"strategy"`
+	CreatedAt     time.Time         `json:"created_at"`
+	EstimatedTime time.Duration     `json:"estimated_time"`
+	Dependencies  []string          `json:"dependencies"`
 }
 
 // ExecutionResult represents the result of executing an intent
 type ExecutionResult struct {
-	ID          string               `json:"id"`
-	PlanID      string               `json:"plan_id"`
-	Success     bool                 `json:"success"`
-	CompletedAt time.Time            `json:"completed_at"`
-	Duration    time.Duration        `json:"duration"`
-	Changes     []FileChange         `json:"changes"`
-	Output      string               `json:"output"`
-	Error       string               `json:"error,omitempty"`
+	ID          string                 `json:"id"`
+	PlanID      string                 `json:"plan_id"`
+	Success     bool                   `json:"success"`
+	CompletedAt time.Time              `json:"completed_at"`
+	Duration    time.Duration          `json:"duration"`
+	Changes     []FileChange           `json:"changes"`
+	Output      string                 `json:"output"`
+	Error       string                 `json:"error,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata"`
 }
 
 // FileChange represents a change made to a file
 type FileChange struct {
-	Path        string    `json:"path"`
-	Type        ChangeType `json:"type"`
-	OldContent  string    `json:"old_content,omitempty"`
-	NewContent  string    `json:"new_content,omitempty"`
-	LineStart   int       `json:"line_start,omitempty"`
-	LineEnd     int       `json:"line_end,omitempty"`
+	Path       string     `json:"path"`
+	Type       ChangeType `json:"type"`
+	OldContent string     `json:"old_content,omitempty"`
+	NewContent string     `json:"new_content,omitempty"`
+	LineStart  int        `json:"line_start,omitempty"`
+	LineEnd    int        `json:"line_end,omitempty"`
 }
 
 // ChangeType represents the type of change made to a file
@@ -92,7 +92,7 @@ type ChangeType string
 
 const (
 	ChangeTypeCreate ChangeType = "create"
-	ChangeTypeModify ChangeType = "modify" 
+	ChangeTypeModify ChangeType = "modify"
 	ChangeTypeDelete ChangeType = "delete"
 	ChangeTypeRename ChangeType = "rename"
 )
@@ -110,15 +110,15 @@ type AgentContext struct {
 
 // AgentState represents the current state of agent execution
 type AgentState struct {
-	ID             string            `json:"id"`
-	SessionID      string            `json:"session_id"`
-	CurrentPlan    *ExecutionPlan    `json:"current_plan,omitempty"`
-	CurrentTodo    *todo.Todo        `json:"current_todo,omitempty"`
-	Status         AgentStatus       `json:"status"`
-	Progress       float64           `json:"progress"`
-	StartedAt      time.Time         `json:"started_at"`
-	LastActivityAt time.Time         `json:"last_activity_at"`
-	Context        *AgentContext     `json:"context"`
+	ID             string         `json:"id"`
+	SessionID      string         `json:"session_id"`
+	CurrentPlan    *ExecutionPlan `json:"current_plan,omitempty"`
+	CurrentTodo    *todo.Todo     `json:"current_todo,omitempty"`
+	Status         AgentStatus    `json:"status"`
+	Progress       float64        `json:"progress"`
+	StartedAt      time.Time      `json:"started_at"`
+	LastActivityAt time.Time      `json:"last_activity_at"`
+	Context        *AgentContext  `json:"context"`
 }
 
 // AgentStatus represents the current status of the agent
@@ -149,16 +149,16 @@ type WorkflowEvent struct {
 type EventType string
 
 const (
-	EventTypeIntentReceived  EventType = "intent_received"
-	EventTypeAnalysisStarted EventType = "analysis_started"
+	EventTypeIntentReceived   EventType = "intent_received"
+	EventTypeAnalysisStarted  EventType = "analysis_started"
 	EventTypeAnalysisComplete EventType = "analysis_complete"
-	EventTypePlanCreated     EventType = "plan_created"
-	EventTypeTodoStarted     EventType = "todo_started"
-	EventTypeTodoCompleted   EventType = "todo_completed"
-	EventTypeTodoFailed      EventType = "todo_failed"
+	EventTypePlanCreated      EventType = "plan_created"
+	EventTypeTodoStarted      EventType = "todo_started"
+	EventTypeTodoCompleted    EventType = "todo_completed"
+	EventTypeTodoFailed       EventType = "todo_failed"
 	EventTypeWorkflowComplete EventType = "workflow_complete"
-	EventTypeWorkflowFailed  EventType = "workflow_failed"
-	EventTypeUserQuestion    EventType = "user_question"
+	EventTypeWorkflowFailed   EventType = "workflow_failed"
+	EventTypeUserQuestion     EventType = "user_question"
 	EventTypeValidationFailed EventType = "validation_failed"
 )
 
@@ -229,9 +229,9 @@ func (as *AgentState) SetCurrentTodo(todo *todo.Todo) {
 // IsActive returns true if the agent is currently active
 func (as *AgentState) IsActive() bool {
 	return as.Status == StatusAnalyzing ||
-		   as.Status == StatusPlanning ||
-		   as.Status == StatusExecuting ||
-		   as.Status == StatusValidating
+		as.Status == StatusPlanning ||
+		as.Status == StatusExecuting ||
+		as.Status == StatusValidating
 }
 
 // GetUptime returns how long the agent has been running

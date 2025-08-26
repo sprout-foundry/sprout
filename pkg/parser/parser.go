@@ -140,12 +140,12 @@ func generateDefaultFilename(lang, response string) string {
 		"yml":        ".yml",
 		"xml":        ".xml",
 	}
-	
+
 	ext, exists := extensions[lang]
 	if !exists {
 		return "" // Don't generate filename for unknown languages
 	}
-	
+
 	// Try to extract a reasonable filename from the response context
 	// Look for existing filenames mentioned in the response
 	lines := strings.Split(response, "\n")
@@ -161,7 +161,7 @@ func generateDefaultFilename(lang, response string) string {
 			}
 		}
 	}
-	
+
 	// Fallback to generic filename
 	return "updated_file" + ext
 }
@@ -169,24 +169,24 @@ func generateDefaultFilename(lang, response string) string {
 // tryContentBasedExtraction attempts to extract code from responses without explicit code blocks
 func tryContentBasedExtraction(response string) map[string]string {
 	result := make(map[string]string)
-	
+
 	// Check if the entire response looks like code
 	lines := strings.Split(response, "\n")
 	codeLines := 0
 	totalLines := len(lines)
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue // Skip empty lines
 		}
-		
+
 		// Check if line looks like code (contains programming constructs)
 		if looksLikeCode(line) {
 			codeLines++
 		}
 	}
-	
+
 	// If a significant portion looks like code, extract it
 	if totalLines > 0 && float64(codeLines)/float64(totalLines) > 0.3 {
 		// Try to determine the language from patterns in the code
@@ -199,7 +199,7 @@ func tryContentBasedExtraction(response string) map[string]string {
 			}
 		}
 	}
-	
+
 	return result
 }
 
@@ -212,15 +212,15 @@ func looksLikeCode(line string) bool {
 		"var ", "let ", "const ", "public ", "private ", "protected ",
 		"#include", "#define", "using ", "namespace ",
 		":=", "==", "!=", "->", "=>", "<-",
-		"{", "}", "[];", ");" , "();",
+		"{", "}", "[];", ");", "();",
 	}
-	
+
 	for _, pattern := range patterns {
 		if strings.Contains(line, pattern) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -228,16 +228,16 @@ func looksLikeCode(line string) bool {
 func detectLanguageFromContent(content string) string {
 	// Language-specific patterns
 	langPatterns := map[string][]string{
-		"go": {"package ", "func ", "import (", "fmt.", ":=", "interface{"},
-		"python": {"def ", "import ", "from ", "if __name__", "class ", "print("},
+		"go":         {"package ", "func ", "import (", "fmt.", ":=", "interface{"},
+		"python":     {"def ", "import ", "from ", "if __name__", "class ", "print("},
 		"javascript": {"function ", "var ", "let ", "const ", "console.log", "=>"},
-		"java": {"public class", "public static", "System.out", "import java"},
-		"c": {"#include", "int main", "printf", "malloc", "struct "},
-		"cpp": {"#include", "std::", "cout <<", "using namespace", "class "},
-		"rust": {"fn ", "let mut", "println!", "use ", "struct ", "impl "},
+		"java":       {"public class", "public static", "System.out", "import java"},
+		"c":          {"#include", "int main", "printf", "malloc", "struct "},
+		"cpp":        {"#include", "std::", "cout <<", "using namespace", "class "},
+		"rust":       {"fn ", "let mut", "println!", "use ", "struct ", "impl "},
 		"typescript": {"interface ", "type ", "export ", "import ", "function "},
 	}
-	
+
 	for lang, patterns := range langPatterns {
 		matches := 0
 		for _, pattern := range patterns {
@@ -245,13 +245,13 @@ func detectLanguageFromContent(content string) string {
 				matches++
 			}
 		}
-		
+
 		// If we find multiple patterns for a language, it's likely that language
 		if matches >= 2 {
 			return lang
 		}
 	}
-	
+
 	return "" // Unknown language
 }
 
@@ -315,7 +315,7 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 					continue
 				}
 			}
-			
+
 			// Enhanced robustness: If it's a code block without explicit filename,
 			// try to use a sensible default based on the language or context
 			if lang != "" && lang != "markdown" && lang != "md" {
@@ -371,7 +371,7 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 			}
 		}
 	}
-	
+
 	fmt.Printf("=== End Parser Debug ===\n")
 
 	return updatedCode, nil

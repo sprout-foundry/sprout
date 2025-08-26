@@ -35,11 +35,11 @@ type WorkspaceContext struct {
 
 // FileInfo represents information about a file
 type FileInfo struct {
-	Path        string  `json:"path"`
-	Type        string  `json:"type"`
-	Language    string  `json:"language"`
-	Summary     string  `json:"summary"`
-	Relevance   float64 `json:"relevance"`
+	Path      string  `json:"path"`
+	Type      string  `json:"type"`
+	Language  string  `json:"language"`
+	Summary   string  `json:"summary"`
+	Relevance float64 `json:"relevance"`
 }
 
 // LLMProvider defines the interface for LLM operations
@@ -48,7 +48,7 @@ type LLMProvider interface {
 	AnalyzeIntent(ctx context.Context, intent string, context WorkspaceContext) (map[string]interface{}, error)
 }
 
-// WorkspaceProvider defines the interface for workspace operations  
+// WorkspaceProvider defines the interface for workspace operations
 type WorkspaceProvider interface {
 	GetContext(ctx context.Context, intent string) (WorkspaceContext, error)
 	GetRelevantFiles(ctx context.Context, intent string, maxFiles int) ([]FileInfo, error)
@@ -94,7 +94,7 @@ func (w *workflowImpl) AnalyzeIntent(ctx context.Context, intent string, workspa
 
 	// Create analysis prompt
 	prompt := w.buildIntentAnalysisPrompt(intent, workspaceContext)
-	
+
 	// Call LLM for analysis
 	response, err := w.llmProvider.GenerateResponse(ctx, prompt, map[string]interface{}{
 		"temperature": 0.2,
@@ -194,7 +194,7 @@ func (w *workflowImpl) ExecutePlan(ctx context.Context, plan *ExecutionPlan) (*E
 		if err != nil {
 			result.Success = false
 			result.SetError(fmt.Errorf("failed to execute todo %s: %w", nextTodo.ID, err))
-			
+
 			event = NewWorkflowEvent("", EventTypeTodoFailed, "Todo execution failed", map[string]interface{}{
 				"todo_id": nextTodo.ID,
 				"error":   err.Error(),
@@ -207,8 +207,8 @@ func (w *workflowImpl) ExecutePlan(ctx context.Context, plan *ExecutionPlan) (*E
 		if todoResult.Changes != nil {
 			for _, change := range todoResult.Changes {
 				result.AddChange(FileChange{
-					Path:       change,
-					Type:       ChangeTypeModify,
+					Path: change,
+					Type: ChangeTypeModify,
 				})
 			}
 		}
@@ -283,7 +283,7 @@ Provide a helpful answer that guides the user forward.`, question, agentContext.
 // buildIntentAnalysisPrompt creates the prompt for intent analysis
 func (w *workflowImpl) buildIntentAnalysisPrompt(intent string, workspaceContext WorkspaceContext) string {
 	var promptBuilder strings.Builder
-	
+
 	promptBuilder.WriteString(`Analyze this user intent for software development task planning:
 
 User Intent: "` + intent + `"
@@ -340,7 +340,7 @@ func (w *workflowImpl) parseIntentAnalysis(response, originalIntent string) (*In
 // determineIntentType determines the type of intent
 func (w *workflowImpl) determineIntentType(intent string) IntentType {
 	intent = strings.ToLower(intent)
-	
+
 	if strings.Contains(intent, "add") || strings.Contains(intent, "create") || strings.Contains(intent, "implement") {
 		return IntentTypeCodeGeneration
 	}
@@ -356,29 +356,29 @@ func (w *workflowImpl) determineIntentType(intent string) IntentType {
 	if strings.Contains(intent, "?") || strings.Contains(intent, "how") || strings.Contains(intent, "what") || strings.Contains(intent, "why") {
 		return IntentTypeQuestion
 	}
-	
+
 	return IntentTypeCodeGeneration // Default
 }
 
 // estimateComplexity estimates the complexity of the intent
 func (w *workflowImpl) estimateComplexity(intent string) ComplexityLevel {
 	intent = strings.ToLower(intent)
-	
+
 	complexWords := []string{"refactor", "restructure", "architecture", "framework", "migrate", "convert"}
 	simpleWords := []string{"add", "create", "fix", "update", "comment"}
-	
+
 	for _, word := range complexWords {
 		if strings.Contains(intent, word) {
 			return ComplexityComplex
 		}
 	}
-	
+
 	for _, word := range simpleWords {
 		if strings.Contains(intent, word) {
 			return ComplexitySimple
 		}
 	}
-	
+
 	return ComplexityModerate // Default
 }
 
@@ -387,7 +387,7 @@ func (w *workflowImpl) extractKeywords(intent string) []string {
 	// Simple keyword extraction - in practice this would be more sophisticated
 	words := strings.Fields(strings.ToLower(intent))
 	keywords := make([]string, 0)
-	
+
 	// Filter out common words and keep meaningful ones
 	stopWords := map[string]bool{
 		"a": true, "an": true, "and": true, "are": true, "as": true, "at": true,
@@ -395,13 +395,13 @@ func (w *workflowImpl) extractKeywords(intent string) []string {
 		"in": true, "is": true, "it": true, "its": true, "of": true, "on": true,
 		"that": true, "the": true, "to": true, "was": true, "will": true, "with": true,
 	}
-	
+
 	for _, word := range words {
 		if len(word) > 2 && !stopWords[word] {
 			keywords = append(keywords, word)
 		}
 	}
-	
+
 	return keywords
 }
 
@@ -411,15 +411,15 @@ func (w *workflowImpl) determineExecutionStrategy(analysis *IntentAnalysis, work
 	if analysis.Type == IntentTypeQuestion {
 		return StrategyAnalyze
 	}
-	
+
 	if analysis.Complexity >= ComplexityComplex || len(analysis.TargetFiles) > 3 {
 		return StrategyFullEdit
 	}
-	
+
 	if analysis.Type == IntentTypeAnalysis {
 		return StrategyAnalyze
 	}
-	
+
 	return StrategyQuickEdit // Default for simple code changes
 }
 
@@ -447,7 +447,7 @@ type basicTodoExecutor struct {
 func (e *basicTodoExecutor) Execute(ctx context.Context, t *todo.Todo) (*todo.ExecutionResult, error) {
 	// Simulate execution
 	time.Sleep(100 * time.Millisecond)
-	
+
 	return &todo.ExecutionResult{
 		Success:  true,
 		Output:   fmt.Sprintf("Executed todo: %s", t.Description),

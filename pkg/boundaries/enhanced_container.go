@@ -17,24 +17,24 @@ import (
 // EnhancedContainer extends the basic container with domain services and improved DI
 type EnhancedContainer interface {
 	Container // Embed existing container interface
-	
+
 	// Domain services
 	GetTodoService() todo.TodoService
 	GetAgentWorkflow() agent.AgentWorkflow
 	GetCodeGenerator() interfaces.CodeGenerator
 	GetWorkspaceAnalyzer() interfaces.WorkspaceAnalyzer
-	
+
 	// Enhanced provider services
 	GetLLMProviderNew() interfaces.LLMProvider
 	GetPromptProvider() interfaces.PromptProvider
 	GetConfigProvider() interfaces.ConfigProvider
-	
+
 	// Service registration and discovery
 	RegisterService(name string, factory ServiceFactory) error
 	RegisterSingleton(name string, instance interface{}) error
 	GetRegisteredService(name string) (interface{}, error)
 	ListServices() []ServiceInfo
-	
+
 	// Advanced lifecycle management
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
@@ -61,13 +61,13 @@ const (
 
 // ServiceInfo contains information about a registered service
 type ServiceInfo struct {
-	Name         string            `json:"name"`
-	Type         ServiceType       `json:"type"`
-	Status       ServiceStatus     `json:"status"`
-	Dependencies []string          `json:"dependencies"`
-	CreatedAt    time.Time         `json:"created_at"`
-	LastAccessed time.Time         `json:"last_accessed"`
-	AccessCount  int64             `json:"access_count"`
+	Name         string        `json:"name"`
+	Type         ServiceType   `json:"type"`
+	Status       ServiceStatus `json:"status"`
+	Dependencies []string      `json:"dependencies"`
+	CreatedAt    time.Time     `json:"created_at"`
+	LastAccessed time.Time     `json:"last_accessed"`
+	AccessCount  int64         `json:"access_count"`
 }
 
 // ServiceStatus represents the status of a service
@@ -84,28 +84,28 @@ const (
 // enhancedContainerImpl implements EnhancedContainer
 type enhancedContainerImpl struct {
 	*DefaultContainer // Embed existing container
-	
-	mu               sync.RWMutex
-	serviceFactories map[string]ServiceFactory
+
+	mu                sync.RWMutex
+	serviceFactories  map[string]ServiceFactory
 	singletonServices map[string]interface{}
-	serviceInfo      map[string]*ServiceInfo
-	
+	serviceInfo       map[string]*ServiceInfo
+
 	// Domain services
 	todoService       todo.TodoService
 	agentWorkflow     agent.AgentWorkflow
 	codeGenerator     interfaces.CodeGenerator
 	workspaceAnalyzer interfaces.WorkspaceAnalyzer
-	
+
 	// Enhanced providers
 	llmProviderNew    interfaces.LLMProvider
 	promptProvider    interfaces.PromptProvider
 	configProviderNew interfaces.ConfigProvider
-	
+
 	// Adapter layer
-	adapterFactory    *adapters.AdapterFactory
-	adapterBundle     *adapters.AdapterBundle
-	domainServices    *adapters.DomainServices
-	
+	adapterFactory *adapters.AdapterFactory
+	adapterBundle  *adapters.AdapterBundle
+	domainServices *adapters.DomainServices
+
 	// State
 	isStarted bool
 	startTime time.Time
@@ -114,7 +114,7 @@ type enhancedContainerImpl struct {
 // NewEnhancedContainer creates a new enhanced dependency injection container
 func NewEnhancedContainer(cfg *config.Config) EnhancedContainer {
 	baseContainer := NewContainer(cfg).(*DefaultContainer)
-	
+
 	return &enhancedContainerImpl{
 		DefaultContainer:  baseContainer,
 		serviceFactories:  make(map[string]ServiceFactory),
@@ -128,24 +128,24 @@ func NewEnhancedContainer(cfg *config.Config) EnhancedContainer {
 func (c *enhancedContainerImpl) Start(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if c.isStarted {
 		return nil
 	}
-	
+
 	// Initialize base container first
 	if err := c.DefaultContainer.Initialize(ctx); err != nil {
 		return fmt.Errorf("failed to initialize base container: %w", err)
 	}
-	
+
 	// Initialize enhanced services
 	if err := c.initializeEnhancedServices(ctx); err != nil {
 		return fmt.Errorf("failed to initialize enhanced services: %w", err)
 	}
-	
+
 	c.isStarted = true
 	c.startTime = time.Now()
-	
+
 	return nil
 }
 
@@ -153,21 +153,21 @@ func (c *enhancedContainerImpl) Start(ctx context.Context) error {
 func (c *enhancedContainerImpl) Stop(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if !c.isStarted {
 		return nil
 	}
-	
+
 	// Stop enhanced services
 	c.stopEnhancedServices(ctx)
-	
+
 	// Stop base container
 	if err := c.DefaultContainer.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to shutdown base container: %w", err)
 	}
-	
+
 	c.isStarted = false
-	
+
 	return nil
 }
 
@@ -176,11 +176,11 @@ func (c *enhancedContainerImpl) Restart(ctx context.Context) error {
 	if err := c.Stop(ctx); err != nil {
 		return fmt.Errorf("failed to stop container: %w", err)
 	}
-	
+
 	if err := c.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -195,11 +195,11 @@ func (c *enhancedContainerImpl) IsReady() bool {
 func (c *enhancedContainerImpl) RegisterService(name string, factory ServiceFactory) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if _, exists := c.serviceFactories[name]; exists {
 		return fmt.Errorf("service %s is already registered", name)
 	}
-	
+
 	c.serviceFactories[name] = factory
 	c.serviceInfo[name] = &ServiceInfo{
 		Name:         name,
@@ -208,7 +208,7 @@ func (c *enhancedContainerImpl) RegisterService(name string, factory ServiceFact
 		Dependencies: factory.GetDependencies(),
 		CreatedAt:    time.Now(),
 	}
-	
+
 	return nil
 }
 
@@ -216,11 +216,11 @@ func (c *enhancedContainerImpl) RegisterService(name string, factory ServiceFact
 func (c *enhancedContainerImpl) RegisterSingleton(name string, instance interface{}) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if _, exists := c.singletonServices[name]; exists {
 		return fmt.Errorf("singleton service %s is already registered", name)
 	}
-	
+
 	c.singletonServices[name] = instance
 	c.serviceInfo[name] = &ServiceInfo{
 		Name:      name,
@@ -228,7 +228,7 @@ func (c *enhancedContainerImpl) RegisterSingleton(name string, instance interfac
 		Status:    ServiceStatusReady,
 		CreatedAt: time.Now(),
 	}
-	
+
 	return nil
 }
 
@@ -236,24 +236,24 @@ func (c *enhancedContainerImpl) RegisterSingleton(name string, instance interfac
 func (c *enhancedContainerImpl) GetRegisteredService(name string) (interface{}, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	// Check singletons first
 	if service, exists := c.singletonServices[name]; exists {
 		c.updateServiceAccess(name)
 		return service, nil
 	}
-	
+
 	// Check factories
 	factory, exists := c.serviceFactories[name]
 	if !exists {
 		return nil, fmt.Errorf("service %s is not registered", name)
 	}
-	
+
 	// Update service info
 	if info, exists := c.serviceInfo[name]; exists {
 		info.Status = ServiceStatusInitializing
 	}
-	
+
 	// Create service instance
 	service, err := factory.Create(c)
 	if err != nil {
@@ -262,17 +262,17 @@ func (c *enhancedContainerImpl) GetRegisteredService(name string) (interface{}, 
 		}
 		return nil, fmt.Errorf("failed to create service %s: %w", name, err)
 	}
-	
+
 	// For singleton services, cache the instance
 	if factory.GetType() == ServiceTypeSingleton {
 		c.singletonServices[name] = service
 	}
-	
+
 	// Update service info
 	if info, exists := c.serviceInfo[name]; exists {
 		info.Status = ServiceStatusReady
 	}
-	
+
 	c.updateServiceAccess(name)
 	return service, nil
 }
@@ -281,12 +281,12 @@ func (c *enhancedContainerImpl) GetRegisteredService(name string) (interface{}, 
 func (c *enhancedContainerImpl) ListServices() []ServiceInfo {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	services := make([]ServiceInfo, 0, len(c.serviceInfo))
 	for _, info := range c.serviceInfo {
 		services = append(services, *info)
 	}
-	
+
 	return services
 }
 
@@ -351,17 +351,17 @@ func (c *enhancedContainerImpl) initializeEnhancedServices(ctx context.Context) 
 	if err := c.initializeEnhancedProviders(); err != nil {
 		return fmt.Errorf("failed to initialize enhanced providers: %w", err)
 	}
-	
+
 	// Initialize domain services
 	if err := c.initializeDomainServices(); err != nil {
 		return fmt.Errorf("failed to initialize domain services: %w", err)
 	}
-	
+
 	// Initialize registered services
 	if err := c.initializeRegisteredServices(); err != nil {
 		return fmt.Errorf("failed to initialize registered services: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -373,16 +373,16 @@ func (c *enhancedContainerImpl) initializeEnhancedProviders() error {
 		return fmt.Errorf("failed to create adapter factory: %w", err)
 	}
 	c.adapterFactory = factory
-	
+
 	// For now, skip the enhanced LLM provider initialization
 	// This will be implemented when the registry factory methods are available
 	// Use the existing DefaultContainer's LLM provider instead
 	c.llmProviderNew = nil // Will be set up later when needed
-	
+
 	// Create adapter bundle with nil provider for now
 	c.adapterBundle = c.adapterFactory.CreateAdapterBundle(nil)
 	c.configProviderNew = c.adapterBundle.Config
-	
+
 	return nil
 }
 
@@ -391,22 +391,22 @@ func (c *enhancedContainerImpl) initializeDomainServices() error {
 	if c.adapterBundle == nil {
 		return fmt.Errorf("adapter bundle must be initialized first")
 	}
-	
+
 	// Wire domain services using the adapter factory
 	domainServices, err := c.adapterFactory.WireServices(c.adapterBundle)
 	if err != nil {
 		return fmt.Errorf("failed to wire domain services: %w", err)
 	}
 	c.domainServices = domainServices
-	
+
 	// Set domain services
 	c.todoService = domainServices.TodoService
 	c.agentWorkflow = domainServices.AgentWorkflow
-	
+
 	// Initialize other services
-	c.codeGenerator = nil // Placeholder - would implement interfaces.CodeGenerator
+	c.codeGenerator = nil     // Placeholder - would implement interfaces.CodeGenerator
 	c.workspaceAnalyzer = nil // Placeholder - interface mismatch, will be fixed later
-	
+
 	return nil
 }
 
@@ -425,7 +425,7 @@ func (c *enhancedContainerImpl) initializeRegisteredServices() error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -436,7 +436,7 @@ func (c *enhancedContainerImpl) stopEnhancedServices(ctx context.Context) {
 		info.Status = ServiceStatusStopped
 		_ = name // avoid unused variable
 	}
-	
+
 	// Clear singleton services
 	c.singletonServices = make(map[string]interface{})
 }
@@ -513,12 +513,12 @@ func (c *enhancedContainerImpl) GetLLMProviderByName(name string) (interfaces.LL
 	if err != nil {
 		return nil, err
 	}
-	
+
 	provider, ok := service.(interfaces.LLMProvider)
 	if !ok {
 		return nil, fmt.Errorf("service is not an LLM provider")
 	}
-	
+
 	return provider, nil
 }
 

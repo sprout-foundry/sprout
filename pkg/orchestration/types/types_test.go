@@ -52,7 +52,7 @@ func TestPatchResolutionUnmarshalJSON(t *testing.T) {
 	}
 }
 
-func TestmainhTypes.PatchResolutionMarshalJSON(t *testing.T) {
+func TestPatchResolutionMarshalJSON(t *testing.T) {
 	// Test marshaling string format
 	patch1 := mainhTypes.PatchResolution{
 		SingleFile: "single file content",
@@ -91,7 +91,7 @@ func TestmainhTypes.PatchResolutionMarshalJSON(t *testing.T) {
 	}
 }
 
-func TestmainhTypes.PatchResolutionIsEmpty(t *testing.T) {
+func TestPatchResolutionIsEmpty(t *testing.T) {
 	// Test empty patch resolution
 	emptyPatch := mainhTypes.PatchResolution{}
 	if !emptyPatch.IsEmpty() {
@@ -113,7 +113,7 @@ func TestmainhTypes.PatchResolutionIsEmpty(t *testing.T) {
 	}
 }
 
-func TestmainhTypes.CodeReviewResultUnmarshalJSON(t *testing.T) {
+func TestCodeReviewResultUnmarshalJSON(t *testing.T) {
 	// Test unmarshaling mainhTypes.CodeReviewResult with string patch_resolution
 	jsonStr := `{
 		"status": "needs_revision",

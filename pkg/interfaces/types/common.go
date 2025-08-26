@@ -65,30 +65,30 @@ type ImageData struct {
 
 // ModelInfo contains information about an LLM model
 type ModelInfo struct {
-	Name         string `json:"name"`
-	Provider     string `json:"provider"`
-	MaxTokens    int    `json:"max_tokens"`
-	SupportsTools bool  `json:"supports_tools"`
-	SupportsImages bool `json:"supports_images"`
+	Name           string `json:"name"`
+	Provider       string `json:"provider"`
+	MaxTokens      int    `json:"max_tokens"`
+	SupportsTools  bool   `json:"supports_tools"`
+	SupportsImages bool   `json:"supports_images"`
 }
 
 // WorkspaceContext represents the context of a workspace
 type WorkspaceContext struct {
-	Files       []FileInfo      `json:"files"`
-	Summary     string         `json:"summary"`
-	Language    string         `json:"language"`
-	Framework   string         `json:"framework"`
-	Metadata    map[string]any `json:"metadata"`
+	Files     []FileInfo     `json:"files"`
+	Summary   string         `json:"summary"`
+	Language  string         `json:"language"`
+	Framework string         `json:"framework"`
+	Metadata  map[string]any `json:"metadata"`
 }
 
 // FileInfo represents information about a file in the workspace
 type FileInfo struct {
-	Path        string `json:"path"`
-	Content     string `json:"content,omitempty"`
-	Summary     string `json:"summary,omitempty"`
-	Language    string `json:"language"`
-	Size        int64  `json:"size"`
-	ModTime     time.Time `json:"mod_time"`
+	Path     string    `json:"path"`
+	Content  string    `json:"content,omitempty"`
+	Summary  string    `json:"summary,omitempty"`
+	Language string    `json:"language"`
+	Size     int64     `json:"size"`
+	ModTime  time.Time `json:"mod_time"`
 }
 
 // ChangeSet represents a set of changes to be applied
@@ -104,16 +104,16 @@ type ChangeSet struct {
 type RequestOptions struct {
 	Model       string        `json:"model"`
 	Temperature float64       `json:"temperature,omitempty"`
-	MaxTokens   int          `json:"max_tokens,omitempty"`
+	MaxTokens   int           `json:"max_tokens,omitempty"`
 	Timeout     time.Duration `json:"timeout,omitempty"`
-	Stream      bool         `json:"stream,omitempty"`
+	Stream      bool          `json:"stream,omitempty"`
 }
 
 // ResponseMetadata contains metadata about an LLM response
 type ResponseMetadata struct {
-	Model       string        `json:"model"`
-	TokenUsage  TokenUsage    `json:"token_usage"`
-	Duration    time.Duration `json:"duration"`
-	Provider    string        `json:"provider"`
-	Cost        float64       `json:"cost,omitempty"`
+	Model      string        `json:"model"`
+	TokenUsage TokenUsage    `json:"token_usage"`
+	Duration   time.Duration `json:"duration"`
+	Provider   string        `json:"provider"`
+	Cost       float64       `json:"cost,omitempty"`
 }

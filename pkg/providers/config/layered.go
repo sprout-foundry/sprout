@@ -13,23 +13,23 @@ import (
 
 // LayeredProvider implements a layered configuration system
 type LayeredProvider struct {
-	mu              sync.RWMutex
-	globalConfig    map[string]interface{}
-	userConfig      map[string]interface{}
-	projectConfig   map[string]interface{}
-	runtimeConfig   map[string]interface{}
-	watchCallbacks  []func()
-	
-	globalPath     string
-	userPath       string
-	projectPath    string
+	mu             sync.RWMutex
+	globalConfig   map[string]interface{}
+	userConfig     map[string]interface{}
+	projectConfig  map[string]interface{}
+	runtimeConfig  map[string]interface{}
+	watchCallbacks []func()
+
+	globalPath  string
+	userPath    string
+	projectPath string
 }
 
 // NewLayeredProvider creates a new layered configuration provider
 func NewLayeredProvider() *LayeredProvider {
 	home, _ := os.UserHomeDir()
 	wd, _ := os.Getwd()
-	
+
 	return &LayeredProvider{
 		globalConfig:  make(map[string]interface{}),
 		userConfig:    make(map[string]interface{}),
@@ -48,16 +48,16 @@ func (p *LayeredProvider) GetProviderConfig(providerName string) (*types.Provide
 
 	// Look for provider config in layers (runtime > project > user > global)
 	providerKey := "providers." + providerName
-	
+
 	var config map[string]interface{}
-	
+
 	// Check runtime config first
 	if val, exists := p.runtimeConfig[providerKey]; exists {
 		if configMap, ok := val.(map[string]interface{}); ok {
 			config = configMap
 		}
 	}
-	
+
 	// Check project config
 	if config == nil {
 		if val, exists := p.projectConfig[providerKey]; exists {
@@ -66,7 +66,7 @@ func (p *LayeredProvider) GetProviderConfig(providerName string) (*types.Provide
 			}
 		}
 	}
-	
+
 	// Check user config
 	if config == nil {
 		if val, exists := p.userConfig[providerKey]; exists {
@@ -75,7 +75,7 @@ func (p *LayeredProvider) GetProviderConfig(providerName string) (*types.Provide
 			}
 		}
 	}
-	
+
 	// Check global config
 	if config == nil {
 		if val, exists := p.globalConfig[providerKey]; exists {
@@ -111,7 +111,7 @@ func (p *LayeredProvider) GetAgentConfig() *types.AgentConfig {
 
 	// Override with layered config values
 	p.applyLayeredConfig("agent", config)
-	
+
 	return config
 }
 
@@ -122,15 +122,15 @@ func (p *LayeredProvider) GetEditorConfig() *types.EditorConfig {
 
 	config := &types.EditorConfig{
 		BackupEnabled:     true,
-		DiffStyle:        "unified",
-		AutoFormat:       false,
+		DiffStyle:         "unified",
+		AutoFormat:        false,
 		PreferredLanguage: "",
-		IgnorePatterns:   []string{"*.log", "*.tmp", "node_modules/*"},
-		MaxFileSize:      10 * 1024 * 1024, // 10MB
+		IgnorePatterns:    []string{"*.log", "*.tmp", "node_modules/*"},
+		MaxFileSize:       10 * 1024 * 1024, // 10MB
 	}
 
 	p.applyLayeredConfig("editor", config)
-	
+
 	return config
 }
 
@@ -141,7 +141,7 @@ func (p *LayeredProvider) GetSecurityConfig() *types.SecurityConfig {
 
 	config := &types.SecurityConfig{
 		EnableCredentialScanning: true,
-		BlockedPatterns:          []string{
+		BlockedPatterns: []string{
 			"password\\s*=\\s*['\"][^'\"]+['\"]",
 			"api[_-]?key\\s*=\\s*['\"][^'\"]+['\"]",
 			"secret\\s*=\\s*['\"][^'\"]+['\"]",
@@ -151,7 +151,7 @@ func (p *LayeredProvider) GetSecurityConfig() *types.SecurityConfig {
 	}
 
 	p.applyLayeredConfig("security", config)
-	
+
 	return config
 }
 
@@ -169,7 +169,7 @@ func (p *LayeredProvider) GetUIConfig() *types.UIConfig {
 	}
 
 	p.applyLayeredConfig("ui", config)
-	
+
 	return config
 }
 
@@ -180,10 +180,10 @@ func (p *LayeredProvider) SetConfig(key string, value interface{}) error {
 
 	// Set in runtime config
 	p.runtimeConfig[key] = value
-	
+
 	// Notify watchers
 	p.notifyWatchers()
-	
+
 	return nil
 }
 
@@ -235,7 +235,7 @@ func (p *LayeredProvider) ReloadConfig() error {
 
 	// Notify watchers
 	p.notifyWatchers()
-	
+
 	return nil
 }
 
@@ -245,7 +245,7 @@ func (p *LayeredProvider) WatchConfig(callback func()) error {
 	defer p.mu.Unlock()
 
 	p.watchCallbacks = append(p.watchCallbacks, callback)
-	
+
 	// TODO: Implement file system watcher for config files
 	return nil
 }
@@ -353,7 +353,7 @@ func (p *LayeredProvider) SetProjectConfig(key string, value interface{}) error 
 	defer p.mu.Unlock()
 
 	p.projectConfig[key] = value
-	
+
 	// Optionally save to project config file
 	if err := p.ensureConfigDir(filepath.Dir(p.projectPath)); err != nil {
 		return fmt.Errorf("failed to ensure project config directory: %w", err)
@@ -369,7 +369,7 @@ func (p *LayeredProvider) SetProjectConfig(key string, value interface{}) error 
 	}
 
 	p.notifyWatchers()
-	
+
 	return nil
 }
 

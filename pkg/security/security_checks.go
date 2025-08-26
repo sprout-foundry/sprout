@@ -143,7 +143,7 @@ func DetectSecurityConcernsWithContext(content, filePath string) ([]string, map[
 					return // Skip this match
 				}
 			}
-			
+
 			concerns = append(concerns, concernType)
 			if _, ok := snippets[concernType]; !ok { // Only store the first snippet found for this type
 				snippets[concernType] = match

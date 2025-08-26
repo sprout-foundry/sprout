@@ -20,10 +20,10 @@ type Registry struct {
 type ProviderFactory interface {
 	// Create creates a new provider instance with the given configuration
 	Create(config *types.ProviderConfig) (interfaces.LLMProvider, error)
-	
+
 	// GetName returns the name of the provider
 	GetName() string
-	
+
 	// Validate validates the provider configuration
 	Validate(config *types.ProviderConfig) error
 }
@@ -40,16 +40,16 @@ func NewRegistry() *Registry {
 func (r *Registry) Register(factory ProviderFactory) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	name := factory.GetName()
 	if name == "" {
 		return fmt.Errorf("provider factory must have a non-empty name")
 	}
-	
+
 	if _, exists := r.providers[name]; exists {
 		return fmt.Errorf("provider '%s' is already registered", name)
 	}
-	
+
 	r.providers[name] = factory
 	return nil
 }
@@ -58,11 +58,11 @@ func (r *Registry) Register(factory ProviderFactory) error {
 func (r *Registry) Unregister(name string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if _, exists := r.providers[name]; !exists {
 		return fmt.Errorf("provider '%s' is not registered", name)
 	}
-	
+
 	delete(r.providers, name)
 	delete(r.instances, name) // Also remove any cached instance
 	return nil
@@ -71,33 +71,33 @@ func (r *Registry) Unregister(name string) error {
 // GetProvider returns a provider instance, creating it if necessary
 func (r *Registry) GetProvider(name string, config *types.ProviderConfig) (interfaces.LLMProvider, error) {
 	r.mu.RLock()
-	
+
 	// Check if we have a cached instance
 	if instance, exists := r.instances[name]; exists {
 		r.mu.RUnlock()
 		return instance, nil
 	}
-	
+
 	// Check if factory is registered
 	factory, exists := r.providers[name]
 	if !exists {
 		r.mu.RUnlock()
 		return nil, fmt.Errorf("provider '%s' is not registered", name)
 	}
-	
+
 	r.mu.RUnlock()
-	
+
 	// Create new instance
 	instance, err := factory.Create(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create provider '%s': %w", name, err)
 	}
-	
+
 	// Cache the instance
 	r.mu.Lock()
 	r.instances[name] = instance
 	r.mu.Unlock()
-	
+
 	return instance, nil
 }
 
@@ -105,12 +105,12 @@ func (r *Registry) GetProvider(name string, config *types.ProviderConfig) (inter
 func (r *Registry) ListProviders() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	names := make([]string, 0, len(r.providers))
 	for name := range r.providers {
 		names = append(names, name)
 	}
-	
+
 	return names
 }
 
@@ -119,11 +119,11 @@ func (r *Registry) ValidateConfig(name string, config *types.ProviderConfig) err
 	r.mu.RLock()
 	factory, exists := r.providers[name]
 	r.mu.RUnlock()
-	
+
 	if !exists {
 		return fmt.Errorf("provider '%s' is not registered", name)
 	}
-	
+
 	return factory.Validate(config)
 }
 
@@ -135,12 +135,12 @@ func (r *Registry) CheckHealth(ctx context.Context) map[string]error {
 		instances[name] = instance
 	}
 	r.mu.RUnlock()
-	
+
 	results := make(map[string]error)
 	for name, instance := range instances {
 		results[name] = instance.IsAvailable(ctx)
 	}
-	
+
 	return results
 }
 
@@ -148,7 +148,7 @@ func (r *Registry) CheckHealth(ctx context.Context) map[string]error {
 func (r *Registry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	r.instances = make(map[string]interfaces.LLMProvider)
 }
 
@@ -158,14 +158,14 @@ func (r *Registry) GetProviderInfo(ctx context.Context, name string, config *typ
 	if err != nil {
 		return nil, err
 	}
-	
+
 	models, err := provider.GetModels(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get models for provider '%s': %w", name, err)
 	}
-	
+
 	healthErr := provider.IsAvailable(ctx)
-	
+
 	return &ProviderInfo{
 		Name:      name,
 		Available: healthErr == nil,
@@ -176,7 +176,7 @@ func (r *Registry) GetProviderInfo(ctx context.Context, name string, config *typ
 
 // ProviderInfo contains information about a provider
 type ProviderInfo struct {
-	Name      string             `json:"name"`
+	Name      string            `json:"name"`
 	Available bool              `json:"available"`
 	Models    []types.ModelInfo `json:"models"`
 	Error     error             `json:"error,omitempty"`

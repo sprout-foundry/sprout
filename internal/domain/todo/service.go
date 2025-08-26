@@ -53,10 +53,10 @@ func (s *todoServiceImpl) CreateFromIntent(ctx context.Context, intent string, w
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate todo list ID: %w", err)
 	}
-	
+
 	// Build context-aware prompt for LLM
 	prompt := s.buildTodoCreationPrompt(intent, workspace)
-	
+
 	// Call LLM to generate todos
 	response, err := s.llmProvider.GenerateResponse(ctx, prompt, map[string]interface{}{
 		"temperature": 0.3, // Lower temperature for more consistent todo generation
@@ -65,13 +65,13 @@ func (s *todoServiceImpl) CreateFromIntent(ctx context.Context, intent string, w
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate todos from LLM: %w", err)
 	}
-	
+
 	// Parse the LLM response into todos
 	todos, err := s.parseTodosFromResponse(response, workspace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse todos from LLM response: %w", err)
 	}
-	
+
 	// Create todo list
 	todoList := &TodoList{
 		ID:         id,
@@ -81,11 +81,11 @@ func (s *todoServiceImpl) CreateFromIntent(ctx context.Context, intent string, w
 		UpdatedAt:  time.Now(),
 		TotalTodos: len(todos),
 	}
-	
+
 	// Set initial priorities and dependencies
 	s.setInitialPriorities(todoList)
 	s.analyzeDependencies(todoList)
-	
+
 	return todoList, nil
 }
 
@@ -94,36 +94,36 @@ func (s *todoServiceImpl) PrioritizeTodos(ctx context.Context, todos []Todo) ([]
 	if len(todos) <= 1 {
 		return todos, nil
 	}
-	
+
 	// Create a copy to avoid modifying the original
 	prioritized := make([]Todo, len(todos))
 	copy(prioritized, todos)
-	
+
 	// Sort todos using multiple criteria
 	sort.Slice(prioritized, func(i, j int) bool {
 		todoA, todoB := prioritized[i], prioritized[j]
-		
+
 		// First, prioritize by dependencies (todos with no dependencies first)
 		depsA := len(todoA.Dependencies)
 		depsB := len(todoB.Dependencies)
 		if depsA != depsB {
 			return depsA < depsB
 		}
-		
+
 		// Then by priority (higher priority first)
 		if todoA.Priority != todoB.Priority {
 			return todoA.Priority > todoB.Priority
 		}
-		
+
 		// Then by complexity (simpler tasks first for quick wins)
 		if todoA.Complexity != todoB.Complexity {
 			return todoA.Complexity < todoB.Complexity
 		}
-		
+
 		// Finally by creation time (older tasks first)
 		return todoA.CreatedAt.Before(todoB.CreatedAt)
 	})
-	
+
 	return prioritized, nil
 }
 
@@ -132,19 +132,19 @@ func (s *todoServiceImpl) SelectNextTodo(ctx context.Context, todoList *TodoList
 	if todoList == nil {
 		return nil, fmt.Errorf("todo list is nil")
 	}
-	
+
 	// Get all executable todos
 	pending := todoList.GetPendingTodos()
 	if len(pending) == 0 {
 		return nil, nil // No todos available
 	}
-	
+
 	// Prioritize the pending todos
 	prioritized, err := s.PrioritizeTodos(ctx, pending)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prioritize todos: %w", err)
 	}
-	
+
 	// Return the highest priority executable todo
 	if len(prioritized) > 0 {
 		// Find the todo in the original list and return a pointer to it
@@ -154,7 +154,7 @@ func (s *todoServiceImpl) SelectNextTodo(ctx context.Context, todoList *TodoList
 			}
 		}
 	}
-	
+
 	return nil, fmt.Errorf("selected todo not found in original list")
 }
 
@@ -163,33 +163,33 @@ func (s *todoServiceImpl) ExecuteTodo(ctx context.Context, todo *Todo, executor 
 	if todo == nil {
 		return nil, fmt.Errorf("todo is nil")
 	}
-	
+
 	if executor == nil {
 		return nil, fmt.Errorf("executor is nil")
 	}
-	
+
 	// Check if executor can handle this type of todo
 	if !executor.CanExecute(todo.Type) {
 		return nil, fmt.Errorf("executor cannot handle todo type: %s", todo.Type)
 	}
-	
+
 	// Mark todo as started
 	todo.MarkStarted()
-	
+
 	// Execute the todo
 	result, err := executor.Execute(ctx, todo)
 	if err != nil {
 		todo.MarkFailed(err)
 		return nil, fmt.Errorf("failed to execute todo %s: %w", todo.ID, err)
 	}
-	
+
 	// Update todo status based on result
 	if result.Success {
 		todo.MarkCompleted()
 	} else {
 		todo.MarkFailed(result.Error)
 	}
-	
+
 	return result, nil
 }
 
@@ -214,22 +214,22 @@ func generateID() (string, error) {
 // buildTodoCreationPrompt creates the prompt for LLM todo generation
 func (s *todoServiceImpl) buildTodoCreationPrompt(intent string, workspace WorkspaceContext) string {
 	var promptBuilder strings.Builder
-	
+
 	promptBuilder.WriteString(`You are an expert software developer. Break down this user request into specific, actionable todos grounded in the provided workspace context.
 
 User Request: "` + intent + `"
 
 ## Workspace Context
 `)
-	
+
 	// Add workspace information
 	promptBuilder.WriteString(fmt.Sprintf("Project Type: %s\n", workspace.ProjectType))
 	promptBuilder.WriteString(fmt.Sprintf("Root Path: %s\n", workspace.RootPath))
-	
+
 	if workspace.Summary != "" {
 		promptBuilder.WriteString(fmt.Sprintf("Summary: %s\n", workspace.Summary))
 	}
-	
+
 	// Add relevant files
 	if len(workspace.Files) > 0 {
 		promptBuilder.WriteString("\nRelevant Files:\n")
@@ -241,7 +241,7 @@ User Request: "` + intent + `"
 			promptBuilder.WriteString(")\n")
 		}
 	}
-	
+
 	promptBuilder.WriteString(`
 Please respond with a JSON array of todos. Each todo should have:
 - "description": A clear, actionable description
@@ -274,7 +274,7 @@ Example response:
   }
 ]
 `)
-	
+
 	return promptBuilder.String()
 }
 
@@ -285,13 +285,13 @@ func (s *todoServiceImpl) parseTodosFromResponse(response string, workspace Work
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract JSON from response: %w", err)
 	}
-	
+
 	// Parse the JSON into a slice of raw todo data
 	var rawTodos []map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &rawTodos); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal todos JSON: %w", err)
 	}
-	
+
 	// Convert raw data to Todo objects
 	var todos []Todo
 	for i, raw := range rawTodos {
@@ -301,7 +301,7 @@ func (s *todoServiceImpl) parseTodosFromResponse(response string, workspace Work
 		}
 		todos = append(todos, todo)
 	}
-	
+
 	return todos, nil
 }
 
@@ -310,11 +310,11 @@ func (s *todoServiceImpl) extractJSON(response string) (string, error) {
 	// Look for JSON array in the response
 	re := regexp.MustCompile(`\[[\s\S]*\]`)
 	matches := re.FindAllString(response, -1)
-	
+
 	if len(matches) == 0 {
 		return "", fmt.Errorf("no JSON array found in response")
 	}
-	
+
 	// Return the last (likely most complete) match
 	return matches[len(matches)-1], nil
 }
@@ -326,23 +326,23 @@ func (s *todoServiceImpl) convertRawTodo(raw map[string]interface{}, index int) 
 	if err != nil {
 		return Todo{}, fmt.Errorf("failed to generate todo ID: %w", err)
 	}
-	
+
 	// Extract required fields
 	description, ok := raw["description"].(string)
 	if !ok || description == "" {
 		return Todo{}, fmt.Errorf("missing or invalid description")
 	}
-	
+
 	activeForm, ok := raw["active_form"].(string)
 	if !ok || activeForm == "" {
 		activeForm = description // Fallback to description
 	}
-	
+
 	todoTypeStr, ok := raw["type"].(string)
 	if !ok {
 		return Todo{}, fmt.Errorf("missing or invalid type")
 	}
-	
+
 	// Convert priority
 	var priority Priority = PriorityNormal
 	if p, ok := raw["priority"].(float64); ok {
@@ -352,7 +352,7 @@ func (s *todoServiceImpl) convertRawTodo(raw map[string]interface{}, index int) 
 			priority = Priority(pInt)
 		}
 	}
-	
+
 	// Convert complexity
 	var complexity ComplexityLevel = ComplexityModerate
 	if c, ok := raw["complexity"].(float64); ok {
@@ -362,7 +362,7 @@ func (s *todoServiceImpl) convertRawTodo(raw map[string]interface{}, index int) 
 			complexity = ComplexityLevel(cInt)
 		}
 	}
-	
+
 	// Extract target files
 	var targetFiles []string
 	if files, ok := raw["target_files"].([]interface{}); ok {
@@ -372,7 +372,7 @@ func (s *todoServiceImpl) convertRawTodo(raw map[string]interface{}, index int) 
 			}
 		}
 	}
-	
+
 	// Extract dependencies (will be resolved later)
 	var dependencies []string
 	if deps, ok := raw["dependencies"].([]interface{}); ok {
@@ -382,7 +382,7 @@ func (s *todoServiceImpl) convertRawTodo(raw map[string]interface{}, index int) 
 			}
 		}
 	}
-	
+
 	return Todo{
 		ID:           id,
 		Description:  description,
@@ -402,17 +402,17 @@ func (s *todoServiceImpl) convertRawTodo(raw map[string]interface{}, index int) 
 func (s *todoServiceImpl) setInitialPriorities(todoList *TodoList) {
 	for i := range todoList.Todos {
 		todo := &todoList.Todos[i]
-		
+
 		// Boost priority for analysis tasks (usually need to be done first)
 		if todo.Type == TodoTypeAnalysis {
 			todo.Priority = Priority(int(todo.Priority) + 10)
 		}
-		
+
 		// Boost priority for validation tasks if they're simple
 		if todo.Type == TodoTypeValidation && todo.Complexity == ComplexitySimple {
 			todo.Priority = Priority(int(todo.Priority) + 5)
 		}
-		
+
 		// Lower priority for documentation tasks (can be done later)
 		if todo.Type == TodoTypeDocumentation {
 			todo.Priority = Priority(int(todo.Priority) - 10)
@@ -427,18 +427,18 @@ func (s *todoServiceImpl) analyzeDependencies(todoList *TodoList) {
 	for _, todo := range todoList.Todos {
 		descToID[todo.Description] = todo.ID
 	}
-	
+
 	// Resolve dependencies
 	for i := range todoList.Todos {
 		todo := &todoList.Todos[i]
 		var resolvedDeps []string
-		
+
 		for _, depDesc := range todo.Dependencies {
 			if depID, found := descToID[depDesc]; found {
 				resolvedDeps = append(resolvedDeps, depID)
 			}
 		}
-		
+
 		todo.Dependencies = resolvedDeps
 	}
 }

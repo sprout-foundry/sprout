@@ -28,6 +28,7 @@ const (
 	ExecutionTypeDirectEdit                        // Simple file edits
 	ExecutionTypeCodeCommand                       // Complex code generation
 	ExecutionTypeShellCommand                      // Shell commands for filesystem operations
+	ExecutionTypeContinuation                      // Continuation to next phase of complex workflow
 )
 
 // createTodos generates a list of todos based on user intent
@@ -79,10 +80,14 @@ User Request: "%s"
 	contextInfo.WriteString(`
 
 Guidance:
+- LIMIT TO MAX 10 TODOS for complex tasks - break into phases if needed
+- For complex workflows that need >10 steps: create 9 todos for the current phase, then make todo #10 "Continue with next phase of [workflow]" to automatically chain to the next batch
+- For monorepo/multi-component tasks: focus on ONE complete component at a time (e.g., complete backend OR frontend, not both simultaneously)  
 - Use tools to validate and ground todos in reality (read files, search code, list files): prefer reading files (workspace_context/read_file), searching code (grep_search), and using workspace_context to find targets.
 - If uncertain about exact locations or details, include an initial "analysis" todo that explicitly uses tools to gather the needed evidence before edits.
 - Avoid speculative or ungrounded todos.
 - Consider the recent analysis findings and accumulated knowledge when creating todos.
+- For shell commands, prefer simple file operations and avoid embedding large code blocks in commands
 
 Please create a JSON array of todos that accomplish this request. Each todo should be:
 - Specific and actionable
@@ -263,6 +268,8 @@ func executeTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 		return executeShellCommandTodo(ctx, todo)
 	case ExecutionTypeCodeCommand:
 		return executeOptimizedCodeEditingTodo(ctx, todo)
+	case ExecutionTypeContinuation:
+		return executeContinuationTodo(ctx, todo)
 	default:
 		return executeOptimizedCodeEditingTodo(ctx, todo)
 	}
@@ -272,6 +279,14 @@ func executeTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 func analyzeTodoExecutionType(content, description string) ExecutionType {
 	contentLower := strings.ToLower(content)
 	descriptionLower := strings.ToLower(description)
+
+	// Continuation todos - check first for workflow continuation
+	continuationKeywords := []string{"continue with next phase", "continue with", "next phase of", "continue to", "proceed with next"}
+	for _, keyword := range continuationKeywords {
+		if strings.Contains(contentLower, keyword) || strings.Contains(descriptionLower, keyword) {
+			return ExecutionTypeContinuation
+		}
+	}
 
 	// Direct edit todos (simple changes, updates to documentation) - check first before shell commands
 	directEditKeywords := []string{"update readme", "update documentation", "add comment", "fix typo", "update description", "add example", "update text"}
@@ -948,8 +963,9 @@ Respond with JSON:
 			continue
 		}
 
-		// Make command idempotent
+		// Make command idempotent and prepare directories
 		safeCommand := makeCommandIdempotent(command)
+		safeCommand = prepareDirectoriesForCommand(safeCommand)
 
 		ctx.Logger.LogProcessStep(fmt.Sprintf("🔧 Executing command %d/%d: %s", i+1, len(commandPlan.Commands), safeCommand))
 
@@ -973,6 +989,26 @@ Respond with JSON:
 
 	ctx.Logger.LogProcessStep("✅ Shell command todo completed successfully")
 	return nil
+}
+
+// prepareDirectoriesForCommand ensures directories exist before file operations
+func prepareDirectoriesForCommand(command string) string {
+	// Look for commands that create files in directories that might not exist
+	if strings.Contains(command, "cat >") && strings.Contains(command, "/") {
+		// Extract the file path from "cat > path/file.ext"
+		parts := strings.Split(command, "cat >")
+		if len(parts) > 1 {
+			filePart := strings.TrimSpace(parts[1])
+			if spaceIdx := strings.Index(filePart, " "); spaceIdx > 0 {
+				filePart = filePart[:spaceIdx]
+			}
+			if strings.Contains(filePart, "/") {
+				dirPath := filePart[:strings.LastIndex(filePart, "/")]
+				return fmt.Sprintf("mkdir -p %s && %s", dirPath, command)
+			}
+		}
+	}
+	return command
 }
 
 // containsUnsafeCommand performs basic safety checks on shell commands
@@ -1024,14 +1060,173 @@ func validateShellCommand(command string) error {
 		"package main", // Go source code being treated as shell command
 		"import (",     // Go imports as shell command
 		"func main",    // Go function as shell command
-		"<<EOF\n",      // Malformed heredoc
+		"<<EOF\n",      // Malformed heredoc with newline
+		"function ",    // JavaScript/TypeScript function
+		"const ",       // JavaScript/TypeScript const
+		"import React", // React imports
+		"export ",      // ES6 exports
+		"<!DOCTYPE",    // HTML
+		"<html",        // HTML
+		"<?xml",        // XML
 	}
 
 	for _, pattern := range problematicPatterns {
 		if strings.Contains(command, pattern) {
-			return fmt.Errorf("command appears to contain source code instead of shell syntax: %s", command)
+			truncated := strings.TrimSpace(command)
+		if len(truncated) > 50 {
+			truncated = truncated[:50] + "..."
+		}
+		return fmt.Errorf("command appears to contain source code instead of shell syntax: %s", truncated)
 		}
 	}
 
+	// Check for excessively long single commands (likely source code)
+	if len(command) > 2000 && !strings.Contains(command, "&&") && !strings.Contains(command, "||") {
+		return fmt.Errorf("command is suspiciously long and may contain source code: %d characters", len(command))
+	}
+
 	return nil
+}
+
+// executeContinuationTodo handles workflow continuation by generating the next batch of todos
+func executeContinuationTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
+	ctx.Logger.LogProcessStep("🔄 Processing continuation todo - generating next phase")
+	
+	// If --skip-prompt is not set, prompt the user before continuing
+	if !ctx.SkipPrompt {
+		ctx.Logger.LogProcessStep("⏳ Requesting user approval for workflow continuation...")
+		ui.Out().Printf("\n🔄 Workflow Continuation Required\n")
+		ui.Out().Printf("The current phase is complete. Ready to continue with the next set of tasks?\n\n")
+		ui.Out().Printf("Original request: %s\n\n", ctx.UserIntent)
+		
+		// Show completed tasks
+		completedCount := 0
+		for _, completedTodo := range ctx.Todos {
+			if completedTodo.Status == "completed" && completedTodo.Content != todo.Content {
+				completedCount++
+			}
+		}
+		ui.Out().Printf("✅ Completed %d tasks in this phase\n\n", completedCount)
+		
+		ui.Out().Printf("Continue with next phase? (y/N): ")
+		
+		var response string
+		fmt.Scanln(&response)
+		
+		if strings.ToLower(strings.TrimSpace(response)) != "y" {
+			ctx.Logger.LogProcessStep("❌ User chose not to continue workflow")
+			return fmt.Errorf("workflow continuation cancelled by user")
+		}
+		
+		ctx.Logger.LogProcessStep("✅ User approved workflow continuation")
+		ui.Out().Printf("\n🚀 Continuing with next phase...\n\n")
+	}
+	
+	// Extract the workflow context from the current intent and completed todos
+	completedTasks := []string{}
+	for _, completedTodo := range ctx.Todos {
+		if completedTodo.Content != todo.Content { // Don't include the continuation todo itself
+			completedTasks = append(completedTasks, completedTodo.Content)
+		}
+	}
+	
+	// Create a continuation prompt that includes context about what's been done
+	continuationPrompt := fmt.Sprintf(`CONTINUATION WORKFLOW
+
+Original Request: %s
+
+COMPLETED IN PREVIOUS PHASE:
+%s
+
+CONTINUATION TODO: %s
+Description: %s
+
+Based on the original request and what has been completed, generate the NEXT 10 todos to continue this workflow. Focus on the logical next steps that build upon the completed work.
+
+Consider:
+- What components/features are still needed?
+- What files/directories need to be created next?  
+- What configuration or setup steps are missing?
+- What testing or validation needs to happen?
+
+Generate todos that continue naturally from where the previous phase left off.`,
+		ctx.UserIntent,
+		strings.Join(completedTasks, "\n- "),
+		todo.Content,
+		todo.Description)
+
+	// Use the same todo creation logic but with continuation context
+	response, tokenUsage, err := llm.GetLLMResponseWithTools(
+		ctx.Config.OrchestrationModel,
+		[]prompts.Message{{Role: "user", Content: continuationPrompt}},
+		"You are an expert project manager continuing a complex workflow. Generate the next logical set of todos.",
+		ctx.Config,
+		60*time.Second,
+	)
+	
+	if err != nil {
+		return fmt.Errorf("failed to generate continuation todos: %w", err)
+	}
+
+	// Track token usage
+	trackTokenUsage(ctx, tokenUsage, ctx.Config.OrchestrationModel)
+
+	// Parse the new todos from the response
+	newTodos, err := parseTodosFromResponse(response)
+	if err != nil {
+		return fmt.Errorf("failed to parse continuation todos: %w", err)
+	}
+
+	// Add the new todos to the context (they'll be picked up in the next execution cycle)
+	ctx.Todos = append(ctx.Todos, newTodos...)
+	
+	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Generated %d continuation todos for next phase", len(newTodos)))
+	
+	// Mark this continuation todo as completed
+	return nil
+}
+
+// parseTodosFromResponse extracts and parses todos from an LLM response
+func parseTodosFromResponse(response string) ([]TodoItem, error) {
+	// Parse JSON response - handle reasoning model responses that include thinking blocks
+	clean, err := utils.ExtractJSON(response)
+	if err != nil {
+		// Try to extract JSON from the end of the response (after thinking blocks)
+		if lastBracket := strings.LastIndex(response, "["); lastBracket != -1 {
+			potentialJSON := response[lastBracket:]
+			if json.Valid([]byte(potentialJSON)) {
+				clean = potentialJSON
+			} else {
+				return nil, fmt.Errorf("failed to extract valid JSON from response")
+			}
+		} else {
+			return nil, fmt.Errorf("no JSON array found in response")
+		}
+	}
+
+	// Parse todo structures from JSON
+	var todos []struct {
+		Content     string `json:"content"`
+		Description string `json:"description"`
+		Priority    int    `json:"priority"`
+		FilePath    string `json:"file_path"`
+	}
+	if err := json.Unmarshal([]byte(clean), &todos); err != nil {
+		return nil, fmt.Errorf("failed to parse todos JSON: %w", err)
+	}
+
+	// Convert to TodoItem structures
+	var todoItems []TodoItem
+	for _, todo := range todos {
+		todoItems = append(todoItems, TodoItem{
+			ID:          generateTodoID(),
+			Content:     todo.Content,
+			Description: todo.Description,
+			Priority:    todo.Priority,
+			FilePath:    todo.FilePath,
+			Status:      "pending",
+		})
+	}
+
+	return todoItems, nil
 }

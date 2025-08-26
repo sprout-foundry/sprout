@@ -70,6 +70,7 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 		TotalPromptTokens:     0,
 		TotalCompletionTokens: 0,
 		TotalCost:             0.0,
+		SkipPrompt:            skipPrompt,
 	}
 
 	// Ensure token usage and cost are always displayed, even on failure

@@ -40,6 +40,9 @@ type SimplifiedAgentContext struct {
 	TotalPromptTokens     int
 	TotalCompletionTokens int
 	TotalCost             float64
+	
+	// User interaction settings
+	SkipPrompt bool
 }
 
 // IntentType represents the type of user intent

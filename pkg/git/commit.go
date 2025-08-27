@@ -88,9 +88,15 @@ func CheckStagedFilesForSecurityCredentials(logger *utils.Logger, cfg *config.Co
 	return securityIssuesFound
 }
 
-// PerformGitCommit executes the git commit command
+// PerformGitCommit executes the git commit command using HEREDOC format for proper formatting
 func PerformGitCommit(message string) error {
-	cmd := exec.Command("git", "commit", "-m", message)
+	// Use HEREDOC format to ensure proper commit message formatting
+	cmdString := fmt.Sprintf(`git commit -m "$(cat <<'EOF'
+%s
+EOF
+)"`, message)
+	
+	cmd := exec.Command("bash", "-c", cmdString)
 	cmd.Stdout = nil // Don't capture stdout
 	cmd.Stderr = nil // Don't capture stderr
 	if err := cmd.Run(); err != nil {
@@ -161,6 +167,29 @@ func CleanCommitMessage(message string) string {
 		// Remove language specifier if present (e.g., "git")
 		message = strings.TrimPrefix(message, "git\n")
 		message = strings.TrimSpace(message)
+	}
+
+	// Normalize commit message format: ensure exactly one blank line between title and description
+	lines := strings.Split(message, "\n")
+	if len(lines) > 2 {
+		// Find the first non-empty line after the title (index 0)
+		titleLine := strings.TrimSpace(lines[0])
+		var descriptionStart int = -1
+		
+		// Find where the description starts (first non-empty line after title)
+		for i := 1; i < len(lines); i++ {
+			if strings.TrimSpace(lines[i]) != "" {
+				descriptionStart = i
+				break
+			}
+		}
+		
+		if descriptionStart > 1 {
+			// There are multiple empty lines between title and description
+			// Reconstruct with exactly one blank line
+			description := strings.Join(lines[descriptionStart:], "\n")
+			message = titleLine + "\n\n" + description
+		}
 	}
 
 	return message

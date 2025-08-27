@@ -98,7 +98,7 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 			generatedMessage = git.CleanCommitMessage(generatedMessage)
 
 			if commitDryRun {
-				logger.LogProcessStep(fmt.Sprintf("DRY RUN - Generated commit message:\n%s", generatedMessage))
+				fmt.Printf("DRY RUN - Generated commit message:\n%s\n", generatedMessage)
 				return
 			}
 

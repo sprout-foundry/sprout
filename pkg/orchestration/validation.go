@@ -314,7 +314,7 @@ func (o *MultiAgentOrchestrator) validateStepConfiguration(step *types.Orchestra
 
 // printProgressTable displays a formatted progress table
 func (o *MultiAgentOrchestrator) printProgressTable() {
-	if ui.Enabled() {
+	if ui.IsUIActive() {
 		ui.Out().Print("\n📊 Orchestration Progress\n")
 		ui.Out().Print("═══════════════════════════════════════\n")
 

@@ -51,6 +51,10 @@ type SimplifiedAgentContext struct {
 	ProjectContext *ProjectContext
 	TaskIntent     TaskIntent
 	IntentType     IntentType
+
+	// Quality optimization
+	QualityLevel     QualityLevel
+	QualityOptimizer *QualityOptimizer
 }
 
 // IntentType represents the type of user intent

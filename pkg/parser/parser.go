@@ -139,7 +139,7 @@ func getExtensionForLanguage(lang string) string {
 		"yml":        "yml",
 		"xml":        "xml",
 	}
-	
+
 	if ext, exists := extensions[lang]; exists {
 		return ext
 	}
@@ -226,7 +226,6 @@ func tryContentBasedExtraction(response string) map[string]string {
 			filename := generateDefaultFilename(lang, response)
 			if filename != "" {
 				result[filename] = response
-				fmt.Printf("Content-based extraction: treating entire response as %s code\n", lang)
 			}
 		}
 	}
@@ -287,26 +286,20 @@ func detectLanguageFromContent(content string) string {
 }
 
 func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
-	fmt.Printf("=== Parser Debug ===\n")
-	fmt.Printf("Response length: %d characters\n", len(response))
 
 	// First, try to parse as patches (new format)
 	patches, err := GetUpdatedCodeFromPatchResponse(response)
 	if err == nil && len(patches) > 0 {
-		fmt.Printf("Found %d patches in response:\n", len(patches))
 		updatedCode := make(map[string]string)
 		for filename, patch := range patches {
-			fmt.Printf("  - %s (%d hunks)\n", filename, len(patch.Hunks))
 			// For backward compatibility, convert patches to full file content
 			// This allows existing code to work with the new patch format
 			updatedCode[filename] = patchToFullContent(patch, filename)
 		}
-		fmt.Printf("=== End Parser Debug ===\n")
 		return updatedCode, nil
 	}
 
 	// Fall back to original parsing for full file content (old format)
-	fmt.Printf("No patches found, falling back to legacy code block parsing\n")
 	updatedCode := make(map[string]string)
 	var currentFileContent strings.Builder
 	var currentFileName string
@@ -314,7 +307,6 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 	inCodeBlock := false
 
 	lines := strings.Split(response, "\n")
-	fmt.Printf("Split into %d lines\n", len(lines))
 
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
@@ -356,7 +348,6 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 					currentFileName = defaultFilename
 					currentLanguage = lang
 					currentFileContent.Reset()
-					fmt.Printf("Using default filename: %s for %s code block\n", defaultFilename, lang)
 					continue
 				} else {
 					// No filename could be determined - return error asking LLM to specify filename
@@ -371,9 +362,7 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 
 				// Check for partial content markers in the file
 				if IsPartialResponse(fileContent) {
-					fmt.Printf("⚠️  WARNING: Detected partial content in file %s\n", currentFileName)
-					fmt.Printf("File contains partial content markers that indicate incomplete code.\n")
-					fmt.Printf("This may cause issues when applying changes.\n")
+					// Note: Partial content detected - may cause issues when applying changes
 				}
 
 				updatedCode[currentFileName] = fileContent
@@ -385,28 +374,16 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 		}
 	}
 
-	fmt.Printf("Found %d code blocks:\n", len(updatedCode))
-	for filename, content := range updatedCode {
-		fmt.Printf("  - %s (%d chars)\n", filename, len(content))
-		// Check if any file seems suspiciously short (possible truncation)
-		if len(content) < 50 {
-			fmt.Printf("⚠️  WARNING: File %s is very short (%d chars) - possible truncation\n", filename, len(content))
-		}
-	}
 	// Final fallback: if no code blocks were found, check if the entire response
 	// looks like structured code content that we can extract
 	if len(updatedCode) == 0 {
-		fmt.Printf("No code blocks found, trying content-based fallback...\n")
 		fallbackContent := tryContentBasedExtraction(response)
 		if len(fallbackContent) > 0 {
-			fmt.Printf("Content-based fallback found %d potential files\n", len(fallbackContent))
 			for filename, content := range fallbackContent {
 				updatedCode[filename] = content
 			}
 		}
 	}
-
-	fmt.Printf("=== End Parser Debug ===\n")
 
 	return updatedCode, nil
 }
@@ -425,7 +402,6 @@ func patchToFullContent(patch *Patch, filename string) string {
 	if err != nil {
 		// If we can't read the original file, fall back to the old behavior
 		// but with improved reconstruction
-		fmt.Printf("Warning: Could not read original file %s: %v\n", filename, err)
 		return fallbackReconstruction(patch)
 	}
 
@@ -433,17 +409,9 @@ func patchToFullContent(patch *Patch, filename string) string {
 	updatedContent, err := applyPatchToContent(patch, string(originalContent))
 	if err != nil {
 		// If patch application fails, fall back to the improved reconstruction
-		fmt.Printf("Warning: Failed to apply patch to %s: %v\n", filename, err)
-		fmt.Printf("Debug: Original content length: %d bytes\n", len(originalContent))
-		fmt.Printf("Debug: Patch has %d hunks\n", len(patch.Hunks))
-		for i, hunk := range patch.Hunks {
-			fmt.Printf("Debug: Hunk %d: OldStart=%d, OldLines=%d, NewStart=%d, NewLines=%d\n",
-				i, hunk.OldStart, hunk.OldLines, hunk.NewStart, hunk.NewLines)
-		}
 		return fallbackReconstruction(patch)
 	}
 
-	fmt.Printf("Debug: Successfully applied patch to %s\n", filename)
 	return updatedContent
 }
 
@@ -711,7 +679,6 @@ func GetUpdatedCodeFromPatchResponse(response string) (map[string]*Patch, error)
 		ts := time.Now().Format("20060102_150405")
 		path := fmt.Sprintf(".ledit/debug/llm_patch_response_%s.txt", ts)
 		_ = os.WriteFile(path, []byte(response), 0644)
-		fmt.Printf("Debug: wrote raw patch response to %s (len=%d)\n", path, len(response))
 	}
 	patches := make(map[string]*Patch)
 	var currentPatchContent strings.Builder
@@ -740,7 +707,6 @@ func GetUpdatedCodeFromPatchResponse(response string) (map[string]*Patch, error)
 			if currentFilename != "" && currentPatchContent.Len() > 0 {
 				patch, err := ParsePatchFromDiff(currentPatchContent.String(), currentFilename)
 				if err != nil {
-					fmt.Printf("⚠️  WARNING: Failed to parse patch for %s: %v\n", currentFilename, err)
 					continue
 				}
 				patches[currentFilename] = patch
@@ -750,7 +716,6 @@ func GetUpdatedCodeFromPatchResponse(response string) (map[string]*Patch, error)
 					ts := time.Now().Format("20060102_150405")
 					fpath := fmt.Sprintf(".ledit/debug/diff_%s_%s.diff", ts, strings.ReplaceAll(currentFilename, string(os.PathSeparator), "_"))
 					_ = os.WriteFile(fpath, []byte(currentPatchContent.String()), 0644)
-					fmt.Printf("Debug: wrote parsed diff for %s to %s\n", currentFilename, fpath)
 				}
 			}
 			currentFilename = ""
@@ -978,8 +943,7 @@ func applyHunkChanges(lines []string, hunk Hunk, matchStart int) []string {
 	if capacity < 0 {
 		// Log the issue for debugging
 		if os.Getenv("LEDIT_DEBUG_PATCH") == "1" {
-			fmt.Printf("DEBUG: Negative capacity detected in applyHunkChanges: len(lines)=%d, consumed=%d, len(updated)=%d\n",
-				len(lines), consumed, len(updated))
+			// Debug logging (env var controlled)
 		}
 		capacity = 0 // Fallback to 0 if calculation is negative
 	}

@@ -19,8 +19,13 @@ import (
 // RunSimplifiedAgent: New simplified agent workflow
 func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error {
 	startTime := time.Now()
-	ui.Out().Print("🤖 Simplified Agent Mode\n")
-	ui.Out().Printf("🎯 Intent: %s\n", userIntent)
+	// Show mode info - more verbose in console, minimal in UI
+	if ui.IsUIActive() {
+		ui.Logf("🎯 %s", userIntent)
+	} else {
+		ui.Out().Print("🤖 Simplified Agent Mode\n")
+		ui.Out().Printf("🎯 Intent: %s\n", userIntent)
+	}
 
 	cfg, err := config.LoadOrInitConfig(skipPrompt)
 	if err != nil {
@@ -32,6 +37,11 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 	}
 	cfg.SkipPrompt = skipPrompt
 	cfg.FromAgent = true
+
+	// Publish the actual orchestration model to UI header
+	if ui.IsUIActive() {
+		ui.PublishModel(cfg.EditingModel)
+	}
 
 	// Set environment variables to ensure non-interactive mode for all operations
 	os.Setenv("LEDIT_FROM_AGENT", "1")
@@ -74,9 +84,9 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 		TotalCost:             0.0,
 		SkipPrompt:            skipPrompt,
 		// Enhanced context awareness
-		ProjectContext:        projectContext,
-		TaskIntent:           taskIntent,
-		IntentType:           intentType,
+		ProjectContext: projectContext,
+		TaskIntent:     taskIntent,
+		IntentType:     intentType,
 	}
 
 	// Ensure token usage and cost are always displayed, even on failure
@@ -91,10 +101,18 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 			}
 
 			duration := time.Since(startTime)
-			ui.Out().Print("\n📊 Agent Usage Summary\n")
-			ui.Out().Printf("├─ Duration: %.2f seconds\n", duration.Seconds())
-			ui.Out().Printf("├─ Total tokens used: %s\n", formatTokenCount(ctx.TotalTokensUsed))
-			ui.Out().Printf("└─ Total cost: $%s\n", formatCost(ctx.TotalCost))
+
+			// Send token/cost info to UI header, show summary only in console
+			if ui.IsUIActive() {
+				// Update UI with final token/cost info - header will show it
+				ui.PublishProgressWithTokens(0, 0, ctx.TotalTokensUsed, ctx.TotalCost, ctx.Config.EditingModel, []ui.ProgressRow{})
+			} else {
+				// Console mode - show detailed summary
+				ui.Out().Print("\n📊 Agent Usage Summary\n")
+				ui.Out().Printf("├─ Duration: %.2f seconds\n", duration.Seconds())
+				ui.Out().Printf("├─ Total tokens used: %s\n", formatTokenCount(ctx.TotalTokensUsed))
+				ui.Out().Printf("└─ Total cost: $%s\n", formatCost(ctx.TotalCost))
+			}
 		}
 	}()
 
@@ -246,15 +264,20 @@ func handleCodeUpdate(ctx *SimplifiedAgentContext, startTime time.Time) error {
 			if err != nil {
 				ctx.Logger.LogError(fmt.Errorf("failed to write summary file: %w", err))
 			} else {
-				ui.Out().Printf("📄 Analysis summary saved to: %s\n", summaryPath)
+				// Only show file path in console mode - UI users don't need this detail
+				ui.PrintfContext(false, "📄 Analysis summary saved to: %s\n", summaryPath)
 			}
 		}
 	}
 
-	// Final summary
-	ui.Out().Print("\n✅ Simplified Agent completed successfully\n")
-	ui.Out().Printf("├─ Todos completed: %d\n", len(ctx.Todos))
-	ui.Out().Printf("└─ Status: All changes validated\n")
+	// Final summary - detailed in console, minimal in UI
+	if ui.IsUIActive() {
+		ui.Log("✅ Agent completed successfully")
+	} else {
+		ui.Out().Print("\n✅ Simplified Agent completed successfully\n")
+		ui.Out().Printf("├─ Todos completed: %d\n", len(ctx.Todos))
+		ui.Out().Printf("└─ Status: All changes validated\n")
+	}
 
 	return nil
 }
@@ -432,13 +455,13 @@ Respond with JSON:
 	return nil
 }
 
-// handleDocumentation handles documentation generation tasks
+// handleDocumentation handles documentation generation tasks with parallel execution
 func handleDocumentation(ctx *SimplifiedAgentContext, startTime time.Time) error {
 	ctx.Logger.LogProcessStep("📚 Documentation task detected")
-	
+
 	// Use the same workflow as code update but with documentation-focused todos
 	ctx.Logger.LogProcessStep("🧭 Analyzing documentation requirements and creating plan...")
-	
+
 	// Create documentation-specific todos
 	err := createDocumentationTodos(ctx)
 	if err != nil {
@@ -452,16 +475,63 @@ func handleDocumentation(ctx *SimplifiedAgentContext, startTime time.Time) error
 
 	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Created %d documentation todos", len(ctx.Todos)))
 
-	// Execute documentation todos
-	return executeTodosWithFallback(ctx)
+	// Separate todos into parallel and sequential groups
+	parallelTodos := []TodoItem{}
+	sequentialTodos := []TodoItem{}
+
+	for _, todo := range ctx.Todos {
+		executionType := analyzeTodoExecutionType(todo.Content, todo.Description)
+		// Analysis todos and documentation edits can run in parallel
+		if executionType == ExecutionTypeAnalysis || (executionType == ExecutionTypeDirectEdit && isDocumentationTodo(todo)) {
+			parallelTodos = append(parallelTodos, todo)
+		} else {
+			sequentialTodos = append(sequentialTodos, todo)
+		}
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("📊 Execution plan: %d parallel, %d sequential todos", len(parallelTodos), len(sequentialTodos)))
+
+	// Execute parallel todos first if any
+	if len(parallelTodos) > 0 && canExecuteInParallel(parallelTodos) {
+		ctx.Logger.LogProcessStep("🚀 Starting parallel execution for documentation tasks")
+		err := executeParallelTodos(ctx, parallelTodos)
+		if err != nil {
+			ctx.Logger.LogError(fmt.Errorf("parallel execution failed: %w", err))
+			// Fall back to sequential execution for failed todos
+			ctx.Logger.LogProcessStep("⚠️ Falling back to sequential execution")
+			return executeTodosWithFallback(ctx)
+		}
+	}
+
+	// Execute remaining sequential todos
+	if len(sequentialTodos) > 0 {
+		ctx.Logger.LogProcessStep("📝 Executing remaining sequential todos")
+		// Update context with only sequential todos
+		originalTodos := ctx.Todos
+		ctx.Todos = sequentialTodos
+		err := executeTodosWithFallback(ctx)
+		// Restore all todos for final reporting
+		ctx.Todos = originalTodos
+		if err != nil {
+			return err
+		}
+	}
+
+	// Final summary
+	ui.Out().Print("\n✅ Documentation generation completed successfully\n")
+	ui.Out().Printf("├─ Parallel todos: %d\n", len(parallelTodos))
+	ui.Out().Printf("├─ Sequential todos: %d\n", len(sequentialTodos))
+	ui.Out().Printf("└─ Total todos: %d\n", len(ctx.Todos))
+
+	return nil
 }
 
 // handleCreation handles file/content creation tasks
 func handleCreation(ctx *SimplifiedAgentContext, startTime time.Time) error {
 	ctx.Logger.LogProcessStep("🆕 Creation task detected")
-	
+
 	ctx.Logger.LogProcessStep("🧭 Analyzing creation requirements and creating plan...")
-	
+
 	// Create creation-specific todos
 	err := createCreationTodos(ctx)
 	if err != nil {
@@ -482,9 +552,9 @@ func handleCreation(ctx *SimplifiedAgentContext, startTime time.Time) error {
 // handleAnalysis handles analysis-only tasks
 func handleAnalysis(ctx *SimplifiedAgentContext, startTime time.Time) error {
 	ctx.Logger.LogProcessStep("🔍 Analysis task detected")
-	
+
 	ctx.Logger.LogProcessStep("🧭 Analyzing analysis requirements and creating plan...")
-	
+
 	// Create analysis-specific todos
 	err := createAnalysisTodos(ctx)
 	if err != nil {
@@ -506,7 +576,7 @@ func handleAnalysis(ctx *SimplifiedAgentContext, startTime time.Time) error {
 func executeTodosWithFallback(ctx *SimplifiedAgentContext) error {
 	completedCount := 0
 	maxRetries := 2
-	
+
 	for {
 		// Select next pending todo by dynamic score
 		nextIdx := selectNextTodoIndex(ctx)
@@ -523,7 +593,7 @@ func executeTodosWithFallback(ctx *SimplifiedAgentContext) error {
 
 		var err error
 		retry := 0
-		
+
 		// Execute with progressive fallback strategies
 		for retry <= maxRetries {
 			if retry == 0 {
@@ -538,19 +608,19 @@ func executeTodosWithFallback(ctx *SimplifiedAgentContext) error {
 				ctx.Logger.LogProcessStep("🔄 Previous attempts failed, trying simplest approach...")
 				err = executeTodoWithSimpleStrategy(ctx, &ctx.Todos[nextIdx])
 			}
-			
+
 			if err == nil {
 				break // Success!
 			}
-			
+
 			retry++
 			ctx.Logger.LogProcessStep(fmt.Sprintf("⚠️ Attempt %d failed: %v", retry, err))
 		}
-		
+
 		if err != nil {
 			ctx.Todos[nextIdx].Status = "failed"
 			ctx.Logger.LogError(fmt.Errorf("todo failed after %d attempts: %w", maxRetries+1, err))
-			
+
 			// Don't fail completely - mark as failed and continue with other todos
 			ctx.Logger.LogProcessStep("⏭️ Continuing with remaining todos...")
 			continue
@@ -585,14 +655,14 @@ func executeTodoWithFallbackStrategy(ctx *SimplifiedAgentContext, todo *TodoItem
 		// Force creation strategy
 		originalTaskIntent := ctx.TaskIntent
 		ctx.TaskIntent = TaskIntentCreation
-		
+
 		err := executeTodoWithSmartRetry(ctx, todo)
-		
+
 		// Restore original task intent
 		ctx.TaskIntent = originalTaskIntent
 		return err
 	}
-	
+
 	// For other tasks, try the full edit strategy
 	return executeTodoWithSmartRetry(ctx, todo)
 }
@@ -604,7 +674,7 @@ func executeTodoWithSimpleStrategy(ctx *SimplifiedAgentContext, todo *TodoItem) 
 		{Role: "system", Content: "You are a helpful assistant. Provide a clear, direct response to the user's request."},
 		{Role: "user", Content: fmt.Sprintf("Task: %s\nDescription: %s", todo.Content, todo.Description)},
 	}
-	
+
 	response, tokenUsage, err := llm.GetLLMResponse(
 		ctx.Config.EditingModel,
 		messages,
@@ -612,19 +682,19 @@ func executeTodoWithSimpleStrategy(ctx *SimplifiedAgentContext, todo *TodoItem) 
 		ctx.Config,
 		60*time.Second,
 	)
-	
+
 	if tokenUsage != nil {
 		trackTokenUsage(ctx, tokenUsage, ctx.Config.EditingModel)
 	}
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// Store the response as analysis result
 	ctx.AnalysisResults[todo.ID+"_simple_result"] = response
 	ctx.Logger.LogProcessStep(fmt.Sprintf("📝 Simple execution completed: %s", response[:min(100, len(response))]))
-	
+
 	return nil
 }
 

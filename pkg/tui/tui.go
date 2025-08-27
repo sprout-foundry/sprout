@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/ui"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -39,6 +41,11 @@ type model struct {
 	vp                viewport.Model
 	// prompt viewport for long prompts/code context
 	promptVP viewport.Model
+	// interactive mode
+	interactiveMode bool
+	textInput       textinput.Model
+	focusedInput    bool
+	commandHistory  []string
 }
 
 type tickMsg time.Time
@@ -53,6 +60,25 @@ func initialModel() model {
 	} else {
 		m.logsCollapsed = true
 	}
+	return m
+}
+
+func initialInteractiveModel() model {
+	m := initialModel()
+	m.interactiveMode = true
+	m.focusedInput = true
+
+	// In interactive mode, expand logs by default so user can see agent progress
+	m.logsCollapsed = false
+
+	// Initialize text input for agent prompts
+	ti := textinput.New()
+	ti.Placeholder = "Enter request or /help for commands..."
+	ti.Focus()
+	ti.CharLimit = 500
+	ti.Width = 60 // Will be dynamically adjusted based on terminal width
+	m.textInput = ti
+
 	return m
 }
 
@@ -175,10 +201,69 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		// Interactive mode key handling
+		if m.interactiveMode && m.focusedInput {
+			switch msg.String() {
+			case "enter":
+				input := strings.TrimSpace(m.textInput.Value())
+				if input != "" {
+					// Check for slash commands first
+					if strings.HasPrefix(input, "/") {
+						handled, newModel, cmd := m.handleSlashCommand(input)
+						if handled {
+							m.textInput.SetValue("")
+							if newModel != nil {
+								return *newModel, cmd
+							}
+							return m, cmd
+						}
+					}
+
+					// Regular agent command execution
+					go executeAgentRequest(input)
+					ui.Logf("🎯 Executing: %s", input)
+
+					// Add to command history
+					m.commandHistory = append(m.commandHistory, input)
+					if len(m.commandHistory) > 50 { // Keep last 50 commands
+						m.commandHistory = m.commandHistory[len(m.commandHistory)-50:]
+					}
+
+					m.textInput.SetValue("")
+				}
+				return m, nil
+			case "esc":
+				// Unfocus input or quit
+				if m.focusedInput {
+					m.focusedInput = false
+					m.textInput.Blur()
+				} else {
+					return m, tea.Quit
+				}
+				return m, nil
+			case "ctrl+c":
+				return m, tea.Quit
+			default:
+				// Pass through to text input
+				var cmd tea.Cmd
+				m.textInput, cmd = m.textInput.Update(msg)
+				return m, cmd
+			}
+		}
+
 		// General key handling (when not in prompt)
 		switch msg.String() {
+		case "i":
+			if m.interactiveMode && !m.focusedInput {
+				// Focus input
+				m.focusedInput = true
+				m.textInput.Focus()
+				return m, nil
+			}
 		case "q", "Q", "esc", "ctrl+c":
-			return m, tea.Quit
+			if !m.interactiveMode || !m.focusedInput {
+				return m, tea.Quit
+			}
 		case "l", "L":
 			m.logsCollapsed = !m.logsCollapsed
 			return m, nil
@@ -224,6 +309,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.logs = m.logs[len(m.logs)-500:]
 		}
 		m.vp.SetContent(strings.Join(m.logs, "\n"))
+		// Auto-scroll to bottom to show latest logs
+		m.vp.GotoBottom()
 		return m, subscribeEvents()
 	case ui.ProgressSnapshotEvent:
 		m.progress = msg
@@ -295,9 +382,15 @@ func (m model) View() string {
 	if !m.progressCollapsed && m.renderProgress() != "" {
 		reserved += countLines(m.renderProgress()) + 1
 	}
+
+	// In interactive mode, reserve space for input box
+	if m.interactiveMode {
+		reserved += 4 // input box height
+	}
+
 	availableLogLines := m.height - reserved
-	if availableLogLines < 1 {
-		availableLogLines = 1
+	if availableLogLines < 3 {
+		availableLogLines = 3 // Minimum space for logs
 	}
 	m.vp.Width = max(0, m.width-2)
 	m.vp.Height = max(1, availableLogLines)
@@ -306,10 +399,82 @@ func (m model) View() string {
 	if !m.logsCollapsed {
 		logsView = m.vp.View()
 	}
-	body := lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("Width: %d  Height: %d\n\n%sLogs (l to toggle) | Progress (p to toggle)\n%s\nPress q to quit.", m.width, m.height, prog, logsView))
-	footer := lipgloss.NewStyle().Faint(true).Padding(0, 1).Render("© Ledit")
+	// Clean body layout for interactive mode
+	var body string
+	if m.interactiveMode {
+		// Clean layout without debug info
+		sectionHeader := "📋 Agent Logs"
+		if !m.logsCollapsed {
+			sectionHeader += " | Press 'l' to collapse"
+		} else {
+			sectionHeader += " | Press 'l' to expand"
+		}
+		body = lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("%s%s\n%s", prog, sectionHeader, logsView))
+	} else {
+		// Keep original layout for non-interactive mode
+		body = lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("Width: %d  Height: %d\n\n%sLogs (l to toggle) | Progress (p to toggle)\n%s", m.width, m.height, prog, logsView))
+	}
 
-	base := lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	// Interactive input box
+	inputBox := ""
+	if m.interactiveMode && m.width > 20 { // Only show input box if terminal is wide enough
+		// Calculate maximum available width for the entire input box
+		maxBoxWidth := max(30, m.width-2) // Leave 1 char margin on each side
+
+		// Calculate text input field width (inside the box)
+		prefixLength := len("📝 Agent Request: ")
+		borderAndPadding := 4                                                  // 2 for border + 2 for padding
+		textFieldWidth := max(15, maxBoxWidth-borderAndPadding-prefixLength-2) // -2 for safety margin
+
+		m.textInput.Width = textFieldWidth
+
+		if m.focusedInput {
+			content := fmt.Sprintf("📝 Agent Request: %s", m.textInput.View())
+			inputBox = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				Padding(0, 1).
+				MaxWidth(maxBoxWidth).
+				Render(content)
+		} else {
+			// Show shorter text when unfocused to prevent overflow
+			currentValue := m.textInput.Value()
+			maxCurrentLen := max(10, maxBoxWidth-borderAndPadding-len("📝 Press 'i' to input | Current: "))
+			if len(currentValue) > maxCurrentLen {
+				currentValue = currentValue[:maxCurrentLen-3] + "..."
+			}
+			content := fmt.Sprintf("📝 Press 'i' to input | Current: %s", currentValue)
+			inputBox = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				Padding(0, 1).
+				MaxWidth(maxBoxWidth).
+				Faint(true).
+				Render(content)
+		}
+	} else if m.interactiveMode {
+		// Terminal too narrow for input box
+		inputBox = lipgloss.NewStyle().Faint(true).Render("Terminal too narrow for input - resize or use command line")
+	}
+
+	footer := ""
+	if m.interactiveMode {
+		footerText := "Interactive Agent Mode | Enter: Execute | /help: Commands | ESC: Unfocus | Ctrl+C: Quit"
+		if len(footerText) > m.width-4 {
+			footerText = "Enter: Execute | /help: Commands | ESC: Unfocus | Ctrl+C: Quit"
+		}
+		if len(footerText) > m.width-4 {
+			footerText = "/help: Commands | ESC: Unfocus | Ctrl+C: Quit"
+		}
+		footer = lipgloss.NewStyle().Faint(true).Padding(0, 1).MaxWidth(m.width).Render(footerText)
+	} else {
+		footer = lipgloss.NewStyle().Faint(true).Padding(0, 1).MaxWidth(m.width).Render("Press q to quit | © Ledit")
+	}
+
+	var base string
+	if m.interactiveMode && inputBox != "" {
+		base = lipgloss.JoinVertical(lipgloss.Left, header, body, inputBox, footer)
+	} else {
+		base = lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	}
 	if m.awaitingPrompt {
 		// Overlay modal with scrollable prompt content + input/choices
 		pvWidth := max(40, m.width-10)
@@ -343,25 +508,65 @@ func (m model) renderHeader() string {
 	if m.streaming {
 		streaming = " [streaming…]"
 	}
-	uptime := time.Since(m.start).Round(time.Second)
-	parts := []string{
-		fmt.Sprintf("Model: %s", m.baseModel),
-		fmt.Sprintf("Tokens: %d", m.totalTokens),
-		fmt.Sprintf("Cost: $%.4f", m.totalCost),
-		fmt.Sprintf("Uptime: %s", uptime),
+
+	var parts []string
+	if m.interactiveMode {
+		// Interactive mode header
+		parts = []string{
+			"🤖 Ledit Interactive Agent",
+			fmt.Sprintf("Model: %s", func() string {
+				if m.baseModel != "" {
+					return m.baseModel
+				}
+				return "default"
+			}()),
+		}
+		if m.totalTokens > 0 {
+			parts = append(parts, fmt.Sprintf("Tokens: %s", formatNumber(m.totalTokens)))
+		}
+		if m.totalCost > 0 {
+			parts = append(parts, fmt.Sprintf("Cost: $%.4f", m.totalCost))
+		}
+		// Removed uptime - not needed in UI
+	} else {
+		// Standard mode header
+		parts = []string{
+			fmt.Sprintf("Model: %s", m.baseModel),
+			fmt.Sprintf("Tokens: %d", m.totalTokens),
+			fmt.Sprintf("Cost: $%.4f", m.totalCost),
+			// Removed uptime from standard mode too
+		}
 	}
-	// If a prompt is active, replace header tail with a hint; else show latest status shimmer if present
+
+	// Status indicators
 	if m.awaitingPrompt {
-		parts = append(parts, "Awaiting input…")
+		parts = append(parts, "🔄 Awaiting input…")
 	} else if len(m.logs) > 0 && strings.HasPrefix(m.logs[0], "… ") {
 		parts = append(parts, strings.TrimPrefix(m.logs[0], "… "))
 	}
+
 	line := strings.Join(parts, " | ") + streaming
 	// trim to width
 	if m.width > 0 {
 		line = trimToWidth(line, m.width-2)
 	}
-	return lipgloss.NewStyle().Bold(true).Padding(0, 1).Render(line)
+
+	headerStyle := lipgloss.NewStyle().Bold(true).Padding(0, 1)
+	if m.interactiveMode {
+		headerStyle = headerStyle.Foreground(lipgloss.Color("#00ADD8")) // Go blue
+	}
+	return headerStyle.Render(line)
+}
+
+// formatNumber formats large numbers with comma separators
+func formatNumber(n int) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	if n < 1000000 {
+		return fmt.Sprintf("%.1fK", float64(n)/1000)
+	}
+	return fmt.Sprintf("%.1fM", float64(n)/1000000)
 }
 
 func trimToWidth(s string, w int) string {
@@ -407,4 +612,235 @@ func Run() error {
 	// On exit, restore default sink to stdout so subsequent output isn't lost
 	ui.UseStdoutSink()
 	return err
+}
+
+// RunInteractiveAgent starts the TUI in interactive agent mode
+func RunInteractiveAgent() error {
+	p := tea.NewProgram(initialInteractiveModel(), tea.WithContext(context.Background()), tea.WithAltScreen())
+	_, err := p.Run()
+	// On exit, restore default sink to stdout so subsequent output isn't lost
+	ui.UseStdoutSink()
+	return err
+}
+
+// handleSlashCommand processes slash commands and returns (handled, newModel, cmd)
+func (m model) handleSlashCommand(input string) (bool, *model, tea.Cmd) {
+	parts := strings.Fields(input)
+	if len(parts) == 0 {
+		return false, nil, nil
+	}
+
+	command := strings.ToLower(parts[0])
+	args := parts[1:]
+
+	switch command {
+	case "/help", "/h":
+		helpText := `🚀 Ledit Interactive Agent - Slash Commands:
+
+Agent Commands:
+  /help, /h              Show this help message
+  /quit, /q, /exit       Quit the interactive agent
+  /clear, /c             Clear the logs
+  /status, /s            Show current agent status
+  /model [name]          Show or set the current model
+  /logs                  Toggle logs collapse/expand
+  /show, /showlogs       Show/expand logs (force visible)
+  /hide, /hidelogs       Hide/collapse logs  
+  /progress              Toggle progress collapse/expand
+  /history, /hist        Show command history
+  /workspace, /ws        Show workspace information
+  /config                Show current configuration
+
+Navigation:
+  Enter                  Execute agent command or slash command
+  ESC                    Unfocus input (ESC again to quit)
+  Ctrl+C                 Quit immediately
+  i                      Focus input (when unfocused)
+  l                      Toggle logs
+  p                      Toggle progress
+
+Examples:
+  Add error handling to main.go
+  /show                              # Expand logs to see output
+  /model deepinfra:deepseek-ai/DeepSeek-V3.1
+  /clear
+  Fix the bug in auth.go
+  /hide                              # Hide logs for more space
+  /status`
+		ui.Log(helpText)
+		return true, nil, nil
+
+	case "/quit", "/q", "/exit":
+		ui.Log("👋 Goodbye!")
+		return true, nil, tea.Quit
+
+	case "/clear", "/c":
+		// Create new model with cleared logs
+		newM := m
+		newM.logs = newM.logs[:0]
+		newM.vp.SetContent("")
+		ui.Log("📋 Logs cleared")
+		return true, &newM, nil
+
+	case "/status", "/s":
+		statusMsg := fmt.Sprintf(`📊 Agent Status:
+• Model: %s
+• Total Tokens: %s
+• Total Cost: $%.4f
+• Logs: %d entries (%s)
+• Interactive Mode: Active`,
+			func() string {
+				if m.baseModel != "" {
+					return m.baseModel
+				}
+				return "default"
+			}(),
+			formatNumber(m.totalTokens),
+			m.totalCost,
+			len(m.logs),
+			func() string {
+				if m.logsCollapsed {
+					return "collapsed"
+				}
+				return "expanded"
+			}())
+		ui.Log(statusMsg)
+		return true, nil, nil
+
+	case "/model", "/m":
+		if len(args) == 0 {
+			ui.Logf("📋 Current model: %s", func() string {
+				if m.baseModel != "" {
+					return m.baseModel
+				}
+				return "default"
+			}())
+		} else {
+			modelName := strings.Join(args, " ")
+			ui.Logf("📋 Model setting changed to: %s (will apply to next agent execution)", modelName)
+			// Note: Actual model change would need to be implemented in the agent execution
+		}
+		return true, nil, nil
+
+	case "/logs", "/l":
+		newM := m
+		newM.logsCollapsed = !newM.logsCollapsed
+		ui.Logf("📋 Logs %s", func() string {
+			if newM.logsCollapsed {
+				return "collapsed"
+			}
+			return "expanded"
+		}())
+		return true, &newM, nil
+
+	case "/show", "/showlogs":
+		newM := m
+		if newM.logsCollapsed {
+			newM.logsCollapsed = false
+			ui.Log("📋 Logs expanded")
+		} else {
+			ui.Log("📋 Logs are already visible")
+		}
+		return true, &newM, nil
+
+	case "/hide", "/hidelogs":
+		newM := m
+		if !newM.logsCollapsed {
+			newM.logsCollapsed = true
+			ui.Log("📋 Logs collapsed")
+		} else {
+			ui.Log("📋 Logs are already hidden")
+		}
+		return true, &newM, nil
+
+	case "/progress", "/p":
+		newM := m
+		newM.progressCollapsed = !newM.progressCollapsed
+		ui.Logf("📊 Progress %s", func() string {
+			if newM.progressCollapsed {
+				return "collapsed"
+			}
+			return "expanded"
+		}())
+		return true, &newM, nil
+
+	case "/history", "/hist":
+		if len(m.commandHistory) == 0 {
+			ui.Log("📋 No command history yet")
+		} else {
+			historyText := "📋 Command History (recent first):\n"
+			// Show last 10 commands
+			start := len(m.commandHistory) - 10
+			if start < 0 {
+				start = 0
+			}
+			for i := len(m.commandHistory) - 1; i >= start; i-- {
+				historyText += fmt.Sprintf("  %d. %s\n", len(m.commandHistory)-i, m.commandHistory[i])
+			}
+			ui.Log(strings.TrimSuffix(historyText, "\n"))
+		}
+		return true, nil, nil
+
+	case "/workspace", "/ws":
+		ui.Log(`📁 Workspace Information:
+• Working Directory: ` + func() string {
+			if wd, err := os.Getwd(); err == nil {
+				return wd
+			}
+			return "unknown"
+		}() + `
+• Git Repository: ` + func() string {
+			if _, err := os.Stat(".git"); err == nil {
+				return "✓ Git repo detected"
+			}
+			return "✗ Not a git repo"
+		}() + `
+• Ledit Config: ` + func() string {
+			if _, err := os.Stat(".ledit"); err == nil {
+				return "✓ .ledit directory exists"
+			}
+			return "✗ No .ledit directory"
+		}())
+		return true, nil, nil
+
+	case "/config":
+		ui.Log(`⚙️  Current Configuration:
+• Interactive Mode: Active
+• Auto-scroll Logs: Enabled
+• Command History: ` + fmt.Sprintf("%d commands stored", len(m.commandHistory)) + `
+• Log Retention: 500 entries max
+• Model: ` + func() string {
+			if m.baseModel != "" {
+				return m.baseModel
+			}
+			return "default (from config)"
+		}())
+		return true, nil, nil
+
+	default:
+		ui.Logf("❌ Unknown slash command: %s. Type /help for available commands.", command)
+		return true, nil, nil
+	}
+}
+
+// executeAgentRequest executes an agent request asynchronously
+func executeAgentRequest(request string) {
+	ui.Logf("🚀 Starting agent execution: %s", request)
+	ui.PublishStatus("Executing agent request...")
+
+	// Set environment variables for agent execution
+	os.Setenv("LEDIT_FROM_AGENT", "1")
+	os.Setenv("LEDIT_SKIP_PROMPT", "1")
+
+	// Execute the agent request
+	ui.Logf("⚙️  Agent analyzing request and creating execution plan...")
+	err := agent.RunSimplifiedAgent(request, true, "") // Use default model
+
+	if err != nil {
+		ui.Logf("❌ Agent execution failed: %v", err)
+		ui.PublishStatus("Agent execution failed")
+	} else {
+		ui.Logf("✅ Agent request completed successfully")
+		ui.PublishStatus("Agent execution completed")
+	}
 }

@@ -584,9 +584,9 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 	}
 	b.WriteString("\n")
 
-	// Show essential directories and key files for project context  
+	// Show essential directories and key files for project context
 	b.WriteString("\nStructure:\n")
-	
+
 	// Show detected projects first if it's a monorepo
 	if len(workspace.Projects) > 0 {
 		var projectNames []string
@@ -594,7 +594,7 @@ func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string 
 			projectNames = append(projectNames, name)
 		}
 		sort.Strings(projectNames)
-		
+
 		for _, name := range projectNames {
 			project := workspace.Projects[name]
 			b.WriteString(fmt.Sprintf("📦 %s/ (%s %s)\n", project.Path, project.Language, project.Type))

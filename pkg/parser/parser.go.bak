@@ -374,6 +374,7 @@ func GetUpdatedCodeFromResponse(response string) (map[string]string, error) {
 		}
 	}
 
+	}
 	// Final fallback: if no code blocks were found, check if the entire response
 	// looks like structured code content that we can extract
 	if len(updatedCode) == 0 {
@@ -409,6 +410,9 @@ func patchToFullContent(patch *Patch, filename string) string {
 	updatedContent, err := applyPatchToContent(patch, string(originalContent))
 	if err != nil {
 		// If patch application fails, fall back to the improved reconstruction
+		for i, hunk := range patch.Hunks {
+				i, hunk.OldStart, hunk.OldLines, hunk.NewStart, hunk.NewLines)
+		}
 		return fallbackReconstruction(patch)
 	}
 
@@ -943,7 +947,8 @@ func applyHunkChanges(lines []string, hunk Hunk, matchStart int) []string {
 	if capacity < 0 {
 		// Log the issue for debugging
 		if os.Getenv("LEDIT_DEBUG_PATCH") == "1" {
-			// Debug logging (env var controlled)
+			fmt.Printf("DEBUG: Negative capacity detected in applyHunkChanges: len(lines)=%d, consumed=%d, len(updated)=%d\n",
+				len(lines), consumed, len(updated))
 		}
 		capacity = 0 // Fallback to 0 if calculation is negative
 	}

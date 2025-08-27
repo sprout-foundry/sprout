@@ -386,6 +386,39 @@ func GetBaseCodeGenSystemMessageWithFormat(usePatchFormat bool) string {
 	return content
 }
 
+// GetQualityAwareCodeGenSystemMessage returns a quality-appropriate system message
+func GetQualityAwareCodeGenSystemMessage(qualityLevel int, usePatchFormat bool) string {
+	if usePatchFormat {
+		return GetBaseCodePatchSystemMessage() // Patch format doesn't have quality variants yet
+	}
+
+	var promptFile string
+	switch qualityLevel {
+	case 2: // QualityProduction
+		promptFile = "base_code_editing_quality_enhanced.txt"
+	case 1: // QualityEnhanced
+		promptFile = "base_code_editing_quality_enhanced.txt"
+	default: // QualityStandard
+		// Try optimized first, fallback to base
+		content, err := LoadPromptFromFile("base_code_editing_optimized.txt")
+		if err == nil {
+			return content
+		}
+		promptFile = "base_code_editing.txt"
+	}
+
+	content, err := LoadPromptFromFile(promptFile)
+	if err != nil {
+		// Fallback to base if quality prompt doesn't exist
+		content, fallbackErr := LoadPromptFromFile("base_code_editing.txt")
+		if fallbackErr != nil {
+			os.Exit(1)
+		}
+		return content
+	}
+	return content
+}
+
 // GetBaseCodePatchSystemMessage returns the system message for patch-based code editing
 func GetBaseCodePatchSystemMessage() string {
 	content, err := LoadPromptFromFile("base_code_editing_patch.txt")

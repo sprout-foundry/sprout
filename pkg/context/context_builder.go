@@ -173,7 +173,13 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	// For agent workflow, use patch format but without interactive tools to avoid confusion
 	_ = os.Getenv("LEDIT_FROM_AGENT") == "1"
 
-	messages := prompts.BuildCodeMessagesWithFormat(code, instructions, filename, true, true)
+	// Use quality-aware messages if quality level is set
+	var messages []prompts.Message
+	if cfg.QualityLevel > 0 {
+		messages = buildQualityAwareCodeMessages(code, instructions, filename, true, true, cfg.QualityLevel)
+	} else {
+		messages = prompts.BuildCodeMessagesWithFormat(code, instructions, filename, true, true)
+	}
 	logger.Log(fmt.Sprintf("Built %d messages", len(messages)))
 
 	// Add image to the user message if provided
@@ -422,4 +428,104 @@ Generate the complete modified file content.`, instructions, code, filename)
 	}
 
 	return cfg.EditingModel, llmResponse, tokenUsage, nil
+}
+
+// buildQualityAwareCodeMessages creates code generation messages with quality-enhanced system prompts
+func buildQualityAwareCodeMessages(code, instructions, filename string, interactive bool, usePatchFormat bool, qualityLevel int) []prompts.Message {
+	var messages []prompts.Message
+
+	// Use quality-aware system prompt instead of base system prompt
+	systemPrompt := prompts.GetQualityAwareCodeGenSystemMessage(qualityLevel, usePatchFormat)
+
+	if interactive {
+		// For interactive mode, still use the interactive prompt but enhance it with quality level
+		var interactivePrompt string
+		var err error
+		if qualityLevel >= 2 { // Production level
+			interactivePrompt, err = prompts.LoadPromptFromFile("interactive_code_generation_quality_enhanced.txt")
+			if err != nil {
+				// Fallback to standard interactive prompt
+				interactivePrompt, _ = prompts.LoadPromptFromFile("interactive_code_generation.txt")
+			}
+		} else {
+			interactivePrompt, _ = prompts.LoadPromptFromFile("interactive_code_generation.txt")
+		}
+		systemPrompt = strings.Replace(interactivePrompt, "{INSTRUCTIONS}", instructions, 1)
+	}
+
+	// Inject dynamic guidance when a specific filename is targeted
+	if filename != "" {
+		systemPrompt = systemPrompt + "\nSINGLE-FILE TARGETING:\n" +
+			"- A specific filename was provided (" + filename + "). Focus your edits primarily on that file.\n" +
+			"- Only create or modify other files if absolutely necessary dependencies are required for the requested change to work.\n" +
+			"MINIMALITY:\n" +
+			"- Make the smallest possible changes to satisfy the request. Do not add unrelated features, refactors, or formatting changes.\n"
+	}
+
+	messages = append(messages, prompts.Message{Role: "system", Content: systemPrompt})
+
+	if code != "" {
+		if usePatchFormat {
+			messages = append(messages, prompts.Message{Role: "user", Content: fmt.Sprintf("Here is the current content of `%s`:\n\n```\n%s\n```\n\nInstructions: %s", filename, code, instructions)})
+		} else {
+			// Get language from filename for syntax highlighting
+			lang := getLanguageFromFilename(filename)
+			messages = append(messages, prompts.Message{Role: "user", Content: fmt.Sprintf("Here is the current content of `%s`:\n\n```%s\n%s\n```\n\nInstructions: %s", filename, lang, code, instructions)})
+		}
+	} else {
+		messages = append(messages, prompts.Message{Role: "user", Content: instructions})
+	}
+
+	return messages
+}
+
+// getLanguageFromFilename extracts language identifier from filename for syntax highlighting
+func getLanguageFromFilename(filename string) string {
+	if filename == "" {
+		return ""
+	}
+
+	ext := strings.ToLower(filename[strings.LastIndex(filename, "."):])
+	switch ext {
+	case ".go":
+		return "go"
+	case ".js":
+		return "javascript"
+	case ".ts":
+		return "typescript"
+	case ".py":
+		return "python"
+	case ".java":
+		return "java"
+	case ".cpp", ".cc", ".cxx":
+		return "cpp"
+	case ".c":
+		return "c"
+	case ".cs":
+		return "csharp"
+	case ".php":
+		return "php"
+	case ".rb":
+		return "ruby"
+	case ".rs":
+		return "rust"
+	case ".sh":
+		return "bash"
+	case ".sql":
+		return "sql"
+	case ".html":
+		return "html"
+	case ".css":
+		return "css"
+	case ".json":
+		return "json"
+	case ".yaml", ".yml":
+		return "yaml"
+	case ".xml":
+		return "xml"
+	case ".md":
+		return "markdown"
+	default:
+		return ""
+	}
 }

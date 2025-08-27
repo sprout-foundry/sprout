@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 )
 
 // OutputSink abstracts where messages go (stdout vs TUI collector).
@@ -38,6 +39,29 @@ func UseStdoutSink() { defaultSink = StdoutSink{} }
 func IsUIActive() bool {
 	_, isTui := defaultSink.(TuiSink)
 	return isTui
+}
+
+// Global UI enabled state
+var uiEnabled bool = false
+
+// SetEnabled sets whether the UI is enabled
+func SetEnabled(enabled bool) {
+	uiEnabled = enabled
+	if enabled {
+		SetDefaultSink(TuiSink{})
+	} else {
+		UseStdoutSink()
+	}
+}
+
+// Enabled returns true if UI is enabled
+func Enabled() bool {
+	return uiEnabled
+}
+
+// FromEnv checks if UI should be enabled based on environment variables
+func FromEnv() bool {
+	return os.Getenv("LEDIT_UI") == "1" || os.Getenv("LEDIT_UI") == "true"
 }
 
 // PrintContext prints text only when appropriate for the current context

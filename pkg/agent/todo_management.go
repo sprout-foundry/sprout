@@ -34,90 +34,88 @@ const (
 
 // createTodos generates a list of todos based on user intent
 func createTodos(ctx *SimplifiedAgentContext) error {
-	// Build context-aware prompt
-	var contextInfo strings.Builder
-	contextInfo.WriteString(fmt.Sprintf(`You are an expert software developer. Break down this user request into specific, actionable todos grounded in the provided workspace context.
+	// Build context-aware prompt using cached optimized template
+	promptCache := GetPromptCache()
+	userPromptTemplate := promptCache.GetCachedPromptWithFallback(
+		"agent_todo_creation_user_optimized.txt",
+		`Expert developer: break down request into actionable todos using workspace context.
 
-User Request: "%s"
+Request: "{USER_REQUEST}"
 
-## Workspace Context
-%s`, ctx.UserIntent, func() string {
-		// Use progressive workspace context with smart fallbacks
-		return workspace.GetProgressiveWorkspaceContext(ctx.UserIntent, ctx.Config)
-	}()))
+## Workspace
+{WORKSPACE_CONTEXT}
+
+{ROLLOVER_CONTEXT}
+
+GUIDELINES:
+- Max 10 todos; use continuation todo #10 for complex multi-phase work
+- Monorepo: focus on ONE component at a time
+- Use tools to validate: read_file, grep_search, shell commands
+- Include analysis todo if locations/details uncertain
+- Ground in actual files, avoid speculation
+
+JSON format:
+[{"content":"Brief task","description":"Details","priority":1,"file_path":"optional/path.ext"}]
+
+Return ONLY JSON array.`,
+	)
+
+	workspaceContext := workspace.GetProgressiveWorkspaceContext(ctx.UserIntent, ctx.Config)
+
+	// Build rollover context
+	var rolloverContext strings.Builder
 
 	// Add rollover context from previous analysis if available
 	if ctx.ContextManager != nil && ctx.PersistentCtx != nil {
-		rolloverContext := ctx.ContextManager.GetRolloverContext(ctx.PersistentCtx)
+		rolloverCtxData := ctx.ContextManager.GetRolloverContext(ctx.PersistentCtx)
 
-		if recentFindings, ok := rolloverContext["recent_findings"]; ok {
+		if recentFindings, ok := rolloverCtxData["recent_findings"]; ok {
 			if findings, ok := recentFindings.([]AnalysisFinding); ok && len(findings) > 0 {
-				contextInfo.WriteString("\n\nRECENT ANALYSIS FINDINGS:\n")
+				rolloverContext.WriteString("\n\nRECENT FINDINGS:\n")
 				for _, finding := range findings {
-					contextInfo.WriteString(fmt.Sprintf("- %s: %s\n", finding.Type, finding.Title))
+					rolloverContext.WriteString(fmt.Sprintf("- %s: %s\n", finding.Type, finding.Title))
 				}
 			}
 		}
 
-		if keyKnowledge, ok := rolloverContext["key_knowledge"]; ok {
+		if keyKnowledge, ok := rolloverCtxData["key_knowledge"]; ok {
 			if knowledge, ok := keyKnowledge.([]KnowledgeItem); ok && len(knowledge) > 0 {
-				contextInfo.WriteString("\n\nACCUMULATED KNOWLEDGE:\n")
+				rolloverContext.WriteString("\n\nKNOWLEDGE:\n")
 				for _, item := range knowledge {
-					contextInfo.WriteString(fmt.Sprintf("- %s: %s\n", item.Category, item.Title))
+					rolloverContext.WriteString(fmt.Sprintf("- %s: %s\n", item.Category, item.Title))
 				}
 			}
 		}
 
-		if codePatterns, ok := rolloverContext["code_patterns"]; ok {
+		if codePatterns, ok := rolloverCtxData["code_patterns"]; ok {
 			if patterns, ok := codePatterns.([]CodePattern); ok && len(patterns) > 0 {
-				contextInfo.WriteString("\n\nIDENTIFIED CODE PATTERNS:\n")
+				rolloverContext.WriteString("\n\nCODE PATTERNS:\n")
 				for _, pattern := range patterns {
-					contextInfo.WriteString(fmt.Sprintf("- %s: %s\n", pattern.Type, pattern.Name))
+					rolloverContext.WriteString(fmt.Sprintf("- %s: %s\n", pattern.Type, pattern.Name))
 				}
 			}
 		}
 	}
 
-	contextInfo.WriteString(`
+	// Substitute template variables
+	prompt := strings.ReplaceAll(userPromptTemplate, "{USER_REQUEST}", ctx.UserIntent)
+	prompt = strings.ReplaceAll(prompt, "{WORKSPACE_CONTEXT}", workspaceContext)
+	prompt = strings.ReplaceAll(prompt, "{ROLLOVER_CONTEXT}", rolloverContext.String())
 
-Guidance:
-- LIMIT TO MAX 10 TODOS for complex tasks - break into phases if needed
-- For complex workflows that need >10 steps: create 9 todos for the current phase, then make todo #10 "Continue with next phase of [workflow]" to automatically chain to the next batch
-- For monorepo/multi-component tasks: focus on ONE complete component at a time (e.g., complete backend OR frontend, not both simultaneously)  
-- Use tools to validate and ground todos in reality (read files, search code, list files): prefer reading files (read_file), searching code (grep_search), and using shell commands (find, grep, ls) to find targets.
-- If uncertain about exact locations or details, include an initial "analysis" todo that explicitly uses tools to gather the needed evidence before edits.
-- Avoid speculative or ungrounded todos.
-- Consider the recent analysis findings and accumulated knowledge when creating todos.
-- For shell commands, prefer simple file operations and avoid embedding large code blocks in commands
-
-Please create a JSON array of todos that accomplish this request. Each todo should be:
-- Specific and actionable
-- Focused on a single task
-- Include a clear description
-- Prioritized (lower number = higher priority)
-- Reference a concrete file path when applicable (use file_path)
-
-Format:
-[
-  {
-    "content": "Brief, actionable description",
-    "description": "Detailed explanation of what this todo accomplishes",
-    "priority": 1,
-    "file_path": "optional/relative/path.ext"
-  }
-]
-
-Focus on concrete changes that can be made to the codebase. Return ONLY the JSON array.`)
-
-	prompt := contextInfo.String()
+	// Load optimized system prompt from cache
+	systemPrompt := promptCache.GetCachedPromptWithFallback(
+		"agent_todo_creation_system_optimized.txt",
+		"Create specific, actionable development todos. Ground todos in workspace context using tools (read_file, grep_search, run_shell_command) to validate assumptions. Include analysis todo if uncertain about file locations or details. Always return valid JSON.",
+	)
 
 	messages := []prompts.Message{
-		{Role: "system", Content: "You create specific, actionable development todos. Ground todos in workspace context and prefer referencing actual files. Strongly prefer using tools (read_file, grep_search, run_shell_command) to validate assumptions when planning. If uncertain, include an initial analysis todo that uses tools to gather evidence. Always return valid JSON."},
+		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: prompt},
 	}
 
 	// Try primary model with smart timeout
-	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis"))
+	smartTimeout := GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis")
+	response, tokenUsage, err := llm.GetLLMResponse(ctx.Config.OrchestrationModel, messages, "", ctx.Config, smartTimeout)
 
 	// If primary model fails, try with fallback model and extended timeout
 	if err != nil {
@@ -130,7 +128,7 @@ Focus on concrete changes that can be made to the codebase. Return ONLY the JSON
 		}
 
 		// Use extended timeout for fallback
-		fallbackTimeout := time.Duration(float64(llm.GetSmartTimeout(ctx.Config, ctx.Config.OrchestrationModel, "analysis")) * 1.5)
+		fallbackTimeout := time.Duration(float64(smartTimeout) * 1.5)
 		response, tokenUsage, err = llm.GetLLMResponse(ctx.Config.OrchestrationModel, fallbackMessages, "", ctx.Config, fallbackTimeout)
 
 		if err != nil {
@@ -1223,8 +1221,8 @@ Generate todos that continue naturally from where the previous phase left off.`,
 func executeParallelTodos(ctx *SimplifiedAgentContext, todos []TodoItem) error {
 	ctx.Logger.LogProcessStep(fmt.Sprintf("🚀 Starting parallel execution of %d todos", len(todos)))
 
-	// Create a worker pool with controlled concurrency
-	maxWorkers := 3 // Limit concurrent LLM calls to avoid rate limits
+	// Create an optimized worker pool with controlled concurrency
+	maxWorkers := getOptimalWorkerCount(len(todos), ctx.Config.OrchestrationModel)
 	if len(todos) < maxWorkers {
 		maxWorkers = len(todos)
 	}
@@ -1651,4 +1649,30 @@ func createTodosFromPrompt(ctx *SimplifiedAgentContext, prompt string) error {
 
 	ctx.Todos = todoItems
 	return nil
+}
+
+// getOptimalWorkerCount determines the optimal number of workers based on task count and model
+func getOptimalWorkerCount(todoCount int, modelName string) int {
+	baseWorkers := 3 // Conservative default
+
+	// Adjust based on provider characteristics
+	if strings.Contains(strings.ToLower(modelName), "groq") {
+		// Groq is fast, can handle more concurrent requests
+		baseWorkers = 5
+	} else if strings.Contains(strings.ToLower(modelName), "deepinfra") {
+		// DeepInfra has rate limits, be more conservative
+		baseWorkers = 2
+	} else if strings.Contains(strings.ToLower(modelName), "openai") {
+		// OpenAI has good rate limits
+		baseWorkers = 4
+	}
+
+	// Scale based on todo count but cap at reasonable limit
+	if todoCount <= 2 {
+		return min(todoCount, 2)
+	} else if todoCount <= 5 {
+		return min(baseWorkers, todoCount)
+	} else {
+		return baseWorkers // Cap at base for stability
+	}
 }

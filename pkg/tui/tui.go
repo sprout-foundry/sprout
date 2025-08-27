@@ -329,6 +329,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.logs = m.logs[:0]
 			m.vp.SetContent("")
 			return m, nil
+		case "tab":
+			if m.interactiveMode {
+				// Toggle input focus with tab
+				if m.focusedInput {
+					m.focusedInput = false
+					m.textInput.Blur()
+				} else {
+					m.focusedInput = true
+					m.textInput.Focus()
+				}
+			}
+			return m, nil
 		case "up", "k":
 			if !m.logsCollapsed {
 				m.vp.LineUp(1)
@@ -463,8 +475,20 @@ func (m model) View() string {
 	// Clean body layout for interactive mode
 	var body string
 	if m.interactiveMode {
-		// Clean layout without debug info
-		sectionHeader := "📋 Agent Logs"
+		// Enhanced header with status indicators
+		logStatus := "expanded"
+		if m.logsCollapsed {
+			logStatus = "collapsed"
+		}
+		
+		autoScrollStatus := "ON"
+		if !m.logsCollapsed && !m.vp.AtBottom() {
+			autoScrollStatus = "OFF"
+		}
+		
+		sectionHeader := fmt.Sprintf("📋 Agent Logs (%s) • Auto-scroll: %s • Entries: %d", 
+			logStatus, autoScrollStatus, len(m.logs))
+		
 		body = lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("%s%s\n%s", prog, sectionHeader, logsView))
 	} else {
 		// Keep original layout for non-interactive mode
@@ -525,15 +549,32 @@ func (m model) View() string {
 	}
 
 	if m.interactiveMode {
-		footerText := "Interactive Mode | Enter: Execute | /help: Commands | ESC: Unfocus | Ctrl+C: Quit" + scrollIndicator
+		// Show focused state and add Tab info
+		focusState := ""
+		if m.focusedInput {
+			focusState = "INPUT FOCUSED"
+		} else {
+			focusState = "LOGS FOCUSED"
+		}
+		
+		historyInfo := ""
+		if len(m.commandHistory) > 0 {
+			historyInfo = fmt.Sprintf(" | History: %d", len(m.commandHistory))
+		}
+		
+		footerText := fmt.Sprintf("%s | Tab: Switch Focus | Enter: Execute | ↑/↓: History | /help: Commands%s%s", 
+			focusState, historyInfo, scrollIndicator)
+		
+		// Progressive truncation for narrow terminals
 		if len(footerText) > m.width-4 {
-			footerText = "Enter: Execute | /help: Commands | ESC: Unfocus | Ctrl+C: Quit" + scrollIndicator
+			footerText = fmt.Sprintf("%s | Tab: Focus | Enter: Execute | ↑/↓: History%s%s", 
+				focusState, historyInfo, scrollIndicator)
 		}
 		if len(footerText) > m.width-4 {
-			footerText = "Enter: Execute | /help: Commands | ESC: Unfocus | Ctrl+C: Quit" + scrollIndicator
+			footerText = fmt.Sprintf("%s | Tab | Enter | ↑/↓%s", focusState, scrollIndicator)
 		}
 		if len(footerText) > m.width-4 {
-			footerText = "/help | Enter: Execute | ESC: Unfocus | Ctrl+C: Quit" + scrollIndicator
+			footerText = focusState + scrollIndicator
 		}
 		footer = lipgloss.NewStyle().Faint(true).Padding(0, 1).MaxWidth(m.width).Render(footerText)
 	} else {
@@ -725,11 +766,13 @@ Agent Commands:
 
 Navigation:
   Enter                  Execute agent command or slash command
+  Tab                    Switch focus (input ↔ logs)
   ESC                    Unfocus input (ESC again to quit)
   Ctrl+C                 Quit immediately
   i                      Focus input (when unfocused)
-  l                      Toggle logs
-  p                      Toggle progress
+  l                      Toggle logs collapse/expand
+  p                      Toggle progress collapse/expand
+  Ctrl+L                 Clear logs
 
 History (when input is focused):
   ↑                      Previous command in history

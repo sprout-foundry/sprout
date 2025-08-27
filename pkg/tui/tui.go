@@ -227,7 +227,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else if m.historyIndex > 0 {
 						m.historyIndex--
 					}
-					
+
 					// Set the historical command
 					if m.historyIndex >= 0 && m.historyIndex < len(m.commandHistory) {
 						m.textInput.SetValue(m.commandHistory[m.historyIndex])
@@ -239,7 +239,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Navigate down in command history
 				if len(m.commandHistory) > 0 && m.historyIndex >= 0 {
 					m.historyIndex++
-					
+
 					// If we've gone past the end, restore original input
 					if m.historyIndex >= len(m.commandHistory) {
 						m.textInput.SetValue(m.originalInput)
@@ -298,7 +298,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.historyIndex = -1
 					m.originalInput = ""
 				}
-				
+
 				// Pass through to text input
 				var cmd tea.Cmd
 				m.textInput, cmd = m.textInput.Update(msg)
@@ -480,15 +480,15 @@ func (m model) View() string {
 		if m.logsCollapsed {
 			logStatus = "collapsed"
 		}
-		
+
 		autoScrollStatus := "ON"
 		if !m.logsCollapsed && !m.vp.AtBottom() {
 			autoScrollStatus = "OFF"
 		}
-		
-		sectionHeader := fmt.Sprintf("📋 Agent Logs (%s) • Auto-scroll: %s • Entries: %d", 
+
+		sectionHeader := fmt.Sprintf("📋 Agent Logs (%s) • Auto-scroll: %s • Entries: %d",
 			logStatus, autoScrollStatus, len(m.logs))
-		
+
 		body = lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("%s%s\n%s", prog, sectionHeader, logsView))
 	} else {
 		// Keep original layout for non-interactive mode
@@ -556,18 +556,18 @@ func (m model) View() string {
 		} else {
 			focusState = "LOGS FOCUSED"
 		}
-		
+
 		historyInfo := ""
 		if len(m.commandHistory) > 0 {
 			historyInfo = fmt.Sprintf(" | History: %d", len(m.commandHistory))
 		}
-		
-		footerText := fmt.Sprintf("%s | Tab: Switch Focus | Enter: Execute | ↑/↓: History | /help: Commands%s%s", 
+
+		footerText := fmt.Sprintf("%s | Tab: Switch Focus | Enter: Execute | ↑/↓: History | /help: Commands%s%s",
 			focusState, historyInfo, scrollIndicator)
-		
+
 		// Progressive truncation for narrow terminals
 		if len(footerText) > m.width-4 {
-			footerText = fmt.Sprintf("%s | Tab: Focus | Enter: Execute | ↑/↓: History%s%s", 
+			footerText = fmt.Sprintf("%s | Tab: Focus | Enter: Execute | ↑/↓: History%s%s",
 				focusState, historyInfo, scrollIndicator)
 		}
 		if len(footerText) > m.width-4 {

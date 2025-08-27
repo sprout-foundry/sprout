@@ -52,8 +52,8 @@ type tickMsg time.Time
 
 func initialModel() model {
 	m := model{start: time.Now(), logs: make([]string, 0, 256)}
-	m.vp = viewport.Model{}
-	m.promptVP = viewport.Model{}
+	m.vp = viewport.New(80, 20)       // Default size, will be updated on window resize
+	m.promptVP = viewport.New(80, 10) // Default size, will be updated on window resize
 	// Default logs collapsed; allow override via env
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("LEDIT_LOGS_COLLAPSED"))); v == "0" || v == "false" || v == "no" {
 		m.logsCollapsed = false
@@ -394,7 +394,6 @@ func (m model) View() string {
 	}
 	m.vp.Width = max(0, m.width-2)
 	m.vp.Height = max(1, availableLogLines)
-	m.vp.SetContent(strings.Join(m.logs, "\n"))
 	logsView := "[logs collapsed]"
 	if !m.logsCollapsed {
 		logsView = m.vp.View()

@@ -107,7 +107,7 @@ func CleanCommitMessage(message string) string {
 		// Try to parse as JSON
 		var jsonObj map[string]interface{}
 		if err := json.Unmarshal([]byte(trimmed), &jsonObj); err == nil {
-			
+
 			// Handle function call format
 			if strings.Contains(message, `"type": "function"`) && strings.Contains(message, `"name": "generateCommitMessage"`) {
 				if params, ok := jsonObj["parameters"].(map[string]interface{}); ok {
@@ -118,7 +118,7 @@ func CleanCommitMessage(message string) string {
 					}
 				}
 			}
-			
+
 			// Handle simple key-value JSON format like {"title": "description"}
 			if len(jsonObj) == 1 {
 				for title, desc := range jsonObj {
@@ -131,25 +131,25 @@ func CleanCommitMessage(message string) string {
 							emoji = "🐛"
 							prefix = "fix"
 						} else if strings.Contains(titleLower, "doc") {
-							emoji = "📝" 
+							emoji = "📝"
 							prefix = "docs"
 						} else if strings.Contains(titleLower, "enhance") || strings.Contains(titleLower, "improve") {
 							emoji = "✨"
 							prefix = "enhance"
 						} else if strings.Contains(titleLower, "refactor") {
 							emoji = "♻️"
-							prefix = "refactor" 
+							prefix = "refactor"
 						} else if strings.Contains(titleLower, "test") {
 							emoji = "🧪"
 							prefix = "test"
 						}
-						
+
 						return fmt.Sprintf("%s %s: %s\n\n%s", emoji, prefix, title, descStr)
 					}
 				}
 			}
 		}
-		
+
 		// Fallback for JSON that couldn't be parsed properly
 		return "🚀 feat: Add new functionality\n\n- Enhanced codebase with new features\n- Improved system capabilities"
 	}

@@ -1452,12 +1452,27 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	// Use simple keyword-based file selection with limits to avoid overwhelming context
 	maxFullContextFiles := 3 // Default: Very focused full context for most relevant files
 	if cfg.FromAgent {
-		maxFullContextFiles = 3 // Keep 3 files for agent runs
+		// Check if this is a documentation task by looking for documentation keywords
+		if strings.Contains(strings.ToLower(instructions), "document") ||
+			strings.Contains(strings.ToLower(instructions), "docs") ||
+			strings.Contains(strings.ToLower(instructions), "api_docs") {
+			maxFullContextFiles = 2 // Reduce for documentation tasks to save tokens
+		} else {
+			maxFullContextFiles = 3 // Keep 3 files for other agent runs
+		}
 	} else {
-		maxFullContextFiles = 10 // Increase to 10 files for direct code command runs
+		maxFullContextFiles = 7 // Standard limit for direct code command runs
 	}
-	const maxSummaryContextFiles = 20 // Broader summary context for exploration
-	const minScoreForFullContext = 3  // Only files with very high relevance scores get full context
+
+	// Reduce summary context for documentation tasks
+	maxSummaryContextFiles := 20 // Default: Broader summary context for exploration
+	if cfg.FromAgent && (strings.Contains(strings.ToLower(instructions), "document") ||
+		strings.Contains(strings.ToLower(instructions), "docs") ||
+		strings.Contains(strings.ToLower(instructions), "api_docs")) {
+		maxSummaryContextFiles = 10 // Reduce summary files for documentation tasks
+	}
+
+	const minScoreForFullContext = 3 // Only files with very high relevance scores get full context
 
 	var fileScores []struct {
 		file  string

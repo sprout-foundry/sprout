@@ -24,13 +24,13 @@ func isDocumentationTask(intent string) bool {
 		"readme", "api documentation", "endpoint documentation",
 		"generate documentation", "create docs", "write documentation",
 	}
-	
+
 	for _, keyword := range docKeywords {
 		if strings.Contains(intentLower, keyword) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -41,13 +41,13 @@ func validateBuild(ctx *SimplifiedAgentContext) error {
 		ctx.Logger.LogProcessStep("⏭️ No files were modified, skipping build validation")
 		return nil
 	}
-	
+
 	// Skip validation for documentation-only tasks
 	if isDocumentationTask(ctx.UserIntent) {
 		ctx.Logger.LogProcessStep("📄 Documentation task detected, skipping build validation")
 		return nil
 	}
-	
+
 	ctx.Logger.LogProcessStep("🔍 Validating build after changes...")
 
 	// For monorepo and early setup stages, be more intelligent about build validation

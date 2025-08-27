@@ -40,10 +40,10 @@ type SimplifiedAgentContext struct {
 	TotalPromptTokens     int
 	TotalCompletionTokens int
 	TotalCost             float64
-	
+
 	// User interaction settings
 	SkipPrompt bool
-	
+
 	// Change tracking to avoid unnecessary validation
 	FilesModified bool
 
@@ -57,12 +57,12 @@ type SimplifiedAgentContext struct {
 type IntentType string
 
 const (
-	IntentTypeCodeUpdate     IntentType = "code_update"
-	IntentTypeQuestion       IntentType = "question"
-	IntentTypeCommand        IntentType = "command"
-	IntentTypeDocumentation  IntentType = "documentation"
-	IntentTypeCreation       IntentType = "creation"
-	IntentTypeAnalysis       IntentType = "analysis"
+	IntentTypeCodeUpdate    IntentType = "code_update"
+	IntentTypeQuestion      IntentType = "question"
+	IntentTypeCommand       IntentType = "command"
+	IntentTypeDocumentation IntentType = "documentation"
+	IntentTypeCreation      IntentType = "creation"
+	IntentTypeAnalysis      IntentType = "analysis"
 )
 
 // TaskIntent represents more detailed task classification for strategy selection
@@ -70,7 +70,7 @@ type TaskIntent string
 
 const (
 	TaskIntentAnalysis      TaskIntent = "analysis"
-	TaskIntentCreation      TaskIntent = "creation" 
+	TaskIntentCreation      TaskIntent = "creation"
 	TaskIntentModification  TaskIntent = "modification"
 	TaskIntentDocumentation TaskIntent = "documentation"
 	TaskIntentRefactoring   TaskIntent = "refactoring"

@@ -33,3 +33,35 @@ func Out() OutputSink { return defaultSink }
 
 // UseStdoutSink switches default output back to stdout.
 func UseStdoutSink() { defaultSink = StdoutSink{} }
+
+// IsUIActive returns true if we're currently using TUI sink (UI is active)
+func IsUIActive() bool {
+	_, isTui := defaultSink.(TuiSink)
+	return isTui
+}
+
+// PrintContext prints text only when appropriate for the current context
+// - In UI mode: only prints to logs if forceInUI is true
+// - In console mode: always prints to stdout
+func PrintContext(text string, forceInUI bool) {
+	if IsUIActive() {
+		if forceInUI {
+			Log(text)
+		}
+		// Otherwise suppress output in UI mode
+	} else {
+		fmt.Print(text)
+	}
+}
+
+// PrintfContext formats and prints text only when appropriate for the current context
+func PrintfContext(forceInUI bool, format string, args ...any) {
+	if IsUIActive() {
+		if forceInUI {
+			Logf(format, args...)
+		}
+		// Otherwise suppress output in UI mode
+	} else {
+		fmt.Printf(format, args...)
+	}
+}

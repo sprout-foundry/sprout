@@ -199,14 +199,9 @@ func (e *Executor) executeShellCommand(ctx context.Context, args map[string]inte
 	}, nil
 }
 
-
-
-
-
-
 func (e *Executor) executeWorkspaceContext(ctx context.Context, args map[string]interface{}) (*Result, error) {
 	action, _ := args["action"].(string)
-	
+
 	// Default to overview if no action specified
 	if strings.TrimSpace(action) == "" {
 		action = "overview"
@@ -216,11 +211,11 @@ func (e *Executor) executeWorkspaceContext(ctx context.Context, args map[string]
 	case "overview":
 		output := e.buildWorkspaceOverview()
 		return &Result{
-			Success: true,
-			Output:  output,
+			Success:  true,
+			Output:   output,
 			Metadata: map[string]interface{}{"action": "overview"},
 		}, nil
-		
+
 	case "search":
 		query, _ := args["query"].(string)
 		if strings.TrimSpace(query) == "" {
@@ -231,11 +226,11 @@ func (e *Executor) executeWorkspaceContext(ctx context.Context, args map[string]
 		}
 		output := e.searchWorkspaceFiles(query)
 		return &Result{
-			Success: true,
-			Output:  output,
+			Success:  true,
+			Output:   output,
 			Metadata: map[string]interface{}{"action": "search", "query": query},
 		}, nil
-		
+
 	default:
 		return &Result{
 			Success: false,
@@ -408,45 +403,45 @@ func ParseToolCallArguments(arguments string) (map[string]interface{}, error) {
 func (e *Executor) buildWorkspaceOverview() string {
 	var builder strings.Builder
 	builder.WriteString("=== Workspace Overview ===\n")
-	
+
 	// Count files by directory and type
 	dirCounts := make(map[string]int)
 	extCounts := make(map[string]int)
 	totalFiles := 0
-	
+
 	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		
+
 		// Skip common ignore patterns
 		if e.shouldSkipFile(path) {
 			return nil
 		}
-		
+
 		totalFiles++
 		dir := filepath.Dir(path)
 		if dir == "." {
 			dir = "root"
 		}
 		dirCounts[dir]++
-		
+
 		ext := filepath.Ext(path)
 		if ext == "" {
 			ext = "no-extension"
 		}
 		extCounts[ext]++
-		
+
 		return nil
 	})
-	
+
 	if err != nil {
 		builder.WriteString("Error scanning workspace: " + err.Error() + "\n")
 		return builder.String()
 	}
-	
+
 	builder.WriteString(fmt.Sprintf("Total files: %d\n\n", totalFiles))
-	
+
 	// Show top directories
 	builder.WriteString("Files by directory:\n")
 	for dir, count := range dirCounts {
@@ -454,7 +449,7 @@ func (e *Executor) buildWorkspaceOverview() string {
 			builder.WriteString(fmt.Sprintf("  %s: %d files\n", dir, count))
 		}
 	}
-	
+
 	// Show file types
 	builder.WriteString("\nFiles by type:\n")
 	for ext, count := range extCounts {
@@ -462,7 +457,7 @@ func (e *Executor) buildWorkspaceOverview() string {
 			builder.WriteString(fmt.Sprintf("  %s: %d files\n", ext, count))
 		}
 	}
-	
+
 	return builder.String()
 }
 
@@ -470,37 +465,37 @@ func (e *Executor) buildWorkspaceOverview() string {
 func (e *Executor) searchWorkspaceFiles(query string) string {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("=== Search Results for '%s' ===\n", query))
-	
+
 	matchCount := 0
 	queryLower := strings.ToLower(query)
-	
+
 	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		
+
 		if e.shouldSkipFile(path) {
 			return nil
 		}
-		
+
 		// Limit file size to avoid huge files
 		if info.Size() > 1024*1024 { // 1MB limit
 			return nil
 		}
-		
+
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return nil
 		}
-		
+
 		contentStr := string(content)
 		if !strings.Contains(strings.ToLower(contentStr), queryLower) {
 			return nil
 		}
-		
+
 		matchCount++
 		builder.WriteString(fmt.Sprintf("\n--- %s ---\n", path))
-		
+
 		// Show matching lines with context
 		lines := strings.Split(contentStr, "\n")
 		for i, line := range lines {
@@ -509,25 +504,25 @@ func (e *Executor) searchWorkspaceFiles(query string) string {
 				builder.WriteString(fmt.Sprintf("%d: %s\n", lineNum, strings.TrimSpace(line)))
 			}
 		}
-		
+
 		// Limit results to avoid overwhelming output
 		if matchCount >= 10 {
 			return fmt.Errorf("stopping search - max results reached")
 		}
-		
+
 		return nil
 	})
-	
+
 	if err != nil && !strings.Contains(err.Error(), "stopping search") {
 		builder.WriteString("Error during search: " + err.Error() + "\n")
 	}
-	
+
 	if matchCount == 0 {
 		builder.WriteString("No matches found.\n")
 	} else {
 		builder.WriteString(fmt.Sprintf("\nFound %d matching files.\n", matchCount))
 	}
-	
+
 	return builder.String()
 }
 
@@ -537,19 +532,19 @@ func (e *Executor) shouldSkipFile(path string) bool {
 	if strings.Contains(path, "/.") {
 		return true
 	}
-	
+
 	// Skip common build/cache directories
 	skipDirs := []string{
-		"node_modules", ".git", "vendor", "target", "build", 
+		"node_modules", ".git", "vendor", "target", "build",
 		"dist", "__pycache__", ".vscode", ".idea",
 	}
-	
+
 	for _, skipDir := range skipDirs {
 		if strings.Contains(path, skipDir) {
 			return true
 		}
 	}
-	
+
 	// Skip binary/media files
 	ext := strings.ToLower(filepath.Ext(path))
 	binaryExts := []string{
@@ -558,12 +553,12 @@ func (e *Executor) shouldSkipFile(path string) bool {
 		".mp4", ".avi", ".mov", ".mp3", ".wav", ".pdf",
 		".zip", ".tar", ".gz", ".rar",
 	}
-	
+
 	for _, binExt := range binaryExts {
 		if ext == binExt {
 			return true
 		}
 	}
-	
+
 	return false
 }

@@ -76,8 +76,6 @@ func callLLMForCodeEditingWithSimpleRetry(modelName string, initialMessages []pr
 			return "", "", nil, err
 		}
 
-		logger.Log(fmt.Sprintf("Response length: %d chars", len(response)))
-
 		// Parse tool calls from response
 		toolCalls, err := ParseToolCalls(response)
 		if err != nil {
@@ -215,7 +213,6 @@ func executeCodeEditingToolCall(toolCall ToolCall, cfg *config.Config) (string, 
 			return string(output), nil
 		}
 		return "", fmt.Errorf("run_shell_command requires 'command' parameter")
-
 
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolCall.Function.Name)

@@ -699,6 +699,22 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			tokenUsage.TotalTokens = est
 			if tokenUsage.PromptTokens == 0 && tokenUsage.CompletionTokens == 0 {
 				tokenUsage.PromptTokens = est
+			} else if tokenUsage.CompletionTokens == 0 && tokenUsage.PromptTokens > 0 {
+				// Some providers (like DeepInfra) don't return completion tokens
+				// Estimate completion tokens as difference between total and prompt
+				if tokenUsage.TotalTokens > tokenUsage.PromptTokens {
+					tokenUsage.CompletionTokens = tokenUsage.TotalTokens - tokenUsage.PromptTokens
+				} else if tokenUsage.TotalTokens == tokenUsage.PromptTokens {
+					// Provider is likely only reporting prompt tokens as total
+					// Estimate completion tokens based on typical response size
+					estimatedCompletion := max(100, tokenUsage.PromptTokens/4) // At least 100 tokens or 25% of prompt
+					tokenUsage.CompletionTokens = estimatedCompletion
+					tokenUsage.TotalTokens = tokenUsage.PromptTokens + tokenUsage.CompletionTokens
+				} else {
+					// Fallback: estimate completion tokens as ~30% of total for typical responses
+					tokenUsage.CompletionTokens = int(float64(tokenUsage.TotalTokens) * 0.3)
+					tokenUsage.PromptTokens = tokenUsage.TotalTokens - tokenUsage.CompletionTokens
+				}
 			}
 		}
 		cost := CalculateCost(*tokenUsage, modelName)

@@ -1,0 +1,44 @@
+Generate high-quality, production-ready code following best practices.
+
+QUALITY STANDARDS:
+- Write clean, readable, maintainable code
+- Follow language-specific conventions and idioms
+- Implement proper error handling and input validation
+- Use descriptive names for variables, functions, and classes
+- Add meaningful comments for complex logic
+- Ensure type safety and handle edge cases
+- Consider performance and scalability implications
+
+ARCHITECTURAL PRINCIPLES:
+- Single Responsibility Principle
+- Open/Closed Principle  
+- Dependency Inversion
+- Separation of concerns
+- Composition over inheritance
+- Fail-fast error handling
+
+SECURITY REQUIREMENTS:
+- Validate and sanitize all inputs
+- Prevent injection attacks (SQL, XSS, etc.)
+- Handle sensitive data securely
+- Implement proper authentication/authorization
+- Use secure coding practices
+- Avoid common security pitfalls
+
+CODE ORGANIZATION:
+- Structure code logically with clear modules/packages
+- Keep functions/methods focused and concise
+- Use appropriate data structures and algorithms  
+- Implement proper abstraction layers
+- Ensure testability through dependency injection
+- Follow DRY (Don't Repeat Yourself) principle
+
+TESTING CONSIDERATIONS:
+- Write testable code with clear interfaces
+- Include unit tests for complex logic
+- Consider integration testing needs
+- Handle mocking and test data appropriately
+- Ensure proper test coverage
+
+OUTPUT FORMAT:
+Provide complete, working code that can be immediately used in production. Include necessary imports, error handling, and documentation.

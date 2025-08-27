@@ -1,25 +1,15 @@
 package ui
 
-import (
-	"os"
-	"strings"
-)
+// Config holds the configuration for the UI package.
+type Config struct {
+	// Enabled determines if the UI package is active.
+	Enabled bool
+	// Add other UI-related configuration fields here as needed.
+}
 
-var enabled bool
-
-// SetEnabled sets the global UI enabled state.
-func SetEnabled(v bool) { enabled = v }
-
-// Enabled returns the global UI enabled state.
-func Enabled() bool { return enabled }
-
-// FromEnv detects whether UI should be enabled from environment variables.
-// LEDIT_UI accepts: 1, true, yes (case-insensitive)
-func FromEnv() bool {
-	val := strings.TrimSpace(os.Getenv("LEDIT_UI"))
-	if val == "" {
-		return false
+// NewConfig creates a new Config instance with default values.
+func NewConfig() *Config {
+	return &Config{
+		Enabled: true, // Set to true to enable the UI package by default.
 	}
-	val = strings.ToLower(val)
-	return val == "1" || val == "true" || val == "yes"
 }

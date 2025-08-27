@@ -20,6 +20,7 @@ var (
 	commitSkipPrompt   bool
 	commitModel        string
 	commitAllowSecrets bool
+	commitDryRun       bool
 )
 
 var commitCmd = &cobra.Command{
@@ -96,6 +97,11 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 			// Clean up the message using shared utility
 			generatedMessage = git.CleanCommitMessage(generatedMessage)
 
+			if commitDryRun {
+				logger.LogProcessStep(fmt.Sprintf("DRY RUN - Generated commit message:\n%s", generatedMessage))
+				return
+			}
+
 			if commitSkipPrompt {
 				logger.LogProcessStep(fmt.Sprintf("Skipping prompt. Committing with generated message:\n%s", generatedMessage))
 				if err := git.PerformGitCommit(generatedMessage); err != nil {
@@ -158,5 +164,6 @@ func init() {
 	commitCmd.Flags().BoolVar(&commitSkipPrompt, "skip-prompt", false, "Skip confirmation prompts and automatically commit")
 	commitCmd.Flags().StringVar(&commitModel, "model", "", "Specify the LLM model to use for commit message generation (e.g., 'ollama:llama3')")
 	commitCmd.Flags().BoolVar(&commitAllowSecrets, "allow-secrets", false, "Allow committing even if potential secrets are detected (override)")
+	commitCmd.Flags().BoolVar(&commitDryRun, "dry-run", false, "Generate and display the commit message without executing the commit")
 	rootCmd.AddCommand(commitCmd)
 }

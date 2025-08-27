@@ -19,6 +19,14 @@ import (
 // RunSimplifiedAgent: New simplified agent workflow
 func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error {
 	startTime := time.Now()
+
+	// Warm up prompt cache for better performance
+	promptCache := GetPromptCache()
+	go promptCache.WarmCache() // Non-blocking warm-up
+
+	// Initialize quality optimizer for intelligent prompt selection
+	qualityOptimizer := NewQualityOptimizer()
+
 	// Show mode info - more verbose in console, minimal in UI
 	if ui.IsUIActive() {
 		ui.Logf("🎯 %s", userIntent)
@@ -69,6 +77,9 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 	taskIntent := analyzeTaskIntent(userIntent, logger)
 	projectContext := inferProjectContext(".", userIntent, logger)
 
+	// Determine quality level for code generation
+	qualityLevel := qualityOptimizer.DetermineQualityLevel(userIntent, taskIntent, cfg)
+
 	ctx := &SimplifiedAgentContext{
 		UserIntent:            userIntent,
 		Config:                cfg,
@@ -87,6 +98,10 @@ func RunSimplifiedAgent(userIntent string, skipPrompt bool, model string) error 
 		ProjectContext: projectContext,
 		TaskIntent:     taskIntent,
 		IntentType:     intentType,
+
+		// Quality optimization
+		QualityLevel:     qualityLevel,
+		QualityOptimizer: qualityOptimizer,
 	}
 
 	// Ensure token usage and cost are always displayed, even on failure

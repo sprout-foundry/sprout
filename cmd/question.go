@@ -81,12 +81,12 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 		// Load fresh workspace context for each question, unless skipping is requested
 		// Default behavior: include workspace context (feature flag can be added later)
 		if true { // Always include context for now
-			ui.Out().Print("\nAnalyzing workspace to answer your question...\n")
+			ui.ShowProgressWithDetails("🔍 Analyzing workspace...", "Analyzing workspace to answer your question")
 			workspaceContext = workspace.GetWorkspaceContext(question, cfg)
 			if workspaceContext == "" {
 				ui.Out().Print("Warning: Could not load workspace context for this question.\n")
 			}
-			ui.Out().Print("Workspace analysis complete.\n")
+			ui.ShowProgressWithDetails("✅ Ready to answer", "Workspace analysis complete")
 			// Combine question and context into a single user message
 			userPrompt = fmt.Sprintf("My question is: '%s'\n\nHere is the relevant context from my workspace:\n\n--- Workspace Context ---\n%s\n\n--- End Workspace Context ---", question, workspaceContext)
 		}
@@ -124,7 +124,7 @@ func interactiveQuestionLoop(cfg *config.Config, initialQuestion string) {
 
 		// Stream to UI when enabled so users see live tokens; fallback to stdout otherwise
 		var writer io.Writer
-		if ui.Enabled() {
+		if ui.IsUIActive() {
 			writer = io.MultiWriter(ui.NewStreamWriter(), &responseBuilder)
 		} else {
 			writer = io.MultiWriter(os.Stdout, &responseBuilder)

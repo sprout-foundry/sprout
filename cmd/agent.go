@@ -75,7 +75,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// If no arguments provided, check if UI is available for interactive mode
 		if len(args) == 0 {
-			if uiPkg.Enabled() {
+			if uiPkg.IsUIActive() {
 				// Start interactive TUI mode
 				return startInteractiveTUI()
 			} else {
@@ -90,7 +90,7 @@ Examples:
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")
 		}
 		// If UI is enabled, start TUI in background and route output
-		if uiPkg.Enabled() {
+		if uiPkg.IsUIActive() {
 			uiPkg.SetDefaultSink(uiPkg.TuiSink{})
 			go func() { _ = tuiPkg.Run() }()
 		}

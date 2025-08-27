@@ -71,12 +71,12 @@ func initialInteractiveModel() model {
 	// In interactive mode, expand logs by default so user can see agent progress
 	m.logsCollapsed = false
 
-	// Initialize text input for agent prompts
+	// Initialize textinput for agent prompts
 	ti := textinput.New()
 	ti.Placeholder = "Enter request or /help for commands..."
 	ti.Focus()
-	ti.CharLimit = 500
-	ti.Width = 60 // Will be dynamically adjusted based on terminal width
+	ti.CharLimit = 2000
+	ti.Width = 50 // Conservative fixed width
 	m.textInput = ti
 
 	return m
@@ -225,7 +225,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					// Add to command history
 					m.commandHistory = append(m.commandHistory, input)
-					if len(m.commandHistory) > 50 { // Keep last 50 commands
+					if len(m.commandHistory) > 50 {
 						m.commandHistory = m.commandHistory[len(m.commandHistory)-50:]
 					}
 
@@ -233,13 +233,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "esc":
-				// Unfocus input or quit
-				if m.focusedInput {
-					m.focusedInput = false
-					m.textInput.Blur()
-				} else {
-					return m, tea.Quit
-				}
+				// Unfocus input when focused
+				m.focusedInput = false
+				m.textInput.Blur()
 				return m, nil
 			case "ctrl+c":
 				return m, tea.Quit
@@ -304,13 +300,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case ui.LogEvent:
+		// Check if user was at bottom before adding new content
+		wasAtBottom := m.vp.AtBottom()
+
 		m.logs = append(m.logs, msg.Text)
 		if len(m.logs) > 500 {
 			m.logs = m.logs[len(m.logs)-500:]
 		}
 		m.vp.SetContent(strings.Join(m.logs, "\n"))
-		// Auto-scroll to bottom to show latest logs
-		m.vp.GotoBottom()
+
+		// Smart auto-scroll: only scroll to bottom if user was already at bottom
+		// This prevents interrupting users who are reading earlier logs
+		if wasAtBottom {
+			m.vp.GotoBottom()
+		}
 		return m, subscribeEvents()
 	case ui.ProgressSnapshotEvent:
 		m.progress = msg
@@ -403,73 +406,65 @@ func (m model) View() string {
 	if m.interactiveMode {
 		// Clean layout without debug info
 		sectionHeader := "📋 Agent Logs"
-		if !m.logsCollapsed {
-			sectionHeader += " | Press 'l' to collapse"
-		} else {
-			sectionHeader += " | Press 'l' to expand"
-		}
 		body = lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("%s%s\n%s", prog, sectionHeader, logsView))
 	} else {
 		// Keep original layout for non-interactive mode
-		body = lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("Width: %d  Height: %d\n\n%sLogs (l to toggle) | Progress (p to toggle)\n%s", m.width, m.height, prog, logsView))
+		body = lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("Width: %d  Height: %d\n\n%sLogs | Progress\n%s", m.width, m.height, prog, logsView))
 	}
 
 	// Interactive input box
 	inputBox := ""
-	if m.interactiveMode && m.width > 20 { // Only show input box if terminal is wide enough
-		// Calculate maximum available width for the entire input box
-		maxBoxWidth := max(30, m.width-2) // Leave 1 char margin on each side
-
-		// Calculate text input field width (inside the box)
-		prefixLength := len("📝 Agent Request: ")
-		borderAndPadding := 4                                                  // 2 for border + 2 for padding
-		textFieldWidth := max(15, maxBoxWidth-borderAndPadding-prefixLength-2) // -2 for safety margin
-
-		m.textInput.Width = textFieldWidth
-
+	if m.interactiveMode {
 		if m.focusedInput {
-			content := fmt.Sprintf("📝 Agent Request: %s", m.textInput.View())
+			// Focused input box with prompt
+			content := fmt.Sprintf("Agent Request: %s", m.textInput.View())
 			inputBox = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				Padding(0, 1).
-				MaxWidth(maxBoxWidth).
 				Render(content)
 		} else {
-			// Show shorter text when unfocused to prevent overflow
-			currentValue := m.textInput.Value()
-			maxCurrentLen := max(10, maxBoxWidth-borderAndPadding-len("📝 Press 'i' to input | Current: "))
-			if len(currentValue) > maxCurrentLen {
-				currentValue = currentValue[:maxCurrentLen-3] + "..."
+			// Show preview when unfocused
+			currentValue := strings.TrimSpace(m.textInput.Value())
+			preview := "Press 'i' to input"
+			if currentValue != "" {
+				preview = fmt.Sprintf("Current: %s", currentValue)
 			}
-			content := fmt.Sprintf("📝 Press 'i' to input | Current: %s", currentValue)
+			content := fmt.Sprintf("Agent Request: %s", preview)
 			inputBox = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				Padding(0, 1).
-				MaxWidth(maxBoxWidth).
 				Faint(true).
 				Render(content)
 		}
-	} else if m.interactiveMode {
-		// Terminal too narrow for input box
-		inputBox = lipgloss.NewStyle().Faint(true).Render("Terminal too narrow for input - resize or use command line")
 	}
 
 	footer := ""
+
+	// Add scroll indicator if user is not at bottom (auto-scroll disabled)
+	scrollIndicator := ""
+	if !m.logsCollapsed && !m.vp.AtBottom() {
+		scrollIndicator = " | 📜 Auto-scroll OFF (Press 'End' to resume)"
+	}
+
 	if m.interactiveMode {
-		footerText := "Interactive Agent Mode | Enter: Execute | /help: Commands | ESC: Unfocus | Ctrl+C: Quit"
+		footerText := "Interactive Mode | Enter: Execute | /help: Commands | ESC: Unfocus | Ctrl+C: Quit" + scrollIndicator
 		if len(footerText) > m.width-4 {
-			footerText = "Enter: Execute | /help: Commands | ESC: Unfocus | Ctrl+C: Quit"
+			footerText = "Enter: Execute | /help: Commands | ESC: Unfocus | Ctrl+C: Quit" + scrollIndicator
 		}
 		if len(footerText) > m.width-4 {
-			footerText = "/help: Commands | ESC: Unfocus | Ctrl+C: Quit"
+			footerText = "Enter: Execute | /help: Commands | ESC: Unfocus | Ctrl+C: Quit" + scrollIndicator
+		}
+		if len(footerText) > m.width-4 {
+			footerText = "/help | Enter: Execute | ESC: Unfocus | Ctrl+C: Quit" + scrollIndicator
 		}
 		footer = lipgloss.NewStyle().Faint(true).Padding(0, 1).MaxWidth(m.width).Render(footerText)
 	} else {
-		footer = lipgloss.NewStyle().Faint(true).Padding(0, 1).MaxWidth(m.width).Render("Press q to quit | © Ledit")
+		footerText := "Press q to quit | © Ledit" + scrollIndicator
+		footer = lipgloss.NewStyle().Faint(true).Padding(0, 1).MaxWidth(m.width).Render(footerText)
 	}
 
 	var base string
-	if m.interactiveMode && inputBox != "" {
+	if m.interactiveMode {
 		base = lipgloss.JoinVertical(lipgloss.Left, header, body, inputBox, footer)
 	} else {
 		base = lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
@@ -512,7 +507,7 @@ func (m model) renderHeader() string {
 	if m.interactiveMode {
 		// Interactive mode header
 		parts = []string{
-			"🤖 Ledit Interactive Agent",
+			"🤖",
 			fmt.Sprintf("Model: %s", func() string {
 				if m.baseModel != "" {
 					return m.baseModel
@@ -634,7 +629,7 @@ func (m model) handleSlashCommand(input string) (bool, *model, tea.Cmd) {
 
 	switch command {
 	case "/help", "/h":
-		helpText := `🚀 Ledit Interactive Agent - Slash Commands:
+		helpText := `🚀 Slash Commands:
 
 Agent Commands:
   /help, /h              Show this help message
@@ -657,6 +652,17 @@ Navigation:
   i                      Focus input (when unfocused)
   l                      Toggle logs
   p                      Toggle progress
+
+Scrolling (when logs are visible):
+  ↑/k                    Scroll up one line
+  ↓/j                    Scroll down one line
+  Home                   Go to top of logs
+  End                    Go to bottom (resume auto-scroll)
+  PgUp/PgDn             Scroll by page
+  Mouse wheel            Scroll up/down
+
+Note: Auto-scroll is disabled when you scroll up to read earlier logs.
+Press 'End' or scroll to bottom to resume auto-scroll for new messages.
 
 Examples:
   Add error handling to main.go
@@ -803,9 +809,13 @@ Examples:
 		return true, nil, nil
 
 	case "/config":
+		autoScrollStatus := "Smart (auto when at bottom)"
+		if !m.vp.AtBottom() {
+			autoScrollStatus = "Disabled (user scrolled up)"
+		}
 		ui.Log(`⚙️  Current Configuration:
 • Interactive Mode: Active
-• Auto-scroll Logs: Enabled
+• Auto-scroll Logs: ` + autoScrollStatus + `
 • Command History: ` + fmt.Sprintf("%d commands stored", len(m.commandHistory)) + `
 • Log Retention: 500 entries max
 • Model: ` + func() string {

@@ -297,7 +297,17 @@ func (s *OptimizedEditingService) analyzeTaskComplexity(todo *TodoItem, ctx *Sim
 
 // executeQuickEdit performs a streamlined edit with rollback support
 func (s *OptimizedEditingService) executeQuickEdit(todo *TodoItem, ctx *SimplifiedAgentContext) (string, []string, error) {
-	result, err := editor.ProcessCodeGenerationWithRollback("", todo.Content+" "+todo.Description, s.cfg, "")
+	// Use quality-aware code generation if context provides quality optimizer
+	var result *editor.EditingOperationResult
+	var err error
+
+	if ctx != nil && ctx.QualityOptimizer != nil {
+		qualityEditor := NewQualityAwareEditor(ctx.QualityOptimizer)
+		result, err = qualityEditor.ProcessCodeGenerationWithRollbackAndQuality(
+			"", todo.Content+" "+todo.Description, s.cfg, ctx.QualityLevel, "")
+	} else {
+		result, err = editor.ProcessCodeGenerationWithRollback("", todo.Content+" "+todo.Description, s.cfg, "")
+	}
 	if err != nil {
 		return "", nil, err
 	}
@@ -306,7 +316,22 @@ func (s *OptimizedEditingService) executeQuickEdit(todo *TodoItem, ctx *Simplifi
 
 // executeFullEdit performs comprehensive multi-phase editing
 func (s *OptimizedEditingService) executeFullEdit(todo *TodoItem, ctx *SimplifiedAgentContext) (string, []string, error) {
-	result, err := editor.ProcessCodeGenerationWithRollback("", todo.Content+" "+todo.Description, s.cfg, "")
+	// Use quality-aware code generation with enhanced quality for full edits
+	var result *editor.EditingOperationResult
+	var err error
+
+	if ctx != nil && ctx.QualityOptimizer != nil {
+		qualityEditor := NewQualityAwareEditor(ctx.QualityOptimizer)
+		// Use enhanced quality for full edits
+		qualityLevel := ctx.QualityLevel
+		if qualityLevel == QualityStandard {
+			qualityLevel = QualityEnhanced // Upgrade to enhanced for full edits
+		}
+		result, err = qualityEditor.ProcessCodeGenerationWithRollbackAndQuality(
+			"", todo.Content+" "+todo.Description, s.cfg, qualityLevel, "")
+	} else {
+		result, err = editor.ProcessCodeGenerationWithRollback("", todo.Content+" "+todo.Description, s.cfg, "")
+	}
 	if err != nil {
 		return "", nil, err
 	}

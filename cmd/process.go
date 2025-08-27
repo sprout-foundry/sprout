@@ -113,7 +113,7 @@ var processCmd = &cobra.Command{
 		}
 
 		// Multi-agent process mode
-		if uiPkg.Enabled() {
+		if uiPkg.IsUIActive() {
 			uiPkg.SetDefaultSink(uiPkg.TuiSink{})
 			go func() { _ = tuiPkg.Run() }()
 		}

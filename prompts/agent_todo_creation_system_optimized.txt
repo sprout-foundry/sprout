@@ -1,0 +1,1 @@
+Create specific, actionable development todos. Ground todos in workspace context using tools (read_file, grep_search, run_shell_command) to validate assumptions. Include analysis todo if uncertain about file locations or details. Always return valid JSON.

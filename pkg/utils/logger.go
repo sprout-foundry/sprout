@@ -79,10 +79,11 @@ func (w *Logger) LogUserInteraction(message string) {
 	ui.Out().Print(message + "\n")
 }
 
-// LogProcessStep logs the current step in a process, and prints to stdout.
+// LogProcessStep logs the current step in a process, with smart UI filtering.
 func (w *Logger) LogProcessStep(step string) {
 	w.logger.Printf("Process Step: %s", step)
-	ui.Out().Print(step + "\n")
+	// Use smart logging to determine if this should be shown in UI
+	ui.SmartLog(step)
 }
 
 // Log logs a general message only to the log file.
@@ -125,7 +126,7 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 		return default_response
 	}
 	// If UI is enabled, ask via TUI prompt events, but only if user interaction is enabled
-	if ui.Enabled() {
+	if ui.IsUIActive() {
 		confirmed, err := ui.PromptYesNo(prompt, default_response)
 		if err != nil {
 			return default_response

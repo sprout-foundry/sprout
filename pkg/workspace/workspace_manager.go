@@ -1380,7 +1380,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	logger.LogProcessStep("--- Loading in workspace data ---")
 	// UI shimmer: workspace context building
-	ui.PublishStatus("Building workspace context (files, syntactic overviews)…")
+	ui.ShowProgressWithDetails("🔄 Preparing workspace...", "Building workspace context (files, syntactic overviews)…")
 	workspaceFilePath := "./.ledit/workspace.json"
 
 	if err := os.MkdirAll(filepath.Dir(workspaceFilePath), os.ModePerm); err != nil {
@@ -1532,7 +1532,7 @@ func GetWorkspaceContext(instructions string, cfg *config.Config) string {
 	}
 
 	for _, file := range fullContextFiles {
-		ui.PublishStatus("Reading selected files for full context…")
+		ui.ShowProgressWithDetails("📝 Reading files...", "Reading selected files for full context…")
 		fileInfo, exists := workspace.Files[file]
 		if !exists {
 			logger.Logf("Warning: file %s selected for full context not found in workspace. Skipping.\n", file)

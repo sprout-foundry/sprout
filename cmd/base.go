@@ -73,7 +73,7 @@ func (b *BaseCommand) Initialize() error {
 	}
 
 	// Setup UI if enabled
-	if uiPkg.Enabled() {
+	if uiPkg.IsUIActive() {
 		uiPkg.SetDefaultSink(uiPkg.TuiSink{})
 		go func() { _ = tuiPkg.Run() }()
 	}

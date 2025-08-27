@@ -515,7 +515,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 	var tokenUsage *types.TokenUsage
 
 	// Inform UI of the active model so the header can render it persistently
-	if ui.Enabled() && strings.TrimSpace(modelName) != "" {
+	if ui.IsUIActive() && strings.TrimSpace(modelName) != "" {
 		ui.PublishModel(modelName)
 	}
 
@@ -685,8 +685,8 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 		rl.LogEvent("llm_response_meta", map[string]any{"provider": provider, "model": modelName, "usage": tokenUsage})
 	}
 
-	// After a successful call, publish token/cost aggregates so the TUI header can persistently show them
-	if ui.Enabled() && tokenUsage != nil {
+	// Ensure token usage estimation is complete (but don't publish individual costs to UI)
+	if tokenUsage != nil {
 		// If provider returned usage, trust it. Otherwise, estimate from messages
 		if tokenUsage.TotalTokens == 0 {
 			est := 0
@@ -717,9 +717,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 				}
 			}
 		}
-		cost := CalculateCost(*tokenUsage, modelName)
-		// Use a ProgressSnapshotEvent with only totals to update the header
-		ui.Publish(ui.ProgressSnapshotEvent{Completed: 0, Total: 0, Rows: nil, Time: time.Now(), TotalTokens: tokenUsage.TotalTokens, TotalCost: cost, BaseModel: modelName})
+		// Note: Individual cost publishing removed - let agent system handle aggregate cost display
 	}
 
 	// Display token usage information to user
@@ -736,7 +734,7 @@ func GetLLMResponse(modelName string, messages []prompts.Message, filename strin
 	// Stream to UI when enabled, while also capturing content in buffer
 	var writer io.Writer = &contentBuffer
 	var stream *ui.StreamWriter
-	if ui.Enabled() {
+	if ui.IsUIActive() {
 		stream = ui.NewStreamWriter()
 		writer = io.MultiWriter(stream, &contentBuffer)
 	}

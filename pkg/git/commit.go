@@ -101,23 +101,57 @@ func PerformGitCommit(message string) error {
 
 // CleanCommitMessage cleans up LLM-generated commit messages
 func CleanCommitMessage(message string) string {
-	// Clean up function call format if present
-	if strings.Contains(message, `"type": "function"`) && strings.Contains(message, `"name": "generateCommitMessage"`) {
-		// Try to parse the JSON and extract meaningful content
-		var funcCall map[string]interface{}
-		if err := json.Unmarshal([]byte(message), &funcCall); err == nil {
-			if params, ok := funcCall["parameters"].(map[string]interface{}); ok {
-				// Look for any field that might contain the actual commit message
-				if commitMsg, ok := params["commitMessageFormat"].(string); ok && commitMsg != "" {
-					return commitMsg
-				} else if originalRequest, ok := params["originalUserRequest"].(string); ok && originalRequest != "" {
-					// Generate a simple commit message based on the original request
-					return fmt.Sprintf("feat: %s\n\n- %s", strings.ToLower(strings.TrimSpace(originalRequest)), "Changes based on user request")
+	// Check if the message looks like JSON (starts and ends with braces)
+	trimmed := strings.TrimSpace(message)
+	if strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}") {
+		// Try to parse as JSON
+		var jsonObj map[string]interface{}
+		if err := json.Unmarshal([]byte(trimmed), &jsonObj); err == nil {
+			
+			// Handle function call format
+			if strings.Contains(message, `"type": "function"`) && strings.Contains(message, `"name": "generateCommitMessage"`) {
+				if params, ok := jsonObj["parameters"].(map[string]interface{}); ok {
+					if commitMsg, ok := params["commitMessageFormat"].(string); ok && commitMsg != "" {
+						return commitMsg
+					} else if originalRequest, ok := params["originalUserRequest"].(string); ok && originalRequest != "" {
+						return fmt.Sprintf("🚀 feat: %s\n\n- %s", strings.ToLower(strings.TrimSpace(originalRequest)), "Changes based on user request")
+					}
+				}
+			}
+			
+			// Handle simple key-value JSON format like {"title": "description"}
+			if len(jsonObj) == 1 {
+				for title, desc := range jsonObj {
+					if descStr, ok := desc.(string); ok && title != "" && descStr != "" {
+						// Determine emoji based on title content
+						emoji := "🚀"
+						prefix := "feat"
+						titleLower := strings.ToLower(title)
+						if strings.Contains(titleLower, "fix") || strings.Contains(titleLower, "bug") {
+							emoji = "🐛"
+							prefix = "fix"
+						} else if strings.Contains(titleLower, "doc") {
+							emoji = "📝" 
+							prefix = "docs"
+						} else if strings.Contains(titleLower, "enhance") || strings.Contains(titleLower, "improve") {
+							emoji = "✨"
+							prefix = "enhance"
+						} else if strings.Contains(titleLower, "refactor") {
+							emoji = "♻️"
+							prefix = "refactor" 
+						} else if strings.Contains(titleLower, "test") {
+							emoji = "🧪"
+							prefix = "test"
+						}
+						
+						return fmt.Sprintf("%s %s: %s\n\n%s", emoji, prefix, title, descStr)
+					}
 				}
 			}
 		}
-		// Fallback to generic message
-		return "feat: add new files and improvements\n\n- Added new test scripts and agent functionality\n- Enhanced code generation and editing capabilities"
+		
+		// Fallback for JSON that couldn't be parsed properly
+		return "🚀 feat: Add new functionality\n\n- Enhanced codebase with new features\n- Improved system capabilities"
 	}
 
 	// Clean up the message: remove markdown fences if present

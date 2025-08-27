@@ -67,7 +67,8 @@ func executeCodeCommand(cfg *CommandConfig, args []string) error {
 		cfg.Config.SkipPrompt = cfg.SkipPrompt
 	}
 
-	ui.Out().Print(prompts.ProcessingCodeGeneration() + "\n")
+	// Show processing message only in console mode - UI shows progress differently
+	ui.PrintContext(prompts.ProcessingCodeGeneration()+"\n", false)
 	startTime := time.Now()
 
 	// Execute code generation
@@ -79,7 +80,8 @@ func executeCodeCommand(cfg *CommandConfig, args []string) error {
 	duration := time.Since(startTime)
 
 	// Display completion message with timing
-	ui.Out().Print(prompts.CodeGenerationFinished(duration))
+	// Show completion message only in console mode
+	ui.PrintContext(prompts.CodeGenerationFinished(duration), false)
 
 	// Display token usage if available
 	if cfg.Config.LastTokenUsage != nil {
@@ -92,7 +94,8 @@ func executeCodeCommand(cfg *CommandConfig, args []string) error {
 				TotalTokens:      cfg.Config.LastTokenUsage.TotalTokens,
 			})
 
-			ui.Out().Printf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
+			// Only show token summary in console mode - UI shows this in header
+			ui.PrintfContext(false, "Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
 				cfg.Config.LastTokenUsage.PromptTokens,
 				cfg.Config.LastTokenUsage.CompletionTokens,
 				cfg.Config.LastTokenUsage.TotalTokens,

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/editor"
@@ -298,7 +299,7 @@ func analyzeTodoExecutionType(content, description string) ExecutionType {
 
 	// File creation/generation tasks - should use Edit/Write tools, not shell commands
 	fileCreationPatterns := []string{
-		"generate.*\\.md", "create.*\\.md", "write.*\\.md", 
+		"generate.*\\.md", "create.*\\.md", "write.*\\.md",
 		"generate.*\\.txt", "create.*\\.txt", "write.*\\.txt",
 		"generate.*\\.json", "create.*\\.json", "write.*\\.json",
 		"generate.*\\.yaml", "create.*\\.yaml", "write.*\\.yaml",
@@ -616,7 +617,7 @@ func applyDirectEdit(filePath, newContent string, logger *utils.Logger, ctx *Sim
 
 	// Mark that files were modified for validation purposes
 	ctx.FilesModified = true
-	
+
 	logger.LogProcessStep(fmt.Sprintf("📝 Updated %s", filePath))
 	return nil
 }
@@ -1104,10 +1105,10 @@ func validateShellCommand(command string) error {
 	for _, pattern := range problematicPatterns {
 		if strings.Contains(command, pattern) {
 			truncated := strings.TrimSpace(command)
-		if len(truncated) > 50 {
-			truncated = truncated[:50] + "..."
-		}
-		return fmt.Errorf("command appears to contain source code instead of shell syntax: %s", truncated)
+			if len(truncated) > 50 {
+				truncated = truncated[:50] + "..."
+			}
+			return fmt.Errorf("command appears to contain source code instead of shell syntax: %s", truncated)
 		}
 	}
 
@@ -1122,14 +1123,14 @@ func validateShellCommand(command string) error {
 // executeContinuationTodo handles workflow continuation by generating the next batch of todos
 func executeContinuationTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error {
 	ctx.Logger.LogProcessStep("🔄 Processing continuation todo - generating next phase")
-	
+
 	// If --skip-prompt is not set, prompt the user before continuing
 	if !ctx.SkipPrompt {
 		ctx.Logger.LogProcessStep("⏳ Requesting user approval for workflow continuation...")
 		ui.Out().Printf("\n🔄 Workflow Continuation Required\n")
 		ui.Out().Printf("The current phase is complete. Ready to continue with the next set of tasks?\n\n")
 		ui.Out().Printf("Original request: %s\n\n", ctx.UserIntent)
-		
+
 		// Show completed tasks
 		completedCount := 0
 		for _, completedTodo := range ctx.Todos {
@@ -1138,21 +1139,21 @@ func executeContinuationTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error 
 			}
 		}
 		ui.Out().Printf("✅ Completed %d tasks in this phase\n\n", completedCount)
-		
+
 		ui.Out().Printf("Continue with next phase? (y/N): ")
-		
+
 		var response string
 		fmt.Scanln(&response)
-		
+
 		if strings.ToLower(strings.TrimSpace(response)) != "y" {
 			ctx.Logger.LogProcessStep("❌ User chose not to continue workflow")
 			return fmt.Errorf("workflow continuation cancelled by user")
 		}
-		
+
 		ctx.Logger.LogProcessStep("✅ User approved workflow continuation")
 		ui.Out().Printf("\n🚀 Continuing with next phase...\n\n")
 	}
-	
+
 	// Extract the workflow context from the current intent and completed todos
 	completedTasks := []string{}
 	for _, completedTodo := range ctx.Todos {
@@ -1160,7 +1161,7 @@ func executeContinuationTodo(ctx *SimplifiedAgentContext, todo *TodoItem) error 
 			completedTasks = append(completedTasks, completedTodo.Content)
 		}
 	}
-	
+
 	// Create a continuation prompt that includes context about what's been done
 	continuationPrompt := fmt.Sprintf(`CONTINUATION WORKFLOW
 
@@ -1194,7 +1195,7 @@ Generate todos that continue naturally from where the previous phase left off.`,
 		ctx.Config,
 		60*time.Second,
 	)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to generate continuation todos: %w", err)
 	}
@@ -1210,11 +1211,209 @@ Generate todos that continue naturally from where the previous phase left off.`,
 
 	// Add the new todos to the context (they'll be picked up in the next execution cycle)
 	ctx.Todos = append(ctx.Todos, newTodos...)
-	
+
 	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Generated %d continuation todos for next phase", len(newTodos)))
-	
+
 	// Mark this continuation todo as completed
 	return nil
+}
+
+// executeParallelTodos executes a set of independent todos concurrently
+// This is particularly useful for documentation and analysis tasks that don't modify the same files
+func executeParallelTodos(ctx *SimplifiedAgentContext, todos []TodoItem) error {
+	ctx.Logger.LogProcessStep(fmt.Sprintf("🚀 Starting parallel execution of %d todos", len(todos)))
+
+	// Create a worker pool with controlled concurrency
+	maxWorkers := 3 // Limit concurrent LLM calls to avoid rate limits
+	if len(todos) < maxWorkers {
+		maxWorkers = len(todos)
+	}
+
+	// Create channels for work distribution
+	todosChan := make(chan TodoItem, len(todos))
+	resultsChan := make(chan ParallelTodoResult, len(todos))
+
+	// Start workers
+	var wg sync.WaitGroup
+	for i := 0; i < maxWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			executeParallelWorker(ctx, workerID, todosChan, resultsChan)
+		}(i)
+	}
+
+	// Send todos to workers
+	go func() {
+		defer close(todosChan)
+		for _, todo := range todos {
+			todosChan <- todo
+		}
+	}()
+
+	// Collect results
+	var results []ParallelTodoResult
+	for i := 0; i < len(todos); i++ {
+		result := <-resultsChan
+		results = append(results, result)
+	}
+
+	// Wait for all workers to complete
+	wg.Wait()
+	close(resultsChan)
+
+	// Process results and update context
+	var errors []error
+	completedCount := 0
+	for _, result := range results {
+		if result.Error != nil {
+			ctx.Logger.LogError(fmt.Errorf("parallel todo failed: %w", result.Error))
+			errors = append(errors, result.Error)
+			// Update todo status in context
+			for i := range ctx.Todos {
+				if ctx.Todos[i].ID == result.TodoID {
+					ctx.Todos[i].Status = "failed"
+					break
+				}
+			}
+		} else {
+			completedCount++
+			// Update todo status and store results
+			for i := range ctx.Todos {
+				if ctx.Todos[i].ID == result.TodoID {
+					ctx.Todos[i].Status = "completed"
+					break
+				}
+			}
+			// Store analysis results and track token usage
+			if result.Output != "" {
+				ctx.AnalysisResults[result.TodoID] = result.Output
+			}
+			if result.TokenUsage != nil {
+				trackTokenUsage(ctx, result.TokenUsage, result.ModelUsed)
+			}
+		}
+	}
+
+	ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Parallel execution completed: %d/%d successful", completedCount, len(todos)))
+
+	// Return error if any todos failed
+	if len(errors) > 0 {
+		return fmt.Errorf("parallel execution had %d failures", len(errors))
+	}
+
+	return nil
+}
+
+// ParallelTodoResult represents the result of a parallel todo execution
+type ParallelTodoResult struct {
+	TodoID     string
+	Output     string
+	Error      error
+	TokenUsage *llm.TokenUsage
+	ModelUsed  string
+}
+
+// executeParallelWorker is a worker function that processes todos from a channel
+func executeParallelWorker(ctx *SimplifiedAgentContext, workerID int, todosChan <-chan TodoItem, resultsChan chan<- ParallelTodoResult) {
+	for todo := range todosChan {
+		ctx.Logger.LogProcessStep(fmt.Sprintf("🔧 Worker %d executing: %s", workerID, todo.Content))
+
+		// Create a copy of the context for this worker to avoid race conditions
+		workerCtx := *ctx
+		workerCtx.CurrentTodo = &todo
+
+		// Execute the todo
+		var result ParallelTodoResult
+		result.TodoID = todo.ID
+
+		// Only execute analysis and documentation todos in parallel
+		// Code modification todos should still be sequential to avoid conflicts
+		executionType := analyzeTodoExecutionType(todo.Content, todo.Description)
+		switch executionType {
+		case ExecutionTypeAnalysis:
+			err := executeAnalysisTodo(&workerCtx, &todo)
+			if err != nil {
+				result.Error = err
+			} else {
+				result.Output = workerCtx.AnalysisResults[todo.ID]
+			}
+		case ExecutionTypeDirectEdit:
+			// For documentation files, we can execute in parallel
+			if isDocumentationTodo(todo) {
+				err := executeDirectEditTodo(&workerCtx, &todo)
+				if err != nil {
+					result.Error = err
+				}
+			} else {
+				// Skip non-documentation edits in parallel mode
+				result.Error = fmt.Errorf("todo %s skipped in parallel mode (requires sequential execution)", todo.Content)
+			}
+		default:
+			// Skip complex todos in parallel mode
+			result.Error = fmt.Errorf("todo %s skipped in parallel mode (requires sequential execution)", todo.Content)
+		}
+
+		resultsChan <- result
+		ctx.Logger.LogProcessStep(fmt.Sprintf("✅ Worker %d completed: %s", workerID, todo.Content))
+	}
+}
+
+// isDocumentationTodo checks if a todo is related to documentation generation
+func isDocumentationTodo(todo TodoItem) bool {
+	content := strings.ToLower(todo.Content + " " + todo.Description)
+	docKeywords := []string{
+		"documentation", "docs", "api_docs", "readme", "doc", "document",
+		"generate.*md", "create.*md", "write.*md",
+		"markdown", ".md",
+	}
+
+	for _, keyword := range docKeywords {
+		if strings.Contains(content, keyword) {
+			return true
+		}
+	}
+
+	// Check file path for documentation files
+	if todo.FilePath != "" {
+		filePath := strings.ToLower(todo.FilePath)
+		if strings.HasSuffix(filePath, ".md") || strings.Contains(filePath, "doc") || strings.Contains(filePath, "readme") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// canExecuteInParallel determines if a set of todos can be executed in parallel
+func canExecuteInParallel(todos []TodoItem) bool {
+	// Check if todos are independent (don't modify the same files)
+	fileMap := make(map[string]bool)
+	for _, todo := range todos {
+		// Skip analysis todos (they don't modify files)
+		executionType := analyzeTodoExecutionType(todo.Content, todo.Description)
+		if executionType == ExecutionTypeAnalysis {
+			continue
+		}
+
+		// Check for file conflicts
+		if todo.FilePath != "" {
+			if fileMap[todo.FilePath] {
+				return false // Same file targeted by multiple todos
+			}
+			fileMap[todo.FilePath] = true
+		}
+
+		// Only allow documentation and analysis todos in parallel
+		if executionType != ExecutionTypeAnalysis && executionType != ExecutionTypeDirectEdit {
+			return false
+		}
+		if executionType == ExecutionTypeDirectEdit && !isDocumentationTodo(todo) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // parseTodosFromResponse extracts and parses todos from an LLM response

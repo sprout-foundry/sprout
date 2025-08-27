@@ -101,6 +101,19 @@ func PublishProgress(completed, total int, rows []ProgressRow) {
 	})
 }
 
+// PublishProgressWithTokens broadcasts a progress snapshot with token/cost info to the UI
+func PublishProgressWithTokens(completed, total, totalTokens int, totalCost float64, baseModel string, rows []ProgressRow) {
+	Publish(ProgressSnapshotEvent{
+		Completed:   completed,
+		Total:       total,
+		Rows:        rows,
+		Time:        time.Now(),
+		TotalTokens: totalTokens,
+		TotalCost:   totalCost,
+		BaseModel:   baseModel,
+	})
+}
+
 // ModelInfoEvent announces the active or base model name
 type ModelInfoEvent struct{ Name string }
 

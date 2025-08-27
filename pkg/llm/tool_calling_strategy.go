@@ -25,9 +25,9 @@ var ProviderToolSupport = map[string]ToolCallingCapability{
 	"gemini":    ToolCallingAdvanced,
 	"deepseek":  ToolCallingOpenAI, // DeepSeek API supports OpenAI-compatible function calling
 	"deepinfra": ToolCallingOpenAI, // DeepInfra supports OpenAI-compatible function calling
-	"ollama":    ToolCallingNone, // Most local models don't support tool calls
-	"cerebras":  ToolCallingNone, // Cerebras doesn't support tool calls
-	"lambda":    ToolCallingNone, // Lambda Labs doesn't support tool calls
+	"ollama":    ToolCallingNone,   // Most local models don't support tool calls
+	"cerebras":  ToolCallingNone,   // Cerebras doesn't support tool calls
+	"lambda":    ToolCallingNone,   // Lambda Labs doesn't support tool calls
 }
 
 // ModelSpecificToolSupport allows overriding provider defaults for specific models

@@ -35,8 +35,20 @@ func init() {
 // agentCmd represents the agent command
 var agentCmd = &cobra.Command{
 	Use:   "agent [intent]",
-	Short: "AI agent mode - analyzes intent and autonomously decides what actions to take",
+	Short: "AI agent mode - interactive or direct execution of development tasks",
 	Long: `Simplified Agent mode with streamlined workflow for code updates, questions, and commands.
+
+The agent can run in two modes:
+
+1. **Interactive Mode** (with --ui flag):
+   - Run "ledit agent --ui" to start interactive TUI mode
+   - Type requests in the bottom input box and press Enter to execute
+   - Watch real-time progress and logs
+   - Perfect for iterative development workflows
+
+2. **Direct Mode** (with command line arguments):
+   - Run "ledit agent \"your request\"" for one-shot execution
+   - Ideal for scripting and automation
 
 The agent uses a simplified approach:
 • For code updates: Creates todos, executes them via the code command with auto-review, validates builds
@@ -51,12 +63,25 @@ Workflow:
 5. Questions and commands are handled directly without todos
 
 Examples:
+  # Interactive mode
+  ledit agent --ui
+  
+  # Direct mode
   ledit agent "Add better error handling to the main function"
   ledit agent "How does the authentication system work?"
   ledit agent "run build command"
   ledit agent "Fix the bug where users can't login"`,
-	Args: cobra.MinimumNArgs(1),
+	Args: cobra.MaximumNArgs(1), // Allow 0 or 1 args for interactive mode
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// If no arguments provided, check if UI is available for interactive mode
+		if len(args) == 0 {
+			if uiPkg.Enabled() {
+				// Start interactive TUI mode
+				return startInteractiveTUI()
+			} else {
+				return fmt.Errorf("no intent provided. Use: ledit agent \"<your request>\" or enable UI mode with --ui flag")
+			}
+		}
 		userIntent := strings.Join(args, " ")
 		// Mark this invocation as coming from agent for downstream logic (e.g., automated review policy)
 		_ = os.Setenv("LEDIT_FROM_AGENT", "1")
@@ -97,7 +122,7 @@ Examples:
 			os.Exit(1)
 		}
 
-		// Attempt to print token usage summary if available and no error occurred
+		// Handle token usage summary based on context
 		if cfg, cfgErr := config.LoadOrInitConfig(agentSkipPrompt); cfgErr == nil && cfg != nil && cfg.LastTokenUsage != nil {
 			// Use provider interface for cost calculation
 			if provider, err := providers.GetProvider(cfg.EditingModel); err == nil {
@@ -106,7 +131,9 @@ Examples:
 					CompletionTokens: cfg.LastTokenUsage.CompletionTokens,
 					TotalTokens:      cfg.LastTokenUsage.TotalTokens,
 				})
-				uiPkg.Out().Printf("Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
+
+				// Only show summary in console mode - UI shows this in the header
+				uiPkg.PrintfContext(false, "Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
 					cfg.LastTokenUsage.PromptTokens,
 					cfg.LastTokenUsage.CompletionTokens,
 					cfg.LastTokenUsage.TotalTokens,
@@ -115,4 +142,16 @@ Examples:
 		}
 		return nil
 	},
+}
+
+// startInteractiveTUI starts the TUI in interactive agent mode
+func startInteractiveTUI() error {
+	// Set TUI as output sink
+	uiPkg.SetDefaultSink(uiPkg.TuiSink{})
+
+	// Start TUI with interactive agent mode
+	if err := tuiPkg.RunInteractiveAgent(); err != nil {
+		return fmt.Errorf("failed to start interactive TUI: %w", err)
+	}
+	return nil
 }

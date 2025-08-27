@@ -332,7 +332,6 @@ func CallLLMWithInteractiveContext(
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
 		ui.Out().Print("[tools] model returned a response\n")
-		logger.Logf("DEBUG: Response length: %d", len(response))
 		previewLen := 100
 		if len(response) < previewLen {
 			previewLen = len(response)
@@ -642,7 +641,6 @@ func CallLLMWithInteractiveContext(
 							continue
 						}
 					}
-
 
 					// Shell caps and dedupe
 					if name == "run_shell_command" {

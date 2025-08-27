@@ -14,7 +14,7 @@ func analyzeIntentType(userIntent string, logger *utils.Logger) IntentType {
 
 	// Check for documentation tasks first - they're often misclassified
 	documentationWords := []string{
-		"document", "documentation", "generate docs", "create docs", "api docs", 
+		"document", "documentation", "generate docs", "create docs", "api docs",
 		"generate documentation", "create documentation", "document endpoints",
 		"document api", "api documentation", "endpoint documentation",
 		"create api documentation", "generate api documentation",

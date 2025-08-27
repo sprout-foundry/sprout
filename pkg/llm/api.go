@@ -775,12 +775,66 @@ func GetCommitMessage(cfg *config.Config, changelog string, originalPrompt strin
 
 	messages := prompts.BuildCommitMessages(changelog, originalPrompt)
 
-	response, _, err := GetLLMResponse(modelName, messages, filename, cfg, 1*time.Minute)
+	// Use a special version that explicitly disables JSON mode and tools for commit messages
+	response, _, err := getCommitMessageFromLLM(modelName, messages, cfg, 1*time.Minute)
 	if err != nil {
 		return "", fmt.Errorf("failed to get commit message from LLM: %w", err)
 	}
 
 	return strings.TrimSpace(response), nil
+}
+
+// getCommitMessageFromLLM is a specialized version that disables JSON mode and tools
+func getCommitMessageFromLLM(modelName string, messages []prompts.Message, cfg *config.Config, timeout time.Duration) (string, *TokenUsage, error) {
+	var contentBuffer strings.Builder
+	tokenUsage, err := getCommitMessageStreamFromLLM(modelName, messages, cfg, timeout, &contentBuffer)
+	if err != nil {
+		return "", tokenUsage, err
+	}
+	content := contentBuffer.String()
+	content = removeThinkTags(content)
+	return content, tokenUsage, nil
+}
+
+// getCommitMessageStreamFromLLM is like GetLLMResponseStream but explicitly disables JSON mode and tools
+func getCommitMessageStreamFromLLM(modelName string, messages []prompts.Message, cfg *config.Config, timeout time.Duration, writer io.Writer) (*TokenUsage, error) {
+	var totalInputTokens int
+	for _, msg := range messages {
+		totalInputTokens += GetMessageTokens(msg.Role, GetMessageText(msg.Content))
+	}
+
+	parts := strings.SplitN(modelName, ":", 3)
+	provider := parts[0]
+	model := ""
+	if len(parts) > 1 {
+		model = parts[1]
+	}
+	if len(parts) > 2 {
+		model = parts[2]
+	}
+
+	var tokenUsage *TokenUsage
+	var err error
+
+	switch provider {
+	case "deepinfra":
+		apiKey, keyErr := apikeys.GetAPIKey("deepinfra", true)
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		tokenUsage, err = callOpenAICompatibleStreamNoTools("https://api.deepinfra.com/v1/openai/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+	case "openai":
+		apiKey, keyErr := apikeys.GetAPIKey("openai", true)
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		tokenUsage, err = callOpenAICompatibleStreamNoTools("https://api.openai.com/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+	default:
+		// For other providers, fall back to the regular implementation
+		return GetLLMResponseStream(modelName, messages, "", cfg, timeout, writer)
+	}
+
+	return tokenUsage, err
 }
 
 // GenerateSearchQuery uses an LLM to generate a concise search query based on the provided context.

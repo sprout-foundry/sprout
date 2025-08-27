@@ -327,3 +327,111 @@ func estimateUsageFromMessages(messages []prompts.Message) *TokenUsage {
 		TotalTokens:      promptTokens + completionTokens,
 	}
 }
+
+// callOpenAICompatibleStreamNoTools calls OpenAI-compatible APIs with JSON mode and tools explicitly disabled
+func callOpenAICompatibleStreamNoTools(apiURL, apiKey, model string, messages []prompts.Message, cfg *config.Config, timeout time.Duration, writer io.Writer) (*TokenUsage, error) {
+	logger := utils.GetLogger(cfg.SkipPrompt)
+
+	// Build request payload without JSON mode or tools
+	payload := map[string]interface{}{
+		"model":    model,
+		"messages": messages,
+		"stream":   true,
+	}
+	// Add temperature if configured
+	if cfg.Temperature > 0 {
+		payload["temperature"] = cfg.Temperature
+	}
+	// Explicitly disable JSON mode - force text response
+	payload["response_format"] = map[string]any{"type": "text"}
+
+	reqBody, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	logger.Logf("DEBUG: callOpenAICompatibleStreamNoTools - sending request to: %s", apiURL)
+	logger.Logf("DEBUG: Request payload: %s", string(reqBody))
+
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
+	if err != nil {
+		ui.Out().Print(prompts.RequestCreationError(err))
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	transport := &http.Transport{}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+	}
+
+	resp, err := retryWithBackoffOpenAI(req, client)
+	if err != nil {
+		ui.Out().Print(prompts.HTTPRequestError(err))
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		ui.Out().Printf("HTTP Error %d: %s\n", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse streaming response (same as regular callOpenAICompatibleStream)
+	scanner := bufio.NewScanner(resp.Body)
+	var tokenUsage *TokenUsage
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			break
+		}
+
+		var chunk map[string]interface{}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+
+		if choices, ok := chunk["choices"].([]interface{}); ok && len(choices) > 0 {
+			choice := choices[0].(map[string]interface{})
+			if delta, ok := choice["delta"].(map[string]interface{}); ok {
+				if content, ok := delta["content"].(string); ok {
+					writer.Write([]byte(content))
+				}
+			}
+		}
+
+		// Extract usage information if available
+		if usage, ok := chunk["usage"].(map[string]interface{}); ok {
+			tokenUsage = &TokenUsage{}
+			if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
+				tokenUsage.PromptTokens = int(promptTokens)
+			}
+			if completionTokens, ok := usage["completion_tokens"].(float64); ok {
+				tokenUsage.CompletionTokens = int(completionTokens)
+			}
+			if totalTokens, ok := usage["total_tokens"].(float64); ok {
+				tokenUsage.TotalTokens = int(totalTokens)
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading response: %w", err)
+	}
+
+	// If no usage data was provided, estimate it
+	if tokenUsage == nil {
+		tokenUsage = estimateUsageFromMessages(messages)
+	}
+
+	return tokenUsage, nil
+}

@@ -46,6 +46,8 @@ type model struct {
 	textInput       textinput.Model
 	focusedInput    bool
 	commandHistory  []string
+	historyIndex    int    // Current position in command history (-1 means not browsing history)
+	originalInput   string // Store original input when browsing history
 }
 
 type tickMsg time.Time
@@ -54,6 +56,10 @@ func initialModel() model {
 	m := model{start: time.Now(), logs: make([]string, 0, 256)}
 	m.vp = viewport.New(80, 20)       // Default size, will be updated on window resize
 	m.promptVP = viewport.New(80, 10) // Default size, will be updated on window resize
+
+	// Enable auto-scroll by default by ensuring viewport starts at bottom
+	m.vp.GotoBottom()
+
 	// Default logs collapsed; allow override via env
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("LEDIT_LOGS_COLLAPSED"))); v == "0" || v == "false" || v == "no" {
 		m.logsCollapsed = false
@@ -76,8 +82,15 @@ func initialInteractiveModel() model {
 	ti.Placeholder = "Enter request or /help for commands..."
 	ti.Focus()
 	ti.CharLimit = 2000
-	ti.Width = 50 // Conservative fixed width
+	ti.Width = 80 // Start with reasonable width, will be adjusted for full width
 	m.textInput = ti
+
+	// Initialize history navigation
+	m.historyIndex = -1 // Not browsing history initially
+	m.originalInput = ""
+
+	// Ensure auto-scroll is enabled from the start in interactive mode
+	m.vp.GotoBottom()
 
 	return m
 }
@@ -204,6 +217,42 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Interactive mode key handling
 		if m.interactiveMode && m.focusedInput {
 			switch msg.String() {
+			case "up":
+				// Navigate up in command history
+				if len(m.commandHistory) > 0 {
+					// If not currently browsing history, save the original input
+					if m.historyIndex == -1 {
+						m.originalInput = m.textInput.Value()
+						m.historyIndex = len(m.commandHistory) - 1
+					} else if m.historyIndex > 0 {
+						m.historyIndex--
+					}
+					
+					// Set the historical command
+					if m.historyIndex >= 0 && m.historyIndex < len(m.commandHistory) {
+						m.textInput.SetValue(m.commandHistory[m.historyIndex])
+						m.textInput.SetCursor(len(m.commandHistory[m.historyIndex]))
+					}
+				}
+				return m, nil
+			case "down":
+				// Navigate down in command history
+				if len(m.commandHistory) > 0 && m.historyIndex >= 0 {
+					m.historyIndex++
+					
+					// If we've gone past the end, restore original input
+					if m.historyIndex >= len(m.commandHistory) {
+						m.textInput.SetValue(m.originalInput)
+						m.textInput.SetCursor(len(m.originalInput))
+						m.historyIndex = -1
+						m.originalInput = ""
+					} else {
+						// Set the historical command
+						m.textInput.SetValue(m.commandHistory[m.historyIndex])
+						m.textInput.SetCursor(len(m.commandHistory[m.historyIndex]))
+					}
+				}
+				return m, nil
 			case "enter":
 				input := strings.TrimSpace(m.textInput.Value())
 				if input != "" {
@@ -229,6 +278,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.commandHistory = m.commandHistory[len(m.commandHistory)-50:]
 					}
 
+					// Reset history navigation state
+					m.historyIndex = -1
+					m.originalInput = ""
+
 					m.textInput.SetValue("")
 				}
 				return m, nil
@@ -240,6 +293,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+c":
 				return m, tea.Quit
 			default:
+				// Reset history navigation when user starts typing
+				if m.historyIndex != -1 {
+					m.historyIndex = -1
+					m.originalInput = ""
+				}
+				
 				// Pass through to text input
 				var cmd tea.Cmd
 				m.textInput, cmd = m.textInput.Update(msg)
@@ -414,28 +473,47 @@ func (m model) View() string {
 
 	// Interactive input box
 	inputBox := ""
-	if m.interactiveMode {
+	if m.interactiveMode && m.width > 20 { // Only show input box if terminal is wide enough
+		// Use a reasonable fixed width to avoid wrapping issues
+		// Dynamic width seems to cause layout problems, so use responsive but stable sizing
+		var textInputWidth int
+		if m.width > 100 {
+			textInputWidth = 80 // Wide terminal
+		} else if m.width > 60 {
+			textInputWidth = m.width - 20 // Medium terminal
+		} else {
+			textInputWidth = 40 // Narrow terminal
+		}
+
+		// Set textinput width
+		m.textInput.Width = textInputWidth
+
 		if m.focusedInput {
-			// Focused input box with prompt
-			content := fmt.Sprintf("Agent Request: %s", m.textInput.View())
+			// Clean input box without prefix - let textinput determine its own width
 			inputBox = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				Padding(0, 1).
-				Render(content)
+				Render(m.textInput.View())
 		} else {
 			// Show preview when unfocused
 			currentValue := strings.TrimSpace(m.textInput.Value())
 			preview := "Press 'i' to input"
 			if currentValue != "" {
+				maxPreviewLen := textInputWidth - 10
+				if len(currentValue) > maxPreviewLen {
+					currentValue = currentValue[:maxPreviewLen-3] + "..."
+				}
 				preview = fmt.Sprintf("Current: %s", currentValue)
 			}
-			content := fmt.Sprintf("Agent Request: %s", preview)
 			inputBox = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				Padding(0, 1).
 				Faint(true).
-				Render(content)
+				Render(preview)
 		}
+	} else if m.interactiveMode {
+		// Terminal too narrow for input box
+		inputBox = lipgloss.NewStyle().Faint(true).Render("Terminal too narrow for input - resize or use command line")
 	}
 
 	footer := ""
@@ -464,7 +542,7 @@ func (m model) View() string {
 	}
 
 	var base string
-	if m.interactiveMode {
+	if m.interactiveMode && inputBox != "" {
 		base = lipgloss.JoinVertical(lipgloss.Left, header, body, inputBox, footer)
 	} else {
 		base = lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
@@ -652,6 +730,10 @@ Navigation:
   i                      Focus input (when unfocused)
   l                      Toggle logs
   p                      Toggle progress
+
+History (when input is focused):
+  ↑                      Previous command in history
+  ↓                      Next command in history (or return to current input)
 
 Scrolling (when logs are visible):
   ↑/k                    Scroll up one line

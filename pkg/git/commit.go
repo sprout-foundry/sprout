@@ -95,7 +95,7 @@ func PerformGitCommit(message string) error {
 %s
 EOF
 )"`, message)
-	
+
 	cmd := exec.Command("bash", "-c", cmdString)
 	cmd.Stdout = nil // Don't capture stdout
 	cmd.Stderr = nil // Don't capture stderr
@@ -175,7 +175,7 @@ func CleanCommitMessage(message string) string {
 		// Find the first non-empty line after the title (index 0)
 		titleLine := strings.TrimSpace(lines[0])
 		var descriptionStart int = -1
-		
+
 		// Find where the description starts (first non-empty line after title)
 		for i := 1; i < len(lines); i++ {
 			if strings.TrimSpace(lines[i]) != "" {
@@ -183,7 +183,7 @@ func CleanCommitMessage(message string) string {
 				break
 			}
 		}
-		
+
 		if descriptionStart > 1 {
 			// There are multiple empty lines between title and description
 			// Reconstruct with exactly one blank line

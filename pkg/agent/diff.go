@@ -90,7 +90,10 @@ def main():
         print("----------------------------------------")
         
         lines_shown = 0
-        max_lines = %d
+        if %d == 0:
+            max_lines = float('inf')
+        else:
+            max_lines = %d
         
         # ANSI color codes
         RED = '\033[31m'

@@ -9,9 +9,22 @@ import (
 	"github.com/alantheprice/ledit/pkg/agent_api"
 )
 
+// ClientType is an alias for the agent API ClientType
+type ClientType = api.ClientType
+
+// Re-export the constants from agent_api for convenience
+const (
+	DeepInfraClientType  = api.DeepInfraClientType
+	OllamaClientType     = api.OllamaClientType
+	CerebrasClientType   = api.CerebrasClientType
+	OpenRouterClientType = api.OpenRouterClientType
+	GroqClientType       = api.GroqClientType
+	DeepSeekClientType   = api.DeepSeekClientType
+)
+
 // Config represents the application configuration
 type Config struct {
-	LastUsedProvider api.ClientType            `json:"last_used_provider"`
+	LastUsedProvider ClientType               `json:"last_used_provider"`
 	ProviderModels   map[string]string         `json:"provider_models"`
 	ProviderPriority []string                  `json:"provider_priority"`
 	Preferences      map[string]interface{}    `json:"preferences"`
@@ -29,12 +42,12 @@ func NewConfig() *Config {
 	return &Config{
 		LastUsedProvider: "",
 		ProviderModels: map[string]string{
-			"deepinfra":  api.GetDefaultModelForProvider(api.DeepInfraClientType),
-			"ollama":     api.GetDefaultModelForProvider(api.OllamaClientType),
-			"cerebras":   api.GetDefaultModelForProvider(api.CerebrasClientType),
-			"openrouter": api.GetDefaultModelForProvider(api.OpenRouterClientType),
-			"groq":       api.GetDefaultModelForProvider(api.GroqClientType),
-			"deepseek":   api.GetDefaultModelForProvider(api.DeepSeekClientType),
+			"deepinfra":  getDefaultModelForProvider(DeepInfraClientType),
+			"ollama":     getDefaultModelForProvider(OllamaClientType),
+			"cerebras":   getDefaultModelForProvider(CerebrasClientType),
+			"openrouter": "deepseek/deepseek-chat-v3.1:free",
+			"groq":       getDefaultModelForProvider(GroqClientType),
+			"deepseek":   getDefaultModelForProvider(DeepSeekClientType),
 		},
 		ProviderPriority: []string{"openrouter", "deepinfra", "ollama", "cerebras", "groq", "deepseek"},
 		Preferences:      make(map[string]interface{}),
@@ -130,19 +143,19 @@ func (c *Config) Validate() error {
 	// Ensure all providers have default models
 	providers := []struct {
 		name string
-		clientType api.ClientType
+		clientType ClientType
 	}{
-		{"deepinfra", api.DeepInfraClientType},
-		{"ollama", api.OllamaClientType},
-		{"cerebras", api.CerebrasClientType},
-		{"openrouter", api.OpenRouterClientType},
-		{"groq", api.GroqClientType},
-		{"deepseek", api.DeepSeekClientType},
+		{"deepinfra", DeepInfraClientType},
+		{"ollama", OllamaClientType},
+		{"cerebras", CerebrasClientType},
+		{"openrouter", OpenRouterClientType},
+		{"groq", GroqClientType},
+		{"deepseek", DeepSeekClientType},
 	}
 	
 	for _, provider := range providers {
 		if _, exists := c.ProviderModels[provider.name]; !exists {
-			c.ProviderModels[provider.name] = api.GetDefaultModelForProvider(provider.clientType)
+			c.ProviderModels[provider.name] = getDefaultModelForProvider(provider.clientType)
 		}
 	}
 	
@@ -155,49 +168,49 @@ func (c *Config) Validate() error {
 }
 
 // GetModelForProvider returns the configured model for a provider
-func (c *Config) GetModelForProvider(provider api.ClientType) string {
+func (c *Config) GetModelForProvider(provider ClientType) string {
 	providerName := getProviderConfigName(provider)
 	if model, exists := c.ProviderModels[providerName]; exists && model != "" {
 		return model
 	}
-	return api.GetDefaultModelForProvider(provider)
+	return getDefaultModelForProvider(provider)
 }
 
 // SetModelForProvider sets the model for a specific provider
-func (c *Config) SetModelForProvider(provider api.ClientType, model string) {
+func (c *Config) SetModelForProvider(provider ClientType, model string) {
 	providerName := getProviderConfigName(provider)
 	c.ProviderModels[providerName] = model
 	c.LastUsedProvider = provider
 }
 
 // GetLastUsedProvider returns the last used provider, with fallback
-func (c *Config) GetLastUsedProvider() api.ClientType {
+func (c *Config) GetLastUsedProvider() ClientType {
 	if c.LastUsedProvider != "" {
 		return c.LastUsedProvider
 	}
 	// Fall back to environment-based detection
-	return api.GetClientTypeFromEnv()
+	return getClientTypeFromEnv()
 }
 
 // SetLastUsedProvider sets the last used provider
-func (c *Config) SetLastUsedProvider(provider api.ClientType) {
+func (c *Config) SetLastUsedProvider(provider ClientType) {
 	c.LastUsedProvider = provider
 }
 
 // getProviderConfigName converts ClientType to config key
-func getProviderConfigName(clientType api.ClientType) string {
+func getProviderConfigName(clientType ClientType) string {
 	switch clientType {
-	case api.DeepInfraClientType:
+	case DeepInfraClientType:
 		return "deepinfra"
-	case api.OllamaClientType:
+	case OllamaClientType:
 		return "ollama"
-	case api.CerebrasClientType:
+	case CerebrasClientType:
 		return "cerebras"
-	case api.OpenRouterClientType:
+	case OpenRouterClientType:
 		return "openrouter"
-	case api.GroqClientType:
+	case GroqClientType:
 		return "groq"
-	case api.DeepSeekClientType:
+	case DeepSeekClientType:
 		return "deepseek"
 	default:
 		return string(clientType)
@@ -205,21 +218,33 @@ func getProviderConfigName(clientType api.ClientType) string {
 }
 
 // GetProviderFromConfigName converts config key to ClientType
-func GetProviderFromConfigName(name string) (api.ClientType, error) {
+func GetProviderFromConfigName(name string) (ClientType, error) {
 	switch name {
 	case "deepinfra":
-		return api.DeepInfraClientType, nil
+		return DeepInfraClientType, nil
 	case "ollama":
-		return api.OllamaClientType, nil
+		return OllamaClientType, nil
 	case "cerebras":
-		return api.CerebrasClientType, nil
+		return CerebrasClientType, nil
 	case "openrouter":
-		return api.OpenRouterClientType, nil
+		return OpenRouterClientType, nil
 	case "groq":
-		return api.GroqClientType, nil
+		return GroqClientType, nil
 	case "deepseek":
-		return api.DeepSeekClientType, nil
+		return DeepSeekClientType, nil
 	default:
 		return "", fmt.Errorf("unknown provider: %s", name)
 	}
+}
+
+// getDefaultModelForProvider returns the best default model for each provider
+func getDefaultModelForProvider(clientType ClientType) string {
+	// Use the agent_api implementation
+	return api.GetDefaultModelForProvider(clientType)
+}
+
+// getClientTypeFromEnv determines which client to use based on environment variables
+func getClientTypeFromEnv() ClientType {
+	// Use the agent_api implementation
+	return api.GetClientTypeFromEnv()
 }

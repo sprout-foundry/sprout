@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -10,7 +12,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/config/layered"
 )
 
-func main() {
+func demoLayeredConfig() {
 	fmt.Println("=== Layered Configuration System Demo ===")
 
 	// Test 1: Basic layered configuration setup

@@ -195,6 +195,27 @@ Please use the structured tool calling format for all future tool calls, not tex
 				continue
 			}
 
+			// Check if this looks like attempted tool calls that we couldn't parse
+			if a.containsAttemptedToolCalls(choice.Message.Content) || a.containsAttemptedToolCalls(choice.Message.ReasoningContent) {
+				a.debugLog("Detected attempted but unparseable tool calls, requesting retry with correct syntax\n")
+
+				retryMessage := `⚠️ I detected what appears to be attempted tool calls in your response, but I couldn't parse them properly. 
+
+Please retry using the correct tool calling format:
+- Use proper structured tool calls, not JSON in text
+- Each tool call should use the function calling interface
+- Do not output tool calls as text or in code blocks
+
+Please continue with your task using the correct tool calling syntax.`
+
+				a.messages = append(a.messages, api.Message{
+					Role:    "user",
+					Content: retryMessage,
+				})
+
+				continue
+			}
+
 			// Check if the response looks incomplete and retry
 			if a.isIncompleteResponse(choice.Message.Content) {
 				// Add encouragement to continue
@@ -240,7 +261,77 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 		return true // Empty responses are definitely incomplete
 	}
 	
-	content = strings.ToLower(content)
+	// Check if this contains attempted tool calls - if so, it's incomplete
+	if a.containsAttemptedToolCalls(content) {
+		return true
+	}
+	
+	contentLower := strings.ToLower(content)
+	originalContent := content // Keep original for case-sensitive checks
+	
+	// Check for intent-to-continue phrases that indicate the model wants to keep working
+	intentToContinuePatterns := []string{
+		"let me",
+		"i'll",
+		"i will",
+		"now i",
+		"next, i",
+		"first, i",
+		"i need to",
+		"i should",
+		"i'm going to",
+		"going to",
+		"will now",
+		"let's",
+		"now let's",
+		"i can",
+		"i'd like to",
+		"i want to",
+		"time to",
+		"ready to",
+		"about to",
+		"need to",
+		"should now",
+	}
+	
+	for _, pattern := range intentToContinuePatterns {
+		if strings.Contains(contentLower, pattern) {
+			a.debugLog("Detected intent-to-continue phrase: '%s'\n", pattern)
+			return true
+		}
+	}
+	
+	// Check for trailing colons or incomplete sentences that suggest continuation
+	trimmedContent := strings.TrimSpace(originalContent)
+	if strings.HasSuffix(trimmedContent, ":") || strings.HasSuffix(trimmedContent, "...") {
+		a.debugLog("Detected trailing continuation punctuation\n")
+		return true
+	}
+	
+	// Check for sentences that end with action words suggesting more to come
+	actionEndingPatterns := []string{
+		"file:",
+		"files:",
+		"code:",
+		"function:",
+		"method:",
+		"class:",
+		"component:",
+		"module:",
+		"directory:",
+		"folder:",
+		"implementation:",
+		"changes:",
+		"updates:",
+		"modifications:",
+	}
+	
+	for _, pattern := range actionEndingPatterns {
+		if strings.HasSuffix(contentLower, pattern) {
+			a.debugLog("Detected action-ending pattern: '%s'\n", pattern)
+			return true
+		}
+	}
 	
 	// Common patterns that indicate the agent is giving up too early
 	declinePatterns := []string{
@@ -258,7 +349,7 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 	// If it's a short response with decline language, it's likely incomplete
 	if len(content) < 200 {
 		for _, pattern := range declinePatterns {
-			if strings.Contains(content, pattern) {
+			if strings.Contains(contentLower, pattern) {
 				return true
 			}
 		}
@@ -280,7 +371,7 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 	
 	hasToolEvidence := false
 	for _, pattern := range toolEvidencePatterns {
-		if strings.Contains(content, pattern) {
+		if strings.Contains(contentLower, pattern) {
 			hasToolEvidence = true
 			break
 		}
@@ -291,6 +382,49 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 		return true
 	}
 	
+	return false
+}
+
+// containsAttemptedToolCalls checks if content contains patterns that suggest attempted tool calls
+func (a *Agent) containsAttemptedToolCalls(content string) bool {
+	if content == "" {
+		return false
+	}
+
+	// Patterns that suggest attempted tool calls that we couldn't parse
+	attemptedPatterns := []string{
+		`"tool_calls"`,
+		`"function"`,
+		`"arguments"`,
+		`"name":`,
+		`"id":`,
+		`"type": "function"`,
+		`shell_command`,
+		`read_file`,
+		`write_file`,
+		`edit_file`,
+		`{"id"`,
+		`"call_`,
+	}
+
+	contentLower := strings.ToLower(content)
+	matchCount := 0
+	
+	for _, pattern := range attemptedPatterns {
+		if strings.Contains(contentLower, strings.ToLower(pattern)) {
+			matchCount++
+			// If we find multiple patterns, it's very likely attempted tool calls
+			if matchCount >= 2 {
+				return true
+			}
+		}
+	}
+
+	// Also check for JSON-like structures that might be malformed tool calls
+	if strings.Contains(content, `{`) && strings.Contains(content, `}`) && matchCount >= 1 {
+		return true
+	}
+
 	return false
 }
 

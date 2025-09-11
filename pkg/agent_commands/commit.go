@@ -66,18 +66,18 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 		for i, file := range validStagedFiles {
 			fmt.Printf("%2d. %s\n", i+1, file)
 		}
-		
+
 		fmt.Println("\n💡 Use staged files for commit? (y/n, default: y):")
 		reader := bufio.NewReader(os.Stdin)
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(strings.ToLower(input))
-		
+
 		if input == "" || input == "y" || input == "yes" {
 			fmt.Println("✅ Using staged files for commit")
 			// Skip to commit message generation - files are already staged
 			return c.generateAndCommit(chatAgent, reader)
 		}
-		
+
 		if input == "n" || input == "no" {
 			fmt.Println("🔄 Proceeding to file selection...")
 			// Fall through to file selection workflow
@@ -194,6 +194,24 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 	return c.generateAndCommit(chatAgent, reader)
 }
 
+// executeSingleFileCommit handles single file commit workflow  
+func (c *CommitCommand) executeSingleFileCommit(args []string, chatAgent *agent.Agent) error {
+	// For now, just redirect to multi-file commit
+	// TODO: Implement proper single file commit workflow
+	fmt.Println("Single file commit - using multi-file workflow for now")
+	return c.executeMultiFileCommit(chatAgent)
+}
+
+// showHelp displays commit command usage
+func (c *CommitCommand) showHelp() error {
+	fmt.Println("📝 Commit Command Usage:")
+	fmt.Println("========================")
+	fmt.Println("/commit          - Interactive multi-file commit workflow")  
+	fmt.Println("/commit single   - Single file commit workflow")
+	fmt.Println("/commit help     - Show this help message")
+	return nil
+}
+
 // generateAndCommit handles commit message generation and commit creation
 func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.Reader) error {
 	// Generate commit message from staged diff
@@ -238,32 +256,24 @@ Please generate only the commit message content, no additional commentary.`, str
 	// Clean up the commit message
 	commitMessage = strings.TrimSpace(commitMessage)
 
-	// Apply text wrapping to description for multi-file commits
-	lines := strings.Split(commitMessage, "\n")
-	if len(lines) > 2 {
-		description := strings.Join(lines[2:], "\n")
-		wrappedDescription := wrapText(description, 72)
-		commitMessage = lines[0] + "\n\n" + wrappedDescription
-	}
+	// Simple commit message validation and confirmation
+	commitMessage = strings.TrimSpace(commitMessage)
 
-	// Validate the commit message format
-	if err := validateCommitFormat(commitMessage, false); err != nil {
-		fmt.Printf("⚠️ Generated message format issue: %v\n", err)
-		// Continue anyway - the user can edit if needed
-	}
+	// Show commit message preview
+	fmt.Println("\n📋 Commit message preview:")
+	fmt.Println("=============================================")
+	fmt.Println(commitMessage)
+	fmt.Println("=============================================")
 
-	// Use the commit utility to handle confirmation, editing, and retry
-	finalCommitMessage, shouldCommit, err := handleCommitConfirmation(commitMessage, chatAgent, reader, diffOutput, "")
-	if err != nil {
-		return fmt.Errorf("commit confirmation failed: %v", err)
-	}
+	// Simple confirmation
+	fmt.Print("\n💡 Proceed with commit? (y/n): ")
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
 
-	if !shouldCommit {
+	if input != "y" && input != "yes" && input != "" {
 		fmt.Println("❌ Commit cancelled")
 		return nil
 	}
-
-	commitMessage = finalCommitMessage
 
 	// Create the commit
 	fmt.Println("\n💾 Creating commit...")

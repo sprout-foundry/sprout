@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // Manager handles configuration operations with intelligent fallbacks
@@ -91,14 +91,7 @@ func (m *Manager) GetModelForProvider(provider api.ClientType) string {
 func (m *Manager) ListAvailableProviders() []api.ClientType {
 	var available []api.ClientType
 	
-	allProviders := []api.ClientType{
-		api.DeepInfraClientType,
-		api.OllamaClientType,
-		api.CerebrasClientType,
-		api.OpenRouterClientType,
-		api.GroqClientType,
-		api.DeepSeekClientType,
-	}
+	allProviders := api.GetAvailableProviders()
 	
 	for _, provider := range allProviders {
 		if m.isProviderAvailable(provider) {
@@ -153,14 +146,7 @@ func (m *Manager) getProviderEnvVar(provider api.ClientType) string {
 func (m *Manager) GetProviderStatus() map[api.ClientType]ProviderStatus {
 	status := make(map[api.ClientType]ProviderStatus)
 	
-	allProviders := []api.ClientType{
-		api.DeepInfraClientType,
-		api.OllamaClientType,
-		api.CerebrasClientType,
-		api.OpenRouterClientType,
-		api.GroqClientType,
-		api.DeepSeekClientType,
-	}
+	allProviders := api.GetAvailableProviders()
 	
 	for _, provider := range allProviders {
 		status[provider] = ProviderStatus{

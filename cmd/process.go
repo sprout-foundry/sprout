@@ -11,7 +11,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/orchestration"
 	"github.com/alantheprice/ledit/pkg/prompts"
-	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
+	// tuiPkg "github.com/alantheprice/ledit/pkg/tui" // TEMPORARILY DISABLED
 	uiPkg "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/spf13/cobra"
@@ -28,18 +28,34 @@ var model string    // TODO: Migrate to new BaseCommand framework
 // processCmd represents the process command
 var processCmd = &cobra.Command{
 	Use:   "process [process-file]",
-	Short: "Executes a multi-agent orchestration process.",
+	Short: "Multi-agent orchestration",
 	Long: `Multi-Agent Process Mode:
-	- Loads a process file defining agents, steps, and dependencies
-	- Coordinates multiple agents with specialized personas (e.g., frontend developer, backend architect, QA engineer)
-	- Executes steps in dependency order
-	- Tracks progress and agent status
-	- Supports budget controls and cost management per agent
 
-	Examples:
-	  ledit process process.json
-	  ledit process --create-example process.json
-	  ledit process   # interactive authoring if no file is provided`,
+Features:
+- Agent coordination with orchestration
+- File operations with atomic writes and error handling
+- Real-time TUI integration with detailed progress tracking
+- Conversation optimization reducing token usage
+- Vision analysis support for UI design processes
+- Error recovery and malformed tool call detection
+
+Process Capabilities:
+- Loads process files defining agents, steps, and dependencies
+- Coordinates multiple agents with specialized personas (frontend dev, backend architect, QA engineer)
+- Executes steps in dependency order
+- Tracks progress and agent status with monitoring
+- Supports budget controls and cost management per agent
+- Uses reasoning and tool execution capabilities
+
+Examples:
+  # Execute process
+  ledit process process.json
+  
+  # Create example
+  ledit process --create-example process.json
+  
+  # Interactive authoring
+  ledit process`,
 	Args: cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := utils.GetLogger(skipPrompt)
@@ -112,10 +128,10 @@ var processCmd = &cobra.Command{
 			return
 		}
 
-		// Multi-agent process mode
+		// Multi-agent process mode - DISABLED to fix input conflicts
 		if uiPkg.IsUIActive() {
 			uiPkg.SetDefaultSink(uiPkg.TuiSink{})
-			go func() { _ = tuiPkg.Run() }()
+			// TEMPORARILY DISABLED: go func() { _ = tuiPkg.Run() }()
 		}
 		if err := runMultiAgentProcess(input, logger); err != nil {
 			logger.LogProcessStep(fmt.Sprintf("Multi-agent process failed: %v", err))

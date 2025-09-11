@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	commands "github.com/alantheprice/ledit/pkg/agent_commands"
 	"github.com/alantheprice/ledit/pkg/ui"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -103,8 +104,10 @@ func (m model) Init() tea.Cmd {
 }
 
 func subscribeEvents() tea.Cmd {
-	return func() tea.Msg {
-		for ev := range ui.Events() {
+	return tea.Tick(200*time.Millisecond, func(t time.Time) tea.Msg {
+		// Check for events with longer polling interval to reduce interference
+		select {
+		case ev := <-ui.Events():
 			switch e := ev.(type) {
 			case ui.LogEvent:
 				return e
@@ -118,11 +121,20 @@ func subscribeEvents() tea.Cmd {
 				return e
 			case ui.PromptResponseEvent:
 				return e
+			case ui.ModelInfoEvent:
+				return e
+			case ui.StatusEvent:
+				return e
 			}
+		default:
+			// No events available, continue polling
 		}
-		return nil
-	}
+		return subscribeEventsMsg{}
+	})
 }
+
+// Message type for continuing event subscription
+type subscribeEventsMsg struct{}
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -142,22 +154,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					ui.SubmitPromptResponse(m.promptID, "yes", true)
 					m.awaitingPrompt = false
 					m.promptInput = ""
-					return m, subscribeEvents()
+					return m, nil
 				case "n", "N":
 					ui.SubmitPromptResponse(m.promptID, "no", false)
 					m.awaitingPrompt = false
 					m.promptInput = ""
-					return m, subscribeEvents()
+					return m, nil
 				case "enter":
 					ui.SubmitPromptResponse(m.promptID, "", m.promptDefault)
 					m.awaitingPrompt = false
 					m.promptInput = ""
-					return m, subscribeEvents()
+					return m, nil
 				case "esc":
 					ui.SubmitPromptResponse(m.promptID, "", m.promptDefault)
 					m.awaitingPrompt = false
 					m.promptInput = ""
-					return m, subscribeEvents()
+					return m, nil
 				}
 				// Typed input workflow
 				switch msg.Type {
@@ -194,17 +206,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						ui.SubmitPromptResponse(m.promptID, "yes", true)
 						m.awaitingPrompt = false
 						m.promptInput = ""
-						return m, subscribeEvents()
+						return m, nil
 					case "n", "no":
 						ui.SubmitPromptResponse(m.promptID, "no", false)
 						m.awaitingPrompt = false
 						m.promptInput = ""
-						return m, subscribeEvents()
+						return m, nil
 					case "":
 						ui.SubmitPromptResponse(m.promptID, "", m.promptDefault)
 						m.awaitingPrompt = false
 						m.promptInput = ""
-						return m, subscribeEvents()
+						return m, nil
 					default:
 						ui.Log("Please type 'yes' or 'no', or press Enter for default")
 						return m, nil
@@ -286,7 +298,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "esc":
-				// Unfocus input when focused
+				// In interactive mode, clear the current input instead of unfocusing
+				if m.interactiveMode {
+					m.textInput.SetValue("")
+					m.textInput.SetCursor(0)
+					// Reset history navigation
+					m.historyIndex = -1
+					m.originalInput = ""
+					return m, nil
+				}
+				// For non-interactive mode, unfocus as before
 				m.focusedInput = false
 				m.textInput.Blur()
 				return m, nil
@@ -315,7 +336,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textInput.Focus()
 				return m, nil
 			}
-		case "q", "Q", "esc", "ctrl+c":
+		case "q", "Q":
+			if !m.interactiveMode || !m.focusedInput {
+				return m, tea.Quit
+			}
+		case "ctrl+c":
+			return m, tea.Quit
+		case "esc":
 			if !m.interactiveMode || !m.focusedInput {
 				return m, tea.Quit
 			}
@@ -331,7 +358,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "tab":
 			if m.interactiveMode {
-				// Toggle input focus with tab
+				// In interactive mode, tab should not unfocus the input
+				// Instead, it can be used for autocomplete or just ignored
+				// Keep input focused for better UX
+				if !m.focusedInput {
+					m.focusedInput = true
+					m.textInput.Focus()
+				}
+				// TODO: Could add autocomplete functionality here
+			} else {
+				// In non-interactive mode, preserve the toggle behavior
 				if m.focusedInput {
 					m.focusedInput = false
 					m.textInput.Blur()
@@ -385,7 +421,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if wasAtBottom {
 			m.vp.GotoBottom()
 		}
-		return m, subscribeEvents()
+		return m, nil
 	case ui.ProgressSnapshotEvent:
 		m.progress = msg
 		if msg.BaseModel != "" {
@@ -397,18 +433,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.TotalCost > 0 {
 			m.totalCost = msg.TotalCost
 		}
-		return m, subscribeEvents()
+		return m, nil
 	case ui.ModelInfoEvent:
 		if strings.TrimSpace(msg.Name) != "" {
 			m.baseModel = msg.Name
 		}
-		return m, subscribeEvents()
+		return m, nil
 	case ui.StreamStartedEvent:
 		m.streaming = true
-		return m, subscribeEvents()
+		return m, nil
 	case ui.StreamEndedEvent:
 		m.streaming = false
-		return m, subscribeEvents()
+		return m, nil
 	case ui.PromptRequestEvent:
 		m.awaitingPrompt = true
 		m.promptID = msg.ID
@@ -423,7 +459,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			pvContent = m.promptText + "\n\n" + m.promptContext
 		}
 		m.promptVP.SetContent(pvContent)
-		return m, subscribeEvents()
+		return m, nil
 	case ui.StatusEvent:
 		// Update a concise shimmery status line by publishing as a log substitute
 		// but we keep it in header/body by storing in baseModel suffix
@@ -434,6 +470,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.logs = m.logs[:500]
 			}
 		}
+		return m, nil
+	case subscribeEventsMsg:
+		// Continue polling for events
 		return m, subscribeEvents()
 	case tickMsg:
 		return m, tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
@@ -443,6 +482,71 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	if m.interactiveMode {
+		return m.renderInteractiveView()
+	}
+	return m.renderStandardView()
+}
+
+// renderInteractiveView provides a streamlined console-like interface
+func (m model) renderInteractiveView() string {
+	// Calculate layout dimensions
+	headerHeight := 2
+	footerHeight := 1
+	inputHeight := 3 // Input box with border
+	progressHeight := 0
+	if !m.progressCollapsed && m.renderProgress() != "" {
+		progressHeight = countLines(m.renderProgress()) + 1
+	}
+
+	// Available space for scrolling logs
+	logsHeight := m.height - headerHeight - footerHeight - inputHeight - progressHeight
+	if logsHeight < 5 {
+		logsHeight = 5 // Minimum viable logs area
+	}
+
+	// Configure viewport for logs
+	m.vp.Width = m.width - 2
+	m.vp.Height = logsHeight
+
+	// Build the UI components
+	header := m.renderStreamlinedHeader()
+	progress := ""
+	if !m.progressCollapsed {
+		if pr := m.renderProgress(); pr != "" {
+			progress = pr + "\n"
+		}
+	}
+
+	// Logs area - always visible in interactive mode
+	logsContent := m.vp.View()
+	if len(m.logs) == 0 {
+		logsContent = lipgloss.NewStyle().
+			Faint(true).
+			Align(lipgloss.Center).
+			Width(m.vp.Width).
+			Height(m.vp.Height).
+			Render("🤖 Agent ready - enter a request below")
+	}
+
+	// Input area at bottom
+	inputArea := m.renderInputArea()
+
+	// Footer with help
+	footer := m.renderStreamlinedFooter()
+
+	// Assemble the complete view
+	return lipgloss.JoinVertical(lipgloss.Left,
+		header,
+		progress,
+		logsContent,
+		inputArea,
+		footer,
+	)
+}
+
+// renderStandardView keeps the original non-interactive layout
+func (m model) renderStandardView() string {
 	header := m.renderHeader()
 	// Progress section (collapsible)
 	prog := ""
@@ -451,20 +555,15 @@ func (m model) View() string {
 			prog = pr + "\n"
 		}
 	}
-	// Compute logs viewport height; prompt renders as overlay, so exclude from height calc
+	// Compute logs viewport height
 	reserved := 1 + 2 + 1 // header + spacing + footer
 	if !m.progressCollapsed && m.renderProgress() != "" {
 		reserved += countLines(m.renderProgress()) + 1
 	}
 
-	// In interactive mode, reserve space for input box
-	if m.interactiveMode {
-		reserved += 4 // input box height
-	}
-
 	availableLogLines := m.height - reserved
 	if availableLogLines < 3 {
-		availableLogLines = 3 // Minimum space for logs
+		availableLogLines = 3
 	}
 	m.vp.Width = max(0, m.width-2)
 	m.vp.Height = max(1, availableLogLines)
@@ -472,28 +571,8 @@ func (m model) View() string {
 	if !m.logsCollapsed {
 		logsView = m.vp.View()
 	}
-	// Clean body layout for interactive mode
-	var body string
-	if m.interactiveMode {
-		// Enhanced header with status indicators
-		logStatus := "expanded"
-		if m.logsCollapsed {
-			logStatus = "collapsed"
-		}
 
-		autoScrollStatus := "ON"
-		if !m.logsCollapsed && !m.vp.AtBottom() {
-			autoScrollStatus = "OFF"
-		}
-
-		sectionHeader := fmt.Sprintf("📋 Agent Logs (%s) • Auto-scroll: %s • Entries: %d",
-			logStatus, autoScrollStatus, len(m.logs))
-
-		body = lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("%s%s\n%s", prog, sectionHeader, logsView))
-	} else {
-		// Keep original layout for non-interactive mode
-		body = lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("Width: %d  Height: %d\n\n%sLogs | Progress\n%s", m.width, m.height, prog, logsView))
-	}
+	body := lipgloss.NewStyle().Margin(1, 1).Render(fmt.Sprintf("Width: %d  Height: %d\n\n%sLogs | Progress\n%s", m.width, m.height, prog, logsView))
 
 	// Interactive input box
 	inputBox := ""
@@ -562,12 +641,12 @@ func (m model) View() string {
 			historyInfo = fmt.Sprintf(" | History: %d", len(m.commandHistory))
 		}
 
-		footerText := fmt.Sprintf("%s | Tab: Switch Focus | Enter: Execute | ↑/↓: History | /help: Commands%s%s",
+		footerText := fmt.Sprintf("%s | Enter: Execute | ↑/↓: History | Esc: Clear | Ctrl+C: Exit | /help: Commands%s%s",
 			focusState, historyInfo, scrollIndicator)
 
 		// Progressive truncation for narrow terminals
 		if len(footerText) > m.width-4 {
-			footerText = fmt.Sprintf("%s | Tab: Focus | Enter: Execute | ↑/↓: History%s%s",
+			footerText = fmt.Sprintf("%s | Enter: Execute | ↑/↓: History | Esc: Clear%s%s",
 				focusState, historyInfo, scrollIndicator)
 		}
 		if len(footerText) > m.width-4 {
@@ -613,6 +692,99 @@ func (m model) View() string {
 		return base + "\n" + overlay
 	}
 	return base
+}
+
+// renderStreamlinedHeader provides a clean header for interactive mode
+func (m model) renderStreamlinedHeader() string {
+	elapsed := time.Since(m.start).Truncate(time.Second)
+	
+	// Get agent info if available
+	agentInfo := "🤖 Agent Ready"
+	if m.streaming {
+		agentInfo = "🤖 Agent Processing..."
+	}
+	
+	// Build header with essential info
+	headerContent := fmt.Sprintf("%s • %v • Logs: %d", 
+		agentInfo, elapsed, len(m.logs))
+	
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("6")). // Cyan
+		Padding(0, 1).
+		Render(headerContent)
+}
+
+// renderInputArea provides the bottom input area for interactive mode
+func (m model) renderInputArea() string {
+	if m.width < 20 {
+		return lipgloss.NewStyle().
+			Faint(true).
+			Render("Terminal too narrow - resize to use input")
+	}
+	
+	// Set appropriate width for text input
+	inputWidth := m.width - 6 // Account for borders and padding
+	if inputWidth > 100 {
+		inputWidth = 100 // Max width for usability
+	}
+	m.textInput.Width = inputWidth
+	
+	// Render based on focus state
+	if m.focusedInput {
+		return lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("6")). // Cyan when focused
+			Padding(0, 1).
+			Width(m.width - 2).
+			Render(m.textInput.View())
+	} else {
+		// Show unfocused state with current value preview
+		currentValue := strings.TrimSpace(m.textInput.Value())
+		preview := "Press 'i' to focus input"
+		if currentValue != "" {
+			maxLen := inputWidth - 20
+			if len(currentValue) > maxLen {
+				currentValue = currentValue[:maxLen-3] + "..."
+			}
+			preview = fmt.Sprintf("Current: %s (Press 'i' to edit)", currentValue)
+		}
+		
+		return lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("8")). // Gray when unfocused
+			Padding(0, 1).
+			Width(m.width - 2).
+			Faint(true).
+			Render(preview)
+	}
+}
+
+// renderStreamlinedFooter provides helpful shortcuts
+func (m model) renderStreamlinedFooter() string {
+	shortcuts := "Enter: Execute • ↑/↓: History • Esc: Clear • /help: Commands • Ctrl+C: Exit"
+	
+	if len(m.commandHistory) > 0 {
+		shortcuts = fmt.Sprintf("History: %d • %s", len(m.commandHistory), shortcuts)
+	}
+	
+	// Add scroll indicator if needed
+	if !m.vp.AtBottom() {
+		shortcuts += " • 📜 Auto-scroll OFF (End: resume)"
+	}
+	
+	// Truncate if too long
+	if len(shortcuts) > m.width-4 {
+		shortcuts = "Enter: Execute • ↑/↓: History • /help • Ctrl+C: Exit"
+	}
+	if len(shortcuts) > m.width-4 {
+		shortcuts = "Enter • ↑/↓ • /help • Ctrl+C"
+	}
+	
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("8")). // Gray
+		Padding(0, 1).
+		Render(shortcuts)
 }
 
 func (m model) renderHeader() string {
@@ -736,6 +908,18 @@ func RunInteractiveAgent() error {
 	return err
 }
 
+// RunMinimalTest runs a minimal TUI for testing input responsiveness
+func RunMinimalTest() error {
+	m := initialInteractiveModel()
+	// Clear all complex logic for testing
+	m.logs = []string{"Minimal TUI test - type something and press enter"}
+
+	p := tea.NewProgram(m, tea.WithContext(context.Background()), tea.WithAltScreen())
+	_, err := p.Run()
+	ui.UseStdoutSink()
+	return err
+}
+
 // handleSlashCommand processes slash commands and returns (handled, newModel, cmd)
 func (m model) handleSlashCommand(input string) (bool, *model, tea.Cmd) {
 	parts := strings.Fields(input)
@@ -763,6 +947,7 @@ Agent Commands:
   /history, /hist        Show command history
   /workspace, /ws        Show workspace information
   /config                Show current configuration
+  /commit [subcommand]   Interactive git commit workflow
 
 Navigation:
   Enter                  Execute agent command or slash command
@@ -951,30 +1136,92 @@ Examples:
 		}())
 		return true, nil, nil
 
+	case "/commit":
+		// Handle commit slash command using unified agent command system
+		go func() {
+			ui.Log("🚀 Starting interactive commit workflow...")
+
+			// Create agent instance for commit processing
+			chatAgent, err := agent.NewAgent()
+			if err != nil {
+				ui.Logf("❌ Failed to create agent: %v", err)
+				return
+			}
+
+			// Create commit command instance and execute
+			commitCmd := &commands.CommitCommand{}
+
+			err = commitCmd.Execute(args, chatAgent)
+			if err != nil {
+				ui.Logf("❌ Commit failed: %v", err)
+			}
+		}()
+		return true, nil, nil
+
 	default:
 		ui.Logf("❌ Unknown slash command: %s. Type /help for available commands.", command)
 		return true, nil, nil
 	}
 }
 
-// executeAgentRequest executes an agent request asynchronously
+// executeAgentRequest executes an agent request using system
 func executeAgentRequest(request string) {
 	ui.Logf("🚀 Starting agent execution: %s", request)
-	ui.PublishStatus("Executing agent request...")
+	ui.PublishStatus("Executing with agent system...")
 
-	// Set environment variables for agent execution
+	// Set environment variables for system
 	os.Setenv("LEDIT_FROM_AGENT", "1")
 	os.Setenv("LEDIT_SKIP_PROMPT", "1")
+	os.Setenv("LEDIT_USING_CODER", "1")
 
-	// Execute the agent request
-	ui.Logf("⚙️  Agent analyzing request and creating execution plan...")
-	err := agent.RunSimplifiedAgent(request, true, "") // Use default model
-
+	// Create agent directly
+	chatAgent, err := agent.NewAgent()
 	if err != nil {
-		ui.Logf("❌ Agent execution failed: %v", err)
-		ui.PublishStatus("Agent execution failed")
-	} else {
-		ui.Logf("✅ Agent request completed successfully")
-		ui.PublishStatus("Agent execution completed")
+		ui.Logf("❌ Failed to initialize agent: %v", err)
+		ui.PublishStatus("Agent initialization failed")
+		return
 	}
+
+	// Execute using agent system
+	ui.Logf("🔄 Processing with workflow...")
+	ui.Logf("💡 Phase-based approach: UNDERSTAND → EXPLORE → IMPLEMENT → VERIFY")
+
+	response, err := chatAgent.ProcessQueryWithContinuity(request)
+	if err != nil {
+		ui.Logf("❌ Coder agent execution failed: %v", err)
+		ui.PublishStatus("Coder agent execution failed")
+	} else {
+		ui.Logf("✅ Coder agent completed successfully")
+		ui.Logf("🎯 Result: %s", response)
+		ui.PublishStatus("Coder agent execution completed")
+
+		// Show statistics from agent
+		totalCost := chatAgent.GetTotalCost()
+		if totalCost > 0 {
+			ui.Logf("💰 Total cost: $%.6f", totalCost)
+		}
+		currentIteration := chatAgent.GetCurrentIteration()
+		if currentIteration > 0 {
+			ui.Logf("🔄 Iterations: %d", currentIteration)
+		}
+	}
+}
+
+// UILogger implements utils.Logger interface to output to UI
+type UILogger struct{}
+
+func (ul *UILogger) LogError(err error) {
+	ui.Logf("❌ %v", err)
+}
+
+func (ul *UILogger) LogProcessStep(message string) {
+	ui.Log(message)
+}
+
+func (ul *UILogger) LogUserInteraction(message string) {
+	ui.Log(message)
+}
+
+func (ul *UILogger) Logf(format string, args ...interface{}) {
+	ui.Logf(format, args...)
 }

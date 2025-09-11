@@ -1,0 +1,158 @@
+package agent
+
+import (
+	"os"
+	"testing"
+
+	"github.com/alantheprice/ledit/pkg/agent_api"
+)
+
+// TestGetModel tests the GetModel method
+func TestGetModel(t *testing.T) {
+	// Set test API key
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("OPENROUTER_API_KEY", "test-key")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Skipping test due to connection error: %v", err)
+	}
+
+	model := agent.GetModel()
+	if model == "" {
+		t.Error("Expected GetModel to return non-empty string")
+	}
+}
+
+// TestGetProvider tests the GetProvider method
+func TestGetProvider(t *testing.T) {
+	// Set test API key
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("OPENROUTER_API_KEY", "test-key")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Skipping test due to connection error: %v", err)
+	}
+
+	provider := agent.GetProvider()
+	if provider == "" {
+		t.Error("Expected GetProvider to return non-empty string")
+	}
+}
+
+// TestGetProviderType tests the GetProviderType method
+func TestGetProviderType(t *testing.T) {
+	// Set test API key
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("OPENROUTER_API_KEY", "test-key")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Skipping test due to connection error: %v", err)
+	}
+
+	providerType := agent.GetProviderType()
+	if providerType == "" {
+		t.Error("Expected GetProviderType to return non-empty provider type")
+	}
+
+	// Check if it's a valid provider type
+	validTypes := []api.ClientType{
+		api.OpenRouterClientType,
+		api.DeepInfraClientType,
+		api.CerebrasClientType,
+		api.GroqClientType,
+		api.DeepSeekClientType,
+		api.OllamaClientType,
+	}
+
+	isValid := false
+	for _, validType := range validTypes {
+		if providerType == validType {
+			isValid = true
+			break
+		}
+	}
+
+	if !isValid {
+		t.Errorf("Expected GetProviderType to return valid provider type, got %q", providerType)
+	}
+}
+
+// TestIsProviderAvailable tests provider availability checking
+func TestIsProviderAvailable(t *testing.T) {
+	// Set test API key
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("OPENROUTER_API_KEY", "test-key")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Skipping test due to connection error: %v", err)
+	}
+
+	// Test with OpenRouter (should be available since we set the key)
+	available := agent.isProviderAvailable(api.OpenRouterClientType)
+	if !available {
+		t.Error("Expected OpenRouter to be available when API key is set")
+	}
+
+	// Test with provider that doesn't have key set
+	available = agent.isProviderAvailable(api.CerebrasClientType)
+	if available && os.Getenv("CEREBRAS_API_KEY") == "" {
+		t.Error("Expected Cerebras to be unavailable when API key is not set")
+	}
+}
+
+// TestDetermineProviderForModel tests model-to-provider determination
+func TestDetermineProviderForModel(t *testing.T) {
+	// Set test API key
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("OPENROUTER_API_KEY", "test-key")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Skipping test due to connection error: %v", err)
+	}
+
+	// Test with an unknown model (should fail)
+	_, err = agent.determineProviderForModel("nonexistent-model")
+	if err == nil {
+		t.Error("Expected error when determining provider for nonexistent model")
+	}
+}

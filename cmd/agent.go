@@ -1,17 +1,24 @@
-// Agent command implementation
+// Agent command for ledit
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"os/signal"
+	"sort"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/config"
+	agent_api "github.com/alantheprice/ledit/pkg/agent_api"
+	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
+	agent_tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/prompts"
-	"github.com/alantheprice/ledit/pkg/providers"
 	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
 	uiPkg "github.com/alantheprice/ledit/pkg/ui"
+	"github.com/chzyer/readline"
 	"github.com/spf13/cobra"
 )
 
@@ -24,47 +31,772 @@ var (
 )
 
 func init() {
-	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompt for applying changes")
-	// Add a flag to allow users to specify and override the LLM model for agent operations
-	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name to use with the LLM")
-	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (no writes/shell side-effects)")
-	agentCmd.Flags().BoolVar(&agentDirectApply, "direct-apply", false, "Let the orchestration model directly apply changes via tools (experimental)")
-	agentCmd.Flags().BoolVar(&agentSimplified, "simplified", true, "Use simplified agent workflow with todos and direct execution (default: true)")
+	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
+	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
+	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
+	agentCmd.Flags().BoolVar(&agentDirectApply, "direct-apply", false, "DEPRECATED: system handles application automatically")
+	agentCmd.Flags().BoolVar(&agentSimplified, "simplified", true, "DEPRECATED: uses optimized workflow")
 }
+
+// createSlashCompleter creates a tab completion function for slash commands
+func createSlashCompleter() *readline.PrefixCompleter {
+	return readline.NewPrefixCompleter(
+		readline.PcItem("/help"),
+		readline.PcItem("/quit"),
+		readline.PcItem("/q"),
+		readline.PcItem("/exit"),
+		readline.PcItem("/init"),
+		readline.PcItem("/models",
+			readline.PcItem("select"),
+			// Add some common model completions
+			readline.PcItem("deepseek-ai/DeepSeek-V3.1"),
+			readline.PcItem("deepseek-ai/DeepSeek-V3"),
+			readline.PcItem("anthropic/claude-4-sonnet"),
+			readline.PcItem("anthropic/claude-4-opus"),
+			readline.PcItem("meta-llama/Meta-Llama-3.1-70B-Instruct"),
+			readline.PcItem("google/gemini-2.5-pro"),
+		),
+		readline.PcItem("/provider",
+			readline.PcItem("select"),
+			readline.PcItem("list"),
+		),
+		readline.PcItem("/shell"),
+		readline.PcItem("/exec"),
+		readline.PcItem("/info"),
+		readline.PcItem("/commit"),
+	)
+}
+
+// runSimpleInteractiveMode provides a simple console-based interactive mode
+func runSimpleInteractiveMode() error {
+	// Create agent to get model info (like coder does)
+	chatAgent, err := agent.NewAgent()
+	if err != nil {
+		return fmt.Errorf("failed to initialize agent: %w", err)
+	}
+	
+	// Create command registry for slash commands
+	commandRegistry := agent_commands.NewCommandRegistry()
+	
+	// Initially disable escape monitoring during normal input to avoid interference
+	chatAgent.DisableEscMonitoring()
+
+	// Show which provider and model is being used (like coder does)
+	providerType := chatAgent.GetProviderType()
+	providerName := agent_api.GetProviderName(providerType)
+	modelName := chatAgent.GetModel()
+
+	if providerType == agent_api.OllamaClientType {
+		fmt.Printf("🤖 %s via %s (local) • Type '/quit' to exit\n\n", modelName, providerName)
+	} else {
+		fmt.Printf("🤖 %s via %s • Type '/quit' to exit\n", modelName, providerName)
+		fmt.Printf("💡 Tip: Press ESC during agent processing to inject new instructions\n\n")
+	}
+
+	// Set up readline with history and tab completion
+	homeDir, _ := os.UserHomeDir()
+	historyFile := homeDir + "/.ledit_agent_history"
+
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:            "🤖 > ",
+		HistoryFile:       historyFile,
+		HistoryLimit:      1000,
+		AutoComplete:      createSlashCompleter(),
+		InterruptPrompt:   "^C",
+		EOFPrompt:         "exit",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize readline: %w", err)
+	}
+	defer rl.Close()
+
+	// Set up signal handling for graceful shutdown (like original coder)
+	interruptChannel := make(chan os.Signal, 1)
+	signal.Notify(interruptChannel, syscall.SIGINT, syscall.SIGTERM)
+
+	// Goroutine to handle graceful shutdown
+	go func() {
+		<-interruptChannel
+		fmt.Println("\n👋 Goodbye!")
+		os.Exit(0)
+	}()
+
+	for {
+		input, err := rl.Readline()
+		if err != nil {
+			if err == readline.ErrInterrupt {
+				fmt.Println("\n👋 Goodbye!")
+				break
+			}
+			fmt.Printf("Input error: %v\n", err)
+			break
+		}
+
+		input = strings.TrimSpace(input)
+		if input == "" {
+			continue
+		}
+
+		// Handle slash commands using CommandRegistry
+		if strings.HasPrefix(input, "/") {
+			// Handle quit commands specially (immediate exit)
+			if strings.HasPrefix(input, "/quit") || strings.HasPrefix(input, "/exit") || strings.HasPrefix(input, "/q") {
+				fmt.Println("👋 Exiting interactive mode")
+				return nil
+			}
+			
+			// Use CommandRegistry for all other slash commands
+			err := commandRegistry.Execute(input, chatAgent)
+			if err != nil {
+				fmt.Printf("❌ Command error: %v\n", err)
+				fmt.Println("💡 Type '/help' to see available commands")
+			}
+			continue
+		}
+
+		// Check if this is a shell command that should be executed directly
+		if isShellCommand(input) {
+			executeShellCommandDirectly(input)
+			fmt.Println("")
+			continue
+		}
+
+		// Validate input length before sending to LLM
+		if !validateQueryLength(input, chatAgent) {
+			fmt.Println("")
+			continue
+		}
+
+		// Process user request with agent
+		fmt.Printf("🔄 Processing: %s\n", input)
+		
+		// Enable escape key monitoring during agent processing
+		chatAgent.EnableEscMonitoring()
+		
+		// Execute the agent command directly using the same agent instance (maintains continuity)
+		response, err := chatAgent.ProcessQueryWithContinuity(input)
+		
+		// Disable escape key monitoring after agent processing
+		chatAgent.DisableEscMonitoring()
+		
+		if err != nil {
+			fmt.Printf("❌ Processing failed: %v\n", err)
+			continue
+		}
+
+		fmt.Printf("\n🎯 Agent Response:\n%s\n", response)
+		fmt.Println("✅ Completed")
+		fmt.Println("")
+	}
+
+	return nil
+}
+
+// executeDirectAgentCommand executes an agent command directly (like coder does)
+func executeDirectAgentCommand(userIntent string) error {
+	// Create agent directly like coder project does
+	chatAgent, err := agent.NewAgent()
+	if err != nil {
+		return fmt.Errorf("failed to initialize agent: %w", err)
+	}
+
+	// Process the query directly with the agent using continuity (like coder does)
+	response, err := chatAgent.ProcessQueryWithContinuity(userIntent)
+	if err != nil {
+		return fmt.Errorf("agent processing failed: %w", err)
+	}
+
+	fmt.Printf("\n🎯 Agent Response:\n%s\n", response)
+	return nil
+}
+
+// isShellCommand checks if the input looks like a shell command (from coder project)
+func isShellCommand(input string) bool {
+	input = strings.TrimSpace(input)
+
+	// Common shell command prefixes
+	shellPrefixes := []string{
+		"ls", "cd", "pwd", "cat", "echo", "grep", "find", "git",
+		"go ", "python", "node", "npm", "yarn", "docker", "kubectl",
+		"curl", "wget", "ssh", "scp", "mv", "cp", "rm", "mkdir",
+		"touch", "chmod", "chown", "ps", "top", "kill", "df", "du",
+		"tar", "zip", "unzip", "gzip", "gunzip", "head", "tail",
+		"diff", "patch", "make", "gcc", "g++", "clang", "javac",
+		"rustc", "cargo", "dotnet", "php", "ruby", "perl", "awk",
+		"sed", "cut", "sort", "uniq", "wc", "tee", "xargs", "env",
+		"export", "source", "./", ".\\", "#", "$",
+	}
+
+	for _, prefix := range shellPrefixes {
+		if strings.HasPrefix(input, prefix) {
+			return true
+		}
+	}
+
+	// Check for shell operators and redirection
+	if strings.Contains(input, " && ") || strings.Contains(input, " || ") ||
+		strings.Contains(input, " | ") {
+		return true
+	}
+
+	// Check for redirection operators with surrounding spaces or at word boundaries
+	if strings.Contains(input, " > ") || strings.Contains(input, " >> ") ||
+		strings.Contains(input, " < ") || strings.HasSuffix(input, ">") ||
+		strings.HasPrefix(input, ">") || strings.HasSuffix(input, "<") ||
+		strings.HasPrefix(input, "<") {
+		return true
+	}
+
+	return false
+}
+
+// executeShellCommandDirectly executes a shell command directly (from coder project)
+func executeShellCommandDirectly(command string) {
+	fmt.Printf("⚡ Direct shell command detected: %s\n", command)
+
+	result, err := agent_tools.ExecuteShellCommand(command)
+	if err != nil {
+		fmt.Printf("❌ Command failed: %v\n", err)
+		fmt.Printf("Output: %s\n", result)
+	} else {
+		fmt.Printf("✅ Command executed successfully:\n")
+		fmt.Printf("Output: %s\n", result)
+	}
+}
+
+// validateQueryLength validates query length and prompts for confirmation (from coder project)
+func validateQueryLength(query string, chatAgent *agent.Agent) bool {
+	queryLen := len(strings.TrimSpace(query))
+	
+	// Absolute minimum: reject anything under 3 characters
+	if queryLen < 3 {
+		fmt.Printf("❌ Query too short (%d characters). Minimum 3 characters required.\n", queryLen)
+		return false
+	}
+	
+	// For queries under 20 characters, ask for confirmation
+	if queryLen < 20 {
+		fmt.Printf("⚠️  Short query detected (%d characters): \"%s\"\n", queryLen, query)
+		fmt.Print("Are you sure you want to process this? (y/N): ")
+		
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+		if response != "y" && response != "yes" {
+			fmt.Println("❌ Query cancelled.")
+			return false
+		}
+	}
+	
+	return true
+}
+
+// handleModelsCommand handles the /models slash command
+func handleModelsCommand(args []string, chatAgent *agent.Agent) error {
+	// If no arguments, list available models
+	if len(args) == 0 {
+		return listModels(chatAgent)
+	}
+
+	// If arguments provided, handle model selection
+	if len(args) == 1 {
+		if args[0] == "select" {
+			return selectModel(chatAgent)
+		} else {
+			// Direct model selection by ID
+			return setModel(args[0], chatAgent)
+		}
+	}
+
+	return fmt.Errorf("usage: /models [select|<model_id>]")
+}
+
+// listModels displays all available models for the current provider
+func listModels(chatAgent *agent.Agent) error {
+	clientType := chatAgent.GetProviderType()
+	providerName := agent_api.GetProviderName(clientType)
+
+	fmt.Printf("\n📋 Available Models (%s):\n", providerName)
+	fmt.Println("====================")
+
+	models, err := agent_api.GetModelsForProvider(clientType)
+	if err != nil {
+		return fmt.Errorf("failed to get available models: %w", err)
+	}
+
+	if len(models) == 0 {
+		fmt.Printf("No models available for %s.\n", providerName)
+		fmt.Println()
+		fmt.Println("💡 Tip: Use '/provider select' to switch to a different provider")
+		return nil
+	}
+
+	// Sort models alphabetically by model ID (like original coder)
+	sort.Slice(models, func(i, j int) bool {
+		return models[i].ID < models[j].ID
+	})
+
+	// Identify featured models
+	featuredIndices := findFeaturedModels(models)
+
+	// Display all models with full information like original coder
+	for i, model := range models {
+		fmt.Printf("%d. %s\n", i+1, model.ID)
+		if model.Description != "" {
+			fmt.Printf("   Description: %s\n", model.Description)
+		}
+		if model.Size != "" {
+			fmt.Printf("   Size: %s\n", model.Size)
+		}
+		if model.InputCost > 0 || model.OutputCost > 0 {
+			if model.InputCost > 0 && model.OutputCost > 0 {
+				fmt.Printf("   Cost: $%.3f/M input, $%.3f/M output tokens\n", model.InputCost, model.OutputCost)
+			} else if model.Cost > 0 {
+				// Fallback to legacy format
+				fmt.Printf("   Cost: ~$%.2f/M tokens\n", model.Cost)
+			}
+		} else if model.Provider == "Ollama (Local)" {
+			fmt.Printf("   Cost: FREE (local)\n")
+		} else {
+			fmt.Printf("   Cost: N/A\n")
+		}
+		if model.ContextLength > 0 {
+			fmt.Printf("   Context: %d tokens\n", model.ContextLength)
+		}
+		if len(model.Tags) > 0 {
+			// Highlight tool support
+			hasTools := false
+			for _, tag := range model.Tags {
+				if tag == "tools" || tag == "tool_choice" {
+					hasTools = true
+					break
+				}
+			}
+			if hasTools {
+				fmt.Printf("   🛠️  Supports tools: %s\n", strings.Join(model.Tags, ", "))
+			} else {
+				fmt.Printf("   Features: %s\n", strings.Join(model.Tags, ", "))
+			}
+		}
+		fmt.Println()
+	}
+
+	// Display featured models section
+	if len(featuredIndices) > 0 {
+		fmt.Println("⭐ Featured Models (Popular & High Performance):")
+		fmt.Println("================================================")
+		for _, idx := range featuredIndices {
+			model := models[idx]
+			fmt.Printf("%d. %s", idx+1, model.ID)
+			if model.InputCost > 0 && model.OutputCost > 0 {
+				fmt.Printf(" - $%.3f/$%.3f per M tokens", model.InputCost, model.OutputCost)
+			} else if model.Cost > 0 {
+				fmt.Printf(" - ~$%.2f/M tokens", model.Cost)
+			} else if model.Provider == "Ollama (Local)" {
+				fmt.Printf(" - FREE")
+			} else {
+				fmt.Printf(" - N/A")
+			}
+			if model.ContextLength > 0 {
+				fmt.Printf(" - %dK context", model.ContextLength/1000)
+			}
+			fmt.Println()
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("Usage:")
+	fmt.Println("  /models select          - Interactive model selection (current provider)")
+	fmt.Println("  /models <model_id>      - Set model directly")
+	fmt.Println("  /models                 - Show this list")
+	fmt.Println("  /provider select        - Switch providers first, then select models")
+
+	return nil
+}
+
+// findFeaturedModels identifies indices of featured models (like original coder)
+func findFeaturedModels(models []agent_api.ModelInfo) []int {
+	featuredPatterns := []string{
+		"deepseek-ai/DeepSeek-V3.1",
+		"qwen3-coder",                      // Qwen3-coder models show strong coding ability
+		"deepseek-chat-v3.1:free",          // Free and reliable
+		"qwen/qwen3-30b-a3b-thinking-2507", // Very cheap and good
+		"bytedance/seed-oss-36b-instruct",  // Open source and cheap
+		"qwen/qwen3-max",                   // Good performance
+		"moonshotai/kimi-k2",               // Good for coding
+		"deepcogito/cogito-v2-preview",     // Reasoning model
+		"nvidia/nemotron-nano-9b-v2",       // Free NVIDIA model
+	}
+
+	var featured []int
+	for i, model := range models {
+		modelLower := strings.ToLower(model.ID)
+		for _, pattern := range featuredPatterns {
+			if strings.Contains(modelLower, strings.ToLower(pattern)) {
+				featured = append(featured, i)
+				break
+			}
+		}
+	}
+
+	return featured
+}
+
+// selectModel allows interactive model selection from the current provider
+func selectModel(chatAgent *agent.Agent) error {
+	clientType := chatAgent.GetProviderType()
+	providerName := agent_api.GetProviderName(clientType)
+
+	models, err := agent_api.GetModelsForProvider(clientType)
+	if err != nil {
+		return fmt.Errorf("failed to get available models: %w", err)
+	}
+
+	if len(models) == 0 {
+		fmt.Printf("No models available for %s.\n", providerName)
+		fmt.Println()
+		fmt.Println("💡 Tip: Use '/provider select' to switch to a different provider with available models")
+		return nil
+	}
+
+	// Sort models alphabetically by model ID (like original coder)
+	sort.Slice(models, func(i, j int) bool {
+		return models[i].ID < models[j].ID
+	})
+
+	// Identify featured models
+	featuredIndices := findFeaturedModels(models)
+
+	fmt.Printf("\n🎯 Select a Model (%s):\n", providerName)
+	fmt.Println("==================")
+
+	fmt.Printf("All %s Models:\n", providerName)
+	fmt.Println("===============")
+	// Display all models with numbers and pricing info
+	for i, model := range models {
+		fmt.Printf("%d. \x1b[34m%s\x1b[0m", i+1, model.ID)
+		if model.InputCost > 0 && model.OutputCost > 0 {
+			fmt.Printf(" - $%.3f/$%.3f per M tokens", model.InputCost, model.OutputCost)
+		} else if model.Cost > 0 {
+			fmt.Printf(" - ~$%.2f/M tokens", model.Cost)
+		} else if providerName == "Ollama (Local)" {
+			fmt.Printf(" - FREE")
+		} else {
+			fmt.Printf(" - N/A")
+		}
+		fmt.Println()
+	}
+
+	// Display featured models at the end if any exist
+	if len(featuredIndices) > 0 {
+		fmt.Println("\n⭐ Featured Models (Popular & High Performance):")
+		fmt.Println("================================================")
+		for _, idx := range featuredIndices {
+			model := models[idx]
+			fmt.Printf("%d. \x1b[34m%s\x1b[0m", idx+1, model.ID)
+			if model.InputCost > 0 && model.OutputCost > 0 {
+				fmt.Printf(" - $%.3f/$%.3f per M tokens", model.InputCost, model.OutputCost)
+			} else if model.Cost > 0 {
+				fmt.Printf(" - ~$%.2f/M tokens", model.Cost)
+			} else if providerName == "Ollama (Local)" {
+				fmt.Printf(" - FREE")
+			} else {
+				fmt.Printf(" - N/A")
+			}
+			if model.ContextLength > 0 {
+				fmt.Printf(" - %dK context", model.ContextLength/1000)
+			}
+			fmt.Println()
+		}
+		fmt.Println()
+	}
+
+	// Get user selection
+	fmt.Printf("\nEnter model number (1-%d) or 'cancel': ", len(models))
+	
+	// Temporarily disable escape monitoring during user input to avoid interference
+	chatAgent.DisableEscMonitoring()
+	defer chatAgent.DisableEscMonitoring() // Keep it disabled after this function
+	
+	// Use bufio.Scanner for better input handling
+	scanner := bufio.NewScanner(os.Stdin)
+	var input string
+	if scanner.Scan() {
+		input = strings.TrimSpace(scanner.Text())
+	}
+	
+	if input == "cancel" || input == "" {
+		fmt.Println("Model selection cancelled.")
+		return nil
+	}
+
+	// Parse selection
+	selection, err := strconv.Atoi(input)
+	if err != nil || selection < 1 || selection > len(models) {
+		return fmt.Errorf("invalid selection. Please enter a number between 1 and %d", len(models))
+	}
+
+	selectedModel := models[selection-1]
+	return setModel(selectedModel.ID, chatAgent)
+}
+
+// setModel sets the specified model for the agent
+func setModel(modelID string, chatAgent *agent.Agent) error {
+	// Update the agent's model
+	err := chatAgent.SetModel(modelID)
+	if err != nil {
+		return fmt.Errorf("failed to set model: %w", err)
+	}
+
+	fmt.Printf("✅ Model set to: %s\n", modelID)
+	return nil
+}
+
+// handleProviderCommand handles the /provider slash command
+func handleProviderCommand(args []string, chatAgent *agent.Agent) error {
+	// If no arguments, show current provider
+	if len(args) == 0 {
+		return showCurrentProvider(chatAgent)
+	}
+
+	// Handle subcommands
+	switch args[0] {
+	case "list":
+		return listProviders()
+	case "select":
+		return selectProvider(chatAgent)
+	default:
+		return fmt.Errorf("usage: /provider [list|select]")
+	}
+}
+
+// showCurrentProvider displays current provider information
+func showCurrentProvider(chatAgent *agent.Agent) error {
+	clientType := chatAgent.GetProviderType()
+	providerName := agent_api.GetProviderName(clientType)
+	modelName := chatAgent.GetModel()
+
+	fmt.Printf("\n📡 Current Provider: %s\n", providerName)
+	fmt.Printf("🤖 Current Model: %s\n", modelName)
+	fmt.Println()
+	fmt.Println("Use '/provider select' to switch providers")
+	fmt.Println("Use '/models select' to switch models")
+
+	return nil
+}
+
+// listProviders displays all available providers
+func listProviders() error {
+	fmt.Println("\n📡 Available Providers:")
+	fmt.Println("======================")
+	fmt.Println("1. DeepInfra")
+	fmt.Println("2. OpenRouter")  
+	fmt.Println("3. Ollama (Local)")
+	fmt.Println("4. Groq")
+	fmt.Println("5. Cerebras")
+	fmt.Println("6. DeepSeek")
+	fmt.Println()
+	fmt.Println("Use '/provider select' to switch providers")
+	
+	return nil
+}
+
+// selectProvider allows interactive provider selection
+func selectProvider(chatAgent *agent.Agent) error {
+	fmt.Println("\n🎯 Select a Provider:")
+	fmt.Println("====================")
+	fmt.Println("1. DeepInfra")
+	fmt.Println("2. OpenRouter")
+	fmt.Println("3. Ollama (Local)")
+	fmt.Println("4. Groq") 
+	fmt.Println("5. Cerebras")
+	fmt.Println("6. DeepSeek")
+
+	fmt.Print("\nEnter provider number (1-6) or 'cancel': ")
+	
+	// Temporarily disable escape monitoring during user input to avoid interference
+	chatAgent.DisableEscMonitoring()
+	defer chatAgent.DisableEscMonitoring() // Keep it disabled after this function
+	
+	// Use bufio.Scanner for better input handling
+	scanner := bufio.NewScanner(os.Stdin)
+	var input string
+	if scanner.Scan() {
+		input = strings.TrimSpace(scanner.Text())
+	}
+	
+	if input == "cancel" || input == "" {
+		fmt.Println("Provider selection cancelled.")
+		return nil
+	}
+
+	// Parse selection
+	selection, err := strconv.Atoi(input)
+	if err != nil || selection < 1 || selection > 6 {
+		return fmt.Errorf("invalid selection. Please enter a number between 1 and 6")
+	}
+
+	// Define available providers (same order as displayed)
+	providers := []agent_api.ClientType{
+		agent_api.DeepInfraClientType,
+		agent_api.OpenRouterClientType,
+		agent_api.OllamaClientType,
+		agent_api.GroqClientType,
+		agent_api.CerebrasClientType,
+		agent_api.DeepSeekClientType,
+	}
+	
+	selectedProvider := providers[selection-1]
+	selectedName := agent_api.GetProviderName(selectedProvider)
+
+	// Get default model for the selected provider
+	configManager := chatAgent.GetConfigManager()
+	defaultModel := configManager.GetModelForProvider(selectedProvider)
+	
+	fmt.Printf("🔄 Switching to %s with model %s...\n", selectedName, defaultModel)
+
+	// Use the agent's SetModel method which handles provider switching automatically
+	err = chatAgent.SetModel(defaultModel)
+	if err != nil {
+		return fmt.Errorf("failed to switch to provider %s: %w", selectedName, err)
+	}
+
+	fmt.Printf("✅ Provider switched to: %s\n", selectedName)
+	fmt.Printf("🤖 Using model: %s\n", defaultModel)
+	
+	return nil
+}
+
+// handleShellCommand handles the /shell slash command
+func handleShellCommand(args []string, chatAgent *agent.Agent) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: /shell <description-of-shell-command-to-generate>")
+	}
+
+	commandDescription := strings.Join(args, " ")
+
+	// Create a prompt to generate a shell command
+	prompt := fmt.Sprintf(`Please generate a shell command that matches this description:
+"%s"
+
+IMPORTANT:
+- Output ONLY the shell command itself, nothing else
+- Do not include any explanations, comments, or additional text
+- The command should be executable as-is
+- Use bash shell syntax
+- Return ONLY the command string
+
+Example:
+If the description is "list all files in current directory", output: "ls -la"
+If the description is "show disk usage", output: "df -h"`, commandDescription)
+
+	fmt.Printf("🤖 Generating shell command...\n")
+
+	// Process the query with the current agent
+	result, err := chatAgent.ProcessQueryWithContinuity(prompt)
+	if err != nil {
+		return fmt.Errorf("failed to generate shell command: %v", err)
+	}
+
+	// Clean up the result - remove any quotes or extra whitespace
+	generatedCommand := strings.TrimSpace(result)
+	generatedCommand = strings.Trim(generatedCommand, `"'`)
+
+	if generatedCommand == "" {
+		return fmt.Errorf("agent did not generate a valid shell command")
+	}
+
+	fmt.Printf("✅ Generated command:\n")
+	fmt.Printf("Command: %s\n", generatedCommand)
+	fmt.Printf("\n")
+
+	// Ask for user approval
+	fmt.Printf("⚠️  Do you want to execute this command? (y/N): ")
+
+	var response string
+	fmt.Scanln(&response)
+
+	response = strings.TrimSpace(strings.ToLower(response))
+	if response != "y" && response != "yes" {
+		fmt.Printf("❌ Command execution cancelled by user\n")
+		return nil
+	}
+
+	fmt.Printf("✅ Executing command...\n")
+	fmt.Printf("=====================================\n")
+
+	// Execute the shell command
+	resultOutput, err := agent_tools.ExecuteShellCommand(generatedCommand)
+	if err != nil {
+		return fmt.Errorf("command failed: %v\nOutput: %s", err, resultOutput)
+	}
+
+	fmt.Printf("✅ Command executed successfully:\n")
+	fmt.Printf("Command: %s\n", generatedCommand)
+	fmt.Printf("Output:\n%s\n", resultOutput)
+
+	return nil
+}
+
+// handleExecCommand handles the /exec slash command
+func handleExecCommand(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: /exec <shell-command-to-execute>")
+	}
+
+	command := strings.Join(args, " ")
+
+	// Execute the shell command
+	result, err := agent_tools.ExecuteShellCommand(command)
+	if err != nil {
+		return fmt.Errorf("command failed: %v\nOutput: %s", err, result)
+	}
+
+	fmt.Printf("✅ Command executed successfully:\n")
+	fmt.Printf("Command: %s\n", command)
+	fmt.Printf("Output:\n%s\n", result)
+
+	return nil
+}
+
 
 // agentCmd represents the agent command
 var agentCmd = &cobra.Command{
 	Use:   "agent [intent]",
-	Short: "AI agent mode - interactive or direct execution of development tasks",
-	Long: `Simplified Agent mode with streamlined workflow for code updates, questions, and commands.
+	Short: "AI agent for code analysis and editing",
+	Long: `AI agent mode for intelligent code analysis and editing.
 
-The agent can run in two modes:
+Features:
+• Error recovery and malformed tool call detection
+• Vision analysis capabilities for UI components
+• Esc key interrupt handling for interactive control
+• Conversation optimization
+• Context management and optimization
+• Intelligent fallback and retry mechanisms
 
-1. **Interactive Mode** (with --ui flag):
-   - Run "ledit agent --ui" to start interactive TUI mode
-   - Type requests in the bottom input box and press Enter to execute
-   - Watch real-time progress and logs
-   - Perfect for iterative development workflows
+The agent runs in two modes:
 
-2. **Direct Mode** (with command line arguments):
-   - Run "ledit agent \"your request\"" for one-shot execution
-   - Ideal for scripting and automation
+1. **Interactive Mode**:
+   - Real-time progress tracking
+   - Conversation optimization
+   - Error handling and recovery
+   - Dynamic reasoning effort adjustment
 
-The agent uses a simplified approach:
-• For code updates: Creates todos, executes them via the code command with auto-review, validates builds
-• For questions: Responds directly without complex planning
-• For commands: Executes commands directly without todo overhead
+2. **Direct Mode**:
+   - Systematic exploration and structured approach
+   - Tool execution with atomic operations
+   - Context management and optimization
+   - Intelligent fallback and retry mechanisms
 
-Workflow:
-1. Analyze your intent (code update, question, or command)
-2. For code updates: Create prioritized todos and execute them sequentially
-3. Each todo is executed via the code command with skip-prompt for auto review
-4. Build validation runs after each todo to ensure changes work
-5. Questions and commands are handled directly without todos
+Workflow (Phase-based approach):
+PHASE 1: UNDERSTAND & PLAN - Break task into specific steps
+PHASE 2: EXPLORE - Systematic codebase exploration
+PHASE 3: IMPLEMENT - Careful changes with file operations
+PHASE 4: VERIFY & COMPLETE - Testing and quality assurance
 
 Examples:
-  # Interactive mode
-  ledit agent --ui
+  # Interactive mode (automatic when no arguments provided)
+  ledit agent
   
   # Direct mode
   ledit agent "Add better error handling to the main function"
@@ -73,85 +805,71 @@ Examples:
   ledit agent "Fix the bug where users can't login"`,
 	Args: cobra.MaximumNArgs(1), // Allow 0 or 1 args for interactive mode
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// If no arguments provided, check if UI is available for interactive mode
+		// Handle interactive mode
 		if len(args) == 0 {
-			if uiPkg.IsUIActive() {
-				// Start interactive TUI mode
-				return startInteractiveTUI()
+			// Start interactive mode automatically when no prompt is provided
+			if uiPkg.Enabled() {
+				uiPkg.SetDefaultSink(uiPkg.TuiSink{})
+
+				// Start interactive TUI mode directly (don't start background TUI)
+				return tuiPkg.RunInteractiveAgent()
 			} else {
-				return fmt.Errorf("no intent provided. Use: ledit agent \"<your request>\" or enable UI mode with --ui flag")
+				// Interactive mode without UI - use simple console-based interactive mode
+				return runSimpleInteractiveMode()
 			}
 		}
-		userIntent := strings.Join(args, " ")
-		// Mark this invocation as coming from agent for downstream logic (e.g., automated review policy)
-		_ = os.Setenv("LEDIT_FROM_AGENT", "1")
-		// Propagate dry-run via env var for simplicity; config loader reads os.Getenv in future enhancement
-		if agentDryRun {
-			_ = os.Setenv("LEDIT_DRY_RUN", "1")
-		}
-		// If UI is enabled, start TUI in background and route output
+
+		// Handle UI integration (only for non-interactive mode)
 		if uiPkg.IsUIActive() {
+			uiPkg.PublishStatus("Initializing agent")
+			uiPkg.Log("🚀 Agent activated")
+
+			// Start TUI in background only for non-interactive mode
 			uiPkg.SetDefaultSink(uiPkg.TuiSink{})
 			go func() { _ = tuiPkg.Run() }()
 		}
 
-		// Default to simplified agent
-		err := agent.RunSimplifiedAgent(userIntent, agentSkipPrompt, agentModel)
+		userIntent := strings.Join(args, " ")
 
-		// If there's an error, use graceful exit with token usage information
+		// Mark environment flags
+		_ = os.Setenv("LEDIT_FROM_AGENT", "1")
+
+		if agentDryRun {
+			_ = os.Setenv("LEDIT_DRY_RUN", "1")
+		}
+
+		if uiPkg.IsUIActive() {
+			uiPkg.Log(fmt.Sprintf("📝 Processing intent: %s", userIntent))
+			uiPkg.PublishStatus("Processing with agent")
+		}
+
+		// Execute using direct agent (like coder)
+		err := executeDirectAgentCommand(userIntent)
+
 		if err != nil {
-			// Try to get token usage information from config
-			var tokenUsage interface{}
-			var modelName string
-
-			if cfg, cfgErr := config.LoadOrInitConfig(agentSkipPrompt); cfgErr == nil && cfg != nil {
-				if cfg.LastTokenUsage != nil {
-					tokenUsage = cfg.LastTokenUsage
-				}
-				modelName = cfg.EditingModel
+			if uiPkg.IsUIActive() {
+				uiPkg.Log(fmt.Sprintf("❌ Agent processing failed: %v", err))
+				uiPkg.PublishStatus("Failed")
 			}
 
-			// Print graceful exit message
 			gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
 				"AI agent processing your request",
 				err,
-				tokenUsage,
-				modelName,
+				nil,
+				"ledit-agent",
 			)
 			fmt.Fprint(os.Stderr, gracefulExitMsg)
 			os.Exit(1)
 		}
 
-		// Handle token usage summary based on context
-		if cfg, cfgErr := config.LoadOrInitConfig(agentSkipPrompt); cfgErr == nil && cfg != nil && cfg.LastTokenUsage != nil {
-			// Use provider interface for cost calculation
-			if provider, err := providers.GetProvider(cfg.EditingModel); err == nil {
-				cost := provider.CalculateCost(providers.TokenUsage{
-					PromptTokens:     cfg.LastTokenUsage.PromptTokens,
-					CompletionTokens: cfg.LastTokenUsage.CompletionTokens,
-					TotalTokens:      cfg.LastTokenUsage.TotalTokens,
-				})
-
-				// Only show summary in console mode - UI shows this in the header
-				uiPkg.PrintfContext(false, "Token Usage: %d prompt + %d completion = %d total (Cost: $%.4f)\n",
-					cfg.LastTokenUsage.PromptTokens,
-					cfg.LastTokenUsage.CompletionTokens,
-					cfg.LastTokenUsage.TotalTokens,
-					cost)
-			}
+		// Show completion
+		if uiPkg.IsUIActive() {
+			uiPkg.Log("✅ Task completed successfully")
+			uiPkg.PublishStatus("Completed")
+		} else {
+			fmt.Println("✅ Task completed successfully")
 		}
 		return nil
 	},
 }
 
-// startInteractiveTUI starts the TUI in interactive agent mode
-func startInteractiveTUI() error {
-	// Set TUI as output sink
-	uiPkg.SetDefaultSink(uiPkg.TuiSink{})
-
-	// Start TUI with interactive agent mode
-	if err := tuiPkg.RunInteractiveAgent(); err != nil {
-		return fmt.Errorf("failed to start interactive TUI: %w", err)
-	}
-	return nil
-}

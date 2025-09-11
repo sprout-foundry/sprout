@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/bubbles v0.18.0
 	github.com/charmbracelet/bubbletea v0.26.6
 	github.com/charmbracelet/lipgloss v0.12.1
+	github.com/chzyer/readline v1.5.1
 	github.com/fatih/color v1.18.0
 	github.com/ollama/ollama v0.10.1
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
@@ -15,7 +16,6 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.4
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/sync v0.15.0
-	golang.org/x/term v0.30.0
 	golang.org/x/text v0.23.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
@@ -47,5 +47,5 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
 )

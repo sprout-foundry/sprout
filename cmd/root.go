@@ -51,12 +51,10 @@ func init() {
 	rootCmd.AddCommand(codeCmd.GetCommand())
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(execCmd)
-	rootCmd.AddCommand(fixCmd)
 	rootCmd.AddCommand(ignoreCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(processCmd)
-	rootCmd.AddCommand(questionCmd)
 	rootCmd.AddCommand(reviewStagedCmd) // Add the new command
 	rootCmd.AddCommand(pricingCmd)
 	rootCmd.AddCommand(uiCmd)
@@ -72,7 +70,7 @@ func init() {
 		}
 		// then flag
 		if f := rootCmd.PersistentFlags().Lookup("ui"); f != nil {
-			if v, err := rootCmd.Flags().GetBool("ui"); err == nil && v {
+			if v, err := rootCmd.PersistentFlags().GetBool("ui"); err == nil && v {
 				ui.SetEnabled(true)
 				ui.SetDefaultSink(ui.TuiSink{})
 				return

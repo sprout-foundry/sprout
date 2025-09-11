@@ -23,7 +23,8 @@ Available commands:
   agent    - AI agent mode (analyzes intent and decides actions)
   process  - Orchestrate complex features
   commit   - Generate commit messages
-  fix      - Fix common issues
+  rollback - Rollback changes by revision ID
+  insights - Show inferred project goals and insights
   ...and more
 
 For autonomous operation, try: ledit agent "your intent here"`,
@@ -53,10 +54,12 @@ func init() {
 	rootCmd.AddCommand(execCmd)
 	rootCmd.AddCommand(ignoreCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(insightsCmd)
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(processCmd)
 	rootCmd.AddCommand(reviewStagedCmd) // Add the new command
 	rootCmd.AddCommand(pricingCmd)
+	rootCmd.AddCommand(rollbackCmd)
 	rootCmd.AddCommand(uiCmd)
 }
 

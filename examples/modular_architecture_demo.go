@@ -14,6 +14,10 @@ import (
 
 // This example demonstrates the new modular architecture
 func main() {
+	demoModularArchitecture()
+}
+
+func demoModularArchitecture() {
 	fmt.Println("🚀 Ledit Modular Architecture Demo")
 	fmt.Println("==================================")
 

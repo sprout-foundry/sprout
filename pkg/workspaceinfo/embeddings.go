@@ -21,3 +21,4 @@ func GetFilesForContextUsingEmbeddings(instructions string, workspaceFile Worksp
 	}
 	return fullContextFiles, summaryContextFiles, nil
 }
+

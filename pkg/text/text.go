@@ -19,3 +19,4 @@ func GetSummary(content, path string, cfg *config.Config) (string, string, strin
 func ExtractKeywords(text string) []string {
 	return strings.Fields(text)
 }
+

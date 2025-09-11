@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	cfg "github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/interfaces"
 	"github.com/alantheprice/ledit/pkg/interfaces/types"
 )
@@ -45,7 +46,7 @@ func (f *Factory) Validate(config *types.ProviderConfig) error {
 
 	// Set defaults
 	if config.BaseURL == "" {
-		config.BaseURL = "http://localhost:11434"
+		config.BaseURL = cfg.DefaultOllamaURL
 	}
 
 	if config.Timeout == 0 {

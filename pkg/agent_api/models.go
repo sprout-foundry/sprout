@@ -13,6 +13,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/agent_types"
+	"github.com/alantheprice/ledit/pkg/config"
 )
 
 // ModelInfo represents information about an available model
@@ -186,7 +187,7 @@ func getDeepInfraModels() ([]ModelInfo, error) {
 func getOllamaModels() ([]ModelInfo, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	
-	resp, err := client.Get("http://localhost:11434/api/tags")
+	resp, err := client.Get(config.DefaultOllamaURL + "/api/tags")
 	if err != nil {
 		return nil, fmt.Errorf("Ollama is not running. Please start Ollama first")
 	}

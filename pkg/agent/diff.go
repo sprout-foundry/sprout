@@ -128,7 +128,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-`, oldFile, newFile, maxLines)
+`, oldFile, newFile, maxLines, maxLines)
 	
 	scriptFile := filepath.Join(tmpDir, "diff_script.py")
 	if err := ioutil.WriteFile(scriptFile, []byte(pythonScript), 0644); err != nil {

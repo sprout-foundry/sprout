@@ -1,0 +1,196 @@
+package agent
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/alantheprice/ledit/pkg/agent_api"
+)
+
+// ConversationState represents the state of a conversation that can be persisted
+type ConversationState struct {
+	Messages         []api.Message `json:"messages"`
+	TaskActions      []TaskAction  `json:"task_actions"`
+	TotalCost        float64       `json:"total_cost"`
+	TotalTokens      int           `json:"total_tokens"`
+	PromptTokens     int           `json:"prompt_tokens"`
+	CompletionTokens int           `json:"completion_tokens"`
+	CachedTokens     int           `json:"cached_tokens"`
+	CachedCostSavings float64      `json:"cached_cost_savings"`
+	LastUpdated      time.Time     `json:"last_updated"`
+	SessionID        string        `json:"session_id"`
+}
+
+// GetStateDir returns the directory for storing conversation state
+func GetStateDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	
+	stateDir := filepath.Join(homeDir, ".gpt_chat_state")
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return "", fmt.Errorf("failed to create state directory: %w", err)
+	}
+	
+	return stateDir, nil
+}
+
+// SaveState saves the current conversation state
+func (a *Agent) SaveState(sessionID string) error {
+	stateDir, err := GetStateDir()
+	if err != nil {
+		return err
+	}
+	
+	state := ConversationState{
+		Messages:         a.messages,
+		TaskActions:      a.taskActions,
+		TotalCost:        a.totalCost,
+		TotalTokens:      a.totalTokens,
+		PromptTokens:     a.promptTokens,
+		CompletionTokens: a.completionTokens,
+		CachedTokens:     a.cachedTokens,
+		CachedCostSavings: a.cachedCostSavings,
+		LastUpdated:      time.Now(),
+		SessionID:        sessionID,
+	}
+	
+	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", sessionID))
+	
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal state: %w", err)
+	}
+	
+	return os.WriteFile(stateFile, data, 0600)
+}
+
+// LoadState loads a conversation state by session ID
+func (a *Agent) LoadState(sessionID string) (*ConversationState, error) {
+	stateDir, err := GetStateDir()
+	if err != nil {
+		return nil, err
+	}
+	
+	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", sessionID))
+	
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read state file: %w", err)
+	}
+	
+	var state ConversationState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal state: %w", err)
+	}
+	
+	return &state, nil
+}
+
+// ListSessions returns all available session IDs
+func ListSessions() ([]string, error) {
+	stateDir, err := GetStateDir()
+	if err != nil {
+		return nil, err
+	}
+	
+	files, err := os.ReadDir(stateDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read state directory: %w", err)
+	}
+	
+	var sessions []string
+	for _, file := range files {
+		if !file.IsDir() && filepath.Ext(file.Name()) == ".json" {
+			sessions = append(sessions, file.Name()[:len(file.Name())-5]) // Remove .json extension
+		}
+	}
+	
+	return sessions, nil
+}
+
+// DeleteSession removes a session state file
+func DeleteSession(sessionID string) error {
+	stateDir, err := GetStateDir()
+	if err != nil {
+		return err
+	}
+	
+	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", sessionID))
+	return os.Remove(stateFile)
+}
+
+// GenerateSessionSummary creates a summary of previous actions for continuity
+func (a *Agent) GenerateSessionSummary() string {
+	if len(a.taskActions) == 0 {
+		return "No previous actions recorded."
+	}
+	
+	var summary strings.Builder
+	summary.WriteString("Previous session summary:\n")
+	summary.WriteString("=====================================\n")
+	
+	// Group actions by type
+	fileCreations := 0
+	fileModifications := 0
+	commandsExecuted := 0
+	filesRead := 0
+	
+	for _, action := range a.taskActions {
+		switch action.Type {
+		case "file_created":
+			fileCreations++
+		case "file_modified":
+			fileModifications++
+		case "command_executed":
+			commandsExecuted++
+		case "file_read":
+			filesRead++
+		}
+	}
+	
+	summary.WriteString(fmt.Sprintf("• Files created: %d\n", fileCreations))
+	summary.WriteString(fmt.Sprintf("• Files modified: %d\n", fileModifications))
+	summary.WriteString(fmt.Sprintf("• Commands executed: %d\n", commandsExecuted))
+	summary.WriteString(fmt.Sprintf("• Files read: %d\n", filesRead))
+	summary.WriteString(fmt.Sprintf("• Total cost: $%.6f\n", a.totalCost))
+	summary.WriteString(fmt.Sprintf("• Total tokens: %s\n", a.formatTokenCount(a.totalTokens)))
+	
+	// Add recent notable actions
+	if len(a.taskActions) > 0 {
+		summary.WriteString("\nRecent actions:\n")
+		recentCount := min(5, len(a.taskActions))
+		for i := len(a.taskActions) - recentCount; i < len(a.taskActions); i++ {
+			action := a.taskActions[i]
+			summary.WriteString(fmt.Sprintf("• %s: %s\n", action.Type, action.Description))
+		}
+	}
+	
+	summary.WriteString("=====================================\n")
+	
+	return summary.String()
+}
+
+// ApplyState applies a loaded state to the current agent
+func (a *Agent) ApplyState(state *ConversationState) {
+	a.messages = state.Messages
+	a.taskActions = state.TaskActions
+	a.totalCost = state.TotalCost
+	a.totalTokens = state.TotalTokens
+	a.promptTokens = state.PromptTokens
+	a.completionTokens = state.CompletionTokens
+	a.cachedTokens = state.CachedTokens
+	a.cachedCostSavings = state.CachedCostSavings
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

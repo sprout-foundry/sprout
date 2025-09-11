@@ -433,6 +433,9 @@ func (a *Agent) extractToolCallsFromContent(content string) []api.ToolCall {
 		return toolCalls
 	}
 
+	// Handle markdown code blocks first
+	content = a.extractFromMarkdownBlocks(content)
+
 	// Look for tool_calls JSON structure in content
 	if strings.Contains(content, "tool_calls") {
 		// Try to extract and parse tool calls from content
@@ -613,4 +616,23 @@ func (a *Agent) containsMalformedToolCalls(content string) bool {
 	}
 
 	return false
+}
+
+// extractFromMarkdownBlocks extracts JSON from markdown code blocks
+func (a *Agent) extractFromMarkdownBlocks(content string) string {
+	// Extract JSON from ```json blocks
+	jsonBlockRegex := regexp.MustCompile("```json\\s*([\\s\\S]*?)```")
+	matches := jsonBlockRegex.FindAllStringSubmatch(content, -1)
+	
+	var extracted strings.Builder
+	extracted.WriteString(content) // Keep original content
+	
+	for _, match := range matches {
+		if len(match) > 1 {
+			extracted.WriteString("\n")
+			extracted.WriteString(strings.TrimSpace(match[1]))
+		}
+	}
+	
+	return extracted.String()
 }

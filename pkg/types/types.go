@@ -1,107 +1,111 @@
 package types
 
-import "encoding/json"
+// ImageData represents an image in a message
+type ImageData struct {
+	URL    string `json:"url,omitempty"`    // URL to image
+	Base64 string `json:"base64,omitempty"` // Base64 encoded image data
+	Type   string `json:"type,omitempty"`   // MIME type (image/jpeg, image/png, etc.)
+}
 
-// ToolCall represents a call to a tool made by the LLM
+// Message represents a chat message
+type Message struct {
+	Role             string      `json:"role"`
+	Content          string      `json:"content"`
+	ReasoningContent string      `json:"reasoning_content,omitempty"`
+	Images           []ImageData `json:"images,omitempty"` // Support for multiple images
+}
+
+// ToolCall represents a tool call in the response
 type ToolCall struct {
-	ID       string           `json:"id"`
-	Type     string           `json:"type"`
-	Function ToolCallFunction `json:"function"`
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }
 
-// ToolCallFunction represents the function call details
-type ToolCallFunction struct {
-	Name       string          `json:"name"`
-	Arguments  string          `json:"arguments,omitempty"`
-	Parameters json.RawMessage `json:"parameters,omitempty"`
+// Tool represents a tool definition
+type Tool struct {
+	Type     string `json:"type"`
+	Function struct {
+		Name        string      `json:"name"`
+		Description string      `json:"description"`
+		Parameters  interface{} `json:"parameters"`
+	} `json:"function"`
 }
 
-// ToolMessage represents a tool call message in the conversation
-type ToolMessage struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
+// Choice represents a response choice
+type Choice struct {
+	Index   int `json:"index"`
+	Message struct {
+		Role             string      `json:"role"`
+		Content          string      `json:"content"`
+		ReasoningContent string      `json:"reasoning_content,omitempty"`
+		Images           []ImageData `json:"images,omitempty"`
+		ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
+	} `json:"message"`
+	FinishReason string `json:"finish_reason"`
 }
 
-// TokenUsage represents actual token usage from an API response
-type TokenUsage struct {
-	PromptTokens     int  `json:"prompt_tokens"`
-	CompletionTokens int  `json:"completion_tokens"`
-	TotalTokens      int  `json:"total_tokens"`
-	Estimated        bool `json:"estimated,omitempty"`
+// Usage represents token usage information
+type Usage struct {
+	PromptTokens     int     `json:"prompt_tokens"`
+	CompletionTokens int     `json:"completion_tokens"`
+	TotalTokens      int     `json:"total_tokens"`
+	EstimatedCost    float64 `json:"estimated_cost"`
+	Estimated        bool    `json:"estimated,omitempty"`
+	PromptTokensDetails struct {
+		CachedTokens     int `json:"cached_tokens"`
+		CacheWriteTokens *int `json:"cache_write_tokens"`
+	} `json:"prompt_tokens_details,omitempty"`
 }
 
-// TokenUsageInterface defines methods for accessing token usage information
-type TokenUsageInterface interface {
-	GetTotalTokens() int
-	GetPromptTokens() int
-	GetCompletionTokens() int
+// ChatResponse represents a chat API response
+type ChatResponse struct {
+	ID      string   `json:"id"`
+	Object  string   `json:"object"`
+	Created int64    `json:"created"`
+	Model   string   `json:"model"`
+	Choices []Choice `json:"choices"`
+	Usage   Usage    `json:"usage"`
 }
 
-// GetTotalTokens implements TokenUsageInterface for TokenUsage
-func (t TokenUsage) GetTotalTokens() int {
-	return t.TotalTokens
+// ModelInfo represents information about a model
+type ModelInfo struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Provider      string  `json:"provider"`
+	Description   string  `json:"description,omitempty"`
+	ContextLength int     `json:"context_length,omitempty"`
+	InputCost     float64 `json:"input_cost,omitempty"`
+	OutputCost    float64 `json:"output_cost,omitempty"`
+	Cost          float64 `json:"cost,omitempty"`
 }
 
-// GetPromptTokens implements TokenUsageInterface for TokenUsage
-func (t TokenUsage) GetPromptTokens() int {
-	return t.PromptTokens
+// ProviderInterface defines the interface that all providers must implement
+type ProviderInterface interface {
+	SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
+	CheckConnection() error
+	SetDebug(debug bool)
+	SetModel(model string) error
+	GetModel() string
+	GetProvider() string
+	GetModelContextLimit() (int, error)
+	ListModels() ([]ModelInfo, error)
+	SupportsVision() bool
+	SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
 }
 
-// GetCompletionTokens implements TokenUsageInterface for TokenUsage
-func (t TokenUsage) GetCompletionTokens() int {
-	return t.CompletionTokens
-}
-
-// SplitUsage tracks prompt vs completion tokens for a category
-type SplitUsage struct {
-	Prompt     int
-	Completion int
-}
-
-// AgentTokenUsage tracks token usage across different agent operations
-type AgentTokenUsage struct {
-	IntentAnalysis     int
-	Planning           int // Tokens used by orchestration model for detailed planning
-	CodeGeneration     int
-	Validation         int
-	ProgressEvaluation int
-	Total              int
-
-	// Split accounting for precise input/output costs
-	IntentSplit     SplitUsage
-	PlanningSplit   SplitUsage
-	CodegenSplit    SplitUsage
-	ValidationSplit SplitUsage
-	ProgressSplit   SplitUsage
-}
-
-// GetTotalTokens implements TokenUsageInterface for AgentTokenUsage
-func (a AgentTokenUsage) GetTotalTokens() int {
-	return a.Total
-}
-
-// GetPromptTokens implements TokenUsageInterface for AgentTokenUsage
-func (a AgentTokenUsage) GetPromptTokens() int {
-	// Sum up all prompt tokens from split usage
-	total := a.IntentSplit.Prompt + a.PlanningSplit.Prompt +
-		a.CodegenSplit.Prompt + a.ValidationSplit.Prompt + a.ProgressSplit.Prompt
-	return total
-}
-
-// GetCompletionTokens implements TokenUsageInterface for AgentTokenUsage
-func (a AgentTokenUsage) GetCompletionTokens() int {
-	// Sum up all completion tokens from split usage
-	total := a.IntentSplit.Completion + a.PlanningSplit.Completion +
-		a.CodegenSplit.Completion + a.ValidationSplit.Completion + a.ProgressSplit.Completion
-	return total
-}
+// TokenUsage represents token usage from LLM responses (alias for Usage)
+type TokenUsage = Usage
 
 // ModelPricing represents cost per 1K tokens for different models
 type ModelPricing struct {
-	InputCostPer1K  float64 // Cost per 1K input tokens
-	OutputCostPer1K float64 // Cost per 1K output tokens
+	InputCost     float64 `json:"input_cost"`
+	OutputCost    float64 `json:"output_cost"`
+	InputCostPer1K  float64 `json:"input_cost_per_1k"`  // Alias for compatibility
+	OutputCostPer1K float64 `json:"output_cost_per_1k"` // Alias for compatibility
 }
 
 // PricingTable holds per-model pricing that can be loaded from disk
@@ -109,67 +113,76 @@ type PricingTable struct {
 	Models map[string]ModelPricing `json:"models"`
 }
 
-// PatchResolution can be either a string (single file) or a map (multi-file patches)
+// PatchResolution represents the resolution of a patch/diff
 type PatchResolution struct {
-	// Single file patch (backward compatibility)
-	SingleFile string
-	// Multi-file patches
-	MultiFile map[string]string
+	ApprovedChanges []string `json:"approved_changes,omitempty"`
+	RejectedChanges []string `json:"rejected_changes,omitempty"`
+	Comments        []string `json:"comments,omitempty"`
+	Status          string   `json:"status,omitempty"`
+	MultiFile       []string `json:"multi_file,omitempty"`
+	SingleFile      string   `json:"single_file,omitempty"`
 }
 
-// IsEmpty returns true if no patch resolution is provided
-func (p *PatchResolution) IsEmpty() bool {
-	return p.SingleFile == "" && len(p.MultiFile) == 0
+// IsEmpty checks if the patch resolution is empty
+func (pr *PatchResolution) IsEmpty() bool {
+	if pr == nil {
+		return true
+	}
+	return len(pr.ApprovedChanges) == 0 && len(pr.RejectedChanges) == 0 && 
+		   len(pr.Comments) == 0 && pr.Status == "" && 
+		   len(pr.MultiFile) == 0 && pr.SingleFile == ""
 }
 
-// GetFiles returns a map of all files and their contents
-func (p *PatchResolution) GetFiles() map[string]string {
-	if p.MultiFile != nil {
-		return p.MultiFile
-	}
-	if p.SingleFile != "" {
-		// For single file patches, we don't have a filename, so return empty map
-		// This might need to be enhanced based on how single file patches are used
-		return make(map[string]string)
-	}
-	return make(map[string]string)
-}
-
-// UnmarshalJSON implements custom JSON unmarshaling for PatchResolution
-func (p *PatchResolution) UnmarshalJSON(data []byte) error {
-	// First try to unmarshal as a string (backward compatibility)
-	var str string
-	if err := json.Unmarshal(data, &str); err == nil {
-		p.SingleFile = str
-		return nil
-	}
-
-	// If that fails, try to unmarshal as a map
-	var m map[string]string
-	if err := json.Unmarshal(data, &m); err == nil {
-		p.MultiFile = m
-		return nil
-	}
-
-	// If both fail, return the original error
-	return json.Unmarshal(data, &str)
-}
-
-// MarshalJSON implements custom JSON marshaling for PatchResolution
-func (p *PatchResolution) MarshalJSON() ([]byte, error) {
-	// If MultiFile is set, marshal it as an object
-	if len(p.MultiFile) > 0 {
-		return json.Marshal((map[string]string)(p.MultiFile))
-	}
-	// Otherwise, marshal SingleFile as a string
-	return json.Marshal(p.SingleFile)
-}
-
-// CodeReviewResult represents the result of an automated code review.
+// CodeReviewResult represents the result of a code review
 type CodeReviewResult struct {
-	Status           string           `json:"status"`                      // "approved", "needs_revision", "rejected"
-	Feedback         string           `json:"feedback"`                    // Explanation for the status
-	DetailedGuidance string           `json:"detailed_guidance,omitempty"` // Detailed guidance for LLM if status is "needs_revision"
-	PatchResolution  *PatchResolution `json:"patch_resolution,omitempty"`  // Complete updated file content if direct patch is provided
-	NewPrompt        string           `json:"new_prompt,omitempty"`        // New prompt suggestion if status is "rejected"
+	Issues           []string         `json:"issues,omitempty"`
+	Suggestions      []string         `json:"suggestions,omitempty"`
+	Approved         bool             `json:"approved"`
+	Status           string           `json:"status,omitempty"`
+	Feedback         string           `json:"feedback,omitempty"`
+	DetailedGuidance string           `json:"detailed_guidance,omitempty"`
+	NewPrompt        string           `json:"new_prompt,omitempty"`
+	PatchResolution  *PatchResolution `json:"patch_resolution,omitempty"`
+}
+
+// ToolCallFunction represents the function part of a tool call
+type ToolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+// AgentTokenUsage represents token usage from agent operations
+type AgentTokenUsage struct {
+	PromptTokens     int     `json:"prompt_tokens"`
+	CompletionTokens int     `json:"completion_tokens"`
+	TotalTokens      int     `json:"total_tokens"`
+	EstimatedCost    float64 `json:"estimated_cost"`
+	Model            string  `json:"model,omitempty"`
+	Provider         string  `json:"provider,omitempty"`
+}
+
+// IntentAnalysis represents the analysis of user intent
+type IntentAnalysis struct {
+	Intent       string            `json:"intent"`
+	Actions      []string          `json:"actions"`
+	Files        []string          `json:"files"`
+	Confidence   float64           `json:"confidence"`
+	Dependencies map[string]string `json:"dependencies,omitempty"`
+}
+
+// EditPlan represents a plan for code edits
+type EditPlan struct {
+	Target      string   `json:"target"`
+	Changes     []string `json:"changes"`
+	Rationale   string   `json:"rationale"`
+	Files       []string `json:"files"`
+	TestChanges bool     `json:"test_changes"`
+}
+
+// AgentContext represents context for agent operations
+type AgentContext struct {
+	WorkspaceRoot string            `json:"workspace_root"`
+	CurrentFiles  []string          `json:"current_files"`
+	GitStatus     string            `json:"git_status,omitempty"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
 }

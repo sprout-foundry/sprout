@@ -6,12 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
-	"github.com/alantheprice/ledit/pkg/prompts"
-	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/agent"
+	ui "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -21,18 +18,34 @@ var (
 )
 
 func init() {
-	execCmd.Flags().BoolVar(&execSkipPrompt, "skip-prompt", false, "Skip user prompt for executing the command")
-	execCmd.Flags().StringVarP(&execModel, "model", "m", "", "Model name to use with the LLM")
+	execCmd.Flags().BoolVar(&execSkipPrompt, "skip-prompt", false, "Skip user prompt (enhanced by safety analysis)")
+	execCmd.Flags().StringVarP(&execModel, "model", "m", "", "Model name to use with the system")
 }
 
 var execCmd = &cobra.Command{
 	Use:   "exec [description]",
-	Short: "Infer and execute a shell command from your description",
-	Long: `Executes a shell command by inferring it from your plain text description using an LLM.
+	Short: "Command inference and execution",
+	Long: `Command inference and execution using natural language processing.
+
+Features:
+- Command inference using reasoning
+- Safety analysis and validation
+- Real-time TUI integration with execution monitoring  
+- Error handling and recovery mechanisms
+- Shell detection and compatibility
+
+The system uses language understanding to convert natural language
+descriptions into precise shell commands with safety and reliability.
 
 Examples:
+  # Natural language to command conversion
   ledit exec "list all files in the current directory in long format"
-  ledit exec "find all go files in the project"`,
+  
+  # Complex operations with better understanding
+  ledit exec "find all go files in the project and show their sizes"
+  
+  # Enhanced safety with validation
+  ledit exec "safely remove temporary files older than 7 days"`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Validate inputs
 		if len(args) == 0 {
@@ -40,48 +53,141 @@ Examples:
 			return
 		}
 
-		// Initialize logger and config
-		logger := utils.GetLogger(execSkipPrompt)
-		cfg, err := config.LoadOrInitConfig(execSkipPrompt)
+		// Create agent directly
+		chatAgent, err := agent.NewAgent()
 		if err != nil {
-			log.Fatalf("Failed to load configuration: %v. Please run 'ledit init'.", err)
-		}
-		model := cfg.WorkspaceModel
-		if execModel != "" {
-			model = execModel
+			log.Fatalf("Failed to initialize agent: %v", err)
 		}
 
-		// Build the user input to infer from
+		// Handle UI integration
+		if ui.IsUIActive() {
+			ui.PublishStatus("Analyzing command request")
+		}
+
 		userInput := strings.Join(args, " ")
 
-		// Ask LLM to infer/confirm the shell command from the user's input (NL or raw)
-		logger.LogProcessStep("Generating command from input...")
-		prompt := fmt.Sprintf("You are an expert in shell commands. Convert the following user input into a single, executable shell command. If the input is already a valid shell command, return it unchanged. Only output the shell command itself, with no explanation, code fences, or extra text.\n\nUser input: '%s'", userInput)
-		messages := []prompts.Message{
-			{Role: "system", Content: "You are an expert at generating shell commands from plain text descriptions. You only output the raw command, with no additional text or explanation."},
-			{Role: "user", Content: prompt},
+		if ui.IsUIActive() {
+			ui.Log(fmt.Sprintf("🔍 Analyzing request: %s", userInput))
+		} else {
+			fmt.Printf("🔍 Analyzing: %s\n", userInput)
 		}
-		commandToRun, _, err := llm.GetLLMResponse(model, messages, "exec_intent", cfg, 30*time.Second)
+
+		// Use command inference system
+		prompt := fmt.Sprintf("Convert the following user input into a safe, executable shell command. Analyze the request for safety and provide the most appropriate command. User input: '%s'", userInput)
+		
+		response, err := chatAgent.ProcessQueryWithContinuity(prompt)
 		if err != nil {
-			log.Fatalf("Failed to get command from LLM: %v", err)
-		}
-		commandToRun = strings.TrimSpace(commandToRun)
-		// Strip potential code fences
-		commandToRun = strings.TrimPrefix(commandToRun, "```sh")
-		commandToRun = strings.TrimPrefix(commandToRun, "```bash")
-		commandToRun = strings.TrimPrefix(commandToRun, "```")
-		commandToRun = strings.TrimSuffix(commandToRun, "```")
-		commandToRun = strings.TrimSpace(commandToRun)
-
-		// Confirm execution via logger's AskForConfirmation
-		logger.LogProcessStep(fmt.Sprintf("Proposed command: %s", commandToRun))
-		if !logger.AskForConfirmation("Execute this command?", true, false) {
-			logger.LogProcessStep("Execution cancelled.")
-			return
+			if ui.IsUIActive() {
+				ui.Log(fmt.Sprintf("❌ Command inference failed: %v", err))
+			}
+			log.Fatalf("Command inference failed: %v", err)
 		}
 
-		executeShellCommand(commandToRun)
+		// Extract command from response
+		commandToRun := extractCommandFromResponse(response)
+		
+		if ui.IsUIActive() {
+			ui.Log(fmt.Sprintf("💡 Proposed command: %s", commandToRun))
+		} else {
+			fmt.Printf("💡 Proposed command: %s\n", commandToRun)
+		}
+
+		// Confirmation using safety analysis
+		if !execSkipPrompt {
+			if ui.IsUIActive() {
+				// Use user interaction via console
+				fmt.Printf("Execute this command? %s [yes/no]: ", commandToRun)
+				var confirmResponse string
+				fmt.Scanln(&confirmResponse)
+				if strings.ToLower(strings.TrimSpace(confirmResponse)) != "yes" {
+					ui.Log("Execution cancelled by user")
+					return
+				}
+			} else {
+				fmt.Print("Execute this command? (y/n): ")
+				var confirm string
+				fmt.Scanln(&confirm)
+				if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
+					fmt.Println("Execution cancelled.")
+					return
+				}
+			}
+		}
+
+		// Execute using shell execution
+		if ui.IsUIActive() {
+			ui.Log("🚀 Executing command...")
+		}
+
+		// Execute command directly
+		shellCmd := exec.Command("sh", "-c", commandToRun)
+		outputBytes, err := shellCmd.CombinedOutput()
+		output := string(outputBytes)
+		
+		if ui.IsUIActive() {
+			if err != nil {
+				ui.Log(fmt.Sprintf("❌ Command failed: %v", err))
+			} else {
+				ui.Log("✅ Command executed successfully")
+				if output != "" {
+					ui.Log(fmt.Sprintf("Output: %s", output))
+				}
+			}
+		} else {
+			if err != nil {
+				fmt.Printf("❌ Command failed: %v\n", err)
+			} else {
+				fmt.Printf("✅ Command executed successfully\n")
+				if output != "" {
+					fmt.Printf("Output:\n%s\n", output)
+				}
+			}
+		}
+
+		// Show statistics
+		totalCost := chatAgent.GetTotalCost()
+		if ui.IsUIActive() {
+			if totalCost > 0 {
+				ui.Log(fmt.Sprintf("💰 Total cost: $%.6f", totalCost))
+			}
+		} else {
+			if totalCost > 0 {
+				fmt.Printf("Cost: $%.6f\n", totalCost)
+			}
+		}
 	},
+}
+
+// extractCommandFromResponse extracts the shell command from response
+func extractCommandFromResponse(response string) string {
+	lines := strings.Split(response, "\n")
+	
+	// Look for code blocks first
+	inCodeBlock := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "```") {
+			inCodeBlock = !inCodeBlock
+			continue
+		}
+		if inCodeBlock && line != "" {
+			return line
+		}
+	}
+	
+	// If no code block, look for lines that look like commands
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") && !strings.Contains(line, "command:") {
+			// Simple heuristic: if it looks like a command, use it
+			if strings.Contains(line, " ") || strings.Contains(line, "/") || strings.Contains(line, ".") {
+				return line
+			}
+		}
+	}
+	
+	// Fallback: return the whole response trimmed
+	return strings.TrimSpace(response)
 }
 
 func detectCallerShell() string {

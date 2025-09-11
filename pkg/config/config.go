@@ -59,7 +59,7 @@ type Config struct {
 	RetryAttemptCount        int                  `json:"-"` // Internal field to track retry attempts
 	UseSearchGrounding       bool                 `json:"-"` // Command-scoped flag to enable search grounding
 	FromAgent                bool                 `json:"-"` // Internal: true when invoked from agent mode
-	LastTokenUsage           *types.TokenUsage    `json:"-"` // Last token usage from LLM call
+	LastTokenUsage           *types.Usage    `json:"-"` // Last token usage from LLM call
 	QualityLevel             int                  `json:"-"` // Internal: quality level for code generation (0=standard, 1=enhanced, 2=production)
 
 	// Legacy UI toggles (DEPRECATED)

@@ -279,41 +279,50 @@ func (o *MultiAgentOrchestrator) buildAgentTask(step *types.OrchestrationStep) s
 func (o *MultiAgentOrchestrator) runAgent(agentRunner *AgentRunner, task string) (*types.StepResult, error) {
 	o.logger.LogProcessStep(fmt.Sprintf("🤖 Running agent: %s", agentRunner.definition.Name))
 
-	// Execute the agent
-	tokenUsage, err := agent.Execute(task, agentRunner.config, agentRunner.logger)
+	// Execute using coder agent directly
+	chatAgent, err := agent.NewAgent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create agent: %w", err)
+	}
+	
+	response, err := chatAgent.ProcessQueryWithContinuity(task)
 	if err != nil {
 		return nil, fmt.Errorf("agent execution error: %w", err)
 	}
-
-	// Convert agent token usage to types token usage
-	var typesTokenUsage *types.AgentTokenUsage
-	if tokenUsage != nil {
-		// Calculate prompt and completion from agent usage
-		prompt := tokenUsage.IntentAnalysis + tokenUsage.Planning + tokenUsage.ProgressEvaluation
-		completion := tokenUsage.CodeGeneration + tokenUsage.Validation
-
-		typesTokenUsage = &types.AgentTokenUsage{
-			AgentID:    agentRunner.definition.ID,
-			Prompt:     prompt,
-			Completion: completion,
-			Total:      tokenUsage.Total,
-			Model:      agentRunner.config.EditingModel,
-		}
+	
+	// Get actual statistics from agent
+	totalCost := chatAgent.GetTotalCost()
+	_ = chatAgent.GetMaxIterations()      // Available if needed
+	_ = chatAgent.GetCurrentIteration()   // Available if needed
+	
+	// Create token usage based on actual cost and model pricing
+	// Estimate tokens from cost (rough approximation)
+	estimatedTokens := int(totalCost * 1000000) // Rough estimate: $1 = ~1M tokens
+	if estimatedTokens < 1 {
+		estimatedTokens = 1 // Minimum for successful execution
+	}
+	
+	tokenUsage := &types.AgentTokenUsage{
+		AgentID:    agentRunner.definition.ID,
+		Total:      estimatedTokens,
+		Prompt:     int(float64(estimatedTokens) * 0.6), // Estimate 60% prompt tokens
+		Completion: int(float64(estimatedTokens) * 0.4), // Estimate 40% completion tokens
+		Model:      agentRunner.definition.Model,
 	}
 
 	// Create the result with token usage from agent execution
 	result := &types.StepResult{
 		Status: "success",
 		Output: map[string]string{
-			"result": fmt.Sprintf("Task completed by %s", agentRunner.definition.Name),
+			"result": response,
 		},
 		Files:      []string{},
 		Errors:     []string{},
 		Warnings:   []string{},
 		Logs:       []string{},
-		TokenUsage: typesTokenUsage,
-		Tokens:     typesTokenUsage.Total,
-		Cost:       0, // TODO: Calculate cost from token usage
+		TokenUsage: tokenUsage,
+		Tokens:     tokenUsage.Total,
+		Cost:       totalCost, // Use actual cost from agent
 	}
 
 	return result, nil

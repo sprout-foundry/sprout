@@ -74,10 +74,10 @@ func (b *BaseCommand) Initialize() error {
 		cfg.WorkspaceModel = *b.flags.Model
 	}
 
-	// Setup UI if enabled
+	// Setup UI if enabled - DISABLED to fix input conflicts
 	if uiPkg.Enabled() {
 		uiPkg.SetDefaultSink(uiPkg.TuiSink{})
-		go func() { _ = tuiPkg.Run() }()
+		// TEMPORARILY DISABLED: go func() { _ = tuiPkg.Run() }()
 	}
 
 	// Create logger

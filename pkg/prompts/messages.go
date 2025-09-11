@@ -5,7 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/types"
+	"github.com/alantheprice/ledit/pkg/interfaces/types"
+	orchestrationTypes "github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/fatih/color"
 )
 
@@ -493,19 +494,11 @@ func GracefulExit(msg GracefulExitMessage) string {
 			}
 
 			// Try to show detailed breakdown if it's an AgentTokenUsage
-			if agentUsage, ok := msg.TokenUsage.(types.AgentTokenUsage); ok {
-				if agentUsage.IntentAnalysis > 0 {
-					output.WriteString(fmt.Sprintf("   • Intent analysis: %d tokens\n", agentUsage.IntentAnalysis))
-				}
-				if agentUsage.Planning > 0 {
-					output.WriteString(fmt.Sprintf("   • Planning: %d tokens\n", agentUsage.Planning))
-				}
-				if agentUsage.CodeGeneration > 0 {
-					output.WriteString(fmt.Sprintf("   • Code generation: %d tokens\n", agentUsage.CodeGeneration))
-				}
-				if agentUsage.Validation > 0 {
-					output.WriteString(fmt.Sprintf("   • Validation: %d tokens\n", agentUsage.Validation))
-				}
+			if agentUsage, ok := msg.TokenUsage.(orchestrationTypes.AgentTokenUsage); ok {
+				output.WriteString(fmt.Sprintf("   • Agent: %s\n", agentUsage.AgentID))
+				output.WriteString(fmt.Sprintf("   • Prompt tokens: %d\n", agentUsage.Prompt))
+				output.WriteString(fmt.Sprintf("   • Completion tokens: %d\n", agentUsage.Completion))
+				output.WriteString(fmt.Sprintf("   • Model: %s\n", agentUsage.Model))
 			}
 			output.WriteString("\n")
 		}

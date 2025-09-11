@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"log"
+	"os"
 
 	"github.com/alantheprice/ledit/pkg/config"
 	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
@@ -72,8 +73,8 @@ func (b *BaseCommand) Initialize() error {
 		cfg.WorkspaceModel = *b.flags.Model
 	}
 
-	// Setup UI if enabled
-	if uiPkg.IsUIActive() {
+	// Setup UI if enabled - BUT ONLY IF NOT INTERACTIVE AGENT
+	if uiPkg.IsUIActive() && os.Getenv("LEDIT_USING_SYSTEM") == "" {
 		uiPkg.SetDefaultSink(uiPkg.TuiSink{})
 		go func() { _ = tuiPkg.Run() }()
 	}

@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/filesystem"
-	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/orchestration"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	// tuiPkg "github.com/alantheprice/ledit/pkg/tui" // TEMPORARILY DISABLED
@@ -236,7 +236,7 @@ func interactiveAuthorProcessDryRun(logger *utils.Logger) error {
 	cfg.SkipPrompt = false
 	sys := "You are a Process Designer for a multi-agent code orchestration tool. Ask the user questions using ask_user and then output ONLY a valid JSON process file."
 	msgs := []prompts.Message{{Role: "system", Content: sys}, {Role: "user", Content: "Help me author a process.json for my goal. Ask me questions, then output JSON only when ready."}}
-	response, err := llm.CallLLMWithInteractiveContext(cfg.OrchestrationModel, msgs, "process_authoring_dry_run", cfg, 0, func(_ []llm.ContextRequest, _ *config.Config) (string, error) { return "", nil })
+	response, err := api.CallLLMWithInteractiveContext(cfg.OrchestrationModel, msgs, "process_authoring_dry_run", cfg, 0, func(_ []api.ContextRequest, _ *config.Config) (string, error) { return "", nil })
 	if err != nil {
 		return fmt.Errorf("LLM interactive authoring failed: %w", err)
 	}
@@ -293,7 +293,7 @@ func interactiveAuthorProcessFile(logger *utils.Logger) (string, error) {
 	}
 
 	// Use the interactive tools loop so the model can ask the user questions via ask_user
-	response, err := llm.CallLLMWithInteractiveContext(cfg.OrchestrationModel, msgs, "process_authoring", cfg, 0, func(_ []llm.ContextRequest, _ *config.Config) (string, error) {
+	response, err := api.CallLLMWithInteractiveContext(cfg.OrchestrationModel, msgs, "process_authoring", cfg, 0, func(_ []api.ContextRequest, _ *config.Config) (string, error) {
 		return "", nil
 	})
 	if err != nil {

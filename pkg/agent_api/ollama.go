@@ -1,18 +1,20 @@
 package api
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/config"
+	ollama "github.com/ollama/ollama/api"
 )
 
 const (
-	OllamaURL   = "http://localhost:11434/v1/chat/completions"
+	OllamaURL   = config.DefaultOllamaURL + "/v1/chat/completions"
 	OllamaModel = "gpt-oss:20b"
 )
 
@@ -37,94 +39,174 @@ func NewOllamaClient() (*LocalOllamaClient, error) {
 }
 
 func (c *LocalOllamaClient) SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
-	// Convert to ENHANCED harmony format
-	var formatter *HarmonyFormatter
+	// Use the superior native Ollama client with streaming support
+	client, err := ollama.ClientFromEnvironment()
+	if err != nil {
+		return nil, fmt.Errorf("could not create ollama client: %w", err)
+	}
+
+	// Convert messages to Ollama format
+	ollamaMessages := make([]ollama.Message, len(messages))
+	for i, msg := range messages {
+		ollamaMessages[i] = ollama.Message{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+
+	// Handle tools by embedding them in the system message if present
+	if len(tools) > 0 {
+		toolsText := c.formatToolsForPrompt(tools)
+		// Add tools as system message at the beginning
+		toolMessage := ollama.Message{
+			Role:    "system",
+			Content: toolsText,
+		}
+		ollamaMessages = append([]ollama.Message{toolMessage}, ollamaMessages...)
+	}
+
+	// The model name for ollama is without the "ollama:" prefix
+	actualModelName := strings.TrimPrefix(c.model, "ollama:")
+
+	// Calculate total token count for context sizing
+	totalTokens := 0
+	for _, msg := range ollamaMessages {
+		totalTokens += c.estimateTokens(msg.Content)
+	}
+
+	// Set num_ctx to be slightly larger than the total token count
+	numCtx := totalTokens + 1000
+	if numCtx < 4096 {
+		numCtx = 4096 // Minimum context size
+	}
+
+	req := &ollama.ChatRequest{
+		Model:    actualModelName,
+		Messages: ollamaMessages,
+		Options: map[string]interface{}{
+			"temperature":    0.1,                                  // Very low for consistency
+			"top_p":          0.9,                                  // Focus on high-probability tokens
+			"num_ctx":        numCtx,                               // Dynamically calculated context size
+			"num_predict":    4096,                                 // Limit output length
+			"repeat_penalty": 1.1,                                  // Discourage repetition
+			"stop":           []string{"\n\n\n", "```\n\n", "END"}, // Stop sequences
+			"stream":         false,                                // Disable streaming for chat completion
+		},
+	}
+
+	// Add reasoning effort if provided
 	if reasoning != "" {
-		formatter = NewHarmonyFormatterWithReasoning(reasoning)
-	} else {
-		formatter = NewHarmonyFormatter()
+		req.Options["reasoning_effort"] = reasoning
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	defer cancel()
+
+	var responseContent strings.Builder
+	respFunc := func(res ollama.ChatResponse) error {
+		responseContent.WriteString(res.Message.Content)
+		return nil
+	}
+
+	err = client.Chat(ctx, req, respFunc)
+	if err != nil {
+		return nil, fmt.Errorf("ollama chat failed: %w", err)
+	}
+
+	// Estimate token usage since Ollama doesn't provide detailed metrics
+	estimatedUsage := struct {
+		PromptTokens     int     `json:"prompt_tokens"`
+		CompletionTokens int     `json:"completion_tokens"`
+		TotalTokens      int     `json:"total_tokens"`
+		EstimatedCost    float64 `json:"estimated_cost"`
+		PromptTokensDetails struct {
+			CachedTokens     int `json:"cached_tokens"`
+			CacheWriteTokens *int `json:"cache_write_tokens"`
+		} `json:"prompt_tokens_details,omitempty"`
+	}{
+		PromptTokens:     totalTokens,
+		CompletionTokens: c.estimateTokens(responseContent.String()),
+		TotalTokens:      totalTokens + c.estimateTokens(responseContent.String()),
+		EstimatedCost:    0.0, // Local inference is free
+		PromptTokensDetails: struct {
+			CachedTokens     int `json:"cached_tokens"`
+			CacheWriteTokens *int `json:"cache_write_tokens"`
+		}{
+			CachedTokens:     0,
+			CacheWriteTokens: nil,
+		},
+	}
+
+	// Build response in agent API format
+	response := &ChatResponse{
+		ID:      "ollama-" + fmt.Sprintf("%d", time.Now().UnixNano()),
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   actualModelName,
+		Choices: []Choice{{
+			Index: 0,
+			Message: struct {
+				Role             string      `json:"role"`
+				Content          string      `json:"content"`
+				ReasoningContent string      `json:"reasoning_content,omitempty"`
+				Images           []ImageData `json:"images,omitempty"`
+				ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
+			}{
+				Role:    "assistant",
+				Content: responseContent.String(),
+			},
+			FinishReason: "stop",
+		}},
+		Usage: estimatedUsage,
+	}
+
+	return response, nil
+}
+
+// formatToolsForPrompt formats tools for inclusion in the system message
+func (c *LocalOllamaClient) formatToolsForPrompt(tools []Tool) string {
+	if len(tools) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("You have access to the following tools:\n\n")
+	
+	for _, tool := range tools {
+		sb.WriteString(fmt.Sprintf("Tool: %s\n", tool.Function.Name))
+		sb.WriteString(fmt.Sprintf("Description: %s\n", tool.Function.Description))
+		
+		if params, ok := tool.Function.Parameters.(map[string]interface{}); ok {
+			if props, ok := params["properties"].(map[string]interface{}); ok {
+				sb.WriteString("Parameters:\n")
+				for name, prop := range props {
+					if propMap, ok := prop.(map[string]interface{}); ok {
+						if desc, ok := propMap["description"].(string); ok {
+							sb.WriteString(fmt.Sprintf("  - %s: %s\n", name, desc))
+						}
+					}
+				}
+			}
+		}
+		sb.WriteString("\n")
 	}
 	
-	// Configure harmony options
-	opts := &HarmonyOptions{
-		ReasoningLevel: reasoning,
-		EnableAnalysis: true,
-	}
-	if opts.ReasoningLevel == "" {
-		opts.ReasoningLevel = "high"
-	}
+	sb.WriteString("To use a tool, respond with a JSON object in this format:\n")
+	sb.WriteString(`{"tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "tool_name", "arguments": "{\"param\": \"value\"}"}}]}`)
+	sb.WriteString("\n\n")
 	
-	harmonyText := formatter.FormatMessagesForCompletion(messages, tools, opts)
+	return sb.String()
+}
 
-	// Create a single message with harmony-formatted text
-	req := map[string]interface{}{
-		"model":      c.model,
-		"messages":   []Message{{Role: "user", Content: harmonyText}},
-		"max_tokens": 30000,
-		// Note: Don't include tools in harmony format - they're embedded in the text
-	}
-
-	// Add reasoning effort if provided (Ollama uses reasoning_effort, not reasoning)
-	if reasoning != "" {
-		req["reasoning_effort"] = reasoning
-	}
-
-	reqBody, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	httpReq, err := http.NewRequest("POST", c.baseURL, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	// Log the request for debugging
-	if c.debug {
-		log.Printf("Ollama Request URL: %s", c.baseURL)
-		log.Printf("Ollama Request Headers: %v", httpReq.Header)
-		log.Printf("Ollama Request Body: %s", string(reqBody))
-	}
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Log the response for debugging
-	respBody, _ := io.ReadAll(resp.Body)
-	if c.debug {
-		log.Printf("Ollama Response Status: %s", resp.Status)
-		log.Printf("Ollama Response Headers: %v", resp.Header)
-		log.Printf("Ollama Response Body: %s", string(respBody))
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Ollama request failed with status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var chatResp ChatResponse
-	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	// Set cost to 0 for local inference
-	chatResp.Usage.EstimatedCost = 0.0
-
-	// Strip return token from GPT-OSS model responses
-	for i, choice := range chatResp.Choices {
-		chatResp.Choices[i].Message.Content = formatter.StripReturnToken(choice.Message.Content)
-	}
-
-	return &chatResp, nil
+// estimateTokens provides a rough token count estimate
+func (c *LocalOllamaClient) estimateTokens(text string) int {
+	// Rough approximation: 1 token ≈ 4 characters
+	return len(text) / 4
 }
 
 func (c *LocalOllamaClient) CheckConnection() error {
 	// Check if Ollama is running and gpt-oss model is available
-	checkURL := "http://localhost:11434/api/tags"
+	checkURL := config.DefaultOllamaURL + "/api/tags"
 
 	resp, err := c.httpClient.Get(checkURL)
 	if err != nil {

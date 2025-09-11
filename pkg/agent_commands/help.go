@@ -34,7 +34,7 @@ Available slash commands:`)
 		fmt.Printf("  /%s - %s\n", cmd.Name(), cmd.Description())
 	}
 
-	fmt.Println(`
+	fmt.Print(`
 🤖 Coder Agent
 
 A command-line coding assistant using OpenAI's gpt-oss-120b model with 7 core tools:

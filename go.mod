@@ -10,7 +10,7 @@ require (
 	github.com/charmbracelet/lipgloss v0.12.1
 	github.com/chzyer/readline v1.5.1
 	github.com/fatih/color v1.18.0
-	github.com/ollama/ollama v0.10.1
+	github.com/ollama/ollama v0.11.10
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/sergi/go-diff v1.3.1
 	github.com/shirou/gopsutil/v3 v3.24.4

@@ -136,12 +136,12 @@ func TestCodeReviewResultUnmarshalJSON(t *testing.T) {
 		t.Errorf("Expected feedback to be 'Fix the bug', got '%s'", result.Feedback)
 	}
 
-	if result.mainhTypes.PatchResolution == nil {
-		t.Error("Expected mainhTypes.PatchResolution to not be nil")
+	if result.PatchResolution == nil {
+		t.Error("Expected PatchResolution to not be nil")
 	}
 
-	if result.mainhTypes.PatchResolution.SingleFile != "fixed code content" {
-		t.Errorf("Expected SingleFile to be 'fixed code content', got '%s'", result.mainhTypes.PatchResolution.SingleFile)
+	if result.PatchResolution.SingleFile != "fixed code content" {
+		t.Errorf("Expected SingleFile to be 'fixed code content', got '%s'", result.PatchResolution.SingleFile)
 	}
 
 	// Test unmarshaling mainhTypes.CodeReviewResult with object patch_resolution
@@ -164,15 +164,15 @@ func TestCodeReviewResultUnmarshalJSON(t *testing.T) {
 		t.Errorf("Expected status to be 'approved', got '%s'", result2.Status)
 	}
 
-	if result2.mainhTypes.PatchResolution == nil {
-		t.Error("Expected mainhTypes.PatchResolution to not be nil")
+	if result2.PatchResolution == nil {
+		t.Error("Expected PatchResolution to not be nil")
 	}
 
-	if len(result2.mainhTypes.PatchResolution.MultiFile) != 2 {
-		t.Errorf("Expected MultiFile to have 2 entries, got %d", len(result2.mainhTypes.PatchResolution.MultiFile))
+	if len(result2.PatchResolution.MultiFile) != 2 {
+		t.Errorf("Expected MultiFile to have 2 entries, got %d", len(result2.PatchResolution.MultiFile))
 	}
 
-	if result2.mainhTypes.PatchResolution.MultiFile["main.go"] != "package main\nfunc main() {}\n" {
-		t.Errorf("Expected main.go content to be correct, got '%s'", result2.mainhTypes.PatchResolution.MultiFile["main.go"])
+	if result2.PatchResolution.MultiFile["main.go"] != "package main\nfunc main() {}\n" {
+		t.Errorf("Expected main.go content to be correct, got '%s'", result2.PatchResolution.MultiFile["main.go"])
 	}
 }

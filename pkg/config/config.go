@@ -21,6 +21,9 @@ const (
 	MediumCoder = "qwen2.5-coder:14b"
 	SmallCoder  = "qwen2.5-coder:7b"
 	MicroCoder  = "qwen2.5-coder:3b"
+	
+	// Default service URLs
+	DefaultOllamaURL = "http://localhost:11434"
 )
 
 // CodeStylePreferences is now defined in agent.go
@@ -346,7 +349,7 @@ func (cfg *Config) setDefaultValues() {
 		cfg.EmbeddingModel = "deepinfra:Qwen/Qwen3-Embedding-4B" // Default embedding model
 	}
 	if cfg.OllamaServerURL == "" {
-		cfg.OllamaServerURL = "http://localhost:11434"
+		cfg.OllamaServerURL = DefaultOllamaURL
 	}
 	if cfg.OrchestrationMaxAttempts == 0 {
 		cfg.OrchestrationMaxAttempts = 12 // Default max attempts for orchestration
@@ -470,7 +473,7 @@ func loadConfig(filePath string) (*Config, error) {
 	// Provide default values for new fields if they are missing in older configs
 	// These defaults will be overridden if the fields exist in the JSON.
 	cfg.WorkspaceModel = ""                        // Default to empty, will fall back to SummaryModel
-	cfg.OllamaServerURL = "http://localhost:11434" // Default Ollama URL
+	cfg.OllamaServerURL = DefaultOllamaURL // Default Ollama URL
 	cfg.EnableSecurityChecks = false               // Default to false for existing configs
 	cfg.Temperature = 0.1                          // NEW: Initialize Temperature to very low value for consistency
 	cfg.MaxTokens = 4096                           // NEW: Initialize MaxTokens
@@ -569,7 +572,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 		LocalModel:               getLocalModel(skipPrompt),
 		TrackWithGit:             autoTrackGit,
 		EnableSecurityChecks:     enableSecurityChecks, // Set from user input
-		OllamaServerURL:          "http://localhost:11434",
+		OllamaServerURL:          DefaultOllamaURL,
 		OrchestrationMaxAttempts: 6,                      // Default max attempts for orchestration
 		CodeStyle:                CodeStylePreferences{}, // Initialize to be populated by setDefaultValues
 		RetryAttemptCount:        0,                      // Initialize retry attempt count to zero

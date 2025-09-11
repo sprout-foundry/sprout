@@ -72,12 +72,12 @@ func DefaultLLMConfig() *LLMConfig {
 			"ollama:":                               300, // 5 minutes for any Ollama model
 		},
 
-		OllamaServerURL: "http://localhost:11434",
+		OllamaServerURL: DefaultOllamaURL,
 		ProviderEndpoints: map[string]string{
 			"deepinfra": "https://api.deepinfra.com/v1/openai",
 			"openai":    "https://api.openai.com/v1",
 			"groq":      "https://api.groq.com/openai/v1",
-			"ollama":    "http://localhost:11434/api",
+			"ollama":    DefaultOllamaURL + "/api",
 		},
 	}
 }

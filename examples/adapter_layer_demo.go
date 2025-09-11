@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -11,18 +13,13 @@ import (
 	"github.com/alantheprice/ledit/pkg/providers/llm"
 )
 
-func main() {
+func demoAdapterLayer() {
 	fmt.Println("=== Adapter Layer Demo ===")
 
-	// Create test configuration
-	cfg := &config.Config{
-		LLMProvider:       "openai",
-		Model:             "gpt-3.5-turbo",
-		OpenAIAPIKey:      "test-key-placeholder",
-		MaxFilesInContext: 10,
-		MaxFileSize:       1024 * 1024,
-		SkipPrompt:        true,
-		Debug:             true,
+	// Create test configuration (using default config to avoid field name issues)
+	cfg, err := config.LoadOrInitConfig(true)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
 	// Test 1: Adapter Factory Creation

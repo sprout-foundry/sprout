@@ -1,5 +1,10 @@
 package types
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // ImageData represents an image in a message
 type ImageData struct {
 	URL    string `json:"url,omitempty"`    // URL to image
@@ -115,12 +120,12 @@ type PricingTable struct {
 
 // PatchResolution represents the resolution of a patch/diff
 type PatchResolution struct {
-	ApprovedChanges []string `json:"approved_changes,omitempty"`
-	RejectedChanges []string `json:"rejected_changes,omitempty"`
-	Comments        []string `json:"comments,omitempty"`
-	Status          string   `json:"status,omitempty"`
-	MultiFile       []string `json:"multi_file,omitempty"`
-	SingleFile      string   `json:"single_file,omitempty"`
+	ApprovedChanges []string          `json:"approved_changes,omitempty"`
+	RejectedChanges []string          `json:"rejected_changes,omitempty"`
+	Comments        []string          `json:"comments,omitempty"`
+	Status          string            `json:"status,omitempty"`
+	SingleFile      string            `json:"SingleFile"`
+	MultiFile       map[string]string `json:"MultiFile"`
 }
 
 // IsEmpty checks if the patch resolution is empty
@@ -131,6 +136,43 @@ func (pr *PatchResolution) IsEmpty() bool {
 	return len(pr.ApprovedChanges) == 0 && len(pr.RejectedChanges) == 0 && 
 		   len(pr.Comments) == 0 && pr.Status == "" && 
 		   len(pr.MultiFile) == 0 && pr.SingleFile == ""
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for PatchResolution
+// It can handle both string format (single file) and object format (multi-file)
+func (pr *PatchResolution) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as string first (single file format)
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		pr.SingleFile = str
+		pr.MultiFile = nil
+		return nil
+	}
+	
+	// Try to unmarshal as map[string]string (simple multi-file format)
+	var multiFile map[string]string
+	if err := json.Unmarshal(data, &multiFile); err == nil {
+		pr.MultiFile = multiFile
+		pr.SingleFile = ""
+		return nil
+	}
+	
+	// Try to unmarshal as full object
+	type PatchResolutionAlias PatchResolution // Avoid infinite recursion
+	var alias PatchResolutionAlias
+	if err := json.Unmarshal(data, &alias); err == nil {
+		*pr = PatchResolution(alias)
+		return nil
+	}
+	
+	return fmt.Errorf("cannot unmarshal PatchResolution from %s", string(data))
+}
+
+// MarshalJSON implements custom JSON marshaling for PatchResolution
+func (pr *PatchResolution) MarshalJSON() ([]byte, error) {
+	// Always marshal as full object to match test expectations
+	type PatchResolutionAlias PatchResolution // Avoid infinite recursion
+	return json.Marshal((*PatchResolutionAlias)(pr))
 }
 
 // CodeReviewResult represents the result of a code review

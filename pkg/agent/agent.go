@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/alantheprice/ledit/pkg/ui"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	agent_config "github.com/alantheprice/ledit/pkg/agent_config"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
@@ -43,6 +45,7 @@ type Agent struct {
 	interruptRequested   bool      // Flag indicating interrupt was requested
 	interruptMessage     string    // User message to inject after interrupt
 	escPressed           chan bool // Channel to signal Esc key press
+	interruptChan        chan string // Channel for TUI interrupt messages
 	escMonitoringEnabled bool      // Flag to enable/disable Esc monitoring
 }
 
@@ -121,6 +124,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		interruptRequested:   false,
 		interruptMessage:     "",
 		escPressed:           make(chan bool, 1),
+		interruptChan:        nil,
 		escMonitoringEnabled: false, // Start disabled
 	}
 
@@ -203,10 +207,29 @@ func (a *Agent) monitorEscKey() {
 	return
 }
 
-// CheckForInterrupt - DISABLED: escape monitoring was removed
+// CheckForInterrupt checks if an interrupt has been requested
 func (a *Agent) CheckForInterrupt() bool {
-	// Always return false since escape monitoring was causing Ctrl+C issues
-	return false
+	// Check TUI channel if available
+	if a.interruptChan != nil {
+		select {
+		case <-a.interruptChan:
+			return true
+		default:
+			return false
+		}
+	}
+
+	// Fallback to old logic if enabled
+	if a.escMonitoringEnabled {
+		select {
+		case <-a.escPressed:
+			return true
+		default:
+			return false
+		}
+	}
+
+	return a.interruptRequested
 }
 
 // EnableEscMonitoring - DISABLED: no-op to prevent Ctrl+C interference
@@ -221,34 +244,61 @@ func (a *Agent) DisableEscMonitoring() {
 
 // HandleInterrupt processes an interrupt request and prompts for continuation
 func (a *Agent) HandleInterrupt() string {
-	// Disable Esc monitoring during prompt to avoid interference
+	a.interruptRequested = false
 	a.DisableEscMonitoring()
 	defer a.EnableEscMonitoring() // Re-enable when done
 
-	fmt.Println("\n🛑 Esc key pressed! Current task paused.")
-	fmt.Println("💬 Enter instructions to modify or continue the current task:")
-	fmt.Println("   (or press Enter to resume, 'quit' to exit)")
-	fmt.Print(">>> ")
+	if a.interruptChan != nil {
+		// TUI mode: wait for response from channel with timeout
+		select {
+		case input := <-a.interruptChan:
+			input = strings.TrimSpace(input)
+			switch input {
+			case "", "resume", "continue":
+				ui.Log("▶️  Resuming current task...")
+				return ""
+			case "quit", "exit", "stop":
+				ui.Log("🚪 Exiting...")
+				ui.Log("=====================================")
+				a.PrintConversationSummary(true)
+				os.Exit(0)
+				return "exit" // Unreachable, but for completeness
+			default:
+				ui.Logf("📝 Injecting new instruction: %s", input)
+				ui.Log("▶️  Continuing with modified task...")
+				return input
+			}
+		case <-time.After(30 * time.Second):
+			ui.Log("⏰ Interrupt timeout - resuming task")
+			return ""
+		}
+	} else {
+		// Console fallback
+		fmt.Println("\n🛑 Esc key pressed! Current task paused.")
+		fmt.Println("💬 Enter instructions to modify or continue the current task:")
+		fmt.Println("   (or press Enter to resume, 'quit' to exit)")
+		fmt.Print(">>> ")
 
-	var input string
-	fmt.Scanln(&input)
+		var input string
+		fmt.Scanln(&input)
 
-	input = strings.TrimSpace(input)
+		input = strings.TrimSpace(input)
 
-	switch input {
-	case "", "resume", "continue":
-		fmt.Println("▶️  Resuming current task...")
-		return ""
-	case "quit", "exit", "stop":
-		fmt.Println("🚪 Exiting...")
-		fmt.Println("=====================================")
-		a.PrintConversationSummary(true)
-		os.Exit(0)
-		return ""
-	default:
-		fmt.Printf("📝 Injecting new instruction: %s\n", input)
-		fmt.Println("▶️  Continuing with modified task...")
-		return input
+		switch input {
+		case "", "resume", "continue":
+			fmt.Println("▶️  Resuming current task...")
+			return ""
+		case "quit", "exit", "stop":
+			fmt.Println("🚪 Exiting...")
+			fmt.Println("=====================================")
+			a.PrintConversationSummary(true)
+			os.Exit(0)
+			return ""
+		default:
+			fmt.Printf("📝 Injecting new instruction: %s\n", input)
+			fmt.Println("▶️  Continuing with modified task...")
+			return input
+		}
 	}
 }
 
@@ -260,6 +310,13 @@ func (a *Agent) ClearInterrupt() {
 	select {
 	case <-a.escPressed:
 	default:
+	}
+	// Drain TUI channel if available
+	if a.interruptChan != nil {
+		select {
+		case <-a.interruptChan:
+		default:
+		}
 	}
 }
 
@@ -282,6 +339,20 @@ func (a *Agent) GetLastAssistantMessage() string {
 		}
 	}
 	return ""
+}
+
+// GenerateResponse generates a simple response using the current model without tool calls
+func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
+	resp, err := a.client.SendChatRequest(messages, nil, "") // No tools, no reasoning
+	if err != nil {
+		return "", fmt.Errorf("failed to generate response: %w", err)
+	}
+
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("no response generated")
+	}
+
+	return resp.Choices[0].Message.Content, nil
 }
 
 // initializeMCP initializes MCP configuration and starts servers if needed

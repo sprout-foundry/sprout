@@ -11,8 +11,8 @@ var promptsFS embed.FS
 
 // getEmbeddedSystemPrompt loads the system prompt from embedded markdown files
 func getEmbeddedSystemPrompt() string {
-	// Read the v2_structured prompt (current default)
-	content, err := promptsFS.ReadFile("prompts/v2_structured.md")
+	// Read the v3_optimized prompt (current default)
+	content, err := promptsFS.ReadFile("prompts/v3_optimized.md")
 	if err != nil {
 		// Fallback to hardcoded prompt if embedding fails
 		return getFallbackSystemPrompt()

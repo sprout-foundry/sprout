@@ -10,41 +10,37 @@ import (
 	"github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
-
 type Agent struct {
-	client                api.ClientInterface
-	messages              []api.Message
-	systemPrompt          string
-	maxIterations         int
-	currentIteration      int
-	totalCost             float64
-	clientType            api.ClientType
-	taskActions           []TaskAction // Track what was accomplished
-	debug                 bool         // Enable debug logging
-	totalTokens           int          // Track total tokens used across all requests
-	promptTokens          int          // Track total prompt tokens
-	completionTokens      int          // Track total completion tokens
-	cachedTokens          int          // Track tokens that were cached/reused
-	cachedCostSavings     float64      // Track cost savings from cached tokens
-	previousSummary       string       // Summary of previous actions for continuity
-	sessionID             string       // Unique session identifier
-	optimizer             *ConversationOptimizer // Conversation optimization
-	configManager         *config.Manager        // Configuration management
-	currentContextTokens  int          // Current context size being sent to model
-	maxContextTokens      int          // Model's maximum context window
-	contextWarningIssued  bool         // Whether we've warned about approaching context limit
-	shellCommandHistory   map[string]*ShellCommandResult // Track shell commands for deduplication
-	changeTracker         *ChangeTracker                 // Track file changes for rollback support
-	
+	client               api.ClientInterface
+	messages             []api.Message
+	systemPrompt         string
+	maxIterations        int
+	currentIteration     int
+	totalCost            float64
+	clientType           api.ClientType
+	taskActions          []TaskAction                   // Track what was accomplished
+	debug                bool                           // Enable debug logging
+	totalTokens          int                            // Track total tokens used across all requests
+	promptTokens         int                            // Track total prompt tokens
+	completionTokens     int                            // Track total completion tokens
+	cachedTokens         int                            // Track tokens that were cached/reused
+	cachedCostSavings    float64                        // Track cost savings from cached tokens
+	previousSummary      string                         // Summary of previous actions for continuity
+	sessionID            string                         // Unique session identifier
+	optimizer            *ConversationOptimizer         // Conversation optimization
+	configManager        *config.Manager                // Configuration management
+	currentContextTokens int                            // Current context size being sent to model
+	maxContextTokens     int                            // Model's maximum context window
+	contextWarningIssued bool                           // Whether we've warned about approaching context limit
+	shellCommandHistory  map[string]*ShellCommandResult // Track shell commands for deduplication
+	changeTracker        *ChangeTracker                 // Track file changes for rollback support
+
 	// Interrupt handling
-	interruptRequested    bool               // Flag indicating interrupt was requested
-	interruptMessage      string             // User message to inject after interrupt
-	escPressed           chan bool           // Channel to signal Esc key press
-	escMonitoringEnabled bool               // Flag to enable/disable Esc monitoring
+	interruptRequested   bool      // Flag indicating interrupt was requested
+	interruptMessage     string    // User message to inject after interrupt
+	escPressed           chan bool // Channel to signal Esc key press
+	escMonitoringEnabled bool      // Flag to enable/disable Esc monitoring
 }
-
-
-
 
 func NewAgent() (*Agent, error) {
 	return NewAgentWithModel("")
@@ -60,7 +56,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Determine best provider and model
 	var clientType api.ClientType
 	var finalModel string
-	
+
 	if model != "" {
 		finalModel = model
 		// When a model is specified, use the best available provider
@@ -108,61 +104,58 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	optimizationEnabled := true
 
 	agent := &Agent{
-		client:              client,
-		messages:            []api.Message{},
-		systemPrompt:        systemPrompt,
-		maxIterations:       100,
-		totalCost:           0.0,
-		clientType:          clientType,
-		debug:               debug,
-		optimizer:           NewConversationOptimizer(optimizationEnabled, debug),
-		configManager:       configManager,
-		shellCommandHistory: make(map[string]*ShellCommandResult),
-		interruptRequested:  false,
-		interruptMessage:    "",
-		escPressed:          make(chan bool, 1),
+		client:               client,
+		messages:             []api.Message{},
+		systemPrompt:         systemPrompt,
+		maxIterations:        20,
+		totalCost:            0.0,
+		clientType:           clientType,
+		debug:                debug,
+		optimizer:            NewConversationOptimizer(optimizationEnabled, debug),
+		configManager:        configManager,
+		shellCommandHistory:  make(map[string]*ShellCommandResult),
+		interruptRequested:   false,
+		interruptMessage:     "",
+		escPressed:           make(chan bool, 1),
 		escMonitoringEnabled: false, // Start disabled
 	}
-	
+
 	// NOTE: Esc key monitoring removed - was interfering with Ctrl+C and terminal control
 	// Will implement proper escape handling through readline library instead
-	
+
 	// Initialize context limits based on model
 	agent.maxContextTokens = agent.getModelContextLimit()
 	agent.currentContextTokens = 0
 	agent.contextWarningIssued = false
-	
+
 	// Load previous conversation summary for continuity
 	agent.loadPreviousSummary()
-	
+
 	// Initialize change tracker (will be activated when user starts making changes)
 	agent.changeTracker = NewChangeTracker(agent, "")
 	agent.changeTracker.Disable() // Start disabled, enable when user makes first request
-	
+
 	return agent, nil
 }
-
-
-
 
 func getProjectContext() string {
 	// Check for project context files in order of priority
 	contextFiles := []string{
 		".cursor/markdown/project.md",
-		".cursor/markdown/context.md", 
+		".cursor/markdown/context.md",
 		".claude/project.md",
 		".claude/context.md",
 		".project_context.md",
 		"PROJECT_CONTEXT.md",
 	}
-	
+
 	for _, filePath := range contextFiles {
 		content, err := tools.ReadFile(filePath)
 		if err == nil && strings.TrimSpace(content) != "" {
 			return fmt.Sprintf("PROJECT CONTEXT:\n%s", content)
 		}
 	}
-	
+
 	return ""
 }
 
@@ -198,7 +191,7 @@ func (a *Agent) EnableEscMonitoring() {
 	// No-op - escape monitoring disabled
 }
 
-// DisableEscMonitoring - DISABLED: no-op to prevent Ctrl+C interference  
+// DisableEscMonitoring - DISABLED: no-op to prevent Ctrl+C interference
 func (a *Agent) DisableEscMonitoring() {
 	// No-op - escape monitoring disabled
 }
@@ -208,17 +201,17 @@ func (a *Agent) HandleInterrupt() string {
 	// Disable Esc monitoring during prompt to avoid interference
 	a.DisableEscMonitoring()
 	defer a.EnableEscMonitoring() // Re-enable when done
-	
+
 	fmt.Println("\n🛑 Esc key pressed! Current task paused.")
 	fmt.Println("💬 Enter instructions to modify or continue the current task:")
 	fmt.Println("   (or press Enter to resume, 'quit' to exit)")
 	fmt.Print(">>> ")
-	
+
 	var input string
 	fmt.Scanln(&input)
-	
+
 	input = strings.TrimSpace(input)
-	
+
 	switch input {
 	case "", "resume", "continue":
 		fmt.Println("▶️  Resuming current task...")
@@ -267,4 +260,3 @@ func (a *Agent) GetLastAssistantMessage() string {
 	}
 	return ""
 }
-

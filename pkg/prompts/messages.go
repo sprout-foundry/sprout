@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/interfaces/types"
-	orchestrationTypes "github.com/alantheprice/ledit/pkg/orchestration/types"
 	"github.com/fatih/color"
 )
 
@@ -493,13 +492,7 @@ func GracefulExit(msg GracefulExitMessage) string {
 				}
 			}
 
-			// Try to show detailed breakdown if it's an AgentTokenUsage
-			if agentUsage, ok := msg.TokenUsage.(orchestrationTypes.AgentTokenUsage); ok {
-				output.WriteString(fmt.Sprintf("   • Agent: %s\n", agentUsage.AgentID))
-				output.WriteString(fmt.Sprintf("   • Prompt tokens: %d\n", agentUsage.Prompt))
-				output.WriteString(fmt.Sprintf("   • Completion tokens: %d\n", agentUsage.Completion))
-				output.WriteString(fmt.Sprintf("   • Model: %s\n", agentUsage.Model))
-			}
+			// Note: Detailed agent breakdown removed with orchestration package
 			output.WriteString("\n")
 		}
 	}

@@ -82,7 +82,6 @@ func (p *DeepInfraProvider) GetProviderName() string {
 	return "deepinfra"
 }
 
-
 // SupportsVision checks if DeepInfra supports vision
 func (p *DeepInfraProvider) SupportsVision() bool {
 	// Check if we have a vision model available
@@ -90,7 +89,14 @@ func (p *DeepInfraProvider) SupportsVision() bool {
 	return visionModel != ""
 }
 
+func (p *DeepInfraProvider) GetFeaturedModels() []string {
+	return []string{
+		"qwen-3-480b",      // Best for coding (480B parameter model)
+		"qwen-3-235b-2507", // Large general model with 2507 variant
+	}
+}
+
 // GetVisionModel returns the vision model for DeepInfra
 func (p *DeepInfraProvider) GetVisionModel() string {
-	return "google/gemma-3-27b-it" // DeepInfra's vision-capable model
+	return "google/gemma-3-27b-it" // DeepInfra's most accurate vision-capable model after comparing options specifically for screenshot to frontend code tasks
 }

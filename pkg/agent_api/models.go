@@ -83,7 +83,7 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 // getOpenAIModels gets available models from OpenAI API
 var (
 	openaiModelsCache     []ModelInfo
-	openaiModelsInitialized bool
+	openaiModelsInitialized bool = false // Reset cache to force pricing repopulation
 )
 
 func getOpenAIModels() ([]ModelInfo, error) {

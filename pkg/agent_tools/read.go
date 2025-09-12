@@ -9,6 +9,10 @@ import (
 )
 
 func ReadFile(filePath string) (string, error) {
+	return ReadFileWithRange(filePath, 0, 0)
+}
+
+func ReadFileWithRange(filePath string, startLine, endLine int) (string, error) {
 	if filePath == "" {
 		return "", fmt.Errorf("empty file path provided")
 	}
@@ -30,12 +34,6 @@ func ReadFile(filePath string) (string, error) {
 		return "", fmt.Errorf("path is a directory, not a file: %s", cleanPath)
 	}
 
-	// Check file size (limit to reasonable size for text files)
-	const maxFileSize = 20 * 1024 // 20KB
-	if info.Size() > maxFileSize {
-		return "", fmt.Errorf("file too large (>20KB): %s", cleanPath)
-	}
-
 	// Check file extension for common non-text file types
 	if isNonTextFileExtension(cleanPath) {
 		return "", fmt.Errorf("only text content files can be read. %s appears to be a non-text file", cleanPath)
@@ -48,9 +46,25 @@ func ReadFile(filePath string) (string, error) {
 	}
 	defer file.Close()
 
-	content, err := io.ReadAll(file)
-	if err != nil {
-		return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+	const maxFileSize = 100 * 1024 // Increased to 100KB
+	var content []byte
+	var truncated bool
+	
+	if info.Size() > maxFileSize {
+		// For large files, read only the maximum size and truncate
+		content = make([]byte, maxFileSize)
+		n, err := file.Read(content)
+		if err != nil && err != io.EOF {
+			return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+		}
+		content = content[:n]
+		truncated = true
+	} else {
+		// For smaller files, read all content
+		content, err = io.ReadAll(file)
+		if err != nil {
+			return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+		}
 	}
 
 	// Check if content appears to be binary/non-text
@@ -58,7 +72,42 @@ func ReadFile(filePath string) (string, error) {
 		return "", fmt.Errorf("only text content files can be read. %s appears to contain binary/non-text content", cleanPath)
 	}
 
-	return string(content), nil
+	fileContent := string(content)
+	
+	// If line range is specified, extract only those lines
+	if startLine > 0 || endLine > 0 {
+		lines := strings.Split(fileContent, "\n")
+		totalLines := len(lines)
+		
+		// Validate line ranges
+		if startLine < 1 {
+			startLine = 1
+		}
+		if endLine < 1 || endLine > totalLines {
+			endLine = totalLines
+		}
+		if startLine > totalLines {
+			return "", fmt.Errorf("start line %d exceeds file length %d", startLine, totalLines)
+		}
+		if startLine > endLine {
+			return "", fmt.Errorf("start line %d is greater than end line %d", startLine, endLine)
+		}
+		
+		// Extract the specified range (convert to 0-based indexing)
+		selectedLines := lines[startLine-1 : endLine]
+		fileContent = strings.Join(selectedLines, "\n")
+		
+		// Add line range info to result
+		return fmt.Sprintf("Lines %d-%d of %s:\n%s", startLine, endLine, cleanPath, fileContent), nil
+	}
+	
+	// Add truncation warning if file was truncated
+	if truncated {
+		fileContent = fmt.Sprintf("⚠️ File truncated (>100KB). Showing first %dKB of %s:\n%s\n\n[Content truncated - file is %d bytes total]", 
+			maxFileSize/1024, cleanPath, fileContent, info.Size())
+	}
+
+	return fileContent, nil
 }
 
 // isNonTextFileExtension checks if the file extension indicates a non-text file

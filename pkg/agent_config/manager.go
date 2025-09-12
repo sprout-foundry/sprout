@@ -125,6 +125,8 @@ func (m *Manager) isProviderAvailable(provider api.ClientType) bool {
 // getProviderEnvVar returns the environment variable name for a provider
 func (m *Manager) getProviderEnvVar(provider api.ClientType) string {
 	switch provider {
+	case api.OpenAIClientType:
+		return "OPENAI_API_KEY"
 	case api.DeepInfraClientType:
 		return "DEEPINFRA_API_KEY"
 	case api.CerebrasClientType:

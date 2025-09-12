@@ -5,6 +5,8 @@ package cmd
 import (
 	"os"
 
+	"github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/agent_config"
 	"github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
 )
@@ -28,12 +30,43 @@ Available commands:
   ...and more
 
 For autonomous operation, try: ledit agent "your intent here"`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Initialize API keys and configuration
+		initializeSystem()
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
 	return rootCmd.Execute()
+}
+
+// initializeSystem initializes API keys and configuration on startup
+func initializeSystem() {
+	// Migrate from old .coder configuration if needed
+	if err := config.MigrateFromCoder(); err != nil {
+		// Don't fail on migration errors, just log
+		if os.Getenv("LEDIT_DEBUG") != "" {
+			println("Migration warning:", err.Error())
+		}
+	}
+	
+	// Initialize API keys from ~/.ledit/api_keys.json
+	if err := api.InitializeAPIKeys(); err != nil {
+		// Don't fail on API key initialization errors
+		if os.Getenv("LEDIT_DEBUG") != "" {
+			println("API key initialization warning:", err.Error())
+		}
+	}
+	
+	// Ensure legacy integration with existing ledit config
+	if err := config.EnsureLegacyIntegration(); err != nil {
+		// Don't fail on integration errors
+		if os.Getenv("LEDIT_DEBUG") != "" {
+			println("Legacy integration warning:", err.Error())
+		}
+	}
 }
 
 func init() {

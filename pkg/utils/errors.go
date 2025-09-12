@@ -255,21 +255,6 @@ func GetCurrentTimestamp() int64 {
 	return 0 // Placeholder - would use time.Now().Unix() in real implementation
 }
 
-// LegacyErrorHandler provides centralized error handling functionality (deprecated)
-type LegacyErrorHandler struct {
-	logger     *Logger
-	maxRetries int
-	retryDelay int64 // milliseconds
-}
-
-// NewLegacyErrorHandler creates a new legacy error handler
-func NewLegacyErrorHandler(logger *Logger, maxRetries int) *LegacyErrorHandler {
-	return &LegacyErrorHandler{
-		logger:     logger,
-		maxRetries: maxRetries,
-		retryDelay: 1000, // 1 second default
-	}
-}
 
 // Error handling utilities
 

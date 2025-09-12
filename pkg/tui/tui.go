@@ -1195,15 +1195,8 @@ func executeAgentRequest(request string) {
 		ui.Logf("🎯 Result: %s", response)
 		ui.PublishStatus("Coder agent execution completed")
 
-		// Show statistics from agent
-		totalCost := chatAgent.GetTotalCost()
-		if totalCost > 0 {
-			ui.Logf("💰 Total cost: $%.6f", totalCost)
-		}
-		currentIteration := chatAgent.GetCurrentIteration()
-		if currentIteration > 0 {
-			ui.Logf("🔄 Iterations: %d", currentIteration)
-		}
+		// Show comprehensive cost and token summary
+		chatAgent.PrintConciseSummary()
 	}
 }
 

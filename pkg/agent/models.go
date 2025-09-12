@@ -38,6 +38,9 @@ func (a *Agent) SetModel(model string) error {
 				api.GetProviderName(a.clientType), api.GetProviderName(requiredProvider), model)
 		}
 
+		// Clear model caches to ensure fresh model lists for the new provider
+		api.ClearModelCaches()
+
 		// Create a new client with the required provider
 		newClient, err := api.NewUnifiedClientWithModel(requiredProvider, model)
 		if err != nil {

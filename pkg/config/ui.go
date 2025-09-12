@@ -5,7 +5,6 @@ type UIConfig struct {
 	// Output and Display
 	JsonLogs       bool `json:"json_logs"`       // Output logs in JSON format
 	HealthChecks   bool `json:"health_checks"`   // Enable health check displays
-	PreapplyReview bool `json:"preapply_review"` // Show review before applying changes
 
 	// Telemetry
 	TelemetryEnabled bool   `json:"telemetry_enabled"` // Enable telemetry collection
@@ -23,7 +22,6 @@ func DefaultUIConfig() *UIConfig {
 	return &UIConfig{
 		JsonLogs:         false,
 		HealthChecks:     true,
-		PreapplyReview:   false,
 		TelemetryEnabled: false,
 		TelemetryFile:    ".ledit/telemetry.json",
 		TrackWithGit:     true,

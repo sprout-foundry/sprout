@@ -422,34 +422,34 @@ func (c *OpenAIClient) calculateOpenAICostWithTier(promptTokens, completionToken
 		BatchMultiplier  float64 // Batch API discount multiplier (typically 0.5 = 50% off)
 		FlexMultiplier   float64 // Flex processing multiplier (typically 0.6 = 40% off)
 	}{
-		// GPT-5 series (current as of September 2025)
-		"gpt-5":                     {625.0, 312.5, 5000.0, 0.5, 0.6},  // $0.625/$0.3125/$5.00 per 1M
-		"gpt-5-2025-08-07":         {625.0, 312.5, 5000.0, 0.5, 0.6},
-		"gpt-5-mini":               {125.0, 62.5, 1000.0, 0.5, 0.6},   // $0.125/$0.0625/$1.00 per 1M
-		"gpt-5-mini-2025-08-07":    {125.0, 62.5, 1000.0, 0.5, 0.6},
-		"gpt-5-nano":               {25.0, 12.5, 200.0, 0.5, 0.6},     // $0.025/$0.0125/$0.20 per 1M
-		"gpt-5-nano-2025-08-07":    {25.0, 12.5, 200.0, 0.5, 0.6},
+		// GPT-5 series (current as of September 2025) - Values are cost per 1M tokens
+		"gpt-5":                     {0.625, 0.3125, 5.00, 0.5, 0.6},    // $0.625/$0.3125/$5.00 per 1M
+		"gpt-5-2025-08-07":         {0.625, 0.3125, 5.00, 0.5, 0.6},
+		"gpt-5-mini":               {0.125, 0.0625, 1.00, 0.5, 0.6},     // $0.125/$0.0625/$1.00 per 1M
+		"gpt-5-mini-2025-08-07":    {0.125, 0.0625, 1.00, 0.5, 0.6},
+		"gpt-5-nano":               {0.025, 0.0125, 0.20, 0.5, 0.6},     // $0.025/$0.0125/$0.20 per 1M
+		"gpt-5-nano-2025-08-07":    {0.025, 0.0125, 0.20, 0.5, 0.6},
 		
-		// O3 series (current pricing)
-		"o3":                       {1000.0, 250.0, 4000.0, 0.5, 0.6}, // $1.00/$0.25/$4.00 per 1M
-		"o3-mini":                  {550.0, 137.5, 2200.0, 0.5, 0.6}, // $0.55/$0.138/$2.20 per 1M (approximated from o4-mini)
+		// O3 series (current pricing) - Values are cost per 1M tokens
+		"o3":                       {1.00, 0.25, 4.00, 0.5, 0.6},       // $1.00/$0.25/$4.00 per 1M
+		"o3-mini":                  {0.55, 0.138, 2.20, 0.5, 0.6},      // $0.55/$0.138/$2.20 per 1M
 		
 		// O4-mini (from screenshot)
-		"o4-mini":                  {550.0, 137.5, 2200.0, 0.5, 0.6}, // $0.55/$0.138/$2.20 per 1M
+		"o4-mini":                  {0.55, 0.138, 2.20, 0.5, 0.6},      // $0.55/$0.138/$2.20 per 1M
 		
-		// GPT-4o series (existing models - keep current pricing)
-		"gpt-4o":                   {5.0, 2.5, 15.0, 0.5, 0.6},       // $0.005/$0.0025/$0.015 per 1K
+		// GPT-4o series (per-1K pricing converted to per-1M for consistency)
+		"gpt-4o":                   {5.0, 2.5, 15.0, 0.5, 0.6},         // $5.00/$2.50/$15.00 per 1M
 		"gpt-4o-2024-05-13":        {5.0, 2.5, 15.0, 0.5, 0.6},
-		"gpt-4o-2024-08-06":        {2.5, 1.25, 10.0, 0.5, 0.6},
+		"gpt-4o-2024-08-06":        {2.5, 1.25, 10.0, 0.5, 0.6},        // $2.50/$1.25/$10.00 per 1M
 		"gpt-4o-2024-11-20":        {2.5, 1.25, 10.0, 0.5, 0.6},
-		"gpt-4o-mini":              {0.15, 0.075, 0.6, 0.5, 0.6},     // $0.15/$0.075/$0.6 per 1K
+		"gpt-4o-mini":              {0.15, 0.075, 0.6, 0.5, 0.6},       // $0.15/$0.075/$0.60 per 1M
 		"gpt-4o-mini-2024-07-18":   {0.15, 0.075, 0.6, 0.5, 0.6},
 		
-		// O1 series (from screenshot - need to convert to per 1M)
-		"o1":                       {1000.0, 250.0, 4000.0, 0.5, 0.6}, // $1.00/$0.25/$4.00 per 1M
-		"o1-2024-12-17":           {1000.0, 250.0, 4000.0, 0.5, 0.6},
-		"o1-mini":                  {550.0, 137.5, 2200.0, 0.5, 0.6}, // $0.55/$0.138/$2.20 per 1M 
-		"o1-mini-2024-09-12":      {550.0, 137.5, 2200.0, 0.5, 0.6},
+		// O1 series (from screenshot) - Values are cost per 1M tokens
+		"o1":                       {1.00, 0.25, 4.00, 0.5, 0.6},       // $1.00/$0.25/$4.00 per 1M
+		"o1-2024-12-17":           {1.00, 0.25, 4.00, 0.5, 0.6},
+		"o1-mini":                  {0.55, 0.138, 2.20, 0.5, 0.6},      // $0.55/$0.138/$2.20 per 1M 
+		"o1-mini-2024-09-12":      {0.55, 0.138, 2.20, 0.5, 0.6},
 		
 		// GPT-4 series (legacy pricing in per-1K format for compatibility)
 		"gpt-4-turbo":              {10.0, 5.0, 30.0, 0.5, 0.6},

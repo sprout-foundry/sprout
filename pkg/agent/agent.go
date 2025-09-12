@@ -34,6 +34,7 @@ type Agent struct {
 	maxContextTokens      int          // Model's maximum context window
 	contextWarningIssued  bool         // Whether we've warned about approaching context limit
 	shellCommandHistory   map[string]*ShellCommandResult // Track shell commands for deduplication
+	changeTracker         *ChangeTracker                 // Track file changes for rollback support
 	
 	// Interrupt handling
 	interruptRequested    bool               // Flag indicating interrupt was requested
@@ -133,6 +134,10 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	
 	// Load previous conversation summary for continuity
 	agent.loadPreviousSummary()
+	
+	// Initialize change tracker (will be activated when user starts making changes)
+	agent.changeTracker = NewChangeTracker(agent, "")
+	agent.changeTracker.Disable() // Start disabled, enable when user makes first request
 	
 	return agent, nil
 }

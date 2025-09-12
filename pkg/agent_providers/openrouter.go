@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_types"
+	types "github.com/alantheprice/ledit/pkg/agent_types"
 )
 
 // OpenRouterProvider implements the OpenAI-compatible OpenRouter API
@@ -59,7 +59,7 @@ func (p *OpenRouterProvider) SendChatRequest(messages []types.Message, tools []t
 	for i, msg := range messages {
 		// Start with text content
 		content := msg.Content
-		
+
 		// For messages with images, convert to OpenAI-compatible format
 		if len(msg.Images) > 0 {
 			// Create multimodal content array
@@ -69,13 +69,13 @@ func (p *OpenRouterProvider) SendChatRequest(messages []types.Message, tools []t
 					"text": content,
 				},
 			}
-			
+
 			// Add images
 			for _, img := range msg.Images {
 				imageContent := map[string]interface{}{
 					"type": "image_url",
 				}
-				
+
 				if img.URL != "" {
 					imageContent["image_url"] = map[string]interface{}{
 						"url": img.URL,
@@ -91,10 +91,10 @@ func (p *OpenRouterProvider) SendChatRequest(messages []types.Message, tools []t
 						"url": dataURL,
 					}
 				}
-				
+
 				contentArray = append(contentArray, imageContent)
 			}
-			
+
 			openRouterMessages[i] = map[string]interface{}{
 				"role":    msg.Role,
 				"content": contentArray,
@@ -423,7 +423,12 @@ func (p *OpenRouterProvider) SupportsVision() bool {
 
 // GetVisionModel returns the vision model for OpenRouter
 func (p *OpenRouterProvider) GetVisionModel() string {
-	return "openai/gpt-4o" // OpenRouter's default vision-capable model
+	// Return first featured vision model
+	featuredVisionModels := p.GetFeaturedVisionModels()
+	if len(featuredVisionModels) > 0 {
+		return featuredVisionModels[0]
+	}
+	return ""
 }
 
 // SendVisionRequest sends a vision-enabled chat request
@@ -432,18 +437,34 @@ func (p *OpenRouterProvider) SendVisionRequest(messages []types.Message, tools [
 	if !p.SupportsVision() {
 		return p.SendChatRequest(messages, tools, reasoning)
 	}
-	
+
 	// Temporarily switch to vision model for this request
 	originalModel := p.model
 	visionModel := p.GetVisionModel()
-	
+
 	p.model = visionModel
-	
+
 	// Send the vision request using regular chat logic (images are handled automatically)
 	response, err := p.SendChatRequest(messages, tools, reasoning)
-	
+
 	// Restore original model
 	p.model = originalModel
-	
+
 	return response, err
+}
+
+func (p *OpenRouterProvider) GetFeaturedModels() []string {
+	return []string{
+		"qwen/qwen3-coder",                     // Best coding model
+		"deepseek/deepseek-chat-v3.1:free",    // Free DeepSeek option
+		"qwen/qwen3-coder:free",                // Free coding model
+		"deepseek/deepseek-chat-v3.1",         // Premium DeepSeek model
+	}
+}
+
+func (p *OpenRouterProvider) GetFeaturedVisionModels() []string {
+	return []string{
+		"google/gemma-3-27b-it",                // Primary vision model for open providers
+		"google/gemma-3-27b-it:free",           // Free vision model option
+	}
 }

@@ -264,13 +264,21 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "read_file",
-				Description: "Read contents of a specific file",
+				Description: "Read contents of a specific file. Supports reading entire files (up to 100KB, larger files are truncated) or specific line ranges for efficiency.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"file_path": map[string]interface{}{
 							"type":        "string",
 							"description": "Path to file to read",
+						},
+						"start_line": map[string]interface{}{
+							"type":        "integer",
+							"description": "Optional: Start line number (1-based) for reading a specific range",
+						},
+						"end_line": map[string]interface{}{
+							"type":        "integer",
+							"description": "Optional: End line number (1-based) for reading a specific range",
 						},
 					},
 					"required": []string{"file_path"},

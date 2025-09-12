@@ -26,16 +26,12 @@ var (
 	agentSkipPrompt  bool
 	agentModel       string // Declare agentModel variable
 	agentDryRun      bool
-	agentDirectApply bool
-	agentSimplified  bool
 )
 
 func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
-	agentCmd.Flags().BoolVar(&agentDirectApply, "direct-apply", false, "DEPRECATED: system handles application automatically")
-	agentCmd.Flags().BoolVar(&agentSimplified, "simplified", true, "DEPRECATED: uses optimized workflow")
 }
 
 // createSlashCompleter creates a tab completion function for slash commands
@@ -64,6 +60,11 @@ func createSlashCompleter() *readline.PrefixCompleter {
 		readline.PcItem("/exec"),
 		readline.PcItem("/info"),
 		readline.PcItem("/commit"),
+		// Change tracking commands
+		readline.PcItem("/changes"),
+		readline.PcItem("/status"),
+		readline.PcItem("/log"),
+		readline.PcItem("/rollback"),
 	)
 }
 
@@ -265,7 +266,7 @@ func executeShellCommandDirectly(command string) {
 }
 
 // validateQueryLength validates query length and prompts for confirmation (from coder project)
-func validateQueryLength(query string, chatAgent *agent.Agent) bool {
+func validateQueryLength(query string, _ *agent.Agent) bool {
 	queryLen := len(strings.TrimSpace(query))
 	
 	// Absolute minimum: reject anything under 3 characters
@@ -291,25 +292,6 @@ func validateQueryLength(query string, chatAgent *agent.Agent) bool {
 	return true
 }
 
-// handleModelsCommand handles the /models slash command
-func handleModelsCommand(args []string, chatAgent *agent.Agent) error {
-	// If no arguments, list available models
-	if len(args) == 0 {
-		return listModels(chatAgent)
-	}
-
-	// If arguments provided, handle model selection
-	if len(args) == 1 {
-		if args[0] == "select" {
-			return selectModel(chatAgent)
-		} else {
-			// Direct model selection by ID
-			return setModel(args[0], chatAgent)
-		}
-	}
-
-	return fmt.Errorf("usage: /models [select|<model_id>]")
-}
 
 // listModels displays all available models for the current provider
 func listModels(chatAgent *agent.Agent) error {
@@ -337,7 +319,7 @@ func listModels(chatAgent *agent.Agent) error {
 	})
 
 	// Identify featured models
-	featuredIndices := findFeaturedModels(models)
+	featuredIndices := findFeaturedModels(models, clientType)
 
 	// Display all models with full information like original coder
 	for i, model := range models {
@@ -414,28 +396,27 @@ func listModels(chatAgent *agent.Agent) error {
 	return nil
 }
 
-// findFeaturedModels identifies indices of featured models (like original coder)
-func findFeaturedModels(models []agent_api.ModelInfo) []int {
-	featuredPatterns := []string{
-		"deepseek-ai/DeepSeek-V3.1",
-		"qwen3-coder",                      // Qwen3-coder models show strong coding ability
-		"deepseek-chat-v3.1:free",          // Free and reliable
-		"qwen/qwen3-30b-a3b-thinking-2507", // Very cheap and good
-		"bytedance/seed-oss-36b-instruct",  // Open source and cheap
-		"qwen/qwen3-max",                   // Good performance
-		"moonshotai/kimi-k2",               // Good for coding
-		"deepcogito/cogito-v2-preview",     // Reasoning model
-		"nvidia/nemotron-nano-9b-v2",       // Free NVIDIA model
+// findFeaturedModels identifies indices of featured models using provider-specific featured models
+func findFeaturedModels(models []agent_api.ModelInfo, clientType agent_api.ClientType) []int {
+	// Get provider-specific featured models
+	featuredModelNames := agent_api.GetFeaturedModelsForProvider(clientType)
+	
+	if len(featuredModelNames) == 0 {
+		return []int{}
 	}
 
 	var featured []int
+	featuredSet := make(map[string]bool)
+	
+	// Convert featured model names to set for O(1) lookup
+	for _, name := range featuredModelNames {
+		featuredSet[strings.ToLower(name)] = true
+	}
+	
+	// Find matching models
 	for i, model := range models {
-		modelLower := strings.ToLower(model.ID)
-		for _, pattern := range featuredPatterns {
-			if strings.Contains(modelLower, strings.ToLower(pattern)) {
-				featured = append(featured, i)
-				break
-			}
+		if featuredSet[strings.ToLower(model.ID)] {
+			featured = append(featured, i)
 		}
 	}
 
@@ -465,7 +446,7 @@ func selectModel(chatAgent *agent.Agent) error {
 	})
 
 	// Identify featured models
-	featuredIndices := findFeaturedModels(models)
+	featuredIndices := findFeaturedModels(models, clientType)
 
 	fmt.Printf("\n🎯 Select a Model (%s):\n", providerName)
 	fmt.Println("==================")
@@ -552,23 +533,6 @@ func setModel(modelID string, chatAgent *agent.Agent) error {
 	return nil
 }
 
-// handleProviderCommand handles the /provider slash command
-func handleProviderCommand(args []string, chatAgent *agent.Agent) error {
-	// If no arguments, show current provider
-	if len(args) == 0 {
-		return showCurrentProvider(chatAgent)
-	}
-
-	// Handle subcommands
-	switch args[0] {
-	case "list":
-		return listProviders()
-	case "select":
-		return selectProvider(chatAgent)
-	default:
-		return fmt.Errorf("usage: /provider [list|select]")
-	}
-}
 
 // showCurrentProvider displays current provider information
 func showCurrentProvider(chatAgent *agent.Agent) error {
@@ -667,97 +631,7 @@ func selectProvider(chatAgent *agent.Agent) error {
 	return nil
 }
 
-// handleShellCommand handles the /shell slash command
-func handleShellCommand(args []string, chatAgent *agent.Agent) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: /shell <description-of-shell-command-to-generate>")
-	}
 
-	commandDescription := strings.Join(args, " ")
-
-	// Create a prompt to generate a shell command
-	prompt := fmt.Sprintf(`Please generate a shell command that matches this description:
-"%s"
-
-IMPORTANT:
-- Output ONLY the shell command itself, nothing else
-- Do not include any explanations, comments, or additional text
-- The command should be executable as-is
-- Use bash shell syntax
-- Return ONLY the command string
-
-Example:
-If the description is "list all files in current directory", output: "ls -la"
-If the description is "show disk usage", output: "df -h"`, commandDescription)
-
-	fmt.Printf("🤖 Generating shell command...\n")
-
-	// Process the query with the current agent
-	result, err := chatAgent.ProcessQueryWithContinuity(prompt)
-	if err != nil {
-		return fmt.Errorf("failed to generate shell command: %v", err)
-	}
-
-	// Clean up the result - remove any quotes or extra whitespace
-	generatedCommand := strings.TrimSpace(result)
-	generatedCommand = strings.Trim(generatedCommand, `"'`)
-
-	if generatedCommand == "" {
-		return fmt.Errorf("agent did not generate a valid shell command")
-	}
-
-	fmt.Printf("✅ Generated command:\n")
-	fmt.Printf("Command: %s\n", generatedCommand)
-	fmt.Printf("\n")
-
-	// Ask for user approval
-	fmt.Printf("⚠️  Do you want to execute this command? (y/N): ")
-
-	var response string
-	fmt.Scanln(&response)
-
-	response = strings.TrimSpace(strings.ToLower(response))
-	if response != "y" && response != "yes" {
-		fmt.Printf("❌ Command execution cancelled by user\n")
-		return nil
-	}
-
-	fmt.Printf("✅ Executing command...\n")
-	fmt.Printf("=====================================\n")
-
-	// Execute the shell command
-	resultOutput, err := agent_tools.ExecuteShellCommand(generatedCommand)
-	if err != nil {
-		return fmt.Errorf("command failed: %v\nOutput: %s", err, resultOutput)
-	}
-
-	fmt.Printf("✅ Command executed successfully:\n")
-	fmt.Printf("Command: %s\n", generatedCommand)
-	fmt.Printf("Output:\n%s\n", resultOutput)
-
-	return nil
-}
-
-// handleExecCommand handles the /exec slash command
-func handleExecCommand(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: /exec <shell-command-to-execute>")
-	}
-
-	command := strings.Join(args, " ")
-
-	// Execute the shell command
-	result, err := agent_tools.ExecuteShellCommand(command)
-	if err != nil {
-		return fmt.Errorf("command failed: %v\nOutput: %s", err, result)
-	}
-
-	fmt.Printf("✅ Command executed successfully:\n")
-	fmt.Printf("Command: %s\n", command)
-	fmt.Printf("Output:\n%s\n", result)
-
-	return nil
-}
 
 
 // agentCmd represents the agent command

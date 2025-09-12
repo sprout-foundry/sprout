@@ -70,7 +70,7 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	})
 
 	// Identify featured models
-	featuredIndices := m.findFeaturedModels(models)
+	featuredIndices := m.findFeaturedModels(models, clientType)
 
 	// Display all models
 	for i, model := range models {
@@ -147,28 +147,27 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	return nil
 }
 
-// findFeaturedModels identifies indices of featured models
-func (m *ModelsCommand) findFeaturedModels(models []api.ModelInfo) []int {
-	featuredPatterns := []string{
-		"deepseek-ai/DeepSeek-V3.1",
-		"qwen3-coder",                      // Qwen3-coder models show strong coding ability
-		"deepseek-chat-v3.1:free",          // Free and reliable
-		"qwen/qwen3-30b-a3b-thinking-2507", // Very cheap and good
-		"bytedance/seed-oss-36b-instruct",  // Open source and cheap
-		"qwen/qwen3-max",                   // Good performance
-		"moonshotai/kimi-k2",               // Good for coding
-		"deepcogito/cogito-v2-preview",     // Reasoning model
-		"nvidia/nemotron-nano-9b-v2",       // Free NVIDIA model
+// findFeaturedModels identifies indices of featured models using provider-specific featured models
+func (m *ModelsCommand) findFeaturedModels(models []api.ModelInfo, clientType api.ClientType) []int {
+	// Get provider-specific featured models
+	featuredModelNames := api.GetFeaturedModelsForProvider(clientType)
+	
+	if len(featuredModelNames) == 0 {
+		return []int{}
 	}
 
 	var featured []int
+	featuredSet := make(map[string]bool)
+	
+	// Convert featured model names to set for O(1) lookup
+	for _, name := range featuredModelNames {
+		featuredSet[strings.ToLower(name)] = true
+	}
+	
+	// Find matching models
 	for i, model := range models {
-		modelLower := strings.ToLower(model.ID)
-		for _, pattern := range featuredPatterns {
-			if strings.Contains(modelLower, strings.ToLower(pattern)) {
-				featured = append(featured, i)
-				break
-			}
+		if featuredSet[strings.ToLower(model.ID)] {
+			featured = append(featured, i)
 		}
 	}
 
@@ -199,7 +198,7 @@ func (m *ModelsCommand) selectModel(chatAgent *agent.Agent) error {
 	})
 
 	// Identify featured models
-	featuredIndices := m.findFeaturedModels(models)
+	featuredIndices := m.findFeaturedModels(models, clientType)
 
 	fmt.Printf("\n🎯 Select a Model (%s):\n", providerName)
 	fmt.Println("==================")
@@ -273,56 +272,18 @@ func (m *ModelsCommand) selectModel(chatAgent *agent.Agent) error {
 
 // setModel sets the specified model for the agent
 func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
-	// Validate that the model exists in the current provider
-	clientType := chatAgent.GetProviderType()
-	models, err := api.GetModelsForProvider(clientType)
-	if err != nil {
-		return fmt.Errorf("failed to validate model: %w", err)
-	}
-
-	var selectedModel *api.ModelInfo
-	for _, model := range models {
-		if model.ID == modelID {
-			selectedModel = &model
-			break
-		}
-	}
-
-	if selectedModel == nil {
-		providerName := api.GetProviderName(clientType)
-		return fmt.Errorf("model '%s' not found in provider %s. Use '/models' to see available models for this provider", modelID, providerName)
-	}
-
-	// For OpenRouter models, validate availability first
-	if selectedModel.Provider == "OpenRouter" {
-		fmt.Printf("🔍 Validating model availability...\n")
-		if err := api.ValidateOpenRouterModel(modelID); err != nil {
-			return fmt.Errorf("model validation failed: %w\n\n💡 Tip: Look for models marked with ✅ verified-working in the list", err)
-		}
-		fmt.Printf("✅ Model validated successfully!\n")
-	}
-
-	// Update the agent's model
-	err = chatAgent.SetModel(modelID)
+	// Let the agent handle provider determination and switching automatically
+	err := chatAgent.SetModel(modelID)
 	if err != nil {
 		return fmt.Errorf("failed to set model: %w", err)
 	}
 
-	fmt.Printf("✅ Model set to: %s\n", selectedModel.ID)
-	if selectedModel.Description != "" {
-		fmt.Printf("   %s\n", selectedModel.Description)
-	}
-	if selectedModel.InputCost > 0 || selectedModel.OutputCost > 0 {
-		if selectedModel.InputCost > 0 && selectedModel.OutputCost > 0 {
-			fmt.Printf("   Cost: $%.3f/M input, $%.3f/M output tokens\n", selectedModel.InputCost, selectedModel.OutputCost)
-		} else if selectedModel.Cost > 0 {
-			fmt.Printf("   Cost: ~$%.2f/M tokens\n", selectedModel.Cost)
-		}
-	} else if selectedModel.Provider == "Ollama (Local)" {
-		fmt.Printf("   Cost: FREE (local inference)\n")
-	} else {
-		fmt.Printf("   Cost: N/A\n")
-	}
+	// Get the final provider and model info after successful switch
+	finalProvider := chatAgent.GetProviderType()
+	finalModel := chatAgent.GetModel()
+	
+	fmt.Printf("✅ Model set to: %s\n", finalModel)
+	fmt.Printf("🏢 Provider: %s\n", api.GetProviderName(finalProvider))
 
 	return nil
 }

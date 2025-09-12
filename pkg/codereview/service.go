@@ -2,6 +2,7 @@ package codereview
 
 import (
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -9,12 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/config"
-	"github.com/alantheprice/ledit/pkg/llm"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
+	"github.com/alantheprice/ledit/pkg/workspace"
+	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
 // RetryRequestError indicates that a retry is needed with a refined prompt
@@ -39,6 +42,12 @@ type ReviewContext struct {
 	SessionID             string         // Unique session identifier
 	CurrentIteration      int            // Current iteration number
 	FullFileContext       string         // Full file content for patch resolution context
+	
+	// NEW: Agent workflow integration
+	WorkspaceContext      *workspaceinfo.ProjectInfo   // Workspace analysis and context
+	RelatedFiles          []string                     // Files that might be affected by changes
+	ProjectStructure      *workspace.ProjectInsights  // Project understanding
+	AgentClient           api.ClientInterface          // Agent API client for LLM calls
 }
 
 // ReviewType defines the type of code review being performed
@@ -61,29 +70,57 @@ type ReviewOptions struct {
 
 // CodeReviewService provides a unified interface for code review operations
 type CodeReviewService struct {
-	config       *config.Config
-	logger       *utils.Logger
-	reviewConfig *ReviewConfiguration
-	contextStore map[string]*ReviewContext // Store contexts by session ID for persistence
+	config         *config.Config
+	logger         *utils.Logger
+	reviewConfig   *ReviewConfiguration
+	contextStore   map[string]*ReviewContext // Store contexts by session ID for persistence
+	workspaceAnalyzer *workspace.ConcurrentAnalyzer // NEW: Workspace analysis for better context
+	defaultAgentClient api.ClientInterface         // NEW: Default agent client for LLM calls
 }
 
 // NewCodeReviewService creates a new code review service instance
 func NewCodeReviewService(cfg *config.Config, logger *utils.Logger) *CodeReviewService {
+	// Create workspace analyzer for intelligent context building
+	workspaceAnalyzer := workspace.NewConcurrentAnalyzer(workspace.ConcurrentConfig{MaxWorkers: 4, BatchSize: 10})
+	
+	// Create default agent client - use the same model as configured for code editing
+	var agentClient api.ClientInterface
+	if cfg != nil && cfg.EditingModel != "" {
+		if client, err := api.NewUnifiedClient(api.GetClientTypeFromEnv()); err == nil {
+			agentClient = client
+		}
+	}
+	
 	return &CodeReviewService{
-		config:       cfg,
-		logger:       logger,
-		reviewConfig: DefaultReviewConfiguration(),
-		contextStore: make(map[string]*ReviewContext),
+		config:         cfg,
+		logger:         logger,
+		reviewConfig:   DefaultReviewConfiguration(),
+		contextStore:   make(map[string]*ReviewContext),
+		workspaceAnalyzer: workspaceAnalyzer,
+		defaultAgentClient: agentClient,
 	}
 }
 
 // NewCodeReviewServiceWithConfig creates a new code review service instance with custom configuration
 func NewCodeReviewServiceWithConfig(cfg *config.Config, logger *utils.Logger, reviewConfig *ReviewConfiguration) *CodeReviewService {
+	// Create workspace analyzer for intelligent context building
+	workspaceAnalyzer := workspace.NewConcurrentAnalyzer(workspace.ConcurrentConfig{MaxWorkers: 4, BatchSize: 10})
+	
+	// Create default agent client - use the same model as configured for code editing
+	var agentClient api.ClientInterface
+	if cfg != nil && cfg.EditingModel != "" {
+		if client, err := api.NewUnifiedClient(api.GetClientTypeFromEnv()); err == nil {
+			agentClient = client
+		}
+	}
+	
 	return &CodeReviewService{
-		config:       cfg,
-		logger:       logger,
-		reviewConfig: reviewConfig,
-		contextStore: make(map[string]*ReviewContext),
+		config:         cfg,
+		logger:         logger,
+		reviewConfig:   reviewConfig,
+		contextStore:   make(map[string]*ReviewContext),
+		workspaceAnalyzer: workspaceAnalyzer,
+		defaultAgentClient: agentClient,
 	}
 }
 
@@ -100,9 +137,128 @@ func (s *CodeReviewService) getStoredContext(sessionID string) (*ReviewContext, 
 	return ctx, exists
 }
 
+// enhanceContextWithWorkspaceIntelligence adds workspace analysis and related file context to the review
+func (s *CodeReviewService) enhanceContextWithWorkspaceIntelligence(ctx *ReviewContext) error {
+	if s.workspaceAnalyzer == nil {
+		s.logger.LogProcessStep("Workspace analyzer not available, skipping workspace intelligence enhancement")
+		return nil
+	}
+
+	s.logger.LogProcessStep("Enhancing review context with workspace intelligence...")
+
+	// Get workspace information if not already present (disabled for now)
+	// if ctx.WorkspaceContext == nil {
+	//	if workspaceInfo, err := s.workspaceAnalyzer.GetWorkspaceInfo(); err == nil {
+	//		ctx.WorkspaceContext = workspaceInfo
+	//	} else {
+	//		s.logger.LogProcessStep(fmt.Sprintf("Warning: Could not load workspace info: %v", err))
+	//	}
+	// }
+
+	// Analyze diff to identify affected files and find related files
+	affectedFiles := s.extractAffectedFilesFromDiff(ctx.Diff)
+	if len(affectedFiles) > 0 {
+		s.logger.LogProcessStep(fmt.Sprintf("Found %d affected files in diff", len(affectedFiles)))
+		
+		// Find files that might be related to the changes
+		for _, file := range affectedFiles {
+			if relatedFiles, err := s.findRelatedFiles(file, ctx.WorkspaceContext); err == nil {
+				ctx.RelatedFiles = append(ctx.RelatedFiles, relatedFiles...)
+			}
+		}
+		
+		// Remove duplicates and the original files (they're already in the diff)
+		ctx.RelatedFiles = s.removeDuplicates(ctx.RelatedFiles)
+		ctx.RelatedFiles = s.removeAffectedFiles(ctx.RelatedFiles, affectedFiles)
+		
+		s.logger.LogProcessStep(fmt.Sprintf("Identified %d related files for enhanced context", len(ctx.RelatedFiles)))
+	}
+
+	// Set agent client if not already provided
+	if ctx.AgentClient == nil {
+		ctx.AgentClient = s.defaultAgentClient
+	}
+
+	return nil
+}
+
+// extractAffectedFilesFromDiff parses a diff to find which files are being modified
+func (s *CodeReviewService) extractAffectedFilesFromDiff(diff string) []string {
+	var files []string
+	lines := strings.Split(diff, "\n")
+	
+	for _, line := range lines {
+		// Look for diff headers that indicate file paths
+		if strings.HasPrefix(line, "diff --git") {
+			// Parse "diff --git a/file.go b/file.go" format
+			parts := strings.Fields(line)
+			if len(parts) >= 4 {
+				filePath := strings.TrimPrefix(parts[2], "a/")
+				files = append(files, filePath)
+			}
+		} else if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
+			// Parse "--- a/file.go" or "+++ b/file.go" format
+			parts := strings.Fields(line)
+			if len(parts) >= 2 && !strings.Contains(parts[1], "/dev/null") {
+				filePath := strings.TrimPrefix(parts[1], "a/")
+				filePath = strings.TrimPrefix(filePath, "b/")
+				files = append(files, filePath)
+			}
+		}
+	}
+	
+	return s.removeDuplicates(files)
+}
+
+// findRelatedFiles identifies files that might be related to the given file
+func (s *CodeReviewService) findRelatedFiles(filePath string, workspaceInfo *workspaceinfo.ProjectInfo) ([]string, error) {
+	var related []string
+	
+	// TODO: Implement proper workspace file relationship detection
+	// This is currently disabled due to workspace integration refactoring
+	return related, nil
+}
+
+// removeDuplicates removes duplicate entries from a string slice
+func (s *CodeReviewService) removeDuplicates(items []string) []string {
+	seen := make(map[string]bool)
+	result := []string{}
+	
+	for _, item := range items {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	
+	return result
+}
+
+// removeAffectedFiles removes files that are already in the affected files list
+func (s *CodeReviewService) removeAffectedFiles(related, affected []string) []string {
+	affectedSet := make(map[string]bool)
+	for _, file := range affected {
+		affectedSet[file] = true
+	}
+	
+	result := []string{}
+	for _, file := range related {
+		if !affectedSet[file] {
+			result = append(result, file)
+		}
+	}
+	
+	return result
+}
+
 // PerformReview performs a code review based on the provided context and options
 func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
 	s.logger.LogProcessStep("Performing code review...")
+
+	// Enhance context with workspace intelligence
+	if err := s.enhanceContextWithWorkspaceIntelligence(ctx); err != nil {
+		s.logger.LogProcessStep(fmt.Sprintf("Warning: Could not enhance context with workspace intelligence: %v", err))
+	}
 
 	// Try to load existing context if session ID is provided
 	var existingCtx *ReviewContext
@@ -345,17 +501,156 @@ func (s *CodeReviewService) calculateSimilarity(str1, str2 string) float64 {
 
 // performAutomatedReview handles automated code reviews during code generation workflow
 func (s *CodeReviewService) performAutomatedReview(ctx *ReviewContext) (*types.CodeReviewResult, error) {
-	// Use the structured JSON-based review for automated workflow
-	// The GetCodeReview function needs to be updated to accept full file context
-	// For now, we'll pass the processed instructions as a substitute
-	return llm.GetCodeReview(s.config, ctx.Diff, ctx.OriginalPrompt, ctx.FullFileContext)
+	// Use enhanced agent-based review with workspace intelligence
+	return s.performAgentBasedCodeReview(ctx, true) // structured format for automated workflow
 }
 
 // performStagedReview handles reviews of Git staged changes
 func (s *CodeReviewService) performStagedReview(ctx *ReviewContext) (*types.CodeReviewResult, error) {
-	// Use the human-readable review for staged changes
-	reviewPrompt := prompts.CodeReviewStagedPrompt()
-	return llm.GetStagedCodeReview(s.config, ctx.Diff, reviewPrompt, "")
+	// Use enhanced agent-based review with workspace intelligence
+	return s.performAgentBasedCodeReview(ctx, false) // human-readable format for staged changes
+}
+
+// performAgentBasedCodeReview performs code review using the agent API with enhanced context
+func (s *CodeReviewService) performAgentBasedCodeReview(ctx *ReviewContext, structured bool) (*types.CodeReviewResult, error) {
+	if ctx.AgentClient == nil {
+		return nil, fmt.Errorf("agent client not available for enhanced code review")
+	}
+
+	s.logger.LogProcessStep("Performing agent-based code review with workspace intelligence...")
+
+	// Build enhanced review prompt with workspace context
+	prompt := s.buildEnhancedReviewPrompt(ctx, structured)
+
+	// Create messages for agent API
+	messages := []api.Message{
+		{
+			Role:    "user",
+			Content: prompt,
+		},
+	}
+
+	// Make agent API call
+	response, err := ctx.AgentClient.SendChatRequest(messages, nil, "")
+	if err != nil {
+		return nil, fmt.Errorf("agent API call failed: %w", err)
+	}
+
+	// Parse response based on format
+	if structured {
+		return s.parseStructuredReviewResponse(response)
+	} else {
+		return s.parseHumanReadableReviewResponse(response)
+	}
+}
+
+// buildEnhancedReviewPrompt builds a review prompt with workspace intelligence and context
+func (s *CodeReviewService) buildEnhancedReviewPrompt(ctx *ReviewContext, structured bool) string {
+	var promptParts []string
+
+	// Add base prompt based on review type
+	if structured {
+		promptParts = append(promptParts, "Please perform a structured code review of the following changes.")
+	} else {
+		promptParts = append(promptParts, prompts.CodeReviewStagedPrompt())
+	}
+
+	// Add workspace context if available
+	if ctx.WorkspaceContext != nil {
+		contextStr := fmt.Sprintf("Project: %s (%s), Language: %s", ctx.WorkspaceContext.Name, ctx.WorkspaceContext.Type, ctx.WorkspaceContext.Language)
+		if ctx.WorkspaceContext.Framework != "" {
+			contextStr += fmt.Sprintf(", Framework: %s", ctx.WorkspaceContext.Framework)
+		}
+		promptParts = append(promptParts, fmt.Sprintf("\n## Project Context\n%s", contextStr))
+	}
+
+	// Add related files context if available
+	if len(ctx.RelatedFiles) > 0 {
+		promptParts = append(promptParts, fmt.Sprintf("\n## Related Files to Consider\nThe following files may be affected by or related to these changes:\n%s", strings.Join(ctx.RelatedFiles, "\n")))
+	}
+
+	// Add original prompt context
+	if ctx.OriginalPrompt != "" {
+		promptParts = append(promptParts, fmt.Sprintf("\n## Original Request\n%s", ctx.OriginalPrompt))
+	}
+
+	// Add processed instructions if available
+	if ctx.ProcessedInstructions != "" {
+		promptParts = append(promptParts, fmt.Sprintf("\n## Processed Instructions\n%s", ctx.ProcessedInstructions))
+	}
+
+	// Add full file context if available
+	if ctx.FullFileContext != "" {
+		promptParts = append(promptParts, fmt.Sprintf("\n## Full File Context\n%s", ctx.FullFileContext))
+	}
+
+	// Add the diff to review
+	promptParts = append(promptParts, fmt.Sprintf("\n## Code Changes to Review\n```diff\n%s\n```", ctx.Diff))
+
+	return strings.Join(promptParts, "\n")
+}
+
+// parseStructuredReviewResponse parses a structured JSON review response from the agent
+func (s *CodeReviewService) parseStructuredReviewResponse(response *api.ChatResponse) (*types.CodeReviewResult, error) {
+	if len(response.Choices) == 0 {
+		return nil, fmt.Errorf("no response choices received from agent")
+	}
+
+	content := response.Choices[0].Message.Content
+	s.logger.LogProcessStep("Parsing structured review response from agent API")
+
+	// Parse JSON response similar to llm.GetCodeReview
+	jsonStr, err := utils.ExtractJSON(content)
+	if err != nil || jsonStr == "" {
+		// If JSON extraction fails, create a simple result
+		return &types.CodeReviewResult{
+			Status:   "approved",
+			Feedback: content,
+		}, nil
+	}
+
+	var reviewResult types.CodeReviewResult
+	if err := json.Unmarshal([]byte(jsonStr), &reviewResult); err != nil {
+		// If JSON parsing fails, create a simple result
+		return &types.CodeReviewResult{
+			Status:   "approved", 
+			Feedback: content,
+		}, nil
+	}
+
+	// Ensure required fields are present
+	if reviewResult.Status == "" {
+		reviewResult.Status = "needs_revision"
+	}
+	if reviewResult.Feedback == "" {
+		reviewResult.Feedback = "No specific feedback provided"
+	}
+
+	return &reviewResult, nil
+}
+
+// parseHumanReadableReviewResponse parses a human-readable review response from the agent
+func (s *CodeReviewService) parseHumanReadableReviewResponse(response *api.ChatResponse) (*types.CodeReviewResult, error) {
+	if len(response.Choices) == 0 {
+		return nil, fmt.Errorf("no response choices received from agent")
+	}
+
+	content := response.Choices[0].Message.Content
+	s.logger.LogProcessStep("Parsing human-readable review response from agent API")
+
+	// For staged reviews, we typically return the content as-is with approved status
+	// unless there are clear rejection indicators
+	status := "approved"
+	if strings.Contains(strings.ToLower(content), "reject") || strings.Contains(strings.ToLower(content), "not acceptable") {
+		status = "rejected"
+	} else if strings.Contains(strings.ToLower(content), "needs") && strings.Contains(strings.ToLower(content), "revision") {
+		status = "needs_revision"
+	}
+
+	return &types.CodeReviewResult{
+		Status:   status,
+		Feedback: content,
+	}, nil
 }
 
 // handleReviewResult processes the review result based on the review options

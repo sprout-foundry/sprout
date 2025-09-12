@@ -63,11 +63,30 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 				return "", fmt.Errorf("invalid file_path argument")
 			}
 		}
-		a.ToolLog("reading file", filePath)
-		a.debugLog("Reading file: %s\n", filePath)
-		result, err := tools.ReadFile(filePath)
-		a.debugLog("Read file result: %s, error: %v\n", result, err)
-		return result, err
+		
+		// Check for optional line range parameters
+		var startLine, endLine int
+		if start, ok := args["start_line"].(float64); ok {
+			startLine = int(start)
+		}
+		if end, ok := args["end_line"].(float64); ok {
+			endLine = int(end)
+		}
+		
+		// Log the operation
+		if startLine > 0 || endLine > 0 {
+			a.ToolLog("reading file", fmt.Sprintf("%s (lines %d-%d)", filePath, startLine, endLine))
+			a.debugLog("Reading file: %s (lines %d-%d)\n", filePath, startLine, endLine)
+			result, err := tools.ReadFileWithRange(filePath, startLine, endLine)
+			a.debugLog("Read file result: %s, error: %v\n", result, err)
+			return result, err
+		} else {
+			a.ToolLog("reading file", filePath)
+			a.debugLog("Reading file: %s\n", filePath)
+			result, err := tools.ReadFile(filePath)
+			a.debugLog("Read file result: %s, error: %v\n", result, err)
+			return result, err
+		}
 
 	case "write_file":
 		filePath, ok := args["file_path"].(string)
@@ -84,6 +103,12 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		}
 		a.ToolLog("writing file", filePath)
 		a.debugLog("Writing file: %s\n", filePath)
+		
+		// Track the file write for change tracking
+		if trackErr := a.TrackFileWrite(filePath, content); trackErr != nil {
+			a.debugLog("Warning: Failed to track file write: %v\n", trackErr)
+		}
+		
 		result, err := tools.WriteFile(filePath, content)
 		a.debugLog("Write file result: %s, error: %v\n", result, err)
 		return result, err
@@ -121,6 +146,11 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 			newContent, readErr := tools.ReadFile(filePath)
 			if readErr == nil {
 				a.ShowColoredDiff(originalContent, newContent, 50)
+				
+				// Track the file edit for change tracking
+				if trackErr := a.TrackFileEdit(filePath, originalContent, newContent); trackErr != nil {
+					a.debugLog("Warning: Failed to track file edit: %v\n", trackErr)
+				}
 			}
 		}
 		

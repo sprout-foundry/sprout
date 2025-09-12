@@ -1,64 +1,87 @@
 # Interactive Agent Slash Commands
 
-The Ledit interactive agent now supports slash commands for quick non-prompt-based operations.
+The Ledit interactive agent supports slash commands for quick non-prompt-based operations during interactive mode.
 
 ## Usage
 
-Start the interactive agent:
+### Interactive Mode
 ```bash
-ledit agent --ui
+ledit agent  # Starts interactive mode
 ```
-
-Then type any slash command in the input box.
 
 ## Available Slash Commands
 
+The following slash commands are available in interactive mode:
+
 ### Basic Commands
-- `/help`, `/h` - Show all available commands with examples
+- `/help` - Show all available commands with examples
 - `/quit`, `/q`, `/exit` - Quit the interactive agent
-- `/clear`, `/c` - Clear the logs display
 
-### Information Commands  
-- `/status`, `/s` - Show current agent status (model, tokens, cost, logs)
-- `/history`, `/hist` - Show recent command history (last 10 commands)
-- `/workspace`, `/ws` - Show workspace information (directory, git status, config)
-- `/config` - Show current configuration settings
+### Provider and Model Management
+- `/models` - List available models for current provider
+- `/models select` - Interactive model selection
+- `/models <model_id>` - Set model directly
+- `/provider` - Show current provider information
+- `/provider list` - List all available providers
+- `/provider select` - Interactive provider selection
 
-### Toggle Commands
-- `/logs`, `/l` - Toggle logs collapse/expand
-- `/show`, `/showlogs` - Show/expand logs (force visible)
-- `/hide`, `/hidelogs` - Hide/collapse logs (force hidden)
-- `/progress`, `/p` - Toggle progress collapse/expand  
-- `/model [name]` - Show current model or set new model for next execution
+### Utility Commands
+- `/shell <description>` - Generate and optionally execute shell commands from natural language
+- `/exec <command>` - Execute shell commands directly
+- `/commit` - Generate conventional commit messages for staged changes
+- `/info` - Show current agent and workspace information
+- `/init` - Initialize ledit configuration in current workspace
 
 ## Examples
 
+### Basic Usage
 ```
-/help                                    # Show help
-/status                                  # Check current status
-/show                                    # Expand logs to see output
-/clear                                   # Clear logs
-Add error handling to main.go            # Regular agent command
-/hide                                    # Hide logs for more space
-/history                                 # See previous commands
-/model deepinfra:deepseek-ai/DeepSeek-V3.1   # Change model
-Fix the authentication bug               # Another agent command
-/quit                                    # Exit
+ledit agent
+🤖 > /help                                    # Show all available commands
+🤖 > /provider list                           # List all providers
+🤖 > /provider select                         # Switch providers interactively
+🤖 > /models                                  # Show available models
+🤖 > /models select                           # Select model interactively
+🤖 > /info                                    # Show current status
+🤖 > Add error handling to main.go            # Regular agent request
+🤖 > /shell "list all go files"               # Generate shell command
+🤖 > /exec ls -la                             # Execute command directly
+🤖 > /commit                                  # Generate commit message
+🤖 > /quit                                    # Exit
+```
+
+### Provider and Model Management
+```
+🤖 > /provider list                           # Shows: DeepInfra, OpenRouter, Ollama, etc.
+🤖 > /provider select                         # Interactive provider selection
+🤖 > /models                                  # Lists all models for current provider
+🤖 > /models select                           # Interactive model selection
+🤖 > /models deepseek-ai/DeepSeek-V3.1        # Set model directly
+```
+
+### Shell Command Generation
+```
+🤖 > /shell "find all Python files modified in last 7 days"
+✅ Generated command: find . -name "*.py" -mtime -7
+⚠️  Do you want to execute this command? (y/N): y
+✅ Executing command...
+[command output]
 ```
 
 ## Features
 
-- **Command History**: Tracks last 50 commands for easy reference
-- **Auto-completion**: Commands support short aliases (e.g., `/h` for `/help`)
-- **Context Aware**: Commands show relevant information about current workspace
+- **Tab Completion**: Slash commands support tab completion with common model and provider names
+- **Interactive Selection**: Provider and model commands offer interactive selection menus
+- **Shell Integration**: Generate shell commands from natural language descriptions
+- **Direct Execution**: Execute shell commands directly without generating them first
+- **Git Integration**: Generate conventional commit messages for staged changes
+- **Context Aware**: Commands work with current workspace and provider settings
 - **Non-blocking**: Slash commands execute instantly without LLM calls
-- **Error Handling**: Unknown commands show helpful error messages
+- **Error Handling**: Unknown commands show helpful error messages with suggestions
 
 ## Navigation Keys
 
 - **Enter**: Execute command or slash command
-- **ESC**: Unfocus input (ESC again to quit)  
+- **Tab**: Auto-complete slash commands
 - **Ctrl+C**: Quit immediately
-- **i**: Focus input when unfocused
-- **l**: Toggle logs (keyboard shortcut)
-- **p**: Toggle progress (keyboard shortcut)
+- **ESC**: Exit during certain interactive prompts (when available)

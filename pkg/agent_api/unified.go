@@ -178,25 +178,32 @@ func (w *UnifiedProviderWrapper) SupportsVision() bool {
 }
 
 func (w *UnifiedProviderWrapper) GetVisionModel() string {
-	providerName := w.provider.GetProvider()
-	
-	// Convert provider name to ClientType
-	switch providerName {
-	case "openrouter":
-		return GetVisionModelForProvider(OpenRouterClientType)
-	case "deepinfra":
-		return GetVisionModelForProvider(DeepInfraClientType)
-	case "ollama":
-		return GetVisionModelForProvider(OllamaClientType)
-	case "cerebras":
-		return GetVisionModelForProvider(CerebrasClientType)
-	case "groq":
-		return GetVisionModelForProvider(GroqClientType)
-	case "deepseek":
-		return GetVisionModelForProvider(DeepSeekClientType)
-	default:
-		return ""
+	// Return first featured vision model from the underlying provider
+	featuredVisionModels := w.GetFeaturedVisionModels()
+	if len(featuredVisionModels) > 0 {
+		return featuredVisionModels[0]
 	}
+	return ""
+}
+
+func (w *UnifiedProviderWrapper) GetFeaturedModels() []string {
+	// Delegate to the underlying provider if it supports featured models
+	if featuredProvider, ok := w.provider.(interface{ GetFeaturedModels() []string }); ok {
+		return featuredProvider.GetFeaturedModels()
+	}
+	
+	// Return empty slice if provider doesn't implement featured models
+	return []string{}
+}
+
+func (w *UnifiedProviderWrapper) GetFeaturedVisionModels() []string {
+	// Delegate to the underlying provider if it supports featured vision models
+	if featuredProvider, ok := w.provider.(interface{ GetFeaturedVisionModels() []string }); ok {
+		return featuredProvider.GetFeaturedVisionModels()
+	}
+	
+	// Return empty slice if provider doesn't implement featured vision models
+	return []string{}
 }
 
 func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {

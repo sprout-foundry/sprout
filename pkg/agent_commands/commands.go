@@ -36,6 +36,12 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&ExecCommand{})
 	registry.Register(&ShellCommand{})
 	registry.Register(&InfoCommand{})
+	
+	// Register change tracking commands
+	registry.Register(&ChangesCommand{})
+	registry.Register(&StatusCommand{})
+	registry.Register(&LogCommand{})
+	registry.Register(&RollbackCommand{})
 
 	return registry
 }

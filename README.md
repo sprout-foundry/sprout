@@ -54,7 +54,7 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 
 -   **Feature Orchestration**: Decomposes high-level feature requests into a detailed, executable plan.
 -   **Intelligent Code Generation**: Generate new code or modify existing code based on natural language prompts, supporting complex feature implementation through orchestration (`ledit code`).
--   **Automated Code Fixing**: Automatically diagnose and fix code issues based on error messages or command output, leveraging a self-correction loop for robust problem-solving (`ledit fix`).
+-   **Self-Correction Loop**: During orchestration, the system can automatically analyze errors and retry operations with improved context.
 -   **Code Explanation**: Provide clear explanations for code snippets, concepts, or error messages, enhancing understanding of your codebase (`ledit explain`).
 -   **Configuration Management**: Easily manage and update `ledit`'s configuration settings directly from the command line (`ledit config`).
 -   **Smart Workspace Context**: Automatically builds and maintains an index of your workspace. An LLM selects the most relevant files to include as context for any given task.
@@ -66,9 +66,6 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 -   **Git Integration**: Can automatically commit changes to Git with AI-generated conventional commit messages.
 -   **Automated Code Review**: When running in automated mode (`--skip-prompt`), performs LLM-based code reviews of changes before committing.
 -   **Self-Correction Loop**: In orchestration mode, it attempts to fix its own errors by analyzing validation failures and retrying.
-
--   **Code Explanation**: Understand complex code snippets, concepts, or error messages with detailed explanations provided by `ledit explain`.
--   **Configuration Management**: Easily manage and update `ledit`'s settings directly from the command line using `ledit config`.
 
 ## Installation
 
@@ -116,8 +113,8 @@ ledit commit
 # View the history of changes made by ledit and revert changes by prompt
 ledit log
 
-# Attempt to fix a problem in your code by running a command and letting ledit attempt to fix the error messages that are a result of the command.
-ledit fix "go build"
+# Use orchestration to fix complex problems
+ledit process "Fix the build errors in this Go project"
 
 # Execute a shell command, or have an LLM generate it from an intent
 ledit exec "list all go files recursively"
@@ -217,13 +214,13 @@ The workspace index is automatically updated whenever you run a command, ensurin
     ledit log
     ```
 
--   **`ledit fix`**: Attempt to fix a problem in your code based on an error message or command output.
+-   **`ledit process`**: Use orchestration to handle complex problem-solving and feature implementation.
     ```bash
-    # Attempt to fix a problem in your code by running a command and letting ledit attempt to fix the error messages that are a result of the command.
-    ledit fix "go build"
+    # Use orchestration to fix complex build or code issues
+    ledit process "Fix all the build errors in this Go project"
 
-    # Attempt to fix a problem in your code based on an error message
-    ledit fix "Error: undefined variable 'user_id' in main.go"
+    # Implement complex features with multi-step planning
+    ledit process "Add user authentication with JWT tokens"
     ```
 
 -   **`ledit exec`**: Execute a shell command, or have an LLM generate it from an intent.
@@ -251,7 +248,6 @@ The workspace index is automatically updated whenever you run a command, ensurin
     ledit config get SkipPrompt
     ledit config get EditingModel
     ```
-```
 
 ### Orchestration
 
@@ -415,4 +411,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Support and Community
 
-If you encounter any issues or have questions, please open an issue on our [GitHub repository](https://github.com/alantheprice/ledit/issues).# Test change
+If you encounter any issues or have questions, please open an issue on our [GitHub repository](https://github.com/alantheprice/ledit/issues).

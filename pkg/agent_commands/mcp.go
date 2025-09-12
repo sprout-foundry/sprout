@@ -73,10 +73,11 @@ func (m *MCPCommand) showHelp() error {
 	fmt.Println("  /mcp help             - Show this help")
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  /mcp add              - Start interactive setup for GitHub MCP")
+	fmt.Println("  /mcp add              - Start interactive setup for MCP servers")
 	fmt.Println("  /mcp list             - See all configured servers")
-	fmt.Println("  /mcp test github      - Test GitHub MCP server")
-	fmt.Println("  /mcp remove github    - Remove GitHub MCP server")
+	fmt.Println("  /mcp test git         - Test Git MCP server")
+	fmt.Println("  /mcp test github      - Test GitHub MCP server") 
+	fmt.Println("  /mcp remove git       - Remove Git MCP server")
 
 	return nil
 }
@@ -104,167 +105,74 @@ func (m *MCPCommand) addServer(chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}
 
-	// Server type selection
-	fmt.Println("Select server type:")
-	fmt.Println("1. GitHub MCP Server (recommended)")
-	fmt.Println("2. Custom MCP Server")
-	fmt.Print("Choice (1-2): ")
+	// Create server registry
+	registry := mcp.NewMCPServerRegistry()
+	
+	return m.setupServerFromRegistry(&mcpConfig, registry, reader)
+}
 
+// setupServerFromRegistry sets up an MCP server using the template registry
+func (m *MCPCommand) setupServerFromRegistry(mcpConfig *mcp.MCPConfig, registry *mcp.MCPServerRegistry, reader *bufio.Reader) error {
+	// Show available templates
+	templates := registry.ListTemplates()
+	fmt.Println("Select MCP server type:")
+	fmt.Println()
+	
+	for i, template := range templates {
+		fmt.Printf("%d. %s\n", i+1, template.Name)
+		fmt.Printf("   %s\n", template.Description)
+		if len(template.Features) > 0 {
+			fmt.Printf("   Features: %s\n", strings.Join(template.Features, ", "))
+		}
+		fmt.Println()
+	}
+	
+	fmt.Print("Choice (1-" + strconv.Itoa(len(templates)) + "): ")
 	choice, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read input: %w", err)
 	}
-	choice = strings.TrimSpace(choice)
-
-	switch choice {
-	case "1":
-		return m.setupGitHubMCPServer(&mcpConfig, reader)
-	case "2":
-		return m.setupCustomMCPServer(&mcpConfig, reader)
-	default:
+	
+	choiceNum, err := strconv.Atoi(strings.TrimSpace(choice))
+	if err != nil || choiceNum < 1 || choiceNum > len(templates) {
 		return fmt.Errorf("invalid choice: %s", choice)
 	}
+	
+	template := templates[choiceNum-1]
+	return m.setupServerFromTemplate(mcpConfig, template, reader)
 }
 
-// setupGitHubMCPServer sets up GitHub MCP server
-func (m *MCPCommand) setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
+// setupServerFromTemplate sets up an MCP server from a specific template
+func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template mcp.MCPServerTemplate, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Println("🐙 GitHub MCP Server Setup")
-	fmt.Println("==========================")
+	fmt.Printf("🔧 %s Setup\n", template.Name)
+	fmt.Println(strings.Repeat("=", len(template.Name)+7))
 	fmt.Println()
-
-	// Check if GitHub server already exists
-	if _, exists := mcpConfig.Servers["github"]; exists {
-		fmt.Print("GitHub MCP server is already configured. Reconfigure? (y/N): ")
-		confirm, _ := reader.ReadString('\n')
-		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
-			fmt.Println("Setup cancelled.")
-			return nil
-		}
-	}
-
-	// Check for existing GitHub token
-	githubToken := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
-
-	if githubToken == "" {
-		fmt.Println("GitHub Personal Access Token is required.")
-		fmt.Println("You can create one at: https://github.com/settings/tokens")
-		fmt.Println("Required permissions: repo, read:user, read:org")
+	
+	if template.Docs != "" {
+		fmt.Printf("📚 Documentation: %s\n", template.Docs)
 		fmt.Println()
-		fmt.Print("Enter your GitHub Personal Access Token: ")
-
-		tokenInput, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read token: %w", err)
-		}
-		githubToken = strings.TrimSpace(tokenInput)
-
-		if githubToken == "" {
-			return fmt.Errorf("GitHub token is required")
-		}
-
-		// Offer to set environment variable
-		fmt.Print("Would you like to set GITHUB_PERSONAL_ACCESS_TOKEN environment variable? (y/N): ")
-		setEnv, _ := reader.ReadString('\n')
-		if strings.ToLower(strings.TrimSpace(setEnv)) == "y" {
-			fmt.Println()
-			fmt.Printf("Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
-			fmt.Printf("\nexport GITHUB_PERSONAL_ACCESS_TOKEN=\"%s\"\n", githubToken)
-			fmt.Println()
-		}
 	}
 
-	// Installation method selection
-	fmt.Println("Select installation method:")
-	fmt.Println("1. npm/npx (recommended)")
-	fmt.Println("2. uvx/pipx")
-	fmt.Print("Choice (1-2): ")
-
-	installChoice, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
-	}
-	installChoice = strings.TrimSpace(installChoice)
-
-	var serverConfig mcp.MCPServerConfig
-
-	switch installChoice {
-	case "1", "":
-		serverConfig = mcp.MCPServerConfig{
-			Name:        "github",
-			Command:     "npx",
-			Args:        []string{"-y", "@modelcontextprotocol/server-github"},
-			AutoStart:   true,
-			MaxRestarts: 3,
-			Timeout:     30 * time.Second,
-			Env: map[string]string{
-				"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
-			},
-		}
-	case "2":
-		serverConfig = mcp.MCPServerConfig{
-			Name:        "github",
-			Command:     "uvx",
-			Args:        []string{"mcp-server-github"},
-			AutoStart:   true,
-			MaxRestarts: 3,
-			Timeout:     30 * time.Second,
-			Env: map[string]string{
-				"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
-			},
-		}
-	default:
-		return fmt.Errorf("invalid choice: %s", installChoice)
-	}
-
-	// Add server to config
-	mcpConfig.Servers["github"] = serverConfig
-	mcpConfig.Enabled = true
-
-	// Save config
-	cfg, _ := config.LoadOrInitConfig(false)
-	if err := mcp.SaveMCPConfig(cfg, *mcpConfig); err != nil {
-		return fmt.Errorf("failed to save MCP config: %w", err)
-	}
-
-	fmt.Println()
-	fmt.Println("✅ GitHub MCP Server configured successfully!")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
-	fmt.Println()
-	fmt.Println("To test the configuration, run: /mcp test github")
-	fmt.Println()
-
-	// Installation instructions
-	if installChoice == "1" || installChoice == "" {
-		fmt.Println("📦 Installation (if not already installed):")
-		fmt.Println("npm install -g @modelcontextprotocol/server-github")
-	} else {
-		fmt.Println("📦 Installation (if not already installed):")
-		fmt.Println("pipx install mcp-server-github")
-	}
-
-	return nil
-}
-
-// setupCustomMCPServer sets up a custom MCP server
-func (m *MCPCommand) setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
-	fmt.Println()
-	fmt.Println("🔧 Custom MCP Server Setup")
-	fmt.Println("==========================")
-	fmt.Println()
-
-	// Server name
-	fmt.Print("Enter server name: ")
+	// Get server name
+	fmt.Printf("Enter server name (default: %s): ", strings.ToLower(strings.ReplaceAll(template.Name, " ", "-")))
 	nameInput, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read server name: %w", err)
 	}
+	
 	serverName := strings.TrimSpace(nameInput)
-
 	if serverName == "" {
-		return fmt.Errorf("server name is required")
+		// Generate default name from template
+		serverName = strings.ToLower(strings.ReplaceAll(template.Name, " ", "-"))
+		serverName = strings.ReplaceAll(serverName, "(", "")
+		serverName = strings.ReplaceAll(serverName, ")", "")
+		// Take first word for common cases
+		if strings.Contains(serverName, "-") {
+			serverName = strings.Split(serverName, "-")[0]
+		}
 	}
-
+	
 	// Check if server already exists
 	if _, exists := mcpConfig.Servers[serverName]; exists {
 		fmt.Printf("Server '%s' already exists. Reconfigure? (y/N): ", serverName)
@@ -275,93 +183,89 @@ func (m *MCPCommand) setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufi
 		}
 	}
 
-	// Command
-	fmt.Print("Enter command to run the server: ")
-	commandInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read command: %w", err)
-	}
-	command := strings.TrimSpace(commandInput)
-
-	if command == "" {
-		return fmt.Errorf("command is required")
-	}
-
-	// Arguments
-	fmt.Print("Enter command arguments (space-separated, or press Enter for none): ")
-	argsInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read arguments: %w", err)
-	}
-	argsStr := strings.TrimSpace(argsInput)
-
-	var args []string
-	if argsStr != "" {
-		args = strings.Fields(argsStr)
-	}
-
-	// Environment variables
-	fmt.Print("Enter environment variables (KEY=VALUE format, comma-separated, or press Enter for none): ")
-	envInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read environment variables: %w", err)
-	}
-	envStr := strings.TrimSpace(envInput)
-
-	env := make(map[string]string)
-	if envStr != "" {
-		envPairs := strings.Split(envStr, ",")
-		for _, pair := range envPairs {
-			pair = strings.TrimSpace(pair)
-			if parts := strings.SplitN(pair, "=", 2); len(parts) == 2 {
-				env[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+	// Collect environment variables
+	envValues := make(map[string]string)
+	for _, envVar := range template.EnvVars {
+		var value string
+		
+		// Check if already set in environment
+		if existingValue := os.Getenv(envVar.Name); existingValue != "" {
+			if envVar.Secret {
+				fmt.Printf("Using existing %s from environment\n", envVar.Name)
+			} else {
+				fmt.Printf("Using existing %s from environment: %s\n", envVar.Name, existingValue)
+			}
+			value = existingValue
+		} else {
+			// Prompt user for value
+			fmt.Printf("%s:\n", envVar.Description)
+			if envVar.Required {
+				fmt.Print("Enter " + envVar.Name + ": ")
+			} else {
+				defaultText := ""
+				if envVar.Default != "" {
+					defaultText = fmt.Sprintf(" (default: %s)", envVar.Default)
+				}
+				fmt.Printf("Enter %s%s: ", envVar.Name, defaultText)
+			}
+			
+			input, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("failed to read %s: %w", envVar.Name, err)
+			}
+			value = strings.TrimSpace(input)
+			
+			if value == "" && envVar.Required {
+				return fmt.Errorf("%s is required", envVar.Name)
 			}
 		}
-	}
-
-	// Working directory
-	fmt.Print("Enter working directory (or press Enter for default): ")
-	workDirInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read working directory: %w", err)
-	}
-	workDir := strings.TrimSpace(workDirInput)
-
-	// Auto-start
-	fmt.Print("Auto-start this server? (Y/n): ")
-	autoStartInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read auto-start preference: %w", err)
-	}
-	autoStart := strings.ToLower(strings.TrimSpace(autoStartInput)) != "n"
-
-	// Timeout
-	fmt.Print("Server timeout in seconds (default: 30): ")
-	timeoutInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read timeout: %w", err)
-	}
-	timeoutStr := strings.TrimSpace(timeoutInput)
-
-	timeout := 30 * time.Second
-	if timeoutStr != "" {
-		if timeoutSecs, err := strconv.Atoi(timeoutStr); err == nil && timeoutSecs > 0 {
-			timeout = time.Duration(timeoutSecs) * time.Second
+		
+		if value != "" {
+			envValues[envVar.Name] = value
 		}
 	}
 
-	// Create server config
-	serverConfig := mcp.MCPServerConfig{
-		Name:        serverName,
-		Command:     command,
-		Args:        args,
-		Env:         env,
-		WorkingDir:  workDir,
-		AutoStart:   autoStart,
-		MaxRestarts: 3,
-		Timeout:     timeout,
+	// Handle custom values for generic templates
+	var customURL, customCommand string
+	var customArgs []string
+	
+	if template.ID == "http-generic" {
+		fmt.Print("Enter MCP server URL: ")
+		urlInput, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read URL: %w", err)
+		}
+		customURL = strings.TrimSpace(urlInput)
+		if customURL == "" {
+			return fmt.Errorf("URL is required for HTTP servers")
+		}
+	}
+	
+	if template.ID == "stdio-generic" {
+		fmt.Print("Enter command: ")
+		cmdInput, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read command: %w", err)
+		}
+		customCommand = strings.TrimSpace(cmdInput)
+		if customCommand == "" {
+			return fmt.Errorf("command is required for stdio servers")
+		}
+		
+		fmt.Print("Enter arguments (space-separated, or press Enter for none): ")
+		argsInput, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read arguments: %w", err)
+		}
+		argsStr := strings.TrimSpace(argsInput)
+		if argsStr != "" {
+			customArgs = strings.Fields(argsStr)
+		}
 	}
 
+	// Create server config from template
+	serverConfig := template.CreateServerConfig(serverName, envValues, customURL, customCommand, customArgs)
+	
 	// Add server to config
 	mcpConfig.Servers[serverName] = serverConfig
 	mcpConfig.Enabled = true
@@ -373,13 +277,29 @@ func (m *MCPCommand) setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufi
 	}
 
 	fmt.Println()
-	fmt.Printf("✅ Custom MCP Server '%s' configured successfully!\n", serverName)
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Printf("✅ %s configured successfully!\n", template.Name)
+	if serverConfig.Type == "http" {
+		fmt.Printf("Type: Remote HTTP server\n")
+		fmt.Printf("URL: %s\n", serverConfig.URL)
+	} else {
+		fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	}
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: /mcp test %s\n", serverName)
+	
+	if len(template.Features) > 0 {
+		fmt.Println()
+		fmt.Println("📦 Features available:")
+		for _, feature := range template.Features {
+			fmt.Printf("• %s\n", feature)
+		}
+	}
 
 	return nil
 }
+
+
+
 
 // removeServer handles MCP server removal
 func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) error {
@@ -502,7 +422,12 @@ func (m *MCPCommand) listServers() error {
 
 	for name, server := range mcpConfig.Servers {
 		fmt.Printf("📡 %s\n", name)
-		fmt.Printf("   Command: %s %v\n", server.Command, server.Args)
+		if server.Type == "http" {
+			fmt.Printf("   Type: HTTP Remote Server\n")
+			fmt.Printf("   URL: %s\n", server.URL)
+		} else {
+			fmt.Printf("   Command: %s %v\n", server.Command, server.Args)
+		}
 		fmt.Printf("   Auto-start: %t\n", server.AutoStart)
 		fmt.Printf("   Max restarts: %d\n", server.MaxRestarts)
 		fmt.Printf("   Timeout: %v\n", server.Timeout)
@@ -596,7 +521,12 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 
 	fmt.Printf("🧪 Testing MCP Server: %s\n", serverName)
 	fmt.Println("========================")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	if serverConfig.Type == "http" {
+		fmt.Printf("Type: HTTP Remote Server\n")
+		fmt.Printf("URL: %s\n", serverConfig.URL)
+	} else {
+		fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	}
 	fmt.Println()
 
 	// Create manager and client

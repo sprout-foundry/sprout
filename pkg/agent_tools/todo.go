@@ -81,24 +81,26 @@ func AddBulkTodos(todos []struct {
 		results = append(results, fmt.Sprintf("✅ %s (%s)", todo.Title, item.ID))
 	}
 
-	// Show the nice todo list after adding todos (generate inline to avoid deadlock)
+	// Show each newly added todo in markdown format
 	var todoListBuilder strings.Builder
 	
-	for _, item := range globalTodoManager.items {
-		if item.Status == "pending" || item.Status == "in_progress" {
-			statusSymbol := getCompactStatusSymbol(item.Status)
-			priority := getCompactPrioritySymbol(item.Priority)
-			todoListBuilder.WriteString(fmt.Sprintf("%s%s %s (%s)", statusSymbol, priority, item.Title, item.ID))
-			if item.Description != "" {
-				todoListBuilder.WriteString(fmt.Sprintf(": %s", item.Description))
-			}
-			todoListBuilder.WriteString("\n")
+	// Show the new todos that were just added (last N items)
+	startIndex := len(globalTodoManager.items) - len(todos)
+	for i := startIndex; i < len(globalTodoManager.items); i++ {
+		item := globalTodoManager.items[i]
+		todoListBuilder.WriteString(fmt.Sprintf("- [ ] %s", item.Title))
+		if item.Description != "" {
+			todoListBuilder.WriteString(fmt.Sprintf(" - %s", item.Description))
 		}
+		if item.Priority == "high" {
+			todoListBuilder.WriteString(" ⚡")
+		}
+		todoListBuilder.WriteString("\n")
 	}
 	
 	todoList := todoListBuilder.String()
 	
-	return fmt.Sprintf("📝 Added %d todos:\n\n%s", len(todos), todoList)
+	return fmt.Sprintf("📝 Adding todos:\n\n%s", todoList)
 }
 
 // UpdateTodoStatus updates the status of a todo item
@@ -126,35 +128,43 @@ func UpdateTodoStatus(id, status string) string {
 			var message string
 			switch status {
 			case "in_progress":
-				message = fmt.Sprintf("Starting %s", item.Title)
+				message = fmt.Sprintf("🔄 Starting work on: %s", item.Title)
 			case "completed":
-				// Show progress when a todo is completed (generate inline to avoid deadlock)
+				// Count completed and remaining todos
 				completedCount := 0
 				totalCount := len(globalTodoManager.items)
-				var todoListBuilder strings.Builder
+				remainingCount := 0
 				
 				for _, todo := range globalTodoManager.items {
 					if todo.Status == "completed" {
 						completedCount++
 					} else if todo.Status == "pending" || todo.Status == "in_progress" {
-						statusSymbol := getCompactStatusSymbol(todo.Status)
-						priority := getCompactPrioritySymbol(todo.Priority)
-						todoListBuilder.WriteString(fmt.Sprintf("%s%s %s (%s)", statusSymbol, priority, todo.Title, todo.ID))
-						if todo.Description != "" {
-							todoListBuilder.WriteString(fmt.Sprintf(": %s", todo.Description))
-						}
-						todoListBuilder.WriteString("\n")
+						remainingCount++
 					}
 				}
 				
-				// Add summary of completed items
-				if completedCount > 0 {
-					todoListBuilder.WriteString(fmt.Sprintf("✓ %d completed\n", completedCount))
+				// Check if this is the last todo being completed
+				if remainingCount == 0 && completedCount == totalCount {
+					// All todos completed - show completion summary with checkmarks
+					var summaryBuilder strings.Builder
+					summaryBuilder.WriteString("🎉 All todos completed!\n\n")
+					
+					for _, todo := range globalTodoManager.items {
+						if todo.Status == "completed" {
+							summaryBuilder.WriteString(fmt.Sprintf("- [x] %s", todo.Title))
+							if todo.Description != "" {
+								summaryBuilder.WriteString(fmt.Sprintf(" - %s", todo.Description))
+							}
+							summaryBuilder.WriteString("\n")
+						}
+					}
+					
+					message = summaryBuilder.String()
+				} else {
+					// Regular completion message with remaining todos
+					message = fmt.Sprintf("✅ Completed: %s\n\nProgress: %d/%d completed (%d remaining)", 
+						item.Title, completedCount, totalCount, remainingCount)
 				}
-				
-				todoList := todoListBuilder.String()
-				message = fmt.Sprintf("✅ Completed: %s\n\nProgress: %d/%d completed\n\n%s", 
-					item.Title, completedCount, totalCount, todoList)
 			case "cancelled":
 				message = fmt.Sprintf("❌ Cancelled: %s", item.Title)
 			default:

@@ -32,11 +32,22 @@ func (m *DefaultMCPManager) AddServer(config MCPServerConfig) error {
 		return fmt.Errorf("MCP server %s already exists", config.Name)
 	}
 
-	client := NewMCPClient(config, m.logger)
+	var client MCPServer
+	if config.Type == "http" {
+		client = NewMCPHTTPClient(config, m.logger)
+	} else {
+		// Default to stdio client for backwards compatibility
+		client = NewMCPClient(config, m.logger)
+	}
+	
 	m.servers[config.Name] = client
 
 	if m.logger != nil {
-		m.logger.LogProcessStep(fmt.Sprintf("📋 Added MCP server: %s", config.Name))
+		serverType := config.Type
+		if serverType == "" {
+			serverType = "stdio"
+		}
+		m.logger.LogProcessStep(fmt.Sprintf("📋 Added MCP server: %s (%s)", config.Name, serverType))
 	}
 
 	return nil

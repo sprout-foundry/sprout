@@ -97,7 +97,9 @@ Type 'exit' or 'quit' to end the session.
 
 ────────────────────────────────────────────────────────────────
 
-🤖 SLASH COMMANDS (most commonly needed):
+🤖 SLASH COMMANDS:
+  • Press TAB after typing '/' for tab completion
+  • Type '/' and press ENTER for interactive command selection
 `)
 
 	// List all registered commands at the bottom for easy access

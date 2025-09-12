@@ -388,17 +388,31 @@ func getDeepInfraModels() ([]ModelInfo, error) {
 
 		// Extract metadata if available
 		if model.Metadata != nil {
-			modelInfo.Description = model.Metadata.Description
-			modelInfo.ContextLength = model.Metadata.ContextLength
-			modelInfo.Tags = model.Metadata.Tags
+			if model.Metadata.Description != "" {
+				modelInfo.Description = model.Metadata.Description
+			}
+			if model.Metadata.ContextLength > 0 {
+				modelInfo.ContextLength = model.Metadata.ContextLength
+			} else {
+				// Default context length for models without metadata
+				modelInfo.ContextLength = 32000
+			}
+			if len(model.Metadata.Tags) > 0 {
+				modelInfo.Tags = model.Metadata.Tags
+			}
 
 			// Extract pricing information
 			if model.Metadata.Pricing != nil {
-				modelInfo.InputCost = model.Metadata.Pricing.InputTokens
-				modelInfo.OutputCost = model.Metadata.Pricing.OutputTokens
+				// DeepInfra pricing is per token, convert to per million tokens for consistency
+				modelInfo.InputCost = model.Metadata.Pricing.InputTokens * 1000000
+				modelInfo.OutputCost = model.Metadata.Pricing.OutputTokens * 1000000
 				// Use average of input/output for backward compatibility
-				modelInfo.Cost = (model.Metadata.Pricing.InputTokens + model.Metadata.Pricing.OutputTokens) / 2.0
+				modelInfo.Cost = (modelInfo.InputCost + modelInfo.OutputCost) / 2.0
 			}
+		} else {
+			// For models without metadata, set reasonable defaults
+			modelInfo.ContextLength = 32000
+			modelInfo.Description = "Language model (metadata unavailable)"
 		}
 
 		models[i] = modelInfo
@@ -412,6 +426,10 @@ func getDeepInfraModels() ([]ModelInfo, error) {
 			}
 		}
 	}
+
+	// Cache the results
+	deepInfraModelsCache = models
+	deepInfraModelsInitialized = true
 
 	return models, nil
 }

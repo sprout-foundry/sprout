@@ -22,8 +22,8 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	// Log the tool call for debugging
 	a.debugLog("🔧 Executing tool: %s with args: %v\n", toolCall.Function.Name, args)
 
-	// Validate tool name and provide helpful error for common mistakes
-	validTools := []string{"shell_command", "read_file", "write_file", "edit_file", "add_todo", "update_todo_status", "list_todos", "add_bulk_todos", "auto_complete_todos", "get_next_todo", "list_all_todos", "get_active_todos_compact", "archive_completed", "update_todo_status_bulk", "analyze_ui_screenshot", "analyze_image_content", "web_search", "fetch_url", "list_directory", "search_files"}
+	// Validate tool name and provide helpful error for common mistakes  
+	validTools := []string{"shell_command", "read_file", "write_file", "edit_file", "search_files", "add_todos", "update_todo_status", "list_todos", "web_search", "fetch_url", "analyze_ui_screenshot", "analyze_image_content"}
 	isValidTool := false
 	isMCPTool := false
 
@@ -166,23 +166,66 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		a.debugLog("Edit file result: %s, error: %v\n", result, err)
 		return result, err
 
-	case "add_todo":
-		title, ok := args["title"].(string)
+	case "add_todos":
+		todosRaw, ok := args["todos"]
 		if !ok {
-			return "", fmt.Errorf("invalid title argument")
+			return "", fmt.Errorf("missing todos argument")
 		}
-		description := ""
-		if desc, ok := args["description"].(string); ok {
-			description = desc
+		
+		// Parse the todos array
+		todosSlice, ok := todosRaw.([]interface{})
+		if !ok {
+			return "", fmt.Errorf("todos must be an array")
 		}
-		priority := ""
-		if prio, ok := args["priority"].(string); ok {
-			priority = prio
+		
+		var todos []struct {
+			Title       string
+			Description string
+			Priority    string
 		}
-		a.ToolLog("adding todo", title)
-		a.debugLog("Adding todo: %s\n", title)
-		result := tools.AddTodo(title, description, priority)
-		a.debugLog("Add todo result: %s\n", result)
+		
+		for _, todoRaw := range todosSlice {
+			todoMap, ok := todoRaw.(map[string]interface{})
+			if !ok {
+				return "", fmt.Errorf("each todo must be an object")
+			}
+			
+			todo := struct {
+				Title       string
+				Description string
+				Priority    string
+			}{}
+			
+			if title, ok := todoMap["title"].(string); ok {
+				todo.Title = title
+			}
+			if desc, ok := todoMap["description"].(string); ok {
+				todo.Description = desc
+			}
+			if prio, ok := todoMap["priority"].(string); ok {
+				todo.Priority = prio
+			} else {
+				todo.Priority = "medium" // default
+			}
+			
+			todos = append(todos, todo)
+		}
+		
+		// Show the todo titles being created
+		todoTitles := make([]string, len(todos))
+		for i, todo := range todos {
+			todoTitles[i] = todo.Title
+		}
+		if len(todoTitles) == 1 {
+			a.ToolLog("adding todo", todoTitles[0])
+		} else if len(todoTitles) <= 3 {
+			a.ToolLog("adding todos", strings.Join(todoTitles, ", "))
+		} else {
+			a.ToolLog("adding todos", fmt.Sprintf("%s, %s, +%d more", todoTitles[0], todoTitles[1], len(todoTitles)-2))
+		}
+		a.debugLog("Adding %d todos\n", len(todos))
+		result := tools.AddBulkTodos(todos)
+		a.debugLog("Add todos result: %s\n", result)
 		return result, nil
 
 	case "update_todo_status":
@@ -239,138 +282,6 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		a.debugLog("Listing todos\n")
 		result := tools.ListTodos()
 		a.debugLog("List todos result: %s\n", result)
-		return result, nil
-
-	case "add_bulk_todos":
-		todosRaw, ok := args["todos"]
-		if !ok {
-			return "", fmt.Errorf("missing todos argument")
-		}
-
-		// Parse the todos array
-		todosSlice, ok := todosRaw.([]interface{})
-		if !ok {
-			return "", fmt.Errorf("todos must be an array")
-		}
-
-		var todos []struct {
-			Title       string
-			Description string
-			Priority    string
-		}
-
-		for _, todoRaw := range todosSlice {
-			todoMap, ok := todoRaw.(map[string]interface{})
-			if !ok {
-				return "", fmt.Errorf("each todo must be an object")
-			}
-
-			todo := struct {
-				Title       string
-				Description string
-				Priority    string
-			}{}
-
-			if title, ok := todoMap["title"].(string); ok {
-				todo.Title = title
-			}
-			if desc, ok := todoMap["description"].(string); ok {
-				todo.Description = desc
-			}
-			if prio, ok := todoMap["priority"].(string); ok {
-				todo.Priority = prio
-			}
-
-			todos = append(todos, todo)
-		}
-
-		// Show the todo titles being created
-		todoTitles := make([]string, len(todos))
-		for i, todo := range todos {
-			todoTitles[i] = todo.Title
-		}
-		if len(todoTitles) <= 3 {
-			a.ToolLog("adding todos", strings.Join(todoTitles, ", "))
-		} else {
-			a.ToolLog("adding todos", fmt.Sprintf("%s, %s, +%d more", todoTitles[0], todoTitles[1], len(todoTitles)-2))
-		}
-		a.debugLog("Adding bulk todos: %d items\n", len(todos))
-		result := tools.AddBulkTodos(todos)
-		a.debugLog("Add bulk todos result: %s\n", result)
-		return result, nil
-
-	case "auto_complete_todos":
-		context, ok := args["context"].(string)
-		if !ok {
-			return "", fmt.Errorf("invalid context argument")
-		}
-		a.ToolLog("auto completing todos", context)
-		a.debugLog("Auto completing todos with context: %s\n", context)
-		result := tools.AutoCompleteTodos(context)
-		a.debugLog("Auto complete result: %s\n", result)
-		return result, nil
-
-	case "get_next_todo":
-		a.ToolLog("getting next todo", "")
-		a.debugLog("Getting next todo\n")
-		result := tools.GetNextTodo()
-		a.debugLog("Next todo result: %s\n", result)
-		return result, nil
-
-	case "list_all_todos":
-		a.ToolLog("listing all todos", "full context")
-		result := tools.ListAllTodos()
-		return result, nil
-
-	case "get_active_todos_compact":
-		a.ToolLog("getting active todos", "compact")
-		result := tools.GetActiveTodosCompact()
-		return result, nil
-
-	case "archive_completed":
-		a.ToolLog("archiving completed", "")
-		result := tools.ArchiveCompleted()
-		return result, nil
-
-	case "update_todo_status_bulk":
-		updatesRaw, ok := args["updates"]
-		if !ok {
-			return "", fmt.Errorf("missing updates argument")
-		}
-
-		updatesSlice, ok := updatesRaw.([]interface{})
-		if !ok {
-			return "", fmt.Errorf("updates must be an array")
-		}
-
-		var updates []struct {
-			ID     string
-			Status string
-		}
-
-		for _, updateRaw := range updatesSlice {
-			updateMap, ok := updateRaw.(map[string]interface{})
-			if !ok {
-				return "", fmt.Errorf("each update must be an object")
-			}
-
-			update := struct {
-				ID     string
-				Status string
-			}{}
-
-			if id, ok := updateMap["id"].(string); ok {
-				update.ID = id
-			}
-			if status, ok := updateMap["status"].(string); ok {
-				update.Status = status
-			}
-
-			updates = append(updates, update)
-		}
-
-		a.ToolLog("bulk status update", fmt.Sprintf("%d items", len(updates)))
-		result := tools.UpdateTodoStatusBulk(updates)
 		return result, nil
 
 	case "analyze_ui_screenshot":
@@ -493,47 +404,6 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 			return "", fmt.Errorf("URL fetch failed: %w", err)
 		}
 		a.debugLog("URL fetch completed, found %d characters of content\n", len(result))
-		return result, nil
-
-	case "list_directory":
-		directoryPath := "."
-		if path, ok := args["directory_path"].(string); ok && path != "" {
-			directoryPath = path
-		}
-		
-		recursive := false
-		if rec, ok := args["recursive"].(bool); ok {
-			recursive = rec
-		}
-		
-		showHidden := false
-		if hidden, ok := args["show_hidden"].(bool); ok {
-			showHidden = hidden
-		}
-		
-		a.ToolLog("listing directory", directoryPath)
-		a.debugLog("Listing directory: %s (recursive: %v, hidden: %v)\n", directoryPath, recursive, showHidden)
-		
-		var command string
-		if recursive {
-			if showHidden {
-				command = fmt.Sprintf("find %s -type f -name '.*' -o -type f -not -name '.*' | head -100", directoryPath)
-			} else {
-				command = fmt.Sprintf("find %s -type f -not -name '.*' | head -100", directoryPath)
-			}
-		} else {
-			if showHidden {
-				command = fmt.Sprintf("ls -la %s", directoryPath)
-			} else {
-				command = fmt.Sprintf("ls -l %s", directoryPath)
-			}
-		}
-		
-		result, err := a.executeShellCommandWithTruncation(command)
-		if err != nil {
-			a.debugLog("Directory listing failed: %v\n", err)
-			return "", fmt.Errorf("directory listing failed: %w", err)
-		}
 		return result, nil
 
 	case "search_files":

@@ -455,16 +455,21 @@ func (p *OpenRouterProvider) SendVisionRequest(messages []types.Message, tools [
 
 func (p *OpenRouterProvider) GetFeaturedModels() []string {
 	return []string{
-		"qwen/qwen3-coder",                     // Best coding model
-		"deepseek/deepseek-chat-v3.1:free",    // Free DeepSeek option
-		"qwen/qwen3-coder:free",                // Free coding model
-		"deepseek/deepseek-chat-v3.1",         // Premium DeepSeek model
+		"qwen/qwen3-coder:free",
+		"qwen/qwen3-coder-30b-a3b-instruct",
+		"qwen/qwen3-coder",
+		"qwen/qwen3-235b-a22b-thinking-2507",
+		"deepseek/deepseek-chat-v3.1:free",
+		"deepseek/deepseek-chat-v3.1",
+		"mistralai/codestral-2508",
+		"mistralai/devstral-small-2505",
+		"x-ai/grok-code-fast-1",
 	}
 }
 
 func (p *OpenRouterProvider) GetFeaturedVisionModels() []string {
 	return []string{
-		"google/gemma-3-27b-it",                // Primary vision model for open providers
-		"google/gemma-3-27b-it:free",           // Free vision model option
+		"google/gemma-3-27b-it",      // Primary vision model for open providers
+		"google/gemma-3-27b-it:free", // Free vision model option
 	}
 }

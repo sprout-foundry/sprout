@@ -115,12 +115,12 @@ func (c *LocalOllamaClient) SendChatRequest(messages []Message, tools []Tool, re
 
 	// Estimate token usage since Ollama doesn't provide detailed metrics
 	estimatedUsage := struct {
-		PromptTokens     int     `json:"prompt_tokens"`
-		CompletionTokens int     `json:"completion_tokens"`
-		TotalTokens      int     `json:"total_tokens"`
-		EstimatedCost    float64 `json:"estimated_cost"`
+		PromptTokens        int     `json:"prompt_tokens"`
+		CompletionTokens    int     `json:"completion_tokens"`
+		TotalTokens         int     `json:"total_tokens"`
+		EstimatedCost       float64 `json:"estimated_cost"`
 		PromptTokensDetails struct {
-			CachedTokens     int `json:"cached_tokens"`
+			CachedTokens     int  `json:"cached_tokens"`
 			CacheWriteTokens *int `json:"cache_write_tokens"`
 		} `json:"prompt_tokens_details,omitempty"`
 	}{
@@ -129,7 +129,7 @@ func (c *LocalOllamaClient) SendChatRequest(messages []Message, tools []Tool, re
 		TotalTokens:      totalTokens + c.estimateTokens(responseContent.String()),
 		EstimatedCost:    0.0, // Local inference is free
 		PromptTokensDetails: struct {
-			CachedTokens     int `json:"cached_tokens"`
+			CachedTokens     int  `json:"cached_tokens"`
 			CacheWriteTokens *int `json:"cache_write_tokens"`
 		}{
 			CachedTokens:     0,
@@ -171,11 +171,11 @@ func (c *LocalOllamaClient) formatToolsForPrompt(tools []Tool) string {
 
 	var sb strings.Builder
 	sb.WriteString("You have access to the following tools:\n\n")
-	
+
 	for _, tool := range tools {
 		sb.WriteString(fmt.Sprintf("Tool: %s\n", tool.Function.Name))
 		sb.WriteString(fmt.Sprintf("Description: %s\n", tool.Function.Description))
-		
+
 		if params, ok := tool.Function.Parameters.(map[string]interface{}); ok {
 			if props, ok := params["properties"].(map[string]interface{}); ok {
 				sb.WriteString("Parameters:\n")
@@ -190,11 +190,11 @@ func (c *LocalOllamaClient) formatToolsForPrompt(tools []Tool) string {
 		}
 		sb.WriteString("\n")
 	}
-	
+
 	sb.WriteString("To use a tool, respond with a JSON object in this format:\n")
 	sb.WriteString(`{"tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "tool_name", "arguments": "{\"param\": \"value\"}"}}]}`)
 	sb.WriteString("\n\n")
-	
+
 	return sb.String()
 }
 
@@ -269,12 +269,12 @@ func (c *LocalOllamaClient) GetProvider() string {
 func (c *LocalOllamaClient) GetModelContextLimit() (int, error) {
 	// For local Ollama models, we use the model name to determine context
 	model := c.model
-	
+
 	switch {
 	case strings.Contains(model, "gpt-oss"):
 		return 120000, nil // GPT-OSS models typically have ~120k context
 	default:
-		return 32000, nil  // Conservative default for other local models
+		return 32000, nil // Conservative default for other local models
 	}
 }
 
@@ -287,7 +287,12 @@ func (c *LocalOllamaClient) SupportsVision() bool {
 
 // GetVisionModel returns the vision model for Ollama
 func (c *LocalOllamaClient) GetVisionModel() string {
-	return GetVisionModelForProvider(OllamaClientType)
+	// Return first featured vision model
+	featuredVisionModels := c.GetFeaturedVisionModels()
+	if len(featuredVisionModels) > 0 {
+		return featuredVisionModels[0]
+	}
+	return ""
 }
 
 // SendVisionRequest sends a vision-enabled chat request
@@ -296,18 +301,32 @@ func (c *LocalOllamaClient) SendVisionRequest(messages []Message, tools []Tool, 
 		// Fallback to regular chat request if no vision model available
 		return c.SendChatRequest(messages, tools, reasoning)
 	}
-	
+
 	// Temporarily switch to vision model for this request
 	originalModel := c.model
 	visionModel := c.GetVisionModel()
-	
+
 	c.model = visionModel
-	
+
 	// Send the vision request
 	response, err := c.SendChatRequest(messages, tools, reasoning)
-	
+
 	// Restore original model
 	c.model = originalModel
-	
+
 	return response, err
+}
+
+func (c *LocalOllamaClient) GetFeaturedModels() []string {
+	return []string{
+		"qwen3-coder", // Primary coding model
+		"gpt-oss:20b", // Local GPT-style model
+	}
+}
+
+func (c *LocalOllamaClient) GetFeaturedVisionModels() []string {
+	return []string{
+		"llava:latest",            // Primary local vision model
+		"llama3.2-vision:11b",     // Llama 3.2 vision model
+	}
 }

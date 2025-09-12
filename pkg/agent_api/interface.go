@@ -18,6 +18,8 @@ type ClientInterface interface {
 	SupportsVision() bool
 	GetVisionModel() string
 	SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
+	GetFeaturedModels() []string
+	GetFeaturedVisionModels() []string
 }
 
 // ClientType represents the type of client to use
@@ -28,6 +30,7 @@ const (
 	OllamaClientType    ClientType = "ollama"
 	CerebrasClientType  ClientType = "cerebras"
 	OpenRouterClientType ClientType = "openrouter"
+	OpenAIClientType    ClientType = "openai"
 	GroqClientType      ClientType = "groq"
 	DeepSeekClientType  ClientType = "deepseek"
 )
@@ -45,6 +48,11 @@ func NewUnifiedClientWithModel(clientType ClientType, model string) (ClientInter
 		model = GetDefaultModelForProvider(clientType)
 	}
 	
+	// Ensure API key is available for non-local providers
+	if err := EnsureAPIKeyAvailable(clientType); err != nil {
+		return nil, fmt.Errorf("API key required for %s: %w", GetProviderName(clientType), err)
+	}
+	
 	switch clientType {
 	case DeepInfraClientType:
 		return NewDeepInfraClientWrapper(model)
@@ -54,6 +62,8 @@ func NewUnifiedClientWithModel(clientType ClientType, model string) (ClientInter
 		return NewCerebrasClientWrapper(model)
 	case OpenRouterClientType:
 		return NewOpenRouterClientWrapper(model)
+	case OpenAIClientType:
+		return NewOpenAIClientWrapper(model)
 	case GroqClientType:
 		return NewGroqClientWrapper(model)
 	case DeepSeekClientType:
@@ -88,6 +98,20 @@ func NewGroqClientWrapper(model string) (ClientInterface, error) {
 	return nil, fmt.Errorf("Groq provider not yet implemented")
 }
 
+// NewOpenAIClientWrapper creates an OpenAI client wrapper
+func NewOpenAIClientWrapper(model string) (ClientInterface, error) {
+	client, err := NewOpenAIClient()
+	if err != nil {
+		return nil, err
+	}
+	if model != "" {
+		if err := client.SetModel(model); err != nil {
+			return nil, err
+		}
+	}
+	return client, nil
+}
+
 // NewDeepSeekClientWrapper creates a DeepSeek client wrapper
 func NewDeepSeekClientWrapper(model string) (ClientInterface, error) {
 	// For now, return an error since DeepSeek provider is not fully implemented
@@ -96,11 +120,12 @@ func NewDeepSeekClientWrapper(model string) (ClientInterface, error) {
 
 // GetClientTypeFromEnv determines which client to use based on environment variables
 func GetClientTypeFromEnv() ClientType {
-	// Check provider environment variables in priority order (OpenRouter first as preferred)
+	// Check provider environment variables in priority order (OpenAI first, then OpenRouter)
 	envProviders := []struct {
 		envVar string
 		client ClientType
 	}{
+		{"OPENAI_API_KEY", OpenAIClientType},
 		{"OPENROUTER_API_KEY", OpenRouterClientType},
 		{"DEEPINFRA_API_KEY", DeepInfraClientType},
 		{"CEREBRAS_API_KEY", CerebrasClientType},
@@ -118,13 +143,22 @@ func GetClientTypeFromEnv() ClientType {
 	return OllamaClientType
 }
 
-// GetDefaultModelForProvider returns the best default model for each provider
+// GetDefaultModelForProvider returns the first featured model for each provider
 func GetDefaultModelForProvider(clientType ClientType) string {
+	// Create a temporary client to get featured models
+	featuredModels := GetFeaturedModelsForProvider(clientType)
+	if len(featuredModels) > 0 {
+		return featuredModels[0]
+	}
+	
+	// Fallback for providers without featured models implemented yet
 	switch clientType {
+	case OpenAIClientType:
+		return "gpt-4o-mini" // Conservative fallback
 	case OpenRouterClientType:
 		return "deepseek/deepseek-chat-v3.1:free"
 	case DeepInfraClientType:
-		return "deepseek-ai/DeepSeek-V3.1"
+		return "deepseek-ai/deepseek-v3.1"
 	case OllamaClientType:
 		return "gpt-oss:20b"
 	case CerebrasClientType:
@@ -134,29 +168,95 @@ func GetDefaultModelForProvider(clientType ClientType) string {
 	case DeepSeekClientType:
 		return "deepseek-chat"
 	default:
-		return "deepseek/deepseek-chat" // Default to OpenRouter
+		return "gpt-4o-mini"
 	}
 }
 
-// GetVisionModelForProvider returns the vision-capable model for each provider
+// GetFeaturedModelsForProvider returns the featured models for a specific provider
+func GetFeaturedModelsForProvider(clientType ClientType) []string {
+	// Try to create a client and get featured models
+	switch clientType {
+	case OpenAIClientType:
+		if client, err := NewOpenAIClientWrapper(""); err == nil {
+			return client.GetFeaturedModels()
+		}
+	case OpenRouterClientType:
+		if client, err := NewOpenRouterClientWrapper(""); err == nil {
+			return client.GetFeaturedModels()
+		}
+	case DeepInfraClientType:
+		if client, err := NewDeepInfraClientWrapper(""); err == nil {
+			return client.GetFeaturedModels()
+		}
+	case OllamaClientType:
+		if client, err := NewOllamaClient(); err == nil {
+			return client.GetFeaturedModels()
+		}
+	case CerebrasClientType:
+		if client, err := NewCerebrasClientWrapper(""); err == nil {
+			return client.GetFeaturedModels()
+		}
+	case GroqClientType:
+		if client, err := NewGroqClientWrapper(""); err == nil {
+			return client.GetFeaturedModels()
+		}
+	case DeepSeekClientType:
+		if client, err := NewDeepSeekClientWrapper(""); err == nil {
+			return client.GetFeaturedModels()
+		}
+	}
+	
+	return []string{} // Return empty if provider not implemented
+}
+
+// GetVisionModelForProvider returns the first vision-capable model for each provider
 // Returns empty string if provider doesn't support vision
 func GetVisionModelForProvider(clientType ClientType) string {
-	switch clientType {
-	case OpenRouterClientType:
-		return "openai/gpt-4o"
-	case DeepInfraClientType:
-		return "google/gemma-3-27b-it"
-	case OllamaClientType:
-		return "llava:latest" // Popular local vision model
-	case CerebrasClientType:
-		return "" // Cerebras doesn't have vision models yet
-	case GroqClientType:
-		return "llama-3.2-11b-vision-preview" // Groq has vision models
-	case DeepSeekClientType:
-		return "" // DeepSeek doesn't have vision models in their API yet
-	default:
-		return "" // No vision support by default
+	// Get featured vision models from the provider
+	featuredVisionModels := GetFeaturedVisionModelsForProvider(clientType)
+	if len(featuredVisionModels) > 0 {
+		return featuredVisionModels[0]
 	}
+	
+	// Return empty string if no vision models available
+	return ""
+}
+
+// GetFeaturedVisionModelsForProvider returns the featured vision models for a specific provider
+func GetFeaturedVisionModelsForProvider(clientType ClientType) []string {
+	// Try to create a client and get featured vision models
+	switch clientType {
+	case OpenAIClientType:
+		if client, err := NewOpenAIClientWrapper(""); err == nil {
+			return client.GetFeaturedVisionModels()
+		}
+	case OpenRouterClientType:
+		if client, err := NewOpenRouterClientWrapper(""); err == nil {
+			return client.GetFeaturedVisionModels()
+		}
+	case DeepInfraClientType:
+		if client, err := NewDeepInfraClientWrapper(""); err == nil {
+			return client.GetFeaturedVisionModels()
+		}
+	case OllamaClientType:
+		if client, err := NewOllamaClient(); err == nil {
+			return client.GetFeaturedVisionModels()
+		}
+	case CerebrasClientType:
+		if client, err := NewCerebrasClientWrapper(""); err == nil {
+			return client.GetFeaturedVisionModels()
+		}
+	case GroqClientType:
+		if client, err := NewGroqClientWrapper(""); err == nil {
+			return client.GetFeaturedVisionModels()
+		}
+	case DeepSeekClientType:
+		if client, err := NewDeepSeekClientWrapper(""); err == nil {
+			return client.GetFeaturedVisionModels()
+		}
+	}
+	
+	return []string{} // Return empty if provider not implemented
 }
 
 // GetClientTypeWithFallback determines client type and falls back if unavailable
@@ -179,11 +279,12 @@ func GetClientTypeWithFallback() (ClientType, error) {
 		return OllamaClientType, nil
 	}
 	
-	// Ollama not available, try other providers as fallback (OpenRouter first as preferred)
+	// Ollama not available, try other providers as fallback (OpenAI first as preferred)
 	envProviders := []struct {
 		envVar string
 		client ClientType
 	}{
+		{"OPENAI_API_KEY", OpenAIClientType},
 		{"OPENROUTER_API_KEY", OpenRouterClientType},
 		{"DEEPINFRA_API_KEY", DeepInfraClientType},
 		{"CEREBRAS_API_KEY", CerebrasClientType},
@@ -206,6 +307,7 @@ func GetClientTypeWithFallback() (ClientType, error) {
 // GetAvailableProviders returns a list of all available providers
 func GetAvailableProviders() []ClientType {
 	return []ClientType{
+		OpenAIClientType,
 		DeepInfraClientType,
 		OllamaClientType,
 		CerebrasClientType,
@@ -218,6 +320,8 @@ func GetAvailableProviders() []ClientType {
 // GetProviderName returns the human-readable name for a provider
 func GetProviderName(clientType ClientType) string {
 	switch clientType {
+	case OpenAIClientType:
+		return "OpenAI"
 	case DeepInfraClientType:
 		return "DeepInfra"
 	case OllamaClientType:
@@ -239,6 +343,8 @@ func GetProviderName(clientType ClientType) string {
 func GetProviderFromString(providerStr string) (ClientType, error) {
 	providerStr = strings.ToLower(providerStr)
 	switch providerStr {
+	case "openai":
+		return OpenAIClientType, nil
 	case "deepinfra":
 		return DeepInfraClientType, nil
 	case "ollama":
@@ -335,8 +441,20 @@ func (w *DeepInfraClientWrapper) GetProvider() string {
 func (w *DeepInfraClientWrapper) GetModelContextLimit() (int, error) {
 	model := w.client.model
 	
-	// Model-specific context limits based on official documentation
+	// Try to get context length from model info API first
+	models, err := getDeepInfraModels()
+	if err == nil {
+		for _, modelInfo := range models {
+			if modelInfo.ID == model && modelInfo.ContextLength > 0 {
+				return modelInfo.ContextLength, nil
+			}
+		}
+	}
+	
+	// Fallback to hardcoded limits if API doesn't provide context length
 	switch {
+	case strings.Contains(model, "deepseek-r1"):
+		return 64000, nil  // DeepSeek-R1 supports 64K context
 	case strings.Contains(model, "DeepSeek-V3.1"):
 		return 128000, nil // DeepSeek-V3.1 supports 128K context
 	case strings.Contains(model, "DeepSeek-V3"):
@@ -345,19 +463,26 @@ func (w *DeepInfraClientWrapper) GetModelContextLimit() (int, error) {
 		return 64000, nil  // DeepSeek-R1 supports 64K context
 	case strings.Contains(model, "deepseek"):
 		return 32000, nil  // Other DeepSeek models typically 32K
+	case strings.Contains(model, "gpt-5"):
+		return 272000, nil // GPT-5 supports up to 272K context
 	case strings.Contains(model, "gpt-oss"):
 		return 120000, nil // GPT-OSS models typically have ~120k context
+	case strings.Contains(model, "llama-4"):
+		return 256000, nil // Llama 4 Maverick supports 256K context
 	case strings.Contains(model, "llama"):
-		return 32000, nil  // Llama models typically have ~32k context
+		return 32000, nil  // Standard Llama models typically have ~32k context
+	case strings.Contains(model, "qwen3-coder-480b"):
+		return 256000, nil // Qwen3-Coder-480B supports 256K context
+	case strings.Contains(model, "qwen3"):
+		return 128000, nil // Qwen3 models typically have 128K context
 	case strings.Contains(model, "qwen"):
-		if strings.Contains(model, "Qwen3-Coder-480B") {
-			return 128000, nil // Large Qwen models have bigger context
-		}
 		return 32000, nil  // Standard Qwen models typically have ~32k context
 	case strings.Contains(model, "claude"):
 		return 200000, nil // Claude models have large context windows
+	case strings.Contains(model, "gemini-2.5"):
+		return 1000000, nil // Gemini 2.5 models support up to 1M context
 	case strings.Contains(model, "gemini"):
-		return 128000, nil // Gemini models have large context windows
+		return 128000, nil // Standard Gemini models have large context windows
 	default:
 		return 32000, nil  // Conservative default
 	}
@@ -370,7 +495,12 @@ func (w *DeepInfraClientWrapper) SupportsVision() bool {
 }
 
 func (w *DeepInfraClientWrapper) GetVisionModel() string {
-	return GetVisionModelForProvider(DeepInfraClientType)
+	// Return first featured vision model
+	featuredVisionModels := w.GetFeaturedVisionModels()
+	if len(featuredVisionModels) > 0 {
+		return featuredVisionModels[0]
+	}
+	return ""
 }
 
 func (w *DeepInfraClientWrapper) SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
@@ -395,6 +525,23 @@ func (w *DeepInfraClientWrapper) SendVisionRequest(messages []Message, tools []T
 	w.SetModel(originalModel)
 	
 	return response, err
+}
+
+func (w *DeepInfraClientWrapper) GetFeaturedModels() []string {
+	return []string{
+		"Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",    // Top coding model
+		"deepseek-ai/DeepSeek-V3.1",                     // Latest DeepSeek model
+		"meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", // Latest Llama with tool support
+		"Qwen/Qwen3-235B-A22B-Instruct-2507",           // Large general model
+	}
+}
+
+func (w *DeepInfraClientWrapper) GetFeaturedVisionModels() []string {
+	return []string{
+		"meta-llama/Llama-4-Scout-17B-16E-Instruct",    // Vision-capable Llama 4
+		// Note: DeepInfra doesn't currently have Gemma 3 27B vision models
+		// but Llama 4 Scout provides excellent vision capabilities
+	}
 }
 
 

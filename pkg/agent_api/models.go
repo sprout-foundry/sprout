@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_providers"
-	"github.com/alantheprice/ledit/pkg/agent_types"
+	providers "github.com/alantheprice/ledit/pkg/agent_providers"
+	types "github.com/alantheprice/ledit/pkg/agent_types"
 	"github.com/alantheprice/ledit/pkg/config"
 )
 
@@ -58,7 +58,7 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 			return apiModels, nil
 		}
 	}
-	
+
 	// Fallback to hardcoded model fetchers if provider method fails
 	switch clientType {
 	case OpenAIClientType:
@@ -82,8 +82,8 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 
 // getOpenAIModels gets available models from OpenAI API
 var (
-	openaiModelsCache     []ModelInfo
-	openaiModelsInitialized bool = false // Reset cache to force pricing repopulation
+	openaiModelsCache       []ModelInfo
+	openaiModelsInitialized bool = false // Force cache reset for corrected pricing
 )
 
 func getOpenAIModels() ([]ModelInfo, error) {
@@ -97,39 +97,32 @@ func getOpenAIModels() ([]ModelInfo, error) {
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	
+
 	req, err := http.NewRequest("GET", "https://api.openai.com/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch OpenAI models: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("OpenAI API error (status %d): %s", resp.StatusCode, string(body))
 	}
-	
+
 	// Read the full response body for both JSON file writing and parsing
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
-	
-	// Write raw API response to JSON file for format inspection
-	if err := os.WriteFile("openai_models_response.json", body, 0644); err != nil {
-		fmt.Printf("Warning: failed to write OpenAI models response to file: %v\n", err)
-	} else {
-		fmt.Println("📄 OpenAI models API response written to openai_models_response.json")
-	}
-	
+
 	var modelsResp struct {
 		Data []struct {
 			ID      string `json:"id"`
@@ -138,22 +131,22 @@ func getOpenAIModels() ([]ModelInfo, error) {
 			OwnedBy string `json:"owned_by"`
 		} `json:"data"`
 	}
-	
+
 	if err := json.Unmarshal(body, &modelsResp); err != nil {
 		return nil, fmt.Errorf("failed to decode OpenAI models: %w", err)
 	}
-	
+
 	// Convert to ModelInfo format
 	models := make([]ModelInfo, 0, len(modelsResp.Data))
 	for _, model := range modelsResp.Data {
 		// Only include chat completion models
-		if strings.Contains(model.ID, "gpt") || strings.Contains(model.ID, "o1") || 
-		   strings.Contains(model.ID, "chatgpt") {
-			
+		if strings.Contains(model.ID, "gpt") || strings.Contains(model.ID, "o1") ||
+			strings.Contains(model.ID, "chatgpt") {
+
 			// Get context length and pricing based on model
 			contextLength := getOpenAIContextLength(model.ID)
 			inputCost, outputCost := getOpenAIModelPricing(model.ID)
-			
+
 			models = append(models, ModelInfo{
 				ID:            model.ID,
 				Name:          model.ID,
@@ -166,7 +159,7 @@ func getOpenAIModels() ([]ModelInfo, error) {
 			})
 		}
 	}
-	
+
 	openaiModelsCache = models
 	openaiModelsInitialized = true
 	return models, nil
@@ -183,110 +176,105 @@ func getOpenAIModelPricing(modelID string) (inputCost, outputCost float64) {
 		FlexMultiplier   float64
 	}{
 		// GPT-5 series (current as of September 2025)
-		"gpt-5":                     {0.625, 0.3125, 5.0, 0.5, 0.6},
-		"gpt-5-2025-08-07":         {0.625, 0.3125, 5.0, 0.5, 0.6},
-		"gpt-5-chat-latest":        {0.625, 0.3125, 5.0, 0.5, 0.6},
-		"gpt-5-mini":               {0.125, 0.0625, 1.0, 0.5, 0.6},
-		"gpt-5-mini-2025-08-07":    {0.125, 0.0625, 1.0, 0.5, 0.6},
-		"gpt-5-nano":               {0.025, 0.0125, 0.2, 0.5, 0.6},
-		"gpt-5-nano-2025-08-07":    {0.025, 0.0125, 0.2, 0.5, 0.6},
-		
+		"gpt-5":                 {0.625, 0.3125, 5.0, 0.5, 0.6},
+		"gpt-5-2025-08-07":      {0.625, 0.3125, 5.0, 0.5, 0.6},
+		"gpt-5-chat-latest":     {0.625, 0.3125, 5.0, 0.5, 0.6},
+		"gpt-5-mini":            {0.125, 0.0625, 1.0, 0.5, 0.6},
+		"gpt-5-mini-2025-08-07": {0.125, 0.0625, 1.0, 0.5, 0.6},
+		"gpt-5-nano":            {0.025, 0.0125, 0.2, 0.5, 0.6},
+		"gpt-5-nano-2025-08-07": {0.025, 0.0125, 0.2, 0.5, 0.6},
+
 		// O3 series (current pricing)
-		"o3":                       {1.0, 0.25, 4.0, 0.5, 0.6},
-		"o3-mini":                  {0.55, 0.138, 2.2, 0.5, 0.6},
-		
+		"o3":      {1.0, 0.25, 4.0, 0.5, 0.6},
+		"o3-mini": {0.55, 0.138, 2.2, 0.5, 0.6},
+
 		// O4-mini (from screenshot)
-		"o4-mini":                  {0.55, 0.138, 2.2, 0.5, 0.6},
-		
+		"o4-mini": {0.55, 0.138, 2.2, 0.5, 0.6},
+
 		// O1 series (from screenshot)
-		"o1":                       {1.0, 0.25, 4.0, 0.5, 0.6},
-		"o1-2024-12-17":           {1.0, 0.25, 4.0, 0.5, 0.6},
-		"o1-mini":                  {0.55, 0.138, 2.2, 0.5, 0.6},
-		"o1-mini-2024-09-12":      {0.55, 0.138, 2.2, 0.5, 0.6},
-		"o1-pro":                   {3.0, 0.75, 12.0, 0.5, 0.6},
-		"o1-pro-2025-03-19":       {3.0, 0.75, 12.0, 0.5, 0.6},
-		
+		"o1":                 {1.0, 0.25, 4.0, 0.5, 0.6},
+		"o1-2024-12-17":      {1.0, 0.25, 4.0, 0.5, 0.6},
+		"o1-mini":            {0.55, 0.138, 2.2, 0.5, 0.6},
+		"o1-mini-2024-09-12": {0.55, 0.138, 2.2, 0.5, 0.6},
+		"o1-pro":             {3.0, 0.75, 12.0, 0.5, 0.6},
+		"o1-pro-2025-03-19":  {3.0, 0.75, 12.0, 0.5, 0.6},
+
 		// GPT-4o series (convert per-1K to per-1M for display)
-		"gpt-4o":                   {0.005, 0.0025, 0.015, 0.5, 0.6},
-		"gpt-4o-2024-05-13":        {0.005, 0.0025, 0.015, 0.5, 0.6},
-		"gpt-4o-2024-08-06":        {0.0025, 0.00125, 0.01, 0.5, 0.6},
-		"gpt-4o-2024-11-20":        {0.0025, 0.00125, 0.01, 0.5, 0.6},
-		"gpt-4o-mini":              {0.00015, 0.000075, 0.0006, 0.5, 0.6},
-		"gpt-4o-mini-2024-07-18":   {0.00015, 0.000075, 0.0006, 0.5, 0.6},
-		
+		"gpt-4o":                 {0.005, 0.0025, 0.015, 0.5, 0.6},
+		"gpt-4o-2024-05-13":      {0.005, 0.0025, 0.015, 0.5, 0.6},
+		"gpt-4o-2024-08-06":      {0.0025, 0.00125, 0.01, 0.5, 0.6},
+		"gpt-4o-2024-11-20":      {0.0025, 0.00125, 0.01, 0.5, 0.6},
+		"gpt-4o-mini":            {0.00015, 0.000075, 0.0006, 0.5, 0.6},
+		"gpt-4o-mini-2024-07-18": {0.00015, 0.000075, 0.0006, 0.5, 0.6},
+
 		// Audio and specialized models
-		"gpt-4o-audio-preview":             {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4o-audio-preview-2024-10-01":  {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4o-audio-preview-2024-12-17":  {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4o-audio-preview-2025-06-03":  {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4o-mini-audio-preview":        {0.002, 0.001, 0.008, 0.5, 0.6},
+		"gpt-4o-audio-preview":                 {0.01, 0.005, 0.03, 0.5, 0.6},
+		"gpt-4o-audio-preview-2024-10-01":      {0.01, 0.005, 0.03, 0.5, 0.6},
+		"gpt-4o-audio-preview-2024-12-17":      {0.01, 0.005, 0.03, 0.5, 0.6},
+		"gpt-4o-audio-preview-2025-06-03":      {0.01, 0.005, 0.03, 0.5, 0.6},
+		"gpt-4o-mini-audio-preview":            {0.002, 0.001, 0.008, 0.5, 0.6},
 		"gpt-4o-mini-audio-preview-2024-12-17": {0.002, 0.001, 0.008, 0.5, 0.6},
-		
+
 		// Realtime models
-		"gpt-4o-realtime-preview":             {0.015, 0.0075, 0.045, 0.5, 0.6},
-		"gpt-4o-realtime-preview-2024-10-01": {0.015, 0.0075, 0.045, 0.5, 0.6},
-		"gpt-4o-realtime-preview-2024-12-17": {0.015, 0.0075, 0.045, 0.5, 0.6},
-		"gpt-4o-realtime-preview-2025-06-03": {0.015, 0.0075, 0.045, 0.5, 0.6},
-		"gpt-4o-mini-realtime-preview":        {0.002, 0.001, 0.008, 0.5, 0.6},
+		"gpt-4o-realtime-preview":                 {0.015, 0.0075, 0.045, 0.5, 0.6},
+		"gpt-4o-realtime-preview-2024-10-01":      {0.015, 0.0075, 0.045, 0.5, 0.6},
+		"gpt-4o-realtime-preview-2024-12-17":      {0.015, 0.0075, 0.045, 0.5, 0.6},
+		"gpt-4o-realtime-preview-2025-06-03":      {0.015, 0.0075, 0.045, 0.5, 0.6},
+		"gpt-4o-mini-realtime-preview":            {0.002, 0.001, 0.008, 0.5, 0.6},
 		"gpt-4o-mini-realtime-preview-2024-12-17": {0.002, 0.001, 0.008, 0.5, 0.6},
-		
-		// Search models  
-		"gpt-4o-search-preview":             {0.005, 0.0025, 0.015, 0.5, 0.6},
-		"gpt-4o-search-preview-2025-03-11":  {0.005, 0.0025, 0.015, 0.5, 0.6},
-		"gpt-4o-mini-search-preview":        {0.00015, 0.000075, 0.0006, 0.5, 0.6},
+
+		// Search models
+		"gpt-4o-search-preview":                 {0.005, 0.0025, 0.015, 0.5, 0.6},
+		"gpt-4o-search-preview-2025-03-11":      {0.005, 0.0025, 0.015, 0.5, 0.6},
+		"gpt-4o-mini-search-preview":            {0.00015, 0.000075, 0.0006, 0.5, 0.6},
 		"gpt-4o-mini-search-preview-2025-03-11": {0.00015, 0.000075, 0.0006, 0.5, 0.6},
-		
+
 		// Transcription models
 		"gpt-4o-transcribe":      {0.005, 0.0025, 0.015, 0.5, 0.6},
 		"gpt-4o-mini-transcribe": {0.00015, 0.000075, 0.0006, 0.5, 0.6},
 		"gpt-4o-mini-tts":        {0.00015, 0.000075, 0.0006, 0.5, 0.6},
-		
+
 		// GPT-4 series (legacy pricing)
-		"gpt-4-turbo":              {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4-turbo-2024-04-09":   {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4-turbo-preview":      {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4":                    {0.03, 0.015, 0.06, 0.5, 0.6},
-		"gpt-4-0613":               {0.03, 0.015, 0.06, 0.5, 0.6},
-		"gpt-4-0125-preview":       {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4-1106-preview":       {0.01, 0.005, 0.03, 0.5, 0.6},
-		
+		"gpt-4-turbo":            {0.01, 0.005, 0.03, 0.5, 0.6},
+		"gpt-4-turbo-2024-04-09": {0.01, 0.005, 0.03, 0.5, 0.6},
+		"gpt-4-turbo-preview":    {0.01, 0.005, 0.03, 0.5, 0.6},
+		"gpt-4":                  {0.03, 0.015, 0.06, 0.5, 0.6},
+		"gpt-4-0613":             {0.03, 0.015, 0.06, 0.5, 0.6},
+		"gpt-4-0125-preview":     {0.01, 0.005, 0.03, 0.5, 0.6},
+		"gpt-4-1106-preview":     {0.01, 0.005, 0.03, 0.5, 0.6},
+
 		// GPT-4.1 series (newer models)
-		"gpt-4.1":                  {0.008, 0.004, 0.024, 0.5, 0.6},
+		"gpt-4.1":                 {0.008, 0.004, 0.024, 0.5, 0.6},
 		"gpt-4.1-2025-04-14":      {0.008, 0.004, 0.024, 0.5, 0.6},
-		"gpt-4.1-mini":             {0.002, 0.001, 0.006, 0.5, 0.6},
+		"gpt-4.1-mini":            {0.002, 0.001, 0.006, 0.5, 0.6},
 		"gpt-4.1-mini-2025-04-14": {0.002, 0.001, 0.006, 0.5, 0.6},
-		"gpt-4.1-nano":             {0.0005, 0.00025, 0.0015, 0.5, 0.6},
+		"gpt-4.1-nano":            {0.0005, 0.00025, 0.0015, 0.5, 0.6},
 		"gpt-4.1-nano-2025-04-14": {0.0005, 0.00025, 0.0015, 0.5, 0.6},
-		
+
 		// GPT-3.5 series (legacy pricing)
-		"gpt-3.5-turbo":                   {0.002, 0.001, 0.002, 0.5, 0.6},
-		"gpt-3.5-turbo-0125":              {0.002, 0.001, 0.002, 0.5, 0.6},
-		"gpt-3.5-turbo-1106":              {0.002, 0.001, 0.002, 0.5, 0.6},
-		"gpt-3.5-turbo-16k":               {0.003, 0.0015, 0.004, 0.5, 0.6},
-		"gpt-3.5-turbo-instruct":          {0.0015, 0.00075, 0.002, 0.5, 0.6},
-		"gpt-3.5-turbo-instruct-0914":     {0.0015, 0.00075, 0.002, 0.5, 0.6},
-		
+		"gpt-3.5-turbo":               {0.002, 0.001, 0.002, 0.5, 0.6},
+		"gpt-3.5-turbo-0125":          {0.002, 0.001, 0.002, 0.5, 0.6},
+		"gpt-3.5-turbo-1106":          {0.002, 0.001, 0.002, 0.5, 0.6},
+		"gpt-3.5-turbo-16k":           {0.003, 0.0015, 0.004, 0.5, 0.6},
+		"gpt-3.5-turbo-instruct":      {0.0015, 0.00075, 0.002, 0.5, 0.6},
+		"gpt-3.5-turbo-instruct-0914": {0.0015, 0.00075, 0.002, 0.5, 0.6},
+
 		// ChatGPT models
 		"chatgpt-4o-latest": {0.005, 0.0025, 0.015, 0.5, 0.6},
-		
+
 		// Audio and specialized models
-		"gpt-audio":                {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-audio-2025-08-28":     {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-realtime":             {5.0, 0.4, 0.0, 0.5, 0.6}, // Per 1M, no output cost
-		"gpt-realtime-2025-08-28":  {5.0, 0.4, 0.0, 0.5, 0.6},
-		"gpt-image-1":              {10.0, 2.5, 40.0, 0.5, 0.6},
+		"gpt-audio":               {0.01, 0.005, 0.03, 0.5, 0.6},
+		"gpt-audio-2025-08-28":    {0.01, 0.005, 0.03, 0.5, 0.6},
+		"gpt-realtime":            {5.0, 0.4, 0.0, 0.5, 0.6}, // Per 1M, no output cost
+		"gpt-realtime-2025-08-28": {5.0, 0.4, 0.0, 0.5, 0.6},
+		"gpt-image-1":             {10.0, 2.5, 40.0, 0.5, 0.6},
 	}
-	
+
 	if pricing, exists := pricingMap[modelID]; exists {
-		// Convert per-1K to per-1M for display consistency if needed
-		if pricing.InputPer1M < 1.0 {
-			// This is per-1K pricing, convert to per-1M for display
-			return pricing.InputPer1M * 1000, pricing.OutputPer1M * 1000
-		}
-		// This is already per-1M pricing
+		// All pricing values are now stored as cost per 1M tokens, return as-is
 		return pricing.InputPer1M, pricing.OutputPer1M
 	}
-	
+
 	// Return 0, 0 for unknown models (will show as N/A)
 	return 0, 0
 }
@@ -312,10 +300,10 @@ func getOpenAIContextLength(modelID string) int {
 	case strings.Contains(modelID, "gpt-4-turbo"):
 		return 128000 // GPT-4 Turbo supports 128K context
 	case strings.Contains(modelID, "gpt-4"):
-		return 8192   // Base GPT-4 supports 8K context
+		return 8192 // Base GPT-4 supports 8K context
 	// GPT-3.5 series
 	case strings.Contains(modelID, "gpt-3.5-turbo"):
-		return 16385  // GPT-3.5-turbo supports ~16K context
+		return 16385 // GPT-3.5-turbo supports ~16K context
 	// ChatGPT models
 	case strings.Contains(modelID, "chatgpt"):
 		return 128000 // ChatGPT models typically support large context
@@ -326,7 +314,7 @@ func getOpenAIContextLength(modelID string) int {
 
 // getDeepInfraModels gets available models from DeepInfra API
 var (
-	deepInfraModelsCache     []ModelInfo
+	deepInfraModelsCache       []ModelInfo
 	deepInfraModelsInitialized bool
 )
 
@@ -335,38 +323,37 @@ func getDeepInfraModels() ([]ModelInfo, error) {
 		return deepInfraModelsCache, nil
 	}
 
-	
 	apiKey := os.Getenv("DEEPINFRA_API_KEY")
 	if apiKey == "" {
 		return nil, fmt.Errorf("DEEPINFRA_API_KEY not set")
 	}
 
 	client := &http.Client{Timeout: 60 * time.Second} // Increased from 30s to 60s
-	
+
 	req, err := http.NewRequest("GET", "https://api.deepinfra.com/v1/openai/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get models: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("DeepInfra API error (status %d): %s", resp.StatusCode, string(body))
 	}
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	var response struct {
 		Object string `json:"object"`
 		Data   []struct {
@@ -375,9 +362,9 @@ func getDeepInfraModels() ([]ModelInfo, error) {
 			Created  int64  `json:"created"`
 			OwnedBy  string `json:"owned_by"`
 			Metadata *struct {
-				Description   string  `json:"description,omitempty"`
-				ContextLength int     `json:"context_length,omitempty"`
-				MaxTokens     int     `json:"max_tokens,omitempty"`
+				Description   string `json:"description,omitempty"`
+				ContextLength int    `json:"context_length,omitempty"`
+				MaxTokens     int    `json:"max_tokens,omitempty"`
 				Pricing       *struct {
 					InputTokens     float64 `json:"input_tokens"`
 					OutputTokens    float64 `json:"output_tokens"`
@@ -387,24 +374,24 @@ func getDeepInfraModels() ([]ModelInfo, error) {
 			} `json:"metadata,omitempty"`
 		} `json:"data"`
 	}
-	
+
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	models := make([]ModelInfo, len(response.Data))
 	for i, model := range response.Data {
 		modelInfo := ModelInfo{
 			ID:       model.ID,
 			Provider: "DeepInfra",
 		}
-		
+
 		// Extract metadata if available
 		if model.Metadata != nil {
 			modelInfo.Description = model.Metadata.Description
 			modelInfo.ContextLength = model.Metadata.ContextLength
 			modelInfo.Tags = model.Metadata.Tags
-			
+
 			// Extract pricing information
 			if model.Metadata.Pricing != nil {
 				modelInfo.InputCost = model.Metadata.Pricing.InputTokens
@@ -413,10 +400,10 @@ func getDeepInfraModels() ([]ModelInfo, error) {
 				modelInfo.Cost = (model.Metadata.Pricing.InputTokens + model.Metadata.Pricing.OutputTokens) / 2.0
 			}
 		}
-		
+
 		models[i] = modelInfo
 	}
-	
+
 	// Sort models alphabetically by ID
 	for i := 0; i < len(models); i++ {
 		for j := i + 1; j < len(models); j++ {
@@ -425,29 +412,29 @@ func getDeepInfraModels() ([]ModelInfo, error) {
 			}
 		}
 	}
-	
+
 	return models, nil
 }
 
 // getOllamaModels gets available models from local Ollama installation
 func getOllamaModels() ([]ModelInfo, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	
+
 	resp, err := client.Get(config.DefaultOllamaURL + "/api/tags")
 	if err != nil {
 		return nil, fmt.Errorf("Ollama is not running. Please start Ollama first")
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("Ollama API error (status %d)", resp.StatusCode)
 	}
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	var response struct {
 		Models []struct {
 			Name       string    `json:"name"`
@@ -463,22 +450,22 @@ func getOllamaModels() ([]ModelInfo, error) {
 			} `json:"details"`
 		} `json:"models"`
 	}
-	
+
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	models := make([]ModelInfo, len(response.Models))
 	for i, model := range response.Models {
 		sizeGB := float64(model.Size) / (1024 * 1024 * 1024)
-		
+
 		models[i] = ModelInfo{
 			ID:       model.Name,
 			Provider: "Ollama (Local)",
 			Size:     fmt.Sprintf("%.1fGB", sizeGB),
 			Cost:     0.0, // Local models are free
 		}
-		
+
 		// Add descriptions for known models
 		if model.Name == "gpt-oss:20b" || model.Name == "gpt-oss:latest" || model.Name == "gpt-oss" {
 			models[i].Description = "GPT-OSS 20B - Local inference, free to use"
@@ -486,7 +473,7 @@ func getOllamaModels() ([]ModelInfo, error) {
 			models[i].Description = fmt.Sprintf("Local %s model", model.Details.Family)
 		}
 	}
-	
+
 	return models, nil
 }
 
@@ -498,30 +485,30 @@ func getCerebrasModels() ([]ModelInfo, error) {
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	
+
 	req, err := http.NewRequest("GET", "https://api.cerebras.ai/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get models: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("Cerebras API error (status %d): %s", resp.StatusCode, string(body))
 	}
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	var response struct {
 		Object string `json:"object"`
 		Data   []struct {
@@ -531,11 +518,11 @@ func getCerebrasModels() ([]ModelInfo, error) {
 			OwnedBy string `json:"owned_by"`
 		} `json:"data"`
 	}
-	
+
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	models := make([]ModelInfo, len(response.Data))
 	for i, model := range response.Data {
 		models[i] = ModelInfo{
@@ -544,7 +531,7 @@ func getCerebrasModels() ([]ModelInfo, error) {
 			Provider: "Cerebras",
 		}
 	}
-	
+
 	return models, nil
 }
 
@@ -556,30 +543,30 @@ func getOpenRouterModels() ([]ModelInfo, error) {
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	
+
 	req, err := http.NewRequest("GET", "https://openrouter.ai/api/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get models: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("OpenRouter API error (status %d): %s", resp.StatusCode, string(body))
 	}
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	var response struct {
 		Data []struct {
 			ID            string `json:"id"`
@@ -592,15 +579,15 @@ func getOpenRouterModels() ([]ModelInfo, error) {
 				Request    string `json:"request"`
 				Image      string `json:"image"`
 			} `json:"pricing"`
-			ContextLength     int `json:"context_length"`
-			SupportedParams   []string `json:"supported_parameters"`
+			ContextLength   int      `json:"context_length"`
+			SupportedParams []string `json:"supported_parameters"`
 		} `json:"data"`
 	}
-	
+
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	models := make([]ModelInfo, len(response.Data))
 	for i, model := range response.Data {
 		modelInfo := ModelInfo{
@@ -611,7 +598,7 @@ func getOpenRouterModels() ([]ModelInfo, error) {
 			ContextLength: model.ContextLength,
 			Tags:          model.SupportedParams, // Show supported parameters as tags
 		}
-		
+
 		if model.Pricing != nil {
 			if promptCost, err := strconv.ParseFloat(model.Pricing.Prompt, 64); err == nil {
 				modelInfo.InputCost = promptCost
@@ -624,10 +611,10 @@ func getOpenRouterModels() ([]ModelInfo, error) {
 				modelInfo.Cost = (modelInfo.InputCost + modelInfo.OutputCost) / 2.0
 			}
 		}
-		
+
 		models[i] = modelInfo
 	}
-	
+
 	// Add availability hints to models based on known working ones
 	return addAvailabilityHints(models), nil
 }
@@ -636,11 +623,11 @@ func getOpenRouterModels() ([]ModelInfo, error) {
 func addAvailabilityHints(models []ModelInfo) []ModelInfo {
 	// Known working models based on our testing
 	knownWorking := map[string]bool{
-		"deepseek/deepseek-chat-v3.1:free":    true,
-		"deepseek/deepseek-chat-v3.1":         true,
-		"qwen/qwen3-30b-a3b-thinking-2507":    true,
-		"bytedance/seed-oss-36b-instruct":     true,
-		"moonshotai/kimi-k2-0905":             true,
+		"deepseek/deepseek-chat-v3.1:free": true,
+		"deepseek/deepseek-chat-v3.1":      true,
+		"qwen/qwen3-30b-a3b-thinking-2507": true,
+		"bytedance/seed-oss-36b-instruct":  true,
+		"moonshotai/kimi-k2-0905":          true,
 		// Add more as we discover them
 	}
 
@@ -670,7 +657,7 @@ func isModelAvailable(client *http.Client, apiKey, modelID string) bool {
 	}
 
 	reqBody, _ := json.Marshal(requestBody)
-	
+
 	req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(reqBody))
 	if err != nil {
 		return false
@@ -706,7 +693,7 @@ func ValidateOpenRouterModel(modelID string) error {
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	
+
 	requestBody := map[string]interface{}{
 		"model": modelID,
 		"messages": []map[string]interface{}{
@@ -716,7 +703,7 @@ func ValidateOpenRouterModel(modelID string) error {
 	}
 
 	reqBody, _ := json.Marshal(requestBody)
-	
+
 	req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(reqBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -757,30 +744,30 @@ func getGroqModels() ([]ModelInfo, error) {
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	
+
 	req, err := http.NewRequest("GET", "https://api.groq.com/openai/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get models: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("Groq API error (status %d): %s", resp.StatusCode, string(body))
 	}
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	var response struct {
 		Object string `json:"object"`
 		Data   []struct {
@@ -790,11 +777,11 @@ func getGroqModels() ([]ModelInfo, error) {
 			OwnedBy string `json:"owned_by"`
 		} `json:"data"`
 	}
-	
+
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	models := make([]ModelInfo, len(response.Data))
 	for i, model := range response.Data {
 		models[i] = ModelInfo{
@@ -802,7 +789,7 @@ func getGroqModels() ([]ModelInfo, error) {
 			Provider: "Groq",
 			Cost:     0.0, // Groq pricing varies by model
 		}
-		
+
 		// Add descriptions for known Groq models
 		switch model.ID {
 		case "llama3-70b-8192":
@@ -818,7 +805,7 @@ func getGroqModels() ([]ModelInfo, error) {
 			models[i].Description = fmt.Sprintf("%s model via Groq", model.ID)
 		}
 	}
-	
+
 	return models, nil
 }
 
@@ -830,30 +817,30 @@ func getDeepSeekModels() ([]ModelInfo, error) {
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	
+
 	req, err := http.NewRequest("GET", "https://api.deepseek.com/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get models: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("DeepSeek API error (status %d): %s", resp.StatusCode, string(body))
 	}
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	var response struct {
 		Object string `json:"object"`
 		Data   []struct {
@@ -863,11 +850,11 @@ func getDeepSeekModels() ([]ModelInfo, error) {
 			OwnedBy string `json:"owned_by"`
 		} `json:"data"`
 	}
-	
+
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	models := make([]ModelInfo, len(response.Data))
 	for i, model := range response.Data {
 		models[i] = ModelInfo{
@@ -875,7 +862,7 @@ func getDeepSeekModels() ([]ModelInfo, error) {
 			Provider: "DeepSeek",
 			Cost:     0.0, // DeepSeek pricing varies by model
 		}
-		
+
 		// Add descriptions for known DeepSeek models
 		switch model.ID {
 		case "deepseek-chat":
@@ -888,9 +875,10 @@ func getDeepSeekModels() ([]ModelInfo, error) {
 			models[i].Description = fmt.Sprintf("%s model via DeepSeek", model.ID)
 		}
 	}
-	
+
 	return models, nil
 }
+
 // createProviderForType creates a provider instance for the given client type
 func createProviderForType(clientType ClientType) (types.ProviderInterface, error) {
 	switch clientType {
@@ -907,7 +895,7 @@ func createProviderForType(clientType ClientType) (types.ProviderInterface, erro
 	}
 }
 
-// convertTypesToAPI converts types.ModelInfo to api.ModelInfo  
+// convertTypesToAPI converts types.ModelInfo to api.ModelInfo
 func convertTypesToAPI(typesModel types.ModelInfo) ModelInfo {
 	return ModelInfo{
 		ID:            typesModel.ID,
@@ -918,5 +906,26 @@ func convertTypesToAPI(typesModel types.ModelInfo) ModelInfo {
 		InputCost:     typesModel.InputCost,
 		OutputCost:    typesModel.OutputCost,
 		Cost:          typesModel.Cost,
+	}
+}
+
+// ClearModelCaches clears all model caches to force refresh on next call
+func ClearModelCaches() {
+	openaiModelsInitialized = false
+	deepInfraModelsInitialized = false
+	openaiModelsCache = nil
+	deepInfraModelsCache = nil
+}
+
+// ClearModelCacheForProvider clears the model cache for a specific provider
+func ClearModelCacheForProvider(clientType ClientType) {
+	switch clientType {
+	case OpenAIClientType:
+		openaiModelsInitialized = false
+		openaiModelsCache = nil
+	case DeepInfraClientType:
+		deepInfraModelsInitialized = false
+		deepInfraModelsCache = nil
+		// Other providers don't have static caches currently
 	}
 }

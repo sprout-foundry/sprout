@@ -2,33 +2,20 @@ package providers
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/alantheprice/ledit/pkg/interfaces"
 	"github.com/alantheprice/ledit/pkg/interfaces/types"
-	"github.com/alantheprice/ledit/pkg/providers/llm"
-	"github.com/alantheprice/ledit/pkg/providers/llm/gemini"
-	"github.com/alantheprice/ledit/pkg/providers/llm/ollama"
-	"github.com/alantheprice/ledit/pkg/providers/llm/openai"
+	// Removed duplicate LLM providers - using agent_api system instead
+	// "github.com/alantheprice/ledit/pkg/providers/llm"
+	// "github.com/alantheprice/ledit/pkg/providers/llm/gemini"
+	// "github.com/alantheprice/ledit/pkg/providers/llm/ollama"
+	// "github.com/alantheprice/ledit/pkg/providers/llm/openai"
 )
 
 // RegisterDefaultProviders registers all default providers with the global registry
 func RegisterDefaultProviders() error {
-	// Register OpenAI provider
-	if err := llm.RegisterProvider(&openai.Factory{}); err != nil {
-		return err
-	}
-
-	// Register Gemini provider
-	if err := llm.RegisterProvider(&gemini.Factory{}); err != nil {
-		return err
-	}
-
-	// Register Ollama provider
-	if err := llm.RegisterProvider(&ollama.Factory{}); err != nil {
-		return err
-	}
-
+	// Legacy provider registration removed - using agent_api system instead
+	// Providers are now registered in pkg/agent_api
 	return nil
 }
 
@@ -48,17 +35,6 @@ func GetProvider(modelName string) (interfaces.LLMProvider, error) {
 		return nil, fmt.Errorf("model name is required")
 	}
 
-	// Extract provider name from model name (e.g., "openai:gpt-4" -> "openai")
-	providerName := strings.SplitN(modelName, ":", 2)[0]
-
-	// Create a basic configuration
-	config := &types.ProviderConfig{
-		Name:    providerName,
-		Model:   modelName,
-		Enabled: true,
-	}
-
-	// Use the global factory to create the provider
-	factory := llm.NewGlobalFactory()
-	return factory.CreateProvider(config)
+	// Legacy factory removed - providers now handled by agent_api
+	return nil, fmt.Errorf("legacy provider system removed - use agent_api instead")
 }

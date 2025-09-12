@@ -24,6 +24,7 @@ type model struct {
 	logs      []string
 	progress  ui.ProgressSnapshotEvent
 	streaming bool
+	interruptChan chan string
 	// simple prompt state
 	awaitingPrompt bool
 	promptID       string
@@ -92,6 +93,9 @@ func initialInteractiveModel() model {
 
 	// Ensure auto-scroll is enabled from the start in interactive mode
 	m.vp.GotoBottom()
+
+	// Initialize interrupt channel
+	m.interruptChan = make(chan string, 1)
 
 	return m
 }

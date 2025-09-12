@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
@@ -25,6 +26,9 @@ func (a *Agent) GetProviderType() api.ClientType {
 
 // SetModel changes the current model and persists the choice
 func (a *Agent) SetModel(model string) error {
+	// IMPORTANT: Clear model caches FIRST to ensure fresh model lists when determining provider
+	api.ClearModelCaches()
+
 	// Determine which provider this model belongs to
 	requiredProvider, err := a.determineProviderForModel(model)
 	if err != nil {
@@ -37,9 +41,6 @@ func (a *Agent) SetModel(model string) error {
 			a.debugLog("🔄 Switching from %s to %s for model %s\n",
 				api.GetProviderName(a.clientType), api.GetProviderName(requiredProvider), model)
 		}
-
-		// Clear model caches to ensure fresh model lists for the new provider
-		api.ClearModelCaches()
 
 		// Create a new client with the required provider
 		newClient, err := api.NewUnifiedClientWithModel(requiredProvider, model)
@@ -124,9 +125,9 @@ func (a *Agent) determineProviderForModel(modelID string) (api.ClientType, error
 			a.debugLog("✅ Got %d models from %s\n", len(models), api.GetProviderName(provider))
 		}
 
-		// Check if this provider has the model
+		// Check if this provider has the model (case-insensitive matching)
 		for _, model := range models {
-			if model.ID == modelID {
+			if strings.EqualFold(model.ID, modelID) {
 				if a.debug {
 					a.debugLog("🎉 Found model %s in provider %s\n", modelID, api.GetProviderName(provider))
 				}

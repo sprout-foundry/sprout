@@ -35,7 +35,7 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 	// Check if query is a simple question that needs safety limits
 	queryLower := strings.ToLower(processedQuery)
 	if strings.Contains(queryLower, "what") || strings.Contains(queryLower, "how") ||
-		strings.Contains(queryLower, "where") || strings.Contains(queryLower, "explain") || 
+		strings.Contains(queryLower, "where") || strings.Contains(queryLower, "explain") ||
 		strings.Contains(queryLower, "show me") || strings.Contains(processedQuery, "?") {
 		maxIterationsForThisQuery = 25 // Safety limit for simple questions
 		isSimpleQuestion = true
@@ -48,7 +48,7 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 
 	// Initialize with system prompt (enhanced with iteration context) and processed user query
 	contextualSystemPrompt := a.systemPrompt
-	
+
 	// Add specific guidance based on query type
 	if isSimpleQuestion {
 		// Simple question - emphasize immediate answering with safety limit
@@ -263,12 +263,16 @@ Current status: Starting iteration 1 (natural termination)`
 				}
 			}
 
-			// Check if we're using structured workflow tools - if so, increase iteration limit
+			// Check if we're using structured workflow tools - if so, remove iteration limits
+			// Todo tools indicate the LLM is making progress through a task systematically
 			for _, toolCall := range choice.Message.ToolCalls {
-				if toolCall.Function.Name == "add_bulk_todos" || toolCall.Function.Name == "add_todo" {
-					if maxIterationsForThisQuery < 40 {
-						maxIterationsForThisQuery = 40
-						a.debugLog("📋 Todo workflow detected - expanding to %d iterations\n", maxIterationsForThisQuery)
+				if toolCall.Function.Name == "add_todos" ||
+					toolCall.Function.Name == "update_todo_status" ||
+					toolCall.Function.Name == "list_todos" {
+					if maxIterationsForThisQuery < 1000 {
+						maxIterationsForThisQuery = 1000 // Effectively unlimited
+						isSimpleQuestion = false         // Treat as complex task - todo usage shows productive work
+						a.debugLog("📋 Todo workflow detected - removing iteration limits (up to %d iterations)\n", maxIterationsForThisQuery)
 					}
 				}
 			}
@@ -361,7 +365,7 @@ Please continue with your task using the correct tool calling syntax.`
 	if commitErr := a.CommitChanges("Maximum iterations reached"); commitErr != nil {
 		a.debugLog("Warning: Failed to commit tracked changes: %v\n", commitErr)
 	}
-	
+
 	if isSimpleQuestion {
 		return "", fmt.Errorf("safety limit (%d iterations) reached for simple question - task may need more specific requirements or the question may be too broad", maxIterationsForThisQuery)
 	} else {
@@ -371,6 +375,22 @@ Please continue with your task using the correct tool calling syntax.`
 
 // ProcessQueryWithContinuity processes a query with continuity from previous actions
 func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
+	// Ensure changes are committed even if there are unexpected errors or early termination
+	defer func() {
+		// Only commit if we have changes and they haven't been committed yet
+		if a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
+			a.debugLog("DEFER: Attempting to commit %d tracked changes\n", a.GetChangeCount())
+			// Check if changes are already committed by trying to commit (it's safe due to committed flag)
+			if commitErr := a.CommitChanges("Session cleanup - ensuring changes are not lost"); commitErr != nil {
+				a.debugLog("Warning: Failed to commit tracked changes during cleanup: %v\n", commitErr)
+			} else {
+				a.debugLog("DEFER: Successfully committed tracked changes during cleanup\n")
+			}
+		} else {
+			a.debugLog("DEFER: No changes to commit (enabled: %v, count: %d)\n", a.IsChangeTrackingEnabled(), a.GetChangeCount())
+		}
+	}()
+
 	// Load previous state if available
 	if a.previousSummary != "" {
 		continuityPrompt := fmt.Sprintf(`

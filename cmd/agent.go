@@ -5,20 +5,16 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	agent_api "github.com/alantheprice/ledit/pkg/agent_api"
-	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
-	agent_tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/interactive"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
 	uiPkg "github.com/alantheprice/ledit/pkg/ui"
-	"github.com/chzyer/readline"
 	"github.com/spf13/cobra"
 )
 
@@ -34,48 +30,6 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 }
 
-// createSlashCompleter creates a tab completion function for slash commands
-func createSlashCompleter() *readline.PrefixCompleter {
-	return readline.NewPrefixCompleter(
-		readline.PcItem("/help"),
-		readline.PcItem("/quit"),
-		readline.PcItem("/q"),
-		readline.PcItem("/exit"),
-		readline.PcItem("/init"),
-		readline.PcItem("/models",
-			readline.PcItem("select"),
-			// Add some common model completions
-			readline.PcItem("deepseek-ai/DeepSeek-V3.1"),
-			readline.PcItem("deepseek-ai/DeepSeek-V3"),
-			readline.PcItem("anthropic/claude-4-sonnet"),
-			readline.PcItem("anthropic/claude-4-opus"),
-			readline.PcItem("meta-llama/Meta-Llama-3.1-70B-Instruct"),
-			readline.PcItem("google/gemini-2.5-pro"),
-		),
-		readline.PcItem("/provider",
-			readline.PcItem("select"),
-			readline.PcItem("list"),
-		),
-		readline.PcItem("/shell"),
-		readline.PcItem("/exec"),
-		readline.PcItem("/info"),
-		readline.PcItem("/commit"),
-		// Change tracking commands
-		readline.PcItem("/changes"),
-		readline.PcItem("/status"),
-		readline.PcItem("/log"),
-		readline.PcItem("/rollback"),
-		// MCP commands
-		readline.PcItem("/mcp",
-			readline.PcItem("add"),
-			readline.PcItem("remove"),
-			readline.PcItem("list"),
-			readline.PcItem("test"),
-			readline.PcItem("help"),
-		),
-	)
-}
-
 // runSimpleInteractiveMode provides a simple console-based interactive mode
 func runSimpleInteractiveMode() error {
 	// Create agent to get model info (like coder does)
@@ -84,130 +38,13 @@ func runSimpleInteractiveMode() error {
 		return fmt.Errorf("failed to initialize agent: %w", err)
 	}
 
-	// Create command registry for slash commands
-	commandRegistry := agent_commands.NewCommandRegistry()
-
-	// Initially disable escape monitoring during normal input to avoid interference
-	chatAgent.DisableEscMonitoring()
-
-	// Show which provider and model is being used (like coder does)
-	providerType := chatAgent.GetProviderType()
-	providerName := agent_api.GetProviderName(providerType)
-	modelName := chatAgent.GetModel()
-
-	if providerType == agent_api.OllamaClientType {
-		fmt.Printf("🤖 %s via %s (local) • Type '/quit' to exit\n\n", modelName, providerName)
-	} else {
-		fmt.Printf("🤖 %s via %s • Type '/quit' to exit\n", modelName, providerName)
-		fmt.Printf("💡 Tip: Press ESC during agent processing to inject new instructions\n\n")
-	}
-
-	// Set up readline with history and tab completion
-	homeDir, _ := os.UserHomeDir()
-	historyFile := homeDir + "/.ledit_agent_history"
-
-	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          "🤖 > ",
-		HistoryFile:     historyFile,
-		HistoryLimit:    1000,
-		AutoComplete:    createSlashCompleter(),
-		InterruptPrompt: "^C",
-		EOFPrompt:       "exit",
-	})
+	// Create and run the interactive input component
+	agentInput, err := interactive.New(chatAgent, nil)
 	if err != nil {
-		return fmt.Errorf("failed to initialize readline: %w", err)
-	}
-	defer rl.Close()
-
-	// Set up signal handling for graceful shutdown (like original coder)
-	interruptChannel := make(chan os.Signal, 1)
-	signal.Notify(interruptChannel, syscall.SIGINT, syscall.SIGTERM)
-
-	// Goroutine to handle graceful shutdown
-	go func() {
-		<-interruptChannel
-		fmt.Println("\n👋 Goodbye!")
-		os.Exit(0)
-	}()
-
-	for {
-		input, err := rl.Readline()
-		if err != nil {
-			if err == readline.ErrInterrupt {
-				fmt.Println("\n👋 Goodbye!")
-				break
-			}
-			fmt.Printf("Input error: %v\n", err)
-			break
-		}
-
-		input = strings.TrimSpace(input)
-		if input == "" {
-			continue
-		}
-
-		// Handle plain 'exit', 'quit', 'q' to match /exit behavior
-		if input == "exit" || input == "quit" || input == "q" {
-			fmt.Println("👋 Exiting interactive mode")
-			return nil
-		}
-
-		// Handle slash commands using CommandRegistry
-		if strings.HasPrefix(input, "/") {
-			// Handle quit commands specially (immediate exit)
-			if strings.HasPrefix(input, "/quit") || strings.HasPrefix(input, "/exit") || strings.HasPrefix(input, "/q") {
-				fmt.Println("👋 Exiting interactive mode")
-				return nil
-			}
-
-			// Use CommandRegistry for all other slash commands
-			err := commandRegistry.Execute(input, chatAgent)
-			if err != nil {
-				fmt.Printf("❌ Command error: %v\n", err)
-				fmt.Println("💡 Type '/help' to see available commands")
-			}
-			continue
-		}
-
-		// Check if this is a shell command that should be executed directly
-		if isShellCommand(input) {
-			executeShellCommandDirectly(input)
-			fmt.Println("")
-			continue
-		}
-
-		// Validate input length before sending to LLM
-		if !validateQueryLength(input, chatAgent) {
-			fmt.Println("")
-			continue
-		}
-
-		// Process user request with agent
-		fmt.Printf("🔄 Processing: %s\n", input)
-
-		// Enable escape key monitoring during agent processing
-		chatAgent.EnableEscMonitoring()
-
-		// Execute the agent command directly using the same agent instance (maintains continuity)
-		response, err := chatAgent.ProcessQueryWithContinuity(input)
-
-		// Disable escape key monitoring after agent processing
-		chatAgent.DisableEscMonitoring()
-
-		if err != nil {
-			fmt.Printf("❌ Processing failed: %v\n", err)
-			continue
-		}
-
-		fmt.Printf("\n🎯 Agent Response:\n%s\n", response)
-
-		// Print cost and token summary
-		chatAgent.PrintConciseSummary()
-		fmt.Println("✅ Completed")
-		fmt.Println("")
+		return fmt.Errorf("failed to initialize interactive input: %w", err)
 	}
 
-	return nil
+	return agentInput.Run()
 }
 
 // executeDirectAgentCommand executes an agent command directly (like coder does)
@@ -229,87 +66,6 @@ func executeDirectAgentCommand(userIntent string) error {
 	// Print cost and token summary
 	chatAgent.PrintConciseSummary()
 	return nil
-}
-
-// isShellCommand checks if the input looks like a shell command (from coder project)
-func isShellCommand(input string) bool {
-	input = strings.TrimSpace(input)
-
-	// Common shell command prefixes
-	shellPrefixes := []string{
-		"ls", "cd", "pwd", "cat", "echo", "grep", "find", "git",
-		"go ", "python", "node", "npm", "yarn", "docker", "kubectl",
-		"curl", "wget", "ssh", "scp", "mv", "cp", "rm", "mkdir",
-		"touch", "chmod", "chown", "ps", "top", "kill", "df", "du",
-		"tar", "zip", "unzip", "gzip", "gunzip", "head", "tail",
-		"diff", "patch", "make", "gcc", "g++", "clang", "javac",
-		"rustc", "cargo", "dotnet", "php", "ruby", "perl", "awk",
-		"sed", "cut", "sort", "uniq", "wc", "tee", "xargs", "env",
-		"export", "source", "./", ".\\", "#", "$",
-	}
-
-	for _, prefix := range shellPrefixes {
-		if strings.HasPrefix(input, prefix) {
-			return true
-		}
-	}
-
-	// Check for shell operators and redirection
-	if strings.Contains(input, " && ") || strings.Contains(input, " || ") ||
-		strings.Contains(input, " | ") {
-		return true
-	}
-
-	// Check for redirection operators with surrounding spaces or at word boundaries
-	if strings.Contains(input, " > ") || strings.Contains(input, " >> ") ||
-		strings.Contains(input, " < ") || strings.HasSuffix(input, ">") ||
-		strings.HasPrefix(input, ">") || strings.HasSuffix(input, "<") ||
-		strings.HasPrefix(input, "<") {
-		return true
-	}
-
-	return false
-}
-
-// executeShellCommandDirectly executes a shell command directly (from coder project)
-func executeShellCommandDirectly(command string) {
-	fmt.Printf("⚡ Direct shell command detected: %s\n", command)
-
-	result, err := agent_tools.ExecuteShellCommand(command)
-	if err != nil {
-		fmt.Printf("❌ Command failed: %v\n", err)
-		fmt.Printf("Output: %s\n", result)
-	} else {
-		fmt.Printf("✅ Command executed successfully:\n")
-		fmt.Printf("Output: %s\n", result)
-	}
-}
-
-// validateQueryLength validates query length and prompts for confirmation (from coder project)
-func validateQueryLength(query string, _ *agent.Agent) bool {
-	queryLen := len(strings.TrimSpace(query))
-
-	// Absolute minimum: reject anything under 3 characters
-	if queryLen < 3 {
-		fmt.Printf("❌ Query too short (%d characters). Minimum 3 characters required.\n", queryLen)
-		return false
-	}
-
-	// For queries under 20 characters, ask for confirmation
-	if queryLen < 20 {
-		fmt.Printf("⚠️  Short query detected (%d characters): \"%s\"\n", queryLen, query)
-		fmt.Print("Are you sure you want to process this? (y/N): ")
-
-		var response string
-		fmt.Scanln(&response)
-		response = strings.ToLower(strings.TrimSpace(response))
-		if response != "y" && response != "yes" {
-			fmt.Println("❌ Query cancelled.")
-			return false
-		}
-	}
-
-	return true
 }
 
 // listModels displays all available models for the current provider

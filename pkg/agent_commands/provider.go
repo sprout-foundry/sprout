@@ -2,12 +2,12 @@ package commands
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/agent_config"
+	"github.com/alantheprice/ledit/pkg/ui"
 )
 
 // ProviderCommand implements the /provider slash command
@@ -128,7 +128,9 @@ func (p *ProviderCommand) listProviders(configManager *config.Manager) error {
 
 // selectProvider allows interactive provider selection
 func (p *ProviderCommand) selectProvider(configManager *config.Manager, chatAgent *agent.Agent) error {
+	// Get available providers
 	available := configManager.ListAvailableProviders()
+	status := configManager.GetProviderStatus()
 
 	if len(available) == 0 {
 		fmt.Println("❌ No providers are currently available.")
@@ -136,45 +138,89 @@ func (p *ProviderCommand) selectProvider(configManager *config.Manager, chatAgen
 		return nil
 	}
 
-	fmt.Println("\n🎯 Select a Provider:")
-	fmt.Println("=====================")
+	// Create dropdown items for providers
+	items := make([]ui.DropdownItem, 0)
 
-	for i, provider := range available {
-		name := api.GetProviderName(provider)
-		model := configManager.GetModelForProvider(provider)
+	// First add available providers
+	for _, provider := range available {
+		info := status[provider]
+		displayName := info.Name
 
-		current := ""
+		// Add current indicator
 		if provider == chatAgent.GetProviderType() {
-			current = " (current)"
+			displayName += " ✓ (current)"
 		}
 
-		fmt.Printf("%d. **%s**%s - %s\n", i+1, name, current, model)
+		// Add model info
+		displayName += " - " + info.CurrentModel
+
+		item := &ui.ProviderItem{
+			Name:        info.Name,
+			DisplayName: displayName,
+			Available:   true,
+		}
+		items = append(items, item)
 	}
 
-	// Get user selection
-	fmt.Print("\nEnter provider number (1-" + strconv.Itoa(len(available)) + ") or 'cancel': ")
+	// Then add unavailable providers
+	for providerType, info := range status {
+		// Skip if already added as available
+		isAvailable := false
+		for _, avail := range available {
+			if avail == providerType {
+				isAvailable = true
+				break
+			}
+		}
 
-	// Temporarily disable Esc monitoring during user input
+		if !isAvailable {
+			item := &ui.ProviderItem{
+				Name:        info.Name,
+				DisplayName: info.Name,
+				Available:   false,
+			}
+			items = append(items, item)
+		}
+	}
+
+	// Create and show dropdown
+	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
+		Prompt:       "🎯 Select a Provider:",
+		SearchPrompt: "Search: ",
+		ShowCounts:   false,
+	})
+
+	// Temporarily disable Esc monitoring during dropdown
 	chatAgent.DisableEscMonitoring()
 	defer chatAgent.EnableEscMonitoring()
 
-	var input string
-	fmt.Scanln(&input)
-
-	input = strings.TrimSpace(input)
-	if input == "cancel" || input == "" {
-		fmt.Println("Provider selection cancelled.")
+	selected, err := dropdown.Show()
+	if err != nil {
+		fmt.Printf("\r\nProvider selection cancelled.\r\n")
 		return nil
 	}
 
-	// Parse selection
-	selection, err := strconv.Atoi(input)
-	if err != nil || selection < 1 || selection > len(available) {
-		return fmt.Errorf("invalid selection. Please enter a number between 1 and %d", len(available))
+	// Get the provider type from the selected name
+	selectedName := selected.Value().(string)
+
+	// Find the provider type that matches this name
+	var selectedProvider api.ClientType
+	for providerType, info := range status {
+		if info.Name == selectedName {
+			selectedProvider = providerType
+			break
+		}
 	}
 
-	selectedProvider := available[selection-1]
-	return p.switchToProvider(selectedProvider, configManager, chatAgent)
+	// Check if the selected provider is available
+	for _, avail := range available {
+		if avail == selectedProvider {
+			return p.switchToProvider(selectedProvider, configManager, chatAgent)
+		}
+	}
+
+	// Provider is not available
+	return fmt.Errorf("provider %s is not currently available. Please set up the required API key", selectedName)
 }
 
 // setProvider sets a specific provider by name

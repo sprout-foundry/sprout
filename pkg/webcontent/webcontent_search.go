@@ -51,7 +51,7 @@ func FetchContextFromSearch(query string, cfg *config.Config) (string, error) {
 	return sb.String(), nil
 }
 
-func getSearchResults(query string, cfg *config.Config) ([]JinaSearchResult, error) {
+func GetSearchResults(query string, cfg *config.Config) ([]JinaSearchResult, error) {
 	fetcher := NewWebContentFetcher()
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	startTime := time.Now()
@@ -123,7 +123,7 @@ func getSearchResults(query string, cfg *config.Config) ([]JinaSearchResult, err
 func fetchJinaSearchResults(query string, cfg *config.Config) (map[string]string, error) {
 	fetcher := NewWebContentFetcher()
 	logger := utils.GetLogger(cfg.SkipPrompt)
-	searchResponse, err := getSearchResults(query, cfg)
+	searchResponse, err := GetSearchResults(query, cfg)
 	if err != nil {
 		logger.Logf("Failed to get search results: %v", err)
 		return nil, fmt.Errorf("failed to get search results: %w", err)
@@ -208,7 +208,22 @@ func selectRelevantURLsWithLLM(query string, results []JinaSearchResult, cfg *co
 	messages := prompts.BuildSearchResultsQueryMessages(sb.String(), query)
 
 	logger.Log("Sending URL selection request to LLM")
-	resp, _, err := llm.GetLLMResponse(cfg.WorkspaceModel, messages, "search_results_selector", cfg, 2*time.Minute)
+	
+	// Use editing model if workspace model is not available
+	modelToUse := cfg.WorkspaceModel
+	if modelToUse == "" {
+		modelToUse = cfg.EditingModel
+		logger.Logf("Using editing model for URL selection: %s", modelToUse)
+	} else {
+		logger.Logf("Using workspace model for URL selection: %s", modelToUse)
+	}
+	
+	if modelToUse == "" {
+		logger.Logf("No model available for URL selection")
+		return nil, fmt.Errorf("no model configured for URL selection")
+	}
+	
+	resp, _, err := llm.GetLLMResponse(modelToUse, messages, "search_results_selector", cfg, 2*time.Minute)
 	if err != nil {
 		logger.Logf("LLM URL selection failed: %v", err)
 		return nil, err

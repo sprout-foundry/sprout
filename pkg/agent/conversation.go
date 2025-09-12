@@ -28,32 +28,33 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 
 	a.currentIteration = 0
 
-	// Dynamic iteration limits - use more iterations for complex workflows
-	maxIterationsForThisQuery := a.maxIterations
+	// Dynamic iteration approach - natural termination for complex tasks, safety limits for simple questions
+	var maxIterationsForThisQuery int
+	var isSimpleQuestion bool
 
-	// Check if query suggests complex workflow that needs more iterations
+	// Check if query is a simple question that needs safety limits
 	queryLower := strings.ToLower(processedQuery)
-	if strings.Contains(queryLower, "implement") || strings.Contains(queryLower, "create") ||
-		strings.Contains(queryLower, "refactor") || strings.Contains(queryLower, "architecture") ||
-		strings.Contains(queryLower, "full stack") || strings.Contains(queryLower, "multiple files") ||
-		len(processedQuery) > 200 {
-		maxIterationsForThisQuery = 50 // Complex work gets more iterations
-		a.debugLog("🎯 Complex workflow detected - allowing %d iterations\n", maxIterationsForThisQuery)
-	} else if strings.Contains(queryLower, "what") || strings.Contains(queryLower, "how") ||
-		strings.Contains(queryLower, "where") || strings.Contains(queryLower, "explain") || strings.Contains(processedQuery, "?") {
-		maxIterationsForThisQuery = 8 // Simple questions get fewer iterations
-		a.debugLog("❓ Simple question detected - limiting to %d iterations\n", maxIterationsForThisQuery)
+	if strings.Contains(queryLower, "what") || strings.Contains(queryLower, "how") ||
+		strings.Contains(queryLower, "where") || strings.Contains(queryLower, "explain") || 
+		strings.Contains(queryLower, "show me") || strings.Contains(processedQuery, "?") {
+		maxIterationsForThisQuery = 25 // Safety limit for simple questions
+		isSimpleQuestion = true
+		a.debugLog("❓ Simple question detected - safety limit: %d iterations\n", maxIterationsForThisQuery)
+	} else {
+		maxIterationsForThisQuery = 1000 // Effectively unlimited for complex work
+		isSimpleQuestion = false
+		a.debugLog("🎯 Complex task detected - natural termination (up to %d iterations)\n", maxIterationsForThisQuery)
 	}
 
 	// Initialize with system prompt (enhanced with iteration context) and processed user query
 	contextualSystemPrompt := a.systemPrompt
 	
 	// Add specific guidance based on query type
-	if maxIterationsForThisQuery <= 8 {
-		// Simple question - emphasize immediate answering
+	if isSimpleQuestion {
+		// Simple question - emphasize immediate answering with safety limit
 		contextualSystemPrompt += fmt.Sprintf(`
 
-## SIMPLE QUESTION MODE - ANSWER EFFICIENTLY (%d iterations max)
+## SIMPLE QUESTION MODE - ANSWER EFFICIENTLY (safety limit: %d iterations)
 🎯 **PRIMARY GOAL**: Answer the question as efficiently as possible
 
 **CRITICAL RULES:**
@@ -68,17 +69,28 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 - **ANSWER THE QUESTION** immediately with the information found
 - Do NOT read additional files unless the answer is incomplete
 
-Current status: Starting iteration 1 of %d`, maxIterationsForThisQuery, maxIterationsForThisQuery)
+Current status: Starting iteration 1`, maxIterationsForThisQuery)
 	} else {
-		// Complex work - use full systematic approach
-		contextualSystemPrompt += fmt.Sprintf(`
+		// Complex work - natural termination approach
+		contextualSystemPrompt += `
 
-## COMPLEX WORKFLOW MODE - SYSTEMATIC APPROACH (%d iterations max)
-- Complex workflows: Use structured approach with todo tools for best results
-- Todo tools trigger automatic iteration expansion for complex work
-- Each iteration costs time - batch operations when possible
+## COMPLEX TASK MODE - NATURAL TERMINATION
+🎯 **PRIMARY GOAL**: Complete the task thoroughly and correctly
 
-Current status: Starting iteration 1 of %d`, maxIterationsForThisQuery, maxIterationsForThisQuery)
+**APPROACH:**
+- Work systematically through the task until genuinely complete
+- Use structured approach with todo tools for complex multi-step work
+- Continue iterating until the task is properly finished
+- **NATURAL COMPLETION**: Stop when no more tools are needed and task is done
+
+**TERMINATION CRITERIA:**
+- All requirements have been met and verified
+- Code compiles/runs successfully (if applicable)
+- Tests pass (if applicable)
+- No remaining errors or issues to address
+- Task is genuinely complete, not just partially done
+
+Current status: Starting iteration 1 (natural termination)`
 	}
 
 	a.messages = []api.Message{
@@ -349,7 +361,12 @@ Please continue with your task using the correct tool calling syntax.`
 	if commitErr := a.CommitChanges("Maximum iterations reached"); commitErr != nil {
 		a.debugLog("Warning: Failed to commit tracked changes: %v\n", commitErr)
 	}
-	return "", fmt.Errorf("maximum iterations (%d) reached without completion", maxIterationsForThisQuery)
+	
+	if isSimpleQuestion {
+		return "", fmt.Errorf("safety limit (%d iterations) reached for simple question - task may need more specific requirements or the question may be too broad", maxIterationsForThisQuery)
+	} else {
+		return "", fmt.Errorf("iteration limit (%d) reached - task may be incomplete or need manual intervention to continue", maxIterationsForThisQuery)
+	}
 }
 
 // ProcessQueryWithContinuity processes a query with continuity from previous actions

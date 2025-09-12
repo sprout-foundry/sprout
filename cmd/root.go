@@ -70,6 +70,7 @@ func init() {
 	rootCmd.AddCommand(ignoreCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(logCmd)
+	rootCmd.AddCommand(mcpCmd)
 	rootCmd.AddCommand(reviewStagedCmd) // Add the new command
 	rootCmd.AddCommand(uiCmd)
 

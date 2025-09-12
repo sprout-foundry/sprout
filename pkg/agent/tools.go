@@ -21,22 +21,31 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 
 	// Log the tool call for debugging
 	a.debugLog("🔧 Executing tool: %s with args: %v\n", toolCall.Function.Name, args)
-	
+
 	// Validate tool name and provide helpful error for common mistakes
-	validTools := []string{"shell_command", "read_file", "write_file", "edit_file", "add_todo", "update_todo_status", "list_todos", "add_bulk_todos", "auto_complete_todos", "get_next_todo", "list_all_todos", "get_active_todos_compact", "archive_completed", "update_todo_status_bulk", "analyze_ui_screenshot", "analyze_image_content"}
+	validTools := []string{"shell_command", "read_file", "write_file", "edit_file", "add_todo", "update_todo_status", "list_todos", "add_bulk_todos", "auto_complete_todos", "get_next_todo", "list_all_todos", "get_active_todos_compact", "archive_completed", "update_todo_status_bulk", "analyze_ui_screenshot", "analyze_image_content", "web_search", "fetch_url", "list_directory", "search_files"}
 	isValidTool := false
+	isMCPTool := false
+
+	// Check if it's a standard tool
 	for _, valid := range validTools {
 		if toolCall.Function.Name == valid {
 			isValidTool = true
 			break
 		}
 	}
-	
+
+	// If not a standard tool, check if it's an MCP tool
+	if !isValidTool && strings.HasPrefix(toolCall.Function.Name, "mcp_") {
+		isMCPTool = a.isValidMCPTool(toolCall.Function.Name)
+		isValidTool = isMCPTool
+	}
+
 	if !isValidTool {
 		// Check for common misnamed tools and suggest corrections
 		suggestion := a.suggestCorrectToolName(toolCall.Function.Name)
 		if suggestion != "" {
-			return "", fmt.Errorf("unknown tool '%s'. Did you mean '%s'? Valid tools are: %v", 
+			return "", fmt.Errorf("unknown tool '%s'. Did you mean '%s'? Valid tools are: %v",
 				toolCall.Function.Name, suggestion, validTools)
 		}
 		return "", fmt.Errorf("unknown tool '%s'. Valid tools are: %v", toolCall.Function.Name, validTools)
@@ -63,7 +72,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 				return "", fmt.Errorf("invalid file_path argument")
 			}
 		}
-		
+
 		// Check for optional line range parameters
 		var startLine, endLine int
 		if start, ok := args["start_line"].(float64); ok {
@@ -72,7 +81,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if end, ok := args["end_line"].(float64); ok {
 			endLine = int(end)
 		}
-		
+
 		// Log the operation
 		if startLine > 0 || endLine > 0 {
 			a.ToolLog("reading file", fmt.Sprintf("%s (lines %d-%d)", filePath, startLine, endLine))
@@ -103,12 +112,12 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		}
 		a.ToolLog("writing file", filePath)
 		a.debugLog("Writing file: %s\n", filePath)
-		
+
 		// Track the file write for change tracking
 		if trackErr := a.TrackFileWrite(filePath, content); trackErr != nil {
 			a.debugLog("Warning: Failed to track file write: %v\n", trackErr)
 		}
-		
+
 		result, err := tools.WriteFile(filePath, content)
 		a.debugLog("Write file result: %s, error: %v\n", result, err)
 		return result, err
@@ -130,30 +139,30 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("invalid new_string argument")
 		}
-		
+
 		// Read the original content for diff display
 		originalContent, err := tools.ReadFile(filePath)
 		if err != nil {
 			return "", fmt.Errorf("failed to read original file for diff: %w", err)
 		}
-		
+
 		a.ToolLog("editing file", filePath)
 		a.debugLog("Editing file: %s\n", filePath)
 		result, err := tools.EditFile(filePath, oldString, newString)
-		
+
 		if err == nil {
 			// Read the new content and show diff
 			newContent, readErr := tools.ReadFile(filePath)
 			if readErr == nil {
 				a.ShowColoredDiff(originalContent, newContent, 50)
-				
+
 				// Track the file edit for change tracking
 				if trackErr := a.TrackFileEdit(filePath, originalContent, newContent); trackErr != nil {
 					a.debugLog("Warning: Failed to track file edit: %v\n", trackErr)
 				}
 			}
 		}
-		
+
 		a.debugLog("Edit file result: %s, error: %v\n", result, err)
 		return result, err
 
@@ -237,31 +246,31 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("missing todos argument")
 		}
-		
+
 		// Parse the todos array
 		todosSlice, ok := todosRaw.([]interface{})
 		if !ok {
 			return "", fmt.Errorf("todos must be an array")
 		}
-		
+
 		var todos []struct {
 			Title       string
 			Description string
 			Priority    string
 		}
-		
+
 		for _, todoRaw := range todosSlice {
 			todoMap, ok := todoRaw.(map[string]interface{})
 			if !ok {
 				return "", fmt.Errorf("each todo must be an object")
 			}
-			
+
 			todo := struct {
 				Title       string
 				Description string
 				Priority    string
 			}{}
-			
+
 			if title, ok := todoMap["title"].(string); ok {
 				todo.Title = title
 			}
@@ -271,10 +280,10 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 			if prio, ok := todoMap["priority"].(string); ok {
 				todo.Priority = prio
 			}
-			
+
 			todos = append(todos, todo)
 		}
-		
+
 		// Show the todo titles being created
 		todoTitles := make([]string, len(todos))
 		for i, todo := range todos {
@@ -328,38 +337,38 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("missing updates argument")
 		}
-		
+
 		updatesSlice, ok := updatesRaw.([]interface{})
 		if !ok {
 			return "", fmt.Errorf("updates must be an array")
 		}
-		
+
 		var updates []struct {
 			ID     string
 			Status string
 		}
-		
+
 		for _, updateRaw := range updatesSlice {
 			updateMap, ok := updateRaw.(map[string]interface{})
 			if !ok {
 				return "", fmt.Errorf("each update must be an object")
 			}
-			
+
 			update := struct {
 				ID     string
 				Status string
 			}{}
-			
+
 			if id, ok := updateMap["id"].(string); ok {
 				update.ID = id
 			}
 			if status, ok := updateMap["status"].(string); ok {
 				update.Status = status
 			}
-			
+
 			updates = append(updates, update)
 		}
-		
+
 		a.ToolLog("bulk status update", fmt.Sprintf("%d items", len(updates)))
 		result := tools.UpdateTodoStatusBulk(updates)
 		return result, nil
@@ -369,14 +378,14 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("invalid image_path argument")
 		}
-		
+
 		// Clear any previous vision usage before the call
 		tools.ClearLastVisionUsage()
-		
+
 		// UI screenshot analysis always uses optimized prompts for better caching
-		a.ToolLog("UI screenshot analysis", fmt.Sprintf("%s [optimized prompt]", 
+		a.ToolLog("UI screenshot analysis", fmt.Sprintf("%s [optimized prompt]",
 			filepath.Base(imagePath)))
-		
+
 		// Check for interrupt before expensive vision call
 		if a.CheckForInterrupt() {
 			return "", fmt.Errorf("🛑 UI analysis interrupted by user")
@@ -386,7 +395,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("UI screenshot analysis failed: %w", err)
 		}
-		
+
 		// Check if vision model usage needs to be tracked
 		if visionUsage := tools.GetLastVisionUsage(); visionUsage != nil {
 			// Add vision model costs to agent's tracking
@@ -394,12 +403,12 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 			a.totalTokens += visionUsage.TotalTokens
 			a.promptTokens += visionUsage.PromptTokens
 			a.completionTokens += visionUsage.CompletionTokens
-			
+
 			// Always log vision costs (they're significant)
-			a.debugLog("💰 UI Screenshot call: %s [frontend] → %d tokens, $%.6f\n", 
+			a.debugLog("💰 UI Screenshot call: %s [frontend] → %d tokens, $%.6f\n",
 				filepath.Base(imagePath), visionUsage.TotalTokens, visionUsage.EstimatedCost)
 		}
-		
+
 		return result, nil
 
 	case "analyze_image_content":
@@ -407,25 +416,25 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("invalid image_path argument")
 		}
-		
+
 		// Get optional analysis prompt
 		analysisPrompt := ""
 		if prompt, ok := args["analysis_prompt"].(string); ok {
 			analysisPrompt = prompt
 		}
-		
+
 		// Clear any previous vision usage before the call
 		tools.ClearLastVisionUsage()
-		
+
 		// Enhanced logging for content analysis
 		promptInfo := "auto"
 		if analysisPrompt != "" {
 			promptInfo = fmt.Sprintf("custom (%d chars)", len(analysisPrompt))
 		}
-		
-		a.ToolLog("image content analysis", fmt.Sprintf("%s [prompt:%s]", 
+
+		a.ToolLog("image content analysis", fmt.Sprintf("%s [prompt:%s]",
 			filepath.Base(imagePath), promptInfo))
-		
+
 		// Check for interrupt before expensive vision call
 		if a.CheckForInterrupt() {
 			return "", fmt.Errorf("🛑 Content analysis interrupted by user")
@@ -434,7 +443,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("image content analysis failed: %w", err)
 		}
-		
+
 		// Check if vision model usage needs to be tracked
 		if visionUsage := tools.GetLastVisionUsage(); visionUsage != nil {
 			// Add vision model costs to agent's tracking
@@ -442,15 +451,152 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 			a.totalTokens += visionUsage.TotalTokens
 			a.promptTokens += visionUsage.PromptTokens
 			a.completionTokens += visionUsage.CompletionTokens
-			
+
 			// Always log vision costs (they're significant)
-			a.debugLog("💰 Content Analysis call: %s [general] → %d tokens, $%.6f\n", 
+			a.debugLog("💰 Content Analysis call: %s [general] → %d tokens, $%.6f\n",
 				filepath.Base(imagePath), visionUsage.TotalTokens, visionUsage.EstimatedCost)
 		}
+
+		return result, nil
+
+	case "web_search":
+		query, ok := args["query"].(string)
+		if !ok {
+			return "", fmt.Errorf("invalid query argument")
+		}
+		a.ToolLog("web search", query)
+		a.debugLog("Performing web search: %s\n", query)
+
+		// Get the config from the agent
+		cfg := a.GetConfig()
+		result, err := tools.WebSearch(query, cfg)
+		if err != nil {
+			a.debugLog("Web search failed: %v\n", err)
+			return "", fmt.Errorf("web search failed: %w", err)
+		}
+		a.debugLog("Web search completed, found %d characters of content\n", len(result))
+		return result, nil
+
+	case "fetch_url":
+		url, ok := args["url"].(string)
+		if !ok {
+			return "", fmt.Errorf("invalid url argument")
+		}
+		a.ToolLog("fetch url", url)
+		a.debugLog("Fetching URL: %s\n", url)
+
+		// Get the config from the agent
+		cfg := a.GetConfig()
+		result, err := tools.FetchURL(url, cfg)
+		if err != nil {
+			a.debugLog("URL fetch failed: %v\n", err)
+			return "", fmt.Errorf("URL fetch failed: %w", err)
+		}
+		a.debugLog("URL fetch completed, found %d characters of content\n", len(result))
+		return result, nil
+
+	case "list_directory":
+		directoryPath := "."
+		if path, ok := args["directory_path"].(string); ok && path != "" {
+			directoryPath = path
+		}
 		
+		recursive := false
+		if rec, ok := args["recursive"].(bool); ok {
+			recursive = rec
+		}
+		
+		showHidden := false
+		if hidden, ok := args["show_hidden"].(bool); ok {
+			showHidden = hidden
+		}
+		
+		a.ToolLog("listing directory", directoryPath)
+		a.debugLog("Listing directory: %s (recursive: %v, hidden: %v)\n", directoryPath, recursive, showHidden)
+		
+		var command string
+		if recursive {
+			if showHidden {
+				command = fmt.Sprintf("find %s -type f -name '.*' -o -type f -not -name '.*' | head -100", directoryPath)
+			} else {
+				command = fmt.Sprintf("find %s -type f -not -name '.*' | head -100", directoryPath)
+			}
+		} else {
+			if showHidden {
+				command = fmt.Sprintf("ls -la %s", directoryPath)
+			} else {
+				command = fmt.Sprintf("ls -l %s", directoryPath)
+			}
+		}
+		
+		result, err := a.executeShellCommandWithTruncation(command)
+		if err != nil {
+			a.debugLog("Directory listing failed: %v\n", err)
+			return "", fmt.Errorf("directory listing failed: %w", err)
+		}
+		return result, nil
+
+	case "search_files":
+		pattern, ok := args["pattern"].(string)
+		if !ok {
+			return "", fmt.Errorf("invalid pattern argument")
+		}
+		
+		directory := "."
+		if dir, ok := args["directory"].(string); ok && dir != "" {
+			directory = dir
+		}
+		
+		filePattern := ""
+		if fp, ok := args["file_pattern"].(string); ok {
+			filePattern = fp
+		}
+		
+		caseSensitive := false
+		if cs, ok := args["case_sensitive"].(bool); ok {
+			caseSensitive = cs
+		}
+		
+		maxResults := 100
+		if mr, ok := args["max_results"].(float64); ok {
+			maxResults = int(mr)
+		}
+		
+		a.ToolLog("searching files", fmt.Sprintf("'%s' in %s", pattern, directory))
+		a.debugLog("Searching files: pattern='%s', directory='%s', file_pattern='%s'\n", pattern, directory, filePattern)
+		
+		var command string
+		grepFlags := "-n"
+		if !caseSensitive {
+			grepFlags += "i"
+		}
+		
+		if filePattern != "" {
+			command = fmt.Sprintf("find %s -name '%s' -type f -exec grep %s '%s' {} + | head -%d", 
+				directory, filePattern, grepFlags, pattern, maxResults)
+		} else {
+			command = fmt.Sprintf("find %s -type f -exec grep %s '%s' {} + | head -%d", 
+				directory, grepFlags, pattern, maxResults)
+		}
+		
+		result, err := a.executeShellCommandWithTruncation(command)
+		if err != nil {
+			a.debugLog("File search failed: %v\n", err)
+			return "", fmt.Errorf("file search failed: %w", err)
+		}
+		
+		if result == "" {
+			return fmt.Sprintf("No matches found for pattern '%s' in %s", pattern, directory), nil
+		}
+		
+		a.debugLog("File search completed, found results\n")
 		return result, nil
 
 	default:
+		// Check if it's an MCP tool
+		if isMCPTool {
+			return a.executeMCPTool(toolCall.Function.Name, args)
+		}
 		return "", fmt.Errorf("unknown tool: %s", toolCall.Function.Name)
 	}
 }
@@ -527,27 +673,27 @@ func (a *Agent) extractJSONFromContent(content string) string {
 	if !strings.HasPrefix(content, "{") {
 		return ""
 	}
-	
+
 	braceCount := 0
 	inString := false
 	escapeNext := false
-	
+
 	for i, char := range content {
 		if escapeNext {
 			escapeNext = false
 			continue
 		}
-		
+
 		if char == '\\' {
 			escapeNext = true
 			continue
 		}
-		
+
 		if char == '"' {
 			inString = !inString
 			continue
 		}
-		
+
 		if !inString {
 			if char == '{' {
 				braceCount++
@@ -559,17 +705,17 @@ func (a *Agent) extractJSONFromContent(content string) string {
 			}
 		}
 	}
-	
+
 	return ""
 }
 
 // extractIndividualToolCalls looks for individual tool calls by function name
 func (a *Agent) extractIndividualToolCalls(content string) []api.ToolCall {
 	var toolCalls []api.ToolCall
-	
+
 	// Look for patterns like: "function": {"name": "write_file", "arguments": "..."}
 	functionNames := []string{"write_file", "read_file", "edit_file", "shell_command", "analyze_ui_screenshot", "analyze_image_content"}
-	
+
 	for _, funcName := range functionNames {
 		pattern := fmt.Sprintf(`"function":\s*{\s*"name":\s*"%s"`, funcName)
 		if matched, _ := regexp.MatchString(pattern, content); matched {
@@ -579,7 +725,7 @@ func (a *Agent) extractIndividualToolCalls(content string) []api.ToolCall {
 			}
 		}
 	}
-	
+
 	return toolCalls
 }
 
@@ -590,7 +736,7 @@ func (a *Agent) extractSingleToolCall(content, functionName string) *api.ToolCal
 	if start == -1 {
 		return nil
 	}
-	
+
 	// Find the start of the tool call object (work backwards to find opening brace)
 	tcStart := strings.LastIndex(content[:start], `{"id":`)
 	if tcStart == -1 {
@@ -599,13 +745,13 @@ func (a *Agent) extractSingleToolCall(content, functionName string) *api.ToolCal
 			return nil
 		}
 	}
-	
+
 	// Extract JSON from the tool call start position
 	jsonStr := a.extractJSONFromContent(content[tcStart:])
 	if jsonStr == "" {
 		return nil
 	}
-	
+
 	var toolCall api.ToolCall
 	if err := json.Unmarshal([]byte(jsonStr), &toolCall); err == nil {
 		// Generate ID if missing
@@ -617,7 +763,7 @@ func (a *Agent) extractSingleToolCall(content, functionName string) *api.ToolCal
 		}
 		return &toolCall
 	}
-	
+
 	return nil
 }
 
@@ -653,16 +799,16 @@ func (a *Agent) extractFromMarkdownBlocks(content string) string {
 	// Extract JSON from ```json blocks
 	jsonBlockRegex := regexp.MustCompile("```json\\s*([\\s\\S]*?)```")
 	matches := jsonBlockRegex.FindAllStringSubmatch(content, -1)
-	
+
 	var extracted strings.Builder
 	extracted.WriteString(content) // Keep original content
-	
+
 	for _, match := range matches {
 		if len(match) > 1 {
 			extracted.WriteString("\n")
 			extracted.WriteString(strings.TrimSpace(match[1]))
 		}
 	}
-	
+
 	return extracted.String()
 }

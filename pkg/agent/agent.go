@@ -1,13 +1,16 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/agent_config"
+	agent_config "github.com/alantheprice/ledit/pkg/agent_config"
 	"github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
 type Agent struct {
@@ -28,12 +31,13 @@ type Agent struct {
 	previousSummary      string                         // Summary of previous actions for continuity
 	sessionID            string                         // Unique session identifier
 	optimizer            *ConversationOptimizer         // Conversation optimization
-	configManager        *config.Manager                // Configuration management
+	configManager        *agent_config.Manager          // Configuration management
 	currentContextTokens int                            // Current context size being sent to model
 	maxContextTokens     int                            // Model's maximum context window
 	contextWarningIssued bool                           // Whether we've warned about approaching context limit
 	shellCommandHistory  map[string]*ShellCommandResult // Track shell commands for deduplication
 	changeTracker        *ChangeTracker                 // Track file changes for rollback support
+	mcpManager           mcp.MCPManager                 // MCP server management
 
 	// Interrupt handling
 	interruptRequested   bool      // Flag indicating interrupt was requested
@@ -48,7 +52,7 @@ func NewAgent() (*Agent, error) {
 
 func NewAgentWithModel(model string) (*Agent, error) {
 	// Initialize configuration manager
-	configManager, err := config.NewManager()
+	configManager, err := agent_config.NewManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize configuration: %w", err)
 	}
@@ -135,6 +139,17 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	agent.changeTracker = NewChangeTracker(agent, "")
 	agent.changeTracker.Disable() // Start disabled, enable when user makes first request
 
+	// Initialize MCP manager
+	agent.mcpManager = mcp.NewMCPManager(nil) // nil logger for now
+
+	// Initialize MCP configuration and auto-start servers if configured
+	if err := agent.initializeMCP(); err != nil {
+		// Don't fail agent creation if MCP fails, just log warning
+		if debug {
+			fmt.Printf("⚠️  Warning: Failed to initialize MCP: %v\n", err)
+		}
+	}
+
 	return agent, nil
 }
 
@@ -160,8 +175,16 @@ func getProjectContext() string {
 }
 
 // Basic getter methods
-func (a *Agent) GetConfigManager() *config.Manager {
+func (a *Agent) GetConfigManager() *agent_config.Manager {
 	return a.configManager
+}
+
+func (a *Agent) GetConfig() *config.Config {
+	// Create a basic config structure for tools that need it
+	cfg := &config.Config{
+		SkipPrompt: !a.debug, // Don't prompt for API keys if not in debug mode
+	}
+	return cfg
 }
 
 func (a *Agent) GetTotalCost() float64 {
@@ -259,4 +282,178 @@ func (a *Agent) GetLastAssistantMessage() string {
 		}
 	}
 	return ""
+}
+
+// initializeMCP initializes MCP configuration and starts servers if needed
+func (a *Agent) initializeMCP() error {
+	ctx := context.Background()
+
+	// Load MCP configuration from the configuration system
+	cfg := &config.Config{} // Placeholder - should use actual config
+	mcpConfig, err := mcp.LoadMCPConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to load MCP config: %w", err)
+	}
+
+	// Skip if MCP is disabled
+	if !mcpConfig.Enabled {
+		if a.debug {
+			fmt.Println("🔧 MCP is disabled in configuration")
+		}
+		return nil
+	}
+
+	// Add configured servers
+	for _, serverConfig := range mcpConfig.Servers {
+		if err := a.mcpManager.AddServer(serverConfig); err != nil {
+			if a.debug {
+				fmt.Printf("⚠️  Warning: Failed to add MCP server %s: %v\n", serverConfig.Name, err)
+			}
+			continue
+		}
+	}
+
+	// Auto-start servers if configured
+	if mcpConfig.AutoStart {
+		if err := a.mcpManager.StartAll(ctx); err != nil {
+			return fmt.Errorf("failed to start MCP servers: %w", err)
+		}
+
+		if a.debug {
+			servers := a.mcpManager.ListServers()
+			runningCount := 0
+			for _, server := range servers {
+				if server.IsRunning() {
+					runningCount++
+				}
+			}
+			fmt.Printf("🚀 Started %d MCP servers\n", runningCount)
+		}
+	}
+
+	return nil
+}
+
+// getMCPTools retrieves all available MCP tools and converts them to agent tool format
+func (a *Agent) getMCPTools() []api.Tool {
+	if a.mcpManager == nil {
+		return nil
+	}
+
+	ctx := context.Background()
+	mcpTools, err := a.mcpManager.GetAllTools(ctx)
+	if err != nil {
+		if a.debug {
+			fmt.Printf("⚠️  Warning: Failed to get MCP tools: %v\n", err)
+		}
+		return nil
+	}
+
+	var agentTools []api.Tool
+	for _, mcpTool := range mcpTools {
+		// Create wrapper and convert to agent tool format
+		wrapper := mcp.NewMCPToolWrapper(mcpTool, a.mcpManager)
+		agentTool := wrapper.ToAgentTool()
+
+		// Convert to api.Tool format
+		apiTool := api.Tool{
+			Type:     agentTool.Type,
+			Function: agentTool.Function,
+		}
+		agentTools = append(agentTools, apiTool)
+	}
+
+	return agentTools
+}
+
+// isValidMCPTool checks if the given tool name corresponds to a valid MCP tool
+func (a *Agent) isValidMCPTool(toolName string) bool {
+	if a.mcpManager == nil {
+		return false
+	}
+
+	// Extract server and tool name from the MCP tool name format: mcp_<server>_<tool>
+	if !strings.HasPrefix(toolName, "mcp_") {
+		return false
+	}
+
+	parts := strings.SplitN(toolName[4:], "_", 2) // Remove "mcp_" prefix and split
+	if len(parts) != 2 {
+		return false
+	}
+
+	serverName := parts[0]
+	originalToolName := parts[1]
+
+	// Check if server exists and is running
+	server, exists := a.mcpManager.GetServer(serverName)
+	if !exists || !server.IsRunning() {
+		return false
+	}
+
+	// Check if tool exists on the server
+	ctx := context.Background()
+	tools, err := server.ListTools(ctx)
+	if err != nil {
+		return false
+	}
+
+	for _, tool := range tools {
+		if tool.Name == originalToolName {
+			return true
+		}
+	}
+
+	return false
+}
+
+// executeMCPTool executes an MCP tool by calling it through the manager
+func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (string, error) {
+	if a.mcpManager == nil {
+		return "", fmt.Errorf("MCP manager not initialized")
+	}
+
+	// Extract server and tool name from the MCP tool name format: mcp_<server>_<tool>
+	if !strings.HasPrefix(toolName, "mcp_") {
+		return "", fmt.Errorf("invalid MCP tool name format: %s", toolName)
+	}
+
+	parts := strings.SplitN(toolName[4:], "_", 2) // Remove "mcp_" prefix and split
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid MCP tool name format: %s", toolName)
+	}
+
+	serverName := parts[0]
+	originalToolName := parts[1]
+
+	if a.debug {
+		fmt.Printf("🔧 Executing MCP tool: %s on server: %s with args: %v\n", originalToolName, serverName, args)
+	}
+
+	// Call the MCP tool
+	ctx := context.Background()
+	result, err := a.mcpManager.CallTool(ctx, serverName, originalToolName, args)
+	if err != nil {
+		return "", fmt.Errorf("MCP tool execution failed: %w", err)
+	}
+
+	// Convert result to string
+	if result.IsError {
+		return "", fmt.Errorf("MCP tool returned error: %v", result.Content)
+	}
+
+	// Combine all content pieces into a single response
+	var response strings.Builder
+	for i, content := range result.Content {
+		if i > 0 {
+			response.WriteString("\n")
+		}
+		if content.Type == "text" {
+			response.WriteString(content.Text)
+		} else if content.Data != "" {
+			response.WriteString(content.Data)
+		}
+	}
+
+	return response.String(), nil
 }

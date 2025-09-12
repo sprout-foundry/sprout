@@ -243,16 +243,18 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "shell_command",
-				Description: "Execute shell commands to explore directory structure, search files, run programs",
+				Description: "Execute shell commands to explore directory structure, search files, run programs. Use with caution as commands can modify the filesystem.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"command": map[string]interface{}{
 							"type":        "string",
 							"description": "Shell command to execute",
+							"minLength":   1,
 						},
 					},
-					"required": []string{"command"},
+					"required":             []string{"command"},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -264,24 +266,28 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "read_file",
-				Description: "Read contents of a specific file. Supports reading entire files (up to 100KB, larger files are truncated) or specific line ranges for efficiency.",
+				Description: "Read contents of a specific file. Supports reading entire files (up to 100KB, larger files are truncated) or specific line ranges for efficiency. Use line ranges for large files to improve performance.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"file_path": map[string]interface{}{
 							"type":        "string",
 							"description": "Path to file to read",
+							"minLength":   1,
 						},
 						"start_line": map[string]interface{}{
 							"type":        "integer",
 							"description": "Optional: Start line number (1-based) for reading a specific range",
+							"minimum":     1,
 						},
 						"end_line": map[string]interface{}{
 							"type":        "integer",
 							"description": "Optional: End line number (1-based) for reading a specific range",
+							"minimum":     1,
 						},
 					},
-					"required": []string{"file_path"},
+					"required":             []string{"file_path"},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -293,24 +299,27 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "edit_file",
-				Description: "Edit existing file by replacing old string with new string",
+				Description: "Edit existing file by replacing old string with new string. The old_string must match exactly including whitespace, indentation, and line breaks. Use read_file first to see the exact content.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"file_path": map[string]interface{}{
 							"type":        "string",
 							"description": "Path to file to edit",
+							"minLength":   1,
 						},
 						"old_string": map[string]interface{}{
 							"type":        "string",
-							"description": "Exact string to replace",
+							"description": "Exact string to replace (must match exactly including whitespace)",
+							"minLength":   1,
 						},
 						"new_string": map[string]interface{}{
 							"type":        "string",
 							"description": "New string to replace with",
 						},
 					},
-					"required": []string{"file_path", "old_string", "new_string"},
+					"required":             []string{"file_path", "old_string", "new_string"},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -322,20 +331,22 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "write_file",
-				Description: "Write content to a new file or overwrite existing file",
+				Description: "Write content to a new file or overwrite existing file. WARNING: This will overwrite existing files without confirmation. Use with caution.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"file_path": map[string]interface{}{
 							"type":        "string",
 							"description": "Path to file to write",
+							"minLength":   1,
 						},
 						"content": map[string]interface{}{
 							"type":        "string",
 							"description": "Content to write to file",
 						},
 					},
-					"required": []string{"file_path", "content"},
+					"required":             []string{"file_path", "content"},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -361,10 +372,13 @@ func GetToolDefinitions() []Tool {
 						},
 						"priority": map[string]interface{}{
 							"type":        "string",
-							"description": "Priority level: high, medium, low",
+							"description": "Priority level for the todo item",
+							"enum":        []string{"high", "medium", "low"},
+							"default":     "medium",
 						},
 					},
-					"required": []string{"title"},
+					"required":             []string{"title"},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -386,10 +400,12 @@ func GetToolDefinitions() []Tool {
 						},
 						"status": map[string]interface{}{
 							"type":        "string",
-							"description": "New status: pending, in_progress, completed, cancelled",
+							"description": "New status for the todo item",
+							"enum":        []string{"pending", "in_progress", "completed", "cancelled"},
 						},
 					},
-					"required": []string{"id", "status"},
+					"required":             []string{"id", "status"},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -403,9 +419,10 @@ func GetToolDefinitions() []Tool {
 				Name:        "list_todos",
 				Description: "List all current todos with their status",
 				Parameters: map[string]interface{}{
-					"type":       "object",
-					"properties": map[string]interface{}{},
-					"required":   []string{},
+					"type":                 "object",
+					"properties":           map[string]interface{}{},
+					"required":             []string{},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -444,7 +461,8 @@ func GetToolDefinitions() []Tool {
 							"description": "Array of todo items to add",
 						},
 					},
-					"required": []string{"todos"},
+					"required":             []string{"todos"},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -465,7 +483,8 @@ func GetToolDefinitions() []Tool {
 							"description": "Context trigger: build_success, test_success, file_written",
 						},
 					},
-					"required": []string{"context"},
+					"required":             []string{"context"},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -479,9 +498,10 @@ func GetToolDefinitions() []Tool {
 				Name:        "get_next_todo",
 				Description: "Get the next logical todo to work on based on priority and current state",
 				Parameters: map[string]interface{}{
-					"type":       "object",
-					"properties": map[string]interface{}{},
-					"required":   []string{},
+					"type":                 "object",
+					"properties":           map[string]interface{}{},
+					"required":             []string{},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -502,7 +522,8 @@ func GetToolDefinitions() []Tool {
 							"description": "Path to UI screenshot, mockup, or design file",
 						},
 					},
-					"required": []string{"image_path"},
+					"required":             []string{"image_path"},
+					"additionalProperties": false,
 				},
 			},
 		},
@@ -527,7 +548,133 @@ func GetToolDefinitions() []Tool {
 							"description": "Optional specific prompt for content extraction (extract text, read code, analyze diagram, etc.)",
 						},
 					},
-					"required": []string{"image_path"},
+					"required":             []string{"image_path"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "web_search",
+				Description: "Search the web for current information and return relevant content from selected URLs. Uses Jina AI Search API with intelligent URL selection and content relevance extraction.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"query": map[string]interface{}{
+							"type":        "string",
+							"description": "Search query to find relevant web content",
+							"minLength":   1,
+							"maxLength":   500,
+						},
+					},
+					"required":             []string{"query"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "fetch_url",
+				Description: "Fetch content from a specific URL using Jina Reader API for clean text extraction. Supports both web pages and documents.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"url": map[string]interface{}{
+							"type":        "string",
+							"description": "URL to fetch content from",
+							"format":      "uri",
+							"pattern":     "^https?://",
+						},
+					},
+					"required":             []string{"url"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "list_directory",
+				Description: "List files and directories in a specified directory. Essential for exploring file structure and finding files to work with.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"directory_path": map[string]interface{}{
+							"type":        "string",
+							"description": "Path to directory to list (use '.' for current directory)",
+							"default":     ".",
+						},
+						"recursive": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Whether to list files recursively in subdirectories",
+							"default":     false,
+						},
+						"show_hidden": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Whether to include hidden files (starting with .)",
+							"default":     false,
+						},
+					},
+					"required":             []string{},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "search_files",
+				Description: "Search for text patterns within files using grep-like functionality. Essential for finding specific code patterns, functions, or text across multiple files.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"pattern": map[string]interface{}{
+							"type":        "string",
+							"description": "Text pattern or regular expression to search for",
+							"minLength":   1,
+						},
+						"directory": map[string]interface{}{
+							"type":        "string",
+							"description": "Directory to search in (use '.' for current directory)",
+							"default":     ".",
+						},
+						"file_pattern": map[string]interface{}{
+							"type":        "string",
+							"description": "File pattern to limit search (e.g., '*.go', '*.js')",
+						},
+						"case_sensitive": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Whether the search should be case sensitive",
+							"default":     false,
+						},
+						"max_results": map[string]interface{}{
+							"type":        "integer",
+							"description": "Maximum number of results to return",
+							"minimum":     1,
+							"maximum":     1000,
+							"default":     100,
+						},
+					},
+					"required":             []string{"pattern"},
+					"additionalProperties": false,
 				},
 			},
 		},

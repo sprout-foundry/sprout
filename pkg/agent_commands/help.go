@@ -23,17 +23,6 @@ func (h *HelpCommand) Description() string {
 
 // Execute runs the help command
 func (h *HelpCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	fmt.Println(`
-🤖 Coder Agent - Slash Commands
-
-Available slash commands:`)
-
-	// List all registered commands
-	commands := h.registry.ListCommands()
-	for _, cmd := range commands {
-		fmt.Printf("  /%s - %s\n", cmd.Name(), cmd.Description())
-	}
-
 	fmt.Print(`
 🤖 Coder Agent
 
@@ -105,7 +94,19 @@ The agent follows a systematic exploration process and will autonomously:
 
 Type 'help' during interactive mode for this help message.
 Type 'exit' or 'quit' to end the session.
+
+────────────────────────────────────────────────────────────────
+
+🤖 SLASH COMMANDS (most commonly needed):
 `)
+
+	// List all registered commands at the bottom for easy access
+	commands := h.registry.ListCommands()
+	for _, cmd := range commands {
+		fmt.Printf("  /%s - %s\n", cmd.Name(), cmd.Description())
+	}
+
+	fmt.Println()
 
 	return nil
 }

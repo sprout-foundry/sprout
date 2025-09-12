@@ -74,8 +74,8 @@ func TestNewAgentWithModel(t *testing.T) {
 	}
 
 	// Verify agent properties
-	if agent.GetMaxIterations() != 20 {
-		t.Errorf("Expected maxIterations to be 20, got %d", agent.GetMaxIterations())
+	if agent.GetMaxIterations() != 100 {
+		t.Errorf("Expected maxIterations to be 100, got %d", agent.GetMaxIterations())
 	}
 }
 

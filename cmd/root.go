@@ -89,7 +89,6 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(insightsCmd)
 	rootCmd.AddCommand(logCmd)
-	rootCmd.AddCommand(processCmd)
 	rootCmd.AddCommand(reviewStagedCmd) // Add the new command
 	rootCmd.AddCommand(pricingCmd)
 	rootCmd.AddCommand(rollbackCmd)

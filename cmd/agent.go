@@ -186,6 +186,9 @@ func runSimpleInteractiveMode() error {
 		}
 
 		fmt.Printf("\n🎯 Agent Response:\n%s\n", response)
+		
+		// Print cost and token summary
+		chatAgent.PrintConciseSummary()
 		fmt.Println("✅ Completed")
 		fmt.Println("")
 	}
@@ -208,6 +211,9 @@ func executeDirectAgentCommand(userIntent string) error {
 	}
 
 	fmt.Printf("\n🎯 Agent Response:\n%s\n", response)
+	
+	// Print cost and token summary
+	chatAgent.PrintConciseSummary()
 	return nil
 }
 

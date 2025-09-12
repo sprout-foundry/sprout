@@ -103,9 +103,10 @@ func runMCPAdd() error {
 
 	// Server type selection
 	fmt.Println("Select server type:")
-	fmt.Println("1. GitHub MCP Server (recommended)")
-	fmt.Println("2. Custom MCP Server")
-	fmt.Print("Choice (1-2): ")
+	fmt.Println("1. Git MCP Server (local Git operations)")
+	fmt.Println("2. GitHub MCP Server (GitHub API, issues, PRs)")
+	fmt.Println("3. Custom MCP Server")
+	fmt.Print("Choice (1-3): ")
 
 	choice, err := reader.ReadString('\n')
 	if err != nil {
@@ -115,12 +116,112 @@ func runMCPAdd() error {
 
 	switch choice {
 	case "1":
-		return setupGitHubMCPServer(&mcpConfig, reader)
+		return setupGitMCPServer(&mcpConfig, reader)
 	case "2":
+		return setupGitHubMCPServer(&mcpConfig, reader)
+	case "3":
 		return setupCustomMCPServer(&mcpConfig, reader)
 	default:
 		return fmt.Errorf("invalid choice: %s", choice)
 	}
+}
+
+func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
+	fmt.Println()
+	fmt.Println("🔧 Git MCP Server Setup")
+	fmt.Println("========================")
+	fmt.Println()
+
+	// Check if Git server already exists
+	if _, exists := mcpConfig.Servers["git"]; exists {
+		fmt.Print("Git MCP server is already configured. Reconfigure? (y/N): ")
+		confirm, _ := reader.ReadString('\n')
+		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
+			fmt.Println("Setup cancelled.")
+			return nil
+		}
+	}
+
+	// Get repository path (optional)
+	fmt.Print("Enter repository path (optional, leave empty to use current directory): ")
+	repoInput, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read repository path: %w", err)
+	}
+	repoPath := strings.TrimSpace(repoInput)
+
+	// Installation method selection
+	fmt.Println("Select installation method:")
+	fmt.Println("1. uvx (recommended)")
+	fmt.Println("2. pip/pipx")
+	fmt.Print("Choice (1-2): ")
+
+	installChoice, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read input: %w", err)
+	}
+	installChoice = strings.TrimSpace(installChoice)
+
+	var serverConfig mcp.MCPServerConfig
+
+	switch installChoice {
+	case "1", "":
+		args := []string{"mcp-server-git"}
+		if repoPath != "" {
+			args = append(args, "--repository", repoPath)
+		}
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "git",
+			Command:     "uvx",
+			Args:        args,
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     30 * time.Second,
+		}
+	case "2":
+		args := []string{"-m", "mcp_server_git"}
+		if repoPath != "" {
+			args = append(args, "--repository", repoPath)
+		}
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "git",
+			Command:     "python",
+			Args:        args,
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     30 * time.Second,
+		}
+	default:
+		return fmt.Errorf("invalid choice: %s", installChoice)
+	}
+
+	// Add server to config
+	mcpConfig.Servers["git"] = serverConfig
+	mcpConfig.Enabled = true
+
+	// Save config
+	cfg, _ := config.LoadOrInitConfig(false)
+	if err := mcp.SaveMCPConfig(cfg, *mcpConfig); err != nil {
+		return fmt.Errorf("failed to save MCP config: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✅ Git MCP Server configured successfully!")
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Println()
+	fmt.Println("To test the configuration, run: ledit mcp test git")
+	fmt.Println()
+
+	// Installation instructions
+	if installChoice == "1" || installChoice == "" {
+		fmt.Println("📦 Installation (if not already installed):")
+		fmt.Println("No installation needed - uvx will install automatically")
+	} else {
+		fmt.Println("📦 Installation (if not already installed):")
+		fmt.Println("pip install mcp-server-git")
+	}
+
+	return nil
 }
 
 func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
@@ -145,7 +246,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	if githubToken == "" {
 		fmt.Println("GitHub Personal Access Token is required.")
 		fmt.Println("You can create one at: https://github.com/settings/tokens")
-		fmt.Println("Required permissions: repo, read:user, read:org")
+		fmt.Println("Required permissions: repo, read:user, read:org, issues")
 		fmt.Println()
 		fmt.Print("Enter your GitHub Personal Access Token: ")
 
@@ -170,10 +271,10 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 		}
 	}
 
-	// Installation method selection
+	// Installation method selection  
 	fmt.Println("Select installation method:")
-	fmt.Println("1. npm/npx (recommended)")
-	fmt.Println("2. uvx/pipx")
+	fmt.Println("1. Remote server (recommended - no Docker needed)")
+	fmt.Println("2. Local Docker")
 	fmt.Print("Choice (1-2): ")
 
 	installChoice, err := reader.ReadString('\n')
@@ -186,22 +287,23 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 
 	switch installChoice {
 	case "1", "":
+		// Remote HTTP server configuration (recommended)
 		serverConfig = mcp.MCPServerConfig{
-			Name:        "github",
-			Command:     "npx",
-			Args:        []string{"-y", "@modelcontextprotocol/server-github"},
-			AutoStart:   true,
-			MaxRestarts: 3,
-			Timeout:     30 * time.Second,
+			Name:      "github",
+			Type:      "http",
+			URL:       "https://api.githubcopilot.com/mcp/",
+			AutoStart: true,
+			Timeout:   30 * time.Second,
 			Env: map[string]string{
 				"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
 			},
 		}
 	case "2":
+		// Docker configuration
 		serverConfig = mcp.MCPServerConfig{
 			Name:        "github",
-			Command:     "uvx",
-			Args:        []string{"mcp-server-github"},
+			Command:     "docker",
+			Args:        []string{"run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"},
 			AutoStart:   true,
 			MaxRestarts: 3,
 			Timeout:     30 * time.Second,
@@ -225,19 +327,20 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 
 	fmt.Println()
 	fmt.Println("✅ GitHub MCP Server configured successfully!")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	if serverConfig.Type == "http" {
+		fmt.Printf("Type: Remote HTTP server\n")
+		fmt.Printf("URL: %s\n", serverConfig.URL)
+	} else {
+		fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	}
 	fmt.Println()
 	fmt.Println("To test the configuration, run: ledit mcp test github")
 	fmt.Println()
-
-	// Installation instructions
-	if installChoice == "1" || installChoice == "" {
-		fmt.Println("📦 Installation (if not already installed):")
-		fmt.Println("npm install -g @modelcontextprotocol/server-github")
-	} else {
-		fmt.Println("📦 Installation (if not already installed):")
-		fmt.Println("pipx install mcp-server-github")
-	}
+	fmt.Println("📦 Features available:")
+	fmt.Println("• Repository management and file operations")
+	fmt.Println("• Issues and pull request automation")
+	fmt.Println("• GitHub Actions workflow monitoring")
+	fmt.Println("• Code analysis and security findings")
 
 	return nil
 }
@@ -491,7 +594,12 @@ func runMCPList() error {
 
 	for name, server := range mcpConfig.Servers {
 		fmt.Printf("📡 %s\n", name)
-		fmt.Printf("   Command: %s %v\n", server.Command, server.Args)
+		if server.Type == "http" {
+			fmt.Printf("   Type: HTTP Remote Server\n")
+			fmt.Printf("   URL: %s\n", server.URL)
+		} else {
+			fmt.Printf("   Command: %s %v\n", server.Command, server.Args)
+		}
 		fmt.Printf("   Auto-start: %t\n", server.AutoStart)
 		fmt.Printf("   Max restarts: %d\n", server.MaxRestarts)
 		fmt.Printf("   Timeout: %v\n", server.Timeout)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/ui"
 	"golang.org/x/term"
 )
 
@@ -209,16 +210,7 @@ func (m *ModelsCommand) selectModel(chatAgent *agent.Agent) error {
 
 // selectModelWithSearch provides interactive model selection with shell-style autocomplete
 func (m *ModelsCommand) selectModelWithSearch(models []api.ModelInfo, featuredIndices []int, clientType api.ClientType, providerName string, chatAgent *agent.Agent) error {
-	fmt.Printf("\n🔍 Model Selection (%s) - Shell-style autocomplete:\n", providerName)
-	fmt.Println("====================")
-	fmt.Println("• Start typing to filter models (e.g., 'open', 'anthrop', 'deep')")
-	fmt.Println("• System auto-completes common prefixes automatically")
-	fmt.Println("• Press Enter when you see your desired model")
-	fmt.Println("• Commands: 'quit' to exit, 'list' for all models")
-	fmt.Printf("• %d total models available\n", len(models))
-	fmt.Println()
-
-	// Create a simple autocomplete interface
+	// Skip redundant header - the real-time interface handles all display
 	return m.interactiveAutocomplete(models, featuredIndices, providerName, chatAgent)
 }
 
@@ -236,74 +228,38 @@ func (m *ModelsCommand) liveSearchInterface(models []api.ModelInfo, featuredIndi
 		return m.fallbackLineBasedInterface(models, featuredIndices, chatAgent)
 	}
 
-	// Save original terminal state
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	// Convert models to dropdown items with proper formatting
+	items := make([]ui.DropdownItem, 0, len(models))
+	for _, model := range models {
+		item := &ui.ModelItem{
+			Provider:       model.Provider,
+			Model:          model.ID,
+			InputCost:      model.InputCost,
+			OutputCost:     model.OutputCost,
+			LegacyCost:     model.Cost,
+			ContextLength:  model.ContextLength,
+			Tags:           model.Tags,
+		}
+		items = append(items, item)
+	}
+
+	// Create and show dropdown
+	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
+		Prompt:       "=== MODEL SEARCH ===",
+		SearchPrompt: "🔍 Search: ",
+		ShowCounts:   true,
+	})
+
+	selected, err := dropdown.Show()
 	if err != nil {
-		return m.fallbackLineBasedInterface(models, featuredIndices, chatAgent)
+		fmt.Printf("\r\nModel selection cancelled.\r\n")
+		return nil
 	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	currentInput := ""
-	selectedIndex := 0
-	buffer := make([]byte, 1)
-
-	// Initial display
-	m.displayRealTimeSearch(currentInput, models, featuredIndices, selectedIndex)
-
-	for {
-		// Read single character
-		n, err := os.Stdin.Read(buffer)
-		if err != nil || n == 0 {
-			fmt.Printf("\nModel selection cancelled.\n")
-			return nil
-		}
-
-		char := buffer[0]
-
-		switch char {
-		case 3: // Ctrl+C
-			fmt.Printf("\nModel selection cancelled.\n")
-			return nil
-		case 13: // Enter
-			matches := m.getCurrentMatches(currentInput, models)
-			if len(matches) > selectedIndex {
-				selectedModel := matches[selectedIndex]
-				fmt.Printf("\n✅ Selected: %s\n", selectedModel.ID)
-				return m.setModel(selectedModel.ID, chatAgent)
-			}
-		case 27: // Escape sequence (arrow keys)
-			// Read the next two characters for arrow key detection
-			seq := make([]byte, 2)
-			os.Stdin.Read(seq)
-			if seq[0] == 91 { // '['
-				matches := m.getCurrentMatches(currentInput, models)
-				switch seq[1] {
-				case 65: // Up arrow
-					if selectedIndex > 0 {
-						selectedIndex--
-					}
-				case 66: // Down arrow
-					if selectedIndex < len(matches)-1 {
-						selectedIndex++
-					}
-				}
-			}
-		case 127, 8: // Backspace/Delete
-			if len(currentInput) > 0 {
-				currentInput = currentInput[:len(currentInput)-1]
-				selectedIndex = 0 // Reset selection when search changes
-			}
-		default:
-			// Regular character input
-			if char >= 32 && char <= 126 { // Printable ASCII
-				currentInput += string(char)
-				selectedIndex = 0 // Reset selection when search changes
-			}
-		}
-
-		// Update display
-		m.displayRealTimeSearch(currentInput, models, featuredIndices, selectedIndex)
-	}
+	// Get the selected model ID and set it
+	modelID := selected.Value().(string)
+	fmt.Printf("\r\n✅ Selected: %s\r\n", modelID)
+	return m.setModel(modelID, chatAgent)
 }
 
 // fallbackLineBasedInterface provides the old line-based interface for non-terminal environments
@@ -312,8 +268,8 @@ func (m *ModelsCommand) fallbackLineBasedInterface(models []api.ModelInfo, featu
 	currentInput := ""
 
 	for {
-		// Clear screen area and redraw
-		m.clearAndRedraw(currentInput, models, featuredIndices)
+		// Use simple display for line-based interface
+		m.displayLineBasedSearch(currentInput, models, featuredIndices)
 
 		fmt.Printf("\nType to filter (current: '%s'): ", currentInput)
 
@@ -360,58 +316,196 @@ func (m *ModelsCommand) fallbackLineBasedInterface(models []api.ModelInfo, featu
 	}
 }
 
-// clearAndRedraw clears the display area and shows current search results
-func (m *ModelsCommand) clearAndRedraw(currentInput string, models []api.ModelInfo, featuredIndices []int) {
-	// Clear screen (simple version)
+// displayLineBasedSearch shows a simple static display for line-based interface
+func (m *ModelsCommand) displayLineBasedSearch(currentInput string, models []api.ModelInfo, featuredIndices []int) {
+	// Try to get terminal width, fallback to 80
+	termWidth := 80
+	if width, _, err := term.GetSize(int(os.Stdin.Fd())); err == nil && width > 40 {
+		termWidth = width
+	}
+
+	fmt.Println("\n" + strings.Repeat("=", termWidth))
+	fmt.Printf("Model Search - %d total models\n", len(models))
+	fmt.Println(strings.Repeat("=", termWidth))
+
+	matches := m.getCurrentMatches(currentInput, models)
+
+	if len(matches) == 0 {
+		fmt.Printf("❌ No models found for '%s'\n", currentInput)
+		fmt.Println("💡 Try: 'gpt', 'claude', 'gemini', 'deepseek'")
+		return
+	}
+
+	fmt.Printf("📋 Found %d matches:\n\n", len(matches))
+
+	// Calculate space for model name - reserve space for number, cost, context
+	// Format: "10. modelname $cost - context"
+	reservedSpace := 35 // Space for number, cost, context info
+	modelNameWidth := termWidth - reservedSpace
+	if modelNameWidth < 15 {
+		modelNameWidth = 15
+		reservedSpace = termWidth - modelNameWidth
+	}
+
+	// Show up to 10 matches with numbering for selection
+	maxShow := 10
+	if len(matches) < maxShow {
+		maxShow = len(matches)
+	}
+
+	for i := 0; i < maxShow; i++ {
+		model := matches[i]
+
+		// Model name with truncation
+		modelName := model.ID
+		if len(modelName) > modelNameWidth {
+			modelName = modelName[:modelNameWidth-3] + "..."
+		}
+
+		// Cost information
+		costStr := "N/A"
+		if model.InputCost > 0 && model.OutputCost > 0 {
+			costStr = fmt.Sprintf("$%.3f/$%.3f/M", model.InputCost, model.OutputCost)
+		} else if model.Cost > 0 {
+			costStr = fmt.Sprintf("$%.3f/M", model.Cost)
+		} else if strings.Contains(model.Provider, "Ollama") {
+			costStr = "FREE"
+		}
+
+		// Build the line
+		line := fmt.Sprintf("%2d. %-*s %s", i+1, modelNameWidth, modelName, costStr)
+
+		// Add context if there's space
+		if model.ContextLength > 0 && len(line) < termWidth-10 {
+			line += fmt.Sprintf(" - %dK", model.ContextLength/1000)
+		}
+
+		// Ensure line doesn't exceed terminal width
+		if len(line) > termWidth {
+			line = line[:termWidth-3] + "..."
+		}
+
+		fmt.Println(line)
+	}
+
+	if len(matches) > maxShow {
+		fmt.Printf("\n... and %d more matches\n", len(matches)-maxShow)
+	}
+
+	fmt.Println("\nCommands: <number> to select, 'clear' to reset, 'quit' to exit")
+}
+
+// updateRealTimeDisplay shows a dropdown-style selector with proper clearing
+func (m *ModelsCommand) updateRealTimeDisplay(currentInput string, models []api.ModelInfo, featuredIndices []int, selectedIndex int) {
+	matches := m.getCurrentMatches(currentInput, models)
+
+	// Get terminal size
+	width, height, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || height < 10 {
+		height = 24 // Default terminal height
+	}
+	_ = width // Not used but available if needed
+
+	// Clear screen
 	fmt.Print("\033[2J\033[H")
 
-	fmt.Printf("🔍 Live Model Search - %d total models\n", len(models))
-	fmt.Println("===========================================")
-	fmt.Println("Commands: 'quit'/'q' to exit, 'clear'/'c' to clear search, 'list'/'l' for all")
-	fmt.Println()
+	// Calculate available space for models
+	// Fixed lines: header (1) + info (1) + separator (1) + bottom separator (1) + search (1) = 5
+	// Plus 2 for scroll indicators = 7 total fixed lines
+	// Leave 1 line buffer = 8
+	availableLines := height - 8
+	if availableLines < 3 {
+		availableLines = 3 // Minimum 3 models visible
+	}
 
-	if currentInput == "" {
-		// Show featured models when no input
-		if len(featuredIndices) > 0 {
-			fmt.Println("⭐ Featured Models:")
-			for i, idx := range featuredIndices {
-				if i >= 5 {
-					break // Show only first 5 featured
-				}
-				model := models[idx]
-				fmt.Printf("%d. %s", i+1, model.ID)
-				m.showModelInfo(model)
-			}
-			fmt.Printf("\n💡 Start typing to search all %d models...\n", len(models))
-		}
-	} else {
-		// Show search results
-		matches := m.getCurrentMatches(currentInput, models)
+	// Header
+	fmt.Print("=== MODEL SEARCH ===\r\n")
+	fmt.Printf("%d matches | Use ↑↓ arrows, Enter to select, Esc to cancel\r\n", len(matches))
+	fmt.Print("─────────────────────────────────────────────────\r\n")
 
-		if len(matches) == 0 {
-			fmt.Printf("❌ No models found matching '%s'\n", currentInput)
-			m.suggestAlternatives(models, currentInput)
-		} else {
-			fmt.Printf("🔍 %d matches for '%s':\n", len(matches), currentInput)
+	if len(matches) == 0 {
+		fmt.Print("No matches found\r\n")
+		fmt.Print("\r\n")
+		fmt.Printf("🔍 Search: %s", currentInput)
+		return
+	}
 
-			maxShow := 10
-			if len(matches) < maxShow {
-				maxShow = len(matches)
-			}
+	// Show models with smart windowing based on terminal height
+	visibleCount := availableLines
+	if visibleCount > len(matches) {
+		visibleCount = len(matches)
+	}
 
-			for i := 0; i < maxShow; i++ {
-				model := matches[i]
-				fmt.Printf("%d. %s", i+1, model.ID)
-				m.showModelInfo(model)
-			}
+	// Center selection in visible window
+	visibleStart := selectedIndex - visibleCount/2
 
-			if len(matches) > maxShow {
-				fmt.Printf("\n... and %d more matches (type number 1-%d to select, or continue typing to narrow down)\n", len(matches)-maxShow, maxShow)
-			} else {
-				fmt.Printf("\nType number 1-%d to select, or continue typing to refine search\n", len(matches))
-			}
+	// Adjust window bounds
+	if visibleStart < 0 {
+		visibleStart = 0
+	} else if visibleStart+visibleCount > len(matches) {
+		visibleStart = len(matches) - visibleCount
+		if visibleStart < 0 {
+			visibleStart = 0
 		}
 	}
+
+	// Display models
+	for i := 0; i < visibleCount && visibleStart+i < len(matches); i++ {
+		idx := visibleStart + i
+		model := matches[idx]
+
+		// Selection styling
+		if idx == selectedIndex {
+			fmt.Print("\033[1;34m▸ ") // Bold blue for selection
+		} else {
+			fmt.Print("  ")
+		}
+
+		// Model name (truncate if needed)
+		modelName := model.ID
+		if len(modelName) > 45 {
+			modelName = modelName[:42] + "..."
+		}
+		fmt.Printf("%-45s", modelName)
+
+		// Pricing
+		if model.InputCost > 0 && model.OutputCost > 0 {
+			fmt.Printf(" $%.3f/$%.3f/M", model.InputCost, model.OutputCost)
+		} else if model.Cost > 0 {
+			fmt.Printf(" $%.3f/M", model.Cost)
+		} else {
+			fmt.Printf(" FREE")
+		}
+
+		// Context
+		if model.ContextLength > 0 {
+			fmt.Printf(" %dK", model.ContextLength/1000)
+		}
+
+		// Reset formatting if selected
+		if idx == selectedIndex {
+			fmt.Print("\033[0m") // Reset formatting
+		}
+
+		fmt.Print("\r\n")
+	}
+
+	// Show scroll indicators
+	if visibleStart > 0 {
+		fmt.Printf("  ↑ %d more above\r\n", visibleStart)
+	} else {
+		fmt.Print("\r\n") // Empty line for consistent spacing
+	}
+
+	if visibleStart+visibleCount < len(matches) {
+		fmt.Printf("  ↓ %d more below\r\n", len(matches)-(visibleStart+visibleCount))
+	} else {
+		fmt.Print("\r\n") // Empty line for consistent spacing
+	}
+
+	// Search input at the bottom
+	fmt.Print("─────────────────────────────────────────────────\r\n")
+	fmt.Printf("🔍 Search: %s", currentInput)
 }
 
 // getCurrentMatches gets the current filtered matches
@@ -641,21 +735,31 @@ func (m *ModelsCommand) calculateFuzzyScore(model api.ModelInfo, query string) i
 		}
 	}
 
-	// Partial matches in ID
-	queryWords := strings.Fields(query)
-	for _, word := range queryWords {
-		if strings.Contains(modelID, word) {
-			score += 30
-		}
-		if strings.Contains(description, word) {
-			score += 10
-		}
-	}
+	// Check if query contains multiple parts (e.g., "openrouter/sono")
+	if strings.Contains(query, "/") {
+		// For provider/model queries, require both parts to match
+		parts := strings.Split(query, "/")
+		if len(parts) == 2 {
+			provider := parts[0]
+			modelPart := parts[1]
 
-	// Character similarity (simple version)
-	for _, char := range query {
-		if strings.ContainsRune(modelID, char) {
-			score += 1
+			// Both parts must exist in the model ID
+			if strings.Contains(modelID, provider) && strings.Contains(modelID, modelPart) {
+				score += 80
+			}
+		}
+	} else {
+		// For single words, check individual words
+		queryWords := strings.Fields(query)
+		for _, word := range queryWords {
+			if len(word) >= 3 { // Only consider words of 3+ chars to avoid too many matches
+				if strings.Contains(modelID, word) {
+					score += 30
+				}
+				if strings.Contains(description, word) {
+					score += 10
+				}
+			}
 		}
 	}
 
@@ -678,59 +782,4 @@ func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 	fmt.Printf("🏢 Provider: %s\n", api.GetProviderName(finalProvider))
 
 	return nil
-}
-
-// displayRealTimeSearch shows the real-time search interface with highlighted selection
-func (m *ModelsCommand) displayRealTimeSearch(currentInput string, models []api.ModelInfo, featuredIndices []int, selectedIndex int) {
-	// Clear screen
-	fmt.Print("\033[2J\033[H")
-
-	fmt.Printf("🔍 Real-time Model Search - %d total models\n", len(models))
-	fmt.Println("===========================================")
-	fmt.Printf("Search: %s_\n", currentInput) // Show cursor with underscore
-	fmt.Println("↑↓ Navigate, Enter to select, Ctrl+C to cancel, Backspace to delete")
-	fmt.Println()
-
-	matches := m.getCurrentMatches(currentInput, models)
-
-	if len(matches) == 0 {
-		fmt.Printf("❌ No models found matching '%s'\n", currentInput)
-		if currentInput != "" {
-			m.suggestAlternatives(models, currentInput)
-		}
-		return
-	}
-
-	fmt.Printf("📋 %d matches:\n", len(matches))
-	fmt.Println()
-
-	// Show up to 10 matches
-	maxShow := 10
-	if len(matches) < maxShow {
-		maxShow = len(matches)
-	}
-
-	for i := 0; i < maxShow; i++ {
-		model := matches[i]
-
-		// Highlight selected item
-		if i == selectedIndex {
-			fmt.Printf("▶ ")
-		} else {
-			fmt.Printf("  ")
-		}
-
-		fmt.Printf("%s", model.ID)
-		m.showModelInfo(model)
-	}
-
-	if len(matches) > maxShow {
-		fmt.Printf("\n... and %d more matches (type to narrow down)\n", len(matches)-maxShow)
-	}
-
-	// Show instructions at bottom
-	fmt.Println()
-	if len(matches) > 0 && selectedIndex < len(matches) {
-		fmt.Printf("Selected: %s", matches[selectedIndex].ID)
-	}
 }

@@ -149,8 +149,16 @@ func (c *MCPConfig) AddServer(serverConfig MCPServerConfig) error {
 		return fmt.Errorf("server name cannot be empty")
 	}
 
-	if serverConfig.Command == "" {
-		return fmt.Errorf("server command cannot be empty")
+	// Validate command for stdio servers, URL for HTTP servers
+	if serverConfig.Type == "http" {
+		if serverConfig.URL == "" {
+			return fmt.Errorf("server URL cannot be empty for HTTP servers")
+		}
+	} else {
+		// stdio server (default)
+		if serverConfig.Command == "" {
+			return fmt.Errorf("server command cannot be empty for stdio servers")
+		}
 	}
 
 	// Set defaults
@@ -191,8 +199,16 @@ func (c *MCPConfig) ValidateConfig() error {
 			return fmt.Errorf("server name mismatch: key=%s, config.name=%s", name, server.Name)
 		}
 
-		if server.Command == "" {
-			return fmt.Errorf("server %s: command cannot be empty", name)
+		// Validate command for stdio servers, URL for HTTP servers
+		if server.Type == "http" {
+			if server.URL == "" {
+				return fmt.Errorf("server %s: URL cannot be empty for HTTP servers", name)
+			}
+		} else {
+			// stdio server (default)
+			if server.Command == "" {
+				return fmt.Errorf("server %s: command cannot be empty for stdio servers", name)
+			}
 		}
 
 		if server.MaxRestarts < 0 {

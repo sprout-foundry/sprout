@@ -13,11 +13,11 @@ import (
 func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 	// Enable change tracking for this conversation
 	a.EnableChangeTracking(userQuery)
-	
+
 	// Enable Esc monitoring during query processing
 	a.EnableEscMonitoring()
 	defer a.DisableEscMonitoring() // Disable when done
-	
+
 	// Process any images in the user query first
 	processedQuery, err := a.processImagesInQuery(userQuery)
 	if err != nil {
@@ -25,16 +25,68 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 		// Continue with original query if vision processing fails
 		processedQuery = userQuery
 	}
-	
-	// Initialize with system prompt and processed user query
-	a.messages = []api.Message{
-		{Role: "system", Content: a.systemPrompt},
-		{Role: "user", Content: processedQuery},
-	}
 
 	a.currentIteration = 0
 
-	for a.currentIteration < a.maxIterations {
+	// Dynamic iteration limits - use more iterations for complex workflows
+	maxIterationsForThisQuery := a.maxIterations
+
+	// Check if query suggests complex workflow that needs more iterations
+	queryLower := strings.ToLower(processedQuery)
+	if strings.Contains(queryLower, "implement") || strings.Contains(queryLower, "create") ||
+		strings.Contains(queryLower, "refactor") || strings.Contains(queryLower, "architecture") ||
+		strings.Contains(queryLower, "full stack") || strings.Contains(queryLower, "multiple files") ||
+		len(processedQuery) > 200 {
+		maxIterationsForThisQuery = 50 // Complex work gets more iterations
+		a.debugLog("🎯 Complex workflow detected - allowing %d iterations\n", maxIterationsForThisQuery)
+	} else if strings.Contains(queryLower, "what") || strings.Contains(queryLower, "how") ||
+		strings.Contains(queryLower, "where") || strings.Contains(queryLower, "explain") || strings.Contains(processedQuery, "?") {
+		maxIterationsForThisQuery = 8 // Simple questions get fewer iterations
+		a.debugLog("❓ Simple question detected - limiting to %d iterations\n", maxIterationsForThisQuery)
+	}
+
+	// Initialize with system prompt (enhanced with iteration context) and processed user query
+	contextualSystemPrompt := a.systemPrompt
+	
+	// Add specific guidance based on query type
+	if maxIterationsForThisQuery <= 8 {
+		// Simple question - emphasize immediate answering
+		contextualSystemPrompt += fmt.Sprintf(`
+
+## SIMPLE QUESTION MODE - ANSWER EFFICIENTLY (%d iterations max)
+🎯 **PRIMARY GOAL**: Answer the question as efficiently as possible
+
+**CRITICAL RULES:**
+1. **ANSWER IMMEDIATELY** when you find relevant information - do NOT continue exploring
+2. **STOP AFTER 2-3 iterations** if you have enough to answer the question
+3. **PREFER QUICK ANSWERS** over exhaustive research
+4. **ONE BATCH READ** after discovery - then answer with what you found
+
+**Process:**
+- Use targeted search (grep/find) to locate relevant files
+- Read 1-3 most relevant files in ONE batch
+- **ANSWER THE QUESTION** immediately with the information found
+- Do NOT read additional files unless the answer is incomplete
+
+Current status: Starting iteration 1 of %d`, maxIterationsForThisQuery, maxIterationsForThisQuery)
+	} else {
+		// Complex work - use full systematic approach
+		contextualSystemPrompt += fmt.Sprintf(`
+
+## COMPLEX WORKFLOW MODE - SYSTEMATIC APPROACH (%d iterations max)
+- Complex workflows: Use structured approach with todo tools for best results
+- Todo tools trigger automatic iteration expansion for complex work
+- Each iteration costs time - batch operations when possible
+
+Current status: Starting iteration 1 of %d`, maxIterationsForThisQuery, maxIterationsForThisQuery)
+	}
+
+	a.messages = []api.Message{
+		{Role: "system", Content: contextualSystemPrompt},
+		{Role: "user", Content: processedQuery},
+	}
+
+	for a.currentIteration < maxIterationsForThisQuery {
 		iterationStart := time.Now()
 		a.currentIteration++
 
@@ -44,7 +96,7 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 			if interruptMessage != "" {
 				// Inject user message into conversation
 				a.messages = append(a.messages, api.Message{
-					Role:    "user", 
+					Role:    "user",
 					Content: fmt.Sprintf("🛑 INTERRUPT: %s", interruptMessage),
 				})
 				a.debugLog("🛑 Interrupt processed, continuing with: %s\n", interruptMessage)
@@ -57,35 +109,35 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 
 		// Optimize conversation before sending to API
 		optimizedMessages := a.optimizer.OptimizeConversation(a.messages)
-		
+
 		if a.debug && len(optimizedMessages) < len(a.messages) {
 			saved := len(a.messages) - len(optimizedMessages)
-			a.debugLog("🔄 Conversation optimized: %d messages → %d messages (saved %d)\n", 
+			a.debugLog("🔄 Conversation optimized: %d messages → %d messages (saved %d)\n",
 				len(a.messages), len(optimizedMessages), saved)
 		}
 
 		// Check context size and manage if approaching limit
 		contextTokens := a.estimateContextTokens(optimizedMessages)
 		a.currentContextTokens = contextTokens
-		
+
 		// Check if we're approaching the context limit (80%)
 		contextThreshold := int(float64(a.maxContextTokens) * 0.8)
 		if contextTokens > contextThreshold {
 			if !a.contextWarningIssued {
-				a.debugLog("⚠️  Context approaching limit: %s/%s (%.1f%%)\n", 
-					a.formatTokenCount(contextTokens), 
+				a.debugLog("⚠️  Context approaching limit: %s/%s (%.1f%%)\n",
+					a.formatTokenCount(contextTokens),
 					a.formatTokenCount(a.maxContextTokens),
 					float64(contextTokens)/float64(a.maxContextTokens)*100)
 				a.contextWarningIssued = true
 			}
-			
+
 			// Perform aggressive optimization when near limit
 			optimizedMessages = a.optimizer.AggressiveOptimization(optimizedMessages)
 			contextTokens = a.estimateContextTokens(optimizedMessages)
 			a.currentContextTokens = contextTokens
-			
+
 			if a.debug {
-				a.debugLog("🔄 Aggressive optimization applied: %s context tokens\n", 
+				a.debugLog("🔄 Aggressive optimization applied: %s context tokens\n",
 					a.formatTokenCount(contextTokens))
 			}
 		}
@@ -95,7 +147,8 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 		tools := a.getOptimizedToolDefinitions(optimizedMessages)
 		resp, err := a.client.SendChatRequest(optimizedMessages, tools, reasoningEffort)
 		if err != nil {
-			return "", fmt.Errorf("API request failed: %w", err)
+			// IMPROVED: Preserve conversation context on API failures instead of losing everything
+			return a.handleAPIFailure(err, optimizedMessages)
 		}
 
 		if len(resp.Choices) == 0 {
@@ -104,22 +157,22 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 
 		// Track token usage and cost
 		cachedTokens := resp.Usage.PromptTokensDetails.CachedTokens
-		
+
 		// Use actual cost from API (already accounts for cached tokens)
 		a.totalCost += resp.Usage.EstimatedCost
 		a.totalTokens += resp.Usage.TotalTokens
 		a.promptTokens += resp.Usage.PromptTokens
 		a.completionTokens += resp.Usage.CompletionTokens
 		a.cachedTokens += cachedTokens
-		
+
 		// Calculate cost savings for display purposes only
 		cachedCostSavings := a.calculateCachedCost(cachedTokens)
 		a.cachedCostSavings += cachedCostSavings
-		
+
 		// Only show context information in debug mode
 		// Calculate iteration timing
 		iterationDuration := time.Since(iterationStart)
-		
+
 		if a.debug {
 			a.debugLog("💰 Response: %d prompt + %d completion | Cost: $%.6f | Context: %s/%s | Time: %v\n",
 				resp.Usage.PromptTokens,
@@ -128,7 +181,7 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 				a.formatTokenCount(a.currentContextTokens),
 				a.formatTokenCount(a.maxContextTokens),
 				iterationDuration)
-			
+
 			if cachedTokens > 0 {
 				a.debugLog("📋 Cached tokens: %d | Savings: $%.6f\n",
 					cachedTokens, cachedCostSavings)
@@ -146,20 +199,74 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 
 		// Check if there are tool calls to execute
 		if len(choice.Message.ToolCalls) > 0 {
-			// Execute each tool call
-			toolResults := make([]string, 0)
-			for _, toolCall := range choice.Message.ToolCalls {
-				result, err := a.executeTool(toolCall)
-				if err != nil {
-					result = fmt.Sprintf("Error executing tool %s: %s", toolCall.Function.Name, err.Error())
+			// Optimization: Check if all tool calls are read_file operations for parallel execution
+			allReadFile := true
+			for _, tc := range choice.Message.ToolCalls {
+				if tc.Function.Name != "read_file" {
+					allReadFile = false
+					break
 				}
-				toolResults = append(toolResults, fmt.Sprintf("Tool call result for %s: %s", toolCall.Function.Name, result))
 			}
 
-			// Add tool results to conversation
+			toolResults := make([]string, len(choice.Message.ToolCalls))
+
+			if allReadFile && len(choice.Message.ToolCalls) > 1 {
+				// Execute read_file operations in parallel
+				a.debugLog("🚀 Executing %d read_file operations in parallel for optimal performance\n", len(choice.Message.ToolCalls))
+
+				type readResult struct {
+					index  int
+					result string
+				}
+
+				resultChan := make(chan readResult, len(choice.Message.ToolCalls))
+
+				// Launch parallel goroutines for each read_file
+				for i, toolCall := range choice.Message.ToolCalls {
+					go func(idx int, tc api.ToolCall) {
+						result, err := a.executeTool(tc)
+						if err != nil {
+							result = fmt.Sprintf("Error executing tool %s: %s", tc.Function.Name, err.Error())
+						}
+						resultChan <- readResult{
+							index:  idx,
+							result: fmt.Sprintf("Tool call result for %s: %s", tc.Function.Name, result),
+						}
+					}(i, toolCall)
+				}
+
+				// Collect results in order
+				for i := 0; i < len(choice.Message.ToolCalls); i++ {
+					res := <-resultChan
+					toolResults[res.index] = res.result
+				}
+			} else {
+				// Execute tool calls sequentially for non-read operations or single calls
+				for i, toolCall := range choice.Message.ToolCalls {
+					result, err := a.executeTool(toolCall)
+					if err != nil {
+						result = fmt.Sprintf("Error executing tool %s: %s", toolCall.Function.Name, err.Error())
+					}
+					toolResults[i] = fmt.Sprintf("Tool call result for %s: %s", toolCall.Function.Name, result)
+				}
+			}
+
+			// Check if we're using structured workflow tools - if so, increase iteration limit
+			for _, toolCall := range choice.Message.ToolCalls {
+				if toolCall.Function.Name == "add_bulk_todos" || toolCall.Function.Name == "add_todo" {
+					if maxIterationsForThisQuery < 40 {
+						maxIterationsForThisQuery = 40
+						a.debugLog("📋 Todo workflow detected - expanding to %d iterations\n", maxIterationsForThisQuery)
+					}
+				}
+			}
+
+			// Add tool results to conversation with iteration context
+			iterationStatus := fmt.Sprintf("\n\n**ITERATION STATUS: %d of %d complete**", a.currentIteration, maxIterationsForThisQuery)
+			toolResultsWithContext := strings.Join(toolResults, "\n\n") + iterationStatus
 			a.messages = append(a.messages, api.Message{
 				Role:    "user",
-				Content: strings.Join(toolResults, "\n\n"),
+				Content: toolResultsWithContext,
 			})
 
 			continue
@@ -223,7 +330,7 @@ Please continue with your task using the correct tool calling syntax.`
 			if a.isIncompleteResponse(choice.Message.Content) {
 				// Add encouragement to continue
 				a.messages = append(a.messages, api.Message{
-					Role: "user",
+					Role:    "user",
 					Content: "The previous response appears incomplete. Please continue with the task and use available tools to fully complete the work.",
 				})
 				continue
@@ -242,7 +349,7 @@ Please continue with your task using the correct tool calling syntax.`
 	if commitErr := a.CommitChanges("Maximum iterations reached"); commitErr != nil {
 		a.debugLog("Warning: Failed to commit tracked changes: %v\n", commitErr)
 	}
-	return "", fmt.Errorf("maximum iterations (%d) reached without completion", a.maxIterations)
+	return "", fmt.Errorf("maximum iterations (%d) reached without completion", maxIterationsForThisQuery)
 }
 
 // ProcessQueryWithContinuity processes a query with continuity from previous actions
@@ -256,12 +363,12 @@ CONTINUITY FROM PREVIOUS SESSION:
 CURRENT TASK:
 %s
 
-Please continue working on this task chain, building upon the previous actions.`, 
+Please continue working on this task chain, building upon the previous actions.`,
 			a.previousSummary, userQuery)
-		
+
 		return a.ProcessQuery(continuityPrompt)
 	}
-	
+
 	// No previous state, process normally
 	return a.ProcessQuery(userQuery)
 }
@@ -271,15 +378,15 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 	if content == "" {
 		return true // Empty responses are definitely incomplete
 	}
-	
+
 	// Check if this contains attempted tool calls - if so, it's incomplete
 	if a.containsAttemptedToolCalls(content) {
 		return true
 	}
-	
+
 	contentLower := strings.ToLower(content)
 	originalContent := content // Keep original for case-sensitive checks
-	
+
 	// Check for intent-to-continue phrases that indicate the model wants to keep working
 	intentToContinuePatterns := []string{
 		"let me",
@@ -304,21 +411,21 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 		"need to",
 		"should now",
 	}
-	
+
 	for _, pattern := range intentToContinuePatterns {
 		if strings.Contains(contentLower, pattern) {
 			a.debugLog("Detected intent-to-continue phrase: '%s'\n", pattern)
 			return true
 		}
 	}
-	
+
 	// Check for trailing colons or incomplete sentences that suggest continuation
 	trimmedContent := strings.TrimSpace(originalContent)
 	if strings.HasSuffix(trimmedContent, ":") || strings.HasSuffix(trimmedContent, "...") {
 		a.debugLog("Detected trailing continuation punctuation\n")
 		return true
 	}
-	
+
 	// Check for sentences that end with action words suggesting more to come
 	actionEndingPatterns := []string{
 		"file:",
@@ -336,14 +443,14 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 		"updates:",
 		"modifications:",
 	}
-	
+
 	for _, pattern := range actionEndingPatterns {
 		if strings.HasSuffix(contentLower, pattern) {
 			a.debugLog("Detected action-ending pattern: '%s'\n", pattern)
 			return true
 		}
 	}
-	
+
 	// Common patterns that indicate the agent is giving up too early
 	declinePatterns := []string{
 		"i'm not able to",
@@ -356,7 +463,7 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 		"cannot add",
 		"cannot create",
 	}
-	
+
 	// If it's a short response with decline language, it's likely incomplete
 	if len(content) < 200 {
 		for _, pattern := range declinePatterns {
@@ -365,7 +472,7 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 			}
 		}
 	}
-	
+
 	// If there's no evidence of tool usage or exploration, likely incomplete
 	toolEvidencePatterns := []string{
 		"ls",
@@ -379,7 +486,7 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 		"implement",
 		"create",
 	}
-	
+
 	hasToolEvidence := false
 	for _, pattern := range toolEvidencePatterns {
 		if strings.Contains(contentLower, pattern) {
@@ -387,13 +494,58 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 			break
 		}
 	}
-	
+
 	// Short response without tool evidence suggests giving up early
 	if len(content) < 300 && !hasToolEvidence {
 		return true
 	}
-	
+
 	return false
+}
+
+// handleAPIFailure preserves conversation context when API calls fail
+func (a *Agent) handleAPIFailure(apiErr error, _ []api.Message) (string, error) {
+	// Count the tools/work we've already done to show progress
+	toolsExecuted := 0
+	for _, msg := range a.messages {
+		if msg.Role == "tool" {
+			toolsExecuted++
+		}
+	}
+
+	a.debugLog("⚠️ API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n",
+		toolsExecuted, a.formatTokenCount(a.totalTokens))
+
+	// Create a response that preserves the conversation context and allows the user to continue
+	response := "⚠️ **API Request Failed - Conversation Preserved**\n\n"
+
+	// Classify the error type for better user guidance
+	errorMsg := apiErr.Error()
+	if strings.Contains(errorMsg, "timeout") || strings.Contains(errorMsg, "deadline exceeded") {
+		response += "The API request timed out, likely due to high server load or a complex request.\n\n"
+	} else if strings.Contains(errorMsg, "rate limit") {
+		response += "Hit API rate limits. Please wait a moment before continuing.\n\n"
+	} else {
+		response += fmt.Sprintf("API error: %s\n\n", errorMsg)
+	}
+
+	response += "**Progress So Far:**\n"
+	response += fmt.Sprintf("- Tools executed: %d\n", toolsExecuted)
+	response += fmt.Sprintf("- Total tokens used: %s\n", a.formatTokenCount(a.totalTokens))
+	response += fmt.Sprintf("- Current iteration: %d/%d\n\n", a.currentIteration, a.maxIterations)
+
+	// Importantly - keep the conversation state intact so user can continue
+	response += "🔄 **Your conversation context is preserved.** You can:\n"
+	response += "- Ask me to continue with your original request\n"
+	response += "- Ask a more specific question about what you wanted to know\n"
+	response += "- Ask me to summarize what I've learned so far\n"
+	response += "- Try a different approach to your question\n\n"
+
+	response += "💡 What would you like me to do next?"
+
+	// DON'T return an error - return the preserved conversation response
+	// This keeps the conversation alive instead of terminating it
+	return response, nil
 }
 
 // containsAttemptedToolCalls checks if content contains patterns that suggest attempted tool calls
@@ -420,7 +572,7 @@ func (a *Agent) containsAttemptedToolCalls(content string) bool {
 
 	contentLower := strings.ToLower(content)
 	matchCount := 0
-	
+
 	for _, pattern := range attemptedPatterns {
 		if strings.Contains(contentLower, strings.ToLower(pattern)) {
 			matchCount++
@@ -444,9 +596,9 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 	if len(messages) == 0 {
 		return "medium"
 	}
-	
+
 	lastMessage := messages[len(messages)-1].Content
-	
+
 	// Use low reasoning for simple, repetitive tasks
 	simplePatterns := []string{
 		"read_file", "ls -", "pwd", "cat ", "echo ",
@@ -454,7 +606,7 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 		"git status", "git diff", "npm install",
 		"go build", "go test", "go run",
 	}
-	
+
 	for _, pattern := range simplePatterns {
 		if strings.Contains(strings.ToLower(lastMessage), pattern) {
 			if a.debug {
@@ -463,7 +615,7 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 			return "low"
 		}
 	}
-	
+
 	// Use high reasoning for complex tasks
 	complexPatterns := []string{
 		"analyze", "design", "implement", "create", "plan",
@@ -471,7 +623,7 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 		"vision", "image", "ui", "frontend", "algorithm",
 		"error", "fix", "problem", "issue", "troubleshoot",
 	}
-	
+
 	for _, pattern := range complexPatterns {
 		if strings.Contains(strings.ToLower(lastMessage), pattern) {
 			if a.debug {
@@ -480,7 +632,7 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 			return "high"
 		}
 	}
-	
+
 	// Default to medium for everything else
 	if a.debug {
 		a.debugLog("⚖️ Using medium reasoning for standard task\n")
@@ -490,14 +642,19 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 
 // getOptimizedToolDefinitions returns relevant tools based on context
 func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
-	// For now, return all tools but could be optimized to return only relevant ones
-	// based on recent conversation context
+	// Get base tools
 	allTools := api.GetToolDefinitions()
-	
+
+	// Add MCP tools if available
+	if a.mcpManager != nil {
+		mcpTools := a.getMCPTools()
+		allTools = append(allTools, mcpTools...)
+	}
+
 	if len(messages) == 0 {
 		return allTools
 	}
-	
+
 	// Quick optimization: if last few messages only used basic tools,
 	// prioritize those (but still include all for flexibility)
 	return allTools
@@ -536,7 +693,7 @@ func (a *Agent) processImagesInQuery(query string) (string, error) {
 		// No vision capability available, return original query
 		return query, nil
 	}
-	
+
 	// Determine analysis mode from query context
 	var analysisMode string
 	if containsFrontendKeywords(query) {
@@ -550,13 +707,13 @@ func (a *Agent) processImagesInQuery(query string) (string, error) {
 	if err != nil {
 		return query, fmt.Errorf("failed to create vision processor: %w", err)
 	}
-	
+
 	// Process any images found in the text
 	enhancedQuery, analyses, err := processor.ProcessImagesInText(query)
 	if err != nil {
 		return query, fmt.Errorf("failed to process images: %w", err)
 	}
-	
+
 	// If images were processed, log the enhancement
 	if len(analyses) > 0 {
 		a.debugLog("🖼️ Processed %d image(s) and enhanced query with vision analysis\n", len(analyses))
@@ -564,7 +721,7 @@ func (a *Agent) processImagesInQuery(query string) (string, error) {
 			a.debugLog("  - %s: %s\n", analysis.ImagePath, analysis.Description[:min(100, len(analysis.Description))])
 		}
 	}
-	
+
 	return enhancedQuery, nil
 }
 
@@ -581,8 +738,8 @@ func containsFrontendKeywords(query string) bool {
 		"dashboard", "landing page", "homepage", "navigation",
 		"mockup", "wireframe", "prototype", "screenshot",
 	}
-	
-	// Secondary frontend indicators  
+
+	// Secondary frontend indicators
 	secondaryKeywords := []string{
 		"colors", "palette", "theme", "branding",
 		"bootstrap", "tailwind", "material", "chakra",
@@ -593,16 +750,16 @@ func containsFrontendKeywords(query string) bool {
 		"typography", "font", "text", "heading",
 		"animation", "transition", "hover", "interactive",
 	}
-	
+
 	queryLower := strings.ToLower(query)
-	
+
 	// Check high-priority keywords first (any match = frontend)
 	for _, keyword := range highPriorityKeywords {
 		if strings.Contains(queryLower, keyword) {
 			return true
 		}
 	}
-	
+
 	// Check for multiple secondary keywords (2+ matches = frontend)
 	matches := 0
 	for _, keyword := range secondaryKeywords {
@@ -613,6 +770,6 @@ func containsFrontendKeywords(query string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }

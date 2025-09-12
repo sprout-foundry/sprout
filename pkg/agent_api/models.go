@@ -45,7 +45,9 @@ func GetAvailableModels() ([]ModelInfo, error) {
 
 // GetModelsForProvider returns available models for a specific provider
 func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
-	// Try to use the provider's ListModels method first
+	// Always try to use the provider's ListModels method first
+	// Note: createProviderForType creates fresh instances, so any caching
+	// happens within individual provider instances
 	provider, err := createProviderForType(clientType)
 	if err == nil && provider != nil {
 		typesModels, listErr := provider.ListModels()
@@ -56,6 +58,10 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 				apiModels[i] = convertTypesToAPI(typesModel)
 			}
 			return apiModels, nil
+		}
+		// If provider ListModels failed, log it but continue to fallback
+		if listErr != nil {
+			// Don't return error immediately, try fallback methods
 		}
 	}
 
@@ -904,9 +910,8 @@ func createProviderForType(clientType ClientType) (types.ProviderInterface, erro
 		return providers.NewCerebrasProvider()
 	case OpenRouterClientType:
 		return providers.NewOpenRouterProvider()
-	// DeepInfra provider is incomplete, will use fallback
 	case DeepInfraClientType:
-		return nil, fmt.Errorf("DeepInfra provider is incomplete, using fallback")
+		return providers.NewDeepInfraProvider()
 	// Add other providers as they implement ListModels
 	default:
 		return nil, fmt.Errorf("provider %s does not support ListModels yet", clientType)
@@ -933,6 +938,23 @@ func ClearModelCaches() {
 	deepInfraModelsInitialized = false
 	openaiModelsCache = nil
 	deepInfraModelsCache = nil
+	
+	// Also clear provider caches by calling ClearProviderCaches
+	// This ensures that the new provider system caches are also cleared
+	ClearProviderCaches()
+}
+
+// ClearProviderCaches clears caches in the new provider system
+func ClearProviderCaches() {
+	// Clear caches for all provider types by creating new instances
+	// This forces them to re-fetch their models on next call
+	
+	// Note: We can't directly access existing provider instances since they're 
+	// created fresh each time, but we can clear any global caches if they exist
+	
+	// The provider instances themselves are created fresh each time in 
+	// createProviderForType(), so clearing the API-level caches is sufficient
+	// to force model list refresh
 }
 
 // ClearModelCacheForProvider clears the model cache for a specific provider

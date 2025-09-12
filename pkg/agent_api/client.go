@@ -494,7 +494,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "web_search",
-				Description: "Search the web for current information and return relevant content from selected URLs. Uses Jina AI Search API with intelligent URL selection and content relevance extraction.",
+				Description: "Search the web for current information and return a list of relevant URLs with titles and descriptions. Agent can then use fetch_url to get specific content. Uses Jina AI Search API.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{

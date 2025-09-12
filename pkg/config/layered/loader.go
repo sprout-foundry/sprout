@@ -230,9 +230,7 @@ func (l *LayeredConfigLoader) mergeUIConfig(base, overlay *config.UIConfig) *con
 	if overlay.HealthChecks != base.HealthChecks {
 		result.HealthChecks = overlay.HealthChecks
 	}
-	if overlay.PreapplyReview != base.PreapplyReview {
-		result.PreapplyReview = overlay.PreapplyReview
-	}
+	// PreapplyReview removed - caused too much churn
 	if overlay.TelemetryEnabled != base.TelemetryEnabled {
 		result.TelemetryEnabled = overlay.TelemetryEnabled
 	}

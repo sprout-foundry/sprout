@@ -66,7 +66,6 @@ type Config struct {
 	QualityLevel             int                  `json:"-"` // Internal: quality level for code generation (0=standard, 1=enhanced, 2=production)
 
 	// Legacy UI toggles (DEPRECATED)
-	PreapplyReview    bool     `json:"preapply_review,omitempty"`
 	DryRun            bool     `json:"dry_run,omitempty"`
 	JsonLogs          bool     `json:"json_logs,omitempty"`
 	HealthChecks      bool     `json:"health_checks,omitempty"`
@@ -163,9 +162,7 @@ func (c *Config) GetUIConfig() *UIConfig {
 	if c.HealthChecks {
 		ui.HealthChecks = true
 	}
-	if c.PreapplyReview {
-		ui.PreapplyReview = true
-	}
+	// PreapplyReview removed - caused too much churn
 	if c.TelemetryEnabled {
 		ui.TelemetryEnabled = true
 	}
@@ -413,10 +410,7 @@ func (cfg *Config) setDefaultValues() {
 		cfg.CodeStyle.Readability = "Prioritize code readability and maintainability. Use comments where necessary to explain complex logic."
 	}
 
-	// Pre-apply review default: enabled
-	if !cfg.PreapplyReview {
-		cfg.PreapplyReview = true
-	}
+	// Pre-apply review removed - caused too much churn
 	// Dry-run default: disabled unless explicitly enabled
 	// cfg.DryRun remains false by default
 	// Json logs off by default
@@ -481,7 +475,7 @@ func loadConfig(filePath string) (*Config, error) {
 	cfg.PresencePenalty = 0.1                      // NEW: Initialize PresencePenalty
 	cfg.FrequencyPenalty = 0.1                     // NEW: Initialize FrequencyPenalty
 	cfg.EmbeddingModel = ""                        // NEW: Initialize EmbeddingModel to its zero value
-	cfg.PreapplyReview = true                      // NEW: default enable pre-apply review
+	// PreapplyReview removed - caused too much churn
 	cfg.DryRun = false                             // NEW: default dry-run off
 	// Initialize CodeStyle to ensure setDefaultValues can populate it
 	cfg.CodeStyle = CodeStylePreferences{}

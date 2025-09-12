@@ -1,9 +1,9 @@
 package agent
 
 import (
-	"testing"
 	"os"
 	"strings"
+	"testing"
 )
 
 // TestNewAgent tests agent creation
@@ -30,8 +30,8 @@ func TestNewAgent(t *testing.T) {
 	}
 
 	// Test basic properties
-	if agent.maxIterations != 100 {
-		t.Errorf("Expected maxIterations to be 100, got %d", agent.maxIterations)
+	if agent.maxIterations != 20 {
+		t.Errorf("Expected maxIterations to be 20, got %d", agent.maxIterations)
 	}
 
 	if agent.currentIteration != 0 {
@@ -74,8 +74,8 @@ func TestNewAgentWithModel(t *testing.T) {
 	}
 
 	// Verify agent properties
-	if agent.GetMaxIterations() != 100 {
-		t.Errorf("Expected maxIterations to be 100, got %d", agent.GetMaxIterations())
+	if agent.GetMaxIterations() != 20 {
+		t.Errorf("Expected maxIterations to be 20, got %d", agent.GetMaxIterations())
 	}
 }
 

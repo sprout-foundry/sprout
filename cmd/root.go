@@ -5,8 +5,7 @@ package cmd
 import (
 	"os"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/agent_config"
+	agent_api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
 )
@@ -44,27 +43,11 @@ func Execute() error {
 
 // initializeSystem initializes API keys and configuration on startup
 func initializeSystem() {
-	// Migrate from old .coder configuration if needed
-	if err := config.MigrateFromCoder(); err != nil {
-		// Don't fail on migration errors, just log
-		if os.Getenv("LEDIT_DEBUG") != "" {
-			println("Migration warning:", err.Error())
-		}
-	}
-	
 	// Initialize API keys from ~/.ledit/api_keys.json
-	if err := api.InitializeAPIKeys(); err != nil {
+	if err := agent_api.InitializeAPIKeys(); err != nil {
 		// Don't fail on API key initialization errors
 		if os.Getenv("LEDIT_DEBUG") != "" {
 			println("API key initialization warning:", err.Error())
-		}
-	}
-	
-	// Ensure legacy integration with existing ledit config
-	if err := config.EnsureLegacyIntegration(); err != nil {
-		// Don't fail on integration errors
-		if os.Getenv("LEDIT_DEBUG") != "" {
-			println("Legacy integration warning:", err.Error())
 		}
 	}
 }
@@ -84,18 +67,13 @@ func init() {
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(codeCmd.GetCommand())
 	rootCmd.AddCommand(commitCmd)
-	rootCmd.AddCommand(execCmd)
 	rootCmd.AddCommand(ignoreCmd)
 	rootCmd.AddCommand(initCmd)
-	rootCmd.AddCommand(insightsCmd)
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(reviewStagedCmd) // Add the new command
-	rootCmd.AddCommand(pricingCmd)
-	rootCmd.AddCommand(rollbackCmd)
 	rootCmd.AddCommand(uiCmd)
-}
 
-func init() {
+	// Initialize UI handling and environment-based defaults
 	cobra.OnInitialize(func() {
 		// consider env first
 		if ui.FromEnv() {

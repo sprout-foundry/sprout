@@ -153,11 +153,11 @@ func (p *ProviderCommand) selectProvider(configManager *config.Manager, chatAgen
 
 	// Get user selection
 	fmt.Print("\nEnter provider number (1-" + strconv.Itoa(len(available)) + ") or 'cancel': ")
-	
+
 	// Temporarily disable Esc monitoring during user input
 	chatAgent.DisableEscMonitoring()
 	defer chatAgent.EnableEscMonitoring()
-	
+
 	var input string
 	fmt.Scanln(&input)
 
@@ -208,6 +208,9 @@ func (p *ProviderCommand) switchToProvider(provider api.ClientType, configManage
 	model := configManager.GetModelForProvider(provider)
 
 	fmt.Printf("🔄 Switching to %s with model %s...\n", api.GetProviderName(provider), model)
+
+	// Clear model caches to ensure fresh model lists for the new provider
+	api.ClearModelCaches()
 
 	// Persist the provider selection to configuration
 	err := configManager.SetProviderAndModel(provider, model)

@@ -8,13 +8,11 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/changetracker"
-	"github.com/alantheprice/ledit/pkg/codereview"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/git"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	ui "github.com/alantheprice/ledit/pkg/ui"
-	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/fatih/color"
 )
@@ -24,8 +22,7 @@ func handleFileUpdates(updatedCode map[string]string, revisionID string, cfg *co
 	reader := bufio.NewReader(os.Stdin)
 	var allDiffs strings.Builder
 
-	// Track whether we already ran a pre-apply review to avoid double-review
-	ranPreapplyReview := false
+	// Automated review removed - caused too much churn
 
 	// Collect edits first to enable a combined review across the entire changeset
 	type preparedEdit struct {
@@ -129,36 +126,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 		})
 	}
 
-	// Run a single pre-apply automated review across the combined diff to consider all files together
-	if cfg.PreapplyReview && (cfg.SkipPrompt || cfg.FromAgent) {
-		combined := allDiffs.String()
-		if combined != "" {
-			logger := utils.GetLogger(cfg.SkipPrompt)
-			ranPreapplyReview = true
-			if err := performAutomatedReview(combined, originalInstructions, processedInstructions, cfg, logger, revisionID); err != nil {
-				// Check if this is a retry request error
-				if retryRequest, ok := err.(*codereview.RetryRequestError); ok {
-					logger.LogProcessStep(fmt.Sprintf("Code review requested retry with refined prompt: %s", retryRequest.Feedback))
-					// For pre-apply review, use the refined prompt to regenerate
-					logger.LogProcessStep(fmt.Sprintf("Retrying pre-apply review with refined prompt: %s", retryRequest.RefinedPrompt))
-					// Use the refined prompt as the new processed instructions for retry
-					processedInstructions = retryRequest.RefinedPrompt
-					// Retry the review with the refined prompt
-					if retryErr := performAutomatedReview(combined, originalInstructions, processedInstructions, cfg, logger, revisionID); retryErr != nil {
-						logger.LogProcessStep(fmt.Sprintf("Retry failed: %v", retryErr))
-						// If retry fails, continue with original error handling
-						if !strings.Contains(retryErr.Error(), "revisions applied, re-validating") {
-							return "", retryErr
-						}
-					} else {
-						logger.LogProcessStep("Pre-apply review retry completed successfully")
-					}
-				} else if !strings.Contains(err.Error(), "revisions applied, re-validating") {
-					return "", err
-				}
-			}
-		}
-	}
+	// Pre-apply review removed - caused too much churn
 
 	// Apply queued edits per file (prompt/write/record)
 	for _, e := range edits {
@@ -260,33 +228,7 @@ Please provide the complete updated file content.`, newFilename, newFilename, or
 			ui.Out().Print(prompts.ChangesNotApplied(newFilename))
 		}
 	}
-	// Perform automated review when skipPrompt is active
-	if cfg.SkipPrompt && !ranPreapplyReview {
-		combinedDiff := allDiffs.String()
-		if combinedDiff != "" {
-			logger := utils.GetLogger(cfg.SkipPrompt)
-			reviewErr := performAutomatedReview(combinedDiff, originalInstructions, processedInstructions, cfg, logger, revisionID)
-			if reviewErr != nil {
-				// Check if this is a retry request error
-				if retryRequest, ok := reviewErr.(*codereview.RetryRequestError); ok {
-					logger.LogProcessStep(fmt.Sprintf("Code review requested retry with refined prompt: %s", retryRequest.Feedback))
-					// For post-apply review, attempt retry with refined prompt
-					logger.LogProcessStep(fmt.Sprintf("Retrying post-apply review with refined prompt: %s", retryRequest.RefinedPrompt))
-					// Use the refined prompt for the retry
-					refinedInstructions := retryRequest.RefinedPrompt
-					if retryErr := performAutomatedReview(combinedDiff, originalInstructions, refinedInstructions, cfg, logger, revisionID); retryErr != nil {
-						logger.LogProcessStep(fmt.Sprintf("Post-apply retry failed: %v", retryErr))
-						// If retry fails, continue with current changes
-						logger.LogProcessStep("Continuing with current changes after failed retry")
-					} else {
-						logger.LogProcessStep("Post-apply review retry completed successfully")
-					}
-				} else if !strings.Contains(reviewErr.Error(), "revisions applied, re-validating") {
-					return "", reviewErr
-				}
-			}
-		}
-	}
+	// Post-apply review removed - caused too much churn
 
 	return allDiffs.String(), nil
 }

@@ -23,9 +23,9 @@ import (
 )
 
 var (
-	agentSkipPrompt  bool
-	agentModel       string // Declare agentModel variable
-	agentDryRun      bool
+	agentSkipPrompt bool
+	agentModel      string // Declare agentModel variable
+	agentDryRun     bool
 )
 
 func init() {
@@ -65,6 +65,14 @@ func createSlashCompleter() *readline.PrefixCompleter {
 		readline.PcItem("/status"),
 		readline.PcItem("/log"),
 		readline.PcItem("/rollback"),
+		// MCP commands
+		readline.PcItem("/mcp",
+			readline.PcItem("add"),
+			readline.PcItem("remove"),
+			readline.PcItem("list"),
+			readline.PcItem("test"),
+			readline.PcItem("help"),
+		),
 	)
 }
 
@@ -75,10 +83,10 @@ func runSimpleInteractiveMode() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize agent: %w", err)
 	}
-	
+
 	// Create command registry for slash commands
 	commandRegistry := agent_commands.NewCommandRegistry()
-	
+
 	// Initially disable escape monitoring during normal input to avoid interference
 	chatAgent.DisableEscMonitoring()
 
@@ -99,12 +107,12 @@ func runSimpleInteractiveMode() error {
 	historyFile := homeDir + "/.ledit_agent_history"
 
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:            "🤖 > ",
-		HistoryFile:       historyFile,
-		HistoryLimit:      1000,
-		AutoComplete:      createSlashCompleter(),
-		InterruptPrompt:   "^C",
-		EOFPrompt:         "exit",
+		Prompt:          "🤖 > ",
+		HistoryFile:     historyFile,
+		HistoryLimit:    1000,
+		AutoComplete:    createSlashCompleter(),
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize readline: %w", err)
@@ -145,7 +153,7 @@ func runSimpleInteractiveMode() error {
 				fmt.Println("👋 Exiting interactive mode")
 				return nil
 			}
-			
+
 			// Use CommandRegistry for all other slash commands
 			err := commandRegistry.Execute(input, chatAgent)
 			if err != nil {
@@ -170,23 +178,23 @@ func runSimpleInteractiveMode() error {
 
 		// Process user request with agent
 		fmt.Printf("🔄 Processing: %s\n", input)
-		
+
 		// Enable escape key monitoring during agent processing
 		chatAgent.EnableEscMonitoring()
-		
+
 		// Execute the agent command directly using the same agent instance (maintains continuity)
 		response, err := chatAgent.ProcessQueryWithContinuity(input)
-		
+
 		// Disable escape key monitoring after agent processing
 		chatAgent.DisableEscMonitoring()
-		
+
 		if err != nil {
 			fmt.Printf("❌ Processing failed: %v\n", err)
 			continue
 		}
 
 		fmt.Printf("\n🎯 Agent Response:\n%s\n", response)
-		
+
 		// Print cost and token summary
 		chatAgent.PrintConciseSummary()
 		fmt.Println("✅ Completed")
@@ -211,7 +219,7 @@ func executeDirectAgentCommand(userIntent string) error {
 	}
 
 	fmt.Printf("\n🎯 Agent Response:\n%s\n", response)
-	
+
 	// Print cost and token summary
 	chatAgent.PrintConciseSummary()
 	return nil
@@ -274,18 +282,18 @@ func executeShellCommandDirectly(command string) {
 // validateQueryLength validates query length and prompts for confirmation (from coder project)
 func validateQueryLength(query string, _ *agent.Agent) bool {
 	queryLen := len(strings.TrimSpace(query))
-	
+
 	// Absolute minimum: reject anything under 3 characters
 	if queryLen < 3 {
 		fmt.Printf("❌ Query too short (%d characters). Minimum 3 characters required.\n", queryLen)
 		return false
 	}
-	
+
 	// For queries under 20 characters, ask for confirmation
 	if queryLen < 20 {
 		fmt.Printf("⚠️  Short query detected (%d characters): \"%s\"\n", queryLen, query)
 		fmt.Print("Are you sure you want to process this? (y/N): ")
-		
+
 		var response string
 		fmt.Scanln(&response)
 		response = strings.ToLower(strings.TrimSpace(response))
@@ -294,10 +302,9 @@ func validateQueryLength(query string, _ *agent.Agent) bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
-
 
 // listModels displays all available models for the current provider
 func listModels(chatAgent *agent.Agent) error {
@@ -406,19 +413,19 @@ func listModels(chatAgent *agent.Agent) error {
 func findFeaturedModels(models []agent_api.ModelInfo, clientType agent_api.ClientType) []int {
 	// Get provider-specific featured models
 	featuredModelNames := agent_api.GetFeaturedModelsForProvider(clientType)
-	
+
 	if len(featuredModelNames) == 0 {
 		return []int{}
 	}
 
 	var featured []int
 	featuredSet := make(map[string]bool)
-	
+
 	// Convert featured model names to set for O(1) lookup
 	for _, name := range featuredModelNames {
 		featuredSet[strings.ToLower(name)] = true
 	}
-	
+
 	// Find matching models
 	for i, model := range models {
 		if featuredSet[strings.ToLower(model.ID)] {
@@ -500,18 +507,18 @@ func selectModel(chatAgent *agent.Agent) error {
 
 	// Get user selection
 	fmt.Printf("\nEnter model number (1-%d) or 'cancel': ", len(models))
-	
+
 	// Temporarily disable escape monitoring during user input to avoid interference
 	chatAgent.DisableEscMonitoring()
 	defer chatAgent.DisableEscMonitoring() // Keep it disabled after this function
-	
+
 	// Use bufio.Scanner for better input handling
 	scanner := bufio.NewScanner(os.Stdin)
 	var input string
 	if scanner.Scan() {
 		input = strings.TrimSpace(scanner.Text())
 	}
-	
+
 	if input == "cancel" || input == "" {
 		fmt.Println("Model selection cancelled.")
 		return nil
@@ -539,7 +546,6 @@ func setModel(modelID string, chatAgent *agent.Agent) error {
 	return nil
 }
 
-
 // showCurrentProvider displays current provider information
 func showCurrentProvider(chatAgent *agent.Agent) error {
 	clientType := chatAgent.GetProviderType()
@@ -560,14 +566,14 @@ func listProviders() error {
 	fmt.Println("\n📡 Available Providers:")
 	fmt.Println("======================")
 	fmt.Println("1. DeepInfra")
-	fmt.Println("2. OpenRouter")  
+	fmt.Println("2. OpenRouter")
 	fmt.Println("3. Ollama (Local)")
 	fmt.Println("4. Groq")
 	fmt.Println("5. Cerebras")
 	fmt.Println("6. DeepSeek")
 	fmt.Println()
 	fmt.Println("Use '/provider select' to switch providers")
-	
+
 	return nil
 }
 
@@ -578,23 +584,23 @@ func selectProvider(chatAgent *agent.Agent) error {
 	fmt.Println("1. DeepInfra")
 	fmt.Println("2. OpenRouter")
 	fmt.Println("3. Ollama (Local)")
-	fmt.Println("4. Groq") 
+	fmt.Println("4. Groq")
 	fmt.Println("5. Cerebras")
 	fmt.Println("6. DeepSeek")
 
 	fmt.Print("\nEnter provider number (1-6) or 'cancel': ")
-	
+
 	// Temporarily disable escape monitoring during user input to avoid interference
 	chatAgent.DisableEscMonitoring()
 	defer chatAgent.DisableEscMonitoring() // Keep it disabled after this function
-	
+
 	// Use bufio.Scanner for better input handling
 	scanner := bufio.NewScanner(os.Stdin)
 	var input string
 	if scanner.Scan() {
 		input = strings.TrimSpace(scanner.Text())
 	}
-	
+
 	if input == "cancel" || input == "" {
 		fmt.Println("Provider selection cancelled.")
 		return nil
@@ -615,14 +621,14 @@ func selectProvider(chatAgent *agent.Agent) error {
 		agent_api.CerebrasClientType,
 		agent_api.DeepSeekClientType,
 	}
-	
+
 	selectedProvider := providers[selection-1]
 	selectedName := agent_api.GetProviderName(selectedProvider)
 
 	// Get default model for the selected provider
 	configManager := chatAgent.GetConfigManager()
 	defaultModel := configManager.GetModelForProvider(selectedProvider)
-	
+
 	fmt.Printf("🔄 Switching to %s with model %s...\n", selectedName, defaultModel)
 
 	// Use the agent's SetModel method which handles provider switching automatically
@@ -633,12 +639,9 @@ func selectProvider(chatAgent *agent.Agent) error {
 
 	fmt.Printf("✅ Provider switched to: %s\n", selectedName)
 	fmt.Printf("🤖 Using model: %s\n", defaultModel)
-	
+
 	return nil
 }
-
-
-
 
 // agentCmd represents the agent command
 var agentCmd = &cobra.Command{
@@ -752,4 +755,3 @@ Examples:
 		return nil
 	},
 }
-

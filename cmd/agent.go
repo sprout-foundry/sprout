@@ -146,6 +146,12 @@ func runSimpleInteractiveMode() error {
 			continue
 		}
 
+		// Handle plain 'exit', 'quit', 'q' to match /exit behavior
+		if input == "exit" || input == "quit" || input == "q" {
+			fmt.Println("👋 Exiting interactive mode")
+			return nil
+		}
+
 		// Handle slash commands using CommandRegistry
 		if strings.HasPrefix(input, "/") {
 			// Handle quit commands specially (immediate exit)

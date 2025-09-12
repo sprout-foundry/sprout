@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	agent_config "github.com/alantheprice/ledit/pkg/agent_config"
-	"github.com/alantheprice/ledit/pkg/agent_tools"
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
@@ -111,7 +111,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		client:               client,
 		messages:             []api.Message{},
 		systemPrompt:         systemPrompt,
-		maxIterations:        20,
+		maxIterations:        100,
 		totalCost:            0.0,
 		clientType:           clientType,
 		debug:                debug,

@@ -529,18 +529,20 @@ func (w *DeepInfraClientWrapper) SendVisionRequest(messages []Message, tools []T
 
 func (w *DeepInfraClientWrapper) GetFeaturedModels() []string {
 	return []string{
-		"Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",    // Top coding model
-		"deepseek-ai/DeepSeek-V3.1",                     // Latest DeepSeek model
+		"Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",         // Top coding model
+		"deepseek-ai/DeepSeek-V3.1",                         // Latest DeepSeek model
 		"meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", // Latest Llama with tool support
-		"Qwen/Qwen3-235B-A22B-Instruct-2507",           // Large general model
+		"Qwen/Qwen3-235B-A22B-Instruct-2507",                // Large general model
+		"deepseek-ai/DeepSeek-V3",                           // DeepSeek V3
+		"deepseek-ai/DeepSeek-R1",                           // DeepSeek R1 with longer context
+		"meta-llama/Llama-3.2-11B-Vision-Instruct",          // Vision capable Llama
 	}
 }
 
 func (w *DeepInfraClientWrapper) GetFeaturedVisionModels() []string {
 	return []string{
-		"meta-llama/Llama-4-Scout-17B-16E-Instruct",    // Vision-capable Llama 4
-		// Note: DeepInfra doesn't currently have Gemma 3 27B vision models
-		// but Llama 4 Scout provides excellent vision capabilities
+		"meta-llama/Llama-3.2-11B-Vision-Instruct",  // Vision-capable Llama 3.2
+		"meta-llama/Llama-4-Scout-17B-16E-Instruct", // Vision-capable Llama 4
 	}
 }
 

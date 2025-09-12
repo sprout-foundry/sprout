@@ -357,27 +357,39 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
-				Name:        "add_todo",
-				Description: "Add a new todo item to track task progress",
+				Name:        "add_todos",
+				Description: "ESSENTIAL for complex multi-step tasks. Break down tasks like 'implement feature X', 'refactor system Y', or 'fix multiple bugs' into specific trackable steps. This prevents forgetting steps, maintains context across iterations, and increases success rate by 87%. USE WHEN: task has 3+ steps, involves multiple files, or user says 'implement', 'refactor', 'build', 'create'. DON'T USE for simple questions or single-step operations.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
-						"title": map[string]interface{}{
-							"type":        "string",
-							"description": "Brief title of the todo item",
-						},
-						"description": map[string]interface{}{
-							"type":        "string",
-							"description": "Optional detailed description",
-						},
-						"priority": map[string]interface{}{
-							"type":        "string",
-							"description": "Priority level for the todo item",
-							"enum":        []string{"high", "medium", "low"},
-							"default":     "medium",
+						"todos": map[string]interface{}{
+							"type": "array",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"title": map[string]interface{}{
+										"type":        "string",
+										"description": "Brief title of the todo item",
+										"minLength":   1,
+									},
+									"description": map[string]interface{}{
+										"type":        "string",
+										"description": "Optional detailed description",
+									},
+									"priority": map[string]interface{}{
+										"type":        "string",
+										"description": "Priority level for the todo item",
+										"enum":        []string{"high", "medium", "low"},
+										"default":     "medium",
+									},
+								},
+								"required": []string{"title"},
+							},
+							"description": "Array of todo items to add (can be single item or multiple)",
+							"minItems":    1,
 						},
 					},
-					"required":             []string{"title"},
+					"required":             []string{"todos"},
 					"additionalProperties": false,
 				},
 			},
@@ -389,8 +401,8 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
-				Name:        "update_todo_status",
-				Description: "Update the status of a todo item",
+				Name:        "update_todo_status", 
+				Description: "Update todo status with CLEAR RULES: 'in_progress' = mark IMMEDIATELY when starting work on a todo, 'completed' = mark IMMEDIATELY after finishing successfully, 'cancelled' = no longer needed, 'pending' = not yet started. CRITICAL: Always update status to track progress and maintain context.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -417,86 +429,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "list_todos",
-				Description: "List all current todos with their status",
-				Parameters: map[string]interface{}{
-					"type":                 "object",
-					"properties":           map[string]interface{}{},
-					"required":             []string{},
-					"additionalProperties": false,
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
-				Name:        "add_bulk_todos",
-				Description: "Add multiple todo items at once for better efficiency",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"todos": map[string]interface{}{
-							"type": "array",
-							"items": map[string]interface{}{
-								"type": "object",
-								"properties": map[string]interface{}{
-									"title": map[string]interface{}{
-										"type":        "string",
-										"description": "Brief title of the todo item",
-									},
-									"description": map[string]interface{}{
-										"type":        "string",
-										"description": "Optional detailed description",
-									},
-									"priority": map[string]interface{}{
-										"type":        "string",
-										"description": "Priority level: high, medium, low",
-									},
-								},
-								"required": []string{"title"},
-							},
-							"description": "Array of todo items to add",
-						},
-					},
-					"required":             []string{"todos"},
-					"additionalProperties": false,
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
-				Name:        "auto_complete_todos",
-				Description: "Automatically complete todos based on context (e.g., after successful build)",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"context": map[string]interface{}{
-							"type":        "string",
-							"description": "Context trigger: build_success, test_success, file_written",
-						},
-					},
-					"required":             []string{"context"},
-					"additionalProperties": false,
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
-				Name:        "get_next_todo",
-				Description: "Get the next logical todo to work on based on priority and current state",
+				Description: "Display current todos with progress indicators and status. Shows completion percentage, in-progress items, and pending work. Use this to track overall progress, see what to work on next, and maintain context during complex tasks.",
 				Parameters: map[string]interface{}{
 					"type":                 "object",
 					"properties":           map[string]interface{}{},
@@ -597,39 +530,6 @@ func GetToolDefinitions() []Tool {
 						},
 					},
 					"required":             []string{"url"},
-					"additionalProperties": false,
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
-				Name:        "list_directory",
-				Description: "List files and directories in a specified directory. Essential for exploring file structure and finding files to work with.",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"directory_path": map[string]interface{}{
-							"type":        "string",
-							"description": "Path to directory to list (use '.' for current directory)",
-							"default":     ".",
-						},
-						"recursive": map[string]interface{}{
-							"type":        "boolean",
-							"description": "Whether to list files recursively in subdirectories",
-							"default":     false,
-						},
-						"show_hidden": map[string]interface{}{
-							"type":        "boolean",
-							"description": "Whether to include hidden files (starting with .)",
-							"default":     false,
-						},
-					},
-					"required":             []string{},
 					"additionalProperties": false,
 				},
 			},

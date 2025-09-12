@@ -11,6 +11,9 @@ import (
 
 // ProcessQuery handles the main conversation loop with the LLM
 func (a *Agent) ProcessQuery(userQuery string) (string, error) {
+	// Enable change tracking for this conversation
+	a.EnableChangeTracking(userQuery)
+	
 	// Enable Esc monitoring during query processing
 	a.EnableEscMonitoring()
 	defer a.DisableEscMonitoring() // Disable when done
@@ -227,10 +230,18 @@ Please continue with your task using the correct tool calling syntax.`
 			}
 
 			// No tool calls and response seems complete - we're done
+			// Commit any tracked changes before returning
+			if commitErr := a.CommitChanges(choice.Message.Content); commitErr != nil {
+				a.debugLog("Warning: Failed to commit tracked changes: %v\n", commitErr)
+			}
 			return choice.Message.Content, nil
 		}
 	}
 
+	// Commit any tracked changes even if we hit max iterations
+	if commitErr := a.CommitChanges("Maximum iterations reached"); commitErr != nil {
+		a.debugLog("Warning: Failed to commit tracked changes: %v\n", commitErr)
+	}
 	return "", fmt.Errorf("maximum iterations (%d) reached without completion", a.maxIterations)
 }
 

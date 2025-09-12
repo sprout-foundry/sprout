@@ -105,6 +105,8 @@ func (a *Agent) suggestCorrectToolName(invalidName string) string {
 // getProviderEnvVar returns the environment variable name for a provider
 func (a *Agent) getProviderEnvVar(provider api.ClientType) string {
 	switch provider {
+	case api.OpenAIClientType:
+		return "OPENAI_API_KEY"
 	case api.DeepInfraClientType:
 		return "DEEPINFRA_API_KEY"
 	case api.CerebrasClientType:

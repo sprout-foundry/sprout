@@ -1,12 +1,16 @@
 package config
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 
 	"github.com/alantheprice/ledit/pkg/agent_api"
+	"golang.org/x/term"
 )
 
 // ClientType is an alias for the agent API ClientType
@@ -14,6 +18,7 @@ type ClientType = api.ClientType
 
 // Re-export the constants from agent_api for convenience
 const (
+	OpenAIClientType     = api.OpenAIClientType
 	DeepInfraClientType  = api.DeepInfraClientType
 	OllamaClientType     = api.OllamaClientType
 	CerebrasClientType   = api.CerebrasClientType
@@ -31,10 +36,22 @@ type Config struct {
 	Version          string                    `json:"version"`
 }
 
+// APIKeys represents the API keys configuration
+type APIKeys struct {
+	OpenAI     string `json:"openai,omitempty"`
+	DeepInfra  string `json:"deepinfra,omitempty"`
+	OpenRouter string `json:"openrouter,omitempty"`
+	Cerebras   string `json:"cerebras,omitempty"`
+	Groq       string `json:"groq,omitempty"`
+	DeepSeek   string `json:"deepseek,omitempty"`
+	Gemini     string `json:"gemini,omitempty"`
+}
+
 const (
 	ConfigVersion = "1.0"
-	ConfigDirName = ".coder"
+	ConfigDirName = ".ledit"
 	ConfigFileName = "config.json"
+	APIKeysFileName = "api_keys.json"
 )
 
 // NewConfig creates a new configuration with sensible defaults
@@ -42,14 +59,15 @@ func NewConfig() *Config {
 	return &Config{
 		LastUsedProvider: "",
 		ProviderModels: map[string]string{
+			"openai":     getDefaultModelForProvider(OpenAIClientType),
 			"deepinfra":  getDefaultModelForProvider(DeepInfraClientType),
 			"ollama":     getDefaultModelForProvider(OllamaClientType),
 			"cerebras":   getDefaultModelForProvider(CerebrasClientType),
-			"openrouter": "deepseek/deepseek-chat-v3.1:free",
+			"openrouter": getDefaultModelForProvider(OpenRouterClientType),
 			"groq":       getDefaultModelForProvider(GroqClientType),
 			"deepseek":   getDefaultModelForProvider(DeepSeekClientType),
 		},
-		ProviderPriority: []string{"openrouter", "deepinfra", "ollama", "cerebras", "groq", "deepseek"},
+		ProviderPriority: []string{"openai", "openrouter", "deepinfra", "ollama", "cerebras", "groq", "deepseek"},
 		Preferences:      make(map[string]interface{}),
 		Version:          ConfigVersion,
 	}
@@ -145,6 +163,7 @@ func (c *Config) Validate() error {
 		name string
 		clientType ClientType
 	}{
+		{"openai", OpenAIClientType},
 		{"deepinfra", DeepInfraClientType},
 		{"ollama", OllamaClientType},
 		{"cerebras", CerebrasClientType},
@@ -161,7 +180,7 @@ func (c *Config) Validate() error {
 	
 	// Set default priority if empty
 	if len(c.ProviderPriority) == 0 {
-		c.ProviderPriority = []string{"deepinfra", "ollama", "cerebras", "openrouter", "groq", "deepseek"}
+		c.ProviderPriority = []string{"openai", "openrouter", "deepinfra", "ollama", "cerebras", "groq", "deepseek"}
 	}
 	
 	return nil
@@ -220,6 +239,8 @@ func getProviderConfigName(clientType ClientType) string {
 // GetProviderFromConfigName converts config key to ClientType
 func GetProviderFromConfigName(name string) (ClientType, error) {
 	switch name {
+	case "openai":
+		return OpenAIClientType, nil
 	case "deepinfra":
 		return DeepInfraClientType, nil
 	case "ollama":
@@ -247,4 +268,212 @@ func getDefaultModelForProvider(clientType ClientType) string {
 func getClientTypeFromEnv() ClientType {
 	// Use the agent_api implementation
 	return api.GetClientTypeFromEnv()
+}
+
+// GetAPIKeysPath returns the full path to the API keys file
+func GetAPIKeysPath() (string, error) {
+	configDir, err := GetConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, APIKeysFileName), nil
+}
+
+// LoadAPIKeys loads API keys from the file and sets environment variables
+func LoadAPIKeys() (*APIKeys, error) {
+	apiKeysPath, err := GetAPIKeysPath()
+	if err != nil {
+		return nil, err
+	}
+
+	// If API keys file doesn't exist, return empty keys
+	if _, err := os.Stat(apiKeysPath); os.IsNotExist(err) {
+		return &APIKeys{}, nil
+	}
+
+	data, err := os.ReadFile(apiKeysPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read API keys file: %w", err)
+	}
+
+	var keys APIKeys
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return nil, fmt.Errorf("failed to parse API keys file: %w", err)
+	}
+
+	// Set environment variables from loaded keys
+	setEnvVarsFromAPIKeys(&keys)
+
+	return &keys, nil
+}
+
+// SaveAPIKeys saves API keys to file
+func SaveAPIKeys(keys *APIKeys) error {
+	apiKeysPath, err := GetAPIKeysPath()
+	if err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(keys, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal API keys: %w", err)
+	}
+
+	return os.WriteFile(apiKeysPath, data, 0600)
+}
+
+// setEnvVarsFromAPIKeys sets environment variables from API keys
+func setEnvVarsFromAPIKeys(keys *APIKeys) {
+	if keys.OpenAI != "" {
+		os.Setenv("OPENAI_API_KEY", keys.OpenAI)
+	}
+	if keys.DeepInfra != "" {
+		os.Setenv("DEEPINFRA_API_KEY", keys.DeepInfra)
+	}
+	if keys.OpenRouter != "" {
+		os.Setenv("OPENROUTER_API_KEY", keys.OpenRouter)
+	}
+	if keys.Cerebras != "" {
+		os.Setenv("CEREBRAS_API_KEY", keys.Cerebras)
+	}
+	if keys.Groq != "" {
+		os.Setenv("GROQ_API_KEY", keys.Groq)
+	}
+	if keys.DeepSeek != "" {
+		os.Setenv("DEEPSEEK_API_KEY", keys.DeepSeek)
+	}
+	if keys.Gemini != "" {
+		os.Setenv("GOOGLE_API_KEY", keys.Gemini)
+	}
+}
+
+// GetProviderAPIKeyName returns the environment variable name for a provider
+func GetProviderAPIKeyName(provider ClientType) string {
+	switch provider {
+	case OpenAIClientType:
+		return "OPENAI_API_KEY"
+	case DeepInfraClientType:
+		return "DEEPINFRA_API_KEY"
+	case OpenRouterClientType:
+		return "OPENROUTER_API_KEY"
+	case CerebrasClientType:
+		return "CEREBRAS_API_KEY"
+	case GroqClientType:
+		return "GROQ_API_KEY"
+	case DeepSeekClientType:
+		return "DEEPSEEK_API_KEY"
+	default:
+		return ""
+	}
+}
+
+// PromptForAPIKey prompts the user for an API key and saves it
+func PromptForAPIKey(provider ClientType) (string, error) {
+	providerName := getProviderDisplayName(provider)
+	fmt.Printf("🔑 API key required for %s\n", providerName)
+	fmt.Printf("Please enter your %s API key: ", providerName)
+
+	// Read API key securely (hidden input)
+	byteKey, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		// Fall back to regular input if term doesn't work
+		fmt.Println() // New line after the prompt
+		reader := bufio.NewReader(os.Stdin)
+		key, err := reader.ReadString('\n')
+		if err != nil {
+			return "", fmt.Errorf("failed to read API key: %w", err)
+		}
+		byteKey = []byte(strings.TrimSpace(key))
+	} else {
+		fmt.Println() // New line after hidden input
+	}
+
+	apiKey := strings.TrimSpace(string(byteKey))
+	if apiKey == "" {
+		return "", fmt.Errorf("no API key provided")
+	}
+
+	// Load existing keys
+	keys, err := LoadAPIKeys()
+	if err != nil {
+		keys = &APIKeys{} // Create new if loading fails
+	}
+
+	// Set the new key
+	setAPIKeyInStruct(keys, provider, apiKey)
+
+	// Save keys
+	if err := SaveAPIKeys(keys); err != nil {
+		return "", fmt.Errorf("failed to save API key: %w", err)
+	}
+
+	// Set environment variable
+	envVar := GetProviderAPIKeyName(provider)
+	if envVar != "" {
+		os.Setenv(envVar, apiKey)
+	}
+
+	fmt.Printf("✅ API key saved for %s\n", providerName)
+	return apiKey, nil
+}
+
+// setAPIKeyInStruct sets the API key in the appropriate field
+func setAPIKeyInStruct(keys *APIKeys, provider ClientType, apiKey string) {
+	switch provider {
+	case OpenAIClientType:
+		keys.OpenAI = apiKey
+	case DeepInfraClientType:
+		keys.DeepInfra = apiKey
+	case OpenRouterClientType:
+		keys.OpenRouter = apiKey
+	case CerebrasClientType:
+		keys.Cerebras = apiKey
+	case GroqClientType:
+		keys.Groq = apiKey
+	case DeepSeekClientType:
+		keys.DeepSeek = apiKey
+	}
+}
+
+// getProviderDisplayName returns a user-friendly name for the provider
+func getProviderDisplayName(provider ClientType) string {
+	switch provider {
+	case OpenAIClientType:
+		return "OpenAI"
+	case DeepInfraClientType:
+		return "DeepInfra"
+	case OpenRouterClientType:
+		return "OpenRouter"
+	case CerebrasClientType:
+		return "Cerebras"
+	case GroqClientType:
+		return "Groq"
+	case DeepSeekClientType:
+		return "DeepSeek"
+	default:
+		return string(provider)
+	}
+}
+
+// EnsureAPIKeyAvailable ensures an API key is available for a provider, prompting if needed
+func EnsureAPIKeyAvailable(provider ClientType) error {
+	envVar := GetProviderAPIKeyName(provider)
+	if envVar == "" {
+		return nil // No API key needed (e.g., Ollama)
+	}
+
+	// Check if already set in environment
+	if os.Getenv(envVar) != "" {
+		return nil
+	}
+
+	// Try to load from file
+	_, err := LoadAPIKeys()
+	if err == nil && os.Getenv(envVar) != "" {
+		return nil
+	}
+
+	// Prompt for API key
+	_, err = PromptForAPIKey(provider)
+	return err
 }

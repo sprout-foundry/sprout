@@ -226,18 +226,13 @@ func EnsureAPIKeyAvailable(provider ClientType) error {
 		return nil // No API key needed (e.g., Ollama)
 	}
 
-	// Check if already set in environment
-	if os.Getenv(envVar) != "" {
-		return nil
-	}
-
-	// Try to load from file
+	// Always try to load from file first to get the latest keys
 	_, err := LoadAPIKeys()
 	if err == nil && os.Getenv(envVar) != "" {
-		return nil
+		return nil // Successfully loaded from file
 	}
 
-	// Prompt for API key
+	// If still no key available, prompt for it
 	_, err = PromptForAPIKey(provider)
 	return err
 }

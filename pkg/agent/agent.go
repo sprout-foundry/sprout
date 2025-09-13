@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/ui"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	agent_config "github.com/alantheprice/ledit/pkg/agent_config"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/alantheprice/ledit/pkg/ui"
 )
 
 type Agent struct {
@@ -40,13 +40,17 @@ type Agent struct {
 	shellCommandHistory  map[string]*ShellCommandResult // Track shell commands for deduplication
 	changeTracker        *ChangeTracker                 // Track file changes for rollback support
 	mcpManager           mcp.MCPManager                 // MCP server management
+	circuitBreaker       *CircuitBreakerState           // Track repetitive actions
 
 	// Interrupt handling
-	interruptRequested   bool      // Flag indicating interrupt was requested
-	interruptMessage     string    // User message to inject after interrupt
-	escPressed           chan bool // Channel to signal Esc key press
+	interruptRequested   bool        // Flag indicating interrupt was requested
+	interruptMessage     string      // User message to inject after interrupt
+	escPressed           chan bool   // Channel to signal Esc key press
 	interruptChan        chan string // Channel for TUI interrupt messages
-	escMonitoringEnabled bool      // Flag to enable/disable Esc monitoring
+	escMonitoringEnabled bool        // Flag to enable/disable Esc monitoring
+
+	// UI callback for real-time updates
+	statsUpdateCallback func(totalTokens int, totalCost float64)
 }
 
 func NewAgent() (*Agent, error) {
@@ -146,6 +150,11 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Initialize MCP manager
 	agent.mcpManager = mcp.NewMCPManager(nil) // nil logger for now
 
+	// Initialize circuit breaker
+	agent.circuitBreaker = &CircuitBreakerState{
+		Actions: make(map[string]*CircuitBreakerAction),
+	}
+
 	// Initialize MCP configuration and auto-start servers if configured
 	if err := agent.initializeMCP(); err != nil {
 		// Don't fail agent creation if MCP fails, just log warning
@@ -155,6 +164,46 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	}
 
 	return agent, nil
+}
+
+// CheckCircuitBreaker checks if an action should be blocked due to repetitive behavior
+func (a *Agent) CheckCircuitBreaker(actionType, target string, threshold int) (bool, string) {
+	key := fmt.Sprintf("%s:%s", actionType, target)
+	action, exists := a.circuitBreaker.Actions[key]
+
+	if !exists {
+		// First time doing this action
+		a.circuitBreaker.Actions[key] = &CircuitBreakerAction{
+			ActionType: actionType,
+			Target:     target,
+			Count:      1,
+			LastUsed:   time.Now().Unix(),
+		}
+		return false, ""
+	}
+
+	action.Count++
+	action.LastUsed = time.Now().Unix()
+
+	if action.Count >= threshold {
+		warning := fmt.Sprintf("🛑 CIRCUIT BREAKER TRIGGERED: You've attempted '%s' on '%s' %d times. This suggests you may be stuck in a loop.\n\n"+
+			"DEBUGGING SUGGESTIONS:\n"+
+			"1. Read the error message carefully - what is it actually telling you?\n"+
+			"2. Check if you're fixing the right thing - are you editing tests when you should fix source code?\n"+
+			"3. Search the codebase for missing functions or dependencies\n"+
+			"4. Step back and analyze the root cause instead of making random changes\n\n"+
+			"Consider trying a different approach or asking for help.",
+			actionType, target, action.Count)
+		return true, warning
+	}
+
+	return false, ""
+}
+
+// ResetCircuitBreaker resets the circuit breaker for a specific action (for testing)
+func (a *Agent) ResetCircuitBreaker(actionType, target string) {
+	key := fmt.Sprintf("%s:%s", actionType, target)
+	delete(a.circuitBreaker.Actions, key)
 }
 
 func getProjectContext() string {
@@ -195,8 +244,17 @@ func (a *Agent) GetTotalCost() float64 {
 	return a.totalCost
 }
 
+func (a *Agent) GetTotalTokens() int {
+	return a.totalTokens
+}
+
 func (a *Agent) GetCurrentIteration() int {
 	return a.currentIteration
+}
+
+// SetStatsUpdateCallback sets a callback for real-time stats updates
+func (a *Agent) SetStatsUpdateCallback(callback func(totalTokens int, totalCost float64)) {
+	a.statsUpdateCallback = callback
 }
 
 // monitorEscKey - DISABLED: was interfering with Ctrl+C and terminal control

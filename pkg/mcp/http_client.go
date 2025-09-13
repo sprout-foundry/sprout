@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"sync"
 
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -21,14 +22,19 @@ type MCPHTTPClient struct {
 	initialized  bool
 	mu           sync.RWMutex
 	nextID       int64
+	sessionID    string // Track session ID for GitHub MCP server
 }
 
 // NewMCPHTTPClient creates a new HTTP MCP client
 func NewMCPHTTPClient(config MCPServerConfig, logger *utils.Logger) *MCPHTTPClient {
+	// Use a cookie jar to maintain session state
+	jar, _ := cookiejar.New(nil)
+	
 	return &MCPHTTPClient{
 		config: config,
 		httpClient: &http.Client{
 			Timeout: config.Timeout,
+			Jar:     jar, // Enable cookie handling for session management
 		},
 		logger:  logger,
 		running: false,
@@ -59,6 +65,7 @@ func (c *MCPHTTPClient) Stop(ctx context.Context) error {
 
 	c.running = false
 	c.initialized = false
+	c.sessionID = "" // Clear session ID
 	if c.logger != nil {
 		c.logger.LogProcessStep(fmt.Sprintf("🛑 HTTP MCP client stopped for %s", c.config.URL))
 	}
@@ -84,6 +91,7 @@ func (c *MCPHTTPClient) GetConfig() MCPServerConfig {
 
 // sendRequest sends an HTTP request to the MCP server
 func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params interface{}) (*MCPMessage, error) {
+	// Only lock for the ID increment, not the entire method
 	c.mu.Lock()
 	id := c.nextID
 	c.nextID++
@@ -113,29 +121,76 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
+	// Add session ID header if available (for subsequent requests after initialize)
+	c.mu.RLock()
+	if c.sessionID != "" && method != "initialize" {
+		req.Header.Set("Mcp-Session-Id", c.sessionID)
+	}
+	c.mu.RUnlock()
+
 	if c.logger != nil {
 		c.logger.LogProcessStep(fmt.Sprintf("🔄 Sending MCP HTTP request: %s to %s", method, c.config.URL))
 	}
 
+	// Debug: Log detailed request information
+	fmt.Printf("🔍 REQUEST DEBUG:\n")
+	fmt.Printf("  Method: %s\n", method)
+	fmt.Printf("  URL: %s\n", req.URL.String())
+	fmt.Printf("  Headers:\n")
+	for k, v := range req.Header {
+		if k == "Authorization" && len(v) > 0 && len(v[0]) > 20 {
+			fmt.Printf("    %s: %s...\n", k, v[0][:20])
+		} else {
+			fmt.Printf("    %s: %v\n", k, v)
+		}
+	}
+	fmt.Printf("  Body: %s\n", string(jsonData))
+	
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		fmt.Printf("❌ REQUEST ERROR: %v\n", err)
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("HTTP request failed with status %d: %s", resp.StatusCode, string(body))
-	}
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
+	// Debug: Log detailed response information
+	fmt.Printf("🔍 RESPONSE DEBUG:\n")
+	fmt.Printf("  Status: %d %s\n", resp.StatusCode, resp.Status)
+	fmt.Printf("  Headers:\n")
+	for k, v := range resp.Header {
+		fmt.Printf("    %s: %v\n", k, v)
+	}
+	fmt.Printf("  Body: %s\n", string(responseBody))
+	
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP request failed with status %d: %s", resp.StatusCode, string(responseBody))
+	}
+
 	var response MCPMessage
 	if err := json.Unmarshal(responseBody, &response); err != nil {
+		fmt.Printf("❌ JSON UNMARSHAL ERROR: %v\n", err)
+		fmt.Printf("Raw response: %s\n", string(responseBody))
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	
+	fmt.Printf("✅ PARSED RESPONSE: %+v\n", response)
+
+	// Extract session ID from response header if this is an initialize request
+	if method == "initialize" {
+		if sessionID := resp.Header.Get("Mcp-Session-Id"); sessionID != "" {
+			c.mu.Lock()
+			c.sessionID = sessionID
+			c.mu.Unlock()
+			if c.logger != nil {
+				c.logger.LogProcessStep(fmt.Sprintf("🔑 Captured session ID: %s", sessionID))
+			}
+			fmt.Printf("🔑 Session ID captured: %s\n", sessionID)
+		}
 	}
 
 	if response.Error != nil {
@@ -147,19 +202,21 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 
 // Initialize sends initialize request to the server
 func (c *MCPHTTPClient) Initialize(ctx context.Context) error {
+	// Check state with lock, but don't hold it during the HTTP call
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.initialized {
+		c.mu.Unlock()
 		return nil
 	}
 
 	if !c.running {
+		c.mu.Unlock()
 		return fmt.Errorf("client not started")
 	}
+	c.mu.Unlock()
 
 	params := map[string]interface{}{
-		"protocolVersion": "2024-11-05",
+		"protocolVersion": "2025-06-18",
 		"capabilities": map[string]interface{}{
 			"roots": map[string]interface{}{
 				"listChanged": false,
@@ -176,7 +233,13 @@ func (c *MCPHTTPClient) Initialize(ctx context.Context) error {
 		return fmt.Errorf("initialize request failed: %w", err)
 	}
 
+	// Session ID extraction happens in sendRequest now
+
+	// Set initialized state with lock
+	c.mu.Lock()
 	c.initialized = true
+	c.mu.Unlock()
+	
 	if c.logger != nil {
 		c.logger.LogProcessStep(fmt.Sprintf("✅ HTTP MCP client initialized for %s", c.config.URL))
 	}

@@ -69,6 +69,10 @@ func (d *Dropdown) Show() (DropdownItem, error) {
 	}
 	defer d.restore()
 
+	// Switch to alternate screen buffer (like vim/less)
+	fmt.Print("\033[?1049h")
+	// Clear screen
+	fmt.Print("\033[2J")
 	// Hide cursor initially for cleaner display
 	fmt.Print("\033[?25l")
 
@@ -172,8 +176,8 @@ func (d *Dropdown) updateDisplay() {
 	// Hide cursor during redraw
 	fmt.Print("\033[?25l")
 
-	// Move cursor to home position and clear screen
-	fmt.Print("\033[H\033[2J")
+	// Move cursor to home position
+	fmt.Print("\033[H")
 
 	// Calculate display window
 	termWidth, termHeight, _ := term.GetSize(int(os.Stdin.Fd()))
@@ -268,6 +272,9 @@ func (d *Dropdown) restore() {
 	if d.oldState != nil {
 		// Show cursor again
 		fmt.Print("\033[?25h")
+
+		// Switch back to main screen buffer
+		fmt.Print("\033[?1049l")
 
 		// Restore terminal state
 		term.Restore(int(os.Stdin.Fd()), d.oldState)

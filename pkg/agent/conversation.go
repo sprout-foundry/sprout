@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -177,9 +178,23 @@ Current status: Starting iteration 1 (natural termination)`
 		a.completionTokens += resp.Usage.CompletionTokens
 		a.cachedTokens += cachedTokens
 
+		// Debug log token update
+		if os.Getenv("DEBUG") == "1" {
+			fmt.Fprintf(os.Stderr, "\n[DEBUG] Token update: usage.Total=%d, agent.Total=%d\n", resp.Usage.TotalTokens, a.totalTokens)
+		}
+
 		// Calculate cost savings for display purposes only
 		cachedCostSavings := a.calculateCachedCost(cachedTokens)
 		a.cachedCostSavings += cachedCostSavings
+
+		// Call stats update callback if set
+		if a.statsUpdateCallback != nil {
+			// Debug log when callback is invoked
+			if os.Getenv("DEBUG") == "1" {
+				fmt.Fprintf(os.Stderr, "\n[DEBUG] Invoking stats callback: total=%d, cost=%.4f\n", a.totalTokens, a.totalCost)
+			}
+			a.statsUpdateCallback(a.totalTokens, a.totalCost)
+		}
 
 		// Only show context information in debug mode
 		// Calculate iteration timing

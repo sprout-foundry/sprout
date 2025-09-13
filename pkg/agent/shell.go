@@ -32,6 +32,14 @@ func (a *Agent) executeShellCommandWithTruncation(command string) (string, error
 	}
 	
 	// Execute the command for the first time
+	
+	// Check circuit breaker for test commands that might be failing repeatedly
+	if strings.Contains(command, "go test") || strings.Contains(command, "test") {
+		if blocked, warning := a.CheckCircuitBreaker("test_command", command, 4); blocked {
+			return warning, fmt.Errorf("circuit breaker triggered - too many failed test attempts")
+		}
+	}
+	
 	a.ToolLog("executing command", command)
 	a.debugLog("Executing shell command: %s\n", command)
 	

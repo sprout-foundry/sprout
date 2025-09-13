@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -22,7 +23,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	// Log the tool call for debugging
 	a.debugLog("🔧 Executing tool: %s with args: %v\n", toolCall.Function.Name, args)
 
-	// Validate tool name and provide helpful error for common mistakes  
+	// Validate tool name and provide helpful error for common mistakes
 	validTools := []string{"shell_command", "read_file", "write_file", "edit_file", "search_files", "add_todos", "update_todo_status", "list_todos", "web_search", "fetch_url", "analyze_ui_screenshot", "analyze_image_content"}
 	isValidTool := false
 	isMCPTool := false
@@ -146,6 +147,11 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 			return "", fmt.Errorf("failed to read original file for diff: %w", err)
 		}
 
+		// Check circuit breaker before editing
+		if blocked, warning := a.CheckCircuitBreaker("edit_file", filePath, 3); blocked {
+			return warning, fmt.Errorf("circuit breaker triggered - too many edit attempts on same file")
+		}
+
 		a.ToolLog("editing file", filePath)
 		a.debugLog("Editing file: %s\n", filePath)
 		result, err := tools.EditFile(filePath, oldString, newString)
@@ -171,31 +177,31 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("missing todos argument")
 		}
-		
+
 		// Parse the todos array
 		todosSlice, ok := todosRaw.([]interface{})
 		if !ok {
 			return "", fmt.Errorf("todos must be an array")
 		}
-		
+
 		var todos []struct {
 			Title       string
 			Description string
 			Priority    string
 		}
-		
+
 		for _, todoRaw := range todosSlice {
 			todoMap, ok := todoRaw.(map[string]interface{})
 			if !ok {
 				return "", fmt.Errorf("each todo must be an object")
 			}
-			
+
 			todo := struct {
 				Title       string
 				Description string
 				Priority    string
 			}{}
-			
+
 			if title, ok := todoMap["title"].(string); ok {
 				todo.Title = title
 			}
@@ -207,10 +213,10 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 			} else {
 				todo.Priority = "medium" // default
 			}
-			
+
 			todos = append(todos, todo)
 		}
-		
+
 		// Show the todo titles being created
 		todoTitles := make([]string, len(todos))
 		for i, todo := range todos {
@@ -315,6 +321,15 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 			a.promptTokens += visionUsage.PromptTokens
 			a.completionTokens += visionUsage.CompletionTokens
 
+			// Call stats update callback if set
+			if a.statsUpdateCallback != nil {
+				// Debug log when callback is invoked
+				if os.Getenv("DEBUG") == "1" {
+					fmt.Fprintf(os.Stderr, "\n[DEBUG] Invoking stats callback from vision tool: total=%d, cost=%.4f\n", a.totalTokens, a.totalCost)
+				}
+				a.statsUpdateCallback(a.totalTokens, a.totalCost)
+			}
+
 			// Always log vision costs (they're significant)
 			a.debugLog("💰 UI Screenshot call: %s [frontend] → %d tokens, $%.6f\n",
 				filepath.Base(imagePath), visionUsage.TotalTokens, visionUsage.EstimatedCost)
@@ -411,54 +426,54 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("invalid pattern argument")
 		}
-		
+
 		directory := "."
 		if dir, ok := args["directory"].(string); ok && dir != "" {
 			directory = dir
 		}
-		
+
 		filePattern := ""
 		if fp, ok := args["file_pattern"].(string); ok {
 			filePattern = fp
 		}
-		
+
 		caseSensitive := false
 		if cs, ok := args["case_sensitive"].(bool); ok {
 			caseSensitive = cs
 		}
-		
+
 		maxResults := 100
 		if mr, ok := args["max_results"].(float64); ok {
 			maxResults = int(mr)
 		}
-		
+
 		a.ToolLog("searching files", fmt.Sprintf("'%s' in %s", pattern, directory))
 		a.debugLog("Searching files: pattern='%s', directory='%s', file_pattern='%s'\n", pattern, directory, filePattern)
-		
+
 		var command string
 		grepFlags := "-n"
 		if !caseSensitive {
 			grepFlags += "i"
 		}
-		
+
 		if filePattern != "" {
-			command = fmt.Sprintf("find %s -name '%s' -type f -exec grep %s '%s' {} + | head -%d", 
+			command = fmt.Sprintf("find %s -name '%s' -type f -exec grep %s '%s' {} + | head -%d",
 				directory, filePattern, grepFlags, pattern, maxResults)
 		} else {
-			command = fmt.Sprintf("find %s -type f -exec grep %s '%s' {} + | head -%d", 
+			command = fmt.Sprintf("find %s -type f -exec grep %s '%s' {} + | head -%d",
 				directory, grepFlags, pattern, maxResults)
 		}
-		
+
 		result, err := a.executeShellCommandWithTruncation(command)
 		if err != nil {
 			a.debugLog("File search failed: %v\n", err)
 			return "", fmt.Errorf("file search failed: %w", err)
 		}
-		
+
 		if result == "" {
 			return fmt.Sprintf("No matches found for pattern '%s' in %s", pattern, directory), nil
 		}
-		
+
 		a.debugLog("File search completed, found results\n")
 		return result, nil
 

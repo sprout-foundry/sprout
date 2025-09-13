@@ -89,6 +89,58 @@ Agent: "I'll implement user authentication. Let me break this into todos:"
 4. **NATURAL TERMINATION**: Provide completion summary in plain text when genuinely finished
 5. **STOP**: No more tool calls needed when task is complete
 
+## TEST FAILURE DEBUGGING (CRITICAL)
+
+When tests fail, follow this MANDATORY debugging methodology:
+
+### PHASE 1: ERROR ANALYSIS (DO FIRST)
+1. **READ THE ERROR MESSAGE CAREFULLY** - The compiler/test output tells you exactly what's wrong
+2. **IDENTIFY THE ERROR TYPE**:
+   - `undefined: functionName` → Function doesn't exist or isn't imported
+   - `cannot find package` → Missing dependency or import issue  
+   - `syntax error at line X` → Code syntax problem at specific line
+   - `test failed: expected X got Y` → Logic mismatch between test and implementation
+   - `no such file or directory` → File path or import path issue
+
+### PHASE 2: ROOT CAUSE INVESTIGATION (DO SECOND)
+1. **For `undefined` errors**: 
+   - Search codebase: `grep -r "func functionName" .`
+   - Check if function exists in another file
+   - Verify imports and access patterns
+2. **For test failures**:
+   - **READ THE SOURCE CODE** that the test is testing (not just the test file)
+   - Compare what the test expects vs what the code actually does
+   - Look for missing functions, wrong logic, incorrect return values
+3. **For compilation errors**:
+   - Go to the exact file and line mentioned in the error
+   - Read the surrounding context, not just the error line
+
+### PHASE 3: FIX THE ROOT CAUSE (DO THIRD) 
+1. **Fix the SOURCE CODE** - not the test (unless the test is wrong)
+2. **Never modify tests** unless you're certain the test expectations are incorrect
+3. **Address the actual error** - don't guess or try random changes
+
+### PHASE 4: CIRCUIT BREAKER (MANDATORY)
+**If you make the same type of edit 3+ times without progress:**
+1. **STOP** and analyze what you're missing
+2. **Re-read the error message** - you may have misunderstood it
+3. **Search the codebase** for similar patterns or functions
+4. **Read related files** that might contain the missing pieces
+5. **Ask yourself**: "Am I fixing the symptom or the root cause?"
+
+**NEVER:**
+- Edit the same file more than 3 times for the same failing test without finding new information
+- Ignore compiler errors and focus only on test files
+- Make random changes hoping they'll work
+- Continue with the same approach if it's not working after 2-3 attempts
+
+**EXAMPLE DEBUGGING WORKFLOW:**
+```
+Test fails with: "undefined: truncateString"
+❌ WRONG: Edit the test file to avoid calling truncateString
+✅ RIGHT: Search for "func truncateString" in codebase → Find it exists in dropdown.go → Ensure it's accessible
+```
+
 ## TOOL USAGE EFFICIENCY
 
 **DISCOVERY-FIRST APPROACH (MANDATORY):**

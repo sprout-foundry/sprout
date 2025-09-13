@@ -1,29 +1,31 @@
 package tui
 
 import (
-	"context"
+	// "context" // commented out - used in the commented functions
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	agent_api "github.com/alantheprice/ledit/pkg/agent_api"
 	commands "github.com/alantheprice/ledit/pkg/agent_commands"
 	"github.com/alantheprice/ledit/pkg/ui"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"path/filepath"
 )
 
 // Basic model scaffold: header, body, footer with ticking clock
 type model struct {
-	start     time.Time
-	width     int
-	height    int
-	logs      []string
-	progress  ui.ProgressSnapshotEvent
-	streaming bool
+	start         time.Time
+	width         int
+	height        int
+	logs          []string
+	progress      ui.ProgressSnapshotEvent
+	streaming     bool
 	interruptChan chan string
 	// simple prompt state
 	awaitingPrompt bool
@@ -50,6 +52,17 @@ type model struct {
 	commandHistory  []string
 	historyIndex    int    // Current position in command history (-1 means not browsing history)
 	originalInput   string // Store original input when browsing history
+	// paste detection
+	lastInputTime  time.Time
+	pasteBuffer    string
+	inPasteMode    bool
+	pasteThreshold time.Duration // Time threshold to detect paste
+	// command suggestions
+	showCommandSuggestions bool
+	commandSuggestions     []string
+	// agent and command registry
+	agent           *agent.Agent
+	commandRegistry *commands.CommandRegistry
 }
 
 type tickMsg time.Time
@@ -91,16 +104,48 @@ func initialInteractiveModel() model {
 	m.historyIndex = -1 // Not browsing history initially
 	m.originalInput = ""
 
+	// Initialize paste detection
+	m.pasteThreshold = 50 * time.Millisecond // Characters arriving faster than this are likely paste
+	m.lastInputTime = time.Now()
+	m.inPasteMode = false
+
 	// Ensure auto-scroll is enabled from the start in interactive mode
 	m.vp.GotoBottom()
 
 	// Initialize interrupt channel
 	m.interruptChan = make(chan string, 1)
 
+	// Initialize agent and command registry
+	// Set environment variables for system
+	os.Setenv("LEDIT_FROM_AGENT", "1")
+	os.Setenv("LEDIT_SKIP_PROMPT", "1")
+	os.Setenv("LEDIT_USING_CODER", "1")
+
+	var err error
+	m.agent, err = agent.NewAgent()
+	if err != nil {
+		ui.Logf("❌ Failed to initialize agent: %v", err)
+	} else {
+		// Set up stats update callback to publish progress events
+		m.agent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
+			// Publish progress event with token/cost updates
+			modelName := m.agent.GetModel()
+			ui.PublishProgressWithTokens(0, 0, totalTokens, totalCost, modelName, nil)
+		})
+
+		// Initialize model info
+		m.baseModel = m.agent.GetModel()
+	}
+
+	m.commandRegistry = commands.NewCommandRegistry()
+
 	return m
 }
 
 func (m model) Init() tea.Cmd {
+	// Set up TUI output redirection so all fmt.Print* calls go to the logs viewport
+	ui.SetDefaultSink(ui.TuiSink{})
+
 	return tea.Batch(
 		tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) }),
 		subscribeEvents(),
@@ -112,24 +157,8 @@ func subscribeEvents() tea.Cmd {
 		// Check for events with longer polling interval to reduce interference
 		select {
 		case ev := <-ui.Events():
-			switch e := ev.(type) {
-			case ui.LogEvent:
-				return e
-			case ui.ProgressSnapshotEvent:
-				return e
-			case ui.StreamStartedEvent:
-				return e
-			case ui.StreamEndedEvent:
-				return e
-			case ui.PromptRequestEvent:
-				return e
-			case ui.PromptResponseEvent:
-				return e
-			case ui.ModelInfoEvent:
-				return e
-			case ui.StatusEvent:
-				return e
-			}
+			// Return any event we receive
+			return ev
 		default:
 			// No events available, continue polling
 		}
@@ -270,10 +299,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "enter":
-				input := strings.TrimSpace(m.textInput.Value())
+				input := m.textInput.Value()
+
+				// Check for backslash continuation
+				if strings.HasSuffix(strings.TrimSpace(input), "\\") {
+					// Remove trailing backslash and add newline
+					trimmed := strings.TrimSpace(input)
+					newValue := trimmed[:len(trimmed)-1] + "\n"
+					m.textInput.SetValue(newValue)
+					m.textInput.SetCursor(len(newValue))
+					ui.Log("↩️  Continue on next line...")
+					return m, nil
+				}
+
+				input = strings.TrimSpace(input)
 				if input != "" {
 					// Check for slash commands first
-					if strings.HasPrefix(input, "/") {
+					if strings.HasPrefix(input, "/") && !strings.Contains(input, "\n") {
 						handled, newModel, cmd := m.handleSlashCommand(input)
 						if handled {
 							m.textInput.SetValue("")
@@ -284,9 +326,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 
+					// Check if input contains file paths
+					processedInput := m.processFileReferences(input)
+
 					// Regular agent command execution
-					go executeAgentRequest(input)
-					ui.Logf("🎯 Executing: %s", input)
+					go func() {
+						m.executeAgentRequest(processedInput)
+					}()
+					ui.Logf("🎯 Executing: %s", strings.ReplaceAll(processedInput, "\n", " ↩️ "))
 
 					// Add to command history
 					m.commandHistory = append(m.commandHistory, input)
@@ -317,6 +364,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "ctrl+c":
 				return m, tea.Quit
+			case "tab":
+				// In interactive mode with focused input, tab should pass through to text input
+				// This prevents the general tab handler from interfering
+				var cmd tea.Cmd
+				m.textInput, cmd = m.textInput.Update(msg)
+				return m, cmd
 			default:
 				// Reset history navigation when user starts typing
 				if m.historyIndex != -1 {
@@ -324,9 +377,58 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.originalInput = ""
 				}
 
+				// Paste detection - check if input is coming in too fast
+				now := time.Now()
+				if msg.Type == tea.KeyRunes {
+					// Check time since last input
+					if now.Sub(m.lastInputTime) < m.pasteThreshold {
+						// Likely paste - accumulate in paste buffer
+						if !m.inPasteMode {
+							m.inPasteMode = true
+							m.pasteBuffer = m.textInput.Value() // Save current content
+						}
+						m.pasteBuffer += string(msg.Runes)
+					} else {
+						// Normal typing speed
+						if m.inPasteMode {
+							// Paste ended, update text input with full paste
+							m.textInput.SetValue(m.pasteBuffer)
+							m.textInput.SetCursor(len(m.pasteBuffer))
+							m.inPasteMode = false
+							m.pasteBuffer = ""
+						}
+					}
+					m.lastInputTime = now
+				}
+
 				// Pass through to text input
 				var cmd tea.Cmd
 				m.textInput, cmd = m.textInput.Update(msg)
+
+				// Check if we should show command suggestions
+				currentValue := m.textInput.Value()
+				if currentValue == "/" && m.commandRegistry != nil {
+					m.showCommandSuggestions = true
+					// Get commands from registry
+					m.commandSuggestions = []string{}
+					for _, cmd := range m.commandRegistry.ListCommands() {
+						m.commandSuggestions = append(m.commandSuggestions,
+							fmt.Sprintf("/%s - %s", cmd.Name(), cmd.Description()))
+					}
+					// Add TUI-specific commands
+					m.commandSuggestions = append(m.commandSuggestions,
+						"/logs - Toggle logs view",
+						"/show - Show/expand logs",
+						"/hide - Hide/collapse logs",
+						"/progress - Toggle progress view",
+						"/history - Show command history",
+						"/paste - Paste mode instructions",
+						"/clear - Clear logs",
+					)
+				} else if !strings.HasPrefix(currentValue, "/") || currentValue == "" {
+					m.showCommandSuggestions = false
+				}
+
 				return m, cmd
 			}
 		}
@@ -361,6 +463,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.vp.SetContent("")
 			return m, nil
 		case "tab":
+			// Skip if we're in interactive mode with focused input
+			// (already handled in the interactive section)
+			if m.interactiveMode && m.focusedInput {
+				return m, nil
+			}
+
 			if m.interactiveMode {
 				// In interactive mode, tab should not unfocus the input
 				// Instead, it can be used for autocomplete or just ignored
@@ -503,8 +611,14 @@ func (m model) renderInteractiveView() string {
 		progressHeight = countLines(m.renderProgress()) + 1
 	}
 
+	// Account for command suggestions if shown
+	suggestionsHeight := 0
+	if m.showCommandSuggestions && len(m.commandSuggestions) > 0 {
+		suggestionsHeight = len(m.commandSuggestions) + 3 // +3 for border and title
+	}
+
 	// Available space for scrolling logs
-	logsHeight := m.height - headerHeight - footerHeight - inputHeight - progressHeight
+	logsHeight := m.height - headerHeight - footerHeight - inputHeight - progressHeight - suggestionsHeight
 	if logsHeight < 5 {
 		logsHeight = 5 // Minimum viable logs area
 	}
@@ -533,6 +647,21 @@ func (m model) renderInteractiveView() string {
 			Render("🤖 Agent ready - enter a request below")
 	}
 
+	// Command suggestions if active
+	commandSuggestionsView := ""
+	if m.showCommandSuggestions && len(m.commandSuggestions) > 0 {
+		suggestionLines := []string{"📋 Available commands:"}
+		for _, cmd := range m.commandSuggestions {
+			suggestionLines = append(suggestionLines, "  "+cmd)
+		}
+		commandSuggestionsView = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("3")). // Yellow
+			Padding(0, 1).
+			Width(m.width - 2).
+			Render(strings.Join(suggestionLines, "\n"))
+	}
+
 	// Input area at bottom
 	inputArea := m.renderInputArea()
 
@@ -540,13 +669,13 @@ func (m model) renderInteractiveView() string {
 	footer := m.renderStreamlinedFooter()
 
 	// Assemble the complete view
-	return lipgloss.JoinVertical(lipgloss.Left,
-		header,
-		progress,
-		logsContent,
-		inputArea,
-		footer,
-	)
+	components := []string{header, progress, logsContent}
+	if commandSuggestionsView != "" {
+		components = append(components, commandSuggestionsView)
+	}
+	components = append(components, inputArea, footer)
+
+	return lipgloss.JoinVertical(lipgloss.Left, components...)
 }
 
 // renderStandardView keeps the original non-interactive layout
@@ -701,17 +830,48 @@ func (m model) renderStandardView() string {
 // renderStreamlinedHeader provides a clean header for interactive mode
 func (m model) renderStreamlinedHeader() string {
 	elapsed := time.Since(m.start).Truncate(time.Second)
-	
+
 	// Get agent info if available
 	agentInfo := "🤖 Agent Ready"
 	if m.streaming {
 		agentInfo = "🤖 Agent Processing..."
 	}
-	
+
 	// Build header with essential info
-	headerContent := fmt.Sprintf("%s • %v • Logs: %d", 
-		agentInfo, elapsed, len(m.logs))
-	
+	parts := []string{agentInfo}
+
+	// Add model info if available
+	if m.baseModel != "" {
+		parts = append(parts, fmt.Sprintf("Model: %s", m.baseModel))
+	}
+
+	// Add token/cost info if available
+	if m.totalTokens > 0 {
+		parts = append(parts, fmt.Sprintf("Tokens: %s", formatNumber(m.totalTokens)))
+	}
+	if m.totalCost > 0 {
+		parts = append(parts, fmt.Sprintf("Cost: $%.4f", m.totalCost))
+	}
+
+	// Add elapsed time and log count
+	parts = append(parts, fmt.Sprintf("%v", elapsed))
+	parts = append(parts, fmt.Sprintf("Logs: %d", len(m.logs)))
+
+	headerContent := strings.Join(parts, " • ")
+
+	// Trim to width if needed
+	if m.width > 0 && len(headerContent) > m.width-4 {
+		// Prioritize showing agent status, tokens, and cost
+		parts = []string{agentInfo}
+		if m.totalTokens > 0 {
+			parts = append(parts, fmt.Sprintf("%s tok", formatNumber(m.totalTokens)))
+		}
+		if m.totalCost > 0 {
+			parts = append(parts, fmt.Sprintf("$%.4f", m.totalCost))
+		}
+		headerContent = strings.Join(parts, " • ")
+	}
+
 	return lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("6")). // Cyan
@@ -726,14 +886,14 @@ func (m model) renderInputArea() string {
 			Faint(true).
 			Render("Terminal too narrow - resize to use input")
 	}
-	
+
 	// Set appropriate width for text input
 	inputWidth := m.width - 6 // Account for borders and padding
 	if inputWidth > 100 {
 		inputWidth = 100 // Max width for usability
 	}
 	m.textInput.Width = inputWidth
-	
+
 	// Render based on focus state
 	if m.focusedInput {
 		return lipgloss.NewStyle().
@@ -753,7 +913,7 @@ func (m model) renderInputArea() string {
 			}
 			preview = fmt.Sprintf("Current: %s (Press 'i' to edit)", currentValue)
 		}
-		
+
 		return lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("8")). // Gray when unfocused
@@ -767,16 +927,16 @@ func (m model) renderInputArea() string {
 // renderStreamlinedFooter provides helpful shortcuts
 func (m model) renderStreamlinedFooter() string {
 	shortcuts := "Enter: Execute • ↑/↓: History • Esc: Clear • /help: Commands • Ctrl+C: Exit"
-	
+
 	if len(m.commandHistory) > 0 {
 		shortcuts = fmt.Sprintf("History: %d • %s", len(m.commandHistory), shortcuts)
 	}
-	
+
 	// Add scroll indicator if needed
 	if !m.vp.AtBottom() {
 		shortcuts += " • 📜 Auto-scroll OFF (End: resume)"
 	}
-	
+
 	// Truncate if too long
 	if len(shortcuts) > m.width-4 {
 		shortcuts = "Enter: Execute • ↑/↓: History • /help • Ctrl+C: Exit"
@@ -784,7 +944,7 @@ func (m model) renderStreamlinedFooter() string {
 	if len(shortcuts) > m.width-4 {
 		shortcuts = "Enter • ↑/↓ • /help • Ctrl+C"
 	}
-	
+
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("8")). // Gray
 		Padding(0, 1).
@@ -894,102 +1054,80 @@ func countLines(s string) int {
 	return c + 1
 }
 
-// Run starts the TUI program with sane options.
-func Run() error {
-	p := tea.NewProgram(initialModel(), tea.WithContext(context.Background()), tea.WithAltScreen())
-	_, err := p.Run()
-	// On exit, restore default sink to stdout so subsequent output isn't lost
-	ui.UseStdoutSink()
-	return err
-}
+// LEGACY: These functions are now in entry.go
+// // Run starts the TUI program with sane options.
+// func Run() error {
+// 	p := tea.NewProgram(initialModel(), tea.WithContext(context.Background()), tea.WithAltScreen())
+// 	_, err := p.Run()
+// 	// On exit, restore default sink to stdout so subsequent output isn't lost
+// 	ui.UseStdoutSink()
+// 	return err
+// }
 
-// RunInteractiveAgent starts the TUI in interactive agent mode
-func RunInteractiveAgent() error {
-	p := tea.NewProgram(initialInteractiveModel(), tea.WithContext(context.Background()), tea.WithAltScreen())
-	_, err := p.Run()
-	// On exit, restore default sink to stdout so subsequent output isn't lost
-	ui.UseStdoutSink()
-	return err
-}
+// // RunInteractiveAgent starts the TUI in interactive agent mode
+// func RunInteractiveAgent() error {
+// 	p := tea.NewProgram(initialInteractiveModel(), tea.WithContext(context.Background()), tea.WithAltScreen())
+// 	_, err := p.Run()
+// 	// On exit, restore default sink to stdout so subsequent output isn't lost
+// 	ui.UseStdoutSink()
+// 	return err
+// }
 
-// RunMinimalTest runs a minimal TUI for testing input responsiveness
-func RunMinimalTest() error {
-	m := initialInteractiveModel()
-	// Clear all complex logic for testing
-	m.logs = []string{"Minimal TUI test - type something and press enter"}
+// // RunMinimalTest runs a minimal TUI for testing input responsiveness
+// func RunMinimalTest() error {
+// 	m := initialInteractiveModel()
+// 	// Clear all complex logic for testing
+// 	m.logs = []string{"Minimal TUI test - type something and press enter"}
 
-	p := tea.NewProgram(m, tea.WithContext(context.Background()), tea.WithAltScreen())
-	_, err := p.Run()
-	ui.UseStdoutSink()
-	return err
-}
+// 	p := tea.NewProgram(m, tea.WithContext(context.Background()), tea.WithAltScreen())
+// 	_, err := p.Run()
+// 	ui.UseStdoutSink()
+// 	return err
+// }
 
 // handleSlashCommand processes slash commands and returns (handled, newModel, cmd)
 func (m model) handleSlashCommand(input string) (bool, *model, tea.Cmd) {
-	parts := strings.Fields(input)
-	if len(parts) == 0 {
-		return false, nil, nil
+	if m.agent == nil || m.commandRegistry == nil {
+		ui.Log("❌ Agent not initialized")
+		return true, nil, nil
 	}
 
-	command := strings.ToLower(parts[0])
-	args := parts[1:]
+	// If user typed just "/" show the command selector
+	if input == "/" {
+		// Convert registry commands to our Command interface
+		cmds := m.commandRegistry.ListCommands()
+		commandList := make([]Command, len(cmds))
+		for i, cmd := range cmds {
+			commandList[i] = cmd
+		}
 
-	switch command {
-	case "/help", "/h":
-		helpText := `🚀 Slash Commands:
+		selectedCmd, err := ShowCommandDropdown(commandList)
+		if err != nil {
+			// Selection was cancelled
+			return true, nil, nil
+		}
+		input = selectedCmd
+	}
 
-Agent Commands:
-  /help, /h              Show this help message
-  /quit, /q, /exit       Quit the interactive agent
-  /clear, /c             Clear the logs
-  /status, /s            Show current agent status
-  /model [name]          Show or set the current model
-  /logs                  Toggle logs collapse/expand
-  /show, /showlogs       Show/expand logs (force visible)
-  /hide, /hidelogs       Hide/collapse logs  
-  /progress              Toggle progress collapse/expand
-  /history, /hist        Show command history
-  /workspace, /ws        Show workspace information
-  /config                Show current configuration
-  /commit [subcommand]   Interactive git commit workflow
+	// Handle special cases for /models - show selector
+	if input == "/models" || input == "/models select" {
+		return m.handleModelsSelector()
+	}
 
-Navigation:
-  Enter                  Execute agent command or slash command
-  Tab                    Switch focus (input ↔ logs)
-  ESC                    Unfocus input (ESC again to quit)
-  Ctrl+C                 Quit immediately
-  i                      Focus input (when unfocused)
-  l                      Toggle logs collapse/expand
-  p                      Toggle progress collapse/expand
-  Ctrl+L                 Clear logs
+	// Handle TUI-specific commands that need special behavior
+	switch input {
+	case "/paste":
+		ui.Log(`📋 Paste Mode Instructions:
 
-History (when input is focused):
-  ↑                      Previous command in history
-  ↓                      Next command in history (or return to current input)
+For multi-line input or pasting code:
+1. Type your text normally - the TUI detects fast input as paste
+2. Use backslash (\) at the end of a line to continue on the next line
+3. Press Enter when done
 
-Scrolling (when logs are visible):
-  ↑/k                    Scroll up one line
-  ↓/j                    Scroll down one line
-  Home                   Go to top of logs
-  End                    Go to bottom (resume auto-scroll)
-  PgUp/PgDn             Scroll by page
-  Mouse wheel            Scroll up/down
-
-Note: Auto-scroll is disabled when you scroll up to read earlier logs.
-Press 'End' or scroll to bottom to resume auto-scroll for new messages.
-
-Examples:
-  Add error handling to main.go
-  /show                              # Expand logs to see output
-  /model deepinfra:deepseek-ai/DeepSeek-V3.1
-  /clear
-  Fix the bug in auth.go
-  /hide                              # Hide logs for more space
-  /status`
-		ui.Log(helpText)
+The TUI automatically handles paste detection and buffering.`)
 		return true, nil, nil
 
-	case "/quit", "/q", "/exit":
+	case "/quit", "/exit", "/q":
 		ui.Log("👋 Goodbye!")
 		return true, nil, tea.Quit
 
@@ -1000,46 +1138,6 @@ Examples:
 		newM.vp.SetContent("")
 		ui.Log("📋 Logs cleared")
 		return true, &newM, nil
-
-	case "/status", "/s":
-		statusMsg := fmt.Sprintf(`📊 Agent Status:
-• Model: %s
-• Total Tokens: %s
-• Total Cost: $%.4f
-• Logs: %d entries (%s)
-• Interactive Mode: Active`,
-			func() string {
-				if m.baseModel != "" {
-					return m.baseModel
-				}
-				return "default"
-			}(),
-			formatNumber(m.totalTokens),
-			m.totalCost,
-			len(m.logs),
-			func() string {
-				if m.logsCollapsed {
-					return "collapsed"
-				}
-				return "expanded"
-			}())
-		ui.Log(statusMsg)
-		return true, nil, nil
-
-	case "/model", "/m":
-		if len(args) == 0 {
-			ui.Logf("📋 Current model: %s", func() string {
-				if m.baseModel != "" {
-					return m.baseModel
-				}
-				return "default"
-			}())
-		} else {
-			modelName := strings.Join(args, " ")
-			ui.Logf("📋 Model setting changed to: %s (will apply to next agent execution)", modelName)
-			// Note: Actual model change would need to be implemented in the agent execution
-		}
-		return true, nil, nil
 
 	case "/logs", "/l":
 		newM := m
@@ -1099,98 +1197,85 @@ Examples:
 			ui.Log(strings.TrimSuffix(historyText, "\n"))
 		}
 		return true, nil, nil
-
-	case "/workspace", "/ws":
-		ui.Log(`📁 Workspace Information:
-• Working Directory: ` + func() string {
-			if wd, err := os.Getwd(); err == nil {
-				return wd
-			}
-			return "unknown"
-		}() + `
-• Git Repository: ` + func() string {
-			if _, err := os.Stat(".git"); err == nil {
-				return "✓ Git repo detected"
-			}
-			return "✗ Not a git repo"
-		}() + `
-• Ledit Config: ` + func() string {
-			if _, err := os.Stat(".ledit"); err == nil {
-				return "✓ .ledit directory exists"
-			}
-			return "✗ No .ledit directory"
-		}())
-		return true, nil, nil
-
-	case "/config":
-		autoScrollStatus := "Smart (auto when at bottom)"
-		if !m.vp.AtBottom() {
-			autoScrollStatus = "Disabled (user scrolled up)"
-		}
-		ui.Log(`⚙️  Current Configuration:
-• Interactive Mode: Active
-• Auto-scroll Logs: ` + autoScrollStatus + `
-• Command History: ` + fmt.Sprintf("%d commands stored", len(m.commandHistory)) + `
-• Log Retention: 500 entries max
-• Model: ` + func() string {
-			if m.baseModel != "" {
-				return m.baseModel
-			}
-			return "default (from config)"
-		}())
-		return true, nil, nil
-
-	case "/commit":
-		// Handle commit slash command using unified agent command system
-		go func() {
-			ui.Log("🚀 Starting interactive commit workflow...")
-
-			// Create agent instance for commit processing
-			chatAgent, err := agent.NewAgent()
-			if err != nil {
-				ui.Logf("❌ Failed to create agent: %v", err)
-				return
-			}
-
-			// Create commit command instance and execute
-			commitCmd := &commands.CommitCommand{}
-
-			err = commitCmd.Execute(args, chatAgent)
-			if err != nil {
-				ui.Logf("❌ Commit failed: %v", err)
-			}
-		}()
-		return true, nil, nil
-
-	default:
-		ui.Logf("❌ Unknown slash command: %s. Type /help for available commands.", command)
-		return true, nil, nil
 	}
+
+	// Use CommandRegistry for all other slash commands
+	err := m.commandRegistry.Execute(input, m.agent)
+	if err != nil {
+		ui.Logf("❌ Command error: %v", err)
+		ui.Logf("💡 Type '/help' to see available commands")
+	}
+
+	return true, nil, nil
 }
 
-// executeAgentRequest executes an agent request using system
-func executeAgentRequest(request string) {
-	ui.Logf("🚀 Starting agent execution: %s", request)
-	ui.PublishStatus("Executing with agent system...")
+// processFileReferences checks for file paths in input and prepends file content markers
+func (m model) processFileReferences(input string) string {
+	// Look for common file path patterns
+	words := strings.Fields(input)
+	var hasFiles bool
+	var filePaths []string
 
-	// Set environment variables for system
-	os.Setenv("LEDIT_FROM_AGENT", "1")
-	os.Setenv("LEDIT_SKIP_PROMPT", "1")
-	os.Setenv("LEDIT_USING_CODER", "1")
+	for _, word := range words {
+		// Remove quotes if present
+		cleaned := strings.Trim(word, `"'`)
 
-	// Create agent directly
-	chatAgent, err := agent.NewAgent()
-	if err != nil {
-		ui.Logf("❌ Failed to initialize agent: %v", err)
-		ui.PublishStatus("Agent initialization failed")
+		// Check if it looks like a file path
+		if strings.Contains(cleaned, "/") || strings.Contains(cleaned, "\\") {
+			// Check if file exists
+			if info, err := os.Stat(cleaned); err == nil && !info.IsDir() {
+				hasFiles = true
+				filePaths = append(filePaths, cleaned)
+			}
+		}
+
+		// Also check for common file extensions without path
+		if strings.Contains(cleaned, ".") {
+			ext := filepath.Ext(cleaned)
+			// Common code file extensions
+			commonExts := []string{".go", ".js", ".ts", ".py", ".java", ".c", ".cpp", ".rs", ".rb", ".php", ".swift", ".kt", ".scala", ".sh", ".yml", ".yaml", ".json", ".xml", ".html", ".css", ".md", ".txt"}
+			for _, commonExt := range commonExts {
+				if ext == commonExt {
+					if info, err := os.Stat(cleaned); err == nil && !info.IsDir() {
+						hasFiles = true
+						filePaths = append(filePaths, cleaned)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	// If we found files, prepend them with file markers
+	if hasFiles {
+		var result strings.Builder
+		result.WriteString(input)
+		result.WriteString("\n\nReferenced files:\n")
+		for _, path := range filePaths {
+			result.WriteString(fmt.Sprintf("#%s\n", path))
+		}
+		ui.Logf("📁 Detected %d file reference(s) in input", len(filePaths))
+		return result.String()
+	}
+
+	return input
+}
+
+// executeAgentRequest executes an agent request using the persistent agent
+func (m *model) executeAgentRequest(request string) {
+	if m.agent == nil {
+		ui.Logf("❌ Agent not initialized")
 		return
 	}
+
+	ui.Logf("🚀 Starting agent execution: %s", request)
+	ui.PublishStatus("Executing with agent system...")
 
 	// Execute using agent system
 	ui.Logf("🔄 Processing with workflow...")
 	ui.Logf("💡 Phase-based approach: UNDERSTAND → EXPLORE → IMPLEMENT → VERIFY")
 
-	response, err := chatAgent.ProcessQueryWithContinuity(request)
+	response, err := m.agent.ProcessQueryWithContinuity(request)
 	if err != nil {
 		ui.Logf("❌ Coder agent execution failed: %v", err)
 		ui.PublishStatus("Coder agent execution failed")
@@ -1200,8 +1285,63 @@ func executeAgentRequest(request string) {
 		ui.PublishStatus("Coder agent execution completed")
 
 		// Show comprehensive cost and token summary
-		chatAgent.PrintConciseSummary()
+		m.agent.PrintConciseSummary()
 	}
+}
+
+// handleModelsSelector shows the model selector in TUI mode
+func (m model) handleModelsSelector() (bool, *model, tea.Cmd) {
+	if m.agent == nil {
+		ui.Log("❌ Agent not initialized")
+		return true, nil, nil
+	}
+
+	// Get current provider from agent
+	clientType := m.agent.GetProviderType()
+
+	// Get available models for the current provider
+	models, err := agent_api.GetModelsForProvider(clientType)
+	if err != nil {
+		ui.Logf("❌ Failed to list models: %v", err)
+		return true, nil, nil
+	}
+
+	if len(models) == 0 {
+		ui.Logf("No models available for %s", agent_api.GetProviderName(clientType))
+		return true, nil, nil
+	}
+
+	// Convert to ModelItem format for the dropdown
+	items := make([]ModelItem, len(models))
+	for i, model := range models {
+		cost := ""
+		if model.InputCost > 0 || model.OutputCost > 0 {
+			cost = fmt.Sprintf("$%.4f/$%.4f", model.InputCost, model.OutputCost)
+		} else if model.Cost > 0 {
+			cost = fmt.Sprintf("$%.4f/1K", model.Cost)
+		} else if model.Provider == "Ollama (Local)" {
+			cost = "FREE (local)"
+		} else {
+			cost = "N/A"
+		}
+
+		items[i] = ModelItem{
+			ID:          model.ID,
+			Display:     fmt.Sprintf("%s (%s)", model.ID, model.Provider),
+			Description: fmt.Sprintf("%s | Context: %d", cost, model.ContextLength),
+		}
+	}
+
+	// Show the dropdown selector
+	selected, err := ShowModelDropdown(items)
+	if err != nil {
+		ui.Log("Model selection cancelled")
+		return true, nil, nil
+	}
+
+	// Execute the models command with the selected model
+	cmdStr := fmt.Sprintf("/models %s", selected)
+	return m.handleSlashCommand(cmdStr)
 }
 
 // UILogger implements utils.Logger interface to output to UI

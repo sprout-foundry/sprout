@@ -38,3 +38,16 @@ type DiffChange struct {
 	NewStart  int
 	NewLength int
 }
+
+// CircuitBreakerAction tracks repetitive actions for circuit breaker logic
+type CircuitBreakerAction struct {
+	ActionType string // "edit_file", "shell_command", etc.
+	Target     string // file path, command, etc.
+	Count      int    // number of times this action was performed
+	LastUsed   int64  // unix timestamp of last use
+}
+
+// CircuitBreakerState tracks repetitive actions across the session
+type CircuitBreakerState struct {
+	Actions map[string]*CircuitBreakerAction // key: actionType:target
+}

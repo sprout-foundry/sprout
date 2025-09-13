@@ -7,7 +7,6 @@ import (
 	"github.com/alantheprice/ledit/internal/domain/agent"
 	"github.com/alantheprice/ledit/internal/domain/todo"
 	configAdapter "github.com/alantheprice/ledit/pkg/adapters/config"
-	llmAdapter "github.com/alantheprice/ledit/pkg/adapters/llm"
 	workspaceAdapter "github.com/alantheprice/ledit/pkg/adapters/workspace"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/interfaces"
@@ -39,10 +38,11 @@ type LLMAdapters struct {
 
 // CreateLLMAdapters creates all LLM adapters from a new interfaces.LLMProvider
 func (f *AdapterFactory) CreateLLMAdapters(provider interfaces.LLMProvider) *LLMAdapters {
+	// TODO: Implement llmAdapter package
 	return &LLMAdapters{
-		Legacy: llmAdapter.NewLLMAdapter(provider),
-		Agent:  llmAdapter.NewDomainLLMAdapter(provider),
-		Todo:   llmAdapter.NewTodoLLMAdapter(provider),
+		Legacy: nil, // llmAdapter.NewLLMAdapter(provider),
+		Agent:  nil, // llmAdapter.NewDomainLLMAdapter(provider),
+		Todo:   nil, // llmAdapter.NewTodoLLMAdapter(provider),
 	}
 }
 
@@ -145,7 +145,8 @@ func NewMigrationSupport(factory *AdapterFactory) *MigrationSupport {
 
 // CreateBackwardCompatibleLLMProvider creates an LLM provider that works with existing code
 func (m *MigrationSupport) CreateBackwardCompatibleLLMProvider(newProvider interfaces.LLMProvider) llm.LLMProvider {
-	return llmAdapter.NewLLMAdapter(newProvider)
+	// TODO: Implement llmAdapter package
+	return nil // llmAdapter.NewLLMAdapter(newProvider)
 }
 
 // GradualMigrationFlags can be used to gradually enable new functionality

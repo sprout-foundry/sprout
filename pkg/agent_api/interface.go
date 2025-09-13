@@ -48,29 +48,9 @@ func NewUnifiedClientWithModel(clientType ClientType, model string) (ClientInter
 		model = GetDefaultModelForProvider(clientType)
 	}
 	
-	// Ensure API key is available for non-local providers
-	if err := EnsureAPIKeyAvailable(clientType); err != nil {
-		return nil, fmt.Errorf("API key required for %s: %w", GetProviderName(clientType), err)
-	}
-	
-	switch clientType {
-	case DeepInfraClientType:
-		return NewDeepInfraClientWrapper(model)
-	case OllamaClientType:
-		return NewOllamaClient()
-	case CerebrasClientType:
-		return NewCerebrasClientWrapper(model)
-	case OpenRouterClientType:
-		return NewOpenRouterClientWrapper(model)
-	case OpenAIClientType:
-		return NewOpenAIClientWrapper(model)
-	case GroqClientType:
-		return NewGroqClientWrapper(model)
-	case DeepSeekClientType:
-		return NewDeepSeekClientWrapper(model)
-	default:
-		return nil, fmt.Errorf("unknown client type: %s", clientType)
-	}
+	// Use the provider registry for data-driven client creation
+	registry := GetProviderRegistry()
+	return registry.CreateClient(clientType, model)
 }
 
 // NewDeepInfraClientWrapper creates a DeepInfra client wrapper
@@ -306,37 +286,14 @@ func GetClientTypeWithFallback() (ClientType, error) {
 
 // GetAvailableProviders returns a list of all available providers
 func GetAvailableProviders() []ClientType {
-	return []ClientType{
-		OpenAIClientType,
-		DeepInfraClientType,
-		OllamaClientType,
-		CerebrasClientType,
-		OpenRouterClientType,
-		GroqClientType,
-		DeepSeekClientType,
-	}
+	registry := GetProviderRegistry()
+	return registry.GetAvailableProviders()
 }
 
 // GetProviderName returns the human-readable name for a provider
 func GetProviderName(clientType ClientType) string {
-	switch clientType {
-	case OpenAIClientType:
-		return "OpenAI"
-	case DeepInfraClientType:
-		return "DeepInfra"
-	case OllamaClientType:
-		return "Ollama (Local)"
-	case CerebrasClientType:
-		return "Cerebras"
-	case OpenRouterClientType:
-		return "OpenRouter"
-	case GroqClientType:
-		return "Groq"
-	case DeepSeekClientType:
-		return "DeepSeek"
-	default:
-		return string(clientType)
-	}
+	registry := GetProviderRegistry()
+	return registry.GetProviderName(clientType)
 }
 
 // GetProviderFromString converts a string to ClientType

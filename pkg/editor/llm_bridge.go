@@ -27,12 +27,6 @@ func getUpdatedCode(originalCode, instructions, filename string, cfg *config.Con
 	}
 
 	log.Log(prompts.ModelReturned(modelName, llmContent))
-	// DEBUG: Print the actual response content to see what's being returned
-	maxLen := 200
-	if len(llmContent) < maxLen {
-		maxLen = len(llmContent)
-	}
-	log.Log(fmt.Sprintf("DEBUG: Raw LLM Content (first %d chars): '%s'", maxLen, llmContent[:maxLen]))
 
 	updatedCode := map[string]string{}
 	var parseErr error

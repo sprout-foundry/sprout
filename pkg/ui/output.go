@@ -2,10 +2,9 @@ package ui
 
 import (
 	"fmt"
-	"os"
 )
 
-// OutputSink abstracts where messages go (stdout vs TUI collector).
+// OutputSink abstracts where messages go
 type OutputSink interface {
 	Print(text string)
 	Printf(format string, args ...any)
@@ -16,12 +15,6 @@ type StdoutSink struct{}
 
 func (StdoutSink) Print(text string)                 { fmt.Print(text) }
 func (StdoutSink) Printf(format string, args ...any) { fmt.Printf(format, args...) }
-
-// TuiSink publishes content to the UI event stream.
-type TuiSink struct{}
-
-func (TuiSink) Print(text string)                 { Log(text) }
-func (TuiSink) Printf(format string, args ...any) { Logf(format, args...) }
 
 // Default sink selection
 var defaultSink OutputSink = StdoutSink{}
@@ -35,57 +28,36 @@ func Out() OutputSink { return defaultSink }
 // UseStdoutSink switches default output back to stdout.
 func UseStdoutSink() { defaultSink = StdoutSink{} }
 
-// IsUIActive returns true if we're currently using TUI sink (UI is active)
-func IsUIActive() bool {
-	_, isTui := defaultSink.(TuiSink)
-	return isTui
-}
-
-// Global UI enabled state
+// Global UI enabled state - deprecated, always false now
 var uiEnabled bool = false
 
-// SetEnabled sets whether the UI is enabled
+// SetEnabled is deprecated - UI is removed
 func SetEnabled(enabled bool) {
-	uiEnabled = enabled
-	if enabled {
-		SetDefaultSink(TuiSink{})
-	} else {
-		UseStdoutSink()
-	}
+	// No-op, UI is removed
 }
 
-// Enabled returns true if UI is enabled
+// Enabled returns false - UI is removed
 func Enabled() bool {
-	return uiEnabled
+	return false
 }
 
 // FromEnv checks if UI should be enabled based on environment variables
+// Deprecated - always returns false
 func FromEnv() bool {
-	return os.Getenv("LEDIT_UI") == "1" || os.Getenv("LEDIT_UI") == "true"
+	return false
 }
 
-// PrintContext prints text only when appropriate for the current context
-// - In UI mode: only prints to logs if forceInUI is true
-// - In console mode: always prints to stdout
+// IsUIActive always returns false - UI is removed
+func IsUIActive() bool {
+	return false
+}
+
+// PrintContext always prints to stdout now
 func PrintContext(text string, forceInUI bool) {
-	if IsUIActive() {
-		if forceInUI {
-			Log(text)
-		}
-		// Otherwise suppress output in UI mode
-	} else {
-		fmt.Print(text)
-	}
+	fmt.Print(text)
 }
 
-// PrintfContext formats and prints text only when appropriate for the current context
+// PrintfContext always prints to stdout now
 func PrintfContext(forceInUI bool, format string, args ...any) {
-	if IsUIActive() {
-		if forceInUI {
-			Logf(format, args...)
-		}
-		// Otherwise suppress output in UI mode
-	} else {
-		fmt.Printf(format, args...)
-	}
+	fmt.Printf(format, args...)
 }

@@ -11,10 +11,9 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	agent_api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/interactive"
+	"github.com/alantheprice/ledit/pkg/console"
+	"github.com/alantheprice/ledit/pkg/console/components"
 	"github.com/alantheprice/ledit/pkg/prompts"
-	tuiPkg "github.com/alantheprice/ledit/pkg/tui"
-	uiPkg "github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -31,20 +30,44 @@ func init() {
 }
 
 // runSimpleInteractiveMode provides a simple console-based interactive mode
-func runSimpleInteractiveMode() error {
-	// Create agent to get model info (like coder does)
+func runInteractiveMode() error {
+	// Create agent
 	chatAgent, err := agent.NewAgent()
 	if err != nil {
 		return fmt.Errorf("failed to initialize agent: %w", err)
 	}
 
-	// Create and run the interactive input component
-	agentInput, err := interactive.New(chatAgent, nil)
-	if err != nil {
-		return fmt.Errorf("failed to initialize interactive input: %w", err)
+	// Create console app
+	app := console.NewConsoleApp()
+
+	// Configure app
+	config := &console.Config{
+		RawMode:      true,
+		MouseEnabled: false,
+		AltScreen:    false,
+		Components: []console.ComponentConfig{
+			{
+				ID:      "agent-console",
+				Type:    "agent",
+				Region:  "main",
+				Enabled: true,
+			},
+		},
 	}
 
-	return agentInput.Run()
+	// Initialize app
+	if err := app.Init(config); err != nil {
+		return fmt.Errorf("failed to initialize console app: %w", err)
+	}
+
+	// Create and add agent console component
+	agentConsole := components.NewAgentConsole(chatAgent, nil)
+	if err := app.AddComponent(agentConsole); err != nil {
+		return fmt.Errorf("failed to add agent console: %w", err)
+	}
+
+	// Run the app
+	return app.Run()
 }
 
 // executeDirectAgentCommand executes an agent command directly (like coder does)
@@ -452,28 +475,11 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Handle interactive mode
 		if len(args) == 0 {
-			// Start interactive mode automatically when no prompt is provided
-			if uiPkg.Enabled() {
-				uiPkg.SetDefaultSink(uiPkg.TuiSink{})
-
-				// Start interactive TUI mode directly (don't start background TUI)
-				return tuiPkg.RunInteractiveAgent()
-			} else {
-				// Interactive mode without UI - use simple console-based interactive mode
-				return runSimpleInteractiveMode()
-			}
+			// Always use our new console architecture for interactive mode
+			return runInteractiveMode()
 		}
 
-		// Handle UI integration (only for non-interactive mode)
-		if uiPkg.IsUIActive() {
-			uiPkg.PublishStatus("Initializing agent")
-			uiPkg.Log("🚀 Agent activated")
-
-			// Start TUI in background only for non-interactive mode
-			uiPkg.SetDefaultSink(uiPkg.TuiSink{})
-			go func() { _ = tuiPkg.Run() }()
-		}
-
+		// Direct mode - execute single command
 		userIntent := strings.Join(args, " ")
 
 		// Mark environment flags
@@ -483,20 +489,10 @@ Examples:
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")
 		}
 
-		if uiPkg.IsUIActive() {
-			uiPkg.Log(fmt.Sprintf("📝 Processing intent: %s", userIntent))
-			uiPkg.PublishStatus("Processing with agent")
-		}
-
-		// Execute using direct agent (like coder)
+		// Execute using direct agent
 		err := executeDirectAgentCommand(userIntent)
 
 		if err != nil {
-			if uiPkg.IsUIActive() {
-				uiPkg.Log(fmt.Sprintf("❌ Agent processing failed: %v", err))
-				uiPkg.PublishStatus("Failed")
-			}
-
 			gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
 				"AI agent processing your request",
 				err,
@@ -507,13 +503,7 @@ Examples:
 			os.Exit(1)
 		}
 
-		// Show completion
-		if uiPkg.IsUIActive() {
-			uiPkg.Log("✅ Task completed successfully")
-			uiPkg.PublishStatus("Completed")
-		} else {
-			fmt.Println("✅ Task completed successfully")
-		}
+		fmt.Println("✅ Task completed successfully")
 		return nil
 	},
 }

@@ -3,14 +3,11 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 // executeTool handles the execution of individual tool calls
@@ -52,6 +49,22 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		return "", fmt.Errorf("unknown tool '%s'. Valid tools are: %v", toolCall.Function.Name, validTools)
 	}
 
+	// Use the tool registry for data-driven tool execution
+	registry := GetToolRegistry()
+	result, err := registry.ExecuteTool(toolCall.Function.Name, args, a)
+	
+	// If tool not found in registry, check if it's an MCP tool
+	if err != nil && strings.Contains(err.Error(), "unknown tool") {
+		if isMCPTool {
+			return a.executeMCPTool(toolCall.Function.Name, args)
+		}
+		return "", fmt.Errorf("unknown tool: %s", toolCall.Function.Name)
+	}
+	
+	return result, err
+	
+	// Legacy switch statement - remove after testing
+	/*
 	switch toolCall.Function.Name {
 	case "shell_command":
 		command, ok := args["command"].(string)
@@ -484,6 +497,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		}
 		return "", fmt.Errorf("unknown tool: %s", toolCall.Function.Name)
 	}
+	*/
 }
 
 // extractToolCallsFromContent attempts to parse tool calls from the assistant's content or reasoning_content

@@ -173,149 +173,16 @@ func getOpenAIModels() ([]ModelInfo, error) {
 
 // getOpenAIModelPricing returns the input and output costs per 1M tokens for OpenAI models
 func getOpenAIModelPricing(modelID string) (inputCost, outputCost float64) {
-	// Use the same pricing map from the OpenAI client
-	pricingMap := map[string]struct {
-		InputPer1M       float64
-		CachedInputPer1M float64
-		OutputPer1M      float64
-		BatchMultiplier  float64
-		FlexMultiplier   float64
-	}{
-		// GPT-5 series (current as of September 2025)
-		"gpt-5":                 {0.625, 0.3125, 5.0, 0.5, 0.6},
-		"gpt-5-2025-08-07":      {0.625, 0.3125, 5.0, 0.5, 0.6},
-		"gpt-5-chat-latest":     {0.625, 0.3125, 5.0, 0.5, 0.6},
-		"gpt-5-mini":            {0.125, 0.0625, 1.0, 0.5, 0.6},
-		"gpt-5-mini-2025-08-07": {0.125, 0.0625, 1.0, 0.5, 0.6},
-		"gpt-5-nano":            {0.025, 0.0125, 0.2, 0.5, 0.6},
-		"gpt-5-nano-2025-08-07": {0.025, 0.0125, 0.2, 0.5, 0.6},
-
-		// O3 series (current pricing)
-		"o3":      {1.0, 0.25, 4.0, 0.5, 0.6},
-		"o3-mini": {0.55, 0.138, 2.2, 0.5, 0.6},
-
-		// O4-mini (from screenshot)
-		"o4-mini": {0.55, 0.138, 2.2, 0.5, 0.6},
-
-		// O1 series (from screenshot)
-		"o1":                 {1.0, 0.25, 4.0, 0.5, 0.6},
-		"o1-2024-12-17":      {1.0, 0.25, 4.0, 0.5, 0.6},
-		"o1-mini":            {0.55, 0.138, 2.2, 0.5, 0.6},
-		"o1-mini-2024-09-12": {0.55, 0.138, 2.2, 0.5, 0.6},
-		"o1-pro":             {3.0, 0.75, 12.0, 0.5, 0.6},
-		"o1-pro-2025-03-19":  {3.0, 0.75, 12.0, 0.5, 0.6},
-
-		// GPT-4o series (convert per-1K to per-1M for display)
-		"gpt-4o":                 {0.005, 0.0025, 0.015, 0.5, 0.6},
-		"gpt-4o-2024-05-13":      {0.005, 0.0025, 0.015, 0.5, 0.6},
-		"gpt-4o-2024-08-06":      {0.0025, 0.00125, 0.01, 0.5, 0.6},
-		"gpt-4o-2024-11-20":      {0.0025, 0.00125, 0.01, 0.5, 0.6},
-		"gpt-4o-mini":            {0.00015, 0.000075, 0.0006, 0.5, 0.6},
-		"gpt-4o-mini-2024-07-18": {0.00015, 0.000075, 0.0006, 0.5, 0.6},
-
-		// Audio and specialized models
-		"gpt-4o-audio-preview":                 {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4o-audio-preview-2024-10-01":      {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4o-audio-preview-2024-12-17":      {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4o-audio-preview-2025-06-03":      {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4o-mini-audio-preview":            {0.002, 0.001, 0.008, 0.5, 0.6},
-		"gpt-4o-mini-audio-preview-2024-12-17": {0.002, 0.001, 0.008, 0.5, 0.6},
-
-		// Realtime models
-		"gpt-4o-realtime-preview":                 {0.015, 0.0075, 0.045, 0.5, 0.6},
-		"gpt-4o-realtime-preview-2024-10-01":      {0.015, 0.0075, 0.045, 0.5, 0.6},
-		"gpt-4o-realtime-preview-2024-12-17":      {0.015, 0.0075, 0.045, 0.5, 0.6},
-		"gpt-4o-realtime-preview-2025-06-03":      {0.015, 0.0075, 0.045, 0.5, 0.6},
-		"gpt-4o-mini-realtime-preview":            {0.002, 0.001, 0.008, 0.5, 0.6},
-		"gpt-4o-mini-realtime-preview-2024-12-17": {0.002, 0.001, 0.008, 0.5, 0.6},
-
-		// Search models
-		"gpt-4o-search-preview":                 {0.005, 0.0025, 0.015, 0.5, 0.6},
-		"gpt-4o-search-preview-2025-03-11":      {0.005, 0.0025, 0.015, 0.5, 0.6},
-		"gpt-4o-mini-search-preview":            {0.00015, 0.000075, 0.0006, 0.5, 0.6},
-		"gpt-4o-mini-search-preview-2025-03-11": {0.00015, 0.000075, 0.0006, 0.5, 0.6},
-
-		// Transcription models
-		"gpt-4o-transcribe":      {0.005, 0.0025, 0.015, 0.5, 0.6},
-		"gpt-4o-mini-transcribe": {0.00015, 0.000075, 0.0006, 0.5, 0.6},
-		"gpt-4o-mini-tts":        {0.00015, 0.000075, 0.0006, 0.5, 0.6},
-
-		// GPT-4 series (legacy pricing)
-		"gpt-4-turbo":            {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4-turbo-2024-04-09": {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4-turbo-preview":    {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4":                  {0.03, 0.015, 0.06, 0.5, 0.6},
-		"gpt-4-0613":             {0.03, 0.015, 0.06, 0.5, 0.6},
-		"gpt-4-0125-preview":     {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-4-1106-preview":     {0.01, 0.005, 0.03, 0.5, 0.6},
-
-		// GPT-4.1 series (newer models)
-		"gpt-4.1":                 {0.008, 0.004, 0.024, 0.5, 0.6},
-		"gpt-4.1-2025-04-14":      {0.008, 0.004, 0.024, 0.5, 0.6},
-		"gpt-4.1-mini":            {0.002, 0.001, 0.006, 0.5, 0.6},
-		"gpt-4.1-mini-2025-04-14": {0.002, 0.001, 0.006, 0.5, 0.6},
-		"gpt-4.1-nano":            {0.0005, 0.00025, 0.0015, 0.5, 0.6},
-		"gpt-4.1-nano-2025-04-14": {0.0005, 0.00025, 0.0015, 0.5, 0.6},
-
-		// GPT-3.5 series (legacy pricing)
-		"gpt-3.5-turbo":               {0.002, 0.001, 0.002, 0.5, 0.6},
-		"gpt-3.5-turbo-0125":          {0.002, 0.001, 0.002, 0.5, 0.6},
-		"gpt-3.5-turbo-1106":          {0.002, 0.001, 0.002, 0.5, 0.6},
-		"gpt-3.5-turbo-16k":           {0.003, 0.0015, 0.004, 0.5, 0.6},
-		"gpt-3.5-turbo-instruct":      {0.0015, 0.00075, 0.002, 0.5, 0.6},
-		"gpt-3.5-turbo-instruct-0914": {0.0015, 0.00075, 0.002, 0.5, 0.6},
-
-		// ChatGPT models
-		"chatgpt-4o-latest": {0.005, 0.0025, 0.015, 0.5, 0.6},
-
-		// Audio and specialized models
-		"gpt-audio":               {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-audio-2025-08-28":    {0.01, 0.005, 0.03, 0.5, 0.6},
-		"gpt-realtime":            {5.0, 0.4, 0.0, 0.5, 0.6}, // Per 1M, no output cost
-		"gpt-realtime-2025-08-28": {5.0, 0.4, 0.0, 0.5, 0.6},
-		"gpt-image-1":             {10.0, 2.5, 40.0, 0.5, 0.6},
-	}
-
-	if pricing, exists := pricingMap[modelID]; exists {
-		// All pricing values are now stored as cost per 1M tokens, return as-is
-		return pricing.InputPer1M, pricing.OutputPer1M
-	}
-
-	// Return 0, 0 for unknown models (will show as N/A)
-	return 0, 0
+	// Use the new model registry for data-driven pricing
+	registry := GetModelRegistry()
+	return registry.GetModelPricing(modelID)
 }
 
 // getOpenAIContextLength returns the context length for OpenAI models (2025 updated)
 func getOpenAIContextLength(modelID string) int {
-	switch {
-	// GPT-5 series (2025) - up to 272K context
-	case strings.Contains(modelID, "gpt-5"):
-		return 272000 // GPT-5 supports up to 272K context
-	// O3 series (2025) - large context models
-	case strings.Contains(modelID, "o3-mini"):
-		return 200000 // O3-mini supports ~200K context
-	case strings.Contains(modelID, "o3"):
-		return 200000 // O3 models support large context
-	// O1 series - reasoning models
-	case strings.Contains(modelID, "o1"):
-		return 128000 // O1 models support 128K context
-	// GPT-4o series - multimodal models
-	case strings.Contains(modelID, "gpt-4o"):
-		return 128000 // GPT-4o supports 128K context
-	// GPT-4 series
-	case strings.Contains(modelID, "gpt-4-turbo"):
-		return 128000 // GPT-4 Turbo supports 128K context
-	case strings.Contains(modelID, "gpt-4"):
-		return 8192 // Base GPT-4 supports 8K context
-	// GPT-3.5 series
-	case strings.Contains(modelID, "gpt-3.5-turbo"):
-		return 16385 // GPT-3.5-turbo supports ~16K context
-	// ChatGPT models
-	case strings.Contains(modelID, "chatgpt"):
-		return 128000 // ChatGPT models typically support large context
-	default:
-		return 16000 // Conservative default for unknown models
-	}
+	// Use the new model registry for data-driven context lengths
+	registry := GetModelRegistry()
+	return registry.GetModelContextLength(modelID)
 }
 
 // getDeepInfraModels gets available models from DeepInfra API

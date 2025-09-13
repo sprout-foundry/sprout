@@ -6,7 +6,6 @@ import (
 	"os"
 
 	agent_api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -72,27 +71,9 @@ func init() {
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(mcpCmd)
 	rootCmd.AddCommand(reviewStagedCmd) // Add the new command
-	rootCmd.AddCommand(uiCmd)
 
-	// Initialize UI handling and environment-based defaults
+	// Initialize environment-based defaults
 	cobra.OnInitialize(func() {
-		// consider env first
-		if ui.FromEnv() {
-			ui.SetEnabled(true)
-			ui.SetDefaultSink(ui.TuiSink{})
-			return
-		}
-		// then flag
-		if f := rootCmd.PersistentFlags().Lookup("ui"); f != nil {
-			if v, err := rootCmd.PersistentFlags().GetBool("ui"); err == nil && v {
-				ui.SetEnabled(true)
-				ui.SetDefaultSink(ui.TuiSink{})
-				return
-			}
-		}
-		// default off if non-interactive
-		if os.Getenv("CI") != "" {
-			ui.SetEnabled(false)
-		}
+		// UI is removed, nothing to initialize
 	})
 }

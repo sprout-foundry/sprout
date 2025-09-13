@@ -8,10 +8,38 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // CommitCommand implements the /commit slash command
 type CommitCommand struct{}
+
+// wrapText wraps text to a specific line length
+func wrapText(text string, lineLength int) string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return ""
+	}
+
+	var lines []string
+	currentLine := words[0]
+
+	for i := 1; i < len(words); i++ {
+		word := words[i]
+		if len(currentLine)+1+len(word) <= lineLength {
+			currentLine += " " + word
+		} else {
+			lines = append(lines, currentLine)
+			currentLine = word
+		}
+	}
+
+	if currentLine != "" {
+		lines = append(lines, currentLine)
+	}
+
+	return strings.Join(lines, "\n")
+}
 
 // Name returns the command name
 func (c *CommitCommand) Name() string {
@@ -75,7 +103,7 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 		if input == "" || input == "y" || input == "yes" {
 			fmt.Println("✅ Using staged files for commit")
 			// Skip to commit message generation - files are already staged
-			return c.generateAndCommit(chatAgent, reader)
+			return c.generateAndCommit(chatAgent, reader, false) // false = multi-file mode
 		}
 
 		if input == "n" || input == "no" {
@@ -191,31 +219,139 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 		}
 	}
 
-	return c.generateAndCommit(chatAgent, reader)
+	return c.generateAndCommit(chatAgent, reader, false) // false = multi-file mode
 }
 
-// executeSingleFileCommit handles single file commit workflow  
+// executeSingleFileCommit handles single file commit workflow
 func (c *CommitCommand) executeSingleFileCommit(args []string, chatAgent *agent.Agent) error {
-	// For now, just redirect to multi-file commit
-	// TODO: Implement proper single file commit workflow
-	fmt.Println("Single file commit - using multi-file workflow for now")
-	return c.executeMultiFileCommit(chatAgent)
+	fmt.Println("🚀 Starting single file commit workflow...")
+	fmt.Println("=============================================")
+
+	// Step 1: Check for already staged files
+	stagedOutput, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get staged files: %v", err)
+	}
+
+	stagedFiles := strings.Split(strings.TrimSpace(string(stagedOutput)), "\n")
+	var validStagedFiles []string
+	for _, file := range stagedFiles {
+		if strings.TrimSpace(file) != "" {
+			validStagedFiles = append(validStagedFiles, file)
+		}
+	}
+
+	// If exactly one file is staged, use it
+	if len(validStagedFiles) == 1 {
+		fmt.Printf("📦 Using staged file: %s\n", validStagedFiles[0])
+		return c.generateAndCommit(chatAgent, nil, true) // true = single file mode
+	}
+
+	// If multiple files are staged, error
+	if len(validStagedFiles) > 1 {
+		fmt.Printf("❌ Error: %d files are already staged. Single file mode requires exactly one file.\n", len(validStagedFiles))
+		fmt.Println("💡 Tip: Use '/commit' without 'single' for multi-file commits, or unstage files with 'git reset'")
+		return nil
+	}
+
+	// Step 2: Show current git status
+	fmt.Println("📊 Current git status:")
+	statusOutput, err := exec.Command("git", "status", "--porcelain").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get git status: %v", err)
+	}
+
+	if len(statusOutput) == 0 {
+		fmt.Println("✅ No changes to commit")
+		return nil
+	}
+
+	statusLines := strings.Split(strings.TrimSpace(string(statusOutput)), "\n")
+	var validStatusLines []string
+	for _, line := range statusLines {
+		if strings.TrimSpace(line) != "" {
+			validStatusLines = append(validStatusLines, line)
+		}
+	}
+
+	if len(validStatusLines) == 0 {
+		fmt.Println("✅ No changes to commit")
+		return nil
+	}
+
+	// Step 3: Show available files
+	fmt.Println("\n📁 Modified files:")
+	for i, line := range validStatusLines {
+		fmt.Printf("%2d. %s\n", i+1, line)
+	}
+
+	// Step 4: Prompt user to select ONE file
+	fmt.Println("\n💡 Enter file number to commit (only one file allowed in single mode, 'q' to quit):")
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	if input == "q" || input == "quit" {
+		fmt.Println("❌ Commit cancelled")
+		return nil
+	}
+
+	// Parse the single file selection
+	var index int
+	_, err = fmt.Sscanf(input, "%d", &index)
+	if err != nil || index < 1 || index > len(validStatusLines) {
+		fmt.Printf("❌ Invalid selection: %s\n", input)
+		return nil
+	}
+
+	line := validStatusLines[index-1]
+	parts := strings.Fields(line)
+	if len(parts) < 2 {
+		fmt.Println("❌ Could not parse file from status")
+		return nil
+	}
+
+	filename := strings.Join(parts[1:], " ")
+	fmt.Printf("✅ Selected: %s\n", filename)
+
+	// Step 5: Stage the file
+	fmt.Println("\n📦 Staging file...")
+	cmd := exec.Command("git", "add", filename)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("❌ Failed to stage %s: %v\n", filename, err)
+		fmt.Printf("Output: %s\n", string(output))
+		return nil
+	}
+	fmt.Printf("✅ Staged: %s\n", filename)
+
+	return c.generateAndCommit(chatAgent, reader, true) // true = single file mode
 }
 
 // showHelp displays commit command usage
 func (c *CommitCommand) showHelp() error {
 	fmt.Println("📝 Commit Command Usage:")
 	fmt.Println("========================")
-	fmt.Println("/commit          - Interactive multi-file commit workflow")  
-	fmt.Println("/commit single   - Single file commit workflow")
+	fmt.Println("/commit          - Interactive multi-file commit workflow")
+	fmt.Println("/commit single   - Single file commit workflow (strict format)")
 	fmt.Println("/commit help     - Show this help message")
+	fmt.Println()
+	fmt.Println("Single file commits follow strict formatting:")
+	fmt.Println("- Lowercase verb start (add, fix, update, etc.)")
+	fmt.Println("- 50 character title limit")
+	fmt.Println("- Focus on what changed, not filename")
 	return nil
 }
 
 // generateAndCommit handles commit message generation and commit creation
-func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.Reader) error {
+func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.Reader, singleFileMode bool) error {
+	// If reader is nil, create one
+	if reader == nil {
+		reader = bufio.NewReader(os.Stdin)
+	}
+
 	// Generate commit message from staged diff
-	fmt.Println("\n📝 Generating commit message...")
+	fmt.Println("\n📝 Generating commit message with fast model...")
 
 	// Get staged diff
 	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
@@ -228,36 +364,230 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		return nil
 	}
 
-	// Use the agent to generate a commit message following gmitllm rules
-	commitPrompt := fmt.Sprintf(`Generate a concise git commit message for the following staged changes.
-
-IMPORTANT: Do NOT use any tools. Rely SOLELY on the staged diff provided below.
-
-Follow these exact rules:
-1. First, generate a short title starting with an action word (Adds, Updates, Deletes, Renames)
-2. Title must be under 72 characters, no colons, no markdown
-3. Title should not include filenames
-4. Then generate a description paragraph under 500 characters
-5. Description should not include code blocks or filenames
-6. No markdown formatting anywhere
-7. Format: [Title]\n\n[Description]
-
-Staged changes:
-%s
-
-Please generate only the commit message content, no additional commentary.`, string(diffOutput))
-
-	fmt.Println("🤖 Generating commit message with AI...")
-	commitMessage, err := chatAgent.ProcessQuery(commitPrompt)
+	// Create a dedicated client for fast commit generation
+	fastClient, err := api.NewUnifiedClientWithModel(api.OpenAIClientType, api.FastModel)
 	if err != nil {
-		return fmt.Errorf("failed to generate commit message: %v", err)
+		return fmt.Errorf("failed to create fast model client: %v", err)
 	}
 
-	// Clean up the commit message
-	commitMessage = strings.TrimSpace(commitMessage)
+	// Get current branch name
+	branchOutput, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get branch name: %v", err)
+	}
+	branch := strings.TrimSpace(string(branchOutput))
 
-	// Simple commit message validation and confirmation
-	commitMessage = strings.TrimSpace(commitMessage)
+	// Check if it's a default branch
+	defaultBranches := []string{"master", "main", "develop", "dev"}
+	isDefaultBranch := false
+	for _, db := range defaultBranches {
+		if branch == db {
+			isDefaultBranch = true
+			break
+		}
+	}
+
+	// Get staged files with their status
+	stagedFilesOutput, err := exec.Command("git", "diff", "--cached", "--name-status").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get staged files status: %v", err)
+	}
+
+	// Parse file actions
+	fileActions := []string{}
+	primaryAction := ""
+	lines := strings.Split(strings.TrimSpace(string(stagedFilesOutput)), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			status := parts[0]
+			filepath := strings.Join(parts[1:], " ")
+
+			action := ""
+			switch status {
+			case "A":
+				action = "Adds"
+			case "D":
+				action = "Deletes"
+			case "R":
+				action = "Renames"
+			default:
+				action = "Updates"
+			}
+
+			if primaryAction == "" {
+				primaryAction = action
+			}
+
+			fileActions = append(fileActions, fmt.Sprintf("%s %s", action, filepath))
+		}
+	}
+
+	// Build the file actions summary
+	fileActionsSummary := strings.Join(fileActions, "; ")
+
+	// Build branch prefix if not on default branch
+	branchPrefix := ""
+	if !isDefaultBranch {
+		branchPrefix = fmt.Sprintf("[%s] ", branch)
+	}
+
+	var commitMessage string
+
+	if singleFileMode {
+		// Single file mode - simple format without file actions in title
+		// Create the commit message generation prompt
+		commitPrompt := fmt.Sprintf(`Generate a concise git commit message for the following staged changes.
+
+STRICT RULES FOR SINGLE FILE COMMITS:
+1. Title MUST start with a lowercase action verb (add, update, fix, remove, refactor, etc.)
+2. Title must be under 50 characters
+3. Title should be specific about WHAT changed, not just the filename
+4. No colons, no markdown, no punctuation at the end
+5. Then a blank line
+6. Then a description paragraph under 300 characters
+7. Description should explain WHY the change was made
+8. No code blocks, no markdown formatting
+9. Format: [title]\n\n[description]
+
+Examples:
+- "add user authentication middleware" (not "add auth.js")
+- "fix memory leak in image processing" (not "fix bug in processor.go")
+- "update database connection timeout" (not "update config")
+
+Staged diff:
+%s
+
+Generate only the commit message, no additional commentary.`, string(diffOutput))
+
+		// Get commit message using fast model
+		messages := []api.Message{
+			{
+				Role:    "system",
+				Content: "You are a git commit message generator. Generate concise, clear commit messages following conventional commit standards with strict single file rules.",
+			},
+			{
+				Role:    "user",
+				Content: commitPrompt,
+			},
+		}
+
+		resp, err := fastClient.SendChatRequest(messages, nil, "")
+		if err != nil {
+			return fmt.Errorf("failed to generate commit message: %v", err)
+		}
+
+		if len(resp.Choices) == 0 {
+			return fmt.Errorf("no response from model")
+		}
+
+		commitMessage = strings.TrimSpace(resp.Choices[0].Message.Content)
+
+		// Validate commit message format for single file commits
+		lines := strings.Split(commitMessage, "\n")
+		if len(lines) > 0 {
+			title := lines[0]
+			// Check if title starts with lowercase
+			if len(title) > 0 && strings.ToUpper(title[:1]) == title[:1] {
+				// Auto-fix: convert first letter to lowercase
+				title = strings.ToLower(title[:1]) + title[1:]
+				lines[0] = title
+				commitMessage = strings.Join(lines, "\n")
+			}
+		}
+
+		// Show token usage
+		fmt.Printf("\n💰 Tokens used: %d (fast model: %s)\n", resp.Usage.TotalTokens, api.FastModel)
+
+	} else {
+		// Multi-file mode - full format with file actions
+		// Calculate available space for title
+		prefixAndActions := branchPrefix + fileActionsSummary + " - "
+		availableSpace := 72 - len(prefixAndActions)
+
+		// Create the commit message generation prompt
+		commitPrompt := fmt.Sprintf(`Base responses on the following changes:
+
+%s
+
+Generate a concise git commit title starting with the word: '%s'. 
+The total length MUST be under %d characters. Don't include the file name or any 
+colons. The title should be a single line without any markdown formatting. Only 
+return the short title and nothing else.`, string(diffOutput), primaryAction, availableSpace)
+
+		// Get commit message title using fast model
+		messages := []api.Message{
+			{
+				Role:    "system",
+				Content: "You are a git commit message generator. Generate concise, clear commit messages following conventional commit standards.",
+			},
+			{
+				Role:    "user",
+				Content: commitPrompt,
+			},
+		}
+
+		resp, err := fastClient.SendChatRequest(messages, nil, "")
+		if err != nil {
+			return fmt.Errorf("failed to generate commit message: %v", err)
+		}
+
+		if len(resp.Choices) == 0 {
+			return fmt.Errorf("no response from model")
+		}
+
+		shortTitle := strings.TrimSpace(resp.Choices[0].Message.Content)
+
+		// Now generate the description
+		descPrompt := fmt.Sprintf(`Base responses on the following changes:
+
+%s
+
+Generate a Git commit message summary. The message should follow these rules:
+1. The total length MUST be under 500 characters.
+2. DO NOT include a title.
+3. DO NOT include any code blocks or filenames.
+4. DO NOT include any user messages.
+5. Message will be a single paragraph without any markdown formatting.
+6. The message should be clear and concise and only give reasoning for the change 
+   if provided by the user.`, string(diffOutput))
+
+		// Get description
+		messages = []api.Message{
+			{
+				Role:    "system",
+				Content: "You are a git commit message generator. Generate clear, concise descriptions.",
+			},
+			{
+				Role:    "user",
+				Content: descPrompt,
+			},
+		}
+
+		resp, err = fastClient.SendChatRequest(messages, nil, "")
+		if err != nil {
+			return fmt.Errorf("failed to generate description: %v", err)
+		}
+
+		if len(resp.Choices) == 0 {
+			return fmt.Errorf("no response from model for description")
+		}
+
+		description := strings.TrimSpace(resp.Choices[0].Message.Content)
+
+		// Wrap description at 72 characters
+		wrappedDesc := wrapText(description, 72)
+
+		// Build the full commit message
+		commitTitle := branchPrefix + fileActionsSummary + " - " + shortTitle
+		commitMessage = commitTitle + "\n\n" + wrappedDesc
+
+		// Show token usage (both requests)
+		fmt.Printf("\n💰 Tokens used: ~%d (fast model: %s)\n", resp.Usage.TotalTokens*2, api.FastModel)
+	}
 
 	// Show commit message preview
 	fmt.Println("\n📋 Commit message preview:")
@@ -266,11 +596,29 @@ Please generate only the commit message content, no additional commentary.`, str
 	fmt.Println("=============================================")
 
 	// Simple confirmation
-	fmt.Print("\n💡 Proceed with commit? (y/n): ")
+	fmt.Print("\n💡 Proceed with commit? (y/n/e to edit): ")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(strings.ToLower(input))
 
-	if input != "y" && input != "yes" && input != "" {
+	if input == "e" || input == "edit" {
+		// Allow editing the commit message
+		fmt.Println("\n✏️  Enter your commit message (press Enter twice when done):")
+		var editedMessage strings.Builder
+		emptyLineCount := 0
+		for {
+			line, _ := reader.ReadString('\n')
+			if line == "\n" {
+				emptyLineCount++
+				if emptyLineCount >= 2 {
+					break
+				}
+			} else {
+				emptyLineCount = 0
+			}
+			editedMessage.WriteString(line)
+		}
+		commitMessage = strings.TrimSpace(editedMessage.String())
+	} else if input != "y" && input != "yes" && input != "" {
 		fmt.Println("❌ Commit cancelled")
 		return nil
 	}
@@ -289,7 +637,7 @@ Please generate only the commit message content, no additional commentary.`, str
 	cmd := exec.Command("git", "commit", "-F", tempFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create commit: %v", err)
+		return fmt.Errorf("failed to create commit: %v\nOutput: %s", err, string(output))
 	}
 
 	fmt.Printf("✅ Commit created successfully!\n")

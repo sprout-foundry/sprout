@@ -224,6 +224,18 @@ Current status: Starting iteration 1 (natural termination)`
 			ReasoningContent: choice.Message.ReasoningContent,
 		})
 
+		// Display intermediate response if it contains substantial content and has tool calls
+		// This shows the user the agent's reasoning before executing tools
+		if len(choice.Message.ToolCalls) > 0 {
+			content := strings.TrimSpace(choice.Message.Content)
+			if len(content) > 50 { // Show meaningful intermediate content
+				fmt.Printf("💭 %s\n", content)
+			} else if len(content) > 0 { // Show brief content
+				fmt.Printf("💭 %s\n", content)
+			}
+			// If no content but has tool calls, we'll let the tool execution logs speak for themselves
+		}
+
 		// Check if there are tool calls to execute
 		if len(choice.Message.ToolCalls) > 0 {
 			// Optimization: Check if all tool calls are read_file operations for parallel execution
@@ -409,13 +421,13 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 	// Load previous state if available
 	if a.previousSummary != "" {
 		continuityPrompt := fmt.Sprintf(`
-CONTINUITY FROM PREVIOUS SESSION:
+CONTEXT FROM PREVIOUS SESSION:
 %s
 
 CURRENT TASK:
 %s
 
-Please continue working on this task chain, building upon the previous actions.`,
+Note: The user cannot see the previous session's responses, so please provide a complete answer without referencing "previous responses" or "as mentioned before". If this task relates to the previous session, build upon that work but present your response as if it's the first time addressing this topic.`,
 			a.previousSummary, userQuery)
 
 		return a.ProcessQuery(continuityPrompt)

@@ -83,7 +83,7 @@ The CLI supports several modes of operation:
 - **`ledit process`**: Multi-step orchestration for complex features
 - **`ledit question`**: Interactive Q&A about the workspace
 - **`ledit fix`**: Error-driven code fixing with validation loops
-- **`ledit ui`**: Launch the standalone TUI interface
+
 
 ### Multi-Agent Architecture
 
@@ -164,4 +164,4 @@ The system analyzes all workspace files and intelligently determines which files
 - **Self-Correction**: Orchestration includes retry logic with error analysis and web search
 - **TDD Integration**: Test-driven development workflows in orchestration mode
 - **Testing**: Python-based E2E test runner with parallel execution and timeout handling
-- **TUI Mode**: Experimental TUI is disabled by default due to command suggestion persistence issues. Use `--tui` flag or `LEDIT_UI=1` to enable
+- **Console UI**: Clean component-based architecture for terminal interactions with proper input handling and footer display

@@ -419,7 +419,10 @@ func (m *ModelsCommand) updateRealTimeDisplay(currentInput string, models []api.
 	}
 	_ = width // Not used but available if needed
 
-	// Clear screen
+	// Save cursor position
+	fmt.Print("\033[s")
+
+	// Clear screen from saved position
 	fmt.Print("\033[2J\033[H")
 
 	// Calculate available space for models
@@ -519,6 +522,12 @@ func (m *ModelsCommand) updateRealTimeDisplay(currentInput string, models []api.
 	// Search input at the bottom
 	fmt.Print("─────────────────────────────────────────────────\r\n")
 	fmt.Printf("🔍 Search: %s", currentInput)
+
+	// Clear to end of line to remove any leftover text
+	fmt.Print("\033[K")
+
+	// Move cursor to correct position for input
+	fmt.Printf("\033[%dG", 14+len(currentInput))
 }
 
 // getCurrentMatches gets the current filtered matches

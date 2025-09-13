@@ -135,7 +135,7 @@ func (m *DefaultMCPManager) StartAll(ctx context.Context) error {
 		for _, err := range errors {
 			errorMsg += "\n  - " + err.Error()
 		}
-		return fmt.Errorf(errorMsg)
+		return fmt.Errorf("%s", errorMsg)
 	}
 
 	if m.logger != nil {
@@ -182,7 +182,7 @@ func (m *DefaultMCPManager) StopAll(ctx context.Context) error {
 		for _, err := range errors {
 			errorMsg += "\n  - " + err.Error()
 		}
-		return fmt.Errorf(errorMsg)
+		return fmt.Errorf("%s", errorMsg)
 	}
 
 	if m.logger != nil && len(servers) > 0 {

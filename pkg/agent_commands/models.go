@@ -222,6 +222,12 @@ func (m *ModelsCommand) interactiveAutocomplete(models []api.ModelInfo, featured
 
 // liveSearchInterface provides real-time filtering with arrow key navigation
 func (m *ModelsCommand) liveSearchInterface(models []api.ModelInfo, featuredIndices []int, chatAgent *agent.Agent) error {
+	// Check if we're in TUI mode
+	if ui.IsUIActive() {
+		// Use TUI dropdown
+		return m.tuiModelSelector(models, chatAgent)
+	}
+
 	// Check if we're in a terminal
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		// Fallback to line-based input for non-terminal environments
@@ -232,13 +238,13 @@ func (m *ModelsCommand) liveSearchInterface(models []api.ModelInfo, featuredIndi
 	items := make([]ui.DropdownItem, 0, len(models))
 	for _, model := range models {
 		item := &ui.ModelItem{
-			Provider:       model.Provider,
-			Model:          model.ID,
-			InputCost:      model.InputCost,
-			OutputCost:     model.OutputCost,
-			LegacyCost:     model.Cost,
-			ContextLength:  model.ContextLength,
-			Tags:           model.Tags,
+			Provider:      model.Provider,
+			Model:         model.ID,
+			InputCost:     model.InputCost,
+			OutputCost:    model.OutputCost,
+			LegacyCost:    model.Cost,
+			ContextLength: model.ContextLength,
+			Tags:          model.Tags,
 		}
 		items = append(items, item)
 	}
@@ -260,6 +266,13 @@ func (m *ModelsCommand) liveSearchInterface(models []api.ModelInfo, featuredIndi
 	modelID := selected.Value().(string)
 	fmt.Printf("\r\n✅ Selected: %s\r\n", modelID)
 	return m.setModel(modelID, chatAgent)
+}
+
+// tuiModelSelector shows model selection in TUI mode
+func (m *ModelsCommand) tuiModelSelector(models []api.ModelInfo, chatAgent *agent.Agent) error {
+	// In TUI mode, the selector is handled by the TUI itself
+	// This just returns a special error to indicate TUI should handle it
+	return fmt.Errorf("TUI_HANDLE_SELECTOR")
 }
 
 // fallbackLineBasedInterface provides the old line-based interface for non-terminal environments
@@ -780,6 +793,9 @@ func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 
 	fmt.Printf("✅ Model set to: %s\n", finalModel)
 	fmt.Printf("🏢 Provider: %s\n", api.GetProviderName(finalProvider))
+
+	// Publish model info event for TUI
+	ui.PublishModel(finalModel)
 
 	return nil
 }

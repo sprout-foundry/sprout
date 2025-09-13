@@ -2,7 +2,6 @@ package interactive
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,15 +13,16 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	commands "github.com/alantheprice/ledit/pkg/agent_commands"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/chzyer/readline"
 )
 
 // AgentInput provides an interactive input interface for the agent
 type AgentInput struct {
 	agent           *agent.Agent
 	commandRegistry *commands.CommandRegistry
-	readline        *readline.Instance
+	rawInput        *BufferedInputHandler
 	historyFile     string
+	termUI          *TerminalUI
+	enableFooter    bool
 }
 
 // Config holds configuration for the agent input
@@ -40,15 +40,6 @@ func DefaultConfig() *Config {
 	}
 }
 
-// InterruptHandler is a custom interrupt handler for readline
-type InterruptHandler struct{}
-
-func (ih *InterruptHandler) OnInterrupt() bool {
-	// Return true to continue, false to exit
-	fmt.Print("\n💭 Use Ctrl+D or type 'exit' to quit. Press Ctrl+C again to force quit.\n")
-	return true
-}
-
 // New creates a new AgentInput instance
 func New(chatAgent *agent.Agent, config *Config) (*AgentInput, error) {
 	if config == nil {
@@ -58,31 +49,44 @@ func New(chatAgent *agent.Agent, config *Config) (*AgentInput, error) {
 	// Create command registry
 	commandRegistry := commands.NewCommandRegistry()
 
-	// Set up readline with history and tab completion
-	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          config.Prompt,
-		HistoryFile:     config.HistoryFile,
-		HistoryLimit:    1000,
-		AutoComplete:    createSlashCompleter(),
-		InterruptPrompt: "^C",
-		EOFPrompt:       "exit",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize readline: %w", err)
+	// Create buffered input handler for better performance
+	rawInput := NewBufferedInputHandler(config.Prompt)
+
+	// Load history
+	if err := rawInput.LoadHistory(config.HistoryFile); err != nil {
+		// Non-fatal error, just log it
+		fmt.Printf("Note: Could not load history: %v\n", err)
 	}
+
+	// Create terminal UI with footer
+	var termUI *TerminalUI
+	var err error
+
+	// Allow disabling footer for performance debugging
+	if os.Getenv("LEDIT_NO_FOOTER") != "1" {
+		termUI, err = NewTerminalUI()
+		if err != nil {
+			// If we can't create the UI, continue without it
+			termUI = nil
+		}
+	}
+	enableFooter := termUI != nil
 
 	return &AgentInput{
 		agent:           chatAgent,
 		commandRegistry: commandRegistry,
-		readline:        rl,
+		rawInput:        rawInput,
 		historyFile:     config.HistoryFile,
+		termUI:          termUI,
+		enableFooter:    enableFooter,
 	}, nil
 }
 
 // Close cleans up resources
 func (ai *AgentInput) Close() {
-	if ai.readline != nil {
-		ai.readline.Close()
+	// Save history
+	if err := ai.rawInput.SaveHistory(ai.historyFile); err != nil {
+		fmt.Printf("Warning: Could not save history: %v\n", err)
 	}
 }
 
@@ -93,10 +97,29 @@ func (ai *AgentInput) Run() error {
 	// Initially disable escape monitoring during normal input
 	ai.agent.DisableEscMonitoring()
 
+	// Setup terminal UI if enabled
+	if ai.enableFooter && ai.termUI != nil {
+		ai.termUI.Clear()
+		ai.termUI.SetupScrollRegion()
+		defer ai.termUI.ResetScrollRegion()
+
+		// Set up callback for real-time stats updates
+		ai.agent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
+			// Debug logging
+			if os.Getenv("DEBUG") == "1" {
+				fmt.Fprintf(os.Stderr, "\n[DEBUG] Stats callback: tokens=%d, cost=%.4f\n", totalTokens, totalCost)
+			}
+			ai.updateFooterStats()
+		})
+
+		// Initialize footer with current stats
+		ai.updateFooterStats()
+	}
+
 	// Show welcome message
 	ai.showWelcomeMessage()
 
-	// Set up signal handling for graceful shutdown and window resize
+	// Set up signal handling for graceful shutdown
 	interruptChannel := make(chan os.Signal, 1)
 	signal.Notify(interruptChannel, syscall.SIGINT, syscall.SIGTERM)
 
@@ -104,14 +127,20 @@ func (ai *AgentInput) Run() error {
 	go func() {
 		<-interruptChannel
 		fmt.Println("\n👋 Goodbye!")
+		ai.Close()
 		os.Exit(0)
 	}()
 
 	// Main input loop
 	for {
-		input, err := ai.readline.Readline()
+		// Read line with paste detection
+		input, isPaste, err := ai.rawInput.ReadLine()
 		if err != nil {
-			if err == readline.ErrInterrupt {
+			if err.Error() == "interrupted" {
+				fmt.Println("\n👋 Goodbye!")
+				break
+			}
+			if err.Error() == "EOF" {
 				fmt.Println("\n👋 Goodbye!")
 				break
 			}
@@ -119,60 +148,105 @@ func (ai *AgentInput) Run() error {
 			break
 		}
 
-		// Detect if this looks like the start of a multi-line paste
-		if ai.looksLikePastedContent(input) {
+		// Handle pasted content
+		if isPaste {
+			fmt.Printf("📋 Paste detected (%d lines)\n", strings.Count(input, "\n")+1)
 			input = ai.handlePastedContent(input)
-		} else {
-			// Handle normal multiline input (lines ending with \)
-			input = ai.handleMultilineInput(input)
 		}
 
-		input = strings.TrimSpace(input)
-		if input == "" {
-			continue
-		}
-
-		// Handle exit commands
-		if ai.isExitCommand(input) {
-			fmt.Println("👋 Exiting interactive mode")
-			return nil
-		}
-
-		// Handle slash commands
-		if strings.HasPrefix(input, "/") {
-			if ai.handleSlashCommand(input) {
-				return nil // Exit was requested
-			}
-			continue
-		}
-
-		// Check if this is a shell command
-		if isShellCommand(input) {
-			executeShellCommandDirectly(input)
-			fmt.Println("")
-			continue
-		}
-
-		// Check if input contains code blocks
-		if ai.looksLikeCode(input) {
-			fmt.Println("💻 Code input detected")
-		}
-
-		// Validate input length
-		if !validateQueryLength(input) {
-			fmt.Println("")
-			continue
-		}
-
-		// Process user request with agent
-		if err := ai.processAgentRequest(input); err != nil {
-			fmt.Printf("❌ Processing failed: %v\n", err)
-		}
-		fmt.Println("")
-
+		// Process input
+		ai.processSingleLine(input)
 	}
 
 	return nil
+}
+
+// handlePasteMode enters paste mode to collect multi-line input
+func (ai *AgentInput) handlePasteMode() {
+	fmt.Println("\n📋 Paste Mode - Paste your content and press Ctrl+D when done:")
+	fmt.Println(strings.Repeat("─", 60))
+
+	// Temporarily change prompt
+	oldPrompt := ai.rawInput.prompt
+	ai.rawInput.SetPrompt("")
+	defer ai.rawInput.SetPrompt(oldPrompt)
+
+	// Collect lines until EOF (Ctrl+D)
+	var lines []string
+	for {
+		line, _, err := ai.rawInput.ReadLine()
+		if err != nil { // EOF or error
+			break
+		}
+		lines = append(lines, line)
+	}
+
+	if len(lines) == 0 {
+		fmt.Println("❌ No content pasted")
+		return
+	}
+
+	// Join lines and handle as pasted content
+	content := strings.Join(lines, "\n")
+	query := ai.handlePastedContent(content)
+
+	// Process the generated query
+	ai.processSingleLine(query)
+}
+
+// processSingleLine processes a single line of input
+func (ai *AgentInput) processSingleLine(input string) {
+	// Check if this is a file path
+	if ai.looksLikeFilePath(input) {
+		if fileQuery := ai.handleFileInput(input); fileQuery != "" {
+			input = fileQuery
+		}
+	} else if !strings.Contains(input, "\n") {
+		// Handle normal multiline input (lines ending with \)
+		input = ai.handleMultilineInput(input)
+	}
+
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return
+	}
+
+	// Handle exit commands
+	if ai.isExitCommand(input) {
+		fmt.Println("👋 Exiting interactive mode")
+		ai.Close()
+		os.Exit(0)
+	}
+
+	// Handle slash commands
+	if strings.HasPrefix(input, "/") {
+		if ai.handleSlashCommand(input) {
+			// Exit was requested by slash command
+			fmt.Println("👋 Exiting interactive mode")
+			ai.Close()
+			os.Exit(0)
+		}
+		return
+	}
+
+	// Check if this is a shell command
+	if isShellCommand(input) {
+		executeShellCommandDirectly(input)
+		fmt.Println("")
+		return
+	}
+
+	// Validate input length
+	if !validateQueryLength(input) {
+		fmt.Println("")
+		return
+	}
+
+	// Process user request with agent
+	if err := ai.processAgentRequest(input); err != nil {
+		fmt.Printf("❌ Processing failed: %v\n", err)
+	}
+	fmt.Println("")
 }
 
 // showWelcomeMessage displays the welcome message with model info
@@ -193,11 +267,8 @@ func (ai *AgentInput) showWelcomeMessage() {
 	}
 
 	fmt.Println("\n📚 Quick Tips:")
-	fmt.Println("  • Type '/quit' or 'exit' to leave")
+	fmt.Println("  • Type '/exit' or 'exit' to leave")
 	fmt.Println("  • Press TAB after '/' for command completion")
-	fmt.Println("  • Type '/' and press ENTER for interactive command selection")
-	fmt.Println("  • End lines with '\\' for multiline input")
-	fmt.Println("  • Note: Multi-line pastes execute line by line (use \\ to join)")
 	if providerType != api.OllamaClientType {
 		fmt.Println("  • Press ESC during processing to inject new instructions")
 	}
@@ -219,6 +290,12 @@ func (ai *AgentInput) handleSlashCommand(input string) bool {
 			return false
 		}
 		input = selectedCmd
+	}
+
+	// Handle paste command specially
+	if input == "/paste" {
+		ai.handlePasteMode()
+		return false
 	}
 
 	// Handle quit commands specially (immediate exit)
@@ -306,89 +383,56 @@ func (ai *AgentInput) printEnhancedSummary(duration time.Duration) {
 	fmt.Printf("⏱️  Duration: %s\n", formatDuration(duration))
 	fmt.Printf("🕐 Time: %s\n", time.Now().Format("15:04:05"))
 	fmt.Println("✅ Completed")
+
+	// Update footer if enabled
+	if ai.enableFooter && ai.termUI != nil {
+		ai.updateFooterStats()
+	}
 }
 
-// looksLikePastedContent detects if input looks like pasted multi-line content
-func (ai *AgentInput) looksLikePastedContent(input string) bool {
-	// Check for common indicators of pasted content:
-	// - Starts with common code/data patterns
-	// - Contains multiple sentences without being a question
-	// - Has structured data markers
-
-	// JSON/YAML/XML
-	if strings.HasPrefix(input, "{") || strings.HasPrefix(input, "[") ||
-		strings.HasPrefix(input, "---") || strings.HasPrefix(input, "<") {
-		return true
+// updateFooterStats updates the terminal footer with current stats
+func (ai *AgentInput) updateFooterStats() {
+	if ai.termUI == nil {
+		return
 	}
 
-	// Code indicators
-	if strings.Contains(input, "function ") || strings.Contains(input, "def ") ||
-		strings.Contains(input, "class ") || strings.Contains(input, "import ") ||
-		strings.Contains(input, "const ") || strings.Contains(input, "var ") {
-		return true
+	modelName := ai.agent.GetModel()
+	providerType := ai.agent.GetProviderType()
+	providerName := api.GetProviderName(providerType)
+
+	// Get token and cost info from agent
+	totalTokens := ai.agent.GetTotalTokens()
+	totalCost := ai.agent.GetTotalCost()
+
+	// Debug logging
+	if os.Getenv("DEBUG") == "1" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] updateFooterStats: tokens=%d, cost=%.4f\n", totalTokens, totalCost)
 	}
 
-	// Markdown/structured text
-	if strings.HasPrefix(input, "#") || strings.HasPrefix(input, "```") ||
-		strings.HasPrefix(input, "- ") || strings.HasPrefix(input, "* ") {
-		return true
+	stats := &UIStats{
+		Model:       modelName,
+		Provider:    providerName,
+		TotalTokens: totalTokens,
+		TotalCost:   totalCost,
+		LastUpdated: time.Now(),
 	}
 
-	return false
+	ai.termUI.UpdateStats(stats)
 }
 
 // handlePastedContent handles multi-line pasted content by saving to a temp file
-func (ai *AgentInput) handlePastedContent(firstLine string) string {
-	// Collect lines that arrive quickly (indicating paste)
-	lines := []string{firstLine}
-	timeout := time.After(50 * time.Millisecond) // Short timeout for paste detection
+func (ai *AgentInput) handlePastedContent(content string) string {
+	// Determine file extension based on content
+	ext := ai.detectContentType(content)
 
-	// Try to collect more lines
-	collectingLines := true
-	for collectingLines {
-		select {
-		case <-timeout:
-			collectingLines = false
-		default:
-			// Set a very short deadline for the next read
-			lineChan := make(chan string, 1)
-			errChan := make(chan error, 1)
-
-			go func() {
-				if line, err := ai.readline.Readline(); err == nil {
-					lineChan <- line
-				} else {
-					errChan <- err
-				}
-			}()
-
-			select {
-			case line := <-lineChan:
-				lines = append(lines, line)
-			case <-errChan:
-				collectingLines = false
-			case <-time.After(10 * time.Millisecond):
-				collectingLines = false
-			}
-		}
-	}
-
-	// If we only got one line, return it as-is
-	if len(lines) == 1 {
-		return firstLine
-	}
-
-	// Multiple lines detected - save to temp file
-	content := strings.Join(lines, "\n")
-
-	// Create temp file
+	// Create temp file with appropriate extension
 	tempDir := filepath.Join(os.TempDir(), "ledit-paste")
 	os.MkdirAll(tempDir, 0755)
 
-	tempFile, err := ioutil.TempFile(tempDir, "paste-*.txt")
+	tempFile, err := os.CreateTemp(tempDir, fmt.Sprintf("paste-*.%s", ext))
 	if err != nil {
 		fmt.Printf("❌ Failed to create temp file: %v\n", err)
-		return content // Fall back to returning the content directly
+		return content
 	}
 
 	_, err = tempFile.WriteString(content)
@@ -399,13 +443,91 @@ func (ai *AgentInput) handlePastedContent(firstLine string) string {
 		return content
 	}
 
-	// Inform user and return file reference
-	fmt.Printf("📋 Multi-line paste detected (%d lines, %d bytes)\n", len(lines), len(content))
-	fmt.Printf("📁 Saved to: %s\n", tempFile.Name())
-	fmt.Println("💡 Processing as file reference...")
+	// Count lines and size
+	lines := strings.Count(content, "\n") + 1
+	size := len(content)
 
-	// Return a query that references the file
-	return fmt.Sprintf("I pasted some content. Please analyze and respond to: #%s", tempFile.Name())
+	// Inform user
+	fmt.Printf("\n📋 Pasted content saved (%d lines, %d bytes)\n", lines, size)
+	fmt.Printf("📁 File: %s\n", tempFile.Name())
+	fmt.Printf("📝 Type: %s\n", ai.getContentTypeDescription(ext))
+
+	// Return a natural query that references the file
+	return fmt.Sprintf("Please analyze this %s file: #%s", ai.getContentTypeDescription(ext), tempFile.Name())
+}
+
+// detectContentType determines the appropriate file extension based on content
+func (ai *AgentInput) detectContentType(content string) string {
+	trimmed := strings.TrimSpace(content)
+
+	// JSON
+	if (strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")) ||
+		(strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]")) {
+		return "json"
+	}
+
+	// YAML
+	if strings.HasPrefix(trimmed, "---") || strings.Contains(content, "\n  ") {
+		return "yaml"
+	}
+
+	// XML/HTML
+	if strings.HasPrefix(trimmed, "<") && strings.HasSuffix(trimmed, ">") {
+		if strings.Contains(trimmed, "<html") {
+			return "html"
+		}
+		return "xml"
+	}
+
+	// SQL
+	if strings.Contains(strings.ToUpper(content), "SELECT ") ||
+		strings.Contains(strings.ToUpper(content), "CREATE TABLE") {
+		return "sql"
+	}
+
+	// Markdown
+	if strings.Contains(content, "```") || strings.HasPrefix(trimmed, "#") {
+		return "md"
+	}
+
+	// Programming languages
+	if strings.Contains(content, "function ") || strings.Contains(content, "const ") {
+		return "js"
+	}
+	if strings.Contains(content, "def ") && strings.Contains(content, "import ") {
+		return "py"
+	}
+	if strings.Contains(content, "func ") && strings.Contains(content, "package ") {
+		return "go"
+	}
+	if strings.Contains(content, "class ") && strings.Contains(content, "public ") {
+		return "java"
+	}
+
+	// Default to txt
+	return "txt"
+}
+
+// getContentTypeDescription returns a human-readable description of the content type
+func (ai *AgentInput) getContentTypeDescription(ext string) string {
+	descriptions := map[string]string{
+		"json": "JSON data",
+		"yaml": "YAML configuration",
+		"xml":  "XML document",
+		"html": "HTML document",
+		"sql":  "SQL query",
+		"md":   "Markdown document",
+		"js":   "JavaScript code",
+		"py":   "Python code",
+		"go":   "Go code",
+		"java": "Java code",
+		"txt":  "text",
+	}
+
+	if desc, ok := descriptions[ext]; ok {
+		return desc
+	}
+	return "text"
 }
 
 // handleMultilineInput handles continuation lines ending with backslash
@@ -421,11 +543,11 @@ func (ai *AgentInput) handleMultilineInput(input string) string {
 	// Keep reading lines until we get one without a trailing backslash
 	for {
 		// Change prompt to indicate continuation
-		ai.readline.SetPrompt("... > ")
-		line, err := ai.readline.Readline()
+		ai.rawInput.SetPrompt("... > ")
+		line, _, err := ai.rawInput.ReadLine()
 		if err != nil {
 			// On error, return what we have so far
-			ai.readline.SetPrompt("🤖 > ")
+			ai.rawInput.SetPrompt("🤖 > ")
 			return strings.Join(lines, "\n")
 		}
 
@@ -441,68 +563,9 @@ func (ai *AgentInput) handleMultilineInput(input string) string {
 	}
 
 	// Restore original prompt
-	ai.readline.SetPrompt("🤖 > ")
+	ai.rawInput.SetPrompt("🤖 > ")
 
 	return strings.Join(lines, "\n")
-}
-
-// looksLikeCode checks if the input appears to contain code
-func (ai *AgentInput) looksLikeCode(input string) bool {
-	codeIndicators := []string{
-		"```", "func ", "function ", "class ", "def ", "import ", "const ", "var ", "let ",
-		"if (", "for (", "while (", "return ", "package ", "public ", "private ",
-		"{", "}", "()", "[]", "=>", "->",
-	}
-
-	for _, indicator := range codeIndicators {
-		if strings.Contains(input, indicator) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// createSlashCompleter creates a tab completion function for slash commands
-func createSlashCompleter() *readline.PrefixCompleter {
-	return readline.NewPrefixCompleter(
-		readline.PcItem("/help"),
-		readline.PcItem("/quit"),
-		readline.PcItem("/q"),
-		readline.PcItem("/exit"),
-		readline.PcItem("/init"),
-		readline.PcItem("/models",
-			readline.PcItem("select"),
-			// Add some common model completions
-			readline.PcItem("deepseek-ai/DeepSeek-V3.1"),
-			readline.PcItem("deepseek-ai/DeepSeek-V3"),
-			readline.PcItem("anthropic/claude-4-sonnet"),
-			readline.PcItem("anthropic/claude-4-opus"),
-			readline.PcItem("meta-llama/Meta-Llama-3.1-70B-Instruct"),
-			readline.PcItem("google/gemini-2.5-pro"),
-		),
-		readline.PcItem("/provider",
-			readline.PcItem("select"),
-			readline.PcItem("list"),
-		),
-		readline.PcItem("/shell"),
-		readline.PcItem("/exec"),
-		readline.PcItem("/info"),
-		readline.PcItem("/commit"),
-		// Change tracking commands
-		readline.PcItem("/changes"),
-		readline.PcItem("/status"),
-		readline.PcItem("/log"),
-		readline.PcItem("/rollback"),
-		// MCP commands
-		readline.PcItem("/mcp",
-			readline.PcItem("add"),
-			readline.PcItem("remove"),
-			readline.PcItem("list"),
-			readline.PcItem("test"),
-			readline.PcItem("help"),
-		),
-	)
 }
 
 // isShellCommand checks if the input looks like a shell command
@@ -584,4 +647,45 @@ func validateQueryLength(query string) bool {
 	}
 
 	return true
+}
+
+// looksLikeFilePath checks if the input looks like a file path
+func (ai *AgentInput) looksLikeFilePath(input string) bool {
+	// Check for common file path patterns
+	if strings.HasPrefix(input, "/") || strings.HasPrefix(input, "./") ||
+		strings.HasPrefix(input, "../") || strings.HasPrefix(input, "~/") ||
+		strings.Contains(input, ":\\") || // Windows paths
+		(strings.Contains(input, "/") && (strings.Contains(input, ".") || strings.HasSuffix(input, "/"))) {
+		return true
+	}
+	return false
+}
+
+// handleFileInput processes a file path input (for future drag-and-drop support)
+func (ai *AgentInput) handleFileInput(filePath string) string {
+	// Clean the file path
+	filePath = strings.TrimSpace(filePath)
+	filePath = strings.Trim(filePath, "'\"") // Remove quotes if present
+
+	// Expand home directory if needed
+	if strings.HasPrefix(filePath, "~/") {
+		homeDir, _ := os.UserHomeDir()
+		filePath = filepath.Join(homeDir, filePath[2:])
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// Don't treat as file path if it doesn't exist
+		return ""
+	}
+
+	// Get file info
+	fileInfo, _ := os.Stat(filePath)
+	size := fileInfo.Size()
+
+	fmt.Printf("\n📎 File detected: %s\n", filepath.Base(filePath))
+	fmt.Printf("📏 Size: %d bytes\n", size)
+
+	// Return a query that references the file
+	return fmt.Sprintf("Please analyze this file: #%s", filePath)
 }

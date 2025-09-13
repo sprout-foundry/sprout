@@ -162,22 +162,29 @@ func (d *Dropdown) filterItems() {
 	d.filteredItems = make([]DropdownItem, 0)
 
 	for _, item := range d.items {
-		if strings.Contains(strings.ToLower(item.SearchText()), searchLower) {
+		searchableText := strings.ToLower(item.SearchText())
+		displayText := strings.ToLower(item.Display())
+
+		// Search in both searchable text and display text
+		if strings.Contains(searchableText, searchLower) || strings.Contains(displayText, searchLower) {
 			d.filteredItems = append(d.filteredItems, item)
 		}
 	}
 
-	// Reset selection
+	// Reset selection and window
 	d.selectedIndex = 0
 	d.windowStart = 0
+
+	// Update display immediately after filtering
+	d.updateDisplay()
 }
 
 func (d *Dropdown) updateDisplay() {
 	// Hide cursor during redraw
 	fmt.Print("\033[?25l")
 
-	// Move cursor to home position
-	fmt.Print("\033[H")
+	// Clear screen and move to home
+	fmt.Print("\033[2J\033[H")
 
 	// Calculate display window
 	termWidth, termHeight, _ := term.GetSize(int(os.Stdin.Fd()))
@@ -188,15 +195,23 @@ func (d *Dropdown) updateDisplay() {
 		termHeight = 24
 	}
 
-	// Reserve space for prompt, search, and padding
-	reservedLines := 4
+	// Reserve space for UI elements:
+	// - prompt (1-2 lines if present)
+	// - scroll indicators (2 lines max - above and below)
+	// - spacing (1 line)
+	// - search info (1 line)
+	// - search box (1 line)
+	reservedLines := 6 // Base: 2 scroll indicators + spacing + search info + search box
 	if d.options.Prompt != "" {
-		reservedLines++
+		reservedLines += 2 // Prompt + blank line after
 	}
 
 	maxItems := termHeight - reservedLines
 	if d.options.MaxHeight > 0 && d.options.MaxHeight < maxItems {
 		maxItems = d.options.MaxHeight
+	}
+	if maxItems < 3 {
+		maxItems = 3 // Minimum visible items
 	}
 
 	// Adjust window to keep selection visible
@@ -218,6 +233,9 @@ func (d *Dropdown) updateDisplay() {
 		} else {
 			fmt.Printf("  ↑ more items above\r\n")
 		}
+	} else {
+		// Empty line to maintain consistent spacing
+		fmt.Println()
 	}
 
 	// Show items
@@ -251,15 +269,26 @@ func (d *Dropdown) updateDisplay() {
 		} else {
 			fmt.Printf("  ↓ more items below\r\n")
 		}
+	} else {
+		// Empty line to maintain consistent spacing
+		fmt.Println()
 	}
 
-	// Show search info
-	if d.searchText != "" {
-		fmt.Printf("\r\n[%d matches]", len(d.filteredItems))
+	// Add separator line before status
+	fmt.Printf("─────────────────────────────────────────────────\r\n")
+
+	// Show search info and selection status
+	if len(d.filteredItems) == 0 {
+		fmt.Printf("\r\n[No matches]")
+	} else {
+		fmt.Printf("\r\n[%d matches, showing %d-%d]", len(d.filteredItems), d.windowStart+1, windowEnd)
 	}
 
 	// Show search box at bottom with visible cursor
 	fmt.Printf("\r\n%s%s", d.options.SearchPrompt, d.searchText)
+
+	// Clear to end of line to remove any artifacts
+	fmt.Print("\033[K")
 
 	// Show cursor at end of search text
 	fmt.Print("\033[?25h") // Show cursor

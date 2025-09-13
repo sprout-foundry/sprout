@@ -56,15 +56,19 @@ func (a *Agent) estimateContextTokens(messages []api.Message) int {
 	return totalChars / 4
 }
 
-// formatTokenCount formats token count with thousands separators
+// formatTokenCount formats token count with thousands/millions separators
 func (a *Agent) formatTokenCount(tokens int) string {
 	if tokens < 1000 {
 		return fmt.Sprintf("%d", tokens)
+	} else if tokens < 1000000 {
+		// Convert to thousands format with one decimal place
+		thousands := float64(tokens) / 1000.0
+		return fmt.Sprintf("%.1fK", thousands)
+	} else {
+		// Convert to millions format with two decimal places
+		millions := float64(tokens) / 1000000.0
+		return fmt.Sprintf("%.2fM", millions)
 	}
-	
-	// Convert to thousands format with one decimal place
-	thousands := float64(tokens) / 1000.0
-	return fmt.Sprintf("%.1fK", thousands)
 }
 
 // suggestCorrectToolName suggests the correct tool name for common mistakes

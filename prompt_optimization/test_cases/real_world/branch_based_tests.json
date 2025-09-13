@@ -1,0 +1,70 @@
+{
+  "real_world_test_suites": {
+    "codebase_integration": {
+      "name": "Real Codebase Integration Tests",
+      "description": "Tests that work with actual git branches containing real issues",
+      "test_cases": [
+        "real_world/refactor_modular_architecture.json",
+        "real_world/fix_concurrent_access_bugs.json",
+        "real_world/implement_workspace_caching.json"
+      ],
+      "timeout_seconds": 900,
+      "requires_git_checkout": true,
+      "cleanup_branches": true,
+      "priority": "high"
+    }
+  },
+  "branch_test_scenarios": {
+    "refactor_modular_architecture": {
+      "base_branch": "main",
+      "test_branch": "test/agentic-refactor-modular",
+      "scenario": "The current codebase has some architectural debt in the agent system. Create a branch with realistic technical debt and test if the agent can identify and fix architectural issues.",
+      "introduced_issues": [
+        "Mix of old and new agent patterns",
+        "Circular dependencies in pkg/agent/",
+        "Inconsistent error handling patterns",
+        "Missing interfaces for testability"
+      ],
+      "success_criteria": [
+        "Identifies architectural problems",
+        "Proposes coherent refactoring plan", 
+        "Implements changes that improve code structure",
+        "Maintains backward compatibility"
+      ]
+    },
+    "fix_concurrent_access_bugs": {
+      "base_branch": "main", 
+      "test_branch": "test/agentic-concurrency-bugs",
+      "scenario": "Introduce realistic race conditions in the workspace cache and agent state management similar to issues that actually occurred during development.",
+      "introduced_issues": [
+        "Unsynchronized map access in workspace cache",
+        "Race condition in agent state updates",
+        "Missing mutex protection in context manager",
+        "Potential deadlock in orchestration coordinator"
+      ],
+      "success_criteria": [
+        "Identifies all race conditions using go race detector knowledge",
+        "Implements proper synchronization primitives",
+        "Tests solution with -race flag understanding",
+        "Maintains performance while adding safety"
+      ]
+    },
+    "implement_workspace_caching": {
+      "base_branch": "feat/merge-in-coder-agent",
+      "test_branch": "test/agentic-workspace-cache",
+      "scenario": "Current workspace analysis is slow on large codebases. Test if agent can implement intelligent caching without breaking existing functionality.",
+      "introduced_issues": [
+        "Performance bottleneck in workspace_analyzer.go",
+        "Repeated file system scans",
+        "No invalidation strategy for file changes", 
+        "Memory usage grows unbounded"
+      ],
+      "success_criteria": [
+        "Implements efficient caching strategy",
+        "Handles cache invalidation correctly",
+        "Maintains accuracy of workspace analysis",
+        "Improves performance measurably"
+      ]
+    }
+  }
+}

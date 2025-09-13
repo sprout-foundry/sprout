@@ -1,0 +1,108 @@
+{
+  "test_suites": {
+    "agentic_core": {
+      "name": "Core Agentic Problem Solving",
+      "description": "Essential tests for agentic capabilities on moderately-sized codebases",
+      "test_cases": [
+        "agentic/codebase_refactor.json",
+        "agentic/bug_hunt.json",
+        "agentic/feature_implementation.json"
+      ],
+      "timeout_seconds": 300,
+      "runs_per_test": 1,
+      "priority": "high"
+    },
+    "agentic_comprehensive": {
+      "name": "Comprehensive Agentic Testing",
+      "description": "Full suite of agentic problem-solving scenarios",
+      "test_cases": [
+        "agentic/codebase_refactor.json",
+        "agentic/bug_hunt.json", 
+        "agentic/feature_implementation.json"
+      ],
+      "timeout_seconds": 600,
+      "runs_per_test": 2,
+      "priority": "high"
+    },
+    "quick_agentic": {
+      "name": "Quick Agentic Validation",
+      "description": "Fastest agentic test for rapid iteration",
+      "test_cases": [
+        "agentic/bug_hunt.json"
+      ],
+      "timeout_seconds": 240,
+      "runs_per_test": 1,
+      "priority": "medium"
+    },
+    "real_world_core": {
+      "name": "Real-World Codebase Problems",
+      "description": "Agentic tests using actual git branches with realistic issues",
+      "test_cases": [
+        "real_world/refactor_modular_architecture.json",
+        "real_world/fix_concurrent_access_bugs.json",
+        "real_world/implement_workspace_caching.json"
+      ],
+      "timeout_seconds": 900,
+      "runs_per_test": 1,
+      "priority": "highest",
+      "requires_git_checkout": true,
+      "cleanup_branches": true
+    },
+    "real_world_quick": {
+      "name": "Quick Real-World Test",
+      "description": "Single real-world test for rapid validation",
+      "test_cases": [
+        "real_world/fix_concurrent_access_bugs.json"
+      ],
+      "timeout_seconds": 720,
+      "runs_per_test": 1,
+      "priority": "high",
+      "requires_git_checkout": true,
+      "cleanup_branches": true
+    }
+  },
+  "provider_model_combinations": {
+    "all_models": [
+      {"provider": "openai", "model": "gpt-5-mini-2025-08-07", "name": "gpt-5-mini"},
+      {"provider": "deepinfra", "model": "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo", "name": "qwen3-coder"},
+      {"provider": "deepinfra", "model": "deepseek-ai/DeepSeek-V3.1", "name": "deepseek-3.1"}
+    ],
+    "fast_models": [
+      {"provider": "deepinfra", "model": "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo", "name": "qwen3-coder"}
+    ],
+    "thorough_models": [
+      {"provider": "deepinfra", "model": "deepseek-ai/DeepSeek-V3.1", "name": "deepseek-3.1"}
+    ],
+    "balanced_models": [
+      {"provider": "openai", "model": "gpt-5-mini-2025-08-07", "name": "gpt-5-mini"}
+    ],
+    "deepinfra_models": [
+      {"provider": "deepinfra", "model": "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo", "name": "qwen3-coder"},
+      {"provider": "deepinfra", "model": "deepseek-ai/DeepSeek-V3.1", "name": "deepseek-3.1"}
+    ]
+  },
+  "evaluation_criteria": {
+    "agentic_reasoning": {
+      "weight": 0.35,
+      "description": "Problem analysis, solution design, and step-by-step thinking"
+    },
+    "technical_execution": {
+      "weight": 0.35, 
+      "description": "Code quality, correctness, and technical implementation"
+    },
+    "completeness": {
+      "weight": 0.20,
+      "description": "How fully the solution addresses all requirements"
+    },
+    "innovation": {
+      "weight": 0.10,
+      "description": "Creative solutions and additional value provided"
+    }
+  },
+  "success_thresholds": {
+    "excellent": 85,
+    "good": 70,
+    "acceptable": 55,
+    "needs_improvement": 40
+  }
+}

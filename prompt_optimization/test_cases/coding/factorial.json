@@ -1,0 +1,51 @@
+{
+  "id": "factorial_basic",
+  "name": "Factorial Function",
+  "description": "Create a simple factorial function in Go",
+  "category": "coding",
+  "difficulty": "easy",
+  "input": {
+    "prompt": "create a simple factorial function in Go",
+    "language": "go",
+    "requirements": [
+      "Function should handle positive integers",
+      "Include basic error handling",
+      "Provide a simple test case"
+    ]
+  },
+  "expected_outputs": {
+    "function_name": "factorial",
+    "return_type": "int or int64",
+    "handles_zero": true,
+    "handles_negative": true,
+    "includes_test": true
+  },
+  "evaluation": {
+    "correctness_tests": [
+      {
+        "input": 0,
+        "expected": 1
+      },
+      {
+        "input": 5, 
+        "expected": 120
+      },
+      {
+        "input": 10,
+        "expected": 3628800
+      }
+    ],
+    "quality_checks": [
+      "function_exists",
+      "proper_go_syntax",
+      "error_handling_present",
+      "reasonable_performance"
+    ]
+  },
+  "scoring": {
+    "max_points": 100,
+    "correctness": 50,
+    "code_quality": 30,
+    "completeness": 20
+  }
+}

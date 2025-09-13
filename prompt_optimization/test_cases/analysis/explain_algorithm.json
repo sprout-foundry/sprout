@@ -1,0 +1,48 @@
+{
+  "id": "explain_quicksort",
+  "name": "Explain Quicksort Algorithm",
+  "description": "Analyze and explain a quicksort implementation",
+  "category": "analysis", 
+  "difficulty": "medium",
+  "input": {
+    "prompt": "Explain how this quicksort algorithm works and analyze its time complexity",
+    "context": "func quicksort(arr []int, low, high int) {\n    if low < high {\n        pi := partition(arr, low, high)\n        quicksort(arr, low, pi-1)\n        quicksort(arr, pi+1, high)\n    }\n}\n\nfunc partition(arr []int, low, high int) int {\n    pivot := arr[high]\n    i := low - 1\n    for j := low; j < high; j++ {\n        if arr[j] < pivot {\n            i++\n            arr[i], arr[j] = arr[j], arr[i]\n        }\n    }\n    arr[i+1], arr[high] = arr[high], arr[i+1]\n    return i + 1\n}",
+    "requirements": [
+      "Explain the algorithm step by step",
+      "Analyze time and space complexity",
+      "Mention best/worst case scenarios"
+    ]
+  },
+  "expected_outputs": {
+    "explains_divide_conquer": true,
+    "describes_partitioning": true,
+    "mentions_pivot": true,
+    "time_complexity_analysis": true,
+    "space_complexity_analysis": true,
+    "best_worst_cases": true
+  },
+  "evaluation": {
+    "content_checks": [
+      "mentions_divide_and_conquer",
+      "explains_partition_function", 
+      "discusses_pivot_selection",
+      "analyzes_time_complexity",
+      "mentions_O_n_log_n_average",
+      "mentions_O_n2_worst_case",
+      "discusses_space_complexity"
+    ],
+    "quality_checks": [
+      "clear_explanation",
+      "technical_accuracy",
+      "appropriate_depth",
+      "well_structured"
+    ]
+  },
+  "scoring": {
+    "max_points": 100,
+    "technical_accuracy": 40,
+    "completeness": 30,
+    "clarity": 20,
+    "depth": 10
+  }
+}

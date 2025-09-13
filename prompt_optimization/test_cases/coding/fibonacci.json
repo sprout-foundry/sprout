@@ -1,0 +1,56 @@
+{
+  "id": "fibonacci_sequence",
+  "name": "Fibonacci Sequence Generator", 
+  "description": "Generate Fibonacci sequence up to n terms",
+  "category": "coding",
+  "difficulty": "easy",
+  "input": {
+    "prompt": "Write a Go function that generates the first n numbers in the Fibonacci sequence",
+    "language": "go",
+    "requirements": [
+      "Function should accept an integer n",
+      "Return slice of Fibonacci numbers",
+      "Handle edge cases (n <= 0)"
+    ]
+  },
+  "expected_outputs": {
+    "function_name": "fibonacci",
+    "return_type": "[]int",
+    "handles_zero": true,
+    "handles_negative": true,
+    "efficient_implementation": true
+  },
+  "evaluation": {
+    "correctness_tests": [
+      {
+        "input": 0,
+        "expected": "[]"
+      },
+      {
+        "input": 1,
+        "expected": "[0]"
+      },
+      {
+        "input": 5,
+        "expected": "[0, 1, 1, 2, 3]"
+      },
+      {
+        "input": 10,
+        "expected": "[0, 1, 1, 2, 3, 5, 8, 13, 21, 34]"
+      }
+    ],
+    "quality_checks": [
+      "function_exists", 
+      "proper_go_syntax",
+      "edge_case_handling",
+      "reasonable_complexity"
+    ]
+  },
+  "scoring": {
+    "max_points": 100,
+    "correctness": 45,
+    "efficiency": 25,
+    "code_quality": 20,
+    "completeness": 10
+  }
+}

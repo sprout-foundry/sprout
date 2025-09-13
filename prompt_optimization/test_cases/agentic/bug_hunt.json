@@ -1,0 +1,82 @@
+{
+  "id": "bug_hunt_concurrent_map",
+  "name": "Bug Hunt - Concurrent Map Access",
+  "description": "Find and fix race condition bugs in a concurrent Go application",
+  "category": "agentic",
+  "difficulty": "hard", 
+  "estimated_time_minutes": 4,
+  "input": {
+    "prompt": "This Go application has race condition bugs causing intermittent panics. Find all the bugs and fix them properly using Go's concurrency primitives.",
+    "codebase": {
+      "files": {
+        "cache.go": "package main\n\nimport (\n\t\"fmt\"\n\t\"sync\"\n\t\"time\"\n)\n\ntype Cache struct {\n\tdata map[string]string\n\thits int\n\tmisses int\n}\n\nfunc NewCache() *Cache {\n\treturn &Cache{\n\t\tdata: make(map[string]string),\n\t}\n}\n\nfunc (c *Cache) Get(key string) (string, bool) {\n\tvalue, exists := c.data[key]\n\tif exists {\n\t\tc.hits++\n\t\treturn value, true\n\t}\n\tc.misses++\n\treturn \"\", false\n}\n\nfunc (c *Cache) Set(key, value string) {\n\tc.data[key] = value\n}\n\nfunc (c *Cache) Delete(key string) {\n\tdelete(c.data, key)\n}\n\nfunc (c *Cache) Stats() (int, int) {\n\treturn c.hits, c.misses\n}\n\nfunc (c *Cache) Clear() {\n\tc.data = make(map[string]string)\n\tc.hits = 0\n\tc.misses = 0\n}\n\nfunc worker(id int, cache *Cache, wg *sync.WaitGroup) {\n\tdefer wg.Done()\n\t\n\tfor i := 0; i < 1000; i++ {\n\t\tkey := fmt.Sprintf(\"key-%d-%d\", id, i)\n\t\tvalue := fmt.Sprintf(\"value-%d-%d\", id, i)\n\t\t\n\t\t// Set some values\n\t\tcache.Set(key, value)\n\t\t\n\t\t// Get some values\n\t\tif retrieved, exists := cache.Get(key); exists {\n\t\t\tif retrieved != value {\n\t\t\t\tfmt.Printf(\"Unexpected value for %s: got %s, expected %s\\n\", key, retrieved, value)\n\t\t\t}\n\t\t}\n\t\t\n\t\t// Occasionally delete\n\t\tif i%100 == 0 {\n\t\t\tcache.Delete(key)\n\t\t}\n\t\t\n\t\t// Occasionally clear (this is problematic)\n\t\tif i%500 == 0 {\n\t\t\tcache.Clear()\n\t\t}\n\t}\n}\n\nfunc statsReporter(cache *Cache, done chan bool) {\n\tticker := time.NewTicker(100 * time.Millisecond)\n\tdefer ticker.Stop()\n\t\n\tfor {\n\t\tselect {\n\t\tcase <-ticker.C:\n\t\t\thits, misses := cache.Stats()\n\t\t\tfmt.Printf(\"Cache stats - Hits: %d, Misses: %d\\n\", hits, misses)\n\t\tcase <-done:\n\t\t\treturn\n\t\t}\n\t}\n}\n\nfunc main() {\n\tcache := NewCache()\n\tvar wg sync.WaitGroup\n\tdone := make(chan bool)\n\t\n\t// Start stats reporter\n\tgo statsReporter(cache, done)\n\t\n\t// Start multiple workers\n\tfor i := 0; i < 10; i++ {\n\t\twg.Add(1)\n\t\tgo worker(i, cache, &wg)\n\t}\n\t\n\twg.Wait()\n\tdone <- true\n\t\n\tfinalHits, finalMisses := cache.Stats()\n\tfmt.Printf(\"Final stats - Hits: %d, Misses: %d\\n\", finalHits, finalMisses)\n}",
+        "README.md": "# Cache Service\\n\\nA simple in-memory cache with concurrent access.\\n\\n## Known Issues\\n\\n- Intermittent panics under load\\n- Race condition warnings when run with -race flag\\n- Inconsistent statistics\\n\\n## Usage\\n\\n```bash\\ngo run cache.go\\n# Or with race detection:\\ngo run -race cache.go\\n```"
+      },
+      "context": "This concurrent cache implementation has multiple race conditions that cause panics and data corruption."
+    },
+    "requirements": [
+      "Identify all race conditions in the code",
+      "Fix race conditions using appropriate Go synchronization primitives",
+      "Maintain the same public API",
+      "Ensure thread-safe access to all shared data", 
+      "Add proper documentation about thread safety",
+      "Verify the solution works with -race flag"
+    ]
+  },
+  "expected_outputs": {
+    "race_conditions_identified": ["map_access", "counter_access", "map_replacement"],
+    "synchronization_primitives": ["sync.RWMutex", "atomic", "sync.Mutex"],
+    "thread_safe_methods": true,
+    "api_preserved": true,
+    "race_flag_clean": true
+  },
+  "evaluation": {
+    "agentic_capabilities": [
+      "bug_identification",
+      "concurrency_analysis",
+      "solution_design",
+      "synchronization_strategy",
+      "testing_approach"
+    ],
+    "technical_requirements": [
+      "all_races_fixed",
+      "proper_synchronization",
+      "api_compatibility", 
+      "performance_consideration",
+      "race_detector_clean"
+    ],
+    "code_quality": [
+      "correct_mutex_usage",
+      "minimal_locking_scope",
+      "deadlock_avoidance",
+      "clear_documentation",
+      "proper_go_conventions"
+    ]
+  },
+  "scoring": {
+    "max_points": 100,
+    "bug_identification": 25,
+    "technical_solution": 35,
+    "implementation_quality": 25,
+    "completeness": 15
+  },
+  "success_criteria": {
+    "must_have": [
+      "Fixes map race conditions",
+      "Fixes counter race conditions", 
+      "Maintains API compatibility",
+      "Passes race detector"
+    ],
+    "should_have": [
+      "Uses appropriate sync primitives",
+      "Minimizes lock contention",
+      "Includes documentation",
+      "Handles edge cases"
+    ],
+    "nice_to_have": [
+      "Performance optimizations",
+      "Additional safety measures",
+      "Comprehensive testing suggestions"
+    ]
+  }
+}

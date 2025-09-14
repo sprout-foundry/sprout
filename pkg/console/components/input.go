@@ -120,7 +120,10 @@ func (c *InputComponent) ReadLine() (string, bool, error) {
 	c.cursorPos = 0
 	c.historyIndex = len(c.history)
 
-	// Display prompt
+	// Ensure we're on a new line before displaying prompt
+	// This fixes the issue where prompt appears at the end of previous output
+	fmt.Print("\r\033[K") // Clear any leftover on current line
+	fmt.Print("\033[1G")  // Move cursor to column 1
 	fmt.Print(c.prompt)
 
 	// Read input
@@ -170,7 +173,8 @@ func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 		}
 
 	case 10, 13: // Enter
-		fmt.Println()
+		fmt.Print("\r\033[K")                                 // Clear the line first
+		fmt.Printf("%s%s\n", c.prompt, string(c.currentLine)) // Reprint the full command
 		return false, true
 
 	case 127: // Backspace
@@ -361,4 +365,31 @@ func NewLegacyInputWrapper(prompt string) *LegacyInputWrapper {
 
 func (w *LegacyInputWrapper) Close() error {
 	return w.Cleanup()
+}
+
+// LoadHistory loads history from a file
+func (c *InputComponent) LoadHistory(filename string) error {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // No history file yet
+		}
+		return err
+	}
+
+	lines := strings.Split(string(data), "\n")
+	c.history = c.history[:0] // Clear existing
+	for _, line := range lines {
+		if line = strings.TrimSpace(line); line != "" {
+			c.history = append(c.history, line)
+		}
+	}
+	c.historyIndex = len(c.history)
+	return nil
+}
+
+// SaveHistory saves history to a file
+func (c *InputComponent) SaveHistory(filename string) error {
+	data := strings.Join(c.history, "\n")
+	return os.WriteFile(filename, []byte(data), 0600)
 }

@@ -202,41 +202,42 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 		}
 
 		if input == "a" || input == "all" {
-		// Add all modified files
-		for _, line := range validStatusLines {
-			// Split on spaces and take everything after the status field
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				// Join all parts except the first (status) to handle filenames with spaces
-				filename := strings.Join(parts[1:], " ")
-				filesToAdd = append(filesToAdd, filename)
+			// Add all modified files
+			for _, line := range validStatusLines {
+				// Split on spaces and take everything after the status field
+				parts := strings.Fields(line)
+				if len(parts) >= 2 {
+					// Join all parts except the first (status) to handle filenames with spaces
+					filename := strings.Join(parts[1:], " ")
+					filesToAdd = append(filesToAdd, filename)
+				}
 			}
-		}
-		fmt.Println("✅ Adding all modified files")
-	} else {
-		// Parse selected file numbers
-		selections := strings.Split(input, ",")
-		for _, sel := range selections {
-			sel = strings.TrimSpace(sel)
-			if sel == "" {
-				continue
-			}
+			fmt.Println("✅ Adding all modified files")
+		} else {
+			// Parse selected file numbers
+			selections := strings.Split(input, ",")
+			for _, sel := range selections {
+				sel = strings.TrimSpace(sel)
+				if sel == "" {
+					continue
+				}
 
-			var index int
-			_, err := fmt.Sscanf(sel, "%d", &index)
-			if err != nil || index < 1 || index > len(validStatusLines) {
-				fmt.Printf("❌ Invalid selection: %s\n", sel)
-				continue
-			}
+				var index int
+				_, err := fmt.Sscanf(sel, "%d", &index)
+				if err != nil || index < 1 || index > len(validStatusLines) {
+					fmt.Printf("❌ Invalid selection: %s\n", sel)
+					continue
+				}
 
-			line := validStatusLines[index-1]
-			// Split on spaces and take everything after the status field
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				// Join all parts except the first (status) to handle filenames with spaces
-				filename := strings.Join(parts[1:], " ")
-				filesToAdd = append(filesToAdd, filename)
-				fmt.Printf("✅ Adding: %s\n", filename)
+				line := validStatusLines[index-1]
+				// Split on spaces and take everything after the status field
+				parts := strings.Fields(line)
+				if len(parts) >= 2 {
+					// Join all parts except the first (status) to handle filenames with spaces
+					filename := strings.Join(parts[1:], " ")
+					filesToAdd = append(filesToAdd, filename)
+					fmt.Printf("✅ Adding: %s\n", filename)
+				}
 			}
 		}
 	}
@@ -325,23 +326,30 @@ func (c *CommitCommand) executeSingleFileCommit(args []string, chatAgent *agent.
 		fmt.Printf("%2d. %s\n", i+1, line)
 	}
 
-	// Step 4: Prompt user to select ONE file
-	fmt.Println("\n💡 Enter file number to commit (only one file allowed in single mode, 'q' to quit):")
-	reader := bufio.NewReader(os.Stdin)
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(input)
-
-	if input == "q" || input == "quit" {
-		fmt.Println("❌ Commit cancelled")
-		return nil
-	}
-
-	// Parse the single file selection
+	// Step 4: Select ONE file (or auto-select first if skipPrompt)
 	var index int
-	_, err = fmt.Sscanf(input, "%d", &index)
-	if err != nil || index < 1 || index > len(validStatusLines) {
-		fmt.Printf("❌ Invalid selection: %s\n", input)
-		return nil
+	var reader *bufio.Reader
+	
+	if c.skipPrompt {
+		fmt.Println("\n✅ Auto-selecting first modified file (--skip-prompt)")
+		index = 1 // Select first file
+	} else {
+		fmt.Println("\n💡 Enter file number to commit (only one file allowed in single mode, 'q' to quit):")
+		reader = bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		if input == "q" || input == "quit" {
+			fmt.Println("❌ Commit cancelled")
+			return nil
+		}
+
+		// Parse the single file selection
+		_, err = fmt.Sscanf(input, "%d", &index)
+		if err != nil || index < 1 || index > len(validStatusLines) {
+			fmt.Printf("❌ Invalid selection: %s\n", input)
+			return nil
+		}
 	}
 
 	line := validStatusLines[index-1]
@@ -635,31 +643,44 @@ Generate a Git commit message summary. The message should follow these rules:
 	fmt.Println(commitMessage)
 	fmt.Println("=============================================")
 
-	// Simple confirmation
-	fmt.Print("\n💡 Proceed with commit? (y/n/e to edit): ")
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(strings.ToLower(input))
+	// Handle confirmation (or auto-proceed if skipPrompt)
+	if c.skipPrompt {
+		fmt.Println("\n✅ Auto-proceeding with commit (--skip-prompt)")
+	} else {
+		// Simple confirmation
+		fmt.Print("\n💡 Proceed with commit? (y/n/e to edit): ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
 
-	if input == "e" || input == "edit" {
-		// Allow editing the commit message
-		fmt.Println("\n✏️  Enter your commit message (press Enter twice when done):")
-		var editedMessage strings.Builder
-		emptyLineCount := 0
-		for {
-			line, _ := reader.ReadString('\n')
-			if line == "\n" {
-				emptyLineCount++
-				if emptyLineCount >= 2 {
-					break
+		if input == "e" || input == "edit" {
+			// Allow editing the commit message
+			fmt.Println("\n✏️  Enter your commit message (press Enter twice when done):")
+			var editedMessage strings.Builder
+			emptyLineCount := 0
+			for {
+				line, _ := reader.ReadString('\n')
+				if line == "\n" {
+					emptyLineCount++
+					if emptyLineCount >= 2 {
+						break
+					}
+				} else {
+					emptyLineCount = 0
 				}
-			} else {
-				emptyLineCount = 0
+				editedMessage.WriteString(line)
 			}
-			editedMessage.WriteString(line)
+			commitMessage = strings.TrimSpace(editedMessage.String())
+		} else if input != "y" && input != "yes" && input != "" {
+			fmt.Println("❌ Commit cancelled")
+			return nil
 		}
-		commitMessage = strings.TrimSpace(editedMessage.String())
-	} else if input != "y" && input != "yes" && input != "" {
-		fmt.Println("❌ Commit cancelled")
+	}
+
+	// Handle dry-run mode
+	if c.dryRun {
+		fmt.Println("\n🔍 Dry-run mode: Commit message generated successfully!")
+		fmt.Println("💡 The commit was not created due to --dry-run flag")
+		fmt.Println("📝 To create the commit, run the command again without --dry-run")
 		return nil
 	}
 

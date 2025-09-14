@@ -215,10 +215,14 @@ func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 
 	case 27: // Escape sequence
 		// Read the rest of the escape sequence
-		seq := make([]byte, 2)
-		os.Stdin.Read(seq)
+		seq := make([]byte, 3)
+		n, err := os.Stdin.Read(seq)
+		if err != nil || n == 0 {
+			// No more bytes available, it's just ESC
+			return false, false
+		}
 
-		if seq[0] == '[' {
+		if seq[0] == '[' || seq[0] == 'O' {
 			switch seq[1] {
 			case 'A': // Up arrow
 				if c.historyEnabled && len(c.history) > 0 {

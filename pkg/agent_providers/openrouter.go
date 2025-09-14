@@ -317,6 +317,12 @@ func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody
 			if err := json.Unmarshal(respBody, &chatResp); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 			}
+
+			// Calculate cost for the response
+			if chatResp.Usage.PromptTokens > 0 || chatResp.Usage.CompletionTokens > 0 {
+				chatResp.Usage.EstimatedCost = p.calculateCost(chatResp.Usage.PromptTokens, chatResp.Usage.CompletionTokens)
+			}
+
 			return &chatResp, nil
 		}
 
@@ -472,4 +478,55 @@ func (p *OpenRouterProvider) GetFeaturedVisionModels() []string {
 		"google/gemma-3-27b-it",      // Primary vision model for open providers
 		"google/gemma-3-27b-it:free", // Free vision model option
 	}
+}
+
+// calculateCost calculates the cost based on token usage and model pricing
+func (p *OpenRouterProvider) calculateCost(promptTokens, completionTokens int) float64 {
+	// Get pricing information from cached models if available
+	if !p.modelsCached {
+		// Try to load models to get pricing, but don't fail if we can't
+		p.ListModels()
+	}
+
+	// Find pricing for current model
+	for _, m := range p.models {
+		if m.ID == p.model {
+			// Calculate cost: pricing is per million tokens
+			inputCost := float64(promptTokens) * m.InputCost / 1000000.0
+			outputCost := float64(completionTokens) * m.OutputCost / 1000000.0
+			return inputCost + outputCost
+		}
+	}
+
+	// Fallback pricing for common models if not found in models list
+	// These are approximate prices per million tokens based on OpenRouter's pricing
+	var inputCostPerMillion, outputCostPerMillion float64
+
+	switch {
+	case strings.Contains(p.model, ":free"):
+		// Free models
+		return 0
+	case strings.Contains(p.model, "deepseek/deepseek-chat"):
+		inputCostPerMillion = 0.27
+		outputCostPerMillion = 1.10
+	case strings.Contains(p.model, "qwen/qwen3-coder") && !strings.Contains(p.model, ":free"):
+		inputCostPerMillion = 1.62
+		outputCostPerMillion = 1.62
+	case strings.Contains(p.model, "mistralai/codestral"):
+		inputCostPerMillion = 1.0
+		outputCostPerMillion = 3.0
+	case strings.Contains(p.model, "mistralai/devstral"):
+		inputCostPerMillion = 0.25
+		outputCostPerMillion = 1.0
+	case strings.Contains(p.model, "x-ai/grok"):
+		inputCostPerMillion = 5.0
+		outputCostPerMillion = 15.0
+	default:
+		// Unknown model - return 0 (will show as $0.000 in footer)
+		return 0
+	}
+
+	inputCost := float64(promptTokens) * inputCostPerMillion / 1000000.0
+	outputCost := float64(completionTokens) * outputCostPerMillion / 1000000.0
+	return inputCost + outputCost
 }

@@ -50,19 +50,15 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 		// Parse CLI flags into appropriate args for the agent command
 		var cmdArgs []string
 
-		// Handle dry run mode (not supported by agent command, but we can warn)
-		if commitDryRun {
-			logger.LogUserInteraction("Note: --dry-run flag not supported in agent-based commit. Use interactive confirmation instead.")
-		}
-
-		// Handle skip prompt mode (not directly supported, but agent command provides y/n options)
+		// Pass flags through to the agent command
 		if commitSkipPrompt {
-			logger.LogUserInteraction("Note: --skip-prompt flag not supported in agent-based commit. Use interactive y/n confirmation.")
+			cmdArgs = append(cmdArgs, "--skip-prompt")
 		}
-
-		// Handle allow secrets flag (not directly supported in agent command)
+		if commitDryRun {
+			cmdArgs = append(cmdArgs, "--dry-run")
+		}
 		if commitAllowSecrets {
-			logger.LogUserInteraction("Note: --allow-secrets flag not supported in agent-based commit.")
+			cmdArgs = append(cmdArgs, "--allow-secrets")
 		}
 
 		// Execute the unified commit workflow

@@ -29,6 +29,7 @@ type InputComponent struct {
 	cursorPos    int
 	isRawMode    bool
 	oldTermState *term.State
+	tempLine     string // Store current line when navigating history
 
 	// Callbacks
 	onSubmit func(string) error
@@ -50,6 +51,14 @@ func NewInputComponent(id, prompt string) *InputComponent {
 		historyIndex:   -1,
 		currentLine:    make([]rune, 0, 256),
 		cursorPos:      0,
+	}
+}
+
+// OnResize handles terminal resize events
+func (c *InputComponent) OnResize(width, height int) {
+	// Only redraw if we're in raw mode (actively reading input)
+	if c.isRawMode && c.echoEnabled {
+		c.redrawLine()
 	}
 }
 
@@ -119,6 +128,7 @@ func (c *InputComponent) ReadLine() (string, bool, error) {
 	c.currentLine = c.currentLine[:0]
 	c.cursorPos = 0
 	c.historyIndex = len(c.history)
+	c.tempLine = ""
 
 	// Ensure we're on a new line before displaying prompt
 	// This fixes the issue where prompt appears at the end of previous output
@@ -156,10 +166,29 @@ func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 		}
 		return false, true
 
+	case 1: // Ctrl+A - move to beginning of line
+		c.cursorPos = 0
+		c.redrawLine()
+
 	case 4: // Ctrl+D
 		if len(c.currentLine) == 0 {
 			return false, true
 		}
+
+	case 5: // Ctrl+E - move to end of line
+		c.cursorPos = len(c.currentLine)
+		c.redrawLine()
+
+	case 11: // Ctrl+K - delete to end of line
+		if c.cursorPos < len(c.currentLine) {
+			c.currentLine = c.currentLine[:c.cursorPos]
+			c.redrawLine()
+		}
+
+	case 21: // Ctrl+U - clear line
+		c.currentLine = c.currentLine[:0]
+		c.cursorPos = 0
+		c.redrawLine()
 
 	case 9: // Tab
 		if c.onTab != nil {
@@ -192,41 +221,49 @@ func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 		if seq[0] == '[' {
 			switch seq[1] {
 			case 'A': // Up arrow
-				if c.historyEnabled && c.historyIndex > 0 {
+				if c.historyEnabled && len(c.history) > 0 {
+					// Save current line if we're at the end of history
 					if c.historyIndex == len(c.history) {
-						// Save current line
-						c.history = append(c.history, string(c.currentLine))
+						c.tempLine = string(c.currentLine)
 					}
-					c.historyIndex--
-					c.currentLine = []rune(c.history[c.historyIndex])
-					c.cursorPos = len(c.currentLine)
-					c.redrawLine()
+
+					// Move up in history
+					if c.historyIndex > 0 {
+						c.historyIndex--
+						c.currentLine = []rune(c.history[c.historyIndex])
+						c.cursorPos = len(c.currentLine)
+						c.redrawLine()
+					}
 				}
 
 			case 'B': // Down arrow
-				if c.historyEnabled && c.historyIndex < len(c.history)-1 {
-					c.historyIndex++
-					if c.historyIndex == len(c.history)-1 {
-						// Restore saved line
-						c.currentLine = []rune(c.history[c.historyIndex])
-						c.history = c.history[:len(c.history)-1]
-					} else {
-						c.currentLine = []rune(c.history[c.historyIndex])
+				if c.historyEnabled {
+					// Move down in history
+					if c.historyIndex < len(c.history) {
+						c.historyIndex++
+
+						if c.historyIndex == len(c.history) {
+							// Restore the temp line
+							c.currentLine = []rune(c.tempLine)
+						} else {
+							c.currentLine = []rune(c.history[c.historyIndex])
+						}
+
+						c.cursorPos = len(c.currentLine)
+						c.redrawLine()
 					}
-					c.cursorPos = len(c.currentLine)
-					c.redrawLine()
 				}
 
 			case 'C': // Right arrow
 				if c.cursorPos < len(c.currentLine) {
 					c.cursorPos++
-					fmt.Print("\033[C")
+					c.redrawLine()
 				}
 
 			case 'D': // Left arrow
 				if c.cursorPos > 0 {
 					c.cursorPos--
-					fmt.Print("\033[D")
+					c.redrawLine()
 				}
 
 			case 'H': // Home
@@ -272,8 +309,31 @@ func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 }
 
 func (c *InputComponent) redrawLine() {
-	// Clear current line
-	fmt.Print("\r\033[K")
+	// Get terminal width
+	termWidth := 80 // Default
+	if c.Terminal() != nil {
+		if w, _, err := c.Terminal().GetSize(); err == nil {
+			termWidth = w
+		}
+	}
+
+	// Calculate how many lines the current input takes
+	totalLength := len(c.prompt) + utf8.RuneCountInString(string(c.currentLine))
+	numLines := (totalLength + termWidth - 1) / termWidth // Round up
+
+	// Move cursor to beginning of the input line
+	fmt.Print("\r")
+
+	// Clear all lines that the input occupies
+	for i := 0; i < numLines; i++ {
+		fmt.Print("\033[K") // Clear current line
+		if i < numLines-1 {
+			fmt.Print("\033[A") // Move up one line
+		}
+	}
+
+	// Now we're at the start of where the prompt should be
+	fmt.Print("\r")
 
 	// Redraw prompt and line
 	fmt.Print(c.prompt)
@@ -288,9 +348,24 @@ func (c *InputComponent) redrawLine() {
 
 	// Move cursor to correct position
 	if c.cursorPos < len(c.currentLine) {
-		moveBack := utf8.RuneCountInString(string(c.currentLine[c.cursorPos:]))
-		if moveBack > 0 {
-			fmt.Printf("\033[%dD", moveBack)
+		// Calculate the absolute position of the cursor
+		totalPos := len(c.prompt) + c.cursorPos
+		currentRow := totalPos / termWidth
+		currentCol := totalPos % termWidth
+
+		// Calculate where we are now (at end of input)
+		endTotalPos := len(c.prompt) + len(c.currentLine)
+		endRow := endTotalPos / termWidth
+		endCol := endTotalPos % termWidth
+
+		// Move cursor from end position to cursor position
+		if currentRow < endRow {
+			// Move up and to the right column
+			fmt.Printf("\033[%dA", endRow-currentRow) // Move up
+			fmt.Printf("\033[%dG", currentCol+1)      // Move to column (1-based)
+		} else if currentCol < endCol {
+			// Same row, just move left
+			fmt.Printf("\033[%dD", endCol-currentCol)
 		}
 	}
 }

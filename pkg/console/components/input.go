@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/alantheprice/ledit/pkg/console"
 	"golang.org/x/term"
@@ -48,7 +47,7 @@ func NewInputComponent(id, prompt string) *InputComponent {
 		historyEnabled: true,
 		maxHistory:     100,
 		history:        make([]string, 0, 100),
-		historyIndex:   -1,
+		historyIndex:   0,
 		currentLine:    make([]rune, 0, 256),
 		cursorPos:      0,
 	}
@@ -133,7 +132,6 @@ func (c *InputComponent) ReadLine() (string, bool, error) {
 	// Ensure we're on a new line before displaying prompt
 	// This fixes the issue where prompt appears at the end of previous output
 	fmt.Print("\r\033[K") // Clear any leftover on current line
-	fmt.Print("\033[1G")  // Move cursor to column 1
 	fmt.Print(c.prompt)
 
 	// Read input
@@ -145,6 +143,69 @@ func (c *InputComponent) ReadLine() (string, bool, error) {
 		}
 
 		for i := 0; i < n; i++ {
+			// Check if this is an escape sequence
+			if buf[i] == 27 && i+2 < n && buf[i+1] == '[' {
+				// Handle escape sequences inline
+				if buf[i+2] == 'A' { // Up arrow
+					if c.historyEnabled && len(c.history) > 0 {
+						// Save current line if we're at the end of history
+						if c.historyIndex >= len(c.history) {
+							c.tempLine = string(c.currentLine)
+							c.historyIndex = len(c.history) - 1
+						} else if c.historyIndex > 0 {
+							c.historyIndex--
+						} else {
+							// Already at the beginning
+							i += 2
+							continue
+						}
+
+						// Update the current line from history
+						if c.historyIndex < len(c.history) {
+							c.currentLine = []rune(c.history[c.historyIndex])
+							c.cursorPos = len(c.currentLine)
+							c.redrawLine()
+						}
+					}
+					i += 2 // Skip the [ and A
+					continue
+				} else if buf[i+2] == 'B' { // Down arrow
+					if c.historyEnabled {
+						// Move down in history
+						if c.historyIndex < len(c.history) {
+							c.historyIndex++
+
+							if c.historyIndex == len(c.history) {
+								// Restore the temp line
+								c.currentLine = []rune(c.tempLine)
+							} else {
+								c.currentLine = []rune(c.history[c.historyIndex])
+							}
+
+							c.cursorPos = len(c.currentLine)
+							c.redrawLine()
+						}
+					}
+					i += 2 // Skip the [ and B
+					continue
+				} else if buf[i+2] == 'C' { // Right arrow
+					if c.cursorPos < len(c.currentLine) {
+						c.cursorPos++
+						c.redrawLine()
+					}
+					i += 2
+					continue
+				} else if buf[i+2] == 'D' { // Left arrow
+					if c.cursorPos > 0 {
+						c.cursorPos--
+						c.redrawLine()
+					}
+					i += 2
+					continue
+				}
+			}
+
+			// Process single byte normally
 			wasMultiline, done := c.processKeypress(buf[i])
 			if done {
 				line := string(c.currentLine)
@@ -214,71 +275,8 @@ func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 		}
 
 	case 27: // Escape sequence
-		// Read the rest of the escape sequence
-		seq := make([]byte, 3)
-		n, err := os.Stdin.Read(seq)
-		if err != nil || n == 0 {
-			// No more bytes available, it's just ESC
-			return false, false
-		}
-
-		if seq[0] == '[' || seq[0] == 'O' {
-			switch seq[1] {
-			case 'A': // Up arrow
-				if c.historyEnabled && len(c.history) > 0 {
-					// Save current line if we're at the end of history
-					if c.historyIndex == len(c.history) {
-						c.tempLine = string(c.currentLine)
-					}
-
-					// Move up in history
-					if c.historyIndex > 0 {
-						c.historyIndex--
-						c.currentLine = []rune(c.history[c.historyIndex])
-						c.cursorPos = len(c.currentLine)
-						c.redrawLine()
-					}
-				}
-
-			case 'B': // Down arrow
-				if c.historyEnabled {
-					// Move down in history
-					if c.historyIndex < len(c.history) {
-						c.historyIndex++
-
-						if c.historyIndex == len(c.history) {
-							// Restore the temp line
-							c.currentLine = []rune(c.tempLine)
-						} else {
-							c.currentLine = []rune(c.history[c.historyIndex])
-						}
-
-						c.cursorPos = len(c.currentLine)
-						c.redrawLine()
-					}
-				}
-
-			case 'C': // Right arrow
-				if c.cursorPos < len(c.currentLine) {
-					c.cursorPos++
-					c.redrawLine()
-				}
-
-			case 'D': // Left arrow
-				if c.cursorPos > 0 {
-					c.cursorPos--
-					c.redrawLine()
-				}
-
-			case 'H': // Home
-				c.cursorPos = 0
-				c.redrawLine()
-
-			case 'F': // End
-				c.cursorPos = len(c.currentLine)
-				c.redrawLine()
-			}
-		}
+		// Just ESC by itself - ignore for now
+		return false, false
 
 	default:
 		// Regular character
@@ -313,63 +311,38 @@ func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 }
 
 func (c *InputComponent) redrawLine() {
-	// Get terminal width
-	termWidth := 80 // Default
-	if c.Terminal() != nil {
-		if w, _, err := c.Terminal().GetSize(); err == nil {
-			termWidth = w
-		}
-	}
+	// Move to beginning of line and clear
+	fmt.Print("\r\033[K")
 
-	// Calculate how many lines the current input takes
-	totalLength := len(c.prompt) + utf8.RuneCountInString(string(c.currentLine))
-	numLines := (totalLength + termWidth - 1) / termWidth // Round up
-
-	// Move cursor to beginning of the input line
-	fmt.Print("\r")
-
-	// Clear all lines that the input occupies
-	for i := 0; i < numLines; i++ {
-		fmt.Print("\033[K") // Clear current line
-		if i < numLines-1 {
-			fmt.Print("\033[A") // Move up one line
-		}
-	}
-
-	// Now we're at the start of where the prompt should be
-	fmt.Print("\r")
-
-	// Redraw prompt and line
+	// Print prompt
 	fmt.Print(c.prompt)
+
 	if c.echoEnabled {
+		// Print the current line
 		fmt.Print(string(c.currentLine))
+
+		// Move cursor to correct position
+		if c.cursorPos < len(c.currentLine) {
+			// Calculate how many positions to move back
+			moveBack := len(c.currentLine) - c.cursorPos
+			if moveBack > 0 {
+				fmt.Printf("\033[%dD", moveBack)
+			}
+		}
 	} else {
 		// Password mode - show asterisks
-		for range c.currentLine {
+		for i := range c.currentLine {
 			fmt.Print("*")
+			if i < c.cursorPos-1 {
+				// Keep track of cursor position in password mode too
+			}
 		}
-	}
-
-	// Move cursor to correct position
-	if c.cursorPos < len(c.currentLine) {
-		// Calculate the absolute position of the cursor
-		totalPos := len(c.prompt) + c.cursorPos
-		currentRow := totalPos / termWidth
-		currentCol := totalPos % termWidth
-
-		// Calculate where we are now (at end of input)
-		endTotalPos := len(c.prompt) + len(c.currentLine)
-		endRow := endTotalPos / termWidth
-		endCol := endTotalPos % termWidth
-
-		// Move cursor from end position to cursor position
-		if currentRow < endRow {
-			// Move up and to the right column
-			fmt.Printf("\033[%dA", endRow-currentRow) // Move up
-			fmt.Printf("\033[%dG", currentCol+1)      // Move to column (1-based)
-		} else if currentCol < endCol {
-			// Same row, just move left
-			fmt.Printf("\033[%dD", endCol-currentCol)
+		// Move cursor for password mode
+		if c.cursorPos < len(c.currentLine) {
+			moveBack := len(c.currentLine) - c.cursorPos
+			if moveBack > 0 {
+				fmt.Printf("\033[%dD", moveBack)
+			}
 		}
 	}
 }
@@ -424,7 +397,7 @@ func (c *InputComponent) GetHistory() []string {
 
 func (c *InputComponent) ClearHistory() {
 	c.history = c.history[:0]
-	c.historyIndex = -1
+	c.historyIndex = 0
 }
 
 func (c *InputComponent) AddToHistory(line string) {
@@ -459,7 +432,8 @@ func (c *InputComponent) LoadHistory(filename string) error {
 	lines := strings.Split(string(data), "\n")
 	c.history = c.history[:0] // Clear existing
 	for _, line := range lines {
-		if line = strings.TrimSpace(line); line != "" {
+		line = strings.TrimRight(line, "\r\n") // Remove line endings but preserve spaces
+		if line != "" {
 			c.history = append(c.history, line)
 		}
 	}

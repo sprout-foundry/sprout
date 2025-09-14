@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -15,6 +14,7 @@ import (
 	commands "github.com/alantheprice/ledit/pkg/agent_commands"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/console"
+	"golang.org/x/term"
 )
 
 // AgentConsole is the main console component for agent interactions
@@ -43,9 +43,8 @@ type AgentConsole struct {
 	jsonFormatter *JSONFormatter
 
 	// Interrupt handling
-	interruptChan    chan string
-	processingActive bool
-	outputMutex      sync.Mutex
+	interruptChan chan string
+	outputMutex   sync.Mutex
 }
 
 // NewAgentConsole creates a new agent console
@@ -72,7 +71,6 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		prompt:           config.Prompt,
 		historyFile:      config.HistoryFile,
 		interruptChan:    make(chan string, 1),
-		processingActive: false,
 		outputMutex:      sync.Mutex{},
 		jsonFormatter:    NewJSONFormatter(),
 	}
@@ -209,77 +207,6 @@ func (ac *AgentConsole) processInput(input string) error {
 		return nil
 	}
 
-	// If agent is processing, handle special cases
-	if ac.processingActive {
-		// Check if it's an exit command that should be handled immediately
-		if strings.HasPrefix(input, "/") {
-			cmd := strings.TrimPrefix(strings.Fields(input)[0], "/")
-			switch cmd {
-			case "exit", "quit", "q":
-				// Handle exit immediately
-				ac.outputMutex.Lock()
-				fmt.Print("\r\033[K") // Clear current line
-				fmt.Println("\n🚪 Exiting...")
-				ac.outputMutex.Unlock()
-				ac.cleanup()
-				os.Exit(0)
-			case "help", "?":
-				// Show help immediately
-				ac.outputMutex.Lock()
-				fmt.Print("\r\033[K") // Clear current line
-				ac.showHelp()
-				fmt.Print(ac.prompt) // Redraw prompt
-				ac.outputMutex.Unlock()
-				return nil
-			case "stop":
-				// Send stop signal to agent
-				select {
-				case ac.interruptChan <- "/stop":
-					ac.outputMutex.Lock()
-					fmt.Print("\r\033[K") // Clear current line
-					fmt.Println("🛑 Stopping current agent processing...")
-					fmt.Print(ac.prompt) // Redraw prompt
-					ac.outputMutex.Unlock()
-				default:
-					ac.outputMutex.Lock()
-					fmt.Print("\r\033[K") // Clear current line
-					fmt.Println("⚠️  Unable to send stop signal.")
-					fmt.Print(ac.prompt) // Redraw prompt
-					ac.outputMutex.Unlock()
-				}
-				return nil
-			default:
-				// Other commands need to wait
-				ac.outputMutex.Lock()
-				fmt.Print("\r\033[K") // Clear current line
-				fmt.Printf("⚠️  Command '/%s' cannot be executed while agent is processing.\n", cmd)
-				fmt.Printf("💡 Use /exit or /quit to stop immediately.\n")
-				fmt.Print(ac.prompt) // Redraw prompt
-				ac.outputMutex.Unlock()
-				return nil
-			}
-		}
-
-		// For non-command input, queue as interrupt
-		select {
-		case ac.interruptChan <- input:
-			ac.outputMutex.Lock()
-			fmt.Print("\r\033[K") // Clear current line
-			fmt.Printf("🔔 Interrupt received! Your input has been queued.\n")
-			fmt.Printf("📝 Message: \"%s\"\n", input)
-			fmt.Printf("⏳ The agent will process this in the next turn...\n")
-			fmt.Print(ac.prompt) // Redraw prompt
-			ac.outputMutex.Unlock()
-		default:
-			ac.outputMutex.Lock()
-			fmt.Print("\r\033[K") // Clear current line
-			fmt.Printf("⚠️  Agent is busy, please wait for current task to complete.\n")
-			fmt.Print(ac.prompt) // Redraw prompt
-			ac.outputMutex.Unlock()
-		}
-		return nil
-	}
-
 	// Check for commands
 	if strings.HasPrefix(input, "/") {
 		return ac.handleCommand(input)
@@ -307,97 +234,69 @@ func (ac *AgentConsole) processInput(input string) error {
 	}
 
 	// Mark as processing
-	ac.processingActive = true
-
 	// Lock output to prevent interleaving
 	ac.outputMutex.Lock()
 
-	// Clear the current input line
-	fmt.Print("\r\033[K")
+	// Clear the current input line and move to a new line for clean output
+	fmt.Print("\r\033[K\n")
 
 	// Show processing indicator
 	fmt.Printf("🔄 Processing your request...\n")
-	fmt.Printf("💡 Tip: You can type additional instructions at any time!\n\n")
 
 	ac.outputMutex.Unlock()
 
-	// Run agent processing in a goroutine to allow concurrent input
-	go func() {
-		// Regular agent interaction using ProcessQueryWithContinuity (with tools!)
-		// Note: We don't hold the mutex during processing so the agent can output
-		response, err := ac.agent.ProcessQueryWithContinuity(input)
+	// Process synchronously to avoid formatting issues
+	response, err := ac.agent.ProcessQueryWithContinuity(input)
 
-		// Mark as no longer processing
-		ac.processingActive = false
+	// Lock for output
+	ac.outputMutex.Lock()
+	defer ac.outputMutex.Unlock()
 
-		// Now lock for final output
-		ac.outputMutex.Lock()
-		defer ac.outputMutex.Unlock()
+	if err != nil {
+		fmt.Printf("\nError: %v\n", err)
+	} else {
+		// Update metrics
+		ac.totalTokens = ac.agent.GetTotalTokens()
+		ac.totalCost = ac.agent.GetTotalCost()
 
-		if err != nil {
-			fmt.Printf("\nError: %v\n", err)
-		} else {
-			// Update metrics
-			ac.totalTokens = ac.agent.GetTotalTokens()
-			ac.totalCost = ac.agent.GetTotalCost()
-			ac.updateFooter()
+		// Display response with proper formatting
+		if response != "" {
+			// Clean up the response
+			cleanResponse := strings.TrimSpace(response)
+			if cleanResponse != "" {
+				fmt.Printf("\n🎯 Agent Response:\n")
 
-			// Display response with proper formatting
-			if response != "" {
-				// Clean up the response
-				cleanResponse := strings.TrimSpace(response)
-				if cleanResponse != "" {
-					fmt.Print("\n🎯 Agent Response:\n")
-
-					// Check if this looks like JSON content
-					if ac.jsonFormatter != nil && ac.jsonFormatter.DetectAndFormatJSON(cleanResponse) != cleanResponse {
-						// Use JSON formatter for structured data
-						formatted := ac.jsonFormatter.FormatModelResponse(cleanResponse)
-						fmt.Println(formatted)
-					} else {
-						// For regular text, we need to handle excessive whitespace
-						// Split into lines and clean each one
-						lines := strings.Split(cleanResponse, "\n")
-						var outputLines []string
-
-						for _, line := range lines {
-							// Remove ANSI codes if present
-							if strings.Contains(line, "\x1b[") {
-								ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
-								line = ansiRegex.ReplaceAllString(line, "")
-							}
-
-							// Collapse multiple spaces into single spaces
-							line = regexp.MustCompile(`\s+`).ReplaceAllString(line, " ")
-							line = strings.TrimSpace(line)
-
-							// Add non-empty lines
-							if line != "" {
-								outputLines = append(outputLines, line)
-							} else if len(outputLines) > 0 && outputLines[len(outputLines)-1] != "" {
-								// Preserve single blank lines between paragraphs
-								outputLines = append(outputLines, "")
-							}
-						}
-
-						// Join and print
-						fmt.Println(strings.Join(outputLines, "\n"))
-					}
+				// Check if this looks like JSON content
+				if ac.jsonFormatter != nil && ac.jsonFormatter.DetectAndFormatJSON(cleanResponse) != cleanResponse {
+					// Use JSON formatter for structured data
+					formatted := ac.jsonFormatter.FormatModelResponse(cleanResponse)
+					fmt.Println(formatted)
+				} else {
+					// For regular text/markdown, just print as-is to preserve formatting
+					fmt.Println(cleanResponse)
 				}
-			}
-
-			// Print summary if we used tokens
-			if ac.agent.GetTotalTokens() > 0 {
-				ac.agent.PrintConciseSummary()
 			}
 		}
 
-		// Add extra newline for spacing
-		fmt.Println()
+		// Print summary if we used tokens
+		if ac.agent.GetTotalTokens() > 0 {
+			ac.agent.PrintConciseSummary()
+		}
+	}
 
-		// Redraw prompt
-		fmt.Print(ac.prompt)
-	}()
+	// Update footer after processing
+	ac.updateFooter()
+
+	// Save history after each command
+	if ac.historyFile != "" && ac.input != nil {
+		if err := ac.input.SaveHistory(ac.historyFile); err != nil {
+			// Don't show warning for every command, just log it silently
+			_ = err
+		}
+	}
+
+	// Add proper spacing before showing prompt again
+	fmt.Printf("\n%s", ac.prompt)
 
 	return nil
 }
@@ -424,8 +323,37 @@ func (ac *AgentConsole) handleCommand(input string) error {
 		fmt.Print("\033[2J\033[H")
 		return nil
 	case "history":
-		for _, line := range ac.input.GetHistory() {
-			fmt.Println(line)
+		history := ac.input.GetHistory()
+		fmt.Printf("History has %d items:\n", len(history))
+		for i, line := range history {
+			fmt.Printf("%3d: %s\n", i+1, line)
+		}
+		return nil
+
+	case "debug":
+		// Toggle debug mode for input
+		fmt.Println("Debug mode: Press keys to see their codes, 'q' to exit debug")
+		fd := int(os.Stdin.Fd())
+		oldState, _ := term.MakeRaw(fd)
+		defer term.Restore(fd, oldState)
+
+		buf := make([]byte, 10)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if err != nil {
+				break
+			}
+
+			fmt.Printf("\r\nRead %d bytes: ", n)
+			for i := 0; i < n; i++ {
+				fmt.Printf("%02X ", buf[i])
+			}
+
+			// Check for 'q' to quit
+			if n == 1 && buf[0] == 'q' {
+				fmt.Println("\r\nExiting debug mode")
+				break
+			}
 		}
 		return nil
 	case "stats":

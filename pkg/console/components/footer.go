@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/console"
@@ -17,6 +18,7 @@ type FooterComponent struct {
 	lastTokens   int
 	lastCost     float64
 	sessionStart time.Time
+	outputMutex  *sync.Mutex
 }
 
 // NewFooterComponent creates a new footer component
@@ -105,6 +107,12 @@ func (fc *FooterComponent) Init(ctx context.Context, deps console.Dependencies) 
 
 // Render renders the footer
 func (fc *FooterComponent) Render() error {
+	// Use output mutex to prevent interleaving with agent output
+	if fc.outputMutex != nil {
+		fc.outputMutex.Lock()
+		defer fc.outputMutex.Unlock()
+	}
+
 	region, err := fc.Layout().GetRegion("footer")
 	if err != nil {
 		return err
@@ -122,12 +130,25 @@ func (fc *FooterComponent) Render() error {
 
 	// Format stats
 	sessionDuration := fc.formatDuration(time.Since(fc.sessionStart))
+
+	// Format cost with appropriate precision
+	var costStr string
+	if fc.lastCost >= 1.0 {
+		costStr = fmt.Sprintf("$%.2f", fc.lastCost)
+	} else if fc.lastCost >= 0.01 {
+		costStr = fmt.Sprintf("$%.3f", fc.lastCost)
+	} else if fc.lastCost > 0 {
+		costStr = fmt.Sprintf("$%.6f", fc.lastCost)
+	} else {
+		costStr = "$0.000"
+	}
+
 	statsLine := fmt.Sprintf(
-		" %s (%s) | %s tokens | $%.3f | %s",
+		" %s (%s) | %s tokens | %s | %s",
 		fc.extractModelName(fc.lastModel),
 		fc.lastProvider,
 		fc.formatTokens(fc.lastTokens),
-		fc.lastCost,
+		costStr,
 		sessionDuration,
 	)
 
@@ -155,6 +176,11 @@ func (fc *FooterComponent) UpdateStats(model, provider string, tokens int, cost 
 	fc.State().Set("footer.provider", provider)
 	fc.State().Set("footer.tokens", tokens)
 	fc.State().Set("footer.cost", cost)
+}
+
+// SetOutputMutex sets the output mutex for synchronized output
+func (fc *FooterComponent) SetOutputMutex(mu *sync.Mutex) {
+	fc.outputMutex = mu
 }
 
 // formatTokens formats token count for display

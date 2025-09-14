@@ -117,6 +117,7 @@ func (p *OpenRouterProvider) SendChatRequest(messages []types.Message, tools []t
 		"messages":    openRouterMessages,
 		"max_tokens":  maxTokens,
 		"temperature": 0.7,
+		"usage":       map[string]interface{}{"include": true}, // Enable usage accounting for cost tracking
 	}
 
 	// Add tools if provided
@@ -313,14 +314,38 @@ func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody
 
 		// Success case
 		if resp.StatusCode == http.StatusOK {
+			// First parse into a generic map to extract OpenRouter-specific fields
+			var rawResp map[string]interface{}
+			if err := json.Unmarshal(respBody, &rawResp); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal raw response: %w", err)
+			}
+
+			// Parse into our standard response structure
 			var chatResp types.ChatResponse
 			if err := json.Unmarshal(respBody, &chatResp); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 			}
 
-			// Calculate cost for the response
-			if chatResp.Usage.PromptTokens > 0 || chatResp.Usage.CompletionTokens > 0 {
+			// Extract OpenRouter's actual cost from the "usage.cost" field
+			if usage, ok := rawResp["usage"].(map[string]interface{}); ok {
+				if cost, ok := usage["cost"].(float64); ok {
+					chatResp.Usage.EstimatedCost = cost
+				}
+			}
+
+			// Log usage information for debugging
+			if p.debug {
+				fmt.Printf("🔍 OpenRouter Usage: prompt=%d, completion=%d, total=%d, actual_cost=%f\n",
+					chatResp.Usage.PromptTokens, chatResp.Usage.CompletionTokens,
+					chatResp.Usage.TotalTokens, chatResp.Usage.EstimatedCost)
+			}
+
+			// Only calculate cost if OpenRouter didn't provide it and it's not a free model
+			if chatResp.Usage.EstimatedCost == 0 && !strings.Contains(p.model, ":free") && (chatResp.Usage.PromptTokens > 0 || chatResp.Usage.CompletionTokens > 0) {
 				chatResp.Usage.EstimatedCost = p.calculateCost(chatResp.Usage.PromptTokens, chatResp.Usage.CompletionTokens)
+				if p.debug {
+					fmt.Printf("🔍 Fallback calculated cost: %f\n", chatResp.Usage.EstimatedCost)
+				}
 			}
 
 			return &chatResp, nil
@@ -498,35 +523,13 @@ func (p *OpenRouterProvider) calculateCost(promptTokens, completionTokens int) f
 		}
 	}
 
-	// Fallback pricing for common models if not found in models list
-	// These are approximate prices per million tokens based on OpenRouter's pricing
-	var inputCostPerMillion, outputCostPerMillion float64
-
-	switch {
-	case strings.Contains(p.model, ":free"):
-		// Free models
-		return 0
-	case strings.Contains(p.model, "deepseek/deepseek-chat"):
-		inputCostPerMillion = 0.27
-		outputCostPerMillion = 1.10
-	case strings.Contains(p.model, "qwen/qwen3-coder") && !strings.Contains(p.model, ":free"):
-		inputCostPerMillion = 1.62
-		outputCostPerMillion = 1.62
-	case strings.Contains(p.model, "mistralai/codestral"):
-		inputCostPerMillion = 1.0
-		outputCostPerMillion = 3.0
-	case strings.Contains(p.model, "mistralai/devstral"):
-		inputCostPerMillion = 0.25
-		outputCostPerMillion = 1.0
-	case strings.Contains(p.model, "x-ai/grok"):
-		inputCostPerMillion = 5.0
-		outputCostPerMillion = 15.0
-	default:
-		// Unknown model - return 0 (will show as $0.000 in footer)
+	// For free models, return 0
+	if strings.Contains(p.model, ":free") {
 		return 0
 	}
 
-	inputCost := float64(promptTokens) * inputCostPerMillion / 1000000.0
-	outputCost := float64(completionTokens) * outputCostPerMillion / 1000000.0
-	return inputCost + outputCost
+	// No hardcoded fallback pricing - return 0 for unknown models
+	// This ensures we always use the actual pricing from the API
+	// rather than potentially incorrect hardcoded values
+	return 0
 }

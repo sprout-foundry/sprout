@@ -32,6 +32,12 @@ func (a *Agent) ToolLog(action, target string) {
 	const blue = "\033[34m"
 	const reset = "\033[0m"
 
+	// Use mutex if available for synchronized output
+	if a.outputMutex != nil {
+		a.outputMutex.Lock()
+		defer a.outputMutex.Unlock()
+	}
+
 	// Ensure we start at column 1
 	fmt.Print("\r\033[K") // Move to start of line and clear
 

@@ -204,8 +204,58 @@ func (ac *AgentConsole) processInput(input string) error {
 		return nil
 	}
 
-	// If agent is processing, send as interrupt
+	// If agent is processing, handle special cases
 	if ac.processingActive {
+		// Check if it's an exit command that should be handled immediately
+		if strings.HasPrefix(input, "/") {
+			cmd := strings.TrimPrefix(strings.Fields(input)[0], "/")
+			switch cmd {
+			case "exit", "quit", "q":
+				// Handle exit immediately
+				ac.outputMutex.Lock()
+				fmt.Print("\r\033[K") // Clear current line
+				fmt.Println("\n🚪 Exiting...")
+				ac.outputMutex.Unlock()
+				ac.cleanup()
+				os.Exit(0)
+			case "help", "?":
+				// Show help immediately
+				ac.outputMutex.Lock()
+				fmt.Print("\r\033[K") // Clear current line
+				ac.showHelp()
+				fmt.Print(ac.prompt) // Redraw prompt
+				ac.outputMutex.Unlock()
+				return nil
+			case "stop":
+				// Send stop signal to agent
+				select {
+				case ac.interruptChan <- "/stop":
+					ac.outputMutex.Lock()
+					fmt.Print("\r\033[K") // Clear current line
+					fmt.Println("🛑 Stopping current agent processing...")
+					fmt.Print(ac.prompt) // Redraw prompt
+					ac.outputMutex.Unlock()
+				default:
+					ac.outputMutex.Lock()
+					fmt.Print("\r\033[K") // Clear current line
+					fmt.Println("⚠️  Unable to send stop signal.")
+					fmt.Print(ac.prompt) // Redraw prompt
+					ac.outputMutex.Unlock()
+				}
+				return nil
+			default:
+				// Other commands need to wait
+				ac.outputMutex.Lock()
+				fmt.Print("\r\033[K") // Clear current line
+				fmt.Printf("⚠️  Command '/%s' cannot be executed while agent is processing.\n", cmd)
+				fmt.Printf("💡 Use /exit or /quit to stop immediately.\n")
+				fmt.Print(ac.prompt) // Redraw prompt
+				ac.outputMutex.Unlock()
+				return nil
+			}
+		}
+
+		// For non-command input, queue as interrupt
 		select {
 		case ac.interruptChan <- input:
 			ac.outputMutex.Lock()
@@ -268,15 +318,16 @@ func (ac *AgentConsole) processInput(input string) error {
 
 	// Run agent processing in a goroutine to allow concurrent input
 	go func() {
-		// Ensure exclusive output control
-		ac.outputMutex.Lock()
-		defer ac.outputMutex.Unlock()
-
 		// Regular agent interaction using ProcessQueryWithContinuity (with tools!)
+		// Note: We don't hold the mutex during processing so the agent can output
 		response, err := ac.agent.ProcessQueryWithContinuity(input)
 
 		// Mark as no longer processing
 		ac.processingActive = false
+
+		// Now lock for final output
+		ac.outputMutex.Lock()
+		defer ac.outputMutex.Unlock()
 
 		if err != nil {
 			fmt.Printf("\nError: %v\n", err)
@@ -286,13 +337,17 @@ func (ac *AgentConsole) processInput(input string) error {
 			ac.totalCost = ac.agent.GetTotalCost()
 			ac.updateFooter()
 
-			// Ensure we're at the start of a clean line
-			fmt.Print("\r\033[K") // Clear any partial line
+			// Ensure we're on a new line before displaying response
+			fmt.Println()
 
-			// Display response (it may already have newlines)
-			fmt.Print(response)
-			if !strings.HasSuffix(response, "\n") {
-				fmt.Println()
+			// Display response with proper formatting
+			if response != "" {
+				// The response might have escape sequences or formatting issues
+				// Clean it up and ensure proper display
+				cleanResponse := strings.TrimSpace(response)
+				if cleanResponse != "" {
+					fmt.Println(cleanResponse)
+				}
 			}
 
 			// Print summary if we used tokens
@@ -301,13 +356,10 @@ func (ac *AgentConsole) processInput(input string) error {
 			}
 		}
 
-		// Ensure we end with a newline for the next prompt
-		if !strings.HasSuffix(response, "\n") {
-			fmt.Println()
-		}
+		// Add extra newline for spacing
+		fmt.Println()
 
-		// Redraw prompt on a clean line
-		fmt.Print("\r\033[K") // Clear line
+		// Redraw prompt
 		fmt.Print(ac.prompt)
 	}()
 
@@ -433,6 +485,7 @@ Available Commands:
   /clear         - Clear the screen
   /history       - Show command history
   /stats         - Show session statistics
+  /stop          - Stop current agent processing (during execution)
   
 Agent Commands:`)
 
@@ -448,6 +501,10 @@ Tips:
 • Short inputs (1-2 chars) will prompt for confirmation
 • Use /model to change the AI model
 • Use /provider to switch between providers
+• While agent is processing, you can:
+  - Type additional instructions (will be queued)
+  - Use /exit or /quit to exit immediately
+  - Use /stop to stop current processing
 `)
 }
 

@@ -382,14 +382,31 @@ Please continue with your task using the correct tool calling syntax.`
 			}
 
 			// Check if the response looks incomplete and retry
-			// But first check if this is a simple arithmetic or factual question
+			// But first check if this is a simple question that shouldn't trigger continuation
 			queryLower := strings.ToLower(userQuery)
-			isSimpleArithmetic := strings.Contains(queryLower, "what is") &&
+			isSimpleQuestion := false
+
+			// Check for simple arithmetic
+			if strings.Contains(queryLower, "what is") &&
 				(strings.Contains(queryLower, "+") || strings.Contains(queryLower, "-") ||
 					strings.Contains(queryLower, "*") || strings.Contains(queryLower, "/") ||
-					strings.Contains(queryLower, "plus") || strings.Contains(queryLower, "minus"))
+					strings.Contains(queryLower, "plus") || strings.Contains(queryLower, "minus")) {
+				isSimpleQuestion = true
+			}
 
-			if !isSimpleArithmetic && a.isIncompleteResponse(choice.Message.Content) {
+			// Check for brief/tell me questions with "already have" or "information you have"
+			if (strings.Contains(queryLower, "briefly") || strings.Contains(queryLower, "tell me")) &&
+				(strings.Contains(queryLower, "already have") || strings.Contains(queryLower, "information you have") ||
+					strings.Contains(queryLower, "with the information")) {
+				isSimpleQuestion = true
+			}
+
+			// Check for simple tell/say commands
+			if strings.HasPrefix(queryLower, "say ") || strings.HasPrefix(queryLower, "tell me a joke") {
+				isSimpleQuestion = true
+			}
+
+			if !isSimpleQuestion && a.isIncompleteResponse(choice.Message.Content) {
 				// Add encouragement to continue
 				a.messages = append(a.messages, api.Message{
 					Role:    "user",

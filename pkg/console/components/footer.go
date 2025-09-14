@@ -3,6 +3,7 @@ package components
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/console"
@@ -123,7 +124,7 @@ func (fc *FooterComponent) Render() error {
 	sessionDuration := fc.formatDuration(time.Since(fc.sessionStart))
 	statsLine := fmt.Sprintf(
 		" %s (%s) | %s tokens | $%.3f | %s",
-		fc.truncateString(fc.lastModel, 20),
+		fc.extractModelName(fc.lastModel),
 		fc.lastProvider,
 		fc.formatTokens(fc.lastTokens),
 		fc.lastCost,
@@ -174,6 +175,74 @@ func (fc *FooterComponent) formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dm", int(d.Minutes()))
 	}
 	return fmt.Sprintf("%.1fh", d.Hours())
+}
+
+// extractModelName extracts the model name from a provider/model string
+func (fc *FooterComponent) extractModelName(fullModel string) string {
+	// Split on "/" and take the last part (actual model name)
+	parts := strings.Split(fullModel, "/")
+	if len(parts) >= 2 {
+		modelName := parts[len(parts)-1]
+		
+		// Smart truncation for common model patterns
+		if len(modelName) > 20 {
+			// First check if it's a free model - preserve ":free" suffix
+			if strings.HasSuffix(modelName, ":free") {
+				// Remove ":free" temporarily for processing
+				baseName := strings.TrimSuffix(modelName, ":free")
+				
+				// Apply pattern-specific truncation to base name
+				var truncatedBase string
+				if strings.Contains(baseName, "Qwen") && strings.Contains(baseName, "Coder") {
+					// Extract: Qwen3-Coder-480B from Qwen3-Coder-480B-A35B-Instruct-Turbo
+					if parts := strings.Split(baseName, "-"); len(parts) >= 3 {
+						truncatedBase = strings.Join(parts[:3], "-")
+					} else {
+						truncatedBase = baseName
+					}
+				} else if strings.Contains(baseName, "deepseek") {
+					// Keep deepseek base name, truncate if too long
+					if len(baseName) > 12 { // Leave room for ":free"
+						truncatedBase = baseName[:12] + "..."
+					} else {
+						truncatedBase = baseName
+					}
+				} else {
+					// Generic truncation for other free models
+					if len(baseName) > 12 { // Leave room for ":free"
+						truncatedBase = baseName[:12] + "..."
+					} else {
+						truncatedBase = baseName
+					}
+				}
+				
+				return truncatedBase + ":free"
+			}
+			
+			// Non-free model patterns
+			if strings.Contains(modelName, "Qwen") && strings.Contains(modelName, "Coder") {
+				// Extract: Qwen3-Coder-480B
+				if parts := strings.Split(modelName, "-"); len(parts) >= 3 {
+					return strings.Join(parts[:3], "-") // e.g., "Qwen3-Coder-480B"
+				}
+			} else if strings.Contains(modelName, "deepseek") {
+				// For non-free deepseek models, truncate base name if needed
+				if parts := strings.Split(modelName, ":"); len(parts) > 1 {
+					base := parts[0]
+					if len(base) > 15 {
+						return base[:15] + "..." 
+					}
+					return base
+				}
+			}
+			
+			// Generic fallback: keep first 17 chars
+			return modelName[:17] + "..."
+		}
+		return modelName
+	}
+	// Fallback to truncating the full string if no "/" found
+	return fc.truncateString(fullModel, 20)
 }
 
 // truncateString truncates a string to maxLen

@@ -38,8 +38,8 @@ func (a *Agent) ToolLog(action, target string) {
 		defer a.outputMutex.Unlock()
 	}
 
-	// Ensure we start at column 1
-	fmt.Print("\r\033[K") // Move to start of line and clear
+	// Clear current line and move to start
+	fmt.Print("\r\033[K")
 
 	// Format: [4:(15.2K/120K)] read file filename.go
 	contextInfo := fmt.Sprintf("[%d:(%s/%s)]",

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -40,6 +41,7 @@ type AgentConsole struct {
 	// Interrupt handling
 	interruptChan    chan string
 	processingActive bool
+	outputMutex      sync.Mutex
 }
 
 // NewAgentConsole creates a new agent console
@@ -67,10 +69,12 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		historyFile:      config.HistoryFile,
 		interruptChan:    make(chan string, 1),
 		processingActive: false,
+		outputMutex:      sync.Mutex{},
 	}
 
-	// Set the interrupt channel on the agent
+	// Set the interrupt channel and output mutex on the agent
 	agent.SetInterruptChannel(ac.interruptChan)
+	agent.SetOutputMutex(&ac.outputMutex)
 
 	return ac
 }
@@ -200,6 +204,27 @@ func (ac *AgentConsole) processInput(input string) error {
 		return nil
 	}
 
+	// If agent is processing, send as interrupt
+	if ac.processingActive {
+		select {
+		case ac.interruptChan <- input:
+			ac.outputMutex.Lock()
+			fmt.Print("\r\033[K") // Clear current line
+			fmt.Printf("🔔 Interrupt received! Your input has been queued.\n")
+			fmt.Printf("📝 Message: \"%s\"\n", input)
+			fmt.Printf("⏳ The agent will process this in the next turn...\n")
+			fmt.Print(ac.prompt) // Redraw prompt
+			ac.outputMutex.Unlock()
+		default:
+			ac.outputMutex.Lock()
+			fmt.Print("\r\033[K") // Clear current line
+			fmt.Printf("⚠️  Agent is busy, please wait for current task to complete.\n")
+			fmt.Print(ac.prompt) // Redraw prompt
+			ac.outputMutex.Unlock()
+		}
+		return nil
+	}
+
 	// Check for commands
 	if strings.HasPrefix(input, "/") {
 		return ac.handleCommand(input)
@@ -226,30 +251,65 @@ func (ac *AgentConsole) processInput(input string) error {
 		return nil
 	}
 
-	// Ensure we're at the start of a new line before agent output
-	fmt.Print("\033[1G") // Move to column 1
+	// Mark as processing
+	ac.processingActive = true
 
-	// Regular agent interaction using ProcessQueryWithContinuity (with tools!)
-	response, err := ac.agent.ProcessQueryWithContinuity(input)
-	if err != nil {
-		return err
-	}
+	// Lock output to prevent interleaving
+	ac.outputMutex.Lock()
 
-	// Update metrics
-	ac.totalTokens = ac.agent.GetTotalTokens()
-	ac.totalCost = ac.agent.GetTotalCost()
-	ac.updateFooter()
+	// Clear the current input line
+	fmt.Print("\r\033[K")
 
-	// Display response
-	fmt.Println(response)
+	// Show processing indicator
+	fmt.Printf("🔄 Processing your request...\n")
+	fmt.Printf("💡 Tip: You can type additional instructions at any time!\n\n")
 
-	// Print summary if we used tokens
-	if ac.agent.GetTotalTokens() > 0 {
-		ac.agent.PrintConciseSummary()
-	}
+	ac.outputMutex.Unlock()
 
-	// Ensure we end with a newline for the next prompt
-	fmt.Println()
+	// Run agent processing in a goroutine to allow concurrent input
+	go func() {
+		// Ensure exclusive output control
+		ac.outputMutex.Lock()
+		defer ac.outputMutex.Unlock()
+
+		// Regular agent interaction using ProcessQueryWithContinuity (with tools!)
+		response, err := ac.agent.ProcessQueryWithContinuity(input)
+
+		// Mark as no longer processing
+		ac.processingActive = false
+
+		if err != nil {
+			fmt.Printf("\nError: %v\n", err)
+		} else {
+			// Update metrics
+			ac.totalTokens = ac.agent.GetTotalTokens()
+			ac.totalCost = ac.agent.GetTotalCost()
+			ac.updateFooter()
+
+			// Ensure we're at the start of a clean line
+			fmt.Print("\r\033[K") // Clear any partial line
+
+			// Display response (it may already have newlines)
+			fmt.Print(response)
+			if !strings.HasSuffix(response, "\n") {
+				fmt.Println()
+			}
+
+			// Print summary if we used tokens
+			if ac.agent.GetTotalTokens() > 0 {
+				ac.agent.PrintConciseSummary()
+			}
+		}
+
+		// Ensure we end with a newline for the next prompt
+		if !strings.HasSuffix(response, "\n") {
+			fmt.Println()
+		}
+
+		// Redraw prompt on a clean line
+		fmt.Print("\r\033[K") // Clear line
+		fmt.Print(ac.prompt)
+	}()
 
 	return nil
 }

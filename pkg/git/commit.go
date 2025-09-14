@@ -88,15 +88,11 @@ func CheckStagedFilesForSecurityCredentials(logger *utils.Logger, cfg *config.Co
 	return securityIssuesFound
 }
 
-// PerformGitCommit executes the git commit command using HEREDOC format for proper formatting
+// PerformGitCommit executes the git commit command safely using stdin
 func PerformGitCommit(message string) error {
-	// Use HEREDOC format to ensure proper commit message formatting
-	cmdString := fmt.Sprintf(`git commit -m "$(cat <<'EOF'
-%s
-EOF
-)"`, message)
-
-	cmd := exec.Command("bash", "-c", cmdString)
+	// Use git commit -F - to read commit message from stdin (safe from injection)
+	cmd := exec.Command("git", "commit", "-F", "-")
+	cmd.Stdin = strings.NewReader(message)
 	cmd.Stdout = nil // Don't capture stdout
 	cmd.Stderr = nil // Don't capture stderr
 	if err := cmd.Run(); err != nil {

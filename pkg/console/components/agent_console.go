@@ -27,12 +27,19 @@ type AgentConsole struct {
 	input  *InputComponent
 	footer *FooterComponent
 
+	// UI Handler
+	uiHandler *console.UIHandler
+
 	// State
 	sessionStartTime time.Time
 	totalTokens      int
 	totalCost        float64
 	prompt           string
 	historyFile      string
+
+	// Interrupt handling
+	interruptChan    chan string
+	processingActive bool
 }
 
 // NewAgentConsole creates a new agent console
@@ -49,7 +56,7 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 
 	footer := NewFooterComponent()
 
-	return &AgentConsole{
+	ac := &AgentConsole{
 		BaseComponent:    base,
 		agent:            agent,
 		commandRegistry:  commands.NewCommandRegistry(),
@@ -58,7 +65,14 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		sessionStartTime: time.Now(),
 		prompt:           config.Prompt,
 		historyFile:      config.HistoryFile,
+		interruptChan:    make(chan string, 1),
+		processingActive: false,
 	}
+
+	// Set the interrupt channel on the agent
+	agent.SetInterruptChannel(ac.interruptChan)
+
+	return ac
 }
 
 // AgentConsoleConfig holds configuration
@@ -82,13 +96,29 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 		return err
 	}
 
+	// Create and initialize UI handler
+	ac.uiHandler = console.NewUIHandler(deps.Terminal)
+	if err := ac.uiHandler.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize UI handler: %w", err)
+	}
+
+	// Register components with UI handler
+	ac.uiHandler.RegisterComponent("agent", ac)
+	ac.uiHandler.RegisterComponent("input", ac.input)
+	ac.uiHandler.RegisterComponent("footer", ac.footer)
+
 	// Initialize sub-components
-	if err := ac.input.Init(ctx, deps); err != nil {
+	if err := ac.footer.Init(ctx, deps); err != nil {
 		return err
 	}
 
-	if err := ac.footer.Init(ctx, deps); err != nil {
-		return err
+	// Set up stats update callback for real-time pricing updates
+	if ac.agent != nil {
+		ac.agent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
+			ac.totalTokens = totalTokens
+			ac.totalCost = totalCost
+			ac.updateFooter()
+		})
 	}
 
 	// Load history
@@ -196,6 +226,9 @@ func (ac *AgentConsole) processInput(input string) error {
 		return nil
 	}
 
+	// Ensure we're at the start of a new line before agent output
+	fmt.Print("\033[1G") // Move to column 1
+
 	// Regular agent interaction using ProcessQueryWithContinuity (with tools!)
 	response, err := ac.agent.ProcessQueryWithContinuity(input)
 	if err != nil {
@@ -217,9 +250,6 @@ func (ac *AgentConsole) processInput(input string) error {
 
 	// Ensure we end with a newline for the next prompt
 	fmt.Println()
-
-	// Reset cursor to column 1 to ensure next prompt starts at the beginning
-	fmt.Print("\033[1G")
 
 	return nil
 }
@@ -388,8 +418,13 @@ func (ac *AgentConsole) setupTerminal() error {
 		return err
 	}
 
-	// Clear screen
+	// Clear screen and home cursor
 	ac.Terminal().ClearScreen()
+
+	// Initial footer render (before setting scroll region)
+	if err := ac.footer.Render(); err != nil {
+		return err
+	}
 
 	// Set up scroll region to leave room for footer (2 lines)
 	// The content area is from line 1 to height-2
@@ -397,30 +432,8 @@ func (ac *AgentConsole) setupTerminal() error {
 		return err
 	}
 
-	// Move cursor to start of content area
+	// Move cursor to top of scroll region
 	ac.Terminal().MoveCursor(1, 1)
-
-	// Subscribe to terminal resize events
-	ac.Terminal().OnResize(func(newWidth, newHeight int) {
-		// Update scroll region
-		ac.Terminal().SetScrollRegion(1, newHeight-2)
-		// Trigger footer redraw
-		ac.footer.SetNeedsRedraw(true)
-		// Fire resize event for footer
-		ac.Events().PublishAsync(console.Event{
-			Type:   "terminal.resized",
-			Source: "terminal",
-			Data: map[string]int{
-				"width":  newWidth,
-				"height": newHeight,
-			},
-		})
-	})
-
-	// Initial footer render
-	if err := ac.footer.Render(); err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -522,6 +535,12 @@ func (ac *AgentConsole) executeShellCommand(command string) (string, error) {
 }
 
 // Helper functions
+
+// OnResize handles terminal resize events
+func (ac *AgentConsole) OnResize(width, height int) {
+	// Update scroll region
+	ac.Terminal().SetScrollRegion(1, height-2)
+}
 
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {

@@ -69,11 +69,23 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	var finalModel string
 
 	if model != "" {
-		finalModel = model
-		// When a model is specified, use the best available provider
-		// The provider should be explicitly set via command line --provider flag
-		// or via interactive /provider selection before this point
-		clientType, _, _ = configManager.GetBestProvider()
+		// Check if model includes provider prefix (e.g., "deepinfra:model-name")
+		parts := strings.SplitN(model, ":", 2)
+		if len(parts) == 2 {
+			// Provider explicitly specified
+			providerName := parts[0]
+			finalModel = parts[1]
+
+			// Convert provider name to ClientType
+			clientType, err = agent_config.GetProviderFromConfigName(providerName)
+			if err != nil {
+				return nil, fmt.Errorf("unknown provider '%s': %w", providerName, err)
+			}
+		} else {
+			// No provider specified, use the model with best available provider
+			finalModel = model
+			clientType, _, _ = configManager.GetBestProvider()
+		}
 	} else {
 		// Use configured provider and model
 		clientType, finalModel, err = configManager.GetBestProvider()

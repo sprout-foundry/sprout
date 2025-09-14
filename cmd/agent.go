@@ -31,8 +31,16 @@ func init() {
 
 // runSimpleInteractiveMode provides a simple console-based interactive mode
 func runInteractiveMode() error {
-	// Create agent
-	chatAgent, err := agent.NewAgent()
+	// Create agent with model if specified
+	var chatAgent *agent.Agent
+	var err error
+
+	if agentModel != "" {
+		chatAgent, err = agent.NewAgentWithModel(agentModel)
+	} else {
+		chatAgent, err = agent.NewAgent()
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to initialize agent: %w", err)
 	}
@@ -72,8 +80,16 @@ func runInteractiveMode() error {
 
 // executeDirectAgentCommand executes an agent command directly (like coder does)
 func executeDirectAgentCommand(userIntent string) error {
-	// Create agent directly like coder project does
-	chatAgent, err := agent.NewAgent()
+	// Create agent with model if specified
+	var chatAgent *agent.Agent
+	var err error
+
+	if agentModel != "" {
+		chatAgent, err = agent.NewAgentWithModel(agentModel)
+	} else {
+		chatAgent, err = agent.NewAgent()
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to initialize agent: %w", err)
 	}

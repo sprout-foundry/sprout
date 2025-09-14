@@ -30,8 +30,8 @@ func TestNewAgent(t *testing.T) {
 	}
 
 	// Test basic properties
-	if agent.maxIterations != 20 {
-		t.Errorf("Expected maxIterations to be 20, got %d", agent.maxIterations)
+	if agent.maxIterations != 100 {
+		t.Errorf("Expected maxIterations to be 100, got %d", agent.maxIterations)
 	}
 
 	if agent.currentIteration != 0 {

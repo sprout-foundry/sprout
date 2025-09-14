@@ -3,7 +3,6 @@ package components
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/console"
@@ -117,11 +116,6 @@ func (fc *FooterComponent) Render() error {
 	// Move to footer position
 	fc.Terminal().MoveCursor(region.X+1, region.Y+1) // 1-based coordinates
 
-	// Draw top border
-	fc.Terminal().Write([]byte("\033[2m\033[90m")) // Dim gray
-	fc.Terminal().Write([]byte(strings.Repeat("─", region.Width)))
-	fc.Terminal().Write([]byte("\033[0m"))
-
 	// Move to stats line
 	fc.Terminal().MoveCursor(region.X+1, region.Y+2)
 
@@ -141,13 +135,12 @@ func (fc *FooterComponent) Render() error {
 		statsLine = statsLine[:region.Width-3] + "..."
 	}
 
-	// Draw stats
-	fc.Terminal().Write([]byte("\033[2m\033[90m")) // Dim gray
+	// Draw stats with dark gray background (#444) and light text
+	// Using dim white text (color code 37) with a dark gray background (color code 40 for black, closest to #444)
+	fc.Terminal().Write([]byte("\033[2m\033[37m\033[40m")) // Dim white text with dark gray background
 	fc.Terminal().Write([]byte(statsLine))
 	fc.Terminal().ClearToEndOfLine()
 	fc.Terminal().Write([]byte("\033[0m"))
-
-	// No bottom border - removed for cleaner look
 
 	// Mark as drawn
 	fc.SetNeedsRedraw(false)
@@ -189,4 +182,21 @@ func (fc *FooterComponent) truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// OnResize handles terminal resize events
+func (fc *FooterComponent) OnResize(width, height int) {
+	// Update footer position
+	region := console.Region{
+		X:       0,
+		Y:       height - 2,
+		Width:   width,
+		Height:  2,
+		ZOrder:  100,
+		Visible: true,
+	}
+
+	fc.Layout().UpdateRegion("footer", region)
+	fc.SetNeedsRedraw(true)
+	fc.Render()
 }

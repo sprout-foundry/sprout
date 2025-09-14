@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -12,7 +13,6 @@ import (
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/mcp"
-	"github.com/alantheprice/ledit/pkg/ui"
 )
 
 type Agent struct {
@@ -51,6 +51,9 @@ type Agent struct {
 
 	// UI callback for real-time updates
 	statsUpdateCallback func(totalTokens int, totalCost float64)
+
+	// Output synchronization
+	outputMutex *sync.Mutex
 }
 
 func NewAgent() (*Agent, error) {
@@ -319,27 +322,27 @@ func (a *Agent) HandleInterrupt() string {
 	defer a.EnableEscMonitoring() // Re-enable when done
 
 	if a.interruptChan != nil {
-		// TUI mode: wait for response from channel with timeout
+		// Console mode with interrupt channel
 		select {
 		case input := <-a.interruptChan:
 			input = strings.TrimSpace(input)
 			switch input {
 			case "", "resume", "continue":
-				ui.Log("▶️  Resuming current task...")
+				fmt.Println("\n▶️  Resuming current task...")
 				return ""
 			case "quit", "exit", "stop":
-				ui.Log("🚪 Exiting...")
-				ui.Log("=====================================")
+				fmt.Println("\n🚪 Exiting...")
+				fmt.Println("=====================================")
 				a.PrintConversationSummary(true)
 				os.Exit(0)
 				return "exit" // Unreachable, but for completeness
 			default:
-				ui.Logf("📝 Injecting new instruction: %s", input)
-				ui.Log("▶️  Continuing with modified task...")
+				fmt.Printf("\n📝 Processing your input: %s\n", input)
+				fmt.Println("▶️  Continuing with your additional context...")
 				return input
 			}
-		case <-time.After(30 * time.Second):
-			ui.Log("⏰ Interrupt timeout - resuming task")
+		case <-time.After(2 * time.Second):
+			// Quick timeout to check for interrupts but continue if none
 			return ""
 		}
 	} else {
@@ -388,6 +391,16 @@ func (a *Agent) ClearInterrupt() {
 		default:
 		}
 	}
+}
+
+// SetInterruptChannel sets the interrupt channel for external input
+func (a *Agent) SetInterruptChannel(ch chan string) {
+	a.interruptChan = ch
+}
+
+// SetOutputMutex sets the output mutex for synchronized output
+func (a *Agent) SetOutputMutex(mu *sync.Mutex) {
+	a.outputMutex = mu
 }
 
 func (a *Agent) GetMaxIterations() int {

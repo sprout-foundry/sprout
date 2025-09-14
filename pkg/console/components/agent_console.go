@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -38,6 +39,9 @@ type AgentConsole struct {
 	prompt           string
 	historyFile      string
 
+	// JSON formatter for structured output
+	jsonFormatter *JSONFormatter
+
 	// Interrupt handling
 	interruptChan    chan string
 	processingActive bool
@@ -70,6 +74,7 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		interruptChan:    make(chan string, 1),
 		processingActive: false,
 		outputMutex:      sync.Mutex{},
+		jsonFormatter:    NewJSONFormatter(),
 	}
 
 	// Set the interrupt channel and output mutex on the agent
@@ -337,16 +342,29 @@ func (ac *AgentConsole) processInput(input string) error {
 			ac.totalCost = ac.agent.GetTotalCost()
 			ac.updateFooter()
 
-			// Ensure we're on a new line before displaying response
-			fmt.Println()
-
 			// Display response with proper formatting
 			if response != "" {
-				// The response might have escape sequences or formatting issues
-				// Clean it up and ensure proper display
+				// Clean up the response
 				cleanResponse := strings.TrimSpace(response)
 				if cleanResponse != "" {
-					fmt.Println(cleanResponse)
+					fmt.Print("\n🎯 Agent Response:\n")
+
+					// Check if this looks like JSON content
+					if ac.jsonFormatter != nil && ac.jsonFormatter.DetectAndFormatJSON(cleanResponse) != cleanResponse {
+						// Use JSON formatter for structured data
+						formatted := ac.jsonFormatter.FormatModelResponse(cleanResponse)
+						fmt.Println(formatted)
+					} else {
+						// For regular text, preserve the original formatting
+						// Only remove ANSI escape sequences if present
+						if strings.Contains(cleanResponse, "\x1b[") {
+							ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+							cleanResponse = ansiRegex.ReplaceAllString(cleanResponse, "")
+						}
+
+						// Don't aggressively clean whitespace - just print as-is
+						fmt.Println(cleanResponse)
+					}
 				}
 			}
 

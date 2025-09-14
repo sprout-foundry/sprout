@@ -474,8 +474,15 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		}
 	}
 
-	// Build the file actions summary
-	fileActionsSummary := strings.Join(fileActions, "; ")
+	// Build the file actions summary (detailed for single file, generic for multi-file)
+	var fileActionsSummary string
+	if len(fileActions) == 1 {
+		// Single file: include the specific action
+		fileActionsSummary = fileActions[0]
+	} else {
+		// Multi-file: use generic summary
+		fileActionsSummary = fmt.Sprintf("%s %d files", primaryAction, len(fileActions))
+	}
 
 	// Build branch prefix if not on default branch
 	branchPrefix := ""
@@ -485,7 +492,9 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 
 	var commitMessage string
 
-	if singleFileMode {
+	// Retry loop for commit message generation
+	for {
+		if singleFileMode {
 		// Single file mode - simple format without file actions in title
 		// Create the commit message generation prompt
 		commitPrompt := fmt.Sprintf(`Generate a concise git commit message for the following staged changes.
@@ -646,13 +655,17 @@ Generate a Git commit message summary. The message should follow these rules:
 	// Handle confirmation (or auto-proceed if skipPrompt)
 	if c.skipPrompt {
 		fmt.Println("\n✅ Auto-proceeding with commit (--skip-prompt)")
+		break // Exit retry loop
 	} else {
-		// Simple confirmation
-		fmt.Print("\n💡 Proceed with commit? (y/n/e to edit): ")
+		// Confirmation with retry option
+		fmt.Print("\n💡 Proceed with commit? (y/n/e to edit/r to retry): ")
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(strings.ToLower(input))
 
-		if input == "e" || input == "edit" {
+		if input == "r" || input == "retry" {
+			fmt.Println("🔄 Regenerating commit message...")
+			continue // Go back to start of loop to regenerate
+		} else if input == "e" || input == "edit" {
 			// Allow editing the commit message
 			fmt.Println("\n✏️  Enter your commit message (press Enter twice when done):")
 			var editedMessage strings.Builder
@@ -670,11 +683,19 @@ Generate a Git commit message summary. The message should follow these rules:
 				editedMessage.WriteString(line)
 			}
 			commitMessage = strings.TrimSpace(editedMessage.String())
-		} else if input != "y" && input != "yes" && input != "" {
+			break // Exit retry loop with edited message
+		} else if input == "y" || input == "yes" || input == "" {
+			break // Exit retry loop and proceed with commit
+		} else if input == "n" || input == "no" {
 			fmt.Println("❌ Commit cancelled")
 			return nil
+		} else {
+			fmt.Printf("❌ Invalid option: %s. Please use y/n/e/r\n", input)
+			continue // Show the confirmation prompt again
 		}
 	}
+
+	} // End of retry loop
 
 	// Handle dry-run mode
 	if c.dryRun {

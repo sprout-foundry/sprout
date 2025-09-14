@@ -355,15 +355,33 @@ func (ac *AgentConsole) processInput(input string) error {
 						formatted := ac.jsonFormatter.FormatModelResponse(cleanResponse)
 						fmt.Println(formatted)
 					} else {
-						// For regular text, preserve the original formatting
-						// Only remove ANSI escape sequences if present
-						if strings.Contains(cleanResponse, "\x1b[") {
-							ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
-							cleanResponse = ansiRegex.ReplaceAllString(cleanResponse, "")
+						// For regular text, we need to handle excessive whitespace
+						// Split into lines and clean each one
+						lines := strings.Split(cleanResponse, "\n")
+						var outputLines []string
+
+						for _, line := range lines {
+							// Remove ANSI codes if present
+							if strings.Contains(line, "\x1b[") {
+								ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+								line = ansiRegex.ReplaceAllString(line, "")
+							}
+
+							// Collapse multiple spaces into single spaces
+							line = regexp.MustCompile(`\s+`).ReplaceAllString(line, " ")
+							line = strings.TrimSpace(line)
+
+							// Add non-empty lines
+							if line != "" {
+								outputLines = append(outputLines, line)
+							} else if len(outputLines) > 0 && outputLines[len(outputLines)-1] != "" {
+								// Preserve single blank lines between paragraphs
+								outputLines = append(outputLines, "")
+							}
 						}
 
-						// Don't aggressively clean whitespace - just print as-is
-						fmt.Println(cleanResponse)
+						// Join and print
+						fmt.Println(strings.Join(outputLines, "\n"))
 					}
 				}
 			}

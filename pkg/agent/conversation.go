@@ -106,7 +106,12 @@ Current status: Starting iteration 1 (natural termination)`
 		// Check for interrupt signal at the start of each iteration
 		if a.CheckForInterrupt() {
 			interruptMessage := a.HandleInterrupt()
-			if interruptMessage != "" {
+			if interruptMessage == "STOP" {
+				// User wants to stop current processing
+				a.debugLog("🛑 User requested stop\n")
+				a.ClearInterrupt()
+				break // Exit the iteration loop
+			} else if interruptMessage != "" {
 				// Inject user message into conversation
 				a.messages = append(a.messages, api.Message{
 					Role:    "user",
@@ -232,10 +237,11 @@ Current status: Starting iteration 1 (natural termination)`
 				// Use mutex if available for synchronized output
 				if a.outputMutex != nil {
 					a.outputMutex.Lock()
-					fmt.Print("\r\033[K") // Clear line first
+					fmt.Print("\r\033[K") // Clear line
 					fmt.Printf("💭 %s\n", content)
 					a.outputMutex.Unlock()
 				} else {
+					fmt.Print("\r\033[K") // Clear line
 					fmt.Printf("💭 %s\n", content)
 				}
 			}
@@ -376,7 +382,14 @@ Please continue with your task using the correct tool calling syntax.`
 			}
 
 			// Check if the response looks incomplete and retry
-			if a.isIncompleteResponse(choice.Message.Content) {
+			// But first check if this is a simple arithmetic or factual question
+			queryLower := strings.ToLower(userQuery)
+			isSimpleArithmetic := strings.Contains(queryLower, "what is") &&
+				(strings.Contains(queryLower, "+") || strings.Contains(queryLower, "-") ||
+					strings.Contains(queryLower, "*") || strings.Contains(queryLower, "/") ||
+					strings.Contains(queryLower, "plus") || strings.Contains(queryLower, "minus"))
+
+			if !isSimpleArithmetic && a.isIncompleteResponse(choice.Message.Content) {
 				// Add encouragement to continue
 				a.messages = append(a.messages, api.Message{
 					Role:    "user",
@@ -390,6 +403,12 @@ Please continue with your task using the correct tool calling syntax.`
 			if commitErr := a.CommitChanges(choice.Message.Content); commitErr != nil {
 				a.debugLog("Warning: Failed to commit tracked changes: %v\n", commitErr)
 			}
+
+			// Debug: Log the response content to see formatting
+			if a.debug {
+				a.debugLog("Final response content (%d chars):\n%s\n", len(choice.Message.Content), choice.Message.Content)
+			}
+
 			return choice.Message.Content, nil
 		}
 	}

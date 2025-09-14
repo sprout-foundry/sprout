@@ -326,6 +326,27 @@ func (a *Agent) HandleInterrupt() string {
 		select {
 		case input := <-a.interruptChan:
 			input = strings.TrimSpace(input)
+
+			// Check if it's a command
+			if strings.HasPrefix(input, "/") {
+				cmd := strings.TrimPrefix(strings.Fields(input)[0], "/")
+				switch cmd {
+				case "exit", "quit", "q":
+					fmt.Println("\n🚪 Exiting via interrupt...")
+					fmt.Println("=====================================")
+					a.PrintConversationSummary(true)
+					os.Exit(0)
+				case "stop":
+					fmt.Println("\n🛑 Stopping current task...")
+					return "STOP" // Special marker to indicate stopping
+				default:
+					// Other commands are treated as regular input
+					fmt.Printf("\n📝 Processing your command: %s\n", input)
+					return input
+				}
+			}
+
+			// Regular input handling
 			switch input {
 			case "", "resume", "continue":
 				fmt.Println("\n▶️  Resuming current task...")

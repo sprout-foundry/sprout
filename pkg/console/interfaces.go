@@ -64,6 +64,12 @@ type TerminalManager interface {
 	ClearToEndOfLine() error
 	ClearToEndOfScreen() error
 
+	// Scroll region support
+	SetScrollRegion(top, bottom int) error
+	ResetScrollRegion() error
+	ScrollUp(lines int) error
+	ScrollDown(lines int) error
+
 	// Output
 	Write(data []byte) (int, error)
 	WriteAt(x, y int, data []byte) error

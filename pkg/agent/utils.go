@@ -31,13 +31,16 @@ func (a *Agent) getModelContextLimit() int {
 func (a *Agent) ToolLog(action, target string) {
 	const blue = "\033[34m"
 	const reset = "\033[0m"
-	
+
+	// Ensure we start at column 1
+	fmt.Print("\r\033[K") // Move to start of line and clear
+
 	// Format: [4:(15.2K/120K)] read file filename.go
-	contextInfo := fmt.Sprintf("[%d:(%s/%s)]", 
-		a.currentIteration, 
-		a.formatTokenCount(a.currentContextTokens), 
+	contextInfo := fmt.Sprintf("[%d:(%s/%s)]",
+		a.currentIteration,
+		a.formatTokenCount(a.currentContextTokens),
 		a.formatTokenCount(a.maxContextTokens))
-	
+
 	if target != "" {
 		fmt.Printf("%s%s %s%s %s\n", blue, contextInfo, action, reset, target)
 	} else {
@@ -75,34 +78,34 @@ func (a *Agent) formatTokenCount(tokens int) string {
 func (a *Agent) suggestCorrectToolName(invalidName string) string {
 	// Common tool name mappings
 	corrections := map[string]string{
-		"exec":         "shell_command",
-		"bash":         "shell_command", 
-		"cmd":          "shell_command",
-		"command":      "shell_command",
-		"run":          "shell_command",
-		"execute":      "shell_command",
-		"read":         "read_file",
-		"cat":          "read_file",
-		"open":         "read_file",
-		"write":        "write_file",
-		"save":         "write_file",
-		"create":       "write_file",
-		"edit":         "edit_file",
-		"modify":       "edit_file",
-		"change":       "edit_file",
-		"replace":      "edit_file",
-		"todo":         "add_todo",
-		"task":         "add_todo",
-		"update":       "update_todo_status",
-		"status":       "update_todo_status",
-		"list":         "list_todos",
-		"show":         "list_todos",
+		"exec":    "shell_command",
+		"bash":    "shell_command",
+		"cmd":     "shell_command",
+		"command": "shell_command",
+		"run":     "shell_command",
+		"execute": "shell_command",
+		"read":    "read_file",
+		"cat":     "read_file",
+		"open":    "read_file",
+		"write":   "write_file",
+		"save":    "write_file",
+		"create":  "write_file",
+		"edit":    "edit_file",
+		"modify":  "edit_file",
+		"change":  "edit_file",
+		"replace": "edit_file",
+		"todo":    "add_todo",
+		"task":    "add_todo",
+		"update":  "update_todo_status",
+		"status":  "update_todo_status",
+		"list":    "list_todos",
+		"show":    "list_todos",
 	}
-	
+
 	if suggestion, exists := corrections[strings.ToLower(invalidName)]; exists {
 		return suggestion
 	}
-	
+
 	return ""
 }
 

@@ -37,9 +37,9 @@ func (fc *FooterComponent) Init(ctx context.Context, deps console.Dependencies) 
 	width, height, _ := deps.Terminal.GetSize()
 	region := console.Region{
 		X:       0,
-		Y:       height - 3, // 3 lines for footer
+		Y:       height - 2, // 2 lines for footer (top border + stats)
 		Width:   width,
-		Height:  3,
+		Height:  2,
 		ZOrder:  100, // High z-order to stay on top
 		Visible: true,
 	}
@@ -87,9 +87,9 @@ func (fc *FooterComponent) Init(ctx context.Context, deps console.Dependencies) 
 
 			region := console.Region{
 				X:       0,
-				Y:       height - 3,
+				Y:       height - 2,
 				Width:   width,
-				Height:  3,
+				Height:  2,
 				ZOrder:  100,
 				Visible: true,
 			}
@@ -147,11 +147,7 @@ func (fc *FooterComponent) Render() error {
 	fc.Terminal().ClearToEndOfLine()
 	fc.Terminal().Write([]byte("\033[0m"))
 
-	// Move to bottom border
-	fc.Terminal().MoveCursor(region.X+1, region.Y+3)
-	fc.Terminal().Write([]byte("\033[2m\033[90m")) // Dim gray
-	fc.Terminal().Write([]byte(strings.Repeat("─", region.Width)))
-	fc.Terminal().Write([]byte("\033[0m"))
+	// No bottom border - removed for cleaner look
 
 	// Mark as drawn
 	fc.SetNeedsRedraw(false)

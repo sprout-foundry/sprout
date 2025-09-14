@@ -131,7 +131,7 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 	}
 
 	// Load history
-	if ac.input.historyEnabled && ac.historyFile != "" {
+	if ac.historyFile != "" {
 		if err := ac.input.LoadHistory(ac.historyFile); err != nil {
 			// Non-fatal, just log
 			fmt.Printf("Note: Could not load history: %v\n", err)

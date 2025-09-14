@@ -199,6 +199,13 @@ After discovery, you MUST read ALL needed files in a single tool call array. NEV
 - **TARGETED SEARCH**: Use grep/find to locate specific functionality, don't explore broadly  
 - **PROGRESSIVE READING**: Start with most relevant files, only read more if needed
 - **NO EXHAUSTIVE DISCOVERY**: Skip broad exploration unless asked for comprehensive overview
+- **CONCISE INTERMEDIATE STEPS**: Before using tools, briefly explain your plan (e.g., "Looking at main.go to understand the entry point")
+
+**INTERMEDIATE RESPONSE RULES:**
+- When you need to use tools, provide a **brief progress update** before tool execution
+- Keep intermediate responses under 2-3 sentences
+- Use format: "Looking at [file/command] to understand [specific aspect]"
+- Example: "Let me examine the main entry point and package structure" → use tools → continue analysis
 
 **FOR IMPLEMENTATION REQUESTS (coding, building):**
 - **DISCOVERY FIRST**: Use shell commands to discover files before reading

@@ -12,7 +12,11 @@ import (
 )
 
 // CommitCommand implements the /commit slash command
-type CommitCommand struct{}
+type CommitCommand struct{
+	skipPrompt   bool
+	dryRun       bool
+	allowSecrets bool
+}
 
 // wrapText wraps text to a specific line length
 func wrapText(text string, lineLength int) string {
@@ -53,15 +57,30 @@ func (c *CommitCommand) Description() string {
 
 // Execute runs the commit command
 func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	// Parse flags from args
+	var cleanArgs []string
+	for _, arg := range args {
+		switch arg {
+		case "--skip-prompt":
+			c.skipPrompt = true
+		case "--dry-run":
+			c.dryRun = true
+		case "--allow-secrets":
+			c.allowSecrets = true
+		default:
+			cleanArgs = append(cleanArgs, arg)
+		}
+	}
+
 	// Handle subcommands
-	if len(args) > 0 {
-		switch args[0] {
+	if len(cleanArgs) > 0 {
+		switch cleanArgs[0] {
 		case "single", "one", "file":
-			return c.executeSingleFileCommit(args[1:], chatAgent)
+			return c.executeSingleFileCommit(cleanArgs[1:], chatAgent)
 		case "help", "--help", "-h":
 			return c.showHelp()
 		default:
-			return fmt.Errorf("unknown subcommand: %s. Use '/commit help' for usage", args[0])
+			return fmt.Errorf("unknown subcommand: %s. Use '/commit help' for usage", cleanArgs[0])
 		}
 	}
 
@@ -93,6 +112,12 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 		fmt.Printf("📦 Found %d staged file(s):\n", len(validStagedFiles))
 		for i, file := range validStagedFiles {
 			fmt.Printf("%2d. %s\n", i+1, file)
+		}
+
+		if c.skipPrompt {
+			fmt.Println("✅ Using staged files for commit (--skip-prompt)")
+			// Skip to commit message generation - files are already staged
+			return c.generateAndCommit(chatAgent, nil, false) // false = multi-file mode, nil = no reader needed
 		}
 
 		fmt.Println("\n💡 Use staged files for commit? (y/n, default: y):")
@@ -148,20 +173,35 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 		fmt.Printf("%2d. %s\n", i+1, line)
 	}
 
-	// Step 4: Prompt user to select files
-	fmt.Println("\n💡 Enter file numbers to commit (comma-separated, 'a' for all, 'q' to quit):")
-	reader := bufio.NewReader(os.Stdin)
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(input)
-
-	if input == "q" || input == "quit" {
-		fmt.Println("❌ Commit cancelled")
-		return nil
-	}
-
+	// Step 4: Select files (or auto-select all if skipPrompt)
 	var filesToAdd []string
+	var reader *bufio.Reader
 
-	if input == "a" || input == "all" {
+	if c.skipPrompt {
+		fmt.Println("\n✅ Auto-selecting all modified files (--skip-prompt)")
+		// Add all modified files
+		for _, line := range validStatusLines {
+			// Split on spaces and take everything after the status field
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				// Join all parts except the first (status) to handle filenames with spaces
+				filename := strings.Join(parts[1:], " ")
+				filesToAdd = append(filesToAdd, filename)
+			}
+		}
+	} else {
+		// Interactive file selection
+		fmt.Println("\n💡 Enter file numbers to commit (comma-separated, 'a' for all, 'q' to quit):")
+		reader = bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		if input == "q" || input == "quit" {
+			fmt.Println("❌ Commit cancelled")
+			return nil
+		}
+
+		if input == "a" || input == "all" {
 		// Add all modified files
 		for _, line := range validStatusLines {
 			// Split on spaces and take everything after the status field
@@ -364,8 +404,8 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		return nil
 	}
 
-	// Create a dedicated client for fast commit generation
-	fastClient, err := api.NewUnifiedClientWithModel(api.OpenAIClientType, api.FastModel)
+	// Create a dedicated client for fast commit generation using the appropriate provider
+	fastClient, err := api.NewUnifiedClientWithModel(api.OpenRouterClientType, api.FastModel)
 	if err != nil {
 		return fmt.Errorf("failed to create fast model client: %v", err)
 	}

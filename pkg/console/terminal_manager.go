@@ -223,6 +223,38 @@ func (tm *terminalManager) Flush() error {
 	return nil
 }
 
+// SetScrollRegion sets the scrolling region (1-based, inclusive)
+func (tm *terminalManager) SetScrollRegion(top, bottom int) error {
+	_, err := fmt.Fprintf(tm.writer, "\033[%d;%dr", top, bottom)
+	return err
+}
+
+// ResetScrollRegion resets the scrolling region to the entire screen
+func (tm *terminalManager) ResetScrollRegion() error {
+	_, err := fmt.Fprint(tm.writer, "\033[r")
+	return err
+}
+
+// ScrollUp scrolls the current region up by n lines
+func (tm *terminalManager) ScrollUp(lines int) error {
+	for i := 0; i < lines; i++ {
+		if _, err := fmt.Fprint(tm.writer, "\033[S"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ScrollDown scrolls the current region down by n lines
+func (tm *terminalManager) ScrollDown(lines int) error {
+	for i := 0; i < lines; i++ {
+		if _, err := fmt.Fprint(tm.writer, "\033[T"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // updateSize updates the cached terminal size
 func (tm *terminalManager) updateSize() error {
 	size, err := utils.GetTerminalSize()

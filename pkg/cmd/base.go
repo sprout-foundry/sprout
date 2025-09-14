@@ -75,7 +75,7 @@ func (b *BaseCommand) Initialize() error {
 
 	// Setup UI if enabled - DISABLED to fix input conflicts
 	if uiPkg.Enabled() {
-		uiPkg.SetDefaultSink(uiPkg.TuiSink{})
+		uiPkg.SetDefaultSink(uiPkg.StdoutSink{})
 		// TEMPORARILY DISABLED: go func() { _ = tuiPkg.Run() }()
 	}
 

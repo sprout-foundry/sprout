@@ -228,10 +228,16 @@ Current status: Starting iteration 1 (natural termination)`
 		// This shows the user the agent's reasoning before executing tools
 		if len(choice.Message.ToolCalls) > 0 {
 			content := strings.TrimSpace(choice.Message.Content)
-			if len(content) > 50 { // Show meaningful intermediate content
-				fmt.Printf("💭 %s\n", content)
-			} else if len(content) > 0 { // Show brief content
-				fmt.Printf("💭 %s\n", content)
+			if len(content) > 0 {
+				// Use mutex if available for synchronized output
+				if a.outputMutex != nil {
+					a.outputMutex.Lock()
+					fmt.Print("\r\033[K") // Clear line first
+					fmt.Printf("💭 %s\n", content)
+					a.outputMutex.Unlock()
+				} else {
+					fmt.Printf("💭 %s\n", content)
+				}
 			}
 			// If no content but has tool calls, we'll let the tool execution logs speak for themselves
 		}

@@ -163,8 +163,9 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 	// Handle signals in background
 	go func() {
 		for range sigChan {
-			// Signal received, but we handle Ctrl+C through input component
-			// This prevents the default behavior of killing the program
+			// When agent is processing, interrupt it
+			// When just at prompt, handle through input component
+			ac.handleCtrlC()
 		}
 	}()
 
@@ -292,6 +293,9 @@ func (ac *AgentConsole) processInput(input string) error {
 			ac.agent.PrintConciseSummary()
 		}
 	}
+
+	// Reset Ctrl+C counter after successful processing
+	ac.ctrlCCount = 0
 
 	// Update footer after processing
 	ac.updateFooter()
@@ -546,13 +550,26 @@ func (ac *AgentConsole) handleCtrlC() {
 	ac.lastCtrlC = now
 
 	if ac.ctrlCCount == 1 {
-		// First Ctrl+C - show message on the same line
-		fmt.Print("\r\033[K^C  💡 Press Ctrl+C again to exit\n")
-		// Redraw prompt
-		fmt.Print(ac.prompt)
+		// First Ctrl+C - try to interrupt agent if it's processing
+		select {
+		case ac.interruptChan <- "Ctrl+C pressed - stopping current operation":
+			fmt.Print("\r\033[K^C  🛑 Stopping current operation... (Press Ctrl+C again to exit)\n")
+			// Don't redraw prompt yet, let the agent finish gracefully
+		default:
+			// Agent not processing, show exit message
+			fmt.Print("\r\033[K^C  💡 Press Ctrl+C again to exit\n")
+			// Redraw prompt
+			fmt.Print(ac.prompt)
+		}
 	} else {
-		// Second Ctrl+C - exit
-		fmt.Println("🚪 Exiting...")
+		// Second Ctrl+C - exit immediately
+		fmt.Print("\r\033[K🚪 Exiting...\n")
+
+		// Try to interrupt agent one more time if it's still running
+		select {
+		case ac.interruptChan <- "Force exit requested":
+		default:
+		}
 
 		// Restore terminal before exiting
 		if ac.input != nil && ac.input.isRawMode {

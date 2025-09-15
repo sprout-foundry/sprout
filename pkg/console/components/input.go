@@ -30,6 +30,10 @@ type InputComponent struct {
 	oldTermState *term.State
 	tempLine     string // Store current line when navigating history
 
+	// Terminal dimensions for multi-line handling
+	termWidth     int
+	prevLineCount int // Track how many lines the previous render used
+
 	// Callbacks
 	onSubmit func(string) error
 	onCancel func()
@@ -128,6 +132,13 @@ func (c *InputComponent) ReadLine() (string, bool, error) {
 	c.cursorPos = 0
 	c.historyIndex = len(c.history)
 	c.tempLine = ""
+	c.prevLineCount = 1
+
+	// Get terminal width
+	c.termWidth = 80 // Default
+	if w, _, err := term.GetSize(fd); err == nil {
+		c.termWidth = w
+	}
 
 	// Ensure we're on a new line before displaying prompt
 	// This fixes the issue where prompt appears at the end of previous output
@@ -143,6 +154,20 @@ func (c *InputComponent) ReadLine() (string, bool, error) {
 		}
 
 		for i := 0; i < n; i++ {
+			// Check for Ctrl+C first
+			if buf[i] == 3 {
+				// Process as a regular keypress so we handle it consistently
+				wasMultiline, done := c.processKeypress(buf[i])
+				if done {
+					line := string(c.currentLine)
+					if c.historyEnabled && line != "" {
+						c.addToHistory(line)
+					}
+					return line, wasMultiline, nil
+				}
+				continue
+			}
+
 			// Check if this is an escape sequence
 			if buf[i] == 27 && i+2 < n && buf[i+1] == '[' {
 				// Handle escape sequences inline
@@ -221,11 +246,18 @@ func (c *InputComponent) ReadLine() (string, bool, error) {
 func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 	switch key {
 	case 3: // Ctrl+C
-		fmt.Println("^C")
+		// When in raw mode, we need to handle Ctrl+C ourselves
+		fmt.Print("\r\033[K") // Clear line
 		if c.onCancel != nil {
 			c.onCancel()
 		}
-		return false, true
+		// Clear current line
+		c.currentLine = c.currentLine[:0]
+		c.cursorPos = 0
+		c.historyIndex = len(c.history)
+		c.tempLine = ""
+		// Don't return done, just continue
+		return false, false
 
 	case 1: // Ctrl+A - move to beginning of line
 		c.cursorPos = 0
@@ -286,14 +318,9 @@ func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 				append([]rune{r}, c.currentLine[c.cursorPos:]...)...)
 			c.cursorPos++
 
+			// Always redraw to handle line wrapping
 			if c.echoEnabled {
-				if c.cursorPos == len(c.currentLine) {
-					// At end of line, just print the character
-					fmt.Printf("%c", r)
-				} else {
-					// In middle of line, redraw
-					c.redrawLine()
-				}
+				c.redrawLine()
 			}
 		} else if key >= 0xC0 {
 			// Handle UTF-8
@@ -311,40 +338,87 @@ func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 }
 
 func (c *InputComponent) redrawLine() {
-	// Move to beginning of line and clear
-	fmt.Print("\r\033[K")
-
-	// Print prompt
-	fmt.Print(c.prompt)
-
-	if c.echoEnabled {
-		// Print the current line
-		fmt.Print(string(c.currentLine))
-
-		// Move cursor to correct position
-		if c.cursorPos < len(c.currentLine) {
-			// Calculate how many positions to move back
-			moveBack := len(c.currentLine) - c.cursorPos
-			if moveBack > 0 {
-				fmt.Printf("\033[%dD", moveBack)
-			}
-		}
-	} else {
-		// Password mode - show asterisks
-		for i := range c.currentLine {
-			fmt.Print("*")
-			if i < c.cursorPos-1 {
-				// Keep track of cursor position in password mode too
-			}
-		}
-		// Move cursor for password mode
-		if c.cursorPos < len(c.currentLine) {
-			moveBack := len(c.currentLine) - c.cursorPos
-			if moveBack > 0 {
-				fmt.Printf("\033[%dD", moveBack)
+	// Get terminal width
+	if c.termWidth == 0 {
+		c.termWidth = 80 // Default
+		if c.Terminal() != nil {
+			if w, _, err := c.Terminal().GetSize(); err == nil {
+				c.termWidth = w
 			}
 		}
 	}
+
+	// Calculate total length including prompt
+	promptLen := len(c.prompt)
+	totalLen := promptLen + len(c.currentLine)
+
+	// Calculate how many lines this will take
+	newLineCount := 1
+	if c.termWidth > 0 {
+		newLineCount = (totalLen + c.termWidth - 1) / c.termWidth
+		if newLineCount == 0 {
+			newLineCount = 1
+		}
+	}
+
+	// If we previously rendered multiple lines, we need to clear them all
+	if c.prevLineCount > 1 {
+		// Move to the beginning of the first line
+		for i := 1; i < c.prevLineCount; i++ {
+			fmt.Print("\033[A") // Move up
+		}
+	}
+
+	// Clear all lines that we're going to use
+	fmt.Print("\r\033[K") // Clear current line
+	for i := 1; i < newLineCount; i++ {
+		fmt.Print("\n\033[K") // New line and clear
+	}
+
+	// Move back to the beginning
+	if newLineCount > 1 {
+		for i := 1; i < newLineCount; i++ {
+			fmt.Print("\033[A") // Move up
+		}
+	}
+	fmt.Print("\r")
+
+	// Print prompt and content
+	fmt.Print(c.prompt)
+	if c.echoEnabled {
+		fmt.Print(string(c.currentLine))
+	} else {
+		// Password mode
+		for range c.currentLine {
+			fmt.Print("*")
+		}
+	}
+
+	// Position cursor correctly
+	if c.cursorPos < len(c.currentLine) {
+		// Calculate absolute position
+		absolutePos := promptLen + c.cursorPos
+		targetRow := absolutePos / c.termWidth
+		targetCol := absolutePos % c.termWidth
+
+		// Current position is at the end
+		currentPos := totalLen
+		currentRow := (currentPos - 1) / c.termWidth
+		currentCol := (currentPos - 1) % c.termWidth
+
+		// Move cursor to target position
+		if targetRow < currentRow {
+			fmt.Printf("\033[%dA", currentRow-targetRow) // Move up
+		}
+		if targetCol < currentCol {
+			fmt.Printf("\033[%dD", currentCol-targetCol) // Move left
+		} else if targetCol > currentCol {
+			fmt.Printf("\033[%dC", targetCol-currentCol) // Move right
+		}
+	}
+
+	// Remember how many lines we used
+	c.prevLineCount = newLineCount
 }
 
 func (c *InputComponent) addToHistory(line string) {

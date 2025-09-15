@@ -45,6 +45,8 @@ type AgentConsole struct {
 	// Interrupt handling
 	interruptChan chan string
 	outputMutex   sync.Mutex
+	ctrlCCount    int
+	lastCtrlC     time.Time
 }
 
 // NewAgentConsole creates a new agent console
@@ -78,6 +80,11 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 	// Set the interrupt channel and output mutex on the agent
 	agent.SetInterruptChannel(ac.interruptChan)
 	agent.SetOutputMutex(&ac.outputMutex)
+
+	// Set up Ctrl+C handler
+	input.SetOnCancel(func() {
+		ac.handleCtrlC()
+	})
 
 	return ac
 }
@@ -138,7 +145,7 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 
 	// Set up command callbacks
 	ac.input.SetOnSubmit(ac.handleCommand)
-	ac.input.SetOnCancel(ac.handleCancel)
+	ac.input.SetOnCancel(ac.handleCtrlC)
 	ac.input.SetOnTab(ac.handleAutocomplete)
 
 	// Set up terminal with scroll regions
@@ -149,24 +156,26 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 	// Update footer with initial state
 	ac.updateFooter()
 
+	// Set up signal handling to intercept Ctrl+C
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// Handle signals in background
+	go func() {
+		for range sigChan {
+			// Signal received, but we handle Ctrl+C through input component
+			// This prevents the default behavior of killing the program
+		}
+	}()
+
 	return nil
 }
 
 // Start starts the interactive loop
 func (ac *AgentConsole) Start() error {
-	// Set up signal handling
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go func() {
-		<-sigChan
-		cancel()
-		ac.cleanup()
-		os.Exit(0)
-	}()
+	// Note: We handle Ctrl+C in the input component instead of using signals
+	// because the terminal is in raw mode
+	ctx := context.Background()
 
 	// Display welcome message
 	ac.showWelcomeMessage()
@@ -468,8 +477,7 @@ Tips:
 • While agent is processing, you can:
   - Type additional instructions (will be queued)
   - Use /exit or /quit to exit immediately
-  - Use /stop to stop current processing
-`)
+  - Use /stop to stop current processing`)
 }
 
 func (ac *AgentConsole) showStats() {
@@ -517,6 +525,43 @@ func (ac *AgentConsole) setupTerminal() error {
 	ac.Terminal().MoveCursor(1, 1)
 
 	return nil
+}
+
+func (ac *AgentConsole) handleCtrlC() {
+	// Recover from any panic
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "[PANIC] in handleCtrlC: %v\n", r)
+		}
+	}()
+
+	now := time.Now()
+
+	// If it's been more than 2 seconds since last Ctrl+C, reset counter
+	if now.Sub(ac.lastCtrlC) > 2*time.Second {
+		ac.ctrlCCount = 0
+	}
+
+	ac.ctrlCCount++
+	ac.lastCtrlC = now
+
+	if ac.ctrlCCount == 1 {
+		// First Ctrl+C - show message on the same line
+		fmt.Print("\r\033[K^C  💡 Press Ctrl+C again to exit\n")
+		// Redraw prompt
+		fmt.Print(ac.prompt)
+	} else {
+		// Second Ctrl+C - exit
+		fmt.Println("🚪 Exiting...")
+
+		// Restore terminal before exiting
+		if ac.input != nil && ac.input.isRawMode {
+			ac.input.restore()
+		}
+
+		ac.cleanup()
+		os.Exit(0)
+	}
 }
 
 func (ac *AgentConsole) cleanup() {

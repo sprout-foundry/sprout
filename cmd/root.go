@@ -21,6 +21,7 @@ responses with live web search results.
 Available commands:
   code     - Generate/edit code based on instructions
   agent    - AI agent mode (analyzes intent and decides actions)
+  shell    - Generate shell scripts from natural language descriptions
   process  - Orchestrate complex features
   commit   - Generate commit messages
   rollback - Rollback changes by revision ID
@@ -70,7 +71,8 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(mcpCmd)
-	rootCmd.AddCommand(reviewStagedCmd) // Add the new command
+	rootCmd.AddCommand(reviewStagedCmd)
+	rootCmd.AddCommand(shellCmd) // Add the new shell command
 
 	// Initialize environment-based defaults
 	cobra.OnInitialize(func() {

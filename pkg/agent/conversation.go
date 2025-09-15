@@ -33,11 +33,19 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 	// The agent should complete tasks naturally, but we need a safety limit
 	maxIterationsForThisQuery := 100
 
-	// Initialize with system prompt and processed user query
-	a.messages = []api.Message{
-		{Role: "system", Content: a.systemPrompt},
-		{Role: "user", Content: processedQuery},
+	// Check if this is a new conversation or continuing an existing one
+	if len(a.messages) == 0 {
+		// First query - initialize with system prompt
+		a.messages = []api.Message{
+			{Role: "system", Content: a.systemPrompt},
+		}
 	}
+
+	// Add the new user query to the existing conversation
+	a.messages = append(a.messages, api.Message{
+		Role:    "user",
+		Content: processedQuery,
+	})
 
 	for a.currentIteration < maxIterationsForThisQuery {
 		iterationStart := time.Now()

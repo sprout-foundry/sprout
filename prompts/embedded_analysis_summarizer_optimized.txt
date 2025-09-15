@@ -1,1 +1,0 @@
-Summarize analysis results while preserving critical insights. Always respond with valid JSON.

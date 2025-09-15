@@ -41,16 +41,13 @@ func (a *Agent) ToolLog(action, target string) {
 	// Clear current line and move to start
 	fmt.Print("\r\033[K")
 
-	// Format: [4:(15.2K/120K)] read file filename.go
-	contextInfo := fmt.Sprintf("[%d:(%s/%s)]",
-		a.currentIteration,
-		a.formatTokenCount(a.currentContextTokens),
-		a.formatTokenCount(a.maxContextTokens))
+	// Format: [4] read file filename.go
+	iterInfo := fmt.Sprintf("[%d]", a.currentIteration)
 
 	if target != "" {
-		fmt.Printf("%s%s %s%s %s\n", blue, contextInfo, action, reset, target)
+		fmt.Printf("%s%s %s%s %s\n", blue, iterInfo, action, reset, target)
 	} else {
-		fmt.Printf("%s%s %s%s\n", blue, contextInfo, action, reset)
+		fmt.Printf("%s%s %s%s\n", blue, iterInfo, action, reset)
 	}
 }
 

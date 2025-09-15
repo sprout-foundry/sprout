@@ -13,12 +13,15 @@ import (
 // FooterComponent displays status information at the bottom of the terminal
 type FooterComponent struct {
 	*console.BaseComponent
-	lastModel    string
-	lastProvider string
-	lastTokens   int
-	lastCost     float64
-	sessionStart time.Time
-	outputMutex  *sync.Mutex
+	lastModel         string
+	lastProvider      string
+	lastTokens        int
+	lastCost          float64
+	lastIteration     int
+	lastContextTokens int
+	maxContextTokens  int
+	sessionStart      time.Time
+	outputMutex       *sync.Mutex
 }
 
 // NewFooterComponent creates a new footer component
@@ -80,6 +83,27 @@ func (fc *FooterComponent) Init(ctx context.Context, deps console.Dependencies) 
 		}
 	})
 
+	deps.State.Subscribe("footer.iteration", func(key string, oldValue, newValue interface{}) {
+		if iteration, ok := newValue.(int); ok {
+			fc.lastIteration = iteration
+			fc.SetNeedsRedraw(true)
+		}
+	})
+
+	deps.State.Subscribe("footer.contextTokens", func(key string, oldValue, newValue interface{}) {
+		if tokens, ok := newValue.(int); ok {
+			fc.lastContextTokens = tokens
+			fc.SetNeedsRedraw(true)
+		}
+	})
+
+	deps.State.Subscribe("footer.maxContextTokens", func(key string, oldValue, newValue interface{}) {
+		if tokens, ok := newValue.(int); ok {
+			fc.maxContextTokens = tokens
+			fc.SetNeedsRedraw(true)
+		}
+	})
+
 	// Subscribe to terminal resize events
 	deps.Events.Subscribe("terminal.resized", func(event console.Event) error {
 		// Update footer position
@@ -128,9 +152,6 @@ func (fc *FooterComponent) Render() error {
 	// Move to stats line
 	fc.Terminal().MoveCursor(region.X+1, region.Y+2)
 
-	// Format stats
-	sessionDuration := fc.formatDuration(time.Since(fc.sessionStart))
-
 	// Format cost with appropriate precision
 	var costStr string
 	if fc.lastCost >= 1.0 {
@@ -143,13 +164,30 @@ func (fc *FooterComponent) Render() error {
 		costStr = "$0.000"
 	}
 
+	// Format context usage
+	contextStr := ""
+	if fc.maxContextTokens > 0 {
+		contextPercent := float64(fc.lastContextTokens) / float64(fc.maxContextTokens) * 100
+		contextStr = fmt.Sprintf(" | Context: %s/%s (%.0f%%)",
+			fc.formatTokens(fc.lastContextTokens),
+			fc.formatTokens(fc.maxContextTokens),
+			contextPercent)
+	}
+
+	// Format iteration
+	iterStr := ""
+	if fc.lastIteration > 0 {
+		iterStr = fmt.Sprintf(" | Iter: %d", fc.lastIteration)
+	}
+
 	statsLine := fmt.Sprintf(
-		" %s (%s) | %s tokens | %s | %s",
+		" %s (%s) | %s tokens | %s%s%s",
 		fc.extractModelName(fc.lastModel),
 		fc.lastProvider,
 		fc.formatTokens(fc.lastTokens),
 		costStr,
-		sessionDuration,
+		contextStr,
+		iterStr,
 	)
 
 	// Truncate if too long
@@ -171,11 +209,14 @@ func (fc *FooterComponent) Render() error {
 }
 
 // UpdateStats updates the footer statistics
-func (fc *FooterComponent) UpdateStats(model, provider string, tokens int, cost float64) {
+func (fc *FooterComponent) UpdateStats(model, provider string, tokens int, cost float64, iteration, contextTokens, maxContextTokens int) {
 	fc.State().Set("footer.model", model)
 	fc.State().Set("footer.provider", provider)
 	fc.State().Set("footer.tokens", tokens)
 	fc.State().Set("footer.cost", cost)
+	fc.State().Set("footer.iteration", iteration)
+	fc.State().Set("footer.contextTokens", contextTokens)
+	fc.State().Set("footer.maxContextTokens", maxContextTokens)
 }
 
 // SetOutputMutex sets the output mutex for synchronized output
@@ -209,14 +250,14 @@ func (fc *FooterComponent) extractModelName(fullModel string) string {
 	parts := strings.Split(fullModel, "/")
 	if len(parts) >= 2 {
 		modelName := parts[len(parts)-1]
-		
+
 		// Smart truncation for common model patterns
 		if len(modelName) > 20 {
 			// First check if it's a free model - preserve ":free" suffix
 			if strings.HasSuffix(modelName, ":free") {
 				// Remove ":free" temporarily for processing
 				baseName := strings.TrimSuffix(modelName, ":free")
-				
+
 				// Apply pattern-specific truncation to base name
 				var truncatedBase string
 				if strings.Contains(baseName, "Qwen") && strings.Contains(baseName, "Coder") {
@@ -241,10 +282,10 @@ func (fc *FooterComponent) extractModelName(fullModel string) string {
 						truncatedBase = baseName
 					}
 				}
-				
+
 				return truncatedBase + ":free"
 			}
-			
+
 			// Non-free model patterns
 			if strings.Contains(modelName, "Qwen") && strings.Contains(modelName, "Coder") {
 				// Extract: Qwen3-Coder-480B
@@ -256,12 +297,12 @@ func (fc *FooterComponent) extractModelName(fullModel string) string {
 				if parts := strings.Split(modelName, ":"); len(parts) > 1 {
 					base := parts[0]
 					if len(base) > 15 {
-						return base[:15] + "..." 
+						return base[:15] + "..."
 					}
 					return base
 				}
 			}
-			
+
 			// Generic fallback: keep first 17 chars
 			return modelName[:17] + "..."
 		}

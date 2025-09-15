@@ -63,6 +63,7 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 - **Change Tracking**: Keeps a local history of all changes made.
 - **Git Integration**: Can automatically commit changes to Git with AI-generated conventional commit messages.
 - **Automated Code Review**: When running in automated mode (`--skip-prompt`), performs LLM-based code reviews of changes before committing.
+- **GitHub Action Integration**: Automatically solve GitHub issues by commenting `/ledit` - the action analyzes issues, creates branches, generates implementations, and opens pull requests.
 
 ## Installation
 
@@ -70,7 +71,7 @@ To get started with `ledit`, the preferred method is to install it via `go insta
 
 ### Prerequisites
 
-- Go 1.20+
+- Go 1.24+
 - Git (for version control integration)
 
 ### From Source (Preferred Method)
@@ -339,6 +340,50 @@ Config in `~/.ledit/mcp_config.json`. Env vars: `LEDIT_MCP_ENABLED=true`.
 Use in agent: `ledit agent "Create GitHub issue for auth bug"`.
 
 Full details in the [MCP section](#mcp-server-integration) (abridged here for brevity).
+
+## GitHub Action: Automated Issue Solving
+
+`ledit` includes a GitHub Action that automatically implements features and fixes based on issue descriptions. Simply comment `/ledit` on any issue to trigger AI-powered code generation.
+
+### Quick Setup
+
+1. Copy the workflow to your repository:
+
+```bash
+# Create the workflow directory
+mkdir -p .github/workflows
+
+# Copy the example workflow
+cp .github/workflows/ledit-solver-example.yml .github/workflows/ledit-solver.yml
+```
+
+2. Add your API key as a repository secret (Settings → Secrets → New repository secret)
+
+3. Comment `/ledit` on any issue to start
+
+### Features
+
+- **Automatic Implementation**: Analyzes issues and generates complete implementations
+- **Iterative Development**: Comment `/ledit <additional instructions>` for changes
+- **Image Support**: Processes mockups and screenshots attached to issues
+- **Multi-Provider Support**: Works with OpenAI, Groq, Gemini, and more
+- **Safe PR Workflow**: All changes go through pull requests for review
+
+### Example
+
+```markdown
+**Issue**: Add dark mode toggle to settings
+
+**Comment**: /ledit implement using Tailwind CSS
+```
+
+The action will:
+1. Create branch `issue/123`
+2. Implement the feature
+3. Open a PR with the changes
+4. Report progress to the issue
+
+See [.github/actions/ledit-issue-solver/README.md](.github/actions/ledit-issue-solver/README.md) for full documentation.
 
 ## Documentation
 

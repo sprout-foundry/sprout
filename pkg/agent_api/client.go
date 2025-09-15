@@ -15,12 +15,12 @@ import (
 const (
 	DeepInfraURL = "https://api.deepinfra.com/v1/openai/chat/completions"
 	DefaultModel = "deepseek-ai/DeepSeek-V3.1"
-	
+
 	// Model types for different use cases
-	AgentModel = "deepseek-ai/DeepSeek-V3.1" // Primary agent model
+	AgentModel = "deepseek-ai/DeepSeek-V3.1"                 // Primary agent model
 	CoderModel = "qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo" // Coding-specific model
-	FastModel  = "deepseek/deepseek-chat-v3.1:free" // Fast, free model for commits and simple tasks
-	
+	FastModel  = "google/gemini-2.5-flash"                   // Fast, model for commits and simple tasks (DeepInfra default)
+
 	// Local models (all use the same model for local inference)
 	LocalModel = "gpt-oss:20b"
 )
@@ -71,12 +71,12 @@ type ChatResponse struct {
 	Model   string   `json:"model"`
 	Choices []Choice `json:"choices"`
 	Usage   struct {
-		PromptTokens     int     `json:"prompt_tokens"`
-		CompletionTokens int     `json:"completion_tokens"`
-		TotalTokens      int     `json:"total_tokens"`
-		EstimatedCost    float64 `json:"estimated_cost"`
+		PromptTokens        int     `json:"prompt_tokens"`
+		CompletionTokens    int     `json:"completion_tokens"`
+		TotalTokens         int     `json:"total_tokens"`
+		EstimatedCost       float64 `json:"estimated_cost"`
 		PromptTokensDetails struct {
-			CachedTokens     int `json:"cached_tokens"`
+			CachedTokens     int  `json:"cached_tokens"`
 			CacheWriteTokens *int `json:"cache_write_tokens"`
 		} `json:"prompt_tokens_details,omitempty"`
 	} `json:"usage"`
@@ -134,7 +134,7 @@ func NewClientWithModel(model string) (*Client, error) {
 
 func (c *Client) SendChatRequest(req ChatRequest) (*ChatResponse, error) {
 	var finalReq ChatRequest
-	
+
 	// Use harmony format only for GPT-OSS models
 	if IsGPTOSSModel(req.Model) {
 		// Convert to ENHANCED harmony format
@@ -144,7 +144,7 @@ func (c *Client) SendChatRequest(req ChatRequest) (*ChatResponse, error) {
 		} else {
 			formatter = NewHarmonyFormatter()
 		}
-		
+
 		// Configure harmony options based on request
 		opts := &HarmonyOptions{
 			ReasoningLevel: req.Reasoning,
@@ -153,7 +153,7 @@ func (c *Client) SendChatRequest(req ChatRequest) (*ChatResponse, error) {
 		if opts.ReasoningLevel == "" {
 			opts.ReasoningLevel = "medium" // Reduced from "high" to "medium"
 		}
-		
+
 		harmonyText := formatter.FormatMessagesForCompletion(req.Messages, req.Tools, opts)
 
 		// Create a single message with harmony-formatted text
@@ -401,7 +401,7 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
-				Name:        "update_todo_status", 
+				Name:        "update_todo_status",
 				Description: "Update todo status with CLEAR RULES: 'in_progress' = mark IMMEDIATELY when starting work on a todo, 'completed' = mark IMMEDIATELY after finishing successfully, 'cancelled' = no longer needed, 'pending' = not yet started. CRITICAL: Always update status to track progress and maintain context.",
 				Parameters: map[string]interface{}{
 					"type": "object",

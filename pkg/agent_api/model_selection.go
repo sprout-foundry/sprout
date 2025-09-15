@@ -119,9 +119,9 @@ func (ms *ModelSelection) getFallbackModel(taskType string) string {
 		// Prefer fast, capable models for editing
 		switch clientType {
 		case OpenRouterClientType:
-			return "deepseek/deepseek-chat-v3.1:free"
+			return "openai/gpt-oss-20b"
 		case DeepInfraClientType:
-			return "google/gemini-2.5-flash"
+			return "openai/gpt-oss-20b"
 		case OllamaClientType:
 			return "gpt-oss:20b"
 		default:

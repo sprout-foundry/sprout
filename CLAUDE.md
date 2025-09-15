@@ -87,7 +87,6 @@ The CLI supports several modes of operation:
 - **`ledit code`**: Direct code generation and editing
 - **`ledit agent`**: Intent-driven autonomous operations with task breakdown
   - Interactive mode: Uses simple console input by default
-  - Use `--tui` flag for experimental TUI mode
 - **`ledit process`**: Multi-step orchestration for complex features
 - **`ledit question`**: Interactive Q&A about the workspace
 - **`ledit fix`**: Error-driven code fixing with validation loops

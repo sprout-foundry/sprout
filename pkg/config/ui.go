@@ -3,8 +3,8 @@ package config
 // UIConfig contains all User Interface and logging related configuration
 type UIConfig struct {
 	// Output and Display
-	JsonLogs       bool `json:"json_logs"`       // Output logs in JSON format
-	HealthChecks   bool `json:"health_checks"`   // Enable health check displays
+	JsonLogs     bool `json:"json_logs"`     // Output logs in JSON format
+	HealthChecks bool `json:"health_checks"` // Enable health check displays
 
 	// Telemetry
 	TelemetryEnabled bool   `json:"telemetry_enabled"` // Enable telemetry collection

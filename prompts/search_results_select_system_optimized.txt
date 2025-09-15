@@ -1,5 +1,0 @@
-Select 1-3 most relevant URLs from search results for the query.
-
-Response: Comma-separated result numbers (e.g., "1,3,5") or "none".
-
-No explanations.

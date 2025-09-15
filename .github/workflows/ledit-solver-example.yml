@@ -1,0 +1,69 @@
+# Example workflow for using the Ledit Issue Solver action
+# Copy this file to your repository's .github/workflows/ directory
+
+name: Ledit Issue Solver
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  solve-issue:
+    # Only run when someone comments /ledit on an issue
+    if: |
+      github.event.issue.pull_request == null && 
+      contains(github.event.comment.body, '/ledit')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Run Ledit Issue Solver
+        uses: ./.github/actions/ledit-issue-solver@v1
+        with:
+          # Required: Choose your AI provider
+          provider: 'openai'  # Options: openai, openrouter, groq, gemini, deepinfra, ollama
+          
+          # Required: Specify the model to use
+          model: 'gpt-4'  # Use any model supported by your provider
+          
+          # Required: GitHub token for API access
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Required: API key for your chosen provider
+          # Add this as a repository secret: Settings -> Secrets -> New repository secret
+          api-key: ${{ secrets.OPENAI_API_KEY }}
+          
+          # Optional: Customize behavior
+          timeout-minutes: 20              # Max time for ledit to run
+          branch-prefix: 'issue'          # Branch naming convention
+          ledit-version: 'latest'         # Specific ledit version
+          max-cost: '2.00'                # Cost limit in USD
+          
+          # Optional: Add project-specific context
+          additional-context: |
+            Please follow the coding standards in our CONTRIBUTING.md file.
+            Use TypeScript for all new code.
+            Ensure all tests pass before creating the PR.
+
+  # Optional: Run tests on the generated PR
+  test-pr:
+    needs: solve-issue
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - run: npm test

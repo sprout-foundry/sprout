@@ -29,73 +29,13 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 
 	a.currentIteration = 0
 
-	// Dynamic iteration approach - natural termination for complex tasks, safety limits for simple questions
-	var maxIterationsForThisQuery int
-	var isSimpleQuestion bool
+	// Set a reasonable iteration limit to prevent infinite loops
+	// The agent should complete tasks naturally, but we need a safety limit
+	maxIterationsForThisQuery := 100
 
-	// Check if query is a simple question that needs safety limits
-	queryLower := strings.ToLower(processedQuery)
-	if strings.Contains(queryLower, "what") || strings.Contains(queryLower, "how") ||
-		strings.Contains(queryLower, "where") || strings.Contains(queryLower, "explain") ||
-		strings.Contains(queryLower, "show me") || strings.Contains(processedQuery, "?") {
-		maxIterationsForThisQuery = 25 // Safety limit for simple questions
-		isSimpleQuestion = true
-		a.debugLog("❓ Simple question detected - safety limit: %d iterations\n", maxIterationsForThisQuery)
-	} else {
-		maxIterationsForThisQuery = 1000 // Effectively unlimited for complex work
-		isSimpleQuestion = false
-		a.debugLog("🎯 Complex task detected - natural termination (up to %d iterations)\n", maxIterationsForThisQuery)
-	}
-
-	// Initialize with system prompt (enhanced with iteration context) and processed user query
-	contextualSystemPrompt := a.systemPrompt
-
-	// Add specific guidance based on query type
-	if isSimpleQuestion {
-		// Simple question - emphasize immediate answering with safety limit
-		contextualSystemPrompt += fmt.Sprintf(`
-
-## SIMPLE QUESTION MODE - ANSWER EFFICIENTLY (safety limit: %d iterations)
-🎯 **PRIMARY GOAL**: Answer the question as efficiently as possible
-
-**CRITICAL RULES:**
-1. **ANSWER IMMEDIATELY** when you find relevant information - do NOT continue exploring
-2. **STOP AFTER 2-3 iterations** if you have enough to answer the question
-3. **PREFER QUICK ANSWERS** over exhaustive research
-4. **ONE BATCH READ** after discovery - then answer with what you found
-
-**Process:**
-- Use targeted search (grep/find) to locate relevant files
-- Read 1-3 most relevant files in ONE batch
-- **ANSWER THE QUESTION** immediately with the information found
-- Do NOT read additional files unless the answer is incomplete
-
-Current status: Starting iteration 1`, maxIterationsForThisQuery)
-	} else {
-		// Complex work - natural termination approach
-		contextualSystemPrompt += `
-
-## COMPLEX TASK MODE - NATURAL TERMINATION
-🎯 **PRIMARY GOAL**: Complete the task thoroughly and correctly
-
-**APPROACH:**
-- Work systematically through the task until genuinely complete
-- Use structured approach with todo tools for complex multi-step work
-- Continue iterating until the task is properly finished
-- **NATURAL COMPLETION**: Stop when no more tools are needed and task is done
-
-**TERMINATION CRITERIA:**
-- All requirements have been met and verified
-- Code compiles/runs successfully (if applicable)
-- Tests pass (if applicable)
-- No remaining errors or issues to address
-- Task is genuinely complete, not just partially done
-
-Current status: Starting iteration 1 (natural termination)`
-	}
-
+	// Initialize with system prompt and processed user query
 	a.messages = []api.Message{
-		{Role: "system", Content: contextualSystemPrompt},
+		{Role: "system", Content: a.systemPrompt},
 		{Role: "user", Content: processedQuery},
 	}
 
@@ -302,26 +242,10 @@ Current status: Starting iteration 1 (natural termination)`
 				}
 			}
 
-			// Check if we're using structured workflow tools - if so, remove iteration limits
-			// Todo tools indicate the LLM is making progress through a task systematically
-			for _, toolCall := range choice.Message.ToolCalls {
-				if toolCall.Function.Name == "add_todos" ||
-					toolCall.Function.Name == "update_todo_status" ||
-					toolCall.Function.Name == "list_todos" {
-					if maxIterationsForThisQuery < 1000 {
-						maxIterationsForThisQuery = 1000 // Effectively unlimited
-						isSimpleQuestion = false         // Treat as complex task - todo usage shows productive work
-						a.debugLog("📋 Todo workflow detected - removing iteration limits (up to %d iterations)\n", maxIterationsForThisQuery)
-					}
-				}
-			}
-
-			// Add tool results to conversation with iteration context
-			iterationStatus := fmt.Sprintf("\n\n**ITERATION STATUS: %d of %d complete**", a.currentIteration, maxIterationsForThisQuery)
-			toolResultsWithContext := strings.Join(toolResults, "\n\n") + iterationStatus
+			// Add tool results to conversation
 			a.messages = append(a.messages, api.Message{
 				Role:    "user",
-				Content: toolResultsWithContext,
+				Content: strings.Join(toolResults, "\n\n"),
 			})
 
 			continue
@@ -334,10 +258,11 @@ Current status: Starting iteration 1 (natural termination)`
 			}
 
 			if len(toolCalls) > 0 {
-				a.debugLog("Found malformed tool calls in content, executing them and providing feedback\n")
+				a.debugLog("⚠️  Found %d malformed tool calls in content - executing them for compatibility\n", len(toolCalls))
 
 				toolResults := make([]string, 0)
 				for _, toolCall := range toolCalls {
+					a.debugLog("  - Executing malformed tool call: %s\n", toolCall.Function.Name)
 					result, err := a.executeTool(toolCall)
 					if err != nil {
 						result = fmt.Sprintf("Error executing tool %s: %s", toolCall.Function.Name, err.Error())
@@ -345,16 +270,10 @@ Current status: Starting iteration 1 (natural termination)`
 					toolResults = append(toolResults, fmt.Sprintf("Tool call result for %s: %s", toolCall.Function.Name, result))
 				}
 
-				// Add tool results and feedback about proper tool calling to conversation
-				feedbackMessage := fmt.Sprintf(`%s
-
-⚠️ IMPORTANT: I detected and executed tool calls from your text response, but you should use proper tool calling format instead of outputting tool calls as text. 
-
-Please use the structured tool calling format for all future tool calls, not text output. Continue with your task using proper tool calls.`, strings.Join(toolResults, "\n\n"))
-
+				// Add tool results to conversation without feedback
 				a.messages = append(a.messages, api.Message{
 					Role:    "user",
-					Content: feedbackMessage,
+					Content: strings.Join(toolResults, "\n\n"),
 				})
 
 				continue
@@ -362,20 +281,12 @@ Please use the structured tool calling format for all future tool calls, not tex
 
 			// Check if this looks like attempted tool calls that we couldn't parse
 			if a.containsAttemptedToolCalls(choice.Message.Content) || a.containsAttemptedToolCalls(choice.Message.ReasoningContent) {
-				a.debugLog("Detected attempted but unparseable tool calls, requesting retry with correct syntax\n")
+				a.debugLog("⚠️  Detected attempted but unparseable tool calls - asking for retry\n")
 
-				retryMessage := `⚠️ I detected what appears to be attempted tool calls in your response, but I couldn't parse them properly. 
-
-Please retry using the correct tool calling format:
-- Use proper structured tool calls, not JSON in text
-- Each tool call should use the function calling interface
-- Do not output tool calls as text or in code blocks
-
-Please continue with your task using the correct tool calling syntax.`
-
+				// Simple retry message without lecturing
 				a.messages = append(a.messages, api.Message{
 					Role:    "user",
-					Content: retryMessage,
+					Content: "I couldn't parse your tool calls. Please retry using the correct tool calling format.",
 				})
 
 				continue
@@ -435,11 +346,7 @@ Please continue with your task using the correct tool calling syntax.`
 		a.debugLog("Warning: Failed to commit tracked changes: %v\n", commitErr)
 	}
 
-	if isSimpleQuestion {
-		return "", fmt.Errorf("safety limit (%d iterations) reached for simple question - task may need more specific requirements or the question may be too broad", maxIterationsForThisQuery)
-	} else {
-		return "", fmt.Errorf("iteration limit (%d) reached - task may be incomplete or need manual intervention to continue", maxIterationsForThisQuery)
-	}
+	return "", fmt.Errorf("iteration limit (%d) reached - task may be incomplete", maxIterationsForThisQuery)
 }
 
 // ProcessQueryWithContinuity processes a query with continuity from previous actions
@@ -490,119 +397,30 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 		return true
 	}
 
-	contentLower := strings.ToLower(content)
 	originalContent := content // Keep original for case-sensitive checks
 
-	// Check for intent-to-continue phrases that indicate the model wants to keep working
-	intentToContinuePatterns := []string{
-		"let me",
-		"i'll",
-		"i will",
-		"now i",
-		"next, i",
-		"first, i",
-		"i need to",
-		"i should",
-		"i'm going to",
-		"going to",
-		"will now",
-		"let's",
-		"now let's",
-		"i can",
-		"i'd like to",
-		"i want to",
-		"time to",
-		"ready to",
-		"about to",
-		"need to",
-		"should now",
-	}
+	// REMOVED: Overly aggressive intent-to-continue patterns that were causing infinite loops
+	// Only check for very specific incomplete indicators
 
-	for _, pattern := range intentToContinuePatterns {
-		if strings.Contains(contentLower, pattern) {
-			a.debugLog("Detected intent-to-continue phrase: '%s'\n", pattern)
-			return true
-		}
-	}
-
-	// Check for trailing colons or incomplete sentences that suggest continuation
+	// Only check for very clear indicators of incomplete responses
 	trimmedContent := strings.TrimSpace(originalContent)
-	if strings.HasSuffix(trimmedContent, ":") || strings.HasSuffix(trimmedContent, "...") {
-		a.debugLog("Detected trailing continuation punctuation\n")
+
+	// Check if response ends with ":" followed by nothing (expecting a list or code)
+	if strings.HasSuffix(trimmedContent, ":") && !strings.Contains(trimmedContent, "\n") {
+		a.debugLog("Detected trailing colon without content\n")
 		return true
 	}
 
-	// Check for sentences that end with action words suggesting more to come
-	actionEndingPatterns := []string{
-		"file:",
-		"files:",
-		"code:",
-		"function:",
-		"method:",
-		"class:",
-		"component:",
-		"module:",
-		"directory:",
-		"folder:",
-		"implementation:",
-		"changes:",
-		"updates:",
-		"modifications:",
+	// Check if the response is cut off mid-sentence (ends with comma or no punctuation)
+	lastChar := ""
+	if len(trimmedContent) > 0 {
+		lastChar = string(trimmedContent[len(trimmedContent)-1])
 	}
 
-	for _, pattern := range actionEndingPatterns {
-		if strings.HasSuffix(contentLower, pattern) {
-			a.debugLog("Detected action-ending pattern: '%s'\n", pattern)
-			return true
-		}
-	}
-
-	// Common patterns that indicate the agent is giving up too early
-	declinePatterns := []string{
-		"i'm not able to",
-		"i cannot",
-		"i can't",
-		"not possible to",
-		"unable to",
-		"can only work with",
-		"cannot modify",
-		"cannot add",
-		"cannot create",
-	}
-
-	// If it's a short response with decline language, it's likely incomplete
-	if len(content) < 200 {
-		for _, pattern := range declinePatterns {
-			if strings.Contains(contentLower, pattern) {
-				return true
-			}
-		}
-	}
-
-	// If there's no evidence of tool usage or exploration, likely incomplete
-	toolEvidencePatterns := []string{
-		"ls",
-		"read",
-		"write",
-		"edit",
-		"shell",
-		"file",
-		"directory",
-		"explore",
-		"implement",
-		"create",
-	}
-
-	hasToolEvidence := false
-	for _, pattern := range toolEvidencePatterns {
-		if strings.Contains(contentLower, pattern) {
-			hasToolEvidence = true
-			break
-		}
-	}
-
-	// Short response without tool evidence suggests giving up early
-	if len(content) < 300 && !hasToolEvidence {
+	// Only consider it incomplete if it ends with a comma or has no ending punctuation at all
+	// and is very short (less than 50 chars)
+	if len(trimmedContent) < 50 && (lastChar == "," || (!strings.ContainsAny(lastChar, ".!?\"'`"))) {
+		a.debugLog("Detected very short response with no ending punctuation\n")
 		return true
 	}
 

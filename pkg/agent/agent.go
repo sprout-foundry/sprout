@@ -54,6 +54,9 @@ type Agent struct {
 
 	// Output synchronization
 	outputMutex *sync.Mutex
+
+	// False stop detection
+	falseStopDetectionEnabled bool
 }
 
 func NewAgent() (*Agent, error) {
@@ -130,21 +133,22 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	optimizationEnabled := true
 
 	agent := &Agent{
-		client:               client,
-		messages:             []api.Message{},
-		systemPrompt:         systemPrompt,
-		maxIterations:        100,
-		totalCost:            0.0,
-		clientType:           clientType,
-		debug:                debug,
-		optimizer:            NewConversationOptimizer(optimizationEnabled, debug),
-		configManager:        configManager,
-		shellCommandHistory:  make(map[string]*ShellCommandResult),
-		interruptRequested:   false,
-		interruptMessage:     "",
-		escPressed:           make(chan bool, 1),
-		interruptChan:        nil,
-		escMonitoringEnabled: false, // Start disabled
+		client:                    client,
+		messages:                  []api.Message{},
+		systemPrompt:              systemPrompt,
+		maxIterations:             100,
+		totalCost:                 0.0,
+		clientType:                clientType,
+		debug:                     debug,
+		optimizer:                 NewConversationOptimizer(optimizationEnabled, debug),
+		configManager:             configManager,
+		shellCommandHistory:       make(map[string]*ShellCommandResult),
+		interruptRequested:        false,
+		interruptMessage:          "",
+		escPressed:                make(chan bool, 1),
+		interruptChan:             nil,
+		escMonitoringEnabled:      false, // Start disabled
+		falseStopDetectionEnabled: true,  // Enable by default
 	}
 
 	// NOTE: Esc key monitoring removed - was interfering with Ctrl+C and terminal control
@@ -273,6 +277,18 @@ func (a *Agent) GetCurrentContextTokens() int {
 
 func (a *Agent) GetMaxContextTokens() int {
 	return a.maxContextTokens
+}
+
+// SetFalseStopDetection enables or disables false stop detection
+func (a *Agent) SetFalseStopDetection(enabled bool) {
+	a.falseStopDetectionEnabled = enabled
+	if a.debug {
+		if enabled {
+			a.debugLog("🔍 False stop detection enabled\n")
+		} else {
+			a.debugLog("🔍 False stop detection disabled\n")
+		}
+	}
 }
 
 // SetStatsUpdateCallback sets a callback for real-time stats updates

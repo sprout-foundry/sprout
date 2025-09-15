@@ -1,7 +1,0 @@
-Precise text replacement tool. Replace old text with new text exactly.
-
-Replace: {old_text}
-With: {new_text}  
-In: {text}
-
-Return: Modified content only - no explanations.

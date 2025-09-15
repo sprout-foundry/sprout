@@ -1,7 +1,0 @@
-Analyze shell script for security risks via static analysis.
-
-Response:
-- "not risky" if safe
-- List specific risks if dangerous
-
-Do not execute. Static analysis only.

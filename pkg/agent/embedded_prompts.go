@@ -1,76 +1,47 @@
 package agent
 
 import (
-	"embed"
-	"fmt"
+	_ "embed"
 	"strings"
 )
 
-//go:embed prompts/*.md
-var promptsFS embed.FS
+//go:embed prompts/system_prompt.md
+var systemPromptContent string
 
-// getEmbeddedSystemPrompt loads the system prompt from embedded markdown files
+// getEmbeddedSystemPrompt returns the embedded system prompt
 func getEmbeddedSystemPrompt() string {
-	// Read the v3_optimized prompt (current default)
-	content, err := promptsFS.ReadFile("prompts/v3_optimized.md")
-	if err != nil {
-		// Fallback to hardcoded prompt if embedding fails
-		return getFallbackSystemPrompt()
-	}
-	
-	// Extract the prompt content from the markdown file
-	promptContent := extractPromptFromMarkdown(string(content))
-	if promptContent == "" {
-		return getFallbackSystemPrompt()
-	}
-	
+	// Extract the prompt content from the markdown
+	promptContent := extractSystemPrompt()
+
 	// Add project context if available
 	projectContext := getProjectContext()
 	if projectContext != "" {
 		return promptContent + "\n\n" + projectContext
 	}
-	
+
 	return promptContent
 }
 
-// extractPromptFromMarkdown extracts the prompt content from markdown files
-func extractPromptFromMarkdown(markdown string) string {
-	// Look for the code block containing the prompt
-	lines := strings.Split(markdown, "\n")
-	var inCodeBlock bool
-	var promptLines []string
-	
-	for _, line := range lines {
-		if strings.Contains(line, "```") {
-			if inCodeBlock {
-				break // End of code block
-			}
-			inCodeBlock = true
-			continue
-		}
-		
-		if inCodeBlock {
-			promptLines = append(promptLines, line)
-		}
+// extractSystemPrompt extracts the prompt content from the system_prompt markdown
+func extractSystemPrompt() string {
+	// The system_prompt.md has the prompt content in a code block
+	// We'll extract everything between the ``` markers
+	const promptStart = "You are an efficient software engineering agent."
+
+	startIdx := strings.Index(systemPromptContent, promptStart)
+	if startIdx == -1 {
+		// Fallback to the embedded content if we can't find the start
+		return getFallbackSystemPrompt()
 	}
-	
-	if len(promptLines) == 0 {
-		// If no code block found, try to extract content after "Enhanced System Prompt"
-		for i, line := range lines {
-			if strings.Contains(line, "Enhanced System Prompt") || strings.Contains(line, "System Prompt:") {
-				// Take the next lines until empty line or section end
-				for j := i + 1; j < len(lines); j++ {
-					if strings.TrimSpace(lines[j]) == "" || strings.HasPrefix(lines[j], "#") {
-						break
-					}
-					promptLines = append(promptLines, lines[j])
-				}
-				break
-			}
-		}
+
+	// Find the end of the code block (closing ```)
+	endIdx := strings.Index(systemPromptContent[startIdx:], "```")
+	if endIdx == -1 {
+		// If no closing marker, use the whole content from start
+		return strings.TrimSpace(systemPromptContent[startIdx:])
 	}
-	
-	return strings.Join(promptLines, "\n")
+
+	return strings.TrimSpace(systemPromptContent[startIdx : startIdx+endIdx])
 }
 
 // getFallbackSystemPrompt provides a fallback prompt if embedded prompts fail
@@ -201,31 +172,4 @@ If tool execution fails:
 3. Verify file paths exist
 4. Try alternative approaches
 5. Use systematic debugging`
-}
-
-// GetAvailablePrompts returns a list of available embedded prompts
-func GetAvailablePrompts() ([]string, error) {
-	entries, err := promptsFS.ReadDir("prompts")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read prompts directory: %w", err)
-	}
-	
-	var prompts []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
-			prompts = append(prompts, strings.TrimSuffix(entry.Name(), ".md"))
-		}
-	}
-	
-	return prompts, nil
-}
-
-// GetPromptContent returns the content of a specific prompt
-func GetPromptContent(promptName string) (string, error) {
-	content, err := promptsFS.ReadFile("prompts/" + promptName + ".md")
-	if err != nil {
-		return "", fmt.Errorf("failed to read prompt %s: %w", promptName, err)
-	}
-	
-	return extractPromptFromMarkdown(string(content)), nil
 }

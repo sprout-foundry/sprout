@@ -266,11 +266,16 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 			}
 
 			if len(toolCalls) > 0 {
-				a.debugLog("⚠️  Found %d malformed tool calls in content - executing them for compatibility\n", len(toolCalls))
+				// Check if these are XML-style tool calls
+				if strings.Contains(choice.Message.Content, "<function=") || strings.Contains(choice.Message.ReasoningContent, "<function=") {
+					a.debugLog("🔧 Found %d XML-style tool calls - executing them for compatibility\n", len(toolCalls))
+				} else {
+					a.debugLog("⚠️  Found %d malformed tool calls in content - executing them for compatibility\n", len(toolCalls))
+				}
 
 				toolResults := make([]string, 0)
 				for _, toolCall := range toolCalls {
-					a.debugLog("  - Executing malformed tool call: %s\n", toolCall.Function.Name)
+					a.debugLog("  - Executing tool call: %s\n", toolCall.Function.Name)
 					result, err := a.executeTool(toolCall)
 					if err != nil {
 						result = fmt.Sprintf("Error executing tool %s: %s", toolCall.Function.Name, err.Error())
@@ -332,6 +337,19 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 					Content: "The previous response appears incomplete. Please continue with the task and use available tools to fully complete the work.",
 				})
 				continue
+			}
+
+			// Check for potential false stops before returning
+			if a.shouldCheckFalseStop(choice.Message.Content) {
+				if isFalseStop, confidence := a.checkFalseStop(choice.Message.Content); isFalseStop {
+					a.debugLog("🔄 Detected possible false stop (confidence: %.2f), continuing...\n", confidence)
+					// Add a gentle continuation prompt
+					a.messages = append(a.messages, api.Message{
+						Role:    "user",
+						Content: "Please continue with your analysis.",
+					})
+					continue
+				}
 			}
 
 			// No tool calls and response seems complete - we're done
@@ -500,6 +518,9 @@ func (a *Agent) containsAttemptedToolCalls(content string) bool {
 		`edit_file`,
 		`{"id"`,
 		`"call_`,
+		`<function=`,  // XML-style function calls
+		`<parameter=`, // XML-style parameters
+		`</function>`, // XML-style closing tag
 	}
 
 	contentLower := strings.ToLower(content)

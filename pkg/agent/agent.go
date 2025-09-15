@@ -512,6 +512,9 @@ func (a *Agent) initializeMCP() error {
 // getMCPTools retrieves all available MCP tools and converts them to agent tool format
 func (a *Agent) getMCPTools() []api.Tool {
 	if a.mcpManager == nil {
+		if a.debug {
+			fmt.Printf("⚠️  Warning: MCP manager is nil\n")
+		}
 		return nil
 	}
 
@@ -522,6 +525,10 @@ func (a *Agent) getMCPTools() []api.Tool {
 			fmt.Printf("⚠️  Warning: Failed to get MCP tools: %v\n", err)
 		}
 		return nil
+	}
+
+	if a.debug {
+		fmt.Printf("🔧 Found %d MCP tools from manager\n", len(mcpTools))
 	}
 
 	var agentTools []api.Tool
@@ -536,6 +543,10 @@ func (a *Agent) getMCPTools() []api.Tool {
 			Function: agentTool.Function,
 		}
 		agentTools = append(agentTools, apiTool)
+
+		if a.debug {
+			fmt.Printf("  - Added MCP tool: %s\n", agentTool.Function.Name)
+		}
 	}
 
 	return agentTools

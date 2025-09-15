@@ -333,7 +333,13 @@ func (ac *AgentConsole) handleCommand(input string) error {
 		ac.cleanup()
 		os.Exit(0)
 	case "clear":
+		// Clear screen
 		fmt.Print("\033[2J\033[H")
+		// Clear conversation history
+		if ac.agent != nil {
+			ac.agent.ClearConversationHistory()
+			fmt.Println("🧹 Screen and conversation history cleared")
+		}
 		return nil
 	case "history":
 		history := ac.input.GetHistory()
@@ -459,7 +465,7 @@ func (ac *AgentConsole) showHelp() {
 Available Commands:
   /help, /?      - Show this help message
   /quit, /exit   - Exit the program
-  /clear         - Clear the screen
+  /clear         - Clear screen and conversation history
   /history       - Show command history
   /stats         - Show session statistics
   /stop          - Stop current agent processing (during execution)
@@ -474,6 +480,8 @@ Agent Commands:`)
 
 	fmt.Println(`
 Tips:
+• Conversations continue between prompts - context is preserved
+• Use /clear to start a fresh conversation
 • Common shell commands (ls, pwd, etc.) are executed directly
 • Short inputs (1-2 chars) will prompt for confirmation
 • Use /model to change the AI model

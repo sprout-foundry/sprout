@@ -751,10 +751,19 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	// Get base tools
 	allTools := api.GetToolDefinitions()
 
+	if a.debug {
+		fmt.Printf("🔧 Base tools count: %d\n", len(allTools))
+	}
+
 	// Add MCP tools if available
 	if a.mcpManager != nil {
 		mcpTools := a.getMCPTools()
 		allTools = append(allTools, mcpTools...)
+		if a.debug {
+			fmt.Printf("🔧 Total tools after adding MCP: %d\n", len(allTools))
+		}
+	} else if a.debug {
+		fmt.Printf("⚠️  MCP manager is nil in getOptimizedToolDefinitions\n")
 	}
 
 	if len(messages) == 0 {

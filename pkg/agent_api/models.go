@@ -556,8 +556,8 @@ func isModelAvailable(client *http.Client, apiKey, modelID string) bool {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("HTTP-Referer", "https://github.com/alantheprice/coder")
-	req.Header.Set("X-Title", "Coder AI Assistant")
+	req.Header.Set("HTTP-Referer", "https://github.com/alantheprice/ledit")
+	req.Header.Set("X-Title", "Ledit Coding Assistant")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -805,7 +805,7 @@ func ClearModelCaches() {
 	deepInfraModelsInitialized = false
 	openaiModelsCache = nil
 	deepInfraModelsCache = nil
-	
+
 	// Also clear provider caches by calling ClearProviderCaches
 	// This ensures that the new provider system caches are also cleared
 	ClearProviderCaches()
@@ -815,11 +815,11 @@ func ClearModelCaches() {
 func ClearProviderCaches() {
 	// Clear caches for all provider types by creating new instances
 	// This forces them to re-fetch their models on next call
-	
-	// Note: We can't directly access existing provider instances since they're 
+
+	// Note: We can't directly access existing provider instances since they're
 	// created fresh each time, but we can clear any global caches if they exist
-	
-	// The provider instances themselves are created fresh each time in 
+
+	// The provider instances themselves are created fresh each time in
 	// createProviderForType(), so clearing the API-level caches is sufficient
 	// to force model list refresh
 }

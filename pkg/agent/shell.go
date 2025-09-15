@@ -11,45 +11,32 @@ import (
 // executeShellCommandWithTruncation handles shell command execution with smart truncation and deduplication
 func (a *Agent) executeShellCommandWithTruncation(command string) (string, error) {
 	const maxOutputLength = 20000 // 20K character limit
-	
+
 	// Check if we've run this exact command before
 	if prevResult, exists := a.shellCommandHistory[command]; exists {
-		// Command was run before - update the previous message to be brief and show full result in current response
+		// Command was run before - mark the previous occurrence as stale in conversation
 		a.updatePreviousShellCommandMessage(prevResult)
-		
-		// Return the full output (will be truncated if needed)
-		if prevResult.Error != nil {
-			return prevResult.FullOutput, prevResult.Error
-		}
-		
-		// If output is still too long, truncate it but mention it's a repeated command
-		output := prevResult.FullOutput
-		if len(output) > maxOutputLength {
-			truncated := output[:maxOutputLength]
-			return truncated + fmt.Sprintf("\n\n... (output truncated at %d chars - repeated command, full output was %d chars)", maxOutputLength, len(output)), nil
-		}
-		return output, nil
 	}
-	
-	// Execute the command for the first time
-	
+
+	// ALWAYS execute the command fresh to get current state</
+
 	// Check circuit breaker for test commands that might be failing repeatedly
 	if strings.Contains(command, "go test") || strings.Contains(command, "test") {
 		if blocked, warning := a.CheckCircuitBreaker("test_command", command, 4); blocked {
 			return warning, fmt.Errorf("circuit breaker triggered - too many failed test attempts")
 		}
 	}
-	
+
 	a.ToolLog("executing command", command)
 	a.debugLog("Executing shell command: %s\n", command)
-	
+
 	fullResult, err := tools.ExecuteShellCommand(command)
 	a.debugLog("Shell command result: %s, error: %v\n", fullResult, err)
-	
+
 	// Determine what to return (truncated or full)
 	var returnResult string
 	var wasTruncated bool
-	
+
 	if len(fullResult) > maxOutputLength {
 		returnResult = fullResult[:maxOutputLength] + fmt.Sprintf("\n\n... (output truncated at %d chars, full output was %d chars)", maxOutputLength, len(fullResult))
 		wasTruncated = true
@@ -57,7 +44,7 @@ func (a *Agent) executeShellCommandWithTruncation(command string) (string, error
 		returnResult = fullResult
 		wasTruncated = false
 	}
-	
+
 	// Store in history for potential deduplication
 	a.shellCommandHistory[command] = &ShellCommandResult{
 		Command:         command,
@@ -68,7 +55,7 @@ func (a *Agent) executeShellCommandWithTruncation(command string) (string, error
 		MessageIndex:    len(a.messages), // Will be the next message index
 		WasTruncated:    wasTruncated,
 	}
-	
+
 	return returnResult, err
 }
 
@@ -77,13 +64,13 @@ func (a *Agent) updatePreviousShellCommandMessage(prevResult *ShellCommandResult
 	// Find the message in the conversation history
 	if prevResult.MessageIndex >= 0 && prevResult.MessageIndex < len(a.messages) {
 		msg := &a.messages[prevResult.MessageIndex]
-		
-		// Update the message content to be brief
-		briefMessage := fmt.Sprintf("Tool result for shell_command (repeated): %s\n\n[This command was run again - see latest execution below for full output]", prevResult.Command)
-		
+
+		// Update the message content to indicate it's stale
+		staleMessage := fmt.Sprintf("Tool call result for shell_command: %s\n[STALE] This output is from an earlier execution - command was run again with potentially different results", prevResult.Command)
+
 		// Update the message content
 		if msg.Role == "user" && strings.Contains(msg.Content, "Tool call result for shell_command") {
-			msg.Content = briefMessage
+			msg.Content = staleMessage
 		}
 	}
 }

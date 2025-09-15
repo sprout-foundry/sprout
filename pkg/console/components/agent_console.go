@@ -431,14 +431,20 @@ func (ac *AgentConsole) updateFooter() {
 	// Get provider and model from agent
 	provider := "unknown"
 	model := "unknown"
+	iteration := 0
+	contextTokens := 0
+	maxContextTokens := 0
 
 	if ac.agent != nil {
 		provider = ac.agent.GetProvider()
 		model = ac.agent.GetModel()
+		iteration = ac.agent.GetCurrentIteration()
+		contextTokens = ac.agent.GetCurrentContextTokens()
+		maxContextTokens = ac.agent.GetMaxContextTokens()
 	}
 
 	// Update footer with current stats
-	ac.footer.UpdateStats(model, provider, ac.totalTokens, ac.totalCost)
+	ac.footer.UpdateStats(model, provider, ac.totalTokens, ac.totalCost, iteration, contextTokens, maxContextTokens)
 
 	// Trigger a render if needed
 	if ac.footer.NeedsRedraw() {

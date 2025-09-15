@@ -267,6 +267,14 @@ func (a *Agent) GetCurrentIteration() int {
 	return a.currentIteration
 }
 
+func (a *Agent) GetCurrentContextTokens() int {
+	return a.currentContextTokens
+}
+
+func (a *Agent) GetMaxContextTokens() int {
+	return a.maxContextTokens
+}
+
 // SetStatsUpdateCallback sets a callback for real-time stats updates
 func (a *Agent) SetStatsUpdateCallback(callback func(totalTokens int, totalCost float64)) {
 	a.statsUpdateCallback = callback

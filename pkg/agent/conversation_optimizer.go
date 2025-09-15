@@ -12,26 +12,26 @@ import (
 
 // FileReadRecord tracks file reads to detect redundancy
 type FileReadRecord struct {
-	FilePath    string
-	Content     string
-	ContentHash string
-	Timestamp   time.Time
+	FilePath     string
+	Content      string
+	ContentHash  string
+	Timestamp    time.Time
 	MessageIndex int
 }
 
 // ShellCommandRecord tracks shell commands to detect redundancy
 type ShellCommandRecord struct {
-	Command     string
-	Output      string
-	OutputHash  string
-	Timestamp   time.Time
+	Command      string
+	Output       string
+	OutputHash   string
+	Timestamp    time.Time
 	MessageIndex int
-	IsTransient bool // Commands like ls, find that become less relevant over time
+	IsTransient  bool // Commands like ls, find that become less relevant over time
 }
 
 // ConversationOptimizer manages conversation history optimization
 type ConversationOptimizer struct {
-	fileReads     map[string]*FileReadRecord    // filepath -> latest read record
+	fileReads     map[string]*FileReadRecord     // filepath -> latest read record
 	shellCommands map[string]*ShellCommandRecord // command -> latest execution record
 	enabled       bool
 	debug         bool
@@ -61,7 +61,7 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 
 	// Second pass: optimize based on tracked data
 	optimized := make([]api.Message, 0, len(messages))
-	
+
 	for i, msg := range messages {
 		if co.isRedundantFileRead(msg, i) {
 			// Replace with summary
@@ -112,7 +112,7 @@ func (co *ConversationOptimizer) isRedundantFileRead(msg api.Message, index int)
 		// Extract current content
 		currentContent := co.extractFileContent(msg.Content)
 		currentHash := co.hashContent(currentContent)
-		
+
 		// Only consider it redundant if:
 		// 1. Content hasn't changed AND
 		// 2. This is NOT the most recent read (index < record.MessageIndex) AND
@@ -169,7 +169,7 @@ func (co *ConversationOptimizer) extractFileContent(content string) string {
 	if len(lines) < 2 {
 		return ""
 	}
-	
+
 	// Skip the first line (tool call result header) and join the rest
 	return strings.Join(lines[1:], "\n")
 }
@@ -183,12 +183,12 @@ func (co *ConversationOptimizer) hashContent(content string) string {
 func (co *ConversationOptimizer) createFileReadSummary(msg api.Message) string {
 	filePath := co.extractFilePath(msg.Content)
 	content := co.extractFileContent(msg.Content)
-	
+
 	// Count lines and characters
 	lines := strings.Split(strings.TrimSpace(content), "\n")
 	lineCount := len(lines)
 	charCount := len(content)
-	
+
 	// Determine file type
 	fileType := "file"
 	if strings.HasSuffix(filePath, ".go") {
@@ -206,9 +206,9 @@ func (co *ConversationOptimizer) createFileReadSummary(msg api.Message) string {
 // GetOptimizationStats returns statistics about optimization
 func (co *ConversationOptimizer) GetOptimizationStats() map[string]interface{} {
 	return map[string]interface{}{
-		"enabled":           co.enabled,
-		"tracked_files":     len(co.fileReads),
-		"tracked_commands":  len(co.shellCommands),
+		"enabled":          co.enabled,
+		"tracked_files":    len(co.fileReads),
+		"tracked_commands": len(co.shellCommands),
 		"file_paths":       co.getTrackedFilePaths(),
 		"shell_commands":   co.getTrackedCommands(),
 	}
@@ -248,20 +248,11 @@ func (co *ConversationOptimizer) isRedundantShellCommand(msg api.Message, index 
 		return false
 	}
 
-	// Check if we have a previous execution of this command
+	// Check if we have a more recent execution of this command
 	if record, exists := co.shellCommands[command]; exists {
-		// Extract current output
-		currentOutput := co.extractShellOutput(msg.Content)
-		currentHash := co.hashContent(currentOutput)
-		
-		// Check if this is a transient command that should be optimized after some time
-		if record.IsTransient && record.MessageIndex < index-2 {
-			return true
-		}
-		
-		// If output hasn't changed and this isn't the most recent execution, it's redundant
-		if record.OutputHash == currentHash && record.MessageIndex < index {
-			return true
+		// This is an OLDER execution if there's a newer one
+		if index < record.MessageIndex {
+			return true // Mark as stale since there's a newer execution
 		}
 	}
 
@@ -311,7 +302,7 @@ func (co *ConversationOptimizer) extractShellOutput(content string) string {
 	if len(lines) < 2 {
 		return ""
 	}
-	
+
 	// Skip the first line (tool call result header) and join the rest
 	return strings.Join(lines[1:], "\n")
 }
@@ -322,7 +313,7 @@ func (co *ConversationOptimizer) isTransientCommand(command string) bool {
 		"ls", "find", "grep", "tree", "pwd", "whoami", "date", "ps",
 		"df", "du", "which", "whereis", "locate", "file", "stat",
 	}
-	
+
 	cmdLower := strings.ToLower(command)
 	for _, pattern := range transientPatterns {
 		if strings.HasPrefix(cmdLower, pattern+" ") || cmdLower == pattern {
@@ -336,19 +327,19 @@ func (co *ConversationOptimizer) isTransientCommand(command string) bool {
 func (co *ConversationOptimizer) createShellCommandSummary(msg api.Message) string {
 	command := co.extractShellCommand(msg.Content)
 	output := co.extractShellOutput(msg.Content)
-	
+
 	// Count lines and characters in output
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	lineCount := len(lines)
 	charCount := len(output)
-	
+
 	// Determine command type
 	commandType := "command"
 	if co.isTransientCommand(command) {
 		commandType = "exploration command"
 	}
 
-	return fmt.Sprintf("Tool call result for shell_command: %s\n[OPTIMIZED] Previously executed %s (%d lines output, %d chars) - output unchanged since last execution",
+	return fmt.Sprintf("Tool call result for shell_command: %s\n[STALE] Earlier execution of %s (%d lines output, %d chars) - see latest execution for current state",
 		command, commandType, lineCount, charCount)
 }
 
@@ -375,25 +366,25 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 	}
 
 	optimized := make([]api.Message, 0, len(messages))
-	
+
 	// Always keep system message and recent messages (last 5)
 	systemMsg := messages[0]
 	optimized = append(optimized, systemMsg)
-	
+
 	// Keep the original user query (usually index 1)
 	if len(messages) > 1 {
 		optimized = append(optimized, messages[1])
 	}
-	
+
 	// For middle messages, apply aggressive summarization
-	recentThreshold := len(messages) - 5  // Keep last 5 messages intact
+	recentThreshold := len(messages) - 5 // Keep last 5 messages intact
 	if recentThreshold < 2 {
 		recentThreshold = 2
 	}
-	
+
 	for i := 2; i < recentThreshold; i++ {
 		msg := messages[i]
-		
+
 		// Only summarize file reads that are old (more than 8 messages ago)
 		messageAge := len(messages) - i
 		if msg.Role == "user" && strings.Contains(msg.Content, "Tool call result for read_file:") && messageAge > 8 {
@@ -412,7 +403,7 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 		} else {
 			// Keep non-tool messages but truncate if very long
 			content := msg.Content
-			if len(content) > 800 {  // Moderate truncation to balance context and size
+			if len(content) > 800 { // Moderate truncation to balance context and size
 				content = content[:800] + "... [TRUNCATED for context limit]"
 			}
 			optimized = append(optimized, api.Message{
@@ -421,36 +412,36 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 			})
 		}
 	}
-	
+
 	// Always keep recent messages (last 5) completely intact
 	for i := recentThreshold; i < len(messages); i++ {
 		optimized = append(optimized, messages[i])
 	}
-	
+
 	return optimized
 }
 
 // createAggressiveSummary creates very compact summaries for tool results
 func (co *ConversationOptimizer) createAggressiveSummary(msg api.Message) string {
 	content := msg.Content
-	
+
 	if strings.Contains(content, "Tool call result for read_file:") {
 		filePath := co.extractFilePath(content)
-		return fmt.Sprintf("Tool call result for read_file: %s\n[COMPACT] File read (%d chars)", 
+		return fmt.Sprintf("Tool call result for read_file: %s\n[COMPACT] File read (%d chars)",
 			filePath, len(content))
 	}
-	
+
 	if strings.Contains(content, "Tool call result for shell_command:") {
 		command := co.extractShellCommand(content)
-		return fmt.Sprintf("Tool call result for shell_command: %s\n[COMPACT] Command executed (%d chars output)", 
+		return fmt.Sprintf("Tool call result for shell_command: %s\n[COMPACT] Command executed (%d chars output)",
 			command, len(content))
 	}
-	
+
 	// Generic tool result summary
 	lines := strings.Split(content, "\n")
 	if len(lines) > 0 {
 		return fmt.Sprintf("%s\n[COMPACT] Tool result (%d chars)", lines[0], len(content))
 	}
-	
+
 	return "[COMPACT] Tool result"
 }

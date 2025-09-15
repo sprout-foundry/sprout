@@ -1,1 +1,0 @@
-Generate concise search queries for software development issues. Output JSON array of 1-2 queries (2-15 words each): ["query one", "query two"]

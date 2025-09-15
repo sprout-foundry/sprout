@@ -1,9 +1,0 @@
-Analyze workspace summary and infer project attributes.
-
-Return JSON with:
-- "overall_goal": Main project objective
-- "key_features": Important functionalities  
-- "target_audience": Intended users
-- "technical_vision": High-level technical approach
-
-JSON only - no other text.

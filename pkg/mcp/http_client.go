@@ -15,21 +15,21 @@ import (
 
 // MCPHTTPClient represents an HTTP-based MCP client for remote servers
 type MCPHTTPClient struct {
-	config       MCPServerConfig
-	httpClient   *http.Client
-	logger       *utils.Logger
-	running      bool
-	initialized  bool
-	mu           sync.RWMutex
-	nextID       int64
-	sessionID    string // Track session ID for GitHub MCP server
+	config      MCPServerConfig
+	httpClient  *http.Client
+	logger      *utils.Logger
+	running     bool
+	initialized bool
+	mu          sync.RWMutex
+	nextID      int64
+	sessionID   string // Track session ID for GitHub MCP server
 }
 
 // NewMCPHTTPClient creates a new HTTP MCP client
 func NewMCPHTTPClient(config MCPServerConfig, logger *utils.Logger) *MCPHTTPClient {
 	// Use a cookie jar to maintain session state
 	jar, _ := cookiejar.New(nil)
-	
+
 	return &MCPHTTPClient{
 		config: config,
 		httpClient: &http.Client{
@@ -115,7 +115,7 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Add GitHub token authentication if available
 	if token, exists := c.config.Env["GITHUB_PERSONAL_ACCESS_TOKEN"]; exists && token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -133,19 +133,19 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 	}
 
 	// Debug: Log detailed request information
-	fmt.Printf("🔍 REQUEST DEBUG:\n")
-	fmt.Printf("  Method: %s\n", method)
-	fmt.Printf("  URL: %s\n", req.URL.String())
-	fmt.Printf("  Headers:\n")
-	for k, v := range req.Header {
-		if k == "Authorization" && len(v) > 0 && len(v[0]) > 20 {
-			fmt.Printf("    %s: %s...\n", k, v[0][:20])
-		} else {
-			fmt.Printf("    %s: %v\n", k, v)
-		}
-	}
-	fmt.Printf("  Body: %s\n", string(jsonData))
-	
+	// fmt.Printf("🔍 REQUEST DEBUG:\n")
+	// fmt.Printf("  Method: %s\n", method)
+	// fmt.Printf("  URL: %s\n", req.URL.String())
+	// fmt.Printf("  Headers:\n")
+	// for k, v := range req.Header {
+	// 	if k == "Authorization" && len(v) > 0 && len(v[0]) > 20 {
+	// 		fmt.Printf("    %s: %s...\n", k, v[0][:20])
+	// 	} else {
+	// 		fmt.Printf("    %s: %v\n", k, v)
+	// 	}
+	// }
+	// fmt.Printf("  Body: %s\n", string(jsonData))
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		fmt.Printf("❌ REQUEST ERROR: %v\n", err)
@@ -159,14 +159,14 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 	}
 
 	// Debug: Log detailed response information
-	fmt.Printf("🔍 RESPONSE DEBUG:\n")
-	fmt.Printf("  Status: %d %s\n", resp.StatusCode, resp.Status)
-	fmt.Printf("  Headers:\n")
-	for k, v := range resp.Header {
-		fmt.Printf("    %s: %v\n", k, v)
-	}
-	fmt.Printf("  Body: %s\n", string(responseBody))
-	
+	// fmt.Printf("🔍 RESPONSE DEBUG:\n")
+	// fmt.Printf("  Status: %d %s\n", resp.StatusCode, resp.Status)
+	// fmt.Printf("  Headers:\n")
+	// for k, v := range resp.Header {
+	// 	fmt.Printf("    %s: %v\n", k, v)
+	// }
+	// fmt.Printf("  Body: %s\n", string(responseBody))
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP request failed with status %d: %s", resp.StatusCode, string(responseBody))
 	}
@@ -177,8 +177,8 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 		fmt.Printf("Raw response: %s\n", string(responseBody))
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
-	
-	fmt.Printf("✅ PARSED RESPONSE: %+v\n", response)
+
+	// fmt.Printf("✅ PARSED RESPONSE: %+v\n", response)
 
 	// Extract session ID from response header if this is an initialize request
 	if method == "initialize" {
@@ -239,7 +239,7 @@ func (c *MCPHTTPClient) Initialize(ctx context.Context) error {
 	c.mu.Lock()
 	c.initialized = true
 	c.mu.Unlock()
-	
+
 	if c.logger != nil {
 		c.logger.LogProcessStep(fmt.Sprintf("✅ HTTP MCP client initialized for %s", c.config.URL))
 	}
@@ -249,11 +249,19 @@ func (c *MCPHTTPClient) Initialize(ctx context.Context) error {
 // ListTools lists available tools from the server
 func (c *MCPHTTPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 	c.mu.RLock()
-	if !c.running || !c.initialized {
+	if !c.running {
 		c.mu.RUnlock()
-		return nil, fmt.Errorf("client not started or initialized")
+		return nil, fmt.Errorf("client not started")
 	}
+	needsInit := !c.initialized
 	c.mu.RUnlock()
+
+	// Auto-initialize if needed
+	if needsInit {
+		if err := c.Initialize(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize client: %w", err)
+		}
+	}
 
 	response, err := c.sendRequest(ctx, "tools/list", nil)
 	if err != nil {
@@ -295,6 +303,21 @@ func (c *MCPHTTPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 
 // CallTool calls a tool on the server
 func (c *MCPHTTPClient) CallTool(ctx context.Context, request MCPToolCallRequest) (*MCPToolCallResult, error) {
+	c.mu.RLock()
+	if !c.running {
+		c.mu.RUnlock()
+		return nil, fmt.Errorf("client not started")
+	}
+	needsInit := !c.initialized
+	c.mu.RUnlock()
+
+	// Auto-initialize if needed
+	if needsInit {
+		if err := c.Initialize(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize client: %w", err)
+		}
+	}
+
 	c.mu.RLock()
 	if !c.running || !c.initialized {
 		c.mu.RUnlock()

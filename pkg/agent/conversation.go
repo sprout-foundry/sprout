@@ -29,8 +29,8 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 
 	a.currentIteration = 0
 
-	// Print startup message in non-interactive mode
-	if os.Getenv("LEDIT_FROM_AGENT") == "1" && !a.IsInteractiveMode() {
+	// Print startup message when running from agent command
+	if os.Getenv("LEDIT_FROM_AGENT") == "1" {
 		providerType := a.GetProviderType()
 		providerName := api.GetProviderName(providerType)
 		model := a.GetModel()

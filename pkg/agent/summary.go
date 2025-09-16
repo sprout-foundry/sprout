@@ -134,7 +134,7 @@ func (a *Agent) PrintConciseSummary() {
 }
 
 // PrintCompactProgress prints a minimal progress indicator for non-interactive mode
-// Format: [iteration:(current-context-tokens/context-limit)]
+// Format: [iteration:(current-context-tokens/context-limit) | total-tokens | cost]
 func (a *Agent) PrintCompactProgress() {
 	// Format tokens in K units for compactness
 	formatTokensCompact := func(tokens int) string {
@@ -144,11 +144,24 @@ func (a *Agent) PrintCompactProgress() {
 		return fmt.Sprintf("%d", tokens)
 	}
 
-	// Print the compact progress indicator
-	fmt.Printf("[%d:(%s/%s)] ",
+	// Format cost compactly
+	formatCostCompact := func(cost float64) string {
+		if cost < 0.01 {
+			return fmt.Sprintf("$%.4f", cost)
+		} else if cost < 1.0 {
+			return fmt.Sprintf("$%.3f", cost)
+		} else {
+			return fmt.Sprintf("$%.2f", cost)
+		}
+	}
+
+	// Print the compact progress indicator with total tokens and cost
+	fmt.Printf("[%d:(%s/%s) | %s | %s] ",
 		a.currentIteration,
 		formatTokensCompact(a.currentContextTokens),
-		formatTokensCompact(a.maxContextTokens))
+		formatTokensCompact(a.maxContextTokens),
+		formatTokensCompact(a.totalTokens),
+		formatCostCompact(a.totalCost))
 }
 
 // calculateCachedCost calculates the cost savings from cached tokens

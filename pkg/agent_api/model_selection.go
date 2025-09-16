@@ -112,7 +112,11 @@ func (ms *ModelSelection) getLegacyModelForTask(taskType string) string {
 
 // getFallbackModel provides hard-coded fallbacks when config is unavailable
 func (ms *ModelSelection) getFallbackModel(taskType string) string {
-	clientType := GetClientTypeFromEnv()
+	// Use unified provider detection
+	clientType, err := DetermineProvider("", "")
+	if err != nil {
+		clientType = OllamaClientType
+	}
 
 	switch taskType {
 	case "editing", "code":
@@ -168,8 +172,11 @@ func (ms *ModelSelection) ResolveModelReference(modelRef string) (ClientType, st
 		return clientType, parts[1], nil
 	}
 
-	// No provider specified - use environment detection and assume model is the name
-	clientType := GetClientTypeFromEnv()
+	// No provider specified - use unified provider detection
+	clientType, err := DetermineProvider("", "")
+	if err != nil {
+		return "", "", err
+	}
 	return clientType, modelRef, nil
 }
 

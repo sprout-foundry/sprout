@@ -278,42 +278,38 @@ func GetVisionModelForProvider(clientType ClientType) string {
 
 // GetClientTypeWithFallback determines client type and falls back if unavailable
 func GetClientTypeWithFallback() (ClientType, error) {
-	// Try primary selection
-	primaryType := GetClientTypeFromEnv()
+	// Use the unified provider detection
+	provider, err := DetermineProvider("", "")
 
-	// For non-Ollama providers, verify API key exists
-	if primaryType != OllamaClientType {
-		if _, err := NewUnifiedClient(primaryType); err == nil {
-			return primaryType, nil
+	// DetermineProvider always returns a provider (falls back to Ollama)
+	// So we need to verify the provider is actually available
+	if err == nil && provider != OllamaClientType {
+		// Verify non-Ollama provider is functional
+		if _, clientErr := NewUnifiedClient(provider); clientErr == nil {
+			return provider, nil
 		}
-		// If primary fails, fall back to Ollama
-		fmt.Printf("⚠️  Primary provider %s unavailable, falling back to Ollama\n", GetProviderName(primaryType))
-		return OllamaClientType, nil
+		// If not, print warning and continue
+		fmt.Printf("⚠️  Provider %s unavailable, checking alternatives\n", GetProviderName(provider))
 	}
 
-	// If Ollama was selected, check if it's running
+	// Check if Ollama is available
 	if _, err := NewUnifiedClient(OllamaClientType); err == nil {
 		return OllamaClientType, nil
 	}
 
-	// Ollama not available, try other providers as fallback (OpenAI first as preferred)
-	envProviders := []struct {
-		envVar string
-		client ClientType
-	}{
-		{"OPENAI_API_KEY", OpenAIClientType},
-		{"OPENROUTER_API_KEY", OpenRouterClientType},
-		{"DEEPINFRA_API_KEY", DeepInfraClientType},
-		{"CEREBRAS_API_KEY", CerebrasClientType},
-		{"GROQ_API_KEY", GroqClientType},
-		{"DEEPSEEK_API_KEY", DeepSeekClientType},
-	}
-
-	for _, provider := range envProviders {
-		if apiKey := os.Getenv(provider.envVar); apiKey != "" {
-			if _, err := NewUnifiedClient(provider.client); err == nil {
-				fmt.Printf("⚠️  Ollama unavailable, using %s as fallback\n", GetProviderName(provider.client))
-				return provider.client, nil
+	// Last resort: try all providers
+	for _, provider := range []ClientType{
+		OpenAIClientType,
+		OpenRouterClientType,
+		DeepInfraClientType,
+		CerebrasClientType,
+		GroqClientType,
+		DeepSeekClientType,
+	} {
+		if IsProviderAvailable(provider) {
+			if _, err := NewUnifiedClient(provider); err == nil {
+				fmt.Printf("⚠️  Using %s as fallback provider\n", GetProviderName(provider))
+				return provider, nil
 			}
 		}
 	}
@@ -448,7 +444,11 @@ func (w *DeepInfraClientWrapper) GetModelContextLimit() (int, error) {
 	// Fallback to model registry for consistent context limit lookup
 	// Note: The registry handles pattern matching for models not in the API response
 	registry := GetModelRegistry()
-	contextLimit := registry.GetModelContextLength(model)
+	contextLimit, err := registry.GetModelContextLength(model)
+	if err != nil {
+		// Return reasonable default for DeepInfra models
+		return 32000, nil
+	}
 	return contextLimit, nil
 }
 

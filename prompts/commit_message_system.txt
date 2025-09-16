@@ -11,7 +11,10 @@ FORMAT REQUIREMENTS:
   🧪 for tests (test:)
 - Follow with a concise title (less than 72 characters total)
 - Add a blank line
-- Provide a detailed description explaining what was changed and why
+- Provide a concise description explaining what was changed and why
+  - Be brief but informative
+  - Focus on the most important changes
+  - Avoid redundancy with the title
 
 EXAMPLE FORMAT:
 🚀 feat: Add user authentication system

@@ -13,6 +13,7 @@ import (
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/mcp"
+	"golang.org/x/term"
 )
 
 type Agent struct {
@@ -275,6 +276,12 @@ func (a *Agent) GetCurrentIteration() int {
 
 func (a *Agent) GetCurrentContextTokens() int {
 	return a.currentContextTokens
+}
+
+// IsInteractiveMode checks if the agent is running in an interactive terminal
+func (a *Agent) IsInteractiveMode() bool {
+	// Check if stdin is a terminal
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 func (a *Agent) GetMaxContextTokens() int {

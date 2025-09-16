@@ -15,7 +15,7 @@ run_test_logic() {
 
     # Run ledit to test handling of missing file context
     output_log="missing_file_test.log"
-    ../ledit code "Summarize reference.txt into a new file called reference_summary.md" --skip-prompt -m "$model_name" > "$output_log" 2>&1
+    ../ledit agent "Summarize reference.txt into a new file called reference_summary.md" --skip-prompt -m "$model_name" > "$output_log" 2>&1
 
     # Check here that the command output contains the contents of the reference file
     if grep -q "This is a reference file that will be used to test the llm requesting access to a file that was not provided, but is referenced in the text." "$output_log"; then

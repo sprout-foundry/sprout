@@ -14,7 +14,7 @@ run_test_logic() {
 
     # Run ledit with a search grounding prompt
     output_log="search_test_output.log"
-    ../../ledit code "Update research.txt with information from a web search about latest AI trends. #SG" --skip-prompt -m "$model_name" > "$output_log" 2>&1
+    ../../ledit agent "Update research.txt with information from a web search about latest AI trends. #SG" --skip-prompt -m "$model_name" > "$output_log" 2>&1
 
     echo
     echo "--- Verifying Test ---"

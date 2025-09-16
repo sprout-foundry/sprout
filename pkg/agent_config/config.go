@@ -29,11 +29,11 @@ const (
 
 // Config represents the application configuration
 type Config struct {
-	LastUsedProvider ClientType               `json:"last_used_provider"`
-	ProviderModels   map[string]string         `json:"provider_models"`
-	ProviderPriority []string                  `json:"provider_priority"`
-	Preferences      map[string]interface{}    `json:"preferences"`
-	Version          string                    `json:"version"`
+	LastUsedProvider ClientType             `json:"last_used_provider"`
+	ProviderModels   map[string]string      `json:"provider_models"`
+	ProviderPriority []string               `json:"provider_priority"`
+	Preferences      map[string]interface{} `json:"preferences"`
+	Version          string                 `json:"version"`
 }
 
 // APIKeys represents the API keys configuration
@@ -48,9 +48,9 @@ type APIKeys struct {
 }
 
 const (
-	ConfigVersion = "1.0"
-	ConfigDirName = ".ledit"
-	ConfigFileName = "config.json"
+	ConfigVersion   = "1.0"
+	ConfigDirName   = ".ledit"
+	ConfigFileName  = "config.json"
 	APIKeysFileName = "api_keys.json"
 )
 
@@ -79,12 +79,12 @@ func GetConfigDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
-	
+
 	configDir := filepath.Join(homeDir, ConfigDirName)
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	return configDir, nil
 }
 
@@ -103,7 +103,7 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// If config doesn't exist, create default
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		config := NewConfig()
@@ -112,22 +112,22 @@ func Load() (*Config, error) {
 		}
 		return config, nil
 	}
-	
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
-	
+
 	// Migrate or validate config if needed
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
-	
+
 	return &config, nil
 }
 
@@ -137,14 +137,14 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
-	
+
 	c.Version = ConfigVersion
-	
+
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	
+
 	return os.WriteFile(configPath, data, 0600)
 }
 
@@ -157,10 +157,10 @@ func (c *Config) Validate() error {
 	if c.Preferences == nil {
 		c.Preferences = make(map[string]interface{})
 	}
-	
+
 	// Ensure all providers have default models
 	providers := []struct {
-		name string
+		name       string
 		clientType ClientType
 	}{
 		{"openai", OpenAIClientType},
@@ -171,18 +171,18 @@ func (c *Config) Validate() error {
 		{"groq", GroqClientType},
 		{"deepseek", DeepSeekClientType},
 	}
-	
+
 	for _, provider := range providers {
 		if _, exists := c.ProviderModels[provider.name]; !exists {
 			c.ProviderModels[provider.name] = getDefaultModelForProvider(provider.clientType)
 		}
 	}
-	
+
 	// Set default priority if empty
 	if len(c.ProviderPriority) == 0 {
 		c.ProviderPriority = []string{"openai", "openrouter", "deepinfra", "ollama", "cerebras", "groq", "deepseek"}
 	}
-	
+
 	return nil
 }
 
@@ -265,9 +265,14 @@ func getDefaultModelForProvider(clientType ClientType) string {
 }
 
 // getClientTypeFromEnv determines which client to use based on environment variables
+// DEPRECATED: Use api.DetermineProvider() instead
 func getClientTypeFromEnv() ClientType {
-	// Use the agent_api implementation
-	return api.GetClientTypeFromEnv()
+	// Use unified provider detection
+	clientType, err := api.DetermineProvider("", "")
+	if err != nil {
+		return api.OllamaClientType
+	}
+	return clientType
 }
 
 // GetAPIKeysPath returns the full path to the API keys file

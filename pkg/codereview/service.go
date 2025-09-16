@@ -42,12 +42,12 @@ type ReviewContext struct {
 	SessionID             string         // Unique session identifier
 	CurrentIteration      int            // Current iteration number
 	FullFileContext       string         // Full file content for patch resolution context
-	
+
 	// NEW: Agent workflow integration
-	WorkspaceContext      *workspaceinfo.ProjectInfo   // Workspace analysis and context
-	RelatedFiles          []string                     // Files that might be affected by changes
-	ProjectStructure      *workspace.ProjectInsights  // Project understanding
-	AgentClient           api.ClientInterface          // Agent API client for LLM calls
+	WorkspaceContext *workspaceinfo.ProjectInfo // Workspace analysis and context
+	RelatedFiles     []string                   // Files that might be affected by changes
+	ProjectStructure *workspace.ProjectInsights // Project understanding
+	AgentClient      api.ClientInterface        // Agent API client for LLM calls
 }
 
 // ReviewType defines the type of code review being performed
@@ -70,33 +70,36 @@ type ReviewOptions struct {
 
 // CodeReviewService provides a unified interface for code review operations
 type CodeReviewService struct {
-	config         *config.Config
-	logger         *utils.Logger
-	reviewConfig   *ReviewConfiguration
-	contextStore   map[string]*ReviewContext // Store contexts by session ID for persistence
-	workspaceAnalyzer *workspace.ConcurrentAnalyzer // NEW: Workspace analysis for better context
-	defaultAgentClient api.ClientInterface         // NEW: Default agent client for LLM calls
+	config             *config.Config
+	logger             *utils.Logger
+	reviewConfig       *ReviewConfiguration
+	contextStore       map[string]*ReviewContext     // Store contexts by session ID for persistence
+	workspaceAnalyzer  *workspace.ConcurrentAnalyzer // NEW: Workspace analysis for better context
+	defaultAgentClient api.ClientInterface           // NEW: Default agent client for LLM calls
 }
 
 // NewCodeReviewService creates a new code review service instance
 func NewCodeReviewService(cfg *config.Config, logger *utils.Logger) *CodeReviewService {
 	// Create workspace analyzer for intelligent context building
 	workspaceAnalyzer := workspace.NewConcurrentAnalyzer(workspace.ConcurrentConfig{MaxWorkers: 4, BatchSize: 10})
-	
+
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
 	if cfg != nil && cfg.EditingModel != "" {
-		if client, err := api.NewUnifiedClient(api.GetClientTypeFromEnv()); err == nil {
-			agentClient = client
+		// Use unified provider detection
+		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
+			if client, err := api.NewUnifiedClient(clientType); err == nil {
+				agentClient = client
+			}
 		}
 	}
-	
+
 	return &CodeReviewService{
-		config:         cfg,
-		logger:         logger,
-		reviewConfig:   DefaultReviewConfiguration(),
-		contextStore:   make(map[string]*ReviewContext),
-		workspaceAnalyzer: workspaceAnalyzer,
+		config:             cfg,
+		logger:             logger,
+		reviewConfig:       DefaultReviewConfiguration(),
+		contextStore:       make(map[string]*ReviewContext),
+		workspaceAnalyzer:  workspaceAnalyzer,
 		defaultAgentClient: agentClient,
 	}
 }
@@ -105,21 +108,24 @@ func NewCodeReviewService(cfg *config.Config, logger *utils.Logger) *CodeReviewS
 func NewCodeReviewServiceWithConfig(cfg *config.Config, logger *utils.Logger, reviewConfig *ReviewConfiguration) *CodeReviewService {
 	// Create workspace analyzer for intelligent context building
 	workspaceAnalyzer := workspace.NewConcurrentAnalyzer(workspace.ConcurrentConfig{MaxWorkers: 4, BatchSize: 10})
-	
+
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
 	if cfg != nil && cfg.EditingModel != "" {
-		if client, err := api.NewUnifiedClient(api.GetClientTypeFromEnv()); err == nil {
-			agentClient = client
+		// Use unified provider detection
+		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
+			if client, err := api.NewUnifiedClient(clientType); err == nil {
+				agentClient = client
+			}
 		}
 	}
-	
+
 	return &CodeReviewService{
-		config:         cfg,
-		logger:         logger,
-		reviewConfig:   reviewConfig,
-		contextStore:   make(map[string]*ReviewContext),
-		workspaceAnalyzer: workspaceAnalyzer,
+		config:             cfg,
+		logger:             logger,
+		reviewConfig:       reviewConfig,
+		contextStore:       make(map[string]*ReviewContext),
+		workspaceAnalyzer:  workspaceAnalyzer,
 		defaultAgentClient: agentClient,
 	}
 }
@@ -159,18 +165,18 @@ func (s *CodeReviewService) enhanceContextWithWorkspaceIntelligence(ctx *ReviewC
 	affectedFiles := s.extractAffectedFilesFromDiff(ctx.Diff)
 	if len(affectedFiles) > 0 {
 		s.logger.LogProcessStep(fmt.Sprintf("Found %d affected files in diff", len(affectedFiles)))
-		
+
 		// Find files that might be related to the changes
 		for _, file := range affectedFiles {
 			if relatedFiles, err := s.findRelatedFiles(file, ctx.WorkspaceContext); err == nil {
 				ctx.RelatedFiles = append(ctx.RelatedFiles, relatedFiles...)
 			}
 		}
-		
+
 		// Remove duplicates and the original files (they're already in the diff)
 		ctx.RelatedFiles = s.removeDuplicates(ctx.RelatedFiles)
 		ctx.RelatedFiles = s.removeAffectedFiles(ctx.RelatedFiles, affectedFiles)
-		
+
 		s.logger.LogProcessStep(fmt.Sprintf("Identified %d related files for enhanced context", len(ctx.RelatedFiles)))
 	}
 
@@ -186,7 +192,7 @@ func (s *CodeReviewService) enhanceContextWithWorkspaceIntelligence(ctx *ReviewC
 func (s *CodeReviewService) extractAffectedFilesFromDiff(diff string) []string {
 	var files []string
 	lines := strings.Split(diff, "\n")
-	
+
 	for _, line := range lines {
 		// Look for diff headers that indicate file paths
 		if strings.HasPrefix(line, "diff --git") {
@@ -206,14 +212,14 @@ func (s *CodeReviewService) extractAffectedFilesFromDiff(diff string) []string {
 			}
 		}
 	}
-	
+
 	return s.removeDuplicates(files)
 }
 
 // findRelatedFiles identifies files that might be related to the given file
 func (s *CodeReviewService) findRelatedFiles(filePath string, workspaceInfo *workspaceinfo.ProjectInfo) ([]string, error) {
 	var related []string
-	
+
 	// TODO: Implement proper workspace file relationship detection
 	// This is currently disabled due to workspace integration refactoring
 	return related, nil
@@ -223,14 +229,14 @@ func (s *CodeReviewService) findRelatedFiles(filePath string, workspaceInfo *wor
 func (s *CodeReviewService) removeDuplicates(items []string) []string {
 	seen := make(map[string]bool)
 	result := []string{}
-	
+
 	for _, item := range items {
 		if !seen[item] {
 			seen[item] = true
 			result = append(result, item)
 		}
 	}
-	
+
 	return result
 }
 
@@ -240,14 +246,14 @@ func (s *CodeReviewService) removeAffectedFiles(related, affected []string) []st
 	for _, file := range affected {
 		affectedSet[file] = true
 	}
-	
+
 	result := []string{}
 	for _, file := range related {
 		if !affectedSet[file] {
 			result = append(result, file)
 		}
 	}
-	
+
 	return result
 }
 
@@ -613,7 +619,7 @@ func (s *CodeReviewService) parseStructuredReviewResponse(response *api.ChatResp
 	if err := json.Unmarshal([]byte(jsonStr), &reviewResult); err != nil {
 		// If JSON parsing fails, create a simple result
 		return &types.CodeReviewResult{
-			Status:   "approved", 
+			Status:   "approved",
 			Feedback: content,
 		}, nil
 	}

@@ -7,19 +7,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/changetracker"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/changetracker"
 )
 
 // ChangeTracker manages change tracking for the agent workflow
 type ChangeTracker struct {
-	revisionID      string
-	sessionID       string
-	instructions    string
-	changes         []TrackedFileChange
-	enabled         bool
-	agent           *Agent
-	committed       bool // Track whether changes have been committed
+	revisionID   string
+	sessionID    string
+	instructions string
+	changes      []TrackedFileChange
+	enabled      bool
+	agent        *Agent
+	committed    bool // Track whether changes have been committed
 }
 
 // TrackedFileChange represents a file change made during agent execution
@@ -27,9 +27,9 @@ type TrackedFileChange struct {
 	FilePath     string    `json:"file_path"`
 	OriginalCode string    `json:"original_code"`
 	NewCode      string    `json:"new_code"`
-	Operation    string    `json:"operation"`    // "write", "edit", "create"
+	Operation    string    `json:"operation"` // "write", "edit", "create"
 	Timestamp    time.Time `json:"timestamp"`
-	ToolCall     string    `json:"tool_call"`    // Which tool was used
+	ToolCall     string    `json:"tool_call"` // Which tool was used
 }
 
 // NewChangeTracker creates a new change tracker for an agent session
@@ -147,9 +147,9 @@ func (ct *ChangeTracker) Commit(llmResponse string) error {
 			change.NewCode,
 			description,
 			note,
-			ct.instructions,      // originalPrompt
-			llmResponse,          // llmMessage
-			ct.getAgentModel(),   // editingModel
+			ct.instructions,    // originalPrompt
+			llmResponse,        // llmMessage
+			ct.getAgentModel(), // editingModel
 		)
 		if err != nil {
 			return fmt.Errorf("failed to record change for %s: %w", change.FilePath, err)
@@ -271,13 +271,13 @@ func (ct *ChangeTracker) GenerateAISummary() (string, error) {
 	var contextBuilder strings.Builder
 	contextBuilder.WriteString("Changes made in this session:\n\n")
 	contextBuilder.WriteString(fmt.Sprintf("Original instruction: %s\n\n", ct.instructions))
-	
+
 	for i, change := range ct.changes {
 		contextBuilder.WriteString(fmt.Sprintf("Change %d: %s %s\n", i+1, change.Operation, change.FilePath))
 		contextBuilder.WriteString(fmt.Sprintf("Tool used: %s\n", change.ToolCall))
-		
+
 		// For large changes, show a diff summary instead of full content
-		if len(change.OriginalCode) + len(change.NewCode) > 2000 {
+		if len(change.OriginalCode)+len(change.NewCode) > 2000 {
 			contextBuilder.WriteString("(Large file change - details in full diff)\n")
 		} else if change.Operation == "edit" {
 			contextBuilder.WriteString(fmt.Sprintf("Original: %s\n", limitString(change.OriginalCode, 300)))
@@ -297,7 +297,7 @@ Focus on WHAT was changed and WHY (based on the instruction). Be specific about 
 	// Use a fast model for summary generation to optimize cost and speed
 	originalModel := ct.agent.GetModel()
 	summaryModel := ct.getSummaryModel()
-	
+
 	// Temporarily switch to fast model if different
 	if summaryModel != originalModel {
 		if err := ct.agent.SetModel(summaryModel); err == nil {
@@ -309,7 +309,7 @@ Focus on WHAT was changed and WHY (based on the instruction). Be specific about 
 	response, err := ct.agent.GenerateResponse([]api.Message{
 		{Role: "user", Content: prompt},
 	})
-	
+
 	if err != nil {
 		return ct.GetSummary(), nil // Fallback to manual summary on error
 	}
@@ -327,7 +327,7 @@ func (ct *ChangeTracker) GetSummary() string {
 	summary.WriteString(fmt.Sprintf("Tracked %d file changes:\n", len(ct.changes)))
 
 	for _, change := range ct.changes {
-		summary.WriteString(fmt.Sprintf("• %s (%s via %s)\n", 
+		summary.WriteString(fmt.Sprintf("• %s (%s via %s)\n",
 			change.FilePath, change.Operation, change.ToolCall))
 	}
 

@@ -27,7 +27,7 @@ func NewCommitMessageHandler(chatAgent *agent.Agent, reader *bufio.Reader) *Comm
 // GenerateCommitMessage generates a commit message from staged diff
 func (h *CommitMessageHandler) GenerateCommitMessage(diffOutput []byte, isSingleFile bool, filename string) (string, error) {
 	var commitPrompt string
-	
+
 	if isSingleFile {
 		commitPrompt = fmt.Sprintf(`Generate a concise commit message for changes to the file "%s".
 
@@ -36,7 +36,7 @@ IMPORTANT: Do NOT use any tools. Rely SOLELY on the staged diff provided below.
 Requirements:
 - Title: Maximum 120 characters, descriptive and concise
 - Blank line after title
-- Summary: 200 words or less, brief description of changes
+- Summary: Brief description of changes (be concise)
 - Focus on what changed in this specific file and why, not how
 - Include the filename in the summary if appropriate
 
@@ -53,7 +53,7 @@ Follow these exact rules:
 1. First, generate a short title starting with an action word (Adds, Updates, Deletes, Renames)
 2. Title must be under 72 characters, no colons, no markdown
 3. Title should not include filenames
-4. Then generate a description paragraph under 500 characters
+4. Then generate a concise description paragraph (be brief but informative)
 5. Description should not include code blocks or filenames
 6. No markdown formatting anywhere
 7. Format: [Title]\n\n[Description]
@@ -88,7 +88,7 @@ func (h *CommitMessageHandler) HandleCommitConfirmation(commitMessage string, fi
 		} else {
 			fmt.Println("\n💡 Commit with this message? (y)es/(n)o/(e)dit/(r)etry:")
 		}
-		
+
 		input, _ := h.reader.ReadString('\n')
 		input = strings.TrimSpace(strings.ToLower(input))
 
@@ -135,10 +135,10 @@ func (h *CommitMessageHandler) EditCommitMessage(commitMessage string) (string, 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	
+
 	fmt.Printf("📝 Opening %s to edit commit message...\n", editor)
 	fmt.Println("💡 Make your changes, save, and exit the editor to continue")
-	
+
 	err = cmd.Run()
 	if err != nil {
 		return "", fmt.Errorf("failed to edit commit message: %v", err)

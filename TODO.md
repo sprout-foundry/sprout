@@ -192,58 +192,68 @@ type ModelConfig struct {
 **Issue**: GitHub action creates incomplete config that causes model fallback.
 
 **Current Problem**:
-- `run-ledit.sh` sets individual model fields but not `provider_models`
-- This causes unexpected fallback to featured models
+- GitHub action scripts may set individual model fields but not `provider_models`
+- This used to cause unexpected fallback to featured models (now fixed)
 
-**Fix Options**:
-1. Update config generation to properly set provider_models:
-```json
-{
-  "provider_models": {
-    "$AI_PROVIDER": "$AI_MODEL"
-  },
-  "last_used_provider": "$AI_PROVIDER"
-}
-```
-
-2. OR use the --model command-line flag with provider prefix:
-```bash
-ledit agent --model "$AI_PROVIDER:$AI_MODEL" "$PROMPT"
-```
-
-3. BETTER: Add --provider flag to agent command and use both:
+**Solution Implemented**:
+The --provider flag has been added to the agent command, allowing explicit provider selection:
 ```bash
 ledit agent --provider "$AI_PROVIDER" --model "$AI_MODEL" "$PROMPT"
 ```
 
-The command-line flag approach is simpler and avoids config file issues entirely, but
-requires adding the missing --provider flag for clarity.
+**Recommended GitHub Action Configuration**:
+For GitHub actions, use command-line flags instead of config files:
+```yaml
+- name: Run Ledit Agent
+  run: |
+    ledit agent --provider "${{ inputs.ai-provider }}" \
+                --model "${{ inputs.ai-model }}" \
+                "${{ inputs.prompt }}"
+```
 
-### Consolidate Provider Detection
+This approach:
+- Avoids config file generation issues
+- Makes provider/model selection explicit
+- Works reliably in CI/CD environments
+- Overrides any existing config settings
+
+**If Config File Generation is Still Needed**:
+Ensure the config properly sets provider_models:
+```json
+{
+  "provider_models": {
+    "openrouter": "deepseek/deepseek-chat-v3.1:free",
+    "openai": "gpt-4o-mini"
+  },
+  "last_used_provider": "openrouter"
+}
+```
+
+### Consolidate Provider Detection ✅
 **Issue**: Multiple places determine which provider to use with different logic.
 
-**Current Problems**:
-- `GetBestProvider()` has complex fallback logic
-- `GetClientTypeFromEnv()` duplicates provider detection
-- No clear hierarchy of configuration sources
-
-**Proposed Solution**:
-Single function with clear precedence:
-1. Command-line flag (--model with provider prefix, e.g., "openrouter:model-name")
+**Solution Implemented**:
+Created unified `DetermineProvider()` function with clear precedence:
+1. Command-line flag (explicit provider string)
 2. Environment variable (LEDIT_PROVIDER)
 3. Config file (last_used_provider)
 4. First available provider from priority list
+5. Fallback to Ollama
 
-**Note**: Currently there's a --model flag but no --provider flag. The model flag can include
-provider prefix (e.g., "openrouter:qwen/qwen3-coder-30b") but this is:
-- Undocumented
-- Conflates provider and model selection
-- Falls back to unreliable "best provider" logic without prefix
+**Changes Made**:
+- Added `DetermineProvider()` function in interface.go
+- Added `parseProviderName()` for consistent provider name handling
+- Added `IsProviderAvailable()` for unified availability checking
+- Updated `GetBestProvider()` to use the new unified function
+- Added `GetProviderWithExplicit()` for command-line override support
+- Deprecated `GetClientTypeFromEnv()` in favor of unified approach
 
-**Recommendation**: Add explicit --provider flag to agent command:
-```bash
-ledit agent --provider openrouter --model "qwen/qwen3-coder-30b-a3b-instruct"
-```
+**Benefits**:
+- Single source of truth for provider selection logic
+- Clear, documented precedence order
+- Consistent provider name parsing
+- Reusable availability checking
+- Works seamlessly with --provider flag
 
 ### Remove Model Aliasing and Normalization
 **Issue**: Complex model name handling adds confusion.

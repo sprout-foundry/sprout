@@ -14,37 +14,63 @@ func (a *Agent) shouldCheckFalseStop(response string) bool {
 		return false
 	}
 
-	// Only check if:
-	// 1. Response is short (under 150 chars)
-	// 2. We're early in the conversation (iteration < 10)
-	// 3. Not an error message
-	// 4. Contains certain indicator phrases
-
-	if len(response) > 150 || a.currentIteration >= 10 {
+	// Skip if we're too late in the conversation
+	if a.currentIteration >= 10 {
 		return false
 	}
 
+	// Skip error messages
 	if strings.Contains(strings.ToLower(response), "error") {
 		return false
 	}
 
-	// Check for indicator phrases that suggest incomplete action
-	indicators := []string{
-		"i'll examine",
-		"i'll analyze",
-		"i'll check",
-		"i'll look at",
-		"let me examine",
-		"let me check",
-		"let me look at",
-		"i'll read",
-		"let me read",
+	// Check if response ends with a colon (indicating more to come)
+	trimmedResponse := strings.TrimSpace(response)
+	if strings.HasSuffix(trimmedResponse, ":") {
+		// Extract the last sentence/paragraph to check
+		lines := strings.Split(trimmedResponse, "\n")
+		lastLine := ""
+		for i := len(lines) - 1; i >= 0; i-- {
+			if strings.TrimSpace(lines[i]) != "" {
+				lastLine = strings.TrimSpace(lines[i])
+				break
+			}
+		}
+
+		// Check if the last line suggests an upcoming action
+		lastLineLower := strings.ToLower(lastLine)
+		actionIndicators := []string{
+			"let me", "i'll", "i need to", "i should", "let's",
+			"checking", "looking", "examining", "understanding",
+		}
+
+		for _, indicator := range actionIndicators {
+			if strings.Contains(lastLineLower, indicator) {
+				return true
+			}
+		}
 	}
 
-	responseLower := strings.ToLower(response)
-	for _, indicator := range indicators {
-		if strings.Contains(responseLower, indicator) {
-			return true
+	// Original check for short responses
+	if len(response) <= 150 {
+		// Check for indicator phrases that suggest incomplete action
+		indicators := []string{
+			"i'll examine",
+			"i'll analyze",
+			"i'll check",
+			"i'll look at",
+			"let me examine",
+			"let me check",
+			"let me look at",
+			"i'll read",
+			"let me read",
+		}
+
+		responseLower := strings.ToLower(response)
+		for _, indicator := range indicators {
+			if strings.Contains(responseLower, indicator) {
+				return true
+			}
 		}
 	}
 
@@ -82,6 +108,17 @@ func (a *Agent) getFastModelForProvider() (string, api.ClientType) {
 // checkFalseStop uses a fast model to determine if the response is a false stop
 func (a *Agent) checkFalseStop(response string) (bool, float64) {
 	// Create a simple, focused prompt for the fast model
+	// For longer responses, focus on the ending
+	responseToCheck := response
+	if len(response) > 500 {
+		// For long responses, check the last 300 characters for context
+		startIdx := len(response) - 300
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		responseToCheck = "..." + response[startIdx:]
+	}
+
 	prompt := fmt.Sprintf(`Analyze this assistant response and determine if it's incomplete.
 
 Response: "%s"
@@ -89,14 +126,19 @@ Response: "%s"
 An incomplete response:
 - Announces an action (like "I'll examine X") but doesn't do it
 - Says it will read/analyze something but stops
+- Ends with a colon suggesting more to come
 - Appears to be cut off mid-task
+- Last sentence indicates an upcoming action that wasn't performed
 
 A complete response:
 - Provides conclusions or recommendations
 - Completes the announced action
 - Is a natural stopping point
+- Ends with a complete thought
 
-Reply with only: "INCOMPLETE" or "COMPLETE"`, response)
+Pay special attention to responses ending with colons after phrases like "Let me check" or "Let me examine".
+
+Reply with only: "INCOMPLETE" or "COMPLETE"`, responseToCheck)
 
 	// Get provider-specific fast model
 	fastModel, clientType := a.getFastModelForProvider()

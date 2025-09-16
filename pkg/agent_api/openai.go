@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
 )
 
 const (
@@ -25,13 +24,13 @@ type OpenAIClient struct {
 
 // OpenAI-specific request/response structures
 type OpenAIRequest struct {
-	Model       string        `json:"model"`
-	Messages    []Message     `json:"messages"`
-	Tools       []Tool        `json:"tools,omitempty"`
-	Temperature *float64      `json:"temperature,omitempty"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Stream      bool          `json:"stream"`
-	Reasoning   string        `json:"reasoning,omitempty"` // For reasoning models
+	Model       string    `json:"model"`
+	Messages    []Message `json:"messages"`
+	Tools       []Tool    `json:"tools,omitempty"`
+	Temperature *float64  `json:"temperature,omitempty"`
+	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Stream      bool      `json:"stream"`
+	Reasoning   string    `json:"reasoning,omitempty"` // For reasoning models
 }
 
 type OpenAIResponse struct {
@@ -50,12 +49,12 @@ type OpenAIResponse struct {
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 	Usage struct {
-		PromptTokens     int     `json:"prompt_tokens"`
-		CompletionTokens int     `json:"completion_tokens"`
-		TotalTokens      int     `json:"total_tokens"`
-		EstimatedCost    float64 `json:"estimated_cost,omitempty"`
+		PromptTokens        int     `json:"prompt_tokens"`
+		CompletionTokens    int     `json:"completion_tokens"`
+		TotalTokens         int     `json:"total_tokens"`
+		EstimatedCost       float64 `json:"estimated_cost,omitempty"`
 		PromptTokensDetails struct {
-			CachedTokens     int `json:"cached_tokens"`
+			CachedTokens     int  `json:"cached_tokens"`
 			CacheWriteTokens *int `json:"cache_write_tokens,omitempty"`
 		} `json:"prompt_tokens_details,omitempty"`
 	} `json:"usage"`
@@ -85,25 +84,25 @@ func NewOpenAIClient() (*OpenAIClient, error) {
 func (c *OpenAIClient) SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
 	// Calculate appropriate max_tokens based on model and context
 	maxTokens := c.calculateMaxTokens(messages, tools)
-	
+
 	req := OpenAIRequest{
 		Model:    c.model,
 		Messages: messages,
 		Tools:    tools,
 		Stream:   false,
 	}
-	
+
 	// Only include temperature for models that support it (not GPT-5 models)
 	if !strings.Contains(c.model, "gpt-5") {
 		temp := 0.1 // Low for consistency
 		req.Temperature = &temp
 	}
-	
+
 	// Only include max_tokens for models that support it (not GPT-5 or o1 models)
 	if !strings.Contains(c.model, "gpt-5") && !strings.Contains(c.model, "o1") {
 		req.MaxTokens = maxTokens
 	}
-	
+
 	// Only include reasoning parameter for o1 models that support it
 	if reasoning != "" && (strings.Contains(c.model, "o1") || strings.Contains(c.model, "reasoning")) {
 		req.Reasoning = reasoning
@@ -165,7 +164,7 @@ func (c *OpenAIClient) SendChatRequest(messages []Message, tools []Tool, reasoni
 	}
 
 	choice := openaiResp.Choices[0]
-	
+
 	// Calculate estimated cost if not provided
 	estimatedCost := openaiResp.Usage.EstimatedCost
 	if estimatedCost == 0 {
@@ -196,12 +195,12 @@ func (c *OpenAIClient) SendChatRequest(messages []Message, tools []Tool, reasoni
 			FinishReason: choice.FinishReason,
 		}},
 		Usage: struct {
-			PromptTokens     int     `json:"prompt_tokens"`
-			CompletionTokens int     `json:"completion_tokens"`
-			TotalTokens      int     `json:"total_tokens"`
-			EstimatedCost    float64 `json:"estimated_cost"`
+			PromptTokens        int     `json:"prompt_tokens"`
+			CompletionTokens    int     `json:"completion_tokens"`
+			TotalTokens         int     `json:"total_tokens"`
+			EstimatedCost       float64 `json:"estimated_cost"`
 			PromptTokensDetails struct {
-				CachedTokens     int `json:"cached_tokens"`
+				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
 			} `json:"prompt_tokens_details,omitempty"`
 		}{
@@ -210,7 +209,7 @@ func (c *OpenAIClient) SendChatRequest(messages []Message, tools []Tool, reasoni
 			TotalTokens:      openaiResp.Usage.TotalTokens,
 			EstimatedCost:    estimatedCost,
 			PromptTokensDetails: struct {
-				CachedTokens     int `json:"cached_tokens"`
+				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
 			}{
 				CachedTokens:     openaiResp.Usage.PromptTokensDetails.CachedTokens,
@@ -300,7 +299,7 @@ func (c *OpenAIClient) GetProvider() string {
 
 func (c *OpenAIClient) GetModelContextLimit() (int, error) {
 	model := c.model
-	
+
 	// Try to get context length from model info API first
 	models, err := getOpenAIModels()
 	if err == nil {
@@ -310,7 +309,7 @@ func (c *OpenAIClient) GetModelContextLimit() (int, error) {
 			}
 		}
 	}
-	
+
 	// Fallback to hardcoded limits if API doesn't provide context length (2025 updated)
 	switch {
 	// GPT-5 series (2025) - up to 272K context
@@ -331,15 +330,15 @@ func (c *OpenAIClient) GetModelContextLimit() (int, error) {
 	case strings.Contains(model, "gpt-4-turbo"):
 		return 128000, nil // GPT-4 Turbo supports 128K context
 	case strings.Contains(model, "gpt-4"):
-		return 8192, nil   // Base GPT-4 supports 8K context
+		return 8192, nil // Base GPT-4 supports 8K context
 	// GPT-3.5 series
 	case strings.Contains(model, "gpt-3.5-turbo"):
-		return 16385, nil  // GPT-3.5-turbo supports ~16K context
+		return 16385, nil // GPT-3.5-turbo supports ~16K context
 	// ChatGPT models
 	case strings.Contains(model, "chatgpt"):
 		return 128000, nil // ChatGPT models typically support large context
 	default:
-		return 16000, nil  // Conservative default for unknown models
+		return 16000, nil // Conservative default for unknown models
 	}
 }
 
@@ -351,12 +350,8 @@ func (c *OpenAIClient) SupportsVision() bool {
 
 // GetVisionModel returns the vision model for OpenAI
 func (c *OpenAIClient) GetVisionModel() string {
-	// Return first featured vision model
-	featuredVisionModels := c.GetFeaturedVisionModels()
-	if len(featuredVisionModels) > 0 {
-		return featuredVisionModels[0]
-	}
-	return ""
+	// Return default vision model
+	return "gpt-4o"
 }
 
 // SendVisionRequest sends a vision-enabled chat request
@@ -381,29 +376,12 @@ func (c *OpenAIClient) SendVisionRequest(messages []Message, tools []Tool, reaso
 	return response, err
 }
 
-func (c *OpenAIClient) GetFeaturedModels() []string {
-	// Featured OpenAI models that work best for coding/tool use
-	return []string{
-		"gpt-4o-mini",    // Best balance of speed, quality, and cost for coding
-		"gpt-4o",         // High quality for complex coding tasks
-		"o1-mini",        // Reasoning model for complex problem solving
-	}
-}
-
-func (c *OpenAIClient) GetFeaturedVisionModels() []string {
-	// Featured OpenAI models that support vision tasks
-	return []string{
-		"gpt-4o",         // Best for vision tasks requiring high quality
-		"gpt-4o-mini",    // Cost-effective vision model
-	}
-}
-
 // OpenAIPricingTier represents different OpenAI pricing tiers
 type OpenAIPricingTier string
 
 const (
 	StandardTier OpenAIPricingTier = "standard"
-	BatchTier    OpenAIPricingTier = "batch" 
+	BatchTier    OpenAIPricingTier = "batch"
 	FlexTier     OpenAIPricingTier = "flex"
 )
 
@@ -417,95 +395,95 @@ func (c *OpenAIClient) calculateOpenAICostWithTier(promptTokens, completionToken
 	// Current OpenAI pricing per 1M tokens (September 2025 - from screenshots)
 	pricingMap := map[string]struct {
 		InputPer1M       float64 // Standard input price per 1M tokens
-		CachedInputPer1M float64 // Cached input price per 1M tokens  
+		CachedInputPer1M float64 // Cached input price per 1M tokens
 		OutputPer1M      float64 // Output price per 1M tokens
 		BatchMultiplier  float64 // Batch API discount multiplier (typically 0.5 = 50% off)
 		FlexMultiplier   float64 // Flex processing multiplier (typically 0.6 = 40% off)
 	}{
 		// GPT-5 series (current as of September 2025) - Values are cost per 1M tokens
-		"gpt-5":                     {0.625, 0.3125, 5.00, 0.5, 0.6},    // $0.625/$0.3125/$5.00 per 1M
-		"gpt-5-2025-08-07":         {0.625, 0.3125, 5.00, 0.5, 0.6},
-		"gpt-5-mini":               {0.125, 0.0625, 1.00, 0.5, 0.6},     // $0.125/$0.0625/$1.00 per 1M
-		"gpt-5-mini-2025-08-07":    {0.125, 0.0625, 1.00, 0.5, 0.6},
-		"gpt-5-nano":               {0.025, 0.0125, 0.20, 0.5, 0.6},     // $0.025/$0.0125/$0.20 per 1M
-		"gpt-5-nano-2025-08-07":    {0.025, 0.0125, 0.20, 0.5, 0.6},
-		
+		"gpt-5":                 {0.625, 0.3125, 5.00, 0.5, 0.6}, // $0.625/$0.3125/$5.00 per 1M
+		"gpt-5-2025-08-07":      {0.625, 0.3125, 5.00, 0.5, 0.6},
+		"gpt-5-mini":            {0.125, 0.0625, 1.00, 0.5, 0.6}, // $0.125/$0.0625/$1.00 per 1M
+		"gpt-5-mini-2025-08-07": {0.125, 0.0625, 1.00, 0.5, 0.6},
+		"gpt-5-nano":            {0.025, 0.0125, 0.20, 0.5, 0.6}, // $0.025/$0.0125/$0.20 per 1M
+		"gpt-5-nano-2025-08-07": {0.025, 0.0125, 0.20, 0.5, 0.6},
+
 		// O3 series (current pricing) - Values are cost per 1M tokens
-		"o3":                       {1.00, 0.25, 4.00, 0.5, 0.6},       // $1.00/$0.25/$4.00 per 1M
-		"o3-mini":                  {0.55, 0.138, 2.20, 0.5, 0.6},      // $0.55/$0.138/$2.20 per 1M
-		
+		"o3":      {1.00, 0.25, 4.00, 0.5, 0.6},  // $1.00/$0.25/$4.00 per 1M
+		"o3-mini": {0.55, 0.138, 2.20, 0.5, 0.6}, // $0.55/$0.138/$2.20 per 1M
+
 		// O4-mini (from screenshot)
-		"o4-mini":                  {0.55, 0.138, 2.20, 0.5, 0.6},      // $0.55/$0.138/$2.20 per 1M
-		
+		"o4-mini": {0.55, 0.138, 2.20, 0.5, 0.6}, // $0.55/$0.138/$2.20 per 1M
+
 		// GPT-4o series (per-1K pricing converted to per-1M for consistency)
-		"gpt-4o":                   {5.0, 2.5, 15.0, 0.5, 0.6},         // $5.00/$2.50/$15.00 per 1M
-		"gpt-4o-2024-05-13":        {5.0, 2.5, 15.0, 0.5, 0.6},
-		"gpt-4o-2024-08-06":        {2.5, 1.25, 10.0, 0.5, 0.6},        // $2.50/$1.25/$10.00 per 1M
-		"gpt-4o-2024-11-20":        {2.5, 1.25, 10.0, 0.5, 0.6},
-		"gpt-4o-mini":              {0.15, 0.075, 0.6, 0.5, 0.6},       // $0.15/$0.075/$0.60 per 1M
-		"gpt-4o-mini-2024-07-18":   {0.15, 0.075, 0.6, 0.5, 0.6},
-		
+		"gpt-4o":                 {5.0, 2.5, 15.0, 0.5, 0.6}, // $5.00/$2.50/$15.00 per 1M
+		"gpt-4o-2024-05-13":      {5.0, 2.5, 15.0, 0.5, 0.6},
+		"gpt-4o-2024-08-06":      {2.5, 1.25, 10.0, 0.5, 0.6}, // $2.50/$1.25/$10.00 per 1M
+		"gpt-4o-2024-11-20":      {2.5, 1.25, 10.0, 0.5, 0.6},
+		"gpt-4o-mini":            {0.15, 0.075, 0.6, 0.5, 0.6}, // $0.15/$0.075/$0.60 per 1M
+		"gpt-4o-mini-2024-07-18": {0.15, 0.075, 0.6, 0.5, 0.6},
+
 		// O1 series (from screenshot) - Values are cost per 1M tokens
-		"o1":                       {1.00, 0.25, 4.00, 0.5, 0.6},       // $1.00/$0.25/$4.00 per 1M
-		"o1-2024-12-17":           {1.00, 0.25, 4.00, 0.5, 0.6},
-		"o1-mini":                  {0.55, 0.138, 2.20, 0.5, 0.6},      // $0.55/$0.138/$2.20 per 1M 
-		"o1-mini-2024-09-12":      {0.55, 0.138, 2.20, 0.5, 0.6},
-		
+		"o1":                 {1.00, 0.25, 4.00, 0.5, 0.6}, // $1.00/$0.25/$4.00 per 1M
+		"o1-2024-12-17":      {1.00, 0.25, 4.00, 0.5, 0.6},
+		"o1-mini":            {0.55, 0.138, 2.20, 0.5, 0.6}, // $0.55/$0.138/$2.20 per 1M
+		"o1-mini-2024-09-12": {0.55, 0.138, 2.20, 0.5, 0.6},
+
 		// GPT-4 series (legacy pricing in per-1K format for compatibility)
-		"gpt-4-turbo":              {10.0, 5.0, 30.0, 0.5, 0.6},
-		"gpt-4":                    {30.0, 15.0, 60.0, 0.5, 0.6},
-		
+		"gpt-4-turbo": {10.0, 5.0, 30.0, 0.5, 0.6},
+		"gpt-4":       {30.0, 15.0, 60.0, 0.5, 0.6},
+
 		// GPT-3.5 series (legacy pricing)
-		"gpt-3.5-turbo":            {2.0, 1.0, 2.0, 0.5, 0.6},
-		
+		"gpt-3.5-turbo": {2.0, 1.0, 2.0, 0.5, 0.6},
+
 		// Image models (from screenshot - per 1M tokens)
-		"gpt-image-1":              {10000.0, 2500.0, 40000.0, 0.5, 0.6}, // $10.00/$2.50/$40.00 per 1M
-		"gpt-realtime":             {5000.0, 400.0, 0.0, 0.5, 0.6},       // $5.00/$0.40 per 1M (no output cost)
+		"gpt-image-1":  {10000.0, 2500.0, 40000.0, 0.5, 0.6}, // $10.00/$2.50/$40.00 per 1M
+		"gpt-realtime": {5000.0, 400.0, 0.0, 0.5, 0.6},       // $5.00/$0.40 per 1M (no output cost)
 	}
-	
+
 	// Look up pricing for the specific model
 	if pricing, exists := pricingMap[c.model]; exists {
 		// Calculate regular input tokens (excluding cached)
 		regularInputTokens := promptTokens - cachedTokens
-		
+
 		// Determine if pricing is per 1M or per 1K tokens based on scale
 		var inputRate, cachedRate, outputRate float64
 		var divisor float64
-		
+
 		// Most new models use per-1M pricing (values > 50), legacy models use per-1K
 		if pricing.InputPer1M > 50 {
 			// Per-1M token pricing (new models like GPT-5, O3, O4-mini)
 			inputRate = pricing.InputPer1M
-			cachedRate = pricing.CachedInputPer1M  // Already includes the discount
+			cachedRate = pricing.CachedInputPer1M // Already includes the discount
 			outputRate = pricing.OutputPer1M
 			divisor = 1000000 // Convert tokens to millions
 		} else {
 			// Per-1K token pricing (legacy models like GPT-4o, GPT-4)
 			inputRate = pricing.InputPer1M
-			cachedRate = pricing.CachedInputPer1M  // Already includes the discount
+			cachedRate = pricing.CachedInputPer1M // Already includes the discount
 			outputRate = pricing.OutputPer1M
 			divisor = 1000 // Convert tokens to thousands
 		}
-		
+
 		// Apply tier pricing multiplier
 		var tierMultiplier float64
 		switch tier {
 		case BatchTier:
 			tierMultiplier = pricing.BatchMultiplier // 50% off for batch
 		case FlexTier:
-			tierMultiplier = pricing.FlexMultiplier  // 40% off for flex
+			tierMultiplier = pricing.FlexMultiplier // 40% off for flex
 		default:
 			tierMultiplier = 1.0 // Standard pricing
 		}
-		
+
 		// Calculate costs with tier multiplier applied
 		inputCost := float64(regularInputTokens) * inputRate * tierMultiplier / divisor
 		cachedCost := float64(cachedTokens) * cachedRate * tierMultiplier / divisor
 		outputCost := float64(completionTokens) * outputRate * tierMultiplier / divisor
-		
+
 		return inputCost + cachedCost + outputCost
 	}
-	
+
 	// Fallback for unknown models - use GPT-4o-mini pricing as conservative estimate
 	regularInputTokens := promptTokens - cachedTokens
 	tierMultiplier := 1.0
@@ -514,9 +492,9 @@ func (c *OpenAIClient) calculateOpenAICostWithTier(promptTokens, completionToken
 	} else if tier == FlexTier {
 		tierMultiplier = 0.6
 	}
-	
+
 	fallbackInputCost := float64(regularInputTokens) * 0.15 * tierMultiplier / 1000
-	fallbackCachedCost := float64(cachedTokens) * 0.075 * tierMultiplier / 1000  // Pre-discounted cached rate
+	fallbackCachedCost := float64(cachedTokens) * 0.075 * tierMultiplier / 1000 // Pre-discounted cached rate
 	fallbackOutputCost := float64(completionTokens) * 0.6 * tierMultiplier / 1000
 	return fallbackInputCost + fallbackCachedCost + fallbackOutputCost
 }

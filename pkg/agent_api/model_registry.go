@@ -50,9 +50,15 @@ func (e *ModelNotFoundError) Error() string {
 // GetModelRegistry returns the default model registry (thread-safe singleton)
 func GetModelRegistry() *ModelRegistry {
 	registryOnce.Do(func() {
-		defaultRegistry = newDefaultModelRegistry()
+		defaultRegistry = NewModelRegistry()
 	})
 	return defaultRegistry
+}
+
+// NewModelRegistry creates a new model registry instance
+// This allows for dependency injection in tests and better isolation
+func NewModelRegistry() *ModelRegistry {
+	return newDefaultModelRegistry()
 }
 
 // newDefaultModelRegistry creates the registry with all model configurations
@@ -297,6 +303,7 @@ func (r *ModelRegistry) GetModelContextLength(modelID string) (int, error) {
 }
 
 // GetModelContextLengthWithDefault returns context length with fallback (for backward compatibility)
+// DEPRECATED: Use GetModelContextLength instead and handle errors properly
 func (r *ModelRegistry) GetModelContextLengthWithDefault(modelID string, defaultLength int) int {
 	length, err := r.GetModelContextLength(modelID)
 	if err != nil {
@@ -329,11 +336,50 @@ func (r *ModelRegistry) AddModel(config ModelConfig) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Comprehensive validation
+	if err := r.validateModelConfig(config); err != nil {
+		return err
+	}
+
+	r.models[config.ID] = config
+	return nil
+}
+
+// validateModelConfig performs comprehensive validation on a model configuration
+func (r *ModelRegistry) validateModelConfig(config ModelConfig) error {
+	// ID validation
 	if config.ID == "" {
 		return &ModelValidationError{Field: "ID", Message: "model ID cannot be empty"}
 	}
 
-	r.models[config.ID] = config
+	// Provider validation
+	if config.Provider == "" {
+		return &ModelValidationError{Field: "Provider", Message: "provider cannot be empty"}
+	}
+
+	// Context length validation
+	if config.ContextLength <= 0 {
+		return &ModelValidationError{Field: "ContextLength", Message: "context length must be positive"}
+	}
+
+	// Cost validation
+	if config.InputCost < 0 {
+		return &ModelValidationError{Field: "InputCost", Message: "input cost cannot be negative"}
+	}
+
+	if config.OutputCost < 0 {
+		return &ModelValidationError{Field: "OutputCost", Message: "output cost cannot be negative"}
+	}
+
+	if config.CachedInputCost < 0 {
+		return &ModelValidationError{Field: "CachedInputCost", Message: "cached input cost cannot be negative"}
+	}
+
+	// Logical validation
+	if config.CachedInputCost > config.InputCost {
+		return &ModelValidationError{Field: "CachedInputCost", Message: "cached input cost should not exceed regular input cost"}
+	}
+
 	return nil
 }
 
@@ -342,12 +388,50 @@ func (r *ModelRegistry) AddPattern(pattern ModelPattern) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Validate pattern
+	if err := r.validateModelPattern(pattern); err != nil {
+		return err
+	}
+
+	r.patterns = append(r.patterns, pattern)
+
+	// Sort patterns by priority (highest first) for consistent matching
+	r.sortPatternsByPriority()
+
+	return nil
+}
+
+// validateModelPattern validates a model pattern
+func (r *ModelRegistry) validateModelPattern(pattern ModelPattern) error {
 	if len(pattern.Contains) == 0 && len(pattern.NotContains) == 0 {
 		return &ModelValidationError{Field: "Pattern", Message: "pattern must have at least one contains or not_contains rule"}
 	}
 
-	r.patterns = append(r.patterns, pattern)
+	// Validate the embedded config (but allow empty ID since it's set dynamically)
+	configCopy := pattern.Config
+	configCopy.ID = "test" // Temporary ID for validation
+	if err := r.validateModelConfig(configCopy); err != nil {
+		return &ModelValidationError{Field: "Pattern.Config", Message: "invalid pattern config: " + err.Error()}
+	}
+
+	// Priority validation
+	if pattern.Priority < 0 {
+		return &ModelValidationError{Field: "Pattern.Priority", Message: "priority cannot be negative"}
+	}
+
 	return nil
+}
+
+// sortPatternsByPriority sorts patterns by priority (highest first)
+func (r *ModelRegistry) sortPatternsByPriority() {
+	// Simple insertion sort since patterns list is typically small
+	for i := 1; i < len(r.patterns); i++ {
+		j := i
+		for j > 0 && r.patterns[j].Priority > r.patterns[j-1].Priority {
+			r.patterns[j], r.patterns[j-1] = r.patterns[j-1], r.patterns[j]
+			j--
+		}
+	}
 }
 
 // ModelValidationError is returned when model or pattern validation fails

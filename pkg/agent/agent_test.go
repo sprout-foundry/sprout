@@ -30,8 +30,8 @@ func TestNewAgent(t *testing.T) {
 	}
 
 	// Test basic properties
-	if agent.maxIterations != 100 {
-		t.Errorf("Expected maxIterations to be 100, got %d", agent.maxIterations)
+	if agent.maxIterations != 1000 {
+		t.Errorf("Expected maxIterations to be 1000, got %d", agent.maxIterations)
 	}
 
 	if agent.currentIteration != 0 {
@@ -74,8 +74,8 @@ func TestNewAgentWithModel(t *testing.T) {
 	}
 
 	// Verify agent properties
-	if agent.GetMaxIterations() != 100 {
-		t.Errorf("Expected maxIterations to be 100, got %d", agent.GetMaxIterations())
+	if agent.GetMaxIterations() != 1000 {
+		t.Errorf("Expected maxIterations to be 1000, got %d", agent.GetMaxIterations())
 	}
 }
 
@@ -102,8 +102,8 @@ func TestBasicGetters(t *testing.T) {
 		t.Errorf("Expected GetCurrentIteration() to be 0, got %d", agent.GetCurrentIteration())
 	}
 
-	if agent.GetMaxIterations() != 100 {
-		t.Errorf("Expected GetMaxIterations() to be 100, got %d", agent.GetMaxIterations())
+	if agent.GetMaxIterations() != 1000 {
+		t.Errorf("Expected GetMaxIterations() to be 1000, got %d", agent.GetMaxIterations())
 	}
 
 	if agent.GetTotalCost() != 0.0 {

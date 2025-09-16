@@ -41,7 +41,7 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 
 	// Set a reasonable iteration limit to prevent infinite loops
 	// The agent should complete tasks naturally, but we need a safety limit
-	maxIterationsForThisQuery := 100
+	maxIterationsForThisQuery := a.maxIterations
 
 	// Check if this is a new conversation or continuing an existing one
 	if len(a.messages) == 0 {

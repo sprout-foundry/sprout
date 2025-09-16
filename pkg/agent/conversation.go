@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -139,10 +140,40 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 		// Send request to API using dynamic reasoning effort and cached tools
 		reasoningEffort := a.determineReasoningEffort(optimizedMessages)
 		tools := a.getOptimizedToolDefinitions(optimizedMessages)
-		resp, err := a.client.SendChatRequest(optimizedMessages, tools, reasoningEffort)
-		if err != nil {
-			// IMPROVED: Preserve conversation context on API failures instead of losing everything
-			return a.handleAPIFailure(err, optimizedMessages)
+
+		// Retry logic for transient errors
+		var resp *api.ChatResponse
+		var err error
+		maxRetries := 3
+		retryDelay := time.Second
+
+		for retry := 0; retry <= maxRetries; retry++ {
+			resp, err = a.client.SendChatRequest(optimizedMessages, tools, reasoningEffort)
+			if err == nil {
+				break // Success
+			}
+
+			// Check if this is a retryable error
+			errStr := err.Error()
+			isRetryable := strings.Contains(errStr, "stream error") ||
+				strings.Contains(errStr, "INTERNAL_ERROR") ||
+				strings.Contains(errStr, "connection reset") ||
+				strings.Contains(errStr, "EOF") ||
+				strings.Contains(errStr, "timeout")
+
+			if !isRetryable || retry == maxRetries {
+				// Not retryable or max retries reached
+				return a.handleAPIFailure(err, optimizedMessages)
+			}
+
+			// Log retry attempt
+			a.debugLog("⚠️ Retrying API request (attempt %d/%d) after error: %v\n", retry+1, maxRetries, err)
+
+			// Exponential backoff with jitter
+			jitter := time.Duration(rand.Float64() * float64(retryDelay/2))
+			sleepTime := retryDelay + jitter
+			time.Sleep(sleepTime)
+			retryDelay *= 2 // Double the delay for next retry
 		}
 
 		if len(resp.Choices) == 0 {
@@ -494,7 +525,22 @@ func (a *Agent) handleAPIFailure(apiErr error, _ []api.Message) (string, error) 
 	a.debugLog("⚠️ API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n",
 		toolsExecuted, a.formatTokenCount(a.totalTokens))
 
-	// Create a response that preserves the conversation context and allows the user to continue
+	// Check if we're in a non-interactive environment (e.g., CI/GitHub Actions)
+	if !a.IsInteractiveMode() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		// In non-interactive mode, return an error to fail fast
+		errorMsg := fmt.Sprintf("API request failed after %d tools executed: %v", toolsExecuted, apiErr)
+
+		// Include progress information in the error message
+		if toolsExecuted > 0 {
+			errorMsg += fmt.Sprintf(" (Progress: %d tools executed, %s tokens used)",
+				toolsExecuted, a.formatTokenCount(a.totalTokens))
+		}
+
+		// Return the error to terminate the process
+		return "", fmt.Errorf("%s", errorMsg)
+	}
+
+	// Interactive mode - preserve conversation for user to continue
 	response := "⚠️ **API Request Failed - Conversation Preserved**\n\n"
 
 	// Classify the error type for better user guidance

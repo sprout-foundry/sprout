@@ -361,23 +361,26 @@ func (c *InputComponent) redrawLine() {
 		}
 	}
 
-	// If we previously rendered multiple lines, we need to clear them all
+	// Move cursor to the start of the input (accounting for multiple lines)
 	if c.prevLineCount > 1 {
 		// Move to the beginning of the first line
 		for i := 1; i < c.prevLineCount; i++ {
 			fmt.Print("\033[A") // Move up
 		}
 	}
+	fmt.Print("\r") // Move to beginning of line
 
-	// Clear all lines that we're going to use
-	fmt.Print("\r\033[K") // Clear current line
-	for i := 1; i < newLineCount; i++ {
-		fmt.Print("\n\033[K") // New line and clear
+	// Clear exactly the lines we previously used (not more)
+	for i := 0; i < c.prevLineCount; i++ {
+		fmt.Print("\033[K") // Clear to end of line
+		if i < c.prevLineCount-1 {
+			fmt.Print("\n") // Move to next line (except for last)
+		}
 	}
 
-	// Move back to the beginning
-	if newLineCount > 1 {
-		for i := 1; i < newLineCount; i++ {
+	// Move back to the first line
+	if c.prevLineCount > 1 {
+		for i := 1; i < c.prevLineCount; i++ {
 			fmt.Print("\033[A") // Move up
 		}
 	}
@@ -401,15 +404,24 @@ func (c *InputComponent) redrawLine() {
 		targetRow := absolutePos / c.termWidth
 		targetCol := absolutePos % c.termWidth
 
-		// Current position is at the end
+		// Current position is at the end of all text
 		currentPos := totalLen
-		currentRow := (currentPos - 1) / c.termWidth
-		currentCol := (currentPos - 1) % c.termWidth
+		currentRow := currentPos / c.termWidth
+		currentCol := currentPos % c.termWidth
+
+		// Handle edge case where we're at column 0 of a new line
+		if currentCol == 0 && currentPos > 0 {
+			currentRow--
+			currentCol = c.termWidth
+		}
 
 		// Move cursor to target position
 		if targetRow < currentRow {
 			fmt.Printf("\033[%dA", currentRow-targetRow) // Move up
+		} else if targetRow > currentRow {
+			fmt.Printf("\033[%dB", targetRow-currentRow) // Move down
 		}
+
 		if targetCol < currentCol {
 			fmt.Printf("\033[%dD", currentCol-targetCol) // Move left
 		} else if targetCol > currentCol {

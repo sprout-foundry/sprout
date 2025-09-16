@@ -9,3 +9,22 @@ testing_area
 
 .bin
 test_dir
+
+# Internal documentation and working files
+ARCHITECTURE_AUDIT*.md
+*_SUMMARY.md
+*_IMPLEMENTATION.md
+FIXES_APPLIED.md
+review_assumptions.md
+false_stop_detection_summary.md
+provider_refactor_summary.md
+
+# Test files and data
+test_input.txt
+openai_models_response.json
+coverage.html
+
+# Temporary test scripts
+test.py
+scripts/test_*.go
+scripts/verify_*.go

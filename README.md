@@ -52,7 +52,6 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 ## Features
 
 - **AI Agent Capabilities**: The `ledit agent` command provides intelligent code analysis, explanation, generation, and orchestration. It can understand natural language intents to explain concepts, analyze code, implement features, and handle complex workflows.
-- **Intelligent Code Generation**: Generate new code or modify existing code based on natural language prompts using `ledit code` for direct editing tasks.
 - **Self-Correction Loop**: During complex operations, the system automatically analyzes errors and retries with improved context.
 - **Smart Workspace Context**: Automatically builds and maintains an index of your workspace. An LLM selects the most relevant files to include as context for any given task.
 - **Leaked Credentials Check**: Automatically scans files for common security concerns like API keys, passwords, database/service URLs, SSH private keys, AWS credentials. This helps prevent accidental exposure of sensitive information.
@@ -222,15 +221,6 @@ The workspace index is automatically updated whenever you run a command, ensurin
   ledit agent "Explain what the main function does"
   ledit agent "Fix all build errors in this project"
   ledit agent --skip-prompt "Implement user authentication with JWT"
-  ```
-
-- **`ledit code "prompt" [-f file]`**: Generate or modify code directly.
-  ```bash
-  # Edit an existing file
-  ledit code "Add a function to reverse a string" -f main.go
-
-  # Create a new file
-  ledit code "Create a python script that prints 'Hello, World!'"
   ```
 
 - **`ledit commit`**: Generate a conventional commit message for staged changes, with optional auto-commit and code review.

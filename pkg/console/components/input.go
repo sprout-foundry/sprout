@@ -361,28 +361,32 @@ func (c *InputComponent) redrawLine() {
 		}
 	}
 
-	// Move cursor to the start of the input (accounting for multiple lines)
-	if c.prevLineCount > 1 {
-		// Move to the beginning of the first line
-		for i := 1; i < c.prevLineCount; i++ {
-			fmt.Print("\033[A") // Move up
-		}
-	}
-	fmt.Print("\r") // Move to beginning of line
+	// Move to the start position
+	// First, go to beginning of current line
+	fmt.Print("\r")
 
-	// Clear exactly the lines we previously used (not more)
-	for i := 0; i < c.prevLineCount; i++ {
-		fmt.Print("\033[K") // Clear to end of line
-		if i < c.prevLineCount-1 {
-			fmt.Print("\n") // Move to next line (except for last)
-		}
+	// If we have multiple lines, move up to the first line
+	if c.prevLineCount > 1 {
+		fmt.Printf("\033[%dA", c.prevLineCount-1)
 	}
 
-	// Move back to the first line
-	if c.prevLineCount > 1 {
-		for i := 1; i < c.prevLineCount; i++ {
-			fmt.Print("\033[A") // Move up
+	// Now clear all lines we need
+	maxLines := c.prevLineCount
+	if newLineCount > maxLines {
+		maxLines = newLineCount
+	}
+
+	// Clear from current position
+	for i := 0; i < maxLines; i++ {
+		fmt.Print("\033[2K") // Clear entire line (more thorough than \033[K)
+		if i < maxLines-1 {
+			fmt.Print("\n") // Move to next line
 		}
+	}
+
+	// Move back to first line
+	if maxLines > 1 {
+		fmt.Printf("\033[%dA", maxLines-1)
 	}
 	fmt.Print("\r")
 

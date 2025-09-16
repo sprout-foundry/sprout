@@ -20,24 +20,32 @@ import (
 var (
 	agentSkipPrompt bool
 	agentModel      string // Declare agentModel variable
+	agentProvider   string // Declare agentProvider variable
 	agentDryRun     bool
 )
 
 func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
+	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, ollama, cerebras, groq, deepseek)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 }
 
 // runSimpleInteractiveMode provides a simple console-based interactive mode
 func runInteractiveMode() error {
-	// Create agent with model if specified
+	// Create agent with provider and model if specified
 	var chatAgent *agent.Agent
 	var err error
 
-	if agentModel != "" {
+	if agentProvider != "" && agentModel != "" {
+		// Both provider and model specified - use them directly
+		modelWithProvider := fmt.Sprintf("%s:%s", agentProvider, agentModel)
+		chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
+	} else if agentModel != "" {
+		// Only model specified - use existing behavior
 		chatAgent, err = agent.NewAgentWithModel(agentModel)
 	} else {
+		// Neither specified - use defaults
 		chatAgent, err = agent.NewAgent()
 	}
 
@@ -80,13 +88,19 @@ func runInteractiveMode() error {
 
 // executeDirectAgentCommand executes an agent command directly (like coder does)
 func executeDirectAgentCommand(userIntent string) error {
-	// Create agent with model if specified
+	// Create agent with provider and model if specified
 	var chatAgent *agent.Agent
 	var err error
 
-	if agentModel != "" {
+	if agentProvider != "" && agentModel != "" {
+		// Both provider and model specified - use them directly
+		modelWithProvider := fmt.Sprintf("%s:%s", agentProvider, agentModel)
+		chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
+	} else if agentModel != "" {
+		// Only model specified - use existing behavior
 		chatAgent, err = agent.NewAgentWithModel(agentModel)
 	} else {
+		// Neither specified - use defaults
 		chatAgent, err = agent.NewAgent()
 	}
 
@@ -485,8 +499,10 @@ Examples:
   # Direct mode
   ledit agent "Add better error handling to the main function"
   ledit agent "How does the authentication system work?"
-  ledit agent "run build command"
-  ledit agent "Fix the bug where users can't login"`,
+  
+  # With specific provider and model
+  ledit agent --provider openrouter --model "qwen/qwen3-coder-30b" "Fix the login bug"
+  ledit agent -p deepinfra -m "deepseek-v3" "Analyze the codebase structure"`,
 	Args: cobra.MaximumNArgs(1), // Allow 0 or 1 args for interactive mode
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Handle interactive mode

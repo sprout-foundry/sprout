@@ -86,7 +86,21 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 		contextTokens := a.estimateContextTokens(optimizedMessages)
 		a.currentContextTokens = contextTokens
 
-		// Check if we're approaching the context limit (80%)
+		// Apply automatic pruning if needed
+		if a.conversationPruner != nil && a.conversationPruner.ShouldPrune(contextTokens, a.maxContextTokens) {
+			// Apply automatic pruning
+			prunedMessages := a.conversationPruner.PruneConversation(optimizedMessages, contextTokens, a.maxContextTokens, a.optimizer)
+
+			// Update the stored messages to reflect pruning
+			if len(prunedMessages) < len(optimizedMessages) {
+				a.messages = prunedMessages
+				optimizedMessages = prunedMessages
+				contextTokens = a.estimateContextTokens(optimizedMessages)
+				a.currentContextTokens = contextTokens
+			}
+		}
+
+		// Check if we're still approaching the context limit after pruning
 		contextThreshold := int(float64(a.maxContextTokens) * 0.8)
 		if contextTokens > contextThreshold {
 			if !a.contextWarningIssued {
@@ -97,7 +111,7 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 				a.contextWarningIssued = true
 			}
 
-			// Perform aggressive optimization when near limit
+			// Perform aggressive optimization as last resort
 			optimizedMessages = a.optimizer.AggressiveOptimization(optimizedMessages)
 			contextTokens = a.estimateContextTokens(optimizedMessages)
 			a.currentContextTokens = contextTokens

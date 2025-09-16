@@ -56,7 +56,7 @@ func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	// Create a comprehensive prompt with environmental context
-	systemPrompt := "You are a shell command generator. Output ONLY executable shell code. No explanations, no markdown, no commentary."
+	systemPrompt := "You are a shell command generator. Output ONLY executable shell code. No explanations, no markdown, no commentary. Do not include <think> tags or any other XML tags. Output only the command or script itself."
 
 	userPrompt := fmt.Sprintf(`Generate a shell command or script for: "%s"
 
@@ -95,8 +95,16 @@ Generate the command/script now:`, description, envContext)
 		return fmt.Errorf("fast model did not generate a valid shell script")
 	}
 
+	// Clean up markdown code blocks if present
+	generatedScript = c.cleanMarkdownCodeBlocks(generatedScript)
+
 	// Validate that the output looks like executable code
 	if !c.isValidShellCode(generatedScript) {
+		// Debug: show what we got
+		if os.Getenv("LEDIT_DEBUG") == "1" {
+			fmt.Printf("DEBUG: Generated script failed validation:\n%s\n", generatedScript)
+		}
+
 		// Try one more time with a more explicit prompt
 		retryMessages := []api.Message{
 			{Role: "system", Content: "Output ONLY executable shell code. No text, no explanation."},
@@ -111,6 +119,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 
 		if len(response.Choices) > 0 {
 			generatedScript = strings.TrimSpace(response.Choices[0].Message.Content)
+			generatedScript = c.cleanMarkdownCodeBlocks(generatedScript)
 		}
 
 		if !c.isValidShellCode(generatedScript) {
@@ -271,10 +280,68 @@ func (c *ShellCommand) getScriptType(isSingleCommand bool) string {
 	return "script"
 }
 
+// cleanMarkdownCodeBlocks removes markdown code block formatting if present
+func (c *ShellCommand) cleanMarkdownCodeBlocks(code string) string {
+	// Remove <think> blocks first
+	if strings.Contains(code, "<think>") && strings.Contains(code, "</think>") {
+		startIdx := strings.Index(code, "<think>")
+		endIdx := strings.Index(code, "</think>")
+		if startIdx != -1 && endIdx != -1 && endIdx > startIdx {
+			code = code[:startIdx] + code[endIdx+8:] // +8 for length of "</think>"
+			code = strings.TrimSpace(code)
+		}
+	}
+
+	// Check if the code contains markdown code blocks
+	if strings.Contains(code, "```") {
+		lines := strings.Split(code, "\n")
+		var cleanedLines []string
+		inCodeBlock := false
+
+		for _, line := range lines {
+			if strings.HasPrefix(strings.TrimSpace(line), "```") {
+				inCodeBlock = !inCodeBlock
+				continue
+			}
+			if inCodeBlock || !strings.HasPrefix(strings.TrimSpace(line), "```") {
+				cleanedLines = append(cleanedLines, line)
+			}
+		}
+
+		return strings.TrimSpace(strings.Join(cleanedLines, "\n"))
+	}
+
+	return code
+}
+
 // isValidShellCode checks if the output looks like executable shell code
 func (c *ShellCommand) isValidShellCode(code string) bool {
 	// Check for common indicators that this is NOT shell code
 	lowerCode := strings.ToLower(code)
+
+	// Remove markdown code blocks if present
+	if strings.HasPrefix(code, "```") {
+		lines := strings.Split(code, "\n")
+		var cleanedLines []string
+		inCodeBlock := false
+		for _, line := range lines {
+			if strings.HasPrefix(line, "```") {
+				inCodeBlock = !inCodeBlock
+				continue
+			}
+			if inCodeBlock {
+				cleanedLines = append(cleanedLines, line)
+			}
+		}
+		code = strings.Join(cleanedLines, "\n")
+		lowerCode = strings.ToLower(code)
+	}
+
+	// If empty after cleanup, it's not valid
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return false
+	}
 
 	// If it starts with explanation phrases, it's not valid shell code
 	invalidStarts := []string{
@@ -288,6 +355,9 @@ func (c *ShellCommand) isValidShellCode(code string) bool {
 		"result:",
 		"error:",
 		"note:",
+		"i'll",
+		"i will",
+		"let me",
 	}
 
 	for _, start := range invalidStarts {
@@ -296,8 +366,34 @@ func (c *ShellCommand) isValidShellCode(code string) bool {
 		}
 	}
 
-	// If it contains sentences with periods (except in comments), it's probably not shell code
+	// Check if it looks like a command (has common shell command patterns)
+	shellPatterns := []string{
+		"git ", "cd ", "ls ", "echo ", "find ", "grep ", "awk ", "sed ",
+		"cat ", "mkdir ", "rm ", "cp ", "mv ", "chmod ", "chown ",
+		"#!/", "if ", "for ", "while ", "function ", "export ",
+	}
+
+	hasShellPattern := false
+	for _, pattern := range shellPatterns {
+		if strings.Contains(lowerCode, pattern) {
+			hasShellPattern = true
+			break
+		}
+	}
+
+	// If it has shell patterns, it's likely valid
+	if hasShellPattern {
+		return true
+	}
+
+	// Check if it's a simple command (no spaces means it might be a single command like "pwd")
+	if !strings.Contains(code, " ") && len(code) < 20 {
+		return true
+	}
+
+	// Otherwise, be more strict about sentence patterns
 	lines := strings.Split(code, "\n")
+	sentenceCount := 0
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		// Skip comments and empty lines
@@ -305,12 +401,23 @@ func (c *ShellCommand) isValidShellCode(code string) bool {
 			continue
 		}
 		// Check for sentence-like patterns
-		if strings.Contains(trimmed, ". ") || strings.HasSuffix(trimmed, ".") {
-			// Exception for commands that might have dots (e.g., file.txt)
-			if !strings.Contains(trimmed, "=") && !strings.Contains(trimmed, "/") && !strings.Contains(trimmed, "\\") {
-				return false
-			}
+		if (strings.Contains(trimmed, ". ") || strings.HasSuffix(trimmed, ".")) &&
+			!strings.Contains(trimmed, "./") && !strings.Contains(trimmed, "...") {
+			sentenceCount++
 		}
+	}
+
+	// If more than half the lines look like sentences, it's probably not code
+	nonCommentLines := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			nonCommentLines++
+		}
+	}
+
+	if nonCommentLines > 0 && float64(sentenceCount)/float64(nonCommentLines) > 0.5 {
+		return false
 	}
 
 	return true

@@ -162,7 +162,7 @@ Examples:
     project_root = Path(__file__).parent.resolve()
     
     testing_dir = project_root / 'testing'
-    e2e_test_scripts_dir = project_root / 'e2e_test_scripts'
+    e2e_test_scripts_dir = project_root / 'e2e_tests'
 
     # Resolve model name: prefer CLI arg; otherwise read orchestration model from .ledit/config.json
     def resolve_default_model() -> str:

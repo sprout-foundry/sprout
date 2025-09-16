@@ -37,8 +37,8 @@ EOF
     echo "-----------------------------"
 
     # 2. Run ledit to analyze the workspace, which should detect the credentials
-    echo "Running 'ledit code' to analyze the workspace for security concerns..."
-    ../ledit code "Analyze the project for any sensitive information and update the workspace. #WORKSPACE" -m "$model_name" --skip-prompt
+    echo "Running 'ledit agent' to analyze the workspace for security concerns..."
+    ../ledit agent "Analyze the project for any sensitive information and update the workspace. #WORKSPACE" -m "$model_name" --skip-prompt
 
     echo
     echo "--- Verifying Test ---"

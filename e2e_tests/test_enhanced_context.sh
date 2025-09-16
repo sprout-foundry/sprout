@@ -17,7 +17,7 @@ run_test_logic() {
 
     # Run ledit to summarize the content of the dummy file
     output_log="enhanced_context_test.log"
-    ../ledit code "Summarize the key features mentioned in $test_file into a new file called $summary_file" --skip-prompt -m "$model_name" > "$output_log" 2>&1
+    ../ledit agent "Summarize the key features mentioned in $test_file into a new file called $summary_file" --skip-prompt -m "$model_name" > "$output_log" 2>&1
 
     # Check if the summary file was created
     if [ ! -f "$summary_file" ]; then
@@ -68,7 +68,7 @@ run_test_logic() {
     # Simulate opening the file and requesting AI assistance
     # The AI should demonstrate understanding of the full file content
     output_log="enhanced_context_test.log"
-    ../ledit code "Summarize the key features and technical vision from dummy_project_info.txt into a new file called project_summary.md" --skip-prompt -m "$model_name" > "$output_log" 2>&1
+    ../ledit agent "Summarize the key features and technical vision from dummy_project_info.txt into a new file called project_summary.md" --skip-prompt -m "$model_name" > "$output_log" 2>&1
 
     # Assert that the AI's response (in project_summary.md) contains information derived from the full file content
     # We expect the AI to have read the file and extracted the key features and technical vision.

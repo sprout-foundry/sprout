@@ -14,7 +14,7 @@ run_test_logic() {
     echo "Created data.json for deletion test."
 
     # Run the agent to delete the file
-    output=$(../../ledit code "Use the delete_file tool to remove data.json" --skip-prompt 2>&1)
+    output=$(../../ledit agent "Delete the file data.json using rm command" --skip-prompt 2>&1)
     echo "$output"
 
     echo

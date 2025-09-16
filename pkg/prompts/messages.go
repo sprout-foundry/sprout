@@ -3,7 +3,6 @@ package prompts
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/alantheprice/ledit/pkg/interfaces/types"
 	"github.com/fatih/color"
@@ -57,18 +56,6 @@ func ConfigSaved(path string) string {
 // --- Code Generation Prompts ---
 func InstructionsRequired() string {
 	return "Instructions are required for the 'code' command. Please provide a description of the changes you want to make."
-}
-
-func ProcessingCodeGeneration() string {
-	return "Processing code generation..."
-}
-
-func CodeGenerationError(err error) string {
-	return fmt.Sprintf("Error during code generation: %v", err)
-}
-
-func CodeGenerationFinished(duration time.Duration) string {
-	return fmt.Sprintf("Code generation finished in %s\n", duration)
 }
 
 // --- Script Generation Messages ---

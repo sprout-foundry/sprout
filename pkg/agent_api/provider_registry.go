@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"os"
+	"sync"
 )
 
 // ProviderConfig holds configuration for a provider
@@ -20,13 +21,16 @@ type ProviderRegistry struct {
 	providers map[ClientType]ProviderConfig
 }
 
-var defaultProviderRegistry *ProviderRegistry
+var (
+	defaultProviderRegistry *ProviderRegistry
+	providerRegistryOnce    sync.Once
+)
 
-// GetProviderRegistry returns the default provider registry
+// GetProviderRegistry returns the default provider registry (thread-safe singleton)
 func GetProviderRegistry() *ProviderRegistry {
-	if defaultProviderRegistry == nil {
+	providerRegistryOnce.Do(func() {
 		defaultProviderRegistry = newDefaultProviderRegistry()
-	}
+	})
 	return defaultProviderRegistry
 }
 

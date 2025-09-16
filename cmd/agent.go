@@ -22,6 +22,7 @@ var (
 	agentModel      string // Declare agentModel variable
 	agentProvider   string // Declare agentProvider variable
 	agentDryRun     bool
+	maxIterations   int
 )
 
 func init() {
@@ -29,6 +30,7 @@ func init() {
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
 	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, ollama, cerebras, groq, deepseek)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
+	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
 }
 
 // runSimpleInteractiveMode provides a simple console-based interactive mode
@@ -52,6 +54,9 @@ func runInteractiveMode() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize agent: %w", err)
 	}
+
+	// Set max iterations if specified
+	chatAgent.SetMaxIterations(maxIterations)
 
 	// Create console app
 	app := console.NewConsoleApp()
@@ -107,6 +112,9 @@ func executeDirectAgentCommand(userIntent string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize agent: %w", err)
 	}
+
+	// Set max iterations if specified
+	chatAgent.SetMaxIterations(maxIterations)
 
 	// Process the query directly with the agent using continuity (like coder does)
 	response, err := chatAgent.ProcessQueryWithContinuity(userIntent)

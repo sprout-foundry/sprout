@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // ProviderAdapter adapts the existing ClientInterface to the new Provider interface
@@ -52,23 +53,21 @@ func (a *ProviderAdapter) SetModel(model string) error {
 
 // GetAvailableModels returns available models for this provider
 func (a *ProviderAdapter) GetAvailableModels(ctx context.Context) ([]ModelDetails, error) {
-	// Convert from featured models list
-	featured := a.client.GetFeaturedModels()
+	// Get models using the provider-specific model fetcher
+	modelInfos, err := GetModelsForProvider(a.clientType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get models for provider %s: %w", a.clientType, err)
+	}
 
-	models := make([]ModelDetails, 0, len(featured))
-	for i, modelID := range featured {
-		// Get context limit for each model
-		oldModel := a.client.GetModel()
-		a.client.SetModel(modelID)
-		contextLimit, _ := a.client.GetModelContextLimit()
-		a.client.SetModel(oldModel) // Restore original
-
+	// Convert ModelInfo to ModelDetails
+	models := make([]ModelDetails, 0, len(modelInfos))
+	for i, modelInfo := range modelInfos {
 		models = append(models, ModelDetails{
-			ID:            modelID,
-			Name:          modelID,
-			ContextLength: contextLimit,
+			ID:            modelInfo.ID,
+			Name:          modelInfo.Name,
+			ContextLength: modelInfo.ContextLength,
 			IsDefault:     i == 0, // First model is default
-			Features:      a.getModelFeatures(modelID),
+			Features:      a.getModelFeatures(modelInfo.ID),
 		})
 	}
 
@@ -146,14 +145,9 @@ func (a *ProviderAdapter) getModelFeatures(modelID string) []string {
 	features := []string{"tools"}
 
 	// Check for vision support
-	if a.client.SupportsVision() {
-		visionModels := a.client.GetFeaturedVisionModels()
-		for _, vm := range visionModels {
-			if vm == modelID {
-				features = append(features, "vision")
-				break
-			}
-		}
+	// For now, assume vision models based on model ID patterns
+	if a.client.SupportsVision() && isVisionModel(modelID) {
+		features = append(features, "vision")
 	}
 
 	// Check for reasoning support
@@ -162,6 +156,24 @@ func (a *ProviderAdapter) getModelFeatures(modelID string) []string {
 	}
 
 	return features
+}
+
+// isVisionModel checks if a model supports vision based on its ID
+func isVisionModel(modelID string) bool {
+	// Common vision model patterns
+	visionPatterns := []string{
+		"gpt-4o", "gpt-4-vision", "llava", "vision",
+		"Llama-3.2-11B-Vision", "Llama-4-Scout",
+		"gemma-3-27b-it", // OpenRouter vision models
+	}
+
+	modelLower := strings.ToLower(modelID)
+	for _, pattern := range visionPatterns {
+		if strings.Contains(modelLower, strings.ToLower(pattern)) {
+			return true
+		}
+	}
+	return false
 }
 
 // containsReasoningModel checks if a model supports reasoning

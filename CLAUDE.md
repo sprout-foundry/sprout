@@ -6,6 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `ledit` is an AI-powered code editing and assistance tool that leverages Large Language Models (LLMs) to understand workspaces, generate code, and orchestrate complex features. It functions as a development partner that can implement features, provide intelligent context, self-correct, and integrate with development tools.
 
+## CRITICAL: Git Operations Policy
+
+**NEVER COMMIT OR PUSH CHANGES**
+- Do NOT use `git commit` under any circumstances
+- Do NOT use `git push` under any circumstances  
+- Only the repository owner decides when to commit
+- You may use `git add` to stage changes when explicitly asked
+- You may use `git status`, `git diff`, and other read-only git commands
+- If you're about to type `git commit`, STOP immediately
+
 ## Build and Development Commands
 
 ### Building
@@ -84,7 +94,6 @@ The UI components are critical for user interaction and terminal display. Any ch
 ### Command Architecture
 
 The CLI supports several modes of operation:
-- **`ledit code`**: Direct code generation and editing
 - **`ledit agent`**: Intent-driven autonomous operations with task breakdown
   - Interactive mode: Uses simple console input by default
 - **`ledit process`**: Multi-step orchestration for complex features

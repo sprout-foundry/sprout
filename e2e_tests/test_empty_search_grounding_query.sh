@@ -12,7 +12,7 @@ run_test_logic() {
 
     # Run a code generation command that should trigger a web search
     output_log="empty_search_test_output.log"
-    ../../ledit code "How do I implement a bubble sort in Go?" --skip-prompt > "$output_log" 2>&1
+    ../../ledit agent "How do I implement a bubble sort in Go?" --skip-prompt > "$output_log" 2>&1
 
     echo
     echo "--- Verifying Test ---"

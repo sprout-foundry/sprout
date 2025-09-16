@@ -14,7 +14,7 @@ run_test_logic() {
         return a + b" > math.py
 
     # Run ledit to analyze the file and check the JSON output
-    ../ledit code "Analyze the 'math.py' file and provide the summary, exports, and references in JSON format. #WORKSPACE" --skip-prompt -m "$model_name"
+    ../ledit agent "Analyze the 'math.py' file and provide the summary, exports, and references in JSON format. #WORKSPACE" --skip-prompt -m "$model_name"
 
     # Load the workspace file ./ledit/workspace.json
     json_output=$(cat .ledit/workspace.json)

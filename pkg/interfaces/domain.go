@@ -6,48 +6,6 @@ import (
 	"github.com/alantheprice/ledit/pkg/interfaces/types"
 )
 
-// CodeGenerator defines the interface for generating and applying code changes
-type CodeGenerator interface {
-	// GenerateCode generates code based on instructions and context
-	GenerateCode(ctx context.Context, req CodeGenerationRequest) (*CodeGenerationResult, error)
-
-	// ApplyChanges applies a set of changes to the workspace
-	ApplyChanges(ctx context.Context, changes types.ChangeSet) error
-
-	// ValidateChanges validates that proposed changes are safe and correct
-	ValidateChanges(ctx context.Context, changes types.ChangeSet) error
-
-	// PreviewChanges returns a preview of what changes would be made
-	PreviewChanges(ctx context.Context, changes types.ChangeSet) (string, error)
-}
-
-// CodeGenerationRequest represents a request to generate code
-type CodeGenerationRequest struct {
-	Instructions    string                  `json:"instructions"`
-	TargetFile      string                  `json:"target_file,omitempty"`
-	Context         *types.WorkspaceContext `json:"context,omitempty"`
-	Strategy        string                  `json:"strategy"` // "quick", "full", "auto"
-	MaxTokens       int                     `json:"max_tokens,omitempty"`
-	Model           string                  `json:"model,omitempty"`
-	AdditionalFiles []string                `json:"additional_files,omitempty"`
-}
-
-// CodeGenerationResult represents the result of code generation
-type CodeGenerationResult struct {
-	Changes    types.ChangeSet         `json:"changes"`
-	Metadata   *types.ResponseMetadata `json:"metadata"`
-	Strategy   string                  `json:"strategy"`
-	Validation *ValidationResult       `json:"validation,omitempty"`
-}
-
-// ValidationResult represents the result of code validation
-type ValidationResult struct {
-	IsValid     bool     `json:"is_valid"`
-	Errors      []string `json:"errors,omitempty"`
-	Warnings    []string `json:"warnings,omitempty"`
-	Suggestions []string `json:"suggestions,omitempty"`
-}
-
 // WorkspaceAnalyzer defines the interface for analyzing workspace structure and content
 type WorkspaceAnalyzer interface {
 	// AnalyzeStructure analyzes the overall structure of the workspace

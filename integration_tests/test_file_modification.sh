@@ -21,7 +21,7 @@ run_test_logic() {
     original_file1_content=$(cat file1.txt)
 
     # Run the agent to modify the file
-    output=$(../../ledit code "Change the version in version.txt to 2.0.0" --skip-prompt 2>&1)
+    output=$(../../ledit agent "Change the version in version.txt to 2.0.0" --skip-prompt 2>&1)
     echo "$output"
 
     # Verify the change

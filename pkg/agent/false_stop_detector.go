@@ -101,12 +101,17 @@ Reply with only: "INCOMPLETE" or "COMPLETE"`, response)
 	// Get provider-specific fast model
 	fastModel, clientType := a.getFastModelForProvider()
 
-	// Create fast client with provider-specific model
+	// Try fast model first
 	fastClient, err := api.NewUnifiedClientWithModel(clientType, fastModel)
 	if err != nil {
-		// If we can't create fast client, fall back to not checking
-		a.debugLog("Failed to create fast model client (%s/%s): %v\n", clientType, fastModel, err)
-		return false, 0.0
+		// Fall back to main model if fast model fails
+		a.debugLog("Failed to create fast model client (%s/%s), falling back to main model: %v\n",
+			clientType, fastModel, err)
+
+		// Use the current client's model as fallback
+		fastClient = a.client
+		fastModel = a.GetModel()
+		clientType = a.GetProviderType()
 	}
 
 	// Send request with minimal token usage
@@ -119,26 +124,54 @@ Reply with only: "INCOMPLETE" or "COMPLETE"`, response)
 
 	resp, err := fastClient.SendChatRequest(messages, nil, "low")
 	if err != nil {
-		a.debugLog("Fast model check failed: %v\n", err)
-		return false, 0.0
+		// If fast model fails and we're already using main model, give up
+		if fastClient == a.client {
+			a.debugLog("False stop check failed with main model fallback: %v\n", err)
+			return false, 0.0
+		}
+
+		// Try fallback to main model
+		a.debugLog("Fast model check failed, trying main model: %v\n", err)
+		fastClient = a.client
+		fastModel = a.GetModel()
+
+		resp, err = fastClient.SendChatRequest(messages, nil, "low")
+		if err != nil {
+			a.debugLog("False stop check failed with main model: %v\n", err)
+			return false, 0.0
+		}
 	}
 
-	if len(resp.Choices) == 0 {
+	// Validate response
+	if resp == nil || len(resp.Choices) == 0 {
+		a.debugLog("False stop check returned empty response\n")
 		return false, 0.0
 	}
 
 	result := strings.TrimSpace(resp.Choices[0].Message.Content)
 
+	// Validate result format
+	resultUpper := strings.ToUpper(result)
+	if resultUpper != "INCOMPLETE" && resultUpper != "COMPLETE" &&
+		!strings.Contains(resultUpper, "INCOMPLETE") && !strings.Contains(resultUpper, "COMPLETE") {
+		a.debugLog("False stop check returned unexpected format: '%s'\n", result)
+		return false, 0.0
+	}
+
 	// Log the check if in debug mode
 	if a.debug {
+		cost := 0.0
+		if resp.Usage.EstimatedCost > 0 {
+			cost = resp.Usage.EstimatedCost
+		}
 		a.debugLog("🔍 False stop check: Model=%s/%s, Response='%s', Result='%s', Cost=$%.6f\n",
-			clientType, fastModel, response, result, resp.Usage.EstimatedCost)
+			clientType, fastModel, response, result, cost)
 	}
 
 	// Determine confidence based on response
-	if result == "INCOMPLETE" {
+	if resultUpper == "INCOMPLETE" {
 		return true, 0.9
-	} else if strings.Contains(strings.ToUpper(result), "INCOMPLETE") {
+	} else if strings.Contains(resultUpper, "INCOMPLETE") {
 		return true, 0.7
 	}
 

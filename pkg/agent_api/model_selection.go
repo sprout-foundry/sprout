@@ -165,7 +165,7 @@ func (ms *ModelSelection) ResolveModelReference(modelRef string) (ClientType, st
 	// If model contains ":", it's already provider-qualified
 	if strings.Contains(modelRef, ":") {
 		parts := strings.SplitN(modelRef, ":", 2)
-		clientType, err := GetProviderFromString(parts[0])
+		clientType, err := parseProviderName(parts[0])
 		if err != nil {
 			return "", "", err
 		}

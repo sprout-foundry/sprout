@@ -455,12 +455,8 @@ func (p *OpenRouterProvider) SupportsVision() bool {
 
 // GetVisionModel returns the vision model for OpenRouter
 func (p *OpenRouterProvider) GetVisionModel() string {
-	// Return first featured vision model
-	featuredVisionModels := p.GetFeaturedVisionModels()
-	if len(featuredVisionModels) > 0 {
-		return featuredVisionModels[0]
-	}
-	return ""
+	// Return default vision model
+	return "gpt-4o"
 }
 
 // SendVisionRequest sends a vision-enabled chat request
@@ -483,27 +479,6 @@ func (p *OpenRouterProvider) SendVisionRequest(messages []types.Message, tools [
 	p.model = originalModel
 
 	return response, err
-}
-
-func (p *OpenRouterProvider) GetFeaturedModels() []string {
-	return []string{
-		"qwen/qwen3-coder:free",
-		"qwen/qwen3-coder-30b-a3b-instruct",
-		"qwen/qwen3-coder",
-		"qwen/qwen3-235b-a22b-thinking-2507",
-		"deepseek/deepseek-chat-v3.1:free",
-		"deepseek/deepseek-chat-v3.1",
-		"mistralai/codestral-2508",
-		"mistralai/devstral-small-2505",
-		"x-ai/grok-code-fast-1",
-	}
-}
-
-func (p *OpenRouterProvider) GetFeaturedVisionModels() []string {
-	return []string{
-		"google/gemma-3-27b-it",      // Primary vision model for open providers
-		"google/gemma-3-27b-it:free", // Free vision model option
-	}
 }
 
 // calculateCost calculates the cost based on token usage and model pricing

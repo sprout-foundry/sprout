@@ -344,16 +344,3 @@ func (p *CerebrasProvider) SendVisionRequest(messages []types.Message, tools []t
 	// Cerebras doesn't support vision, so just send regular chat request
 	return p.SendChatRequest(messages, tools, reasoning)
 }
-
-func (p *CerebrasProvider) GetFeaturedModels() []string {
-	return []string{
-		"qwen-3-480b",      // Best for coding (480B parameter model)
-		"qwen-3-235b-2507", // Large general model with 2507 variant
-	}
-}
-
-func (p *CerebrasProvider) GetFeaturedVisionModels() []string {
-	// Cerebras models are currently text-only
-	// Vision capabilities may be added in future updates
-	return []string{}
-}

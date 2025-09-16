@@ -287,11 +287,7 @@ func (c *LocalOllamaClient) SupportsVision() bool {
 
 // GetVisionModel returns the vision model for Ollama
 func (c *LocalOllamaClient) GetVisionModel() string {
-	// Return first featured vision model
-	featuredVisionModels := c.GetFeaturedVisionModels()
-	if len(featuredVisionModels) > 0 {
-		return featuredVisionModels[0]
-	}
+	// Return empty - vision support depends on local models
 	return ""
 }
 
@@ -315,18 +311,4 @@ func (c *LocalOllamaClient) SendVisionRequest(messages []Message, tools []Tool, 
 	c.model = originalModel
 
 	return response, err
-}
-
-func (c *LocalOllamaClient) GetFeaturedModels() []string {
-	return []string{
-		"qwen3-coder", // Primary coding model
-		"gpt-oss:20b", // Local GPT-style model
-	}
-}
-
-func (c *LocalOllamaClient) GetFeaturedVisionModels() []string {
-	return []string{
-		"llava:latest",            // Primary local vision model
-		"llama3.2-vision:11b",     // Llama 3.2 vision model
-	}
 }

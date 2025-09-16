@@ -31,7 +31,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 				Type:   img.Type,
 			}
 		}
-		
+
 		typeMessages[i] = types.Message{
 			Role:             msg.Role,
 			Content:          msg.Content,
@@ -69,12 +69,12 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 		Created: response.Created,
 		Model:   response.Model,
 		Usage: struct {
-			PromptTokens     int     `json:"prompt_tokens"`
-			CompletionTokens int     `json:"completion_tokens"`
-			TotalTokens      int     `json:"total_tokens"`
-			EstimatedCost    float64 `json:"estimated_cost"`
+			PromptTokens        int     `json:"prompt_tokens"`
+			CompletionTokens    int     `json:"completion_tokens"`
+			TotalTokens         int     `json:"total_tokens"`
+			EstimatedCost       float64 `json:"estimated_cost"`
 			PromptTokensDetails struct {
-				CachedTokens     int `json:"cached_tokens"`
+				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
 			} `json:"prompt_tokens_details,omitempty"`
 		}{
@@ -83,7 +83,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 			TotalTokens:      response.Usage.TotalTokens,
 			EstimatedCost:    response.Usage.EstimatedCost,
 			PromptTokensDetails: struct {
-				CachedTokens     int `json:"cached_tokens"`
+				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
 			}{
 				CachedTokens:     response.Usage.PromptTokensDetails.CachedTokens,
@@ -104,7 +104,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 				Type:   img.Type,
 			}
 		}
-		
+
 		apiResponse.Choices[i] = Choice{
 			Index: choice.Index,
 			Message: struct {
@@ -178,32 +178,11 @@ func (w *UnifiedProviderWrapper) SupportsVision() bool {
 }
 
 func (w *UnifiedProviderWrapper) GetVisionModel() string {
-	// Return first featured vision model from the underlying provider
-	featuredVisionModels := w.GetFeaturedVisionModels()
-	if len(featuredVisionModels) > 0 {
-		return featuredVisionModels[0]
+	// Delegate to the underlying provider if it supports vision model
+	if visionProvider, ok := w.provider.(interface{ GetVisionModel() string }); ok {
+		return visionProvider.GetVisionModel()
 	}
 	return ""
-}
-
-func (w *UnifiedProviderWrapper) GetFeaturedModels() []string {
-	// Delegate to the underlying provider if it supports featured models
-	if featuredProvider, ok := w.provider.(interface{ GetFeaturedModels() []string }); ok {
-		return featuredProvider.GetFeaturedModels()
-	}
-	
-	// Return empty slice if provider doesn't implement featured models
-	return []string{}
-}
-
-func (w *UnifiedProviderWrapper) GetFeaturedVisionModels() []string {
-	// Delegate to the underlying provider if it supports featured vision models
-	if featuredProvider, ok := w.provider.(interface{ GetFeaturedVisionModels() []string }); ok {
-		return featuredProvider.GetFeaturedVisionModels()
-	}
-	
-	// Return empty slice if provider doesn't implement featured vision models
-	return []string{}
 }
 
 func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
@@ -219,7 +198,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 				Type:   img.Type,
 			}
 		}
-		
+
 		typeMessages[i] = types.Message{
 			Role:             msg.Role,
 			Content:          msg.Content,
@@ -257,12 +236,12 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 		Created: response.Created,
 		Model:   response.Model,
 		Usage: struct {
-			PromptTokens     int     `json:"prompt_tokens"`
-			CompletionTokens int     `json:"completion_tokens"`
-			TotalTokens      int     `json:"total_tokens"`
-			EstimatedCost    float64 `json:"estimated_cost"`
+			PromptTokens        int     `json:"prompt_tokens"`
+			CompletionTokens    int     `json:"completion_tokens"`
+			TotalTokens         int     `json:"total_tokens"`
+			EstimatedCost       float64 `json:"estimated_cost"`
 			PromptTokensDetails struct {
-				CachedTokens     int `json:"cached_tokens"`
+				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
 			} `json:"prompt_tokens_details,omitempty"`
 		}{
@@ -271,7 +250,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 			TotalTokens:      response.Usage.TotalTokens,
 			EstimatedCost:    response.Usage.EstimatedCost,
 			PromptTokensDetails: struct {
-				CachedTokens     int `json:"cached_tokens"`
+				CachedTokens     int  `json:"cached_tokens"`
 				CacheWriteTokens *int `json:"cache_write_tokens"`
 			}{
 				CachedTokens:     response.Usage.PromptTokensDetails.CachedTokens,
@@ -292,7 +271,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 				Type:   img.Type,
 			}
 		}
-		
+
 		apiResponse.Choices[i] = Choice{
 			Index: choice.Index,
 			Message: struct {

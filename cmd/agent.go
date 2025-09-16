@@ -224,31 +224,11 @@ func listModels(chatAgent *agent.Agent) error {
 	return nil
 }
 
-// findFeaturedModels identifies indices of featured models using provider-specific featured models
+// findFeaturedModels identifies indices of featured models
+// Now that we've removed the featured models concept, this returns an empty list
 func findFeaturedModels(models []agent_api.ModelInfo, clientType agent_api.ClientType) []int {
-	// Get provider-specific featured models
-	featuredModelNames := agent_api.GetFeaturedModelsForProvider(clientType)
-
-	if len(featuredModelNames) == 0 {
-		return []int{}
-	}
-
-	var featured []int
-	featuredSet := make(map[string]bool)
-
-	// Convert featured model names to set for O(1) lookup
-	for _, name := range featuredModelNames {
-		featuredSet[strings.ToLower(name)] = true
-	}
-
-	// Find matching models
-	for i, model := range models {
-		if featuredSet[strings.ToLower(model.ID)] {
-			featured = append(featured, i)
-		}
-	}
-
-	return featured
+	// Featured models concept has been removed - all models are treated equally
+	return []int{}
 }
 
 // selectModel allows interactive model selection from the current provider

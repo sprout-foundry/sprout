@@ -97,7 +97,16 @@ func NewDeepSeekClientWrapper(model string) (ClientInterface, error) {
 }
 
 // GetClientTypeFromEnv determines which client to use based on environment variables
+// DEPRECATED: Use DetermineProvider() instead for unified provider detection
 func GetClientTypeFromEnv() ClientType {
+	// Check for explicit provider environment variable first
+	if providerEnv := os.Getenv("LEDIT_PROVIDER"); providerEnv != "" {
+		// Try to parse the provider name
+		if provider, err := parseProviderName(providerEnv); err == nil {
+			return provider
+		}
+	}
+
 	// Check provider environment variables in priority order (OpenAI first, then OpenRouter)
 	envProviders := []struct {
 		envVar string
@@ -119,6 +128,105 @@ func GetClientTypeFromEnv() ClientType {
 
 	// Otherwise, default to Ollama for local inference
 	return OllamaClientType
+}
+
+// DetermineProvider provides unified provider detection with clear precedence:
+// 1. Command-line flag (if provided)
+// 2. Environment variable (LEDIT_PROVIDER)
+// 3. Config file (last_used_provider)
+// 4. First available provider based on API keys
+// 5. Fallback to Ollama
+func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (ClientType, error) {
+	// 1. Command-line flag has highest priority
+	if explicitProvider != "" {
+		provider, err := parseProviderName(explicitProvider)
+		if err != nil {
+			return "", fmt.Errorf("invalid provider '%s': %w", explicitProvider, err)
+		}
+		if !IsProviderAvailable(provider) {
+			return "", fmt.Errorf("provider '%s' is not available (check API key)", explicitProvider)
+		}
+		return provider, nil
+	}
+
+	// 2. Environment variable
+	if providerEnv := os.Getenv("LEDIT_PROVIDER"); providerEnv != "" {
+		provider, err := parseProviderName(providerEnv)
+		if err == nil && IsProviderAvailable(provider) {
+			return provider, nil
+		}
+	}
+
+	// 3. Last used provider from config
+	if lastUsedProvider != "" && IsProviderAvailable(lastUsedProvider) {
+		return lastUsedProvider, nil
+	}
+
+	// 4. First available provider based on API keys
+	priorityOrder := []ClientType{
+		OpenAIClientType,
+		OpenRouterClientType,
+		DeepInfraClientType,
+		CerebrasClientType,
+		GroqClientType,
+		DeepSeekClientType,
+		OllamaClientType,
+	}
+
+	for _, provider := range priorityOrder {
+		if IsProviderAvailable(provider) {
+			return provider, nil
+		}
+	}
+
+	// 5. Final fallback
+	return OllamaClientType, nil
+}
+
+// parseProviderName converts a string provider name to ClientType
+func parseProviderName(name string) (ClientType, error) {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	switch normalized {
+	case "openai":
+		return OpenAIClientType, nil
+	case "openrouter":
+		return OpenRouterClientType, nil
+	case "deepinfra":
+		return DeepInfraClientType, nil
+	case "ollama":
+		return OllamaClientType, nil
+	case "cerebras":
+		return CerebrasClientType, nil
+	case "groq":
+		return GroqClientType, nil
+	case "deepseek":
+		return DeepSeekClientType, nil
+	default:
+		return "", fmt.Errorf("unknown provider: %s", name)
+	}
+}
+
+// IsProviderAvailable checks if a provider can be used
+func IsProviderAvailable(provider ClientType) bool {
+	switch provider {
+	case OllamaClientType:
+		// Ollama is always available (local)
+		return true
+	case OpenAIClientType:
+		return os.Getenv("OPENAI_API_KEY") != ""
+	case OpenRouterClientType:
+		return os.Getenv("OPENROUTER_API_KEY") != ""
+	case DeepInfraClientType:
+		return os.Getenv("DEEPINFRA_API_KEY") != ""
+	case CerebrasClientType:
+		return os.Getenv("CEREBRAS_API_KEY") != ""
+	case GroqClientType:
+		return os.Getenv("GROQ_API_KEY") != ""
+	case DeepSeekClientType:
+		return os.Getenv("DEEPSEEK_API_KEY") != ""
+	default:
+		return false
+	}
 }
 
 // GetDefaultModelForProvider returns the default model for each provider

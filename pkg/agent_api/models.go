@@ -39,7 +39,12 @@ type ModelsListInterface interface {
 
 // GetAvailableModels returns available models for the current provider
 func GetAvailableModels() ([]ModelInfo, error) {
-	clientType := GetClientTypeFromEnv()
+	// Use unified provider detection
+	clientType, err := DetermineProvider("", "")
+	if err != nil {
+		// Fallback to a reasonable default
+		clientType = OllamaClientType
+	}
 	return GetModelsForProvider(clientType)
 }
 
@@ -175,14 +180,21 @@ func getOpenAIModels() ([]ModelInfo, error) {
 func getOpenAIModelPricing(modelID string) (inputCost, outputCost float64) {
 	// Use the new model registry for data-driven pricing
 	registry := GetModelRegistry()
-	return registry.GetModelPricing(modelID)
+	inputCost, outputCost, err := registry.GetModelPricing(modelID)
+	if err != nil {
+		// Log warning but return zero costs rather than failing
+		// This maintains backward compatibility
+		return 0, 0
+	}
+	return inputCost, outputCost
 }
 
 // getOpenAIContextLength returns the context length for OpenAI models (2025 updated)
 func getOpenAIContextLength(modelID string) int {
 	// Use the new model registry for data-driven context lengths
 	registry := GetModelRegistry()
-	return registry.GetModelContextLength(modelID)
+	// Use the backward-compatible method that returns a default on error
+	return registry.GetModelContextLengthWithDefault(modelID, 16000)
 }
 
 // getDeepInfraModels gets available models from DeepInfra API

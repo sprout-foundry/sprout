@@ -124,83 +124,61 @@ func (p *OpenAIProvider) CheckConnection(ctx context.Context) error {
 func (p *OpenAIProvider) GetModelContextLimit() (int, error) {
 	// Use the model registry for consistent context limit lookup
 	registry := GetModelRegistry()
-	contextLimit := registry.GetModelContextLength(p.model)
+	contextLimit, err := registry.GetModelContextLength(p.model)
+	if err != nil {
+		// Log the error but return a reasonable default
+		// OpenAI models typically support at least 4K
+		return 4096, nil
+	}
 	return contextLimit, nil
 }
 
 // GetAvailableModels returns the list of available OpenAI models
 func (p *OpenAIProvider) GetAvailableModels(ctx context.Context) ([]ModelDetails, error) {
-	// Define featured models with their properties
-	models := []ModelDetails{
-		// GPT-5 models
-		{
-			ID:              "gpt-5",
-			Name:            "GPT-5",
-			ContextLength:   272000,
-			InputCostPer1K:  0.005,
-			OutputCostPer1K: 0.025,
-			Features:        []string{"vision", "tools"},
-		},
-		{
-			ID:              "gpt-5-mini",
-			Name:            "GPT-5 Mini",
-			ContextLength:   272000,
-			InputCostPer1K:  0.000125,
-			OutputCostPer1K: 0.0000625,
-			Features:        []string{"vision", "tools"},
-		},
-		// O3 models
-		{
-			ID:              "o3",
-			Name:            "O3",
-			ContextLength:   200000,
-			InputCostPer1K:  0.001,
-			OutputCostPer1K: 0.004,
-			Features:        []string{"reasoning"},
-		},
-		{
-			ID:              "o3-mini",
-			Name:            "O3 Mini",
-			ContextLength:   200000,
-			InputCostPer1K:  0.00055,
-			OutputCostPer1K: 0.000138,
-			Features:        []string{"reasoning"},
-		},
-		// GPT-4o models
-		{
-			ID:              "gpt-4o",
-			Name:            "GPT-4o",
-			ContextLength:   128000,
-			InputCostPer1K:  0.005,
-			OutputCostPer1K: 0.015,
-			Features:        []string{"vision", "tools"},
-		},
-		{
-			ID:              "gpt-4o-mini",
-			Name:            "GPT-4o Mini",
-			ContextLength:   128000,
-			InputCostPer1K:  0.00015,
-			OutputCostPer1K: 0.0006,
-			Features:        []string{"vision", "tools"},
-			IsDefault:       true,
-		},
-		// O1 models
-		{
-			ID:              "o1",
-			Name:            "O1",
-			ContextLength:   128000,
-			InputCostPer1K:  0.001,
-			OutputCostPer1K: 0.004,
-			Features:        []string{"reasoning"},
-		},
-		{
-			ID:              "o1-mini",
-			Name:            "O1 Mini",
-			ContextLength:   128000,
-			InputCostPer1K:  0.00055,
-			OutputCostPer1K: 0.000138,
-			Features:        []string{"reasoning"},
-		},
+	// Get the registry for model information
+	registry := GetModelRegistry()
+
+	// Define the core OpenAI models we want to expose
+	// This list can be configured or expanded as needed
+	coreModelIDs := []string{
+		"gpt-5",
+		"gpt-5-mini",
+		"o3",
+		"o3-mini",
+		"gpt-4o",
+		"gpt-4o-mini",
+		"o1",
+		"o1-mini",
+		"gpt-4-turbo",
+		"gpt-4",
+		"gpt-3.5-turbo",
+	}
+
+	models := make([]ModelDetails, 0, len(coreModelIDs))
+
+	for _, modelID := range coreModelIDs {
+		config, err := registry.GetModelConfig(modelID)
+		if err != nil {
+			// Skip models not found in registry
+			continue
+		}
+
+		// Convert costs from per-1M to per-1K for backward compatibility
+		inputCostPer1K := config.InputCost / 1000.0
+		outputCostPer1K := config.OutputCost / 1000.0
+
+		// Set default flag for gpt-4o-mini
+		isDefault := modelID == "gpt-4o-mini"
+
+		models = append(models, ModelDetails{
+			ID:              config.ID,
+			Name:            config.Name,
+			ContextLength:   config.ContextLength,
+			InputCostPer1K:  inputCostPer1K,
+			OutputCostPer1K: outputCostPer1K,
+			Features:        config.Features,
+			IsDefault:       isDefault,
+		})
 	}
 
 	return models, nil
@@ -325,7 +303,12 @@ func (p *OpenAIProvider) convertToUnifiedResponse(resp *OpenAIResponse) *ChatRes
 func (p *OpenAIProvider) EstimateCost(promptTokens, completionTokens int, model string) float64 {
 	// Use the model registry for consistent pricing lookup
 	registry := GetModelRegistry()
-	inputCostPer1M, outputCostPer1M := registry.GetModelPricing(model)
+	inputCostPer1M, outputCostPer1M, err := registry.GetModelPricing(model)
+	if err != nil {
+		// Fallback to conservative estimates if model not found
+		inputCostPer1M = 1.0  // $1 per 1M input tokens
+		outputCostPer1M = 2.0 // $2 per 1M output tokens
+	}
 
 	// Convert from per 1M to per token costs
 	inputCost := float64(promptTokens) * inputCostPer1M / 1_000_000

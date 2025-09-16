@@ -138,7 +138,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		client:                    client,
 		messages:                  []api.Message{},
 		systemPrompt:              systemPrompt,
-		maxIterations:             100,
+		maxIterations:             1000,
 		totalCost:                 0.0,
 		clientType:                clientType,
 		debug:                     debug,
@@ -459,6 +459,12 @@ func (a *Agent) SetOutputMutex(mu *sync.Mutex) {
 
 func (a *Agent) GetMaxIterations() int {
 	return a.maxIterations
+}
+
+func (a *Agent) SetMaxIterations(max int) {
+	if max > 0 {
+		a.maxIterations = max
+	}
 }
 
 func (a *Agent) GetMessages() []api.Message {

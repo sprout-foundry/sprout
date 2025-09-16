@@ -322,6 +322,20 @@ func (fc *FooterComponent) truncateString(s string, maxLen int) string {
 
 // OnResize handles terminal resize events
 func (fc *FooterComponent) OnResize(width, height int) {
+	// Get the old region to clear it
+	oldRegion, _ := fc.Layout().GetRegion("footer")
+
+	// Clear the old footer area before updating position
+	if oldRegion.Y > 0 {
+		fc.Terminal().SaveCursor()
+		// Clear both lines of the old footer
+		fc.Terminal().MoveCursor(1, oldRegion.Y+1)
+		fc.Terminal().ClearLine()
+		fc.Terminal().MoveCursor(1, oldRegion.Y+2)
+		fc.Terminal().ClearLine()
+		fc.Terminal().RestoreCursor()
+	}
+
 	// Update footer position
 	region := console.Region{
 		X:       0,

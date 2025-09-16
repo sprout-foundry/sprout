@@ -41,6 +41,7 @@ type Agent struct {
 	changeTracker        *ChangeTracker                 // Track file changes for rollback support
 	mcpManager           mcp.MCPManager                 // MCP server management
 	circuitBreaker       *CircuitBreakerState           // Track repetitive actions
+	conversationPruner   *ConversationPruner            // Automatic conversation pruning
 
 	// Interrupt handling
 	interruptRequested   bool        // Flag indicating interrupt was requested
@@ -149,6 +150,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		interruptChan:             nil,
 		escMonitoringEnabled:      false, // Start disabled
 		falseStopDetectionEnabled: true,  // Enable by default
+		conversationPruner:        NewConversationPruner(debug),
 	}
 
 	// NOTE: Esc key monitoring removed - was interfering with Ctrl+C and terminal control

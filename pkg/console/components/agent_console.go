@@ -248,10 +248,10 @@ func (ac *AgentConsole) processInput(input string) error {
 	ac.outputMutex.Lock()
 
 	// Clear the current input line and move to a new line for clean output
-	fmt.Print("\r\033[K\n")
+	ac.safePrint("\r\033[K\n")
 
 	// Show processing indicator
-	fmt.Printf("🔄 Processing your request...\n")
+	ac.safePrint("🔄 Processing your request...\n")
 
 	ac.outputMutex.Unlock()
 
@@ -263,7 +263,7 @@ func (ac *AgentConsole) processInput(input string) error {
 	defer ac.outputMutex.Unlock()
 
 	if err != nil {
-		fmt.Printf("\nError: %v\n", err)
+		ac.safePrint("\nError: %v\n", err)
 	} else {
 		// Update metrics
 		ac.totalTokens = ac.agent.GetTotalTokens()
@@ -274,16 +274,16 @@ func (ac *AgentConsole) processInput(input string) error {
 			// Clean up the response
 			cleanResponse := strings.TrimSpace(response)
 			if cleanResponse != "" {
-				fmt.Printf("\n🎯 Agent Response:\n")
+				ac.safePrint("\n🎯 Agent Response:\n")
 
 				// Check if this looks like JSON content
 				if ac.jsonFormatter != nil && ac.jsonFormatter.DetectAndFormatJSON(cleanResponse) != cleanResponse {
 					// Use JSON formatter for structured data
 					formatted := ac.jsonFormatter.FormatModelResponse(cleanResponse)
-					fmt.Println(formatted)
+					ac.safePrintln(formatted)
 				} else {
 					// For regular text/markdown, just print as-is to preserve formatting
-					fmt.Println(cleanResponse)
+					ac.safePrintln(cleanResponse)
 				}
 			}
 		}
@@ -309,7 +309,7 @@ func (ac *AgentConsole) processInput(input string) error {
 	}
 
 	// Add proper spacing before showing prompt again
-	fmt.Printf("\n%s", ac.prompt)
+	ac.safePrint("\n%s", ac.prompt)
 
 	return nil
 }
@@ -333,12 +333,20 @@ func (ac *AgentConsole) handleCommand(input string) error {
 		ac.cleanup()
 		os.Exit(0)
 	case "clear":
-		// Clear screen
-		fmt.Print("\033[2J\033[H")
+		// Clear only the content area within the scroll region
+		ac.Terminal().SaveCursor()
+		_, height, _ := ac.Terminal().GetSize()
+		// Clear each line in the scroll region
+		for i := 1; i <= height-2; i++ {
+			ac.Terminal().MoveCursor(1, i)
+			ac.Terminal().ClearLine()
+		}
+		ac.Terminal().MoveCursor(1, 1)
+
 		// Clear conversation history
 		if ac.agent != nil {
 			ac.agent.ClearConversationHistory()
-			fmt.Println("🧹 Screen and conversation history cleared")
+			ac.safePrintln("🧹 Screen and conversation history cleared")
 		}
 		return nil
 	case "history":
@@ -539,8 +547,8 @@ func (ac *AgentConsole) setupTerminal() error {
 		return err
 	}
 
-	// Move cursor to top of scroll region
-	ac.Terminal().MoveCursor(1, 1)
+	// After setting scroll region, cursor is already at the correct position
+	// No need to explicitly move it - this prevents overwriting content
 
 	return nil
 }
@@ -693,10 +701,40 @@ func (ac *AgentConsole) executeShellCommand(command string) (string, error) {
 
 // Helper functions
 
+// safePrint writes output that respects the scroll region
+func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
+	// Ensure we're within the scroll region by using the terminal's Write method
+	content := fmt.Sprintf(format, args...)
+	ac.Terminal().Write([]byte(content))
+}
+
+// safePrintln writes output with a newline that respects the scroll region
+func (ac *AgentConsole) safePrintln(args ...interface{}) {
+	content := fmt.Sprintln(args...)
+	ac.Terminal().Write([]byte(content))
+}
+
 // OnResize handles terminal resize events
 func (ac *AgentConsole) OnResize(width, height int) {
-	// Update scroll region
+	// Lock output mutex to prevent interleaving with agent output
+	ac.outputMutex.Lock()
+	defer ac.outputMutex.Unlock()
+
+	// Get current cursor position relative to scroll region
+	// This prevents cursor from jumping to top on resize
+
+	// Update scroll region for new height
+	// The content area is from line 1 to height-2 (leaving 2 lines for footer)
 	ac.Terminal().SetScrollRegion(1, height-2)
+
+	// Note: After changing scroll region, the cursor maintains its relative position
+	// within the new region, so we don't need to save/restore cursor position
+	// which can cause the cursor to jump unexpectedly
+
+	// Let footer component handle its own resize
+	if ac.footer != nil {
+		ac.footer.OnResize(width, height)
+	}
 }
 
 func formatDuration(d time.Duration) string {

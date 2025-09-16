@@ -366,71 +366,16 @@ func mustLoadPrompt(filename string) string {
 	return content
 }
 
-// GetBaseCodeGenSystemMessage returns the base system message for code generation
-// This function now supports both legacy full-file format and new patch format
+// GetBaseCodeGenSystemMessage returns a basic system message for agent code operations
 func GetBaseCodeGenSystemMessage() string {
-	return GetBaseCodeGenSystemMessageWithFormat(false)
+	return "You are a coding assistant. Help the user with their code-related tasks."
 }
 
-// GetBaseCodeGenSystemMessageWithFormat returns the base system message with format selection
+// GetBaseCodeGenSystemMessageWithFormat returns a basic system message for agent code operations
 func GetBaseCodeGenSystemMessageWithFormat(usePatchFormat bool) string {
-	if usePatchFormat {
-		return GetBaseCodePatchSystemMessage()
-	}
-
-	content, err := LoadPromptFromFile("base_code_editing.txt")
-	if err != nil {
-		// we need to exit, this is a critical error
-		os.Exit(1)
-	}
-	return content
+	return GetBaseCodeGenSystemMessage()
 }
 
-// GetQualityAwareCodeGenSystemMessage returns a quality-appropriate system message
-func GetQualityAwareCodeGenSystemMessage(qualityLevel int, usePatchFormat bool) string {
-	if usePatchFormat {
-		return GetBaseCodePatchSystemMessage() // Patch format doesn't have quality variants yet
-	}
-
-	var promptFile string
-	switch qualityLevel {
-	case 2: // QualityProduction
-		promptFile = "base_code_editing_quality_enhanced.txt"
-	case 1: // QualityEnhanced
-		promptFile = "base_code_editing_quality_enhanced.txt"
-	default: // QualityStandard
-		// Try optimized first, fallback to base
-		content, err := LoadPromptFromFile("base_code_editing_optimized.txt")
-		if err == nil {
-			return content
-		}
-		promptFile = "base_code_editing.txt"
-	}
-
-	content, err := LoadPromptFromFile(promptFile)
-	if err != nil {
-		// Fallback to base if quality prompt doesn't exist
-		content, fallbackErr := LoadPromptFromFile("base_code_editing.txt")
-		if fallbackErr != nil {
-			os.Exit(1)
-		}
-		return content
-	}
-	return content
-}
-
-// GetBaseCodePatchSystemMessage returns the system message for patch-based code editing
-func GetBaseCodePatchSystemMessage() string {
-	content, err := LoadPromptFromFile("base_code_editing_patch.txt")
-	if err != nil {
-		// we need to exit, this is a critical error
-		os.Exit(1)
-	}
-	return content
-}
-
-// StripToolCallsIfPresent removes obvious tool_calls JSON blocks from a model response
-// to ensure code-only handling when tools are disabled.
 func StripToolCallsIfPresent(response string) string {
 	// Quick heuristic: if it contains '"tool_calls"' or a top-level JSON with that key, strip everything between a recognizable block.
 	// Keep it conservative to avoid removing valid code; we just drop the tool_calls stanza if present.
@@ -466,17 +411,12 @@ func BuildCodeMessages(code, instructions, filename string, interactive bool) []
 	return BuildCodeMessagesWithFormat(code, instructions, filename, interactive, false)
 }
 
-// BuildCodeMessagesWithFormat constructs the messages with format selection (legacy or patch)
+// BuildCodeMessagesWithFormat constructs the messages for agent operations
 func BuildCodeMessagesWithFormat(code, instructions, filename string, interactive bool, usePatchFormat bool) []Message {
 	var messages []Message
 
-	systemPrompt := GetBaseCodeGenSystemMessageWithFormat(usePatchFormat) // Use the base message with format selection
-
-	if interactive {
-		// Force non-interactive behavior by overriding the system prompt completely
-		systemPrompt = mustLoadPrompt("interactive_code_generation.txt")
-		systemPrompt = strings.Replace(systemPrompt, "{INSTRUCTIONS}", instructions, 1)
-	}
+	// Simple system prompt for agent operations
+	systemPrompt := "You are a coding assistant working within an agent system. Help complete the requested code task."
 
 	// Inject dynamic guidance when a specific filename is targeted
 	if filename != "" {

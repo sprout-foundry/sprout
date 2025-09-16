@@ -122,49 +122,10 @@ func (p *OpenAIProvider) CheckConnection(ctx context.Context) error {
 
 // GetModelContextLimit returns the context window size for the current model
 func (p *OpenAIProvider) GetModelContextLimit() (int, error) {
-	model := strings.ToLower(p.model)
-
-	// GPT-5 models
-	if strings.Contains(model, "gpt-5") {
-		return 272000, nil
-	}
-
-	// O3/O4 models
-	if strings.Contains(model, "o3-mini") || strings.Contains(model, "o4-mini") {
-		return 200000, nil
-	}
-	if strings.Contains(model, "o3") || strings.Contains(model, "o4") {
-		return 200000, nil
-	}
-
-	// GPT-4o models
-	if strings.Contains(model, "gpt-4o") {
-		return 128000, nil
-	}
-
-	// GPT-4 models
-	if strings.Contains(model, "gpt-4-turbo") {
-		return 128000, nil
-	}
-	if strings.Contains(model, "gpt-4-32k") {
-		return 32768, nil
-	}
-	if strings.Contains(model, "gpt-4") {
-		return 8192, nil
-	}
-
-	// GPT-3.5 models
-	if strings.Contains(model, "gpt-3.5-turbo") {
-		return 16385, nil
-	}
-
-	// O1 models
-	if strings.Contains(model, "o1") {
-		return 128000, nil
-	}
-
-	// Default conservative estimate
-	return 4096, nil
+	// Use the model registry for consistent context limit lookup
+	registry := GetModelRegistry()
+	contextLimit := registry.GetModelContextLength(p.model)
+	return contextLimit, nil
 }
 
 // GetAvailableModels returns the list of available OpenAI models
@@ -362,51 +323,13 @@ func (p *OpenAIProvider) convertToUnifiedResponse(resp *OpenAIResponse) *ChatRes
 
 // EstimateCost calculates the cost for OpenAI models
 func (p *OpenAIProvider) EstimateCost(promptTokens, completionTokens int, model string) float64 {
-	// Get model-specific pricing
-	var inputCostPer1K, outputCostPer1K float64
+	// Use the model registry for consistent pricing lookup
+	registry := GetModelRegistry()
+	inputCostPer1M, outputCostPer1M := registry.GetModelPricing(model)
 
-	switch {
-	case strings.Contains(model, "gpt-5-mini"):
-		inputCostPer1K = 0.000125
-		outputCostPer1K = 0.0000625
-	case strings.Contains(model, "gpt-5"):
-		inputCostPer1K = 0.005
-		outputCostPer1K = 0.025
-	case strings.Contains(model, "o3-mini"):
-		inputCostPer1K = 0.00055
-		outputCostPer1K = 0.000138
-	case strings.Contains(model, "o3"):
-		inputCostPer1K = 0.001
-		outputCostPer1K = 0.004
-	case strings.Contains(model, "gpt-4o-mini"):
-		inputCostPer1K = 0.00015
-		outputCostPer1K = 0.0006
-	case strings.Contains(model, "gpt-4o"):
-		inputCostPer1K = 0.005
-		outputCostPer1K = 0.015
-	case strings.Contains(model, "o1-mini"):
-		inputCostPer1K = 0.00055
-		outputCostPer1K = 0.000138
-	case strings.Contains(model, "o1"):
-		inputCostPer1K = 0.001
-		outputCostPer1K = 0.004
-	case strings.Contains(model, "gpt-4-turbo"):
-		inputCostPer1K = 0.01
-		outputCostPer1K = 0.03
-	case strings.Contains(model, "gpt-4"):
-		inputCostPer1K = 0.03
-		outputCostPer1K = 0.06
-	case strings.Contains(model, "gpt-3.5-turbo"):
-		inputCostPer1K = 0.002
-		outputCostPer1K = 0.002
-	default:
-		// Conservative default
-		inputCostPer1K = 0.001
-		outputCostPer1K = 0.002
-	}
-
-	inputCost := float64(promptTokens) * inputCostPer1K / 1000
-	outputCost := float64(completionTokens) * outputCostPer1K / 1000
+	// Convert from per 1M to per token costs
+	inputCost := float64(promptTokens) * inputCostPer1M / 1_000_000
+	outputCost := float64(completionTokens) * outputCostPer1M / 1_000_000
 
 	return inputCost + outputCost
 }

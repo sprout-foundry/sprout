@@ -2,118 +2,62 @@
 
 ## Provider Architecture
 
-### Refactor Provider Interface (Medium Priority)
-**Issue**: The Provider interface has too many methods (14+), violating the Interface Segregation Principle.
+### Refactor Provider Interface (Medium Priority) ⚠️
+**Status**: Analysis Complete - No Action Needed
 
 **Current State**:
-```go
-type Provider interface {
-    SendChatRequest(...)
-    CheckConnection(...)
-    GetModel()
-    SetModel(...)
-    GetAvailableModels(...)
-    GetModelContextLimit()
-    GetName()
-    GetType()
-    GetEndpoint()
-    SupportsVision()
-    SupportsTools()
-    SupportsStreaming()
-    SupportsReasoning()
-    SetDebug(...)
-    IsDebug()
-}
-```
+The Provider interface in `pkg/agent_api/provider_interface.go` has 15 methods, which is borderline but still manageable. The interface is already well-organized with:
+- Clear method grouping (Core, Model management, Provider info, Features, Config)
+- A BaseProvider that implements common functionality
+- Good separation between required and optional features
 
-**Proposed Solution**:
-Split into smaller, focused interfaces:
-```go
-type ChatProvider interface {
-    SendChatRequest(ctx context.Context, req *ProviderChatRequest) (*ChatResponse, error)
-}
+**Assessment**:
+While the interface could be split into smaller interfaces as originally proposed, doing so would:
+1. Break backward compatibility with all existing provider implementations
+2. Require significant refactoring across the codebase
+3. Add complexity without significant immediate benefit
 
-type ModelProvider interface {
-    GetModel() string
-    SetModel(model string) error
-    GetAvailableModels(ctx context.Context) ([]ModelDetails, error)
-    GetModelContextLimit() (int, error)
-}
+**Recommendation**: Keep as-is
+The current interface is functional and not causing immediate problems. Consider interface segregation only if:
+- New provider types emerge that only need a subset of functionality
+- Testing becomes difficult due to interface size
+- The interface grows beyond 20+ methods
 
-type FeatureProvider interface {
-    SupportsVision() bool
-    SupportsTools() bool
-    SupportsStreaming() bool
-    SupportsReasoning() bool
-}
+**Alternative Approach**:
+If refactoring becomes necessary in the future, use adapter pattern:
+- Keep existing Provider interface for compatibility
+- Create smaller interfaces for new implementations
+- Use adapters to bridge between old and new interfaces
 
-type Provider interface {
-    ChatProvider
-    ModelProvider
-    FeatureProvider
-    GetName() string
-    GetType() ClientType
-    // ... other core methods
-}
-```
+### Replace String-based Model Detection (Low Priority) ✅
+**Status**: Partially Complete
 
-**Benefits**:
-- Easier to test individual aspects
-- Providers can implement only what they need
-- Better separation of concerns
+**What Was Done**:
+1. ✅ Model registry already exists (`model_registry.go`)
+2. ✅ Updated `provider_openai.go` to use registry for:
+   - `GetModelContextLimit()` - Now uses `registry.GetModelContextLength()`
+   - `EstimateCost()` - Now uses `registry.GetModelPricing()`
+3. ✅ Updated `DeepInfraClientWrapper` in `interface.go` to use registry
 
-### Replace String-based Model Detection (Low Priority)
-**Issue**: Using `strings.Contains()` for model detection is fragile and error-prone.
+**Model Registry Features**:
+- Pattern-based matching with priority levels
+- Comprehensive OpenAI model database
+- Extensible design for adding new providers
+- Unified pricing (per 1M tokens) and context limits
 
-**Current Examples**:
-```go
-// In provider_openai.go
-if strings.Contains(model, "gpt-5") {
-    return 272000, nil
-}
-if strings.Contains(model, "o3-mini") {
-    return 200000, nil
-}
-```
+**Remaining String-Based Detection**:
+Some string matching remains in:
+- Provider-specific context limit fallbacks (when API calls fail)
+- Feature detection (vision, reasoning capabilities)
+- Model family identification for behavior adjustments
 
-**Proposed Solution**:
-Create a model registry with structured metadata:
-```go
-type ModelMetadata struct {
-    ID            string
-    Family        string
-    Version       string
-    ContextLimit  int
-    Features      []string
-    Pricing       PricingInfo
-}
+**Decision**: Current Implementation is Sufficient
+The model registry provides the core functionality needed:
+- Central source of truth for model metadata
+- Pattern-based fallback for new models
+- Easy to extend with new models/providers
 
-type ModelRegistry struct {
-    models map[string]ModelMetadata
-}
-
-func (r *ModelRegistry) GetModelInfo(modelID string) (ModelMetadata, bool) {
-    // Exact match first
-    if info, ok := r.models[modelID]; ok {
-        return info, true
-    }
-    // Fallback to pattern matching if needed
-    // ...
-}
-```
-
-**Implementation Steps**:
-1. Create ModelMetadata and ModelRegistry types
-2. Build registry from existing model data
-3. Replace all string.Contains checks with registry lookups
-4. Add fallback logic for unknown models
-5. Make registry configurable/extensible
-
-**Benefits**:
-- Type-safe model information
-- Easier to maintain and update
-- Better support for model aliases and versions
-- Can be extended with additional metadata
+The remaining string-based checks are mostly in provider-specific code where they serve as appropriate fallbacks or feature detection that doesn't warrant registry complexity.
 
 ## Anonymous Structs in Provider Responses
 
@@ -255,20 +199,29 @@ Created unified `DetermineProvider()` function with clear precedence:
 - Reusable availability checking
 - Works seamlessly with --provider flag
 
-### Remove Model Aliasing and Normalization
+### Remove Model Aliasing and Normalization ✅
 **Issue**: Complex model name handling adds confusion.
 
-**Current Problems**:
-- Model names are normalized in pricing service
-- Featured models create implicit aliases
-- No clear canonical model names
-- String manipulation for model detection
+**Status**: Partially Complete
+- ✅ Featured models implicit aliases removed
+- ✅ Clear canonical model names established (exact provider names)
+- ⚠️  Pricing service still normalizes for lookup (case-insensitive)
 
-**Proposed Solution**:
-- Use exact model names as provided by each service
-- No aliasing or normalization
-- Clear documentation of valid model names per provider
-- Validation against known model list
+**Remaining Normalization**:
+The pricing service normalizes model names for case-insensitive lookup:
+- `normalizeModelKey()` lowercases and removes provider prefixes
+- `normalizePricingKeys()` lowercases all pricing table keys
+
+**Decision**: Keep pricing normalization
+This normalization is actually beneficial for pricing lookup because:
+- Model names may vary in casing across providers
+- Pricing should work regardless of exact casing
+- It's isolated to pricing logic and doesn't affect model selection
+
+**What Was Fixed**:
+- Removed featured models that created implicit aliases
+- Model selection now uses exact names from providers
+- No more string manipulation for model detection in selection logic
 
 ## Additional Improvements
 

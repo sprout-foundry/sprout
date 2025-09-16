@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
@@ -28,6 +28,15 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 	}
 
 	a.currentIteration = 0
+
+	// Print startup message in non-interactive mode
+	if os.Getenv("LEDIT_FROM_AGENT") == "1" && !a.IsInteractiveMode() {
+		providerType := a.GetProviderType()
+		providerName := api.GetProviderName(providerType)
+		model := a.GetModel()
+		fmt.Printf("🤖 Agent: %s/%s\n", providerName, model)
+		fmt.Printf("📋 Task: %s\n", userQuery)
+	}
 
 	// Set a reasonable iteration limit to prevent infinite loops
 	// The agent should complete tasks naturally, but we need a safety limit
@@ -72,6 +81,11 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 		}
 
 		a.debugLog("Iteration %d/%d\n", a.currentIteration, a.maxIterations)
+
+		// Print compact progress indicator in non-interactive mode
+		if os.Getenv("LEDIT_FROM_AGENT") == "1" && !a.IsInteractiveMode() {
+			a.PrintCompactProgress()
+		}
 
 		// Optimize conversation before sending to API
 		optimizedMessages := a.optimizer.OptimizeConversation(a.messages)

@@ -35,19 +35,20 @@ const (
 
 // NewUnifiedClient creates a client with default model for the provider
 func NewUnifiedClient(clientType ClientType) (ClientInterface, error) {
-	defaultModel := GetDefaultModelForProvider(clientType)
+	registry := GetProviderRegistry()
+	defaultModel := registry.GetDefaultModel(clientType)
 	return NewUnifiedClientWithModel(clientType, defaultModel)
 }
 
 // NewUnifiedClientWithModel creates a client with a specific model
 func NewUnifiedClientWithModel(clientType ClientType, model string) (ClientInterface, error) {
 	// Use default model if none specified
+	registry := GetProviderRegistry()
 	if model == "" {
-		model = GetDefaultModelForProvider(clientType)
+		model = registry.GetDefaultModel(clientType)
 	}
 
 	// Use the provider registry for data-driven client creation
-	registry := GetProviderRegistry()
 	return registry.CreateClient(clientType, model)
 }
 
@@ -94,40 +95,6 @@ func NewOpenAIClientWrapper(model string) (ClientInterface, error) {
 func NewDeepSeekClientWrapper(model string) (ClientInterface, error) {
 	// For now, return an error since DeepSeek provider is not fully implemented
 	return nil, fmt.Errorf("DeepSeek provider not yet implemented")
-}
-
-// GetClientTypeFromEnv determines which client to use based on environment variables
-// DEPRECATED: Use DetermineProvider() instead for unified provider detection
-func GetClientTypeFromEnv() ClientType {
-	// Check for explicit provider environment variable first
-	if providerEnv := os.Getenv("LEDIT_PROVIDER"); providerEnv != "" {
-		// Try to parse the provider name
-		if provider, err := parseProviderName(providerEnv); err == nil {
-			return provider
-		}
-	}
-
-	// Check provider environment variables in priority order (OpenAI first, then OpenRouter)
-	envProviders := []struct {
-		envVar string
-		client ClientType
-	}{
-		{"OPENAI_API_KEY", OpenAIClientType},
-		{"OPENROUTER_API_KEY", OpenRouterClientType},
-		{"DEEPINFRA_API_KEY", DeepInfraClientType},
-		{"CEREBRAS_API_KEY", CerebrasClientType},
-		{"GROQ_API_KEY", GroqClientType},
-		{"DEEPSEEK_API_KEY", DeepSeekClientType},
-	}
-
-	for _, provider := range envProviders {
-		if apiKey := os.Getenv(provider.envVar); apiKey != "" {
-			return provider.client
-		}
-	}
-
-	// Otherwise, default to Ollama for local inference
-	return OllamaClientType
 }
 
 // DetermineProvider provides unified provider detection with clear precedence:
@@ -206,6 +173,20 @@ func parseProviderName(name string) (ClientType, error) {
 	}
 }
 
+// GetDefaultModelForProvider returns the default model for each provider
+// This is a compatibility wrapper around the provider registry
+func GetDefaultModelForProvider(clientType ClientType) string {
+	registry := GetProviderRegistry()
+	return registry.GetDefaultModel(clientType)
+}
+
+// GetVisionModelForProvider returns the default vision-capable model for each provider
+// This is a compatibility wrapper around the provider registry
+func GetVisionModelForProvider(clientType ClientType) string {
+	registry := GetProviderRegistry()
+	return registry.GetDefaultVisionModel(clientType)
+}
+
 // IsProviderAvailable checks if a provider can be used
 func IsProviderAvailable(provider ClientType) bool {
 	switch provider {
@@ -229,94 +210,6 @@ func IsProviderAvailable(provider ClientType) bool {
 	}
 }
 
-// GetDefaultModelForProvider returns the default model for each provider
-func GetDefaultModelForProvider(clientType ClientType) string {
-	// Simple, hardcoded defaults for each provider
-	switch clientType {
-	case OpenAIClientType:
-		return "gpt-4o-mini" // Best balance of speed, quality, and cost
-	case OpenRouterClientType:
-		return "deepseek/deepseek-chat-v3.1:free"
-	case DeepInfraClientType:
-		return "deepseek-ai/deepseek-v3.1"
-	case OllamaClientType:
-		return "gpt-oss:20b"
-	case CerebrasClientType:
-		return "cerebras/btlm-3b-8k-base"
-	case GroqClientType:
-		return "llama3-70b-8192"
-	case DeepSeekClientType:
-		return "deepseek-chat"
-	default:
-		return "gpt-4o-mini"
-	}
-}
-
-// GetVisionModelForProvider returns the default vision-capable model for each provider
-// Returns empty string if provider doesn't support vision
-func GetVisionModelForProvider(clientType ClientType) string {
-	// Simple, hardcoded vision models for each provider
-	switch clientType {
-	case OpenAIClientType:
-		return "gpt-4o" // Best for vision tasks requiring high quality
-	case OpenRouterClientType:
-		return "gpt-4o" // Most providers support GPT-4o for vision
-	case DeepInfraClientType:
-		return "" // No default vision model
-	case OllamaClientType:
-		return "" // Vision support depends on local models
-	case CerebrasClientType:
-		return "" // No vision support
-	case GroqClientType:
-		return "" // No vision support
-	case DeepSeekClientType:
-		return "" // No vision support
-	default:
-		return ""
-	}
-}
-
-// GetClientTypeWithFallback determines client type and falls back if unavailable
-func GetClientTypeWithFallback() (ClientType, error) {
-	// Use the unified provider detection
-	provider, err := DetermineProvider("", "")
-
-	// DetermineProvider always returns a provider (falls back to Ollama)
-	// So we need to verify the provider is actually available
-	if err == nil && provider != OllamaClientType {
-		// Verify non-Ollama provider is functional
-		if _, clientErr := NewUnifiedClient(provider); clientErr == nil {
-			return provider, nil
-		}
-		// If not, print warning and continue
-		fmt.Printf("⚠️  Provider %s unavailable, checking alternatives\n", GetProviderName(provider))
-	}
-
-	// Check if Ollama is available
-	if _, err := NewUnifiedClient(OllamaClientType); err == nil {
-		return OllamaClientType, nil
-	}
-
-	// Last resort: try all providers
-	for _, provider := range []ClientType{
-		OpenAIClientType,
-		OpenRouterClientType,
-		DeepInfraClientType,
-		CerebrasClientType,
-		GroqClientType,
-		DeepSeekClientType,
-	} {
-		if IsProviderAvailable(provider) {
-			if _, err := NewUnifiedClient(provider); err == nil {
-				fmt.Printf("⚠️  Using %s as fallback provider\n", GetProviderName(provider))
-				return provider, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("no available providers found. Please set up either Ollama or a provider API key")
-}
-
 // GetAvailableProviders returns a list of all available providers
 func GetAvailableProviders() []ClientType {
 	registry := GetProviderRegistry()
@@ -327,29 +220,6 @@ func GetAvailableProviders() []ClientType {
 func GetProviderName(clientType ClientType) string {
 	registry := GetProviderRegistry()
 	return registry.GetProviderName(clientType)
-}
-
-// GetProviderFromString converts a string to ClientType
-func GetProviderFromString(providerStr string) (ClientType, error) {
-	providerStr = strings.ToLower(providerStr)
-	switch providerStr {
-	case "openai":
-		return OpenAIClientType, nil
-	case "deepinfra":
-		return DeepInfraClientType, nil
-	case "ollama":
-		return OllamaClientType, nil
-	case "cerebras":
-		return CerebrasClientType, nil
-	case "openrouter":
-		return OpenRouterClientType, nil
-	case "groq":
-		return GroqClientType, nil
-	case "deepseek":
-		return DeepSeekClientType, nil
-	default:
-		return "", fmt.Errorf("unknown provider: %s", providerStr)
-	}
 }
 
 // DeepInfraClientWrapper wraps the existing DeepInfra client to implement ClientInterface

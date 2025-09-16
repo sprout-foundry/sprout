@@ -445,41 +445,11 @@ func (w *DeepInfraClientWrapper) GetModelContextLimit() (int, error) {
 		}
 	}
 
-	// Fallback to hardcoded limits if API doesn't provide context length
-	switch {
-	case strings.Contains(model, "deepseek-r1"):
-		return 64000, nil // DeepSeek-R1 supports 64K context
-	case strings.Contains(model, "DeepSeek-V3.1"):
-		return 128000, nil // DeepSeek-V3.1 supports 128K context
-	case strings.Contains(model, "DeepSeek-V3"):
-		return 128000, nil // DeepSeek-V3 supports 128K context
-	case strings.Contains(model, "DeepSeek-R1"):
-		return 64000, nil // DeepSeek-R1 supports 64K context
-	case strings.Contains(model, "deepseek"):
-		return 32000, nil // Other DeepSeek models typically 32K
-	case strings.Contains(model, "gpt-5"):
-		return 272000, nil // GPT-5 supports up to 272K context
-	case strings.Contains(model, "gpt-oss"):
-		return 120000, nil // GPT-OSS models typically have ~120k context
-	case strings.Contains(model, "llama-4"):
-		return 256000, nil // Llama 4 Maverick supports 256K context
-	case strings.Contains(model, "llama"):
-		return 32000, nil // Standard Llama models typically have ~32k context
-	case strings.Contains(model, "qwen3-coder-480b"):
-		return 256000, nil // Qwen3-Coder-480B supports 256K context
-	case strings.Contains(model, "qwen3"):
-		return 128000, nil // Qwen3 models typically have 128K context
-	case strings.Contains(model, "qwen"):
-		return 32000, nil // Standard Qwen models typically have ~32k context
-	case strings.Contains(model, "claude"):
-		return 200000, nil // Claude models have large context windows
-	case strings.Contains(model, "gemini-2.5"):
-		return 1000000, nil // Gemini 2.5 models support up to 1M context
-	case strings.Contains(model, "gemini"):
-		return 128000, nil // Standard Gemini models have large context windows
-	default:
-		return 32000, nil // Conservative default
-	}
+	// Fallback to model registry for consistent context limit lookup
+	// Note: The registry handles pattern matching for models not in the API response
+	registry := GetModelRegistry()
+	contextLimit := registry.GetModelContextLength(model)
+	return contextLimit, nil
 }
 
 func (w *DeepInfraClientWrapper) SupportsVision() bool {

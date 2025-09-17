@@ -98,8 +98,7 @@ func (a *ProviderAdapter) GetEndpoint() string {
 		return "https://api.openai.com/v1/chat/completions"
 	case DeepInfraClientType:
 		return "https://api.deepinfra.com/v1/openai/chat/completions"
-	case GroqClientType:
-		return "https://api.groq.com/openai/v1/chat/completions"
+
 	default:
 		return ""
 	}

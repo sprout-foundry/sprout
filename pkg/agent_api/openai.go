@@ -513,3 +513,102 @@ func (c *OpenAIClient) CalculateOpenAICostFlex(promptTokens, completionTokens, c
 func (c *OpenAIClient) CalculateOpenAICostStandard(promptTokens, completionTokens, cachedTokens int) float64 {
 	return c.calculateOpenAICostWithTier(promptTokens, completionTokens, cachedTokens, StandardTier)
 }
+
+// SendChatRequestStream sends a streaming chat request
+func (c *OpenAIClient) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error) {
+	// Calculate appropriate max_tokens based on model and context
+	maxTokens := c.calculateMaxTokens(messages, tools)
+
+	req := OpenAIRequest{
+		Model:    c.model,
+		Messages: messages,
+		Tools:    tools,
+		Stream:   true, // Enable streaming
+	}
+
+	// Only include temperature for models that support it (not GPT-5 models)
+	if !strings.Contains(c.model, "gpt-5") {
+		temp := 0.1 // Low for consistency
+		req.Temperature = &temp
+	}
+
+	// Only include max_tokens for models that support it (not GPT-5 or o1 models)
+	if !strings.Contains(c.model, "gpt-5") && !strings.Contains(c.model, "o1") {
+		req.MaxTokens = maxTokens
+	}
+
+	// Only include reasoning parameter for o1 models that support it
+	if reasoning != "" && (strings.Contains(c.model, "o1") || strings.Contains(c.model, "reasoning")) {
+		req.Reasoning = reasoning
+	}
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	if c.debug {
+		fmt.Printf("OpenAI Streaming Request: %s\n", string(reqBody))
+	}
+
+	httpReq, err := http.NewRequest("POST", OpenAIURL, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	httpReq.Header.Set("Accept", "text/event-stream")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("OpenAI API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	// Create response builder
+	builder := NewStreamingResponseBuilder(callback)
+
+	// Create SSE reader
+	sseReader := NewSSEReader(resp.Body, func(event, data string) error {
+		if data == "" {
+			return nil
+		}
+
+		chunk, err := ParseSSEData(data)
+		if err != nil {
+			if err == io.EOF {
+				// Stream complete
+				return nil
+			}
+			return err
+		}
+
+		return builder.ProcessChunk(chunk)
+	})
+
+	// Read the stream
+	if err := sseReader.Read(); err != nil {
+		return nil, fmt.Errorf("failed to read stream: %w", err)
+	}
+
+	// Get the final response
+	response := builder.GetResponse()
+
+	// Calculate estimated cost if not provided
+	if response.Usage.EstimatedCost == 0 && response.Usage.TotalTokens > 0 {
+		cachedTokens := response.Usage.PromptTokensDetails.CachedTokens
+		response.Usage.EstimatedCost = c.calculateOpenAICostWithCaching(
+			response.Usage.PromptTokens,
+			response.Usage.CompletionTokens,
+			cachedTokens,
+		)
+	}
+
+	return response, nil
+}

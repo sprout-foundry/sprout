@@ -147,8 +147,35 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 		maxRetries := 3
 		retryDelay := time.Second
 
+		// Reset streaming buffer
+		a.streamingBuffer.Reset()
+
 		for retry := 0; retry <= maxRetries; retry++ {
-			resp, err = a.client.SendChatRequest(optimizedMessages, tools, reasoningEffort)
+			if a.streamingEnabled {
+				// Don't show indicator here - let the streaming formatter handle it
+
+				// Use streaming API
+				streamCallback := func(content string) {
+					// Accumulate content in buffer
+					a.streamingBuffer.WriteString(content)
+
+					// Call user callback if provided
+					if a.streamingCallback != nil {
+						a.streamingCallback(content)
+					} else if a.outputMutex != nil {
+						// Default streaming output
+						a.outputMutex.Lock()
+						fmt.Print(content)
+						a.outputMutex.Unlock()
+					}
+				}
+
+				resp, err = a.client.SendChatRequestStream(optimizedMessages, tools, reasoningEffort, streamCallback)
+			} else {
+				// Use regular API
+				resp, err = a.client.SendChatRequest(optimizedMessages, tools, reasoningEffort)
+			}
+
 			if err == nil {
 				break // Success
 			}
@@ -240,7 +267,8 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 		// This shows the user the agent's reasoning before executing tools
 		if len(choice.Message.ToolCalls) > 0 {
 			content := strings.TrimSpace(choice.Message.Content)
-			if len(content) > 0 {
+			// If streaming was enabled, content was already shown in real-time
+			if !a.streamingEnabled && len(content) > 0 {
 				// Use mutex if available for synchronized output
 				if a.outputMutex != nil {
 					a.outputMutex.Lock()
@@ -250,6 +278,15 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 				} else {
 					fmt.Print("\r\033[K") // Clear line
 					fmt.Printf("💭 %s\n", content)
+				}
+			} else if a.streamingEnabled && len(content) > 0 {
+				// Add newline after streaming content if there are tool calls coming
+				if a.outputMutex != nil {
+					a.outputMutex.Lock()
+					fmt.Println() // Add newline after streamed content
+					a.outputMutex.Unlock()
+				} else {
+					fmt.Println()
 				}
 			}
 			// If no content but has tool calls, we'll let the tool execution logs speak for themselves
@@ -549,6 +586,15 @@ func (a *Agent) handleAPIFailure(apiErr error, _ []api.Message) (string, error) 
 		response += "The API request timed out, likely due to high server load or a complex request.\n\n"
 	} else if strings.Contains(errorMsg, "rate limit") {
 		response += "Hit API rate limits. Please wait a moment before continuing.\n\n"
+	} else if strings.Contains(strings.ToLower(errorMsg), "model") &&
+		(strings.Contains(strings.ToLower(errorMsg), "not exist") ||
+			strings.Contains(strings.ToLower(errorMsg), "not found") ||
+			strings.Contains(strings.ToLower(errorMsg), "does not exist")) {
+		response += fmt.Sprintf("❌ **Model Error**: %s\n\n", errorMsg)
+		response += "The selected model is not available. You may need to:\n"
+		response += "- Check the model name with `/models` command\n"
+		response += "- Switch to a different model with `/model` command\n"
+		response += "- Verify your API key has access to this model\n\n"
 	} else {
 		response += fmt.Sprintf("API error: %s\n\n", errorMsg)
 	}

@@ -160,28 +160,6 @@ func newDefaultModelRegistry() *ModelRegistry {
 		registry.models[model.ID] = model
 	}
 
-	// Add Cerebras models
-	cerebrasModels := []ModelConfig{
-		{"cerebras/btlm-3b-8k-base", "BTLM 3B", "cerebras", 8192, 0.1, 0.1, 0, []string{}, []string{}},
-		{"qwen-3-480b", "Qwen 3 480B", "cerebras", 256000, 2.0, 2.0, 0, []string{"tools"}, []string{}},
-		{"qwen-3-235b-2507", "Qwen 3 235B", "cerebras", 128000, 1.5, 1.5, 0, []string{"tools"}, []string{}},
-		{"llama3.1-8b", "Llama 3.1 8B", "cerebras", 8192, 0.2, 0.2, 0, []string{"tools"}, []string{}},
-		{"llama-3.3-70b", "Llama 3.3 70B", "cerebras", 128000, 0.6, 0.6, 0, []string{"tools"}, []string{}},
-	}
-	for _, model := range cerebrasModels {
-		registry.models[model.ID] = model
-	}
-
-	// Add Groq models
-	groqModels := []ModelConfig{
-		{"llama3-70b-8192", "Llama 3 70B", "groq", 8192, 0.59, 0.79, 0, []string{"tools"}, []string{}},
-		{"llama-3.1-70b-versatile", "Llama 3.1 70B Versatile", "groq", 128000, 0.59, 0.79, 0, []string{"tools"}, []string{}},
-		{"mixtral-8x7b-32768", "Mixtral 8x7B", "groq", 32768, 0.24, 0.24, 0, []string{"tools"}, []string{}},
-	}
-	for _, model := range groqModels {
-		registry.models[model.ID] = model
-	}
-
 	// Add OpenRouter-specific models
 	openRouterModels := []ModelConfig{
 		{"deepseek/deepseek-chat-v3.1:free", "DeepSeek Chat V3.1 (Free)", "openrouter", 128000, 0, 0, 0, []string{"tools"}, []string{"free"}},
@@ -198,8 +176,6 @@ func newDefaultModelRegistry() *ModelRegistry {
 	ollamaModels := []ModelConfig{
 		{"gpt-oss:20b", "GPT OSS 20B (Local)", "ollama", 120000, 0, 0, 0, []string{"tools"}, []string{"local"}},
 		{"qwen3-coder", "Qwen3 Coder (Local)", "ollama", 32000, 0, 0, 0, []string{"tools"}, []string{"local"}},
-		{"llama3.2", "Llama 3.2 (Local)", "ollama", 128000, 0, 0, 0, []string{"tools"}, []string{"local"}},
-		{"deepseek-coder-v2", "DeepSeek Coder V2 (Local)", "ollama", 128000, 0, 0, 0, []string{"tools"}, []string{"local"}},
 	}
 	for _, model := range ollamaModels {
 		registry.models[model.ID] = model

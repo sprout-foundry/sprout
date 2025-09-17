@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/alantheprice/ledit/pkg/config"
 	agent_config "github.com/alantheprice/ledit/pkg/agent_config"
+	"github.com/alantheprice/ledit/pkg/config"
 )
 
 // UnifiedConfig provides a unified interface for both config systems
@@ -38,7 +38,7 @@ type UnifiedConfig interface {
 
 // UnifiedConfigImpl implements the UnifiedConfig interface
 type UnifiedConfigImpl struct {
-	mainConfig  *config.Config        // pkg/config.Config
+	mainConfig  *config.Config       // pkg/config.Config
 	agentConfig *agent_config.Config // legacy agent config
 	configDir   string
 }
@@ -210,14 +210,12 @@ func (u *UnifiedConfigImpl) mapClientTypeToString(clientType agent_config.Client
 	switch clientType {
 	case agent_config.OpenAIClientType:
 		return "openai"
-	case agent_config.GroqClientType:
-		return "groq"
+
 	case agent_config.OllamaClientType:
 		return "ollama"
 	case agent_config.DeepInfraClientType:
 		return "deepinfra"
-	case agent_config.CerebrasClientType:
-		return "cerebras"
+
 	case agent_config.OpenRouterClientType:
 		return "openrouter"
 	case agent_config.DeepSeekClientType:
@@ -231,14 +229,12 @@ func (u *UnifiedConfigImpl) mapStringToClientType(provider string) agent_config.
 	switch provider {
 	case "openai":
 		return agent_config.OpenAIClientType
-	case "groq":
-		return agent_config.GroqClientType
+
 	case "ollama":
 		return agent_config.OllamaClientType
 	case "deepinfra":
 		return agent_config.DeepInfraClientType
-	case "cerebras":
-		return agent_config.CerebrasClientType
+
 	case "openrouter":
 		return agent_config.OpenRouterClientType
 	case "deepseek":
@@ -258,10 +254,7 @@ func (u *UnifiedConfigImpl) getAPIKeyFromStruct(keys *agent_config.APIKeys, prov
 		return keys.DeepInfra
 	case agent_config.OpenRouterClientType:
 		return keys.OpenRouter
-	case agent_config.CerebrasClientType:
-		return keys.Cerebras
-	case agent_config.GroqClientType:
-		return keys.Groq
+
 	case agent_config.DeepSeekClientType:
 		return keys.DeepSeek
 	default:
@@ -277,10 +270,7 @@ func (u *UnifiedConfigImpl) setAPIKeyInStruct(keys *agent_config.APIKeys, provid
 		keys.DeepInfra = apiKey
 	case agent_config.OpenRouterClientType:
 		keys.OpenRouter = apiKey
-	case agent_config.CerebrasClientType:
-		keys.Cerebras = apiKey
-	case agent_config.GroqClientType:
-		keys.Groq = apiKey
+
 	case agent_config.DeepSeekClientType:
 		keys.DeepSeek = apiKey
 	}

@@ -59,6 +59,11 @@ type Agent struct {
 
 	// False stop detection
 	falseStopDetectionEnabled bool
+
+	// Streaming support
+	streamingEnabled  bool
+	streamingCallback api.StreamCallback
+	streamingBuffer   strings.Builder
 }
 
 func NewAgent() (*Agent, error) {
@@ -455,6 +460,18 @@ func (a *Agent) SetInterruptChannel(ch chan string) {
 // SetOutputMutex sets the output mutex for synchronized output
 func (a *Agent) SetOutputMutex(mu *sync.Mutex) {
 	a.outputMutex = mu
+}
+
+// EnableStreaming enables streaming mode with optional callback
+func (a *Agent) EnableStreaming(callback api.StreamCallback) {
+	a.streamingEnabled = true
+	a.streamingCallback = callback
+}
+
+// DisableStreaming disables streaming mode
+func (a *Agent) DisableStreaming() {
+	a.streamingEnabled = false
+	a.streamingCallback = nil
 }
 
 func (a *Agent) GetMaxIterations() int {

@@ -2,7 +2,7 @@ package api
 
 import (
 	"github.com/alantheprice/ledit/pkg/agent_providers"
-	"github.com/alantheprice/ledit/pkg/agent_types"
+	types "github.com/alantheprice/ledit/pkg/agent_types"
 )
 
 // UnifiedProviderWrapper wraps any provider that implements types.ProviderInterface
@@ -311,17 +311,135 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 	return apiResponse, nil
 }
 
-// Factory functions for creating providers
-func NewOpenRouterProvider(model string) (ClientInterface, error) {
-	provider, err := providers.NewOpenRouterProviderWithModel(model)
+// SendChatRequestStream sends a streaming chat request (not yet implemented for unified providers)
+func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error) {
+	// Convert API types to provider types
+	providerMessages := make([]types.Message, len(messages))
+	for i, msg := range messages {
+		// Convert image data
+		providerImages := make([]types.ImageData, len(msg.Images))
+		for j, img := range msg.Images {
+			providerImages[j] = types.ImageData{
+				URL:    img.URL,
+				Base64: img.Base64,
+				Type:   img.Type,
+			}
+		}
+
+		providerMessages[i] = types.Message{
+			Role:             msg.Role,
+			Content:          msg.Content,
+			ReasoningContent: msg.ReasoningContent,
+			Images:           providerImages,
+		}
+	}
+
+	providerTools := make([]types.Tool, len(tools))
+	for i, tool := range tools {
+		providerTools[i] = types.Tool{
+			Type: tool.Type,
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        tool.Function.Name,
+				Description: tool.Function.Description,
+				Parameters:  tool.Function.Parameters,
+			},
+		}
+	}
+
+	// Create a wrapper callback that converts strings to our StreamCallback type
+	providerCallback := func(content string) {
+		if callback != nil {
+			callback(content)
+		}
+	}
+
+	// Call provider's streaming method
+	response, err := w.provider.SendChatRequestStream(providerMessages, providerTools, reasoning, providerCallback)
 	if err != nil {
 		return nil, err
 	}
-	return NewUnifiedProviderWrapper(provider), nil
+
+	// Convert response back to API types
+	apiResponse := &ChatResponse{
+		ID:      response.ID,
+		Object:  response.Object,
+		Created: response.Created,
+		Model:   response.Model,
+		Choices: make([]Choice, len(response.Choices)),
+		Usage: struct {
+			PromptTokens        int     `json:"prompt_tokens"`
+			CompletionTokens    int     `json:"completion_tokens"`
+			TotalTokens         int     `json:"total_tokens"`
+			EstimatedCost       float64 `json:"estimated_cost"`
+			PromptTokensDetails struct {
+				CachedTokens     int  `json:"cached_tokens"`
+				CacheWriteTokens *int `json:"cache_write_tokens"`
+			} `json:"prompt_tokens_details,omitempty"`
+		}{
+			PromptTokens:     response.Usage.PromptTokens,
+			CompletionTokens: response.Usage.CompletionTokens,
+			TotalTokens:      response.Usage.TotalTokens,
+			EstimatedCost:    response.Usage.EstimatedCost,
+		},
+	}
+
+	// Convert choices
+	for i, choice := range response.Choices {
+		// Convert tool calls
+		var toolCalls []ToolCall
+		for _, tc := range choice.Message.ToolCalls {
+			toolCalls = append(toolCalls, ToolCall{
+				ID:   tc.ID,
+				Type: tc.Type,
+				Function: struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				}{
+					Name:      tc.Function.Name,
+					Arguments: tc.Function.Arguments,
+				},
+			})
+		}
+
+		// Convert images
+		var images []ImageData
+		for _, img := range choice.Message.Images {
+			images = append(images, ImageData{
+				URL:    img.URL,
+				Base64: img.Base64,
+				Type:   img.Type,
+			})
+		}
+
+		apiResponse.Choices[i] = Choice{
+			Index: choice.Index,
+			Message: struct {
+				Role             string      `json:"role"`
+				Content          string      `json:"content"`
+				ReasoningContent string      `json:"reasoning_content,omitempty"`
+				Images           []ImageData `json:"images,omitempty"`
+				ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
+			}{
+				Role:             choice.Message.Role,
+				Content:          choice.Message.Content,
+				ReasoningContent: choice.Message.ReasoningContent,
+				Images:           images,
+				ToolCalls:        toolCalls,
+			},
+			FinishReason: choice.FinishReason,
+		}
+	}
+
+	return apiResponse, nil
 }
 
-func NewCerebrasProvider(model string) (ClientInterface, error) {
-	provider, err := providers.NewCerebrasProviderWithModel(model)
+// Factory functions for creating providers
+func NewOpenRouterProvider(model string) (ClientInterface, error) {
+	provider, err := providers.NewOpenRouterProviderWithModel(model)
 	if err != nil {
 		return nil, err
 	}

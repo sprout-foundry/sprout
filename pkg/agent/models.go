@@ -85,8 +85,7 @@ func (a *Agent) determineProviderForModel(modelID string) (api.ClientType, error
 		api.OpenRouterClientType, // Check OpenRouter first as it has most models
 		api.OpenAIClientType,
 		api.DeepInfraClientType,
-		api.CerebrasClientType,
-		api.GroqClientType,
+
 		api.DeepSeekClientType,
 		api.OllamaClientType, // Check Ollama last as it's local
 	}

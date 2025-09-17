@@ -17,10 +17,9 @@ type APIKeys struct {
 	OpenAI     string `json:"openai,omitempty"`
 	DeepInfra  string `json:"deepinfra,omitempty"`
 	OpenRouter string `json:"openrouter,omitempty"`
-	Cerebras   string `json:"cerebras,omitempty"`
-	Groq       string `json:"groq,omitempty"`
-	DeepSeek   string `json:"deepseek,omitempty"`
-	Gemini     string `json:"gemini,omitempty"`
+
+	DeepSeek string `json:"deepseek,omitempty"`
+	Gemini   string `json:"gemini,omitempty"`
 }
 
 const (
@@ -97,12 +96,7 @@ func setEnvVarsFromAPIKeys(keys *APIKeys) {
 	if keys.OpenRouter != "" {
 		os.Setenv("OPENROUTER_API_KEY", keys.OpenRouter)
 	}
-	if keys.Cerebras != "" {
-		os.Setenv("CEREBRAS_API_KEY", keys.Cerebras)
-	}
-	if keys.Groq != "" {
-		os.Setenv("GROQ_API_KEY", keys.Groq)
-	}
+
 	if keys.DeepSeek != "" {
 		os.Setenv("DEEPSEEK_API_KEY", keys.DeepSeek)
 	}
@@ -120,10 +114,7 @@ func GetProviderAPIKeyName(provider ClientType) string {
 		return "DEEPINFRA_API_KEY"
 	case OpenRouterClientType:
 		return "OPENROUTER_API_KEY"
-	case CerebrasClientType:
-		return "CEREBRAS_API_KEY"
-	case GroqClientType:
-		return "GROQ_API_KEY"
+
 	case DeepSeekClientType:
 		return "DEEPSEEK_API_KEY"
 	default:
@@ -190,10 +181,7 @@ func setAPIKeyInStruct(keys *APIKeys, provider ClientType, apiKey string) {
 		keys.DeepInfra = apiKey
 	case OpenRouterClientType:
 		keys.OpenRouter = apiKey
-	case CerebrasClientType:
-		keys.Cerebras = apiKey
-	case GroqClientType:
-		keys.Groq = apiKey
+
 	case DeepSeekClientType:
 		keys.DeepSeek = apiKey
 	}
@@ -208,10 +196,7 @@ func getProviderDisplayName(provider ClientType) string {
 		return "DeepInfra"
 	case OpenRouterClientType:
 		return "OpenRouter"
-	case CerebrasClientType:
-		return "Cerebras"
-	case GroqClientType:
-		return "Groq"
+
 	case DeepSeekClientType:
 		return "DeepSeek"
 	default:

@@ -98,6 +98,7 @@ type ChatRequest struct {
 	ToolChoice string    `json:"tool_choice,omitempty"`
 	MaxTokens  int       `json:"max_tokens,omitempty"`
 	Reasoning  string    `json:"reasoning,omitempty"`
+	Stream     bool      `json:"stream,omitempty"`
 }
 
 type Client struct {
@@ -312,6 +313,138 @@ func (c *Client) SendChatRequest(req ChatRequest) (*ChatResponse, error) {
 
 func (c *Client) GetModel() string {
 	return c.model
+}
+
+// SendChatRequestStream sends a streaming chat request and processes chunks via callback
+func (c *Client) SendChatRequestStream(req ChatRequest, callback StreamCallback) (*ChatResponse, error) {
+	// Enable streaming
+	req.Stream = true
+
+	var finalReq ChatRequest
+
+	// Use harmony format only for GPT-OSS models
+	if IsGPTOSSModel(req.Model) {
+		// Convert to ENHANCED harmony format
+		var formatter *HarmonyFormatter
+		if req.Reasoning != "" {
+			formatter = NewHarmonyFormatterWithReasoning(req.Reasoning)
+		} else {
+			formatter = NewHarmonyFormatter()
+		}
+
+		// Configure harmony options based on request
+		opts := &HarmonyOptions{
+			ReasoningLevel: req.Reasoning,
+			EnableAnalysis: false,
+		}
+		if opts.ReasoningLevel == "" {
+			opts.ReasoningLevel = "medium"
+		}
+
+		harmonyText := formatter.FormatMessagesForCompletion(req.Messages, req.Tools, opts)
+
+		finalReq = ChatRequest{
+			Model:     req.Model,
+			Messages:  []Message{{Role: "user", Content: harmonyText}},
+			MaxTokens: req.MaxTokens,
+			Reasoning: req.Reasoning,
+			Stream:    true,
+		}
+	} else {
+		finalReq = req
+	}
+
+	reqBody, err := json.Marshal(finalReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequest("POST", DeepInfraURL, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiToken)
+	httpReq.Header.Set("Accept", "text/event-stream") // Important for SSE
+
+	// Log the request for debugging
+	if c.debug {
+		log.Printf("DeepInfra Streaming Request URL: %s", DeepInfraURL)
+		log.Printf("DeepInfra Streaming Request Headers: %v", httpReq.Header)
+		log.Printf("DeepInfra Streaming Request Body: %s", string(reqBody))
+	}
+
+	// Track request timing
+	start := time.Now()
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	duration := time.Since(start)
+
+	if c.debug {
+		log.Printf("DeepInfra Streaming Response Status: %s (initial response time: %v)", resp.Status, duration)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Create response builder
+	builder := NewStreamingResponseBuilder(callback)
+
+	// Create SSE reader
+	sseReader := NewSSEReader(resp.Body, func(event, data string) error {
+		// Parse SSE data
+		chunk, err := ParseSSEData(data)
+		if err != nil {
+			if err == io.EOF {
+				// Stream complete
+				return err
+			}
+			// Log parse errors but continue
+			if c.debug {
+				log.Printf("Failed to parse SSE chunk: %v", err)
+			}
+			return nil
+		}
+
+		// Process chunk
+		if err := builder.ProcessChunk(chunk); err != nil {
+			return fmt.Errorf("failed to process chunk: %w", err)
+		}
+
+		return nil
+	})
+
+	// Read the stream
+	if err := sseReader.Read(); err != nil && err != io.EOF {
+		return nil, fmt.Errorf("failed to read SSE stream: %w", err)
+	}
+
+	// Get the final response
+	response := builder.GetResponse()
+
+	// Post-process harmony responses
+	if IsGPTOSSModel(req.Model) {
+		formatter := NewHarmonyFormatter()
+		// Strip return token from responses before returning to agent
+		for i, choice := range response.Choices {
+			response.Choices[i].Message.Content = formatter.StripReturnToken(choice.Message.Content)
+		}
+	}
+
+	if c.debug {
+		log.Printf("✅ Streaming request completed (total time: %v)", time.Since(start))
+		log.Printf("📊 Final usage - Tokens: %d, Cost: $%.6f", response.Usage.TotalTokens, response.Usage.EstimatedCost)
+	}
+
+	return response, nil
 }
 
 func GetToolDefinitions() []Tool {

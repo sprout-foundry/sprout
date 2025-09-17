@@ -182,9 +182,7 @@ func TestGetProviderEnvVar(t *testing.T) {
 		expected string
 	}{
 		{api.DeepInfraClientType, "DEEPINFRA_API_KEY"},
-		{api.CerebrasClientType, "CEREBRAS_API_KEY"},
 		{api.OpenRouterClientType, "OPENROUTER_API_KEY"},
-		{api.GroqClientType, "GROQ_API_KEY"},
 		{api.DeepSeekClientType, "DEEPSEEK_API_KEY"},
 		{api.OllamaClientType, ""},
 		{"unknown", ""},

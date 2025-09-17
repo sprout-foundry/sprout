@@ -305,10 +305,7 @@ func GetLLMResponseWithToolsScoped(modelName string, messages []prompts.Message,
 		log.Logf("DEBUG: Using OpenAI provider: %s", modelName)
 		apiURL = "https://api.openai.com/v1/chat/completions"
 		apiKey, err = apikeys.GetAPIKey("openai", true)
-	case "groq":
-		log.Logf("DEBUG: Using Groq provider: %s", modelName)
-		apiURL = "https://api.groq.com/openai/v1/chat/completions"
-		apiKey, err = apikeys.GetAPIKey("groq", true)
+
 	case "deepseek":
 		log.Logf("DEBUG: Using DeepSeek provider: %s", modelName)
 		apiURL = "https://api.deepseek.com/openai/v1/chat/completions"
@@ -558,16 +555,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			return nil, err
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.openai.com/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
-	case "groq":
-		if cfg.HealthChecks {
-			_ = CheckEndpointReachable("https://api.groq.com/", 2*time.Second)
-		}
-		apiKey, err := apikeys.GetAPIKey("groq", true) // Pass cfg.Interactive
-		if err != nil {
-			ui.Out().Print(prompts.APIKeyError(err))
-			return nil, err
-		}
-		tokenUsage, err = callOpenAICompatibleStream("https://api.groq.com/openai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+
 	case "gemini":
 		// Gemini streaming not implemented, using non-streaming call and writing the whole response.
 		var content string
@@ -594,16 +582,7 @@ func GetLLMResponseStream(modelName string, messages []prompts.Message, filename
 			return nil, err
 		}
 		tokenUsage, err = callOpenAICompatibleStream("https://api.lambda.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
-	case "cerebras":
-		if cfg.HealthChecks {
-			_ = CheckEndpointReachable("https://api.cerebras.ai/", 2*time.Second)
-		}
-		apiKey, err := apikeys.GetAPIKey("cerebras", true) // Pass cfg.Interactive
-		if err != nil {
-			ui.Out().Print(prompts.APIKeyError(err))
-			return nil, err
-		}
-		tokenUsage, err = callOpenAICompatibleStream("https://api.cerebras.ai/v1/chat/completions", apiKey, model, messages, cfg, timeout, writer)
+
 	case "deepseek":
 		if cfg.HealthChecks {
 			_ = CheckEndpointReachable("https://api.deepseek.com/", 2*time.Second)
@@ -770,7 +749,7 @@ func GetLLMResponse(modelName string, messages []prompts.Message, filename strin
 func GetCommitMessage(cfg *config.Config, changelog string, originalPrompt string, filename string) (string, error) {
 	modelName := cfg.WorkspaceModel
 	if modelName == "" {
-		modelName = cfg.AgentModel // Fallback if workspace model is not configured
+		modelName = cfg.GetLLMConfig().GetPrimaryModel() // Fallback if workspace model is not configured
 	}
 
 	messages := prompts.BuildCommitMessages(changelog, originalPrompt)
@@ -844,7 +823,7 @@ func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
 		{Role: "user", Content: fmt.Sprintf("Generate search queries based on the following context: %s", context)},
 	}
 
-	modelName := cfg.AgentModel // Use the editing model for generating search queries
+	modelName := cfg.GetLLMConfig().GetPrimaryModel() // Use the editing model for generating search queries
 
 	// Use a short timeout for generating a search query
 	queryResponse, _, err := GetLLMResponse(modelName, messages, "", cfg, GetSmartTimeout(cfg, modelName, "search")) // Query generation does not use search grounding
@@ -877,7 +856,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 	modelName := cfg.SummaryModel // Use the summary model for this task
 	if modelName == "" {
 		// Fallback if summary model is not configured
-		modelName = cfg.AgentModel
+		modelName = cfg.GetLLMConfig().GetPrimaryModel()
 		ui.Out().Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 
@@ -896,7 +875,7 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 	// Use a dedicated CodeReviewModel if available, otherwise fall back to AgentModel
 	modelName := cfg.CodeReviewModel
 	if modelName == "" {
-		modelName = cfg.AgentModel
+		modelName = cfg.GetLLMConfig().GetPrimaryModel()
 	}
 
 	messages := prompts.BuildCodeReviewMessages(combinedDiff, originalPrompt, workspaceContext, workspaceContext)
@@ -953,7 +932,7 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 // GetStagedCodeReview performs a code review on staged Git changes using a human-readable prompt.
 // This is specifically designed for the review-staged command.
 func GetStagedCodeReview(cfg *config.Config, stagedDiff, reviewPrompt, workspaceContext string) (*types.CodeReviewResult, error) {
-	modelName := cfg.AgentModel
+	modelName := cfg.GetLLMConfig().GetPrimaryModel()
 	if modelName == "" {
 		return nil, fmt.Errorf("no editing model specified in config")
 	}

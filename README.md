@@ -305,10 +305,9 @@ Supported providers:
 
 - **`deepinfra`**: Default for cost-effective models (e.g., `deepinfra:deepseek-ai/DeepSeek-V3-0324`)
 - **`openai`**: OpenAI models (e.g., `openai:gpt-4o`)
-- **`groq`**: Fast inference (e.g., `groq:llama3-70b-8192`)
+- **`openrouter`**: Multi-provider gateway (e.g., `openrouter:deepseek/deepseek-chat-v3.1:free`)
 - **`gemini`**: Google Gemini (e.g., `gemini:gemini-1.5-pro`)
 - **`ollama`**: Local models (e.g., `ollama:llama3`)
-- **`cerebras`**: Cerebras models
 - **`deepseek`**: DeepSeek models (e.g., `deepseek:deepseek-coder-v2`)
 
 Additional providers can be added via PR.

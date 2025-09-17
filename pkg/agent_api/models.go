@@ -78,14 +78,12 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 		return getDeepInfraModels()
 	case OllamaClientType:
 		return getOllamaModels()
-	case CerebrasClientType:
-		return getCerebrasModels()
 	case OpenRouterClientType:
-		return getOpenRouterModels()
-	case GroqClientType:
-		return getGroqModels()
+		// TODO: Implement getOpenRouterModels
+		return nil, fmt.Errorf("OpenRouter model listing not implemented")
 	case DeepSeekClientType:
-		return getDeepSeekModels()
+		// TODO: Implement getDeepSeekModels
+		return nil, fmt.Errorf("DeepSeek model listing not implemented")
 	default:
 		return nil, fmt.Errorf("unknown client type: %s", clientType)
 	}
@@ -384,64 +382,6 @@ func getOllamaModels() ([]ModelInfo, error) {
 func getCerebrasModels() ([]ModelInfo, error) {
 	apiKey := os.Getenv("CEREBRAS_API_KEY")
 	if apiKey == "" {
-		return nil, fmt.Errorf("CEREBRAS_API_KEY not set")
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	req, err := http.NewRequest("GET", "https://api.cerebras.ai/v1/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get models: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Cerebras API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var response struct {
-		Object string `json:"object"`
-		Data   []struct {
-			ID      string `json:"id"`
-			Object  string `json:"object"`
-			Created int64  `json:"created"`
-			OwnedBy string `json:"owned_by"`
-		} `json:"data"`
-	}
-
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	models := make([]ModelInfo, len(response.Data))
-	for i, model := range response.Data {
-		models[i] = ModelInfo{
-			ID:       model.ID,
-			Name:     model.ID,
-			Provider: "Cerebras",
-		}
-	}
-
-	return models, nil
-}
-
-// getOpenRouterModels gets available models from OpenRouter API
-func getOpenRouterModels() ([]ModelInfo, error) {
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	if apiKey == "" {
 		return nil, fmt.Errorf("OPENROUTER_API_KEY not set")
 	}
 
@@ -639,154 +579,9 @@ func ValidateOpenRouterModel(modelID string) error {
 	return nil
 }
 
-// getGroqModels gets available models from Groq API
-func getGroqModels() ([]ModelInfo, error) {
-	apiKey := os.Getenv("GROQ_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("GROQ_API_KEY not set")
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	req, err := http.NewRequest("GET", "https://api.groq.com/openai/v1/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get models: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Groq API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var response struct {
-		Object string `json:"object"`
-		Data   []struct {
-			ID      string `json:"id"`
-			Object  string `json:"object"`
-			Created int64  `json:"created"`
-			OwnedBy string `json:"owned_by"`
-		} `json:"data"`
-	}
-
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	models := make([]ModelInfo, len(response.Data))
-	for i, model := range response.Data {
-		models[i] = ModelInfo{
-			ID:       model.ID,
-			Provider: "Groq",
-			Cost:     0.0, // Groq pricing varies by model
-		}
-
-		// Add descriptions for known Groq models
-		switch model.ID {
-		case "llama3-70b-8192":
-			models[i].Description = "Llama 3 70B - Fast inference via Groq"
-			models[i].Cost = 0.00059 // $0.59 per million tokens
-		case "llama3-8b-8192":
-			models[i].Description = "Llama 3 8B - Fast inference via Groq"
-			models[i].Cost = 0.00010 // $0.10 per million tokens
-		case "mixtral-8x7b-32768":
-			models[i].Description = "Mixtral 8x7B - Fast inference via Groq"
-			models[i].Cost = 0.00027 // $0.27 per million tokens
-		default:
-			models[i].Description = fmt.Sprintf("%s model via Groq", model.ID)
-		}
-	}
-
-	return models, nil
-}
-
-// getDeepSeekModels gets available models from DeepSeek API
-func getDeepSeekModels() ([]ModelInfo, error) {
-	apiKey := os.Getenv("DEEPSEEK_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("DEEPSEEK_API_KEY not set")
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	req, err := http.NewRequest("GET", "https://api.deepseek.com/v1/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get models: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("DeepSeek API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var response struct {
-		Object string `json:"object"`
-		Data   []struct {
-			ID      string `json:"id"`
-			Object  string `json:"object"`
-			Created int64  `json:"created"`
-			OwnedBy string `json:"owned_by"`
-		} `json:"data"`
-	}
-
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	models := make([]ModelInfo, len(response.Data))
-	for i, model := range response.Data {
-		models[i] = ModelInfo{
-			ID:       model.ID,
-			Provider: "DeepSeek",
-			Cost:     0.0, // DeepSeek pricing varies by model
-		}
-
-		// Add descriptions for known DeepSeek models
-		switch model.ID {
-		case "deepseek-chat":
-			models[i].Description = "DeepSeek Chat - General purpose model"
-			models[i].Cost = 0.00014 // $0.14 per million tokens
-		case "deepseek-coder":
-			models[i].Description = "DeepSeek Coder - Coding specialized model"
-			models[i].Cost = 0.00028 // $0.28 per million tokens
-		default:
-			models[i].Description = fmt.Sprintf("%s model via DeepSeek", model.ID)
-		}
-	}
-
-	return models, nil
-}
-
 // createProviderForType creates a provider instance for the given client type
 func createProviderForType(clientType ClientType) (types.ProviderInterface, error) {
 	switch clientType {
-	case CerebrasClientType:
-		return providers.NewCerebrasProvider()
 	case OpenRouterClientType:
 		return providers.NewOpenRouterProvider()
 	case DeepInfraClientType:

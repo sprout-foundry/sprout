@@ -69,30 +69,12 @@ func newDefaultProviderRegistry() *ProviderRegistry {
 	})
 
 	registry.RegisterProvider(ProviderConfig{
-		Type:               CerebrasClientType,
-		Name:               "Cerebras",
-		EnvVarName:         "CEREBRAS_API_KEY",
-		DefaultModel:       "cerebras/btlm-3b-8k-base",
-		DefaultVisionModel: "",
-		FactoryFunc:        NewCerebrasClientWrapper,
-	})
-
-	registry.RegisterProvider(ProviderConfig{
 		Type:               OpenRouterClientType,
 		Name:               "OpenRouter",
 		EnvVarName:         "OPENROUTER_API_KEY",
 		DefaultModel:       "deepseek/deepseek-chat-v3.1:free",
 		DefaultVisionModel: "gpt-4o",
 		FactoryFunc:        NewOpenRouterClientWrapper,
-	})
-
-	registry.RegisterProvider(ProviderConfig{
-		Type:               GroqClientType,
-		Name:               "Groq",
-		EnvVarName:         "GROQ_API_KEY",
-		DefaultModel:       "llama3-70b-8192",
-		DefaultVisionModel: "",
-		FactoryFunc:        NewGroqClientWrapper,
 	})
 
 	registry.RegisterProvider(ProviderConfig{

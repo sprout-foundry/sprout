@@ -26,8 +26,9 @@ type AgentConsole struct {
 	commandRegistry *commands.CommandRegistry
 
 	// Sub-components
-	input  *InputComponent
-	footer *FooterComponent
+	input              *InputComponent
+	footer             *FooterComponent
+	streamingFormatter *StreamingFormatter
 
 	// UI Handler
 	uiHandler *console.UIHandler
@@ -76,6 +77,9 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		outputMutex:      sync.Mutex{},
 		jsonFormatter:    NewJSONFormatter(),
 	}
+
+	// Create streaming formatter
+	ac.streamingFormatter = NewStreamingFormatter(&ac.outputMutex)
 
 	// Set the interrupt channel and output mutex on the agent
 	agent.SetInterruptChannel(ac.interruptChan)
@@ -255,6 +259,24 @@ func (ac *AgentConsole) processInput(input string) error {
 
 	ac.outputMutex.Unlock()
 
+	// Set up streaming with our formatter
+	// Reset formatter for new session
+	ac.streamingFormatter.Reset()
+
+	// Enable streaming with our formatter callback
+	ac.agent.EnableStreaming(func(content string) {
+		ac.streamingFormatter.Write(content)
+	})
+
+	// Ensure cleanup
+	defer func() {
+		// Only finalize if we actually streamed content
+		if ac.streamingFormatter.HasProcessedContent() {
+			ac.streamingFormatter.Finalize()
+		}
+		ac.agent.DisableStreaming()
+	}()
+
 	// Process synchronously to avoid formatting issues
 	response, err := ac.agent.ProcessQueryWithContinuity(input)
 
@@ -263,30 +285,34 @@ func (ac *AgentConsole) processInput(input string) error {
 	defer ac.outputMutex.Unlock()
 
 	if err != nil {
-		ac.safePrint("\nError: %v\n", err)
+		// Clear any partial streaming output
+		ac.safePrint("\r\033[K")
+		ac.safePrint("\n❌ Error: %v\n", err)
 	} else {
+		// Check if the response contains error indicators (from handleAPIFailure)
+		// This happens when API fails but conversation is preserved
+		if strings.Contains(response, "⚠️ **API Request Failed") ||
+			strings.Contains(response, "API Request Failed") ||
+			strings.Contains(response, "❌ **Model Error**") {
+			// The error message was returned as content, not an error
+			// Check if streaming actually processed any content
+			if !ac.streamingFormatter.HasProcessedContent() {
+				// Nothing was streamed, clear the processing message and show error
+				ac.safePrint("\r\033[K")
+			}
+			// Format and print the error response
+			ac.streamingFormatter.Write(response)
+			ac.streamingFormatter.Finalize()
+		} else if response != "" && !ac.streamingFormatter.HasProcessedContent() {
+			// We have a response but nothing was streamed
+			// This can happen if streaming failed immediately
+			ac.safePrint("\r\033[K")
+			ac.safePrint("\n%s\n", response)
+		}
+
 		// Update metrics
 		ac.totalTokens = ac.agent.GetTotalTokens()
 		ac.totalCost = ac.agent.GetTotalCost()
-
-		// Display response with proper formatting
-		if response != "" {
-			// Clean up the response
-			cleanResponse := strings.TrimSpace(response)
-			if cleanResponse != "" {
-				ac.safePrint("\n🎯 Agent Response:\n")
-
-				// Check if this looks like JSON content
-				if ac.jsonFormatter != nil && ac.jsonFormatter.DetectAndFormatJSON(cleanResponse) != cleanResponse {
-					// Use JSON formatter for structured data
-					formatted := ac.jsonFormatter.FormatModelResponse(cleanResponse)
-					ac.safePrintln(formatted)
-				} else {
-					// For regular text/markdown, just print as-is to preserve formatting
-					ac.safePrintln(cleanResponse)
-				}
-			}
-		}
 
 		// Print summary if we used tokens
 		if ac.agent.GetTotalTokens() > 0 {
@@ -499,7 +525,7 @@ Tips:
 • Common shell commands (ls, pwd, etc.) are executed directly
 • Short inputs (1-2 chars) will prompt for confirmation
 • Use /model to change the AI model
-• Use /provider to switch between providers
+• Use /providers to switch between providers
 • While agent is processing, you can:
   - Type additional instructions (will be queued)
   - Use /exit or /quit to exit immediately

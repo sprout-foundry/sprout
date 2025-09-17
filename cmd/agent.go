@@ -15,22 +15,30 @@ import (
 	"github.com/alantheprice/ledit/pkg/console/components"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
+// isTerminal checks if stdout is a terminal (not piped)
+func isTerminal() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
 var (
-	agentSkipPrompt bool
-	agentModel      string // Declare agentModel variable
-	agentProvider   string // Declare agentProvider variable
-	agentDryRun     bool
-	maxIterations   int
+	agentSkipPrompt  bool
+	agentModel       string // Declare agentModel variable
+	agentProvider    string // Declare agentProvider variable
+	agentDryRun      bool
+	maxIterations    int
+	agentNoStreaming bool // Disable streaming mode (streaming is default)
 )
 
 func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
-	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, ollama, cerebras, groq, deepseek)")
+	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, ollama, deepseek)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
+	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines)")
 }
 
 // runSimpleInteractiveMode provides a simple console-based interactive mode
@@ -57,6 +65,12 @@ func runInteractiveMode() error {
 
 	// Set max iterations if specified
 	chatAgent.SetMaxIterations(maxIterations)
+
+	// Enable streaming by default unless disabled or output is piped
+	if !agentNoStreaming && isTerminal() {
+		// In interactive mode, the console component will handle streaming output
+		chatAgent.EnableStreaming(nil)
+	}
 
 	// Create console app
 	app := console.NewConsoleApp()
@@ -116,6 +130,11 @@ func executeDirectAgentCommand(userIntent string) error {
 	// Set max iterations if specified
 	chatAgent.SetMaxIterations(maxIterations)
 
+	// Enable streaming by default unless disabled or output is piped
+	if !agentNoStreaming && isTerminal() {
+		chatAgent.EnableStreaming(nil) // Use default streaming output
+	}
+
 	// Process the query directly with the agent using continuity (like coder does)
 	response, err := chatAgent.ProcessQueryWithContinuity(userIntent)
 	if err != nil {
@@ -145,7 +164,7 @@ func listModels(chatAgent *agent.Agent) error {
 	if len(models) == 0 {
 		fmt.Printf("No models available for %s.\n", providerName)
 		fmt.Println()
-		fmt.Println("💡 Tip: Use '/provider select' to switch to a different provider")
+		fmt.Println("💡 Tip: Use '/providers select' to switch to a different provider")
 		return nil
 	}
 
@@ -227,7 +246,7 @@ func listModels(chatAgent *agent.Agent) error {
 	fmt.Println("  /models select          - Interactive model selection (current provider)")
 	fmt.Println("  /models <model_id>      - Set model directly")
 	fmt.Println("  /models                 - Show this list")
-	fmt.Println("  /provider select        - Switch providers first, then select models")
+	fmt.Println("  /providers select        - Switch providers first, then select models")
 
 	return nil
 }
@@ -252,7 +271,7 @@ func selectModel(chatAgent *agent.Agent) error {
 	if len(models) == 0 {
 		fmt.Printf("No models available for %s.\n", providerName)
 		fmt.Println()
-		fmt.Println("💡 Tip: Use '/provider select' to switch to a different provider with available models")
+		fmt.Println("💡 Tip: Use '/providers select' to switch to a different provider with available models")
 		return nil
 	}
 
@@ -358,7 +377,7 @@ func showCurrentProvider(chatAgent *agent.Agent) error {
 	fmt.Printf("\n📡 Current Provider: %s\n", providerName)
 	fmt.Printf("🤖 Current Model: %s\n", modelName)
 	fmt.Println()
-	fmt.Println("Use '/provider select' to switch providers")
+	fmt.Println("Use '/providers select' to switch providers")
 	fmt.Println("Use '/models select' to switch models")
 
 	return nil
@@ -375,7 +394,7 @@ func listProviders() error {
 	fmt.Println("5. Cerebras")
 	fmt.Println("6. DeepSeek")
 	fmt.Println()
-	fmt.Println("Use '/provider select' to switch providers")
+	fmt.Println("Use '/providers select' to switch providers")
 
 	return nil
 }
@@ -420,8 +439,6 @@ func selectProvider(chatAgent *agent.Agent) error {
 		agent_api.DeepInfraClientType,
 		agent_api.OpenRouterClientType,
 		agent_api.OllamaClientType,
-		agent_api.GroqClientType,
-		agent_api.CerebrasClientType,
 		agent_api.DeepSeekClientType,
 	}
 

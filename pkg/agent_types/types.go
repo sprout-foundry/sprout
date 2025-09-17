@@ -50,12 +50,12 @@ type Choice struct {
 
 // Usage represents token usage information
 type Usage struct {
-	PromptTokens     int     `json:"prompt_tokens"`
-	CompletionTokens int     `json:"completion_tokens"`
-	TotalTokens      int     `json:"total_tokens"`
-	EstimatedCost    float64 `json:"estimated_cost"`
+	PromptTokens        int     `json:"prompt_tokens"`
+	CompletionTokens    int     `json:"completion_tokens"`
+	TotalTokens         int     `json:"total_tokens"`
+	EstimatedCost       float64 `json:"estimated_cost"`
 	PromptTokensDetails struct {
-		CachedTokens     int `json:"cached_tokens"`
+		CachedTokens     int  `json:"cached_tokens"`
 		CacheWriteTokens *int `json:"cache_write_tokens"`
 	} `json:"prompt_tokens_details,omitempty"`
 }
@@ -82,9 +82,13 @@ type ModelInfo struct {
 	Cost          float64 `json:"cost,omitempty"`
 }
 
+// StreamCallback is called for each content chunk received during streaming
+type StreamCallback func(content string)
+
 // ProviderInterface defines the interface that all providers must implement
 type ProviderInterface interface {
 	SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
+	SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error)
 	CheckConnection() error
 	SetDebug(debug bool)
 	SetModel(model string) error

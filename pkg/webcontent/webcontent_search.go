@@ -212,7 +212,7 @@ func selectRelevantURLsWithLLM(query string, results []JinaSearchResult, cfg *co
 	// Use editing model if workspace model is not available
 	modelToUse := cfg.WorkspaceModel
 	if modelToUse == "" {
-		modelToUse = cfg.EditingModel
+		modelToUse = cfg.AgentModel
 		logger.Logf("Using editing model for URL selection: %s", modelToUse)
 	} else {
 		logger.Logf("Using workspace model for URL selection: %s", modelToUse)

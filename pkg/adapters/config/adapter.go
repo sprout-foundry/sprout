@@ -124,9 +124,9 @@ func (a *ConfigAdapter) SetConfig(key string, value interface{}) error {
 
 	// Update supported config fields
 	switch key {
-	case "editing_model":
+	case "agent_model":
 		if model, ok := value.(string); ok && a.config.LLM != nil {
-			a.config.LLM.EditingModel = model
+			a.config.LLM.AgentModel = model
 		}
 	case "skip_prompt":
 		if skipPrompt, ok := value.(bool); ok {

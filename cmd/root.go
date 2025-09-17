@@ -10,14 +10,13 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "ledit",
-	Short: "AI-powered code editor and orchestrator",
+	Short: "AI agent for code analysis and editing (interactive mode when run without arguments)",
 	Long: `Ledit is a command-line tool that leverages Large Language Models (LLMs)
 to automate and assist in software development tasks. It can understand your
 entire workspace, generate code, orchestrate complex features, and ground its
 responses with live web search results.
 
 Available commands:
-  code     - Generate/edit code based on instructions
   agent    - AI agent mode (analyzes intent and decides actions)
   shell    - Generate shell scripts from natural language descriptions
   process  - Orchestrate complex features
@@ -26,10 +25,20 @@ Available commands:
   insights - Show inferred project goals and insights
   ...and more
 
-For autonomous operation, try: ledit agent "your intent here"`,
+For autonomous operation, try: ledit agent "your intent here"
+
+Running just 'ledit' without arguments starts the interactive agent mode.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Initialize API keys and configuration
 		initializeSystem()
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// If no subcommand is provided, run agent in interactive mode
+		if len(args) == 0 && cmd.Flags().NFlag() == 0 {
+			return runInteractiveMode()
+		}
+		// Otherwise show help
+		return cmd.Help()
 	},
 }
 

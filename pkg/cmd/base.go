@@ -68,7 +68,7 @@ func (b *BaseCommand) Initialize() error {
 
 	// Override model if specified
 	if *b.flags.Model != "" {
-		cfg.EditingModel = *b.flags.Model
+		cfg.AgentModel = *b.flags.Model
 		cfg.OrchestrationModel = *b.flags.Model
 		cfg.WorkspaceModel = *b.flags.Model
 	}

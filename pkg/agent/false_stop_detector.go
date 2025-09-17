@@ -90,12 +90,8 @@ func (a *Agent) getFastModelForProvider() (string, api.ClientType) {
 		return "google/gemini-2.5-flash", api.OpenRouterClientType
 	case api.DeepInfraClientType:
 		return "google/gemini-2.5-flash", api.DeepInfraClientType
-	case api.GroqClientType:
-		return "gemma2-9b-it", api.GroqClientType
 	case api.DeepSeekClientType:
 		return "deepseek-chat", api.DeepSeekClientType
-	case api.CerebrasClientType:
-		return "llama-3.3-70b", api.CerebrasClientType
 	case api.OllamaClientType:
 		// For Ollama, use whatever model is configured locally
 		return a.GetModel(), api.OllamaClientType

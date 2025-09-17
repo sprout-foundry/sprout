@@ -82,8 +82,7 @@ func TestGetProviderType(t *testing.T) {
 	validTypes := []api.ClientType{
 		api.OpenRouterClientType,
 		api.DeepInfraClientType,
-		api.CerebrasClientType,
-		api.GroqClientType,
+
 		api.DeepSeekClientType,
 		api.OllamaClientType,
 	}
@@ -126,9 +125,9 @@ func TestIsProviderAvailable(t *testing.T) {
 	}
 
 	// Test with provider that doesn't have key set
-	available = agent.isProviderAvailable(api.CerebrasClientType)
-	if available && os.Getenv("CEREBRAS_API_KEY") == "" {
-		t.Error("Expected Cerebras to be unavailable when API key is not set")
+	available = agent.isProviderAvailable(api.DeepSeekClientType)
+	if available && os.Getenv("DEEPSEEK_API_KEY") == "" {
+		t.Error("Expected DeepSeek to be unavailable when API key is not set")
 	}
 }
 

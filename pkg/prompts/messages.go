@@ -13,7 +13,7 @@ func ConfigLoadFailed(err error) string {
 	return fmt.Sprintf("Failed to load config: %v. Using default values.", err)
 }
 
-func EnterEditingModel(defaultModel string) string {
+func EnterAgentModel(defaultModel string) string {
 	return fmt.Sprintf("Enter your preferred editing model (e.g., %s): ", defaultModel)
 }
 

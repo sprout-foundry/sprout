@@ -22,7 +22,7 @@ type RevisionGroup struct {
 	Response     string
 	Changes      []ChangeLog
 	Timestamp    time.Time
-	EditingModel string // Added: Editing model used for this revision
+	AgentModel string // Added: Editing model used for this revision
 }
 
 // HasActiveChangesForRevision returns whether a revision ID exists and has any active changes
@@ -146,7 +146,7 @@ func PrintRevisionHistory() error {
 				ui.Out().Print("\nNo original prompt recorded.\n")
 			}
 		case "l": // Show LLM details
-			ui.Out().Printf("\n\033[1mEditing Model:\033[0m %s\n", revisionGroups[currentIndex].EditingModel)
+			ui.Out().Printf("\n\033[1mEditing Model:\033[0m %s\n", revisionGroups[currentIndex].AgentModel)
 			if revisionGroups[currentIndex].Response != "" {
 				ui.Out().Printf("\n\033[1mFull LLM Response:\033[0m\n%s\n", revisionGroups[currentIndex].Response)
 			} else {
@@ -208,14 +208,14 @@ func PrintRevisionHistoryBuffer() (string, error) {
 }
 
 func displayRevision(group RevisionGroup) {
-	fmt.Printf("\n\033[1mEditing Model:\033[0m %s\n", group.EditingModel)
+	fmt.Printf("\n\033[1mEditing Model:\033[0m %s\n", group.AgentModel)
 	fmt.Println(strings.Repeat("=", 80))
 	color.New(color.FgCyan).Printf("Revision ID: %s\n", group.RevisionID)
 	fmt.Printf("Time: %s\n", group.Timestamp.Format(time.RFC1123))
 
 	// Display the editing model used for this revision
-	if group.EditingModel != "" {
-		fmt.Printf("Model: %s\n\n", group.EditingModel)
+	if group.AgentModel != "" {
+		fmt.Printf("Model: %s\n\n", group.AgentModel)
 	} else {
 		fmt.Printf("Model: Not specified\n\n")
 	}
@@ -258,14 +258,14 @@ func displayRevision(group RevisionGroup) {
 func formatRevision(group RevisionGroup) string {
 	var buffer strings.Builder
 
-	buffer.WriteString(fmt.Sprintf("\nEditing Model: %s\n", group.EditingModel))
+	buffer.WriteString(fmt.Sprintf("\nEditing Model: %s\n", group.AgentModel))
 	buffer.WriteString(strings.Repeat("=", 80) + "\n")
 	buffer.WriteString(fmt.Sprintf("Revision ID: %s\n", group.RevisionID))
 	buffer.WriteString(fmt.Sprintf("Time: %s\n", group.Timestamp.Format(time.RFC1123)))
 
 	// Display the editing model used for this revision
-	if group.EditingModel != "" {
-		buffer.WriteString(fmt.Sprintf("Model: %s\n\n", group.EditingModel))
+	if group.AgentModel != "" {
+		buffer.WriteString(fmt.Sprintf("Model: %s\n\n", group.AgentModel))
 	} else {
 		buffer.WriteString("Model: Not specified\n\n")
 	}
@@ -326,7 +326,7 @@ func groupChangesByRevision(changes []ChangeLog) []RevisionGroup {
 				Response:     change.Response,
 				Changes:      []ChangeLog{change},
 				Timestamp:    change.Timestamp,
-				EditingModel: change.EditingModel, // Added: Include editing model in group
+				AgentModel: change.AgentModel, // Added: Include editing model in group
 			}
 		}
 	}

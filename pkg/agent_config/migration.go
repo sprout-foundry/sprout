@@ -14,51 +14,51 @@ func MigrateFromCoder() error {
 	if err != nil {
 		return err
 	}
-	
+
 	oldConfigPath := filepath.Join(homeDir, ".coder", "config.json")
 	if _, err := os.Stat(oldConfigPath); os.IsNotExist(err) {
 		return nil // No old config to migrate
 	}
-	
+
 	// Read old config
 	oldData, err := os.ReadFile(oldConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to read old config: %w", err)
 	}
-	
+
 	var oldConfig Config
 	if err := json.Unmarshal(oldData, &oldConfig); err != nil {
 		return fmt.Errorf("failed to parse old config: %w", err)
 	}
-	
+
 	// Load or create new config
 	newConfig, err := Load()
 	if err != nil {
 		newConfig = NewConfig()
 	}
-	
+
 	// Migrate data
 	if oldConfig.LastUsedProvider != "" {
 		newConfig.LastUsedProvider = oldConfig.LastUsedProvider
 	}
-	
+
 	if len(oldConfig.ProviderModels) > 0 {
 		for provider, model := range oldConfig.ProviderModels {
 			newConfig.ProviderModels[provider] = model
 		}
 	}
-	
+
 	if len(oldConfig.ProviderPriority) > 0 {
 		newConfig.ProviderPriority = oldConfig.ProviderPriority
 	}
-	
+
 	// Save migrated config
 	if err := newConfig.Save(); err != nil {
 		return fmt.Errorf("failed to save migrated config: %w", err)
 	}
-	
+
 	fmt.Println("✅ Configuration migrated from ~/.coder to ~/.ledit")
-	
+
 	// Backup and remove old config
 	backupPath := oldConfigPath + ".migrated.bak"
 	if err := os.Rename(oldConfigPath, backupPath); err != nil {
@@ -66,7 +66,7 @@ func MigrateFromCoder() error {
 	} else {
 		fmt.Printf("📦 Old config backed up to: %s\n", backupPath)
 	}
-	
+
 	return nil
 }
 
@@ -78,7 +78,7 @@ func EnsureLegacyIntegration() error {
 		// Ledit config exists - we should integrate with it rather than replace it
 		return integrateWithLeditConfig()
 	}
-	
+
 	return nil
 }
 
@@ -88,44 +88,44 @@ func integrateWithLeditConfig() error {
 	if err != nil {
 		return err
 	}
-	
+
 	leditConfigPath := filepath.Join(homeDir, ".ledit", "config.json")
-	
+
 	// Read existing ledit config
 	data, err := os.ReadFile(leditConfigPath)
 	if err != nil {
 		return err
 	}
-	
+
 	var leditConfig map[string]interface{}
 	if err := json.Unmarshal(data, &leditConfig); err != nil {
 		return err
 	}
-	
+
 	// Load our agent config
 	agentConfig, err := Load()
 	if err != nil {
 		agentConfig = NewConfig()
 	}
-	
+
 	// Update ledit config with agent provider preferences if they exist
 	if agentConfig.LastUsedProvider != "" {
 		// Map our provider to ledit's model selection format
 		updateLeditModelsFromAgentConfig(leditConfig, agentConfig)
-		
+
 		// Save updated ledit config
 		updatedData, err := json.MarshalIndent(leditConfig, "", "  ")
 		if err != nil {
 			return err
 		}
-		
+
 		if err := os.WriteFile(leditConfigPath, updatedData, 0644); err != nil {
 			return err
 		}
-		
+
 		fmt.Println("✅ Integrated agent configuration with existing ledit config")
 	}
-	
+
 	return nil
 }
 
@@ -136,12 +136,11 @@ func updateLeditModelsFromAgentConfig(leditConfig map[string]interface{}, agentC
 		"openai":     "openai:",
 		"deepinfra":  "deepinfra:",
 		"openrouter": "openrouter:",
-		"cerebras":   "cerebras:",
-		"groq":       "groq:",
-		"deepseek":   "deepseek:",
-		"ollama":     "ollama:",
+
+		"deepseek": "deepseek:",
+		"ollama":   "ollama:",
 	}
-	
+
 	// Update agent_model based on last used provider
 	if agentConfig.LastUsedProvider != "" {
 		providerName := getProviderConfigName(agentConfig.LastUsedProvider)

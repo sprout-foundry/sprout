@@ -8,7 +8,7 @@ import (
 // LLMConfig contains all Large Language Model related configuration
 type LLMConfig struct {
 	// Model Selection
-	AgentModel       string `json:"agent_model"`       // Primary model for code editing
+	AgentModel         string `json:"agent_model"`         // Primary model for code editing
 	SummaryModel       string `json:"summary_model"`       // Model for summarization tasks
 	OrchestrationModel string `json:"orchestration_model"` // Model for orchestration tasks
 	WorkspaceModel     string `json:"workspace_model"`     // Model for workspace analysis
@@ -37,7 +37,7 @@ type LLMConfig struct {
 // DefaultLLMConfig returns sensible defaults for LLM configuration
 func DefaultLLMConfig() *LLMConfig {
 	return &LLMConfig{
-		AgentModel:       "deepinfra:google/gemini-2.5-flash",
+		AgentModel:         "deepinfra:google/gemini-2.5-flash",
 		SummaryModel:       "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo",
 		OrchestrationModel: "deepinfra:moonshotai/Kimi-K2-Instruct",
 		WorkspaceModel:     "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo",
@@ -57,10 +57,10 @@ func DefaultLLMConfig() *LLMConfig {
 		ProviderTimeouts: map[string]int{
 			"deepinfra": 180, // 3 minutes for DeepInfra (can be slower)
 			"openai":    90,  // 1.5 minutes for OpenAI
-			"groq":      60,  // 1 minute for Groq (fast)
-			"deepseek":  120, // 2 minutes for DeepSeek
-			"ollama":    300, // 5 minutes for local Ollama models
-			"gemini":    90,  // 1.5 minutes for Gemini
+
+			"deepseek": 120, // 2 minutes for DeepSeek
+			"ollama":   300, // 5 minutes for local Ollama models
+			"gemini":   90,  // 1.5 minutes for Gemini
 		},
 		ModelTimeouts: map[string]int{
 			// Reasoning models need more time
@@ -76,8 +76,8 @@ func DefaultLLMConfig() *LLMConfig {
 		ProviderEndpoints: map[string]string{
 			"deepinfra": "https://api.deepinfra.com/v1/openai",
 			"openai":    "https://api.openai.com/v1",
-			"groq":      "https://api.groq.com/openai/v1",
-			"ollama":    DefaultOllamaURL + "/api",
+
+			"ollama": DefaultOllamaURL + "/api",
 		},
 	}
 }

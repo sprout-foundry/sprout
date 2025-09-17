@@ -64,7 +64,7 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	if len(models) == 0 {
 		fmt.Printf("No models available for %s.\n", providerName)
 		fmt.Println()
-		fmt.Println("💡 Tip: Use '/provider select' to switch to a different provider")
+		fmt.Println("💡 Tip: Use '/providers select' to switch to a different provider")
 		return nil
 	}
 
@@ -146,7 +146,7 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	fmt.Println("  /models select          - Interactive model selection (current provider)")
 	fmt.Println("  /models <model_id>      - Set model directly")
 	fmt.Println("  /models                 - Show this list")
-	fmt.Println("  /provider select        - Switch providers first, then select models")
+	fmt.Println("  /providers select        - Switch providers first, then select models")
 
 	return nil
 }
@@ -172,7 +172,7 @@ func (m *ModelsCommand) selectModel(chatAgent *agent.Agent) error {
 	if len(models) == 0 {
 		fmt.Printf("No models available for %s.\n", providerName)
 		fmt.Println()
-		fmt.Println("💡 Tip: Use '/provider select' to switch to a different provider with available models")
+		fmt.Println("💡 Tip: Use '/providers select' to switch to a different provider with available models")
 		return nil
 	}
 

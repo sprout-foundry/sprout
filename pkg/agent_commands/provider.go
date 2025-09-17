@@ -15,7 +15,7 @@ type ProviderCommand struct{}
 
 // Name returns the command name
 func (p *ProviderCommand) Name() string {
-	return "provider"
+	return "providers"
 }
 
 // Description returns the command description
@@ -96,10 +96,10 @@ func (p *ProviderCommand) showProviderStatus(configManager *config.Manager, chat
 	}
 
 	fmt.Println("Usage:")
-	fmt.Println("  /provider                    - Show this status")
-	fmt.Println("  /provider list              - List available providers only")
-	fmt.Println("  /provider select            - Interactive provider selection")
-	fmt.Println("  /provider <provider_name>   - Switch to specific provider")
+	fmt.Println("  /providers                    - Show this status")
+	fmt.Println("  /providers list              - List available providers only")
+	fmt.Println("  /providers select            - Interactive provider selection")
+	fmt.Println("  /providers <provider_name>   - Switch to specific provider")
 
 	return nil
 }
@@ -228,7 +228,7 @@ func (p *ProviderCommand) setProvider(providerName string, configManager *config
 	// Convert name to provider type
 	provider, err := config.GetProviderFromConfigName(strings.ToLower(providerName))
 	if err != nil {
-		return fmt.Errorf("unknown provider '%s'. Available: deepinfra, ollama, cerebras, openrouter, groq, deepseek", providerName)
+		return fmt.Errorf("unknown provider '%s'. Available: deepinfra, ollama, openrouter, deepseek", providerName)
 	}
 
 	// Check if provider is available
@@ -242,7 +242,7 @@ func (p *ProviderCommand) setProvider(providerName string, configManager *config
 	}
 
 	if !isAvailable {
-		return fmt.Errorf("provider %s is not currently available. Use '/provider list' to see available providers", api.GetProviderName(provider))
+		return fmt.Errorf("provider %s is not currently available. Use '/providers list' to see available providers", api.GetProviderName(provider))
 	}
 
 	return p.switchToProvider(provider, configManager, chatAgent)

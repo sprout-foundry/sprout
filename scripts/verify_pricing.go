@@ -24,7 +24,7 @@ func main() {
 		"openai:gpt-4o-mini",
 		"openai:gpt-4o",
 		"anthropic:claude-3-5-sonnet-20241022",
-		"groq:llama3-8b-8192",
+
 		"deepinfra:meta-llama/llama-3-8b-instruct",
 	}
 

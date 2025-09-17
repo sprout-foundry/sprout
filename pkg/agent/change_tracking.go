@@ -238,8 +238,7 @@ func (ct *ChangeTracker) getSummaryModel() string {
 			return "mistralai/mixtral-8x7b-instruct" // Fast OpenRouter option
 		case api.DeepInfraClientType:
 			return "meta-llama/Meta-Llama-3.1-8B-Instruct" // Fast DeepInfra option
-		case api.GroqClientType:
-			return "mixtral-8x7b-32768" // Fast Groq model
+
 		default:
 			return ct.getAgentModel() // Fallback to current model
 		}

@@ -127,7 +127,7 @@ func GetModelPricing(model string) ModelPricing {
 	// Normalize model key: strip provider prefixes and lowercase
 	key := strings.ToLower(strings.TrimSpace(model))
 	// Common provider prefixes to strip
-	prefixes := []string{"deepinfra:", "openai:", "groq:", "gemini:", "cerebras:", "lambda-ai:", "ollama:"}
+	prefixes := []string{"deepinfra:", "openai:", "gemini:", "lambda-ai:", "ollama:"}
 	for _, p := range prefixes {
 		if strings.HasPrefix(key, p) {
 			key = strings.TrimPrefix(key, p)
@@ -181,10 +181,12 @@ func GetModelPricing(model string) ModelPricing {
 		return ModelPricing{InputCostPer1K: 0.24 / 1000, OutputCostPer1K: 0.24 / 1000}
 	case strings.Contains(modelLower, "qwen"):
 		return ModelPricing{InputCostPer1K: 0.40 / 1000, OutputCostPer1K: 0.80 / 1000}
-	case strings.Contains(modelLower, "gpt-4o") || strings.Contains(modelLower, "gpt-4-turbo") || strings.Contains(modelLower, "gpt-4"):
-		return ModelPricing{InputCostPer1K: 0.03, OutputCostPer1K: 0.06}
+	case strings.Contains(modelLower, "gpt-4o"):
+		return ModelPricing{InputCostPer1K: 0.0025, OutputCostPer1K: 0.01}
+	case strings.Contains(modelLower, "gpt-4-turbo") || strings.Contains(modelLower, "gpt-4"):
+		return ModelPricing{InputCostPer1K: 0.01, OutputCostPer1K: 0.03}
 	case strings.Contains(modelLower, "gpt-3.5"):
-		return ModelPricing{InputCostPer1K: 0.002, OutputCostPer1K: 0.002}
+		return ModelPricing{InputCostPer1K: 0.0005, OutputCostPer1K: 0.0015}
 	case strings.Contains(modelLower, "gemini"):
 		return ModelPricing{InputCostPer1K: 0.00025, OutputCostPer1K: 0.0005}
 	case strings.Contains(modelLower, "ollama"):

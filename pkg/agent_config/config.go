@@ -21,9 +21,7 @@ const (
 	OpenAIClientType     = api.OpenAIClientType
 	DeepInfraClientType  = api.DeepInfraClientType
 	OllamaClientType     = api.OllamaClientType
-	CerebrasClientType   = api.CerebrasClientType
 	OpenRouterClientType = api.OpenRouterClientType
-	GroqClientType       = api.GroqClientType
 	DeepSeekClientType   = api.DeepSeekClientType
 )
 
@@ -41,8 +39,6 @@ type APIKeys struct {
 	OpenAI     string `json:"openai,omitempty"`
 	DeepInfra  string `json:"deepinfra,omitempty"`
 	OpenRouter string `json:"openrouter,omitempty"`
-	Cerebras   string `json:"cerebras,omitempty"`
-	Groq       string `json:"groq,omitempty"`
 	DeepSeek   string `json:"deepseek,omitempty"`
 	Gemini     string `json:"gemini,omitempty"`
 }
@@ -62,12 +58,10 @@ func NewConfig() *Config {
 			"openai":     getDefaultModelForProvider(OpenAIClientType),
 			"deepinfra":  getDefaultModelForProvider(DeepInfraClientType),
 			"ollama":     getDefaultModelForProvider(OllamaClientType),
-			"cerebras":   getDefaultModelForProvider(CerebrasClientType),
 			"openrouter": getDefaultModelForProvider(OpenRouterClientType),
-			"groq":       getDefaultModelForProvider(GroqClientType),
 			"deepseek":   getDefaultModelForProvider(DeepSeekClientType),
 		},
-		ProviderPriority: []string{"openai", "openrouter", "deepinfra", "ollama", "cerebras", "groq", "deepseek"},
+		ProviderPriority: []string{"openai", "openrouter", "deepinfra", "ollama", "deepseek"},
 		Preferences:      make(map[string]interface{}),
 		Version:          ConfigVersion,
 	}
@@ -166,9 +160,7 @@ func (c *Config) Validate() error {
 		{"openai", OpenAIClientType},
 		{"deepinfra", DeepInfraClientType},
 		{"ollama", OllamaClientType},
-		{"cerebras", CerebrasClientType},
 		{"openrouter", OpenRouterClientType},
-		{"groq", GroqClientType},
 		{"deepseek", DeepSeekClientType},
 	}
 
@@ -180,7 +172,7 @@ func (c *Config) Validate() error {
 
 	// Set default priority if empty
 	if len(c.ProviderPriority) == 0 {
-		c.ProviderPriority = []string{"openai", "openrouter", "deepinfra", "ollama", "cerebras", "groq", "deepseek"}
+		c.ProviderPriority = []string{"openai", "openrouter", "deepinfra", "ollama", "deepseek"}
 	}
 
 	return nil
@@ -223,12 +215,8 @@ func getProviderConfigName(clientType ClientType) string {
 		return "deepinfra"
 	case OllamaClientType:
 		return "ollama"
-	case CerebrasClientType:
-		return "cerebras"
 	case OpenRouterClientType:
 		return "openrouter"
-	case GroqClientType:
-		return "groq"
 	case DeepSeekClientType:
 		return "deepseek"
 	default:
@@ -245,12 +233,8 @@ func GetProviderFromConfigName(name string) (ClientType, error) {
 		return DeepInfraClientType, nil
 	case "ollama":
 		return OllamaClientType, nil
-	case "cerebras":
-		return CerebrasClientType, nil
 	case "openrouter":
 		return OpenRouterClientType, nil
-	case "groq":
-		return GroqClientType, nil
 	case "deepseek":
 		return DeepSeekClientType, nil
 	default:
@@ -338,12 +322,7 @@ func setEnvVarsFromAPIKeys(keys *APIKeys) {
 	if keys.OpenRouter != "" {
 		os.Setenv("OPENROUTER_API_KEY", keys.OpenRouter)
 	}
-	if keys.Cerebras != "" {
-		os.Setenv("CEREBRAS_API_KEY", keys.Cerebras)
-	}
-	if keys.Groq != "" {
-		os.Setenv("GROQ_API_KEY", keys.Groq)
-	}
+
 	if keys.DeepSeek != "" {
 		os.Setenv("DEEPSEEK_API_KEY", keys.DeepSeek)
 	}
@@ -361,10 +340,7 @@ func GetProviderAPIKeyName(provider ClientType) string {
 		return "DEEPINFRA_API_KEY"
 	case OpenRouterClientType:
 		return "OPENROUTER_API_KEY"
-	case CerebrasClientType:
-		return "CEREBRAS_API_KEY"
-	case GroqClientType:
-		return "GROQ_API_KEY"
+
 	case DeepSeekClientType:
 		return "DEEPSEEK_API_KEY"
 	default:
@@ -431,10 +407,7 @@ func setAPIKeyInStruct(keys *APIKeys, provider ClientType, apiKey string) {
 		keys.DeepInfra = apiKey
 	case OpenRouterClientType:
 		keys.OpenRouter = apiKey
-	case CerebrasClientType:
-		keys.Cerebras = apiKey
-	case GroqClientType:
-		keys.Groq = apiKey
+
 	case DeepSeekClientType:
 		keys.DeepSeek = apiKey
 	}
@@ -449,10 +422,7 @@ func getProviderDisplayName(provider ClientType) string {
 		return "DeepInfra"
 	case OpenRouterClientType:
 		return "OpenRouter"
-	case CerebrasClientType:
-		return "Cerebras"
-	case GroqClientType:
-		return "Groq"
+
 	case DeepSeekClientType:
 		return "DeepSeek"
 	default:

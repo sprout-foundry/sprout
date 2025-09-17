@@ -312,3 +312,20 @@ func (c *LocalOllamaClient) SendVisionRequest(messages []Message, tools []Tool, 
 
 	return response, err
 }
+
+// SendChatRequestStream sends a streaming chat request (not yet fully implemented for Ollama)
+func (c *LocalOllamaClient) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error) {
+	// For now, fallback to non-streaming request
+	// TODO: Implement proper streaming support for Ollama
+	response, err := c.SendChatRequest(messages, tools, reasoning)
+	if err != nil {
+		return nil, err
+	}
+
+	// Call the callback with the full content at once
+	if callback != nil && len(response.Choices) > 0 {
+		callback(response.Choices[0].Message.Content)
+	}
+
+	return response, nil
+}

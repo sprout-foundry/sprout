@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -154,6 +155,182 @@ func (p *OpenRouterProvider) SendChatRequest(messages []types.Message, tools []t
 	return p.sendRequestWithRetry(httpReq, reqBody)
 }
 
+// SendChatRequestStream sends a streaming chat request to OpenRouter
+func (p *OpenRouterProvider) SendChatRequestStream(messages []types.Message, tools []types.Tool, reasoning string, callback types.StreamCallback) (*types.ChatResponse, error) {
+	url := "https://openrouter.ai/api/v1/chat/completions"
+
+	// Convert our messages to OpenAI format
+	openAIMessages := make([]interface{}, len(messages))
+	for i, msg := range messages {
+		openAIMessages[i] = map[string]interface{}{
+			"role":    msg.Role,
+			"content": msg.Content,
+		}
+	}
+
+	reqBody := map[string]interface{}{
+		"model":       p.model,
+		"messages":    openAIMessages,
+		"temperature": 0.7,
+		"stream":      true, // Enable streaming
+	}
+
+	// Add tools if present
+	if len(tools) > 0 {
+		openAITools := make([]map[string]interface{}, len(tools))
+		for i, tool := range tools {
+			openAITools[i] = map[string]interface{}{
+				"type": tool.Type,
+				"function": map[string]interface{}{
+					"name":        tool.Function.Name,
+					"description": tool.Function.Description,
+					"parameters":  tool.Function.Parameters,
+				},
+			}
+		}
+		reqBody["tools"] = openAITools
+		reqBody["tool_choice"] = "auto"
+	}
+
+	reqBodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(reqBodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiToken)
+	httpReq.Header.Set("Accept", "text/event-stream")
+	httpReq.Header.Set("HTTP-Referer", "https://github.com/alantheprice/ledit")
+	httpReq.Header.Set("X-Title", "Ledit Coding Assistant")
+
+	if p.debug {
+		fmt.Printf("🔍 OpenRouter Streaming Request URL: %s\n", url)
+		fmt.Printf("🔍 OpenRouter Streaming Request Body: %s\n", string(reqBodyBytes))
+	}
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("OpenRouter API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	// Process SSE stream
+	scanner := bufio.NewScanner(resp.Body)
+	var content strings.Builder
+	var toolCalls []types.ToolCall
+	var finishReason string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines
+		if line == "" {
+			continue
+		}
+
+		// Parse SSE data
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+
+			// Check for end of stream
+			if data == "[DONE]" {
+				break
+			}
+
+			// Parse JSON chunk
+			var chunk map[string]interface{}
+			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+				if p.debug {
+					fmt.Printf("Failed to parse chunk: %s\n", err)
+				}
+				continue
+			}
+
+			// Extract choices
+			if choices, ok := chunk["choices"].([]interface{}); ok && len(choices) > 0 {
+				if choice, ok := choices[0].(map[string]interface{}); ok {
+					// Extract delta content
+					if delta, ok := choice["delta"].(map[string]interface{}); ok {
+						if contentChunk, ok := delta["content"].(string); ok && contentChunk != "" {
+							content.WriteString(contentChunk)
+							// Call the streaming callback
+							if callback != nil {
+								callback(contentChunk)
+							}
+						}
+
+						// Handle tool calls in delta
+						if toolCallsData, ok := delta["tool_calls"].([]interface{}); ok {
+							for _, tcData := range toolCallsData {
+								if tc, ok := tcData.(map[string]interface{}); ok {
+									// Process tool call updates (accumulate them)
+									// This is a simplified version - full implementation would need to handle incremental updates
+									if id, ok := tc["id"].(string); ok {
+										toolCall := types.ToolCall{
+											ID:   id,
+											Type: "function",
+										}
+										if fn, ok := tc["function"].(map[string]interface{}); ok {
+											toolCall.Function.Name, _ = fn["name"].(string)
+											toolCall.Function.Arguments, _ = fn["arguments"].(string)
+										}
+										toolCalls = append(toolCalls, toolCall)
+									}
+								}
+							}
+						}
+					}
+
+					// Extract finish reason
+					if fr, ok := choice["finish_reason"].(string); ok && fr != "" {
+						finishReason = fr
+					}
+				}
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading stream: %w", err)
+	}
+
+	// Build response
+	response := &types.ChatResponse{
+		Model: p.model,
+		Choices: []types.Choice{
+			{
+				Index: 0,
+				Message: struct {
+					Role             string            `json:"role"`
+					Content          string            `json:"content"`
+					ReasoningContent string            `json:"reasoning_content,omitempty"`
+					Images           []types.ImageData `json:"images,omitempty"`
+					ToolCalls        []types.ToolCall  `json:"tool_calls,omitempty"`
+				}{
+					Role:      "assistant",
+					Content:   content.String(),
+					ToolCalls: toolCalls,
+				},
+				FinishReason: finishReason,
+			},
+		},
+		// Note: Usage information is typically not available in streaming responses
+		// but some providers might include it in the final chunk
+	}
+
+	return response, nil
+}
+
 // CheckConnection checks if the OpenRouter connection is valid
 func (p *OpenRouterProvider) CheckConnection() error {
 	if p.apiToken == "" {
@@ -187,17 +364,28 @@ func (p *OpenRouterProvider) GetProvider() string {
 func (p *OpenRouterProvider) GetModelContextLimit() (int, error) {
 	if !p.modelsCached {
 		if _, err := p.ListModels(); err != nil {
-			return 32000, nil // fallback
+			fmt.Printf("Warning: Failed to load OpenRouter models for %s, using fallback\n", p.model)
+			return 128000, err
 		}
 	}
 
 	for _, m := range p.models {
-		if m.ID == p.model {
-			return m.ContextLength, nil
+		if m.ID == p.model || strings.HasPrefix(m.ID, p.model) || strings.Contains(m.ID, p.model) {
+			if m.ContextLength > 0 {
+				return m.ContextLength, nil
+			}
 		}
 	}
 
-	return 128000, nil // default
+	// Model-aware fallback
+	switch {
+	case strings.Contains(p.model, "gpt-3.5") || strings.Contains(p.model, "llama-2"):
+		return 4096, nil
+	case strings.Contains(p.model, "gpt-4") || strings.Contains(p.model, "claude") || strings.Contains(p.model, "llama-3"):
+		return 128000, nil
+	default:
+		return 128000, nil
+	}
 }
 
 // ListModels returns available models from OpenRouter API

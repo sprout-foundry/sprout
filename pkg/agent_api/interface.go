@@ -9,6 +9,7 @@ import (
 // ClientInterface defines the common interface for all API clients
 type ClientInterface interface {
 	SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
+	SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error)
 	CheckConnection() error
 	SetDebug(debug bool)
 	SetModel(model string) error
@@ -26,10 +27,8 @@ type ClientType string
 const (
 	DeepInfraClientType  ClientType = "deepinfra"
 	OllamaClientType     ClientType = "ollama"
-	CerebrasClientType   ClientType = "cerebras"
 	OpenRouterClientType ClientType = "openrouter"
 	OpenAIClientType     ClientType = "openai"
-	GroqClientType       ClientType = "groq"
 	DeepSeekClientType   ClientType = "deepseek"
 )
 
@@ -61,20 +60,9 @@ func NewDeepInfraClientWrapper(model string) (ClientInterface, error) {
 	return &DeepInfraClientWrapper{client: client}, nil
 }
 
-// NewCerebrasClientWrapper creates a Cerebras client wrapper
-func NewCerebrasClientWrapper(model string) (ClientInterface, error) {
-	return NewCerebrasProvider(model)
-}
-
 // NewOpenRouterClientWrapper creates an OpenRouter client wrapper
 func NewOpenRouterClientWrapper(model string) (ClientInterface, error) {
 	return NewOpenRouterProvider(model)
-}
-
-// NewGroqClientWrapper creates a Groq client wrapper
-func NewGroqClientWrapper(model string) (ClientInterface, error) {
-	// For now, return an error since Groq provider is not fully implemented
-	return nil, fmt.Errorf("Groq provider not yet implemented")
 }
 
 // NewOpenAIClientWrapper creates an OpenAI client wrapper
@@ -134,8 +122,6 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 		OpenAIClientType,
 		OpenRouterClientType,
 		DeepInfraClientType,
-		CerebrasClientType,
-		GroqClientType,
 		DeepSeekClientType,
 		OllamaClientType,
 	}
@@ -162,10 +148,7 @@ func parseProviderName(name string) (ClientType, error) {
 		return DeepInfraClientType, nil
 	case "ollama":
 		return OllamaClientType, nil
-	case "cerebras":
-		return CerebrasClientType, nil
-	case "groq":
-		return GroqClientType, nil
+
 	case "deepseek":
 		return DeepSeekClientType, nil
 	default:
@@ -199,10 +182,7 @@ func IsProviderAvailable(provider ClientType) bool {
 		return os.Getenv("OPENROUTER_API_KEY") != ""
 	case DeepInfraClientType:
 		return os.Getenv("DEEPINFRA_API_KEY") != ""
-	case CerebrasClientType:
-		return os.Getenv("CEREBRAS_API_KEY") != ""
-	case GroqClientType:
-		return os.Getenv("GROQ_API_KEY") != ""
+
 	case DeepSeekClientType:
 		return os.Getenv("DEEPSEEK_API_KEY") != ""
 	default:
@@ -239,6 +219,20 @@ func (w *DeepInfraClientWrapper) SendChatRequest(messages []Message, tools []Too
 		Reasoning: reasoning,
 	}
 	return w.client.SendChatRequest(req)
+}
+
+func (w *DeepInfraClientWrapper) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error) {
+	// Calculate context-aware max_tokens to avoid exceeding model limits
+	maxTokens := w.calculateMaxTokens(messages, tools)
+
+	req := ChatRequest{
+		Model:     w.client.model,
+		Messages:  messages,
+		Tools:     tools,
+		MaxTokens: maxTokens,
+		Reasoning: reasoning,
+	}
+	return w.client.SendChatRequestStream(req, callback)
 }
 
 // calculateMaxTokens calculates appropriate max_tokens based on input size and model limits

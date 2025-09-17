@@ -10,19 +10,18 @@ import (
 type Provider interface {
 	// GetName returns the provider name
 	GetName() string
-	
+
 	// GetEndpoint returns the API endpoint URL
 	GetEndpoint() string
-	
+
 	// GetAPIKey returns the API key
 	GetAPIKey() string
-	
+
 	// GetDefaultModel returns the default model for this provider
 	GetDefaultModel() string
-	
+
 	// IsAvailable checks if the provider is available (API key set)
 	IsAvailable() bool
-	
 }
 
 // BaseProvider provides common functionality for all providers
@@ -36,13 +35,21 @@ type BaseProvider struct {
 
 // NewBaseProvider creates a new base provider
 func NewBaseProvider(name, endpoint, apiKeyEnv, defaultModel string) *BaseProvider {
+	// Get timeout from environment variable or use default
+	timeout := 120 * time.Second // Default: 2 minutes (reduced from 5)
+	if timeoutEnv := os.Getenv("LEDIT_API_TIMEOUT"); timeoutEnv != "" {
+		if duration, err := time.ParseDuration(timeoutEnv); err == nil {
+			timeout = duration
+		}
+	}
+
 	return &BaseProvider{
 		Name:         name,
 		Endpoint:     endpoint,
 		APIKeyEnv:    apiKeyEnv,
 		DefaultModel: defaultModel,
 		HTTPClient: &http.Client{
-			Timeout: 300 * time.Second,
+			Timeout: timeout,
 		},
 	}
 }

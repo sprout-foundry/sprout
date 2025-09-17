@@ -449,7 +449,7 @@ func selectProvider(chatAgent *agent.Agent) error {
 // agentCmd represents the agent command
 var agentCmd = &cobra.Command{
 	Use:   "agent [intent]",
-	Short: "AI agent for code analysis and editing",
+	Short: "AI agent for code analysis and editing (default when running 'ledit' alone)",
 	Long: `AI agent mode for intelligent code analysis and editing.
 
 Features:

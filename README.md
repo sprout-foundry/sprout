@@ -98,7 +98,10 @@ Once installed, you can use `ledit` in your project directory and start using it
 # Initialize ledit in your project (creates .ledit directory)
 ledit init
 
-# Use the AI agent for code generation, analysis, or complex tasks
+# Start interactive agent mode (just run ledit without arguments)
+ledit
+
+# Or use the AI agent directly with a specific task
 ledit agent "Create a python script that prints 'Hello, World!'"
 ledit agent "What does the main function in main.go do?"
 ledit agent "Fix the build errors in this Go project"
@@ -195,6 +198,8 @@ Key sections:
 Legacy fields are still supported for backward compatibility but are migrated to these sections.
 
 ## Usage and Commands
+
+**Quick Start**: Just type `ledit` to start the interactive AI agent mode!
 
 ### Workspace Initialization
 

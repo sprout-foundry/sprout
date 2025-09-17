@@ -37,7 +37,7 @@ type ChangeMetadata struct {
 	Description      string    `json:"description"`
 	OriginalPrompt   string    `json:"original_prompt,omitempty"` // Added: Original user prompt
 	LLMMessage       string    `json:"llm_message,omitempty"`     // Added: Full message sent to LLM
-	EditingModel     string    `json:"editing_model,omitempty"`   // Added: Editing model used
+	AgentModel     string    `json:"agent_model,omitempty"`   // Added: Editing model used
 }
 
 // ChangeLog represents a logged change, including context from the base revision.
@@ -55,7 +55,7 @@ type ChangeLog struct {
 	Timestamp        time.Time
 	OriginalPrompt   string // Added: Original user prompt
 	LLMMessage       string // Added: Full message sent to LLM
-	EditingModel     string // Added: Editing model used
+	AgentModel     string // Added: Editing model used
 }
 
 func ensureChangesDirs() error {
@@ -124,7 +124,7 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 		Description:      description,
 		OriginalPrompt:   originalPrompt,
 		LLMMessage:       llmMessage,
-		EditingModel:     editingModel,
+		AgentModel:     editingModel,
 	}
 
 	metadataBytes, err := json.MarshalIndent(metadata, "", "  ")
@@ -253,7 +253,7 @@ func fetchAllChanges() ([]ChangeLog, error) {
 			Timestamp:        metadata.Timestamp,
 			OriginalPrompt:   metadata.OriginalPrompt,
 			LLMMessage:       metadata.LLMMessage,
-			EditingModel:     metadata.EditingModel,
+			AgentModel:     metadata.AgentModel,
 		})
 	}
 

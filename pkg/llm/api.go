@@ -770,7 +770,7 @@ func GetLLMResponse(modelName string, messages []prompts.Message, filename strin
 func GetCommitMessage(cfg *config.Config, changelog string, originalPrompt string, filename string) (string, error) {
 	modelName := cfg.WorkspaceModel
 	if modelName == "" {
-		modelName = cfg.EditingModel // Fallback if workspace model is not configured
+		modelName = cfg.AgentModel // Fallback if workspace model is not configured
 	}
 
 	messages := prompts.BuildCommitMessages(changelog, originalPrompt)
@@ -844,7 +844,7 @@ func GenerateSearchQuery(cfg *config.Config, context string) ([]string, error) {
 		{Role: "user", Content: fmt.Sprintf("Generate search queries based on the following context: %s", context)},
 	}
 
-	modelName := cfg.EditingModel // Use the editing model for generating search queries
+	modelName := cfg.AgentModel // Use the editing model for generating search queries
 
 	// Use a short timeout for generating a search query
 	queryResponse, _, err := GetLLMResponse(modelName, messages, "", cfg, GetSmartTimeout(cfg, modelName, "search")) // Query generation does not use search grounding
@@ -877,7 +877,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 	modelName := cfg.SummaryModel // Use the summary model for this task
 	if modelName == "" {
 		// Fallback if summary model is not configured
-		modelName = cfg.EditingModel
+		modelName = cfg.AgentModel
 		ui.Out().Printf(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 
@@ -893,10 +893,10 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceContext string) (*types.CodeReviewResult, error) {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 
-	// Use a dedicated CodeReviewModel if available, otherwise fall back to EditingModel
+	// Use a dedicated CodeReviewModel if available, otherwise fall back to AgentModel
 	modelName := cfg.CodeReviewModel
 	if modelName == "" {
-		modelName = cfg.EditingModel
+		modelName = cfg.AgentModel
 	}
 
 	messages := prompts.BuildCodeReviewMessages(combinedDiff, originalPrompt, workspaceContext, workspaceContext)
@@ -953,7 +953,7 @@ func GetCodeReview(cfg *config.Config, combinedDiff, originalPrompt, workspaceCo
 // GetStagedCodeReview performs a code review on staged Git changes using a human-readable prompt.
 // This is specifically designed for the review-staged command.
 func GetStagedCodeReview(cfg *config.Config, stagedDiff, reviewPrompt, workspaceContext string) (*types.CodeReviewResult, error) {
-	modelName := cfg.EditingModel
+	modelName := cfg.AgentModel
 	if modelName == "" {
 		return nil, fmt.Errorf("no editing model specified in config")
 	}

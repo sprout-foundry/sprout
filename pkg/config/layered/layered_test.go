@@ -46,7 +46,7 @@ func TestLayeredConfiguration(t *testing.T) {
 		configPath := filepath.Join(tempDir, "test-config.json")
 		configContent := `{
 			"llm": {
-				"editing_model": "test-model",
+				"agent_model": "test-model",
 				"temperature": 0.5
 			}
 		}`
@@ -70,8 +70,8 @@ func TestLayeredConfiguration(t *testing.T) {
 			t.Error("Expected non-nil config")
 		}
 
-		if cfg.LLM.EditingModel != "test-model" {
-			t.Errorf("Expected editing model 'test-model', got %s", cfg.LLM.EditingModel)
+		if cfg.LLM.AgentModel != "test-model" {
+			t.Errorf("Expected editing model 'test-model', got %s", cfg.LLM.AgentModel)
 		}
 	})
 
@@ -185,7 +185,7 @@ func TestConfigurationValidation(t *testing.T) {
 
 		// Test invalid config
 		invalidConfig := config.DefaultConfig()
-		invalidConfig.LLM.EditingModel = ""  // Invalid
+		invalidConfig.LLM.AgentModel = ""  // Invalid
 		invalidConfig.LLM.Temperature = -1.0 // Invalid
 
 		errors = rule.Validate(invalidConfig)

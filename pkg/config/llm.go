@@ -8,7 +8,7 @@ import (
 // LLMConfig contains all Large Language Model related configuration
 type LLMConfig struct {
 	// Model Selection
-	EditingModel       string `json:"editing_model"`       // Primary model for code editing
+	AgentModel       string `json:"agent_model"`       // Primary model for code editing
 	SummaryModel       string `json:"summary_model"`       // Model for summarization tasks
 	OrchestrationModel string `json:"orchestration_model"` // Model for orchestration tasks
 	WorkspaceModel     string `json:"workspace_model"`     // Model for workspace analysis
@@ -37,7 +37,7 @@ type LLMConfig struct {
 // DefaultLLMConfig returns sensible defaults for LLM configuration
 func DefaultLLMConfig() *LLMConfig {
 	return &LLMConfig{
-		EditingModel:       "deepinfra:google/gemini-2.5-flash",
+		AgentModel:       "deepinfra:google/gemini-2.5-flash",
 		SummaryModel:       "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo",
 		OrchestrationModel: "deepinfra:moonshotai/Kimi-K2-Instruct",
 		WorkspaceModel:     "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo",
@@ -84,8 +84,8 @@ func DefaultLLMConfig() *LLMConfig {
 
 // Validate checks if the LLM configuration is valid
 func (c *LLMConfig) Validate() error {
-	if c.EditingModel == "" {
-		return NewValidationError("editing_model", "cannot be empty")
+	if c.AgentModel == "" {
+		return NewValidationError("agent_model", "cannot be empty")
 	}
 
 	if c.Temperature < 0.0 || c.Temperature > 2.0 {
@@ -105,8 +105,8 @@ func (c *LLMConfig) Validate() error {
 
 // GetPrimaryModel returns the most commonly used model for general operations
 func (c *LLMConfig) GetPrimaryModel() string {
-	if c.EditingModel != "" {
-		return c.EditingModel
+	if c.AgentModel != "" {
+		return c.AgentModel
 	}
 	return "deepinfra:google/gemini-2.5-flash" // fallback
 }

@@ -33,7 +33,7 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 
 		// Override model if specified by flag
 		if reviewStagedModel != "" {
-			cfg.EditingModel = reviewStagedModel // Use EditingModel for review tasks
+			cfg.AgentModel = reviewStagedModel // Use AgentModel for review tasks
 		}
 
 		// Check for staged changes
@@ -80,7 +80,6 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		opts := &codereview.ReviewOptions{
 			Type:             codereview.StagedReview,
 			SkipPrompt:       reviewStagedSkipPrompt,
-			AutoApplyFixes:   false, // Don't auto-apply fixes for staged reviews
 			RollbackOnReject: false, // Don't rollback for staged reviews
 		}
 

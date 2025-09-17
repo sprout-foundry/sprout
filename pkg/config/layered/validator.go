@@ -143,9 +143,9 @@ func (r *LLMModelValidationRule) Validate(cfg *config.Config) []ValidationError 
 	}
 
 	// Validate editing model
-	if cfg.LLM.EditingModel == "" {
+	if cfg.LLM.AgentModel == "" {
 		errors = append(errors, ValidationError{
-			Field:   "llm.editing_model",
+			Field:   "llm.agent_model",
 			Value:   "",
 			Message: "Editing model is required",
 			Code:    "MISSING_EDITING_MODEL",
@@ -297,7 +297,7 @@ func (r *ModelCompatibilityValidationRule) Validate(cfg *config.Config) []Valida
 	}
 
 	models := []string{
-		cfg.LLM.EditingModel,
+		cfg.LLM.AgentModel,
 		cfg.LLM.SummaryModel,
 		cfg.LLM.OrchestrationModel,
 		cfg.LLM.WorkspaceModel,
@@ -309,7 +309,7 @@ func (r *ModelCompatibilityValidationRule) Validate(cfg *config.Config) []Valida
 		}
 
 		fieldNames := []string{
-			"llm.editing_model",
+			"llm.agent_model",
 			"llm.summary_model",
 			"llm.orchestration_model",
 			"llm.workspace_model",

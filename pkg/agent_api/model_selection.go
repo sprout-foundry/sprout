@@ -28,8 +28,8 @@ func (ms *ModelSelection) GetModelForTask(taskType string) string {
 
 	switch taskType {
 	case "editing", "code":
-		if llmCfg.EditingModel != "" {
-			return llmCfg.EditingModel
+		if llmCfg.AgentModel != "" {
+			return llmCfg.AgentModel
 		}
 	case "summary", "summarization":
 		if llmCfg.SummaryModel != "" {
@@ -78,8 +78,8 @@ func (ms *ModelSelection) getLegacyModelForTask(taskType string) string {
 	// Check legacy config fields
 	switch taskType {
 	case "editing", "code":
-		if ms.config.EditingModel != "" {
-			return ms.config.EditingModel
+		if ms.config.AgentModel != "" {
+			return ms.config.AgentModel
 		}
 	case "summary", "summarization":
 		if ms.config.SummaryModel != "" {
@@ -200,8 +200,8 @@ func (ms *ModelSelection) UpdateConfigDefaults() {
 	llmCfg := ms.config.LLM
 
 	// Update defaults if they're still using legacy values
-	if llmCfg.EditingModel == "" {
-		llmCfg.EditingModel = ms.getFallbackModel("editing")
+	if llmCfg.AgentModel == "" {
+		llmCfg.AgentModel = ms.getFallbackModel("editing")
 	}
 
 	if llmCfg.OrchestrationModel == "" {

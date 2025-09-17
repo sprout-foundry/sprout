@@ -56,12 +56,7 @@ func (a *ConfigAdapter) GetProviderConfig(providerName string) (*types.ProviderC
 		if config.Model == "" {
 			config.Model = llmConfig.LocalModel
 		}
-	case "groq":
-		config.BaseURL = "https://api.groq.com/openai/v1"
-		config.APIKey = "test-key-placeholder"
-		if config.Model == "" {
-			config.Model = "mixtral-8x7b-32768"
-		}
+
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", providerName)
 	}

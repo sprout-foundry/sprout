@@ -305,7 +305,14 @@ func (e *Executor) handleDuplicateRequest(toolName string, args map[string]inter
 	if toolName == "read_file" {
 		// For read_file duplicates, return a special response indicating the file was already requested
 		filePath, _ := args["file_path"].(string)
-		response := fmt.Sprintf("⚡ Duplicate request detected: File '%s' has already been read %d times in this session (first read: %s, last read: %s). You already have this file content available.",
+		response := fmt.Sprintf(`⚡ Duplicate request detected
+
+File: '%s'
+Read %d times in this session
+First read: %s
+Last read: %s
+
+You already have this file content available.`,
 			filePath, callInfo.CallCount, callInfo.FirstCall.Format("15:04:05"), callInfo.LastCall.Format("15:04:05"))
 
 		if e.logger != nil {

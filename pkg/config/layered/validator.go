@@ -292,8 +292,8 @@ func (r *ModelCompatibilityValidationRule) Validate(cfg *config.Config) []Valida
 		"gpt-4":         {"openai"},
 		"gemini-pro":    {"gemini", "google"},
 		"claude-3":      {"anthropic"},
-		"mixtral":       {"groq", "ollama"},
-		"llama":         {"ollama", "groq"},
+		"mixtral":       {"ollama", "openrouter"},
+		"llama":         {"ollama", "openrouter", "deepinfra"},
 	}
 
 	models := []string{

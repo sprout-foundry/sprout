@@ -12,18 +12,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // Global variables for vision model tracking and caching
 var lastVisionUsage *VisionUsageInfo
-var visionCache = make(map[string]string) // cache key -> result
+var visionCache = make(map[string]string)                // cache key -> result
 var visionCacheUsage = make(map[string]*VisionUsageInfo) // cache key -> usage info
 
 // VisionAnalysis represents the result of vision model analysis
 type VisionAnalysis struct {
-	ImagePath   string `json:"image_path"`
-	Description string `json:"description"`
+	ImagePath   string      `json:"image_path"`
+	Description string      `json:"description"`
 	Elements    []UIElement `json:"elements,omitempty"`
 	Issues      []string    `json:"issues,omitempty"`
 	Suggestions []string    `json:"suggestions,omitempty"`
@@ -31,9 +31,9 @@ type VisionAnalysis struct {
 
 // UIElement represents a UI element detected in an image
 type UIElement struct {
-	Type        string `json:"type"`        // button, input, text, etc.
-	Description string `json:"description"` // what it looks like
-	Position    string `json:"position"`    // approximate location
+	Type        string `json:"type"`             // button, input, text, etc.
+	Description string `json:"description"`      // what it looks like
+	Position    string `json:"position"`         // approximate location
 	Issues      string `json:"issues,omitempty"` // any problems noted
 }
 
@@ -94,7 +94,7 @@ func createVisionClient() (api.ClientInterface, error) {
 	}{
 		{api.OpenRouterClientType, "OPENROUTER_API_KEY"},
 		{api.DeepInfraClientType, "DEEPINFRA_API_KEY"},
-		{api.GroqClientType, "GROQ_API_KEY"},
+
 		{api.OllamaClientType, ""}, // Ollama doesn't need API key
 	}
 
@@ -123,7 +123,7 @@ func createVisionClient() (api.ClientInterface, error) {
 
 		return client, nil
 	}
-	
+
 	return nil, fmt.Errorf("no vision-capable providers available - please set up OPENROUTER_API_KEY, DEEPINFRA_API_KEY, GROQ_API_KEY, or install Ollama with a vision model")
 }
 
@@ -447,24 +447,23 @@ func (vp *VisionProcessor) downloadImage(url string) ([]byte, error) {
 // createVisionPrompt creates an appropriate prompt based on image context
 func (vp *VisionProcessor) createVisionPrompt(imagePath string) string {
 	filename := filepath.Base(imagePath)
-	
+
 	// Customize prompt based on likely image type
-	if strings.Contains(strings.ToLower(filename), "ui") || 
-	   strings.Contains(strings.ToLower(filename), "screen") ||
-	   strings.Contains(strings.ToLower(filename), "mockup") {
+	if strings.Contains(strings.ToLower(filename), "ui") ||
+		strings.Contains(strings.ToLower(filename), "screen") ||
+		strings.Contains(strings.ToLower(filename), "mockup") {
 		return `Analyze this UI screenshot or mockup in detail. Please provide:
 
 1. **Overall Description**: What type of interface is this?
 2. **UI Elements**: List all visible elements (buttons, inputs, text, navigation, etc.) with their positions
 3. **Layout & Design**: Describe the layout, colors, typography, spacing
-4. **Issues or Improvements**: Note any usability issues, design inconsistencies, or areas for improvement
-5. **Implementation Guidance**: Suggest HTML structure, CSS classes, or component architecture that would be needed
+4. **Implementation Guidance**: Suggest HTML structure, CSS classes, or component architecture that would be needed
 
 Format your response clearly with sections. Focus on details that would help a developer implement or modify this interface.`
 	}
 
 	if strings.Contains(strings.ToLower(filename), "error") ||
-	   strings.Contains(strings.ToLower(filename), "bug") {
+		strings.Contains(strings.ToLower(filename), "bug") {
 		return `Analyze this error screenshot or bug report image. Please provide:
 
 1. **Error Description**: What error or issue is shown?
@@ -493,14 +492,14 @@ Focus on providing actionable information for software development tasks.`
 func (vp *VisionProcessor) looksLikeUI(description string) bool {
 	uiKeywords := []string{"button", "input", "form", "menu", "navigation", "interface", "screen", "page", "component"}
 	lowerDesc := strings.ToLower(description)
-	
+
 	count := 0
 	for _, keyword := range uiKeywords {
 		if strings.Contains(lowerDesc, keyword) {
 			count++
 		}
 	}
-	
+
 	return count >= 2 // If we find 2+ UI-related keywords, it's likely a UI
 }
 
@@ -508,7 +507,7 @@ func (vp *VisionProcessor) looksLikeUI(description string) bool {
 func (vp *VisionProcessor) extractUIElements(description string) []UIElement {
 	// This is a simplified extraction - could be enhanced with more sophisticated parsing
 	var elements []UIElement
-	
+
 	// Look for common UI element mentions
 	lines := strings.Split(description, "\n")
 	for _, line := range lines {
@@ -516,26 +515,26 @@ func (vp *VisionProcessor) extractUIElements(description string) []UIElement {
 			elements = append(elements, element)
 		}
 	}
-	
+
 	return elements
 }
 
 // parseUIElementFromLine attempts to extract a UI element from a description line
 func (vp *VisionProcessor) parseUIElementFromLine(line string) UIElement {
 	lowerLine := strings.ToLower(line)
-	
+
 	// Simple pattern matching for UI elements
 	patterns := map[string]string{
-		"button":     `(?i)(button|btn)`,
-		"input":      `(?i)(input|field|textbox)`,
-		"text":       `(?i)(text|label|heading)`,
-		"link":       `(?i)(link|anchor)`,
-		"image":      `(?i)(image|img|icon)`,
-		"dropdown":   `(?i)(dropdown|select)`,
-		"checkbox":   `(?i)(checkbox|check)`,
-		"radio":      `(?i)(radio)`,
+		"button":   `(?i)(button|btn)`,
+		"input":    `(?i)(input|field|textbox)`,
+		"text":     `(?i)(text|label|heading)`,
+		"link":     `(?i)(link|anchor)`,
+		"image":    `(?i)(image|img|icon)`,
+		"dropdown": `(?i)(dropdown|select)`,
+		"checkbox": `(?i)(checkbox|check)`,
+		"radio":    `(?i)(radio)`,
 	}
-	
+
 	for elementType, pattern := range patterns {
 		if matched, _ := regexp.MatchString(pattern, lowerLine); matched {
 			return UIElement{
@@ -545,7 +544,7 @@ func (vp *VisionProcessor) parseUIElementFromLine(line string) UIElement {
 			}
 		}
 	}
-	
+
 	return UIElement{}
 }
 
@@ -553,13 +552,13 @@ func (vp *VisionProcessor) parseUIElementFromLine(line string) UIElement {
 func (vp *VisionProcessor) extractPosition(line string) string {
 	positionKeywords := []string{"top", "bottom", "left", "right", "center", "upper", "lower", "corner"}
 	lowerLine := strings.ToLower(line)
-	
+
 	for _, keyword := range positionKeywords {
 		if strings.Contains(lowerLine, keyword) {
 			return keyword
 		}
 	}
-	
+
 	return "unknown"
 }
 
@@ -579,9 +578,9 @@ func (vp *VisionProcessor) enhanceTextWithAnalysis(text, imagePath string, analy
 	if len(analysis.Elements) > 0 {
 		enhancement += "**UI Elements Detected:**\n"
 		for _, element := range analysis.Elements {
-			enhancement += fmt.Sprintf("- **%s** (%s): %s\n", 
-				strings.Title(element.Type), 
-				element.Position, 
+			enhancement += fmt.Sprintf("- **%s** (%s): %s\n",
+				strings.Title(element.Type),
+				element.Position,
 				element.Description)
 		}
 		enhancement += "\n"
@@ -590,8 +589,8 @@ func (vp *VisionProcessor) enhanceTextWithAnalysis(text, imagePath string, analy
 	// Replace image reference with enhanced description
 	// Try multiple replacement strategies
 	replacements := []string{
-		imagePath,                          // Direct path
-		filepath.Base(imagePath),           // Just filename
+		imagePath,                // Direct path
+		filepath.Base(imagePath), // Just filename
 		fmt.Sprintf("![%s](%s)", filepath.Base(imagePath), imagePath), // Markdown format
 	}
 
@@ -629,7 +628,7 @@ func HasVisionCapability() bool {
 	}{
 		{api.OpenRouterClientType, "OPENROUTER_API_KEY"},
 		{api.DeepInfraClientType, "DEEPINFRA_API_KEY"},
-		{api.GroqClientType, "GROQ_API_KEY"},
+
 		{api.OllamaClientType, ""}, // Ollama doesn't need API key
 	}
 
@@ -675,13 +674,13 @@ func ClearLastVisionUsage() {
 func GetVisionCacheStats() map[string]interface{} {
 	stats := make(map[string]interface{})
 	stats["cached_results"] = len(visionCache)
-	
+
 	totalSavedCost := 0.0
 	for _, usage := range visionCacheUsage {
 		totalSavedCost += usage.EstimatedCost
 	}
 	stats["estimated_savings"] = totalSavedCost
-	
+
 	return stats
 }
 
@@ -693,16 +692,16 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 
 	// Create cache key based on image path, mode, and prompt
 	cacheKey := fmt.Sprintf("%s|%s|%s", imagePath, analysisMode, analysisPrompt)
-	
+
 	// Check cache first
 	if cachedResult, exists := visionCache[cacheKey]; exists {
 		fmt.Printf("🔄 Using cached vision analysis for %s [%s]\n", filepath.Base(imagePath), analysisMode)
-		
+
 		// Restore cached usage info for cost tracking
 		if cachedUsage, hasUsage := visionCacheUsage[cacheKey]; hasUsage {
 			lastVisionUsage = cachedUsage
 		}
-		
+
 		return cachedResult, nil
 	}
 

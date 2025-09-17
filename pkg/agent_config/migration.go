@@ -142,12 +142,12 @@ func updateLeditModelsFromAgentConfig(leditConfig map[string]interface{}, agentC
 		"ollama":     "ollama:",
 	}
 	
-	// Update editing_model based on last used provider
+	// Update agent_model based on last used provider
 	if agentConfig.LastUsedProvider != "" {
 		providerName := getProviderConfigName(agentConfig.LastUsedProvider)
 		if model, exists := agentConfig.ProviderModels[providerName]; exists {
 			if prefix, ok := providerModelMap[providerName]; ok {
-				leditConfig["editing_model"] = prefix + model
+				leditConfig["agent_model"] = prefix + model
 			}
 		}
 	}

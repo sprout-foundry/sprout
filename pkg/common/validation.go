@@ -375,7 +375,7 @@ func (v *Validator) ValidateConfig(cfg *config.Config) *ValidationResult {
 	// Validate LLM configuration
 	llmConfig := cfg.GetLLMConfig()
 	if llmConfig != nil {
-		if llmConfig.EditingModel == "" {
+		if llmConfig.AgentModel == "" {
 			result.Valid = false
 			result.Errors = append(result.Errors, "editing model cannot be empty")
 		}

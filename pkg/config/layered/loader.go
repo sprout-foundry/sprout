@@ -197,8 +197,8 @@ func (l *LayeredConfigLoader) mergeConfig(base, overlay *config.Config) *config.
 func (l *LayeredConfigLoader) mergeLLMConfig(base, overlay *config.LLMConfig) *config.LLMConfig {
 	result := *base // Shallow copy
 
-	if overlay.EditingModel != "" {
-		result.EditingModel = overlay.EditingModel
+	if overlay.AgentModel != "" {
+		result.AgentModel = overlay.AgentModel
 	}
 	if overlay.SummaryModel != "" {
 		result.SummaryModel = overlay.SummaryModel

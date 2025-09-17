@@ -102,7 +102,7 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 			}
 			fileContentStr := string(fileContent)
 			messages := prompts.BuildPatchMessages(fileContentStr, llmInstructions, filePath, true)
-			_, _, err = llm.GetLLMResponse(cfg.EditingModel, messages, filePath, cfg, 6*time.Minute)
+			_, _, err = llm.GetLLMResponse(cfg.AgentModel, messages, filePath, cfg, 6*time.Minute)
 
 			if err != nil {
 				responses = append(responses, fmt.Sprintf("Failed to edit file %s: %v", filePath, err))
@@ -164,12 +164,12 @@ func handleContextRequest(reqs []ContextRequest, cfg *config.Config) (string, er
 func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imagePath string) (string, string, *llm.TokenUsage, error) {
 	// Debug: Log function entry
 	logger := utils.GetLogger(cfg.SkipPrompt)
-	logger.Logf("DEBUG: GetLLMCodeResponse called with model: %s", cfg.EditingModel)
+	logger.Logf("DEBUG: GetLLMCodeResponse called with model: %s", cfg.AgentModel)
 
 	// This function is only used by agent workflow
 	isAgentMode := os.Getenv("LEDIT_FROM_AGENT") == "1"
 	if !isAgentMode {
-		return cfg.EditingModel, "", nil, fmt.Errorf("GetLLMCodeResponse is only supported in agent mode")
+		return cfg.AgentModel, "", nil, fmt.Errorf("GetLLMCodeResponse is only supported in agent mode")
 	}
 
 	// Use quality-aware messages if quality level is set - for now keep using existing functions
@@ -183,7 +183,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 		for i := len(messages) - 1; i >= 0; i-- {
 			if messages[i].Role == "user" {
 				if err := llm.AddImageToMessage(&messages[i], imagePath); err != nil {
-					return cfg.EditingModel, "", nil, fmt.Errorf("failed to add image to message: %w. Please ensure the image file exists and is in a supported format (JPEG, PNG, GIF, WebP)", err)
+					return cfg.AgentModel, "", nil, fmt.Errorf("failed to add image to message: %w. Please ensure the image file exists and is in a supported format (JPEG, PNG, GIF, WebP)", err)
 				}
 				logger.Logf("Added image to message. Note: If the model doesn't support vision, the request may fail. Consider using a vision-capable model like 'openai:gpt-4o', 'gemini:gemini-1.5-flash', or 'anthropic:claude-3-sonnet'.")
 				break
@@ -217,7 +217,7 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 
 	// Create unified interactive config
 	unifiedConfig := &llm.UnifiedInteractiveConfig{
-		ModelName:       cfg.EditingModel,
+		ModelName:       cfg.AgentModel,
 		Messages:        messages,
 		Filename:        filename,
 		WorkflowContext: workflowContext,
@@ -232,11 +232,11 @@ func GetLLMCodeResponse(cfg *config.Config, code, instructions, filename, imageP
 	logger.Logf("DEBUG: Unified interactive call completed")
 	if err != nil {
 		logger.Log(fmt.Sprintf("Interactive LLM call failed: %v", err))
-		return cfg.EditingModel, "", nil, err
+		return cfg.AgentModel, "", nil, err
 	}
 	logger.Log(fmt.Sprintf("Interactive response length: %d chars", len(response)))
 	logger.Log("=== End GetLLMCodeResponse Debug ===")
-	return cfg.EditingModel, response, tokenUsage, nil
+	return cfg.AgentModel, response, tokenUsage, nil
 }
 
 // GetScriptRiskAnalysis sends a shell script to the summary model for risk analysis.
@@ -246,7 +246,7 @@ func GetScriptRiskAnalysis(cfg *config.Config, scriptContent string) (string, er
 	modelName := cfg.SummaryModel // Use the summary model for this task
 	if modelName == "" {
 		// Fallback if summary model is not configured
-		modelName = cfg.EditingModel
+		modelName = cfg.AgentModel
 		logger.Log(prompts.NoSummaryModelFallback(modelName)) // New prompt
 	}
 

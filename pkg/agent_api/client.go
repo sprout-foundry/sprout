@@ -122,9 +122,23 @@ func NewClientWithModel(model string) (*Client, error) {
 		model = DefaultModel
 	}
 
+	// Get timeout from environment variable or use default
+	timeout := 120 * time.Second // Default: 2 minutes (reduced from 5)
+	if timeoutEnv := os.Getenv("LEDIT_API_TIMEOUT"); timeoutEnv != "" {
+		if duration, err := time.ParseDuration(timeoutEnv); err == nil {
+			timeout = duration
+		} else {
+			// Try parsing as seconds if duration parsing fails
+			var seconds int
+			if _, err := fmt.Sscanf(timeoutEnv, "%d", &seconds); err == nil && seconds > 0 {
+				timeout = time.Duration(seconds) * time.Second
+			}
+		}
+	}
+
 	return &Client{
 		httpClient: &http.Client{
-			Timeout: 300 * time.Second, // Increased from 120s to 300s for complex reasoning tasks
+			Timeout: timeout,
 		},
 		apiToken: token,
 		debug:    false, // Will be set later via SetDebug
@@ -174,54 +188,126 @@ func (c *Client) SendChatRequest(req ChatRequest) (*ChatResponse, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", DeepInfraURL, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
+	// Implement retry logic with smarter timeout detection
+	maxRetries := 2 // Reduced from 3 since we have shorter timeout
+	var lastErr error
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiToken)
-
-	// Log the request for debugging
-	if c.debug {
-		log.Printf("DeepInfra Request URL: %s", DeepInfraURL)
-		log.Printf("DeepInfra Request Headers: %v", httpReq.Header)
-		log.Printf("DeepInfra Request Body: %s", string(reqBody))
-	}
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Log the response for debugging
-	respBody, _ := io.ReadAll(resp.Body)
-	if c.debug {
-		log.Printf("DeepInfra Response Status: %s", resp.Status)
-		log.Printf("DeepInfra Response Headers: %v", resp.Header)
-		log.Printf("DeepInfra Response Body: %s", string(respBody))
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var chatResp ChatResponse
-	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	// Post-process harmony responses
-	if IsGPTOSSModel(req.Model) {
-		formatter := NewHarmonyFormatter()
-		// Strip return token from responses before returning to agent
-		for i, choice := range chatResp.Choices {
-			chatResp.Choices[i].Message.Content = formatter.StripReturnToken(choice.Message.Content)
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		httpReq, err := http.NewRequest("POST", DeepInfraURL, bytes.NewBuffer(reqBody))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
+
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Authorization", "Bearer "+c.apiToken)
+
+		// Log the request for debugging
+		if c.debug && attempt == 0 {
+			log.Printf("DeepInfra Request URL: %s", DeepInfraURL)
+			log.Printf("DeepInfra Request Headers: %v", httpReq.Header)
+			log.Printf("DeepInfra Request Body: %s", string(reqBody))
+		}
+
+		// Track request timing
+		start := time.Now()
+		resp, err := c.httpClient.Do(httpReq)
+		duration := time.Since(start)
+
+		if err != nil {
+			lastErr = err
+			errStr := err.Error()
+
+			// Check if this is a timeout
+			isTimeout := strings.Contains(errStr, "timeout") ||
+				strings.Contains(errStr, "deadline exceeded") ||
+				strings.Contains(errStr, "Client.Timeout exceeded")
+
+			if isTimeout {
+				// Log timing information
+				if c.debug {
+					log.Printf("⏱️ Request timeout after %v (attempt %d/%d, timeout setting: %v)",
+						duration, attempt+1, maxRetries+1, c.httpClient.Timeout)
+				}
+
+				// For timeouts, only retry if we haven't already tried
+				if attempt < maxRetries {
+					// Wait a bit before retrying (shorter wait for timeouts)
+					time.Sleep(time.Duration(attempt+1) * time.Second)
+					continue
+				}
+			}
+
+			// For non-timeout errors, check if retryable
+			isRetryable := strings.Contains(errStr, "connection reset") ||
+				strings.Contains(errStr, "EOF") ||
+				strings.Contains(errStr, "broken pipe")
+
+			if isRetryable && attempt < maxRetries {
+				// Exponential backoff
+				time.Sleep(time.Duration(1<<uint(attempt)) * time.Second)
+				continue
+			}
+
+			return nil, fmt.Errorf("failed to send request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// Log the response for debugging
+		respBody, _ := io.ReadAll(resp.Body)
+		if c.debug {
+			log.Printf("DeepInfra Response Status: %s (duration: %v)", resp.Status, duration)
+			log.Printf("DeepInfra Response Headers: %v", resp.Header)
+			log.Printf("DeepInfra Response Body: %s", string(respBody))
+		}
+
+		// Handle rate limiting with retry
+		if resp.StatusCode == 429 && attempt < maxRetries {
+			// Check for Retry-After header
+			retryAfter := resp.Header.Get("Retry-After")
+			waitTime := time.Duration(5+attempt*5) * time.Second // Default: 5s, 10s, 15s
+
+			if retryAfter != "" {
+				if seconds, err := time.ParseDuration(retryAfter + "s"); err == nil {
+					waitTime = seconds
+				}
+			}
+
+			if c.debug {
+				log.Printf("⏳ Rate limited, waiting %v before retry (attempt %d/%d)", waitTime, attempt+1, maxRetries+1)
+			}
+
+			time.Sleep(waitTime)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
+		}
+
+		var chatResp ChatResponse
+		if err := json.Unmarshal(respBody, &chatResp); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		}
+
+		// Post-process harmony responses
+		if IsGPTOSSModel(req.Model) {
+			formatter := NewHarmonyFormatter()
+			// Strip return token from responses before returning to agent
+			for i, choice := range chatResp.Choices {
+				chatResp.Choices[i].Message.Content = formatter.StripReturnToken(choice.Message.Content)
+			}
+		}
+
+		// Success!
+		if c.debug && attempt > 0 {
+			log.Printf("✅ Request succeeded after %d retries", attempt)
+		}
+
+		return &chatResp, nil
 	}
 
-	return &chatResp, nil
+	// All retries exhausted
+	return nil, fmt.Errorf("request failed after %d attempts: %w", maxRetries+1, lastErr)
 }
 
 func (c *Client) GetModel() string {

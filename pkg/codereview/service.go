@@ -20,16 +20,6 @@ import (
 	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
-// RetryRequestError indicates that a retry is needed with a refined prompt
-type RetryRequestError struct {
-	RefinedPrompt string
-	Feedback      string
-}
-
-func (e *RetryRequestError) Error() string {
-	return fmt.Sprintf("code review requires retry with refined prompt: %s", e.Feedback)
-}
-
 // ReviewContext represents the context for a code review request
 type ReviewContext struct {
 	Diff                  string // The code diff to review
@@ -54,8 +44,7 @@ type ReviewContext struct {
 type ReviewType int
 
 const (
-	AutomatedReview ReviewType = iota // Used during code generation workflow
-	StagedReview                      // Used for reviewing Git staged changes
+	StagedReview ReviewType = iota // Used for reviewing Git staged changes
 )
 
 // ReviewOptions contains options for the code review
@@ -63,8 +52,6 @@ type ReviewOptions struct {
 	Type             ReviewType
 	SkipPrompt       bool
 	PreapplyReview   bool
-	MaxRetries       int
-	AutoApplyFixes   bool // Whether to automatically apply fixes for automated reviews
 	RollbackOnReject bool // Whether to rollback changes when review is rejected
 }
 
@@ -85,7 +72,7 @@ func NewCodeReviewService(cfg *config.Config, logger *utils.Logger) *CodeReviewS
 
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
-	if cfg != nil && cfg.EditingModel != "" {
+	if cfg != nil && cfg.AgentModel != "" {
 		// Use unified provider detection
 		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
 			if client, err := api.NewUnifiedClient(clientType); err == nil {
@@ -111,7 +98,7 @@ func NewCodeReviewServiceWithConfig(cfg *config.Config, logger *utils.Logger, re
 
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
-	if cfg != nil && cfg.EditingModel != "" {
+	if cfg != nil && cfg.AgentModel != "" {
 		// Use unified provider detection
 		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
 			if client, err := api.NewUnifiedClient(clientType); err == nil {
@@ -307,14 +294,12 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 	var result *types.CodeReviewResult
 	var err error
 
-	switch opts.Type {
-	case AutomatedReview:
-		result, err = s.performAutomatedReview(ctx)
-	case StagedReview:
-		result, err = s.performStagedReview(ctx)
-	default:
-		return nil, fmt.Errorf("unknown review type: %d", opts.Type)
+	// Only support staged review now
+	if opts.Type != StagedReview {
+		return nil, fmt.Errorf("only staged review type is supported")
 	}
+
+	result, err = s.performStagedReview(ctx)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform code review: %w", err)
@@ -503,12 +488,6 @@ func (s *CodeReviewService) calculateSimilarity(str1, str2 string) float64 {
 	}
 
 	return float64(intersection) / float64(union)
-}
-
-// performAutomatedReview handles automated code reviews during code generation workflow
-func (s *CodeReviewService) performAutomatedReview(ctx *ReviewContext) (*types.CodeReviewResult, error) {
-	// Use enhanced agent-based review with workspace intelligence
-	return s.performAgentBasedCodeReview(ctx, true) // structured format for automated workflow
 }
 
 // performStagedReview handles reviews of Git staged changes
@@ -703,39 +682,8 @@ func (s *CodeReviewService) handleNeedsRevision(result *types.CodeReviewResult, 
 		return result, nil
 	}
 
-	// For automated reviews, apply fixes if enabled and we haven't exceeded limits
-	if opts.Type == AutomatedReview && opts.AutoApplyFixes && result.PatchResolution != nil && !result.PatchResolution.IsEmpty() {
-		s.logger.LogProcessStep("Applying patch resolution...")
-		return nil, s.applyPatchToContent(result.PatchResolution, result.Feedback)
-	}
-
-	// If detailed guidance is provided but no patch resolution, attempt retry with the feedback
-	if opts.Type == AutomatedReview && opts.AutoApplyFixes && (result.DetailedGuidance != "" || result.Feedback != "") {
-		s.logger.LogProcessStep("No direct patch resolution provided. Attempting retry with review feedback...")
-
-		// Attempt to retry the code generation with refined prompt based on feedback
-		if retryErr := s.attemptRetryForNeedsRevision(result, ctx, opts); retryErr != nil {
-			// Check if this is a retry request error
-			if retryRequest, ok := retryErr.(*RetryRequestError); ok {
-				s.logger.LogProcessStep("Retry requested with refined prompt. Returning to caller for re-generation.")
-				// Return the retry request error to signal the caller to retry with the refined prompt
-				return nil, retryRequest
-			} else {
-				s.logger.LogProcessStep(fmt.Sprintf("Unexpected retry error: %v", retryErr))
-				// Continue with the original result if retry fails
-			}
-		} else {
-			s.logger.LogProcessStep("Retry completed. The code generation process should use the refined prompt for the next iteration.")
-			// Mark that we've attempted to address the issues via retry
-			result.Feedback += " (Retry attempted with refined prompt)"
-		}
-	}
-
-	// If detailed guidance is provided but auto-apply is disabled, log it for manual use
-	if opts.Type == AutomatedReview && result.DetailedGuidance != "" && !opts.AutoApplyFixes {
-		s.logger.LogProcessStep(fmt.Sprintf("Code review guidance: %s", result.DetailedGuidance))
-		s.logger.LogProcessStep("Auto-apply fixes disabled. Guidance provided for manual review.")
-	}
+	// Removed automated review logic - no longer supported
+	// Only staged reviews are supported now
 
 	return result, nil
 }
@@ -763,10 +711,7 @@ func (s *CodeReviewService) handleRejected(result *types.CodeReviewResult, ctx *
 		}
 	}
 
-	// Attempt retries if enabled
-	if opts.MaxRetries > 0 && opts.Type == AutomatedReview {
-		return nil, s.attemptRetry(result, ctx, opts)
-	}
+	// Retries are no longer supported - removed with automated review
 
 	return result, nil
 }
@@ -950,86 +895,6 @@ func (s *CodeReviewService) validatePatchContent(content string) error {
 	}
 
 	return nil
-}
-
-// attemptRetry attempts to retry the code generation with refined prompts
-func (s *CodeReviewService) attemptRetry(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) error {
-	maxRetries := opts.MaxRetries
-	if maxRetries <= 0 {
-		maxRetries = 2 // Default to 2 retries
-	}
-
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		s.config.RetryAttemptCount = attempt
-		refined := result.NewPrompt
-		if strings.TrimSpace(refined) == "" {
-			// Synthesize a refined prompt using feedback + original
-			refined = fmt.Sprintf("Refine the previous change. Keep existing functionality intact. Address review feedback: %s. Original intent: %s.", result.Feedback, ctx.OriginalPrompt)
-		}
-		s.logger.LogProcessStep(fmt.Sprintf("Retrying code generation (%d/%d) with new prompt: %s", attempt, maxRetries, refined))
-
-		// This would delegate to the code generation process
-		// For now, we'll just log the attempt
-		s.logger.LogProcessStep("Retry logic would be implemented here")
-
-		// If retry was successful, we'd break here
-		// For now, we'll assume it failed and continue to next attempt
-	}
-
-	return fmt.Errorf("changes rejected after %d retries. Feedback: %s. Suggested prompt: %s", maxRetries, result.Feedback, result.NewPrompt)
-}
-
-// createRefinedPromptForRetry creates a refined prompt for retry attempts when revisions are needed
-func (s *CodeReviewService) createRefinedPromptForRetry(result *types.CodeReviewResult, ctx *ReviewContext) string {
-	// Use the suggested new prompt if available
-	if strings.TrimSpace(result.NewPrompt) != "" {
-		return result.NewPrompt
-	}
-
-	// Create a refined prompt using feedback and detailed guidance
-	var promptParts []string
-
-	// Start with the original intent
-	if strings.TrimSpace(ctx.OriginalPrompt) != "" {
-		promptParts = append(promptParts, fmt.Sprintf("Original request: %s", ctx.OriginalPrompt))
-	}
-
-	// Add feedback
-	if strings.TrimSpace(result.Feedback) != "" {
-		promptParts = append(promptParts, fmt.Sprintf("Review feedback to address: %s", result.Feedback))
-	}
-
-	// Add detailed guidance if available
-	if strings.TrimSpace(result.DetailedGuidance) != "" {
-		promptParts = append(promptParts, fmt.Sprintf("Detailed guidance: %s", result.DetailedGuidance))
-	}
-
-	// Add instruction to fix the issues
-	promptParts = append(promptParts, "Please revise the code to address these issues while maintaining existing functionality.")
-
-	return strings.Join(promptParts, "\n\n")
-}
-
-// attemptRetryForNeedsRevision attempts to retry code generation when review requires revisions
-func (s *CodeReviewService) attemptRetryForNeedsRevision(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) error {
-	// Check if we have meaningful feedback to work with
-	if strings.TrimSpace(result.Feedback) == "" && strings.TrimSpace(result.DetailedGuidance) == "" {
-		s.logger.LogProcessStep("No actionable feedback available for retry. Skipping retry attempt.")
-		return nil
-	}
-
-	s.logger.LogProcessStep("Code review requires retry with refined prompt based on feedback.")
-
-	// Create the refined prompt for retry
-	refinedPrompt := s.createRefinedPromptForRetry(result, ctx)
-
-	s.logger.LogProcessStep("Generated refined prompt for retry attempt.")
-
-	// Return a retry request error to signal to the caller that a retry is needed
-	return &RetryRequestError{
-		RefinedPrompt: refinedPrompt,
-		Feedback:      result.Feedback,
-	}
 }
 
 // hasPreviousApprovedResult checks if there are any previous approved results in history

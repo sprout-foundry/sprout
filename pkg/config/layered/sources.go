@@ -110,11 +110,11 @@ func (e *EnvironmentConfigSource) Load(ctx context.Context) (*config.Config, err
 
 	for key, value := range envVars {
 		switch strings.ToLower(key) {
-		case "editing_model":
+		case "agent_model":
 			if cfg.LLM == nil {
 				cfg.LLM = config.DefaultLLMConfig()
 			}
-			cfg.LLM.EditingModel = value
+			cfg.LLM.AgentModel = value
 		case "summary_model":
 			if cfg.LLM == nil {
 				cfg.LLM = config.DefaultLLMConfig()

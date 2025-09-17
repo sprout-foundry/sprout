@@ -40,7 +40,7 @@ type Config struct {
 
 	// Legacy fields (DEPRECATED - use domain-specific configs instead)
 	// These are kept for backward compatibility and will be migrated over time
-	EditingModel             string               `json:"editing_model,omitempty"`
+	AgentModel             string               `json:"agent_model,omitempty"`
 	SummaryModel             string               `json:"summary_model,omitempty"`
 	OrchestrationModel       string               `json:"orchestration_model,omitempty"`
 	WorkspaceModel           string               `json:"workspace_model,omitempty"`
@@ -63,7 +63,6 @@ type Config struct {
 	UseSearchGrounding       bool                 `json:"-"` // Command-scoped flag to enable search grounding
 	FromAgent                bool                 `json:"-"` // Internal: true when invoked from agent mode
 	LastTokenUsage           *types.Usage    `json:"-"` // Last token usage from LLM call
-	QualityLevel             int                  `json:"-"` // Internal: quality level for code generation (0=standard, 1=enhanced, 2=production)
 
 	// Legacy UI toggles (DEPRECATED)
 	DryRun            bool     `json:"dry_run,omitempty"`
@@ -102,8 +101,8 @@ func (c *Config) GetLLMConfig() *LLMConfig {
 
 	// Create from legacy fields
 	llm := DefaultLLMConfig()
-	if c.EditingModel != "" {
-		llm.EditingModel = c.EditingModel
+	if c.AgentModel != "" {
+		llm.AgentModel = c.AgentModel
 	}
 	if c.SummaryModel != "" {
 		llm.SummaryModel = c.SummaryModel
@@ -333,14 +332,14 @@ func (cfg *Config) setDefaultValues() {
 	if cfg.WorkspaceModel == "" {
 		cfg.WorkspaceModel = "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo"
 	}
-	if cfg.EditingModel == "" {
-		cfg.EditingModel = "deepinfra:deepseek-ai/DeepSeek-V3-0324" // Cheap, capable model; alternatives: deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo
+	if cfg.AgentModel == "" {
+		cfg.AgentModel = "deepinfra:deepseek-ai/DeepSeek-V3-0324" // Cheap, capable model; alternatives: deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo
 	}
 	if cfg.OrchestrationModel == "" {
 		cfg.OrchestrationModel = "deepinfra:moonshotai/Kimi-K2-Instruct"
 	}
 	if cfg.CodeReviewModel == "" {
-		cfg.CodeReviewModel = cfg.EditingModel // Default to editing model, but can be overridden for reliability
+		cfg.CodeReviewModel = cfg.AgentModel // Default to editing model, but can be overridden for reliability
 	}
 	if cfg.EmbeddingModel == "" {
 		cfg.EmbeddingModel = "deepinfra:Qwen/Qwen3-Embedding-4B" // Default embedding model
@@ -504,7 +503,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 	reader := bufio.NewReader(os.Stdin)
 	// No logger needed here, as these are direct prompts for user input
 
-	fmt.Print(prompts.EnterEditingModel("deepinfra:deepseek-ai/DeepSeek-V3-0324")) // Use prompt
+	fmt.Print(prompts.EnterAgentModel("deepinfra:deepseek-ai/DeepSeek-V3-0324")) // Use prompt
 	editingModel, _ := reader.ReadString('\n')
 	editingModel = strings.TrimSpace(editingModel)
 	if editingModel == "" {
@@ -557,7 +556,7 @@ func createConfig(filePath string, skipPrompt bool) (*Config, error) {
 	fmt.Print(prompts.EnterLLMProvider("anthropic")) // NEW PROMPT for LLM Provider
 
 	cfg := &Config{
-		EditingModel:             editingModel,
+		AgentModel:             editingModel,
 		SummaryModel:             summaryModel,
 		WorkspaceModel:           workspaceModel,
 		OrchestrationModel:       orchestrationModel,

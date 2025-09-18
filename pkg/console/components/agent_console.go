@@ -269,10 +269,12 @@ func (ac *AgentConsole) processInput(input string) error {
 	})
 
 	// Ensure cleanup
+	streamingFinalized := false
 	defer func() {
-		// Only finalize if we actually streamed content
-		if ac.streamingFormatter.HasProcessedContent() {
+		// Only finalize if we actually streamed content and haven't already finalized
+		if ac.streamingFormatter.HasProcessedContent() && !streamingFinalized {
 			ac.streamingFormatter.Finalize()
+			streamingFinalized = true
 		}
 		ac.agent.DisableStreaming()
 	}()
@@ -303,11 +305,16 @@ func (ac *AgentConsole) processInput(input string) error {
 			// Format and print the error response
 			ac.streamingFormatter.Write(response)
 			ac.streamingFormatter.Finalize()
+			streamingFinalized = true
 		} else if response != "" && !ac.streamingFormatter.HasProcessedContent() {
 			// We have a response but nothing was streamed
 			// This can happen if streaming failed immediately
 			ac.safePrint("\r\033[K")
 			ac.safePrint("\n%s\n", response)
+		} else if response != "" && ac.streamingFormatter.HasProcessedContent() {
+			// This should not happen - if streaming processed content, response should be empty
+			// Log this for debugging
+			fmt.Fprintf(os.Stderr, "\n[DEBUG] Unexpected: response is non-empty (%d chars) when streaming processed content\n", len(response))
 		}
 
 		// Update metrics
@@ -316,6 +323,11 @@ func (ac *AgentConsole) processInput(input string) error {
 
 		// Print summary if we used tokens
 		if ac.agent.GetTotalTokens() > 0 {
+			// Check if we need spacing before summary
+			if ac.streamingFormatter.HasProcessedContent() && !ac.streamingFormatter.EndedWithNewline() {
+				ac.safePrint("\n")
+			}
+			ac.safePrint("\n")
 			ac.agent.PrintConciseSummary()
 		}
 	}
@@ -334,8 +346,17 @@ func (ac *AgentConsole) processInput(input string) error {
 		}
 	}
 
-	// Add proper spacing before showing prompt again
-	ac.safePrint("\n%s", ac.prompt)
+	// Ensure we're on a new line before returning
+	// The prompt will be shown by ReadLine
+	if ac.streamingFormatter.HasProcessedContent() && !ac.streamingFormatter.EndedWithNewline() {
+		ac.safePrint("\n")
+	}
+
+	// Flush stdout to ensure all output is visible before input
+	os.Stdout.Sync()
+
+	// Small delay to ensure terminal is ready
+	time.Sleep(50 * time.Millisecond)
 
 	return nil
 }

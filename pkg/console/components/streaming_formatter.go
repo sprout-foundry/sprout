@@ -10,6 +10,8 @@ import (
 	"github.com/fatih/color"
 )
 
+const contentPadding = "  " // 2 spaces for left padding
+
 // StreamingFormatter handles better formatting for streaming responses
 type StreamingFormatter struct {
 	mu             sync.Mutex
@@ -19,9 +21,11 @@ type StreamingFormatter struct {
 	isFirstChunk   bool
 	lastWasNewline bool
 	inCodeBlock    bool
+	inListContext  bool // Track if we're in a list to avoid extra spacing
 	outputMutex    *sync.Mutex
 	minUpdateDelay time.Duration
 	maxBufferSize  int
+	finalized      bool // Prevent double finalization
 }
 
 // NewStreamingFormatter creates a new streaming formatter
@@ -38,6 +42,11 @@ func NewStreamingFormatter(outputMutex *sync.Mutex) *StreamingFormatter {
 func (sf *StreamingFormatter) Write(content string) {
 	sf.mu.Lock()
 	defer sf.mu.Unlock()
+
+	// Don't write after finalization
+	if sf.finalized {
+		return
+	}
 
 	// Handle first chunk - show we're streaming
 	if sf.isFirstChunk {
@@ -128,11 +137,8 @@ func (sf *StreamingFormatter) flush() {
 			sf.outputLine(line)
 			sf.lastWasNewline = true
 		} else {
-			// Incomplete line - for streaming, output it immediately
-			// This ensures real-time display of content
-			if line != "" {
-				fmt.Print(line)
-			}
+			// Incomplete line - buffer it for proper formatting
+			sf.lineBuffer.WriteString(line)
 			sf.lastWasNewline = false
 		}
 	}
@@ -142,17 +148,28 @@ func (sf *StreamingFormatter) flush() {
 
 // outputLine outputs a complete line with formatting
 func (sf *StreamingFormatter) outputLine(line string) {
+	// Combine any buffered content with the current line
 	if sf.lineBuffer.Len() > 0 {
-		// Output any buffered content first
-		fmt.Print(sf.lineBuffer.String())
+		line = sf.lineBuffer.String() + line
 		sf.lineBuffer.Reset()
 	}
 
 	// Apply formatting based on content type
 	trimmed := strings.TrimSpace(line)
 
-	// Check if this is a markdown header
-	if strings.HasPrefix(trimmed, "#") {
+	// Handle lines starting with bullet character (•) - some LLMs use this instead of markdown
+	if strings.HasPrefix(trimmed, "•") {
+		// Convert to standard markdown bullet for consistent formatting
+		bulletText := strings.TrimSpace(strings.TrimPrefix(trimmed, "•"))
+		fmt.Print(contentPadding + "  ")
+		color.New(color.FgHiBlack).Print("• ")
+		// Apply inline formatting to the bullet text
+		formattedText := sf.applyInlineFormatting(bulletText)
+		fmt.Println(formattedText)
+		sf.lastWasNewline = true
+		sf.inListContext = true
+	} else if strings.HasPrefix(trimmed, "#") {
+		// Check if this is a markdown header
 		// Add visual separation for headers
 		if !sf.lastWasNewline {
 			fmt.Println()
@@ -161,42 +178,56 @@ func (sf *StreamingFormatter) outputLine(line string) {
 		// Style headers with color
 		if strings.HasPrefix(trimmed, "# ") {
 			// Main header - bold blue
-			color.New(color.FgBlue, color.Bold).Println(line)
+			color.New(color.FgBlue, color.Bold).Println(sf.addPadding(line))
 		} else if strings.HasPrefix(trimmed, "## ") {
 			// Sub header - blue
-			color.New(color.FgBlue).Println(line)
+			color.New(color.FgBlue).Println(sf.addPadding(line))
 		} else if strings.HasPrefix(trimmed, "### ") {
 			// Level 3 headers - cyan
-			color.New(color.FgCyan).Println(line)
+			color.New(color.FgCyan).Println(sf.addPadding(line))
+		} else if strings.HasPrefix(trimmed, "#### ") {
+			// Level 4 headers - cyan (same as level 3)
+			color.New(color.FgCyan).Println(sf.addPadding(line))
 		} else {
 			// Other headers - normal with emphasis
-			color.New(color.Bold).Println(line)
+			color.New(color.Bold).Println(sf.addPadding(line))
 		}
 	} else if strings.HasPrefix(trimmed, "```") {
 		// Code blocks - handle language identifier
 		if len(trimmed) > 3 {
 			// Code fence with language
-			color.New(color.FgGreen, color.Faint).Println(line)
+			color.New(color.FgGreen, color.Faint).Println(sf.addPadding(line))
 			sf.inCodeBlock = !sf.inCodeBlock
 		} else {
 			// Plain code fence
-			color.New(color.Faint).Println(line)
+			color.New(color.Faint).Println(sf.addPadding(line))
 			sf.inCodeBlock = !sf.inCodeBlock
 		}
 	} else if sf.inCodeBlock {
 		// Inside code block - yellow/amber color
-		color.New(color.FgYellow).Println(line)
+		color.New(color.FgYellow).Println(sf.addPadding(line))
 	} else if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "+ ") {
-		// Bullet points - green bullet with normal text
+		// Bullet points - light grey bullet with formatted text
 		bulletText := strings.TrimSpace(trimmed[2:])
 		fmt.Print("  ")
-		color.New(color.FgGreen).Print("• ")
-		fmt.Println(bulletText)
+		color.New(color.FgHiBlack).Print("• ")
+		// Apply inline formatting to the bullet text
+		formattedText := sf.applyInlineFormatting(bulletText)
+		fmt.Println(formattedText)
+		sf.inListContext = true
 	} else if matched, _ := regexp.MatchString(`^\d+\.`, trimmed); matched {
-		// Numbered lists
-		fmt.Print("  ")
-		color.New(color.FgGreen).Print(strings.SplitN(trimmed, ".", 2)[0] + ". ")
-		fmt.Println(strings.TrimSpace(strings.SplitN(trimmed, ".", 2)[1]))
+		// Numbered lists with formatted text
+		parts := strings.SplitN(trimmed, ".", 2)
+		if len(parts) == 2 {
+			fmt.Print("  ")
+			color.New(color.FgHiBlack).Print(parts[0] + ". ")
+			// Apply inline formatting to the list item text
+			formattedText := sf.applyInlineFormatting(strings.TrimSpace(parts[1]))
+			fmt.Println(formattedText)
+		} else {
+			fmt.Println(line)
+		}
+		sf.inListContext = true
 	} else if strings.HasPrefix(trimmed, ">") {
 		// Blockquotes - dim italic
 		quotedText := strings.TrimSpace(strings.TrimPrefix(trimmed, ">"))
@@ -210,12 +241,23 @@ func (sf *StreamingFormatter) outputLine(line string) {
 			fmt.Println(line)
 		}
 	} else if trimmed == "" && sf.lastWasNewline {
-		// Preserve paragraph breaks
-		fmt.Println()
+		// Preserve paragraph breaks but not in list contexts
+		if !sf.inListContext {
+			fmt.Println()
+		}
 	} else {
+		// Reset list context if we hit non-list content
+		if !strings.HasPrefix(trimmed, "•") &&
+			!strings.HasPrefix(trimmed, "- ") &&
+			!strings.HasPrefix(trimmed, "* ") &&
+			!strings.HasPrefix(trimmed, "+ ") &&
+			!regexp.MustCompile(`^\d+\.`).MatchString(trimmed) {
+			sf.inListContext = false
+		}
 		// Regular line - apply inline formatting
 		formatted := sf.applyInlineFormatting(line)
 		fmt.Println(formatted)
+		sf.lastWasNewline = true
 	}
 }
 
@@ -224,24 +266,36 @@ func (sf *StreamingFormatter) Finalize() {
 	sf.mu.Lock()
 	defer sf.mu.Unlock()
 
+	// Don't finalize twice
+	if sf.finalized {
+		return
+	}
+	sf.finalized = true
+
 	// Flush any remaining buffer
 	if sf.buffer.Len() > 0 {
 		sf.flush()
 	}
 
-	// Output any remaining line buffer
+	// Output any remaining line buffer with proper formatting
 	if sf.lineBuffer.Len() > 0 {
 		if sf.outputMutex != nil {
 			sf.outputMutex.Lock()
 			defer sf.outputMutex.Unlock()
 		}
-		fmt.Println(sf.lineBuffer.String())
+		// Apply formatting to the final line
+		sf.outputLine(sf.lineBuffer.String())
 		sf.lineBuffer.Reset()
 	}
 
-	// Add a final newline for clean separation
+	// Only add a final newline if the last output didn't end with one
 	if !sf.lastWasNewline {
+		if sf.outputMutex != nil {
+			sf.outputMutex.Lock()
+			defer sf.outputMutex.Unlock()
+		}
 		fmt.Println()
+		sf.lastWasNewline = true
 	}
 }
 
@@ -255,7 +309,9 @@ func (sf *StreamingFormatter) Reset() {
 	sf.isFirstChunk = true
 	sf.lastWasNewline = false
 	sf.inCodeBlock = false
+	sf.inListContext = false
 	sf.lastUpdate = time.Time{}
+	sf.finalized = false
 }
 
 // HasProcessedContent returns true if any content has been processed
@@ -265,27 +321,44 @@ func (sf *StreamingFormatter) HasProcessedContent() bool {
 	return !sf.isFirstChunk
 }
 
+// EndedWithNewline returns true if the last output ended with a newline
+func (sf *StreamingFormatter) EndedWithNewline() bool {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+	return sf.lastWasNewline
+}
+
+// addPadding adds left padding to a line
+func (sf *StreamingFormatter) addPadding(line string) string {
+	return contentPadding + line
+}
+
 // applyInlineFormatting applies markdown inline formatting using ANSI codes
 func (sf *StreamingFormatter) applyInlineFormatting(text string) string {
 	// Handle inline code blocks `code`
+	// Use cyan with background for better visibility (similar to One Dark theme)
 	codePattern := regexp.MustCompile("`([^`]+)`")
 	text = codePattern.ReplaceAllStringFunc(text, func(match string) string {
 		code := match[1 : len(match)-1]
-		return color.New(color.FgMagenta).Sprint(code)
+		// Cyan text with subtle background highlighting
+		return color.New(color.FgCyan, color.BgBlack).Sprint(" " + code + " ")
 	})
 
 	// Handle bold **text** - use non-greedy matching
+	// Use muted yellow color (One Dark theme) with bold
 	boldPattern1 := regexp.MustCompile(`\*\*(.+?)\*\*`)
 	text = boldPattern1.ReplaceAllStringFunc(text, func(match string) string {
 		content := match[2 : len(match)-2]
-		return color.New(color.Bold).Sprint(content)
+		// Muted yellow with bold for better readability
+		return color.New(color.FgYellow, color.Bold).Sprint(content)
 	})
 
 	// Handle bold __text__ - use non-greedy matching
 	boldPattern2 := regexp.MustCompile(`__(.+?)__`)
 	text = boldPattern2.ReplaceAllStringFunc(text, func(match string) string {
 		content := match[2 : len(match)-2]
-		return color.New(color.Bold).Sprint(content)
+		// Same muted yellow with bold
+		return color.New(color.FgYellow, color.Bold).Sprint(content)
 	})
 
 	// Handle italic *text* - use non-greedy matching but avoid matching bold

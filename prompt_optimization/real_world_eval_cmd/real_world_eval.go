@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // Real-world test configuration structures
@@ -442,16 +441,6 @@ func loadAgenticConfig(configPath string) (*AgenticConfig, error) {
 }
 
 func createAgent(provider, model string) (*agent.Agent, error) {
-	var clientType api.ClientType
-	switch provider {
-	case "openai":
-		clientType = api.OpenAIClientType
-	case "deepinfra":
-		clientType = api.DeepInfraClientType
-	default:
-		return nil, fmt.Errorf("unsupported provider: %s", provider)
-	}
-
 	return agent.NewAgentWithModel(model)
 }
 

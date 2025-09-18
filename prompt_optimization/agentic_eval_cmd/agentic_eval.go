@@ -350,22 +350,8 @@ func runAgenticTest(providerModel ProviderModelCombination, promptType string, t
 		Timestamp:  start,
 	}
 
-	// Map provider string to ClientType
-	var clientType api.ClientType
-	switch providerModel.Provider {
-	case "openai":
-		clientType = api.OpenAIClientType
-	case "deepinfra":
-		clientType = api.DeepInfraClientType
-	case "openrouter":
-		clientType = api.OpenRouterClientType
-	default:
-		result.Error = fmt.Sprintf("Unknown provider: %s", providerModel.Provider)
-		return result
-	}
-
-	// Create agent with explicit provider and model
-	agentInstance, err := agent.NewAgentWithProviderAndModel(clientType, providerModel.Model)
+	// Create agent with model
+	agentInstance, err := agent.NewAgentWithModel(providerModel.Model)
 	if err != nil {
 		result.Error = fmt.Sprintf("Agent creation failed: %v", err)
 		result.ResponseTime = time.Since(start)

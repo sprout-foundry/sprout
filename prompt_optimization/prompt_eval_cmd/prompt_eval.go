@@ -355,21 +355,7 @@ func runSingleTest(modelName, promptType string, testCase TestCase, config *Mode
 	// Get model configuration
 	modelConfig := config.Models[modelName]
 	
-	// Map model name to provider type
-	var clientType api.ClientType
-	switch modelConfig.Provider {
-	case "openai":
-		clientType = api.OpenAIClientType
-	case "deepinfra":
-		clientType = api.DeepInfraClientType
-	case "openrouter":
-		clientType = api.OpenRouterClientType
-	default:
-		result.Error = fmt.Sprintf("Unknown provider: %s", modelConfig.Provider)
-		return result
-	}
-
-	// Create agent with explicit provider and model
+	// Create agent with model
 	var agentInstance *agent.Agent
 	var err error
 	

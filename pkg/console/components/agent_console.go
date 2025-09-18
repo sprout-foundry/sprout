@@ -505,9 +505,10 @@ func (ac *AgentConsole) updateFooter() {
 	// Update footer with current stats
 	ac.footer.UpdateStats(model, provider, ac.totalTokens, ac.totalCost, iteration, contextTokens, maxContextTokens)
 
-	// Trigger a render if needed
-	if ac.footer.NeedsRedraw() {
-		ac.footer.Render()
+	// Force render to ensure tokens update is shown
+	if err := ac.footer.Render(); err != nil {
+		// Non-fatal, log if debug
+		fmt.Fprintf(os.Stderr, "Warning: Footer render failed: %v\n", err)
 	}
 }
 
@@ -592,9 +593,12 @@ func (ac *AgentConsole) setupTerminal() error {
 		return err
 	}
 
-	// Set up scroll region to leave room for footer (4 lines)
-	// The content area is from line 1 to height-4
-	if err := ac.Terminal().SetScrollRegion(1, height-4); err != nil {
+	// Get dynamic footer height
+	footerHeight := ac.footer.GetHeight()
+
+	// Set up scroll region to leave room for footer (dynamic)
+	// The content area is from line 1 to height - footerHeight
+	if err := ac.Terminal().SetScrollRegion(1, height - footerHeight); err != nil {
 		return err
 	}
 
@@ -772,21 +776,19 @@ func (ac *AgentConsole) OnResize(width, height int) {
 	ac.outputMutex.Lock()
 	defer ac.outputMutex.Unlock()
 
-	// Get current cursor position relative to scroll region
-	// This prevents cursor from jumping to top on resize
+	// Let footer component handle its own resize first (updates dynamic height)
+	if ac.footer != nil {
+		ac.footer.OnResize(width, height)
+	}
 
-	// Update scroll region for new height
-	// The content area is from line 1 to height-4 (leaving 4 lines for footer)
-	ac.Terminal().SetScrollRegion(1, height-4)
+	// Get updated footer height and adjust scroll region
+	footerHeight := ac.footer.GetHeight()
+	// The content area is from line 1 to height - footerHeight (dynamic)
+	ac.Terminal().SetScrollRegion(1, height - footerHeight)
 
 	// Note: After changing scroll region, the cursor maintains its relative position
 	// within the new region, so we don't need to save/restore cursor position
 	// which can cause the cursor to jump unexpectedly
-
-	// Let footer component handle its own resize
-	if ac.footer != nil {
-		ac.footer.OnResize(width, height)
-	}
 }
 
 func formatDuration(d time.Duration) string {

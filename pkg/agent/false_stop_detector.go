@@ -24,8 +24,13 @@ func (a *Agent) shouldCheckFalseStop(response string) bool {
 		return false
 	}
 
-	// Check if response ends with a colon (indicating more to come)
+	// Skip responses ending with question mark - these are definitely complete
 	trimmedResponse := strings.TrimSpace(response)
+	if strings.HasSuffix(trimmedResponse, "?") {
+		return false
+	}
+
+	// Check if response ends with a colon (indicating more to come)
 	if strings.HasSuffix(trimmedResponse, ":") {
 		// Extract the last sentence/paragraph to check
 		lines := strings.Split(trimmedResponse, "\n")

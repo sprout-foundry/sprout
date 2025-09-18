@@ -42,9 +42,9 @@ func (fc *FooterComponent) Init(ctx context.Context, deps console.Dependencies) 
 	width, height, _ := deps.Terminal.GetSize()
 	region := console.Region{
 		X:       0,
-		Y:       height - 2, // 2 lines for footer (top border + stats)
+		Y:       height - 1, // 1 line for footer
 		Width:   width,
-		Height:  2,
+		Height:  1,
 		ZOrder:  100, // High z-order to stay on top
 		Visible: true,
 	}
@@ -113,9 +113,9 @@ func (fc *FooterComponent) Init(ctx context.Context, deps console.Dependencies) 
 
 			region := console.Region{
 				X:       0,
-				Y:       height - 2,
+				Y:       height - 1,
 				Width:   width,
-				Height:  2,
+				Height:  1,
 				ZOrder:  100,
 				Visible: true,
 			}
@@ -146,11 +146,11 @@ func (fc *FooterComponent) Render() error {
 	fc.Terminal().SaveCursor()
 	defer fc.Terminal().RestoreCursor()
 
-	// Move to footer position
+	// Single line footer with model info on left (light) and stats on right (dark)
 	fc.Terminal().MoveCursor(region.X+1, region.Y+1) // 1-based coordinates
 
-	// Move to stats line
-	fc.Terminal().MoveCursor(region.X+1, region.Y+2)
+	// Clear the entire line first to avoid artifacts
+	fc.Terminal().ClearLine()
 
 	// Format cost with appropriate precision
 	var costStr string
@@ -164,11 +164,11 @@ func (fc *FooterComponent) Render() error {
 		costStr = "$0.000"
 	}
 
-	// Format context usage
+	// Format context usage (simplified - no "Context:" prefix)
 	contextStr := ""
 	if fc.maxContextTokens > 0 {
 		contextPercent := float64(fc.lastContextTokens) / float64(fc.maxContextTokens) * 100
-		contextStr = fmt.Sprintf(" | Context: %s/%s (%.0f%%)",
+		contextStr = fmt.Sprintf(" | %s/%s (%.0f%%)",
 			fc.formatTokens(fc.lastContextTokens),
 			fc.formatTokens(fc.maxContextTokens),
 			contextPercent)
@@ -180,27 +180,89 @@ func (fc *FooterComponent) Render() error {
 		iterStr = fmt.Sprintf(" | Iter: %d", fc.lastIteration)
 	}
 
-	statsLine := fmt.Sprintf(
-		" %s (%s) | %s tokens | %s%s%s",
-		fc.extractModelName(fc.lastModel),
-		fc.lastProvider,
+	// Model info for left side (light background)
+	leftPad := "  "       // 2 spaces for left padding
+	rightModelPad := "  " // 2 spaces for right padding after model text
+
+	// Format provider (model) - provider name first, then model
+	modelName := fc.extractModelName(fc.lastModel)
+	modelText := fmt.Sprintf("%s (%s)", fc.lastProvider, modelName)
+
+	// If model section would be too long, truncate the model name
+	maxModelSectionWidth := region.Width / 2 // Use max half the screen for model info
+	modelSection := leftPad + modelText + rightModelPad
+
+	if len(modelSection) > maxModelSectionWidth {
+		// Calculate how much space we have for the model name after provider
+		availableForModel := maxModelSectionWidth - len(leftPad) - len(rightModelPad) - len(fc.lastProvider) - 3 // 3 for " ()"
+		if availableForModel > 3 {
+			truncatedModel := modelName
+			if len(modelName) > availableForModel {
+				truncatedModel = modelName[:availableForModel-3] + "..."
+			}
+			modelText = fmt.Sprintf("%s (%s)", fc.lastProvider, truncatedModel)
+			modelSection = leftPad + modelText + rightModelPad
+		} else {
+			// Just show provider if no room for model
+			modelText = fc.lastProvider
+			modelSection = leftPad + modelText + rightModelPad
+		}
+	}
+
+	modelSectionLen := len(modelSection)
+
+	// Stats content for right side (simplified - no "tokens" word)
+	rightPad := "  " // 2 spaces for right padding
+	statsContent := fmt.Sprintf(
+		"%s | %s%s%s",
 		fc.formatTokens(fc.lastTokens),
 		costStr,
 		contextStr,
 		iterStr,
 	)
 
-	// Truncate if too long
-	if len(statsLine) > region.Width {
-		statsLine = statsLine[:region.Width-3] + "..."
-	}
+	statsSection := statsContent + rightPad
+	statsSectionLen := len(statsSection)
 
-	// Draw stats with dark gray background (#444) and light text
-	// Using dim white text (color code 37) with a dark gray background (color code 40 for black, closest to #444)
-	fc.Terminal().Write([]byte("\033[2m\033[37m\033[40m")) // Dim white text with dark gray background
-	fc.Terminal().Write([]byte(statsLine))
-	fc.Terminal().ClearToEndOfLine()
-	fc.Terminal().Write([]byte("\033[0m"))
+	// Check if everything fits with at least some gap
+	minGap := 2 // Minimum gap between sections
+	if modelSectionLen+statsSectionLen+minGap <= region.Width {
+		// Light gray background wrapped exactly to model text
+		fc.Terminal().Write([]byte("\033[47m\033[30m")) // Light gray background, black text
+		fc.Terminal().Write([]byte(modelSection))
+		fc.Terminal().Write([]byte("\033[0m")) // Reset colors immediately after text
+
+		// Fill the rest of the line with dark background
+		remainingSpace := region.Width - modelSectionLen
+
+		// Dark background for the entire remaining space
+		fc.Terminal().Write([]byte("\033[2m\033[37m\033[40m")) // Dim white text with dark gray background
+
+		// Add spaces to position stats at the right
+		paddingBeforeStats := remainingSpace - statsSectionLen
+		if paddingBeforeStats > 0 {
+			fc.Terminal().Write([]byte(strings.Repeat(" ", paddingBeforeStats)))
+		}
+
+		// Write stats content
+		fc.Terminal().Write([]byte(statsSection))
+
+		// Fill any remaining space to the end of line with dark background
+		fc.Terminal().ClearToEndOfLine()
+
+		// Reset colors
+		fc.Terminal().Write([]byte("\033[0m"))
+	} else {
+		// If it doesn't fit, just show model info with dark background for the rest
+		fc.Terminal().Write([]byte("\033[47m\033[30m")) // Light gray background, black text
+		fc.Terminal().Write([]byte(modelSection))
+		fc.Terminal().Write([]byte("\033[0m")) // Reset colors
+
+		// Fill the rest with dark background
+		fc.Terminal().Write([]byte("\033[2m\033[37m\033[40m")) // Dim white text with dark gray background
+		fc.Terminal().ClearToEndOfLine()
+		fc.Terminal().Write([]byte("\033[0m")) // Reset colors
+	}
 
 	// Mark as drawn
 	fc.SetNeedsRedraw(false)
@@ -325,28 +387,56 @@ func (fc *FooterComponent) OnResize(width, height int) {
 	// Get the old region to clear it
 	oldRegion, _ := fc.Layout().GetRegion("footer")
 
-	// Clear the old footer area before updating position
+	// Save cursor position
+	fc.Terminal().SaveCursor()
+
+	// When shrinking, wrapped content can leave artifacts
+	// Clear a range of lines around where the footer might be
 	if oldRegion.Y > 0 {
-		fc.Terminal().SaveCursor()
-		// Clear both lines of the old footer
-		fc.Terminal().MoveCursor(1, oldRegion.Y+1)
-		fc.Terminal().ClearLine()
-		fc.Terminal().MoveCursor(1, oldRegion.Y+2)
-		fc.Terminal().ClearLine()
-		fc.Terminal().RestoreCursor()
+		// Clear old position
+		if oldRegion.Y+1 <= height {
+			fc.Terminal().MoveCursor(1, oldRegion.Y+1)
+			fc.Terminal().ClearLine()
+		}
+
+		// Clear potential wrapped lines above old position
+		if oldRegion.Y > 0 && oldRegion.Y <= height {
+			fc.Terminal().MoveCursor(1, oldRegion.Y)
+			fc.Terminal().ClearLine()
+		}
 	}
 
 	// Update footer position
 	region := console.Region{
 		X:       0,
-		Y:       height - 2,
+		Y:       height - 1,
 		Width:   width,
-		Height:  2,
+		Height:  1,
 		ZOrder:  100,
 		Visible: true,
 	}
 
+	// Clear multiple lines at the new footer position to handle wrapped content
+	// Clear the line above the footer (in case of wrap artifacts)
+	if region.Y > 0 {
+		fc.Terminal().MoveCursor(1, region.Y)
+		fc.Terminal().ClearLine()
+	}
+
+	// Clear the footer line itself
+	fc.Terminal().MoveCursor(1, region.Y+1)
+	fc.Terminal().ClearLine()
+
+	// Restore cursor
+	fc.Terminal().RestoreCursor()
+
+	// Update the layout
 	fc.Layout().UpdateRegion("footer", region)
 	fc.SetNeedsRedraw(true)
+
+	// Add a small delay to let terminal stabilize after resize
+	time.Sleep(10 * time.Millisecond)
+
+	// Force a fresh render
 	fc.Render()
 }

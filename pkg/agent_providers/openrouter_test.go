@@ -1,13 +1,11 @@
 package providers
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_types"
+	types "github.com/alantheprice/ledit/pkg/agent_types"
 )
 
 func TestListModelsParsing(t *testing.T) {
@@ -77,8 +75,8 @@ func TestListModelsParsing(t *testing.T) {
 
 func TestGetModelContextLimitFallback(t *testing.T) {
 	p := &OpenRouterProvider{
-		model: "unknown-gpt-3.5",
-		models: []agent_types.ModelInfo{}, // Empty cache
+		model:        "unknown-gpt-3.5",
+		models:       []types.ModelInfo{}, // Empty cache
 		modelsCached: true,
 	}
 

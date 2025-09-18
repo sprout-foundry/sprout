@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"sync"
@@ -159,6 +160,9 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 
 	// Update footer with initial state
 	ac.updateFooter()
+
+	// Initialize git and path info for footer
+	ac.initializeFooterInfo()
 
 	// Set up signal handling to intercept Ctrl+C
 	sigChan := make(chan os.Signal, 1)
@@ -588,9 +592,9 @@ func (ac *AgentConsole) setupTerminal() error {
 		return err
 	}
 
-	// Set up scroll region to leave room for footer (2 lines)
-	// The content area is from line 1 to height-2
-	if err := ac.Terminal().SetScrollRegion(1, height-2); err != nil {
+	// Set up scroll region to leave room for footer (4 lines)
+	// The content area is from line 1 to height-4
+	if err := ac.Terminal().SetScrollRegion(1, height-4); err != nil {
 		return err
 	}
 
@@ -771,8 +775,8 @@ func (ac *AgentConsole) OnResize(width, height int) {
 	// This prevents cursor from jumping to top on resize
 
 	// Update scroll region for new height
-	// The content area is from line 1 to height-2 (leaving 2 lines for footer)
-	ac.Terminal().SetScrollRegion(1, height-2)
+	// The content area is from line 1 to height-4 (leaving 4 lines for footer)
+	ac.Terminal().SetScrollRegion(1, height-4)
 
 	// Note: After changing scroll region, the cursor maintains its relative position
 	// within the new region, so we don't need to save/restore cursor position
@@ -814,4 +818,67 @@ func loadHistory(filename string) ([]string, error) {
 func saveHistory(filename string, history []string) error {
 	data := strings.Join(history, "\n")
 	return os.WriteFile(filename, []byte(data), 0600)
+}
+
+// initializeFooterInfo sets up git and path information for the footer
+func (ac *AgentConsole) initializeFooterInfo() {
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err == nil && ac.footer != nil {
+		ac.footer.UpdatePath(cwd)
+	}
+
+	// Get git info - run git command directly
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	branchOut, err := cmd.CombinedOutput()
+	if err == nil {
+		branch := strings.TrimSpace(string(branchOut))
+
+		// Get remote URL
+		remoteCmd := exec.Command("git", "remote", "get-url", "origin")
+		remoteOut, _ := remoteCmd.CombinedOutput()
+		remote := strings.TrimSpace(string(remoteOut))
+
+		// Convert to SSH-style format (git@host:user/repo)
+		if remote != "" {
+			// Handle https URLs: https://github.com/user/repo.git
+			if strings.HasPrefix(remote, "https://") {
+				remote = strings.TrimPrefix(remote, "https://")
+				remote = strings.TrimSuffix(remote, ".git")
+				parts := strings.Split(remote, "/")
+				if len(parts) >= 3 {
+					host := parts[0]
+					user := parts[1]
+					repo := parts[2]
+					remote = fmt.Sprintf("git@%s:%s/%s", host, user, repo)
+				}
+			} else if strings.HasPrefix(remote, "git@") {
+				// Already in SSH format, just trim .git
+				remote = strings.TrimSuffix(remote, ".git")
+			}
+		}
+
+		// Get number of changes
+		statusCmd := exec.Command("git", "status", "--porcelain")
+		statusOut, _ := statusCmd.CombinedOutput()
+		changes := 0
+		if len(statusOut) > 0 {
+			lines := strings.Split(string(statusOut), "\n")
+			for _, line := range lines {
+				if line != "" {
+					changes++
+				}
+			}
+		}
+
+		if ac.footer != nil {
+			ac.footer.UpdateGitInfo(branch, changes, true)
+			ac.footer.UpdateGitRemote(remote)
+		}
+	} else {
+		// Not a git repo
+		if ac.footer != nil {
+			ac.footer.UpdateGitInfo("", 0, false)
+		}
+	}
 }

@@ -158,7 +158,7 @@ func (fc *FooterComponent) Render() error {
 	fc.Terminal().MoveCursor(region.X+1, region.Y+1) // 1-based coordinates
 	fc.Terminal().ClearLine()
 	// Using ANSI 256 color 67 - a more blue-toned grey
-	fc.Terminal().Write([]byte("\033[48;5;236m"))
+	fc.Terminal().Write([]byte("\033[48;2;50;54;62m"))
 	fc.Terminal().Write([]byte(strings.Repeat(" ", region.Width)))
 	fc.Terminal().Write([]byte("\033[0m"))
 
@@ -172,7 +172,7 @@ func (fc *FooterComponent) Render() error {
 		displayPath = "~" + strings.TrimPrefix(displayPath, home)
 	}
 
-	fc.Terminal().Write([]byte("\033[48;5;236m\033[37m")) // Blue-grey bg, normal white text
+	fc.Terminal().Write([]byte("\033[48;2;50;54;62m\033[37m")) // Blue-grey bg, normal white text
 	pathLine := fmt.Sprintf("  %s", displayPath)          // No icon
 	// Truncate path if too long
 	if len(pathLine) > region.Width-2 {
@@ -192,21 +192,21 @@ func (fc *FooterComponent) Render() error {
 
 	// Blue-grey background continues
 	if fc.isGitRepo && fc.gitBranch != "" {
-		fc.Terminal().Write([]byte("\033[48;5;236m")) // Blue-grey bg
+		fc.Terminal().Write([]byte("\033[48;2;50;54;62m")) // Blue-grey bg
 
 		// Format git line: remote in darker text, branch in lighter
 		gitLine := "  "
 		if fc.gitRemote != "" {
 			// Remote in darker gray text (color 243)
-			gitLine += fmt.Sprintf("\033[38;5;243m%s\033[0m\033[48;5;236m", fc.gitRemote)
+			gitLine += fmt.Sprintf("\033[38;5;243m%s\033[0m\033[48;2;50;54;62m", fc.gitRemote)
 			gitLine += ":"
 		}
 		// Branch name in lighter gray (color 250)
-		gitLine += fmt.Sprintf("\033[38;5;250m%s\033[0m\033[48;5;236m", fc.gitBranch)
+		gitLine += fmt.Sprintf("\033[38;5;250m%s\033[0m\033[48;2;50;54;62m", fc.gitBranch)
 
 		// Changes in default white
 		if fc.gitChanges > 0 {
-			gitLine += fmt.Sprintf("\033[37m (+%d)\033[0m\033[48;5;236m", fc.gitChanges)
+			gitLine += fmt.Sprintf("\033[37m (+%d)\033[0m\033[48;2;50;54;62m", fc.gitChanges)
 		}
 
 		fc.Terminal().Write([]byte(gitLine))
@@ -222,7 +222,7 @@ func (fc *FooterComponent) Render() error {
 		fc.Terminal().Write([]byte("\033[0m"))
 	} else {
 		// No git repo - fill with blue-grey
-		fc.Terminal().Write([]byte("\033[48;5;236m"))
+		fc.Terminal().Write([]byte("\033[48;2;50;54;62m"))
 		fc.Terminal().Write([]byte(strings.Repeat(" ", region.Width)))
 		fc.Terminal().Write([]byte("\033[0m"))
 	}

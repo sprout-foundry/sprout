@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/prompts"
 
@@ -28,6 +29,15 @@ var initCmd = &cobra.Command{
 			)
 			fmt.Fprint(os.Stderr, gracefulExitMsg)
 			os.Exit(1)
+		}
+
+		// Generate validation context for the project
+		fmt.Println("Analyzing project for validation requirements...")
+		if err := agent.RegenerateProjectValidationContext(); err != nil {
+			fmt.Printf("Warning: Could not generate validation context: %v\n", err)
+			// Don't exit - this is not critical for init
+		} else {
+			fmt.Println("✓ Generated validation context")
 		}
 	},
 }

@@ -3,6 +3,7 @@ package components
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,13 @@ type FooterComponent struct {
 	maxContextTokens  int
 	sessionStart      time.Time
 	outputMutex       *sync.Mutex
+
+	// Git and path information
+	gitBranch   string
+	gitChanges  int
+	gitRemote   string
+	currentPath string
+	isGitRepo   bool
 }
 
 // NewFooterComponent creates a new footer component
@@ -42,9 +50,9 @@ func (fc *FooterComponent) Init(ctx context.Context, deps console.Dependencies) 
 	width, height, _ := deps.Terminal.GetSize()
 	region := console.Region{
 		X:       0,
-		Y:       height - 1, // 1 line for footer
+		Y:       height - 4, // 4 lines for footer (blank separator, git, path, stats)
 		Width:   width,
-		Height:  1,
+		Height:  4,
 		ZOrder:  100, // High z-order to stay on top
 		Visible: true,
 	}
@@ -113,9 +121,9 @@ func (fc *FooterComponent) Init(ctx context.Context, deps console.Dependencies) 
 
 			region := console.Region{
 				X:       0,
-				Y:       height - 1,
+				Y:       height - 4,
 				Width:   width,
-				Height:  1,
+				Height:  4,
 				ZOrder:  100,
 				Visible: true,
 			}
@@ -146,10 +154,81 @@ func (fc *FooterComponent) Render() error {
 	fc.Terminal().SaveCursor()
 	defer fc.Terminal().RestoreCursor()
 
-	// Single line footer with model info on left (light) and stats on right (dark)
+	// First line: Blank separator with blue-grey background
 	fc.Terminal().MoveCursor(region.X+1, region.Y+1) // 1-based coordinates
+	fc.Terminal().ClearLine()
+	// Using ANSI 256 color 67 - a more blue-toned grey
+	fc.Terminal().Write([]byte("\033[48;5;236m"))
+	fc.Terminal().Write([]byte(strings.Repeat(" ", region.Width)))
+	fc.Terminal().Write([]byte("\033[0m"))
 
-	// Clear the entire line first to avoid artifacts
+	// Second line: Current path
+	fc.Terminal().MoveCursor(region.X+1, region.Y+2)
+	fc.Terminal().ClearLine()
+
+	// Replace home directory with ~
+	displayPath := fc.currentPath
+	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(displayPath, home) {
+		displayPath = "~" + strings.TrimPrefix(displayPath, home)
+	}
+
+	fc.Terminal().Write([]byte("\033[48;5;236m\033[37m")) // Blue-grey bg, normal white text
+	pathLine := fmt.Sprintf("  %s", displayPath)          // No icon
+	// Truncate path if too long
+	if len(pathLine) > region.Width-2 {
+		pathLine = "  ..." + pathLine[len(pathLine)-(region.Width-7):]
+	}
+	fc.Terminal().Write([]byte(pathLine))
+	// Pad the rest
+	padding := region.Width - len(pathLine)
+	if padding > 0 {
+		fc.Terminal().Write([]byte(strings.Repeat(" ", padding)))
+	}
+	fc.Terminal().Write([]byte("\033[0m"))
+
+	// Third line: Git information (if in git repo)
+	fc.Terminal().MoveCursor(region.X+1, region.Y+3)
+	fc.Terminal().ClearLine()
+
+	// Blue-grey background continues
+	if fc.isGitRepo && fc.gitBranch != "" {
+		fc.Terminal().Write([]byte("\033[48;5;236m")) // Blue-grey bg
+
+		// Format git line: remote in darker text, branch in lighter
+		gitLine := "  "
+		if fc.gitRemote != "" {
+			// Remote in darker gray text (color 243)
+			gitLine += fmt.Sprintf("\033[38;5;243m%s\033[0m\033[48;5;236m", fc.gitRemote)
+			gitLine += ":"
+		}
+		// Branch name in lighter gray (color 250)
+		gitLine += fmt.Sprintf("\033[38;5;250m%s\033[0m\033[48;5;236m", fc.gitBranch)
+
+		// Changes in default white
+		if fc.gitChanges > 0 {
+			gitLine += fmt.Sprintf("\033[37m (+%d)\033[0m\033[48;5;236m", fc.gitChanges)
+		}
+
+		fc.Terminal().Write([]byte(gitLine))
+		// Pad the rest of the line - need to calculate visible length
+		visibleLen := 2 + len(fc.gitRemote) + 1 + len(fc.gitBranch) // 2 for spaces, 1 for colon
+		if fc.gitChanges > 0 {
+			visibleLen += len(fmt.Sprintf(" (+%d)", fc.gitChanges))
+		}
+		padding := region.Width - visibleLen
+		if padding > 0 {
+			fc.Terminal().Write([]byte(strings.Repeat(" ", padding)))
+		}
+		fc.Terminal().Write([]byte("\033[0m"))
+	} else {
+		// No git repo - fill with blue-grey
+		fc.Terminal().Write([]byte("\033[48;5;236m"))
+		fc.Terminal().Write([]byte(strings.Repeat(" ", region.Width)))
+		fc.Terminal().Write([]byte("\033[0m"))
+	}
+
+	// Fourth line: Model and stats (existing footer)
+	fc.Terminal().MoveCursor(region.X+1, region.Y+4)
 	fc.Terminal().ClearLine()
 
 	// Format cost with appropriate precision
@@ -281,6 +360,26 @@ func (fc *FooterComponent) UpdateStats(model, provider string, tokens int, cost 
 	fc.State().Set("footer.maxContextTokens", maxContextTokens)
 }
 
+// UpdateGitInfo updates git information
+func (fc *FooterComponent) UpdateGitInfo(branch string, changes int, isRepo bool) {
+	fc.gitBranch = branch
+	fc.gitChanges = changes
+	fc.isGitRepo = isRepo
+	fc.SetNeedsRedraw(true)
+}
+
+// UpdateGitRemote updates git remote information
+func (fc *FooterComponent) UpdateGitRemote(remote string) {
+	fc.gitRemote = remote
+	fc.SetNeedsRedraw(true)
+}
+
+// UpdatePath updates the current path
+func (fc *FooterComponent) UpdatePath(path string) {
+	fc.currentPath = path
+	fc.SetNeedsRedraw(true)
+}
+
 // SetOutputMutex sets the output mutex for synchronized output
 func (fc *FooterComponent) SetOutputMutex(mu *sync.Mutex) {
 	fc.outputMutex = mu
@@ -390,42 +489,33 @@ func (fc *FooterComponent) OnResize(width, height int) {
 	// Save cursor position
 	fc.Terminal().SaveCursor()
 
-	// When shrinking, wrapped content can leave artifacts
-	// Clear a range of lines around where the footer might be
-	if oldRegion.Y > 0 {
-		// Clear old position
-		if oldRegion.Y+1 <= height {
-			fc.Terminal().MoveCursor(1, oldRegion.Y+1)
-			fc.Terminal().ClearLine()
-		}
-
-		// Clear potential wrapped lines above old position
-		if oldRegion.Y > 0 && oldRegion.Y <= height {
-			fc.Terminal().MoveCursor(1, oldRegion.Y)
-			fc.Terminal().ClearLine()
+	// Clear all old footer lines (we now have 3 lines)
+	if oldRegion.Y > 0 && oldRegion.Height > 0 {
+		for i := 0; i < oldRegion.Height; i++ {
+			if oldRegion.Y+i+1 <= height {
+				fc.Terminal().MoveCursor(1, oldRegion.Y+i+1)
+				fc.Terminal().ClearLine()
+			}
 		}
 	}
 
 	// Update footer position
 	region := console.Region{
 		X:       0,
-		Y:       height - 1,
+		Y:       height - 4,
 		Width:   width,
-		Height:  1,
+		Height:  4,
 		ZOrder:  100,
 		Visible: true,
 	}
 
-	// Clear multiple lines at the new footer position to handle wrapped content
-	// Clear the line above the footer (in case of wrap artifacts)
-	if region.Y > 0 {
-		fc.Terminal().MoveCursor(1, region.Y)
-		fc.Terminal().ClearLine()
+	// Clear all 4 lines at the new footer position
+	for i := 0; i < 4; i++ {
+		if region.Y+i+1 <= height {
+			fc.Terminal().MoveCursor(1, region.Y+i+1)
+			fc.Terminal().ClearLine()
+		}
 	}
-
-	// Clear the footer line itself
-	fc.Terminal().MoveCursor(1, region.Y+1)
-	fc.Terminal().ClearLine()
 
 	// Restore cursor
 	fc.Terminal().RestoreCursor()

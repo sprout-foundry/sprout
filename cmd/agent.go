@@ -32,18 +32,7 @@ var (
 	agentNoStreaming bool // Disable streaming mode (streaming is default)
 )
 
-func init() {
-	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
-	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
-	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, ollama, deepseek)")
-	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
-	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
-	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines)")
-}
-
-// runSimpleInteractiveMode provides a simple console-based interactive mode
-func runInteractiveMode() error {
-	// Create agent with provider and model if specified
+func createChatAgent() (*agent.Agent, error) {
 	var chatAgent *agent.Agent
 	var err error
 
@@ -60,7 +49,7 @@ func runInteractiveMode() error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to initialize agent: %w", err)
+		return nil, fmt.Errorf("failed to initialize agent: %w", err)
 	}
 
 	// Set max iterations if specified
@@ -68,10 +57,23 @@ func runInteractiveMode() error {
 
 	// Enable streaming by default unless disabled or output is piped
 	if !agentNoStreaming && isTerminal() {
-		// In interactive mode, the console component will handle streaming output
 		chatAgent.EnableStreaming(nil)
 	}
 
+	return chatAgent, nil
+}
+
+func init() {
+	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
+	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
+	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, ollama, deepseek)")
+	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
+	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
+	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines)")
+}
+
+// runSimpleInteractiveMode provides a simple console-based interactive mode
+func runInteractiveMode(chatAgent *agent.Agent) error {
 	// Create console app
 	app := console.NewConsoleApp()
 
@@ -106,35 +108,7 @@ func runInteractiveMode() error {
 }
 
 // executeDirectAgentCommand executes an agent command directly (like coder does)
-func executeDirectAgentCommand(userIntent string) error {
-	// Create agent with provider and model if specified
-	var chatAgent *agent.Agent
-	var err error
-
-	if agentProvider != "" && agentModel != "" {
-		// Both provider and model specified - use them directly
-		modelWithProvider := fmt.Sprintf("%s:%s", agentProvider, agentModel)
-		chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
-	} else if agentModel != "" {
-		// Only model specified - use existing behavior
-		chatAgent, err = agent.NewAgentWithModel(agentModel)
-	} else {
-		// Neither specified - use defaults
-		chatAgent, err = agent.NewAgent()
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to initialize agent: %w", err)
-	}
-
-	// Set max iterations if specified
-	chatAgent.SetMaxIterations(maxIterations)
-
-	// Enable streaming by default unless disabled or output is piped
-	if !agentNoStreaming && isTerminal() {
-		chatAgent.EnableStreaming(nil) // Use default streaming output
-	}
-
+func executeDirectAgentCommand(chatAgent *agent.Agent, userIntent string) error {
 	// Process the query directly with the agent using continuity (like coder does)
 	response, err := chatAgent.ProcessQueryWithContinuity(userIntent)
 	if err != nil {
@@ -390,9 +364,7 @@ func listProviders() error {
 	fmt.Println("1. DeepInfra")
 	fmt.Println("2. OpenRouter")
 	fmt.Println("3. Ollama (Local)")
-	fmt.Println("4. Groq")
-	fmt.Println("5. Cerebras")
-	fmt.Println("6. DeepSeek")
+	fmt.Println("4. DeepSeek")
 	fmt.Println()
 	fmt.Println("Use '/providers select' to switch providers")
 
@@ -406,11 +378,9 @@ func selectProvider(chatAgent *agent.Agent) error {
 	fmt.Println("1. DeepInfra")
 	fmt.Println("2. OpenRouter")
 	fmt.Println("3. Ollama (Local)")
-	fmt.Println("4. Groq")
-	fmt.Println("5. Cerebras")
-	fmt.Println("6. DeepSeek")
+	fmt.Println("4. DeepSeek")
 
-	fmt.Print("\nEnter provider number (1-6) or 'cancel': ")
+	fmt.Print("\nEnter provider number (1-4) or 'cancel': ")
 
 	// Temporarily disable escape monitoring during user input to avoid interference
 	chatAgent.DisableEscMonitoring()
@@ -430,8 +400,8 @@ func selectProvider(chatAgent *agent.Agent) error {
 
 	// Parse selection
 	selection, err := strconv.Atoi(input)
-	if err != nil || selection < 1 || selection > 6 {
-		return fmt.Errorf("invalid selection. Please enter a number between 1 and 6")
+	if err != nil || selection < 1 || selection > 4 {
+		return fmt.Errorf("invalid selection. Please enter a number between 1 and 4")
 	}
 
 	// Define available providers (same order as displayed)
@@ -507,17 +477,16 @@ Examples:
   
   # With specific provider and model
   ledit agent --provider openrouter --model "qwen/qwen3-coder-30b" "Fix the login bug"
-  ledit agent -p deepinfra -m "deepseek-v3" "Analyze the codebase structure"`,
+  ledit agent -p deepinfra -m "deepseek-v3" "Analyze the codebase structure"
+
+  # UI mode for follow-up interaction
+  ledit agent --ui "Fix the login bug"`,
 	Args: cobra.MaximumNArgs(1), // Allow 0 or 1 args for interactive mode
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Handle interactive mode
-		if len(args) == 0 {
-			// Always use our new console architecture for interactive mode
-			return runInteractiveMode()
+		chatAgent, err := createChatAgent()
+		if err != nil {
+			return err
 		}
-
-		// Direct mode - execute single command
-		userIntent := strings.Join(args, " ")
 
 		// Mark environment flags
 		_ = os.Setenv("LEDIT_FROM_AGENT", "1")
@@ -526,21 +495,42 @@ Examples:
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")
 		}
 
-		// Execute using direct agent
-		err := executeDirectAgentCommand(userIntent)
+		isInteractive := len(args) == 0 || enableUI
+		var userIntent string
 
-		if err != nil {
-			gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
-				"AI agent processing your request",
-				err,
-				nil,
-				"ledit-agent",
-			)
-			fmt.Fprint(os.Stderr, gracefulExitMsg)
-			os.Exit(1)
+		if isInteractive {
+			if len(args) > 0 {
+				userIntent = strings.Join(args, " ")
+				err := executeDirectAgentCommand(chatAgent, userIntent)
+				if err != nil {
+					gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
+						"AI agent processing your initial request",
+						err,
+						nil,
+						"ledit-agent",
+					)
+					fmt.Fprint(os.Stderr, gracefulExitMsg)
+					os.Exit(1)
+				}
+				fmt.Println("\n✅ Initial task completed. Entering interactive mode for follow-up questions...")
+			}
+			return runInteractiveMode(chatAgent)
+		} else {
+			// Direct mode - execute single command
+			userIntent = strings.Join(args, " ")
+			err := executeDirectAgentCommand(chatAgent, userIntent)
+			if err != nil {
+				gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
+					"AI agent processing your request",
+					err,
+					nil,
+					"ledit-agent",
+				)
+				fmt.Fprint(os.Stderr, gracefulExitMsg)
+				os.Exit(1)
+			}
+			fmt.Println("✅ Task completed successfully")
+			return nil
 		}
-
-		fmt.Println("✅ Task completed successfully")
-		return nil
 	},
 }

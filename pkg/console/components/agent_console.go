@@ -756,6 +756,7 @@ func (ac *AgentConsole) executeShellCommand(command string) (string, error) {
 func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 	// Ensure we're within the scroll region by using the terminal's Write method
 	content := fmt.Sprintf(format, args...)
+	// The terminal's Write method should respect the scroll region
 	ac.Terminal().Write([]byte(content))
 }
 

@@ -143,6 +143,9 @@ func (c *InputComponent) ReadLine() (string, bool, error) {
 	// Ensure we're on a new line before displaying prompt
 	// This fixes the issue where prompt appears at the end of previous output
 	fmt.Print("\r\033[K") // Clear any leftover on current line
+
+	// Ensure terminal is in a good state
+	fmt.Print("\033[0m") // Reset all attributes
 	fmt.Print(c.prompt)
 
 	// Read input

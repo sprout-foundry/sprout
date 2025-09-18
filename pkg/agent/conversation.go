@@ -439,6 +439,13 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 			if a.shouldCheckFalseStop(choice.Message.Content) {
 				if isFalseStop, confidence := a.checkFalseStop(choice.Message.Content); isFalseStop {
 					a.debugLog("🔄 Detected possible false stop (confidence: %.2f), continuing...\n", confidence)
+
+					// Always show a message when false stop detection triggers
+					fmt.Printf("🔄 False stop detected (confidence: %.2f) - Response length: %d chars\n", confidence, len(choice.Message.Content))
+					if a.debug {
+						fmt.Printf("   Response preview: %q\n", truncateString(choice.Message.Content, 100))
+					}
+
 					// Add a gentle continuation prompt
 					a.messages = append(a.messages, api.Message{
 						Role:    "user",
@@ -459,6 +466,14 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 				a.debugLog("Final response content (%d chars):\n%s\n", len(choice.Message.Content), choice.Message.Content)
 			}
 
+			// If streaming was enabled, the content was already displayed
+			// Return empty string to avoid duplication
+			if a.streamingEnabled {
+				if a.debug {
+					a.debugLog("Streaming was enabled, returning empty string (content length: %d)\n", len(choice.Message.Content))
+				}
+				return "", nil
+			}
 			return choice.Message.Content, nil
 		}
 	}

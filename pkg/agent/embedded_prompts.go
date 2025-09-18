@@ -16,7 +16,13 @@ func getEmbeddedSystemPrompt() string {
 	// Add project context if available
 	projectContext := getProjectContext()
 	if projectContext != "" {
-		return promptContent + "\n\n" + projectContext
+		promptContent = promptContent + "\n\n" + projectContext
+	}
+
+	// Add project validation context
+	validationContext, err := generateProjectValidationContext()
+	if err == nil && validationContext != "" {
+		promptContent = promptContent + "\n\n" + validationContext
 	}
 
 	return promptContent

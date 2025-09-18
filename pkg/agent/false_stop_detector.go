@@ -124,22 +124,26 @@ func (a *Agent) checkFalseStop(response string) (bool, float64) {
 
 Response: "%s"
 
-An incomplete response:
-- Announces an action (like "I'll examine X") but doesn't do it
-- Says it will read/analyze something but stops
-- Ends with a colon suggesting more to come
-- Appears to be cut off mid-task
-- Last sentence indicates an upcoming action that wasn't performed
+An incomplete response typically:
+- Announces an intended action (e.g., "I'll examine X", "Let me check Y", "Now let me analyze Z") but does not actually perform or describe performing that action
+- States it will read, search, or investigate something but stops without results or next steps
+- Ends abruptly with a colon (:) or phrase suggesting continuation (e.g., after "Let me examine:")
+- Appears cut off mid-thought or mid-task, especially if short
+- The last sentence/phrase clearly indicates an upcoming action that is not executed (e.g., "Now let me examine the core agent package to understand how the AI agent functions.")
+
+Examples of incomplete:
+- "Now let me examine the core agent package to understand how the AI agent functions." (announces examination but doesn't do it)
+- "I'll check the false stop detection logic." (announces check but no execution)
+- "Let me read the conversation.go file:" (ends with colon, no content follows)
 
 A complete response:
-- Provides conclusions or recommendations
-- Completes the announced action
-- Is a natural stopping point
-- Ends with a complete thought
+- Performs the announced action and provides results, analysis, or conclusions
+- Reaches a natural ending with full thoughts, recommendations, or summaries
+- Does not leave actions unexecuted or thoughts unfinished
 
-Pay special attention to responses ending with colons after phrases like "Let me check" or "Let me examine".
+IMPORTANT: If the response announces any tool use, file reading, analysis, or investigation without showing the results of that action, classify as INCOMPLETE. Err on the side of INCOMPLETE for responses under 200 characters that mention future actions.
 
-Reply with only: "INCOMPLETE" or "COMPLETE"`, responseToCheck)
+Reply ONLY with "INCOMPLETE" or "COMPLETE" in uppercase, nothing else.`, responseToCheck)
 
 	// Get provider-specific fast model
 	fastModel, clientType := a.getFastModelForProvider()

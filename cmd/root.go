@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	agent_api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/spf13/cobra"
 )
 
@@ -60,9 +60,10 @@ func Execute() error {
 
 // initializeSystem initializes API keys and configuration on startup
 func initializeSystem() {
-	// Initialize API keys from ~/.ledit/api_keys.json
-	if err := agent_api.InitializeAPIKeys(); err != nil {
-		// Don't fail on API key initialization errors
+	// Initialize API keys from ~/.ledit/api_keys.json using main configuration system
+	_, err := configuration.LoadAPIKeys()
+	if err != nil {
+		// Don't fail on API key initialization errors - will be created on demand
 		if os.Getenv("LEDIT_DEBUG") != "" {
 			println("API key initialization warning:", err.Error())
 		}

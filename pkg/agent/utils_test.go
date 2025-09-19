@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // TestDebugLog tests the debug logging functionality
@@ -155,43 +155,6 @@ func TestSuggestCorrectToolName(t *testing.T) {
 		result := agent.suggestCorrectToolName(test.input)
 		if result != test.expected {
 			t.Errorf("suggestCorrectToolName(%q) = %q, expected %q", test.input, result, test.expected)
-		}
-	}
-}
-
-// TestGetProviderEnvVar tests environment variable mapping
-func TestGetProviderEnvVar(t *testing.T) {
-	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
-
-	agent, err := NewAgent()
-	if err != nil {
-		t.Skipf("Skipping test due to connection error: %v", err)
-	}
-
-	tests := []struct {
-		provider api.ClientType
-		expected string
-	}{
-		{api.DeepInfraClientType, "DEEPINFRA_API_KEY"},
-		{api.OpenRouterClientType, "OPENROUTER_API_KEY"},
-		{api.DeepSeekClientType, "DEEPSEEK_API_KEY"},
-		{api.OllamaClientType, ""},
-		{"unknown", ""},
-	}
-
-	for _, test := range tests {
-		result := agent.getProviderEnvVar(test.provider)
-		if result != test.expected {
-			t.Errorf("getProviderEnvVar(%q) = %q, expected %q", test.provider, result, test.expected)
 		}
 	}
 }

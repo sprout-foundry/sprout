@@ -3,6 +3,8 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // ImageData represents an image in a message
@@ -20,25 +22,8 @@ type Message struct {
 	Images           []ImageData `json:"images,omitempty"` // Support for multiple images
 }
 
-// ToolCall represents a tool call in the response
-type ToolCall struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
-}
-
-// Tool represents a tool definition
-type Tool struct {
-	Type     string `json:"type"`
-	Function struct {
-		Name        string      `json:"name"`
-		Description string      `json:"description"`
-		Parameters  interface{} `json:"parameters"`
-	} `json:"function"`
-}
+// Tool and ToolCall types moved to pkg/agent_api for consolidation
+// Import from there: github.com/alantheprice/ledit/pkg/agent_api
 
 // Choice represents a response choice
 type Choice struct {
@@ -48,7 +33,7 @@ type Choice struct {
 		Content          string      `json:"content"`
 		ReasoningContent string      `json:"reasoning_content,omitempty"`
 		Images           []ImageData `json:"images,omitempty"`
-		ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
+		ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
 	} `json:"message"`
 	FinishReason string `json:"finish_reason"`
 }
@@ -88,19 +73,6 @@ type ModelInfo struct {
 	Cost          float64 `json:"cost,omitempty"`
 }
 
-// ProviderInterface defines the interface that all providers must implement
-type ProviderInterface interface {
-	SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
-	CheckConnection() error
-	SetDebug(debug bool)
-	SetModel(model string) error
-	GetModel() string
-	GetProvider() string
-	GetModelContextLimit() (int, error)
-	ListModels() ([]ModelInfo, error)
-	SupportsVision() bool
-	SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
-}
 
 // TokenUsage represents token usage from LLM responses (alias for Usage)
 type TokenUsage = Usage

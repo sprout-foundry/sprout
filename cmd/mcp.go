@@ -91,12 +91,12 @@ func runMCPAdd() error {
 	fmt.Println()
 
 	// Load existing config
-	cfg, err := configuration.LoadOrInitConfig(false)
+	_, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	mcpConfig, err := mcp.LoadMCPConfig(cfg)
+	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}
@@ -200,8 +200,7 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	mcpConfig.Enabled = true
 
 	// Save config
-	cfg, _ := configuration.LoadOrInitConfig(false)
-	if err := mcp.SaveMCPConfig(cfg, *mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(*mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -320,8 +319,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	mcpConfig.Enabled = true
 
 	// Save config
-	cfg, _ := configuration.LoadOrInitConfig(false)
-	if err := mcp.SaveMCPConfig(cfg, *mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(*mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -465,8 +463,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	mcpConfig.Enabled = true
 
 	// Save config
-	cfg, _ := configuration.LoadOrInitConfig(false)
-	if err := mcp.SaveMCPConfig(cfg, *mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(*mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -483,12 +480,12 @@ func runMCPRemove(serverName string) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	// Load existing config
-	cfg, err := configuration.LoadOrInitConfig(false)
+	_, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	mcpConfig, err := mcp.LoadMCPConfig(cfg)
+	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}
@@ -549,7 +546,7 @@ func runMCPRemove(serverName string) error {
 	}
 
 	// Save config
-	if err := mcp.SaveMCPConfig(cfg, mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -564,12 +561,12 @@ func runMCPRemove(serverName string) error {
 
 func runMCPList() error {
 	// Load existing config
-	cfg, err := configuration.LoadOrInitConfig(false)
+	_, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	mcpConfig, err := mcp.LoadMCPConfig(cfg)
+	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}
@@ -639,12 +636,12 @@ func runMCPTest(serverName string) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	// Load existing config
-	cfg, err := configuration.LoadOrInitConfig(false)
+	_, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	mcpConfig, err := mcp.LoadMCPConfig(cfg)
+	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}

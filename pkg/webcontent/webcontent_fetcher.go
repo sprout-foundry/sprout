@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/apikeys"       // Changed import from pkg/llm to pkg/apikeys
 	"github.com/alantheprice/ledit/pkg/configuration" // Updated to new config
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -23,7 +22,7 @@ func NewWebContentFetcher() *WebContentFetcher {
 
 // FetchWebContent fetches content from a given URL, using a cache to avoid refetching.
 // It uses Jina Reader for external URLs if available, otherwise falls back to a direct HTTP GET.
-func (w *WebContentFetcher) FetchWebContent(url string, cfg *configuration.Config) (string, error) { // Added cfg parameter
+func (w *WebContentFetcher) FetchWebContent(url string, cfg *configuration.Manager) (string, error) { // Use Manager instead of Config
 	utils.GetLogger(false).LogProcessStep(fmt.Sprintf("Starting web content search for query: %s", url))
 	// Check cache first
 	if cachedEntry, found := w.loadURLCache(url); found {
@@ -44,11 +43,11 @@ func (w *WebContentFetcher) FetchWebContent(url string, cfg *configuration.Confi
 }
 
 // fetchContent determines the best method to fetch content and retrieves it.
-func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Config) (string, error) { // Added cfg parameter
+func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Manager) (string, error) { // Use Manager instead of Config
 	isLocalhost := strings.HasPrefix(url, "http://localhost") || strings.HasPrefix(url, "https://localhost")
-	jinaAPIKey, err := apikeys.GetAPIKey("JinaAI", true) // Changed call to apikeys.GetAPIKey and passed cfg
+	jinaAPIKey := cfg.GetAPIKeys().GetAPIKey("jinaai")
 
-	useJina := !isLocalhost && err == nil && jinaAPIKey != ""
+	useJina := !isLocalhost && jinaAPIKey != ""
 	if useJina {
 		content, err := w.fetchWithJinaReader(url, cfg) // Pass cfg
 		if err != nil {
@@ -60,16 +59,16 @@ func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Config) 
 	// Fallback to direct fetch for localhost or if Jina is not configured.
 	if !isLocalhost {
 		// Get your Jina AI API key for free: https://jina.ai/?sui=apikey
-		fmt.Printf("Warning: Jina AI API key not found or provided. Jina Reader will not be used for URL: %s. Falling back to direct HTTP GET. Error: %v\n", url, err)
+		fmt.Printf("Warning: Jina AI API key not found or provided. Jina Reader will not be used for URL: %s. Falling back to direct HTTP GET.\n", url)
 	}
 	return w.fetchDirectURL(url)
 }
 
 // fetchWithJinaReader fetches content using the Jina Reader API.
-func (w *WebContentFetcher) fetchWithJinaReader(url string, cfg *configuration.Config) (string, error) { // Added cfg parameter
-	apiKey, err := apikeys.GetAPIKey("JinaAI", true) // Get API key here, passing cfg
-	if err != nil {
-		return "", fmt.Errorf("failed to get Jina AI API key: %w", err)
+func (w *WebContentFetcher) fetchWithJinaReader(url string, cfg *configuration.Manager) (string, error) { // Use Manager instead of Config
+	apiKey := cfg.GetAPIKeys().GetAPIKey("jinaai")
+	if apiKey == "" {
+		return "", fmt.Errorf("JinaAI API key not found")
 	}
 
 	req, err := createJinaRequest(url, apiKey)

@@ -29,6 +29,8 @@ func NewConversationHandler(agent *Agent) *ConversationHandler {
 
 // ProcessQuery handles a user query through the complete conversation flow
 func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
+	// Reset streaming buffer for new query
+	ch.agent.streamingBuffer.Reset()
 
 	// Enable change tracking
 	ch.agent.EnableChangeTracking(userQuery)
@@ -52,8 +54,11 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 
 	// Main conversation loop
 	for ch.agent.currentIteration = 0; ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
+		ch.agent.debugLog("🔄 Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.messages))
+
 		// Check for interrupts
 		if ch.checkForInterrupt() {
+			ch.agent.debugLog("⏹️ Conversation interrupted\n")
 			break
 		}
 
@@ -65,9 +70,14 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 
 		// Process response
 		if shouldStop := ch.processResponse(response); shouldStop {
+			ch.agent.debugLog("✅ Conversation complete\n")
 			break
+		} else {
+			ch.agent.debugLog("➡️ Continuing conversation...\n")
 		}
 	}
+
+	ch.agent.debugLog("🏁 Exited conversation loop - Iteration: %d, Messages: %d\n", ch.agent.currentIteration, len(ch.agent.messages))
 
 	// Finalize conversation
 	return ch.finalizeConversation()
@@ -102,21 +112,29 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	// Execute tools if present
 	if len(choice.Message.ToolCalls) > 0 {
+		ch.agent.debugLog("🛠️ Executing %d tool calls\n", len(choice.Message.ToolCalls))
 		ch.displayIntermediateResponse(choice.Message.Content)
 		toolResults := ch.toolExecutor.ExecuteTools(choice.Message.ToolCalls)
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
+		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
 		return false // Continue conversation
 	}
 
-	// Validate response completeness
-	if ch.responseValidator.IsIncomplete(choice.Message.Content) {
-		ch.handleIncompleteResponse()
-		return false // Continue to get complete response
+	// Check if the response indicates completion
+	if ch.responseValidator.IsComplete(choice.Message.Content) {
+		// Remove the completion signal before displaying
+		cleanContent := strings.Replace(choice.Message.Content, "[[TASK_COMPLETE]]", "", -1)
+		cleanContent = strings.TrimSpace(cleanContent)
+
+		// Display final response
+		ch.displayFinalResponse(cleanContent)
+		return true // Stop - response explicitly indicates completion
 	}
 
-	// Display final response
-	ch.displayFinalResponse(choice.Message.Content)
-	return true // Stop - response is complete
+	// Otherwise, continue the conversation
+	ch.agent.debugLog("📝 Response doesn't indicate completion, continuing...\n")
+	ch.displayIntermediateResponse(choice.Message.Content)
+	return false // Continue conversation
 }
 
 // Helper methods...
@@ -190,6 +208,12 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 		if err := ch.agent.CommitChanges("Task completed"); err != nil {
 			ch.agent.debugLog("Warning: Failed to commit changes: %v\n", err)
 		}
+	}
+
+	// If streaming was enabled and content was streamed, return empty string
+	// to avoid duplicate display in the console
+	if ch.agent.streamingEnabled && len(ch.agent.streamingBuffer.String()) > 0 {
+		return "", nil
 	}
 
 	// Get last assistant message

@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	providers "github.com/alantheprice/ledit/pkg/agent_providers"
 	types "github.com/alantheprice/ledit/pkg/agent_types"
 )
 
@@ -649,16 +648,11 @@ func ValidateOpenRouterModel(modelID string) error {
 }
 
 // createProviderForType creates a provider instance for the given client type
+// TODO: Fix import cycle - temporarily disabled to break agent_api <-> agent_providers cycle
 func createProviderForType(clientType ClientType) (types.ProviderInterface, error) {
-	switch clientType {
-	case OpenRouterClientType:
-		return providers.NewOpenRouterProvider()
-	case DeepInfraClientType:
-		return providers.NewDeepInfraProvider()
-	// Add other providers as they implement ListModels
-	default:
-		return nil, fmt.Errorf("provider %s does not support ListModels yet", clientType)
-	}
+	// Temporarily return error to break import cycle
+	// This breaks the cycle: agent_api -> agent_providers -> agent_api
+	return nil, fmt.Errorf("provider creation temporarily disabled to fix import cycle - clientType: %s", clientType)
 }
 
 // convertTypesToAPI converts types.ModelInfo to api.ModelInfo

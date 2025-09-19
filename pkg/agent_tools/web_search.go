@@ -10,7 +10,7 @@ import (
 
 // WebSearch performs a web search and returns raw search results.
 // The agent can then decide which URLs to fetch and process.
-func WebSearch(query string, cfg *configuration.Config) (string, error) {
+func WebSearch(query string, cfg *configuration.Manager) (string, error) {
 	if query == "" {
 		return "", fmt.Errorf("search query cannot be empty")
 	}

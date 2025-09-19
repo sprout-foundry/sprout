@@ -283,7 +283,7 @@ func (e *Executor) executeEditFileSection(ctx context.Context, args map[string]i
 	}
 
 	// Read current file content
-	content, err := os.ReadFile(filePath)
+	content, err := filesystem.ReadFileBytes(filePath)
 	if err != nil {
 		return &Result{
 			Success: false,
@@ -303,7 +303,7 @@ func (e *Executor) executeEditFileSection(ctx context.Context, args map[string]i
 	newContent := strings.Replace(originalContent, oldText, newText, 1)
 
 	// Write the modified content back
-	err = os.WriteFile(filePath, []byte(newContent), 0644)
+	err = filesystem.WriteFileWithDir(filePath, []byte(newContent), 0644)
 	if err != nil {
 		return &Result{
 			Success: false,

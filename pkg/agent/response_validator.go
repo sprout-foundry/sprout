@@ -17,6 +17,22 @@ func NewResponseValidator(agent *Agent) *ResponseValidator {
 	}
 }
 
+// IsComplete checks if a response explicitly indicates completion
+func (rv *ResponseValidator) IsComplete(content string) bool {
+	if len(content) == 0 {
+		return false
+	}
+
+	// Check for the explicit completion signal
+	completionSignal := "[[TASK_COMPLETE]]"
+	if strings.Contains(content, completionSignal) {
+		rv.agent.debugLog("✅ Found completion signal: %s\n", completionSignal)
+		return true
+	}
+
+	return false
+}
+
 // IsIncomplete checks if a response appears to be incomplete
 func (rv *ResponseValidator) IsIncomplete(content string) bool {
 	// Skip validation if streaming or if content is empty
@@ -33,31 +49,11 @@ func (rv *ResponseValidator) IsIncomplete(content string) bool {
 
 // hasIncompletePatterns checks for patterns indicating incomplete response
 func (rv *ResponseValidator) hasIncompletePatterns(content string) bool {
-	incompletePatterns := []string{
-		"I'll continue",
-		"Let me continue",
-		"Continuing with",
-		"Moving on to",
-		"Now let's",
-		"Next, I'll",
-		"I should also",
-		"Additionally, I need to",
-		"Furthermore",
-		"I need to also",
-		"I'll also need to",
-	}
-
-	contentLower := strings.ToLower(content)
-
-	// Check if response ends with these patterns
-	for _, pattern := range incompletePatterns {
-		if strings.HasSuffix(strings.TrimSpace(contentLower), strings.ToLower(pattern)) {
-			return true
-		}
-	}
+	// With the explicit completion signal approach, we don't need complex pattern matching
+	// Just check for obvious incomplete endings
+	trimmed := strings.TrimSpace(content)
 
 	// Check for ellipsis at the end
-	trimmed := strings.TrimSpace(content)
 	if strings.HasSuffix(trimmed, "...") {
 		return true
 	}

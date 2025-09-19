@@ -312,10 +312,18 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 
 // getOptimizedToolDefinitions returns tool definitions optimized based on conversation context
 func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
-	// For now, just delegate to getMCPTools which handles caching
+	// Start with standard tools
+	tools := api.GetToolDefinitions()
+
+	// Add MCP tools if available
+	mcpTools := a.getMCPTools()
+	if mcpTools != nil {
+		tools = append(tools, mcpTools...)
+	}
+
 	// Future: Could optimize by analyzing conversation context
 	// and only returning relevant tools
-	return a.getMCPTools()
+	return tools
 }
 
 // ClearConversationHistory clears the conversation history

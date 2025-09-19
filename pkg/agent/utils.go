@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // debugLog logs a message only if debug mode is enabled
@@ -110,20 +110,4 @@ func (a *Agent) suggestCorrectToolName(invalidName string) string {
 	}
 
 	return ""
-}
-
-// getProviderEnvVar returns the environment variable name for a provider
-func (a *Agent) getProviderEnvVar(provider api.ClientType) string {
-	switch provider {
-	case api.OpenAIClientType:
-		return "OPENAI_API_KEY"
-	case api.DeepInfraClientType:
-		return "DEEPINFRA_API_KEY"
-	case api.OpenRouterClientType:
-		return "OPENROUTER_API_KEY"
-	case api.OllamaClientType:
-		return "" // Ollama doesn't use an API key
-	default:
-		return ""
-	}
 }

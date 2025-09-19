@@ -31,6 +31,7 @@ type ClientType string
 
 const (
 	DeepInfraClientType   ClientType = "deepinfra"
+	DeepSeekClientType    ClientType = "deepseek"
 	OllamaClientType      ClientType = "ollama" // Maps to local ollama
 	OllamaLocalClientType ClientType = "ollama-local"
 	OllamaTurboClientType ClientType = "ollama-turbo"

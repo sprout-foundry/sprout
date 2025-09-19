@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	types "github.com/alantheprice/ledit/pkg/agent_types"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // DeepInfraProvider implements the OpenAI-compatible DeepInfra API
@@ -22,7 +22,7 @@ type DeepInfraProvider struct {
 	apiToken     string
 	debug        bool
 	model        string
-	models       []types.ModelInfo
+	models       []api.ModelInfo
 	modelsCached bool
 }
 
@@ -56,7 +56,7 @@ func NewDeepInfraProviderWithModel(model string) (*DeepInfraProvider, error) {
 }
 
 // SendChatRequest sends a chat completion request to DeepInfra
-func (p *DeepInfraProvider) SendChatRequest(messages []types.Message, tools []types.Tool, reasoning string) (*types.ChatResponse, error) {
+func (p *DeepInfraProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	// Convert messages to OpenAI-compatible format
 	deepinfraMessages := make([]map[string]interface{}, len(messages))
 	for i, msg := range messages {
@@ -154,7 +154,7 @@ func (p *DeepInfraProvider) SendChatRequest(messages []types.Message, tools []ty
 }
 
 // SendChatRequestStream sends a streaming chat request to DeepInfra
-func (p *DeepInfraProvider) SendChatRequestStream(messages []types.Message, tools []types.Tool, reasoning string, callback types.StreamCallback) (*types.ChatResponse, error) {
+func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
 	url := "https://api.deepinfra.com/v1/openai/chat/completions"
 
 	// Convert our messages to OpenAI format
@@ -223,7 +223,7 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []types.Message, tool
 	// Process SSE stream
 	scanner := bufio.NewScanner(resp.Body)
 	var content strings.Builder
-	var toolCalls []types.ToolCall
+	var toolCalls []api.ToolCall
 	var finishReason string
 
 	for scanner.Scan() {
@@ -276,7 +276,7 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []types.Message, tool
 								if tc, ok := tcData.(map[string]interface{}); ok {
 									// Process tool call updates (accumulate them)
 									if id, ok := tc["id"].(string); ok {
-										toolCall := types.ToolCall{
+										toolCall := api.ToolCall{
 											ID:   id,
 											Type: "function",
 										}
@@ -305,17 +305,17 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []types.Message, tool
 	}
 
 	// Build response
-	response := &types.ChatResponse{
+	response := &api.ChatResponse{
 		Model: p.model,
-		Choices: []types.Choice{
+		Choices: []api.Choice{
 			{
 				Index: 0,
 				Message: struct {
 					Role             string            `json:"role"`
 					Content          string            `json:"content"`
 					ReasoningContent string            `json:"reasoning_content,omitempty"`
-					Images           []types.ImageData `json:"images,omitempty"`
-					ToolCalls        []types.ToolCall  `json:"tool_calls,omitempty"`
+					Images           []api.ImageData `json:"images,omitempty"`
+					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
 				}{
 					Role:      "assistant",
 					Content:   content.String(),
@@ -378,7 +378,7 @@ func (p *DeepInfraProvider) GetModelContextLimit() (int, error) {
 }
 
 // ListModels returns available models from DeepInfra API
-func (p *DeepInfraProvider) ListModels() ([]types.ModelInfo, error) {
+func (p *DeepInfraProvider) ListModels() ([]api.ModelInfo, error) {
 	if p.modelsCached {
 		return p.models, nil
 	}
@@ -423,9 +423,9 @@ func (p *DeepInfraProvider) ListModels() ([]types.ModelInfo, error) {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	models := make([]types.ModelInfo, len(response.Data))
+	models := make([]api.ModelInfo, len(response.Data))
 	for i, model := range response.Data {
-		modelInfo := types.ModelInfo{
+		modelInfo := api.ModelInfo{
 			ID:       model.ID,
 			Name:     model.Name,
 			Provider: "deepinfra",
@@ -464,7 +464,7 @@ func (p *DeepInfraProvider) ListModels() ([]types.ModelInfo, error) {
 }
 
 // sendRequestWithRetry implements exponential backoff retry logic for rate limits
-func (p *DeepInfraProvider) sendRequestWithRetry(httpReq *http.Request, reqBody []byte) (*types.ChatResponse, error) {
+func (p *DeepInfraProvider) sendRequestWithRetry(httpReq *http.Request, reqBody []byte) (*api.ChatResponse, error) {
 	maxRetries := 3
 	baseDelay := 1 * time.Second
 
@@ -492,7 +492,7 @@ func (p *DeepInfraProvider) sendRequestWithRetry(httpReq *http.Request, reqBody 
 
 		// Success case
 		if resp.StatusCode == http.StatusOK {
-			var chatResp types.ChatResponse
+			var chatResp api.ChatResponse
 			if err := json.Unmarshal(respBody, &chatResp); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 			}
@@ -534,7 +534,7 @@ func (p *DeepInfraProvider) sendRequestWithRetry(httpReq *http.Request, reqBody 
 }
 
 // calculateMaxTokens calculates appropriate max_tokens based on input size and model limits
-func (p *DeepInfraProvider) calculateMaxTokens(messages []types.Message, tools []types.Tool) int {
+func (p *DeepInfraProvider) calculateMaxTokens(messages []api.Message, tools []api.Tool) int {
 	// Get model context limit
 	contextLimit, err := p.GetModelContextLimit()
 	if err != nil || contextLimit == 0 {
@@ -590,7 +590,7 @@ func (p *DeepInfraProvider) GetVisionModel() string {
 }
 
 // SendVisionRequest sends a vision-enabled chat request
-func (p *DeepInfraProvider) SendVisionRequest(messages []types.Message, tools []types.Tool, reasoning string) (*types.ChatResponse, error) {
+func (p *DeepInfraProvider) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	// If the model doesn't support vision, fall back to regular chat
 	if !p.SupportsVision() {
 		return p.SendChatRequest(messages, tools, reasoning)

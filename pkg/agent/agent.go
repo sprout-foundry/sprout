@@ -437,7 +437,7 @@ func (a *Agent) initializeMCP() error {
 			Args:        serverConfig.Args,
 			AutoStart:   serverConfig.AutoStart,
 			MaxRestarts: serverConfig.MaxRestarts,
-			Timeout:     serverConfig.GetTimeout(),
+			Timeout:     serverConfig.Timeout,
 			Env:         serverConfig.Env,
 		}
 

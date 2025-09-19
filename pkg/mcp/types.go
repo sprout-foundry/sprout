@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -17,6 +19,50 @@ type MCPServerConfig struct {
 	Timeout     time.Duration     `json:"timeout,omitempty"`
 	AutoStart   bool              `json:"auto_start"`
 	MaxRestarts int               `json:"max_restarts"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for MCPServerConfig to handle timeout as string or duration
+func (s *MCPServerConfig) UnmarshalJSON(data []byte) error {
+	// Create an alias to avoid infinite recursion
+	type MCPServerConfigAlias MCPServerConfig
+
+	// First try to unmarshal as the normal struct
+	aux := &struct {
+		Timeout interface{} `json:"timeout"`
+		*MCPServerConfigAlias
+	}{
+		MCPServerConfigAlias: (*MCPServerConfigAlias)(s),
+	}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Handle timeout field conversion
+	if aux.Timeout != nil {
+		switch v := aux.Timeout.(type) {
+		case string:
+			// Parse string duration (backward compatibility)
+			if v != "" {
+				duration, err := time.ParseDuration(v)
+				if err != nil {
+					return fmt.Errorf("invalid timeout duration: %w", err)
+				}
+				s.Timeout = duration
+			} else {
+				s.Timeout = 30 * time.Second // default
+			}
+		case float64:
+			// Handle JSON number (nanoseconds)
+			s.Timeout = time.Duration(v)
+		default:
+			s.Timeout = 30 * time.Second // default fallback
+		}
+	} else {
+		s.Timeout = 30 * time.Second // default if not present
+	}
+
+	return nil
 }
 
 // MCPTool represents a tool available via MCP

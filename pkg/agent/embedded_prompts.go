@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 //go:embed prompts/system_prompt.md
@@ -16,8 +18,7 @@ func getEmbeddedSystemPrompt() string {
 	promptContent := extractSystemPrompt()
 
 	// Add project context if available
-	// TODO: Implement getProjectContext when needed
-	projectContext := ""
+	projectContext := getProjectContext()
 	if projectContext != "" {
 		promptContent = promptContent + "\n\n" + projectContext
 	}
@@ -59,4 +60,27 @@ func extractSystemPrompt() string {
 	}
 
 	return strings.TrimSpace(systemPromptContent[startIdx : startIdx+endIdx])
+}
+
+// getProjectContext loads project context from various possible locations
+func getProjectContext() string {
+	// TODO: This is not great and should use a better pattern to aggregate some of these files potentially, but also generate this if it doesn't exist
+	// Check for project context files in order of priority
+	contextFiles := []string{
+		// ".cursor/markdown/project.md",
+		// ".cursor/markdown/context.md",
+		// ".claude/project.md",
+		// ".claude/context.md",
+		// ".project_context.md",
+		// "PROJECT_CONTEXT.md",
+	}
+
+	for _, filePath := range contextFiles {
+		content, err := tools.ReadFile(filePath)
+		if err == nil && strings.TrimSpace(content) != "" {
+			return fmt.Sprintf("PROJECT CONTEXT:\n%s", content)
+		}
+	}
+
+	return ""
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/console"
+	"github.com/alantheprice/ledit/pkg/filesystem"
 	"golang.org/x/term"
 )
 
@@ -514,7 +515,7 @@ func (w *LegacyInputWrapper) Close() error {
 
 // LoadHistory loads history from a file
 func (c *InputComponent) LoadHistory(filename string) error {
-	data, err := os.ReadFile(filename)
+	data, err := filesystem.ReadFileBytes(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil // No history file yet
@@ -537,5 +538,5 @@ func (c *InputComponent) LoadHistory(filename string) error {
 // SaveHistory saves history to a file
 func (c *InputComponent) SaveHistory(filename string) error {
 	data := strings.Join(c.history, "\n")
-	return os.WriteFile(filename, []byte(data), 0600)
+	return filesystem.WriteFileWithDir(filename, []byte(data), 0600)
 }

@@ -179,3 +179,27 @@ func LoadFileContent(path string) (string, error) {
 	}
 	return string(content), nil
 }
+
+// EnsureDir creates directory if it doesn't exist
+func EnsureDir(dir string) error {
+	return os.MkdirAll(dir, 0755)
+}
+
+// WriteFileWithDir creates the directory and writes the file
+func WriteFileWithDir(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	if err := EnsureDir(dir); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dir, err)
+	}
+	return os.WriteFile(path, data, perm)
+}
+
+// ReadFileBytes reads file as bytes
+func ReadFileBytes(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
+// CreateTempFile creates a temporary file
+func CreateTempFile(dir, pattern string) (*os.File, error) {
+	return os.CreateTemp(dir, pattern)
+}

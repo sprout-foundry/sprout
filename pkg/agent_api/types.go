@@ -27,11 +27,11 @@ type ToolCall struct {
 type Choice struct {
 	Index   int `json:"index"`
 	Message struct {
-		Role             string      `json:"role"`
-		Content          string      `json:"content"`
-		ReasoningContent string      `json:"reasoning_content,omitempty"`
-		Images           []ImageData `json:"images,omitempty"`
-		ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
+		Role             string           `json:"role"`
+		Content          string           `json:"content"`
+		ReasoningContent string           `json:"reasoning_content,omitempty"`
+		Images           []ImageData      `json:"images,omitempty"`
+		ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 	} `json:"message"`
 	FinishReason string `json:"finish_reason"`
 }
@@ -64,11 +64,11 @@ type Tool struct {
 }
 
 type ChatRequest struct {
-	Model      string    `json:"model"`
-	Messages   []Message `json:"messages"`
-	Tools      []Tool    `json:"tools,omitempty"`
-	ToolChoice string    `json:"tool_choice,omitempty"`
-	MaxTokens  int       `json:"max_tokens,omitempty"`
-	Reasoning  string    `json:"reasoning,omitempty"`
-	Stream     bool      `json:"stream,omitempty"`
+	Model      string       `json:"model"`
+	Messages   []Message    `json:"messages"`
+	Tools      []Tool `json:"tools,omitempty"`
+	ToolChoice string       `json:"tool_choice,omitempty"`
+	MaxTokens  int          `json:"max_tokens,omitempty"`
+	Reasoning  string       `json:"reasoning,omitempty"`
+	Stream     bool         `json:"stream,omitempty"`
 }

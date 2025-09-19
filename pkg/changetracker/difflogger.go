@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
@@ -95,7 +96,7 @@ func checkPython() {
 
 func getDiffWithPython(originalCode, newCode string) (string, error) {
 	// Create temp file for python script
-	scriptFile, err := os.CreateTemp("", "diff_script_*.py")
+	scriptFile, err := filesystem.CreateTempFile("", "diff_script_*.py")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp script file: %w", err)
 	}
@@ -109,7 +110,7 @@ func getDiffWithPython(originalCode, newCode string) (string, error) {
 	}
 
 	// Create temp files for original and new code
-	originalFile, err := os.CreateTemp("", "original_*.txt")
+	originalFile, err := filesystem.CreateTempFile("", "original_*.txt")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file for original code: %w", err)
 	}
@@ -122,7 +123,7 @@ func getDiffWithPython(originalCode, newCode string) (string, error) {
 		return "", fmt.Errorf("failed to close temp original file: %w", err)
 	}
 
-	newFile, err := os.CreateTemp("", "new_*.txt")
+	newFile, err := filesystem.CreateTempFile("", "new_*.txt")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file for new code: %w", err)
 	}

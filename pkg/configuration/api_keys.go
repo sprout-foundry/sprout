@@ -12,6 +12,54 @@ import (
 	"golang.org/x/term"
 )
 
+type ProviderAPIKey struct {
+	Name            string `json:"name,omitempty"`
+	FormattedName   string `json:"formatted_name,omitempty"`
+	RequiresKey     bool   `json:"requires_key,omitempty"`
+	Key             string `json:"key,omitempty"`
+	EnvVariableName string `json:"env_variable_name,omitempty"`
+}
+
+func getSupportedProviders() []ProviderAPIKey {
+	return []ProviderAPIKey{
+		{
+			Name:            "openai",
+			FormattedName:   "OpenAI",
+			RequiresKey:     true,
+			EnvVariableName: "OPENAI_API_KEY",
+		},
+		{
+			Name:            "deepinfra",
+			FormattedName:   "DeepInfra",
+			RequiresKey:     true,
+			EnvVariableName: "DEEPINFRA_API_KEY",
+		},
+		{
+			Name:            "openrouter",
+			FormattedName:   "OpenRouter",
+			RequiresKey:     true,
+			EnvVariableName: "OPENROUTER_API_KEY",
+		},
+		{
+			Name:          "ollama",
+			FormattedName: "Ollama (local)",
+			RequiresKey:   false,
+		},
+		{
+			Name:            "ollama-turbo",
+			FormattedName:   "Ollama (turbo)",
+			RequiresKey:     true,
+			EnvVariableName: "OLLAMA_API_KEY",
+		},
+		{
+			Name:            "jinaai",
+			FormattedName:   "JinaAI",
+			RequiresKey:     true,
+			EnvVariableName: "JINA_API_KEY",
+		},
+	}
+}
+
 // GetAPIKeysPath returns the full path to the API keys file
 func GetAPIKeysPath() (string, error) {
 	configDir, err := GetConfigDir()
@@ -65,54 +113,46 @@ func SaveAPIKeys(keys *APIKeys) error {
 // This is called on startup to capture any keys set via environment
 func (keys *APIKeys) PopulateFromEnvironment() bool {
 	updated := false
-
-	if envKey := os.Getenv("OPENAI_API_KEY"); envKey != "" && keys.OpenAI == "" {
-		keys.OpenAI = envKey
-		updated = true
+	for _, provider := range getSupportedProviders() {
+		if provider.RequiresKey && provider.EnvVariableName != "" {
+			if envKey := os.Getenv(provider.EnvVariableName); envKey != "" && keys.GetAPIKey(provider.Name) == "" {
+				keys.SetAPIKey(provider.Name, envKey)
+				updated = true
+			}
+		}
 	}
-
-	if envKey := os.Getenv("DEEPINFRA_API_KEY"); envKey != "" && keys.DeepInfra == "" {
-		keys.DeepInfra = envKey
-		updated = true
+	if updated {
+		// Save updated keys to file
+		if err := SaveAPIKeys(keys); err != nil {
+			fmt.Printf("Warning: failed to save API keys after populating from environment: %v\n", err)
+		}
 	}
-
-	if envKey := os.Getenv("OPENROUTER_API_KEY"); envKey != "" && keys.OpenRouter == "" {
-		keys.OpenRouter = envKey
-		updated = true
-	}
-
 	return updated
 }
 
 // GetAPIKey returns the API key for a provider
 func (keys *APIKeys) GetAPIKey(provider string) string {
-	switch provider {
-	case "openai":
-		return keys.OpenAI
-	case "deepinfra":
-		return keys.DeepInfra
-	case "openrouter":
-		return keys.OpenRouter
-	default:
+	if keys == nil {
 		return ""
 	}
+	return (*keys)[provider]
 }
 
 // SetAPIKey sets the API key for a provider
 func (keys *APIKeys) SetAPIKey(provider, key string) {
-	switch provider {
-	case "openai":
-		keys.OpenAI = key
-	case "deepinfra":
-		keys.DeepInfra = key
-	case "openrouter":
-		keys.OpenRouter = key
+	if keys == nil || *keys == nil {
+		*keys = make(APIKeys)
 	}
+	(*keys)[provider] = key
 }
 
 // HasAPIKey checks if a provider has an API key set
 func (keys *APIKeys) HasAPIKey(provider string) bool {
-	return keys.GetAPIKey(provider) != ""
+	// First check stored keys
+	if keys.GetAPIKey(provider) != "" {
+		return true
+	}
+	return false
 }
 
 // PromptForAPIKey prompts the user for an API key
@@ -146,22 +186,12 @@ func PromptForAPIKey(provider string) (string, error) {
 
 // getProviderDisplayName returns a user-friendly name for the provider
 func getProviderDisplayName(provider string) string {
-	switch provider {
-	case "openai":
-		return "OpenAI"
-	case "deepinfra":
-		return "DeepInfra"
-	case "openrouter":
-		return "OpenRouter"
-	case "ollama":
-		return "Ollama"
-	case "ollama-local":
-		return "Ollama (local)"
-	case "ollama-turbo":
-		return "Ollama (turbo)"
-	default:
-		return provider
+	for _, p := range getSupportedProviders() {
+		if p.Name == provider {
+			return p.FormattedName
+		}
 	}
+	return provider
 }
 
 // RequiresAPIKey checks if a provider requires an API key
@@ -172,9 +202,6 @@ func RequiresAPIKey(provider string) bool {
 	case "ollama-turbo":
 		// Ollama turbo requires API key for remote acceleration
 		return true
-	case "ollama":
-		// Regular ollama maps to local, doesn't need API key
-		return false
 	default:
 		return true
 	}

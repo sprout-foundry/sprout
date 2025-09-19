@@ -1,5 +1,8 @@
 package types
 
+// Note: Tool and ToolCall types are consolidated in pkg/agent_api for main usage
+// This package maintains these for backward compatibility
+
 // ImageData represents an image in a message
 type ImageData struct {
 	URL    string `json:"url,omitempty"`    // URL to image
@@ -39,11 +42,11 @@ type Tool struct {
 type Choice struct {
 	Index   int `json:"index"`
 	Message struct {
-		Role             string      `json:"role"`
-		Content          string      `json:"content"`
-		ReasoningContent string      `json:"reasoning_content,omitempty"`
-		Images           []ImageData `json:"images,omitempty"`
-		ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
+		Role             string                 `json:"role"`
+		Content          string                 `json:"content"`
+		ReasoningContent string                 `json:"reasoning_content,omitempty"`
+		Images           []ImageData            `json:"images,omitempty"`
+		ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 	} `json:"message"`
 	FinishReason string `json:"finish_reason"`
 }

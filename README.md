@@ -18,6 +18,7 @@
   - [Usage and Commands](#usage-and-commands)
     - [Workspace Initialization](#workspace-initialization)
     - [Basic Editing and Interaction](#basic-editing-and-interaction)
+    - [Slash Commands in Interactive Mode](#slash-commands-in-interactive-mode)
     - [Ignoring Files](#ignoring-files)
   - [Advanced Concepts: Prompting with Context](#advanced-concepts-prompting-with-context)
     - [`#<filepath>` - Include a File](#filepath---include-a-file)
@@ -45,7 +46,7 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 
 - **Implement complex features**: Take a high-level prompt and break it down into a step-by-step plan of file changes.
 - **Intelligently use context**: Automatically determines which files in your workspace are relevant to a task, including either their full content or just a summary to optimize the context provided to the LLM.
-- **Self-correct**: When orchestrating changes, it can validate its own work, and if an error occurs, it retries with an understanding of the failure.
+- **Self-correct**: When orchestrating changes, it can validate its own work, and if an error occurs, it retries with an understanding of the failure (up to 12 attempts).
 - **Stay up-to-date**: Use real-time web search to ground its knowledge and answer questions about new technologies or libraries.
 - **Work with your tools**: Integrates with Git for automatic commits and respects your `.gitignore` files.
 
@@ -53,16 +54,20 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 
 - **AI Agent Capabilities**: The `ledit agent` command provides intelligent code analysis, explanation, generation, and orchestration. It can understand natural language intents to explain concepts, analyze code, implement features, and handle complex workflows.
 - **Self-Correction Loop**: During complex operations, the system automatically analyzes errors and retries with improved context.
-- **Smart Workspace Context**: Automatically builds and maintains an index of your workspace. An LLM selects the most relevant files to include as context for any given task.
+- **Smart Workspace Context**: Automatically builds and maintains an index of your workspace using embeddings. An LLM selects the most relevant files to include as context for any given task.
 - **Leaked Credentials Check**: Automatically scans files for common security concerns like API keys, passwords, database/service URLs, SSH private keys, AWS credentials. This helps prevent accidental exposure of sensitive information.
 - **Search Grounding**: Augments prompts with fresh information from the web using the `#SG "query"` directive.
 - **Interactive and Automated Modes**: Confirm each change manually, or run in a fully automated mode with `--skip-prompt`.
-- **Multi-Provider LLM Support**: Works with DeepInfra, OpenAI, Groq, Gemini, Ollama, Cerebras, DeepSeek, and more.
+- **Multi-Provider LLM Support**: Works with DeepInfra, OpenAI, Ollama (local/Turbo), OpenRouter, Gemini, DeepSeek, and more.
 - **MCP Server Integration**: Connect to Model Context Protocol (MCP) servers to extend functionality with external tools and services like GitHub.
-- **Change Tracking**: Keeps a local history of all changes made.
+- **Change Tracking**: Keeps a local history of all changes made in `.ledit/changes/`.
 - **Git Integration**: Can automatically commit changes to Git with AI-generated conventional commit messages.
 - **Automated Code Review**: When running in automated mode (`--skip-prompt`), performs LLM-based code reviews of changes before committing.
-- **GitHub Action Integration**: Automatically solve GitHub issues by commenting `/ledit` - the action analyzes issues, creates branches, generates implementations, and opens pull requests.
+- **Shell Script Generation**: Generate executable shell scripts from natural language descriptions (`ledit shell`).
+- **Todo Tracking**: Built-in todo management for breaking down tasks during workflows.
+- **TPS Monitoring**: Tracks tokens-per-second for performance analysis across providers.
+- **Interactive UI**: Rich terminal UI with streaming output, progress bars, and slash command support (via `--ui` or LEDIT_UI=1).
+- **Tool Suite**: Built-in tools for editing, reading/writing files, web search, vision analysis, shell execution (allowlisted), and user interaction.
 
 ## Installation
 
@@ -95,25 +100,35 @@ After adding this, restart your terminal or run `source ~/.bashrc` (or your resp
 Once installed, you can use `ledit` in your project directory and start using its powerful features.
 
 ```bash
-# Initialize ledit in your project (creates .ledit directory)
+# Initialize ledit in your project (creates .ledit directory with workspace index)
 ledit init
 
-# Start interactive agent mode (just run ledit without arguments)
+# Start interactive agent mode (default; use --ui or LEDIT_UI=1 for enhanced UI)
 ledit
 
-# Or use the AI agent directly with a specific task
+# Run a specific task with the AI agent
 ledit agent "Create a python script that prints 'Hello, World!'"
 ledit agent "What does the main function in main.go do?"
 ledit agent "Fix the build errors in this Go project"
+ledit agent --skip-prompt "Implement user authentication"
 
 # Generate a conventional commit message for staged changes
 ledit commit
+ledit commit --skip-prompt  # Auto-commit with review
+
+# Perform AI code review on staged changes
+ledit review
+
+# Generate shell scripts from natural language
+ledit shell "backup all .go files to a timestamped archive"
 
 # View the history of changes made by ledit and revert if needed
 ledit log
+ledit log --raw-log  # Show verbose logs
 
-# Ignore a directory from workspace analysis
-ledit ignore "dist/"
+# Manage MCP servers
+ledit mcp list
+ledit mcp add  # Interactive setup
 
 # For more detailed examples, see the documentation
 ```
@@ -122,11 +137,11 @@ ledit ignore "dist/"
 
 `ledit` is configured via a `config.json` file. It looks for this file first in `./.ledit/config.json` and then in `~/.ledit/config.json`. A default configuration is created on first run.
 
-**API Keys** for services like OpenAI, Groq, Jina AI, etc., are stored securely in `~/.ledit/api_keys.json`. If a key is not found, `ledit` will prompt you to enter it.
+**API Keys** for services like DeepInfra, OpenAI, Ollama, etc., are stored securely in `~/.ledit/api_keys.json`. If a key is not found, `ledit` will prompt you to enter it. Set env vars like `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_API_KEY` for convenience.
 
 ### `config.json` settings
 
-The configuration has evolved to include domain-specific sections. Here's an example of the current structure with defaults:
+The configuration has domain-specific sections. Here's the current structure with defaults:
 
 ```json
 {
@@ -199,228 +214,145 @@ Legacy fields are still supported for backward compatibility but are migrated to
 
 ## Usage and Commands
 
-**Quick Start**: Just type `ledit` to start the interactive AI agent mode!
+**Quick Start**: Just type `ledit` to start the interactive AI agent mode with terminal UI!
 
 ### Workspace Initialization
 
-The first time you run `ledit` in a project, it will create a `.ledit` directory. This directory contains:
-
-- `workspace.json`: An index of your project's files, including summaries and exports, used for context selection.
-- `leditignore`: A file for patterns to ignore, in addition to `.gitignore`.
-- `config.json`: Project-specific configuration (optional, created via `ledit init`).
-- Various logs and cache files.
-
-The workspace index is automatically updated whenever you run a command, ensuring the context is always fresh.
+Run `ledit init` to create `.ledit/` directory containing the workspace index, config, and ignore file. The index (`workspace.json`) is automatically updated on commands for fresh context.
 
 ### Basic Editing and Interaction
 
-`ledit` provides commands for code manipulation, analysis, and integration.
-
-- **`ledit agent [intent]`**: AI agent for intelligent code analysis, generation, explanation, and complex task orchestration.
+- **`ledit agent [intent]`**: Core AI agent for analysis, generation, explanation, orchestration.
   ```bash
-  # Interactive mode (chat-like)
-  ledit agent
-
-  # Direct mode for specific tasks
-  ledit agent "Add a function to reverse a string in main.go"
-  ledit agent "Explain what the main function does"
-  ledit agent "Fix all build errors in this project"
-  ledit agent --skip-prompt "Implement user authentication with JWT"
+  ledit agent  # Interactive mode
+  ledit agent "Add JWT auth to API" --skip-prompt --model "deepinfra:qwen3-coder"
+  ledit agent --dry-run "Refactor main.go for modularity"
   ```
 
-- **`ledit commit`**: Generate a conventional commit message for staged changes, with optional auto-commit and code review.
+- **`ledit commit`**: AI-generated conventional commit for staged changes.
   ```bash
-  ledit commit
-  ledit commit --skip-prompt  # Auto-commit with review
+  ledit commit --dry-run
+  ledit commit --skip-prompt  # Auto-review and commit
   ```
 
-- **`ledit log`**: View the history of changes made by `ledit` and revert if needed.
+- **`ledit review`**: LLM code review for staged Git changes.
   ```bash
-  ledit log
+  ledit review --model "openai:gpt-4o"
   ```
 
-- **`ledit ignore "pattern"`**: Add patterns to `.ledit/leditignore` to exclude files/directories from analysis (respects `.gitignore`).
+- **`ledit shell [description]`**: Generate shell scripts from natural language (no execution).
   ```bash
-  ledit ignore "dist/"
-  ledit ignore "*.log"
+  ledit shell "Setup React dev environment and install dependencies"
   ```
 
-- **`ledit mcp`**: Manage Model Context Protocol (MCP) servers for external tool integration.
+- **`ledit log`**: View/revert change history.
   ```bash
-  ledit mcp add     # Interactive setup
-  ledit mcp list    # List servers
-  ledit mcp test    # Test connections
-  ledit mcp remove [name]
+  ledit log  # Summary
+  ledit log --raw-log  # Verbose .ledit/workspace.log
   ```
 
-- **`ledit init`**: Initialize project-specific configuration in `.ledit/config.json`.
+- **`ledit mcp`**: Manage MCP servers (see MCP section).
 
-- **`ledit ui`**: Launch the interactive terminal UI.
+### Slash Commands in Interactive Mode
 
-### AI Agent Orchestration
+In interactive `ledit` or `ledit agent`, use `/` for commands (tab-complete):
+- `/help`: Show usage and slash commands.
+- `/models [select|<id>]`: List/select models (e.g., `/models select` for interactive dropdown).
+- `/providers [select|<name>]`: Switch providers (e.g., `/providers ollama`).
+- `/commit`: Generate commit message.
+- `/shell <desc>`: Generate shell script.
+- `/init`: Regenerate workspace context.
+- `/log`: View changes.
+- `/mcp`: Manage MCP.
+- `/exit`: Quit session.
 
-The `ledit agent` command handles complex tasks through a structured orchestration process (alpha stage, use with caution):
+### Ignoring Files
 
-1. **Analysis**: Analyzes your intent and workspace.
-2. **Planning**: Generates a step-by-step plan using LLM.
-3. **Execution**: Executes steps (code gen, edits, validation).
-4. **Validation & Self-Correction**: Analyzes errors, searches for solutions, retries up to 12 times.
-5. **Review**: Performs LLM-based code review in automated mode.
-
-Example:
+Add patterns to `.ledit/leditignore` (respects `.gitignore`):
 ```bash
-ledit agent "Implement a REST API for users using Gin" --skip-prompt
+# Via agent or manually
+echo "dist/" >> .ledit/leditignore
+echo "*.log" >> .ledit/leditignore
 ```
 
 ## Advanced Concepts: Prompting with Context
 
-Enhance prompts with `#` directives for better context.
+Use `#` directives in prompts for enhanced context:
 
-### `#<filepath>` - Include a File
-
-Include full file content:
-```bash
-ledit agent "Refactor using helpers from #./helpers.go" -f main.go
-```
-
-### `#WORKSPACE` / `#WS` - Smart Context
-
-Curates relevant files/summaries:
-```bash
-ledit agent "Add JWT auth. #WORKSPACE"
-```
-
-### `#SG "query"` - Search Grounding
-
-Fetches web info:
-```bash
-ledit agent "Add latest react-query. #SG \"latest react-query version\"" -f package.json
-```
+- **`#<filepath>`**: Include full file (e.g., "Refactor #main.go").
+- **`#WORKSPACE` / `#WS`**: Smart relevance selection via embeddings.
+- **`#SG "query"`**: Web search grounding (e.g., "#SG latest React hooks").
 
 ## Supported LLM Providers
 
-`ledit` supports OpenAI-compatible APIs. Specify as `<provider>:<model>`.
+Specify as `<provider>:<model>` (e.g., `--model "deepinfra:deepseek-coder"`).
 
-Supported providers:
+- **DeepInfra** (default, cost-effective): `deepinfra:deepseek-ai/DeepSeek-V3`, `deepinfra:qwen/Qwen3-Coder`.
+- **OpenAI**: `openai:gpt-4o`, `openai:gpt-4-turbo`.
+- **Ollama** (local/Turbo): Local (`ollama:llama3`), Turbo (`ollama:gpt-oss:120b` - requires OLLAMA_API_KEY for remote).
+- **OpenRouter**: `openrouter:anthropic/claude-3.5-sonnet`.
+- **Gemini**: `gemini:gemini-1.5-pro`.
+- **DeepSeek**: `deepseek:deepseek-coder-v2`.
 
-- **`deepinfra`**: Default for cost-effective models (e.g., `deepinfra:deepseek-ai/DeepSeek-V3-0324`)
-- **`openai`**: OpenAI models (e.g., `openai:gpt-4o`)
-- **`openrouter`**: Multi-provider gateway (e.g., `openrouter:deepseek/deepseek-chat-v3.1:free`)
-- **`gemini`**: Google Gemini (e.g., `gemini:gemini-1.5-pro`)
-- **`ollama`**: Local models (e.g., `ollama:llama3`)
-- **`deepseek`**: DeepSeek models (e.g., `deepseek:deepseek-coder-v2`)
-
-Additional providers can be added via PR.
+Env vars: DEEPINFRA_API_KEY, OPENAI_API_KEY, etc. Ollama URL: http://localhost:11434.
 
 ## MCP Server Integration
 
-**TL;DR**: `ledit mcp add` for easy GitHub/other integrations.
-
-Supports [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) for external tools.
-
-### Quick Start
+MCP extends `ledit` with external tools (e.g., GitHub repos/issues/PRs).
 
 ```bash
-ledit mcp add    # Guided setup
-ledit mcp list   # Status
-ledit mcp test   # Verify
+ledit mcp add  # Interactive (GitHub or custom)
+ledit mcp list  # Status
+ledit mcp test [name]  # Verify
 ledit mcp remove [name]
 ```
 
-Built-in: GitHub MCP (repos, issues, PRs). Custom servers supported.
+Config: `~/.ledit/mcp_config.json`. Use in agent: "Create GitHub PR for feature #WS".
 
-Config in `~/.ledit/mcp_config.json`. Env vars: `LEDIT_MCP_ENABLED=true`.
+See docs/MCP_INTEGRATION.md for details.
 
-Use in agent: `ledit agent "Create GitHub issue for auth bug"`.
+## GitHub Action Integration (Example)
 
-Full details in the [MCP section](#mcp-server-integration) (abridged here for brevity).
-
-## GitHub Action: Automated Issue Solving
-
-`ledit` includes a GitHub Action that automatically implements features and fixes based on issue descriptions. Simply comment `/ledit` on any issue to trigger AI-powered code generation.
-
-### Quick Setup
-
-1. Copy the workflow to your repository:
-
-```bash
-# Create the workflow directory
-mkdir -p .github/workflows
-
-# Copy the example workflow
-cp .github/workflows/ledit-solver-example.yml .github/workflows/ledit-solver.yml
-```
-
-2. Add your API key as a repository secret (Settings → Secrets → New repository secret)
-
-3. Comment `/ledit` on any issue to start
-
-### Features
-
-- **Automatic Implementation**: Analyzes issues and generates complete implementations
-- **Iterative Development**: Comment `/ledit <additional instructions>` for changes
-- **Image Support**: Processes mockups and screenshots attached to issues
-- **Multi-Provider Support**: Works with OpenAI, Groq, Gemini, and more
-- **Safe PR Workflow**: All changes go through pull requests for review
-
-### Example
-
-```markdown
-**Issue**: Add dark mode toggle to settings
-
-**Comment**: /ledit implement using Tailwind CSS
-```
-
-The action will:
-1. Create branch `issue/123`
-2. Implement the feature
-3. Open a PR with the changes
-4. Report progress to the issue
-
-See [.github/actions/ledit-issue-solver/README.md](.github/actions/ledit-issue-solver/README.md) for full documentation.
+An example workflow in .github/workflows/ledit-solver.yml allows commenting `/ledit` on issues to auto-implement. Copy and configure with API secrets. See docs for setup.
 
 ## Documentation
 
-- [Getting Started](docs/GETTING_STARTED.md)
-- [Cheatsheet](docs/CHEATSHEET.md)
-- [Examples](docs/EXAMPLES.md)
-- [Tips and Tricks](docs/TIPS_AND_TRICKS.md)
+- [MCP Integration](docs/MCP_INTEGRATION.md)
+- [Streaming](docs/STREAMING_IMPLEMENTATION.md)
+- [Ollama Turbo](docs/OLLAMA_TURBO.md)
+- Prompt optimization in prompt_optimization/.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PRs.
 
 ## File Structure
 
 ### Key files maintained by ledit
 
-In `.ledit/`:
-
-- `workspace.json` - File index with summaries/exports.
-- `config.json` - Project config.
-- `leditignore` - Ignore patterns.
-- `requirements.json` - Orchestration plans (if used).
-- `changes/` - Revision history.
-- `revisions/` - Detailed change logs.
-- Logs: `runlogs/`, `workspace.log`, etc.
-- Caches: `embeddings/`, `url_cache/`, `evidence_cache.json`.
-
-Generated: `setup.sh`, `validate.sh` (project root).
+- **Root**: main.go (entry), cmd/ (CLI subcommands: agent, commit, log, mcp, review, shell).
+- **pkg/**: agent/ (orchestration, state, tools), agent_api/ (providers, TPS tracker), agent_config/ (config loading), workspace/ (indexing/embeddings), changetracker/ (history/diffs), git/ (commit integration), security/ (credential scans, allowlist), mcp/ (protocol client), console/ (terminal UI, streaming).
+- **.ledit/** (project-local):
+  - `workspace.json`: File index with embeddings/summaries for relevance.
+  - `config.json`: Local overrides.
+  - `leditignore`: Ignore patterns (augments .gitignore).
+  - `changes/`: Per-revision diff logs.
+  - `runlogs/`: JSONL workflow traces.
+  - `workspace.log`: Verbose execution log.
+  - `embeddings/`: Vector cache for files/web content.
+- **Global (~/.ledit/)**: api_keys.json, mcp_config.json.
+- **Tests**: Unit in pkg/ (e.g., tps_tracker_test.go), integration_tests/ (git/file mods), e2e_tests/ (shell workflows), smoke_tests/ (API).
 
 ## Author's notes
 
-Most of this README is generated, but key thoughts:
-
-- DeepInfra defaults work well for workspace indexing.
-- Prefer Gemini 1.5 Flash/Pro for editing (speedy, capable).
-- For cost: Qwen3 Coder on DeepInfra or Ollama local.
-- Agent orchestration is alpha; use `#WS` for context.
-- Goal: Streamline personal dev flow, not compete broadly.
+- Defaults to DeepInfra for efficiency; switch with `/providers`.
+- Orchestration is alpha; monitor with TPS stats (`/models` shows costs).
+- Focus: Personal dev assistant with safe, contextual edits.
 
 ## License
 
-[MIT License](LICENSE).
+MIT License (LICENSE).
 
 ## Support and Community
 
-Open issues at [GitHub](https://github.com/alantheprice/ledit/issues).
+File issues at GitHub. Community discussions in issues/PRs.

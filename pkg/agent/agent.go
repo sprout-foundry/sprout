@@ -13,6 +13,7 @@ import (
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/config"
 	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/alantheprice/ledit/pkg/utils"
 	"golang.org/x/term"
 )
 
@@ -35,12 +36,14 @@ type Agent struct {
 	sessionID            string                         // Unique session identifier
 	optimizer            *ConversationOptimizer         // Conversation optimization
 	configManager        *agent_config.Manager          // Configuration management
+	config               *config.Config                 // Main application configuration
 	currentContextTokens int                            // Current context size being sent to model
 	maxContextTokens     int                            // Model's maximum context window
 	contextWarningIssued bool                           // Whether we've warned about approaching context limit
 	shellCommandHistory  map[string]*ShellCommandResult // Track shell commands for deduplication
 	changeTracker        *ChangeTracker                 // Track file changes for rollback support
 	mcpManager           mcp.MCPManager                 // MCP server management
+	mcpToolsCache        []api.Tool                     // Cached MCP tools to avoid reloading
 	circuitBreaker       *CircuitBreakerState           // Track repetitive actions
 	conversationPruner   *ConversationPruner            // Automatic conversation pruning
 
@@ -56,6 +59,11 @@ type Agent struct {
 
 	// Output synchronization
 	outputMutex *sync.Mutex
+
+	// Hang detection
+	hangDetector    *utils.HangDetector
+	progressMonitor *utils.ProgressMonitor
+	debugHangMode   bool
 
 	// False stop detection
 	falseStopDetectionEnabled bool
@@ -121,6 +129,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 	// Check if debug mode is enabled
 	debug := os.Getenv("DEBUG") == "true" || os.Getenv("DEBUG") == "1"
+	debugHang := os.Getenv("LEDIT_DEBUG_HANG") == "true" || os.Getenv("LEDIT_DEBUG_HANG") == "1"
 
 	// Set debug mode on the client
 	client.SetDebug(debug)
@@ -139,6 +148,12 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Conversation optimization is always enabled
 	optimizationEnabled := true
 
+	// Load the actual configuration
+	cfg, err := config.LoadOrInitConfig(true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
+	}
+
 	agent := &Agent{
 		client:                    client,
 		messages:                  []api.Message{},
@@ -149,6 +164,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		debug:                     debug,
 		optimizer:                 NewConversationOptimizer(optimizationEnabled, debug),
 		configManager:             configManager,
+		config:                    cfg,
 		shellCommandHistory:       make(map[string]*ShellCommandResult),
 		interruptRequested:        false,
 		interruptMessage:          "",
@@ -157,6 +173,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		escMonitoringEnabled:      false, // Start disabled
 		falseStopDetectionEnabled: true,  // Enable by default
 		conversationPruner:        NewConversationPruner(debug),
+		debugHangMode:             debugHang,
 	}
 
 	// NOTE: Esc key monitoring removed - was interfering with Ctrl+C and terminal control
@@ -190,7 +207,47 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		}
 	}
 
+	// Initialize hang detection
+	agent.initializeHangDetection()
+
 	return agent, nil
+}
+
+// initializeHangDetection sets up hang detection monitoring
+func (a *Agent) initializeHangDetection() {
+	// Default timeout for operations (adjustable via env var)
+	timeout := 5 * time.Minute // Default 5 minutes
+	if timeoutStr := os.Getenv("LEDIT_HANG_TIMEOUT"); timeoutStr != "" {
+		if parsedTimeout, err := time.ParseDuration(timeoutStr); err == nil {
+			timeout = parsedTimeout
+		}
+	}
+
+	// Create hang detector for overall agent operations
+	a.hangDetector = utils.NewHangDetector("Agent", timeout)
+
+	// Create progress monitor for detailed operation tracking
+	a.progressMonitor = utils.NewProgressMonitor("AgentProgress", timeout)
+
+	// Set custom hang handler if in debug mode
+	if a.debugHangMode {
+		a.hangDetector.SetHangHandler(func(name string, duration time.Duration) {
+			// Use mutex for synchronized output if available
+			if a.outputMutex != nil {
+				a.outputMutex.Lock()
+				defer a.outputMutex.Unlock()
+			}
+
+			fmt.Printf("\n🚨 HANG DETECTED: No progress updates from %s for %v\n", name, duration)
+			fmt.Printf("   This may indicate the operation is stuck or taking longer than expected.\n")
+			fmt.Printf("   Use Ctrl+C to interrupt, or wait for the operation to complete.\n")
+			fmt.Printf("   Check .ledit/workspace.log and latest .ledit/runlogs/ for details\n\n")
+		})
+
+		// Start monitoring immediately in debug mode
+		a.hangDetector.Start()
+		a.progressMonitor.Start()
+	}
 }
 
 // CheckCircuitBreaker checks if an action should be blocked due to repetitive behavior
@@ -260,11 +317,7 @@ func (a *Agent) GetConfigManager() *agent_config.Manager {
 }
 
 func (a *Agent) GetConfig() *config.Config {
-	// Create a basic config structure for tools that need it
-	cfg := &config.Config{
-		SkipPrompt: !a.debug, // Don't prompt for API keys if not in debug mode
-	}
-	return cfg
+	return a.config
 }
 
 func (a *Agent) GetTotalCost() float64 {
@@ -520,8 +573,7 @@ func (a *Agent) initializeMCP() error {
 	ctx := context.Background()
 
 	// Load MCP configuration from the configuration system
-	cfg := &config.Config{} // Placeholder - should use actual config
-	mcpConfig, err := mcp.LoadMCPConfig(cfg)
+	mcpConfig, err := mcp.LoadMCPConfig(a.config)
 	if err != nil {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}
@@ -562,16 +614,27 @@ func (a *Agent) initializeMCP() error {
 		}
 	}
 
+	// Generate MCP server summary for the system prompt
+	a.generateMCPServerSummary()
+
 	return nil
 }
 
-// getMCPTools retrieves all available MCP tools and converts them to agent tool format
+// getMCPTools retrieves all available MCP tools and converts them to agent tool format (with caching)
 func (a *Agent) getMCPTools() []api.Tool {
 	if a.mcpManager == nil {
 		if a.debug {
 			fmt.Printf("⚠️  Warning: MCP manager is nil\n")
 		}
 		return nil
+	}
+
+	// Return cached tools if available
+	if a.mcpToolsCache != nil {
+		if a.debug {
+			fmt.Printf("🔧 Using cached MCP tools: %d\n", len(a.mcpToolsCache))
+		}
+		return a.mcpToolsCache
 	}
 
 	ctx := context.Background()
@@ -584,7 +647,7 @@ func (a *Agent) getMCPTools() []api.Tool {
 	}
 
 	if a.debug {
-		fmt.Printf("🔧 Found %d MCP tools from manager\n", len(mcpTools))
+		fmt.Printf("🔧 Loading %d MCP tools from manager (first time)\n", len(mcpTools))
 	}
 
 	var agentTools []api.Tool
@@ -601,9 +664,12 @@ func (a *Agent) getMCPTools() []api.Tool {
 		agentTools = append(agentTools, apiTool)
 
 		if a.debug {
-			fmt.Printf("  - Added MCP tool: %s\n", agentTool.Function.Name)
+			fmt.Printf("  - Loaded MCP tool: %s\n", agentTool.Function.Name)
 		}
 	}
+
+	// Cache the tools for future use
+	a.mcpToolsCache = agentTools
 
 	return agentTools
 }
@@ -698,4 +764,258 @@ func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (st
 	}
 
 	return response.String(), nil
+}
+
+// handleMCPToolsCommand handles the mcp_tools meta-tool for discovering and calling MCP tools
+func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, error) {
+	if a.mcpManager == nil {
+		return "MCP is not configured or enabled. No MCP servers are available.", nil
+	}
+
+	action, ok := args["action"].(string)
+	if !ok {
+		return "", fmt.Errorf("action parameter is required. Use 'list' to see available tools or 'call' to execute a tool")
+	}
+
+	switch action {
+	case "list":
+		return a.listMCPTools(args)
+	case "call":
+		return a.callMCPToolViaMetaTool(args)
+	default:
+		return "", fmt.Errorf("unknown action: %s. Use 'list' or 'call'", action)
+	}
+}
+
+// listMCPTools lists available MCP tools
+func (a *Agent) listMCPTools(args map[string]interface{}) (string, error) {
+	serverFilter, _ := args["server"].(string)
+	ctx := context.Background()
+
+	var result strings.Builder
+	result.WriteString("Available MCP Tools:\n\n")
+
+	servers := a.mcpManager.ListServers()
+	toolCount := 0
+
+	for _, server := range servers {
+		serverName := server.GetName()
+
+		// Skip if filtering by server name
+		if serverFilter != "" && serverName != serverFilter {
+			continue
+		}
+
+		if !server.IsRunning() {
+			result.WriteString(fmt.Sprintf("Server '%s': Not running\n", serverName))
+			continue
+		}
+
+		tools, err := server.ListTools(ctx)
+		if err != nil {
+			result.WriteString(fmt.Sprintf("Server '%s': Error listing tools: %v\n", serverName, err))
+			continue
+		}
+
+		if len(tools) > 0 {
+			result.WriteString(fmt.Sprintf("Server '%s':\n", serverName))
+			for _, tool := range tools {
+				toolCount++
+				// Show the full MCP tool name that can be used
+				mcpToolName := fmt.Sprintf("mcp_%s_%s", serverName, tool.Name)
+				result.WriteString(fmt.Sprintf("  - %s: %s\n", mcpToolName, tool.Description))
+			}
+			result.WriteString("\n")
+		}
+	}
+
+	if toolCount == 0 {
+		if serverFilter != "" {
+			result.WriteString(fmt.Sprintf("No tools found for server '%s'\n", serverFilter))
+		} else {
+			result.WriteString("No MCP tools currently available. Check if MCP servers are running.\n")
+		}
+	} else {
+		result.WriteString(fmt.Sprintf("\nTotal tools available: %d\n", toolCount))
+		result.WriteString("\nTo use a tool, call it directly or use: mcp_tools action='call' server='<server>' tool='<tool>' arguments={...}\n")
+	}
+
+	return result.String(), nil
+}
+
+// callMCPToolViaMetaTool executes an MCP tool via the mcp_tools meta-tool
+func (a *Agent) callMCPToolViaMetaTool(args map[string]interface{}) (string, error) {
+	server, ok := args["server"].(string)
+	if !ok || server == "" {
+		return "", fmt.Errorf("server parameter is required for 'call' action")
+	}
+
+	tool, ok := args["tool"].(string)
+	if !ok || tool == "" {
+		return "", fmt.Errorf("tool parameter is required for 'call' action")
+	}
+
+	toolArgs, _ := args["arguments"].(map[string]interface{})
+	if toolArgs == nil {
+		toolArgs = make(map[string]interface{})
+	}
+
+	// Call the tool through the manager
+	ctx := context.Background()
+	result, err := a.mcpManager.CallTool(ctx, server, tool, toolArgs)
+	if err != nil {
+		return "", fmt.Errorf("failed to call MCP tool: %w", err)
+	}
+
+	if result.IsError {
+		return "", fmt.Errorf("MCP tool returned error: %v", result.Content)
+	}
+
+	// Combine all content pieces into a single response
+	var response strings.Builder
+	for i, content := range result.Content {
+		if i > 0 {
+			response.WriteString("\n")
+		}
+		if content.Type == "text" {
+			response.WriteString(content.Text)
+		} else if content.Data != "" {
+			response.WriteString(content.Data)
+		}
+	}
+
+	return response.String(), nil
+}
+
+// GetMCPManager returns the MCP manager (for tool access)
+func (a *Agent) GetMCPManager() interface{} {
+	return a.mcpManager
+}
+
+// mcpServerSummary holds the dynamic summary of available MCP servers
+var mcpServerSummary string
+
+// generateMCPServerSummary creates a summary of available MCP servers
+func (a *Agent) generateMCPServerSummary() {
+	if a.mcpManager == nil {
+		return
+	}
+
+	servers := a.mcpManager.ListServers()
+	if len(servers) == 0 {
+		return
+	}
+
+	var summary strings.Builder
+	summary.WriteString("\n\nMCP SERVERS AVAILABLE:\n")
+
+	ctx := context.Background()
+	serverCount := 0
+
+	for _, server := range servers {
+		if !server.IsRunning() {
+			continue
+		}
+
+		serverName := server.GetName()
+		serverCount++
+
+		// Get a sample of tools to understand what the server provides
+		tools, err := server.ListTools(ctx)
+		if err != nil || len(tools) == 0 {
+			summary.WriteString(fmt.Sprintf("- %s: MCP server (tools unavailable)\n", serverName))
+			continue
+		}
+
+		// Analyze tool names to determine server purpose
+		serverDesc := analyzeMCPServerPurpose(serverName, tools)
+		summary.WriteString(fmt.Sprintf("- %s: %s (%d tools)\n", serverName, serverDesc, len(tools)))
+	}
+
+	if serverCount > 0 {
+		summary.WriteString("\nUse the 'mcp_tools' tool with action='list' to see all available tools from these servers.")
+		mcpServerSummary = summary.String()
+	} else {
+		mcpServerSummary = ""
+	}
+}
+
+// analyzeMCPServerPurpose attempts to determine what a server does based on its name and tools
+func analyzeMCPServerPurpose(serverName string, tools []mcp.MCPTool) string {
+	// First check common server names
+	lowerName := strings.ToLower(serverName)
+
+	switch {
+	case strings.Contains(lowerName, "github"):
+		return "GitHub operations (PRs, issues, repos)"
+	case strings.Contains(lowerName, "filesystem") || strings.Contains(lowerName, "fs"):
+		return "Advanced file system operations"
+	case strings.Contains(lowerName, "postgres") || strings.Contains(lowerName, "pg"):
+		return "PostgreSQL database operations"
+	case strings.Contains(lowerName, "slack"):
+		return "Slack messaging and workspace operations"
+	case strings.Contains(lowerName, "aws"):
+		return "AWS cloud service operations"
+	case strings.Contains(lowerName, "docker"):
+		return "Docker container management"
+	case strings.Contains(lowerName, "git") && !strings.Contains(lowerName, "github"):
+		return "Git version control operations"
+	}
+
+	// If name doesn't give a clear hint, analyze tool names
+	toolCategories := make(map[string]int)
+	for _, tool := range tools {
+		toolLower := strings.ToLower(tool.Name)
+
+		// Categorize based on tool names
+		switch {
+		case strings.Contains(toolLower, "file") || strings.Contains(toolLower, "dir"):
+			toolCategories["file"]++
+		case strings.Contains(toolLower, "query") || strings.Contains(toolLower, "select") || strings.Contains(toolLower, "insert"):
+			toolCategories["database"]++
+		case strings.Contains(toolLower, "pr") || strings.Contains(toolLower, "issue") || strings.Contains(toolLower, "commit"):
+			toolCategories["vcs"]++
+		case strings.Contains(toolLower, "send") || strings.Contains(toolLower, "message") || strings.Contains(toolLower, "channel"):
+			toolCategories["messaging"]++
+		case strings.Contains(toolLower, "deploy") || strings.Contains(toolLower, "build") || strings.Contains(toolLower, "run"):
+			toolCategories["devops"]++
+		}
+	}
+
+	// Find dominant category
+	maxCount := 0
+	dominantCategory := ""
+	for cat, count := range toolCategories {
+		if count > maxCount {
+			maxCount = count
+			dominantCategory = cat
+		}
+	}
+
+	// Return description based on dominant category
+	switch dominantCategory {
+	case "file":
+		return "File and directory operations"
+	case "database":
+		return "Database operations"
+	case "vcs":
+		return "Version control operations"
+	case "messaging":
+		return "Messaging and communication"
+	case "devops":
+		return "DevOps and deployment operations"
+	default:
+		// Generic description with some sample tools
+		if len(tools) > 0 {
+			sampleTools := []string{}
+			for i, tool := range tools {
+				if i >= 3 {
+					break
+				}
+				sampleTools = append(sampleTools, tool.Name)
+			}
+			return fmt.Sprintf("Various operations including %s", strings.Join(sampleTools, ", "))
+		}
+		return "Various operations"
+	}
 }

@@ -19,36 +19,34 @@ type ClientInterface interface {
 	SupportsVision() bool
 	GetVisionModel() string
 	SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)
+	// TPS (Tokens Per Second) tracking methods
+	GetLastTPS() float64
+	GetAverageTPS() float64
+	GetTPSStats() map[string]float64
+	ResetTPSStats()
 }
 
 // ClientType represents the type of client to use
 type ClientType string
 
 const (
-	DeepInfraClientType  ClientType = "deepinfra"
-	OllamaClientType     ClientType = "ollama"
-	OpenRouterClientType ClientType = "openrouter"
-	OpenAIClientType     ClientType = "openai"
-	DeepSeekClientType   ClientType = "deepseek"
+	DeepInfraClientType   ClientType = "deepinfra"
+	OllamaClientType      ClientType = "ollama" // Maps to local ollama
+	OllamaLocalClientType ClientType = "ollama-local"
+	OllamaTurboClientType ClientType = "ollama-turbo"
+	OpenRouterClientType  ClientType = "openrouter"
+	OpenAIClientType      ClientType = "openai"
+	DeepSeekClientType    ClientType = "deepseek"
 )
 
 // NewUnifiedClient creates a client with default model for the provider
 func NewUnifiedClient(clientType ClientType) (ClientInterface, error) {
-	registry := GetProviderRegistry()
-	defaultModel := registry.GetDefaultModel(clientType)
-	return NewUnifiedClientWithModel(clientType, defaultModel)
+	return NewUnifiedClientWithModel(clientType, "")
 }
 
 // NewUnifiedClientWithModel creates a client with a specific model
 func NewUnifiedClientWithModel(clientType ClientType, model string) (ClientInterface, error) {
-	// Use default model if none specified
-	registry := GetProviderRegistry()
-	if model == "" {
-		model = registry.GetDefaultModel(clientType)
-	}
-
-	// Use the provider registry for data-driven client creation
-	return registry.CreateClient(clientType, model)
+	return CreateProviderClient(clientType, model)
 }
 
 // NewDeepInfraClientWrapper creates a DeepInfra client wrapper
@@ -123,7 +121,8 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 		OpenRouterClientType,
 		DeepInfraClientType,
 		DeepSeekClientType,
-		OllamaClientType,
+		OllamaTurboClientType,
+		OllamaLocalClientType,
 	}
 
 	for _, provider := range priorityOrder {
@@ -133,7 +132,7 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 	}
 
 	// 5. Final fallback
-	return OllamaClientType, nil
+	return OllamaLocalClientType, nil
 }
 
 // parseProviderName converts a string provider name to ClientType
@@ -147,8 +146,12 @@ func parseProviderName(name string) (ClientType, error) {
 	case "deepinfra":
 		return DeepInfraClientType, nil
 	case "ollama":
-		return OllamaClientType, nil
-
+		// "ollama" maps to local
+		return OllamaLocalClientType, nil
+	case "ollama-local":
+		return OllamaLocalClientType, nil
+	case "ollama-turbo":
+		return OllamaTurboClientType, nil
 	case "deepseek":
 		return DeepSeekClientType, nil
 	default:
@@ -156,33 +159,20 @@ func parseProviderName(name string) (ClientType, error) {
 	}
 }
 
-// GetDefaultModelForProvider returns the default model for each provider
-// This is a compatibility wrapper around the provider registry
-func GetDefaultModelForProvider(clientType ClientType) string {
-	registry := GetProviderRegistry()
-	return registry.GetDefaultModel(clientType)
-}
-
-// GetVisionModelForProvider returns the default vision-capable model for each provider
-// This is a compatibility wrapper around the provider registry
-func GetVisionModelForProvider(clientType ClientType) string {
-	registry := GetProviderRegistry()
-	return registry.GetDefaultVisionModel(clientType)
-}
-
 // IsProviderAvailable checks if a provider can be used
 func IsProviderAvailable(provider ClientType) bool {
 	switch provider {
-	case OllamaClientType:
-		// Ollama is always available (local)
+	case OllamaClientType, OllamaLocalClientType:
+		// Ollama local is always available (we'll check actual model availability later)
 		return true
+	case OllamaTurboClientType:
+		return os.Getenv("OLLAMA_API_KEY") != ""
 	case OpenAIClientType:
 		return os.Getenv("OPENAI_API_KEY") != ""
 	case OpenRouterClientType:
 		return os.Getenv("OPENROUTER_API_KEY") != ""
 	case DeepInfraClientType:
 		return os.Getenv("DEEPINFRA_API_KEY") != ""
-
 	case DeepSeekClientType:
 		return os.Getenv("DEEPSEEK_API_KEY") != ""
 	default:
@@ -192,14 +182,42 @@ func IsProviderAvailable(provider ClientType) bool {
 
 // GetAvailableProviders returns a list of all available providers
 func GetAvailableProviders() []ClientType {
-	registry := GetProviderRegistry()
-	return registry.GetAvailableProviders()
+	providers := []ClientType{
+		OpenAIClientType,
+		DeepInfraClientType,
+		OllamaLocalClientType,
+		OllamaTurboClientType,
+		OpenRouterClientType,
+		DeepSeekClientType,
+	}
+
+	available := make([]ClientType, 0, len(providers))
+	for _, provider := range providers {
+		if IsProviderAvailable(provider) {
+			available = append(available, provider)
+		}
+	}
+	return available
 }
 
 // GetProviderName returns the human-readable name for a provider
 func GetProviderName(clientType ClientType) string {
-	registry := GetProviderRegistry()
-	return registry.GetProviderName(clientType)
+	switch clientType {
+	case OpenAIClientType:
+		return "OpenAI"
+	case DeepInfraClientType:
+		return "DeepInfra"
+	case OllamaClientType, OllamaLocalClientType:
+		return "Ollama (Local)"
+	case OllamaTurboClientType:
+		return "Ollama Turbo"
+	case OpenRouterClientType:
+		return "OpenRouter"
+	case DeepSeekClientType:
+		return "DeepSeek"
+	default:
+		return string(clientType)
+	}
 }
 
 // DeepInfraClientWrapper wraps the existing DeepInfra client to implement ClientInterface
@@ -305,15 +323,9 @@ func (w *DeepInfraClientWrapper) GetModelContextLimit() (int, error) {
 		}
 	}
 
-	// Fallback to model registry for consistent context limit lookup
-	// Note: The registry handles pattern matching for models not in the API response
-	registry := GetModelRegistry()
-	contextLimit, err := registry.GetModelContextLength(model)
-	if err != nil {
-		// Return reasonable default for DeepInfra models
-		return 32000, nil
-	}
-	return contextLimit, nil
+	// Return reasonable default for DeepInfra models
+	// The provider should be queried for actual context limits
+	return 128000, nil
 }
 
 func (w *DeepInfraClientWrapper) SupportsVision() bool {
@@ -349,4 +361,24 @@ func (w *DeepInfraClientWrapper) SendVisionRequest(messages []Message, tools []T
 	w.SetModel(originalModel)
 
 	return response, err
+}
+
+// GetLastTPS returns the most recent TPS measurement
+func (w *DeepInfraClientWrapper) GetLastTPS() float64 {
+	return w.client.GetLastTPS()
+}
+
+// GetAverageTPS returns the average TPS across all requests
+func (w *DeepInfraClientWrapper) GetAverageTPS() float64 {
+	return w.client.GetAverageTPS()
+}
+
+// GetTPSStats returns comprehensive TPS statistics
+func (w *DeepInfraClientWrapper) GetTPSStats() map[string]float64 {
+	return w.client.GetTPSStats()
+}
+
+// ResetTPSStats clears all TPS tracking data
+func (w *DeepInfraClientWrapper) ResetTPSStats() {
+	w.client.ResetTPSStats()
 }

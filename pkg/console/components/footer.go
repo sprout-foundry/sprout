@@ -60,6 +60,11 @@ type FooterComponent struct {
 	outputMutex       *sync.Mutex
 	dynamicHeight     int
 
+	// Token rate tracking
+	lastTokenUpdateTime time.Time
+	previousTokens      int
+	tokensPerSecond     float64
+
 	// Git and path information
 	gitBranch   string
 	gitChanges  int
@@ -258,25 +263,58 @@ func (fc *FooterComponent) renderPathLine(region console.Region, lineOffset int)
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
 	fc.Terminal().ClearLine()
 
+	// Set background color for the entire path line
+	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey + fc.config.Colors.TextWhite))
+
 	// Replace home directory with ~
 	displayPath := fc.currentPath
 	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(displayPath, home) {
 		displayPath = "~" + strings.TrimPrefix(displayPath, home)
 	}
 
-	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey + fc.config.Colors.TextWhite))
+	// Calculate tokens per second for the path line
+	duration := time.Since(fc.sessionStart).Seconds()
+	var tpsStr string
+	if duration > 1.0 && fc.lastTokens > 0 { // Only show after 1 second and with tokens
+		tps := fc.tokensPerSecond
+		if tps > 0 {
+			tpsStr = fmt.Sprintf(" | %.1f t/s", tps)
+		}
+	}
+
+	// Truncate path if too long, considering TPS space
+	tpsLen := len(tpsStr)
+	availablePathLen := region.Width - tpsLen - len(fc.config.Paddings.PathLeft) - 4 // 4 for safety
+	if len(displayPath) > availablePathLen {
+		ellipsisLen := fc.config.Truncation.PathEllipsisLen
+		startIdx := len(displayPath) - availablePathLen + ellipsisLen
+		if startIdx > 0 {
+			displayPath = "..." + displayPath[startIdx:]
+		}
+	}
+
 	pathLine := fmt.Sprintf("%s%s", fc.config.Paddings.PathLeft, displayPath)
-	// Truncate path if too long
-	if len(pathLine) > region.Width-2 {
-		ellipsis := strings.Repeat(".", fc.config.Truncation.PathEllipsisLen-2) // Adjust for "  "
-		pathLine = fmt.Sprintf("%s...%s", fc.config.Paddings.PathLeft, ellipsis+displayPath[len(displayPath)-(region.Width-fc.config.Truncation.PathEllipsisLen-2):])
-	}
 	fc.Terminal().Write([]byte(pathLine))
-	// Pad the rest
-	padding := region.Width - len(pathLine)
-	if padding > 0 {
-		fc.Terminal().Write([]byte(strings.Repeat(" ", padding)))
+
+	// Calculate padding between path and TPS
+	paddingLen := region.Width - len(pathLine) - tpsLen
+	if paddingLen > 0 {
+		fc.Terminal().Write([]byte(strings.Repeat(" ", paddingLen)))
 	}
+
+	// Write TPS if applicable, with dim white for subtlety
+	if tpsStr != "" {
+		fc.Terminal().Write([]byte(fc.config.Colors.DimWhite))
+		fc.Terminal().Write([]byte(tpsStr))
+		fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+	} else {
+		// Pad the rest if no TPS
+		remainingPad := region.Width - len(pathLine)
+		if remainingPad > 0 {
+			fc.Terminal().Write([]byte(strings.Repeat(" ", remainingPad)))
+		}
+	}
+
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 	return nil
 }
@@ -582,6 +620,48 @@ func (fc *FooterComponent) UpdateStats(model, provider string, tokens int, cost 
 		// Log or handle invalid values if needed
 		return
 	}
+	
+	// Calculate tokens per second with improved accuracy
+	now := time.Now()
+	
+	if fc.lastTokenUpdateTime.IsZero() {
+		// First token update, initialize tracking
+		fc.previousTokens = tokens
+		fc.lastTokenUpdateTime = now
+		fc.tokensPerSecond = 0.0
+	} else if tokens > fc.previousTokens {
+		// Calculate rate based on tokens generated since last update
+		duration := now.Sub(fc.lastTokenUpdateTime).Seconds()
+		
+		// Only calculate if reasonable time has passed (avoid division by zero and noise)
+		if duration >= 0.05 { // 50ms minimum for meaningful calculation
+			tokensGenerated := tokens - fc.previousTokens
+			
+			// Calculate instantaneous rate
+			instantaneousRate := float64(tokensGenerated) / duration
+			
+			// Apply exponential smoothing for more stable display
+			// Weight new measurement more heavily (0.7) vs previous value (0.3)
+			if fc.tokensPerSecond > 0 {
+				fc.tokensPerSecond = 0.7*instantaneousRate + 0.3*fc.tokensPerSecond
+			} else {
+				fc.tokensPerSecond = instantaneousRate
+			}
+			
+			fc.previousTokens = tokens
+			fc.lastTokenUpdateTime = now
+		}
+	} else if tokens < fc.previousTokens {
+		// Token count decreased (likely reset), reset tracking
+		fc.previousTokens = tokens
+		fc.lastTokenUpdateTime = now
+		fc.tokensPerSecond = 0.0
+	} else {
+		// Tokens stayed the same, update time but keep rate
+		// This prevents the rate from decaying too quickly during pauses
+		fc.lastTokenUpdateTime = now
+	}
+	
 	fc.State().Set("footer.model", model)
 	fc.State().Set("footer.provider", provider)
 	fc.State().Set("footer.tokens", tokens)

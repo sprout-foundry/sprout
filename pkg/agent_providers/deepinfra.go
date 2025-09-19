@@ -33,19 +33,7 @@ func NewDeepInfraProvider() (*DeepInfraProvider, error) {
 		return nil, fmt.Errorf("DEEPINFRA_API_KEY environment variable not set")
 	}
 
-	// Get timeout from environment variable or use default
-	timeout := 120 * time.Second // Default: 2 minutes (reduced from 5)
-	if timeoutEnv := os.Getenv("LEDIT_API_TIMEOUT"); timeoutEnv != "" {
-		if duration, err := time.ParseDuration(timeoutEnv); err == nil {
-			timeout = duration
-		} else {
-			// Try parsing as seconds if duration parsing fails
-			var seconds int
-			if _, err := fmt.Sscanf(timeoutEnv, "%d", &seconds); err == nil && seconds > 0 {
-				timeout = time.Duration(seconds) * time.Second
-			}
-		}
-	}
+	timeout := 120 * time.Second
 
 	return &DeepInfraProvider{
 		httpClient: &http.Client{
@@ -655,9 +643,6 @@ func (p *DeepInfraProvider) calculateCost(promptTokens, completionTokens int) fl
 	case strings.Contains(p.model, "Qwen/Qwen3-Coder-480B"):
 		inputCostPerMillion = 1.62
 		outputCostPerMillion = 1.62
-	case strings.Contains(p.model, "meta-llama/Llama-3"):
-		inputCostPerMillion = 0.08
-		outputCostPerMillion = 0.08
 	case strings.Contains(p.model, "meta-llama/Llama-4"):
 		inputCostPerMillion = 0.35
 		outputCostPerMillion = 0.40

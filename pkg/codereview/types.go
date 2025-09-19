@@ -3,7 +3,7 @@ package codereview
 import (
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/types"
 )
 
@@ -12,14 +12,14 @@ type CodeReviewResult = types.CodeReviewResult
 
 // Reviewer defines the interface for a code reviewer
 type Reviewer interface {
-	Review(cfg *config.Config, combinedDiff, originalPrompt, workspaceContext string) (*types.CodeReviewResult, error)
+	Review(cfg *configuration.Config, combinedDiff, originalPrompt, workspaceContext string) (*types.CodeReviewResult, error)
 }
 
 // NoReviewer is a no-op reviewer
 type NoReviewer struct{}
 
 // Review performs a no-op review
-func (r *NoReviewer) Review(cfg *config.Config, combinedDiff, originalPrompt, workspaceContext string) (*types.CodeReviewResult, error) {
+func (r *NoReviewer) Review(cfg *configuration.Config, combinedDiff, originalPrompt, workspaceContext string) (*types.CodeReviewResult, error) {
 	return &types.CodeReviewResult{
 		Status:   "approved",
 		Feedback: "No reviewer configured.",

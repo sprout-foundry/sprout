@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -41,7 +41,7 @@ func main() {
 	defer os.Chdir(oldWd)
 
 	// Test that subsequent edits build upon previous changes
-	cfg := &config.Config{
+	cfg := &configuration.Config{
 		SkipPrompt: true,
 	}
 	logger := utils.GetLogger(true)
@@ -137,7 +137,7 @@ func farewell(name string) {
 
 // TestReviewContextHistory tests that review history is maintained correctly
 func TestReviewContextHistory(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &configuration.Config{}
 	logger := utils.GetLogger(true)
 
 	service := NewCodeReviewService(cfg, logger)

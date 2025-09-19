@@ -92,8 +92,8 @@ func (a *Agent) LoadState(sessionID string) (*ConversationState, error) {
 	return &state, nil
 }
 
-// ListSessions returns all available session IDs
-func ListSessions() ([]string, error) {
+// ListSessionsWithTimestamps returns all available session IDs with their last updated timestamps
+func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
 		return nil, err
@@ -104,14 +104,60 @@ func ListSessions() ([]string, error) {
 		return nil, fmt.Errorf("failed to read state directory: %w", err)
 	}
 	
-	var sessions []string
+	var sessions []SessionInfo
 	for _, file := range files {
 		if !file.IsDir() && filepath.Ext(file.Name()) == ".json" {
-			sessions = append(sessions, file.Name()[:len(file.Name())-5]) // Remove .json extension
+			sessionID := file.Name()[:len(file.Name())-5] // Remove .json extension
+			
+			// Get file info for timestamp
+			fileInfo, err := file.Info()
+			if err != nil {
+				continue
+			}
+			
+			// Try to read the session file to get the last updated time from metadata
+			stateFile := filepath.Join(stateDir, file.Name())
+			lastUpdated := fileInfo.ModTime()
+			
+			// Read the file to get the actual last updated time from the state
+			if data, err := os.ReadFile(stateFile); err == nil {
+				var state ConversationState
+				if err := json.Unmarshal(data, &state); err == nil {
+					if !state.LastUpdated.IsZero() {
+						lastUpdated = state.LastUpdated
+					}
+				}
+			}
+			
+			sessions = append(sessions, SessionInfo{
+				SessionID:   sessionID,
+				LastUpdated: lastUpdated,
+			})
 		}
 	}
 	
 	return sessions, nil
+}
+
+// SessionInfo represents session information with timestamp
+type SessionInfo struct {
+	SessionID   string    `json:"session_id"`
+	LastUpdated time.Time `json:"last_updated"`
+}
+
+// ListSessions returns all available session IDs
+func ListSessions() ([]string, error) {
+	sessions, err := ListSessionsWithTimestamps()
+	if err != nil {
+		return nil, err
+	}
+	
+	var sessionIDs []string
+	for _, session := range sessions {
+		sessionIDs = append(sessionIDs, session.SessionID)
+	}
+	
+	return sessionIDs, nil
 }
 
 // DeleteSession removes a session state file

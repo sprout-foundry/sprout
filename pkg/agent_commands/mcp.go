@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
@@ -76,7 +76,7 @@ func (m *MCPCommand) showHelp() error {
 	fmt.Println("  /mcp add              - Start interactive setup for MCP servers")
 	fmt.Println("  /mcp list             - See all configured servers")
 	fmt.Println("  /mcp test git         - Test Git MCP server")
-	fmt.Println("  /mcp test github      - Test GitHub MCP server") 
+	fmt.Println("  /mcp test github      - Test GitHub MCP server")
 	fmt.Println("  /mcp remove git       - Remove Git MCP server")
 
 	return nil
@@ -95,7 +95,7 @@ func (m *MCPCommand) addServer(chatAgent *agent.Agent) error {
 	defer chatAgent.EnableEscMonitoring()
 
 	// Load existing config
-	cfg, err := config.LoadOrInitConfig(false)
+	cfg, err := configuration.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -107,7 +107,7 @@ func (m *MCPCommand) addServer(chatAgent *agent.Agent) error {
 
 	// Create server registry
 	registry := mcp.NewMCPServerRegistry()
-	
+
 	return m.setupServerFromRegistry(&mcpConfig, registry, reader)
 }
 
@@ -117,7 +117,7 @@ func (m *MCPCommand) setupServerFromRegistry(mcpConfig *mcp.MCPConfig, registry 
 	templates := registry.ListTemplates()
 	fmt.Println("Select MCP server type:")
 	fmt.Println()
-	
+
 	for i, template := range templates {
 		fmt.Printf("%d. %s\n", i+1, template.Name)
 		fmt.Printf("   %s\n", template.Description)
@@ -126,18 +126,18 @@ func (m *MCPCommand) setupServerFromRegistry(mcpConfig *mcp.MCPConfig, registry 
 		}
 		fmt.Println()
 	}
-	
+
 	fmt.Print("Choice (1-" + strconv.Itoa(len(templates)) + "): ")
 	choice, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read input: %w", err)
 	}
-	
+
 	choiceNum, err := strconv.Atoi(strings.TrimSpace(choice))
 	if err != nil || choiceNum < 1 || choiceNum > len(templates) {
 		return fmt.Errorf("invalid choice: %s", choice)
 	}
-	
+
 	template := templates[choiceNum-1]
 	return m.setupServerFromTemplate(mcpConfig, template, reader)
 }
@@ -148,7 +148,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	fmt.Printf("🔧 %s Setup\n", template.Name)
 	fmt.Println(strings.Repeat("=", len(template.Name)+7))
 	fmt.Println()
-	
+
 	if template.Docs != "" {
 		fmt.Printf("📚 Documentation: %s\n", template.Docs)
 		fmt.Println()
@@ -160,7 +160,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	if err != nil {
 		return fmt.Errorf("failed to read server name: %w", err)
 	}
-	
+
 	serverName := strings.TrimSpace(nameInput)
 	if serverName == "" {
 		// Generate default name from template
@@ -172,7 +172,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 			serverName = strings.Split(serverName, "-")[0]
 		}
 	}
-	
+
 	// Check if server already exists
 	if _, exists := mcpConfig.Servers[serverName]; exists {
 		fmt.Printf("Server '%s' already exists. Reconfigure? (y/N): ", serverName)
@@ -187,7 +187,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	envValues := make(map[string]string)
 	for _, envVar := range template.EnvVars {
 		var value string
-		
+
 		// Check if already set in environment
 		if existingValue := os.Getenv(envVar.Name); existingValue != "" {
 			if envVar.Secret {
@@ -208,18 +208,18 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 				}
 				fmt.Printf("Enter %s%s: ", envVar.Name, defaultText)
 			}
-			
+
 			input, err := reader.ReadString('\n')
 			if err != nil {
 				return fmt.Errorf("failed to read %s: %w", envVar.Name, err)
 			}
 			value = strings.TrimSpace(input)
-			
+
 			if value == "" && envVar.Required {
 				return fmt.Errorf("%s is required", envVar.Name)
 			}
 		}
-		
+
 		if value != "" {
 			envValues[envVar.Name] = value
 		}
@@ -228,7 +228,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	// Handle custom values for generic templates
 	var customURL, customCommand string
 	var customArgs []string
-	
+
 	if template.ID == "http-generic" {
 		fmt.Print("Enter MCP server URL: ")
 		urlInput, err := reader.ReadString('\n')
@@ -240,7 +240,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 			return fmt.Errorf("URL is required for HTTP servers")
 		}
 	}
-	
+
 	if template.ID == "stdio-generic" {
 		fmt.Print("Enter command: ")
 		cmdInput, err := reader.ReadString('\n')
@@ -251,7 +251,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 		if customCommand == "" {
 			return fmt.Errorf("command is required for stdio servers")
 		}
-		
+
 		fmt.Print("Enter arguments (space-separated, or press Enter for none): ")
 		argsInput, err := reader.ReadString('\n')
 		if err != nil {
@@ -265,13 +265,13 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 
 	// Create server config from template
 	serverConfig := template.CreateServerConfig(serverName, envValues, customURL, customCommand, customArgs)
-	
+
 	// Add server to config
 	mcpConfig.Servers[serverName] = serverConfig
 	mcpConfig.Enabled = true
 
 	// Save config
-	cfg, _ := config.LoadOrInitConfig(false)
+	cfg, _ := configuration.Load()
 	if err := mcp.SaveMCPConfig(cfg, *mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
@@ -286,7 +286,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	}
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: /mcp test %s\n", serverName)
-	
+
 	if len(template.Features) > 0 {
 		fmt.Println()
 		fmt.Println("📦 Features available:")
@@ -298,9 +298,6 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	return nil
 }
 
-
-
-
 // removeServer handles MCP server removal
 func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) error {
 	reader := bufio.NewReader(os.Stdin)
@@ -310,7 +307,7 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 	defer chatAgent.EnableEscMonitoring()
 
 	// Load existing config
-	cfg, err := config.LoadOrInitConfig(false)
+	cfg, err := configuration.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -392,7 +389,7 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 // listServers displays all configured MCP servers
 func (m *MCPCommand) listServers() error {
 	// Load existing config
-	cfg, err := config.LoadOrInitConfig(false)
+	cfg, err := configuration.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -472,7 +469,7 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 	defer chatAgent.EnableEscMonitoring()
 
 	// Load existing config
-	cfg, err := config.LoadOrInitConfig(false)
+	cfg, err := configuration.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

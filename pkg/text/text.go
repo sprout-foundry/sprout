@@ -3,11 +3,11 @@ package text
 import (
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
 // GetSummary returns a summary, exports, and references for the given content.
-func GetSummary(content, path string, cfg *config.Config) (string, string, string, error) {
+func GetSummary(content, path string, cfg *configuration.Config) (string, string, string, error) {
 	// Simple heuristic-based summarization for now.
 	summary := "File summary"
 	exports := "File exports"

@@ -57,19 +57,7 @@ func NewClientWithModel(model string) (*Client, error) {
 		model = DefaultModel
 	}
 
-	// Get timeout from environment variable or use default
-	timeout := 120 * time.Second // Default: 2 minutes (reduced from 5)
-	if timeoutEnv := os.Getenv("LEDIT_API_TIMEOUT"); timeoutEnv != "" {
-		if duration, err := time.ParseDuration(timeoutEnv); err == nil {
-			timeout = duration
-		} else {
-			// Try parsing as seconds if duration parsing fails
-			var seconds int
-			if _, err := fmt.Sscanf(timeoutEnv, "%d", &seconds); err == nil && seconds > 0 {
-				timeout = time.Duration(seconds) * time.Second
-			}
-		}
-	}
+	timeout := 120 * time.Second
 
 	return &Client{
 		httpClient: &http.Client{
@@ -424,8 +412,27 @@ func (c *Client) SendChatRequestStream(req ChatRequest, callback StreamCallback)
 		}
 	}
 
+	// Calculate durations
+	totalDuration := time.Since(start)
+	tokenGenDuration := builder.GetTokenGenerationDuration()
+
+	// Use token generation duration for TPS if available, otherwise use total duration
+	tpsDuration := tokenGenDuration
+	if tpsDuration == 0 {
+		tpsDuration = totalDuration
+	}
+
+	// Track TPS for streaming requests
+	if c.tpsTracker != nil && response.Usage.CompletionTokens > 0 {
+		tps := c.tpsTracker.RecordRequest(tpsDuration, response.Usage.CompletionTokens)
+		if c.debug {
+			log.Printf("📊 Streaming TPS: %.1f tokens/s (completion: %d tokens, token gen duration: %v, total duration: %v)",
+				tps, response.Usage.CompletionTokens, tokenGenDuration, totalDuration)
+		}
+	}
+
 	if c.debug {
-		log.Printf("✅ Streaming request completed (total time: %v)", time.Since(start))
+		log.Printf("✅ Streaming request completed (total time: %v)", totalDuration)
 		log.Printf("📊 Final usage - Tokens: %d, Cost: $%.6f", response.Usage.TotalTokens, response.Usage.EstimatedCost)
 	}
 

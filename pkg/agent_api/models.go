@@ -14,7 +14,6 @@ import (
 
 	providers "github.com/alantheprice/ledit/pkg/agent_providers"
 	types "github.com/alantheprice/ledit/pkg/agent_types"
-	"github.com/alantheprice/ledit/pkg/config"
 )
 
 // ModelInfo represents information about an available model
@@ -84,9 +83,6 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 	case OpenRouterClientType:
 		// TODO: Implement getOpenRouterModels
 		return nil, fmt.Errorf("OpenRouter model listing not implemented")
-	case DeepSeekClientType:
-		// TODO: Implement getDeepSeekModels
-		return nil, fmt.Errorf("DeepSeek model listing not implemented")
 	default:
 		return nil, fmt.Errorf("unknown client type: %s", clientType)
 	}
@@ -300,7 +296,7 @@ func getOllamaLocalModels() ([]ModelInfo, error) {
 	// Only get local models
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	resp, err := client.Get(config.DefaultOllamaURL + "/api/tags")
+	resp, err := client.Get("http://localhost:11434/api/tags")
 	if err != nil {
 		return nil, fmt.Errorf("Ollama is not running. Please start Ollama first")
 	}
@@ -541,8 +537,6 @@ func getCerebrasModels() ([]ModelInfo, error) {
 func addAvailabilityHints(models []ModelInfo) []ModelInfo {
 	// Known working models based on our testing
 	knownWorking := map[string]bool{
-		"deepseek/deepseek-chat-v3.1:free": true,
-		"deepseek/deepseek-chat-v3.1":      true,
 		"qwen/qwen3-30b-a3b-thinking-2507": true,
 		"bytedance/seed-oss-36b-instruct":  true,
 		"moonshotai/kimi-k2-0905":          true,

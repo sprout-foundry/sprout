@@ -12,7 +12,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/changetracker"
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -26,7 +26,7 @@ type ReviewContext struct {
 	OriginalPrompt        string // The original user prompt (for automated reviews)
 	ProcessedInstructions string // Processed instructions (for automated reviews)
 	RevisionID            string // Revision ID for change tracking
-	Config                *config.Config
+	Config                *configuration.Config
 	Logger                *utils.Logger
 	History               *ReviewHistory // Review history for this context
 	SessionID             string         // Unique session identifier
@@ -57,7 +57,7 @@ type ReviewOptions struct {
 
 // CodeReviewService provides a unified interface for code review operations
 type CodeReviewService struct {
-	config             *config.Config
+	config             *configuration.Config
 	logger             *utils.Logger
 	reviewConfig       *ReviewConfiguration
 	contextStore       map[string]*ReviewContext     // Store contexts by session ID for persistence
@@ -66,14 +66,21 @@ type CodeReviewService struct {
 }
 
 // NewCodeReviewService creates a new code review service instance
-func NewCodeReviewService(cfg *config.Config, logger *utils.Logger) *CodeReviewService {
+func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *CodeReviewService {
 	// Create workspace analyzer for intelligent context building
 	workspaceAnalyzer := workspace.NewConcurrentAnalyzer(workspace.ConcurrentConfig{MaxWorkers: 4, BatchSize: 10})
 
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
-	if cfg != nil && cfg.AgentModel != "" {
-		// Use unified provider detection
+	if cfg != nil && cfg.LastUsedProvider != "" {
+		// Use unified provider detection based on last used provider
+		if clientType, err := api.ParseProviderName(cfg.LastUsedProvider); err == nil {
+			if client, err := api.NewUnifiedClient(clientType); err == nil {
+				agentClient = client
+			}
+		}
+	} else {
+		// Fallback to auto-detection
 		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
 			if client, err := api.NewUnifiedClient(clientType); err == nil {
 				agentClient = client
@@ -92,14 +99,21 @@ func NewCodeReviewService(cfg *config.Config, logger *utils.Logger) *CodeReviewS
 }
 
 // NewCodeReviewServiceWithConfig creates a new code review service instance with custom configuration
-func NewCodeReviewServiceWithConfig(cfg *config.Config, logger *utils.Logger, reviewConfig *ReviewConfiguration) *CodeReviewService {
+func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Logger, reviewConfig *ReviewConfiguration) *CodeReviewService {
 	// Create workspace analyzer for intelligent context building
 	workspaceAnalyzer := workspace.NewConcurrentAnalyzer(workspace.ConcurrentConfig{MaxWorkers: 4, BatchSize: 10})
 
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
-	if cfg != nil && cfg.AgentModel != "" {
-		// Use unified provider detection
+	if cfg != nil && cfg.LastUsedProvider != "" {
+		// Use unified provider detection based on last used provider
+		if clientType, err := api.ParseProviderName(cfg.LastUsedProvider); err == nil {
+			if client, err := api.NewUnifiedClient(clientType); err == nil {
+				agentClient = client
+			}
+		}
+	} else {
+		// Fallback to auto-detection
 		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
 			if client, err := api.NewUnifiedClient(clientType); err == nil {
 				agentClient = client

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -14,7 +14,7 @@ func TestDuplicateRequestDetection(t *testing.T) {
 	// Create a mock registry and executor
 	registry := &mockRegistry{}
 	logger := utils.GetLogger(true)
-	cfg := &config.Config{}
+	cfg := &configuration.Config{}
 	permissions := &SimplePermissionChecker{allowedPermissions: map[string]bool{
 		"read_file": true,
 	}}

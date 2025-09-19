@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/apikeys"
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 const jinaSearchURL = "https://s.jina.ai/search"
 
 // GetSearchResults performs a web search using Jina AI and returns search results
-func GetSearchResults(query string, cfg *config.Config) ([]JinaSearchResult, error) {
+func GetSearchResults(query string, cfg *configuration.Config) ([]JinaSearchResult, error) {
 	fetcher := NewWebContentFetcher()
-	logger := utils.GetLogger(cfg.SkipPrompt)
+	logger := utils.GetLogger(false)
 	startTime := time.Now()
 	defer func() {
 		logger.Logf("Jina search results fetch completed in %v", time.Since(startTime))
@@ -32,7 +32,7 @@ func GetSearchResults(query string, cfg *config.Config) ([]JinaSearchResult, err
 	}
 
 	// Get Jina API Key. This will prompt the user if the key is not found.
-	jinaAPIKey, err := apikeys.GetAPIKey("JinaAI", !cfg.SkipPrompt)
+	jinaAPIKey, err := apikeys.GetAPIKey("JinaAI", true)
 	if err != nil {
 		logger.Logf("Could not get Jina API key: %v. Proceeding without it, but may be rate limited.", err)
 	} else {

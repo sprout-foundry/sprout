@@ -16,7 +16,8 @@ func getEmbeddedSystemPrompt() string {
 	promptContent := extractSystemPrompt()
 
 	// Add project context if available
-	projectContext := getProjectContext()
+	// TODO: Implement getProjectContext when needed
+	projectContext := ""
 	if projectContext != "" {
 		promptContent = promptContent + "\n\n" + projectContext
 	}
@@ -28,6 +29,8 @@ func getEmbeddedSystemPrompt() string {
 	}
 
 	// Add MCP server summary if available
+	// TODO: Implement mcpServerSummary when needed
+	mcpServerSummary := ""
 	if mcpServerSummary != "" {
 		promptContent = promptContent + "\n" + mcpServerSummary
 	}

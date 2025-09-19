@@ -3,7 +3,7 @@ package embedding
 import (
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
@@ -34,12 +34,12 @@ type CodeEmbedding struct {
 }
 
 // GenerateWorkspaceEmbeddings generates embeddings for all files in a workspace.
-func GenerateWorkspaceEmbeddings(workspace workspaceinfo.WorkspaceFile, db *VectorDB, cfg *config.Config) error {
+func GenerateWorkspaceEmbeddings(workspace workspaceinfo.WorkspaceFile, db *VectorDB, cfg *configuration.Config) error {
 	return nil
 }
 
 // SearchRelevantFiles finds the most relevant files for a given query
-func SearchRelevantFiles(query string, db *VectorDB, topK int, cfg *config.Config) ([]*CodeEmbedding, []float64, error) {
+func SearchRelevantFiles(query string, db *VectorDB, topK int, cfg *configuration.Config) ([]*CodeEmbedding, []float64, error) {
 	return nil, nil, nil
 }
 

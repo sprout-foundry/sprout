@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -193,13 +193,13 @@ func CheckFileSecurity(
 	isChanged bool,
 	existingSecurityConcerns []string,
 	existingIgnoredSecurityConcerns []string,
-	cfg *config.Config,
+	cfg *configuration.Config,
 ) (
 	updatedSecurityConcerns []string,
 	updatedIgnoredSecurityConcerns []string,
 	skipLLMSummarization bool,
 ) {
-	logger := utils.GetLogger(cfg.SkipPrompt)
+	logger := utils.GetLogger(false)
 
 	concernsForThisFile := make([]string, 0)
 	ignoredConcernsForThisFile := make([]string, 0)

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/codereview"
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/spf13/cobra"
@@ -25,16 +25,14 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := utils.GetLogger(reviewStagedSkipPrompt)
 
-		cfg, err := config.LoadOrInitConfig(reviewStagedSkipPrompt)
+		cfg, err := configuration.LoadOrInitConfig(reviewStagedSkipPrompt)
 		if err != nil {
 			logger.LogError(fmt.Errorf("failed to load or initialize config: %w", err))
 			return
 		}
 
 		// Override model if specified by flag
-		if reviewStagedModel != "" {
-			cfg.AgentModel = reviewStagedModel // Use AgentModel for review tasks
-		}
+		// Model will be passed to the code review service
 
 		// Check for staged changes
 		cmdCheckStaged := exec.Command("git", "diff", "--cached", "--quiet", "--exit-code")

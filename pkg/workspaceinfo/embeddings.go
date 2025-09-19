@@ -3,12 +3,12 @@ package workspaceinfo
 import (
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // GetFilesForContextUsingEmbeddings selects files for context using embeddings.
-func GetFilesForContextUsingEmbeddings(instructions string, workspaceFile WorkspaceFile, cfg *config.Config, logger *utils.Logger) ([]string, []string, error) {
+func GetFilesForContextUsingEmbeddings(instructions string, workspaceFile WorkspaceFile, cfg *configuration.Config, logger *utils.Logger) ([]string, []string, error) {
 	// Simple keyword-based selection for now.
 	fullContextFiles := []string{}
 	summaryContextFiles := []string{}

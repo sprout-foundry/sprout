@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/git"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -87,7 +87,7 @@ func printFileTree(node *fileTreeNode, b *strings.Builder, prefix string, isLast
 
 // getWorkspaceInfo formats the workspace information for the LLM.
 // It lists all files, provides full content for selected files, and summaries for others.
-func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextFiles []string, projectGoals ProjectGoals, cfg *config.Config) string {
+func getWorkspaceInfo(workspace WorkspaceFile, fullContextFiles, summaryContextFiles []string, projectGoals ProjectGoals, cfg *configuration.Config) string {
 	logger := utils.GetLogger(false) // Get logger instance
 	var b strings.Builder
 	b.WriteString("--- Start of full content from workspace ---\n")
@@ -431,7 +431,7 @@ func getLanguageFromFilename(filename string) string {
 }
 
 // GetProgressiveWorkspaceContext attempts multiple context loading strategies with fallbacks
-func GetProgressiveWorkspaceContext(instructions string, cfg *config.Config) string {
+func GetProgressiveWorkspaceContext(instructions string, cfg *configuration.Config) string {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 
 	// Try minimal context first
@@ -537,7 +537,7 @@ func generateContextFromIntent(intent string) string {
 
 // GetMinimalWorkspaceContext generates a lightweight context with only summaries and exports from workspace.json
 // This approach significantly reduces token usage and forces the LLM to make targeted file reads
-func GetMinimalWorkspaceContext(instructions string, cfg *config.Config) string {
+func GetMinimalWorkspaceContext(instructions string, cfg *configuration.Config) string {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	logger.LogProcessStep("--- Loading ultra-minimal workspace context ---")
 
@@ -705,7 +705,7 @@ func GetFormattedFileTree(ws WorkspaceFile) (string, error) {
 
 // GetFullWorkspaceSummary generates the full workspace information string for the LLM,
 // including all files as summary context.
-func GetFullWorkspaceSummary(ws WorkspaceFile, codeStyle config.CodeStylePreferences, cfg *config.Config, logger *utils.Logger) (string, error) {
+func GetFullWorkspaceSummary(ws WorkspaceFile, codeStyle *configuration.CodeStyleConfig, cfg *configuration.Config, logger *utils.Logger) (string, error) {
 	var allFilePaths []string
 	for filePath := range ws.Files {
 		allFilePaths = append(allFilePaths, filePath)

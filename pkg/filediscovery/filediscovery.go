@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/index"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/workspaceinfo"
@@ -16,12 +16,12 @@ import (
 
 // FileDiscovery provides common file discovery and analysis functionality
 type FileDiscovery struct {
-	config *config.Config
+	config *configuration.Config
 	logger *utils.Logger
 }
 
 // NewFileDiscovery creates a new file discovery instance
-func NewFileDiscovery(cfg *config.Config, logger *utils.Logger) *FileDiscovery {
+func NewFileDiscovery(cfg *configuration.Config, logger *utils.Logger) *FileDiscovery {
 	return &FileDiscovery{
 		config: cfg,
 		logger: logger,

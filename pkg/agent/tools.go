@@ -49,23 +49,11 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		return "", fmt.Errorf("unknown tool '%s'. Valid tools are: %v", toolCall.Function.Name, validTools)
 	}
 
-	// Update hang detection before tool execution
-	if a.debugHangMode && a.progressMonitor != nil {
-		a.progressMonitor.Progress(fmt.Sprintf("Executing tool: %s", toolCall.Function.Name))
-	}
 
 	// Use the tool registry for data-driven tool execution
 	registry := GetToolRegistry()
 	result, err := registry.ExecuteTool(toolCall.Function.Name, args, a)
 
-	// Update hang detection after tool execution
-	if a.debugHangMode && a.progressMonitor != nil {
-		if err != nil {
-			a.progressMonitor.Progress(fmt.Sprintf("Tool %s failed: %v", toolCall.Function.Name, err))
-		} else {
-			a.progressMonitor.Progress(fmt.Sprintf("Tool %s completed", toolCall.Function.Name))
-		}
-	}
 
 	// If tool not found in registry, check for special cases
 	if err != nil && strings.Contains(err.Error(), "unknown tool") {

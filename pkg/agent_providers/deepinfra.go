@@ -270,6 +270,11 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []types.Message, tool
 					// Extract delta content
 					if delta, ok := choice["delta"].(map[string]interface{}); ok {
 						if contentChunk, ok := delta["content"].(string); ok && contentChunk != "" {
+							// Debug logging for duplicate detection
+							if p.debug && strings.Contains(content.String(), contentChunk) && len(contentChunk) > 10 {
+								fmt.Printf("🔍 DeepInfra: Possible duplicate chunk detected: %q\n", contentChunk)
+							}
+
 							content.WriteString(contentChunk)
 							// Call the streaming callback
 							if callback != nil {

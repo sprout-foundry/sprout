@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -43,7 +44,7 @@ func GetAvailableModels() ([]ModelInfo, error) {
 	clientType, err := DetermineProvider("", "")
 	if err != nil {
 		// Fallback to a reasonable default
-		clientType = OllamaClientType
+		clientType = OllamaLocalClientType
 	}
 	return GetModelsForProvider(clientType)
 }
@@ -76,8 +77,10 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 		return getOpenAIModels()
 	case DeepInfraClientType:
 		return getDeepInfraModels()
-	case OllamaClientType:
-		return getOllamaModels()
+	case OllamaClientType, OllamaLocalClientType:
+		return getOllamaLocalModels()
+	case OllamaTurboClientType:
+		return getOllamaTurboModels()
 	case OpenRouterClientType:
 		// TODO: Implement getOpenRouterModels
 		return nil, fmt.Errorf("OpenRouter model listing not implemented")
@@ -152,18 +155,14 @@ func getOpenAIModels() ([]ModelInfo, error) {
 		if strings.Contains(model.ID, "gpt") || strings.Contains(model.ID, "o1") ||
 			strings.Contains(model.ID, "chatgpt") {
 
-			// Get context length and pricing based on model
-			contextLength := getOpenAIContextLength(model.ID)
-			inputCost, outputCost := getOpenAIModelPricing(model.ID)
-
 			models = append(models, ModelInfo{
 				ID:            model.ID,
 				Name:          model.ID,
 				Provider:      "openai",
 				Description:   fmt.Sprintf("OpenAI %s model", model.ID),
-				ContextLength: contextLength,
-				InputCost:     inputCost,
-				OutputCost:    outputCost,
+				ContextLength: 0, // Should be fetched from API
+				InputCost:     0, // Should be fetched from API
+				OutputCost:    0, // Should be fetched from API
 				Tags:          []string{"chat", "openai"},
 			})
 		}
@@ -172,27 +171,6 @@ func getOpenAIModels() ([]ModelInfo, error) {
 	openaiModelsCache = models
 	openaiModelsInitialized = true
 	return models, nil
-}
-
-// getOpenAIModelPricing returns the input and output costs per 1M tokens for OpenAI models
-func getOpenAIModelPricing(modelID string) (inputCost, outputCost float64) {
-	// Use the new model registry for data-driven pricing
-	registry := GetModelRegistry()
-	inputCost, outputCost, err := registry.GetModelPricing(modelID)
-	if err != nil {
-		// Log warning but return zero costs rather than failing
-		// This maintains backward compatibility
-		return 0, 0
-	}
-	return inputCost, outputCost
-}
-
-// getOpenAIContextLength returns the context length for OpenAI models (2025 updated)
-func getOpenAIContextLength(modelID string) int {
-	// Use the new model registry for data-driven context lengths
-	registry := GetModelRegistry()
-	// Use the backward-compatible method that returns a default on error
-	return registry.GetModelContextLengthWithDefault(modelID, 16000)
 }
 
 // getDeepInfraModels gets available models from DeepInfra API
@@ -317,8 +295,9 @@ func getDeepInfraModels() ([]ModelInfo, error) {
 	return models, nil
 }
 
-// getOllamaModels gets available models from local Ollama installation
-func getOllamaModels() ([]ModelInfo, error) {
+// getOllamaLocalModels gets available models from local Ollama installation
+func getOllamaLocalModels() ([]ModelInfo, error) {
+	// Only get local models
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	resp, err := client.Get(config.DefaultOllamaURL + "/api/tags")
@@ -333,46 +312,142 @@ func getOllamaModels() ([]ModelInfo, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, err
 	}
 
-	var response struct {
+	var tagsResp struct {
 		Models []struct {
-			Name       string    `json:"name"`
-			Size       int64     `json:"size"`
-			Digest     string    `json:"digest"`
-			ModifiedAt time.Time `json:"modified_at"`
+			Name       string `json:"name"`
+			Size       int64  `json:"size"`
+			ModifiedAt string `json:"modified_at"`
+			Digest     string `json:"digest"`
 			Details    struct {
-				Format            string   `json:"format"`
-				Family            string   `json:"family"`
-				Families          []string `json:"families"`
 				ParameterSize     string   `json:"parameter_size"`
 				QuantizationLevel string   `json:"quantization_level"`
+				Families          []string `json:"families"`
 			} `json:"details"`
 		} `json:"models"`
 	}
 
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	if err := json.Unmarshal(body, &tagsResp); err != nil {
+		return nil, err
 	}
 
-	models := make([]ModelInfo, len(response.Models))
-	for i, model := range response.Models {
-		sizeGB := float64(model.Size) / (1024 * 1024 * 1024)
-
-		models[i] = ModelInfo{
+	var models []ModelInfo
+	for _, model := range tagsResp.Models {
+		modelInfo := ModelInfo{
 			ID:       model.Name,
 			Provider: "Ollama (Local)",
-			Size:     fmt.Sprintf("%.1fGB", sizeGB),
-			Cost:     0.0, // Local models are free
 		}
 
-		// Add descriptions for known models
-		if model.Name == "gpt-oss:20b" || model.Name == "gpt-oss:latest" || model.Name == "gpt-oss" {
-			models[i].Description = "GPT-OSS 20B - Local inference, free to use"
+		// Extract base name and size
+		baseName := strings.Split(model.Name, ":")[0]
+		if model.Details.ParameterSize != "" {
+			modelInfo.Description = fmt.Sprintf("%s (%s) - Local", baseName, model.Details.ParameterSize)
 		} else {
-			models[i].Description = fmt.Sprintf("Local %s model", model.Details.Family)
+			modelInfo.Description = baseName + " - Local"
 		}
+
+		// Set context lengths based on model
+		switch {
+		case strings.Contains(baseName, "llama"):
+			modelInfo.ContextLength = 4096
+		case strings.Contains(baseName, "qwen"):
+			modelInfo.ContextLength = 32768
+		case strings.Contains(baseName, "deepseek"):
+			modelInfo.ContextLength = 16384
+		case strings.Contains(baseName, "mistral"):
+			modelInfo.ContextLength = 8192
+		default:
+			modelInfo.ContextLength = 4096
+		}
+
+		models = append(models, modelInfo)
+	}
+
+	// Sort models by name
+	sort.Slice(models, func(i, j int) bool {
+		return models[i].ID < models[j].ID
+	})
+
+	return models, nil
+}
+
+// getOllamaRemoteModels gets available models from Ollama.com (Turbo/Remote)
+func getOllamaTurboModels() ([]ModelInfo, error) {
+	apiKey := os.Getenv("OLLAMA_API_KEY")
+	if apiKey == "" {
+		return nil, fmt.Errorf("OLLAMA_API_KEY not set for Ollama Turbo")
+	}
+
+	// Fetch turbo models from ollama.com API
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("GET", "https://ollama.com/v1/models", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch remote models: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Ollama Turbo API error (status %d)", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var modelsResp struct {
+		Object string `json:"object"`
+		Data   []struct {
+			ID      string `json:"id"`
+			Object  string `json:"object"`
+			Created int64  `json:"created"`
+			OwnedBy string `json:"owned_by"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &modelsResp); err != nil {
+		return nil, err
+	}
+
+	var models []ModelInfo
+	for _, model := range modelsResp.Data {
+		modelInfo := ModelInfo{
+			ID:       model.ID,
+			Provider: "Ollama Turbo",
+		}
+
+		// Add model-specific details
+		switch model.ID {
+		case "gpt-oss:20b":
+			modelInfo.Description = "GPT-OSS 20B - Fast Turbo inference"
+			modelInfo.ContextLength = 128000
+		case "gpt-oss:120b":
+			modelInfo.Description = "GPT-OSS 120B - High quality Turbo"
+			modelInfo.ContextLength = 256000
+		case "deepseek-v3.1:671b":
+			modelInfo.Description = "DeepSeek V3.1 671B - State-of-the-art Turbo"
+			modelInfo.ContextLength = 128000
+		case "qwen3-coder:480b":
+			modelInfo.Description = "Qwen3 Coder 480B - Turbo coding specialist"
+			modelInfo.ContextLength = 128000
+		case "qwen3-coder:1m":
+			modelInfo.Description = "Qwen3 Coder 1M - Largest Turbo coding model"
+			modelInfo.ContextLength = 128000
+		default:
+			modelInfo.Description = model.ID + " - Turbo"
+			modelInfo.ContextLength = 32768
+		}
+
+		models = append(models, modelInfo)
 	}
 
 	return models, nil
@@ -603,43 +678,5 @@ func convertTypesToAPI(typesModel types.ModelInfo) ModelInfo {
 		InputCost:     typesModel.InputCost,
 		OutputCost:    typesModel.OutputCost,
 		Cost:          typesModel.Cost,
-	}
-}
-
-// ClearModelCaches clears all model caches to force refresh on next call
-func ClearModelCaches() {
-	openaiModelsInitialized = false
-	deepInfraModelsInitialized = false
-	openaiModelsCache = nil
-	deepInfraModelsCache = nil
-
-	// Also clear provider caches by calling ClearProviderCaches
-	// This ensures that the new provider system caches are also cleared
-	ClearProviderCaches()
-}
-
-// ClearProviderCaches clears caches in the new provider system
-func ClearProviderCaches() {
-	// Clear caches for all provider types by creating new instances
-	// This forces them to re-fetch their models on next call
-
-	// Note: We can't directly access existing provider instances since they're
-	// created fresh each time, but we can clear any global caches if they exist
-
-	// The provider instances themselves are created fresh each time in
-	// createProviderForType(), so clearing the API-level caches is sufficient
-	// to force model list refresh
-}
-
-// ClearModelCacheForProvider clears the model cache for a specific provider
-func ClearModelCacheForProvider(clientType ClientType) {
-	switch clientType {
-	case OpenAIClientType:
-		openaiModelsInitialized = false
-		openaiModelsCache = nil
-	case DeepInfraClientType:
-		deepInfraModelsInitialized = false
-		deepInfraModelsCache = nil
-		// Other providers don't have static caches currently
 	}
 }

@@ -229,6 +229,8 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []types.Message, too
 	var content strings.Builder
 	var toolCalls []types.ToolCall
 	var finishReason string
+	var usage types.Usage
+	var actualCost float64
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -254,6 +256,23 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []types.Message, too
 					fmt.Printf("Failed to parse chunk: %s\n", err)
 				}
 				continue
+			}
+
+			// Extract usage information (OpenRouter sends this in the final chunk)
+			if usageData, ok := chunk["usage"].(map[string]interface{}); ok {
+				if promptTokens, ok := usageData["prompt_tokens"].(float64); ok {
+					usage.PromptTokens = int(promptTokens)
+				}
+				if completionTokens, ok := usageData["completion_tokens"].(float64); ok {
+					usage.CompletionTokens = int(completionTokens)
+				}
+				if totalTokens, ok := usageData["total_tokens"].(float64); ok {
+					usage.TotalTokens = int(totalTokens)
+				}
+				// Extract OpenRouter's actual cost
+				if cost, ok := usageData["cost"].(float64); ok {
+					actualCost = cost
+				}
 			}
 
 			// Extract choices
@@ -304,6 +323,20 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []types.Message, too
 		return nil, fmt.Errorf("error reading stream: %w", err)
 	}
 
+	// Set the actual cost if provided by OpenRouter
+	if actualCost > 0 {
+		usage.EstimatedCost = actualCost
+	} else if !strings.Contains(p.model, ":free") && (usage.PromptTokens > 0 || usage.CompletionTokens > 0) {
+		// Calculate cost if not provided and not a free model
+		usage.EstimatedCost = p.calculateCost(usage.PromptTokens, usage.CompletionTokens)
+	}
+
+	// Log usage information for debugging
+	if p.debug {
+		fmt.Printf("🔍 OpenRouter Streaming Usage: prompt=%d, completion=%d, total=%d, cost=%f\n",
+			usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.EstimatedCost)
+	}
+
 	// Build response
 	response := &types.ChatResponse{
 		Model: p.model,
@@ -324,8 +357,7 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []types.Message, too
 				FinishReason: finishReason,
 			},
 		},
-		// Note: Usage information is typically not available in streaming responses
-		// but some providers might include it in the final chunk
+		Usage: usage,
 	}
 
 	return response, nil

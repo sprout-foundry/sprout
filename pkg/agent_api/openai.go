@@ -16,6 +16,7 @@ const (
 )
 
 type OpenAIClient struct {
+	*TPSBase
 	httpClient *http.Client
 	apiKey     string
 	model      string
@@ -72,6 +73,7 @@ func NewOpenAIClient() (*OpenAIClient, error) {
 	}
 
 	return &OpenAIClient{
+		TPSBase: NewTPSBase(),
 		httpClient: &http.Client{
 			Timeout: 120 * time.Second,
 		},
@@ -125,6 +127,9 @@ func (c *OpenAIClient) SendChatRequest(messages []Message, tools []Tool, reasoni
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 
+	// Track request timing
+	startTime := time.Now()
+
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("API request failed: %w", err)
@@ -135,6 +140,10 @@ func (c *OpenAIClient) SendChatRequest(messages []Message, tools []Tool, reasoni
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
+
+	// Calculate request duration AFTER reading the full response body
+	// This gives us the true end-to-end token generation time
+	duration := time.Since(startTime)
 
 	if c.debug {
 		fmt.Printf("OpenAI Response: %s\n", string(body))
@@ -171,6 +180,15 @@ func (c *OpenAIClient) SendChatRequest(messages []Message, tools []Tool, reasoni
 		// Use static OpenAI pricing for accurate cost calculation including cached tokens
 		cachedTokens := openaiResp.Usage.PromptTokensDetails.CachedTokens
 		estimatedCost = c.calculateOpenAICostWithCaching(openaiResp.Usage.PromptTokens, openaiResp.Usage.CompletionTokens, cachedTokens)
+	}
+
+	// Track TPS
+	if c.TPSBase != nil && c.TPSBase.GetTracker() != nil {
+		tps := c.TPSBase.GetTracker().RecordRequest(duration, openaiResp.Usage.CompletionTokens)
+		if c.debug {
+			fmt.Printf("OpenAI TPS Tracking: Duration=%v, Tokens=%d, TPS=%.2f\n",
+				duration, openaiResp.Usage.CompletionTokens, tps)
+		}
 	}
 
 	response := &ChatResponse{

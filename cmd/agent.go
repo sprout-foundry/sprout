@@ -13,7 +13,7 @@ import (
 	agent_api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/console/components"
-	"github.com/alantheprice/ledit/pkg/prompts"
+
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -56,8 +56,12 @@ func createChatAgent() (*agent.Agent, error) {
 	chatAgent.SetMaxIterations(maxIterations)
 
 	// Enable streaming by default unless disabled or output is piped
+	// Note: OpenAI streaming doesn't include token usage data, so we disable it
 	if !agentNoStreaming && isTerminal() {
-		chatAgent.EnableStreaming(nil)
+		provider := chatAgent.GetProvider()
+		if provider != "openai" {
+			chatAgent.EnableStreaming(nil)
+		}
 	}
 
 	return chatAgent, nil
@@ -66,7 +70,7 @@ func createChatAgent() (*agent.Agent, error) {
 func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
-	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, ollama, deepseek)")
+	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, ollama, ollama-local, ollama-turbo, deepseek)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
 	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines)")
@@ -115,7 +119,10 @@ func executeDirectAgentCommand(chatAgent *agent.Agent, userIntent string) error 
 		return fmt.Errorf("agent processing failed: %w", err)
 	}
 
-	fmt.Printf("\n🎯 Agent Response:\n%s\n", response)
+	// Only print response if non-empty (streaming mode returns empty)
+	if response != "" {
+		fmt.Printf("\n🎯 Agent Response:\n%s\n", response)
+	}
 
 	// Print cost and token summary
 	chatAgent.PrintConciseSummary()
@@ -503,13 +510,7 @@ Examples:
 				userIntent = strings.Join(args, " ")
 				err := executeDirectAgentCommand(chatAgent, userIntent)
 				if err != nil {
-					gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
-						"AI agent processing your initial request",
-						err,
-						nil,
-						"ledit-agent",
-					)
-					fmt.Fprint(os.Stderr, gracefulExitMsg)
+					fmt.Fprintf(os.Stderr, "\n❌ Error: %v\n", err)
 					os.Exit(1)
 				}
 				fmt.Println("\n✅ Initial task completed. Entering interactive mode for follow-up questions...")
@@ -520,13 +521,7 @@ Examples:
 			userIntent = strings.Join(args, " ")
 			err := executeDirectAgentCommand(chatAgent, userIntent)
 			if err != nil {
-				gracefulExitMsg := prompts.NewGracefulExitWithTokenUsage(
-					"AI agent processing your request",
-					err,
-					nil,
-					"ledit-agent",
-				)
-				fmt.Fprint(os.Stderr, gracefulExitMsg)
+				fmt.Fprintf(os.Stderr, "\n❌ Error: %v\n", err)
 				os.Exit(1)
 			}
 			fmt.Println("✅ Task completed successfully")

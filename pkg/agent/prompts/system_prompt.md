@@ -132,6 +132,7 @@ When tests fail:
 - analyze_ui_screenshot: UI/frontend analysis
 - analyze_image_content: Text/diagram extraction
 - Todo tools: add_todos, update_todo_status, list_todos
+- mcp_tools: Access MCP servers (GitHub, filesystem, databases, etc.) - use action='list' to discover available tools
 
 ## CRITICAL RULES
 - Never output code as text - use tools

@@ -4,16 +4,34 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/alantheprice/ledit/pkg/tools"
 )
+
+// Local constants to avoid importing tools package and creating cycle
+const (
+	CategoryWeb            = "web"
+	PermissionNetworkAccess = "network_access"
+)
+
+// Local type definitions to avoid import cycle
+type Parameters struct {
+	Args   []string
+	Kwargs map[string]interface{}
+}
+
+type Result struct {
+	Success       bool                   `json:"success"`
+	Output        interface{}            `json:"output"`
+	Errors        []string               `json:"errors"`
+	Metadata      map[string]interface{} `json:"metadata"`
+	ExecutionTime time.Duration          `json:"execution_time"`
+}
 
 // NewMCPToolWrapper creates a new wrapper for an MCP tool to implement the standard Tool interface
 func NewMCPToolWrapper(mcpTool MCPTool, manager MCPManager) *MCPToolWrapper {
 	return &MCPToolWrapper{
 		mcpTool:   mcpTool,
 		manager:   manager,
-		category:  tools.CategoryWeb, // Default category for MCP tools
+		category:  CategoryWeb, // Default category for MCP tools
 		timeout:   30 * time.Second,  // Default timeout
 		available: true,
 	}
@@ -39,7 +57,7 @@ func (w *MCPToolWrapper) Category() string {
 }
 
 // Execute runs the tool with the given context and parameters
-func (w *MCPToolWrapper) Execute(ctx context.Context, params tools.Parameters) (*tools.Result, error) {
+func (w *MCPToolWrapper) Execute(ctx context.Context, params Parameters) (*Result, error) {
 	startTime := time.Now()
 
 	// Extract arguments from parameters
@@ -51,7 +69,7 @@ func (w *MCPToolWrapper) Execute(ctx context.Context, params tools.Parameters) (
 	// Call the MCP tool
 	result, err := w.manager.CallTool(ctx, w.mcpTool.ServerName, w.mcpTool.Name, args)
 	if err != nil {
-		return &tools.Result{
+		return &Result{
 			Success:       false,
 			Errors:        []string{err.Error()},
 			ExecutionTime: time.Since(startTime),
@@ -66,7 +84,7 @@ func (w *MCPToolWrapper) Execute(ctx context.Context, params tools.Parameters) (
 				errors = append(errors, content.Text)
 			}
 		}
-		return &tools.Result{
+		return &Result{
 			Success:       false,
 			Errors:        errors,
 			ExecutionTime: time.Since(startTime),
@@ -134,7 +152,7 @@ func (w *MCPToolWrapper) Execute(ctx context.Context, params tools.Parameters) (
 		}
 	}
 
-	return &tools.Result{
+	return &Result{
 		Success:       true,
 		Output:        output,
 		Metadata:      metadata,
@@ -143,7 +161,7 @@ func (w *MCPToolWrapper) Execute(ctx context.Context, params tools.Parameters) (
 }
 
 // CanExecute checks if the tool can be executed with the current context
-func (w *MCPToolWrapper) CanExecute(ctx context.Context, params tools.Parameters) bool {
+func (w *MCPToolWrapper) CanExecute(ctx context.Context, params Parameters) bool {
 	// Check if the server is available
 	server, exists := w.manager.GetServer(w.mcpTool.ServerName)
 	if !exists || !server.IsRunning() {
@@ -157,7 +175,7 @@ func (w *MCPToolWrapper) CanExecute(ctx context.Context, params tools.Parameters
 // RequiredPermissions returns the permissions needed to execute this tool
 func (w *MCPToolWrapper) RequiredPermissions() []string {
 	// MCP tools typically need network access to communicate with servers
-	permissions := []string{tools.PermissionNetworkAccess}
+	permissions := []string{PermissionNetworkAccess}
 
 	// Add permissions based on tool category or server type
 	if w.mcpTool.ServerName == "github" {

@@ -19,13 +19,7 @@ func Initialize() (*Config, *APIKeys, error) {
 		return nil, nil, fmt.Errorf("failed to load API keys: %w", err)
 	}
 
-	// Populate API keys from environment on startup
-	if apiKeys.PopulateFromEnvironment() {
-		// Save if we captured any new keys from environment
-		if err := SaveAPIKeys(apiKeys); err != nil {
-			return nil, nil, fmt.Errorf("failed to save API keys: %w", err)
-		}
-	}
+	apiKeys.PopulateFromEnvironment()
 
 	// Check if this is first run (no provider selected)
 	if config.LastUsedProvider == "" {
@@ -55,9 +49,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 
 	// Check all providers
 	providers := []string{
-		"openai", "anthropic", "openrouter", "deepinfra",
-		"deepseek", "gemini", "groq", "cerebras",
-		"ollama", "ollama-local", "ollama-turbo",
+		"openai", "openrouter", "deepinfra", "ollama-local", "ollama-turbo",
 	}
 
 	for _, provider := range providers {
@@ -82,14 +74,10 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	// Show all provider options
 	fmt.Println("🤖 Available AI providers:")
 	fmt.Println("  1. OpenAI (gpt-4o, gpt-4, etc.)")
-	fmt.Println("  2. Anthropic (claude-3.5-sonnet, etc.)")
-	fmt.Println("  3. OpenRouter (access to many models)")
-	fmt.Println("  4. DeepInfra (open source models)")
-	fmt.Println("  5. DeepSeek (deepseek-chat)")
-	fmt.Println("  6. Google Gemini (gemini-2.0-flash)")
-	fmt.Println("  7. Groq (fast inference)")
-	fmt.Println("  8. Cerebras (fast inference)")
-	fmt.Println("  9. Ollama (local models)")
+	fmt.Println("  2. OpenRouter (access to many models)")
+	fmt.Println("  3. DeepInfra (open source models)")
+	fmt.Println("  4. Ollama Turbo (requires API key)")
+	fmt.Println("  5. Ollama Local (no API key needed, local models)")
 	fmt.Println()
 
 	// Get user choice
@@ -103,23 +91,13 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	// Map choice to provider
 	providerMap := map[int]string{
 		1: "openai",
-		2: "anthropic",
-		3: "openrouter",
-		4: "deepinfra",
-		5: "deepseek",
-		6: "gemini",
-		7: "groq",
-		8: "cerebras",
-		9: "ollama",
+		2: "openrouter",
+		3: "deepinfra",
+		4: "ollama-turbo",
+		5: "ollama-local",
 	}
 
 	selectedProvider := providerMap[choice]
-
-	// For Ollama, ask which variant
-	if selectedProvider == "ollama" {
-		selectedProvider = selectOllamaVariant()
-	}
-
 	// Check if API key is needed
 	if RequiresAPIKey(selectedProvider) && !apiKeys.HasAPIKey(selectedProvider) {
 		fmt.Println()
@@ -137,33 +115,6 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	}
 
 	return selectedProvider, nil
-}
-
-// selectOllamaVariant asks user which Ollama variant to use
-func selectOllamaVariant() string {
-	fmt.Println()
-	fmt.Println("🦙 Ollama variants:")
-	fmt.Println("  1. Standard Ollama (ollama serve)")
-	fmt.Println("  2. Ollama Turbo (requires separate setup)")
-	fmt.Println("  3. Local optimized (smaller models)")
-	fmt.Println()
-
-	var choice int
-	fmt.Print("Select Ollama variant (1-3): ")
-	_, err := fmt.Scanln(&choice)
-	if err != nil || choice < 1 || choice > 3 {
-		// Default to standard
-		return "ollama"
-	}
-
-	switch choice {
-	case 2:
-		return "ollama-turbo"
-	case 3:
-		return "ollama-local"
-	default:
-		return "ollama"
-	}
 }
 
 // EnsureProviderAPIKey ensures the provider has an API key, prompting if needed
@@ -362,8 +313,7 @@ func DebugPrintConfig(config *Config, apiKeys *APIKeys) {
 
 	fmt.Println("  API Keys:")
 	providers := []string{
-		"openai", "anthropic", "openrouter", "deepinfra",
-		"deepseek", "gemini", "groq", "cerebras",
+		"openai", "openrouter", "deepinfra", "ollama-local", "ollama-turbo",
 	}
 	for _, provider := range providers {
 		if apiKeys.HasAPIKey(provider) {

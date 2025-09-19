@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -121,7 +121,7 @@ func (e *Executor) ExecuteToolByName(ctx context.Context, toolName string, param
 }
 
 // ExecuteToolCall executes a tool call from an LLM response
-func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall types.ToolCall) (*Result, error) {
+func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall api.ToolCall) (*Result, error) {
 	// Parse the arguments from JSON string to map
 	args, err := ParseToolCallArguments(toolCall.Function.Arguments)
 	if err != nil {

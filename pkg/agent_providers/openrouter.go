@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	types "github.com/alantheprice/ledit/pkg/agent_types"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // OpenRouterProvider implements the OpenAI-compatible OpenRouter API
@@ -22,7 +22,7 @@ type OpenRouterProvider struct {
 	apiToken     string
 	debug        bool
 	model        string
-	models       []types.ModelInfo
+	models       []api.ModelInfo
 	modelsCached bool
 }
 
@@ -54,7 +54,7 @@ func NewOpenRouterProviderWithModel(model string) (*OpenRouterProvider, error) {
 }
 
 // SendChatRequest sends a chat completion request to OpenRouter
-func (p *OpenRouterProvider) SendChatRequest(messages []types.Message, tools []types.Tool, reasoning string) (*types.ChatResponse, error) {
+func (p *OpenRouterProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	// Convert messages to OpenRouter format
 	openRouterMessages := make([]map[string]interface{}, len(messages))
 	for i, msg := range messages {
@@ -156,7 +156,7 @@ func (p *OpenRouterProvider) SendChatRequest(messages []types.Message, tools []t
 }
 
 // SendChatRequestStream sends a streaming chat request to OpenRouter
-func (p *OpenRouterProvider) SendChatRequestStream(messages []types.Message, tools []types.Tool, reasoning string, callback types.StreamCallback) (*types.ChatResponse, error) {
+func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
 	url := "https://openrouter.ai/api/v1/chat/completions"
 
 	// Convert our messages to OpenAI format
@@ -227,9 +227,9 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []types.Message, too
 	// Process SSE stream
 	scanner := bufio.NewScanner(resp.Body)
 	var content strings.Builder
-	var toolCalls []types.ToolCall
+	var toolCalls []api.ToolCall
 	var finishReason string
-	var usage types.Usage
+	var usage api.Usage
 	var actualCost float64
 
 	for scanner.Scan() {
@@ -295,7 +295,7 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []types.Message, too
 									// Process tool call updates (accumulate them)
 									// This is a simplified version - full implementation would need to handle incremental updates
 									if id, ok := tc["id"].(string); ok {
-										toolCall := types.ToolCall{
+										toolCall := api.ToolCall{
 											ID:   id,
 											Type: "function",
 										}
@@ -338,17 +338,17 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []types.Message, too
 	}
 
 	// Build response
-	response := &types.ChatResponse{
+	response := &api.ChatResponse{
 		Model: p.model,
-		Choices: []types.Choice{
+		Choices: []api.Choice{
 			{
 				Index: 0,
 				Message: struct {
 					Role             string            `json:"role"`
 					Content          string            `json:"content"`
 					ReasoningContent string            `json:"reasoning_content,omitempty"`
-					Images           []types.ImageData `json:"images,omitempty"`
-					ToolCalls        []types.ToolCall  `json:"tool_calls,omitempty"`
+					Images           []api.ImageData `json:"images,omitempty"`
+					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
 				}{
 					Role:      "assistant",
 					Content:   content.String(),
@@ -421,7 +421,7 @@ func (p *OpenRouterProvider) GetModelContextLimit() (int, error) {
 }
 
 // ListModels returns available models from OpenRouter API
-func (p *OpenRouterProvider) ListModels() ([]types.ModelInfo, error) {
+func (p *OpenRouterProvider) ListModels() ([]api.ModelInfo, error) {
 	if p.modelsCached {
 		return p.models, nil
 	}
@@ -468,9 +468,9 @@ func (p *OpenRouterProvider) ListModels() ([]types.ModelInfo, error) {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	models := make([]types.ModelInfo, len(response.Data))
+	models := make([]api.ModelInfo, len(response.Data))
 	for i, model := range response.Data {
-		modelInfo := types.ModelInfo{
+		modelInfo := api.ModelInfo{
 			ID:       model.ID,
 			Name:     model.Name,
 			Provider: "openrouter",
@@ -507,7 +507,7 @@ func (p *OpenRouterProvider) ListModels() ([]types.ModelInfo, error) {
 }
 
 // sendRequestWithRetry implements exponential backoff retry logic for rate limits
-func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody []byte) (*types.ChatResponse, error) {
+func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody []byte) (*api.ChatResponse, error) {
 	maxRetries := 3
 	baseDelay := 1 * time.Second
 
@@ -542,7 +542,7 @@ func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody
 			}
 
 			// Parse into our standard response structure
-			var chatResp types.ChatResponse
+			var chatResp api.ChatResponse
 			if err := json.Unmarshal(respBody, &chatResp); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 			}
@@ -606,7 +606,7 @@ func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody
 }
 
 // calculateMaxTokens calculates appropriate max_tokens based on input size and model limits
-func (p *OpenRouterProvider) calculateMaxTokens(messages []types.Message, tools []types.Tool) int {
+func (p *OpenRouterProvider) calculateMaxTokens(messages []api.Message, tools []api.Tool) int {
 	// Get model context limit
 	contextLimit, err := p.GetModelContextLimit()
 	if err != nil || contextLimit == 0 {
@@ -680,7 +680,7 @@ func (p *OpenRouterProvider) GetVisionModel() string {
 }
 
 // SendVisionRequest sends a vision-enabled chat request
-func (p *OpenRouterProvider) SendVisionRequest(messages []types.Message, tools []types.Tool, reasoning string) (*types.ChatResponse, error) {
+func (p *OpenRouterProvider) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	// If the model doesn't support vision, fall back to regular chat
 	if !p.SupportsVision() {
 		return p.SendChatRequest(messages, tools, reasoning)

@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 func TestInputComponent_NewInputComponent(t *testing.T) {
@@ -263,7 +265,7 @@ func TestInputComponent_SaveLoadHistory(t *testing.T) {
 	input := NewInputComponent("test", "")
 
 	// Create a temporary file
-	tmpFile, err := os.CreateTemp("", "test_history_*.txt")
+	tmpFile, err := filesystem.CreateTempFile("", "test_history_*.txt")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}

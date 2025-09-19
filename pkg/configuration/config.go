@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
 const (
@@ -25,7 +27,7 @@ type Config struct {
 	ProviderPriority []string          `json:"provider_priority"`
 
 	// MCP Configuration
-	MCP MCPConfig `json:"mcp"`
+	MCP mcp.MCPConfig `json:"mcp"`
 
 	// Code Style Configuration
 	CodeStyle *CodeStyleConfig `json:"code_style,omitempty"`
@@ -84,36 +86,24 @@ type CodeStyleConfig struct {
 	Modularity               string `json:"modularity"`
 }
 
-// MCPConfig represents the MCP configuration
-type MCPConfig struct {
-	Enabled      bool                       `json:"enabled"`
-	Servers      map[string]MCPServerConfig `json:"servers"`
-	AutoStart    bool                       `json:"auto_start"`
-	AutoDiscover bool                       `json:"auto_discover"`
-	Timeout      string                     `json:"timeout"` // Duration as string
+// MCPConfig moved to pkg/mcp package for consolidation
+// Import from there: github.com/alantheprice/ledit/pkg/mcp
+
+// MCPServerConfig moved to pkg/mcp package for consolidation
+// Import from there: github.com/alantheprice/ledit/pkg/mcp
+
+type APIKeys map[string]string
+
+// Optional helpers
+func (a APIKeys) Get(provider string) string {
+	return a[provider]
 }
 
-// MCPServerConfig represents an individual MCP server configuration
-type MCPServerConfig struct {
-	Name        string            `json:"name"`
-	Command     string            `json:"command"`
-	Args        []string          `json:"args"`
-	AutoStart   bool              `json:"auto_start"`
-	MaxRestarts int               `json:"max_restarts"`
-	Timeout     string            `json:"timeout"` // Duration as string
-	Env         map[string]string `json:"env,omitempty"`
-}
-
-// APIKeys represents the API keys configuration
-type APIKeys struct {
-	OpenAI     string `json:"openai,omitempty"`
-	DeepInfra  string `json:"deepinfra,omitempty"`
-	OpenRouter string `json:"openrouter,omitempty"`
-	DeepSeek   string `json:"deepseek,omitempty"`
-	Gemini     string `json:"gemini,omitempty"`
-	Anthropic  string `json:"anthropic,omitempty"`
-	Groq       string `json:"groq,omitempty"`
-	Cerebras   string `json:"cerebras,omitempty"`
+func (a *APIKeys) Set(provider, key string) {
+	if *a == nil {
+		*a = make(map[string]string)
+	}
+	(*a)[provider] = key
 }
 
 // NewConfig creates a new configuration with sensible defaults
@@ -125,7 +115,6 @@ func NewConfig() *Config {
 			"openai":       "gpt-4o",
 			"deepinfra":    "meta-llama/Llama-3.3-70B-Instruct",
 			"openrouter":   "openai/gpt-4o",
-			"ollama":       "qwen2.5-coder:latest",
 			"ollama-local": "qwen2.5-coder:3b",
 			"ollama-turbo": "qwen2.5-coder:latest",
 		},
@@ -134,16 +123,9 @@ func NewConfig() *Config {
 			"openrouter",
 			"deepinfra",
 			"ollama-turbo",
-			"ollama",
 			"ollama-local",
 		},
-		MCP: MCPConfig{
-			Enabled:      false,
-			Servers:      make(map[string]MCPServerConfig),
-			AutoStart:    true,
-			AutoDiscover: true,
-			Timeout:      "30s",
-		},
+		MCP: mcp.DefaultMCPConfig(),
 		Preferences:           make(map[string]interface{}),
 		FileBatchSize:         10,
 		MaxConcurrentRequests: 5,
@@ -213,7 +195,7 @@ func Load() (*Config, error) {
 		config.Preferences = make(map[string]interface{})
 	}
 	if config.MCP.Servers == nil {
-		config.MCP.Servers = make(map[string]MCPServerConfig)
+		config.MCP.Servers = make(map[string]mcp.MCPServerConfig)
 	}
 
 	// Set version if not present
@@ -267,28 +249,10 @@ func (c *Config) SetModelForProvider(provider, model string) {
 
 // GetMCPTimeout returns the MCP timeout as a time.Duration
 func (c *Config) GetMCPTimeout() time.Duration {
-	if c.MCP.Timeout == "" {
+	if c.MCP.Timeout == 0 {
 		return 30 * time.Second
 	}
-
-	duration, err := time.ParseDuration(c.MCP.Timeout)
-	if err != nil {
-		return 30 * time.Second
-	}
-
-	return duration
+	return c.MCP.Timeout
 }
 
-// GetMCPServerTimeout returns a server's timeout as a time.Duration
-func (s *MCPServerConfig) GetTimeout() time.Duration {
-	if s.Timeout == "" {
-		return 30 * time.Second
-	}
-
-	duration, err := time.ParseDuration(s.Timeout)
-	if err != nil {
-		return 30 * time.Second
-	}
-
-	return duration
-}
+// GetMCPServerTimeout moved to pkg/mcp package with MCPServerConfig

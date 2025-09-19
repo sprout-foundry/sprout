@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -47,7 +47,7 @@ func GetGlobalExecutor() *Executor {
 }
 
 // ExecuteToolCall is a convenience function that uses the global executor
-func ExecuteToolCall(ctx context.Context, toolCall types.ToolCall) (*Result, error) {
+func ExecuteToolCall(ctx context.Context, toolCall api.ToolCall) (*Result, error) {
 	executor := GetGlobalExecutor()
 	if executor == nil {
 		// Fallback: create a minimal executor

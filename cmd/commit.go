@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/agent_commands"
+	commands "github.com/alantheprice/ledit/pkg/agent_commands"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 

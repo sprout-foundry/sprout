@@ -15,7 +15,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "shell_command",
-				Description: "Execute shell commands to explore directory structure, search files, run programs. Use with caution as commands can modify the filesystem.",
+				Description: "Execute shell commands",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -38,7 +38,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "read_file",
-				Description: "Read contents of a specific file. Supports reading entire files (up to 100KB, larger files are truncated) or specific line ranges for efficiency. Use line ranges for large files to improve performance.",
+				Description: "Read file contents, optionally with line range",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -71,7 +71,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "edit_file",
-				Description: "Edit existing file by replacing old string with new string. The old_string must match exactly including whitespace, indentation, and line breaks. Use read_file first to see the exact content.",
+				Description: "Replace exact string match in file",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -103,7 +103,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "write_file",
-				Description: "Write content to a new file or overwrite existing file. WARNING: This will overwrite existing files without confirmation. Use with caution.",
+				Description: "Create or overwrite file with content",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -130,7 +130,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "add_todos",
-				Description: "ESSENTIAL for complex multi-step tasks. Break down tasks like 'implement feature X', 'refactor system Y', or 'fix multiple bugs' into specific trackable steps. This prevents forgetting steps, maintains context across iterations, and increases success rate by 87%. USE WHEN: task has 3+ steps, involves multiple files, or user says 'implement', 'refactor', 'build', 'create'. DON'T USE for simple questions or single-step operations.",
+				Description: "Create task list for multi-step work",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -174,7 +174,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "update_todo_status",
-				Description: "Update todo status with CLEAR RULES: 'in_progress' = mark IMMEDIATELY when starting work on a todo, 'completed' = mark IMMEDIATELY after finishing successfully, 'cancelled' = no longer needed, 'pending' = not yet started. CRITICAL: Always update status to track progress and maintain context.",
+				Description: "Update task status (pending/in_progress/completed/cancelled)",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -201,7 +201,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "list_todos",
-				Description: "Display current todos with progress indicators and status. Shows completion percentage, in-progress items, and pending work. Use this to track overall progress, see what to work on next, and maintain context during complex tasks.",
+				Description: "Show current task list and progress",
 				Parameters: map[string]interface{}{
 					"type":                 "object",
 					"properties":           map[string]interface{}{},
@@ -218,7 +218,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "analyze_ui_screenshot",
-				Description: "Comprehensive analysis of UI screenshots, mockups, and web designs. Extracts colors, layout, components, styling, and generates implementation guidance for frontend development. Use this for ANY React/Vue/Angular app creation, website building, or UI design implementation. Uses optimized prompts for maximum caching efficiency.",
+				Description: "Analyze UI/mockup images for implementation details",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -240,7 +240,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "analyze_image_content",
-				Description: "General image analysis for text extraction, code screenshots, diagrams, and non-UI content. Use only for document text extraction, reading code from screenshots, or analyzing non-UI visual content.",
+				Description: "Extract text/code from images",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -266,7 +266,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "web_search",
-				Description: "Search the web for current information and return a list of relevant URLs with titles and descriptions. Agent can then use fetch_url to get specific content. Uses Jina AI Search API.",
+				Description: "Search web for relevant URLs",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -290,7 +290,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "fetch_url",
-				Description: "Fetch content from a specific URL using Jina Reader API for clean text extraction. Supports both web pages and documents.",
+				Description: "Fetch and extract content from URL",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -314,7 +314,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "search_files",
-				Description: "Search for text patterns within files using grep-like functionality. Essential for finding specific code patterns, functions, or text across multiple files.",
+				Description: "Search text patterns in files",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -358,7 +358,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "mcp_tools",
-				Description: "Interact with MCP (Model Context Protocol) servers for extended capabilities. Use action='list' to discover available servers and their tools, or action='call' to execute a specific tool. Available servers are listed in the system prompt.",
+				Description: "Access MCP server tools",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{

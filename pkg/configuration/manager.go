@@ -3,7 +3,8 @@ package configuration
 import (
 	"fmt"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
 // Manager provides a unified interface for configuration management
@@ -125,7 +126,7 @@ func (m *Manager) GetAvailableProviders() []api.ClientType {
 }
 
 // GetMCPConfig returns the MCP configuration
-func (m *Manager) GetMCPConfig() MCPConfig {
+func (m *Manager) GetMCPConfig() mcp.MCPConfig {
 	return m.config.MCP
 }
 
@@ -136,9 +137,9 @@ func (m *Manager) SetMCPEnabled(enabled bool) error {
 }
 
 // AddMCPServer adds an MCP server configuration
-func (m *Manager) AddMCPServer(name string, server MCPServerConfig) error {
+func (m *Manager) AddMCPServer(name string, server mcp.MCPServerConfig) error {
 	if m.config.MCP.Servers == nil {
-		m.config.MCP.Servers = make(map[string]MCPServerConfig)
+		m.config.MCP.Servers = make(map[string]mcp.MCPServerConfig)
 	}
 	m.config.MCP.Servers[name] = server
 	return m.SaveConfig()

@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
 // MCPConfig represents the MCP configuration
@@ -17,6 +15,50 @@ type MCPConfig struct {
 	AutoStart    bool                       `json:"auto_start"`
 	AutoDiscover bool                       `json:"auto_discover"`
 	Timeout      time.Duration              `json:"timeout"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for MCPConfig to handle timeout as string or duration
+func (c *MCPConfig) UnmarshalJSON(data []byte) error {
+	// Create an alias to avoid infinite recursion
+	type MCPConfigAlias MCPConfig
+
+	// First try to unmarshal as the normal struct
+	aux := &struct {
+		Timeout interface{} `json:"timeout"`
+		*MCPConfigAlias
+	}{
+		MCPConfigAlias: (*MCPConfigAlias)(c),
+	}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Handle timeout field conversion
+	if aux.Timeout != nil {
+		switch v := aux.Timeout.(type) {
+		case string:
+			// Parse string duration (backward compatibility)
+			if v != "" {
+				duration, err := time.ParseDuration(v)
+				if err != nil {
+					return fmt.Errorf("invalid timeout duration: %w", err)
+				}
+				c.Timeout = duration
+			} else {
+				c.Timeout = 30 * time.Second // default
+			}
+		case float64:
+			// Handle JSON number (nanoseconds)
+			c.Timeout = time.Duration(v)
+		default:
+			c.Timeout = 30 * time.Second // default fallback
+		}
+	} else {
+		c.Timeout = 30 * time.Second // default if not present
+	}
+
+	return nil
 }
 
 // DefaultMCPConfig returns the default MCP configuration
@@ -60,12 +102,21 @@ func GetGitHubServerConfigUvx() MCPServerConfig {
 	}
 }
 
-// LoadMCPConfig loads MCP configuration from the main config
-func LoadMCPConfig(cfg *configuration.Config) (MCPConfig, error) {
+// getConfigDir returns the user's config directory
+func getConfigDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
+	}
+	return filepath.Join(homeDir, ".ledit"), nil
+}
+
+// LoadMCPConfig loads MCP configuration from file
+func LoadMCPConfig() (MCPConfig, error) {
 	mcpConfig := DefaultMCPConfig()
 
 	// Try to load from config file if it exists
-	configDir, err := configuration.GetConfigDir()
+	configDir, err := getConfigDir()
 	if err != nil {
 		return mcpConfig, fmt.Errorf("failed to get config directory: %w", err)
 	}
@@ -108,8 +159,8 @@ func LoadMCPConfig(cfg *configuration.Config) (MCPConfig, error) {
 }
 
 // SaveMCPConfig saves MCP configuration to file
-func SaveMCPConfig(cfg *configuration.Config, mcpConfig MCPConfig) error {
-	configDir, err := configuration.GetConfigDir()
+func SaveMCPConfig(mcpConfig MCPConfig) error {
+	configDir, err := getConfigDir()
 	if err != nil {
 		return fmt.Errorf("failed to get config directory: %w", err)
 	}

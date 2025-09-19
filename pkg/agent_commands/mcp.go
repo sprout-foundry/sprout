@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
@@ -94,13 +93,9 @@ func (m *MCPCommand) addServer(chatAgent *agent.Agent) error {
 	chatAgent.DisableEscMonitoring()
 	defer chatAgent.EnableEscMonitoring()
 
-	// Load existing config
-	cfg, err := configuration.Load()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
+	// Load existing config (no longer needed for MCP)
 
-	mcpConfig, err := mcp.LoadMCPConfig(cfg)
+	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}
@@ -271,8 +266,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	mcpConfig.Enabled = true
 
 	// Save config
-	cfg, _ := configuration.Load()
-	if err := mcp.SaveMCPConfig(cfg, *mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(*mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -306,13 +300,9 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 	chatAgent.DisableEscMonitoring()
 	defer chatAgent.EnableEscMonitoring()
 
-	// Load existing config
-	cfg, err := configuration.Load()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
+	// Load existing config (no longer needed for MCP)
 
-	mcpConfig, err := mcp.LoadMCPConfig(cfg)
+	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}
@@ -373,7 +363,7 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 	}
 
 	// Save config
-	if err := mcp.SaveMCPConfig(cfg, mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -388,13 +378,9 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 
 // listServers displays all configured MCP servers
 func (m *MCPCommand) listServers() error {
-	// Load existing config
-	cfg, err := configuration.Load()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
+	// Load existing config (no longer needed for MCP)
 
-	mcpConfig, err := mcp.LoadMCPConfig(cfg)
+	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}
@@ -468,13 +454,9 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 	chatAgent.DisableEscMonitoring()
 	defer chatAgent.EnableEscMonitoring()
 
-	// Load existing config
-	cfg, err := configuration.Load()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
+	// Load existing config (no longer needed for MCP)
 
-	mcpConfig, err := mcp.LoadMCPConfig(cfg)
+	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}

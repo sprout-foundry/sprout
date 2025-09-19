@@ -13,6 +13,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	commands "github.com/alantheprice/ledit/pkg/agent_commands"
+	"github.com/alantheprice/ledit/pkg/filesystem"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/console"
 	"golang.org/x/term"
@@ -316,9 +317,9 @@ func (ac *AgentConsole) processInput(input string) error {
 			ac.safePrint("\r\033[K")
 			ac.safePrint("\n%s\n", response)
 		} else if response != "" && ac.streamingFormatter.HasProcessedContent() {
-			// This should not happen - if streaming processed content, response should be empty
-			// Log this for debugging
-			fmt.Fprintf(os.Stderr, "\n[DEBUG] Unexpected: response is non-empty (%d chars) when streaming processed content\n", len(response))
+			// With the fix, response should be empty when streaming processed content
+			// If not empty, it's likely a provider that doesn't support streaming properly
+			// Just ignore the duplicate content in this case
 		}
 
 		// Update metrics
@@ -598,7 +599,7 @@ func (ac *AgentConsole) setupTerminal() error {
 
 	// Set up scroll region to leave room for footer (dynamic)
 	// The content area is from line 1 to height - footerHeight
-	if err := ac.Terminal().SetScrollRegion(1, height - footerHeight); err != nil {
+	if err := ac.Terminal().SetScrollRegion(1, height-footerHeight); err != nil {
 		return err
 	}
 
@@ -784,7 +785,7 @@ func (ac *AgentConsole) OnResize(width, height int) {
 	// Get updated footer height and adjust scroll region
 	footerHeight := ac.footer.GetHeight()
 	// The content area is from line 1 to height - footerHeight (dynamic)
-	ac.Terminal().SetScrollRegion(1, height - footerHeight)
+	ac.Terminal().SetScrollRegion(1, height-footerHeight)
 
 	// Note: After changing scroll region, the cursor maintains its relative position
 	// within the new region, so we don't need to save/restore cursor position
@@ -802,7 +803,7 @@ func formatDuration(d time.Duration) string {
 }
 
 func loadHistory(filename string) ([]string, error) {
-	data, err := os.ReadFile(filename)
+	data, err := filesystem.ReadFileBytes(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -820,7 +821,7 @@ func loadHistory(filename string) ([]string, error) {
 
 func saveHistory(filename string, history []string) error {
 	data := strings.Join(history, "\n")
-	return os.WriteFile(filename, []byte(data), 0600)
+	return filesystem.WriteFileWithDir(filename, []byte(data), 0600)
 }
 
 // initializeFooterInfo sets up git and path information for the footer

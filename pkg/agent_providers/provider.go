@@ -35,13 +35,7 @@ type BaseProvider struct {
 
 // NewBaseProvider creates a new base provider
 func NewBaseProvider(name, endpoint, apiKeyEnv, defaultModel string) *BaseProvider {
-	// Get timeout from environment variable or use default
-	timeout := 120 * time.Second // Default: 2 minutes (reduced from 5)
-	if timeoutEnv := os.Getenv("LEDIT_API_TIMEOUT"); timeoutEnv != "" {
-		if duration, err := time.ParseDuration(timeoutEnv); err == nil {
-			timeout = duration
-		}
-	}
+	timeout := 120 * time.Second
 
 	return &BaseProvider{
 		Name:         name,

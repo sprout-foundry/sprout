@@ -9,11 +9,9 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	agent_config "github.com/alantheprice/ledit/pkg/agent_config"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/mcp"
-	"github.com/alantheprice/ledit/pkg/utils"
 	"golang.org/x/term"
 )
 
@@ -35,8 +33,7 @@ type Agent struct {
 	previousSummary      string                         // Summary of previous actions for continuity
 	sessionID            string                         // Unique session identifier
 	optimizer            *ConversationOptimizer         // Conversation optimization
-	configManager        *agent_config.Manager          // Configuration management
-	config               *config.Config                 // Main application configuration
+	configManager        *configuration.Manager         // Configuration management
 	currentContextTokens int                            // Current context size being sent to model
 	maxContextTokens     int                            // Model's maximum context window
 	contextWarningIssued bool                           // Whether we've warned about approaching context limit
@@ -48,71 +45,93 @@ type Agent struct {
 	conversationPruner   *ConversationPruner            // Automatic conversation pruning
 
 	// Interrupt handling
-	interruptRequested   bool        // Flag indicating interrupt was requested
-	interruptMessage     string      // User message to inject after interrupt
-	escPressed           chan bool   // Channel to signal Esc key press
-	interruptChan        chan string // Channel for TUI interrupt messages
-	escMonitoringEnabled bool        // Flag to enable/disable Esc monitoring
+	interruptRequested   bool            // Flag indicating interrupt was requested
+	interruptMessage     string          // User message to inject after interrupt
+	escPressed           chan bool       // Channel to signal Esc key press
+	interruptChan        chan string     // Channel for TUI interrupt messages
+	escMonitoringEnabled bool            // Flag to enable/disable Esc monitoring
+	outputMutex          *sync.Mutex     // Mutex for synchronized output
+	streamingEnabled     bool            // Whether streaming is enabled
+	streamingCallback    func(string)    // Custom streaming callback
+	streamingBuffer      strings.Builder // Buffer for streaming content
 
-	// UI callback for real-time updates
-	statsUpdateCallback func(totalTokens int, totalCost float64)
-
-	// Output synchronization
-	outputMutex *sync.Mutex
-
-	// Hang detection
-	hangDetector    *utils.HangDetector
-	progressMonitor *utils.ProgressMonitor
-	debugHangMode   bool
-
-	// False stop detection
+	// Feature flags
 	falseStopDetectionEnabled bool
-
-	// Streaming support
-	streamingEnabled  bool
-	streamingCallback api.StreamCallback
-	streamingBuffer   strings.Builder
+	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
 }
 
+// NewAgent creates a new agent with auto-detected provider
 func NewAgent() (*Agent, error) {
 	return NewAgentWithModel("")
 }
 
+// NewAgentWithModel creates a new agent with optional model override
 func NewAgentWithModel(model string) (*Agent, error) {
 	// Initialize configuration manager
-	configManager, err := agent_config.NewManager()
+	configManager, err := configuration.NewManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize configuration: %w", err)
 	}
 
-	// Determine best provider and model
 	var clientType api.ClientType
 	var finalModel string
 
 	if model != "" {
-		// Check if model includes provider prefix (e.g., "deepinfra:model-name")
+		// Check if model includes provider prefix (e.g., "openai:gpt-4")
 		parts := strings.SplitN(model, ":", 2)
 		if len(parts) == 2 {
 			// Provider explicitly specified
 			providerName := parts[0]
 			finalModel = parts[1]
 
-			// Convert provider name to ClientType
-			clientType, err = agent_config.GetProviderFromConfigName(providerName)
+			// Get ClientType for provider
+			clientType, err = getClientTypeFromName(providerName)
 			if err != nil {
 				return nil, fmt.Errorf("unknown provider '%s': %w", providerName, err)
 			}
+
+			// Ensure provider has API key
+			if err := configManager.EnsureAPIKey(clientType); err != nil {
+				// Try to select a different provider
+				clientType, err = configManager.SelectNewProvider()
+				if err != nil {
+					return nil, fmt.Errorf("failed to select provider: %w", err)
+				}
+				finalModel = configManager.GetModelForProvider(clientType)
+			}
 		} else {
-			// No provider specified, use the model with best available provider
+			// No provider specified, use current provider with specified model
+			clientType, err = configManager.GetProvider()
+			if err != nil {
+				// No provider set, select one
+				clientType, err = configManager.SelectNewProvider()
+				if err != nil {
+					return nil, fmt.Errorf("failed to select provider: %w", err)
+				}
+			}
 			finalModel = model
-			clientType, _, _ = configManager.GetBestProvider()
 		}
 	} else {
 		// Use configured provider and model
-		clientType, finalModel, err = configManager.GetBestProvider()
+		clientType, err = configManager.GetProvider()
 		if err != nil {
-			return nil, fmt.Errorf("no available providers: %w", err)
+			// No provider set, select one
+			clientType, err = configManager.SelectNewProvider()
+			if err != nil {
+				return nil, fmt.Errorf("failed to select provider: %w", err)
+			}
 		}
+
+		// Ensure provider has API key
+		if err := configManager.EnsureAPIKey(clientType); err != nil {
+			// Try to select a different provider
+			clientType, err = configManager.SelectNewProvider()
+			if err != nil {
+				return nil, fmt.Errorf("failed to select provider: %w", err)
+			}
+		}
+
+		finalModel = configManager.GetModelForProvider(clientType)
 	}
 
 	// Create the client
@@ -121,15 +140,18 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		return nil, fmt.Errorf("failed to create API client: %w", err)
 	}
 
-	// Save the selection for future use
-	if err := configManager.SetProviderAndModel(clientType, finalModel); err != nil {
-		// Log warning but don't fail - this is not critical
+	// Save the selection
+	if err := configManager.SetProvider(clientType); err != nil {
 		fmt.Printf("⚠️  Warning: Failed to save provider selection: %v\n", err)
+	}
+	if finalModel != "" && finalModel != configManager.GetModelForProvider(clientType) {
+		if err := configManager.SetModelForProvider(clientType, finalModel); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to save model selection: %v\n", err)
+		}
 	}
 
 	// Check if debug mode is enabled
 	debug := os.Getenv("DEBUG") == "true" || os.Getenv("DEBUG") == "1"
-	debugHang := os.Getenv("LEDIT_DEBUG_HANG") == "true" || os.Getenv("LEDIT_DEBUG_HANG") == "1"
 
 	// Set debug mode on the client
 	client.SetDebug(debug)
@@ -148,12 +170,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Conversation optimization is always enabled
 	optimizationEnabled := true
 
-	// Load the actual configuration
-	cfg, err := config.LoadOrInitConfig(true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load configuration: %w", err)
-	}
-
+	// Create the agent
 	agent := &Agent{
 		client:                    client,
 		messages:                  []api.Message{},
@@ -164,394 +181,226 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		debug:                     debug,
 		optimizer:                 NewConversationOptimizer(optimizationEnabled, debug),
 		configManager:             configManager,
-		config:                    cfg,
 		shellCommandHistory:       make(map[string]*ShellCommandResult),
 		interruptRequested:        false,
 		interruptMessage:          "",
 		escPressed:                make(chan bool, 1),
 		interruptChan:             nil,
-		escMonitoringEnabled:      false, // Start disabled
-		falseStopDetectionEnabled: true,  // Enable by default
+		escMonitoringEnabled:      false,
+		falseStopDetectionEnabled: true,
 		conversationPruner:        NewConversationPruner(debug),
-		debugHangMode:             debugHang,
 	}
-
-	// NOTE: Esc key monitoring removed - was interfering with Ctrl+C and terminal control
-	// Will implement proper escape handling through readline library instead
 
 	// Initialize context limits based on model
 	agent.maxContextTokens = agent.getModelContextLimit()
 	agent.currentContextTokens = 0
 	agent.contextWarningIssued = false
 
-	// Load previous conversation summary for continuity
-	agent.loadPreviousSummary()
-
-	// Initialize change tracker (will be activated when user starts making changes)
+	// Initialize change tracker
 	agent.changeTracker = NewChangeTracker(agent, "")
-	agent.changeTracker.Disable() // Start disabled, enable when user makes first request
+	agent.changeTracker.Disable() // Start disabled
 
 	// Initialize MCP manager
-	agent.mcpManager = mcp.NewMCPManager(nil) // nil logger for now
+	agent.mcpManager = mcp.NewMCPManager(nil)
 
 	// Initialize circuit breaker
 	agent.circuitBreaker = &CircuitBreakerState{
 		Actions: make(map[string]*CircuitBreakerAction),
 	}
 
-	// Initialize MCP configuration and auto-start servers if configured
+	// Initialize MCP if config has it enabled
 	if err := agent.initializeMCP(); err != nil {
-		// Don't fail agent creation if MCP fails, just log warning
+		// Non-fatal - MCP is optional
 		if debug {
-			fmt.Printf("⚠️  Warning: Failed to initialize MCP: %v\n", err)
+			fmt.Printf("⚠️  MCP initialization skipped: %v\n", err)
 		}
 	}
-
-	// Initialize hang detection
-	agent.initializeHangDetection()
 
 	return agent, nil
 }
 
-// initializeHangDetection sets up hang detection monitoring
-func (a *Agent) initializeHangDetection() {
-	// Default timeout for operations (adjustable via env var)
-	timeout := 5 * time.Minute // Default 5 minutes
-	if timeoutStr := os.Getenv("LEDIT_HANG_TIMEOUT"); timeoutStr != "" {
-		if parsedTimeout, err := time.ParseDuration(timeoutStr); err == nil {
-			timeout = parsedTimeout
-		}
-	}
-
-	// Create hang detector for overall agent operations
-	a.hangDetector = utils.NewHangDetector("Agent", timeout)
-
-	// Create progress monitor for detailed operation tracking
-	a.progressMonitor = utils.NewProgressMonitor("AgentProgress", timeout)
-
-	// Set custom hang handler if in debug mode
-	if a.debugHangMode {
-		a.hangDetector.SetHangHandler(func(name string, duration time.Duration) {
-			// Use mutex for synchronized output if available
-			if a.outputMutex != nil {
-				a.outputMutex.Lock()
-				defer a.outputMutex.Unlock()
-			}
-
-			fmt.Printf("\n🚨 HANG DETECTED: No progress updates from %s for %v\n", name, duration)
-			fmt.Printf("   This may indicate the operation is stuck or taking longer than expected.\n")
-			fmt.Printf("   Use Ctrl+C to interrupt, or wait for the operation to complete.\n")
-			fmt.Printf("   Check .ledit/workspace.log and latest .ledit/runlogs/ for details\n\n")
-		})
-
-		// Start monitoring immediately in debug mode
-		a.hangDetector.Start()
-		a.progressMonitor.Start()
+// getClientTypeFromName converts provider name to ClientType
+func getClientTypeFromName(name string) (api.ClientType, error) {
+	switch name {
+	case "openai":
+		return api.OpenAIClientType, nil
+	case "deepinfra":
+		return api.DeepInfraClientType, nil
+	case "openrouter":
+		return api.OpenRouterClientType, nil
+	case "ollama":
+		return api.OllamaClientType, nil
+	case "ollama-local":
+		return api.OllamaLocalClientType, nil
+	case "ollama-turbo":
+		return api.OllamaTurboClientType, nil
+	// For providers not yet in ClientType constants
+	case "anthropic", "gemini", "groq", "cerebras":
+		return api.ClientType(name), nil
+	default:
+		return "", fmt.Errorf("unknown provider: %s", name)
 	}
 }
 
-// CheckCircuitBreaker checks if an action should be blocked due to repetitive behavior
-func (a *Agent) CheckCircuitBreaker(actionType, target string, threshold int) (bool, string) {
-	key := fmt.Sprintf("%s:%s", actionType, target)
-	action, exists := a.circuitBreaker.Actions[key]
-
-	if !exists {
-		// First time doing this action
-		a.circuitBreaker.Actions[key] = &CircuitBreakerAction{
-			ActionType: actionType,
-			Target:     target,
-			Count:      1,
-			LastUsed:   time.Now().Unix(),
-		}
-		return false, ""
-	}
-
-	action.Count++
-	action.LastUsed = time.Now().Unix()
-
-	if action.Count >= threshold {
-		warning := fmt.Sprintf("🛑 CIRCUIT BREAKER TRIGGERED: You've attempted '%s' on '%s' %d times. This suggests you may be stuck in a loop.\n\n"+
-			"DEBUGGING SUGGESTIONS:\n"+
-			"1. Read the error message carefully - what is it actually telling you?\n"+
-			"2. Check if you're fixing the right thing - are you editing tests when you should fix source code?\n"+
-			"3. Search the codebase for missing functions or dependencies\n"+
-			"4. Step back and analyze the root cause instead of making random changes\n\n"+
-			"Consider trying a different approach or asking for help.",
-			actionType, target, action.Count)
-		return true, warning
-	}
-
-	return false, ""
-}
-
-// ResetCircuitBreaker resets the circuit breaker for a specific action (for testing)
-func (a *Agent) ResetCircuitBreaker(actionType, target string) {
-	key := fmt.Sprintf("%s:%s", actionType, target)
-	delete(a.circuitBreaker.Actions, key)
-}
-
-func getProjectContext() string {
-	// Check for project context files in order of priority
-	contextFiles := []string{
-		".cursor/markdown/project.md",
-		".cursor/markdown/context.md",
-		".claude/project.md",
-		".claude/context.md",
-		".project_context.md",
-		"PROJECT_CONTEXT.md",
-	}
-
-	for _, filePath := range contextFiles {
-		content, err := tools.ReadFile(filePath)
-		if err == nil && strings.TrimSpace(content) != "" {
-			return fmt.Sprintf("PROJECT CONTEXT:\n%s", content)
-		}
-	}
-
-	return ""
-}
-
-// Basic getter methods
-func (a *Agent) GetConfigManager() *agent_config.Manager {
-	return a.configManager
-}
-
-func (a *Agent) GetConfig() *config.Config {
-	return a.config
-}
-
-func (a *Agent) GetTotalCost() float64 {
-	return a.totalCost
-}
-
-func (a *Agent) GetTotalTokens() int {
-	return a.totalTokens
-}
-
-func (a *Agent) GetCurrentIteration() int {
-	return a.currentIteration
-}
-
-func (a *Agent) GetCurrentContextTokens() int {
-	return a.currentContextTokens
-}
-
-// IsInteractiveMode checks if the agent is running in an interactive terminal
-func (a *Agent) IsInteractiveMode() bool {
-	// Check if stdin is a terminal
-	return term.IsTerminal(int(os.Stdin.Fd()))
-}
-
-func (a *Agent) GetMaxContextTokens() int {
-	return a.maxContextTokens
-}
-
-// SetFalseStopDetection enables or disables false stop detection
-func (a *Agent) SetFalseStopDetection(enabled bool) {
-	a.falseStopDetectionEnabled = enabled
-	if a.debug {
-		if enabled {
-			a.debugLog("🔍 False stop detection enabled\n")
-		} else {
-			a.debugLog("🔍 False stop detection disabled\n")
-		}
+// SetStreamingEnabled enables or disables streaming responses
+func (a *Agent) SetStreamingEnabled(enabled bool) {
+	a.streamingEnabled = enabled
+	if enabled && a.outputMutex == nil {
+		a.outputMutex = &sync.Mutex{}
 	}
 }
 
-// SetStatsUpdateCallback sets a callback for real-time stats updates
-func (a *Agent) SetStatsUpdateCallback(callback func(totalTokens int, totalCost float64)) {
-	a.statsUpdateCallback = callback
+// SetStreamingCallback sets a custom callback for streaming output
+func (a *Agent) SetStreamingCallback(callback func(string)) {
+	a.streamingCallback = callback
 }
 
-// monitorEscKey - DISABLED: was interfering with Ctrl+C and terminal control
-// This function was consuming all stdin input, preventing proper signal handling
-// and blocking Ctrl+C from working. Need to implement escape handling differently.
+// SetDebug enables or disables debug mode
+func (a *Agent) SetDebug(debug bool) {
+	a.debug = debug
+	if a.client != nil {
+		a.client.SetDebug(debug)
+	}
+}
+
+// debugLog prints debug messages if debug mode is enabled
+
+// SetInterruptHandler sets the interrupt channel for TUI mode
+func (a *Agent) SetInterruptHandler(ch chan string) {
+	a.interruptChan = ch
+}
+
+// monitorEscKey monitors for Esc key press in a separate goroutine
 func (a *Agent) monitorEscKey() {
-	// DISABLED - do nothing to prevent stdin interference
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return
+	}
+
+	// Get the current terminal state
+	oldState, err := term.GetState(int(os.Stdin.Fd()))
+	if err != nil {
+		return
+	}
+
+	// Make sure to restore the terminal state when done
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+	// Put terminal in raw mode to capture single key presses
+	rawState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		return
+	}
+	defer term.Restore(int(os.Stdin.Fd()), rawState)
+
+	// Read single bytes
+	buf := make([]byte, 1)
+	for a.escMonitoringEnabled {
+		n, err := os.Stdin.Read(buf)
+		if err != nil || n == 0 {
+			continue
+		}
+
+		// Check for ESC key (ASCII 27)
+		if buf[0] == 27 {
+			select {
+			case a.escPressed <- true:
+			default:
+				// Channel is full, skip
+			}
+		}
+	}
 	return
 }
 
-// CheckForInterrupt checks if an interrupt has been requested
-func (a *Agent) CheckForInterrupt() bool {
-	// Check TUI channel if available
-	if a.interruptChan != nil {
-		select {
-		case <-a.interruptChan:
-			return true
-		default:
-			return false
-		}
-	}
-
-	// Fallback to old logic if enabled
-	if a.escMonitoringEnabled {
-		select {
-		case <-a.escPressed:
-			return true
-		default:
-			return false
-		}
-	}
-
-	return a.interruptRequested
-}
-
-// EnableEscMonitoring - DISABLED: no-op to prevent Ctrl+C interference
+// EnableEscMonitoring starts monitoring for Esc key
 func (a *Agent) EnableEscMonitoring() {
-	// No-op - escape monitoring disabled
+	// Note: Esc monitoring is currently disabled due to terminal conflicts
+	// Will implement proper escape handling through readline library
+	a.escMonitoringEnabled = false
 }
 
-// DisableEscMonitoring - DISABLED: no-op to prevent Ctrl+C interference
+// DisableEscMonitoring stops monitoring for Esc key
 func (a *Agent) DisableEscMonitoring() {
-	// No-op - escape monitoring disabled
+	a.escMonitoringEnabled = false
 }
 
-// HandleInterrupt processes an interrupt request and prompts for continuation
-func (a *Agent) HandleInterrupt() string {
-	a.interruptRequested = false
-	a.DisableEscMonitoring()
-	defer a.EnableEscMonitoring() // Re-enable when done
-
-	if a.interruptChan != nil {
-		// Console mode with interrupt channel
-		select {
-		case input := <-a.interruptChan:
-			input = strings.TrimSpace(input)
-
-			// Check if it's a command
-			if strings.HasPrefix(input, "/") {
-				cmd := strings.TrimPrefix(strings.Fields(input)[0], "/")
-				switch cmd {
-				case "exit", "quit", "q":
-					fmt.Println("\n🚪 Exiting via interrupt...")
-					fmt.Println("=====================================")
-					a.PrintConversationSummary(true)
-					os.Exit(0)
-				case "stop":
-					fmt.Println("\n🛑 Stopping current task...")
-					return "STOP" // Special marker to indicate stopping
-				default:
-					// Other commands are treated as regular input
-					fmt.Printf("\n📝 Processing your command: %s\n", input)
-					return input
-				}
-			}
-
-			// Regular input handling
-			switch input {
-			case "", "resume", "continue":
-				fmt.Println("\n▶️  Resuming current task...")
-				return ""
-			case "quit", "exit", "stop":
-				fmt.Println("\n🚪 Exiting...")
-				fmt.Println("=====================================")
-				a.PrintConversationSummary(true)
-				os.Exit(0)
-				return "exit" // Unreachable, but for completeness
-			default:
-				fmt.Printf("\n📝 Processing your input: %s\n", input)
-				fmt.Println("▶️  Continuing with your additional context...")
-				return input
-			}
-		case <-time.After(2 * time.Second):
-			// Quick timeout to check for interrupts but continue if none
-			return ""
-		}
-	} else {
-		// Console fallback
-		fmt.Println("\n🛑 Esc key pressed! Current task paused.")
-		fmt.Println("💬 Enter instructions to modify or continue the current task:")
-		fmt.Println("   (or press Enter to resume, 'quit' to exit)")
-		fmt.Print(">>> ")
-
-		var input string
-		fmt.Scanln(&input)
-
-		input = strings.TrimSpace(input)
-
-		switch input {
-		case "", "resume", "continue":
-			fmt.Println("▶️  Resuming current task...")
-			return ""
-		case "quit", "exit", "stop":
-			fmt.Println("🚪 Exiting...")
-			fmt.Println("=====================================")
-			a.PrintConversationSummary(true)
-			os.Exit(0)
-			return ""
-		default:
-			fmt.Printf("📝 Injecting new instruction: %s\n", input)
-			fmt.Println("▶️  Continuing with modified task...")
-			return input
-		}
+// CheckForInterrupt checks if an interrupt was requested
+func (a *Agent) CheckForInterrupt() bool {
+	select {
+	case <-a.escPressed:
+		a.interruptRequested = true
+		return true
+	default:
+		return a.interruptRequested
 	}
 }
 
-// ClearInterrupt resets interrupt state
+// HandleInterrupt processes the interrupt request
+func (a *Agent) HandleInterrupt() string {
+	if !a.interruptRequested {
+		return ""
+	}
+
+	// If we have an interrupt channel (TUI mode), use it
+	if a.interruptChan != nil {
+		select {
+		case msg := <-a.interruptChan:
+			return msg
+		case <-time.After(100 * time.Millisecond):
+			// No message, just stop
+			return "STOP"
+		}
+	}
+
+	// Otherwise prompt for input
+	fmt.Println("\n🛑 Processing interrupted. Enter new instructions (or press Enter to stop):")
+
+	// Read user input
+	var input string
+	fmt.Scanln(&input)
+
+	if strings.TrimSpace(input) == "" {
+		return "STOP"
+	}
+
+	return input
+}
+
+// ClearInterrupt resets the interrupt state
 func (a *Agent) ClearInterrupt() {
 	a.interruptRequested = false
 	a.interruptMessage = ""
-	// Drain any pending Esc signals
+	// Drain the channel
 	select {
 	case <-a.escPressed:
 	default:
 	}
-	// Drain TUI channel if available
-	if a.interruptChan != nil {
-		select {
-		case <-a.interruptChan:
-		default:
-		}
-	}
 }
 
-// SetInterruptChannel sets the interrupt channel for external input
-func (a *Agent) SetInterruptChannel(ch chan string) {
-	a.interruptChan = ch
-}
-
-// SetOutputMutex sets the output mutex for synchronized output
-func (a *Agent) SetOutputMutex(mu *sync.Mutex) {
-	a.outputMutex = mu
-}
-
-// EnableStreaming enables streaming mode with optional callback
-func (a *Agent) EnableStreaming(callback api.StreamCallback) {
-	a.streamingEnabled = true
-	a.streamingCallback = callback
-}
-
-// DisableStreaming disables streaming mode
-func (a *Agent) DisableStreaming() {
-	a.streamingEnabled = false
-	a.streamingCallback = nil
-}
-
-func (a *Agent) GetMaxIterations() int {
-	return a.maxIterations
-}
-
-func (a *Agent) SetMaxIterations(max int) {
-	if max > 0 {
-		a.maxIterations = max
-	}
-}
-
+// GetMessages returns the current conversation messages
 func (a *Agent) GetMessages() []api.Message {
 	return a.messages
 }
 
-func (a *Agent) GetConversationHistory() []api.Message {
-	return a.messages
+// SetMessages sets the conversation messages (for restore)
+func (a *Agent) SetMessages(messages []api.Message) {
+	a.messages = messages
 }
 
-func (a *Agent) GetLastAssistantMessage() string {
-	for i := len(a.messages) - 1; i >= 0; i-- {
-		if a.messages[i].Role == "assistant" {
-			return a.messages[i].Content
-		}
-	}
-	return ""
+// GetTotalCost returns the total cost of the conversation
+func (a *Agent) GetTotalCost() float64 {
+	return a.totalCost
+}
+
+// GetTaskActions returns completed task actions
+func (a *Agent) GetTaskActions() []TaskAction {
+	return a.taskActions
+}
+
+// IsInteractiveMode returns true if running in interactive mode
+func (a *Agent) IsInteractiveMode() bool {
+	return os.Getenv("LEDIT_INTERACTIVE") == "1" ||
+		os.Getenv("LEDIT_FROM_AGENT") != "1"
 }
 
 // GenerateResponse generates a simple response using the current model without tool calls
@@ -570,53 +419,90 @@ func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 
 // initializeMCP initializes MCP configuration and starts servers if needed
 func (a *Agent) initializeMCP() error {
-	ctx := context.Background()
-
-	// Load MCP configuration from the configuration system
-	mcpConfig, err := mcp.LoadMCPConfig(a.config)
-	if err != nil {
-		return fmt.Errorf("failed to load MCP config: %w", err)
-	}
-
-	// Skip if MCP is disabled
-	if !mcpConfig.Enabled {
+	config := a.configManager.GetConfig()
+	if !config.MCP.Enabled {
 		if a.debug {
 			fmt.Println("🔧 MCP is disabled in configuration")
 		}
 		return nil
 	}
 
+	ctx := context.Background()
+
 	// Add configured servers
-	for _, serverConfig := range mcpConfig.Servers {
-		if err := a.mcpManager.AddServer(serverConfig); err != nil {
+	for name, serverConfig := range config.MCP.Servers {
+		mcpServer := mcp.MCPServerConfig{
+			Name:        serverConfig.Name,
+			Command:     serverConfig.Command,
+			Args:        serverConfig.Args,
+			AutoStart:   serverConfig.AutoStart,
+			MaxRestarts: serverConfig.MaxRestarts,
+			Timeout:     serverConfig.GetTimeout(),
+			Env:         serverConfig.Env,
+		}
+
+		if err := a.mcpManager.AddServer(mcpServer); err != nil {
 			if a.debug {
-				fmt.Printf("⚠️  Warning: Failed to add MCP server %s: %v\n", serverConfig.Name, err)
+				fmt.Printf("⚠️  Warning: Failed to add MCP server %s: %v\n", name, err)
 			}
 			continue
 		}
 	}
 
 	// Auto-start servers if configured
-	if mcpConfig.AutoStart {
+	if config.MCP.AutoStart {
 		if err := a.mcpManager.StartAll(ctx); err != nil {
 			return fmt.Errorf("failed to start MCP servers: %w", err)
 		}
 
 		if a.debug {
-			servers := a.mcpManager.ListServers()
-			runningCount := 0
-			for _, server := range servers {
-				if server.IsRunning() {
-					runningCount++
-				}
-			}
-			fmt.Printf("🚀 Started %d MCP servers\n", runningCount)
+			tools, _ := a.mcpManager.GetAllTools(ctx)
+			fmt.Printf("✅ MCP initialized with %d tools available\n", len(tools))
 		}
 	}
 
-	// Generate MCP server summary for the system prompt
-	a.generateMCPServerSummary()
+	// Auto-discover GitHub server if token is available
+	if config.MCP.AutoDiscover {
+		if githubToken := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN"); githubToken != "" {
+			if _, exists := config.MCP.Servers["github"]; !exists {
+				// Try npx version first
+				githubServer := mcp.MCPServerConfig{
+					Name:        "github",
+					Command:     "npx",
+					Args:        []string{"-y", "@modelcontextprotocol/server-github"},
+					AutoStart:   true,
+					MaxRestarts: 3,
+					Timeout:     30 * time.Second,
+					Env: map[string]string{
+						"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
+					},
+				}
 
+				if err := a.mcpManager.AddServer(githubServer); err == nil {
+					if config.MCP.AutoStart {
+						if err := a.mcpManager.StartAll(ctx); err != nil {
+							if a.debug {
+								fmt.Printf("⚠️  Failed to start GitHub MCP server (npx): %v\n", err)
+							}
+						} else if a.debug {
+							fmt.Println("✅ GitHub MCP server auto-discovered and started (npx)")
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// RefreshMCPTools refreshes the MCP tools cache
+func (a *Agent) RefreshMCPTools() error {
+	a.mcpToolsCache = nil // Clear cache to force reload
+	tools := a.getMCPTools()
+	if a.debug {
+		fmt.Printf("🔧 Refreshed MCP tools: %d available\n", len(tools))
+	}
 	return nil
 }
 
@@ -662,52 +548,116 @@ func (a *Agent) getMCPTools() []api.Tool {
 			Function: agentTool.Function,
 		}
 		agentTools = append(agentTools, apiTool)
-
-		if a.debug {
-			fmt.Printf("  - Loaded MCP tool: %s\n", agentTool.Function.Name)
-		}
 	}
 
-	// Cache the tools for future use
+	// Cache the tools
 	a.mcpToolsCache = agentTools
 
 	return agentTools
 }
 
-// isValidMCPTool checks if the given tool name corresponds to a valid MCP tool
-func (a *Agent) isValidMCPTool(toolName string) bool {
-	if a.mcpManager == nil {
-		return false
+// SetStatsUpdateCallback sets a callback for token/cost updates
+func (a *Agent) SetStatsUpdateCallback(callback func(int, float64)) {
+	a.statsUpdateCallback = callback
+}
+
+// GetConfig returns the configuration
+func (a *Agent) GetConfig() *configuration.Config {
+	if a.configManager == nil {
+		return nil
+	}
+	return a.configManager.GetConfig()
+}
+
+// SelectProvider allows interactive provider selection
+func (a *Agent) SelectProvider() error {
+	newProvider, err := a.configManager.SelectNewProvider()
+	if err != nil {
+		return err
 	}
 
-	// Extract server and tool name from the MCP tool name format: mcp_<server>_<tool>
+	// Update agent's client type
+	a.clientType = newProvider
+
+	// Recreate client with new provider
+	model := a.configManager.GetModelForProvider(newProvider)
+	client, err := api.NewUnifiedClientWithModel(newProvider, model)
+	if err != nil {
+		return fmt.Errorf("failed to create client for %s: %w", newProvider, err)
+	}
+
+	a.client = client
+	a.client.SetDebug(a.debug)
+
+	return nil
+}
+
+// suggestCorrectToolName suggests a correct tool name based on common mistakes
+func (a *Agent) suggestCorrectToolNameOLD(wrongName string) string {
+	wrongLower := strings.ToLower(wrongName)
+
+	// Common tool name mappings
+	corrections := map[string]string{
+		"bash":          "shell_command",
+		"shell":         "shell_command",
+		"run":           "shell_command",
+		"execute":       "shell_command",
+		"cmd":           "shell_command",
+		"read":          "read_file",
+		"cat":           "read_file",
+		"open":          "read_file",
+		"write":         "write_file",
+		"save":          "write_file",
+		"create":        "write_file",
+		"edit":          "edit_file",
+		"modify":        "edit_file",
+		"update":        "edit_file",
+		"search":        "search_files",
+		"find":          "search_files",
+		"grep":          "search_files",
+		"list_files":    "shell_command",
+		"ls":            "shell_command",
+		"todo":          "add_todos",
+		"task":          "add_todos",
+		"add_todo":      "add_todos",
+		"update_status": "update_todo_status",
+		"list_tasks":    "list_todos",
+		"web":           "web_search",
+		"google":        "web_search",
+		"search_web":    "web_search",
+		"fetch":         "fetch_url",
+		"get":           "fetch_url",
+		"download":      "fetch_url",
+		"analyze_ui":    "analyze_ui_screenshot",
+		"screenshot":    "analyze_ui_screenshot",
+		"analyze_image": "analyze_image_content",
+		"image":         "analyze_image_content",
+	}
+
+	if suggestion, found := corrections[wrongLower]; found {
+		return suggestion
+	}
+
+	// Check for partial matches
+	for wrong, correct := range corrections {
+		if strings.Contains(wrongLower, wrong) {
+			return correct
+		}
+	}
+
+	return ""
+}
+
+// isValidMCPTool checks if the tool name is a valid MCP tool
+func (a *Agent) isValidMCPTool(toolName string) bool {
 	if !strings.HasPrefix(toolName, "mcp_") {
 		return false
 	}
 
-	parts := strings.SplitN(toolName[4:], "_", 2) // Remove "mcp_" prefix and split
-	if len(parts) != 2 {
-		return false
-	}
-
-	serverName := parts[0]
-	originalToolName := parts[1]
-
-	// Check if server exists and is running
-	server, exists := a.mcpManager.GetServer(serverName)
-	if !exists || !server.IsRunning() {
-		return false
-	}
-
-	// Check if tool exists on the server
-	ctx := context.Background()
-	tools, err := server.ListTools(ctx)
-	if err != nil {
-		return false
-	}
-
-	for _, tool := range tools {
-		if tool.Name == originalToolName {
+	// Get MCP tools
+	mcpTools := a.getMCPTools()
+	for _, tool := range mcpTools {
+		if tool.Function.Name == toolName {
 			return true
 		}
 	}
@@ -715,307 +665,160 @@ func (a *Agent) isValidMCPTool(toolName string) bool {
 	return false
 }
 
-// executeMCPTool executes an MCP tool by calling it through the manager
+// executeMCPTool executes an MCP tool
 func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (string, error) {
-	if a.mcpManager == nil {
-		return "", fmt.Errorf("MCP manager not initialized")
-	}
-
-	// Extract server and tool name from the MCP tool name format: mcp_<server>_<tool>
-	if !strings.HasPrefix(toolName, "mcp_") {
-		return "", fmt.Errorf("invalid MCP tool name format: %s", toolName)
-	}
-
-	parts := strings.SplitN(toolName[4:], "_", 2) // Remove "mcp_" prefix and split
+	// Remove mcp_ prefix and parse server:tool format
+	toolName = strings.TrimPrefix(toolName, "mcp_")
+	parts := strings.SplitN(toolName, "_", 2)
 	if len(parts) != 2 {
 		return "", fmt.Errorf("invalid MCP tool name format: %s", toolName)
 	}
 
 	serverName := parts[0]
-	originalToolName := parts[1]
+	actualToolName := parts[1]
 
-	if a.debug {
-		fmt.Printf("🔧 Executing MCP tool: %s on server: %s with args: %v\n", originalToolName, serverName, args)
-	}
-
-	// Call the MCP tool
 	ctx := context.Background()
-	result, err := a.mcpManager.CallTool(ctx, serverName, originalToolName, args)
+	result, err := a.mcpManager.CallTool(ctx, serverName, actualToolName, args)
 	if err != nil {
-		return "", fmt.Errorf("MCP tool execution failed: %w", err)
+		return "", err
 	}
 
 	// Convert result to string
-	if result.IsError {
-		return "", fmt.Errorf("MCP tool returned error: %v", result.Content)
-	}
-
-	// Combine all content pieces into a single response
-	var response strings.Builder
-	for i, content := range result.Content {
-		if i > 0 {
-			response.WriteString("\n")
-		}
-		if content.Type == "text" {
-			response.WriteString(content.Text)
-		} else if content.Data != "" {
-			response.WriteString(content.Data)
-		}
-	}
-
-	return response.String(), nil
+	return formatMCPResult(result), nil
 }
 
-// handleMCPToolsCommand handles the mcp_tools meta-tool for discovering and calling MCP tools
-func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, error) {
-	if a.mcpManager == nil {
-		return "MCP is not configured or enabled. No MCP servers are available.", nil
+// formatMCPResult formats an MCP result for display
+func formatMCPResult(result *mcp.MCPToolCallResult) string {
+	if result == nil {
+		return "No result"
 	}
 
+	var output strings.Builder
+	for _, content := range result.Content {
+		switch content.Type {
+		case "text":
+			output.WriteString(content.Text)
+			output.WriteString("\n")
+		case "resource":
+			output.WriteString(fmt.Sprintf("[Resource: %s]\n", content.Data))
+		default:
+			output.WriteString(fmt.Sprintf("[%s: %s]\n", content.Type, content.Text))
+		}
+	}
+
+	return strings.TrimSpace(output.String())
+}
+
+// handleMCPToolsCommand handles the mcp_tools meta command
+func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, error) {
 	action, ok := args["action"].(string)
 	if !ok {
-		return "", fmt.Errorf("action parameter is required. Use 'list' to see available tools or 'call' to execute a tool")
+		return "", fmt.Errorf("action parameter required")
 	}
+
+	ctx := context.Background()
 
 	switch action {
 	case "list":
-		return a.listMCPTools(args)
-	case "call":
-		return a.callMCPToolViaMetaTool(args)
-	default:
-		return "", fmt.Errorf("unknown action: %s. Use 'list' or 'call'", action)
-	}
-}
-
-// listMCPTools lists available MCP tools
-func (a *Agent) listMCPTools(args map[string]interface{}) (string, error) {
-	serverFilter, _ := args["server"].(string)
-	ctx := context.Background()
-
-	var result strings.Builder
-	result.WriteString("Available MCP Tools:\n\n")
-
-	servers := a.mcpManager.ListServers()
-	toolCount := 0
-
-	for _, server := range servers {
-		serverName := server.GetName()
-
-		// Skip if filtering by server name
-		if serverFilter != "" && serverName != serverFilter {
-			continue
+		tools := a.getMCPTools()
+		if len(tools) == 0 {
+			return "No MCP tools available", nil
 		}
 
-		if !server.IsRunning() {
-			result.WriteString(fmt.Sprintf("Server '%s': Not running\n", serverName))
-			continue
+		var output strings.Builder
+		output.WriteString(fmt.Sprintf("Available MCP tools (%d):\n", len(tools)))
+		for _, tool := range tools {
+			output.WriteString(fmt.Sprintf("- %s: %s\n", tool.Function.Name, tool.Function.Description))
 		}
+		return output.String(), nil
 
-		tools, err := server.ListTools(ctx)
-		if err != nil {
-			result.WriteString(fmt.Sprintf("Server '%s': Error listing tools: %v\n", serverName, err))
-			continue
-		}
+	case "refresh":
+		a.mcpToolsCache = nil
+		tools := a.getMCPTools()
+		return fmt.Sprintf("Refreshed MCP tools. %d tools available.", len(tools)), nil
 
-		if len(tools) > 0 {
-			result.WriteString(fmt.Sprintf("Server '%s':\n", serverName))
-			for _, tool := range tools {
-				toolCount++
-				// Show the full MCP tool name that can be used
-				mcpToolName := fmt.Sprintf("mcp_%s_%s", serverName, tool.Name)
-				result.WriteString(fmt.Sprintf("  - %s: %s\n", mcpToolName, tool.Description))
+	case "status":
+		servers := a.mcpManager.ListServers()
+		var output strings.Builder
+		output.WriteString("MCP Server Status:\n")
+		for _, server := range servers {
+			status := "stopped"
+			if server.IsRunning() {
+				status = "running"
 			}
-			result.WriteString("\n")
+			output.WriteString(fmt.Sprintf("- %s: %s\n", server.GetName(), status))
 		}
-	}
+		return output.String(), nil
 
-	if toolCount == 0 {
-		if serverFilter != "" {
-			result.WriteString(fmt.Sprintf("No tools found for server '%s'\n", serverFilter))
-		} else {
-			result.WriteString("No MCP tools currently available. Check if MCP servers are running.\n")
+	case "start":
+		// For now, start all servers
+		if err := a.mcpManager.StartAll(ctx); err != nil {
+			return "", fmt.Errorf("failed to start servers: %w", err)
 		}
-	} else {
-		result.WriteString(fmt.Sprintf("\nTotal tools available: %d\n", toolCount))
-		result.WriteString("\nTo use a tool, call it directly or use: mcp_tools action='call' server='<server>' tool='<tool>' arguments={...}\n")
-	}
+		return "Started all MCP servers", nil
 
-	return result.String(), nil
-}
-
-// callMCPToolViaMetaTool executes an MCP tool via the mcp_tools meta-tool
-func (a *Agent) callMCPToolViaMetaTool(args map[string]interface{}) (string, error) {
-	server, ok := args["server"].(string)
-	if !ok || server == "" {
-		return "", fmt.Errorf("server parameter is required for 'call' action")
-	}
-
-	tool, ok := args["tool"].(string)
-	if !ok || tool == "" {
-		return "", fmt.Errorf("tool parameter is required for 'call' action")
-	}
-
-	toolArgs, _ := args["arguments"].(map[string]interface{})
-	if toolArgs == nil {
-		toolArgs = make(map[string]interface{})
-	}
-
-	// Call the tool through the manager
-	ctx := context.Background()
-	result, err := a.mcpManager.CallTool(ctx, server, tool, toolArgs)
-	if err != nil {
-		return "", fmt.Errorf("failed to call MCP tool: %w", err)
-	}
-
-	if result.IsError {
-		return "", fmt.Errorf("MCP tool returned error: %v", result.Content)
-	}
-
-	// Combine all content pieces into a single response
-	var response strings.Builder
-	for i, content := range result.Content {
-		if i > 0 {
-			response.WriteString("\n")
+	case "stop":
+		// For now, stop all servers
+		if err := a.mcpManager.StopAll(ctx); err != nil {
+			return "", fmt.Errorf("failed to stop servers: %w", err)
 		}
-		if content.Type == "text" {
-			response.WriteString(content.Text)
-		} else if content.Data != "" {
-			response.WriteString(content.Data)
-		}
-	}
+		return "Stopped all MCP servers", nil
 
-	return response.String(), nil
-}
-
-// GetMCPManager returns the MCP manager (for tool access)
-func (a *Agent) GetMCPManager() interface{} {
-	return a.mcpManager
-}
-
-// mcpServerSummary holds the dynamic summary of available MCP servers
-var mcpServerSummary string
-
-// generateMCPServerSummary creates a summary of available MCP servers
-func (a *Agent) generateMCPServerSummary() {
-	if a.mcpManager == nil {
-		return
-	}
-
-	servers := a.mcpManager.ListServers()
-	if len(servers) == 0 {
-		return
-	}
-
-	var summary strings.Builder
-	summary.WriteString("\n\nMCP SERVERS AVAILABLE:\n")
-
-	ctx := context.Background()
-	serverCount := 0
-
-	for _, server := range servers {
-		if !server.IsRunning() {
-			continue
-		}
-
-		serverName := server.GetName()
-		serverCount++
-
-		// Get a sample of tools to understand what the server provides
-		tools, err := server.ListTools(ctx)
-		if err != nil || len(tools) == 0 {
-			summary.WriteString(fmt.Sprintf("- %s: MCP server (tools unavailable)\n", serverName))
-			continue
-		}
-
-		// Analyze tool names to determine server purpose
-		serverDesc := analyzeMCPServerPurpose(serverName, tools)
-		summary.WriteString(fmt.Sprintf("- %s: %s (%d tools)\n", serverName, serverDesc, len(tools)))
-	}
-
-	if serverCount > 0 {
-		summary.WriteString("\nUse the 'mcp_tools' tool with action='list' to see all available tools from these servers.")
-		mcpServerSummary = summary.String()
-	} else {
-		mcpServerSummary = ""
-	}
-}
-
-// analyzeMCPServerPurpose attempts to determine what a server does based on its name and tools
-func analyzeMCPServerPurpose(serverName string, tools []mcp.MCPTool) string {
-	// First check common server names
-	lowerName := strings.ToLower(serverName)
-
-	switch {
-	case strings.Contains(lowerName, "github"):
-		return "GitHub operations (PRs, issues, repos)"
-	case strings.Contains(lowerName, "filesystem") || strings.Contains(lowerName, "fs"):
-		return "Advanced file system operations"
-	case strings.Contains(lowerName, "postgres") || strings.Contains(lowerName, "pg"):
-		return "PostgreSQL database operations"
-	case strings.Contains(lowerName, "slack"):
-		return "Slack messaging and workspace operations"
-	case strings.Contains(lowerName, "aws"):
-		return "AWS cloud service operations"
-	case strings.Contains(lowerName, "docker"):
-		return "Docker container management"
-	case strings.Contains(lowerName, "git") && !strings.Contains(lowerName, "github"):
-		return "Git version control operations"
-	}
-
-	// If name doesn't give a clear hint, analyze tool names
-	toolCategories := make(map[string]int)
-	for _, tool := range tools {
-		toolLower := strings.ToLower(tool.Name)
-
-		// Categorize based on tool names
-		switch {
-		case strings.Contains(toolLower, "file") || strings.Contains(toolLower, "dir"):
-			toolCategories["file"]++
-		case strings.Contains(toolLower, "query") || strings.Contains(toolLower, "select") || strings.Contains(toolLower, "insert"):
-			toolCategories["database"]++
-		case strings.Contains(toolLower, "pr") || strings.Contains(toolLower, "issue") || strings.Contains(toolLower, "commit"):
-			toolCategories["vcs"]++
-		case strings.Contains(toolLower, "send") || strings.Contains(toolLower, "message") || strings.Contains(toolLower, "channel"):
-			toolCategories["messaging"]++
-		case strings.Contains(toolLower, "deploy") || strings.Contains(toolLower, "build") || strings.Contains(toolLower, "run"):
-			toolCategories["devops"]++
-		}
-	}
-
-	// Find dominant category
-	maxCount := 0
-	dominantCategory := ""
-	for cat, count := range toolCategories {
-		if count > maxCount {
-			maxCount = count
-			dominantCategory = cat
-		}
-	}
-
-	// Return description based on dominant category
-	switch dominantCategory {
-	case "file":
-		return "File and directory operations"
-	case "database":
-		return "Database operations"
-	case "vcs":
-		return "Version control operations"
-	case "messaging":
-		return "Messaging and communication"
-	case "devops":
-		return "DevOps and deployment operations"
 	default:
-		// Generic description with some sample tools
-		if len(tools) > 0 {
-			sampleTools := []string{}
-			for i, tool := range tools {
-				if i >= 3 {
-					break
-				}
-				sampleTools = append(sampleTools, tool.Name)
-			}
-			return fmt.Sprintf("Various operations including %s", strings.Join(sampleTools, ", "))
-		}
-		return "Various operations"
+		return "", fmt.Errorf("unknown action: %s", action)
 	}
+}
+
+// SetInterruptChannel sets the interrupt channel for the agent
+func (a *Agent) SetInterruptChannel(ch chan string) {
+	a.interruptChan = ch
+}
+
+// SetOutputMutex sets the output mutex for synchronized output
+func (a *Agent) SetOutputMutex(mutex *sync.Mutex) {
+	a.outputMutex = mutex
+}
+
+// EnableStreaming enables response streaming with a callback
+func (a *Agent) EnableStreaming(callback func(string)) {
+	a.streamingEnabled = true
+	a.streamingCallback = callback
+}
+
+// DisableStreaming disables response streaming
+func (a *Agent) DisableStreaming() {
+	a.streamingEnabled = false
+	a.streamingCallback = nil
+}
+
+// GetTotalTokens returns the total tokens used across all requests
+func (a *Agent) GetTotalTokens() int {
+	return a.totalTokens
+}
+
+// GetCurrentIteration returns the current iteration number
+func (a *Agent) GetCurrentIteration() int {
+	return a.currentIteration
+}
+
+// GetCurrentContextTokens returns the current context token count
+func (a *Agent) GetCurrentContextTokens() int {
+	// For now, return the last known prompt tokens
+	return a.promptTokens
+}
+
+// GetMaxContextTokens returns the maximum context tokens for the current model
+func (a *Agent) GetMaxContextTokens() int {
+	// Get context limit from the model
+	return a.getModelContextLimit()
+}
+
+// SetMaxIterations sets the maximum number of iterations for the agent
+func (a *Agent) SetMaxIterations(max int) {
+	a.maxIterations = max
+}
+
+// GetConfigManager returns the configuration manager
+func (a *Agent) GetConfigManager() *configuration.Manager {
+	return a.configManager
 }

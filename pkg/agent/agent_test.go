@@ -2,7 +2,6 @@ package agent
 
 import (
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -74,8 +73,8 @@ func TestNewAgentWithModel(t *testing.T) {
 	}
 
 	// Verify agent properties
-	if agent.GetMaxIterations() != 1000 {
-		t.Errorf("Expected maxIterations to be 1000, got %d", agent.GetMaxIterations())
+	if agent.maxIterations != 1000 {
+		t.Errorf("Expected maxIterations to be 1000, got %d", agent.maxIterations)
 	}
 }
 
@@ -102,8 +101,8 @@ func TestBasicGetters(t *testing.T) {
 		t.Errorf("Expected GetCurrentIteration() to be 0, got %d", agent.GetCurrentIteration())
 	}
 
-	if agent.GetMaxIterations() != 1000 {
-		t.Errorf("Expected GetMaxIterations() to be 1000, got %d", agent.GetMaxIterations())
+	if agent.maxIterations != 1000 {
+		t.Errorf("Expected maxIterations to be 1000, got %d", agent.maxIterations)
 	}
 
 	if agent.GetTotalCost() != 0.0 {
@@ -115,48 +114,13 @@ func TestBasicGetters(t *testing.T) {
 		t.Errorf("Expected GetMessages() to return empty slice, got %d messages", len(messages))
 	}
 
-	history := agent.GetConversationHistory()
-	if len(history) != 0 {
-		t.Errorf("Expected GetConversationHistory() to return empty slice, got %d messages", len(history))
-	}
-
-	lastMessage := agent.GetLastAssistantMessage()
-	if lastMessage != "" {
-		t.Errorf("Expected GetLastAssistantMessage() to return empty string, got %q", lastMessage)
-	}
-
 	configManager := agent.GetConfigManager()
 	if configManager == nil {
 		t.Error("Expected GetConfigManager() to return non-nil manager")
 	}
 }
 
-// TestGetProjectContext tests the project context functionality
-func TestGetProjectContext(t *testing.T) {
-	// Test with no project context files
-	context := getProjectContext()
-	if context != "" {
-		t.Errorf("Expected empty context when no files exist, got %q", context)
-	}
-
-	// Create a temporary project context file
-	testContent := "Test project context"
-	err := os.WriteFile(".project_context.md", []byte(testContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-	defer os.Remove(".project_context.md")
-
-	context = getProjectContext()
-	expectedPrefix := "PROJECT CONTEXT:\n"
-	if !strings.HasPrefix(context, expectedPrefix) {
-		t.Errorf("Expected context to start with %q, got %q", expectedPrefix, context)
-	}
-
-	if !strings.Contains(context, testContent) {
-		t.Errorf("Expected context to contain %q, got %q", testContent, context)
-	}
-}
+// TestGetProjectContext - removed as getProjectContext was removed
 
 // TestAgentStructFields tests that all expected struct fields are present
 func TestAgentStructFields(t *testing.T) {

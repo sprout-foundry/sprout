@@ -46,12 +46,6 @@ func TestTimeoutConfiguration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment variable
-			if tt.envValue != "" {
-				os.Setenv("LEDIT_API_TIMEOUT", tt.envValue)
-				defer os.Unsetenv("LEDIT_API_TIMEOUT")
-			}
-
 			// Create a test API key
 			os.Setenv("DEEPINFRA_API_KEY", "test-key")
 			defer os.Unsetenv("DEEPINFRA_API_KEY")

@@ -198,9 +198,9 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 
 	// Apply different strategies based on context
 	if contextUsage > 0.9 {
-		// Critical - use aggressive pruning
+		// Critical - use aggressive optimization
 		if cp.debug {
-			fmt.Printf("🚨 Critical context usage (%.1f%%), using aggressive pruning\n", contextUsage*100)
+			fmt.Printf("🚨 Critical context usage (%.1f%%), using aggressive optimization\n", contextUsage*100)
 		}
 		return optimizer.AggressiveOptimization(messages)
 	} else if hasLongHistory && hasManyToolCalls {

@@ -104,10 +104,16 @@ func createVisionClient() (api.ClientInterface, error) {
 			continue // Skip if API key not set
 		}
 
-		// Check if provider has vision support
-		visionModel := api.GetVisionModelForProvider(provider.clientType)
-		if visionModel == "" {
-			continue // Skip if no vision model available
+		// For now, skip providers that don't have known vision support
+		// TODO: Query provider directly for vision-capable models
+		var visionModel string
+		switch provider.clientType {
+		case api.OpenAIClientType:
+			visionModel = "gpt-4o"
+		case api.OpenRouterClientType:
+			visionModel = "gpt-4o"
+		default:
+			continue // Skip if no vision model known
 		}
 
 		// Try to create client with vision model
@@ -633,10 +639,18 @@ func HasVisionCapability() bool {
 	}
 
 	for _, provider := range providers {
-		// Check if provider has vision support
-		visionModel := api.GetVisionModelForProvider(provider.clientType)
-		if visionModel == "" {
-			continue // Skip if no vision model available
+		// For now, only OpenAI and OpenRouter have known vision support
+		// TODO: Query provider directly for vision-capable models
+		hasVisionSupport := false
+		switch provider.clientType {
+		case api.OpenAIClientType, api.OpenRouterClientType:
+			hasVisionSupport = true
+		default:
+			continue // Skip if no vision support
+		}
+
+		if !hasVisionSupport {
+			continue
 		}
 
 		// Check if provider is available
@@ -644,8 +658,7 @@ func HasVisionCapability() bool {
 			continue // Skip if API key not set
 		}
 
-		// For Ollama, we assume it's available if it has vision models
-		// (actual connection check would be too expensive for this function)
+		// Provider has vision support and is available
 		return true
 	}
 

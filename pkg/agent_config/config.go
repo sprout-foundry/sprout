@@ -18,11 +18,13 @@ type ClientType = api.ClientType
 
 // Re-export the constants from agent_api for convenience
 const (
-	OpenAIClientType     = api.OpenAIClientType
-	DeepInfraClientType  = api.DeepInfraClientType
-	OllamaClientType     = api.OllamaClientType
-	OpenRouterClientType = api.OpenRouterClientType
-	DeepSeekClientType   = api.DeepSeekClientType
+	OpenAIClientType      = api.OpenAIClientType
+	DeepInfraClientType   = api.DeepInfraClientType
+	OllamaClientType      = api.OllamaClientType
+	OllamaLocalClientType = api.OllamaLocalClientType
+	OllamaTurboClientType = api.OllamaTurboClientType
+	OpenRouterClientType  = api.OpenRouterClientType
+	DeepSeekClientType    = api.DeepSeekClientType
 )
 
 // Config represents the application configuration
@@ -55,13 +57,15 @@ func NewConfig() *Config {
 	return &Config{
 		LastUsedProvider: "",
 		ProviderModels: map[string]string{
-			"openai":     getDefaultModelForProvider(OpenAIClientType),
-			"deepinfra":  getDefaultModelForProvider(DeepInfraClientType),
-			"ollama":     getDefaultModelForProvider(OllamaClientType),
-			"openrouter": getDefaultModelForProvider(OpenRouterClientType),
-			"deepseek":   getDefaultModelForProvider(DeepSeekClientType),
+			"openai":       getDefaultModelForProvider(OpenAIClientType),
+			"deepinfra":    getDefaultModelForProvider(DeepInfraClientType),
+			"ollama":       getDefaultModelForProvider(OllamaClientType),
+			"ollama-local": getDefaultModelForProvider(OllamaLocalClientType),
+			"ollama-turbo": getDefaultModelForProvider(OllamaTurboClientType),
+			"openrouter":   getDefaultModelForProvider(OpenRouterClientType),
+			"deepseek":     getDefaultModelForProvider(DeepSeekClientType),
 		},
-		ProviderPriority: []string{"openai", "openrouter", "deepinfra", "ollama", "deepseek"},
+		ProviderPriority: []string{"openai", "openrouter", "deepinfra", "ollama-turbo", "ollama", "ollama-local", "deepseek"},
 		Preferences:      make(map[string]interface{}),
 		Version:          ConfigVersion,
 	}
@@ -215,6 +219,10 @@ func getProviderConfigName(clientType ClientType) string {
 		return "deepinfra"
 	case OllamaClientType:
 		return "ollama"
+	case OllamaLocalClientType:
+		return "ollama-local"
+	case OllamaTurboClientType:
+		return "ollama-turbo"
 	case OpenRouterClientType:
 		return "openrouter"
 	case DeepSeekClientType:
@@ -233,6 +241,10 @@ func GetProviderFromConfigName(name string) (ClientType, error) {
 		return DeepInfraClientType, nil
 	case "ollama":
 		return OllamaClientType, nil
+	case "ollama-local":
+		return api.OllamaLocalClientType, nil
+	case "ollama-turbo":
+		return api.OllamaTurboClientType, nil
 	case "openrouter":
 		return OpenRouterClientType, nil
 	case "deepseek":
@@ -244,8 +256,8 @@ func GetProviderFromConfigName(name string) (ClientType, error) {
 
 // getDefaultModelForProvider returns the best default model for each provider
 func getDefaultModelForProvider(clientType ClientType) string {
-	// Use the agent_api implementation
-	return api.GetDefaultModelForProvider(clientType)
+	// No longer provide defaults - user must configure
+	return ""
 }
 
 // getClientTypeFromEnv determines which client to use based on environment variables

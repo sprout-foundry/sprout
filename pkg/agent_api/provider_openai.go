@@ -122,66 +122,16 @@ func (p *OpenAIProvider) CheckConnection(ctx context.Context) error {
 
 // GetModelContextLimit returns the context window size for the current model
 func (p *OpenAIProvider) GetModelContextLimit() (int, error) {
-	// Use the model registry for consistent context limit lookup
-	registry := GetModelRegistry()
-	contextLimit, err := registry.GetModelContextLength(p.model)
-	if err != nil {
-		// Log the error but return a reasonable default
-		// OpenAI models typically support at least 4K
-		return 4096, nil
-	}
-	return contextLimit, nil
+	// Most modern OpenAI models support 128K context
+	// This should ideally come from the API, not hardcoded
+	return 128000, nil
 }
 
 // GetAvailableModels returns the list of available OpenAI models
 func (p *OpenAIProvider) GetAvailableModels(ctx context.Context) ([]ModelDetails, error) {
-	// Get the registry for model information
-	registry := GetModelRegistry()
-
-	// Define the core OpenAI models we want to expose
-	// This list can be configured or expanded as needed
-	coreModelIDs := []string{
-		"gpt-5",
-		"gpt-5-mini",
-		"o3",
-		"o3-mini",
-		"gpt-4o",
-		"gpt-4o-mini",
-		"o1",
-		"o1-mini",
-		"gpt-4-turbo",
-		"gpt-4",
-		"gpt-3.5-turbo",
-	}
-
-	models := make([]ModelDetails, 0, len(coreModelIDs))
-
-	for _, modelID := range coreModelIDs {
-		config, err := registry.GetModelConfig(modelID)
-		if err != nil {
-			// Skip models not found in registry
-			continue
-		}
-
-		// Convert costs from per-1M to per-1K for backward compatibility
-		inputCostPer1K := config.InputCost / 1000.0
-		outputCostPer1K := config.OutputCost / 1000.0
-
-		// Set default flag for gpt-4o-mini
-		isDefault := modelID == "gpt-4o-mini"
-
-		models = append(models, ModelDetails{
-			ID:              config.ID,
-			Name:            config.Name,
-			ContextLength:   config.ContextLength,
-			InputCostPer1K:  inputCostPer1K,
-			OutputCostPer1K: outputCostPer1K,
-			Features:        config.Features,
-			IsDefault:       isDefault,
-		})
-	}
-
-	return models, nil
+	// This should query the OpenAI API for available models
+	// For now, return an error to force using the actual API
+	return nil, fmt.Errorf("GetAvailableModels not implemented - use OpenAI API directly")
 }
 
 // buildOpenAIRequest converts a unified request to OpenAI format
@@ -301,18 +251,37 @@ func (p *OpenAIProvider) convertToUnifiedResponse(resp *OpenAIResponse) *ChatRes
 
 // EstimateCost calculates the cost for OpenAI models
 func (p *OpenAIProvider) EstimateCost(promptTokens, completionTokens int, model string) float64 {
-	// Use the model registry for consistent pricing lookup
-	registry := GetModelRegistry()
-	inputCostPer1M, outputCostPer1M, err := registry.GetModelPricing(model)
-	if err != nil {
-		// Fallback to conservative estimates if model not found
-		inputCostPer1M = 1.0  // $1 per 1M input tokens
-		outputCostPer1M = 2.0 // $2 per 1M output tokens
-	}
+	// Get pricing for the model
+	inputCostPer1M, outputCostPer1M := p.getModelPricing(model)
 
 	// Convert from per 1M to per token costs
 	inputCost := float64(promptTokens) * inputCostPer1M / 1_000_000
 	outputCost := float64(completionTokens) * outputCostPer1M / 1_000_000
 
 	return inputCost + outputCost
+}
+
+// getModelPricing returns input and output costs per 1M tokens for OpenAI models
+func (p *OpenAIProvider) getModelPricing(model string) (inputCostPer1M, outputCostPer1M float64) {
+	// OpenAI pricing (as of last known update)
+	// TODO: This should ideally come from the OpenAI API
+	switch {
+	case strings.Contains(model, "gpt-4o-mini"):
+		return 0.15, 0.60
+	case strings.Contains(model, "gpt-4o"):
+		return 2.50, 10.00
+	case strings.Contains(model, "gpt-4-turbo"):
+		return 10.00, 30.00
+	case strings.Contains(model, "gpt-4"):
+		return 30.00, 60.00
+	case strings.Contains(model, "gpt-3.5-turbo"):
+		return 0.50, 1.50
+	case strings.Contains(model, "o1-preview"):
+		return 15.00, 60.00
+	case strings.Contains(model, "o1-mini"):
+		return 3.00, 12.00
+	default:
+		// Conservative fallback
+		return 1.0, 2.0
+	}
 }

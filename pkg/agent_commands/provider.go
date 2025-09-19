@@ -250,25 +250,16 @@ func (p *ProviderCommand) setProvider(providerName string, configManager *config
 
 // switchToProvider performs the actual provider switch
 func (p *ProviderCommand) switchToProvider(provider api.ClientType, configManager *config.Manager, chatAgent *agent.Agent) error {
-	// Get the configured model for this provider
-	model := configManager.GetModelForProvider(provider)
+	fmt.Printf("🔄 Switching to %s...\n", api.GetProviderName(provider))
 
-	fmt.Printf("🔄 Switching to %s with model %s...\n", api.GetProviderName(provider), model)
-
-	// Clear model caches to ensure fresh model lists for the new provider
-	api.ClearModelCaches()
-
-	// Persist the provider selection to configuration
-	err := configManager.SetProviderAndModel(provider, model)
-	if err != nil {
-		return fmt.Errorf("failed to persist provider selection: %w", err)
-	}
-
-	// Switch the agent to use the new provider and model immediately
-	err = chatAgent.SetModel(model)
+	// Switch the agent to the new provider
+	err := chatAgent.SetProvider(provider)
 	if err != nil {
 		return fmt.Errorf("failed to switch to provider %s: %w", api.GetProviderName(provider), err)
 	}
+
+	// Get the model that was set
+	model := chatAgent.GetModel()
 
 	fmt.Printf("✅ Provider switched to: %s\n", api.GetProviderName(provider))
 	fmt.Printf("🤖 Using model: %s\n", model)

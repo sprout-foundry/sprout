@@ -66,13 +66,14 @@ func (ms *ModelSelection) GetModelForTask(taskType string) string {
 		return primary
 	}
 
-	return ms.getFallbackModel(taskType)
+	// No model configured - return empty string
+	return ""
 }
 
 // getLegacyModelForTask checks legacy config fields for backward compatibility
 func (ms *ModelSelection) getLegacyModelForTask(taskType string) string {
 	if ms.config == nil {
-		return ms.getFallbackModel(taskType)
+		return ""
 	}
 
 	// Check legacy config fields
@@ -107,56 +108,7 @@ func (ms *ModelSelection) getLegacyModelForTask(taskType string) string {
 		}
 	}
 
-	return ms.getFallbackModel(taskType)
-}
-
-// getFallbackModel provides hard-coded fallbacks when config is unavailable
-func (ms *ModelSelection) getFallbackModel(taskType string) string {
-	// Use unified provider detection
-	clientType, err := DetermineProvider("", "")
-	if err != nil {
-		clientType = OllamaClientType
-	}
-
-	switch taskType {
-	case "editing", "code":
-		// Prefer fast, capable models for editing
-		switch clientType {
-		case OpenRouterClientType:
-			return "openai/gpt-oss-20b"
-		case DeepInfraClientType:
-			return "openai/gpt-oss-20b"
-		case OllamaClientType:
-			return "gpt-oss:20b"
-		default:
-			return GetDefaultModelForProvider(clientType)
-		}
-
-	case "orchestration", "process":
-		// Prefer reasoning-capable models for orchestration
-		switch clientType {
-		case OpenRouterClientType:
-			return "deepseek/deepseek-chat-v3.1:free"
-		case DeepInfraClientType:
-			return "moonshotai/Kimi-K2-Instruct"
-		default:
-			return GetDefaultModelForProvider(clientType)
-		}
-
-	case "summary", "workspace", "analysis":
-		// Prefer high-capacity models for analysis
-		switch clientType {
-		case OpenRouterClientType:
-			return "deepseek/deepseek-chat-v3.1:free"
-		case DeepInfraClientType:
-			return "meta-llama/Llama-3.3-70B-Instruct-Turbo"
-		default:
-			return GetDefaultModelForProvider(clientType)
-		}
-
-	default:
-		return GetDefaultModelForProvider(clientType)
-	}
+	return ""
 }
 
 // ResolveModelReference resolves a model reference to a fully qualified model name
@@ -193,30 +145,6 @@ func (ms *ModelSelection) GetClientForTask(taskType string) (ClientInterface, er
 
 // UpdateConfigDefaults ensures config defaults are aligned with agent API best practices
 func (ms *ModelSelection) UpdateConfigDefaults() {
-	if ms.config == nil || ms.config.LLM == nil {
-		return
-	}
-
-	llmCfg := ms.config.LLM
-
-	// Update defaults if they're still using legacy values
-	if llmCfg.AgentModel == "" {
-		llmCfg.AgentModel = ms.getFallbackModel("editing")
-	}
-
-	if llmCfg.OrchestrationModel == "" {
-		llmCfg.OrchestrationModel = ms.getFallbackModel("orchestration")
-	}
-
-	if llmCfg.SummaryModel == "" {
-		llmCfg.SummaryModel = ms.getFallbackModel("summary")
-	}
-
-	if llmCfg.WorkspaceModel == "" {
-		llmCfg.WorkspaceModel = ms.getFallbackModel("workspace")
-	}
-
-	if llmCfg.CodeReviewModel == "" {
-		llmCfg.CodeReviewModel = ms.getFallbackModel("review")
-	}
+	// No longer set defaults - let users explicitly choose their models
+	// This ensures they pick models that are actually available from their provider
 }

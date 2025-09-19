@@ -1,24 +1,31 @@
 package api
 
 import (
+	"time"
+
 	"github.com/alantheprice/ledit/pkg/agent_providers"
 	types "github.com/alantheprice/ledit/pkg/agent_types"
 )
 
 // UnifiedProviderWrapper wraps any provider that implements types.ProviderInterface
 type UnifiedProviderWrapper struct {
+	*TPSBase
 	provider types.ProviderInterface
 }
 
 // NewUnifiedProviderWrapper creates a wrapper for any provider
 func NewUnifiedProviderWrapper(provider types.ProviderInterface) *UnifiedProviderWrapper {
 	return &UnifiedProviderWrapper{
+		TPSBase:  NewTPSBase(),
 		provider: provider,
 	}
 }
 
 // SendChatRequest converts types and forwards to provider
 func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
+	// Track request timing
+	startTime := time.Now()
+
 	// Convert API types to shared types
 	typeMessages := make([]types.Message, len(messages))
 	for i, msg := range messages {
@@ -58,8 +65,18 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 
 	// Call provider
 	response, err := w.provider.SendChatRequest(typeMessages, typeTools, reasoning)
+
+	// Calculate request duration AFTER the provider completes
+	// This ensures we measure the full token generation time
+	duration := time.Since(startTime)
+
 	if err != nil {
 		return nil, err
+	}
+
+	// Track TPS
+	if w.GetTracker() != nil && response != nil && response.Usage.CompletionTokens > 0 {
+		w.GetTracker().RecordRequest(duration, response.Usage.CompletionTokens)
 	}
 
 	// Convert response back to API types
@@ -435,6 +452,38 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 	}
 
 	return apiResponse, nil
+}
+
+// GetTPSStatistics returns tokens per second statistics
+func (w *UnifiedProviderWrapper) GetTPSStatistics() (float64, float64, int) {
+	// Delegate to underlying provider if it supports TPS tracking
+	if tpsProvider, ok := w.provider.(interface {
+		GetTPSStatistics() (float64, float64, int)
+	}); ok {
+		return tpsProvider.GetTPSStatistics()
+	}
+	return 0.0, 0.0, 0
+}
+
+// GetLastRequestTPS returns the TPS for the last API request
+func (w *UnifiedProviderWrapper) GetLastRequestTPS() float64 {
+	// Delegate to underlying provider if it supports TPS tracking
+	if tpsProvider, ok := w.provider.(interface {
+		GetLastRequestTPS() float64
+	}); ok {
+		return tpsProvider.GetLastRequestTPS()
+	}
+	return 0.0
+}
+
+// ResetTPSStatistics resets the TPS tracking
+func (w *UnifiedProviderWrapper) ResetTPSStatistics() {
+	// Delegate to underlying provider if it supports TPS tracking
+	if tpsProvider, ok := w.provider.(interface {
+		ResetTPSStatistics()
+	}); ok {
+		tpsProvider.ResetTPSStatistics()
+	}
 }
 
 // Factory functions for creating providers

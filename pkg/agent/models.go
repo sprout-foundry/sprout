@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -24,51 +23,147 @@ func (a *Agent) GetProviderType() api.ClientType {
 	return a.clientType
 }
 
-// SetModel changes the current model and persists the choice
-func (a *Agent) SetModel(model string) error {
-	// IMPORTANT: Clear model caches FIRST to ensure fresh model lists when determining provider
-	api.ClearModelCaches()
+// selectDefaultModel chooses an appropriate default model from available models
+func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientType) string {
+	// If there are no models, return empty
+	if len(models) == 0 {
+		return ""
+	}
 
-	// Determine which provider this model belongs to
-	requiredProvider, err := a.determineProviderForModel(model)
+	// Provider-specific logic to select best default model
+	switch provider {
+	case api.DeepInfraClientType:
+		// Prefer DeepSeek or Llama models for DeepInfra
+		for _, model := range models {
+			if strings.Contains(strings.ToLower(model.ID), "deepseek") && strings.Contains(strings.ToLower(model.ID), "instruct") {
+				return model.ID
+			}
+		}
+		for _, model := range models {
+			if strings.Contains(strings.ToLower(model.ID), "llama") && strings.Contains(strings.ToLower(model.ID), "70b") {
+				return model.ID
+			}
+		}
+
+	case api.OpenRouterClientType:
+		// Prefer free models for OpenRouter
+		for _, model := range models {
+			if strings.Contains(strings.ToLower(model.ID), ":free") {
+				return model.ID
+			}
+		}
+
+	case api.OllamaClientType, api.OllamaLocalClientType:
+		// Prefer smaller models for local Ollama
+		for _, model := range models {
+			if strings.Contains(strings.ToLower(model.ID), "llama3.2") || strings.Contains(strings.ToLower(model.ID), "llama3.1") {
+				return model.ID
+			}
+		}
+
+	case api.OllamaTurboClientType:
+		// Prefer gpt-oss models for Ollama Turbo
+		for _, model := range models {
+			if strings.Contains(strings.ToLower(model.ID), "gpt-oss:20b") {
+				return model.ID
+			}
+		}
+	}
+
+	// Default: return the first model
+	return models[0].ID
+}
+
+// SetProvider switches to a specific provider with its default or current model
+func (a *Agent) SetProvider(provider api.ClientType) error {
+	// Get the configured model for this provider
+	model := a.configManager.GetModelForProvider(provider)
+	if model == "" {
+		// If no model configured, try to get the first available model from the provider
+		models, err := api.GetModelsForProvider(provider)
+		if err == nil && len(models) > 0 {
+			// Find a suitable default model
+			model = a.selectDefaultModel(models, provider)
+			if a.debug {
+				a.debugLog("🔍 Auto-selected model %s for provider %s\n", model, api.GetProviderName(provider))
+			}
+		} else {
+			// No models available from API and no model specified
+			return fmt.Errorf("no models available from provider %v - please specify a model explicitly", api.GetProviderName(provider))
+		}
+	}
+
+	// Create a new client with the specified provider
+	newClient, err := api.NewUnifiedClientWithModel(provider, model)
 	if err != nil {
-		return fmt.Errorf("failed to determine provider for model %s: %w", model, err)
+		return fmt.Errorf("failed to create client for provider %s: %w", api.GetProviderName(provider), err)
 	}
 
-	// Check if we need to switch providers
-	if requiredProvider != a.clientType {
-		if a.debug {
-			a.debugLog("🔄 Switching from %s to %s for model %s\n",
-				api.GetProviderName(a.clientType), api.GetProviderName(requiredProvider), model)
-		}
+	// Set debug mode on the new client
+	newClient.SetDebug(a.debug)
 
-		// Create a new client with the required provider
-		newClient, err := api.NewUnifiedClientWithModel(requiredProvider, model)
-		if err != nil {
-			return fmt.Errorf("failed to create client for provider %s: %w", api.GetProviderName(requiredProvider), err)
-		}
-
-		// Set debug mode on the new client
-		newClient.SetDebug(a.debug)
-
-		// Check connection
-		if err := newClient.CheckConnection(); err != nil {
-			return fmt.Errorf("connection check failed for provider %s: %w", api.GetProviderName(requiredProvider), err)
-		}
-
-		// Switch to the new client
-		a.client = newClient
-		a.clientType = requiredProvider
-	} else {
-		// Same provider, just update the model
-		if err := a.client.SetModel(model); err != nil {
-			return fmt.Errorf("failed to set model on client: %w", err)
-		}
+	// Check connection
+	if err := newClient.CheckConnection(); err != nil {
+		return fmt.Errorf("connection check failed for provider %s: %w", api.GetProviderName(provider), err)
 	}
+
+	// Switch to the new client
+	a.client = newClient
+	a.clientType = provider
 
 	// Save to configuration
-	if err := a.configManager.SetProviderAndModel(requiredProvider, model); err != nil {
-		return fmt.Errorf("failed to save model selection: %w", err)
+	if err := a.configManager.SetProviderAndModel(provider, model); err != nil {
+		return fmt.Errorf("failed to save provider selection: %w", err)
+	}
+
+	// Update context limits for the new model
+	a.maxContextTokens = a.getModelContextLimit()
+	a.currentContextTokens = 0
+
+	if a.debug {
+		a.debugLog("✅ Switched to provider %s with model %s\n", api.GetProviderName(provider), model)
+	}
+
+	return nil
+}
+
+// SetModel changes the current model and persists the choice
+func (a *Agent) SetModel(model string) error {
+	// Use the current provider - we don't need to determine it
+	// The user has already selected the provider via /providers select
+
+	// Verify the model exists for the current provider
+	models, err := a.getModelsForProvider(a.clientType)
+	if err != nil {
+		return fmt.Errorf("failed to get models for current provider %s: %w", api.GetProviderName(a.clientType), err)
+	}
+
+	// Check if the model exists (case-insensitive)
+	modelFound := false
+	for _, m := range models {
+		if strings.EqualFold(m.ID, model) {
+			modelFound = true
+			// Use the exact model ID from the provider's list
+			model = m.ID
+			break
+		}
+	}
+
+	if !modelFound {
+		return fmt.Errorf("model %s not found for provider %s", model, api.GetProviderName(a.clientType))
+	}
+
+	// Update the model on the current client
+	if err := a.client.SetModel(model); err != nil {
+		return fmt.Errorf("failed to set model on client: %w", err)
+	}
+
+	// Save the selection
+	if err := a.configManager.SetProviderAndModel(a.clientType, model); err != nil {
+		// Log warning but don't fail - this is not critical
+		if a.debug {
+			a.debugLog("⚠️  Failed to save model selection: %v\n", err)
+		}
 	}
 
 	// Update context limits for the new model
@@ -76,70 +171,6 @@ func (a *Agent) SetModel(model string) error {
 	a.currentContextTokens = 0
 
 	return nil
-}
-
-// determineProviderForModel determines which provider a model belongs to by checking all available models
-func (a *Agent) determineProviderForModel(modelID string) (api.ClientType, error) {
-	// Get all available models from all providers
-	allProviders := []api.ClientType{
-		api.OpenRouterClientType, // Check OpenRouter first as it has most models
-		api.OpenAIClientType,
-		api.DeepInfraClientType,
-
-		api.DeepSeekClientType,
-		api.OllamaClientType, // Check Ollama last as it's local
-	}
-
-	if a.debug {
-		a.debugLog("🔍 Searching for model %s across providers\n", modelID)
-	}
-
-	for _, provider := range allProviders {
-		if a.debug {
-			a.debugLog("🔍 Checking provider: %s\n", api.GetProviderName(provider))
-		}
-
-		// Check if this provider is available
-		if !a.isProviderAvailable(provider) {
-			if a.debug {
-				a.debugLog("❌ Provider %s not available\n", api.GetProviderName(provider))
-			}
-			continue
-		}
-
-		if a.debug {
-			a.debugLog("✅ Provider %s is available, checking models\n", api.GetProviderName(provider))
-		}
-
-		// Get models for this provider
-		models, err := a.getModelsForProvider(provider)
-		if err != nil {
-			if a.debug {
-				a.debugLog("❌ Failed to get models for %s: %v\n", api.GetProviderName(provider), err)
-			}
-			continue
-		}
-
-		if a.debug {
-			a.debugLog("✅ Got %d models from %s\n", len(models), api.GetProviderName(provider))
-		}
-
-		// Check if this provider has the model (case-insensitive matching)
-		for _, model := range models {
-			if strings.EqualFold(model.ID, modelID) {
-				if a.debug {
-					a.debugLog("🎉 Found model %s in provider %s\n", modelID, api.GetProviderName(provider))
-				}
-				return provider, nil
-			}
-		}
-
-		if a.debug {
-			a.debugLog("❌ Model %s not found in provider %s\n", modelID, api.GetProviderName(provider))
-		}
-	}
-
-	return "", fmt.Errorf("model %s not found in any available provider", modelID)
 }
 
 // getModelsForProvider gets models for a specific provider without environment manipulation
@@ -156,20 +187,6 @@ func (a *Agent) getModelsForProvider(provider api.ClientType) ([]api.ModelInfo, 
 
 // isProviderAvailable checks if a provider is currently available
 func (a *Agent) isProviderAvailable(provider api.ClientType) bool {
-	// For Ollama, check if it's running
-	if provider == api.OllamaClientType {
-		client, err := api.NewUnifiedClient(api.OllamaClientType)
-		if err != nil {
-			return false
-		}
-		return client.CheckConnection() == nil
-	}
-
-	// For other providers, check if API key is set
-	envVar := a.getProviderEnvVar(provider)
-	if envVar == "" {
-		return false
-	}
-
-	return os.Getenv(envVar) != ""
+	// Use the unified IsProviderAvailable function
+	return api.IsProviderAvailable(provider)
 }

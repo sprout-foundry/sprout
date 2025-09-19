@@ -70,10 +70,17 @@ EXAMPLES:
   echo "Fix the bug in main.go where the variable is undefined" | ./coder
 
 ENVIRONMENT:
-  DEEPINFRA_API_KEY: API token for DeepInfra (if not set, uses local Ollama)
+  DEEPINFRA_API_KEY: API token for DeepInfra models
+  OLLAMA_API_KEY: API token for Ollama Turbo models (optional, enables remote acceleration)
+  LEDIT_DEBUG_HANG: Enable hang detection and monitoring (true/false)
+  LEDIT_HANG_TIMEOUT: Timeout for hang detection (e.g., "5m", "300s")
 
 MODEL OPTIONS:
-  🏠 Local (Ollama):    gpt-oss:20b - FREE, runs locally (14GB VRAM)
+  🏠 Local (Ollama):    Various models - FREE, runs locally
+  ⚡ Turbo (Ollama):    Remote acceleration with datacenter-grade hardware
+     • gpt-oss:20b - 128k context
+     • gpt-oss:120b - 256k context  
+     • deepseek-v3.1:671b - 128k context
   ☁️  Remote (DeepInfra): Multiple models available:
      • openai/gpt-oss-120b (default) - Uses harmony syntax
      • meta-llama/Meta-Llama-3.1-70B-Instruct - Standard format
@@ -81,7 +88,8 @@ MODEL OPTIONS:
      • And many others - check DeepInfra docs for full list
 
 SETUP:
-  Local:  ollama pull gpt-oss:20b
+  Local:  ollama pull <model-name>
+  Turbo:  export OLLAMA_API_KEY="your_api_key_here" (get from https://ollama.com/settings/keys)
   Remote: export DEEPINFRA_API_KEY="your_api_key_here"
 
 The agent follows a systematic exploration process and will autonomously:
@@ -94,6 +102,13 @@ The agent follows a systematic exploration process and will autonomously:
 
 Type 'help' during interactive mode for this help message.
 Type 'exit' or 'quit' to end the session.
+
+DEBUGGING HANGS:
+  If ledit appears to hang or freeze:
+  • Run: ./debug_hanging.sh (to analyze current state)
+  • Enable hang detection: ./debug_hang_mode.sh
+  • Check logs: less .ledit/workspace.log
+  • Monitor progress: tail -f .ledit/runlogs/run-*.jsonl
 
 ────────────────────────────────────────────────────────────────
 

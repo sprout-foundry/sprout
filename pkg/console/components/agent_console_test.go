@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 func TestAgentConsole_DefaultConfig(t *testing.T) {
@@ -74,7 +76,7 @@ func TestAgentConsole_LoadSaveHistory(t *testing.T) {
 	history := []string{"command1", "command2", "command3"}
 
 	// Create a temporary file
-	tmpFile, err := os.CreateTemp("", "test_history_*.txt")
+	tmpFile, err := filesystem.CreateTempFile("", "test_history_*.txt")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
@@ -208,7 +210,7 @@ func TestAgentConsole_UtilityFunctions(t *testing.T) {
 
 	// Test empty history handling
 	emptyHistory := []string{}
-	tmpFile, err := os.CreateTemp("", "empty_history_*.txt")
+	tmpFile, err := filesystem.CreateTempFile("", "empty_history_*.txt")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}

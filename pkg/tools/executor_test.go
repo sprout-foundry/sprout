@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -26,14 +26,12 @@ func TestDuplicateRequestDetection(t *testing.T) {
 	ctx := context.WithValue(context.Background(), "session_id", sessionID)
 
 	// Create a read_file tool call
-	toolCall := types.ToolCall{
+	toolCall := api.ToolCall{
 		ID:   "test_1",
 		Type: "function",
-		Function: types.ToolCallFunction{
-			Name:      "read_file",
-			Arguments: `{"file_path": "/test/file.txt"}`,
-		},
 	}
+	toolCall.Function.Name = "read_file"
+	toolCall.Function.Arguments = `{"file_path": "/test/file.txt"}`
 
 	// First call should succeed (assuming the mock tool returns successfully)
 	// We need to register a mock tool first
@@ -66,8 +64,8 @@ func TestDuplicateRequestDetection(t *testing.T) {
 		if !containsString(output, "Duplicate request detected") {
 			t.Errorf("Expected duplicate message, got: %s", output)
 		}
-		if !containsString(output, "has already been read") {
-			t.Errorf("Expected 'already been read' message, got: %s", output)
+		if !containsString(output, "You already have this file content available") {
+			t.Errorf("Expected 'already have this file content' message, got: %s", output)
 		}
 	} else {
 		t.Error("Expected string output for duplicate detection")

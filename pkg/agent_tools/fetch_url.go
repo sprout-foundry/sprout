@@ -9,7 +9,7 @@ import (
 
 // FetchURL fetches content from a specific URL using the webcontent fetcher.
 // This provides direct URL access as an agent tool.
-func FetchURL(url string, cfg *configuration.Config) (string, error) {
+func FetchURL(url string, cfg *configuration.Manager) (string, error) {
 	if url == "" {
 		return "", fmt.Errorf("URL cannot be empty")
 	}

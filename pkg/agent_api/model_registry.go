@@ -134,7 +134,6 @@ func newDefaultModelRegistry() *ModelRegistry {
 		registry.models[model.ID] = model
 	}
 
-
 	// Add DeepInfra models
 	deepInfraModels := []ModelConfig{
 		{"Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo", "Qwen3 Coder 480B", "deepinfra", 256000, 2.0, 2.0, 0, []string{"tools"}, []string{}},
@@ -196,7 +195,7 @@ func newDefaultModelRegistry() *ModelRegistry {
 		// ChatGPT patterns
 		{[]string{"chatgpt"}, []string{}, ModelConfig{"", "", "openai", 128000, 0.005, 0.015, 0.0025, []string{}, []string{}}, 45},
 
-	// (DeepSeek patterns removed)
+		// (DeepSeek patterns removed)
 
 		// Llama patterns
 		{[]string{"llama-4"}, []string{}, ModelConfig{"", "", "", 256000, 0.5, 0.5, 0, []string{"tools"}, []string{}}, 25},

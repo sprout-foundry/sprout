@@ -17,9 +17,9 @@ type APIKeys struct {
 	OpenAI     string `json:"openai,omitempty"`
 	DeepInfra  string `json:"deepinfra,omitempty"`
 	OpenRouter string `json:"openrouter,omitempty"`
-
-	DeepSeek string `json:"deepseek,omitempty"`
-	Gemini   string `json:"gemini,omitempty"`
+	Ollama     string `json:"ollama,omitempty"` // For Ollama Remote API key
+	DeepSeek   string `json:"deepseek,omitempty"`
+	Gemini     string `json:"gemini,omitempty"`
 }
 
 const (
@@ -96,7 +96,9 @@ func setEnvVarsFromAPIKeys(keys *APIKeys) {
 	if keys.OpenRouter != "" {
 		os.Setenv("OPENROUTER_API_KEY", keys.OpenRouter)
 	}
-
+	if keys.Ollama != "" {
+		os.Setenv("OLLAMA_API_KEY", keys.Ollama)
+	}
 	if keys.DeepSeek != "" {
 		os.Setenv("DEEPSEEK_API_KEY", keys.DeepSeek)
 	}
@@ -114,7 +116,10 @@ func GetProviderAPIKeyName(provider ClientType) string {
 		return "DEEPINFRA_API_KEY"
 	case OpenRouterClientType:
 		return "OPENROUTER_API_KEY"
-
+	case OllamaLocalClientType:
+		return "" // No API key needed for local
+	case OllamaTurboClientType:
+		return "OLLAMA_API_KEY"
 	case DeepSeekClientType:
 		return "DEEPSEEK_API_KEY"
 	default:
@@ -181,7 +186,8 @@ func setAPIKeyInStruct(keys *APIKeys, provider ClientType, apiKey string) {
 		keys.DeepInfra = apiKey
 	case OpenRouterClientType:
 		keys.OpenRouter = apiKey
-
+	case OllamaTurboClientType:
+		keys.Ollama = apiKey
 	case DeepSeekClientType:
 		keys.DeepSeek = apiKey
 	}
@@ -196,7 +202,10 @@ func getProviderDisplayName(provider ClientType) string {
 		return "DeepInfra"
 	case OpenRouterClientType:
 		return "OpenRouter"
-
+	case OllamaLocalClientType:
+		return "Ollama (Local)"
+	case OllamaTurboClientType:
+		return "Ollama Turbo"
 	case DeepSeekClientType:
 		return "DeepSeek"
 	default:

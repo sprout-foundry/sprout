@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/llm"
 )
 
 // PruningStrategy defines different pruning approaches
@@ -239,7 +238,7 @@ func (cp *ConversationPruner) scoreMessages(messages []api.Message) []MessageImp
 			Index:         i,
 			Role:          msg.Role,
 			ContentLength: len(msg.Content),
-			TokenEstimate: llm.EstimateTokens(msg.Content),
+			TokenEstimate: EstimateTokens(msg.Content),
 			Age:           len(messages) - i,
 		}
 
@@ -314,9 +313,9 @@ func (cp *ConversationPruner) scoreMessages(messages []api.Message) []MessageImp
 func (cp *ConversationPruner) estimateTokens(messages []api.Message) int {
 	tokens := 0
 	for _, msg := range messages {
-		tokens += llm.EstimateTokens(msg.Content)
+		tokens += EstimateTokens(msg.Content)
 		if msg.ReasoningContent != "" {
-			tokens += llm.EstimateTokens(msg.ReasoningContent)
+			tokens += EstimateTokens(msg.ReasoningContent)
 		}
 	}
 	return tokens
@@ -326,9 +325,9 @@ func (cp *ConversationPruner) estimateTokensForIndices(messages []api.Message, i
 	tokens := 0
 	for i, msg := range messages {
 		if indices[i] {
-			tokens += llm.EstimateTokens(msg.Content)
+			tokens += EstimateTokens(msg.Content)
 			if msg.ReasoningContent != "" {
-				tokens += llm.EstimateTokens(msg.ReasoningContent)
+				tokens += EstimateTokens(msg.ReasoningContent)
 			}
 		}
 	}

@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
@@ -92,40 +91,14 @@ func (m *Manager) ListAvailableProviders() []api.ClientType {
 
 // isProviderAvailable checks if a provider is currently available
 func (m *Manager) isProviderAvailable(provider api.ClientType) bool {
-	// For Ollama, check if it's running
-	if provider == api.OllamaClientType {
-		client, err := api.NewUnifiedClient(api.OllamaClientType)
-		if err != nil {
-			return false
-		}
-		return client.CheckConnection() == nil
-	}
-
-	// For other providers, check if API key is set
-	envVar := m.getProviderEnvVar(provider)
-	if envVar == "" {
-		return false
-	}
-
-	return os.Getenv(envVar) != ""
+	// Use the unified IsProviderAvailable function
+	return api.IsProviderAvailable(provider)
 }
 
 // getProviderEnvVar returns the environment variable name for a provider
 func (m *Manager) getProviderEnvVar(provider api.ClientType) string {
-	switch provider {
-	case api.OpenAIClientType:
-		return "OPENAI_API_KEY"
-	case api.DeepInfraClientType:
-		return "DEEPINFRA_API_KEY"
-	case api.OpenRouterClientType:
-		return "OPENROUTER_API_KEY"
-	case api.DeepSeekClientType:
-		return "DEEPSEEK_API_KEY"
-	case api.OllamaClientType:
-		return "" // Ollama doesn't use an API key
-	default:
-		return ""
-	}
+	// Use the unified GetProviderAPIKeyName function
+	return api.GetProviderAPIKeyName(provider)
 }
 
 // GetProviderStatus returns detailed status information for all providers

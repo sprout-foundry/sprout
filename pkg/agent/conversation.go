@@ -9,10 +9,22 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // ProcessQuery handles the main conversation loop with the LLM
 func (a *Agent) ProcessQuery(userQuery string) (string, error) {
+	// Start hang detection if enabled
+	if a.debugHangMode && a.hangDetector != nil {
+		a.hangDetector.Start()
+		a.progressMonitor.Start()
+		defer func() {
+			a.hangDetector.Stop()
+			a.progressMonitor.Stop()
+		}()
+		a.progressMonitor.Progress("Starting query processing")
+	}
+
 	// Enable change tracking for this conversation
 	a.EnableChangeTracking(userQuery)
 
@@ -60,6 +72,11 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 	for a.currentIteration < maxIterationsForThisQuery {
 		iterationStart := time.Now()
 		a.currentIteration++
+
+		// Update hang detection progress
+		if a.debugHangMode && a.progressMonitor != nil {
+			a.progressMonitor.Progress(fmt.Sprintf("Starting iteration %d", a.currentIteration))
+		}
 
 		// Check for interrupt signal at the start of each iteration
 		if a.CheckForInterrupt() {
@@ -151,11 +168,29 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 		a.streamingBuffer.Reset()
 
 		for retry := 0; retry <= maxRetries; retry++ {
+			// Update hang detection before LLM call
+			if a.debugHangMode && a.progressMonitor != nil {
+				if retry > 0 {
+					a.progressMonitor.Progress(fmt.Sprintf("Retrying LLM request (attempt %d)", retry+1))
+				} else {
+					a.progressMonitor.Progress("Making LLM request")
+				}
+			}
+
 			if a.streamingEnabled {
 				// Don't show indicator here - let the streaming formatter handle it
 
 				// Use streaming API
 				streamCallback := func(content string) {
+					// Update hang detection on streaming content
+					if a.debugHangMode && a.progressMonitor != nil {
+						// More granular updates for streaming
+						if len(content) > 10 {
+							// Only update on substantial chunks to avoid too many updates
+							a.progressMonitor.Progress(fmt.Sprintf("Streaming response (%d chars received)", len(a.streamingBuffer.String())))
+						}
+					}
+
 					// Accumulate content in buffer
 					a.streamingBuffer.WriteString(content)
 
@@ -173,7 +208,27 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 				resp, err = a.client.SendChatRequestStream(optimizedMessages, tools, reasoningEffort, streamCallback)
 			} else {
 				// Use regular API
+				// Note for OpenAI: We use non-streaming mode to get accurate token usage data
+				if a.GetProvider() == "openai" && retry == 0 && a.currentIteration == 0 {
+					message := "📊 Using non-streaming mode for accurate token tracking...\n\n"
+					if a.outputMutex != nil {
+						a.outputMutex.Lock()
+						fmt.Print(message)
+						a.outputMutex.Unlock()
+					} else {
+						fmt.Print(message)
+					}
+				}
 				resp, err = a.client.SendChatRequest(optimizedMessages, tools, reasoningEffort)
+			}
+
+			// Update hang detection after LLM call
+			if a.debugHangMode && a.progressMonitor != nil {
+				if err != nil {
+					a.progressMonitor.Progress(fmt.Sprintf("LLM request failed: %v", err))
+				} else {
+					a.progressMonitor.Progress("LLM request completed")
+				}
 			}
 
 			if err == nil {
@@ -182,11 +237,17 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 
 			// Check if this is a retryable error
 			errStr := err.Error()
-			isRetryable := strings.Contains(errStr, "stream error") ||
+
+			// Rate limit errors (429) should not be retried immediately
+			isRateLimit := strings.Contains(errStr, "429") ||
+				strings.Contains(errStr, "rate limit") ||
+				strings.Contains(errStr, "usage limit")
+
+			isRetryable := !isRateLimit && (strings.Contains(errStr, "stream error") ||
 				strings.Contains(errStr, "INTERNAL_ERROR") ||
 				strings.Contains(errStr, "connection reset") ||
 				strings.Contains(errStr, "EOF") ||
-				strings.Contains(errStr, "timeout")
+				strings.Contains(errStr, "timeout"))
 
 			if !isRetryable || retry == maxRetries {
 				// Not retryable or max retries reached
@@ -233,6 +294,25 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 				fmt.Fprintf(os.Stderr, "\n[DEBUG] Invoking stats callback: total=%d, cost=%.4f\n", a.totalTokens, a.totalCost)
 			}
 			a.statsUpdateCallback(a.totalTokens, a.totalCost)
+		}
+
+		// Get TPS information from the client if available
+		if tpsClient, ok := a.client.(interface{ GetAverageTPS() float64 }); ok {
+			averageTPS := tpsClient.GetAverageTPS()
+			if averageTPS > 0 && a.debug {
+				// Check if using a proxy provider
+				providerName := ""
+				if provider, ok := a.client.(interface{ GetProvider() string }); ok {
+					providerName = provider.GetProvider()
+				}
+
+				tpsLabel := "TPS"
+				if providerName == "openrouter" || providerName == "OpenRouter" {
+					tpsLabel = "TPS (transfer rate, not generation)"
+				}
+
+				a.debugLog("⚡ %s: %.1f tokens/second (averaged across requests)\n", tpsLabel, averageTPS)
+			}
 		}
 
 		// Only show context information in debug mode
@@ -470,7 +550,7 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 			// Return empty string to avoid duplication
 			if a.streamingEnabled {
 				if a.debug {
-					a.debugLog("Streaming was enabled, returning empty string (content length: %d)\n", len(choice.Message.Content))
+					a.debugLog("Streaming was enabled, returning empty string to avoid duplication (content length: %d)\n", len(choice.Message.Content))
 				}
 				return "", nil
 			}
@@ -599,7 +679,23 @@ func (a *Agent) handleAPIFailure(apiErr error, _ []api.Message) (string, error) 
 	errorMsg := apiErr.Error()
 	if strings.Contains(errorMsg, "timeout") || strings.Contains(errorMsg, "deadline exceeded") {
 		response += "The API request timed out, likely due to high server load or a complex request.\n\n"
-	} else if strings.Contains(errorMsg, "rate limit") {
+	} else if strings.Contains(errorMsg, "rate limit") || strings.Contains(errorMsg, "usage limit") {
+		// Log token usage when hitting rate limits to understand provider limits
+		logger := utils.GetLogger(false)
+		logger.LogProcessStep(fmt.Sprintf("🚨 RATE LIMIT HIT: %s | Total tokens: %s | Provider: %s | Model: %s",
+			errorMsg, a.formatTokenCount(a.totalTokens), a.GetProvider(), a.GetModel()))
+
+		if rl := utils.GetRunLogger(); rl != nil {
+			rl.LogEvent("rate_limit_hit", map[string]any{
+				"provider":       a.GetProvider(),
+				"model":          a.GetModel(),
+				"total_tokens":   a.totalTokens,
+				"error_message":  errorMsg,
+				"tools_executed": toolsExecuted,
+				"timestamp":      time.Now().Format(time.RFC3339),
+			})
+		}
+
 		response += "Hit API rate limits. Please wait a moment before continuing.\n\n"
 	} else if strings.Contains(strings.ToLower(errorMsg), "model") &&
 		(strings.Contains(strings.ToLower(errorMsg), "not exist") ||
@@ -610,6 +706,12 @@ func (a *Agent) handleAPIFailure(apiErr error, _ []api.Message) (string, error) 
 		response += "- Check the model name with `/models` command\n"
 		response += "- Switch to a different model with `/model` command\n"
 		response += "- Verify your API key has access to this model\n\n"
+	} else if strings.Contains(errorMsg, "401") || strings.Contains(strings.ToLower(errorMsg), "unauthorized") {
+		response += fmt.Sprintf("❌ **Authentication Error**: %s\n\n", errorMsg)
+		response += "The API key was rejected. Please check:\n"
+		response += "- Your API key is correct and active\n"
+		response += "- The API key has access to the selected model\n"
+		response += "- Your account has sufficient credits/quota\n\n"
 	} else {
 		response += fmt.Sprintf("API error: %s\n\n", errorMsg)
 	}
@@ -731,21 +833,31 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 // getOptimizedToolDefinitions returns relevant tools based on context
 func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	// Get base tools
-	allTools := api.GetToolDefinitions()
+	// Use compact definitions if TOKEN_OPTIMIZATION env var is set
+	var allTools []api.Tool
+	if os.Getenv("LEDIT_TOKEN_OPTIMIZATION") == "true" {
+		allTools = api.GetCompactToolDefinitions()
+	} else {
+		allTools = api.GetToolDefinitions()
+	}
 
 	if a.debug {
 		fmt.Printf("🔧 Base tools count: %d\n", len(allTools))
 	}
 
-	// Add MCP tools if available
-	if a.mcpManager != nil {
-		mcpTools := a.getMCPTools()
-		allTools = append(allTools, mcpTools...)
-		if a.debug {
-			fmt.Printf("🔧 Total tools after adding MCP: %d\n", len(allTools))
+	// Don't load MCP tools by default - they can be accessed via mcp_tools tool
+	// This significantly reduces token usage
+	if os.Getenv("LEDIT_LOAD_MCP_TOOLS") == "true" {
+		// Only load MCP tools if explicitly requested
+		if a.mcpManager != nil {
+			mcpTools := a.getMCPTools()
+			allTools = append(allTools, mcpTools...)
+			if a.debug {
+				fmt.Printf("🔧 Total tools after adding MCP: %d\n", len(allTools))
+			}
 		}
 	} else if a.debug {
-		fmt.Printf("⚠️  MCP manager is nil in getOptimizedToolDefinitions\n")
+		fmt.Printf("🔧 MCP tools available via 'mcp_tools' tool (not loaded to save tokens)\n")
 	}
 
 	if len(messages) == 0 {

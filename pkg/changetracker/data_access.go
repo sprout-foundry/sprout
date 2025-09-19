@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -59,10 +60,10 @@ type ChangeLog struct {
 }
 
 func ensureChangesDirs() error {
-	if err := os.MkdirAll(changesDir, 0755); err != nil {
+	if err := filesystem.EnsureDir(changesDir); err != nil {
 		return fmt.Errorf("failed to create changes directory: %w", err)
 	}
-	if err := os.MkdirAll(revisionsDir, 0755); err != nil {
+	if err := filesystem.EnsureDir(revisionsDir); err != nil {
 		return fmt.Errorf("failed to create revisions directory: %w", err)
 	}
 	return nil
@@ -76,14 +77,14 @@ func RecordBaseRevision(requestHash, instructions, response string) (string, err
 
 	revisionID := requestHash
 	revisionPath := filepath.Join(revisionsDir, revisionID)
-	if err := os.MkdirAll(revisionPath, 0755); err != nil {
+	if err := filesystem.EnsureDir(revisionPath); err != nil {
 		return "", fmt.Errorf("failed to create revision directory: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(revisionPath, "instructions.txt"), []byte(instructions), 0644); err != nil {
+	if err := filesystem.WriteFileWithDir(filepath.Join(revisionPath, "instructions.txt"), []byte(instructions), 0644); err != nil {
 		return "", fmt.Errorf("failed to save instructions: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(revisionPath, "llm_response.txt"), []byte(response), 0644); err != nil {
+	if err := filesystem.WriteFileWithDir(filepath.Join(revisionPath, "llm_response.txt"), []byte(response), 0644); err != nil {
 		return "", fmt.Errorf("failed to save LLM response: %w", err)
 	}
 
@@ -98,7 +99,7 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 
 	fileRevisionHash := utils.GenerateFileRevisionHash(filename, newCode)
 	changeDir := filepath.Join(changesDir, fileRevisionHash)
-	if err := os.MkdirAll(changeDir, 0755); err != nil {
+	if err := filesystem.EnsureDir(changeDir); err != nil {
 		return fmt.Errorf("failed to create change directory: %w", err)
 	}
 
@@ -106,10 +107,10 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 	safeFilename := strings.ReplaceAll(filename, "/", "_")
 	safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
 
-	if err := os.WriteFile(filepath.Join(changeDir, safeFilename+originalSuffix), []byte(originalCode), 0644); err != nil {
+	if err := filesystem.WriteFileWithDir(filepath.Join(changeDir, safeFilename+originalSuffix), []byte(originalCode), 0644); err != nil {
 		return fmt.Errorf("failed to save original code: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(changeDir, safeFilename+updatedSuffix), []byte(newCode), 0644); err != nil {
+	if err := filesystem.WriteFileWithDir(filepath.Join(changeDir, safeFilename+updatedSuffix), []byte(newCode), 0644); err != nil {
 		return fmt.Errorf("failed to save updated code: %w", err)
 	}
 
@@ -132,7 +133,7 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(changeDir, metadataFile), metadataBytes, 0644); err != nil {
+	if err := filesystem.WriteFileWithDir(filepath.Join(changeDir, metadataFile), metadataBytes, 0644); err != nil {
 		return fmt.Errorf("failed to save metadata: %w", err)
 	}
 
@@ -149,7 +150,7 @@ func updateChangeStatus(fileRevisionHash, status string) error {
 	changeDir := filepath.Join(changesDir, fileRevisionHash)
 	metadataPath := filepath.Join(changeDir, metadataFile)
 
-	metadataBytes, err := os.ReadFile(metadataPath)
+	metadataBytes, err := filesystem.ReadFileBytes(metadataPath)
 	if err != nil {
 		return fmt.Errorf("failed to read metadata: %w", err)
 	}
@@ -166,7 +167,7 @@ func updateChangeStatus(fileRevisionHash, status string) error {
 		return fmt.Errorf("failed to marshal updated metadata: %w", err)
 	}
 
-	if err := os.WriteFile(metadataPath, updatedMetadata, 0644); err != nil {
+	if err := filesystem.WriteFileWithDir(metadataPath, updatedMetadata, 0644); err != nil {
 		return fmt.Errorf("failed to write updated metadata: %w", err)
 	}
 
@@ -197,7 +198,7 @@ func fetchAllChanges() ([]ChangeLog, error) {
 		changeDir := filepath.Join(changesDir, entry.Name())
 		metadataPath := filepath.Join(changeDir, metadataFile)
 
-		metadataBytes, err := os.ReadFile(metadataPath)
+		metadataBytes, err := filesystem.ReadFileBytes(metadataPath)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue // Not a valid change directory, skip.
@@ -213,13 +214,13 @@ func fetchAllChanges() ([]ChangeLog, error) {
 		safeFilename := strings.ReplaceAll(metadata.Filename, "/", "_")
 		safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
 
-		originalBytes, err := os.ReadFile(filepath.Join(changeDir, safeFilename+originalSuffix))
+		originalBytes, err := filesystem.ReadFileBytes(filepath.Join(changeDir, safeFilename+originalSuffix))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read original code for %s: %w", metadata.Filename, err)
 		}
 		originalCode := string(originalBytes)
 
-		updatedBytes, err := os.ReadFile(filepath.Join(changeDir, safeFilename+updatedSuffix))
+		updatedBytes, err := filesystem.ReadFileBytes(filepath.Join(changeDir, safeFilename+updatedSuffix))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read updated code for %s: %w", metadata.Filename, err)
 		}
@@ -227,13 +228,13 @@ func fetchAllChanges() ([]ChangeLog, error) {
 
 		// Fetch instructions and response from revisions directory
 		revisionPath := filepath.Join(revisionsDir, metadata.RequestHash)
-		instructionsBytes, err := os.ReadFile(filepath.Join(revisionPath, "instructions.txt"))
+		instructionsBytes, err := filesystem.ReadFileBytes(filepath.Join(revisionPath, "instructions.txt"))
 		var instructions string
 		if err == nil {
 			instructions = string(instructionsBytes)
 		}
 
-		responseBytes, err := os.ReadFile(filepath.Join(revisionPath, "llm_response.txt"))
+		responseBytes, err := filesystem.ReadFileBytes(filepath.Join(revisionPath, "llm_response.txt"))
 		var response string
 		if err == nil {
 			response = string(responseBytes)

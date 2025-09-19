@@ -414,8 +414,8 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 			a.ToolLog("web search", query)
 			a.debugLog("Performing web search: %s\n", query)
 
-			// Get the config from the agent
-			cfg := a.GetConfig()
+			// Get the config manager from the agent
+			cfg := a.GetConfigManager()
 			result, err := tools.WebSearch(query, cfg)
 			if err != nil {
 				a.debugLog("Web search failed: %v\n", err)
@@ -432,8 +432,8 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 			a.ToolLog("fetch url", url)
 			a.debugLog("Fetching URL: %s\n", url)
 
-			// Get the config from the agent
-			cfg := a.GetConfig()
+			// Get the config manager from the agent
+			cfg := a.GetConfigManager()
 			result, err := tools.FetchURL(url, cfg)
 			if err != nil {
 				a.debugLog("URL fetch failed: %v\n", err)

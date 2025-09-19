@@ -1,9 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_providers"
 	types "github.com/alantheprice/ledit/pkg/agent_types"
 )
 
@@ -487,10 +487,8 @@ func (w *UnifiedProviderWrapper) ResetTPSStatistics() {
 }
 
 // Factory functions for creating providers
+// TODO: Fix import cycle - temporarily disabled
 func NewOpenRouterProvider(model string) (ClientInterface, error) {
-	provider, err := providers.NewOpenRouterProviderWithModel(model)
-	if err != nil {
-		return nil, err
-	}
-	return NewUnifiedProviderWrapper(provider), nil
+	// Temporarily disabled to break import cycle: agent_api -> agent_providers -> agent_api
+	return nil, fmt.Errorf("provider creation temporarily disabled to fix import cycle - model: %s", model)
 }

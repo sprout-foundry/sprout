@@ -8,18 +8,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // Validator provides common validation functionality
 type Validator struct {
-	config *config.Config
+	config *configuration.Config
 	logger *utils.Logger
 }
 
 // NewValidator creates a new validator
-func NewValidator(cfg *config.Config, logger *utils.Logger) *Validator {
+func NewValidator(cfg *configuration.Config, logger *utils.Logger) *Validator {
 	return &Validator{
 		config: cfg,
 		logger: logger,
@@ -358,7 +358,7 @@ type NumberValidationCriteria struct {
 }
 
 // ValidateConfig validates configuration
-func (v *Validator) ValidateConfig(cfg *config.Config) *ValidationResult {
+func (v *Validator) ValidateConfig(cfg *configuration.Config) *ValidationResult {
 	result := &ValidationResult{
 		Valid:       true,
 		Errors:      []string{},

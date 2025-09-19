@@ -7,8 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	agent_config "github.com/alantheprice/ledit/pkg/agent_config"
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
 // MCPConfig represents the MCP configuration
@@ -62,11 +61,11 @@ func GetGitHubServerConfigUvx() MCPServerConfig {
 }
 
 // LoadMCPConfig loads MCP configuration from the main config
-func LoadMCPConfig(cfg *config.Config) (MCPConfig, error) {
+func LoadMCPConfig(cfg *configuration.Config) (MCPConfig, error) {
 	mcpConfig := DefaultMCPConfig()
 
 	// Try to load from config file if it exists
-	configDir, err := agent_config.GetConfigDir()
+	configDir, err := configuration.GetConfigDir()
 	if err != nil {
 		return mcpConfig, fmt.Errorf("failed to get config directory: %w", err)
 	}
@@ -109,8 +108,8 @@ func LoadMCPConfig(cfg *config.Config) (MCPConfig, error) {
 }
 
 // SaveMCPConfig saves MCP configuration to file
-func SaveMCPConfig(cfg *config.Config, mcpConfig MCPConfig) error {
-	configDir, err := agent_config.GetConfigDir()
+func SaveMCPConfig(cfg *configuration.Config, mcpConfig MCPConfig) error {
+	configDir, err := configuration.GetConfigDir()
 	if err != nil {
 		return fmt.Errorf("failed to get config directory: %w", err)
 	}

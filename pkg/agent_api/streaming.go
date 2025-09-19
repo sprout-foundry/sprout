@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"time"
 )
 
 // StreamCallback is called for each content chunk received
@@ -70,6 +71,8 @@ type StreamingResponseBuilder struct {
 	toolCallArgs     map[int]*strings.Builder // Index to arguments builder
 	finishReason     string
 	streamCallback   StreamCallback
+	firstTokenTime   time.Time // Track when first token arrives
+	lastTokenTime    time.Time // Track when last token arrives
 }
 
 // NewStreamingResponseBuilder creates a new streaming response builder
@@ -103,6 +106,12 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 
 		// Process content delta
 		if choice.Delta.Content != "" {
+			// Track timing for first content token
+			if b.firstTokenTime.IsZero() {
+				b.firstTokenTime = time.Now()
+			}
+			b.lastTokenTime = time.Now()
+
 			b.content.WriteString(choice.Delta.Content)
 			// Call stream callback for UI updates
 			if b.streamCallback != nil {
@@ -184,6 +193,18 @@ func (b *StreamingResponseBuilder) GetResponse() *ChatResponse {
 	}
 
 	return &b.response
+}
+
+// GetTokenGenerationDuration returns the duration from first token to last token
+func (b *StreamingResponseBuilder) GetTokenGenerationDuration() time.Duration {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.firstTokenTime.IsZero() || b.lastTokenTime.IsZero() {
+		return 0
+	}
+
+	return b.lastTokenTime.Sub(b.firstTokenTime)
 }
 
 // SSEReader reads Server-Sent Events from a reader

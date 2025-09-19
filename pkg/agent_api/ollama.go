@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
 	ollama "github.com/ollama/ollama/api"
 )
 
 const (
-	OllamaURL   = config.DefaultOllamaURL + "/v1/chat/completions"
-	OllamaModel = "gpt-oss:20b"
+	DefaultOllamaURL = "http://localhost:11434"
+	OllamaURL        = DefaultOllamaURL + "/v1/chat/completions"
+	OllamaModel      = "gpt-oss:20b"
 )
 
 type LocalOllamaClient struct {
@@ -206,7 +206,7 @@ func (c *LocalOllamaClient) estimateTokens(text string) int {
 
 func (c *LocalOllamaClient) CheckConnection() error {
 	// Check if Ollama is running and gpt-oss model is available
-	checkURL := config.DefaultOllamaURL + "/api/tags"
+	checkURL := DefaultOllamaURL + "/api/tags"
 
 	resp, err := c.httpClient.Get(checkURL)
 	if err != nil {

@@ -121,8 +121,6 @@ func (a *Agent) getProviderEnvVar(provider api.ClientType) string {
 		return "DEEPINFRA_API_KEY"
 	case api.OpenRouterClientType:
 		return "OPENROUTER_API_KEY"
-	case api.DeepSeekClientType:
-		return "DEEPSEEK_API_KEY"
 	case api.OllamaClientType:
 		return "" // Ollama doesn't use an API key
 	default:

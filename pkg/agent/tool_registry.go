@@ -12,7 +12,7 @@ type ToolHandler func(a *Agent, args map[string]interface{}) (string, error)
 // ParameterConfig defines parameter validation rules for a tool
 type ParameterConfig struct {
 	Name         string   `json:"name"`
-	Type         string   `json:"type"`         // "string", "int", "float64", "bool"
+	Type         string   `json:"type"` // "string", "int", "float64", "bool"
 	Required     bool     `json:"required"`
 	Alternatives []string `json:"alternatives"` // Alternative parameter names for backward compatibility
 	Description  string   `json:"description"`
@@ -20,10 +20,10 @@ type ParameterConfig struct {
 
 // ToolConfig holds configuration for a tool
 type ToolConfig struct {
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	Parameters  []ParameterConfig  `json:"parameters"`
-	Handler     ToolHandler        `json:"-"` // Function reference, not serialized
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Parameters  []ParameterConfig `json:"parameters"`
+	Handler     ToolHandler       `json:"-"` // Function reference, not serialized
 }
 
 // ToolRegistry manages tool configurations in a data-driven way
@@ -46,7 +46,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	registry := &ToolRegistry{
 		tools: make(map[string]ToolConfig),
 	}
-	
+
 	// Register shell_command tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "shell_command",
@@ -56,7 +56,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		},
 		Handler: handleShellCommand,
 	})
-	
+
 	// Register read_file tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "read_file",
@@ -68,7 +68,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		},
 		Handler: handleReadFile,
 	})
-	
+
 	// Register write_file tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "write_file",
@@ -79,7 +79,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		},
 		Handler: handleWriteFile,
 	})
-	
+
 	// Register edit_file tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "edit_file",
@@ -91,7 +91,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		},
 		Handler: handleEditFile,
 	})
-	
+
 	// Register todo tools
 	registry.RegisterTool(ToolConfig{
 		Name:        "add_todo",
@@ -101,7 +101,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		},
 		Handler: handleAddTodo,
 	})
-	
+
 	registry.RegisterTool(ToolConfig{
 		Name:        "update_todo_status",
 		Description: "Update the status of a todo item",
@@ -111,14 +111,14 @@ func newDefaultToolRegistry() *ToolRegistry {
 		},
 		Handler: handleUpdateTodoStatus,
 	})
-	
+
 	registry.RegisterTool(ToolConfig{
 		Name:        "list_todos",
 		Description: "List all todo items",
-		Parameters: []ParameterConfig{},
-		Handler: handleListTodos,
+		Parameters:  []ParameterConfig{},
+		Handler:     handleListTodos,
 	})
-	
+
 	return registry
 }
 
@@ -133,13 +133,13 @@ func (r *ToolRegistry) ExecuteTool(toolName string, args map[string]interface{},
 	if !exists {
 		return "", fmt.Errorf("unknown tool '%s'", toolName)
 	}
-	
+
 	// Validate and extract parameters
 	validatedArgs, err := r.validateParameters(tool, args)
 	if err != nil {
 		return "", fmt.Errorf("parameter validation failed for tool '%s': %w", toolName, err)
 	}
-	
+
 	// Execute the tool handler
 	return tool.Handler(agent, validatedArgs)
 }
@@ -147,14 +147,14 @@ func (r *ToolRegistry) ExecuteTool(toolName string, args map[string]interface{},
 // validateParameters validates and extracts parameters according to tool configuration
 func (r *ToolRegistry) validateParameters(tool ToolConfig, args map[string]interface{}) (map[string]interface{}, error) {
 	validated := make(map[string]interface{})
-	
+
 	for _, param := range tool.Parameters {
 		value, found := r.extractParameter(param, args)
-		
+
 		if !found && param.Required {
 			return nil, fmt.Errorf("required parameter '%s' missing", param.Name)
 		}
-		
+
 		if found {
 			// Type validation and conversion
 			convertedValue, err := r.convertParameterType(value, param.Type)
@@ -164,7 +164,7 @@ func (r *ToolRegistry) validateParameters(tool ToolConfig, args map[string]inter
 			validated[param.Name] = convertedValue
 		}
 	}
-	
+
 	return validated, nil
 }
 
@@ -174,14 +174,14 @@ func (r *ToolRegistry) extractParameter(param ParameterConfig, args map[string]i
 	if value, exists := args[param.Name]; exists {
 		return value, true
 	}
-	
+
 	// Try alternative names for backward compatibility
 	for _, alt := range param.Alternatives {
 		if value, exists := args[alt]; exists {
 			return value, true
 		}
 	}
-	
+
 	return nil, false
 }
 
@@ -193,7 +193,7 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 			return str, nil
 		}
 		return "", fmt.Errorf("expected string, got %T", value)
-		
+
 	case "int":
 		if i, ok := value.(int); ok {
 			return i, nil
@@ -202,7 +202,7 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 			return int(f), nil
 		}
 		return 0, fmt.Errorf("expected int, got %T", value)
-		
+
 	case "float64":
 		if f, ok := value.(float64); ok {
 			return f, nil
@@ -211,13 +211,13 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 			return float64(i), nil
 		}
 		return 0.0, fmt.Errorf("expected float64, got %T", value)
-		
+
 	case "bool":
 		if b, ok := value.(bool); ok {
 			return b, nil
 		}
 		return false, fmt.Errorf("expected bool, got %T", value)
-		
+
 	default:
 		return value, nil // No conversion needed for unknown types
 	}
@@ -241,11 +241,11 @@ func handleShellCommand(a *Agent, args map[string]interface{}) (string, error) {
 
 func handleReadFile(a *Agent, args map[string]interface{}) (string, error) {
 	filePath := args["file_path"].(string)
-	
+
 	// Check for optional line range parameters
 	startLine, hasStart := args["start_line"].(int)
 	endLine, hasEnd := args["end_line"].(int)
-	
+
 	// Log the operation
 	if hasStart || hasEnd {
 		a.ToolLog("reading file", fmt.Sprintf("%s (lines %d-%d)", filePath, startLine, endLine))
@@ -265,7 +265,7 @@ func handleReadFile(a *Agent, args map[string]interface{}) (string, error) {
 func handleWriteFile(a *Agent, args map[string]interface{}) (string, error) {
 	filePath := args["file_path"].(string)
 	content := args["content"].(string)
-	
+
 	a.ToolLog("writing file", filePath)
 	a.debugLog("Writing file: %s\n", filePath)
 
@@ -290,12 +290,12 @@ func handleEditFile(a *Agent, args map[string]interface{}) (string, error) {
 		return "", fmt.Errorf("failed to read original file for diff: %w", err)
 	}
 
-	// Check circuit breaker before editing
-	if blocked, warning := a.CheckCircuitBreaker("edit_file", filePath, 3); blocked {
-		return warning, fmt.Errorf("circuit breaker triggered - too many edit attempts on same file")
-	}
+	// TODO: Implement circuit breaker
+	// if blocked, warning := a.CheckCircuitBreaker("edit_file", filePath, 3); blocked {
+	// 	return warning, fmt.Errorf("circuit breaker triggered - too many edit attempts on same file")
+	// }
 
-	a.ToolLog("editing file", fmt.Sprintf("%s (%s → %s)", filePath, 
+	a.ToolLog("editing file", fmt.Sprintf("%s (%s → %s)", filePath,
 		truncateString(oldString, 30), truncateString(newString, 30)))
 	a.debugLog("Editing file: %s\n", filePath)
 	a.debugLog("Old string: %s\n", oldString)
@@ -308,7 +308,7 @@ func handleEditFile(a *Agent, args map[string]interface{}) (string, error) {
 
 	result, err := tools.EditFile(filePath, oldString, newString)
 	a.debugLog("Edit file result: %s, error: %v\n", result, err)
-	
+
 	// Display diff if successful
 	if err == nil {
 		newContent, readErr := tools.ReadFile(filePath)
@@ -316,7 +316,7 @@ func handleEditFile(a *Agent, args map[string]interface{}) (string, error) {
 			a.ShowColoredDiff(originalContent, newContent, 50)
 		}
 	}
-	
+
 	return result, err
 }
 
@@ -324,7 +324,7 @@ func handleAddTodo(a *Agent, args map[string]interface{}) (string, error) {
 	task := args["task"].(string)
 	a.ToolLog("adding todo", task)
 	a.debugLog("Adding todo: %s\n", task)
-	
+
 	result := tools.AddTodo(task, "", "medium") // title, description, priority
 	a.debugLog("Add todo result: %s\n", result)
 	return result, nil
@@ -333,10 +333,10 @@ func handleAddTodo(a *Agent, args map[string]interface{}) (string, error) {
 func handleUpdateTodoStatus(a *Agent, args map[string]interface{}) (string, error) {
 	taskID := args["task_id"].(int)
 	status := args["status"].(string)
-	
+
 	a.ToolLog("updating todo", fmt.Sprintf("task %d to %s", taskID, status))
 	a.debugLog("Updating todo %d to status: %s\n", taskID, status)
-	
+
 	result := tools.UpdateTodoStatus(fmt.Sprintf("%d", taskID), status)
 	a.debugLog("Update todo result: %s\n", result)
 	return result, nil
@@ -345,7 +345,7 @@ func handleUpdateTodoStatus(a *Agent, args map[string]interface{}) (string, erro
 func handleListTodos(a *Agent, args map[string]interface{}) (string, error) {
 	a.ToolLog("listing todos", "")
 	a.debugLog("Listing todos\n")
-	
+
 	result := tools.ListTodos()
 	a.debugLog("List todos result: %s\n", result)
 	return result, nil

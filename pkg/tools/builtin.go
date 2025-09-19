@@ -133,15 +133,16 @@ func (e *Executor) executeAskUser(ctx context.Context, args map[string]interface
 		}, nil
 	}
 
-	if e.config.SkipPrompt {
-		return &Result{
-			Success: true,
-			Output:  "User interaction skipped in non-interactive mode",
-			Metadata: map[string]interface{}{
-				"skipped": true,
-			},
-		}, nil
-	}
+	// TODO: Add back when SkipPrompt is added to configuration.Config
+	// if e.config.SkipPrompt {
+	// 	return &Result{
+	// 		Success: true,
+	// 		Output:  "User interaction skipped in non-interactive mode",
+	// 		Metadata: map[string]interface{}{
+	// 			"skipped": true,
+	// 		},
+	// 	}, nil
+	// }
 
 	ui.Out().Printf("\n🤖 Question: %s\n", question)
 	ui.Out().Print("Your answer: ")

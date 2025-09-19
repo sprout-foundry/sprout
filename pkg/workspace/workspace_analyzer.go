@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
 // generateFileHash creates a SHA256 hash of the file content.
@@ -23,7 +23,7 @@ func generateFileHash(content string) string {
 }
 
 // getSummary generates a brief syntactic overview locally (no remote LLM).
-func getSummary(content, filename string, cfg *config.Config) (string, string, string, error) {
+func getSummary(content, filename string, cfg *configuration.Config) (string, string, string, error) {
 	// Check if the file is a text file
 	if !isTextFile(filename) {
 		return "", "", "", fmt.Errorf("file type not supported for analysis")

@@ -23,11 +23,10 @@ responses with live web search results.
 Available commands:
   agent    - AI agent mode (analyzes intent and decides actions)
   shell    - Generate shell scripts from natural language descriptions
-  process  - Orchestrate complex features
   commit   - Generate commit messages
-  rollback - Rollback changes by revision ID
-  insights - Show inferred project goals and insights
-  ...and more
+  review-staged - Review staged changes
+  log      - View operation logs
+  mcp      - Manage MCP (Model Context Protocol) servers
 
 For autonomous operation, try: ledit agent "your intent here"
 
@@ -84,12 +83,10 @@ func init() {
 
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(commitCmd)
-	rootCmd.AddCommand(ignoreCmd)
-	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(mcpCmd)
 	rootCmd.AddCommand(reviewStagedCmd)
-	rootCmd.AddCommand(shellCmd) // Add the new shell command
+	rootCmd.AddCommand(shellCmd)
 
 	// Initialize environment-based defaults
 	cobra.OnInitialize(func() {

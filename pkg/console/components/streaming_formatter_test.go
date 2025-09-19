@@ -1,7 +1,6 @@
 package components
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 	"sync"
@@ -11,13 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// captureOutput captures stdout during test execution
-func captureOutput(f func()) string {
-	// Since the formatter writes directly to stdout, we need to test differently
-	// For now, we'll test the internal methods and formatting logic
-	return ""
-}
 
 func TestStreamingFormatter_NewStreamingFormatter(t *testing.T) {
 	mu := &sync.Mutex{}

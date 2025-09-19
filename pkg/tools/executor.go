@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -16,7 +16,7 @@ type Executor struct {
 	registry       Registry
 	permissions    PermissionChecker
 	logger         *utils.Logger
-	config         *config.Config
+	config         *configuration.Config
 	sessionTracker *SessionTracker
 }
 
@@ -30,7 +30,7 @@ type PermissionChecker interface {
 }
 
 // NewExecutor creates a new tool executor
-func NewExecutor(registry Registry, permissions PermissionChecker, logger *utils.Logger, config *config.Config) *Executor {
+func NewExecutor(registry Registry, permissions PermissionChecker, logger *utils.Logger, config *configuration.Config) *Executor {
 	return &Executor{
 		registry:       registry,
 		permissions:    permissions,

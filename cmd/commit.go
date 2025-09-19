@@ -5,7 +5,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/agent_commands"
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/spf13/cobra"
@@ -26,19 +26,20 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := utils.GetLogger(commitSkipPrompt)
 
-		cfg, err := config.LoadOrInitConfig(commitSkipPrompt)
+		_, err := configuration.LoadOrInitConfig(commitSkipPrompt)
 		if err != nil {
 			logger.LogError(fmt.Errorf("failed to load or initialize config: %w", err))
 			return
 		}
 
-		// Override model if specified by flag
-		if commitModel != "" {
-			cfg.WorkspaceModel = commitModel
-		}
-
 		// Create agent instance for commit processing
-		chatAgent, err := agent.NewAgent()
+		var chatAgent *agent.Agent
+		if commitModel != "" {
+			// Create agent with specified model
+			chatAgent, err = agent.NewAgentWithModel(commitModel)
+		} else {
+			chatAgent, err = agent.NewAgent()
+		}
 		if err != nil {
 			logger.LogError(fmt.Errorf("failed to create agent: %w", err))
 			return

@@ -40,18 +40,17 @@ func NewOllamaTurboClient(model string) (*OllamaTurboClient, error) {
 		return nil, fmt.Errorf("OLLAMA_API_KEY environment variable is required for Ollama Turbo")
 	}
 
+	timeout := 120 * time.Second // Default: 2 minutes (same as other providers)
+
 	client := &OllamaTurboClient{
 		TPSBase: NewTPSBase(),
 		httpClient: &http.Client{
-			Timeout: 300 * time.Second,
+			Timeout: timeout,
 		},
 		model:  model,
 		apiKey: apiKey,
 		debug:  false,
 	}
-
-	// Don't validate model during creation - let SetModel handle validation
-	// This allows provider switching without requiring a valid model upfront
 	return client, nil
 }
 
@@ -103,10 +102,9 @@ func (c *OllamaTurboClient) SendChatRequestStream(messages []Message, tools []To
 		Stream:   true,
 	}
 
-	// Don't send reasoning to Ollama Turbo - it might not support this field
-	// if reasoning != "" {
-	// 	req.Reasoning = reasoning
-	// }
+	if reasoning != "" {
+		req.Reasoning = reasoning
+	}
 
 	jsonData, err := json.Marshal(req)
 	if err != nil {
@@ -170,10 +168,19 @@ func (c *OllamaTurboClient) SendChatRequestStream(messages []Message, tools []To
 	// Get the final response
 	response := builder.GetResponse()
 
-	// Calculate duration and track TPS
-	duration := time.Since(startTime)
+	// Calculate durations
+	totalDuration := time.Since(startTime)
+	tokenGenDuration := builder.GetTokenGenerationDuration()
+
+	// Use token generation duration for TPS if available, otherwise use total duration
+	tpsDuration := tokenGenDuration
+	if tpsDuration == 0 {
+		tpsDuration = totalDuration
+	}
+
+	// Track TPS
 	if c.GetTracker() != nil && response.Usage.CompletionTokens > 0 {
-		c.GetTracker().RecordRequest(duration, response.Usage.CompletionTokens)
+		c.GetTracker().RecordRequest(tpsDuration, response.Usage.CompletionTokens)
 	}
 
 	// Ollama Turbo is free so set cost to 0
@@ -226,7 +233,7 @@ func (c *OllamaTurboClient) GetModelContextLimit() (int, error) {
 	case "gpt-oss:120b":
 		return 256000, nil
 	case "deepseek-v3.1:671b":
-		return 128000, nil
+		return 161000, nil
 	default:
 		return 128000, nil // Default for unknown models
 	}

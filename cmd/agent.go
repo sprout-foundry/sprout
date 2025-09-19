@@ -70,7 +70,7 @@ func createChatAgent() (*agent.Agent, error) {
 func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
-	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, ollama, ollama-local, ollama-turbo, deepseek)")
+	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, ollama, ollama-local, ollama-turbo)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
 	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines)")
@@ -371,7 +371,6 @@ func listProviders() error {
 	fmt.Println("1. DeepInfra")
 	fmt.Println("2. OpenRouter")
 	fmt.Println("3. Ollama (Local)")
-	fmt.Println("4. DeepSeek")
 	fmt.Println()
 	fmt.Println("Use '/providers select' to switch providers")
 
@@ -385,9 +384,8 @@ func selectProvider(chatAgent *agent.Agent) error {
 	fmt.Println("1. DeepInfra")
 	fmt.Println("2. OpenRouter")
 	fmt.Println("3. Ollama (Local)")
-	fmt.Println("4. DeepSeek")
 
-	fmt.Print("\nEnter provider number (1-4) or 'cancel': ")
+	fmt.Print("\nEnter provider number (1-3) or 'cancel': ")
 
 	// Temporarily disable escape monitoring during user input to avoid interference
 	chatAgent.DisableEscMonitoring()
@@ -407,8 +405,8 @@ func selectProvider(chatAgent *agent.Agent) error {
 
 	// Parse selection
 	selection, err := strconv.Atoi(input)
-	if err != nil || selection < 1 || selection > 4 {
-		return fmt.Errorf("invalid selection. Please enter a number between 1 and 4")
+	if err != nil || selection < 1 || selection > 3 {
+		return fmt.Errorf("invalid selection. Please enter a number between 1 and 3")
 	}
 
 	// Define available providers (same order as displayed)
@@ -416,7 +414,6 @@ func selectProvider(chatAgent *agent.Agent) error {
 		agent_api.DeepInfraClientType,
 		agent_api.OpenRouterClientType,
 		agent_api.OllamaClientType,
-		agent_api.DeepSeekClientType,
 	}
 
 	selectedProvider := providers[selection-1]

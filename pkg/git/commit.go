@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -42,7 +42,7 @@ func GetStagedDiff() (string, error) {
 }
 
 // CheckStagedFilesForSecurityCredentials checks staged files for security credentials
-func CheckStagedFilesForSecurityCredentials(logger *utils.Logger, cfg *config.Config) bool {
+func CheckStagedFilesForSecurityCredentials(logger *utils.Logger, cfg *configuration.Config) bool {
 	// Get list of staged files
 	cmd := exec.Command("git", "diff", "--cached", "--name-only")
 	output, err := cmd.Output()

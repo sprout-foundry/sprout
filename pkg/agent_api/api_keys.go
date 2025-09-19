@@ -18,7 +18,6 @@ type APIKeys struct {
 	DeepInfra  string `json:"deepinfra,omitempty"`
 	OpenRouter string `json:"openrouter,omitempty"`
 	Ollama     string `json:"ollama,omitempty"` // For Ollama Remote API key
-	DeepSeek   string `json:"deepseek,omitempty"`
 	Gemini     string `json:"gemini,omitempty"`
 }
 
@@ -99,9 +98,6 @@ func setEnvVarsFromAPIKeys(keys *APIKeys) {
 	if keys.Ollama != "" {
 		os.Setenv("OLLAMA_API_KEY", keys.Ollama)
 	}
-	if keys.DeepSeek != "" {
-		os.Setenv("DEEPSEEK_API_KEY", keys.DeepSeek)
-	}
 	if keys.Gemini != "" {
 		os.Setenv("GOOGLE_API_KEY", keys.Gemini)
 	}
@@ -120,8 +116,6 @@ func GetProviderAPIKeyName(provider ClientType) string {
 		return "" // No API key needed for local
 	case OllamaTurboClientType:
 		return "OLLAMA_API_KEY"
-	case DeepSeekClientType:
-		return "DEEPSEEK_API_KEY"
 	default:
 		return ""
 	}
@@ -188,8 +182,6 @@ func setAPIKeyInStruct(keys *APIKeys, provider ClientType, apiKey string) {
 		keys.OpenRouter = apiKey
 	case OllamaTurboClientType:
 		keys.Ollama = apiKey
-	case DeepSeekClientType:
-		keys.DeepSeek = apiKey
 	}
 }
 
@@ -206,8 +198,6 @@ func getProviderDisplayName(provider ClientType) string {
 		return "Ollama (Local)"
 	case OllamaTurboClientType:
 		return "Ollama Turbo"
-	case DeepSeekClientType:
-		return "DeepSeek"
 	default:
 		return string(provider)
 	}

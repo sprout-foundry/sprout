@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -44,7 +44,7 @@ type Parameters struct {
 	Kwargs map[string]interface{}
 
 	// Config provides access to configuration
-	Config *config.Config
+	Config *configuration.Config
 
 	// Logger for tool execution logging
 	Logger *utils.Logger

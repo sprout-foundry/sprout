@@ -16,8 +16,6 @@ func CreateProviderClient(clientType ClientType, model string) (ClientInterface,
 		return NewOllamaTurboClient(model)
 	case OpenRouterClientType:
 		return NewOpenRouterClientWrapper(model)
-	case DeepSeekClientType:
-		return NewDeepSeekClientWrapper(model)
 	default:
 		return nil, fmt.Errorf("unknown client type: %s", clientType)
 	}

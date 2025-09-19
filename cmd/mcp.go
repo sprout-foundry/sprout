@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/mcp"
 	"github.com/spf13/cobra"
 )
@@ -91,7 +91,7 @@ func runMCPAdd() error {
 	fmt.Println()
 
 	// Load existing config
-	cfg, err := config.LoadOrInitConfig(false)
+	cfg, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -200,7 +200,7 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	mcpConfig.Enabled = true
 
 	// Save config
-	cfg, _ := config.LoadOrInitConfig(false)
+	cfg, _ := configuration.LoadOrInitConfig(false)
 	if err := mcp.SaveMCPConfig(cfg, *mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
@@ -320,7 +320,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	mcpConfig.Enabled = true
 
 	// Save config
-	cfg, _ := config.LoadOrInitConfig(false)
+	cfg, _ := configuration.LoadOrInitConfig(false)
 	if err := mcp.SaveMCPConfig(cfg, *mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
@@ -465,7 +465,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	mcpConfig.Enabled = true
 
 	// Save config
-	cfg, _ := config.LoadOrInitConfig(false)
+	cfg, _ := configuration.LoadOrInitConfig(false)
 	if err := mcp.SaveMCPConfig(cfg, *mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
@@ -483,7 +483,7 @@ func runMCPRemove(serverName string) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	// Load existing config
-	cfg, err := config.LoadOrInitConfig(false)
+	cfg, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -564,7 +564,7 @@ func runMCPRemove(serverName string) error {
 
 func runMCPList() error {
 	// Load existing config
-	cfg, err := config.LoadOrInitConfig(false)
+	cfg, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -639,7 +639,7 @@ func runMCPTest(serverName string) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	// Load existing config
-	cfg, err := config.LoadOrInitConfig(false)
+	cfg, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

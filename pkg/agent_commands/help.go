@@ -36,12 +36,12 @@ A command-line coding assistant using OpenAI's gpt-oss-120b model with 7 core to
 - list_todos: View all current tasks and their status
 
 USAGE:
-  Interactive mode:     ./coder
-  Non-interactive:      ./coder "your query here"
-  Local inference:      ./coder --local "your query"
-  Custom model:         ./coder --model=meta-llama/Meta-Llama-3.1-70B-Instruct "your query"
-  Piped input:         echo "your query" | ./coder
-  Help:                ./coder --help
+  Interactive mode:     ./ledit
+  Non-interactive:      ./ledit "your query here"
+  Local inference:      ./ledit --local "your query"
+  Custom model:         ./ledit --model=meta-llama/Meta-Llama-3.1-70B-Instruct "your query"
+  Piped input:         echo "your query" | ./ledit
+  Help:                ./ledit --help
 
 INPUT FEATURES:
   - Arrow keys for navigation and command history
@@ -51,23 +51,23 @@ INPUT FEATURES:
 
 EXAMPLES:
   # Interactive mode
-  ./coder
+  ./ledit
   > Create a simple Go HTTP server in server.go
   
   # Non-interactive mode
-  ./coder "Create a simple Go HTTP server in server.go"
+  ./ledit "Create a simple Go HTTP server in server.go"
   
   # Multi-word prompts (use quotes)
-  ./coder "Fix the bug in main.go and add unit tests"
+  ./ledit "Fix the bug in main.go and add unit tests"
   
   # Local inference
-  ./coder --local "Create a Python calculator"
+  ./ledit --local "Create a Python calculator"
   
   # Use a different model
-  ./coder --model=meta-llama/Meta-Llama-3.1-70B-Instruct "Create a Python calculator"
+  ./ledit --model=meta-llama/Meta-Llama-3.1-70B-Instruct "Create a Python calculator"
   
   # Piped input
-  echo "Fix the bug in main.go where the variable is undefined" | ./coder
+  echo "Fix the bug in main.go where the variable is undefined" | ./ledit
 
 ENVIRONMENT:
   DEEPINFRA_API_KEY: API token for DeepInfra models

@@ -91,7 +91,7 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	}
 
 	// Show optimization stats if enabled
-	if a.optimizer.IsEnabled() {
+	if a.optimizer != nil && a.optimizer.IsEnabled() {
 		stats := a.optimizer.GetOptimizationStats()
 		fmt.Println()
 		fmt.Println("🔄 Conversation Optimization")
@@ -267,14 +267,16 @@ func (a *Agent) GenerateConversationSummary() string {
 	}
 
 	// Add key files explored
-	stats := a.optimizer.GetOptimizationStats()
-	if trackedFiles, ok := stats["file_paths"].([]string); ok && len(trackedFiles) > 0 {
-		summary.WriteString("📂 KEY FILES EXPLORED:\n")
-		summary.WriteString("──────────────────────────────\n")
-		for _, file := range trackedFiles {
-			summary.WriteString(fmt.Sprintf("• %s\n", file))
+	if a.optimizer != nil {
+		stats := a.optimizer.GetOptimizationStats()
+		if trackedFiles, ok := stats["file_paths"].([]string); ok && len(trackedFiles) > 0 {
+			summary.WriteString("📂 KEY FILES EXPLORED:\n")
+			summary.WriteString("──────────────────────────────\n")
+			for _, file := range trackedFiles {
+				summary.WriteString(fmt.Sprintf("• %s\n", file))
+			}
+			summary.WriteString("\n")
 		}
-		summary.WriteString("\n")
 	}
 
 	// Add conversation metrics
@@ -358,25 +360,27 @@ func (a *Agent) GenerateCompactSummary() string {
 	}
 
 	// Add key files touched (limited list)
-	stats := a.optimizer.GetOptimizationStats()
-	if trackedFiles, ok := stats["file_paths"].([]string); ok && len(trackedFiles) > 0 {
-		summary.WriteString("📄 KEY FILES:\n")
-		summary.WriteString("─────────────────────────────\n")
+	if a.optimizer != nil {
+		stats := a.optimizer.GetOptimizationStats()
+		if trackedFiles, ok := stats["file_paths"].([]string); ok && len(trackedFiles) > 0 {
+			summary.WriteString("📄 KEY FILES:\n")
+			summary.WriteString("─────────────────────────────\n")
 
-		// Limit to 8 files to control summary size
-		count := len(trackedFiles)
-		if count > 8 {
-			count = 8
-		}
+			// Limit to 8 files to control summary size
+			count := len(trackedFiles)
+			if count > 8 {
+				count = 8
+			}
 
-		for i := 0; i < count; i++ {
-			summary.WriteString(fmt.Sprintf("• %s\n", trackedFiles[i]))
-		}
+			for i := 0; i < count; i++ {
+				summary.WriteString(fmt.Sprintf("• %s\n", trackedFiles[i]))
+			}
 
-		if len(trackedFiles) > 8 {
-			summary.WriteString(fmt.Sprintf("  ... and %d more files\n", len(trackedFiles)-8))
+			if len(trackedFiles) > 8 {
+				summary.WriteString(fmt.Sprintf("  ... and %d more files\n", len(trackedFiles)-8))
+			}
+			summary.WriteString("\n")
 		}
-		summary.WriteString("\n")
 	}
 
 	// Add concise session metrics

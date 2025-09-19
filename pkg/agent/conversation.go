@@ -2,568 +2,16 @@ package agent
 
 import (
 	"fmt"
-	"math/rand"
-	"os"
 	"strings"
-	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/agent_tools"
-	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // ProcessQuery handles the main conversation loop with the LLM
 func (a *Agent) ProcessQuery(userQuery string) (string, error) {
-	// Start hang detection if enabled
-	if a.debugHangMode && a.hangDetector != nil {
-		a.hangDetector.Start()
-		a.progressMonitor.Start()
-		defer func() {
-			a.hangDetector.Stop()
-			a.progressMonitor.Stop()
-		}()
-		a.progressMonitor.Progress("Starting query processing")
-	}
-
-	// Enable change tracking for this conversation
-	a.EnableChangeTracking(userQuery)
-
-	// Enable Esc monitoring during query processing
-	a.EnableEscMonitoring()
-	defer a.DisableEscMonitoring() // Disable when done
-
-	// Process any images in the user query first
-	processedQuery, err := a.processImagesInQuery(userQuery)
-	if err != nil {
-		a.debugLog("⚠️ Vision processing failed: %v\n", err)
-		// Continue with original query if vision processing fails
-		processedQuery = userQuery
-	}
-
-	a.currentIteration = 0
-
-	// Print startup message when running from agent command
-	if os.Getenv("LEDIT_FROM_AGENT") == "1" {
-		providerType := a.GetProviderType()
-		providerName := api.GetProviderName(providerType)
-		model := a.GetModel()
-		fmt.Printf("🤖 Agent: %s/%s\n", providerName, model)
-		fmt.Printf("📋 Task: %s\n", userQuery)
-	}
-
-	// Set a reasonable iteration limit to prevent infinite loops
-	// The agent should complete tasks naturally, but we need a safety limit
-	maxIterationsForThisQuery := a.maxIterations
-
-	// Check if this is a new conversation or continuing an existing one
-	if len(a.messages) == 0 {
-		// First query - initialize with system prompt
-		a.messages = []api.Message{
-			{Role: "system", Content: a.systemPrompt},
-		}
-	}
-
-	// Add the new user query to the existing conversation
-	a.messages = append(a.messages, api.Message{
-		Role:    "user",
-		Content: processedQuery,
-	})
-
-	for a.currentIteration < maxIterationsForThisQuery {
-		iterationStart := time.Now()
-		a.currentIteration++
-
-		// Update hang detection progress
-		if a.debugHangMode && a.progressMonitor != nil {
-			a.progressMonitor.Progress(fmt.Sprintf("Starting iteration %d", a.currentIteration))
-		}
-
-		// Check for interrupt signal at the start of each iteration
-		if a.CheckForInterrupt() {
-			interruptMessage := a.HandleInterrupt()
-			if interruptMessage == "STOP" {
-				// User wants to stop current processing
-				a.debugLog("🛑 User requested stop\n")
-				a.ClearInterrupt()
-				break // Exit the iteration loop
-			} else if interruptMessage != "" {
-				// Inject user message into conversation
-				a.messages = append(a.messages, api.Message{
-					Role:    "user",
-					Content: fmt.Sprintf("🛑 INTERRUPT: %s", interruptMessage),
-				})
-				a.debugLog("🛑 Interrupt processed, continuing with: %s\n", interruptMessage)
-			}
-			// Clear interrupt state and continue
-			a.ClearInterrupt()
-		}
-
-		a.debugLog("Iteration %d/%d\n", a.currentIteration, a.maxIterations)
-
-		// Print compact progress indicator in non-interactive mode
-		if os.Getenv("LEDIT_FROM_AGENT") == "1" && !a.IsInteractiveMode() {
-			a.PrintCompactProgress()
-		}
-
-		// Optimize conversation before sending to API
-		optimizedMessages := a.optimizer.OptimizeConversation(a.messages)
-
-		if a.debug && len(optimizedMessages) < len(a.messages) {
-			saved := len(a.messages) - len(optimizedMessages)
-			a.debugLog("🔄 Conversation optimized: %d messages → %d messages (saved %d)\n",
-				len(a.messages), len(optimizedMessages), saved)
-		}
-
-		// Check context size and manage if approaching limit
-		contextTokens := a.estimateContextTokens(optimizedMessages)
-		a.currentContextTokens = contextTokens
-
-		// Apply automatic pruning if needed
-		if a.conversationPruner != nil && a.conversationPruner.ShouldPrune(contextTokens, a.maxContextTokens) {
-			// Apply automatic pruning
-			prunedMessages := a.conversationPruner.PruneConversation(optimizedMessages, contextTokens, a.maxContextTokens, a.optimizer)
-
-			// Update the stored messages to reflect pruning
-			if len(prunedMessages) < len(optimizedMessages) {
-				a.messages = prunedMessages
-				optimizedMessages = prunedMessages
-				contextTokens = a.estimateContextTokens(optimizedMessages)
-				a.currentContextTokens = contextTokens
-			}
-		}
-
-		// Check if we're still approaching the context limit after pruning
-		contextThreshold := int(float64(a.maxContextTokens) * 0.8)
-		if contextTokens > contextThreshold {
-			if !a.contextWarningIssued {
-				a.debugLog("⚠️  Context approaching limit: %s/%s (%.1f%%)\n",
-					a.formatTokenCount(contextTokens),
-					a.formatTokenCount(a.maxContextTokens),
-					float64(contextTokens)/float64(a.maxContextTokens)*100)
-				a.contextWarningIssued = true
-			}
-
-			// Perform aggressive optimization as last resort
-			optimizedMessages = a.optimizer.AggressiveOptimization(optimizedMessages)
-			contextTokens = a.estimateContextTokens(optimizedMessages)
-			a.currentContextTokens = contextTokens
-
-			if a.debug {
-				a.debugLog("🔄 Aggressive optimization applied: %s context tokens\n",
-					a.formatTokenCount(contextTokens))
-			}
-		}
-
-		// Send request to API using dynamic reasoning effort and cached tools
-		reasoningEffort := a.determineReasoningEffort(optimizedMessages)
-		tools := a.getOptimizedToolDefinitions(optimizedMessages)
-
-		// Retry logic for transient errors
-		var resp *api.ChatResponse
-		var err error
-		maxRetries := 3
-		retryDelay := time.Second
-
-		// Reset streaming buffer
-		a.streamingBuffer.Reset()
-
-		for retry := 0; retry <= maxRetries; retry++ {
-			// Update hang detection before LLM call
-			if a.debugHangMode && a.progressMonitor != nil {
-				if retry > 0 {
-					a.progressMonitor.Progress(fmt.Sprintf("Retrying LLM request (attempt %d)", retry+1))
-				} else {
-					a.progressMonitor.Progress("Making LLM request")
-				}
-			}
-
-			if a.streamingEnabled {
-				// Don't show indicator here - let the streaming formatter handle it
-
-				// Use streaming API
-				streamCallback := func(content string) {
-					// Update hang detection on streaming content
-					if a.debugHangMode && a.progressMonitor != nil {
-						// More granular updates for streaming
-						if len(content) > 10 {
-							// Only update on substantial chunks to avoid too many updates
-							a.progressMonitor.Progress(fmt.Sprintf("Streaming response (%d chars received)", len(a.streamingBuffer.String())))
-						}
-					}
-
-					// Accumulate content in buffer
-					a.streamingBuffer.WriteString(content)
-
-					// Call user callback if provided
-					if a.streamingCallback != nil {
-						a.streamingCallback(content)
-					} else if a.outputMutex != nil {
-						// Default streaming output
-						a.outputMutex.Lock()
-						fmt.Print(content)
-						a.outputMutex.Unlock()
-					}
-				}
-
-				resp, err = a.client.SendChatRequestStream(optimizedMessages, tools, reasoningEffort, streamCallback)
-			} else {
-				// Use regular API
-				// Note for OpenAI: We use non-streaming mode to get accurate token usage data
-				if a.GetProvider() == "openai" && retry == 0 && a.currentIteration == 0 {
-					message := "📊 Using non-streaming mode for accurate token tracking...\n\n"
-					if a.outputMutex != nil {
-						a.outputMutex.Lock()
-						fmt.Print(message)
-						a.outputMutex.Unlock()
-					} else {
-						fmt.Print(message)
-					}
-				}
-				resp, err = a.client.SendChatRequest(optimizedMessages, tools, reasoningEffort)
-			}
-
-			// Update hang detection after LLM call
-			if a.debugHangMode && a.progressMonitor != nil {
-				if err != nil {
-					a.progressMonitor.Progress(fmt.Sprintf("LLM request failed: %v", err))
-				} else {
-					a.progressMonitor.Progress("LLM request completed")
-				}
-			}
-
-			if err == nil {
-				break // Success
-			}
-
-			// Check if this is a retryable error
-			errStr := err.Error()
-
-			// Rate limit errors (429) should not be retried immediately
-			isRateLimit := strings.Contains(errStr, "429") ||
-				strings.Contains(errStr, "rate limit") ||
-				strings.Contains(errStr, "usage limit")
-
-			isRetryable := !isRateLimit && (strings.Contains(errStr, "stream error") ||
-				strings.Contains(errStr, "INTERNAL_ERROR") ||
-				strings.Contains(errStr, "connection reset") ||
-				strings.Contains(errStr, "EOF") ||
-				strings.Contains(errStr, "timeout"))
-
-			if !isRetryable || retry == maxRetries {
-				// Not retryable or max retries reached
-				return a.handleAPIFailure(err, optimizedMessages)
-			}
-
-			// Log retry attempt
-			a.debugLog("⚠️ Retrying API request (attempt %d/%d) after error: %v\n", retry+1, maxRetries, err)
-
-			// Exponential backoff with jitter
-			jitter := time.Duration(rand.Float64() * float64(retryDelay/2))
-			sleepTime := retryDelay + jitter
-			time.Sleep(sleepTime)
-			retryDelay *= 2 // Double the delay for next retry
-		}
-
-		if len(resp.Choices) == 0 {
-			return "", fmt.Errorf("no response choices returned")
-		}
-
-		// Track token usage and cost
-		cachedTokens := resp.Usage.PromptTokensDetails.CachedTokens
-
-		// Use actual cost from API (already accounts for cached tokens)
-		a.totalCost += resp.Usage.EstimatedCost
-		a.totalTokens += resp.Usage.TotalTokens
-		a.promptTokens += resp.Usage.PromptTokens
-		a.completionTokens += resp.Usage.CompletionTokens
-		a.cachedTokens += cachedTokens
-
-		// Debug log token update
-		if os.Getenv("DEBUG") == "1" {
-			fmt.Fprintf(os.Stderr, "\n[DEBUG] Token update: usage.Total=%d, agent.Total=%d\n", resp.Usage.TotalTokens, a.totalTokens)
-		}
-
-		// Calculate cost savings for display purposes only
-		cachedCostSavings := a.calculateCachedCost(cachedTokens)
-		a.cachedCostSavings += cachedCostSavings
-
-		// Call stats update callback if set
-		if a.statsUpdateCallback != nil {
-			// Debug log when callback is invoked
-			if os.Getenv("DEBUG") == "1" {
-				fmt.Fprintf(os.Stderr, "\n[DEBUG] Invoking stats callback: total=%d, cost=%.4f\n", a.totalTokens, a.totalCost)
-			}
-			a.statsUpdateCallback(a.totalTokens, a.totalCost)
-		}
-
-		// Get TPS information from the client if available
-		if tpsClient, ok := a.client.(interface{ GetAverageTPS() float64 }); ok {
-			averageTPS := tpsClient.GetAverageTPS()
-			if averageTPS > 0 && a.debug {
-				// Check if using a proxy provider
-				providerName := ""
-				if provider, ok := a.client.(interface{ GetProvider() string }); ok {
-					providerName = provider.GetProvider()
-				}
-
-				tpsLabel := "TPS"
-				if providerName == "openrouter" || providerName == "OpenRouter" {
-					tpsLabel = "TPS (transfer rate, not generation)"
-				}
-
-				a.debugLog("⚡ %s: %.1f tokens/second (averaged across requests)\n", tpsLabel, averageTPS)
-			}
-		}
-
-		// Only show context information in debug mode
-		// Calculate iteration timing
-		iterationDuration := time.Since(iterationStart)
-
-		if a.debug {
-			a.debugLog("💰 Response: %d prompt + %d completion | Cost: $%.6f | Context: %s/%s | Time: %v\n",
-				resp.Usage.PromptTokens,
-				resp.Usage.CompletionTokens,
-				resp.Usage.EstimatedCost,
-				a.formatTokenCount(a.currentContextTokens),
-				a.formatTokenCount(a.maxContextTokens),
-				iterationDuration)
-
-			if cachedTokens > 0 {
-				a.debugLog("📋 Cached tokens: %d | Savings: $%.6f\n",
-					cachedTokens, cachedCostSavings)
-			}
-		}
-
-		choice := resp.Choices[0]
-
-		// Add assistant's message to history
-		a.messages = append(a.messages, api.Message{
-			Role:             "assistant",
-			Content:          choice.Message.Content,
-			ReasoningContent: choice.Message.ReasoningContent,
-		})
-
-		// Display intermediate response if it contains substantial content and has tool calls
-		// This shows the user the agent's reasoning before executing tools
-		if len(choice.Message.ToolCalls) > 0 {
-			content := strings.TrimSpace(choice.Message.Content)
-			// If streaming was enabled, content was already shown in real-time
-			if !a.streamingEnabled && len(content) > 0 {
-				// Use mutex if available for synchronized output
-				if a.outputMutex != nil {
-					a.outputMutex.Lock()
-					fmt.Print("\r\033[K") // Clear line
-					fmt.Printf("💭 %s\n", content)
-					a.outputMutex.Unlock()
-				} else {
-					fmt.Print("\r\033[K") // Clear line
-					fmt.Printf("💭 %s\n", content)
-				}
-			} else if a.streamingEnabled && len(content) > 0 {
-				// Add newline after streaming content if there are tool calls coming
-				if a.outputMutex != nil {
-					a.outputMutex.Lock()
-					fmt.Println() // Add newline after streamed content
-					a.outputMutex.Unlock()
-				} else {
-					fmt.Println()
-				}
-			}
-			// If no content but has tool calls, we'll let the tool execution logs speak for themselves
-		}
-
-		// Check if there are tool calls to execute
-		if len(choice.Message.ToolCalls) > 0 {
-			// Optimization: Check if all tool calls are read_file operations for parallel execution
-			allReadFile := true
-			for _, tc := range choice.Message.ToolCalls {
-				if tc.Function.Name != "read_file" {
-					allReadFile = false
-					break
-				}
-			}
-
-			toolResults := make([]string, len(choice.Message.ToolCalls))
-
-			if allReadFile && len(choice.Message.ToolCalls) > 1 {
-				// Execute read_file operations in parallel
-				a.debugLog("🚀 Executing %d read_file operations in parallel for optimal performance\n", len(choice.Message.ToolCalls))
-
-				type readResult struct {
-					index  int
-					result string
-				}
-
-				resultChan := make(chan readResult, len(choice.Message.ToolCalls))
-
-				// Launch parallel goroutines for each read_file
-				for i, toolCall := range choice.Message.ToolCalls {
-					go func(idx int, tc api.ToolCall) {
-						result, err := a.executeTool(tc)
-						if err != nil {
-							result = fmt.Sprintf("Error executing tool %s: %s", tc.Function.Name, err.Error())
-						}
-						resultChan <- readResult{
-							index:  idx,
-							result: fmt.Sprintf("Tool call result for %s: %s", tc.Function.Name, result),
-						}
-					}(i, toolCall)
-				}
-
-				// Collect results in order
-				for i := 0; i < len(choice.Message.ToolCalls); i++ {
-					res := <-resultChan
-					toolResults[res.index] = res.result
-				}
-			} else {
-				// Execute tool calls sequentially for non-read operations or single calls
-				for i, toolCall := range choice.Message.ToolCalls {
-					result, err := a.executeTool(toolCall)
-					if err != nil {
-						result = fmt.Sprintf("Error executing tool %s: %s", toolCall.Function.Name, err.Error())
-					}
-					toolResults[i] = fmt.Sprintf("Tool call result for %s: %s", toolCall.Function.Name, result)
-				}
-			}
-
-			// Add tool results to conversation
-			a.messages = append(a.messages, api.Message{
-				Role:    "user",
-				Content: strings.Join(toolResults, "\n\n"),
-			})
-
-			continue
-		} else {
-			// Check if content or reasoning_content contains tool calls that weren't properly parsed
-			toolCalls := a.extractToolCallsFromContent(choice.Message.Content)
-			if len(toolCalls) == 0 {
-				// Also check reasoning_content
-				toolCalls = a.extractToolCallsFromContent(choice.Message.ReasoningContent)
-			}
-
-			if len(toolCalls) > 0 {
-				// Check if these are XML-style tool calls
-				if strings.Contains(choice.Message.Content, "<function=") || strings.Contains(choice.Message.ReasoningContent, "<function=") {
-					a.debugLog("🔧 Found %d XML-style tool calls - executing them for compatibility\n", len(toolCalls))
-				} else {
-					a.debugLog("⚠️  Found %d malformed tool calls in content - executing them for compatibility\n", len(toolCalls))
-				}
-
-				toolResults := make([]string, 0)
-				for _, toolCall := range toolCalls {
-					a.debugLog("  - Executing tool call: %s\n", toolCall.Function.Name)
-					result, err := a.executeTool(toolCall)
-					if err != nil {
-						result = fmt.Sprintf("Error executing tool %s: %s", toolCall.Function.Name, err.Error())
-					}
-					toolResults = append(toolResults, fmt.Sprintf("Tool call result for %s: %s", toolCall.Function.Name, result))
-				}
-
-				// Add tool results to conversation without feedback
-				a.messages = append(a.messages, api.Message{
-					Role:    "user",
-					Content: strings.Join(toolResults, "\n\n"),
-				})
-
-				continue
-			}
-
-			// Check if this looks like attempted tool calls that we couldn't parse
-			if a.containsAttemptedToolCalls(choice.Message.Content) || a.containsAttemptedToolCalls(choice.Message.ReasoningContent) {
-				a.debugLog("⚠️  Detected attempted but unparseable tool calls - asking for retry\n")
-
-				// Simple retry message without lecturing
-				a.messages = append(a.messages, api.Message{
-					Role:    "user",
-					Content: "I couldn't parse your tool calls. Please retry using the correct tool calling format.",
-				})
-
-				continue
-			}
-
-			// Check if the response looks incomplete and retry
-			// But first check if this is a simple question that shouldn't trigger continuation
-			queryLower := strings.ToLower(userQuery)
-			isSimpleQuestion := false
-
-			// Check for simple arithmetic
-			if strings.Contains(queryLower, "what is") &&
-				(strings.Contains(queryLower, "+") || strings.Contains(queryLower, "-") ||
-					strings.Contains(queryLower, "*") || strings.Contains(queryLower, "/") ||
-					strings.Contains(queryLower, "plus") || strings.Contains(queryLower, "minus")) {
-				isSimpleQuestion = true
-			}
-
-			// Check for brief/tell me questions with "already have" or "information you have"
-			if (strings.Contains(queryLower, "briefly") || strings.Contains(queryLower, "tell me")) &&
-				(strings.Contains(queryLower, "already have") || strings.Contains(queryLower, "information you have") ||
-					strings.Contains(queryLower, "with the information")) {
-				isSimpleQuestion = true
-			}
-
-			// Check for simple tell/say commands
-			if strings.HasPrefix(queryLower, "say ") || strings.HasPrefix(queryLower, "tell me a joke") {
-				isSimpleQuestion = true
-			}
-
-			if !isSimpleQuestion && a.isIncompleteResponse(choice.Message.Content) {
-				// Add encouragement to continue
-				a.messages = append(a.messages, api.Message{
-					Role:    "user",
-					Content: "The previous response appears incomplete. Please continue with the task and use available tools to fully complete the work.",
-				})
-				continue
-			}
-
-			// Check for potential false stops before returning
-			if a.shouldCheckFalseStop(choice.Message.Content) {
-				if isFalseStop, confidence := a.checkFalseStop(choice.Message.Content); isFalseStop {
-					a.debugLog("🔄 Detected possible false stop (confidence: %.2f), continuing...\n", confidence)
-
-					// Always show a message when false stop detection triggers
-					fmt.Printf("🔄 False stop detected (confidence: %.2f) - Response length: %d chars\n", confidence, len(choice.Message.Content))
-					if a.debug {
-						fmt.Printf("   Response preview: %q\n", truncateString(choice.Message.Content, 100))
-					}
-
-					// Add a gentle continuation prompt
-					a.messages = append(a.messages, api.Message{
-						Role:    "user",
-						Content: "Please continue with your analysis.",
-					})
-					continue
-				}
-			}
-
-			// No tool calls and response seems complete - we're done
-			// Commit any tracked changes before returning
-			if commitErr := a.CommitChanges(choice.Message.Content); commitErr != nil {
-				a.debugLog("Warning: Failed to commit tracked changes: %v\n", commitErr)
-			}
-
-			// Debug: Log the response content to see formatting
-			if a.debug {
-				a.debugLog("Final response content (%d chars):\n%s\n", len(choice.Message.Content), choice.Message.Content)
-			}
-
-			// If streaming was enabled, the content was already displayed
-			// Return empty string to avoid duplication
-			if a.streamingEnabled {
-				if a.debug {
-					a.debugLog("Streaming was enabled, returning empty string to avoid duplication (content length: %d)\n", len(choice.Message.Content))
-				}
-				return "", nil
-			}
-			return choice.Message.Content, nil
-		}
-	}
-
-	// Commit any tracked changes even if we hit max iterations
-	if commitErr := a.CommitChanges("Maximum iterations reached"); commitErr != nil {
-		a.debugLog("Warning: Failed to commit tracked changes: %v\n", commitErr)
-	}
-
-	return "", fmt.Errorf("iteration limit (%d) reached - task may be incomplete", maxIterationsForThisQuery)
+	handler := NewConversationHandler(a)
+	return handler.ProcessQuery(userQuery)
 }
 
 // ProcessQueryWithContinuity processes a query with continuity from previous actions
@@ -582,6 +30,10 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 		} else {
 			a.debugLog("DEFER: No changes to commit (enabled: %v, count: %d)\n", a.IsChangeTrackingEnabled(), a.GetChangeCount())
 		}
+
+		// Auto-save memory state after every successful turn
+		a.autoSaveState()
+		a.debugLog("DEFER: Auto-saved memory state\n")
 	}()
 
 	// Load previous state if available
@@ -603,41 +55,63 @@ Note: The user cannot see the previous session's responses, so please provide a 
 	return a.ProcessQuery(userQuery)
 }
 
+// Helper methods that are still needed by various components
+
 // isIncompleteResponse checks if a response looks incomplete or is declining the task prematurely
 func (a *Agent) isIncompleteResponse(content string) bool {
-	if content == "" {
-		return true // Empty responses are definitely incomplete
-	}
+	contentLower := strings.ToLower(content)
+	contentLen := len(content)
 
-	// Check if this contains attempted tool calls - if so, it's incomplete
+	// Check if response contains malformed tool calls
 	if a.containsAttemptedToolCalls(content) {
 		return true
 	}
 
-	originalContent := content // Keep original for case-sensitive checks
-
-	// REMOVED: Overly aggressive intent-to-continue patterns that were causing infinite loops
-	// Only check for very specific incomplete indicators
-
-	// Only check for very clear indicators of incomplete responses
-	trimmedContent := strings.TrimSpace(originalContent)
-
-	// Check if response ends with ":" followed by nothing (expecting a list or code)
-	if strings.HasSuffix(trimmedContent, ":") && !strings.Contains(trimmedContent, "\n") {
-		a.debugLog("Detected trailing colon without content\n")
+	// Check for very short responses that suggest incompletion
+	if contentLen < 100 && (strings.Contains(contentLower, "let me") ||
+		strings.Contains(contentLower, "i'll") ||
+		strings.Contains(contentLower, "i will")) {
 		return true
 	}
 
-	// Check if the response is cut off mid-sentence (ends with comma or no punctuation)
-	lastChar := ""
-	if len(trimmedContent) > 0 {
-		lastChar = string(trimmedContent[len(trimmedContent)-1])
+	// Check for responses that suggest the agent is waiting for confirmation
+	incompletePatterns := []string{
+		"would you like me to",
+		"should i proceed",
+		"shall i",
+		"do you want me to",
+		"before i continue",
+		"let me know if",
+		"is this what you",
+		"does this look",
+		"if you'd like",
+		"i can help you",
+		"i understand you",
+		"to get started",
+		"to begin",
+		"before we proceed",
+		"ready to help",
+		"happy to assist",
+		"glad to help",
+		"i'm here to",
 	}
 
-	// Only consider it incomplete if it ends with a comma or has no ending punctuation at all
-	// and is very short (less than 50 chars)
-	if len(trimmedContent) < 50 && (lastChar == "," || (!strings.ContainsAny(lastChar, ".!?\"'`"))) {
-		a.debugLog("Detected very short response with no ending punctuation\n")
+	for _, pattern := range incompletePatterns {
+		if strings.Contains(contentLower, pattern) {
+			// But allow if the response is already substantial
+			if contentLen > 500 {
+				continue
+			}
+			return true
+		}
+	}
+
+	// Check for responses that end with ellipsis or other continuation indicators
+	trimmedContent := strings.TrimSpace(content)
+	if strings.HasSuffix(trimmedContent, "...") ||
+		strings.HasSuffix(trimmedContent, "…") ||
+		strings.HasSuffix(trimmedContent, ":") ||
+		strings.HasSuffix(trimmedContent, "-") {
 		return true
 	}
 
@@ -646,253 +120,235 @@ func (a *Agent) isIncompleteResponse(content string) bool {
 
 // handleAPIFailure preserves conversation context when API calls fail
 func (a *Agent) handleAPIFailure(apiErr error, _ []api.Message) (string, error) {
-	// Count the tools/work we've already done to show progress
-	toolsExecuted := 0
-	for _, msg := range a.messages {
-		if msg.Role == "tool" {
-			toolsExecuted++
-		}
+	// Log the error for debugging
+	a.debugLog("🚨 API Error: %v\n", apiErr)
+
+	// Extract error message
+	errMsg := apiErr.Error()
+
+	// Check for specific error types and provide helpful context
+	if strings.Contains(errMsg, "timeout") {
+		return "", fmt.Errorf("Request timed out. The model took too long to respond. Try:\n  - Using a simpler query\n  - Breaking down complex tasks\n  - Checking your internet connection\n\nOriginal error: %v", apiErr)
 	}
 
-	a.debugLog("⚠️ API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n",
-		toolsExecuted, a.formatTokenCount(a.totalTokens))
-
-	// Check if we're in a non-interactive environment (e.g., CI/GitHub Actions)
-	if !a.IsInteractiveMode() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-		// In non-interactive mode, return an error to fail fast
-		errorMsg := fmt.Sprintf("API request failed after %d tools executed: %v", toolsExecuted, apiErr)
-
-		// Include progress information in the error message
-		if toolsExecuted > 0 {
-			errorMsg += fmt.Sprintf(" (Progress: %d tools executed, %s tokens used)",
-				toolsExecuted, a.formatTokenCount(a.totalTokens))
-		}
-
-		// Return the error to terminate the process
-		return "", fmt.Errorf("%s", errorMsg)
+	if strings.Contains(errMsg, "rate limit") || strings.Contains(errMsg, "quota") {
+		return "", fmt.Errorf("API rate limit reached. Try:\n  - Waiting a few moments before retrying\n  - Using a different API key\n  - Checking your usage limits\n\nOriginal error: %v", apiErr)
 	}
 
-	// Interactive mode - preserve conversation for user to continue
-	response := "⚠️ **API Request Failed - Conversation Preserved**\n\n"
-
-	// Classify the error type for better user guidance
-	errorMsg := apiErr.Error()
-	if strings.Contains(errorMsg, "timeout") || strings.Contains(errorMsg, "deadline exceeded") {
-		response += "The API request timed out, likely due to high server load or a complex request.\n\n"
-	} else if strings.Contains(errorMsg, "rate limit") || strings.Contains(errorMsg, "usage limit") {
-		// Log token usage when hitting rate limits to understand provider limits
-		logger := utils.GetLogger(false)
-		logger.LogProcessStep(fmt.Sprintf("🚨 RATE LIMIT HIT: %s | Total tokens: %s | Provider: %s | Model: %s",
-			errorMsg, a.formatTokenCount(a.totalTokens), a.GetProvider(), a.GetModel()))
-
-		if rl := utils.GetRunLogger(); rl != nil {
-			rl.LogEvent("rate_limit_hit", map[string]any{
-				"provider":       a.GetProvider(),
-				"model":          a.GetModel(),
-				"total_tokens":   a.totalTokens,
-				"error_message":  errorMsg,
-				"tools_executed": toolsExecuted,
-				"timestamp":      time.Now().Format(time.RFC3339),
-			})
-		}
-
-		response += "Hit API rate limits. Please wait a moment before continuing.\n\n"
-	} else if strings.Contains(strings.ToLower(errorMsg), "model") &&
-		(strings.Contains(strings.ToLower(errorMsg), "not exist") ||
-			strings.Contains(strings.ToLower(errorMsg), "not found") ||
-			strings.Contains(strings.ToLower(errorMsg), "does not exist")) {
-		response += fmt.Sprintf("❌ **Model Error**: %s\n\n", errorMsg)
-		response += "The selected model is not available. You may need to:\n"
-		response += "- Check the model name with `/models` command\n"
-		response += "- Switch to a different model with `/model` command\n"
-		response += "- Verify your API key has access to this model\n\n"
-	} else if strings.Contains(errorMsg, "401") || strings.Contains(strings.ToLower(errorMsg), "unauthorized") {
-		response += fmt.Sprintf("❌ **Authentication Error**: %s\n\n", errorMsg)
-		response += "The API key was rejected. Please check:\n"
-		response += "- Your API key is correct and active\n"
-		response += "- The API key has access to the selected model\n"
-		response += "- Your account has sufficient credits/quota\n\n"
-	} else {
-		response += fmt.Sprintf("API error: %s\n\n", errorMsg)
+	if strings.Contains(errMsg, "context length") || strings.Contains(errMsg, "too many tokens") {
+		// Try to provide helpful context about what to do
+		return "", fmt.Errorf("Context too long for model. The conversation history exceeds the model's limits. Try:\n  - Starting a new conversation with 'ledit agent --fresh'\n  - Using a model with larger context (e.g., claude-3-opus)\n  - Summarizing previous work before continuing\n\nOriginal error: %v", apiErr)
 	}
 
-	response += "**Progress So Far:**\n"
-	response += fmt.Sprintf("- Tools executed: %d\n", toolsExecuted)
-	response += fmt.Sprintf("- Total tokens used: %s\n", a.formatTokenCount(a.totalTokens))
-	response += fmt.Sprintf("- Current iteration: %d/%d\n\n", a.currentIteration, a.maxIterations)
+	if strings.Contains(errMsg, "authentication") || strings.Contains(errMsg, "unauthorized") {
+		return "", fmt.Errorf("Authentication failed. Check:\n  - Your API key is correctly set\n  - The API key has proper permissions\n  - Your subscription/credits are active\n\nOriginal error: %v", apiErr)
+	}
 
-	// Importantly - keep the conversation state intact so user can continue
-	response += "🔄 **Your conversation context is preserved.** You can:\n"
-	response += "- Ask me to continue with your original request\n"
-	response += "- Ask a more specific question about what you wanted to know\n"
-	response += "- Ask me to summarize what I've learned so far\n"
-	response += "- Try a different approach to your question\n\n"
+	if strings.Contains(errMsg, "model not found") || strings.Contains(errMsg, "does not exist") {
+		return "", fmt.Errorf("Model not available. The requested model may:\n  - Require special access\n  - Be deprecated or renamed\n  - Have a typo in the name\n\nOriginal error: %v", apiErr)
+	}
 
-	response += "💡 What would you like me to do next?"
+	// Connection errors
+	if strings.Contains(errMsg, "connection") || strings.Contains(errMsg, "network") ||
+		strings.Contains(errMsg, "dial") || strings.Contains(errMsg, "EOF") {
+		return "", fmt.Errorf("Network connection error. Check:\n  - Your internet connection\n  - Any firewall or proxy settings\n  - The API service status\n\nOriginal error: %v", apiErr)
+	}
 
-	// DON'T return an error - return the preserved conversation response
-	// This keeps the conversation alive instead of terminating it
-	return response, nil
+	// Service errors
+	if strings.Contains(errMsg, "500") || strings.Contains(errMsg, "502") ||
+		strings.Contains(errMsg, "503") || strings.Contains(errMsg, "internal") {
+		return "", fmt.Errorf("API service error. The service is experiencing issues. Try:\n  - Waiting a few minutes and retrying\n  - Checking the provider's status page\n  - Using a different model or provider\n\nOriginal error: %v", apiErr)
+	}
+
+	// Generic error with conversation preservation advice
+	return "", fmt.Errorf("API request failed: %v\n\nYour conversation has been preserved. You can:\n  - Retry the same query\n  - Continue with a different approach\n  - Check logs with --debug flag for more details", apiErr)
 }
 
 // containsAttemptedToolCalls checks if content contains patterns that suggest attempted tool calls
 func (a *Agent) containsAttemptedToolCalls(content string) bool {
-	if content == "" {
-		return false
-	}
-
-	// Patterns that suggest attempted tool calls that we couldn't parse
-	attemptedPatterns := []string{
-		`"tool_calls"`,
-		`"function"`,
-		`"arguments"`,
+	// Look for common patterns that indicate attempted tool usage
+	patterns := []string{
+		// JSON-like tool call patterns
+		`"tool":`,
+		`"function":`,
 		`"name":`,
-		`"id":`,
-		`"type": "function"`,
-		`shell_command`,
-		`read_file`,
-		`write_file`,
-		`edit_file`,
-		`{"id"`,
-		`"call_`,
-		`<function=`,  // XML-style function calls
-		`<parameter=`, // XML-style parameters
-		`</function>`, // XML-style closing tag
+		`"arguments":`,
+		`{"tool_calls"`,
+		`"tool_calls":`,
+		// XML/Claude-style patterns
+		`<function=`,
+		`</function>`,
+		`<tool>`,
+		`</tool>`,
+		// Code block tool patterns
+		"```tool",
+		"```function",
+		// Direct tool invocation patterns
+		"TOOL:",
+		"FUNCTION:",
+		"Calling:",
+		"Executing:",
+		"Tool call:",
+		"Function call:",
+		// Common malformed patterns
+		"I'll use the",
+		"I'll call the",
+		"Let me use",
+		"Let me call",
+		"Using the.*tool",
+		"Calling the.*function",
 	}
 
 	contentLower := strings.ToLower(content)
-	matchCount := 0
-
-	for _, pattern := range attemptedPatterns {
+	for _, pattern := range patterns {
 		if strings.Contains(contentLower, strings.ToLower(pattern)) {
-			matchCount++
-			// If we find multiple patterns, it's very likely attempted tool calls
-			if matchCount >= 2 {
+			// Make sure it's not just discussing tools in general
+			if !strings.Contains(contentLower, "tool calls are") &&
+				!strings.Contains(contentLower, "tools can be") &&
+				!strings.Contains(contentLower, "available tools") &&
+				!strings.Contains(contentLower, "the tool is") {
 				return true
 			}
 		}
 	}
 
-	// Also check for JSON-like structures that might be malformed tool calls
-	if strings.Contains(content, `{`) && strings.Contains(content, `}`) && matchCount >= 1 {
-		return true
+	// Check for specific tool names being mentioned in action context
+	toolNames := []string{"read_file", "write_file", "shell_command", "search_files", "edit_file"}
+	for _, tool := range toolNames {
+		if strings.Contains(contentLower, tool) &&
+			(strings.Contains(contentLower, "i'll") ||
+				strings.Contains(contentLower, "i will") ||
+				strings.Contains(contentLower, "let me") ||
+				strings.Contains(contentLower, "using") ||
+				strings.Contains(contentLower, "calling")) {
+			return true
+		}
 	}
 
 	return false
 }
 
-// determineReasoningEffort decides reasoning level based on task complexity
+// determineReasoningEffort determines the appropriate reasoning effort level based on the query
 func (a *Agent) determineReasoningEffort(messages []api.Message) string {
-	if len(messages) == 0 {
-		return "medium"
+	// Only certain providers support reasoning effort
+	if a.GetProvider() != "openai" && a.GetProvider() != "deepseek" {
+		return "" // Default - provider will ignore it
 	}
 
-	lastMessage := messages[len(messages)-1].Content
-
-	// Use low reasoning for simple, repetitive tasks
-	simplePatterns := []string{
-		"read_file", "ls -", "pwd", "cat ", "echo ",
-		"mkdir", "cd ", "mv ", "cp ", "rm ",
-		"git status", "git diff", "npm install",
-		"go build", "go test", "go run",
-	}
-
-	for _, pattern := range simplePatterns {
-		if strings.Contains(strings.ToLower(lastMessage), pattern) {
-			if a.debug {
-				a.debugLog("🚀 Using low reasoning for simple task\n")
-			}
-			return "low"
+	// Get the last user message
+	var lastUserMessage string
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			lastUserMessage = messages[i].Content
+			break
 		}
 	}
 
-	// Use high reasoning for complex tasks
-	complexPatterns := []string{
-		"analyze", "design", "implement", "create", "plan",
-		"debug", "refactor", "optimize", "architecture",
-		"vision", "image", "ui", "frontend", "algorithm",
-		"error", "fix", "problem", "issue", "troubleshoot",
+	if lastUserMessage == "" {
+		return "medium" // Default
 	}
 
-	for _, pattern := range complexPatterns {
-		if strings.Contains(strings.ToLower(lastMessage), pattern) {
-			if a.debug {
-				a.debugLog("🧠 Using high reasoning for complex task\n")
-			}
-			return "high"
+	queryLower := strings.ToLower(lastUserMessage)
+
+	// High reasoning effort indicators
+	highEffortKeywords := []string{
+		"algorithm", "optimize", "performance", "complexity",
+		"architect", "design pattern", "refactor", "security",
+		"analyze", "debug", "trace", "investigate",
+		"compare", "evaluate", "trade-off", "decision",
+		"implement", "integrate", "migrate", "transform",
+		"explain why", "explain how", "deep dive", "comprehensive",
+		"edge case", "corner case", "test case", "validation",
+		"best practice", "recommendation", "strategy",
+		"fix", "solve", "resolve", "troubleshoot",
+		"create", "build", "develop", "construct",
+	}
+
+	// Low reasoning effort indicators
+	lowEffortKeywords := []string{
+		"what is", "define", "list", "show", "display",
+		"tell me", "give me", "provide", "fetch",
+		"simple", "basic", "quick", "brief",
+		"yes or no", "true or false", "check if",
+		"count", "how many", "number of",
+		"rename", "move", "copy", "delete",
+		"format", "indent", "spacing", "style",
+		"typo", "spelling", "grammar",
+		"comment", "document", "annotate",
+	}
+
+	// Count matches
+	highMatches := 0
+	lowMatches := 0
+
+	for _, keyword := range highEffortKeywords {
+		if strings.Contains(queryLower, keyword) {
+			highMatches++
 		}
 	}
 
-	// Default to medium for everything else
-	if a.debug {
-		a.debugLog("⚖️ Using medium reasoning for standard task\n")
+	for _, keyword := range lowEffortKeywords {
+		if strings.Contains(queryLower, keyword) {
+			lowMatches++
+		}
 	}
-	return "medium"
+
+	// Determine effort level based on matches and query characteristics
+	if highMatches >= 2 || (highMatches > lowMatches && len(lastUserMessage) > 100) {
+		return "high"
+	} else if lowMatches >= 2 || (lowMatches > highMatches) {
+		return "low"
+	}
+
+	// Check query length as additional factor
+	if len(lastUserMessage) > 200 {
+		return "high" // Complex queries likely need more reasoning
+	} else if len(lastUserMessage) < 50 {
+		return "low" // Short queries are usually simple
+	}
+
+	return "medium" // Default for balanced tasks
 }
 
-// getOptimizedToolDefinitions returns relevant tools based on context
+// getOptimizedToolDefinitions returns tool definitions optimized based on conversation context
 func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
-	// Get base tools
-	// Use compact definitions if TOKEN_OPTIMIZATION env var is set
-	var allTools []api.Tool
-	if os.Getenv("LEDIT_TOKEN_OPTIMIZATION") == "true" {
-		allTools = api.GetCompactToolDefinitions()
-	} else {
-		allTools = api.GetToolDefinitions()
-	}
-
-	if a.debug {
-		fmt.Printf("🔧 Base tools count: %d\n", len(allTools))
-	}
-
-	// Don't load MCP tools by default - they can be accessed via mcp_tools tool
-	// This significantly reduces token usage
-	if os.Getenv("LEDIT_LOAD_MCP_TOOLS") == "true" {
-		// Only load MCP tools if explicitly requested
-		if a.mcpManager != nil {
-			mcpTools := a.getMCPTools()
-			allTools = append(allTools, mcpTools...)
-			if a.debug {
-				fmt.Printf("🔧 Total tools after adding MCP: %d\n", len(allTools))
-			}
-		}
-	} else if a.debug {
-		fmt.Printf("🔧 MCP tools available via 'mcp_tools' tool (not loaded to save tokens)\n")
-	}
-
-	if len(messages) == 0 {
-		return allTools
-	}
-
-	// Quick optimization: if last few messages only used basic tools,
-	// prioritize those (but still include all for flexibility)
-	return allTools
+	// For now, just delegate to getMCPTools which handles caching
+	// Future: Could optimize by analyzing conversation context
+	// and only returning relevant tools
+	return a.getMCPTools()
 }
 
-// ClearConversationHistory resets the conversation state
+// ClearConversationHistory clears the conversation history
 func (a *Agent) ClearConversationHistory() {
-	a.messages = []api.Message{}
+	a.messages = []api.Message{
+		{Role: "system", Content: a.systemPrompt},
+	}
+	a.currentIteration = 0
 	a.previousSummary = ""
-	a.taskActions = []TaskAction{}
-	a.optimizer.Reset()
+	a.debugLog("🧹 Conversation history cleared\n")
 }
 
 // SetConversationOptimization enables or disables conversation optimization
-// Note: Optimization is always enabled by default for optimal performance
 func (a *Agent) SetConversationOptimization(enabled bool) {
-	a.optimizer.SetEnabled(enabled)
-	if a.debug {
+	if a.optimizer != nil {
+		a.optimizer.SetEnabled(enabled)
 		if enabled {
-			a.debugLog("🔄 Conversation optimization enabled\n")
+			a.debugLog("✨ Conversation optimization enabled\n")
 		} else {
-			a.debugLog("🔄 Conversation optimization disabled\n")
+			a.debugLog("🔧 Conversation optimization disabled\n")
 		}
 	}
 }
 
 // GetOptimizationStats returns optimization statistics
 func (a *Agent) GetOptimizationStats() map[string]interface{} {
-	return a.optimizer.GetOptimizationStats()
+	if a.optimizer != nil {
+		return a.optimizer.GetOptimizationStats()
+	}
+	return map[string]interface{}{
+		"enabled": false,
+		"message": "Optimizer not initialized",
+	}
 }
 
 // processImagesInQuery detects and processes images in user queries

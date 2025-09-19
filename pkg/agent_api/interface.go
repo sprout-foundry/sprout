@@ -36,7 +36,6 @@ const (
 	OllamaTurboClientType ClientType = "ollama-turbo"
 	OpenRouterClientType  ClientType = "openrouter"
 	OpenAIClientType      ClientType = "openai"
-	DeepSeekClientType    ClientType = "deepseek"
 )
 
 // NewUnifiedClient creates a client with default model for the provider
@@ -78,10 +77,7 @@ func NewOpenAIClientWrapper(model string) (ClientInterface, error) {
 }
 
 // NewDeepSeekClientWrapper creates a DeepSeek client wrapper
-func NewDeepSeekClientWrapper(model string) (ClientInterface, error) {
-	// For now, return an error since DeepSeek provider is not fully implemented
-	return nil, fmt.Errorf("DeepSeek provider not yet implemented")
-}
+// DeepSeek provider removed (unimplemented)
 
 // DetermineProvider provides unified provider detection with clear precedence:
 // 1. Command-line flag (if provided)
@@ -92,7 +88,7 @@ func NewDeepSeekClientWrapper(model string) (ClientInterface, error) {
 func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (ClientType, error) {
 	// 1. Command-line flag has highest priority
 	if explicitProvider != "" {
-		provider, err := parseProviderName(explicitProvider)
+		provider, err := ParseProviderName(explicitProvider)
 		if err != nil {
 			return "", fmt.Errorf("invalid provider '%s': %w", explicitProvider, err)
 		}
@@ -104,7 +100,7 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 
 	// 2. Environment variable
 	if providerEnv := os.Getenv("LEDIT_PROVIDER"); providerEnv != "" {
-		provider, err := parseProviderName(providerEnv)
+		provider, err := ParseProviderName(providerEnv)
 		if err == nil && IsProviderAvailable(provider) {
 			return provider, nil
 		}
@@ -120,7 +116,6 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 		OpenAIClientType,
 		OpenRouterClientType,
 		DeepInfraClientType,
-		DeepSeekClientType,
 		OllamaTurboClientType,
 		OllamaLocalClientType,
 	}
@@ -135,8 +130,8 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 	return OllamaLocalClientType, nil
 }
 
-// parseProviderName converts a string provider name to ClientType
-func parseProviderName(name string) (ClientType, error) {
+// ParseProviderName converts a string provider name to ClientType
+func ParseProviderName(name string) (ClientType, error) {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	switch normalized {
 	case "openai":
@@ -152,8 +147,6 @@ func parseProviderName(name string) (ClientType, error) {
 		return OllamaLocalClientType, nil
 	case "ollama-turbo":
 		return OllamaTurboClientType, nil
-	case "deepseek":
-		return DeepSeekClientType, nil
 	default:
 		return "", fmt.Errorf("unknown provider: %s", name)
 	}
@@ -173,8 +166,6 @@ func IsProviderAvailable(provider ClientType) bool {
 		return os.Getenv("OPENROUTER_API_KEY") != ""
 	case DeepInfraClientType:
 		return os.Getenv("DEEPINFRA_API_KEY") != ""
-	case DeepSeekClientType:
-		return os.Getenv("DEEPSEEK_API_KEY") != ""
 	default:
 		return false
 	}
@@ -188,7 +179,6 @@ func GetAvailableProviders() []ClientType {
 		OllamaLocalClientType,
 		OllamaTurboClientType,
 		OpenRouterClientType,
-		DeepSeekClientType,
 	}
 
 	available := make([]ClientType, 0, len(providers))
@@ -213,8 +203,6 @@ func GetProviderName(clientType ClientType) string {
 		return "Ollama Turbo"
 	case OpenRouterClientType:
 		return "OpenRouter"
-	case DeepSeekClientType:
-		return "DeepSeek"
 	default:
 		return string(clientType)
 	}

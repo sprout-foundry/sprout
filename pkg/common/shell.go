@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // ShellExecutor provides common shell command execution functionality
 type ShellExecutor struct {
-	config    *config.Config
+	config    *configuration.Config
 	logger    *utils.Logger
 	allowlist []string
 	blocklist []string
@@ -22,7 +22,7 @@ type ShellExecutor struct {
 }
 
 // NewShellExecutor creates a new shell executor
-func NewShellExecutor(cfg *config.Config, logger *utils.Logger) *ShellExecutor {
+func NewShellExecutor(cfg *configuration.Config, logger *utils.Logger) *ShellExecutor {
 	securityConfig := cfg.GetSecurityConfig()
 
 	return &ShellExecutor{

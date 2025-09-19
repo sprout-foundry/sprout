@@ -3,13 +3,13 @@ package codereview
 import (
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 func TestIterationLimitExceeded(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &configuration.Config{}
 	logger := utils.GetLogger(true)
 	service := NewCodeReviewService(cfg, logger)
 
@@ -32,7 +32,7 @@ func TestIterationLimitExceeded(t *testing.T) {
 }
 
 func TestConvergenceDetection(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &configuration.Config{}
 	logger := utils.GetLogger(true)
 	service := NewCodeReviewService(cfg, logger)
 
@@ -67,7 +67,7 @@ func TestConvergenceDetection(t *testing.T) {
 }
 
 func TestSimilarityCalculation(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &configuration.Config{}
 	logger := utils.GetLogger(true)
 	service := NewCodeReviewService(cfg, logger)
 
@@ -94,7 +94,7 @@ func TestSimilarityCalculation(t *testing.T) {
 }
 
 func TestReviewHistoryInitialization(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &configuration.Config{}
 	logger := utils.GetLogger(true)
 	service := NewCodeReviewService(cfg, logger)
 

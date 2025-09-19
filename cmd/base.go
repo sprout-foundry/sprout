@@ -3,7 +3,7 @@ package cmd
 import (
 	"log"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -14,7 +14,7 @@ type CommandConfig struct {
 	Model      string
 	DryRun     bool
 	Logger     *utils.Logger
-	Config     *config.Config
+	Config     *configuration.Config
 }
 
 // BaseCommand provides common functionality for all CLI commands
@@ -44,7 +44,6 @@ func NewBaseCommand(use, short, long string) *BaseCommand {
 
 	// Initialize common flags
 	base.flags.SkipPrompt = base.cmd.Flags().Bool("skip-prompt", false, "Skip user confirmation prompts")
-	base.flags.Model = base.cmd.Flags().StringP("model", "m", "", "LLM model to use")
 	base.flags.DryRun = base.cmd.Flags().Bool("dry-run", false, "Run in simulation mode")
 
 	return base
@@ -58,16 +57,9 @@ func (b *BaseCommand) GetCommand() *cobra.Command {
 // Initialize sets up common command infrastructure
 func (b *BaseCommand) Initialize() error {
 	// Load configuration
-	cfg, err := config.LoadOrInitConfig(*b.flags.SkipPrompt)
+	cfg, err := configuration.LoadOrInitConfig(*b.flags.SkipPrompt)
 	if err != nil {
 		return err
-	}
-
-	// Override model if specified
-	if *b.flags.Model != "" {
-		cfg.AgentModel = *b.flags.Model
-		cfg.OrchestrationModel = *b.flags.Model
-		cfg.WorkspaceModel = *b.flags.Model
 	}
 
 	// UI has been removed from the project

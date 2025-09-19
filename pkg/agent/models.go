@@ -112,8 +112,11 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	a.clientType = provider
 
 	// Save to configuration
-	if err := a.configManager.SetProviderAndModel(provider, model); err != nil {
-		return fmt.Errorf("failed to save provider selection: %w", err)
+	if err := a.configManager.SetProvider(provider); err != nil {
+		return fmt.Errorf("failed to save provider: %w", err)
+	}
+	if err := a.configManager.SetModelForProvider(provider, model); err != nil {
+		return fmt.Errorf("failed to save model: %w", err)
 	}
 
 	// Update context limits for the new model
@@ -159,10 +162,16 @@ func (a *Agent) SetModel(model string) error {
 	}
 
 	// Save the selection
-	if err := a.configManager.SetProviderAndModel(a.clientType, model); err != nil {
+	if err := a.configManager.SetProvider(a.clientType); err != nil {
 		// Log warning but don't fail - this is not critical
 		if a.debug {
-			a.debugLog("⚠️  Failed to save model selection: %v\n", err)
+			a.debugLog("⚠️  Failed to save provider: %v\n", err)
+		}
+	}
+	if err := a.configManager.SetModelForProvider(a.clientType, model); err != nil {
+		// Log warning but don't fail - this is not critical
+		if a.debug {
+			a.debugLog("⚠️  Failed to save model: %v\n", err)
 		}
 	}
 

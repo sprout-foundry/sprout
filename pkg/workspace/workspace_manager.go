@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/filediscovery"
 	"github.com/alantheprice/ledit/pkg/security"
 	"github.com/alantheprice/ledit/pkg/text"
@@ -936,7 +936,7 @@ func detectBuildCommand(rootDir string) string {
 
 // validateAndUpdateWorkspace checks the current file system against the workspace.json file,
 // analyzes new or changed files, removes deleted files, and saves the updated workspace.
-func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (workspaceinfo.WorkspaceFile, error) {
+func validateAndUpdateWorkspace(rootDir string, cfg *configuration.Config) (workspaceinfo.WorkspaceFile, error) {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 
 	workspace, err := workspaceinfo.LoadWorkspaceFile()
@@ -1095,7 +1095,7 @@ func validateAndUpdateWorkspace(rootDir string, cfg *config.Config) (workspacein
 
 		for _, file := range batch {
 			wg.Add(1)
-			go func(f fileToProcess, cfg *config.Config) {
+			go func(f fileToProcess, cfg *configuration.Config) {
 				defer wg.Done()
 
 				// Acquire semaphore
@@ -1376,7 +1376,7 @@ func detectRunnerPaths(rootDir string) ([]string, []string) {
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
 // GetWorkspaceContext orchestrates the workspace loading, analysis, and context generation process.
-func GetWorkspaceContext(instructions string, cfg *config.Config) string {
+func GetWorkspaceContext(instructions string, cfg *configuration.Config) string {
 	logger := utils.GetLogger(cfg.SkipPrompt)
 	logger.LogProcessStep("--- Loading in workspace data ---")
 	// UI shimmer: workspace context building

@@ -13,6 +13,22 @@ import (
 	"github.com/alantheprice/ledit/pkg/ui"
 )
 
+// FileExists checks if a file exists at the given path
+func FileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil
+}
+
+// FilesExist checks if all the given files exist
+func FilesExist(filenames ...string) (bool, error) {
+	for _, filename := range filenames {
+		if !FileExists(filename) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 // SaveFile saves or removes a file with the given content.
 // If content is empty, the file is removed.
 func SaveFile(filename, content string) error {

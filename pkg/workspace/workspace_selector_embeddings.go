@@ -3,7 +3,7 @@ package workspace
 import (
 	"fmt"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/embedding"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -16,7 +16,7 @@ const (
 // GetFilesForContextUsingEmbeddings uses vector embeddings to determine which files from the workspace
 // are relevant to the user's instructions. It returns two lists: one for files
 // to be included with full content, and one for files to be included as summaries.
-func GetFilesForContextUsingEmbeddings(instructions string, workspace WorkspaceFile, cfg *config.Config, logger *utils.Logger) ([]string, []string, error) {
+func GetFilesForContextUsingEmbeddings(instructions string, workspace WorkspaceFile, cfg *configuration.Config, logger *utils.Logger) ([]string, []string, error) {
 	db := embedding.NewVectorDB()
 
 	// GenerateWorkspaceEmbeddings now handles loading, generating, and saving embeddings

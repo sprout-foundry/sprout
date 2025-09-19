@@ -28,8 +28,9 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register built-in commands
 	registry.Register(&HelpCommand{registry: registry})
 	registry.Register(&ModelsCommand{})
-	registry.Register(&ProviderCommand{})
+	registry.Register(&ProvidersCommand{})
 	registry.Register(&ContinuityCommand{})
+	registry.Register(&MemoryCommand{})
 	registry.Register(&InitCommand{})
 	registry.Register(&ExitCommand{})
 	registry.Register(&CommitCommand{})

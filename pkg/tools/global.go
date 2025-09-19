@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/alantheprice/ledit/pkg/config"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -17,7 +17,7 @@ var (
 )
 
 // InitializeGlobalExecutor initializes the global tool executor
-func InitializeGlobalExecutor(config *config.Config, logger *utils.Logger) {
+func InitializeGlobalExecutor(config *configuration.Config, logger *utils.Logger) {
 	globalMutex.Lock()
 	defer globalMutex.Unlock()
 
@@ -51,7 +51,7 @@ func ExecuteToolCall(ctx context.Context, toolCall types.ToolCall) (*Result, err
 	executor := GetGlobalExecutor()
 	if executor == nil {
 		// Fallback: create a minimal executor
-		config := &config.Config{SkipPrompt: true}
+		config := &configuration.Config{}
 		logger := utils.GetLogger(true)
 		InitializeGlobalExecutor(config, logger)
 		executor = GetGlobalExecutor()
@@ -65,7 +65,7 @@ func ExecuteToolByName(ctx context.Context, toolName string, params Parameters) 
 	executor := GetGlobalExecutor()
 	if executor == nil {
 		// Fallback: create a minimal executor
-		config := &config.Config{SkipPrompt: true}
+		config := &configuration.Config{}
 		logger := utils.GetLogger(true)
 		InitializeGlobalExecutor(config, logger)
 		executor = GetGlobalExecutor()

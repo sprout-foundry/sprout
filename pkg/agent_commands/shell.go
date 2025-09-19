@@ -11,8 +11,8 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	config "github.com/alantheprice/ledit/pkg/agent_config"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
 // ShellCommand handles the /shell slash command
@@ -44,13 +44,14 @@ func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	// Create a simple client using the unified provider system
-	cfg, err := config.Load()
+	cfg, err := configuration.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %v", err)
 	}
 
-	// Get a unified client wrapper
-	clientWrapper, err := api.NewUnifiedClientWithModel(cfg.LastUsedProvider, api.FastModel)
+	// Get a unified client wrapper using the selected provider
+	provider := api.ClientType(cfg.LastUsedProvider)
+	clientWrapper, err := api.NewUnifiedClientWithModel(provider, api.FastModel)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %v", err)
 	}

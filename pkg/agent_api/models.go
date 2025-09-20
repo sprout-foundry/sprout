@@ -221,7 +221,7 @@ type ollamaTurboListModelsWrapper struct {
 }
 
 func (w *ollamaTurboListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	turboModels, err := w.client.ListModels()
+	turboModels, err := w.client.ListOllamaModels()
 	if err != nil {
 		return nil, err
 	}
@@ -387,4 +387,3 @@ func parseFloat(s string) (float64, error) {
 	cleaned := strings.TrimPrefix(s, "$")
 	return strconv.ParseFloat(cleaned, 64)
 }
-

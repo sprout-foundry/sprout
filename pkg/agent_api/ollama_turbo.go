@@ -54,8 +54,8 @@ func NewOllamaTurboClient(model string) (*OllamaTurboClient, error) {
 	return client, nil
 }
 
-// ListModels returns available models from Ollama Turbo
-func (c *OllamaTurboClient) ListModels() ([]OllamaTurboModel, error) {
+// ListOllamaModels returns available models from Ollama Turbo (original method)
+func (c *OllamaTurboClient) ListOllamaModels() ([]OllamaTurboModel, error) {
 	req, err := http.NewRequest("GET", "https://ollama.com/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -191,7 +191,7 @@ func (c *OllamaTurboClient) SendChatRequestStream(messages []Message, tools []To
 
 // CheckConnection checks if the Ollama Turbo API is accessible
 func (c *OllamaTurboClient) CheckConnection() error {
-	models, err := c.ListModels()
+	models, err := c.ListOllamaModels()
 	if err != nil {
 		return fmt.Errorf("failed to connect to Ollama Turbo: %w", err)
 	}
@@ -258,6 +258,24 @@ func (c *OllamaTurboClient) SendVisionRequest(messages []Message, tools []Tool, 
 }
 
 // NewOllamaTurboClientWrapper creates an Ollama Turbo client wrapper for backwards compatibility
+// ListModels implements ClientInterface - converts OllamaTurboModel to ModelInfo
+func (c *OllamaTurboClient) ListModels() ([]ModelInfo, error) {
+	turboModels, err := c.ListOllamaModels()
+	if err != nil {
+		return nil, err
+	}
+	// Convert OllamaTurboModel to ModelInfo
+	models := make([]ModelInfo, len(turboModels))
+	for i, tm := range turboModels {
+		models[i] = ModelInfo{
+			ID:       tm.ID,
+			Name:     tm.ID, // Use ID as name since Name field doesn't exist
+			Provider: "ollama-turbo",
+		}
+	}
+	return models, nil
+}
+
 func NewOllamaTurboClientWrapper(model string) (ClientInterface, error) {
 	return NewOllamaTurboClient(model)
 }

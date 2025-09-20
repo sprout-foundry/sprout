@@ -16,6 +16,7 @@ type ClientInterface interface {
 	GetModel() string
 	GetProvider() string
 	GetModelContextLimit() (int, error)
+	ListModels() ([]ModelInfo, error)
 	SupportsVision() bool
 	GetVisionModel() string
 	SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error)

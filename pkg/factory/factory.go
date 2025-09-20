@@ -57,6 +57,10 @@ func (w *DeepInfraClientWrapper) SendVisionRequest(messages []api.Message, tools
 	return w.provider.SendVisionRequest(messages, tools, reasoning)
 }
 
+func (w *DeepInfraClientWrapper) ListModels() ([]api.ModelInfo, error) {
+	return w.provider.ListModels()
+}
+
 // TPS methods that the provider doesn't implement
 func (w *DeepInfraClientWrapper) GetLastTPS() float64 {
 	return 0.0 // Provider doesn't track TPS
@@ -122,6 +126,10 @@ func (w *OpenRouterClientWrapper) GetVisionModel() string {
 
 func (w *OpenRouterClientWrapper) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	return w.provider.SendVisionRequest(messages, tools, reasoning)
+}
+
+func (w *OpenRouterClientWrapper) ListModels() ([]api.ModelInfo, error) {
+	return w.provider.ListModels()
 }
 
 // TPS methods that the provider now implements

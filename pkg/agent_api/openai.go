@@ -468,20 +468,11 @@ func (c *OpenAIClient) calculateOpenAICostWithTier(promptTokens, completionToken
 		var inputRate, cachedRate, outputRate float64
 		var divisor float64
 
-		// Most new models use per-1M pricing (values > 50), legacy models use per-1K
-		if pricing.InputPer1M > 50 {
-			// Per-1M token pricing (new models like GPT-5, O3, O4-mini)
-			inputRate = pricing.InputPer1M
-			cachedRate = pricing.CachedInputPer1M // Already includes the discount
-			outputRate = pricing.OutputPer1M
-			divisor = 1000000 // Convert tokens to millions
-		} else {
-			// Per-1K token pricing (legacy models like GPT-4o, GPT-4)
-			inputRate = pricing.InputPer1M
-			cachedRate = pricing.CachedInputPer1M // Already includes the discount
-			outputRate = pricing.OutputPer1M
-			divisor = 1000 // Convert tokens to thousands
-		}
+		// All current pricing data is per 1M tokens as per OpenAI's current pricing structure
+		inputRate = pricing.InputPer1M
+		cachedRate = pricing.CachedInputPer1M // Already includes the discount
+		outputRate = pricing.OutputPer1M
+		divisor = 1000000 // Convert tokens to millions
 
 		// Apply tier pricing multiplier
 		var tierMultiplier float64

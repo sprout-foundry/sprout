@@ -29,9 +29,9 @@ func (a *Agent) getModelContextLimit() int {
 
 // ToolLog logs tool execution messages that are always visible with blue formatting
 func (a *Agent) ToolLog(action, target string) {
-	// Use muted gray colors for tool call logging
-	const darkGray = "\033[90m"  // Bright black (darker gray) for tool call info
-	const lightGray = "\033[37m" // Light gray for the executed portion
+	// Use muted gray colors for tool call logging - both very close in darkness
+	const darkGray = "\033[90m"                  // Bright black (darker gray) for tool call info
+	const slightlyLighterGray = "\033[38;5;246m" // Slightly lighter gray for the executed portion
 	const reset = "\033[0m"
 
 	// Format: [4] read file filename.go
@@ -40,8 +40,8 @@ func (a *Agent) ToolLog(action, target string) {
 	var message string
 	if target != "" {
 		// Add newline before tool call to put it on its own line
-		// Use darker gray for tool call info and lighter gray for target
-		message = fmt.Sprintf("\n%s%s %s%s %s%s%s\n", darkGray, iterInfo, action, reset, lightGray, target, reset)
+		// Use darker gray for tool call info and slightly lighter gray for target
+		message = fmt.Sprintf("\n%s%s %s%s %s%s%s\n", darkGray, iterInfo, action, reset, slightlyLighterGray, target, reset)
 	} else {
 		// Add newline before tool call to put it on its own line
 		message = fmt.Sprintf("\n%s%s %s%s\n", darkGray, iterInfo, action, reset)

@@ -29,12 +29,12 @@ type FooterConfig struct {
 		Reset         string // "\033[0m"
 	}
 	Paddings struct {
-		Left          string // "  "
-		Right         string // "  "
-		MinGap        int    // 1
-		PathLeft      string // "  "
-		GitLeft       string // "  "
-		StatsLeftPad  int    // 4 for indent in stats only
+		Left         string // "  "
+		Right        string // "  "
+		MinGap       int    // 1
+		PathLeft     string // "  "
+		GitLeft      string // "  "
+		StatsLeftPad int    // 4 for indent in stats only
 	}
 	Truncation struct {
 		PathEllipsisLen int // 7 for "..."
@@ -48,7 +48,7 @@ type FooterConfig struct {
 // FooterComponent displays status information at the bottom of the terminal
 type FooterComponent struct {
 	*console.BaseComponent
-	config             FooterConfig
+	config            FooterConfig
 	lastModel         string
 	lastProvider      string
 	lastTokens        int
@@ -102,19 +102,19 @@ func NewFooterComponent() *FooterComponent {
 			Reset:         "\033[0m",
 		},
 		Paddings: struct {
-			Left          string
-			Right         string
-			MinGap        int
-			PathLeft      string
-			GitLeft       string
-			StatsLeftPad  int
+			Left         string
+			Right        string
+			MinGap       int
+			PathLeft     string
+			GitLeft      string
+			StatsLeftPad int
 		}{
-			Left:          "  ",
-			Right:         "  ",
-			MinGap:        1,
-			PathLeft:      "  ",
-			GitLeft:       "  ",
-			StatsLeftPad:  4,
+			Left:         "  ",
+			Right:        "  ",
+			MinGap:       1,
+			PathLeft:     "  ",
+			GitLeft:      "  ",
+			StatsLeftPad: 4,
 		},
 		Truncation: struct {
 			PathEllipsisLen int
@@ -457,8 +457,8 @@ func (fc *FooterComponent) renderModelAndStats(region console.Region, lineOffset
 	modelSection := leftPad + baseModelText + rightModelPad
 	if len(modelSection) > availableForModel {
 		minProviderLen := len(fc.lastProvider) + len(leftPad) + 1
-		if availableForModel <= minProviderLen + 5 {
-			abbrProvider := fc.truncateString(fc.lastProvider, availableForModel - len(leftPad) - 1)
+		if availableForModel <= minProviderLen+5 {
+			abbrProvider := fc.truncateString(fc.lastProvider, availableForModel-len(leftPad)-1)
 			modelSection = leftPad + abbrProvider + rightModelPad
 		} else {
 			availableForModelPart := availableForModel - len(leftPad) - len(fc.lastProvider) - len(rightModelPad) - 3 // For " ()"
@@ -620,11 +620,19 @@ func (fc *FooterComponent) UpdateStats(model, provider string, tokens int, cost 
 		// Log or handle invalid values if needed
 		return
 	}
-	
-	// Use the provider's TPS tracking instead of calculating our own
-	// The TPS is now tracked by the provider wrapper and is more accurate
-	// as it measures actual token generation time per request
-	
+
+	// Calculate tokens per second for real-time display
+	now := time.Now()
+	if !fc.lastTokenUpdateTime.IsZero() && tokens > fc.previousTokens {
+		deltaTokens := tokens - fc.previousTokens
+		deltaTime := now.Sub(fc.lastTokenUpdateTime).Seconds()
+		if deltaTime > 0.1 { // Only update if at least 100ms have passed
+			fc.tokensPerSecond = float64(deltaTokens) / deltaTime
+		}
+	}
+	fc.lastTokenUpdateTime = now
+	fc.previousTokens = tokens
+
 	fc.State().Set("footer.model", model)
 	fc.State().Set("footer.provider", provider)
 	fc.State().Set("footer.tokens", tokens)

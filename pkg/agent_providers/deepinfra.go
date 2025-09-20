@@ -268,6 +268,12 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 	var content strings.Builder
 	var toolCalls []api.ToolCall
 	var finishReason string
+	var usage struct {
+		PromptTokens     int     `json:"prompt_tokens"`
+		CompletionTokens int     `json:"completion_tokens"`
+		TotalTokens      int     `json:"total_tokens"`
+		EstimatedCost    float64 `json:"estimated_cost"`
+	}
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -293,6 +299,27 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 					fmt.Printf("Failed to parse chunk: %s\n", err)
 				}
 				continue
+			}
+
+			// Extract usage information (DeepInfra sends this in the final chunk)
+			if usageData, ok := chunk["usage"].(map[string]interface{}); ok && usageData != nil {
+				if promptTokens, ok := usageData["prompt_tokens"].(float64); ok {
+					usage.PromptTokens = int(promptTokens)
+				}
+				if completionTokens, ok := usageData["completion_tokens"].(float64); ok {
+					usage.CompletionTokens = int(completionTokens)
+				}
+				if totalTokens, ok := usageData["total_tokens"].(float64); ok {
+					usage.TotalTokens = int(totalTokens)
+				}
+				// Extract DeepInfra's estimated cost
+				if cost, ok := usageData["estimated_cost"].(float64); ok {
+					usage.EstimatedCost = cost
+				}
+				if p.debug {
+					fmt.Printf("🔍 DeepInfra Streaming Usage: prompt=%d, completion=%d, total=%d, cost=%f\n",
+						usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.EstimatedCost)
+				}
 			}
 
 			// Extract choices
@@ -367,8 +394,21 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 				FinishReason: finishReason,
 			},
 		},
-		// Note: Usage information is typically not available in streaming responses
-		// but some providers might include it in the final chunk
+		Usage: struct {
+			PromptTokens        int     `json:"prompt_tokens"`
+			CompletionTokens    int     `json:"completion_tokens"`
+			TotalTokens         int     `json:"total_tokens"`
+			EstimatedCost       float64 `json:"estimated_cost"`
+			PromptTokensDetails struct {
+				CachedTokens     int  `json:"cached_tokens"`
+				CacheWriteTokens *int `json:"cache_write_tokens"`
+			} `json:"prompt_tokens_details,omitempty"`
+		}{
+			PromptTokens:     usage.PromptTokens,
+			CompletionTokens: usage.CompletionTokens,
+			TotalTokens:      usage.TotalTokens,
+			EstimatedCost:    usage.EstimatedCost,
+		},
 	}
 
 	return response, nil
@@ -702,6 +742,25 @@ func (p *DeepInfraProvider) calculateCost(promptTokens, completionTokens int) fl
 	return inputCost + outputCost
 }
 
+// estimateInputTokens estimates the number of input tokens for streaming responses
+func (p *DeepInfraProvider) estimateInputTokens(messages []api.Message, tools []api.Tool) int {
+	// Rough estimation: 1 token ≈ 4 characters
+	inputTokens := 0
+
+	// Estimate tokens from messages
+	for _, msg := range messages {
+		inputTokens += len(msg.Content) / 4
+	}
+
+	// Estimate tokens from tools (tools descriptions can be large)
+	inputTokens += len(tools) * 200 // Rough estimate per tool
+
+	// Add some overhead for system messages and formatting
+	inputTokens += 500
+
+	return inputTokens
+}
+
 // TPS methods - DeepInfra provider doesn't track TPS internally
 func (p *DeepInfraProvider) GetLastTPS() float64 {
 	return 0.0
@@ -716,5 +775,5 @@ func (p *DeepInfraProvider) GetTPSStats() map[string]float64 {
 }
 
 func (p *DeepInfraProvider) ResetTPSStats() {
-	// No-op - this provider doesn't track TPS
+	// No-op - this provider doesn't track T极S
 }

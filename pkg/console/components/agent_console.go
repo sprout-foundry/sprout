@@ -50,6 +50,11 @@ type AgentConsole struct {
 	outputMutex   sync.Mutex
 	ctrlCCount    int
 	lastCtrlC     time.Time
+
+	// Streaming TPS tracking
+	streamingStartTime  time.Time
+	streamingTokenCount int
+	isStreaming         bool
 }
 
 // NewAgentConsole creates a new agent console
@@ -271,6 +276,8 @@ func (ac *AgentConsole) processInput(input string) error {
 	// Enable streaming with our formatter callback
 	ac.agent.EnableStreaming(func(content string) {
 		ac.streamingFormatter.Write(content)
+		// Update TPS estimation during streaming
+		ac.updateStreamingTPS(content)
 	})
 
 	// Set flush callback to force flush buffered content when needed
@@ -287,6 +294,8 @@ func (ac *AgentConsole) processInput(input string) error {
 			streamingFinalized = true
 		}
 		ac.agent.DisableStreaming()
+		// Reset streaming TPS tracking
+		ac.resetStreamingTPS()
 	}()
 
 	// Process synchronously to avoid formatting issues
@@ -586,6 +595,43 @@ Session Statistics:
   Provider: %s
   Model:    %s
 `, formatDuration(duration), ac.totalTokens, ac.totalCost, provider, model)
+}
+
+// updateStreamingTPS estimates tokens per second during streaming
+func (ac *AgentConsole) updateStreamingTPS(content string) {
+	now := time.Now()
+
+	// Initialize streaming tracking on first call
+	if !ac.isStreaming {
+		ac.isStreaming = true
+		ac.streamingStartTime = now
+		ac.streamingTokenCount = 0
+	}
+
+	// Better token estimation: ~3.3 chars per token for realistic text
+	// This accounts for spaces, punctuation, and typical word lengths
+	estimatedTokens := float64(len(content)) / 3.3
+	if estimatedTokens < 0.25 && len(content) > 0 {
+		estimatedTokens = 0.25 // Minimum fractional token for any content
+	}
+
+	// Accumulate streaming tokens
+	ac.streamingTokenCount += int(estimatedTokens)
+
+	// Update estimated total tokens for display
+	ac.totalTokens += int(estimatedTokens)
+
+	// Update footer less frequently to allow proper TPS calculation
+	elapsed := now.Sub(ac.streamingStartTime).Seconds()
+	if elapsed > 0.2 { // Only update every 200ms to allow meaningful TPS calculation
+		ac.updateFooter()
+	}
+}
+
+// resetStreamingTPS resets streaming tracking (call when streaming ends)
+func (ac *AgentConsole) resetStreamingTPS() {
+	ac.isStreaming = false
+	ac.streamingTokenCount = 0
 }
 
 func (ac *AgentConsole) setupTerminal() error {

@@ -370,3 +370,80 @@ func TestStreamingFormatter_ColorOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestStreamingFormatter_XMLToolCallFiltering(t *testing.T) {
+	mu := &sync.Mutex{}
+	sf := NewStreamingFormatter(mu)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple XML tool call",
+			input:    `<function=shell_command><parameter=command>ls -la</parameter></function>`,
+			expected: ``,
+		},
+		{
+			name:     "XML tool call with text before and after",
+			input:    `Here's the output: <function=shell_command><parameter=command>ls</parameter></function> Done!`,
+			expected: `Here's the output:  Done!`,
+		},
+		{
+			name: "multiple XML tool calls",
+			input: `<function=shell_command><parameter=command>ls</parameter></function>
+
+<function=read_file><parameter=file_path>test.txt</parameter></function>`,
+			expected: `
+
+`,
+		},
+		{
+			name:     "XML tool call with tool_call closing tag",
+			input:    `<function=shell_command><parameter=command>ls</parameter></tool_call>`,
+			expected: ``,
+		},
+		{
+			name: "mixed content with XML tool calls",
+			input: `Let me check the files:
+
+<function=shell_command>
+<parameter=command>
+ls -la
+</parameter>
+</function>
+
+Now let me read a file:
+
+<function=read_file>
+<parameter=file_path>
+README.md
+</parameter>
+</function>
+
+That's all!`,
+			expected: `Let me check the files:
+
+
+
+Now let me read a file:
+
+
+
+That's all!`,
+		},
+		{
+			name:     "regular text without tool calls",
+			input:    `This is regular text without any tool calls.`,
+			expected: `This is regular text without any tool calls.`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sf.filterXMLToolCalls(tt.input)
+			assert.Equal(t, tt.expected, result, "XML tool call filtering failed for: %s", tt.name)
+		})
+	}
+}

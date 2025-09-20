@@ -9,11 +9,12 @@ import (
 
 // ConversationHandler manages the high-level conversation flow
 type ConversationHandler struct {
-	agent             *Agent
-	apiClient         *APIClient
-	toolExecutor      *ToolExecutor
-	responseValidator *ResponseValidator
-	errorHandler      *ErrorHandler
+	agent                      *Agent
+	apiClient                  *APIClient
+	toolExecutor               *ToolExecutor
+	responseValidator          *ResponseValidator
+	errorHandler               *ErrorHandler
+	consecutiveBlankIterations int
 }
 
 // NewConversationHandler creates a new conversation handler
@@ -29,6 +30,10 @@ func NewConversationHandler(agent *Agent) *ConversationHandler {
 
 // ProcessQuery handles a user query through the complete conversation flow
 func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
+	if ch.agent.debug {
+		fmt.Printf("DEBUG: ProcessQuery called with: %s\n", userQuery)
+	}
+
 	// Reset streaming buffer for new query
 	ch.agent.streamingBuffer.Reset()
 
@@ -63,8 +68,14 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		}
 
 		// Send message to LLM
+		if ch.agent.debug {
+			fmt.Printf("DEBUG: ConversationHandler sending message (iteration %d)\n", ch.agent.currentIteration)
+		}
 		response, err := ch.sendMessage()
 		if err != nil {
+			if ch.agent.debug {
+				fmt.Printf("DEBUG: ConversationHandler got error: %v\n", err)
+			}
 			return ch.errorHandler.HandleAPIFailure(err, ch.agent.messages)
 		}
 
@@ -105,6 +116,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		Role:             "assistant",
 		Content:          choice.Message.Content,
 		ReasoningContent: choice.Message.ReasoningContent,
+		ToolCalls:        choice.Message.ToolCalls,
 	})
 
 	// Update token tracking
@@ -113,6 +125,13 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	// Execute tools if present
 	if len(choice.Message.ToolCalls) > 0 {
 		ch.agent.debugLog("🛠️ Executing %d tool calls\n", len(choice.Message.ToolCalls))
+
+		// Flush any buffered streaming content before tool execution
+		// This ensures narrative text appears before tool calls for better flow
+		if ch.agent.flushCallback != nil {
+			ch.agent.flushCallback()
+		}
+
 		ch.displayIntermediateResponse(choice.Message.Content)
 		toolResults := ch.toolExecutor.ExecuteTools(choice.Message.ToolCalls)
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
@@ -120,11 +139,56 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		return false // Continue conversation
 	}
 
+	// Check for blank iteration (no content and no tool calls)
+	isBlankIteration := ch.isBlankIteration(choice.Message.Content, choice.Message.ToolCalls)
+
+	if isBlankIteration {
+		ch.consecutiveBlankIterations++
+		ch.agent.debugLog("⚠️ Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
+
+		if ch.consecutiveBlankIterations == 1 {
+			// First blank iteration - remind the model
+			ch.agent.debugLog("🔔 Sending reminder about task completion signal\n")
+			reminderMessage := api.Message{
+				Role:    "user",
+				Content: "You provided a blank response. If you have completed the task and have no more actions to take, please respond with [[TASK_COMPLETE]] to indicate you are done. If you are not done, please continue with your next action.",
+			}
+			ch.agent.messages = append(ch.agent.messages, reminderMessage)
+			return false // Continue conversation to get a proper response
+		} else if ch.consecutiveBlankIterations >= 2 {
+			// Two consecutive blank iterations - error out
+			ch.agent.debugLog("❌ Too many consecutive blank iterations, stopping with error\n")
+			errorMessage := "Error: The agent provided two consecutive blank responses and appears to be stuck. Please try rephrasing your request or break it into smaller tasks."
+			ch.displayFinalResponse(errorMessage)
+			return true // Stop with error
+		}
+	} else {
+		// Reset blank iteration counter on any non-blank response
+		ch.consecutiveBlankIterations = 0
+	}
+
 	// Check if the response indicates completion
 	if ch.responseValidator.IsComplete(choice.Message.Content) {
-		// Remove the completion signal before displaying
-		cleanContent := strings.Replace(choice.Message.Content, "[[TASK_COMPLETE]]", "", -1)
+		// Remove all variations of the completion signal from the content
+		cleanContent := choice.Message.Content
+		completionSignals := []string{
+			"[[TASK_COMPLETE]]",
+			"[[TASKCOMPLETE]]",
+			"[[TASK COMPLETE]]",
+			"[[task_complete]]",
+			"[[taskcomplete]]",
+			"[[task complete]]",
+		}
+
+		for _, signal := range completionSignals {
+			cleanContent = strings.ReplaceAll(cleanContent, signal, "")
+		}
 		cleanContent = strings.TrimSpace(cleanContent)
+
+		// Update the last message to remove the signal
+		if len(ch.agent.messages) > 0 {
+			ch.agent.messages[len(ch.agent.messages)-1].Content = cleanContent
+		}
 
 		// Display final response
 		ch.displayFinalResponse(cleanContent)
@@ -176,14 +240,12 @@ func (ch *ConversationHandler) displayIntermediateResponse(content string) {
 	content = strings.TrimSpace(content)
 	if len(content) > 0 {
 		if ch.agent.streamingEnabled {
-			// Add newline after streaming content
-			if ch.agent.outputMutex != nil {
-				ch.agent.outputMutex.Lock()
-				fmt.Println()
-				ch.agent.outputMutex.Unlock()
-			}
+			// During streaming, content has already been displayed in real-time
+			// But we need to ensure proper spacing and formatting after tool calls
+			// Add a newline to separate from tool execution output
+			ch.agent.safePrint("\n")
 		} else {
-			// Display thinking message
+			// Display thinking message for non-streaming mode
 			ch.agent.safePrint("\r\033[K💭 %s\n", content)
 		}
 	}
@@ -230,4 +292,26 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 func (ch *ConversationHandler) processImagesInQuery(query string) (string, error) {
 	// Move image processing logic here
 	return ch.agent.processImagesInQuery(query)
+}
+
+// isBlankIteration checks if an iteration is considered blank (no meaningful content or tool calls)
+func (ch *ConversationHandler) isBlankIteration(content string, toolCalls []api.ToolCall) bool {
+	// Check if there are tool calls - if yes, not blank
+	if len(toolCalls) > 0 {
+		return false
+	}
+
+	// Check if content is empty or contains only whitespace
+	trimmedContent := strings.TrimSpace(content)
+	if len(trimmedContent) == 0 {
+		return true
+	}
+
+	// Check if content is just a very short response that doesn't seem meaningful
+	// (e.g., single character, just punctuation, etc.)
+	if len(trimmedContent) <= 3 {
+		return true
+	}
+
+	return false
 }

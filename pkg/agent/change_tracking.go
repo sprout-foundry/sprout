@@ -224,27 +224,6 @@ func (ct *ChangeTracker) getAgentModel() string {
 	return "unknown"
 }
 
-// getSummaryModel returns a fast/cheap model for generating change summaries
-func (ct *ChangeTracker) getSummaryModel() string {
-	// Use a fast, cheap model for summaries to optimize cost and speed
-	// Priority: gpt-4o-mini > mixtral-8x7b > llama-3.1-8b
-	if ct.agent != nil {
-		// Try to get a fast model from the agent's provider
-		clientType := ct.agent.GetProviderType()
-		switch clientType {
-		case api.OpenAIClientType:
-			return "gpt-5-nano" // Fast and cheap OpenAI model
-		case api.OpenRouterClientType:
-			return "mistralai/mixtral-8x7b-instruct" // Fast OpenRouter option
-		case api.DeepInfraClientType:
-			return "meta-llama/Meta-Llama-3.1-8B-Instruct" // Fast DeepInfra option
-
-		default:
-			return ct.getAgentModel() // Fallback to current model
-		}
-	}
-	return "gpt-5-nano" // Default fallback
-}
 
 // limitString truncates a string to the specified length with ellipsis
 func limitString(s string, maxLen int) string {
@@ -256,7 +235,7 @@ func limitString(s string, maxLen int) string {
 
 // Summary methods for reporting
 
-// GenerateAISummary creates an AI-generated summary of the changes using a fast model
+// GenerateAISummary creates an AI-generated summary of the changes
 func (ct *ChangeTracker) GenerateAISummary() (string, error) {
 	if len(ct.changes) == 0 {
 		return "No changes to summarize", nil
@@ -293,18 +272,7 @@ func (ct *ChangeTracker) GenerateAISummary() (string, error) {
 
 Focus on WHAT was changed and WHY (based on the instruction). Be specific about files and functionality affected.`, contextBuilder.String())
 
-	// Use a fast model for summary generation to optimize cost and speed
-	originalModel := ct.agent.GetModel()
-	summaryModel := ct.getSummaryModel()
-
-	// Temporarily switch to fast model if different
-	if summaryModel != originalModel {
-		if err := ct.agent.SetModel(summaryModel); err == nil {
-			defer ct.agent.SetModel(originalModel) // Switch back after summary
-		}
-	}
-
-	// Generate summary using the fast model
+	// Generate summary using the current model
 	response, err := ct.agent.GenerateResponse([]api.Message{
 		{Role: "user", Content: prompt},
 	})

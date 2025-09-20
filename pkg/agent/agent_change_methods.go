@@ -82,12 +82,10 @@ func (a *Agent) TrackFileWrite(filePath string, content string) error {
 	return nil
 }
 
-// TrackFileEdit is called by the EditFile tool to track file edits  
+// TrackFileEdit is called by the EditFile tool to track file edits
 func (a *Agent) TrackFileEdit(filePath string, originalContent string, newContent string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
 		return a.changeTracker.TrackFileEdit(filePath, originalContent, newContent)
 	}
 	return nil
 }
-
-// Note: GetSessionID, GetModel, and SetSessionID are already defined in other files

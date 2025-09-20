@@ -102,9 +102,9 @@ func (c *OllamaTurboClient) SendChatRequestStream(messages []Message, tools []To
 		Stream:   true,
 	}
 
-	if reasoning != "" {
-		req.Reasoning = reasoning
-	}
+	// if reasoning != "" {
+	// 	req.Reasoning = reasoning
+	// }
 
 	jsonData, err := json.Marshal(req)
 	if err != nil {

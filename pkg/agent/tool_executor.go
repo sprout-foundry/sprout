@@ -27,10 +27,15 @@ func NewToolExecutor(agent *Agent) *ToolExecutor {
 func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 	// Check for interrupt before executing
 	if te.agent.interruptRequested {
-		return []api.Message{{
-			Role:    "tool",
-			Content: "Execution interrupted by user",
-		}}
+		var results []api.Message
+		for _, tc := range toolCalls {
+			results = append(results, api.Message{
+				Role:       "tool",
+				Content:    "Execution interrupted by user",
+				ToolCallId: tc.ID,
+			})
+		}
+		return results
 	}
 
 	// Optimize parallel execution for read_file operations
@@ -54,6 +59,12 @@ func (te *ToolExecutor) canExecuteInParallel(toolCalls []api.ToolCall) bool {
 
 // executeParallel executes tools in parallel (for read_file operations)
 func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message {
+	// Flush any buffered streaming content before parallel tool execution
+	// This ensures narrative text appears before tool calls for better flow
+	if te.agent.flushCallback != nil {
+		te.agent.flushCallback()
+	}
+
 	te.agent.debugLog("🚀 Executing %d read_file operations in parallel\n", len(toolCalls))
 
 	var wg sync.WaitGroup
@@ -87,10 +98,17 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 		// Check for interrupt between tool executions
 		if te.agent.interruptRequested {
 			toolResults = append(toolResults, api.Message{
-				Role:    "tool",
-				Content: "Execution interrupted by user",
+				Role:       "tool",
+				Content:    "Execution interrupted by user",
+				ToolCallId: tc.ID,
 			})
 			break
+		}
+
+		// Flush any buffered streaming content before each tool execution
+		// This ensures narrative text appears before each tool call for better flow
+		if te.agent.flushCallback != nil {
+			te.agent.flushCallback()
 		}
 
 		// Show progress
@@ -117,8 +135,9 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
 		return api.Message{
-			Role:    "tool",
-			Content: fmt.Sprintf("Error parsing arguments: %v", err),
+			Role:       "tool",
+			Content:    fmt.Sprintf("Error parsing arguments: %v", err),
+			ToolCallId: toolCall.ID,
 		}
 	}
 
@@ -130,8 +149,9 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	// Execute with circuit breaker check
 	if te.checkCircuitBreaker(toolCall.Function.Name, args) {
 		return api.Message{
-			Role:    "tool",
-			Content: "Circuit breaker: This action has been attempted too many times with the same parameters.",
+			Role:       "tool",
+			Content:    "Circuit breaker: This action has been attempted too many times with the same parameters.",
+			ToolCallId: toolCall.ID,
 		}
 	}
 
@@ -146,8 +166,9 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	te.updateCircuitBreaker(toolCall.Function.Name, args)
 
 	return api.Message{
-		Role:    "tool",
-		Content: result,
+		Role:       "tool",
+		Content:    result,
+		ToolCallId: toolCall.ID,
 	}
 }
 
@@ -161,8 +182,9 @@ func (te *ToolExecutor) executeMCPTool(toolCall api.ToolCall, args map[string]in
 	parts := strings.SplitN(toolCall.Function.Name, ":", 2)
 	if len(parts) != 2 {
 		return api.Message{
-			Role:    "tool",
-			Content: fmt.Sprintf("Invalid MCP tool name format: %s", toolCall.Function.Name),
+			Role:       "tool",
+			Content:    fmt.Sprintf("Invalid MCP tool name format: %s", toolCall.Function.Name),
+			ToolCallId: toolCall.ID,
 		}
 	}
 
@@ -175,8 +197,9 @@ func (te *ToolExecutor) executeMCPTool(toolCall api.ToolCall, args map[string]in
 	mcpResult, err := te.agent.mcpManager.CallTool(ctx, serverName, toolName, args)
 	if err != nil {
 		return api.Message{
-			Role:    "tool",
-			Content: fmt.Sprintf("Error calling MCP tool: %v", err),
+			Role:       "tool",
+			Content:    fmt.Sprintf("Error calling MCP tool: %v", err),
+			ToolCallId: toolCall.ID,
 		}
 	}
 
@@ -194,8 +217,9 @@ func (te *ToolExecutor) executeMCPTool(toolCall api.ToolCall, args map[string]in
 	}
 
 	return api.Message{
-		Role:    "tool",
-		Content: resultContent,
+		Role:       "tool",
+		Content:    resultContent,
+		ToolCallId: toolCall.ID,
 	}
 }
 

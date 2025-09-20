@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/factory"
 )
 
 // GetModel gets the current model being used by the agent
@@ -94,7 +95,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	}
 
 	// Create a new client with the specified provider
-	newClient, err := api.NewUnifiedClientWithModel(provider, model)
+	newClient, err := factory.CreateProviderClient(provider, model)
 	if err != nil {
 		return fmt.Errorf("failed to create client for provider %s: %w", api.GetProviderName(provider), err)
 	}

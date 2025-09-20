@@ -1,20 +1,17 @@
 package api
 
 import (
-	"fmt"
 	"time"
-
-	types "github.com/alantheprice/ledit/pkg/agent_types"
 )
 
-// UnifiedProviderWrapper wraps any provider that implements types.ProviderInterface
+// UnifiedProviderWrapper wraps any provider that implements ProviderInterface
 type UnifiedProviderWrapper struct {
 	*TPSBase
-	provider types.ProviderInterface
+	provider ProviderInterface
 }
 
 // NewUnifiedProviderWrapper creates a wrapper for any provider
-func NewUnifiedProviderWrapper(provider types.ProviderInterface) *UnifiedProviderWrapper {
+func NewUnifiedProviderWrapper(provider ProviderInterface) *UnifiedProviderWrapper {
 	return &UnifiedProviderWrapper{
 		TPSBase:  NewTPSBase(),
 		provider: provider,
@@ -27,19 +24,19 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 	startTime := time.Now()
 
 	// Convert API types to shared types
-	typeMessages := make([]types.Message, len(messages))
+	typeMessages := make([]Message, len(messages))
 	for i, msg := range messages {
 		// Convert image data
-		typeImages := make([]types.ImageData, len(msg.Images))
+		typeImages := make([]ImageData, len(msg.Images))
 		for j, img := range msg.Images {
-			typeImages[j] = types.ImageData{
+			typeImages[j] = ImageData{
 				URL:    img.URL,
 				Base64: img.Base64,
 				Type:   img.Type,
 			}
 		}
 
-		typeMessages[i] = types.Message{
+		typeMessages[i] = Message{
 			Role:             msg.Role,
 			Content:          msg.Content,
 			ReasoningContent: msg.ReasoningContent,
@@ -47,9 +44,9 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 		}
 	}
 
-	typeTools := make([]types.Tool, len(tools))
+	typeTools := make([]Tool, len(tools))
 	for i, tool := range tools {
-		typeTools[i] = types.Tool{
+		typeTools[i] = Tool{
 			Type: tool.Type,
 			Function: struct {
 				Name        string      `json:"name"`
@@ -186,7 +183,7 @@ func (w *UnifiedProviderWrapper) GetModelContextLimit() (int, error) {
 	return w.provider.GetModelContextLimit()
 }
 
-func (w *UnifiedProviderWrapper) ListModels() ([]types.ModelInfo, error) {
+func (w *UnifiedProviderWrapper) ListModels() ([]ModelInfo, error) {
 	return w.provider.ListModels()
 }
 
@@ -204,19 +201,19 @@ func (w *UnifiedProviderWrapper) GetVisionModel() string {
 
 func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
 	// Convert API types to shared types
-	typeMessages := make([]types.Message, len(messages))
+	typeMessages := make([]Message, len(messages))
 	for i, msg := range messages {
 		// Convert image data
-		typeImages := make([]types.ImageData, len(msg.Images))
+		typeImages := make([]ImageData, len(msg.Images))
 		for j, img := range msg.Images {
-			typeImages[j] = types.ImageData{
+			typeImages[j] = ImageData{
 				URL:    img.URL,
 				Base64: img.Base64,
 				Type:   img.Type,
 			}
 		}
 
-		typeMessages[i] = types.Message{
+		typeMessages[i] = Message{
 			Role:             msg.Role,
 			Content:          msg.Content,
 			ReasoningContent: msg.ReasoningContent,
@@ -224,9 +221,9 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 		}
 	}
 
-	typeTools := make([]types.Tool, len(tools))
+	typeTools := make([]Tool, len(tools))
 	for i, tool := range tools {
-		typeTools[i] = types.Tool{
+		typeTools[i] = Tool{
 			Type: tool.Type,
 			Function: struct {
 				Name        string      `json:"name"`
@@ -331,19 +328,19 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 // SendChatRequestStream sends a streaming chat request (not yet implemented for unified providers)
 func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error) {
 	// Convert API types to provider types
-	providerMessages := make([]types.Message, len(messages))
+	providerMessages := make([]Message, len(messages))
 	for i, msg := range messages {
 		// Convert image data
-		providerImages := make([]types.ImageData, len(msg.Images))
+		providerImages := make([]ImageData, len(msg.Images))
 		for j, img := range msg.Images {
-			providerImages[j] = types.ImageData{
+			providerImages[j] = ImageData{
 				URL:    img.URL,
 				Base64: img.Base64,
 				Type:   img.Type,
 			}
 		}
 
-		providerMessages[i] = types.Message{
+		providerMessages[i] = Message{
 			Role:             msg.Role,
 			Content:          msg.Content,
 			ReasoningContent: msg.ReasoningContent,
@@ -351,9 +348,9 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 		}
 	}
 
-	providerTools := make([]types.Tool, len(tools))
+	providerTools := make([]Tool, len(tools))
 	for i, tool := range tools {
-		providerTools[i] = types.Tool{
+		providerTools[i] = Tool{
 			Type: tool.Type,
 			Function: struct {
 				Name        string      `json:"name"`
@@ -486,9 +483,4 @@ func (w *UnifiedProviderWrapper) ResetTPSStatistics() {
 	}
 }
 
-// Factory functions for creating providers
-// TODO: Fix import cycle - temporarily disabled
-func NewOpenRouterProvider(model string) (ClientInterface, error) {
-	// Temporarily disabled to break import cycle: agent_api -> agent_providers -> agent_api
-	return nil, fmt.Errorf("provider creation temporarily disabled to fix import cycle - model: %s", model)
-}
+// NewOpenRouterProvider is deprecated - import cycle resolved by moving to factory package

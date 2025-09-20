@@ -13,9 +13,9 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	commands "github.com/alantheprice/ledit/pkg/agent_commands"
-	"github.com/alantheprice/ledit/pkg/filesystem"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/console"
+	"github.com/alantheprice/ledit/pkg/filesystem"
 	"golang.org/x/term"
 )
 
@@ -273,6 +273,11 @@ func (ac *AgentConsole) processInput(input string) error {
 		ac.streamingFormatter.Write(content)
 	})
 
+	// Set flush callback to force flush buffered content when needed
+	ac.agent.SetFlushCallback(func() {
+		ac.streamingFormatter.ForceFlush()
+	})
+
 	// Ensure cleanup
 	streamingFinalized := false
 	defer func() {
@@ -287,6 +292,10 @@ func (ac *AgentConsole) processInput(input string) error {
 	// Process synchronously to avoid formatting issues
 	response, err := ac.agent.ProcessQueryWithContinuity(input)
 
+	// Force flush any remaining streaming content immediately after processing
+	// This ensures all narrative text is displayed before final output processing
+	ac.streamingFormatter.ForceFlush()
+
 	// Lock for output
 	ac.outputMutex.Lock()
 	defer ac.outputMutex.Unlock()
@@ -298,7 +307,8 @@ func (ac *AgentConsole) processInput(input string) error {
 	} else {
 		// Check if the response contains error indicators (from handleAPIFailure)
 		// This happens when API fails but conversation is preserved
-		if strings.Contains(response, "⚠️ **API Request Failed") ||
+		if strings.Contains(response, "⚠️ API request failed") ||
+			strings.Contains(response, "⚠️ **API Request Failed") ||
 			strings.Contains(response, "API Request Failed") ||
 			strings.Contains(response, "❌ **Model Error**") {
 			// The error message was returned as content, not an error
@@ -494,7 +504,6 @@ func (ac *AgentConsole) updateFooter() {
 	iteration := 0
 	contextTokens := 0
 	maxContextTokens := 0
-
 	if ac.agent != nil {
 		provider = ac.agent.GetProvider()
 		model = ac.agent.GetModel()
@@ -761,8 +770,15 @@ func (ac *AgentConsole) executeShellCommand(command string) (string, error) {
 func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 	// Ensure we're within the scroll region by using the terminal's Write method
 	content := fmt.Sprintf(format, args...)
-	// The terminal's Write method should respect the scroll region
-	ac.Terminal().Write([]byte(content))
+
+	// Filter out completion signals that should not be displayed
+	content = ac.filterCompletionSignals(content)
+
+	// Only write if there's content left after filtering
+	if strings.TrimSpace(content) != "" {
+		// The terminal's Write method should respect the scroll region
+		ac.Terminal().Write([]byte(content))
+	}
 }
 
 // safePrintln writes output with a newline that respects the scroll region
@@ -885,4 +901,23 @@ func (ac *AgentConsole) initializeFooterInfo() {
 			ac.footer.UpdateGitInfo("", 0, false)
 		}
 	}
+}
+
+// filterCompletionSignals removes task completion signals from content
+func (ac *AgentConsole) filterCompletionSignals(content string) string {
+	completionSignals := []string{
+		"[[TASK_COMPLETE]]",
+		"[[TASKCOMPLETE]]",
+		"[[TASK COMPLETE]]",
+		"[[task_complete]]",
+		"[[taskcomplete]]",
+		"[[task complete]]",
+	}
+
+	filtered := content
+	for _, signal := range completionSignals {
+		filtered = strings.ReplaceAll(filtered, signal, "")
+	}
+
+	return strings.TrimSpace(filtered)
 }

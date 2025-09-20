@@ -13,6 +13,8 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/factory"
+	"github.com/alantheprice/ledit/pkg/agent_providers"
 )
 
 // Global variables for vision model tracking and caching
@@ -117,7 +119,7 @@ func createVisionClient() (api.ClientInterface, error) {
 		}
 
 		// Try to create client with vision model
-		client, err := api.NewUnifiedClientWithModel(provider.clientType, visionModel)
+		client, err := factory.CreateProviderClient(provider.clientType, visionModel)
 		if err != nil {
 			continue // Try next provider
 		}
@@ -139,7 +141,7 @@ func createVisionClientWithModel(modelName string) (api.ClientInterface, error) 
 	if strings.HasPrefix(modelName, "google/") || strings.HasPrefix(modelName, "meta-llama/") {
 		// DeepInfra model
 		if apiKey := os.Getenv("DEEPINFRA_API_KEY"); apiKey != "" {
-			wrapper, err := api.NewDeepInfraClientWrapper(modelName)
+			wrapper, err := providers.NewDeepInfraProviderWithModel(modelName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create DeepInfra client: %w", err)
 			}

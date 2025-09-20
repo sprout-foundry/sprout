@@ -29,25 +29,38 @@ func (a *Agent) getModelContextLimit() int {
 
 // ToolLog logs tool execution messages that are always visible with blue formatting
 func (a *Agent) ToolLog(action, target string) {
-	const blue = "\033[34m"
+	// Use muted gray colors for tool call logging
+	const darkGray = "\033[90m"  // Bright black (darker gray) for tool call info
+	const lightGray = "\033[37m" // Light gray for the executed portion
 	const reset = "\033[0m"
-
-	// Use mutex if available for synchronized output
-	if a.outputMutex != nil {
-		a.outputMutex.Lock()
-		defer a.outputMutex.Unlock()
-	}
-
-	// Clear current line and move to start
-	fmt.Print("\r\033[K")
 
 	// Format: [4] read file filename.go
 	iterInfo := fmt.Sprintf("[%d]", a.currentIteration)
 
+	var message string
 	if target != "" {
-		fmt.Printf("%s%s %s%s %s\n", blue, iterInfo, action, reset, target)
+		// Add newline before tool call to put it on its own line
+		// Use darker gray for tool call info and lighter gray for target
+		message = fmt.Sprintf("\n%s%s %s%s %s%s%s\n", darkGray, iterInfo, action, reset, lightGray, target, reset)
 	} else {
-		fmt.Printf("%s%s %s%s\n", blue, iterInfo, action, reset)
+		// Add newline before tool call to put it on its own line
+		message = fmt.Sprintf("\n%s%s %s%s\n", darkGray, iterInfo, action, reset)
+	}
+
+	// Route through streaming callback if streaming is enabled
+	if a.streamingEnabled && a.streamingCallback != nil {
+		// Send through streaming callback to maintain proper order with narrative text
+		a.streamingCallback(message)
+	} else {
+		// Fallback to direct output for non-streaming mode
+		if a.outputMutex != nil {
+			a.outputMutex.Lock()
+			defer a.outputMutex.Unlock()
+		}
+
+		// Clear current line and move to start
+		fmt.Print("\r\033[K")
+		fmt.Print(message)
 	}
 }
 

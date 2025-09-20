@@ -11,6 +11,7 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/mcp"
 	"golang.org/x/term"
 )
@@ -54,6 +55,7 @@ type Agent struct {
 	streamingEnabled     bool            // Whether streaming is enabled
 	streamingCallback    func(string)    // Custom streaming callback
 	streamingBuffer      strings.Builder // Buffer for streaming content
+	flushCallback        func()          // Callback to flush buffered output
 
 	// Feature flags
 	falseStopDetectionEnabled bool
@@ -135,7 +137,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	}
 
 	// Create the client
-	client, err := api.NewUnifiedClientWithModel(clientType, finalModel)
+	client, err := factory.CreateProviderClient(clientType, finalModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API client: %w", err)
 	}
@@ -309,7 +311,6 @@ func (a *Agent) monitorEscKey() {
 			}
 		}
 	}
-	return
 }
 
 // EnableEscMonitoring starts monitoring for Esc key
@@ -581,7 +582,7 @@ func (a *Agent) SelectProvider() error {
 
 	// Recreate client with new provider
 	model := a.configManager.GetModelForProvider(newProvider)
-	client, err := api.NewUnifiedClientWithModel(newProvider, model)
+	client, err := factory.CreateProviderClient(newProvider, model)
 	if err != nil {
 		return fmt.Errorf("failed to create client for %s: %w", newProvider, err)
 	}
@@ -789,6 +790,12 @@ func (a *Agent) EnableStreaming(callback func(string)) {
 func (a *Agent) DisableStreaming() {
 	a.streamingEnabled = false
 	a.streamingCallback = nil
+	a.flushCallback = nil
+}
+
+// SetFlushCallback sets a callback to flush buffered output
+func (a *Agent) SetFlushCallback(callback func()) {
+	a.flushCallback = callback
 }
 
 // GetTotalTokens returns the total tokens used across all requests
@@ -803,8 +810,8 @@ func (a *Agent) GetCurrentIteration() int {
 
 // GetCurrentContextTokens returns the current context token count
 func (a *Agent) GetCurrentContextTokens() int {
-	// For now, return the last known prompt tokens
-	return a.promptTokens
+	// Return the current request context tokens, not cumulative
+	return a.currentContextTokens
 }
 
 // GetMaxContextTokens returns the maximum context tokens for the current model
@@ -813,12 +820,41 @@ func (a *Agent) GetMaxContextTokens() int {
 	return a.getModelContextLimit()
 }
 
+// GetConfigManager returns the configuration manager
+func (a *Agent) GetConfigManager() *configuration.Manager {
+	return a.configManager
+}
+
 // SetMaxIterations sets the maximum number of iterations for the agent
 func (a *Agent) SetMaxIterations(max int) {
 	a.maxIterations = max
 }
 
-// GetConfigManager returns the configuration manager
-func (a *Agent) GetConfigManager() *configuration.Manager {
-	return a.configManager
+// GetLastTPS returns the most recent TPS value from the provider
+func (a *Agent) GetLastTPS() float64 {
+	if a.client != nil {
+		return a.client.GetLastTPS()
+	}
+	return 0.0
+}
+
+// GetCurrentTPS returns the current TPS value (alias for GetLastTPS)
+func (a *Agent) GetCurrentTPS() float64 {
+	return a.GetLastTPS()
+}
+
+// GetAverageTPS returns the average TPS across all requests
+func (a *Agent) GetAverageTPS() float64 {
+	if a.client != nil {
+		return a.client.GetAverageTPS()
+	}
+	return 0.0
+}
+
+// GetTPSStats returns comprehensive TPS statistics
+func (a *Agent) GetTPSStats() map[string]float64 {
+	if a.client != nil {
+		return a.client.GetTPSStats()
+	}
+	return map[string]float64{}
 }

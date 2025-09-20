@@ -621,46 +621,9 @@ func (fc *FooterComponent) UpdateStats(model, provider string, tokens int, cost 
 		return
 	}
 	
-	// Calculate tokens per second with improved accuracy
-	now := time.Now()
-	
-	if fc.lastTokenUpdateTime.IsZero() {
-		// First token update, initialize tracking
-		fc.previousTokens = tokens
-		fc.lastTokenUpdateTime = now
-		fc.tokensPerSecond = 0.0
-	} else if tokens > fc.previousTokens {
-		// Calculate rate based on tokens generated since last update
-		duration := now.Sub(fc.lastTokenUpdateTime).Seconds()
-		
-		// Only calculate if reasonable time has passed (avoid division by zero and noise)
-		if duration >= 0.05 { // 50ms minimum for meaningful calculation
-			tokensGenerated := tokens - fc.previousTokens
-			
-			// Calculate instantaneous rate
-			instantaneousRate := float64(tokensGenerated) / duration
-			
-			// Apply exponential smoothing for more stable display
-			// Weight new measurement more heavily (0.7) vs previous value (0.3)
-			if fc.tokensPerSecond > 0 {
-				fc.tokensPerSecond = 0.7*instantaneousRate + 0.3*fc.tokensPerSecond
-			} else {
-				fc.tokensPerSecond = instantaneousRate
-			}
-			
-			fc.previousTokens = tokens
-			fc.lastTokenUpdateTime = now
-		}
-	} else if tokens < fc.previousTokens {
-		// Token count decreased (likely reset), reset tracking
-		fc.previousTokens = tokens
-		fc.lastTokenUpdateTime = now
-		fc.tokensPerSecond = 0.0
-	} else {
-		// Tokens stayed the same, update time but keep rate
-		// This prevents the rate from decaying too quickly during pauses
-		fc.lastTokenUpdateTime = now
-	}
+	// Use the provider's TPS tracking instead of calculating our own
+	// The TPS is now tracked by the provider wrapper and is more accurate
+	// as it measures actual token generation time per request
 	
 	fc.State().Set("footer.model", model)
 	fc.State().Set("footer.provider", provider)

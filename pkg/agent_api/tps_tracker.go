@@ -36,12 +36,14 @@ func (t *TPSTracker) RecordRequest(duration time.Duration, completionTokens int)
 		tps := float64(completionTokens) / durationSeconds
 
 		// Debug suspicious TPS values
-		if tps > 1000 {
+		// Note: Modern LLMs can output tool calls very quickly (5000+ TPS)
+		// Only warn for truly impossible values
+		if tps > 2000 {
 			fmt.Printf("⚠️  WARNING: Suspiciously high TPS detected!\n")
 			fmt.Printf("   Duration: %v (%.3f seconds)\n", duration, durationSeconds)
 			fmt.Printf("   Completion Tokens: %d\n", completionTokens)
 			fmt.Printf("   Calculated TPS: %.2f\n", tps)
-			fmt.Printf("   This suggests duration measurement may be incorrect\n")
+			fmt.Printf("   This may indicate cached responses or timing measurement issues\n")
 		}
 
 		// Store in history (keep last 100 requests)

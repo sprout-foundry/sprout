@@ -18,12 +18,13 @@ import (
 
 // OpenRouterProvider implements the OpenAI-compatible OpenRouter API
 type OpenRouterProvider struct {
-	httpClient   *http.Client
-	apiToken     string
-	debug        bool
-	model        string
-	models       []api.ModelInfo
-	modelsCached bool
+	httpClient      *http.Client
+	streamingClient *http.Client
+	apiToken        string
+	debug           bool
+	model           string
+	models          []api.ModelInfo
+	modelsCached    bool
 }
 
 // NewOpenRouterProvider creates a new OpenRouter provider instance
@@ -37,9 +38,12 @@ func NewOpenRouterProvider() (*OpenRouterProvider, error) {
 		httpClient: &http.Client{
 			Timeout: 300 * time.Second,
 		},
+		streamingClient: &http.Client{
+			Timeout: 900 * time.Second, // 15 minutes for streaming requests
+		},
 		apiToken: token,
 		debug:    false,
-		model:    "deepseek/deepseek-chat-v3.1:free", // Default OpenRouter model
+		model:    "openai/gpt-4o", // Default OpenRouter model (matches config.go defaults)
 	}, nil
 }
 
@@ -102,10 +106,15 @@ func (p *OpenRouterProvider) SendChatRequest(messages []api.Message, tools []api
 			}
 		} else {
 			// Regular text-only message
-			openRouterMessages[i] = map[string]interface{}{
+			message := map[string]interface{}{
 				"role":    msg.Role,
 				"content": content,
 			}
+			// Add tool_call_id for tool result messages
+			if msg.ToolCallId != "" {
+				message["tool_call_id"] = msg.ToolCallId
+			}
+			openRouterMessages[i] = message
 		}
 	}
 
@@ -162,10 +171,15 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 	// Convert our messages to OpenAI format
 	openAIMessages := make([]interface{}, len(messages))
 	for i, msg := range messages {
-		openAIMessages[i] = map[string]interface{}{
+		message := map[string]interface{}{
 			"role":    msg.Role,
 			"content": msg.Content,
 		}
+		// Add tool_call_id for tool result messages
+		if msg.ToolCallId != "" {
+			message["tool_call_id"] = msg.ToolCallId
+		}
+		openAIMessages[i] = message
 	}
 
 	reqBody := map[string]interface{}{
@@ -229,7 +243,16 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 	var content strings.Builder
 	var toolCalls []api.ToolCall
 	var finishReason string
-	var usage api.Usage
+	var usage struct {
+		PromptTokens        int     `json:"prompt_tokens"`
+		CompletionTokens    int     `json:"completion_tokens"`
+		TotalTokens         int     `json:"total_tokens"`
+		EstimatedCost       float64 `json:"estimated_cost"`
+		PromptTokensDetails struct {
+			CachedTokens     int  `json:"cached_tokens"`
+			CacheWriteTokens *int `json:"cache_write_tokens"`
+		} `json:"prompt_tokens_details,omitempty"`
+	}
 	var actualCost float64
 
 	for scanner.Scan() {
@@ -344,9 +367,9 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 			{
 				Index: 0,
 				Message: struct {
-					Role             string            `json:"role"`
-					Content          string            `json:"content"`
-					ReasoningContent string            `json:"reasoning_content,omitempty"`
+					Role             string          `json:"role"`
+					Content          string          `json:"content"`
+					ReasoningContent string          `json:"reasoning_content,omitempty"`
 					Images           []api.ImageData `json:"images,omitempty"`
 					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
 				}{
@@ -515,7 +538,7 @@ func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody
 		// Clone the request body for retry attempts
 		httpReq.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 
-		resp, err := p.httpClient.Do(httpReq)
+		resp, err := p.streamingClient.Do(httpReq)
 		if err != nil {
 			return nil, fmt.Errorf("failed to send request: %w", err)
 		}
@@ -728,4 +751,21 @@ func (p *OpenRouterProvider) calculateCost(promptTokens, completionTokens int) f
 	// This ensures we always use the actual pricing from the API
 	// rather than potentially incorrect hardcoded values
 	return 0
+}
+
+// TPS methods - OpenRouter provider doesn't track TPS internally
+func (p *OpenRouterProvider) GetLastTPS() float64 {
+	return 0.0
+}
+
+func (p *OpenRouterProvider) GetAverageTPS() float64 {
+	return 0.0
+}
+
+func (p *OpenRouterProvider) GetTPSStats() map[string]float64 {
+	return map[string]float64{}
+}
+
+func (p *OpenRouterProvider) ResetTPSStats() {
+	// No-op - this provider doesn't track TPS
 }

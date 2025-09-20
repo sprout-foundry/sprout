@@ -13,11 +13,12 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/factory"
 )
 
 // ShellCommand handles the /shell slash command
 // Usage: /shell <description-of-shell-script-to-generate>
-// This command uses the fast model to generate shell scripts from natural language descriptions
+// This command generates shell scripts from natural language descriptions
 // with full environmental context. It does not execute the script - just generates it.
 
 type ShellCommand struct{}
@@ -43,15 +44,19 @@ func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to gather environmental context: %v", err)
 	}
 
-	// Create a simple client using the unified provider system
-	cfg, err := configuration.Load()
+	// Get a unified client wrapper using the current configuration
+	configManager, err := configuration.NewManager()
 	if err != nil {
-		return fmt.Errorf("failed to load config: %v", err)
+		return fmt.Errorf("failed to initialize configuration: %v", err)
 	}
 
-	// Get a unified client wrapper using the selected provider
-	provider := api.ClientType(cfg.LastUsedProvider)
-	clientWrapper, err := api.NewUnifiedClientWithModel(provider, api.FastModel)
+	clientType, err := configManager.GetProvider()
+	if err != nil {
+		return fmt.Errorf("failed to get provider: %v", err)
+	}
+	model := configManager.GetModelForProvider(clientType)
+
+	clientWrapper, err := factory.CreateProviderClient(clientType, model)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %v", err)
 	}
@@ -93,7 +98,7 @@ Generate the command/script now:`, description, envContext)
 	}
 
 	if generatedScript == "" {
-		return fmt.Errorf("fast model did not generate a valid shell script")
+		return fmt.Errorf("model did not generate a valid shell script")
 	}
 
 	// Clean up markdown code blocks if present

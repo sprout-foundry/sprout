@@ -61,8 +61,11 @@ func (sf *StreamingFormatter) Write(content string) {
 		}
 	}
 
-	// Add content to buffer
-	sf.buffer.WriteString(content)
+	// Filter out XML-style tool calls and completion signals before adding to buffer
+	filteredContent := sf.filterXMLToolCalls(content)
+
+	// Add filtered content to buffer
+	sf.buffer.WriteString(filteredContent)
 
 	// Check if we should flush
 	shouldFlush := false
@@ -261,6 +264,22 @@ func (sf *StreamingFormatter) outputLine(line string) {
 	}
 }
 
+// ForceFlush immediately outputs any buffered content without finalizing
+func (sf *StreamingFormatter) ForceFlush() {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+
+	// Don't flush if already finalized
+	if sf.finalized {
+		return
+	}
+
+	// Flush any buffered content immediately
+	if sf.buffer.Len() > 0 {
+		sf.flush()
+	}
+}
+
 // Finalize ensures all buffered content is output
 func (sf *StreamingFormatter) Finalize() {
 	sf.mu.Lock()
@@ -392,4 +411,34 @@ func (sf *StreamingFormatter) applyInlineFormatting(text string) string {
 	})
 
 	return text
+}
+
+// filterXMLToolCalls removes XML-style tool calls and completion signals from streaming content to prevent them from being displayed
+func (sf *StreamingFormatter) filterXMLToolCalls(content string) string {
+	// Pattern to match XML-style function calls like:
+	// <function=shell_command><parameter=command>ls</parameter></function>
+	// or <function=shell_command>...<parameter=command>ls</parameter>...</tool_call>
+	funcRegex := regexp.MustCompile(`<function=\w+>[\s\S]*?(?:</function>|</tool_call>)`)
+
+	// Remove all XML tool calls from the content
+	filtered := funcRegex.ReplaceAllString(content, "")
+
+	// Also filter out task completion signals that should not be displayed
+	completionSignals := []string{
+		"[[TASK_COMPLETE]]",
+		"[[TASKCOMPLETE]]",
+		"[[TASK COMPLETE]]",
+		"[[task_complete]]",
+		"[[taskcomplete]]",
+		"[[task complete]]",
+	}
+
+	for _, signal := range completionSignals {
+		if strings.Contains(filtered, signal) {
+			// Debug: completion signal detected and filtered
+			filtered = strings.ReplaceAll(filtered, signal, "")
+		}
+	}
+
+	return filtered
 }

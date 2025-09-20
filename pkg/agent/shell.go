@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_tools"
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 // executeShellCommandWithTruncation handles shell command execution with smart truncation and deduplication
@@ -17,15 +17,6 @@ func (a *Agent) executeShellCommandWithTruncation(command string) (string, error
 		// Command was run before - mark the previous occurrence as stale in conversation
 		a.updatePreviousShellCommandMessage(prevResult)
 	}
-
-	// ALWAYS execute the command fresh to get current state</
-
-	// TODO: Implement circuit breaker for test commands
-	// if strings.Contains(command, "go test") || strings.Contains(command, "test") {
-	// 	if blocked, warning := a.CheckCircuitBreaker("test_command", command, 4); blocked {
-	// 		return warning, fmt.Errorf("circuit breaker triggered - too many failed test attempts")
-	// 	}
-	// }
 
 	a.ToolLog("executing command", command)
 	a.debugLog("Executing shell command: %s\n", command)

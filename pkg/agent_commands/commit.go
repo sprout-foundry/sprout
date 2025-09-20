@@ -9,6 +9,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/factory"
 )
 
 // CommitCommand implements the /commit slash command
@@ -398,8 +399,8 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		reader = bufio.NewReader(os.Stdin)
 	}
 
-	// Generate commit message from staged diff
-	fmt.Println("\n📝 Generating commit message with fast model...")
+	// Generate commit message
+	fmt.Println("\n📝 Generating commit message...")
 
 	// Get staged diff
 	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
@@ -412,10 +413,17 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		return nil
 	}
 
-	// Create a dedicated client for fast commit generation using the appropriate provider
-	fastClient, err := api.NewUnifiedClientWithModel(api.OpenRouterClientType, api.FastModel)
+	// Use the current agent's configured provider and model for commit generation
+	configManager := chatAgent.GetConfigManager()
+	clientType, err := configManager.GetProvider()
 	if err != nil {
-		return fmt.Errorf("failed to create fast model client: %v", err)
+		return fmt.Errorf("failed to get provider: %v", err)
+	}
+	model := configManager.GetModelForProvider(clientType)
+
+	client, err := factory.CreateProviderClient(clientType, model)
+	if err != nil {
+		return fmt.Errorf("failed to create client: %v", err)
 	}
 
 	// Get current branch name
@@ -532,7 +540,7 @@ Generate only the commit message, no additional commentary.`, string(diffOutput)
 			},
 		}
 
-		resp, err := fastClient.SendChatRequest(messages, nil, "")
+		resp, err := client.SendChatRequest(messages, nil, "")
 		if err != nil {
 			return fmt.Errorf("failed to generate commit message: %v", err)
 		}
@@ -557,7 +565,7 @@ Generate only the commit message, no additional commentary.`, string(diffOutput)
 		}
 
 		// Show token usage
-		fmt.Printf("\n💰 Tokens used: %d (fast model: %s)\n", resp.Usage.TotalTokens, api.FastModel)
+		fmt.Printf("\n💰 Tokens used: %d (model: %s/%s)\n", resp.Usage.TotalTokens, clientType, model)
 
 	} else {
 		// Multi-file mode - full format with file actions
@@ -587,7 +595,7 @@ return the short title and nothing else.`, string(diffOutput), primaryAction, av
 			},
 		}
 
-		resp, err := fastClient.SendChatRequest(messages, nil, "")
+		resp, err := client.SendChatRequest(messages, nil, "")
 		if err != nil {
 			return fmt.Errorf("failed to generate commit message: %v", err)
 		}
@@ -624,7 +632,7 @@ Generate a Git commit message summary. The message should follow these rules:
 			},
 		}
 
-		resp, err = fastClient.SendChatRequest(messages, nil, "")
+		resp, err = client.SendChatRequest(messages, nil, "")
 		if err != nil {
 			return fmt.Errorf("failed to generate description: %v", err)
 		}
@@ -643,7 +651,7 @@ Generate a Git commit message summary. The message should follow these rules:
 		commitMessage = commitTitle + "\n\n" + wrappedDesc
 
 		// Show token usage (both requests)
-		fmt.Printf("\n💰 Tokens used: ~%d (fast model: %s)\n", resp.Usage.TotalTokens*2, api.FastModel)
+		fmt.Printf("\n💰 Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
 	}
 
 	// Show commit message preview

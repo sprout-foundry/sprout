@@ -104,14 +104,20 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 			b.response.Choices = append(b.response.Choices, Choice{})
 		}
 
-		// Process content delta
-		if choice.Delta.Content != "" {
-			// Track timing for first content token
+		// Track timing for any content (including tool calls)
+		hasContent := choice.Delta.Content != "" ||
+			choice.Delta.ReasoningContent != "" ||
+			len(choice.Delta.ToolCalls) > 0
+
+		if hasContent {
 			if b.firstTokenTime.IsZero() {
 				b.firstTokenTime = time.Now()
 			}
 			b.lastTokenTime = time.Now()
+		}
 
+		// Process content delta
+		if choice.Delta.Content != "" {
 			b.content.WriteString(choice.Delta.Content)
 			// Call stream callback for UI updates
 			if b.streamCallback != nil {
@@ -178,8 +184,18 @@ func (b *StreamingResponseBuilder) GetResponse() *ChatResponse {
 	// Finalize the response
 	if len(b.response.Choices) > 0 {
 		choice := &b.response.Choices[0]
-		choice.Message.Content = b.content.String()
-		choice.Message.ReasoningContent = b.reasoningContent.String()
+		content := b.content.String()
+		reasoningContent := b.reasoningContent.String()
+
+		// Handle case where reasoning models only provide reasoning_content
+		// Move reasoning_content to content field to avoid empty content (causes 502 errors)
+		if content == "" && reasoningContent != "" {
+			choice.Message.Content = reasoningContent
+			choice.Message.ReasoningContent = reasoningContent
+		} else {
+			choice.Message.Content = content
+			choice.Message.ReasoningContent = reasoningContent
+		}
 		choice.FinishReason = b.finishReason
 
 		// Convert tool calls map to slice

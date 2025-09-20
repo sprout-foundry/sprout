@@ -319,7 +319,7 @@ func (c *OpenAIClient) GetModelContextLimit() (int, error) {
 	model := c.model
 
 	// Try to get context length from model info API first
-	models, err := getOpenAIModels()
+	models, err := GetModelsForProvider(OpenAIClientType)
 	if err == nil {
 		for _, modelInfo := range models {
 			if modelInfo.ID == model && modelInfo.ContextLength > 0 {

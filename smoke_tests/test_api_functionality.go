@@ -5,6 +5,7 @@ import (
 	"os"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/factory"
 )
 
 func main() {
@@ -23,7 +24,7 @@ func main() {
 
 	for _, provider := range providers {
 		if os.Getenv(string(provider)+"_API_KEY") != "" {
-			client, err := api.CreateProviderClient(provider, "test-model")
+			client, err := factory.CreateProviderClient(provider, "test-model")
 			if err != nil {
 				fmt.Printf("\n   ERROR creating %s client: %v", provider, err)
 				factoryWorking = false
@@ -130,7 +131,7 @@ func main() {
 	if os.Getenv("OPENROUTER_API_KEY") != "" {
 		fmt.Print("5. Testing OpenRouter provider creation... ")
 
-		_, err := api.CreateProviderClient(api.OpenRouterClientType, "meta-llama/llama-3.3-70b-instruct:free")
+		_, err := factory.CreateProviderClient(api.OpenRouterClientType, "meta-llama/llama-3.3-70b-instruct:free")
 		if err != nil {
 			fmt.Printf("FAILED - %v\n", err)
 			failed++
@@ -146,7 +147,7 @@ func main() {
 	if os.Getenv("OPENAI_API_KEY") != "" {
 		fmt.Print("6. Testing OpenAI streaming token tracking... ")
 
-		client, err := api.CreateProviderClient(api.OpenAIClientType, "gpt-4o-mini")
+		client, err := factory.CreateProviderClient(api.OpenAIClientType, "gpt-4o-mini")
 		if err != nil {
 			fmt.Printf("FAILED - Could not create client: %v\n", err)
 			failed++

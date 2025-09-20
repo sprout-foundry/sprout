@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
 )
 
 // ProviderAdapter adapts the existing ClientInterface to the new Provider interface
@@ -211,12 +212,4 @@ func CreateProviderFromClient(clientType ClientType, client ClientInterface) Pro
 	return NewProviderAdapter(clientType, client)
 }
 
-// GetProviderFromExisting gets a Provider using the existing system
-func GetProviderFromExisting(clientType ClientType, model string) (Provider, error) {
-	client, err := NewUnifiedClientWithModel(clientType, model)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
-	}
-
-	return CreateProviderFromClient(clientType, client), nil
-}
+// GetProviderFromExisting is deprecated - use agent.CreateProviderClient directly

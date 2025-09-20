@@ -424,3 +424,45 @@ func BenchmarkStreamingResponseBuilder(b *testing.B) {
 		builder.GetResponse()
 	}
 }
+
+func TestStreamingResponseBuilder_EmptyContentHandling(t *testing.T) {
+	builder := NewStreamingResponseBuilder(nil)
+
+	// Test case: reasoning-only response (empty content, non-empty reasoning_content)
+	chunk := &StreamingChatResponse{
+		Choices: []StreamingChoice{
+			{
+				Index: 0,
+				Delta: StreamingDelta{
+					ReasoningContent: "The user is asking about...",
+				},
+			},
+		},
+	}
+
+	// Process the chunk
+	builder.ProcessChunk(chunk)
+
+	// Finalize the response
+	response := builder.GetResponse()
+
+	// Verify the response
+	if len(response.Choices) == 0 {
+		t.Fatal("Expected at least one choice in response")
+	}
+
+	choice := response.Choices[0]
+
+	// Content should be populated with reasoning content to avoid empty content field
+	if choice.Message.Content == "" {
+		t.Error("Expected content to be populated from reasoning_content, but it was empty")
+	}
+
+	if choice.Message.Content != "The user is asking about..." {
+		t.Errorf("Expected content to be 'The user is asking about...', got: %s", choice.Message.Content)
+	}
+
+	if choice.Message.ReasoningContent != "The user is asking about..." {
+		t.Errorf("Expected reasoning_content to be preserved, got: %s", choice.Message.ReasoningContent)
+	}
+}

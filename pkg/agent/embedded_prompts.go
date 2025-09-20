@@ -12,6 +12,15 @@ import (
 //go:embed prompts/system_prompt.md
 var systemPromptContent string
 
+// //go:embed prompts/project_goals_prompt.md
+// var projectGoalsPromptContent string
+
+//go:embed prompts/project_insights_system.md
+var projectInsightsPromptContent string
+
+//go:embed prompts/code_review_prompt.md
+var codeReviewPromptContent string
+
 // getEmbeddedSystemPrompt returns the embedded system prompt
 func getEmbeddedSystemPrompt() string {
 	// Extract the prompt content from the markdown

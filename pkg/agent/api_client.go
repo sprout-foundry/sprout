@@ -39,6 +39,9 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 	ac.agent.streamingBuffer.Reset()
 
 	for retry := 0; retry <= ac.maxRetries; retry++ {
+		if ac.agent.debug {
+			fmt.Printf("DEBUG: APIClient attempt %d/%d\n", retry, ac.maxRetries)
+		}
 
 		// Send request
 		resp, err = ac.sendRequest(messages, tools, reasoning)
@@ -46,9 +49,20 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 			break // Success
 		}
 
+		if ac.agent.debug {
+			fmt.Printf("DEBUG: APIClient error on attempt %d: %v\n", retry, err)
+		}
+
 		// Handle error with retry logic
 		if !ac.shouldRetry(err, retry) {
+			if ac.agent.debug {
+				fmt.Printf("DEBUG: APIClient not retrying error: %v\n", err)
+			}
 			return nil, err
+		}
+
+		if ac.agent.debug {
+			fmt.Printf("DEBUG: APIClient retrying due to: %v\n", err)
 		}
 
 		// Calculate backoff delay
@@ -62,6 +76,9 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 
 // sendRequest sends a single request to the LLM
 func (ac *APIClient) sendRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+	// Estimate and store the current request's token count before sending
+	ac.agent.currentContextTokens = ac.estimateRequestTokens(messages, tools)
+
 	if ac.agent.streamingEnabled {
 		return ac.sendStreamingRequest(messages, tools, reasoning)
 	}
@@ -119,11 +136,23 @@ func (ac *APIClient) shouldRetry(err error, attempt int) bool {
 
 	// Check for rate limits
 	if ac.isRateLimit(errStr) {
+		if ac.agent.debug {
+			fmt.Printf("DEBUG: shouldRetry - rate limit detected: %v\n", err)
+		}
 		return ac.handleRateLimit(err, attempt)
 	}
 
 	// Check other retryable errors
-	return ac.isRetryableError(errStr) && attempt < ac.maxRetries
+	isRetryable := ac.isRetryableError(errStr)
+	withinMaxRetries := attempt < ac.maxRetries
+	result := isRetryable && withinMaxRetries
+
+	if ac.agent.debug {
+		fmt.Printf("DEBUG: shouldRetry - error: %v, isRetryable: %v, attempt: %d/%d, result: %v\n",
+			err, isRetryable, attempt, ac.maxRetries, result)
+	}
+
+	return result
 }
 
 // isRateLimit checks if error is a rate limit
@@ -161,6 +190,11 @@ func (ac *APIClient) handleRateLimit(err error, attempt int) bool {
 
 // isRetryableError checks if an error should be retried
 func (ac *APIClient) isRetryableError(errStr string) bool {
+	// Never retry 502 errors - these are server-side issues
+	if strings.Contains(errStr, "502") || strings.Contains(errStr, "upstream error") {
+		return false
+	}
+
 	return strings.Contains(errStr, "stream error") ||
 		strings.Contains(errStr, "INTERNAL_ERROR") ||
 		strings.Contains(errStr, "connection reset") ||
@@ -190,4 +224,32 @@ func (ac *APIClient) showTokenTrackingMessage() {
 	} else {
 		fmt.Print(message)
 	}
+}
+
+// estimateRequestTokens estimates the token count for the current request
+func (ac *APIClient) estimateRequestTokens(messages []api.Message, tools []api.Tool) int {
+	tokenEstimate := 0
+
+	// Estimate tokens for messages (rough approximation: 1 token ≈ 4 characters)
+	for _, msg := range messages {
+		tokenEstimate += len(msg.Content) / 4
+		if msg.ReasoningContent != "" {
+			tokenEstimate += len(msg.ReasoningContent) / 4
+		}
+	}
+
+	// Estimate tokens for tools (JSON serialization overhead + descriptions)
+	for _, tool := range tools {
+		// Tool name and description
+		tokenEstimate += len(tool.Function.Name) / 4
+		tokenEstimate += len(tool.Function.Description) / 4
+
+		// Parameters are typically JSON schema - estimate ~200 tokens per tool
+		tokenEstimate += 200
+	}
+
+	// Add some overhead for API formatting
+	tokenEstimate += 100
+
+	return tokenEstimate
 }

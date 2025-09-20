@@ -319,12 +319,20 @@ func (a *Agent) finalizeConversation() (string, error) {
 
 // safePrint safely prints output with mutex protection
 func (a *Agent) safePrint(format string, args ...interface{}) {
-	if a.outputMutex != nil {
-		a.outputMutex.Lock()
-		fmt.Printf(format, args...)
-		a.outputMutex.Unlock()
-	} else {
-		fmt.Printf(format, args...)
+	content := fmt.Sprintf(format, args...)
+
+	// Filter out completion signals that should not be displayed
+	content = a.filterCompletionSignals(content)
+
+	// Only print if there's content left after filtering
+	if strings.TrimSpace(content) != "" {
+		if a.outputMutex != nil {
+			a.outputMutex.Lock()
+			fmt.Print(content)
+			a.outputMutex.Unlock()
+		} else {
+			fmt.Print(content)
+		}
 	}
 }
 
@@ -344,4 +352,23 @@ func (a *Agent) logTPSInfo() {
 			}
 		}
 	}
+}
+
+// filterCompletionSignals removes task completion signals from content
+func (a *Agent) filterCompletionSignals(content string) string {
+	completionSignals := []string{
+		"[[TASK_COMPLETE]]",
+		"[[TASKCOMPLETE]]",
+		"[[TASK COMPLETE]]",
+		"[[task_complete]]",
+		"[[taskcomplete]]",
+		"[[task complete]]",
+	}
+
+	filtered := content
+	for _, signal := range completionSignals {
+		filtered = strings.ReplaceAll(filtered, signal, "")
+	}
+
+	return strings.TrimSpace(filtered)
 }

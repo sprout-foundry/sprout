@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	types "github.com/alantheprice/ledit/pkg/agent_types"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 func TestListModelsParsing(t *testing.T) {
@@ -70,7 +70,7 @@ func TestListModelsParsing(t *testing.T) {
 func TestGetModelContextLimitFallback(t *testing.T) {
 	p := &OpenRouterProvider{
 		model:        "unknown-gpt-3.5",
-		models:       []types.ModelInfo{}, // Empty cache
+		models:       []api.ModelInfo{}, // Empty cache
 		modelsCached: true,
 	}
 

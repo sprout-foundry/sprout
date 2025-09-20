@@ -621,3 +621,59 @@ func (c *OpenAIClient) SendChatRequestStream(messages []Message, tools []Tool, r
 
 	return response, nil
 }
+
+// ListModels returns available OpenAI models
+func (c *OpenAIClient) ListModels() ([]ModelInfo, error) {
+	// For OpenAI, we return a static list of commonly used models
+	// since OpenAI's /models endpoint doesn't include pricing information
+	return []ModelInfo{
+		{
+			ID:            "gpt-4o-mini",
+			Name:          "GPT-4o Mini",
+			Provider:      "openai",
+			ContextLength: 128000,
+			InputCost:     0.15, // $0.15 per 1M tokens
+			OutputCost:    0.6,  // $0.60 per 1M tokens
+		},
+		{
+			ID:            "gpt-4o",
+			Name:          "GPT-4o",
+			Provider:      "openai",
+			ContextLength: 128000,
+			InputCost:     2.5,  // $2.50 per 1M tokens
+			OutputCost:    10.0, // $10.00 per 1M tokens
+		},
+		{
+			ID:            "gpt-5-mini",
+			Name:          "GPT-5 Mini",
+			Provider:      "openai",
+			ContextLength: 200000,
+			InputCost:     0.25, // $0.25 per 1M tokens
+			OutputCost:    2.0,  // $2.00 per 1M tokens
+		},
+		{
+			ID:            "gpt-5",
+			Name:          "GPT-5",
+			Provider:      "openai",
+			ContextLength: 200000,
+			InputCost:     1.25, // $1.25 per 1M tokens
+			OutputCost:    10.0, // $10.00 per 1M tokens
+		},
+		{
+			ID:            "o1-mini",
+			Name:          "O1 Mini",
+			Provider:      "openai",
+			ContextLength: 128000,
+			InputCost:     0.55, // $0.55 per 1M tokens
+			OutputCost:    2.20, // $2.20 per 1M tokens
+		},
+		{
+			ID:            "o1",
+			Name:          "O1",
+			Provider:      "openai",
+			ContextLength: 128000,
+			InputCost:     1.0, // $1.00 per 1M tokens
+			OutputCost:    4.0, // $4.00 per 1M tokens
+		},
+	}, nil
+}

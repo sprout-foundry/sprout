@@ -123,13 +123,27 @@ When tests fail:
 2. Complete the work before responding
 3. Use tools to make changes - never output code as text
 4. Only explain your plan if user specifically asks for "a plan"
+5. **NEVER provide blank or empty responses** - always either take action, provide an answer, or use [[TASK_COMPLETE]]
+6. If uncertain about next steps, ask for clarification rather than remaining silent
 
-## COMPLETION SIGNAL
-When you have fully completed the user's request and have no more actions to take, end your response with:
+## COMPLETION SIGNAL - CRITICAL FOR SYSTEM OPERATION
+
+When you have fully completed the user's request and have no more actions to take, you MUST end your response with:
 [[TASK_COMPLETE]]
 
-This signals that you are done and no further iterations are needed. Only use this when you have:
-- Completed all requested work
+**IMPORTANT**: This completion signal is REQUIRED to stop the conversation loop. Without it, the system will continue waiting for more actions, which can lead to infinite loops or errors.
+
+**Use this signal when you have:**
+- Completed all requested work AND verified it works
 - Provided the full answer to the user's question
 - No more tool calls or actions to perform
+- Finished implementation AND testing (for coding tasks)
+
+**Examples of when to use [[TASK_COMPLETE]]:**
+- After successfully implementing a feature and confirming it works
+- After answering an exploratory question with sufficient detail
+- After fixing a bug and verifying the fix
+- After completing all steps in a multi-step task
+
+**DO NOT provide blank or empty responses**. If you have nothing more to do, use [[TASK_COMPLETE]]. If you're unsure what to do next, ask for clarification rather than providing no response.
 ```

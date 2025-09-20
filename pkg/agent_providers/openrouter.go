@@ -350,8 +350,32 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 	if actualCost > 0 {
 		usage.EstimatedCost = actualCost
 	} else if !strings.Contains(p.model, ":free") && (usage.PromptTokens > 0 || usage.CompletionTokens > 0) {
-		// Calculate cost if not provided and not a free model
-		usage.EstimatedCost = p.calculateCost(usage.PromptTokens, usage.CompletionTokens)
+		// Calculate cost based on the correct pricing model for OpenRouter - use the existing pricing system
+		// First, try to get model information from cached models if available
+		var inputCost, outputCost float64
+
+		// Check if we already have pricing information cached
+		if p.modelsCached {
+			for _, m := range p.models {
+				if m.ID == p.model {
+					inputCost = m.InputCost
+					outputCost = m.OutputCost
+					break
+				}
+			}
+		}
+
+		// If we don't have cached model info, fallback to calculate cost
+		if inputCost == 0 && outputCost == 0 {
+			// Only calculate if we have the model info but it's missing pricing
+			// This is a fallback to avoid breaking existing functionality
+			usage.EstimatedCost = p.calculateCost(usage.PromptTokens, usage.CompletionTokens)
+		} else if inputCost > 0 || outputCost > 0 {
+			// Calculate using the actual model pricing
+			inputCost = inputCost * float64(usage.PromptTokens) / 1000000.0
+			outputCost = outputCost * float64(usage.CompletionTokens) / 1000000.0
+			usage.EstimatedCost = inputCost + outputCost
+		}
 	}
 
 	// Log usage information for debugging
@@ -525,6 +549,10 @@ func (p *OpenRouterProvider) ListModels() ([]api.ModelInfo, error) {
 
 		models[i] = modelInfo
 	}
+
+	// Cache the models for future use
+	p.models = models
+	p.modelsCached = true
 
 	return models, nil
 }

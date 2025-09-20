@@ -23,11 +23,20 @@ func (rv *ResponseValidator) IsComplete(content string) bool {
 		return false
 	}
 
-	// Check for the explicit completion signal
-	completionSignal := "[[TASK_COMPLETE]]"
-	if strings.Contains(content, completionSignal) {
-		rv.agent.debugLog("✅ Found completion signal: %s\n", completionSignal)
-		return true
+	// Check for various forms of the completion signal
+	// LLMs might use slightly different formats
+	completionSignals := []string{
+		"[[TASK_COMPLETE]]",
+		"[[TASKCOMPLETE]]",
+		"[[TASK COMPLETE]]",
+	}
+
+	contentUpper := strings.ToUpper(content)
+	for _, signal := range completionSignals {
+		if strings.Contains(contentUpper, signal) {
+			rv.agent.debugLog("✅ Found completion signal: %s\n", signal)
+			return true
+		}
 	}
 
 	return false

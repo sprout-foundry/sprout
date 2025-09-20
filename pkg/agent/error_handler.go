@@ -48,7 +48,11 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 
 // buildInteractiveErrorResponse builds a user-friendly error response
 func (eh *ErrorHandler) buildInteractiveErrorResponse(apiErr error, toolsExecuted int) string {
-	response := "\n🚨 **API Request Failed - Conversation Preserved**\n\n"
+	// Include the debug message that's currently only in logs
+	response := fmt.Sprintf("⚠️ API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n\n",
+		toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens))
+
+	response += "🚨 **API Request Failed - Conversation Preserved**\n\n"
 
 	// Classify error type
 	errorMsg := apiErr.Error()

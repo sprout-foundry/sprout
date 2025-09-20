@@ -18,12 +18,13 @@ import (
 
 // DeepInfraProvider implements the OpenAI-compatible DeepInfra API
 type DeepInfraProvider struct {
-	httpClient   *http.Client
-	apiToken     string
-	debug        bool
-	model        string
-	models       []api.ModelInfo
-	modelsCached bool
+	httpClient      *http.Client
+	streamingClient *http.Client
+	apiToken        string
+	debug           bool
+	model           string
+	models          []api.ModelInfo
+	modelsCached    bool
 }
 
 // NewDeepInfraProvider creates a new DeepInfra provider instance
@@ -39,9 +40,12 @@ func NewDeepInfraProvider() (*DeepInfraProvider, error) {
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		streamingClient: &http.Client{
+			Timeout: 900 * time.Second, // 15 minutes for streaming requests
+		},
 		apiToken: token,
 		debug:    false,
-		model:    "deepseek-ai/DeepSeek-V3.1", // Default DeepInfra model
+		model:    "meta-llama/Llama-3.3-70B-Instruct", // Default DeepInfra model (matches config.go defaults)
 	}, nil
 }
 
@@ -58,8 +62,22 @@ func NewDeepInfraProviderWithModel(model string) (*DeepInfraProvider, error) {
 // SendChatRequest sends a chat completion request to DeepInfra
 func (p *DeepInfraProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	// Convert messages to OpenAI-compatible format
-	deepinfraMessages := make([]map[string]interface{}, len(messages))
-	for i, msg := range messages {
+	deepinfraMessages := make([]map[string]interface{}, 0, len(messages))
+	for _, msg := range messages {
+		// Handle tool messages - DeepInfra doesn't support "tool" role
+		if msg.Role == "tool" {
+			// Format tool response as a user message with clear labeling
+			formattedContent := fmt.Sprintf("Tool Response:\n%s", msg.Content)
+			if p.debug {
+				fmt.Printf("🔍 DeepInfra: Converting tool message to user message (non-streaming)\n")
+			}
+			deepinfraMessages = append(deepinfraMessages, map[string]interface{}{
+				"role":    "user",
+				"content": formattedContent,
+			})
+			continue
+		}
+
 		// Start with text content
 		content := msg.Content
 
@@ -98,16 +116,16 @@ func (p *DeepInfraProvider) SendChatRequest(messages []api.Message, tools []api.
 				contentArray = append(contentArray, imageContent)
 			}
 
-			deepinfraMessages[i] = map[string]interface{}{
+			deepinfraMessages = append(deepinfraMessages, map[string]interface{}{
 				"role":    msg.Role,
 				"content": contentArray,
-			}
+			})
 		} else {
 			// Regular text-only message
-			deepinfraMessages[i] = map[string]interface{}{
+			deepinfraMessages = append(deepinfraMessages, map[string]interface{}{
 				"role":    msg.Role,
 				"content": content,
-			}
+			})
 		}
 	}
 
@@ -158,22 +176,40 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 	url := "https://api.deepinfra.com/v1/openai/chat/completions"
 
 	// Convert our messages to OpenAI format
-	openAIMessages := make([]interface{}, len(messages))
-	for i, msg := range messages {
-		openAIMessages[i] = map[string]interface{}{
-			"role":    msg.Role,
-			"content": msg.Content,
+	openAIMessages := make([]interface{}, 0, len(messages))
+	for _, msg := range messages {
+		// DeepInfra doesn't support "tool" role - convert to user message
+		if msg.Role == "tool" {
+			// Format tool response as a user message with clear labeling
+			formattedContent := fmt.Sprintf("Tool Response:\n%s", msg.Content)
+			if p.debug {
+				fmt.Printf("🔍 DeepInfra: Converting tool message to user message\n")
+			}
+			openAIMessages = append(openAIMessages, map[string]interface{}{
+				"role":    "user",
+				"content": formattedContent,
+			})
+		} else {
+			openAIMessages = append(openAIMessages, map[string]interface{}{
+				"role":    msg.Role,
+				"content": msg.Content,
+			})
 		}
 	}
+
+	// Calculate appropriate max_tokens
+	maxTokens := p.calculateMaxTokens(messages, tools)
 
 	reqBody := map[string]interface{}{
 		"model":       p.model,
 		"messages":    openAIMessages,
+		"max_tokens":  maxTokens,
 		"temperature": 0.7,
 		"stream":      true, // Enable streaming
 	}
 
 	// Add tools if present
+	// NOTE: Some DeepInfra models may not support tools in streaming mode
 	if len(tools) > 0 {
 		openAITools := make([]map[string]interface{}, len(tools))
 		for i, tool := range tools {
@@ -188,6 +224,10 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 		}
 		reqBody["tools"] = openAITools
 		reqBody["tool_choice"] = "auto"
+
+		if p.debug {
+			fmt.Printf("🔍 DeepInfra: Sending %d tools with streaming request\n", len(tools))
+		}
 	}
 
 	reqBodyBytes, err := json.Marshal(reqBody)
@@ -209,7 +249,7 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 		fmt.Printf("🔍 DeepInfra Streaming Request Body: %s\n", string(reqBodyBytes))
 	}
 
-	resp, err := p.httpClient.Do(httpReq)
+	resp, err := p.streamingClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("API request failed: %w", err)
 	}
@@ -217,6 +257,9 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if p.debug {
+			fmt.Printf("🔍 DeepInfra Error Response (status %d): %s\n", resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("DeepInfra API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -311,9 +354,9 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 			{
 				Index: 0,
 				Message: struct {
-					Role             string            `json:"role"`
-					Content          string            `json:"content"`
-					ReasoningContent string            `json:"reasoning_content,omitempty"`
+					Role             string          `json:"role"`
+					Content          string          `json:"content"`
+					ReasoningContent string          `json:"reasoning_content,omitempty"`
 					Images           []api.ImageData `json:"images,omitempty"`
 					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
 				}{
@@ -398,6 +441,9 @@ func (p *DeepInfraProvider) ListModels() ([]api.ModelInfo, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if p.debug {
+			fmt.Printf("🔍 DeepInfra Error Response (status %d): %s\n", resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("DeepInfra API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -654,4 +700,21 @@ func (p *DeepInfraProvider) calculateCost(promptTokens, completionTokens int) fl
 	inputCost := float64(promptTokens) * inputCostPerMillion / 1000000.0
 	outputCost := float64(completionTokens) * outputCostPerMillion / 1000000.0
 	return inputCost + outputCost
+}
+
+// TPS methods - DeepInfra provider doesn't track TPS internally
+func (p *DeepInfraProvider) GetLastTPS() float64 {
+	return 0.0
+}
+
+func (p *DeepInfraProvider) GetAverageTPS() float64 {
+	return 0.0
+}
+
+func (p *DeepInfraProvider) GetTPSStats() map[string]float64 {
+	return map[string]float64{}
+}
+
+func (p *DeepInfraProvider) ResetTPSStats() {
+	// No-op - this provider doesn't track TPS
 }

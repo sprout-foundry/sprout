@@ -30,6 +30,14 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 	eh.agent.debugLog("⚠️ API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n",
 		toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens))
 
+	// Check if this is a rate limit error - these should NEVER be shown to the model
+	errorMsg := apiErr.Error()
+	if eh.isRateLimitError(errorMsg) {
+		// Rate limits are infrastructure issues - return as error, not content
+		// This prevents the model from seeing rate limit messages
+		return "", fmt.Errorf("rate limit detected - retrying automatically")
+	}
+
 	// In non-interactive mode, fail fast
 	if !eh.agent.IsInteractiveMode() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		errorMsg := fmt.Sprintf("API request failed after %d tools executed: %v", toolsExecuted, apiErr)
@@ -81,10 +89,12 @@ func (eh *ErrorHandler) classifyError(errorMsg string) string {
 		return "The API request timed out, likely due to high server load or a complex request.\n\n"
 	}
 
-	if strings.Contains(errorMsg, "rate limit") || strings.Contains(errorMsg, "usage limit") || strings.Contains(errorMsg, "429") {
-		// Log rate limit details
+	// Rate limit errors should never reach this function anymore
+	// They are handled in HandleAPIFailure before getting here
+	// But if one slips through, just return a generic message
+	if eh.isRateLimitError(errorMsg) {
 		eh.logRateLimit(errorMsg)
-		return "Hit API rate limits. Please wait a moment before continuing.\n\n"
+		return "Temporary API issue encountered.\n\n"
 	}
 
 	if strings.Contains(strings.ToLower(errorMsg), "model") &&
@@ -125,6 +135,17 @@ func (eh *ErrorHandler) formatTokenCount(tokens int) string {
 		return fmt.Sprintf("%dk", tokens/1000)
 	}
 	return fmt.Sprintf("%d", tokens)
+}
+
+// isRateLimitError checks if an error is a rate limit (same logic as other components)
+func (eh *ErrorHandler) isRateLimitError(errStr string) bool {
+	lowerStr := strings.ToLower(errStr)
+	// More precise detection to avoid false positives
+	return (strings.Contains(errStr, "429") && (strings.Contains(lowerStr, "too many requests") || strings.Contains(lowerStr, "rate"))) ||
+		(strings.Contains(lowerStr, "rate limit") && !strings.Contains(lowerStr, "not due to rate limit")) ||
+		strings.Contains(lowerStr, "requests per minute") ||
+		strings.Contains(lowerStr, "rpm exceeded") ||
+		strings.Contains(lowerStr, "rate exceeded")
 }
 
 // logRateLimit logs rate limit information

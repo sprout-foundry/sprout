@@ -98,11 +98,15 @@ func (ms *MessageSender) shouldRetry(err error, attempt int) bool {
 	return isRetryable && attempt < 3
 }
 
-// isRateLimit checks if error is a rate limit
+// isRateLimit checks if error is a real rate limit (more precise detection)
 func (ms *MessageSender) isRateLimit(errStr string) bool {
-	return strings.Contains(errStr, "429") ||
-		strings.Contains(errStr, "rate limit") ||
-		strings.Contains(errStr, "usage limit")
+	lowerStr := strings.ToLower(errStr)
+	// More precise detection to avoid false positives
+	return (strings.Contains(errStr, "429") && (strings.Contains(lowerStr, "too many requests") || strings.Contains(lowerStr, "rate"))) ||
+		(strings.Contains(lowerStr, "rate limit") && !strings.Contains(lowerStr, "not due to rate limit")) ||
+		strings.Contains(lowerStr, "requests per minute") ||
+		strings.Contains(lowerStr, "rpm exceeded") ||
+		strings.Contains(lowerStr, "rate exceeded")
 }
 
 // calculateBackoff calculates backoff delay for retries

@@ -437,65 +437,64 @@ func (fc *FooterComponent) renderModelAndStats(region console.Region, lineOffset
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
 	fc.Terminal().ClearLine()
 
+	// Define edge padding widths
+	leftEdgePadding := len(fc.config.Paddings.Left)   // Usually 2 spaces
+	rightEdgePadding := len(fc.config.Paddings.Right) // Usually 2 spaces
+
+	// Get stats content
 	statsSection, statsLen := fc.getStatsSection(region)
-	availableForModel := region.Width - statsLen - fc.config.Paddings.MinGap
 
-	leftPad := fc.config.Paddings.Left
-	rightModelPad := " " // Note: This is hardcoded as per original, can be config if needed
+	// Calculate available space for model section
+	availableForModel := region.Width - leftEdgePadding - rightEdgePadding - statsLen - fc.config.Paddings.MinGap
 
+	// Build model section
 	modelName := fc.extractModelName(fc.lastModel)
 	baseModelText := fmt.Sprintf("%s (%s)", fc.lastProvider, modelName)
 
-	modelSection := leftPad + baseModelText + rightModelPad
-	if len(modelSection) > availableForModel {
-		minProviderLen := len(fc.lastProvider) + len(leftPad) + 1
-		if availableForModel <= minProviderLen+5 {
-			abbrProvider := fc.truncateString(fc.lastProvider, availableForModel-len(leftPad)-1)
-			modelSection = leftPad + abbrProvider + rightModelPad
-		} else {
-			availableForModelPart := availableForModel - len(leftPad) - len(fc.lastProvider) - len(rightModelPad) - 3 // For " ()"
-			if availableForModelPart > 3 {
-				truncModel := fc.truncateString(modelName, availableForModelPart)
-				modelText := fmt.Sprintf("%s (%s)", fc.lastProvider, truncModel)
-				modelSection = leftPad + modelText + rightModelPad
+	// Adjust model content to fit available space
+	modelContent := baseModelText
+	if len(modelContent) > availableForModel {
+		// Truncate model section to fit
+		if availableForModel > len(fc.lastProvider)+5 {
+			availableForModelName := availableForModel - len(fc.lastProvider) - 3 // For " ()"
+			if availableForModelName > 3 {
+				truncModel := fc.truncateString(modelName, availableForModelName)
+				modelContent = fmt.Sprintf("%s (%s)", fc.lastProvider, truncModel)
 			} else {
-				modelSection = leftPad + fc.lastProvider + rightModelPad
+				modelContent = fc.lastProvider
 			}
+		} else {
+			modelContent = fc.truncateString(fc.lastProvider, availableForModel)
 		}
 	}
 
-	modelSectionLen := len(modelSection) // Visual length (plain text)
-
-	// Start with blue-grey background for entire line
+	// Render the line with three sections: blue-grey | light-gray model | dark-gray stats | blue-grey
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
-	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-	fc.Terminal().Write([]byte(strings.Repeat(" ", region.Width)))
 
-	// Position and write model section with its background (overwriting part of blue-grey)
-	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset) // Start at column 1
-	fc.Terminal().Write([]byte(fc.config.Colors.LightGrayBg + fc.config.Colors.BlackText))
-	fc.Terminal().Write([]byte(modelSection))
+	// 1. Left blue-grey padding
+	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
+	fc.Terminal().Write([]byte(strings.Repeat(" ", leftEdgePadding)))
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
-	// Calculate gap and stats positioning
-	statsStartCol := region.Width - statsLen + 1
-	currentColAfterModel := 1 + modelSectionLen
-	gapSpaces := statsStartCol - currentColAfterModel
-
-	// Fill gap with dark background from end of model to start of stats
-	if gapSpaces > 0 {
-		fc.Terminal().Write([]byte(fc.config.Colors.DarkGrayBg + fc.config.Colors.DimWhite))
-		fc.Terminal().Write([]byte(strings.Repeat(" ", gapSpaces)))
-		fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+	// 2. Model section with light gray background
+	fc.Terminal().Write([]byte(fc.config.Colors.LightGrayBg + fc.config.Colors.BlackText))
+	fc.Terminal().Write([]byte(modelContent))
+	// Pad model section to full available width
+	modelPadding := availableForModel - len(modelContent)
+	if modelPadding > 0 {
+		fc.Terminal().Write([]byte(strings.Repeat(" ", modelPadding)))
 	}
+	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
-	// Write stats section with dark background
+	// 3. Stats section with dark gray background
 	fc.Terminal().Write([]byte(fc.config.Colors.DarkGrayBg + fc.config.Colors.DimWhite))
 	fc.Terminal().Write([]byte(statsSection))
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
-	// The rest of the line should already be blue-grey from the initial fill
-	// No need to explicitly fill the right padding as it's already blue-grey
+	// 4. Right blue-grey padding
+	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
+	fc.Terminal().Write([]byte(strings.Repeat(" ", rightEdgePadding)))
+	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
 	return nil
 }
@@ -505,20 +504,55 @@ func (fc *FooterComponent) renderModelOnly(region console.Region, lineOffset int
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
 	fc.Terminal().ClearLine()
 
-	leftPad := fc.config.Paddings.Left
+	// Define edge padding widths
+	leftEdgePadding := len(fc.config.Paddings.Left)   // Usually 2 spaces
+	rightEdgePadding := len(fc.config.Paddings.Right) // Usually 2 spaces
+
+	// Calculate available space for model content
+	availableForModel := region.Width - leftEdgePadding - rightEdgePadding
+
+	// Build model content
 	modelName := fc.extractModelName(fc.lastModel)
-	modelText := fmt.Sprintf("%s (%s)", fc.lastProvider, modelName)
+	modelContent := fmt.Sprintf("%s (%s)", fc.lastProvider, modelName)
 
-	// Light gray background for the entire model section
+	// Truncate if necessary
+	if len(modelContent) > availableForModel {
+		if availableForModel > len(fc.lastProvider)+5 {
+			availableForModelName := availableForModel - len(fc.lastProvider) - 3 // For " ()"
+			if availableForModelName > 3 {
+				truncModel := fc.truncateString(modelName, availableForModelName)
+				modelContent = fmt.Sprintf("%s (%s)", fc.lastProvider, truncModel)
+			} else {
+				modelContent = fc.lastProvider
+			}
+		} else {
+			modelContent = fc.truncateString(fc.lastProvider, availableForModel)
+		}
+	}
+
+	// Render the line: blue-grey | light-gray model | blue-grey
+	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
+
+	// 1. Left blue-grey padding
+	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
+	fc.Terminal().Write([]byte(strings.Repeat(" ", leftEdgePadding)))
+	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+
+	// 2. Model section with light gray background
 	fc.Terminal().Write([]byte(fc.config.Colors.LightGrayBg + fc.config.Colors.BlackText))
-	fc.Terminal().Write([]byte(leftPad + modelText))
-
-	// Pad the rest of the line
-	padding := region.Width - len(leftPad) - len(modelText)
-	if padding > 0 {
-		fc.Terminal().Write([]byte(strings.Repeat(" ", padding)))
+	fc.Terminal().Write([]byte(modelContent))
+	// Pad model section to full available width
+	modelPadding := availableForModel - len(modelContent)
+	if modelPadding > 0 {
+		fc.Terminal().Write([]byte(strings.Repeat(" ", modelPadding)))
 	}
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+
+	// 3. Right blue-grey padding
+	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
+	fc.Terminal().Write([]byte(strings.Repeat(" ", rightEdgePadding)))
+	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+
 	return nil
 }
 
@@ -527,30 +561,61 @@ func (fc *FooterComponent) renderStatsOnly(region console.Region, lineOffset int
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
 	fc.Terminal().ClearLine()
 
+	// Define edge padding widths
+	leftEdgePadding := len(fc.config.Paddings.Left)   // Usually 2 spaces
+	rightEdgePadding := len(fc.config.Paddings.Right) // Usually 2 spaces
+
+	// Calculate available space for stats content (with slight indent)
+	statsIndent := fc.config.Paddings.StatsLeftPad // Usually 4 spaces for indent
+	availableForStats := region.Width - leftEdgePadding - rightEdgePadding - statsIndent
+
+	// Build stats content
 	costStr := fc.formatCost(fc.lastCost)
 	contextStr := fc.formatContextUsage()
 	iterStr := fc.formatIteration()
 
-	leftPad := strings.Repeat(" ", fc.config.Paddings.StatsLeftPad) // Slight indent
-	fullStatsContent := fmt.Sprintf(
+	statsContent := fmt.Sprintf(
 		"%s | %s%s%s",
 		fc.formatTokens(fc.lastTokens),
 		costStr,
 		contextStr,
 		iterStr,
 	)
-	statsLine := leftPad + fullStatsContent + fc.config.Paddings.Right
 
-	// Dark background for stats section (changed from BgBlueGrey to DarkGrayBg for consistency)
-	fc.Terminal().Write([]byte(fc.config.Colors.DimWhite + fc.config.Colors.DarkGrayBg))
-	fc.Terminal().Write([]byte(statsLine))
+	// Truncate stats if necessary (fallback to minimal)
+	if len(statsContent) > availableForStats {
+		minContent := fmt.Sprintf("%s | %s", fc.formatTokens(fc.lastTokens), costStr)
+		if len(minContent) <= availableForStats {
+			statsContent = minContent
+		} else {
+			statsContent = costStr // Absolute minimum
+		}
+	}
 
-	// Pad the rest
-	padding := region.Width - len(statsLine)
-	if padding > 0 {
-		fc.Terminal().Write([]byte(strings.Repeat(" ", padding)))
+	// Render the line: blue-grey | dark-gray stats | blue-grey
+	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
+
+	// 1. Left blue-grey padding
+	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
+	fc.Terminal().Write([]byte(strings.Repeat(" ", leftEdgePadding)))
+	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+
+	// 2. Stats section with dark gray background (includes indent)
+	fc.Terminal().Write([]byte(fc.config.Colors.DarkGrayBg + fc.config.Colors.DimWhite))
+	fc.Terminal().Write([]byte(strings.Repeat(" ", statsIndent))) // Indent
+	fc.Terminal().Write([]byte(statsContent))
+	// Pad stats section to full available width
+	statsPadding := availableForStats - len(statsContent)
+	if statsPadding > 0 {
+		fc.Terminal().Write([]byte(strings.Repeat(" ", statsPadding)))
 	}
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+
+	// 3. Right blue-grey padding
+	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
+	fc.Terminal().Write([]byte(strings.Repeat(" ", rightEdgePadding)))
+	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+
 	return nil
 }
 

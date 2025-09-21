@@ -381,7 +381,7 @@ func (sf *StreamingFormatter) applyInlineFormatting(text string) string {
 	})
 
 	// Handle italic *text* - use non-greedy matching but avoid matching bold
-	italicPattern1 := regexp.MustCompile(`(?:^|[^*])\*([^*]+)\*(?:[^*]|$)`)
+	italicPattern1 := regexp.MustCompile(`(?:^|[\s\p{P}])\*([^*]+)\*(?:[\s\p{P}]|$)`)
 	text = italicPattern1.ReplaceAllStringFunc(text, func(match string) string {
 		// Extract just the content between single asterisks
 		start := strings.Index(match, "*")
@@ -396,7 +396,9 @@ func (sf *StreamingFormatter) applyInlineFormatting(text string) string {
 	})
 
 	// Handle italic _text_ - use non-greedy matching but avoid matching bold
-	italicPattern2 := regexp.MustCompile(`(?:^|[^_])_([^_]+)_(?:[^_]|$)`)
+	// Only apply italics when underscores are surrounded by word characters or at word boundaries
+	// This prevents underscores in filenames like "my_file.txt" from being treated as italics
+	italicPattern2 := regexp.MustCompile(`(?:^|[\s\p{P}])_([^_]+)_([^\w]|$)`)
 	text = italicPattern2.ReplaceAllStringFunc(text, func(match string) string {
 		// Extract just the content between single underscores
 		start := strings.Index(match, "_")

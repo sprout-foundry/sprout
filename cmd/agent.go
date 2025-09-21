@@ -30,6 +30,8 @@ var (
 	agentDryRun      bool
 	maxIterations    int
 	agentNoStreaming bool // Disable streaming mode (streaming is default)
+	agentSystemPromptFile string // File path for custom system prompt
+	agentSystemPrompt     string // Direct system prompt string
 )
 
 func createChatAgent() (*agent.Agent, error) {
@@ -50,6 +52,15 @@ func createChatAgent() (*agent.Agent, error) {
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
+	}
+
+	// Set custom system prompt if specified
+	if agentSystemPrompt != "" {
+		chatAgent.SetSystemPrompt(agentSystemPrompt)
+	} else if agentSystemPromptFile != "" {
+		if err := chatAgent.SetSystemPromptFromFile(agentSystemPromptFile); err != nil {
+			return nil, fmt.Errorf("failed to load system prompt from file: %w", err)
+		}
 	}
 
 	// Set max iterations if specified
@@ -74,6 +85,8 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
 	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines)")
+	agentCmd.Flags().StringVar(&agentSystemPromptFile, "system-prompt", "", "File path containing custom system prompt")
+	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
 }
 
 // runSimpleInteractiveMode provides a simple console-based interactive mode

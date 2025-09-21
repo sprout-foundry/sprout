@@ -35,6 +35,9 @@ type AgentConsole struct {
 	// UI Handler
 	uiHandler *console.UIHandler
 
+	// Console buffer for output management and resize handling
+	consoleBuffer *console.ConsoleBuffer
+
 	// State
 	sessionStartTime time.Time
 	totalTokens      int
@@ -77,6 +80,7 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		commandRegistry:  commands.NewCommandRegistry(),
 		input:            input,
 		footer:           footer,
+		consoleBuffer:    console.NewConsoleBuffer(10000), // 10,000 line buffer
 		sessionStartTime: time.Now(),
 		prompt:           config.Prompt,
 		historyFile:      config.HistoryFile,
@@ -87,6 +91,7 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 
 	// Create streaming formatter
 	ac.streamingFormatter = NewStreamingFormatter(&ac.outputMutex)
+	ac.streamingFormatter.SetConsoleBuffer(ac.consoleBuffer)
 
 	// Set the interrupt channel and output mutex on the agent
 	agent.SetInterruptChannel(ac.interruptChan)
@@ -158,6 +163,12 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 	ac.input.SetOnSubmit(ac.handleCommand)
 	ac.input.SetOnCancel(ac.handleCtrlC)
 	ac.input.SetOnTab(ac.handleAutocomplete)
+
+	// Initialize console buffer with current terminal width
+	width, _, err := ac.Terminal().GetSize()
+	if err == nil {
+		ac.consoleBuffer.SetTerminalWidth(width)
+	}
 
 	// Set up terminal with scroll regions
 	if err := ac.setupTerminal(); err != nil {
@@ -404,6 +415,9 @@ func (ac *AgentConsole) handleCommand(input string) error {
 		ac.cleanup()
 		os.Exit(0)
 	case "clear":
+		// Clear the console buffer
+		ac.consoleBuffer.Clear()
+
 		// Clear only the content area within the scroll region
 		ac.Terminal().SaveCursor()
 		_, height, _ := ac.Terminal().GetSize()
@@ -812,7 +826,7 @@ func (ac *AgentConsole) executeShellCommand(command string) (string, error) {
 
 // Helper functions
 
-// safePrint writes output that respects the scroll region
+// safePrint writes output that respects the scroll region and updates buffer
 func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 	// Ensure we're within the scroll region by using the terminal's Write method
 	content := fmt.Sprintf(format, args...)
@@ -822,14 +836,21 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 
 	// Only write if there's content left after filtering
 	if strings.TrimSpace(content) != "" {
+		// Add to console buffer
+		ac.consoleBuffer.AddContent(content)
+
 		// The terminal's Write method should respect the scroll region
 		ac.Terminal().Write([]byte(content))
 	}
 }
 
-// safePrintln writes output with a newline that respects the scroll region
+// safePrintln writes output with a newline that respects the scroll region and updates buffer
 func (ac *AgentConsole) safePrintln(args ...interface{}) {
 	content := fmt.Sprintln(args...)
+
+	// Add to console buffer
+	ac.consoleBuffer.AddContent(content)
+
 	ac.Terminal().Write([]byte(content))
 }
 
@@ -839,6 +860,9 @@ func (ac *AgentConsole) OnResize(width, height int) {
 	ac.outputMutex.Lock()
 	defer ac.outputMutex.Unlock()
 
+	// Update console buffer with new width for rewrapping
+	ac.consoleBuffer.SetTerminalWidth(width)
+
 	// Let footer component handle its own resize first (updates dynamic height)
 	if ac.footer != nil {
 		ac.footer.OnResize(width, height)
@@ -846,12 +870,23 @@ func (ac *AgentConsole) OnResize(width, height int) {
 
 	// Get updated footer height and adjust scroll region
 	footerHeight := ac.footer.GetHeight()
-	// The content area is from line 1 to height - footerHeight (dynamic)
-	ac.Terminal().SetScrollRegion(1, height-footerHeight)
+	contentHeight := height - footerHeight
 
-	// Note: After changing scroll region, the cursor maintains its relative position
-	// within the new region, so we don't need to save/restore cursor position
-	// which can cause the cursor to jump unexpectedly
+	// The content area is from line 1 to height - footerHeight (dynamic)
+	ac.Terminal().SetScrollRegion(1, contentHeight)
+
+	// Redraw the visible content from buffer with new wrapping
+	if err := ac.consoleBuffer.RedrawBuffer(ac.Terminal(), contentHeight); err != nil {
+		// Log error but continue
+		fmt.Fprintf(os.Stderr, "Warning: Buffer redraw failed: %v\n", err)
+	}
+
+	// Re-render footer after content
+	if err := ac.footer.Render(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Footer render failed: %v\n", err)
+	}
+
+	// Note: Cursor will be repositioned by the input component when it redraws
 }
 
 func formatDuration(d time.Duration) string {

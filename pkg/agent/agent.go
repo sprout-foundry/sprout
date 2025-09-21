@@ -858,3 +858,53 @@ func (a *Agent) GetTPSStats() map[string]float64 {
 	}
 	return map[string]float64{}
 }
+
+// SetSystemPrompt sets the system prompt for the agent
+func (a *Agent) SetSystemPrompt(prompt string) {
+	a.systemPrompt = a.ensureStopInformation(prompt)
+}
+
+// GetSystemPrompt returns the current system prompt
+func (a *Agent) GetSystemPrompt() string {
+	return a.systemPrompt
+}
+
+// SetSystemPromptFromFile loads a custom system prompt from a file
+func (a *Agent) SetSystemPromptFromFile(filePath string) error {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read system prompt file: %w", err)
+	}
+
+	promptContent := strings.TrimSpace(string(content))
+	if promptContent == "" {
+		return fmt.Errorf("system prompt file is empty")
+	}
+
+	a.systemPrompt = a.ensureStopInformation(promptContent)
+	return nil
+}
+
+// ensureStopInformation checks if the stop information is present and adds it if missing
+func (a *Agent) ensureStopInformation(prompt string) string {
+	// Check if the completion signal pattern is already present
+	if strings.Contains(prompt, "[[TASK_COMPLETE]]") || strings.Contains(prompt, "TASK_COMPLETE") {
+		return prompt
+	}
+
+	// Add the critical stop information
+	stopInfo := `
+
+## COMPLETION SIGNAL - CRITICAL FOR SYSTEM OPERATION
+
+When you have fully completed the user's request and have no more actions to take, you MUST end your response with:
+[[TASK_COMPLETE]]
+
+**IMPORTANT**: This completion signal is REQUIRED to stop the conversation loop. Without it, the system will continue waiting for more actions.
+
+Use [[TASK_COMPLETE]] when you have completed all requested work, provided the full answer, and have no more actions to perform.
+
+**DO NOT provide blank or empty responses**. If you have nothing more to do, use [[TASK_COMPLETE]].`
+
+	return prompt + stopInfo
+}

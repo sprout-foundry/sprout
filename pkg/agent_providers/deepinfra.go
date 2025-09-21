@@ -447,17 +447,45 @@ func (p *DeepInfraProvider) GetProvider() string {
 func (p *DeepInfraProvider) GetModelContextLimit() (int, error) {
 	if !p.modelsCached {
 		if _, err := p.ListModels(); err != nil {
-			return 32000, nil // fallback
+			// If we can't fetch models, return known defaults for common models
+			return p.getKnownModelContextLimit(), nil
 		}
 	}
 
 	for _, m := range p.models {
 		if m.ID == p.model {
-			return m.ContextLength, nil
+			if m.ContextLength > 0 {
+				return m.ContextLength, nil
+			}
 		}
 	}
 
-	return 128000, nil // default
+	// Fallback to known model context limits
+	return p.getKnownModelContextLimit(), nil
+}
+
+// getKnownModelContextLimit returns known context limits for common DeepInfra models
+func (p *DeepInfraProvider) getKnownModelContextLimit() int {
+	switch {
+	case strings.Contains(p.model, "deepseek-ai/DeepSeek-V3"):
+		return 65536 // 64K context
+	case strings.Contains(p.model, "deepseek-ai/DeepSeek-R1"):
+		return 65536 // 64K context
+	case strings.Contains(p.model, "meta-llama/Llama-3.3-70B"):
+		return 131072 // 128K context
+	case strings.Contains(p.model, "meta-llama/Llama-4"):
+		return 131072 // 128K context
+	case strings.Contains(p.model, "Qwen/Qwen3-Coder"):
+		return 131072 // 128K context
+	case strings.Contains(p.model, "llama"):
+		return 131072 // Most Llama models have 128K
+	case strings.Contains(p.model, "deepseek"):
+		return 65536 // Most DeepSeek models have 64K
+	case strings.Contains(p.model, "qwen"):
+		return 131072 // Most Qwen models have 128K
+	default:
+		return 32768 // Conservative default
+	}
 }
 
 // ListModels returns available models from DeepInfra API

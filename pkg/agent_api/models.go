@@ -331,7 +331,8 @@ func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
 
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	req, err := http.NewRequest("GET", "https://api.deepinfra.com/v1/models", nil)
+	// Use the OpenAI-compatible endpoint like the DeepInfra provider does
+	req, err := http.NewRequest("GET", "https://api.deepinfra.com/v1/openai/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -355,27 +356,56 @@ func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	var modelsResp struct {
+	// Use the same response structure as the DeepInfra provider
+	var response struct {
 		Data []struct {
-			ModelName string `json:"model_name"`
-			Type      string `json:"type"`
+			ID            string `json:"id"`
+			Name          string `json:"name"`
+			Description   string `json:"description"`
+			ContextLength int    `json:"context_length"`
+			Pricing       *struct {
+				Prompt     string `json:"prompt"`
+				Completion string `json:"completion"`
+			} `json:"pricing"`
 		} `json:"data"`
 	}
 
-	if err := json.Unmarshal(body, &modelsResp); err != nil {
+	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to decode DeepInfra models: %w", err)
 	}
 
-	// Convert to ModelInfo format
-	models := make([]ModelInfo, 0, len(modelsResp.Data))
-	for _, model := range modelsResp.Data {
-		// Include all models for now (we can filter later if needed)
+	// Convert to ModelInfo format with full details
+	models := make([]ModelInfo, len(response.Data))
+	for i, model := range response.Data {
 		modelInfo := ModelInfo{
-			ID:       model.ModelName,
-			Name:     model.ModelName,
+			ID:       model.ID,
+			Name:     model.Name,
 			Provider: "deepinfra",
 		}
-		models = append(models, modelInfo)
+
+		if model.Description != "" {
+			modelInfo.Description = model.Description
+		}
+		if model.ContextLength > 0 {
+			modelInfo.ContextLength = model.ContextLength
+		}
+
+		// Parse pricing if available
+		if model.Pricing != nil {
+			if promptCost, err := strconv.ParseFloat(model.Pricing.Prompt, 64); err == nil {
+				// DeepInfra pricing is per token, convert to per million tokens
+				modelInfo.InputCost = promptCost * 1000000
+			}
+			if completionCost, err := strconv.ParseFloat(model.Pricing.Completion, 64); err == nil {
+				// DeepInfra pricing is per token, convert to per million tokens
+				modelInfo.OutputCost = completionCost * 1000000
+			}
+			if modelInfo.InputCost > 0 || modelInfo.OutputCost > 0 {
+				modelInfo.Cost = (modelInfo.InputCost + modelInfo.OutputCost) / 2.0
+			}
+		}
+
+		models[i] = modelInfo
 	}
 
 	return models, nil
@@ -386,4 +416,26 @@ func parseFloat(s string) (float64, error) {
 	// Remove any currency symbols and parse
 	cleaned := strings.TrimPrefix(s, "$")
 	return strconv.ParseFloat(cleaned, 64)
+}
+
+// ModelSelection represents a model selection system
+// This is a stub implementation for backward compatibility
+// The actual model selection logic has been moved to configuration-based system
+type ModelSelection struct {
+	config interface{}
+}
+
+// NewModelSelection creates a new ModelSelection instance
+// This is a stub for backward compatibility - the actual model selection
+// is now handled through the configuration system
+func NewModelSelection(config interface{}) *ModelSelection {
+	return &ModelSelection{config: config}
+}
+
+// GetModelForTask returns a model for a specific task
+// This is a stub that returns empty string to indicate no hardcoded defaults
+func (ms *ModelSelection) GetModelForTask(task string) string {
+	// Return empty string to indicate no hardcoded defaults
+	// The actual model selection is now handled through configuration
+	return ""
 }

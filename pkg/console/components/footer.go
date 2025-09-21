@@ -394,7 +394,7 @@ func (fc *FooterComponent) formatContextUsage() string {
 // formatIteration formats the iteration string
 func (fc *FooterComponent) formatIteration() string {
 	if fc.lastIteration > 0 {
-		return fmt.Sprintf(" | Iter: %d", fc.lastIteration)
+		return fmt.Sprintf(" | %d", fc.lastIteration)
 	}
 	return ""
 }
@@ -437,14 +437,6 @@ func (fc *FooterComponent) renderModelAndStats(region console.Region, lineOffset
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
 	fc.Terminal().ClearLine()
 
-	// Set background for the entire line first for consistent alignment
-	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-	fc.Terminal().Write([]byte(strings.Repeat(" ", region.Width)))
-	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
-
-	// Reset cursor to start of line
-	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
-
 	statsSection, statsLen := fc.getStatsSection(region)
 	availableForModel := region.Width - statsLen - fc.config.Paddings.MinGap
 
@@ -474,31 +466,37 @@ func (fc *FooterComponent) renderModelAndStats(region console.Region, lineOffset
 
 	modelSectionLen := len(modelSection) // Visual length (plain text)
 
-	// Position and write model section with its background
+	// Start with blue-grey background for entire line
+	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
+	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
+	fc.Terminal().Write([]byte(strings.Repeat(" ", region.Width)))
+
+	// Position and write model section with its background (overwriting part of blue-grey)
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset) // Start at column 1
 	fc.Terminal().Write([]byte(fc.config.Colors.LightGrayBg + fc.config.Colors.BlackText))
 	fc.Terminal().Write([]byte(modelSection))
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
-	// Now set dark background from end of model to end of line
-	fc.Terminal().Write([]byte(fc.config.Colors.DarkGrayBg + fc.config.Colors.DimWhite))
-
-	// Calculate gap spaces to stats start
+	// Calculate gap and stats positioning
 	statsStartCol := region.Width - statsLen + 1
 	currentColAfterModel := 1 + modelSectionLen
 	gapSpaces := statsStartCol - currentColAfterModel
+
+	// Fill gap with dark background from end of model to start of stats
 	if gapSpaces > 0 {
+		fc.Terminal().Write([]byte(fc.config.Colors.DarkGrayBg + fc.config.Colors.DimWhite))
 		fc.Terminal().Write([]byte(strings.Repeat(" ", gapSpaces)))
+		fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 	}
 
-	// Write stats section
+	// Write stats section with dark background
+	fc.Terminal().Write([]byte(fc.config.Colors.DarkGrayBg + fc.config.Colors.DimWhite))
 	fc.Terminal().Write([]byte(statsSection))
-
-	// Since stats is right-aligned, cursor should be at end; add any remaining if needed
-	// But typically not necessary
-
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
-	fc.Terminal().ClearToEndOfLine()
+
+	// The rest of the line should already be blue-grey from the initial fill
+	// No need to explicitly fill the right padding as it's already blue-grey
+
 	return nil
 }
 

@@ -23,6 +23,7 @@ type StreamingFormatter struct {
 	inCodeBlock    bool
 	inListContext  bool // Track if we're in a list to avoid extra spacing
 	outputMutex    *sync.Mutex
+	consoleBuffer  interface{ AddContent(string) } // Interface to avoid circular import
 	minUpdateDelay time.Duration
 	maxBufferSize  int
 	finalized      bool // Prevent double finalization
@@ -36,6 +37,13 @@ func NewStreamingFormatter(outputMutex *sync.Mutex) *StreamingFormatter {
 		minUpdateDelay: 50 * time.Millisecond, // Minimum delay between updates
 		maxBufferSize:  100,                   // Max chars to buffer before forcing output
 	}
+}
+
+// SetConsoleBuffer sets the console buffer for output tracking
+func (sf *StreamingFormatter) SetConsoleBuffer(buffer interface{ AddContent(string) }) {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+	sf.consoleBuffer = buffer
 }
 
 // Write formats and outputs streaming content
@@ -155,6 +163,11 @@ func (sf *StreamingFormatter) outputLine(line string) {
 	if sf.lineBuffer.Len() > 0 {
 		line = sf.lineBuffer.String() + line
 		sf.lineBuffer.Reset()
+	}
+
+	// Store the original line in buffer before formatting
+	if sf.consoleBuffer != nil {
+		sf.consoleBuffer.AddContent(line + "\n")
 	}
 
 	// Apply formatting based on content type

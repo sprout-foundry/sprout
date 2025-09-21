@@ -155,11 +155,15 @@ func (ac *APIClient) shouldRetry(err error, attempt int) bool {
 	return result
 }
 
-// isRateLimit checks if error is a rate limit
+// isRateLimit checks if error is a real rate limit (more precise detection)
 func (ac *APIClient) isRateLimit(errStr string) bool {
-	return strings.Contains(errStr, "429") ||
-		strings.Contains(errStr, "rate limit") ||
-		strings.Contains(errStr, "usage limit")
+	lowerStr := strings.ToLower(errStr)
+	// More precise detection to avoid false positives
+	return (strings.Contains(errStr, "429") && (strings.Contains(lowerStr, "too many requests") || strings.Contains(lowerStr, "rate"))) ||
+		(strings.Contains(lowerStr, "rate limit") && !strings.Contains(lowerStr, "not due to rate limit")) ||
+		strings.Contains(lowerStr, "requests per minute") ||
+		strings.Contains(lowerStr, "rpm exceeded") ||
+		strings.Contains(lowerStr, "rate exceeded")
 }
 
 // handleRateLimit handles rate limit errors with proper backoff

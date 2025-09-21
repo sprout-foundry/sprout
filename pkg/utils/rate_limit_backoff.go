@@ -29,15 +29,19 @@ func NewRateLimitBackoff() *RateLimitBackoff {
 
 // IsRateLimitError checks if an error or HTTP response indicates a rate limit
 func (rlb *RateLimitBackoff) IsRateLimitError(err error, resp *http.Response) bool {
+	// HTTP 429 is generally a reliable indicator
 	if resp != nil && resp.StatusCode == 429 {
 		return true
 	}
 
 	if err != nil {
 		errStr := strings.ToLower(err.Error())
-		return strings.Contains(errStr, "429") ||
-			strings.Contains(errStr, "rate limit") ||
-			strings.Contains(errStr, "usage limit") ||
+		// More precise detection to avoid false positives
+		return (strings.Contains(errStr, "429") && strings.Contains(errStr, "too many requests")) ||
+			(strings.Contains(errStr, "rate limit") && !strings.Contains(errStr, "not due to rate limit")) ||
+			strings.Contains(errStr, "requests per minute") ||
+			strings.Contains(errStr, "rpm exceeded") ||
+			strings.Contains(errStr, "rate exceeded") ||
 			strings.Contains(errStr, "quota exceeded") ||
 			strings.Contains(errStr, "too many requests")
 	}

@@ -119,6 +119,14 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler:     handleListTodos,
 	})
 
+	// Register build validation tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "validate_build",
+		Description: "Validate project build after file operations",
+		Parameters:  []ParameterConfig{},
+		Handler:     handleValidateBuild,
+	})
+
 	return registry
 }
 
@@ -357,4 +365,13 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+func handleValidateBuild(a *Agent, args map[string]interface{}) (string, error) {
+	a.ToolLog("running build validation", "")
+	a.debugLog("Running build validation\n")
+	
+	result, err := tools.ValidateBuild()
+	a.debugLog("Build validation result: %s, error: %v\n", result, err)
+	return result, err
 }

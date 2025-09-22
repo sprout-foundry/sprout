@@ -26,11 +26,17 @@ func WriteFile(filePath, content string) (string, error) {
 		return "", fmt.Errorf("failed to write file %s: %w", cleanPath, err)
 	}
 
+	// Read back the file to confirm successful write and return content
+	readContent, readErr := os.ReadFile(cleanPath)
+	if readErr != nil {
+		return "", fmt.Errorf("file written but failed to read back for verification: %w", readErr)
+	}
+
 	// Get file info for confirmation
 	info, err := os.Stat(cleanPath)
 	if err != nil {
-		return fmt.Sprintf("File %s written successfully", cleanPath), nil
+		return fmt.Sprintf("File %s written successfully. Content:\n\n%s", cleanPath, string(readContent)), nil
 	}
 
-	return fmt.Sprintf("File %s written successfully (%d bytes)", cleanPath, info.Size()), nil
+	return fmt.Sprintf("File %s written successfully (%d bytes). Content:\n\n%s", cleanPath, info.Size(), string(readContent)), nil
 }

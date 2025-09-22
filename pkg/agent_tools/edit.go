@@ -51,6 +51,12 @@ func EditFile(filePath, oldString, newString string) (string, error) {
 		return "", fmt.Errorf("failed to write file %s: %w", cleanPath, err)
 	}
 
-	return fmt.Sprintf("File %s edited successfully - replaced %d characters with %d characters",
-		cleanPath, len(oldString), len(newString)), nil
+	// Read back the updated file to confirm success and return content
+	updatedContent, err := os.ReadFile(cleanPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to verify file edit by reading back %s: %w", cleanPath, err)
+	}
+
+	return fmt.Sprintf("File %s edited successfully - replaced %d characters with %d characters. Updated file content:\n\n%s",
+		cleanPath, len(oldString), len(newString), string(updatedContent)), nil
 }

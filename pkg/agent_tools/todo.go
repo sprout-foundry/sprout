@@ -81,26 +81,8 @@ func AddBulkTodos(todos []struct {
 		results = append(results, fmt.Sprintf("✅ %s (%s)", todo.Title, item.ID))
 	}
 
-	// Show each newly added todo in markdown format
-	var todoListBuilder strings.Builder
-	
-	// Show the new todos that were just added (last N items)
-	startIndex := len(globalTodoManager.items) - len(todos)
-	for i := startIndex; i < len(globalTodoManager.items); i++ {
-		item := globalTodoManager.items[i]
-		todoListBuilder.WriteString(fmt.Sprintf("- [ ] %s", item.Title))
-		if item.Description != "" {
-			todoListBuilder.WriteString(fmt.Sprintf(" - %s", item.Description))
-		}
-		if item.Priority == "high" {
-			todoListBuilder.WriteString(" ⚡")
-		}
-		todoListBuilder.WriteString("\n")
-	}
-	
-	todoList := todoListBuilder.String()
-	
-	return fmt.Sprintf("📝 Adding todos:\n\n%s", todoList)
+	// Show the complete todo list for better context
+	return fmt.Sprintf("📝 Added %d todo(s)\n\n**Todo List:**\n%s", len(todos), GetTodoListMarkdown())
 }
 
 // UpdateTodoStatus updates the status of a todo item
@@ -124,17 +106,18 @@ func UpdateTodoStatus(id, status string) string {
 			globalTodoManager.items[i].Status = status
 			globalTodoManager.items[i].UpdatedAt = time.Now()
 
-			// Special messaging based on status change
-			var message string
+			// Always show the updated todo list for better UI visibility
+			var message strings.Builder
+
+			// Status change header
 			switch status {
 			case "in_progress":
-				message = fmt.Sprintf("🔄 Starting work on: %s", item.Title)
+				message.WriteString(fmt.Sprintf("🔄 Starting work on: %s\n\n", item.Title))
 			case "completed":
 				// Count completed and remaining todos
 				completedCount := 0
-				totalCount := len(globalTodoManager.items)
 				remainingCount := 0
-				
+
 				for _, todo := range globalTodoManager.items {
 					if todo.Status == "completed" {
 						completedCount++
@@ -142,37 +125,23 @@ func UpdateTodoStatus(id, status string) string {
 						remainingCount++
 					}
 				}
-				
-				// Check if this is the last todo being completed
-				if remainingCount == 0 && completedCount == totalCount {
-					// All todos completed - show completion summary with checkmarks
-					var summaryBuilder strings.Builder
-					summaryBuilder.WriteString("🎉 All todos completed!\n\n")
-					
-					for _, todo := range globalTodoManager.items {
-						if todo.Status == "completed" {
-							summaryBuilder.WriteString(fmt.Sprintf("- [x] %s", todo.Title))
-							if todo.Description != "" {
-								summaryBuilder.WriteString(fmt.Sprintf(" - %s", todo.Description))
-							}
-							summaryBuilder.WriteString("\n")
-						}
-					}
-					
-					message = summaryBuilder.String()
+
+				if remainingCount == 0 {
+					message.WriteString("🎉 All todos completed!\n\n")
 				} else {
-					// Regular completion message with remaining todos
-					message = fmt.Sprintf("✅ Completed: %s\n\nProgress: %d/%d completed (%d remaining)", 
-						item.Title, completedCount, totalCount, remainingCount)
+					message.WriteString(fmt.Sprintf("✅ Completed: %s\n\n", item.Title))
 				}
 			case "cancelled":
-				message = fmt.Sprintf("❌ Cancelled: %s", item.Title)
+				message.WriteString(fmt.Sprintf("❌ Cancelled: %s\n\n", item.Title))
 			default:
-				symbol := getCompactStatusSymbol(status)
-				message = fmt.Sprintf("%s %s", symbol, item.Title)
+				message.WriteString(fmt.Sprintf("📝 Updated: %s to %s\n\n", item.Title, status))
 			}
-			
-			return message
+
+			// Always show the complete todo list in markdown format
+			message.WriteString("**Todo List:**\n")
+			message.WriteString(GetTodoListMarkdown())
+
+			return message.String()
 		}
 	}
 
@@ -197,7 +166,7 @@ func UpdateTodoStatusBulk(updates []struct {
 					globalTodoManager.items[i].Status = update.Status
 					globalTodoManager.items[i].UpdatedAt = time.Now()
 					updateCount++
-					
+
 					symbol := getCompactStatusSymbol(update.Status)
 					results = append(results, fmt.Sprintf("%s %s", symbol, item.Title))
 				}
@@ -214,68 +183,13 @@ func UpdateTodoStatusBulk(updates []struct {
 	if len(results) <= 3 {
 		return strings.Join(results, ", ")
 	}
-	
+
 	return fmt.Sprintf("Updated %d todos: %s, +%d more", updateCount, results[0], len(results)-1)
 }
 
-// ListTodos returns a formatted list of all todos
+// ListTodos returns a markdown-formatted list of all todos for UI display
 func ListTodos() string {
-	globalTodoManager.mutex.RLock()
-	defer globalTodoManager.mutex.RUnlock()
-
-	if len(globalTodoManager.items) == 0 {
-		return "No todos"
-	}
-
-	var result strings.Builder
-	
-	// Group by status
-	statusGroups := map[string][]TodoItem{
-		"in_progress": {},
-		"pending":     {},
-		"completed":   {},
-		"cancelled":   {},
-	}
-
-	for _, item := range globalTodoManager.items {
-		statusGroups[item.Status] = append(statusGroups[item.Status], item)
-	}
-
-	// Show only active todos by default, completed ones create context bloat
-	for _, status := range []string{"in_progress", "pending"} {
-		items := statusGroups[status]
-		if len(items) == 0 {
-			continue
-		}
-
-		for _, item := range items {
-			statusSymbol := getCompactStatusSymbol(item.Status)
-			priority := getCompactPrioritySymbol(item.Priority)
-			result.WriteString(fmt.Sprintf("%s%s %s (%s)", statusSymbol, priority, item.Title, item.ID))
-			if item.Description != "" {
-				result.WriteString(fmt.Sprintf(": %s", item.Description))
-			}
-			result.WriteString("\n")
-		}
-	}
-
-	// Show summary of completed items without details
-	completedCount := len(statusGroups["completed"])
-	cancelledCount := len(statusGroups["cancelled"])
-	if completedCount > 0 {
-		result.WriteString(fmt.Sprintf("✓ %d completed", completedCount))
-	}
-	if cancelledCount > 0 {
-		if completedCount > 0 {
-			result.WriteString(", ")
-		}
-		result.WriteString(fmt.Sprintf("✗ %d cancelled", cancelledCount))
-	}
-	if completedCount > 0 || cancelledCount > 0 {
-		result.WriteString("\n")
-	}
-
-	return result.String()
+	return GetTodoListMarkdown()
 }
 
 // ListAllTodos returns verbose format when full context is needed
@@ -288,7 +202,7 @@ func ListAllTodos() string {
 	}
 
 	var result strings.Builder
-	
+
 	statusGroups := map[string][]TodoItem{
 		"in_progress": {},
 		"pending":     {},
@@ -428,11 +342,11 @@ func ArchiveCompleted() string {
 	}
 
 	globalTodoManager.items = activeItems
-	
+
 	if archivedCount == 0 {
 		return "No todos to archive"
 	}
-	
+
 	return fmt.Sprintf("Archived %d completed/cancelled todos", archivedCount)
 }
 
@@ -464,7 +378,7 @@ func GetActiveTodosCompact() string {
 			result.WriteString(" | ")
 		}
 	}
-	
+
 	if len(active) > 0 {
 		if len(active) <= 3 {
 			result.WriteString(strings.Join(active, ", "))
@@ -527,7 +441,7 @@ func AutoCompleteTodos(context string) string {
 	defer globalTodoManager.mutex.Unlock()
 
 	var completed []string
-	
+
 	// Auto-complete based on common patterns
 	for i, item := range globalTodoManager.items {
 		if item.Status != "pending" && item.Status != "in_progress" {
@@ -538,7 +452,7 @@ func AutoCompleteTodos(context string) string {
 		switch context {
 		case "build_success":
 			if strings.Contains(strings.ToLower(item.Title), "build") ||
-			   strings.Contains(strings.ToLower(item.Title), "compile") {
+				strings.Contains(strings.ToLower(item.Title), "compile") {
 				shouldComplete = true
 			}
 		case "test_success":
@@ -547,7 +461,7 @@ func AutoCompleteTodos(context string) string {
 			}
 		case "file_written":
 			if strings.Contains(strings.ToLower(item.Title), "create") ||
-			   strings.Contains(strings.ToLower(item.Title), "write") {
+				strings.Contains(strings.ToLower(item.Title), "write") {
 				shouldComplete = true
 			}
 		}
@@ -563,7 +477,7 @@ func AutoCompleteTodos(context string) string {
 		return ""
 	}
 
-	return fmt.Sprintf("🎯 Auto-completed %d todos based on %s:\n%s", 
+	return fmt.Sprintf("🎯 Auto-completed %d todos based on %s:\n%s",
 		len(completed), context, strings.Join(completed, "\n"))
 }
 
@@ -595,7 +509,7 @@ func GetNextTodo() string {
 // SuggestTodos suggests todos based on common agent workflow patterns
 func SuggestTodos(phase string, taskContext string) []string {
 	var suggestions []string
-	
+
 	switch phase {
 	case "understand":
 		suggestions = append(suggestions,
@@ -618,7 +532,7 @@ func SuggestTodos(phase string, taskContext string) []string {
 			"Fix any compilation errors",
 			"Validate implementation works")
 	}
-	
+
 	// Add context-specific suggestions
 	if strings.Contains(strings.ToLower(taskContext), "test") {
 		suggestions = append(suggestions, "Run test suite", "Fix failing tests")
@@ -626,7 +540,7 @@ func SuggestTodos(phase string, taskContext string) []string {
 	if strings.Contains(strings.ToLower(taskContext), "api") {
 		suggestions = append(suggestions, "Update API documentation", "Test API endpoints")
 	}
-	
+
 	return suggestions
 }
 
@@ -634,7 +548,7 @@ func SuggestTodos(phase string, taskContext string) []string {
 func GetAllTodos() []TodoItem {
 	globalTodoManager.mutex.RLock()
 	defer globalTodoManager.mutex.RUnlock()
-	
+
 	// Return a copy to avoid race conditions
 	todos := make([]TodoItem, len(globalTodoManager.items))
 	copy(todos, globalTodoManager.items)
@@ -645,7 +559,7 @@ func GetAllTodos() []TodoItem {
 func GetCompletedTasks() []string {
 	globalTodoManager.mutex.RLock()
 	defer globalTodoManager.mutex.RUnlock()
-	
+
 	var completed []string
 	for _, item := range globalTodoManager.items {
 		if item.Status == "completed" {
@@ -656,6 +570,57 @@ func GetCompletedTasks() []string {
 			}
 		}
 	}
-	
+
 	return completed
+}
+
+// GetTodoListMarkdown returns a markdown-formatted todo list for UI display
+func GetTodoListMarkdown() string {
+	globalTodoManager.mutex.RLock()
+	defer globalTodoManager.mutex.RUnlock()
+
+	if len(globalTodoManager.items) == 0 {
+		return "No todos"
+	}
+
+	var result strings.Builder
+
+	// Show todos in creation order for better context
+	for _, item := range globalTodoManager.items {
+		var checkbox string
+		var statusIndicator string
+
+		switch item.Status {
+		case "completed":
+			checkbox = "- [x]"
+			statusIndicator = " ✅"
+		case "in_progress":
+			checkbox = "- [...]" // Visual indicator for in-progress
+			statusIndicator = " 🔄"
+		case "cancelled":
+			checkbox = "- [x]"
+			statusIndicator = " ❌"
+		default: // pending
+			checkbox = "- [ ]"
+			statusIndicator = ""
+		}
+
+		result.WriteString(fmt.Sprintf("%s %s", checkbox, item.Title))
+
+		// Add priority indicator
+		if item.Priority == "high" {
+			result.WriteString(" ⚡")
+		}
+
+		// Add description if present
+		if item.Description != "" {
+			result.WriteString(fmt.Sprintf(" - %s", item.Description))
+		}
+
+		// Add status indicator at the end
+		result.WriteString(statusIndicator)
+		result.WriteString("\n")
+	}
+
+	return result.String()
 }

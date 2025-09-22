@@ -171,15 +171,15 @@ func TestModelItem_DisplayCompact_WithDisplayName(t *testing.T) {
 		Provider:      "openai",
 		Model:         "gpt-5",
 		DisplayName:   "GPT-5",
-		InputCost:     0.0025,
-		OutputCost:    0.01,
+		InputCost:     0.003,
+		OutputCost:    0.010,
 		ContextLength: 128000,
 	}
 
 	result := modelItem.DisplayCompact(40)
 
 	// Should use DisplayName instead of Model
-	if !strings.HasPrefix(result, "GPT-4 Omni") {
+	if !strings.HasPrefix(result, "GPT-5") {
 		t.Errorf("DisplayCompact() should use DisplayName. Got %q", result)
 	}
 

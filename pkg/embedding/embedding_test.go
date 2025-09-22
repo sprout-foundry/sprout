@@ -29,7 +29,11 @@ func TestGenerateWorkspaceEmbeddings_AddUpdateRemoveFlow(t *testing.T) {
 	}}
 
 	db := NewVectorDB()
-	cfg := &configuration.Config{EmbeddingModel: "test:dummy"}
+	cfg := &configuration.Config{
+		ProviderModels: map[string]string{
+			"embedding": "test:dummy",
+		},
+	}
 
 	// Initial generation
 	if err := GenerateWorkspaceEmbeddings(wf, db, cfg); err != nil {
@@ -69,7 +73,11 @@ func TestSearchRelevantFiles_UsesTestProvider(t *testing.T) {
 	// Add test content using the correct API
 	db.Add("file:/x/a.go", "test content a")
 	db.Add("file:/x/b.go", "test content b")
-	cfg := &configuration.Config{EmbeddingModel: "test:dummy"}
+	cfg := &configuration.Config{
+		ProviderModels: map[string]string{
+			"embedding": "test:dummy",
+		},
+	}
 	embs, scores, err := SearchRelevantFiles("aaa", db, 1, cfg)
 	if err != nil {
 		t.Fatalf("SearchRelevantFiles error: %v", err)

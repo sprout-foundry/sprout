@@ -85,11 +85,23 @@ func main() {
 		fmt.Println(" models")
 		passed++
 	} else {
-		fmt.Println("FAILED or SKIPPED")
-		if len(modelCounts) == 0 {
-			fmt.Println("   No providers available for testing")
+		// Check if we have any API keys at all
+		hasAnyAPIKey := false
+		for _, provider := range providers {
+			if os.Getenv(string(provider)+"_API_KEY") != "" {
+				hasAnyAPIKey = true
+				break
+			}
 		}
-		failed++
+
+		if hasAnyAPIKey {
+			fmt.Println("FAILED")
+			failed++
+		} else {
+			fmt.Println("SKIPPED - No API keys found")
+			fmt.Println("   No providers available for testing")
+			// Don't increment failed for skipped tests
+		}
 	}
 
 	// Test 3: No Hardcoded Defaults

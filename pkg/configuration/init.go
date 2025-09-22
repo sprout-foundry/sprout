@@ -2,11 +2,15 @@ package configuration
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
 // Initialize loads or creates configuration with first-run setup
 func Initialize() (*Config, *APIKeys, error) {
+	// Check if we're in a CI environment
+	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
+
 	// Ensure config directory exists
 	configDir, err := GetConfigDir()
 	if err != nil {
@@ -40,8 +44,29 @@ func Initialize() (*Config, *APIKeys, error) {
 		currentProvider := config.LastUsedProvider
 		if RequiresAPIKey(currentProvider) && !apiKeys.HasAPIKey(currentProvider) {
 			needsSetup = true
-			fmt.Printf("⚠️  Current provider '%s' requires an API key but none is configured.\n", getProviderDisplayName(currentProvider))
+			if !isCI {
+				fmt.Printf("⚠️  Current provider '%s' requires an API key but none is configured.\n", getProviderDisplayName(currentProvider))
+			}
 		}
+	}
+
+	// In CI environments, skip interactive setup and use defaults
+	if isCI && (isFirstRun || needsSetup) {
+		// Set a default provider that works in CI
+		if apiKeys.HasAPIKey("openrouter") {
+			config.LastUsedProvider = "openrouter"
+		} else if apiKeys.HasAPIKey("openai") {
+			config.LastUsedProvider = "openai"
+		} else {
+			// Default to ollama-local which doesn't need API keys
+			config.LastUsedProvider = "ollama-local"
+		}
+
+		if err := config.Save(); err != nil {
+			return nil, nil, fmt.Errorf("failed to save config: %w", err)
+		}
+
+		return config, apiKeys, nil
 	}
 
 	if isFirstRun || needsSetup {

@@ -120,8 +120,27 @@ func (t *TPSTracker) GetStats() map[string]interface{} {
 
 	if len(t.tpsHistory) > 0 {
 		stats["current_tps"] = t.tpsHistory[len(t.tpsHistory)-1]
-		stats["average_tps"] = t.GetAverageTPS()
-		stats["smooth_tps"] = t.GetSmoothTPS()
+
+		// Calculate average TPS without calling the method (to avoid deadlock)
+		if t.totalDuration > 0 && t.totalTokens > 0 {
+			totalSeconds := t.totalDuration.Seconds()
+			stats["average_tps"] = float64(t.totalTokens) / totalSeconds
+		} else {
+			stats["average_tps"] = 0.0
+		}
+
+		// Calculate smooth TPS without calling the method (to avoid deadlock)
+		if len(t.tpsHistory) > 0 {
+			alpha := 0.3
+			smoothed := t.tpsHistory[0]
+			for i := 1; i < len(t.tpsHistory); i++ {
+				smoothed = alpha*t.tpsHistory[i] + (1-alpha)*smoothed
+			}
+			stats["smooth_tps"] = smoothed
+		} else {
+			stats["smooth_tps"] = 0.0
+		}
+
 		stats["min_tps"] = t.getMinTPS()
 		stats["max_tps"] = t.getMaxTPS()
 	}

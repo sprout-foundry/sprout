@@ -58,15 +58,28 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
-// initializeSystem initializes API keys and configuration on startup
+// initializeSystem initializes configuration and API keys with first-run setup
 func initializeSystem() {
-	// Initialize API keys from ~/.ledit/api_keys.json using main configuration system
-	_, err := configuration.LoadAPIKeys()
-	if err != nil {
-		// Don't fail on API key initialization errors - will be created on demand
-		if os.Getenv("LEDIT_DEBUG") != "" {
+	// Check if we're in a CI environment or non-interactive mode
+	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
+
+	if isCI {
+		// In CI environments, just load what we can and continue
+		_, err := configuration.LoadAPIKeys()
+		if err != nil && os.Getenv("LEDIT_DEBUG") != "" {
 			println("API key initialization warning:", err.Error())
 		}
+		return
+	}
+
+	// For interactive use, ensure proper initialization
+	_, _, err := configuration.Initialize()
+	if err != nil {
+		// If initialization fails, print helpful error and exit
+		fmt.Fprintf(os.Stderr, "❌ Failed to initialize ledit: %v\n", err)
+		fmt.Fprintln(os.Stderr, "\n💡 This usually means there's an issue with your configuration or API keys.")
+		fmt.Fprintln(os.Stderr, "   Try running 'ledit' again to set up your AI provider.")
+		os.Exit(1)
 	}
 }
 

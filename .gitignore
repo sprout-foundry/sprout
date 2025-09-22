@@ -28,3 +28,8 @@ coverage.html
 test.py
 scripts/test_*.go
 scripts/verify_*.go
+
+# Test temporary directories (created by integration tests)
+test_home/
+test_config/
+test_home/

@@ -33,13 +33,61 @@ def main():
     # Discover tests
     tests = sorted([f for f in test_path.glob("*.sh") if f.is_file()])
     
-    if args.list or (not args.test):
+    if args.list:
         print("Available integration tests:")
         for i, test in enumerate(tests, 1):
             print(f"{i}: {test.stem}")
-        if not args.list:
-            print("\nRun with -t <number> to execute a specific test")
         sys.exit(0)
+    
+    # If no specific test is requested, run all tests
+    if not args.test:
+        print("Running ALL integration tests:")
+        for i, test in enumerate(tests, 1):
+            print(f"{i}: {test.stem}")
+        print(f"\nRunning {len(tests)} tests with model: {args.model}")
+        print("=" * 50)
+        
+        passed = 0
+        failed = 0
+        
+        for i, test_file in enumerate(tests, 1):
+            print(f"\n[{i}/{len(tests)}] Running: {test_file.stem}")
+            print("-" * 50)
+            
+            try:
+                result = subprocess.run(
+                    ["bash", str(test_file), args.model],
+                    cwd=script_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=120  # 2 minute timeout per test
+                )
+                
+                if result.returncode == 0:
+                    print("✅ PASSED")
+                    passed += 1
+                else:
+                    print("❌ FAILED")
+                    print("STDOUT:", result.stdout)
+                    print("STDERR:", result.stderr)
+                    failed += 1
+                    
+            except subprocess.TimeoutExpired:
+                print("❌ FAILED (timeout)")
+                failed += 1
+            except Exception as e:
+                print(f"❌ FAILED (error): {e}")
+                failed += 1
+        
+        print("=" * 50)
+        print(f"Results: {passed} passed, {failed} failed")
+        
+        if failed > 0:
+            print(f"\n❌ {failed} test(s) failed")
+            sys.exit(1)
+        else:
+            print(f"\n✅ All {passed} tests passed!")
+            sys.exit(0)
 
     # Run specific test
     if args.test:

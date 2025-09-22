@@ -241,6 +241,8 @@ func getClientTypeFromName(name string) (api.ClientType, error) {
 		return api.OllamaLocalClientType, nil
 	case "ollama-turbo":
 		return api.OllamaTurboClientType, nil
+	case "test":
+		return api.TestClientType, nil
 	// For providers not yet in ClientType constants
 	case "anthropic", "gemini", "groq", "cerebras":
 		return api.ClientType(name), nil

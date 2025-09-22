@@ -155,17 +155,22 @@ func (keys *APIKeys) HasAPIKey(provider string) bool {
 	return false
 }
 
-// PromptForAPIKey prompts the user for an API key
+// PromptForAPIKey prompts the user for an API key with helpful guidance
 func PromptForAPIKey(provider string) (string, error) {
 	providerName := getProviderDisplayName(provider)
-	fmt.Printf("🔑 API key required for %s\n", providerName)
-	fmt.Printf("Please enter your %s API key: ", providerName)
+
+	// Provide specific guidance for getting API keys
+	fmt.Printf("🔑 Enter your %s API key\n", providerName)
+	fmt.Printf("   (The key will be hidden as you type for security)\n")
+	fmt.Printf("   API key: ")
 
 	// Read API key securely (hidden input)
 	byteKey, err := term.ReadPassword(int(syscall.Stdin))
 	if err != nil {
 		// Fall back to regular input if term doesn't work
 		fmt.Println() // New line after the prompt
+		fmt.Printf("   (Hidden input not available, key will be visible)\n")
+		fmt.Printf("   API key: ")
 		reader := bufio.NewReader(os.Stdin)
 		key, err := reader.ReadString('\n')
 		if err != nil {
@@ -181,6 +186,24 @@ func PromptForAPIKey(provider string) (string, error) {
 		return "", fmt.Errorf("no API key provided")
 	}
 
+	// Basic validation
+	if len(apiKey) < 10 {
+		return "", fmt.Errorf("API key seems too short (expected at least 10 characters, got %d)", len(apiKey))
+	}
+
+	// Provider-specific validation patterns
+	switch provider {
+	case "openai":
+		if !strings.HasPrefix(apiKey, "sk-") {
+			fmt.Println("⚠️  Warning: OpenAI API keys typically start with 'sk-'")
+		}
+	case "openrouter":
+		if !strings.HasPrefix(apiKey, "sk-or-") {
+			fmt.Println("⚠️  Warning: OpenRouter API keys typically start with 'sk-or-'")
+		}
+	}
+
+	fmt.Printf("✅ API key accepted (%d characters)\n", len(apiKey))
 	return apiKey, nil
 }
 

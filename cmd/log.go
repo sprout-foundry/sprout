@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/changetracker"
+	"github.com/alantheprice/ledit/pkg/history"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +22,7 @@ var logCmd = &cobra.Command{
 		if rawLog {
 			displayVerboseLog()
 		} else {
-			if err := changetracker.PrintRevisionHistory(); err != nil {
+			if err := history.PrintRevisionHistory(); err != nil {
 				log.Fatalf("Failed to print revision history: %v", err)
 			}
 		}

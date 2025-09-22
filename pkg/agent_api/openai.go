@@ -25,13 +25,19 @@ type OpenAIClient struct {
 
 // OpenAI-specific request/response structures
 type OpenAIRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Tools       []Tool    `json:"tools,omitempty"`
-	Temperature *float64  `json:"temperature,omitempty"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
-	Stream      bool      `json:"stream"`
-	Reasoning   string    `json:"reasoning,omitempty"` // For reasoning models
+	Model               string               `json:"model"`
+	Messages            []Message            `json:"messages"`
+	Tools               []Tool               `json:"tools,omitempty"`
+	Temperature         *float64             `json:"temperature,omitempty"`
+	MaxTokens           int                  `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int                  `json:"max_completion_tokens,omitempty"`
+	Stream              bool                 `json:"stream"`
+	StreamOptions       *OpenAIStreamOptions `json:"stream_options,omitempty"`
+	Reasoning           string               `json:"reasoning,omitempty"` // For reasoning models
+}
+
+type OpenAIStreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 type OpenAIResponse struct {
@@ -78,7 +84,7 @@ func NewOpenAIClient() (*OpenAIClient, error) {
 			Timeout: 120 * time.Second,
 		},
 		apiKey: apiKey,
-		model:  "gpt-4o-mini", // Default to cost-effective model
+		model:  "gpt-5-mini", // Default to cost-effective model
 		debug:  false,
 	}, nil
 }
@@ -100,10 +106,15 @@ func (c *OpenAIClient) SendChatRequest(messages []Message, tools []Tool, reasoni
 		req.Temperature = &temp
 	}
 
-	// Only include max_tokens for models that support it (not GPT-5 or o1 models)
-	if !strings.Contains(c.model, "gpt-5") && !strings.Contains(c.model, "o1") {
+	// Handle token limits based on model type
+	if strings.Contains(c.model, "gpt-5") {
+		// GPT-5 models use max_completion_tokens
+		req.MaxCompletionTokens = maxTokens
+	} else if !strings.Contains(c.model, "o1") {
+		// Other models (except o1) use max_tokens
 		req.MaxTokens = maxTokens
 	}
+	// o1 models don't support token limits
 
 	// Only include reasoning parameter for o1 models that support it
 	if reasoning != "" && (strings.Contains(c.model, "o1") || strings.Contains(c.model, "reasoning")) {
@@ -341,9 +352,9 @@ func (c *OpenAIClient) GetModelContextLimit() (int, error) {
 	// O1 series - reasoning models
 	case strings.Contains(model, "o1"):
 		return 128000, nil // O1 models support 128K context
-	// GPT-4o series - multimodal models
-	case strings.Contains(model, "gpt-4o"):
-		return 128000, nil // GPT-4o supports 128K context
+	// GPT-5 series - multimodal models
+	case strings.Contains(model, "gpt-5"):
+		return 128000, nil // GPT-5 supports 128K context
 	// GPT-4 series
 	case strings.Contains(model, "gpt-4-turbo"):
 		return 128000, nil // GPT-4 Turbo supports 128K context
@@ -369,7 +380,7 @@ func (c *OpenAIClient) SupportsVision() bool {
 // GetVisionModel returns the vision model for OpenAI
 func (c *OpenAIClient) GetVisionModel() string {
 	// Return default vision model
-	return "gpt-4o"
+	return "gpt-5"
 }
 
 // SendVisionRequest sends a vision-enabled chat request
@@ -533,6 +544,9 @@ func (c *OpenAIClient) SendChatRequestStream(messages []Message, tools []Tool, r
 		Messages: messages,
 		Tools:    tools,
 		Stream:   true, // Enable streaming
+		StreamOptions: &OpenAIStreamOptions{
+			IncludeUsage: true, // Include usage data in streaming response
+		},
 	}
 
 	// Only include temperature for models that support it (not GPT-5 models)
@@ -541,10 +555,15 @@ func (c *OpenAIClient) SendChatRequestStream(messages []Message, tools []Tool, r
 		req.Temperature = &temp
 	}
 
-	// Only include max_tokens for models that support it (not GPT-5 or o1 models)
-	if !strings.Contains(c.model, "gpt-5") && !strings.Contains(c.model, "o1") {
+	// Handle token limits based on model type
+	if strings.Contains(c.model, "gpt-5") {
+		// GPT-5 models use max_completion_tokens
+		req.MaxCompletionTokens = maxTokens
+	} else if !strings.Contains(c.model, "o1") {
+		// Other models (except o1) use max_tokens
 		req.MaxTokens = maxTokens
 	}
+	// o1 models don't support token limits
 
 	// Only include reasoning parameter for o1 models that support it
 	if reasoning != "" && (strings.Contains(c.model, "o1") || strings.Contains(c.model, "reasoning")) {
@@ -627,22 +646,7 @@ func (c *OpenAIClient) ListModels() ([]ModelInfo, error) {
 	// For OpenAI, we return a static list of commonly used models
 	// since OpenAI's /models endpoint doesn't include pricing information
 	return []ModelInfo{
-		{
-			ID:            "gpt-4o-mini",
-			Name:          "GPT-4o Mini",
-			Provider:      "openai",
-			ContextLength: 128000,
-			InputCost:     0.15, // $0.15 per 1M tokens
-			OutputCost:    0.6,  // $0.60 per 1M tokens
-		},
-		{
-			ID:            "gpt-4o",
-			Name:          "GPT-4o",
-			Provider:      "openai",
-			ContextLength: 128000,
-			InputCost:     2.5,  // $2.50 per 1M tokens
-			OutputCost:    10.0, // $10.00 per 1M tokens
-		},
+
 		{
 			ID:            "gpt-5-mini",
 			Name:          "GPT-5 Mini",

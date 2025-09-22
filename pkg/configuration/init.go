@@ -81,7 +81,7 @@ func Initialize() (*Config, *APIKeys, error) {
 
 	if isFirstRun || needsSetup {
 		if isFirstRun {
-			fmt.Printf("🚀 Welcome to ledit! Let's set up your AI provider.\n")
+			ShowWelcomeMessage()
 			fmt.Printf("   Config directory: %s\n\n", configDir)
 		}
 
@@ -99,11 +99,7 @@ func Initialize() (*Config, *APIKeys, error) {
 		fmt.Printf("🎉 Setup complete! You can now use ledit with %s.\n\n", getProviderDisplayName(provider))
 
 		// Show helpful next steps
-		fmt.Println("Next steps:")
-		fmt.Println("  • Run 'ledit' to start the interactive mode")
-		fmt.Println("  • Run 'ledit agent \"your task here\"' for direct commands")
-		fmt.Println("  • Use --provider flag to switch providers temporarily")
-		fmt.Printf("  • Config stored in: %s\n\n", configDir)
+		ShowNextSteps(provider, configDir)
 	}
 
 	// Final validation - ensure selected provider is actually usable
@@ -143,6 +139,8 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	fmt.Println("🤖 All available AI providers:")
 	for i, provider := range allProviders {
 		status := ""
+		description := ""
+
 		if provider.RequiresKey && !apiKeys.HasAPIKey(provider.Name) {
 			status = " (needs API key)"
 		} else if provider.RequiresKey && apiKeys.HasAPIKey(provider.Name) {
@@ -151,7 +149,23 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			status = " (local, no key needed)"
 		}
 
-		fmt.Printf("  %d. %s%s\n", i+1, provider.FormattedName, status)
+		// Add helpful descriptions
+		switch provider.Name {
+		case "openrouter":
+			description = " - 100+ models, free options, pay-as-you-go"
+		case "openai":
+			description = " - GPT models, reliable but pricier"
+		case "deepinfra":
+			description = " - Open-source models, good performance"
+		case "ollama":
+			description = " - Run models locally, completely free (requires setup)"
+		case "ollama-turbo":
+			description = " - Hosted Ollama with API access"
+		case "jinaai":
+			description = " - Specialized in embeddings and search"
+		}
+
+		fmt.Printf("  %d. %s%s%s\n", i+1, provider.FormattedName, status, description)
 	}
 	fmt.Println()
 
@@ -175,9 +189,15 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		case "openai":
 			fmt.Println("   • Visit: https://platform.openai.com/api-keys")
 			fmt.Println("   • Create an account and generate an API key")
+			fmt.Println("   • Note: OpenAI models are more expensive (~$0.01-0.06 per request)")
+			fmt.Println("   • Consider OpenRouter for more cost-effective options")
 		case "openrouter":
 			fmt.Println("   • Visit: https://openrouter.ai/keys")
-			fmt.Println("   • Access to many different AI models through one API")
+			fmt.Println("   • Access to 100+ AI models through one API")
+			fmt.Println("   • Important: Choose models with tool-calling support")
+			fmt.Println("   • Recommended: qwen/qwen3-coder-30b-a3b-instruct (great for coding)")
+			fmt.Println("   • Also good: anthropic/claude-3.5-haiku, openai/gpt-5-mini")
+			fmt.Println("   • Pay-as-you-go pricing, no monthly fees")
 		case "deepinfra":
 			fmt.Println("   • Visit: https://deepinfra.com/dash/api_keys")
 			fmt.Println("   • Focus on open-source models")
@@ -440,4 +460,48 @@ func DebugPrintConfig(config *Config, apiKeys *APIKeys) {
 			fmt.Printf("    %s: %s\n", provider, masked)
 		}
 	}
+}
+
+// ShowWelcomeMessage displays a comprehensive welcome message for new users
+func ShowWelcomeMessage() {
+	fmt.Println("🚀 Welcome to ledit - AI-powered code assistance!")
+	fmt.Println()
+	fmt.Println("   ledit helps you write code faster using AI language models.")
+	fmt.Println("   Requires models with tool-calling support for code editing.")
+	fmt.Println("   Get started with low-cost AI models - no lock-in, maximum flexibility.")
+	fmt.Println()
+	fmt.Println("💡 Recommended for beginners:")
+	fmt.Println("   • OpenRouter - Access to 100+ AI models through one API")
+	fmt.Println("   • Tool-calling models work best with ledit (required for code editing)")
+	fmt.Println("   • Pay-as-you-go pricing starting from $0.0001 per request")
+	fmt.Println("   • Great model: qwen/qwen3-coder-30b-a3b-instruct (excellent for coding)")
+	fmt.Println()
+	fmt.Println("🔗 Get started: https://openrouter.ai/keys")
+	fmt.Println()
+}
+
+// ShowNextSteps displays helpful next steps after successful setup
+func ShowNextSteps(provider, configDir string) {
+	fmt.Println("Next steps:")
+	fmt.Println("  • Run 'ledit' to start the interactive mode")
+	fmt.Println("  • Run 'ledit agent \"your task here\"' for direct commands")
+
+	// Add specific recommendations based on provider
+	if provider == "openrouter" {
+		fmt.Println()
+		fmt.Println("💰 Cost-effective tool-calling models:")
+		fmt.Println("  • qwen/qwen3-coder-30b-a3b-instruct - Excellent for coding tasks")
+		fmt.Println("  • anthropic/claude-3.5-haiku - Fast and affordable")
+		fmt.Println("  • openai/gpt-5-mini - Good performance, low cost")
+		fmt.Println("  • Note: Avoid models without tool-calling support - they won't work with ledit")
+		fmt.Println()
+		fmt.Println("📖 Usage examples:")
+		fmt.Println("  ledit agent -m \"qwen/qwen3-coder-30b-a3b-instruct\" \"Add error handling to my function\"")
+		fmt.Println("  ledit agent -p openrouter \"Explain this code and suggest improvements\"")
+	}
+
+	fmt.Println()
+	fmt.Println("  • Use --provider and --model flags to try different options")
+	fmt.Printf("  • Config stored in: %s\n", configDir)
+	fmt.Println()
 }

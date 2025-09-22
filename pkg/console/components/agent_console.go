@@ -284,7 +284,7 @@ func (ac *AgentConsole) processInput(input string) error {
 	// Reset formatter for new session
 	ac.streamingFormatter.Reset()
 
-	// Enable streaming with our formatter callback
+	// Enable streaming with our formatter callback for all providers
 	ac.agent.EnableStreaming(func(content string) {
 		ac.streamingFormatter.Write(content)
 		// Update TPS estimation during streaming
@@ -535,8 +535,12 @@ func (ac *AgentConsole) updateFooter() {
 		maxContextTokens = ac.agent.GetMaxContextTokens()
 	}
 
-	// Update footer with current stats
-	ac.footer.UpdateStats(model, provider, ac.totalTokens, ac.totalCost, iteration, contextTokens, maxContextTokens)
+	// Update footer with current stats - use agent's total tokens to avoid double counting
+	actualTotalTokens := ac.totalTokens
+	if ac.agent != nil {
+		actualTotalTokens = ac.agent.GetTotalTokens()
+	}
+	ac.footer.UpdateStats(model, provider, actualTotalTokens, ac.totalCost, iteration, contextTokens, maxContextTokens)
 
 	// Force render to ensure tokens update is shown
 	if err := ac.footer.Render(); err != nil {
@@ -632,8 +636,9 @@ func (ac *AgentConsole) updateStreamingTPS(content string) {
 	// Accumulate streaming tokens
 	ac.streamingTokenCount += int(estimatedTokens)
 
-	// Update estimated total tokens for display
-	ac.totalTokens += int(estimatedTokens)
+	// TODO: Fix token counting - don't double count streaming tokens
+	// Total tokens should come from agent.GetTotalTokens() only
+	// ac.totalTokens += int(estimatedTokens)
 
 	// Update footer less frequently to allow proper TPS calculation
 	elapsed := now.Sub(ac.streamingStartTime).Seconds()

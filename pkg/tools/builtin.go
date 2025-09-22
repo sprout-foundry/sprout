@@ -9,8 +9,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/alantheprice/ledit/pkg/history"
 	"github.com/alantheprice/ledit/pkg/ui"
 )
 
@@ -35,6 +37,10 @@ func (e *Executor) executeBuiltinTool(ctx context.Context, toolName string, args
 		return e.executeEditFileSection(ctx, args)
 	case "validate_file":
 		return e.executeValidateFile(ctx, args)
+	case "view_history":
+		return e.executeViewHistory(ctx, args)
+	case "rollback_changes":
+		return e.executeRollbackChanges(ctx, args)
 	default:
 		return &Result{
 			Success: false,
@@ -562,4 +568,309 @@ func (e *Executor) shouldSkipFile(path string) bool {
 	}
 
 	return false
+}
+
+// executeViewHistory allows models to view change history across sessions
+func (e *Executor) executeViewHistory(ctx context.Context, args map[string]interface{}) (*Result, error) {
+	// Parse arguments
+	limit := 10
+	if l, ok := args["limit"].(float64); ok {
+		limit = int(l)
+	}
+
+	var fileFilter string
+	if f, ok := args["file_filter"].(string); ok {
+		fileFilter = strings.TrimSpace(f)
+	}
+
+	var sinceFilter string
+	if s, ok := args["since"].(string); ok && s != "" {
+		// Validate the time format
+		_, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return &Result{
+				Success: false,
+				Errors:  []string{fmt.Sprintf("Invalid time format: %s. Use ISO 8601 format like '2024-01-01T10:00:00Z'", s)},
+			}, nil
+		}
+		sinceFilter = s
+	}
+
+	showContent := false
+	if sc, ok := args["show_content"].(bool); ok {
+		showContent = sc
+	}
+
+	// Get changes using the history package
+	var changes []history.ChangeLog
+	var err error
+
+	if sinceFilter != "" {
+		sinceTime, _ := time.Parse(time.RFC3339, sinceFilter)
+		changes, err = history.GetChangesSince(sinceTime)
+	} else {
+		changes, err = history.GetAllChanges()
+	}
+
+	if err != nil {
+		return &Result{
+			Success: false,
+			Errors:  []string{fmt.Sprintf("Failed to retrieve change history: %v", err)},
+		}, nil
+	}
+
+	// Filter by filename if specified
+	if fileFilter != "" {
+		var filtered []history.ChangeLog
+		for _, change := range changes {
+			if strings.Contains(strings.ToLower(change.Filename), strings.ToLower(fileFilter)) {
+				filtered = append(filtered, change)
+			}
+		}
+		changes = filtered
+	}
+
+	// Limit results
+	if len(changes) > limit {
+		changes = changes[:limit]
+	}
+
+	if len(changes) == 0 {
+		return &Result{
+			Success: true,
+			Output:  "No changes found matching the specified criteria.",
+		}, nil
+	}
+
+	// Format results
+	result := formatHistoryView(changes, showContent)
+
+	return &Result{
+		Success: true,
+		Output:  result,
+		Metadata: map[string]interface{}{
+			"limit":        limit,
+			"file_filter":  fileFilter,
+			"since":        sinceFilter,
+			"show_content": showContent,
+			"entry_count":  len(changes),
+		},
+	}, nil
+}
+
+// executeRollbackChanges allows models to rollback changes
+func (e *Executor) executeRollbackChanges(ctx context.Context, args map[string]interface{}) (*Result, error) {
+	confirm := false
+	if c, ok := args["confirm"].(bool); ok {
+		confirm = c
+	}
+
+	revisionID, hasRevision := args["revision_id"].(string)
+	filePath, hasFile := args["file_path"].(string)
+
+	if !hasRevision {
+		// Show available revisions to rollback
+		changes, err := history.GetAllChanges()
+		if err != nil {
+			return &Result{
+				Success: false,
+				Errors:  []string{fmt.Sprintf("Failed to retrieve changes: %v", err)},
+			}, nil
+		}
+
+		if len(changes) == 0 {
+			return &Result{
+				Success: true,
+				Output:  "No changes found to rollback.",
+			}, nil
+		}
+
+		// Group by revision and show only active changes
+		revisions := make(map[string][]history.ChangeLog)
+		for _, change := range changes {
+			if change.Status == "active" {
+				revisions[change.RequestHash] = append(revisions[change.RequestHash], change)
+			}
+		}
+
+		if len(revisions) == 0 {
+			return &Result{
+				Success: true,
+				Output:  "No active changes found to rollback.",
+			}, nil
+		}
+
+		var result strings.Builder
+		result.WriteString("Available revisions to rollback:\n\n")
+
+		for revID, revChanges := range revisions {
+			result.WriteString(fmt.Sprintf("**Revision ID:** %s\n", revID))
+			result.WriteString(fmt.Sprintf("**Model:** %s\n", revChanges[0].AgentModel))
+			result.WriteString(fmt.Sprintf("**Time:** %s\n", revChanges[0].Timestamp.Format(time.RFC3339)))
+			result.WriteString(fmt.Sprintf("**Files changed:** %d\n", len(revChanges)))
+			for _, change := range revChanges {
+				result.WriteString(fmt.Sprintf("  - %s\n", change.Filename))
+			}
+			result.WriteString("\n")
+		}
+
+		result.WriteString("To rollback a revision, call this tool again with:\n")
+		result.WriteString("- `revision_id`: The revision ID to rollback\n")
+		result.WriteString("- `confirm`: true (to actually perform the rollback)\n")
+		result.WriteString("- `file_path`: Optional, to rollback only a specific file\n")
+
+		return &Result{
+			Success: true,
+			Output:  result.String(),
+			Metadata: map[string]interface{}{
+				"action":          "list_revisions",
+				"available_count": len(revisions),
+			},
+		}, nil
+	}
+
+	if hasFile && !confirm {
+		return &Result{
+			Success: true,
+			Output: fmt.Sprintf("Would rollback file '%s' from revision '%s'.\nTo confirm, call again with confirm=true.",
+				filePath, revisionID),
+			Metadata: map[string]interface{}{
+				"action":      "preview_file_rollback",
+				"revision_id": revisionID,
+				"file_path":   filePath,
+			},
+		}, nil
+	}
+
+	if !confirm {
+		return &Result{
+			Success: true,
+			Output:  fmt.Sprintf("Would rollback revision '%s'.\nTo confirm, call again with confirm=true.", revisionID),
+			Metadata: map[string]interface{}{
+				"action":      "preview_revision_rollback",
+				"revision_id": revisionID,
+			},
+		}, nil
+	}
+
+	// Perform actual rollback
+	if hasFile {
+		// Rollback specific file
+		changes, err := history.GetAllChanges()
+		if err != nil {
+			return &Result{
+				Success: false,
+				Errors:  []string{fmt.Sprintf("Failed to retrieve changes: %v", err)},
+			}, nil
+		}
+
+		// Find the specific file change
+		var targetChange *history.ChangeLog
+		for _, change := range changes {
+			if change.RequestHash == revisionID && change.Filename == filePath && change.Status == "active" {
+				targetChange = &change
+				break
+			}
+		}
+
+		if targetChange == nil {
+			return &Result{
+				Success: false,
+				Errors:  []string{fmt.Sprintf("No active change found for file '%s' in revision '%s'", filePath, revisionID)},
+			}, nil
+		}
+
+		// Restore the original content
+		err = filesystem.SaveFile(targetChange.Filename, targetChange.OriginalCode)
+		if err != nil {
+			return &Result{
+				Success: false,
+				Errors:  []string{fmt.Sprintf("Failed to restore file content: %v", err)},
+			}, nil
+		}
+
+		return &Result{
+			Success: true,
+			Output:  fmt.Sprintf("Successfully rolled back file '%s' from revision '%s'", filePath, revisionID),
+			Metadata: map[string]interface{}{
+				"action":      "file_rollback",
+				"revision_id": revisionID,
+				"file_path":   filePath,
+			},
+		}, nil
+	} else {
+		// Rollback entire revision
+		err := history.RevertChangeByRevisionID(revisionID)
+		if err != nil {
+			return &Result{
+				Success: false,
+				Errors:  []string{fmt.Sprintf("Failed to rollback revision: %v", err)},
+			}, nil
+		}
+
+		return &Result{
+			Success: true,
+			Output:  fmt.Sprintf("Successfully rolled back revision '%s'", revisionID),
+			Metadata: map[string]interface{}{
+				"action":      "revision_rollback",
+				"revision_id": revisionID,
+			},
+		}, nil
+	}
+}
+
+// formatHistoryView formats change history for display
+func formatHistoryView(changes []history.ChangeLog, showContent bool) string {
+	var result strings.Builder
+
+	result.WriteString(fmt.Sprintf("## Change History (%d entries)\n\n", len(changes)))
+
+	// Group by revision
+	revisions := make(map[string][]history.ChangeLog)
+	revisionOrder := make([]string, 0)
+	seen := make(map[string]bool)
+
+	for _, change := range changes {
+		if !seen[change.RequestHash] {
+			revisionOrder = append(revisionOrder, change.RequestHash)
+			seen[change.RequestHash] = true
+		}
+		revisions[change.RequestHash] = append(revisions[change.RequestHash], change)
+	}
+
+	for _, revID := range revisionOrder {
+		revChanges := revisions[revID]
+		if len(revChanges) == 0 {
+			continue
+		}
+
+		firstChange := revChanges[0]
+		result.WriteString(fmt.Sprintf("### Revision: %s\n", revID))
+		result.WriteString(fmt.Sprintf("**Model:** %s\n", firstChange.AgentModel))
+		result.WriteString(fmt.Sprintf("**Time:** %s\n", firstChange.Timestamp.Format("2006-01-02 15:04:05")))
+		result.WriteString(fmt.Sprintf("**Files Changed:** %d\n", len(revChanges)))
+
+		if firstChange.Instructions != "" {
+			result.WriteString(fmt.Sprintf("**Instructions:** %s\n", firstChange.Instructions))
+		}
+
+		result.WriteString("\n**Files:**\n")
+		for _, change := range revChanges {
+			result.WriteString(fmt.Sprintf("- **%s** (%s)\n", change.Filename, change.Status))
+			if change.Description != "" {
+				result.WriteString(fmt.Sprintf("  *%s*\n", change.Description))
+			}
+
+			if showContent {
+				result.WriteString("  ```diff\n")
+				// For now, just show a summary. Full diff can be added later.
+				result.WriteString(fmt.Sprintf("  Content changed (%d chars → %d chars)\n",
+					len(change.OriginalCode), len(change.NewCode)))
+				result.WriteString("  ```\n")
+			}
+		}
+		result.WriteString("\n---\n\n")
+	}
+
+	return result.String()
 }

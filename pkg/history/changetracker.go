@@ -1,4 +1,4 @@
-package changetracker
+package history
 
 import (
 	"bufio"

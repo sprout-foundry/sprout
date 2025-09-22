@@ -23,6 +23,12 @@ type ProviderAPIKey struct {
 func getSupportedProviders() []ProviderAPIKey {
 	return []ProviderAPIKey{
 		{
+			Name:            "openrouter",
+			FormattedName:   "OpenRouter (Recommended)",
+			RequiresKey:     true,
+			EnvVariableName: "OPENROUTER_API_KEY",
+		},
+		{
 			Name:            "openai",
 			FormattedName:   "OpenAI",
 			RequiresKey:     true,
@@ -33,12 +39,6 @@ func getSupportedProviders() []ProviderAPIKey {
 			FormattedName:   "DeepInfra",
 			RequiresKey:     true,
 			EnvVariableName: "DEEPINFRA_API_KEY",
-		},
-		{
-			Name:            "openrouter",
-			FormattedName:   "OpenRouter",
-			RequiresKey:     true,
-			EnvVariableName: "OPENROUTER_API_KEY",
 		},
 		{
 			Name:          "ollama",

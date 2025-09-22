@@ -183,7 +183,7 @@ ledit agent "Analyze this codebase" --provider openai --model gpt-4
 - Verify test scripts have execute permissions
 
 **E2E tests expensive**:
-- Use cheaper models when possible: `deepinfra:meta-llama/Llama-3.1-8B-Instruct`
+- Use cheaper models when possible: `deepinfra:deepseek-ai/DeepSeek-V3.1`
 - Run selectively, not all tests every time
 
 **Smoke tests failing**:

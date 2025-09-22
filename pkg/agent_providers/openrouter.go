@@ -43,7 +43,7 @@ func NewOpenRouterProvider() (*OpenRouterProvider, error) {
 		},
 		apiToken: token,
 		debug:    false,
-		model:    "openai/gpt-4o", // Default OpenRouter model (matches config.go defaults)
+		model:    "openai/gpt-5", // Default OpenRouter model (matches config.go defaults)
 	}, nil
 }
 
@@ -727,7 +727,7 @@ func (p *OpenRouterProvider) SupportsVision() bool {
 // GetVisionModel returns the vision model for OpenRouter
 func (p *OpenRouterProvider) GetVisionModel() string {
 	// Return default vision model
-	return "gpt-4o"
+	return "gpt-5"
 }
 
 // SendVisionRequest sends a vision-enabled chat request

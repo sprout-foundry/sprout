@@ -7,35 +7,35 @@ import (
 
 func TestModelItem_DisplayCompact(t *testing.T) {
 	tests := []struct {
-		name           string
-		modelItem      *ModelItem
-		maxWidth       int
-		expectedPrefix string
+		name             string
+		modelItem        *ModelItem
+		maxWidth         int
+		expectedPrefix   string
 		expectedContains []string
 	}{
 		{
 			name: "Model with input/output pricing and context",
 			modelItem: &ModelItem{
 				Provider:      "openai",
-				Model:         "gpt-4o",
+				Model:         "gpt-5",
 				InputCost:     0.0025,
 				OutputCost:    0.01,
 				ContextLength: 128000,
 			},
-			maxWidth:       40,
-			expectedPrefix: "gpt-4o",
+			maxWidth:         40,
+			expectedPrefix:   "gpt-5",
 			expectedContains: []string{"$0.003/$0.010/M", "128K"},
 		},
 		{
 			name: "Model with legacy pricing",
 			modelItem: &ModelItem{
-				Provider:     "anthropic",
-				Model:        "claude-3-sonnet",
-				LegacyCost:   0.003,
+				Provider:      "anthropic",
+				Model:         "claude-3-sonnet",
+				LegacyCost:    0.003,
 				ContextLength: 200000,
 			},
-			maxWidth:       50,
-			expectedPrefix: "claude-3-sonnet",
+			maxWidth:         50,
+			expectedPrefix:   "claude-3-sonnet",
 			expectedContains: []string{"$0.003/M", "200K"},
 		},
 		{
@@ -45,8 +45,8 @@ func TestModelItem_DisplayCompact(t *testing.T) {
 				Model:         "llama3",
 				ContextLength: 4096,
 			},
-			maxWidth:       30,
-			expectedPrefix: "llama3",
+			maxWidth:         30,
+			expectedPrefix:   "llama3",
 			expectedContains: []string{"FREE", "4K"},
 		},
 		{
@@ -55,8 +55,8 @@ func TestModelItem_DisplayCompact(t *testing.T) {
 				Provider: "huggingface",
 				Model:    "codellama",
 			},
-			maxWidth:       20,
-			expectedPrefix: "codellama",
+			maxWidth:         20,
+			expectedPrefix:   "codellama",
 			expectedContains: []string{},
 		},
 		{
@@ -68,8 +68,8 @@ func TestModelItem_DisplayCompact(t *testing.T) {
 				OutputCost:    0.002,
 				ContextLength: 128000,
 			},
-			maxWidth:       15,
-			expectedPrefix: "gpt-4-turbo",
+			maxWidth:         15,
+			expectedPrefix:   "gpt-4-turbo",
 			expectedContains: []string{}, // Should truncate before pricing info
 		},
 		{
@@ -81,8 +81,8 @@ func TestModelItem_DisplayCompact(t *testing.T) {
 				OutputCost:    0.06,
 				ContextLength: 8192,
 			},
-			maxWidth:       25,
-			expectedPrefix: "gpt-4",
+			maxWidth:         25,
+			expectedPrefix:   "gpt-4",
 			expectedContains: []string{"$0.030/$0.060/M"}, // Should show pricing but not context
 		},
 	}
@@ -90,19 +90,19 @@ func TestModelItem_DisplayCompact(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.modelItem.DisplayCompact(tt.maxWidth)
-			
+
 			// Should start with model name
 			if !strings.HasPrefix(result, tt.expectedPrefix) {
 				t.Errorf("DisplayCompact() result %q should start with %q", result, tt.expectedPrefix)
 			}
-			
+
 			// Should contain expected pricing/context info
 			for _, expected := range tt.expectedContains {
 				if !strings.Contains(result, expected) {
 					t.Errorf("DisplayCompact() result %q should contain %q", result, expected)
 				}
 			}
-			
+
 			// Should not exceed max width
 			if len(result) > tt.maxWidth {
 				t.Errorf("DisplayCompact() result %q exceeds max width %d (length: %d)", result, tt.maxWidth, len(result))
@@ -168,21 +168,21 @@ func TestModelItem_DisplayCompact_EdgeCases(t *testing.T) {
 
 func TestModelItem_DisplayCompact_WithDisplayName(t *testing.T) {
 	modelItem := &ModelItem{
-		Provider:    "openai",
-		Model:       "gpt-4o",
-		DisplayName: "GPT-4 Omni",
-		InputCost:   0.0025,
-		OutputCost:  0.01,
+		Provider:      "openai",
+		Model:         "gpt-5",
+		DisplayName:   "GPT-5",
+		InputCost:     0.0025,
+		OutputCost:    0.01,
 		ContextLength: 128000,
 	}
 
 	result := modelItem.DisplayCompact(40)
-	
+
 	// Should use DisplayName instead of Model
 	if !strings.HasPrefix(result, "GPT-4 Omni") {
 		t.Errorf("DisplayCompact() should use DisplayName. Got %q", result)
 	}
-	
+
 	// Should still contain pricing and context info
 	if !strings.Contains(result, "$0.003/$0.010/M") || !strings.Contains(result, "128K") {
 		t.Errorf("DisplayCompact() should contain pricing and context info. Got %q", result)
@@ -192,7 +192,7 @@ func TestModelItem_DisplayCompact_WithDisplayName(t *testing.T) {
 func BenchmarkModelItem_DisplayCompact(b *testing.B) {
 	modelItem := &ModelItem{
 		Provider:      "openai",
-		Model:         "gpt-4o",
+		Model:         "gpt-5",
 		InputCost:     0.0025,
 		OutputCost:    0.01,
 		ContextLength: 128000,

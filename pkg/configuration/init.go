@@ -52,19 +52,29 @@ func Initialize() (*Config, *APIKeys, error) {
 
 	// In CI environments, skip interactive setup and use defaults
 	if isCI && (isFirstRun || needsSetup) {
+		if isFirstRun {
+			fmt.Printf("🚀 Welcome to ledit! Let's set up your AI provider.\n")
+			fmt.Printf("   Config directory: %s\n\n", configDir)
+		}
+
 		// Set a default provider that works in CI
 		if apiKeys.HasAPIKey("openrouter") {
 			config.LastUsedProvider = "openrouter"
+			fmt.Printf("✅ Using OpenRouter provider from environment\n")
 		} else if apiKeys.HasAPIKey("openai") {
 			config.LastUsedProvider = "openai"
+			fmt.Printf("✅ Using OpenAI provider from environment\n")
 		} else {
 			// Default to ollama-local which doesn't need API keys
 			config.LastUsedProvider = "ollama-local"
+			fmt.Printf("✅ Using Ollama local provider (no API key needed)\n")
 		}
 
 		if err := config.Save(); err != nil {
 			return nil, nil, fmt.Errorf("failed to save config: %w", err)
 		}
+
+		fmt.Printf("🎉 Setup complete! You can now use ledit.\n\n")
 
 		return config, apiKeys, nil
 	}

@@ -9,14 +9,21 @@ import (
 
 // TestGetOptimizedToolDefinitions verifies that the agent gets both standard and MCP tools
 func TestGetOptimizedToolDefinitions(t *testing.T) {
-	// Set a test API key to ensure agent creation succeeds
+	// Set CI environment and test API key to ensure agent creation succeeds
+	originalCI := os.Getenv("CI")
 	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools")
+	os.Setenv("CI", "1")
+	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
 	defer func() {
 		if originalKey != "" {
 			os.Setenv("OPENROUTER_API_KEY", originalKey)
 		} else {
 			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+		if originalCI != "" {
+			os.Setenv("CI", originalCI)
+		} else {
+			os.Unsetenv("CI")
 		}
 	}()
 
@@ -56,14 +63,21 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 
 // TestOllamaAPIKeyDetection verifies that OLLAMA_API_KEY is properly detected
 func TestOllamaAPIKeyDetection(t *testing.T) {
-	// Set up test environment with API keys
+	// Set up test environment with API keys and CI flag
+	originalCI := os.Getenv("CI")
 	originalOpenRouterKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key-openrouter")
+	os.Setenv("CI", "1")
+	os.Setenv("OPENROUTER_API_KEY", "test-key-openrouter-long-enough")
 	defer func() {
 		if originalOpenRouterKey != "" {
 			os.Setenv("OPENROUTER_API_KEY", originalOpenRouterKey)
 		} else {
 			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+		if originalCI != "" {
+			os.Setenv("CI", originalCI)
+		} else {
+			os.Unsetenv("CI")
 		}
 	}()
 

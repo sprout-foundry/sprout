@@ -61,9 +61,8 @@ func (sf *StreamingFormatter) Write(content string) {
 		sf.isFirstChunk = false
 		if sf.outputMutex != nil {
 			sf.outputMutex.Lock()
-			// Clear the "Processing..." line
-			fmt.Print("\r\033[K")
-			// Show streaming indicator with color
+			// Instead of clearing line, just add streaming indicator on new line
+			// This prevents accidentally clearing wrapped content
 			color.Cyan("✨ Streaming response...\n\n")
 			sf.outputMutex.Unlock()
 		}

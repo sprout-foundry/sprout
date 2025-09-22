@@ -65,9 +65,9 @@ func Initialize() (*Config, *APIKeys, error) {
 			config.LastUsedProvider = "openai"
 			fmt.Printf("✅ Using OpenAI provider from environment\n")
 		} else {
-			// Default to ollama-local which doesn't need API keys
-			config.LastUsedProvider = "ollama-local"
-			fmt.Printf("✅ Using Ollama local provider (no API key needed)\n")
+			// Default to test provider which is designed for CI/testing
+			config.LastUsedProvider = "test"
+			fmt.Printf("✅ Using test provider (designed for CI environments)\n")
 		}
 
 		if err := config.Save(); err != nil {

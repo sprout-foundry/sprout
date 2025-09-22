@@ -38,6 +38,7 @@ const (
 	OllamaTurboClientType ClientType = "ollama-turbo"
 	OpenRouterClientType  ClientType = "openrouter"
 	OpenAIClientType      ClientType = "openai"
+	TestClientType        ClientType = "test" // Mock provider for CI/testing
 )
 
 // NewUnifiedClient creates a client with default model for the provider
@@ -146,6 +147,8 @@ func ParseProviderName(name string) (ClientType, error) {
 		return OllamaLocalClientType, nil
 	case "ollama-turbo":
 		return OllamaTurboClientType, nil
+	case "test":
+		return TestClientType, nil
 	default:
 		return "", fmt.Errorf("unknown provider: %s", name)
 	}
@@ -156,6 +159,9 @@ func IsProviderAvailable(provider ClientType) bool {
 	switch provider {
 	case OllamaClientType, OllamaLocalClientType:
 		// Ollama local is always available (we'll check actual model availability later)
+		return true
+	case TestClientType:
+		// Test provider is always available for CI/testing
 		return true
 	case OllamaTurboClientType:
 		return os.Getenv("OLLAMA_API_KEY") != ""

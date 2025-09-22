@@ -24,12 +24,12 @@ func isTerminal() bool {
 }
 
 var (
-	agentSkipPrompt  bool
-	agentModel       string // Declare agentModel variable
-	agentProvider    string // Declare agentProvider variable
-	agentDryRun      bool
-	maxIterations    int
-	agentNoStreaming bool // Disable streaming mode (streaming is default)
+	agentSkipPrompt       bool
+	agentModel            string // Declare agentModel variable
+	agentProvider         string // Declare agentProvider variable
+	agentDryRun           bool
+	maxIterations         int
+	agentNoStreaming      bool   // Disable streaming mode (streaming is default)
 	agentSystemPromptFile string // File path for custom system prompt
 	agentSystemPrompt     string // Direct system prompt string
 )
@@ -512,7 +512,10 @@ Examples:
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")
 		}
 
-		isInteractive := len(args) == 0 || enableUI
+		// Check if we're in a CI environment
+		isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
+
+		isInteractive := (len(args) == 0 || enableUI) && !isCI
 		var userIntent string
 
 		if isInteractive {
@@ -527,7 +530,15 @@ Examples:
 			}
 			return runInteractiveMode(chatAgent)
 		} else {
-			// Direct mode - execute single command
+			// Direct mode - execute single command or handle CI without args
+			if len(args) == 0 {
+				// In CI with no args, show welcome message and exit gracefully
+				fmt.Println("Welcome to ledit! 🤖")
+				fmt.Println("Agent initialized successfully in CI environment.")
+				fmt.Println("Use 'ledit agent \"your query\"' to execute commands.")
+				return nil
+			}
+
 			userIntent = strings.Join(args, " ")
 			err := executeDirectAgentCommand(chatAgent, userIntent)
 			if err != nil {

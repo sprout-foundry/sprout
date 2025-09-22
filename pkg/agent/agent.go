@@ -158,9 +158,14 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Set debug mode on the client
 	client.SetDebug(debug)
 
-	// Check connection
-	if err := client.CheckConnection(); err != nil {
-		return nil, fmt.Errorf("client connection check failed: %w", err)
+	// Check connection (skip in CI environments when testing)
+	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
+	skipConnectionCheck := isCI && os.Getenv("LEDIT_SKIP_CONNECTION_CHECK") != ""
+
+	if !skipConnectionCheck {
+		if err := client.CheckConnection(); err != nil {
+			return nil, fmt.Errorf("client connection check failed: %w", err)
+		}
 	}
 
 	// Use embedded system prompt

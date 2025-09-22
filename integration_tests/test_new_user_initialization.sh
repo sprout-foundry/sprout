@@ -32,6 +32,7 @@ run_test_logic() {
     # Create a completely clean environment
     export XDG_CONFIG_HOME="$PWD/test_config"
     export HOME="$PWD/test_home"
+    export LEDIT_SKIP_CONNECTION_CHECK="1"  # Skip connection checks in CI
     mkdir -p "$HOME"
     
     # Ensure no existing config
@@ -43,7 +44,7 @@ run_test_logic() {
     echo "=== Test 1: Configuration initialization ==="
     
     # Test that ledit can handle missing config gracefully
-    output=$(timeout 10s echo "exit" | $LEDIT_CMD agent --skip-prompt 2>&1 || true)
+    output=$(timeout 10s echo "exit" | $LEDIT_CMD agent --skip-prompt --dry-run 2>&1 || true)
     
     if echo "$output" | grep -q "Welcome to ledit"; then
         echo "✓ New user welcome message displayed"

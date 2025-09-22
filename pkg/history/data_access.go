@@ -1,7 +1,8 @@
-package changetracker
+package history
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -38,7 +39,7 @@ type ChangeMetadata struct {
 	Description      string    `json:"description"`
 	OriginalPrompt   string    `json:"original_prompt,omitempty"` // Added: Original user prompt
 	LLMMessage       string    `json:"llm_message,omitempty"`     // Added: Full message sent to LLM
-	AgentModel     string    `json:"agent_model,omitempty"`   // Added: Editing model used
+	AgentModel       string    `json:"agent_model,omitempty"`     // Added: Editing model used
 }
 
 // ChangeLog represents a logged change, including context from the base revision.
@@ -56,7 +57,7 @@ type ChangeLog struct {
 	Timestamp        time.Time
 	OriginalPrompt   string // Added: Original user prompt
 	LLMMessage       string // Added: Full message sent to LLM
-	AgentModel     string // Added: Editing model used
+	AgentModel       string // Added: Editing model used
 }
 
 func ensureChangesDirs() error {
@@ -107,10 +108,14 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 	safeFilename := strings.ReplaceAll(filename, "/", "_")
 	safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
 
-	if err := filesystem.WriteFileWithDir(filepath.Join(changeDir, safeFilename+originalSuffix), []byte(originalCode), 0644); err != nil {
+	// Encode file contents in base64 to avoid grep conflicts
+	originalEncoded := base64.StdEncoding.EncodeToString([]byte(originalCode))
+	newEncoded := base64.StdEncoding.EncodeToString([]byte(newCode))
+
+	if err := filesystem.WriteFileWithDir(filepath.Join(changeDir, safeFilename+originalSuffix), []byte(originalEncoded), 0644); err != nil {
 		return fmt.Errorf("failed to save original code: %w", err)
 	}
-	if err := filesystem.WriteFileWithDir(filepath.Join(changeDir, safeFilename+updatedSuffix), []byte(newCode), 0644); err != nil {
+	if err := filesystem.WriteFileWithDir(filepath.Join(changeDir, safeFilename+updatedSuffix), []byte(newEncoded), 0644); err != nil {
 		return fmt.Errorf("failed to save updated code: %w", err)
 	}
 
@@ -125,7 +130,7 @@ func RecordChangeWithDetails(baseRevisionID string, filename, originalCode, newC
 		Description:      description,
 		OriginalPrompt:   originalPrompt,
 		LLMMessage:       llmMessage,
-		AgentModel:     editingModel,
+		AgentModel:       editingModel,
 	}
 
 	metadataBytes, err := json.MarshalIndent(metadata, "", "  ")
@@ -218,13 +223,25 @@ func fetchAllChanges() ([]ChangeLog, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read original code for %s: %w", metadata.Filename, err)
 		}
-		originalCode := string(originalBytes)
+		// Decode base64 content
+		originalDecoded, err := base64.StdEncoding.DecodeString(string(originalBytes))
+		if err != nil {
+			// Fallback for existing non-encoded files
+			originalDecoded = originalBytes
+		}
+		originalCode := string(originalDecoded)
 
 		updatedBytes, err := filesystem.ReadFileBytes(filepath.Join(changeDir, safeFilename+updatedSuffix))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read updated code for %s: %w", metadata.Filename, err)
 		}
-		newCode := string(updatedBytes)
+		// Decode base64 content
+		updatedDecoded, err := base64.StdEncoding.DecodeString(string(updatedBytes))
+		if err != nil {
+			// Fallback for existing non-encoded files
+			updatedDecoded = updatedBytes
+		}
+		newCode := string(updatedDecoded)
 
 		// Fetch instructions and response from revisions directory
 		revisionPath := filepath.Join(revisionsDir, metadata.RequestHash)
@@ -254,7 +271,7 @@ func fetchAllChanges() ([]ChangeLog, error) {
 			Timestamp:        metadata.Timestamp,
 			OriginalPrompt:   metadata.OriginalPrompt,
 			LLMMessage:       metadata.LLMMessage,
-			AgentModel:     metadata.AgentModel,
+			AgentModel:       metadata.AgentModel,
 		})
 	}
 

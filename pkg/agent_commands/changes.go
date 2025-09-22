@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/changetracker"
+	"github.com/alantheprice/ledit/pkg/history"
 )
 
 // ChangesCommand shows tracked file changes in the current session
@@ -35,7 +35,7 @@ func (c *ChangesCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	fmt.Printf("📝 Session Changes (Revision: %s)\n", chatAgent.GetRevisionID())
 	fmt.Println("=" + fmt.Sprintf("%*s", 50, "="))
-	
+
 	summary := chatAgent.GetChangesSummary()
 	fmt.Println(summary)
 
@@ -59,18 +59,18 @@ func (s *StatusCommand) Description() string {
 func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Println("📊 Agent Session Status")
 	fmt.Println("=" + fmt.Sprintf("%*s", 25, "="))
-	
+
 	// Session info
 	fmt.Printf("Session ID: %s\n", chatAgent.GetSessionID())
 	fmt.Printf("Model: %s\n", chatAgent.GetModel())
 	fmt.Printf("Provider: %s\n", chatAgent.GetProvider())
-	
+
 	// Change tracking info
 	if chatAgent.IsChangeTrackingEnabled() {
 		fmt.Printf("Change Tracking: ✅ Enabled\n")
 		fmt.Printf("Revision ID: %s\n", chatAgent.GetRevisionID())
 		fmt.Printf("Files Modified: %d\n", chatAgent.GetChangeCount())
-		
+
 		files := chatAgent.GetTrackedFiles()
 		if len(files) > 0 {
 			fmt.Println("\nModified Files:")
@@ -85,7 +85,7 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return nil
 }
 
-// LogCommand shows the change history using the changetracker
+// LogCommand shows the change history using the history package
 type LogCommand struct{}
 
 // Name returns the command name
@@ -102,9 +102,9 @@ func (l *LogCommand) Description() string {
 func (l *LogCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Println("📜 Recent Change History")
 	fmt.Println("=" + fmt.Sprintf("%*s", 25, "="))
-	
-	// Use the changetracker to print revision history
-	err := changetracker.PrintRevisionHistory()
+
+	// Use the history package to print revision history
+	err := history.PrintRevisionHistory()
 	if err != nil {
 		return fmt.Errorf("failed to show change history: %w", err)
 	}
@@ -136,7 +136,7 @@ func (r *RollbackCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	revisionID := args[0]
 	fmt.Printf("🔄 Attempting to rollback revision: %s\n", revisionID)
 
-	err := changetracker.RevertChangeByRevisionID(revisionID)
+	err := history.RevertChangeByRevisionID(revisionID)
 	if err != nil {
 		return fmt.Errorf("rollback failed: %w", err)
 	}

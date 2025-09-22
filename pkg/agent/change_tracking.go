@@ -8,7 +8,7 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/changetracker"
+	"github.com/alantheprice/ledit/pkg/history"
 )
 
 // ChangeTracker manages change tracking for the agent workflow
@@ -127,7 +127,7 @@ func (ct *ChangeTracker) Commit(llmResponse string) error {
 	}
 
 	// Record base revision
-	revisionID, err := changetracker.RecordBaseRevision(ct.revisionID, ct.instructions, llmResponse)
+	revisionID, err := history.RecordBaseRevision(ct.revisionID, ct.instructions, llmResponse)
 	if err != nil {
 		return fmt.Errorf("failed to record base revision: %w", err)
 	}
@@ -140,7 +140,7 @@ func (ct *ChangeTracker) Commit(llmResponse string) error {
 		description := fmt.Sprintf("%s via %s", change.Operation, change.ToolCall)
 		note := fmt.Sprintf("Agent session: %s", ct.sessionID)
 
-		err := changetracker.RecordChangeWithDetails(
+		err := history.RecordChangeWithDetails(
 			ct.revisionID,
 			change.FilePath,
 			change.OriginalCode,
@@ -223,7 +223,6 @@ func (ct *ChangeTracker) getAgentModel() string {
 	}
 	return "unknown"
 }
-
 
 // limitString truncates a string to the specified length with ellipsis
 func limitString(s string, maxLen int) string {

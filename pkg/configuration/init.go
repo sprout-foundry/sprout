@@ -7,6 +7,12 @@ import (
 
 // Initialize loads or creates configuration with first-run setup
 func Initialize() (*Config, *APIKeys, error) {
+	// Ensure config directory exists
+	configDir, err := GetConfigDir()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to access config directory: %w", err)
+	}
+
 	// Load or create config
 	config, err := Load()
 	if err != nil {
@@ -19,20 +25,55 @@ func Initialize() (*Config, *APIKeys, error) {
 		return nil, nil, fmt.Errorf("failed to load API keys: %w", err)
 	}
 
-	apiKeys.PopulateFromEnvironment()
+	// Populate from environment variables
+	envKeysFound := apiKeys.PopulateFromEnvironment()
+	if envKeysFound {
+		fmt.Println("✅ Found API keys from environment variables")
+	}
 
 	// Check if this is first run (no provider selected)
-	if config.LastUsedProvider == "" {
-		// First run - select initial provider
+	isFirstRun := config.LastUsedProvider == ""
+
+	// Also check if current provider has no API key (and needs one)
+	needsSetup := false
+	if !isFirstRun {
+		currentProvider := config.LastUsedProvider
+		if RequiresAPIKey(currentProvider) && !apiKeys.HasAPIKey(currentProvider) {
+			needsSetup = true
+			fmt.Printf("⚠️  Current provider '%s' requires an API key but none is configured.\n", getProviderDisplayName(currentProvider))
+		}
+	}
+
+	if isFirstRun || needsSetup {
+		if isFirstRun {
+			fmt.Printf("🚀 Welcome to ledit! Let's set up your AI provider.\n")
+			fmt.Printf("   Config directory: %s\n\n", configDir)
+		}
+
+		// First run or setup needed - select initial provider
 		provider, err := selectInitialProvider(apiKeys)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("provider setup failed: %w", err)
 		}
 
 		config.LastUsedProvider = provider
 		if err := config.Save(); err != nil {
 			return nil, nil, fmt.Errorf("failed to save config: %w", err)
 		}
+
+		fmt.Printf("🎉 Setup complete! You can now use ledit with %s.\n\n", getProviderDisplayName(provider))
+
+		// Show helpful next steps
+		fmt.Println("Next steps:")
+		fmt.Println("  • Run 'ledit' to start the interactive mode")
+		fmt.Println("  • Run 'ledit agent \"your task here\"' for direct commands")
+		fmt.Println("  • Use --provider flag to switch providers temporarily")
+		fmt.Printf("  • Config stored in: %s\n\n", configDir)
+	}
+
+	// Final validation - ensure selected provider is actually usable
+	if err := validateProviderSetup(config.LastUsedProvider, apiKeys); err != nil {
+		return nil, nil, fmt.Errorf("provider validation failed: %w", err)
 	}
 
 	return config, apiKeys, nil
@@ -40,81 +81,92 @@ func Initialize() (*Config, *APIKeys, error) {
 
 // selectInitialProvider guides user through initial provider selection
 func selectInitialProvider(apiKeys *APIKeys) (string, error) {
-	fmt.Println("🚀 Welcome to ledit! Let's set up your AI provider.")
-	fmt.Println()
-
 	// Check which providers have API keys already
-	availableProviders := []string{}
 	providersWithKeys := []string{}
+	allProviders := getSupportedProviders()
 
-	// Check all providers
-	providers := []string{
-		"openai", "openrouter", "deepinfra", "ollama-local", "ollama-turbo",
-	}
-
-	for _, provider := range providers {
-		if !RequiresAPIKey(provider) {
-			// Ollama variants always available
-			availableProviders = append(availableProviders, provider)
-		} else if apiKeys.HasAPIKey(provider) {
-			availableProviders = append(availableProviders, provider)
-			providersWithKeys = append(providersWithKeys, provider)
+	for _, provider := range allProviders {
+		if !provider.RequiresKey || apiKeys.HasAPIKey(provider.Name) {
+			providersWithKeys = append(providersWithKeys, provider.Name)
 		}
 	}
 
-	// If we have providers with keys, show them first
+	// If we have providers ready to use, show them first
 	if len(providersWithKeys) > 0 {
-		fmt.Println("📋 Providers with API keys configured:")
-		for i, provider := range providersWithKeys {
-			fmt.Printf("  %d. %s\n", i+1, getProviderDisplayName(provider))
+		fmt.Println("✅ Ready to use (configured or no API key needed):")
+		for i, providerName := range providersWithKeys {
+			fmt.Printf("  %d. %s", i+1, getProviderDisplayName(providerName))
+			if !RequiresAPIKey(providerName) {
+				fmt.Print(" (no API key needed)")
+			}
+			fmt.Println()
 		}
 		fmt.Println()
 	}
 
-	// Show all provider options
-	fmt.Println("🤖 Available AI providers:")
-	fmt.Println("  1. OpenAI (gpt-4o, gpt-4, etc.)")
-	fmt.Println("  2. OpenRouter (access to many models)")
-	fmt.Println("  3. DeepInfra (open source models)")
-	fmt.Println("  4. Ollama Turbo (requires API key)")
-	fmt.Println("  5. Ollama Local (no API key needed, local models)")
+	// Show all provider options with clear descriptions
+	fmt.Println("🤖 All available AI providers:")
+	for i, provider := range allProviders {
+		status := ""
+		if provider.RequiresKey && !apiKeys.HasAPIKey(provider.Name) {
+			status = " (needs API key)"
+		} else if provider.RequiresKey && apiKeys.HasAPIKey(provider.Name) {
+			status = " ✅"
+		} else {
+			status = " (local, no key needed)"
+		}
+
+		fmt.Printf("  %d. %s%s\n", i+1, provider.FormattedName, status)
+	}
 	fmt.Println()
 
 	// Get user choice
 	var choice int
-	fmt.Print("Select a provider (1-9): ")
+	fmt.Printf("Select a provider (1-%d): ", len(allProviders))
 	_, err := fmt.Scanln(&choice)
-	if err != nil || choice < 1 || choice > 9 {
-		return "", fmt.Errorf("invalid choice")
+	if err != nil || choice < 1 || choice > len(allProviders) {
+		return "", fmt.Errorf("invalid choice, please enter a number between 1 and %d", len(allProviders))
 	}
 
-	// Map choice to provider
-	providerMap := map[int]string{
-		1: "openai",
-		2: "openrouter",
-		3: "deepinfra",
-		4: "ollama-turbo",
-		5: "ollama-local",
-	}
+	selectedProvider := allProviders[choice-1]
 
-	selectedProvider := providerMap[choice]
 	// Check if API key is needed
-	if RequiresAPIKey(selectedProvider) && !apiKeys.HasAPIKey(selectedProvider) {
+	if selectedProvider.RequiresKey && !apiKeys.HasAPIKey(selectedProvider.Name) {
 		fmt.Println()
-		apiKey, err := PromptForAPIKey(selectedProvider)
+		fmt.Printf("📋 Setting up %s:\n", selectedProvider.FormattedName)
+
+		// Provide helpful information about getting API keys
+		switch selectedProvider.Name {
+		case "openai":
+			fmt.Println("   • Visit: https://platform.openai.com/api-keys")
+			fmt.Println("   • Create an account and generate an API key")
+		case "openrouter":
+			fmt.Println("   • Visit: https://openrouter.ai/keys")
+			fmt.Println("   • Access to many different AI models through one API")
+		case "deepinfra":
+			fmt.Println("   • Visit: https://deepinfra.com/dash/api_keys")
+			fmt.Println("   • Focus on open-source models")
+		}
+		fmt.Println()
+
+		apiKey, err := PromptForAPIKey(selectedProvider.Name)
 		if err != nil {
 			return "", fmt.Errorf("failed to get API key: %w", err)
 		}
 
-		apiKeys.SetAPIKey(selectedProvider, apiKey)
+		apiKeys.SetAPIKey(selectedProvider.Name, apiKey)
 		if err := SaveAPIKeys(apiKeys); err != nil {
 			return "", fmt.Errorf("failed to save API key: %w", err)
 		}
 
-		fmt.Printf("✅ API key saved for %s\n", getProviderDisplayName(selectedProvider))
+		fmt.Printf("✅ API key saved for %s\n", selectedProvider.FormattedName)
+	} else if selectedProvider.RequiresKey {
+		fmt.Printf("✅ Using existing API key for %s\n", selectedProvider.FormattedName)
+	} else {
+		fmt.Printf("✅ Selected %s (no API key required)\n", selectedProvider.FormattedName)
 	}
 
-	return selectedProvider, nil
+	return selectedProvider.Name, nil
 }
 
 // EnsureProviderAPIKey ensures the provider has an API key, prompting if needed
@@ -271,6 +323,28 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 
 	fmt.Printf("✅ Added %s\n", getProviderDisplayName(provider))
 	return provider, nil
+}
+
+// validateProviderSetup ensures the provider can actually be used
+func validateProviderSetup(provider string, apiKeys *APIKeys) error {
+	if provider == "" {
+		return fmt.Errorf("no provider selected")
+	}
+
+	// Check if provider requires API key
+	if RequiresAPIKey(provider) {
+		if !apiKeys.HasAPIKey(provider) {
+			return fmt.Errorf("provider '%s' requires an API key but none is configured", provider)
+		}
+
+		// Basic API key format validation
+		key := apiKeys.GetAPIKey(provider)
+		if len(key) < 10 {
+			return fmt.Errorf("API key for '%s' appears to be too short (expected at least 10 characters)", provider)
+		}
+	}
+
+	return nil
 }
 
 // LoadOrInitConfig loads existing configuration or initializes a new one

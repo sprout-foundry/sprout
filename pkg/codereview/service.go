@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/changetracker"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/history"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -715,8 +715,8 @@ func (s *CodeReviewService) handleRejected(result *types.CodeReviewResult, ctx *
 
 	// Rollback changes if enabled and we have a revision ID
 	if opts.RollbackOnReject && ctx.RevisionID != "" {
-		if hasActive, _ := changetracker.HasActiveChangesForRevision(ctx.RevisionID); hasActive {
-			if err := changetracker.RevertChangeByRevisionID(ctx.RevisionID); err != nil {
+		if hasActive, _ := history.HasActiveChangesForRevision(ctx.RevisionID); hasActive {
+			if err := history.RevertChangeByRevisionID(ctx.RevisionID); err != nil {
 				s.logger.LogError(fmt.Errorf("failed to rollback changes for revision %s: %w", ctx.RevisionID, err))
 				return nil, fmt.Errorf("changes rejected by automated review, but rollback failed. Feedback: %s", result.Feedback)
 			}

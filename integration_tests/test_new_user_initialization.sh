@@ -43,8 +43,8 @@ run_test_logic() {
     # Test 1: Basic initialization without API keys
     echo "=== Test 1: Configuration initialization ==="
     
-    # Test that ledit can handle missing config gracefully
-    output=$(timeout 10s echo "exit" | $LEDIT_CMD agent --skip-prompt --dry-run 2>&1 || true)
+    # Test that ledit can handle missing config gracefully  
+    output=$(timeout 10s echo "exit" | $LEDIT_CMD agent --model "test:test" --skip-prompt --dry-run 2>&1 || true)
     
     if echo "$output" | grep -q "Welcome to ledit"; then
         echo "✓ New user welcome message displayed"
@@ -66,7 +66,7 @@ run_test_logic() {
     echo "=== Test 2: Default provider selection ==="
     
     # Test that we can run with test provider (no API key needed)
-    # Use printf to send "4\nexit\n" (select Ollama local + exit)
+    # Use printf to send "4\nexit\n" (select test provider + exit)
     output=$(timeout 10s printf "4\nexit\n" | $LEDIT_CMD agent --model "$model_name" 2>&1 || true)
     
     if echo "$output" | grep -q -E "(Agent initialized|Console started|test:test|Selected provider)"; then

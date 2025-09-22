@@ -222,6 +222,9 @@ func RequiresAPIKey(provider string) bool {
 	switch provider {
 	case "ollama-local":
 		return false
+	case "test":
+		// Test provider is for CI/testing and doesn't require API key
+		return false
 	case "ollama-turbo":
 		// Ollama turbo requires API key for remote acceleration
 		return true

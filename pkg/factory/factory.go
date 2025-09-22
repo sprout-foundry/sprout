@@ -149,6 +149,121 @@ func (w *OpenRouterClientWrapper) ResetTPSStats() {
 	w.provider.ResetTPSStats()
 }
 
+// TestClient implements a mock client for CI/testing environments
+type TestClient struct {
+	model string
+	debug bool
+}
+
+// Create test client methods
+func (t *TestClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+	return &api.ChatResponse{
+		ID:      "test-response-id",
+		Object:  "chat.completion",
+		Created: 1234567890,
+		Model:   t.GetModel(),
+		Choices: []api.Choice{
+			{
+				Index: 0,
+				Message: struct {
+					Role             string          `json:"role"`
+					Content          string          `json:"content"`
+					ReasoningContent string          `json:"reasoning_content,omitempty"`
+					Images           []api.ImageData `json:"images,omitempty"`
+					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
+				}{
+					Role:    "assistant",
+					Content: "Test response from mock provider",
+				},
+				FinishReason: "stop",
+			},
+		},
+		Usage: struct {
+			PromptTokens        int     `json:"prompt_tokens"`
+			CompletionTokens    int     `json:"completion_tokens"`
+			TotalTokens         int     `json:"total_tokens"`
+			EstimatedCost       float64 `json:"estimated_cost"`
+			PromptTokensDetails struct {
+				CachedTokens     int  `json:"cached_tokens"`
+				CacheWriteTokens *int `json:"cache_write_tokens"`
+			} `json:"prompt_tokens_details,omitempty"`
+		}{
+			PromptTokens:     10,
+			CompletionTokens: 5,
+			TotalTokens:      15,
+			EstimatedCost:    0.0,
+		},
+	}, nil
+}
+
+func (t *TestClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
+	// Simple streaming simulation
+	callback("Test response from mock provider")
+	return t.SendChatRequest(messages, tools, reasoning)
+}
+
+func (t *TestClient) CheckConnection() error {
+	return nil // Test provider always has good connection
+}
+
+func (t *TestClient) SetDebug(debug bool) {
+	t.debug = debug
+}
+
+func (t *TestClient) SetModel(model string) error {
+	t.model = model
+	return nil
+}
+
+func (t *TestClient) GetModel() string {
+	if t.model == "" {
+		return "test-model"
+	}
+	return t.model
+}
+
+func (t *TestClient) GetProvider() string {
+	return "test"
+}
+
+func (t *TestClient) GetModelContextLimit() (int, error) {
+	return 4096, nil
+}
+
+func (t *TestClient) ListModels() ([]api.ModelInfo, error) {
+	return []api.ModelInfo{
+		{Name: "test-model", ContextLength: 4096},
+	}, nil
+}
+
+func (t *TestClient) SupportsVision() bool {
+	return false
+}
+
+func (t *TestClient) GetVisionModel() string {
+	return ""
+}
+
+func (t *TestClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+	return nil, fmt.Errorf("vision not supported in test provider")
+}
+
+func (t *TestClient) GetLastTPS() float64 {
+	return 100.0 // Mock TPS
+}
+
+func (t *TestClient) GetAverageTPS() float64 {
+	return 100.0 // Mock TPS
+}
+
+func (t *TestClient) GetTPSStats() map[string]float64 {
+	return map[string]float64{"last": 100.0, "average": 100.0}
+}
+
+func (t *TestClient) ResetTPSStats() {
+	// No-op for test client
+}
+
 // CreateProviderClient is a factory function that creates providers
 func CreateProviderClient(clientType api.ClientType, model string) (api.ClientInterface, error) {
 	switch clientType {
@@ -172,6 +287,13 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 			return nil, err
 		}
 		return &OpenRouterClientWrapper{provider: provider}, nil
+	case api.TestClientType:
+		// Return test/mock client for CI environments
+		testClient := &TestClient{model: model}
+		if model != "" {
+			testClient.SetModel(model)
+		}
+		return testClient, nil
 	default:
 		return nil, fmt.Errorf("unknown client type: %s", clientType)
 	}

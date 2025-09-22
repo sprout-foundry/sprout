@@ -141,76 +141,44 @@ ledit mcp add  # Interactive setup
 
 ### `config.json` settings
 
-The configuration has domain-specific sections. Here's the current structure with defaults:
+The configuration uses a flat structure focused on provider and model management. Here's the current structure with defaults:
 
 ```json
 {
-  "llm": {
-    "EditingModel": "deepinfra:deepseek-ai/DeepSeek-V3-0324",
-    "SummaryModel": "deepinfra:mistralai/Mistral-Small-3.2-24B-Instruct-2506",
-    "OrchestrationModel": "deepinfra:Qwen/Qwen3-Coder-480B-A35B-Instruct",
-    "WorkspaceModel": "deepinfra:meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    "EmbeddingModel": "deepinfra:Qwen/Qwen3-Embedding-4B",
-    "OllamaServerURL": "http://localhost:11434",
-    "Temperature": 0.1,
-    "MaxTokens": 30000,
-    "TopP": 0.9,
-    "PresencePenalty": 0.1,
-    "FrequencyPenalty": 0.1
+  "version": "2.0",
+  "last_used_provider": "deepinfra",
+  "provider_models": {
+    "deepinfra": "deepseek-ai/DeepSeek-V3.1",
+    "ollama-local": "qwen2.5-coder:3b",
+    "ollama-turbo": "qwen2.5-coder:latest",
+    "openai": "gpt-5",
+    "openrouter": "openai/gpt-5"
   },
-  "ui": {
-    "TrackWithGit": false,
-    "JsonLogs": false,
-    "TelemetryEnabled": false
-  },
-  "agent": {
-    "OrchestrationMaxAttempts": 12,
-    "AutoGenerateTests": false,
-    "DryRun": false,
-    "CodeStyle": {
-      "FunctionSize": "Aim for smaller, single-purpose functions (under 50 lines).",
-      "FileSize": "Prefer smaller files, breaking down large components into multiple files (under 500 lines).",
-      "NamingConventions": "Use clear, descriptive names for variables, functions, and types. Follow Go conventions (camelCase for local, PascalCase for exported).",
-      "ErrorHandling": "Handle errors explicitly, returning errors as the last return value. Avoid panics for recoverable errors.",
-      "TestingApproach": "Write unit tests when practical.",
-      "Modularity": "Design components to be loosely coupled and highly cohesive.",
-      "Readability": "Prioritize code readability and maintainability. Use comments where necessary to explain complex logic."
-    }
-  },
-  "security": {
-    "EnableSecurityChecks": true,
-    "ShellAllowlist": [
-      "rm -rf node_modules",
-      "rm -fr node_modules",
-      "rm -rf ./node_modules",
-      "rm -fr ./node_modules",
-      "rm -rf node_modules/",
-      "rm -fr node_modules/",
-      "rm -rf ./node_modules/",
-      "rm -fr ./node_modules/",
-      "rm -f package-lock.json",
-      "rm -f ./package-lock.json"
-    ]
-  },
-  "performance": {
-    "FileBatchSize": 30,
-    "EmbeddingBatchSize": 30,
-    "MaxConcurrentRequests": 3,
-    "RequestDelayMs": 100,
-    "ShellTimeoutSecs": 20
+  "provider_priority": [
+    "openai",
+    "openrouter", 
+    "deepinfra",
+    "ollama-turbo",
+    "ollama-local"
+  ],
+  "mcp": {
+    "enabled": false,
+    "servers": {},
+    "auto_start": false,
+    "auto_discover": false,
+    "timeout": 30000000000
   }
 }
 ```
 
 Key sections:
 
-- **`llm`**: LLM-related settings, including models and generation parameters.
-- **`ui`**: UI and logging settings, like Git tracking and telemetry.
-- **`agent`**: Agent behavior, including orchestration attempts and code style preferences.
-- **`security`**: Security checks and shell allowlist.
-- **`performance`**: Batch sizes, concurrency, and timeouts.
+- **`provider_models`**: Maps each provider to their default model
+- **`provider_priority`**: Defines the order in which providers are tried
+- **`mcp`**: Model Context Protocol configuration
+- **`last_used_provider`**: Tracks the most recently used provider
 
-Legacy fields are still supported for backward compatibility but are migrated to these sections.
+Additional code style and performance settings are managed internally and configured through the agent interface rather than the config file.
 
 ## Usage and Commands
 
@@ -237,7 +205,7 @@ Run `ledit init` to create `.ledit/` directory containing the workspace index, c
 
 - **`ledit review`**: LLM code review for staged Git changes.
   ```bash
-  ledit review --model "openai:gpt-4o"
+  ledit review --model "openai:gpt-5"
   ```
 
 - **`ledit shell [description]`**: Generate shell scripts from natural language (no execution).
@@ -288,8 +256,8 @@ Use `#` directives in prompts for enhanced context:
 Specify as `<provider>:<model>` (e.g., `--model "deepinfra:deepseek-coder"`).
 
 - **DeepInfra** (default, cost-effective): `deepinfra:deepseek-ai/DeepSeek-V3`, `deepinfra:qwen/Qwen3-Coder`.
-- **OpenAI**: `openai:gpt-4o`, `openai:gpt-4-turbo`.
-- **Ollama** (local/Turbo): Local (`ollama:llama3`), Turbo (`ollama:gpt-oss:120b` - requires OLLAMA_API_KEY for remote).
+- **OpenAI**: `openai:gpt-5`, `openai:gpt-5-mini`.
+- **Ollama** (local/Turbo): Local (`ollama:qwen2.5-coder:3b`), Turbo (`ollama:qwen2.5-coder:latest` - requires OLLAMA_API_KEY for remote).
 - **OpenRouter**: `openrouter:anthropic/claude-3.5-sonnet`.
 - **Gemini**: `gemini:gemini-1.5-pro`.
 - **DeepSeek**: `deepseek:deepseek-coder-v2`.
@@ -331,7 +299,7 @@ See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PR
 ### Key files maintained by ledit
 
 - **Root**: main.go (entry), cmd/ (CLI subcommands: agent, commit, log, mcp, review, shell).
-- **pkg/**: agent/ (orchestration, state, tools), agent_api/ (providers, TPS tracker), agent_config/ (config loading), workspace/ (indexing/embeddings), changetracker/ (history/diffs), git/ (commit integration), security/ (credential scans, allowlist), mcp/ (protocol client), console/ (terminal UI, streaming).
+- **pkg/**: agent/ (orchestration, state, tools), agent_api/ (providers, TPS tracker), configuration/ (config loading), workspace/ (indexing/embeddings), changetracker/ (history/diffs), git/ (commit integration), security/ (credential scans, allowlist), mcp/ (protocol client), console/ (terminal UI, streaming), codereview/ (code review functionality).
 - **.ledit/** (project-local):
   - `workspace.json`: File index with embeddings/summaries for relevance.
   - `config.json`: Local overrides.

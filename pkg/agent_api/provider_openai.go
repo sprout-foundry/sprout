@@ -43,7 +43,7 @@ func NewOpenAIProvider() (*OpenAIProvider, error) {
 
 	// Set default model if not already set
 	if provider.model == "" {
-		provider.model = "gpt-4o-mini"
+		provider.model = "gpt-5-mini"
 	}
 
 	return provider, nil
@@ -266,9 +266,9 @@ func (p *OpenAIProvider) getModelPricing(model string) (inputCostPer1M, outputCo
 	// OpenAI pricing (as of last known update)
 	// TODO: This should ideally come from the OpenAI API
 	switch {
-	case strings.Contains(model, "gpt-4o-mini"):
+	case strings.Contains(model, "gpt-5-mini"):
 		return 0.15, 0.60
-	case strings.Contains(model, "gpt-4o"):
+	case strings.Contains(model, "gpt-5"):
 		return 2.50, 10.00
 	case strings.Contains(model, "gpt-4-turbo"):
 		return 10.00, 30.00

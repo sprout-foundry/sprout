@@ -126,6 +126,14 @@ func runInteractiveMode(chatAgent *agent.Agent) error {
 
 // executeDirectAgentCommand executes an agent command directly (like coder does)
 func executeDirectAgentCommand(chatAgent *agent.Agent, userIntent string) error {
+	// Enable streaming for OpenAI to test usage data with stream_options
+	if chatAgent.GetProvider() == "openai" {
+		chatAgent.EnableStreaming(func(content string) {
+			fmt.Print(content)
+		})
+		defer chatAgent.DisableStreaming()
+	}
+
 	// Process the query directly with the agent using continuity (like coder does)
 	response, err := chatAgent.ProcessQueryWithContinuity(userIntent)
 	if err != nil {
@@ -521,6 +529,14 @@ Examples:
 		if isInteractive {
 			if len(args) > 0 {
 				userIntent = strings.Join(args, " ")
+
+				// Set up a simple stats callback for direct command execution
+				// This ensures token/cost tracking works even before console setup
+				chatAgent.SetStatsUpdateCallback(func(tokens int, cost float64) {
+					// Simple callback that just ensures the mechanism works
+					// The console will set its own callback later
+				})
+
 				err := executeDirectAgentCommand(chatAgent, userIntent)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "\n❌ Error: %v\n", err)

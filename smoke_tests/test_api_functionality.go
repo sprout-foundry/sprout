@@ -143,7 +143,7 @@ func main() {
 	if os.Getenv("OPENROUTER_API_KEY") != "" {
 		fmt.Print("5. Testing OpenRouter provider creation... ")
 
-		_, err := factory.CreateProviderClient(api.OpenRouterClientType, "meta-llama/llama-3.3-70b-instruct:free")
+		_, err := factory.CreateProviderClient(api.OpenRouterClientType, "qwen/qwen3-coder-30b-a3b-instruct")
 		if err != nil {
 			fmt.Printf("FAILED - %v\n", err)
 			failed++

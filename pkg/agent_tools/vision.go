@@ -13,8 +13,8 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/agent_providers"
+	"github.com/alantheprice/ledit/pkg/factory"
 )
 
 // Global variables for vision model tracking and caching
@@ -70,8 +70,8 @@ func NewVisionProcessorWithMode(debug bool, mode string) (*VisionProcessor, erro
 		// Use gemma-3-27b-it for comprehensive frontend analysis
 		client, err = createVisionClientWithModel("google/gemma-3-27b-it")
 	case "general", "text", "content", "extract", "analyze":
-		// Use llama-4-maverick for fast general analysis
-		client, err = createVisionClientWithModel("meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8")
+		// Use DeepSeek for fast general analysis
+		client, err = createVisionClientWithModel("deepseek-ai/DeepSeek-V3.1")
 	default:
 		// Default to balanced approach (current implementation)
 		client, err = createVisionClient()
@@ -111,9 +111,9 @@ func createVisionClient() (api.ClientInterface, error) {
 		var visionModel string
 		switch provider.clientType {
 		case api.OpenAIClientType:
-			visionModel = "gpt-4o"
+			visionModel = "gpt-5"
 		case api.OpenRouterClientType:
-			visionModel = "gpt-4o"
+			visionModel = "gpt-5"
 		default:
 			continue // Skip if no vision model known
 		}

@@ -272,19 +272,8 @@ func (fc *FooterComponent) renderPathLine(region console.Region, lineOffset int)
 		displayPath = "~" + strings.TrimPrefix(displayPath, home)
 	}
 
-	// Calculate tokens per second for the path line
-	duration := time.Since(fc.sessionStart).Seconds()
-	var tpsStr string
-	if duration > 1.0 && fc.lastTokens > 0 { // Only show after 1 second and with tokens
-		tps := fc.tokensPerSecond
-		if tps > 0 {
-			tpsStr = fmt.Sprintf(" | %.1f t/s", tps)
-		}
-	}
-
-	// Truncate path if too long, considering TPS space
-	tpsLen := len(tpsStr)
-	availablePathLen := region.Width - tpsLen - len(fc.config.Paddings.PathLeft) - 4 // 4 for safety
+	// Truncate path if too long
+	availablePathLen := region.Width - len(fc.config.Paddings.PathLeft) - 4 // 4 for safety
 	if len(displayPath) > availablePathLen {
 		ellipsisLen := fc.config.Truncation.PathEllipsisLen
 		startIdx := len(displayPath) - availablePathLen + ellipsisLen
@@ -296,24 +285,26 @@ func (fc *FooterComponent) renderPathLine(region console.Region, lineOffset int)
 	pathLine := fmt.Sprintf("%s%s", fc.config.Paddings.PathLeft, displayPath)
 	fc.Terminal().Write([]byte(pathLine))
 
-	// Calculate padding between path and TPS
-	paddingLen := region.Width - len(pathLine) - tpsLen
-	if paddingLen > 0 {
-		fc.Terminal().Write([]byte(strings.Repeat(" ", paddingLen)))
-	}
+	// TODO: TPS-related padding temporarily removed
+	// Calculate padding between path and end of line
+	// paddingLen := region.Width - len(pathLine) - tpsLen
+	// if paddingLen > 0 {
+	//	fc.Terminal().Write([]byte(strings.Repeat(" ", paddingLen)))
+	// }
 
+	// TODO: TPS display temporarily disabled due to incorrect data
 	// Write TPS if applicable, with dim white for subtlety
-	if tpsStr != "" {
-		fc.Terminal().Write([]byte(fc.config.Colors.DimWhite))
-		fc.Terminal().Write([]byte(tpsStr))
-		fc.Terminal().Write([]byte(fc.config.Colors.Reset))
-	} else {
-		// Pad the rest if no TPS
-		remainingPad := region.Width - len(pathLine)
-		if remainingPad > 0 {
-			fc.Terminal().Write([]byte(strings.Repeat(" ", remainingPad)))
-		}
+	// if tpsStr != "" {
+	//	fc.Terminal().Write([]byte(fc.config.Colors.DimWhite))
+	//	fc.Terminal().Write([]byte(tpsStr))
+	//	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+	// } else {
+	// Pad the rest without TPS
+	remainingPad := region.Width - len(pathLine)
+	if remainingPad > 0 {
+		fc.Terminal().Write([]byte(strings.Repeat(" ", remainingPad)))
 	}
+	// }
 
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 	return nil
@@ -476,15 +467,18 @@ func (fc *FooterComponent) renderModelAndStats(region console.Region, lineOffset
 	fc.Terminal().Write([]byte(strings.Repeat(" ", leftEdgePadding)))
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
-	// 2. Model section with light gray background
+	// 2. Model section with light gray background (only behind text)
 	fc.Terminal().Write([]byte(fc.config.Colors.LightGrayBg + fc.config.Colors.BlackText))
 	fc.Terminal().Write([]byte(modelContent))
-	// Pad model section to full available width
+	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+
+	// 2.5. Padding after model with blue-grey background
 	modelPadding := availableForModel - len(modelContent)
 	if modelPadding > 0 {
+		fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
 		fc.Terminal().Write([]byte(strings.Repeat(" ", modelPadding)))
+		fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 	}
-	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
 	// 3. Stats section with dark gray background
 	fc.Terminal().Write([]byte(fc.config.Colors.DarkGrayBg + fc.config.Colors.DimWhite))
@@ -538,15 +532,18 @@ func (fc *FooterComponent) renderModelOnly(region console.Region, lineOffset int
 	fc.Terminal().Write([]byte(strings.Repeat(" ", leftEdgePadding)))
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
-	// 2. Model section with light gray background
+	// 2. Model section with light gray background (only behind text)
 	fc.Terminal().Write([]byte(fc.config.Colors.LightGrayBg + fc.config.Colors.BlackText))
 	fc.Terminal().Write([]byte(modelContent))
-	// Pad model section to full available width
+	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+
+	// 2.5. Padding after model with blue-grey background
 	modelPadding := availableForModel - len(modelContent)
 	if modelPadding > 0 {
+		fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
 		fc.Terminal().Write([]byte(strings.Repeat(" ", modelPadding)))
+		fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 	}
-	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
 	// 3. Right blue-grey padding
 	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))

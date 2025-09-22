@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
 )
 
 // ProviderAdapter adapts the existing ClientInterface to the new Provider interface
@@ -118,7 +117,7 @@ func (a *ProviderAdapter) SupportsTools() bool {
 
 // SupportsStreaming returns whether the provider supports streaming
 func (a *ProviderAdapter) SupportsStreaming() bool {
-	// Most providers support streaming
+	// OpenAI now supports streaming with usage data via stream_options
 	return true
 }
 

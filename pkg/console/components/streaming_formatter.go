@@ -27,6 +27,9 @@ type StreamingFormatter struct {
 	minUpdateDelay time.Duration
 	maxBufferSize  int
 	finalized      bool // Prevent double finalization
+
+	// Custom output function (if set, replaces fmt.Print calls)
+	outputFunc func(string)
 }
 
 // NewStreamingFormatter creates a new streaming formatter
@@ -44,6 +47,31 @@ func (sf *StreamingFormatter) SetConsoleBuffer(buffer interface{ AddContent(stri
 	sf.mu.Lock()
 	defer sf.mu.Unlock()
 	sf.consoleBuffer = buffer
+}
+
+// SetOutputFunc sets a custom output function to replace fmt.Print calls
+func (sf *StreamingFormatter) SetOutputFunc(outputFunc func(string)) {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+	sf.outputFunc = outputFunc
+}
+
+// print outputs text using custom output function if available, otherwise fmt.Print
+func (sf *StreamingFormatter) print(text string) {
+	if sf.outputFunc != nil {
+		sf.outputFunc(text)
+	} else {
+		fmt.Print(text)
+	}
+}
+
+// println outputs text with newline using custom output function if available, otherwise fmt.Println
+func (sf *StreamingFormatter) println(text string) {
+	if sf.outputFunc != nil {
+		sf.outputFunc(text + "\n")
+	} else {
+		fmt.Println(text)
+	}
 }
 
 // Write formats and outputs streaming content
@@ -176,7 +204,7 @@ func (sf *StreamingFormatter) outputLine(line string) {
 	if strings.HasPrefix(trimmed, "•") {
 		// Convert to standard markdown bullet for consistent formatting
 		bulletText := strings.TrimSpace(strings.TrimPrefix(trimmed, "•"))
-		fmt.Print(contentPadding + "  ")
+		sf.print(contentPadding + "  ")
 		color.New(color.FgHiBlack).Print("• ")
 		// Apply inline formatting to the bullet text
 		formattedText := sf.applyInlineFormatting(bulletText)
@@ -187,7 +215,7 @@ func (sf *StreamingFormatter) outputLine(line string) {
 		// Check if this is a markdown header
 		// Add visual separation for headers
 		if !sf.lastWasNewline {
-			fmt.Println()
+			sf.println("")
 		}
 
 		// Style headers with color
@@ -238,7 +266,7 @@ func (sf *StreamingFormatter) outputLine(line string) {
 			color.New(color.FgHiBlack).Print(parts[0] + ". ")
 			// Apply inline formatting to the list item text
 			formattedText := sf.applyInlineFormatting(strings.TrimSpace(parts[1]))
-			fmt.Println(formattedText)
+			sf.println(formattedText)
 		} else {
 			fmt.Println(line)
 		}
@@ -258,7 +286,7 @@ func (sf *StreamingFormatter) outputLine(line string) {
 	} else if trimmed == "" && sf.lastWasNewline {
 		// Preserve paragraph breaks but not in list contexts
 		if !sf.inListContext {
-			fmt.Println()
+			sf.println("")
 		}
 	} else {
 		// Reset list context if we hit non-list content
@@ -271,7 +299,7 @@ func (sf *StreamingFormatter) outputLine(line string) {
 		}
 		// Regular line - apply inline formatting
 		formatted := sf.applyInlineFormatting(line)
-		fmt.Println(formatted)
+		sf.println(formatted)
 		sf.lastWasNewline = true
 	}
 }

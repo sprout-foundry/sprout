@@ -227,6 +227,22 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 		}
 	}
 
+	// Check for input injections
+	select {
+	case newInput := <-ch.agent.inputInjectionChan:
+		ch.agent.debugLog("📥 Input injection received: %s\n", newInput)
+		// Add the new input as a user message to continue the conversation
+		userMessage := api.Message{
+			Role:    "user",
+			Content: newInput,
+		}
+		ch.agent.messages = append(ch.agent.messages, userMessage)
+		ch.lastActivityTime = time.Now() // Reset activity time
+		return false                     // Continue processing with the new input
+	default:
+		// No input injection
+	}
+
 	// Check for timeout (5 minutes of inactivity)
 	if time.Since(ch.lastActivityTime) > ch.timeoutDuration {
 		ch.agent.debugLog("⏰ Conversation timeout after %v of inactivity\n", ch.timeoutDuration)

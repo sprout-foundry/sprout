@@ -28,12 +28,16 @@ type AgentConsole struct {
 	commandRegistry *commands.CommandRegistry
 
 	// Sub-components
-	input              *InputComponent
+	inputManager       *InputManager
+	historyManager     *HistoryManager
 	footer             *FooterComponent
 	streamingFormatter *StreamingFormatter
 
 	// UI Handler
 	uiHandler *console.UIHandler
+
+	// Layout management
+	autoLayoutManager *console.AutoLayoutManager
 
 	// Console buffer for output management and resize handling
 	consoleBuffer *console.ConsoleBuffer
@@ -45,6 +49,10 @@ type AgentConsole struct {
 	prompt           string
 	historyFile      string
 
+	// Content area tracking
+	currentContentLine int // Current line within content area (0-based relative to content top)
+	contentRegionTop   int // Cached top of content region
+
 	// JSON formatter for structured output
 	jsonFormatter *JSONFormatter
 
@@ -53,6 +61,11 @@ type AgentConsole struct {
 	outputMutex   sync.Mutex
 	ctrlCCount    int
 	lastCtrlC     time.Time
+
+	// Concurrent processing state
+	isProcessing    bool
+	processingMutex sync.RWMutex
+	agentDoneChan   chan struct{}
 
 	// Streaming TPS tracking
 	streamingStartTime  time.Time
@@ -69,40 +82,82 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 	base := console.NewBaseComponent("agent-console", "agent")
 
 	// Create sub-components
-	input := NewInputComponent("agent-input", config.Prompt)
-	input.SetHistory(true).SetEcho(true)
-
 	footer := NewFooterComponent()
 
+	// Create input manager for concurrent input handling
+	inputManager := NewInputManager(config.Prompt)
+
+	// Create history manager
+	historyManager := NewHistoryManager(config.HistoryFile, 1000)
+
+	// Create auto layout manager
+	autoLayoutManager := console.NewAutoLayoutManager()
+
 	ac := &AgentConsole{
-		BaseComponent:    base,
-		agent:            agent,
-		commandRegistry:  commands.NewCommandRegistry(),
-		input:            input,
-		footer:           footer,
-		consoleBuffer:    console.NewConsoleBuffer(10000), // 10,000 line buffer
-		sessionStartTime: time.Now(),
-		prompt:           config.Prompt,
-		historyFile:      config.HistoryFile,
-		interruptChan:    make(chan string, 1),
-		outputMutex:      sync.Mutex{},
-		jsonFormatter:    NewJSONFormatter(),
+		BaseComponent:     base,
+		agent:             agent,
+		commandRegistry:   commands.NewCommandRegistry(),
+		inputManager:      inputManager,
+		historyManager:    historyManager,
+		footer:            footer,
+		autoLayoutManager: autoLayoutManager,
+		consoleBuffer:     console.NewConsoleBuffer(10000), // 10,000 line buffer
+		sessionStartTime:  time.Now(),
+		prompt:            config.Prompt,
+		historyFile:       config.HistoryFile,
+		interruptChan:     make(chan string, 1),
+		outputMutex:       sync.Mutex{},
+		jsonFormatter:     NewJSONFormatter(),
+		agentDoneChan:     make(chan struct{}, 1),
+		processingMutex:   sync.RWMutex{},
 	}
 
 	// Create streaming formatter
 	ac.streamingFormatter = NewStreamingFormatter(&ac.outputMutex)
 	ac.streamingFormatter.SetConsoleBuffer(ac.consoleBuffer)
 
+	// Set custom output function to use our safe print method
+	ac.streamingFormatter.SetOutputFunc(func(text string) {
+		// Use our simplified safe print (no complex positioning)
+		ac.safePrint("%s", text)
+	})
+
 	// Set the interrupt channel and output mutex on the agent
 	agent.SetInterruptChannel(ac.interruptChan)
 	agent.SetOutputMutex(&ac.outputMutex)
 
-	// Set up Ctrl+C handler
-	input.SetOnCancel(func() {
-		ac.handleCtrlC()
-	})
+	// Set up input manager callbacks
+	inputManager.SetCallbacks(
+		ac.handleInputFromManager,
+		ac.handleInterruptFromManager,
+	)
 
 	return ac
+}
+
+// setupLayoutComponents registers components with the layout manager
+func (ac *AgentConsole) setupLayoutComponents() {
+	// Register footer (bottom, lowest priority = furthest from content)
+	ac.autoLayoutManager.RegisterComponent("footer", &console.ComponentInfo{
+		Name:     "footer",
+		Position: "bottom",
+		Height:   4,  // Will be updated dynamically
+		Priority: 10, // Lower priority = further from content (at very bottom)
+		Visible:  true,
+		ZOrder:   100,
+	})
+
+	// Register input (bottom, higher priority = closer to content)
+	ac.autoLayoutManager.RegisterComponent("input", &console.ComponentInfo{
+		Name:     "input",
+		Position: "bottom",
+		Height:   1,
+		Priority: 20, // Higher priority = closer to content (above footer)
+		Visible:  true,
+		ZOrder:   90,
+	})
+
+	// Content region is automatically managed
 }
 
 // AgentConsoleConfig holds configuration
@@ -126,6 +181,14 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 		return err
 	}
 
+	// Register components with layout manager FIRST
+	ac.setupLayoutComponents()
+
+	// Initialize auto layout manager AFTER components are registered
+	if err := ac.autoLayoutManager.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize layout manager: %w", err)
+	}
+
 	// Create and initialize UI handler
 	ac.uiHandler = console.NewUIHandler(deps.Terminal)
 	if err := ac.uiHandler.Initialize(); err != nil {
@@ -134,7 +197,6 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 
 	// Register components with UI handler
 	ac.uiHandler.RegisterComponent("agent", ac)
-	ac.uiHandler.RegisterComponent("input", ac.input)
 	ac.uiHandler.RegisterComponent("footer", ac.footer)
 
 	// Initialize sub-components
@@ -153,16 +215,11 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 
 	// Load history
 	if ac.historyFile != "" {
-		if err := ac.input.LoadHistory(ac.historyFile); err != nil {
+		if err := ac.historyManager.LoadFromFile(); err != nil {
 			// Non-fatal, just log
 			fmt.Printf("Note: Could not load history: %v\n", err)
 		}
 	}
-
-	// Set up command callbacks
-	ac.input.SetOnSubmit(ac.handleCommand)
-	ac.input.SetOnCancel(ac.handleCtrlC)
-	ac.input.SetOnTab(ac.handleAutocomplete)
 
 	// Initialize console buffer with current terminal width
 	width, _, err := ac.Terminal().GetSize()
@@ -197,11 +254,17 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 	return nil
 }
 
-// Start starts the interactive loop
+// Start starts the interactive loop with concurrent input handling
 func (ac *AgentConsole) Start() error {
-	// Note: We handle Ctrl+C in the input component instead of using signals
-	// because the terminal is in raw mode
-	ctx := context.Background()
+	// Start the concurrent input manager
+	if err := ac.inputManager.Start(); err != nil {
+		return fmt.Errorf("failed to start input manager: %w", err)
+	}
+
+	// Ensure cleanup when done
+	defer ac.inputManager.Stop()
+
+	// Layout manager handles positioning automatically
 
 	// Display welcome message
 	ac.showWelcomeMessage()
@@ -209,29 +272,30 @@ func (ac *AgentConsole) Start() error {
 	// Initial footer render
 	ac.updateFooter()
 
-	// Main input loop
+	// Show initial help about the new features
+	ac.safePrint("\n💡 You can now type while the agent is processing!\n")
+	ac.safePrint("   Press Enter to send new prompts immediately, even during agent responses.\n")
+	ac.safePrint("   Use Ctrl+C to interrupt the agent.\n\n")
+
+	// Main event loop - non-blocking
+	ctx := context.Background()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		default:
-			// The input component handles cursor positioning
-			line, _, err := ac.input.ReadLine()
 
-			if err != nil {
-				if err.Error() == "EOF" {
-					return nil
-				}
-				return err
-			}
+		case <-ac.inputManager.GetInterruptChannel():
+			// Handle interrupt from input manager
+			// The callback already handles this, just continue
 
-			// Process the line
-			if err := ac.processInput(line); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-
-			// Update footer after processing
+		case <-ac.agentDoneChan:
+			// Agent processing completed, update footer
 			ac.updateFooter()
+
+		default:
+			// Small sleep to prevent busy waiting
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
@@ -249,14 +313,14 @@ func (ac *AgentConsole) processInput(input string) error {
 
 	// Check if it's a shell command (common commands that users might type)
 	if ac.isShellCommand(input) {
-		fmt.Printf("\033[34m[shell]\033[0m Executing: %s\n", input)
+		ac.safePrint("\033[34m[shell]\033[0m Executing: %s\n", input)
 		output, err := ac.executeShellCommand(input)
 		if err != nil {
-			fmt.Printf("Error: %v\n", err)
+			ac.safePrint("Error: %v\n", err)
 		} else {
-			fmt.Print(output)
+			ac.safePrint("%s", output)
 			if !strings.HasSuffix(output, "\n") {
-				fmt.Println()
+				ac.safePrint("\n")
 			}
 		}
 		return nil
@@ -264,7 +328,7 @@ func (ac *AgentConsole) processInput(input string) error {
 
 	// Check for short/accidental input
 	if len(input) <= 2 && !strings.Contains(input, "?") {
-		fmt.Printf("Input too short. Did you mean to type something else? (Press Enter to continue or type your full query)\n")
+		ac.safePrint("Input too short. Did you mean to type something else? (Press Enter to continue or type your full query)\n")
 		return nil
 	}
 
@@ -283,6 +347,12 @@ func (ac *AgentConsole) processInput(input string) error {
 	// Set up streaming with our formatter
 	// Reset formatter for new session
 	ac.streamingFormatter.Reset()
+
+	// Check if agent is properly initialized
+	if ac.agent == nil {
+		ac.safePrint("❌ Error: Agent not initialized\n")
+		return nil
+	}
 
 	// Enable streaming with our formatter callback for all providers
 	ac.agent.EnableStreaming(func(content string) {
@@ -374,8 +444,8 @@ func (ac *AgentConsole) processInput(input string) error {
 	ac.updateFooter()
 
 	// Save history after each command
-	if ac.historyFile != "" && ac.input != nil {
-		if err := ac.input.SaveHistory(ac.historyFile); err != nil {
+	if ac.historyFile != "" && ac.historyManager != nil {
+		if err := ac.historyManager.SaveToFile(); err != nil {
 			// Don't show warning for every command, just log it silently
 			_ = err
 		}
@@ -435,7 +505,7 @@ func (ac *AgentConsole) handleCommand(input string) error {
 		}
 		return nil
 	case "history":
-		history := ac.input.GetHistory()
+		history := ac.historyManager.GetHistory()
 		fmt.Printf("History has %d items:\n", len(history))
 		for i, line := range history {
 			fmt.Printf("%3d: %s\n", i+1, line)
@@ -471,6 +541,9 @@ func (ac *AgentConsole) handleCommand(input string) error {
 	case "stats":
 		ac.showStats()
 		return nil
+	case "debug-layout":
+		ac.showLayoutDebug()
+		return nil
 	}
 
 	// Check command registry
@@ -494,7 +567,7 @@ func (ac *AgentConsole) handleAutocomplete(text string, pos int) []string {
 		var suggestions []string
 
 		// Built-in commands
-		builtins := []string{"help", "quit", "exit", "clear", "history", "stats"}
+		builtins := []string{"help", "quit", "exit", "clear", "history", "stats", "debug-layout"}
 		for _, cmd := range builtins {
 			if strings.HasPrefix(cmd, prefix) {
 				suggestions = append(suggestions, "/"+cmd)
@@ -550,13 +623,18 @@ func (ac *AgentConsole) updateFooter() {
 }
 
 func (ac *AgentConsole) showWelcomeMessage() {
-	fmt.Printf(`Welcome to Ledit Agent! 🤖
+	ac.safePrint(`Welcome to Ledit Agent! 🤖
 
 I can help you with:
 • Code analysis and generation
 • File exploration and editing
 • Shell command execution
 • Project understanding
+
+✨ NEW FEATURES:
+• Real-time input: Type while I'm processing!
+• Input injection: Send new prompts mid-conversation!
+• Interrupt support: Use Ctrl+C to stop processing
 
 Type /help for available commands, or just start chatting!
 
@@ -571,7 +649,14 @@ Available Commands:
   /clear         - Clear screen and conversation history
   /history       - Show command history
   /stats         - Show session statistics
+  /debug-layout  - Show layout manager debug information
   /stop          - Stop current agent processing (during execution)
+  
+Real-time Features:
+  • Type while agent is processing - input will be injected into conversation
+  • Press Ctrl+C once to interrupt agent processing
+  • Press Ctrl+C twice to exit the program
+  • Input field is always visible at the bottom
   
 Agent Commands:`)
 
@@ -615,6 +700,12 @@ Session Statistics:
 `, formatDuration(duration), ac.totalTokens, ac.totalCost, provider, model)
 }
 
+func (ac *AgentConsole) showLayoutDebug() {
+	fmt.Println("\n=== Layout Manager Debug ===")
+	ac.autoLayoutManager.PrintDebugLayout()
+	fmt.Println()
+}
+
 // updateStreamingTPS estimates tokens per second during streaming
 func (ac *AgentConsole) updateStreamingTPS(content string) {
 	now := time.Now()
@@ -654,31 +745,51 @@ func (ac *AgentConsole) resetStreamingTPS() {
 }
 
 func (ac *AgentConsole) setupTerminal() error {
-	// Get terminal size
-	_, height, err := ac.Terminal().GetSize()
-	if err != nil {
-		return err
-	}
-
 	// Clear screen and home cursor
 	ac.Terminal().ClearScreen()
 
-	// Initial footer render (before setting scroll region)
+	// Update footer height in layout manager
+	footerHeight := ac.footer.GetHeight()
+	ac.autoLayoutManager.SetComponentHeight("footer", footerHeight)
+
+	// Get scroll region from layout manager
+	top, bottom := ac.autoLayoutManager.GetScrollRegion()
+
+	// DEBUG: Show terminal size and scroll region
+	width, height, _ := ac.Terminal().GetSize()
+	fmt.Fprintf(os.Stderr, "[SETUP] Terminal: %dx%d, Scroll region: %d-%d\n", width, height, top, bottom)
+
+	// Set up scroll region based on layout calculation
+	if err := ac.Terminal().SetScrollRegion(top, bottom); err != nil {
+		return err
+	}
+
+	// Move cursor to the beginning of the content area (top of scroll region)
+	if err := ac.Terminal().MoveCursor(1, top); err != nil {
+		return err
+	}
+
+	// Cache content region info for positioning
+	if contentRegion, err := ac.autoLayoutManager.GetContentRegion(); err == nil {
+		ac.contentRegionTop = contentRegion.Y
+		ac.currentContentLine = 0
+	}
+
+	// DEBUG: Test that content goes to the right place
+	fmt.Print("TEST: This should appear at top of content area\n")
+
+	// Configure input manager to use layout manager for positioning
+	ac.inputManager.SetLayoutManager(ac.autoLayoutManager)
+
+	// Initial footer render
 	if err := ac.footer.Render(); err != nil {
 		return err
 	}
 
-	// Get dynamic footer height
-	footerHeight := ac.footer.GetHeight()
-
-	// Set up scroll region to leave room for footer (dynamic)
-	// The content area is from line 1 to height - footerHeight
-	if err := ac.Terminal().SetScrollRegion(1, height-footerHeight); err != nil {
+	// Ensure cursor is back in content area after footer render
+	if err := ac.Terminal().MoveCursor(1, top); err != nil {
 		return err
 	}
-
-	// After setting scroll region, cursor is already at the correct position
-	// No need to explicitly move it - this prevents overwriting content
 
 	return nil
 }
@@ -723,31 +834,86 @@ func (ac *AgentConsole) handleCtrlC() {
 		default:
 		}
 
-		// Restore terminal before exiting
-		if ac.input != nil && ac.input.isRawMode {
-			ac.input.restore()
-		}
+		// Input manager handles its own terminal restoration
 
 		ac.cleanup()
 		os.Exit(0)
 	}
 }
 
+// handleInputFromManager processes input from the concurrent input manager
+func (ac *AgentConsole) handleInputFromManager(input string) error {
+	// Add to history
+	ac.historyManager.AddEntry(input)
+
+	ac.processingMutex.Lock()
+	if ac.isProcessing {
+		// Inject the input into the agent's conversation flow
+		ac.agent.InjectInput(input)
+		ac.processingMutex.Unlock()
+
+		// Show feedback that input was injected
+		ac.safePrint("\n💬 Input injected into conversation: %s\n", input)
+		ac.inputManager.ScrollOutput() // Make room for the message
+
+		return nil
+	}
+	ac.isProcessing = true
+	ac.processingMutex.Unlock()
+
+	// Process the input immediately (start new conversation)
+	go func() {
+		defer func() {
+			ac.processingMutex.Lock()
+			ac.isProcessing = false
+			ac.inputManager.SetProcessing(false)
+			ac.processingMutex.Unlock()
+
+			// Signal completion
+			select {
+			case ac.agentDoneChan <- struct{}{}:
+			default:
+			}
+		}()
+
+		ac.inputManager.SetProcessing(true)
+
+		// Show processing message in content area (not below input)
+		ac.safePrint("\n🔄 Processing: %s\n", input)
+		ac.inputManager.ScrollOutput()
+
+		err := ac.processInput(input)
+		if err != nil {
+			ac.safePrint("❌ Error: %v\n", err)
+			ac.inputManager.ScrollOutput()
+		}
+	}()
+
+	return nil
+}
+
+// handleInterruptFromManager processes interrupt signals from input manager
+func (ac *AgentConsole) handleInterruptFromManager() {
+	ac.handleCtrlC()
+}
+
 func (ac *AgentConsole) cleanup() {
+	// Stop input manager first
+	if ac.inputManager != nil {
+		ac.inputManager.Stop()
+	}
+
 	// Reset scroll region
 	ac.Terminal().ResetScrollRegion()
 
 	// Save history
-	if ac.historyFile != "" && ac.input != nil {
-		if err := ac.input.SaveHistory(ac.historyFile); err != nil {
+	if ac.historyFile != "" && ac.historyManager != nil {
+		if err := ac.historyManager.SaveToFile(); err != nil {
 			fmt.Printf("Warning: Could not save history: %v\n", err)
 		}
 	}
 
-	// Clean up components
-	if ac.input != nil {
-		ac.input.Cleanup()
-	}
+	// Clean up components handled by individual managers
 	if ac.footer != nil {
 		ac.footer.Cleanup()
 	}
@@ -831,9 +997,8 @@ func (ac *AgentConsole) executeShellCommand(command string) (string, error) {
 
 // Helper functions
 
-// safePrint writes output that respects the scroll region and updates buffer
-func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
-	// Ensure we're within the scroll region by using the terminal's Write method
+// safePrintNoLock is like safePrint but doesn't acquire mutex (for streaming callbacks)
+func (ac *AgentConsole) safePrintNoLock(format string, args ...interface{}) {
 	content := fmt.Sprintf(format, args...)
 
 	// Filter out completion signals that should not be displayed
@@ -841,11 +1006,75 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 
 	// Only write if there's content left after filtering
 	if strings.TrimSpace(content) != "" {
+		// NO MUTEX LOCKING - caller must handle
+
 		// Add to console buffer
 		ac.consoleBuffer.AddContent(content)
 
-		// The terminal's Write method should respect the scroll region
-		ac.Terminal().Write([]byte(content))
+		// Get content region for positioning
+		contentRegion, err := ac.autoLayoutManager.GetContentRegion()
+		if err != nil {
+			// Fallback: write directly without positioning
+			ac.Terminal().Write([]byte(content))
+			return
+		}
+
+		// Split content into lines to handle multi-line output
+		lines := strings.Split(content, "\n")
+
+		for i, line := range lines {
+			// Skip empty lines at the end (from split)
+			if i == len(lines)-1 && line == "" {
+				continue
+			}
+
+			// Check if we need to scroll within content area
+			if ac.currentContentLine >= contentRegion.Height {
+				// Scroll content area up by one line
+				// Move to bottom of content area and scroll
+				ac.Terminal().MoveCursor(1, contentRegion.Y+contentRegion.Height)
+				ac.Terminal().Write([]byte("\n"))
+				ac.currentContentLine = contentRegion.Height - 1
+			}
+
+			// Position cursor at current content line
+			actualLine := contentRegion.Y + ac.currentContentLine + 1 // +1 for 1-based coordinates
+			ac.Terminal().MoveCursor(1, actualLine)
+
+			// Clear the line and write content
+			ac.Terminal().ClearLine()
+			ac.Terminal().Write([]byte(line))
+
+			// Move to next line for next content (except for last line if no newline)
+			if i < len(lines)-1 || strings.HasSuffix(content, "\n") {
+				ac.currentContentLine++
+			}
+		}
+	}
+}
+
+// safePrint writes output that respects the content area and updates buffer
+func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
+	content := fmt.Sprintf(format, args...)
+
+	// Filter out completion signals that should not be displayed
+	content = ac.filterCompletionSignals(content)
+
+	// Only write if there's content left after filtering
+	if strings.TrimSpace(content) != "" {
+		// Add to console buffer for tracking
+		if ac.consoleBuffer != nil {
+			ac.consoleBuffer.AddContent(content)
+		}
+
+		// Simple positioning: move to content area before each output
+		// Get scroll region and position at the bottom of content area for new content
+		if top, bottom := ac.autoLayoutManager.GetScrollRegion(); top > 0 {
+			// Position at bottom of content area where new content should appear
+			ac.Terminal().MoveCursor(1, bottom)
+		}
+
+		fmt.Print(content)
 	}
 }
 
@@ -873,18 +1102,25 @@ func (ac *AgentConsole) OnResize(width, height int) {
 		ac.footer.OnResize(width, height)
 	}
 
-	// Get updated footer height and adjust scroll region
+	// Update layout manager with new terminal size
+	ac.autoLayoutManager.OnTerminalResize(width, height)
+
+	// Update footer height in layout
 	footerHeight := ac.footer.GetHeight()
-	contentHeight := height - footerHeight
+	ac.autoLayoutManager.SetComponentHeight("footer", footerHeight)
 
-	// The content area is from line 1 to height - footerHeight (dynamic)
-	ac.Terminal().SetScrollRegion(1, contentHeight)
+	// Get updated scroll region from layout manager
+	top, bottom := ac.autoLayoutManager.GetScrollRegion()
+	ac.Terminal().SetScrollRegion(top, bottom)
 
-	// Redraw the visible content from buffer with new wrapping
-	if err := ac.consoleBuffer.RedrawBuffer(ac.Terminal(), contentHeight); err != nil {
-		// Log error but continue
-		fmt.Fprintf(os.Stderr, "Warning: Buffer redraw failed: %v\n", err)
-	}
+	// Layout manager automatically handles input positioning
+
+	// Skip redraw to preserve scrollback content - let terminal handle natural scrollback
+	// The RedrawBuffer call was clearing content area and only showing recent content
+	// contentHeight := bottom - top + 1
+	// if err := ac.consoleBuffer.RedrawBuffer(ac.Terminal(), contentHeight); err != nil {
+	//     fmt.Fprintf(os.Stderr, "Warning: Buffer redraw failed: %v\n", err)
+	// }
 
 	// Re-render footer after content
 	if err := ac.footer.Render(); err != nil {
@@ -892,6 +1128,24 @@ func (ac *AgentConsole) OnResize(width, height int) {
 	}
 
 	// Note: Cursor will be repositioned by the input component when it redraws
+}
+
+// refreshLayoutAfterSetup applies the same layout positioning logic as OnResize
+// This ensures content appears in the right place after initial setup
+func (ac *AgentConsole) refreshLayoutAfterSetup(width, height int) {
+	// Update layout manager with terminal size (similar to resize)
+	ac.autoLayoutManager.OnTerminalResize(width, height)
+
+	// Update footer height in layout
+	footerHeight := ac.footer.GetHeight()
+	ac.autoLayoutManager.SetComponentHeight("footer", footerHeight)
+
+	// Get updated scroll region from layout manager
+	top, bottom := ac.autoLayoutManager.GetScrollRegion()
+	ac.Terminal().SetScrollRegion(top, bottom)
+
+	// Position cursor at start of content area
+	ac.Terminal().MoveCursor(1, top)
 }
 
 func formatDuration(d time.Duration) string {

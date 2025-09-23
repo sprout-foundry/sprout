@@ -129,14 +129,11 @@ func (p *DeepInfraProvider) SendChatRequest(messages []api.Message, tools []api.
 		}
 	}
 
-	// Calculate appropriate max_tokens based on context limits
-	maxTokens := p.calculateMaxTokens(messages, tools)
-
-	// Build request payload
+	// Build request payload (removed max_tokens for better context management)
 	requestBody := map[string]interface{}{
 		"model":       p.model,
 		"messages":    deepinfraMessages,
-		"max_tokens":  maxTokens,
+		"max_tokens":  30000,
 		"temperature": 0.7,
 	}
 
@@ -197,13 +194,9 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 		}
 	}
 
-	// Calculate appropriate max_tokens
-	maxTokens := p.calculateMaxTokens(messages, tools)
-
 	reqBody := map[string]interface{}{
 		"model":       p.model,
 		"messages":    openAIMessages,
-		"max_tokens":  maxTokens,
 		"temperature": 0.7,
 		"stream":      true, // Enable streaming
 	}

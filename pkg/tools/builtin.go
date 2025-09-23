@@ -183,26 +183,56 @@ func (e *Executor) executeShellCommand(ctx context.Context, args map[string]inte
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	output, err := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	// Token-based truncation logic
+	const maxTokens = 1000
+	const avgCharsPerToken = 4 // Conservative estimate
+	maxChars := maxTokens * avgCharsPerToken
+
+	var finalOutput string
+	var metadata = map[string]interface{}{
+		"command":   command,
+		"exit_code": 0,
+	}
+
+	if err != nil {
+		metadata["exit_code"] = cmd.ProcessState.ExitCode()
+	}
+
+	// Check if output needs truncation
+	if len(outputStr) > maxChars {
+		// Create temp file for full output
+		tempFile, tempErr := e.createTempOutputFile(outputStr)
+		if tempErr != nil {
+			// If temp file creation fails, just truncate normally
+			finalOutput = fmt.Sprintf("%s\n\n[Output truncated - original length: %d chars, showing first %d chars]",
+				outputStr[:maxChars], len(outputStr), maxChars)
+		} else {
+			// Truncate and reference temp file
+			finalOutput = fmt.Sprintf("%s\n\n[Output truncated - original length: %d chars (%d tokens estimated), full output saved to %s]",
+				outputStr[:maxChars], len(outputStr), len(outputStr)/avgCharsPerToken, tempFile)
+			metadata["full_output_file"] = tempFile
+		}
+		metadata["truncated"] = true
+		metadata["original_length"] = len(outputStr)
+	} else {
+		finalOutput = outputStr
+	}
 
 	if err != nil {
 		return &Result{
-			Success: false,
-			Output:  string(output),
-			Errors:  []string{fmt.Sprintf("command failed: %v", err)},
-			Metadata: map[string]interface{}{
-				"command":   command,
-				"exit_code": cmd.ProcessState.ExitCode(),
-			},
+			Success:  false,
+			Output:   finalOutput,
+			Errors:   []string{fmt.Sprintf("command failed: %v", err)},
+			Metadata: metadata,
 		}, nil
 	}
 
 	return &Result{
-		Success: true,
-		Output:  string(output),
-		Metadata: map[string]interface{}{
-			"command":   command,
-			"exit_code": 0,
-		},
+		Success:  true,
+		Output:   finalOutput,
+		Metadata: metadata,
 	}, nil
 }
 
@@ -873,4 +903,25 @@ func formatHistoryView(changes []history.ChangeLog, showContent bool) string {
 	}
 
 	return result.String()
+}
+
+// createTempOutputFile creates a temporary file in .ledit directory to store large shell output
+func (e *Executor) createTempOutputFile(output string) (string, error) {
+	// Ensure .ledit directory exists
+	leditDir := ".ledit"
+	if err := os.MkdirAll(leditDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create .ledit directory: %w", err)
+	}
+
+	// Generate timestamp-based filename
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("temp_output_%s.txt", timestamp)
+	filepath := filepath.Join(leditDir, filename)
+
+	// Write output to temp file
+	if err := os.WriteFile(filepath, []byte(output), 0644); err != nil {
+		return "", fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	return filepath, nil
 }

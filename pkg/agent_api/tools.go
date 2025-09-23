@@ -357,6 +357,75 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
+				Name:        "view_history",
+				Description: "View change history of files across sessions to see what writes/edits have happened",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"limit": map[string]interface{}{
+							"type":        "integer",
+							"description": "Maximum number of changes to return (default: 10)",
+							"minimum":     1,
+							"maximum":     100,
+							"default":     10,
+						},
+						"file_filter": map[string]interface{}{
+							"type":        "string",
+							"description": "Filter changes by filename (partial match)",
+						},
+						"since": map[string]interface{}{
+							"type":        "string",
+							"description": "Filter changes since this time (ISO 8601 format)",
+						},
+						"show_content": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Include actual file content changes in output (default: false)",
+							"default":     false,
+						},
+					},
+					"required":             []string{},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "rollback_changes",
+				Description: "Rollback previous changes by revision ID or specific file",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"revision_id": map[string]interface{}{
+							"type":        "string",
+							"description": "Revision ID to rollback (get from view_history). If not provided, shows available revisions",
+						},
+						"file_path": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional: rollback only this specific file from the revision",
+						},
+						"confirm": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Must be true to actually perform rollback (default: false for preview)",
+							"default":     false,
+						},
+					},
+					"required":             []string{},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
 				Name:        "mcp_tools",
 				Description: "Access MCP server tools",
 				Parameters: map[string]interface{}{

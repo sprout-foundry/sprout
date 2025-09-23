@@ -46,7 +46,7 @@ type ConversationPruner struct {
 func NewConversationPruner(debug bool) *ConversationPruner {
 	return &ConversationPruner{
 		strategy:             PruneStrategyAdaptive, // Default to adaptive
-		contextThreshold:     0.7,                   // Start pruning at 70% context usage
+		contextThreshold:     0.7,                   // 70% threshold (used in hybrid approach)
 		minMessagesToKeep:    3,                     // Always keep at least system + first query + first response
 		recentMessagesToKeep: 10,                    // Keep last 10 messages
 		slidingWindowSize:    20,                    // For sliding window strategy
@@ -55,13 +55,34 @@ func NewConversationPruner(debug bool) *ConversationPruner {
 }
 
 // ShouldPrune checks if pruning should occur based on context usage
+// Uses hybrid approach: 70K tokens OR 70% of context limit, whichever is hit first
 func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int) bool {
 	if cp.strategy == PruneStrategyNone {
 		return false
 	}
 
+	// Hybrid threshold: 70K tokens OR 70% of context limit, whichever is hit first
+	const tokenCeiling = 70000      // 70K token absolute ceiling
+	const percentageThreshold = 0.7 // 70% threshold
+
+	// Check if we hit the absolute token ceiling
+	if currentTokens >= tokenCeiling {
+		if cp.debug {
+			fmt.Printf("🔄 Token ceiling hit: %d >= %d tokens\n", currentTokens, tokenCeiling)
+		}
+		return true
+	}
+
+	// Check if we hit the percentage threshold
 	contextUsage := float64(currentTokens) / float64(maxTokens)
-	return contextUsage >= cp.contextThreshold
+	if contextUsage >= percentageThreshold {
+		if cp.debug {
+			fmt.Printf("🔄 Percentage threshold hit: %.1f%% >= %.1f%%\n", contextUsage*100, percentageThreshold*100)
+		}
+		return true
+	}
+
+	return false
 }
 
 // PruneConversation automatically prunes conversation based on strategy

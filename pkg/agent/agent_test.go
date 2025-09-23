@@ -63,7 +63,7 @@ func TestNewAgentWithModel(t *testing.T) {
 		}
 	}()
 
-	agent, err := NewAgentWithModel("deepseek/deepseek-chat")
+	agent, err := NewAgentWithModel("deepseek/deepseek-chat-v3.1:free")
 	if err != nil {
 		t.Skipf("Skipping test due to connection error: %v", err)
 	}

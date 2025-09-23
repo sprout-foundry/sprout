@@ -50,6 +50,7 @@ type Agent struct {
 	interruptMessage     string          // User message to inject after interrupt
 	escPressed           chan bool       // Channel to signal Esc key press
 	interruptChan        chan string     // Channel for TUI interrupt messages
+	inputInjectionChan   chan string     // Channel for injecting new user inputs during processing
 	escMonitoringEnabled bool            // Flag to enable/disable Esc monitoring
 	outputMutex          *sync.Mutex     // Mutex for synchronized output
 	streamingEnabled     bool            // Whether streaming is enabled
@@ -193,6 +194,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		interruptMessage:          "",
 		escPressed:                make(chan bool, 1),
 		interruptChan:             nil,
+		inputInjectionChan:        make(chan string, 10), // Buffer up to 10 inputs
 		escMonitoringEnabled:      false,
 		falseStopDetectionEnabled: true,
 		conversationPruner:        NewConversationPruner(debug),
@@ -780,6 +782,22 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 // SetInterruptChannel sets the interrupt channel for the agent
 func (a *Agent) SetInterruptChannel(ch chan string) {
 	a.interruptChan = ch
+}
+
+// InjectInput injects a new user input into the conversation flow
+func (a *Agent) InjectInput(input string) {
+	select {
+	case a.inputInjectionChan <- input:
+		// Successfully queued
+	default:
+		// Channel full, could log warning
+		a.debugLog("⚠️ Input injection channel full, dropping input: %s\n", input)
+	}
+}
+
+// GetInputInjectionChannel returns the input injection channel for monitoring
+func (a *Agent) GetInputInjectionChannel() <-chan string {
+	return a.inputInjectionChan
 }
 
 // SetOutputMutex sets the output mutex for synchronized output

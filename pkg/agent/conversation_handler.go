@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
@@ -15,6 +16,9 @@ type ConversationHandler struct {
 	responseValidator          *ResponseValidator
 	errorHandler               *ErrorHandler
 	consecutiveBlankIterations int
+	conversationStartTime      time.Time
+	lastActivityTime           time.Time
+	timeoutDuration            time.Duration
 }
 
 // NewConversationHandler creates a new conversation handler
@@ -25,6 +29,7 @@ func NewConversationHandler(agent *Agent) *ConversationHandler {
 		toolExecutor:      NewToolExecutor(agent),
 		responseValidator: NewResponseValidator(agent),
 		errorHandler:      NewErrorHandler(agent),
+		timeoutDuration:   7 * time.Minute, // 5-minute timeout
 	}
 }
 
@@ -33,6 +38,10 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	if ch.agent.debug {
 		fmt.Printf("DEBUG: ProcessQuery called with: %s\n", userQuery)
 	}
+
+	// Initialize timeout tracking
+	ch.conversationStartTime = time.Now()
+	ch.lastActivityTime = time.Now()
 
 	// Reset streaming buffer for new query
 	ch.agent.streamingBuffer.Reset()
@@ -78,6 +87,9 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 			}
 			return ch.errorHandler.HandleAPIFailure(err, ch.agent.messages)
 		}
+
+		// Update activity time on successful response
+		ch.lastActivityTime = time.Now()
 
 		// Process response
 		if shouldStop := ch.processResponse(response); shouldStop {
@@ -203,13 +215,26 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 // Helper methods...
 func (ch *ConversationHandler) checkForInterrupt() bool {
+	// Check for escape key press
 	select {
 	case <-ch.agent.escPressed:
 		ch.agent.interruptRequested = true
 		return true
 	default:
-		return ch.agent.interruptRequested
+		// Check for existing interrupt request
+		if ch.agent.interruptRequested {
+			return true
+		}
 	}
+
+	// Check for timeout (5 minutes of inactivity)
+	if time.Since(ch.lastActivityTime) > ch.timeoutDuration {
+		ch.agent.debugLog("⏰ Conversation timeout after %v of inactivity\n", ch.timeoutDuration)
+		ch.agent.interruptRequested = true
+		return true
+	}
+
+	return false
 }
 
 func (ch *ConversationHandler) prepareMessages() []api.Message {
@@ -225,6 +250,37 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 	// Always include system prompt at the beginning
 	allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
 	allMessages = append(allMessages, optimizedMessages...)
+
+	// Check context limits and apply pruning if needed
+	currentTokens := ch.estimateTokens(allMessages)
+	if ch.agent.maxContextTokens > 0 {
+		// Create pruner if needed and check if we should prune
+		if ch.agent.conversationPruner == nil {
+			ch.agent.conversationPruner = NewConversationPruner(ch.agent.debug)
+		}
+
+		if ch.agent.conversationPruner.ShouldPrune(currentTokens, ch.agent.maxContextTokens) {
+			if ch.agent.debug {
+				contextUsage := float64(currentTokens) / float64(ch.agent.maxContextTokens)
+				fmt.Printf("🔄 Context pruning triggered: %d/%d tokens (%.1f%%)\n",
+					currentTokens, ch.agent.maxContextTokens, contextUsage*100)
+			}
+
+			// Apply pruning to optimized messages (excluding system prompt)
+			prunedMessages := ch.agent.conversationPruner.PruneConversation(optimizedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer)
+
+			// Rebuild with system prompt
+			allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+			allMessages = append(allMessages, prunedMessages...)
+
+			if ch.agent.debug {
+				newTokens := ch.estimateTokens(allMessages)
+				fmt.Printf("✅ Context after pruning: %d tokens (%.1f%%)\n",
+					newTokens, float64(newTokens)/float64(ch.agent.maxContextTokens)*100)
+			}
+		}
+	}
+
 	return allMessages
 }
 
@@ -314,4 +370,32 @@ func (ch *ConversationHandler) isBlankIteration(content string, toolCalls []api.
 	}
 
 	return false
+}
+
+// estimateTokens provides a rough estimate of token count for messages
+func (ch *ConversationHandler) estimateTokens(messages []api.Message) int {
+	totalChars := 0
+	for _, msg := range messages {
+		// Count characters in content
+		totalChars += len(msg.Content)
+
+		// Count characters in reasoning content if present
+		if msg.ReasoningContent != "" {
+			totalChars += len(msg.ReasoningContent)
+		}
+
+		// Estimate tokens for tool calls (function names, parameters, etc.)
+		for _, toolCall := range msg.ToolCalls {
+			totalChars += len(toolCall.Function.Name) + len(toolCall.Function.Arguments) + 50 // overhead
+		}
+
+		// Add overhead for role, formatting, etc.
+		totalChars += 50
+	}
+
+	// Conservative estimate: 1 token ≈ 3 characters (accounting for markdown, code, etc.)
+	estimatedTokens := totalChars / 3
+
+	// Add some safety buffer
+	return int(float64(estimatedTokens) * 1.1)
 }

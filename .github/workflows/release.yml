@@ -61,23 +61,52 @@ jobs:
         VERSION=${GITHUB_REF#refs/tags/}
         LAST_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
         
-        echo "# Changelog" > CHANGELOG.md
-        echo "" >> CHANGELOG.md
-        echo "All notable changes to ledit will be documented in this file." >> CHANGELOG.md
-        echo "" >> CHANGELOG.md
-        echo "## [$VERSION] - $(date +%Y-%m-%d)" >> CHANGELOG.md
-        echo "" >> CHANGELOG.md
+        # Create temporary changelog for this release
+        TEMP_CHANGELOG=$(mktemp)
+        
+        echo "## [$VERSION] - $(date +%Y-%m-%d)" > $TEMP_CHANGELOG
+        echo "" >> $TEMP_CHANGELOG
         
         if [ -n "$LAST_TAG" ]; then
-          git log --pretty=format:"- %s (%h)" --abbrev-commit "$LAST_TAG..HEAD" >> CHANGELOG.md 2>/dev/null || \
-          echo "- No changes detected since last tag" >> CHANGELOG.md
+          git log --pretty=format:"- %s (%h)" --abbrev-commit "$LAST_TAG..HEAD" >> $TEMP_CHANGELOG 2>/dev/null || \
+          echo "- No changes detected since last tag" >> $TEMP_CHANGELOG
         else
-          echo "- Initial release" >> CHANGELOG.md
+          echo "- Initial release" >> $TEMP_CHANGELOG
+        fi
+        echo "" >> $TEMP_CHANGELOG
+        
+        # If CHANGELOG.md exists, prepend new content; otherwise create fresh
+        if [ -f "CHANGELOG.md" ]; then
+          # Insert new release section at the top (after header)
+          HEADER=$(head -n 4 CHANGELOG.md)
+          TAIL=$(tail -n +5 CHANGELOG.md)
+          echo "$HEADER" > CHANGELOG.md.new
+          echo "" >> CHANGELOG.md.new
+          cat $TEMP_CHANGELOG >> CHANGELOG.md.new
+          echo "" >> CHANGELOG.md.new
+          echo "$TAIL" >> CHANGELOG.md.new
+          mv CHANGELOG.md.new CHANGELOG.md
+        else
+          # Create new changelog
+          echo "# Changelog" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "All notable changes to ledit will be documented in this file." >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          cat $TEMP_CHANGELOG >> CHANGELOG.md
         fi
         
-        echo "" >> CHANGELOG.md
+        rm -f $TEMP_CHANGELOG
         echo "Generated changelog for $VERSION"
         cat CHANGELOG.md
+
+    - name: Commit changelog
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add CHANGELOG.md
+        git commit -m "docs: Update changelog for $VERSION" || echo "No changes to commit"
+        git push origin HEAD:main
 
     - name: Update README with version
       run: |

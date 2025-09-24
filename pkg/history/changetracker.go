@@ -11,8 +11,6 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	ui "github.com/alantheprice/ledit/pkg/ui"
-
-	"github.com/fatih/color"
 )
 
 // RevisionGroup represents a group of changes that belong to the same revision
@@ -22,7 +20,7 @@ type RevisionGroup struct {
 	Response     string
 	Changes      []ChangeLog
 	Timestamp    time.Time
-	AgentModel string // Added: Editing model used for this revision
+	AgentModel   string // Added: Editing model used for this revision
 }
 
 // HasActiveChangesForRevision returns whether a revision ID exists and has any active changes
@@ -80,7 +78,8 @@ func RevertChangeByRevisionID(revisionID string) error {
 	return nil
 }
 
-func PrintRevisionHistory() error {
+// PrintRevisionHistoryWithReader allows custom input reader for interactive navigation
+func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 	changes, err := fetchAllChanges() // fetchAllChanges now returns sorted data
 	if err != nil {
 		return err
@@ -98,7 +97,10 @@ func PrintRevisionHistory() error {
 		return nil
 	}
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := inputReader
+	if reader == nil {
+		reader = bufio.NewReader(os.Stdin)
+	}
 	currentIndex := 0
 
 	// Display the first revision
@@ -177,6 +179,10 @@ func PrintRevisionHistory() error {
 	}
 }
 
+func PrintRevisionHistory() error {
+	return PrintRevisionHistoryWithReader(nil)
+}
+
 // PrintRevisionHistoryBuffer displays the revision history to a buffer for seamless console experience
 func PrintRevisionHistoryBuffer() (string, error) {
 	changes, err := fetchAllChanges() // fetchAllChanges now returns sorted data
@@ -208,48 +214,48 @@ func PrintRevisionHistoryBuffer() (string, error) {
 }
 
 func displayRevision(group RevisionGroup) {
-	fmt.Printf("\n\033[1mEditing Model:\033[0m %s\n", group.AgentModel)
-	fmt.Println(strings.Repeat("=", 80))
-	color.New(color.FgCyan).Printf("Revision ID: %s\n", group.RevisionID)
-	fmt.Printf("Time: %s\n", group.Timestamp.Format(time.RFC1123))
+	fmt.Printf("\r\n\033[1mEditing Model:\033[0m %s\r\n", group.AgentModel)
+	fmt.Print(strings.Repeat("=", 80) + "\r\n")
+	fmt.Printf("\033[36mRevision ID: %s\033[0m\r\n", group.RevisionID)
+	fmt.Printf("Time: %s\r\n", group.Timestamp.Format(time.RFC1123))
 
 	// Display the editing model used for this revision
 	if group.AgentModel != "" {
-		fmt.Printf("Model: %s\n\n", group.AgentModel)
+		fmt.Printf("Model: %s\r\n\r\n", group.AgentModel)
 	} else {
-		fmt.Printf("Model: Not specified\n\n")
+		fmt.Print("Model: Not specified\r\n\r\n")
 	}
 
-	fmt.Printf("\033[1mFile Changes (%d):\033[0m\n", len(group.Changes))
+	fmt.Printf("\033[1mFile Changes (%d):\033[0m\r\n", len(group.Changes))
 	for _, change := range group.Changes {
-		fmt.Println(strings.Repeat("-", 40))
-		color.New(color.FgYellow).Printf("(%s)", change.Filename)
+		fmt.Print(strings.Repeat("-", 40) + "\r\n")
+		fmt.Printf("\033[33m(%s)\033[0m", change.Filename)
 		fmt.Printf(" -- \033[1m%s\033[0m", change.FileRevisionHash)
 		if change.Status != "active" {
-			fmt.Printf(" - %s%s%s\n", "\033[2m", change.Status, "\033[0m")
+			fmt.Printf(" - %s%s%s\r\n", "\033[2m", change.Status, "\033[0m")
 		} else {
-			color.Green(" - %s\n", change.Status)
+			fmt.Printf(" - \033[32m%s\033[0m\r\n", change.Status)
 		}
 
 		if change.Note.Valid {
-			fmt.Printf("    \033[1m%s\033[0m\n\n", change.Note.String)
+			fmt.Printf("    \033[1m%s\033[0m\r\n\r\n", change.Note.String)
 		}
 
 		// Wrap the description at 72 characters and indent with 4 spaces
 		wrappedDesc := wrapAndIndent(change.Description, 72, 4)
-		fmt.Print(wrappedDesc + "\n")
+		fmt.Print(wrappedDesc + "\r\n")
 
 		// Show a preview of the diff
 		diff := GetDiff(change.Filename, change.OriginalCode, change.NewCode)
 		diffLines := strings.Split(diff, "\n")
 		if len(diffLines) > 3 {
 			for _, line := range diffLines[:3] {
-				fmt.Println(line)
+				fmt.Print(line + "\r\n")
 			}
-			fmt.Println("...")
+			fmt.Print("...\r\n")
 		} else {
 			for _, line := range diffLines {
-				fmt.Println(line)
+				fmt.Print(line + "\r\n")
 			}
 		}
 	}
@@ -326,7 +332,7 @@ func groupChangesByRevision(changes []ChangeLog) []RevisionGroup {
 				Response:     change.Response,
 				Changes:      []ChangeLog{change},
 				Timestamp:    change.Timestamp,
-				AgentModel: change.AgentModel, // Added: Include editing model in group
+				AgentModel:   change.AgentModel, // Added: Include editing model in group
 			}
 		}
 	}

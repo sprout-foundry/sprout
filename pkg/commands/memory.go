@@ -46,6 +46,9 @@ func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 		chatAgent.ApplyState(state)
 		fmt.Printf("✓ Conversation memory loaded for session: %s\n", sessionID)
+		
+		// Show conversation preview
+		c.displayConversationPreview(chatAgent)
 		return nil
 	}
 
@@ -88,5 +91,27 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 
 	chatAgent.ApplyState(state)
 	fmt.Printf("\r\n✅ Conversation memory loaded for session: %s\r\n", sessionID)
+	
+	// Show conversation preview
+	c.displayConversationPreview(chatAgent)
 	return nil
+}
+
+// displayConversationPreview shows recent messages from the restored session
+func (c *MemoryCommand) displayConversationPreview(agent *agent.Agent) {
+	// Get last few messages for preview (e.g., last 5)
+	lastMessages := agent.GetLastMessages(5)
+	
+	if len(lastMessages) > 0 {
+		fmt.Println("\n📋 Recent conversation preview:")
+		fmt.Println("================================")
+		for _, msg := range lastMessages {
+			if msg.Role == "user" {
+				fmt.Printf("👤 You: %s\n", msg.Content)
+			} else if msg.Role == "assistant" {
+				fmt.Printf("🤖 Assistant: %s\n", msg.Content)
+			}
+		}
+		fmt.Println("================================\n")
+	}
 }

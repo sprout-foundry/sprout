@@ -26,12 +26,26 @@ type InputManager struct {
 	currentLine    []rune
 	cursorPos      int
 	prompt         string
-	inputFieldLine int // Line number where input field is shown
+	inputFieldLine int // Line number where input field starts
+	inputHeight    int // Number of lines currently used by input field
 
 	// Layout integration (optional)
 	layoutManager interface {
 		GetRegion(name string) (console.Region, error)
 	}
+
+	// History integration (optional)
+	historyManager interface {
+		GetHistory() []string
+		AddEntry(string)
+	}
+
+	// History navigation state
+	historyIndex int    // Current position in history (-1 = not in history mode)
+	tempInput    []rune // Temporary storage for current input when browsing history
+
+	// Input routing
+	inputRouter *console.InputRouter
 
 	// Concurrency
 	inputChan     chan string
@@ -41,8 +55,9 @@ type InputManager struct {
 	mutex         sync.RWMutex
 
 	// Callbacks
-	onInput     func(string) error
-	onInterrupt func()
+	onInput        func(string) error
+	onInterrupt    func()
+	onHeightChange func(int) // Callback when input height changes
 
 	// Context for shutdown
 	ctx    context.Context
@@ -51,6 +66,8 @@ type InputManager struct {
 	// State tracking
 	lastOutputLine int
 	running        bool
+	paused         bool
+	redrawing      bool // Prevent concurrent redraw operations
 }
 
 // NewInputManager creates a new concurrent input manager
@@ -66,6 +83,9 @@ func NewInputManager(prompt string) *InputManager {
 		ctx:           ctx,
 		cancel:        cancel,
 		mutex:         sync.RWMutex{},
+		inputHeight:   1,        // Start with single line
+		historyIndex:  -1,       // Not in history mode initially
+		tempInput:     []rune{}, // Empty temp input
 	}
 }
 
@@ -124,6 +144,13 @@ func (im *InputManager) SetCallbacks(onInput func(string) error, onInterrupt fun
 	im.onInterrupt = onInterrupt
 }
 
+// SetHeightChangeCallback sets the callback for when input height changes
+func (im *InputManager) SetHeightChangeCallback(callback func(int)) {
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+	im.onHeightChange = callback
+}
+
 // SetLayoutManager sets the layout manager for automatic positioning
 func (im *InputManager) SetLayoutManager(layoutManager interface {
 	GetRegion(name string) (console.Region, error)
@@ -132,6 +159,23 @@ func (im *InputManager) SetLayoutManager(layoutManager interface {
 	defer im.mutex.Unlock()
 	im.layoutManager = layoutManager
 	im.calculateInputPosition()
+}
+
+// SetHistoryManager sets the history manager for arrow key navigation
+func (im *InputManager) SetHistoryManager(historyManager interface {
+	GetHistory() []string
+	AddEntry(string)
+}) {
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+	im.historyManager = historyManager
+}
+
+// SetInputRouter sets the input router for event routing
+func (im *InputManager) SetInputRouter(router *console.InputRouter) {
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+	im.inputRouter = router
 }
 
 // calculateInputPosition calculates where the input field should be positioned
@@ -176,7 +220,13 @@ func (im *InputManager) inputLoop() {
 				continue
 			}
 
-			im.processKeystrokes(buffer[:n])
+			// Route input through the input router if available
+			if im.inputRouter != nil {
+				im.inputRouter.SendKeystroke(buffer[:n])
+			} else {
+				// Fallback to direct processing
+				im.processKeystrokes(buffer[:n])
+			}
 		}
 	}
 }
@@ -186,7 +236,7 @@ func (im *InputManager) processKeystrokes(data []byte) {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
-	if !im.running {
+	if !im.running || im.paused {
 		return
 	}
 
@@ -235,11 +285,18 @@ func (im *InputManager) handleEnter() {
 		return
 	}
 
-	// Clear current line
+	// Clear current line and reset to single line height
 	im.currentLine = []rune{}
 	im.cursorPos = 0
 
-	// Hide input field temporarily
+	// Reset history navigation state
+	im.historyIndex = -1
+	im.tempInput = []rune{}
+
+	// Reset input height to single line after submission (this handles its own locking)
+	im.resetInputHeight()
+
+	// Hide input field temporarily (this will now only clear the single line)
 	im.hideInputField()
 
 	if im.isProcessing {
@@ -274,19 +331,83 @@ func (im *InputManager) handleCtrlC() {
 // handleBackspace removes character before cursor
 func (im *InputManager) handleBackspace() {
 	if im.cursorPos > 0 {
+		// Reset history navigation when user modifies input
+		if im.historyIndex != -1 {
+			im.historyIndex = -1
+			im.tempInput = []rune{}
+		}
+
 		im.currentLine = append(im.currentLine[:im.cursorPos-1], im.currentLine[im.cursorPos:]...)
 		im.cursorPos--
 	}
 }
 
 // Arrow key handlers
-func (im *InputManager) handleUpArrow()   { /* TODO: History navigation */ }
-func (im *InputManager) handleDownArrow() { /* TODO: History navigation */ }
+func (im *InputManager) handleUpArrow() {
+	if im.historyManager == nil {
+		return
+	}
+
+	history := im.historyManager.GetHistory()
+	if len(history) == 0 {
+		return
+	}
+
+	// If we're not in history mode, save current input and start from most recent
+	if im.historyIndex == -1 {
+		im.tempInput = make([]rune, len(im.currentLine))
+		copy(im.tempInput, im.currentLine)
+		im.historyIndex = len(history) - 1
+	} else if im.historyIndex > 0 {
+		// Move to older entry
+		im.historyIndex--
+	} else {
+		// Already at oldest entry
+		return
+	}
+
+	// Load history entry
+	im.currentLine = []rune(history[im.historyIndex])
+	im.cursorPos = len(im.currentLine)
+
+	// Recalculate input height since history entry might be different length
+	im.updateInputHeightFromContent()
+}
+
+func (im *InputManager) handleDownArrow() {
+	if im.historyManager == nil || im.historyIndex == -1 {
+		return
+	}
+
+	history := im.historyManager.GetHistory()
+	if len(history) == 0 {
+		return
+	}
+
+	if im.historyIndex < len(history)-1 {
+		// Move to newer entry
+		im.historyIndex++
+		im.currentLine = []rune(history[im.historyIndex])
+		im.cursorPos = len(im.currentLine)
+	} else {
+		// Return to original input
+		im.historyIndex = -1
+		im.currentLine = make([]rune, len(im.tempInput))
+		copy(im.currentLine, im.tempInput)
+		im.cursorPos = len(im.currentLine)
+		im.tempInput = []rune{} // Clear temp storage
+	}
+
+	// Recalculate input height
+	im.updateInputHeightFromContent()
+}
+
 func (im *InputManager) handleLeftArrow() {
 	if im.cursorPos > 0 {
 		im.cursorPos--
 	}
 }
+
 func (im *InputManager) handleRightArrow() {
 	if im.cursorPos < len(im.currentLine) {
 		im.cursorPos++
@@ -295,6 +416,12 @@ func (im *InputManager) handleRightArrow() {
 
 // insertChar inserts a character at cursor position
 func (im *InputManager) insertChar(ch rune) {
+	// Reset history navigation when user starts typing
+	if im.historyIndex != -1 {
+		im.historyIndex = -1
+		im.tempInput = []rune{}
+	}
+
 	if im.cursorPos >= len(im.currentLine) {
 		im.currentLine = append(im.currentLine, ch)
 	} else {
@@ -312,32 +439,230 @@ func (im *InputManager) printf(format string, args ...interface{}) {
 	fmt.Print(text)
 }
 
-// showInputField displays the input field above the footer
-func (im *InputManager) showInputField() {
-	if !im.running {
-		return
+// calculateInputDimensions calculates how many lines the input takes and cursor position
+func (im *InputManager) calculateInputDimensions() (lines int, cursorLine int, cursorCol int) {
+	if im.termWidth <= 0 {
+		im.updateTerminalSize()
 	}
 
-	// Move to input field position (above footer)
-	im.printf("\033[%d;1H", im.inputFieldLine)
+	// Calculate effective width (terminal width minus 1 to avoid edge wrapping issues)
+	effectiveWidth := im.termWidth - 1
+	if effectiveWidth <= 0 {
+		effectiveWidth = 80 // Fallback
+	}
 
-	// Clear line and show prompt + input
-	im.printf("\r\033[K%s%s", im.prompt, string(im.currentLine))
+	// Total text is prompt + input
+	promptWidth := len(im.prompt)
+	fullText := im.prompt + string(im.currentLine)
 
-	// Position cursor correctly
-	// Simple prompt "> " is 2 characters
-	promptDisplayWidth := len(im.prompt)
-	cursorCol := promptDisplayWidth + im.cursorPos + 1
-	im.printf("\033[%d;%dH", im.inputFieldLine, cursorCol)
+	// Calculate total lines needed
+	totalChars := len(fullText)
+	lines = (totalChars + effectiveWidth - 1) / effectiveWidth // Ceiling division
+	if lines == 0 {
+		lines = 1
+	}
+
+	// Calculate cursor position
+	cursorTextPos := promptWidth + im.cursorPos
+	cursorLine = cursorTextPos / effectiveWidth
+	cursorCol = (cursorTextPos % effectiveWidth) + 1
+
+	return lines, cursorLine, cursorCol
 }
 
-// hideInputField clears the input field
+// notifyLayoutOfInputHeight tells the layout manager about input height changes
+func (im *InputManager) notifyLayoutOfInputHeight(newHeight int) {
+	if newHeight != im.inputHeight {
+		im.inputHeight = newHeight
+
+		// Notify agent console of height change so it can update the layout
+		if im.onHeightChange != nil {
+			im.onHeightChange(newHeight)
+		}
+	}
+}
+
+// showInputField displays the input field above the footer with proper multi-line handling
+func (im *InputManager) showInputField() {
+	if !im.running || im.redrawing {
+		return
+	}
+	im.redrawing = true
+	defer func() { im.redrawing = false }()
+
+	// Calculate input dimensions
+	lines, cursorLine, cursorCol := im.calculateInputDimensions()
+
+	// Store the previous height before any updates
+	previousHeight := im.inputHeight
+
+	// Check if we need more lines than currently allocated
+	if lines > im.inputHeight {
+		im.notifyLayoutOfInputHeight(lines)
+		im.inputHeight = lines
+		// Note: This might require layout recalculation, but we'll continue with current positioning for now
+	}
+
+	// Clear all lines that might contain input - use the MAXIMUM of previous and current height
+	// This ensures we clear artifacts when transitioning from multi-line to single-line
+	linesToClear := previousHeight
+	if lines > linesToClear {
+		linesToClear = lines
+	}
+
+	for i := 0; i < linesToClear; i++ {
+		im.printf("\033[%d;1H\033[2K", im.inputFieldLine+i)
+	}
+
+	// Update height to match actual content needs
+	im.inputHeight = lines
+	if lines != previousHeight {
+		im.notifyLayoutOfInputHeight(lines)
+	}
+
+	// Display the input text with proper wrapping
+	fullText := im.prompt + string(im.currentLine)
+
+	// Calculate effective width for wrapping
+	effectiveWidth := im.termWidth - 1
+	if effectiveWidth <= 0 {
+		effectiveWidth = 80
+	}
+
+	// Split text into lines based on terminal width
+	currentLine := 0
+	for i := 0; i < len(fullText); i += effectiveWidth {
+		end := i + effectiveWidth
+		if end > len(fullText) {
+			end = len(fullText)
+		}
+
+		segment := fullText[i:end]
+		// Always position cursor explicitly for each line to avoid artifacts
+		im.printf("\033[%d;1H%s", im.inputFieldLine+currentLine, segment)
+		currentLine++
+	}
+
+	// Position cursor correctly on the right line and column
+	actualCursorLine := im.inputFieldLine + cursorLine
+	im.printf("\033[%d;%dH", actualCursorLine, cursorCol)
+}
+
+// showInputFieldAfterResize handles input field display after terminal resize
+// This method clears potential artifacts from the old terminal dimensions
+func (im *InputManager) showInputFieldAfterResize(oldWidth, oldHeight int) {
+	if !im.running || im.redrawing {
+		return
+	}
+	im.redrawing = true
+	defer func() { im.redrawing = false }()
+
+	// Calculate how many lines the same content would have used at the old width
+	oldLines := im.calculateLinesForWidth(oldWidth)
+
+	// Calculate how many lines we need at the new width
+	newLines, cursorLine, cursorCol := im.calculateInputDimensions()
+
+	// Store previous height
+	previousHeight := im.inputHeight
+
+	// Clear more lines to handle resize artifacts - use the maximum of:
+	// 1. Previous height (from before resize)
+	// 2. Lines that would be used at old width
+	// 3. Lines that will be used at new width
+	// 4. Add extra buffer lines to catch edge cases
+	linesToClear := previousHeight
+	if oldLines > linesToClear {
+		linesToClear = oldLines
+	}
+	if newLines > linesToClear {
+		linesToClear = newLines
+	}
+
+	// Add buffer lines for edge cases (up to 3 extra lines)
+	linesToClear += 3
+
+	// Ensure we don't go beyond reasonable bounds (max 20 lines to avoid clearing too much)
+	if linesToClear > 20 {
+		linesToClear = 20
+	}
+
+	// Clear all potential lines that might contain artifacts
+	// Use aggressive clearing for resize scenarios to handle horizontal artifacts
+	for i := 0; i < linesToClear; i++ {
+		// Move to beginning of line and clear entire line (including beyond terminal width)
+		im.printf("\033[%d;1H\033[2K", im.inputFieldLine+i)
+	}
+
+	// Update height to match new terminal width needs
+	im.inputHeight = newLines
+	if newLines != previousHeight {
+		im.notifyLayoutOfInputHeight(newLines)
+	}
+
+	// Display the input text with proper wrapping for new width
+	fullText := im.prompt + string(im.currentLine)
+
+	// Calculate effective width for wrapping
+	effectiveWidth := im.termWidth - 1
+	if effectiveWidth <= 0 {
+		effectiveWidth = 80
+	}
+
+	// Split text into lines based on NEW terminal width
+	currentLine := 0
+	for i := 0; i < len(fullText); i += effectiveWidth {
+		end := i + effectiveWidth
+		if end > len(fullText) {
+			end = len(fullText)
+		}
+
+		segment := fullText[i:end]
+		// Always position cursor explicitly for each line to avoid artifacts
+		im.printf("\033[%d;1H%s", im.inputFieldLine+currentLine, segment)
+		currentLine++
+	}
+
+	// Position cursor correctly on the right line and column
+	actualCursorLine := im.inputFieldLine + cursorLine
+	im.printf("\033[%d;%dH", actualCursorLine, cursorCol)
+}
+
+// calculateLinesForWidth calculates how many lines the current input would use for a given width
+func (im *InputManager) calculateLinesForWidth(width int) int {
+	if width <= 0 {
+		return 1
+	}
+
+	// Calculate effective width
+	effectiveWidth := width - 1
+	if effectiveWidth <= 0 {
+		effectiveWidth = 80 // Fallback
+	}
+
+	// Total text is prompt + input
+	fullText := im.prompt + string(im.currentLine)
+	totalChars := len(fullText)
+
+	// Calculate lines needed
+	lines := (totalChars + effectiveWidth - 1) / effectiveWidth // Ceiling division
+	if lines == 0 {
+		lines = 1
+	}
+
+	return lines
+}
+
+// hideInputField clears the input field (all lines it uses)
 func (im *InputManager) hideInputField() {
 	if !im.running {
 		return
 	}
 
-	im.printf("\033[%d;1H\033[K", im.inputFieldLine)
+	// Clear all lines used by the input field
+	for i := 0; i < im.inputHeight; i++ {
+		im.printf("\033[%d;1H\033[2K", im.inputFieldLine+i)
+	}
 }
 
 // updateTerminalSize gets current terminal dimensions
@@ -364,8 +689,8 @@ func (im *InputManager) resizeLoop() {
 		case <-ticker.C:
 			im.updateTerminalSize()
 			if im.termWidth != lastWidth || im.termHeight != lastHeight {
-				im.calculateInputPosition() // Recalculate position from layout manager
-				im.showInputField()         // Redraw at new position
+				im.calculateInputPosition()                         // Recalculate position from layout manager
+				im.showInputFieldAfterResize(lastWidth, lastHeight) // Clear artifacts and redraw
 				lastWidth, lastHeight = im.termWidth, im.termHeight
 			}
 		}
@@ -405,4 +730,162 @@ func (im *InputManager) ScrollOutput() {
 	// to account for both input field and footer
 	// Just ensure input field is visible
 	im.showInputField()
+}
+
+// InputHandler interface implementation
+func (im *InputManager) GetHandlerID() string {
+	return "main_console"
+}
+
+// HandleInput processes input events from the router
+func (im *InputManager) HandleInput(event console.InputEvent) bool {
+	if event.Type == console.KeystrokeEvent {
+		if data, ok := event.Data.(console.KeystrokeData); ok {
+			im.processKeystrokes(data.Bytes)
+			return true
+		}
+	} else if event.Type == console.InterruptEvent {
+		im.handleCtrlC()
+		return true
+	}
+	return false
+}
+
+// SetPassthroughMode completely stops/starts input processing for interactive commands
+func (im *InputManager) SetPassthroughMode(enabled bool) {
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+
+	if enabled {
+		if !im.running {
+			return // Already stopped
+		}
+
+		// Debug output
+		if term.IsTerminal(int(os.Stdout.Fd())) {
+			fmt.Printf("\r\n🔄 Enabling passthrough mode for interactive command...\r\n")
+		}
+
+		// Hide input field
+		im.hideInputField()
+
+		// Reset scroll region
+		im.printf("\033[r")
+
+		// Stop the input manager completely
+		im.running = false
+		im.cancel()
+
+		// Restore terminal from raw mode
+		if im.isRawMode && im.oldTermState != nil {
+			term.Restore(im.terminalFd, im.oldTermState)
+			im.isRawMode = false
+		}
+
+		if term.IsTerminal(int(os.Stdout.Fd())) {
+			fmt.Printf("✅ Passthrough mode enabled - terminal restored to normal mode\r\n")
+		}
+	} else {
+		if im.running {
+			return // Already running
+		}
+
+		if term.IsTerminal(int(os.Stdout.Fd())) {
+			fmt.Printf("\r\n🔄 Disabling passthrough mode - restoring console input...\r\n")
+		}
+
+		// Create new context
+		ctx, cancel := context.WithCancel(context.Background())
+		im.ctx = ctx
+		im.cancel = cancel
+
+		// Re-enter raw mode
+		oldState, err := term.MakeRaw(im.terminalFd)
+		if err != nil {
+			if term.IsTerminal(int(os.Stdout.Fd())) {
+				fmt.Printf("❌ Failed to re-enter raw mode: %v\r\n", err)
+			}
+			return
+		}
+
+		im.oldTermState = oldState
+		im.isRawMode = true
+		im.running = true
+		im.paused = false
+
+		// Restart input reading goroutine
+		go im.inputLoop()
+
+		// Restart resize monitoring
+		go im.resizeLoop()
+
+		// Get terminal dimensions
+		im.updateTerminalSize()
+
+		// Show input field
+		im.showInputField()
+
+		if term.IsTerminal(int(os.Stdout.Fd())) {
+			fmt.Printf("✅ Console input restored - ready for commands\r\n")
+		}
+	}
+}
+
+// GetInputFieldLine returns the current input field line (for layout restoration)
+func (im *InputManager) GetCurrentInputFieldLine() int {
+	im.mutex.RLock()
+	defer im.mutex.RUnlock()
+	return im.inputFieldLine
+}
+
+// GetInputHeight returns the current number of lines used by the input field
+func (im *InputManager) GetInputHeight() int {
+	im.mutex.RLock()
+	defer im.mutex.RUnlock()
+	return im.inputHeight
+}
+
+// UpdateInputHeight forces a recalculation of input dimensions and returns new height
+func (im *InputManager) UpdateInputHeight() int {
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+
+	lines, _, _ := im.calculateInputDimensions()
+	if lines != im.inputHeight {
+		im.inputHeight = lines
+		return lines
+	}
+	return im.inputHeight
+}
+
+// updateInputHeightFromContent updates height based on current content (called from within mutex)
+func (im *InputManager) updateInputHeightFromContent() {
+	lines, _, _ := im.calculateInputDimensions()
+	if lines != im.inputHeight {
+		im.notifyLayoutOfInputHeight(lines)
+	}
+}
+
+// resetInputHeight resets the input field to single line height and notifies layout
+func (im *InputManager) resetInputHeight() {
+	// Note: This method is called from within processKeystrokes which already holds the mutex
+	// So we don't need additional locking here
+
+	if im.inputHeight > 1 {
+		// Clear all lines that were previously used
+		for i := 0; i < im.inputHeight; i++ {
+			im.printf("\033[%d;1H\033[K", im.inputFieldLine+i)
+		}
+
+		// Reset to single line
+		im.inputHeight = 1
+
+		// Notify layout of height change (this callback should be thread-safe)
+		if im.onHeightChange != nil {
+			// Call the callback without holding the mutex to avoid deadlocks
+			go func(newHeight int) {
+				im.onHeightChange(newHeight)
+			}(1)
+		}
+	}
 }

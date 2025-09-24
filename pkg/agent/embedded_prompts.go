@@ -52,7 +52,7 @@ func getEmbeddedSystemPrompt() string {
 func extractSystemPrompt() string {
 	// The system_prompt.md has the prompt content in a code block
 	// We'll extract everything between the ``` markers
-	const promptStart = "You are a software engineering agent."
+	const promptStart = "You are a software engineering agent"
 
 	startIdx := strings.Index(systemPromptContent, promptStart)
 	if startIdx == -1 {

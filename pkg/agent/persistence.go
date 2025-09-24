@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -232,6 +233,32 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.completionTokens = state.CompletionTokens
 	a.cachedTokens = state.CachedTokens
 	a.cachedCostSavings = state.CachedCostSavings
+}
+
+// cleanupMemorySessions removes old sessions, keeping only the last 20
+func cleanupMemorySessions() error {
+	sessions, err := ListSessionsWithTimestamps()
+	if err != nil {
+		return fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	if len(sessions) <= 20 {
+		return nil // No cleanup needed
+	}
+
+	// Sort sessions by last updated (oldest first)
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].LastUpdated.Before(sessions[j].LastUpdated)
+	})
+
+	// Delete oldest sessions beyond the 20 most recent
+	for i := 0; i < len(sessions)-20; i++ {
+		if err := DeleteSession(sessions[i].SessionID); err != nil {
+			return fmt.Errorf("failed to delete session %s: %w", sessions[i].SessionID, err)
+		}
+	}
+
+	return nil
 }
 
 func min(a, b int) int {

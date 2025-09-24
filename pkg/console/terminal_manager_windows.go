@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -187,6 +188,15 @@ func (tm *terminalManager) ShowCursor() error {
 // Write writes data to the terminal
 func (tm *terminalManager) Write(p []byte) (n int, err error) {
 	return tm.writer.Write(p)
+}
+
+// WriteText writes text with automatic raw mode line ending handling
+func (tm *terminalManager) WriteText(text string) (int, error) {
+	// In raw mode, convert \n to \r\n for proper line breaks
+	if tm.IsRawMode() {
+		text = strings.ReplaceAll(text, "\n", "\r\n")
+	}
+	return tm.writer.Write([]byte(text))
 }
 
 // OnResize registers a callback for terminal resize events

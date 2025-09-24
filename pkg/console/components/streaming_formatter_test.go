@@ -392,14 +392,22 @@ func TestStreamingFormatter_XMLToolCallFiltering(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "simple XML tool call",
-			input:    `<function=shell_command><parameter=command>ls -la</parameter></function>`,
-			expected: ``,
+			name:  "simple XML tool call",
+			input: `<function=shell_command><parameter=command>ls -la</parameter></function>`,
+			expected: `
+
+🔧 shell_command
+
+`,
 		},
 		{
-			name:     "XML tool call with text before and after",
-			input:    `Here's the output: <function=shell_command><parameter=command>ls</parameter></function> Done!`,
-			expected: `Here's the output:  Done!`,
+			name:  "XML tool call with text before and after",
+			input: `Here's the output: <function=shell_command><parameter=command>ls</parameter></function> Done!`,
+			expected: `Here's the output: 
+
+🔧 shell_command
+
+ Done!`,
 		},
 		{
 			name: "multiple XML tool calls",
@@ -408,12 +416,22 @@ func TestStreamingFormatter_XMLToolCallFiltering(t *testing.T) {
 <function=read_file><parameter=file_path>test.txt</parameter></function>`,
 			expected: `
 
+🔧 shell_command
+
+
+
+🔧 read_file
+
 `,
 		},
 		{
-			name:     "XML tool call with tool_call closing tag",
-			input:    `<function=shell_command><parameter=command>ls</parameter></tool_call>`,
-			expected: ``,
+			name:  "XML tool call with tool_call closing tag",
+			input: `<function=shell_command><parameter=command>ls</parameter></tool_call>`,
+			expected: `
+
+🔧 shell_command
+
+`,
 		},
 		{
 			name: "mixed content with XML tool calls",
@@ -436,11 +454,11 @@ README.md
 That's all!`,
 			expected: `Let me check the files:
 
-
+🔧 shell_command
 
 Now let me read a file:
 
-
+🔧 read_file
 
 That's all!`,
 		},

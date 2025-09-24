@@ -72,6 +72,7 @@ type TerminalManager interface {
 
 	// Output
 	Write(data []byte) (int, error)
+	WriteText(text string) (int, error) // Automatically handles line endings for raw mode
 	WriteAt(x, y int, data []byte) error
 	Flush() error
 }

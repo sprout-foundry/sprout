@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -201,6 +202,15 @@ func (tm *terminalManager) ClearToEndOfScreen() error {
 // Write writes data to the terminal
 func (tm *terminalManager) Write(data []byte) (int, error) {
 	return tm.writer.Write(data)
+}
+
+// WriteText writes text with automatic raw mode line ending handling
+func (tm *terminalManager) WriteText(text string) (int, error) {
+	// In raw mode, convert \n to \r\n for proper line breaks
+	if tm.IsRawMode() {
+		text = strings.ReplaceAll(text, "\n", "\r\n")
+	}
+	return tm.writer.Write([]byte(text))
 }
 
 // WriteAt writes data at a specific position

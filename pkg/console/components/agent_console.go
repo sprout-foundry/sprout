@@ -217,7 +217,7 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 	if ac.historyFile != "" {
 		if err := ac.historyManager.LoadFromFile(); err != nil {
 			// Non-fatal, just log
-			fmt.Printf("Note: Could not load history: %v\n", err)
+			ac.writeTextWithRawModeFix(fmt.Sprintf("Note: Could not load history: %v\n", err))
 		}
 	}
 
@@ -501,20 +501,20 @@ func (ac *AgentConsole) handleCommand(input string) error {
 		// Clear conversation history
 		if ac.agent != nil {
 			ac.agent.ClearConversationHistory()
-			ac.safePrintln("🧹 Screen and conversation history cleared")
+			ac.safePrint("🧹 Screen and conversation history cleared\n")
 		}
 		return nil
 	case "history":
 		history := ac.historyManager.GetHistory()
-		fmt.Printf("History has %d items:\n", len(history))
+		ac.writeTextWithRawModeFix(fmt.Sprintf("History has %d items:\n", len(history)))
 		for i, line := range history {
-			fmt.Printf("%3d: %s\n", i+1, line)
+			ac.writeTextWithRawModeFix(fmt.Sprintf("%3d: %s\n", i+1, line))
 		}
 		return nil
 
 	case "debug":
 		// Toggle debug mode for input
-		fmt.Println("Debug mode: Press keys to see their codes, 'q' to exit debug")
+		ac.writeTextWithRawModeFix("Debug mode: Press keys to see their codes, 'q' to exit debug\n")
 		fd := int(os.Stdin.Fd())
 		oldState, _ := term.MakeRaw(fd)
 		defer term.Restore(fd, oldState)
@@ -526,14 +526,14 @@ func (ac *AgentConsole) handleCommand(input string) error {
 				break
 			}
 
-			fmt.Printf("\r\nRead %d bytes: ", n)
+			ac.writeTextWithRawModeFix(fmt.Sprintf("\r\nRead %d bytes: ", n))
 			for i := 0; i < n; i++ {
-				fmt.Printf("%02X ", buf[i])
+				ac.writeTextWithRawModeFix(fmt.Sprintf("%02X ", buf[i]))
 			}
 
 			// Check for 'q' to quit
 			if n == 1 && buf[0] == 'q' {
-				fmt.Println("\r\nExiting debug mode")
+				ac.writeTextWithRawModeFix("\r\nExiting debug mode\n")
 				break
 			}
 		}
@@ -642,7 +642,7 @@ Type /help for available commands, or just start chatting!
 }
 
 func (ac *AgentConsole) showHelp() {
-	fmt.Println(`
+	ac.writeTextWithRawModeFix(`
 Available Commands:
   /help, /?      - Show this help message
   /quit, /exit   - Exit the program
@@ -662,11 +662,11 @@ Agent Commands:`)
 
 	if ac.commandRegistry != nil {
 		for _, cmd := range ac.commandRegistry.ListCommands() {
-			fmt.Printf("  /%-12s - %s\n", cmd.Name(), cmd.Description())
+			ac.writeTextWithRawModeFix(fmt.Sprintf("  /%-12s - %s\n", cmd.Name(), cmd.Description()))
 		}
 	}
 
-	fmt.Println(`
+	ac.writeTextWithRawModeFix(`
 Tips:
 • Conversations continue between prompts - context is preserved
 • Use /clear to start a fresh conversation
@@ -690,20 +690,20 @@ func (ac *AgentConsole) showStats() {
 	// These would come from the agent's configuration
 	// For now, just display what we have
 
-	fmt.Printf(`
+	ac.writeTextWithRawModeFix(fmt.Sprintf(`
 Session Statistics:
   Duration: %s
   Tokens:   %d
   Cost:     $%.4f
   Provider: %s
   Model:    %s
-`, formatDuration(duration), ac.totalTokens, ac.totalCost, provider, model)
+`, formatDuration(duration), ac.totalTokens, ac.totalCost, provider, model))
 }
 
 func (ac *AgentConsole) showLayoutDebug() {
-	fmt.Println("\n=== Layout Manager Debug ===")
+	ac.writeTextWithRawModeFix("\n=== Layout Manager Debug ===\n")
 	ac.autoLayoutManager.PrintDebugLayout()
-	fmt.Println()
+	ac.writeTextWithRawModeFix("\n")
 }
 
 // updateStreamingTPS estimates tokens per second during streaming
@@ -776,7 +776,7 @@ func (ac *AgentConsole) setupTerminal() error {
 	}
 
 	// DEBUG: Test that content goes to the right place
-	fmt.Print("TEST: This should appear at top of content area\n")
+	ac.writeTextWithRawModeFix("TEST: This should appear at top of content area\n")
 
 	// Configure input manager to use layout manager for positioning
 	ac.inputManager.SetLayoutManager(ac.autoLayoutManager)
@@ -816,17 +816,17 @@ func (ac *AgentConsole) handleCtrlC() {
 		// First Ctrl+C - try to interrupt agent if it's processing
 		select {
 		case ac.interruptChan <- "Ctrl+C pressed - stopping current operation":
-			fmt.Print("\r\033[K^C  🛑 Stopping current operation... (Press Ctrl+C again to exit)\n")
+			ac.writeTextWithRawModeFix("\r\033[K^C  🛑 Stopping current operation... (Press Ctrl+C again to exit)\n")
 			// Don't redraw prompt yet, let the agent finish gracefully
 		default:
 			// Agent not processing, show exit message
-			fmt.Print("\r\033[K^C  💡 Press Ctrl+C again to exit\n")
+			ac.writeTextWithRawModeFix("\r\033[K^C  💡 Press Ctrl+C again to exit\n")
 			// Redraw prompt
-			fmt.Print(ac.prompt)
+			ac.writeTextWithRawModeFix(ac.prompt)
 		}
 	} else {
 		// Second Ctrl+C - exit immediately
-		fmt.Print("\r\033[K🚪 Exiting...\n")
+		ac.writeTextWithRawModeFix("\r\033[K🚪 Exiting...\n")
 
 		// Try to interrupt agent one more time if it's still running
 		select {
@@ -909,7 +909,7 @@ func (ac *AgentConsole) cleanup() {
 	// Save history
 	if ac.historyFile != "" && ac.historyManager != nil {
 		if err := ac.historyManager.SaveToFile(); err != nil {
-			fmt.Printf("Warning: Could not save history: %v\n", err)
+			ac.writeTextWithRawModeFix(fmt.Sprintf("Warning: Could not save history: %v\n", err))
 		}
 	}
 
@@ -997,60 +997,12 @@ func (ac *AgentConsole) executeShellCommand(command string) (string, error) {
 
 // Helper functions
 
-// safePrintNoLock is like safePrint but doesn't acquire mutex (for streaming callbacks)
-func (ac *AgentConsole) safePrintNoLock(format string, args ...interface{}) {
-	content := fmt.Sprintf(format, args...)
-
-	// Filter out completion signals that should not be displayed
-	content = ac.filterCompletionSignals(content)
-
-	// Only write if there's content left after filtering
-	if strings.TrimSpace(content) != "" {
-		// NO MUTEX LOCKING - caller must handle
-
-		// Add to console buffer
-		ac.consoleBuffer.AddContent(content)
-
-		// Get content region for positioning
-		contentRegion, err := ac.autoLayoutManager.GetContentRegion()
-		if err != nil {
-			// Fallback: write directly without positioning
-			ac.Terminal().Write([]byte(content))
-			return
-		}
-
-		// Split content into lines to handle multi-line output
-		lines := strings.Split(content, "\n")
-
-		for i, line := range lines {
-			// Skip empty lines at the end (from split)
-			if i == len(lines)-1 && line == "" {
-				continue
-			}
-
-			// Check if we need to scroll within content area
-			if ac.currentContentLine >= contentRegion.Height {
-				// Scroll content area up by one line
-				// Move to bottom of content area and scroll
-				ac.Terminal().MoveCursor(1, contentRegion.Y+contentRegion.Height)
-				ac.Terminal().Write([]byte("\n"))
-				ac.currentContentLine = contentRegion.Height - 1
-			}
-
-			// Position cursor at current content line
-			actualLine := contentRegion.Y + ac.currentContentLine + 1 // +1 for 1-based coordinates
-			ac.Terminal().MoveCursor(1, actualLine)
-
-			// Clear the line and write content
-			ac.Terminal().ClearLine()
-			ac.Terminal().Write([]byte(line))
-
-			// Move to next line for next content (except for last line if no newline)
-			if i < len(lines)-1 || strings.HasSuffix(content, "\n") {
-				ac.currentContentLine++
-			}
-		}
+// writeTextWithRawModeFix is a helper to write text with proper line ending handling
+func (ac *AgentConsole) writeTextWithRawModeFix(text string) {
+	if ac.Terminal().IsRawMode() {
+		text = strings.ReplaceAll(text, "\n", "\r\n")
 	}
+	fmt.Print(text)
 }
 
 // safePrint writes output that respects the content area and updates buffer
@@ -1067,25 +1019,23 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 			ac.consoleBuffer.AddContent(content)
 		}
 
-		// Simple positioning: move to content area before each output
-		// Get scroll region and position at the bottom of content area for new content
-		if top, bottom := ac.autoLayoutManager.GetScrollRegion(); top > 0 {
-			// Position at bottom of content area where new content should appear
-			ac.Terminal().MoveCursor(1, bottom)
+		// Key fix: Track if we need to position in content area vs continuing from current position
+		// For the first output after setup, we need to be in content area
+		// For subsequent outputs, we continue from where we are (sequential output)
+
+		// If current content line is 0, we're starting fresh - position in content area
+		if ac.currentContentLine == 0 {
+			top, _ := ac.autoLayoutManager.GetScrollRegion()
+			ac.Terminal().MoveCursor(1, top)
 		}
 
-		fmt.Print(content)
+		// Write content - this will advance cursor naturally
+		ac.writeTextWithRawModeFix(content)
+
+		// Update our tracking of content lines
+		newlines := strings.Count(content, "\n")
+		ac.currentContentLine += newlines
 	}
-}
-
-// safePrintln writes output with a newline that respects the scroll region and updates buffer
-func (ac *AgentConsole) safePrintln(args ...interface{}) {
-	content := fmt.Sprintln(args...)
-
-	// Add to console buffer
-	ac.consoleBuffer.AddContent(content)
-
-	ac.Terminal().Write([]byte(content))
 }
 
 // OnResize handles terminal resize events
@@ -1122,10 +1072,8 @@ func (ac *AgentConsole) OnResize(width, height int) {
 	//     fmt.Fprintf(os.Stderr, "Warning: Buffer redraw failed: %v\n", err)
 	// }
 
-	// Re-render footer after content
-	if err := ac.footer.Render(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Footer render failed: %v\n", err)
-	}
+	// Footer already renders itself in its OnResize method, no need to render again
+	// This was causing duplicate footer rendering during resize events
 
 	// Note: Cursor will be repositioned by the input component when it redraws
 }

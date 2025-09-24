@@ -89,7 +89,7 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Create review options for staged review
 	opts := &codereview.ReviewOptions{
 		Type:             codereview.StagedReview,
-		SkipPrompt:       true, // Skip prompts for slash command
+		SkipPrompt:       true,  // Skip prompts for slash command
 		RollbackOnReject: false, // Don't rollback for staged reviews
 	}
 
@@ -102,18 +102,24 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	logger.LogProcessStep("Code review completed successfully")
 
-	// Format the response for the agent console
-	response := fmt.Sprintf("\n--- AI Code Review ---\n")
-	response += fmt.Sprintf("Status: %s\n", strings.ToUpper(reviewResponse.Status))
-	response += fmt.Sprintf("Feedback:\n%s\n", reviewResponse.Feedback)
+	// Output the review using simple, reliable formatting (same pattern as test)
+	fmt.Print("\n" + strings.Repeat("═", 50) + "\n")
+	fmt.Print("📋 AI CODE REVIEW\n")
+	fmt.Print(strings.Repeat("═", 50) + "\n\n")
+
+	fmt.Printf("Status: %s\n\n", strings.ToUpper(reviewResponse.Status))
+
+	fmt.Print("Feedback:\n")
+	fmt.Print(strings.Repeat("-", 30) + "\n")
+	fmt.Print(reviewResponse.Feedback + "\n")
 
 	if reviewResponse.Status == "rejected" && reviewResponse.NewPrompt != "" {
-		response += fmt.Sprintf("\nSuggested New Prompt for Re-execution:\n%s\n", reviewResponse.NewPrompt)
+		fmt.Print("\nSuggested New Prompt:\n")
+		fmt.Print(strings.Repeat("-", 30) + "\n")
+		fmt.Print(reviewResponse.NewPrompt + "\n")
 	}
-	response += fmt.Sprintf("----------------------")
 
-	// Print the response directly to stdout (following the pattern used by other commands)
-	fmt.Println(response)
+	fmt.Print("\n" + strings.Repeat("═", 50) + "\n")
 
 	return nil
 }

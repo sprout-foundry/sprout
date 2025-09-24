@@ -112,6 +112,6 @@ func (c *MemoryCommand) displayConversationPreview(agent *agent.Agent) {
 				fmt.Printf("🤖 Assistant: %s\n", msg.Content)
 			}
 		}
-		fmt.Println("================================\n")
+		fmt.Println("================================")
 	}
 }

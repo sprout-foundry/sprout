@@ -20,18 +20,17 @@
     - [Basic Editing and Interaction](#basic-editing-and-interaction)
     - [Slash Commands in Interactive Mode](#slash-commands-in-interactive-mode)
     - [Ignoring Files](#ignoring-files)
-  - [Advanced Concepts: Prompting with Context](#advanced-concepts-prompting-with-context)
-    - [`#<filepath>` - Include a File](#filepath---include-a-file)
-    - [`#WORKSPACE` / `#WS` - Smart Context](#workspace--ws---smart-context)
-    - [`#SG "query"` - Search Grounding](#sg-query---search-grounding)
-- [Supported LLM Providers](#supported-llm-providers)
-- [MCP Server Integration](#mcp-server-integration)
-- [Documentation](#documentation)
+  - [MCP Server Integration](#mcp-server-integration)
+  - [Documentation](#documentation)
   - [Contributing](#contributing)
   - [File Structure](#file-structure)
     - [Key files maintained by ledit](#key-files-maintained-by-ledit)
-  - [Author's notes](#authors-notes)
   - [License](#license)
+  - [Version Management and Release Process](#version-management-and-release-process)
+    - [Release Workflow](#release-workflow)
+    - [Creating a Release](#creating-a-release)
+    - [Version Information](#version-information)
+    - [Release Validation](#release-validation)
   - [Support and Community](#support-and-community)
 
 ## Disclaimer
@@ -54,7 +53,7 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 
 - **AI Agent Capabilities**: The `ledit agent` command provides intelligent code analysis, explanation, generation, and orchestration. It can understand natural language intents to explain concepts, analyze code, implement features, and handle complex workflows.
 - **Self-Correction Loop**: During complex operations, the system automatically analyzes errors and retries with improved context.
-- **Smart Workspace Context**: Automatically builds and maintains an index of your workspace using embeddings. An LLM selects the most relevant files to include as context for any given task.
+- **Smart Workspace Context**: Automatically builds and maintains an index of your workspace with syntactic analysis of files. An LLM selects the most relevant files to include as context for any given task.
 - **Leaked Credentials Check**: Automatically scans files for common security concerns like API keys, passwords, database/service URLs, SSH private keys, AWS credentials. This helps prevent accidental exposure of sensitive information.
 - **Search Grounding**: Augments prompts with fresh information from the web using the `#SG "query"` directive.
 - **Interactive and Automated Modes**: Confirm each change manually, or run in a fully automated mode with `--skip-prompt`.
@@ -100,9 +99,6 @@ After adding this, restart your terminal or run `source ~/.bashrc` (or your resp
 Once installed, you can use `ledit` in your project directory and start using its powerful features.
 
 ```bash
-# Initialize ledit in your project (creates .ledit directory with workspace index)
-ledit init
-
 # Start interactive agent mode (default; use --ui or LEDIT_UI=1 for enhanced UI)
 ledit
 
@@ -146,20 +142,18 @@ The configuration uses a flat structure focused on provider and model management
 ```json
 {
   "version": "2.0",
-  "last_used_provider": "deepinfra",
+  "last_used_provider": "ollama-turbo",
   "provider_models": {
-    "deepinfra": "deepseek-ai/DeepSeek-V3.1",
-    "ollama-local": "qwen2.5-coder:3b",
-    "ollama-turbo": "qwen2.5-coder:latest",
-    "openai": "gpt-5",
-    "openrouter": "openai/gpt-5"
+    "deepinfra": "deepseek-ai/DeepSeek-V3.1-Terminus",
+    "ollama-local": "qwen3-coder:30b",
+    "ollama-turbo": "qwen3-coder:480b",
+    "openai": "gpt-5-mini-2025-08-07",
+    "openrouter": "qwen/qwen3-coder-30b-a3b-instruct",
+    "test": "test"
   },
   "provider_priority": [
-    "openai",
-    "openrouter", 
-    "deepinfra",
-    "ollama-turbo",
-    "ollama-local"
+    "openrouter",
+    "deepinfra"
   ],
   "mcp": {
     "enabled": false,
@@ -167,6 +161,31 @@ The configuration uses a flat structure focused on provider and model management
     "auto_start": false,
     "auto_discover": false,
     "timeout": 30000000000
+  },
+  "code_style": {
+    "indentation_type": "",
+    "indentation_size": 0,
+    "quote_style": "",
+    "line_endings": "",
+    "trailing_semicolons": false,
+    "trailing_commas": false,
+    "bracket_spacing": false,
+    "javascript_style": "",
+    "optional_chaining": false,
+    "arrow_parens": false,
+    "space_before_function_paren": false,
+    "jsx_single_quote": false,
+    "jsx_bracket_same_line": false
+  },
+  "preferences": {
+    "auto_commit": false,
+    "auto_review": false,
+    "streaming": true,
+    "max_retries": 3,
+    "retry_delay": 1000,
+    "context_window": 128000,
+    "temperature": 0.7,
+    "max_tokens": 4096
   }
 }
 ```
@@ -177,8 +196,10 @@ Key sections:
 - **`provider_priority`**: Defines the order in which providers are tried
 - **`mcp`**: Model Context Protocol configuration
 - **`last_used_provider`**: Tracks the most recently used provider
+- **`code_style`**: Code formatting preferences
+- **`preferences`**: General application preferences
 
-Additional code style and performance settings are managed internally and configured through the agent interface rather than the config file.
+Additional settings are managed internally and configured through the agent interface rather than the config file.
 
 ## Usage and Commands
 
@@ -186,7 +207,7 @@ Additional code style and performance settings are managed internally and config
 
 ### Workspace Initialization
 
-Run `ledit init` to create `.ledit/` directory containing the workspace index, config, and ignore file. The index (`workspace.json`) is automatically updated on commands for fresh context.
+The `.ledit/` directory is automatically created when you first run `ledit` commands. It contains the workspace index, configuration, and other metadata. The index is automatically updated on commands for fresh context.
 
 ### Basic Editing and Interaction
 
@@ -243,27 +264,6 @@ echo "dist/" >> .ledit/leditignore
 echo "*.log" >> .ledit/leditignore
 ```
 
-## Advanced Concepts: Prompting with Context
-
-Use `#` directives in prompts for enhanced context:
-
-- **`#<filepath>`**: Include full file (e.g., "Refactor #main.go").
-- **`#WORKSPACE` / `#WS`**: Smart relevance selection via embeddings.
-- **`#SG "query"`**: Web search grounding (e.g., "#SG latest React hooks").
-
-## Supported LLM Providers
-
-Specify as `<provider>:<model>` (e.g., `--model "deepinfra:deepseek-coder"`).
-
-- **DeepInfra** (default, cost-effective): `deepinfra:deepseek-ai/DeepSeek-V3`, `deepinfra:qwen/Qwen3-Coder`.
-- **OpenAI**: `openai:gpt-5`, `openai:gpt-5-mini`.
-- **Ollama** (local/Turbo): Local (`ollama:qwen2.5-coder:3b`), Turbo (`ollama:qwen2.5-coder:latest` - requires OLLAMA_API_KEY for remote).
-- **OpenRouter**: `openrouter:anthropic/claude-3.5-sonnet`.
-- **Gemini**: `gemini:gemini-1.5-pro`.
-- **DeepSeek**: `deepseek:deepseek-coder-v2`.
-
-Env vars: DEEPINFRA_API_KEY, OPENAI_API_KEY, etc. Ollama URL: http://localhost:11434.
-
 ## MCP Server Integration
 
 MCP extends `ledit` with external tools (e.g., GitHub repos/issues/PRs).
@@ -278,10 +278,6 @@ ledit mcp remove [name]
 Config: `~/.ledit/mcp_config.json`. Use in agent: "Create GitHub PR for feature #WS".
 
 See docs/MCP_INTEGRATION.md for details.
-
-## GitHub Action Integration (Example)
-
-An example workflow in .github/workflows/ledit-solver.yml allows commenting `/ledit` on issues to auto-implement. Copy and configure with API secrets. See docs for setup.
 
 ## Documentation
 
@@ -299,23 +295,17 @@ See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PR
 ### Key files maintained by ledit
 
 - **Root**: main.go (entry), cmd/ (CLI subcommands: agent, commit, log, mcp, review, shell).
-- **pkg/**: agent/ (orchestration, state, tools), agent_api/ (providers, TPS tracker), configuration/ (config loading), workspace/ (indexing/embeddings), changetracker/ (history/diffs), git/ (commit integration), security/ (credential scans, allowlist), mcp/ (protocol client), console/ (terminal UI, streaming), codereview/ (code review functionality).
+- **pkg/**: agent/ (orchestration, state, tools), agent_api/ (providers, TPS tracker), configuration/ (config loading), workspace/ (indexing/syntactic analysis), changetracker/ (history/diffs), git/ (commit integration), security/ (credential scans, allowlist), mcp/ (protocol client), console/ (terminal UI, streaming), codereview/ (code review functionality).
 - **.ledit/** (project-local):
-  - `workspace.json`: File index with embeddings/summaries for relevance.
   - `config.json`: Local overrides.
   - `leditignore`: Ignore patterns (augments .gitignore).
-  - `changes/`: Per-revision diff logs.
+  - `changes/`: Per-change diff logs with original and updated files.
+  - `revisions/`: Per-session directories with instructions and LLM responses.
   - `runlogs/`: JSONL workflow traces.
   - `workspace.log`: Verbose execution log.
-  - `embeddings/`: Vector cache for files/web content.
-- **Global (~/.ledit/)**: api_keys.json, mcp_config.json.
+  - `validation_context.md`: Project validation requirements.
+- **Global (~/.ledit/)**: config.json (global config), api_keys.json, mcp_config.json.
 - **Tests**: Unit in pkg/ (e.g., tps_tracker_test.go), integration_tests/ (git/file mods), e2e_tests/ (shell workflows), smoke_tests/ (API).
-
-## Author's notes
-
-- Defaults to DeepInfra for efficiency; switch with `/providers`.
-- Orchestration is alpha; monitor with TPS stats (`/models` shows costs).
-- Focus: Personal dev assistant with safe, contextual edits.
 
 ## License
 

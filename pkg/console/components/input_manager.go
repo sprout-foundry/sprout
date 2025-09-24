@@ -111,8 +111,9 @@ func (im *InputManager) Start() error {
 	// Start input reading goroutine
 	go im.inputLoop()
 
-	// Start resize monitoring
-	go im.resizeLoop()
+	// Note: Resize monitoring is now handled by AgentConsole.OnResize()
+	// to coordinate full-screen redraws including buffer and footer
+	// go im.resizeLoop()
 
 	// Show initial input field
 	im.showInputField()
@@ -816,8 +817,8 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 		// Restart input reading goroutine
 		go im.inputLoop()
 
-		// Restart resize monitoring
-		go im.resizeLoop()
+		// Note: Resize monitoring handled by AgentConsole.OnResize()
+		// go im.resizeLoop()
 
 		// Get terminal dimensions
 		im.updateTerminalSize()

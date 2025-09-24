@@ -50,6 +50,58 @@ func (mt *MockTerminal) GetSize() (int, int, error) {
 	return mt.width, mt.height, nil
 }
 
+func (mt *MockTerminal) SetSize(width, height int) {
+	mt.commands = append(mt.commands, fmt.Sprintf("SetSize(%d,%d)", width, height))
+
+	// Update dimensions
+	oldBuffer := mt.buffer
+	oldWidth := mt.width
+	oldHeight := mt.height
+
+	mt.width = width
+	mt.height = height
+
+	// Create new buffer
+	mt.buffer = make([][]rune, height)
+	for i := range mt.buffer {
+		mt.buffer[i] = make([]rune, width)
+		for j := range mt.buffer[i] {
+			mt.buffer[i][j] = ' '
+		}
+	}
+
+	// Copy old content if applicable
+	if oldBuffer != nil {
+		copyHeight := min(oldHeight, height)
+		copyWidth := min(oldWidth, width)
+
+		for i := 0; i < copyHeight; i++ {
+			for j := 0; j < copyWidth; j++ {
+				mt.buffer[i][j] = oldBuffer[i][j]
+			}
+		}
+	}
+
+	// Adjust cursor position if needed
+	if mt.cursorX > width {
+		mt.cursorX = width
+	}
+	if mt.cursorY > height {
+		mt.cursorY = height
+	}
+
+	// Reset scroll region
+	mt.scrollTop = 1
+	mt.scrollBottom = height
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func (mt *MockTerminal) IsRawMode() bool {
 	return mt.rawMode
 }

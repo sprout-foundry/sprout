@@ -62,10 +62,19 @@ type AgentConsole struct {
 	ctrlCCount    int
 	lastCtrlC     time.Time
 
+	// Resize handling
+	lastResize                        time.Time
+	lastResizeWidth, lastResizeHeight int
+	resizeMutex                       sync.Mutex
+
 	// Concurrent processing state
 	isProcessing    bool
 	processingMutex sync.RWMutex
 	agentDoneChan   chan struct{}
+
+	// Context for background operations
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	// Streaming TPS tracking
 	streamingStartTime  time.Time
@@ -93,6 +102,9 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 	// Create auto layout manager
 	autoLayoutManager := console.NewAutoLayoutManager()
 
+	// Create context for background operations
+	ctx, cancel := context.WithCancel(context.Background())
+
 	ac := &AgentConsole{
 		BaseComponent:     base,
 		agent:             agent,
@@ -110,6 +122,8 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		jsonFormatter:     NewJSONFormatter(),
 		agentDoneChan:     make(chan struct{}, 1),
 		processingMutex:   sync.RWMutex{},
+		ctx:               ctx,
+		cancel:            cancel,
 	}
 
 	// Create streaming formatter
@@ -233,6 +247,16 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 		ac.consoleBuffer.SetTerminalWidth(width)
 	}
 
+	// Subscribe to terminal resize events
+	deps.Events.Subscribe("terminal.resized", func(event console.Event) error {
+		if data, ok := event.Data.(map[string]int); ok {
+			width := data["width"]
+			height := data["height"]
+			ac.OnResize(width, height)
+		}
+		return nil
+	})
+
 	// Set up terminal with scroll regions
 	if err := ac.setupTerminal(); err != nil {
 		return fmt.Errorf("failed to setup terminal: %w", err)
@@ -257,11 +281,17 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 		}
 	}()
 
+	// Start resize polling as a fallback to terminal events
+	go ac.resizeFallbackLoop()
+
 	return nil
 }
 
 // Start starts the interactive loop with concurrent input handling
 func (ac *AgentConsole) Start() error {
+	// Connect input manager to layout manager
+	ac.inputManager.SetLayoutManager(ac.autoLayoutManager)
+
 	// Start the concurrent input manager
 	if err := ac.inputManager.Start(); err != nil {
 		return fmt.Errorf("failed to start input manager: %w", err)
@@ -383,6 +413,10 @@ func (ac *AgentConsole) processInput(input string) error {
 		if ac.streamingFormatter.HasProcessedContent() && !streamingFinalized {
 			ac.streamingFormatter.Finalize()
 			streamingFinalized = true
+
+			// Ensure cursor is positioned correctly after streaming completes
+			// This helps with immediate resize responsiveness
+			ac.finalizeStreamingPosition()
 		}
 		ac.agent.DisableStreaming()
 		// Reset streaming TPS tracking
@@ -421,6 +455,9 @@ func (ac *AgentConsole) processInput(input string) error {
 			ac.streamingFormatter.Write(response)
 			ac.streamingFormatter.Finalize()
 			streamingFinalized = true
+
+			// Ensure cursor is positioned correctly after streaming completes
+			ac.finalizeStreamingPosition()
 		} else if response != "" && !ac.streamingFormatter.HasProcessedContent() {
 			// We have a response but nothing was streamed
 			// This can happen if streaming failed immediately
@@ -970,6 +1007,11 @@ func (ac *AgentConsole) handleInputHeightChange(newHeight int) {
 }
 
 func (ac *AgentConsole) cleanup() {
+	// Cancel background operations
+	if ac.cancel != nil {
+		ac.cancel()
+	}
+
 	// Stop input manager first
 	if ac.inputManager != nil {
 		ac.inputManager.Stop()
@@ -1110,11 +1152,33 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 		// Update our tracking of content lines for additional newlines
 		newlines := strings.Count(content, "\n")
 		ac.currentContentLine += newlines
+
+		// Safeguard: Ensure currentContentLine doesn't exceed scroll region
+		// This prevents writing below footer during race conditions
+		_, bottom := ac.autoLayoutManager.GetScrollRegion()
+		top, _ := ac.autoLayoutManager.GetScrollRegion()
+		maxContentLine := bottom - top + 1
+		if ac.currentContentLine > maxContentLine {
+			ac.currentContentLine = maxContentLine
+		}
 	}
 }
 
 // OnResize handles terminal resize events
 func (ac *AgentConsole) OnResize(width, height int) {
+	// Debounce rapid resize events to prevent overlapping redraws
+	ac.resizeMutex.Lock()
+	now := time.Now()
+	if now.Sub(ac.lastResize) < 200*time.Millisecond &&
+		width == ac.lastResizeWidth && height == ac.lastResizeHeight {
+		ac.resizeMutex.Unlock()
+		return // Skip this resize, same dimensions and too soon after the last one
+	}
+	ac.lastResize = now
+	ac.lastResizeWidth = width
+	ac.lastResizeHeight = height
+	ac.resizeMutex.Unlock()
+
 	// Lock output mutex to prevent interleaving with agent output
 	ac.outputMutex.Lock()
 	defer ac.outputMutex.Unlock()
@@ -1140,17 +1204,98 @@ func (ac *AgentConsole) OnResize(width, height int) {
 
 	// Layout manager automatically handles input positioning
 
-	// Skip redraw to preserve scrollback content - let terminal handle natural scrollback
-	// The RedrawBuffer call was clearing content area and only showing recent content
-	// contentHeight := bottom - top + 1
-	// if err := ac.consoleBuffer.RedrawBuffer(ac.Terminal(), contentHeight); err != nil {
-	//     fmt.Fprintf(os.Stderr, "Warning: Buffer redraw failed: %v\n", err)
-	// }
+	// Only redraw buffer if absolutely necessary - this can cause display issues during active output
+	// The layout and cursor repositioning below should handle most resize cases without full redraw
+	contentHeight := bottom - top + 1
+
+	// CRITICAL FIX: Reposition cursor and currentContentLine after resize
+	// This ensures that ongoing agent output continues at the correct location
+	// instead of writing below the footer
+	if ac.currentContentLine > 0 {
+		// Ensure currentContentLine is within the new scroll region bounds
+		if ac.currentContentLine > contentHeight {
+			// Content line is beyond new scroll region - reposition to bottom of content area
+			ac.currentContentLine = contentHeight
+			ac.Terminal().MoveCursor(1, top+contentHeight-1) // Move to bottom of scroll region
+		} else {
+			// Content line is still valid - just reposition cursor to current location
+			ac.Terminal().MoveCursor(1, top+ac.currentContentLine-1)
+		}
+	} else {
+		// No content yet - position at top of scroll region
+		ac.Terminal().MoveCursor(1, top)
+		ac.currentContentLine = 1
+	}
 
 	// Footer already renders itself in its OnResize method, no need to render again
 	// This was causing duplicate footer rendering during resize events
 
+	// Update input manager with new terminal size and trigger its redraw
+	if ac.inputManager != nil {
+		ac.inputManager.updateTerminalSize()
+		// Force input manager to redraw with new positioning
+		ac.inputManager.showInputField()
+	}
+
 	// Note: Cursor will be repositioned by the input component when it redraws
+}
+
+// resizeFallbackLoop provides fallback resize detection via polling
+// This complements the terminal event-based resize handling
+func (ac *AgentConsole) resizeFallbackLoop() {
+	ticker := time.NewTicker(100 * time.Millisecond) // Match InputManager polling speed for responsive resize
+	defer ticker.Stop()
+
+	var lastWidth, lastHeight int
+
+	// Get initial size
+	if w, h, err := ac.Terminal().GetSize(); err == nil {
+		lastWidth, lastHeight = w, h
+	}
+
+	for {
+		select {
+		case <-ac.ctx.Done():
+			return
+		case <-ticker.C:
+			if width, height, err := ac.Terminal().GetSize(); err == nil {
+				if width != lastWidth || height != lastHeight {
+					// Size changed - trigger resize handling
+					// Use a small delay to debounce rapid resize events
+					time.Sleep(50 * time.Millisecond)
+
+					// Check if size is still different (debouncing)
+					if w, h, err := ac.Terminal().GetSize(); err == nil && (w != lastWidth || h != lastHeight) {
+						ac.OnResize(w, h)
+						lastWidth, lastHeight = w, h
+					}
+				}
+			}
+		}
+	}
+}
+
+// finalizeStreamingPosition ensures cursor is properly positioned after streaming completes
+func (ac *AgentConsole) finalizeStreamingPosition() {
+	ac.outputMutex.Lock()
+	defer ac.outputMutex.Unlock()
+
+	// Get current scroll region
+	top, bottom := ac.autoLayoutManager.GetScrollRegion()
+	contentHeight := bottom - top + 1
+
+	// Ensure currentContentLine is within bounds
+	if ac.currentContentLine > contentHeight {
+		ac.currentContentLine = contentHeight
+	}
+
+	// Position cursor at the current content line
+	if ac.currentContentLine > 0 {
+		ac.Terminal().MoveCursor(1, top+ac.currentContentLine-1)
+	} else {
+		ac.Terminal().MoveCursor(1, top)
+		ac.currentContentLine = 1
+	}
 }
 
 // refreshLayoutAfterSetup applies the same layout positioning logic as OnResize

@@ -1,11 +1,11 @@
-# Ledit Testing Makefile
-# Provides clear commands for different types of tests
+# Ledit Testing and Build Makefile
+# Provides clear commands for different types of tests and builds
 
-.PHONY: help test-unit test-integration test-e2e test-smoke test-all clean
+.PHONY: help test-unit test-integration test-e2e test-smoke test-all clean build build-version
 
 # Default target
 help:
-	@echo "Ledit Testing Commands:"
+	@echo "Ledit Testing and Build Commands:"
 	@echo ""
 	@echo "  make test-unit        - Run unit tests (fast, no dependencies)"
 	@echo "  make test-integration - Run integration tests (mocked AI)"  
@@ -13,11 +13,17 @@ help:
 	@echo "  make test-smoke       - Run smoke tests (basic functionality)"
 	@echo "  make test-all         - Run unit + integration + smoke tests"
 	@echo "  make clean            - Clean test artifacts"
+	@echo "  make build            - Build ledit binary"
+	@echo "  make build-version    - Build with version information"
+	@echo ""
+	@echo "Version Management:"
+	@echo "  ./scripts/version-manager.sh build    - Build with version info"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make test-unit                    # Quick feedback loop"
 	@echo "  make test-e2e MODEL=openai:gpt-4  # Full e2e with real model"
 	@echo "  make test-all                     # Pre-release validation"
+	@echo "  make build-version                # Build with version info"
 
 # Unit Tests - Fast, no external dependencies
 test-unit:
@@ -63,3 +69,15 @@ test: test-unit
 # CI-friendly test (unit + integration)
 test-ci: test-unit test-integration
 	@echo "✅ CI tests completed"
+
+# Build ledit binary
+build:
+	@echo "🔨 Building ledit..."
+	go build -o ledit .
+	@echo "✅ Build completed"
+
+# Build with version information
+build-version:
+	@echo "🔨 Building ledit with version information..."
+	./scripts/version-manager.sh build
+	@echo "✅ Versioned build completed"

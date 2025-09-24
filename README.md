@@ -321,6 +321,59 @@ See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PR
 
 MIT License (LICENSE).
 
+## Version Management and Release Process
+
+`ledit` uses a comprehensive CI-gated release process to ensure stable releases.
+
+### Release Workflow
+
+Releases are created through GitHub Actions and enforce strict quality gates:
+
+1. **CI-Gated Releases**: Releases can only be created through the GitHub Actions workflow
+2. **Main Branch Only**: Releases must be created from the `main` branch with no uncommitted changes
+3. **Automated Changelog**: Changelog is automatically generated using `ledit` itself
+4. **Comprehensive Testing**: All tests must pass before release
+5. **Multi-Platform Builds**: Automatic builds for Linux, Windows, and macOS
+
+### Creating a Release
+
+**Via GitHub Actions (Recommended)**:
+1. Go to GitHub Actions → "Create Release" workflow
+2. Click "Run workflow" and specify version (e.g., `v1.2.0`)
+3. The workflow will validate prerequisites and create the release
+
+**Local Development (for testing)**:
+```bash
+# Build with version information
+make build-release
+
+# Create a release (local testing only)
+make deploy-release VERSION=v1.2.0
+```
+
+### Version Information
+
+Each release includes comprehensive version information:
+```bash
+ledit version
+```
+
+This displays:
+- Semantic version
+- Git commit hash
+- Build timestamp
+- Release channel
+
+### Release Validation
+
+The release process validates:
+- ✅ On `main` branch
+- ✅ No uncommitted changes
+- ✅ Valid semantic version format
+- ✅ Tag doesn't already exist
+- ✅ All tests pass
+- ✅ Changelog is updated
+
 ## Support and Community
 
 File issues at GitHub. Community discussions in issues/PRs.

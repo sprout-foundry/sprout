@@ -19,6 +19,7 @@ type StreamingFormatter struct {
 	buffer         strings.Builder
 	lineBuffer     strings.Builder
 	isFirstChunk   bool
+	firstContent   bool // Track if this is the first actual content after streaming indicator
 	lastWasNewline bool
 	inCodeBlock    bool
 	inListContext  bool // Track if we're in a list to avoid extra spacing
@@ -74,6 +75,15 @@ func (sf *StreamingFormatter) println(text string) {
 	}
 }
 
+// printlnColored outputs colored text with newline using consistent output system
+func (sf *StreamingFormatter) printlnColored(colorFunc func(...interface{}) string, text string) {
+	if sf.outputFunc != nil {
+		sf.outputFunc(colorFunc(text) + "\n")
+	} else {
+		fmt.Println(colorFunc(text))
+	}
+}
+
 // Write formats and outputs streaming content
 func (sf *StreamingFormatter) Write(content string) {
 	sf.mu.Lock()
@@ -87,13 +97,25 @@ func (sf *StreamingFormatter) Write(content string) {
 	// Handle first chunk - show we're streaming
 	if sf.isFirstChunk {
 		sf.isFirstChunk = false
+		sf.firstContent = true // Mark that the next content should be flushed aggressively
 		if sf.outputMutex != nil {
 			sf.outputMutex.Lock()
-			// Instead of clearing line, just add streaming indicator on new line
-			// This prevents accidentally clearing wrapped content
-			color.Cyan("✨ Streaming response...\n\n")
+			// Ensure we're on a new line before showing streaming indicator
+			if !sf.lastWasNewline {
+				sf.println("") // Add separation from processing message
+			}
+			// Use consistent output method to ensure proper cursor positioning
+			if sf.outputFunc != nil {
+				// Use output function for consistency
+				sf.outputFunc(color.New(color.FgCyan).Sprint("✨ Streaming response...") + "\n")
+			} else {
+				color.New(color.FgCyan).Println("✨ Streaming response...")
+			}
+			sf.println("") // Add blank line for spacing
 			sf.outputMutex.Unlock()
 		}
+		// IMPORTANT: Update state to reflect that we just output newlines
+		sf.lastWasNewline = true
 	}
 
 	// Filter out XML-style tool calls and completion signals before adding to buffer
@@ -135,6 +157,12 @@ func (sf *StreamingFormatter) Write(content string) {
 	// 5. It's been long enough since last update (but reduce the delay)
 	if time.Since(sf.lastUpdate) >= sf.minUpdateDelay && sf.buffer.Len() > 0 {
 		shouldFlush = true
+	}
+
+	// 6. First content after streaming indicator - flush more aggressively for immediate feedback
+	if sf.firstContent && sf.buffer.Len() > 10 {
+		shouldFlush = true
+		sf.firstContent = false // Only apply this once
 	}
 
 	if shouldFlush {
@@ -205,7 +233,7 @@ func (sf *StreamingFormatter) outputLine(line string) {
 		// Convert to standard markdown bullet for consistent formatting
 		bulletText := strings.TrimSpace(strings.TrimPrefix(trimmed, "•"))
 		sf.print(contentPadding + "  ")
-		color.New(color.FgHiBlack).Print("• ")
+		sf.print(color.New(color.FgHiBlack).Sprint("• "))
 		// Apply inline formatting to the bullet text
 		formattedText := sf.applyInlineFormatting(bulletText)
 		sf.println(formattedText)
@@ -218,42 +246,45 @@ func (sf *StreamingFormatter) outputLine(line string) {
 			sf.println("")
 		}
 
-		// Style headers with color
+		// Style headers with color using consistent output system
 		if strings.HasPrefix(trimmed, "# ") {
 			// Main header - bold blue
-			color.New(color.FgBlue, color.Bold).Println(sf.addPadding(line))
+			sf.printlnColored(color.New(color.FgBlue, color.Bold).Sprint, sf.addPadding(line))
 		} else if strings.HasPrefix(trimmed, "## ") {
-			// Sub header - blue
-			color.New(color.FgBlue).Println(sf.addPadding(line))
+			// Sub header - bright blue with bold for better visibility
+			sf.printlnColored(color.New(color.FgHiBlue, color.Bold).Sprint, sf.addPadding(line))
 		} else if strings.HasPrefix(trimmed, "### ") {
 			// Level 3 headers - cyan
-			color.New(color.FgCyan).Println(sf.addPadding(line))
+			sf.printlnColored(color.New(color.FgCyan).Sprint, sf.addPadding(line))
 		} else if strings.HasPrefix(trimmed, "#### ") {
 			// Level 4 headers - cyan (same as level 3)
-			color.New(color.FgCyan).Println(sf.addPadding(line))
+			sf.printlnColored(color.New(color.FgCyan).Sprint, sf.addPadding(line))
 		} else {
 			// Other headers - normal with emphasis
-			color.New(color.Bold).Println(sf.addPadding(line))
+			sf.printlnColored(color.New(color.Bold).Sprint, sf.addPadding(line))
 		}
+
+		// Add spacing after headers for better readability
+		sf.lastWasNewline = true
 	} else if strings.HasPrefix(trimmed, "```") {
 		// Code blocks - handle language identifier
 		if len(trimmed) > 3 {
 			// Code fence with language
-			color.New(color.FgGreen, color.Faint).Println(sf.addPadding(line))
+			sf.printlnColored(color.New(color.FgGreen, color.Faint).Sprint, sf.addPadding(line))
 			sf.inCodeBlock = !sf.inCodeBlock
 		} else {
 			// Plain code fence
-			color.New(color.Faint).Println(sf.addPadding(line))
+			sf.printlnColored(color.New(color.Faint).Sprint, sf.addPadding(line))
 			sf.inCodeBlock = !sf.inCodeBlock
 		}
 	} else if sf.inCodeBlock {
 		// Inside code block - yellow/amber color
-		color.New(color.FgYellow).Println(sf.addPadding(line))
+		sf.printlnColored(color.New(color.FgYellow).Sprint, sf.addPadding(line))
 	} else if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "+ ") {
 		// Bullet points - light grey bullet with formatted text
 		bulletText := strings.TrimSpace(trimmed[2:])
 		sf.print("  ")
-		color.New(color.FgHiBlack).Print("• ")
+		sf.print(color.New(color.FgHiBlack).Sprint("• "))
 		// Apply inline formatting to the bullet text
 		formattedText := sf.applyInlineFormatting(bulletText)
 		sf.println(formattedText)
@@ -263,7 +294,7 @@ func (sf *StreamingFormatter) outputLine(line string) {
 		parts := strings.SplitN(trimmed, ".", 2)
 		if len(parts) == 2 {
 			sf.print("  ")
-			color.New(color.FgHiBlack).Print(parts[0] + ". ")
+			sf.print(color.New(color.FgHiBlack).Sprint(parts[0] + ". "))
 			// Apply inline formatting to the list item text
 			formattedText := sf.applyInlineFormatting(strings.TrimSpace(parts[1]))
 			sf.println(formattedText)
@@ -275,11 +306,11 @@ func (sf *StreamingFormatter) outputLine(line string) {
 		// Blockquotes - dim italic
 		quotedText := strings.TrimSpace(strings.TrimPrefix(trimmed, ">"))
 		sf.print("  ")
-		color.New(color.Faint, color.Italic).Println("│ " + quotedText)
+		sf.printlnColored(color.New(color.Faint, color.Italic).Sprint, "│ "+quotedText)
 	} else if strings.HasPrefix(trimmed, "---") || strings.HasPrefix(trimmed, "***") || strings.HasPrefix(trimmed, "___") {
 		// Horizontal rules
 		if len(strings.TrimSpace(trimmed)) >= 3 {
-			color.New(color.Faint).Println(strings.Repeat("─", 60))
+			sf.printlnColored(color.New(color.Faint).Sprint, strings.Repeat("─", 60))
 		} else {
 			sf.println(line)
 		}
@@ -366,6 +397,7 @@ func (sf *StreamingFormatter) Reset() {
 	sf.buffer.Reset()
 	sf.lineBuffer.Reset()
 	sf.isFirstChunk = true
+	sf.firstContent = false
 	sf.lastWasNewline = false
 	sf.inCodeBlock = false
 	sf.inListContext = false
@@ -472,9 +504,15 @@ func (sf *StreamingFormatter) filterXMLToolCalls(content string) string {
 		}
 
 		functionName := funcMatches[1]
-		// Format as a nice tool execution indicator with line breaks
-		return fmt.Sprintf("\n\n🔧 %s\n\n", functionName)
+		// Format as a simple tool execution indicator with trailing newline for readability
+		return fmt.Sprintf("🔧 %s\n", functionName)
 	})
+
+	// Clean up excessive newlines that might result from the replacement
+	// Replace 3+ consecutive newlines with just 2 newlines
+	// This allows for proper spacing between content while preventing excessive gaps
+	excessiveNewlineRegex := regexp.MustCompile(`\n{3,}`)
+	filtered = excessiveNewlineRegex.ReplaceAllString(filtered, "\n\n")
 
 	// Also filter out task completion signals that should not be displayed
 	completionSignals := []string{

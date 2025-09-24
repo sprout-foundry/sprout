@@ -78,7 +78,14 @@ func (a *Agent) LoadState(sessionID string) (*ConversationState, error) {
 		return nil, err
 	}
 	
-	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", sessionID))
+	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
+	cleanSessionID := sessionID
+	if strings.HasPrefix(sessionID, "session_") {
+		// Remove the "session_" prefix if it's already there
+		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
+	}
+	
+	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
 	
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
@@ -168,7 +175,14 @@ func DeleteSession(sessionID string) error {
 		return err
 	}
 	
-	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", sessionID))
+	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
+	cleanSessionID := sessionID
+	if strings.HasPrefix(sessionID, "session_") {
+		// Remove the "session_" prefix if it's already there
+		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
+	}
+	
+	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
 	return os.Remove(stateFile)
 }
 
@@ -233,6 +247,20 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.completionTokens = state.CompletionTokens
 	a.cachedTokens = state.CachedTokens
 	a.cachedCostSavings = state.CachedCostSavings
+}
+
+// GetLastMessages returns the last N messages for preview
+func (a *Agent) GetLastMessages(n int) []api.Message {
+	if len(a.messages) == 0 {
+		return []api.Message{}
+	}
+	
+	start := len(a.messages) - n
+	if start < 0 {
+		start = 0
+	}
+	
+	return a.messages[start:]
 }
 
 // cleanupMemorySessions removes old sessions, keeping only the last 20

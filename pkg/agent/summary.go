@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent_tools"
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 // PrintConversationSummary displays a comprehensive conversation summary with formatting
@@ -126,7 +126,7 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 func (a *Agent) PrintConciseSummary() {
 	actualProcessed := a.totalTokens - a.cachedTokens
 	costStr := fmt.Sprintf("$%.6f", a.totalCost)
-	fmt.Printf("💰 Session: %s total (%s processed + %s cached) | %s\n",
+	fmt.Printf("\n💰 Session: %s total (%s processed + %s cached) | %s\n",
 		a.formatTokenCount(a.totalTokens),
 		a.formatTokenCount(actualProcessed),
 		a.formatTokenCount(a.cachedTokens),

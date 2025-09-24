@@ -251,8 +251,24 @@ func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]int
 		return false
 	}
 
+	// Higher threshold for troubleshooting operations
+	threshold := 3
+	
+	// Increase threshold for common troubleshooting operations
+	switch toolName {
+	case "read_file":
+		// Reading files is often repeated during troubleshooting
+		threshold = 5
+	case "shell_command":
+		// Shell commands are frequently repeated during troubleshooting and debugging
+		threshold = 8
+	case "edit_file":
+		// Editing the same file multiple times might be needed for complex fixes
+		threshold = 4
+	}
+
 	// Block if attempted too many times
-	return action.Count >= 3
+	return action.Count >= threshold
 }
 
 // updateCircuitBreaker updates the circuit breaker state
@@ -274,6 +290,25 @@ func (te *ToolExecutor) updateCircuitBreaker(toolName string, args map[string]in
 
 	action.Count++
 	action.LastUsed = getCurrentTime()
+
+	// Clean up old entries (older than 5 minutes) to prevent memory leaks
+	te.cleanupOldCircuitBreakerEntries()
+}
+
+// cleanupOldCircuitBreakerEntries removes entries older than 5 minutes
+func (te *ToolExecutor) cleanupOldCircuitBreakerEntries() {
+	if te.agent.circuitBreaker == nil {
+		return
+	}
+
+	currentTime := getCurrentTime()
+	fiveMinutesAgo := currentTime - 300 // 5 minutes in seconds
+
+	for key, action := range te.agent.circuitBreaker.Actions {
+		if action.LastUsed < fiveMinutesAgo {
+			delete(te.agent.circuitBreaker.Actions, key)
+		}
+	}
 }
 
 // generateActionKey creates a unique key for an action

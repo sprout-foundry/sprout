@@ -175,6 +175,9 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Clear old todos at session start
 	tools.ClearTodos()
 
+	// Clean up old sessions (keep only most recent 20)
+	cleanupMemorySessions()
+
 	// Conversation optimization is always enabled
 	optimizationEnabled := true
 

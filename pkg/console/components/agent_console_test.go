@@ -12,8 +12,8 @@ import (
 func TestAgentConsole_DefaultConfig(t *testing.T) {
 	config := DefaultAgentConsoleConfig()
 
-	if config.Prompt != "🤖 > " {
-		t.Errorf("Default prompt incorrect: expected '🤖 > ', got %s", config.Prompt)
+	if config.Prompt != "> " {
+		t.Errorf("Default prompt incorrect: expected '> ', got %s", config.Prompt)
 	}
 
 	// Should have a default history file path

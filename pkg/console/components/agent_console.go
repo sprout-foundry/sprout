@@ -132,6 +132,12 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		ac.handleInterruptFromManager,
 	)
 
+	// Set up height change callback to update layout
+	inputManager.SetHeightChangeCallback(ac.handleInputHeightChange)
+
+	// Set up history manager for arrow key navigation
+	inputManager.SetHistoryManager(ac.historyManager)
+
 	return ac
 }
 
@@ -171,7 +177,7 @@ func DefaultAgentConsoleConfig() *AgentConsoleConfig {
 	homeDir, _ := os.UserHomeDir()
 	return &AgentConsoleConfig{
 		HistoryFile: homeDir + "/.ledit_agent_history",
-		Prompt:      "🤖 > ",
+		Prompt:      "> ",
 	}
 }
 
@@ -343,6 +349,10 @@ func (ac *AgentConsole) processInput(input string) error {
 	ac.safePrint("🔄 Processing your request...\n")
 
 	ac.outputMutex.Unlock()
+
+	// CRITICAL FIX: Ensure cursor is positioned correctly for streaming output
+	// processInput() does its own output which might affect cursor position
+	ac.repositionCursorToContentArea()
 
 	// Set up streaming with our formatter
 	// Reset formatter for new session
@@ -549,6 +559,33 @@ func (ac *AgentConsole) handleCommand(input string) error {
 	// Check command registry
 	if ac.commandRegistry != nil {
 		if cmdHandler, exists := ac.commandRegistry.GetCommand(cmd); exists {
+			// Check if this is an interactive command that needs passthrough mode
+			// Note: log command now uses buffer output, so it's not interactive
+			isInteractiveCommand := cmd == "models" || cmd == "mcp" || cmd == "commit" || cmd == "shell" || cmd == "providers"
+
+			if isInteractiveCommand {
+				// Enable passthrough mode for interactive command
+				ac.inputManager.SetPassthroughMode(true)
+
+				// Give terminal time to settle
+				time.Sleep(100 * time.Millisecond)
+
+				// Execute the command
+				err := cmdHandler.Execute(args, ac.agent)
+
+				// Give command time to finish
+				time.Sleep(100 * time.Millisecond)
+
+				// Disable passthrough mode after command completes
+				ac.inputManager.SetPassthroughMode(false)
+
+				// CRITICAL FIX: Restore console layout after passthrough mode
+				ac.restoreLayoutAfterPassthrough()
+
+				return err
+			}
+
+			// For non-interactive commands, execute normally
 			return cmdHandler.Execute(args, ac.agent)
 		}
 	}
@@ -856,6 +893,10 @@ func (ac *AgentConsole) handleInputFromManager(input string) error {
 		ac.safePrint("\n💬 Input injected into conversation: %s\n", input)
 		ac.inputManager.ScrollOutput() // Make room for the message
 
+		// CRITICAL FIX: ScrollOutput() repositions cursor to input field
+		// We need to move cursor back to content area for subsequent output
+		ac.repositionCursorToContentArea()
+
 		return nil
 	}
 	ac.isProcessing = true
@@ -882,10 +923,16 @@ func (ac *AgentConsole) handleInputFromManager(input string) error {
 		ac.safePrint("\n🔄 Processing: %s\n", input)
 		ac.inputManager.ScrollOutput()
 
+		// CRITICAL FIX: Reposition cursor to content area after ScrollOutput()
+		ac.repositionCursorToContentArea()
+
 		err := ac.processInput(input)
 		if err != nil {
 			ac.safePrint("❌ Error: %v\n", err)
 			ac.inputManager.ScrollOutput()
+
+			// CRITICAL FIX: Reposition cursor to content area after ScrollOutput()
+			ac.repositionCursorToContentArea()
 		}
 	}()
 
@@ -895,6 +942,31 @@ func (ac *AgentConsole) handleInputFromManager(input string) error {
 // handleInterruptFromManager processes interrupt signals from input manager
 func (ac *AgentConsole) handleInterruptFromManager() {
 	ac.handleCtrlC()
+}
+
+// handleInputHeightChange handles input field height changes and updates layout
+func (ac *AgentConsole) handleInputHeightChange(newHeight int) {
+	// Update the layout manager with the new input height
+	ac.autoLayoutManager.SetComponentHeight("input", newHeight)
+
+	// Recalculate layout positions
+	width, height, err := ac.Terminal().GetSize()
+	if err == nil {
+		ac.autoLayoutManager.OnTerminalResize(width, height)
+
+		// Update footer height in layout
+		footerHeight := ac.footer.GetHeight()
+		ac.autoLayoutManager.SetComponentHeight("footer", footerHeight)
+
+		// Get updated scroll region from layout manager
+		top, bottom := ac.autoLayoutManager.GetScrollRegion()
+
+		// Re-establish scroll region
+		if err := ac.Terminal().SetScrollRegion(top, bottom); err == nil {
+			// Force input manager to recalculate its position
+			ac.inputManager.updateTerminalSize()
+		}
+	}
 }
 
 func (ac *AgentConsole) cleanup() {
@@ -1002,7 +1074,8 @@ func (ac *AgentConsole) writeTextWithRawModeFix(text string) {
 	if ac.Terminal().IsRawMode() {
 		text = strings.ReplaceAll(text, "\n", "\r\n")
 	}
-	fmt.Print(text)
+	// Use terminal's Write method instead of fmt.Print to ensure proper routing
+	ac.Terminal().Write([]byte(text))
 }
 
 // safePrint writes output that respects the content area and updates buffer
@@ -1027,12 +1100,14 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 		if ac.currentContentLine == 0 {
 			top, _ := ac.autoLayoutManager.GetScrollRegion()
 			ac.Terminal().MoveCursor(1, top)
+			// Mark that we've started writing content (even if no newlines)
+			ac.currentContentLine = 1
 		}
 
 		// Write content - this will advance cursor naturally
 		ac.writeTextWithRawModeFix(content)
 
-		// Update our tracking of content lines
+		// Update our tracking of content lines for additional newlines
 		newlines := strings.Count(content, "\n")
 		ac.currentContentLine += newlines
 	}
@@ -1207,5 +1282,65 @@ func (ac *AgentConsole) filterCompletionSignals(content string) string {
 		filtered = strings.ReplaceAll(filtered, signal, "")
 	}
 
-	return strings.TrimSpace(filtered)
+	// Don't use TrimSpace as it removes important newlines
+	// Just remove empty/whitespace-only content after filtering
+	if strings.TrimSpace(filtered) == "" {
+		return ""
+	}
+	return filtered
+}
+
+// repositionCursorToContentArea moves cursor back to content area after input manager positioning
+func (ac *AgentConsole) repositionCursorToContentArea() {
+	// Input manager's ScrollOutput() positions cursor at input field
+	// We need to move it back to where content should continue appearing
+
+	// If we haven't written any content yet, position at top of content area
+	if ac.currentContentLine == 0 {
+		top, _ := ac.autoLayoutManager.GetScrollRegion()
+		ac.Terminal().MoveCursor(1, top)
+		ac.currentContentLine = 1
+	} else {
+		// Content already exists, position cursor at bottom of scroll region
+		// where new content should continue appearing
+		_, bottom := ac.autoLayoutManager.GetScrollRegion()
+		ac.Terminal().MoveCursor(1, bottom)
+	}
+}
+
+// restoreLayoutAfterPassthrough restores the console layout after interactive commands
+func (ac *AgentConsole) restoreLayoutAfterPassthrough() {
+	// Give input manager time to fully restore raw mode
+	time.Sleep(50 * time.Millisecond)
+
+	// Get current terminal dimensions
+	width, height, err := ac.Terminal().GetSize()
+	if err != nil {
+		return
+	}
+
+	// Re-establish layout with current dimensions
+	ac.autoLayoutManager.OnTerminalResize(width, height)
+
+	// Update footer height in layout
+	footerHeight := ac.footer.GetHeight()
+	ac.autoLayoutManager.SetComponentHeight("footer", footerHeight)
+
+	// Get updated scroll region from layout manager
+	top, bottom := ac.autoLayoutManager.GetScrollRegion()
+
+	// Re-establish scroll region
+	if err := ac.Terminal().SetScrollRegion(top, bottom); err != nil {
+		// Non-fatal, but log for debugging
+		fmt.Fprintf(os.Stderr, "[DEBUG] Failed to restore scroll region after passthrough: %v\n", err)
+	}
+
+	// Re-render footer to ensure it's properly positioned
+	if err := ac.footer.Render(); err != nil {
+		// Non-fatal
+		fmt.Fprintf(os.Stderr, "[DEBUG] Failed to render footer after passthrough: %v\n", err)
+	}
+
+	// Position cursor in content area for next output
+	ac.repositionCursorToContentArea()
 }

@@ -2,11 +2,11 @@ package agent
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
-	"strings"
 	"path/filepath"
-	"io/ioutil"
+	"strings"
 )
 
 // ShowColoredDiff displays a colored diff between old and new content, focusing on actual changes
@@ -16,7 +16,7 @@ func (a *Agent) ShowColoredDiff(oldContent, newContent string, maxLines int) {
 	if a.showPythonDiff(oldContent, newContent, maxLines) {
 		return
 	}
-	
+
 	// Fallback to Go implementation
 	a.showGoDiff(oldContent, newContent, maxLines)
 }
@@ -31,7 +31,7 @@ func (a *Agent) showPythonDiff(oldContent, newContent string, maxLines int) bool
 		}
 		return false
 	}
-	
+
 	// Create temporary files for the diff
 	tmpDir, err := ioutil.TempDir("", "coder_diff_")
 	if err != nil {
@@ -41,10 +41,10 @@ func (a *Agent) showPythonDiff(oldContent, newContent string, maxLines int) bool
 		return false
 	}
 	defer os.RemoveAll(tmpDir)
-	
+
 	oldFile := filepath.Join(tmpDir, "old.txt")
 	newFile := filepath.Join(tmpDir, "new.txt")
-	
+
 	// Write content to temporary files
 	if err := ioutil.WriteFile(oldFile, []byte(oldContent), 0644); err != nil {
 		if a.debug {
@@ -58,7 +58,7 @@ func (a *Agent) showPythonDiff(oldContent, newContent string, maxLines int) bool
 		}
 		return false
 	}
-	
+
 	// Create Python script for unified diff
 	pythonScript := fmt.Sprintf(`
 import sys
@@ -83,11 +83,11 @@ def main():
         ))
         
         if not diff:
-            print("No changes detected")
+            print("No changes detected", end='\r\n')
             return
             
-        print("File changes:")
-        print("----------------------------------------")
+        print("File changes:", end='\r\n')
+        print("----------------------------------------", end='\r\n')
         
         lines_shown = 0
         if %d == 0:
@@ -103,24 +103,24 @@ def main():
         
         for line in diff:
             if lines_shown >= max_lines:
-                print(f"... (truncated after {max_lines} lines)")
+                print(f"... (truncated after {max_lines} lines)", end='\r\n')
                 break
                 
             line = line.rstrip('\n')
             if line.startswith('---') or line.startswith('+++'):
-                print(f"{CYAN}{line}{RESET}")
+                print(f"{CYAN}{line}{RESET}", end='\r\n')
             elif line.startswith('@@'):
-                print(f"{CYAN}{line}{RESET}")
+                print(f"{CYAN}{line}{RESET}", end='\r\n')
             elif line.startswith('-'):
-                print(f"{RED}{line}{RESET}")
+                print(f"{RED}{line}{RESET}", end='\r\n')
             elif line.startswith('+'):
-                print(f"{GREEN}{line}{RESET}")
+                print(f"{GREEN}{line}{RESET}", end='\r\n')
             else:
-                print(line)
+                print(line, end='\r\n')
             
             lines_shown += 1
         
-        print("----------------------------------------")
+        print("----------------------------------------", end='\r\n')
         
     except Exception as e:
         sys.stderr.write(f"Error: {e}\n")
@@ -129,7 +129,7 @@ def main():
 if __name__ == "__main__":
     main()
 `, oldFile, newFile, maxLines, maxLines)
-	
+
 	scriptFile := filepath.Join(tmpDir, "diff_script.py")
 	if err := ioutil.WriteFile(scriptFile, []byte(pythonScript), 0644); err != nil {
 		if a.debug {
@@ -137,12 +137,12 @@ if __name__ == "__main__":
 		}
 		return false
 	}
-	
+
 	// Execute Python script
 	cmd := exec.Command("python3", scriptFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	
+
 	if err := cmd.Run(); err != nil {
 		if a.debug {
 			a.debugLog("python3 execution failed: %v, trying python", err)
@@ -151,7 +151,7 @@ if __name__ == "__main__":
 		cmd = exec.Command("python", scriptFile)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		
+
 		if err := cmd.Run(); err != nil {
 			if a.debug {
 				a.debugLog("python execution also failed: %v, falling back to Go diff", err)
@@ -159,68 +159,68 @@ if __name__ == "__main__":
 			return false
 		}
 	}
-	
+
 	return true
 }
 
 // showGoDiff provides the fallback Go implementation
 func (a *Agent) showGoDiff(oldContent, newContent string, maxLines int) {
-	const red = "\033[31m"    // Red for deletions
-	const green = "\033[32m"  // Green for additions
+	const red = "\033[31m"   // Red for deletions
+	const green = "\033[32m" // Green for additions
 	const reset = "\033[0m"
-	
+
 	oldLines := strings.Split(oldContent, "\n")
 	newLines := strings.Split(newContent, "\n")
-	
+
 	// Find the actual changes by identifying differing regions
 	changes := a.findChanges(oldLines, newLines)
-	
+
 	if len(changes) == 0 {
-		fmt.Println("No changes detected")
+		fmt.Print("No changes detected\r\n")
 		return
 	}
-	
-	fmt.Println("File changes:")
-	fmt.Println("----------------------------------------")
-	
+
+	fmt.Print("File changes:\r\n")
+	fmt.Print("----------------------------------------\r\n")
+
 	totalLinesShown := 0
-	
+
 	for _, change := range changes {
 		if totalLinesShown >= maxLines {
-			fmt.Printf("... (truncated after %d lines)\n", maxLines)
+			fmt.Printf("... (truncated after %d lines)\r\n", maxLines)
 			break
 		}
-		
+
 		// Show deletions (old content)
 		if change.OldLength > 0 {
 			for i := 0; i < change.OldLength && totalLinesShown < maxLines; i++ {
 				lineNum := change.OldStart + i
 				if lineNum < len(oldLines) {
-					fmt.Printf("%s- %s%s\n", red, oldLines[lineNum], reset)
+					fmt.Printf("%s- %s%s\r\n", red, oldLines[lineNum], reset)
 					totalLinesShown++
 				}
 			}
 		}
-		
+
 		// Show additions (new content)
 		if change.NewLength > 0 {
 			for i := 0; i < change.NewLength && totalLinesShown < maxLines; i++ {
 				lineNum := change.NewStart + i
 				if lineNum < len(newLines) {
-					fmt.Printf("%s+ %s%s\n", green, newLines[lineNum], reset)
+					fmt.Printf("%s+ %s%s\r\n", green, newLines[lineNum], reset)
 					totalLinesShown++
 				}
 			}
 		}
-		
+
 		// Add separator between changes
 		if totalLinesShown < maxLines {
-			fmt.Println()
+			fmt.Print("\r\n")
 			totalLinesShown++
 		}
 	}
-	
-	fmt.Println("----------------------------------------")
+
+	fmt.Print("----------------------------------------\r\n")
 }
 
 // isPythonAvailable checks if Python is available on the system
@@ -229,43 +229,42 @@ func isPythonAvailable() bool {
 	if _, err := exec.LookPath("python3"); err == nil {
 		return true
 	}
-	
+
 	// Try python
 	if _, err := exec.LookPath("python"); err == nil {
 		return true
 	}
-	
+
 	return false
 }
-
 
 // findChanges identifies regions where content differs between old and new versions
 func (a *Agent) findChanges(oldLines, newLines []string) []DiffChange {
 	var changes []DiffChange
-	
+
 	oldLen := len(oldLines)
 	newLen := len(newLines)
 	maxLen := oldLen
 	if newLen > oldLen {
 		maxLen = newLen
 	}
-	
+
 	changeStart := -1
-	
+
 	for i := 0; i < maxLen; i++ {
 		oldLine := ""
 		newLine := ""
-		
+
 		if i < oldLen {
 			oldLine = oldLines[i]
 		}
 		if i < newLen {
 			newLine = newLines[i]
 		}
-		
+
 		// Check if lines differ
 		linesDiffer := oldLine != newLine
-		
+
 		if linesDiffer {
 			// Start of a new change
 			if changeStart == -1 {
@@ -277,15 +276,15 @@ func (a *Agent) findChanges(oldLines, newLines []string) []DiffChange {
 				// Calculate the lengths for old and new content
 				oldChangeLen := i - changeStart
 				newChangeLen := i - changeStart
-				
+
 				// Adjust lengths if one side runs out of lines
-				if changeStart + oldChangeLen > oldLen {
+				if changeStart+oldChangeLen > oldLen {
 					oldChangeLen = oldLen - changeStart
 				}
-				if changeStart + newChangeLen > newLen {
+				if changeStart+newChangeLen > newLen {
 					newChangeLen = newLen - changeStart
 				}
-				
+
 				// Ensure lengths are not negative
 				if oldChangeLen < 0 {
 					oldChangeLen = 0
@@ -293,31 +292,31 @@ func (a *Agent) findChanges(oldLines, newLines []string) []DiffChange {
 				if newChangeLen < 0 {
 					newChangeLen = 0
 				}
-				
+
 				changes = append(changes, DiffChange{
 					OldStart:  changeStart,
 					OldLength: oldChangeLen,
 					NewStart:  changeStart,
 					NewLength: newChangeLen,
 				})
-				
+
 				changeStart = -1 // Reset for next change
 			}
 		}
 	}
-	
+
 	// Handle case where change extends to the end
 	if changeStart != -1 {
 		oldChangeLen := oldLen - changeStart
 		newChangeLen := newLen - changeStart
-		
+
 		if oldChangeLen < 0 {
 			oldChangeLen = 0
 		}
 		if newChangeLen < 0 {
 			newChangeLen = 0
 		}
-		
+
 		changes = append(changes, DiffChange{
 			OldStart:  changeStart,
 			OldLength: oldChangeLen,
@@ -325,6 +324,6 @@ func (a *Agent) findChanges(oldLines, newLines []string) []DiffChange {
 			NewLength: newChangeLen,
 		})
 	}
-	
+
 	return changes
 }

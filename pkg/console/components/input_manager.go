@@ -303,6 +303,15 @@ func (im *InputManager) insertChar(ch rune) {
 	im.cursorPos++
 }
 
+// printf is a helper that handles raw mode line endings
+func (im *InputManager) printf(format string, args ...interface{}) {
+	text := fmt.Sprintf(format, args...)
+	if im.isRawMode && strings.Contains(text, "\n") {
+		text = strings.ReplaceAll(text, "\n", "\r\n")
+	}
+	fmt.Print(text)
+}
+
 // showInputField displays the input field above the footer
 func (im *InputManager) showInputField() {
 	if !im.running {
@@ -310,16 +319,16 @@ func (im *InputManager) showInputField() {
 	}
 
 	// Move to input field position (above footer)
-	fmt.Printf("\033[%d;1H", im.inputFieldLine)
+	im.printf("\033[%d;1H", im.inputFieldLine)
 
 	// Clear line and show prompt + input
-	fmt.Printf("\r\033[K%s%s", im.prompt, string(im.currentLine))
+	im.printf("\r\033[K%s%s", im.prompt, string(im.currentLine))
 
 	// Position cursor correctly
 	// Simple prompt "> " is 2 characters
 	promptDisplayWidth := len(im.prompt)
 	cursorCol := promptDisplayWidth + im.cursorPos + 1
-	fmt.Printf("\033[%d;%dH", im.inputFieldLine, cursorCol)
+	im.printf("\033[%d;%dH", im.inputFieldLine, cursorCol)
 }
 
 // hideInputField clears the input field
@@ -328,7 +337,7 @@ func (im *InputManager) hideInputField() {
 		return
 	}
 
-	fmt.Printf("\033[%d;1H\033[K", im.inputFieldLine)
+	im.printf("\033[%d;1H\033[K", im.inputFieldLine)
 }
 
 // updateTerminalSize gets current terminal dimensions

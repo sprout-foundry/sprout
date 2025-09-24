@@ -76,14 +76,20 @@ func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *Code
 	if cfg != nil && cfg.LastUsedProvider != "" {
 		// Parse provider name to ClientType
 		if clientType, err := api.ParseProviderName(cfg.LastUsedProvider); err == nil {
-			// Use factory method to create provider client
-			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
+			// Get the model for this provider from configuration
+			model := cfg.ProviderModels[cfg.LastUsedProvider]
+			if model == "" {
+				logger.LogProcessStep("Warning: No model configured for provider " + cfg.LastUsedProvider + ", using default")
+			}
+			// Use factory method to create provider client with the configured model
+			if client, err := factory.CreateProviderClient(clientType, model); err == nil {
 				agentClient = client
 			}
 		}
 	} else {
 		// Fallback to auto-detection
 		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
+			// Use default model for auto-detected provider
 			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
 				agentClient = client
 			}
@@ -110,14 +116,20 @@ func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Log
 	if cfg != nil && cfg.LastUsedProvider != "" {
 		// Parse provider name to ClientType
 		if clientType, err := api.ParseProviderName(cfg.LastUsedProvider); err == nil {
-			// Use factory method to create provider client
-			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
+			// Get the model for this provider from configuration
+			model := cfg.ProviderModels[cfg.LastUsedProvider]
+			if model == "" {
+				logger.LogProcessStep("Warning: No model configured for provider " + cfg.LastUsedProvider + ", using default")
+			}
+			// Use factory method to create provider client with the configured model
+			if client, err := factory.CreateProviderClient(clientType, model); err == nil {
 				agentClient = client
 			}
 		}
 	} else {
 		// Fallback to auto-detection
 		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
+			// Use default model for auto-detected provider
 			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
 				agentClient = client
 			}

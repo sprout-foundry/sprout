@@ -46,6 +46,9 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register MCP commands
 	registry.Register(&MCPCommand{})
 
+	// Register code review command
+	registry.Register(&ReviewCommand{})
+
 	return registry
 }
 

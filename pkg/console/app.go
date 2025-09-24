@@ -47,6 +47,11 @@ func (ca *consoleApp) Init(config *Config) error {
 		return fmt.Errorf("failed to init terminal: %w", err)
 	}
 
+	// Set raw mode based on config
+	if err := ca.terminal.SetRawMode(config.RawMode); err != nil {
+		return fmt.Errorf("failed to set raw mode: %w", err)
+	}
+
 	// Get terminal size for layout
 	width, height, err := ca.terminal.GetSize()
 	if err != nil {

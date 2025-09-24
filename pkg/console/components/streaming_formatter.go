@@ -208,7 +208,7 @@ func (sf *StreamingFormatter) outputLine(line string) {
 		color.New(color.FgHiBlack).Print("• ")
 		// Apply inline formatting to the bullet text
 		formattedText := sf.applyInlineFormatting(bulletText)
-		fmt.Println(formattedText)
+		sf.println(formattedText)
 		sf.lastWasNewline = true
 		sf.inListContext = true
 	} else if strings.HasPrefix(trimmed, "#") {
@@ -252,36 +252,36 @@ func (sf *StreamingFormatter) outputLine(line string) {
 	} else if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "+ ") {
 		// Bullet points - light grey bullet with formatted text
 		bulletText := strings.TrimSpace(trimmed[2:])
-		fmt.Print("  ")
+		sf.print("  ")
 		color.New(color.FgHiBlack).Print("• ")
 		// Apply inline formatting to the bullet text
 		formattedText := sf.applyInlineFormatting(bulletText)
-		fmt.Println(formattedText)
+		sf.println(formattedText)
 		sf.inListContext = true
 	} else if matched, _ := regexp.MatchString(`^\d+\.`, trimmed); matched {
 		// Numbered lists with formatted text
 		parts := strings.SplitN(trimmed, ".", 2)
 		if len(parts) == 2 {
-			fmt.Print("  ")
+			sf.print("  ")
 			color.New(color.FgHiBlack).Print(parts[0] + ". ")
 			// Apply inline formatting to the list item text
 			formattedText := sf.applyInlineFormatting(strings.TrimSpace(parts[1]))
 			sf.println(formattedText)
 		} else {
-			fmt.Println(line)
+			sf.println(line)
 		}
 		sf.inListContext = true
 	} else if strings.HasPrefix(trimmed, ">") {
 		// Blockquotes - dim italic
 		quotedText := strings.TrimSpace(strings.TrimPrefix(trimmed, ">"))
-		fmt.Print("  ")
+		sf.print("  ")
 		color.New(color.Faint, color.Italic).Println("│ " + quotedText)
 	} else if strings.HasPrefix(trimmed, "---") || strings.HasPrefix(trimmed, "***") || strings.HasPrefix(trimmed, "___") {
 		// Horizontal rules
 		if len(strings.TrimSpace(trimmed)) >= 3 {
 			color.New(color.Faint).Println(strings.Repeat("─", 60))
 		} else {
-			fmt.Println(line)
+			sf.println(line)
 		}
 	} else if trimmed == "" && sf.lastWasNewline {
 		// Preserve paragraph breaks but not in list contexts
@@ -353,7 +353,7 @@ func (sf *StreamingFormatter) Finalize() {
 			sf.outputMutex.Lock()
 			defer sf.outputMutex.Unlock()
 		}
-		fmt.Println()
+		sf.println("")
 		sf.lastWasNewline = true
 	}
 }
@@ -455,15 +455,26 @@ func (sf *StreamingFormatter) applyInlineFormatting(text string) string {
 	return text
 }
 
-// filterXMLToolCalls removes XML-style tool calls and completion signals from streaming content to prevent them from being displayed
+// filterXMLToolCalls formats XML-style tool calls for display instead of removing them
 func (sf *StreamingFormatter) filterXMLToolCalls(content string) string {
 	// Pattern to match XML-style function calls like:
 	// <function=shell_command><parameter=command>ls</parameter></function>
 	// or <function=shell_command>...<parameter=command>ls</parameter>...</tool_call>
-	funcRegex := regexp.MustCompile(`<function=\w+>[\s\S]*?(?:</function>|</tool_call>)`)
+	funcRegex := regexp.MustCompile(`<function=(\w+)>[\s\S]*?(?:</function>|</tool_call>)`)
 
-	// Remove all XML tool calls from the content
-	filtered := funcRegex.ReplaceAllString(content, "")
+	// Replace XML tool calls with formatted display text
+	filtered := funcRegex.ReplaceAllStringFunc(content, func(match string) string {
+		// Extract function name from <function=name>
+		funcNameRegex := regexp.MustCompile(`<function=(\w+)>`)
+		funcMatches := funcNameRegex.FindStringSubmatch(match)
+		if len(funcMatches) < 2 {
+			return "" // If we can't parse it, remove it
+		}
+
+		functionName := funcMatches[1]
+		// Format as a nice tool execution indicator with line breaks
+		return fmt.Sprintf("\n\n🔧 %s\n\n", functionName)
+	})
 
 	// Also filter out task completion signals that should not be displayed
 	completionSignals := []string{

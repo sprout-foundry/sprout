@@ -12,6 +12,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/history"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/types"
@@ -73,16 +74,17 @@ func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *Code
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
 	if cfg != nil && cfg.LastUsedProvider != "" {
-		// Use unified provider detection based on last used provider
+		// Parse provider name to ClientType
 		if clientType, err := api.ParseProviderName(cfg.LastUsedProvider); err == nil {
-			if client, err := api.NewUnifiedClient(clientType); err == nil {
+			// Use factory method to create provider client
+			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
 				agentClient = client
 			}
 		}
 	} else {
 		// Fallback to auto-detection
 		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
-			if client, err := api.NewUnifiedClient(clientType); err == nil {
+			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
 				agentClient = client
 			}
 		}
@@ -106,16 +108,17 @@ func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Log
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
 	if cfg != nil && cfg.LastUsedProvider != "" {
-		// Use unified provider detection based on last used provider
+		// Parse provider name to ClientType
 		if clientType, err := api.ParseProviderName(cfg.LastUsedProvider); err == nil {
-			if client, err := api.NewUnifiedClient(clientType); err == nil {
+			// Use factory method to create provider client
+			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
 				agentClient = client
 			}
 		}
 	} else {
 		// Fallback to auto-detection
 		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
-			if client, err := api.NewUnifiedClient(clientType); err == nil {
+			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
 				agentClient = client
 			}
 		}
@@ -262,7 +265,19 @@ func (s *CodeReviewService) removeAffectedFiles(related, affected []string) []st
 func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
 	s.logger.LogProcessStep("Performing code review...")
 
+	// Validate input parameters
+	if ctx == nil {
+		return nil, fmt.Errorf("review context cannot be nil")
+	}
+	if opts == nil {
+		return nil, fmt.Errorf("review options cannot be nil")
+	}
+	if ctx.Diff == "" {
+		return nil, fmt.Errorf("no diff content provided for review")
+	}
+
 	// Enhance context with workspace intelligence
+	s.logger.LogProcessStep("Enhancing context with workspace intelligence...")
 	if err := s.enhanceContextWithWorkspaceIntelligence(ctx); err != nil {
 		s.logger.LogProcessStep(fmt.Sprintf("Warning: Could not enhance context with workspace intelligence: %v", err))
 	}
@@ -270,14 +285,18 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 	// Try to load existing context if session ID is provided
 	var existingCtx *ReviewContext
 	if ctx.SessionID != "" {
+		s.logger.LogProcessStep(fmt.Sprintf("Looking for existing review context for session %s", ctx.SessionID))
 		if storedCtx, exists := s.getStoredContext(ctx.SessionID); exists {
 			existingCtx = storedCtx
 			s.logger.LogProcessStep(fmt.Sprintf("Loaded existing review context for session %s", ctx.SessionID))
+		} else {
+			s.logger.LogProcessStep(fmt.Sprintf("No existing context found for session %s", ctx.SessionID))
 		}
 	}
 
 	// Merge with existing context or initialize new history
 	if existingCtx != nil {
+		s.logger.LogProcessStep("Merging with existing review context...")
 		// Update existing context with new information
 		existingCtx.Diff = ctx.Diff
 		existingCtx.OriginalPrompt = ctx.OriginalPrompt
@@ -289,6 +308,7 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 		existingCtx.FullFileContext = ctx.FullFileContext
 		ctx = existingCtx
 	} else {
+		s.logger.LogProcessStep("Initializing new review context...")
 		// Initialize review history if not provided
 		if ctx.History == nil {
 			ctx.History = s.initializeReviewHistory(ctx)
@@ -297,11 +317,13 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 
 	// Check iteration limits
 	if s.hasExceededIterationLimit(ctx) {
+		s.logger.LogProcessStep("Iteration limit exceeded, handling gracefully...")
 		return s.handleIterationLimitExceeded(ctx)
 	}
 
 	// Check for convergence
 	if s.reviewConfig.EnableConvergenceDetection && s.hasConverged(ctx) {
+		s.logger.LogProcessStep("Review has converged, handling gracefully...")
 		return s.handleConvergence(ctx)
 	}
 
@@ -310,21 +332,26 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 
 	// Only support staged review now
 	if opts.Type != StagedReview {
-		return nil, fmt.Errorf("only staged review type is supported")
+		return nil, fmt.Errorf("only staged review type is supported, requested type: %v", opts.Type)
 	}
 
+	s.logger.LogProcessStep("Performing staged code review...")
 	result, err = s.performStagedReview(ctx)
 
 	if err != nil {
+		s.logger.LogProcessStep(fmt.Sprintf("Code review failed: %v", err))
 		return nil, fmt.Errorf("failed to perform code review: %w", err)
 	}
 
+	s.logger.LogProcessStep("Recording review iteration...")
 	// Record the iteration
 	s.recordReviewIteration(ctx, result, ctx.Diff)
 
+	s.logger.LogProcessStep("Storing updated context...")
 	// Store the updated context for future iterations
 	s.storeContext(ctx)
 
+	s.logger.LogProcessStep("Handling review result...")
 	// Handle the review result based on options
 	return s.handleReviewResult(result, ctx, opts)
 }

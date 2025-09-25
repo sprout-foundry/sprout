@@ -10,10 +10,11 @@ import (
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/factory"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // CommitCommand implements the /commit slash command
-type CommitCommand struct{
+type CommitCommand struct {
 	skipPrompt   bool
 	dryRun       bool
 	allowSecrets bool
@@ -53,7 +54,7 @@ func (c *CommitCommand) Name() string {
 
 // Description returns the command description
 func (c *CommitCommand) Description() string {
-	return "Interactive commit workflow - select files and generate commit messages"
+	return "Interactive commit workflow with dropdown selection - stage files and generate commit messages"
 }
 
 // Execute runs the commit command
@@ -85,8 +86,9 @@ func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}
 	}
 
-	// Default behavior: multi-file commit
-	return c.executeMultiFileCommit(chatAgent)
+	// Default behavior: use new interactive commit flow
+	flow := NewCommitFlow(chatAgent)
+	return flow.Execute()
 }
 
 // executeMultiFileCommit handles the original multi-file commit workflow
@@ -330,7 +332,7 @@ func (c *CommitCommand) executeSingleFileCommit(args []string, chatAgent *agent.
 	// Step 4: Select ONE file (or auto-select first if skipPrompt)
 	var index int
 	var reader *bufio.Reader
-	
+
 	if c.skipPrompt {
 		fmt.Println("\n✅ Auto-selecting first modified file (--skip-prompt)")
 		index = 1 // Select first file
@@ -381,9 +383,21 @@ func (c *CommitCommand) executeSingleFileCommit(args []string, chatAgent *agent.
 func (c *CommitCommand) showHelp() error {
 	fmt.Println("📝 Commit Command Usage:")
 	fmt.Println("========================")
-	fmt.Println("/commit          - Interactive multi-file commit workflow")
+	fmt.Println("/commit          - Interactive commit workflow with dropdown selection")
 	fmt.Println("/commit single   - Single file commit workflow (strict format)")
 	fmt.Println("/commit help     - Show this help message")
+	fmt.Println()
+	fmt.Println("The interactive workflow offers:")
+	fmt.Println("🚀 Smart commit options based on your current git status")
+	fmt.Println("📦 Commit staged files")
+	fmt.Println("📝 Select specific files to stage and commit")
+	fmt.Println("🎯 Stage all modified files and commit")
+	fmt.Println("📄 Single file commit mode")
+	fmt.Println()
+	fmt.Println("Features:")
+	fmt.Println("✨ Optimized diff processing for large files")
+	fmt.Println("🤖 AI-generated commit messages")
+	fmt.Println("🔍 Smart file detection and summaries")
 	fmt.Println()
 	fmt.Println("Single file commits follow strict formatting:")
 	fmt.Println("- Lowercase verb start (add, fix, update, etc.)")
@@ -503,9 +517,22 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	// Retry loop for commit message generation
 	for {
 		if singleFileMode {
-		// Single file mode - simple format without file actions in title
-		// Create the commit message generation prompt
-		commitPrompt := fmt.Sprintf(`Generate a concise git commit message for the following staged changes.
+			// Single file mode - simple format without file actions in title
+			// Optimize diff for API efficiency
+			optimizer := utils.NewDiffOptimizer()
+			optimizedDiff := optimizer.OptimizeDiff(string(diffOutput))
+
+			// Build context info for large files
+			var contextInfo string
+			if len(optimizedDiff.FileSummaries) > 0 {
+				contextInfo = "\n\nFile summaries for optimized content:\n"
+				for file, summary := range optimizedDiff.FileSummaries {
+					contextInfo += fmt.Sprintf("- %s: %s\n", file, summary)
+				}
+			}
+
+			// Create the commit message generation prompt
+			commitPrompt := fmt.Sprintf(`Generate a concise git commit message for the following staged changes.
 
 STRICT RULES FOR SINGLE FILE COMMITS:
 1. Title MUST start with a lowercase action verb (add, update, fix, remove, refactor, etc.)
@@ -524,92 +551,105 @@ Examples:
 - "update database connection timeout" (not "update config")
 
 Staged diff:
-%s
+%s%s
 
-Generate only the commit message, no additional commentary.`, string(diffOutput))
+Generate only the commit message, no additional commentary.`, optimizedDiff.OptimizedContent, contextInfo)
 
-		// Get commit message using fast model
-		messages := []api.Message{
-			{
-				Role:    "system",
-				Content: "You are a git commit message generator. Generate concise, clear commit messages following conventional commit standards with strict single file rules.",
-			},
-			{
-				Role:    "user",
-				Content: commitPrompt,
-			},
-		}
-
-		resp, err := client.SendChatRequest(messages, nil, "")
-		if err != nil {
-			return fmt.Errorf("failed to generate commit message: %v", err)
-		}
-
-		if len(resp.Choices) == 0 {
-			return fmt.Errorf("no response from model")
-		}
-
-		commitMessage = strings.TrimSpace(resp.Choices[0].Message.Content)
-
-		// Validate commit message format for single file commits
-		lines := strings.Split(commitMessage, "\n")
-		if len(lines) > 0 {
-			title := lines[0]
-			// Check if title starts with lowercase
-			if len(title) > 0 && strings.ToUpper(title[:1]) == title[:1] {
-				// Auto-fix: convert first letter to lowercase
-				title = strings.ToLower(title[:1]) + title[1:]
-				lines[0] = title
-				commitMessage = strings.Join(lines, "\n")
+			// Get commit message using fast model
+			messages := []api.Message{
+				{
+					Role:    "system",
+					Content: "You are a git commit message generator. Generate concise, clear commit messages following conventional commit standards with strict single file rules.",
+				},
+				{
+					Role:    "user",
+					Content: commitPrompt,
+				},
 			}
-		}
 
-		// Show token usage
-		fmt.Printf("\n💰 Tokens used: %d (model: %s/%s)\n", resp.Usage.TotalTokens, clientType, model)
+			resp, err := client.SendChatRequest(messages, nil, "")
+			if err != nil {
+				return fmt.Errorf("failed to generate commit message: %v", err)
+			}
 
-	} else {
-		// Multi-file mode - full format with file actions
-		// Calculate available space for title
-		prefixAndActions := branchPrefix + fileActionsSummary + " - "
-		availableSpace := 72 - len(prefixAndActions)
+			if len(resp.Choices) == 0 {
+				return fmt.Errorf("no response from model")
+			}
 
-		// Create the commit message generation prompt
-		commitPrompt := fmt.Sprintf(`Base responses on the following changes:
+			commitMessage = strings.TrimSpace(resp.Choices[0].Message.Content)
 
-%s
+			// Validate commit message format for single file commits
+			lines := strings.Split(commitMessage, "\n")
+			if len(lines) > 0 {
+				title := lines[0]
+				// Check if title starts with lowercase
+				if len(title) > 0 && strings.ToUpper(title[:1]) == title[:1] {
+					// Auto-fix: convert first letter to lowercase
+					title = strings.ToLower(title[:1]) + title[1:]
+					lines[0] = title
+					commitMessage = strings.Join(lines, "\n")
+				}
+			}
+
+			// Show token usage
+			fmt.Printf("\n💰 Tokens used: %d (model: %s/%s)\n", resp.Usage.TotalTokens, clientType, model)
+
+		} else {
+			// Multi-file mode - full format with file actions
+			// Calculate available space for title
+			prefixAndActions := branchPrefix + fileActionsSummary + " - "
+			availableSpace := 72 - len(prefixAndActions)
+
+			// Optimize diff for API efficiency
+			optimizer := utils.NewDiffOptimizer()
+			optimizedDiff := optimizer.OptimizeDiff(string(diffOutput))
+
+			// Build context info for large files
+			var contextInfo string
+			if len(optimizedDiff.FileSummaries) > 0 {
+				contextInfo = "\n\nFile summaries for optimized content:\n"
+				for file, summary := range optimizedDiff.FileSummaries {
+					contextInfo += fmt.Sprintf("- %s: %s\n", file, summary)
+				}
+			}
+
+			// Create the commit message generation prompt
+			commitPrompt := fmt.Sprintf(`Base responses on the following changes:
+
+%s%s
 
 Generate a concise git commit title starting with the word: '%s'. 
 The total length MUST be under %d characters. Don't include the file name or any 
 colons. The title should be a single line without any markdown formatting. Only 
-return the short title and nothing else.`, string(diffOutput), primaryAction, availableSpace)
+return the short title and nothing else.`, optimizedDiff.OptimizedContent, contextInfo, primaryAction, availableSpace)
 
-		// Get commit message title using fast model
-		messages := []api.Message{
-			{
-				Role:    "system",
-				Content: "You are a git commit message generator. Generate concise, clear commit messages following conventional commit standards.",
-			},
-			{
-				Role:    "user",
-				Content: commitPrompt,
-			},
-		}
+			// Get commit message title using fast model
+			messages := []api.Message{
+				{
+					Role:    "system",
+					Content: "You are a git commit message generator. Generate concise, clear commit messages following conventional commit standards.",
+				},
+				{
+					Role:    "user",
+					Content: commitPrompt,
+				},
+			}
 
-		resp, err := client.SendChatRequest(messages, nil, "")
-		if err != nil {
-			return fmt.Errorf("failed to generate commit message: %v", err)
-		}
+			resp, err := client.SendChatRequest(messages, nil, "")
+			if err != nil {
+				return fmt.Errorf("failed to generate commit message: %v", err)
+			}
 
-		if len(resp.Choices) == 0 {
-			return fmt.Errorf("no response from model")
-		}
+			if len(resp.Choices) == 0 {
+				return fmt.Errorf("no response from model")
+			}
 
-		shortTitle := strings.TrimSpace(resp.Choices[0].Message.Content)
+			shortTitle := strings.TrimSpace(resp.Choices[0].Message.Content)
 
-		// Now generate the description
-		descPrompt := fmt.Sprintf(`Base responses on the following changes:
+			// Now generate the description (reuse the optimized diff)
+			descPrompt := fmt.Sprintf(`Base responses on the following changes:
 
-%s
+%s%s
 
 Generate a Git commit message summary. The message should follow these rules:
 1. The total length MUST be under 500 characters.
@@ -618,90 +658,90 @@ Generate a Git commit message summary. The message should follow these rules:
 4. DO NOT include any user messages.
 5. Message will be a single paragraph without any markdown formatting.
 6. The message should be clear and concise and only give reasoning for the change 
-   if provided by the user.`, string(diffOutput))
+   if provided by the user.`, optimizedDiff.OptimizedContent, contextInfo)
 
-		// Get description
-		messages = []api.Message{
-			{
-				Role:    "system",
-				Content: "You are a git commit message generator. Generate clear, concise descriptions.",
-			},
-			{
-				Role:    "user",
-				Content: descPrompt,
-			},
-		}
-
-		resp, err = client.SendChatRequest(messages, nil, "")
-		if err != nil {
-			return fmt.Errorf("failed to generate description: %v", err)
-		}
-
-		if len(resp.Choices) == 0 {
-			return fmt.Errorf("no response from model for description")
-		}
-
-		description := strings.TrimSpace(resp.Choices[0].Message.Content)
-
-		// Wrap description at 72 characters
-		wrappedDesc := wrapText(description, 72)
-
-		// Build the full commit message
-		commitTitle := branchPrefix + fileActionsSummary + " - " + shortTitle
-		commitMessage = commitTitle + "\n\n" + wrappedDesc
-
-		// Show token usage (both requests)
-		fmt.Printf("\n💰 Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
-	}
-
-	// Show commit message preview
-	fmt.Println("\n📋 Commit message preview:")
-	fmt.Println("=============================================")
-	fmt.Println(commitMessage)
-	fmt.Println("=============================================")
-
-	// Handle confirmation (or auto-proceed if skipPrompt)
-	if c.skipPrompt {
-		fmt.Println("\n✅ Auto-proceeding with commit (--skip-prompt)")
-		break // Exit retry loop
-	} else {
-		// Confirmation with retry option
-		fmt.Print("\n💡 Proceed with commit? (y/n/e to edit/r to retry): ")
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(strings.ToLower(input))
-
-		if input == "r" || input == "retry" {
-			fmt.Println("🔄 Regenerating commit message...")
-			continue // Go back to start of loop to regenerate
-		} else if input == "e" || input == "edit" {
-			// Allow editing the commit message
-			fmt.Println("\n✏️  Enter your commit message (press Enter twice when done):")
-			var editedMessage strings.Builder
-			emptyLineCount := 0
-			for {
-				line, _ := reader.ReadString('\n')
-				if line == "\n" {
-					emptyLineCount++
-					if emptyLineCount >= 2 {
-						break
-					}
-				} else {
-					emptyLineCount = 0
-				}
-				editedMessage.WriteString(line)
+			// Get description
+			messages = []api.Message{
+				{
+					Role:    "system",
+					Content: "You are a git commit message generator. Generate clear, concise descriptions.",
+				},
+				{
+					Role:    "user",
+					Content: descPrompt,
+				},
 			}
-			commitMessage = strings.TrimSpace(editedMessage.String())
-			break // Exit retry loop with edited message
-		} else if input == "y" || input == "yes" || input == "" {
-			break // Exit retry loop and proceed with commit
-		} else if input == "n" || input == "no" {
-			fmt.Println("❌ Commit cancelled")
-			return nil
-		} else {
-			fmt.Printf("❌ Invalid option: %s. Please use y/n/e/r\n", input)
-			continue // Show the confirmation prompt again
+
+			resp, err = client.SendChatRequest(messages, nil, "")
+			if err != nil {
+				return fmt.Errorf("failed to generate description: %v", err)
+			}
+
+			if len(resp.Choices) == 0 {
+				return fmt.Errorf("no response from model for description")
+			}
+
+			description := strings.TrimSpace(resp.Choices[0].Message.Content)
+
+			// Wrap description at 72 characters
+			wrappedDesc := wrapText(description, 72)
+
+			// Build the full commit message
+			commitTitle := branchPrefix + fileActionsSummary + " - " + shortTitle
+			commitMessage = commitTitle + "\n\n" + wrappedDesc
+
+			// Show token usage (both requests)
+			fmt.Printf("\n💰 Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
 		}
-	}
+
+		// Show commit message preview
+		fmt.Println("\n📋 Commit message preview:")
+		fmt.Println("=============================================")
+		fmt.Println(commitMessage)
+		fmt.Println("=============================================")
+
+		// Handle confirmation (or auto-proceed if skipPrompt)
+		if c.skipPrompt {
+			fmt.Println("\n✅ Auto-proceeding with commit (--skip-prompt)")
+			break // Exit retry loop
+		} else {
+			// Confirmation with retry option
+			fmt.Print("\n💡 Proceed with commit? (y/n/e to edit/r to retry): ")
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(strings.ToLower(input))
+
+			if input == "r" || input == "retry" {
+				fmt.Println("🔄 Regenerating commit message...")
+				continue // Go back to start of loop to regenerate
+			} else if input == "e" || input == "edit" {
+				// Allow editing the commit message
+				fmt.Println("\n✏️  Enter your commit message (press Enter twice when done):")
+				var editedMessage strings.Builder
+				emptyLineCount := 0
+				for {
+					line, _ := reader.ReadString('\n')
+					if line == "\n" {
+						emptyLineCount++
+						if emptyLineCount >= 2 {
+							break
+						}
+					} else {
+						emptyLineCount = 0
+					}
+					editedMessage.WriteString(line)
+				}
+				commitMessage = strings.TrimSpace(editedMessage.String())
+				break // Exit retry loop with edited message
+			} else if input == "y" || input == "yes" || input == "" {
+				break // Exit retry loop and proceed with commit
+			} else if input == "n" || input == "no" {
+				fmt.Println("❌ Commit cancelled")
+				return nil
+			} else {
+				fmt.Printf("❌ Invalid option: %s. Please use y/n/e/r\n", input)
+				continue // Show the confirmation prompt again
+			}
+		}
 
 	} // End of retry loop
 

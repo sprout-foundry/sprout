@@ -51,7 +51,8 @@ func TestInteractiveCommandDetection(t *testing.T) {
 		command       string
 		isInteractive bool
 	}{
-		{"log", false},      // Now non-interactive
+		{"log", true},       // Interactive dropdown
+		{"memory", true},    // Interactive dropdown
 		{"models", true},    // Interactive dropdown
 		{"providers", true}, // Interactive dropdown
 		{"mcp", true},       // Interactive configuration
@@ -67,7 +68,7 @@ func TestInteractiveCommandDetection(t *testing.T) {
 		t.Run(tc.command, func(t *testing.T) {
 			// This simulates the logic from agent console
 			isInteractive := tc.command == "models" || tc.command == "mcp" ||
-				tc.command == "commit" || tc.command == "shell" || tc.command == "providers"
+				tc.command == "commit" || tc.command == "shell" || tc.command == "providers" || tc.command == "memory" || tc.command == "log"
 
 			if isInteractive != tc.isInteractive {
 				t.Errorf("Command '%s': expected interactive=%v, got %v",
@@ -119,12 +120,12 @@ func TestPassthroughModeSimulation(t *testing.T) {
 
 func TestInteractiveCommandList(t *testing.T) {
 	// Verify we have the right set of interactive commands
-	expectedInteractive := []string{"models", "mcp", "commit", "shell", "providers"}
-	expectedNonInteractive := []string{"log", "help", "changes", "status", "info", "rollback"}
+	expectedInteractive := []string{"models", "mcp", "commit", "shell", "providers", "memory", "log"}
+	expectedNonInteractive := []string{"help", "changes", "status", "info", "rollback"}
 
 	// Test that interactive commands are correctly identified
 	for _, cmd := range expectedInteractive {
-		isInteractive := cmd == "models" || cmd == "mcp" || cmd == "commit" || cmd == "shell" || cmd == "providers"
+		isInteractive := cmd == "models" || cmd == "mcp" || cmd == "commit" || cmd == "shell" || cmd == "providers" || cmd == "memory" || cmd == "log"
 		if !isInteractive {
 			t.Errorf("Command '%s' should be identified as interactive", cmd)
 		}
@@ -132,7 +133,7 @@ func TestInteractiveCommandList(t *testing.T) {
 
 	// Test that non-interactive commands are correctly identified
 	for _, cmd := range expectedNonInteractive {
-		isInteractive := cmd == "models" || cmd == "mcp" || cmd == "commit" || cmd == "shell" || cmd == "providers"
+		isInteractive := cmd == "models" || cmd == "mcp" || cmd == "commit" || cmd == "shell" || cmd == "providers" || cmd == "memory" || cmd == "log"
 		if isInteractive {
 			t.Errorf("Command '%s' should not be identified as interactive", cmd)
 		}

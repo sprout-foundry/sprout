@@ -14,16 +14,16 @@ import (
 
 // ConversationState represents the state of a conversation that can be persisted
 type ConversationState struct {
-	Messages         []api.Message `json:"messages"`
-	TaskActions      []TaskAction  `json:"task_actions"`
-	TotalCost        float64       `json:"total_cost"`
-	TotalTokens      int           `json:"total_tokens"`
-	PromptTokens     int           `json:"prompt_tokens"`
-	CompletionTokens int           `json:"completion_tokens"`
-	CachedTokens     int           `json:"cached_tokens"`
-	CachedCostSavings float64      `json:"cached_cost_savings"`
-	LastUpdated      time.Time     `json:"last_updated"`
-	SessionID        string        `json:"session_id"`
+	Messages          []api.Message `json:"messages"`
+	TaskActions       []TaskAction  `json:"task_actions"`
+	TotalCost         float64       `json:"total_cost"`
+	TotalTokens       int           `json:"total_tokens"`
+	PromptTokens      int           `json:"prompt_tokens"`
+	CompletionTokens  int           `json:"completion_tokens"`
+	CachedTokens      int           `json:"cached_tokens"`
+	CachedCostSavings float64       `json:"cached_cost_savings"`
+	LastUpdated       time.Time     `json:"last_updated"`
+	SessionID         string        `json:"session_id"`
 }
 
 // GetStateDir returns the directory for storing conversation state
@@ -32,12 +32,12 @@ func GetStateDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
-	
+
 	stateDir := filepath.Join(homeDir, ".gpt_chat_state")
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return "", fmt.Errorf("failed to create state directory: %w", err)
 	}
-	
+
 	return stateDir, nil
 }
 
@@ -47,27 +47,27 @@ func (a *Agent) SaveState(sessionID string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	state := ConversationState{
-		Messages:         a.messages,
-		TaskActions:      a.taskActions,
-		TotalCost:        a.totalCost,
-		TotalTokens:      a.totalTokens,
-		PromptTokens:     a.promptTokens,
-		CompletionTokens: a.completionTokens,
-		CachedTokens:     a.cachedTokens,
+		Messages:          a.messages,
+		TaskActions:       a.taskActions,
+		TotalCost:         a.totalCost,
+		TotalTokens:       a.totalTokens,
+		PromptTokens:      a.promptTokens,
+		CompletionTokens:  a.completionTokens,
+		CachedTokens:      a.cachedTokens,
 		CachedCostSavings: a.cachedCostSavings,
-		LastUpdated:      time.Now(),
-		SessionID:        sessionID,
+		LastUpdated:       time.Now(),
+		SessionID:         sessionID,
 	}
-	
+
 	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", sessionID))
-	
+
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}
-	
+
 	return os.WriteFile(stateFile, data, 0600)
 }
 
@@ -77,26 +77,26 @@ func (a *Agent) LoadState(sessionID string) (*ConversationState, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
 	cleanSessionID := sessionID
 	if strings.HasPrefix(sessionID, "session_") {
 		// Remove the "session_" prefix if it's already there
 		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
 	}
-	
+
 	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
-	
+
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read state file: %w", err)
 	}
-	
+
 	var state ConversationState
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal state: %w", err)
 	}
-	
+
 	return &state, nil
 }
 
@@ -106,27 +106,27 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	files, err := os.ReadDir(stateDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read state directory: %w", err)
 	}
-	
+
 	var sessions []SessionInfo
 	for _, file := range files {
 		if !file.IsDir() && filepath.Ext(file.Name()) == ".json" {
 			sessionID := file.Name()[:len(file.Name())-5] // Remove .json extension
-			
+
 			// Get file info for timestamp
 			fileInfo, err := file.Info()
 			if err != nil {
 				continue
 			}
-			
+
 			// Try to read the session file to get the last updated time from metadata
 			stateFile := filepath.Join(stateDir, file.Name())
 			lastUpdated := fileInfo.ModTime()
-			
+
 			// Read the file to get the actual last updated time from the state
 			if data, err := os.ReadFile(stateFile); err == nil {
 				var state ConversationState
@@ -136,14 +136,14 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 					}
 				}
 			}
-			
+
 			sessions = append(sessions, SessionInfo{
 				SessionID:   sessionID,
 				LastUpdated: lastUpdated,
 			})
 		}
 	}
-	
+
 	return sessions, nil
 }
 
@@ -159,12 +159,12 @@ func ListSessions() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var sessionIDs []string
 	for _, session := range sessions {
 		sessionIDs = append(sessionIDs, session.SessionID)
 	}
-	
+
 	return sessionIDs, nil
 }
 
@@ -174,14 +174,14 @@ func DeleteSession(sessionID string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
 	cleanSessionID := sessionID
 	if strings.HasPrefix(sessionID, "session_") {
 		// Remove the "session_" prefix if it's already there
 		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
 	}
-	
+
 	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
 	return os.Remove(stateFile)
 }
@@ -191,17 +191,17 @@ func (a *Agent) GenerateSessionSummary() string {
 	if len(a.taskActions) == 0 {
 		return "No previous actions recorded."
 	}
-	
+
 	var summary strings.Builder
 	summary.WriteString("Previous session summary:\n")
 	summary.WriteString("=====================================\n")
-	
+
 	// Group actions by type
 	fileCreations := 0
 	fileModifications := 0
 	commandsExecuted := 0
 	filesRead := 0
-	
+
 	for _, action := range a.taskActions {
 		switch action.Type {
 		case "file_created":
@@ -214,14 +214,14 @@ func (a *Agent) GenerateSessionSummary() string {
 			filesRead++
 		}
 	}
-	
+
 	summary.WriteString(fmt.Sprintf("• Files created: %d\n", fileCreations))
 	summary.WriteString(fmt.Sprintf("• Files modified: %d\n", fileModifications))
 	summary.WriteString(fmt.Sprintf("• Commands executed: %d\n", commandsExecuted))
 	summary.WriteString(fmt.Sprintf("• Files read: %d\n", filesRead))
 	summary.WriteString(fmt.Sprintf("• Total cost: $%.6f\n", a.totalCost))
 	summary.WriteString(fmt.Sprintf("• Total tokens: %s\n", a.formatTokenCount(a.totalTokens)))
-	
+
 	// Add recent notable actions
 	if len(a.taskActions) > 0 {
 		summary.WriteString("\nRecent actions:\n")
@@ -231,14 +231,15 @@ func (a *Agent) GenerateSessionSummary() string {
 			summary.WriteString(fmt.Sprintf("• %s: %s\n", action.Type, action.Description))
 		}
 	}
-	
+
 	summary.WriteString("=====================================\n")
-	
+
 	return summary.String()
 }
 
 // ApplyState applies a loaded state to the current agent
 func (a *Agent) ApplyState(state *ConversationState) {
+	// Apply saved state
 	a.messages = state.Messages
 	a.taskActions = state.TaskActions
 	a.totalCost = state.TotalCost
@@ -247,6 +248,30 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.completionTokens = state.CompletionTokens
 	a.cachedTokens = state.CachedTokens
 	a.cachedCostSavings = state.CachedCostSavings
+
+	// CRITICAL: Reset session state to prevent hanging issues after session restore
+	a.currentIteration = 0
+	a.contextWarningIssued = false
+	a.interruptRequested = false
+	a.interruptMessage = ""
+
+	// Reset circuit breaker state to prevent false positives
+	if a.circuitBreaker != nil {
+		a.circuitBreaker.Actions = make(map[string]*CircuitBreakerAction)
+	}
+
+	// Clear streaming buffer to prevent old content from interfering
+	a.streamingBuffer.Reset()
+
+	// Reset shell command history to prevent stale cache issues
+	if a.shellCommandHistory == nil {
+		a.shellCommandHistory = make(map[string]*ShellCommandResult)
+	} else {
+		// Clear existing history
+		for k := range a.shellCommandHistory {
+			delete(a.shellCommandHistory, k)
+		}
+	}
 }
 
 // GetLastMessages returns the last N messages for preview
@@ -254,12 +279,12 @@ func (a *Agent) GetLastMessages(n int) []api.Message {
 	if len(a.messages) == 0 {
 		return []api.Message{}
 	}
-	
+
 	start := len(a.messages) - n
 	if start < 0 {
 		start = 0
 	}
-	
+
 	return a.messages[start:]
 }
 

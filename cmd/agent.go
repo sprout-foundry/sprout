@@ -67,12 +67,12 @@ func createChatAgent() (*agent.Agent, error) {
 	chatAgent.SetMaxIterations(maxIterations)
 
 	// Enable streaming by default unless disabled or output is piped
-	// Note: OpenAI streaming doesn't include token usage data, so we disable it
+	// Note: OpenAI streaming doesn't include token usage data, but we'll enable it anyway
+	// for better UX in interactive mode
 	if !agentNoStreaming && isTerminal() {
-		provider := chatAgent.GetProvider()
-		if provider != "openai" {
-			chatAgent.EnableStreaming(nil)
-		}
+		// Enable streaming for all providers in interactive mode
+		// The agent console will set up its own streaming callback
+		chatAgent.EnableStreaming(nil)
 	}
 
 	return chatAgent, nil

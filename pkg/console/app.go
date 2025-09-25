@@ -12,6 +12,7 @@ type consoleApp struct {
 	mu         sync.RWMutex
 	config     *Config
 	terminal   TerminalManager
+	controller *TerminalController
 	layout     LayoutManager
 	state      StateManager
 	events     EventBus
@@ -41,22 +42,28 @@ func (ca *consoleApp) Init(config *Config) error {
 	// Create context
 	ca.ctx, ca.cancel = context.WithCancel(context.Background())
 
+	// Initialize event bus first
+	ca.events = NewEventBus(config.EventQueueSize)
+
 	// Initialize terminal manager
 	ca.terminal = NewTerminalManager()
 	if err := ca.terminal.Init(); err != nil {
 		return fmt.Errorf("failed to init terminal: %w", err)
 	}
 
-	// Set raw mode based on config
-	if err := ca.terminal.SetRawMode(config.RawMode); err != nil {
+	// Initialize terminal controller with centralized handling
+	ca.controller = NewTerminalController(ca.terminal, ca.events)
+	if err := ca.controller.Init(); err != nil {
+		return fmt.Errorf("failed to init terminal controller: %w", err)
+	}
+
+	// Set raw mode through controller
+	if err := ca.controller.SetRawMode(config.RawMode); err != nil {
 		return fmt.Errorf("failed to set raw mode: %w", err)
 	}
 
 	// Get terminal size for layout
-	width, height, err := ca.terminal.GetSize()
-	if err != nil {
-		return fmt.Errorf("failed to get terminal size: %w", err)
-	}
+	width, height, _ := ca.controller.GetSize()
 
 	// Initialize layout manager
 	ca.layout = NewLayoutManager(width, height)
@@ -64,17 +71,16 @@ func (ca *consoleApp) Init(config *Config) error {
 	// Initialize state manager
 	ca.state = NewStateManager()
 
-	// Initialize event bus
-	ca.events = NewEventBus(config.EventQueueSize)
-
-	// Set up terminal resize handling
-	ca.terminal.OnResize(func(w, h int) {
-		ca.layout.CalculateLayout(w, h)
-		ca.events.PublishAsync(Event{
-			Type:   "terminal.resized",
-			Source: "terminal",
-			Data:   map[string]int{"width": w, "height": h},
-		})
+	// Subscribe to resize events from controller
+	ca.events.Subscribe("terminal.resized", func(event Event) error {
+		if data, ok := event.Data.(map[string]interface{}); ok {
+			if w, wOk := data["width"].(int); wOk {
+				if h, hOk := data["height"].(int); hOk {
+					ca.layout.CalculateLayout(w, h)
+				}
+			}
+		}
+		return nil
 	})
 
 	// Initialize components from config
@@ -193,7 +199,7 @@ func (ca *consoleApp) AddComponent(component Component) error {
 
 	// Initialize component
 	deps := Dependencies{
-		Terminal: ca.terminal,
+		Terminal: ca.controller, // Components use controller instead of raw terminal
 		Layout:   ca.layout,
 		State:    ca.state,
 		Events:   ca.events,
@@ -306,6 +312,13 @@ func (ca *consoleApp) Cleanup() error {
 		if err := comp.Cleanup(); err != nil {
 			// Log but continue
 			fmt.Printf("Error cleaning up component %s: %v\n", comp.ID(), err)
+		}
+	}
+
+	// Cleanup terminal controller first
+	if ca.controller != nil {
+		if err := ca.controller.Cleanup(); err != nil {
+			return fmt.Errorf("failed to cleanup terminal controller: %w", err)
 		}
 	}
 

@@ -154,7 +154,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	}
 
 	// Check if debug mode is enabled
-	debug := os.Getenv("DEBUG") == "true" || os.Getenv("DEBUG") == "1"
+	debug := os.Getenv("LEDIT_DEBUG") == "true" || os.Getenv("LEDIT_DEBUG") == "1" || os.Getenv("LEDIT_DEBUG") != ""
 
 	// Set debug mode on the client
 	client.SetDebug(debug)

@@ -242,6 +242,7 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 	scanner := bufio.NewScanner(resp.Body)
 	var content strings.Builder
 	var toolCalls []api.ToolCall
+	var toolCallsMap = make(map[string]*api.ToolCall) // Track tool calls by ID for proper accumulation
 	var finishReason string
 	var usage struct {
 		PromptTokens        int     `json:"prompt_tokens"`
@@ -311,22 +312,55 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 							}
 						}
 
-						// Handle tool calls in delta
+						// Handle tool calls in delta - proper incremental parsing
 						if toolCallsData, ok := delta["tool_calls"].([]interface{}); ok {
 							for _, tcData := range toolCallsData {
 								if tc, ok := tcData.(map[string]interface{}); ok {
-									// Process tool call updates (accumulate them)
-									// This is a simplified version - full implementation would need to handle incremental updates
-									if id, ok := tc["id"].(string); ok {
-										toolCall := api.ToolCall{
-											ID:   id,
+									// Get tool call index and ID
+									var toolCallIndex int
+									var toolCallID string
+
+									if idx, ok := tc["index"].(float64); ok {
+										toolCallIndex = int(idx)
+									}
+									if id, ok := tc["id"].(string); ok && id != "" {
+										toolCallID = id
+									}
+
+									// Create a unique key for this tool call (use ID if available, otherwise use index)
+									key := toolCallID
+									if key == "" {
+										key = fmt.Sprintf("tc_%d", toolCallIndex)
+									}
+
+									// Get or create the tool call
+									if _, exists := toolCallsMap[key]; !exists {
+										toolCallsMap[key] = &api.ToolCall{
+											ID:   toolCallID,
 											Type: "function",
 										}
-										if fn, ok := tc["function"].(map[string]interface{}); ok {
-											toolCall.Function.Name, _ = fn["name"].(string)
-											toolCall.Function.Arguments, _ = fn["arguments"].(string)
+										// Initialize the function struct
+										toolCallsMap[key].Function.Arguments = "" // Will be built incrementally
+									}
+
+									currentTC := toolCallsMap[key]
+
+									// Update the tool call ID if we got it in this chunk
+									if toolCallID != "" && currentTC.ID == "" {
+										currentTC.ID = toolCallID
+									}
+
+									// Handle function data
+									if fn, ok := tc["function"].(map[string]interface{}); ok {
+										// Set function name if present
+										if name, ok := fn["name"].(string); ok && name != "" {
+											currentTC.Function.Name = name
 										}
-										toolCalls = append(toolCalls, toolCall)
+
+										// Append incremental arguments
+										if args, ok := fn["arguments"].(string); ok && args != "" {
+											currentTC.Function.Arguments += args
+										}
 									}
 								}
 							}
@@ -344,6 +378,22 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading stream: %w", err)
+	}
+
+	// Convert tool calls map to slice and validate JSON arguments
+	for _, tc := range toolCallsMap {
+		// Validate that arguments form valid JSON before adding
+		if tc.Function.Arguments != "" {
+			var testJSON interface{}
+			if json.Unmarshal([]byte(tc.Function.Arguments), &testJSON) != nil {
+				if p.debug {
+					fmt.Printf("🔍 Invalid JSON in tool call arguments for %s: %s\n", tc.Function.Name, tc.Function.Arguments)
+				}
+				// Skip malformed tool calls
+				continue
+			}
+		}
+		toolCalls = append(toolCalls, *tc)
 	}
 
 	// Set the actual cost if provided by OpenRouter

@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/history"
@@ -99,24 +98,11 @@ func (l *LogCommand) Description() string {
 	return "Show recent change history from all sessions"
 }
 
-// Execute shows the change log
+// Execute shows the change log using enhanced flow
 func (l *LogCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	// Always use \r\n for consistency in agent console (raw mode)
-	// The agent console handles all output in raw mode
-	fmt.Print("📜 Recent Change History\r\n")
-	fmt.Print("=" + fmt.Sprintf("%*s", 25, "=") + "\r\n")
-
-	// Use the non-interactive buffer version with proper formatting
-	historyText, err := history.PrintRevisionHistoryBuffer()
-	if err != nil {
-		return fmt.Errorf("failed to show change history: %w", err)
-	}
-
-	// Always convert to \r\n since we're in agent console raw mode
-	historyText = strings.ReplaceAll(historyText, "\n", "\r\n")
-
-	fmt.Print(historyText)
-	fmt.Print("\r\n💡 Use /rollback <revision-id> to revert changes\r\n")
+	// Use the enhanced log flow for better UX
+	logFlow := NewLogFlow(chatAgent)
+	return logFlow.Execute(args)
 
 	return nil
 }

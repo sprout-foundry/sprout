@@ -13,7 +13,7 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/agent_providers"
+	providers "github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/factory"
 )
 
@@ -71,7 +71,7 @@ func NewVisionProcessorWithMode(debug bool, mode string) (*VisionProcessor, erro
 		client, err = createVisionClientWithModel("google/gemma-3-27b-it")
 	case "general", "text", "content", "extract", "analyze":
 		// Use DeepSeek for fast general analysis
-		client, err = createVisionClientWithModel("deepseek-ai/DeepSeek-V3.1")
+		client, err = createVisionClientWithModel("google/gemma-3-27b-it")
 	default:
 		// Default to balanced approach (current implementation)
 		client, err = createVisionClient()

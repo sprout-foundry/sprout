@@ -62,6 +62,12 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 		return "" // Default - provider will ignore it
 	}
 
+	// Always use highest reasoning for gpt-oss models
+	currentModel := a.GetModel()
+	if strings.Contains(strings.ToLower(currentModel), "gpt-oss") {
+		return "high"
+	}
+
 	// Get the last user message
 	var lastUserMessage string
 	for i := len(messages) - 1; i >= 0; i-- {

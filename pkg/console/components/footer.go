@@ -248,6 +248,15 @@ func (fc *FooterComponent) updateRegionOnResize(width, height int) {
 	fc.SetNeedsRedraw(true)
 }
 
+// fillLineBackground ensures the entire line has the footer background color
+func (fc *FooterComponent) fillLineBackground(currentLen int, totalWidth int) {
+	if currentLen < totalWidth {
+		// Fill the rest of the line with background color
+		padding := strings.Repeat(" ", totalWidth-currentLen)
+		fc.Terminal().Write([]byte(padding))
+	}
+}
+
 // renderSeparator renders the blank separator line
 func (fc *FooterComponent) renderSeparator(region console.Region, lineOffset int) error {
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
@@ -618,11 +627,18 @@ func (fc *FooterComponent) renderStatsOnly(region console.Region, lineOffset int
 
 // Render renders the footer
 func (fc *FooterComponent) Render() error {
+	if console.DebugEnabled() {
+		fmt.Fprintf(os.Stderr, "[DEBUG] FooterComponent.Render() called\n")
+	}
+
 	// Use output mutex to prevent interleaving with agent output
 	if fc.outputMutex != nil {
 		fc.outputMutex.Lock()
 		defer fc.outputMutex.Unlock()
 	}
+
+	// Ensure we start with a clean slate - reset any existing styles
+	fc.Terminal().Write([]byte("\033[0m"))
 
 	region, err := fc.Layout().GetRegion("footer")
 	if err != nil {
@@ -670,6 +686,13 @@ func (fc *FooterComponent) Render() error {
 
 	// Mark as drawn
 	fc.SetNeedsRedraw(false)
+
+	// CRITICAL: Reset all styling to prevent bleed-through to subsequent output
+	// Use explicit SGR0 reset to ensure ALL attributes are cleared
+	fc.Terminal().Write([]byte("\033[0m"))
+
+	// Also explicitly set default foreground/background to be absolutely sure
+	fc.Terminal().Write([]byte("\033[39;49m"))
 
 	return nil
 }

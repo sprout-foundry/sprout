@@ -76,14 +76,31 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	logger.LogProcessStep(fmt.Sprintf("Retrieved staged diff (%d bytes)", len(stagedDiff)))
 
+	// Optimize diff for more efficient API usage
+	optimizer := utils.NewDiffOptimizer()
+	optimizedDiff := optimizer.OptimizeDiff(stagedDiff)
+
+	logger.LogProcessStep(fmt.Sprintf("Optimized diff: %d -> %d lines, %d bytes saved",
+		optimizedDiff.OriginalLines, optimizedDiff.OptimizedLines, optimizedDiff.BytesSaved))
+
 	// Create the unified code review service
 	service := codereview.NewCodeReviewService(cfg, logger)
 
-	// Create the review context
+	// Create the review context with optimized diff
 	ctx := &codereview.ReviewContext{
-		Diff:   stagedDiff,
+		Diff:   optimizedDiff.OptimizedContent,
 		Config: cfg,
 		Logger: logger,
+	}
+
+	// Add file summaries to context if available
+	if len(optimizedDiff.FileSummaries) > 0 {
+		var summaryInfo strings.Builder
+		summaryInfo.WriteString("\n\nLarge files optimized for review:\n")
+		for file, summary := range optimizedDiff.FileSummaries {
+			summaryInfo.WriteString(fmt.Sprintf("- %s: %s\n", file, summary))
+		}
+		ctx.Diff += summaryInfo.String()
 	}
 
 	// Create review options for staged review
@@ -102,24 +119,28 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	logger.LogProcessStep("Code review completed successfully")
 
-	// Output the review using simple, reliable formatting (same pattern as test)
-	fmt.Print("\n" + strings.Repeat("═", 50) + "\n")
-	fmt.Print("📋 AI CODE REVIEW\n")
-	fmt.Print(strings.Repeat("═", 50) + "\n\n")
+	// Output the review using simple, reliable formatting with proper raw mode line endings
+	fmt.Print("\r\n" + strings.Repeat("═", 50) + "\r\n")
+	fmt.Print("📋 AI CODE REVIEW\r\n")
+	fmt.Print(strings.Repeat("═", 50) + "\r\n\r\n")
 
-	fmt.Printf("Status: %s\n\n", strings.ToUpper(reviewResponse.Status))
+	fmt.Printf("Status: %s\r\n\r\n", strings.ToUpper(reviewResponse.Status))
 
-	fmt.Print("Feedback:\n")
-	fmt.Print(strings.Repeat("-", 30) + "\n")
-	fmt.Print(reviewResponse.Feedback + "\n")
+	fmt.Print("Feedback:\r\n")
+	fmt.Print(strings.Repeat("-", 30) + "\r\n")
+	// Convert any \n in the feedback to \r\n for raw mode compatibility
+	feedback := strings.ReplaceAll(reviewResponse.Feedback, "\n", "\r\n")
+	fmt.Print(feedback + "\r\n")
 
 	if reviewResponse.Status == "rejected" && reviewResponse.NewPrompt != "" {
-		fmt.Print("\nSuggested New Prompt:\n")
-		fmt.Print(strings.Repeat("-", 30) + "\n")
-		fmt.Print(reviewResponse.NewPrompt + "\n")
+		fmt.Print("\r\nSuggested New Prompt:\r\n")
+		fmt.Print(strings.Repeat("-", 30) + "\r\n")
+		// Convert any \n in the new prompt to \r\n for raw mode compatibility
+		newPrompt := strings.ReplaceAll(reviewResponse.NewPrompt, "\n", "\r\n")
+		fmt.Print(newPrompt + "\r\n")
 	}
 
-	fmt.Print("\n" + strings.Repeat("═", 50) + "\n")
+	fmt.Print("\r\n" + strings.Repeat("═", 50) + "\r\n")
 
 	return nil
 }

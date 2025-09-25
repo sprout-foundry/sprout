@@ -29,6 +29,11 @@ type StreamingFormatter struct {
 	maxBufferSize  int
 	finalized      bool // Prevent double finalization
 
+	// Think tag handling
+	inThinkTag         bool
+	thinkBuffer        strings.Builder
+	conversationBuffer strings.Builder // Store clean conversation for post-processing
+
 	// Custom output function (if set, replaces fmt.Print calls)
 	outputFunc func(string)
 }
@@ -121,8 +126,14 @@ func (sf *StreamingFormatter) Write(content string) {
 	// Filter out XML-style tool calls and completion signals before adding to buffer
 	filteredContent := sf.filterXMLToolCalls(content)
 
-	// Add filtered content to buffer
-	sf.buffer.WriteString(filteredContent)
+	// Process think tags for better display
+	processedContent := sf.processThinkTags(filteredContent)
+
+	// Add original content to conversation buffer for post-processing
+	sf.conversationBuffer.WriteString(filteredContent)
+
+	// Add processed content to buffer
+	sf.buffer.WriteString(processedContent)
 
 	// Check if we should flush
 	shouldFlush := false
@@ -532,4 +543,80 @@ func (sf *StreamingFormatter) filterXMLToolCalls(content string) string {
 	}
 
 	return filtered
+}
+
+// processThinkTags handles <think> tags in streaming content
+func (sf *StreamingFormatter) processThinkTags(content string) string {
+	if !strings.Contains(content, "<think>") && !strings.Contains(content, "</think>") {
+		return content
+	}
+
+	result := strings.Builder{}
+	i := 0
+
+	for i < len(content) {
+		if i < len(content)-7 && content[i:i+7] == "<think>" {
+			// Start of think tag - switch to think mode
+			sf.inThinkTag = true
+			result.WriteString(color.New(color.FgYellow, color.Faint).Sprint("💭 "))
+			i += 7
+		} else if i < len(content)-8 && content[i:i+8] == "</think>" {
+			// End of think tag - switch back to normal mode
+			sf.inThinkTag = false
+			if sf.thinkBuffer.Len() > 0 {
+				thinkContent := sf.thinkBuffer.String()
+				sf.thinkBuffer.Reset()
+				// Style think content differently
+				styledThink := color.New(color.FgYellow, color.Faint).Sprint(thinkContent)
+				result.WriteString(styledThink)
+				result.WriteString(color.New(color.Reset).Sprint("\n"))
+			}
+			i += 8
+		} else if sf.inThinkTag {
+			// Inside think tag - buffer the content
+			sf.thinkBuffer.WriteByte(content[i])
+			i++
+		} else {
+			// Normal content
+			result.WriteByte(content[i])
+			i++
+		}
+	}
+
+	return result.String()
+}
+
+// GetConversationBuffer returns the clean conversation buffer for post-processing
+func (sf *StreamingFormatter) GetConversationBuffer() string {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+	return sf.conversationBuffer.String()
+}
+
+// RewriteConversationOnComplete rewrites the conversation buffer after completion
+func (sf *StreamingFormatter) RewriteConversationOnComplete(originalPrompt string) {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+
+	if !sf.finalized {
+		return
+	}
+
+	// Get the complete conversation
+	conversation := sf.conversationBuffer.String()
+
+	// Remove think tags from the final conversation for cleaner display
+	cleanConversation := sf.removeThinkTags(conversation)
+
+	// TODO: Implement actual buffer rewrite logic
+	// This would require coordination with the console buffer system
+	// For now, we prepare the clean content for potential use
+	_ = cleanConversation // Prevent unused variable error until full implementation
+}
+
+// removeThinkTags completely removes think tags and their content
+func (sf *StreamingFormatter) removeThinkTags(content string) string {
+	// Remove think tag blocks completely
+	thinkRegex := regexp.MustCompile(`<think>.*?</think>`)
+	return thinkRegex.ReplaceAllString(content, "")
 }

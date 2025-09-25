@@ -2,11 +2,13 @@ package components
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/fatih/color"
 )
 
@@ -177,18 +179,31 @@ func (sf *StreamingFormatter) Write(content string) {
 	}
 
 	if shouldFlush {
+		if console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] StreamingFormatter: Flushing buffer with %d chars\n", sf.buffer.Len())
+		}
 		sf.flush()
+	} else {
+		if console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] StreamingFormatter: Not flushing yet, buffer has %d chars\n", sf.buffer.Len())
+		}
 	}
 }
 
 // flush outputs the buffered content
 func (sf *StreamingFormatter) flush() {
 	if sf.buffer.Len() == 0 {
+		if console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] StreamingFormatter.flush: buffer empty, nothing to flush\n")
+		}
 		return
 	}
 
 	content := sf.buffer.String()
 	sf.buffer.Reset()
+	if console.DebugEnabled() {
+		fmt.Fprintf(os.Stderr, "[DEBUG] StreamingFormatter.flush: flushing %d chars\n", len(content))
+	}
 
 	// Process the content line by line for better formatting
 	lines := strings.Split(content, "\n")
@@ -217,6 +232,9 @@ func (sf *StreamingFormatter) flush() {
 			// Incomplete line - buffer it for proper formatting
 			sf.lineBuffer.WriteString(line)
 			sf.lastWasNewline = false
+
+			// Don't output partial content immediately - wait for a complete line
+			// This prevents interleaving issues with tool logs
 		}
 	}
 

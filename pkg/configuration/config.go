@@ -43,6 +43,9 @@ type Config struct {
 	MaxConcurrentRequests int `json:"max_concurrent_requests,omitempty"`
 	RequestDelayMs        int `json:"request_delay_ms,omitempty"`
 
+	// API Timeout Configuration (in seconds)
+	APITimeouts *APITimeoutConfig `json:"api_timeouts,omitempty"`
+
 	// Security Configuration
 	EnableSecurityChecks bool `json:"enable_security_checks,omitempty"`
 
@@ -84,6 +87,14 @@ type CodeStyleConfig struct {
 	ErrorHandling            string `json:"error_handling"`
 	TestingApproach          string `json:"testing_approach"`
 	Modularity               string `json:"modularity"`
+}
+
+// APITimeoutConfig represents timeout settings for API calls
+type APITimeoutConfig struct {
+	ConnectionTimeoutSec int `json:"connection_timeout_sec,omitempty"`  // Time to establish connection (default: 30)
+	FirstChunkTimeoutSec int `json:"first_chunk_timeout_sec,omitempty"` // Time to receive first response (default: 60)
+	ChunkTimeoutSec      int `json:"chunk_timeout_sec,omitempty"`       // Max time between streaming chunks (default: 30)
+	OverallTimeoutSec    int `json:"overall_timeout_sec,omitempty"`     // Total request timeout (default: 600)
 }
 
 // MCPConfig moved to pkg/mcp package for consolidation
@@ -137,6 +148,12 @@ func NewConfig() *Config {
 			QuoteStyle:      "double",
 			LineEndings:     "unix",
 			ImportStyle:     "grouped",
+		},
+		APITimeouts: &APITimeoutConfig{
+			ConnectionTimeoutSec: 30,
+			FirstChunkTimeoutSec: 60,
+			ChunkTimeoutSec:      30,
+			OverallTimeoutSec:    600, // 10 minutes
 		},
 	}
 }

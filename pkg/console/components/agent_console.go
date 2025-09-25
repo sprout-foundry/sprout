@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
@@ -16,6 +14,7 @@ import (
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/fatih/color"
 	"golang.org/x/term"
 )
 
@@ -62,11 +61,6 @@ type AgentConsole struct {
 	ctrlCCount    int
 	lastCtrlC     time.Time
 
-	// Resize handling
-	lastResize                        time.Time
-	lastResizeWidth, lastResizeHeight int
-	resizeMutex                       sync.Mutex
-
 	// Concurrent processing state
 	isProcessing    bool
 	processingMutex sync.RWMutex
@@ -80,6 +74,9 @@ type AgentConsole struct {
 	streamingStartTime  time.Time
 	streamingTokenCount int
 	isStreaming         bool
+
+	// UI coordination for throttled updates
+	uiCoordinator *UICoordinator
 }
 
 // NewAgentConsole creates a new agent console
@@ -129,6 +126,10 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 	// Create streaming formatter
 	ac.streamingFormatter = NewStreamingFormatter(&ac.outputMutex)
 	ac.streamingFormatter.SetConsoleBuffer(ac.consoleBuffer)
+
+	// Create UI coordinator for throttled footer updates
+	ac.uiCoordinator = NewUICoordinator(footer, ac.Terminal())
+	ac.uiCoordinator.Start()
 
 	// Set custom output function to use our safe print method
 	ac.streamingFormatter.SetOutputFunc(func(text string) {
@@ -268,21 +269,13 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 	// Initialize git and path info for footer
 	ac.initializeFooterInfo()
 
-	// Set up signal handling to intercept Ctrl+C
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	// Subscribe to terminal interrupt events from controller
+	deps.Events.Subscribe("terminal.interrupted", func(event console.Event) error {
+		ac.handleCtrlC()
+		return nil
+	})
 
-	// Handle signals in background
-	go func() {
-		for range sigChan {
-			// When agent is processing, interrupt it
-			// When just at prompt, handle through input component
-			ac.handleCtrlC()
-		}
-	}()
-
-	// Start resize polling as a fallback to terminal events
-	go ac.resizeFallbackLoop()
+	// Resize handling is now managed by TerminalController via events
 
 	return nil
 }
@@ -305,13 +298,13 @@ func (ac *AgentConsole) Start() error {
 	// Display welcome message
 	ac.showWelcomeMessage()
 
-	// Initial footer render
-	ac.updateFooter()
-
-	// Show initial help about the new features
+	// Show initial help about the new features (BEFORE footer)
 	ac.safePrint("\n💡 You can now type while the agent is processing!\n")
 	ac.safePrint("   Press Enter to send new prompts immediately, even during agent responses.\n")
 	ac.safePrint("   Use Ctrl+C to interrupt the agent.\n\n")
+
+	// Initial footer render (MUST be last)
+	ac.updateFooter()
 
 	// Main event loop - non-blocking
 	ctx := context.Background()
@@ -369,7 +362,7 @@ func (ac *AgentConsole) processInput(input string) error {
 	}
 
 	// Mark as processing
-	// Lock output to prevent interleaving
+	// Lock output to prevent interleaving (brief lock for initial setup)
 	ac.outputMutex.Lock()
 
 	// Clear the current input line and move to a new line for clean output
@@ -378,15 +371,28 @@ func (ac *AgentConsole) processInput(input string) error {
 	// Show processing indicator
 	ac.safePrint("🔄 Processing your request...\n")
 
+	// CRITICAL: Release mutex before streaming starts to prevent deadlock
+	// The streaming formatter has its own mutex coordination
 	ac.outputMutex.Unlock()
 
 	// CRITICAL FIX: Ensure cursor is positioned correctly for streaming output
 	// processInput() does its own output which might affect cursor position
 	ac.repositionCursorToContentArea()
 
+	// Store the original prompt for potential conversation rewrite
+	originalPrompt := input
+	_ = originalPrompt // TODO: Use for conversation rewrite
+
 	// Set up streaming with our formatter
 	// Reset formatter for new session
 	ac.streamingFormatter.Reset()
+	ac.isStreaming = true
+	if ac.uiCoordinator != nil {
+		ac.uiCoordinator.SetStreaming(true)
+	}
+	if console.DebugEnabled() {
+		console.DebugPrintf("Starting streaming mode\n")
+	}
 
 	// Check if agent is properly initialized
 	if ac.agent == nil {
@@ -394,11 +400,39 @@ func (ac *AgentConsole) processInput(input string) error {
 		return nil
 	}
 
+	// Track last streaming activity for timeout reset
+	var lastStreamingActivity time.Time
+
 	// Enable streaming with our formatter callback for all providers
+	// Keep synchronous but add deadlock detection
+	if console.DebugEnabled() {
+		console.DebugPrintf("Setting up streaming callback for provider=%s\n", ac.agent.GetProvider())
+	}
 	ac.agent.EnableStreaming(func(content string) {
-		ac.streamingFormatter.Write(content)
-		// Update TPS estimation during streaming
-		ac.updateStreamingTPS(content)
+		// Try to get the output mutex with a timeout to detect deadlocks
+		done := make(chan bool, 1)
+		go func() {
+			// Debug: log streaming content
+			if len(content) > 0 {
+				if console.DebugEnabled() {
+					fmt.Fprintf(os.Stderr, "[DEBUG] Streaming content: %d chars, first 20: %q\n", len(content), content[:min(20, len(content))])
+				}
+			}
+			ac.streamingFormatter.Write(content)
+			// Update TPS estimation during streaming
+			ac.updateStreamingTPS(content)
+			// Update last activity time when we receive content
+			lastStreamingActivity = time.Now()
+			done <- true
+		}()
+
+		// Wait for completion or timeout
+		select {
+		case <-done:
+			// Success
+		case <-time.After(80 * time.Second):
+			fmt.Printf("🚨 DEADLOCK DETECTED: Streaming callback blocked for 80+ seconds\n")
+		}
 	})
 
 	// Set flush callback to force flush buffered content when needed
@@ -423,8 +457,74 @@ func (ac *AgentConsole) processInput(input string) error {
 		ac.resetStreamingTPS()
 	}()
 
-	// Process synchronously to avoid formatting issues
-	response, err := ac.agent.ProcessQueryWithContinuity(input)
+	// Process with timeout detection to help diagnose hanging
+	type queryResult struct {
+		response string
+		err      error
+	}
+
+	resultChan := make(chan queryResult, 1)
+	go func() {
+		if console.DebugEnabled() {
+			console.DebugPrintf("Calling ProcessQueryWithContinuity\n")
+		}
+		response, err := ac.agent.ProcessQueryWithContinuity(input)
+		if console.DebugEnabled() {
+			console.DebugPrintf("ProcessQueryWithContinuity returned: err=%v, response len=%d\n", err, len(response))
+		}
+		resultChan <- queryResult{response: response, err: err}
+	}()
+
+	// Wait for result with progress-aware timeout detection
+	// Reset timeout when streaming content is received
+	timeout := 15 * time.Minute // Longer base timeout for complex operations
+	lastActivity := time.Now()
+	activityTicker := time.NewTicker(30 * time.Second)
+	defer activityTicker.Stop()
+
+	var response string
+	var err error
+
+	for {
+		select {
+		case result := <-resultChan:
+			response = result.response
+			err = result.err
+			if console.DebugEnabled() {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Got result from ProcessQueryWithContinuity, going to processComplete\n")
+			}
+			goto processComplete
+
+		case <-activityTicker.C:
+			// Check if we've had recent streaming activity
+			if !lastStreamingActivity.IsZero() && lastStreamingActivity.After(lastActivity) {
+				// Reset timeout - we've received streaming content
+				lastActivity = lastStreamingActivity
+			} else if ac.streamingFormatter.HasProcessedContent() {
+				// Fallback: reset timeout if formatter shows any content processed
+				lastActivity = time.Now()
+			}
+
+			// Check if we've exceeded timeout without any activity
+			if time.Since(lastActivity) > timeout {
+				err = fmt.Errorf("query processing timeout after %v with no streaming activity - this may indicate a hanging issue", timeout)
+				ac.safePrint("\n🚨 TIMEOUT: No processing activity for %v\n", timeout)
+				ac.safePrint("  This may indicate a deadlock or very complex operation\n")
+				ac.safePrint("  Try breaking down the request into smaller parts\n")
+				goto processComplete
+			}
+		}
+	}
+
+processComplete:
+	// End streaming mode
+	ac.isStreaming = false
+	if ac.uiCoordinator != nil {
+		ac.uiCoordinator.SetStreaming(false)
+	}
+	if console.DebugEnabled() {
+		console.DebugPrintf("Ending streaming mode\n")
+	}
 
 	// Force flush any remaining streaming content immediately after processing
 	// This ensures all narrative text is displayed before final output processing
@@ -475,11 +575,20 @@ func (ac *AgentConsole) processInput(input string) error {
 
 		// Print summary if we used tokens
 		if ac.agent.GetTotalTokens() > 0 {
+			// Call conversation rewrite functionality for better formatting
+			if ac.streamingFormatter.HasProcessedContent() {
+				ac.streamingFormatter.RewriteConversationOnComplete(originalPrompt)
+			}
+
 			// Check if we need spacing before summary
 			if ac.streamingFormatter.HasProcessedContent() && !ac.streamingFormatter.EndedWithNewline() {
 				ac.safePrint("\n")
 			}
 			ac.safePrint("\n")
+
+			// Add a subtle separator before the summary to improve readability
+			separator := color.New(color.FgHiBlack).Sprint("─────────────────────────────────────────────────\n")
+			ac.safePrint("%s", separator)
 			ac.agent.PrintConciseSummary()
 		}
 	}
@@ -597,8 +706,8 @@ func (ac *AgentConsole) handleCommand(input string) error {
 	if ac.commandRegistry != nil {
 		if cmdHandler, exists := ac.commandRegistry.GetCommand(cmd); exists {
 			// Check if this is an interactive command that needs passthrough mode
-			// Note: log command now uses buffer output, so it's not interactive
-			isInteractiveCommand := cmd == "models" || cmd == "mcp" || cmd == "commit" || cmd == "shell" || cmd == "providers"
+			// Interactive commands use dropdowns and need raw mode control
+			isInteractiveCommand := cmd == "models" || cmd == "mcp" || cmd == "commit" || cmd == "shell" || cmd == "providers" || cmd == "memory" || cmd == "log"
 
 			if isInteractiveCommand {
 				// Enable passthrough mode for interactive command
@@ -664,6 +773,9 @@ func (ac *AgentConsole) handleAutocomplete(text string, pos int) []string {
 }
 
 func (ac *AgentConsole) updateFooter() {
+	if console.DebugEnabled() {
+		console.DebugPrintf("updateFooter called\n")
+	}
 	if ac.footer == nil {
 		return
 	}
@@ -687,12 +799,30 @@ func (ac *AgentConsole) updateFooter() {
 	if ac.agent != nil {
 		actualTotalTokens = ac.agent.GetTotalTokens()
 	}
-	ac.footer.UpdateStats(model, provider, actualTotalTokens, ac.totalCost, iteration, contextTokens, maxContextTokens)
 
-	// Force render to ensure tokens update is shown
-	if err := ac.footer.Render(); err != nil {
-		// Non-fatal, log if debug
-		fmt.Fprintf(os.Stderr, "Warning: Footer render failed: %v\n", err)
+	// Use UI coordinator for throttled updates during streaming
+	if ac.uiCoordinator != nil {
+		ac.uiCoordinator.QueueFooterUpdate(FooterUpdate{
+			Model:            model,
+			Provider:         provider,
+			Tokens:           actualTotalTokens,
+			Cost:             ac.totalCost,
+			Iteration:        iteration,
+			ContextTokens:    contextTokens,
+			MaxContextTokens: maxContextTokens,
+		})
+	} else {
+		// Fallback to direct update if coordinator not available
+		ac.footer.UpdateStats(model, provider, actualTotalTokens, ac.totalCost, iteration, contextTokens, maxContextTokens)
+
+		// Force render to ensure tokens update is shown
+		if console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Calling footer.Render()\n")
+		}
+		if err := ac.footer.Render(); err != nil {
+			// Non-fatal, log if debug
+			fmt.Fprintf(os.Stderr, "Warning: Footer render failed: %v\n", err)
+		}
 	}
 }
 
@@ -847,10 +977,14 @@ func (ac *AgentConsole) setupTerminal() error {
 	if contentRegion, err := ac.autoLayoutManager.GetContentRegion(); err == nil {
 		ac.contentRegionTop = contentRegion.Y
 		ac.currentContentLine = 0
+		if console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Content region setup: top=%d, currentContentLine=0\n", contentRegion.Y)
+		}
 	}
 
 	// DEBUG: Test that content goes to the right place
-	ac.writeTextWithRawModeFix("TEST: This should appear at top of content area\n")
+	// ac.writeTextWithRawModeFix("TEST: This should appear at top of content area\n")
+	// Commented out - this test message might be interfering with actual content
 
 	// Configure input manager to use layout manager for positioning
 	ac.inputManager.SetLayoutManager(ac.autoLayoutManager)
@@ -1017,6 +1151,11 @@ func (ac *AgentConsole) cleanup() {
 		ac.inputManager.Stop()
 	}
 
+	// Stop UI coordinator
+	if ac.uiCoordinator != nil {
+		ac.uiCoordinator.Stop()
+	}
+
 	// Reset scroll region
 	ac.Terminal().ResetScrollRegion()
 
@@ -1124,6 +1263,11 @@ func (ac *AgentConsole) writeTextWithRawModeFix(text string) {
 func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 	content := fmt.Sprintf(format, args...)
 
+	// Debug output
+	if console.DebugEnabled() && len(content) > 0 && content != "\n" {
+		console.DebugPrintf("safePrint called with %d chars\n", len(content))
+	}
+
 	// Filter out completion signals that should not be displayed
 	content = ac.filterCompletionSignals(content)
 
@@ -1141,43 +1285,79 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 		// If current content line is 0, we're starting fresh - position in content area
 		if ac.currentContentLine == 0 {
 			top, _ := ac.autoLayoutManager.GetScrollRegion()
+			if console.DebugEnabled() {
+				console.DebugPrintf("First output - positioning at top of scroll region: line %d\n", top)
+			}
 			ac.Terminal().MoveCursor(1, top)
-			// Mark that we've started writing content (even if no newlines)
+			// Mark that we've started writing content
 			ac.currentContentLine = 1
+		} else {
+			// For subsequent outputs, we need to check if we should reposition cursor
+			// This handles the case where footer updates might have moved the cursor
+			top, bottom := ac.autoLayoutManager.GetScrollRegion()
+			expectedLine := top + ac.currentContentLine - 1
+
+			// If we're within the scroll region, make sure cursor is at the right position
+			if expectedLine <= bottom {
+				if console.DebugEnabled() {
+					console.DebugPrintf("Repositioning cursor to line %d (top=%d, currentContentLine=%d)\n",
+						expectedLine, top, ac.currentContentLine)
+				}
+				ac.Terminal().MoveCursor(1, expectedLine)
+			}
 		}
 
 		// Write content - this will advance cursor naturally
+		if console.DebugEnabled() {
+			console.DebugPrintf("Writing content at currentContentLine=%d\n", ac.currentContentLine)
+		}
+
+		// Write the content
 		ac.writeTextWithRawModeFix(content)
 
 		// Update our tracking of content lines for additional newlines
 		newlines := strings.Count(content, "\n")
 		ac.currentContentLine += newlines
 
+		// Debug: Log actual cursor position tracking
+		if console.DebugEnabled() {
+			console.DebugPrintf("After writing content: newlines=%d, new currentContentLine=%d\n",
+				newlines, ac.currentContentLine)
+		}
+
 		// Safeguard: Ensure currentContentLine doesn't exceed scroll region
 		// This prevents writing below footer during race conditions
-		_, bottom := ac.autoLayoutManager.GetScrollRegion()
-		top, _ := ac.autoLayoutManager.GetScrollRegion()
+		top, bottom := ac.autoLayoutManager.GetScrollRegion()
 		maxContentLine := bottom - top + 1
+
+		// Debug scroll region bounds
+		if console.DebugEnabled() {
+			console.DebugPrintf("Scroll region: %d-%d, maxContentLine=%d, currentContentLine=%d\n",
+				top, bottom, maxContentLine, ac.currentContentLine)
+		}
+
 		if ac.currentContentLine > maxContentLine {
+			if console.DebugEnabled() {
+				console.DebugPrintf("WARNING: currentContentLine exceeds scroll region!\n")
+			}
 			ac.currentContentLine = maxContentLine
+			// CRITICAL: When we're at the bottom of the scroll region, we need to ensure
+			// the cursor is actually positioned at the bottom line so that the terminal
+			// will scroll properly when more content is added
+			ac.Terminal().MoveCursor(1, bottom)
+
+			// Also ensure scroll region is properly set to prevent overflow
+			ac.Terminal().SetScrollRegion(top, bottom)
+			if console.DebugEnabled() {
+				console.DebugPrintf("Repositioned cursor to bottom of scroll region (line %d)\n", bottom)
+			}
 		}
 	}
 }
 
 // OnResize handles terminal resize events
 func (ac *AgentConsole) OnResize(width, height int) {
-	// Debounce rapid resize events to prevent overlapping redraws
-	ac.resizeMutex.Lock()
-	now := time.Now()
-	if now.Sub(ac.lastResize) < 200*time.Millisecond &&
-		width == ac.lastResizeWidth && height == ac.lastResizeHeight {
-		ac.resizeMutex.Unlock()
-		return // Skip this resize, same dimensions and too soon after the last one
-	}
-	ac.lastResize = now
-	ac.lastResizeWidth = width
-	ac.lastResizeHeight = height
-	ac.resizeMutex.Unlock()
+	// Terminal controller now handles debouncing, so we can process immediately
 
 	// Lock output mutex to prevent interleaving with agent output
 	ac.outputMutex.Lock()
@@ -1207,6 +1387,41 @@ func (ac *AgentConsole) OnResize(width, height int) {
 	// Only redraw buffer if absolutely necessary - this can cause display issues during active output
 	// The layout and cursor repositioning below should handle most resize cases without full redraw
 	contentHeight := bottom - top + 1
+
+	// Queue a buffer redraw through the UI coordinator
+	// This ensures proper serialization with other UI updates
+	if ac.uiCoordinator != nil && ac.consoleBuffer != nil && ac.currentContentLine > 0 {
+		// Create a closure that captures the necessary context
+		redrawCallback := func(height int) error {
+			// Get fresh scroll region in case it changed
+			top, _ := ac.autoLayoutManager.GetScrollRegion()
+
+			// Create a custom redraw that respects our scroll region
+			lines := ac.consoleBuffer.GetVisibleLines(height)
+
+			// Clear and redraw the content area
+			for i := 0; i < height && i < len(lines); i++ {
+				ac.Terminal().MoveCursor(1, top+i)
+				ac.Terminal().ClearLine()
+				// Use writeTextWithRawModeFix to handle raw mode conversion
+				ac.writeTextWithRawModeFix(lines[i])
+				if i < len(lines)-1 {
+					ac.writeTextWithRawModeFix("\n")
+				}
+			}
+
+			// Clear any remaining lines in the content area
+			for i := len(lines); i < height; i++ {
+				ac.Terminal().MoveCursor(1, top+i)
+				ac.Terminal().ClearLine()
+			}
+
+			return nil
+		}
+
+		// Queue the redraw - it will be skipped if streaming is active
+		ac.uiCoordinator.QueueRedraw(contentHeight, redrawCallback)
+	}
 
 	// CRITICAL FIX: Reposition cursor and currentContentLine after resize
 	// This ensures that ongoing agent output continues at the correct location
@@ -1238,41 +1453,6 @@ func (ac *AgentConsole) OnResize(width, height int) {
 	}
 
 	// Note: Cursor will be repositioned by the input component when it redraws
-}
-
-// resizeFallbackLoop provides fallback resize detection via polling
-// This complements the terminal event-based resize handling
-func (ac *AgentConsole) resizeFallbackLoop() {
-	ticker := time.NewTicker(100 * time.Millisecond) // Match InputManager polling speed for responsive resize
-	defer ticker.Stop()
-
-	var lastWidth, lastHeight int
-
-	// Get initial size
-	if w, h, err := ac.Terminal().GetSize(); err == nil {
-		lastWidth, lastHeight = w, h
-	}
-
-	for {
-		select {
-		case <-ac.ctx.Done():
-			return
-		case <-ticker.C:
-			if width, height, err := ac.Terminal().GetSize(); err == nil {
-				if width != lastWidth || height != lastHeight {
-					// Size changed - trigger resize handling
-					// Use a small delay to debounce rapid resize events
-					time.Sleep(50 * time.Millisecond)
-
-					// Check if size is still different (debouncing)
-					if w, h, err := ac.Terminal().GetSize(); err == nil && (w != lastWidth || h != lastHeight) {
-						ac.OnResize(w, h)
-						lastWidth, lastHeight = w, h
-					}
-				}
-			}
-		}
-	}
 }
 
 // finalizeStreamingPosition ensures cursor is properly positioned after streaming completes
@@ -1477,13 +1657,17 @@ func (ac *AgentConsole) restoreLayoutAfterPassthrough() {
 	// Re-establish scroll region
 	if err := ac.Terminal().SetScrollRegion(top, bottom); err != nil {
 		// Non-fatal, but log for debugging
-		fmt.Fprintf(os.Stderr, "[DEBUG] Failed to restore scroll region after passthrough: %v\n", err)
+		if console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Failed to restore scroll region after passthrough: %v\n", err)
+		}
 	}
 
 	// Re-render footer to ensure it's properly positioned
 	if err := ac.footer.Render(); err != nil {
 		// Non-fatal
-		fmt.Fprintf(os.Stderr, "[DEBUG] Failed to render footer after passthrough: %v\n", err)
+		if console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Failed to render footer after passthrough: %v\n", err)
+		}
 	}
 
 	// Position cursor in content area for next output

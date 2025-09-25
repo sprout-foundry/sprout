@@ -42,6 +42,16 @@ func HasActiveChangesForRevision(revisionID string) (bool, error) {
 	return false, nil
 }
 
+// GetRevisionGroups returns all revision groups sorted by timestamp (most recent first)
+func GetRevisionGroups() ([]RevisionGroup, error) {
+	changes, err := fetchAllChanges()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch changes: %w", err)
+	}
+
+	return groupChangesByRevision(changes), nil
+}
+
 // RevertChangeByRevisionID reverts all changes associated with a given revision ID.
 func RevertChangeByRevisionID(revisionID string) error {
 	changes, err := fetchAllChanges()

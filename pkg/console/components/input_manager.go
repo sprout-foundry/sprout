@@ -485,6 +485,10 @@ func (im *InputManager) notifyLayoutOfInputHeight(newHeight int) {
 
 // showInputField displays the input field above the footer with proper multi-line handling
 func (im *InputManager) showInputField() {
+	// Only show debug messages if LEDIT_DEBUG is set
+	if os.Getenv("LEDIT_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] InputManager.showInputField called\n")
+	}
 	if !im.running || im.redrawing {
 		return
 	}

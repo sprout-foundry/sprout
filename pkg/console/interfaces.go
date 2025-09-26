@@ -63,6 +63,8 @@ type TerminalManager interface {
 	ClearLine() error
 	ClearToEndOfLine() error
 	ClearToEndOfScreen() error
+	EnterAltScreen() error
+	ExitAltScreen() error
 
 	// Scroll region support
 	SetScrollRegion(top, bottom int) error

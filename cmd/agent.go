@@ -3,11 +3,13 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	agent_api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -98,7 +100,7 @@ func runInteractiveMode(chatAgent *agent.Agent) error {
 	config := &console.Config{
 		RawMode:      true,
 		MouseEnabled: false,
-		AltScreen:    false,
+		AltScreen:    true, // Use alternate screen buffer like vim
 		Components: []console.ComponentConfig{
 			{
 				ID:      "agent-console",
@@ -120,33 +122,109 @@ func runInteractiveMode(chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to add agent console: %w", err)
 	}
 
+	// Register cleanup to ensure terminal is restored
+	console.RegisterCleanup(func() error {
+		return app.Stop()
+	})
+
+	// Ensure cleanup happens on panic
+	defer console.RunCleanup()
+
 	// Run the app
-	return app.Run()
+	err := app.Run()
+
+	// Check if user requested quit
+	if errors.Is(err, components.ErrUserQuit) {
+		return nil // Normal exit
+	}
+
+	return err
 }
 
 // executeDirectAgentCommand executes an agent command directly (like coder does)
 func executeDirectAgentCommand(chatAgent *agent.Agent, userIntent string) error {
-	// Enable streaming for OpenAI to test usage data with stream_options
-	if chatAgent.GetProvider() == "openai" {
-		chatAgent.EnableStreaming(func(content string) {
-			fmt.Print(content)
-		})
-		defer chatAgent.DisableStreaming()
+	// Create CI output handler - it handles both CI and direct execution
+	outputHandler := console.NewCIOutputHandler(os.Stdout)
+
+	// Set up stats callback to update CI handler
+	chatAgent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
+		outputHandler.UpdateMetrics(
+			totalTokens,
+			chatAgent.GetCurrentContextTokens(),
+			chatAgent.GetMaxContextTokens(),
+			chatAgent.GetCurrentIteration(),
+			totalCost,
+		)
+	})
+
+	// Mark as CI mode if detected to adjust formatting
+	if outputHandler.IsCI() {
+		os.Setenv("LEDIT_CI_MODE", "1")
+		defer os.Unsetenv("LEDIT_CI_MODE")
 	}
 
-	// Process the query directly with the agent using continuity (like coder does)
+	// Show initial message
+	outputHandler.WriteString("🔄 Processing query...\n\n")
+
+	// Start progress ticker for CI mode
+	var progressTicker *time.Ticker
+	var progressDone chan bool
+	if outputHandler.IsCI() {
+		progressTicker = time.NewTicker(2 * time.Second)
+		progressDone = make(chan bool)
+
+		go func() {
+			for {
+				select {
+				case <-progressTicker.C:
+					outputHandler.PrintProgress()
+				case <-progressDone:
+					return
+				}
+			}
+		}()
+	}
+
+	// Set up streaming callback that uses the output handler's filtering
+	chatAgent.EnableStreaming(func(content string) {
+		outputHandler.Write([]byte(content))
+	})
+	defer chatAgent.DisableStreaming()
+
+	// Also ensure we flush any remaining content at the end
+	defer func() {
+		// Force a final newline if needed
+		outputHandler.Write([]byte("\n"))
+	}()
+
+	// Process the query
 	response, err := chatAgent.ProcessQueryWithContinuity(userIntent)
+
+	// Stop progress ticker if running
+	if progressTicker != nil {
+		progressTicker.Stop()
+		close(progressDone)
+	}
+
 	if err != nil {
 		return fmt.Errorf("agent processing failed: %w", err)
 	}
 
-	// Only print response if non-empty (streaming mode returns empty)
-	if response != "" {
-		fmt.Printf("\n🎯 Agent Response:\n%s\n", response)
+	// In streaming mode, response is usually empty since content was streamed
+	// Only print if we have additional content (and it's not just the completion signal)
+	if response != "" && !strings.Contains(response, "[[TASK_COMPLETE]]") {
+		outputHandler.WriteString("\n" + response + "\n")
 	}
 
-	// Print cost and token summary
-	chatAgent.PrintConciseSummary()
+	// Print summary
+	outputHandler.PrintSummary()
+
+	// Also print agent's concise summary for backwards compatibility
+	// (Skip in CI mode since we already have a summary)
+	if !outputHandler.IsCI() {
+		chatAgent.PrintConciseSummary()
+	}
+
 	return nil
 }
 
@@ -520,10 +598,14 @@ Examples:
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")
 		}
 
-		// Check if we're in a CI environment
+		// Check if we're in a CI environment or non-interactive mode
 		isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
 
-		isInteractive := (len(args) == 0 || enableUI) && !isCI
+		// Check if stdin is a terminal (not piped)
+		stdinIsTerminal := term.IsTerminal(int(os.Stdin.Fd()))
+
+		// We're interactive only if we have a terminal, no args (or UI flag), and not in CI
+		isInteractive := (len(args) == 0 || enableUI) && !isCI && stdinIsTerminal
 		var userIntent string
 
 		if isInteractive {
@@ -546,9 +628,25 @@ Examples:
 			}
 			return runInteractiveMode(chatAgent)
 		} else {
-			// Direct mode - execute single command or handle CI without args
+			// Direct mode - execute single command or handle CI/piped input without args
 			if len(args) == 0 {
-				// In CI with no args, show welcome message and exit gracefully
+				// Check if we have piped input
+				if !stdinIsTerminal {
+					// Read from stdin
+					scanner := bufio.NewScanner(os.Stdin)
+					if scanner.Scan() {
+						userIntent = scanner.Text()
+						err := executeDirectAgentCommand(chatAgent, userIntent)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "\n❌ Error: %v\n", err)
+							os.Exit(1)
+						}
+						fmt.Println("✅ Task completed successfully")
+						return nil
+					}
+				}
+
+				// In CI with no args and no piped input, show welcome message and exit gracefully
 				fmt.Println("Welcome to ledit! 🤖")
 				fmt.Println("Agent initialized successfully in CI environment.")
 				fmt.Println("Use 'ledit agent \"your query\"' to execute commands.")

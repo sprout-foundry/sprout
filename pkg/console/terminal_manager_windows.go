@@ -208,6 +208,9 @@ func (tm *terminalManager) OnResize(callback func(width, height int)) {
 
 // Cleanup cleans up terminal resources
 func (tm *terminalManager) Cleanup() error {
+	// Exit alternate screen first (before locking)
+	tm.ExitAltScreen()
+
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
@@ -316,5 +319,19 @@ func (tm *terminalManager) WriteAt(x, y int, data []byte) error {
 // Flush flushes any buffered output
 func (tm *terminalManager) Flush() error {
 	// For now, we don't buffer output
+	return nil
+}
+
+// EnterAltScreen enters the alternate screen buffer
+func (tm *terminalManager) EnterAltScreen() error {
+	// Windows Terminal supports alternate screen buffer
+	fmt.Fprint(tm.writer, "\x1b[?1049h")
+	return nil
+}
+
+// ExitAltScreen exits the alternate screen buffer
+func (tm *terminalManager) ExitAltScreen() error {
+	// Windows Terminal supports alternate screen buffer
+	fmt.Fprint(tm.writer, "\x1b[?1049l")
 	return nil
 }

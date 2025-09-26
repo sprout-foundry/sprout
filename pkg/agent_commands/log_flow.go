@@ -290,8 +290,8 @@ func (lf *LogFlow) showCurrentSessionChanges() error {
 
 // showChangeStatistics displays statistics about all changes
 func (lf *LogFlow) showChangeStatistics() error {
-	fmt.Printf("\r\n📊 Change Statistics\r\n")
-	fmt.Printf("=" + strings.Repeat("=", 22) + "\r\n")
+	fmt.Print("\r\n📊 Change Statistics\r\n")
+	fmt.Print("=" + strings.Repeat("=", 22) + "\r\n")
 
 	// Get current session stats
 	if lf.agent.IsChangeTrackingEnabled() {

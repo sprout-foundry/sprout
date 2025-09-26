@@ -57,6 +57,11 @@ func (f *FileItem) Value() interface{} { return f.Filename }
 
 // Execute runs the interactive commit flow
 func (cf *CommitFlow) Execute() error {
+	// Check if we're in the agent console
+	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+		return cf.executeConsoleFlow()
+	}
+
 	// Check for terminal support
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return cf.executeNonInteractive()
@@ -217,6 +222,11 @@ func (cf *CommitFlow) commitStagedFiles() error {
 
 // selectFilesToCommit allows the user to select specific files to commit
 func (cf *CommitFlow) selectFilesToCommit() error {
+	// Use console flow if in agent console
+	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+		return cf.selectFilesToCommitConsole()
+	}
+
 	_, unstagedFiles, err := cf.getGitStatus()
 	if err != nil {
 		return err
@@ -282,6 +292,11 @@ func (cf *CommitFlow) stageAllAndCommit() error {
 
 // singleFileCommit allows selecting and committing a single file
 func (cf *CommitFlow) singleFileCommit() error {
+	// Use console flow if in agent console
+	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+		return cf.singleFileCommitConsole()
+	}
+
 	// Get all available files (staged + unstaged)
 	stagedFiles, unstagedFiles, err := cf.getGitStatus()
 	if err != nil {

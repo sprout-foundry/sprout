@@ -31,6 +31,7 @@
     - [Creating a Release](#creating-a-release)
     - [Version Information](#version-information)
     - [Release Validation](#release-validation)
+  - [CI/CD and Non-Interactive Usage](#cicd-and-non-interactive-usage)
   - [Support and Community](#support-and-community)
 
 ## Disclaimer
@@ -363,6 +364,17 @@ The release process validates:
 - ✅ Tag doesn't already exist
 - ✅ All tests pass
 - ✅ Changelog is updated
+
+## CI/CD and Non-Interactive Usage
+
+`ledit` is designed to work seamlessly in CI/CD pipelines and automated environments:
+
+- **Automatic CI detection** via `CI`/`GITHUB_ACTIONS` environment variables
+- **Clean, structured output** without terminal control sequences
+- **Progress updates** every 5 seconds with token/cost tracking
+- **Structured summaries** at completion with iteration counts and metrics
+- **Piped input support** for scripted automation
+- **Exit code handling** for integration with CI systems
 
 ## Support and Community
 

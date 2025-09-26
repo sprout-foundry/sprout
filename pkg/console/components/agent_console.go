@@ -2,6 +2,7 @@ package components
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,6 +18,9 @@ import (
 	"github.com/fatih/color"
 	"golang.org/x/term"
 )
+
+// ErrUserQuit is returned when the user requests to quit
+var ErrUserQuit = errors.New("user requested quit")
 
 // AgentConsole is the main console component for agent interactions
 type AgentConsole struct {
@@ -307,12 +311,10 @@ func (ac *AgentConsole) Start() error {
 	ac.updateFooter()
 
 	// Main event loop - non-blocking
-	ctx := context.Background()
-
 	for {
 		select {
-		case <-ctx.Done():
-			return nil
+		case <-ac.ctx.Done():
+			return ErrUserQuit
 
 		case <-ac.inputManager.GetInterruptChannel():
 			// Handle interrupt from input manager
@@ -638,8 +640,8 @@ func (ac *AgentConsole) handleCommand(input string) error {
 		ac.showHelp()
 		return nil
 	case "quit", "exit", "q":
-		ac.cleanup()
-		os.Exit(0)
+		// Return a special error to signal clean exit
+		return ErrUserQuit
 	case "clear":
 		// Clear the console buffer
 		ac.consoleBuffer.Clear()
@@ -712,6 +714,10 @@ func (ac *AgentConsole) handleCommand(input string) error {
 			if isInteractiveCommand {
 				// Enable passthrough mode for interactive command
 				ac.inputManager.SetPassthroughMode(true)
+
+				// Set environment variable so child processes know they're in agent console
+				os.Setenv("LEDIT_AGENT_CONSOLE", "1")
+				defer os.Unsetenv("LEDIT_AGENT_CONSOLE")
 
 				// Give terminal time to settle
 				time.Sleep(100 * time.Millisecond)
@@ -1042,10 +1048,9 @@ func (ac *AgentConsole) handleCtrlC() {
 		default:
 		}
 
-		// Input manager handles its own terminal restoration
-
-		ac.cleanup()
-		os.Exit(0)
+		// Signal that we want to exit cleanly
+		// Don't use os.Exit as it bypasses cleanup
+		ac.cancel() // Cancel the context to stop the main loop
 	}
 }
 
@@ -1099,6 +1104,13 @@ func (ac *AgentConsole) handleInputFromManager(input string) error {
 
 		err := ac.processInput(input)
 		if err != nil {
+			// Check if user requested quit
+			if errors.Is(err, ErrUserQuit) {
+				// Cancel the context to trigger clean shutdown
+				ac.cancel()
+				return
+			}
+
 			ac.safePrint("❌ Error: %v\n", err)
 			ac.inputManager.ScrollOutput()
 

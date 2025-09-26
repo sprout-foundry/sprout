@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -282,7 +283,12 @@ func (a *Agent) displayIntermediateResponse(content string) {
 		}
 	} else {
 		// Show thinking indicator
-		a.safePrint("\r\033[K💭 %s\n", content)
+		// In CI mode, don't use cursor control sequences
+		if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+			a.safePrint("💭 %s\n", content)
+		} else {
+			a.safePrint("\r\033[K💭 %s\n", content)
+		}
 	}
 }
 

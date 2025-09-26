@@ -62,6 +62,13 @@ func (ca *consoleApp) Init(config *Config) error {
 		return fmt.Errorf("failed to set raw mode: %w", err)
 	}
 
+	// Enter alternate screen if configured
+	if config.AltScreen {
+		if err := ca.terminal.EnterAltScreen(); err != nil {
+			return fmt.Errorf("failed to enter alternate screen: %w", err)
+		}
+	}
+
 	// Get terminal size for layout
 	width, height, _ := ca.controller.GetSize()
 
@@ -199,7 +206,7 @@ func (ca *consoleApp) AddComponent(component Component) error {
 
 	// Initialize component
 	deps := Dependencies{
-		Terminal: ca.controller, // Components use controller instead of raw terminal
+		Terminal: ca.terminal, // Pass the terminal manager
 		Layout:   ca.layout,
 		State:    ca.state,
 		Events:   ca.events,

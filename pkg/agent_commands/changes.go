@@ -103,8 +103,6 @@ func (l *LogCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Use the enhanced log flow for better UX
 	logFlow := NewLogFlow(chatAgent)
 	return logFlow.Execute(args)
-
-	return nil
 }
 
 // RollbackCommand provides rollback functionality

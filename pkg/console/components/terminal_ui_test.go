@@ -372,6 +372,18 @@ func (mt *MockTerminal) GetCommands() []string {
 	return mt.commands
 }
 
+// EnterAltScreen enters alternate screen buffer (mock implementation)
+func (mt *MockTerminal) EnterAltScreen() error {
+	mt.commands = append(mt.commands, "EnterAltScreen()")
+	return nil
+}
+
+// ExitAltScreen exits alternate screen buffer (mock implementation)
+func (mt *MockTerminal) ExitAltScreen() error {
+	mt.commands = append(mt.commands, "ExitAltScreen()")
+	return nil
+}
+
 // PrintDebugInfo prints detailed information about terminal state
 func (mt *MockTerminal) PrintDebugInfo() {
 	fmt.Printf("=== Mock Terminal Debug Info ===\n")

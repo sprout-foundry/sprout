@@ -23,6 +23,7 @@ type terminalManager struct {
 	height          int
 	oldState        *term.State
 	rawMode         bool
+	altScreen       bool
 	resizeCallbacks []func(width, height int)
 	signalChan      chan os.Signal
 	stopChan        chan struct{}
@@ -60,6 +61,9 @@ func (tm *terminalManager) Init() error {
 
 // Cleanup restores terminal to original state
 func (tm *terminalManager) Cleanup() error {
+	// Exit alternate screen first (before locking)
+	tm.ExitAltScreen()
+
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
@@ -173,6 +177,36 @@ func (tm *terminalManager) HideCursor() error {
 func (tm *terminalManager) ShowCursor() error {
 	_, err := fmt.Fprint(tm.writer, "\033[?25h")
 	return err
+}
+
+// EnterAltScreen enters the alternate screen buffer
+func (tm *terminalManager) EnterAltScreen() error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if !tm.altScreen {
+		_, err := fmt.Fprint(tm.writer, "\033[?1049h")
+		if err == nil {
+			tm.altScreen = true
+		}
+		return err
+	}
+	return nil
+}
+
+// ExitAltScreen exits the alternate screen buffer
+func (tm *terminalManager) ExitAltScreen() error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if tm.altScreen {
+		_, err := fmt.Fprint(tm.writer, "\033[?1049l")
+		if err == nil {
+			tm.altScreen = false
+		}
+		return err
+	}
+	return nil
 }
 
 // ClearScreen clears the entire screen

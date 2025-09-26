@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -58,9 +59,14 @@ func (a *Agent) ToolLog(action, target string) {
 			defer a.outputMutex.Unlock()
 		}
 
-		// Clear current line and move to start
-		fmt.Print("\r\033[K")
-		fmt.Print(message)
+		// In CI mode, don't use cursor control sequences
+		if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+			fmt.Print(message)
+		} else {
+			// Clear current line and move to start for interactive terminals
+			fmt.Print("\r\033[K")
+			fmt.Print(message)
+		}
 	}
 }
 

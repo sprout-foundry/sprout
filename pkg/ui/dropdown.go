@@ -61,16 +61,26 @@ func NewDropdown(items []DropdownItem, options DropdownOptions) *Dropdown {
 
 // Show displays the dropdown and returns the selected item
 func (d *Dropdown) Show() (DropdownItem, error) {
-	// Save terminal state
-	var err error
-	d.oldState, err = term.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to set raw mode: %w", err)
-	}
-	defer d.restore()
+	// Check if we're running inside the agent console
+	inAgentConsole := os.Getenv("LEDIT_AGENT_CONSOLE") == "1"
 
-	// Switch to alternate screen buffer (like vim/less)
-	fmt.Print("\033[?1049h")
+	// Only set raw mode if not already in agent console
+	if !inAgentConsole {
+		// Save terminal state
+		var err error
+		d.oldState, err = term.MakeRaw(int(os.Stdin.Fd()))
+		if err != nil {
+			return nil, fmt.Errorf("failed to set raw mode: %w", err)
+		}
+		defer d.restore()
+
+		// Switch to alternate screen buffer (like vim/less)
+		fmt.Print("\033[?1049h")
+	} else {
+		// In agent console, just ensure cleanup happens
+		defer d.restoreInAgentConsole()
+	}
+
 	// Clear screen
 	fmt.Print("\033[2J")
 	// Hide cursor initially for cleaner display
@@ -298,16 +308,25 @@ func (d *Dropdown) updateDisplay() {
 }
 
 func (d *Dropdown) restore() {
-	if d.oldState != nil {
-		// Show cursor again
-		fmt.Print("\033[?25h")
+	// Always show cursor again
+	fmt.Print("\033[?25h")
 
+	if d.oldState != nil {
+		// Only restore terminal state if we saved it
 		// Switch back to main screen buffer
 		fmt.Print("\033[?1049l")
 
 		// Restore terminal state
 		term.Restore(int(os.Stdin.Fd()), d.oldState)
 	}
+}
+
+// restoreInAgentConsole handles cleanup when running inside agent console
+func (d *Dropdown) restoreInAgentConsole() {
+	// Just show cursor again - don't mess with terminal modes
+	fmt.Print("\033[?25h")
+	// Clear screen one more time to ensure clean state
+	fmt.Print("\033[2J\033[H")
 }
 
 func truncateString(s string, maxLen int) string {

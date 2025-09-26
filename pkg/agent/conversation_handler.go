@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -325,7 +326,12 @@ func (ch *ConversationHandler) displayIntermediateResponse(content string) {
 			ch.agent.safePrint("\n")
 		} else {
 			// Display thinking message for non-streaming mode
-			ch.agent.safePrint("\r\033[K💭 %s\n", content)
+			// In CI mode, don't use cursor control sequences
+			if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+				ch.agent.safePrint("💭 %s\n", content)
+			} else {
+				ch.agent.safePrint("\r\033[K💭 %s\n", content)
+			}
 		}
 	}
 }

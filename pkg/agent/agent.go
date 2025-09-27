@@ -61,6 +61,9 @@ type Agent struct {
 	// Feature flags
 	falseStopDetectionEnabled bool
 	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
+
+	// UI integration
+	ui UI // UI provider for dropdowns, etc.
 }
 
 // NewAgent creates a new agent with auto-detected provider

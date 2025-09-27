@@ -34,7 +34,8 @@ func (m *ModelItem) Display() string {
 	if m.DisplayName != "" {
 		return m.DisplayName
 	}
-	return fmt.Sprintf("%s/%s", m.Provider, m.Model)
+	// Just return the model ID, not provider/model
+	return m.Model
 }
 
 // DisplayCompact returns a compact display format prioritizing pricing and context info

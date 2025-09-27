@@ -325,7 +325,8 @@ func (tm *terminalManager) Flush() error {
 // EnterAltScreen enters the alternate screen buffer
 func (tm *terminalManager) EnterAltScreen() error {
 	// Windows Terminal supports alternate screen buffer
-	fmt.Fprint(tm.writer, "\x1b[?1049h")
+	// Also disable mouse reporting to prevent scroll issues
+	fmt.Fprint(tm.writer, "\x1b[?1049h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l")
 	return nil
 }
 

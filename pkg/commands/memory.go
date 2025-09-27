@@ -2,10 +2,12 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/ui"
+	"golang.org/x/term"
 )
 
 // MemoryCommand handles memory features with auto-tracking and session recovery
@@ -46,7 +48,7 @@ func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 		chatAgent.ApplyState(state)
 		fmt.Printf("✓ Conversation memory loaded for session: %s\n", sessionID)
-		
+
 		// Show conversation preview
 		c.displayConversationPreview(chatAgent)
 		return nil
@@ -58,6 +60,30 @@ func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 // selectSessionWithDropdown provides interactive session selection with dropdown
 func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
+	// Check if we're in agent console - if so, show list with help
+	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+		fmt.Println("\n📂 Available Sessions:")
+		fmt.Println("=====================")
+
+		// Display sessions in reverse order (newest first)
+		for i := len(sessions) - 1; i >= 0; i-- {
+			session := sessions[i]
+			sessionNum := len(sessions) - i
+			fmt.Printf("%d. Session %s - %s\n", sessionNum, session.SessionID, session.LastUpdated.Format("2006-01-02 15:04:05"))
+		}
+
+		fmt.Println("\n💡 To load a session, use: /memory <session_number>")
+		fmt.Println("   Example: /memory 1")
+		return nil
+	}
+
+	// Check if we're not in a terminal
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Println("Interactive session selection requires a terminal.")
+		fmt.Println("Use /memory <session_number> to load a specific session.")
+		return nil
+	}
+
 	// Convert sessions to dropdown items (reverse order for newest first)
 	items := make([]ui.DropdownItem, 0, len(sessions))
 	for i := len(sessions) - 1; i >= 0; i-- {
@@ -91,7 +117,7 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 
 	chatAgent.ApplyState(state)
 	fmt.Printf("\r\n✅ Conversation memory loaded for session: %s\r\n", sessionID)
-	
+
 	// Show conversation preview
 	c.displayConversationPreview(chatAgent)
 	return nil
@@ -101,7 +127,7 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 func (c *MemoryCommand) displayConversationPreview(agent *agent.Agent) {
 	// Get last few messages for preview (e.g., last 5)
 	lastMessages := agent.GetLastMessages(5)
-	
+
 	if len(lastMessages) > 0 {
 		fmt.Println("\n📋 Recent conversation preview:")
 		fmt.Println("================================")

@@ -93,6 +93,34 @@ func (mf *MemoryFlow) loadSessionDirectly(arg string) error {
 
 // selectAndLoadSession shows session selection dropdown
 func (mf *MemoryFlow) selectAndLoadSession(sessions []agent.SessionInfo) error {
+	// Check if we're in agent console - show help instead
+	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+		fmt.Println("\n📂 Available Sessions:")
+		fmt.Println("=====================")
+
+		// Display sessions in reverse order (newest first)
+		for i := len(sessions) - 1; i >= 0; i-- {
+			session := sessions[i]
+			sessionNum := len(sessions) - i
+			fmt.Printf("%d. %s - %s\n", sessionNum, session.SessionID,
+				session.LastUpdated.Format("2006-01-02 15:04:05"))
+		}
+
+		fmt.Println("\n💡 To load a session, use: /memory <session_number>")
+		fmt.Println("   Example: /memory 1")
+		return nil
+	}
+
+	// Check if we're not in a terminal
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Printf("Available sessions:\r\n")
+		for i, session := range sessions {
+			fmt.Printf("%d. %s (%s)\r\n", i+1, session.SessionID,
+				session.LastUpdated.Format("2006-01-02 15:04:05"))
+		}
+		return nil
+	}
+
 	// Convert sessions to dropdown items (newest first)
 	items := make([]ui.DropdownItem, 0, len(sessions))
 	for i := len(sessions) - 1; i >= 0; i-- {
@@ -104,21 +132,23 @@ func (mf *MemoryFlow) selectAndLoadSession(sessions []agent.SessionInfo) error {
 		items = append(items, item)
 	}
 
+	// Temporarily disable ESC monitoring during dropdown
+	mf.agent.DisableEscMonitoring()
+	defer mf.agent.EnableEscMonitoring()
+
 	// Create and show dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
+	selected, err := mf.agent.ShowDropdown(items, ui.DropdownOptions{
 		Prompt:       "📂 Select Session to Load:",
 		SearchPrompt: "Search: ",
 		ShowCounts:   false,
 	})
 
-	// Temporarily disable ESC monitoring during dropdown
-	mf.agent.DisableEscMonitoring()
-	defer mf.agent.EnableEscMonitoring()
-
-	selected, err := dropdown.Show()
 	if err != nil {
-		fmt.Printf("\r\nSession loading cancelled.\r\n")
-		return nil
+		if err == ui.ErrCancelled {
+			fmt.Printf("\r\nSession loading cancelled.\r\n")
+			return nil
+		}
+		return fmt.Errorf("failed to show session selection: %w", err)
 	}
 
 	// Load the selected session

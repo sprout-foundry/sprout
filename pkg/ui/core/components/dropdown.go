@@ -244,14 +244,14 @@ func (d *DropdownComponent) HandleInput(input []byte) error {
 		return nil
 	}
 
-	// Handle single byte input
-	if len(input) == 1 {
-		switch input[0] {
-		case 27: // ESC
+    // Handle single byte input
+    if len(input) == 1 {
+        switch input[0] {
+        case 27: // ESC
 
 			d.Dispatch(core.CancelAction())
 			d.Dispatch(core.HideDropdownAction(d.GetID()))
-		case 13, 10: // Enter (CR or LF)
+        case 13, 10: // Enter (CR or LF)
 
 			// Get current state to ensure we have a selection
 			state := d.Select(func(s core.State) interface{} {
@@ -264,15 +264,17 @@ func (d *DropdownComponent) HandleInput(input []byte) error {
 				d.Dispatch(core.SelectAction())
 				d.Dispatch(core.HideDropdownAction(d.GetID()))
 			}
-		default:
-			// Regular character - only handle printable ASCII
-			if input[0] >= 32 && input[0] <= 126 {
-				d.HandleKeyPress(input[0])
-			}
-			// Ignore non-printable characters to prevent screen thrashing
-		}
-		return nil
-	}
+        case 127, 8: // Backspace/Delete
+            d.HandleKeyPress(input[0])
+        default:
+            // Regular character - only handle printable ASCII
+            if input[0] >= 32 && input[0] <= 126 {
+                d.HandleKeyPress(input[0])
+            }
+            // Ignore other non-printable characters to prevent screen thrashing
+        }
+        return nil
+    }
 
 	// Handle escape sequences
 	if input[0] == 27 { // ESC

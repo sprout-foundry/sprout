@@ -10,9 +10,11 @@ type BaseComponent struct {
 	id            string
 	componentType string
 	region        string
-	deps          Dependencies
 	needsRedraw   bool
 	ctx           context.Context
+
+	// Protected fields - accessible by embedding components
+	Deps Dependencies
 }
 
 // NewBaseComponent creates a new base component
@@ -27,7 +29,7 @@ func NewBaseComponent(id, componentType string) *BaseComponent {
 // Init initializes the component with dependencies
 func (bc *BaseComponent) Init(ctx context.Context, deps Dependencies) error {
 	bc.ctx = ctx
-	bc.deps = deps
+	bc.Deps = deps
 	return nil
 }
 
@@ -93,22 +95,22 @@ func (bc *BaseComponent) SetRegion(region string) {
 
 // Terminal returns the terminal manager
 func (bc *BaseComponent) Terminal() TerminalManager {
-	return bc.deps.Terminal
+	return bc.Deps.Terminal
 }
 
 // Layout returns the layout manager
 func (bc *BaseComponent) Layout() LayoutManager {
-	return bc.deps.Layout
+	return bc.Deps.Layout
 }
 
 // State returns the state manager
 func (bc *BaseComponent) State() StateManager {
-	return bc.deps.State
+	return bc.Deps.State
 }
 
 // Events returns the event bus
 func (bc *BaseComponent) Events() EventBus {
-	return bc.deps.Events
+	return bc.Deps.Events
 }
 
 // PublishEvent publishes an event from this component
@@ -118,5 +120,5 @@ func (bc *BaseComponent) PublishEvent(eventType string, data interface{}) {
 		Source: bc.id,
 		Data:   data,
 	}
-	bc.deps.Events.PublishAsync(event)
+	bc.Deps.Events.PublishAsync(event)
 }

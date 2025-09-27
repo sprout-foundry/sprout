@@ -9,17 +9,18 @@ import (
 
 // consoleApp implements ConsoleApp interface
 type consoleApp struct {
-	mu         sync.RWMutex
-	config     *Config
-	terminal   TerminalManager
-	controller *TerminalController
-	layout     LayoutManager
-	state      StateManager
-	events     EventBus
-	components map[string]Component
-	running    bool
-	ctx        context.Context
-	cancel     context.CancelFunc
+	mu               sync.RWMutex
+	config           *Config
+	terminal         TerminalManager
+	controller       *TerminalController
+	layout           LayoutManager
+	state            StateManager
+	events           EventBus
+	components       map[string]Component
+	running          bool
+	ctx              context.Context
+	cancel           context.CancelFunc
+	exclusiveInputID string // Component with exclusive input
 }
 
 // NewConsoleApp creates a new console application
@@ -86,6 +87,39 @@ func (ca *consoleApp) Init(config *Config) error {
 					ca.layout.CalculateLayout(w, h)
 				}
 			}
+		}
+		return nil
+	})
+
+	// Subscribe to input exclusivity events
+	ca.events.Subscribe("input.request_exclusive", func(event Event) error {
+		ca.mu.Lock()
+		defer ca.mu.Unlock()
+
+		componentID := event.Source
+		if ca.exclusiveInputID == "" {
+			ca.exclusiveInputID = componentID
+			// Notify component it got exclusive input
+			ca.events.Publish(Event{
+				Type: "input.exclusive_granted",
+				Data: map[string]interface{}{"component": componentID},
+			})
+		} else {
+			// Notify component it was denied
+			ca.events.Publish(Event{
+				Type: "input.exclusive_denied",
+				Data: map[string]interface{}{"component": componentID},
+			})
+		}
+		return nil
+	})
+
+	ca.events.Subscribe("input.release_exclusive", func(event Event) error {
+		ca.mu.Lock()
+		defer ca.mu.Unlock()
+
+		if ca.exclusiveInputID == event.Source {
+			ca.exclusiveInputID = ""
 		}
 		return nil
 	})
@@ -364,6 +398,15 @@ func (ca *consoleApp) processInput() error {
 	ca.mu.RLock()
 	defer ca.mu.RUnlock()
 
+	// If a component has exclusive input, only send to that component
+	if ca.exclusiveInputID != "" {
+		if comp, exists := ca.components[ca.exclusiveInputID]; exists {
+			_, err := comp.HandleInput(buf[:n])
+			return err
+		}
+	}
+
+	// Otherwise, send to components that can handle input
 	for _, comp := range ca.components {
 		if comp.CanHandleInput() {
 			handled, err := comp.HandleInput(buf[:n])

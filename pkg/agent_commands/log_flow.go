@@ -82,6 +82,18 @@ func (lf *LogFlow) showLogOptions() error {
 		return nil
 	}
 
+	// Check if we're in agent console - just show the log
+	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+		// In agent console, just display the change log by default
+		return lf.viewChangeLog()
+	}
+
+	// Check if we're not in a terminal
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		// Non-terminal, show change log
+		return lf.viewChangeLog()
+	}
+
 	// Convert to dropdown items
 	items := make([]ui.DropdownItem, len(actions))
 	for i, action := range actions {
@@ -92,21 +104,23 @@ func (lf *LogFlow) showLogOptions() error {
 		}
 	}
 
+	// Temporarily disable ESC monitoring during dropdown
+	lf.agent.DisableEscMonitoring()
+	defer lf.agent.EnableEscMonitoring()
+
 	// Create and show dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
+	selected, err := lf.agent.ShowDropdown(items, ui.DropdownOptions{
 		Prompt:       "📜 Change History:",
 		SearchPrompt: "Search: ",
 		ShowCounts:   false,
 	})
 
-	// Temporarily disable ESC monitoring during dropdown
-	lf.agent.DisableEscMonitoring()
-	defer lf.agent.EnableEscMonitoring()
-
-	selected, err := dropdown.Show()
 	if err != nil {
-		fmt.Printf("\r\nLog operation cancelled.\r\n")
-		return nil
+		if err == ui.ErrCancelled {
+			fmt.Printf("\r\nLog operation cancelled.\r\n")
+			return nil
+		}
+		return fmt.Errorf("failed to show action selection: %w", err)
 	}
 
 	// Execute selected action
@@ -212,6 +226,32 @@ func (lf *LogFlow) interactiveRollback() error {
 		return nil
 	}
 
+	// Check if we're in agent console - show list with help
+	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+		fmt.Println("\n⏮️ Available Revisions:")
+		fmt.Println("=======================")
+
+		for i, revision := range revisions {
+			description := revision.Instructions
+			if len(description) > 50 {
+				description = description[:47] + "..."
+			}
+			fmt.Printf("%d. %s - %s (%s)\n", i+1, revision.RevisionID, description,
+				revision.Timestamp.Format("2006-01-02 15:04:05"))
+		}
+
+		fmt.Println("\n💡 To rollback to a revision, use: /rollback <revision-id>")
+		fmt.Println("   Example: /rollback rev_abc123")
+		return nil
+	}
+
+	// Check if we're not in a terminal
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Println("Interactive rollback selection requires a terminal.")
+		fmt.Println("Use /rollback <revision-id> to rollback to a specific revision.")
+		return nil
+	}
+
 	// Convert revisions to dropdown items
 	items := make([]ui.DropdownItem, len(revisions))
 	for i, revision := range revisions {
@@ -228,21 +268,23 @@ func (lf *LogFlow) interactiveRollback() error {
 		}
 	}
 
+	// Show dropdown
+	lf.agent.DisableEscMonitoring()
+	defer lf.agent.EnableEscMonitoring()
+
 	// Create revision selection dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
+	selected, err := lf.agent.ShowDropdown(items, ui.DropdownOptions{
 		Prompt:       "⏮️ Select Revision to Rollback:",
 		SearchPrompt: "Search: ",
 		ShowCounts:   false,
 	})
 
-	// Show dropdown
-	lf.agent.DisableEscMonitoring()
-	defer lf.agent.EnableEscMonitoring()
-
-	selected, err := dropdown.Show()
 	if err != nil {
-		fmt.Printf("\r\nRollback cancelled.\r\n")
-		return nil
+		if err == ui.ErrCancelled {
+			fmt.Printf("\r\nRollback cancelled.\r\n")
+			return nil
+		}
+		return fmt.Errorf("failed to show revision selection: %w", err)
 	}
 
 	revisionID := selected.Value().(string)

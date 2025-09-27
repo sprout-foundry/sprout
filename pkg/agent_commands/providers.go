@@ -2,14 +2,12 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/ui"
-	"golang.org/x/term"
 )
 
 // ProvidersCommand implements the /providers slash command
@@ -128,26 +126,6 @@ func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) e
 
 // selectProvider allows interactive provider selection
 func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, chatAgent *agent.Agent) error {
-	// Check if we're in a terminal
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		// Fallback to configuration manager's built-in selection for non-terminal
-		newProvider, err := configManager.SelectNewProvider()
-		if err != nil {
-			return err
-		}
-
-		// Switch the agent to the new provider
-		err = chatAgent.SetProvider(newProvider)
-		if err != nil {
-			return fmt.Errorf("failed to switch to provider: %w", err)
-		}
-
-		model := chatAgent.GetModel()
-		fmt.Printf("✅ Provider switched to: %s\n", getProviderDisplayName(newProvider))
-		fmt.Printf("🤖 Using model: %s\n", model)
-		return nil
-	}
-
 	// Get all available providers
 	providers := configManager.GetAvailableProviders()
 	currentProvider := chatAgent.GetProviderType()
@@ -169,33 +147,60 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 			displayName += " ✓"
 		}
 
-		item := &ui.ProviderItem{
-			Name:        string(provider),
-			DisplayName: displayName,
-			Available:   isReady,
+		item := &providerDropdownItem{
+			provider:    provider,
+			displayName: displayName,
+			available:   isReady,
 		}
 		items = append(items, item)
 	}
 
-	// Create and show dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
+	// Try to show dropdown using the agent's UI
+	selected, err := chatAgent.ShowDropdown(items, ui.DropdownOptions{
 		Prompt:       "🎯 Select a Provider:",
 		SearchPrompt: "Search: ",
 		ShowCounts:   false,
 	})
 
-	// Temporarily disable Esc monitoring during dropdown
-	chatAgent.DisableEscMonitoring()
-	defer chatAgent.EnableEscMonitoring()
-
-	selected, err := dropdown.Show()
 	if err != nil {
-		fmt.Printf("\r\nProvider selection cancelled.\r\n")
-		return nil
+		fmt.Printf("DEBUG: ShowDropdown error: %v\n", err)
+		// If dropdown is not available, show list with help
+		if err == ui.ErrUINotAvailable {
+			fmt.Println("\n📋 Available Providers:")
+			fmt.Println("======================")
+
+			for i, provider := range providers {
+				// Check if provider is ready
+				requiresKey := !api.IsProviderAvailable(provider) && provider != api.OllamaLocalClientType
+				hasKey := configManager.HasAPIKey(provider)
+				isReady := !requiresKey || hasKey
+
+				status := ""
+				if !isReady {
+					status = " (API key required)"
+				} else if provider == chatAgent.GetProviderType() {
+					status = " ✓"
+				}
+
+				fmt.Printf("%d. %s%s\n", i+1, getProviderDisplayName(provider), status)
+			}
+
+			fmt.Println("\n💡 To select a provider, use: /providers <provider_name>")
+			fmt.Println("   Example: /providers openai")
+			return nil
+		}
+
+		// Check if it was just cancelled
+		if err == ui.ErrCancelled {
+			fmt.Printf("Provider selection cancelled.\n")
+			return nil
+		}
+
+		return fmt.Errorf("failed to show provider selection: %w", err)
 	}
 
 	// Get the selected provider
-	selectedProvider := api.ClientType(selected.Value().(string))
+	selectedProvider := selected.Value().(api.ClientType)
 
 	// Check if provider needs API key
 	if !api.IsProviderAvailable(selectedProvider) && selectedProvider != api.OllamaLocalClientType {
@@ -207,7 +212,7 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 	}
 
 	// Switch to the provider
-	fmt.Printf("\r\n🔄 Switching to %s...\r\n", getProviderDisplayName(selectedProvider))
+	fmt.Printf("🔄 Switching to %s...\n", getProviderDisplayName(selectedProvider))
 
 	err = chatAgent.SetProvider(selectedProvider)
 	if err != nil {
@@ -217,11 +222,22 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 	// Get the model that was set
 	model := chatAgent.GetModel()
 
-	fmt.Printf("✅ Provider switched to: %s\r\n", getProviderDisplayName(selectedProvider))
-	fmt.Printf("🤖 Using model: %s\r\n", model)
+	fmt.Printf("✅ Provider switched to: %s\n", getProviderDisplayName(selectedProvider))
+	fmt.Printf("🤖 Using model: %s\n", model)
 
 	return nil
 }
+
+// providerDropdownItem implements agent.DropdownItem for providers
+type providerDropdownItem struct {
+	provider    api.ClientType
+	displayName string
+	available   bool
+}
+
+func (p *providerDropdownItem) Display() string    { return p.displayName }
+func (p *providerDropdownItem) SearchText() string { return p.displayName }
+func (p *providerDropdownItem) Value() interface{} { return p.provider }
 
 // setProvider sets a specific provider by name
 func (p *ProvidersCommand) setProvider(providerName string, configManager *configuration.Manager, chatAgent *agent.Agent) error {

@@ -31,6 +31,8 @@ type DropdownOptions struct {
 }
 
 // Dropdown provides an interactive dropdown selector with search
+// DEPRECATED: This is the old dropdown implementation. Use the new component-based
+// dropdown system through agent.ShowDropdown() instead.
 type Dropdown struct {
 	items         []DropdownItem
 	filteredItems []DropdownItem
@@ -42,6 +44,7 @@ type Dropdown struct {
 }
 
 // NewDropdown creates a new dropdown instance
+// DEPRECATED: Use agent.ShowDropdown() instead of creating dropdowns directly.
 func NewDropdown(items []DropdownItem, options DropdownOptions) *Dropdown {
 	if options.SearchPrompt == "" {
 		options.SearchPrompt = "Search: "

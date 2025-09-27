@@ -223,17 +223,24 @@ func (m *ModelsCommand) liveSearchInterface(models []api.ModelInfo, featuredIndi
 		items = append(items, item)
 	}
 
-	// Create and show dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
-		Prompt:       "=== MODEL SEARCH ===",
-		SearchPrompt: "🔍 Search: ",
+	// Try to show dropdown using the agent's UI
+	selected, err := chatAgent.ShowDropdown(items, ui.DropdownOptions{
+		Prompt:       "🎯 Select a Model:",
+		SearchPrompt: "Search: ",
 		ShowCounts:   true,
 	})
 
-	selected, err := dropdown.Show()
 	if err != nil {
-		fmt.Printf("\r\nModel selection cancelled.\r\n")
-		return nil
+		// Check if it was just cancelled
+		if err == ui.ErrCancelled {
+			fmt.Printf("\r\nModel selection cancelled.\r\n")
+			return nil
+		}
+		// If dropdown is not available, fall back
+		if err == ui.ErrUINotAvailable {
+			return m.fallbackLineBasedInterface(models, featuredIndices, chatAgent)
+		}
+		return fmt.Errorf("failed to show model selection: %w", err)
 	}
 
 	// Get the selected model ID and set it

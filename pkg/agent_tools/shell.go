@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,9 +10,43 @@ import (
 	"time"
 )
 
+// ExecuteShellCommand executes a shell command with safety checks
 func ExecuteShellCommand(command string) (string, error) {
+	return ExecuteShellCommandWithSafety(command, true, "")
+}
+
+// ExecuteShellCommandWithSafety executes a shell command with configurable safety checks
+func ExecuteShellCommandWithSafety(command string, interactiveMode bool, sessionID string) (string, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", fmt.Errorf("empty command provided")
+	}
+
+	// Check for destructive commands
+	if destructiveCmd, isDestructive := IsDestructiveCommand(command); isDestructive {
+		// In interactive mode, ask for confirmation
+		if interactiveMode {
+			fmt.Printf("⚠️  Potentially destructive command detected:\n")
+			fmt.Printf("   Command: %s\n", command)
+			fmt.Printf("   Risk Level: %s - %s\n", destructiveCmd.RiskLevel, destructiveCmd.Description)
+			fmt.Printf("\n🤔 Do you want to proceed? (yes/no): ")
+
+			reader := bufio.NewReader(os.Stdin)
+			userResponse, err := reader.ReadString('\n')
+			if err != nil {
+				return "", fmt.Errorf("failed to read user response: %v", err)
+			}
+
+			userResponse = strings.ToLower(strings.TrimSpace(userResponse))
+			if userResponse != "yes" && userResponse != "y" {
+				return "", fmt.Errorf("command execution cancelled by user")
+			}
+		}
+		// In non-interactive mode, proceed without confirmation but track the action
+	}
+
+	// Track file deletions in changelog
+	if IsFileDeletionCommand(command) && sessionID != "" {
+		trackFileDeletion(command, sessionID)
 	}
 
 	// Create command with timeout
@@ -51,4 +86,11 @@ func ExecuteShellCommand(command string) (string, error) {
 		}
 		return "", fmt.Errorf("command timed out after %v", timeout)
 	}
+}
+
+// trackFileDeletion records file deletion commands in the changelog
+func trackFileDeletion(command string, sessionID string) {
+	// TODO: Implement file deletion tracking in changelog
+	// This will need to integrate with the existing changelog system
+	fmt.Printf("📝 Tracking file deletion: %s (session: %s)\n", command, sessionID)
 }

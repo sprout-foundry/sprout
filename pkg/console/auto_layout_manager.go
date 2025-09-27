@@ -35,29 +35,35 @@ type AutoLayoutManager struct {
 
 // NewAutoLayoutManager creates an enhanced layout manager
 func NewAutoLayoutManager() *AutoLayoutManager {
-	baseManager := NewLayoutManager(0, 0)
+    // Provide sensible defaults for non-interactive tests
+    baseManager := NewLayoutManager(80, 24)
 
-	return &AutoLayoutManager{
-		LayoutManager:   baseManager,
-		terminalFd:      0, // stdin
-		components:      make(map[string]*ComponentInfo),
-		resizeCallbacks: make([]func(width, height int), 0),
-	}
+    return &AutoLayoutManager{
+        LayoutManager:   baseManager,
+        terminalFd:      0, // stdin
+        termWidth:       80,
+        termHeight:      24,
+        components:      make(map[string]*ComponentInfo),
+        resizeCallbacks: make([]func(width, height int), 0),
+    }
 }
 
 // Initialize sets up the auto layout manager
 func (alm *AutoLayoutManager) Initialize() error {
-	alm.mutex.Lock()
-	defer alm.mutex.Unlock()
+    alm.mutex.Lock()
+    defer alm.mutex.Unlock()
 
-	if !term.IsTerminal(alm.terminalFd) {
-		return fmt.Errorf("not running in a terminal")
-	}
-
-	width, height, err := term.GetSize(alm.terminalFd)
-	if err != nil {
-		return fmt.Errorf("failed to get terminal size: %w", err)
-	}
+    var width, height int
+    var err error
+    if term.IsTerminal(alm.terminalFd) {
+        width, height, err = term.GetSize(alm.terminalFd)
+        if err != nil {
+            return fmt.Errorf("failed to get terminal size: %w", err)
+        }
+    } else {
+        // Headless fallback for tests and non-interactive environments
+        width, height = 80, 24
+    }
 
 	alm.termWidth = width
 	alm.termHeight = height
@@ -96,9 +102,8 @@ func (alm *AutoLayoutManager) RegisterComponent(name string, info *ComponentInfo
 	defer alm.mutex.Unlock()
 
 	alm.components[name] = info
-	if alm.initialized {
-		alm.calculateAutoLayout()
-	}
+    // Calculate layout even before initialization, using default/test dimensions
+    alm.calculateAutoLayout()
 }
 
 // UpdateComponentInfo updates component layout information

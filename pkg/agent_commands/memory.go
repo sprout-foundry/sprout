@@ -20,11 +20,11 @@ func (c *MemoryCommand) Description() string {
 }
 
 func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	// List sessions immediately in reverse order (newest first)
-	sessions, err := agent.ListSessionsWithTimestamps()
-	if err != nil {
-		return fmt.Errorf("failed to list sessions: %v", err)
-	}
+    // List sessions immediately in reverse order (newest first)
+    sessions, err := agent.ListSessionsWithTimestamps()
+    if err != nil {
+        return fmt.Errorf("failed to list sessions: %v", err)
+    }
 
 	if len(sessions) == 0 {
 		fmt.Println("No saved sessions found.")
@@ -49,8 +49,14 @@ func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return nil
 	}
 
-	// Use dropdown for interactive selection
-	return c.selectSessionWithDropdown(sessions, chatAgent)
+    // If no args and no agent (e.g., in tests), just print sessions and return
+    if chatAgent == nil {
+        fmt.Printf("Found %d saved sessions. Run with a session number to load.\n", len(sessions))
+        return nil
+    }
+
+    // Use dropdown for interactive selection
+    return c.selectSessionWithDropdown(sessions, chatAgent)
 }
 
 // selectSessionWithDropdown provides interactive session selection with dropdown
@@ -66,17 +72,21 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 		items = append(items, item)
 	}
 
-	// Create and show dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
-		Prompt:       "=== SESSION SELECTOR ===",
-		SearchPrompt: "🔍 Search: ",
+	// Try to show dropdown using the agent's UI
+	selected, err := chatAgent.ShowDropdown(items, ui.DropdownOptions{
+		Prompt:       "🎯 Select a Session:",
+		SearchPrompt: "Search: ",
 		ShowCounts:   true,
 	})
 
-	selected, err := dropdown.Show()
 	if err != nil {
-		fmt.Printf("\r\nSession selection cancelled.\r\n")
-		return nil
+		// Check if it was just cancelled
+		if err == ui.ErrCancelled {
+			fmt.Printf("\r\nSession selection cancelled.\r\n")
+			return nil
+		}
+		// If dropdown is not available, we could add a fallback here
+		return fmt.Errorf("failed to show session selection: %w", err)
 	}
 
 	// Get the selected session ID and load it

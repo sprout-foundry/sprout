@@ -185,7 +185,13 @@ func (tm *terminalManager) EnterAltScreen() error {
 	defer tm.mu.Unlock()
 
 	if !tm.altScreen {
-		_, err := fmt.Fprint(tm.writer, "\033[?1049h")
+		// Enter alternate screen and disable mouse reporting
+		// \033[?1049h - Enter alternate screen buffer
+		// \033[?1000l - Disable X11 mouse reporting
+		// \033[?1002l - Disable cell motion mouse tracking
+		// \033[?1003l - Disable all motion mouse tracking
+		// \033[?1006l - Disable SGR mouse mode
+		_, err := fmt.Fprint(tm.writer, "\033[?1049h\033[?1000l\033[?1002l\033[?1003l\033[?1006l")
 		if err == nil {
 			tm.altScreen = true
 		}

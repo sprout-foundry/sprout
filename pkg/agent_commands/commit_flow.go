@@ -97,21 +97,23 @@ func (cf *CommitFlow) showCommitOptions() error {
 		}
 	}
 
-	// Create and show dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
+	// Temporarily disable ESC monitoring during dropdown
+	cf.agent.DisableEscMonitoring()
+	defer cf.agent.EnableEscMonitoring()
+
+	// Try to show dropdown using the agent's UI
+	selected, err := cf.agent.ShowDropdown(items, ui.DropdownOptions{
 		Prompt:       "🚀 Commit Workflow:",
 		SearchPrompt: "Search: ",
 		ShowCounts:   false,
 	})
 
-	// Temporarily disable ESC monitoring during dropdown
-	cf.agent.DisableEscMonitoring()
-	defer cf.agent.EnableEscMonitoring()
-
-	selected, err := dropdown.Show()
 	if err != nil {
-		fmt.Printf("\r\nCommit workflow cancelled.\r\n")
-		return nil
+		if err == ui.ErrCancelled {
+			fmt.Printf("\r\nCommit workflow cancelled.\r\n")
+			return nil
+		}
+		return fmt.Errorf("failed to show action selection: %w", err)
 	}
 
 	// Execute selected action
@@ -246,21 +248,23 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 		}
 	}
 
-	// Create file selection dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
+	// Temporarily disable ESC monitoring during dropdown
+	cf.agent.DisableEscMonitoring()
+	defer cf.agent.EnableEscMonitoring()
+
+	// Try to show dropdown using the agent's UI
+	selected, err := cf.agent.ShowDropdown(items, ui.DropdownOptions{
 		Prompt:       "📝 Select File to Commit:",
 		SearchPrompt: "Search files: ",
 		ShowCounts:   true,
 	})
 
-	// Temporarily disable ESC monitoring during dropdown
-	cf.agent.DisableEscMonitoring()
-	defer cf.agent.EnableEscMonitoring()
-
-	selected, err := dropdown.Show()
 	if err != nil {
-		fmt.Printf("\r\nFile selection cancelled.\r\n")
-		return nil
+		if err == ui.ErrCancelled {
+			fmt.Printf("\r\nFile selection cancelled.\r\n")
+			return nil
+		}
+		return fmt.Errorf("failed to show file selection: %w", err)
 	}
 
 	selectedFile := selected.Value().(string)
@@ -325,21 +329,23 @@ func (cf *CommitFlow) singleFileCommit() error {
 		}
 	}
 
-	// Create dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
+	// Show dropdown
+	cf.agent.DisableEscMonitoring()
+	defer cf.agent.EnableEscMonitoring()
+
+	// Try to show dropdown using the agent's UI
+	selected, err := cf.agent.ShowDropdown(items, ui.DropdownOptions{
 		Prompt:       "📄 Select Single File to Commit:",
 		SearchPrompt: "Search files: ",
 		ShowCounts:   true,
 	})
 
-	// Show dropdown
-	cf.agent.DisableEscMonitoring()
-	defer cf.agent.EnableEscMonitoring()
-
-	selected, err := dropdown.Show()
 	if err != nil {
-		fmt.Printf("\r\nSingle file commit cancelled.\r\n")
-		return nil
+		if err == ui.ErrCancelled {
+			fmt.Printf("\r\nSingle file commit cancelled.\r\n")
+			return nil
+		}
+		return fmt.Errorf("failed to show file selection: %w", err)
 	}
 
 	selectedFile := selected.Value().(string)

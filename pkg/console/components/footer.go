@@ -489,8 +489,8 @@ func (fc *FooterComponent) renderModelAndStats(region console.Region, lineOffset
 		fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 	}
 
-	// 3. Stats section with dark gray background
-	fc.Terminal().Write([]byte(fc.config.Colors.DarkGrayBg + fc.config.Colors.DimWhite))
+	// 3. Stats section with blue-grey background
+	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey + fc.config.Colors.DimWhite))
 	fc.Terminal().Write([]byte(statsSection))
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
@@ -607,7 +607,7 @@ func (fc *FooterComponent) renderStatsOnly(region console.Region, lineOffset int
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
 	// 2. Stats section with dark gray background (includes indent)
-	fc.Terminal().Write([]byte(fc.config.Colors.DarkGrayBg + fc.config.Colors.DimWhite))
+	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey + fc.config.Colors.DimWhite))
 	fc.Terminal().Write([]byte(strings.Repeat(" ", statsIndent))) // Indent
 	fc.Terminal().Write([]byte(statsContent))
 	// Pad stats section to full available width
@@ -699,10 +699,10 @@ func (fc *FooterComponent) Render() error {
 
 // UpdateStats updates the footer statistics
 func (fc *FooterComponent) UpdateStats(model, provider string, tokens int, cost float64, iteration, contextTokens, maxContextTokens int) {
-	if tokens < 0 || contextTokens < 0 || maxContextTokens < 0 {
-		// Log or handle invalid values if needed
-		return
-	}
+    if tokens < 0 || contextTokens < 0 || maxContextTokens < 0 {
+        // Log or handle invalid values if needed
+        return
+    }
 
 	// Calculate tokens per second for real-time display
 	now := time.Now()
@@ -716,13 +716,25 @@ func (fc *FooterComponent) UpdateStats(model, provider string, tokens int, cost 
 	fc.lastTokenUpdateTime = now
 	fc.previousTokens = tokens
 
-	fc.State().Set("footer.model", model)
-	fc.State().Set("footer.provider", provider)
-	fc.State().Set("footer.tokens", tokens)
-	fc.State().Set("footer.cost", cost)
-	fc.State().Set("footer.iteration", iteration)
-	fc.State().Set("footer.contextTokens", contextTokens)
-	fc.State().Set("footer.maxContextTokens", maxContextTokens)
+    // If not initialized with dependencies yet, just store values locally
+    if fc.State() == nil {
+        fc.lastModel = model
+        fc.lastProvider = provider
+        fc.lastTokens = tokens
+        fc.lastCost = cost
+        fc.lastIteration = iteration
+        fc.lastContextTokens = contextTokens
+        fc.maxContextTokens = maxContextTokens
+        return
+    }
+
+    fc.State().Set("footer.model", model)
+    fc.State().Set("footer.provider", provider)
+    fc.State().Set("footer.tokens", tokens)
+    fc.State().Set("footer.cost", cost)
+    fc.State().Set("footer.iteration", iteration)
+    fc.State().Set("footer.contextTokens", contextTokens)
+    fc.State().Set("footer.maxContextTokens", maxContextTokens)
 }
 
 // UpdateGitInfo updates git information

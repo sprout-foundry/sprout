@@ -153,13 +153,15 @@ func TestFirstLinePositioningAfterQuery(t *testing.T) {
 		t.Errorf("   This means first line appears on/below input line before getting corrected")
 	}
 
-	if firstResponseLineNum > processingLineNum+1 {
-		t.Errorf("❌ ISSUE CONFIRMED: First response line appears much lower than expected (line %d vs expected ~%d)", firstResponseLineNum, processingLineNum+1)
+	// Account for streaming indicator that appears between processing message and first response
+	expectedFirstResponseLine := processingLineNum + 2 // processing + streaming indicator + first response
+	if firstResponseLineNum > expectedFirstResponseLine {
+		t.Errorf("❌ ISSUE CONFIRMED: First response line appears much lower than expected (line %d vs expected ~%d)", firstResponseLineNum, expectedFirstResponseLine)
 		t.Errorf("   This suggests positioning is getting confused during initial streaming")
 	}
 
 	// Success conditions
-	if firstResponseLineNum >= top && firstResponseLineNum <= bottom && firstResponseLineNum == processingLineNum+1 {
+	if firstResponseLineNum >= top && firstResponseLineNum <= bottom && firstResponseLineNum == expectedFirstResponseLine {
 		t.Logf("✅ First response line positioned correctly in content area")
 	}
 

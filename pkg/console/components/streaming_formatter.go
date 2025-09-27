@@ -249,10 +249,8 @@ func (sf *StreamingFormatter) outputLine(line string) {
 		sf.lineBuffer.Reset()
 	}
 
-	// Store the original line in buffer before formatting
-	if sf.consoleBuffer != nil {
-		sf.consoleBuffer.AddContent(line + "\n")
-	}
+	// Note: Don't add to buffer here as the output function will handle it
+	// This prevents duplication between original and formatted content
 
 	// Apply formatting based on content type
 	trimmed := strings.TrimSpace(line)

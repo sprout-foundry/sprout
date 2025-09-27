@@ -2,11 +2,13 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/ui"
+	"golang.org/x/term"
 )
 
 // CommandItem adapts a slash command for dropdown display
@@ -38,12 +40,9 @@ func (c *CommandItem) Value() interface{} {
 }
 
 // ShowCommandSelector displays a dropdown for slash command selection
-func ShowCommandSelector(registry *CommandRegistry) (string, error) {
+func ShowCommandSelector(registry *CommandRegistry, chatAgent *agent.Agent) (string, error) {
 	// Get all commands
 	commands := registry.ListCommands()
-
-	// Create dropdown items
-	items := make([]ui.DropdownItem, 0, len(commands))
 
 	// Build a map of command names for sorting
 	cmdMap := make(map[string]Command)
@@ -53,6 +52,28 @@ func ShowCommandSelector(registry *CommandRegistry) (string, error) {
 		names = append(names, cmd.Name())
 	}
 	sort.Strings(names)
+
+	// Check if we're in agent console - show help instead
+	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
+		fmt.Println("\n📋 Available Commands:")
+		fmt.Println("=====================")
+
+		for _, name := range names {
+			cmd := cmdMap[name]
+			fmt.Printf("/%s - %s\n", name, cmd.Description())
+		}
+
+		fmt.Println("\n💡 Type any command to use it")
+		return "", fmt.Errorf("command selector not available in agent console")
+	}
+
+	// Check if we're not in a terminal
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return "", fmt.Errorf("interactive command selection requires a terminal")
+	}
+
+	// Create dropdown items
+	items := make([]ui.DropdownItem, 0, len(commands))
 
 	// Build items
 	for _, name := range names {
@@ -87,14 +108,13 @@ func ShowCommandSelector(registry *CommandRegistry) (string, error) {
 		items = append(items, item)
 	}
 
-	// Create and show dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
-		Prompt:       "Select a command:",
-		SearchPrompt: "Search commands: ",
+	// Try to show dropdown using the agent's UI
+	selected, err := chatAgent.ShowDropdown(items, ui.DropdownOptions{
+		Prompt:       "🎯 Select a command:",
+		SearchPrompt: "Search: ",
 		ShowCounts:   false,
 	})
 
-	selected, err := dropdown.Show()
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +124,7 @@ func ShowCommandSelector(registry *CommandRegistry) (string, error) {
 
 // SelectAndExecuteCommand shows command selector and executes the selected command
 func SelectAndExecuteCommand(registry *CommandRegistry, chatAgent *agent.Agent) error {
-	selectedCmd, err := ShowCommandSelector(registry)
+	selectedCmd, err := ShowCommandSelector(registry, chatAgent)
 	if err != nil {
 		return fmt.Errorf("command selection cancelled")
 	}

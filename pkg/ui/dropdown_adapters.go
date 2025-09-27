@@ -1,8 +1,8 @@
 package ui
 
 import (
-	"fmt"
-	"strings"
+    "fmt"
+    "strings"
 )
 
 // StringItem is a simple adapter for string selections
@@ -118,7 +118,7 @@ func (p *ProviderItem) SearchText() string {
 }
 
 func (p *ProviderItem) Value() interface{} {
-	return p.Name
+    return p.Name
 }
 
 // KeyValueItem is a generic key-value adapter
@@ -139,3 +139,17 @@ func NewKeyValueItem(key string, display string, value interface{}) *KeyValueIte
 func (k *KeyValueItem) Display() string    { return k.DisplayText }
 func (k *KeyValueItem) SearchText() string { return k.Key + " " + k.DisplayText }
 func (k *KeyValueItem) Value() interface{} { return k.val }
+
+// truncateString safely truncates a string to maxLen with ellipsis when possible
+func truncateString(s string, maxLen int) string {
+    if maxLen <= 0 {
+        return ""
+    }
+    if len(s) <= maxLen {
+        return s
+    }
+    if maxLen <= 3 {
+        return s[:maxLen]
+    }
+    return s[:maxLen-3] + "..."
+}

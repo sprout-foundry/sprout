@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/console"
+	uiutil "github.com/alantheprice/ledit/pkg/ui"
 )
 
 // FooterConfig holds configurable values for the footer
@@ -69,8 +70,11 @@ type FooterComponent struct {
 	gitBranch   string
 	gitChanges  int
 	gitRemote   string
-	currentPath string
-	isGitRepo   bool
+    currentPath string
+    isGitRepo   bool
+
+    // UI hints
+    focusMode string // "input" or "output"
 }
 
 // NewFooterComponent creates a new footer component
@@ -259,12 +263,24 @@ func (fc *FooterComponent) fillLineBackground(currentLen int, totalWidth int) {
 
 // renderSeparator renders the blank separator line
 func (fc *FooterComponent) renderSeparator(region console.Region, lineOffset int) error {
-	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
-	fc.Terminal().ClearLine()
-	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-	fc.Terminal().Write([]byte(strings.Repeat(" ", region.Width)))
-	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
-	return nil
+    fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
+    fc.Terminal().ClearLine()
+    // Draw full-width background first
+    fc.Terminal().Write([]byte(uiutil.BgPad(region.Width, fc.config.Colors.BgBlueGrey)))
+
+    // Overlay focus hint at left
+    hint := ""
+    if fc.focusMode != "" {
+        // e.g., "Focus: Output  • Tab: Toggle • Esc: Interrupt"
+        mode := strings.Title(fc.focusMode)
+        hint = fmt.Sprintf(" Focus: %s  • Tab: Toggle  • Esc: Interrupt ", mode)
+        if len(hint) > region.Width {
+            hint = hint[:region.Width]
+        }
+        fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
+        fc.Terminal().Write([]byte(fc.config.Colors.DimWhite + hint + fc.config.Colors.Reset))
+    }
+    return nil
 }
 
 // renderPathLine renders the current path line
@@ -471,10 +487,8 @@ func (fc *FooterComponent) renderModelAndStats(region console.Region, lineOffset
 	// Render the line with three sections: blue-grey | light-gray model | dark-gray stats | blue-grey
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
 
-	// 1. Left blue-grey padding
-	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-	fc.Terminal().Write([]byte(strings.Repeat(" ", leftEdgePadding)))
-	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+    // 1. Left blue-grey padding
+    fc.Terminal().Write([]byte(uiutil.BgPad(leftEdgePadding, fc.config.Colors.BgBlueGrey)))
 
 	// 2. Model section with light gray background (only behind text)
 	fc.Terminal().Write([]byte(fc.config.Colors.LightGrayBg + fc.config.Colors.BlackText))
@@ -483,21 +497,17 @@ func (fc *FooterComponent) renderModelAndStats(region console.Region, lineOffset
 
 	// 2.5. Padding after model with blue-grey background
 	modelPadding := availableForModel - len(modelContent)
-	if modelPadding > 0 {
-		fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-		fc.Terminal().Write([]byte(strings.Repeat(" ", modelPadding)))
-		fc.Terminal().Write([]byte(fc.config.Colors.Reset))
-	}
+    if modelPadding > 0 {
+        fc.Terminal().Write([]byte(uiutil.BgPad(modelPadding, fc.config.Colors.BgBlueGrey)))
+    }
 
 	// 3. Stats section with blue-grey background
 	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey + fc.config.Colors.DimWhite))
 	fc.Terminal().Write([]byte(statsSection))
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
-	// 4. Right blue-grey padding
-	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-	fc.Terminal().Write([]byte(strings.Repeat(" ", rightEdgePadding)))
-	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+    // 4. Right blue-grey padding
+    fc.Terminal().Write([]byte(uiutil.BgPad(rightEdgePadding, fc.config.Colors.BgBlueGrey)))
 
 	return nil
 }
@@ -536,10 +546,8 @@ func (fc *FooterComponent) renderModelOnly(region console.Region, lineOffset int
 	// Render the line: blue-grey | light-gray model | blue-grey
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
 
-	// 1. Left blue-grey padding
-	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-	fc.Terminal().Write([]byte(strings.Repeat(" ", leftEdgePadding)))
-	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+    // 1. Left blue-grey padding
+    fc.Terminal().Write([]byte(uiutil.BgPad(leftEdgePadding, fc.config.Colors.BgBlueGrey)))
 
 	// 2. Model section with light gray background (only behind text)
 	fc.Terminal().Write([]byte(fc.config.Colors.LightGrayBg + fc.config.Colors.BlackText))
@@ -548,16 +556,12 @@ func (fc *FooterComponent) renderModelOnly(region console.Region, lineOffset int
 
 	// 2.5. Padding after model with blue-grey background
 	modelPadding := availableForModel - len(modelContent)
-	if modelPadding > 0 {
-		fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-		fc.Terminal().Write([]byte(strings.Repeat(" ", modelPadding)))
-		fc.Terminal().Write([]byte(fc.config.Colors.Reset))
-	}
+    if modelPadding > 0 {
+        fc.Terminal().Write([]byte(uiutil.BgPad(modelPadding, fc.config.Colors.BgBlueGrey)))
+    }
 
-	// 3. Right blue-grey padding
-	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-	fc.Terminal().Write([]byte(strings.Repeat(" ", rightEdgePadding)))
-	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+    // 3. Right blue-grey padding
+    fc.Terminal().Write([]byte(uiutil.BgPad(rightEdgePadding, fc.config.Colors.BgBlueGrey)))
 
 	return nil
 }
@@ -601,10 +605,8 @@ func (fc *FooterComponent) renderStatsOnly(region console.Region, lineOffset int
 	// Render the line: blue-grey | dark-gray stats | blue-grey
 	fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
 
-	// 1. Left blue-grey padding
-	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-	fc.Terminal().Write([]byte(strings.Repeat(" ", leftEdgePadding)))
-	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+    // 1. Left blue-grey padding
+    fc.Terminal().Write([]byte(uiutil.BgPad(leftEdgePadding, fc.config.Colors.BgBlueGrey)))
 
 	// 2. Stats section with dark gray background (includes indent)
 	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey + fc.config.Colors.DimWhite))
@@ -617,10 +619,8 @@ func (fc *FooterComponent) renderStatsOnly(region console.Region, lineOffset int
 	}
 	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
 
-	// 3. Right blue-grey padding
-	fc.Terminal().Write([]byte(fc.config.Colors.BgBlueGrey))
-	fc.Terminal().Write([]byte(strings.Repeat(" ", rightEdgePadding)))
-	fc.Terminal().Write([]byte(fc.config.Colors.Reset))
+    // 3. Right blue-grey padding
+    fc.Terminal().Write([]byte(uiutil.BgPad(rightEdgePadding, fc.config.Colors.BgBlueGrey)))
 
 	return nil
 }
@@ -637,8 +637,8 @@ func (fc *FooterComponent) Render() error {
 		defer fc.outputMutex.Unlock()
 	}
 
-	// Ensure we start with a clean slate - reset any existing styles
-	fc.Terminal().Write([]byte("\033[0m"))
+    // Ensure we start with a clean slate - reset any existing styles
+    fc.Terminal().Write([]byte(uiutil.SGRReset))
 
 	region, err := fc.Layout().GetRegion("footer")
 	if err != nil {
@@ -687,12 +687,12 @@ func (fc *FooterComponent) Render() error {
 	// Mark as drawn
 	fc.SetNeedsRedraw(false)
 
-	// CRITICAL: Reset all styling to prevent bleed-through to subsequent output
-	// Use explicit SGR0 reset to ensure ALL attributes are cleared
-	fc.Terminal().Write([]byte("\033[0m"))
+    // CRITICAL: Reset all styling to prevent bleed-through to subsequent output
+    // Use explicit SGR0 reset to ensure ALL attributes are cleared
+    fc.Terminal().Write([]byte(uiutil.SGRReset))
 
-	// Also explicitly set default foreground/background to be absolutely sure
-	fc.Terminal().Write([]byte("\033[39;49m"))
+    // Also explicitly set default foreground/background to be absolutely sure
+    fc.Terminal().Write([]byte(uiutil.SGRDefaultFgBg))
 
 	return nil
 }
@@ -753,8 +753,17 @@ func (fc *FooterComponent) UpdateGitRemote(remote string) {
 
 // UpdatePath updates the current path
 func (fc *FooterComponent) UpdatePath(path string) {
-	fc.currentPath = path
-	fc.SetNeedsRedraw(true)
+    fc.currentPath = path
+    fc.SetNeedsRedraw(true)
+}
+
+// SetFocusMode updates the focus mode for hint rendering ("input" or "output")
+func (fc *FooterComponent) SetFocusMode(mode string) {
+    if mode != "input" && mode != "output" {
+        return
+    }
+    fc.focusMode = mode
+    fc.SetNeedsRedraw(true)
 }
 
 // SetOutputMutex sets the output mutex for synchronized output

@@ -144,34 +144,34 @@ func GetCompactToolDefinitions() []Tool {
 				},
 			},
 		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
-				Name:        "add_bulk_todos",
-				Description: "Create multiple tasks",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"todos": map[string]interface{}{
-							"type": "array",
-							"items": map[string]interface{}{
-								"type": "object",
-								"properties": map[string]interface{}{
-									"title":    map[string]interface{}{"type": "string"},
-									"priority": map[string]interface{}{"type": "string"},
-								},
-								"required": []string{"title"},
-							},
-						},
-					},
-					"required": []string{"todos"},
-				},
-			},
-		},
+            {
+                Type: "function",
+                Function: struct {
+                    Name        string      `json:"name"`
+                    Description string      `json:"description"`
+                    Parameters  interface{} `json:"parameters"`
+                }{
+                    Name:        "add_todos",
+                    Description: "Create multiple tasks",
+                    Parameters: map[string]interface{}{
+                        "type": "object",
+                        "properties": map[string]interface{}{
+                            "todos": map[string]interface{}{
+                                "type": "array",
+                                "items": map[string]interface{}{
+                                    "type": "object",
+                                    "properties": map[string]interface{}{
+                                        "title":    map[string]interface{}{"type": "string"},
+                                        "priority": map[string]interface{}{"type": "string"},
+                                    },
+                                    "required": []string{"title"},
+                                },
+                            },
+                        },
+                        "required": []string{"todos"},
+                    },
+                },
+            },
 		{
 			Type: "function",
 			Function: struct {
@@ -187,10 +187,10 @@ func GetCompactToolDefinitions() []Tool {
 						"id": map[string]interface{}{
 							"type": "string",
 						},
-						"status": map[string]interface{}{
-							"type": "string",
-							"enum": []string{"pending", "in_progress", "completed"},
-						},
+                    "status": map[string]interface{}{
+                        "type": "string",
+                        "enum": []string{"pending", "in_progress", "completed", "cancelled"},
+                    },
 					},
 					"required": []string{"id", "status"},
 				},

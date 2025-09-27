@@ -1,9 +1,10 @@
 package agent
 
 import (
-	"fmt"
+    "fmt"
+    "strings"
 
-	"github.com/alantheprice/ledit/pkg/agent_tools"
+    "github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 // ToolHandler represents a function that can handle a tool execution
@@ -43,9 +44,9 @@ func GetToolRegistry() *ToolRegistry {
 
 // newDefaultToolRegistry creates the registry with all tool configurations
 func newDefaultToolRegistry() *ToolRegistry {
-	registry := &ToolRegistry{
-		tools: make(map[string]ToolConfig),
-	}
+    registry := &ToolRegistry{
+        tools: make(map[string]ToolConfig),
+    }
 
 	// Register shell_command tool
 	registry.RegisterTool(ToolConfig{
@@ -92,22 +93,32 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleEditFile,
 	})
 
-	// Register todo tools
-	registry.RegisterTool(ToolConfig{
-		Name:        "add_todo",
-		Description: "Add a new todo item",
-		Parameters: []ParameterConfig{
-			{"task", "string", true, []string{"content", "description"}, "The todo task description"},
-		},
-		Handler: handleAddTodo,
-	})
+    // Register todo tools
+    registry.RegisterTool(ToolConfig{
+        Name:        "add_todo",
+        Description: "Add a new todo item",
+        Parameters: []ParameterConfig{
+            {"task", "string", true, []string{"content", "description"}, "The todo task description"},
+        },
+        Handler: handleAddTodo,
+    })
+
+    // Register add_todos (bulk add) tool
+    registry.RegisterTool(ToolConfig{
+        Name:        "add_todos",
+        Description: "Create multiple todo items",
+        Parameters: []ParameterConfig{
+            {"todos", "array", true, []string{}, "Array of todos: {title, description?, priority?}"},
+        },
+        Handler: handleAddTodos,
+    })
 
 	registry.RegisterTool(ToolConfig{
 		Name:        "update_todo_status",
 		Description: "Update the status of a todo item",
 		Parameters: []ParameterConfig{
-			{"task_id", "int", true, []string{"id"}, "The ID of the todo task"},
-			{"status", "string", true, []string{}, "New status: pending, in_progress, completed"},
+			{"task_id", "string", true, []string{"id"}, "The ID of the todo task (e.g., 'todo_1')"},
+			{"status", "string", true, []string{}, "New status: pending, in_progress, completed, cancelled"},
 		},
 		Handler: handleUpdateTodoStatus,
 	})
@@ -329,9 +340,9 @@ func handleEditFile(a *Agent, args map[string]interface{}) (string, error) {
 }
 
 func handleAddTodo(a *Agent, args map[string]interface{}) (string, error) {
-	task := args["task"].(string)
-	a.ToolLog("adding todo", task)
-	a.debugLog("Adding todo: %s\n", task)
+    task := args["task"].(string)
+    a.ToolLog("adding todo", task)
+    a.debugLog("Adding todo: %s\n", task)
 
 	result := tools.AddTodo(task, "", "medium") // title, description, priority
 	a.debugLog("Add todo result: %s\n", result)
@@ -339,15 +350,82 @@ func handleAddTodo(a *Agent, args map[string]interface{}) (string, error) {
 }
 
 func handleUpdateTodoStatus(a *Agent, args map[string]interface{}) (string, error) {
-	taskID := args["task_id"].(int)
-	status := args["status"].(string)
+    taskID := args["task_id"].(string)
+    status := args["status"].(string)
 
-	a.ToolLog("updating todo", fmt.Sprintf("task %d to %s", taskID, status))
-	a.debugLog("Updating todo %d to status: %s\n", taskID, status)
+    a.ToolLog("updating todo", fmt.Sprintf("task %s to %s", taskID, status))
+    a.debugLog("Updating todo %s to status: %s\n", taskID, status)
 
-	result := tools.UpdateTodoStatus(fmt.Sprintf("%d", taskID), status)
-	a.debugLog("Update todo result: %s\n", result)
-	return result, nil
+    result := tools.UpdateTodoStatus(taskID, status)
+    a.debugLog("Update todo result: %s\n", result)
+    return result, nil
+}
+
+func handleAddTodos(a *Agent, args map[string]interface{}) (string, error) {
+    todosRaw, ok := args["todos"]
+    if !ok {
+        return "", fmt.Errorf("missing todos argument")
+    }
+
+    // Parse the todos array
+    todosSlice, ok := todosRaw.([]interface{})
+    if !ok {
+        return "", fmt.Errorf("todos must be an array")
+    }
+
+    var todos []struct {
+        Title       string
+        Description string
+        Priority    string
+    }
+
+    for _, todoRaw := range todosSlice {
+        todoMap, ok := todoRaw.(map[string]interface{})
+        if !ok {
+            return "", fmt.Errorf("each todo must be an object")
+        }
+
+        todo := struct {
+            Title       string
+            Description string
+            Priority    string
+        }{}
+
+        if title, ok := todoMap["title"].(string); ok {
+            todo.Title = title
+        }
+        if desc, ok := todoMap["description"].(string); ok {
+            todo.Description = desc
+        }
+        if prio, ok := todoMap["priority"].(string); ok {
+            todo.Priority = prio
+        } else {
+            todo.Priority = "medium"
+        }
+
+        if todo.Title == "" {
+            return "", fmt.Errorf("each todo requires a title")
+        }
+        todos = append(todos, todo)
+    }
+
+    // Log compact summary
+    titles := make([]string, len(todos))
+    for i, t := range todos {
+        titles[i] = t.Title
+    }
+    if len(titles) == 1 {
+        a.ToolLog("adding todo", titles[0])
+    } else if len(titles) <= 3 {
+        a.ToolLog("adding todos", strings.Join(titles, ", "))
+    } else {
+        a.ToolLog("adding todos", fmt.Sprintf("%s, %s, +%d more", titles[0], titles[1], len(titles)-2))
+    }
+    a.debugLog("Adding %d todos\n", len(todos))
+
+    result := tools.AddBulkTodos(todos)
+    a.debugLog("Add todos result: %s\n", result)
+    return result, nil
 }
 
 func handleListTodos(a *Agent, args map[string]interface{}) (string, error) {

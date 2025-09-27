@@ -1,11 +1,11 @@
 package agent
 
 import (
-	"fmt"
-	"os"
-	"strings"
+    "fmt"
+    "os"
+    "strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+    api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // debugLog logs a message only if debug mode is enabled
@@ -68,6 +68,37 @@ func (a *Agent) ToolLog(action, target string) {
 			fmt.Print(message)
 		}
 	}
+}
+
+// PrintLine prints a line of text to the console content area.
+// In interactive streaming mode it routes through the streaming callback so
+// the AgentConsole renders it in the content region. Otherwise, it falls back
+// to direct stdout while ensuring the current terminal line is cleared.
+func (a *Agent) PrintLine(text string) {
+    message := text
+    if !strings.HasSuffix(message, "\n") {
+        message += "\n"
+    }
+
+    if a.streamingEnabled && a.streamingCallback != nil {
+        a.streamingCallback(message)
+        return
+    }
+
+    if a.outputMutex != nil {
+        a.outputMutex.Lock()
+        defer a.outputMutex.Unlock()
+    }
+
+    // In CI, avoid cursor control sequences
+    if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+        fmt.Print(message)
+        return
+    }
+
+    // Clear current line, then print the message
+    fmt.Print("\r\033[K")
+    fmt.Print(message)
 }
 
 // estimateContextTokens estimates the token count for messages

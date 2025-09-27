@@ -95,18 +95,21 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 		items = append(items, item)
 	}
 
-	// Create and show dropdown
-	dropdown := ui.NewDropdown(items, ui.DropdownOptions{
-		Prompt:       "=== SESSION SELECTOR ===",
-		SearchPrompt: "🔍 Search: ",
-		ShowCounts:   true,
-	})
+    // Use agent's integrated dropdown UI if available
+    if chatAgent == nil || !chatAgent.IsInteractiveMode() {
+        fmt.Println("Interactive selection not available. Use /memory <session_number> instead.")
+        return nil
+    }
 
-	selected, err := dropdown.Show()
-	if err != nil {
-		fmt.Printf("\r\nSession selection cancelled.\r\n")
-		return nil
-	}
+    selected, err := chatAgent.ShowDropdown(items, ui.DropdownOptions{
+        Prompt:       "=== SESSION SELECTOR ===",
+        SearchPrompt: "🔍 Search: ",
+        ShowCounts:   true,
+    })
+    if err != nil {
+        fmt.Printf("\r\nSession selection cancelled.\r\n")
+        return nil
+    }
 
 	// Get the selected session ID and load it
 	sessionID := selected.Value().(string)

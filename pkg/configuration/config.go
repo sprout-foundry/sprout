@@ -93,7 +93,7 @@ type CodeStyleConfig struct {
 type APITimeoutConfig struct {
 	ConnectionTimeoutSec int `json:"connection_timeout_sec,omitempty"`  // Time to establish connection (default: 30)
 	FirstChunkTimeoutSec int `json:"first_chunk_timeout_sec,omitempty"` // Time to receive first response (default: 60)
-	ChunkTimeoutSec      int `json:"chunk_timeout_sec,omitempty"`       // Max time between streaming chunks (default: 30)
+	ChunkTimeoutSec      int `json:"chunk_timeout_sec,omitempty"`       // Max time between streaming chunks (default: 90)
 	OverallTimeoutSec    int `json:"overall_timeout_sec,omitempty"`     // Total request timeout (default: 600)
 }
 
@@ -152,7 +152,7 @@ func NewConfig() *Config {
 		APITimeouts: &APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
 			FirstChunkTimeoutSec: 60,
-			ChunkTimeoutSec:      30,
+			ChunkTimeoutSec:      180, // Increased from 90 to 180 seconds (3 minutes) for complex tasks
 			OverallTimeoutSec:    600, // 10 minutes
 		},
 	}

@@ -22,10 +22,15 @@ func (c *ChangesCommand) Description() string {
 
 // Execute shows the tracked changes for this session
 func (c *ChangesCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	if !chatAgent.IsChangeTrackingEnabled() {
-		fmt.Print("📝 Change tracking is not enabled for this session\r\n")
-		return nil
-	}
+    if chatAgent == nil {
+        // Gracefully handle nil agent in tests or non-interactive contexts
+        fmt.Print("📝 Change tracking is not enabled for this session\r\n")
+        return nil
+    }
+    if !chatAgent.IsChangeTrackingEnabled() {
+        fmt.Print("📝 Change tracking is not enabled for this session\r\n")
+        return nil
+    }
 
 	changeCount := chatAgent.GetChangeCount()
 	if changeCount == 0 {
@@ -57,8 +62,15 @@ func (s *StatusCommand) Description() string {
 
 // Execute shows the current status
 func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	fmt.Print("📊 Agent Session Status\r\n")
-	fmt.Print("=" + fmt.Sprintf("%*s", 25, "=") + "\r\n")
+    if chatAgent == nil {
+        // Gracefully handle nil agent
+        fmt.Print("📊 Agent Session Status\r\n")
+        fmt.Print("=" + fmt.Sprintf("%*s", 25, "=") + "\r\n")
+        fmt.Print("Change Tracking: ❌ Disabled\r\n")
+        return nil
+    }
+    fmt.Print("📊 Agent Session Status\r\n")
+    fmt.Print("=" + fmt.Sprintf("%*s", 25, "=") + "\r\n")
 
 	// Session info
 	fmt.Printf("Session ID: %s\r\n", chatAgent.GetSessionID())

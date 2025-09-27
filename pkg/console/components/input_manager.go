@@ -59,7 +59,7 @@ type InputManager struct {
 	onInterrupt    func()
 	onHeightChange func(int) // Callback when input height changes
 	onScrollUp     func(int) // Callback for scroll up
-	onScrollDown   func(int) // Callback for scroll down
+    onScrollDown   func(int) // Callback for scroll down
 
 	// Context for shutdown
 	ctx    context.Context
@@ -69,7 +69,17 @@ type InputManager struct {
 	lastOutputLine int
 	running        bool
 	paused         bool
-	redrawing      bool // Prevent concurrent redraw operations
+    redrawing      bool // Prevent concurrent redraw operations
+
+    // Focus provider (returns "input" or "output")
+    focusProvider func() string
+    onToggleFocus func()
+
+    // Vim sequence state
+    pendingG bool
+
+    // Help overlay toggle (for output focus)
+    onToggleHelp func()
 }
 
 // NewInputManager creates a new concurrent input manager
@@ -87,8 +97,29 @@ func NewInputManager(prompt string) *InputManager {
 		mutex:         sync.RWMutex{},
 		inputHeight:   1,        // Start with single line
 		historyIndex:  -1,       // Not in history mode initially
-		tempInput:     []rune{}, // Empty temp input
-	}
+        tempInput:     []rune{}, // Empty temp input
+    }
+}
+
+// SetFocusProvider sets a callback to get current focus mode ("input" or "output")
+func (im *InputManager) SetFocusProvider(provider func() string) {
+    im.mutex.Lock()
+    defer im.mutex.Unlock()
+    im.focusProvider = provider
+}
+
+// SetFocusToggle sets a callback to toggle focus manually (e.g., Tab)
+func (im *InputManager) SetFocusToggle(cb func()) {
+    im.mutex.Lock()
+    defer im.mutex.Unlock()
+    im.onToggleFocus = cb
+}
+
+// SetHelpToggle sets a callback to toggle output help overlay
+func (im *InputManager) SetHelpToggle(cb func()) {
+    im.mutex.Lock()
+    defer im.mutex.Unlock()
+    im.onToggleHelp = cb
 }
 
 // Start begins concurrent input handling
@@ -283,43 +314,38 @@ func (im *InputManager) processKeystrokes(data []byte) {
 			if im.onScrollDown != nil {
 				im.onScrollDown(im.termHeight - 1) // Full page scroll down
 			}
-		case 10: // Ctrl+J (vim-style scroll up - half page)
-			if im.onScrollUp != nil {
-				im.onScrollUp(im.termHeight / 2) // Half page scroll up
-			}
-		case 11: // Ctrl+K (vim-style scroll down - half page)
-			if im.onScrollDown != nil {
-				im.onScrollDown(im.termHeight / 2) // Half page scroll down
-			}
+    case 9: // Tab - manual focus toggle
+            if im.onToggleFocus != nil { go im.onToggleFocus() }
+    case 10: // Ctrl+J (vim-style scroll up - half page)
+            if im.onScrollUp != nil {
+                im.onScrollUp(im.termHeight / 2) // Half page scroll up
+            }
+    case 11: // Ctrl+K (vim-style scroll down - half page)
+            if im.onScrollDown != nil {
+                im.onScrollDown(im.termHeight / 2) // Half page scroll down
+            }
 		case 127, 8: // Backspace/Delete
 			im.handleBackspace()
-		case 27: // Escape sequence
-			// Handle escape sequences
-			if i+1 < len(data) {
-				if data[i+1] == '[' {
+    case 27: // Escape key or escape sequence
+            // Handle CSI sequences (ESC [ ...)
+            if i+1 < len(data) && data[i+1] == '[' {
 					// CSI sequences (ESC [)
 					if i+2 < len(data) {
 						switch data[i+2] {
-						case 'A': // Up arrow
-							// Default behavior: scroll output when input is empty and not in history mode
-							if len(im.currentLine) == 0 && im.historyIndex == -1 {
-								if im.onScrollUp != nil {
-									im.onScrollUp(1)
-								}
-							} else {
-								im.handleUpArrow()
-							}
-							i += 2
-						case 'B': // Down arrow
-							// Default behavior: scroll output when input is empty and not in history mode
-							if len(im.currentLine) == 0 && im.historyIndex == -1 {
-								if im.onScrollDown != nil {
-									im.onScrollDown(1)
-								}
-							} else {
-								im.handleDownArrow()
-							}
-							i += 2
+                    case 'A': // Up arrow
+                        if im.focusProvider != nil && im.focusProvider() == "output" {
+                            if im.onScrollUp != nil { im.onScrollUp(1) }
+                        } else {
+                            im.handleUpArrow()
+                        }
+                        i += 2
+                    case 'B': // Down arrow
+                        if im.focusProvider != nil && im.focusProvider() == "output" {
+                            if im.onScrollDown != nil { im.onScrollDown(1) }
+                        } else {
+                            im.handleDownArrow()
+                        }
+                        i += 2
 						case 'C': // Right arrow
 							im.handleRightArrow()
 							i += 2
@@ -369,15 +395,41 @@ func (im *InputManager) processKeystrokes(data []byte) {
 						}
 					}
 				} else {
-					// Non-CSI escape sequences - skip 1 byte (ESC + 1)
-					i += 1
+					// Plain ESC (not followed by '[') -> treat as interrupt
+					im.handleCtrlC()
+					// Consume only ESC
 				}
-			}
-		default:
-			// Regular character
-			if unicode.IsPrint(rune(b)) {
-				im.insertChar(rune(b))
-			}
+			// end ESC handling
+        default:
+            // Regular character
+            if im.focusProvider != nil && im.focusProvider() == "output" {
+                // Vim-style navigation in output focus
+                switch b {
+                case 'j':
+                    if im.onScrollDown != nil { im.onScrollDown(1) }
+                case 'k':
+                    if im.onScrollUp != nil { im.onScrollUp(1) }
+                case '?':
+                    if im.onToggleHelp != nil { im.onToggleHelp() }
+                    // do not affect pendingG
+                case 'g':
+                    if im.pendingG {
+                        if im.onScrollUp != nil { im.onScrollUp(im.termHeight*100) }
+                        im.pendingG = false
+                    } else {
+                        im.pendingG = true
+                    }
+                case 'G':
+                    if im.onScrollDown != nil { im.onScrollDown(im.termHeight*100) }
+                    im.pendingG = false
+                default:
+                    // Ignore others in output focus; reset pendingG
+                    im.pendingG = false
+                }
+            } else {
+                im.pendingG = false
+                if unicode.IsPrint(rune(b)) { im.insertChar(rune(b)) }
+            }
 		}
 	}
 
@@ -540,11 +592,19 @@ func (im *InputManager) insertChar(ch rune) {
 
 // printf is a helper that handles raw mode line endings
 func (im *InputManager) printf(format string, args ...interface{}) {
-	text := fmt.Sprintf(format, args...)
-	if im.isRawMode && strings.Contains(text, "\n") {
-		text = strings.ReplaceAll(text, "\n", "\r\n")
-	}
-	fmt.Print(text)
+    text := fmt.Sprintf(format, args...)
+    if im.isRawMode && strings.Contains(text, "\n") {
+        text = strings.ReplaceAll(text, "\n", "\r\n")
+    }
+    fmt.Print(text)
+}
+
+// write outputs text directly, applying raw mode line ending normalization
+func (im *InputManager) write(text string) {
+    if im.isRawMode && strings.Contains(text, "\n") {
+        text = strings.ReplaceAll(text, "\n", "\r\n")
+    }
+    fmt.Print(text)
 }
 
 // calculateInputDimensions calculates how many lines the input takes and cursor position
@@ -615,16 +675,20 @@ func (im *InputManager) showInputField() {
 		// Note: This might require layout recalculation, but we'll continue with current positioning for now
 	}
 
-	// Clear all lines that might contain input - use the MAXIMUM of previous and current height
-	// This ensures we clear artifacts when transitioning from multi-line to single-line
-	linesToClear := previousHeight
-	if lines > linesToClear {
-		linesToClear = lines
-	}
+    // Determine left margin based on focus (reserve column 1 for focus bar when input is focused)
+    // Always reserve 2 columns for gutter (bar+padding)
+    startX := 3
 
-	for i := 0; i < linesToClear; i++ {
-		im.printf("\033[%d;1H\033[2K", im.inputFieldLine+i)
-	}
+    // Clear all lines that might contain input - use the MAXIMUM of previous and current height
+    // This ensures we clear artifacts when transitioning from multi-line to single-line
+    linesToClear := previousHeight
+    if lines > linesToClear {
+        linesToClear = lines
+    }
+
+    for i := 0; i < linesToClear; i++ {
+        im.write(console.MoveCursorSeq(startX, im.inputFieldLine+i) + console.ClearToEndOfLineSeq())
+    }
 
 	// Update height to match actual content needs
 	im.inputHeight = lines
@@ -681,12 +745,15 @@ func (im *InputManager) showInputFieldAfterResize(oldWidth, oldHeight int) {
 		linesToClear = 20
 	}
 
-	// Clear all potential lines that might contain artifacts
-	// Use aggressive clearing for resize scenarios to handle horizontal artifacts
-	for i := 0; i < linesToClear; i++ {
-		// Move to beginning of line and clear entire line (including beyond terminal width)
-		im.printf("\033[%d;1H\033[2K", im.inputFieldLine+i)
-	}
+    // Always reserve 2 columns for gutter (bar+padding)
+    startX := 3
+
+    // Clear all potential lines that might contain artifacts
+    // Use aggressive clearing for resize scenarios to handle horizontal artifacts
+    for i := 0; i < linesToClear; i++ {
+        // Move to left margin and clear to end of line
+        im.write(console.MoveCursorSeq(startX, im.inputFieldLine+i) + console.ClearToEndOfLineSeq())
+    }
 
 	// Update height to match new terminal width needs
 	im.inputHeight = newLines
@@ -731,7 +798,8 @@ func (im *InputManager) calculateLinesForWidth(width int) int {
 
 // getEffectiveWidth returns the wrapping width with safe fallbacks
 func (im *InputManager) getEffectiveWidth() int {
-    effectiveWidth := im.termWidth - 1
+    // Always reserve 2 columns for gutter (bar+padding)
+    effectiveWidth := im.termWidth - 2
     if effectiveWidth <= 0 {
         effectiveWidth = 80
     }
@@ -740,6 +808,8 @@ func (im *InputManager) getEffectiveWidth() int {
 
 // renderInputContent writes the input prompt+text wrapped to the terminal and positions cursor
 func (im *InputManager) renderInputContent(fullText string, effectiveWidth, cursorLine, cursorCol int) {
+    // account for left margin when computing cursor column (gutter=2)
+    leftMargin := 3
     // Split text into lines based on terminal width
     currentLine := 0
     for i := 0; i < len(fullText); i += effectiveWidth {
@@ -748,12 +818,12 @@ func (im *InputManager) renderInputContent(fullText string, effectiveWidth, curs
 
         segment := fullText[i:end]
         // Always position cursor explicitly for each line to avoid artifacts
-        im.printf("\033[%d;1H%s", im.inputFieldLine+currentLine, segment)
+        im.write(console.MoveCursorSeq(leftMargin, im.inputFieldLine+currentLine) + segment)
         currentLine++
     }
     // Position cursor correctly on the right line and column
     actualCursorLine := im.inputFieldLine + cursorLine
-    im.printf("\033[%d;%dH", actualCursorLine, cursorCol)
+    im.write(console.MoveCursorSeq(leftMargin+cursorCol-1, actualCursorLine))
 }
 
 // hideInputField clears the input field (all lines it uses)
@@ -763,9 +833,11 @@ func (im *InputManager) hideInputField() {
 	}
 
 	// Clear all lines used by the input field
-	for i := 0; i < im.inputHeight; i++ {
-		im.printf("\033[%d;1H\033[2K", im.inputFieldLine+i)
-	}
+    // Always reserve 2 columns for gutter (bar+padding)
+    startX := 3
+    for i := 0; i < im.inputHeight; i++ {
+        im.printf("%s", console.MoveCursorSeq(startX, im.inputFieldLine+i)+console.ClearToEndOfLineSeq())
+    }
 }
 
 // updateTerminalSize gets current terminal dimensions
@@ -864,10 +936,10 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 			return // Already stopped
 		}
 
-		// Debug output
-		if term.IsTerminal(int(os.Stdout.Fd())) {
-			fmt.Printf("\r\n🔄 Enabling passthrough mode for interactive command...\r\n")
-		}
+    // Debug output (stderr only, and only when LEDIT_DEBUG is set)
+    if os.Getenv("LEDIT_DEBUG") != "" {
+        fmt.Fprintf(os.Stderr, "\r\n[DEBUG] Enabling passthrough mode for interactive command...\r\n")
+    }
 
 		// Hide input field
 		im.hideInputField()
@@ -885,17 +957,17 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 			im.isRawMode = false
 		}
 
-		if term.IsTerminal(int(os.Stdout.Fd())) {
-			fmt.Printf("✅ Passthrough mode enabled - terminal restored to normal mode\r\n")
-		}
+    if os.Getenv("LEDIT_DEBUG") != "" {
+        fmt.Fprintf(os.Stderr, "[DEBUG] Passthrough mode enabled - terminal restored to normal mode\r\n")
+    }
 	} else {
 		if im.running {
 			return // Already running
 		}
 
-		if term.IsTerminal(int(os.Stdout.Fd())) {
-			fmt.Printf("\r\n🔄 Disabling passthrough mode - restoring console input...\r\n")
-		}
+    if os.Getenv("LEDIT_DEBUG") != "" {
+        fmt.Fprintf(os.Stderr, "\r\n[DEBUG] Disabling passthrough mode - restoring console input...\r\n")
+    }
 
 		// Create new context
 		ctx, cancel := context.WithCancel(context.Background())
@@ -905,11 +977,11 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 		// Re-enter raw mode
 		oldState, err := term.MakeRaw(im.terminalFd)
 		if err != nil {
-			if term.IsTerminal(int(os.Stdout.Fd())) {
-				fmt.Printf("❌ Failed to re-enter raw mode: %v\r\n", err)
-			}
-			return
-		}
+            if os.Getenv("LEDIT_DEBUG") != "" {
+                fmt.Fprintf(os.Stderr, "[DEBUG] Failed to re-enter raw mode: %v\r\n", err)
+            }
+            return
+        }
 
 		im.oldTermState = oldState
 		im.isRawMode = true
@@ -928,9 +1000,9 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 		// Show input field
 		im.showInputField()
 
-		if term.IsTerminal(int(os.Stdout.Fd())) {
-			fmt.Printf("✅ Console input restored - ready for commands\r\n")
-		}
+        if os.Getenv("LEDIT_DEBUG") != "" {
+            fmt.Fprintf(os.Stderr, "[DEBUG] Console input restored - ready for commands\r\n")
+        }
 	}
 }
 
@@ -975,10 +1047,10 @@ func (im *InputManager) resetInputHeight() {
 	// So we don't need additional locking here
 
 	if im.inputHeight > 1 {
-		// Clear all lines that were previously used
-		for i := 0; i < im.inputHeight; i++ {
-			im.printf("\033[%d;1H\033[K", im.inputFieldLine+i)
-		}
+        // Clear all lines that were previously used
+        for i := 0; i < im.inputHeight; i++ {
+            im.write(console.MoveCursorSeq(1, im.inputFieldLine+i) + console.ClearToEndOfLineSeq())
+        }
 
 		// Reset to single line
 		im.inputHeight = 1

@@ -1,15 +1,16 @@
 package commands
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
-	"strings"
+    "errors"
+    "fmt"
+    "os"
+    "os/exec"
+    "strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/ui"
-	"github.com/alantheprice/ledit/pkg/utils"
-	"golang.org/x/term"
+    "github.com/alantheprice/ledit/pkg/agent"
+    "github.com/alantheprice/ledit/pkg/ui"
+    "github.com/alantheprice/ledit/pkg/utils"
+    "golang.org/x/term"
 )
 
 // CommitFlow manages the interactive commit workflow
@@ -57,18 +58,20 @@ func (f *FileItem) Value() interface{} { return f.Filename }
 
 // Execute runs the interactive commit flow
 func (cf *CommitFlow) Execute() error {
-	// Check if we're in the agent console
-	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
-		return cf.executeConsoleFlow()
-	}
+    // Prefer the integrated dropdown UI when available
+    if term.IsTerminal(int(os.Stdin.Fd())) {
+        if err := cf.showCommitOptions(); err != nil {
+            // Fallback to console prompts if UI isn't available
+            if errors.Is(err, ui.ErrUINotAvailable) {
+                return cf.executeConsoleFlow()
+            }
+            return err
+        }
+        return nil
+    }
 
-	// Check for terminal support
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return cf.executeNonInteractive()
-	}
-
-	// Show commit flow options
-	return cf.showCommitOptions()
+    // Non-interactive environments: fallback
+    return cf.executeNonInteractive()
 }
 
 // showCommitOptions displays the main commit flow options

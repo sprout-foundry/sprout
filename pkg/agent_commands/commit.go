@@ -414,7 +414,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 
 	// Generate commit message
-	fmt.Println("\n📝 Generating commit message...")
+    fmt.Println("\n📝 Generating commit message...")
 
 	// Get staged diff
 	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
@@ -427,18 +427,22 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		return nil
 	}
 
-	// Use the current agent's configured provider and model for commit generation
-	configManager := chatAgent.GetConfigManager()
-	clientType, err := configManager.GetProvider()
-	if err != nil {
-		return fmt.Errorf("failed to get provider: %v", err)
-	}
-	model := configManager.GetModelForProvider(clientType)
-
-	client, err := factory.CreateProviderClient(clientType, model)
-	if err != nil {
-		return fmt.Errorf("failed to create client: %v", err)
-	}
+    // Prepare LLM client if agent is available; otherwise fall back to manual prompt
+    var client api.ClientInterface
+    var clientType api.ClientType
+    var model string
+    if chatAgent != nil {
+        configManager := chatAgent.GetConfigManager()
+        if configManager != nil {
+            if ct, e := configManager.GetProvider(); e == nil {
+                clientType = ct
+                model = configManager.GetModelForProvider(clientType)
+                if cl, ce := factory.CreateProviderClient(clientType, model); ce == nil {
+                    client = cl
+                }
+            }
+        }
+    }
 
 	// Get current branch name
 	branchOutput, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
@@ -514,8 +518,38 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 
 	var commitMessage string
 
-	// Retry loop for commit message generation
-	for {
+    // Retry loop for commit message generation (LLM if available, otherwise manual input)
+    for {
+        if client == nil {
+            // Manual fallback when LLM client isn't available
+            fmt.Println("\n🧾 Staged diff (truncated):")
+            preview := string(diffOutput)
+            if len(preview) > 2000 {
+                preview = preview[:2000] + "\n... (truncated)"
+            }
+            fmt.Println(preview)
+            fmt.Println("\n✏️  Enter commit message (end with a blank line):")
+            var b strings.Builder
+            empty := 0
+            for {
+                line, _ := reader.ReadString('\n')
+                if strings.TrimSpace(line) == "" {
+                    empty++
+                    if empty >= 1 {
+                        break
+                    }
+                } else {
+                    empty = 0
+                }
+                b.WriteString(line)
+            }
+            commitMessage = strings.TrimSpace(b.String())
+            if commitMessage == "" {
+                fmt.Println("❌ Empty commit message; aborting")
+                return nil
+            }
+            break
+        }
 		if singleFileMode {
 			// Single file mode - simple format without file actions in title
 			// Optimize diff for API efficiency

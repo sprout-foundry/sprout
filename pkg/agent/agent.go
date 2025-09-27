@@ -45,8 +45,8 @@ type Agent struct {
 	circuitBreaker       *CircuitBreakerState           // Track repetitive actions
 	conversationPruner   *ConversationPruner            // Automatic conversation pruning
 
-	// Interrupt handling
-	interruptRequested   bool            // Flag indicating interrupt was requested
+    // Interrupt handling
+    interruptRequested   bool            // Flag indicating interrupt was requested
 	interruptMessage     string          // User message to inject after interrupt
 	escPressed           chan bool       // Channel to signal Esc key press
 	interruptChan        chan string     // Channel for TUI interrupt messages
@@ -342,13 +342,23 @@ func (a *Agent) DisableEscMonitoring() {
 
 // CheckForInterrupt checks if an interrupt was requested
 func (a *Agent) CheckForInterrupt() bool {
-	select {
-	case <-a.escPressed:
-		a.interruptRequested = true
-		return true
-	default:
-		return a.interruptRequested
-	}
+    // Check for ESC key press
+    select {
+    case <-a.escPressed:
+        a.interruptRequested = true
+        return true
+    default:
+    }
+
+    // Check for external interrupt requests (from TUI via interruptChan)
+    select {
+    case <-a.interruptChan:
+        a.interruptRequested = true
+        return true
+    default:
+        // No new events
+    }
+    return a.interruptRequested
 }
 
 // HandleInterrupt processes the interrupt request
@@ -384,13 +394,24 @@ func (a *Agent) HandleInterrupt() string {
 
 // ClearInterrupt resets the interrupt state
 func (a *Agent) ClearInterrupt() {
-	a.interruptRequested = false
-	a.interruptMessage = ""
-	// Drain the channel
-	select {
-	case <-a.escPressed:
-	default:
-	}
+    a.interruptRequested = false
+    a.interruptMessage = ""
+    // Drain the channel
+    select {
+    case <-a.escPressed:
+    default:
+    }
+    // Drain any pending interrupt control messages
+    if a.interruptChan != nil {
+        for {
+            select {
+            case <-a.interruptChan:
+                // keep draining
+            default:
+                return
+            }
+        }
+    }
 }
 
 // GetMessages returns the current conversation messages
@@ -808,7 +829,12 @@ func (a *Agent) GetInputInjectionChannel() <-chan string {
 
 // SetOutputMutex sets the output mutex for synchronized output
 func (a *Agent) SetOutputMutex(mutex *sync.Mutex) {
-	a.outputMutex = mutex
+    a.outputMutex = mutex
+}
+
+// IsInterrupted returns true if an interrupt has been requested
+func (a *Agent) IsInterrupted() bool {
+    return a.interruptRequested
 }
 
 // EnableStreaming enables response streaming with a callback

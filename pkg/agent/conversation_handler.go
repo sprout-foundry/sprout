@@ -223,17 +223,26 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 // Helper methods...
 func (ch *ConversationHandler) checkForInterrupt() bool {
-	// Check for escape key press
-	select {
-	case <-ch.agent.escPressed:
-		ch.agent.interruptRequested = true
-		return true
-	default:
-		// Check for existing interrupt request
-		if ch.agent.interruptRequested {
-			return true
-		}
-	}
+    // Check for escape key press
+    select {
+    case <-ch.agent.escPressed:
+        ch.agent.interruptRequested = true
+        return true
+    default:
+        // No ESC event
+    }
+
+    // Check for external interrupt (from console via interrupt channel)
+    select {
+    case <-ch.agent.interruptChan:
+        ch.agent.interruptRequested = true
+        return true
+    default:
+        // Check for existing interrupt request
+        if ch.agent.interruptRequested {
+            return true
+        }
+    }
 
 	// Check for input injections
 	select {
@@ -457,12 +466,8 @@ func (ch *ConversationHandler) displayUserFriendlyError(err error) {
 		userMessage = fmt.Sprintf("❌ %s API error: %v", providerName, err)
 	}
 
-	// Display the message
-	if ch.agent.outputMutex != nil {
-		ch.agent.outputMutex.Lock()
-		fmt.Printf("\n%s\n\n", userMessage)
-		ch.agent.outputMutex.Unlock()
-	} else {
-		fmt.Printf("\n%s\n\n", userMessage)
-	}
+    // Display the message in the content area via agent routing
+    ch.agent.PrintLine("")
+    ch.agent.PrintLine(userMessage)
+    ch.agent.PrintLine("")
 }

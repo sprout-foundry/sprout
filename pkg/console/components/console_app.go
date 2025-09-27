@@ -1,10 +1,11 @@
 package components
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"sync"
+    "context"
+    "fmt"
+    "os"
+    "sync"
+    "time"
 
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/ui/core"
@@ -96,10 +97,12 @@ func (c *ConsoleApp) ShowDropdown(ctx context.Context, items []interface{}, opti
 	// Keep terminal in raw mode for proper input handling
 	// The dropdown needs raw mode to capture arrow keys properly
 	wasRawMode := c.terminal.IsRawMode()
-	if !wasRawMode {
-		c.terminal.SetRawMode(true)
-		defer c.terminal.SetRawMode(false)
-	}
+    if !wasRawMode {
+        c.terminal.SetRawMode(true)
+        // Allow terminal to settle in raw mode to avoid losing the first keystroke
+        time.Sleep(30 * time.Millisecond)
+        defer c.terminal.SetRawMode(false)
+    }
 
 	c.mu.Unlock()
 

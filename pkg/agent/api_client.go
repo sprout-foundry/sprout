@@ -44,7 +44,7 @@ func (ac *APIClient) setTimeoutsFromConfig() {
 	// Default timeout values
 	connectionTimeoutSec := 30
 	firstChunkTimeoutSec := 60
-	chunkTimeoutSec := 30
+	chunkTimeoutSec := 90
 	overallTimeoutSec := 600
 
 	// Get timeout config if available
@@ -395,14 +395,9 @@ func (ac *APIClient) calculateBackoff(err error, attempt int, baseDelay time.Dur
 
 // showTokenTrackingMessage shows OpenAI token tracking message
 func (ac *APIClient) showTokenTrackingMessage() {
-	message := "📊 Using non-streaming mode for accurate token tracking...\n\n"
-	if ac.agent.outputMutex != nil {
-		ac.agent.outputMutex.Lock()
-		fmt.Print(message)
-		ac.agent.outputMutex.Unlock()
-	} else {
-		fmt.Print(message)
-	}
+    message := "📊 Using non-streaming mode for accurate token tracking..."
+    ac.agent.PrintLine(message)
+    ac.agent.PrintLine("")
 }
 
 // estimateRequestTokens estimates the token count for the current request
@@ -435,27 +430,15 @@ func (ac *APIClient) estimateRequestTokens(messages []api.Message, tools []api.T
 
 // displayTimeoutError shows a user-friendly timeout error
 func (ac *APIClient) displayTimeoutError(message string, timeout time.Duration) {
-	errorMsg := fmt.Sprintf("🔌 %s (waited %v)", message, timeout)
-
-	if ac.agent.outputMutex != nil {
-		ac.agent.outputMutex.Lock()
-		fmt.Printf("\r\033[K%s\n", errorMsg)
-		ac.agent.outputMutex.Unlock()
-	} else {
-		fmt.Printf("\r\033[K%s\n", errorMsg)
-	}
+    errorMsg := fmt.Sprintf("🔌 %s (waited %v)", message, timeout)
+    // Route through agent so interactive console places it in content area
+    ac.agent.PrintLine(errorMsg)
 }
 
 // displayAPIError shows a user-friendly API error
 func (ac *APIClient) displayAPIError(err error) {
-	providerName := ac.agent.GetProvider()
-	errorMsg := fmt.Sprintf("🚨 %s API Error: %v", strings.Title(providerName), err)
-
-	if ac.agent.outputMutex != nil {
-		ac.agent.outputMutex.Lock()
-		fmt.Printf("\r\033[K%s\n", errorMsg)
-		ac.agent.outputMutex.Unlock()
-	} else {
-		fmt.Printf("\r\033[K%s\n", errorMsg)
-	}
+    providerName := ac.agent.GetProvider()
+    errorMsg := fmt.Sprintf("🚨 %s API Error: %v", strings.Title(providerName), err)
+    // Route through agent so interactive console places it in content area
+    ac.agent.PrintLine(errorMsg)
 }

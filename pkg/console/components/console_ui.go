@@ -1,9 +1,10 @@
 package components
 
 import (
-	"context"
-	"fmt"
-	"os"
+    "context"
+    "fmt"
+    "os"
+    "time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/ui"
@@ -43,12 +44,19 @@ func (c *ConsoleUI) ShowDropdown(ctx context.Context, items []ui.DropdownItem, o
 	}
 
 	// Use the new component-based dropdown if available
-	if c.consoleApp != nil {
-		// Put input manager in passthrough mode to avoid interference
-		if c.agentConsole != nil && c.agentConsole.inputManager != nil {
-			c.agentConsole.inputManager.SetPassthroughMode(true)
-			defer c.agentConsole.inputManager.SetPassthroughMode(false)
-		}
+    if c.consoleApp != nil {
+        // Put input manager in passthrough mode to avoid interference
+        if c.agentConsole != nil && c.agentConsole.inputManager != nil {
+            c.agentConsole.inputManager.SetPassthroughMode(true)
+            // Give InputManager time to fully stop and release stdin to the dropdown
+            time.Sleep(100 * time.Millisecond)
+            // Ensure layout is fully restored after dropdown completes
+            defer func() {
+                c.agentConsole.inputManager.SetPassthroughMode(false)
+                // Restore scroll region, footer and cursor positioning
+                c.agentConsole.restoreLayoutAfterPassthrough()
+            }()
+        }
 
 		// Convert dropdown items to the format expected by the new UI
 		convertedItems := make([]interface{}, len(items))
@@ -83,26 +91,8 @@ func (c *ConsoleUI) ShowDropdown(ctx context.Context, items []ui.DropdownItem, o
 		return nil, fmt.Errorf("unexpected dropdown result type")
 	}
 
-	// Fallback to the simple dropdown
-	dropdown := ui.NewDropdown(items, options)
-
-	// Temporarily switch to non-raw mode for the dropdown
-	if c.agentConsole != nil {
-		// Clear current line and show dropdown
-		fmt.Print("\r\033[K") // Clear line
-
-		// The dropdown will handle terminal mode switching
-		selected, err := dropdown.Show()
-
-		// Restore state
-		fmt.Print("\r\033[K") // Clear dropdown remnants
-
-		return selected, err
-	}
-
-	// Fallback if console is not available
-	selected, err := dropdown.Show()
-	return selected, err
+    // No component app available; UI not available in this context
+    return nil, ui.ErrUINotAvailable
 }
 
 // IsInteractive implements agent.UI

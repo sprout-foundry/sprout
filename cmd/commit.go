@@ -28,8 +28,8 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 
 		_, err := configuration.LoadOrInitConfig(commitSkipPrompt)
 		if err != nil {
+			// Non-fatal for commit flow; continue with manual fallback if needed
 			logger.LogError(fmt.Errorf("failed to load or initialize config: %w", err))
-			return
 		}
 
 		// Create agent instance for commit processing
@@ -41,8 +41,9 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 			chatAgent, err = agent.NewAgent()
 		}
 		if err != nil {
-			logger.LogError(fmt.Errorf("failed to create agent: %w", err))
-			return
+			// Proceed without agent; the commit flow will fall back to manual prompts
+			logger.LogError(fmt.Errorf("failed to create agent (falling back to manual mode): %w", err))
+			chatAgent = nil
 		}
 
 		// Create commit command instance and execute

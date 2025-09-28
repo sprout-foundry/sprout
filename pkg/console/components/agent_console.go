@@ -33,6 +33,7 @@ type AgentConsole struct {
 	// Sub-components
 	inputManager       *InputManager
 	historyManager     *HistoryManager
+	inputStateManager  *InputStateManager
 	footer             *FooterComponent
 	streamingFormatter *StreamingFormatter
 
@@ -116,6 +117,10 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 	// Create history manager
 	historyManager := NewHistoryManager(config.HistoryFile, 1000)
 
+	// Create input state manager for history navigation persistence
+	inputStateFile := config.HistoryFile + ".state"
+	inputStateManager := NewInputStateManager(inputStateFile)
+
 	// Create auto layout manager
 	autoLayoutManager := console.NewAutoLayoutManager()
 
@@ -128,6 +133,7 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		commandRegistry:   commands.NewCommandRegistry(),
 		inputManager:      inputManager,
 		historyManager:    historyManager,
+		inputStateManager: inputStateManager,
 		footer:            footer,
 		autoLayoutManager: autoLayoutManager,
 		consoleBuffer:     console.NewConsoleBuffer(10000), // 10,000 line buffer
@@ -388,6 +394,20 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 		if err := ac.historyManager.LoadFromFile(); err != nil {
 			// Non-fatal, just log
 			ac.writeTextWithRawModeFix(fmt.Sprintf("Note: Could not load history: %v\n", err))
+		}
+	}
+
+	// Load input state (history navigation position)
+	if ac.inputStateManager != nil {
+		if err := ac.inputStateManager.LoadFromFile(); err != nil {
+			// Non-fatal, just log
+			ac.writeTextWithRawModeFix(fmt.Sprintf("Note: Could not load input state: %v\n", err))
+		}
+		
+		// Apply loaded state to input manager
+		if ac.inputManager != nil {
+			state := ac.inputStateManager.GetState()
+			ac.inputManager.SetHistoryState(state.HistoryIndex, state.TempInput)
 		}
 	}
 
@@ -1352,6 +1372,22 @@ func (ac *AgentConsole) cleanup() {
 	if ac.historyFile != "" && ac.historyManager != nil {
 		if err := ac.historyManager.SaveToFile(); err != nil {
 			ac.writeTextWithRawModeFix(fmt.Sprintf("Warning: Could not save history: %v\n", err))
+		}
+	}
+
+	// Save input state (history navigation position)
+	if ac.inputStateManager != nil {
+		// Get current state from input manager
+		if ac.inputManager != nil {
+			historyIndex, tempInput := ac.inputManager.GetHistoryState()
+			state := InputState{
+				HistoryIndex: historyIndex,
+				TempInput:    tempInput,
+			}
+			ac.inputStateManager.SetState(state)
+		}
+		if err := ac.inputStateManager.SaveToFile(); err != nil {
+			ac.writeTextWithRawModeFix(fmt.Sprintf("Warning: Could not save input state: %v\n", err))
 		}
 	}
 

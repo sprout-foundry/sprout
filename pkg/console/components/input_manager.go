@@ -646,11 +646,8 @@ func (im *InputManager) calculateInputDimensions() (lines int, cursorLine int, c
 		im.updateTerminalSize()
 	}
 
-	// Calculate effective width (terminal width minus 1 to avoid edge wrapping issues)
-	effectiveWidth := im.termWidth - 1
-	if effectiveWidth <= 0 {
-		effectiveWidth = 80 // Fallback
-	}
+    // Calculate effective width using the same gutter-aware width as rendering
+    effectiveWidth := im.getEffectiveWidth()
 
 	// Total text is prompt + input
 	promptWidth := len(im.prompt)
@@ -665,10 +662,10 @@ func (im *InputManager) calculateInputDimensions() (lines int, cursorLine int, c
 
 	// Calculate cursor position
 	cursorTextPos := promptWidth + im.cursorPos
-	cursorLine = cursorTextPos / effectiveWidth
-	cursorCol = (cursorTextPos % effectiveWidth) + 1
+    cursorLine = cursorTextPos / effectiveWidth
+    cursorCol = (cursorTextPos % effectiveWidth) + 1
 
-	return lines, cursorLine, cursorCol
+    return lines, cursorLine, cursorCol
 }
 
 // notifyLayoutOfInputHeight tells the layout manager about input height changes
@@ -806,8 +803,8 @@ func (im *InputManager) showInputFieldAfterResize(oldWidth, oldHeight int) {
 		linesToClear = 20
 	}
 
-    // Reserve 3 columns for gutter (2-bar + padding)
-    startX := 4
+    // Reserve 2-column gutter in both states (accent+padding when focused, padding-only when not)
+    startX := 3
 
 	// Clear all potential lines that might contain artifacts
 	// Use aggressive clearing for resize scenarios to handle horizontal artifacts
@@ -861,8 +858,8 @@ func (im *InputManager) calculateLinesForWidth(width int) int {
 
 // getEffectiveWidth returns the wrapping width with safe fallbacks
 func (im *InputManager) getEffectiveWidth() int {
-    // Reserve 3 columns for gutter (2-bar + padding)
-    effectiveWidth := im.termWidth - 3
+    // Reserve 2 columns for gutter consistently
+    effectiveWidth := im.termWidth - 2
 	if effectiveWidth <= 0 {
 		effectiveWidth = 80
 	}
@@ -871,24 +868,38 @@ func (im *InputManager) getEffectiveWidth() int {
 
 // renderInputContent writes the input prompt+text wrapped to the terminal and positions cursor
 func (im *InputManager) renderInputContent(fullText string, effectiveWidth, cursorLine, cursorCol int) {
-    // account for left margin when computing cursor column (gutter=3)
-    leftMargin := 4
-	// Split text into lines based on terminal width
-	currentLine := 0
-	for i := 0; i < len(fullText); i += effectiveWidth {
-		end := i + effectiveWidth
-		if end > len(fullText) {
-			end = len(fullText)
-		}
+    // account for left margin when computing cursor column (gutter=2)
+    leftMargin := 3
+    continuationPrefix := "> "
+    continuationWidth := len(continuationPrefix)
 
-		segment := fullText[i:end]
-		// Always position cursor explicitly for each line to avoid artifacts
-		im.write(console.MoveCursorSeq(leftMargin, im.inputFieldLine+currentLine) + segment)
-		currentLine++
-	}
-	// Position cursor correctly on the right line and column
-	actualCursorLine := im.inputFieldLine + cursorLine
-	im.write(console.MoveCursorSeq(leftMargin+cursorCol-1, actualCursorLine))
+    // Split text into lines based on terminal width
+    currentLine := 0
+    for i := 0; i < len(fullText); i += effectiveWidth {
+        end := i + effectiveWidth
+        if end > len(fullText) {
+            end = len(fullText)
+        }
+
+        segment := fullText[i:end]
+        y := im.inputFieldLine + currentLine
+        // Draw continuation prompt on wrapped lines for visual alignment
+        if currentLine == 0 {
+            im.write(console.MoveCursorSeq(leftMargin, y) + segment)
+        } else {
+            // Write continuation marker then the segment
+            im.write(console.MoveCursorSeq(leftMargin, y) + continuationPrefix)
+            im.write(console.MoveCursorSeq(leftMargin+continuationWidth, y) + segment)
+        }
+        currentLine++
+    }
+    // Position cursor correctly on the right line and column
+    actualCursorLine := im.inputFieldLine + cursorLine
+    cursorX := leftMargin + cursorCol - 1
+    if cursorLine > 0 {
+        cursorX += continuationWidth
+    }
+    im.write(console.MoveCursorSeq(cursorX, actualCursorLine))
 }
 
 // hideInputField clears the input field (all lines it uses)

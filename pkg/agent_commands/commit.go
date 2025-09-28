@@ -1,17 +1,17 @@
 package commands
 
 import (
-    "bufio"
-    "fmt"
-    "os"
-    "os/exec"
-    "strings"
+	"bufio"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 
-    "github.com/alantheprice/ledit/pkg/agent"
-    api "github.com/alantheprice/ledit/pkg/agent_api"
-    "github.com/alantheprice/ledit/pkg/factory"
-    "github.com/alantheprice/ledit/pkg/utils"
-    "golang.org/x/term"
+	"github.com/alantheprice/ledit/pkg/agent"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/factory"
+	"github.com/alantheprice/ledit/pkg/utils"
+	"golang.org/x/term"
 )
 
 // CommitCommand implements the /commit slash command
@@ -55,58 +55,69 @@ func (c *CommitCommand) Name() string {
 
 // Description returns the command description
 func (c *CommitCommand) Description() string {
-    return "Interactive commit workflow with dropdown selection - stage files and generate commit messages"
+	return "Interactive commit workflow with dropdown selection - stage files and generate commit messages"
 }
 
 // console-safe output helpers
 func normalizeNewlines(s string) string {
-    if term.IsTerminal(int(os.Stdout.Fd())) {
-        return strings.ReplaceAll(s, "\n", "\r\n")
-    }
-    return s
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		return strings.ReplaceAll(s, "\n", "\r\n")
+	}
+	return s
 }
 
 func (c *CommitCommand) printf(format string, args ...interface{}) {
-    fmt.Fprint(os.Stdout, normalizeNewlines(fmt.Sprintf(format, args...)))
+	fmt.Fprint(os.Stdout, normalizeNewlines(fmt.Sprintf(format, args...)))
 }
 
 func (c *CommitCommand) println(text string) {
-    fmt.Fprint(os.Stdout, normalizeNewlines(text)+"\r\n")
+	fmt.Fprint(os.Stdout, normalizeNewlines(text)+"\r\n")
 }
 
 // dropdown helpers for TUI confirmation
 type confirmItem struct{ label, value string }
 
 type confirmDropdownItem struct{ item confirmItem }
+
 func (i confirmDropdownItem) Display() string    { return i.item.label }
 func (i confirmDropdownItem) SearchText() string { return i.item.label }
 func (i confirmDropdownItem) Value() interface{} { return i.item.value }
 
 // editInEditor opens $VISUAL or $EDITOR to edit content, returns the edited text
 func editInEditor(initial string) (string, error) {
-    // Create temp file
-    f, err := os.CreateTemp("", "ledit_commit_*.txt")
-    if err != nil { return "", err }
-    path := f.Name()
-    _, _ = f.WriteString(initial)
-    f.Close()
+	// Create temp file
+	f, err := os.CreateTemp("", "ledit_commit_*.txt")
+	if err != nil {
+		return "", err
+	}
+	path := f.Name()
+	_, _ = f.WriteString(initial)
+	f.Close()
 
-    // Choose editor
-    editor := os.Getenv("VISUAL")
-    if editor == "" { editor = os.Getenv("EDITOR") }
-    if editor == "" { editor = "vi" }
+	// Choose editor
+	editor := os.Getenv("VISUAL")
+	if editor == "" {
+		editor = os.Getenv("EDITOR")
+	}
+	if editor == "" {
+		editor = "vi"
+	}
 
-    cmd := exec.Command(editor, path)
-    cmd.Stdin = os.Stdin
-    cmd.Stdout = os.Stdout
-    cmd.Stderr = os.Stderr
-    if err := cmd.Run(); err != nil { return "", err }
+	cmd := exec.Command(editor, path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
 
-    // Read back
-    data, err := os.ReadFile(path)
-    _ = os.Remove(path)
-    if err != nil { return "", err }
-    return strings.TrimSpace(string(data)), nil
+	// Read back
+	data, err := os.ReadFile(path)
+	_ = os.Remove(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
 }
 
 // Execute runs the commit command
@@ -440,21 +451,12 @@ func (c *CommitCommand) showHelp() error {
 	fmt.Println("/commit help     - Show this help message")
 	fmt.Println()
 	fmt.Println("The interactive workflow offers:")
-	fmt.Println("🚀 Smart commit options based on your current git status")
-	fmt.Println("📦 Commit staged files")
-	fmt.Println("📝 Select specific files to stage and commit")
-	fmt.Println("🎯 Stage all modified files and commit")
-	fmt.Println("📄 Single file commit mode")
+	fmt.Println("Smart commit options based on your current git status")
+	fmt.Println("Commit staged files")
+	fmt.Println("Select specific files to stage and commit")
+	fmt.Println("Stage all modified files and commit")
+	fmt.Println("Single file commit mode")
 	fmt.Println()
-	fmt.Println("Features:")
-	fmt.Println("✨ Optimized diff processing for large files")
-	fmt.Println("🤖 AI-generated commit messages")
-	fmt.Println("🔍 Smart file detection and summaries")
-	fmt.Println()
-	fmt.Println("Single file commits follow strict formatting:")
-	fmt.Println("- Lowercase verb start (add, fix, update, etc.)")
-	fmt.Println("- 50 character title limit")
-	fmt.Println("- Focus on what changed, not filename")
 	return nil
 }
 
@@ -466,8 +468,8 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 
 	// Generate commit message
-    c.println("")
-    c.println("📝 Generating commit message...")
+	c.println("")
+	c.printf("Using model: %s\n From Provider: %s\n", chatAgent.GetModel(), chatAgent.GetProvider())
 
 	// Get staged diff
 	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
@@ -475,27 +477,27 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		return fmt.Errorf("failed to get staged diff: %v", err)
 	}
 
-    if len(strings.TrimSpace(string(diffOutput))) == 0 {
-        c.println("❌ No changes staged")
-        return nil
-    }
+	if len(strings.TrimSpace(string(diffOutput))) == 0 {
+		c.println("❌ No changes staged")
+		return nil
+	}
 
-    // Prepare LLM client if agent is available; otherwise fall back to manual prompt
-    var client api.ClientInterface
-    var clientType api.ClientType
-    var model string
-    if chatAgent != nil {
-        configManager := chatAgent.GetConfigManager()
-        if configManager != nil {
-            if ct, e := configManager.GetProvider(); e == nil {
-                clientType = ct
-                model = configManager.GetModelForProvider(clientType)
-                if cl, ce := factory.CreateProviderClient(clientType, model); ce == nil {
-                    client = cl
-                }
-            }
-        }
-    }
+	// Prepare LLM client if agent is available; otherwise fall back to manual prompt
+	var client api.ClientInterface
+	var clientType api.ClientType
+	var model string
+	if chatAgent != nil {
+		configManager := chatAgent.GetConfigManager()
+		if configManager != nil {
+			if ct, e := configManager.GetProvider(); e == nil {
+				clientType = ct
+				model = configManager.GetModelForProvider(clientType)
+				if cl, ce := factory.CreateProviderClient(clientType, model); ce == nil {
+					client = cl
+				}
+			}
+		}
+	}
 
 	// Get current branch name
 	branchOutput, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
@@ -520,20 +522,20 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		return fmt.Errorf("failed to get staged files status: %v", err)
 	}
 
-    // Parse file actions and filenames
-    fileActions := []string{}
-    primaryAction := ""
-    stagedFilenames := []string{}
-    lines := strings.Split(strings.TrimSpace(string(stagedFilesOutput)), "\n")
-    for _, line := range lines {
-        if line == "" {
-            continue
-        }
-        parts := strings.Fields(line)
-        if len(parts) >= 2 {
-            status := parts[0]
-            filepath := strings.Join(parts[1:], " ")
-            stagedFilenames = append(stagedFilenames, filepath)
+	// Parse file actions and filenames
+	fileActions := []string{}
+	primaryAction := ""
+	stagedFilenames := []string{}
+	lines := strings.Split(strings.TrimSpace(string(stagedFilesOutput)), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			status := parts[0]
+			filepath := strings.Join(parts[1:], " ")
+			stagedFilenames = append(stagedFilenames, filepath)
 
 			action := ""
 			switch status {
@@ -573,41 +575,41 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 
 	var commitMessage string
 
-    // Retry loop for commit message generation (LLM if available, otherwise manual input)
+	// Retry loop for commit message generation (LLM if available, otherwise manual input)
 retryLoop:
-    for {
-        if client == nil {
-            // Manual fallback when LLM client isn't available
-            c.println("")
-            c.println("🧾 Staged diff (truncated):")
-            preview := string(diffOutput)
-            if len(preview) > 2000 {
-                preview = preview[:2000] + "\n... (truncated)"
-            }
-            c.println(preview)
-            c.println("")
-            c.println("✏️  Enter commit message (end with a blank line):")
-            var b strings.Builder
-            empty := 0
-            for {
-                line, _ := reader.ReadString('\n')
-                if strings.TrimSpace(line) == "" {
-                    empty++
-                    if empty >= 1 {
-                        break
-                    }
-                } else {
-                    empty = 0
-                }
-                b.WriteString(line)
-            }
-            commitMessage = strings.TrimSpace(b.String())
-            if commitMessage == "" {
-                fmt.Println("❌ Empty commit message; aborting")
-                return nil
-            }
-            break
-        }
+	for {
+		if client == nil {
+			// Manual fallback when LLM client isn't available
+			c.println("")
+			c.println("🧾 Staged diff (truncated):")
+			preview := string(diffOutput)
+			if len(preview) > 2000 {
+				preview = preview[:2000] + "\n... (truncated)"
+			}
+			c.println(preview)
+			c.println("")
+			c.println("✏️  Enter commit message (end with a blank line):")
+			var b strings.Builder
+			empty := 0
+			for {
+				line, _ := reader.ReadString('\n')
+				if strings.TrimSpace(line) == "" {
+					empty++
+					if empty >= 1 {
+						break
+					}
+				} else {
+					empty = 0
+				}
+				b.WriteString(line)
+			}
+			commitMessage = strings.TrimSpace(b.String())
+			if commitMessage == "" {
+				fmt.Println("❌ Empty commit message; aborting")
+				return nil
+			}
+			break
+		}
 		if singleFileMode {
 			// Single file mode - simple format without file actions in title
 			// Optimize diff for API efficiency
@@ -684,7 +686,7 @@ Generate only the commit message, no additional commentary.`, optimizedDiff.Opti
 			}
 
 			// Show token usage
-            c.printf("\n💰 Tokens used: %d (model: %s/%s)\n", resp.Usage.TotalTokens, clientType, model)
+			c.printf("\n💰 Tokens used: %d (model: %s/%s)\n", resp.Usage.TotalTokens, clientType, model)
 
 		} else {
 			// Multi-file mode - full format with file actions
@@ -783,120 +785,132 @@ Generate a Git commit message summary. The message should follow these rules:
 			commitMessage = commitTitle + "\n\n" + wrappedDesc
 
 			// Show token usage (both requests)
-            c.printf("\n💰 Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
-        }
+			c.printf("\n💰 Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
+		}
 
-        // Show staged files summary and commit message (minimal, no emoji)
-        c.println("")
-        if len(stagedFilenames) > 0 {
-            c.printf("Committing %d staged file(s):\n", len(stagedFilenames))
-            const maxList = 10
-            for i, name := range stagedFilenames {
-                if i >= maxList {
-                    remaining := len(stagedFilenames) - maxList
-                    if remaining > 0 {
-                        c.printf("... (+%d more)\n", remaining)
-                    }
-                    break
-                }
-                c.printf("- %s\n", name)
-            }
-        }
-        c.println("")
-        c.println("With message:")
-        c.println("")
-        c.println(commitMessage)
-        c.println("")
+		// Show staged files summary and commit message (minimal, no emoji)
+		c.println("")
+		if len(stagedFilenames) > 0 {
+			c.printf("Committing %d staged file(s):\n", len(stagedFilenames))
+			const maxList = 10
+			for i, name := range stagedFilenames {
+				if i >= maxList {
+					remaining := len(stagedFilenames) - maxList
+					if remaining > 0 {
+						c.printf("... (+%d more)\n", remaining)
+					}
+					break
+				}
+				c.printf("- %s\n", name)
+			}
+		}
+		c.println("")
+		c.println("With message:")
+		c.println("")
+		c.println(commitMessage)
+		c.println("")
 
-        // Handle confirmation (or auto-proceed if skipPrompt)
-        if c.skipPrompt {
-            c.println("")
-            c.println("✅ Auto-proceeding with commit (--skip-prompt)")
-            break // Exit retry loop
-        } else {
-            // If TUI is active use dropdown, otherwise stdin prompt
-            if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" && chatAgent != nil {
-                // Include the commit title in the prompt so users see context even if overlay obscures preview
-                title := ""
-                if parts := strings.Split(commitMessage, "\n"); len(parts) > 0 {
-                    title = strings.TrimSpace(parts[0])
-                    if len(title) > 80 {
-                        title = title[:77] + "..."
-                    }
-                }
-                choices := []agent.ChoiceOption{
-                    {Label: "Proceed", Value: "y"},
-                    {Label: "Edit", Value: "e"},
-                    {Label: "Retry", Value: "r"},
-                    {Label: "Cancel", Value: "n"},
-                }
-                prompt := "Proceed with commit?"
-                if title != "" {
-                    prompt = prompt + " — " + title
-                }
-                choice, err := chatAgent.PromptChoice(prompt, choices)
-                if err != nil { return fmt.Errorf("confirmation failed: %w", err) }
-                switch choice {
-                case "r":
-                    c.println("Regenerating commit message...")
-                    continue
-                case "e":
-                    edited, err := editInEditor(commitMessage)
-                    if err != nil { return fmt.Errorf("editor failed: %w", err) }
-                    if strings.TrimSpace(edited) == "" { c.println("Empty commit message; aborting"); return nil }
-                    commitMessage = edited
-                    break retryLoop
-                case "y":
-                    break retryLoop
-                case "n":
-                    c.println("Commit cancelled")
-                    return nil
-                default:
-                    continue
-                }
-            } else {
-                // Confirmation with retry option via stdin
-                c.println("")
-                c.printf("Proceed with commit? (y/n/e to edit/r to retry): ")
-                input, _ := reader.ReadString('\n')
-                input = strings.TrimSpace(strings.ToLower(input))
+		// Handle confirmation (or auto-proceed if skipPrompt)
+		if c.skipPrompt {
+			c.println("")
+			c.println("✅ Auto-proceeding with commit (--skip-prompt)")
+			break // Exit retry loop
+		} else {
+			// If TUI is active use dropdown, otherwise stdin prompt
+			if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" && chatAgent != nil {
+				// Include the commit title in the prompt so users see context even if overlay obscures preview
+				title := ""
+				if parts := strings.Split(commitMessage, "\n"); len(parts) > 0 {
+					title = strings.TrimSpace(parts[0])
+					if len(title) > 80 {
+						title = title[:77] + "..."
+					}
+				}
+				choices := []agent.ChoiceOption{
+					{Label: "Proceed", Value: "y"},
+					{Label: "Edit", Value: "e"},
+					{Label: "Retry", Value: "r"},
+					{Label: "Cancel", Value: "n"},
+				}
+				prompt := "Proceed with commit?"
+				if title != "" {
+					prompt = prompt + " — " + title
+				}
+				choice, err := chatAgent.PromptChoice(prompt, choices)
+				if err != nil {
+					return fmt.Errorf("confirmation failed: %w", err)
+				}
+				switch choice {
+				case "r":
+					c.println("Regenerating commit message...")
+					continue
+				case "e":
+					edited, err := editInEditor(commitMessage)
+					if err != nil {
+						return fmt.Errorf("editor failed: %w", err)
+					}
+					if strings.TrimSpace(edited) == "" {
+						c.println("Empty commit message; aborting")
+						return nil
+					}
+					commitMessage = edited
+					break retryLoop
+				case "y":
+					break retryLoop
+				case "n":
+					c.println("Commit cancelled")
+					return nil
+				default:
+					continue
+				}
+			} else {
+				// Confirmation with retry option via stdin
+				c.println("")
+				c.printf("Proceed with commit? (y/n/e to edit/r to retry): ")
+				input, _ := reader.ReadString('\n')
+				input = strings.TrimSpace(strings.ToLower(input))
 
-                if input == "r" || input == "retry" {
-                    c.println("Regenerating commit message...")
-                    continue // Go back to start of loop to regenerate
-                } else if input == "e" || input == "edit" {
-                    // Open editor for editing
-                    edited, err := editInEditor(commitMessage)
-                    if err != nil { return fmt.Errorf("editor failed: %w", err) }
-                    if strings.TrimSpace(edited) == "" { c.println("Empty commit message; aborting"); return nil }
-                    commitMessage = edited
-                    break
-                } else if input == "y" || input == "yes" || input == "" {
-                    break // Exit retry loop and proceed with commit
-                } else if input == "n" || input == "no" {
-                    c.println("Commit cancelled")
-                    return nil
-                } else {
-                    c.printf("Invalid option: %s. Please use y/n/e/r\n", input)
-                    continue // Show the confirmation prompt again
-                }
-            }
-        }
+				if input == "r" || input == "retry" {
+					c.println("Regenerating commit message...")
+					continue // Go back to start of loop to regenerate
+				} else if input == "e" || input == "edit" {
+					// Open editor for editing
+					edited, err := editInEditor(commitMessage)
+					if err != nil {
+						return fmt.Errorf("editor failed: %w", err)
+					}
+					if strings.TrimSpace(edited) == "" {
+						c.println("Empty commit message; aborting")
+						return nil
+					}
+					commitMessage = edited
+					break
+				} else if input == "y" || input == "yes" || input == "" {
+					break // Exit retry loop and proceed with commit
+				} else if input == "n" || input == "no" {
+					c.println("Commit cancelled")
+					return nil
+				} else {
+					c.printf("Invalid option: %s. Please use y/n/e/r\n", input)
+					continue // Show the confirmation prompt again
+				}
+			}
+		}
 
-    } // End of retry loop
+	} // End of retry loop
 
 	// Handle dry-run mode
 	if c.dryRun {
-    c.println("")
-    c.println("🔍 Dry-run mode: Commit message generated successfully!")
-    c.println("💡 The commit was not created due to --dry-run flag")
-    c.println("📝 To create the commit, run the command again without --dry-run")
-    return nil
-}
+		c.println("")
+		c.println("🔍 Dry-run mode: Commit message generated successfully!")
+		c.println("💡 The commit was not created due to --dry-run flag")
+		c.println("📝 To create the commit, run the command again without --dry-run")
+		return nil
+	}
 
 	// Create the commit
-    c.println("")
-    c.println("💾 Creating commit...")
+	c.println("")
+	c.println("💾 Creating commit...")
 
 	// Write commit message to temporary file
 	tempFile := "commit_msg.txt"
@@ -912,8 +926,8 @@ Generate a Git commit message summary. The message should follow these rules:
 		return fmt.Errorf("failed to create commit: %v\nOutput: %s", err, string(output))
 	}
 
-    c.println("✅ Commit created successfully!")
-    c.printf("Output: %s\n", string(output))
+	c.println("✅ Commit created successfully!")
+	c.printf("Output: %s\n", string(output))
 
 	return nil
 }

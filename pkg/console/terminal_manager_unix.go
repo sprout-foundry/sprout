@@ -61,11 +61,11 @@ func (tm *terminalManager) Init() error {
 
 // Cleanup restores terminal to original state
 func (tm *terminalManager) Cleanup() error {
-	// Exit alternate screen first (before locking)
-	tm.ExitAltScreen()
+    // Exit alternate screen first (before locking)
+    tm.ExitAltScreen()
 
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+    tm.mu.Lock()
+    defer tm.mu.Unlock()
 
 	// Stop resize monitoring
 	if tm.stopChan != nil {
@@ -81,10 +81,17 @@ func (tm *terminalManager) Cleanup() error {
 		tm.oldState = nil
 	}
 
-	// Show cursor
-	tm.ShowCursor()
+    // Show cursor
+    tm.ShowCursor()
 
-	return nil
+    // Reset scroll region to full screen and clear any styling
+    fmt.Fprint(tm.writer, "\033[r\033[0m")
+    // Ensure output is flushed
+    if f, ok := tm.writer.(*os.File); ok {
+        _ = f.Sync()
+    }
+
+    return nil
 }
 
 // GetSize returns the current terminal size

@@ -122,10 +122,10 @@ func runInteractiveMode(chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to add agent console: %w", err)
 	}
 
-	// Register cleanup to ensure terminal is restored
-	console.RegisterCleanup(func() error {
-		return app.Stop()
-	})
+    // Register cleanup to ensure terminal is fully restored (controller + terminal)
+    console.RegisterCleanup(func() error {
+        return app.Cleanup()
+    })
 
 	// Ensure cleanup happens on panic
 	defer console.RunCleanup()

@@ -4,15 +4,27 @@ import (
     "fmt"
     "os"
     "strings"
+    "time"
 
     api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // debugLog logs a message only if debug mode is enabled
 func (a *Agent) debugLog(format string, args ...interface{}) {
-	if a.debug {
-		fmt.Printf(format, args...)
-	}
+    if !a.debug {
+        return
+    }
+    msg := fmt.Sprintf(format, args...)
+    // Prefer writing to debug log file if available
+    if a.debugLogFile != nil {
+        a.debugLogMutex.Lock()
+        defer a.debugLogMutex.Unlock()
+        timestamp := time.Now().Format("15:04:05.000")
+        _, _ = a.debugLogFile.WriteString(fmt.Sprintf("[%s] %s", timestamp, msg))
+        return
+    }
+    // Fallback to stderr
+    fmt.Fprint(os.Stderr, msg)
 }
 
 // getModelContextLimit returns the maximum context window for a model from the API

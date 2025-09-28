@@ -386,6 +386,10 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 									}
 								}
 							}
+							// Signal activity for streaming timeout even when only tool_calls are present
+							if callback != nil {
+								callback("") // empty chunk: updates watchdog without printing
+							}
 						}
 					}
 

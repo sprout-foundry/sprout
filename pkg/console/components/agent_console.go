@@ -575,37 +575,27 @@ func (ac *AgentConsole) processInput(input string) error {
 	// Track last streaming activity for timeout reset
 	var lastStreamingActivity time.Time
 
-	// Enable streaming with our formatter callback for all providers
-	// Keep synchronous but add deadlock detection
-	if console.DebugEnabled() {
-		console.DebugPrintf("Setting up streaming callback for provider=%s\n", ac.agent.GetProvider())
-	}
-	ac.agent.EnableStreaming(func(content string) {
-		// Try to get the output mutex with a timeout to detect deadlocks
-		done := make(chan bool, 1)
-		go func() {
-			// Debug: log streaming content
-			if len(content) > 0 {
-				if console.DebugEnabled() {
-					fmt.Fprintf(os.Stderr, "[DEBUG] Streaming content: %d chars, first 20: %q\n", len(content), content[:min(20, len(content))])
-				}
-			}
-			ac.streamingFormatter.Write(content)
-			// Update TPS estimation during streaming
-			ac.updateStreamingTPS(content)
-			// Update last activity time when we receive content
-			lastStreamingActivity = time.Now()
-			done <- true
-		}()
-
-		// Wait for completion or timeout
-		select {
-		case <-done:
-			// Success
-		case <-time.After(80 * time.Second):
-			fmt.Printf("🚨 DEADLOCK DETECTED: Streaming callback blocked for 80+ seconds\n")
-		}
-	})
+    // Enable streaming with our formatter callback for all providers
+    // Make callback non-blocking to avoid potential deadlocks under contention
+    if console.DebugEnabled() {
+        console.DebugPrintf("Setting up streaming callback for provider=%s\n", ac.agent.GetProvider())
+    }
+    ac.agent.EnableStreaming(func(content string) {
+        // Dispatch write asynchronously and return immediately
+        go func() {
+            // Debug: log streaming content
+            if len(content) > 0 {
+                if console.DebugEnabled() {
+                    fmt.Fprintf(os.Stderr, "[DEBUG] Streaming content: %d chars, first 20: %q\n", len(content), content[:min(20, len(content))])
+                }
+            }
+            ac.streamingFormatter.Write(content)
+            // Update TPS estimation during streaming
+            ac.updateStreamingTPS(content)
+            // Update last activity time when we receive content
+            lastStreamingActivity = time.Now()
+        }()
+    })
 
 	// Set flush callback to force flush buffered content when needed
 	ac.agent.SetFlushCallback(func() {

@@ -74,6 +74,41 @@ func (c *CommitCommand) println(text string) {
     fmt.Fprint(os.Stdout, normalizeNewlines(text)+"\r\n")
 }
 
+// dropdown helpers for TUI confirmation
+type confirmItem struct{ label, value string }
+
+type confirmDropdownItem struct{ item confirmItem }
+func (i confirmDropdownItem) Display() string    { return i.item.label }
+func (i confirmDropdownItem) SearchText() string { return i.item.label }
+func (i confirmDropdownItem) Value() interface{} { return i.item.value }
+
+// editInEditor opens $VISUAL or $EDITOR to edit content, returns the edited text
+func editInEditor(initial string) (string, error) {
+    // Create temp file
+    f, err := os.CreateTemp("", "ledit_commit_*.txt")
+    if err != nil { return "", err }
+    path := f.Name()
+    _, _ = f.WriteString(initial)
+    f.Close()
+
+    // Choose editor
+    editor := os.Getenv("VISUAL")
+    if editor == "" { editor = os.Getenv("EDITOR") }
+    if editor == "" { editor = "vi" }
+
+    cmd := exec.Command(editor, path)
+    cmd.Stdin = os.Stdin
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+    if err := cmd.Run(); err != nil { return "", err }
+
+    // Read back
+    data, err := os.ReadFile(path)
+    _ = os.Remove(path)
+    if err != nil { return "", err }
+    return strings.TrimSpace(string(data)), nil
+}
+
 // Execute runs the commit command
 func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Parse flags from args
@@ -485,18 +520,20 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		return fmt.Errorf("failed to get staged files status: %v", err)
 	}
 
-	// Parse file actions
-	fileActions := []string{}
-	primaryAction := ""
-	lines := strings.Split(strings.TrimSpace(string(stagedFilesOutput)), "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		parts := strings.Fields(line)
-		if len(parts) >= 2 {
-			status := parts[0]
-			filepath := strings.Join(parts[1:], " ")
+    // Parse file actions and filenames
+    fileActions := []string{}
+    primaryAction := ""
+    stagedFilenames := []string{}
+    lines := strings.Split(strings.TrimSpace(string(stagedFilesOutput)), "\n")
+    for _, line := range lines {
+        if line == "" {
+            continue
+        }
+        parts := strings.Fields(line)
+        if len(parts) >= 2 {
+            status := parts[0]
+            filepath := strings.Join(parts[1:], " ")
+            stagedFilenames = append(stagedFilenames, filepath)
 
 			action := ""
 			switch status {
@@ -537,6 +574,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	var commitMessage string
 
     // Retry loop for commit message generation (LLM if available, otherwise manual input)
+retryLoop:
     for {
         if client == nil {
             // Manual fallback when LLM client isn't available
@@ -748,12 +786,27 @@ Generate a Git commit message summary. The message should follow these rules:
             c.printf("\n💰 Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
         }
 
-        // Show commit message preview
+        // Show staged files summary and commit message (minimal, no emoji)
         c.println("")
-        c.println("📋 Commit message preview:")
-        c.println("=============================================")
+        if len(stagedFilenames) > 0 {
+            c.printf("Committing %d staged file(s):\n", len(stagedFilenames))
+            const maxList = 10
+            for i, name := range stagedFilenames {
+                if i >= maxList {
+                    remaining := len(stagedFilenames) - maxList
+                    if remaining > 0 {
+                        c.printf("... (+%d more)\n", remaining)
+                    }
+                    break
+                }
+                c.printf("- %s\n", name)
+            }
+        }
+        c.println("")
+        c.println("With message:")
+        c.println("")
         c.println(commitMessage)
-        c.println("=============================================")
+        c.println("")
 
         // Handle confirmation (or auto-proceed if skipPrompt)
         if c.skipPrompt {
@@ -761,43 +814,70 @@ Generate a Git commit message summary. The message should follow these rules:
             c.println("✅ Auto-proceeding with commit (--skip-prompt)")
             break // Exit retry loop
         } else {
-            {
+            // If TUI is active use dropdown, otherwise stdin prompt
+            if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" && chatAgent != nil {
+                // Include the commit title in the prompt so users see context even if overlay obscures preview
+                title := ""
+                if parts := strings.Split(commitMessage, "\n"); len(parts) > 0 {
+                    title = strings.TrimSpace(parts[0])
+                    if len(title) > 80 {
+                        title = title[:77] + "..."
+                    }
+                }
+                choices := []agent.ChoiceOption{
+                    {Label: "Proceed", Value: "y"},
+                    {Label: "Edit", Value: "e"},
+                    {Label: "Retry", Value: "r"},
+                    {Label: "Cancel", Value: "n"},
+                }
+                prompt := "Proceed with commit?"
+                if title != "" {
+                    prompt = prompt + " — " + title
+                }
+                choice, err := chatAgent.PromptChoice(prompt, choices)
+                if err != nil { return fmt.Errorf("confirmation failed: %w", err) }
+                switch choice {
+                case "r":
+                    c.println("Regenerating commit message...")
+                    continue
+                case "e":
+                    edited, err := editInEditor(commitMessage)
+                    if err != nil { return fmt.Errorf("editor failed: %w", err) }
+                    if strings.TrimSpace(edited) == "" { c.println("Empty commit message; aborting"); return nil }
+                    commitMessage = edited
+                    break retryLoop
+                case "y":
+                    break retryLoop
+                case "n":
+                    c.println("Commit cancelled")
+                    return nil
+                default:
+                    continue
+                }
+            } else {
                 // Confirmation with retry option via stdin
                 c.println("")
-                c.printf("💡 Proceed with commit? (y/n/e to edit/r to retry): ")
+                c.printf("Proceed with commit? (y/n/e to edit/r to retry): ")
                 input, _ := reader.ReadString('\n')
                 input = strings.TrimSpace(strings.ToLower(input))
 
                 if input == "r" || input == "retry" {
-                    c.println("🔄 Regenerating commit message...")
+                    c.println("Regenerating commit message...")
                     continue // Go back to start of loop to regenerate
                 } else if input == "e" || input == "edit" {
-                    // Allow editing the commit message
-                    c.println("")
-                    c.println("✏️  Enter your commit message (press Enter twice when done):")
-                    var editedMessage strings.Builder
-                    emptyLineCount := 0
-                    for {
-                        line, _ := reader.ReadString('\n')
-                        if line == "\n" {
-                            emptyLineCount++
-                            if emptyLineCount >= 2 {
-                                break
-                            }
-                        } else {
-                            emptyLineCount = 0
-                        }
-                        editedMessage.WriteString(line)
-                    }
-                    commitMessage = strings.TrimSpace(editedMessage.String())
-                    break // Exit retry loop with edited message
+                    // Open editor for editing
+                    edited, err := editInEditor(commitMessage)
+                    if err != nil { return fmt.Errorf("editor failed: %w", err) }
+                    if strings.TrimSpace(edited) == "" { c.println("Empty commit message; aborting"); return nil }
+                    commitMessage = edited
+                    break
                 } else if input == "y" || input == "yes" || input == "" {
                     break // Exit retry loop and proceed with commit
                 } else if input == "n" || input == "no" {
-                    c.println("❌ Commit cancelled")
+                    c.println("Commit cancelled")
                     return nil
                 } else {
-                    c.printf("❌ Invalid option: %s. Please use y/n/e/r\n", input)
+                    c.printf("Invalid option: %s. Please use y/n/e/r\n", input)
                     continue // Show the confirmation prompt again
                 }
             }

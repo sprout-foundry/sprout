@@ -36,7 +36,7 @@ type ProgressSnapshotEvent struct {
 	BaseModel   string
 }
 
-// StatusEvent carries a concise current activity/status message for the TUI header/body
+// StatusEvent carries a concise current activity/status message for the UI header/body
 type StatusEvent struct{ Text string }
 
 // StreamStartedEvent indicates a streaming operation has begun

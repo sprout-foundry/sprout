@@ -173,11 +173,12 @@ type EventFilter func(event Event) bool
 
 // ConsoleApp is the main application controller
 type ConsoleApp interface {
-	// Lifecycle
-	Init(config *Config) error
-	Start() error
-	Stop() error
-	Run() error
+    // Lifecycle
+    Init(config *Config) error
+    Start() error
+    Stop() error
+    Run() error
+    Cleanup() error
 
 	// Component management
 	AddComponent(component Component) error

@@ -17,40 +17,40 @@ import (
 )
 
 type Agent struct {
-	client               api.ClientInterface
-	messages             []api.Message
-	systemPrompt         string
-	maxIterations        int
-	currentIteration     int
-	totalCost            float64
-	clientType           api.ClientType
-	taskActions          []TaskAction                   // Track what was accomplished
-	debug                bool                           // Enable debug logging
-	totalTokens          int                            // Track total tokens used across all requests
-	promptTokens         int                            // Track total prompt tokens
-	completionTokens     int                            // Track total completion tokens
-	cachedTokens         int                            // Track tokens that were cached/reused
-	cachedCostSavings    float64                        // Track cost savings from cached tokens
-	previousSummary      string                         // Summary of previous actions for continuity
-	sessionID            string                         // Unique session identifier
-	optimizer            *ConversationOptimizer         // Conversation optimization
-	configManager        *configuration.Manager         // Configuration management
-	currentContextTokens int                            // Current context size being sent to model
-	maxContextTokens     int                            // Model's maximum context window
-	contextWarningIssued bool                           // Whether we've warned about approaching context limit
-	shellCommandHistory  map[string]*ShellCommandResult // Track shell commands for deduplication
-	changeTracker        *ChangeTracker                 // Track file changes for rollback support
-	mcpManager           mcp.MCPManager                 // MCP server management
-	mcpToolsCache        []api.Tool                     // Cached MCP tools to avoid reloading
-	circuitBreaker       *CircuitBreakerState           // Track repetitive actions
-    conversationPruner   *ConversationPruner            // Automatic conversation pruning
-    toolCallGuidanceAdded bool                          // Prevent repeating tool call guidance
+	client                api.ClientInterface
+	messages              []api.Message
+	systemPrompt          string
+	maxIterations         int
+	currentIteration      int
+	totalCost             float64
+	clientType            api.ClientType
+	taskActions           []TaskAction                   // Track what was accomplished
+	debug                 bool                           // Enable debug logging
+	totalTokens           int                            // Track total tokens used across all requests
+	promptTokens          int                            // Track total prompt tokens
+	completionTokens      int                            // Track total completion tokens
+	cachedTokens          int                            // Track tokens that were cached/reused
+	cachedCostSavings     float64                        // Track cost savings from cached tokens
+	previousSummary       string                         // Summary of previous actions for continuity
+	sessionID             string                         // Unique session identifier
+	optimizer             *ConversationOptimizer         // Conversation optimization
+	configManager         *configuration.Manager         // Configuration management
+	currentContextTokens  int                            // Current context size being sent to model
+	maxContextTokens      int                            // Model's maximum context window
+	contextWarningIssued  bool                           // Whether we've warned about approaching context limit
+	shellCommandHistory   map[string]*ShellCommandResult // Track shell commands for deduplication
+	changeTracker         *ChangeTracker                 // Track file changes for rollback support
+	mcpManager            mcp.MCPManager                 // MCP server management
+	mcpToolsCache         []api.Tool                     // Cached MCP tools to avoid reloading
+	circuitBreaker        *CircuitBreakerState           // Track repetitive actions
+	conversationPruner    *ConversationPruner            // Automatic conversation pruning
+	toolCallGuidanceAdded bool                           // Prevent repeating tool call guidance
 
-    // Interrupt handling
-    interruptRequested   bool            // Flag indicating interrupt was requested
+	// Interrupt handling
+	interruptRequested   bool            // Flag indicating interrupt was requested
 	interruptMessage     string          // User message to inject after interrupt
 	escPressed           chan bool       // Channel to signal Esc key press
-	interruptChan        chan string     // Channel for TUI interrupt messages
+	interruptChan        chan string     // Channel for UI interrupt messages
 	inputInjectionChan   chan string     // Channel for injecting new user inputs during processing
 	escMonitoringEnabled bool            // Flag to enable/disable Esc monitoring
 	outputMutex          *sync.Mutex     // Mutex for synchronized output
@@ -64,12 +64,12 @@ type Agent struct {
 	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
 
 	// UI integration
-    ui UI // UI provider for dropdowns, etc.
+	ui UI // UI provider for dropdowns, etc.
 
-    // Debug logging
-    debugLogFile  *os.File      // File handle for debug logs
-    debugLogPath  string        // Path to the debug log file
-    debugLogMutex sync.Mutex    // Mutex for safe writes to debug log
+	// Debug logging
+	debugLogFile  *os.File   // File handle for debug logs
+	debugLogPath  string     // Path to the debug log file
+	debugLogMutex sync.Mutex // Mutex for safe writes to debug log
 }
 
 // NewAgent creates a new agent with auto-detected provider
@@ -165,8 +165,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Check if debug mode is enabled
 	debug := os.Getenv("LEDIT_DEBUG") == "true" || os.Getenv("LEDIT_DEBUG") == "1" || os.Getenv("LEDIT_DEBUG") != ""
 
-    // Set debug mode on the client
-    client.SetDebug(debug)
+	// Set debug mode on the client
+	client.SetDebug(debug)
 
 	// Check connection (skip in CI environments when testing)
 	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
@@ -191,8 +191,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	optimizationEnabled := true
 
 	// Create the agent
-    agent := &Agent{
-        client:                    client,
+	agent := &Agent{
+		client:                    client,
 		messages:                  []api.Message{},
 		systemPrompt:              systemPrompt,
 		maxIterations:             1000,
@@ -209,16 +209,16 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		inputInjectionChan:        make(chan string, 10), // Buffer up to 10 inputs
 		escMonitoringEnabled:      false,
 		falseStopDetectionEnabled: true,
-        conversationPruner:        NewConversationPruner(debug),
-    }
+		conversationPruner:        NewConversationPruner(debug),
+	}
 
-    // Initialize debug log file if debug enabled
-    if debug {
-        if err := agent.initDebugLogger(); err != nil {
-            // Non-fatal: fall back to stdout debug
-            fmt.Fprintf(os.Stderr, "⚠️ Failed to initialize debug logger: %v\n", err)
-        }
-    }
+	// Initialize debug log file if debug enabled
+	if debug {
+		if err := agent.initDebugLogger(); err != nil {
+			// Non-fatal: fall back to stdout debug
+			fmt.Fprintf(os.Stderr, "⚠️ Failed to initialize debug logger: %v\n", err)
+		}
+	}
 
 	// Initialize context limits based on model
 	agent.maxContextTokens = agent.getModelContextLimit()
@@ -245,31 +245,31 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		}
 	}
 
-    return agent, nil
+	return agent, nil
 }
 
 // initDebugLogger creates a temporary file for debug logs and writes a session header
 func (a *Agent) initDebugLogger() error {
-    // Create temp file
-    f, err := os.CreateTemp("", "ledit-debug-*.log")
-    if err != nil {
-        return err
-    }
-    a.debugLogFile = f
-    a.debugLogPath = f.Name()
+	// Create temp file
+	f, err := os.CreateTemp("", "ledit-debug-*.log")
+	if err != nil {
+		return err
+	}
+	a.debugLogFile = f
+	a.debugLogPath = f.Name()
 
-    // Write header
-    header := fmt.Sprintf("==== Ledit Debug Log ====%sSession start: %s\nProvider: %s\nModel: %s\nPID: %d\n========================\n",
-        "\n",
-        time.Now().Format(time.RFC3339),
-        a.GetProvider(), a.GetModel(), os.Getpid(),
-    )
-    a.debugLogMutex.Lock()
-    defer a.debugLogMutex.Unlock()
-    if _, err := a.debugLogFile.WriteString(header); err != nil {
-        return err
-    }
-    return nil
+	// Write header
+	header := fmt.Sprintf("==== Ledit Debug Log ====%sSession start: %s\nProvider: %s\nModel: %s\nPID: %d\n========================\n",
+		"\n",
+		time.Now().Format(time.RFC3339),
+		a.GetProvider(), a.GetModel(), os.Getpid(),
+	)
+	a.debugLogMutex.Lock()
+	defer a.debugLogMutex.Unlock()
+	if _, err := a.debugLogFile.WriteString(header); err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetDebugLogPath returns the path to the current debug log file (if any)
@@ -323,7 +323,7 @@ func (a *Agent) SetDebug(debug bool) {
 
 // debugLog prints debug messages if debug mode is enabled
 
-// SetInterruptHandler sets the interrupt channel for TUI mode
+// SetInterruptHandler sets the interrupt channel for UI mode
 func (a *Agent) SetInterruptHandler(ch chan string) {
 	a.interruptChan = ch
 }
@@ -383,23 +383,23 @@ func (a *Agent) DisableEscMonitoring() {
 
 // CheckForInterrupt checks if an interrupt was requested
 func (a *Agent) CheckForInterrupt() bool {
-    // Check for ESC key press
-    select {
-    case <-a.escPressed:
-        a.interruptRequested = true
-        return true
-    default:
-    }
+	// Check for ESC key press
+	select {
+	case <-a.escPressed:
+		a.interruptRequested = true
+		return true
+	default:
+	}
 
-    // Check for external interrupt requests (from TUI via interruptChan)
-    select {
-    case <-a.interruptChan:
-        a.interruptRequested = true
-        return true
-    default:
-        // No new events
-    }
-    return a.interruptRequested
+	// Check for external interrupt requests (from UI via interruptChan)
+	select {
+	case <-a.interruptChan:
+		a.interruptRequested = true
+		return true
+	default:
+		// No new events
+	}
+	return a.interruptRequested
 }
 
 // HandleInterrupt processes the interrupt request
@@ -408,7 +408,7 @@ func (a *Agent) HandleInterrupt() string {
 		return ""
 	}
 
-	// If we have an interrupt channel (TUI mode), use it
+	// If we have an interrupt channel (UI mode), use it
 	if a.interruptChan != nil {
 		select {
 		case msg := <-a.interruptChan:
@@ -435,24 +435,24 @@ func (a *Agent) HandleInterrupt() string {
 
 // ClearInterrupt resets the interrupt state
 func (a *Agent) ClearInterrupt() {
-    a.interruptRequested = false
-    a.interruptMessage = ""
-    // Drain the channel
-    select {
-    case <-a.escPressed:
-    default:
-    }
-    // Drain any pending interrupt control messages
-    if a.interruptChan != nil {
-        for {
-            select {
-            case <-a.interruptChan:
-                // keep draining
-            default:
-                return
-            }
-        }
-    }
+	a.interruptRequested = false
+	a.interruptMessage = ""
+	// Drain the channel
+	select {
+	case <-a.escPressed:
+	default:
+	}
+	// Drain any pending interrupt control messages
+	if a.interruptChan != nil {
+		for {
+			select {
+			case <-a.interruptChan:
+				// keep draining
+			default:
+				return
+			}
+		}
+	}
 }
 
 // GetMessages returns the current conversation messages
@@ -870,12 +870,12 @@ func (a *Agent) GetInputInjectionChannel() <-chan string {
 
 // SetOutputMutex sets the output mutex for synchronized output
 func (a *Agent) SetOutputMutex(mutex *sync.Mutex) {
-    a.outputMutex = mutex
+	a.outputMutex = mutex
 }
 
 // IsInterrupted returns true if an interrupt has been requested
 func (a *Agent) IsInterrupted() bool {
-    return a.interruptRequested
+	return a.interruptRequested
 }
 
 // EnableStreaming enables response streaming with a callback

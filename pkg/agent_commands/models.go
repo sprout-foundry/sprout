@@ -774,10 +774,10 @@ func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 	finalProvider := chatAgent.GetProviderType()
 	finalModel := chatAgent.GetModel()
 
-	fmt.Printf("✅ Model set to: %s\n", finalModel)
-	fmt.Printf("🏢 Provider: %s\n", api.GetProviderName(finalProvider))
+	fmt.Printf("Model set to: %s\n", finalModel)
+	fmt.Printf("Provider: %s\n", api.GetProviderName(finalProvider))
 
-	// Publish model info event for TUI
+	// Publish model info event for UI
 	ui.PublishModel(finalModel)
 
 	return nil

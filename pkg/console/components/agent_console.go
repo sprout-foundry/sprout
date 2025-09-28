@@ -447,8 +447,6 @@ func (ac *AgentConsole) Start() error {
 
 	// Layout manager handles positioning automatically
 
-	// Initial help about the new features (BEFORE footer)
-	ac.safePrint("\n💡 You can now type while the agent is processing!\n")
 	ac.safePrint("   Press Tab to switch between inputs and output focus.\n")
 	ac.safePrint("   Use Ctrl+C to interrupt the agent.\n\n")
 
@@ -1455,39 +1453,39 @@ func (ac *AgentConsole) writeTextWithRawModeFix(text string) {
 
 // safePrint writes output that respects the content area and updates buffer
 func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
-    content := fmt.Sprintf(format, args...)
+	content := fmt.Sprintf(format, args...)
 
 	// Debug output
 	if console.DebugEnabled() && len(content) > 0 && content != "\n" {
 		console.DebugPrintf("safePrint called with %d chars\n", len(content))
 	}
 
-    // Filter out completion signals that should not be displayed
-    content = ac.filterCompletionSignals(content)
+	// Filter out completion signals that should not be displayed
+	content = ac.filterCompletionSignals(content)
 
-    // Only write if there's content left after filtering
-    if strings.TrimSpace(content) != "" {
-        // Ensure currentContentLine is initialized and within bounds when we have content
-        if ac.autoLayoutManager != nil && ac.Terminal() != nil {
-            top, bottom := ac.autoLayoutManager.GetScrollRegion()
-            contentHeight := bottom - top + 1
-            if ac.currentContentLine == 0 {
-                ac.currentContentLine = 1
-            }
-            if ac.currentContentLine > contentHeight {
-                ac.currentContentLine = contentHeight
-            }
-        } else {
-            if ac.currentContentLine == 0 {
-                ac.currentContentLine = 1
-            }
-        }
+	// Only write if there's content left after filtering
+	if strings.TrimSpace(content) != "" {
+		// Ensure currentContentLine is initialized and within bounds when we have content
+		if ac.autoLayoutManager != nil && ac.Terminal() != nil {
+			top, bottom := ac.autoLayoutManager.GetScrollRegion()
+			contentHeight := bottom - top + 1
+			if ac.currentContentLine == 0 {
+				ac.currentContentLine = 1
+			}
+			if ac.currentContentLine > contentHeight {
+				ac.currentContentLine = contentHeight
+			}
+		} else {
+			if ac.currentContentLine == 0 {
+				ac.currentContentLine = 1
+			}
+		}
 
-        // Fallback for uninitialized console (e.g., lightweight tests)
-        if ac.autoLayoutManager == nil || ac.Terminal() == nil {
-            if ac.consoleBuffer != nil {
-                ac.consoleBuffer.AddContent(content)
-            }
+		// Fallback for uninitialized console (e.g., lightweight tests)
+		if ac.autoLayoutManager == nil || ac.Terminal() == nil {
+			if ac.consoleBuffer != nil {
+				ac.consoleBuffer.AddContent(content)
+			}
 			// Best-effort stdout write without terminal ops
 			fmt.Print(content)
 			if ac.currentContentLine == 0 {
@@ -1496,40 +1494,40 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 			ac.currentContentLine += strings.Count(content, "\n")
 			return
 		}
-        // Add to console buffer for tracking
-        if ac.consoleBuffer != nil {
-            ac.consoleBuffer.AddContent(content)
-        }
+		// Add to console buffer for tracking
+		if ac.consoleBuffer != nil {
+			ac.consoleBuffer.AddContent(content)
+		}
 
 		// If we're scrolling, don't auto-display new content
 		if ac.isScrolling {
 			return
 		}
 
-        // Redraw from buffer to ensure consistent ordering and wrapping
-        ac.redrawContent()
+		// Redraw from buffer to ensure consistent ordering and wrapping
+		ac.redrawContent()
 
-        // Update currentContentLine by the number of newlines in the content, with bounds checking
-        newlines := strings.Count(content, "\n")
-        if newlines > 0 {
-            ac.currentContentLine += newlines
-            if ac.autoLayoutManager != nil {
-                top, bottom := ac.autoLayoutManager.GetScrollRegion()
-                contentHeight := bottom - top + 1
-                if ac.currentContentLine > contentHeight {
-                    ac.currentContentLine = contentHeight
-                }
-                if ac.currentContentLine < 1 {
-                    ac.currentContentLine = 1
-                }
-            }
-        }
+		// Update currentContentLine by the number of newlines in the content, with bounds checking
+		newlines := strings.Count(content, "\n")
+		if newlines > 0 {
+			ac.currentContentLine += newlines
+			if ac.autoLayoutManager != nil {
+				top, bottom := ac.autoLayoutManager.GetScrollRegion()
+				contentHeight := bottom - top + 1
+				if ac.currentContentLine > contentHeight {
+					ac.currentContentLine = contentHeight
+				}
+				if ac.currentContentLine < 1 {
+					ac.currentContentLine = 1
+				}
+			}
+		}
 
-        // For non-streaming output, ensure cursor returns to the tracked content area position
-        if !ac.isStreaming {
-            ac.repositionCursorToContentArea()
-        }
-    }
+		// For non-streaming output, ensure cursor returns to the tracked content area position
+		if !ac.isStreaming {
+			ac.repositionCursorToContentArea()
+		}
+	}
 }
 
 // OnResize handles terminal resize events

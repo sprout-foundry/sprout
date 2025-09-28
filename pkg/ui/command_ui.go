@@ -13,11 +13,14 @@ var ErrCancelled = errors.New("operation cancelled")
 
 // CommandUI provides UI capabilities to commands
 type CommandUI interface {
-	// ShowDropdown shows a dropdown selection UI
-	ShowDropdown(ctx context.Context, items []DropdownItem, options DropdownOptions) (DropdownItem, error)
+    // ShowDropdown shows a dropdown selection UI
+    ShowDropdown(ctx context.Context, items []DropdownItem, options DropdownOptions) (DropdownItem, error)
 
-	// ShowInput shows an input prompt
-	ShowInput(ctx context.Context, prompt string, defaultValue string) (string, error)
+    // ShowQuickPrompt shows a small, inline prompt above input with quick choices
+    ShowQuickPrompt(ctx context.Context, prompt string, options []QuickOption, horizontal bool) (QuickOption, error)
+
+    // ShowInput shows an input prompt
+    ShowInput(ctx context.Context, prompt string, defaultValue string) (string, error)
 
 	// ShowProgress shows a progress indicator
 	ShowProgress(ctx context.Context, message string) ProgressHandle

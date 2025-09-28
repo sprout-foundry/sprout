@@ -208,11 +208,11 @@ func (tm *terminalManager) OnResize(callback func(width, height int)) {
 
 // Cleanup cleans up terminal resources
 func (tm *terminalManager) Cleanup() error {
-	// Exit alternate screen first (before locking)
-	tm.ExitAltScreen()
+    // Exit alternate screen first (before locking)
+    tm.ExitAltScreen()
 
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+    tm.mu.Lock()
+    defer tm.mu.Unlock()
 
 	// Stop resize monitoring
 	close(tm.stopChan)
@@ -225,9 +225,12 @@ func (tm *terminalManager) Cleanup() error {
 		}
 	}
 
-	// Show cursor
-	fmt.Fprint(tm.writer, "\x1b[?25h")
-	return nil
+    // Show cursor and reset scroll region + styling
+    fmt.Fprint(tm.writer, "\x1b[?25h\x1b[r\x1b[0m")
+    if f, ok := tm.writer.(*os.File); ok {
+        _ = f.Sync()
+    }
+    return nil
 }
 
 // SetWriter sets the output writer

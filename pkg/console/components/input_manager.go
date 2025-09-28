@@ -731,7 +731,7 @@ func (im *InputManager) showInputField() {
 	}
 
 	// Determine left margin based on focus (reserve column 1 for focus bar when input is focused)
-	// Always reserve 2 columns for gutter (bar+padding)
+    // Reserve 3 columns for gutter (2-bar + padding)
 
 	// First, clear the previously rendered region at its original Y (in case Y changed due to layout)
 	if im.lastRenderHeight > 0 && im.lastRenderY > 0 {
@@ -806,8 +806,8 @@ func (im *InputManager) showInputFieldAfterResize(oldWidth, oldHeight int) {
 		linesToClear = 20
 	}
 
-	// Always reserve 2 columns for gutter (bar+padding)
-	startX := 3
+    // Reserve 3 columns for gutter (2-bar + padding)
+    startX := 4
 
 	// Clear all potential lines that might contain artifacts
 	// Use aggressive clearing for resize scenarios to handle horizontal artifacts
@@ -861,8 +861,8 @@ func (im *InputManager) calculateLinesForWidth(width int) int {
 
 // getEffectiveWidth returns the wrapping width with safe fallbacks
 func (im *InputManager) getEffectiveWidth() int {
-	// Always reserve 2 columns for gutter (bar+padding)
-	effectiveWidth := im.termWidth - 2
+    // Reserve 3 columns for gutter (2-bar + padding)
+    effectiveWidth := im.termWidth - 3
 	if effectiveWidth <= 0 {
 		effectiveWidth = 80
 	}
@@ -871,8 +871,8 @@ func (im *InputManager) getEffectiveWidth() int {
 
 // renderInputContent writes the input prompt+text wrapped to the terminal and positions cursor
 func (im *InputManager) renderInputContent(fullText string, effectiveWidth, cursorLine, cursorCol int) {
-	// account for left margin when computing cursor column (gutter=2)
-	leftMargin := 3
+    // account for left margin when computing cursor column (gutter=3)
+    leftMargin := 4
 	// Split text into lines based on terminal width
 	currentLine := 0
 	for i := 0; i < len(fullText); i += effectiveWidth {

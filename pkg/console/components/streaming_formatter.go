@@ -256,17 +256,16 @@ func (sf *StreamingFormatter) outputLine(line string) {
 	trimmed := strings.TrimSpace(line)
 
 	// Handle lines starting with bullet character (•) - some LLMs use this instead of markdown
-	if strings.HasPrefix(trimmed, "•") {
-		// Convert to standard markdown bullet for consistent formatting
-		bulletText := strings.TrimSpace(strings.TrimPrefix(trimmed, "•"))
-		sf.print(contentPadding + "  ")
-		sf.print(color.New(color.FgHiBlack).Sprint("• "))
-		// Apply inline formatting to the bullet text
-		formattedText := sf.applyInlineFormatting(bulletText)
-		sf.println(formattedText)
-		sf.lastWasNewline = true
-		sf.inListContext = true
-	} else if strings.HasPrefix(trimmed, "#") {
+    if strings.HasPrefix(trimmed, "•") {
+        // Convert to standard markdown bullet for consistent formatting
+        bulletText := strings.TrimSpace(strings.TrimPrefix(trimmed, "•"))
+        // Compose a single line so the marker and text stay together
+        formattedText := sf.applyInlineFormatting(bulletText)
+        lineOut := contentPadding + "  " + color.New(color.FgHiBlack).Sprint("• ") + formattedText
+        sf.println(lineOut)
+        sf.lastWasNewline = true
+        sf.inListContext = true
+    } else if strings.HasPrefix(trimmed, "#") {
 		// Check if this is a markdown header
 		// Add visual separation for headers
 		if !sf.lastWasNewline {
@@ -307,29 +306,27 @@ func (sf *StreamingFormatter) outputLine(line string) {
 	} else if sf.inCodeBlock {
 		// Inside code block - yellow/amber color
 		sf.printlnColored(color.New(color.FgYellow).Sprint, sf.addPadding(line))
-	} else if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "+ ") {
-		// Bullet points - light grey bullet with formatted text
-		bulletText := strings.TrimSpace(trimmed[2:])
-		sf.print("  ")
-		sf.print(color.New(color.FgHiBlack).Sprint("• "))
-		// Apply inline formatting to the bullet text
-		formattedText := sf.applyInlineFormatting(bulletText)
-		sf.println(formattedText)
-		sf.inListContext = true
-	} else if matched, _ := regexp.MatchString(`^\d+\.`, trimmed); matched {
-		// Numbered lists with formatted text
-		parts := strings.SplitN(trimmed, ".", 2)
-		if len(parts) == 2 {
-			sf.print("  ")
-			sf.print(color.New(color.FgHiBlack).Sprint(parts[0] + ". "))
-			// Apply inline formatting to the list item text
-			formattedText := sf.applyInlineFormatting(strings.TrimSpace(parts[1]))
-			sf.println(formattedText)
-		} else {
-			sf.println(line)
-		}
-		sf.inListContext = true
-	} else if strings.HasPrefix(trimmed, ">") {
+    } else if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "+ ") {
+        // Bullet points - light grey bullet with formatted text
+        bulletText := strings.TrimSpace(trimmed[2:])
+        formattedText := sf.applyInlineFormatting(bulletText)
+        // Compose a single line so the marker and text stay together
+        lineOut := "  " + color.New(color.FgHiBlack).Sprint("• ") + formattedText
+        sf.println(lineOut)
+        sf.inListContext = true
+    } else if matched, _ := regexp.MatchString(`^\d+\.`, trimmed); matched {
+        // Numbered lists with formatted text
+        parts := strings.SplitN(trimmed, ".", 2)
+        if len(parts) == 2 {
+            formattedText := sf.applyInlineFormatting(strings.TrimSpace(parts[1]))
+            // Compose a single line so the marker and text stay together
+            lineOut := "  " + color.New(color.FgHiBlack).Sprint(parts[0]+". ") + formattedText
+            sf.println(lineOut)
+        } else {
+            sf.println(line)
+        }
+        sf.inListContext = true
+    } else if strings.HasPrefix(trimmed, ">") {
 		// Blockquotes - dim italic
 		quotedText := strings.TrimSpace(strings.TrimPrefix(trimmed, ">"))
 		sf.print("  ")

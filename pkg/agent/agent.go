@@ -63,7 +63,12 @@ type Agent struct {
 	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
 
 	// UI integration
-	ui UI // UI provider for dropdowns, etc.
+    ui UI // UI provider for dropdowns, etc.
+
+    // Debug logging
+    debugLogFile  *os.File      // File handle for debug logs
+    debugLogPath  string        // Path to the debug log file
+    debugLogMutex sync.Mutex    // Mutex for safe writes to debug log
 }
 
 // NewAgent creates a new agent with auto-detected provider
@@ -159,8 +164,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Check if debug mode is enabled
 	debug := os.Getenv("LEDIT_DEBUG") == "true" || os.Getenv("LEDIT_DEBUG") == "1" || os.Getenv("LEDIT_DEBUG") != ""
 
-	// Set debug mode on the client
-	client.SetDebug(debug)
+    // Set debug mode on the client
+    client.SetDebug(debug)
 
 	// Check connection (skip in CI environments when testing)
 	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
@@ -185,8 +190,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	optimizationEnabled := true
 
 	// Create the agent
-	agent := &Agent{
-		client:                    client,
+    agent := &Agent{
+        client:                    client,
 		messages:                  []api.Message{},
 		systemPrompt:              systemPrompt,
 		maxIterations:             1000,
@@ -203,8 +208,16 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		inputInjectionChan:        make(chan string, 10), // Buffer up to 10 inputs
 		escMonitoringEnabled:      false,
 		falseStopDetectionEnabled: true,
-		conversationPruner:        NewConversationPruner(debug),
-	}
+        conversationPruner:        NewConversationPruner(debug),
+    }
+
+    // Initialize debug log file if debug enabled
+    if debug {
+        if err := agent.initDebugLogger(); err != nil {
+            // Non-fatal: fall back to stdout debug
+            fmt.Fprintf(os.Stderr, "⚠️ Failed to initialize debug logger: %v\n", err)
+        }
+    }
 
 	// Initialize context limits based on model
 	agent.maxContextTokens = agent.getModelContextLimit()
@@ -231,8 +244,35 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		}
 	}
 
-	return agent, nil
+    return agent, nil
 }
+
+// initDebugLogger creates a temporary file for debug logs and writes a session header
+func (a *Agent) initDebugLogger() error {
+    // Create temp file
+    f, err := os.CreateTemp("", "ledit-debug-*.log")
+    if err != nil {
+        return err
+    }
+    a.debugLogFile = f
+    a.debugLogPath = f.Name()
+
+    // Write header
+    header := fmt.Sprintf("==== Ledit Debug Log ====%sSession start: %s\nProvider: %s\nModel: %s\nPID: %d\n========================\n",
+        "\n",
+        time.Now().Format(time.RFC3339),
+        a.GetProvider(), a.GetModel(), os.Getpid(),
+    )
+    a.debugLogMutex.Lock()
+    defer a.debugLogMutex.Unlock()
+    if _, err := a.debugLogFile.WriteString(header); err != nil {
+        return err
+    }
+    return nil
+}
+
+// GetDebugLogPath returns the path to the current debug log file (if any)
+func (a *Agent) GetDebugLogPath() string { return a.debugLogPath }
 
 // getClientTypeFromName converts provider name to ClientType
 func getClientTypeFromName(name string) (api.ClientType, error) {

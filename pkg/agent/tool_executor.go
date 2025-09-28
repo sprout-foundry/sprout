@@ -157,10 +157,14 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 
 	// Use the tool registry for execution
 	registry := GetToolRegistry()
-	result, err := registry.ExecuteTool(toolCall.Function.Name, args, te.agent)
-	if err != nil {
-		result = fmt.Sprintf("Error: %v", err)
-	}
+    result, err := registry.ExecuteTool(toolCall.Function.Name, args, te.agent)
+    if err != nil {
+        // Ensure the error is visible to the user immediately
+        te.agent.PrintLine("")
+        te.agent.PrintLine(fmt.Sprintf("❌ Tool '%s' failed: %v", toolCall.Function.Name, err))
+        te.agent.PrintLine("")
+        result = fmt.Sprintf("Error: %v", err)
+    }
 
 	// Update circuit breaker
 	te.updateCircuitBreaker(toolCall.Function.Name, args)

@@ -36,9 +36,9 @@ func NewConversationHandler(agent *Agent) *ConversationHandler {
 
 // ProcessQuery handles a user query through the complete conversation flow
 func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
-	if ch.agent.debug {
-		fmt.Printf("DEBUG: ProcessQuery called with: %s\n", userQuery)
-	}
+    if ch.agent.debug {
+        ch.agent.debugLog("DEBUG: ProcessQuery called with: %s\n", userQuery)
+    }
 
 	// Initialize timeout tracking
 	ch.conversationStartTime = time.Now()
@@ -78,23 +78,23 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		}
 
 		// Send message to LLM
-		if ch.agent.debug {
-			fmt.Printf("DEBUG: ConversationHandler sending message (iteration %d) at %s\n", ch.agent.currentIteration, time.Now().Format("15:04:05.000"))
-		}
+        if ch.agent.debug {
+            ch.agent.debugLog("DEBUG: ConversationHandler sending message (iteration %d) at %s\n", ch.agent.currentIteration, time.Now().Format("15:04:05.000"))
+        }
 		response, err := ch.sendMessage()
 		if err != nil {
-			if ch.agent.debug {
-				fmt.Printf("DEBUG: ConversationHandler got error at %s: %v\n", time.Now().Format("15:04:05.000"), err)
-			}
+            if ch.agent.debug {
+                ch.agent.debugLog("DEBUG: ConversationHandler got error at %s: %v\n", time.Now().Format("15:04:05.000"), err)
+            }
 
 			// Display user-friendly error message based on error type
 			ch.displayUserFriendlyError(err)
 
 			return ch.errorHandler.HandleAPIFailure(err, ch.agent.messages)
 		}
-		if ch.agent.debug {
-			fmt.Printf("DEBUG: ConversationHandler received response at %s\n", time.Now().Format("15:04:05.000"))
-		}
+        if ch.agent.debug {
+            ch.agent.debugLog("DEBUG: ConversationHandler received response at %s\n", time.Now().Format("15:04:05.000"))
+        }
 
 		// Update activity time on successful response
 		ch.lastActivityTime = time.Now()

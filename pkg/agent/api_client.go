@@ -69,10 +69,10 @@ func (ac *APIClient) setTimeoutsFromConfig() {
 	ac.chunkTimeout = time.Duration(chunkTimeoutSec) * time.Second
 	ac.overallTimeout = time.Duration(overallTimeoutSec) * time.Second
 
-	if ac.agent.debug {
-		fmt.Printf("DEBUG: API Timeouts - Connection: %v, First Chunk: %v, Chunk: %v, Overall: %v\n",
-			ac.connectionTimeout, ac.firstChunkTimeout, ac.chunkTimeout, ac.overallTimeout)
-	}
+    if ac.agent.debug {
+        ac.agent.debugLog("DEBUG: API Timeouts - Connection: %v, First Chunk: %v, Chunk: %v, Overall: %v\n",
+            ac.connectionTimeout, ac.firstChunkTimeout, ac.chunkTimeout, ac.overallTimeout)
+    }
 }
 
 // SendWithRetry sends a request to the LLM with retry logic
@@ -85,41 +85,41 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 	ac.agent.streamingBuffer.Reset()
 
 	for retry := 0; retry <= ac.maxRetries; retry++ {
-		if ac.agent.debug {
-			fmt.Printf("DEBUG: APIClient attempt %d/%d\n", retry, ac.maxRetries)
-		}
+        if ac.agent.debug {
+            ac.agent.debugLog("DEBUG: APIClient attempt %d/%d\n", retry, ac.maxRetries)
+        }
 
 		// Send request with diagnostic timing
-		if ac.agent.debug {
-			fmt.Printf("DEBUG: APIClient starting sendRequest at %s\n", time.Now().Format("15:04:05.000"))
-		}
+        if ac.agent.debug {
+            ac.agent.debugLog("DEBUG: APIClient starting sendRequest at %s\n", time.Now().Format("15:04:05.000"))
+        }
 		resp, err = ac.sendRequest(messages, tools, reasoning)
-		if ac.agent.debug {
-			if err == nil {
-				fmt.Printf("DEBUG: APIClient completed sendRequest successfully at %s\n", time.Now().Format("15:04:05.000"))
-			} else {
-				fmt.Printf("DEBUG: APIClient sendRequest failed at %s with error: %v\n", time.Now().Format("15:04:05.000"), err)
-			}
-		}
+        if ac.agent.debug {
+            if err == nil {
+                ac.agent.debugLog("DEBUG: APIClient completed sendRequest successfully at %s\n", time.Now().Format("15:04:05.000"))
+            } else {
+                ac.agent.debugLog("DEBUG: APIClient sendRequest failed at %s with error: %v\n", time.Now().Format("15:04:05.000"), err)
+            }
+        }
 		if err == nil {
 			break // Success
 		}
 
-		if ac.agent.debug {
-			fmt.Printf("DEBUG: APIClient error on attempt %d: %v\n", retry, err)
-		}
+        if ac.agent.debug {
+            ac.agent.debugLog("DEBUG: APIClient error on attempt %d: %v\n", retry, err)
+        }
 
 		// Handle error with retry logic
 		if !ac.shouldRetry(err, retry) {
-			if ac.agent.debug {
-				fmt.Printf("DEBUG: APIClient not retrying error: %v\n", err)
-			}
+            if ac.agent.debug {
+                ac.agent.debugLog("DEBUG: APIClient not retrying error: %v\n", err)
+            }
 			return nil, err
 		}
 
-		if ac.agent.debug {
-			fmt.Printf("DEBUG: APIClient retrying due to: %v\n", err)
-		}
+        if ac.agent.debug {
+            ac.agent.debugLog("DEBUG: APIClient retrying due to: %v\n", err)
+        }
 
 		// Calculate backoff delay
 		sleepTime := ac.calculateBackoff(err, retry, retryDelay)
@@ -180,17 +180,17 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 
 	// Start the API call in a goroutine
 	go func() {
-		if ac.agent.debug {
-			fmt.Printf("DEBUG: APIClient calling client.SendChatRequestStream at %s\n", time.Now().Format("15:04:05.000"))
-		}
+        if ac.agent.debug {
+            ac.agent.debugLog("DEBUG: APIClient calling client.SendChatRequestStream at %s\n", time.Now().Format("15:04:05.000"))
+        }
 		resp, err := ac.agent.client.SendChatRequestStream(messages, tools, reasoning, streamCallback)
-		if ac.agent.debug {
-			if err == nil {
-				fmt.Printf("DEBUG: APIClient client.SendChatRequestStream completed at %s\n", time.Now().Format("15:04:05.000"))
-			} else {
-				fmt.Printf("DEBUG: APIClient client.SendChatRequestStream failed at %s: %v\n", time.Now().Format("15:04:05.000"), err)
-			}
-		}
+        if ac.agent.debug {
+            if err == nil {
+                ac.agent.debugLog("DEBUG: APIClient client.SendChatRequestStream completed at %s\n", time.Now().Format("15:04:05.000"))
+            } else {
+                ac.agent.debugLog("DEBUG: APIClient client.SendChatRequestStream failed at %s: %v\n", time.Now().Format("15:04:05.000"), err)
+            }
+        }
 
 		resultChan <- struct {
 			resp *api.ChatResponse
@@ -268,24 +268,24 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 	}, 1)
 
 	// Start the API call in a goroutine
-	go func() {
-		if ac.agent.debug {
-			fmt.Printf("DEBUG: APIClient calling client.SendChatRequest at %s\n", time.Now().Format("15:04:05.000"))
-		}
-		resp, err := ac.agent.client.SendChatRequest(messages, tools, reasoning)
-		if ac.agent.debug {
-			if err == nil {
-				fmt.Printf("DEBUG: APIClient client.SendChatRequest completed at %s\n", time.Now().Format("15:04:05.000"))
-			} else {
-				fmt.Printf("DEBUG: APIClient client.SendChatRequest failed at %s: %v\n", time.Now().Format("15:04:05.000"), err)
-			}
-		}
+    go func() {
+        if ac.agent.debug {
+            ac.agent.debugLog("DEBUG: APIClient calling client.SendChatRequest at %s\n", time.Now().Format("15:04:05.000"))
+        }
+        resp, err := ac.agent.client.SendChatRequest(messages, tools, reasoning)
+        if ac.agent.debug {
+            if err == nil {
+                ac.agent.debugLog("DEBUG: APIClient client.SendChatRequest completed at %s\n", time.Now().Format("15:04:05.000"))
+            } else {
+                ac.agent.debugLog("DEBUG: APIClient client.SendChatRequest failed at %s: %v\n", time.Now().Format("15:04:05.000"), err)
+            }
+        }
 
-		resultChan <- struct {
-			resp *api.ChatResponse
-			err  error
-		}{resp, err}
-	}()
+        resultChan <- struct {
+            resp *api.ChatResponse
+            err  error
+        }{resp, err}
+    }()
 
 	// Wait for result or timeout
 	select {
@@ -311,9 +311,9 @@ func (ac *APIClient) shouldRetry(err error, attempt int) bool {
 
 	// Check for rate limits
 	if ac.isRateLimit(errStr) {
-		if ac.agent.debug {
-			fmt.Printf("DEBUG: shouldRetry - rate limit detected: %v\n", err)
-		}
+    if ac.agent.debug {
+        ac.agent.debugLog("DEBUG: shouldRetry - rate limit detected: %v\n", err)
+    }
 		return ac.handleRateLimit(err, attempt)
 	}
 
@@ -322,10 +322,10 @@ func (ac *APIClient) shouldRetry(err error, attempt int) bool {
 	withinMaxRetries := attempt < ac.maxRetries
 	result := isRetryable && withinMaxRetries
 
-	if ac.agent.debug {
-		fmt.Printf("DEBUG: shouldRetry - error: %v, isRetryable: %v, attempt: %d/%d, result: %v\n",
-			err, isRetryable, attempt, ac.maxRetries, result)
-	}
+    if ac.agent.debug {
+        ac.agent.debugLog("DEBUG: shouldRetry - error: %v, isRetryable: %v, attempt: %d/%d, result: %v\n",
+            err, isRetryable, attempt, ac.maxRetries, result)
+    }
 
 	return result
 }

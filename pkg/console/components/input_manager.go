@@ -1090,6 +1090,32 @@ func (im *InputManager) GetInputHeight() int {
 	return im.inputHeight
 }
 
+// GetHistoryState returns the current history navigation state
+func (im *InputManager) GetHistoryState() (int, string) {
+	im.mutex.RLock()
+	defer im.mutex.RUnlock()
+	
+	tempInput := ""
+	if im.tempInput != nil {
+		tempInput = string(im.tempInput)
+	}
+	
+	return im.historyIndex, tempInput
+}
+
+// SetHistoryState sets the history navigation state
+func (im *InputManager) SetHistoryState(historyIndex int, tempInput string) {
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+	
+	im.historyIndex = historyIndex
+	if tempInput != "" {
+		im.tempInput = []rune(tempInput)
+	} else {
+		im.tempInput = []rune{}
+	}
+}
+
 // UpdateInputHeight forces a recalculation of input dimensions and returns new height
 func (im *InputManager) UpdateInputHeight() int {
 	im.mutex.Lock()

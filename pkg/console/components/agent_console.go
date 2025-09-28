@@ -91,13 +91,23 @@ type AgentConsole struct {
 	scrollPosition int
 
 	// Interruption state
-	wasInterrupted bool
+    wasInterrupted bool
 
 	// Focus state: "input" or "output"
 	focusMode string
 
 	// Help overlay state (output focus)
-	showOutputHelp bool
+    showOutputHelp bool
+
+    // Print positioning state
+    didInitialPosition bool
+
+    // Streaming ordering
+    streamCh   chan string
+    streamDone chan struct{}
+
+    // Input rendering state
+    lastInputHeight int
 }
 
 // NewAgentConsole creates a new agent console
@@ -266,14 +276,10 @@ func (ac *AgentConsole) setFocus(mode string) {
 		}
 	}
 	ac.renderFocusIndicators()
-    // Adjust buffer wrapping width based on focus margin
+    // Adjust buffer wrapping width based on gutter (accent+padding or padding-only = 2 cols)
     if ac.Terminal() != nil && ac.consoleBuffer != nil {
         w, _, _ := ac.Terminal().GetSize()
-        contentWidth := w
-        // Reserve a 3-column gutter (bar+bar+space) when output-focused
-        if mode == "output" {
-            contentWidth = w - 3
-        }
+        contentWidth := w - 2
         if contentWidth < 1 {
             contentWidth = 1
         }
@@ -291,28 +297,58 @@ func (ac *AgentConsole) renderFocusIndicators() {
 		return
 	}
 
-    // Build a wider cyan bar using two thin line glyphs, plus a space padding (total gutter = 3)
-    bar := "\033[36m││\033[0m"
-    clear := "   "
+    // Build a clean gutter: 1 colored column + 1 padding space between accent and content
+    bar := "\033[46m \033[0m "
+    clear := "  "
 
 	// Clear any existing bar in content area first
 	top, bottom := ac.autoLayoutManager.GetScrollRegion()
-	for y := top; y <= bottom; y++ {
-		ac.Terminal().MoveCursor(1, y)
+    for y := top; y <= bottom; y++ {
+        ac.Terminal().MoveCursor(1, y)
         if ac.focusMode == "output" {
-            ac.Terminal().WriteText(bar + " ")
+            ac.Terminal().WriteText(bar)
         } else {
             ac.Terminal().WriteText(clear)
         }
-	}
+    }
 
-	// Draw or clear input focus bar at input field line
-	inputLine := ac.inputManager.GetCurrentInputFieldLine()
-	ac.Terminal().MoveCursor(1, inputLine)
-    if ac.focusMode == "input" {
-        ac.Terminal().WriteText(bar + " ")
-    } else {
-        ac.Terminal().WriteText(clear)
+    // Draw or clear input focus bar at input field line
+    inputLine := ac.inputManager.GetCurrentInputFieldLine()
+    height := ac.lastInputHeight
+    if height <= 0 {
+        height = 1
+    }
+    for i := 0; i < height; i++ {
+        ac.Terminal().MoveCursor(1, inputLine+i)
+        if ac.focusMode == "input" {
+            ac.Terminal().WriteText(bar)
+        } else {
+            ac.Terminal().WriteText(clear)
+        }
+    }
+}
+
+// enqueueBestEffort tries to enqueue content without risking indefinite blocking
+func (ac *AgentConsole) enqueueBestEffort(content string) error {
+    if ac.streamCh == nil {
+        // No worker, write directly (unlikely)
+        ac.streamingFormatter.Write(content)
+        return nil
+    }
+    select {
+    case ac.streamCh <- content:
+        return nil
+    default:
+        // Drop into a short goroutine to avoid blocking the caller; ordering may be affected only in overload
+        go func(c string) {
+            select {
+            case ac.streamCh <- c:
+            case <-time.After(200 * time.Millisecond):
+                // If still blocked, as a last resort write directly; extremely rare
+                ac.streamingFormatter.Write(c)
+            }
+        }(content)
+        return nil
     }
 }
 
@@ -575,13 +611,15 @@ func (ac *AgentConsole) processInput(input string) error {
 	var lastStreamingActivity time.Time
 
     // Enable streaming with our formatter callback for all providers
-    // Make callback non-blocking to avoid potential deadlocks under contention
+    // Use a single worker and a buffered channel to preserve ordering without per-chunk goroutines
     if console.DebugEnabled() {
         console.DebugPrintf("Setting up streaming callback for provider=%s\n", ac.agent.GetProvider())
     }
-    ac.agent.EnableStreaming(func(content string) {
-        // Dispatch write asynchronously and return immediately
-        go func() {
+    // Start ordered streaming worker
+    ac.streamCh = make(chan string, 1024)
+    ac.streamDone = make(chan struct{})
+    go func() {
+        for content := range ac.streamCh {
             // Debug: log streaming content
             if len(content) > 0 {
                 if console.DebugEnabled() {
@@ -593,7 +631,23 @@ func (ac *AgentConsole) processInput(input string) error {
             ac.updateStreamingTPS(content)
             // Update last activity time when we receive content
             lastStreamingActivity = time.Now()
-        }()
+        }
+        close(ac.streamDone)
+    }()
+    ac.agent.EnableStreaming(func(content string) {
+        // Queue content to maintain order; buffered channel avoids blocking in normal conditions
+        select {
+        case ac.streamCh <- content:
+        default:
+            // If buffer is full, fall back to a bounded wait to avoid reordering
+            select {
+            case ac.streamCh <- content:
+            case <-time.After(100 * time.Millisecond):
+                // As a last resort, coalesce by forcing a flush and then enqueue (best-effort)
+                ac.streamingFormatter.ForceFlush()
+                _ = ac.enqueueBestEffort(content)
+            }
+        }
     })
 
 	// Set flush callback to force flush buffered content when needed
@@ -603,20 +657,31 @@ func (ac *AgentConsole) processInput(input string) error {
 
 	// Ensure cleanup
 	streamingFinalized := false
-	defer func() {
-		// Only finalize if we actually streamed content and haven't already finalized
-		if ac.streamingFormatter.HasProcessedContent() && !streamingFinalized {
-			ac.streamingFormatter.Finalize()
-			streamingFinalized = true
+    defer func() {
+        // Only finalize if we actually streamed content and haven't already finalized
+        if ac.streamingFormatter.HasProcessedContent() && !streamingFinalized {
+            ac.streamingFormatter.Finalize()
+            streamingFinalized = true
 
-			// Ensure cursor is positioned correctly after streaming completes
-			// This helps with immediate resize responsiveness
-			ac.finalizeStreamingPosition()
-		}
-		ac.agent.DisableStreaming()
-		// Reset streaming TPS tracking
-		ac.resetStreamingTPS()
-	}()
+            // Ensure cursor is positioned correctly after streaming completes
+            // This helps with immediate resize responsiveness
+            ac.finalizeStreamingPosition()
+        }
+        // Shut down ordered streaming worker cleanly
+        if ac.streamCh != nil {
+            close(ac.streamCh)
+            // Wait briefly for drain
+            select {
+            case <-ac.streamDone:
+            case <-time.After(500 * time.Millisecond):
+            }
+            ac.streamCh = nil
+            ac.streamDone = nil
+        }
+        ac.agent.DisableStreaming()
+        // Reset streaming TPS tracking
+        ac.resetStreamingTPS()
+    }()
 
 	// Process with timeout detection to help diagnose hanging
 	type queryResult struct {
@@ -1315,6 +1380,8 @@ func (ac *AgentConsole) handleInterruptFromManager() {
 
 // handleInputHeightChange handles input field height changes and updates layout
 func (ac *AgentConsole) handleInputHeightChange(newHeight int) {
+    // Track for rendering focus gutter over multiline input
+    ac.lastInputHeight = newHeight
 	// Update the layout manager with the new input height
 	ac.autoLayoutManager.SetComponentHeight("input", newHeight)
 
@@ -1545,10 +1612,11 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 			}
 		}
 
-		// For non-streaming output, ensure cursor returns to the tracked content area position
-		if !ac.isStreaming {
-			ac.repositionCursorToContentArea()
-		}
+        // For non-streaming output, position cursor only on first content write
+        if !ac.isStreaming && !ac.didInitialPosition {
+            ac.repositionCursorToContentArea()
+            ac.didInitialPosition = true
+        }
 	}
 }
 
@@ -2008,9 +2076,9 @@ func (ac *AgentConsole) redrawContent() {
         // Clear entire line then draw gutter
         ac.Terminal().ClearLine()
         if ac.focusMode == "output" {
-            ac.Terminal().WriteText("\033[36m││\033[0m ")
+            ac.Terminal().WriteText("\033[46m \033[0m")
         } else {
-            ac.Terminal().WriteText("   ")
+            ac.Terminal().WriteText("  ")
         }
         if i < height-1 {
             ac.Terminal().WriteText("\r\n")
@@ -2018,11 +2086,8 @@ func (ac *AgentConsole) redrawContent() {
     }
 
     // Draw visible lines
-    // If output focused, start content at column 4 (after 2-bar gutter + padding)
-    startX := 1
-    if ac.focusMode == "output" {
-        startX = 4
-    }
+    // Start content at column 3 (accent+padding or padding-only)
+    startX := 3
 	for i := 0; i < len(lines); i++ {
 		ac.Terminal().MoveCursor(startX, contentTop+i)
 		ac.Terminal().ClearToEndOfLine()

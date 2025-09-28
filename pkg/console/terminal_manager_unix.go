@@ -25,18 +25,20 @@ type terminalManager struct {
 	rawMode         bool
 	altScreen       bool
 	resizeCallbacks []func(width, height int)
-	signalChan      chan os.Signal
-	stopChan        chan struct{}
-	writer          io.Writer
+    signalChan      chan os.Signal
+    stopChan        chan struct{}
+    writer          io.Writer
+    stopClosed      bool
 }
 
 // NewTerminalManager creates a new terminal manager
 func NewTerminalManager() TerminalManager {
-	return &terminalManager{
-		writer:          os.Stdout,
-		resizeCallbacks: make([]func(width, height int), 0),
-		stopChan:        make(chan struct{}),
-	}
+    return &terminalManager{
+        writer:          os.Stdout,
+        resizeCallbacks: make([]func(width, height int), 0),
+        stopChan:        make(chan struct{}),
+        stopClosed:      false,
+    }
 }
 
 // Init initializes the terminal manager
@@ -67,10 +69,17 @@ func (tm *terminalManager) Cleanup() error {
     tm.mu.Lock()
     defer tm.mu.Unlock()
 
-	// Stop resize monitoring
-	if tm.stopChan != nil {
-		close(tm.stopChan)
-	}
+    // Stop resize monitoring (idempotent)
+    if tm.stopChan != nil && !tm.stopClosed {
+        close(tm.stopChan)
+        tm.stopClosed = true
+    }
+    // Stop and close signal channel if present
+    if tm.signalChan != nil {
+        signal.Stop(tm.signalChan)
+        close(tm.signalChan)
+        tm.signalChan = nil
+    }
 
 	// Restore terminal mode
 	if tm.rawMode && tm.oldState != nil {

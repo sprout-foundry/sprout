@@ -2,6 +2,10 @@ package agent
 
 import (
     "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "regexp"
     "strings"
 
     "github.com/alantheprice/ledit/pkg/agent_tools"
@@ -123,20 +127,99 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleUpdateTodoStatus,
 	})
 
-	registry.RegisterTool(ToolConfig{
-		Name:        "list_todos",
-		Description: "List all todo items",
-		Parameters:  []ParameterConfig{},
-		Handler:     handleListTodos,
-	})
+    registry.RegisterTool(ToolConfig{
+        Name:        "list_todos",
+        Description: "List all todo items",
+        Parameters:  []ParameterConfig{},
+        Handler:     handleListTodos,
+    })
 
-	// Register build validation tool
-	registry.RegisterTool(ToolConfig{
-		Name:        "validate_build",
-		Description: "Validate project build after file operations",
-		Parameters:  []ParameterConfig{},
-		Handler:     handleValidateBuild,
-	})
+    // Optional compact/maintenance todo tools (to avoid unknown tool calls)
+    registry.RegisterTool(ToolConfig{
+        Name:        "get_active_todos_compact",
+        Description: "Get compact view of active todos",
+        Parameters:  []ParameterConfig{},
+        Handler: func(a *Agent, args map[string]interface{}) (string, error) {
+            return tools.GetActiveTodosCompact(), nil
+        },
+    })
+    registry.RegisterTool(ToolConfig{
+        Name:        "archive_completed",
+        Description: "Archive completed/cancelled todos",
+        Parameters:  []ParameterConfig{},
+        Handler: func(a *Agent, args map[string]interface{}) (string, error) {
+            return tools.ArchiveCompleted(), nil
+        },
+    })
+
+    // Register build validation tool
+    registry.RegisterTool(ToolConfig{
+        Name:        "validate_build",
+        Description: "Validate project build after file operations",
+        Parameters:  []ParameterConfig{},
+        Handler:     handleValidateBuild,
+    })
+
+    // Register search_files tool (cross-platform file content search)
+    registry.RegisterTool(ToolConfig{
+        Name:        "search_files",
+        Description: "Search text pattern in files (cross-platform, ignores .git, node_modules, .ledit by default)",
+        Parameters: []ParameterConfig{
+            {"pattern", "string", true, []string{}, "Text pattern or regex to search for"},
+            {"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
+            {"file_pattern", "string", false, []string{"glob"}, "Glob to limit files (e.g., *.go)"},
+            {"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
+            {"max_results", "int", false, []string{}, "Maximum results to return (default: 200)"},
+        },
+        Handler: handleSearchFiles,
+    })
+
+    // Register aliases: find and find_files map to same handler/parameters
+    registry.RegisterTool(ToolConfig{
+        Name:        "find",
+        Description: "Find text pattern in files (alias of search_files)",
+        Parameters: []ParameterConfig{
+            {"pattern", "string", true, []string{}, "Text pattern or regex to search for"},
+            {"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
+            {"file_pattern", "string", false, []string{"glob"}, "Glob to limit files (e.g., *.go)"},
+            {"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
+            {"max_results", "int", false, []string{}, "Maximum results to return (default: 200)"},
+        },
+        Handler: handleSearchFiles,
+    })
+    registry.RegisterTool(ToolConfig{
+        Name:        "find_files",
+        Description: "Find text pattern in files (alias of search_files)",
+        Parameters: []ParameterConfig{
+            {"pattern", "string", true, []string{}, "Text pattern or regex to search for"},
+            {"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
+            {"file_pattern", "string", false, []string{"glob"}, "Glob to limit files (e.g., *.go)"},
+            {"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
+            {"max_results", "int", false, []string{}, "Maximum results to return (default: 200)"},
+        },
+        Handler: handleSearchFiles,
+    })
+
+    // Register auto_complete_todos tool
+    registry.RegisterTool(ToolConfig{
+        Name:        "auto_complete_todos",
+        Description: "Auto-complete todos based on context (build_success/test_success)",
+        Parameters: []ParameterConfig{
+            {"context", "string", true, []string{}, "Context trigger: build_success or test_success"},
+        },
+        Handler: func(a *Agent, args map[string]interface{}) (string, error) {
+            ctx := args["context"].(string)
+            valid := map[string]bool{"build_success": true, "test_success": true}
+            if !valid[ctx] {
+                return "", fmt.Errorf("invalid context: %s (expected build_success or test_success)", ctx)
+            }
+            result := tools.AutoCompleteTodos(ctx)
+            if strings.TrimSpace(result) == "" {
+                return "No todos auto-completed for current context", nil
+            }
+            return result, nil
+        },
+    })
 
 	return registry
 }
@@ -350,8 +433,42 @@ func handleAddTodo(a *Agent, args map[string]interface{}) (string, error) {
 }
 
 func handleUpdateTodoStatus(a *Agent, args map[string]interface{}) (string, error) {
-    taskID := args["task_id"].(string)
-    status := args["status"].(string)
+    // Accept id as string or number for robustness
+    var taskID string
+    if idStr, ok := args["task_id"].(string); ok {
+        taskID = idStr
+    } else if idAlt, ok := args["id"].(string); ok {
+        taskID = idAlt
+    } else if idNum, ok := args["task_id"].(float64); ok {
+        taskID = fmt.Sprintf("todo_%d", int(idNum))
+    } else if idNumAlt, ok := args["id"].(float64); ok {
+        taskID = fmt.Sprintf("todo_%d", int(idNumAlt))
+    } else if idInt, ok := args["task_id"].(int); ok { // just in case
+        taskID = fmt.Sprintf("todo_%d", idInt)
+    } else if idIntAlt, ok := args["id"].(int); ok {
+        taskID = fmt.Sprintf("todo_%d", idIntAlt)
+    } else {
+        return "", fmt.Errorf("invalid or missing task_id/id argument")
+    }
+
+    // Normalize string numeric IDs like "1" to internal format "todo_1"
+    if !strings.HasPrefix(taskID, "todo_") {
+        allDigits := true
+        for i := 0; i < len(taskID); i++ {
+            if taskID[i] < '0' || taskID[i] > '9' {
+                allDigits = false
+                break
+            }
+        }
+        if allDigits && len(taskID) > 0 {
+            taskID = fmt.Sprintf("todo_%s", taskID)
+        }
+    }
+
+    status, ok := args["status"].(string)
+    if !ok {
+        return "", fmt.Errorf("invalid status argument")
+    }
 
     a.ToolLog("updating todo", fmt.Sprintf("task %s to %s", taskID, status))
     a.debugLog("Updating todo %s to status: %s\n", taskID, status)
@@ -452,4 +569,180 @@ func handleValidateBuild(a *Agent, args map[string]interface{}) (string, error) 
 	result, err := tools.ValidateBuild()
 	a.debugLog("Build validation result: %s, error: %v\n", result, err)
 	return result, err
+}
+
+// handleSearchFiles implements a cross-platform content search with sensible defaults and ignores
+func handleSearchFiles(a *Agent, args map[string]interface{}) (string, error) {
+    pattern := args["pattern"].(string)
+
+    root := "."
+    if v, ok := args["directory"].(string); ok && strings.TrimSpace(v) != "" {
+        root = v
+    }
+
+    glob := ""
+    if v, ok := args["file_pattern"].(string); ok {
+        glob = v
+    }
+
+    caseSensitive := false
+    if v, ok := args["case_sensitive"].(bool); ok {
+        caseSensitive = v
+    }
+
+    maxResults := 200
+    if v, ok := args["max_results"].(int); ok && v > 0 {
+        maxResults = v
+    }
+
+    // Prepare matcher: try regex first, then fallback to substring
+    var re *regexp.Regexp
+    var err error
+    if caseSensitive {
+        re, err = regexp.Compile(pattern)
+    } else {
+        re, err = regexp.Compile("(?i)" + pattern)
+    }
+    useRegex := err == nil
+
+    // Default excluded directories
+    excluded := map[string]bool{
+        ".git":        true,
+        "node_modules": true,
+        ".ledit":       true,
+        ".venv":       true,
+        "dist":        true,
+        "build":       true,
+        ".cache":      true,
+    }
+
+    matched := 0
+    var b strings.Builder
+
+    // Limit per-file read to avoid huge files (in bytes)
+    const maxFileSize = 2 * 1024 * 1024 // 2MB
+
+    walkErr := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+        if err != nil {
+            return nil // skip on error
+        }
+        name := d.Name()
+        if d.IsDir() {
+            if excluded[name] {
+                return filepath.SkipDir
+            }
+            // Skip hidden dirs unless explicitly included via pattern/glob (keep simple)
+            if strings.HasPrefix(name, ".") && !strings.HasPrefix(name, ".env") {
+                if name != "." && name != ".." {
+                    return filepath.SkipDir
+                }
+            }
+            return nil
+        }
+
+        // Glob filter
+        if glob != "" {
+            // Use base name for typical patterns
+            if ok, _ := filepath.Match(glob, name); !ok {
+                return nil
+            }
+        }
+
+        // Basic binary guard by extension
+        ext := strings.ToLower(filepath.Ext(name))
+        switch ext {
+        case ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp",
+            ".pdf", ".zip", ".tar", ".gz", ".rar", ".7z",
+            ".mp3", ".wav", ".ogg", ".flac", ".aac",
+            ".mp4", ".avi", ".mov", ".wmv", ".mkv",
+            ".exe", ".dll", ".so", ".dylib", ".bin",
+            ".db", ".sqlite", ".ico", ".woff", ".woff2", ".ttf":
+            return nil
+        }
+
+        // Open file and scan
+        f, err := os.Open(path)
+        if err != nil {
+            return nil
+        }
+        defer f.Close()
+
+        // Size cap
+        if info, err := f.Stat(); err == nil && info.Size() > maxFileSize {
+            // Read only first maxFileSize bytes
+            r := io.LimitReader(f, maxFileSize)
+            buf := make([]byte, maxFileSize)
+            n, _ := io.ReadFull(r, buf)
+            buf = buf[:n]
+            // naive binary check: look for NUL
+            if bytesIndexByte(buf, 0) >= 0 {
+                return nil
+            }
+            // search within this chunk by lines
+            if searchBufferLines(&b, path, string(buf), re, pattern, caseSensitive, useRegex, &matched, maxResults) {
+                return io.EOF // stop walking by returning non-nil? better: track and stop later
+            }
+            return nil
+        }
+
+        content, err := io.ReadAll(f)
+        if err != nil {
+            return nil
+        }
+        // binary check
+        if bytesIndexByte(content, 0) >= 0 {
+            return nil
+        }
+        if searchBufferLines(&b, path, string(content), re, pattern, caseSensitive, useRegex, &matched, maxResults) {
+            return io.EOF
+        }
+        return nil
+    })
+
+    if walkErr != nil && walkErr != io.EOF {
+        return "", fmt.Errorf("search failed: %v", walkErr)
+    }
+
+    if matched == 0 {
+        return fmt.Sprintf("No matches found for pattern '%s' in %s", pattern, root), nil
+    }
+    return b.String(), nil
+}
+
+// bytesIndexByte is a small helper to avoid importing bytes for one call
+func bytesIndexByte(b []byte, c byte) int {
+    for i := 0; i < len(b); i++ {
+        if b[i] == c {
+            return i
+        }
+    }
+    return -1
+}
+
+// searchBufferLines scans lines of content and appends matches; returns true if max reached
+func searchBufferLines(b *strings.Builder, path, content string, re *regexp.Regexp, pattern string, caseSensitive, useRegex bool, matched *int, max int) bool {
+    // Normalize to forward slashes for readability
+    norm := filepath.ToSlash(path)
+    lines := strings.Split(content, "\n")
+    for i, line := range lines {
+        if *matched >= max {
+            return true
+        }
+        ok := false
+        if useRegex {
+            ok = re.FindStringIndex(line) != nil
+        } else {
+            if caseSensitive {
+                ok = strings.Contains(line, pattern)
+            } else {
+                ok = strings.Contains(strings.ToLower(line), strings.ToLower(pattern))
+            }
+        }
+        if ok {
+            // Format similar to grep: path:line:content
+            fmt.Fprintf(b, "%s:%d:%s\n", norm, i+1, line)
+            *matched++
+        }
+    }
+    return false
 }

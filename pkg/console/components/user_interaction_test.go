@@ -148,14 +148,24 @@ func TestEmptyStartInteraction(t *testing.T) {
 	ac.setupLayoutComponents()
 	ac.autoLayoutManager.InitializeForTest(80, 24)
 
-	// Set up scroll region
-	ac.autoLayoutManager.SetComponentHeight("footer", 4)
-	top, bottom := ac.autoLayoutManager.GetScrollRegion()
-	mockTerminal.SetScrollRegion(top, bottom)
-	mockTerminal.MoveCursor(1, top)
+    // Set up scroll region
+    ac.autoLayoutManager.SetComponentHeight("footer", 4)
+    top, bottom := ac.autoLayoutManager.GetScrollRegion()
+    mockTerminal.SetScrollRegion(top, bottom)
+    mockTerminal.MoveCursor(1, top)
 
-	// Reset content tracking
-	ac.currentContentLine = 0
+    // Reset content tracking and clear any pre-rendered welcome/help content
+    ac.currentContentLine = 0
+    if ac.consoleBuffer != nil {
+        ac.consoleBuffer.Clear()
+    }
+    // Clear visible content area lines in the mock terminal to simulate a fresh start
+    for y := top; y <= bottom; y++ {
+        mockTerminal.MoveCursor(1, y)
+        mockTerminal.ClearLine()
+    }
+    // Reposition cursor to start of content area
+    mockTerminal.MoveCursor(1, top)
 
 	t.Logf("=== FRESH START TEST ===")
 	t.Logf("Scroll region: %d-%d", top, bottom)

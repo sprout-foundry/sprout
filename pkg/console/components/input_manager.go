@@ -74,9 +74,12 @@ type InputManager struct {
 	lastRenderHeight int
 	lastRenderY      int
 
-	// Focus provider (returns "input" or "output")
-	focusProvider func() string
-	onToggleFocus func()
+    // Focus provider (returns "input" or "output")
+    focusProvider func() string
+    onToggleFocus func()
+
+    // Scrolling state provider
+    isScrollingProvider func() bool
 
 	// Vim sequence state
 	pendingG bool
@@ -108,9 +111,16 @@ func NewInputManager(prompt string) *InputManager {
 
 // SetFocusProvider sets a callback to get current focus mode ("input" or "output")
 func (im *InputManager) SetFocusProvider(provider func() string) {
-	im.mutex.Lock()
-	defer im.mutex.Unlock()
-	im.focusProvider = provider
+    im.mutex.Lock()
+    defer im.mutex.Unlock()
+    im.focusProvider = provider
+}
+
+// SetScrollingProvider sets a callback to know if output is currently in scrolling mode
+func (im *InputManager) SetScrollingProvider(provider func() bool) {
+    im.mutex.Lock()
+    defer im.mutex.Unlock()
+    im.isScrollingProvider = provider
 }
 
 // SetFocusToggle sets a callback to toggle focus manually (e.g., Tab)
@@ -690,6 +700,14 @@ func (im *InputManager) showInputField() {
     showingHint := false
     hintText := ""
     if im.focusProvider != nil && im.focusProvider() == "output" {
+        // Only show hint when actively scrolling to reduce noise
+        scrolling := false
+        if im.isScrollingProvider != nil {
+            scrolling = im.isScrollingProvider()
+        }
+        if !scrolling {
+            // do not show hint when not scrolling
+        } else {
         // When output is focused, show a concise scrolling hint instead of the prompt/input
         // Colors: light grey (info) and muted blue (keys)
         grey := "\033[38;2;170;170;170m"
@@ -697,13 +715,14 @@ func (im *InputManager) showInputField() {
         reset := "\033[0m"
         // Keep it short to avoid wrapping; use simple keys that work across terminals
         // Example: "Scrolling: ↑/↓, PgUp/PgDn, g g top, G bottom, ? help"
-        hintText = grey + "Scrolling: " + blue + "↑/↓" + grey + ", " + blue + "PgUp/PgDn" + grey + ", " + blue + "g g" + grey + " top, " + blue + "G" + grey + " bottom, " + blue + "?" + grey + " help" + reset
+        hintText = grey + "Scrolling: " + blue + "↑/↓" + grey + ", " + blue + "PgUp/PgDn" + grey + ", " + blue + "g g" + grey + " top, " + blue + "G" + grey + " bottom" + reset
 
         // Force single-line rendering for hint to avoid escape sequence slicing
         lines = 1
         cursorLine = 0
         cursorCol = 1
         showingHint = true
+        }
     }
 
 	// If height grew, notify early so layout can expand before we draw

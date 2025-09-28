@@ -17,17 +17,25 @@ def main():
     parser = argparse.ArgumentParser(description="Run ledit end-to-end tests with real AI models")
     parser.add_argument("-t", "--test", type=int, help="Run specific test by number")
     parser.add_argument("-l", "--list", action="store_true", help="List available tests")
-    parser.add_argument("-m", "--model", required=True, help="Model to use (e.g., openai:gpt-4)")
+    parser.add_argument("-y", "--yes", action="store_true", help="Run all tests without confirmation")
+    parser.add_argument(
+        "-m",
+        "--model",
+        default="openrouter:qwen/qwen3-coder-30b-a3b-instruct",
+        help="Model to use (default: openrouter:qwen/qwen3-coder-30b-a3b-instruct)",
+    )
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Run only non-interactive, no-network smoke tests",
+    )
     args = parser.parse_args()
 
-    # Validate model
+    # Validate model (basic sanity)
     if args.model == "test:test":
         print("ERROR: E2E tests require a real AI model, not test:test")
-        print("Example models:")
-        print("  - openai:gpt-4")
-        print("  - deepinfra:meta-llama/Llama-3.1-8B-Instruct")
-        print("  - groq:llama-3.1-70b-versatile")
-        sys.exit(1)
+        print("Tip: using default model: openrouter:qwen/qwen3-coder-30b-a3b-instruct")
+        args.model = "openrouter:qwen/qwen3-coder-30b-a3b-instruct"
 
     # Find test directory
     script_dir = Path(__file__).parent
@@ -39,9 +47,14 @@ def main():
 
     # Discover tests
     tests = sorted([f for f in test_path.glob("*.sh") if f.is_file()])
+    if args.non_interactive:
+        # Whitelist of non-interactive, no-network tests
+        ni_set = {"test_ui_smoke.sh"}
+        tests = [f for f in tests if f.name in ni_set]
     
     if args.list:
-        print("Available end-to-end tests (require real AI models):")
+        header = "Available non-interactive tests:" if args.non_interactive else "Available end-to-end tests (require real AI models):"
+        print(header)
         for i, test in enumerate(tests, 1):
             print(f"{i}: {test.stem}")
         sys.exit(0)
@@ -49,10 +62,11 @@ def main():
     if not args.test:
         print("Running ALL e2e tests with model:", args.model)
         print("This may take a while and consume API credits!")
-        response = input("Continue? (y/N): ")
-        if response.lower() != 'y':
-            print("Aborted")
-            sys.exit(0)
+        if not args.yes:
+            response = input("Continue? (y/N): ")
+            if response.lower() != 'y':
+                print("Aborted")
+                sys.exit(0)
         # Run all tests
         run_all_tests(script_dir, tests, args.model)
     else:
@@ -83,6 +97,16 @@ def run_single_test(script_dir, test_file, model):
     test_dir = script_dir / "testing" / test_file.stem
     test_dir.mkdir(parents=True, exist_ok=True)
     
+    # Ensure test-local binary exists (some scripts use ./ledit)
+    built_bin = script_dir / "ledit"
+    local_bin = test_dir / "ledit"
+    try:
+        if built_bin.exists():
+            import shutil
+            shutil.copy2(str(built_bin), str(local_bin))
+    except Exception as e:
+        print(f"Warning: could not prepare local ledit binary: {e}")
+
     # Run the test
     env = os.environ.copy()
     env["PATH"] = f"{script_dir}:{env.get('PATH', '')}"

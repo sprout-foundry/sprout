@@ -16,8 +16,11 @@ def hello():
     return "Hello from OpenRouter streaming!"
 EOF
 
-    # Run a simple command that should produce token counts
-    export OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-test}"
+    # Require a real OpenRouter key; skip gracefully if missing
+    if [[ -z "${OPENROUTER_API_KEY}" || "${OPENROUTER_API_KEY}" == "test" ]]; then
+        echo "SKIP: OPENROUTER_API_KEY not set; skipping OpenRouter streaming test"
+        return 0
+    fi
     
     # Use the agent with OpenRouter to add a docstring
     echo "Running agent with OpenRouter streaming..."

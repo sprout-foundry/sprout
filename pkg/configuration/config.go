@@ -220,6 +220,32 @@ func Load() (*Config, error) {
 		config.Version = ConfigVersion
 	}
 
+	// Apply defaults for API timeouts if missing or zeroed
+	if config.APITimeouts == nil {
+		def := NewConfig().APITimeouts
+		// Copy defaults to avoid sharing pointers
+		config.APITimeouts = &APITimeoutConfig{
+			ConnectionTimeoutSec: def.ConnectionTimeoutSec,
+			FirstChunkTimeoutSec: def.FirstChunkTimeoutSec,
+			ChunkTimeoutSec:      def.ChunkTimeoutSec,
+			OverallTimeoutSec:    def.OverallTimeoutSec,
+		}
+	} else {
+		def := NewConfig().APITimeouts
+		if config.APITimeouts.ConnectionTimeoutSec == 0 {
+			config.APITimeouts.ConnectionTimeoutSec = def.ConnectionTimeoutSec
+		}
+		if config.APITimeouts.FirstChunkTimeoutSec == 0 {
+			config.APITimeouts.FirstChunkTimeoutSec = def.FirstChunkTimeoutSec
+		}
+		if config.APITimeouts.ChunkTimeoutSec == 0 {
+			config.APITimeouts.ChunkTimeoutSec = def.ChunkTimeoutSec
+		}
+		if config.APITimeouts.OverallTimeoutSec == 0 {
+			config.APITimeouts.OverallTimeoutSec = def.OverallTimeoutSec
+		}
+	}
+
 	return &config, nil
 }
 

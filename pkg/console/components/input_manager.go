@@ -59,7 +59,7 @@ type InputManager struct {
 	onInterrupt    func()
 	onHeightChange func(int) // Callback when input height changes
 	onScrollUp     func(int) // Callback for scroll up
-    onScrollDown   func(int) // Callback for scroll down
+	onScrollDown   func(int) // Callback for scroll down
 
 	// Context for shutdown
 	ctx    context.Context
@@ -69,17 +69,20 @@ type InputManager struct {
 	lastOutputLine int
 	running        bool
 	paused         bool
-    redrawing      bool // Prevent concurrent redraw operations
+	redrawing      bool // Prevent concurrent redraw operations
+	// Tracks last drawn input field region
+	lastRenderHeight int
+	lastRenderY      int
 
-    // Focus provider (returns "input" or "output")
-    focusProvider func() string
-    onToggleFocus func()
+	// Focus provider (returns "input" or "output")
+	focusProvider func() string
+	onToggleFocus func()
 
-    // Vim sequence state
-    pendingG bool
+	// Vim sequence state
+	pendingG bool
 
-    // Help overlay toggle (for output focus)
-    onToggleHelp func()
+	// Help overlay toggle (for output focus)
+	onToggleHelp func()
 }
 
 // NewInputManager creates a new concurrent input manager
@@ -87,39 +90,41 @@ func NewInputManager(prompt string) *InputManager {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &InputManager{
-		terminalFd:    int(os.Stdin.Fd()),
-		prompt:        prompt,
-		inputChan:     make(chan string, 10), // Buffer for queued inputs
-		interruptChan: make(chan struct{}, 1),
-		queuedInputs:  make([]string, 0),
-		ctx:           ctx,
-		cancel:        cancel,
-		mutex:         sync.RWMutex{},
-		inputHeight:   1,        // Start with single line
-		historyIndex:  -1,       // Not in history mode initially
-        tempInput:     []rune{}, // Empty temp input
-    }
+		terminalFd:       int(os.Stdin.Fd()),
+		prompt:           prompt,
+		inputChan:        make(chan string, 10), // Buffer for queued inputs
+		interruptChan:    make(chan struct{}, 1),
+		queuedInputs:     make([]string, 0),
+		ctx:              ctx,
+		cancel:           cancel,
+		mutex:            sync.RWMutex{},
+		inputHeight:      1, // Start with single line
+		lastRenderHeight: 0, // Nothing drawn yet
+		lastRenderY:      0,
+		historyIndex:     -1,       // Not in history mode initially
+		tempInput:        []rune{}, // Empty temp input
+	}
 }
 
 // SetFocusProvider sets a callback to get current focus mode ("input" or "output")
 func (im *InputManager) SetFocusProvider(provider func() string) {
-    im.mutex.Lock()
-    defer im.mutex.Unlock()
-    im.focusProvider = provider
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+	im.focusProvider = provider
 }
 
 // SetFocusToggle sets a callback to toggle focus manually (e.g., Tab)
 func (im *InputManager) SetFocusToggle(cb func()) {
-    im.mutex.Lock()
-    defer im.mutex.Unlock()
-    im.onToggleFocus = cb
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+	im.onToggleFocus = cb
 }
 
 // SetHelpToggle sets a callback to toggle output help overlay
 func (im *InputManager) SetHelpToggle(cb func()) {
-    im.mutex.Lock()
-    defer im.mutex.Unlock()
-    im.onToggleHelp = cb
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+	im.onToggleHelp = cb
 }
 
 // Start begins concurrent input handling
@@ -222,29 +227,29 @@ func (im *InputManager) SetInputRouter(router *console.InputRouter) {
 
 // calculateInputPosition calculates where the input field should be positioned
 func (im *InputManager) calculateInputPosition() {
-    if im.layoutManager == nil {
-        // Default to last line if no layout manager
-        if im.termHeight <= 0 {
-            im.inputFieldLine = 1
-        } else {
-            im.inputFieldLine = im.termHeight
-        }
-        return
-    }
+	if im.layoutManager == nil {
+		// Default to last line if no layout manager
+		if im.termHeight <= 0 {
+			im.inputFieldLine = 1
+		} else {
+			im.inputFieldLine = im.termHeight
+		}
+		return
+	}
 
-    region, err := im.layoutManager.GetRegion("input")
-    if err != nil {
-        // Fallback: place input at last terminal line when region is not defined
-        if im.termHeight <= 0 {
-            im.inputFieldLine = 1
-        } else {
-            im.inputFieldLine = im.termHeight
-        }
-        return
-    }
+	region, err := im.layoutManager.GetRegion("input")
+	if err != nil {
+		// Fallback: place input at last terminal line when region is not defined
+		if im.termHeight <= 0 {
+			im.inputFieldLine = 1
+		} else {
+			im.inputFieldLine = im.termHeight
+		}
+		return
+	}
 
-    // Convert 0-based region coordinates to 1-based terminal line number
-    im.inputFieldLine = region.Y + 1
+	// Convert 0-based region coordinates to 1-based terminal line number
+	im.inputFieldLine = region.Y + 1
 }
 
 // SetProcessing sets the processing state
@@ -314,122 +319,140 @@ func (im *InputManager) processKeystrokes(data []byte) {
 			if im.onScrollDown != nil {
 				im.onScrollDown(im.termHeight - 1) // Full page scroll down
 			}
-    case 9: // Tab - manual focus toggle
-            if im.onToggleFocus != nil { go im.onToggleFocus() }
-    case 10: // Ctrl+J (vim-style scroll up - half page)
-            if im.onScrollUp != nil {
-                im.onScrollUp(im.termHeight / 2) // Half page scroll up
-            }
-    case 11: // Ctrl+K (vim-style scroll down - half page)
-            if im.onScrollDown != nil {
-                im.onScrollDown(im.termHeight / 2) // Half page scroll down
-            }
+		case 9: // Tab - manual focus toggle
+			if im.onToggleFocus != nil {
+				go im.onToggleFocus()
+			}
+		case 10: // Ctrl+J (vim-style scroll up - half page)
+			if im.onScrollUp != nil {
+				im.onScrollUp(im.termHeight / 2) // Half page scroll up
+			}
+		case 11: // Ctrl+K (vim-style scroll down - half page)
+			if im.onScrollDown != nil {
+				im.onScrollDown(im.termHeight / 2) // Half page scroll down
+			}
 		case 127, 8: // Backspace/Delete
 			im.handleBackspace()
-    case 27: // Escape key or escape sequence
-            // Handle CSI sequences (ESC [ ...)
-            if i+1 < len(data) && data[i+1] == '[' {
-					// CSI sequences (ESC [)
-					if i+2 < len(data) {
-						switch data[i+2] {
-                    case 'A': // Up arrow
-                        if im.focusProvider != nil && im.focusProvider() == "output" {
-                            if im.onScrollUp != nil { im.onScrollUp(1) }
-                        } else {
-                            im.handleUpArrow()
-                        }
-                        i += 2
-                    case 'B': // Down arrow
-                        if im.focusProvider != nil && im.focusProvider() == "output" {
-                            if im.onScrollDown != nil { im.onScrollDown(1) }
-                        } else {
-                            im.handleDownArrow()
-                        }
-                        i += 2
-						case 'C': // Right arrow
-							im.handleRightArrow()
-							i += 2
-						case 'D': // Left arrow
-							im.handleLeftArrow()
-							i += 2
-						case '5': // Page Up (ESC [ 5 ~)
-							if i+3 < len(data) && data[i+3] == '~' {
-								if im.onScrollUp != nil {
-									im.onScrollUp(10) // Scroll up 10 lines
-								}
-								i += 3 // Skip the full sequence
+		case 27: // Escape key or escape sequence
+			// Handle CSI sequences (ESC [ ...)
+			if i+1 < len(data) && data[i+1] == '[' {
+				// CSI sequences (ESC [)
+				if i+2 < len(data) {
+					switch data[i+2] {
+					case 'A': // Up arrow
+						if im.focusProvider != nil && im.focusProvider() == "output" {
+							if im.onScrollUp != nil {
+								im.onScrollUp(1)
 							}
-						case '6': // Page Down (ESC [ 6 ~)
-							if i+3 < len(data) && data[i+3] == '~' {
-								if im.onScrollDown != nil {
-									im.onScrollDown(10) // Scroll down 10 lines
-								}
-								i += 3 // Skip the full sequence
+						} else {
+							im.handleUpArrow()
+						}
+						i += 2
+					case 'B': // Down arrow
+						if im.focusProvider != nil && im.focusProvider() == "output" {
+							if im.onScrollDown != nil {
+								im.onScrollDown(1)
 							}
-						case 'M': // Mouse events - ignore completely to prevent interference
-							// Mouse events in X11 protocol: ESC [ M button x y
-							// Skip the entire mouse sequence to prevent interference with input
-							// Mouse sequences are typically 6 bytes total
-							if i+5 < len(data) {
-								i += 5 // Skip the full sequence
-							} else {
-								i = len(data) - 1 // Skip rest of buffer
+						} else {
+							im.handleDownArrow()
+						}
+						i += 2
+					case 'C': // Right arrow
+						im.handleRightArrow()
+						i += 2
+					case 'D': // Left arrow
+						im.handleLeftArrow()
+						i += 2
+					case '5': // Page Up (ESC [ 5 ~)
+						if i+3 < len(data) && data[i+3] == '~' {
+							if im.onScrollUp != nil {
+								im.onScrollUp(10) // Scroll up 10 lines
 							}
-						case '<': // SGR mouse events - ignore completely to prevent interference
-							// SGR mouse protocol: ESC [ < button;x;y M/m
-							// Find the end of the sequence (M or m) and skip it
-							for j := i + 3; j < len(data); j++ {
-								if data[j] == 'M' || data[j] == 'm' {
-									i = j // Skip to end of sequence
-									break
-								}
+							i += 3 // Skip the full sequence
+						}
+					case '6': // Page Down (ESC [ 6 ~)
+						if i+3 < len(data) && data[i+3] == '~' {
+							if im.onScrollDown != nil {
+								im.onScrollDown(10) // Scroll down 10 lines
 							}
-						default:
-							// For any other CSI sequences, skip them
-							// Skip at least 2 bytes (ESC [), and assume sequences are up to 10 bytes
-							if i+10 < len(data) {
-								i += 9 // Skip up to 10 bytes total (ESC + 9 more)
-							} else {
-								i = len(data) - 1 // Skip rest of buffer
+							i += 3 // Skip the full sequence
+						}
+					case 'M': // Mouse events - ignore completely to prevent interference
+						// Mouse events in X11 protocol: ESC [ M button x y
+						// Skip the entire mouse sequence to prevent interference with input
+						// Mouse sequences are typically 6 bytes total
+						if i+5 < len(data) {
+							i += 5 // Skip the full sequence
+						} else {
+							i = len(data) - 1 // Skip rest of buffer
+						}
+					case '<': // SGR mouse events - ignore completely to prevent interference
+						// SGR mouse protocol: ESC [ < button;x;y M/m
+						// Find the end of the sequence (M or m) and skip it
+						for j := i + 3; j < len(data); j++ {
+							if data[j] == 'M' || data[j] == 'm' {
+								i = j // Skip to end of sequence
+								break
 							}
 						}
+					default:
+						// For any other CSI sequences, skip them
+						// Skip at least 2 bytes (ESC [), and assume sequences are up to 10 bytes
+						if i+10 < len(data) {
+							i += 9 // Skip up to 10 bytes total (ESC + 9 more)
+						} else {
+							i = len(data) - 1 // Skip rest of buffer
+						}
 					}
-				} else {
-					// Plain ESC (not followed by '[') -> treat as interrupt
-					im.handleCtrlC()
-					// Consume only ESC
 				}
+			} else {
+				// Plain ESC (not followed by '[') -> treat as interrupt
+				im.handleCtrlC()
+				// Consume only ESC
+			}
 			// end ESC handling
-        default:
-            // Regular character
-            if im.focusProvider != nil && im.focusProvider() == "output" {
-                // Vim-style navigation in output focus
-                switch b {
-                case 'j':
-                    if im.onScrollDown != nil { im.onScrollDown(1) }
-                case 'k':
-                    if im.onScrollUp != nil { im.onScrollUp(1) }
-                case '?':
-                    if im.onToggleHelp != nil { im.onToggleHelp() }
-                    // do not affect pendingG
-                case 'g':
-                    if im.pendingG {
-                        if im.onScrollUp != nil { im.onScrollUp(im.termHeight*100) }
-                        im.pendingG = false
-                    } else {
-                        im.pendingG = true
-                    }
-                case 'G':
-                    if im.onScrollDown != nil { im.onScrollDown(im.termHeight*100) }
-                    im.pendingG = false
-                default:
-                    // Ignore others in output focus; reset pendingG
-                    im.pendingG = false
-                }
-            } else {
-                im.pendingG = false
-                if unicode.IsPrint(rune(b)) { im.insertChar(rune(b)) }
-            }
+		default:
+			// Regular character
+			if im.focusProvider != nil && im.focusProvider() == "output" {
+				// Vim-style navigation in output focus
+				switch b {
+				case 'j':
+					if im.onScrollDown != nil {
+						im.onScrollDown(1)
+					}
+				case 'k':
+					if im.onScrollUp != nil {
+						im.onScrollUp(1)
+					}
+				case '?':
+					if im.onToggleHelp != nil {
+						im.onToggleHelp()
+					}
+					// do not affect pendingG
+				case 'g':
+					if im.pendingG {
+						if im.onScrollUp != nil {
+							im.onScrollUp(im.termHeight * 100)
+						}
+						im.pendingG = false
+					} else {
+						im.pendingG = true
+					}
+				case 'G':
+					if im.onScrollDown != nil {
+						im.onScrollDown(im.termHeight * 100)
+					}
+					im.pendingG = false
+				default:
+					// Ignore others in output focus; reset pendingG
+					im.pendingG = false
+				}
+			} else {
+				im.pendingG = false
+				if unicode.IsPrint(rune(b)) {
+					im.insertChar(rune(b))
+				}
+			}
 		}
 	}
 
@@ -592,19 +615,19 @@ func (im *InputManager) insertChar(ch rune) {
 
 // printf is a helper that handles raw mode line endings
 func (im *InputManager) printf(format string, args ...interface{}) {
-    text := fmt.Sprintf(format, args...)
-    if im.isRawMode && strings.Contains(text, "\n") {
-        text = strings.ReplaceAll(text, "\n", "\r\n")
-    }
-    fmt.Print(text)
+	text := fmt.Sprintf(format, args...)
+	if im.isRawMode && strings.Contains(text, "\n") {
+		text = strings.ReplaceAll(text, "\n", "\r\n")
+	}
+	fmt.Print(text)
 }
 
 // write outputs text directly, applying raw mode line ending normalization
 func (im *InputManager) write(text string) {
-    if im.isRawMode && strings.Contains(text, "\n") {
-        text = strings.ReplaceAll(text, "\n", "\r\n")
-    }
-    fmt.Print(text)
+	if im.isRawMode && strings.Contains(text, "\n") {
+		text = strings.ReplaceAll(text, "\n", "\r\n")
+	}
+	fmt.Print(text)
 }
 
 // calculateInputDimensions calculates how many lines the input takes and cursor position
@@ -662,48 +685,67 @@ func (im *InputManager) showInputField() {
 	im.redrawing = true
 	defer func() { im.redrawing = false }()
 
-	// Calculate input dimensions
-	lines, cursorLine, cursorCol := im.calculateInputDimensions()
+    // Calculate input dimensions based on current focus
+    lines, cursorLine, cursorCol := im.calculateInputDimensions()
+    showingHint := false
+    hintText := ""
+    if im.focusProvider != nil && im.focusProvider() == "output" {
+        // When output is focused, show a concise scrolling hint instead of the prompt/input
+        // Colors: light grey (info) and muted blue (keys)
+        grey := "\033[38;2;170;170;170m"
+        blue := "\033[38;2;110;160;230m"
+        reset := "\033[0m"
+        // Keep it short to avoid wrapping; use simple keys that work across terminals
+        // Example: "Scrolling: ↑/↓, PgUp/PgDn, g g top, G bottom, ? help"
+        hintText = grey + "Scrolling: " + blue + "↑/↓" + grey + ", " + blue + "PgUp/PgDn" + grey + ", " + blue + "g g" + grey + " top, " + blue + "G" + grey + " bottom, " + blue + "?" + grey + " help" + reset
 
-	// Store the previous height before any updates
-	previousHeight := im.inputHeight
+        // Force single-line rendering for hint to avoid escape sequence slicing
+        lines = 1
+        cursorLine = 0
+        cursorCol = 1
+        showingHint = true
+    }
 
-	// Check if we need more lines than currently allocated
+	// If height grew, notify early so layout can expand before we draw
 	if lines > im.inputHeight {
 		im.notifyLayoutOfInputHeight(lines)
-		im.inputHeight = lines
-		// Note: This might require layout recalculation, but we'll continue with current positioning for now
 	}
 
-    // Determine left margin based on focus (reserve column 1 for focus bar when input is focused)
-    // Always reserve 2 columns for gutter (bar+padding)
-    startX := 3
+	// Determine left margin based on focus (reserve column 1 for focus bar when input is focused)
+	// Always reserve 2 columns for gutter (bar+padding)
 
-    // Clear all lines that might contain input - use the MAXIMUM of previous and current height
-    // This ensures we clear artifacts when transitioning from multi-line to single-line
-    linesToClear := previousHeight
-    if lines > linesToClear {
-        linesToClear = lines
-    }
+	// First, clear the previously rendered region at its original Y (in case Y changed due to layout)
+	if im.lastRenderHeight > 0 && im.lastRenderY > 0 {
+		for i := 0; i < im.lastRenderHeight; i++ {
+			im.write(console.MoveCursorSeq(1, im.lastRenderY+i) + console.ClearLineSeq())
+		}
+	}
 
-    for i := 0; i < linesToClear; i++ {
-        im.write(console.MoveCursorSeq(startX, im.inputFieldLine+i) + console.ClearToEndOfLineSeq())
-    }
+	// Then clear the current target region that we're about to draw into
+	for i := 0; i < lines; i++ {
+		im.write(console.MoveCursorSeq(1, im.inputFieldLine+i) + console.ClearLineSeq())
+	}
 
-	// Update height to match actual content needs
-	im.inputHeight = lines
-	if lines != previousHeight {
+	// Update height to match actual content needs (handle shrink or any change)
+	if lines != im.inputHeight {
 		im.notifyLayoutOfInputHeight(lines)
 	}
 
-    // Display the input text with proper wrapping
+    // Display the input text or hint with proper wrapping
     fullText := im.prompt + string(im.currentLine)
+    if showingHint {
+        fullText = hintText
+    }
 
-    // Calculate effective width for wrapping
-    effectiveWidth := im.getEffectiveWidth()
+	// Calculate effective width for wrapping
+	effectiveWidth := im.getEffectiveWidth()
 
     // Render content and place cursor
     im.renderInputContent(fullText, effectiveWidth, cursorLine, cursorCol)
+
+	// Remember how many lines and where we actually drew
+	im.lastRenderHeight = lines
+	im.lastRenderY = im.inputFieldLine
 }
 
 // showInputFieldAfterResize handles input field display after terminal resize
@@ -745,15 +787,17 @@ func (im *InputManager) showInputFieldAfterResize(oldWidth, oldHeight int) {
 		linesToClear = 20
 	}
 
-    // Always reserve 2 columns for gutter (bar+padding)
-    startX := 3
+	// Always reserve 2 columns for gutter (bar+padding)
+	startX := 3
 
-    // Clear all potential lines that might contain artifacts
-    // Use aggressive clearing for resize scenarios to handle horizontal artifacts
-    for i := 0; i < linesToClear; i++ {
-        // Move to left margin and clear to end of line
-        im.write(console.MoveCursorSeq(startX, im.inputFieldLine+i) + console.ClearToEndOfLineSeq())
-    }
+	// Clear all potential lines that might contain artifacts
+	// Use aggressive clearing for resize scenarios to handle horizontal artifacts
+	for i := 0; i < linesToClear; i++ {
+		// Clear entire line first
+		im.write(console.MoveCursorSeq(1, im.inputFieldLine+i) + console.ClearLineSeq())
+		// Then clear from gutter onward to be thorough
+		im.write(console.MoveCursorSeq(startX, im.inputFieldLine+i) + console.ClearToEndOfLineSeq())
+	}
 
 	// Update height to match new terminal width needs
 	im.inputHeight = newLines
@@ -761,14 +805,14 @@ func (im *InputManager) showInputFieldAfterResize(oldWidth, oldHeight int) {
 		im.notifyLayoutOfInputHeight(newLines)
 	}
 
-    // Display the input text with proper wrapping for new width
-    fullText := im.prompt + string(im.currentLine)
+	// Display the input text with proper wrapping for new width
+	fullText := im.prompt + string(im.currentLine)
 
-    // Calculate effective width for wrapping
-    effectiveWidth := im.getEffectiveWidth()
+	// Calculate effective width for wrapping
+	effectiveWidth := im.getEffectiveWidth()
 
-    // Render content and place cursor
-    im.renderInputContent(fullText, effectiveWidth, cursorLine, cursorCol)
+	// Render content and place cursor
+	im.renderInputContent(fullText, effectiveWidth, cursorLine, cursorCol)
 }
 
 // calculateLinesForWidth calculates how many lines the current input would use for a given width
@@ -798,32 +842,34 @@ func (im *InputManager) calculateLinesForWidth(width int) int {
 
 // getEffectiveWidth returns the wrapping width with safe fallbacks
 func (im *InputManager) getEffectiveWidth() int {
-    // Always reserve 2 columns for gutter (bar+padding)
-    effectiveWidth := im.termWidth - 2
-    if effectiveWidth <= 0 {
-        effectiveWidth = 80
-    }
-    return effectiveWidth
+	// Always reserve 2 columns for gutter (bar+padding)
+	effectiveWidth := im.termWidth - 2
+	if effectiveWidth <= 0 {
+		effectiveWidth = 80
+	}
+	return effectiveWidth
 }
 
 // renderInputContent writes the input prompt+text wrapped to the terminal and positions cursor
 func (im *InputManager) renderInputContent(fullText string, effectiveWidth, cursorLine, cursorCol int) {
-    // account for left margin when computing cursor column (gutter=2)
-    leftMargin := 3
-    // Split text into lines based on terminal width
-    currentLine := 0
-    for i := 0; i < len(fullText); i += effectiveWidth {
-        end := i + effectiveWidth
-        if end > len(fullText) { end = len(fullText) }
+	// account for left margin when computing cursor column (gutter=2)
+	leftMargin := 3
+	// Split text into lines based on terminal width
+	currentLine := 0
+	for i := 0; i < len(fullText); i += effectiveWidth {
+		end := i + effectiveWidth
+		if end > len(fullText) {
+			end = len(fullText)
+		}
 
-        segment := fullText[i:end]
-        // Always position cursor explicitly for each line to avoid artifacts
-        im.write(console.MoveCursorSeq(leftMargin, im.inputFieldLine+currentLine) + segment)
-        currentLine++
-    }
-    // Position cursor correctly on the right line and column
-    actualCursorLine := im.inputFieldLine + cursorLine
-    im.write(console.MoveCursorSeq(leftMargin+cursorCol-1, actualCursorLine))
+		segment := fullText[i:end]
+		// Always position cursor explicitly for each line to avoid artifacts
+		im.write(console.MoveCursorSeq(leftMargin, im.inputFieldLine+currentLine) + segment)
+		currentLine++
+	}
+	// Position cursor correctly on the right line and column
+	actualCursorLine := im.inputFieldLine + cursorLine
+	im.write(console.MoveCursorSeq(leftMargin+cursorCol-1, actualCursorLine))
 }
 
 // hideInputField clears the input field (all lines it uses)
@@ -832,12 +878,17 @@ func (im *InputManager) hideInputField() {
 		return
 	}
 
-	// Clear all lines used by the input field
-    // Always reserve 2 columns for gutter (bar+padding)
-    startX := 3
-    for i := 0; i < im.inputHeight; i++ {
-        im.printf("%s", console.MoveCursorSeq(startX, im.inputFieldLine+i)+console.ClearToEndOfLineSeq())
-    }
+	// Clear previously rendered region first (in case Y changed)
+	if im.lastRenderHeight > 0 && im.lastRenderY > 0 {
+		for i := 0; i < im.lastRenderHeight; i++ {
+			im.printf("%s", console.MoveCursorSeq(1, im.lastRenderY+i)+console.ClearLineSeq())
+		}
+	}
+
+	// Also clear current input field region to be safe
+	for i := 0; i < im.inputHeight; i++ {
+		im.printf("%s", console.MoveCursorSeq(1, im.inputFieldLine+i)+console.ClearLineSeq())
+	}
 }
 
 // updateTerminalSize gets current terminal dimensions
@@ -936,10 +987,10 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 			return // Already stopped
 		}
 
-    // Debug output (stderr only, and only when LEDIT_DEBUG is set)
-    if os.Getenv("LEDIT_DEBUG") != "" {
-        fmt.Fprintf(os.Stderr, "\r\n[DEBUG] Enabling passthrough mode for interactive command...\r\n")
-    }
+		// Debug output (stderr only, and only when LEDIT_DEBUG is set)
+		if os.Getenv("LEDIT_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "\r\n[DEBUG] Enabling passthrough mode for interactive command...\r\n")
+		}
 
 		// Hide input field
 		im.hideInputField()
@@ -957,17 +1008,17 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 			im.isRawMode = false
 		}
 
-    if os.Getenv("LEDIT_DEBUG") != "" {
-        fmt.Fprintf(os.Stderr, "[DEBUG] Passthrough mode enabled - terminal restored to normal mode\r\n")
-    }
+		if os.Getenv("LEDIT_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Passthrough mode enabled - terminal restored to normal mode\r\n")
+		}
 	} else {
 		if im.running {
 			return // Already running
 		}
 
-    if os.Getenv("LEDIT_DEBUG") != "" {
-        fmt.Fprintf(os.Stderr, "\r\n[DEBUG] Disabling passthrough mode - restoring console input...\r\n")
-    }
+		if os.Getenv("LEDIT_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "\r\n[DEBUG] Disabling passthrough mode - restoring console input...\r\n")
+		}
 
 		// Create new context
 		ctx, cancel := context.WithCancel(context.Background())
@@ -977,11 +1028,11 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 		// Re-enter raw mode
 		oldState, err := term.MakeRaw(im.terminalFd)
 		if err != nil {
-            if os.Getenv("LEDIT_DEBUG") != "" {
-                fmt.Fprintf(os.Stderr, "[DEBUG] Failed to re-enter raw mode: %v\r\n", err)
-            }
-            return
-        }
+			if os.Getenv("LEDIT_DEBUG") != "" {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Failed to re-enter raw mode: %v\r\n", err)
+			}
+			return
+		}
 
 		im.oldTermState = oldState
 		im.isRawMode = true
@@ -1000,9 +1051,9 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 		// Show input field
 		im.showInputField()
 
-        if os.Getenv("LEDIT_DEBUG") != "" {
-            fmt.Fprintf(os.Stderr, "[DEBUG] Console input restored - ready for commands\r\n")
-        }
+		if os.Getenv("LEDIT_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Console input restored - ready for commands\r\n")
+		}
 	}
 }
 
@@ -1047,10 +1098,10 @@ func (im *InputManager) resetInputHeight() {
 	// So we don't need additional locking here
 
 	if im.inputHeight > 1 {
-        // Clear all lines that were previously used
-        for i := 0; i < im.inputHeight; i++ {
-            im.write(console.MoveCursorSeq(1, im.inputFieldLine+i) + console.ClearToEndOfLineSeq())
-        }
+		// Clear all lines that were previously used
+		for i := 0; i < im.inputHeight; i++ {
+			im.write(console.MoveCursorSeq(1, im.inputFieldLine+i) + console.ClearToEndOfLineSeq())
+		}
 
 		// Reset to single line
 		im.inputHeight = 1

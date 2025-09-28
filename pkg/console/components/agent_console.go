@@ -85,18 +85,18 @@ type AgentConsole struct {
 	// Dropdown support
 	activeDropdown *DropdownComponent
 
-    // Scroll state
-    isScrolling    bool
-    scrollPosition int
+	// Scroll state
+	isScrolling    bool
+	scrollPosition int
 
-    // Interruption state
-    wasInterrupted bool
+	// Interruption state
+	wasInterrupted bool
 
-    // Focus state: "input" or "output"
-    focusMode string
+	// Focus state: "input" or "output"
+	focusMode string
 
-    // Help overlay state (output focus)
-    showOutputHelp bool
+	// Help overlay state (output focus)
+	showOutputHelp bool
 }
 
 // NewAgentConsole creates a new agent console
@@ -157,11 +157,11 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		ac.safePrint("%s", text)
 	})
 
-    // Set the interrupt channel and output mutex on the agent (guard for nil)
-    if agent != nil {
-        agent.SetInterruptChannel(ac.interruptChan)
-        agent.SetOutputMutex(&ac.outputMutex)
-    }
+	// Set the interrupt channel and output mutex on the agent (guard for nil)
+	if agent != nil {
+		agent.SetInterruptChannel(ac.interruptChan)
+		agent.SetOutputMutex(&ac.outputMutex)
+	}
 
 	// Set up input manager callbacks
 	inputManager.SetCallbacks(
@@ -175,38 +175,42 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 	// Set up history manager for arrow key navigation
 	inputManager.SetHistoryManager(ac.historyManager)
 
-    // Set up scroll callbacks
-    inputManager.SetScrollCallbacks(
-        func(lines int) { ac.scrollUp(lines) },
-        func(lines int) { ac.scrollDown(lines) },
-    )
+	// Set up scroll callbacks
+	inputManager.SetScrollCallbacks(
+		func(lines int) { ac.scrollUp(lines) },
+		func(lines int) { ac.scrollDown(lines) },
+	)
 
-    // Provide focus to input manager so arrow keys and vim keys are context-aware
-    inputManager.SetFocusProvider(ac.getFocusMode)
+	// Provide focus to input manager so arrow keys and vim keys are context-aware
+	inputManager.SetFocusProvider(ac.getFocusMode)
 
-    // Manual focus toggle via Tab
-    inputManager.SetFocusToggle(func() {
-        if ac.getFocusMode() == "input" { ac.setFocus("output") } else { ac.setFocus("input") }
-        // Refresh UI elements after focus change
-        if ac.getFocusMode() == "output" {
-            ac.redrawContent()
-        } else {
-            ac.inputManager.showInputField()
-        }
-    })
+	// Manual focus toggle via Tab
+	inputManager.SetFocusToggle(func() {
+		if ac.getFocusMode() == "input" {
+			ac.setFocus("output")
+		} else {
+			ac.setFocus("input")
+		}
+		// Refresh UI elements after focus change
+		// Always refresh content and input field so the input can show hints in output focus
+		if ac.getFocusMode() == "output" {
+			ac.redrawContent()
+		}
+		ac.inputManager.showInputField()
+	})
 
-    // Toggle help overlay with '?' in output focus
-    inputManager.SetHelpToggle(func() {
-        if ac.getFocusMode() == "output" {
-            ac.showOutputHelp = !ac.showOutputHelp
-            ac.redrawContent()
-        }
-    })
+	// Toggle help overlay with '?' in output focus
+	inputManager.SetHelpToggle(func() {
+		if ac.getFocusMode() == "output" {
+			ac.showOutputHelp = !ac.showOutputHelp
+			ac.redrawContent()
+		}
+	})
 
-    // Default focus is input
-    ac.focusMode = "input"
+	// Default focus is input
+	ac.focusMode = "input"
 
-    return ac
+	return ac
 }
 
 // setupLayoutComponents registers components with the layout manager
@@ -231,66 +235,78 @@ func (ac *AgentConsole) setupLayoutComponents() {
 		ZOrder:   90,
 	})
 
-    // Content region is automatically managed
+	// Content region is automatically managed
 
-    // Emit welcome message early so tests that don't call Start() still see baseline content
-    ac.showWelcomeMessage()
-    // Ensure initial focus is rendered on input
-    ac.setFocus("input")
+	// Emit welcome message early so tests that don't call Start() still see baseline content
+	ac.showWelcomeMessage()
+	// Ensure initial focus is rendered on input
+	ac.setFocus("input")
 }
 
 // setFocus switches focus between input and output and refreshes indicators
 func (ac *AgentConsole) setFocus(mode string) {
-    if mode != "input" && mode != "output" {
-        return
-    }
-    ac.focusMode = mode
-    // Update footer hint
-    if ac.footer != nil {
-        ac.footer.SetFocusMode(mode)
-        // Render footer promptly only if initialized with deps
-        if ac.footer.State() != nil && ac.footer.Terminal() != nil {
-            _ = ac.footer.Render()
-        }
-    }
-    ac.renderFocusIndicators()
-    // Adjust buffer wrapping width based on focus margin
-    if ac.Terminal() != nil && ac.consoleBuffer != nil {
-        w, _, _ := ac.Terminal().GetSize()
-        contentWidth := w
-        if mode == "output" { contentWidth = w - 2 }
-        if contentWidth < 1 { contentWidth = 1 }
-        ac.consoleBuffer.SetTerminalWidth(contentWidth)
-        // Redraw to apply immediately
-        ac.redrawContent()
-    }
+	if mode != "input" && mode != "output" {
+		return
+	}
+	ac.focusMode = mode
+	// Update footer hint
+	if ac.footer != nil {
+		ac.footer.SetFocusMode(mode)
+		// Render footer promptly only if initialized with deps
+		if ac.footer.State() != nil && ac.footer.Terminal() != nil {
+			_ = ac.footer.Render()
+		}
+	}
+	ac.renderFocusIndicators()
+	// Adjust buffer wrapping width based on focus margin
+	if ac.Terminal() != nil && ac.consoleBuffer != nil {
+		w, _, _ := ac.Terminal().GetSize()
+		contentWidth := w
+		if mode == "output" {
+			contentWidth = w - 2
+		}
+		if contentWidth < 1 {
+			contentWidth = 1
+		}
+		ac.consoleBuffer.SetTerminalWidth(contentWidth)
+		// Redraw to apply immediately
+		ac.redrawContent()
+	}
 }
 
 func (ac *AgentConsole) getFocusMode() string { return ac.focusMode }
 
 // renderFocusIndicators draws a light teal bar on the focused component
 func (ac *AgentConsole) renderFocusIndicators() {
-    if ac.Terminal() == nil || ac.autoLayoutManager == nil {
-        return
-    }
+	if ac.Terminal() == nil || ac.autoLayoutManager == nil {
+		return
+	}
 
-    // Build a wider cyan bar using two thin line glyphs, plus a space padding (total gutter=3 visually wider)
-    bar := "\033[36m││\033[0m"
-    clear := "  "
+	// Build a wider cyan bar using two thin line glyphs, plus a space padding (total gutter=3 visually wider)
+	bar := "\033[36m││\033[0m"
+	clear := "  "
 
-    // Clear any existing bar in content area first
-    top, bottom := ac.autoLayoutManager.GetScrollRegion()
-    for y := top; y <= bottom; y++ {
-        ac.Terminal().MoveCursor(1, y)
-        if ac.focusMode == "output" { ac.Terminal().WriteText(bar) } else { ac.Terminal().WriteText(clear) }
-        ac.Terminal().WriteText(" ") // one column padding to separate content
-    }
+	// Clear any existing bar in content area first
+	top, bottom := ac.autoLayoutManager.GetScrollRegion()
+	for y := top; y <= bottom; y++ {
+		ac.Terminal().MoveCursor(1, y)
+		if ac.focusMode == "output" {
+			ac.Terminal().WriteText(bar)
+		} else {
+			ac.Terminal().WriteText(clear)
+		}
+		ac.Terminal().WriteText(" ") // one column padding to separate content
+	}
 
-    // Draw or clear input focus bar at input field line
-    inputLine := ac.inputManager.GetCurrentInputFieldLine()
-    ac.Terminal().MoveCursor(1, inputLine)
-    if ac.focusMode == "input" { ac.Terminal().WriteText(bar) } else { ac.Terminal().WriteText(clear) }
-    ac.Terminal().WriteText(" ")
+	// Draw or clear input focus bar at input field line
+	inputLine := ac.inputManager.GetCurrentInputFieldLine()
+	ac.Terminal().MoveCursor(1, inputLine)
+	if ac.focusMode == "input" {
+		ac.Terminal().WriteText(bar)
+	} else {
+		ac.Terminal().WriteText(clear)
+	}
+	ac.Terminal().WriteText(" ")
 }
 
 // AgentConsoleConfig holds configuration
@@ -431,10 +447,10 @@ func (ac *AgentConsole) Start() error {
 
 	// Layout manager handles positioning automatically
 
-    // Initial help about the new features (BEFORE footer)
-    ac.safePrint("\n💡 You can now type while the agent is processing!\n")
-    ac.safePrint("   Press Enter to send new prompts immediately, even during agent responses.\n")
-    ac.safePrint("   Use Ctrl+C to interrupt the agent.\n\n")
+	// Initial help about the new features (BEFORE footer)
+	ac.safePrint("\n💡 You can now type while the agent is processing!\n")
+	ac.safePrint("   Press Tab to switch between inputs and output focus.\n")
+	ac.safePrint("   Use Ctrl+C to interrupt the agent.\n\n")
 
 	// Initial footer render (MUST be last)
 	ac.updateFooter()
@@ -529,6 +545,11 @@ func (ac *AgentConsole) processInput(input string) error {
 	if ac.agent == nil {
 		ac.safePrint("❌ Error: Agent not initialized\n")
 		return nil
+	}
+
+	// If debug is enabled and a debug log file exists, show its path once per run
+	if path := ac.agent.GetDebugLogPath(); path != "" && (os.Getenv("LEDIT_DEBUG") == "1" || os.Getenv("LEDIT_DEBUG") == "true" || os.Getenv("LEDIT_DEBUG") != "") {
+		ac.safePrint("\n🪵 Debug log: %s\n\n", path)
 	}
 
 	// Track last streaming activity for timeout reset
@@ -962,7 +983,7 @@ func (ac *AgentConsole) updateFooter() {
 }
 
 func (ac *AgentConsole) showWelcomeMessage() {
-    ac.safePrint(`
+	ac.safePrint(`
 Welcome to Ledit Agent! 🤖
 
 I can help you with:
@@ -979,8 +1000,8 @@ I can help you with:
 Type /help for available commands, or just start chatting!
 
 `)
-    // Normalize content tracking so subsequent output starts near the top of content area
-    ac.currentContentLine = 1
+	// Normalize content tracking so subsequent output starts near the top of content area
+	ac.currentContentLine = 1
 }
 
 func (ac *AgentConsole) showHelp() {
@@ -1158,13 +1179,13 @@ func (ac *AgentConsole) handleCtrlC() {
 	ac.ctrlCCount++
 	ac.lastCtrlC = now
 
-    if ac.ctrlCCount == 1 {
-        // Mark that we were interrupted to influence next input behavior
-        ac.wasInterrupted = true
-        // First Esc - try to interrupt agent if it's processing
-        select {
-        case ac.interruptChan <- "Ctrl+C pressed - stopping current operation":
-            ac.writeTextWithRawModeFix("\r\033[K^C  🛑 Stopping current operation... (Press Ctrl+C again to exit)\n")
+	if ac.ctrlCCount == 1 {
+		// Mark that we were interrupted to influence next input behavior
+		ac.wasInterrupted = true
+		// First Esc - try to interrupt agent if it's processing
+		select {
+		case ac.interruptChan <- "Ctrl+C pressed - stopping current operation":
+			ac.writeTextWithRawModeFix("\r\033[K^C  🛑 Stopping current operation... (Press Ctrl+C again to exit)\n")
 			// Don't redraw prompt yet, let the agent finish gracefully
 		default:
 			// Agent not processing, show exit message
@@ -1173,8 +1194,8 @@ func (ac *AgentConsole) handleCtrlC() {
 			ac.writeTextWithRawModeFix(ac.prompt)
 		}
 	} else {
-        // Second Esc - exit immediately
-        ac.writeTextWithRawModeFix("\r\033[K🚪 Exiting...\n")
+		// Second Esc - exit immediately
+		ac.writeTextWithRawModeFix("\r\033[K🚪 Exiting...\n")
 
 		// Try to interrupt agent one more time if it's still running
 		select {
@@ -1190,80 +1211,80 @@ func (ac *AgentConsole) handleCtrlC() {
 
 // handleInputFromManager processes input from the concurrent input manager
 func (ac *AgentConsole) handleInputFromManager(input string) error {
-    // Add to history
-    ac.historyManager.AddEntry(input)
+	// Add to history
+	ac.historyManager.AddEntry(input)
 
-    // Decide whether to inject into existing processing or start fresh
-    ac.processingMutex.Lock()
-    startNew := false
-    if ac.isProcessing {
-        // If a recent interrupt occurred, treat this as a new conversation
-        interrupted := ac.wasInterrupted
-        if !interrupted && ac.agent != nil {
-            interrupted = ac.agent.IsInterrupted()
-        }
-        if interrupted {
-            // Start a fresh conversation
-            startNew = true
-        } else {
-            // Inject into ongoing processing
-            if ac.agent != nil {
-                ac.agent.InjectInput(input)
-            }
-            ac.processingMutex.Unlock()
+	// Decide whether to inject into existing processing or start fresh
+	ac.processingMutex.Lock()
+	startNew := false
+	if ac.isProcessing {
+		// If a recent interrupt occurred, treat this as a new conversation
+		interrupted := ac.wasInterrupted
+		if !interrupted && ac.agent != nil {
+			interrupted = ac.agent.IsInterrupted()
+		}
+		if interrupted {
+			// Start a fresh conversation
+			startNew = true
+		} else {
+			// Inject into ongoing processing
+			if ac.agent != nil {
+				ac.agent.InjectInput(input)
+			}
+			ac.processingMutex.Unlock()
 
-            // Show feedback that input was injected
-            ac.safePrint("\n💬 Input injected into conversation: %s\n", input)
-            ac.inputManager.ScrollOutput() // Make room for the message
-            ac.repositionCursorToContentArea()
-            return nil
-        }
-    } else {
-        startNew = true
-    }
+			// Show feedback that input was injected
+			ac.safePrint("\n💬 Input injected into conversation: %s\n", input)
+			ac.inputManager.ScrollOutput() // Make room for the message
+			ac.repositionCursorToContentArea()
+			return nil
+		}
+	} else {
+		startNew = true
+	}
 
-    if startNew {
-        ac.isProcessing = true
-    }
-    ac.processingMutex.Unlock()
+	if startNew {
+		ac.isProcessing = true
+	}
+	ac.processingMutex.Unlock()
 
-    // Clear any previous interrupt state to allow fresh processing
-    if ac.agent != nil {
-        ac.agent.ClearInterrupt()
-    }
-    ac.wasInterrupted = false
+	// Clear any previous interrupt state to allow fresh processing
+	if ac.agent != nil {
+		ac.agent.ClearInterrupt()
+	}
+	ac.wasInterrupted = false
 
-    // Switch focus to output while processing
-    ac.setFocus("output")
+	// Switch focus to output while processing
+	ac.setFocus("output")
 
 	// Process the input immediately (start new conversation)
-    go func() {
-        defer func() {
-            ac.processingMutex.Lock()
-            ac.isProcessing = false
-            ac.inputManager.SetProcessing(false)
-            ac.processingMutex.Unlock()
+	go func() {
+		defer func() {
+			ac.processingMutex.Lock()
+			ac.isProcessing = false
+			ac.inputManager.SetProcessing(false)
+			ac.processingMutex.Unlock()
 
-            // Signal completion
-            select {
-            case ac.agentDoneChan <- struct{}{}:
-            default:
-            }
+			// Signal completion
+			select {
+			case ac.agentDoneChan <- struct{}{}:
+			default:
+			}
 
-            // Return focus to input after completion
-            ac.setFocus("input")
-        }()
+			// Return focus to input after completion
+			ac.setFocus("input")
+		}()
 
-        ac.inputManager.SetProcessing(true)
+		ac.inputManager.SetProcessing(true)
 
-        // Show processing message in content area (not below input)
-        ac.safePrint("\n🔄 Processing: %s\n", input)
+		// Show processing message in content area (not below input)
+		ac.safePrint("\n🔄 Processing: %s\n", input)
 		ac.inputManager.ScrollOutput()
 
-        // CRITICAL FIX: Reposition cursor to content area after ScrollOutput()
-        ac.repositionCursorToContentArea()
+		// CRITICAL FIX: Reposition cursor to content area after ScrollOutput()
+		ac.repositionCursorToContentArea()
 
-        err := ac.processInput(input)
+		err := ac.processInput(input)
 		if err != nil {
 			// Check if user requested quit
 			if errors.Is(err, ErrUserQuit) {
@@ -1446,32 +1467,69 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 
     // Only write if there's content left after filtering
     if strings.TrimSpace(content) != "" {
+        // Ensure currentContentLine is initialized and within bounds when we have content
+        if ac.autoLayoutManager != nil && ac.Terminal() != nil {
+            top, bottom := ac.autoLayoutManager.GetScrollRegion()
+            contentHeight := bottom - top + 1
+            if ac.currentContentLine == 0 {
+                ac.currentContentLine = 1
+            }
+            if ac.currentContentLine > contentHeight {
+                ac.currentContentLine = contentHeight
+            }
+        } else {
+            if ac.currentContentLine == 0 {
+                ac.currentContentLine = 1
+            }
+        }
+
         // Fallback for uninitialized console (e.g., lightweight tests)
         if ac.autoLayoutManager == nil || ac.Terminal() == nil {
             if ac.consoleBuffer != nil {
                 ac.consoleBuffer.AddContent(content)
             }
-            // Best-effort stdout write without terminal ops
-            fmt.Print(content)
-            if ac.currentContentLine == 0 {
-                ac.currentContentLine = 1
-            }
-            ac.currentContentLine += strings.Count(content, "\n")
-            return
-        }
-		// Add to console buffer for tracking
-		if ac.consoleBuffer != nil {
-			ac.consoleBuffer.AddContent(content)
+			// Best-effort stdout write without terminal ops
+			fmt.Print(content)
+			if ac.currentContentLine == 0 {
+				ac.currentContentLine = 1
+			}
+			ac.currentContentLine += strings.Count(content, "\n")
+			return
 		}
-
-        // If we're scrolling, don't auto-display new content
-        if ac.isScrolling {
-            return
+        // Add to console buffer for tracking
+        if ac.consoleBuffer != nil {
+            ac.consoleBuffer.AddContent(content)
         }
+
+		// If we're scrolling, don't auto-display new content
+		if ac.isScrolling {
+			return
+		}
 
         // Redraw from buffer to ensure consistent ordering and wrapping
         ac.redrawContent()
-	}
+
+        // Update currentContentLine by the number of newlines in the content, with bounds checking
+        newlines := strings.Count(content, "\n")
+        if newlines > 0 {
+            ac.currentContentLine += newlines
+            if ac.autoLayoutManager != nil {
+                top, bottom := ac.autoLayoutManager.GetScrollRegion()
+                contentHeight := bottom - top + 1
+                if ac.currentContentLine > contentHeight {
+                    ac.currentContentLine = contentHeight
+                }
+                if ac.currentContentLine < 1 {
+                    ac.currentContentLine = 1
+                }
+            }
+        }
+
+        // For non-streaming output, ensure cursor returns to the tracked content area position
+        if !ac.isStreaming {
+            ac.repositionCursorToContentArea()
+        }
+    }
 }
 
 // OnResize handles terminal resize events
@@ -1482,10 +1540,12 @@ func (ac *AgentConsole) OnResize(width, height int) {
 	ac.outputMutex.Lock()
 	defer ac.outputMutex.Unlock()
 
-    // Update console buffer with new width for rewrapping (account for left gutter + padding = 2 cols)
-    contentWidth := width - 2
-    if contentWidth < 1 { contentWidth = 1 }
-    ac.consoleBuffer.SetTerminalWidth(contentWidth)
+	// Update console buffer with new width for rewrapping (account for left gutter + padding = 2 cols)
+	contentWidth := width - 2
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	ac.consoleBuffer.SetTerminalWidth(contentWidth)
 
 	// Let footer component handle its own resize first (updates dynamic height)
 	if ac.footer != nil {
@@ -1738,34 +1798,34 @@ func (ac *AgentConsole) filterCompletionSignals(content string) string {
 
 // repositionCursorToContentArea moves cursor back to content area after input manager positioning
 func (ac *AgentConsole) repositionCursorToContentArea() {
-    // Ensure subsequent output is written within the content area, not at input line
+	// Ensure subsequent output is written within the content area, not at input line
 
-    // If layout/terminal not initialized yet (e.g., tests), track minimally
-    if ac.autoLayoutManager == nil || ac.Terminal() == nil {
-        if ac.currentContentLine == 0 {
-            ac.currentContentLine = 1
-        }
-        return
-    }
+	// If layout/terminal not initialized yet (e.g., tests), track minimally
+	if ac.autoLayoutManager == nil || ac.Terminal() == nil {
+		if ac.currentContentLine == 0 {
+			ac.currentContentLine = 1
+		}
+		return
+	}
 
-    top, bottom := ac.autoLayoutManager.GetScrollRegion()
+	top, bottom := ac.autoLayoutManager.GetScrollRegion()
 
-    // If no content yet, move to the top of content area
-    if ac.currentContentLine == 0 {
-        ac.Terminal().MoveCursor(1, top)
-        ac.currentContentLine = 1
-        return
-    }
+	// If no content yet, move to the top of content area
+	if ac.currentContentLine == 0 {
+		ac.Terminal().MoveCursor(1, top)
+		ac.currentContentLine = 1
+		return
+	}
 
-    // Clamp to valid content area and move to tracked line
-    contentHeight := bottom - top + 1
-    line := ac.currentContentLine
-    if line < 1 {
-        line = 1
-    } else if line > contentHeight {
-        line = contentHeight
-    }
-    ac.Terminal().MoveCursor(1, top+line-1)
+	// Clamp to valid content area and move to tracked line
+	contentHeight := bottom - top + 1
+	line := ac.currentContentLine
+	if line < 1 {
+		line = 1
+	} else if line > contentHeight {
+		line = contentHeight
+	}
+	ac.Terminal().MoveCursor(1, top+line-1)
 }
 
 // restoreLayoutAfterPassthrough restores the console layout after interactive commands
@@ -1912,85 +1972,101 @@ func (ac *AgentConsole) scrollDown(lines int) {
 
 // redrawContent redraws the content area with the current scroll position
 func (ac *AgentConsole) redrawContent() {
-    // Get content region boundaries
-    contentTop, contentBottom := ac.autoLayoutManager.GetScrollRegion()
-    height := contentBottom - contentTop + 1
+	// Get content region boundaries
+	contentTop, contentBottom := ac.autoLayoutManager.GetScrollRegion()
+	height := contentBottom - contentTop + 1
 
-    // Get visible lines from buffer
-    lines := ac.consoleBuffer.GetVisibleLines(height)
+	// Get visible lines from buffer
+	lines := ac.consoleBuffer.GetVisibleLines(height)
 
-    // Save cursor position
-    ac.Terminal().SaveCursor()
+	// Save cursor position
+	ac.Terminal().SaveCursor()
 
-    // Clear content area first
-    ac.Terminal().MoveCursor(1, contentTop)
-    for i := 0; i < height; i++ {
-        // Clear entire line then draw gutter (bar+padding)
-        ac.Terminal().ClearLine()
-        if ac.focusMode == "output" { ac.Terminal().WriteText("\033[36m│\033[0m ") } else { ac.Terminal().WriteText("  ") }
-        if i < height-1 { ac.Terminal().WriteText("\r\n") }
-    }
+	// Clear content area first
+	ac.Terminal().MoveCursor(1, contentTop)
+	for i := 0; i < height; i++ {
+		// Clear entire line then draw gutter (bar+padding)
+		ac.Terminal().ClearLine()
+		if ac.focusMode == "output" {
+			ac.Terminal().WriteText("\033[36m│\033[0m ")
+		} else {
+			ac.Terminal().WriteText("  ")
+		}
+		if i < height-1 {
+			ac.Terminal().WriteText("\r\n")
+		}
+	}
 
-    // Draw visible lines
-    // If output focused, start content at column 3 (after bar+padding)
-    startX := 1
-    if ac.focusMode == "output" { startX = 3 }
-    for i := 0; i < len(lines); i++ {
-        ac.Terminal().MoveCursor(startX, contentTop+i)
-        ac.Terminal().ClearToEndOfLine()
-        ac.Terminal().WriteText(lines[i])
-    }
+	// Draw visible lines
+	// If output focused, start content at column 3 (after bar+padding)
+	startX := 1
+	if ac.focusMode == "output" {
+		startX = 3
+	}
+	for i := 0; i < len(lines); i++ {
+		ac.Terminal().MoveCursor(startX, contentTop+i)
+		ac.Terminal().ClearToEndOfLine()
+		ac.Terminal().WriteText(lines[i])
+	}
 
-    // Draw help overlay (non-destructive overlay on top of content)
-    if ac.showOutputHelp && ac.focusMode == "output" {
-        width, _, _ := ac.Terminal().GetSize()
-        boxW := width - startX - 2
-        if boxW > 60 { boxW = 60 }
-        if boxW < 24 { boxW = 24 }
-        help := []string{
-            "Output Navigation Help",
-            "",
-            "j / k        • scroll down / up one line",
-            "PgDn / PgUp  • scroll page down / up",
-            "Ctrl-D / U   • half-page down / up",
-            "gg / G       • jump to top / bottom",
-            "Tab          • toggle focus (input/output)",
-            "Esc          • interrupt current operation",
-            "?            • toggle this help",
-        }
-        // Position overlay below top content line
-        boxX := startX
-        boxY := contentTop + 1
-        horizontal := strings.Repeat("-", boxW)
-        ac.Terminal().MoveCursor(boxX, boxY)
-        ac.Terminal().WriteText("+" + horizontal + "+")
-        y := boxY + 1
-        for _, line := range help {
-            if len(line) > boxW { line = line[:boxW] }
-            padding := boxW - len(line)
-            ac.Terminal().MoveCursor(boxX, y)
-            ac.Terminal().WriteText("|" + line + strings.Repeat(" ", padding) + "|")
-            y++
-            if y > contentBottom-1 { break }
-        }
-        if y <= contentBottom {
-            ac.Terminal().MoveCursor(boxX, y)
-            ac.Terminal().WriteText("+" + horizontal + "+")
-        }
-    }
+	// Draw help overlay (non-destructive overlay on top of content)
+	if ac.showOutputHelp && ac.focusMode == "output" {
+		width, _, _ := ac.Terminal().GetSize()
+		boxW := width - startX - 2
+		if boxW > 60 {
+			boxW = 60
+		}
+		if boxW < 24 {
+			boxW = 24
+		}
+		help := []string{
+			"Output Navigation Help",
+			"",
+			"j / k        • scroll down / up one line",
+			"PgDn / PgUp  • scroll page down / up",
+			"Ctrl-D / U   • half-page down / up",
+			"gg / G       • jump to top / bottom",
+			"Tab          • toggle focus (input/output)",
+			"Esc          • interrupt current operation",
+			"?            • toggle this help",
+		}
+		// Position overlay below top content line
+		boxX := startX
+		boxY := contentTop + 1
+		horizontal := strings.Repeat("-", boxW)
+		ac.Terminal().MoveCursor(boxX, boxY)
+		ac.Terminal().WriteText("+" + horizontal + "+")
+		y := boxY + 1
+		for _, line := range help {
+			if len(line) > boxW {
+				line = line[:boxW]
+			}
+			padding := boxW - len(line)
+			ac.Terminal().MoveCursor(boxX, y)
+			ac.Terminal().WriteText("|" + line + strings.Repeat(" ", padding) + "|")
+			y++
+			if y > contentBottom-1 {
+				break
+			}
+		}
+		if y <= contentBottom {
+			ac.Terminal().MoveCursor(boxX, y)
+			ac.Terminal().WriteText("+" + horizontal + "+")
+		}
+	}
 
-    // Add scroll indicator if scrolling
-    if ac.isScrolling {
-        stats := ac.consoleBuffer.GetStats()
-        if stats.ScrollPosition > 0 {
-            indicator := fmt.Sprintf(" [Scroll: -%d lines] ", stats.ScrollPosition)
-            // Draw indicator at top right of content area
-            width, _, _ := ac.Terminal().GetSize()
-            ac.Terminal().MoveCursor(width-len(indicator), contentTop)
-            ac.Terminal().WriteText("\033[7m" + indicator + "\033[0m") // Inverse video
-        }
-    }
+	// Add scroll indicator if scrolling
+	if ac.isScrolling {
+		stats := ac.consoleBuffer.GetStats()
+		if stats.ScrollPosition > 0 {
+			indicator := fmt.Sprintf(" [Scroll: -%d lines] ", stats.ScrollPosition)
+			// Draw indicator at top right of content area
+			width, _, _ := ac.Terminal().GetSize()
+			ac.Terminal().MoveCursor(width-len(indicator), contentTop)
+			ac.Terminal().WriteText("\033[7m" + indicator + "\033[0m") // Inverse video
+		}
+	}
 
-    // Restore cursor position
-    ac.Terminal().RestoreCursor()
+	// Restore cursor position
+	ac.Terminal().RestoreCursor()
 }

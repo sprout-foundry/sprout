@@ -1,16 +1,17 @@
 package commands
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-	"os/exec"
-	"strings"
+    "bufio"
+    "fmt"
+    "os"
+    "os/exec"
+    "strings"
 
-	"github.com/alantheprice/ledit/pkg/agent"
-	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/factory"
-	"github.com/alantheprice/ledit/pkg/utils"
+    "github.com/alantheprice/ledit/pkg/agent"
+    api "github.com/alantheprice/ledit/pkg/agent_api"
+    "github.com/alantheprice/ledit/pkg/factory"
+    "github.com/alantheprice/ledit/pkg/utils"
+    "golang.org/x/term"
 )
 
 // CommitCommand implements the /commit slash command
@@ -54,7 +55,23 @@ func (c *CommitCommand) Name() string {
 
 // Description returns the command description
 func (c *CommitCommand) Description() string {
-	return "Interactive commit workflow with dropdown selection - stage files and generate commit messages"
+    return "Interactive commit workflow with dropdown selection - stage files and generate commit messages"
+}
+
+// console-safe output helpers
+func normalizeNewlines(s string) string {
+    if term.IsTerminal(int(os.Stdout.Fd())) {
+        return strings.ReplaceAll(s, "\n", "\r\n")
+    }
+    return s
+}
+
+func (c *CommitCommand) printf(format string, args ...interface{}) {
+    fmt.Fprint(os.Stdout, normalizeNewlines(fmt.Sprintf(format, args...)))
+}
+
+func (c *CommitCommand) println(text string) {
+    fmt.Fprint(os.Stdout, normalizeNewlines(text)+"\r\n")
 }
 
 // Execute runs the commit command
@@ -414,7 +431,8 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 
 	// Generate commit message
-    fmt.Println("\n📝 Generating commit message...")
+    c.println("")
+    c.println("📝 Generating commit message...")
 
 	// Get staged diff
 	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
@@ -422,10 +440,10 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		return fmt.Errorf("failed to get staged diff: %v", err)
 	}
 
-	if len(strings.TrimSpace(string(diffOutput))) == 0 {
-		fmt.Println("❌ No changes staged")
-		return nil
-	}
+    if len(strings.TrimSpace(string(diffOutput))) == 0 {
+        c.println("❌ No changes staged")
+        return nil
+    }
 
     // Prepare LLM client if agent is available; otherwise fall back to manual prompt
     var client api.ClientInterface
@@ -522,13 +540,15 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
     for {
         if client == nil {
             // Manual fallback when LLM client isn't available
-            fmt.Println("\n🧾 Staged diff (truncated):")
+            c.println("")
+            c.println("🧾 Staged diff (truncated):")
             preview := string(diffOutput)
             if len(preview) > 2000 {
                 preview = preview[:2000] + "\n... (truncated)"
             }
-            fmt.Println(preview)
-            fmt.Println("\n✏️  Enter commit message (end with a blank line):")
+            c.println(preview)
+            c.println("")
+            c.println("✏️  Enter commit message (end with a blank line):")
             var b strings.Builder
             empty := 0
             for {
@@ -626,7 +646,7 @@ Generate only the commit message, no additional commentary.`, optimizedDiff.Opti
 			}
 
 			// Show token usage
-			fmt.Printf("\n💰 Tokens used: %d (model: %s/%s)\n", resp.Usage.TotalTokens, clientType, model)
+            c.printf("\n💰 Tokens used: %d (model: %s/%s)\n", resp.Usage.TotalTokens, clientType, model)
 
 		} else {
 			// Multi-file mode - full format with file actions
@@ -725,70 +745,78 @@ Generate a Git commit message summary. The message should follow these rules:
 			commitMessage = commitTitle + "\n\n" + wrappedDesc
 
 			// Show token usage (both requests)
-			fmt.Printf("\n💰 Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
-		}
+            c.printf("\n💰 Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
+        }
 
-		// Show commit message preview
-		fmt.Println("\n📋 Commit message preview:")
-		fmt.Println("=============================================")
-		fmt.Println(commitMessage)
-		fmt.Println("=============================================")
+        // Show commit message preview
+        c.println("")
+        c.println("📋 Commit message preview:")
+        c.println("=============================================")
+        c.println(commitMessage)
+        c.println("=============================================")
 
-		// Handle confirmation (or auto-proceed if skipPrompt)
-		if c.skipPrompt {
-			fmt.Println("\n✅ Auto-proceeding with commit (--skip-prompt)")
-			break // Exit retry loop
-		} else {
-			// Confirmation with retry option
-			fmt.Print("\n💡 Proceed with commit? (y/n/e to edit/r to retry): ")
-			input, _ := reader.ReadString('\n')
-			input = strings.TrimSpace(strings.ToLower(input))
+        // Handle confirmation (or auto-proceed if skipPrompt)
+        if c.skipPrompt {
+            c.println("")
+            c.println("✅ Auto-proceeding with commit (--skip-prompt)")
+            break // Exit retry loop
+        } else {
+            {
+                // Confirmation with retry option via stdin
+                c.println("")
+                c.printf("💡 Proceed with commit? (y/n/e to edit/r to retry): ")
+                input, _ := reader.ReadString('\n')
+                input = strings.TrimSpace(strings.ToLower(input))
 
-			if input == "r" || input == "retry" {
-				fmt.Println("🔄 Regenerating commit message...")
-				continue // Go back to start of loop to regenerate
-			} else if input == "e" || input == "edit" {
-				// Allow editing the commit message
-				fmt.Println("\n✏️  Enter your commit message (press Enter twice when done):")
-				var editedMessage strings.Builder
-				emptyLineCount := 0
-				for {
-					line, _ := reader.ReadString('\n')
-					if line == "\n" {
-						emptyLineCount++
-						if emptyLineCount >= 2 {
-							break
-						}
-					} else {
-						emptyLineCount = 0
-					}
-					editedMessage.WriteString(line)
-				}
-				commitMessage = strings.TrimSpace(editedMessage.String())
-				break // Exit retry loop with edited message
-			} else if input == "y" || input == "yes" || input == "" {
-				break // Exit retry loop and proceed with commit
-			} else if input == "n" || input == "no" {
-				fmt.Println("❌ Commit cancelled")
-				return nil
-			} else {
-				fmt.Printf("❌ Invalid option: %s. Please use y/n/e/r\n", input)
-				continue // Show the confirmation prompt again
-			}
-		}
+                if input == "r" || input == "retry" {
+                    c.println("🔄 Regenerating commit message...")
+                    continue // Go back to start of loop to regenerate
+                } else if input == "e" || input == "edit" {
+                    // Allow editing the commit message
+                    c.println("")
+                    c.println("✏️  Enter your commit message (press Enter twice when done):")
+                    var editedMessage strings.Builder
+                    emptyLineCount := 0
+                    for {
+                        line, _ := reader.ReadString('\n')
+                        if line == "\n" {
+                            emptyLineCount++
+                            if emptyLineCount >= 2 {
+                                break
+                            }
+                        } else {
+                            emptyLineCount = 0
+                        }
+                        editedMessage.WriteString(line)
+                    }
+                    commitMessage = strings.TrimSpace(editedMessage.String())
+                    break // Exit retry loop with edited message
+                } else if input == "y" || input == "yes" || input == "" {
+                    break // Exit retry loop and proceed with commit
+                } else if input == "n" || input == "no" {
+                    c.println("❌ Commit cancelled")
+                    return nil
+                } else {
+                    c.printf("❌ Invalid option: %s. Please use y/n/e/r\n", input)
+                    continue // Show the confirmation prompt again
+                }
+            }
+        }
 
-	} // End of retry loop
+    } // End of retry loop
 
 	// Handle dry-run mode
 	if c.dryRun {
-		fmt.Println("\n🔍 Dry-run mode: Commit message generated successfully!")
-		fmt.Println("💡 The commit was not created due to --dry-run flag")
-		fmt.Println("📝 To create the commit, run the command again without --dry-run")
-		return nil
-	}
+    c.println("")
+    c.println("🔍 Dry-run mode: Commit message generated successfully!")
+    c.println("💡 The commit was not created due to --dry-run flag")
+    c.println("📝 To create the commit, run the command again without --dry-run")
+    return nil
+}
 
 	// Create the commit
-	fmt.Println("\n💾 Creating commit...")
+    c.println("")
+    c.println("💾 Creating commit...")
 
 	// Write commit message to temporary file
 	tempFile := "commit_msg.txt"
@@ -804,8 +832,8 @@ Generate a Git commit message summary. The message should follow these rules:
 		return fmt.Errorf("failed to create commit: %v\nOutput: %s", err, string(output))
 	}
 
-	fmt.Printf("✅ Commit created successfully!\n")
-	fmt.Printf("Output: %s\n", string(output))
+    c.println("✅ Commit created successfully!")
+    c.printf("Output: %s\n", string(output))
 
 	return nil
 }

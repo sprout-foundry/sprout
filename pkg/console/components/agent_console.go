@@ -266,20 +266,21 @@ func (ac *AgentConsole) setFocus(mode string) {
 		}
 	}
 	ac.renderFocusIndicators()
-	// Adjust buffer wrapping width based on focus margin
-	if ac.Terminal() != nil && ac.consoleBuffer != nil {
-		w, _, _ := ac.Terminal().GetSize()
-		contentWidth := w
-		if mode == "output" {
-			contentWidth = w - 2
-		}
-		if contentWidth < 1 {
-			contentWidth = 1
-		}
-		ac.consoleBuffer.SetTerminalWidth(contentWidth)
-		// Redraw to apply immediately
-		ac.redrawContent()
-	}
+    // Adjust buffer wrapping width based on focus margin
+    if ac.Terminal() != nil && ac.consoleBuffer != nil {
+        w, _, _ := ac.Terminal().GetSize()
+        contentWidth := w
+        // Reserve a 3-column gutter (bar+bar+space) when output-focused
+        if mode == "output" {
+            contentWidth = w - 3
+        }
+        if contentWidth < 1 {
+            contentWidth = 1
+        }
+        ac.consoleBuffer.SetTerminalWidth(contentWidth)
+        // Redraw to apply immediately
+        ac.redrawContent()
+    }
 }
 
 func (ac *AgentConsole) getFocusMode() string { return ac.focusMode }
@@ -290,31 +291,29 @@ func (ac *AgentConsole) renderFocusIndicators() {
 		return
 	}
 
-	// Build a wider cyan bar using two thin line glyphs, plus a space padding (total gutter=3 visually wider)
-	bar := "\033[36m││\033[0m"
-	clear := "  "
+    // Build a wider cyan bar using two thin line glyphs, plus a space padding (total gutter = 3)
+    bar := "\033[36m││\033[0m"
+    clear := "   "
 
 	// Clear any existing bar in content area first
 	top, bottom := ac.autoLayoutManager.GetScrollRegion()
 	for y := top; y <= bottom; y++ {
 		ac.Terminal().MoveCursor(1, y)
-		if ac.focusMode == "output" {
-			ac.Terminal().WriteText(bar)
-		} else {
-			ac.Terminal().WriteText(clear)
-		}
-		ac.Terminal().WriteText(" ") // one column padding to separate content
+        if ac.focusMode == "output" {
+            ac.Terminal().WriteText(bar + " ")
+        } else {
+            ac.Terminal().WriteText(clear)
+        }
 	}
 
 	// Draw or clear input focus bar at input field line
 	inputLine := ac.inputManager.GetCurrentInputFieldLine()
 	ac.Terminal().MoveCursor(1, inputLine)
-	if ac.focusMode == "input" {
-		ac.Terminal().WriteText(bar)
-	} else {
-		ac.Terminal().WriteText(clear)
-	}
-	ac.Terminal().WriteText(" ")
+    if ac.focusMode == "input" {
+        ac.Terminal().WriteText(bar + " ")
+    } else {
+        ac.Terminal().WriteText(clear)
+    }
 }
 
 // AgentConsoleConfig holds configuration
@@ -2005,25 +2004,25 @@ func (ac *AgentConsole) redrawContent() {
 
 	// Clear content area first
 	ac.Terminal().MoveCursor(1, contentTop)
-	for i := 0; i < height; i++ {
-		// Clear entire line then draw gutter (bar+padding)
-		ac.Terminal().ClearLine()
-		if ac.focusMode == "output" {
-			ac.Terminal().WriteText("\033[36m│\033[0m ")
-		} else {
-			ac.Terminal().WriteText("  ")
-		}
-		if i < height-1 {
-			ac.Terminal().WriteText("\r\n")
-		}
-	}
+    for i := 0; i < height; i++ {
+        // Clear entire line then draw gutter
+        ac.Terminal().ClearLine()
+        if ac.focusMode == "output" {
+            ac.Terminal().WriteText("\033[36m││\033[0m ")
+        } else {
+            ac.Terminal().WriteText("   ")
+        }
+        if i < height-1 {
+            ac.Terminal().WriteText("\r\n")
+        }
+    }
 
-	// Draw visible lines
-	// If output focused, start content at column 3 (after bar+padding)
-	startX := 1
-	if ac.focusMode == "output" {
-		startX = 3
-	}
+    // Draw visible lines
+    // If output focused, start content at column 4 (after 2-bar gutter + padding)
+    startX := 1
+    if ac.focusMode == "output" {
+        startX = 4
+    }
 	for i := 0; i < len(lines); i++ {
 		ac.Terminal().MoveCursor(startX, contentTop+i)
 		ac.Terminal().ClearToEndOfLine()

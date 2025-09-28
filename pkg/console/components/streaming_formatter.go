@@ -34,10 +34,13 @@ type StreamingFormatter struct {
 	// Think tag handling
 	inThinkTag         bool
 	thinkBuffer        strings.Builder
-	conversationBuffer strings.Builder // Store clean conversation for post-processing
+    conversationBuffer strings.Builder // Store clean conversation for post-processing
 
 	// Custom output function (if set, replaces fmt.Print calls)
-	outputFunc func(string)
+    outputFunc func(string)
+
+    // Simple anti-duplication guard for consecutive identical printed lines
+    lastPrintedNormalized string
 }
 
 // NewStreamingFormatter creates a new streaming formatter
@@ -352,11 +355,18 @@ func (sf *StreamingFormatter) outputLine(line string) {
 			!regexp.MustCompile(`^\d+\.`).MatchString(trimmed) {
 			sf.inListContext = false
 		}
-		// Regular line - apply inline formatting
-		formatted := sf.applyInlineFormatting(line)
-		sf.println(formatted)
-		sf.lastWasNewline = true
-	}
+    // Regular line - apply inline formatting
+    formatted := sf.applyInlineFormatting(line)
+    // Deduplicate consecutive identical (normalized) lines
+    norm := strings.TrimSpace(formatted)
+    if norm != "" && norm == sf.lastPrintedNormalized {
+        // skip duplicate line
+        return
+    }
+    sf.println(formatted)
+    sf.lastPrintedNormalized = norm
+    sf.lastWasNewline = true
+}
 }
 
 // ForceFlush immediately outputs any buffered content without finalizing
@@ -426,7 +436,8 @@ func (sf *StreamingFormatter) Reset() {
 	sf.inCodeBlock = false
 	sf.inListContext = false
 	sf.lastUpdate = time.Time{}
-	sf.finalized = false
+    sf.finalized = false
+    sf.lastPrintedNormalized = ""
 }
 
 // HasProcessedContent returns true if any content has been processed

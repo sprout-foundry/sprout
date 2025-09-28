@@ -99,7 +99,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		// Update activity time on successful response
 		ch.lastActivityTime = time.Now()
 
-		// Process response
+	// Process response
 		if shouldStop := ch.processResponse(response); shouldStop {
 			ch.agent.debugLog("✅ Conversation complete\n")
 			break
@@ -152,11 +152,20 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			ch.agent.flushCallback()
 		}
 
-		ch.displayIntermediateResponse(choice.Message.Content)
-		toolResults := ch.toolExecutor.ExecuteTools(choice.Message.ToolCalls)
-		ch.agent.messages = append(ch.agent.messages, toolResults...)
-		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
-		return false // Continue conversation
+    ch.displayIntermediateResponse(choice.Message.Content)
+    toolResults := ch.toolExecutor.ExecuteTools(choice.Message.ToolCalls)
+    ch.agent.messages = append(ch.agent.messages, toolResults...)
+
+    // If the tool calls appear malformed (parse/unknown/validation), add guidance once
+    if ch.shouldAddToolCallGuidance(toolResults) {
+        guidance := ch.buildToolCallGuidance()
+        ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
+        ch.agent.toolCallGuidanceAdded = true
+        ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
+    }
+
+    ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
+    return false // Continue conversation
 	}
 
 	// Check for blank iteration (no content and no tool calls)
@@ -222,6 +231,50 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 }
 
 // Helper methods...
+// shouldAddToolCallGuidance inspects tool results for common malformed tool call errors
+func (ch *ConversationHandler) shouldAddToolCallGuidance(results []api.Message) bool {
+    if ch.agent.toolCallGuidanceAdded {
+        return false
+    }
+    for _, r := range results {
+        if r.Role != "tool" {
+            continue
+        }
+        c := strings.ToLower(r.Content)
+        if strings.Contains(c, "error parsing arguments") ||
+            strings.Contains(c, "failed to parse tool arguments") ||
+            strings.Contains(c, "unknown tool") ||
+            strings.Contains(c, "invalid mcp tool name format") ||
+            strings.Contains(c, "parameter validation failed") ||
+            (strings.Contains(c, "tool ") && strings.Contains(c, " not found")) {
+            return true
+        }
+    }
+    return false
+}
+
+// buildToolCallGuidance returns a concise system message instructing correct tool call usage
+func (ch *ConversationHandler) buildToolCallGuidance() string {
+    return "When you need to use tools, emit structured function calls only (no plain text instructions about tools).\n" +
+        "Rules:\n" +
+        "- Use the exact tool name from the tools list.\n" +
+        "- Arguments must be valid JSON matching the schema keys.\n" +
+        "- Do not include extra fields, comments, or trailing commas.\n" +
+        "- Include all required parameters.\n\n" +
+        "Examples:\n" +
+        "1) read_file\n" +
+        "   name: read_file\n" +
+        "   arguments: {\"file_path\": \"pkg/agent/agent.go\"}\n\n" +
+        "2) shell_command\n" +
+        "   name: shell_command\n" +
+        "   arguments: {\"command\": \"go test ./... -v\"}\n\n" +
+        "3) edit_file\n" +
+        "   name: edit_file\n" +
+        "   arguments: {\"file_path\": \"README.md\", \"old_string\": \"old\", \"new_string\": \"new\"}\n\n" +
+        "Notes:\n" +
+        "- Do not embed a 'tool_calls' JSON object in your message content.\n" +
+        "- If you need multiple tools, emit multiple function calls in order, each with valid JSON arguments."
+}
 func (ch *ConversationHandler) checkForInterrupt() bool {
     // Check for escape key press
     select {

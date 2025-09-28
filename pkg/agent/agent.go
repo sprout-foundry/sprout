@@ -43,7 +43,8 @@ type Agent struct {
 	mcpManager           mcp.MCPManager                 // MCP server management
 	mcpToolsCache        []api.Tool                     // Cached MCP tools to avoid reloading
 	circuitBreaker       *CircuitBreakerState           // Track repetitive actions
-	conversationPruner   *ConversationPruner            // Automatic conversation pruning
+    conversationPruner   *ConversationPruner            // Automatic conversation pruning
+    toolCallGuidanceAdded bool                          // Prevent repeating tool call guidance
 
     // Interrupt handling
     interruptRequested   bool            // Flag indicating interrupt was requested

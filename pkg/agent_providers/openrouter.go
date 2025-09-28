@@ -616,7 +616,7 @@ func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody
 		// Clone the request body for retry attempts
 		httpReq.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 
-		resp, err := p.streamingClient.Do(httpReq)
+		resp, err := p.httpClient.Do(httpReq)
 		if err != nil {
 			return nil, fmt.Errorf("failed to send request: %w", err)
 		}

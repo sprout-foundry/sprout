@@ -154,7 +154,6 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
     ch.displayIntermediateResponse(choice.Message.Content)
     toolResults := ch.toolExecutor.ExecuteTools(choice.Message.ToolCalls)
-    ch.agent.messages = append(ch.agent.messages, toolResults...)
 
     // If the tool calls appear malformed (parse/unknown/validation), add guidance once
     if ch.shouldAddToolCallGuidance(toolResults) {
@@ -164,6 +163,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
         ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
     }
 
+    ch.agent.messages = append(ch.agent.messages, toolResults...)
     ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
     return false // Continue conversation
 	}

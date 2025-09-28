@@ -181,8 +181,10 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		func(lines int) { ac.scrollDown(lines) },
 	)
 
-	// Provide focus to input manager so arrow keys and vim keys are context-aware
-	inputManager.SetFocusProvider(ac.getFocusMode)
+    // Provide focus to input manager so arrow keys and vim keys are context-aware
+    inputManager.SetFocusProvider(ac.getFocusMode)
+    // Provide scrolling state to input manager for contextual hints
+    inputManager.SetScrollingProvider(func() bool { return ac.isScrolling })
 
 	// Manual focus toggle via Tab
 	inputManager.SetFocusToggle(func() {
@@ -989,11 +991,6 @@ I can help you with:
 • File exploration and editing
 • Shell command execution
 • Project understanding
-
-✨ NEW FEATURES:
-• Real-time input: Type while I'm processing!
-• Input injection: Send new prompts mid-conversation!
-• Interrupt support: Press Esc to stop processing
 
 Type /help for available commands, or just start chatting!
 

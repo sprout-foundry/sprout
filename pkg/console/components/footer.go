@@ -263,23 +263,10 @@ func (fc *FooterComponent) fillLineBackground(currentLen int, totalWidth int) {
 
 // renderSeparator renders the blank separator line
 func (fc *FooterComponent) renderSeparator(region console.Region, lineOffset int) error {
+    // Render a clean separator line without control hints to keep footer uncluttered
     fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
     fc.Terminal().ClearLine()
-    // Draw full-width background first
     fc.Terminal().Write([]byte(uiutil.BgPad(region.Width, fc.config.Colors.BgBlueGrey)))
-
-    // Overlay focus hint at left
-    hint := ""
-    if fc.focusMode != "" {
-        // e.g., "Focus: Output  • Tab: Toggle • Esc: Interrupt"
-        mode := strings.Title(fc.focusMode)
-        hint = fmt.Sprintf(" Focus: %s  • Tab: Toggle  • Esc: Interrupt ", mode)
-        if len(hint) > region.Width {
-            hint = hint[:region.Width]
-        }
-        fc.Terminal().MoveCursor(region.X+1, region.Y+lineOffset)
-        fc.Terminal().Write([]byte(fc.config.Colors.DimWhite + hint + fc.config.Colors.Reset))
-    }
     return nil
 }
 

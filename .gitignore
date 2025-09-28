@@ -1,3 +1,13 @@
 ledit
 .ledit/
 *.tmp
+testing/
+e2e_results.csv
+debug.log
+debug_logs/
+ui_test_logs/
+test_home/
+
+.DS_STORE
+.vscode/
+.idea/

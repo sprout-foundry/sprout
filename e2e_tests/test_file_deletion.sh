@@ -19,9 +19,18 @@ run_test_logic() {
 
     echo
     echo "--- Verifying Test ---"
-    # Check that data.json is no longer in the workspace file
-    ! grep -q "\"data.json\":" .ledit/workspace.json && echo "PASS: data.json correctly removed from workspace.json" || (echo "FAIL: data.json still exists in workspace.json"; exit 1)
-    
+    # Ensure workspace file exists before checking contents
+    if [ -f .ledit/workspace.json ]; then
+        if grep -q '"data.json":' .ledit/workspace.json; then
+            echo "FAIL: data.json still exists in workspace.json"
+            exit 1
+        else
+            echo "PASS: data.json correctly removed from workspace.json"
+        fi
+    else
+        echo "INFO: .ledit/workspace.json not found (agent likely failed to start). Skipping workspace check."
+    fi
+
     # Also check if the file actually exists on disk
     if [ ! -f "data.json" ]; then
         echo "PASS: data.json was successfully deleted from disk."

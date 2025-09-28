@@ -47,6 +47,12 @@ def main():
         print(f"\nRunning {len(tests)} tests with model: {args.model}")
         print("=" * 50)
         
+        # Build ledit once for the test run and ensure it's on PATH for subprocesses
+        build_result = subprocess.run(["go", "build", "-o", "ledit"], capture_output=True, text=True, cwd=script_dir)
+        if build_result.returncode != 0:
+            print("Build failed:", build_result.stderr)
+            sys.exit(1)
+
         passed = 0
         failed = 0
         
@@ -55,12 +61,16 @@ def main():
             print("-" * 50)
             
             try:
+                env = os.environ.copy()
+                # Prepend script_dir (which contains built ledit) to PATH so tests can invoke `ledit`
+                env["PATH"] = f"{script_dir}:{env.get('PATH', '')}"
                 result = subprocess.run(
                     ["bash", str(test_file), args.model],
                     cwd=script_dir,
                     capture_output=True,
                     text=True,
-                    timeout=120  # 2 minute timeout per test
+                    timeout=120,  # 2 minute timeout per test
+                    env=env,
                 )
                 
                 if result.returncode == 0:

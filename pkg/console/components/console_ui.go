@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
     "os"
+    "strings"
     "time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
@@ -108,19 +109,27 @@ func (c *ConsoleUI) ShowQuickPrompt(ctx context.Context, prompt string, options 
         c.agentConsole.restoreLayoutAfterPassthrough()
     }()
 
-    // Determine line above input
-    y := c.agentConsole.inputManager.GetCurrentInputFieldLine() - 1
-    if y < 1 {
-        y = 1
+    // Determine available width and lines to render
+    width, _, _ := c.agentConsole.Terminal().GetSize()
+    lines := BuildQuickPromptLines(prompt, options, width, horizontal)
+
+    // Determine starting Y so the block sits above input and stays on screen
+    inputY := c.agentConsole.inputManager.GetCurrentInputFieldLine()
+    yStart := inputY - len(lines)
+    if yStart < 1 {
+        yStart = 1
     }
 
-    // Build prompt line
-    line := BuildQuickPromptLine(prompt, options, horizontal)
-
-    // Render prompt
-    c.agentConsole.Terminal().MoveCursor(1, y)
-    c.agentConsole.Terminal().ClearLine()
-    c.agentConsole.Terminal().WriteText(line)
+    // Render prompt block
+    for i, ln := range lines {
+        c.agentConsole.Terminal().MoveCursor(1, yStart+i)
+        c.agentConsole.Terminal().ClearLine()
+        // Truncate if longer than width
+        if len(ln) > width {
+            ln = ln[:width]
+        }
+        c.agentConsole.Terminal().WriteText(ln)
+    }
 
     // Simple key mapping: digits 1..n or first-letter hotkeys (case-insensitive), Enter=first, Esc=cancel
     keyToIndex := func(b byte) (int, bool) {
@@ -145,18 +154,35 @@ func (c *ConsoleUI) ShowQuickPrompt(ctx context.Context, prompt string, options 
     for {
         select {
         case <-ctx.Done():
+            // Clear prompt block before return
+            for i := range lines {
+                c.agentConsole.Terminal().MoveCursor(1, yStart+i)
+                c.agentConsole.Terminal().ClearLine()
+            }
             return ui.QuickOption{}, ui.ErrCancelled
         default:
             n, _ := os.Stdin.Read(buf[:])
             if n == 0 { continue }
             b := buf[0]
             if b == 27 { // ESC
+                for i := range lines {
+                    c.agentConsole.Terminal().MoveCursor(1, yStart+i)
+                    c.agentConsole.Terminal().ClearLine()
+                }
                 return ui.QuickOption{}, ui.ErrCancelled
             }
             if b == 13 || b == 10 { // Enter
+                for i := range lines {
+                    c.agentConsole.Terminal().MoveCursor(1, yStart+i)
+                    c.agentConsole.Terminal().ClearLine()
+                }
                 return options[0], nil
             }
             if idx, ok := keyToIndex(b); ok {
+                for i := range lines {
+                    c.agentConsole.Terminal().MoveCursor(1, yStart+i)
+                    c.agentConsole.Terminal().ClearLine()
+                }
                 return options[idx], nil
             }
         }
@@ -189,6 +215,47 @@ func BuildQuickPromptLine(prompt string, options []ui.QuickOption, horizontal bo
         }
     }
     return rendered
+}
+
+// BuildQuickPromptLines returns either a single horizontal line or a vertical block
+// depending on width constraints. If horizontal is false, always returns vertical block.
+func BuildQuickPromptLines(prompt string, options []ui.QuickOption, maxWidth int, horizontal bool) []string {
+    // First try horizontal
+    if horizontal {
+        line := BuildQuickPromptLine(prompt, options, true)
+        if visualLen(line) <= maxWidth {
+            return []string{line}
+        }
+    }
+    // Fallback to vertical block: prompt line then one option per line
+    lines := []string{}
+    if prompt != "" {
+        lines = append(lines, prompt)
+    }
+    // Assign numeric hotkeys for display; capture label representation
+    for i, opt := range options {
+        label := opt.Label
+        hk := opt.Hotkey
+        if hk == 0 {
+            if i < 9 { hk = rune('1' + i) } else if len(label) > 0 { hk = []rune(label)[0] }
+        }
+        lines = append(lines, fmt.Sprintf("[%s] %s", string(hk), label))
+    }
+    return lines
+}
+
+// visualLen approximates the printable length, ignoring ANSI sequences (best-effort)
+func visualLen(s string) int {
+    // Remove simple SGR sequences: \033[...m
+    res := s
+    for {
+        start := strings.Index(res, "\033[")
+        if start == -1 { break }
+        end := strings.Index(res[start:], "m")
+        if end == -1 { break }
+        res = res[:start] + res[start+end+1:]
+    }
+    return len(res)
 }
 
 // IsInteractive implements agent.UI

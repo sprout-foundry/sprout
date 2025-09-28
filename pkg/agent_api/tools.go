@@ -217,6 +217,40 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
+				Name:        "get_active_todos_compact",
+				Description: "Minimal task view (in-progress + pending summary)",
+				Parameters: map[string]interface{}{
+					"type":                 "object",
+					"properties":           map[string]interface{}{},
+					"required":             []string{},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "archive_completed",
+				Description: "Remove completed/cancelled todos from active view",
+				Parameters: map[string]interface{}{
+					"type":                 "object",
+					"properties":           map[string]interface{}{},
+					"required":             []string{},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
 				Name:        "analyze_ui_screenshot",
 				Description: "Analyze UI/mockup images for implementation details",
 				Parameters: map[string]interface{}{

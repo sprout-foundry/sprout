@@ -82,9 +82,7 @@ func TestRealTerminalSimulation(t *testing.T) {
 	t.Logf("\n=== Step 2: Initial Help ===")
 	mockTerminal.commands = []string{} // Clear commands
 
-	ac.safePrint("\n💡 You can now type while the agent is processing!\n")
-	ac.safePrint("   Press Enter to send new prompts immediately, even during agent responses.\n")
-    ac.safePrint("   Press Esc to interrupt the agent.\n\n")
+	ac.safePrint("   Press Esc to interrupt the agent.\n\n")
 
 	t.Logf("After initial help:")
 	t.Logf("Cursor position: (%d,%d)", mockTerminal.cursorX, mockTerminal.cursorY)

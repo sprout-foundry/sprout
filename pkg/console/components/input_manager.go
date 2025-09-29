@@ -74,12 +74,12 @@ type InputManager struct {
 	lastRenderHeight int
 	lastRenderY      int
 
-    // Focus provider (returns "input" or "output")
-    focusProvider func() string
-    onToggleFocus func()
+	// Focus provider (returns "input" or "output")
+	focusProvider func() string
+	onToggleFocus func()
 
-    // Scrolling state provider
-    isScrollingProvider func() bool
+	// Scrolling state provider
+	isScrollingProvider func() bool
 
 	// Vim sequence state
 	pendingG bool
@@ -111,16 +111,16 @@ func NewInputManager(prompt string) *InputManager {
 
 // SetFocusProvider sets a callback to get current focus mode ("input" or "output")
 func (im *InputManager) SetFocusProvider(provider func() string) {
-    im.mutex.Lock()
-    defer im.mutex.Unlock()
-    im.focusProvider = provider
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+	im.focusProvider = provider
 }
 
 // SetScrollingProvider sets a callback to know if output is currently in scrolling mode
 func (im *InputManager) SetScrollingProvider(provider func() bool) {
-    im.mutex.Lock()
-    defer im.mutex.Unlock()
-    im.isScrollingProvider = provider
+	im.mutex.Lock()
+	defer im.mutex.Unlock()
+	im.isScrollingProvider = provider
 }
 
 // SetFocusToggle sets a callback to toggle focus manually (e.g., Tab)
@@ -646,8 +646,8 @@ func (im *InputManager) calculateInputDimensions() (lines int, cursorLine int, c
 		im.updateTerminalSize()
 	}
 
-    // Calculate effective width using the same gutter-aware width as rendering
-    effectiveWidth := im.getEffectiveWidth()
+	// Calculate effective width using the same gutter-aware width as rendering
+	effectiveWidth := im.getEffectiveWidth()
 
 	// Total text is prompt + input
 	promptWidth := len(im.prompt)
@@ -662,10 +662,10 @@ func (im *InputManager) calculateInputDimensions() (lines int, cursorLine int, c
 
 	// Calculate cursor position
 	cursorTextPos := promptWidth + im.cursorPos
-    cursorLine = cursorTextPos / effectiveWidth
-    cursorCol = (cursorTextPos % effectiveWidth) + 1
+	cursorLine = cursorTextPos / effectiveWidth
+	cursorCol = (cursorTextPos % effectiveWidth) + 1
 
-    return lines, cursorLine, cursorCol
+	return lines, cursorLine, cursorCol
 }
 
 // notifyLayoutOfInputHeight tells the layout manager about input height changes
@@ -692,35 +692,35 @@ func (im *InputManager) showInputField() {
 	im.redrawing = true
 	defer func() { im.redrawing = false }()
 
-    // Calculate input dimensions based on current focus
-    lines, cursorLine, cursorCol := im.calculateInputDimensions()
-    showingHint := false
-    hintText := ""
-    if im.focusProvider != nil && im.focusProvider() == "output" {
-        // Only show hint when actively scrolling to reduce noise
-        scrolling := false
-        if im.isScrollingProvider != nil {
-            scrolling = im.isScrollingProvider()
-        }
-        if !scrolling {
-            // do not show hint when not scrolling
-        } else {
-        // When output is focused, show a concise scrolling hint instead of the prompt/input
-        // Colors: light grey (info) and muted blue (keys)
-        grey := "\033[38;2;170;170;170m"
-        blue := "\033[38;2;110;160;230m"
-        reset := "\033[0m"
-        // Keep it short to avoid wrapping; use simple keys that work across terminals
-        // Example: "Scrolling: ↑/↓, PgUp/PgDn, g g top, G bottom, ? help"
-        hintText = grey + "Scrolling: " + blue + "↑/↓" + grey + ", " + blue + "PgUp/PgDn" + grey + ", " + blue + "g g" + grey + " top, " + blue + "G" + grey + " bottom" + reset
+	// Calculate input dimensions based on current focus
+	lines, cursorLine, cursorCol := im.calculateInputDimensions()
+	showingHint := false
+	hintText := ""
+	if im.focusProvider != nil && im.focusProvider() == "output" {
+		// Only show hint when actively scrolling to reduce noise
+		scrolling := false
+		if im.isScrollingProvider != nil {
+			scrolling = im.isScrollingProvider()
+		}
+		if !scrolling {
+			// do not show hint when not scrolling
+		} else {
+			// When output is focused, show a concise scrolling hint instead of the prompt/input
+			// Colors: light grey (info) and muted blue (keys)
+			greyColor := "\033[38;2;170;170;170m"
+			blueColor := "\033[38;2;110;160;230m"
+			resetColor := "\033[0m"
+			// Keep it short to avoid wrapping; use simple keys that work across terminals
+			// Example: "Scrolling: ↑/↓, PgUp/PgDn, g g top, G bottom, ? help"
+			hintText = greyColor + "Scrolling: " + blueColor + "↑/↓" + greyColor + ", " + blueColor + "PgUp/PgDn " + resetColor
 
-        // Force single-line rendering for hint to avoid escape sequence slicing
-        lines = 1
-        cursorLine = 0
-        cursorCol = 1
-        showingHint = true
-        }
-    }
+			// Force single-line rendering for hint to avoid escape sequence slicing
+			lines = 1
+			cursorLine = 0
+			cursorCol = 1
+			showingHint = true
+		}
+	}
 
 	// If height grew, notify early so layout can expand before we draw
 	if lines > im.inputHeight {
@@ -728,7 +728,7 @@ func (im *InputManager) showInputField() {
 	}
 
 	// Determine left margin based on focus (reserve column 1 for focus bar when input is focused)
-    // Reserve 3 columns for gutter (2-bar + padding)
+	// Reserve 3 columns for gutter (2-bar + padding)
 
 	// First, clear the previously rendered region at its original Y (in case Y changed due to layout)
 	if im.lastRenderHeight > 0 && im.lastRenderY > 0 {
@@ -747,17 +747,17 @@ func (im *InputManager) showInputField() {
 		im.notifyLayoutOfInputHeight(lines)
 	}
 
-    // Display the input text or hint with proper wrapping
-    fullText := im.prompt + string(im.currentLine)
-    if showingHint {
-        fullText = hintText
-    }
+	// Display the input text or hint with proper wrapping
+	fullText := im.prompt + string(im.currentLine)
+	if showingHint {
+		fullText = hintText
+	}
 
 	// Calculate effective width for wrapping
 	effectiveWidth := im.getEffectiveWidth()
 
-    // Render content and place cursor
-    im.renderInputContent(fullText, effectiveWidth, cursorLine, cursorCol)
+	// Render content and place cursor
+	im.renderInputContent(fullText, effectiveWidth, cursorLine, cursorCol)
 
 	// Remember how many lines and where we actually drew
 	im.lastRenderHeight = lines
@@ -803,8 +803,8 @@ func (im *InputManager) showInputFieldAfterResize(oldWidth, oldHeight int) {
 		linesToClear = 20
 	}
 
-    // Reserve 2-column gutter in both states (accent+padding when focused, padding-only when not)
-    startX := 3
+	// Reserve 2-column gutter in both states (accent+padding when focused, padding-only when not)
+	startX := 3
 
 	// Clear all potential lines that might contain artifacts
 	// Use aggressive clearing for resize scenarios to handle horizontal artifacts
@@ -858,8 +858,8 @@ func (im *InputManager) calculateLinesForWidth(width int) int {
 
 // getEffectiveWidth returns the wrapping width with safe fallbacks
 func (im *InputManager) getEffectiveWidth() int {
-    // Reserve 2 columns for gutter consistently
-    effectiveWidth := im.termWidth - 2
+	// Reserve 2 columns for gutter consistently
+	effectiveWidth := im.termWidth - 2
 	if effectiveWidth <= 0 {
 		effectiveWidth = 80
 	}
@@ -868,38 +868,38 @@ func (im *InputManager) getEffectiveWidth() int {
 
 // renderInputContent writes the input prompt+text wrapped to the terminal and positions cursor
 func (im *InputManager) renderInputContent(fullText string, effectiveWidth, cursorLine, cursorCol int) {
-    // account for left margin when computing cursor column (gutter=2)
-    leftMargin := 3
-    continuationPrefix := "> "
-    continuationWidth := len(continuationPrefix)
+	// account for left margin when computing cursor column (gutter=2)
+	leftMargin := 3
+	continuationPrefix := "> "
+	continuationWidth := len(continuationPrefix)
 
-    // Split text into lines based on terminal width
-    currentLine := 0
-    for i := 0; i < len(fullText); i += effectiveWidth {
-        end := i + effectiveWidth
-        if end > len(fullText) {
-            end = len(fullText)
-        }
+	// Split text into lines based on terminal width
+	currentLine := 0
+	for i := 0; i < len(fullText); i += effectiveWidth {
+		end := i + effectiveWidth
+		if end > len(fullText) {
+			end = len(fullText)
+		}
 
-        segment := fullText[i:end]
-        y := im.inputFieldLine + currentLine
-        // Draw continuation prompt on wrapped lines for visual alignment
-        if currentLine == 0 {
-            im.write(console.MoveCursorSeq(leftMargin, y) + segment)
-        } else {
-            // Write continuation marker then the segment
-            im.write(console.MoveCursorSeq(leftMargin, y) + continuationPrefix)
-            im.write(console.MoveCursorSeq(leftMargin+continuationWidth, y) + segment)
-        }
-        currentLine++
-    }
-    // Position cursor correctly on the right line and column
-    actualCursorLine := im.inputFieldLine + cursorLine
-    cursorX := leftMargin + cursorCol - 1
-    if cursorLine > 0 {
-        cursorX += continuationWidth
-    }
-    im.write(console.MoveCursorSeq(cursorX, actualCursorLine))
+		segment := fullText[i:end]
+		y := im.inputFieldLine + currentLine
+		// Draw continuation prompt on wrapped lines for visual alignment
+		if currentLine == 0 {
+			im.write(console.MoveCursorSeq(leftMargin, y) + segment)
+		} else {
+			// Write continuation marker then the segment
+			im.write(console.MoveCursorSeq(leftMargin, y) + continuationPrefix)
+			im.write(console.MoveCursorSeq(leftMargin+continuationWidth, y) + segment)
+		}
+		currentLine++
+	}
+	// Position cursor correctly on the right line and column
+	actualCursorLine := im.inputFieldLine + cursorLine
+	cursorX := leftMargin + cursorCol - 1
+	if cursorLine > 0 {
+		cursorX += continuationWidth
+	}
+	im.write(console.MoveCursorSeq(cursorX, actualCursorLine))
 }
 
 // hideInputField clears the input field (all lines it uses)
@@ -1105,12 +1105,12 @@ func (im *InputManager) GetInputHeight() int {
 func (im *InputManager) GetHistoryState() (int, string) {
 	im.mutex.RLock()
 	defer im.mutex.RUnlock()
-	
+
 	tempInput := ""
 	if im.tempInput != nil {
 		tempInput = string(im.tempInput)
 	}
-	
+
 	return im.historyIndex, tempInput
 }
 
@@ -1118,7 +1118,7 @@ func (im *InputManager) GetHistoryState() (int, string) {
 func (im *InputManager) SetHistoryState(historyIndex int, tempInput string) {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
-	
+
 	im.historyIndex = historyIndex
 	if tempInput != "" {
 		im.tempInput = []rune(tempInput)

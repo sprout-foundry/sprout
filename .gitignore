@@ -6,8 +6,10 @@ e2e_results.csv
 debug.log
 debug_logs/
 ui_test_logs/
+tool_calls.log
 test_home/
 
 .DS_STORE
 .vscode/
 .idea/
+.bin/

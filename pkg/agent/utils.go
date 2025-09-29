@@ -5,6 +5,7 @@ import (
     "os"
     "strings"
     "time"
+    "encoding/json"
 
     api "github.com/alantheprice/ledit/pkg/agent_api"
 )
@@ -172,4 +173,35 @@ func (a *Agent) suggestCorrectToolName(invalidName string) string {
 	}
 
 	return ""
+}
+
+// LogToolCall appends a JSON line describing a tool call to a local file for quick debugging.
+// File: ./tool_calls.log (in the current working directory)
+func (a *Agent) LogToolCall(tc api.ToolCall, phase string) {
+    // Only log when explicitly enabled or in debug mode
+    if os.Getenv("LEDIT_LOG_TOOL_CALLS") == "" && !a.debug {
+        return
+    }
+    entry := map[string]interface{}{
+        "ts":       time.Now().Format(time.RFC3339Nano),
+        "provider": a.GetProvider(),
+        "model":    a.GetModel(),
+        "phase":    phase, // e.g., "received", "executing"
+        "id":       tc.ID,
+        "type":     tc.Type,
+        "name":     tc.Function.Name,
+        "arguments": tc.Function.Arguments,
+    }
+    b, err := json.Marshal(entry)
+    if err != nil {
+        return
+    }
+
+    f, err := os.OpenFile("tool_calls.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return
+    }
+    // best-effort write; ignore errors on close
+    _, _ = f.Write(append(b, '\n'))
+    _ = f.Close()
 }

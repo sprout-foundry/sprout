@@ -131,8 +131,12 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 
 // executeSingleTool executes a single tool call
 func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
-	// Parse arguments
-	var args map[string]interface{}
+    // Log prior to execution for diagnostics
+    if te.agent != nil {
+        te.agent.LogToolCall(toolCall, "executing")
+    }
+    // Parse arguments
+    var args map[string]interface{}
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
 		return api.Message{
 			Role:       "tool",

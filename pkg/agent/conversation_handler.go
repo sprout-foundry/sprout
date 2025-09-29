@@ -144,6 +144,10 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	// Execute tools if present
 	if len(choice.Message.ToolCalls) > 0 {
+		// Log raw tool calls as received from the model for debugging
+		for _, tc := range choice.Message.ToolCalls {
+			ch.agent.LogToolCall(tc, "received")
+		}
 		ch.agent.debugLog("🛠️ Executing %d tool calls\n", len(choice.Message.ToolCalls))
 
 		// Flush any buffered streaming content before tool execution
@@ -165,7 +169,19 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
     ch.agent.messages = append(ch.agent.messages, toolResults...)
     ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
-    return false // Continue conversation
+		return false // Continue conversation
+	}
+
+	// If no tool_calls came back but the content suggests attempted tool usage,
+	// inject one-time guidance and try again.
+	if !ch.responseValidator.ValidateToolCalls(choice.Message.Content) {
+		if !ch.agent.toolCallGuidanceAdded { // avoid spamming repeated hints
+			guidance := ch.buildToolCallGuidance()
+			ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
+			ch.agent.toolCallGuidanceAdded = true
+			ch.agent.debugLog("📝 Added system guidance due to attempted tool usage without tool_calls\n")
+		}
+		return false // Continue conversation to allow the model to issue proper tool_calls
 	}
 
 	// Check for blank iteration (no content and no tool calls)

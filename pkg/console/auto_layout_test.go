@@ -42,9 +42,9 @@ func TestAutoLayoutManager_ComponentRegistrationOrder(t *testing.T) {
 		t.Errorf("Expected content region Y=0, got Y=%d", contentRegion.Y)
 	}
 
-    // With 24 lines total: footer (4) + input (1) + gaps (2) = 7 lines at bottom
-    // Content should be 24 - 7 = 17 lines
-    expectedHeight := 24 - 4 - 1 - 2 // terminal - footer - input - gaps
+    // With 24 lines total, footer (4) + input (1) = 5 lines at bottom
+    // Content should be 24 - 5 = 19 lines
+    expectedHeight := 24 - 4 - 1 // terminal - footer - input
 	if contentRegion.Height != expectedHeight {
 		t.Errorf("Expected content region height=%d, got height=%d", expectedHeight, contentRegion.Height)
 	}
@@ -52,7 +52,7 @@ func TestAutoLayoutManager_ComponentRegistrationOrder(t *testing.T) {
 	// Test scroll region calculation
 	top, bottom := layout.GetScrollRegion()
     expectedTop := 1     // 1-based
-    expectedBottom := 17 // content region height with gaps
+    expectedBottom := 19 // content region height
 
 	if top != expectedTop {
 		t.Errorf("Expected scroll region top=%d, got top=%d", expectedTop, top)

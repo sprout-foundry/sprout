@@ -82,6 +82,73 @@ func TestDuplicateRequestDetection(t *testing.T) {
 	}
 }
 
+func TestDuplicateRequestDetectionRespectsLineRanges(t *testing.T) {
+	registry := &mockRegistry{}
+	logger := utils.GetLogger(true)
+	cfg := &configuration.Config{}
+	permissions := &SimplePermissionChecker{allowedPermissions: map[string]bool{
+		"read_file": true,
+	}}
+
+	executor := NewExecutor(registry, permissions, logger, cfg)
+	registry.tools = []Tool{&mockTool{}}
+
+	sessionID := executor.StartSession()
+	ctx := context.WithValue(context.Background(), "session_id", sessionID)
+
+	toolCall := api.ToolCall{ID: "range_test", Type: "function"}
+	toolCall.Function.Name = "read_file"
+
+	// First ranged read
+	toolCall.Function.Arguments = `{"file_path": "/test/ranged.txt", "start_line": 1, "end_line": 5}`
+	result1, err1 := executor.ExecuteToolCall(ctx, toolCall)
+	if err1 != nil {
+		t.Fatalf("First ranged read failed: %v", err1)
+	}
+	if result1 == nil || !result1.Success {
+		t.Fatal("First ranged read should succeed")
+	}
+
+	// Duplicate ranged read should be detected
+	result2, err2 := executor.ExecuteToolCall(ctx, toolCall)
+	if err2 != nil {
+		t.Fatalf("Duplicate ranged read failed: %v", err2)
+	}
+	if result2 == nil || !result2.Success {
+		t.Fatal("Duplicate ranged read should return success with warning")
+	}
+	if output, ok := result2.Output.(string); ok {
+		if !containsString(output, "Duplicate request detected") {
+			t.Errorf("Expected duplicate warning, got: %s", output)
+		}
+	} else {
+		t.Fatal("Expected string output for duplicate detection")
+	}
+
+	// Different range should not be treated as duplicate
+	toolCall.Function.Arguments = `{"file_path": "/test/ranged.txt", "start_line": 6, "end_line": 10}`
+	result3, err3 := executor.ExecuteToolCall(ctx, toolCall)
+	if err3 != nil {
+		t.Fatalf("Second ranged read failed: %v", err3)
+	}
+	if result3 == nil || !result3.Success {
+		t.Fatal("Second ranged read should succeed")
+	}
+	if output, ok := result3.Output.(string); ok {
+		if containsString(output, "Duplicate request detected") {
+			t.Errorf("Did not expect duplicate warning for different range, got: %s", output)
+		}
+	} else {
+		t.Fatal("Expected string output for ranged read")
+	}
+
+	if result3.Metadata != nil {
+		if duplicate, ok := result3.Metadata["duplicate_request"].(bool); ok && duplicate {
+			t.Error("Expected duplicate_request metadata to be false for different range")
+		}
+	}
+}
+
 // Mock registry for testing
 type mockRegistry struct {
 	tools []Tool

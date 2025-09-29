@@ -233,25 +233,47 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 
 // setupLayoutComponents registers components with the layout manager
 func (ac *AgentConsole) setupLayoutComponents() {
-	// Register footer (bottom, lowest priority = furthest from content)
-	ac.autoLayoutManager.RegisterComponent("footer", &console.ComponentInfo{
-		Name:     "footer",
-		Position: "bottom",
-		Height:   4,  // Will be updated dynamically
-		Priority: 10, // Lower priority = further from content (at very bottom)
-		Visible:  true,
-		ZOrder:   100,
-	})
+    // Register footer (bottom, lowest priority = furthest from content)
+    ac.autoLayoutManager.RegisterComponent("footer", &console.ComponentInfo{
+        Name:     "footer",
+        Position: "bottom",
+        Height:   4,  // Will be updated dynamically
+        Priority: 10, // Lower priority = further from content (at very bottom)
+        Visible:  true,
+        ZOrder:   100,
+    })
 
-	// Register input (bottom, higher priority = closer to content)
-	ac.autoLayoutManager.RegisterComponent("input", &console.ComponentInfo{
-		Name:     "input",
-		Position: "bottom",
-		Height:   1,
-		Priority: 20, // Higher priority = closer to content (above footer)
-		Visible:  true,
-		ZOrder:   90,
-	})
+    // Add a visual spacer BELOW the input field (keeps a blank line between input and footer)
+    // Higher priority than footer so it sits directly above the footer
+    ac.autoLayoutManager.RegisterComponent("input_gap", &console.ComponentInfo{
+        Name:     "input_gap",
+        Position: "bottom",
+        Height:   1,
+        Priority: 15, // Between input (20) and footer (10)
+        Visible:  true,
+        ZOrder:   95,
+    })
+
+    // Register input (bottom, higher priority = closer to content)
+    ac.autoLayoutManager.RegisterComponent("input", &console.ComponentInfo{
+        Name:     "input",
+        Position: "bottom",
+        Height:   1,
+        Priority: 20, // Higher priority = closer to content (above footer)
+        Visible:  true,
+        ZOrder:   90,
+    })
+
+    // Add a visual spacer ABOVE the input field (keeps a blank line between content and input)
+    // Highest bottom priority so it sits directly below the content area
+    ac.autoLayoutManager.RegisterComponent("content_gap", &console.ComponentInfo{
+        Name:     "content_gap",
+        Position: "bottom",
+        Height:   1,
+        Priority: 30, // Above input (20), closest to content
+        Visible:  true,
+        ZOrder:   85,
+    })
 
 	// Content region is automatically managed
 

@@ -62,27 +62,37 @@ run_test_logic() {
         return 1
     fi
     
-    # Test 2: Provider selection with skip-prompt
+    # Test 2: Provider selection / CI behavior
     echo "=== Test 2: Default provider selection ==="
-    
-    # Test that we can run with test provider (no API key needed)
-    # Use printf to send "4\nexit\n" (select test provider + exit)
-    output=$(timeout 10s printf "4\nexit\n" | $LEDIT_CMD agent --model "$model_name" 2>&1 || true)
-    
-    if echo "$output" | grep -q -E "(Agent initialized|Console started|test:test|Selected provider)"; then
-        echo "✓ Test provider selection works"
-    else
-        # Try alternative with skip-prompt if the provider selection doesn't work
-        echo "⚠️  Interactive selection failed, trying skip-prompt..."
-        output2=$(timeout 10s echo "exit" | $LEDIT_CMD agent --model "$model_name" --skip-prompt 2>&1 || true)
-        
-        if echo "$output2" | grep -q -E "(Agent initialized|test:test|provider setup failed|invalid choice)"; then
-            echo "✓ Skip-prompt behavior validated (graceful handling of config issues)"
+
+    # In CI, interactive selection isn't possible. Validate CI-friendly behavior.
+    if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+        output=$(timeout 10s $LEDIT_CMD agent --model "$model_name" 2>&1 || true)
+        if echo "$output" | grep -q -E "(Welcome to ledit|Agent initialized successfully)"; then
+            echo "✓ CI non-interactive provider setup validated"
         else
-            echo "✗ Test provider failed to initialize"
-            echo "Interactive output: $output"
-            echo "Skip-prompt output: $output2"
+            echo "✗ CI provider setup output unexpected"
+            echo "Output: $output"
             return 1
+        fi
+    else
+        # Local/non-CI: allow interactive selection; send a choice then exit
+        # Use printf to send a choice + exit to progress flow even without real keys
+        output=$(timeout 10s printf "4\nexit\n" | $LEDIT_CMD agent --model "$model_name" 2>&1 || true)
+        if echo "$output" | grep -q -E "(Agent initialized|Console started|test:test|Selected provider)"; then
+            echo "✓ Test provider selection works"
+        else
+            # Try alternative with skip-prompt if the provider selection doesn't work
+            echo "⚠️  Interactive selection failed, trying skip-prompt..."
+            output2=$(timeout 10s echo "exit" | $LEDIT_CMD agent --model "$model_name" --skip-prompt 2>&1 || true)
+            if echo "$output2" | grep -q -E "(Agent initialized|test:test|provider setup failed|invalid choice)"; then
+                echo "✓ Skip-prompt behavior validated (graceful handling of config issues)"
+            else
+                echo "✗ Test provider failed to initialize"
+                echo "Interactive output: $output"
+                echo "Skip-prompt output: $output2"
+                return 1
+            fi
         fi
     fi
     

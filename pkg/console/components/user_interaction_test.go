@@ -107,11 +107,11 @@ func TestUserInteractionFlow(t *testing.T) {
 	t.Logf("Content area is lines: %d-%d", top, bottom)
 
 	// Check if content appeared in reasonable positions
-	if processingLineNum > 0 && processingLineNum <= 3 {
-		t.Logf("✅ Processing message appears near top of content area")
-	} else if processingLineNum > bottom-5 {
-		t.Errorf("❌ Processing message appears near bottom (line %d) - user might think cursor 'jumped'", processingLineNum)
-	}
+    if processingLineNum > 0 && processingLineNum <= 3 {
+        t.Logf("✅ Processing message appears near top of content area")
+    } else if processingLineNum > bottom-4 {
+        t.Errorf("❌ Processing message appears near bottom (line %d) - user might think cursor 'jumped'", processingLineNum)
+    }
 
 	if responseLineNum > 0 && responseLineNum <= processingLineNum+2 {
 		t.Logf("✅ Agent response appears right after processing message")

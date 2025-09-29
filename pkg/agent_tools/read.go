@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -8,11 +9,11 @@ import (
 	"strings"
 )
 
-func ReadFile(filePath string) (string, error) {
-	return ReadFileWithRange(filePath, 0, 0)
+func ReadFile(ctx context.Context, filePath string) (string, error) {
+	return ReadFileWithRange(ctx, filePath, 0, 0)
 }
 
-func ReadFileWithRange(filePath string, startLine, endLine int) (string, error) {
+func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine int) (string, error) {
 	if filePath == "" {
 		return "", fmt.Errorf("empty file path provided")
 	}

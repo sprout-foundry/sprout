@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -171,7 +172,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 
 	if isSingleCommand {
 		// Execute single command directly
-		output, execErr = tools.ExecuteShellCommand(generatedScript)
+		output, execErr = tools.ExecuteShellCommand(context.Background(), generatedScript)
 	} else {
 		// For scripts, save to temporary file and execute
 		tmpFile, err := os.CreateTemp("", "ledit-script-*.sh")
@@ -194,7 +195,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 		}
 
 		// Execute the script
-		output, execErr = tools.ExecuteShellCommand(tmpFile.Name())
+		output, execErr = tools.ExecuteShellCommand(context.Background(), tmpFile.Name())
 	}
 
 	// Display results

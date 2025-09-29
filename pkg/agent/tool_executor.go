@@ -26,7 +26,9 @@ func NewToolExecutor(agent *Agent) *ToolExecutor {
 // ExecuteTools executes a list of tool calls and returns the results
 func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 	// Check for interrupt before executing
-	if te.agent.interruptRequested {
+	select {
+	case <-te.agent.interruptCtx.Done():
+		// Context cancelled, interrupt requested
 		var results []api.Message
 		for _, tc := range toolCalls {
 			results = append(results, api.Message{
@@ -36,6 +38,8 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 			})
 		}
 		return results
+	default:
+		// Context not cancelled
 	}
 
 	// Optimize parallel execution for read_file operations
@@ -96,13 +100,17 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 
 	for i, tc := range toolCalls {
 		// Check for interrupt between tool executions
-		if te.agent.interruptRequested {
+		select {
+		case <-te.agent.interruptCtx.Done():
+			// Context cancelled, interrupt requested
 			toolResults = append(toolResults, api.Message{
 				Role:       "tool",
 				Content:    "Execution interrupted by user",
 				ToolCallId: tc.ID,
 			})
 			break
+		default:
+			// Context not cancelled
 		}
 
 		// Flush any buffered streaming content before each tool execution
@@ -131,12 +139,12 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 
 // executeSingleTool executes a single tool call
 func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
-    // Log prior to execution for diagnostics
-    if te.agent != nil {
-        te.agent.LogToolCall(toolCall, "executing")
-    }
-    // Parse arguments
-    var args map[string]interface{}
+	// Log prior to execution for diagnostics
+	if te.agent != nil {
+		te.agent.LogToolCall(toolCall, "executing")
+	}
+	// Parse arguments
+	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
 		return api.Message{
 			Role:       "tool",
@@ -159,16 +167,47 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		}
 	}
 
-	// Use the tool registry for execution
-	registry := GetToolRegistry()
-    result, err := registry.ExecuteTool(toolCall.Function.Name, args, te.agent)
-    if err != nil {
-        // Ensure the error is visible to the user immediately
-        te.agent.PrintLine("")
-        te.agent.PrintLine(fmt.Sprintf("❌ Tool '%s' failed: %v", toolCall.Function.Name, err))
-        te.agent.PrintLine("")
-        result = fmt.Sprintf("Error: %v", err)
-    }
+	// Create a context with a timeout for the tool execution
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Create a channel to receive the result of the tool execution
+	resultChan := make(chan struct {
+		result string
+		err    error
+	}, 1)
+
+	// Execute the tool in a goroutine
+	go func() {
+		registry := GetToolRegistry()
+		result, err := registry.ExecuteTool(ctx, toolCall.Function.Name, args, te.agent)
+		resultChan <- struct {
+			result string
+			err    error
+		}{result, err}
+	}()
+
+	var result string
+	var err error
+
+	// Wait for the tool to complete, timeout, or interrupt
+	select {
+	case res := <-resultChan:
+		result = res.result
+		err = res.err
+	case <-ctx.Done():
+		err = fmt.Errorf("tool execution timed out after 5 minutes")
+	case <-te.agent.interruptCtx.Done():
+		err = fmt.Errorf("tool execution interrupted by user")
+	}
+
+	if err != nil {
+		// Ensure the error is visible to the user immediately
+		te.agent.PrintLine("")
+		te.agent.PrintLine(fmt.Sprintf("❌ Tool '%s' failed: %v", toolCall.Function.Name, err))
+		te.agent.PrintLine("")
+		result = fmt.Sprintf("Error: %v", err)
+	}
 
 	// Update circuit breaker
 	te.updateCircuitBreaker(toolCall.Function.Name, args)

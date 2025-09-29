@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -9,7 +10,7 @@ import (
 )
 
 // executeShellCommandWithTruncation handles shell command execution with smart truncation and deduplication
-func (a *Agent) executeShellCommandWithTruncation(command string) (string, error) {
+func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command string) (string, error) {
 	const maxOutputLength = 20000 // 20K character limit
 
 	// Check if we've run this exact command before
@@ -21,7 +22,7 @@ func (a *Agent) executeShellCommandWithTruncation(command string) (string, error
 	a.ToolLog("executing command", command)
 	a.debugLog("Executing shell command: %s\n", command)
 
-	fullResult, err := tools.ExecuteShellCommand(command)
+	fullResult, err := tools.ExecuteShellCommand(ctx, command)
 	a.debugLog("Shell command result: %s, error: %v\n", fullResult, err)
 
 	// Determine what to return (truncated or full)

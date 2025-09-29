@@ -1,13 +1,14 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-func EditFile(filePath, oldString, newString string) (string, error) {
+func EditFile(ctx context.Context, filePath, oldString, newString string) (string, error) {
 	if filePath == "" {
 		return "", fmt.Errorf("empty file path provided")
 	}

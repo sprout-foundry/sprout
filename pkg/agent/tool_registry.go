@@ -1,18 +1,19 @@
 package agent
 
 import (
-    "fmt"
-    "io"
-    "os"
-    "path/filepath"
-    "regexp"
-    "strings"
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 
-    "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 // ToolHandler represents a function that can handle a tool execution
-type ToolHandler func(a *Agent, args map[string]interface{}) (string, error)
+type ToolHandler func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error)
 
 // ParameterConfig defines parameter validation rules for a tool
 type ParameterConfig struct {
@@ -139,7 +140,7 @@ func newDefaultToolRegistry() *ToolRegistry {
         Name:        "get_active_todos_compact",
         Description: "Get compact view of active todos",
         Parameters:  []ParameterConfig{},
-        Handler: func(a *Agent, args map[string]interface{}) (string, error) {
+        Handler: func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
             return tools.GetActiveTodosCompact(), nil
         },
     })
@@ -147,7 +148,7 @@ func newDefaultToolRegistry() *ToolRegistry {
         Name:        "archive_completed",
         Description: "Archive completed/cancelled todos",
         Parameters:  []ParameterConfig{},
-        Handler: func(a *Agent, args map[string]interface{}) (string, error) {
+        Handler: func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
             return tools.ArchiveCompleted(), nil
         },
     })
@@ -207,13 +208,13 @@ func newDefaultToolRegistry() *ToolRegistry {
         Parameters: []ParameterConfig{
             {"context", "string", true, []string{}, "Context trigger: build_success or test_success"},
         },
-        Handler: func(a *Agent, args map[string]interface{}) (string, error) {
-            ctx := args["context"].(string)
+        Handler: func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+            ctxParam := args["context"].(string)
             valid := map[string]bool{"build_success": true, "test_success": true}
-            if !valid[ctx] {
-                return "", fmt.Errorf("invalid context: %s (expected build_success or test_success)", ctx)
+            if !valid[ctxParam] {
+                return "", fmt.Errorf("invalid context: %s (expected build_success or test_success)", ctxParam)
             }
-            result := tools.AutoCompleteTodos(ctx)
+            result := tools.AutoCompleteTodos(ctxParam)
             if strings.TrimSpace(result) == "" {
                 return "No todos auto-completed for current context", nil
             }
@@ -230,7 +231,7 @@ func (r *ToolRegistry) RegisterTool(config ToolConfig) {
 }
 
 // ExecuteTool executes a tool with standardized parameter validation and error handling
-func (r *ToolRegistry) ExecuteTool(toolName string, args map[string]interface{}, agent *Agent) (string, error) {
+func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) (string, error) {
 	tool, exists := r.tools[toolName]
 	if !exists {
 		return "", fmt.Errorf("unknown tool '%s'", toolName)
@@ -243,7 +244,7 @@ func (r *ToolRegistry) ExecuteTool(toolName string, args map[string]interface{},
 	}
 
 	// Execute the tool handler
-	return tool.Handler(agent, validatedArgs)
+	return tool.Handler(ctx, agent, validatedArgs)
 }
 
 // validateParameters validates and extracts parameters according to tool configuration
@@ -336,12 +337,12 @@ func (r *ToolRegistry) GetAvailableTools() []string {
 
 // Tool handler implementations
 
-func handleShellCommand(a *Agent, args map[string]interface{}) (string, error) {
+func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	command := args["command"].(string)
-	return a.executeShellCommandWithTruncation(command)
+	return a.executeShellCommandWithTruncation(ctx, command)
 }
 
-func handleReadFile(a *Agent, args map[string]interface{}) (string, error) {
+func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	filePath := args["file_path"].(string)
 
 	// Check for optional line range parameters
@@ -352,19 +353,19 @@ func handleReadFile(a *Agent, args map[string]interface{}) (string, error) {
 	if hasStart || hasEnd {
 		a.ToolLog("reading file", fmt.Sprintf("%s (lines %d-%d)", filePath, startLine, endLine))
 		a.debugLog("Reading file: %s (lines %d-%d)\n", filePath, startLine, endLine)
-		result, err := tools.ReadFileWithRange(filePath, startLine, endLine)
+		result, err := tools.ReadFileWithRange(ctx, filePath, startLine, endLine)
 		a.debugLog("Read file result: %s, error: %v\n", result, err)
 		return result, err
 	} else {
 		a.ToolLog("reading file", filePath)
 		a.debugLog("Reading file: %s\n", filePath)
-		result, err := tools.ReadFile(filePath)
+		result, err := tools.ReadFile(ctx, filePath)
 		a.debugLog("Read file result: %s, error: %v\n", result, err)
 		return result, err
 	}
 }
 
-func handleWriteFile(a *Agent, args map[string]interface{}) (string, error) {
+func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	filePath := args["file_path"].(string)
 	content := args["content"].(string)
 
@@ -376,18 +377,18 @@ func handleWriteFile(a *Agent, args map[string]interface{}) (string, error) {
 		a.debugLog("Warning: Failed to track file write: %v\n", trackErr)
 	}
 
-	result, err := tools.WriteFile(filePath, content)
+	result, err := tools.WriteFile(ctx, filePath, content)
 	a.debugLog("Write file result: %s, error: %v\n", result, err)
 	return result, err
 }
 
-func handleEditFile(a *Agent, args map[string]interface{}) (string, error) {
+func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	filePath := args["file_path"].(string)
 	oldString := args["old_string"].(string)
 	newString := args["new_string"].(string)
 
 	// Read the original content for diff display
-	originalContent, err := tools.ReadFile(filePath)
+	originalContent, err := tools.ReadFile(ctx, filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read original file for diff: %w", err)
 	}
@@ -408,12 +409,12 @@ func handleEditFile(a *Agent, args map[string]interface{}) (string, error) {
 		a.debugLog("Warning: Failed to track file edit: %v\n", trackErr)
 	}
 
-	result, err := tools.EditFile(filePath, oldString, newString)
+	result, err := tools.EditFile(ctx, filePath, oldString, newString)
 	a.debugLog("Edit file result: %s, error: %v\n", result, err)
 
 	// Display diff if successful
 	if err == nil {
-		newContent, readErr := tools.ReadFile(filePath)
+		newContent, readErr := tools.ReadFile(ctx, filePath)
 		if readErr == nil {
 			a.ShowColoredDiff(originalContent, newContent, 50)
 		}
@@ -422,7 +423,7 @@ func handleEditFile(a *Agent, args map[string]interface{}) (string, error) {
 	return result, err
 }
 
-func handleAddTodo(a *Agent, args map[string]interface{}) (string, error) {
+func handleAddTodo(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
     task := args["task"].(string)
     a.ToolLog("adding todo", task)
     a.debugLog("Adding todo: %s\n", task)
@@ -432,7 +433,7 @@ func handleAddTodo(a *Agent, args map[string]interface{}) (string, error) {
 	return result, nil
 }
 
-func handleUpdateTodoStatus(a *Agent, args map[string]interface{}) (string, error) {
+func handleUpdateTodoStatus(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
     // Accept id as string or number for robustness
     var taskID string
     if idStr, ok := args["task_id"].(string); ok {
@@ -478,7 +479,7 @@ func handleUpdateTodoStatus(a *Agent, args map[string]interface{}) (string, erro
     return result, nil
 }
 
-func handleAddTodos(a *Agent, args map[string]interface{}) (string, error) {
+func handleAddTodos(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
     todosRaw, ok := args["todos"]
     if !ok {
         return "", fmt.Errorf("missing todos argument")
@@ -545,7 +546,7 @@ func handleAddTodos(a *Agent, args map[string]interface{}) (string, error) {
     return result, nil
 }
 
-func handleListTodos(a *Agent, args map[string]interface{}) (string, error) {
+func handleListTodos(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	a.ToolLog("listing todos", "")
 	a.debugLog("Listing todos\n")
 
@@ -562,7 +563,7 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-func handleValidateBuild(a *Agent, args map[string]interface{}) (string, error) {
+func handleValidateBuild(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	a.ToolLog("running build validation", "")
 	a.debugLog("Running build validation\n")
 	
@@ -572,7 +573,7 @@ func handleValidateBuild(a *Agent, args map[string]interface{}) (string, error) 
 }
 
 // handleSearchFiles implements a cross-platform content search with sensible defaults and ignores
-func handleSearchFiles(a *Agent, args map[string]interface{}) (string, error) {
+func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
     pattern := args["pattern"].(string)
 
     root := "."

@@ -252,8 +252,6 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	// CRITICAL: Reset session state to prevent hanging issues after session restore
 	a.currentIteration = 0
 	a.contextWarningIssued = false
-	a.interruptRequested = false
-	a.interruptMessage = ""
 
 	// Reset circuit breaker state to prevent false positives
 	if a.circuitBreaker != nil {

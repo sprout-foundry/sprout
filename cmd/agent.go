@@ -165,7 +165,7 @@ func executeDirectAgentCommand(chatAgent *agent.Agent, userIntent string) error 
 	}
 
 	// Show initial message
-	outputHandler.WriteString("🔄 Processing query...\n\n")
+	outputHandler.WriteString("Processing query...\n\n")
 
 	// Start progress ticker for CI mode
 	var progressTicker *time.Ticker
@@ -234,7 +234,7 @@ func listModels(chatAgent *agent.Agent) error {
 	clientType := chatAgent.GetProviderType()
 	providerName := agent_api.GetProviderName(clientType)
 
-	fmt.Printf("\n📋 Available Models (%s):\n", providerName)
+	fmt.Printf("\nAvailable Models (%s):\n", providerName)
 	fmt.Println("====================")
 
 	models, err := agent_api.GetModelsForProvider(clientType)
@@ -245,7 +245,7 @@ func listModels(chatAgent *agent.Agent) error {
 	if len(models) == 0 {
 		fmt.Printf("No models available for %s.\n", providerName)
 		fmt.Println()
-		fmt.Println("💡 Tip: Use '/providers select' to switch to a different provider")
+		fmt.Println("Tip: Use '/providers select' to switch to a different provider")
 		return nil
 	}
 
@@ -291,7 +291,7 @@ func listModels(chatAgent *agent.Agent) error {
 				}
 			}
 			if hasTools {
-				fmt.Printf("   🛠️  Supports tools: %s\n", strings.Join(model.Tags, ", "))
+				fmt.Printf("   Supports tools: %s\n", strings.Join(model.Tags, ", "))
 			} else {
 				fmt.Printf("   Features: %s\n", strings.Join(model.Tags, ", "))
 			}
@@ -301,7 +301,7 @@ func listModels(chatAgent *agent.Agent) error {
 
 	// Display featured models section
 	if len(featuredIndices) > 0 {
-		fmt.Println("⭐ Featured Models (Popular & High Performance):")
+		fmt.Println("Featured Models (Popular & High Performance):")
 		fmt.Println("================================================")
 		for _, idx := range featuredIndices {
 			model := models[idx]
@@ -352,7 +352,7 @@ func selectModel(chatAgent *agent.Agent) error {
 	if len(models) == 0 {
 		fmt.Printf("No models available for %s.\n", providerName)
 		fmt.Println()
-		fmt.Println("💡 Tip: Use '/providers select' to switch to a different provider with available models")
+		fmt.Println("Tip: Use '/providers select' to switch to a different provider with available models")
 		return nil
 	}
 
@@ -364,7 +364,7 @@ func selectModel(chatAgent *agent.Agent) error {
 	// Identify featured models
 	featuredIndices := findFeaturedModels(models, clientType)
 
-	fmt.Printf("\n🎯 Select a Model (%s):\n", providerName)
+	fmt.Printf("\nSelect a Model (%s):\n", providerName)
 	fmt.Println("==================")
 
 	fmt.Printf("All %s Models:\n", providerName)
@@ -386,7 +386,7 @@ func selectModel(chatAgent *agent.Agent) error {
 
 	// Display featured models at the end if any exist
 	if len(featuredIndices) > 0 {
-		fmt.Println("\n⭐ Featured Models (Popular & High Performance):")
+		fmt.Println("\nFeatured Models (Popular & High Performance):")
 		fmt.Println("================================================")
 		for _, idx := range featuredIndices {
 			model := models[idx]
@@ -445,7 +445,7 @@ func setModel(modelID string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to set model: %w", err)
 	}
 
-	fmt.Printf("✅ Model set to: %s\n", modelID)
+	fmt.Printf("Model set to: %s\n", modelID)
 	return nil
 }
 
@@ -455,8 +455,8 @@ func showCurrentProvider(chatAgent *agent.Agent) error {
 	providerName := agent_api.GetProviderName(clientType)
 	modelName := chatAgent.GetModel()
 
-	fmt.Printf("\n📡 Current Provider: %s\n", providerName)
-	fmt.Printf("🤖 Current Model: %s\n", modelName)
+	fmt.Printf("\nCurrent Provider: %s\n", providerName)
+	fmt.Printf("Current Model: %s\n", modelName)
 	fmt.Println()
 	fmt.Println("Use '/providers select' to switch providers")
 	fmt.Println("Use '/models select' to switch models")

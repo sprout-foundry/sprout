@@ -76,8 +76,8 @@ func initializeSystem() {
 	_, _, err := configuration.Initialize()
 	if err != nil {
 		// If initialization fails, print helpful error and exit
-		fmt.Fprintf(os.Stderr, "❌ Failed to initialize ledit: %v\n", err)
-		fmt.Fprintln(os.Stderr, "\n💡 This usually means there's an issue with your configuration or API keys.")
+		fmt.Fprintf(os.Stderr, "Failed to initialize ledit: %v\n", err)
+		fmt.Fprintln(os.Stderr, "\nThis usually means there's an issue with your configuration or API keys.")
 		fmt.Fprintln(os.Stderr, "   Try running 'ledit' again to set up your AI provider.")
 		os.Exit(1)
 	}

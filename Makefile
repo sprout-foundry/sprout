@@ -27,37 +27,37 @@ help:
 
 # Unit Tests - Fast, no external dependencies
 test-unit:
-	@echo "🧪 Running unit tests..."
+	@echo "Running unit tests..."
 	go test ./pkg/... ./cmd/... -v -timeout=30s
 
 # Integration Tests - Mocked AI, file operations
 test-integration:
-	@echo "🔧 Running integration tests..."
+	@echo "Running integration tests..."
 	python3 integration_test_runner.py
 
 # E2E Tests - Real AI models (expensive)
 test-e2e:
 ifndef MODEL
-	@echo "❌ Error: MODEL is required for e2e tests"
+	@echo "Error: MODEL is required for e2e tests"
 	@echo "Example: make test-e2e MODEL=openai:gpt-4"
 	@exit 1
 endif
-	@echo "🚀 Running e2e tests with model: $(MODEL)"
-	@echo "⚠️  This will use real API calls and cost money!"
+	@echo "Running e2e tests with model: $(MODEL)"
+	@echo "This will use real API calls and cost money!"
 	python3 e2e_test_runner.py -m $(MODEL)
 
 # Smoke Tests - Basic functionality check
 test-smoke:
-	@echo "💨 Running smoke tests..."
+	@echo "Running smoke tests..."
 	cd smoke_tests && chmod +x run_api_test.sh && ./run_api_test.sh
 
 # Test All (except expensive e2e)
 test-all: test-unit test-integration test-smoke
-	@echo "✅ All tests completed (excluding e2e)"
+	@echo "All tests completed (excluding e2e)"
 
 # Clean test artifacts
 clean:
-	@echo "🧹 Cleaning test artifacts..."
+	@echo "Cleaning test artifacts..."
 	rm -rf testing/
 	rm -f e2e_results.csv
 	find . -name "*.test" -delete
@@ -68,16 +68,16 @@ test: test-unit
 
 # CI-friendly test (unit + integration)
 test-ci: test-unit test-integration
-	@echo "✅ CI tests completed"
+	@echo "CI tests completed"
 
 # Build ledit binary
 build:
-	@echo "🔨 Building ledit..."
+	@echo "Building ledit..."
 	go build -o ledit .
-	@echo "✅ Build completed"
+	@echo "Build completed"
 
 # Build with version information
 build-version:
-	@echo "🔨 Building ledit with version information..."
+	@echo "Building ledit with version information..."
 	./scripts/version-manager.sh build
-	@echo "✅ Versioned build completed"
+	@echo "Versioned build completed"

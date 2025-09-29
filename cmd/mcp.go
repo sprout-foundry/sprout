@@ -86,7 +86,7 @@ var mcpTestCmd = &cobra.Command{
 func runMCPAdd() error {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("🚀 MCP Server Setup")
+	fmt.Println("MCP Server Setup")
 	fmt.Println("==================")
 	fmt.Println()
 
@@ -128,7 +128,7 @@ func runMCPAdd() error {
 
 func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Println("🔧 Git MCP Server Setup")
+	fmt.Println("Git MCP Server Setup")
 	fmt.Println("========================")
 	fmt.Println()
 

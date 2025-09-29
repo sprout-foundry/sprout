@@ -154,7 +154,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 	// Save the selection
 	if err := configManager.SetProvider(clientType); err != nil {
-		fmt.Printf("⚠️  Warning: Failed to save provider selection: %v\n", err)
+		fmt.Printf("Warning: Failed to save provider selection: %v\n", err)
 	}
 	if finalModel != "" && finalModel != configManager.GetModelForProvider(clientType) {
 		if err := configManager.SetModelForProvider(clientType, finalModel); err != nil {
@@ -216,7 +216,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	if debug {
 		if err := agent.initDebugLogger(); err != nil {
 			// Non-fatal: fall back to stdout debug
-			fmt.Fprintf(os.Stderr, "⚠️ Failed to initialize debug logger: %v\n", err)
+			fmt.Fprintf(os.Stderr, "WARNING: Failed to initialize debug logger: %v\n", err)
 		}
 	}
 

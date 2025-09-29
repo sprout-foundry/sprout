@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -177,9 +178,23 @@ func (st *SessionTracker) GetSessionStats(sessionID string) map[string]interface
 func (st *SessionTracker) createToolCallKey(toolName string, arguments map[string]interface{}) string {
 	// For read_file, we want to deduplicate by file_path specifically
 	if toolName == "read_file" {
-		if filePath, ok := arguments["file_path"].(string); ok {
-			return fmt.Sprintf("%s:%s", toolName, filePath)
+		filePath := st.extractStringArgument(arguments, "file_path", "target_file", "path", "filename")
+		startLine, hasStart := st.extractLineArgument(arguments, "start_line", "line_start", "start")
+		endLine, hasEnd := st.extractLineArgument(arguments, "end_line", "line_end", "end")
+
+		// Normalize missing end line when start is provided to avoid treating
+		// different representations of full-file reads as distinct keys.
+		if hasStart && !hasEnd {
+			endLine = 0
 		}
+		if hasEnd && !hasStart {
+			startLine = 0
+		}
+
+		if hasStart || hasEnd {
+			return fmt.Sprintf("%s:%s:%d:%d", toolName, filePath, startLine, endLine)
+		}
+		return fmt.Sprintf("%s:%s:full", toolName, filePath)
 	}
 
 	// For other tools, create a key based on all arguments
@@ -189,6 +204,45 @@ func (st *SessionTracker) createToolCallKey(toolName string, arguments map[strin
 	}
 
 	return fmt.Sprintf("%s:%s", toolName, argsStr)
+}
+
+func (st *SessionTracker) extractStringArgument(arguments map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := arguments[key]; ok {
+			switch v := value.(type) {
+			case string:
+				return v
+			}
+		}
+	}
+	return ""
+}
+
+func (st *SessionTracker) extractLineArgument(arguments map[string]interface{}, keys ...string) (int, bool) {
+	for _, key := range keys {
+		if value, ok := arguments[key]; ok {
+			switch v := value.(type) {
+			case int:
+				return v, true
+			case int32:
+				return int(v), true
+			case int64:
+				return int(v), true
+			case float64:
+				return int(v), true
+			case float32:
+				return int(v), true
+			case string:
+				if v == "" {
+					continue
+				}
+				if parsed, err := strconv.Atoi(v); err == nil {
+					return parsed, true
+				}
+			}
+		}
+	}
+	return 0, false
 }
 
 // cleanupWorker runs in the background to clean up old sessions

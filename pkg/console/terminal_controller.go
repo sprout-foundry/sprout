@@ -1,13 +1,12 @@
 package console
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
-	"time"
+    "context"
+    "fmt"
+    "os"
+    "os/signal"
+    "sync"
+    "time"
 )
 
 // RenderOp represents a terminal rendering operation
@@ -74,12 +73,18 @@ func (tc *TerminalController) Init() error {
 	}
 
 	// Set up resize handling
-	tc.resizeChan = make(chan os.Signal, 1)
-	signal.Notify(tc.resizeChan, syscall.SIGWINCH)
+    tc.resizeChan = make(chan os.Signal, 1)
+    if sig := resizeSignal(); sig != nil {
+        signal.Notify(tc.resizeChan, sig)
+    } else {
+        // No resize signal on this platform; leave channel unused (nil select-safe)
+        tc.resizeChan = nil
+    }
 
 	// Set up interrupt handling
-	tc.interruptChan = make(chan os.Signal, 1)
-	signal.Notify(tc.interruptChan, os.Interrupt, syscall.SIGTERM)
+    tc.interruptChan = make(chan os.Signal, 1)
+    intr := append([]os.Signal{os.Interrupt}, extraInterruptSignals()...)
+    signal.Notify(tc.interruptChan, intr...)
 
 	// Start event monitoring
 	go tc.monitorEvents()

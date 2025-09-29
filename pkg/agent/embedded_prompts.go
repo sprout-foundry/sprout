@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"os"
@@ -85,7 +86,7 @@ func getProjectContext() string {
 	}
 
 	for _, filePath := range contextFiles {
-		content, err := tools.ReadFile(filePath)
+		content, err := tools.ReadFile(context.Background(), filePath)
 		if err == nil && strings.TrimSpace(content) != "" {
 			return fmt.Sprintf("PROJECT CONTEXT:\n%s", content)
 		}

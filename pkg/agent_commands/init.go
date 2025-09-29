@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -389,7 +390,7 @@ func (i *InitCommand) extractOverviewFromExisting(existingFiles []string) string
 	for _, priorityFile := range priority {
 		for _, existingFile := range existingFiles {
 			if existingFile == priorityFile {
-				if content, err := agent_tools.ReadFile(existingFile); err == nil {
+				if content, err := agent_tools.ReadFile(context.Background(), existingFile); err == nil {
 					// Extract overview section or first few paragraphs
 					lines := strings.Split(content, "\n")
 					var overview strings.Builder

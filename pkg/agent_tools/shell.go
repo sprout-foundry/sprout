@@ -2,21 +2,21 @@ package tools
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
-	"time"
 )
 
 // ExecuteShellCommand executes a shell command with safety checks
-func ExecuteShellCommand(command string) (string, error) {
-	return ExecuteShellCommandWithSafety(command, true, "")
+func ExecuteShellCommand(ctx context.Context, command string) (string, error) {
+	return ExecuteShellCommandWithSafety(ctx, command, true, "")
 }
 
 // ExecuteShellCommandWithSafety executes a shell command with configurable safety checks
-func ExecuteShellCommandWithSafety(command string, interactiveMode bool, sessionID string) (string, error) {
+func ExecuteShellCommandWithSafety(ctx context.Context, command string, interactiveMode bool, sessionID string) (string, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", fmt.Errorf("empty command provided")
 	}
@@ -49,43 +49,62 @@ func ExecuteShellCommandWithSafety(command string, interactiveMode bool, session
 		trackFileDeletion(command, sessionID)
 	}
 
-	// Create command with timeout
+	// Create command with context
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/sh"
 	}
-	cmd := exec.Command(shell, "-c", command)
+	cmd := exec.CommandContext(ctx, shell, "-c", command)
 
-	// Set up timeout
-	timeout := 60 * time.Second // Increased from 30s to 60s for longer operations
+	// Get pipes for stdout and stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stderr pipe: %w", err)
+	}
 
-	done := make(chan error, 1)
-	var output []byte
-	var err error
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start command: %w", err)
+	}
 
+	// Create a string builder to capture the output
+	var output strings.Builder
+
+	// Create scanners to read the output line by line
+	stdoutScanner := bufio.NewScanner(stdout)
+	stderrScanner := bufio.NewScanner(stderr)
+
+	// Read from stdout and stderr concurrently
 	go func() {
-		output, err = cmd.CombinedOutput()
-		done <- err
+		for stdoutScanner.Scan() {
+			line := stdoutScanner.Text()
+			output.WriteString(line + "\n")
+		}
+	}()
+	go func() {
+		for stderrScanner.Scan() {
+			line := stderrScanner.Text()
+			output.WriteString(line + "\n")
+		}
 	}()
 
-	select {
-	case err := <-done:
-		if err != nil {
-			// Check if it's an exit error (command ran but failed)
-			if exitError, ok := err.(*exec.ExitError); ok {
-				if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
-					return string(output), fmt.Errorf("command failed with exit code %d: %s", status.ExitStatus(), string(output))
-				}
+	// Wait for the command to finish
+	err = cmd.Wait()
+	if err != nil {
+		// Check if it's an exit error (command ran but failed)
+		if exitError, ok := err.(*exec.ExitError); ok {
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				return output.String(), fmt.Errorf("command failed with exit code %d: %s", status.ExitStatus(), output.String())
 			}
-			return string(output), fmt.Errorf("command failed: %w", err)
 		}
-		return string(output), nil
-	case <-time.After(timeout):
-		if cmd.Process != nil {
-			cmd.Process.Kill()
-		}
-		return "", fmt.Errorf("command timed out after %v", timeout)
+		return output.String(), fmt.Errorf("command failed: %w", err)
 	}
+
+	return output.String(), nil
 }
 
 // trackFileDeletion records file deletion commands in the changelog

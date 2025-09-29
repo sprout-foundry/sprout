@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -52,7 +53,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 
 	// Use the tool registry for data-driven tool execution
 	registry := GetToolRegistry()
-	result, err := registry.ExecuteTool(toolCall.Function.Name, args, a)
+	result, err := registry.ExecuteTool(context.Background(), toolCall.Function.Name, args, a)
 
 
 	// If tool not found in registry, check for special cases
@@ -83,7 +84,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 					return "", fmt.Errorf("invalid command argument")
 				}
 			}
-			return a.executeShellCommandWithTruncation(command)
+			return a.executeShellCommandWithTruncation(ctx, command)
 
 		case "read_file":
 			filePath, ok := args["file_path"].(string)

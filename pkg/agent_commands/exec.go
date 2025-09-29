@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -28,7 +29,7 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	command := strings.Join(args, " ")
 	
 	// Execute the shell command
-	result, err := tools.ExecuteShellCommand(command)
+	result, err := tools.ExecuteShellCommand(context.Background(), command)
 	if err != nil {
 		return fmt.Errorf("command failed: %v\nOutput: %s", err, result)
 	}
@@ -66,5 +67,5 @@ func IsShellCommand(prompt string) bool {
 
 // ExecuteShellCommandDirectly executes a shell command directly and returns the result
 func ExecuteShellCommandDirectly(command string) (string, error) {
-	return tools.ExecuteShellCommand(command)
+	return tools.ExecuteShellCommand(context.Background(), command)
 }

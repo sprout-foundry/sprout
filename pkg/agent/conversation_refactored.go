@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -214,7 +216,7 @@ func (a *Agent) executeToolsSequentially(toolCalls []api.ToolCall) ([]api.Messag
 
 	for i, tc := range toolCalls {
 		// Check for interrupt
-		if a.interruptRequested {
+		if a.CheckForInterrupt() {
 			results = append(results, api.Message{
 				Role:    "tool",
 				Content: "Execution interrupted by user",
@@ -242,8 +244,15 @@ func (a *Agent) executeToolsSequentially(toolCalls []api.ToolCall) ([]api.Messag
 func (a *Agent) executeSingleTool(toolCall api.ToolCall) (api.Message, error) {
 	// Use the tool registry
 	registry := GetToolRegistry()
-	result, err := registry.ExecuteTool(toolCall.Function.Name,
-		map[string]interface{}{}, // Parse args from toolCall.Function.Arguments
+
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
+		return api.Message{},
+			fmt.Errorf("failed to parse tool arguments: %w", err)
+	}
+
+	result, err := registry.ExecuteTool(context.Background(), toolCall.Function.Name,
+		args, // Parse args from toolCall.Function.Arguments
 		a)
 
 	if err != nil {
@@ -260,11 +269,11 @@ func (a *Agent) executeSingleTool(toolCall api.ToolCall) (api.Message, error) {
 
 func (a *Agent) checkForInterrupt() bool {
 	select {
-	case <-a.escPressed:
-		a.interruptRequested = true
+	case <-a.interruptCtx.Done():
+		// Context cancelled, interrupt requested
 		return true
 	default:
-		return a.interruptRequested
+		return false
 	}
 }
 

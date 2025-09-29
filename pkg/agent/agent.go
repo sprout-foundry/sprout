@@ -47,12 +47,9 @@ type Agent struct {
 	toolCallGuidanceAdded bool                           // Prevent repeating tool call guidance
 
 	// Interrupt handling
-	interruptRequested   bool            // Flag indicating interrupt was requested
-	interruptMessage     string          // User message to inject after interrupt
-	escPressed           chan bool       // Channel to signal Esc key press
-	interruptChan        chan string     // Channel for UI interrupt messages
-	inputInjectionChan   chan string     // Channel for injecting new user inputs during processing
-	escMonitoringEnabled bool            // Flag to enable/disable Esc monitoring
+	interruptCtx        context.Context    // Context for interrupt handling
+	interruptCancel     context.CancelFunc // Cancel function for interrupt context
+	escMonitoringCancel context.CancelFunc // Cancel function for Esc monitoring
 	outputMutex          *sync.Mutex     // Mutex for synchronized output
 	streamingEnabled     bool            // Whether streaming is enabled
 	streamingCallback    func(string)    // Custom streaming callback
@@ -190,6 +187,9 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Conversation optimization is always enabled
 	optimizationEnabled := true
 
+	// Create interrupt context for the agent
+	interruptCtx, interruptCancel := context.WithCancel(context.Background())
+
 	// Create the agent
 	agent := &Agent{
 		client:                    client,
@@ -202,12 +202,9 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		optimizer:                 NewConversationOptimizer(optimizationEnabled, debug),
 		configManager:             configManager,
 		shellCommandHistory:       make(map[string]*ShellCommandResult),
-		interruptRequested:        false,
-		interruptMessage:          "",
-		escPressed:                make(chan bool, 1),
-		interruptChan:             nil,
-		inputInjectionChan:        make(chan string, 10), // Buffer up to 10 inputs
-		escMonitoringEnabled:      false,
+		interruptCtx:              interruptCtx,
+		interruptCancel:           interruptCancel,
+		escMonitoringCancel:       nil,
 		falseStopDetectionEnabled: true,
 		conversationPruner:        NewConversationPruner(debug),
 	}
@@ -323,17 +320,41 @@ func (a *Agent) SetDebug(debug bool) {
 
 // debugLog prints debug messages if debug mode is enabled
 
-// SetInterruptHandler sets the interrupt channel for UI mode
-func (a *Agent) SetInterruptHandler(ch chan string) {
-	a.interruptChan = ch
+// SetInterruptHandler sets the interrupt handler for UI mode
+func (a *Agent) SetInterruptHandler(ch chan struct{}) {
+	// Store the channel for external interrupt handling
+	// Note: This is kept for backward compatibility
+	// Interrupts are now primarily handled via context cancellation
 }
 
-// monitorEscKey monitors for Esc key press in a separate goroutine
-func (a *Agent) monitorEscKey() {
+// EnableEscMonitoring starts monitoring for Esc key using context cancellation
+func (a *Agent) EnableEscMonitoring() {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return
 	}
 
+	// Cancel any existing monitoring
+	if a.escMonitoringCancel != nil {
+		a.escMonitoringCancel()
+	}
+
+	// Create new context for Esc monitoring
+	ctx, cancel := context.WithCancel(a.interruptCtx)
+	a.escMonitoringCancel = cancel
+
+	go a.monitorEscKey(ctx)
+}
+
+// DisableEscMonitoring stops monitoring for Esc key
+func (a *Agent) DisableEscMonitoring() {
+	if a.escMonitoringCancel != nil {
+		a.escMonitoringCancel()
+		a.escMonitoringCancel = nil
+	}
+}
+
+// monitorEscKey monitors for Esc key press in a separate goroutine with context cancellation
+func (a *Agent) monitorEscKey(ctx context.Context) {
 	// Get the current terminal state
 	oldState, err := term.GetState(int(os.Stdin.Fd()))
 	if err != nil {
@@ -350,74 +371,52 @@ func (a *Agent) monitorEscKey() {
 	}
 	defer term.Restore(int(os.Stdin.Fd()), rawState)
 
-	// Read single bytes
+	// Read single bytes with timeout
 	buf := make([]byte, 1)
-	for a.escMonitoringEnabled {
-		n, err := os.Stdin.Read(buf)
-		if err != nil || n == 0 {
-			continue
-		}
+	for {
+		select {
+		case <-ctx.Done():
+			// Context cancelled, exit gracefully
+			return
+		default:
+			// Set a short timeout to avoid blocking indefinitely
+			os.Stdin.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+			n, err := os.Stdin.Read(buf)
+			if err != nil {
+				// Timeout or error, continue loop
+				if err, ok := err.(*os.PathError); ok && err.Timeout() {
+					continue
+				}
+				return
+			}
 
-		// Check for ESC key (ASCII 27)
-		if buf[0] == 27 {
-			select {
-			case a.escPressed <- true:
-			default:
-				// Channel is full, skip
+			if n > 0 && buf[0] == 27 {
+				// ESC key pressed, trigger interrupt
+				a.interruptCancel()
+				return
 			}
 		}
 	}
 }
 
-// EnableEscMonitoring starts monitoring for Esc key
-func (a *Agent) EnableEscMonitoring() {
-	// Note: Esc monitoring is currently disabled due to terminal conflicts
-	// Will implement proper escape handling through readline library
-	a.escMonitoringEnabled = false
-}
-
-// DisableEscMonitoring stops monitoring for Esc key
-func (a *Agent) DisableEscMonitoring() {
-	a.escMonitoringEnabled = false
-}
-
 // CheckForInterrupt checks if an interrupt was requested
 func (a *Agent) CheckForInterrupt() bool {
-	// Check for ESC key press
 	select {
-	case <-a.escPressed:
-		a.interruptRequested = true
+	case <-a.interruptCtx.Done():
+		// Context cancelled, interrupt requested
 		return true
 	default:
+		return false
 	}
-
-	// Check for external interrupt requests (from UI via interruptChan)
-	select {
-	case <-a.interruptChan:
-		a.interruptRequested = true
-		return true
-	default:
-		// No new events
-	}
-	return a.interruptRequested
 }
 
 // HandleInterrupt processes the interrupt request
 func (a *Agent) HandleInterrupt() string {
-	if !a.interruptRequested {
+	if !a.CheckForInterrupt() {
 		return ""
 	}
 
-	// If we have an interrupt channel (UI mode), use it
-	if a.interruptChan != nil {
-		select {
-		case msg := <-a.interruptChan:
-			return msg
-		case <-time.After(100 * time.Millisecond):
-			// No message, just stop
-			return "STOP"
-		}
-	}
+	// Note: External interrupt channels are deprecated - interrupt handling is now context-based
 
 	// Otherwise prompt for input
 	fmt.Println("\n🛑 Processing interrupted. Enter new instructions (or press Enter to stop):")
@@ -435,24 +434,13 @@ func (a *Agent) HandleInterrupt() string {
 
 // ClearInterrupt resets the interrupt state
 func (a *Agent) ClearInterrupt() {
-	a.interruptRequested = false
-	a.interruptMessage = ""
-	// Drain the channel
-	select {
-	case <-a.escPressed:
-	default:
+	// Create new interrupt context
+	if a.interruptCancel != nil {
+		a.interruptCancel()
 	}
-	// Drain any pending interrupt control messages
-	if a.interruptChan != nil {
-		for {
-			select {
-			case <-a.interruptChan:
-				// keep draining
-			default:
-				return
-			}
-		}
-	}
+	interruptCtx, interruptCancel := context.WithCancel(context.Background())
+	a.interruptCtx = interruptCtx
+	a.interruptCancel = interruptCancel
 }
 
 // GetMessages returns the current conversation messages
@@ -848,24 +836,23 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 }
 
 // SetInterruptChannel sets the interrupt channel for the agent
-func (a *Agent) SetInterruptChannel(ch chan string) {
-	a.interruptChan = ch
+// DEPRECATED: Interrupt handling is now context-based
+func (a *Agent) SetInterruptChannel(ch chan struct{}) {
+	// No-op: interrupt handling is now context-based
 }
 
 // InjectInput injects a new user input into the conversation flow
+// DEPRECATED: Input injection is now handled via context-based interrupt system
 func (a *Agent) InjectInput(input string) {
-	select {
-	case a.inputInjectionChan <- input:
-		// Successfully queued
-	default:
-		// Channel full, could log warning
-		a.debugLog("⚠️ Input injection channel full, dropping input: %s\n", input)
-	}
+	// No-op: Input injection is now handled via context-based interrupt system
+	a.debugLog("⚠️ Input injection via InjectInput() is deprecated: %s\n", input)
 }
 
 // GetInputInjectionChannel returns the input injection channel for monitoring
+// DEPRECATED: Input injection is now handled via context-based interrupt system
 func (a *Agent) GetInputInjectionChannel() <-chan string {
-	return a.inputInjectionChan
+	// Return nil channel since input injection is deprecated
+	return nil
 }
 
 // SetOutputMutex sets the output mutex for synchronized output
@@ -875,7 +862,7 @@ func (a *Agent) SetOutputMutex(mutex *sync.Mutex) {
 
 // IsInterrupted returns true if an interrupt has been requested
 func (a *Agent) IsInterrupted() bool {
-	return a.interruptRequested
+	return a.CheckForInterrupt()
 }
 
 // EnableStreaming enables response streaming with a callback

@@ -61,7 +61,7 @@ type AgentConsole struct {
 	jsonFormatter *JSONFormatter
 
 	// Interrupt handling
-	interruptChan chan string
+	interruptChan chan struct{}
 	outputMutex   sync.Mutex
 	ctrlCCount    int
 	lastCtrlC     time.Time
@@ -150,7 +150,7 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		sessionStartTime:  time.Now(),
 		prompt:            config.Prompt,
 		historyFile:       config.HistoryFile,
-		interruptChan:     make(chan string, 1),
+		interruptChan:     make(chan struct{}),
 		outputMutex:       sync.Mutex{},
 		jsonFormatter:     NewJSONFormatter(),
 		agentDoneChan:     make(chan struct{}, 1),
@@ -1274,25 +1274,13 @@ func (ac *AgentConsole) handleCtrlC() {
 		// Mark that we were interrupted to influence next input behavior
 		ac.wasInterrupted = true
 		// First Esc - try to interrupt agent if it's processing
-		select {
-		case ac.interruptChan <- "Ctrl+C pressed - stopping current operation":
-			ac.writeTextWithRawModeFix("\r\033[K^C  🛑 Stopping current operation... (Press Ctrl+C again to exit)\n")
-			// Don't redraw prompt yet, let the agent finish gracefully
-		default:
-			// Agent not processing, show exit message
-			ac.writeTextWithRawModeFix("\r\033[K^C  💡 Press Ctrl+C again to exit\n")
-			// Redraw prompt
-			ac.writeTextWithRawModeFix(ac.prompt)
-		}
+		close(ac.interruptChan)
 	} else {
 		// Second Esc - exit immediately
 		ac.writeTextWithRawModeFix("\r\033[K🚪 Exiting...\n")
 
 		// Try to interrupt agent one more time if it's still running
-		select {
-		case ac.interruptChan <- "Force exit requested":
-		default:
-		}
+		close(ac.interruptChan)
 
 		// Signal that we want to exit cleanly
 		// Don't use os.Exit as it bypasses cleanup
@@ -1548,7 +1536,7 @@ func (ac *AgentConsole) isShellCommand(input string) bool {
 // executeShellCommand executes a shell command and returns the output
 func (ac *AgentConsole) executeShellCommand(command string) (string, error) {
 	// Use the tools package to execute shell commands
-	return tools.ExecuteShellCommand(command)
+	return tools.ExecuteShellCommand(context.Background(), command)
 }
 
 // Helper functions

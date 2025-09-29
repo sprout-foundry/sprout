@@ -292,47 +292,19 @@ func (ch *ConversationHandler) buildToolCallGuidance() string {
         "- If you need multiple tools, emit multiple function calls in order, each with valid JSON arguments."
 }
 func (ch *ConversationHandler) checkForInterrupt() bool {
-    // Check for escape key press
-    select {
-    case <-ch.agent.escPressed:
-        ch.agent.interruptRequested = true
-        return true
-    default:
-        // No ESC event
-    }
-
-    // Check for external interrupt (from console via interrupt channel)
-    select {
-    case <-ch.agent.interruptChan:
-        ch.agent.interruptRequested = true
-        return true
-    default:
-        // Check for existing interrupt request
-        if ch.agent.interruptRequested {
-            return true
-        }
-    }
-
-	// Check for input injections
+	// Check for context cancellation (new interrupt system)
 	select {
-	case newInput := <-ch.agent.inputInjectionChan:
-		ch.agent.debugLog("📥 Input injection received: %s\n", newInput)
-		// Add the new input as a user message to continue the conversation
-		userMessage := api.Message{
-			Role:    "user",
-			Content: newInput,
-		}
-		ch.agent.messages = append(ch.agent.messages, userMessage)
-		ch.lastActivityTime = time.Now() // Reset activity time
-		return false                     // Continue processing with the new input
+	case <-ch.agent.interruptCtx.Done():
+		ch.agent.debugLog("⏹️ Context cancelled, interrupt requested\n")
+		return true
 	default:
-		// No input injection
+		// Context not cancelled
 	}
 
 	// Check for timeout (5 minutes of inactivity)
 	if time.Since(ch.lastActivityTime) > ch.timeoutDuration {
 		ch.agent.debugLog("⏰ Conversation timeout after %v of inactivity\n", ch.timeoutDuration)
-		ch.agent.interruptRequested = true
+		ch.agent.interruptCancel() // Cancel context to trigger interrupt
 		return true
 	}
 

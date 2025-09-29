@@ -1,12 +1,13 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 )
 
-func WriteFile(filePath, content string) (string, error) {
+func WriteFile(ctx context.Context, filePath, content string) (string, error) {
 	if filePath == "" {
 		return "", fmt.Errorf("empty file path provided")
 	}

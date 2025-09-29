@@ -249,9 +249,28 @@ func (tc *TerminalController) Flush() error {
 	}
 }
 
-// Terminal returns the underlying terminal manager for compatibility
-func (tc *TerminalController) Terminal() TerminalManager {
-	return tc.tm
+// EnterAltScreen enters the alternate screen buffer
+func (tc *TerminalController) EnterAltScreen() error {
+	tc.QueueRender(RenderOp{
+		Type: "enterAltScreen",
+		Callback: func() error {
+			return tc.tm.EnterAltScreen()
+		},
+		Priority: 2, // High priority for screen mode changes
+	})
+	return nil
+}
+
+// ExitAltScreen exits the alternate screen buffer
+func (tc *TerminalController) ExitAltScreen() error {
+	tc.QueueRender(RenderOp{
+		Type: "exitAltScreen",
+		Callback: func() error {
+			return tc.tm.ExitAltScreen()
+		},
+		Priority: 2, // High priority for screen mode changes
+	})
+	return nil
 }
 
 // ClearScreen clears the entire screen

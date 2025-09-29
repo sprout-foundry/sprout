@@ -1,6 +1,7 @@
 package agent
 
 import (
+    "context"
     "os"
     "path/filepath"
     "strings"
@@ -33,7 +34,8 @@ func TestSearchFiles_SubstringCaseInsensitive(t *testing.T) {
     }
 
     reg := GetToolRegistry()
-    out, err := reg.ExecuteTool("search_files", args, nil)
+    ctx := context.Background()
+    out, err := reg.ExecuteTool(ctx, "search_files", args, nil)
     if err != nil {
         t.Fatalf("search_files returned error: %v", err)
     }
@@ -59,7 +61,8 @@ func TestSearchFiles_RegexCaseSensitive(t *testing.T) {
         "max_results":    10,
     }
     reg := GetToolRegistry()
-    out, err := reg.ExecuteTool("search_files", args, nil)
+    ctx := context.Background()
+    out, err := reg.ExecuteTool(ctx, "search_files", args, nil)
     if err != nil {
         t.Fatalf("search_files error: %v", err)
     }
@@ -84,7 +87,8 @@ func TestSearchFiles_GlobFilterAndMaxResults(t *testing.T) {
         "max_results":  1, // ensure truncation
     }
     reg := GetToolRegistry()
-    out, err := reg.ExecuteTool("search_files", args, nil)
+    ctx := context.Background()
+    out, err := reg.ExecuteTool(ctx, "search_files", args, nil)
     if err != nil {
         t.Fatalf("search_files error: %v", err)
     }
@@ -107,7 +111,8 @@ func TestSearchFiles_ExcludeDotLedit(t *testing.T) {
         "directory": root,
     }
     reg := GetToolRegistry()
-    out, err := reg.ExecuteTool("search_files", args, nil)
+    ctx := context.Background()
+    out, err := reg.ExecuteTool(ctx, "search_files", args, nil)
     if err != nil {
         t.Fatalf("search_files error: %v", err)
     }

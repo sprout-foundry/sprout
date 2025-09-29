@@ -634,7 +634,7 @@ func (ac *AgentConsole) processInput(input string) error {
         }
         close(ac.streamDone)
     }()
-    ac.agent.EnableStreaming(func(content string) {
+        ac.agent.EnableStreaming(func(content string) {
         // Queue content to maintain order; buffered channel avoids blocking in normal conditions
         select {
         case ac.streamCh <- content:
@@ -648,7 +648,7 @@ func (ac *AgentConsole) processInput(input string) error {
                 _ = ac.enqueueBestEffort(content)
             }
         }
-    })
+        })
 
 	// Set flush callback to force flush buffered content when needed
 	ac.agent.SetFlushCallback(func() {

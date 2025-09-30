@@ -113,35 +113,35 @@ func (cb *ConsoleBuffer) wrapLine(line string, width int) []string {
 		return []string{line}
 	}
 
-    var wrapped []string
-    remaining := line
-    firstSegment := true
+	var wrapped []string
+	remaining := line
+	firstSegment := true
 
-    for len(remaining) > 0 {
-        // Find the best place to break the line
-        breakPoint := cb.findWrapPoint(remaining, width)
+	for len(remaining) > 0 {
+		// Find the best place to break the line
+		breakPoint := cb.findWrapPoint(remaining, width)
 
-        // List-aware guard: ensure the first segment of a list item keeps the marker
-        // and at least a few characters of content on the same line.
-        if firstSegment {
-            if mEnd := listMarkerEnd(remaining); mEnd > 0 {
-                // Keep at least 3 chars after the marker with it
-                minAfter := 3
-                minPos := mEnd + minAfter
-                if breakPoint <= minPos && len(remaining) > minPos {
-                    // Try to break at the next space after the minimum position
-                    if next := nextSpaceAfter(remaining, minPos); next > 0 && next < len(remaining) {
-                        breakPoint = next
-                    } else {
-                        breakPoint = minPos
-                    }
-                }
-            }
-        }
-        if breakPoint <= 0 {
-            // Can't wrap nicely, force break
-            breakPoint = cb.forceWrapPoint(remaining, width)
-        }
+		// List-aware guard: ensure the first segment of a list item keeps the marker
+		// and at least a few characters of content on the same line.
+		if firstSegment {
+			if mEnd := listMarkerEnd(remaining); mEnd > 0 {
+				// Keep at least 3 chars after the marker with it
+				minAfter := 3
+				minPos := mEnd + minAfter
+				if breakPoint <= minPos && len(remaining) > minPos {
+					// Try to break at the next space after the minimum position
+					if next := nextSpaceAfter(remaining, minPos); next > 0 && next < len(remaining) {
+						breakPoint = next
+					} else {
+						breakPoint = minPos
+					}
+				}
+			}
+		}
+		if breakPoint <= 0 {
+			// Can't wrap nicely, force break
+			breakPoint = cb.forceWrapPoint(remaining, width)
+		}
 
 		if breakPoint >= len(remaining) {
 			// Last piece
@@ -149,18 +149,18 @@ func (cb *ConsoleBuffer) wrapLine(line string, width int) []string {
 			break
 		}
 
-        // Extract the piece
-        piece := remaining[:breakPoint]
-        wrapped = append(wrapped, piece)
-        remaining = remaining[breakPoint:]
+		// Extract the piece
+		piece := remaining[:breakPoint]
+		wrapped = append(wrapped, piece)
+		remaining = remaining[breakPoint:]
 
-        // Skip at most one leading space on continuation lines (preserve indentation)
-        if strings.HasPrefix(remaining, " ") {
-            remaining = strings.TrimPrefix(remaining, " ")
-        }
+		// Skip at most one leading space on continuation lines (preserve indentation)
+		if strings.HasPrefix(remaining, " ") {
+			remaining = strings.TrimPrefix(remaining, " ")
+		}
 
-        firstSegment = false
-    }
+		firstSegment = false
+	}
 
 	return wrapped
 }
@@ -207,18 +207,18 @@ func (cb *ConsoleBuffer) findWrapPoint(line string, maxWidth int) int {
 		runePos += size
 	}
 
-    // Prefer not to break immediately after list markers like "• ", "- ", "* ", or "1. "
-    markerEnd := listMarkerEnd(line)
+	// Prefer not to break immediately after list markers like "• ", "- ", "* ", or "1. "
+	markerEnd := listMarkerEnd(line)
 
-    // If we found a space within reasonable distance, use it (with list marker safeguard)
-    if lastSpace > 0 && lastSpace > runePos-20 {
-        if markerEnd > 0 && lastSpace <= markerEnd {
-            if next := nextSpaceAfter(line, markerEnd); next > 0 && next < runePos {
-                return next
-            }
-        }
-        return lastSpace
-    }
+	// If we found a space within reasonable distance, use it (with list marker safeguard)
+	if lastSpace > 0 && lastSpace > runePos-20 {
+		if markerEnd > 0 && lastSpace <= markerEnd {
+			if next := nextSpaceAfter(line, markerEnd); next > 0 && next < runePos {
+				return next
+			}
+		}
+		return lastSpace
+	}
 
 	return runePos
 }
@@ -265,30 +265,32 @@ func (cb *ConsoleBuffer) forceWrapPoint(line string, maxWidth int) int {
 
 // listMarkerEnd returns the byte index after a list marker if present at start (e.g., "• ", "- ", "* ", "1. ", "1) ")
 func listMarkerEnd(s string) int {
-    // Bullet markers
-    if strings.HasPrefix(s, "• ") || strings.HasPrefix(s, "- ") || strings.HasPrefix(s, "* ") {
-        return 2
-    }
-    // Numbered: digits then '.' or ')' then space
-    i := 0
-    for i < len(s) && s[i] >= '0' && s[i] <= '9' {
-        i++
-    }
-    if i > 0 && i+1 < len(s) && (s[i] == '.' || s[i] == ')') && s[i+1] == ' ' {
-        return i + 2
-    }
-    return 0
+	// Bullet markers
+	if strings.HasPrefix(s, "• ") || strings.HasPrefix(s, "- ") || strings.HasPrefix(s, "* ") {
+		return 2
+	}
+	// Numbered: digits then '.' or ')' then space
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i > 0 && i+1 < len(s) && (s[i] == '.' || s[i] == ')') && s[i+1] == ' ' {
+		return i + 2
+	}
+	return 0
 }
 
 // nextSpaceAfter finds the next space byte index after pos
 func nextSpaceAfter(s string, pos int) int {
-    if pos < 0 { pos = 0 }
-    for i := pos; i < len(s); i++ {
-        if s[i] == ' ' {
-            return i
-        }
-    }
-    return -1
+	if pos < 0 {
+		pos = 0
+	}
+	for i := pos; i < len(s); i++ {
+		if s[i] == ' ' {
+			return i
+		}
+	}
+	return -1
 }
 
 // visualLength calculates the visual length of a string (ignoring ANSI escapes)

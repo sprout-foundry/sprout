@@ -41,9 +41,9 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 		{Role: "system", Content: "System prompt"}, // index 0
 		{Role: "user", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"}, // index 1 - FIRST read (should be optimized)
 		{Role: "assistant", Content: "Message 2"}, // index 2
-		{Role: "user", Content: "Message 3"}, // index 3
+		{Role: "user", Content: "Message 3"},      // index 3
 		{Role: "assistant", Content: "Message 4"}, // index 4
-		{Role: "user", Content: "Message 5"}, // index 5
+		{Role: "user", Content: "Message 5"},      // index 5
 		{Role: "assistant", Content: "Message 6"}, // index 6
 		{Role: "user", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"}, // index 7 - LAST read (should be preserved)
 	}

@@ -119,10 +119,14 @@ func (a *Agent) processImagesInQuery(query string) (string, error) {
 		analysisMode = "general"
 	}
 
-	// Create vision processor with appropriate mode
-	processor, err := tools.NewVisionProcessorWithMode(a.debug, analysisMode)
+	// Create vision processor using the current provider's vision model
+	processor, err := tools.NewVisionProcessorWithProvider(a.debug, a.clientType)
 	if err != nil {
-		return query, fmt.Errorf("failed to create vision processor: %w", err)
+		// Fall back to default vision processor if current provider doesn't support vision
+		processor, err = tools.NewVisionProcessorWithMode(a.debug, analysisMode)
+		if err != nil {
+			return query, fmt.Errorf("failed to create vision processor: %w", err)
+		}
 	}
 
 	// Process any images found in the text

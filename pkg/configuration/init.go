@@ -29,10 +29,18 @@ func Initialize() (*Config, *APIKeys, error) {
 		return nil, nil, fmt.Errorf("failed to load API keys: %w", err)
 	}
 
-	// Populate from environment variables
+	// Populate from environment variables FIRST - prioritize env vars over stored keys
 	envKeysFound := apiKeys.PopulateFromEnvironment()
 	if envKeysFound {
 		fmt.Println("✅ Found API keys from environment variables")
+	}
+
+	// Check if we have any usable providers from environment variables
+	for _, provider := range getSupportedProviders() {
+		if provider.RequiresKey && apiKeys.HasAPIKey(provider.Name) {
+			// Found at least one usable provider
+			break
+		}
 	}
 
 	// Check if this is first run (no provider selected)
@@ -116,6 +124,39 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	providersWithKeys := []string{}
 	allProviders := getSupportedProviders()
 
+	// First, check for providers that have environment variables set
+	envProviders := []string{}
+	for _, provider := range allProviders {
+		if provider.RequiresKey && provider.EnvVariableName != "" {
+			if envKey := os.Getenv(provider.EnvVariableName); envKey != "" {
+				envProviders = append(envProviders, provider.Name)
+			}
+		}
+	}
+
+	// If we have providers with environment variables, prioritize them
+	if len(envProviders) > 0 {
+		fmt.Println("🚀 Found providers with environment variables set:")
+		for i, providerName := range envProviders {
+			// Find the provider struct to get the environment variable name
+			var envVarName string
+			for _, provider := range allProviders {
+				if provider.Name == providerName {
+					envVarName = provider.EnvVariableName
+					break
+				}
+			}
+			fmt.Printf("  %d. %s (from %s)", i+1, getProviderDisplayName(providerName), envVarName)
+			fmt.Println()
+		}
+		fmt.Println()
+		
+		// Auto-select the first provider with environment variable
+		fmt.Printf("✅ Auto-selecting %s (environment variable detected)\n", getProviderDisplayName(envProviders[0]))
+		return envProviders[0], nil
+	}
+
+	// Check which providers have API keys already (from file)
 	for _, provider := range allProviders {
 		if !provider.RequiresKey || apiKeys.HasAPIKey(provider.Name) {
 			providersWithKeys = append(providersWithKeys, provider.Name)

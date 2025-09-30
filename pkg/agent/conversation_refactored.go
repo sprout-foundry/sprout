@@ -105,6 +105,29 @@ func (a *Agent) processResponse(resp *api.ChatResponse, validator *ResponseValid
 		return true, nil // Continue to get complete response
 	}
 
+	// If the response contains an explicit completion signal, clean it and append a short system summary
+	if validator.IsComplete(choice.Message.Content) {
+		cleanContent := choice.Message.Content
+		completionSignals := []string{"[[TASK_COMPLETE]]", "[[TASKCOMPLETE]]", "[[TASK COMPLETE]]", "[[task_complete]]", "[[taskcomplete]]", "[[task complete]]"}
+		for _, s := range completionSignals {
+			cleanContent = strings.ReplaceAll(cleanContent, s, "")
+		}
+		cleanContent = strings.TrimSpace(cleanContent)
+
+		// Update last assistant message
+		if len(a.messages) > 0 {
+			a.messages[len(a.messages)-1].Content = cleanContent
+		}
+
+		// Append concise system summary for background context
+		summary := "Task completed. Summary: The assistant finished the requested work. Future user instructions or follow-ups should be treated as new actions and take precedence over prior completed tasks."
+		a.messages = append(a.messages, api.Message{Role: "system", Content: summary})
+
+		// Display final response
+		a.displayFinalResponse(cleanContent)
+		return false, nil
+	}
+
 	// Display final response
 	a.displayFinalResponse(choice.Message.Content)
 	return false, nil // Stop - response is complete

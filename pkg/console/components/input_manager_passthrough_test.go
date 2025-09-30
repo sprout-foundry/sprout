@@ -1,9 +1,72 @@
 package components
 
 import (
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/console"
 )
+
+type testTerminalManager struct {
+	mu         sync.Mutex
+	rawMode    bool
+	resetCount int
+	width      int
+	height     int
+}
+
+func newTestTerminalManager(width, height int) *testTerminalManager {
+	return &testTerminalManager{width: width, height: height}
+}
+
+func (tm *testTerminalManager) Init() error                { return nil }
+func (tm *testTerminalManager) Cleanup() error             { return nil }
+func (tm *testTerminalManager) GetSize() (int, int, error) { return tm.width, tm.height, nil }
+func (tm *testTerminalManager) OnResize(func(int, int))    {}
+func (tm *testTerminalManager) SetRawMode(enabled bool) error {
+	tm.mu.Lock()
+	tm.rawMode = enabled
+	tm.mu.Unlock()
+	return nil
+}
+func (tm *testTerminalManager) IsRawMode() bool {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	return tm.rawMode
+}
+func (tm *testTerminalManager) MoveCursor(int, int) error      { return nil }
+func (tm *testTerminalManager) SaveCursor() error              { return nil }
+func (tm *testTerminalManager) RestoreCursor() error           { return nil }
+func (tm *testTerminalManager) HideCursor() error              { return nil }
+func (tm *testTerminalManager) ShowCursor() error              { return nil }
+func (tm *testTerminalManager) ClearScreen() error             { return nil }
+func (tm *testTerminalManager) ClearScrollback() error         { return nil }
+func (tm *testTerminalManager) ClearLine() error               { return nil }
+func (tm *testTerminalManager) ClearToEndOfLine() error        { return nil }
+func (tm *testTerminalManager) ClearToEndOfScreen() error      { return nil }
+func (tm *testTerminalManager) EnterAltScreen() error          { return nil }
+func (tm *testTerminalManager) ExitAltScreen() error           { return nil }
+func (tm *testTerminalManager) EnableMouseReporting() error    { return nil }
+func (tm *testTerminalManager) DisableMouseReporting() error   { return nil }
+func (tm *testTerminalManager) SetScrollRegion(int, int) error { return nil }
+func (tm *testTerminalManager) ResetScrollRegion() error {
+	tm.mu.Lock()
+	tm.resetCount++
+	tm.mu.Unlock()
+	return nil
+}
+func (tm *testTerminalManager) ScrollUp(int) error              { return nil }
+func (tm *testTerminalManager) ScrollDown(int) error            { return nil }
+func (tm *testTerminalManager) Write(b []byte) (int, error)     { return len(b), nil }
+func (tm *testTerminalManager) WriteText(s string) (int, error) { return len(s), nil }
+func (tm *testTerminalManager) WriteAt(int, int, []byte) error  { return nil }
+func (tm *testTerminalManager) Flush() error                    { return nil }
+func (tm *testTerminalManager) rawModeResets() int {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	return tm.resetCount
+}
 
 // MockTerminal for testing
 type MockTerminalForPassthrough struct {
@@ -192,6 +255,46 @@ func TestInputManager_PassthroughModeMemoryLeaks(t *testing.T) {
 
 	// This test mainly ensures no panics occur and goroutines are cleaned up
 	t.Log("Multiple passthrough cycles completed")
+}
+
+func TestInputManager_ControllerRawModeLifecycle(t *testing.T) {
+	tm := newTestTerminalManager(80, 24)
+	eventBus := console.NewEventBus(16)
+	tc := console.NewTerminalController(tm, eventBus)
+	if err := tc.Init(); err != nil {
+		t.Fatalf("terminal controller init failed: %v", err)
+	}
+	defer tc.Cleanup()
+
+	im := NewInputManager("> ")
+	im.mutex.Lock()
+	im.running = true
+	im.mutex.Unlock()
+
+	im.SetController(tc)
+
+	if !tm.IsRawMode() {
+		t.Fatalf("expected raw mode to be enabled after controller wiring")
+	}
+
+	im.SetPassthroughMode(true)
+
+	if tm.IsRawMode() {
+		t.Fatalf("expected raw mode to be released during passthrough mode")
+	}
+
+	if resets := tm.rawModeResets(); resets == 0 {
+		t.Fatalf("expected controller to reset scroll region during passthrough")
+	}
+
+	im.mutex.Lock()
+	im.running = true
+	im.ensureRawModeLocked(rawModeOwnerInputManager)
+	im.mutex.Unlock()
+
+	if !tm.IsRawMode() {
+		t.Fatalf("expected raw mode to be reacquired after passthrough")
+	}
 }
 
 // Test the integration with agent console command handling

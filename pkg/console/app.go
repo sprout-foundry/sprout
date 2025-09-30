@@ -35,15 +35,15 @@ func NewConsoleAppWithMode(mode OutputMode) ConsoleApp {
 	app := &consoleApp{
 		components: make(map[string]Component),
 	}
-	
+
 	// Set the mode-specific configuration
 	app.config = ConfigForMode(mode)
-	
+
 	return app
 }
 
 // Init initializes the console app
-func (ca *consoleApp) Init(config *Config) error {
+func (ca *consoleApp) Init(config *Config) (err error) {
 	ca.mu.Lock()
 	defer ca.mu.Unlock()
 
@@ -60,25 +60,65 @@ func (ca *consoleApp) Init(config *Config) error {
 
 	// Initialize terminal manager
 	ca.terminal = NewTerminalManager()
-	if err := ca.terminal.Init(); err != nil {
-		return fmt.Errorf("failed to init terminal: %w", err)
+
+	// Track whether we've entered the alternate screen so we can unwind on failure
+	var enteredAltScreen bool
+
+	defer func() {
+		if err == nil {
+			return
+		}
+
+		if enteredAltScreen && ca.controller != nil {
+			_ = ca.controller.ExitAltScreen()
+			_ = ca.controller.Flush()
+		}
+
+		if ca.controller != nil {
+			// Best effort cleanup to restore terminal state
+			_ = ca.controller.Cleanup()
+			ca.controller = nil
+		}
+
+		if ca.terminal != nil {
+			_ = ca.terminal.Cleanup()
+			ca.terminal = nil
+		}
+	}()
+
+	if err = ca.terminal.Init(); err != nil {
+		err = fmt.Errorf("failed to init terminal: %w", err)
+		return err
 	}
 
 	// Initialize terminal controller with centralized handling
 	ca.controller = NewTerminalController(ca.terminal, ca.events)
-	if err := ca.controller.Init(); err != nil {
-		return fmt.Errorf("failed to init terminal controller: %w", err)
+	if err = ca.controller.Init(); err != nil {
+		err = fmt.Errorf("failed to init terminal controller: %w", err)
+		return err
 	}
 
 	// Set raw mode through controller
-	if err := ca.controller.SetRawMode(config.RawMode); err != nil {
-		return fmt.Errorf("failed to set raw mode: %w", err)
+	if err = ca.controller.SetRawMode(config.RawMode); err != nil {
+		err = fmt.Errorf("failed to set raw mode: %w", err)
+		return err
 	}
 
-	// Enter alternate screen if configured
+	// Enter alternate screen via controller if configured
 	if config.AltScreen {
-		if err := ca.terminal.EnterAltScreen(); err != nil {
-			return fmt.Errorf("failed to enter alternate screen: %w", err)
+		if err = ca.controller.EnterAltScreen(); err != nil {
+			err = fmt.Errorf("failed to enter alternate screen: %w", err)
+			return err
+		}
+		enteredAltScreen = true
+		// Ensure the mode switch applies before continuing
+		_ = ca.controller.Flush()
+		// Clear any prior scrollback so alternate screen starts fresh
+		_ = ca.controller.ClearScrollback()
+		if config.MouseEnabled {
+			if err := ca.controller.EnableMouseTracking(); err != nil && DebugEnabled() {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Failed to enable mouse tracking: %v\n", err)
+			}
 		}
 	}
 
@@ -252,10 +292,11 @@ func (ca *consoleApp) AddComponent(component Component) error {
 
 	// Initialize component
 	deps := Dependencies{
-		Terminal: ca.terminal, // Pass the terminal manager
-		Layout:   ca.layout,
-		State:    ca.state,
-		Events:   ca.events,
+		Terminal:   ca.terminal, // Pass the terminal manager
+		Controller: ca.controller,
+		Layout:     ca.layout,
+		State:      ca.state,
+		Events:     ca.events,
 	}
 
 	if err := component.Init(ca.ctx, deps); err != nil {
@@ -314,6 +355,11 @@ func (ca *consoleApp) Terminal() TerminalManager {
 	return ca.terminal
 }
 
+// Controller returns the terminal controller
+func (ca *consoleApp) Controller() *TerminalController {
+	return ca.controller
+}
+
 // Layout returns the layout manager
 func (ca *consoleApp) Layout() LayoutManager {
 	return ca.layout
@@ -368,7 +414,19 @@ func (ca *consoleApp) Cleanup() error {
 		}
 	}
 
-	// Cleanup terminal controller first
+	// Ensure we leave the alternate screen before tearing down the controller
+	if ca.controller != nil {
+		if ca.config != nil && ca.config.MouseEnabled {
+			_ = ca.controller.DisableMouseTracking()
+		}
+	}
+
+	if ca.controller != nil && ca.controller.IsAltScreen() {
+		_ = ca.controller.ExitAltScreen()
+		_ = ca.controller.Flush()
+	}
+
+	// Cleanup terminal controller next
 	if ca.controller != nil {
 		if err := ca.controller.Cleanup(); err != nil {
 			return fmt.Errorf("failed to cleanup terminal controller: %w", err)
@@ -499,7 +557,7 @@ func ConfigForMode(mode OutputMode) *Config {
 	case OutputModeInteractive:
 		return &Config{
 			RawMode:        true, // Interactive mode uses raw terminal
-			MouseEnabled:   false,
+			MouseEnabled:   true,
 			AltScreen:      true,
 			MinWidth:       80,
 			MinHeight:      24,

@@ -61,11 +61,14 @@ type TerminalManager interface {
 
 	// Screen operations
 	ClearScreen() error
+	ClearScrollback() error
 	ClearLine() error
 	ClearToEndOfLine() error
 	ClearToEndOfScreen() error
 	EnterAltScreen() error
 	ExitAltScreen() error
+	EnableMouseReporting() error
+	DisableMouseReporting() error
 
 	// Scroll region support
 	SetScrollRegion(top, bottom int) error

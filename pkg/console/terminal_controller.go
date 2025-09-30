@@ -1,12 +1,12 @@
 package console
 
 import (
-    "context"
-    "fmt"
-    "os"
-    "os/signal"
-    "sync"
-    "time"
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"sync"
+	"time"
 )
 
 // RenderOp represents a terminal rendering operation
@@ -18,16 +18,23 @@ type RenderOp struct {
 
 // TerminalController centralizes all terminal operations and state management
 type TerminalController struct {
-	mu       sync.RWMutex
-	tm       TerminalManager
-	eventBus EventBus
-	ctx      context.Context
-	cancel   context.CancelFunc
+	mu          sync.RWMutex
+	tm          TerminalManager
+	eventBus    EventBus
+	ctx         context.Context
+	cancel      context.CancelFunc
+	cleanupOnce sync.Once
+	cleanupErr  error
 
 	// Terminal state
-	width     int
-	height    int
-	inRawMode bool
+	width             int
+	height            int
+	inRawMode         bool
+	rawModeBase       bool
+	rawModeRefCount   int
+	altScreenRefCount int
+	mouseRequested    bool
+	mouseActive       bool
 
 	// Resize handling
 	resizeDebounce time.Duration
@@ -73,18 +80,18 @@ func (tc *TerminalController) Init() error {
 	}
 
 	// Set up resize handling
-    tc.resizeChan = make(chan os.Signal, 1)
-    if sig := resizeSignal(); sig != nil {
-        signal.Notify(tc.resizeChan, sig)
-    } else {
-        // No resize signal on this platform; leave channel unused (nil select-safe)
-        tc.resizeChan = nil
-    }
+	tc.resizeChan = make(chan os.Signal, 1)
+	if sig := resizeSignal(); sig != nil {
+		signal.Notify(tc.resizeChan, sig)
+	} else {
+		// No resize signal on this platform; leave channel unused (nil select-safe)
+		tc.resizeChan = nil
+	}
 
 	// Set up interrupt handling
-    tc.interruptChan = make(chan os.Signal, 1)
-    intr := append([]os.Signal{os.Interrupt}, extraInterruptSignals()...)
-    signal.Notify(tc.interruptChan, intr...)
+	tc.interruptChan = make(chan os.Signal, 1)
+	intr := append([]os.Signal{os.Interrupt}, extraInterruptSignals()...)
+	signal.Notify(tc.interruptChan, intr...)
 
 	// Start event monitoring
 	go tc.monitorEvents()
@@ -98,25 +105,84 @@ func (tc *TerminalController) Init() error {
 
 // Cleanup shuts down the controller and restores terminal state
 func (tc *TerminalController) Cleanup() error {
-	// Cancel context to stop all goroutines
-	tc.cancel()
+	tc.cleanupOnce.Do(func() {
+		// Cancel context to stop all goroutines
+		tc.cancel()
 
-	// Close render queue and wait for processing to complete
-	close(tc.renderQueue)
-	tc.renderWg.Wait()
+		// Close render queue and wait for processing to complete
+		close(tc.renderQueue)
+		tc.renderWg.Wait()
 
-	// Stop signal handling
-	if tc.resizeChan != nil {
-		signal.Stop(tc.resizeChan)
-		close(tc.resizeChan)
+		// Stop signal handling
+		if tc.resizeChan != nil {
+			signal.Stop(tc.resizeChan)
+			close(tc.resizeChan)
+			tc.resizeChan = nil
+		}
+		if tc.interruptChan != nil {
+			signal.Stop(tc.interruptChan)
+			close(tc.interruptChan)
+			tc.interruptChan = nil
+		}
+
+		// Restore terminal state
+		tc.disableMouseImmediate()
+		err := tc.tm.Cleanup()
+		if err == nil {
+			tc.mu.Lock()
+			if tc.altScreenRefCount != 0 {
+				DebugPrintf("terminal: cleanup resetting alternate screen depth from %d to 0\n", tc.altScreenRefCount)
+				tc.altScreenRefCount = 0
+			}
+			if tc.rawModeRefCount != 0 {
+				DebugPrintf("terminal: cleanup resetting raw mode refs from %d to 0\n", tc.rawModeRefCount)
+				tc.rawModeRefCount = 0
+			}
+			tc.mouseActive = false
+			tc.mouseRequested = false
+			tc.rawModeBase = false
+			tc.inRawMode = false
+			tc.mu.Unlock()
+		}
+		tc.cleanupErr = err
+	})
+
+	return tc.cleanupErr
+}
+
+// syncRenderQueue forces currently queued render operations to complete before continuing.
+func (tc *TerminalController) syncRenderQueue() {
+	// Avoid scheduling if we've already shut down
+	tc.mu.RLock()
+	queue := tc.renderQueue
+	tc.mu.RUnlock()
+	if queue == nil {
+		return
 	}
-	if tc.interruptChan != nil {
-		signal.Stop(tc.interruptChan)
-		close(tc.interruptChan)
-	}
 
-	// Restore terminal state
-	return tc.tm.Cleanup()
+	done := make(chan struct{})
+	// Use low priority so existing work executes first within the batch
+	tc.QueueRender(RenderOp{
+		Type: "sync",
+		Callback: func() error {
+			select {
+			case <-done:
+				// Already closed by timeout or context
+			default:
+				close(done)
+			}
+			return nil
+		},
+		Priority: -1000,
+	})
+
+	select {
+	case <-done:
+	case <-tc.ctx.Done():
+	case <-time.After(250 * time.Millisecond):
+		// Timed out waiting; proceed to avoid blocking
+		close(done)
+	}
 }
 
 // GetSize returns current terminal dimensions
@@ -129,17 +195,19 @@ func (tc *TerminalController) GetSize() (width, height int, err error) {
 // SetRawMode enables or disables raw mode atomically
 func (tc *TerminalController) SetRawMode(enabled bool) error {
 	tc.mu.Lock()
-	defer tc.mu.Unlock()
+	tc.rawModeBase = enabled
+	err := tc.applyRawModeLocked()
+	base := tc.rawModeBase
+	refs := tc.rawModeRefCount
+	tc.mu.Unlock()
 
-	if tc.inRawMode == enabled {
-		return nil
-	}
-
-	if err := tc.tm.SetRawMode(enabled); err != nil {
+	if err != nil {
 		return err
 	}
 
-	tc.inRawMode = enabled
+	if DebugEnabled() {
+		DebugPrintf("terminal: set raw mode base=%t (refs=%d active=%t)\n", base, refs, tc.IsRawMode())
+	}
 	return nil
 }
 
@@ -148,6 +216,203 @@ func (tc *TerminalController) IsRawMode() bool {
 	tc.mu.RLock()
 	defer tc.mu.RUnlock()
 	return tc.inRawMode
+}
+
+func (tc *TerminalController) applyRawModeLocked() error {
+	desired := tc.rawModeBase || tc.rawModeRefCount > 0
+	if tc.inRawMode == desired {
+		return nil
+	}
+
+	if err := tc.tm.SetRawMode(desired); err != nil {
+		return err
+	}
+
+	tc.inRawMode = desired
+	return nil
+}
+
+// AcquireRawMode increments the raw mode reference count and ensures raw mode is enabled.
+// The returned release function should be called to decrement the reference count when done.
+func (tc *TerminalController) AcquireRawMode(reason string) (func(), error) {
+	if reason == "" {
+		reason = "anonymous"
+	}
+
+	tc.mu.Lock()
+	tc.rawModeRefCount++
+	if DebugEnabled() {
+		DebugPrintf("terminal: raw mode acquire requested by %s (refs=%d base=%t)\n", reason, tc.rawModeRefCount, tc.rawModeBase)
+	}
+	if err := tc.applyRawModeLocked(); err != nil {
+		tc.rawModeRefCount--
+		tc.mu.Unlock()
+		return nil, err
+	}
+	refs := tc.rawModeRefCount
+	base := tc.rawModeBase
+	tc.mu.Unlock()
+
+	if DebugEnabled() {
+		DebugPrintf("terminal: raw mode active after acquire by %s (refs=%d base=%t)\n", reason, refs, base)
+	}
+
+	var once sync.Once
+	release := func() {
+		once.Do(func() {
+			tc.releaseRawMode(reason)
+		})
+	}
+
+	return release, nil
+}
+
+// ReleaseRawMode decrements the raw mode reference count and applies the resulting mode.
+func (tc *TerminalController) ReleaseRawMode(reason string) {
+	if reason == "" {
+		reason = "anonymous"
+	}
+	tc.releaseRawMode(reason)
+}
+
+// WithRawMode acquires raw mode, runs the callback, and releases raw mode afterward.
+func (tc *TerminalController) WithRawMode(reason string, fn func() error) error {
+	if fn == nil {
+		return nil
+	}
+
+	release, err := tc.AcquireRawMode(reason)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	return fn()
+}
+
+func (tc *TerminalController) releaseRawMode(reason string) {
+	tc.mu.Lock()
+	if tc.rawModeRefCount > 0 {
+		tc.rawModeRefCount--
+	} else if DebugEnabled() {
+		DebugPrintf("terminal: raw mode release requested by %s with zero refs\n", reason)
+	}
+	if DebugEnabled() {
+		DebugPrintf("terminal: raw mode release requested by %s (refs=%d base=%t)\n", reason, tc.rawModeRefCount, tc.rawModeBase)
+	}
+	err := tc.applyRawModeLocked()
+	refs := tc.rawModeRefCount
+	base := tc.rawModeBase
+	tc.mu.Unlock()
+
+	if DebugEnabled() {
+		DebugPrintf("terminal: raw mode state after release by %s (refs=%d base=%t active=%t)\n", reason, refs, base, tc.IsRawMode())
+	}
+	if err != nil && DebugEnabled() {
+		DebugPrintf("terminal: failed to apply raw mode after release by %s: %v\n", reason, err)
+	}
+}
+
+// EnableMouseTracking enables terminal mouse reporting and records the desired state.
+func (tc *TerminalController) EnableMouseTracking() error {
+	tc.mu.Lock()
+	tc.mouseRequested = true
+	alreadyActive := tc.mouseActive
+	tc.mu.Unlock()
+
+	if alreadyActive {
+		return nil
+	}
+
+	tc.QueueRender(RenderOp{
+		Type: "enableMouseTracking",
+		Callback: func() error {
+			tc.mu.Lock()
+			if tc.mouseActive {
+				tc.mu.Unlock()
+				return nil
+			}
+			tc.mu.Unlock()
+			if err := tc.tm.EnableMouseReporting(); err != nil {
+				return err
+			}
+			tc.mu.Lock()
+			tc.mouseActive = true
+			tc.mu.Unlock()
+			return nil
+		},
+		Priority: 2,
+	})
+	return nil
+}
+
+// DisableMouseTracking disables terminal mouse reporting and clears the desired state.
+func (tc *TerminalController) DisableMouseTracking() error {
+	tc.mu.Lock()
+	tc.mouseRequested = false
+	tc.mu.Unlock()
+
+	tc.QueueRender(RenderOp{
+		Type: "disableMouseTracking",
+		Callback: func() error {
+			if err := tc.tm.DisableMouseReporting(); err != nil {
+				return err
+			}
+			tc.mu.Lock()
+			tc.mouseActive = false
+			tc.mu.Unlock()
+			return nil
+		},
+		Priority: 2,
+	})
+
+	return nil
+}
+
+func (tc *TerminalController) enableMouseImmediate() {
+	tc.mu.Lock()
+	requested := tc.mouseRequested
+	active := tc.mouseActive
+	tc.mu.Unlock()
+
+	if !requested || active {
+		return
+	}
+
+	if err := tc.tm.EnableMouseReporting(); err != nil {
+		if DebugEnabled() {
+			DebugPrintf("terminal: failed to enable mouse tracking immediately: %v\n", err)
+		}
+		return
+	}
+
+	tc.mu.Lock()
+	tc.mouseActive = true
+	tc.mu.Unlock()
+}
+
+func (tc *TerminalController) disableMouseImmediate() {
+	tc.mu.Lock()
+	active := tc.mouseActive
+	tc.mu.Unlock()
+
+	if !active {
+		if err := tc.tm.DisableMouseReporting(); err != nil && DebugEnabled() {
+			DebugPrintf("terminal: failed to disable mouse tracking immediately: %v\n", err)
+		}
+		return
+	}
+
+	if err := tc.tm.DisableMouseReporting(); err != nil {
+		if DebugEnabled() {
+			DebugPrintf("terminal: failed to disable mouse tracking immediately: %v\n", err)
+		}
+		return
+	}
+
+	tc.mu.Lock()
+	tc.mouseActive = false
+	tc.mu.Unlock()
 }
 
 // RegisterComponent adds a component to the controller
@@ -254,7 +519,27 @@ func (tc *TerminalController) EnterAltScreen() error {
 	tc.QueueRender(RenderOp{
 		Type: "enterAltScreen",
 		Callback: func() error {
-			return tc.tm.EnterAltScreen()
+			err := tc.tm.EnterAltScreen()
+			if err == nil {
+				tc.mu.Lock()
+				tc.altScreenRefCount++
+				depth := tc.altScreenRefCount
+				shouldEnableMouse := tc.mouseRequested
+				tc.mu.Unlock()
+				DebugPrintf("terminal: entered alternate screen (depth=%d)\n", depth)
+				if shouldEnableMouse {
+					if err := tc.tm.EnableMouseReporting(); err != nil {
+						if DebugEnabled() {
+							DebugPrintf("terminal: failed to enable mouse tracking on alt screen enter: %v\n", err)
+						}
+					} else {
+						tc.mu.Lock()
+						tc.mouseActive = true
+						tc.mu.Unlock()
+					}
+				}
+			}
+			return err
 		},
 		Priority: 2, // High priority for screen mode changes
 	})
@@ -266,10 +551,113 @@ func (tc *TerminalController) ExitAltScreen() error {
 	tc.QueueRender(RenderOp{
 		Type: "exitAltScreen",
 		Callback: func() error {
-			return tc.tm.ExitAltScreen()
+			err := tc.tm.ExitAltScreen()
+			if err == nil {
+				tc.mu.Lock()
+				tc.mouseActive = false
+				if tc.altScreenRefCount > 0 {
+					tc.altScreenRefCount--
+					depth := tc.altScreenRefCount
+					tc.mu.Unlock()
+					DebugPrintf("terminal: exited alternate screen (depth=%d)\n", depth)
+				} else {
+					tc.mu.Unlock()
+					DebugPrintf("terminal: exit alt screen requested with depth already zero\n")
+				}
+			}
+			return err
 		},
 		Priority: 2, // High priority for screen mode changes
 	})
+	return nil
+}
+
+// IsAltScreen returns true when the controller believes the alternate screen is active.
+func (tc *TerminalController) IsAltScreen() bool {
+	tc.mu.RLock()
+	defer tc.mu.RUnlock()
+	return tc.altScreenRefCount > 0
+}
+
+// WithPrimaryScreen ensures operations run on the primary screen, temporarily leaving the
+// alternate buffer when needed and restoring it afterward.
+func (tc *TerminalController) WithPrimaryScreen(fn func() error) error {
+	if fn == nil {
+		return nil
+	}
+
+	// Ensure pending render operations are flushed before switching screen modes
+	tc.syncRenderQueue()
+
+	tc.mu.RLock()
+	depth := tc.altScreenRefCount
+	tc.mu.RUnlock()
+
+	if depth > 0 {
+		tc.disableMouseImmediate()
+		if err := tc.exitAltScreenImmediate(depth); err != nil {
+			return fmt.Errorf("failed to exit alternate screen: %w", err)
+		}
+		// Apply changes immediately so callers can interact with primary screen
+		_ = tc.tm.Flush()
+	}
+
+	err := fn()
+
+	if depth > 0 {
+		if reErr := tc.enterAltScreenImmediate(depth); reErr != nil {
+			if err != nil {
+				err = fmt.Errorf("%w; %v", err, reErr)
+			} else {
+				err = reErr
+			}
+		} else {
+			_ = tc.tm.Flush()
+			if tc.mouseRequested {
+				tc.enableMouseImmediate()
+			}
+		}
+	}
+
+	// Allow queued operations to resume with the restored screen state
+	tc.syncRenderQueue()
+
+	return err
+}
+
+func (tc *TerminalController) exitAltScreenImmediate(times int) error {
+	for i := 0; i < times; i++ {
+		if err := tc.tm.ExitAltScreen(); err != nil {
+			return err
+		}
+		tc.mu.Lock()
+		if tc.altScreenRefCount > 0 {
+			tc.altScreenRefCount--
+		}
+		tc.mu.Unlock()
+	}
+	tc.mu.Lock()
+	tc.mouseActive = false
+	tc.mu.Unlock()
+	return nil
+}
+
+func (tc *TerminalController) enterAltScreenImmediate(times int) error {
+	shouldEnableMouse := false
+	for i := 0; i < times; i++ {
+		if err := tc.tm.EnterAltScreen(); err != nil {
+			return err
+		}
+		tc.mu.Lock()
+		tc.altScreenRefCount++
+		if tc.mouseRequested {
+			shouldEnableMouse = true
+		}
+		tc.mu.Unlock()
+	}
+	if shouldEnableMouse {
+		tc.enableMouseImmediate()
+	}
 	return nil
 }
 
@@ -279,6 +667,18 @@ func (tc *TerminalController) ClearScreen() error {
 		Type: "clearScreen",
 		Callback: func() error {
 			return tc.tm.ClearScreen()
+		},
+		Priority: 2,
+	})
+	return nil
+}
+
+// ClearScrollback clears the scrollback buffer
+func (tc *TerminalController) ClearScrollback() error {
+	tc.QueueRender(RenderOp{
+		Type: "clearScrollback",
+		Callback: func() error {
+			return tc.tm.ClearScrollback()
 		},
 		Priority: 2,
 	})

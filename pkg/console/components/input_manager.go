@@ -143,14 +143,11 @@ func (im *InputManager) Start() error {
 		return fmt.Errorf("not running in a terminal")
 	}
 
-	// Switch to raw mode
-	oldState, err := term.MakeRaw(im.terminalFd)
-	if err != nil {
-		return fmt.Errorf("failed to enter raw mode: %w", err)
-	}
+	// Input manager should not set raw mode directly
+	// Raw mode is managed by the console app's terminal manager
+	// We'll work with the existing terminal state
+	im.isRawMode = false // Don't manage raw mode independently
 
-	im.oldTermState = oldState
-	im.isRawMode = true
 	im.running = true
 
 	// Get terminal dimensions
@@ -1032,14 +1029,11 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 		im.running = false
 		im.cancel()
 
-		// Restore terminal from raw mode
-		if im.isRawMode && im.oldTermState != nil {
-			term.Restore(im.terminalFd, im.oldTermState)
-			im.isRawMode = false
-		}
+		// Note: Terminal state is managed by console app's terminal manager
+		// We don't manipulate raw mode independently
 
 		if os.Getenv("LEDIT_DEBUG") != "" {
-			fmt.Fprintf(os.Stderr, "[DEBUG] Passthrough mode enabled - terminal restored to normal mode\r\n")
+			fmt.Fprintf(os.Stderr, "[DEBUG] Passthrough mode enabled - terminal state managed by console app\r\n")
 		}
 	} else {
 		if im.running {
@@ -1055,17 +1049,9 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 		im.ctx = ctx
 		im.cancel = cancel
 
-		// Re-enter raw mode
-		oldState, err := term.MakeRaw(im.terminalFd)
-		if err != nil {
-			if os.Getenv("LEDIT_DEBUG") != "" {
-				fmt.Fprintf(os.Stderr, "[DEBUG] Failed to re-enter raw mode: %v\r\n", err)
-			}
-			return
-		}
-
-		im.oldTermState = oldState
-		im.isRawMode = true
+		// Note: Terminal state is managed by console app's terminal manager
+		// We don't manipulate raw mode independently
+		im.isRawMode = false // Terminal manager handles raw mode
 		im.running = true
 		im.paused = false
 

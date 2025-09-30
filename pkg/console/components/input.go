@@ -119,12 +119,11 @@ func (c *InputComponent) ReadLine() (string, bool, error) {
 		return strings.TrimSuffix(line, "\n"), false, nil
 	}
 
-	// Switch to raw mode
-	oldState, err := term.MakeRaw(fd)
-	if err != nil {
-		return "", false, err
+	// Use terminal manager for raw mode instead of direct manipulation
+	if c.Terminal() != nil {
+		c.Terminal().SetRawMode(true)
+		defer c.Terminal().SetRawMode(false)
 	}
-	c.oldTermState = oldState
 	c.isRawMode = true
 	defer c.restore()
 

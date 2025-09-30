@@ -51,6 +51,23 @@ func NewConsoleApp(terminal console.TerminalManager) *ConsoleApp {
 	}
 }
 
+// NewConsoleAppWithMode creates a new console app with mode-aware configuration
+func NewConsoleAppWithMode(terminal console.TerminalManager, mode console.OutputMode) *ConsoleApp {
+	app := core.NewApp()
+	renderer := core.NewTerminalRenderer(terminal)
+	app.SetRenderer(renderer)
+
+	// Set the mode-specific configuration
+	// Note: Raw mode is set during proper initialization, not here
+	// The mode-aware configuration will be applied when the console app is initialized
+	
+	return &ConsoleApp{
+		app:      app,
+		terminal: terminal,
+		renderer: renderer,
+	}
+}
+
 // ShowDropdown displays a dropdown and returns the selected item
 func (c *ConsoleApp) ShowDropdown(ctx context.Context, items []interface{}, options map[string]interface{}) (interface{}, error) {
 	c.mu.Lock()

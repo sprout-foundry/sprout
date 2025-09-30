@@ -8,6 +8,7 @@ import (
     "time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/ui"
 	"golang.org/x/term"
 )
@@ -28,7 +29,8 @@ func NewConsoleUI(agentConsole *AgentConsole) *ConsoleUI {
 
 	var consoleApp *ConsoleApp
 	if isInteractive && agentConsole != nil && agentConsole.Deps.Terminal != nil {
-		consoleApp = NewConsoleApp(agentConsole.Deps.Terminal)
+		// Use interactive mode for UI operations (dropdowns need raw mode)
+		consoleApp = NewConsoleAppWithMode(agentConsole.Deps.Terminal, console.OutputModeInteractive)
 	}
 
 	return &ConsoleUI{

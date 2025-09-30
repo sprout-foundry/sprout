@@ -1,11 +1,11 @@
 package components
 
 import (
-    "context"
-    "fmt"
-    "os"
-    "strings"
-    "time"
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/console"
@@ -41,25 +41,32 @@ func NewConsoleUI(agentConsole *AgentConsole) *ConsoleUI {
 }
 
 // ShowDropdown implements agent.UI
+
 func (c *ConsoleUI) ShowDropdown(ctx context.Context, items []ui.DropdownItem, options ui.DropdownOptions) (ui.DropdownItem, error) {
-	if !c.isInteractive {
+	if !c.isInteractive || c.agentConsole == nil {
 		return nil, ui.ErrUINotAvailable
 	}
 
-	// Use the new component-based dropdown if available
-    if c.consoleApp != nil {
-        // Put input manager in passthrough mode to avoid interference
-        if c.agentConsole != nil && c.agentConsole.inputManager != nil {
-            c.agentConsole.inputManager.SetPassthroughMode(true)
-            // Give InputManager time to fully stop and release stdin to the dropdown
-            time.Sleep(100 * time.Millisecond)
-            // Ensure layout is fully restored after dropdown completes
-            defer func() {
-                c.agentConsole.inputManager.SetPassthroughMode(false)
-                // Restore scroll region, footer and cursor positioning
-                c.agentConsole.restoreLayoutAfterPassthrough()
-            }()
-        }
+	runDropdown := func() (ui.DropdownItem, error) {
+		if c.consoleApp == nil {
+			return nil, ui.ErrUINotAvailable
+		}
+
+		controller := c.agentConsole.Controller()
+		terminal := c.agentConsole.Terminal()
+
+		// Put input manager in passthrough mode to avoid interference
+		if c.agentConsole != nil && c.agentConsole.inputManager != nil {
+			c.agentConsole.inputManager.SetPassthroughMode(true)
+			// Give InputManager time to fully stop and release stdin to the dropdown
+			time.Sleep(100 * time.Millisecond)
+			// Ensure layout is fully restored after dropdown completes
+			defer func() {
+				c.agentConsole.inputManager.SetPassthroughMode(false)
+				// Restore scroll region, footer and cursor positioning
+				c.agentConsole.restoreLayoutAfterPassthrough()
+			}()
+		}
 
 		// Convert dropdown items to the format expected by the new UI
 		convertedItems := make([]interface{}, len(items))
@@ -74,8 +81,15 @@ func (c *ConsoleUI) ShowDropdown(ctx context.Context, items []ui.DropdownItem, o
 			"showCounts":   options.ShowCounts,
 		}
 
-		// Clear current line and show dropdown
-		fmt.Print("\r\033[K") // Clear line
+		// Clear current line before showing dropdown
+		switch {
+		case controller != nil:
+			_ = controller.WriteString("\r\033[K")
+		case terminal != nil:
+			terminal.Write([]byte("\r\033[K"))
+		default:
+			fmt.Print("\r\033[K")
+		}
 
 		// Show the new dropdown
 		selected, err := c.consoleApp.ShowDropdown(ctx, convertedItems, opts)
@@ -84,7 +98,14 @@ func (c *ConsoleUI) ShowDropdown(ctx context.Context, items []ui.DropdownItem, o
 		}
 
 		// Clear dropdown remnants
-		fmt.Print("\r\033[K")
+		switch {
+		case controller != nil:
+			_ = controller.WriteString("\r\033[K")
+		case terminal != nil:
+			terminal.Write([]byte("\r\033[K"))
+		default:
+			fmt.Print("\r\033[K")
+		}
 
 		// Convert back to DropdownItem
 		if dropdownItem, ok := selected.(ui.DropdownItem); ok {
@@ -94,170 +115,237 @@ func (c *ConsoleUI) ShowDropdown(ctx context.Context, items []ui.DropdownItem, o
 		return nil, fmt.Errorf("unexpected dropdown result type")
 	}
 
-    // No component app available; UI not available in this context
-    return nil, ui.ErrUINotAvailable
+	controller := c.agentConsole.Controller()
+	if controller != nil {
+		var result ui.DropdownItem
+		err := controller.WithPrimaryScreen(func() error {
+			var innerErr error
+			result, innerErr = runDropdown()
+			return innerErr
+		})
+		return result, err
+	}
+
+	return runDropdown()
 }
 
 // ShowQuickPrompt renders a minimal inline prompt above the input and captures a quick choice
 func (c *ConsoleUI) ShowQuickPrompt(ctx context.Context, prompt string, options []ui.QuickOption, horizontal bool) (ui.QuickOption, error) {
-    if !c.isInteractive || c.agentConsole == nil || c.agentConsole.inputManager == nil {
-        return ui.QuickOption{}, ui.ErrUINotAvailable
-    }
+	if !c.isInteractive || c.agentConsole == nil || c.agentConsole.inputManager == nil {
+		return ui.QuickOption{}, ui.ErrUINotAvailable
+	}
 
-    // Enter passthrough mode to capture direct key input
-    c.agentConsole.inputManager.SetPassthroughMode(true)
-    defer func() {
-        c.agentConsole.inputManager.SetPassthroughMode(false)
-        c.agentConsole.restoreLayoutAfterPassthrough()
-    }()
+	controller := c.agentConsole.Controller()
+	terminal := c.agentConsole.Terminal()
 
-    // Determine available width and lines to render
-    width, _, _ := c.agentConsole.Terminal().GetSize()
-    lines := BuildQuickPromptLines(prompt, options, width, horizontal)
+	// Enter passthrough mode to capture direct key input
+	c.agentConsole.inputManager.SetPassthroughMode(true)
+	defer func() {
+		c.agentConsole.inputManager.SetPassthroughMode(false)
+		c.agentConsole.restoreLayoutAfterPassthrough()
+	}()
 
-    // Determine starting Y so the block sits above input and stays on screen
-    inputY := c.agentConsole.inputManager.GetCurrentInputFieldLine()
-    yStart := inputY - len(lines)
-    if yStart < 1 {
-        yStart = 1
-    }
+	// Determine available width and lines to render
+	width := 0
+	if controller != nil {
+		width, _, _ = controller.GetSize()
+	} else if terminal != nil {
+		width, _, _ = terminal.GetSize()
+	}
+	if width == 0 {
+		width = 80
+	}
+	lines := BuildQuickPromptLines(prompt, options, width, horizontal)
 
-    // Render prompt block
-    for i, ln := range lines {
-        c.agentConsole.Terminal().MoveCursor(1, yStart+i)
-        c.agentConsole.Terminal().ClearLine()
-        // Truncate if longer than width
-        if len(ln) > width {
-            ln = ln[:width]
-        }
-        c.agentConsole.Terminal().WriteText(ln)
-    }
+	// Determine starting Y so the block sits above input and stays on screen
+	inputY := c.agentConsole.inputManager.GetCurrentInputFieldLine()
+	yStart := inputY - len(lines)
+	if yStart < 1 {
+		yStart = 1
+	}
 
-    // Simple key mapping: digits 1..n or first-letter hotkeys (case-insensitive), Enter=first, Esc=cancel
-    keyToIndex := func(b byte) (int, bool) {
-        if b >= '1' && b <= '9' {
-            idx := int(b - '1')
-            if idx >= 0 && idx < len(options) { return idx, true }
-        }
-        // letters
-        lower := b
-        if b >= 'A' && b <= 'Z' { lower = b + 32 }
-        for i, opt := range options {
-            hk := opt.Hotkey
-            if hk == 0 && len(opt.Label) > 0 { hk = rune([]rune(opt.Label)[0]) }
-            if hk >= 'A' && hk <= 'Z' { hk = hk + 32 }
-            if rune(lower) == hk { return i, true }
-        }
-        return 0, false
-    }
+	clearLineAt := func(y int) {
+		switch {
+		case controller != nil:
+			controller.MoveCursor(1, y)
+			controller.ClearLine()
+		case terminal != nil:
+			terminal.MoveCursor(1, y)
+			terminal.ClearLine()
+		default:
+			fmt.Printf("\033[%d;1H\033[2K", y)
+		}
+	}
 
-    // Read single key with context cancellation support (rudimentary)
-    var buf [1]byte
-    for {
-        select {
-        case <-ctx.Done():
-            // Clear prompt block before return
-            for i := range lines {
-                c.agentConsole.Terminal().MoveCursor(1, yStart+i)
-                c.agentConsole.Terminal().ClearLine()
-            }
-            return ui.QuickOption{}, ui.ErrCancelled
-        default:
-            n, _ := os.Stdin.Read(buf[:])
-            if n == 0 { continue }
-            b := buf[0]
-            if b == 27 { // ESC
-                for i := range lines {
-                    c.agentConsole.Terminal().MoveCursor(1, yStart+i)
-                    c.agentConsole.Terminal().ClearLine()
-                }
-                return ui.QuickOption{}, ui.ErrCancelled
-            }
-            if b == 13 || b == 10 { // Enter
-                for i := range lines {
-                    c.agentConsole.Terminal().MoveCursor(1, yStart+i)
-                    c.agentConsole.Terminal().ClearLine()
-                }
-                return options[0], nil
-            }
-            if idx, ok := keyToIndex(b); ok {
-                for i := range lines {
-                    c.agentConsole.Terminal().MoveCursor(1, yStart+i)
-                    c.agentConsole.Terminal().ClearLine()
-                }
-                return options[idx], nil
-            }
-        }
-    }
+	writeLine := func(y int, text string) {
+		if len(text) > width {
+			text = text[:width]
+		}
+		switch {
+		case controller != nil:
+			controller.MoveCursor(1, y)
+			controller.ClearLine()
+			controller.WriteText(text)
+		case terminal != nil:
+			terminal.MoveCursor(1, y)
+			terminal.ClearLine()
+			terminal.WriteText(text)
+		default:
+			fmt.Printf("\033[%d;1H\033[2K%s", y, text)
+		}
+	}
+
+	// Render prompt block
+	for i, ln := range lines {
+		writeLine(yStart+i, ln)
+	}
+
+	if controller != nil {
+		controller.Flush()
+	} else if terminal != nil {
+		terminal.Flush()
+	}
+
+	// Simple key mapping: digits 1..n or first-letter hotkeys (case-insensitive), Enter=first, Esc=cancel
+	keyToIndex := func(b byte) (int, bool) {
+		if b >= '1' && b <= '9' {
+			idx := int(b - '1')
+			if idx >= 0 && idx < len(options) {
+				return idx, true
+			}
+		}
+		// letters
+		lower := b
+		if b >= 'A' && b <= 'Z' {
+			lower = b + 32
+		}
+		for i, opt := range options {
+			hk := opt.Hotkey
+			if hk == 0 && len(opt.Label) > 0 {
+				hk = rune([]rune(opt.Label)[0])
+			}
+			if hk >= 'A' && hk <= 'Z' {
+				hk = hk + 32
+			}
+			if rune(lower) == hk {
+				return i, true
+			}
+		}
+		return 0, false
+	}
+
+	// Read single key with context cancellation support (rudimentary)
+	var buf [1]byte
+	for {
+		select {
+		case <-ctx.Done():
+			for i := range lines {
+				clearLineAt(yStart + i)
+			}
+			return ui.QuickOption{}, ui.ErrCancelled
+		default:
+			n, _ := os.Stdin.Read(buf[:])
+			if n == 0 {
+				continue
+			}
+			b := buf[0]
+			if b == 27 { // ESC
+				for i := range lines {
+					clearLineAt(yStart + i)
+				}
+				return ui.QuickOption{}, ui.ErrCancelled
+			}
+			if b == 13 || b == 10 { // Enter
+				for i := range lines {
+					clearLineAt(yStart + i)
+				}
+				return options[0], nil
+			}
+			if idx, ok := keyToIndex(b); ok {
+				for i := range lines {
+					clearLineAt(yStart + i)
+				}
+				return options[idx], nil
+			}
+		}
+	}
 }
 
 // BuildQuickPromptLine constructs a simple horizontally-aligned quick prompt line
 func BuildQuickPromptLine(prompt string, options []ui.QuickOption, horizontal bool) string {
-    // Assign numeric hotkeys if none provided
-    rendered := prompt
-    if rendered != "" {
-        rendered += "  "
-    }
-    for i, opt := range options {
-        label := opt.Label
-        hk := opt.Hotkey
-        if hk == 0 {
-            if i < 9 {
-                hk = rune('1' + i)
-            } else if len(label) > 0 {
-                hk = []rune(label)[0]
-            }
-        }
-        rendered += fmt.Sprintf("[%s] %s", string(hk), label)
-        if i < len(options)-1 {
-            rendered += "  "
-            if !horizontal {
-                rendered += "| "
-            }
-        }
-    }
-    return rendered
+	// Assign numeric hotkeys if none provided
+	rendered := prompt
+	if rendered != "" {
+		rendered += "  "
+	}
+	for i, opt := range options {
+		label := opt.Label
+		hk := opt.Hotkey
+		if hk == 0 {
+			if i < 9 {
+				hk = rune('1' + i)
+			} else if len(label) > 0 {
+				hk = []rune(label)[0]
+			}
+		}
+		rendered += fmt.Sprintf("[%s] %s", string(hk), label)
+		if i < len(options)-1 {
+			rendered += "  "
+			if !horizontal {
+				rendered += "| "
+			}
+		}
+	}
+	return rendered
 }
 
 // BuildQuickPromptLines returns either a single horizontal line or a vertical block
 // depending on width constraints. If horizontal is false, always returns vertical block.
 func BuildQuickPromptLines(prompt string, options []ui.QuickOption, maxWidth int, horizontal bool) []string {
-    // First try horizontal
-    if horizontal {
-        line := BuildQuickPromptLine(prompt, options, true)
-        if visualLen(line) <= maxWidth {
-            return []string{line}
-        }
-    }
-    // Fallback to vertical block: prompt line then one option per line
-    lines := []string{}
-    if prompt != "" {
-        lines = append(lines, prompt)
-    }
-    // Assign numeric hotkeys for display; capture label representation
-    for i, opt := range options {
-        label := opt.Label
-        hk := opt.Hotkey
-        if hk == 0 {
-            if i < 9 { hk = rune('1' + i) } else if len(label) > 0 { hk = []rune(label)[0] }
-        }
-        lines = append(lines, fmt.Sprintf("[%s] %s", string(hk), label))
-    }
-    return lines
+	// First try horizontal
+	if horizontal {
+		line := BuildQuickPromptLine(prompt, options, true)
+		if visualLen(line) <= maxWidth {
+			return []string{line}
+		}
+	}
+	// Fallback to vertical block: prompt line then one option per line
+	lines := []string{}
+	if prompt != "" {
+		lines = append(lines, prompt)
+	}
+	// Assign numeric hotkeys for display; capture label representation
+	for i, opt := range options {
+		label := opt.Label
+		hk := opt.Hotkey
+		if hk == 0 {
+			if i < 9 {
+				hk = rune('1' + i)
+			} else if len(label) > 0 {
+				hk = []rune(label)[0]
+			}
+		}
+		lines = append(lines, fmt.Sprintf("[%s] %s", string(hk), label))
+	}
+	return lines
 }
 
 // visualLen approximates the printable length, ignoring ANSI sequences (best-effort)
 func visualLen(s string) int {
-    // Remove simple SGR sequences: \033[...m
-    res := s
-    for {
-        start := strings.Index(res, "\033[")
-        if start == -1 { break }
-        end := strings.Index(res[start:], "m")
-        if end == -1 { break }
-        res = res[:start] + res[start+end+1:]
-    }
-    return len(res)
+	// Remove simple SGR sequences: \033[...m
+	res := s
+	for {
+		start := strings.Index(res, "\033[")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(res[start:], "m")
+		if end == -1 {
+			break
+		}
+		res = res[:start] + res[start+end+1:]
+	}
+	return len(res)
 }
 
 // IsInteractive implements agent.UI

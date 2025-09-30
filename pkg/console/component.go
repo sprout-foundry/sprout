@@ -98,6 +98,11 @@ func (bc *BaseComponent) Terminal() TerminalManager {
 	return bc.Deps.Terminal
 }
 
+// Controller returns the terminal controller
+func (bc *BaseComponent) Controller() *TerminalController {
+	return bc.Deps.Controller
+}
+
 // Layout returns the layout manager
 func (bc *BaseComponent) Layout() LayoutManager {
 	return bc.Deps.Layout

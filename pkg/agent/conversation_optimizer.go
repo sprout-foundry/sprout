@@ -93,7 +93,7 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 
 // isRedundantFileRead checks if this message is a redundant file read
 func (co *ConversationOptimizer) isRedundantFileRead(msg api.Message, index int) bool {
-	if msg.Role != "user" {
+	if msg.Role != "tool" {
 		return false
 	}
 
@@ -128,7 +128,7 @@ func (co *ConversationOptimizer) isRedundantFileRead(msg api.Message, index int)
 
 // trackFileRead records a file read for future optimization
 func (co *ConversationOptimizer) trackFileRead(msg api.Message, index int) {
-	if msg.Role != "user" || !strings.Contains(msg.Content, "Tool call result for read_file:") {
+	if msg.Role != "tool" || !strings.Contains(msg.Content, "Tool call result for read_file:") {
 		return
 	}
 
@@ -234,7 +234,7 @@ func (co *ConversationOptimizer) getTrackedFilePaths() []string {
 
 // isRedundantShellCommand checks if this message is a redundant shell command
 func (co *ConversationOptimizer) isRedundantShellCommand(msg api.Message, index int) bool {
-	if msg.Role != "user" {
+	if msg.Role != "tool" {
 		return false
 	}
 
@@ -261,7 +261,7 @@ func (co *ConversationOptimizer) isRedundantShellCommand(msg api.Message, index 
 
 // trackShellCommand records a shell command execution for future optimization
 func (co *ConversationOptimizer) trackShellCommand(msg api.Message, index int) {
-	if msg.Role != "user" || !strings.Contains(msg.Content, "Tool call result for shell_command:") {
+	if msg.Role != "tool" || !strings.Contains(msg.Content, "Tool call result for shell_command:") {
 		return
 	}
 
@@ -387,13 +387,13 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 
 		// Only summarize file reads that are old (more than 8 messages ago)
 		messageAge := len(messages) - i
-		if msg.Role == "user" && strings.Contains(msg.Content, "Tool call result for read_file:") && messageAge > 8 {
+		if msg.Role == "tool" && strings.Contains(msg.Content, "Tool call result for read_file:") && messageAge > 8 {
 			summary := co.createAggressiveSummary(msg)
 			optimized = append(optimized, api.Message{
 				Role:    msg.Role,
 				Content: summary,
 			})
-		} else if msg.Role == "user" && strings.Contains(msg.Content, "Tool call result for shell_command:") {
+		} else if msg.Role == "tool" && strings.Contains(msg.Content, "Tool call result for shell_command:") {
 			// Still summarize shell commands aggressively as they're less critical for context
 			summary := co.createAggressiveSummary(msg)
 			optimized = append(optimized, api.Message{

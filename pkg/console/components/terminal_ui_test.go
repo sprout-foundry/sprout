@@ -138,6 +138,11 @@ func (mt *MockTerminal) ClearScreen() error {
 	return nil
 }
 
+func (mt *MockTerminal) ClearScrollback() error {
+	mt.commands = append(mt.commands, "ClearScrollback()")
+	return nil
+}
+
 func (mt *MockTerminal) ClearLine() error {
 	mt.commands = append(mt.commands, fmt.Sprintf("ClearLine() at y=%d", mt.cursorY))
 	if mt.cursorY >= 1 && mt.cursorY <= mt.height {
@@ -178,6 +183,16 @@ func (mt *MockTerminal) ClearToEndOfScreen() error {
 			}
 		}
 	}
+	return nil
+}
+
+func (mt *MockTerminal) EnableMouseReporting() error {
+	mt.commands = append(mt.commands, "EnableMouseReporting()")
+	return nil
+}
+
+func (mt *MockTerminal) DisableMouseReporting() error {
+	mt.commands = append(mt.commands, "DisableMouseReporting()")
 	return nil
 }
 
@@ -454,6 +469,9 @@ func TestAgentConsolePositioning(t *testing.T) {
 
 	// Test: Welcome message positioning
 	t.Run("WelcomeMessagePositioning", func(t *testing.T) {
+		// Simulate startup sequence where the welcome message is rendered
+		ac.showWelcomeMessage()
+
 		// The welcome message should appear in the content area (not at the bottom)
 		lines := mockTerminal.GetBufferContent()
 
@@ -479,9 +497,9 @@ func TestAgentConsolePositioning(t *testing.T) {
 			t.Errorf("Welcome message appears too low (line %d), should be in content area", welcomeLineNum)
 		}
 
-		// It should also not be at line 1 (there might be some setup)
-		if welcomeLineNum < 2 {
-			t.Errorf("Welcome message appears too high (line %d), might be overlapping with other UI", welcomeLineNum)
+		// It should be within the content region (at or below the scroll region top)
+		if welcomeLineNum < top {
+			t.Errorf("Welcome message appears before content region (line %d)", welcomeLineNum)
 		}
 	})
 

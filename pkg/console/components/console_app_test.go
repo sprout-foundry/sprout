@@ -26,11 +26,14 @@ func (m *mockTerminalForApp) RestoreCursor() error                      { return
 func (m *mockTerminalForApp) HideCursor() error                         { return nil }
 func (m *mockTerminalForApp) ShowCursor() error                         { return nil }
 func (m *mockTerminalForApp) ClearScreen() error                        { return nil }
+func (m *mockTerminalForApp) ClearScrollback() error                    { return nil }
 func (m *mockTerminalForApp) ClearLine() error                          { return nil }
 func (m *mockTerminalForApp) ClearToEndOfLine() error                   { return nil }
 func (m *mockTerminalForApp) ClearToEndOfScreen() error                 { return nil }
 func (m *mockTerminalForApp) EnterAltScreen() error                     { return nil }
 func (m *mockTerminalForApp) ExitAltScreen() error                      { return nil }
+func (m *mockTerminalForApp) EnableMouseReporting() error               { return nil }
+func (m *mockTerminalForApp) DisableMouseReporting() error              { return nil }
 func (m *mockTerminalForApp) SetScrollRegion(top, bottom int) error     { return nil }
 func (m *mockTerminalForApp) ResetScrollRegion() error                  { return nil }
 func (m *mockTerminalForApp) ScrollUp(lines int) error                  { return nil }

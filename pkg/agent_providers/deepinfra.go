@@ -749,8 +749,8 @@ func (p *DeepInfraProvider) SupportsVision() bool {
 
 // GetVisionModel returns the vision model for DeepInfra
 func (p *DeepInfraProvider) GetVisionModel() string {
-	// No default vision model for DeepInfra
-	return ""
+	// DeepInfra supports vision models like deepseek-reasoner-v2
+	return "deepseek-reasoner-v2"
 }
 
 // SendVisionRequest sends a vision-enabled chat request

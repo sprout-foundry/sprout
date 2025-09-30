@@ -93,23 +93,23 @@ type AgentConsole struct {
 	scrollPosition int
 
 	// Interruption state
-    wasInterrupted bool
+	wasInterrupted bool
 
 	// Focus state: "input" or "output"
 	focusMode string
 
 	// Help overlay state (output focus)
-    showOutputHelp bool
+	showOutputHelp bool
 
-    // Print positioning state
-    didInitialPosition bool
+	// Print positioning state
+	didInitialPosition bool
 
-    // Streaming ordering
-    streamCh   chan string
-    streamDone chan struct{}
+	// Streaming ordering
+	streamCh   chan string
+	streamDone chan struct{}
 
-    // Input rendering state
-    lastInputHeight int
+	// Input rendering state
+	lastInputHeight int
 }
 
 // NewAgentConsole creates a new agent console
@@ -141,7 +141,7 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 
 	// Create a single console buffer instance to ensure consistency
 	consoleBuffer := console.NewConsoleBuffer(10000) // 10,000 line buffer
-	
+
 	ac := &AgentConsole{
 		BaseComponent:     base,
 		agent:             agent,
@@ -158,13 +158,14 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		historyFile:       config.HistoryFile,
 		interruptChan:     make(chan struct{}),
 		outputMutex:       sync.Mutex{},
+		ctrlCCount:        1, // initialize to non-zero so interrupt handling is primed
 		jsonFormatter:     NewJSONFormatter(),
 		agentDoneChan:     make(chan struct{}, 1),
 		processingMutex:   sync.RWMutex{},
 		ctx:               ctx,
 		cancel:            cancel,
 	}
-	
+
 	// Set output handler to interactive mode for proper terminal handling
 	if dualHandler, ok := ac.outputHandler.(*console.DualOutputHandler); ok {
 		dualHandler.SetMode(console.OutputModeInteractive)
@@ -210,10 +211,10 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		func(lines int) { ac.scrollDown(lines) },
 	)
 
-    // Provide focus to input manager so arrow keys and vim keys are context-aware
-    inputManager.SetFocusProvider(ac.getFocusMode)
-    // Provide scrolling state to input manager for contextual hints
-    inputManager.SetScrollingProvider(func() bool { return ac.isScrolling })
+	// Provide focus to input manager so arrow keys and vim keys are context-aware
+	inputManager.SetFocusProvider(ac.getFocusMode)
+	// Provide scrolling state to input manager for contextual hints
+	inputManager.SetScrollingProvider(func() bool { return ac.isScrolling })
 
 	// Manual focus toggle via Tab
 	inputManager.SetFocusToggle(func() {
@@ -246,47 +247,47 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 
 // setupLayoutComponents registers components with the layout manager
 func (ac *AgentConsole) setupLayoutComponents() {
-    // Register footer (bottom, lowest priority = furthest from content)
-    ac.autoLayoutManager.RegisterComponent("footer", &console.ComponentInfo{
-        Name:     "footer",
-        Position: "bottom",
-        Height:   4,  // Will be updated dynamically
-        Priority: 10, // Lower priority = further from content (at very bottom)
-        Visible:  true,
-        ZOrder:   100,
-    })
+	// Register footer (bottom, lowest priority = furthest from content)
+	ac.autoLayoutManager.RegisterComponent("footer", &console.ComponentInfo{
+		Name:     "footer",
+		Position: "bottom",
+		Height:   4,  // Will be updated dynamically
+		Priority: 10, // Lower priority = further from content (at very bottom)
+		Visible:  true,
+		ZOrder:   100,
+	})
 
-    // Add a visual spacer BELOW the input field (keeps a blank line between input and footer)
-    // Higher priority than footer so it sits directly above the footer
-    ac.autoLayoutManager.RegisterComponent("input_gap", &console.ComponentInfo{
-        Name:     "input_gap",
-        Position: "bottom",
-        Height:   1,
-        Priority: 15, // Between input (20) and footer (10)
-        Visible:  true,
-        ZOrder:   95,
-    })
+	// Add a visual spacer BELOW the input field (keeps a blank line between input and footer)
+	// Higher priority than footer so it sits directly above the footer
+	ac.autoLayoutManager.RegisterComponent("input_gap", &console.ComponentInfo{
+		Name:     "input_gap",
+		Position: "bottom",
+		Height:   1,
+		Priority: 15, // Between input (20) and footer (10)
+		Visible:  true,
+		ZOrder:   95,
+	})
 
-    // Register input (bottom, higher priority = closer to content)
-    ac.autoLayoutManager.RegisterComponent("input", &console.ComponentInfo{
-        Name:     "input",
-        Position: "bottom",
-        Height:   1,
-        Priority: 20, // Higher priority = closer to content (above footer)
-        Visible:  true,
-        ZOrder:   90,
-    })
+	// Register input (bottom, higher priority = closer to content)
+	ac.autoLayoutManager.RegisterComponent("input", &console.ComponentInfo{
+		Name:     "input",
+		Position: "bottom",
+		Height:   1,
+		Priority: 20, // Higher priority = closer to content (above footer)
+		Visible:  true,
+		ZOrder:   90,
+	})
 
-    // Add a visual spacer ABOVE the input field (keeps a blank line between content and input)
-    // Highest bottom priority so it sits directly below the content area
-    ac.autoLayoutManager.RegisterComponent("content_gap", &console.ComponentInfo{
-        Name:     "content_gap",
-        Position: "bottom",
-        Height:   1,
-        Priority: 30, // Above input (20), closest to content
-        Visible:  true,
-        ZOrder:   85,
-    })
+	// Add a visual spacer ABOVE the input field (keeps a blank line between content and input)
+	// Highest bottom priority so it sits directly below the content area
+	ac.autoLayoutManager.RegisterComponent("content_gap", &console.ComponentInfo{
+		Name:     "content_gap",
+		Position: "bottom",
+		Height:   1,
+		Priority: 30, // Above input (20), closest to content
+		Visible:  true,
+		ZOrder:   85,
+	})
 
 	// Content region is automatically managed
 
@@ -312,17 +313,17 @@ func (ac *AgentConsole) setFocus(mode string) {
 		}
 	}
 	ac.renderFocusIndicators()
-    // Adjust buffer wrapping width based on gutter (accent+padding or padding-only = 2 cols)
-    if ac.Terminal() != nil && ac.consoleBuffer != nil {
-        w, _, _ := ac.Terminal().GetSize()
-        contentWidth := w - 2
-        if contentWidth < 1 {
-            contentWidth = 1
-        }
-        ac.consoleBuffer.SetTerminalWidth(contentWidth)
-        // Redraw to apply immediately
-        ac.redrawContent()
-    }
+	// Adjust buffer wrapping width based on gutter (accent+padding or padding-only = 2 cols)
+	if ac.Terminal() != nil && ac.consoleBuffer != nil {
+		w, _, _ := ac.Terminal().GetSize()
+		contentWidth := w - 2
+		if contentWidth < 1 {
+			contentWidth = 1
+		}
+		ac.consoleBuffer.SetTerminalWidth(contentWidth)
+		// Redraw to apply immediately
+		ac.redrawContent()
+	}
 }
 
 func (ac *AgentConsole) getFocusMode() string { return ac.focusMode }
@@ -333,59 +334,59 @@ func (ac *AgentConsole) renderFocusIndicators() {
 		return
 	}
 
-    // Build a clean gutter: 1 colored column + 1 padding space between accent and content
-    bar := "\033[46m \033[0m "
-    clear := "  "
+	// Build a clean gutter: 1 colored column + 1 padding space between accent and content
+	bar := "\033[46m \033[0m "
+	clear := "  "
 
 	// Clear any existing bar in content area first
 	top, bottom := ac.autoLayoutManager.GetScrollRegion()
-    for y := top; y <= bottom; y++ {
-        ac.Terminal().MoveCursor(1, y)
-        if ac.focusMode == "output" {
-            ac.Terminal().WriteText(bar)
-        } else {
-            ac.Terminal().WriteText(clear)
-        }
-    }
+	for y := top; y <= bottom; y++ {
+		ac.Terminal().MoveCursor(1, y)
+		if ac.focusMode == "output" {
+			ac.Terminal().WriteText(bar)
+		} else {
+			ac.Terminal().WriteText(clear)
+		}
+	}
 
-    // Draw or clear input focus bar at input field line
-    inputLine := ac.inputManager.GetCurrentInputFieldLine()
-    height := ac.lastInputHeight
-    if height <= 0 {
-        height = 1
-    }
-    for i := 0; i < height; i++ {
-        ac.Terminal().MoveCursor(1, inputLine+i)
-        if ac.focusMode == "input" {
-            ac.Terminal().WriteText(bar)
-        } else {
-            ac.Terminal().WriteText(clear)
-        }
-    }
+	// Draw or clear input focus bar at input field line
+	inputLine := ac.inputManager.GetCurrentInputFieldLine()
+	height := ac.lastInputHeight
+	if height <= 0 {
+		height = 1
+	}
+	for i := 0; i < height; i++ {
+		ac.Terminal().MoveCursor(1, inputLine+i)
+		if ac.focusMode == "input" {
+			ac.Terminal().WriteText(bar)
+		} else {
+			ac.Terminal().WriteText(clear)
+		}
+	}
 }
 
 // enqueueBestEffort tries to enqueue content without risking indefinite blocking
 func (ac *AgentConsole) enqueueBestEffort(content string) error {
-    if ac.streamCh == nil {
-        // No worker, write directly (unlikely)
-        ac.streamingFormatter.Write(content)
-        return nil
-    }
-    select {
-    case ac.streamCh <- content:
-        return nil
-    default:
-        // Drop into a short goroutine to avoid blocking the caller; ordering may be affected only in overload
-        go func(c string) {
-            select {
-            case ac.streamCh <- c:
-            case <-time.After(200 * time.Millisecond):
-                // If still blocked, as a last resort write directly; extremely rare
-                ac.streamingFormatter.Write(c)
-            }
-        }(content)
-        return nil
-    }
+	if ac.streamCh == nil {
+		// No worker, write directly (unlikely)
+		ac.streamingFormatter.Write(content)
+		return nil
+	}
+	select {
+	case ac.streamCh <- content:
+		return nil
+	default:
+		// Drop into a short goroutine to avoid blocking the caller; ordering may be affected only in overload
+		go func(c string) {
+			select {
+			case ac.streamCh <- c:
+			case <-time.After(200 * time.Millisecond):
+				// If still blocked, as a last resort write directly; extremely rare
+				ac.streamingFormatter.Write(c)
+			}
+		}(content)
+		return nil
+	}
 }
 
 // AgentConsoleConfig holds configuration
@@ -411,6 +412,10 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 
 	// Store deps for dropdown support
 	ac.BaseComponent.Deps = deps
+
+	if ac.inputManager != nil {
+		ac.inputManager.SetController(deps.Controller)
+	}
 
 	// Register components with layout manager FIRST
 	ac.setupLayoutComponents()
@@ -474,7 +479,7 @@ func (ac *AgentConsole) Init(ctx context.Context, deps console.Dependencies) err
 			// Non-fatal, just log
 			ac.writeTextWithRawModeFix(fmt.Sprintf("Note: Could not load input state: %v\n", err))
 		}
-		
+
 		// Apply loaded state to input manager
 		if ac.inputManager != nil {
 			state := ac.inputStateManager.GetState()
@@ -649,45 +654,45 @@ func (ac *AgentConsole) processInput(input string) error {
 	// Track last streaming activity for timeout reset
 	var lastStreamingActivity time.Time
 
-    // Enable streaming with our formatter callback for all providers
-    // Use a single worker and a buffered channel to preserve ordering without per-chunk goroutines
-    if console.DebugEnabled() {
-        console.DebugPrintf("Setting up streaming callback for provider=%s\n", ac.agent.GetProvider())
-    }
-    // Start ordered streaming worker
-    ac.streamCh = make(chan string, 1024)
-    ac.streamDone = make(chan struct{})
-    go func() {
-        for content := range ac.streamCh {
-            // Debug: log streaming content
-            if len(content) > 0 {
-                if console.DebugEnabled() {
-                    fmt.Fprintf(os.Stderr, "[DEBUG] Streaming content: %d chars, first 20: %q\n", len(content), content[:min(20, len(content))])
-                }
-            }
-            ac.streamingFormatter.Write(content)
-            // Update TPS estimation during streaming
-            ac.updateStreamingTPS(content)
-            // Update last activity time when we receive content
-            lastStreamingActivity = time.Now()
-        }
-        close(ac.streamDone)
-    }()
-        ac.agent.EnableStreaming(func(content string) {
-        // Queue content to maintain order; buffered channel avoids blocking in normal conditions
-        select {
-        case ac.streamCh <- content:
-        default:
-            // If buffer is full, fall back to a bounded wait to avoid reordering
-            select {
-            case ac.streamCh <- content:
-            case <-time.After(100 * time.Millisecond):
-                // As a last resort, coalesce by forcing a flush and then enqueue (best-effort)
-                ac.streamingFormatter.ForceFlush()
-                _ = ac.enqueueBestEffort(content)
-            }
-        }
-        })
+	// Enable streaming with our formatter callback for all providers
+	// Use a single worker and a buffered channel to preserve ordering without per-chunk goroutines
+	if console.DebugEnabled() {
+		console.DebugPrintf("Setting up streaming callback for provider=%s\n", ac.agent.GetProvider())
+	}
+	// Start ordered streaming worker
+	ac.streamCh = make(chan string, 1024)
+	ac.streamDone = make(chan struct{})
+	go func() {
+		for content := range ac.streamCh {
+			// Debug: log streaming content
+			if len(content) > 0 {
+				if console.DebugEnabled() {
+					fmt.Fprintf(os.Stderr, "[DEBUG] Streaming content: %d chars, first 20: %q\n", len(content), content[:min(20, len(content))])
+				}
+			}
+			ac.streamingFormatter.Write(content)
+			// Update TPS estimation during streaming
+			ac.updateStreamingTPS(content)
+			// Update last activity time when we receive content
+			lastStreamingActivity = time.Now()
+		}
+		close(ac.streamDone)
+	}()
+	ac.agent.EnableStreaming(func(content string) {
+		// Queue content to maintain order; buffered channel avoids blocking in normal conditions
+		select {
+		case ac.streamCh <- content:
+		default:
+			// If buffer is full, fall back to a bounded wait to avoid reordering
+			select {
+			case ac.streamCh <- content:
+			case <-time.After(100 * time.Millisecond):
+				// As a last resort, coalesce by forcing a flush and then enqueue (best-effort)
+				ac.streamingFormatter.ForceFlush()
+				_ = ac.enqueueBestEffort(content)
+			}
+		}
+	})
 
 	// Set flush callback to force flush buffered content when needed
 	ac.agent.SetFlushCallback(func() {
@@ -696,31 +701,31 @@ func (ac *AgentConsole) processInput(input string) error {
 
 	// Ensure cleanup
 	streamingFinalized := false
-    defer func() {
-        // Only finalize if we actually streamed content and haven't already finalized
-        if ac.streamingFormatter.HasProcessedContent() && !streamingFinalized {
-            ac.streamingFormatter.Finalize()
-            streamingFinalized = true
+	defer func() {
+		// Only finalize if we actually streamed content and haven't already finalized
+		if ac.streamingFormatter.HasProcessedContent() && !streamingFinalized {
+			ac.streamingFormatter.Finalize()
+			streamingFinalized = true
 
-            // Ensure cursor is positioned correctly after streaming completes
-            // This helps with immediate resize responsiveness
-            ac.finalizeStreamingPosition()
-        }
-        // Shut down ordered streaming worker cleanly
-        if ac.streamCh != nil {
-            close(ac.streamCh)
-            // Wait briefly for drain
-            select {
-            case <-ac.streamDone:
-            case <-time.After(500 * time.Millisecond):
-            }
-            ac.streamCh = nil
-            ac.streamDone = nil
-        }
-        ac.agent.DisableStreaming()
-        // Reset streaming TPS tracking
-        ac.resetStreamingTPS()
-    }()
+			// Ensure cursor is positioned correctly after streaming completes
+			// This helps with immediate resize responsiveness
+			ac.finalizeStreamingPosition()
+		}
+		// Shut down ordered streaming worker cleanly
+		if ac.streamCh != nil {
+			close(ac.streamCh)
+			// Wait briefly for drain
+			select {
+			case <-ac.streamDone:
+			case <-time.After(500 * time.Millisecond):
+			}
+			ac.streamCh = nil
+			ac.streamDone = nil
+		}
+		ac.agent.DisableStreaming()
+		// Reset streaming TPS tracking
+		ac.resetStreamingTPS()
+	}()
 
 	// Process with timeout detection to help diagnose hanging
 	type queryResult struct {
@@ -936,8 +941,14 @@ func (ac *AgentConsole) handleCommand(input string) error {
 	case "debug":
 		// Toggle debug mode for input
 		ac.writeTextWithRawModeFix("Debug mode: Press keys to see their codes, 'q' to exit debug\n")
-		// Use terminal manager instead of direct raw mode manipulation
-		if ac.Terminal() != nil {
+		if controller := ac.Controller(); controller != nil {
+			release, err := controller.AcquireRawMode("agent-console-debug")
+			if err == nil {
+				defer release()
+			} else if console.DebugEnabled() {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Failed to acquire raw mode for debug command: %v\n", err)
+			}
+		} else if ac.Terminal() != nil {
 			ac.Terminal().SetRawMode(true)
 			defer ac.Terminal().SetRawMode(false)
 		}
@@ -977,29 +988,35 @@ func (ac *AgentConsole) handleCommand(input string) error {
 			isInteractiveCommand := cmd == "models" || cmd == "mcp" || cmd == "commit" || cmd == "shell" || cmd == "providers" || cmd == "memory" || cmd == "log"
 
 			if isInteractiveCommand {
-				// Enable passthrough mode for interactive command
-				ac.inputManager.SetPassthroughMode(true)
+				runInteractive := func() error {
+					// Enable passthrough mode for interactive command
+					ac.inputManager.SetPassthroughMode(true)
+					defer func() {
+						ac.inputManager.SetPassthroughMode(false)
+						ac.restoreLayoutAfterPassthrough()
+					}()
 
-				// Set environment variable so child processes know they're in agent console
-				os.Setenv("LEDIT_AGENT_CONSOLE", "1")
-				defer os.Unsetenv("LEDIT_AGENT_CONSOLE")
+					// Set environment variable so child processes know they're in agent console
+					os.Setenv("LEDIT_AGENT_CONSOLE", "1")
+					defer os.Unsetenv("LEDIT_AGENT_CONSOLE")
 
-				// Give terminal time to settle
-				time.Sleep(100 * time.Millisecond)
+					// Give terminal time to settle
+					time.Sleep(100 * time.Millisecond)
 
-				// Execute the command
-				err := cmdHandler.Execute(args, ac.agent)
+					// Execute the command
+					err := cmdHandler.Execute(args, ac.agent)
 
-				// Give command time to finish
-				time.Sleep(100 * time.Millisecond)
+					// Give command time to finish
+					time.Sleep(100 * time.Millisecond)
 
-				// Disable passthrough mode after command completes
-				ac.inputManager.SetPassthroughMode(false)
+					return err
+				}
 
-				// CRITICAL FIX: Restore console layout after passthrough mode
-				ac.restoreLayoutAfterPassthrough()
+				if controller := ac.Controller(); controller != nil {
+					return controller.WithPrimaryScreen(runInteractive)
+				}
 
-				return err
+				return runInteractive()
 			}
 
 			// For non-interactive commands, execute normally
@@ -1098,8 +1115,7 @@ func (ac *AgentConsole) updateFooter() {
 }
 
 func (ac *AgentConsole) showWelcomeMessage() {
-	ac.safePrint(`
-Welcome to Ledit Agent! 🤖
+	ac.safePrint(`Welcome to Ledit Agent! 🤖
 
 I can help you with:
 • Code analysis and generation
@@ -1219,7 +1235,12 @@ func (ac *AgentConsole) resetStreamingTPS() {
 
 func (ac *AgentConsole) setupTerminal() error {
 	// Clear screen and home cursor
-	ac.Terminal().ClearScreen()
+	if err := ac.Terminal().ClearScrollback(); err != nil {
+		return err
+	}
+	if err := ac.Terminal().ClearScreen(); err != nil {
+		return err
+	}
 
 	// Update footer height in layout manager
 	footerHeight := ac.footer.GetHeight()
@@ -1424,8 +1445,8 @@ func (ac *AgentConsole) handleInterruptFromManager() {
 
 // handleInputHeightChange handles input field height changes and updates layout
 func (ac *AgentConsole) handleInputHeightChange(newHeight int) {
-    // Track for rendering focus gutter over multiline input
-    ac.lastInputHeight = newHeight
+	// Track for rendering focus gutter over multiline input
+	ac.lastInputHeight = newHeight
 	// Update the layout manager with the new input height
 	ac.autoLayoutManager.SetComponentHeight("input", newHeight)
 
@@ -1602,7 +1623,7 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 		newlineCount := strings.Count(content, "\n")
 		if newlineCount > 0 {
 			ac.currentContentLine += newlineCount
-			
+
 			// Ensure currentContentLine stays within bounds
 			top, bottom := ac.autoLayoutManager.GetScrollRegion()
 			contentHeight := bottom - top + 1
@@ -1610,11 +1631,11 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 				ac.currentContentLine = contentHeight
 			}
 		}
-		
+
 		// Use the dual-mode output handler
 		if ac.outputHandler != nil {
 			ac.outputHandler.Printf("%s", content)
-			
+
 			// In interactive mode, trigger redraw to ensure content appears in terminal
 			if ac.outputHandler.Mode() == console.OutputModeInteractive {
 				ac.redrawContent()
@@ -1895,7 +1916,9 @@ func (ac *AgentConsole) repositionCursorToContentArea() {
 	// Ensure subsequent output is written within the content area, not at input line
 
 	// If layout/terminal not initialized yet (e.g., tests), track minimally
-	if ac.autoLayoutManager == nil || ac.Terminal() == nil {
+	controller := ac.Controller()
+	terminal := ac.Terminal()
+	if ac.autoLayoutManager == nil || (controller == nil && terminal == nil) {
 		if ac.currentContentLine == 0 {
 			ac.currentContentLine = 1
 		}
@@ -1906,7 +1929,11 @@ func (ac *AgentConsole) repositionCursorToContentArea() {
 
 	// If no content yet, move to the top of content area
 	if ac.currentContentLine == 0 {
-		ac.Terminal().MoveCursor(1, top)
+		if controller != nil {
+			controller.MoveCursor(1, top)
+		} else {
+			terminal.MoveCursor(1, top)
+		}
 		ac.currentContentLine = 1
 		return
 	}
@@ -1919,7 +1946,11 @@ func (ac *AgentConsole) repositionCursorToContentArea() {
 	} else if line > contentHeight {
 		line = contentHeight
 	}
-	ac.Terminal().MoveCursor(1, top+line-1)
+	if controller != nil {
+		controller.MoveCursor(1, top+line-1)
+	} else {
+		terminal.MoveCursor(1, top+line-1)
+	}
 }
 
 // restoreLayoutAfterPassthrough restores the console layout after interactive commands
@@ -1927,13 +1958,21 @@ func (ac *AgentConsole) restoreLayoutAfterPassthrough() {
 	// Give input manager time to fully restore raw mode
 	time.Sleep(50 * time.Millisecond)
 
+	controller := ac.Controller()
+	terminal := ac.Terminal()
+
 	// Safe check for nil terminal
-	if ac.Terminal() == nil {
+	if controller == nil && terminal == nil {
 		return
 	}
 
 	// Get current terminal dimensions
-	width, height, err := ac.Terminal().GetSize()
+	width, height, err := 0, 0, error(nil)
+	if controller != nil {
+		width, height, err = controller.GetSize()
+	} else if terminal != nil {
+		width, height, err = terminal.GetSize()
+	}
 	if err != nil {
 		return
 	}
@@ -1949,9 +1988,18 @@ func (ac *AgentConsole) restoreLayoutAfterPassthrough() {
 	top, bottom := ac.autoLayoutManager.GetScrollRegion()
 
 	// Re-establish scroll region
-	if err := ac.Terminal().SetScrollRegion(top, bottom); err != nil {
-		// Non-fatal, but log for debugging
-		if console.DebugEnabled() {
+	if controller != nil {
+		if err := controller.ResetScrollRegion(); err != nil && console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Failed to reset scroll region after passthrough: %v\n", err)
+		}
+		if err := controller.SetScrollRegion(top, bottom); err != nil && console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Failed to restore scroll region after passthrough: %v\n", err)
+		}
+	} else if terminal != nil {
+		if err := terminal.ResetScrollRegion(); err != nil && console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Failed to reset scroll region after passthrough: %v\n", err)
+		}
+		if err := terminal.SetScrollRegion(top, bottom); err != nil && console.DebugEnabled() {
 			fmt.Fprintf(os.Stderr, "[DEBUG] Failed to restore scroll region after passthrough: %v\n", err)
 		}
 	}
@@ -1966,6 +2014,12 @@ func (ac *AgentConsole) restoreLayoutAfterPassthrough() {
 
 	// Position cursor in content area for next output
 	ac.repositionCursorToContentArea()
+
+	if controller != nil {
+		controller.Flush()
+	} else if terminal != nil {
+		terminal.Flush()
+	}
 }
 
 // handleDropdownShow handles request to show dropdown
@@ -2088,27 +2142,27 @@ func (ac *AgentConsole) redrawContent() {
 
 	// Clear content area first
 	ac.Terminal().MoveCursor(1, contentTop)
-    for i := 0; i < height; i++ {
-        // Clear entire line then draw gutter
-        ac.Terminal().ClearLine()
-        // Safe check for focusMode to avoid nil pointer dereference
-        focusMode := "input"
-        if ac.focusMode != "" {
-            focusMode = ac.focusMode
-        }
-        if focusMode == "output" {
-            ac.Terminal().WriteText("\033[46m \033[0m")
-        } else {
-            ac.Terminal().WriteText("  ")
-        }
-        if i < height-1 {
-            ac.Terminal().WriteText("\r\n")
-        }
-    }
+	for i := 0; i < height; i++ {
+		// Clear entire line then draw gutter
+		ac.Terminal().ClearLine()
+		// Safe check for focusMode to avoid nil pointer dereference
+		focusMode := "input"
+		if ac.focusMode != "" {
+			focusMode = ac.focusMode
+		}
+		if focusMode == "output" {
+			ac.Terminal().WriteText("\033[46m \033[0m")
+		} else {
+			ac.Terminal().WriteText("  ")
+		}
+		if i < height-1 {
+			ac.Terminal().WriteText("\r\n")
+		}
+	}
 
-    // Draw visible lines
-    // Start content at column 3 (accent+padding or padding-only)
-    startX := 3
+	// Draw visible lines
+	// Start content at column 3 (accent+padding or padding-only)
+	startX := 3
 	for i := 0; i < len(lines); i++ {
 		ac.Terminal().MoveCursor(startX, contentTop+i)
 		ac.Terminal().ClearToEndOfLine()

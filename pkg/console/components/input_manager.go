@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
-	"time"
 	"unicode"
 
 	"github.com/alantheprice/ledit/pkg/console"
@@ -16,11 +16,13 @@ import (
 // InputManager handles concurrent input with persistent input field
 type InputManager struct {
 	// Terminal state
-	terminalFd   int
-	oldTermState *term.State
-	isRawMode    bool
-	termWidth    int
-	termHeight   int
+	terminalFd                  int
+	isRawMode                   bool
+	termWidth                   int
+	termHeight                  int
+	controller                  *console.TerminalController
+	rawModeRelease              func()
+	wasRunningBeforePassthrough bool
 
 	// Input state
 	currentLine    []rune
@@ -66,10 +68,9 @@ type InputManager struct {
 	cancel context.CancelFunc
 
 	// State tracking
-	lastOutputLine int
-	running        bool
-	paused         bool
-	redrawing      bool // Prevent concurrent redraw operations
+	running   bool
+	paused    bool
+	redrawing bool // Prevent concurrent redraw operations
 	// Tracks last drawn input field region
 	lastRenderHeight int
 	lastRenderY      int
@@ -109,6 +110,55 @@ func NewInputManager(prompt string) *InputManager {
 	}
 }
 
+const rawModeOwnerInputManager = "input-manager"
+
+// SetController wires the terminal controller for coordinated raw-mode management.
+func (im *InputManager) SetController(controller *console.TerminalController) {
+	im.mutex.Lock()
+	im.controller = controller
+	if im.running {
+		im.ensureRawModeLocked(rawModeOwnerInputManager)
+	}
+	im.mutex.Unlock()
+}
+
+func (im *InputManager) ensureRawModeLocked(reason string) {
+	if im.controller == nil || im.rawModeRelease != nil {
+		return
+	}
+
+	release, err := im.controller.AcquireRawMode(reason)
+	if err != nil {
+		if console.DebugEnabled() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] InputManager failed to acquire raw mode: %v\n", err)
+		}
+		return
+	}
+
+	im.rawModeRelease = release
+	im.isRawMode = true
+}
+
+func (im *InputManager) releaseRawModeLocked(reason string) {
+	if im.rawModeRelease != nil {
+		im.rawModeRelease()
+		im.rawModeRelease = nil
+	}
+
+	if im.controller != nil {
+		im.isRawMode = im.controller.IsRawMode()
+	} else {
+		im.isRawMode = false
+	}
+}
+
+func (im *InputManager) rawModeActive() bool {
+	if im.controller != nil {
+		return im.controller.IsRawMode()
+	}
+	return im.isRawMode
+}
+
 // SetFocusProvider sets a callback to get current focus mode ("input" or "output")
 func (im *InputManager) SetFocusProvider(provider func() string) {
 	im.mutex.Lock()
@@ -143,12 +193,11 @@ func (im *InputManager) Start() error {
 		return fmt.Errorf("not running in a terminal")
 	}
 
-	// Input manager should not set raw mode directly
-	// Raw mode is managed by the console app's terminal manager
-	// We'll work with the existing terminal state
-	im.isRawMode = false // Don't manage raw mode independently
-
+	im.mutex.Lock()
+	im.ensureRawModeLocked(rawModeOwnerInputManager)
 	im.running = true
+	im.paused = false
+	im.mutex.Unlock()
 
 	// Get terminal dimensions
 	im.updateTerminalSize()
@@ -177,11 +226,8 @@ func (im *InputManager) Stop() {
 
 	im.running = false
 	im.cancel()
-
-	if im.isRawMode && im.oldTermState != nil {
-		term.Restore(im.terminalFd, im.oldTermState)
-		im.isRawMode = false
-	}
+	im.releaseRawModeLocked(rawModeOwnerInputManager)
+	im.wasRunningBeforePassthrough = false
 }
 
 // SetCallbacks sets the callback functions
@@ -384,24 +430,29 @@ func (im *InputManager) processKeystrokes(data []byte) {
 							}
 							i += 3 // Skip the full sequence
 						}
-					case 'M': // Mouse events - ignore completely to prevent interference
-						// Mouse events in X11 protocol: ESC [ M button x y
-						// Skip the entire mouse sequence to prevent interference with input
-						// Mouse sequences are typically 6 bytes total
+					case 'M': // Legacy X10 mouse events (ESC [ M button x y)
 						if i+5 < len(data) {
-							i += 5 // Skip the full sequence
+							button := int(data[i+3] - 32)
+							im.handleMouseButton(button)
+							i += 5
 						} else {
-							i = len(data) - 1 // Skip rest of buffer
+							i = len(data) - 1
 						}
-					case '<': // SGR mouse events - ignore completely to prevent interference
-						// SGR mouse protocol: ESC [ < button;x;y M/m
-						// Find the end of the sequence (M or m) and skip it
+						continue
+					case '<': // SGR mouse events (ESC [ < button;x;y M/m)
+						if button, endIdx, ok := im.parseSGRMouse(data, i); ok {
+							im.handleMouseButton(button)
+							i = endIdx
+							continue
+						}
+						// Fallback: skip to end of sequence if parsing fails
 						for j := i + 3; j < len(data); j++ {
 							if data[j] == 'M' || data[j] == 'm' {
-								i = j // Skip to end of sequence
+								i = j
 								break
 							}
 						}
+						continue
 					default:
 						// For any other CSI sequences, skip them
 						// Skip at least 2 bytes (ESC [), and assume sequences are up to 10 bytes
@@ -623,7 +674,7 @@ func (im *InputManager) insertChar(ch rune) {
 // printf is a helper that handles raw mode line endings
 func (im *InputManager) printf(format string, args ...interface{}) {
 	text := fmt.Sprintf(format, args...)
-	if im.isRawMode && strings.Contains(text, "\n") {
+	if im.rawModeActive() && strings.Contains(text, "\n") {
 		text = strings.ReplaceAll(text, "\n", "\r\n")
 	}
 	fmt.Print(text)
@@ -631,7 +682,7 @@ func (im *InputManager) printf(format string, args ...interface{}) {
 
 // write outputs text directly, applying raw mode line ending normalization
 func (im *InputManager) write(text string) {
-	if im.isRawMode && strings.Contains(text, "\n") {
+	if im.rawModeActive() && strings.Contains(text, "\n") {
 		text = strings.ReplaceAll(text, "\n", "\r\n")
 	}
 	fmt.Print(text)
@@ -761,98 +812,6 @@ func (im *InputManager) showInputField() {
 	im.lastRenderY = im.inputFieldLine
 }
 
-// showInputFieldAfterResize handles input field display after terminal resize
-// This method clears potential artifacts from the old terminal dimensions
-func (im *InputManager) showInputFieldAfterResize(oldWidth, oldHeight int) {
-	if !im.running || im.redrawing {
-		return
-	}
-	im.redrawing = true
-	defer func() { im.redrawing = false }()
-
-	// Calculate how many lines the same content would have used at the old width
-	oldLines := im.calculateLinesForWidth(oldWidth)
-
-	// Calculate how many lines we need at the new width
-	newLines, cursorLine, cursorCol := im.calculateInputDimensions()
-
-	// Store previous height
-	previousHeight := im.inputHeight
-
-	// Clear more lines to handle resize artifacts - use the maximum of:
-	// 1. Previous height (from before resize)
-	// 2. Lines that would be used at old width
-	// 3. Lines that will be used at new width
-	// 4. Add extra buffer lines to catch edge cases
-	linesToClear := previousHeight
-	if oldLines > linesToClear {
-		linesToClear = oldLines
-	}
-	if newLines > linesToClear {
-		linesToClear = newLines
-	}
-
-	// Add buffer lines for edge cases (up to 3 extra lines)
-	linesToClear += 3
-
-	// Ensure we don't go beyond reasonable bounds (max 20 lines to avoid clearing too much)
-	if linesToClear > 20 {
-		linesToClear = 20
-	}
-
-	// Reserve 2-column gutter in both states (accent+padding when focused, padding-only when not)
-	startX := 3
-
-	// Clear all potential lines that might contain artifacts
-	// Use aggressive clearing for resize scenarios to handle horizontal artifacts
-	for i := 0; i < linesToClear; i++ {
-		// Clear entire line first
-		im.write(console.MoveCursorSeq(1, im.inputFieldLine+i) + console.ClearLineSeq())
-		// Then clear from gutter onward to be thorough
-		im.write(console.MoveCursorSeq(startX, im.inputFieldLine+i) + console.ClearToEndOfLineSeq())
-	}
-
-	// Update height to match new terminal width needs
-	im.inputHeight = newLines
-	if newLines != previousHeight {
-		im.notifyLayoutOfInputHeight(newLines)
-	}
-
-	// Display the input text with proper wrapping for new width
-	fullText := im.prompt + string(im.currentLine)
-
-	// Calculate effective width for wrapping
-	effectiveWidth := im.getEffectiveWidth()
-
-	// Render content and place cursor
-	im.renderInputContent(fullText, effectiveWidth, cursorLine, cursorCol)
-}
-
-// calculateLinesForWidth calculates how many lines the current input would use for a given width
-func (im *InputManager) calculateLinesForWidth(width int) int {
-	if width <= 0 {
-		return 1
-	}
-
-	// Calculate effective width
-	effectiveWidth := width - 1
-	if effectiveWidth <= 0 {
-		effectiveWidth = 80 // Fallback
-	}
-
-	// Total text is prompt + input
-	fullText := im.prompt + string(im.currentLine)
-	totalChars := len(fullText)
-
-	// Calculate lines needed
-	lines := (totalChars + effectiveWidth - 1) / effectiveWidth // Ceiling division
-	if lines == 0 {
-		lines = 1
-	}
-
-	return lines
-}
-
 // getEffectiveWidth returns the wrapping width with safe fallbacks
 func (im *InputManager) getEffectiveWidth() int {
 	// Reserve 2 columns for gutter consistently
@@ -899,6 +858,31 @@ func (im *InputManager) renderInputContent(fullText string, effectiveWidth, curs
 	im.write(console.MoveCursorSeq(cursorX, actualCursorLine))
 }
 
+// calculateLinesForWidth calculates how many lines the current input would use for a given width.
+// This helper is retained for tests that verify wrapping behavior.
+func (im *InputManager) calculateLinesForWidth(width int) int {
+	if width <= 0 {
+		return 1
+	}
+
+	// Reserve the gutter to match renderInputContent behavior
+	effectiveWidth := width - 2
+	if effectiveWidth <= 0 {
+		effectiveWidth = 80
+	}
+
+	fullText := im.prompt + string(im.currentLine)
+	if len(fullText) == 0 {
+		return 1
+	}
+
+	lines := (len(fullText) + effectiveWidth - 1) / effectiveWidth
+	if lines < 1 {
+		lines = 1
+	}
+	return lines
+}
+
 // hideInputField clears the input field (all lines it uses)
 func (im *InputManager) hideInputField() {
 	if !im.running {
@@ -929,27 +913,6 @@ func (im *InputManager) updateTerminalSize() {
 }
 
 // resizeLoop monitors for terminal resize events
-func (im *InputManager) resizeLoop() {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	lastWidth, lastHeight := im.termWidth, im.termHeight
-
-	for {
-		select {
-		case <-im.ctx.Done():
-			return
-		case <-ticker.C:
-			im.updateTerminalSize()
-			if im.termWidth != lastWidth || im.termHeight != lastHeight {
-				im.calculateInputPosition()                         // Recalculate position from layout manager
-				im.showInputFieldAfterResize(lastWidth, lastHeight) // Clear artifacts and redraw
-				lastWidth, lastHeight = im.termWidth, im.termHeight
-			}
-		}
-	}
-}
-
 // processQueuedInputs processes any queued inputs
 func (im *InputManager) processQueuedInputs() {
 	im.mutex.Lock()
@@ -985,6 +948,92 @@ func (im *InputManager) ScrollOutput() {
 	im.showInputField()
 }
 
+func (im *InputManager) parseSGRMouse(data []byte, start int) (button int, end int, ok bool) {
+	if start+3 >= len(data) {
+		return 0, 0, false
+	}
+
+	j := start + 3
+	btnStart := j
+	for j < len(data) && data[j] != ';' && data[j] != 'M' && data[j] != 'm' {
+		j++
+	}
+	if j >= len(data) || data[j] != ';' {
+		return 0, 0, false
+	}
+
+	buttonVal, err := strconv.Atoi(string(data[btnStart:j]))
+	if err != nil {
+		return 0, 0, false
+	}
+
+	for j < len(data) && data[j] != 'M' && data[j] != 'm' {
+		j++
+	}
+	if j >= len(data) {
+		return 0, 0, false
+	}
+
+	return buttonVal, j, true
+}
+
+func (im *InputManager) handleMouseButton(button int) {
+	im.pendingG = false
+
+	if button&0x40 == 0 {
+		return
+	}
+
+	switch button & 0x3 {
+	case 0:
+		im.handleMouseScroll(-1)
+	case 1:
+		im.handleMouseScroll(1)
+	default:
+		// Ignore horizontal wheel or release events
+	}
+}
+
+func (im *InputManager) handleMouseScroll(direction int) {
+	if direction == 0 {
+		return
+	}
+
+	if im.focusProvider == nil || im.focusProvider() != "output" {
+		return
+	}
+
+	lines := im.mouseScrollLines()
+	if lines <= 0 {
+		lines = 1
+	}
+
+	if direction < 0 {
+		if im.onScrollUp != nil {
+			im.onScrollUp(lines)
+		}
+	} else {
+		if im.onScrollDown != nil {
+			im.onScrollDown(lines)
+		}
+	}
+}
+
+func (im *InputManager) mouseScrollLines() int {
+	if im.termHeight <= 0 {
+		return 3
+	}
+
+	lines := im.termHeight / 6
+	if lines < 1 {
+		lines = 1
+	}
+	if lines > 10 {
+		lines = 10
+	}
+	return lines
+}
+
 // InputHandler interface implementation
 func (im *InputManager) GetHandlerID() string {
 	return "main_console"
@@ -1014,6 +1063,8 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 			return // Already stopped
 		}
 
+		im.wasRunningBeforePassthrough = true
+
 		// Debug output (stderr only, and only when LEDIT_DEBUG is set)
 		if os.Getenv("LEDIT_DEBUG") != "" {
 			fmt.Fprintf(os.Stderr, "\r\n[DEBUG] Enabling passthrough mode for interactive command...\r\n")
@@ -1022,8 +1073,24 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 		// Hide input field
 		im.hideInputField()
 
-		// Reset scroll region
-		im.printf("\033[r")
+		// Release our raw-mode hold so passthrough commands can manage the terminal
+		im.releaseRawModeLocked(rawModeOwnerInputManager)
+
+		// Reset scroll region using the controller when available to ensure a clean primary screen
+		if im.controller != nil {
+			im.updateTerminalSize()
+			if err := im.controller.ResetScrollRegion(); err != nil && console.DebugEnabled() {
+				fmt.Fprintf(os.Stderr, "[DEBUG] InputManager failed to reset scroll region: %v\n", err)
+			}
+			if im.termHeight > 0 {
+				if err := im.controller.MoveCursor(1, im.termHeight); err != nil && console.DebugEnabled() {
+					fmt.Fprintf(os.Stderr, "[DEBUG] InputManager failed to move cursor during passthrough: %v\n", err)
+				}
+			}
+			im.controller.Flush()
+		} else {
+			im.printf("\033[r")
+		}
 
 		// Stop the input manager completely
 		im.running = false
@@ -1040,6 +1107,10 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 			return // Already running
 		}
 
+		if !im.wasRunningBeforePassthrough {
+			return
+		}
+
 		if os.Getenv("LEDIT_DEBUG") != "" {
 			fmt.Fprintf(os.Stderr, "\r\n[DEBUG] Disabling passthrough mode - restoring console input...\r\n")
 		}
@@ -1049,14 +1120,16 @@ func (im *InputManager) SetPassthroughMode(enabled bool) {
 		im.ctx = ctx
 		im.cancel = cancel
 
-		// Note: Terminal state is managed by console app's terminal manager
-		// We don't manipulate raw mode independently
-		im.isRawMode = false // Terminal manager handles raw mode
 		im.running = true
 		im.paused = false
 
+		// Reacquire raw mode for interactive input
+		im.ensureRawModeLocked(rawModeOwnerInputManager)
+
 		// Restart input reading goroutine
 		go im.inputLoop()
+
+		im.wasRunningBeforePassthrough = false
 
 		// Note: Resize monitoring handled by AgentConsole.OnResize()
 		// go im.resizeLoop()

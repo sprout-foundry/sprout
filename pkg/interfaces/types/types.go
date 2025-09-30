@@ -14,13 +14,13 @@ type ProviderConfig struct {
 
 // AgentConfig represents configuration for agent behavior
 type AgentConfig struct {
-	MaxRetries         int    `json:"max_retries"`
-	RetryDelay         int    `json:"retry_delay"`
-	MaxContextRequests int    `json:"max_context_requests"`
-	EnableValidation   bool   `json:"enable_validation"`
-	EnableCodeReview   bool   `json:"enable_code_review"`
-	ValidationTimeout  int    `json:"validation_timeout"`
-	DefaultStrategy    string `json:"default_strategy"`
+	MaxRetries         int     `json:"max_retries"`
+	RetryDelay         int     `json:"retry_delay"`
+	MaxContextRequests int     `json:"max_context_requests"`
+	EnableValidation   bool    `json:"enable_validation"`
+	EnableCodeReview   bool    `json:"enable_code_review"`
+	ValidationTimeout  int     `json:"validation_timeout"`
+	DefaultStrategy    string  `json:"default_strategy"`
 	CostThreshold      float64 `json:"cost_threshold"`
 }
 

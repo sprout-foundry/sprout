@@ -1,38 +1,38 @@
 package commands
 
 import (
-    "errors"
-    "fmt"
-    "os"
-    "os/exec"
-    "strings"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 
-    "github.com/alantheprice/ledit/pkg/agent"
-    "github.com/alantheprice/ledit/pkg/ui"
-    "github.com/alantheprice/ledit/pkg/utils"
-    "golang.org/x/term"
+	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/ui"
+	"github.com/alantheprice/ledit/pkg/utils"
+	"golang.org/x/term"
 )
 
 // CommitFlow manages the interactive commit workflow
 type CommitFlow struct {
-    agent     *agent.Agent
-    optimizer *utils.DiffOptimizer
+	agent     *agent.Agent
+	optimizer *utils.DiffOptimizer
 }
 
 // NewCommitFlow creates a new commit flow
 func NewCommitFlow(chatAgent *agent.Agent) *CommitFlow {
-    return &CommitFlow{
-        agent:     chatAgent,
-        optimizer: utils.NewDiffOptimizer(),
-    }
+	return &CommitFlow{
+		agent:     chatAgent,
+		optimizer: utils.NewDiffOptimizer(),
+	}
 }
 
 func (cf *CommitFlow) printf(format string, args ...interface{}) {
-    fmt.Fprint(os.Stdout, normalizeNewlines(fmt.Sprintf(format, args...)))
+	fmt.Fprint(os.Stdout, normalizeNewlines(fmt.Sprintf(format, args...)))
 }
 
 func (cf *CommitFlow) println(text string) {
-    fmt.Fprint(os.Stdout, normalizeNewlines(text)+"\r\n")
+	fmt.Fprint(os.Stdout, normalizeNewlines(text)+"\r\n")
 }
 
 // CommitAction represents different commit actions
@@ -66,38 +66,38 @@ func (f *FileItem) Value() interface{} { return f.Filename }
 
 // Execute runs the interactive commit flow
 func (cf *CommitFlow) Execute() error {
-    // Prefer the integrated dropdown UI when available
-    if term.IsTerminal(int(os.Stdin.Fd())) {
-        if err := cf.showCommitOptions(); err != nil {
-            // Fallback to console prompts if UI isn't available
-            if errors.Is(err, ui.ErrUINotAvailable) {
-                return cf.executeConsoleFlow()
-            }
-            return err
-        }
-        return nil
-    }
+	// Prefer the integrated dropdown UI when available
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		if err := cf.showCommitOptions(); err != nil {
+			// Fallback to console prompts if UI isn't available
+			if errors.Is(err, ui.ErrUINotAvailable) {
+				return cf.executeConsoleFlow()
+			}
+			return err
+		}
+		return nil
+	}
 
-    // Non-interactive environments: fallback
-    return cf.executeNonInteractive()
+	// Non-interactive environments: fallback
+	return cf.executeNonInteractive()
 }
 
 // showCommitOptions displays the main commit flow options
 func (cf *CommitFlow) showCommitOptions() error {
-    // Check current git status first
-    stagedFiles, unstagedFiles, err := cf.getGitStatus()
-    if err != nil {
-        return fmt.Errorf("failed to get git status: %w", err)
-    }
+	// Check current git status first
+	stagedFiles, unstagedFiles, err := cf.getGitStatus()
+	if err != nil {
+		return fmt.Errorf("failed to get git status: %w", err)
+	}
 
 	// Build dynamic options based on current state
 	actions := cf.buildCommitActions(stagedFiles, unstagedFiles)
 
-    if len(actions) == 0 {
-        cf.println("")
-        cf.println("📭 No changes to commit. Working directory is clean.")
-        return nil
-    }
+	if len(actions) == 0 {
+		cf.println("")
+		cf.println("📭 No changes to commit. Working directory is clean.")
+		return nil
+	}
 
 	// Convert to dropdown items
 	items := make([]ui.DropdownItem, len(actions))
@@ -110,8 +110,8 @@ func (cf *CommitFlow) showCommitOptions() error {
 	}
 
 	// Temporarily disable ESC monitoring during dropdown
-    cf.agent.DisableEscMonitoring()
-    defer cf.agent.EnableEscMonitoring()
+	cf.agent.DisableEscMonitoring()
+	defer cf.agent.EnableEscMonitoring()
 
 	// Try to show dropdown using the agent's UI
 	selected, err := cf.agent.ShowDropdown(items, ui.DropdownOptions{
@@ -120,14 +120,14 @@ func (cf *CommitFlow) showCommitOptions() error {
 		ShowCounts:   false,
 	})
 
-    if err != nil {
-        if err == ui.ErrCancelled {
-            cf.println("")
-            cf.println("Commit workflow cancelled.")
-            return nil
-        }
-        return fmt.Errorf("failed to show action selection: %w", err)
-    }
+	if err != nil {
+		if err == ui.ErrCancelled {
+			cf.println("")
+			cf.println("Commit workflow cancelled.")
+			return nil
+		}
+		return fmt.Errorf("failed to show action selection: %w", err)
+	}
 
 	// Execute selected action
 	selectedID := selected.Value().(string)
@@ -231,9 +231,9 @@ func (cf *CommitFlow) getGitStatus() (staged, unstaged []string, err error) {
 
 // commitStagedFiles commits the currently staged files
 func (cf *CommitFlow) commitStagedFiles() error {
-    cf.println("")
-    cf.println("📦 Committing staged files...")
-    return cf.generateCommitMessageAndCommit(false) // false = not single file mode
+	cf.println("")
+	cf.println("📦 Committing staged files...")
+	return cf.generateCommitMessageAndCommit(false) // false = not single file mode
 }
 
 // selectFilesToCommit allows the user to select specific files to commit
@@ -248,11 +248,11 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 		return err
 	}
 
-    if len(unstagedFiles) == 0 {
-        cf.println("")
-        cf.println("📭 No unstaged files to select.")
-        return nil
-    }
+	if len(unstagedFiles) == 0 {
+		cf.println("")
+		cf.println("📭 No unstaged files to select.")
+		return nil
+	}
 
 	// Convert files to dropdown items
 	items := make([]ui.DropdownItem, len(unstagedFiles))
@@ -264,8 +264,8 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 	}
 
 	// Temporarily disable ESC monitoring during dropdown
-    cf.agent.DisableEscMonitoring()
-    defer cf.agent.EnableEscMonitoring()
+	cf.agent.DisableEscMonitoring()
+	defer cf.agent.EnableEscMonitoring()
 
 	// Try to show dropdown using the agent's UI
 	selected, err := cf.agent.ShowDropdown(items, ui.DropdownOptions{
@@ -274,24 +274,24 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 		ShowCounts:   true,
 	})
 
-    if err != nil {
-        if err == ui.ErrCancelled {
-            cf.println("")
-            cf.println("File selection cancelled.")
-            return nil
-        }
-        return fmt.Errorf("failed to show file selection: %w", err)
-    }
+	if err != nil {
+		if err == ui.ErrCancelled {
+			cf.println("")
+			cf.println("File selection cancelled.")
+			return nil
+		}
+		return fmt.Errorf("failed to show file selection: %w", err)
+	}
 
 	selectedFile := selected.Value().(string)
 
 	// Stage the selected file
-    cf.println("")
-    cf.printf("📤 Staging: %s\n", selectedFile)
-    cmd := exec.Command("git", "add", selectedFile)
-    if err := cmd.Run(); err != nil {
-        return fmt.Errorf("failed to stage file %s: %w", selectedFile, err)
-    }
+	cf.println("")
+	cf.printf("📤 Staging: %s\n", selectedFile)
+	cmd := exec.Command("git", "add", selectedFile)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to stage file %s: %w", selectedFile, err)
+	}
 
 	// Determine if this is a single file commit
 	singleFileMode := true
@@ -300,16 +300,16 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 
 // stageAllAndCommit stages all modified files and commits them
 func (cf *CommitFlow) stageAllAndCommit() error {
-    cf.println("")
-    cf.println("🎯 Staging all modified files...")
+	cf.println("")
+	cf.println("🎯 Staging all modified files...")
 
 	cmd := exec.Command("git", "add", "-A")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
 
-    cf.println("✅ All files staged.")
-    return cf.generateCommitMessageAndCommit(false) // false = not single file mode
+	cf.println("✅ All files staged.")
+	return cf.generateCommitMessageAndCommit(false) // false = not single file mode
 }
 
 // singleFileCommit allows selecting and committing a single file
@@ -326,11 +326,11 @@ func (cf *CommitFlow) singleFileCommit() error {
 	}
 
 	allFiles := append(stagedFiles, unstagedFiles...)
-    if len(allFiles) == 0 {
-        cf.println("")
-        cf.println("📭 No files available for commit.")
-        return nil
-    }
+	if len(allFiles) == 0 {
+		cf.println("")
+		cf.println("📭 No files available for commit.")
+		return nil
+	}
 
 	// Convert to dropdown items with status indicators
 	items := make([]ui.DropdownItem, len(allFiles))
@@ -349,8 +349,8 @@ func (cf *CommitFlow) singleFileCommit() error {
 	}
 
 	// Show dropdown
-    cf.agent.DisableEscMonitoring()
-    defer cf.agent.EnableEscMonitoring()
+	cf.agent.DisableEscMonitoring()
+	defer cf.agent.EnableEscMonitoring()
 
 	// Try to show dropdown using the agent's UI
 	selected, err := cf.agent.ShowDropdown(items, ui.DropdownOptions{
@@ -359,27 +359,27 @@ func (cf *CommitFlow) singleFileCommit() error {
 		ShowCounts:   true,
 	})
 
-    if err != nil {
-        if err == ui.ErrCancelled {
-            cf.println("")
-            cf.println("Single file commit cancelled.")
-            return nil
-        }
-        return fmt.Errorf("failed to show file selection: %w", err)
-    }
+	if err != nil {
+		if err == ui.ErrCancelled {
+			cf.println("")
+			cf.println("Single file commit cancelled.")
+			return nil
+		}
+		return fmt.Errorf("failed to show file selection: %w", err)
+	}
 
 	selectedFile := selected.Value().(string)
 
 	// Reset staging area and stage only the selected file
-    cf.println("")
-    cf.println("🔄 Resetting staging area...")
-    exec.Command("git", "reset").Run() // Reset staging area
+	cf.println("")
+	cf.println("🔄 Resetting staging area...")
+	exec.Command("git", "reset").Run() // Reset staging area
 
-    cf.printf("📤 Staging: %s\n", selectedFile)
-    cmd := exec.Command("git", "add", selectedFile)
-    if err := cmd.Run(); err != nil {
-        return fmt.Errorf("failed to stage file %s: %w", selectedFile, err)
-    }
+	cf.printf("📤 Staging: %s\n", selectedFile)
+	cmd := exec.Command("git", "add", selectedFile)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to stage file %s: %w", selectedFile, err)
+	}
 
 	return cf.generateCommitMessageAndCommit(true) // true = single file mode
 }
@@ -388,20 +388,20 @@ func (cf *CommitFlow) singleFileCommit() error {
 func (cf *CommitFlow) generateCommitMessageAndCommit(singleFileMode bool) error {
 	// Get diff for commit message generation
 	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
-    if err != nil {
-        return fmt.Errorf("failed to get staged diff: %w", err)
-    }
+	if err != nil {
+		return fmt.Errorf("failed to get staged diff: %w", err)
+	}
 
-    if len(diffOutput) == 0 {
-        cf.println("")
-        cf.println("📭 No staged changes to commit.")
-        return nil
-    }
+	if len(diffOutput) == 0 {
+		cf.println("")
+		cf.println("📭 No staged changes to commit.")
+		return nil
+	}
 
 	// Use existing commit message generation logic from the original commit command
 	// This will use the diff optimizer we already implemented
-    cf.println("")
-    cf.println("🤖 Generating commit message...")
+	cf.println("")
+	cf.println("🤖 Generating commit message...")
 
 	// Create a temporary CommitCommand to reuse the existing logic
 	commitCmd := &CommitCommand{}

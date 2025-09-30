@@ -300,7 +300,7 @@ func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]int
 
 	// Higher threshold for troubleshooting operations
 	threshold := 3
-	
+
 	// Increase threshold for common troubleshooting operations
 	switch toolName {
 	case "read_file":

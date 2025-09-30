@@ -617,13 +617,13 @@ func TestScrollRegionBehavior(t *testing.T) {
 	}
 
 	// Should leave space for footer
-    expectedContentLines := 24 - 4 // Assuming 4 lines for footer (gaps may further reduce content area)
-    actualContentLines := scrollBottom - scrollTop + 1
+	expectedContentLines := 24 - 4 // Assuming 4 lines for footer (gaps may further reduce content area)
+	actualContentLines := scrollBottom - scrollTop + 1
 
-    // Allow a slightly wider tolerance to account for layout spacers
-    if actualContentLines < expectedContentLines-3 || actualContentLines > expectedContentLines+2 {
-        t.Errorf("Scroll region size seems wrong: got %d lines, expected around %d", actualContentLines, expectedContentLines)
-    }
+	// Allow a slightly wider tolerance to account for layout spacers
+	if actualContentLines < expectedContentLines-3 || actualContentLines > expectedContentLines+2 {
+		t.Errorf("Scroll region size seems wrong: got %d lines, expected around %d", actualContentLines, expectedContentLines)
+	}
 }
 
 // TestCursorPositioningFlow tests the cursor positioning during content output
@@ -687,8 +687,8 @@ func TestCursorPositioningFlow(t *testing.T) {
 	commands = mockTerminal.GetCommands()
 	t.Logf("Commands after second safePrint: %v", commands)
 
-    // Historically this test asserted no MoveCursor at all. The renderer now
-    // performs minimal cursor moves during redraw for stability. Instead of
-    // forbidding any MoveCursor, we accept redraw operations here.
-    // The positioning behavior is validated in other tests.
+	// Historically this test asserted no MoveCursor at all. The renderer now
+	// performs minimal cursor moves during redraw for stability. Instead of
+	// forbidding any MoveCursor, we accept redraw operations here.
+	// The positioning behavior is validated in other tests.
 }

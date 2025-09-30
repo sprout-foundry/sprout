@@ -26,7 +26,7 @@ type ShellCommandResult struct {
 type AgentState struct {
 	Messages        []api.Message `json:"messages"`
 	PreviousSummary string        `json:"previous_summary"`
-	CompactSummary  string        `json:"compact_summary"`  // New: 5K limit summary for continuity
+	CompactSummary  string        `json:"compact_summary"` // New: 5K limit summary for continuity
 	TaskActions     []TaskAction  `json:"task_actions"`
 	SessionID       string        `json:"session_id"`
 }

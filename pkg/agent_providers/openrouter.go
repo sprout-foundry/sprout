@@ -31,37 +31,37 @@ type OpenRouterProvider struct {
 // command to local files for quick reproduction. Files are placed in the
 // current working directory and overwritten each call.
 func (p *OpenRouterProvider) writeDebugArtifacts(filenameBase string, body []byte, streaming bool) {
-    // Only when debug is enabled to avoid leaking data unintentionally
-    if !p.debug {
-        return
-    }
-    jsonName := filenameBase + ".json"
-    curlName := filenameBase + ".curl"
-    _ = os.WriteFile(jsonName, body, 0644)
+	// Only when debug is enabled to avoid leaking data unintentionally
+	if !p.debug {
+		return
+	}
+	jsonName := filenameBase + ".json"
+	curlName := filenameBase + ".curl"
+	_ = os.WriteFile(jsonName, body, 0644)
 
-    // Build curl using env var for auth
-    var headers []string
-    headers = append(headers, "-H \"Authorization: Bearer $OPENROUTER_API_KEY\"")
-    headers = append(headers, "-H 'Content-Type: application/json'")
-    if streaming {
-        headers = append(headers, "-H 'Accept: text/event-stream'")
-    }
-    headers = append(headers, "-H 'HTTP-Referer: https://github.com/alantheprice/ledit'")
-    headers = append(headers, "-H 'X-Title: Ledit Debug'")
+	// Build curl using env var for auth
+	var headers []string
+	headers = append(headers, "-H \"Authorization: Bearer $OPENROUTER_API_KEY\"")
+	headers = append(headers, "-H 'Content-Type: application/json'")
+	if streaming {
+		headers = append(headers, "-H 'Accept: text/event-stream'")
+	}
+	headers = append(headers, "-H 'HTTP-Referer: https://github.com/alantheprice/ledit'")
+	headers = append(headers, "-H 'X-Title: Ledit Debug'")
 
-    curl := fmt.Sprintf("curl -sS https://openrouter.ai/api/v1/chat/completions \\\n+ %s \\\n+ -d @%s\n", strings.Join(headers, " \\\n+ "), jsonName)
-    _ = os.WriteFile(curlName, []byte(curl), 0644)
+	curl := fmt.Sprintf("curl -sS https://openrouter.ai/api/v1/chat/completions \\\n+ %s \\\n+ -d @%s\n", strings.Join(headers, " \\\n+ "), jsonName)
+	_ = os.WriteFile(curlName, []byte(curl), 0644)
 
-    fmt.Fprintf(os.Stderr, "🧪 OpenRouter debug artifacts written: %s, %s\n", jsonName, curlName)
+	fmt.Fprintf(os.Stderr, "🧪 OpenRouter debug artifacts written: %s, %s\n", jsonName, curlName)
 }
 
 // writeDebugResponse writes raw provider response for comparison
 func (p *OpenRouterProvider) writeDebugResponse(filename string, body []byte) {
-    if !p.debug {
-        return
-    }
-    _ = os.WriteFile(filename, body, 0644)
-    fmt.Fprintf(os.Stderr, "🧪 OpenRouter response written: %s\n", filename)
+	if !p.debug {
+		return
+	}
+	_ = os.WriteFile(filename, body, 0644)
+	fmt.Fprintf(os.Stderr, "🧪 OpenRouter response written: %s\n", filename)
 }
 
 // NewOpenRouterProvider creates a new OpenRouter provider instance
@@ -158,40 +158,40 @@ func (p *OpenRouterProvider) SendChatRequest(messages []api.Message, tools []api
 	// Calculate appropriate max_tokens based on context limits
 	maxTokens := p.calculateMaxTokens(messages, tools)
 
-    // Build request payload
-    requestBody := map[string]interface{}{
-        "model":       p.model,
-        "messages":    openRouterMessages,
-        "max_tokens":  maxTokens,
-        "temperature": 0.7,
-        "usage":       map[string]interface{}{"include": true}, // Enable usage accounting for cost tracking
-    }
+	// Build request payload
+	requestBody := map[string]interface{}{
+		"model":       p.model,
+		"messages":    openRouterMessages,
+		"max_tokens":  maxTokens,
+		"temperature": 0.7,
+		"usage":       map[string]interface{}{"include": true}, // Enable usage accounting for cost tracking
+	}
 
-    // Add tools if provided (normalize to OpenAI function-calling schema explicitly)
-    if len(tools) > 0 {
-        openAITools := make([]map[string]interface{}, len(tools))
-        for i, tool := range tools {
-            openAITools[i] = map[string]interface{}{
-                "type": tool.Type,
-                "function": map[string]interface{}{
-                    "name":        tool.Function.Name,
-                    "description": tool.Function.Description,
-                    "parameters":  tool.Function.Parameters,
-                },
-            }
-        }
-        requestBody["tools"] = openAITools
-        // OpenRouter backends expect string literal for tool_choice
-        requestBody["tool_choice"] = "auto"
-    }
+	// Add tools if provided (normalize to OpenAI function-calling schema explicitly)
+	if len(tools) > 0 {
+		openAITools := make([]map[string]interface{}, len(tools))
+		for i, tool := range tools {
+			openAITools[i] = map[string]interface{}{
+				"type": tool.Type,
+				"function": map[string]interface{}{
+					"name":        tool.Function.Name,
+					"description": tool.Function.Description,
+					"parameters":  tool.Function.Parameters,
+				},
+			}
+		}
+		requestBody["tools"] = openAITools
+		// OpenRouter backends expect string literal for tool_choice
+		requestBody["tool_choice"] = "auto"
+	}
 
 	reqBody, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-    // Write debug artifacts for quick reproduction
-    p.writeDebugArtifacts("openrouter_last_request", reqBody, false)
+	// Write debug artifacts for quick reproduction
+	p.writeDebugArtifacts("openrouter_last_request", reqBody, false)
 
 	httpReq, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(reqBody))
 	if err != nil {
@@ -218,7 +218,7 @@ func (p *OpenRouterProvider) SendChatRequest(messages []api.Message, tools []api
 
 // SendChatRequestStream sends a streaming chat request to OpenRouter
 func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
-    url := "https://openrouter.ai/api/v1/chat/completions"
+	url := "https://openrouter.ai/api/v1/chat/completions"
 
 	// Convert our messages to OpenAI format
 	openAIMessages := make([]interface{}, len(messages))
@@ -234,16 +234,16 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 		openAIMessages[i] = message
 	}
 
-    // Calculate max tokens similarly to non-streaming path
-    maxTokens := p.calculateMaxTokens(messages, tools)
+	// Calculate max tokens similarly to non-streaming path
+	maxTokens := p.calculateMaxTokens(messages, tools)
 
-    reqBody := map[string]interface{}{
-        "model":       p.model,
-        "messages":    openAIMessages,
-        "temperature": 0.7,
-        "max_tokens":  maxTokens,
-        "stream":      true, // Enable streaming
-    }
+	reqBody := map[string]interface{}{
+		"model":       p.model,
+		"messages":    openAIMessages,
+		"temperature": 0.7,
+		"max_tokens":  maxTokens,
+		"stream":      true, // Enable streaming
+	}
 
 	// Add tools if present
 	if len(tools) > 0 {
@@ -258,17 +258,17 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 				},
 			}
 		}
-        reqBody["tools"] = openAITools
-        reqBody["tool_choice"] = "auto"
+		reqBody["tools"] = openAITools
+		reqBody["tool_choice"] = "auto"
 	}
 
-    reqBodyBytes, err := json.Marshal(reqBody)
-    if err != nil {
-        return nil, fmt.Errorf("failed to marshal request: %w", err)
-    }
+	reqBodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
 
-    // Write debug artifacts for quick reproduction (streaming variant)
-    p.writeDebugArtifacts("openrouter_last_request_stream", reqBodyBytes, true)
+	// Write debug artifacts for quick reproduction (streaming variant)
+	p.writeDebugArtifacts("openrouter_last_request_stream", reqBodyBytes, true)
 
 	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(reqBodyBytes))
 	if err != nil {
@@ -386,8 +386,8 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 										toolCallID = id
 									}
 
-                            // Use index as the stable aggregation key; set ID on the struct when available
-                            key := fmt.Sprintf("idx_%d", toolCallIndex)
+									// Use index as the stable aggregation key; set ID on the struct when available
+									key := fmt.Sprintf("idx_%d", toolCallIndex)
 
 									// Get or create the tool call
 									if _, exists := toolCallsMap[key]; !exists {
@@ -401,10 +401,10 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 
 									currentTC := toolCallsMap[key]
 
-                            // Update the tool call ID if we got it in this chunk
-                            if toolCallID != "" && currentTC.ID == "" {
-                                currentTC.ID = toolCallID
-                            }
+									// Update the tool call ID if we got it in this chunk
+									if toolCallID != "" && currentTC.ID == "" {
+										currentTC.ID = toolCallID
+									}
 
 									// Handle function data
 									if fn, ok := tc["function"].(map[string]interface{}); ok {
@@ -690,67 +690,77 @@ func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody
 			fmt.Printf("🔍 OpenRouter Response Body: %s\n", string(respBody))
 		}
 
-        // Success case
-        if resp.StatusCode == http.StatusOK {
-            // First parse into a generic map to extract OpenRouter-specific fields
-            var rawResp map[string]interface{}
-            if err := json.Unmarshal(respBody, &rawResp); err != nil {
-                return nil, fmt.Errorf("failed to unmarshal raw response: %w", err)
-            }
+		// Success case
+		if resp.StatusCode == http.StatusOK {
+			// First parse into a generic map to extract OpenRouter-specific fields
+			var rawResp map[string]interface{}
+			if err := json.Unmarshal(respBody, &rawResp); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal raw response: %w", err)
+			}
 
-            // Write raw successful response for debugging
-            p.writeDebugResponse("openrouter_last_response.json", respBody)
+			// Write raw successful response for debugging
+			p.writeDebugResponse("openrouter_last_response.json", respBody)
 
-            // Parse into our standard response structure
-            var chatResp api.ChatResponse
-            if err := json.Unmarshal(respBody, &chatResp); err != nil {
-                return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-            }
+			// Parse into our standard response structure
+			var chatResp api.ChatResponse
+			if err := json.Unmarshal(respBody, &chatResp); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+			}
 
-            // Robustly normalize tool_calls in non-streaming responses for providers
-            // that may return function.arguments as an object instead of a string
-            // or omit fields inconsistently.
-            if len(chatResp.Choices) > 0 {
-                // Try to pull raw tool_calls from the generic map to repair as needed
-                if rawChoices, ok := rawResp["choices"].([]interface{}); ok && len(rawChoices) > 0 {
-                    if rawChoice, ok := rawChoices[0].(map[string]interface{}); ok {
-                        if msg, ok := rawChoice["message"].(map[string]interface{}); ok {
-                            if rawTCs, ok := msg["tool_calls"].([]interface{}); ok && len(rawTCs) > 0 {
-                                fixed := make([]api.ToolCall, 0, len(rawTCs))
-                                for _, it := range rawTCs {
-                                    m, ok := it.(map[string]interface{})
-                                    if !ok { continue }
-                                    var tc api.ToolCall
-                                    if id, ok := m["id"].(string); ok { tc.ID = id }
-                                    if t, ok := m["type"].(string); ok { tc.Type = t } else { tc.Type = "function" }
-                                    if fn, ok := m["function"].(map[string]interface{}); ok {
-                                        if name, ok := fn["name"].(string); ok { tc.Function.Name = name }
-                                        switch args := fn["arguments"].(type) {
-                                        case string:
-                                            tc.Function.Arguments = args
-                                        case map[string]interface{}:
-                                            if b, err := json.Marshal(args); err == nil {
-                                                tc.Function.Arguments = string(b)
-                                            }
-                                        case nil:
-                                            // leave empty
-                                        }
-                                    }
-                                    // Only add if we have at least a name
-                                    if tc.Function.Name != "" {
-                                        fixed = append(fixed, tc)
-                                    }
-                                }
-                                // Overwrite parsed tool calls with normalized ones if we fixed any
-                                if len(fixed) > 0 {
-                                    chatResp.Choices[0].Message.ToolCalls = fixed
-                                    chatResp.Choices[0].FinishReason = "tool_calls"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+			// Robustly normalize tool_calls in non-streaming responses for providers
+			// that may return function.arguments as an object instead of a string
+			// or omit fields inconsistently.
+			if len(chatResp.Choices) > 0 {
+				// Try to pull raw tool_calls from the generic map to repair as needed
+				if rawChoices, ok := rawResp["choices"].([]interface{}); ok && len(rawChoices) > 0 {
+					if rawChoice, ok := rawChoices[0].(map[string]interface{}); ok {
+						if msg, ok := rawChoice["message"].(map[string]interface{}); ok {
+							if rawTCs, ok := msg["tool_calls"].([]interface{}); ok && len(rawTCs) > 0 {
+								fixed := make([]api.ToolCall, 0, len(rawTCs))
+								for _, it := range rawTCs {
+									m, ok := it.(map[string]interface{})
+									if !ok {
+										continue
+									}
+									var tc api.ToolCall
+									if id, ok := m["id"].(string); ok {
+										tc.ID = id
+									}
+									if t, ok := m["type"].(string); ok {
+										tc.Type = t
+									} else {
+										tc.Type = "function"
+									}
+									if fn, ok := m["function"].(map[string]interface{}); ok {
+										if name, ok := fn["name"].(string); ok {
+											tc.Function.Name = name
+										}
+										switch args := fn["arguments"].(type) {
+										case string:
+											tc.Function.Arguments = args
+										case map[string]interface{}:
+											if b, err := json.Marshal(args); err == nil {
+												tc.Function.Arguments = string(b)
+											}
+										case nil:
+											// leave empty
+										}
+									}
+									// Only add if we have at least a name
+									if tc.Function.Name != "" {
+										fixed = append(fixed, tc)
+									}
+								}
+								// Overwrite parsed tool calls with normalized ones if we fixed any
+								if len(fixed) > 0 {
+									chatResp.Choices[0].Message.ToolCalls = fixed
+									chatResp.Choices[0].FinishReason = "tool_calls"
+								}
+							}
+						}
+					}
+				}
+			}
 
 			// Extract OpenRouter's actual cost from the "usage.cost" field
 			if usage, ok := rawResp["usage"].(map[string]interface{}); ok {
@@ -774,8 +784,8 @@ func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody
 				}
 			}
 
-            return &chatResp, nil
-        }
+			return &chatResp, nil
+		}
 
 		// Handle error cases
 		if resp.StatusCode == 429 {

@@ -309,17 +309,17 @@ func (c *InputComponent) processKeypress(key byte) (multiline, done bool) {
 			c.redrawLine()
 		}
 
-    case 27: // ESC -> treat as interrupt/cancel
-        fmt.Print("\r\033[K") // Clear line
-        if c.onCancel != nil {
-            c.onCancel()
-        }
-        // Reset current input state
-        c.currentLine = c.currentLine[:0]
-        c.cursorPos = 0
-        c.historyIndex = len(c.history)
-        c.tempLine = ""
-        return false, false
+	case 27: // ESC -> treat as interrupt/cancel
+		fmt.Print("\r\033[K") // Clear line
+		if c.onCancel != nil {
+			c.onCancel()
+		}
+		// Reset current input state
+		c.currentLine = c.currentLine[:0]
+		c.cursorPos = 0
+		c.historyIndex = len(c.history)
+		c.tempLine = ""
+		return false, false
 
 	default:
 		// Regular character

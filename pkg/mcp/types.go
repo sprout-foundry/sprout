@@ -10,10 +10,10 @@ import (
 // MCPServerConfig represents the configuration for an MCP server
 type MCPServerConfig struct {
 	Name        string            `json:"name"`
-	Type        string            `json:"type,omitempty"`        // "stdio" or "http"
-	Command     string            `json:"command,omitempty"`     // For stdio servers
-	Args        []string          `json:"args,omitempty"`        // For stdio servers
-	URL         string            `json:"url,omitempty"`         // For HTTP servers
+	Type        string            `json:"type,omitempty"`    // "stdio" or "http"
+	Command     string            `json:"command,omitempty"` // For stdio servers
+	Args        []string          `json:"args,omitempty"`    // For stdio servers
+	URL         string            `json:"url,omitempty"`     // For HTTP servers
 	Env         map[string]string `json:"env,omitempty"`
 	WorkingDir  string            `json:"working_dir,omitempty"` // For stdio servers
 	Timeout     time.Duration     `json:"timeout,omitempty"`

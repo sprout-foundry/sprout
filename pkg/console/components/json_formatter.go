@@ -23,7 +23,7 @@ type JSONFormatter struct {
 		bracket    string // White for brackets/braces
 		colon      string // Light gray for colons/commas
 	}
-	
+
 	indentSize int
 	maxDepth   int
 }
@@ -34,10 +34,10 @@ func NewJSONFormatter() *JSONFormatter {
 		indentSize: 2,
 		maxDepth:   10,
 	}
-	
+
 	// One Dark color scheme
 	jf.colors.reset = "\033[0m"
-	jf.colors.background = "\033[48;2;40;44;52m"  // Dark background
+	jf.colors.background = "\033[48;2;40;44;52m"    // Dark background
 	jf.colors.foreground = "\033[38;2;171;178;191m" // Light foreground
 	jf.colors.comment = "\033[38;2;92;99;112m"      // Gray
 	jf.colors.keyword = "\033[38;2;198;120;221m"    // Purple (for keys)
@@ -47,7 +47,7 @@ func NewJSONFormatter() *JSONFormatter {
 	jf.colors.null = "\033[38;2;92;99;112m"         // Gray
 	jf.colors.bracket = "\033[38;2;224;227;236m"    // Light white
 	jf.colors.colon = "\033[38;2;130;137;151m"      // Light gray
-	
+
 	return jf
 }
 
@@ -56,7 +56,7 @@ func (jf *JSONFormatter) FormatJSON(data interface{}) (string, error) {
 	// Handle different input types
 	var jsonData interface{}
 	var err error
-	
+
 	switch v := data.(type) {
 	case string:
 		// Try to parse as JSON
@@ -73,7 +73,7 @@ func (jf *JSONFormatter) FormatJSON(data interface{}) (string, error) {
 	default:
 		jsonData = data
 	}
-	
+
 	// Format the JSON with syntax highlighting
 	return jf.formatValue(jsonData, 0), nil
 }
@@ -83,30 +83,30 @@ func (jf *JSONFormatter) formatValue(value interface{}, depth int) string {
 	if depth > jf.maxDepth {
 		return jf.colors.comment + "..." + jf.colors.reset
 	}
-	
+
 	switch v := value.(type) {
 	case nil:
 		return jf.colors.null + "null" + jf.colors.reset
-		
+
 	case bool:
 		return jf.colors.boolean + fmt.Sprintf("%t", v) + jf.colors.reset
-		
+
 	case float64:
 		// JSON numbers are always float64 when unmarshaled
 		if v == float64(int64(v)) {
 			return jf.colors.number + fmt.Sprintf("%.0f", v) + jf.colors.reset
 		}
 		return jf.colors.number + fmt.Sprintf("%g", v) + jf.colors.reset
-		
+
 	case string:
 		return jf.colors.string + `"` + jf.escapeString(v) + `"` + jf.colors.reset
-		
+
 	case []interface{}:
 		return jf.formatArray(v, depth)
-		
+
 	case map[string]interface{}:
 		return jf.formatObject(v, depth)
-		
+
 	default:
 		// Fallback for unknown types
 		return jf.colors.foreground + fmt.Sprintf("%v", v) + jf.colors.reset
@@ -118,13 +118,13 @@ func (jf *JSONFormatter) formatArray(arr []interface{}, depth int) string {
 	if len(arr) == 0 {
 		return jf.colors.bracket + "[]" + jf.colors.reset
 	}
-	
+
 	indent := strings.Repeat(" ", depth*jf.indentSize)
 	nextIndent := strings.Repeat(" ", (depth+1)*jf.indentSize)
-	
+
 	var parts []string
 	parts = append(parts, jf.colors.bracket+"["+jf.colors.reset)
-	
+
 	for i, item := range arr {
 		line := nextIndent + jf.formatValue(item, depth+1)
 		if i < len(arr)-1 {
@@ -132,7 +132,7 @@ func (jf *JSONFormatter) formatArray(arr []interface{}, depth int) string {
 		}
 		parts = append(parts, line)
 	}
-	
+
 	parts = append(parts, indent+jf.colors.bracket+"]"+jf.colors.reset)
 	return strings.Join(parts, "\n")
 }
@@ -142,31 +142,31 @@ func (jf *JSONFormatter) formatObject(obj map[string]interface{}, depth int) str
 	if len(obj) == 0 {
 		return jf.colors.bracket + "{}" + jf.colors.reset
 	}
-	
+
 	indent := strings.Repeat(" ", depth*jf.indentSize)
 	nextIndent := strings.Repeat(" ", (depth+1)*jf.indentSize)
-	
+
 	var parts []string
 	parts = append(parts, jf.colors.bracket+"{"+jf.colors.reset)
-	
+
 	// Sort keys for consistent output
 	keys := make([]string, 0, len(obj))
 	for k := range obj {
 		keys = append(keys, k)
 	}
-	
+
 	for i, key := range keys {
 		value := obj[key]
 		keyStr := jf.colors.keyword + `"` + jf.escapeString(key) + `"` + jf.colors.reset
 		valueStr := jf.formatValue(value, depth+1)
-		
+
 		line := nextIndent + keyStr + jf.colors.colon + ": " + jf.colors.reset + valueStr
 		if i < len(keys)-1 {
 			line += jf.colors.colon + "," + jf.colors.reset
 		}
 		parts = append(parts, line)
 	}
-	
+
 	parts = append(parts, indent+jf.colors.bracket+"}"+jf.colors.reset)
 	return strings.Join(parts, "\n")
 }
@@ -191,7 +191,7 @@ func (jf *JSONFormatter) escapeString(s string) string {
 func (jf *JSONFormatter) DetectAndFormatJSON(text string) string {
 	// Regex to find JSON-like structures
 	jsonRegex := regexp.MustCompile(`(?s)\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*\]`)
-	
+
 	return jsonRegex.ReplaceAllStringFunc(text, func(match string) string {
 		formatted, err := jf.FormatJSON(match)
 		if err != nil {
@@ -207,14 +207,14 @@ func (jf *JSONFormatter) FormatModelResponse(response string) string {
 	// Handle common model response patterns
 	lines := strings.Split(response, "\n")
 	var formattedLines []string
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			formattedLines = append(formattedLines, "")
 			continue
 		}
-		
+
 		// Check if line contains JSON
 		if strings.Contains(line, "{") || strings.Contains(line, "[") {
 			formatted := jf.DetectAndFormatJSON(line)
@@ -224,7 +224,7 @@ func (jf *JSONFormatter) FormatModelResponse(response string) string {
 			formattedLines = append(formattedLines, jf.colors.foreground+line+jf.colors.reset)
 		}
 	}
-	
+
 	return strings.Join(formattedLines, "\n")
 }
 
@@ -246,7 +246,7 @@ func (jf *JSONFormatter) FormatCompact(data interface{}) (string, error) {
 	originalIndent := jf.indentSize
 	jf.indentSize = 1
 	defer func() { jf.indentSize = originalIndent }()
-	
+
 	return jf.FormatJSON(data)
 }
 

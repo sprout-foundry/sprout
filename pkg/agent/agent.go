@@ -50,11 +50,11 @@ type Agent struct {
 	interruptCtx        context.Context    // Context for interrupt handling
 	interruptCancel     context.CancelFunc // Cancel function for interrupt context
 	escMonitoringCancel context.CancelFunc // Cancel function for Esc monitoring
-	outputMutex          *sync.Mutex     // Mutex for synchronized output
-	streamingEnabled     bool            // Whether streaming is enabled
-	streamingCallback    func(string)    // Custom streaming callback
-	streamingBuffer      strings.Builder // Buffer for streaming content
-	flushCallback        func()          // Callback to flush buffered output
+	outputMutex         *sync.Mutex        // Mutex for synchronized output
+	streamingEnabled    bool               // Whether streaming is enabled
+	streamingCallback   func(string)       // Custom streaming callback
+	streamingBuffer     strings.Builder    // Buffer for streaming content
+	flushCallback       func()             // Callback to flush buffered output
 
 	// Feature flags
 	falseStopDetectionEnabled bool

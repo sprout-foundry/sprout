@@ -6,6 +6,7 @@ import (
 )
 
 // OutputMode represents the different output modes
+//
 //go:generate stringer -type=OutputMode
 type OutputMode int
 
@@ -20,25 +21,25 @@ const (
 type OutputHandler interface {
 	// Mode returns the current output mode
 	Mode() OutputMode
-	
+
 	// Print writes formatted output
 	Print(format string, args ...interface{})
-	
+
 	// Println writes output with newline
 	Println(args ...interface{})
-	
+
 	// Printf writes formatted output
 	Printf(format string, args ...interface{})
-	
+
 	// Write writes raw bytes
 	Write(p []byte) (n int, err error)
-	
+
 	// Buffer returns the console buffer (nil in CLI mode)
 	Buffer() *ConsoleBuffer
-	
+
 	// Redraw forces a redraw of the content (only in interactive mode)
 	Redraw()
-	
+
 	// SetMode changes the output mode
 	SetMode(mode OutputMode)
 }
@@ -115,7 +116,7 @@ func (doh *DualOutputHandler) handleOutput(content string) {
 	case OutputModeCLI:
 		// Direct CLI output
 		fmt.Fprint(doh.cliOutput, content)
-		
+
 	case OutputModeInteractive:
 		// Interactive buffer mode
 		if doh.consoleBuffer != nil {

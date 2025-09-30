@@ -50,11 +50,9 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		return "", fmt.Errorf("unknown tool '%s'. Valid tools are: %v", toolCall.Function.Name, validTools)
 	}
 
-
 	// Use the tool registry for data-driven tool execution
 	registry := GetToolRegistry()
 	result, err := registry.ExecuteTool(context.Background(), toolCall.Function.Name, args, a)
-
 
 	// If tool not found in registry, check for special cases
 	if err != nil && strings.Contains(err.Error(), "unknown tool") {

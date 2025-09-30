@@ -126,9 +126,6 @@ func TestReviewHistoryInitialization(t *testing.T) {
 	}
 }
 
-
-
-
 // Helper function to check if a string contains a substring
 func containsString(str, substr string) bool {
 	return len(str) >= len(substr) && (str == substr || len(substr) == 0 ||

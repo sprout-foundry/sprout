@@ -29,24 +29,24 @@ type Message struct {
 type Choice struct {
 	Index   int `json:"index"`
 	Message struct {
-		Role             string      `json:"role"`
-		Content          string      `json:"content"`
-		ReasoningContent string      `json:"reasoning_content,omitempty"`
-		Images           []ImageData `json:"images,omitempty"`
-		ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
+		Role             string         `json:"role"`
+		Content          string         `json:"content"`
+		ReasoningContent string         `json:"reasoning_content,omitempty"`
+		Images           []ImageData    `json:"images,omitempty"`
+		ToolCalls        []api.ToolCall `json:"tool_calls,omitempty"`
 	} `json:"message"`
 	FinishReason string `json:"finish_reason"`
 }
 
 // Usage represents token usage information
 type Usage struct {
-	PromptTokens     int     `json:"prompt_tokens"`
-	CompletionTokens int     `json:"completion_tokens"`
-	TotalTokens      int     `json:"total_tokens"`
-	EstimatedCost    float64 `json:"estimated_cost"`
-	Estimated        bool    `json:"estimated,omitempty"`
+	PromptTokens        int     `json:"prompt_tokens"`
+	CompletionTokens    int     `json:"completion_tokens"`
+	TotalTokens         int     `json:"total_tokens"`
+	EstimatedCost       float64 `json:"estimated_cost"`
+	Estimated           bool    `json:"estimated,omitempty"`
 	PromptTokensDetails struct {
-		CachedTokens     int `json:"cached_tokens"`
+		CachedTokens     int  `json:"cached_tokens"`
 		CacheWriteTokens *int `json:"cache_write_tokens"`
 	} `json:"prompt_tokens_details,omitempty"`
 }
@@ -73,14 +73,13 @@ type ModelInfo struct {
 	Cost          float64 `json:"cost,omitempty"`
 }
 
-
 // TokenUsage represents token usage from LLM responses (alias for Usage)
 type TokenUsage = Usage
 
 // ModelPricing represents cost per 1K tokens for different models
 type ModelPricing struct {
-	InputCost     float64 `json:"input_cost"`
-	OutputCost    float64 `json:"output_cost"`
+	InputCost       float64 `json:"input_cost"`
+	OutputCost      float64 `json:"output_cost"`
 	InputCostPer1K  float64 `json:"input_cost_per_1k"`  // Alias for compatibility
 	OutputCostPer1K float64 `json:"output_cost_per_1k"` // Alias for compatibility
 }
@@ -105,9 +104,9 @@ func (pr *PatchResolution) IsEmpty() bool {
 	if pr == nil {
 		return true
 	}
-	return len(pr.ApprovedChanges) == 0 && len(pr.RejectedChanges) == 0 && 
-		   len(pr.Comments) == 0 && pr.Status == "" && 
-		   len(pr.MultiFile) == 0 && pr.SingleFile == ""
+	return len(pr.ApprovedChanges) == 0 && len(pr.RejectedChanges) == 0 &&
+		len(pr.Comments) == 0 && pr.Status == "" &&
+		len(pr.MultiFile) == 0 && pr.SingleFile == ""
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for PatchResolution
@@ -120,7 +119,7 @@ func (pr *PatchResolution) UnmarshalJSON(data []byte) error {
 		pr.MultiFile = nil
 		return nil
 	}
-	
+
 	// Try to unmarshal as map[string]string (simple multi-file format)
 	var multiFile map[string]string
 	if err := json.Unmarshal(data, &multiFile); err == nil {
@@ -128,7 +127,7 @@ func (pr *PatchResolution) UnmarshalJSON(data []byte) error {
 		pr.SingleFile = ""
 		return nil
 	}
-	
+
 	// Try to unmarshal as full object
 	type PatchResolutionAlias PatchResolution // Avoid infinite recursion
 	var alias PatchResolutionAlias
@@ -136,7 +135,7 @@ func (pr *PatchResolution) UnmarshalJSON(data []byte) error {
 		*pr = PatchResolution(alias)
 		return nil
 	}
-	
+
 	return fmt.Errorf("cannot unmarshal PatchResolution from %s", string(data))
 }
 

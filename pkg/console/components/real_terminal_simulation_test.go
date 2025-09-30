@@ -133,7 +133,7 @@ func TestRealTerminalSimulation(t *testing.T) {
 		t.Errorf("CURSOR WENT OUTSIDE CONTENT AREA! Cursor Y=%d, Content area bottom=%d", mockTerminal.cursorY, bottom)
 	}
 
-    // Accept cursor placement anywhere within the content area bounds
+	// Accept cursor placement anywhere within the content area bounds
 
 	// Print final buffer state
 	t.Logf("\n=== FINAL BUFFER STATE ===")

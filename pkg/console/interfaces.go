@@ -31,10 +31,11 @@ type Component interface {
 
 // Dependencies provides access to core services
 type Dependencies struct {
-	Terminal TerminalManager
-	Layout   LayoutManager
-	State    StateManager
-	Events   EventBus
+	Terminal   TerminalManager
+	Controller *TerminalController
+	Layout     LayoutManager
+	State      StateManager
+	Events     EventBus
 }
 
 // TerminalManager handles all terminal operations
@@ -173,12 +174,12 @@ type EventFilter func(event Event) bool
 
 // ConsoleApp is the main application controller
 type ConsoleApp interface {
-    // Lifecycle
-    Init(config *Config) error
-    Start() error
-    Stop() error
-    Run() error
-    Cleanup() error
+	// Lifecycle
+	Init(config *Config) error
+	Start() error
+	Stop() error
+	Run() error
+	Cleanup() error
 
 	// Component management
 	AddComponent(component Component) error
@@ -191,6 +192,7 @@ type ConsoleApp interface {
 	Layout() LayoutManager
 	State() StateManager
 	Events() EventBus
+	Controller() *TerminalController
 
 	// Configuration
 	GetConfig() *Config

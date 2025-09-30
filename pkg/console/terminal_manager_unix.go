@@ -25,20 +25,20 @@ type terminalManager struct {
 	rawMode         bool
 	altScreen       bool
 	resizeCallbacks []func(width, height int)
-    signalChan      chan os.Signal
-    stopChan        chan struct{}
-    writer          io.Writer
-    stopClosed      bool
+	signalChan      chan os.Signal
+	stopChan        chan struct{}
+	writer          io.Writer
+	stopClosed      bool
 }
 
 // NewTerminalManager creates a new terminal manager
 func NewTerminalManager() TerminalManager {
-    return &terminalManager{
-        writer:          os.Stdout,
-        resizeCallbacks: make([]func(width, height int), 0),
-        stopChan:        make(chan struct{}),
-        stopClosed:      false,
-    }
+	return &terminalManager{
+		writer:          os.Stdout,
+		resizeCallbacks: make([]func(width, height int), 0),
+		stopChan:        make(chan struct{}),
+		stopClosed:      false,
+	}
 }
 
 // Init initializes the terminal manager
@@ -63,23 +63,23 @@ func (tm *terminalManager) Init() error {
 
 // Cleanup restores terminal to original state
 func (tm *terminalManager) Cleanup() error {
-    // Exit alternate screen first (before locking)
-    tm.ExitAltScreen()
+	// Exit alternate screen first (before locking)
+	tm.ExitAltScreen()
 
-    tm.mu.Lock()
-    defer tm.mu.Unlock()
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
 
-    // Stop resize monitoring (idempotent)
-    if tm.stopChan != nil && !tm.stopClosed {
-        close(tm.stopChan)
-        tm.stopClosed = true
-    }
-    // Stop and close signal channel if present
-    if tm.signalChan != nil {
-        signal.Stop(tm.signalChan)
-        close(tm.signalChan)
-        tm.signalChan = nil
-    }
+	// Stop resize monitoring (idempotent)
+	if tm.stopChan != nil && !tm.stopClosed {
+		close(tm.stopChan)
+		tm.stopClosed = true
+	}
+	// Stop and close signal channel if present
+	if tm.signalChan != nil {
+		signal.Stop(tm.signalChan)
+		close(tm.signalChan)
+		tm.signalChan = nil
+	}
 
 	// Restore terminal mode
 	if tm.rawMode && tm.oldState != nil {
@@ -90,17 +90,17 @@ func (tm *terminalManager) Cleanup() error {
 		tm.oldState = nil
 	}
 
-    // Show cursor
-    tm.ShowCursor()
+	// Show cursor
+	tm.ShowCursor()
 
-    // Reset scroll region to full screen and clear any styling
-    fmt.Fprint(tm.writer, "\033[r\033[0m")
-    // Ensure output is flushed
-    if f, ok := tm.writer.(*os.File); ok {
-        _ = f.Sync()
-    }
+	// Reset scroll region to full screen and clear any styling
+	fmt.Fprint(tm.writer, "\033[r\033[0m")
+	// Ensure output is flushed
+	if f, ok := tm.writer.(*os.File); ok {
+		_ = f.Sync()
+	}
 
-    return nil
+	return nil
 }
 
 // GetSize returns the current terminal size

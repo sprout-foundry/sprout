@@ -39,7 +39,7 @@ func (i *InitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	// Discover existing context files
 	existingContext := i.discoverExistingContext()
-	
+
 	// Analyze actual project structure
 	projectName := filepath.Base(wd)
 	projectStructure := i.analyzeProjectStructure()
@@ -74,7 +74,7 @@ func (i *InitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 func (i *InitCommand) discoverExistingContext() []string {
 	contextFiles := []string{
 		"CLAUDE.md",
-		".claude/project.md", 
+		".claude/project.md",
 		".claude/context.md",
 		".cursor/markdown/project.md",
 		".cursor/markdown/context.md",
@@ -84,21 +84,21 @@ func (i *InitCommand) discoverExistingContext() []string {
 		".cursor-rules",
 		"README.md",
 	}
-	
+
 	var found []string
 	for _, file := range contextFiles {
 		if _, err := os.Stat(file); err == nil {
 			found = append(found, file)
 		}
 	}
-	
+
 	return found
 }
 
 // analyzeProjectStructure explores the actual codebase structure
 func (i *InitCommand) analyzeProjectStructure() map[string][]string {
 	structure := make(map[string][]string)
-	
+
 	// Find main directories
 	dirs := []string{"cmd", "pkg", "internal", "src", "lib", "app", "api", "web", "ui"}
 	for _, dir := range dirs {
@@ -106,23 +106,23 @@ func (i *InitCommand) analyzeProjectStructure() map[string][]string {
 			structure[dir] = files
 		}
 	}
-	
+
 	// Root level Go files
 	if files := i.findGoFiles("."); len(files) > 0 {
 		structure["."] = files
 	}
-	
+
 	return structure
 }
 
 // discoverTestingFramework finds testing files and patterns
 func (i *InitCommand) discoverTestingFramework() map[string]interface{} {
 	testing := make(map[string]interface{})
-	
+
 	// Find test files
 	testFiles := i.findTestFiles()
 	testing["test_files"] = testFiles
-	
+
 	// Check for test runners and scripts
 	scripts := []string{"test.sh", "test_e2e.sh", "validate.sh", "test_runner.py"}
 	var foundScripts []string
@@ -132,25 +132,25 @@ func (i *InitCommand) discoverTestingFramework() map[string]interface{} {
 		}
 	}
 	testing["test_scripts"] = foundScripts
-	
+
 	// Check for E2E test directory
 	if _, err := os.Stat("e2e_test_scripts"); err == nil {
 		e2eFiles, _ := filepath.Glob("e2e_test_scripts/*.sh")
 		testing["e2e_scripts"] = e2eFiles
 	}
-	
+
 	return testing
 }
 
 // findEntrypoints discovers main entry points and CLI commands
 func (i *InitCommand) findEntrypoints() []string {
 	var entrypoints []string
-	
+
 	// Check for main.go
 	if _, err := os.Stat("main.go"); err == nil {
 		entrypoints = append(entrypoints, "main.go")
 	}
-	
+
 	// Check cmd directory for multiple entrypoints
 	if entries, err := os.ReadDir("cmd"); err == nil {
 		for _, entry := range entries {
@@ -165,18 +165,18 @@ func (i *InitCommand) findEntrypoints() []string {
 			}
 		}
 	}
-	
+
 	return entrypoints
 }
 
 // analyzeBuildSystem checks build configuration and dependencies
 func (i *InitCommand) analyzeBuildSystem() map[string]interface{} {
 	build := make(map[string]interface{})
-	
+
 	// Read go.mod
 	if goModContent, err := os.ReadFile("go.mod"); err == nil {
 		build["go_mod"] = string(goModContent)
-		
+
 		// Extract Go version and key dependencies
 		lines := strings.Split(string(goModContent), "\n")
 		for _, line := range lines {
@@ -186,7 +186,7 @@ func (i *InitCommand) analyzeBuildSystem() map[string]interface{} {
 			}
 		}
 	}
-	
+
 	// Check for Makefile, Dockerfile, etc.
 	buildFiles := []string{"Makefile", "Dockerfile", "docker-compose.yml", ".github/workflows"}
 	var foundBuildFiles []string
@@ -196,24 +196,24 @@ func (i *InitCommand) analyzeBuildSystem() map[string]interface{} {
 		}
 	}
 	build["build_files"] = foundBuildFiles
-	
+
 	return build
 }
 
 // findGoFiles recursively finds Go files in a directory
 func (i *InitCommand) findGoFiles(dir string) []string {
 	var files []string
-	
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return files
 	}
-	
+
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), ".") {
 			continue // Skip hidden files/directories
 		}
-		
+
 		path := filepath.Join(dir, entry.Name())
 		if entry.IsDir() {
 			// Don't recurse too deep, just check immediate subdirectories
@@ -225,7 +225,7 @@ func (i *InitCommand) findGoFiles(dir string) []string {
 			files = append(files, path)
 		}
 	}
-	
+
 	sort.Strings(files)
 	return files
 }
@@ -233,41 +233,41 @@ func (i *InitCommand) findGoFiles(dir string) []string {
 // findTestFiles finds all test files in the project
 func (i *InitCommand) findTestFiles() []string {
 	var testFiles []string
-	
+
 	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Continue walking
 		}
-		
-		// Skip hidden directories (but not the root .) and vendor/node_modules  
-		if info.IsDir() && path != "." && (strings.HasPrefix(info.Name(), ".") || 
+
+		// Skip hidden directories (but not the root .) and vendor/node_modules
+		if info.IsDir() && path != "." && (strings.HasPrefix(info.Name(), ".") ||
 			info.Name() == "vendor" || info.Name() == "node_modules") {
 			return filepath.SkipDir
 		}
-		
+
 		if strings.HasSuffix(path, "_test.go") {
 			testFiles = append(testFiles, path)
 		}
-		
+
 		return nil
 	})
-	
+
 	if err == nil {
 		sort.Strings(testFiles)
 	}
-	
+
 	return testFiles
 }
 
 // generateEnhancedContext creates a comprehensive context based on actual code exploration
-func (i *InitCommand) generateEnhancedContext(projectName string, existingContext []string, 
-	structure map[string][]string, testing map[string]interface{}, 
+func (i *InitCommand) generateEnhancedContext(projectName string, existingContext []string,
+	structure map[string][]string, testing map[string]interface{},
 	entrypoints []string, build map[string]interface{}, timestamp string) string {
-	
+
 	var sb strings.Builder
-	
+
 	sb.WriteString(fmt.Sprintf("# Project Context: %s\n\n", projectName))
-	
+
 	// Overview section - check if we have CLAUDE.md to extract real overview
 	overview := i.extractOverviewFromExisting(existingContext)
 	if overview != "" {
@@ -275,11 +275,11 @@ func (i *InitCommand) generateEnhancedContext(projectName string, existingContex
 		sb.WriteString(overview)
 		sb.WriteString("\n\n")
 	}
-	
+
 	// Discovered project structure
 	sb.WriteString("## Project Structure\n")
 	sb.WriteString("*Auto-discovered from codebase exploration*\n\n")
-	
+
 	if len(entrypoints) > 0 {
 		sb.WriteString("**Entry Points:**\n")
 		for _, entry := range entrypoints {
@@ -287,7 +287,7 @@ func (i *InitCommand) generateEnhancedContext(projectName string, existingContex
 		}
 		sb.WriteString("\n")
 	}
-	
+
 	if len(structure) > 0 {
 		sb.WriteString("**Code Organization:**\n")
 		for dir, files := range structure {
@@ -306,7 +306,7 @@ func (i *InitCommand) generateEnhancedContext(projectName string, existingContex
 		}
 		sb.WriteString("\n")
 	}
-	
+
 	// Testing information
 	if testFiles, ok := testing["test_files"].([]string); ok && len(testFiles) > 0 {
 		sb.WriteString("## Testing Framework\n")
@@ -326,7 +326,7 @@ func (i *InitCommand) generateEnhancedContext(projectName string, existingContex
 		}
 		sb.WriteString("\n")
 	}
-	
+
 	if scripts, ok := testing["test_scripts"].([]string); ok && len(scripts) > 0 {
 		sb.WriteString("**Test Scripts:**\n")
 		for _, script := range scripts {
@@ -334,7 +334,7 @@ func (i *InitCommand) generateEnhancedContext(projectName string, existingContex
 		}
 		sb.WriteString("\n")
 	}
-	
+
 	if e2eScripts, ok := testing["e2e_scripts"].([]string); ok && len(e2eScripts) > 0 {
 		sb.WriteString("**E2E Test Scripts:**\n")
 		for _, script := range e2eScripts {
@@ -342,12 +342,12 @@ func (i *InitCommand) generateEnhancedContext(projectName string, existingContex
 		}
 		sb.WriteString("\n")
 	}
-	
+
 	// Build system information
 	if goVersion, ok := build["go_version"].(string); ok {
 		sb.WriteString("## Build System\n")
 		sb.WriteString(fmt.Sprintf("**Go Version:** %s\n", goVersion))
-		
+
 		if buildFiles, ok := build["build_files"].([]string); ok && len(buildFiles) > 0 {
 			sb.WriteString("**Build Files:**\n")
 			for _, file := range buildFiles {
@@ -356,7 +356,7 @@ func (i *InitCommand) generateEnhancedContext(projectName string, existingContex
 		}
 		sb.WriteString("\n")
 	}
-	
+
 	// Existing context files
 	if len(existingContext) > 0 {
 		sb.WriteString("## Existing Documentation\n")
@@ -366,7 +366,7 @@ func (i *InitCommand) generateEnhancedContext(projectName string, existingContex
 		}
 		sb.WriteString("\n")
 	}
-	
+
 	// Go module information
 	if goMod, ok := build["go_mod"].(string); ok && goMod != "" {
 		sb.WriteString("## Dependencies\n")
@@ -374,11 +374,11 @@ func (i *InitCommand) generateEnhancedContext(projectName string, existingContex
 		sb.WriteString(goMod)
 		sb.WriteString("```\n\n")
 	}
-	
+
 	// Generation timestamp
 	sb.WriteString("## Generated\n")
 	sb.WriteString(fmt.Sprintf("Context generated on %s by `/init` command with codebase exploration\n", timestamp))
-	
+
 	return sb.String()
 }
 
@@ -386,7 +386,7 @@ func (i *InitCommand) generateEnhancedContext(projectName string, existingContex
 func (i *InitCommand) extractOverviewFromExisting(existingFiles []string) string {
 	// Priority order for extracting overview
 	priority := []string{"CLAUDE.md", "README.md", ".claude/project.md", "PROJECT_CONTEXT.md"}
-	
+
 	for _, priorityFile := range priority {
 		for _, existingFile := range existingFiles {
 			if existingFile == priorityFile {
@@ -395,37 +395,37 @@ func (i *InitCommand) extractOverviewFromExisting(existingFiles []string) string
 					lines := strings.Split(content, "\n")
 					var overview strings.Builder
 					inOverview := false
-					
+
 					for _, line := range lines {
 						trimmed := strings.TrimSpace(line)
-						
+
 						// Look for overview section
 						if strings.Contains(strings.ToLower(trimmed), "overview") && strings.HasPrefix(trimmed, "#") {
 							inOverview = true
 							continue
 						}
-						
+
 						// Stop at next major section
-						if inOverview && strings.HasPrefix(trimmed, "#") && 
+						if inOverview && strings.HasPrefix(trimmed, "#") &&
 							!strings.Contains(strings.ToLower(trimmed), "overview") {
 							break
 						}
-						
+
 						if inOverview && trimmed != "" && !strings.HasPrefix(trimmed, "#") {
 							overview.WriteString(line + "\n")
 						}
-						
+
 						// If we haven't found overview section, take first substantial paragraph
 						if !inOverview && overview.Len() == 0 && len(trimmed) > 50 && !strings.HasPrefix(trimmed, "#") {
 							overview.WriteString(trimmed + "\n")
 						}
-						
+
 						// Limit overview length
 						if overview.Len() > 500 {
 							break
 						}
 					}
-					
+
 					if overview.Len() > 0 {
 						return strings.TrimSpace(overview.String())
 					}
@@ -433,6 +433,6 @@ func (i *InitCommand) extractOverviewFromExisting(existingFiles []string) string
 			}
 		}
 	}
-	
+
 	return ""
 }

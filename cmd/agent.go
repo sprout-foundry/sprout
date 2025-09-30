@@ -68,15 +68,15 @@ func createChatAgent() (*agent.Agent, error) {
 	// Set max iterations if specified
 	chatAgent.SetMaxIterations(maxIterations)
 
-    // Enable streaming by default unless disabled or output is piped
-    // Note: OpenAI streaming doesn't include token usage data, but we'll enable it anyway
-    // for better UX in interactive mode
-    if !agentNoStreaming && isTerminal() {
-        // Enable streaming for all providers in interactive mode
-        chatAgent.EnableStreaming(nil)
-    }
+	// Enable streaming by default unless disabled or output is piped
+	// Note: OpenAI streaming doesn't include token usage data, but we'll enable it anyway
+	// for better UX in interactive mode
+	if !agentNoStreaming && isTerminal() {
+		// Enable streaming for all providers in interactive mode
+		chatAgent.EnableStreaming(nil)
+	}
 
-    // Streaming behavior is uniform across providers unless --no-stream is set.
+	// Streaming behavior is uniform across providers unless --no-stream is set.
 
 	return chatAgent, nil
 }
@@ -96,7 +96,7 @@ func init() {
 func runInteractiveMode(chatAgent *agent.Agent) error {
 	// Create console app with interactive mode configuration
 	app := console.NewConsoleAppWithMode(console.OutputModeInteractive)
-	
+
 	// Configure components for interactive mode
 	config := app.GetConfig()
 	config.Components = []console.ComponentConfig{
@@ -119,10 +119,10 @@ func runInteractiveMode(chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to add agent console: %w", err)
 	}
 
-    // Register cleanup to ensure terminal is fully restored (controller + terminal)
-    console.RegisterCleanup(func() error {
-        return app.Cleanup()
-    })
+	// Register cleanup to ensure terminal is fully restored (controller + terminal)
+	console.RegisterCleanup(func() error {
+		return app.Cleanup()
+	})
 
 	// Ensure cleanup happens on panic
 	defer console.RunCleanup()

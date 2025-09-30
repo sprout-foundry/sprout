@@ -24,7 +24,7 @@ func (h *HarmonyFormatter) FormatMessagesForCompletion(messages []Message, tools
 			EnableAnalysis: true,
 		}
 	}
-	
+
 	// Ensure default reasoning level is set
 	if opts.ReasoningLevel == "" {
 		opts.ReasoningLevel = "high"
@@ -78,7 +78,7 @@ func (h *HarmonyFormatter) FormatMessagesForCompletion(messages []Message, tools
 		}
 
 		result.WriteString("} // namespace functions\n\n")
-		
+
 		// Add tool calling instructions
 		result.WriteString("## Tool Calling Instructions\n\n")
 		result.WriteString("Call tools in the commentary channel using this format:\n")
@@ -114,7 +114,7 @@ func (h *HarmonyFormatter) formatToolParameters(params interface{}) string {
 						}
 					}
 				}
-				
+
 				for paramName, paramDef := range propsMap {
 					if defMap, ok := paramDef.(map[string]interface{}); ok {
 						paramType := "string" // default
@@ -137,7 +137,7 @@ func (h *HarmonyFormatter) formatToolParameters(params interface{}) string {
 			}
 		}
 	}
-	
+
 	return "_: any"
 }
 
@@ -146,11 +146,11 @@ func (h *HarmonyFormatter) validateMessages(messages []Message) error {
 	if len(messages) == 0 {
 		return fmt.Errorf("no messages provided")
 	}
-	
+
 	validRoles := map[string]bool{
 		"system": true, "user": true, "assistant": true, "developer": true, "tool": true,
 	}
-	
+
 	for i, msg := range messages {
 		if !validRoles[msg.Role] {
 			return fmt.Errorf("invalid role '%s' at message %d", msg.Role, i)
@@ -159,7 +159,7 @@ func (h *HarmonyFormatter) validateMessages(messages []Message) error {
 			return fmt.Errorf("empty content at message %d", i)
 		}
 	}
-	
+
 	return nil
 }
 

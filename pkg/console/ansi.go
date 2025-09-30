@@ -7,7 +7,7 @@ import "fmt"
 // MoveCursorSeq returns the escape sequence to move the cursor to (x,y)
 // Note: ANSI uses row (y) first, then column (x).
 func MoveCursorSeq(x, y int) string {
-    return fmt.Sprintf("\033[%d;%dH", y, x)
+	return fmt.Sprintf("\033[%d;%dH", y, x)
 }
 
 // ClearLineSeq returns the escape sequence to clear the entire current line.
@@ -18,9 +18,8 @@ func ClearToEndOfLineSeq() string { return "\033[K" }
 
 // SetScrollRegionSeq returns the escape sequence to set the scrolling region (1-based, inclusive).
 func SetScrollRegionSeq(top, bottom int) string {
-    return fmt.Sprintf("\033[%d;%dr", top, bottom)
+	return fmt.Sprintf("\033[%d;%dr", top, bottom)
 }
 
 // ResetScrollRegionSeq resets the scrolling region to the full screen.
 func ResetScrollRegionSeq() string { return "\033[r" }
-

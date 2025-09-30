@@ -22,20 +22,20 @@ type terminalManager struct {
 	height          int
 	oldState        *term.State
 	rawMode         bool
-    resizeCallbacks []func(width, height int)
-    stopChan        chan struct{}
-    writer          io.Writer
-    stopClosed      bool
+	resizeCallbacks []func(width, height int)
+	stopChan        chan struct{}
+	writer          io.Writer
+	stopClosed      bool
 }
 
 // NewTerminalManager creates a new terminal manager
 func NewTerminalManager() TerminalManager {
-    return &terminalManager{
-        writer:          os.Stdout,
-        resizeCallbacks: make([]func(width, height int), 0),
-        stopChan:        make(chan struct{}),
-        stopClosed:      false,
-    }
+	return &terminalManager{
+		writer:          os.Stdout,
+		resizeCallbacks: make([]func(width, height int), 0),
+		stopChan:        make(chan struct{}),
+		stopClosed:      false,
+	}
 }
 
 // Init initializes the terminal manager
@@ -210,17 +210,17 @@ func (tm *terminalManager) OnResize(callback func(width, height int)) {
 
 // Cleanup cleans up terminal resources
 func (tm *terminalManager) Cleanup() error {
-    // Exit alternate screen first (before locking)
-    tm.ExitAltScreen()
+	// Exit alternate screen first (before locking)
+	tm.ExitAltScreen()
 
-    tm.mu.Lock()
-    defer tm.mu.Unlock()
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
 
-    // Stop resize monitoring
-    if tm.stopChan != nil && !tm.stopClosed {
-        close(tm.stopChan)
-        tm.stopClosed = true
-    }
+	// Stop resize monitoring
+	if tm.stopChan != nil && !tm.stopClosed {
+		close(tm.stopChan)
+		tm.stopClosed = true
+	}
 
 	// Restore terminal mode if needed
 	if tm.rawMode && tm.oldState != nil {
@@ -230,12 +230,12 @@ func (tm *terminalManager) Cleanup() error {
 		}
 	}
 
-    // Show cursor and reset scroll region + styling
-    fmt.Fprint(tm.writer, "\x1b[?25h\x1b[r\x1b[0m")
-    if f, ok := tm.writer.(*os.File); ok {
-        _ = f.Sync()
-    }
-    return nil
+	// Show cursor and reset scroll region + styling
+	fmt.Fprint(tm.writer, "\x1b[?25h\x1b[r\x1b[0m")
+	if f, ok := tm.writer.(*os.File); ok {
+		_ = f.Sync()
+	}
+	return nil
 }
 
 // SetWriter sets the output writer

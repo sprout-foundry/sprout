@@ -1,12 +1,12 @@
 package ui
 
 import (
-    "encoding/json"
-    "fmt"
-    "os"
-    "strings"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
 
-    "github.com/fatih/color"
+	"github.com/fatih/color"
 )
 
 // Common ANSI/SGR sequences used across the UI
@@ -67,7 +67,7 @@ func LoadTheme(themePath string) (*Theme, error) {
 			return theme, nil
 		}
 	}
-	
+
 	return theme, nil
 }
 

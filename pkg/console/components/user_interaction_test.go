@@ -107,11 +107,11 @@ func TestUserInteractionFlow(t *testing.T) {
 	t.Logf("Content area is lines: %d-%d", top, bottom)
 
 	// Check if content appeared in reasonable positions
-    if processingLineNum > 0 && processingLineNum <= 3 {
-        t.Logf("✅ Processing message appears near top of content area")
-    } else if processingLineNum > bottom-4 {
-        t.Errorf("❌ Processing message appears near bottom (line %d) - user might think cursor 'jumped'", processingLineNum)
-    }
+	if processingLineNum > 0 && processingLineNum <= 3 {
+		t.Logf("✅ Processing message appears near top of content area")
+	} else if processingLineNum > bottom-4 {
+		t.Errorf("❌ Processing message appears near bottom (line %d) - user might think cursor 'jumped'", processingLineNum)
+	}
 
 	if responseLineNum > 0 && responseLineNum <= processingLineNum+2 {
 		t.Logf("✅ Agent response appears right after processing message")
@@ -148,24 +148,24 @@ func TestEmptyStartInteraction(t *testing.T) {
 	ac.setupLayoutComponents()
 	ac.autoLayoutManager.InitializeForTest(80, 24)
 
-    // Set up scroll region
-    ac.autoLayoutManager.SetComponentHeight("footer", 4)
-    top, bottom := ac.autoLayoutManager.GetScrollRegion()
-    mockTerminal.SetScrollRegion(top, bottom)
-    mockTerminal.MoveCursor(1, top)
+	// Set up scroll region
+	ac.autoLayoutManager.SetComponentHeight("footer", 4)
+	top, bottom := ac.autoLayoutManager.GetScrollRegion()
+	mockTerminal.SetScrollRegion(top, bottom)
+	mockTerminal.MoveCursor(1, top)
 
-    // Reset content tracking and clear any pre-rendered welcome/help content
-    ac.currentContentLine = 0
-    if ac.consoleBuffer != nil {
-        ac.consoleBuffer.Clear()
-    }
-    // Clear visible content area lines in the mock terminal to simulate a fresh start
-    for y := top; y <= bottom; y++ {
-        mockTerminal.MoveCursor(1, y)
-        mockTerminal.ClearLine()
-    }
-    // Reposition cursor to start of content area
-    mockTerminal.MoveCursor(1, top)
+	// Reset content tracking and clear any pre-rendered welcome/help content
+	ac.currentContentLine = 0
+	if ac.consoleBuffer != nil {
+		ac.consoleBuffer.Clear()
+	}
+	// Clear visible content area lines in the mock terminal to simulate a fresh start
+	for y := top; y <= bottom; y++ {
+		mockTerminal.MoveCursor(1, y)
+		mockTerminal.ClearLine()
+	}
+	// Reposition cursor to start of content area
+	mockTerminal.MoveCursor(1, top)
 
 	t.Logf("=== FRESH START TEST ===")
 	t.Logf("Scroll region: %d-%d", top, bottom)

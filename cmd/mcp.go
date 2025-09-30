@@ -270,7 +270,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 		}
 	}
 
-	// Installation method selection  
+	// Installation method selection
 	fmt.Println("Select installation method:")
 	fmt.Println("1. Remote server (recommended - no Docker needed)")
 	fmt.Println("2. Local Docker")

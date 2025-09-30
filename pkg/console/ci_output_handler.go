@@ -122,7 +122,7 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 			// Split by carriage returns and handle each segment
 			segments := strings.Split(content, "\r")
 			var cleanedSegments []string
-			
+
 			for i, segment := range segments {
 				if i == 0 {
 					// First segment stays as-is

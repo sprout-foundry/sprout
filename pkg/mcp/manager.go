@@ -39,7 +39,7 @@ func (m *DefaultMCPManager) AddServer(config MCPServerConfig) error {
 		// Default to stdio client for backwards compatibility
 		client = NewMCPClient(config, m.logger)
 	}
-	
+
 	m.servers[config.Name] = client
 
 	if m.logger != nil {

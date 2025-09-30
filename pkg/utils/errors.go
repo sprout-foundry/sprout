@@ -255,7 +255,6 @@ func GetCurrentTimestamp() int64 {
 	return 0 // Placeholder - would use time.Now().Unix() in real implementation
 }
 
-
 // Error handling utilities
 
 // RecoverableError wraps an error to make it recoverable

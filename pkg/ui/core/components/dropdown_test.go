@@ -168,40 +168,40 @@ func TestDropdownComponent_Search(t *testing.T) {
 }
 
 func TestDropdownComponent_Backspace(t *testing.T) {
-    // Create store
-    reducer := core.CombineReducers(map[string]core.Reducer{
-        "ui":    core.UIReducer,
-        "focus": core.FocusReducer,
-    })
-    store := core.NewStore(reducer, nil)
+	// Create store
+	reducer := core.CombineReducers(map[string]core.Reducer{
+		"ui":    core.UIReducer,
+		"focus": core.FocusReducer,
+	})
+	store := core.NewStore(reducer, nil)
 
-    // Create dropdown
-    renderer := &mockRenderer{}
-    dropdown := NewDropdownComponent("test-dropdown", store, renderer)
+	// Create dropdown
+	renderer := &mockRenderer{}
+	dropdown := NewDropdownComponent("test-dropdown", store, renderer)
 
-    // Show dropdown
-    items := []interface{}{"Alpha", "Beta"}
-    store.Dispatch(core.ShowDropdownAction("test-dropdown", items, nil))
+	// Show dropdown
+	items := []interface{}{"Alpha", "Beta"}
+	store.Dispatch(core.ShowDropdownAction("test-dropdown", items, nil))
 
-    // Type 'a' and then backspace
-    dropdown.HandleInput([]byte{'a'})
-    dropdown.HandleInput([]byte{127}) // Backspace
+	// Type 'a' and then backspace
+	dropdown.HandleInput([]byte{'a'})
+	dropdown.HandleInput([]byte{127}) // Backspace
 
-    // Check state
-    state := store.GetState()
-    ui := state["ui"].(core.State)
-    dropdowns := ui["dropdowns"].(map[string]interface{})
-    dropdownState := dropdowns["test-dropdown"].(map[string]interface{})
+	// Check state
+	state := store.GetState()
+	ui := state["ui"].(core.State)
+	dropdowns := ui["dropdowns"].(map[string]interface{})
+	dropdownState := dropdowns["test-dropdown"].(map[string]interface{})
 
-    searchText := dropdownState["searchText"].(string)
-    if searchText != "" {
-        t.Errorf("Expected empty search after backspace, got %q", searchText)
-    }
+	searchText := dropdownState["searchText"].(string)
+	if searchText != "" {
+		t.Errorf("Expected empty search after backspace, got %q", searchText)
+	}
 
-    filtered := dropdownState["filteredItems"].([]interface{})
-    if len(filtered) != 2 {
-        t.Errorf("Expected filtered list reset to all items, got %d", len(filtered))
-    }
+	filtered := dropdownState["filteredItems"].([]interface{})
+	if len(filtered) != 2 {
+		t.Errorf("Expected filtered list reset to all items, got %d", len(filtered))
+	}
 }
 
 func TestDropdownComponent_Navigation(t *testing.T) {

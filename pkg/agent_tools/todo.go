@@ -53,94 +53,94 @@ func AddTodo(title, description, priority string) string {
 
 // AddBulkTodos adds multiple todo items at once
 func AddBulkTodos(todos []struct {
-    Title       string
-    Description string
-    Priority    string
+	Title       string
+	Description string
+	Priority    string
 }) string {
-    globalTodoManager.mutex.Lock()
+	globalTodoManager.mutex.Lock()
 
-    var results []string
-    for _, todo := range todos {
-        priority := todo.Priority
-        if priority == "" {
-            priority = "medium"
-        }
+	var results []string
+	for _, todo := range todos {
+		priority := todo.Priority
+		if priority == "" {
+			priority = "medium"
+		}
 
-        item := TodoItem{
-            ID:          fmt.Sprintf("todo_%d", len(globalTodoManager.items)+1),
-            Title:       todo.Title,
-            Description: todo.Description,
-            Status:      "pending",
-            Priority:    priority,
-            CreatedAt:   time.Now(),
-            UpdatedAt:   time.Now(),
-        }
+		item := TodoItem{
+			ID:          fmt.Sprintf("todo_%d", len(globalTodoManager.items)+1),
+			Title:       todo.Title,
+			Description: todo.Description,
+			Status:      "pending",
+			Priority:    priority,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
 
-        globalTodoManager.items = append(globalTodoManager.items, item)
-        results = append(results, fmt.Sprintf("✅ %s (%s)", todo.Title, item.ID))
-    }
-    // Unlock before generating markdown to avoid deadlock (GetTodoListMarkdown uses RLock)
-    globalTodoManager.mutex.Unlock()
+		globalTodoManager.items = append(globalTodoManager.items, item)
+		results = append(results, fmt.Sprintf("✅ %s (%s)", todo.Title, item.ID))
+	}
+	// Unlock before generating markdown to avoid deadlock (GetTodoListMarkdown uses RLock)
+	globalTodoManager.mutex.Unlock()
 
-    // Show the complete todo list for better context
-    return fmt.Sprintf("📝 Added %d todo(s)\n\n**Todo List:**\n%s", len(todos), GetTodoListMarkdown())
+	// Show the complete todo list for better context
+	return fmt.Sprintf("📝 Added %d todo(s)\n\n**Todo List:**\n%s", len(todos), GetTodoListMarkdown())
 }
 
 // UpdateTodoStatus updates the status of a todo item
 func UpdateTodoStatus(id, status string) string {
-    // Validate status before taking the lock
-    validStatuses := map[string]bool{
-        "pending":     true,
-        "in_progress": true,
-        "completed":   true,
-        "cancelled":   true,
-    }
+	// Validate status before taking the lock
+	validStatuses := map[string]bool{
+		"pending":     true,
+		"in_progress": true,
+		"completed":   true,
+		"cancelled":   true,
+	}
 
-    if !validStatuses[status] {
-        return fmt.Sprintf("Invalid status: %s", status)
-    }
+	if !validStatuses[status] {
+		return fmt.Sprintf("Invalid status: %s", status)
+	}
 
-    globalTodoManager.mutex.Lock()
+	globalTodoManager.mutex.Lock()
 
-    var header string
-    for i, item := range globalTodoManager.items {
-        if item.ID == id {
-            globalTodoManager.items[i].Status = status
-            globalTodoManager.items[i].UpdatedAt = time.Now()
+	var header string
+	for i, item := range globalTodoManager.items {
+		if item.ID == id {
+			globalTodoManager.items[i].Status = status
+			globalTodoManager.items[i].UpdatedAt = time.Now()
 
-            // Build header while holding the lock
-            switch status {
-            case "in_progress":
-                header = fmt.Sprintf("🔄 Starting work on: %s\n\n", item.Title)
-            case "completed":
-                // Count remaining todos to optionally add context
-                remainingCount := 0
-                for _, todo := range globalTodoManager.items {
-                    if todo.Status == "pending" || todo.Status == "in_progress" {
-                        remainingCount++
-                    }
-                }
-                if remainingCount == 0 {
-                    header = "🎉 All todos completed!\n\n"
-                } else {
-                    header = fmt.Sprintf("✅ Completed: %s\n\n", item.Title)
-                }
-            case "cancelled":
-                header = fmt.Sprintf("❌ Cancelled: %s\n\n", item.Title)
-            default:
-                header = fmt.Sprintf("📝 Updated: %s to %s\n\n", item.Title, status)
-            }
+			// Build header while holding the lock
+			switch status {
+			case "in_progress":
+				header = fmt.Sprintf("🔄 Starting work on: %s\n\n", item.Title)
+			case "completed":
+				// Count remaining todos to optionally add context
+				remainingCount := 0
+				for _, todo := range globalTodoManager.items {
+					if todo.Status == "pending" || todo.Status == "in_progress" {
+						remainingCount++
+					}
+				}
+				if remainingCount == 0 {
+					header = "🎉 All todos completed!\n\n"
+				} else {
+					header = fmt.Sprintf("✅ Completed: %s\n\n", item.Title)
+				}
+			case "cancelled":
+				header = fmt.Sprintf("❌ Cancelled: %s\n\n", item.Title)
+			default:
+				header = fmt.Sprintf("📝 Updated: %s to %s\n\n", item.Title, status)
+			}
 
-            // Unlock before generating markdown to avoid deadlock
-            globalTodoManager.mutex.Unlock()
-            return header + "**Todo List:**\n" + GetTodoListMarkdown()
-        }
-    }
+			// Unlock before generating markdown to avoid deadlock
+			globalTodoManager.mutex.Unlock()
+			return header + "**Todo List:**\n" + GetTodoListMarkdown()
+		}
+	}
 
-    // Unlock before returning not found
-    globalTodoManager.mutex.Unlock()
+	// Unlock before returning not found
+	globalTodoManager.mutex.Unlock()
 
-    return "Todo not found"
+	return "Todo not found"
 }
 
 // UpdateTodoStatusBulk updates multiple todos at once to reduce tool calls

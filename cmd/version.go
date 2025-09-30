@@ -28,21 +28,21 @@ This command supports both --version and -v flags as well as the standalone vers
 // versionInfo holds the build-time version information
 var (
 	// These variables are set at build time using -ldflags
-	version     = "dev"     // Semantic version (e.g., "v1.0.0")
-	buildDate   = "unknown" // Build timestamp
-	gitCommit   = ""        // Git commit hash
-	gitTag      = ""        // Git tag (if building from tag)
-	goVersion   = runtime.Version()
+	version   = "dev"     // Semantic version (e.g., "v1.0.0")
+	buildDate = "unknown" // Build timestamp
+	gitCommit = ""        // Git commit hash
+	gitTag    = ""        // Git tag (if building from tag)
+	goVersion = runtime.Version()
 )
 
 // init adds flags and sets up the version command
 func init() {
 	// Add version command to root
 	rootCmd.AddCommand(versionCmd)
-	
+
 	// Add --version and -v flags to root command
 	rootCmd.Flags().BoolP("version", "v", false, "Print version information and exit")
-	
+
 	// Hook into the root command's pre-run to handle version flags
 	originalPreRun := rootCmd.PersistentPreRun
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
@@ -51,7 +51,7 @@ func init() {
 			printVersionInfo()
 			os.Exit(0)
 		}
-		
+
 		// Call original pre-run if it exists
 		if originalPreRun != nil {
 			originalPreRun(cmd, args)
@@ -62,12 +62,12 @@ func init() {
 // printVersionInfo prints comprehensive version information
 func printVersionInfo() {
 	fmt.Printf("ledit version %s\n", version)
-	
+
 	// Add build information if available
 	if buildDate != "unknown" {
 		fmt.Printf("Build date: %s\n", buildDate)
 	}
-	
+
 	// Add git information if available
 	if gitCommit != "" {
 		fmt.Printf("Git commit: %s\n", gitCommit)
@@ -75,9 +75,9 @@ func printVersionInfo() {
 			fmt.Printf("Git tag: %s\n", gitTag)
 		}
 	}
-	
+
 	fmt.Printf("Go version: %s\n", goVersion)
-	
+
 	// Add module information from build info
 	if info, ok := debug.ReadBuildInfo(); ok {
 		fmt.Printf("Module: %s\n", info.Main.Path)
@@ -85,6 +85,6 @@ func printVersionInfo() {
 			fmt.Printf("Module version: %s\n", info.Main.Version)
 		}
 	}
-	
+
 	fmt.Printf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 }

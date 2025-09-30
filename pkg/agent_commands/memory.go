@@ -20,11 +20,11 @@ func (c *MemoryCommand) Description() string {
 }
 
 func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
-    // List sessions immediately in reverse order (newest first)
-    sessions, err := agent.ListSessionsWithTimestamps()
-    if err != nil {
-        return fmt.Errorf("failed to list sessions: %v", err)
-    }
+	// List sessions immediately in reverse order (newest first)
+	sessions, err := agent.ListSessionsWithTimestamps()
+	if err != nil {
+		return fmt.Errorf("failed to list sessions: %v", err)
+	}
 
 	if len(sessions) == 0 {
 		fmt.Println("No saved sessions found.")
@@ -49,14 +49,14 @@ func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return nil
 	}
 
-    // If no args and no agent (e.g., in tests), just print sessions and return
-    if chatAgent == nil {
-        fmt.Printf("Found %d saved sessions. Run with a session number to load.\n", len(sessions))
-        return nil
-    }
+	// If no args and no agent (e.g., in tests), just print sessions and return
+	if chatAgent == nil {
+		fmt.Printf("Found %d saved sessions. Run with a session number to load.\n", len(sessions))
+		return nil
+	}
 
-    // Use dropdown for interactive selection
-    return c.selectSessionWithDropdown(sessions, chatAgent)
+	// Use dropdown for interactive selection
+	return c.selectSessionWithDropdown(sessions, chatAgent)
 }
 
 // selectSessionWithDropdown provides interactive session selection with dropdown

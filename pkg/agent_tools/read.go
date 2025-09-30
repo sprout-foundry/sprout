@@ -50,7 +50,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 	const maxFileSize = 100 * 1024 // Increased to 100KB
 	var content []byte
 	var truncated bool
-	
+
 	if info.Size() > maxFileSize {
 		// For large files, read only the maximum size and truncate
 		content = make([]byte, maxFileSize)
@@ -74,12 +74,12 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 	}
 
 	fileContent := string(content)
-	
+
 	// If line range is specified, extract only those lines
 	if startLine > 0 || endLine > 0 {
 		lines := strings.Split(fileContent, "\n")
 		totalLines := len(lines)
-		
+
 		// Validate line ranges
 		if startLine < 1 {
 			startLine = 1
@@ -93,18 +93,18 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		if startLine > endLine {
 			return "", fmt.Errorf("start line %d is greater than end line %d", startLine, endLine)
 		}
-		
+
 		// Extract the specified range (convert to 0-based indexing)
 		selectedLines := lines[startLine-1 : endLine]
 		fileContent = strings.Join(selectedLines, "\n")
-		
+
 		// Add line range info to result
 		return fmt.Sprintf("Lines %d-%d of %s:\n%s", startLine, endLine, cleanPath, fileContent), nil
 	}
-	
+
 	// Add truncation warning if file was truncated
 	if truncated {
-		fileContent = fmt.Sprintf("⚠️ File truncated (>100KB). Showing first %dKB of %s:\n%s\n\n[Content truncated - file is %d bytes total]", 
+		fileContent = fmt.Sprintf("⚠️ File truncated (>100KB). Showing first %dKB of %s:\n%s\n\n[Content truncated - file is %d bytes total]",
 			maxFileSize/1024, cleanPath, fileContent, info.Size())
 	}
 
@@ -138,8 +138,6 @@ func isNonTextFileExtension(filePath string) bool {
 	return false
 }
 
-
-
 // isBinaryContent checks if the content appears to be binary data
 func isBinaryContent(content []byte) bool {
 	// If file is empty, it's not binary
@@ -157,19 +155,19 @@ func isBinaryContent(content []byte) bool {
 	// Check for high percentage of non-printable characters
 	nonPrintableCount := 0
 	totalBytes := len(content)
-	
+
 	// Sample first 1KB for efficiency with large files
 	sampleSize := totalBytes
 	if sampleSize > 1024 {
 		sampleSize = 1024
 	}
-	
+
 	for i := 0; i < sampleSize; i++ {
 		if content[i] < 32 && content[i] != 9 && content[i] != 10 && content[i] != 13 { // Not tab, LF, CR
 			nonPrintableCount++
 		}
 	}
-	
+
 	// If more than 30% of sampled bytes are non-printable, consider it binary
 	if float64(nonPrintableCount)/float64(sampleSize) > 0.3 {
 		return true

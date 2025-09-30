@@ -8,7 +8,7 @@ import (
 
 // Local constants to avoid importing tools package and creating cycle
 const (
-	CategoryWeb            = "web"
+	CategoryWeb             = "web"
 	PermissionNetworkAccess = "network_access"
 )
 
@@ -31,8 +31,8 @@ func NewMCPToolWrapper(mcpTool MCPTool, manager MCPManager) *MCPToolWrapper {
 	return &MCPToolWrapper{
 		mcpTool:   mcpTool,
 		manager:   manager,
-		category:  CategoryWeb, // Default category for MCP tools
-		timeout:   30 * time.Second,  // Default timeout
+		category:  CategoryWeb,      // Default category for MCP tools
+		timeout:   30 * time.Second, // Default timeout
 		available: true,
 	}
 }

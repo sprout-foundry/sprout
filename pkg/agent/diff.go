@@ -12,13 +12,13 @@ import (
 // ShowColoredDiff displays a colored diff between old and new content, focusing on actual changes
 // Uses Python's difflib for better diff quality when available, falls back to Go implementation
 func (a *Agent) ShowColoredDiff(oldContent, newContent string, maxLines int) {
-    // Try Python difflib first for better diff quality
-    if a.showPythonDiff(oldContent, newContent, maxLines) {
-        return
-    }
+	// Try Python difflib first for better diff quality
+	if a.showPythonDiff(oldContent, newContent, maxLines) {
+		return
+	}
 
-    // Fallback to Go implementation
-    a.showGoDiff(oldContent, newContent, maxLines)
+	// Fallback to Go implementation
+	a.showGoDiff(oldContent, newContent, maxLines)
 }
 
 // showPythonDiff attempts to use Python's difflib for superior diff output
@@ -139,89 +139,89 @@ if __name__ == "__main__":
 	}
 
 	// Execute Python script
-    cmd := exec.Command("python3", scriptFile)
-    out, err := cmd.CombinedOutput()
-    if err != nil {
-        if a.debug {
-            a.debugLog("python3 execution failed: %v, trying python", err)
-        }
-        // Try python instead of python3
-        cmd = exec.Command("python", scriptFile)
-        out, err = cmd.CombinedOutput()
-        if err != nil {
-            if a.debug {
-                a.debugLog("python execution also failed: %v, falling back to Go diff", err)
-            }
-            return false
-        }
-    }
+	cmd := exec.Command("python3", scriptFile)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if a.debug {
+			a.debugLog("python3 execution failed: %v, trying python", err)
+		}
+		// Try python instead of python3
+		cmd = exec.Command("python", scriptFile)
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			if a.debug {
+				a.debugLog("python execution also failed: %v, falling back to Go diff", err)
+			}
+			return false
+		}
+	}
 
-    // Route diff output through agent's streaming-aware printer to avoid being overwritten
-    a.PrintLine(strings.ReplaceAll(string(out), "\r\n", "\n"))
-    return true
+	// Route diff output through agent's streaming-aware printer to avoid being overwritten
+	a.PrintLine(strings.ReplaceAll(string(out), "\r\n", "\n"))
+	return true
 }
 
 // showGoDiff provides the fallback Go implementation
 func (a *Agent) showGoDiff(oldContent, newContent string, maxLines int) {
-    const red = "\033[31m"   // Red for deletions
-    const green = "\033[32m" // Green for additions
-    const reset = "\033[0m"
+	const red = "\033[31m"   // Red for deletions
+	const green = "\033[32m" // Green for additions
+	const reset = "\033[0m"
 
-    oldLines := strings.Split(oldContent, "\n")
-    newLines := strings.Split(newContent, "\n")
+	oldLines := strings.Split(oldContent, "\n")
+	newLines := strings.Split(newContent, "\n")
 
-    // Find the actual changes by identifying differing regions
-    changes := a.findChanges(oldLines, newLines)
+	// Find the actual changes by identifying differing regions
+	changes := a.findChanges(oldLines, newLines)
 
-    var b strings.Builder
-    if len(changes) == 0 {
-        b.WriteString("No changes detected\n")
-        a.PrintLine(b.String())
-        return
-    }
+	var b strings.Builder
+	if len(changes) == 0 {
+		b.WriteString("No changes detected\n")
+		a.PrintLine(b.String())
+		return
+	}
 
-    b.WriteString("File changes:\n")
-    b.WriteString("----------------------------------------\n")
+	b.WriteString("File changes:\n")
+	b.WriteString("----------------------------------------\n")
 
-    totalLinesShown := 0
+	totalLinesShown := 0
 
-    for _, change := range changes {
-        if totalLinesShown >= maxLines {
-            b.WriteString(fmt.Sprintf("... (truncated after %d lines)\n", maxLines))
-            break
-        }
+	for _, change := range changes {
+		if totalLinesShown >= maxLines {
+			b.WriteString(fmt.Sprintf("... (truncated after %d lines)\n", maxLines))
+			break
+		}
 
-        // Show deletions (old content)
-        if change.OldLength > 0 {
-            for i := 0; i < change.OldLength && totalLinesShown < maxLines; i++ {
-                lineNum := change.OldStart + i
-                if lineNum < len(oldLines) {
-                    b.WriteString(fmt.Sprintf("%s- %s%s\n", red, oldLines[lineNum], reset))
-                    totalLinesShown++
-                }
-            }
-        }
+		// Show deletions (old content)
+		if change.OldLength > 0 {
+			for i := 0; i < change.OldLength && totalLinesShown < maxLines; i++ {
+				lineNum := change.OldStart + i
+				if lineNum < len(oldLines) {
+					b.WriteString(fmt.Sprintf("%s- %s%s\n", red, oldLines[lineNum], reset))
+					totalLinesShown++
+				}
+			}
+		}
 
-        // Show additions (new content)
-        if change.NewLength > 0 {
-            for i := 0; i < change.NewLength && totalLinesShown < maxLines; i++ {
-                lineNum := change.NewStart + i
-                if lineNum < len(newLines) {
-                    b.WriteString(fmt.Sprintf("%s+ %s%s\n", green, newLines[lineNum], reset))
-                    totalLinesShown++
-                }
-            }
-        }
+		// Show additions (new content)
+		if change.NewLength > 0 {
+			for i := 0; i < change.NewLength && totalLinesShown < maxLines; i++ {
+				lineNum := change.NewStart + i
+				if lineNum < len(newLines) {
+					b.WriteString(fmt.Sprintf("%s+ %s%s\n", green, newLines[lineNum], reset))
+					totalLinesShown++
+				}
+			}
+		}
 
-        // Add separator between changes
-        if totalLinesShown < maxLines {
-            b.WriteString("\n")
-            totalLinesShown++
-        }
-    }
+		// Add separator between changes
+		if totalLinesShown < maxLines {
+			b.WriteString("\n")
+			totalLinesShown++
+		}
+	}
 
-    b.WriteString("----------------------------------------\n")
-    a.PrintLine(b.String())
+	b.WriteString("----------------------------------------\n")
+	a.PrintLine(b.String())
 }
 
 // isPythonAvailable checks if Python is available on the system

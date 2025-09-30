@@ -22,6 +22,8 @@ type terminalManager struct {
 	height          int
 	oldState        *term.State
 	rawMode         bool
+	altScreen       bool
+	mouseTracking   bool
 	resizeCallbacks []func(width, height int)
 	stopChan        chan struct{}
 	writer          io.Writer
@@ -212,6 +214,7 @@ func (tm *terminalManager) OnResize(callback func(width, height int)) {
 func (tm *terminalManager) Cleanup() error {
 	// Exit alternate screen first (before locking)
 	tm.ExitAltScreen()
+	tm.DisableMouseReporting()
 
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -267,6 +270,11 @@ func (tm *terminalManager) RestoreCursor() error {
 // ClearScreen clears the entire screen
 func (tm *terminalManager) ClearScreen() error {
 	return utils.ClearScreen()
+}
+
+func (tm *terminalManager) ClearScrollback() error {
+	fmt.Fprint(tm.writer, "\x1b[3J")
+	return nil
 }
 
 // ClearLine clears the current line
@@ -332,15 +340,66 @@ func (tm *terminalManager) Flush() error {
 
 // EnterAltScreen enters the alternate screen buffer
 func (tm *terminalManager) EnterAltScreen() error {
-	// Windows Terminal supports alternate screen buffer
-	// Also disable mouse reporting to prevent scroll issues
-	fmt.Fprint(tm.writer, "\x1b[?1049h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l")
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if tm.altScreen {
+		return nil
+	}
+
+	if _, err := fmt.Fprint(tm.writer, "\x1b[?1049h"); err != nil {
+		return err
+	}
+	tm.altScreen = true
+	tm.mouseTracking = false
 	return nil
 }
 
 // ExitAltScreen exits the alternate screen buffer
 func (tm *terminalManager) ExitAltScreen() error {
-	// Windows Terminal supports alternate screen buffer
-	fmt.Fprint(tm.writer, "\x1b[?1049l")
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if !tm.altScreen {
+		return nil
+	}
+
+	if tm.mouseTracking {
+		if _, err := fmt.Fprint(tm.writer, "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l"); err != nil {
+			return err
+		}
+		tm.mouseTracking = false
+	}
+
+	if _, err := fmt.Fprint(tm.writer, "\x1b[?1049l"); err != nil {
+		return err
+	}
+	tm.altScreen = false
+	return nil
+}
+
+func (tm *terminalManager) EnableMouseReporting() error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if tm.mouseTracking {
+		return nil
+	}
+
+	if _, err := fmt.Fprint(tm.writer, "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h"); err != nil {
+		return err
+	}
+	tm.mouseTracking = true
+	return nil
+}
+
+func (tm *terminalManager) DisableMouseReporting() error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if _, err := fmt.Fprint(tm.writer, "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l"); err != nil {
+		return err
+	}
+	tm.mouseTracking = false
 	return nil
 }

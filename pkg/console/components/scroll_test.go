@@ -113,55 +113,98 @@ func TestInputManager_MouseEventHandling(t *testing.T) {
 
 	// Mock scroll callbacks
 	var scrollUpCount, scrollDownCount int
+	var scrollUpLines, scrollDownLines int
 
 	im.SetScrollCallbacks(
 		func(lines int) {
 			scrollUpCount++
+			scrollUpLines = lines
 		},
 		func(lines int) {
 			scrollDownCount++
+			scrollDownLines = lines
 		},
 	)
 
-	// Test mouse events are properly ignored
-	tests := []struct {
-		name          string
-		mouseSequence []byte
-		expectedUp    int
-		expectedDown  int
-	}{
-		{
-			name:          "X11 mouse event (ESC [ M)",
-			mouseSequence: []byte{27, '[', 'M', 32, 10, 20}, // ESC [ M button x y
-			expectedUp:    0,
-			expectedDown:  0,
-		},
-		{
-			name:          "SGR mouse event (ESC [ <)",
-			mouseSequence: []byte{27, '[', '<', 0, ';', 10, ';', 20, 'M'}, // ESC [ < button;x;y M
-			expectedUp:    0,
-			expectedDown:  0,
-		},
+	im.termWidth = 80
+	im.termHeight = 24
+	im.running = true
+
+	focusMode := "input"
+	im.SetFocusProvider(func() string { return focusMode })
+	im.SetScrollingProvider(func() bool { return true })
+
+	sgrWheelDown := []byte{27, '[', '<', '6', '5', ';', '1', '0', ';', '5', 'M'}
+	sgrWheelUp := []byte{27, '[', '<', '6', '4', ';', '1', '0', ';', '5', 'M'}
+	legacyWheelUp := []byte{27, '[', 'M', 32 + 64, 35, 40}
+	legacyWheelDown := []byte{27, '[', 'M', 32 + 65, 35, 40}
+
+	// Helper to reset counters
+	resetCounters := func() {
+		scrollUpCount = 0
+		scrollDownCount = 0
+		scrollUpLines = 0
+		scrollDownLines = 0
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Reset counters
-			scrollUpCount = 0
-			scrollDownCount = 0
+	pagelines := im.mouseScrollLines()
 
-			// Process the mouse sequence
-			im.processKeystrokes(tt.mouseSequence)
+	t.Run("InputFocusIgnoresMouse", func(t *testing.T) {
+		resetCounters()
+		focusMode = "input"
+		im.processKeystrokes(sgrWheelDown)
+		if scrollUpCount != 0 || scrollDownCount != 0 {
+			t.Fatalf("expected no scroll callbacks in input focus, got up=%d down=%d", scrollUpCount, scrollDownCount)
+		}
+	})
 
-			// Verify no scroll callbacks were triggered
-			if scrollUpCount != tt.expectedUp {
-				t.Errorf("%s: expected %d scroll up calls, got %d", tt.name, tt.expectedUp, scrollUpCount)
-			}
-			if scrollDownCount != tt.expectedDown {
-				t.Errorf("%s: expected %d scroll down calls, got %d", tt.name, tt.expectedDown, scrollDownCount)
-			}
-		})
-	}
+	t.Run("OutputFocusScrollsSGRWheelDown", func(t *testing.T) {
+		resetCounters()
+		focusMode = "output"
+		im.processKeystrokes(sgrWheelDown)
+		if scrollDownCount != 1 {
+			t.Fatalf("expected one scroll down callback, got %d", scrollDownCount)
+		}
+		if scrollDownLines != pagelines {
+			t.Fatalf("expected scroll down lines %d, got %d", pagelines, scrollDownLines)
+		}
+	})
+
+	t.Run("OutputFocusScrollsSGRWheelUp", func(t *testing.T) {
+		resetCounters()
+		focusMode = "output"
+		im.processKeystrokes(sgrWheelUp)
+		if scrollUpCount != 1 {
+			t.Fatalf("expected one scroll up callback, got %d", scrollUpCount)
+		}
+		if scrollUpLines != pagelines {
+			t.Fatalf("expected scroll up lines %d, got %d", pagelines, scrollUpLines)
+		}
+	})
+
+	t.Run("OutputFocusScrollsLegacyWheelDown", func(t *testing.T) {
+		resetCounters()
+		focusMode = "output"
+		im.processKeystrokes(legacyWheelDown)
+		if scrollDownCount != 1 {
+			t.Fatalf("expected one legacy scroll down callback, got %d", scrollDownCount)
+		}
+		if scrollDownLines != pagelines {
+			t.Fatalf("expected legacy scroll down lines %d, got %d", pagelines, scrollDownLines)
+		}
+	})
+
+	t.Run("OutputFocusScrollsLegacyWheelUp", func(t *testing.T) {
+		resetCounters()
+		focusMode = "output"
+		im.processKeystrokes(legacyWheelUp)
+		if scrollUpCount != 1 {
+			t.Fatalf("expected one legacy scroll up callback, got %d", scrollUpCount)
+		}
+		if scrollUpLines != pagelines {
+			t.Fatalf("expected legacy scroll up lines %d, got %d", pagelines, scrollUpLines)
+		}
+	})
 }
 
 func TestStreamingFormatter_NoLineDuplication(t *testing.T) {

@@ -116,10 +116,30 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 
 	// In CI/non-interactive mode, fix line endings and strip ANSI codes
 	if !h.isInteractive || h.isCI {
-		// Replace carriage returns without newlines with proper newlines
-		// This handles progress-style updates that use \r
-		if strings.Contains(content, "\r") && !strings.Contains(content, "\n") {
-			content = strings.ReplaceAll(content, "\r", "\n")
+		// Handle carriage returns properly - replace \r without \n with proper newlines
+		// This prevents overwriting issues in CLI mode
+		if strings.Contains(content, "\r") {
+			// Split by carriage returns and handle each segment
+			segments := strings.Split(content, "\r")
+			var cleanedSegments []string
+			
+			for i, segment := range segments {
+				if i == 0 {
+					// First segment stays as-is
+					cleanedSegments = append(cleanedSegments, segment)
+				} else {
+					// Subsequent segments after \r should start new lines
+					// But only if they contain actual content
+					if strings.TrimSpace(segment) != "" {
+						cleanedSegments = append(cleanedSegments, "\n"+segment)
+					} else {
+						// Empty segments after \r are likely progress updates
+						// Skip them to avoid extra blank lines
+						cleanedSegments = append(cleanedSegments, "")
+					}
+				}
+			}
+			content = strings.Join(cleanedSegments, "")
 		}
 
 		// Strip ANSI escape codes

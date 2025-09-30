@@ -1,11 +1,11 @@
 package components
 
 import (
-    "context"
-    "fmt"
-    "os"
-    "sync"
-    "time"
+	"context"
+	"fmt"
+	"os"
+	"sync"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/ui/core"
@@ -60,7 +60,7 @@ func NewConsoleAppWithMode(terminal console.TerminalManager, mode console.Output
 	// Set the mode-specific configuration
 	// Note: Raw mode is set during proper initialization, not here
 	// The mode-aware configuration will be applied when the console app is initialized
-	
+
 	return &ConsoleApp{
 		app:      app,
 		terminal: terminal,
@@ -114,12 +114,12 @@ func (c *ConsoleApp) ShowDropdown(ctx context.Context, items []interface{}, opti
 	// Keep terminal in raw mode for proper input handling
 	// The dropdown needs raw mode to capture arrow keys properly
 	wasRawMode := c.terminal.IsRawMode()
-    if !wasRawMode {
-        c.terminal.SetRawMode(true)
-        // Allow terminal to settle in raw mode to avoid losing the first keystroke
-        time.Sleep(30 * time.Millisecond)
-        defer c.terminal.SetRawMode(false)
-    }
+	if !wasRawMode {
+		c.terminal.SetRawMode(true)
+		// Allow terminal to settle in raw mode to avoid losing the first keystroke
+		time.Sleep(30 * time.Millisecond)
+		defer c.terminal.SetRawMode(false)
+	}
 
 	c.mu.Unlock()
 

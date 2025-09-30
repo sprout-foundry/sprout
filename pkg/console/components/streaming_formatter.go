@@ -108,10 +108,10 @@ func (sf *StreamingFormatter) Write(content string) {
 	if sf.isFirstChunk {
 		sf.isFirstChunk = false
 		sf.firstContent = true // Mark that the next content should be flushed aggressively
-		
+
 		// Release the main mutex before acquiring output mutex to avoid deadlock
 		sf.mu.Unlock()
-		
+
 		if sf.outputMutex != nil {
 			sf.outputMutex.Lock()
 			// Ensure we're on a new line before showing streaming indicator
@@ -128,10 +128,10 @@ func (sf *StreamingFormatter) Write(content string) {
 			sf.println("") // Add blank line for spacing
 			sf.outputMutex.Unlock()
 		}
-		
+
 		// Re-acquire the main mutex
 		sf.mu.Lock()
-		
+
 		// IMPORTANT: Update state to reflect that we just output newlines
 		sf.lastWasNewline = true
 	}

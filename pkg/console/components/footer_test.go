@@ -193,13 +193,13 @@ func TestFooterComponent_CostFormatting(t *testing.T) {
 		cost     float64
 		expected string // What the logic should produce
 	}{
-		{5.50, "$5.50"},           // >= 1.0
-		{0.123, "$0.123"},         // >= 0.01
-		{0.000416, "$0.000416"},   // > 0, small amount
-		{0.0, "$0.000"},           // exactly 0
-		{10.75, "$10.75"},         // >= 1.0
-		{0.05, "$0.050"},          // >= 0.01
-		{0.001234, "$0.001234"},   // > 0, very small
+		{5.50, "$5.50"},         // >= 1.0
+		{0.123, "$0.123"},       // >= 0.01
+		{0.000416, "$0.000416"}, // > 0, small amount
+		{0.0, "$0.000"},         // exactly 0
+		{10.75, "$10.75"},       // >= 1.0
+		{0.05, "$0.050"},        // >= 0.01
+		{0.001234, "$0.001234"}, // > 0, very small
 	}
 
 	for _, tc := range testCases {

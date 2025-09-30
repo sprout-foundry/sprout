@@ -27,7 +27,7 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	command := strings.Join(args, " ")
-	
+
 	// Execute the shell command
 	result, err := tools.ExecuteShellCommand(context.Background(), command)
 	if err != nil {
@@ -37,14 +37,14 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Printf("✅ Command executed successfully:\n")
 	fmt.Printf("Command: %s\n", command)
 	fmt.Printf("Output:\n%s\n", result)
-	
+
 	return nil
 }
 
 // IsShellCommand checks if a prompt starts with common shell tools
 func IsShellCommand(prompt string) bool {
 	prompt = strings.TrimSpace(prompt)
-	
+
 	// Common shell command prefixes
 	shellPrefixes := []string{
 		"ls", "cd", "pwd", "cat", "echo", "grep", "find", "git",
@@ -55,13 +55,13 @@ func IsShellCommand(prompt string) bool {
 		"cargo", "dotnet", "php", "ruby", "perl", "bash", "zsh",
 		"fish", "pwsh", "powershell", "cmd", "winget", "scoop",
 	}
-	
+
 	for _, prefix := range shellPrefixes {
 		if strings.HasPrefix(prompt, prefix+" ") || prompt == prefix {
 			return true
 		}
 	}
-	
+
 	return false
 }
 

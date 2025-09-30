@@ -14,19 +14,19 @@ type Theme struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Colors      struct {
-		Primary       string `json:"primary"`
-		Secondary     string `json:"secondary"`
-		Success       string `json:"success"`
-		Warning       string `json:"warning"`
-		Error         string `json:"error"`
-		Info          string `json:"info"`
-		Comment       string `json:"comment"`
-		Keyword       string `json:"keyword"`
-		String        string `json:"string"`
-		Number        string `json:"number"`
-		Function      string `json:"function"`
-		Background    string `json:"background"`
-		Foreground    string `json:"foreground"`
+		Primary    string `json:"primary"`
+		Secondary  string `json:"secondary"`
+		Success    string `json:"success"`
+		Warning    string `json:"warning"`
+		Error      string `json:"error"`
+		Info       string `json:"info"`
+		Comment    string `json:"comment"`
+		Keyword    string `json:"keyword"`
+		String     string `json:"string"`
+		Number     string `json:"number"`
+		Function   string `json:"function"`
+		Background string `json:"background"`
+		Foreground string `json:"foreground"`
 	} `json:"colors"`
 }
 
@@ -49,19 +49,19 @@ func (tm *ThemeManager) LoadDefaultTheme() *Theme {
 		Name:        "default",
 		Description: "Default theme",
 		Colors: struct {
-			Primary       string `json:"primary"`
-			Secondary     string `json:"secondary"`
-			Success       string `json:"success"`
-			Warning       string `json:"warning"`
-			Error         string `json:"error"`
-			Info          string `json:"info"`
-			Comment       string `json:"comment"`
-			Keyword       string `json:"keyword"`
-			String        string `json:"string"`
-			Number        string `json:"number"`
-			Function      string `json:"function"`
-			Background    string `json:"background"`
-			Foreground    string `json:"foreground"`
+			Primary    string `json:"primary"`
+			Secondary  string `json:"secondary"`
+			Success    string `json:"success"`
+			Warning    string `json:"warning"`
+			Error      string `json:"error"`
+			Info       string `json:"info"`
+			Comment    string `json:"comment"`
+			Keyword    string `json:"keyword"`
+			String     string `json:"string"`
+			Number     string `json:"number"`
+			Function   string `json:"function"`
+			Background string `json:"background"`
+			Foreground string `json:"foreground"`
 		}{
 			Primary:    "cyan",
 			Secondary:  "magenta",

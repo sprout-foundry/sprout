@@ -7,8 +7,8 @@ import (
 
 // InteractiveOutputHandler handles interactive buffer mode output (Vim-like)
 type InteractiveOutputHandler struct {
-	buffer        *ConsoleBuffer
-	terminal      TerminalManager
+	buffer   *ConsoleBuffer
+	terminal TerminalManager
 }
 
 // NewInteractiveOutputHandler creates a new interactive output handler
@@ -66,10 +66,10 @@ func (h *InteractiveOutputHandler) addToBuffer(content string) {
 	if strings.TrimSpace(content) == "" {
 		return
 	}
-	
+
 	// Add to buffer for scrolling history
 	h.buffer.AddLine(content)
-	
+
 	// Also write directly to terminal for immediate display
 	// This ensures content appears at the correct cursor position
 	if h.terminal != nil {

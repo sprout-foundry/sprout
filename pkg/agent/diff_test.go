@@ -28,7 +28,7 @@ func TestShowColoredDiff(t *testing.T) {
 	// Test with simple content change (just ensure it doesn't panic)
 	oldContent := "line 1\nline 2\nline 3"
 	newContent := "line 1\nmodified line 2\nline 3"
-	
+
 	// This should not panic - we can't easily test output without capturing stdout
 	agent.ShowColoredDiff(oldContent, newContent, 10)
 }
@@ -36,20 +36,20 @@ func TestShowColoredDiff(t *testing.T) {
 // TestIsPythonAvailable tests Python availability detection
 func TestIsPythonAvailable(t *testing.T) {
 	result := isPythonAvailable()
-	
+
 	// Check if the result matches actual system state
 	python3Available := false
 	pythonAvailable := false
-	
+
 	if _, err := exec.LookPath("python3"); err == nil {
 		python3Available = true
 	}
 	if _, err := exec.LookPath("python"); err == nil {
 		pythonAvailable = true
 	}
-	
+
 	expectedResult := python3Available || pythonAvailable
-	
+
 	if result != expectedResult {
 		t.Errorf("isPythonAvailable() = %v, expected %v", result, expectedResult)
 	}
@@ -76,7 +76,7 @@ func TestShowGoDiff(t *testing.T) {
 	// Test with simple content change (just ensure it doesn't panic)
 	oldContent := "line 1\nline 2\nline 3"
 	newContent := "line 1\nmodified line 2\nline 3"
-	
+
 	// This should not panic
 	agent.showGoDiff(oldContent, newContent, 10)
 }
@@ -101,10 +101,10 @@ func TestShowPythonDiff(t *testing.T) {
 
 	oldContent := "line 1\nline 2\nline 3"
 	newContent := "line 1\nmodified line 2\nline 3"
-	
+
 	// Test Python diff - this will return false if Python is not available
 	result := agent.showPythonDiff(oldContent, newContent, 10)
-	
+
 	// The result should match Python availability
 	pythonAvailable := isPythonAvailable()
 	if pythonAvailable {
@@ -199,7 +199,7 @@ func TestDiffChangeStruct(t *testing.T) {
 		NewStart:  3,
 		NewLength: 4,
 	}
-	
+
 	if change.OldStart != 1 {
 		t.Errorf("Expected OldStart to be 1, got %d", change.OldStart)
 	}
@@ -234,13 +234,13 @@ func TestShowColoredDiffWithEmptyContent(t *testing.T) {
 
 	// Test with empty old content
 	agent.ShowColoredDiff("", "new content", 10)
-	
+
 	// Test with empty new content
 	agent.ShowColoredDiff("old content", "", 10)
-	
+
 	// Test with both empty
 	agent.ShowColoredDiff("", "", 10)
-	
+
 	// Test with very long content
 	longContent := strings.Repeat("line\n", 1000)
 	agent.ShowColoredDiff(longContent, longContent+"new line", 5)
@@ -268,10 +268,10 @@ func TestFallbackBehavior(t *testing.T) {
 	originalPath := os.Getenv("PATH")
 	os.Setenv("PATH", "/nonexistent")
 	defer os.Setenv("PATH", originalPath)
-	
+
 	// This should fall back to Go implementation and not panic
 	oldContent := "line 1\nline 2\nline 3"
 	newContent := "line 1\nmodified line 2\nline 3"
-	
+
 	agent.ShowColoredDiff(oldContent, newContent, 10)
 }

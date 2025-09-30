@@ -26,4 +26,3 @@ func SaveWorkspaceFile(ws WorkspaceFile) error {
 	}
 	return os.WriteFile(".ledit/workspace.json", data, 0644)
 }
-

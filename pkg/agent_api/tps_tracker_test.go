@@ -11,10 +11,10 @@ func TestTPSTracker(t *testing.T) {
 	// Test recording a request
 	duration := 2 * time.Second
 	completionTokens := 100
-	
+
 	tps := tracker.RecordRequest(duration, completionTokens)
 	expectedTPS := 50.0 // 100 tokens / 2 seconds = 50 TPS
-	
+
 	if tps != expectedTPS {
 		t.Errorf("Expected TPS %.1f, got %.1f", expectedTPS, tps)
 	}

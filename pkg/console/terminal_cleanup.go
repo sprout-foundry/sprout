@@ -1,10 +1,10 @@
 package console
 
 import (
-    "fmt"
-    "os"
-    "os/signal"
-    "sync"
+	"fmt"
+	"os"
+	"os/signal"
+	"sync"
 )
 
 // TerminalCleanupHandler ensures terminal is properly restored on exit
@@ -52,21 +52,21 @@ func (h *TerminalCleanupHandler) Cleanup() {
 
 // installSignalHandlers sets up signal handlers for graceful shutdown
 func (h *TerminalCleanupHandler) installSignalHandlers() {
-    sigChan := make(chan os.Signal, 1)
-    // Use cross-platform helper to get appropriate signals per OS
-    sigs := signalsToCapture()
-    if len(sigs) > 0 {
-        signal.Notify(sigChan, sigs...)
-    }
+	sigChan := make(chan os.Signal, 1)
+	// Use cross-platform helper to get appropriate signals per OS
+	sigs := signalsToCapture()
+	if len(sigs) > 0 {
+		signal.Notify(sigChan, sigs...)
+	}
 
 	go func() {
 		sig := <-sigChan
 		// Run cleanup on signal
 		h.Cleanup()
 
-        // Re-raise or exit using cross-platform helper
-        reRaiseSignal(sig)
-    }()
+		// Re-raise or exit using cross-platform helper
+		reRaiseSignal(sig)
+	}()
 }
 
 // EnsureCleanup should be deferred in main to ensure cleanup on panic

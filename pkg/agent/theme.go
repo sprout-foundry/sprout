@@ -1,10 +1,10 @@
 package agent
 
 import (
-    "encoding/json"
-    "fmt"
-    "io/ioutil"
-    "os"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
 )
 
 // Theme represents a color theme configuration

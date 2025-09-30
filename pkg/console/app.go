@@ -30,6 +30,18 @@ func NewConsoleApp() ConsoleApp {
 	}
 }
 
+// NewConsoleAppWithMode creates a new console application with mode-aware configuration
+func NewConsoleAppWithMode(mode OutputMode) ConsoleApp {
+	app := &consoleApp{
+		components: make(map[string]Component),
+	}
+	
+	// Set the mode-specific configuration
+	app.config = ConfigForMode(mode)
+	
+	return app
+}
+
 // Init initializes the console app
 func (ca *consoleApp) Init(config *Config) error {
 	ca.mu.Lock()
@@ -471,15 +483,36 @@ func (ca *consoleApp) render() {
 	ca.terminal.Flush()
 }
 
-// DefaultConfig returns the default configuration
-func DefaultConfig() *Config {
-	return &Config{
-		RawMode:        true,
-		MouseEnabled:   false,
-		AltScreen:      false,
-		MinWidth:       80,
-		MinHeight:      24,
-		EventQueueSize: 100,
-		Debug:          false,
+// ConfigForMode returns a configuration appropriate for the given output mode
+func ConfigForMode(mode OutputMode) *Config {
+	switch mode {
+	case OutputModeCLI:
+		return &Config{
+			RawMode:        false, // CLI mode uses cooked terminal
+			MouseEnabled:   false,
+			AltScreen:      false,
+			MinWidth:       80,
+			MinHeight:      24,
+			EventQueueSize: 100,
+			Debug:          false,
+		}
+	case OutputModeInteractive:
+		return &Config{
+			RawMode:        true, // Interactive mode uses raw terminal
+			MouseEnabled:   false,
+			AltScreen:      true,
+			MinWidth:       80,
+			MinHeight:      24,
+			EventQueueSize: 100,
+			Debug:          false,
+		}
+	default:
+		// Default to CLI mode for safety
+		return ConfigForMode(OutputModeCLI)
 	}
+}
+
+// DefaultConfig returns the default configuration (compatible with existing code)
+func DefaultConfig() *Config {
+	return ConfigForMode(OutputModeInteractive) // Maintain existing behavior
 }

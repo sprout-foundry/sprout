@@ -94,21 +94,17 @@ func init() {
 
 // runSimpleInteractiveMode provides a simple console-based interactive mode
 func runInteractiveMode(chatAgent *agent.Agent) error {
-	// Create console app
-	app := console.NewConsoleApp()
-
-	// Configure app
-	config := &console.Config{
-		RawMode:      true,
-		MouseEnabled: false,
-		AltScreen:    true, // Use alternate screen buffer like vim
-		Components: []console.ComponentConfig{
-			{
-				ID:      "agent-console",
-				Type:    "agent",
-				Region:  "main",
-				Enabled: true,
-			},
+	// Create console app with interactive mode configuration
+	app := console.NewConsoleAppWithMode(console.OutputModeInteractive)
+	
+	// Configure components for interactive mode
+	config := app.GetConfig()
+	config.Components = []console.ComponentConfig{
+		{
+			ID:      "agent-console",
+			Type:    "agent",
+			Region:  "main",
+			Enabled: true,
 		},
 	}
 
@@ -622,8 +618,7 @@ Examples:
 
 				err := executeDirectAgentCommand(chatAgent, userIntent)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "\n❌ Error: %v\n", err)
-					os.Exit(1)
+					return fmt.Errorf("direct agent command failed: %w", err)
 				}
 				fmt.Println("\n✅ Initial task completed. Entering interactive mode for follow-up questions...")
 			}
@@ -640,7 +635,7 @@ Examples:
 						err := executeDirectAgentCommand(chatAgent, userIntent)
 						if err != nil {
 							fmt.Fprintf(os.Stderr, "\n❌ Error: %v\n", err)
-							os.Exit(1)
+							return fmt.Errorf("direct agent command failed: %w", err)
 						}
 						fmt.Println("✅ Task completed successfully")
 						return nil
@@ -658,7 +653,7 @@ Examples:
 			err := executeDirectAgentCommand(chatAgent, userIntent)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "\n❌ Error: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("direct agent command failed: %w", err)
 			}
 			fmt.Println("✅ Task completed successfully")
 			return nil

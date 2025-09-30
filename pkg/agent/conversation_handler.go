@@ -36,9 +36,9 @@ func NewConversationHandler(agent *Agent) *ConversationHandler {
 
 // ProcessQuery handles a user query through the complete conversation flow
 func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
-    if ch.agent.debug {
-        ch.agent.debugLog("DEBUG: ProcessQuery called with: %s\n", userQuery)
-    }
+	if ch.agent.debug {
+		ch.agent.debugLog("DEBUG: ProcessQuery called with: %s\n", userQuery)
+	}
 
 	// Initialize timeout tracking
 	ch.conversationStartTime = time.Now()
@@ -78,28 +78,28 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		}
 
 		// Send message to LLM
-        if ch.agent.debug {
-            ch.agent.debugLog("DEBUG: ConversationHandler sending message (iteration %d) at %s\n", ch.agent.currentIteration, time.Now().Format("15:04:05.000"))
-        }
+		if ch.agent.debug {
+			ch.agent.debugLog("DEBUG: ConversationHandler sending message (iteration %d) at %s\n", ch.agent.currentIteration, time.Now().Format("15:04:05.000"))
+		}
 		response, err := ch.sendMessage()
 		if err != nil {
-            if ch.agent.debug {
-                ch.agent.debugLog("DEBUG: ConversationHandler got error at %s: %v\n", time.Now().Format("15:04:05.000"), err)
-            }
+			if ch.agent.debug {
+				ch.agent.debugLog("DEBUG: ConversationHandler got error at %s: %v\n", time.Now().Format("15:04:05.000"), err)
+			}
 
 			// Display user-friendly error message based on error type
 			ch.displayUserFriendlyError(err)
 
 			return ch.errorHandler.HandleAPIFailure(err, ch.agent.messages)
 		}
-        if ch.agent.debug {
-            ch.agent.debugLog("DEBUG: ConversationHandler received response at %s\n", time.Now().Format("15:04:05.000"))
-        }
+		if ch.agent.debug {
+			ch.agent.debugLog("DEBUG: ConversationHandler received response at %s\n", time.Now().Format("15:04:05.000"))
+		}
 
 		// Update activity time on successful response
 		ch.lastActivityTime = time.Now()
 
-	// Process response
+		// Process response
 		if shouldStop := ch.processResponse(response); shouldStop {
 			ch.agent.debugLog("✅ Conversation complete\n")
 			break
@@ -156,19 +156,20 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			ch.agent.flushCallback()
 		}
 
-    ch.displayIntermediateResponse(choice.Message.Content)
-    toolResults := ch.toolExecutor.ExecuteTools(choice.Message.ToolCalls)
+		ch.displayIntermediateResponse(choice.Message.Content)
+		toolResults := ch.toolExecutor.ExecuteTools(choice.Message.ToolCalls)
 
-    // If the tool calls appear malformed (parse/unknown/validation), add guidance once
-    if ch.shouldAddToolCallGuidance(toolResults) {
-        guidance := ch.buildToolCallGuidance()
-        ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
-        ch.agent.toolCallGuidanceAdded = true
-        ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
-    }
+		// Add tool results immediately after the assistant message with tool calls
+		ch.agent.messages = append(ch.agent.messages, toolResults...)
+		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
 
-    ch.agent.messages = append(ch.agent.messages, toolResults...)
-    ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
+		// If the tool calls appear malformed (parse/unknown/validation), add guidance after tool results
+		if ch.shouldAddToolCallGuidance(toolResults) {
+			guidance := ch.buildToolCallGuidance()
+			ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
+			ch.agent.toolCallGuidanceAdded = true
+			ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
+		}
 		return false // Continue conversation
 	}
 
@@ -235,6 +236,11 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			ch.agent.messages[len(ch.agent.messages)-1].Content = cleanContent
 		}
 
+		// Append a concise system summary to mark this task as completed and
+		// provide guidance for future messages (treat future user instructions as higher priority)
+		summary := "Task completed. Summary: The assistant finished the requested work. Future user instructions or follow-ups should be treated as new actions and take precedence over prior completed tasks."
+		ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: summary})
+
 		// Display final response
 		ch.displayFinalResponse(cleanContent)
 		return true // Stop - response explicitly indicates completion
@@ -249,47 +255,47 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 // Helper methods...
 // shouldAddToolCallGuidance inspects tool results for common malformed tool call errors
 func (ch *ConversationHandler) shouldAddToolCallGuidance(results []api.Message) bool {
-    if ch.agent.toolCallGuidanceAdded {
-        return false
-    }
-    for _, r := range results {
-        if r.Role != "tool" {
-            continue
-        }
-        c := strings.ToLower(r.Content)
-        if strings.Contains(c, "error parsing arguments") ||
-            strings.Contains(c, "failed to parse tool arguments") ||
-            strings.Contains(c, "unknown tool") ||
-            strings.Contains(c, "invalid mcp tool name format") ||
-            strings.Contains(c, "parameter validation failed") ||
-            (strings.Contains(c, "tool ") && strings.Contains(c, " not found")) {
-            return true
-        }
-    }
-    return false
+	if ch.agent.toolCallGuidanceAdded {
+		return false
+	}
+	for _, r := range results {
+		if r.Role != "tool" {
+			continue
+		}
+		c := strings.ToLower(r.Content)
+		if strings.Contains(c, "error parsing arguments") ||
+			strings.Contains(c, "failed to parse tool arguments") ||
+			strings.Contains(c, "unknown tool") ||
+			strings.Contains(c, "invalid mcp tool name format") ||
+			strings.Contains(c, "parameter validation failed") ||
+			(strings.Contains(c, "tool ") && strings.Contains(c, " not found")) {
+			return true
+		}
+	}
+	return false
 }
 
 // buildToolCallGuidance returns a concise system message instructing correct tool call usage
 func (ch *ConversationHandler) buildToolCallGuidance() string {
-    return "When you need to use tools, emit structured function calls only (no plain text instructions about tools).\n" +
-        "Rules:\n" +
-        "- Use the exact tool name from the tools list.\n" +
-        "- Arguments must be valid JSON matching the schema keys.\n" +
-        "- Do not include extra fields, comments, or trailing commas.\n" +
-        "- Include all required parameters.\n\n" +
-        "Examples:\n" +
-        "1) read_file\n" +
-        "   name: read_file\n" +
-        "   arguments: {\"file_path\": \"pkg/agent/agent.go\"}\n\n" +
-        "2) shell_command\n" +
-        "   name: shell_command\n" +
-        "   arguments: {\"command\": \"go test ./... -v\"}\n\n" +
-        "3) edit_file\n" +
-        "   name: edit_file\n" +
-        "   arguments: {\"file_path\": \"README.md\", \"old_string\": \"old\", \"new_string\": \"new\"}\n\n" +
-        "Notes:\n" +
-        "- Do not embed a 'tool_calls' JSON object in your message content.\n" +
-        "- If you need multiple tools, emit multiple function calls in order, each with valid JSON arguments."
+	return "When you need to use tools, emit structured function calls only (no plain text instructions about tools).\n" +
+		"Rules:\n" +
+		"- Use the exact tool name from the tools list.\n" +
+		"- Arguments must be valid JSON matching the schema keys.\n" +
+		"- Do not include extra fields, comments, or trailing commas.\n" +
+		"- Include all required parameters.\n\n" +
+		"Examples:\n" +
+		"1) read_file\n" +
+		"   name: read_file\n" +
+		"   arguments: {\"file_path\": \"pkg/agent/agent.go\"}\n\n" +
+		"2) shell_command\n" +
+		"   name: shell_command\n" +
+		"   arguments: {\"command\": \"go test ./... -v\"}\n\n" +
+		"3) edit_file\n" +
+		"   name: edit_file\n" +
+		"   arguments: {\"file_path\": \"README.md\", \"old_string\": \"old\", \"new_string\": \"new\"}\n\n" +
+		"Notes:\n" +
+		"- Do not embed a 'tool_calls' JSON object in your message content.\n" +
+		"- If you need multiple tools, emit multiple function calls in order, each with valid JSON arguments."
 }
 func (ch *ConversationHandler) checkForInterrupt() bool {
 	// Check for context cancellation (new interrupt system)
@@ -507,8 +513,8 @@ func (ch *ConversationHandler) displayUserFriendlyError(err error) {
 		userMessage = fmt.Sprintf("❌ %s API error: %v", providerName, err)
 	}
 
-    // Display the message in the content area via agent routing
-    ch.agent.PrintLine("")
-    ch.agent.PrintLine(userMessage)
-    ch.agent.PrintLine("")
+	// Display the message in the content area via agent routing
+	ch.agent.PrintLine("")
+	ch.agent.PrintLine(userMessage)
+	ch.agent.PrintLine("")
 }

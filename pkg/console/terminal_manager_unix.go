@@ -4,6 +4,7 @@
 package console
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -24,6 +25,7 @@ type terminalManager struct {
 	oldState        *term.State
 	rawMode         bool
 	altScreen       bool
+	mouseTracking   bool
 	resizeCallbacks []func(width, height int)
 	signalChan      chan os.Signal
 	stopChan        chan struct{}
@@ -65,6 +67,7 @@ func (tm *terminalManager) Init() error {
 func (tm *terminalManager) Cleanup() error {
 	// Exit alternate screen first (before locking)
 	tm.ExitAltScreen()
+	tm.DisableMouseReporting()
 
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -201,15 +204,12 @@ func (tm *terminalManager) EnterAltScreen() error {
 	defer tm.mu.Unlock()
 
 	if !tm.altScreen {
-		// Enter alternate screen and disable mouse reporting
-		// \033[?1049h - Enter alternate screen buffer
-		// \033[?1000l - Disable X11 mouse reporting
-		// \033[?1002l - Disable cell motion mouse tracking
-		// \033[?1003l - Disable all motion mouse tracking
-		// \033[?1006l - Disable SGR mouse mode
-		_, err := fmt.Fprint(tm.writer, "\033[?1049h\033[?1000l\033[?1002l\033[?1003l\033[?1006l")
+		// Enter alternate screen buffer
+		_, err := fmt.Fprint(tm.writer, "\033[?1049h")
 		if err == nil {
 			tm.altScreen = true
+			// Default to mouse reporting disabled until explicitly enabled
+			tm.mouseTracking = false
 		}
 		return err
 	}
@@ -222,6 +222,12 @@ func (tm *terminalManager) ExitAltScreen() error {
 	defer tm.mu.Unlock()
 
 	if tm.altScreen {
+		if tm.mouseTracking {
+			if _, err := fmt.Fprint(tm.writer, "\033[?1000l\033[?1002l\033[?1003l\033[?1006l"); err != nil {
+				return err
+			}
+			tm.mouseTracking = false
+		}
 		_, err := fmt.Fprint(tm.writer, "\033[?1049l")
 		if err == nil {
 			tm.altScreen = false
@@ -231,9 +237,52 @@ func (tm *terminalManager) ExitAltScreen() error {
 	return nil
 }
 
+// EnableMouseReporting enables mouse tracking sequences
+func (tm *terminalManager) EnableMouseReporting() error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if tm.mouseTracking {
+		return nil
+	}
+
+	_, err := fmt.Fprint(tm.writer, "\033[?1000h\033[?1002h\033[?1003h\033[?1006h")
+	if err == nil {
+		tm.mouseTracking = true
+	}
+	return err
+}
+
+// DisableMouseReporting disables mouse tracking sequences
+func (tm *terminalManager) DisableMouseReporting() error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if !tm.mouseTracking {
+		// Still send the disable sequence to ensure terminal state is clean
+		_, err := fmt.Fprint(tm.writer, "\033[?1000l\033[?1002l\033[?1003l\033[?1006l")
+		return err
+	}
+
+	_, err := fmt.Fprint(tm.writer, "\033[?1000l\033[?1002l\033[?1003l\033[?1006l")
+	if err == nil {
+		tm.mouseTracking = false
+	}
+	return err
+}
+
 // ClearScreen clears the entire screen
 func (tm *terminalManager) ClearScreen() error {
 	_, err := fmt.Fprint(tm.writer, "\033[2J\033[H")
+	return err
+}
+
+// ClearScrollback clears the scrollback buffer
+func (tm *terminalManager) ClearScrollback() error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	_, err := fmt.Fprint(tm.writer, "\033[3J")
 	return err
 }
 
@@ -286,8 +335,17 @@ func (tm *terminalManager) WriteAt(x, y int, data []byte) error {
 
 // Flush flushes any buffered output
 func (tm *terminalManager) Flush() error {
-	if f, ok := tm.writer.(*os.File); ok {
-		return f.Sync()
+	type syncer interface {
+		Sync() error
+	}
+
+	if s, ok := tm.writer.(syncer); ok {
+		if err := s.Sync(); err != nil {
+			if errors.Is(err, syscall.ENOTTY) || errors.Is(err, syscall.EINVAL) {
+				return nil
+			}
+			return err
+		}
 	}
 	return nil
 }

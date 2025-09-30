@@ -123,17 +123,18 @@ func NewConfig() *Config {
 		Version:          ConfigVersion,
 		LastUsedProvider: "",
 		ProviderModels: map[string]string{
-			"openai":       "gpt-5",
-			"deepinfra":    "deepseek-ai/DeepSeek-V3.1",
+			"openai":       "gpt-5-mini",
+			"deepinfra":    "deepseek-ai/DeepSeek-V3.1-Terminus",
 			"openrouter":   "openai/gpt-5",
-			"ollama-local": "qwen2.5-coder:3b",
-			"ollama-turbo": "qwen2.5-coder:latest",
+			"ollama-local": "qwen3-coder:30b",
+			"ollama-turbo": "deepseek-v3.1:671b",
 		},
 		ProviderPriority: []string{
 			"openai",
 			"openrouter",
 			"deepinfra",
 			"ollama-turbo",
+
 			"ollama-local",
 		},
 		MCP:                   mcp.DefaultMCPConfig(),

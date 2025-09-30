@@ -10,6 +10,7 @@ from collections import OrderedDict
 from pathlib import Path
 import logging # Import logging module
 import json
+import re
 
 """
 This script performs a robust test of the `ledit` workspace functionality.
@@ -38,6 +39,31 @@ RED = '\033[31m'
 RESET = '\033[0m'
 
 DEFAULT_MODEL = 'deepinfra:Qwen/Qwen2.5-Coder-32B-Instruct'
+MAX_SANITIZED_LENGTH = 80
+
+
+def sanitize_test_name(name: str) -> str:
+    """Create a filesystem-friendly slug for test workspaces."""
+    if not name:
+        return "test"
+
+    # Collapse all whitespace (including newlines) to single spaces before converting to underscores
+    collapsed = " ".join(name.split())
+    sanitized = collapsed.replace(" ", "_")
+    # Remove characters that aren't safe for filenames
+    sanitized = re.sub(r'[^A-Za-z0-9._-]', '_', sanitized)
+    # Collapse multiple underscores and strip leading/trailing separators
+    sanitized = re.sub(r'_+', '_', sanitized).strip('._-')
+
+    if not sanitized:
+        sanitized = "test"
+
+    if len(sanitized) > MAX_SANITIZED_LENGTH:
+        sanitized = sanitized[:MAX_SANITIZED_LENGTH].rstrip('_-')
+        if not sanitized:
+            sanitized = "test"
+
+    return sanitized
 
 def extract_failure_reason(stdout, stderr):
     """Extract a short, concise failure reason from test output.
@@ -237,6 +263,8 @@ Examples:
         logging.error(f"{RED}Error: No test scripts found in '{e2e_test_scripts_dir}'. Ensure your test scripts are named 'test_*.sh'.{RESET}")
         sys.exit(1)
 
+    sanitized_names_in_use = set()
+
     for script_path in test_script_paths:
         try:
             # Execute 'get_test_name' function from each script to retrieve its logical name
@@ -255,7 +283,22 @@ Examples:
                 logging.warning(f"'get_test_name' in {script_path.name} returned an empty name. Skipping this test.")
                 continue
             # Keep orchestration test; include new agent v2 tests as well
-            tests.append({'name': test_name, 'path': script_path})
+            sanitized_name = sanitize_test_name(test_name)
+            base_name = sanitized_name
+            counter = 2
+            while sanitized_name in sanitized_names_in_use:
+                suffix = f"_{counter}"
+                trimmed_base = base_name
+                if len(trimmed_base) + len(suffix) > MAX_SANITIZED_LENGTH:
+                    trimmed_base = trimmed_base[:MAX_SANITIZED_LENGTH - len(suffix)].rstrip('_-')
+                if not trimmed_base:
+                    trimmed_base = "test"
+                sanitized_name = f"{trimmed_base}{suffix}"
+                counter += 1
+
+            sanitized_names_in_use.add(sanitized_name)
+
+            tests.append({'name': test_name, 'path': script_path, 'sanitized': sanitized_name})
             print(f"Discovered Test: {test_name}")
         except subprocess.CalledProcessError as e:
             logging.error(f"{RED}Error discovering test name from {script_path.name}: {e.stderr.strip()}. Skipping.{RESET}")
@@ -351,7 +394,7 @@ Examples:
     # Start all selected tests as subprocesses
     for test in selected_tests_for_execution:
         test_name = test['name']
-        sanitized_test_name = test_name.replace(' ', '_') # Sanitize name for file paths
+        sanitized_test_name = test.get('sanitized') or sanitize_test_name(test_name)
         print(f"--- Starting test: {test_name} ---")
         
         # Create a unique directory for this test to ensure isolation

@@ -355,23 +355,8 @@ func (a *Agent) DisableEscMonitoring() {
 
 // monitorEscKey monitors for Esc key press in a separate goroutine with context cancellation
 func (a *Agent) monitorEscKey(ctx context.Context) {
-	// Get the current terminal state
-	oldState, err := term.GetState(int(os.Stdin.Fd()))
-	if err != nil {
-		return
-	}
-
-	// Make sure to restore the terminal state when done
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
-
-	// Put terminal in raw mode to capture single key presses
-	rawState, err := term.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		return
-	}
-	defer term.Restore(int(os.Stdin.Fd()), rawState)
-
-	// Read single bytes with timeout
+	// Use non-blocking read with timeout instead of manipulating terminal state
+	// This avoids conflicts with the console app's terminal management
 	buf := make([]byte, 1)
 	for {
 		select {

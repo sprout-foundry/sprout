@@ -16,7 +16,6 @@ import (
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/fatih/color"
-	"golang.org/x/term"
 )
 
 // ErrUserQuit is returned when the user requests to quit
@@ -45,6 +44,9 @@ type AgentConsole struct {
 
 	// Console buffer for output management and resize handling
 	consoleBuffer *console.ConsoleBuffer
+
+	// Dual-mode output handler
+	outputHandler console.OutputHandler
 
 	// State
 	sessionStartTime time.Time
@@ -137,6 +139,9 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 	// Create context for background operations
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create a single console buffer instance to ensure consistency
+	consoleBuffer := console.NewConsoleBuffer(10000) // 10,000 line buffer
+	
 	ac := &AgentConsole{
 		BaseComponent:     base,
 		agent:             agent,
@@ -146,7 +151,8 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		inputStateManager: inputStateManager,
 		footer:            footer,
 		autoLayoutManager: autoLayoutManager,
-		consoleBuffer:     console.NewConsoleBuffer(10000), // 10,000 line buffer
+		consoleBuffer:     consoleBuffer,
+		outputHandler:     console.NewDualOutputHandler(os.Stdout, consoleBuffer),
 		sessionStartTime:  time.Now(),
 		prompt:            config.Prompt,
 		historyFile:       config.HistoryFile,
@@ -157,6 +163,11 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		processingMutex:   sync.RWMutex{},
 		ctx:               ctx,
 		cancel:            cancel,
+	}
+	
+	// Set output handler to interactive mode for proper terminal handling
+	if dualHandler, ok := ac.outputHandler.(*console.DualOutputHandler); ok {
+		dualHandler.SetMode(console.OutputModeInteractive)
 	}
 
 	// Create streaming formatter
@@ -169,6 +180,8 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 
 	// Set custom output function to use our safe print method
 	ac.streamingFormatter.SetOutputFunc(func(text string) {
+		// Ensure cursor is positioned correctly in content area before output
+		ac.repositionCursorToContentArea()
 		// Use our simplified safe print (no complex positioning)
 		ac.safePrint("%s", text)
 	})
@@ -277,10 +290,11 @@ func (ac *AgentConsole) setupLayoutComponents() {
 
 	// Content region is automatically managed
 
-	// Emit welcome message early so tests that don't call Start() still see baseline content
-	ac.showWelcomeMessage()
-	// Ensure initial focus is rendered on input
-	ac.setFocus("input")
+	// Ensure initial focus is set (but don't render yet)
+	ac.focusMode = "input"
+	if ac.footer != nil {
+		ac.footer.SetFocusMode("input")
+	}
 }
 
 // setFocus switches focus between input and output and refreshes indicators
@@ -525,6 +539,9 @@ func (ac *AgentConsole) Start() error {
 	defer ac.inputManager.Stop()
 
 	// Layout manager handles positioning automatically
+
+	// Show welcome message now that terminal is properly initialized
+	ac.showWelcomeMessage()
 
 	ac.safePrint("   Press Tab to switch between inputs and output focus.\n")
 	ac.safePrint("   Use Ctrl+C to interrupt the agent.\n\n")
@@ -919,9 +936,11 @@ func (ac *AgentConsole) handleCommand(input string) error {
 	case "debug":
 		// Toggle debug mode for input
 		ac.writeTextWithRawModeFix("Debug mode: Press keys to see their codes, 'q' to exit debug\n")
-		fd := int(os.Stdin.Fd())
-		oldState, _ := term.MakeRaw(fd)
-		defer term.Restore(fd, oldState)
+		// Use terminal manager instead of direct raw mode manipulation
+		if ac.Terminal() != nil {
+			ac.Terminal().SetRawMode(true)
+			defer ac.Terminal().SetRawMode(false)
+		}
 
 		buf := make([]byte, 10)
 		for {
@@ -1226,9 +1245,13 @@ func (ac *AgentConsole) setupTerminal() error {
 	// Cache content region info for positioning
 	if contentRegion, err := ac.autoLayoutManager.GetContentRegion(); err == nil {
 		ac.contentRegionTop = contentRegion.Y
-		ac.currentContentLine = 0
+		// Only reset currentContentLine if it's not already set (e.g., during initialization)
+		// Don't reset during clear sequences to preserve positioning
+		if ac.currentContentLine == 0 {
+			ac.currentContentLine = 1
+		}
 		if console.DebugEnabled() {
-			fmt.Fprintf(os.Stderr, "[DEBUG] Content region setup: top=%d, currentContentLine=0\n", contentRegion.Y)
+			fmt.Fprintf(os.Stderr, "[DEBUG] Content region setup: top=%d, currentContentLine=%d\n", contentRegion.Y, ac.currentContentLine)
 		}
 	}
 
@@ -1273,18 +1296,29 @@ func (ac *AgentConsole) handleCtrlC() {
 	if ac.ctrlCCount == 1 {
 		// Mark that we were interrupted to influence next input behavior
 		ac.wasInterrupted = true
-		// First Esc - try to interrupt agent if it's processing
-		close(ac.interruptChan)
+		// First Ctrl+C - try to interrupt agent if it's processing
+		ac.signalInterrupt()
 	} else {
-		// Second Esc - exit immediately
+		// Second Ctrl+C - exit immediately
 		ac.writeTextWithRawModeFix("\r\033[K🚪 Exiting...\n")
 
 		// Try to interrupt agent one more time if it's still running
-		close(ac.interruptChan)
+		ac.signalInterrupt()
 
 		// Signal that we want to exit cleanly
 		// Don't use os.Exit as it bypasses cleanup
 		ac.cancel() // Cancel the context to stop the main loop
+	}
+}
+
+// signalInterrupt safely signals an interrupt without causing channel close panics
+func (ac *AgentConsole) signalInterrupt() {
+	// Use a non-blocking send to avoid panics
+	select {
+	case ac.interruptChan <- struct{}{}:
+		// Signal sent successfully
+	default:
+		// Channel is already closed or full, ignore
 	}
 }
 
@@ -1564,69 +1598,31 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 
 	// Only write if there's content left after filtering
 	if strings.TrimSpace(content) != "" {
-		// Ensure currentContentLine is initialized and within bounds when we have content
-		if ac.autoLayoutManager != nil && ac.Terminal() != nil {
+		// Count newlines to update currentContentLine tracking
+		newlineCount := strings.Count(content, "\n")
+		if newlineCount > 0 {
+			ac.currentContentLine += newlineCount
+			
+			// Ensure currentContentLine stays within bounds
 			top, bottom := ac.autoLayoutManager.GetScrollRegion()
 			contentHeight := bottom - top + 1
-			if ac.currentContentLine == 0 {
-				ac.currentContentLine = 1
-			}
 			if ac.currentContentLine > contentHeight {
 				ac.currentContentLine = contentHeight
 			}
+		}
+		
+		// Use the dual-mode output handler
+		if ac.outputHandler != nil {
+			ac.outputHandler.Printf("%s", content)
+			
+			// In interactive mode, trigger redraw to ensure content appears in terminal
+			if ac.outputHandler.Mode() == console.OutputModeInteractive {
+				ac.redrawContent()
+			}
 		} else {
-			if ac.currentContentLine == 0 {
-				ac.currentContentLine = 1
-			}
-		}
-
-		// Fallback for uninitialized console (e.g., lightweight tests)
-		if ac.autoLayoutManager == nil || ac.Terminal() == nil {
-			if ac.consoleBuffer != nil {
-				ac.consoleBuffer.AddContent(content)
-			}
-			// Best-effort stdout write without terminal ops
+			// Fallback to direct output
 			fmt.Print(content)
-			if ac.currentContentLine == 0 {
-				ac.currentContentLine = 1
-			}
-			ac.currentContentLine += strings.Count(content, "\n")
-			return
 		}
-		// Add to console buffer for tracking
-		if ac.consoleBuffer != nil {
-			ac.consoleBuffer.AddContent(content)
-		}
-
-		// If we're scrolling, don't auto-display new content
-		if ac.isScrolling {
-			return
-		}
-
-		// Redraw from buffer to ensure consistent ordering and wrapping
-		ac.redrawContent()
-
-		// Update currentContentLine by the number of newlines in the content, with bounds checking
-		newlines := strings.Count(content, "\n")
-		if newlines > 0 {
-			ac.currentContentLine += newlines
-			if ac.autoLayoutManager != nil {
-				top, bottom := ac.autoLayoutManager.GetScrollRegion()
-				contentHeight := bottom - top + 1
-				if ac.currentContentLine > contentHeight {
-					ac.currentContentLine = contentHeight
-				}
-				if ac.currentContentLine < 1 {
-					ac.currentContentLine = 1
-				}
-			}
-		}
-
-        // For non-streaming output, position cursor only on first content write
-        if !ac.isStreaming && !ac.didInitialPosition {
-            ac.repositionCursorToContentArea()
-            ac.didInitialPosition = true
-        }
 	}
 }
 
@@ -1931,6 +1927,11 @@ func (ac *AgentConsole) restoreLayoutAfterPassthrough() {
 	// Give input manager time to fully restore raw mode
 	time.Sleep(50 * time.Millisecond)
 
+	// Safe check for nil terminal
+	if ac.Terminal() == nil {
+		return
+	}
+
 	// Get current terminal dimensions
 	width, height, err := ac.Terminal().GetSize()
 	if err != nil {
@@ -2070,6 +2071,11 @@ func (ac *AgentConsole) scrollDown(lines int) {
 
 // redrawContent redraws the content area with the current scroll position
 func (ac *AgentConsole) redrawContent() {
+	// Safe check for nil terminal
+	if ac.Terminal() == nil {
+		return
+	}
+
 	// Get content region boundaries
 	contentTop, contentBottom := ac.autoLayoutManager.GetScrollRegion()
 	height := contentBottom - contentTop + 1
@@ -2085,7 +2091,12 @@ func (ac *AgentConsole) redrawContent() {
     for i := 0; i < height; i++ {
         // Clear entire line then draw gutter
         ac.Terminal().ClearLine()
-        if ac.focusMode == "output" {
+        // Safe check for focusMode to avoid nil pointer dereference
+        focusMode := "input"
+        if ac.focusMode != "" {
+            focusMode = ac.focusMode
+        }
+        if focusMode == "output" {
             ac.Terminal().WriteText("\033[46m \033[0m")
         } else {
             ac.Terminal().WriteText("  ")

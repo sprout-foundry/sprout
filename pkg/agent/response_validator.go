@@ -29,11 +29,18 @@ func (rv *ResponseValidator) IsComplete(content string) bool {
 		"[[TASK_COMPLETE]]",
 		"[[TASKCOMPLETE]]",
 		"[[TASK COMPLETE]]",
+		"[[task_complete]]",
+		"[[taskcomplete]]",
+		"[[task complete]]",
 	}
 
-	contentUpper := strings.ToUpper(content)
+	// Normalize content for case-insensitive matching
+	contentNormalized := strings.ToLower(strings.ReplaceAll(content, " ", ""))
+	
 	for _, signal := range completionSignals {
-		if strings.Contains(contentUpper, signal) {
+		// Normalize signal for comparison
+		signalNormalized := strings.ToLower(strings.ReplaceAll(signal, " ", ""))
+		if strings.Contains(contentNormalized, signalNormalized) {
 			rv.agent.debugLog("✅ Found completion signal: %s\n", signal)
 			return true
 		}

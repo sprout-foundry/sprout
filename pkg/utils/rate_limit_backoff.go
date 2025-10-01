@@ -43,7 +43,12 @@ func (rlb *RateLimitBackoff) IsRateLimitError(err error, resp *http.Response) bo
 			strings.Contains(errStr, "rpm exceeded") ||
 			strings.Contains(errStr, "rate exceeded") ||
 			strings.Contains(errStr, "quota exceeded") ||
-			strings.Contains(errStr, "too many requests")
+			strings.Contains(errStr, "too many requests") ||
+			strings.Contains(errStr, "insufficient_quota") ||
+			strings.Contains(errStr, "insufficient quota") ||
+			(strings.Contains(errStr, "quota") && strings.Contains(errStr, "exceeded")) ||
+			strings.Contains(errStr, "current quota") ||
+			strings.Contains(errStr, "billing hard limit")
 	}
 
 	return false

@@ -185,33 +185,33 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		return false // Continue conversation to allow the model to issue proper tool_calls
 	}
 
-	// Check for blank iteration (no content and no tool calls)
-	isBlankIteration := ch.isBlankIteration(choice.Message.Content, choice.Message.ToolCalls)
+		// Check for blank iteration (no content and no tool calls)
+		isBlankIteration := ch.isBlankIteration(choice.Message.Content, choice.Message.ToolCalls)
 
-	if isBlankIteration {
-		ch.consecutiveBlankIterations++
-		ch.agent.debugLog("⚠️ Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
+		if isBlankIteration {
+			ch.consecutiveBlankIterations++
+			ch.agent.debugLog("⚠️ Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
 
-		if ch.consecutiveBlankIterations == 1 {
-			// First blank iteration - remind the model
-			ch.agent.debugLog("🔔 Sending reminder about task completion signal\n")
-			reminderMessage := api.Message{
-				Role:    "user",
-				Content: "You provided a blank response. If you have completed the task and have no more actions to take, please respond with [[TASK_COMPLETE]] to indicate you are done. If you are not done, please continue with your next action.",
+			if ch.consecutiveBlankIterations == 1 {
+				// First blank iteration - remind the model
+				ch.agent.debugLog("🔔 Sending reminder about task completion signal\n")
+				reminderMessage := api.Message{
+					Role:    "user",
+					Content: "You provided a blank response. If you have completed the task and have no more actions to take, please respond with [[TASK_COMPLETE]] to indicate you are done. If you are not done, please continue with your next action.",
+				}
+				ch.agent.messages = append(ch.agent.messages, reminderMessage)
+				return false // Continue conversation to get a proper response
+			} else if ch.consecutiveBlankIterations >= 2 {
+				// Two consecutive blank iterations - error out
+				ch.agent.debugLog("❌ Too many consecutive blank iterations, stopping with error\n")
+				errorMessage := "Error: The agent provided two consecutive blank responses and appears to be stuck. Please try rephrasing your request or break it into smaller tasks."
+				ch.displayFinalResponse(errorMessage)
+				return true // Stop with error
 			}
-			ch.agent.messages = append(ch.agent.messages, reminderMessage)
-			return false // Continue conversation to get a proper response
-		} else if ch.consecutiveBlankIterations >= 2 {
-			// Two consecutive blank iterations - error out
-			ch.agent.debugLog("❌ Too many consecutive blank iterations, stopping with error\n")
-			errorMessage := "Error: The agent provided two consecutive blank responses and appears to be stuck. Please try rephrasing your request or break it into smaller tasks."
-			ch.displayFinalResponse(errorMessage)
-			return true // Stop with error
+		} else {
+			// Reset blank iteration counter on any non-blank response
+			ch.consecutiveBlankIterations = 0
 		}
-	} else {
-		// Reset blank iteration counter on any non-blank response
-		ch.consecutiveBlankIterations = 0
-	}
 
 	// Check if the response indicates completion
 	if ch.responseValidator.IsComplete(choice.Message.Content) {

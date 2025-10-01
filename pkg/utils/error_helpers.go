@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 // Global error manager instance
@@ -174,10 +176,13 @@ func ValidateRange(value, min, max int, name string) error {
 
 // ValidateFileExists validates that a file exists
 func ValidateFileExists(path, name string) error {
-	// This would use filesystem operations to check if file exists
+
 	// For now, just validate the path is not empty
 	if path == "" {
 		return NewValidationError(name, "file path cannot be empty")
+	}
+	if !filesystem.FileExists(path) {
+		return NewValidationError(name, "file does not exist")
 	}
 	return nil
 }

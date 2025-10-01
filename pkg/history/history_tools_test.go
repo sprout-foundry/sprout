@@ -216,7 +216,7 @@ func TestRollback(t *testing.T) {
 	newContent := "Modified content"
 
 	// Create the test file with original content
-	err := filesystem.WriteFile(testFile, []byte(originalContent))
+	err := os.WriteFile(testFile, []byte(originalContent), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestRollback(t *testing.T) {
 	}
 
 	// Modify the actual file to simulate the change being applied
-	err = filesystem.WriteFile(testFile, []byte(newContent))
+	err = os.WriteFile(testFile, []byte(newContent), 0644)
 	if err != nil {
 		t.Fatalf("Failed to modify test file: %v", err)
 	}

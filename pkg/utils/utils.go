@@ -12,8 +12,6 @@ import (
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-
-	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 // GenerateRequestHash generates a SHA256 hash for a given set of instructions.
@@ -44,7 +42,7 @@ func sanitizeTimestamp(timestamp string) string {
 // (.ledit/backups) with a timestamped filename.
 func CreateBackup(filePath string) error {
 	// Read the original file content
-	content, err := filesystem.ReadFile(filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			GetLogger(true).Log(fmt.Sprintf("File '%s' does not exist, no backup created.", filePath))
@@ -66,7 +64,7 @@ func CreateBackup(filePath string) error {
 	backupFilename := fmt.Sprintf("%s_%s.bak", baseFilename, timestamp)
 	backupPath := filepath.Join(backupDir, backupFilename)
 	// Save the content to the backup file
-	if err := filesystem.SaveFile(backupPath, content); err != nil {
+	if err := os.WriteFile(backupPath, content, 0644); err != nil {
 		return fmt.Errorf("failed to save backup file '%s': %w", backupPath, err)
 	}
 

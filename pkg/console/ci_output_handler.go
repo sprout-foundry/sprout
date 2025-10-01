@@ -249,14 +249,14 @@ func (h *CIOutputHandler) PrintSummary() {
 			"├─ Elapsed Time: %s\n"+
 			"└─ Operations: %d\n",
 			iteration,
-			h.formatTokensVerbose(totalTokens),
+			h.formatTokensCompact(totalTokens),
 			h.formatCostVerbose(totalCost),
 			h.formatDuration(elapsed),
 			operationCount)
 	} else {
 		summary = fmt.Sprintf("\n💰 Session: %s tokens | %s | Duration: %s\n",
-			h.formatTokensVerbose(totalTokens),
-			h.formatCostVerbose(totalCost),
+			h.formatTokensCompact(totalTokens),
+			h.formatCostCompact(totalCost),
 			h.formatDuration(elapsed))
 	}
 

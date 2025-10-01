@@ -96,67 +96,14 @@ func NewOpenRouterProviderWithModel(model string) (*OpenRouterProvider, error) {
 
 // SendChatRequest sends a chat completion request to OpenRouter
 func (p *OpenRouterProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
-	// Convert messages to OpenRouter format
-	openRouterMessages := make([]map[string]interface{}, len(messages))
-	for i, msg := range messages {
-		// Start with text content
-		content := msg.Content
+	messageOpts := MessageConversionOptions{IncludeToolCallID: true}
+	openRouterMessages := BuildOpenAIChatMessages(messages, messageOpts)
 
-		// For messages with images, convert to OpenAI-compatible format
-		if len(msg.Images) > 0 {
-			// Create multimodal content array
-			contentArray := []map[string]interface{}{
-				{
-					"type": "text",
-					"text": content,
-				},
-			}
-
-			// Add images
-			for _, img := range msg.Images {
-				imageContent := map[string]interface{}{
-					"type": "image_url",
-				}
-
-				if img.URL != "" {
-					imageContent["image_url"] = map[string]interface{}{
-						"url": img.URL,
-					}
-				} else if img.Base64 != "" {
-					// Format as data URL
-					mimeType := img.Type
-					if mimeType == "" {
-						mimeType = "image/jpeg" // default
-					}
-					dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, img.Base64)
-					imageContent["image_url"] = map[string]interface{}{
-						"url": dataURL,
-					}
-				}
-
-				contentArray = append(contentArray, imageContent)
-			}
-
-			openRouterMessages[i] = map[string]interface{}{
-				"role":    msg.Role,
-				"content": contentArray,
-			}
-		} else {
-			// Regular text-only message
-			message := map[string]interface{}{
-				"role":    msg.Role,
-				"content": content,
-			}
-			// Add tool_call_id for tool result messages
-			if msg.ToolCallId != "" {
-				message["tool_call_id"] = msg.ToolCallId
-			}
-			openRouterMessages[i] = message
-		}
+	contextLimit, err := p.GetModelContextLimit()
+	if err != nil {
+		contextLimit = 32000
 	}
-
-	// Calculate appropriate max_tokens based on context limits
-	maxTokens := p.calculateMaxTokens(messages, tools)
+	maxTokens := CalculateMaxTokens(contextLimit, messages, tools)
 
 	// Build request payload
 	requestBody := map[string]interface{}{
@@ -168,18 +115,7 @@ func (p *OpenRouterProvider) SendChatRequest(messages []api.Message, tools []api
 	}
 
 	// Add tools if provided (normalize to OpenAI function-calling schema explicitly)
-	if len(tools) > 0 {
-		openAITools := make([]map[string]interface{}, len(tools))
-		for i, tool := range tools {
-			openAITools[i] = map[string]interface{}{
-				"type": tool.Type,
-				"function": map[string]interface{}{
-					"name":        tool.Function.Name,
-					"description": tool.Function.Description,
-					"parameters":  tool.Function.Parameters,
-				},
-			}
-		}
+	if openAITools := BuildOpenAIToolsPayload(tools); openAITools != nil {
 		requestBody["tools"] = openAITools
 		// OpenRouter backends expect string literal for tool_choice
 		requestBody["tool_choice"] = "auto"
@@ -220,22 +156,13 @@ func (p *OpenRouterProvider) SendChatRequest(messages []api.Message, tools []api
 func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
 	url := "https://openrouter.ai/api/v1/chat/completions"
 
-	// Convert our messages to OpenAI format
-	openAIMessages := make([]interface{}, len(messages))
-	for i, msg := range messages {
-		message := map[string]interface{}{
-			"role":    msg.Role,
-			"content": msg.Content,
-		}
-		// Add tool_call_id for tool result messages
-		if msg.ToolCallId != "" {
-			message["tool_call_id"] = msg.ToolCallId
-		}
-		openAIMessages[i] = message
-	}
+	openAIMessages := BuildOpenAIStreamingMessages(messages, MessageConversionOptions{IncludeToolCallID: true})
 
-	// Calculate max tokens similarly to non-streaming path
-	maxTokens := p.calculateMaxTokens(messages, tools)
+	contextLimit, err := p.GetModelContextLimit()
+	if err != nil {
+		contextLimit = 32000
+	}
+	maxTokens := CalculateMaxTokens(contextLimit, messages, tools)
 
 	reqBody := map[string]interface{}{
 		"model":       p.model,
@@ -246,18 +173,7 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 	}
 
 	// Add tools if present
-	if len(tools) > 0 {
-		openAITools := make([]map[string]interface{}, len(tools))
-		for i, tool := range tools {
-			openAITools[i] = map[string]interface{}{
-				"type": tool.Type,
-				"function": map[string]interface{}{
-					"name":        tool.Function.Name,
-					"description": tool.Function.Description,
-					"parameters":  tool.Function.Parameters,
-				},
-			}
-		}
+	if openAITools := BuildOpenAIToolsPayload(tools); openAITools != nil {
 		reqBody["tools"] = openAITools
 		reqBody["tool_choice"] = "auto"
 	}
@@ -818,38 +734,6 @@ func (p *OpenRouterProvider) sendRequestWithRetry(httpReq *http.Request, reqBody
 	}
 
 	return nil, fmt.Errorf("max retries exceeded")
-}
-
-// calculateMaxTokens calculates appropriate max_tokens based on input size and model limits
-func (p *OpenRouterProvider) calculateMaxTokens(messages []api.Message, tools []api.Tool) int {
-	// Get model context limit
-	contextLimit, err := p.GetModelContextLimit()
-	if err != nil || contextLimit == 0 {
-		contextLimit = 32000 // Conservative default
-	}
-
-	// Rough estimation: 1 token ≈ 4 characters
-	inputTokens := 0
-
-	// Estimate tokens from messages
-	for _, msg := range messages {
-		inputTokens += len(msg.Content) / 4
-	}
-
-	// Estimate tokens from tools (tools descriptions can be large)
-	inputTokens += len(tools) * 200 // Rough estimate per tool
-
-	// Reserve buffer for safety and leave room for response
-	maxOutput := contextLimit - inputTokens - 1000 // 1000 token safety buffer
-
-	// Ensure reasonable bounds
-	if maxOutput > 16000 {
-		maxOutput = 16000 // Cap at 16K for most responses
-	} else if maxOutput < 1000 {
-		maxOutput = 1000 // Minimum useful response size
-	}
-
-	return maxOutput
 }
 
 // calculateBackoffDelay calculates the delay for exponential backoff

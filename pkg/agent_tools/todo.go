@@ -430,52 +430,6 @@ func getCompactPrioritySymbol(priority string) string {
 	}
 }
 
-// AutoCompleteTodos automatically completes todos based on context
-func AutoCompleteTodos(context string) string {
-	globalTodoManager.mutex.Lock()
-	defer globalTodoManager.mutex.Unlock()
-
-	var completed []string
-
-	// Auto-complete based on common patterns
-	for i, item := range globalTodoManager.items {
-		if item.Status != "pending" && item.Status != "in_progress" {
-			continue
-		}
-
-		shouldComplete := false
-		switch context {
-		case "build_success":
-			if strings.Contains(strings.ToLower(item.Title), "build") ||
-				strings.Contains(strings.ToLower(item.Title), "compile") {
-				shouldComplete = true
-			}
-		case "test_success":
-			if strings.Contains(strings.ToLower(item.Title), "test") {
-				shouldComplete = true
-			}
-		case "file_written":
-			if strings.Contains(strings.ToLower(item.Title), "create") ||
-				strings.Contains(strings.ToLower(item.Title), "write") {
-				shouldComplete = true
-			}
-		}
-
-		if shouldComplete {
-			globalTodoManager.items[i].Status = "completed"
-			globalTodoManager.items[i].UpdatedAt = time.Now()
-			completed = append(completed, item.Title)
-		}
-	}
-
-	if len(completed) == 0 {
-		return ""
-	}
-
-	return fmt.Sprintf("🎯 Auto-completed %d todos based on %s:\n%s",
-		len(completed), context, strings.Join(completed, "\n"))
-}
-
 // GetNextTodo returns the next logical todo based on current state
 func GetNextTodo() string {
 	globalTodoManager.mutex.RLock()

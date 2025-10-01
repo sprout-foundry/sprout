@@ -116,7 +116,7 @@ func (e *Executor) executeReplaceFileContent(ctx context.Context, args map[strin
 		}, nil
 	}
 
-	err := filesystem.WriteFile(filePath, []byte(newContent))
+	err := os.WriteFile(filePath, []byte(newContent), 0644)
 	if err != nil {
 		return &Result{
 			Success: false,

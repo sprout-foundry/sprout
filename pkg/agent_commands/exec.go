@@ -44,7 +44,10 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 // IsShellCommand checks if a prompt starts with common shell tools
 func IsShellCommand(prompt string) bool {
 	prompt = strings.TrimSpace(prompt)
-	// TODO: Update this to be more intelligent, using some level of NLP or pattern matching
+	// TODO: Update this to be more intelligent, using some level of NLP or pattern matching to avoid false positives
+	if prompt == "" {
+		return false
+	}
 
 	// Common shell command prefixes
 	shellPrefixes := []string{

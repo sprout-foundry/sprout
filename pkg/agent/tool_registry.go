@@ -222,27 +222,6 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleSearchFiles,
 	})
 
-	// Register auto_complete_todos tool
-	registry.RegisterTool(ToolConfig{
-		Name:        "auto_complete_todos",
-		Description: "Auto-complete todos based on context (build_success/test_success)",
-		Parameters: []ParameterConfig{
-			{"context", "string", true, []string{}, "Context trigger: build_success or test_success"},
-		},
-		Handler: func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-			ctxParam := args["context"].(string)
-			valid := map[string]bool{"build_success": true, "test_success": true}
-			if !valid[ctxParam] {
-				return "", fmt.Errorf("invalid context: %s (expected build_success or test_success)", ctxParam)
-			}
-			result := tools.AutoCompleteTodos(ctxParam)
-			if strings.TrimSpace(result) == "" {
-				return "No todos auto-completed for current context", nil
-			}
-			return result, nil
-		},
-	})
-
 	// Register vision analysis tools
 	registry.RegisterTool(ToolConfig{
 		Name:        "analyze_ui_screenshot",

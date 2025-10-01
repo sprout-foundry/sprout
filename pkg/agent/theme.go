@@ -3,7 +3,6 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 )
 
@@ -69,7 +68,7 @@ func (tm *ThemeManager) LoadThemeFromFile(themePath string) error {
 	}
 
 	// Read the file
-	data, err := ioutil.ReadFile(themePath)
+	data, err := os.ReadFile(themePath)
 	if err != nil {
 		return fmt.Errorf("error reading theme file: %v", err)
 	}

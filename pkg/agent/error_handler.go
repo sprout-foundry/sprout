@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -30,12 +31,15 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 	eh.agent.debugLog("⚠️ API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n",
 		toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens))
 
-	// Check if this is a rate limit error - these should NEVER be shown to the model
+	// Check if this is a rate limit error - these should never be sent back to the model
 	errorMsg := apiErr.Error()
+	if rlErr, ok := apiErr.(*RateLimitExceededError); ok {
+		eh.logRateLimit(errorMsg)
+		return eh.buildRateLimitMessage(rlErr.Attempts, rlErr.LastError), nil
+	}
 	if eh.isRateLimitError(errorMsg) {
-		// Rate limits are infrastructure issues - return as error, not content
-		// This prevents the model from seeing rate limit messages
-		return "", fmt.Errorf("rate limit detected - retrying automatically")
+		eh.logRateLimit(errorMsg)
+		return eh.buildRateLimitMessage(0, apiErr), nil
 	}
 
 	// In non-interactive mode, fail fast
@@ -81,6 +85,45 @@ func (eh *ErrorHandler) buildInteractiveErrorResponse(apiErr error, toolsExecute
 	response += "💡 What would you like me to do next?"
 
 	return response
+}
+
+func (eh *ErrorHandler) buildRateLimitMessage(attempts int, lastErr error) string {
+	if attempts <= 0 {
+		attempts = 1
+	}
+
+	provider := eh.agent.GetProvider()
+	if provider == "" {
+		provider = "the provider"
+	} else if len(provider) > 1 {
+		provider = strings.ToUpper(provider[:1]) + provider[1:]
+	} else {
+		provider = strings.ToUpper(provider)
+	}
+
+	attemptLabel := "one retry"
+	if attempts > 1 {
+		attemptLabel = fmt.Sprintf("%d retries", attempts)
+	}
+
+	message := fmt.Sprintf("🚦 %s hit a rate limit after %s.\n\n", provider, attemptLabel)
+	message += "I already paused between attempts using exponential backoff, but the service is still reporting quota exhaustion.\n\n"
+
+	if lastErr != nil {
+		details := strings.TrimSpace(lastErr.Error())
+		if details != "" {
+			message += fmt.Sprintf("> %s\n\n", details)
+		}
+	}
+
+	message += "✅ Your conversation context and any file changes are preserved.\n\n"
+	message += "Next steps you can take right now:\n"
+	message += "- Wait 30–60 seconds and ask me to continue where we left off\n"
+	message += "- Switch to a different provider or model with more available quota\n"
+	message += "- Reduce the scope of the request so it uses fewer tokens\n\n"
+	message += "Let me know which option you'd like, or provide new instructions."
+
+	return message
 }
 
 // classifyError returns user-friendly error explanation
@@ -139,13 +182,7 @@ func (eh *ErrorHandler) formatTokenCount(tokens int) string {
 
 // isRateLimitError checks if an error is a rate limit (same logic as other components)
 func (eh *ErrorHandler) isRateLimitError(errStr string) bool {
-	lowerStr := strings.ToLower(errStr)
-	// More precise detection to avoid false positives
-	return (strings.Contains(errStr, "429") && (strings.Contains(lowerStr, "too many requests") || strings.Contains(lowerStr, "rate"))) ||
-		(strings.Contains(lowerStr, "rate limit") && !strings.Contains(lowerStr, "not due to rate limit")) ||
-		strings.Contains(lowerStr, "requests per minute") ||
-		strings.Contains(lowerStr, "rpm exceeded") ||
-		strings.Contains(lowerStr, "rate exceeded")
+	return utils.NewRateLimitBackoff().IsRateLimitError(errors.New(errStr), nil)
 }
 
 // logRateLimit logs rate limit information

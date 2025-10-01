@@ -586,18 +586,9 @@ func (ac *AgentConsole) processInput(input string) error {
 		return ac.handleCommand(input)
 	}
 
-	// Check if it's a shell command (common commands that users might type)
+	// Check if it's a likely shell command (common commands that users might type, forgetting that they're in an interactive console)
 	if ac.isShellCommand(input) {
-		ac.safePrint("\033[34m[shell]\033[0m Executing: %s\n", input)
-		output, err := ac.executeShellCommand(input)
-		if err != nil {
-			ac.safePrint("Error: %v\n", err)
-		} else {
-			ac.safePrint("%s", output)
-			if !strings.HasSuffix(output, "\n") {
-				ac.safePrint("\n")
-			}
-		}
+		ac.executeShellCommand(input)
 		return nil
 	}
 
@@ -617,11 +608,11 @@ func (ac *AgentConsole) processInput(input string) error {
 	// Show processing indicator
 	ac.safePrint("🔄 Processing your request...\n")
 
-	// CRITICAL: Release mutex before streaming starts to prevent deadlock
+	// Release mutex before streaming starts to prevent deadlock
 	// The streaming formatter has its own mutex coordination
 	ac.outputMutex.Unlock()
 
-	// CRITICAL FIX: Ensure cursor is positioned correctly for streaming output
+	// Ensure cursor is positioned correctly for streaming output
 	// processInput() does its own output which might affect cursor position
 	ac.repositionCursorToContentArea()
 
@@ -1525,73 +1516,26 @@ func (ac *AgentConsole) Cleanup() error {
 
 // isShellCommand checks if the input is likely a shell command
 func (ac *AgentConsole) isShellCommand(input string) bool {
-	// Split input into command and args
-	parts := strings.Fields(input)
-	if len(parts) == 0 {
-		return false
-	}
-
-	cmd := parts[0]
-
-	// Common shell commands that users might type
-	shellCommands := []string{
-		"ls", "ll", "la", "dir", "pwd", "cd", "cat", "less", "more", "head", "tail",
-		"grep", "find", "echo", "clear", "history", "man", "which", "whoami",
-		"ps", "top", "htop", "df", "du", "free", "uptime", "date", "cal",
-		"cp", "mv", "rm", "mkdir", "rmdir", "touch", "chmod", "chown",
-		"git", "go", "npm", "yarn", "python", "python3", "pip", "pip3",
-		"docker", "kubectl", "make", "cargo", "rustc", "node", "deno",
-		"vim", "vi", "nano", "emacs", "code", "subl", "tree", "wc",
-		"curl", "wget", "ping", "netstat", "ss", "ip", "ifconfig",
-		"brew", "apt", "apt-get", "yum", "snap", "flatpak",
-		"sed", "awk", "cut", "sort", "uniq", "tr", "tee", "xargs",
-		"kill", "killall", "pkill", "jobs", "fg", "bg", "nohup",
-		"export", "source", "alias", "unalias", "type", "env",
-		"tar", "gzip", "gunzip", "zip", "unzip", "bzip2", "bunzip2",
-		"sha1sum", "sha256sum", "md5sum", "openssl", "base64",
-		"systemctl", "service", "journalctl", "dmesg", "lsof", "strace",
-		"diff", "comm", "paste", "join", "split", "csplit",
-		"test", "true", "false", "yes", "seq", "expr", "bc",
-		"screen", "tmux", "watch", "time", "timeout", "sleep",
-		"mount", "umount", "fdisk", "mkfs", "fsck", "blkid",
-		"id", "groups", "users", "who", "w", "last", "su", "sudo",
-		"ssh", "scp", "rsync", "ftp", "sftp", "telnet", "nc", "nmap",
-		"iptables", "ufw", "firewall-cmd", "tcpdump", "wireshark",
-		"locate", "updatedb", "whereis", "file", "stat", "ln",
-		"crontab", "at", "batch", "nohup", "nice", "renice",
-		"patch", "diff", "git", "svn", "hg", "cvs",
-		"gcc", "g++", "clang", "javac", "rustc", "go",
-		"mysql", "psql", "sqlite3", "redis-cli", "mongo",
-		"jq", "yq", "xmllint", "tig", "ag", "rg", "fd",
-		"lspci", "lsusb", "lsblk", "lscpu", "lshw", "dmidecode",
-		"modprobe", "lsmod", "rmmod", "insmod", "depmod",
-		"hostnamectl", "timedatectl", "localectl", "loginctl",
-	}
-
-	// Check if it's a known shell command
-	for _, shellCmd := range shellCommands {
-		if cmd == shellCmd {
-			return true
-		}
-	}
-
-	// Check for paths (absolute or relative)
-	if strings.HasPrefix(input, "/") || strings.HasPrefix(input, "./") || strings.HasPrefix(input, "../") {
-		return true
-	}
-
-	// Check for command with common shell operators
-	if strings.ContainsAny(input, "|&<>$") {
-		return true
-	}
-
-	return false
+	return commands.IsShellCommand(input)
 }
 
 // executeShellCommand executes a shell command and returns the output
-func (ac *AgentConsole) executeShellCommand(command string) (string, error) {
-	// Use the tools package to execute shell commands
-	return tools.ExecuteShellCommand(context.Background(), command)
+func (ac *AgentConsole) executeShellCommand(command string) error {
+	// Use the tools package to execute shell commands, this will execute them safely, which makes more sense for direct execution when we only have a guess on user intent
+	ac.safePrint("\033[34m[shell]\033[0m Executing this thing: %s\n", command)
+	output, err := tools.ExecuteShellCommand(context.Background(), command)
+	if err != nil {
+		ac.safePrint("Error: %v\n", err)
+	} else {
+		ac.safePrint("----------------------------\n")
+		ac.safePrint("%s", output)
+		if !strings.HasSuffix(output, "\n") {
+			ac.safePrint("\n")
+		}
+		ac.safePrint("----------------------------\n")
+	}
+
+	return nil
 }
 
 // Helper functions

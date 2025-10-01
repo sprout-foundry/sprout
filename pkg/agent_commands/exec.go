@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/agent_tools"
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 // ExecCommand handles the /exec slash command
@@ -44,16 +44,41 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 // IsShellCommand checks if a prompt starts with common shell tools
 func IsShellCommand(prompt string) bool {
 	prompt = strings.TrimSpace(prompt)
+	// TODO: Update this to be more intelligent, using some level of NLP or pattern matching
 
 	// Common shell command prefixes
 	shellPrefixes := []string{
-		"ls", "cd", "pwd", "cat", "echo", "grep", "find", "git",
-		"mkdir", "rm", "cp", "mv", "touch", "chmod", "chown",
-		"curl", "wget", "ssh", "scp", "rsync", "tar", "zip",
-		"go ", "python", "node", "npm", "yarn", "docker", "kubectl",
-		"make", "gcc", "g++", "clang", "javac", "java", "rustc",
-		"cargo", "dotnet", "php", "ruby", "perl", "bash", "zsh",
-		"fish", "pwsh", "powershell", "cmd", "winget", "scoop",
+		"ls", "ll", "la", "dir", "pwd", "cd", "cat", "less", "more", "head", "tail",
+		"grep", "find", "echo", "clear", "history", "man", "which", "whoami",
+		"ps", "top", "htop", "df", "du", "free", "uptime", "date", "cal",
+		"cp", "mv", "rm", "mkdir", "rmdir", "touch", "chmod", "chown",
+		"git", "go", "npm", "yarn", "python", "python3", "pip", "pip3",
+		"docker", "kubectl", "make", "cargo", "rustc", "node", "deno",
+		"vim", "vi", "nano", "emacs", "code", "subl", "tree", "wc",
+		"curl", "wget", "ping", "netstat", "ss", "ip", "ifconfig",
+		"brew", "apt", "apt-get", "yum", "snap", "flatpak",
+		"sed", "awk", "cut", "sort", "uniq", "tr", "tee", "xargs",
+		"kill", "killall", "pkill", "jobs", "fg", "bg", "nohup",
+		"export", "source", "alias", "unalias", "type", "env",
+		"tar", "gzip", "gunzip", "zip", "unzip", "bzip2", "bunzip2",
+		"sha1sum", "sha256sum", "md5sum", "openssl", "base64",
+		"systemctl", "service", "journalctl", "dmesg", "lsof", "strace",
+		"diff", "comm", "paste", "join", "split", "csplit",
+		"test", "true", "false", "yes", "seq", "expr", "bc",
+		"screen", "tmux", "watch", "time", "timeout", "sleep",
+		"mount", "umount", "fdisk", "mkfs", "fsck", "blkid",
+		"id", "groups", "users", "who", "w", "last", "su", "sudo",
+		"ssh", "scp", "rsync", "ftp", "sftp", "telnet", "nc", "nmap",
+		"iptables", "ufw", "firewall-cmd", "tcpdump", "wireshark",
+		"locate", "updatedb", "whereis", "file", "stat", "ln",
+		"crontab", "at", "batch", "nohup", "nice", "renice",
+		"patch", "diff", "git", "svn", "hg", "cvs",
+		"gcc", "g++", "clang", "javac", "rustc", "go",
+		"mysql", "psql", "sqlite3", "redis-cli", "mongo",
+		"jq", "yq", "xmllint", "tig", "ag", "rg", "fd",
+		"lspci", "lsusb", "lsblk", "lscpu", "lshw", "dmidecode",
+		"modprobe", "lsmod", "rmmod", "insmod", "depmod",
+		"hostnamectl", "timedatectl", "localectl", "loginctl",
 	}
 
 	for _, prefix := range shellPrefixes {

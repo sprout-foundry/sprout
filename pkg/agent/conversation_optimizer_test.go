@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 func TestConversationOptimizer(t *testing.T) {
@@ -13,9 +13,9 @@ func TestConversationOptimizer(t *testing.T) {
 	// Recent file reads (within 10 messages) should NOT be optimized
 	messages := []api.Message{
 		{Role: "system", Content: "System prompt"},
-		{Role: "user", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"},
+		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"},
 		{Role: "assistant", Content: "Working..."},
-		{Role: "user", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"},
+		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"},
 	}
 
 	optimized := optimizer.OptimizeConversation(messages)
@@ -39,13 +39,13 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 	// The FIRST read should be optimized, the LAST read should be preserved
 	messages := []api.Message{
 		{Role: "system", Content: "System prompt"}, // index 0
-		{Role: "user", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"}, // index 1 - FIRST read (should be optimized)
+		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"}, // index 1 - FIRST read (should be optimized)
 		{Role: "assistant", Content: "Message 2"}, // index 2
 		{Role: "user", Content: "Message 3"},      // index 3
 		{Role: "assistant", Content: "Message 4"}, // index 4
 		{Role: "user", Content: "Message 5"},      // index 5
 		{Role: "assistant", Content: "Message 6"}, // index 6
-		{Role: "user", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"}, // index 7 - LAST read (should be preserved)
+		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"}, // index 7 - LAST read (should be preserved)
 	}
 
 	optimized := optimizer.OptimizeConversation(messages)
@@ -90,8 +90,8 @@ func TestOptimizationDisabled(t *testing.T) {
 	optimizer := NewConversationOptimizer(false, false)
 
 	messages := []api.Message{
-		{Role: "user", Content: "Tool call result for read_file: test.go\ncontent"},
-		{Role: "user", Content: "Tool call result for read_file: test.go\ncontent"},
+		{Role: "tool", Content: "Tool call result for read_file: test.go\ncontent"},
+		{Role: "tool", Content: "Tool call result for read_file: test.go\ncontent"},
 	}
 
 	optimized := optimizer.OptimizeConversation(messages)
@@ -106,8 +106,8 @@ func TestFileContentChange(t *testing.T) {
 	optimizer := NewConversationOptimizer(true, false)
 
 	messages := []api.Message{
-		{Role: "user", Content: "Tool call result for read_file: test.go\noriginal content"},
-		{Role: "user", Content: "Tool call result for read_file: test.go\nmodified content"},
+		{Role: "tool", Content: "Tool call result for read_file: test.go\noriginal content"},
+		{Role: "tool", Content: "Tool call result for read_file: test.go\nmodified content"},
 	}
 
 	optimized := optimizer.OptimizeConversation(messages)
@@ -122,7 +122,7 @@ func TestCreateFileReadSummary(t *testing.T) {
 	optimizer := NewConversationOptimizer(true, false)
 
 	msg := api.Message{
-		Role:    "user",
+		Role:    "tool",
 		Content: "Tool call result for read_file: test.go\npackage main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}",
 	}
 

@@ -1,13 +1,10 @@
 package agent
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"os"
 	"strings"
-
-	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 //go:embed prompts/system_prompt.md
@@ -16,22 +13,10 @@ var systemPromptContent string
 // //go:embed prompts/project_goals_prompt.md
 // var projectGoalsPromptContent string
 
-//go:embed prompts/project_insights_system.md
-var projectInsightsPromptContent string
-
-//go:embed prompts/code_review_prompt.md
-var codeReviewPromptContent string
-
 // getEmbeddedSystemPrompt returns the embedded system prompt
 func getEmbeddedSystemPrompt() string {
 	// Extract the prompt content from the markdown
 	promptContent := extractSystemPrompt()
-
-	// Add project context if available
-	projectContext := getProjectContext()
-	if projectContext != "" {
-		promptContent = promptContent + "\n\n" + projectContext
-	}
 
 	// Add project validation context
 	validationContext, err := generateProjectValidationContext()
@@ -72,25 +57,4 @@ func extractSystemPrompt() string {
 	return strings.TrimSpace(systemPromptContent[startIdx : startIdx+endIdx])
 }
 
-// getProjectContext loads project context from various possible locations
-func getProjectContext() string {
-	// TODO: This is not great and should use a better pattern to aggregate some of these files potentially, but also generate this if it doesn't exist
-	// Check for project context files in order of priority
-	contextFiles := []string{
-		// ".cursor/markdown/project.md",
-		// ".cursor/markdown/context.md",
-		// ".claude/project.md",
-		// ".claude/context.md",
-		// ".project_context.md",
-		// "PROJECT_CONTEXT.md",
-	}
-
-	for _, filePath := range contextFiles {
-		content, err := tools.ReadFile(context.Background(), filePath)
-		if err == nil && strings.TrimSpace(content) != "" {
-			return fmt.Sprintf("PROJECT CONTEXT:\n%s", content)
-		}
-	}
-
-	return ""
-}
+// Find the end of the code block (closing ```)

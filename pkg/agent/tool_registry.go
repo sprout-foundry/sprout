@@ -8,8 +8,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_tools"
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 // ToolHandler represents a function that can handle a tool execution
@@ -175,6 +176,26 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleSearchFiles,
 	})
 
+	// Register web_search tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "web_search",
+		Description: "Search web for relevant URLs",
+		Parameters: []ParameterConfig{
+			{"query", "string", true, []string{}, "Search query to find relevant web content"},
+		},
+		Handler: handleWebSearch,
+	})
+
+	// Register fetch_url tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "fetch_url",
+		Description: "Fetch and extract content from a URL",
+		Parameters: []ParameterConfig{
+			{"url", "string", true, []string{}, "URL to fetch content from"},
+		},
+		Handler: handleFetchURL,
+	})
+
 	// Register aliases: find and find_files map to same handler/parameters
 	registry.RegisterTool(ToolConfig{
 		Name:        "find",
@@ -220,6 +241,51 @@ func newDefaultToolRegistry() *ToolRegistry {
 			}
 			return result, nil
 		},
+	})
+
+	// Register vision analysis tools
+	registry.RegisterTool(ToolConfig{
+		Name:        "analyze_ui_screenshot",
+		Description: "Analyze UI screenshots or mockups for implementation guidance",
+		Parameters: []ParameterConfig{
+			{"image_path", "string", true, []string{}, "Path or URL to the UI screenshot"},
+		},
+		Handler: handleAnalyzeUIScreenshot,
+	})
+
+	registry.RegisterTool(ToolConfig{
+		Name:        "analyze_image_content",
+		Description: "Analyze images for text/code extraction or general insights",
+		Parameters: []ParameterConfig{
+			{"image_path", "string", true, []string{}, "Path or URL to the image to analyze"},
+			{"analysis_prompt", "string", false, []string{}, "Optional custom vision prompt"},
+			{"analysis_mode", "string", false, []string{}, "Optional analysis mode override"},
+		},
+		Handler: handleAnalyzeImageContent,
+	})
+
+	// Register history tools
+	registry.RegisterTool(ToolConfig{
+		Name:        "view_history",
+		Description: "View recent change history tracked by the agent",
+		Parameters: []ParameterConfig{
+			{"limit", "int", false, []string{}, "Maximum number of entries to return (default 10)"},
+			{"file_filter", "string", false, []string{"filename"}, "Filter by filename (partial match)"},
+			{"since", "string", false, []string{}, "Only include changes after this ISO 8601 timestamp"},
+			{"show_content", "bool", false, []string{}, "Include content summaries for each change"},
+		},
+		Handler: handleViewHistory,
+	})
+
+	registry.RegisterTool(ToolConfig{
+		Name:        "rollback_changes",
+		Description: "Preview or perform a rollback of tracked revisions",
+		Parameters: []ParameterConfig{
+			{"revision_id", "string", false, []string{}, "Revision ID to rollback (leave blank to list revisions)"},
+			{"file_path", "string", false, []string{"filename"}, "Rollback only this file from the revision"},
+			{"confirm", "bool", false, []string{}, "Set to true to execute the rollback"},
+		},
+		Handler: handleRollbackChanges,
 	})
 
 	return registry
@@ -392,11 +458,6 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	if err != nil {
 		return "", fmt.Errorf("failed to read original file for diff: %w", err)
 	}
-
-	// TODO: Implement circuit breaker
-	// if blocked, warning := a.CheckCircuitBreaker("edit_file", filePath, 3); blocked {
-	// 	return warning, fmt.Errorf("circuit breaker triggered - too many edit attempts on same file")
-	// }
 
 	a.ToolLog("editing file", fmt.Sprintf("%s (%s → %s)", filePath,
 		truncateString(oldString, 30), truncateString(newString, 30)))
@@ -708,6 +769,183 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 		return fmt.Sprintf("No matches found for pattern '%s' in %s", pattern, root), nil
 	}
 	return b.String(), nil
+}
+
+func handleWebSearch(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	if a == nil {
+		return "", fmt.Errorf("agent context is required for web_search tool")
+	}
+
+	query := args["query"].(string)
+	a.ToolLog("web search", query)
+	a.debugLog("Performing web search: %s\n", query)
+
+	if a.configManager == nil {
+		return "", fmt.Errorf("configuration manager not initialized for web search")
+	}
+
+	result, err := tools.WebSearch(query, a.configManager)
+	a.debugLog("Web search error: %v\n", err)
+	return result, err
+}
+
+func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	if a == nil {
+		return "", fmt.Errorf("agent context is required for fetch_url tool")
+	}
+
+	url := args["url"].(string)
+	a.ToolLog("fetching url", url)
+	a.debugLog("Fetching URL: %s\n", url)
+
+	if a.configManager == nil {
+		return "", fmt.Errorf("configuration manager not initialized for URL fetch")
+	}
+
+	result, err := tools.FetchURL(url, a.configManager)
+	a.debugLog("Fetch URL error: %v\n", err)
+	return result, err
+}
+
+func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	if a == nil {
+		return "", fmt.Errorf("agent context is required for analyze_ui_screenshot tool")
+	}
+
+	imagePath := args["image_path"].(string)
+	a.ToolLog("analyzing ui screenshot", imagePath)
+	a.debugLog("Analyzing UI screenshot: %s\n", imagePath)
+
+	result, err := tools.AnalyzeImage(imagePath, "", "frontend")
+	a.debugLog("Analyze UI screenshot error: %v\n", err)
+	return result, err
+}
+
+func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	if a == nil {
+		return "", fmt.Errorf("agent context is required for analyze_image_content tool")
+	}
+
+	imagePath := args["image_path"].(string)
+	analysisPrompt := ""
+	if v, ok := args["analysis_prompt"].(string); ok {
+		analysisPrompt = v
+	}
+	analysisMode := "general"
+	if v, ok := args["analysis_mode"].(string); ok && strings.TrimSpace(v) != "" {
+		analysisMode = v
+	}
+
+	a.ToolLog("analyzing image", imagePath)
+	a.debugLog("Analyzing image: %s (mode=%s)\n", imagePath, analysisMode)
+
+	result, err := tools.AnalyzeImage(imagePath, analysisPrompt, analysisMode)
+	a.debugLog("Analyze image content error: %v\n", err)
+	return result, err
+}
+
+func handleViewHistory(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	limit := 10
+	if v, ok := args["limit"].(int); ok {
+		limit = v
+	} else if v, ok := args["limit"].(float64); ok {
+		limit = int(v)
+	}
+
+	fileFilter := ""
+	if v, ok := args["file_filter"].(string); ok {
+		fileFilter = strings.TrimSpace(v)
+	}
+
+	var sincePtr *time.Time
+	sinceDisplay := ""
+	if raw, ok := args["since"].(string); ok && strings.TrimSpace(raw) != "" {
+		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(raw))
+		if err != nil {
+			return "", fmt.Errorf("invalid time format for 'since': %s. Use ISO 8601 format like '2024-01-01T10:00:00Z'", raw)
+		}
+		sincePtr = &parsed
+		sinceDisplay = parsed.Format(time.RFC3339)
+	}
+
+	showContent := false
+	if v, ok := args["show_content"].(bool); ok {
+		showContent = v
+	}
+
+	logParts := []string{fmt.Sprintf("limit=%d", limit)}
+	if fileFilter != "" {
+		logParts = append(logParts, fmt.Sprintf("file~%s", fileFilter))
+	}
+	if sincePtr != nil {
+		logParts = append(logParts, fmt.Sprintf("since=%s", sinceDisplay))
+	}
+	if showContent {
+		logParts = append(logParts, "with_content")
+	}
+
+	a.ToolLog("viewing history", strings.Join(logParts, " "))
+	a.debugLog("Executing view_history with limit=%d, file_filter=%q, since=%s, show_content=%v\n", limit, fileFilter, sinceDisplay, showContent)
+
+	res, err := tools.ViewHistory(limit, fileFilter, sincePtr, showContent)
+	if err != nil {
+		return "", err
+	}
+
+	a.debugLog("view_history metadata: %+v\n", res.Metadata)
+	return res.Output, nil
+}
+
+func handleRollbackChanges(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	revisionID := ""
+	if v, ok := args["revision_id"].(string); ok {
+		revisionID = strings.TrimSpace(v)
+	}
+
+	filePath := ""
+	if v, ok := args["file_path"].(string); ok {
+		filePath = strings.TrimSpace(v)
+	}
+
+	confirm := false
+	if v, ok := args["confirm"].(bool); ok {
+		confirm = v
+	}
+
+	logAction := "previewing rollback"
+	if revisionID == "" {
+		logAction = "listing revisions"
+	} else if filePath != "" {
+		if confirm {
+			logAction = "rolling back file"
+		} else {
+			logAction = "previewing file rollback"
+		}
+	} else if confirm {
+		logAction = "rolling back revision"
+	}
+
+	logDetails := []string{}
+	if revisionID != "" {
+		logDetails = append(logDetails, fmt.Sprintf("rev=%s", revisionID))
+	}
+	if filePath != "" {
+		logDetails = append(logDetails, fmt.Sprintf("file=%s", filePath))
+	}
+	if confirm {
+		logDetails = append(logDetails, "confirm")
+	}
+
+	a.ToolLog(logAction, strings.Join(logDetails, " "))
+	a.debugLog("Executing rollback_changes with revision_id=%q, file_path=%q, confirm=%v\n", revisionID, filePath, confirm)
+
+	res, err := tools.RollbackChanges(revisionID, filePath, confirm)
+	if err != nil {
+		return "", err
+	}
+
+	a.debugLog("rollback_changes success=%v metadata=%+v\n", res.Success, res.Metadata)
+	return res.Output, nil
 }
 
 // bytesIndexByte is a small helper to avoid importing bytes for one call

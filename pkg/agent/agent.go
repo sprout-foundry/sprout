@@ -643,62 +643,6 @@ func (a *Agent) SelectProvider() error {
 	return nil
 }
 
-// suggestCorrectToolName suggests a correct tool name based on common mistakes
-func (a *Agent) suggestCorrectToolNameOLD(wrongName string) string {
-	wrongLower := strings.ToLower(wrongName)
-
-	// Common tool name mappings
-	corrections := map[string]string{
-		"bash":          "shell_command",
-		"shell":         "shell_command",
-		"run":           "shell_command",
-		"execute":       "shell_command",
-		"cmd":           "shell_command",
-		"read":          "read_file",
-		"cat":           "read_file",
-		"open":          "read_file",
-		"write":         "write_file",
-		"save":          "write_file",
-		"create":        "write_file",
-		"edit":          "edit_file",
-		"modify":        "edit_file",
-		"update":        "edit_file",
-		"search":        "search_files",
-		"find":          "search_files",
-		"grep":          "search_files",
-		"list_files":    "shell_command",
-		"ls":            "shell_command",
-		"todo":          "add_todos",
-		"task":          "add_todos",
-		"add_todo":      "add_todos",
-		"update_status": "update_todo_status",
-		"list_tasks":    "list_todos",
-		"web":           "web_search",
-		"google":        "web_search",
-		"search_web":    "web_search",
-		"fetch":         "fetch_url",
-		"get":           "fetch_url",
-		"download":      "fetch_url",
-		"analyze_ui":    "analyze_ui_screenshot",
-		"screenshot":    "analyze_ui_screenshot",
-		"analyze_image": "analyze_image_content",
-		"image":         "analyze_image_content",
-	}
-
-	if suggestion, found := corrections[wrongLower]; found {
-		return suggestion
-	}
-
-	// Check for partial matches
-	for wrong, correct := range corrections {
-		if strings.Contains(wrongLower, wrong) {
-			return correct
-		}
-	}
-
-	return ""
-}
-
 // isValidMCPTool checks if the tool name is a valid MCP tool
 func (a *Agent) isValidMCPTool(toolName string) bool {
 	if !strings.HasPrefix(toolName, "mcp_") {

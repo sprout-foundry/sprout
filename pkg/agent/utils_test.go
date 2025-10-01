@@ -148,6 +148,12 @@ func TestSuggestCorrectToolName(t *testing.T) {
 		{"write", "write_file"},
 		{"edit", "edit_file"},
 		{"todo", "add_todo"},
+		{"todos", "add_todos"},
+		{"web", "web_search"},
+		{"fetch", "fetch_url"},
+		{"screenshot", "analyze_ui_screenshot"},
+		{"history", "view_history"},
+		{"rollback", "rollback_changes"},
 		{"unknown", ""},
 	}
 

@@ -488,7 +488,7 @@ func (sf *StreamingFormatter) applyInlineFormatting(text string) string {
 	})
 
 	// Handle bold __text__ - use non-greedy matching
-	boldPattern2 := regexp.MustCompile(`__(.+?)__`)
+	boldPattern2 := regexp.MustCompile(` __(.+?)__ `)
 	text = boldPattern2.ReplaceAllStringFunc(text, func(match string) string {
 		content := match[2 : len(match)-2]
 		// Same muted yellow with bold

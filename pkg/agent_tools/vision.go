@@ -45,20 +45,6 @@ type VisionProcessor struct {
 	debug        bool
 }
 
-// NewVisionProcessor creates a new vision processor
-func NewVisionProcessor(debug bool) (*VisionProcessor, error) {
-	// Try to create a vision-capable client (GPT-4V via OpenRouter)
-	client, err := createVisionClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create vision client: %w", err)
-	}
-
-	return &VisionProcessor{
-		visionClient: client,
-		debug:        debug,
-	}, nil
-}
-
 // NewVisionProcessorWithMode creates a vision processor optimized for specific analysis mode
 func NewVisionProcessorWithMode(debug bool, mode string) (*VisionProcessor, error) {
 	var client api.ClientInterface
@@ -107,13 +93,13 @@ func createVisionClientWithProvider(providerType api.ClientType) (api.ClientInte
 	if visionModel == "" {
 		return nil, fmt.Errorf("provider %s does not support vision models", providerType)
 	}
-	
+
 	// Create client with the vision model
 	client, err := factory.CreateProviderClient(providerType, visionModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vision client for provider %s: %w", providerType, err)
 	}
-	
+
 	return client, nil
 }
 
@@ -139,9 +125,9 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 func createVisionClient() (api.ClientInterface, error) {
 	// List of providers to try, in order of preference
 	providers := []struct {
-		clientType api.ClientType
-		envVar     string
-		visionModel string
+		clientType       api.ClientType
+		envVar           string
+		visionModel      string
 		hasVisionSupport bool
 	}{
 		{api.OpenRouterClientType, "OPENROUTER_API_KEY", "gpt-4o-mini", true},
@@ -653,21 +639,6 @@ func (vp *VisionProcessor) enhanceTextWithAnalysis(text, imagePath string, analy
 	}
 
 	return text
-}
-
-// AnalyzeImageFile is a convenience function to analyze a single image file
-func AnalyzeImageFile(imagePath string, debug bool) (*VisionAnalysis, error) {
-	processor, err := NewVisionProcessor(debug)
-	if err != nil {
-		return nil, err
-	}
-
-	analysis, err := processor.analyzeImage(imagePath)
-	if err != nil {
-		return nil, err
-	}
-
-	return &analysis, nil
 }
 
 // HasVisionCapability checks if vision processing is available

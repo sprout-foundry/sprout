@@ -34,14 +34,9 @@ func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientTy
 	// Provider-specific logic to select best default model
 	switch provider {
 	case api.DeepInfraClientType:
-		// Prefer DeepSeek or Llama models for DeepInfra
+		// Prefer DeepSeek models for DeepInfra
 		for _, model := range models {
 			if strings.Contains(strings.ToLower(model.ID), "deepseek") && strings.Contains(strings.ToLower(model.ID), "instruct") {
-				return model.ID
-			}
-		}
-		for _, model := range models {
-			if strings.Contains(strings.ToLower(model.ID), "llama") && strings.Contains(strings.ToLower(model.ID), "70b") {
 				return model.ID
 			}
 		}

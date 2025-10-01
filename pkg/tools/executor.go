@@ -123,7 +123,7 @@ func (e *Executor) ExecuteToolByName(ctx context.Context, toolName string, param
 // ExecuteToolCall executes a tool call from an LLM response
 func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall api.ToolCall) (*Result, error) {
 	// Parse the arguments from JSON string to map
-	args, err := ParseToolCallArguments(toolCall.Function.Arguments)
+	args, err := ParseToolCallArgumentsJSON(toolCall.Function.Arguments)
 	if err != nil {
 		return &Result{
 			Success: false,
@@ -154,19 +154,10 @@ func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall api.ToolCall) (
 	// Get the tool from registry
 	tool, exists := e.registry.GetTool(toolCall.Function.Name)
 	if !exists {
-		// Fall back to built-in tools for backward compatibility
-		result, err := e.executeBuiltinTool(ctx, toolCall.Function.Name, args)
-
-		// Record the tool call in session tracker if successful
-		if sessionID != "" && err == nil && result != nil && result.Success {
-			responseStr := ""
-			if output, ok := result.Output.(string); ok {
-				responseStr = output
-			}
-			e.sessionTracker.RecordToolCall(sessionID, toolCall.Function.Name, args, responseStr)
-		}
-
-		return result, err
+		return &Result{
+			Success: false,
+			Errors:  []string{fmt.Sprintf("tool %s not found in registry", toolCall.Function.Name)},
+		}, nil
 	}
 
 	result, err := e.ExecuteTool(ctx, tool, params)
@@ -181,6 +172,7 @@ func (e *Executor) ExecuteToolCall(ctx context.Context, toolCall api.ToolCall) (
 	}
 
 	return result, err
+
 }
 
 // normalizeArgsForTool maps common alias parameter names to expected names per tool

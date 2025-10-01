@@ -333,6 +333,17 @@ func (a *Agent) EnableEscMonitoring() {
 		return
 	}
 
+	// When the interactive console UI is active, it already handles interrupt keys.
+	// Running our own monitor alongside it competes for stdin reads and interprets
+	// escape sequences (like arrow keys) as interrupts, prematurely cancelling
+	// conversations. Skip the standalone monitor in that scenario.
+	if a.ui != nil && a.ui.IsInteractive() {
+		if a.debug {
+			a.debugLog("DEBUG: Skipping ESC monitoring (interactive UI handles interrupts)\n")
+		}
+		return
+	}
+
 	// Cancel any existing monitoring
 	if a.escMonitoringCancel != nil {
 		a.escMonitoringCancel()

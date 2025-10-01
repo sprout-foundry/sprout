@@ -108,7 +108,7 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 				Content:    "Execution interrupted by user",
 				ToolCallId: tc.ID,
 			})
-			break
+			return toolResults
 		default:
 			// Context not cancelled
 		}
@@ -153,11 +153,6 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		}
 	}
 
-	// Check for MCP tools
-	if te.isMCPTool(toolCall.Function.Name) {
-		return te.executeMCPTool(toolCall, args)
-	}
-
 	// Execute with circuit breaker check
 	if te.checkCircuitBreaker(toolCall.Function.Name, args) {
 		return api.Message{
@@ -179,8 +174,23 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 
 	// Execute the tool in a goroutine
 	go func() {
-		registry := GetToolRegistry()
-		result, err := registry.ExecuteTool(ctx, toolCall.Function.Name, args, te.agent)
+		var result string
+		var err error
+
+		if toolCall.Function.Name == "mcp_tools" {
+			result, err = te.agent.handleMCPToolsCommand(args)
+		} else {
+			registry := GetToolRegistry()
+			result, err = registry.ExecuteTool(ctx, toolCall.Function.Name, args, te.agent)
+
+			if err != nil && strings.Contains(err.Error(), "unknown tool") {
+				if fallbackResult, fallbackErr, handled := te.tryExecuteMCPTool(toolCall.Function.Name, args); handled {
+					result = fallbackResult
+					err = fallbackErr
+				}
+			}
+		}
+
 		resultChan <- struct {
 			result string
 			err    error
@@ -219,55 +229,19 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	}
 }
 
-// isMCPTool checks if a tool is an MCP tool
-func (te *ToolExecutor) isMCPTool(toolName string) bool {
-	return strings.Contains(toolName, ":")
-}
-
-// executeMCPTool executes an MCP tool
-func (te *ToolExecutor) executeMCPTool(toolCall api.ToolCall, args map[string]interface{}) api.Message {
-	parts := strings.SplitN(toolCall.Function.Name, ":", 2)
-	if len(parts) != 2 {
-		return api.Message{
-			Role:       "tool",
-			Content:    fmt.Sprintf("Invalid MCP tool name format: %s", toolCall.Function.Name),
-			ToolCallId: toolCall.ID,
-		}
+// tryExecuteMCPTool attempts to execute an MCP tool name using the agent's MCP manager.
+// Returns handled=false when the tool name doesn't correspond to an MCP tool.
+func (te *ToolExecutor) tryExecuteMCPTool(toolName string, args map[string]interface{}) (string, error, bool) {
+	if te.agent == nil {
+		return "", fmt.Errorf("agent not initialized"), true
 	}
 
-	serverName := parts[0]
-	toolName := parts[1]
-
-	te.agent.debugLog("🔧 Executing MCP tool: %s on server: %s\n", toolName, serverName)
-
-	ctx := context.Background()
-	mcpResult, err := te.agent.mcpManager.CallTool(ctx, serverName, toolName, args)
-	if err != nil {
-		return api.Message{
-			Role:       "tool",
-			Content:    fmt.Sprintf("Error calling MCP tool: %v", err),
-			ToolCallId: toolCall.ID,
-		}
+	if strings.HasPrefix(toolName, "mcp_") {
+		result, err := te.agent.executeMCPTool(toolName, args)
+		return result, err, true
 	}
 
-	// Convert MCP result to string
-	var resultContent string
-	if mcpResult.IsError {
-		resultContent = "MCP Error: "
-	}
-	for _, content := range mcpResult.Content {
-		if content.Type == "text" {
-			resultContent += content.Text
-		} else if content.Type == "resource" {
-			resultContent += fmt.Sprintf("[Resource: %s]", content.Data)
-		}
-	}
-
-	return api.Message{
-		Role:       "tool",
-		Content:    resultContent,
-		ToolCallId: toolCall.ID,
-	}
+	return "", nil, false
 }
 
 // shouldStopExecution checks if execution should stop after a tool

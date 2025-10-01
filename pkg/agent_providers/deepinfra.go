@@ -61,85 +61,26 @@ func NewDeepInfraProviderWithModel(model string) (*DeepInfraProvider, error) {
 
 // SendChatRequest sends a chat completion request to DeepInfra
 func (p *DeepInfraProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
-	// Convert messages to OpenAI-compatible format
-	deepinfraMessages := make([]map[string]interface{}, 0, len(messages))
-	for _, msg := range messages {
-		// Handle tool messages - DeepInfra doesn't support "tool" role
-		if msg.Role == "tool" {
-			// Format tool response as a user message with clear labeling
-			formattedContent := fmt.Sprintf("Tool Response:\n%s", msg.Content)
-			if p.debug {
-				fmt.Printf("🔍 DeepInfra: Converting tool message to user message (non-streaming)\n")
-			}
-			deepinfraMessages = append(deepinfraMessages, map[string]interface{}{
-				"role":    "user",
-				"content": formattedContent,
-			})
-			continue
-		}
+	messageOpts := MessageConversionOptions{ConvertToolRoleToUser: true}
+	deepinfraMessages := BuildOpenAIChatMessages(messages, messageOpts)
 
-		// Start with text content
-		content := msg.Content
-
-		// For messages with images, convert to OpenAI-compatible format
-		if len(msg.Images) > 0 {
-			// Create multimodal content array
-			contentArray := []map[string]interface{}{
-				{
-					"type": "text",
-					"text": content,
-				},
-			}
-
-			// Add images
-			for _, img := range msg.Images {
-				imageContent := map[string]interface{}{
-					"type": "image_url",
-				}
-
-				if img.URL != "" {
-					imageContent["image_url"] = map[string]interface{}{
-						"url": img.URL,
-					}
-				} else if img.Base64 != "" {
-					// Format as data URL
-					mimeType := img.Type
-					if mimeType == "" {
-						mimeType = "image/jpeg" // default
-					}
-					dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, img.Base64)
-					imageContent["image_url"] = map[string]interface{}{
-						"url": dataURL,
-					}
-				}
-
-				contentArray = append(contentArray, imageContent)
-			}
-
-			deepinfraMessages = append(deepinfraMessages, map[string]interface{}{
-				"role":    msg.Role,
-				"content": contentArray,
-			})
-		} else {
-			// Regular text-only message
-			deepinfraMessages = append(deepinfraMessages, map[string]interface{}{
-				"role":    msg.Role,
-				"content": content,
-			})
-		}
+	contextLimit, err := p.GetModelContextLimit()
+	if err != nil {
+		contextLimit = p.getKnownModelContextLimit()
 	}
+	maxTokens := CalculateMaxTokens(contextLimit, messages, tools)
 
-	// Build request payload (removed max_tokens for better context management)
+	// Build request payload
 	requestBody := map[string]interface{}{
 		"model":       p.model,
 		"messages":    deepinfraMessages,
-		"max_tokens":  30000,
+		"max_tokens":  maxTokens,
 		"temperature": 0.7,
 	}
 
 	// Add tools if provided
-	if len(tools) > 0 {
-		requestBody["tools"] = tools
+	if openAITools := BuildOpenAIToolsPayload(tools); openAITools != nil {
+		requestBody["tools"] = openAITools
 		requestBody["tool_choice"] = "auto"
 	}
 
@@ -172,27 +113,7 @@ func (p *DeepInfraProvider) SendChatRequest(messages []api.Message, tools []api.
 func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
 	url := "https://api.deepinfra.com/v1/openai/chat/completions"
 
-	// Convert our messages to OpenAI format
-	openAIMessages := make([]interface{}, 0, len(messages))
-	for _, msg := range messages {
-		// DeepInfra doesn't support "tool" role - convert to user message
-		if msg.Role == "tool" {
-			// Format tool response as a user message with clear labeling
-			formattedContent := fmt.Sprintf("Tool Response:\n%s", msg.Content)
-			if p.debug {
-				fmt.Printf("🔍 DeepInfra: Converting tool message to user message\n")
-			}
-			openAIMessages = append(openAIMessages, map[string]interface{}{
-				"role":    "user",
-				"content": formattedContent,
-			})
-		} else {
-			openAIMessages = append(openAIMessages, map[string]interface{}{
-				"role":    msg.Role,
-				"content": msg.Content,
-			})
-		}
-	}
+	openAIMessages := BuildOpenAIStreamingMessages(messages, MessageConversionOptions{ConvertToolRoleToUser: true})
 
 	reqBody := map[string]interface{}{
 		"model":       p.model,
@@ -697,38 +618,6 @@ func (p *DeepInfraProvider) sendRequestWithRetry(httpReq *http.Request, reqBody 
 	return nil, fmt.Errorf("max retries exceeded")
 }
 
-// calculateMaxTokens calculates appropriate max_tokens based on input size and model limits
-func (p *DeepInfraProvider) calculateMaxTokens(messages []api.Message, tools []api.Tool) int {
-	// Get model context limit
-	contextLimit, err := p.GetModelContextLimit()
-	if err != nil || contextLimit == 0 {
-		contextLimit = 32000 // Conservative default
-	}
-
-	// Rough estimation: 1 token ≈ 4 characters
-	inputTokens := 0
-
-	// Estimate tokens from messages
-	for _, msg := range messages {
-		inputTokens += len(msg.Content) / 4
-	}
-
-	// Estimate tokens from tools (tools descriptions can be large)
-	inputTokens += len(tools) * 200 // Rough estimate per tool
-
-	// Reserve buffer for safety and leave room for response
-	maxOutput := contextLimit - inputTokens - 1000 // 1000 token safety buffer
-
-	// Ensure reasonable bounds
-	if maxOutput > 16000 {
-		maxOutput = 16000 // Cap at 16K for most responses
-	} else if maxOutput < 1000 {
-		maxOutput = 1000 // Minimum useful response size
-	}
-
-	return maxOutput
-}
-
 // calculateBackoffDelay calculates the delay for exponential backoff
 func (p *DeepInfraProvider) calculateBackoffDelay(resp *http.Response, attempt int, baseDelay time.Duration) time.Duration {
 	// Fallback to exponential backoff
@@ -818,25 +707,6 @@ func (p *DeepInfraProvider) calculateCost(promptTokens, completionTokens int) fl
 	inputCost := float64(promptTokens) * inputCostPerMillion / 1000000.0
 	outputCost := float64(completionTokens) * outputCostPerMillion / 1000000.0
 	return inputCost + outputCost
-}
-
-// estimateInputTokens estimates the number of input tokens for streaming responses
-func (p *DeepInfraProvider) estimateInputTokens(messages []api.Message, tools []api.Tool) int {
-	// Rough estimation: 1 token ≈ 4 characters
-	inputTokens := 0
-
-	// Estimate tokens from messages
-	for _, msg := range messages {
-		inputTokens += len(msg.Content) / 4
-	}
-
-	// Estimate tokens from tools (tools descriptions can be large)
-	inputTokens += len(tools) * 200 // Rough estimate per tool
-
-	// Add some overhead for system messages and formatting
-	inputTokens += 500
-
-	return inputTokens
 }
 
 // TPS methods - DeepInfra provider doesn't track TPS internally

@@ -149,6 +149,142 @@ func TestDuplicateRequestDetectionRespectsLineRanges(t *testing.T) {
 	}
 }
 
+func TestExecuteToolCallInvalidJSON(t *testing.T) {
+	registry := &mockRegistry{}
+	logger := utils.GetLogger(true)
+	cfg := &configuration.Config{}
+	permissions := &SimplePermissionChecker{allowedPermissions: map[string]bool{}}
+
+	executor := NewExecutor(registry, permissions, logger, cfg)
+
+	toolCall := api.ToolCall{ID: "invalid_json", Type: "function"}
+	toolCall.Function.Name = "read_file"
+	toolCall.Function.Arguments = "{this is not valid json}"
+
+	result, err := executor.ExecuteToolCall(context.Background(), toolCall)
+	if err != nil {
+		t.Fatalf("expected no execution error, got %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result describing failure")
+	}
+	if result.Success {
+		t.Error("expected success=false when JSON parsing fails")
+	}
+	if len(result.Errors) == 0 {
+		t.Error("expected error message for JSON parsing failure")
+	}
+}
+
+func TestExecuteToolCallToolNotFound(t *testing.T) {
+	registry := &mockRegistry{}
+	logger := utils.GetLogger(true)
+	cfg := &configuration.Config{}
+	permissions := &SimplePermissionChecker{allowedPermissions: map[string]bool{"any": true}}
+
+	executor := NewExecutor(registry, permissions, logger, cfg)
+
+	toolCall := api.ToolCall{ID: "missing_tool", Type: "function"}
+	toolCall.Function.Name = "nonexistent_tool"
+	toolCall.Function.Arguments = `{"foo": "bar"}`
+
+	result, err := executor.ExecuteToolCall(context.Background(), toolCall)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result describing missing tool")
+	}
+	if result.Success {
+		t.Error("expected success=false when tool is not registered")
+	}
+	if len(result.Errors) == 0 || !containsString(result.Errors[0], "not found") {
+		t.Errorf("expected not found error, got %v", result.Errors)
+	}
+}
+
+func TestExecuteToolCallPermissionDenied(t *testing.T) {
+	registry := &mockRegistry{}
+	logger := utils.GetLogger(true)
+	cfg := &configuration.Config{}
+	permissions := &SimplePermissionChecker{allowedPermissions: map[string]bool{}}
+
+	restricted := &restrictedTool{}
+	registry.tools = []Tool{restricted}
+
+	executor := NewExecutor(registry, permissions, logger, cfg)
+
+	toolCall := api.ToolCall{ID: "permission_test", Type: "function"}
+	toolCall.Function.Name = restricted.Name()
+	toolCall.Function.Arguments = `{"target_file": "foo.txt"}`
+
+	result, err := executor.ExecuteToolCall(context.Background(), toolCall)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result == nil || result.Success {
+		t.Fatal("expected failure result when permissions missing")
+	}
+	if restricted.executed {
+		t.Error("restricted tool should not execute when permissions are denied")
+	}
+	if len(result.Errors) == 0 || !containsString(result.Errors[0], "insufficient permissions") {
+		t.Errorf("expected insufficient permissions error, got %v", result.Errors)
+	}
+}
+
+func TestExecuteToolCallNormalizesAliases(t *testing.T) {
+	registry := &mockRegistry{}
+	logger := utils.GetLogger(true)
+	cfg := &configuration.Config{}
+	permissions := &SimplePermissionChecker{allowedPermissions: map[string]bool{"read_file": true}}
+
+	capturing := &capturingTool{}
+	shellCapturing := &shellCapturingTool{}
+	registry.tools = []Tool{capturing, shellCapturing}
+
+	executor := NewExecutor(registry, permissions, logger, cfg)
+
+	sessionID := executor.StartSession()
+	ctx := context.WithValue(context.Background(), "session_id", sessionID)
+
+	readCall := api.ToolCall{ID: "alias_test_read", Type: "function"}
+	readCall.Function.Name = capturing.Name()
+	readCall.Function.Arguments = `{"target_file": "alias.txt"}`
+
+	readResult, readErr := executor.ExecuteToolCall(ctx, readCall)
+	if readErr != nil {
+		t.Fatalf("expected no error, got %v", readErr)
+	}
+	if readResult == nil || !readResult.Success {
+		t.Fatalf("expected successful read execution, got %+v", readResult)
+	}
+	if capturing.lastParams == nil {
+		t.Fatal("expected read tool Execute to be invoked")
+	}
+	if fp, ok := capturing.lastParams.Kwargs["file_path"].(string); !ok || fp != "alias.txt" {
+		t.Errorf("expected file_path normalized to alias.txt, got %v", capturing.lastParams.Kwargs["file_path"])
+	}
+
+	shellCall := api.ToolCall{ID: "alias_test_shell", Type: "function"}
+	shellCall.Function.Name = shellCapturing.Name()
+	shellCall.Function.Arguments = `{"cmd": "ls -la"}`
+
+	shellResult, shellErr := executor.ExecuteToolCall(ctx, shellCall)
+	if shellErr != nil {
+		t.Fatalf("expected no error, got %v", shellErr)
+	}
+	if shellResult == nil || !shellResult.Success {
+		t.Fatalf("expected successful shell execution, got %+v", shellResult)
+	}
+	if shellCapturing.lastParams == nil {
+		t.Fatal("expected shell tool Execute to be invoked")
+	}
+	if cmd, ok := shellCapturing.lastParams.Kwargs["command"].(string); !ok || cmd != "ls -la" {
+		t.Errorf("expected command normalized to ls -la, got %v", shellCapturing.lastParams.Kwargs["command"])
+	}
+}
+
 // Mock registry for testing
 type mockRegistry struct {
 	tools []Tool
@@ -221,6 +357,119 @@ func (m *mockTool) EstimatedDuration() time.Duration {
 }
 
 func (m *mockTool) IsAvailable() bool {
+	return true
+}
+
+type restrictedTool struct {
+	executed bool
+}
+
+func (r *restrictedTool) Name() string {
+	return "restricted_tool"
+}
+
+func (r *restrictedTool) Description() string {
+	return "Restricted tool"
+}
+
+func (r *restrictedTool) Category() string {
+	return "misc"
+}
+
+func (r *restrictedTool) Execute(ctx context.Context, params Parameters) (*Result, error) {
+	r.executed = true
+	return &Result{Success: true, Output: "ok"}, nil
+}
+
+func (r *restrictedTool) CanExecute(ctx context.Context, params Parameters) bool {
+	return true
+}
+
+func (r *restrictedTool) RequiredPermissions() []string {
+	return []string{"write_file"}
+}
+
+func (r *restrictedTool) EstimatedDuration() time.Duration {
+	return 0
+}
+
+func (r *restrictedTool) IsAvailable() bool {
+	return true
+}
+
+type capturingTool struct {
+	lastParams *Parameters
+}
+
+func (c *capturingTool) Name() string {
+	return "read_file"
+}
+
+func (c *capturingTool) Description() string {
+	return "Capturing tool"
+}
+
+func (c *capturingTool) Category() string {
+	return "file"
+}
+
+func (c *capturingTool) Execute(ctx context.Context, params Parameters) (*Result, error) {
+	paramsCopy := params
+	c.lastParams = &paramsCopy
+	return &Result{Success: true, Output: "captured"}, nil
+}
+
+func (c *capturingTool) CanExecute(ctx context.Context, params Parameters) bool {
+	return true
+}
+
+func (c *capturingTool) RequiredPermissions() []string {
+	return []string{"read_file"}
+}
+
+func (c *capturingTool) EstimatedDuration() time.Duration {
+	return 0
+}
+
+func (c *capturingTool) IsAvailable() bool {
+	return true
+}
+
+type shellCapturingTool struct {
+	lastParams *Parameters
+}
+
+func (c *shellCapturingTool) Name() string {
+	return "run_shell_command"
+}
+
+func (c *shellCapturingTool) Description() string {
+	return "Shell capturing tool"
+}
+
+func (c *shellCapturingTool) Category() string {
+	return "shell"
+}
+
+func (c *shellCapturingTool) Execute(ctx context.Context, params Parameters) (*Result, error) {
+	paramsCopy := params
+	c.lastParams = &paramsCopy
+	return &Result{Success: true, Output: "shell"}, nil
+}
+
+func (c *shellCapturingTool) CanExecute(ctx context.Context, params Parameters) bool {
+	return true
+}
+
+func (c *shellCapturingTool) RequiredPermissions() []string {
+	return nil
+}
+
+func (c *shellCapturingTool) EstimatedDuration() time.Duration {
+	return 0
+}
+
+func (c *shellCapturingTool) IsAvailable() bool {
 	return true
 }
 

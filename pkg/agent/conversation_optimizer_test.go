@@ -39,13 +39,13 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 	// The FIRST read should be optimized, the LAST read should be preserved
 	messages := []api.Message{
 		{Role: "system", Content: "System prompt"}, // index 0
-		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"}, // index 1 - FIRST read (should be optimized)
+		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallId: "call-1"}, // index 1 - FIRST read (should be optimized)
 		{Role: "assistant", Content: "Message 2"}, // index 2
 		{Role: "user", Content: "Message 3"},      // index 3
 		{Role: "assistant", Content: "Message 4"}, // index 4
 		{Role: "user", Content: "Message 5"},      // index 5
 		{Role: "assistant", Content: "Message 6"}, // index 6
-		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}"}, // index 7 - LAST read (should be preserved)
+		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallId: "call-2"}, // index 7 - LAST read (should be preserved)
 	}
 
 	optimized := optimizer.OptimizeConversation(messages)
@@ -60,11 +60,51 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 	if !containsString(firstReadMsg.Content, "[OPTIMIZED]") {
 		t.Errorf("Expected first read (index 1) to contain [OPTIMIZED], got: %s", firstReadMsg.Content)
 	}
+	if firstReadMsg.ToolCallId != "call-1" {
+		t.Errorf("Expected first read (index 1) to preserve ToolCallId, got: %s", firstReadMsg.ToolCallId)
+	}
 
 	// Check that the LAST file read was preserved (index 7)
 	lastReadMsg := optimized[7]
 	if containsString(lastReadMsg.Content, "[OPTIMIZED]") {
 		t.Errorf("Expected last read (index 7) to NOT contain [OPTIMIZED], got: %s", lastReadMsg.Content)
+	}
+	if lastReadMsg.ToolCallId != "call-2" {
+		t.Errorf("Expected last read (index 7) to preserve ToolCallId, got: %s", lastReadMsg.ToolCallId)
+	}
+
+}
+
+func TestAggressiveOptimizationPreservesToolCallId(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	messages := []api.Message{
+		{Role: "system", Content: "System prompt"},
+		{Role: "user", Content: "Initial question"},
+		{Role: "tool", Content: "Tool call result for read_file: pkg/foo.go\npackage foo", ToolCallId: "agg-call"},
+		{Role: "assistant", Content: "Message 3"},
+		{Role: "user", Content: "Message 4"},
+		{Role: "assistant", Content: "Message 5"},
+		{Role: "user", Content: "Message 6"},
+		{Role: "assistant", Content: "Message 7"},
+		{Role: "user", Content: "Message 8"},
+		{Role: "assistant", Content: "Message 9"},
+		{Role: "user", Content: "Message 10"},
+		{Role: "assistant", Content: "Message 11"},
+	}
+
+	optimized := optimizer.AggressiveOptimization(messages)
+
+	if len(optimized) != len(messages) {
+		t.Fatalf("Expected same message count after aggressive optimization, got %d -> %d", len(messages), len(optimized))
+	}
+
+	rewritten := optimized[2]
+	if !containsString(rewritten.Content, "[COMPACT]") {
+		t.Fatalf("Expected aggressive summary to contain [COMPACT], got: %s", rewritten.Content)
+	}
+	if rewritten.ToolCallId != "agg-call" {
+		t.Fatalf("Expected aggressive summary to preserve ToolCallId, got: %s", rewritten.ToolCallId)
 	}
 }
 

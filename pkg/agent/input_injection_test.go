@@ -18,7 +18,7 @@ func TestInputInjectionContext(t *testing.T) {
 		input := "Test input"
 		err := agent.InjectInputContext(input)
 		assert.NoError(t, err)
-		
+
 		select {
 		case injectedInput := <-agent.inputInjectionChan:
 			assert.Equal(t, input, injectedInput)
@@ -34,7 +34,7 @@ func TestInputInjectionContext(t *testing.T) {
 			err := agent.InjectInputContext(input)
 			assert.NoError(t, err)
 		}
-		
+
 		for _, expected := range inputs {
 			select {
 			case injectedInput := <-agent.inputInjectionChan:
@@ -50,7 +50,7 @@ func TestInputInjectionContext(t *testing.T) {
 func TestCheckForInputInjection(t *testing.T) {
 	agent, err := NewAgent()
 	require.NoError(t, err)
-	
+
 	handler := NewConversationHandler(agent)
 
 	// Test no input injection
@@ -65,7 +65,7 @@ func TestCheckForInputInjection(t *testing.T) {
 		testInput := "Injected input"
 		err := agent.InjectInputContext(testInput)
 		require.NoError(t, err)
-		
+
 		// The checkForInterrupt method will detect and process the injected input
 		interrupted := handler.checkForInterrupt()
 		assert.False(t, interrupted) // Should continue processing, not interrupt
@@ -76,18 +76,18 @@ func TestCheckForInputInjection(t *testing.T) {
 func TestInputInjectionIntegration(t *testing.T) {
 	agent, err := NewAgent()
 	require.NoError(t, err)
-	
+
 	handler := NewConversationHandler(agent)
 
 	// Test full integration flow
 	t.Run("IntegrationFlow", func(t *testing.T) {
 		err := agent.InjectInputContext("Integration test")
 		assert.NoError(t, err)
-		
+
 		// Verify the conversation handler processes the injection
 		interrupted := handler.checkForInterrupt()
 		assert.False(t, interrupted) // Should continue processing with injected input
-		
+
 		// Verify the message was added to the agent's messages
 		assert.Greater(t, len(agent.messages), 0)
 		if len(agent.messages) > 0 {

@@ -18,46 +18,18 @@ func (cf *CommitFlow) executeConsoleFlow() error {
 		return fmt.Errorf("failed to get git status: %w", err)
 	}
 
-	// Build dynamic options based on current state
-	actions := cf.buildCommitActions(stagedFiles, unstagedFiles)
+	// Simplified path: if staged files exist, proceed directly; else prompt to select files
+	if len(stagedFiles) > 0 {
+		return cf.generateCommitMessageAndCommit()
+	}
 
-	if len(actions) == 0 {
+	if len(unstagedFiles) == 0 {
 		fmt.Printf("\r\n📭 No changes to commit. Working directory is clean.\r\n")
 		return nil
 	}
 
-	// Display options
-	fmt.Printf("\r\n🚀 Commit Workflow:\r\n")
-	fmt.Printf("==================\r\n\r\n")
-
-	for i, action := range actions {
-		fmt.Printf("%d. %s\r\n   %s\r\n\r\n", i+1, action.DisplayName, action.Description)
-	}
-
-	// Get user choice
-	fmt.Printf("Select an option (1-%d) or 'q' to quit: ", len(actions))
-
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
-	}
-
-	input = strings.TrimSpace(input)
-	if input == "q" || input == "Q" {
-		fmt.Printf("\r\nCommit workflow cancelled.\r\n")
-		return nil
-	}
-
-	choice, err := strconv.Atoi(input)
-	if err != nil || choice < 1 || choice > len(actions) {
-		fmt.Printf("\r\nInvalid selection. Please try again.\r\n")
-		return cf.executeConsoleFlow() // Retry
-	}
-
-	// Execute selected action
-	selectedAction := actions[choice-1]
-	return selectedAction.Action(cf)
+	// Prompt to select files and then generate message
+	return cf.selectFilesToCommitConsole()
 }
 
 // promptForFiles shows a list of files and lets user select multiple
@@ -174,7 +146,7 @@ func (cf *CommitFlow) selectFilesToCommitConsole() error {
 	}
 
 	// Generate commit message
-	return cf.generateCommitMessageAndCommit(false)
+	return cf.generateCommitMessageAndCommit()
 }
 
 // singleFileCommitConsole is the console version of singleFileCommit
@@ -236,7 +208,7 @@ func (cf *CommitFlow) singleFileCommitConsole() error {
 	}
 
 	// Generate commit message for single file
-	return cf.generateCommitMessageAndCommit(true)
+	return cf.generateCommitMessageAndCommit()
 }
 
 // stageAllAndCommitConsole is the console version (same as regular since no dropdown)
@@ -249,5 +221,5 @@ func (cf *CommitFlow) stageAllAndCommitConsole() error {
 	}
 
 	fmt.Printf("✅ All files staged.\r\n")
-	return cf.generateCommitMessageAndCommit(false)
+	return cf.generateCommitMessageAndCommit()
 }

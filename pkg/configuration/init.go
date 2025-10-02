@@ -150,7 +150,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			fmt.Println()
 		}
 		fmt.Println()
-		
+
 		// Auto-select the first provider with environment variable
 		fmt.Printf("✅ Auto-selecting %s (environment variable detected)\n", getProviderDisplayName(envProviders[0]))
 		return envProviders[0], nil

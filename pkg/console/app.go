@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -557,7 +558,7 @@ func ConfigForMode(mode OutputMode) *Config {
 	case OutputModeInteractive:
 		return &Config{
 			RawMode:        true, // Interactive mode uses raw terminal
-			MouseEnabled:   true,
+			MouseEnabled:   defaultMouseTrackingEnabled(),
 			AltScreen:      true,
 			MinWidth:       80,
 			MinHeight:      24,
@@ -573,4 +574,24 @@ func ConfigForMode(mode OutputMode) *Config {
 // DefaultConfig returns the default configuration (compatible with existing code)
 func DefaultConfig() *Config {
 	return ConfigForMode(OutputModeInteractive) // Maintain existing behavior
+}
+
+// defaultMouseTrackingEnabled returns whether interactive sessions should request
+// mouse tracking from the terminal. We disable it by default so users can select
+// and copy text normally, while allowing advanced users to opt back in via
+// environment variable if they prefer scroll-wheel handling.
+func defaultMouseTrackingEnabled() bool {
+	value := strings.TrimSpace(os.Getenv("LEDIT_MOUSE_ENABLED"))
+	if value == "" {
+		return false
+	}
+
+	switch strings.ToLower(value) {
+	case "1", "true", "yes", "on", "enable", "enabled":
+		return true
+	case "0", "false", "no", "off", "disable", "disabled":
+		return false
+	default:
+		return false
+	}
 }

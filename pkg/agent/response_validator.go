@@ -36,7 +36,7 @@ func (rv *ResponseValidator) IsComplete(content string) bool {
 
 	// Normalize content for case-insensitive matching
 	contentNormalized := strings.ToLower(strings.ReplaceAll(content, " ", ""))
-	
+
 	for _, signal := range completionSignals {
 		// Normalize signal for comparison
 		signalNormalized := strings.ToLower(strings.ReplaceAll(signal, " ", ""))

@@ -118,7 +118,18 @@ func (a *Agent) PrintLineAsync(text string) {
 	select {
 	case a.asyncOutput <- text:
 	case <-timer.C:
-		a.printLineInternal(text)
+		// If we can take the mutex immediately, print synchronously without
+		// blocking the caller while holding the lock.
+		if a.outputMutex != nil && a.outputMutex.TryLock() {
+			a.printLineInternalUnlocked(text)
+			a.outputMutex.Unlock()
+			return
+		}
+
+		// Otherwise, fall back to a goroutine that will emit the line once the
+		// mutex is released and streaming resumes. This avoids deadlocks at the
+		// cost of a short-lived goroutine in rare contention scenarios.
+		go a.printLineInternal(text)
 	}
 }
 
@@ -137,6 +148,14 @@ func (a *Agent) ensureAsyncOutputWorker() {
 // printLineInternal contains the core printing logic used by both synchronous
 // and asynchronous pathways.
 func (a *Agent) printLineInternal(text string) {
+	a.printLineInternalLocked(text, true)
+}
+
+func (a *Agent) printLineInternalUnlocked(text string) {
+	a.printLineInternalLocked(text, false)
+}
+
+func (a *Agent) printLineInternalLocked(text string, manageLock bool) {
 	message := text
 	if !strings.HasSuffix(message, "\n") {
 		message += "\n"
@@ -147,7 +166,7 @@ func (a *Agent) printLineInternal(text string) {
 		return
 	}
 
-	if a.outputMutex != nil {
+	if manageLock && a.outputMutex != nil {
 		a.outputMutex.Lock()
 		defer a.outputMutex.Unlock()
 	}

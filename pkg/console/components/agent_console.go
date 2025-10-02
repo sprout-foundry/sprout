@@ -792,7 +792,12 @@ processComplete:
 
 	// Lock for output
 	ac.outputMutex.Lock()
-	defer ac.outputMutex.Unlock()
+	locked := true
+	defer func() {
+		if locked {
+			ac.outputMutex.Unlock()
+		}
+	}()
 
 	if err != nil {
 		// Clear any partial streaming output
@@ -801,16 +806,23 @@ processComplete:
 	} else {
 		// Check if the response contains error indicators (from handleAPIFailure)
 		// This happens when API fails but conversation is preserved
-		if strings.Contains(response, "⚠️ API request failed") ||
+		hasAPIErrorContent := strings.Contains(response, "⚠️ API request failed") ||
 			strings.Contains(response, "⚠️ **API Request Failed") ||
 			strings.Contains(response, "API Request Failed") ||
-			strings.Contains(response, "❌ **Model Error**") {
+			strings.Contains(response, "❌ **Model Error**")
+
+		if hasAPIErrorContent {
 			// The error message was returned as content, not an error
 			// Check if streaming actually processed any content
 			if !ac.streamingFormatter.HasProcessedContent() {
 				// Nothing was streamed, clear the processing message and show error
 				ac.safePrint("\r\033[K")
 			}
+
+			// Release output lock before interacting with streaming formatter to avoid deadlocks
+			ac.outputMutex.Unlock()
+			locked = false
+
 			// Format and print the error response
 			ac.streamingFormatter.Write(response)
 			ac.streamingFormatter.Finalize()
@@ -818,6 +830,10 @@ processComplete:
 
 			// Ensure cursor is positioned correctly after streaming completes
 			ac.finalizeStreamingPosition()
+
+			// Reacquire the lock for remaining completion steps
+			ac.outputMutex.Lock()
+			locked = true
 		} else if response != "" && !ac.streamingFormatter.HasProcessedContent() {
 			// We have a response but nothing was streamed
 			// This can happen if streaming failed immediately

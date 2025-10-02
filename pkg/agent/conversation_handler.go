@@ -90,6 +90,11 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 				ch.agent.debugLog("DEBUG: ConversationHandler got error at %s: %v\n", time.Now().Format("15:04:05.000"), err)
 			}
 
+			// Ensure any buffered streaming output is flushed before showing the error
+			if ch.agent.flushCallback != nil {
+				ch.agent.flushCallback()
+			}
+
 			// Display user-friendly error message based on error type
 			ch.displayUserFriendlyError(err)
 
@@ -372,11 +377,65 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 		}
 	}
 
+	allMessages = ch.sanitizeToolMessages(allMessages)
+
 	return allMessages
 }
 
 func (ch *ConversationHandler) prepareTools() []api.Tool {
 	return ch.agent.getOptimizedToolDefinitions(ch.agent.messages)
+}
+
+func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []api.Message {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	sanitized := make([]api.Message, 0, len(messages))
+	seenToolCalls := make(map[string]struct{})
+
+	for _, msg := range messages {
+		switch msg.Role {
+		case "assistant":
+			sanitized = append(sanitized, msg)
+			if len(msg.ToolCalls) > 0 {
+				for _, tc := range msg.ToolCalls {
+					if tc.ID != "" {
+						seenToolCalls[tc.ID] = struct{}{}
+					}
+				}
+			}
+		case "tool":
+			if msg.ToolCallId == "" {
+				ch.logDroppedToolMessage("missing tool_call_id", msg)
+				continue
+			}
+
+			if _, ok := seenToolCalls[msg.ToolCallId]; ok {
+				sanitized = append(sanitized, msg)
+				delete(seenToolCalls, msg.ToolCallId)
+			} else {
+				ch.logDroppedToolMessage(fmt.Sprintf("no matching assistant for %s", msg.ToolCallId), msg)
+			}
+		default:
+			sanitized = append(sanitized, msg)
+		}
+	}
+
+	return sanitized
+}
+
+func (ch *ConversationHandler) logDroppedToolMessage(reason string, msg api.Message) {
+	if ch.agent == nil || !ch.agent.debug {
+		return
+	}
+
+	snippet := strings.TrimSpace(msg.Content)
+	if len(snippet) > 80 {
+		snippet = snippet[:77] + "..."
+	}
+
+	ch.agent.debugLog("⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
 }
 
 func (ch *ConversationHandler) determineReasoningEffort() string {

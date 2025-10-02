@@ -16,6 +16,11 @@ import (
 	"golang.org/x/term"
 )
 
+const (
+	inputInjectionBufferSize = 10
+	asyncOutputBufferSize    = 256
+)
+
 type Agent struct {
 	client                api.ClientInterface
 	messages              []api.Message
@@ -46,7 +51,9 @@ type Agent struct {
 	conversationPruner    *ConversationPruner            // Automatic conversation pruning
 	toolCallGuidanceAdded bool                           // Prevent repeating tool call guidance
 
-	// Interrupt handling
+	// Input injection handling
+	inputInjectionChan  chan string        // Channel for injecting new user input
+	inputInjectionMutex sync.Mutex         // Mutex for input injection operations
 	interruptCtx        context.Context    // Context for interrupt handling
 	interruptCancel     context.CancelFunc // Cancel function for interrupt context
 	escMonitoringCancel context.CancelFunc // Cancel function for Esc monitoring
@@ -55,6 +62,8 @@ type Agent struct {
 	streamingCallback   func(string)       // Custom streaming callback
 	streamingBuffer     strings.Builder    // Buffer for streaming content
 	flushCallback       func()             // Callback to flush buffered output
+	asyncOutput         chan string        // Buffered channel for async PrintLine calls
+	asyncOutputOnce     sync.Once          // Ensure async worker initializes once
 
 	// Feature flags
 	falseStopDetectionEnabled bool
@@ -202,6 +211,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		optimizer:                 NewConversationOptimizer(optimizationEnabled, debug),
 		configManager:             configManager,
 		shellCommandHistory:       make(map[string]*ShellCommandResult),
+		inputInjectionChan:        make(chan string, inputInjectionBufferSize),
 		interruptCtx:              interruptCtx,
 		interruptCancel:           interruptCancel,
 		escMonitoringCancel:       nil,
@@ -775,24 +785,40 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 	}
 }
 
-// SetInterruptChannel sets the interrupt channel for the agent
-// DEPRECATED: Interrupt handling is now context-based
-func (a *Agent) SetInterruptChannel(ch chan struct{}) {
-	// No-op: interrupt handling is now context-based
+// InjectInputContext injects a new user input using context-based interrupt system
+func (a *Agent) InjectInputContext(input string) error {
+	a.inputInjectionMutex.Lock()
+	defer a.inputInjectionMutex.Unlock()
+
+	// Send the new input to the injection channel
+	select {
+	case a.inputInjectionChan <- input:
+		return nil
+	default:
+		return fmt.Errorf("input injection channel full")
+	}
 }
 
-// InjectInput injects a new user input into the conversation flow
-// DEPRECATED: Input injection is now handled via context-based interrupt system
-func (a *Agent) InjectInput(input string) {
-	// No-op: Input injection is now handled via context-based interrupt system
-	a.debugLog("⚠️ Input injection via InjectInput() is deprecated: %s\n", input)
+// GetInputInjectionContext returns the input injection channel for the new system
+func (a *Agent) GetInputInjectionContext() <-chan string {
+	return a.inputInjectionChan
 }
 
-// GetInputInjectionChannel returns the input injection channel for monitoring
-// DEPRECATED: Input injection is now handled via context-based interrupt system
-func (a *Agent) GetInputInjectionChannel() <-chan string {
-	// Return nil channel since input injection is deprecated
-	return nil
+// ClearInputInjectionContext clears any pending input injections
+func (a *Agent) ClearInputInjectionContext() {
+	a.inputInjectionMutex.Lock()
+	defer a.inputInjectionMutex.Unlock()
+
+	// Drain the channel
+	for {
+		select {
+		case <-a.inputInjectionChan:
+			// Remove item
+		default:
+			// Channel empty
+			return
+		}
+	}
 }
 
 // SetOutputMutex sets the output mutex for synchronized output

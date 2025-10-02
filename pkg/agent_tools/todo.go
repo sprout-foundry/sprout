@@ -59,7 +59,6 @@ func AddBulkTodos(todos []struct {
 }) string {
 	globalTodoManager.mutex.Lock()
 
-	var results []string
 	for _, todo := range todos {
 		priority := todo.Priority
 		if priority == "" {
@@ -77,13 +76,12 @@ func AddBulkTodos(todos []struct {
 		}
 
 		globalTodoManager.items = append(globalTodoManager.items, item)
-		results = append(results, fmt.Sprintf("✅ %s (%s)", todo.Title, item.ID))
 	}
 	// Unlock before generating markdown to avoid deadlock (GetTodoListMarkdown uses RLock)
 	globalTodoManager.mutex.Unlock()
 
 	// Show the complete todo list for better context
-	return fmt.Sprintf("📝 Added %d todo(s)\n\n**Todo List:**\n%s", len(todos), GetTodoListMarkdown())
+	return GetTodoListMarkdown()
 }
 
 // UpdateTodoStatus updates the status of a todo item
@@ -453,55 +451,6 @@ func GetNextTodo() string {
 	}
 
 	return "🎉 All todos completed!"
-}
-
-// SuggestTodos suggests todos based on common agent workflow patterns
-func SuggestTodos(phase string, taskContext string) []string {
-	var suggestions []string
-
-	switch phase {
-	case "understand":
-		suggestions = append(suggestions,
-			"Analyze project structure",
-			"Identify key files and dependencies",
-			"Understand existing code patterns")
-	case "explore":
-		suggestions = append(suggestions,
-			"Read relevant source files",
-			"Check existing tests",
-			"Verify build configuration")
-	case "implement":
-		suggestions = append(suggestions,
-			"Write/modify core implementation",
-			"Add necessary imports",
-			"Follow existing code patterns")
-	case "verify":
-		suggestions = append(suggestions,
-			"Build and test changes",
-			"Fix any compilation errors",
-			"Validate implementation works")
-	}
-
-	// Add context-specific suggestions
-	if strings.Contains(strings.ToLower(taskContext), "test") {
-		suggestions = append(suggestions, "Run test suite", "Fix failing tests")
-	}
-	if strings.Contains(strings.ToLower(taskContext), "api") {
-		suggestions = append(suggestions, "Update API documentation", "Test API endpoints")
-	}
-
-	return suggestions
-}
-
-// GetAllTodos returns all todo items (for internal use)
-func GetAllTodos() []TodoItem {
-	globalTodoManager.mutex.RLock()
-	defer globalTodoManager.mutex.RUnlock()
-
-	// Return a copy to avoid race conditions
-	todos := make([]TodoItem, len(globalTodoManager.items))
-	copy(todos, globalTodoManager.items)
-	return todos
 }
 
 // GetCompletedTasks returns a list of completed task descriptions for session continuity

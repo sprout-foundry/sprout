@@ -187,9 +187,8 @@ func NewAgentConsole(agent *agent.Agent, config *AgentConsoleConfig) *AgentConso
 		ac.safePrint("%s", text)
 	})
 
-	// Set the interrupt channel and output mutex on the agent (guard for nil)
+	// Set the output mutex on the agent (guard for nil)
 	if agent != nil {
-		agent.SetInterruptChannel(ac.interruptChan)
 		agent.SetOutputMutex(&ac.outputMutex)
 	}
 
@@ -1352,9 +1351,12 @@ func (ac *AgentConsole) handleInputFromManager(input string) error {
 			// Start a fresh conversation
 			startNew = true
 		} else {
-			// Inject into ongoing processing
+			// Inject into ongoing processing using new context-based system
 			if ac.agent != nil {
-				ac.agent.InjectInput(input)
+				err := ac.agent.InjectInputContext(input)
+				if err != nil {
+					ac.safePrint("\n⚠️ Failed to inject input: %v\n", err)
+				}
 			}
 			ac.processingMutex.Unlock()
 

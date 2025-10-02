@@ -14,6 +14,7 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 // DeepInfraProvider implements the OpenAI-compatible DeepInfra API
@@ -601,8 +602,13 @@ func (p *DeepInfraProvider) sendRequestWithRetry(httpReq *http.Request, reqBody 
 						if attempt < maxRetries {
 							// Check for rate limit headers to get reset time
 							waitTime := p.calculateBackoffDelay(resp, attempt, baseDelay)
-							fmt.Printf("⏳ Rate limit hit (attempt %d/%d), waiting %v before retry...\n",
+							message := fmt.Sprintf("⏳ Rate limit hit (attempt %d/%d), waiting %v before retry...",
 								attempt+1, maxRetries+1, waitTime)
+							if logger := utils.GetLogger(false); logger != nil {
+								logger.LogProcessStep(message)
+							} else {
+								fmt.Println(message)
+							}
 							time.Sleep(waitTime)
 							continue
 						}

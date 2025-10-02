@@ -83,11 +83,60 @@ func (a *Agent) ToolLog(action, target string) {
 	}
 }
 
-// PrintLine prints a line of text to the console content area.
-// In interactive streaming mode it routes through the streaming callback so
-// the AgentConsole renders it in the content region. Otherwise, it falls back
-// to direct stdout while ensuring the current terminal line is cleared.
+// PrintLine prints a line of text to the console content area synchronously.
+// It delegates to the internal renderer that handles streaming vs CLI output.
 func (a *Agent) PrintLine(text string) {
+	if a == nil {
+		return
+	}
+	a.printLineInternal(text)
+}
+
+// PrintLineAsync enqueues a line for asynchronous output. Background
+// goroutines (rate-limit handlers, streaming workers, etc.) should prefer this
+// helper to avoid blocking on the UI mutex. If the queue is saturated, we fall
+// back to bounded waiting and finally synchronous printing to avoid goroutine
+// leaks while still preserving message ordering as much as possible.
+func (a *Agent) PrintLineAsync(text string) {
+	if a == nil {
+		return
+	}
+
+	a.ensureAsyncOutputWorker()
+
+	select {
+	case a.asyncOutput <- text:
+		return
+	default:
+	}
+
+	// Queue is saturated; attempt a bounded wait before falling back to
+	// synchronous printing.
+	timer := time.NewTimer(50 * time.Millisecond)
+	defer timer.Stop()
+
+	select {
+	case a.asyncOutput <- text:
+	case <-timer.C:
+		a.printLineInternal(text)
+	}
+}
+
+func (a *Agent) ensureAsyncOutputWorker() {
+	a.asyncOutputOnce.Do(func() {
+		// Generous buffer to absorb bursts without blocking.
+		a.asyncOutput = make(chan string, asyncOutputBufferSize)
+		go func() {
+			for msg := range a.asyncOutput {
+				a.printLineInternal(msg)
+			}
+		}()
+	})
+}
+
+// printLineInternal contains the core printing logic used by both synchronous
+// and asynchronous pathways.
+func (a *Agent) printLineInternal(text string) {
 	message := text
 	if !strings.HasSuffix(message, "\n") {
 		message += "\n"

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // TestGetModel tests the GetModel method
@@ -82,9 +82,11 @@ func TestGetProviderType(t *testing.T) {
 	validTypes := []api.ClientType{
 		api.OpenRouterClientType,
 		api.DeepInfraClientType,
-
 		api.DeepSeekClientType,
 		api.OllamaClientType,
+		api.OllamaLocalClientType,
+		api.OllamaTurboClientType,
+		api.OpenAIClientType,
 	}
 
 	isValid := false

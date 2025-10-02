@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // FileReadRecord tracks file reads to detect redundancy
@@ -66,20 +66,18 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 		if co.isRedundantFileRead(msg, i) {
 			// Replace with summary
 			summary := co.createFileReadSummary(msg)
-			optimized = append(optimized, api.Message{
-				Role:    msg.Role,
-				Content: summary,
-			})
+			rewritten := msg
+			rewritten.Content = summary
+			optimized = append(optimized, rewritten)
 			if co.debug {
 				fmt.Printf("🔄 Optimized redundant file read: %s\n", co.extractFilePath(msg.Content))
 			}
 		} else if co.isRedundantShellCommand(msg, i) {
 			// Replace with summary
 			summary := co.createShellCommandSummary(msg)
-			optimized = append(optimized, api.Message{
-				Role:    msg.Role,
-				Content: summary,
-			})
+			rewritten := msg
+			rewritten.Content = summary
+			optimized = append(optimized, rewritten)
 			if co.debug {
 				fmt.Printf("🔄 Optimized redundant shell command: %s\n", co.extractShellCommand(msg.Content))
 			}
@@ -389,27 +387,24 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 		messageAge := len(messages) - i
 		if msg.Role == "tool" && strings.Contains(msg.Content, "Tool call result for read_file:") && messageAge > 8 {
 			summary := co.createAggressiveSummary(msg)
-			optimized = append(optimized, api.Message{
-				Role:    msg.Role,
-				Content: summary,
-			})
+			rewritten := msg
+			rewritten.Content = summary
+			optimized = append(optimized, rewritten)
 		} else if msg.Role == "tool" && strings.Contains(msg.Content, "Tool call result for shell_command:") {
 			// Still summarize shell commands aggressively as they're less critical for context
 			summary := co.createAggressiveSummary(msg)
-			optimized = append(optimized, api.Message{
-				Role:    msg.Role,
-				Content: summary,
-			})
+			rewritten := msg
+			rewritten.Content = summary
+			optimized = append(optimized, rewritten)
 		} else {
 			// Keep non-tool messages but truncate if very long
 			content := msg.Content
 			if len(content) > 800 { // Moderate truncation to balance context and size
 				content = content[:800] + "... [TRUNCATED for context limit]"
 			}
-			optimized = append(optimized, api.Message{
-				Role:    msg.Role,
-				Content: content,
-			})
+			rewritten := msg
+			rewritten.Content = content
+			optimized = append(optimized, rewritten)
 		}
 	}
 

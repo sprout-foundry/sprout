@@ -57,6 +57,15 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	ch.agent.EnableEscMonitoring()
 	defer ch.agent.DisableEscMonitoring()
 
+	// Reset circuit breaker history for a fresh query to avoid carrying over
+	// repetitive-tool counts from previous requests.
+	if ch.agent.circuitBreaker != nil {
+		ch.agent.circuitBreaker.Actions = make(map[string]*CircuitBreakerAction)
+		if ch.agent.debug {
+			ch.agent.debugLog("DEBUG: Reset circuit breaker for new query\n")
+		}
+	}
+
 	// Process images if present
 	processedQuery, err := ch.processImagesInQuery(userQuery)
 	if err != nil {
@@ -368,6 +377,8 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 			// Rebuild with system prompt
 			allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
 			allMessages = append(allMessages, prunedMessages...)
+			// Persist pruned history so future iterations don't re-trigger on stale counts
+			ch.agent.messages = prunedMessages
 
 			if ch.agent.debug {
 				newTokens := ch.estimateTokens(allMessages)
@@ -529,30 +540,34 @@ func (ch *ConversationHandler) isBlankIteration(content string, toolCalls []api.
 
 // estimateTokens provides a rough estimate of token count for messages
 func (ch *ConversationHandler) estimateTokens(messages []api.Message) int {
-	totalChars := 0
+	totalTokens := 0
+
 	for _, msg := range messages {
-		// Count characters in content
-		totalChars += len(msg.Content)
+		// Estimate core content tokens
+		totalTokens += EstimateTokens(msg.Content)
 
-		// Count characters in reasoning content if present
 		if msg.ReasoningContent != "" {
-			totalChars += len(msg.ReasoningContent)
+			totalTokens += EstimateTokens(msg.ReasoningContent)
 		}
 
-		// Estimate tokens for tool calls (function names, parameters, etc.)
+		// Include tool call metadata (arguments can be sizeable JSON payloads)
 		for _, toolCall := range msg.ToolCalls {
-			totalChars += len(toolCall.Function.Name) + len(toolCall.Function.Arguments) + 50 // overhead
+			totalTokens += EstimateTokens(toolCall.Function.Name)
+			totalTokens += EstimateTokens(toolCall.Function.Arguments)
+			// modest overhead for call framing/ids
+			totalTokens += 20
 		}
 
-		// Add overhead for role, formatting, etc.
-		totalChars += 50
+		// Role/formatting overhead per message
+		totalTokens += 10
 	}
 
-	// Conservative estimate: 1 token ≈ 3 characters (accounting for markdown, code, etc.)
-	estimatedTokens := totalChars / 3
-
-	// Add some safety buffer
-	return int(float64(estimatedTokens) * 1.1)
+	// Apply a small safety buffer but stay close to measured estimate
+	buffered := int(float64(totalTokens) * 1.05)
+	if buffered < totalTokens {
+		return totalTokens
+	}
+	return buffered
 }
 
 // displayUserFriendlyError shows contextual error messages to the user

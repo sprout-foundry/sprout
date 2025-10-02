@@ -109,6 +109,9 @@ type AgentConsole struct {
 	streamCh   chan string
 	streamDone chan struct{}
 
+	// Output tracking
+	lastOutputEndedWithNewline bool
+
 	// Input rendering state
 	lastInputHeight int
 }
@@ -643,6 +646,7 @@ func (ac *AgentConsole) processInput(input string) error {
 	// Set up streaming with our formatter
 	// Reset formatter for new session
 	ac.streamingFormatter.Reset()
+	ac.streamingFormatter.SetStartOnNewLine(ac.lastOutputEndedWithNewline)
 	ac.isStreaming = true
 	if ac.uiCoordinator != nil {
 		ac.uiCoordinator.SetStreaming(true)
@@ -1601,7 +1605,7 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 	content = ac.filterCompletionSignals(content)
 
 	// Only write if there's content left after filtering
-	if strings.TrimSpace(content) != "" {
+	if content != "" {
 		// Count newlines to update currentContentLine tracking
 		newlineCount := strings.Count(content, "\n")
 		if newlineCount > 0 {
@@ -1627,6 +1631,9 @@ func (ac *AgentConsole) safePrint(format string, args ...interface{}) {
 			// Fallback to direct output
 			fmt.Print(content)
 		}
+
+		// Track whether the last write ended with a newline so streaming formatter can preserve spacing
+		ac.lastOutputEndedWithNewline = strings.HasSuffix(content, "\n")
 	}
 }
 
@@ -1886,9 +1893,9 @@ func (ac *AgentConsole) filterCompletionSignals(content string) string {
 		filtered = strings.ReplaceAll(filtered, signal, "")
 	}
 
-	// Don't use TrimSpace as it removes important newlines
-	// Just remove empty/whitespace-only content after filtering
-	if strings.TrimSpace(filtered) == "" {
+	// Remove spaces/tabs only; preserve newlines so formatting chunks remain intact
+	trimmed := strings.Trim(filtered, " \t")
+	if trimmed == "" {
 		return ""
 	}
 	return filtered

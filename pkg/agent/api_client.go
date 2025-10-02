@@ -51,6 +51,8 @@ func NewAPIClient(agent *Agent) *APIClient {
 		baseRetryDelay: time.Second,
 	}
 
+	client.rateLimiter.SetOutputFunc(client.printRateLimitMessage)
+
 	// Set timeouts from configuration or defaults
 	client.setTimeoutsFromConfig()
 
@@ -383,15 +385,17 @@ func (ac *APIClient) handleRateLimit(err error, attempt int) bool {
 	backoffDelay := ac.rateLimiter.CalculateBackoffDelay(nil, attempt)
 
 	// Show progress to user
-	if ac.agent.outputMutex != nil {
-		ac.agent.outputMutex.Lock()
-		ac.rateLimiter.WaitWithProgress(backoffDelay, ac.agent.GetProvider())
-		ac.agent.outputMutex.Unlock()
-	} else {
-		ac.rateLimiter.WaitWithProgress(backoffDelay, ac.agent.GetProvider())
-	}
+	ac.rateLimiter.WaitWithProgress(backoffDelay, ac.agent.GetProvider())
 
 	return true
+}
+
+func (ac *APIClient) printRateLimitMessage(msg string) {
+	if ac.agent != nil {
+		ac.agent.PrintLineAsync(msg)
+		return
+	}
+	fmt.Print(msg)
 }
 
 // isRetryableError checks if an error should be retried

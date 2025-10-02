@@ -512,6 +512,7 @@ func handleUpdateTodoStatus(ctx context.Context, a *Agent, args map[string]inter
 	}
 
 	a.ToolLog("updating todo", fmt.Sprintf("task %s to %s", taskID, status))
+	a.safePrint("%s", tools.ListAllTodos())
 	a.debugLog("Updating todo %s to status: %s\n", taskID, status)
 
 	result := tools.UpdateTodoStatus(taskID, status)
@@ -582,6 +583,7 @@ func handleAddTodos(ctx context.Context, a *Agent, args map[string]interface{}) 
 	a.debugLog("Adding %d todos\n", len(todos))
 
 	result := tools.AddBulkTodos(todos)
+	a.safePrint("%s", result)
 	a.debugLog("Add todos result: %s\n", result)
 	return result, nil
 }

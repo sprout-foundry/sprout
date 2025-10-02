@@ -248,9 +248,9 @@ This is line 3
 	sf.Finalize()
 
 	// Verify content was added line by line (no duplication)
-	// The streaming formatter processes content line by line for better streaming experience
-	// Test content has 3 lines + 1 final newline = 4 additions
-	expectedAdditions := 4
+	// The streaming formatter processes content line by line and keeps the trailing newline with the final line
+	// Test content has 3 lines, so we expect exactly 3 additions
+	expectedAdditions := 3
 	if addContentCount != expectedAdditions {
 		t.Errorf("Expected %d content additions (line by line), got %d", expectedAdditions, addContentCount)
 	}
@@ -263,7 +263,6 @@ This is line 3
 			"This is line 1\n",
 			"This is line 2\n",
 			"This is line 3\n",
-			"\n", // Final newline
 		}
 
 		for i, expectedLine := range expectedLines {

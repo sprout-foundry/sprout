@@ -91,6 +91,7 @@ func TestFirstLinePositioningAfterQuery(t *testing.T) {
 
 	// Reset formatter (from processInput)
 	ac.streamingFormatter.Reset()
+	ac.streamingFormatter.SetStartOnNewLine(ac.lastOutputEndedWithNewline)
 
 	// The first line of streaming content - this is where the issue occurs
 	mockTerminal.commands = []string{} // Clear to see exactly what happens
@@ -98,6 +99,7 @@ func TestFirstLinePositioningAfterQuery(t *testing.T) {
 	ac.streamingFormatter.Write("Here's my first line of response\n")
 
 	firstResponseLineCursor := mockTerminal.cursorY
+
 	t.Logf("After first streaming line, cursor: (%d,%d)", mockTerminal.cursorX, firstResponseLineCursor)
 	t.Logf("Commands during first streaming: %v", mockTerminal.GetCommands())
 

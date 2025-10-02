@@ -88,6 +88,7 @@ func TestPostQueryPositioning(t *testing.T) {
 
 	// Reset formatter for new session (from processInput)
 	ac.streamingFormatter.Reset()
+	ac.streamingFormatter.SetStartOnNewLine(ac.lastOutputEndedWithNewline)
 
 	// The streaming formatter has a custom output function that calls safePrint
 	// Let's simulate what it does:

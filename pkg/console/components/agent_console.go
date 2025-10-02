@@ -694,19 +694,8 @@ func (ac *AgentConsole) processInput(input string) error {
 		close(ac.streamDone)
 	}()
 	ac.agent.EnableStreaming(func(content string) {
-		// Queue content to maintain order; buffered channel avoids blocking in normal conditions
-		select {
-		case ac.streamCh <- content:
-		default:
-			// If buffer is full, fall back to a bounded wait to avoid reordering
-			select {
-			case ac.streamCh <- content:
-			case <-time.After(100 * time.Millisecond):
-				// As a last resort, coalesce by forcing a flush and then enqueue (best-effort)
-				ac.streamingFormatter.ForceFlush()
-				_ = ac.enqueueBestEffort(content)
-			}
-		}
+		// Queue content using best-effort strategy without blocking the provider goroutine
+		_ = ac.enqueueBestEffort(content)
 	})
 
 	// Set flush callback to force flush buffered content when needed

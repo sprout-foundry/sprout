@@ -1,8 +1,6 @@
 package agent
 
-import (
-	"github.com/alantheprice/ledit/pkg/agent_api"
-)
+import api "github.com/alantheprice/ledit/pkg/agent_api"
 
 // TaskAction represents a completed action during task execution
 type TaskAction struct {
@@ -20,6 +18,9 @@ type ShellCommandResult struct {
 	ExecutedAt      int64  // Unix timestamp
 	MessageIndex    int    // Index in messages array where this result appears
 	WasTruncated    bool   // Whether output was truncated
+	FullOutputPath  string // Optional path to the saved full output
+	TruncatedTokens int    // Number of tokens omitted from the middle section
+	TruncatedLines  int    // Approximate number of lines omitted from the middle
 }
 
 // AgentState represents the state of an agent that can be persisted

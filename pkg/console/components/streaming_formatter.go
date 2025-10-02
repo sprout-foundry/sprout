@@ -67,6 +67,13 @@ func (sf *StreamingFormatter) SetOutputFunc(outputFunc func(string)) {
 	sf.outputFunc = outputFunc
 }
 
+// SetStartOnNewLine seeds the formatter with whether the cursor is currently on a newline
+func (sf *StreamingFormatter) SetStartOnNewLine(onNewLine bool) {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+	sf.lastWasNewline = onNewLine
+}
+
 // print outputs text using custom output function if available, otherwise fmt.Print
 func (sf *StreamingFormatter) print(text string) {
 	if sf.outputFunc != nil {
@@ -125,7 +132,6 @@ func (sf *StreamingFormatter) Write(content string) {
 			} else {
 				color.New(color.FgCyan).Println("✨ Streaming response...")
 			}
-			sf.println("") // Add blank line for spacing
 			sf.outputMutex.Unlock()
 		}
 
@@ -225,6 +231,13 @@ func (sf *StreamingFormatter) flush() {
 	}
 
 	for i, line := range lines {
+		// Skip the trailing empty segment that Split creates when content ends with a newline.
+		// The newline has already been accounted for, so emitting another blank line creates gaps.
+		if i == len(lines)-1 && line == "" && strings.HasSuffix(content, "\n") {
+			sf.lastWasNewline = true
+			continue
+		}
+
 		// Skip empty lines at the start
 		if i == 0 && sf.lastWasNewline && strings.TrimSpace(line) == "" {
 			continue

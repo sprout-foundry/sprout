@@ -55,13 +55,47 @@ func NewConversationPruner(debug bool) *ConversationPruner {
 }
 
 // ShouldPrune checks if pruning should occur based on context usage
-// Uses hybrid approach: 70K tokens OR 70% of context limit, whichever is hit first
-func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int) bool {
+// Default behavior: Hybrid approach (70K tokens OR 70% of context limit)
+// For providers with significant cached-token discounts (e.g., OpenAI) use an
+// alternative policy: allow the context to grow until the remaining tokens are
+// within min(20k, 20% of max) then prune.
+func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider string) bool {
 	if cp.strategy == PruneStrategyNone {
 		return false
 	}
 
-	// Hybrid threshold: 70K tokens OR 70% of context limit, whichever is hit first
+	// Providers that should use the cached-token friendly threshold
+	cachedDiscountProviders := map[string]bool{
+		"openai": true,
+	}
+
+	if cachedDiscountProviders[provider] {
+		// Remaining tokens before hitting the model limit
+		remaining := maxTokens - currentTokens
+
+		// Compute threshold: whichever is lower of 20k or 20% of maxTokens
+		percentThreshold := int(0.2 * float64(maxTokens))
+		threshold := 20000
+		if percentThreshold < threshold {
+			threshold = percentThreshold
+		}
+
+		if cp.debug {
+			fmt.Printf("🔁 Cached-discount provider (%s): remaining=%d, threshold=%d (min of 20k and 20%% of %d)\n",
+				provider, remaining, threshold, maxTokens)
+		}
+
+		if remaining <= threshold {
+			if cp.debug {
+				fmt.Printf("🔄 Pruning triggered for cached-discount provider: remaining %d <= %d\n", remaining, threshold)
+			}
+			return true
+		}
+
+		return false
+	}
+
+	// Fallback/default behavior: Hybrid threshold: 70K tokens OR 70% of context limit
 	const tokenCeiling = 70000      // 70K token absolute ceiling
 	const percentageThreshold = 0.7 // 70% threshold
 
@@ -86,14 +120,14 @@ func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int) bool {
 }
 
 // PruneConversation automatically prunes conversation based on strategy
-func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentTokens, maxTokens int, optimizer *ConversationOptimizer) []api.Message {
-	if !cp.ShouldPrune(currentTokens, maxTokens) {
+func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentTokens, maxTokens int, optimizer *ConversationOptimizer, provider string) []api.Message {
+	if !cp.ShouldPrune(currentTokens, maxTokens, provider) {
 		return messages
 	}
 
 	if cp.debug {
 		contextUsage := float64(currentTokens) / float64(maxTokens)
-		fmt.Printf("🔄 Auto-pruning triggered (%.1f%% context used, strategy: %s)\n", contextUsage*100, cp.strategy)
+		fmt.Printf("🔄 Auto-pruning triggered (%.1f%% context used, strategy: %s, provider: %s)\n", contextUsage*100, cp.strategy, provider)
 	}
 
 	var pruned []api.Message

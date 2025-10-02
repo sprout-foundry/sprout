@@ -375,20 +375,21 @@ func (ac *AgentConsole) enqueueBestEffort(content string) error {
 		ac.streamingFormatter.Write(content)
 		return nil
 	}
-	select {
-	case ac.streamCh <- content:
-		return nil
-	default:
-		// Drop into a short goroutine to avoid blocking the caller; ordering may be affected only in overload
-		go func(c string) {
-			select {
-			case ac.streamCh <- c:
-			case <-time.After(200 * time.Millisecond):
-				// If still blocked, as a last resort write directly; extremely rare
-				ac.streamingFormatter.Write(c)
-			}
-		}(content)
-		return nil
+
+	// Attempt to enqueue while preserving message order. Wait in bounded
+	// intervals for the worker to drain rather than writing directly and
+	// reordering output.
+	ticker := time.NewTicker(25 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case ac.streamCh <- content:
+			return nil
+		case <-ticker.C:
+			// Keep waiting; worker likely still draining. This loop is bounded by
+			// the life of streamCh, and preserves ordering by avoiding out-of-band writes.
+		}
 	}
 }
 

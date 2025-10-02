@@ -64,6 +64,7 @@ type Agent struct {
 	flushCallback       func()             // Callback to flush buffered output
 	asyncOutput         chan string        // Buffered channel for async PrintLine calls
 	asyncOutputOnce     sync.Once          // Ensure async worker initializes once
+	asyncBufferSize     int                // Optional override for async output buffer (tests)
 
 	// Feature flags
 	falseStopDetectionEnabled bool

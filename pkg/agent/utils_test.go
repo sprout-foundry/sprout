@@ -188,8 +188,9 @@ func TestGetModelContextLimit(t *testing.T) {
 		t.Error("Expected positive context limit")
 	}
 
-	// Should at least be the default fallback value
-	if limit < 32000 {
-		t.Errorf("Expected context limit to be at least 32000, got %d", limit)
+	// TestClient returns 4096, so we should expect that value
+	expectedLimit := 4096
+	if limit != expectedLimit {
+		t.Errorf("Expected context limit to be %d (TestClient default), got %d", expectedLimit, limit)
 	}
 }

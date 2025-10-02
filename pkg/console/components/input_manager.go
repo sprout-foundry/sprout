@@ -757,10 +757,9 @@ func (im *InputManager) showInputField() {
 			// Colors: light grey (info) and muted blue (keys)
 			greyColor := "\033[38;2;170;170;170m"
 			blueColor := "\033[38;2;110;160;230m"
-			resetColor := "\033[0m"
 			// Keep it short to avoid wrapping; use simple keys that work across terminals
 			// Example: "Scrolling: ↑/↓, PgUp/PgDn, g g top, G bottom, ? help"
-			hintText = greyColor + "Scrolling: " + blueColor + "↑/↓" + greyColor + ", " + blueColor + "PgUp/PgDn " + resetColor
+			hintText = greyColor + "Scrolling: " + blueColor + "↑/↓" + greyColor + ", " + blueColor + "PgUp/PgDn " + "Tab to focus input"
 
 			// Force single-line rendering for hint to avoid escape sequence slicing
 			lines = 1

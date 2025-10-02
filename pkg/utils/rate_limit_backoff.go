@@ -15,6 +15,7 @@ type RateLimitBackoff struct {
 	BaseDelay  time.Duration
 	MaxDelay   time.Duration
 	BufferTime time.Duration
+	outputFn   func(string)
 }
 
 // NewRateLimitBackoff creates a new rate limit backoff handler with sensible defaults
@@ -24,7 +25,25 @@ func NewRateLimitBackoff() *RateLimitBackoff {
 		BaseDelay:  2 * time.Second,
 		MaxDelay:   60 * time.Second,
 		BufferTime: 2 * time.Second,
+		outputFn:   func(msg string) { fmt.Print(msg) },
 	}
+}
+
+// SetOutputFunc overrides the default output function for user-facing messages
+func (rlb *RateLimitBackoff) SetOutputFunc(fn func(string)) {
+	if fn == nil {
+		rlb.outputFn = func(msg string) { fmt.Print(msg) }
+		return
+	}
+	rlb.outputFn = fn
+}
+
+func (rlb *RateLimitBackoff) print(msg string) {
+	if rlb.outputFn != nil {
+		rlb.outputFn(msg)
+		return
+	}
+	fmt.Print(msg)
 }
 
 // IsRateLimitError checks if an error or HTTP response indicates a rate limit
@@ -185,12 +204,15 @@ func (rlb *RateLimitBackoff) WaitWithProgress(duration time.Duration, provider s
 		return
 	}
 
-	fmt.Printf("⏳ Rate limited by %s. Waiting %v before retry...\n", provider, duration.Round(time.Second))
+	rlb.print(fmt.Sprintf("⏳ Rate limited by %s. Waiting %v before retry...\n", provider, duration.Round(time.Second)))
 
 	// Show progress for long waits
 	if duration > 10*time.Second {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
+
+		deadline := time.NewTimer(duration)
+		defer deadline.Stop()
 
 		start := time.Now()
 		for {
@@ -199,16 +221,17 @@ func (rlb *RateLimitBackoff) WaitWithProgress(duration time.Duration, provider s
 				elapsed := time.Since(start)
 				remaining := duration - elapsed
 				if remaining <= 0 {
+					rlb.print("✅ Rate limit wait complete, retrying...\n")
 					return
 				}
-				fmt.Printf("   Still waiting... %v remaining\n", remaining.Round(time.Second))
-			case <-time.After(duration):
+				rlb.print(fmt.Sprintf("   Still waiting... %v remaining\n", remaining.Round(time.Second)))
+			case <-deadline.C:
+				rlb.print("✅ Rate limit wait complete, retrying...\n")
 				return
 			}
 		}
 	} else {
 		time.Sleep(duration)
+		rlb.print("✅ Rate limit wait complete, retrying...\n")
 	}
-
-	fmt.Printf("✅ Rate limit wait complete, retrying...\n")
 }

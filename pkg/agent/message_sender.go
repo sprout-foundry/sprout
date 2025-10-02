@@ -19,9 +19,18 @@ type MessageSender struct {
 
 // NewMessageSender creates a new message sender
 func NewMessageSender(agent *Agent) *MessageSender {
+	rateLimiter := utils.NewRateLimitBackoff()
+	rateLimiter.SetOutputFunc(func(msg string) {
+		if agent != nil {
+			agent.PrintLineAsync(msg)
+			return
+		}
+		fmt.Print(msg)
+	})
+
 	return &MessageSender{
 		agent:       agent,
-		rateLimiter: utils.NewRateLimitBackoff(),
+		rateLimiter: rateLimiter,
 	}
 }
 
@@ -168,13 +177,7 @@ func (ms *MessageSender) updateProgress(retry int) {
 }
 
 func (ms *MessageSender) showRateLimitProgress(delay time.Duration) {
-	if ms.agent.outputMutex != nil {
-		ms.agent.outputMutex.Lock()
-		ms.rateLimiter.WaitWithProgress(delay, ms.agent.GetProvider())
-		ms.agent.outputMutex.Unlock()
-	} else {
-		ms.rateLimiter.WaitWithProgress(delay, ms.agent.GetProvider())
-	}
+	ms.rateLimiter.WaitWithProgress(delay, ms.agent.GetProvider())
 }
 
 func (ms *MessageSender) flushStreamingOutput(err error) {

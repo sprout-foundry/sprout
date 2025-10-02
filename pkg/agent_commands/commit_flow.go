@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"errors"
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,8 +15,11 @@ import (
 
 // CommitFlow manages the interactive commit workflow
 type CommitFlow struct {
-	agent     *agent.Agent
-	optimizer *utils.DiffOptimizer
+	agent        *agent.Agent
+	optimizer    *utils.DiffOptimizer
+	skipPrompt   bool
+	dryRun       bool
+	allowSecrets bool
 }
 
 // NewCommitFlow creates a new commit flow
@@ -24,6 +27,17 @@ func NewCommitFlow(chatAgent *agent.Agent) *CommitFlow {
 	return &CommitFlow{
 		agent:     chatAgent,
 		optimizer: utils.NewDiffOptimizer(),
+	}
+}
+
+// NewCommitFlowWithFlags creates a new commit flow with CLI flags
+func NewCommitFlowWithFlags(chatAgent *agent.Agent, skipPrompt, dryRun, allowSecrets bool) *CommitFlow {
+	return &CommitFlow{
+		agent:        chatAgent,
+		optimizer:    utils.NewDiffOptimizer(),
+		skipPrompt:   skipPrompt,
+		dryRun:       dryRun,
+		allowSecrets: allowSecrets,
 	}
 }
 
@@ -64,21 +78,24 @@ func (f *FileItem) Display() string    { return f.Description }
 func (f *FileItem) SearchText() string { return f.Filename + " " + f.Description }
 func (f *FileItem) Value() interface{} { return f.Filename }
 
-// Execute runs the interactive commit flow
+// Execute runs a simplified commit flow:
+// 1) If there are staged changes, use them and generate a commit message
+// 2) If there are no staged changes, prompt user to select files, then generate the commit message
 func (cf *CommitFlow) Execute() error {
-	// Prefer the integrated dropdown UI when available
+	// Interactive terminal
 	if term.IsTerminal(int(os.Stdin.Fd())) {
-		if err := cf.showCommitOptions(); err != nil {
-			// Fallback to console prompts if UI isn't available
-			if errors.Is(err, ui.ErrUINotAvailable) {
-				return cf.executeConsoleFlow()
-			}
-			return err
+		stagedFiles, _, err := cf.getGitStatus()
+		if err != nil {
+			return fmt.Errorf("failed to get git status: %w", err)
 		}
-		return nil
+		if len(stagedFiles) > 0 {
+			return cf.generateCommitMessageAndCommit()
+		}
+		// No staged changes -> select files and then continue to message generation
+		return cf.selectFilesToCommit()
 	}
 
-	// Non-interactive environments: fallback
+	// Non-interactive environments: just attempt to generate and print message
 	return cf.executeNonInteractive()
 }
 
@@ -94,8 +111,8 @@ func (cf *CommitFlow) showCommitOptions() error {
 	actions := cf.buildCommitActions(stagedFiles, unstagedFiles)
 
 	if len(actions) == 0 {
-		cf.println("")
-		cf.println("📭 No changes to commit. Working directory is clean.")
+		cf.agent.PrintLine("")
+		cf.agent.PrintLine("📭 No changes to commit. Working directory is clean.")
 		return nil
 	}
 
@@ -233,7 +250,7 @@ func (cf *CommitFlow) getGitStatus() (staged, unstaged []string, err error) {
 func (cf *CommitFlow) commitStagedFiles() error {
 	cf.println("")
 	cf.println("📦 Committing staged files...")
-	return cf.generateCommitMessageAndCommit(false) // false = not single file mode
+	return cf.generateCommitMessageAndCommit()
 }
 
 // selectFilesToCommit allows the user to select specific files to commit
@@ -254,48 +271,29 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 		return nil
 	}
 
-	// Convert files to dropdown items
-	items := make([]ui.DropdownItem, len(unstagedFiles))
-	for i, file := range unstagedFiles {
-		items[i] = &FileItem{
-			Filename:    file,
-			Description: fmt.Sprintf("📝 Stage and commit: %s", file),
-		}
+	// Simpler selection flow: use the console-style prompt from CommitCommand
+	// to avoid dropdowns and complex decision trees. This will prompt the
+	// user to enter file numbers or 'a' for all, then stage the chosen files.
+	commitCmd := &CommitCommand{
+		skipPrompt:   cf.skipPrompt,
+		dryRun:       cf.dryRun,
+		allowSecrets: cf.allowSecrets,
 	}
 
-	// Temporarily disable ESC monitoring during dropdown
-	cf.agent.DisableEscMonitoring()
-	defer cf.agent.EnableEscMonitoring()
-
-	// Try to show dropdown using the agent's UI
-	selected, err := cf.agent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "📝 Select File to Commit:",
-		SearchPrompt: "Search files: ",
-		ShowCounts:   true,
-	})
-
+	reader := bufio.NewReader(os.Stdin)
+	selectedFiles, err := commitCmd.selectAndStageFiles(cf.agent, reader)
 	if err != nil {
-		if err == ui.ErrCancelled {
-			cf.println("")
-			cf.println("File selection cancelled.")
-			return nil
-		}
-		return fmt.Errorf("failed to show file selection: %w", err)
+		return err
 	}
 
-	selectedFile := selected.Value().(string)
-
-	// Stage the selected file
-	cf.println("")
-	cf.printf("📤 Staging: %s\n", selectedFile)
-	cmd := exec.Command("git", "add", selectedFile)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to stage file %s: %w", selectedFile, err)
+	if len(selectedFiles) == 0 {
+		cf.println("")
+		cf.println("❌ No files selected")
+		return nil
 	}
 
-	// Determine if this is a single file commit
-	singleFileMode := true
-	return cf.generateCommitMessageAndCommit(singleFileMode)
+	// Proceed to generate commit message and commit
+	return cf.generateCommitMessageAndCommit()
 }
 
 // stageAllAndCommit stages all modified files and commits them
@@ -309,7 +307,7 @@ func (cf *CommitFlow) stageAllAndCommit() error {
 	}
 
 	cf.println("✅ All files staged.")
-	return cf.generateCommitMessageAndCommit(false) // false = not single file mode
+	return cf.generateCommitMessageAndCommit()
 }
 
 // singleFileCommit allows selecting and committing a single file
@@ -381,11 +379,11 @@ func (cf *CommitFlow) singleFileCommit() error {
 		return fmt.Errorf("failed to stage file %s: %w", selectedFile, err)
 	}
 
-	return cf.generateCommitMessageAndCommit(true) // true = single file mode
+	return cf.generateCommitMessageAndCommit() // true = single file mode
 }
 
 // generateCommitMessageAndCommit handles the commit message generation and commit
-func (cf *CommitFlow) generateCommitMessageAndCommit(singleFileMode bool) error {
+func (cf *CommitFlow) generateCommitMessageAndCommit() error {
 	// Get diff for commit message generation
 	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
 	if err != nil {
@@ -404,8 +402,12 @@ func (cf *CommitFlow) generateCommitMessageAndCommit(singleFileMode bool) error 
 	cf.println("🤖 Generating commit message...")
 
 	// Create a temporary CommitCommand to reuse the existing logic
-	commitCmd := &CommitCommand{}
-	return commitCmd.generateAndCommit(cf.agent, nil, singleFileMode)
+	commitCmd := &CommitCommand{
+		skipPrompt:   cf.skipPrompt,
+		dryRun:       cf.dryRun,
+		allowSecrets: cf.allowSecrets,
+	}
+	return commitCmd.generateAndCommit(cf.agent, nil)
 }
 
 // executeNonInteractive handles non-interactive mode (fallback)

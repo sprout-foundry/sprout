@@ -43,11 +43,12 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 // IsShellCommand checks if a prompt starts with common shell tools
 func IsShellCommand(prompt string) bool {
-	prompt = strings.TrimSpace(prompt)
-	// TODO: Update this to be more intelligent, using some level of NLP or pattern matching to avoid false positives
-	if prompt == "" {
+	trimmed := strings.TrimSpace(prompt)
+	if trimmed == "" {
 		return false
 	}
+
+	lower := strings.ToLower(trimmed)
 
 	// Common shell command prefixes
 	shellPrefixes := []string{
@@ -85,7 +86,109 @@ func IsShellCommand(prompt string) bool {
 	}
 
 	for _, prefix := range shellPrefixes {
-		if strings.HasPrefix(prompt, prefix+" ") || prompt == prefix {
+		if strings.HasPrefix(lower, prefix+" ") || lower == prefix {
+			return true
+		}
+	}
+
+	parts := strings.Fields(trimmed)
+	firstToken := ""
+	if len(parts) > 0 {
+		firstToken = parts[0]
+	}
+
+	if looksLikePath(firstToken) {
+		return true
+	}
+
+	if containsShellOperator(trimmed) {
+		return true
+	}
+
+	if containsEnvReference(trimmed) {
+		return true
+	}
+
+	return false
+}
+
+func looksLikePath(token string) bool {
+	if token == "" {
+		return false
+	}
+
+	if strings.HasPrefix(token, "./") || strings.HasPrefix(token, "../") || strings.HasPrefix(token, "/") || strings.HasPrefix(token, "~/") {
+		return true
+	}
+
+	if strings.HasPrefix(token, ".\\") || strings.HasPrefix(token, "..\\") {
+		return true
+	}
+
+	if len(token) >= 2 && token[1] == ':' {
+		first := token[0]
+		if (first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') {
+			return true
+		}
+	}
+
+	if strings.Contains(token, "//") && strings.Contains(token, "://") {
+		return false
+	}
+
+	if strings.Contains(token, "/") {
+		return true
+	}
+
+	if strings.Contains(token, "\\") {
+		return true
+	}
+
+	return false
+}
+
+func containsShellOperator(s string) bool {
+	trimmed := strings.TrimSpace(s)
+
+	if strings.Contains(trimmed, "&&") || strings.Contains(trimmed, "||") {
+		return true
+	}
+
+	if strings.Contains(trimmed, " | ") || strings.HasSuffix(trimmed, "|") || strings.Contains(trimmed, "| ") {
+		return true
+	}
+
+	if strings.Contains(trimmed, " > ") || strings.Contains(trimmed, " < ") || strings.Contains(trimmed, " >>") || strings.Contains(trimmed, "<<") || strings.Contains(trimmed, " 2>") || strings.Contains(trimmed, " 1>") {
+		return true
+	}
+
+	if strings.Contains(trimmed, "${") || strings.Contains(trimmed, "$(") || strings.Contains(trimmed, "`") {
+		return true
+	}
+
+	if strings.Contains(trimmed, "; ") || strings.HasSuffix(trimmed, ";") {
+		return true
+	}
+
+	if strings.HasSuffix(trimmed, "&") || strings.Contains(trimmed, " & ") {
+		return true
+	}
+
+	return false
+}
+
+func containsEnvReference(s string) bool {
+	for i := 0; i < len(s)-1; i++ {
+		if s[i] != '$' {
+			continue
+		}
+
+		next := s[i+1]
+		if next == '(' || next == '{' {
+			return true
+		}
+
+		if (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z') || next == '_' {
 			return true
 		}
 	}

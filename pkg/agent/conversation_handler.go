@@ -148,10 +148,17 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	choice := resp.Choices[0]
 
+	// Determine the content to record and validate. Prefer the streaming buffer if streaming was used
+	contentUsed := choice.Message.Content
+	if ch.agent.streamingEnabled && len(ch.agent.streamingBuffer.String()) > 0 {
+		// Use the fully streamed content if available
+		contentUsed = ch.agent.streamingBuffer.String()
+	}
+
 	// Add to conversation history
 	ch.agent.messages = append(ch.agent.messages, api.Message{
 		Role:             "assistant",
-		Content:          choice.Message.Content,
+		Content:          contentUsed,
 		ReasoningContent: choice.Message.ReasoningContent,
 		ToolCalls:        choice.Message.ToolCalls,
 	})
@@ -173,7 +180,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			ch.agent.flushCallback()
 		}
 
-		ch.displayIntermediateResponse(choice.Message.Content)
+		ch.displayIntermediateResponse(contentUsed)
 		toolResults := ch.toolExecutor.ExecuteTools(choice.Message.ToolCalls)
 
 		// Add tool results immediately after the assistant message with tool calls
@@ -192,7 +199,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	// If no tool_calls came back but the content suggests attempted tool usage,
 	// inject one-time guidance and try again.
-	if !ch.responseValidator.ValidateToolCalls(choice.Message.Content) {
+	if !ch.responseValidator.ValidateToolCalls(contentUsed) {
 		if !ch.agent.toolCallGuidanceAdded { // avoid spamming repeated hints
 			guidance := ch.buildToolCallGuidance()
 			ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
@@ -203,7 +210,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 
 	// Check for blank iteration (no content and no tool calls)
-	isBlankIteration := ch.isBlankIteration(choice.Message.Content, choice.Message.ToolCalls)
+	isBlankIteration := ch.isBlankIteration(contentUsed, choice.Message.ToolCalls)
 
 	if isBlankIteration {
 		ch.consecutiveBlankIterations++
@@ -231,9 +238,9 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 
 	// Check if the response indicates completion
-	if ch.responseValidator.IsComplete(choice.Message.Content) {
+	if ch.responseValidator.IsComplete(contentUsed) {
 		// Remove all variations of the completion signal from the content
-		cleanContent := choice.Message.Content
+		cleanContent := contentUsed
 		completionSignals := []string{
 			"[[TASK_COMPLETE]]",
 			"[[TASKCOMPLETE]]",
@@ -263,10 +270,18 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		return true // Stop - response explicitly indicates completion
 	}
 
-	// Otherwise, continue the conversation
-	ch.agent.debugLog("📝 Response doesn't indicate completion, continuing...\n")
-	ch.displayIntermediateResponse(choice.Message.Content)
-	return false // Continue conversation
+	// Otherwise, decide whether this is a final (non-incomplete) response or we need more
+	// If the response appears incomplete, ask the model to continue. Otherwise treat it as final.
+	if ch.responseValidator.IsIncomplete(contentUsed) {
+		ch.agent.debugLog("⚠️ Response appears incomplete, asking model to continue\n")
+		ch.handleIncompleteResponse()
+		return false // Continue conversation to get a complete response
+	}
+
+	// No explicit completion signal and response doesn't look incomplete -> treat as final
+	ch.agent.debugLog("📝 Treating response as final (no completion signal but appears complete)\n")
+	ch.displayFinalResponse(contentUsed)
+	return true // Stop conversation
 }
 
 // Helper methods...

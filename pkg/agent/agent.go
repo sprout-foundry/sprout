@@ -94,6 +94,53 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	var clientType api.ClientType
 	var finalModel string
 
+	// If running under `go test`, prefer the test/mock client to avoid network/API key
+	// dependencies unless explicitly overridden by LEDIT_ALLOW_REAL_PROVIDER.
+	if isRunningUnderTest() && os.Getenv("LEDIT_ALLOW_REAL_PROVIDER") == "" {
+		clientType = api.TestClientType
+		finalModel = model
+		// Create the test client immediately to avoid API key checks
+		client, err := factory.CreateProviderClient(clientType, finalModel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create API client for tests: %w", err)
+		}
+
+		// Create agent with minimal initialization using test client
+		agent := &Agent{
+			client:                    client,
+			messages:                  []api.Message{},
+			systemPrompt:              getEmbeddedSystemPrompt(),
+			maxIterations:             1000,
+			totalCost:                 0.0,
+			clientType:                clientType,
+			debug:                     os.Getenv("LEDIT_DEBUG") == "true",
+			optimizer:                 NewConversationOptimizer(true, false),
+			configManager:             configManager,
+			shellCommandHistory:       make(map[string]*ShellCommandResult),
+			inputInjectionChan:        make(chan string, inputInjectionBufferSize),
+			interruptCtx:              context.Background(),
+			interruptCancel:           func() { /* no-op */ },
+			falseStopDetectionEnabled: true,
+			conversationPruner:        NewConversationPruner(false),
+		}
+
+		// Initialize debug log file if debug enabled
+		if agent.debug {
+			if err := agent.initDebugLogger(); err != nil {
+				fmt.Fprintf(os.Stderr, "WARNING: Failed to initialize debug logger: %v\n", err)
+			}
+		}
+
+		// Initialize MCP manager
+		agent.mcpManager = mcp.NewMCPManager(nil)
+
+		// Initialize change tracker
+		agent.changeTracker = NewChangeTracker(agent, "")
+		agent.changeTracker.Disable()
+
+		return agent, nil
+	}
+
 	if model != "" {
 		// Check if model includes provider prefix (e.g., "openai:gpt-4")
 		parts := strings.SplitN(model, ":", 2)
@@ -174,9 +221,9 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Set debug mode on the client
 	client.SetDebug(debug)
 
-	// Check connection (skip in CI environments when testing)
-	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
-	skipConnectionCheck := isCI && os.Getenv("LEDIT_SKIP_CONNECTION_CHECK") != ""
+	// Check connection (allow tests to skip by setting LEDIT_SKIP_CONNECTION_CHECK)
+	// Historically this was only skipped in CI, but for unit tests we allow explicit opt-out.
+	skipConnectionCheck := os.Getenv("LEDIT_SKIP_CONNECTION_CHECK") != ""
 
 	if !skipConnectionCheck {
 		if err := client.CheckConnection(); err != nil {

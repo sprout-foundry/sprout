@@ -15,6 +15,7 @@ import (
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/alantheprice/ledit/pkg/ui"
 	"github.com/fatih/color"
 )
 
@@ -583,6 +584,26 @@ func (ac *AgentConsole) processInput(input string) error {
 	// Check for commands
 	if strings.HasPrefix(input, "/") {
 		return ac.handleCommand(input)
+	}
+
+	// If the input matches the name of a registered slash command without the leading '/' ask the user.
+	// We check this for any normal submission (not starting with '/') so users who forget the leading
+	// slash are prompted before their input is sent to the agent.
+	if !strings.HasPrefix(input, "/") && ac.commandRegistry != nil {
+		parts := strings.Fields(input)
+		if len(parts) > 0 {
+			first := parts[0]
+			if cmd, exists := ac.commandRegistry.GetCommand(first); exists {
+				_ = cmd // keep lint happy if not used
+				question := fmt.Sprintf("Did you mean to run the slash command '/%s'?", first)
+				confirmed, err := ui.PromptYesNo(question, true)
+				if err == nil && confirmed {
+					// Execute the slash command via registry; preserve any arguments the user typed
+					return ac.commandRegistry.Execute("/"+input, ac.agent)
+				}
+				// If not confirmed, fall through to normal handling
+			}
+		}
 	}
 
 	// Check if it's a likely shell command (common commands that users might type, forgetting that they're in an interactive console)

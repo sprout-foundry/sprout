@@ -379,15 +379,15 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 			ch.agent.conversationPruner = NewConversationPruner(ch.agent.debug)
 		}
 
-		if ch.agent.conversationPruner.ShouldPrune(currentTokens, ch.agent.maxContextTokens) {
+		if ch.agent.conversationPruner.ShouldPrune(currentTokens, ch.agent.maxContextTokens, ch.agent.GetProvider()) {
 			if ch.agent.debug {
 				contextUsage := float64(currentTokens) / float64(ch.agent.maxContextTokens)
-				fmt.Printf("🔄 Context pruning triggered: %d/%d tokens (%.1f%%)\n",
-					currentTokens, ch.agent.maxContextTokens, contextUsage*100)
+				ch.agent.PrintLineAsync(fmt.Sprintf("🔄 Context pruning triggered: %d/%d tokens (%.1f%%)",
+					currentTokens, ch.agent.maxContextTokens, contextUsage*100))
 			}
 
 			// Apply pruning to optimized messages (excluding system prompt)
-			prunedMessages := ch.agent.conversationPruner.PruneConversation(optimizedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer)
+			prunedMessages := ch.agent.conversationPruner.PruneConversation(optimizedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider())
 
 			// Rebuild with system prompt
 			allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
@@ -397,8 +397,8 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 
 			if ch.agent.debug {
 				newTokens := ch.estimateTokens(allMessages)
-				fmt.Printf("✅ Context after pruning: %d tokens (%.1f%%)\n",
-					newTokens, float64(newTokens)/float64(ch.agent.maxContextTokens)*100)
+				ch.agent.PrintLineAsync(fmt.Sprintf("✅ Context after pruning: %d tokens (%.1f%%)",
+					newTokens, float64(newTokens)/float64(ch.agent.maxContextTokens)*100))
 			}
 		}
 	}

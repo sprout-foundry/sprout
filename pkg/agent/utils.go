@@ -111,32 +111,27 @@ func (a *Agent) PrintLineAsync(text string) {
 	}
 
 	// Queue is saturated; attempt a bounded wait before falling back to
-	// synchronous printing.
+	// synchronous printing while preserving ordering. Block for a short
+	// interval to give the worker a chance to drain, then emit directly in
+	// the current goroutine to avoid reordering.
 	timer := time.NewTimer(50 * time.Millisecond)
 	defer timer.Stop()
 
 	select {
 	case a.asyncOutput <- text:
 	case <-timer.C:
-		// If we can take the mutex immediately, print synchronously without
-		// blocking the caller while holding the lock.
-		if a.outputMutex != nil && a.outputMutex.TryLock() {
-			a.printLineInternalUnlocked(text)
-			a.outputMutex.Unlock()
-			return
-		}
-
-		// Otherwise, fall back to a goroutine that will emit the line once the
-		// mutex is released and streaming resumes. This avoids deadlocks at the
-		// cost of a short-lived goroutine in rare contention scenarios.
-		go a.printLineInternal(text)
+		a.printLineInternal(text)
 	}
 }
 
 func (a *Agent) ensureAsyncOutputWorker() {
 	a.asyncOutputOnce.Do(func() {
 		// Generous buffer to absorb bursts without blocking.
-		a.asyncOutput = make(chan string, asyncOutputBufferSize)
+		size := a.asyncBufferSize
+		if size <= 0 {
+			size = asyncOutputBufferSize
+		}
+		a.asyncOutput = make(chan string, size)
 		go func() {
 			for msg := range a.asyncOutput {
 				a.printLineInternal(msg)
@@ -149,10 +144,6 @@ func (a *Agent) ensureAsyncOutputWorker() {
 // and asynchronous pathways.
 func (a *Agent) printLineInternal(text string) {
 	a.printLineInternalLocked(text, true)
-}
-
-func (a *Agent) printLineInternalUnlocked(text string) {
-	a.printLineInternalLocked(text, false)
 }
 
 func (a *Agent) printLineInternalLocked(text string, manageLock bool) {

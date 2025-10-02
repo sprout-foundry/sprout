@@ -81,7 +81,8 @@ func AddBulkTodos(todos []struct {
 	globalTodoManager.mutex.Unlock()
 
 	// Show the complete todo list for better context
-	return GetTodoListMarkdown()
+	markdown := GetTodoListMarkdown()
+	return fmt.Sprintf("📝 Added %d todo(s)\n\n**Todo List:**\n%s", len(todos), markdown)
 }
 
 // UpdateTodoStatus updates the status of a todo item
@@ -490,16 +491,16 @@ func GetTodoListMarkdown() string {
 
 		switch item.Status {
 		case "completed":
-			checkbox = "- [x]"
+			checkbox = "[x] -"
 			statusIndicator = " ✅"
 		case "in_progress":
-			checkbox = "- [...]" // Visual indicator for in-progress
-			statusIndicator = " 🔄"
+			checkbox = "[...] -"
+			statusIndicator += " 🔄"
 		case "cancelled":
-			checkbox = "- [x]"
+			checkbox = "[x] -"
 			statusIndicator = " ❌"
 		default: // pending
-			checkbox = "- [ ]"
+			checkbox = "[ ] -"
 			statusIndicator = ""
 		}
 

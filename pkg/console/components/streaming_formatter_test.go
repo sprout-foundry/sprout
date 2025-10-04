@@ -24,7 +24,8 @@ func TestStreamingFormatter_NewStreamingFormatter(t *testing.T) {
 }
 
 func TestStreamingFormatter_ApplyInlineFormatting(t *testing.T) {
-	sf := NewStreamingFormatter(nil)
+	outputMutex := &sync.Mutex{}
+	sf := NewStreamingFormatter(outputMutex)
 
 	tests := []struct {
 		name     string
@@ -234,6 +235,47 @@ func TestStreamingFormatter_Finalize(t *testing.T) {
 
 	assert.Equal(t, "", sf.buffer.String())
 	assert.Equal(t, "", sf.lineBuffer.String())
+}
+
+func TestStreamingFormatter_ForceFlushEmitsPendingCodeFence(t *testing.T) {
+	sf := NewStreamingFormatter(nil)
+
+	callCount := 0
+	var captured []string
+	sf.SetOutputFunc(func(text string) {
+		callCount++
+		captured = append(captured, text)
+	})
+
+	// Sanity-check that the output function is wired correctly.
+	sf.println("direct test")
+	require.Equal(t, 1, callCount)
+	callCount = 0
+	captured = captured[:0]
+
+	// Simulate a streamed code block where the closing fence arrives without a trailing newline.
+	sf.Write("```go\n")
+	t.Logf("after opening fence: calls=%d captured=%d buffer=%d lineBuffer=%d", callCount, len(captured), sf.buffer.Len(), sf.lineBuffer.Len())
+	require.Equal(t, 0, sf.buffer.Len(), "opening fence should flush immediately")
+	sf.Write("fmt.Println(\"hi\")\n")
+	t.Logf("after code line: calls=%d captured=%d buffer=%d lineBuffer=%d", callCount, len(captured), sf.buffer.Len(), sf.lineBuffer.Len())
+	require.Equal(t, 0, sf.buffer.Len(), "code line should flush immediately")
+	sf.Write("```")
+	t.Logf("after closing fence chunk: calls=%d captured=%d buffer=%d lineBuffer=%d", callCount, len(captured), sf.buffer.Len(), sf.lineBuffer.Len())
+
+	// The closing fence should still be buffered at this point and no additional output produced.
+	require.Greater(t, len(captured), 0, "expected prior writes to produce visible output")
+	before := callCount
+	require.Greater(t, sf.buffer.Len()+sf.lineBuffer.Len(), 0, "pending fence should be buffered before force flush")
+	require.True(t, sf.inCodeBlock, "should still be in code block before flush")
+
+	// Force flush should emit the buffered fence and exit the code block state.
+	sf.ForceFlush()
+
+	require.Greater(t, callCount, before, "force flush should emit buffered fence content")
+	require.Equal(t, 0, sf.buffer.Len(), "buffer should be empty after flush")
+	require.Equal(t, 0, sf.lineBuffer.Len(), "line buffer should be cleared after flush")
+	require.False(t, sf.inCodeBlock, "code block flag should be reset after closing fence")
 }
 
 func TestStreamingFormatter_ConcurrentAccess(t *testing.T) {

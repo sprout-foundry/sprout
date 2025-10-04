@@ -129,7 +129,7 @@ func buildTruncationNotice(headTokens, tailTokens, truncatedTokens, truncatedLin
 }
 
 func (a *Agent) saveShellOutputToFile(output string) (string, error) {
-	dir := ".ledit"
+	dir := ".ledit/shell_outputs"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

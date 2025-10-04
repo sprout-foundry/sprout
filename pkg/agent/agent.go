@@ -64,19 +64,23 @@ type Agent struct {
 	flushCallback       func()             // Callback to flush buffered output
 	asyncOutput         chan string        // Buffered channel for async PrintLine calls
 	asyncOutputOnce     sync.Once          // Ensure async worker initializes once
-	asyncBufferSize     int                // Optional override for async output buffer (tests)
+    asyncBufferSize     int                // Optional override for async output buffer (tests)
 
 	// Feature flags
 	falseStopDetectionEnabled bool
 	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
 
-	// UI integration
-	ui UI // UI provider for dropdowns, etc.
+    // UI integration
+    ui UI // UI provider for dropdowns, etc.
 
 	// Debug logging
 	debugLogFile  *os.File   // File handle for debug logs
 	debugLogPath  string     // Path to the debug log file
-	debugLogMutex sync.Mutex // Mutex for safe writes to debug log
+    debugLogMutex sync.Mutex // Mutex for safe writes to debug log
+
+    // Base context cache (session scoped)
+    baseContextJSON string
+    baseContextOnce sync.Once
 }
 
 // NewAgent creates a new agent with auto-detected provider

@@ -404,6 +404,22 @@ func (sf *StreamingFormatter) ForceFlush() {
 	if sf.buffer.Len() > 0 {
 		sf.flush()
 	}
+
+	// If we have a pending line that looks like a code fence, emit it so we don't stall on tool execution.
+	if sf.lineBuffer.Len() > 0 {
+		trimmed := strings.TrimSpace(sf.lineBuffer.String())
+		if strings.HasPrefix(trimmed, "```") {
+			if sf.outputMutex != nil {
+				sf.outputMutex.Lock()
+				sf.outputLine("")
+				sf.outputMutex.Unlock()
+			} else {
+				sf.outputLine("")
+			}
+			sf.lastWasNewline = true
+			sf.lastUpdate = time.Now()
+		}
+	}
 }
 
 // Finalize ensures all buffered content is output

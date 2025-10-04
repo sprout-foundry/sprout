@@ -35,7 +35,7 @@ func NewDeepInfraProvider() (*DeepInfraProvider, error) {
 		return nil, fmt.Errorf("DEEPINFRA_API_KEY environment variable not set")
 	}
 
-	timeout := 120 * time.Second
+	timeout := 320 * time.Second
 
 	return &DeepInfraProvider{
 		httpClient: &http.Client{
@@ -78,6 +78,9 @@ func (p *DeepInfraProvider) SendChatRequest(messages []api.Message, tools []api.
 		"max_tokens":  maxTokens,
 		"temperature": 0.7,
 	}
+
+	// Do not set provider-level stop sequences; we want the marker
+	// included in content so the agent can detect it explicitly.
 
 	// Add tools if provided
 	if openAITools := BuildOpenAIToolsPayload(tools); openAITools != nil {
@@ -122,6 +125,8 @@ func (p *DeepInfraProvider) SendChatRequestStream(messages []api.Message, tools 
 		"temperature": 0.7,
 		"stream":      true, // Enable streaming
 	}
+
+	// Do not set provider-level stop sequences in streaming mode either.
 
 	// Add tools if present
 	// NOTE: Some DeepInfra models may not support tools in streaming mode

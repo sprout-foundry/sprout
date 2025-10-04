@@ -115,6 +115,9 @@ func (p *OpenRouterProvider) SendChatRequest(messages []api.Message, tools []api
 		"usage":       map[string]interface{}{"include": true}, // Enable usage accounting for cost tracking
 	}
 
+	// Do not set provider-level stop sequences. We need the explicit
+	// marker to be present in content for the agent to detect.
+
 	// Add tools if provided (normalize to OpenAI function-calling schema explicitly)
 	if openAITools := BuildOpenAIToolsPayload(tools); openAITools != nil {
 		requestBody["tools"] = openAITools
@@ -172,6 +175,8 @@ func (p *OpenRouterProvider) SendChatRequestStream(messages []api.Message, tools
 		"max_tokens":  maxTokens,
 		"stream":      true, // Enable streaming
 	}
+
+	// Do not set provider-level stop sequences for the completion marker.
 
 	// Add tools if present
 	if openAITools := BuildOpenAIToolsPayload(tools); openAITools != nil {

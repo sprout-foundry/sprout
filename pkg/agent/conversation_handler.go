@@ -7,6 +7,8 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // ConversationHandler manages the high-level conversation flow
@@ -16,7 +18,9 @@ type ConversationHandler struct {
 	toolExecutor               *ToolExecutor
 	responseValidator          *ResponseValidator
 	errorHandler               *ErrorHandler
+	fallbackParser             *FallbackParser
 	consecutiveBlankIterations int
+	missingCompletionReminders int
 	conversationStartTime      time.Time
 	lastActivityTime           time.Time
 	timeoutDuration            time.Duration
@@ -31,6 +35,7 @@ func NewConversationHandler(agent *Agent) *ConversationHandler {
 		toolExecutor:          NewToolExecutor(agent),
 		responseValidator:     NewResponseValidator(agent),
 		errorHandler:          NewErrorHandler(agent),
+		fallbackParser:        NewFallbackParser(agent),
 		conversationStartTime: now,
 		lastActivityTime:      now,
 		timeoutDuration:       7 * time.Minute, // 5-minute timeout
@@ -186,6 +191,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		// Add tool results immediately after the assistant message with tool calls
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
 		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
+		ch.missingCompletionReminders = 0
 
 		// If the tool calls appear malformed (parse/unknown/validation), add guidance after tool results
 		if ch.shouldAddToolCallGuidance(toolResults) {
@@ -195,6 +201,58 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
 		}
 		return false // Continue conversation
+	}
+
+	// Fallback parsing: If no structured tool_calls came back but the content contains tool call patterns,
+	// attempt to parse tool calls from the content
+	if len(choice.Message.ToolCalls) == 0 && ch.fallbackParser.ShouldUseFallback(contentUsed, false) {
+		if result := ch.fallbackParser.Parse(contentUsed); result != nil && len(result.ToolCalls) > 0 {
+			ch.agent.debugLog("🔄 FallbackParser: Found %d tool calls in content\n", len(result.ToolCalls))
+
+			// Update the message with the parsed tool calls and cleaned content
+			if len(ch.agent.messages) > 0 {
+				last := &ch.agent.messages[len(ch.agent.messages)-1]
+				last.ToolCalls = result.ToolCalls
+				last.Content = strings.TrimSpace(result.CleanedContent)
+			}
+
+			// Log parsed tool calls
+			for _, tc := range result.ToolCalls {
+				ch.agent.LogToolCall(tc, "fallback_parsed")
+			}
+
+			displayContent := strings.TrimSpace(result.CleanedContent)
+			if displayContent == "" {
+				notice := "ℹ️ Fallback parser detected tool-only assistant content; executing parsed tool call."
+				ch.agent.safePrint("%s\n", notice)
+				if !ch.agent.streamingEnabled {
+					displayContent = "Executing tool call parsed from assistant content."
+				}
+			}
+
+			// Execute the parsed tool calls
+			if displayContent != "" {
+				ch.displayIntermediateResponse(displayContent)
+			} else if ch.agent.streamingEnabled {
+				ch.agent.safePrint("\n")
+			}
+			toolResults := ch.toolExecutor.ExecuteTools(result.ToolCalls)
+
+			// Add tool results immediately after the assistant message
+			ch.agent.messages = append(ch.agent.messages, toolResults...)
+			ch.agent.debugLog("✔️ Added %d fallback tool results to conversation\n", len(toolResults))
+			ch.missingCompletionReminders = 0
+
+			// Add guidance about proper tool call formatting
+			if !ch.agent.toolCallGuidanceAdded {
+				guidance := ch.buildToolCallGuidance()
+				ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
+				ch.agent.toolCallGuidanceAdded = true
+				ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
+			}
+
+			return false // Continue conversation
+		}
 	}
 
 	// If no tool_calls came back but the content suggests attempted tool usage,
@@ -212,20 +270,30 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	// Check for blank iteration (no content and no tool calls)
 	isBlankIteration := ch.isBlankIteration(contentUsed, choice.Message.ToolCalls)
 
-	if isBlankIteration {
-		ch.consecutiveBlankIterations++
-		ch.agent.debugLog("⚠️ Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
+		if isBlankIteration {
+			ch.consecutiveBlankIterations++
+			ch.agent.debugLog("⚠️ Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
 
-		if ch.consecutiveBlankIterations == 1 {
-			// First blank iteration - remind the model
-			ch.agent.debugLog("🔔 Sending reminder about task completion signal\n")
-			reminderMessage := api.Message{
-				Role:    "user",
-				Content: "You provided a blank response. If you have completed the task and have no more actions to take, please respond with [[TASK_COMPLETE]] to indicate you are done. If you are not done, please continue with your next action.",
-			}
-			ch.agent.messages = append(ch.agent.messages, reminderMessage)
-			return false // Continue conversation to get a proper response
-		} else if ch.consecutiveBlankIterations >= 2 {
+			if ch.consecutiveBlankIterations == 1 {
+				// First blank iteration - provide explicit, actionable reminder
+				ch.agent.debugLog("🔔 Sending reminder about task completion signal and next action\n")
+				reminderMessage := api.Message{
+					Role: "user",
+					Content: "You provided no content. If you are finished, reply exactly with [[TASK_COMPLETE]]. If not finished, continue now with your next concrete action/output.\n" +
+						"- If you intend to use tools, emit valid tool_calls with proper JSON arguments.\n" +
+						"- Otherwise, proceed with the actual result (not a plan).",
+				}
+				ch.agent.messages = append(ch.agent.messages, reminderMessage)
+
+				// Add one-time tool call guidance to improve follow-up behavior on blank turns
+				if !ch.agent.toolCallGuidanceAdded {
+					guidance := ch.buildToolCallGuidance()
+					ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
+					ch.agent.toolCallGuidanceAdded = true
+					ch.agent.debugLog("📝 Added system guidance due to blank iteration\n")
+				}
+				return false // Continue conversation to get a proper response
+			} else if ch.consecutiveBlankIterations >= 2 {
 			// Two consecutive blank iterations - error out
 			ch.agent.debugLog("❌ Too many consecutive blank iterations, stopping with error\n")
 			errorMessage := "Error: The agent provided two consecutive blank responses and appears to be stuck. Please try rephrasing your request or break it into smaller tasks."
@@ -239,6 +307,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	// Check if the response indicates completion
 	if ch.responseValidator.IsComplete(contentUsed) {
+		ch.missingCompletionReminders = 0
 		// Remove all variations of the completion signal from the content
 		cleanContent := contentUsed
 		completionSignals := []string{
@@ -274,14 +343,23 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	// If the response appears incomplete, ask the model to continue. Otherwise treat it as final.
 	if ch.responseValidator.IsIncomplete(contentUsed) {
 		ch.agent.debugLog("⚠️ Response appears incomplete, asking model to continue\n")
+		ch.missingCompletionReminders = 0
 		ch.handleIncompleteResponse()
 		return false // Continue conversation to get a complete response
 	}
 
-	// No explicit completion signal and response doesn't look incomplete -> treat as final
-	ch.agent.debugLog("📝 Treating response as final (no completion signal but appears complete)\n")
-	ch.displayFinalResponse(contentUsed)
-	return true // Stop conversation
+	// No explicit completion signal and response doesn't look incomplete.
+	// Decide based on provider/model policy whether implicit completion is acceptable.
+	if ch.agent.shouldAllowImplicitCompletion() {
+		ch.agent.debugLog("📝 Treating response as final (implicit completion allowed for provider/model)\n")
+		ch.missingCompletionReminders = 0
+		ch.displayFinalResponse(contentUsed)
+		return true
+	}
+
+	ch.agent.debugLog("⏳ Waiting for explicit completion signal per provider/model policy\n")
+	ch.handleMissingCompletionSignal()
+	return false
 }
 
 // Helper methods...
@@ -501,6 +579,18 @@ func (ch *ConversationHandler) handleIncompleteResponse() {
 	})
 }
 
+func (ch *ConversationHandler) handleMissingCompletionSignal() {
+	if ch.missingCompletionReminders > 0 {
+		// Already reminded once; continue waiting without spamming the model.
+		return
+	}
+
+	reminder := "Please confirm completion by responding with [[TASK_COMPLETE]] once all requested work is fully done. If you still have steps remaining, continue with the next action."
+	ch.agent.messages = append(ch.agent.messages, api.Message{Role: "user", Content: reminder})
+	ch.missingCompletionReminders++
+	ch.agent.debugLog("🔔 Added reminder requesting explicit [[TASK_COMPLETE]] signal\n")
+}
+
 func (ch *ConversationHandler) finalizeConversation() (string, error) {
 	// Commit tracked changes
 	if ch.agent.IsChangeTrackingEnabled() && ch.agent.GetChangeCount() > 0 {
@@ -588,7 +678,7 @@ func (ch *ConversationHandler) estimateTokens(messages []api.Message) int {
 // displayUserFriendlyError shows contextual error messages to the user
 func (ch *ConversationHandler) displayUserFriendlyError(err error) {
 	errStr := err.Error()
-	providerName := strings.Title(ch.agent.GetProvider())
+	providerName := cases.Title(language.Und).String(ch.agent.GetProvider())
 
 	var userMessage string
 

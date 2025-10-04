@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -9,17 +10,49 @@ import (
 	ollama "github.com/ollama/ollama/api"
 )
 
+type ollamaClient interface {
+	List(ctx context.Context) (*ollama.ListResponse, error)
+	Chat(ctx context.Context, req *ollama.ChatRequest, fn ollama.ChatResponseFunc) error
+}
+
+type ollamaClientFactory func() (ollamaClient, error)
+
 // OllamaLocalClient handles local Ollama API requests
 type OllamaLocalClient struct {
 	*TPSBase
-	model string
-	debug bool
+	model         string
+	debug         bool
+	clientFactory ollamaClientFactory
 }
 
-// NewOllamaLocalClient creates a new local Ollama client
-func NewOllamaLocalClient(model string) (*OllamaLocalClient, error) {
+func defaultOllamaClientFactory() (ollamaClient, error) {
+	return ollama.ClientFromEnvironment()
+}
+
+func ensureModelAvailable(ctx context.Context, client ollamaClient, model string) error {
+	listResp, err := client.List(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list local models: %w", err)
+	}
+
+	availableModels := make([]string, 0, len(listResp.Models))
+	for _, m := range listResp.Models {
+		availableModels = append(availableModels, m.Name)
+		if m.Name == model {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("model %s not found locally. Available models: %v", model, availableModels)
+}
+
+func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) (*OllamaLocalClient, error) {
+	if factory == nil {
+		factory = defaultOllamaClientFactory
+	}
+
 	// Verify Ollama is running locally
-	client, err := ollama.ClientFromEnvironment()
+	client, err := factory()
 	if err != nil {
 		return nil, fmt.Errorf("could not create ollama client: %w", err)
 	}
@@ -28,97 +61,111 @@ func NewOllamaLocalClient(model string) (*OllamaLocalClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	listResp, err := client.List(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list local models: %w", err)
-	}
-
-	modelFound := false
-	for _, m := range listResp.Models {
-		if m.Name == model {
-			modelFound = true
-			break
-		}
-	}
-
-	if !modelFound {
-		availableModels := make([]string, 0, len(listResp.Models))
-		for _, m := range listResp.Models {
-			availableModels = append(availableModels, m.Name)
-		}
-		return nil, fmt.Errorf("model %s not found locally. Available models: %v", model, availableModels)
+	if err := ensureModelAvailable(ctx, client, model); err != nil {
+		return nil, err
 	}
 
 	return &OllamaLocalClient{
-		TPSBase: NewTPSBase(),
-		model:   model,
-		debug:   false,
+		TPSBase:       NewTPSBase(),
+		model:         model,
+		debug:         false,
+		clientFactory: factory,
 	}, nil
 }
 
-// SendChatRequest sends a chat request to local Ollama
-func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
-	client, err := ollama.ClientFromEnvironment()
-	if err != nil {
-		return nil, fmt.Errorf("could not create ollama client: %w", err)
-	}
+// NewOllamaLocalClient creates a new local Ollama client
+func NewOllamaLocalClient(model string) (*OllamaLocalClient, error) {
+	return newOllamaLocalClientWithFactory(model, nil)
+}
 
-	// Convert messages to Ollama format
-	ollamaMessages := make([]ollama.Message, len(messages))
-	for i, msg := range messages {
-		ollamaMessages[i] = ollama.Message{
+func (c *OllamaLocalClient) newClient() (ollamaClient, error) {
+	if c.clientFactory == nil {
+		c.clientFactory = defaultOllamaClientFactory
+	}
+	return c.clientFactory()
+}
+
+func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, reasoning string, stream bool) (*ollama.ChatRequest, int) {
+	ollamaMessages := make([]ollama.Message, 0, len(messages)+1)
+	ollamaTools := convertToolsToOllamaTools(tools)
+
+	for _, msg := range messages {
+		ollamaMessages = append(ollamaMessages, ollama.Message{
 			Role:    msg.Role,
 			Content: msg.Content,
-		}
+		})
 	}
 
-	// Handle tools by embedding them in the system message if present
-	if len(tools) > 0 {
-		toolsText := formatToolsForPrompt(tools)
-		toolMessage := ollama.Message{
-			Role:    "system",
-			Content: toolsText,
-		}
-		ollamaMessages = append([]ollama.Message{toolMessage}, ollamaMessages...)
-	}
-
-	// Calculate total token count for context sizing
 	totalTokens := 0
 	for _, msg := range ollamaMessages {
 		totalTokens += c.estimateTokens(msg.Content)
 	}
+	// TODO: we should account for both the total model size and the context size and use algorithms to ensure we stay within the limits of whatever hardware this is running
+	numCtx := max(totalTokens+10000, 65000) // Aim for 10K free tokens
 
-	numCtx := totalTokens + 1000
-	if numCtx < 4096 {
-		numCtx = 4096
+    options := map[string]any{
+        "temperature":    0.1,
+        "top_p":          0.9,
+        "num_ctx":        numCtx,
+        "num_predict":    8096,
+        "repeat_penalty": 1.1,
+        "stream":         stream,
+    }
+
+    // Do NOT set provider-level stop sequences for completion markers.
+    // We require the model to emit the explicit [[TASK_COMPLETE]] token in content
+    // so the conversation handler can detect it and finalize. Using provider-level
+    // stop would strip the marker from content and break detection.
+
+	if reasoning != "" {
+		options["reasoning_effort"] = reasoning
 	}
 
 	req := &ollama.ChatRequest{
 		Model:    c.model,
 		Messages: ollamaMessages,
-		Options: map[string]interface{}{
-			"temperature":    0.1,
-			"top_p":          0.9,
-			"num_ctx":        numCtx,
-			"num_predict":    4096,
-			"repeat_penalty": 1.1,
-			"stop":           []string{"\n\n\n", "```\n\n", "END"},
-			"stream":         false,
-		},
+		Options:  options,
 	}
 
-	if reasoning != "" {
-		req.Options["reasoning_effort"] = reasoning
+	if len(ollamaTools) > 0 {
+		req.Tools = ollamaTools
 	}
+	req.Stream = &stream
+
+	return req, totalTokens
+}
+
+// SendChatRequest sends a chat request to local Ollama
+func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
+	client, err := c.newClient()
+	if err != nil {
+		return nil, fmt.Errorf("could not create ollama client: %w", err)
+	}
+
+	req, totalTokens := c.buildChatRequest(messages, tools, reasoning, false)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	var responseContent strings.Builder
-	respFunc := func(res ollama.ChatResponse) error {
-		responseContent.WriteString(res.Message.Content)
+	var toolCalls []ToolCall
+	var lastDoneReason string
+	var lastMetrics ollama.Metrics
+	respFunc := ollama.ChatResponseFunc(func(res ollama.ChatResponse) error {
+		if len(res.Message.ToolCalls) > 0 {
+			toolCalls = append(toolCalls, convertOllamaToolCalls(res.Message.ToolCalls)...)
+		} else if trimmed := strings.TrimSpace(res.Message.Content); trimmed != "" {
+			responseContent.WriteString(res.Message.Content)
+		}
+
+		if res.DoneReason != "" {
+			lastDoneReason = res.DoneReason
+		}
+
+		lastMetrics = res.Metrics
+
 		return nil
-	}
+	})
 
 	// Track request timing
 	startTime := time.Now()
@@ -135,21 +182,9 @@ func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, re
 	// Calculate request duration
 	duration := time.Since(startTime)
 
-	// Build response
-	estimatedUsage := struct {
-		PromptTokens        int     `json:"prompt_tokens"`
-		CompletionTokens    int     `json:"completion_tokens"`
-		TotalTokens         int     `json:"total_tokens"`
-		EstimatedCost       float64 `json:"estimated_cost"`
-		PromptTokensDetails struct {
-			CachedTokens     int  `json:"cached_tokens"`
-			CacheWriteTokens *int `json:"cache_write_tokens"`
-		} `json:"prompt_tokens_details,omitempty"`
-	}{
-		PromptTokens:     totalTokens,
-		CompletionTokens: c.estimateTokens(responseContent.String()),
-		TotalTokens:      totalTokens + c.estimateTokens(responseContent.String()),
-		EstimatedCost:    0.0, // Local inference is free
+	finishReason := lastDoneReason
+	if finishReason == "" {
+		finishReason = "stop"
 	}
 
 	response := &ChatResponse{
@@ -169,14 +204,32 @@ func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, re
 				Role:    "assistant",
 				Content: responseContent.String(),
 			},
-			FinishReason: "stop",
+			FinishReason: finishReason,
 		}},
-		Usage: estimatedUsage,
+	}
+
+	promptTokens := totalTokens
+	if lastMetrics.PromptEvalCount > 0 {
+		promptTokens = lastMetrics.PromptEvalCount
+	}
+
+	completionTokens := c.estimateTokens(responseContent.String())
+	if lastMetrics.EvalCount > 0 {
+		completionTokens = lastMetrics.EvalCount
+	}
+
+	response.Usage.PromptTokens = promptTokens
+	response.Usage.CompletionTokens = completionTokens
+	response.Usage.TotalTokens = promptTokens + completionTokens
+	response.Usage.EstimatedCost = 0
+
+	if len(toolCalls) > 0 {
+		response.Choices[0].Message.ToolCalls = toolCalls
 	}
 
 	// Track TPS
-	if c.GetTracker() != nil && estimatedUsage.CompletionTokens > 0 {
-		c.GetTracker().RecordRequest(duration, estimatedUsage.CompletionTokens)
+	if c.GetTracker() != nil && completionTokens > 0 {
+		c.GetTracker().RecordRequest(duration, completionTokens)
 	}
 
 	return response, nil
@@ -199,7 +252,7 @@ func (c *OllamaLocalClient) GetProvider() string {
 
 // CheckConnection verifies local Ollama is accessible
 func (c *OllamaLocalClient) CheckConnection() error {
-	client, err := ollama.ClientFromEnvironment()
+	client, err := c.newClient()
 	if err != nil {
 		return fmt.Errorf("could not create ollama client: %w", err)
 	}
@@ -215,17 +268,44 @@ func (c *OllamaLocalClient) CheckConnection() error {
 func (c *OllamaLocalClient) GetModelContextLimit() (int, error) {
 	// Most Ollama models support 4K-32K context
 	// This is a conservative default
-	return 8192, nil
+	if strings.Contains(c.model, "qwen3-coder") || strings.Contains(c.model, "gpt-oss") {
+		return 128000, nil
+	}
+	return 32000, nil
 }
 
-// SetModel sets the model (not supported for local client after initialization)
+// SetModel updates the active model after validating it exists locally
 func (c *OllamaLocalClient) SetModel(model string) error {
-	return fmt.Errorf("cannot change model after initialization for local Ollama client")
+	if strings.TrimSpace(model) == "" {
+		return fmt.Errorf("model name cannot be empty")
+	}
+
+	if model == c.model {
+		return nil
+	}
+
+	client, err := c.newClient()
+	if err != nil {
+		return fmt.Errorf("could not create ollama client: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := ensureModelAvailable(ctx, client, model); err != nil {
+		return err
+	}
+
+	c.model = model
+	if c.debug {
+		fmt.Printf("DEBUG: Switched local Ollama model to: %s\n", model)
+	}
+	return nil
 }
 
 // ListModels returns available local models
 func (c *OllamaLocalClient) ListModels() ([]ModelInfo, error) {
-	client, err := ollama.ClientFromEnvironment()
+	client, err := c.newClient()
 	if err != nil {
 		return nil, fmt.Errorf("could not create ollama client: %w", err)
 	}
@@ -264,10 +344,97 @@ func (c *OllamaLocalClient) SendVisionRequest(messages []Message, tools []Tool, 
 	return nil, fmt.Errorf("vision requests are not supported by local Ollama through this interface")
 }
 
-// SendChatRequestStream is not implemented for local Ollama
+// SendChatRequestStream streams responses from local Ollama as they arrive
 func (c *OllamaLocalClient) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error) {
-	// TODO: Implement streaming support using Ollama's native streaming
-	return nil, fmt.Errorf("streaming is not yet implemented for local Ollama")
+	client, err := c.newClient()
+	if err != nil {
+		return nil, fmt.Errorf("could not create ollama client: %w", err)
+	}
+
+	req, totalTokens := c.buildChatRequest(messages, tools, reasoning, true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	defer cancel()
+
+	builder := NewStreamingResponseBuilder(callback)
+	var lastMetrics ollama.Metrics
+	var lastDoneReason string
+
+	startTime := time.Now()
+
+	if c.debug {
+		fmt.Printf("DEBUG: Streaming local Ollama with model: %s\n", c.model)
+	}
+
+	err = client.Chat(ctx, req, func(res ollama.ChatResponse) error {
+		chunk := convertOllamaResponseToStreamingChunk(res)
+		if err := builder.ProcessChunk(chunk); err != nil {
+			return err
+		}
+
+		if res.DoneReason != "" {
+			lastDoneReason = res.DoneReason
+		}
+
+		lastMetrics = res.Metrics
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ollama chat failed: %w", err)
+	}
+
+	response := builder.GetResponse()
+	if response == nil {
+		response = &ChatResponse{}
+	}
+
+	if response.ID == "" {
+		response.ID = "ollama-" + fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	if response.Object == "" {
+		response.Object = "chat.completion"
+	}
+	if response.Created == 0 {
+		response.Created = time.Now().Unix()
+	}
+	response.Model = c.model
+
+	if len(response.Choices) == 0 {
+		response.Choices = []Choice{{}}
+	}
+
+	choice := &response.Choices[0]
+	if choice.Message.Role == "" {
+		choice.Message.Role = "assistant"
+	}
+	if choice.FinishReason == "" {
+		if lastDoneReason != "" {
+			choice.FinishReason = lastDoneReason
+		} else {
+			choice.FinishReason = "stop"
+		}
+	}
+
+	promptTokens := totalTokens
+	if lastMetrics.PromptEvalCount > 0 {
+		promptTokens = lastMetrics.PromptEvalCount
+	}
+
+	completionTokens := c.estimateTokens(choice.Message.Content)
+	if lastMetrics.EvalCount > 0 {
+		completionTokens = lastMetrics.EvalCount
+	}
+
+	response.Usage.PromptTokens = promptTokens
+	response.Usage.CompletionTokens = completionTokens
+	response.Usage.TotalTokens = promptTokens + completionTokens
+	response.Usage.EstimatedCost = 0
+
+	if c.GetTracker() != nil && completionTokens > 0 {
+		c.GetTracker().RecordRequest(time.Since(startTime), completionTokens)
+	}
+
+	return response, nil
 }
 
 // estimateTokens provides a rough token count estimate
@@ -276,25 +443,128 @@ func (c *OllamaLocalClient) estimateTokens(text string) int {
 	return len(text) / 4
 }
 
-// formatToolsForPrompt formats tools as a text prompt
-func formatToolsForPrompt(tools []Tool) string {
+func convertToolsToOllamaTools(tools []Tool) ollama.Tools {
 	if len(tools) == 0 {
-		return ""
+		return nil
 	}
 
-	var sb strings.Builder
-	sb.WriteString("You have access to the following tools:\n\n")
-
+	result := make(ollama.Tools, 0, len(tools))
 	for _, tool := range tools {
-		sb.WriteString(fmt.Sprintf("Tool: %s\n", tool.Function.Name))
-		sb.WriteString(fmt.Sprintf("Description: %s\n", tool.Function.Description))
-		// You could add parameter descriptions here if needed
-		sb.WriteString("\n")
+		if strings.TrimSpace(tool.Type) == "" {
+			continue
+		}
+
+		ollamaTool := ollama.Tool{
+			Type: tool.Type,
+			Function: ollama.ToolFunction{
+				Name:        tool.Function.Name,
+				Description: tool.Function.Description,
+			},
+		}
+
+		params := ollama.ToolFunctionParameters{Type: "object", Properties: make(map[string]ollama.ToolProperty)}
+		if tool.Function.Parameters != nil {
+			if raw, err := json.Marshal(tool.Function.Parameters); err == nil {
+				if err := json.Unmarshal(raw, &params); err != nil {
+					params = ollama.ToolFunctionParameters{Type: "object", Properties: make(map[string]ollama.ToolProperty)}
+				}
+			}
+		}
+
+		if params.Type == "" {
+			params.Type = "object"
+		}
+
+		ollamaTool.Function.Parameters = params
+		result = append(result, ollamaTool)
 	}
 
-	sb.WriteString("To use a tool, respond with a JSON object in this format:\n")
-	sb.WriteString(`{"tool_call": {"name": "tool_name", "arguments": {...}}}`)
-	sb.WriteString("\n\n")
+	if len(result) == 0 {
+		return nil
+	}
 
-	return sb.String()
+	return result
+}
+
+func convertOllamaResponseToStreamingChunk(res ollama.ChatResponse) *StreamingChatResponse {
+	chunk := &StreamingChatResponse{
+		ID:    res.Model,
+		Model: res.Model,
+	}
+
+	if !res.CreatedAt.IsZero() {
+		chunk.Created = res.CreatedAt.Unix()
+	}
+
+	delta := StreamingDelta{Role: res.Message.Role}
+
+	if len(res.Message.ToolCalls) == 0 {
+		trimmed := strings.TrimSpace(res.Message.Content)
+		if trimmed != "" {
+			delta.Content = res.Message.Content
+		}
+	}
+
+	if len(res.Message.ToolCalls) > 0 {
+		delta.ToolCalls = make([]StreamingToolCall, 0, len(res.Message.ToolCalls))
+		for _, call := range res.Message.ToolCalls {
+			var arguments string
+			if call.Function.Arguments != nil {
+				if encoded, err := json.Marshal(call.Function.Arguments); err == nil {
+					arguments = string(encoded)
+				} else {
+					arguments = fmt.Sprintf("%v", call.Function.Arguments)
+				}
+			}
+
+			delta.ToolCalls = append(delta.ToolCalls, StreamingToolCall{
+				Index: call.Function.Index,
+				Function: &StreamingToolCallFunction{
+					Name:      call.Function.Name,
+					Arguments: arguments,
+				},
+			})
+		}
+	}
+
+	choice := StreamingChoice{
+		Index: 0,
+		Delta: delta,
+	}
+
+	if res.DoneReason != "" {
+		reason := res.DoneReason
+		choice.FinishReason = &reason
+	} else if res.Done {
+		reason := "stop"
+		choice.FinishReason = &reason
+	}
+
+	chunk.Choices = []StreamingChoice{choice}
+	return chunk
+}
+
+func convertOllamaToolCalls(calls []ollama.ToolCall) []ToolCall {
+	if len(calls) == 0 {
+		return nil
+	}
+
+	result := make([]ToolCall, 0, len(calls))
+	for _, call := range calls {
+		var arguments string
+		if call.Function.Arguments != nil {
+			if encoded, err := json.Marshal(call.Function.Arguments); err == nil {
+				arguments = string(encoded)
+			} else {
+				arguments = fmt.Sprintf("%v", call.Function.Arguments)
+			}
+		}
+
+		toolCall := ToolCall{Type: "function"}
+		toolCall.Function.Name = call.Function.Name
+		toolCall.Function.Arguments = arguments
+		result = append(result, toolCall)
+	}
+
+	return result
 }

@@ -77,12 +77,17 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		return "", err
 	}
 
-	// Add user message
-	userMessage := api.Message{
-		Role:    "user",
-		Content: processedQuery,
-	}
-	ch.agent.messages = append(ch.agent.messages, userMessage)
+    // Inject base repository context as a system message to speed up discovery (cached per session)
+    if base := ch.agent.GetOrBuildBaseContext(); strings.TrimSpace(base) != "" {
+        ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: base})
+    }
+
+    // Add user message
+    userMessage := api.Message{
+        Role:    "user",
+        Content: processedQuery,
+    }
+    ch.agent.messages = append(ch.agent.messages, userMessage)
 
 	// Main conversation loop
 	for ch.agent.currentIteration = 0; ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
@@ -436,7 +441,7 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 }
 
 func (ch *ConversationHandler) prepareMessages() []api.Message {
-	var optimizedMessages []api.Message
+    var optimizedMessages []api.Message
 
 	// Use conversation optimizer if enabled
 	if ch.agent.optimizer != nil && ch.agent.optimizer.IsEnabled() {
@@ -445,8 +450,8 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 		optimizedMessages = ch.agent.messages
 	}
 
-	// Always include system prompt at the beginning
-	allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+    // Always include system prompt at the beginning
+    allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
 	allMessages = append(allMessages, optimizedMessages...)
 
 	// Check context limits and apply pruning if needed

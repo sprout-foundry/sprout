@@ -98,6 +98,10 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 		}
 		// Create DeepInfra wrapper that uses the provider's ListModels directly
 		return &deepInfraListModelsWrapper{}, nil
+	case LMStudioClientType:
+		// LM Studio doesn't require an API key or base URL (has default fallback)
+		// Create LM Studio wrapper that uses the provider's ListModels directly
+		return &lmStudioListModelsWrapper{}, nil
 	default:
 		return nil, fmt.Errorf("provider creation not supported for client type: %s", clientType)
 	}
@@ -411,11 +415,65 @@ func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	return models, nil
 }
 
-// Helper function to parse float from string
-func parseFloat(s string) (float64, error) {
-	// Remove any currency symbols and parse
-	cleaned := strings.TrimPrefix(s, "$")
-	return strconv.ParseFloat(cleaned, 64)
+type lmStudioListModelsWrapper struct{}
+
+func (w *lmStudioListModelsWrapper) ListModels() ([]ModelInfo, error) {
+	baseURL := os.Getenv("LMSTUDIO_BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://127.0.0.1:1234/v1"
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	req, err := http.NewRequest("GET", baseURL+"/models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch LM Studio models: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("LM Studio API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var modelsResp struct {
+		Data []struct {
+			ID      string `json:"id"`
+			Object  string `json:"object"`
+			OwnedBy string `json:"owned_by"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &modelsResp); err != nil {
+		return nil, fmt.Errorf("failed to decode LM Studio models: %w", err)
+	}
+
+	// Convert to ModelInfo format
+	models := make([]ModelInfo, 0, len(modelsResp.Data))
+	for _, model := range modelsResp.Data {
+		modelInfo := ModelInfo{
+			ID:            model.ID,
+			Name:          model.ID, // Use ID as name since name field isn't provided
+			Description:   fmt.Sprintf("LM Studio model: %s", model.ID),
+			Provider:      "lmstudio",
+			ContextLength: 32768, // Assume 32k context length for LM Studio models
+		}
+		models = append(models, modelInfo)
+	}
+
+	return models, nil
 }
 
 // ModelSelection represents a model selection system
@@ -432,10 +490,9 @@ func NewModelSelection(config interface{}) *ModelSelection {
 	return &ModelSelection{config: config}
 }
 
-// GetModelForTask returns a model for a specific task
-// This is a stub that returns empty string to indicate no hardcoded defaults
-func (ms *ModelSelection) GetModelForTask(task string) string {
-	// Return empty string to indicate no hardcoded defaults
-	// The actual model selection is now handled through configuration
-	return ""
+// Helper function to parse float from string
+func parseFloat(s string) (float64, error) {
+	// Remove any currency symbols and parse
+	cleaned := strings.TrimPrefix(s, "$")
+	return strconv.ParseFloat(cleaned, 64)
 }

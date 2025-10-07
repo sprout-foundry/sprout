@@ -511,11 +511,18 @@ func handleUpdateTodoStatus(ctx context.Context, a *Agent, args map[string]inter
 		return "", fmt.Errorf("invalid status argument")
 	}
 
-	a.ToolLog("updating todo", fmt.Sprintf("task %s to %s", taskID, status))
-	a.safePrint("%s", tools.ListAllTodos())
+    a.ToolLog("updating todo", fmt.Sprintf("task %s to %s", taskID, status))
 	a.debugLog("Updating todo %s to status: %s\n", taskID, status)
 
-	result := tools.UpdateTodoStatus(taskID, status)
+    result := tools.UpdateTodoStatus(taskID, status)
+    if result == "Todo not found" && !strings.HasPrefix(taskID, "todo_") {
+        if resolved, ok := tools.FindTodoIDByTitle(taskID); ok {
+            a.debugLog("Resolved todo title '%s' to id %s\n", taskID, resolved)
+            a.ToolLog("updating todo", fmt.Sprintf("resolved '%s' -> %s", taskID, resolved))
+            taskID = resolved
+            result = tools.UpdateTodoStatus(taskID, status)
+        }
+    }
 	a.debugLog("Update todo result: %s\n", result)
 	return result, nil
 }

@@ -64,6 +64,17 @@ func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientTy
 				return model.ID
 			}
 		}
+
+	case api.LMStudioClientType:
+		// Prefer chat models for LM Studio, skip embedding models
+		for _, model := range models {
+			if !strings.Contains(strings.ToLower(model.ID), "embedding") && 
+			   !strings.Contains(strings.ToLower(model.ID), "embed") {
+				return model.ID
+			}
+		}
+		// If no non-embedding models found, return the first one
+		return models[0].ID
 	}
 
 	// Default: return the first model

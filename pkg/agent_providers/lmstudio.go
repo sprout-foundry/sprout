@@ -1,18 +1,17 @@
 package providers
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"strconv"
-	"strings"
-	"time"
+    "bufio"
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "io"
+    "net/http"
+    "os"
+    "strings"
+    "time"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
+    api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // LMStudioProvider implements the OpenAI-compatible LM Studio API
@@ -180,93 +179,52 @@ func (p *LMStudioProvider) SendChatRequestStream(messages []api.Message, tools [
 		return nil, fmt.Errorf("LM Studio streaming API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	// Process streaming response
-	reader := bufio.NewReader(resp.Body)
-	var fullContent strings.Builder
-	var chatResp api.ChatResponse
+    // Process streaming response using shared builder to support tool_calls
+    reader := bufio.NewReader(resp.Body)
+    builder := api.NewStreamingResponseBuilder(callback)
 
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, fmt.Errorf("failed to read streaming response: %w", err)
-		}
+    for {
+        line, err := reader.ReadString('\n')
+        if err != nil {
+            if err == io.EOF {
+                break
+            }
+            return nil, fmt.Errorf("failed to read streaming response: %w", err)
+        }
 
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
+        line = strings.TrimSpace(line)
+        if line == "" || !strings.HasPrefix(line, "data: ") {
+            continue
+        }
+        data := strings.TrimPrefix(line, "data: ")
+        if data == "[DONE]" {
+            break
+        }
 
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
+        if chunk, err := api.ParseSSEData(data); err == nil && chunk != nil {
+            _ = builder.ProcessChunk(chunk)
+        }
+    }
 
-		data := strings.TrimPrefix(line, "data: ")
-		if data == "[DONE]" {
-			break
-		}
+    // Finalize response from builder
+    respObj := builder.GetResponse()
+    if respObj == nil {
+        // Fallback empty response
+        respObj = &api.ChatResponse{Choices: []api.Choice{{}}}
+    }
+    if respObj.Model == "" {
+        respObj.Model = p.model
+    }
+    // Best-effort usage estimation if missing
+    if respObj.Usage.TotalTokens == 0 {
+        prompt := EstimateInputTokens(messages, tools)
+        completion := len(respObj.Choices[0].Message.Content) / 4
+        respObj.Usage.PromptTokens = prompt
+        respObj.Usage.CompletionTokens = completion
+        respObj.Usage.TotalTokens = prompt + completion
+    }
 
-		var streamResp struct {
-			Choices []struct {
-				Delta struct {
-					Content string `json:"content"`
-				} `json:"delta"`
-			} `json:"choices"`
-		}
-
-		if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
-			continue // Skip malformed events
-		}
-
-		if len(streamResp.Choices) > 0 && streamResp.Choices[0].Delta.Content != "" {
-			content := streamResp.Choices[0].Delta.Content
-			fullContent.WriteString(content)
-			callback(content)
-		}
-	}
-
-	// Create final response
-	chatResp = api.ChatResponse{
-		ID:      "lmstudio-stream-" + strconv.FormatInt(time.Now().Unix(), 10),
-		Object:  "chat.completion",
-		Created: time.Now().Unix(),
-		Model:   p.model,
-		Choices: []api.Choice{
-			{
-				Index: 0,
-				Message: struct {
-					Role             string          `json:"role"`
-					Content          string          `json:"content"`
-					ReasoningContent string          `json:"reasoning_content,omitempty"`
-					Images           []api.ImageData `json:"images,omitempty"`
-					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-				}{
-					Role:    "assistant",
-					Content: fullContent.String(),
-				},
-				FinishReason: "stop",
-			},
-		},
-		Usage: struct {
-			PromptTokens        int     `json:"prompt_tokens"`
-			CompletionTokens    int     `json:"completion_tokens"`
-			TotalTokens         int     `json:"total_tokens"`
-			EstimatedCost       float64 `json:"estimated_cost"`
-			PromptTokensDetails struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			} `json:"prompt_tokens_details,omitempty"`
-		}{
-			PromptTokens:     EstimateInputTokens(messages, tools),
-			CompletionTokens: len(fullContent.String()) / 4,
-			TotalTokens:      EstimateInputTokens(messages, tools) + len(fullContent.String())/4,
-			EstimatedCost:    0.0, // Local provider, no cost
-		},
-	}
-
-	return &chatResp, nil
+    return respObj, nil
 }
 
 // CheckConnection verifies that LM Studio is accessible

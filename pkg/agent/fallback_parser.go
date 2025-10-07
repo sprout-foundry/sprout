@@ -1,24 +1,24 @@
 package agent
 
 import (
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "regexp"
-    "sort"
-    "strings"
-    "time"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
 
-    api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // Precompiled regex patterns for performance
 var (
-    codeBlockRegex      = regexp.MustCompile("(?s)```[a-zA-Z0-9_+-]*\\s*(.*?)```")
-    xmlFunctionRegex    = regexp.MustCompile(`(?s)<function=([^>]+)>(.*?)</function>`)
-    xmlOpenWrapperRegex = regexp.MustCompile(`(?s)<tool_call>\\s*$`)
-    xmlCloseWrapperRegex= regexp.MustCompile(`(?s)^\\s*</tool_call>`)
-    functionNameRegex   = regexp.MustCompile(`name:\s*([\\w\\.-]+)`) // allow tool names with dots/dashes
+	codeBlockRegex       = regexp.MustCompile("(?s)```[a-zA-Z0-9_+-]*\\s*(.*?)```")
+	xmlFunctionRegex     = regexp.MustCompile(`(?s)<function=([^>]+)>(.*?)</function>`)
+	xmlOpenWrapperRegex  = regexp.MustCompile(`(?s)<tool_call>\\s*$`)
+	xmlCloseWrapperRegex = regexp.MustCompile(`(?s)^\\s*</tool_call>`)
+	functionNameRegex    = regexp.MustCompile(`name:\s*([\\w\\.-]+)`) // allow tool names with dots/dashes
 )
 
 // FallbackParser handles parsing tool calls from content when they should have been structured tool_calls
@@ -121,9 +121,9 @@ func (fp *FallbackParser) collectBlocks(content string) []extractedBlock {
 }
 
 func (fp *FallbackParser) parseJSONBlocks(content string) []extractedBlock {
-    var blocks []extractedBlock
+	var blocks []extractedBlock
 
-    codeBlockMatches := codeBlockRegex.FindAllStringSubmatchIndex(content, -1)
+	codeBlockMatches := codeBlockRegex.FindAllStringSubmatchIndex(content, -1)
 
 	for _, match := range codeBlockMatches {
 		if len(match) < 4 {
@@ -169,9 +169,9 @@ func (fp *FallbackParser) parseJSONBlocks(content string) []extractedBlock {
 }
 
 func (fp *FallbackParser) parseXMLBlocks(content string) []extractedBlock {
-    var blocks []extractedBlock
+	var blocks []extractedBlock
 
-    matches := xmlFunctionRegex.FindAllStringSubmatchIndex(content, -1)
+	matches := xmlFunctionRegex.FindAllStringSubmatchIndex(content, -1)
 
 	for _, match := range matches {
 		if len(match) < 6 {
@@ -181,13 +181,13 @@ func (fp *FallbackParser) parseXMLBlocks(content string) []extractedBlock {
 		nameStart, nameEnd := match[2], match[3]
 		innerStart, innerEnd := match[4], match[5]
 
-        if loc := xmlOpenWrapperRegex.FindStringIndex(content[:blockStart]); loc != nil {
-            blockStart = loc[0]
-        }
+		if loc := xmlOpenWrapperRegex.FindStringIndex(content[:blockStart]); loc != nil {
+			blockStart = loc[0]
+		}
 
-        if loc := xmlCloseWrapperRegex.FindStringIndex(content[blockEnd:]); loc != nil {
-            blockEnd += loc[1]
-        }
+		if loc := xmlCloseWrapperRegex.FindStringIndex(content[blockEnd:]); loc != nil {
+			blockEnd += loc[1]
+		}
 
 		name := strings.TrimSpace(content[nameStart:nameEnd])
 		inner := content[innerStart:innerEnd]
@@ -207,9 +207,9 @@ func (fp *FallbackParser) parseXMLBlocks(content string) []extractedBlock {
 }
 
 func (fp *FallbackParser) parseFunctionBlocks(content string) []extractedBlock {
-    var blocks []extractedBlock
+	var blocks []extractedBlock
 
-    matches := functionNameRegex.FindAllStringSubmatchIndex(content, -1)
+	matches := functionNameRegex.FindAllStringSubmatchIndex(content, -1)
 
 	for _, match := range matches {
 		if len(match) < 4 {
@@ -237,10 +237,10 @@ func (fp *FallbackParser) parseFunctionBlocks(content string) []extractedBlock {
 }
 
 func (fp *FallbackParser) parseToolCallsFromJSON(raw string) []api.ToolCall {
-    raw = strings.TrimSpace(raw)
-    if raw == "" {
-        return nil
-    }
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
 
 	type toolCallWrapper struct {
 		ToolCalls []json.RawMessage `json:"tool_calls"`
@@ -249,56 +249,56 @@ func (fp *FallbackParser) parseToolCallsFromJSON(raw string) []api.ToolCall {
 		} `json:"message"`
 	}
 
-    var wrapper toolCallWrapper
-    if err := json.Unmarshal([]byte(raw), &wrapper); err == nil {
-        var calls []api.ToolCall
-        for _, item := range wrapper.ToolCalls {
-            if call, ok := fp.convertRawToolCall(item); ok {
-                calls = append(calls, call)
-            }
-        }
-        for _, item := range wrapper.Message.ToolCalls {
-            if call, ok := fp.convertRawToolCall(item); ok {
-                calls = append(calls, call)
-            }
-        }
-        if len(calls) > 0 {
-            return calls
-        }
-    } else if fp.agent != nil && fp.agent.debug {
-        fp.agent.debugLog("FallbackParser: JSON wrapper parse error: %v (snippet: %s)\n", err, truncateForLog(raw))
-    }
+	var wrapper toolCallWrapper
+	if err := json.Unmarshal([]byte(raw), &wrapper); err == nil {
+		var calls []api.ToolCall
+		for _, item := range wrapper.ToolCalls {
+			if call, ok := fp.convertRawToolCall(item); ok {
+				calls = append(calls, call)
+			}
+		}
+		for _, item := range wrapper.Message.ToolCalls {
+			if call, ok := fp.convertRawToolCall(item); ok {
+				calls = append(calls, call)
+			}
+		}
+		if len(calls) > 0 {
+			return calls
+		}
+	} else if fp.agent != nil && fp.agent.debug {
+		fp.agent.debugLog("FallbackParser: JSON wrapper parse error: %v (snippet: %s)\n", err, truncateForLog(raw))
+	}
 
-    var array []json.RawMessage
-    if err := json.Unmarshal([]byte(raw), &array); err == nil {
-        var calls []api.ToolCall
-        for _, item := range array {
-            if call, ok := fp.convertRawToolCall(item); ok {
-                calls = append(calls, call)
-            }
-        }
-        if len(calls) > 0 {
-            return calls
-        }
-    } else if fp.agent != nil && fp.agent.debug {
-        fp.agent.debugLog("FallbackParser: JSON array parse error: %v (snippet: %s)\n", err, truncateForLog(raw))
-    }
+	var array []json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &array); err == nil {
+		var calls []api.ToolCall
+		for _, item := range array {
+			if call, ok := fp.convertRawToolCall(item); ok {
+				calls = append(calls, call)
+			}
+		}
+		if len(calls) > 0 {
+			return calls
+		}
+	} else if fp.agent != nil && fp.agent.debug {
+		fp.agent.debugLog("FallbackParser: JSON array parse error: %v (snippet: %s)\n", err, truncateForLog(raw))
+	}
 
-    if call, ok := fp.convertRawToolCall(json.RawMessage([]byte(raw))); ok {
-        return []api.ToolCall{call}
-    }
+	if call, ok := fp.convertRawToolCall(json.RawMessage([]byte(raw))); ok {
+		return []api.ToolCall{call}
+	}
 
 	return nil
 }
 
 func (fp *FallbackParser) convertRawToolCall(raw json.RawMessage) (api.ToolCall, bool) {
-    var data map[string]json.RawMessage
-    if err := json.Unmarshal(raw, &data); err != nil {
-        if fp.agent != nil && fp.agent.debug {
-            fp.agent.debugLog("FallbackParser: tool call map parse error: %v (snippet: %s)\n", err, truncateForLog(string(raw)))
-        }
-        return api.ToolCall{}, false
-    }
+	var data map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &data); err != nil {
+		if fp.agent != nil && fp.agent.debug {
+			fp.agent.debugLog("FallbackParser: tool call map parse error: %v (snippet: %s)\n", err, truncateForLog(string(raw)))
+		}
+		return api.ToolCall{}, false
+	}
 
 	name := fp.extractToolName(data)
 	if name == "" {
@@ -329,27 +329,27 @@ func (fp *FallbackParser) convertRawToolCall(raw json.RawMessage) (api.ToolCall,
 }
 
 func (fp *FallbackParser) extractToolName(data map[string]json.RawMessage) string {
-    if fnRaw, ok := data["function"]; ok {
-        var fn struct {
-            Name string `json:"name"`
-        }
-        if err := json.Unmarshal(fnRaw, &fn); err == nil && fn.Name != "" {
-            return fn.Name
-        } else if err != nil && fp.agent != nil && fp.agent.debug {
-            fp.agent.debugLog("FallbackParser: function.name parse error: %v (snippet: %s)\n", err, truncateForLog(string(fnRaw)))
-        }
-    }
+	if fnRaw, ok := data["function"]; ok {
+		var fn struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(fnRaw, &fn); err == nil && fn.Name != "" {
+			return fn.Name
+		} else if err != nil && fp.agent != nil && fp.agent.debug {
+			fp.agent.debugLog("FallbackParser: function.name parse error: %v (snippet: %s)\n", err, truncateForLog(string(fnRaw)))
+		}
+	}
 
 	if fcRaw, ok := data["function_call"]; ok {
 		var fc struct {
 			Name string `json:"name"`
 		}
-        if err := json.Unmarshal(fcRaw, &fc); err == nil && fc.Name != "" {
-            return fc.Name
-        } else if err != nil && fp.agent != nil && fp.agent.debug {
-            fp.agent.debugLog("FallbackParser: function_call.name parse error: %v (snippet: %s)\n", err, truncateForLog(string(fcRaw)))
-        }
-    }
+		if err := json.Unmarshal(fcRaw, &fc); err == nil && fc.Name != "" {
+			return fc.Name
+		} else if err != nil && fp.agent != nil && fp.agent.debug {
+			fp.agent.debugLog("FallbackParser: function_call.name parse error: %v (snippet: %s)\n", err, truncateForLog(string(fcRaw)))
+		}
+	}
 
 	for _, key := range []string{"name", "tool", "function"} {
 		if raw, ok := data[key]; ok {
@@ -364,27 +364,27 @@ func (fp *FallbackParser) extractToolName(data map[string]json.RawMessage) strin
 }
 
 func (fp *FallbackParser) extractArguments(data map[string]json.RawMessage) json.RawMessage {
-    if fnRaw, ok := data["function"]; ok {
-        var fn struct {
-            Arguments json.RawMessage `json:"arguments"`
-        }
-        if err := json.Unmarshal(fnRaw, &fn); err == nil && len(fn.Arguments) > 0 {
-            return fn.Arguments
-        } else if err != nil && fp.agent != nil && fp.agent.debug {
-            fp.agent.debugLog("FallbackParser: function.arguments parse error: %v (snippet: %s)\n", err, truncateForLog(string(fnRaw)))
-        }
-    }
+	if fnRaw, ok := data["function"]; ok {
+		var fn struct {
+			Arguments json.RawMessage `json:"arguments"`
+		}
+		if err := json.Unmarshal(fnRaw, &fn); err == nil && len(fn.Arguments) > 0 {
+			return fn.Arguments
+		} else if err != nil && fp.agent != nil && fp.agent.debug {
+			fp.agent.debugLog("FallbackParser: function.arguments parse error: %v (snippet: %s)\n", err, truncateForLog(string(fnRaw)))
+		}
+	}
 
 	if fcRaw, ok := data["function_call"]; ok {
 		var fc struct {
 			Arguments json.RawMessage `json:"arguments"`
 		}
-        if err := json.Unmarshal(fcRaw, &fc); err == nil && len(fc.Arguments) > 0 {
-            return fc.Arguments
-        } else if err != nil && fp.agent != nil && fp.agent.debug {
-            fp.agent.debugLog("FallbackParser: function_call.arguments parse error: %v (snippet: %s)\n", err, truncateForLog(string(fcRaw)))
-        }
-    }
+		if err := json.Unmarshal(fcRaw, &fc); err == nil && len(fc.Arguments) > 0 {
+			return fc.Arguments
+		} else if err != nil && fp.agent != nil && fp.agent.debug {
+			fp.agent.debugLog("FallbackParser: function_call.arguments parse error: %v (snippet: %s)\n", err, truncateForLog(string(fcRaw)))
+		}
+	}
 
 	for _, key := range []string{"arguments", "args", "input"} {
 		if raw, ok := data[key]; ok {
@@ -740,21 +740,21 @@ func (fp *FallbackParser) readBalancedJSON(content string, start int) (jsonSegme
 }
 
 func (fp *FallbackParser) parseJSONArguments(raw string) map[string]interface{} {
-    var args map[string]interface{}
-    if err := json.Unmarshal([]byte(raw), &args); err == nil {
-        return args
-    } else if fp.agent != nil && fp.agent.debug {
-        fp.agent.debugLog("FallbackParser: arguments parse error: %v (snippet: %s)\n", err, truncateForLog(raw))
-    }
-    return map[string]interface{}{}
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &args); err == nil {
+		return args
+	} else if fp.agent != nil && fp.agent.debug {
+		fp.agent.debugLog("FallbackParser: arguments parse error: %v (snippet: %s)\n", err, truncateForLog(raw))
+	}
+	return map[string]interface{}{}
 }
 
 // truncateForLog returns a safe, max-length snippet for debug logging
 func truncateForLog(s string) string {
-    const max = 120
-    s = strings.TrimSpace(s)
-    if len(s) <= max {
-        return s
-    }
-    return s[:max] + "..."
+	const max = 120
+	s = strings.TrimSpace(s)
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }

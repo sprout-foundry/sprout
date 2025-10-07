@@ -264,6 +264,77 @@ func (t *TestClient) ResetTPSStats() {
 	// No-op for test client
 }
 
+// LMStudioClientWrapper wraps LMStudioProvider to implement the full ClientInterface
+type LMStudioClientWrapper struct {
+	provider *providers.LMStudioProvider
+}
+
+// Delegate all methods to the provider
+func (w *LMStudioClientWrapper) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+	return w.provider.SendChatRequest(messages, tools, reasoning)
+}
+
+func (w *LMStudioClientWrapper) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
+	return w.provider.SendChatRequestStream(messages, tools, reasoning, callback)
+}
+
+func (w *LMStudioClientWrapper) CheckConnection() error {
+	return w.provider.CheckConnection()
+}
+
+func (w *LMStudioClientWrapper) SetDebug(debug bool) {
+	w.provider.SetDebug(debug)
+}
+
+func (w *LMStudioClientWrapper) SetModel(model string) error {
+	return w.provider.SetModel(model)
+}
+
+func (w *LMStudioClientWrapper) GetModel() string {
+	return w.provider.GetModel()
+}
+
+func (w *LMStudioClientWrapper) GetProvider() string {
+	return w.provider.GetProvider()
+}
+
+func (w *LMStudioClientWrapper) GetModelContextLimit() (int, error) {
+	return w.provider.GetModelContextLimit()
+}
+
+func (w *LMStudioClientWrapper) SupportsVision() bool {
+	return w.provider.SupportsVision()
+}
+
+func (w *LMStudioClientWrapper) GetVisionModel() string {
+	return w.provider.GetVisionModel()
+}
+
+func (w *LMStudioClientWrapper) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+	return w.provider.SendVisionRequest(messages, tools, reasoning)
+}
+
+func (w *LMStudioClientWrapper) ListModels() ([]api.ModelInfo, error) {
+	return w.provider.ListModels()
+}
+
+// TPS methods that the provider doesn't implement
+func (w *LMStudioClientWrapper) GetLastTPS() float64 {
+	return 0.0 // Provider doesn't track TPS
+}
+
+func (w *LMStudioClientWrapper) GetAverageTPS() float64 {
+	return 0.0 // Provider doesn't track TPS
+}
+
+func (w *LMStudioClientWrapper) GetTPSStats() map[string]float64 {
+	return map[string]float64{} // Provider doesn't track TPS
+}
+
+func (w *LMStudioClientWrapper) ResetTPSStats() {
+	// No-op - provider doesn't track TPS
+}
+
 // CreateProviderClient is a factory function that creates providers
 func CreateProviderClient(clientType api.ClientType, model string) (api.ClientInterface, error) {
 	switch clientType {
@@ -287,6 +358,13 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 			return nil, err
 		}
 		return &OpenRouterClientWrapper{provider: provider}, nil
+	case api.LMStudioClientType:
+		// Use the real LM Studio provider wrapped to implement ClientInterface
+		provider, err := providers.NewLMStudioProviderWithModel(model)
+		if err != nil {
+			return nil, err
+		}
+		return &LMStudioClientWrapper{provider: provider}, nil
 	case api.TestClientType:
 		// Return test/mock client for CI environments
 		testClient := &TestClient{model: model}

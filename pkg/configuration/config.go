@@ -153,7 +153,7 @@ func NewConfig() *Config {
 		APITimeouts: &APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
 			FirstChunkTimeoutSec: 60,
-			ChunkTimeoutSec:      180, // Increased from 90 to 180 seconds (3 minutes) for complex tasks
+			ChunkTimeoutSec:      600, // Increased from 90 to 180 seconds (3 minutes) for complex tasks
 			OverallTimeoutSec:    600, // 10 minutes
 		},
 	}

@@ -623,12 +623,12 @@ func handleValidateBuild(ctx context.Context, a *Agent, args map[string]interfac
 
 // handleSearchFiles implements a cross-platform content search with sensible defaults and ignores
 func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	pattern := args["pattern"].(string)
+    pattern := args["pattern"].(string)
 
-	root := "."
-	if v, ok := args["directory"].(string); ok && strings.TrimSpace(v) != "" {
-		root = v
-	}
+    root := "."
+    if v, ok := args["directory"].(string); ok && strings.TrimSpace(v) != "" {
+        root = v
+    }
 
 	glob := ""
 	if v, ok := args["file_pattern"].(string); ok {
@@ -640,10 +640,14 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 		caseSensitive = v
 	}
 
-	maxResults := 200
-	if v, ok := args["max_results"].(int); ok && v > 0 {
-		maxResults = v
-	}
+    maxResults := 200
+    if v, ok := args["max_results"].(int); ok && v > 0 {
+        maxResults = v
+    }
+
+    // Log the search action so users can see that the tool actually executed
+    a.ToolLog("searching files", fmt.Sprintf("%q in %s (max %d)", pattern, root, maxResults))
+    a.debugLog("Searching files: pattern=%q, root=%s, max_results=%d\n", pattern, root, maxResults)
 
 	// Prepare matcher: try regex first, then fallback to substring
 	var re *regexp.Regexp

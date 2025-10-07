@@ -1,17 +1,17 @@
 package providers
 
 import (
-    "bufio"
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "io"
-    "net/http"
-    "os"
-    "strings"
-    "time"
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+	"time"
 
-    api "github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // LMStudioProvider implements the OpenAI-compatible LM Studio API
@@ -179,52 +179,52 @@ func (p *LMStudioProvider) SendChatRequestStream(messages []api.Message, tools [
 		return nil, fmt.Errorf("LM Studio streaming API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-    // Process streaming response using shared builder to support tool_calls
-    reader := bufio.NewReader(resp.Body)
-    builder := api.NewStreamingResponseBuilder(callback)
+	// Process streaming response using shared builder to support tool_calls
+	reader := bufio.NewReader(resp.Body)
+	builder := api.NewStreamingResponseBuilder(callback)
 
-    for {
-        line, err := reader.ReadString('\n')
-        if err != nil {
-            if err == io.EOF {
-                break
-            }
-            return nil, fmt.Errorf("failed to read streaming response: %w", err)
-        }
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("failed to read streaming response: %w", err)
+		}
 
-        line = strings.TrimSpace(line)
-        if line == "" || !strings.HasPrefix(line, "data: ") {
-            continue
-        }
-        data := strings.TrimPrefix(line, "data: ")
-        if data == "[DONE]" {
-            break
-        }
+		line = strings.TrimSpace(line)
+		if line == "" || !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			break
+		}
 
-        if chunk, err := api.ParseSSEData(data); err == nil && chunk != nil {
-            _ = builder.ProcessChunk(chunk)
-        }
-    }
+		if chunk, err := api.ParseSSEData(data); err == nil && chunk != nil {
+			_ = builder.ProcessChunk(chunk)
+		}
+	}
 
-    // Finalize response from builder
-    respObj := builder.GetResponse()
-    if respObj == nil {
-        // Fallback empty response
-        respObj = &api.ChatResponse{Choices: []api.Choice{{}}}
-    }
-    if respObj.Model == "" {
-        respObj.Model = p.model
-    }
-    // Best-effort usage estimation if missing
-    if respObj.Usage.TotalTokens == 0 {
-        prompt := EstimateInputTokens(messages, tools)
-        completion := len(respObj.Choices[0].Message.Content) / 4
-        respObj.Usage.PromptTokens = prompt
-        respObj.Usage.CompletionTokens = completion
-        respObj.Usage.TotalTokens = prompt + completion
-    }
+	// Finalize response from builder
+	respObj := builder.GetResponse()
+	if respObj == nil {
+		// Fallback empty response
+		respObj = &api.ChatResponse{Choices: []api.Choice{{}}}
+	}
+	if respObj.Model == "" {
+		respObj.Model = p.model
+	}
+	// Best-effort usage estimation if missing
+	if respObj.Usage.TotalTokens == 0 {
+		prompt := EstimateInputTokens(messages, tools)
+		completion := len(respObj.Choices[0].Message.Content) / 4
+		respObj.Usage.PromptTokens = prompt
+		respObj.Usage.CompletionTokens = completion
+		respObj.Usage.TotalTokens = prompt + completion
+	}
 
-    return respObj, nil
+	return respObj, nil
 }
 
 // CheckConnection verifies that LM Studio is accessible
@@ -287,18 +287,12 @@ func (p *LMStudioProvider) GetModelContextLimit() (int, error) {
 func (p *LMStudioProvider) getKnownModelContextLimit() int {
 	// Common LM Studio model context limits
 	switch {
-	case strings.Contains(strings.ToLower(p.model), "128k"):
-		return 131072
-	case strings.Contains(strings.ToLower(p.model), "64k"):
-		return 65536
-	case strings.Contains(strings.ToLower(p.model), "32k"):
-		return 32768
-	case strings.Contains(strings.ToLower(p.model), "16k"):
-		return 16384
-	case strings.Contains(strings.ToLower(p.model), "8k"):
-		return 8192
+	case strings.Contains(strings.ToLower(p.model), "qwen/qwen3-coder-30b"):
+		return 161072
+	case strings.Contains(strings.ToLower(p.model), "gpt-oss"):
+		return 128000
 	default:
-		return 32768 // Default to 32k context for modern models
+		return 40000 // Default to 40k context for modern models
 	}
 }
 

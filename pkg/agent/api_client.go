@@ -1,14 +1,13 @@
 package agent
 
 import (
-    "context"
-    "errors"
-    "fmt"
-    "os"
-    "math/rand"
-    "os"
-    "strings"
-    "time"
+	"context"
+	"errors"
+	"fmt"
+	"math/rand"
+	"os"
+	"strings"
+	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -62,12 +61,12 @@ func NewAPIClient(agent *Agent) *APIClient {
 
 // setTimeoutsFromConfig applies timeout settings from configuration
 func (ac *APIClient) setTimeoutsFromConfig() {
-    // Default timeout values
-    connectionTimeoutSec := 30
-    // Many local providers (e.g., LM Studio) can take longer to emit first tokens
-    firstChunkTimeoutSec := 120
-    chunkTimeoutSec := 90
-    overallTimeoutSec := 600
+	// Default timeout values
+	connectionTimeoutSec := 30
+	// Many local providers (e.g., LM Studio) can take longer to emit first tokens
+	firstChunkTimeoutSec := 120
+	chunkTimeoutSec := 90
+	overallTimeoutSec := 600
 
 	// Get timeout config if available
 	if config := ac.agent.GetConfig(); config != nil && config.APITimeouts != nil {
@@ -88,25 +87,25 @@ func (ac *APIClient) setTimeoutsFromConfig() {
 	// Convert to time.Duration
 	ac.connectionTimeout = time.Duration(connectionTimeoutSec) * time.Second
 	ac.firstChunkTimeout = time.Duration(firstChunkTimeoutSec) * time.Second
-    ac.chunkTimeout = time.Duration(chunkTimeoutSec) * time.Second
-    ac.overallTimeout = time.Duration(overallTimeoutSec) * time.Second
+	ac.chunkTimeout = time.Duration(chunkTimeoutSec) * time.Second
+	ac.overallTimeout = time.Duration(overallTimeoutSec) * time.Second
 
-    // Provider-specific adjustments
-    if ac.agent != nil && strings.EqualFold(ac.agent.GetProvider(), "lmstudio") {
-        // Give LM Studio a more generous window to deliver the first chunk
-        if ac.firstChunkTimeout < 180*time.Second {
-            ac.firstChunkTimeout = 180 * time.Second
-        }
-        // Some local models may stream slowly; extend chunk timeout modestly
-        if ac.chunkTimeout < 120*time.Second {
-            ac.chunkTimeout = 120 * time.Second
-        }
-    }
+	// Provider-specific adjustments
+	if ac.agent != nil && strings.EqualFold(ac.agent.GetProvider(), "lmstudio") {
+		// Give LM Studio a more generous window to deliver the first chunk
+		if ac.firstChunkTimeout < 180*time.Second {
+			ac.firstChunkTimeout = 180 * time.Second
+		}
+		// Some local models may stream slowly; extend chunk timeout modestly
+		if ac.chunkTimeout < 120*time.Second {
+			ac.chunkTimeout = 120 * time.Second
+		}
+	}
 
-    if ac.agent.debug {
-        ac.agent.debugLog("DEBUG: API Timeouts - Connection: %v, First Chunk: %v, Chunk: %v, Overall: %v\n",
-            ac.connectionTimeout, ac.firstChunkTimeout, ac.chunkTimeout, ac.overallTimeout)
-    }
+	if ac.agent.debug {
+		ac.agent.debugLog("DEBUG: API Timeouts - Connection: %v, First Chunk: %v, Chunk: %v, Overall: %v\n",
+			ac.connectionTimeout, ac.firstChunkTimeout, ac.chunkTimeout, ac.overallTimeout)
+	}
 }
 
 // SendWithRetry sends a request to the LLM with retry logic
@@ -173,13 +172,13 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 
 // sendRequest sends a single request to the LLM
 func (ac *APIClient) sendRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
-    // Estimate and store the current request's token count before sending
-    ac.agent.currentContextTokens = ac.estimateRequestTokens(messages, tools)
+	// Estimate and store the current request's token count before sending
+	ac.agent.currentContextTokens = ac.estimateRequestTokens(messages, tools)
 
-    // Optional context breakdown diagnostic
-    if os.Getenv("LEDIT_CONTEXT_DIAG") != "" {
-        ac.printContextBreakdown(messages, tools)
-    }
+	// Optional context breakdown diagnostic
+	if os.Getenv("LEDIT_CONTEXT_DIAG") != "" {
+		ac.printContextBreakdown(messages, tools)
+	}
 
 	if ac.agent.streamingEnabled {
 		return ac.sendStreamingRequest(messages, tools, reasoning)
@@ -189,41 +188,41 @@ func (ac *APIClient) sendRequest(messages []api.Message, tools []api.Tool, reaso
 
 // printContextBreakdown logs a per-message breakdown to help diagnose large first-turn context
 func (ac *APIClient) printContextBreakdown(messages []api.Message, tools []api.Tool) {
-    if ac.agent == nil || !ac.agent.debug {
-        return
-    }
-    totalChars := 0
-    totalMsgTokens := 0
-    ac.agent.debugLog("\n🔎 Context Breakdown (messages=%d, tools=%d)\n", len(messages), len(tools))
-    for i, m := range messages {
-        chars := len(m.Content) + len(m.ReasoningContent)
-        tokens := chars / 4 // rough estimate
-        totalChars += chars
-        totalMsgTokens += tokens
-        // Detect likely base context JSON by simple heuristic
-        tag := ""
-        c := strings.TrimSpace(m.Content)
-        if m.Role == "system" && strings.HasPrefix(c, "{") && strings.Contains(c, "\"repo_root\"") && strings.Contains(c, "\"files\"") {
-            tag = " [base-context]"
-        }
-        // Preview first 160 chars single-line
-        preview := c
-        if len(preview) > 160 {
-            preview = preview[:160] + "…"
-        }
-        preview = strings.ReplaceAll(preview, "\n", " ")
-        ac.agent.debugLog("  %2d) role=%s chars=%d est_tokens=%d%s | %s\n", i, m.Role, chars, tokens, tag, preview)
-    }
-    // Tools estimate mirroring estimateRequestTokens
-    toolTokens := 0
-    for _, t := range tools {
-        toolTokens += len(t.Function.Name) / 4
-        toolTokens += len(t.Function.Description) / 4
-        toolTokens += 200
-    }
-    ac.agent.debugLog("  Messages: chars=%d est_tokens=%d\n", totalChars, totalMsgTokens)
-    ac.agent.debugLog("  Tools: count=%d est_tokens~%d\n", len(tools), toolTokens)
-    ac.agent.debugLog("  Total est_tokens=%d (what footer will display as prompt)\n\n", totalMsgTokens+toolTokens+100)
+	if ac.agent == nil || !ac.agent.debug {
+		return
+	}
+	totalChars := 0
+	totalMsgTokens := 0
+	ac.agent.debugLog("\n🔎 Context Breakdown (messages=%d, tools=%d)\n", len(messages), len(tools))
+	for i, m := range messages {
+		chars := len(m.Content) + len(m.ReasoningContent)
+		tokens := chars / 4 // rough estimate
+		totalChars += chars
+		totalMsgTokens += tokens
+		// Detect likely base context JSON by simple heuristic
+		tag := ""
+		c := strings.TrimSpace(m.Content)
+		if m.Role == "system" && strings.HasPrefix(c, "{") && strings.Contains(c, "\"repo_root\"") && strings.Contains(c, "\"files\"") {
+			tag = " [base-context]"
+		}
+		// Preview first 160 chars single-line
+		preview := c
+		if len(preview) > 160 {
+			preview = preview[:160] + "…"
+		}
+		preview = strings.ReplaceAll(preview, "\n", " ")
+		ac.agent.debugLog("  %2d) role=%s chars=%d est_tokens=%d%s | %s\n", i, m.Role, chars, tokens, tag, preview)
+	}
+	// Tools estimate mirroring estimateRequestTokens
+	toolTokens := 0
+	for _, t := range tools {
+		toolTokens += len(t.Function.Name) / 4
+		toolTokens += len(t.Function.Description) / 4
+		toolTokens += 200
+	}
+	ac.agent.debugLog("  Messages: chars=%d est_tokens=%d\n", totalChars, totalMsgTokens)
+	ac.agent.debugLog("  Tools: count=%d est_tokens~%d\n", len(tools), toolTokens)
+	ac.agent.debugLog("  Total est_tokens=%d (what footer will display as prompt)\n\n", totalMsgTokens+toolTokens+100)
 }
 
 // sendStreamingRequest handles streaming API requests with timeouts

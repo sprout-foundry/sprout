@@ -84,6 +84,40 @@ type Agent struct {
     baseContextInjected bool // ensure we inject base context at most once per session
 }
 
+// Shutdown attempts to gracefully stop background work and child processes
+// (e.g., MCP servers), and releases resources. It is safe to call multiple times.
+func (a *Agent) Shutdown() {
+    if a == nil {
+        return
+    }
+
+    // Stop MCP servers (best-effort)
+    if a.mcpManager != nil {
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        _ = a.mcpManager.StopAll(ctx)
+        cancel()
+    }
+
+    // Disable ESC monitoring and cancel interrupt context
+    a.DisableEscMonitoring()
+    if a.interruptCancel != nil {
+        a.interruptCancel()
+    }
+
+    // Close async output worker
+    if a.asyncOutput != nil {
+        // Close channel to stop background worker started in ensureAsyncOutputWorker
+        close(a.asyncOutput)
+        a.asyncOutput = nil
+    }
+
+    // Close debug log file
+    if a.debugLogFile != nil {
+        _ = a.debugLogFile.Close()
+        a.debugLogFile = nil
+    }
+}
+
 // NewAgent creates a new agent with auto-detected provider
 func NewAgent() (*Agent, error) {
 	return NewAgentWithModel("")

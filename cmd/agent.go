@@ -140,7 +140,10 @@ func executeDirectAgentCommand(chatAgent *agent.Agent, userIntent string) error 
 	// Create CI output handler - it handles both CI and direct execution
 	outputHandler := console.NewCIOutputHandler(os.Stdout)
 
-	// Set up stats callback to update CI handler
+    // Ensure shutdown on exit
+    defer chatAgent.Shutdown()
+
+    // Set up stats callback to update CI handler
 	chatAgent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
 		outputHandler.UpdateMetrics(
 			totalTokens,

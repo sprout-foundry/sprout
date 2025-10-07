@@ -77,9 +77,25 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		return "", err
 	}
 
-    // Inject base repository context as a system message to speed up discovery (cached per session)
-    if base := ch.agent.GetOrBuildBaseContext(); strings.TrimSpace(base) != "" {
-        ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: base})
+    // Inject base repository context once per session to speed up discovery
+    if !ch.agent.baseContextInjected {
+        // Avoid duplicate base-context if already present (e.g., from a previous attempt)
+        alreadyPresent := false
+        for _, m := range ch.agent.messages {
+            if m.Role == "system" {
+                c := strings.TrimSpace(m.Content)
+                if strings.HasPrefix(c, "{") && strings.Contains(c, "\"repo_root\"") && strings.Contains(c, "\"files\"") {
+                    alreadyPresent = true
+                    break
+                }
+            }
+        }
+        if !alreadyPresent {
+            if base := ch.agent.GetOrBuildBaseContext(); strings.TrimSpace(base) != "" {
+                ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: base})
+            }
+        }
+        ch.agent.baseContextInjected = true
     }
 
     // Add user message
@@ -443,16 +459,28 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 func (ch *ConversationHandler) prepareMessages() []api.Message {
     var optimizedMessages []api.Message
 
-	// Use conversation optimizer if enabled
-	if ch.agent.optimizer != nil && ch.agent.optimizer.IsEnabled() {
-		optimizedMessages = ch.agent.optimizer.OptimizeConversation(ch.agent.messages)
-	} else {
-		optimizedMessages = ch.agent.messages
-	}
+    // Use conversation optimizer if enabled
+    if ch.agent.optimizer != nil && ch.agent.optimizer.IsEnabled() {
+        optimizedMessages = ch.agent.optimizer.OptimizeConversation(ch.agent.messages)
+    } else {
+        optimizedMessages = ch.agent.messages
+    }
+
+    // Belt-and-suspenders: ensure we don't carry a duplicate system prompt in history.
+    // If any system message matches the current systemPrompt verbatim, drop it from history here
+    // because we always prepend the active systemPrompt below.
+    filtered := make([]api.Message, 0, len(optimizedMessages))
+    for _, m := range optimizedMessages {
+        if m.Role == "system" && strings.TrimSpace(m.Content) == strings.TrimSpace(ch.agent.systemPrompt) {
+            continue
+        }
+        filtered = append(filtered, m)
+    }
+    optimizedMessages = filtered
 
     // Always include system prompt at the beginning
     allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
-	allMessages = append(allMessages, optimizedMessages...)
+    allMessages = append(allMessages, optimizedMessages...)
 
 	// Check context limits and apply pruning if needed
 	currentTokens := ch.estimateTokens(allMessages)

@@ -81,6 +81,7 @@ type Agent struct {
     // Base context cache (session scoped)
     baseContextJSON string
     baseContextOnce sync.Once
+    baseContextInjected bool // ensure we inject base context at most once per session
 }
 
 // NewAgent creates a new agent with auto-detected provider

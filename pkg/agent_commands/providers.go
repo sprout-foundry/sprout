@@ -244,7 +244,7 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 	// Convert name to provider type
 	provider, err := api.ParseProviderName(strings.ToLower(providerName))
 	if err != nil {
-		return fmt.Errorf("unknown provider '%s'. Available: openai, deepinfra, ollama, openrouter, test", providerName)
+		return fmt.Errorf("unknown provider '%s'. Available: openai, deepinfra, ollama, openrouter, lmstudio, test", providerName)
 	}
 
 	// Check if provider needs API key but doesn't have one
@@ -289,6 +289,8 @@ func getProviderDisplayName(provider api.ClientType) string {
 		return "Ollama Local"
 	case api.OllamaTurboClientType:
 		return "Ollama Turbo"
+	case api.LMStudioClientType:
+		return "LM Studio"
 	case api.TestClientType:
 		return "Test (CI/Mock)"
 	default:

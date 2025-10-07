@@ -55,9 +55,13 @@ func (rlb *RateLimitBackoff) IsRateLimitError(err error, resp *http.Response) bo
 
 	if err != nil {
 		errStr := strings.ToLower(err.Error())
-		// More precise detection to avoid false positives
-		return (strings.Contains(errStr, "429") && strings.Contains(errStr, "too many requests")) ||
-			(strings.Contains(errStr, "rate limit") && !strings.Contains(errStr, "not due to rate limit")) ||
+		// Treat any reference to HTTP 429 as a rate limit, even if the phrase
+		// "too many requests" is absent. Providers often format as "status 429".
+		if strings.Contains(errStr, "429") || strings.Contains(errStr, "http 429") || strings.Contains(errStr, "status 429") {
+			return true
+		}
+		// Otherwise match common phrasing used by providers
+		return strings.Contains(errStr, "rate limit") ||
 			strings.Contains(errStr, "requests per minute") ||
 			strings.Contains(errStr, "rpm exceeded") ||
 			strings.Contains(errStr, "rate exceeded") ||
@@ -66,8 +70,7 @@ func (rlb *RateLimitBackoff) IsRateLimitError(err error, resp *http.Response) bo
 			strings.Contains(errStr, "insufficient_quota") ||
 			strings.Contains(errStr, "insufficient quota") ||
 			(strings.Contains(errStr, "quota") && strings.Contains(errStr, "exceeded")) ||
-			strings.Contains(errStr, "current quota") ||
-			strings.Contains(errStr, "billing hard limit")
+			strings.Contains(errStr, "current quota")
 	}
 
 	return false

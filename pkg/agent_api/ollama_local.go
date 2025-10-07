@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -89,33 +90,80 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 	ollamaMessages := make([]ollama.Message, 0, len(messages)+1)
 	ollamaTools := convertToolsToOllamaTools(tools)
 
-	for _, msg := range messages {
-		ollamaMessages = append(ollamaMessages, ollama.Message{
-			Role:    msg.Role,
-			Content: msg.Content,
-		})
+	// Optional: fold system content into first user message for templates that ignore system role
+	if os.Getenv("LEDIT_OLLAMA_FOLD_SYSTEM") != "" {
+		var systemParts []string
+		injected := false
+		for _, m := range messages {
+			role := strings.ToLower(m.Role)
+			if role == "system" {
+				if t := strings.TrimSpace(m.Content); t != "" {
+					systemParts = append(systemParts, t)
+				}
+				continue
+			}
+			if !injected && role == "user" && len(systemParts) > 0 {
+				combined := "System:\n" + strings.Join(systemParts, "\n\n") + "\n\n" + m.Content
+				ollamaMessages = append(ollamaMessages, ollama.Message{Role: m.Role, Content: combined})
+				injected = true
+				continue
+			}
+			ollamaMessages = append(ollamaMessages, ollama.Message{Role: m.Role, Content: m.Content})
+		}
+		if len(ollamaMessages) == 0 { // no user message existed
+			for _, m := range messages {
+				if strings.ToLower(m.Role) != "system" {
+					ollamaMessages = append(ollamaMessages, ollama.Message{Role: m.Role, Content: m.Content})
+				}
+			}
+		}
+	} else {
+		for _, msg := range messages {
+			ollamaMessages = append(ollamaMessages, ollama.Message{Role: msg.Role, Content: msg.Content})
+		}
 	}
 
 	totalTokens := 0
 	for _, msg := range ollamaMessages {
 		totalTokens += c.estimateTokens(msg.Content)
 	}
-	// TODO: we should account for both the total model size and the context size and use algorithms to ensure we stay within the limits of whatever hardware this is running
-	numCtx := max(totalTokens+10000, 65000) // Aim for 10K free tokens
 
-    options := map[string]any{
-        "temperature":    0.1,
-        "top_p":          0.9,
-        "num_ctx":        numCtx,
-        "num_predict":    8096,
-        "repeat_penalty": 1.1,
-        "stream":         stream,
-    }
+	// Derive conservative context/prediction sizing based on model limit
+	contextLimit, _ := c.GetModelContextLimit()
+	if contextLimit <= 0 {
+		contextLimit = 32000
+	}
+	// Keep headroom for generation but do not exceed limit
+	headroom := 4096
+	if headroom > contextLimit/2 {
+		headroom = contextLimit / 2
+	}
+	numCtx := totalTokens + headroom
+	if numCtx > contextLimit {
+		numCtx = contextLimit
+	}
+	if numCtx < totalTokens+1024 {
+		numCtx = totalTokens + 1024
+		if numCtx > contextLimit {
+			numCtx = contextLimit
+		}
+	}
 
-    // Do NOT set provider-level stop sequences for completion markers.
-    // We require the model to emit the explicit [[TASK_COMPLETE]] token in content
-    // so the conversation handler can detect it and finalize. Using provider-level
-    // stop would strip the marker from content and break detection.
+	// Compute safe prediction cap
+	numPredict := contextLimit - totalTokens - 512
+	if numPredict < 512 {
+		numPredict = 512
+	}
+	if numPredict > 4096 {
+		numPredict = 4096
+	}
+
+	// Keep sampling options minimal to align with provider defaults
+	options := map[string]any{
+		"num_ctx":     numCtx,
+		"num_predict": numPredict,
+		"stream":      stream,
+	}
 
 	if reasoning != "" {
 		options["reasoning_effort"] = reasoning

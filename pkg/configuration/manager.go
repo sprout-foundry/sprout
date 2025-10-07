@@ -160,6 +160,8 @@ func mapClientTypeToString(ct api.ClientType) string {
 		return "ollama-local"
 	case api.OllamaTurboClientType:
 		return "ollama-turbo"
+	case api.LMStudioClientType:
+		return "lmstudio"
 	default:
 		// For providers not yet in ClientType constants
 		return string(ct)
@@ -181,6 +183,8 @@ func mapStringToClientType(s string) (api.ClientType, error) {
 		return api.OllamaLocalClientType, nil
 	case "ollama-turbo":
 		return api.OllamaTurboClientType, nil
+	case "lmstudio":
+		return api.LMStudioClientType, nil
 	default:
 		return "", fmt.Errorf("unknown provider: %s", s)
 	}

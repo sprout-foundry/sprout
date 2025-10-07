@@ -20,8 +20,8 @@ type TodoItem struct {
 
 // TodoManager manages the todo list for the current session
 type TodoManager struct {
-	items []TodoItem
-	mutex sync.RWMutex
+    items []TodoItem
+    mutex sync.RWMutex
 }
 
 var globalTodoManager = &TodoManager{
@@ -140,6 +140,23 @@ func UpdateTodoStatus(id, status string) string {
 	globalTodoManager.mutex.Unlock()
 
 	return "Todo not found"
+}
+
+// FindTodoIDByTitle performs a case-insensitive exact title match and returns the ID if found.
+func FindTodoIDByTitle(title string) (string, bool) {
+    globalTodoManager.mutex.RLock()
+    defer globalTodoManager.mutex.RUnlock()
+
+    tnorm := strings.TrimSpace(strings.ToLower(title))
+    if tnorm == "" {
+        return "", false
+    }
+    for _, item := range globalTodoManager.items {
+        if strings.ToLower(strings.TrimSpace(item.Title)) == tnorm {
+            return item.ID, true
+        }
+    }
+    return "", false
 }
 
 // UpdateTodoStatusBulk updates multiple todos at once to reduce tool calls

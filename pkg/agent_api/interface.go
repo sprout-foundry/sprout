@@ -33,6 +33,7 @@ type ClientType string
 const (
 	DeepInfraClientType   ClientType = "deepinfra"
 	DeepSeekClientType    ClientType = "deepseek"
+	LMStudioClientType    ClientType = "lmstudio"
 	OllamaClientType      ClientType = "ollama" // Maps to local ollama
 	OllamaLocalClientType ClientType = "ollama-local"
 	OllamaTurboClientType ClientType = "ollama-turbo"
@@ -117,6 +118,7 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 		OpenRouterClientType,
 		DeepInfraClientType,
 		OllamaTurboClientType,
+		LMStudioClientType,
 		OllamaLocalClientType,
 	}
 
@@ -147,6 +149,8 @@ func ParseProviderName(name string) (ClientType, error) {
 		return OllamaLocalClientType, nil
 	case "ollama-turbo":
 		return OllamaTurboClientType, nil
+	case "lmstudio":
+		return LMStudioClientType, nil
 	case "test":
 		return TestClientType, nil
 	default:
@@ -162,6 +166,9 @@ func IsProviderAvailable(provider ClientType) bool {
 		return true
 	case TestClientType:
 		// Test provider is always available for CI/testing
+		return true
+	case LMStudioClientType:
+		// LM Studio is a local provider and doesn't require API key
 		return true
 	case OllamaTurboClientType:
 		return os.Getenv("OLLAMA_API_KEY") != ""
@@ -184,6 +191,7 @@ func GetAvailableProviders() []ClientType {
 		OllamaLocalClientType,
 		OllamaTurboClientType,
 		OpenRouterClientType,
+		LMStudioClientType,
 	}
 
 	available := make([]ClientType, 0, len(providers))
@@ -208,6 +216,8 @@ func GetProviderName(clientType ClientType) string {
 		return "Ollama Turbo"
 	case OpenRouterClientType:
 		return "OpenRouter"
+	case LMStudioClientType:
+		return "LM Studio"
 	default:
 		return string(clientType)
 	}

@@ -52,6 +52,12 @@ func getSupportedProviders() []ProviderAPIKey {
 			EnvVariableName: "OLLAMA_API_KEY",
 		},
 		{
+			Name:          "lmstudio",
+			FormattedName: "LM Studio",
+			RequiresKey:   false,
+			EnvVariableName: "LMSTUDIO_API_KEY",
+		},
+		{
 			Name:            "jinaai",
 			FormattedName:   "JinaAI",
 			RequiresKey:     true,
@@ -224,6 +230,9 @@ func RequiresAPIKey(provider string) bool {
 		return false
 	case "test":
 		// Test provider is for CI/testing and doesn't require API key
+		return false
+	case "lmstudio":
+		// LM Studio is a local provider and doesn't require API key
 		return false
 	case "ollama-turbo":
 		// Ollama turbo requires API key for remote acceleration

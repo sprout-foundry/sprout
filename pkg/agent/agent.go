@@ -466,10 +466,21 @@ func (a *Agent) monitorEscKey(ctx context.Context) {
 	// Use non-blocking read with timeout instead of manipulating terminal state
 	// This avoids conflicts with the console app's terminal management
 	buf := make([]byte, 1)
+	
+	// Add a safety timeout to prevent infinite loops
+	safetyTimeout := time.NewTimer(30 * time.Second)
+	defer safetyTimeout.Stop()
+	
 	for {
 		select {
 		case <-ctx.Done():
 			// Context cancelled, exit gracefully
+			return
+		case <-safetyTimeout.C:
+			// Safety timeout reached, exit to prevent infinite loops
+			if a.debug {
+				a.debugLog("⚠️ Esc monitoring safety timeout reached\n")
+			}
 			return
 		default:
 			// Set a short timeout to avoid blocking indefinitely

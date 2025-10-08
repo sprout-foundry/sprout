@@ -61,12 +61,12 @@ func NewAPIClient(agent *Agent) *APIClient {
 
 // setTimeoutsFromConfig applies timeout settings from configuration
 func (ac *APIClient) setTimeoutsFromConfig() {
-	// Default timeout values
-	connectionTimeoutSec := 30
-	// Many local providers (e.g., LM Studio) can take longer to emit first tokens
-	firstChunkTimeoutSec := 120
-	chunkTimeoutSec := 90
-	overallTimeoutSec := 600
+    // Default timeout values (apply to all providers)
+    // Set to 2 minutes for connection, first-chunk, and inter-chunk timeouts.
+    connectionTimeoutSec := 120
+    firstChunkTimeoutSec := 120
+    chunkTimeoutSec := 120
+    overallTimeoutSec := 600
 
 	// Get timeout config if available
 	if config := ac.agent.GetConfig(); config != nil && config.APITimeouts != nil {

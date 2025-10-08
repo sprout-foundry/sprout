@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -114,12 +115,13 @@ func (a *Agent) PrintLineAsync(text string) {
 	// synchronous printing while preserving ordering. Block for a short
 	// interval to give the worker a chance to drain, then emit directly in
 	// the current goroutine to avoid reordering.
-	timer := time.NewTimer(50 * time.Millisecond)
-	defer timer.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
 
 	select {
 	case a.asyncOutput <- text:
-	case <-timer.C:
+	case <-ctx.Done():
+		// Timeout reached, fall back to synchronous printing
 		a.printLineInternal(text)
 	}
 }

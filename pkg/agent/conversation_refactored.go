@@ -214,7 +214,12 @@ func (a *Agent) executeToolsInParallel(toolCalls []api.ToolCall) ([]api.Message,
 	for i, tc := range toolCalls {
 		wg.Add(1)
 		go func(index int, toolCall api.ToolCall) {
-			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					errors[index] = fmt.Errorf("tool execution panicked: %v", r)
+				}
+				wg.Done()
+			}()
 			result, err := a.executeSingleTool(toolCall)
 			results[index] = result
 			errors[index] = err

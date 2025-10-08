@@ -78,7 +78,19 @@ func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message 
 	for i, tc := range toolCalls {
 		wg.Add(1)
 		go func(index int, toolCall api.ToolCall) {
-			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					te.agent.debugLog("⚠️ Tool execution panicked: %v\n", r)
+					// Create error result
+					resultsMutex.Lock()
+					results[index] = api.Message{
+						Role:    "tool",
+						Content: fmt.Sprintf("Tool execution panicked: %v", r),
+					}
+					resultsMutex.Unlock()
+				}
+				wg.Done()
+			}()
 
 			// Execute tool
 			result := te.executeSingleTool(toolCall)

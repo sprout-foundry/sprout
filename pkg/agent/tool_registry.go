@@ -511,18 +511,18 @@ func handleUpdateTodoStatus(ctx context.Context, a *Agent, args map[string]inter
 		return "", fmt.Errorf("invalid status argument")
 	}
 
-    a.ToolLog("updating todo", fmt.Sprintf("task %s to %s", taskID, status))
+	a.ToolLog("updating todo", fmt.Sprintf("task %s to %s", taskID, status))
 	a.debugLog("Updating todo %s to status: %s\n", taskID, status)
 
-    result := tools.UpdateTodoStatus(taskID, status)
-    if result == "Todo not found" && !strings.HasPrefix(taskID, "todo_") {
-        if resolved, ok := tools.FindTodoIDByTitle(taskID); ok {
-            a.debugLog("Resolved todo title '%s' to id %s\n", taskID, resolved)
-            a.ToolLog("updating todo", fmt.Sprintf("resolved '%s' -> %s", taskID, resolved))
-            taskID = resolved
-            result = tools.UpdateTodoStatus(taskID, status)
-        }
-    }
+	result := tools.UpdateTodoStatus(taskID, status)
+	if result == "Todo not found" && !strings.HasPrefix(taskID, "todo_") {
+		if resolved, ok := tools.FindTodoIDByTitle(taskID); ok {
+			a.debugLog("Resolved todo title '%s' to id %s\n", taskID, resolved)
+			a.ToolLog("updating todo", fmt.Sprintf("resolved '%s' -> %s", taskID, resolved))
+			taskID = resolved
+			result = tools.UpdateTodoStatus(taskID, status)
+		}
+	}
 	a.debugLog("Update todo result: %s\n", result)
 	return result, nil
 }
@@ -623,12 +623,12 @@ func handleValidateBuild(ctx context.Context, a *Agent, args map[string]interfac
 
 // handleSearchFiles implements a cross-platform content search with sensible defaults and ignores
 func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-    pattern := args["pattern"].(string)
+	pattern := args["pattern"].(string)
 
-    root := "."
-    if v, ok := args["directory"].(string); ok && strings.TrimSpace(v) != "" {
-        root = v
-    }
+	root := "."
+	if v, ok := args["directory"].(string); ok && strings.TrimSpace(v) != "" {
+		root = v
+	}
 
 	glob := ""
 	if v, ok := args["file_pattern"].(string); ok {
@@ -640,14 +640,14 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 		caseSensitive = v
 	}
 
-    maxResults := 200
-    if v, ok := args["max_results"].(int); ok && v > 0 {
-        maxResults = v
-    }
+	maxResults := 200
+	if v, ok := args["max_results"].(int); ok && v > 0 {
+		maxResults = v
+	}
 
-    // Log the search action so users can see that the tool actually executed
-    a.ToolLog("searching files", fmt.Sprintf("%q in %s (max %d)", pattern, root, maxResults))
-    a.debugLog("Searching files: pattern=%q, root=%s, max_results=%d\n", pattern, root, maxResults)
+	// Log the search action so users can see that the tool actually executed
+	a.ToolLog("searching files", fmt.Sprintf("%q in %s (max %d)", pattern, root, maxResults))
+	a.debugLog("Searching files: pattern=%q, root=%s, max_results=%d\n", pattern, root, maxResults)
 
 	// Prepare matcher: try regex first, then fallback to substring
 	var re *regexp.Regexp

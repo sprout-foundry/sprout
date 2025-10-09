@@ -77,33 +77,33 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		return "", err
 	}
 
-    // Inject base repository context once per session to speed up discovery
-    if !ch.agent.baseContextInjected {
-        // Avoid duplicate base-context if already present (e.g., from a previous attempt)
-        alreadyPresent := false
-        for _, m := range ch.agent.messages {
-            if m.Role == "system" {
-                c := strings.TrimSpace(m.Content)
-                if strings.HasPrefix(c, "{") && strings.Contains(c, "\"repo_root\"") && strings.Contains(c, "\"files\"") {
-                    alreadyPresent = true
-                    break
-                }
-            }
-        }
-        if !alreadyPresent {
-            if base := ch.agent.GetOrBuildBaseContext(); strings.TrimSpace(base) != "" {
-                ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: base})
-            }
-        }
-        ch.agent.baseContextInjected = true
-    }
+	// Inject base repository context once per session to speed up discovery
+	if !ch.agent.baseContextInjected {
+		// Avoid duplicate base-context if already present (e.g., from a previous attempt)
+		alreadyPresent := false
+		for _, m := range ch.agent.messages {
+			if m.Role == "system" {
+				c := strings.TrimSpace(m.Content)
+				if strings.HasPrefix(c, "{") && strings.Contains(c, "\"repo_root\"") && strings.Contains(c, "\"files\"") {
+					alreadyPresent = true
+					break
+				}
+			}
+		}
+		if !alreadyPresent {
+			if base := ch.agent.GetOrBuildBaseContext(); strings.TrimSpace(base) != "" {
+				ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: base})
+			}
+		}
+		ch.agent.baseContextInjected = true
+	}
 
-    // Add user message
-    userMessage := api.Message{
-        Role:    "user",
-        Content: processedQuery,
-    }
-    ch.agent.messages = append(ch.agent.messages, userMessage)
+	// Add user message
+	userMessage := api.Message{
+		Role:    "user",
+		Content: processedQuery,
+	}
+	ch.agent.messages = append(ch.agent.messages, userMessage)
 
 	// Main conversation loop
 	for ch.agent.currentIteration = 0; ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
@@ -291,30 +291,30 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	// Check for blank iteration (no content and no tool calls)
 	isBlankIteration := ch.isBlankIteration(contentUsed, choice.Message.ToolCalls)
 
-		if isBlankIteration {
-			ch.consecutiveBlankIterations++
-			ch.agent.debugLog("⚠️ Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
+	if isBlankIteration {
+		ch.consecutiveBlankIterations++
+		ch.agent.debugLog("⚠️ Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
 
-			if ch.consecutiveBlankIterations == 1 {
-				// First blank iteration - provide explicit, actionable reminder
-				ch.agent.debugLog("🔔 Sending reminder about task completion signal and next action\n")
-				reminderMessage := api.Message{
-					Role: "user",
-					Content: "You provided no content. If you are finished, reply exactly with [[TASK_COMPLETE]]. If not finished, continue now with your next concrete action/output.\n" +
-						"- If you intend to use tools, emit valid tool_calls with proper JSON arguments.\n" +
-						"- Otherwise, proceed with the actual result (not a plan).",
-				}
-				ch.agent.messages = append(ch.agent.messages, reminderMessage)
+		if ch.consecutiveBlankIterations == 1 {
+			// First blank iteration - provide explicit, actionable reminder
+			ch.agent.debugLog("🔔 Sending reminder about task completion signal and next action\n")
+			reminderMessage := api.Message{
+				Role: "user",
+				Content: "You provided no content. If you are finished, reply exactly with [[TASK_COMPLETE]]. If not finished, continue now with your next concrete action/output.\n" +
+					"- If you intend to use tools, emit valid tool_calls with proper JSON arguments.\n" +
+					"- Otherwise, proceed with the actual result (not a plan).",
+			}
+			ch.agent.messages = append(ch.agent.messages, reminderMessage)
 
-				// Add one-time tool call guidance to improve follow-up behavior on blank turns
-				if !ch.agent.toolCallGuidanceAdded {
-					guidance := ch.buildToolCallGuidance()
-					ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
-					ch.agent.toolCallGuidanceAdded = true
-					ch.agent.debugLog("📝 Added system guidance due to blank iteration\n")
-				}
-				return false // Continue conversation to get a proper response
-			} else if ch.consecutiveBlankIterations >= 2 {
+			// Add one-time tool call guidance to improve follow-up behavior on blank turns
+			if !ch.agent.toolCallGuidanceAdded {
+				guidance := ch.buildToolCallGuidance()
+				ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
+				ch.agent.toolCallGuidanceAdded = true
+				ch.agent.debugLog("📝 Added system guidance due to blank iteration\n")
+			}
+			return false // Continue conversation to get a proper response
+		} else if ch.consecutiveBlankIterations >= 2 {
 			// Two consecutive blank iterations - error out
 			ch.agent.debugLog("❌ Too many consecutive blank iterations, stopping with error\n")
 			errorMessage := "Error: The agent provided two consecutive blank responses and appears to be stuck. Please try rephrasing your request or break it into smaller tasks."
@@ -353,11 +353,11 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		// Apply completion context summarization to prevent contamination in follow-up questions
 		if ch.agent.completionSummarizer != nil && ch.agent.completionSummarizer.ShouldApplySummarization(ch.agent.messages) {
 			ch.agent.messages = ch.agent.completionSummarizer.ApplyCompletionSummarization(ch.agent.messages)
-	}
+		}
 
-	// Display final response
-	ch.displayFinalResponse(cleanContent)
-	return true // Stop - response explicitly indicates completion
+		// Display final response
+		ch.displayFinalResponse(cleanContent)
+		return true // Stop - response explicitly indicates completion
 	}
 
 	// Otherwise, decide whether this is a final (non-incomplete) response or we need more
@@ -457,30 +457,30 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 }
 
 func (ch *ConversationHandler) prepareMessages() []api.Message {
-    var optimizedMessages []api.Message
+	var optimizedMessages []api.Message
 
-    // Use conversation optimizer if enabled
-    if ch.agent.optimizer != nil && ch.agent.optimizer.IsEnabled() {
-        optimizedMessages = ch.agent.optimizer.OptimizeConversation(ch.agent.messages)
-    } else {
-        optimizedMessages = ch.agent.messages
-    }
+	// Use conversation optimizer if enabled
+	if ch.agent.optimizer != nil && ch.agent.optimizer.IsEnabled() {
+		optimizedMessages = ch.agent.optimizer.OptimizeConversation(ch.agent.messages)
+	} else {
+		optimizedMessages = ch.agent.messages
+	}
 
-    // Belt-and-suspenders: ensure we don't carry a duplicate system prompt in history.
-    // If any system message matches the current systemPrompt verbatim, drop it from history here
-    // because we always prepend the active systemPrompt below.
-    filtered := make([]api.Message, 0, len(optimizedMessages))
-    for _, m := range optimizedMessages {
-        if m.Role == "system" && strings.TrimSpace(m.Content) == strings.TrimSpace(ch.agent.systemPrompt) {
-            continue
-        }
-        filtered = append(filtered, m)
-    }
-    optimizedMessages = filtered
+	// Belt-and-suspenders: ensure we don't carry a duplicate system prompt in history.
+	// If any system message matches the current systemPrompt verbatim, drop it from history here
+	// because we always prepend the active systemPrompt below.
+	filtered := make([]api.Message, 0, len(optimizedMessages))
+	for _, m := range optimizedMessages {
+		if m.Role == "system" && strings.TrimSpace(m.Content) == strings.TrimSpace(ch.agent.systemPrompt) {
+			continue
+		}
+		filtered = append(filtered, m)
+	}
+	optimizedMessages = filtered
 
-    // Always include system prompt at the beginning
-    allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
-    allMessages = append(allMessages, optimizedMessages...)
+	// Always include system prompt at the beginning
+	allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+	allMessages = append(allMessages, optimizedMessages...)
 
 	// Check context limits and apply pruning if needed
 	currentTokens := ch.estimateTokens(allMessages)

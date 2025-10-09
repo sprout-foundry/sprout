@@ -52,9 +52,9 @@ func getSupportedProviders() []ProviderAPIKey {
 			EnvVariableName: "OLLAMA_API_KEY",
 		},
 		{
-			Name:          "lmstudio",
-			FormattedName: "LM Studio",
-			RequiresKey:   false,
+			Name:            "lmstudio",
+			FormattedName:   "LM Studio",
+			RequiresKey:     false,
 			EnvVariableName: "LMSTUDIO_API_KEY",
 		},
 		{

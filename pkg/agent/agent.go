@@ -49,6 +49,7 @@ type Agent struct {
 	mcpToolsCache         []api.Tool                     // Cached MCP tools to avoid reloading
 	circuitBreaker        *CircuitBreakerState           // Track repetitive actions
 	conversationPruner    *ConversationPruner            // Automatic conversation pruning
+	completionSummarizer *CompletionContextSummarizer   // Completion context summarization
 	toolCallGuidanceAdded bool                           // Prevent repeating tool call guidance
 
 	// Input injection handling
@@ -304,6 +305,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		escMonitoringCancel:       nil,
 		falseStopDetectionEnabled: true,
 		conversationPruner:        NewConversationPruner(debug),
+		completionSummarizer:      NewCompletionContextSummarizer(debug),
 	}
 
 	// Initialize debug log file if debug enabled

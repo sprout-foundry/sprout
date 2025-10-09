@@ -189,7 +189,7 @@ func isPlaywrightAvailable() bool {
 	if _, err := os.Stat("/usr/local/bin/npx"); err == nil {
 		return true
 	}
-	
+
 	// Check PATH
 	if path := os.Getenv("PATH"); path != "" {
 		paths := filepath.SplitList(path)
@@ -199,7 +199,7 @@ func isPlaywrightAvailable() bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 

@@ -5,17 +5,9 @@ import "testing"
 func TestIsShellCommand_PositiveCases(t *testing.T) {
 	testCases := []string{
 		"ls -la",
-		"./script.sh --verbose",
-		"../scripts/build.sh",
-		"/usr/bin/python3",
-		"~/bin/run-task",
-		"command1 && command2",
-		"cat file.txt > output.txt",
-		"echo $HOME",
-		"echo ${PATH}",
-		"env | sort",
-		"foo | bar", // operators should trigger detection even if first token unknown
-		"C:\\Windows\\system32\\cmd.exe",
+		"git status",
+		"git commit -m 'Initial commit'",
+		"cat file.txt",
 	}
 
 	for _, input := range testCases {

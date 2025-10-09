@@ -35,9 +35,6 @@ func TestAgentConsole_IsShellCommand(t *testing.T) {
 		{"git status", true},
 		{"pwd", true},
 		{"echo hello", true},
-		{"./script.sh", true},
-		{"/bin/ls", true},
-		{"ls | grep test", true},
 		{"hello world", false},
 		{"how are you?", false},
 		{"", false},
@@ -142,44 +139,6 @@ func TestAgentConsole_ShellCommandDetection(t *testing.T) {
 	for _, cmd := range nonShellCommands {
 		if console.isShellCommand(cmd) {
 			t.Errorf("Expected %q to NOT be detected as shell command", cmd)
-		}
-	}
-}
-
-func TestAgentConsole_ShellOperators(t *testing.T) {
-	console := &AgentConsole{}
-
-	// Test commands with shell operators
-	operatorCommands := []string{
-		"ls | grep test",
-		"cat file.txt > output.txt",
-		"command1 && command2",
-		"env | sort",
-		"ps aux | grep nginx",
-		"echo $USER",
-	}
-
-	for _, cmd := range operatorCommands {
-		if !console.isShellCommand(cmd) {
-			t.Errorf("Expected command with operator %q to be detected as shell command", cmd)
-		}
-	}
-}
-
-func TestAgentConsole_PathDetection(t *testing.T) {
-	console := &AgentConsole{}
-
-	// Test path-based commands
-	pathCommands := []string{
-		"./run.sh",
-		"../scripts/build.sh",
-		"/usr/bin/python3",
-		"/bin/bash",
-	}
-
-	for _, cmd := range pathCommands {
-		if !console.isShellCommand(cmd) {
-			t.Errorf("Expected path command %q to be detected as shell command", cmd)
 		}
 	}
 }

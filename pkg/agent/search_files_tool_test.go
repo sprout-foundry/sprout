@@ -35,7 +35,8 @@ func TestSearchFiles_SubstringCaseInsensitive(t *testing.T) {
 
 	reg := GetToolRegistry()
 	ctx := context.Background()
-	out, err := reg.ExecuteTool(ctx, "search_files", args, nil)
+	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
 	if err != nil {
 		t.Fatalf("search_files returned error: %v", err)
 	}
@@ -62,7 +63,8 @@ func TestSearchFiles_RegexCaseSensitive(t *testing.T) {
 	}
 	reg := GetToolRegistry()
 	ctx := context.Background()
-	out, err := reg.ExecuteTool(ctx, "search_files", args, nil)
+	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
 	}
@@ -88,7 +90,8 @@ func TestSearchFiles_GlobFilterAndMaxResults(t *testing.T) {
 	}
 	reg := GetToolRegistry()
 	ctx := context.Background()
-	out, err := reg.ExecuteTool(ctx, "search_files", args, nil)
+	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
 	}
@@ -112,7 +115,8 @@ func TestSearchFiles_ExcludeDotLedit(t *testing.T) {
 	}
 	reg := GetToolRegistry()
 	ctx := context.Background()
-	out, err := reg.ExecuteTool(ctx, "search_files", args, nil)
+	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	out, err := reg.ExecuteTool(ctx, "search_files", args, agent)
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
 	}

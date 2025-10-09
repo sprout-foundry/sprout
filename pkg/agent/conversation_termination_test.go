@@ -70,7 +70,7 @@ func TestProcessResponse_RequiresExplicitCompletionWhenPolicyDisallowsImplicit(t
 
 // Test that an incomplete-looking response causes the handler to request continuation
 func TestProcessResponse_RequestsContinuationForIncomplete(t *testing.T) {
-	agent := &Agent{}
+	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
 	ch := NewConversationHandler(agent)
 
 	choice := api.Choice{}
@@ -114,7 +114,7 @@ func TestProcessResponse_AllowsImplicitCompletionForAllowedModel(t *testing.T) {
 
 // Test that explicit [[TASK_COMPLETE]] is handled and stripped
 func TestProcessResponse_ExplicitCompletionSignal(t *testing.T) {
-	agent := &Agent{}
+	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
 	ch := NewConversationHandler(agent)
 
 	choice := api.Choice{}
@@ -125,10 +125,9 @@ func TestProcessResponse_ExplicitCompletionSignal(t *testing.T) {
 	stopped := ch.processResponse(resp)
 	assert.True(t, stopped, "Expected conversation to stop when explicit completion signal provided")
 	// Last assistant message content should have the signal stripped
-	// The last assistant message should be at len(agent.messages)-2 because system summary was appended after
-	if len(agent.messages) < 2 {
-		t.Fatalf("expected at least 2 messages in agent.messages, got %d", len(agent.messages))
+	if len(agent.messages) < 1 {
+		t.Fatalf("expected at least 1 message in agent.messages, got %d", len(agent.messages))
 	}
-	last := agent.messages[len(agent.messages)-2]
+	last := agent.messages[len(agent.messages)-1]
 	assert.Equal(t, "All done.", last.Content)
 }

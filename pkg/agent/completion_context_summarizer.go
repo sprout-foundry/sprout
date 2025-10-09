@@ -13,8 +13,8 @@ import (
 type CompletionContextSummarizer struct {
 	preserveEssentialOutcomes bool
 	compactToolExecutionLogs  bool
-	maintainUserIntentChain bool
-	debug                    bool
+	maintainUserIntentChain   bool
+	debug                     bool
 }
 
 // NewCompletionContextSummarizer creates a new summarizer with default settings
@@ -22,8 +22,8 @@ func NewCompletionContextSummarizer(debug bool) *CompletionContextSummarizer {
 	return &CompletionContextSummarizer{
 		preserveEssentialOutcomes: true,
 		compactToolExecutionLogs:  true,
-		maintainUserIntentChain: true,
-		debug:                   debug,
+		maintainUserIntentChain:   true,
+		debug:                     debug,
 	}
 }
 
@@ -43,15 +43,15 @@ func (ccs *CompletionContextSummarizer) CreateCompletionSummary(messages []api.M
 	var summary strings.Builder
 	summary.WriteString("## Task Completion Summary\n")
 	summary.WriteString("**Original Request**: " + originalRequest + "\n\n")
-	
+
 	if keyAccomplishments != "" {
 		summary.WriteString("**Key Accomplishments**:\n" + keyAccomplishments + "\n\n")
 	}
-	
+
 	if filesModified != "" {
 		summary.WriteString("**Files Modified**: " + filesModified + "\n\n")
 	}
-	
+
 	summary.WriteString("**Status**: ✅ Task completed successfully\n")
 	summary.WriteString("**Next Steps**: Future instructions should be treated as new tasks.\n")
 
@@ -82,7 +82,7 @@ func (ccs *CompletionContextSummarizer) extractOriginalRequest(messages []api.Me
 // extractKeyAccomplishments identifies what was actually accomplished
 func (ccs *CompletionContextSummarizer) extractKeyAccomplishments(messages []api.Message) string {
 	var accomplishments []string
-	
+
 	// Look for completion messages that describe what was done
 	for _, msg := range messages {
 		if msg.Role == "assistant" && strings.Contains(msg.Content, "[[TASK_COMPLETE]]") {
@@ -94,7 +94,7 @@ func (ccs *CompletionContextSummarizer) extractKeyAccomplishments(messages []api
 			}
 		}
 	}
-	
+
 	if len(accomplishments) > 0 {
 		return strings.Join(accomplishments, "\n")
 	}
@@ -105,7 +105,7 @@ func (ccs *CompletionContextSummarizer) extractKeyAccomplishments(messages []api
 func (ccs *CompletionContextSummarizer) extractFilesModified(messages []api.Message) string {
 	var files []string
 	fileSet := make(map[string]bool)
-	
+
 	// Look for file operations in tool calls
 	for _, msg := range messages {
 		if msg.Role == "assistant" && msg.ToolCalls != nil {
@@ -125,7 +125,7 @@ func (ccs *CompletionContextSummarizer) extractFilesModified(messages []api.Mess
 			}
 		}
 	}
-	
+
 	if len(files) > 0 {
 		if len(files) <= 3 {
 			return strings.Join(files, ", ")
@@ -141,19 +141,19 @@ func (ccs *CompletionContextSummarizer) ApplyCompletionSummarization(messages []
 	if len(messages) <= 3 {
 		return messages // Keep short conversations intact
 	}
-	
+
 	// Only apply summarization if we have completion signals
 	if !ccs.ShouldApplySummarization(messages) {
 		return messages
 	}
-	
+
 	// Create a compact summary of the conversation
 	summary := ccs.CreateCompletionSummary(messages)
-	
+
 	// Replace detailed conversation with summary
 	// Keep essential context: system prompt, original request, and summary
 	var summarizedMessages []api.Message
-	
+
 	// Find and keep the system prompt
 	for _, msg := range messages {
 		if msg.Role == "system" {
@@ -161,7 +161,7 @@ func (ccs *CompletionContextSummarizer) ApplyCompletionSummarization(messages []
 			break
 		}
 	}
-	
+
 	// Keep the original user request if it exists
 	originalRequestFound := false
 	for _, msg := range messages {
@@ -172,13 +172,13 @@ func (ccs *CompletionContextSummarizer) ApplyCompletionSummarization(messages []
 			}
 		}
 	}
-	
+
 	// Add the completion summary
 	summarizedMessages = append(summarizedMessages, api.Message{
 		Role:    "assistant",
 		Content: summary,
 	})
-	
+
 	return summarizedMessages
 }
 

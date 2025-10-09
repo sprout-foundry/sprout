@@ -19,12 +19,12 @@ type JinaSearchResult struct {
 
 // ReferenceCacheEntry stores cached search results and fetched content.
 type ReferenceCacheEntry struct {
-	Query          string         `json:"query"`
-	SearchResults  []SearchResult `json:"search_results"`  // Initial search results (snippets)
-	SelectedURLs   []string       `json:"selected_urls"`   // URLs chosen by LLM
-	FinalContent   string         `json:"final_content"`   // Full content fetched from selected URLs
+	Query          string            `json:"query"`
+	SearchResults  []SearchResult    `json:"search_results"`  // Initial search results (snippets)
+	SelectedURLs   []string          `json:"selected_urls"`   // URLs chosen by LLM
+	FinalContent   string            `json:"final_content"`   // Full content fetched from selected URLs
 	FetchedContent map[string]string `json:"fetched_content"` // Full content for each selected URL
-	Timestamp      time.Time      `json:"timestamp"`       // When this entry was cached
+	Timestamp      time.Time         `json:"timestamp"`       // When this entry was cached
 }
 
 // URLCacheEntry stores cached content for individual URLs

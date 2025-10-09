@@ -508,20 +508,20 @@ func GetTodoListMarkdown() string {
 
 		switch item.Status {
 		case "completed":
-			checkbox = "[x] -"
+			checkbox = "[x]"
 			statusIndicator = " ✅"
 		case "in_progress":
-			checkbox = "[...] -"
+			checkbox = "[...]"
 			statusIndicator += " 🔄"
 		case "cancelled":
-			checkbox = "[x] -"
+			checkbox = "[x]"
 			statusIndicator = " ❌"
 		default: // pending
-			checkbox = "[ ] -"
+			checkbox = "[ ]"
 			statusIndicator = ""
 		}
 
-		result.WriteString(fmt.Sprintf("%s %s", checkbox, item.Title))
+		result.WriteString(fmt.Sprintf("- %s %s", checkbox, item.Title))
 
 		// Add priority indicator
 		if item.Priority == "high" {

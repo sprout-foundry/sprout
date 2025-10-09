@@ -81,7 +81,7 @@ func NewOpenAIClient() (*OpenAIClient, error) {
 	return &OpenAIClient{
 		TPSBase: NewTPSBase(),
 		httpClient: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout: 600 * time.Second, // Increased from 120 to 600 seconds to match overall timeout
 		},
 		apiKey: apiKey,
 		model:  "gpt-5-mini", // Default to cost-effective model
@@ -163,6 +163,15 @@ func (c *OpenAIClient) SendChatRequest(messages []Message, tools []Tool, reasoni
 	if resp.StatusCode != http.StatusOK {
 		var errorResp OpenAIResponse
 		if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.Error != nil {
+			// Check if this is a rate limit error by looking at the error message content
+			errorMsg := strings.ToLower(errorResp.Error.Message)
+			if strings.Contains(errorMsg, "rate limit") ||
+				strings.Contains(errorMsg, "requests per minute") ||
+				strings.Contains(errorMsg, "quota exceeded") ||
+				strings.Contains(errorMsg, "too many requests") {
+				// This is a rate limit error - return with appropriate status code
+				return nil, fmt.Errorf("OpenAI API rate limit error (status %d): %s", resp.StatusCode, errorResp.Error.Message)
+			}
 			return nil, fmt.Errorf("OpenAI API error (status %d): %s", resp.StatusCode, errorResp.Error.Message)
 		}
 		return nil, fmt.Errorf("OpenAI API error (status %d): %s", resp.StatusCode, string(body))
@@ -620,8 +629,10 @@ func (c *OpenAIClient) SendChatRequestStream(messages []Message, tools []Tool, r
 		return builder.ProcessChunk(chunk)
 	})
 
-	// Read the stream
-	if err := sseReader.Read(); err != nil {
+	// Read the stream with timeout (use chunk timeout from API client)
+	// Default to 120 seconds if no timeout is configured
+	streamTimeout := 120 * time.Second
+	if err := sseReader.ReadWithTimeout(streamTimeout); err != nil {
 		return nil, fmt.Errorf("failed to read stream: %w", err)
 	}
 

@@ -11,7 +11,8 @@ import (
 // Test that a blank assistant turn appends a user reminder and one-time tool-call guidance,
 // and does not stop the conversation on the first blank iteration.
 func TestProcessResponse_BlankIterationAddsReminderAndGuidance(t *testing.T) {
-	agent := &Agent{}
+	agent, err := NewAgent()
+	assert.NoError(t, err)
 	ch := NewConversationHandler(agent)
 
 	// Simulate a blank assistant response (no content, no tool calls)

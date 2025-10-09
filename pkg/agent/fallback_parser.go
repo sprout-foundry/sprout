@@ -16,9 +16,9 @@ import (
 var (
 	codeBlockRegex       = regexp.MustCompile("(?s)```[a-zA-Z0-9_+-]*\\s*(.*?)```")
 	xmlFunctionRegex     = regexp.MustCompile(`(?s)<function=([^>]+)>(.*?)</function>`)
-	xmlOpenWrapperRegex  = regexp.MustCompile(`(?s)<tool_call>\\s*$`)
-	xmlCloseWrapperRegex = regexp.MustCompile(`(?s)^\\s*</tool_call>`)
-	functionNameRegex    = regexp.MustCompile(`name:\s*([\\w\\.-]+)`) // allow tool names with dots/dashes
+	xmlOpenWrapperRegex  = regexp.MustCompile(`(?s)<tool_call>\s*$`)
+	xmlCloseWrapperRegex = regexp.MustCompile(`(?s)^\s*</tool_call>`)
+	functionNameRegex    = regexp.MustCompile(`name:\s*(\w[\w\.-]*)`) // allow tool names with dots/dashes
 )
 
 // FallbackParser handles parsing tool calls from content when they should have been structured tool_calls

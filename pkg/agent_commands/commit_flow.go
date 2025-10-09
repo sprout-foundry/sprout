@@ -99,64 +99,6 @@ func (cf *CommitFlow) Execute() error {
 	return cf.executeNonInteractive()
 }
 
-// showCommitOptions displays the main commit flow options
-func (cf *CommitFlow) showCommitOptions() error {
-	// Check current git status first
-	stagedFiles, unstagedFiles, err := cf.getGitStatus()
-	if err != nil {
-		return fmt.Errorf("failed to get git status: %w", err)
-	}
-
-	// Build dynamic options based on current state
-	actions := cf.buildCommitActions(stagedFiles, unstagedFiles)
-
-	if len(actions) == 0 {
-		cf.agent.PrintLine("")
-		cf.agent.PrintLine("📭 No changes to commit. Working directory is clean.")
-		return nil
-	}
-
-	// Convert to dropdown items
-	items := make([]ui.DropdownItem, len(actions))
-	for i, action := range actions {
-		items[i] = &CommitActionItem{
-			ID:          action.ID,
-			DisplayName: action.DisplayName,
-			Description: action.Description,
-		}
-	}
-
-	// Temporarily disable ESC monitoring during dropdown
-	cf.agent.DisableEscMonitoring()
-	defer cf.agent.EnableEscMonitoring()
-
-	// Try to show dropdown using the agent's UI
-	selected, err := cf.agent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "🚀 Commit Workflow:",
-		SearchPrompt: "Search: ",
-		ShowCounts:   false,
-	})
-
-	if err != nil {
-		if err == ui.ErrCancelled {
-			cf.println("")
-			cf.println("Commit workflow cancelled.")
-			return nil
-		}
-		return fmt.Errorf("failed to show action selection: %w", err)
-	}
-
-	// Execute selected action
-	selectedID := selected.Value().(string)
-	for _, action := range actions {
-		if action.ID == selectedID {
-			return action.Action(cf)
-		}
-	}
-
-	return fmt.Errorf("unknown action: %s", selectedID)
-}
-
 // buildCommitActions creates dynamic actions based on git status
 func (cf *CommitFlow) buildCommitActions(stagedFiles, unstagedFiles []string) []CommitAction {
 	var actions []CommitAction

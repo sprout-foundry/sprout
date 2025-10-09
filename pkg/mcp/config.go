@@ -87,18 +87,27 @@ func GetGitHubServerConfig() MCPServerConfig {
 	}
 }
 
-// GetGitHubServerConfigUvx returns a GitHub MCP server configuration using uvx
-func GetGitHubServerConfigUvx() MCPServerConfig {
+// GetPlaywrightServerConfig returns a default Playwright MCP server configuration
+func GetPlaywrightServerConfig() MCPServerConfig {
 	return MCPServerConfig{
-		Name:        "github-uvx",
-		Command:     "uvx",
-		Args:        []string{"mcp-server-github"},
+		Name:        "playwright",
+		Command:     "npx",
+		Args:        []string{"-y", "@playwright/mcp"},
 		AutoStart:   true,
 		MaxRestarts: 3,
-		Timeout:     30 * time.Second,
-		Env: map[string]string{
-			"GITHUB_PERSONAL_ACCESS_TOKEN": "", // User needs to set this
-		},
+		Timeout:     60 * time.Second, // Longer timeout for browser operations
+	}
+}
+
+// GetPlaywrightServerConfigUvx returns a Playwright MCP server configuration using uvx
+func GetPlaywrightServerConfigUvx() MCPServerConfig {
+	return MCPServerConfig{
+		Name:        "playwright-uvx",
+		Command:     "uvx",
+		Args:        []string{"playwright-mcp-server"},
+		AutoStart:   true,
+		MaxRestarts: 3,
+		Timeout:     60 * time.Second, // Longer timeout for browser operations
 	}
 }
 
@@ -155,7 +164,43 @@ func LoadMCPConfig() (MCPConfig, error) {
 		}
 	}
 
+	// Check for Playwright server auto-discovery
+	if mcpConfig.AutoDiscover {
+		// Check if npx is available and playwright packages might be installed
+		if _, exists := mcpConfig.Servers["playwright"]; !exists {
+			// Try to detect if playwright packages are available
+			if isPlaywrightAvailable() {
+				mcpConfig.Servers["playwright"] = GetPlaywrightServerConfig()
+				mcpConfig.Enabled = true
+			}
+		}
+	}
+
 	return mcpConfig, nil
+}
+
+// isPlaywrightAvailable checks if Playwright MCP packages are likely available
+func isPlaywrightAvailable() bool {
+	// Simple check: see if npx is available and can run playwright commands
+	// This is a basic detection - in practice we'd want more robust checks
+	if _, err := os.Stat("/usr/bin/npx"); err == nil {
+		return true
+	}
+	if _, err := os.Stat("/usr/local/bin/npx"); err == nil {
+		return true
+	}
+	
+	// Check PATH
+	if path := os.Getenv("PATH"); path != "" {
+		paths := filepath.SplitList(path)
+		for _, p := range paths {
+			if _, err := os.Stat(filepath.Join(p, "npx")); err == nil {
+				return true
+			}
+		}
+	}
+	
+	return false
 }
 
 // SaveMCPConfig saves MCP configuration to file

@@ -350,14 +350,14 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			ch.agent.messages[len(ch.agent.messages)-1].Content = cleanContent
 		}
 
-		// Append a concise system summary to mark this task as completed and
-		// provide guidance for future messages (treat future user instructions as higher priority)
-		summary := "Task completed. Summary: The assistant finished the requested work. Future user instructions or follow-ups should be treated as new actions and take precedence over prior completed tasks."
-		ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: summary})
+		// Apply completion context summarization to prevent contamination in follow-up questions
+		if ch.agent.completionSummarizer != nil && ch.agent.completionSummarizer.ShouldApplySummarization(ch.agent.messages) {
+			ch.agent.messages = ch.agent.completionSummarizer.ApplyCompletionSummarization(ch.agent.messages)
+	}
 
-		// Display final response
-		ch.displayFinalResponse(cleanContent)
-		return true // Stop - response explicitly indicates completion
+	// Display final response
+	ch.displayFinalResponse(cleanContent)
+	return true // Stop - response explicitly indicates completion
 	}
 
 	// Otherwise, decide whether this is a final (non-incomplete) response or we need more

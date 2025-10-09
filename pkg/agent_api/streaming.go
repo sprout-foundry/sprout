@@ -239,50 +239,87 @@ func NewSSEReader(r io.Reader, onEvent func(event, data string) error) *SSEReade
 
 // Read processes the SSE stream
 func (r *SSEReader) Read() error {
+	return r.ReadWithTimeout(0) // Default: no timeout
+}
+
+// ReadWithTimeout processes the SSE stream with a timeout
+func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 	var event string
 	var dataBuilder strings.Builder
 
+	// Set up timeout handling if specified
+	var timer *time.Timer
+	var timerChan <-chan time.Time
+	if timeout > 0 {
+		timer = time.NewTimer(timeout)
+		timerChan = timer.C
+		defer func() {
+			if timer != nil {
+				timer.Stop()
+			}
+		}()
+	}
+
 	for {
-		line, err := r.reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				// Process any remaining data
+		// Use a goroutine to read with timeout
+		readChan := make(chan struct {
+			line string
+			err  error
+		}, 1)
+
+		go func() {
+			line, err := r.reader.ReadString('\n')
+			readChan <- struct {
+				line string
+				err  error
+			}{line, err}
+		}()
+
+		select {
+		case result := <-readChan:
+			if result.err != nil {
+				if result.err == io.EOF {
+					// Process any remaining data
+					if dataBuilder.Len() > 0 && r.onEvent != nil {
+						if err := r.onEvent(event, dataBuilder.String()); err != nil {
+							return err
+						}
+					}
+					return nil
+				}
+				return result.err
+			}
+
+			line := strings.TrimSpace(result.line)
+
+			// Empty line signals end of event
+			if line == "" {
 				if dataBuilder.Len() > 0 && r.onEvent != nil {
 					if err := r.onEvent(event, dataBuilder.String()); err != nil {
 						return err
 					}
 				}
-				return nil
+				// Reset for next event
+				event = ""
+				dataBuilder.Reset()
+				continue
 			}
-			return err
-		}
 
-		line = strings.TrimSpace(line)
-
-		// Empty line signals end of event
-		if line == "" {
-			if dataBuilder.Len() > 0 && r.onEvent != nil {
-				if err := r.onEvent(event, dataBuilder.String()); err != nil {
-					return err
+			// Parse field
+			if strings.HasPrefix(line, "event:") {
+				event = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			} else if strings.HasPrefix(line, "data:") {
+				data := strings.TrimPrefix(line, "data:")
+				if dataBuilder.Len() > 0 {
+					dataBuilder.WriteString("\n")
 				}
+				dataBuilder.WriteString(strings.TrimSpace(data))
 			}
-			// Reset for next event
-			event = ""
-			dataBuilder.Reset()
-			continue
-		}
+			// Ignore other fields like id:, retry:
 
-		// Parse field
-		if strings.HasPrefix(line, "event:") {
-			event = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-		} else if strings.HasPrefix(line, "data:") {
-			data := strings.TrimPrefix(line, "data:")
-			if dataBuilder.Len() > 0 {
-				dataBuilder.WriteString("\n")
-			}
-			dataBuilder.WriteString(strings.TrimSpace(data))
+		case <-timerChan:
+			return fmt.Errorf("SSE stream timeout after %v", timeout)
 		}
-		// Ignore other fields like id:, retry:
 	}
 }
 

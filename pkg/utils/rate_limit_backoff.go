@@ -46,6 +46,20 @@ func (rlb *RateLimitBackoff) print(msg string) {
 	fmt.Print(msg)
 }
 
+func containsRateLimitPhrases(s string) bool {
+	s = strings.ToLower(s)
+	return strings.Contains(s, "rate limit") ||
+		strings.Contains(s, "requests per minute") ||
+		strings.Contains(s, "rpm exceeded") ||
+		strings.Contains(s, "rate exceeded") ||
+		strings.Contains(s, "quota exceeded") ||
+		strings.Contains(s, "too many requests") ||
+		strings.Contains(s, "insufficient_quota") ||
+		strings.Contains(s, "insufficient quota") ||
+		(strings.Contains(s, "quota") && strings.Contains(s, "exceeded")) ||
+		strings.Contains(s, "current quota")
+}
+
 // IsRateLimitError checks if an error or HTTP response indicates a rate limit
 func (rlb *RateLimitBackoff) IsRateLimitError(err error, resp *http.Response) bool {
 	// HTTP 429 is generally a reliable indicator
@@ -60,17 +74,14 @@ func (rlb *RateLimitBackoff) IsRateLimitError(err error, resp *http.Response) bo
 		if strings.Contains(errStr, "429") || strings.Contains(errStr, "http 429") || strings.Contains(errStr, "status 429") {
 			return true
 		}
+
+		// Treat any reference to HTTP 403 as potentially a rate limit (OpenAI specific)
+		if strings.Contains(errStr, "403") || strings.Contains(errStr, "http 403") || strings.Contains(errStr, "status 403") {
+			return containsRateLimitPhrases(errStr)
+		}
+
 		// Otherwise match common phrasing used by providers
-		return strings.Contains(errStr, "rate limit") ||
-			strings.Contains(errStr, "requests per minute") ||
-			strings.Contains(errStr, "rpm exceeded") ||
-			strings.Contains(errStr, "rate exceeded") ||
-			strings.Contains(errStr, "quota exceeded") ||
-			strings.Contains(errStr, "too many requests") ||
-			strings.Contains(errStr, "insufficient_quota") ||
-			strings.Contains(errStr, "insufficient quota") ||
-			(strings.Contains(errStr, "quota") && strings.Contains(errStr, "exceeded")) ||
-			strings.Contains(errStr, "current quota")
+		return containsRateLimitPhrases(errStr)
 	}
 
 	return false

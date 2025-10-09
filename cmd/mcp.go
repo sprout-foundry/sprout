@@ -105,8 +105,9 @@ func runMCPAdd() error {
 	fmt.Println("Select server type:")
 	fmt.Println("1. Git MCP Server (local Git operations)")
 	fmt.Println("2. GitHub MCP Server (GitHub API, issues, PRs)")
-	fmt.Println("3. Custom MCP Server")
-	fmt.Print("Choice (1-3): ")
+	fmt.Println("3. Playwright MCP Server (browser automation)")
+	fmt.Println("4. Custom MCP Server")
+	fmt.Print("Choice (1-4): ")
 
 	choice, err := reader.ReadString('\n')
 	if err != nil {
@@ -120,6 +121,8 @@ func runMCPAdd() error {
 	case "2":
 		return setupGitHubMCPServer(&mcpConfig, reader)
 	case "3":
+		return setupPlaywrightMCPServer(&mcpConfig, reader)
+	case "4":
 		return setupCustomMCPServer(&mcpConfig, reader)
 	default:
 		return fmt.Errorf("invalid choice: %s", choice)
@@ -339,6 +342,100 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	fmt.Println("• Issues and pull request automation")
 	fmt.Println("• GitHub Actions workflow monitoring")
 	fmt.Println("• Code analysis and security findings")
+
+	return nil
+}
+
+func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
+	fmt.Println()
+	fmt.Println("🎭 Playwright MCP Server Setup")
+	fmt.Println("=============================")
+	fmt.Println()
+
+	// Check if Playwright server already exists
+	if _, exists := mcpConfig.Servers["playwright"]; exists {
+		fmt.Print("Playwright MCP server is already configured. Reconfigure? (y/N): ")
+		confirm, _ := reader.ReadString('\n')
+		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
+			fmt.Println("Setup cancelled.")
+			return nil
+		}
+	}
+
+	// Installation method selection
+	fmt.Println("Select installation method:")
+	fmt.Println("1. Official Playwright MCP Server (recommended)")
+	fmt.Println("2. Automata Labs Playwright MCP Server")
+	fmt.Println("3. Execute Automation Playwright MCP Server")
+	fmt.Print("Choice (1-3): ")
+
+	installChoice, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read input: %w", err)
+	}
+	installChoice = strings.TrimSpace(installChoice)
+
+	var serverConfig mcp.MCPServerConfig
+
+	switch installChoice {
+	case "1", "":
+		// Official Playwright MCP Server
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "playwright",
+			Command:     "npx",
+			Args:        []string{"-y", "@playwright/mcp"},
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     60 * time.Second, // Longer timeout for browser operations
+		}
+	case "2":
+		// Automata Labs Playwright MCP Server
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "playwright",
+			Command:     "npx",
+			Args:        []string{"-y", "@automatalabs/mcp-server-playwright"},
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     60 * time.Second,
+		}
+	case "3":
+		// Execute Automation Playwright MCP Server
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "playwright",
+			Command:     "npx",
+			Args:        []string{"-y", "@executeautomation/playwright-mcp-server"},
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     60 * time.Second,
+		}
+	default:
+		return fmt.Errorf("invalid choice: %s", installChoice)
+	}
+
+	// Add server to config
+	mcpConfig.Servers["playwright"] = serverConfig
+	mcpConfig.Enabled = true
+
+	// Save config
+	if err := mcp.SaveMCPConfig(*mcpConfig); err != nil {
+		return fmt.Errorf("failed to save MCP config: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✅ Playwright MCP Server configured successfully!")
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Println()
+	fmt.Println("To test the configuration, run: ledit mcp test playwright")
+	fmt.Println()
+	fmt.Println("📦 Installation (if not already installed):")
+	fmt.Println("npx will install the package automatically")
+	fmt.Println()
+	fmt.Println("🎭 Features available:")
+	fmt.Println("• Browser automation (Chromium, Firefox, WebKit)")
+	fmt.Println("• Web scraping and data extraction")
+	fmt.Println("• UI testing and validation")
+	fmt.Println("• Screenshot capture and visual testing")
+	fmt.Println("• Form filling and navigation automation")
 
 	return nil
 }

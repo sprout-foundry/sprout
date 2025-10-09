@@ -72,12 +72,12 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 
 // ClearConversationHistory clears the conversation history
 func (a *Agent) ClearConversationHistory() {
-    // Keep messages empty; system prompt is added during prepareMessages
-    a.messages = []api.Message{}
-    a.currentIteration = 0
-    a.previousSummary = ""
-    a.baseContextInjected = false
-    a.debugLog("🧹 Conversation history cleared\n")
+	// Keep messages empty; system prompt is added during prepareMessages
+	a.messages = []api.Message{}
+	a.currentIteration = 0
+	a.previousSummary = ""
+	a.baseContextInjected = false
+	a.debugLog("🧹 Conversation history cleared\n")
 }
 
 // SetConversationOptimization enables or disables conversation optimization

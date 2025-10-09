@@ -68,8 +68,8 @@ func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientTy
 	case api.LMStudioClientType:
 		// Prefer chat models for LM Studio, skip embedding models
 		for _, model := range models {
-			if !strings.Contains(strings.ToLower(model.ID), "embedding") && 
-			   !strings.Contains(strings.ToLower(model.ID), "embed") {
+			if !strings.Contains(strings.ToLower(model.ID), "embedding") &&
+				!strings.Contains(strings.ToLower(model.ID), "embed") {
 				return model.ID
 			}
 		}

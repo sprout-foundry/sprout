@@ -95,15 +95,12 @@ func (c *OllamaTurboClient) SendChatRequest(messages []Message, tools []Tool, re
 
 // SendChatRequestStream sends a streaming chat request to Ollama Turbo
 func (c *OllamaTurboClient) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, callback StreamCallback) (*ChatResponse, error) {
-    req := ChatRequest{
-        Model:    c.model,
-        Messages: messages,
-        Tools:    tools,
-        Stream:   true,
-    }
-
-    // Do not set provider-level stop sequences; we want the marker included
-    // in the assistant content so the agent can detect it explicitly.
+	req := ChatRequest{
+		Model:    c.model,
+		Messages: messages,
+		Tools:    tools,
+		Stream:   true,
+	}
 
 	// if reasoning != "" {
 	// 	req.Reasoning = reasoning

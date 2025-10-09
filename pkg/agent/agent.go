@@ -49,7 +49,7 @@ type Agent struct {
 	mcpToolsCache         []api.Tool                     // Cached MCP tools to avoid reloading
 	circuitBreaker        *CircuitBreakerState           // Track repetitive actions
 	conversationPruner    *ConversationPruner            // Automatic conversation pruning
-	completionSummarizer *CompletionContextSummarizer   // Completion context summarization
+	completionSummarizer  *CompletionContextSummarizer   // Completion context summarization
 	toolCallGuidanceAdded bool                           // Prevent repeating tool call guidance
 
 	// Input injection handling
@@ -65,58 +65,58 @@ type Agent struct {
 	flushCallback       func()             // Callback to flush buffered output
 	asyncOutput         chan string        // Buffered channel for async PrintLine calls
 	asyncOutputOnce     sync.Once          // Ensure async worker initializes once
-    asyncBufferSize     int                // Optional override for async output buffer (tests)
+	asyncBufferSize     int                // Optional override for async output buffer (tests)
 
 	// Feature flags
 	falseStopDetectionEnabled bool
 	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
 
-    // UI integration
-    ui UI // UI provider for dropdowns, etc.
+	// UI integration
+	ui UI // UI provider for dropdowns, etc.
 
 	// Debug logging
 	debugLogFile  *os.File   // File handle for debug logs
 	debugLogPath  string     // Path to the debug log file
-    debugLogMutex sync.Mutex // Mutex for safe writes to debug log
+	debugLogMutex sync.Mutex // Mutex for safe writes to debug log
 
-    // Base context cache (session scoped)
-    baseContextJSON string
-    baseContextOnce sync.Once
-    baseContextInjected bool // ensure we inject base context at most once per session
+	// Base context cache (session scoped)
+	baseContextJSON     string
+	baseContextOnce     sync.Once
+	baseContextInjected bool // ensure we inject base context at most once per session
 }
 
 // Shutdown attempts to gracefully stop background work and child processes
 // (e.g., MCP servers), and releases resources. It is safe to call multiple times.
 func (a *Agent) Shutdown() {
-    if a == nil {
-        return
-    }
+	if a == nil {
+		return
+	}
 
-    // Stop MCP servers (best-effort)
-    if a.mcpManager != nil {
-        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-        _ = a.mcpManager.StopAll(ctx)
-        cancel()
-    }
+	// Stop MCP servers (best-effort)
+	if a.mcpManager != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = a.mcpManager.StopAll(ctx)
+		cancel()
+	}
 
-    // Disable ESC monitoring and cancel interrupt context
-    a.DisableEscMonitoring()
-    if a.interruptCancel != nil {
-        a.interruptCancel()
-    }
+	// Disable ESC monitoring and cancel interrupt context
+	a.DisableEscMonitoring()
+	if a.interruptCancel != nil {
+		a.interruptCancel()
+	}
 
-    // Close async output worker
-    if a.asyncOutput != nil {
-        // Close channel to stop background worker started in ensureAsyncOutputWorker
-        close(a.asyncOutput)
-        a.asyncOutput = nil
-    }
+	// Close async output worker
+	if a.asyncOutput != nil {
+		// Close channel to stop background worker started in ensureAsyncOutputWorker
+		close(a.asyncOutput)
+		a.asyncOutput = nil
+	}
 
-    // Close debug log file
-    if a.debugLogFile != nil {
-        _ = a.debugLogFile.Close()
-        a.debugLogFile = nil
-    }
+	// Close debug log file
+	if a.debugLogFile != nil {
+		_ = a.debugLogFile.Close()
+		a.debugLogFile = nil
+	}
 }
 
 // NewAgent creates a new agent with auto-detected provider
@@ -468,11 +468,11 @@ func (a *Agent) monitorEscKey(ctx context.Context) {
 	// Use non-blocking read with timeout instead of manipulating terminal state
 	// This avoids conflicts with the console app's terminal management
 	buf := make([]byte, 1)
-	
+
 	// Add a safety timeout to prevent infinite loops
 	safetyTimeout := time.NewTimer(30 * time.Second)
 	defer safetyTimeout.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():

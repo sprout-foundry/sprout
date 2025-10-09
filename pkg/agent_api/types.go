@@ -66,13 +66,13 @@ type Tool struct {
 }
 
 type ChatRequest struct {
-    Model      string    `json:"model"`
-    Messages   []Message `json:"messages"`
-    Tools      []Tool    `json:"tools,omitempty"`
-    ToolChoice string    `json:"tool_choice,omitempty"`
-    MaxTokens  int       `json:"max_tokens,omitempty"`
-    Reasoning  string    `json:"reasoning,omitempty"`
-    Stream     bool      `json:"stream,omitempty"`
+	Model      string    `json:"model"`
+	Messages   []Message `json:"messages"`
+	Tools      []Tool    `json:"tools,omitempty"`
+	ToolChoice string    `json:"tool_choice,omitempty"`
+	MaxTokens  int       `json:"max_tokens,omitempty"`
+	Reasoning  string    `json:"reasoning,omitempty"`
+	Stream     bool      `json:"stream,omitempty"`
 }
 
 // ProviderInterface defines the interface that all providers must implement

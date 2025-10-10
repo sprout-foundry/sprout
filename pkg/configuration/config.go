@@ -119,24 +119,26 @@ func (a *APIKeys) Set(provider, key string) {
 
 // NewConfig creates a new configuration with sensible defaults
 func NewConfig() *Config {
-	return &Config{
-		Version:          ConfigVersion,
-		LastUsedProvider: "",
-		ProviderModels: map[string]string{
-			"openai":       "gpt-5-mini",
-			"deepinfra":    "deepseek-ai/DeepSeek-V3.1-Terminus",
-			"openrouter":   "openai/gpt-5",
-			"ollama-local": "qwen3-coder:30b",
-			"ollama-turbo": "deepseek-v3.1:671b",
-		},
-		ProviderPriority: []string{
-			"openai",
-			"openrouter",
-			"deepinfra",
-			"ollama-turbo",
+    return &Config{
+        Version:          ConfigVersion,
+        LastUsedProvider: "",
+        ProviderModels: map[string]string{
+            "openai":       "gpt-5-mini",
+            "zai":          "GLM-4.6",
+            "deepinfra":    "deepseek-ai/DeepSeek-V3.1-Terminus",
+            "openrouter":   "openai/gpt-5",
+            "ollama-local": "qwen3-coder:30b",
+            "ollama-turbo": "deepseek-v3.1:671b",
+        },
+        ProviderPriority: []string{
+            "openai",
+            "zai",
+            "openrouter",
+            "deepinfra",
+            "ollama-turbo",
 
-			"ollama-local",
-		},
+            "ollama-local",
+        },
 		MCP:                   mcp.DefaultMCPConfig(),
 		Preferences:           make(map[string]interface{}),
 		FileBatchSize:         10,

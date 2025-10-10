@@ -92,14 +92,24 @@ func (ac *APIClient) setTimeoutsFromConfig() {
 
 	// Provider-specific adjustments
 	if ac.agent != nil && strings.EqualFold(ac.agent.GetProvider(), "lmstudio") {
-		// Give LM Studio a more generous window to deliver the first chunk
-		if ac.firstChunkTimeout < 180*time.Second {
-			ac.firstChunkTimeout = 180 * time.Second
-		}
-		// Some local models may stream slowly; extend chunk timeout modestly
-		if ac.chunkTimeout < 120*time.Second {
-			ac.chunkTimeout = 120 * time.Second
-		}
+		// LM Studio: 5 minute timeout for all operations
+		ac.connectionTimeout = 300 * time.Second
+		ac.firstChunkTimeout = 300 * time.Second
+		ac.chunkTimeout = 300 * time.Second
+	}
+
+	if ac.agent != nil && strings.EqualFold(ac.agent.GetProvider(), "ollama") {
+		// Ollama: 5 minute timeout for all operations
+		ac.connectionTimeout = 300 * time.Second
+		ac.firstChunkTimeout = 300 * time.Second
+		ac.chunkTimeout = 300 * time.Second
+	}
+
+	if ac.agent != nil && strings.EqualFold(ac.agent.GetProvider(), "openai") {
+		// OpenAI: 3 minute timeout for all operations
+		ac.connectionTimeout = 180 * time.Second
+		ac.firstChunkTimeout = 180 * time.Second
+		ac.chunkTimeout = 180 * time.Second
 	}
 
 	if ac.agent.debug {

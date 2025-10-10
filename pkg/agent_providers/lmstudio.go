@@ -37,14 +37,14 @@ func NewLMStudioProvider() (*LMStudioProvider, error) {
 		baseURL = "http://127.0.0.1:1234/v1"
 	}
 
-	timeout := 320 * time.Second
+	timeout := 300 * time.Second
 
 	return &LMStudioProvider{
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
 		streamingClient: &http.Client{
-			Timeout: 900 * time.Second, // 15 minutes for streaming requests
+			Timeout: 300 * time.Second, // 5 minutes for streaming requests
 		},
 		apiToken: "", // LM Studio typically doesn't require authentication
 		debug:    false,

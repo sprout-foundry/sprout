@@ -262,15 +262,17 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Set debug mode on the client
 	client.SetDebug(debug)
 
-	// Check connection (allow tests to skip by setting LEDIT_SKIP_CONNECTION_CHECK)
-	// Historically this was only skipped in CI, but for unit tests we allow explicit opt-out.
-	skipConnectionCheck := os.Getenv("LEDIT_SKIP_CONNECTION_CHECK") != ""
+    // Check connection (allow tests to skip by setting LEDIT_SKIP_CONNECTION_CHECK)
+    // Also skip for providers where a fast/reliable connectivity probe is not available (e.g., Z.AI Coding Plan).
+    skipConnectionCheck := os.Getenv("LEDIT_SKIP_CONNECTION_CHECK") != "" || clientType == api.ZAIClientType
 
-	if !skipConnectionCheck {
-		if err := client.CheckConnection(); err != nil {
-			return nil, fmt.Errorf("client connection check failed: %w", err)
-		}
-	}
+    if !skipConnectionCheck {
+        if err := client.CheckConnection(); err != nil {
+            return nil, fmt.Errorf("client connection check failed: %w", err)
+        }
+    } else if debug {
+        fmt.Printf("⚠️  Skipping provider connection check for %s\n", api.GetProviderName(clientType))
+    }
 
 	// Use embedded system prompt
 	systemPrompt := getEmbeddedSystemPrompt()

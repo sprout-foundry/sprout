@@ -31,15 +31,16 @@ type ClientInterface interface {
 type ClientType string
 
 const (
-	DeepInfraClientType   ClientType = "deepinfra"
-	DeepSeekClientType    ClientType = "deepseek"
-	LMStudioClientType    ClientType = "lmstudio"
-	OllamaClientType      ClientType = "ollama" // Maps to local ollama
-	OllamaLocalClientType ClientType = "ollama-local"
-	OllamaTurboClientType ClientType = "ollama-turbo"
-	OpenRouterClientType  ClientType = "openrouter"
-	OpenAIClientType      ClientType = "openai"
-	TestClientType        ClientType = "test" // Mock provider for CI/testing
+    DeepInfraClientType   ClientType = "deepinfra"
+    DeepSeekClientType    ClientType = "deepseek"
+    LMStudioClientType    ClientType = "lmstudio"
+    OllamaClientType      ClientType = "ollama" // Maps to local ollama
+    OllamaLocalClientType ClientType = "ollama-local"
+    OllamaTurboClientType ClientType = "ollama-turbo"
+    OpenRouterClientType  ClientType = "openrouter"
+    OpenAIClientType      ClientType = "openai"
+    ZAIClientType         ClientType = "zai" // Z.AI Coding Plan (OpenAI-compatible)
+    TestClientType        ClientType = "test" // Mock provider for CI/testing
 )
 
 // NewUnifiedClient creates a client with default model for the provider
@@ -113,14 +114,15 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 	}
 
 	// 4. First available provider based on API keys
-	priorityOrder := []ClientType{
-		OpenAIClientType,
-		OpenRouterClientType,
-		DeepInfraClientType,
-		OllamaTurboClientType,
-		LMStudioClientType,
-		OllamaLocalClientType,
-	}
+    priorityOrder := []ClientType{
+        OpenAIClientType,
+        OpenRouterClientType,
+        ZAIClientType,
+        DeepInfraClientType,
+        OllamaTurboClientType,
+        LMStudioClientType,
+        OllamaLocalClientType,
+    }
 
 	for _, provider := range priorityOrder {
 		if IsProviderAvailable(provider) {
@@ -134,14 +136,16 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 
 // ParseProviderName converts a string provider name to ClientType
 func ParseProviderName(name string) (ClientType, error) {
-	normalized := strings.ToLower(strings.TrimSpace(name))
-	switch normalized {
-	case "openai":
-		return OpenAIClientType, nil
-	case "openrouter":
-		return OpenRouterClientType, nil
-	case "deepinfra":
-		return DeepInfraClientType, nil
+    normalized := strings.ToLower(strings.TrimSpace(name))
+    switch normalized {
+    case "openai":
+        return OpenAIClientType, nil
+    case "zai", "zai-coding", "z.ai":
+        return ZAIClientType, nil
+    case "openrouter":
+        return OpenRouterClientType, nil
+    case "deepinfra":
+        return DeepInfraClientType, nil
 	case "ollama":
 		// "ollama" maps to local
 		return OllamaLocalClientType, nil
@@ -160,39 +164,42 @@ func ParseProviderName(name string) (ClientType, error) {
 
 // IsProviderAvailable checks if a provider can be used
 func IsProviderAvailable(provider ClientType) bool {
-	switch provider {
-	case OllamaClientType, OllamaLocalClientType:
-		// Ollama local is always available (we'll check actual model availability later)
-		return true
-	case TestClientType:
-		// Test provider is always available for CI/testing
-		return true
-	case LMStudioClientType:
-		// LM Studio is a local provider and doesn't require API key
-		return true
-	case OllamaTurboClientType:
-		return os.Getenv("OLLAMA_API_KEY") != ""
-	case OpenAIClientType:
-		return os.Getenv("OPENAI_API_KEY") != ""
-	case OpenRouterClientType:
-		return os.Getenv("OPENROUTER_API_KEY") != ""
-	case DeepInfraClientType:
-		return os.Getenv("DEEPINFRA_API_KEY") != ""
-	default:
-		return false
-	}
+    switch provider {
+    case OllamaClientType, OllamaLocalClientType:
+        // Ollama local is always available (we'll check actual model availability later)
+        return true
+    case TestClientType:
+        // Test provider is always available for CI/testing
+        return true
+    case LMStudioClientType:
+        // LM Studio is a local provider and doesn't require API key
+        return true
+    case OllamaTurboClientType:
+        return os.Getenv("OLLAMA_API_KEY") != ""
+    case OpenAIClientType:
+        return os.Getenv("OPENAI_API_KEY") != ""
+    case ZAIClientType:
+        return os.Getenv("ZAI_API_KEY") != ""
+    case OpenRouterClientType:
+        return os.Getenv("OPENROUTER_API_KEY") != ""
+    case DeepInfraClientType:
+        return os.Getenv("DEEPINFRA_API_KEY") != ""
+    default:
+        return false
+    }
 }
 
 // GetAvailableProviders returns a list of all available providers
 func GetAvailableProviders() []ClientType {
-	providers := []ClientType{
-		OpenAIClientType,
-		DeepInfraClientType,
-		OllamaLocalClientType,
-		OllamaTurboClientType,
-		OpenRouterClientType,
-		LMStudioClientType,
-	}
+    providers := []ClientType{
+        OpenAIClientType,
+        ZAIClientType,
+        DeepInfraClientType,
+        OllamaLocalClientType,
+        OllamaTurboClientType,
+        OpenRouterClientType,
+        LMStudioClientType,
+    }
 
 	available := make([]ClientType, 0, len(providers))
 	for _, provider := range providers {
@@ -205,22 +212,24 @@ func GetAvailableProviders() []ClientType {
 
 // GetProviderName returns the human-readable name for a provider
 func GetProviderName(clientType ClientType) string {
-	switch clientType {
-	case OpenAIClientType:
-		return "OpenAI"
-	case DeepInfraClientType:
-		return "DeepInfra"
-	case OllamaClientType, OllamaLocalClientType:
-		return "Ollama (Local)"
-	case OllamaTurboClientType:
-		return "Ollama Turbo"
-	case OpenRouterClientType:
-		return "OpenRouter"
-	case LMStudioClientType:
-		return "LM Studio"
-	default:
-		return string(clientType)
-	}
+    switch clientType {
+    case OpenAIClientType:
+        return "OpenAI"
+    case ZAIClientType:
+        return "Z.AI Coding Plan"
+    case DeepInfraClientType:
+        return "DeepInfra"
+    case OllamaClientType, OllamaLocalClientType:
+        return "Ollama (Local)"
+    case OllamaTurboClientType:
+        return "Ollama Turbo"
+    case OpenRouterClientType:
+        return "OpenRouter"
+    case LMStudioClientType:
+        return "LM Studio"
+    default:
+        return string(clientType)
+    }
 }
 
 // DeepInfraClientWrapper is deprecated - use providers.NewDeepInfraProviderWithModel directly

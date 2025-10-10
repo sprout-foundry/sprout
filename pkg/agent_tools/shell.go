@@ -94,17 +94,30 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 
 	// Wait for the command to finish
 	err = cmd.Wait()
+	
+	// Get the exit code for status reporting
+	exitCode := 0
 	if err != nil {
 		// Check if it's an exit error (command ran but failed)
 		if exitError, ok := err.(*exec.ExitError); ok {
 			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
-				return output.String(), fmt.Errorf("command failed with exit code %d: %s", status.ExitStatus(), output.String())
+				exitCode = status.ExitStatus()
 			}
 		}
-		return output.String(), fmt.Errorf("command failed: %w", err)
+	}
+	
+	// Build the final output with status header
+	finalOutput := buildShellOutputWithStatus(output.String(), command, exitCode, err)
+	
+	if err != nil {
+		// Return the enhanced output with error information
+		if exitCode != 0 {
+			return finalOutput, fmt.Errorf("command failed with exit code %d", exitCode)
+		}
+		return finalOutput, fmt.Errorf("command failed: %w", err)
 	}
 
-	return output.String(), nil
+	return finalOutput, nil
 }
 
 // trackFileDeletion records file deletion commands in the changelog
@@ -112,4 +125,34 @@ func trackFileDeletion(command string, sessionID string) {
 	// TODO: Implement file deletion tracking in changelog
 	// This will need to integrate with the existing changelog system
 	fmt.Printf("📝 Tracking file deletion: %s (session: %s)\n", command, sessionID)
+}
+
+// buildShellOutputWithStatus enhances shell output with status information
+func buildShellOutputWithStatus(output, command string, exitCode int, err error) string {
+	// If there's substantial output or an error, just return the output as-is
+	// This preserves the original behavior for most cases
+	if strings.TrimSpace(output) != "" || err != nil {
+		return output
+	}
+	
+	// For successful commands with no output, add a status header
+	var status string
+	var icon string
+	if exitCode == 0 {
+		status = "SUCCESS"
+		icon = "✅"
+	} else {
+		status = "FAILED"
+		icon = "❌"
+	}
+	
+	// Build status header
+	header := fmt.Sprintf("%s Command completed with exit code %d (%s)\n", icon, exitCode, status)
+	
+	// If there was any output (even whitespace), include it after the header
+	if strings.TrimSpace(output) == "" {
+		return header + "(no output)"
+	}
+	
+	return header + output
 }

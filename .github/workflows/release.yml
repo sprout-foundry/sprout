@@ -23,6 +23,16 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Install Python dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        if [ -f "requirements.txt" ]; then
+          pip install -r requirements.txt
+        else
+          # Install basic dependencies for integration tests
+          pip install requests pytest
+        fi
+
     - name: Install dependencies
       run: go mod download
 
@@ -45,6 +55,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Fetch full history for changelog generation
 
     - name: Set up Go
       uses: actions/setup-go@v5

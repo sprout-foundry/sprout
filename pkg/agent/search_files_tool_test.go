@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -125,5 +126,56 @@ func TestSearchFiles_ExcludeDotLedit(t *testing.T) {
 	}
 	if !strings.Contains(out, "visible.txt") {
 		t.Fatalf("expected visible.txt to appear, got: %s", out)
+	}
+}
+
+func TestSearchFiles_DefaultMaxResultsAndLineTruncation(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < defaultSearchMaxResults+10; i++ {
+		writeTestFile(t, root, filepath.Join("dir", fmt.Sprintf("file-%d.txt", i)), strings.Repeat("A", 600)+" needle match")
+	}
+
+	reg := GetToolRegistry()
+	ctx := context.Background()
+	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	out, err := reg.ExecuteTool(ctx, "search_files", map[string]interface{}{
+		"pattern":   "needle",
+		"directory": root,
+	}, agent)
+	if err != nil {
+		t.Fatalf("search_files error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) > defaultSearchMaxResults {
+		t.Fatalf("expected at most %d results, got %d", defaultSearchMaxResults, len(lines))
+	}
+
+	if !strings.Contains(out, "...") {
+		t.Fatalf("expected long lines to be truncated with ellipsis, got: %s", out)
+	}
+}
+
+func TestSearchFiles_MaxBytesLimit(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "one.txt", "needle one\n")
+	writeTestFile(t, root, "two.txt", "needle two\n")
+	writeTestFile(t, root, "three.txt", "needle three\n")
+
+	reg := GetToolRegistry()
+	ctx := context.Background()
+	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
+	out, err := reg.ExecuteTool(ctx, "search_files", map[string]interface{}{
+		"pattern":   "needle",
+		"directory": root,
+		"max_bytes": 40,
+	}, agent)
+	if err != nil {
+		t.Fatalf("search_files error: %v", err)
+	}
+
+	lineCount := strings.Count(strings.TrimSpace(out), "\n") + 1
+	if lineCount > 2 { // should stop early due to byte cap
+		t.Fatalf("expected byte cap to limit results, got %d lines: %s", lineCount, out)
 	}
 }

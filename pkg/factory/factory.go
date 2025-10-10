@@ -337,16 +337,23 @@ func (w *LMStudioClientWrapper) ResetTPSStats() {
 
 // CreateProviderClient is a factory function that creates providers
 func CreateProviderClient(clientType api.ClientType, model string) (api.ClientInterface, error) {
-	switch clientType {
-	case api.OpenAIClientType:
-		return api.NewOpenAIClientWrapper(model)
-	case api.DeepInfraClientType:
-		// Use the real DeepInfra provider wrapped to implement ClientInterface
-		provider, err := providers.NewDeepInfraProviderWithModel(model)
-		if err != nil {
-			return nil, err
-		}
-		return &DeepInfraClientWrapper{provider: provider}, nil
+    switch clientType {
+    case api.OpenAIClientType:
+        return api.NewOpenAIClientWrapper(model)
+    case api.ZAIClientType:
+        // Use the Z.AI provider wrapped to implement ClientInterface
+        provider, err := providers.NewZAIProviderWithModel(model)
+        if err != nil {
+            return nil, err
+        }
+        return &ZAIClientWrapper{provider: provider}, nil
+    case api.DeepInfraClientType:
+        // Use the real DeepInfra provider wrapped to implement ClientInterface
+        provider, err := providers.NewDeepInfraProviderWithModel(model)
+        if err != nil {
+            return nil, err
+        }
+        return &DeepInfraClientWrapper{provider: provider}, nil
 	case api.OllamaClientType, api.OllamaLocalClientType:
 		return api.NewOllamaLocalClient(model)
 	case api.OllamaTurboClientType:
@@ -372,7 +379,40 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 			testClient.SetModel(model)
 		}
 		return testClient, nil
-	default:
-		return nil, fmt.Errorf("unknown client type: %s", clientType)
-	}
+    default:
+        return nil, fmt.Errorf("unknown client type: %s", clientType)
+    }
 }
+
+// ZAIClientWrapper wraps ZAIProvider to implement the full ClientInterface
+type ZAIClientWrapper struct {
+    provider *providers.ZAIProvider
+}
+
+// Delegate methods
+func (w *ZAIClientWrapper) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+    return w.provider.SendChatRequest(messages, tools, reasoning)
+}
+
+func (w *ZAIClientWrapper) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
+    return w.provider.SendChatRequestStream(messages, tools, reasoning, callback)
+}
+
+func (w *ZAIClientWrapper) CheckConnection() error                         { return w.provider.CheckConnection() }
+func (w *ZAIClientWrapper) SetDebug(debug bool)                             { w.provider.SetDebug(debug) }
+func (w *ZAIClientWrapper) SetModel(model string) error                     { return w.provider.SetModel(model) }
+func (w *ZAIClientWrapper) GetModel() string                                { return w.provider.GetModel() }
+func (w *ZAIClientWrapper) GetProvider() string                             { return w.provider.GetProvider() }
+func (w *ZAIClientWrapper) GetModelContextLimit() (int, error)              { return w.provider.GetModelContextLimit() }
+func (w *ZAIClientWrapper) SupportsVision() bool                            { return w.provider.SupportsVision() }
+func (w *ZAIClientWrapper) GetVisionModel() string                          { return w.provider.GetVisionModel() }
+func (w *ZAIClientWrapper) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+    return w.provider.SendVisionRequest(messages, tools, reasoning)
+}
+func (w *ZAIClientWrapper) ListModels() ([]api.ModelInfo, error)            { return w.provider.ListModels() }
+
+// TPS methods not tracked by provider
+func (w *ZAIClientWrapper) GetLastTPS() float64        { return 0.0 }
+func (w *ZAIClientWrapper) GetAverageTPS() float64     { return 0.0 }
+func (w *ZAIClientWrapper) GetTPSStats() map[string]float64 { return map[string]float64{} }
+func (w *ZAIClientWrapper) ResetTPSStats()             {}

@@ -2,11 +2,13 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -171,7 +173,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
 			{"file_pattern", "string", false, []string{"glob"}, "Glob to limit files (e.g., *.go)"},
 			{"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
-			{"max_results", "int", false, []string{}, "Maximum results to return (default: 200)"},
+			{"max_results", "int", false, []string{}, "Maximum results to return (default: 50)"},
+			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 20480)"},
 		},
 		Handler: handleSearchFiles,
 	})
@@ -205,7 +208,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
 			{"file_pattern", "string", false, []string{"glob"}, "Glob to limit files (e.g., *.go)"},
 			{"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
-			{"max_results", "int", false, []string{}, "Maximum results to return (default: 200)"},
+			{"max_results", "int", false, []string{}, "Maximum results to return (default: 50)"},
+			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 20480)"},
 		},
 		Handler: handleSearchFiles,
 	})
@@ -217,7 +221,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
 			{"file_pattern", "string", false, []string{"glob"}, "Glob to limit files (e.g., *.go)"},
 			{"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
-			{"max_results", "int", false, []string{}, "Maximum results to return (default: 200)"},
+			{"max_results", "int", false, []string{}, "Maximum results to return (default: 50)"},
+			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 20480)"},
 		},
 		Handler: handleSearchFiles,
 	})
@@ -622,6 +627,75 @@ func handleValidateBuild(ctx context.Context, a *Agent, args map[string]interfac
 }
 
 // handleSearchFiles implements a cross-platform content search with sensible defaults and ignores
+const (
+	defaultSearchMaxResults = 50
+	defaultSearchMaxBytes   = 20 * 1024
+	defaultSearchLineLength = 240
+)
+
+func normalizePositiveInt(value any) int {
+	const maxInt = int(^uint(0) >> 1)
+	switch v := value.(type) {
+	case int:
+		if v > 0 {
+			return v
+		}
+	case int8:
+		if v > 0 {
+			return int(v)
+		}
+	case int16:
+		if v > 0 {
+			return int(v)
+		}
+	case int32:
+		if v > 0 {
+			return int(v)
+		}
+	case int64:
+		if v > 0 && v <= int64(maxInt) {
+			return int(v)
+		}
+	case uint:
+		if v64 := uint64(v); v64 > 0 && v64 <= uint64(maxInt) {
+			return int(v)
+		}
+	case uint8:
+		if v > 0 {
+			return int(v)
+		}
+	case uint16:
+		if v > 0 {
+			return int(v)
+		}
+	case uint32:
+		if v64 := uint64(v); v64 > 0 && v64 <= uint64(maxInt) {
+			return int(v)
+		}
+	case uint64:
+		if v > 0 && v <= uint64(maxInt) {
+			return int(v)
+		}
+	case float32:
+		if v > 0 {
+			return int(v)
+		}
+	case float64:
+		if v > 0 {
+			return int(v)
+		}
+	case json.Number:
+		if i, err := v.Int64(); err == nil {
+			return normalizePositiveInt(i)
+		}
+	case string:
+		if i, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			return normalizePositiveInt(i)
+		}
+	}
+	return 0
+}
+
 func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	pattern := args["pattern"].(string)
 
@@ -640,9 +714,18 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 		caseSensitive = v
 	}
 
-	maxResults := 200
-	if v, ok := args["max_results"].(int); ok && v > 0 {
-		maxResults = v
+	maxResults := defaultSearchMaxResults
+	if v, ok := args["max_results"]; ok {
+		if normalized := normalizePositiveInt(v); normalized > 0 {
+			maxResults = normalized
+		}
+	}
+
+	maxBytes := defaultSearchMaxBytes
+	if v, ok := args["max_bytes"]; ok {
+		if normalized := normalizePositiveInt(v); normalized > 0 {
+			maxBytes = normalized
+		}
 	}
 
 	// Log the search action so users can see that the tool actually executed
@@ -672,11 +755,15 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 
 	matched := 0
 	var b strings.Builder
+	searchCapped := false
 
 	// Limit per-file read to avoid huge files (in bytes)
 	const maxFileSize = 2 * 1024 * 1024 // 2MB
 
 	walkErr := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if searchCapped {
+			return io.EOF
+		}
 		if err != nil {
 			return nil // skip on error
 		}
@@ -733,7 +820,8 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 				return nil
 			}
 			// search within this chunk by lines
-			if searchBufferLines(&b, path, string(buf), re, pattern, caseSensitive, useRegex, &matched, maxResults) {
+			if searchBufferLines(&b, path, string(buf), re, pattern, caseSensitive, useRegex, &matched, maxResults, maxBytes) {
+				searchCapped = true
 				return io.EOF // stop walking by returning non-nil? better: track and stop later
 			}
 			return nil
@@ -747,7 +835,8 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 		if bytesIndexByte(content, 0) >= 0 {
 			return nil
 		}
-		if searchBufferLines(&b, path, string(content), re, pattern, caseSensitive, useRegex, &matched, maxResults) {
+		if searchBufferLines(&b, path, string(content), re, pattern, caseSensitive, useRegex, &matched, maxResults, maxBytes) {
+			searchCapped = true
 			return io.EOF
 		}
 		return nil
@@ -951,11 +1040,14 @@ func bytesIndexByte(b []byte, c byte) int {
 }
 
 // searchBufferLines scans lines of content and appends matches; returns true if max reached
-func searchBufferLines(b *strings.Builder, path, content string, re *regexp.Regexp, pattern string, caseSensitive, useRegex bool, matched *int, max int) bool {
+func searchBufferLines(b *strings.Builder, path, content string, re *regexp.Regexp, pattern string, caseSensitive, useRegex bool, matched *int, max int, maxBytes int) bool {
 	// Normalize to forward slashes for readability
 	norm := filepath.ToSlash(path)
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
+		if maxBytes > 0 && b.Len() >= maxBytes {
+			return true
+		}
 		if *matched >= max {
 			return true
 		}
@@ -970,9 +1062,16 @@ func searchBufferLines(b *strings.Builder, path, content string, re *regexp.Rege
 			}
 		}
 		if ok {
+			lineOut := line
+			if defaultSearchLineLength > 0 && len(lineOut) > defaultSearchLineLength {
+				lineOut = truncateString(lineOut, defaultSearchLineLength)
+			}
 			// Format similar to grep: path:line:content
-			fmt.Fprintf(b, "%s:%d:%s\n", norm, i+1, line)
+			fmt.Fprintf(b, "%s:%d:%s\n", norm, i+1, lineOut)
 			*matched++
+			if maxBytes > 0 && b.Len() >= maxBytes {
+				return true
+			}
 		}
 	}
 	return false

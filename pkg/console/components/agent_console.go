@@ -1555,7 +1555,7 @@ func (ac *AgentConsole) isShellCommand(input string) bool {
 // executeShellCommand executes a shell command and returns the output
 func (ac *AgentConsole) executeShellCommand(command string) error {
 	// Use the tools package to execute shell commands, this will execute them safely, which makes more sense for direct execution when we only have a guess on user intent
-	ac.safePrint("\033[34m[shell]\033[0m Executing this thing: %s\n", command)
+	ac.safePrint("\033[34m[shell]\033[0m Executing: %s\n", command)
 	output, err := tools.ExecuteShellCommand(context.Background(), command)
 	if err != nil {
 		ac.safePrint("Error: %v\n", err)

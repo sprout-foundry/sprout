@@ -119,7 +119,7 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 		// Process content delta
 		if choice.Delta.Content != "" {
 			b.content.WriteString(choice.Delta.Content)
-			// Call stream callback for UI updates
+			// Call stream callback for UI updates and timeout reset
 			if b.streamCallback != nil {
 				b.streamCallback(choice.Delta.Content)
 			}
@@ -128,6 +128,11 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 		// Process reasoning content delta
 		if choice.Delta.ReasoningContent != "" {
 			b.reasoningContent.WriteString(choice.Delta.ReasoningContent)
+			// Call stream callback for timeout reset (even if content is empty)
+			// This ensures timeout is properly reset when receiving reasoning tokens
+			if b.streamCallback != nil {
+				b.streamCallback("") // Empty content to trigger timeout reset
+			}
 		}
 
 		// Process tool calls

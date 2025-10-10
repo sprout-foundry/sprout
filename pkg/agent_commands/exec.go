@@ -28,15 +28,20 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	command := strings.Join(args, " ")
 
-	// Execute the shell command
+	// Execute the shell command using the same pattern as direct shell execution
+	fmt.Printf("\033[34m[shell]\033[0m Executing: %s\n", command)
 	result, err := tools.ExecuteShellCommand(context.Background(), command)
 	if err != nil {
-		return fmt.Errorf("command failed: %v\nOutput: %s", err, result)
+		fmt.Printf("Error: %v\n", err)
+		return nil
 	}
 
-	fmt.Printf("✅ Command executed successfully:\n")
-	fmt.Printf("Command: %s\n", command)
-	fmt.Printf("Output:\n%s\n", result)
+	fmt.Printf("----------------------------\n")
+	fmt.Print(result)
+	if !strings.HasSuffix(result, "\n") {
+		fmt.Print("\n")
+	}
+	fmt.Printf("----------------------------\n")
 
 	return nil
 }

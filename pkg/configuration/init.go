@@ -313,16 +313,17 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 
 // GetAvailableProviders returns all supported providers
 func GetAvailableProviders(apiKeys *APIKeys) []string {
-	// Return all supported providers, regardless of API key status
-	// The selection process will handle prompting for API keys
-	return []string{
-		"openai",
-		"openrouter",
-		"deepinfra",
-		"ollama-local",
-		"ollama-turbo",
-		"lmstudio",
-	}
+    // Return all supported providers, regardless of API key status
+    // The selection process will handle prompting for API keys
+    return []string{
+        "openai",
+        "zai",
+        "openrouter",
+        "deepinfra",
+        "ollama-local",
+        "ollama-turbo",
+        "lmstudio",
+    }
 }
 
 // SelectProvider allows user to select a provider interactively

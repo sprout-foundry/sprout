@@ -147,13 +147,15 @@ func (m *Manager) AddMCPServer(name string, server mcp.MCPServerConfig) error {
 
 // mapClientTypeToString converts ClientType to string
 func mapClientTypeToString(ct api.ClientType) string {
-	switch ct {
-	case api.OpenAIClientType:
-		return "openai"
-	case api.DeepInfraClientType:
-		return "deepinfra"
-	case api.OpenRouterClientType:
-		return "openrouter"
+    switch ct {
+    case api.OpenAIClientType:
+        return "openai"
+    case api.ZAIClientType:
+        return "zai"
+    case api.DeepInfraClientType:
+        return "deepinfra"
+    case api.OpenRouterClientType:
+        return "openrouter"
 	case api.OllamaClientType:
 		return "ollama"
 	case api.OllamaLocalClientType:
@@ -170,13 +172,15 @@ func mapClientTypeToString(ct api.ClientType) string {
 
 // mapStringToClientType converts string to ClientType
 func mapStringToClientType(s string) (api.ClientType, error) {
-	switch s {
-	case "openai":
-		return api.OpenAIClientType, nil
-	case "deepinfra":
-		return api.DeepInfraClientType, nil
-	case "openrouter":
-		return api.OpenRouterClientType, nil
+    switch s {
+    case "openai":
+        return api.OpenAIClientType, nil
+    case "zai":
+        return api.ZAIClientType, nil
+    case "deepinfra":
+        return api.DeepInfraClientType, nil
+    case "openrouter":
+        return api.OpenRouterClientType, nil
 	case "ollama":
 		return api.OllamaClientType, nil
 	case "ollama-local":

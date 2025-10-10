@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 // OpenAIProvider implements the Provider interface for OpenAI
@@ -39,6 +41,11 @@ func NewOpenAIProvider() (*OpenAIProvider, error) {
 	provider := &OpenAIProvider{
 		BaseProvider: base,
 		organization: os.Getenv("OPENAI_ORG_ID"),
+	}
+
+	// Override HTTP client timeout for OpenAI (3 minutes)
+	provider.httpClient = &http.Client{
+		Timeout: 3 * time.Minute,
 	}
 
 	// Set default model if not already set

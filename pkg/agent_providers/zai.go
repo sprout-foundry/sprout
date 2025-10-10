@@ -376,9 +376,28 @@ func (p *ZAIProvider) sendRequestWithRetry(req *http.Request, reqBody []byte) (*
 
 // CheckConnection verifies connectivity by sending a minimal request
 func (p *ZAIProvider) CheckConnection() error {
-    // Minimal ping via chat endpoint with tiny prompt
-    _, err := p.SendChatRequest([]api.Message{{Role: "user", Content: "ping"}}, nil, "")
-    return err
+    // Perform a minimal POST to chat/completions with an empty body.
+    // Any HTTP response proves reachability. 401 signals bad/absent key.
+    client := &http.Client{Timeout: 15 * time.Second}
+    url := "https://api.z.ai/api/coding/paas/v4/chat/completions"
+    req, err := http.NewRequest("POST", url, bytes.NewBufferString("{}"))
+    if err != nil {
+        return fmt.Errorf("failed to create request: %w", err)
+    }
+    req.Header.Set("Authorization", "Bearer "+p.apiToken)
+    req.Header.Set("Content-Type", "application/json")
+
+    resp, err := client.Do(req)
+    if err != nil {
+        return fmt.Errorf("Z.AI API not reachable: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode == http.StatusUnauthorized {
+        return fmt.Errorf("invalid Z.AI API key")
+    }
+    // For other statuses (200/400/404/405/422/5xx), consider connectivity OK
+    return nil
 }
 
 func (p *ZAIProvider) SetDebug(debug bool) { p.debug = debug }

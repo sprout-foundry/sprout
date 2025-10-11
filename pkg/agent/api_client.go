@@ -112,6 +112,15 @@ func (ac *APIClient) setTimeoutsFromConfig() {
 		ac.chunkTimeout = 180 * time.Second
 	}
 
+	if ac.agent != nil && strings.EqualFold(ac.agent.GetProvider(), "zai") {
+		// ZAI: Use timeouts that accommodate file operations
+		// File writes/edits can take time to process and generate chunks
+		// Align with streaming timeout of 120 seconds
+		ac.connectionTimeout = 90 * time.Second // 1.5 minutes
+		ac.firstChunkTimeout = 90 * time.Second // 90 seconds for first chunk
+		ac.chunkTimeout = 90 * time.Second      // 90 seconds between chunks
+	}
+
 	if ac.agent.debug {
 		ac.agent.debugLog("DEBUG: API Timeouts - Connection: %v, First Chunk: %v, Chunk: %v, Overall: %v\n",
 			ac.connectionTimeout, ac.firstChunkTimeout, ac.chunkTimeout, ac.overallTimeout)

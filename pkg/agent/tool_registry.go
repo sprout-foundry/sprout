@@ -393,11 +393,42 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 }
 
 func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	filePath := args["file_path"].(string)
+	// Convert arguments to proper types with type checking
+	filePath, err := convertToString(args["file_path"], "file_path")
+	if err != nil {
+		return "", err
+	}
 
 	// Check for optional line range parameters
-	startLine, hasStart := args["start_line"].(int)
-	endLine, hasEnd := args["end_line"].(int)
+	var startLine int
+	var hasStart bool
+	if startLineParam, exists := args["start_line"]; exists {
+		switch v := startLineParam.(type) {
+		case int:
+			startLine = v
+			hasStart = true
+		case float64: // JSON numbers are often unmarshaled as float64
+			startLine = int(v)
+			hasStart = true
+		default:
+			return "", fmt.Errorf("parameter 'start_line' has invalid type %T, expected integer", startLineParam)
+		}
+	}
+
+	var endLine int
+	var hasEnd bool
+	if endLineParam, exists := args["end_line"]; exists {
+		switch v := endLineParam.(type) {
+		case int:
+			endLine = v
+			hasEnd = true
+		case float64: // JSON numbers are often unmarshaled as float64
+			endLine = int(v)
+			hasEnd = true
+		default:
+			return "", fmt.Errorf("parameter 'end_line' has invalid type %T, expected integer", endLineParam)
+		}
+	}
 
 	// Log the operation
 	if hasStart || hasEnd {
@@ -415,9 +446,42 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 }
 
+// convertToString safely converts a parameter to string with proper error handling
+func convertToString(param interface{}, paramName string) (string, error) {
+	switch v := param.(type) {
+	case string:
+		return v, nil
+	case []byte:
+		return string(v), nil
+	case int, int32, int64, float32, float64:
+		return fmt.Sprintf("%v", v), nil
+	case bool:
+		return fmt.Sprintf("%t", v), nil
+	case map[string]interface{}:
+		// If it's a map, try to convert to JSON string
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("parameter '%s' is an object that cannot be converted to string: %w", paramName, err)
+		}
+		return string(jsonBytes), nil
+	case nil:
+		return "", fmt.Errorf("parameter '%s' is missing or null", paramName)
+	default:
+		return "", fmt.Errorf("parameter '%s' has invalid type %T, expected string", paramName, param)
+	}
+}
+
 func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	filePath := args["file_path"].(string)
-	content := args["content"].(string)
+	// Convert arguments to strings with proper type checking
+	filePath, err := convertToString(args["file_path"], "file_path")
+	if err != nil {
+		return "", err
+	}
+
+	content, err := convertToString(args["content"], "content")
+	if err != nil {
+		return "", err
+	}
 
 	a.ToolLog("writing file", filePath)
 	a.debugLog("Writing file: %s\n", filePath)
@@ -433,9 +497,21 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 }
 
 func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	filePath := args["file_path"].(string)
-	oldString := args["old_string"].(string)
-	newString := args["new_string"].(string)
+	// Convert arguments to strings with proper type checking
+	filePath, err := convertToString(args["file_path"], "file_path")
+	if err != nil {
+		return "", err
+	}
+
+	oldString, err := convertToString(args["old_string"], "old_string")
+	if err != nil {
+		return "", err
+	}
+
+	newString, err := convertToString(args["new_string"], "new_string")
+	if err != nil {
+		return "", err
+	}
 
 	// Read the original content for diff display
 	originalContent, err := tools.ReadFile(ctx, filePath)

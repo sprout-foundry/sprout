@@ -21,7 +21,6 @@
     - [Slash Commands in Interactive Mode](#slash-commands-in-interactive-mode)
     - [Ignoring Files](#ignoring-files)
   - [MCP Server Integration](#mcp-server-integration)
-  - [Documentation](#documentation)
   - [Contributing](#contributing)
   - [File Structure](#file-structure)
     - [Key files maintained by ledit](#key-files-maintained-by-ledit)
@@ -59,6 +58,7 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 - **Search Grounding**: Augments prompts with fresh information from the web using the `#SG "query"` directive.
 - **Interactive and Automated Modes**: Confirm each change manually, or run in a fully automated mode with `--skip-prompt`.
 - **Multi-Provider LLM Support**: Works with DeepInfra, OpenAI, Ollama (local/Turbo), OpenRouter, Gemini, DeepSeek, and more.
+  - Now includes Z.AI Coding Plan (OpenAI-compatible) via `--provider zai` with models like `GLM-4.6`.
 - **MCP Server Integration**: Connect to Model Context Protocol (MCP) servers to extend functionality with external tools and services like GitHub.
 - **Change Tracking**: Keeps a local history of all changes made in `.ledit/changes/`.
 - **Git Integration**: Can automatically commit changes to Git with AI-generated conventional commit messages.
@@ -135,6 +135,13 @@ ledit mcp add  # Interactive setup
 `ledit` is configured via a `config.json` file. It looks for this file first in `./.ledit/config.json` and then in `~/.ledit/config.json`. A default configuration is created on first run.
 
 **API Keys** for services like DeepInfra, OpenAI, Ollama, etc., are stored securely in `~/.ledit/api_keys.json`. If a key is not found, `ledit` will prompt you to enter it. Set env vars like `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_API_KEY` for convenience.
+
+For Z.AI Coding Plan support, set `ZAI_API_KEY` and select the provider/model:
+
+```bash
+export ZAI_API_KEY=your_api_key
+ledit agent --provider zai --model GLM-4.6 "implement feature X"
+```
 
 ### `config.json` settings
 
@@ -277,16 +284,6 @@ ledit mcp remove [name]
 ```
 
 Config: `~/.ledit/mcp_config.json`. Use in agent: "Create GitHub PR for feature #WS".
-
-See docs/MCP_INTEGRATION.md for details.
-
-## Documentation
-
-- [MCP Integration](docs/MCP_INTEGRATION.md)
-- [Streaming](docs/STREAMING_IMPLEMENTATION.md)
-- [Ollama Turbo](docs/OLLAMA_TURBO.md)
-- Prompt optimization in prompt_optimization/.
-
 ## Contributing
 
 See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PRs.

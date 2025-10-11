@@ -153,6 +153,47 @@ type SessionInfo struct {
 	LastUpdated time.Time `json:"last_updated"`
 }
 
+// GetSessionPreview returns the first 50 characters of the first user message
+func GetSessionPreview(sessionID string) string {
+	stateDir, err := GetStateDir()
+	if err != nil {
+		return ""
+	}
+
+	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
+	cleanSessionID := sessionID
+	if strings.HasPrefix(sessionID, "session_") {
+		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
+	}
+
+	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		return ""
+	}
+
+	var state ConversationState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return ""
+	}
+
+	// Find the first user message
+	for _, msg := range state.Messages {
+		if msg.Role == "user" && strings.TrimSpace(msg.Content) != "" {
+			// Get first 50 characters, clean up whitespace
+			content := strings.TrimSpace(msg.Content)
+			if len(content) > 50 {
+				content = content[:50] + "..."
+			}
+			// Replace newlines with spaces to keep it on one line
+			content = strings.ReplaceAll(content, "\n", " ")
+			return content
+		}
+	}
+
+	return ""
+}
+
 // ListSessions returns all available session IDs
 func ListSessions() ([]string, error) {
 	sessions, err := ListSessionsWithTimestamps()

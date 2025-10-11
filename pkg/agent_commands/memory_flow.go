@@ -125,9 +125,11 @@ func (mf *MemoryFlow) selectAndLoadSession(sessions []agent.SessionInfo) error {
 	items := make([]ui.DropdownItem, 0, len(sessions))
 	for i := len(sessions) - 1; i >= 0; i-- {
 		session := sessions[i]
+		preview := agent.GetSessionPreview(session.SessionID)
 		item := &ui.SessionItem{
 			SessionID: session.SessionID,
 			Timestamp: session.LastUpdated,
+			Preview:   preview,
 		}
 		items = append(items, item)
 	}

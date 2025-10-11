@@ -382,6 +382,8 @@ func getClientTypeFromName(name string) (api.ClientType, error) {
 		return api.DeepInfraClientType, nil
 	case "openrouter":
 		return api.OpenRouterClientType, nil
+	case "zai":
+		return api.ZAIClientType, nil
 	case "ollama":
 		return api.OllamaClientType, nil
 	case "ollama-local":

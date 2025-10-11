@@ -803,6 +803,9 @@ func (im *InputManager) showInputField() {
 	// Calculate effective width for wrapping
 	effectiveWidth := im.getEffectiveWidth()
 
+	// Draw separator lines above and below the input area for visual separation
+	im.drawInputSeparators(lines)
+
 	// Render content and place cursor
 	im.renderInputContent(fullText, effectiveWidth, cursorLine, cursorCol)
 
@@ -1227,5 +1230,41 @@ func (im *InputManager) resetInputHeight() {
 				im.onHeightChange(newHeight)
 			}(1)
 		}
+	}
+}
+
+// drawInputSeparators draws horizontal lines above and below the input area
+func (im *InputManager) drawInputSeparators(lines int) {
+	// Use current terminal size
+	width := im.termWidth
+	height := im.termHeight
+	if width < 10 || height < 3 {
+		return
+	}
+
+	// Calculate input area boundaries based on actual input field position
+	inputStartLine := im.inputFieldLine - lines
+	inputEndLine := im.inputFieldLine - 1 // The line before the input field starts
+
+	// Ensure we're within bounds
+	if inputStartLine < 1 {
+		inputStartLine = 1
+	}
+	if inputEndLine >= height {
+		inputEndLine = height - 1
+	}
+
+	// Draw top separator line (above input area)
+	if inputStartLine > 1 && inputStartLine < im.inputFieldLine {
+		// Use dim characters for subtle separator
+		separator := strings.Repeat("─", width-4) // Leave space for focus bars
+		fmt.Printf("\033[%d;3H\033[2m%s\033[0m", inputStartLine, separator)
+	}
+
+	// Draw bottom separator line (below input area, above help line)
+	// Only draw if there's space between input and help area
+	if im.inputFieldLine+lines < height-1 {
+		separator := strings.Repeat("─", width-4) // Leave space for focus bars
+		fmt.Printf("\033[%d;3H\033[2m%s\033[0m", im.inputFieldLine+lines, separator)
 	}
 }

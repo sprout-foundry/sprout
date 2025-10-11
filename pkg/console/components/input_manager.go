@@ -544,6 +544,11 @@ func (im *InputManager) handleEnter() {
 		// Send input while agent is processing (will be injected into conversation)
 		if im.onInput != nil {
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						fmt.Fprintf(os.Stderr, "Input callback panic: %v\n", r)
+					}
+				}()
 				im.onInput(input)
 			}()
 		}
@@ -551,6 +556,11 @@ func (im *InputManager) handleEnter() {
 		// Process immediately (start new conversation)
 		if im.onInput != nil {
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						fmt.Fprintf(os.Stderr, "Input callback panic: %v\n", r)
+					}
+				}()
 				im.onInput(input)
 			}()
 		}
@@ -1227,6 +1237,11 @@ func (im *InputManager) resetInputHeight() {
 		if im.onHeightChange != nil {
 			// Call the callback without holding the mutex to avoid deadlocks
 			go func(newHeight int) {
+				defer func() {
+					if r := recover(); r != nil {
+						fmt.Fprintf(os.Stderr, "Height change callback panic: %v\n", r)
+					}
+				}()
 				im.onHeightChange(newHeight)
 			}(1)
 		}

@@ -61,18 +61,9 @@ func NewZAIProviderWithModel(model string) (*ZAIProvider, error) {
 func (p *ZAIProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
 	// Z.AI follows OpenAI message format
 	openaiMessages := BuildOpenAIChatMessages(messages, MessageConversionOptions{})
-
-	// Estimate tokens and compute max_tokens conservatively
-	contextLimit, err := p.GetModelContextLimit()
-	if err != nil {
-		contextLimit = 128000
-	}
-	maxTokens := CalculateMaxTokens(contextLimit, messages, tools)
-
 	requestBody := map[string]interface{}{
 		"model":             p.model,
 		"messages":          openaiMessages,
-		"max_tokens":        maxTokens,
 		"temperature":       0.1, // Lower temperature for GLM models for more consistent coding output
 		"frequency_penalty": 0.5, // Reduce repetition of frequent phrases/commands
 		"presence_penalty":  0.3, // Encourage talking about new topics vs repeating
@@ -109,6 +100,7 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 	url := "https://api.z.ai/api/coding/paas/v4/chat/completions"
 
 	openaiMessages := BuildOpenAIStreamingMessages(messages, MessageConversionOptions{})
+
 	reqBody := map[string]interface{}{
 		"model":             p.model,
 		"messages":          openaiMessages,
@@ -487,7 +479,7 @@ func (p *ZAIProvider) ListModels() ([]api.ModelInfo, error) {
 		return p.models, nil
 	}
 	p.models = []api.ModelInfo{
-		{ID: "GLM-4.6", Name: "GLM-4.6", ContextLength: 128000},
+		{ID: "GLM-4.6", Name: "GLM-4.6", ContextLength: 200000},
 		{ID: "GLM-4.5", Name: "GLM-4.5", ContextLength: 128000},
 		{ID: "GLM-4.5-air", Name: "GLM-4.5-air", ContextLength: 128000},
 	}

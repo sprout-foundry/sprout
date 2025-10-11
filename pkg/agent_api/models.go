@@ -65,8 +65,8 @@ func GetModelsForProvider(clientType ClientType) ([]ModelInfo, error) {
 
 // createProviderForType creates a provider instance for the given client type
 func createProviderForType(clientType ClientType) (interface{ ListModels() ([]ModelInfo, error) }, error) {
-    switch clientType {
-    case OllamaClientType, OllamaLocalClientType:
+	switch clientType {
+	case OllamaClientType, OllamaLocalClientType:
 		client, err := NewOllamaLocalClient("llama3.1:8b") // Use an available model
 		if err != nil {
 			return nil, err
@@ -98,16 +98,16 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 		}
 		// Create DeepInfra wrapper that uses the provider's ListModels directly
 		return &deepInfraListModelsWrapper{}, nil
-    case LMStudioClientType:
-        // LM Studio doesn't require an API key or base URL (has default fallback)
-        // Create LM Studio wrapper that uses the provider's ListModels directly
-        return &lmStudioListModelsWrapper{}, nil
-    case ZAIClientType:
-        // Z.AI Coding Plan: no public models endpoint documented; return curated list
-        return &zaiListModelsWrapper{}, nil
-    default:
-        return nil, fmt.Errorf("provider creation not supported for client type: %s", clientType)
-    }
+	case LMStudioClientType:
+		// LM Studio doesn't require an API key or base URL (has default fallback)
+		// Create LM Studio wrapper that uses the provider's ListModels directly
+		return &lmStudioListModelsWrapper{}, nil
+	case ZAIClientType:
+		// Z.AI Coding Plan: no public models endpoint documented; return curated list
+		return &zaiListModelsWrapper{}, nil
+	default:
+		return nil, fmt.Errorf("provider creation not supported for client type: %s", clientType)
+	}
 }
 
 // Wrapper adapters to normalize ListModels return types
@@ -482,16 +482,16 @@ func (w *lmStudioListModelsWrapper) ListModels() ([]ModelInfo, error) {
 type zaiListModelsWrapper struct{}
 
 func (w *zaiListModelsWrapper) ListModels() ([]ModelInfo, error) {
-    if os.Getenv("ZAI_API_KEY") == "" {
-        return nil, fmt.Errorf("ZAI_API_KEY not set")
-    }
-    // Static list aligned with docs
-    models := []ModelInfo{
-        {ID: "GLM-4.6", Name: "GLM-4.6", Provider: "zai", ContextLength: 128000, Tags: []string{"tools"}},
-        {ID: "GLM-4.5", Name: "GLM-4.5", Provider: "zai", ContextLength: 128000, Tags: []string{"tools"}},
-        {ID: "GLM-4.5-air", Name: "GLM-4.5-air", Provider: "zai", ContextLength: 128000, Tags: []string{"tools"}},
-    }
-    return models, nil
+	if os.Getenv("ZAI_API_KEY") == "" {
+		return nil, fmt.Errorf("ZAI_API_KEY not set")
+	}
+	// Static list aligned with docs
+	models := []ModelInfo{
+		{ID: "GLM-4.6", Name: "GLM-4.6", Provider: "zai", ContextLength: 200000, Tags: []string{"tools"}},
+		{ID: "GLM-4.5", Name: "GLM-4.5", Provider: "zai", ContextLength: 128000, Tags: []string{"tools"}},
+		{ID: "GLM-4.5-air", Name: "GLM-4.5-air", Provider: "zai", ContextLength: 128000, Tags: []string{"tools"}},
+	}
+	return models, nil
 }
 
 // ModelSelection represents a model selection system

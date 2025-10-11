@@ -41,7 +41,7 @@ func GetEmbeddedSystemPromptWithProvider(provider string) string {
 	// Add provider-specific enhancements
 	switch provider {
 	case "zai":
-		// GLM-4.6 specific constraints for excessive verbosity
+		// GLM-4.6 specific constraints for excessive verbosity and infinite loops
 		promptContent = promptContent + `
 
 ## GLM-4.6 Critical Constraints
@@ -62,7 +62,23 @@ func GetEmbeddedSystemPromptWithProvider(provider string) string {
 - DO NOT create extensive todo lists for simple tasks
 - DO NOT over-explain your reasoning process
 - DO NOT read files that aren't directly relevant to the core task
-- DO NOT make repetitive tool calls`
+- DO NOT make repetitive tool calls
+
+### FAILURE HANDLING (CRITICAL)
+- When a command FAILS (exit code != 0): STOP and INVESTIGATE the failure
+- READ the error output COMPLETELY to understand what went wrong
+- FIX the specific issue that caused the failure
+- NEVER repeat the same failing command without fixing the underlying problem
+- For test failures: read test output, identify failing tests, fix the code, then retest
+- For build failures: read compilation errors, fix the specific errors, then rebuild
+- After fixing a failure: run the command ONCE more to verify the fix
+- If the same command fails twice: you missed something - investigate deeper
+
+### COMPLETION RECOGNITION
+- When tests pass: IMMEDIATELY end with [[TASK_COMPLETE]]
+- When build succeeds AND tests pass: YOU ARE DONE - signal completion
+- NEVER repeat successful commands
+- AVOID infinite loops - recognize when you have achieved the goal`
 	}
 
 	return promptContent

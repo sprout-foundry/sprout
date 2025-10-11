@@ -10,11 +10,12 @@ import (
 type SessionItem struct {
 	SessionID string
 	Timestamp time.Time
+	Preview   string // First 50 characters of the first user message
 }
 
 // Display returns the string to show in the dropdown
 func (s *SessionItem) Display() string {
-	// Format: session_id (time ago)
+	// Format: time ago - preview (no session ID for cleaner display)
 	timeAgo := time.Since(s.Timestamp)
 
 	// Format time ago in a human-readable way
@@ -32,13 +33,20 @@ func (s *SessionItem) Display() string {
 		timeStr = fmt.Sprintf("%dd ago", days)
 	}
 
-	// Build the display string
-	return fmt.Sprintf("%s (%s)", s.SessionID, timeStr)
+	// Build the display string with preview (no session ID)
+	if s.Preview != "" {
+		return fmt.Sprintf("%s - %s", timeStr, s.Preview)
+	}
+	return timeStr
 }
 
 // SearchText returns the text used for searching
 func (s *SessionItem) SearchText() string {
-	return strings.ToLower(s.SessionID)
+	// Only search by preview content since session ID is hidden from user
+	if s.Preview != "" {
+		return strings.ToLower(s.Preview)
+	}
+	return ""
 }
 
 // Value returns the actual value when selected
@@ -53,13 +61,7 @@ func (s *SessionItem) DisplayCompact(maxWidth int) string {
 		return baseDisplay
 	}
 
-	// Truncate session ID if needed
-	sessionPart := s.SessionID
-	if len(sessionPart) > maxWidth/2 {
-		sessionPart = sessionPart[:maxWidth/2-3] + "..."
-	}
-
-	// Build compact display
+	// Build compact display (no session ID)
 	timeAgo := time.Since(s.Timestamp)
 	var timeStr string
 	if timeAgo < time.Minute {
@@ -75,7 +77,27 @@ func (s *SessionItem) DisplayCompact(maxWidth int) string {
 		timeStr = fmt.Sprintf("%dd", days)
 	}
 
-	compact := fmt.Sprintf("%s (%s)", sessionPart, timeStr)
+	// Calculate space for preview
+	maxPreviewLen := maxWidth - len(timeStr) - 3 // 3 for " - "
+	if maxPreviewLen <= 0 {
+		return timeStr
+	}
+
+	// Truncate preview if needed
+	previewPart := ""
+	if s.Preview != "" {
+		previewPart = s.Preview
+		if len(previewPart) > maxPreviewLen {
+			previewPart = previewPart[:maxPreviewLen-3] + "..."
+		}
+	}
+
+	var compact string
+	if previewPart != "" {
+		compact = fmt.Sprintf("%s - %s", timeStr, previewPart)
+	} else {
+		compact = timeStr
+	}
 
 	if len(compact) > maxWidth {
 		compact = compact[:maxWidth-3] + "..."

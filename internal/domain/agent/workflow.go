@@ -86,28 +86,52 @@ func NewAgentWorkflow(
 
 // AnalyzeIntent analyzes the user intent to determine how to proceed
 func (w *workflowImpl) AnalyzeIntent(ctx context.Context, intent string, workspaceContext WorkspaceContext) (*IntentAnalysis, error) {
+	// Validate inputs
+	if intent == "" {
+		return nil, NewValidationError(ErrCodeIntentParsingFailed, "intent cannot be empty", nil).
+			WithComponent("workflow").
+			WithOperation("AnalyzeIntent")
+	}
+
 	// Publish event
 	event := NewWorkflowEvent("", EventTypeAnalysisStarted, "Starting intent analysis", map[string]interface{}{
 		"intent": intent,
 	})
-	w.eventBus.Publish(ctx, event)
+	if err := w.eventBus.Publish(ctx, event); err != nil {
+		// Log warning but continue - event publishing failure shouldn't stop the workflow
+		// In a real implementation, this would use proper logging
+	}
 
 	// Create analysis prompt
 	prompt := w.buildIntentAnalysisPrompt(intent, workspaceContext)
 
-	// Call LLM for analysis
+	// Call LLM for analysis with error handling
 	response, err := w.llmProvider.GenerateResponse(ctx, prompt, map[string]interface{}{
 		"temperature": 0.2,
 		"max_tokens":  1500,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to analyze intent with LLM: %w", err)
+		return nil, NewLLMError(ErrCodeLLMUnavailable, "failed to analyze intent with LLM", err).
+			WithComponent("workflow").
+			WithOperation("AnalyzeIntent").
+			WithContext("intent", intent).
+			WithContext("workspace_root", workspaceContext.RootPath)
+	}
+
+	// Validate LLM response
+	if response == "" {
+		return nil, NewLLMError(ErrCodeLLMInvalidResponse, "empty response from LLM", nil).
+			WithComponent("workflow").
+			WithOperation("AnalyzeIntent")
 	}
 
 	// Parse the response into IntentAnalysis
 	analysis, err := w.parseIntentAnalysis(response, intent)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse intent analysis: %w", err)
+		return nil, NewIntentAnalysisError(ErrCodeIntentParsingFailed, "failed to parse intent analysis", err).
+			WithComponent("workflow").
+			WithOperation("AnalyzeIntent").
+			WithContext("response_length", len(response))
 	}
 
 	// Determine execution strategy
@@ -117,13 +141,22 @@ func (w *workflowImpl) AnalyzeIntent(ctx context.Context, intent string, workspa
 	event = NewWorkflowEvent("", EventTypeAnalysisComplete, "Intent analysis completed", map[string]interface{}{
 		"analysis": analysis,
 	})
-	w.eventBus.Publish(ctx, event)
+	if err := w.eventBus.Publish(ctx, event); err != nil {
+		// Log warning but continue
+	}
 
 	return analysis, nil
 }
 
 // CreateExecutionPlan creates a detailed execution plan based on the analysis
 func (w *workflowImpl) CreateExecutionPlan(ctx context.Context, analysis *IntentAnalysis, workspaceContext WorkspaceContext) (*ExecutionPlan, error) {
+	// Validate inputs
+	if analysis == nil {
+		return nil, NewValidationError(ErrCodeConfigurationMissing, "analysis cannot be nil", nil).
+			WithComponent("workflow").
+			WithOperation("CreateExecutionPlan")
+	}
+
 	// Create todo list from the intent
 	todoList, err := w.todoService.CreateFromIntent(ctx, analysis.Description, todo.WorkspaceContext{
 		RootPath:     workspaceContext.RootPath,
@@ -133,7 +166,18 @@ func (w *workflowImpl) CreateExecutionPlan(ctx context.Context, analysis *Intent
 		Dependencies: workspaceContext.Dependencies,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create todo list: %w", err)
+		return nil, NewWorkflowExecutionError(ErrCodePlanCreationFailed, "failed to create todo list", err).
+			WithComponent("workflow").
+			WithOperation("CreateExecutionPlan").
+			WithContext("intent", analysis.Description).
+			WithContext("workspace_root", workspaceContext.RootPath)
+	}
+
+	// Validate todo list
+	if todoList == nil {
+		return nil, NewWorkflowExecutionError(ErrCodePlanCreationFailed, "todo service returned nil todo list", nil).
+			WithComponent("workflow").
+			WithOperation("CreateExecutionPlan")
 	}
 
 	// Create execution plan
@@ -153,7 +197,9 @@ func (w *workflowImpl) CreateExecutionPlan(ctx context.Context, analysis *Intent
 		"todo_count": len(todoList.Todos),
 		"strategy":   string(analysis.Strategy),
 	})
-	w.eventBus.Publish(ctx, event)
+	if err := w.eventBus.Publish(ctx, event); err != nil {
+		// Log warning but continue
+	}
 
 	return plan, nil
 }

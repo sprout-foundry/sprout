@@ -294,11 +294,13 @@ func (ac *AgentConsole) setupLayoutComponents() {
 
 	// Content region is automatically managed
 
-	// Ensure initial focus is set (but don't render yet)
+	// Ensure initial focus is set and render indicators
 	ac.focusMode = "input"
 	if ac.footer != nil {
 		ac.footer.SetFocusMode("input")
 	}
+	// Render initial focus indicators
+	ac.renderFocusIndicators()
 }
 
 // setFocus switches focus between input and output and refreshes indicators
@@ -331,14 +333,14 @@ func (ac *AgentConsole) setFocus(mode string) {
 
 func (ac *AgentConsole) getFocusMode() string { return ac.focusMode }
 
-// renderFocusIndicators draws a light teal bar on the focused component
+// renderFocusIndicators draws a blue bar on the focused component
 func (ac *AgentConsole) renderFocusIndicators() {
 	if ac.Terminal() == nil || ac.autoLayoutManager == nil {
 		return
 	}
 
 	// Build a clean gutter: 1 colored column + 1 padding space between accent and content
-	bar := "\033[46m \033[0m "
+	bar := "\033[44m \033[0m " // Blue background instead of light teal
 	clear := "  "
 
 	// Clear any existing bar in content area first
@@ -554,6 +556,9 @@ func (ac *AgentConsole) Start() error {
 
 	ac.safePrint("   Press Tab to switch between inputs and output focus.\n")
 	ac.safePrint("   Use Ctrl+C to interrupt the agent.\n\n")
+
+	// Render focus indicators now that terminal is ready
+	ac.renderFocusIndicators()
 
 	// Initial footer render (MUST be last)
 	ac.updateFooter()

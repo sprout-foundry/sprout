@@ -563,8 +563,9 @@ func (sf *StreamingFormatter) applyInlineFormatting(text string) string {
 func (sf *StreamingFormatter) filterXMLToolCalls(content string) string {
 	// Pattern to match XML-style function calls like:
 	// <function=shell_command><parameter=command>ls</parameter></function>
-	// or <function=shell_command>...<parameter=command>ls</parameter>...</tool_call>
-	funcRegex := regexp.MustCompile(`<function=(\w+)>[\s\S]*?(?:</function>|</tool_call>)`)
+	// or <function=shell_command>...<parameter=command>ls</parameter>...</think>
+	// This regex is more permissive to handle malformed tags
+	funcRegex := regexp.MustCompile("<function=(\\w+)>[\\s\\S]*?(?:<\\/function>|$)")
 
 	// Replace XML tool calls with formatted display text
 	filtered := funcRegex.ReplaceAllStringFunc(content, func(match string) string {
@@ -580,10 +581,64 @@ func (sf *StreamingFormatter) filterXMLToolCalls(content string) string {
 		return fmt.Sprintf("🔧 %s\n", functionName)
 	})
 
+	// Additional pattern to catch malformed/incomplete XML tags that might slip through
+	// This handles cases like <function=tool_name... without proper closing
+	malformedPatterns := []struct {
+		pattern string
+		replacer func(string) string
+	}{
+		// Catch incomplete <function=...> tags
+		{
+			`<function=\w+[^>]*$`,
+			func(match string) string { return "" },
+		},
+		// Catch <parameter=...> tags without proper context
+		{
+			`<parameter=[^>]*>`,
+			func(match string) string { return "" },
+		},
+		// Catch stray closing tags
+		{
+			`</parameter>`,
+			func(match string) string { return "" },
+		},
+		// Catch any remaining <...> patterns that look like tool calls
+		{
+			`<[^>]*(?:function|parameter|tool_call)[^>]*>`,
+			func(match string) string { return "" },
+		},
+	}
+
+	for _, p := range malformedPatterns {
+		filtered = regexp.MustCompile(p.pattern).ReplaceAllStringFunc(filtered, p.replacer)
+	}
+
 	// Clean up excessive newlines that might result from the replacement
 	// Replace 3+ consecutive newlines with just 2 newlines
 	// This allows for proper spacing between content while preventing excessive gaps
 	excessiveNewlineRegex := regexp.MustCompile(`\n{3,}`)
+	filtered = excessiveNewlineRegex.ReplaceAllString(filtered, "\n\n")
+
+	funcRegex = regexp.MustCompile("<function=(\\w+)>[\\s\\S]*?(?:<\\/function>|$)")
+
+	// Replace XML tool calls with formatted display text
+	filtered = funcRegex.ReplaceAllStringFunc(content, func(match string) string {
+		// Extract function name from <function=name>
+		funcNameRegex := regexp.MustCompile(`<function=(\w+)>`)
+		funcMatches := funcNameRegex.FindStringSubmatch(match)
+		if len(funcMatches) < 2 {
+			return "" // If we can't parse it, remove it
+		}
+
+		functionName := funcMatches[1]
+		// Format as a simple tool execution indicator with trailing newline for readability
+		return fmt.Sprintf("🔧 %s\n", functionName)
+	})
+
+	// Clean up excessive newlines that might result from the replacement
+	// Replace 3+ consecutive newlines with just 2 newlines
+	// This allows for proper spacing between content while preventing excessive gaps
+	excessiveNewlineRegex = regexp.MustCompile(`\n{3,}`)
 	filtered = excessiveNewlineRegex.ReplaceAllString(filtered, "\n\n")
 
 	// Also filter out task completion signals that should not be displayed

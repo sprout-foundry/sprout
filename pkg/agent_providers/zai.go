@@ -70,10 +70,12 @@ func (p *ZAIProvider) SendChatRequest(messages []api.Message, tools []api.Tool, 
 	maxTokens := CalculateMaxTokens(contextLimit, messages, tools)
 
 	requestBody := map[string]interface{}{
-		"model":       p.model,
-		"messages":    openaiMessages,
-		"max_tokens":  maxTokens,
-		"temperature": 0.1, // Lower temperature for GLM models for more consistent coding output
+		"model":             p.model,
+		"messages":          openaiMessages,
+		"max_tokens":        maxTokens,
+		"temperature":       0.1, // Lower temperature for GLM models for more consistent coding output
+		"frequency_penalty": 0.5, // Reduce repetition of frequent phrases/commands
+		"presence_penalty":  0.3, // Encourage talking about new topics vs repeating
 	}
 
 	if openAITools := BuildOpenAIToolsPayload(tools); openAITools != nil {
@@ -108,10 +110,12 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 
 	openaiMessages := BuildOpenAIStreamingMessages(messages, MessageConversionOptions{})
 	reqBody := map[string]interface{}{
-		"model":       p.model,
-		"messages":    openaiMessages,
-		"temperature": 0.1, // Lower temperature for GLM models for more consistent coding output
-		"stream":      true,
+		"model":             p.model,
+		"messages":          openaiMessages,
+		"temperature":       0.1, // Lower temperature for GLM models for more consistent coding output
+		"frequency_penalty": 0.5, // Reduce repetition of frequent phrases/commands
+		"presence_penalty":  0.3, // Encourage talking about new topics vs repeating
+		"stream":            true,
 	}
 	if openAITools := BuildOpenAIToolsPayload(tools); openAITools != nil {
 		reqBody["tools"] = openAITools
@@ -193,6 +197,9 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 						if c, ok := delta["content"].(string); ok && c != "" {
 							content.WriteString(c)
 							if callback != nil {
+								if p.debug {
+									fmt.Printf("💬 ZAI: Content chunk (%d chars)\n", len(c))
+								}
 								callback(c)
 							}
 						}
@@ -201,6 +208,9 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 							reasoningContent.WriteString(rc)
 							// Send reasoning content through callback with grey formatting
 							if callback != nil {
+								if p.debug {
+									fmt.Printf("🤔 ZAI: Reasoning chunk (%d chars)\n", len(rc))
+								}
 								// Format reasoning content in grey/dim text to indicate thinking
 								formattedReasoning := fmt.Sprintf("\033[2m%s\033[0m", rc)
 								callback(formattedReasoning)
@@ -231,9 +241,24 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 									if fdata, ok := tcMap["function"].(map[string]interface{}); ok {
 										if name, ok := fdata["name"].(string); ok {
 											entry.Function.Name = name
+											// Notify chunk timer of tool call activity to prevent timeout during long operations
+											if callback != nil {
+												if p.debug {
+													fmt.Printf("🔧 ZAI: Tool call started: %s\n", name)
+												}
+												// Use zero-width space to reset timer without visible output
+												callback("\u200B")
+											}
 										}
 										if args, ok := fdata["arguments"].(string); ok {
 											entry.Function.Arguments = args
+											// For substantial tool arguments, send periodic keep-alive signals
+											if callback != nil && len(args) > 500 {
+												if p.debug {
+													fmt.Printf("🔧 ZAI: Long tool arguments (%d chars), sending keep-alive\n", len(args))
+												}
+												callback("\u200B")
+											}
 										}
 									}
 								}

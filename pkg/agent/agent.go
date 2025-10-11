@@ -61,7 +61,9 @@ type Agent struct {
 	outputMutex         *sync.Mutex        // Mutex for synchronized output
 	streamingEnabled    bool               // Whether streaming is enabled
 	streamingCallback   func(string)       // Custom streaming callback
+	reasoningCallback   func(string)       // Custom reasoning/thinking callback
 	streamingBuffer     strings.Builder    // Buffer for streaming content
+	reasoningBuffer     strings.Builder    // Buffer for reasoning content
 	flushCallback       func()             // Callback to flush buffered output
 	asyncOutput         chan string        // Buffered channel for async PrintLine calls
 	asyncOutputOnce     sync.Once          // Ensure async worker initializes once
@@ -150,7 +152,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		agent := &Agent{
 			client:                    client,
 			messages:                  []api.Message{},
-			systemPrompt:              getEmbeddedSystemPrompt(),
+			systemPrompt:              GetEmbeddedSystemPrompt(),
 			maxIterations:             1000,
 			totalCost:                 0.0,
 			clientType:                clientType,
@@ -262,20 +264,21 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Set debug mode on the client
 	client.SetDebug(debug)
 
-    // Check connection (allow tests to skip by setting LEDIT_SKIP_CONNECTION_CHECK)
-    // Also skip for providers where a fast/reliable connectivity probe is not available (e.g., Z.AI Coding Plan).
-    skipConnectionCheck := os.Getenv("LEDIT_SKIP_CONNECTION_CHECK") != "" || clientType == api.ZAIClientType
+	// Check connection (allow tests to skip by setting LEDIT_SKIP_CONNECTION_CHECK)
+	// Also skip for providers where a fast/reliable connectivity probe is not available (e.g., Z.AI Coding Plan).
+	skipConnectionCheck := os.Getenv("LEDIT_SKIP_CONNECTION_CHECK") != "" || clientType == api.ZAIClientType
 
-    if !skipConnectionCheck {
-        if err := client.CheckConnection(); err != nil {
-            return nil, fmt.Errorf("client connection check failed: %w", err)
-        }
-    } else if debug {
-        fmt.Printf("⚠️  Skipping provider connection check for %s\n", api.GetProviderName(clientType))
-    }
+	if !skipConnectionCheck {
+		if err := client.CheckConnection(); err != nil {
+			return nil, fmt.Errorf("client connection check failed: %w", err)
+		}
+	} else if debug {
+		fmt.Printf("⚠️  Skipping provider connection check for %s\n", api.GetProviderName(clientType))
+	}
 
-	// Use embedded system prompt
-	systemPrompt := getEmbeddedSystemPrompt()
+	// Use embedded system prompt with provider-specific enhancements
+	providerName := api.GetProviderName(clientType)
+	systemPrompt := GetEmbeddedSystemPromptWithProvider(providerName)
 
 	// Clear old todos at session start
 	tools.ClearTodos()

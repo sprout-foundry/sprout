@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -78,23 +79,34 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	stdoutScanner := bufio.NewScanner(stdout)
 	stderrScanner := bufio.NewScanner(stderr)
 
-	// Read from stdout and stderr concurrently
+	// Read from stdout and stderr concurrently with proper synchronization
+	var wg sync.WaitGroup
+	var outputMutex sync.Mutex
+
+	wg.Add(2)
 	go func() {
+		defer wg.Done()
 		for stdoutScanner.Scan() {
 			line := stdoutScanner.Text()
+			outputMutex.Lock()
 			output.WriteString(line + "\n")
+			outputMutex.Unlock()
 		}
 	}()
 	go func() {
+		defer wg.Done()
 		for stderrScanner.Scan() {
 			line := stderrScanner.Text()
+			outputMutex.Lock()
 			output.WriteString(line + "\n")
+			outputMutex.Unlock()
 		}
 	}()
 
-	// Wait for the command to finish
+	// Wait for both readers to finish and the command to complete
+	wg.Wait()
 	err = cmd.Wait()
-	
+
 	// Get the exit code for status reporting
 	exitCode := 0
 	if err != nil {
@@ -105,10 +117,10 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 			}
 		}
 	}
-	
+
 	// Build the final output with status header
 	finalOutput := buildShellOutputWithStatus(output.String(), command, exitCode, err)
-	
+
 	if err != nil {
 		// Return the enhanced output with error information
 		if exitCode != 0 {
@@ -134,7 +146,7 @@ func buildShellOutputWithStatus(output, command string, exitCode int, err error)
 	if strings.TrimSpace(output) != "" || err != nil {
 		return output
 	}
-	
+
 	// For successful commands with no output, add a status header
 	var status string
 	var icon string
@@ -145,14 +157,14 @@ func buildShellOutputWithStatus(output, command string, exitCode int, err error)
 		status = "FAILED"
 		icon = "❌"
 	}
-	
+
 	// Build status header
 	header := fmt.Sprintf("%s Command completed with exit code %d (%s)\n", icon, exitCode, status)
-	
+
 	// If there was any output (even whitespace), include it after the header
 	if strings.TrimSpace(output) == "" {
 		return header + "(no output)"
 	}
-	
+
 	return header + output
 }

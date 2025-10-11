@@ -114,9 +114,9 @@ func (co *ConversationOptimizer) isRedundantFileRead(msg api.Message, index int)
 		// Only consider it redundant if:
 		// 1. Content hasn't changed AND
 		// 2. This is NOT the most recent read (index < record.MessageIndex) AND
-		// 3. The gap to the most recent read is at least 5 messages
+		// 3. The gap to the most recent read is at least 10 messages (preserving recent reads)
 		messageGap := record.MessageIndex - index
-		if record.ContentHash == currentHash && index < record.MessageIndex && messageGap >= 5 {
+		if record.ContentHash == currentHash && index < record.MessageIndex && messageGap >= 10 {
 			return true
 		}
 	}

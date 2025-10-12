@@ -575,14 +575,7 @@ func handleUpdateTodoStatus(ctx context.Context, a *Agent, args map[string]inter
 
 	// Normalize string numeric IDs like "1" to internal format "todo_1"
 	if !strings.HasPrefix(taskID, "todo_") {
-		allDigits := true
-		for i := 0; i < len(taskID); i++ {
-			if taskID[i] < '0' || taskID[i] > '9' {
-				allDigits = false
-				break
-			}
-		}
-		if allDigits && len(taskID) > 0 {
+		if _, err := strconv.Atoi(taskID); err == nil {
 			taskID = fmt.Sprintf("todo_%s", taskID)
 		}
 	}

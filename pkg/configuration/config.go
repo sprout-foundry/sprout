@@ -119,26 +119,26 @@ func (a *APIKeys) Set(provider, key string) {
 
 // NewConfig creates a new configuration with sensible defaults
 func NewConfig() *Config {
-    return &Config{
-        Version:          ConfigVersion,
-        LastUsedProvider: "",
-        ProviderModels: map[string]string{
-            "openai":       "gpt-5-mini",
-            "zai":          "GLM-4.6",
-            "deepinfra":    "deepseek-ai/DeepSeek-V3.1-Terminus",
-            "openrouter":   "openai/gpt-5",
-            "ollama-local": "qwen3-coder:30b",
-            "ollama-turbo": "deepseek-v3.1:671b",
-        },
-        ProviderPriority: []string{
-            "openai",
-            "zai",
-            "openrouter",
-            "deepinfra",
-            "ollama-turbo",
+	return &Config{
+		Version:          ConfigVersion,
+		LastUsedProvider: "",
+		ProviderModels: map[string]string{
+			"openai":       "gpt-5-mini",
+			"zai":          "GLM-4.6",
+			"deepinfra":    "deepseek-ai/DeepSeek-V3.1-Terminus",
+			"openrouter":   "openai/gpt-5",
+			"ollama-local": "qwen3-coder:30b",
+			"ollama-turbo": "deepseek-v3.1:671b",
+		},
+		ProviderPriority: []string{
+			"openai",
+			"zai",
+			"openrouter",
+			"deepinfra",
+			"ollama-turbo",
 
-            "ollama-local",
-        },
+			"ollama-local",
+		},
 		MCP:                   mcp.DefaultMCPConfig(),
 		Preferences:           make(map[string]interface{}),
 		FileBatchSize:         10,
@@ -155,7 +155,7 @@ func NewConfig() *Config {
 		APITimeouts: &APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
 			FirstChunkTimeoutSec: 60,
-			ChunkTimeoutSec:      600, // Increased from 90 to 180 seconds (3 minutes) for complex tasks
+			ChunkTimeoutSec:      320, // Increased from 90 to 320 seconds (5 minutes) for complex tasks
 			OverallTimeoutSec:    600, // 10 minutes
 		},
 	}

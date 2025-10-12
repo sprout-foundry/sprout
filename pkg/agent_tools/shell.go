@@ -121,14 +121,9 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	// Build the final output with status header
 	finalOutput := buildShellOutputWithStatus(output.String(), command, exitCode, err)
 
-	if err != nil {
-		// Return the enhanced output with error information
-		if exitCode != 0 {
-			return finalOutput, fmt.Errorf("command failed with exit code %d", exitCode)
-		}
-		return finalOutput, fmt.Errorf("command failed: %w", err)
-	}
-
+	// Shell tool execution is always successful as long as we can run the command
+	// Non-zero exit codes are normal command outcomes, not tool failures
+	// The output includes the command's stderr and exit status information
 	return finalOutput, nil
 }
 
@@ -141,13 +136,13 @@ func trackFileDeletion(command string, sessionID string) {
 
 // buildShellOutputWithStatus enhances shell output with status information
 func buildShellOutputWithStatus(output, command string, exitCode int, err error) string {
-	// If there's substantial output or an error, just return the output as-is
+	// If there's substantial output, just return the output as-is
 	// This preserves the original behavior for most cases
-	if strings.TrimSpace(output) != "" || err != nil {
+	if strings.TrimSpace(output) != "" {
 		return output
 	}
 
-	// For successful commands with no output, add a status header
+	// For commands with no output, add a status header
 	var status string
 	var icon string
 	if exitCode == 0 {

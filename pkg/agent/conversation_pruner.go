@@ -66,44 +66,38 @@ func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider
 
 	// Providers that should use the cached-token friendly threshold
 	cachedDiscountProviders := map[string]bool{
-		"openai": true,
+		// Note: OpenAI moved to highThresholdProviders due to generous caching
 	}
 
 	// Providers that need higher context thresholds for better performance
 	highThresholdProviders := map[string]bool{
-		"zai": true,
+		"openai": true,
+		"zai":    true,
 	}
 
 	if highThresholdProviders[provider] {
-		// ZAI needs more context for quality - use higher thresholds
-		const tokenCeiling = 160000      // 160K token absolute ceiling (vs 70K default)
-		const percentageThreshold = 0.85 // 85% threshold (vs 70% default)
+		// High threshold providers use 85% of total model context
+		const percentageThreshold = 0.85 // 85% threshold
+		tokenCeiling := int(float64(maxTokens) * percentageThreshold)
 
 		if cp.debug {
-			fmt.Printf("🔍 ZAI pruning check: current=%d, max=%d, ceiling=%d, threshold=%.1f%%\n",
-				currentTokens, maxTokens, tokenCeiling, percentageThreshold*100)
+			fmt.Printf("🔍 High threshold provider (%s) pruning check: current=%d, max=%d, ceiling=%d, threshold=%.1f%%\n",
+				provider, currentTokens, maxTokens, tokenCeiling, percentageThreshold*100)
 		}
 
-		// Check if we hit the absolute token ceiling
-		if currentTokens >= tokenCeiling {
+		// Check if we hit the percentage threshold (85% of max context)
+		contextUsage := float64(currentTokens) / float64(maxTokens)
+		if contextUsage >= percentageThreshold {
 			if cp.debug {
-				fmt.Printf("🔄 ZAI token ceiling hit: %d >= %d tokens\n", currentTokens, tokenCeiling)
-			}
-			return true
-		}
-
-		// Check if we hit the percentage threshold
-		zaiContextUsage := float64(currentTokens) / float64(maxTokens)
-		if zaiContextUsage >= percentageThreshold {
-			if cp.debug {
-				fmt.Printf("🔄 ZAI percentage threshold hit: %.1f%% >= %.1f%%\n", zaiContextUsage*100, percentageThreshold*100)
+				fmt.Printf("🔄 High threshold provider percentage threshold hit: %.1f%% >= %.1f%% (current=%d, ceiling=%d)\n", 
+					contextUsage*100, percentageThreshold*100, currentTokens, tokenCeiling)
 			}
 			return true
 		}
 
 		if cp.debug {
-			fmt.Printf("✅ ZAI pruning not needed: %.1f%% < %.1f%% and %d < %d\n",
-				zaiContextUsage*100, percentageThreshold*100, currentTokens, tokenCeiling)
+			fmt.Printf("✅ High threshold provider pruning not needed: %.1f%% < %.1f%% and %d < %d\n",
+				contextUsage*100, percentageThreshold*100, currentTokens, tokenCeiling)
 		}
 		return false
 	}
@@ -444,9 +438,15 @@ func (cp *ConversationPruner) getTargetTokens(messageCount int) int {
 
 // getTargetTokensForProvider returns provider-specific target tokens
 func (cp *ConversationPruner) getTargetTokensForProvider(messageCount int, provider string) int {
-	// ZAI needs more context for better quality
-	if provider == "zai" {
-		baseTarget := 90000 // ~90K tokens target for ZAI
+	// High threshold providers use 85% of model context
+	highThresholdProviders := map[string]bool{
+		"openai": true,
+		"zai":    true,
+	}
+	
+	if highThresholdProviders[provider] {
+		// Use 85% of typical context window (assuming 128K context for most models)
+		baseTarget := int(0.85 * 128000) // ~108K tokens target for high threshold providers
 
 		// Adjust based on message count
 		if messageCount < 20 {

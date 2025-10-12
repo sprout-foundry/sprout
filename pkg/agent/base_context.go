@@ -7,7 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	gitutil "github.com/alantheprice/ledit/pkg/git"
+	"github.com/alantheprice/ledit/pkg/filediscovery"
+	"github.com/alantheprice/ledit/pkg/git"
 )
 
 // baseContextSpec represents the JSON structure injected into the conversation
@@ -48,11 +49,8 @@ func BuildBaseContextJSON() string {
 		"build.gradle":     "java",
 	}
 
-	// Ignore directories
-	ignoreDirs := map[string]struct{}{
-		".git": {}, "node_modules": {}, "vendor": {}, "dist": {}, "build": {},
-		".cache": {}, ".venv": {}, "target": {}, "out": {}, ".next": {},
-	}
+	// Get ignore rules from filediscovery package
+	ignoreRules := filediscovery.GetIgnoreRules(root)
 
 	// Category buckets
 	files := map[string][]string{
@@ -87,14 +85,6 @@ func BuildBaseContextJSON() string {
 		if err != nil {
 			return nil
 		}
-		// Skip ignored directories
-		if d.IsDir() {
-			name := d.Name()
-			if _, ok := ignoreDirs[name]; ok {
-				return filepath.SkipDir
-			}
-			return nil
-		}
 
 		rel := path
 		if abs, err := filepath.Abs(path); err == nil {
@@ -103,6 +93,19 @@ func BuildBaseContextJSON() string {
 					rel = rel2
 				}
 			}
+		}
+
+		// Skip ignored files and directories using filediscovery rules
+		if ignoreRules != nil && ignoreRules.MatchesPath(rel) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Skip ignored directories
+		if d.IsDir() {
+			return filepath.SkipDir
 		}
 
 		base := filepath.Base(rel)
@@ -200,7 +203,7 @@ func (a *Agent) GetOrBuildBaseContext() string {
 }
 
 func detectRepoRoot() string {
-	if root, err := gitutil.GetGitRootDir(); err == nil && strings.TrimSpace(root) != "" {
+	if root, err := git.GetGitRootDir(); err == nil && strings.TrimSpace(root) != "" {
 		return root
 	}
 	if cwd, err := os.Getwd(); err == nil {

@@ -59,6 +59,7 @@ func NewZAIProviderWithModel(model string) (*ZAIProvider, error) {
 
 // SendChatRequest sends a chat completion request to Z.AI
 func (p *ZAIProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
+	fmt.Printf("🔍 SendChatRequest called with model: %s\n", p.model)
 	// Z.AI follows OpenAI message format
 	openaiMessages := BuildOpenAIChatMessages(messages, MessageConversionOptions{})
 	requestBody := map[string]interface{}{
@@ -92,11 +93,15 @@ func (p *ZAIProvider) SendChatRequest(messages []api.Message, tools []api.Tool, 
 		fmt.Printf("🔍 Z.AI Request Body: %s\n", string(body))
 	}
 
+	// Log curl request for debugging
+	p.logCurlRequest(url, body)
+
 	return p.sendRequestWithRetry(req, body)
 }
 
 // SendChatRequestStream sends a streaming chat request
 func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
+	fmt.Printf("=== ZAI SEND STREAM CALLED ===\n")
 	url := "https://api.z.ai/api/coding/paas/v4/chat/completions"
 
 	openaiMessages := BuildOpenAIStreamingMessages(messages, MessageConversionOptions{})
@@ -131,6 +136,10 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 		fmt.Printf("🔍 Z.AI Streaming Request Body: %s\n", string(body))
 	}
 
+	// Log curl request for debugging
+	p.logCurlRequest(url, body)
+
+	fmt.Printf("🔍 About to send streaming request to ZAI...\n")
 	resp, err := p.streamingClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("API request failed: %w", err)
@@ -201,10 +210,13 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 							// Send reasoning content through callback with grey formatting
 							if callback != nil {
 								if p.debug {
-									fmt.Printf("🤔 ZAI: Reasoning chunk (%d chars)\n", len(rc))
+									fmt.Printf("🤔 ZAI: Reasoning chunk (%d chars): %q\n", len(rc), rc)
 								}
 								// Format reasoning content in grey/dim text to indicate thinking
 								formattedReasoning := fmt.Sprintf("\033[2m%s\033[0m", rc)
+								if p.debug {
+									fmt.Printf("🎨 ZAI: Formatted reasoning: %q\n", formattedReasoning)
+								}
 								callback(formattedReasoning)
 							}
 						}
@@ -238,8 +250,7 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 												if p.debug {
 													fmt.Printf("🔧 ZAI: Tool call started: %s\n", name)
 												}
-												// Use zero-width space to reset timer without visible output
-												callback("\u200B")
+
 											}
 										}
 										if args, ok := fdata["arguments"].(string); ok {
@@ -249,7 +260,7 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 												if p.debug {
 													fmt.Printf("🔧 ZAI: Long tool arguments (%d chars), sending keep-alive\n", len(args))
 												}
-												callback("\u200B")
+
 											}
 										}
 									}
@@ -362,9 +373,10 @@ func (p *ZAIProvider) sendRequestWithRetry(req *http.Request, reqBody []byte) (*
 		Choices []struct {
 			Index   int `json:"index"`
 			Message struct {
-				Role      string         `json:"role"`
-				Content   string         `json:"content"`
-				ToolCalls []api.ToolCall `json:"tool_calls,omitempty"`
+				Role             string         `json:"role"`
+				Content          string         `json:"content"`
+				ReasoningContent string         `json:"reasoning_content,omitempty"`
+				ToolCalls        []api.ToolCall `json:"tool_calls,omitempty"`
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
@@ -405,9 +417,10 @@ func (p *ZAIProvider) sendRequestWithRetry(req *http.Request, reqBody []byte) (*
 				Images           []api.ImageData `json:"images,omitempty"`
 				ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
 			}{
-				Role:      choice.Message.Role,
-				Content:   choice.Message.Content,
-				ToolCalls: choice.Message.ToolCalls,
+				Role:             choice.Message.Role,
+				Content:          choice.Message.Content,
+				ReasoningContent: choice.Message.ReasoningContent,
+				ToolCalls:        choice.Message.ToolCalls,
 			},
 			FinishReason: choice.FinishReason,
 		}},
@@ -491,6 +504,31 @@ func (p *ZAIProvider) ListModels() ([]api.ModelInfo, error) {
 func (p *ZAIProvider) estimateCost(promptTokens, completionTokens int) float64 {
 	_ = math.Min(0, 0) // keep math import used
 	return 0.0
+}
+
+// logCurlRequest logs the current request as a runnable curl command
+func (p *ZAIProvider) logCurlRequest(url string, body []byte) {
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("zai_curl_request_%s.sh", timestamp)
+
+	curlCmd := fmt.Sprintf(`#!/bin/bash
+# ZAI API Request - %s
+# Run this script to reproduce the exact request
+
+API_KEY="${ZAI_API_KEY:-your_api_key_here}"
+
+curl -s -X POST "%s" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '%s' | jq '.'
+`, timestamp, url, string(body))
+
+	// Write to file
+	if err := os.WriteFile(filename, []byte(curlCmd), 0644); err == nil {
+		fmt.Printf("📝 Curl request logged to: %s\n", filename)
+	} else {
+		fmt.Printf("❌ Failed to write curl request to %s: %v\n", filename, err)
+	}
 }
 
 // Utility to coerce number to int safely

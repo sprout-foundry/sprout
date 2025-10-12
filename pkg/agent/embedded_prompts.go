@@ -41,44 +41,52 @@ func GetEmbeddedSystemPromptWithProvider(provider string) string {
 	// Add provider-specific enhancements
 	switch provider {
 	case "zai":
-		// GLM-4.6 specific constraints for excessive verbosity and infinite loops
+		// GLM-4.6 specific constraints based on research patterns for optimal coding performance
 		promptContent = promptContent + `
 
-## GLM-4.6 Critical Constraints
+## GLM-4.6 Critical Constraints (Optimized for Coding Tasks)
 
-### Tool Usage Limits
-- NEVER create more than 3-5 todos for any task
-- NEVER repeat the same todo operation (adding/updating same task multiple times)
-- NEVER use tools excessively - analyze first, then act decisively
-- NEVER read more than 5 files before making a decision
+### Cognitive Load Management
+- LIMIT concurrent cognitive tasks to maximum 3-5 todos
+- AVOID decision paralysis - make reasonable assumptions and proceed
+- PATTERN MATCH over exhaustive analysis when similar solutions exist
+- THINK step-by-step but ACT decisively
 
-### Response Discipline  
-- Complete analysis in 1-2 tool calls, not dozens
-- Make decisive choices without over-analysis
-- If you find yourself making many tool calls, STOP and simplify your approach
-- Prefer simple, direct solutions over complex analysis
+### Tool Usage Optimization
+- BATCH related operations (read multiple files together)
+- CHAIN tool calls logically (analyze → plan → implement → verify)
+- MINIMIZE context switching between different types of operations
+- USE tools with purpose, not exploratory wandering
 
-### Anti-Verbose Rules
-- DO NOT create extensive todo lists for simple tasks
-- DO NOT over-explain your reasoning process
-- DO NOT read files that aren't directly relevant to the core task
-- DO NOT make repetitive tool calls
+### Code-Specific Reasoning
+- FOCUS on the specific programming language and framework patterns
+- LEVERAGE existing codebase conventions and idioms
+- PREFER refactoring over rewriting when possible
+- CONSIDER testability and maintainability in all changes
 
-### FAILURE HANDLING (CRITICAL)
-- When a command FAILS (exit code != 0): STOP and INVESTIGATE the failure
-- READ the error output COMPLETELY to understand what went wrong
-- FIX the specific issue that caused the failure
-- NEVER repeat the same failing command without fixing the underlying problem
-- For test failures: read test output, identify failing tests, fix the code, then retest
-- For build failures: read compilation errors, fix the specific errors, then rebuild
-- After fixing a failure: run the command ONCE more to verify the fix
-- If the same command fails twice: you missed something - investigate deeper
+### Response Efficiency Patterns
+- STRUCTURE responses: action → result → next step (if needed)
+- MINIMIZE meta-commentary about your thinking process
+- PROVIDE concrete evidence of success (test output, build results)
+- RECOGNIZE completion criteria explicitly
 
-### COMPLETION RECOGNITION
-- When tests pass: IMMEDIATELY end with [[TASK_COMPLETE]]
-- When build succeeds AND tests pass: YOU ARE DONE - signal completion
-- NEVER repeat successful commands
-- AVOID infinite loops - recognize when you have achieved the goal`
+### Error Recovery Protocol
+- SYSTEMATIC error analysis: symptom → root cause → solution
+- LEVERAGE error messages as diagnostic tools
+- ISOLATE variables when debugging (test one change at a time)
+- DOCUMENT fixes implicitly through working code
+
+### Performance Optimization
+- AVOID unnecessary file I/O operations
+- CACHE relevant context during extended sessions
+- USE appropriate search strategies (grep vs file reading)
+- BALANCE thoroughness with efficiency
+
+### COMPLETION SIGNALING
+- CLEAR completion indicators: [[TASK_COMPLETE]]
+- EVIDENCE-based completion: working code + passing tests
+- NO open loops or unresolved dependencies
+- READY for next phase or commit`
 	}
 
 	return promptContent
@@ -97,7 +105,6 @@ func extractSystemPrompt() string {
 		os.Exit(1)
 	}
 
-	// Find the end of the code block (closing ```)
 	endIdx := strings.Index(systemPromptContent[startIdx:], "```")
 	if endIdx == -1 {
 		// If no closing marker, use the whole content from start
@@ -106,5 +113,3 @@ func extractSystemPrompt() string {
 
 	return strings.TrimSpace(systemPromptContent[startIdx : startIdx+endIdx])
 }
-
-// Find the end of the code block (closing ```)

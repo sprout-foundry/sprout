@@ -35,11 +35,11 @@ func TestZAIPruningThresholds(t *testing.T) {
 			description:   "85% should trigger pruning for ZAI",
 		},
 		{
-			name:          "ZAI At 100K Ceiling",
+			name:          "ZAI At 100K Tokens",
 			currentTokens: 100000,
 			provider:      "zai",
-			expectedPrune: true,
-			description:   "100K tokens should trigger pruning for ZAI (above 60% threshold)",
+			expectedPrune: false,
+			description:   "100K tokens should not trigger pruning for ZAI (78.1% < 85% threshold)",
 		},
 		{
 			name:          "ZAI Below Thresholds",

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // PruningStrategy defines different pruning approaches
@@ -67,6 +67,45 @@ func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider
 	// Providers that should use the cached-token friendly threshold
 	cachedDiscountProviders := map[string]bool{
 		"openai": true,
+	}
+
+	// Providers that need higher context thresholds for better performance
+	highThresholdProviders := map[string]bool{
+		"zai": true,
+	}
+
+	if highThresholdProviders[provider] {
+		// ZAI needs more context for quality - use higher thresholds
+		const tokenCeiling = 160000      // 160K token absolute ceiling (vs 70K default)
+		const percentageThreshold = 0.85 // 85% threshold (vs 70% default)
+
+		if cp.debug {
+			fmt.Printf("🔍 ZAI pruning check: current=%d, max=%d, ceiling=%d, threshold=%.1f%%\n",
+				currentTokens, maxTokens, tokenCeiling, percentageThreshold*100)
+		}
+
+		// Check if we hit the absolute token ceiling
+		if currentTokens >= tokenCeiling {
+			if cp.debug {
+				fmt.Printf("🔄 ZAI token ceiling hit: %d >= %d tokens\n", currentTokens, tokenCeiling)
+			}
+			return true
+		}
+
+		// Check if we hit the percentage threshold
+		zaiContextUsage := float64(currentTokens) / float64(maxTokens)
+		if zaiContextUsage >= percentageThreshold {
+			if cp.debug {
+				fmt.Printf("🔄 ZAI percentage threshold hit: %.1f%% >= %.1f%%\n", zaiContextUsage*100, percentageThreshold*100)
+			}
+			return true
+		}
+
+		if cp.debug {
+			fmt.Printf("✅ ZAI pruning not needed: %.1f%% < %.1f%% and %d < %d\n",
+				zaiContextUsage*100, percentageThreshold*100, currentTokens, tokenCeiling)
+		}
+		return false
 	}
 
 	if cachedDiscountProviders[provider] {
@@ -136,11 +175,11 @@ func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentT
 	case PruneStrategySlidingWindow:
 		pruned = cp.pruneSlidingWindow(messages)
 	case PruneStrategyImportance:
-		pruned = cp.pruneByImportance(messages)
+		pruned = cp.pruneByImportance(messages, provider)
 	case PruneStrategyHybrid:
-		pruned = cp.pruneHybrid(messages, optimizer)
+		pruned = cp.pruneHybrid(messages, optimizer, provider)
 	case PruneStrategyAdaptive:
-		pruned = cp.pruneAdaptive(messages, currentTokens, maxTokens, optimizer)
+		pruned = cp.pruneAdaptive(messages, currentTokens, maxTokens, optimizer, provider)
 	default:
 		pruned = messages // No pruning
 	}
@@ -182,7 +221,7 @@ func (cp *ConversationPruner) pruneSlidingWindow(messages []api.Message) []api.M
 }
 
 // pruneByImportance keeps messages based on importance scoring
-func (cp *ConversationPruner) pruneByImportance(messages []api.Message) []api.Message {
+func (cp *ConversationPruner) pruneByImportance(messages []api.Message, provider string) []api.Message {
 	// Score all messages
 	scores := cp.scoreMessages(messages)
 
@@ -209,7 +248,7 @@ func (cp *ConversationPruner) pruneByImportance(messages []api.Message) []api.Me
 	}
 
 	// Keep high-importance messages from the middle
-	targetTokens := cp.getTargetTokens(len(messages))
+	targetTokens := cp.getTargetTokensForProvider(len(messages), provider)
 	currentTokens := cp.estimateTokensForIndices(messages, keepIndices)
 
 	// Sort messages by importance (excluding already kept ones)
@@ -234,16 +273,16 @@ func (cp *ConversationPruner) pruneByImportance(messages []api.Message) []api.Me
 }
 
 // pruneHybrid combines sliding window with importance scoring
-func (cp *ConversationPruner) pruneHybrid(messages []api.Message, optimizer *ConversationOptimizer) []api.Message {
+func (cp *ConversationPruner) pruneHybrid(messages []api.Message, optimizer *ConversationOptimizer, provider string) []api.Message {
 	// First apply optimizer's deduplication
 	optimized := optimizer.OptimizeConversation(messages)
 
 	// Then apply importance-based pruning
-	return cp.pruneByImportance(optimized)
+	return cp.pruneByImportance(optimized, provider)
 }
 
 // pruneAdaptive uses different strategies based on conversation characteristics
-func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentTokens, maxTokens int, optimizer *ConversationOptimizer) []api.Message {
+func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentTokens, maxTokens int, optimizer *ConversationOptimizer, provider string) []api.Message {
 	contextUsage := float64(currentTokens) / float64(maxTokens)
 
 	// Analyze conversation characteristics
@@ -263,7 +302,7 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 		if cp.debug {
 			fmt.Printf("📊 Long technical conversation detected, using hybrid pruning\n")
 		}
-		return cp.pruneHybrid(messages, optimizer)
+		return cp.pruneHybrid(messages, optimizer, provider)
 	} else if hasLargeFiles {
 		// File-heavy conversation - focus on deduplication
 		if cp.debug {
@@ -280,7 +319,7 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 		if cp.debug {
 			fmt.Printf("⚖️ Using importance-based pruning\n")
 		}
-		return cp.pruneByImportance(messages)
+		return cp.pruneByImportance(messages, provider)
 	}
 }
 
@@ -401,6 +440,26 @@ func (cp *ConversationPruner) getTargetTokens(messageCount int) int {
 	} else {
 		return baseTarget - 20000
 	}
+}
+
+// getTargetTokensForProvider returns provider-specific target tokens
+func (cp *ConversationPruner) getTargetTokensForProvider(messageCount int, provider string) int {
+	// ZAI needs more context for better quality
+	if provider == "zai" {
+		baseTarget := 90000 // ~90K tokens target for ZAI
+
+		// Adjust based on message count
+		if messageCount < 20 {
+			return baseTarget
+		} else if messageCount < 50 {
+			return baseTarget - 10000
+		} else {
+			return baseTarget - 20000
+		}
+	}
+
+	// Default for other providers
+	return cp.getTargetTokens(messageCount)
 }
 
 func (cp *ConversationPruner) countToolCalls(messages []api.Message) int {

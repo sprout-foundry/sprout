@@ -584,7 +584,7 @@ func (sf *StreamingFormatter) filterXMLToolCalls(content string) string {
 	// Additional pattern to catch malformed/incomplete XML tags that might slip through
 	// This handles cases like <function=tool_name... without proper closing
 	malformedPatterns := []struct {
-		pattern string
+		pattern  string
 		replacer func(string) string
 	}{
 		// Catch incomplete <function=...> tags

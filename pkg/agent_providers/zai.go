@@ -152,6 +152,7 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 	scanner := bufio.NewScanner(resp.Body)
 	var content strings.Builder
 	var reasoningContent strings.Builder
+	var reasoningChunkCount int // Counter to reduce debug overhead for 1-char chunks
 	var toolCalls []api.ToolCall
 	var toolCallsMap = make(map[string]*api.ToolCall)
 	var finishReason string
@@ -195,7 +196,7 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 						if c, ok := delta["content"].(string); ok && c != "" {
 							content.WriteString(c)
 							if callback != nil {
-								if p.debug {
+								if p.debug && len(c) > 1 { // Only log chunks larger than 1 char to reduce noise
 									fmt.Printf("💬 ZAI: Content chunk (%d chars)\n", len(c))
 								}
 								callback(c)
@@ -204,17 +205,20 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 						// Track reasoning content if present
 						if rc, ok := delta["reasoning_content"].(string); ok && rc != "" {
 							reasoningContent.WriteString(rc)
-							// Send reasoning content through callback with grey formatting
+							reasoningChunkCount++
+							// Send reasoning content directly to output (not through callback to avoid ANSI pollution)
 							if callback != nil {
-								if p.debug {
-									fmt.Printf("🤔 ZAI: Reasoning chunk (%d chars): %q\n", len(rc), rc)
+								// Reduce debug overhead for frequent 1-char chunks
+								if p.debug && (len(rc) > 1 || reasoningChunkCount%100 == 0) {
+									fmt.Printf("🤔 ZAI: Reasoning chunk (%d chars, #%d): %q\n", len(rc), reasoningChunkCount, rc)
 								}
 								// Format reasoning content in grey/dim text to indicate thinking
 								formattedReasoning := fmt.Sprintf("\033[2m%s\033[0m", rc)
-								if p.debug {
+								if p.debug && (len(rc) > 1 || reasoningChunkCount%100 == 0) {
 									fmt.Printf("🎨 ZAI: Formatted reasoning: %q\n", formattedReasoning)
 								}
-								callback(formattedReasoning)
+								// Send formatted reasoning directly to output to avoid polluting the streaming buffer
+								fmt.Print(formattedReasoning)
 							}
 						}
 						// Track tool calls if present

@@ -2,16 +2,55 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
+
+// logAPIRequest saves the full API request payload to .ledit/lastRequest.json
+func logAPIRequest(messages []api.Message, tools []api.Tool, reasoning string, streaming bool) {
+	// Create the request structure
+	request := api.ChatRequest{
+		Messages:  messages,
+		Tools:     tools,
+		Reasoning: reasoning,
+		Stream:    streaming,
+	}
+
+	// Get the model from the first available provider (for logging purposes)
+	// This is a best-effort approach - the actual model might be set by the specific provider
+	request.Model = "unknown"
+
+	// Convert to JSON
+	jsonData, err := json.MarshalIndent(request, "", "  ")
+	if err != nil {
+		// If we can't marshal, create a simple text representation
+		jsonData = []byte(fmt.Sprintf("Failed to marshal request: %v\nMessages: %d\nTools: %d\nReasoning: %s\nStreaming: %v",
+			err, len(messages), len(tools), reasoning, streaming))
+	}
+
+	// Ensure .ledit directory exists
+	leditDir := filepath.Join(os.Getenv("HOME"), ".ledit")
+	if err := os.MkdirAll(leditDir, 0755); err != nil {
+		// If we can't create the directory, we can't log
+		return
+	}
+
+	// Write to lastRequest.json
+	filePath := filepath.Join(leditDir, "lastRequest.json")
+	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
+		// If we can't write the file, we can't log
+		return
+	}
+}
 
 // APIClient handles all LLM API communication with retry logic
 type APIClient struct {
@@ -281,6 +320,9 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 		}
 	}
 
+	// Log the full API request payload
+	logAPIRequest(messages, tools, reasoning, true)
+
 	// Start the API call in a goroutine
 	go func() {
 		if ac.agent.debug {
@@ -371,6 +413,9 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 		resp *api.ChatResponse
 		err  error
 	}, 1)
+
+	// Log the full API request payload
+	logAPIRequest(messages, tools, reasoning, false)
 
 	// Start the API call in a goroutine
 	go func() {

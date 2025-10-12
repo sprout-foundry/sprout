@@ -89,7 +89,7 @@ func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider
 		contextUsage := float64(currentTokens) / float64(maxTokens)
 		if contextUsage >= percentageThreshold {
 			if cp.debug {
-				fmt.Printf("🔄 High threshold provider percentage threshold hit: %.1f%% >= %.1f%% (current=%d, ceiling=%d)\n", 
+				fmt.Printf("🔄 High threshold provider percentage threshold hit: %.1f%% >= %.1f%% (current=%d, ceiling=%d)\n",
 					contextUsage*100, percentageThreshold*100, currentTokens, tokenCeiling)
 			}
 			return true
@@ -443,7 +443,7 @@ func (cp *ConversationPruner) getTargetTokensForProvider(messageCount int, provi
 		"openai": true,
 		"zai":    true,
 	}
-	
+
 	if highThresholdProviders[provider] {
 		// Use 85% of typical context window (assuming 128K context for most models)
 		baseTarget := int(0.85 * 128000) // ~108K tokens target for high threshold providers

@@ -39,7 +39,7 @@ func TestGetEmbeddedSystemPromptWithProvider(t *testing.T) {
 		t.Error("ZAI prompt should contain GLM-4.6 specific constraints")
 	}
 
-	if !strings.Contains(zaiPrompt, "NEVER create more than 3-5 todos") {
+	if !strings.Contains(zaiPrompt, "LIMIT concurrent cognitive tasks to maximum 3-5 todos") {
 		t.Error("ZAI prompt should contain todo limits")
 	}
 

@@ -181,11 +181,23 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		contentUsed = ch.agent.streamingBuffer.String()
 	}
 
+	// Optimize reasoning content for ZAI to prevent conversation bloat
+	reasoningContent := choice.Message.ReasoningContent
+	if ch.agent.client.GetProvider() == "zai" && reasoningContent != "" {
+		ch.agent.debugLog("🔍 ZAI reasoning content length: %d chars\n", len(reasoningContent))
+		// For ZAI, truncate extremely verbose reasoning to prevent loop detection
+		if len(reasoningContent) > 2000 {
+			ch.agent.debugLog("✂️ Truncating ZAI reasoning from %d to ~%d chars\n", len(reasoningContent), 2000)
+			// Keep only the first and last parts of very long reasoning
+			reasoningContent = reasoningContent[:1000] + "\n... [reasoning truncated for ZAI] ...\n" + reasoningContent[len(reasoningContent)-1000:]
+		}
+	}
+
 	// Add to conversation history
 	ch.agent.messages = append(ch.agent.messages, api.Message{
 		Role:             "assistant",
 		Content:          contentUsed,
-		ReasoningContent: choice.Message.ReasoningContent,
+		ReasoningContent: reasoningContent,
 		ToolCalls:        choice.Message.ToolCalls,
 	})
 
@@ -291,18 +303,35 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	// Check for blank iteration (no content and no tool calls)
 	isBlankIteration := ch.isBlankIteration(contentUsed, choice.Message.ToolCalls)
 
-	if isBlankIteration {
+	// Check for repetitive content loop
+	isRepetitiveContent := ch.isRepetitiveContent(contentUsed)
+
+	if isBlankIteration || isRepetitiveContent {
 		ch.consecutiveBlankIterations++
-		ch.agent.debugLog("⚠️ Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
+		if isBlankIteration {
+			ch.agent.debugLog("⚠️ Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
+		} else {
+			ch.agent.debugLog("⚠️ Repetitive content detected (%d consecutive)\n", ch.consecutiveBlankIterations)
+		}
 
 		if ch.consecutiveBlankIterations == 1 {
-			// First blank iteration - provide explicit, actionable reminder
+			// First blank/repetitive iteration - provide explicit, actionable reminder
 			ch.agent.debugLog("🔔 Sending reminder about task completion signal and next action\n")
-			reminderMessage := api.Message{
-				Role: "user",
-				Content: "You provided no content. If you are finished, reply exactly with [[TASK_COMPLETE]]. If not finished, continue now with your next concrete action/output.\n" +
+			var reminderContent string
+			if isRepetitiveContent {
+				reminderContent = "You appear to be stuck in a repetitive loop. Please break out of this pattern and either:\n" +
+					"1. If you are finished, reply exactly with [[TASK_COMPLETE]]\n" +
+					"2. If not finished, take a concrete action (use tools) or provide a specific result\n" +
+					"3. Avoid repeating the same phrases and move forward with the actual task.\n" +
+					"- Focus on making actual changes or providing specific findings."
+			} else {
+				reminderContent = "You provided no content. If you are finished, reply exactly with [[TASK_COMPLETE]]. If not finished, continue now with your next concrete action/output.\n" +
 					"- If you intend to use tools, emit valid tool_calls with proper JSON arguments.\n" +
-					"- Otherwise, proceed with the actual result (not a plan).",
+					"- Otherwise, proceed with the actual result (not a plan)."
+			}
+			reminderMessage := api.Message{
+				Role:    "user",
+				Content: reminderContent,
 			}
 			ch.agent.messages = append(ch.agent.messages, reminderMessage)
 
@@ -671,6 +700,78 @@ func (ch *ConversationHandler) isBlankIteration(content string, toolCalls []api.
 	// (e.g., single character, just punctuation, etc.)
 	if len(trimmedContent) <= 3 {
 		return true
+	}
+
+	return false
+}
+
+// isRepetitiveContent checks if the content is repetitive or indicates a loop
+func (ch *ConversationHandler) isRepetitiveContent(content string) bool {
+	trimmedContent := strings.TrimSpace(content)
+
+	// Check for common repetitive patterns that indicate the agent is stuck
+	repetitivePatterns := []string{
+		"let me check for any simple improvements",
+		"let me look for any obvious issues",
+		"let me check for any simple improvements by looking at the file more carefully",
+		"let me look for any obvious issues:",
+		"let me check for any simple improvements by looking at the file more carefully. let me look for any obvious issues:",
+		"let me look at the agent creation code more carefully:",
+		"let me look at the",
+		"let me examine the",
+		"let me analyze the",
+		"let me review the",
+		"let me check the",
+		"let me investigate the",
+		"let me explore the",
+		"let me understand the",
+		"let me look more carefully at",
+		"let me examine more carefully",
+		"let me analyze this more carefully",
+		"let me review this more carefully",
+		"let me take a closer look at",
+		"let me examine this in more detail",
+		"let me analyze this in more detail",
+		"let me look at this more closely",
+		"let me examine the code more carefully",
+		"let me look at the code more carefully",
+		"let me analyze the code more carefully",
+		"let me review the code more carefully",
+	}
+
+	lowerContent := strings.ToLower(trimmedContent)
+	for _, pattern := range repetitivePatterns {
+		if strings.Contains(lowerContent, pattern) {
+			ch.agent.debugLog("🔄 Repetitive content pattern detected: %s\n", pattern)
+			return true
+		}
+	}
+
+	// Check if the content is exactly the same as the previous assistant message
+	if len(ch.agent.messages) >= 2 {
+		lastAssistantMsg := ch.agent.messages[len(ch.agent.messages)-2]
+		if lastAssistantMsg.Role == "assistant" && strings.TrimSpace(lastAssistantMsg.Content) == trimmedContent {
+			ch.agent.debugLog("🔄 Exact duplicate content detected\n")
+			return true
+		}
+	}
+
+	// Check for excessive repetition of the same phrase
+	words := strings.Fields(lowerContent)
+	if len(words) > 10 {
+		// Count word frequency
+		wordCount := make(map[string]int)
+		for _, word := range words {
+			wordCount[word]++
+		}
+
+		// If any word appears more than 30% of the time, it's likely repetitive
+		for word, count := range wordCount {
+			if float64(count)/float64(len(words)) > 0.3 && len(word) > 3 {
+				ch.agent.debugLog("🔄 High word repetition detected: %s (%d/%d)\n", word, count, len(words))
+				return true
+			}
+		}
 	}
 
 	return false

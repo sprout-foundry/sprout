@@ -243,9 +243,9 @@ func (p *providerDropdownItem) Value() interface{} { return p.provider }
 func (p *ProvidersCommand) setProvider(providerName string, configManager *configuration.Manager, chatAgent *agent.Agent) error {
 	// Convert name to provider type
 	provider, err := api.ParseProviderName(strings.ToLower(providerName))
-    if err != nil {
-        return fmt.Errorf("unknown provider '%s'. Available: openai, zai, deepinfra, ollama, ollama-turbo, openrouter, lmstudio, test", providerName)
-    }
+	if err != nil {
+		return fmt.Errorf("unknown provider '%s'. Available: openai, zai, deepinfra, ollama, ollama-turbo, openrouter, lmstudio, test", providerName)
+	}
 
 	// Check if provider needs API key but doesn't have one
 	if !api.IsProviderAvailable(provider) && provider != api.OllamaLocalClientType {
@@ -276,15 +276,15 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 
 // getProviderDisplayName returns a user-friendly name for the provider
 func getProviderDisplayName(provider api.ClientType) string {
-    switch provider {
-    case api.OpenAIClientType:
-        return "OpenAI"
-    case api.ZAIClientType:
-        return "Z.AI Coding Plan"
-    case api.DeepInfraClientType:
-        return "DeepInfra"
-    case api.OpenRouterClientType:
-        return "OpenRouter"
+	switch provider {
+	case api.OpenAIClientType:
+		return "OpenAI"
+	case api.ZAIClientType:
+		return "Z.AI Coding Plan"
+	case api.DeepInfraClientType:
+		return "DeepInfra"
+	case api.OpenRouterClientType:
+		return "OpenRouter"
 	case api.OllamaClientType:
 		return "Ollama"
 	case api.OllamaLocalClientType:

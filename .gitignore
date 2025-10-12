@@ -9,8 +9,18 @@ ui_test_logs/
 tool_calls.log
 test_home/
 
-.DS_STORE
+.DS_Store
 .vscode/
 .idea/
 .bin/
 plans/
+
+# Common build and dependency directories
+node_modules/
+vendor/
+dist/
+build/
+target/
+out/
+.cache/
+.venv/

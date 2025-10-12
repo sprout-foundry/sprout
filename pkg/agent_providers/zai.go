@@ -59,7 +59,6 @@ func NewZAIProviderWithModel(model string) (*ZAIProvider, error) {
 
 // SendChatRequest sends a chat completion request to Z.AI
 func (p *ZAIProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string) (*api.ChatResponse, error) {
-	fmt.Printf("🔍 SendChatRequest called with model: %s\n", p.model)
 	// Z.AI follows OpenAI message format
 	openaiMessages := BuildOpenAIChatMessages(messages, MessageConversionOptions{})
 	requestBody := map[string]interface{}{
@@ -91,17 +90,15 @@ func (p *ZAIProvider) SendChatRequest(messages []api.Message, tools []api.Tool, 
 	if p.debug {
 		fmt.Printf("🔍 Z.AI Request URL: %s\n", url)
 		fmt.Printf("🔍 Z.AI Request Body: %s\n", string(body))
+		// Log curl request for debugging
+		p.logCurlRequest(url, body)
 	}
-
-	// Log curl request for debugging
-	p.logCurlRequest(url, body)
 
 	return p.sendRequestWithRetry(req, body)
 }
 
 // SendChatRequestStream sends a streaming chat request
 func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
-	fmt.Printf("=== ZAI SEND STREAM CALLED ===\n")
 	url := "https://api.z.ai/api/coding/paas/v4/chat/completions"
 
 	openaiMessages := BuildOpenAIStreamingMessages(messages, MessageConversionOptions{})
@@ -134,12 +131,12 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 	if p.debug {
 		fmt.Printf("🔍 Z.AI Streaming Request URL: %s\n", url)
 		fmt.Printf("🔍 Z.AI Streaming Request Body: %s\n", string(body))
+		// Log curl request for debugging
+		p.logCurlRequest(url, body)
+
+		fmt.Printf("🔍 About to send streaming request to ZAI...\n")
 	}
 
-	// Log curl request for debugging
-	p.logCurlRequest(url, body)
-
-	fmt.Printf("🔍 About to send streaming request to ZAI...\n")
 	resp, err := p.streamingClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("API request failed: %w", err)

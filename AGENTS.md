@@ -4,11 +4,9 @@ This guide helps contributors work effectively on ledit, an AI‑assisted code e
 
 ## Project Structure & Module Organization
 - `cmd/`: Cobra CLI commands (e.g., `agent`, `shell`, `commit`).
-- `pkg/agent/`: Core agent (conversation, tools, streaming, MCP, change tracking).
-- `pkg/agent_api/`: LLM provider clients (OpenAI, OpenRouter, DeepInfra, Ollama).
-- `pkg/console/`: Terminal UI framework and components (agent console, input, footer).
-- `pkg/tools/`: Built‑in tool implementations (file ops, shell, web, validation, rollback).
-- Other key packages: `pkg/agent_commands/`, `pkg/configuration/`, `pkg/workspace/`, `pkg/history/`.
+- `internal/domain/`: Core domain entities (agent, todo).
+- `pkg/ui/`: UI framework and components.
+- `pkg/`: Other core packages (currently under development).
 - Tests: Go unit tests co‑located; E2E runner `test_runner.py`; integration tests in `integration_tests/`.
 
 ## Build, Test, and Development Commands

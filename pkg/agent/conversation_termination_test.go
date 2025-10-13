@@ -112,6 +112,36 @@ func TestProcessResponse_AllowsImplicitCompletionForAllowedModel(t *testing.T) {
 	}
 }
 
+// Test that LMStudio does NOT allow implicit completion
+func TestProcessResponse_LMStudioDisallowsImplicitCompletion(t *testing.T) {
+	agent := &Agent{client: newStubClient("lmstudio", "test-model")}
+	
+	// Debug: Check the policy
+	t.Logf("Provider: %s", agent.GetProvider())
+	t.Logf("Should allow implicit completion: %t", agent.shouldAllowImplicitCompletion())
+	
+	ch := NewConversationHandler(agent)
+
+	choice := api.Choice{}
+	choice.Message.Role = "assistant"
+	choice.Message.Content = "Here is the answer. Everything is done."
+	resp := &api.ChatResponse{
+		Choices: []api.Choice{choice},
+	}
+
+	stopped := ch.processResponse(resp)
+	assert.False(t, stopped, "Expected conversation to continue until explicit completion signal is provided for LMStudio")
+
+	reminderFound := false
+	for _, m := range agent.messages {
+		if m.Role == "user" && strings.Contains(m.Content, "[[TASK_COMPLETE]]") {
+			reminderFound = true
+			break
+		}
+	}
+	assert.True(t, reminderFound, "Expected reminder requesting [[TASK_COMPLETE]] to be appended for LMStudio")
+}
+
 // Test that explicit [[TASK_COMPLETE]] is handled and stripped
 func TestProcessResponse_ExplicitCompletionSignal(t *testing.T) {
 	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}

@@ -52,6 +52,43 @@ func logAPIRequest(messages []api.Message, tools []api.Tool, reasoning string, s
 	}
 }
 
+// logAPIResponse saves the accumulated streaming response to .ledit/lastResponse.json
+func LogAPIResponse(content string, streaming bool) {
+	// Create the response structure
+	response := map[string]interface{}{
+		"content":   content,
+		"streaming": streaming,
+		"timestamp": time.Now().Format(time.RFC3339),
+	}
+
+	// Convert to JSON
+	jsonData, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		// If we can't marshal, create a simple text representation
+		jsonData = []byte(fmt.Sprintf("Failed to marshal response: %v\nContent length: %d\nStreaming: %v\nTimestamp: %s",
+			err, len(content), streaming, time.Now().Format(time.RFC3339)))
+	}
+
+	// Ensure .ledit directory exists
+	leditDir := filepath.Join(os.Getenv("HOME"), ".ledit")
+	if err := os.MkdirAll(leditDir, 0755); err != nil {
+		// If we can't create the directory, we can't log
+		return
+	}
+
+	// Write to lastResponse.json
+	filePath := filepath.Join(leditDir, "lastResponse.json")
+	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
+		// If we can't write the file, we can't log
+		return
+	}
+}
+
+// logAPIResponse saves the accumulated streaming response to .ledit/lastResponse.json
+func logAPIResponse(content string, streaming bool) {
+	LogAPIResponse(content, streaming)
+}
+
 // APIClient handles all LLM API communication with retry logic
 type APIClient struct {
 	agent             *Agent
@@ -387,11 +424,34 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 				ac.agent.outputMutex.Unlock()
 			}
 
+			// Log the accumulated streaming response for debugging
+			if ac.agent.streamingEnabled {
+				logAPIResponse(ac.agent.streamingBuffer.String(), true)
+			}
+
 			if result.err != nil {
 				if !ac.isRateLimit(result.err.Error()) {
 					ac.displayAPIError(result.err)
 				}
+				return result.resp, result.err
 			}
+
+			// Apply completion policy for streaming responses only for providers that require explicit completion
+			if result.resp != nil {
+				// Check if this provider allows implicit completion
+				if !ac.agent.shouldAllowImplicitCompletion() {
+					handler := NewConversationHandler(ac.agent)
+					shouldStop := handler.processResponse(result.resp)
+					if shouldStop {
+						ac.agent.debugLog("✅ Streaming response complete - explicit completion signal received\n")
+					} else {
+						ac.agent.debugLog("➡️ Streaming response incomplete - waiting for explicit completion signal\n")
+					}
+				} else {
+					ac.agent.debugLog("✅ Streaming response complete - implicit completion allowed for provider\n")
+				}
+			}
+
 			return result.resp, result.err
 		}
 	}

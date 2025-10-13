@@ -894,7 +894,7 @@ func (s *CodeReviewService) applyPatchToContent(patchResolution *types.PatchReso
 	// Handle multi-file patches
 	if len(patchResolution.MultiFile) > 0 {
 		s.logger.LogProcessStep(fmt.Sprintf("Applying multi-file patch with %d files", len(patchResolution.MultiFile)))
-		for filePath, _ := range patchResolution.MultiFile {
+		for filePath := range patchResolution.MultiFile {
 			s.logger.LogProcessStep(fmt.Sprintf("Would apply patch to: %s", filePath))
 		}
 		// For now, return an error to signal that multi-file patches need to be applied

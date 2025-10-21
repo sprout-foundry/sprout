@@ -292,6 +292,10 @@ func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]int
 	case "read_file":
 		// Reading files is often repeated during troubleshooting
 		threshold = 5
+		// But be more aggressive for ZAI to prevent loops
+		if te.agent.GetProvider() == "zai" {
+			threshold = 3
+		}
 	case "shell_command":
 		// Shell commands are frequently repeated during troubleshooting and debugging
 		threshold = 8

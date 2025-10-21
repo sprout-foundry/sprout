@@ -3,8 +3,10 @@ package agent
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"golang.org/x/text/cases"
@@ -179,6 +181,14 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	if ch.agent.streamingEnabled && len(ch.agent.streamingBuffer.String()) > 0 {
 		// Use the fully streamed content if available
 		contentUsed = ch.agent.streamingBuffer.String()
+		if ch.agent.debug {
+			// Debug: Check for ANSI codes in content being added to conversation
+			if strings.Contains(contentUsed, "\x1b[") || strings.Contains(contentUsed, "\x1b(") {
+				ch.agent.debugLog("🚨 ANSI DETECTED in conversation content: %q\n", contentUsed)
+			}
+		}
+		// Sanitize content to remove ANSI codes that might have leaked in
+		contentUsed = ch.sanitizeContent(contentUsed)
 	}
 
 	// Optimize reasoning content for ZAI to prevent conversation bloat
@@ -198,8 +208,21 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		Role:             "assistant",
 		Content:          contentUsed,
 		ReasoningContent: reasoningContent,
-		ToolCalls:        choice.Message.ToolCalls,
 	})
+
+	// ZAI-specific completion detection
+	if ch.agent.client.GetProvider() == "zai" {
+		// Check if this looks like an incomplete or empty response that might cause loops
+		if strings.TrimSpace(contentUsed) == "" ||
+			strings.HasSuffix(strings.TrimSpace(contentUsed), "I understand") ||
+			len(strings.TrimSpace(contentUsed)) < 20 {
+			if ch.agent.debug {
+				ch.agent.debugLog("🔍 ZAI potential incomplete response detected: %q\n", contentUsed)
+			}
+			// Force completion to prevent infinite loops
+			return true
+		}
+	}
 
 	// Update token tracking
 	ch.agent.updateTokenUsage(resp.Usage)
@@ -642,15 +665,23 @@ func (ch *ConversationHandler) handleIncompleteResponse() {
 }
 
 func (ch *ConversationHandler) handleMissingCompletionSignal() {
-	if ch.missingCompletionReminders > 0 {
-		// Already reminded once; continue waiting without spamming the model.
+	// Allow multiple reminders but with increasing intervals to avoid infinite loops
+	if ch.missingCompletionReminders >= 3 {
+		// After 3 reminders, assume the agent is stuck and provide stronger guidance
+		ch.agent.debugLog("⚠️ Multiple completion reminders sent, providing stronger guidance\n")
+		strongReminder := "You have not provided [[TASK_COMPLETE]] after multiple reminders. Please:\n" +
+			"1. If your task is COMPLETE, respond exactly with: [[TASK_COMPLETE]]\n" +
+			"2. If your task is NOT complete, take a specific ACTION (use tools) or provide a concrete RESULT\n" +
+			"3. Do not provide explanations or plans - take action or confirm completion."
+		ch.agent.messages = append(ch.agent.messages, api.Message{Role: "user", Content: strongReminder})
+		ch.missingCompletionReminders++
 		return
 	}
 
 	reminder := "Please confirm completion by responding with [[TASK_COMPLETE]] once all requested work is fully done. If you still have steps remaining, continue with the next action."
 	ch.agent.messages = append(ch.agent.messages, api.Message{Role: "user", Content: reminder})
 	ch.missingCompletionReminders++
-	ch.agent.debugLog("🔔 Added reminder requesting explicit [[TASK_COMPLETE]] signal\n")
+	ch.agent.debugLog("🔔 Added reminder requesting explicit [[TASK_COMPLETE]] signal (reminder #%d)\n", ch.missingCompletionReminders)
 }
 
 func (ch *ConversationHandler) finalizeConversation() (string, error) {
@@ -677,6 +708,26 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 	return "", fmt.Errorf("no assistant response found")
 }
 
+// sanitizeContent removes ANSI escape sequences and other problematic characters from content
+func (ch *ConversationHandler) sanitizeContent(content string) string {
+	// Remove ANSI escape sequences
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[mGKHJABCD]`)
+	cleaned := ansiRegex.ReplaceAllString(content, "")
+
+	// Remove other potential ANSI sequences
+	ansiRegex2 := regexp.MustCompile(`\x1b\([0-9;]*[AB]`)
+	cleaned = ansiRegex2.ReplaceAllString(cleaned, "")
+
+	// Remove any remaining escape characters
+	cleaned = strings.ReplaceAll(cleaned, "\x1b", "")
+
+	if ch.agent.debug && cleaned != content {
+		ch.agent.debugLog("🧹 Sanitized content, removed %d ANSI chars\n", len(content)-len(cleaned))
+	}
+
+	return cleaned
+}
+
 // processImagesInQuery handles image processing in queries
 func (ch *ConversationHandler) processImagesInQuery(query string) (string, error) {
 	// Move image processing logic here
@@ -697,9 +748,20 @@ func (ch *ConversationHandler) isBlankIteration(content string, toolCalls []api.
 	}
 
 	// Check if content is just a very short response that doesn't seem meaningful
-	// (e.g., single character, just punctuation, etc.)
-	if len(trimmedContent) <= 3 {
+	// Be less aggressive - only consider truly meaningless content as blank
+	if len(trimmedContent) <= 1 {
+		// Only single characters or empty content should be considered blank
 		return true
+	}
+
+	// Check if it's just punctuation or whitespace
+	if len(trimmedContent) <= 3 {
+		for _, char := range trimmedContent {
+			if !unicode.IsPunct(rune(char)) && !unicode.IsSpace(rune(char)) {
+				return false // Contains a non-punctuation character, not blank
+			}
+		}
+		return true // All punctuation/space, considered blank
 	}
 
 	return false
@@ -710,6 +772,7 @@ func (ch *ConversationHandler) isRepetitiveContent(content string) bool {
 	trimmedContent := strings.TrimSpace(content)
 
 	// Check for common repetitive patterns that indicate the agent is stuck
+	// Focus on specific problematic patterns rather than common analysis phrases
 	repetitivePatterns := []string{
 		"let me check for any simple improvements",
 		"let me look for any obvious issues",
@@ -717,26 +780,8 @@ func (ch *ConversationHandler) isRepetitiveContent(content string) bool {
 		"let me look for any obvious issues:",
 		"let me check for any simple improvements by looking at the file more carefully. let me look for any obvious issues:",
 		"let me look at the agent creation code more carefully:",
-		"let me look at the",
-		"let me examine the",
-		"let me analyze the",
-		"let me review the",
-		"let me check the",
-		"let me investigate the",
-		"let me explore the",
-		"let me understand the",
-		"let me look more carefully at",
-		"let me examine more carefully",
-		"let me analyze this more carefully",
-		"let me review this more carefully",
-		"let me take a closer look at",
-		"let me examine this in more detail",
-		"let me analyze this in more detail",
-		"let me look at this more closely",
-		"let me examine the code more carefully",
-		"let me look at the code more carefully",
-		"let me analyze the code more carefully",
-		"let me review the code more carefully",
+		// Remove overly broad patterns like "let me examine the", "let me analyze the", etc.
+		// These are common legitimate analysis phrases that shouldn't trigger repetition detection
 	}
 
 	lowerContent := strings.ToLower(trimmedContent)

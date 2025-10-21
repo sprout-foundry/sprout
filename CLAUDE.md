@@ -44,32 +44,22 @@ The UI components are critical for user interaction and terminal display. Any ch
 
 ### Core Components
 
-**Agent System** (`pkg/agent/`):
-- **Main Agent** (`agent.go`): Core entry point for AI-driven code editing
-- **Conversation Management** (`conversation.go`, `conversation_handler.go`): Chat and interaction handling
-- **Change Tracking** (`change_tracking.go`, `changetracker.go`): File modification tracking with rollback support
-- **State Management** (`state.go`, `persistence.go`): Agent state and session persistence
+**Agent System** (`internal/domain/agent/`):
+- **Domain Entities** (`entities.go`): Core agent, execution plan, and workflow event definitions
+- **Workflow Management** (`workflow.go`): Agent workflow orchestration
 
-**Agent API** (`pkg/agent_api/`):
-- **Multi-Provider Support**: OpenAI, Ollama, DeepInfra, Cerebras, and other LLM providers
-- **Streaming Support** (`streaming.go`, `ollama_turbo.go`): Real-time response streaming
-- **Model Management** (`models.go`): Provider-specific model handling
+**Todo Management** (`internal/domain/todo/`):
+- **Todo Entities** (`entities.go`): Todo and todo list definitions with execution logic
+- **Todo Service** (`service.go`): Todo creation, prioritization, and execution
 
-**Console UI** (`pkg/console/`):
-- **Agent Console** (`components/agent_console.go`): Interactive agent interface
-- **Input Handling** (`components/input.go`): User input processing
-- **Footer Display** (`components/footer.go`): Status and information display
-- **Formatting** (`components/json_formatter.go`, `components/streaming_formatter.go`): Output formatting
+**UI Framework** (`pkg/ui/`):
+- **Core UI** (`core/app.go`): Terminal UI application framework
+- **Components** (`core/components/`): UI components including dropdowns
+- **Styles and Themes** (`styles.go`, `theme/theme.go`): UI styling and theming
 
-**Workspace Management** (`pkg/workspace/`):
-- **File Discovery** (`pkg/filediscovery/`): Intelligent file selection
-- **Context Building**: Smart file selection for LLM context
-- **Change Tracking** (`pkg/changetracker/`): Version control and rollback
-
-**Tools and Integration** (`pkg/tools/`):
-- **Built-in Tools** (`builtin.go`): Core editing and analysis tools
-- **Tool Execution** (`executor.go`): Tool orchestration and execution
-- **Web Content** (`pkg/webcontent/`): Web fetching and search capabilities
+**Command Interface** (`cmd/`):
+- **Agent Command** (`agent.go`): Interactive AI-powered code editing and assistance
+- **Other Commands**: Shell, commit, version, and MCP commands
 
 ### Key Data Flow
 

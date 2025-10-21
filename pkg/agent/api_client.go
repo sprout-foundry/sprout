@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -344,8 +345,19 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 			// Channel full, that's ok - we just want to signal activity
 		}
 
-		// Accumulate content
-		ac.agent.streamingBuffer.WriteString(content)
+		// Accumulate content (sanitize to prevent ANSI contamination)
+		if ac.agent.debug {
+			// Debug: Log raw content being written to streaming buffer
+			if strings.Contains(content, "\x1b[") || strings.Contains(content, "\x1b(") {
+				ac.agent.debugLog("🚨 ANSI DETECTED in streaming content: %q\n", content)
+			}
+		}
+		// Sanitize content before storing in streaming buffer
+		sanitizedContent := sanitizeStreamingContent(content)
+		if sanitizedContent != content && ac.agent.debug {
+			ac.agent.debugLog("🧹 Sanitized streaming content, removed ANSI codes\n")
+		}
+		ac.agent.streamingBuffer.WriteString(sanitizedContent)
 
 		// Call user callback or default output
 		if ac.agent.streamingCallback != nil {
@@ -653,4 +665,20 @@ func (ac *APIClient) displayAPIError(err error) {
 	errorMsg := fmt.Sprintf("🚨 %s API Error: %v", strings.Title(providerName), err)
 	// Route through agent so interactive console places it in content area
 	ac.agent.PrintLine(errorMsg)
+}
+
+// sanitizeStreamingContent removes ANSI escape sequences from streaming content
+func sanitizeStreamingContent(content string) string {
+	// Remove ANSI escape sequences
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[mGKHJABCD]`)
+	cleaned := ansiRegex.ReplaceAllString(content, "")
+
+	// Remove other potential ANSI sequences
+	ansiRegex2 := regexp.MustCompile(`\x1b\([0-9;]*[AB]`)
+	cleaned = ansiRegex2.ReplaceAllString(cleaned, "")
+
+	// Remove any remaining escape characters
+	cleaned = strings.ReplaceAll(cleaned, "\x1b", "")
+
+	return cleaned
 }

@@ -206,19 +206,10 @@ func (p *ZAIProvider) SendChatRequestStream(messages []api.Message, tools []api.
 						if rc, ok := delta["reasoning_content"].(string); ok && rc != "" {
 							reasoningContent.WriteString(rc)
 							reasoningChunkCount++
-							// Send reasoning content directly to output (not through callback to avoid ANSI pollution)
-							if callback != nil {
-								// Reduce debug overhead for frequent 1-char chunks
-								if p.debug && (len(rc) > 1 || reasoningChunkCount%100 == 0) {
-									fmt.Printf("🤔 ZAI: Reasoning chunk (%d chars, #%d): %q\n", len(rc), reasoningChunkCount, rc)
-								}
-								// Format reasoning content in grey/dim text to indicate thinking
-								formattedReasoning := fmt.Sprintf("\033[2m%s\033[0m", rc)
-								if p.debug && (len(rc) > 1 || reasoningChunkCount%100 == 0) {
-									fmt.Printf("🎨 ZAI: Formatted reasoning: %q\n", formattedReasoning)
-								}
-								// Send formatted reasoning directly to output to avoid polluting the streaming buffer
-								fmt.Print(formattedReasoning)
+							// Reasoning content is included in the response but not sent through callback
+							// to avoid contaminating the streaming buffer with ANSI codes
+							if p.debug && (len(rc) > 1 || reasoningChunkCount%100 == 0) {
+								fmt.Printf("🤔 ZAI: Reasoning chunk (%d chars, #%d): %q\n", len(rc), reasoningChunkCount, rc)
 							}
 						}
 						// Track tool calls if present

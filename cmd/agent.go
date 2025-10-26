@@ -84,9 +84,17 @@ func init() {
 	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, zai, ollama, ollama-local, ollama-turbo, lmstudio)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
-	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines)")
+	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set LEDIT_NO_STREAM=1)")
 	agentCmd.Flags().StringVar(&agentSystemPromptFile, "system-prompt", "", "File path containing custom system prompt")
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
+	
+	// Initialize environment-based defaults
+	cobra.OnInitialize(func() {
+		// Check for LEDIT_NO_STREAM environment variable
+		if os.Getenv("LEDIT_NO_STREAM") == "1" || os.Getenv("LEDIT_NO_STREAM") == "true" {
+			agentNoStreaming = true
+		}
+	})
 }
 
 // runSimpleInteractiveMode provides a simple console-based interactive mode
@@ -183,9 +191,12 @@ func executeDirectAgentCommand(chatAgent *agent.Agent, userIntent string) error 
 	}
 
 	// Set up streaming callback that uses the output handler's filtering
-	chatAgent.EnableStreaming(func(content string) {
-		outputHandler.Write([]byte(content))
-	})
+	// Only enable streaming if not explicitly disabled
+	if !agentNoStreaming {
+		chatAgent.EnableStreaming(func(content string) {
+			outputHandler.Write([]byte(content))
+		})
+	}
 	defer chatAgent.DisableStreaming()
 
 	// Also ensure we flush any remaining content at the end

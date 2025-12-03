@@ -1,7 +1,7 @@
 # Ledit Testing and Build Makefile
 # Provides clear commands for different types of tests and builds
 
-.PHONY: help test-unit test-integration test-e2e test-smoke test-all clean build build-version
+.PHONY: help test-unit test-integration test-e2e test-smoke test-all clean build build-version build-ui deploy-ui test-webui
 
 # Default target
 help:
@@ -15,6 +15,9 @@ help:
 	@echo "  make clean            - Clean test artifacts"
 	@echo "  make build            - Build ledit binary"
 	@echo "  make build-version    - Build with version information"
+	@echo "  make build-ui         - Build React web UI"
+	@echo "  make deploy-ui        - Build and deploy React UI to Go static"
+	@echo "  make test-webui      - Test React web UI server"
 	@echo ""
 	@echo "Version Management:"
 	@echo "  ./scripts/version-manager.sh build    - Build with version info"
@@ -24,6 +27,8 @@ help:
 	@echo "  make test-e2e MODEL=openai:gpt-4  # Full e2e with real model"
 	@echo "  make test-all                     # Pre-release validation"
 	@echo "  make build-version                # Build with version info"
+	@echo "  make deploy-ui                    # Build and deploy React UI"
+	@echo "  make test-webui                   # Test React web UI server"
 
 # Unit Tests - Fast, no external dependencies
 test-unit:
@@ -81,3 +86,46 @@ build-version:
 	@echo "Building ledit with version information..."
 	./scripts/version-manager.sh build
 	@echo "Versioned build completed"
+
+# React Web UI Commands
+
+# Build React web UI only (doesn't deploy to Go static)
+build-ui:
+	@echo "Building React web UI..."
+	@if [ ! -d "webui" ]; then \
+		echo "Error: webui directory not found"; \
+		exit 1; \
+	fi
+	cd webui && npm run build
+	@echo "React web UI build completed in webui/build/"
+
+# Build React web UI and deploy to Go static directory
+deploy-ui: build-ui
+	@echo "Deploying React web UI to Go static directory..."
+	@if [ ! -d "pkg/webui/static" ]; then \
+		mkdir -p pkg/webui/static; \
+	fi
+	cp -r webui/build/* pkg/webui/static/
+	@echo "React web UI deployed to pkg/webui/static/"
+	@echo "Run 'make build' to create Go binary with embedded UI"
+
+# Test React web UI server
+test-webui:
+	@echo "Building and testing React web UI server..."
+	@if [ ! -f "test/test_webserver" ]; then \
+		echo "Building test web server..."; \
+		go build -o test/test_webserver ./test/; \
+	fi
+	@echo "Starting React web UI test server on port 8801..."
+	@echo "Open http://localhost:8801 to test the UI"
+	@echo "Press Ctrl+C to stop the server"
+	cd test && ./test_webserver
+
+# Full development build: UI + Go binary
+build-all: deploy-ui build
+	@echo "Full build completed: React UI + Go binary"
+
+# Quick development workflow
+dev: deploy-ui
+	@echo "Development build ready: React UI deployed"
+	@echo "Run 'make build' to create Go binary with embedded UI"

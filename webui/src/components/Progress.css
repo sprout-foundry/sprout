@@ -1,0 +1,128 @@
+.progress-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  max-width: 400px;
+  width: 100%;
+  z-index: 1002;
+}
+
+.progress-item {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.progress-item.done {
+  border-color: #4caf50;
+  opacity: 0.8;
+}
+
+.progress-item.active {
+  border-left: 4px solid #007acc;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.progress-message {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  flex: 1;
+  margin-right: 12px;
+}
+
+.progress-time {
+  color: #888;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.progress-bar-container {
+  background: #1a1a1a;
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  min-width: 2px;
+}
+
+.progress-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-count {
+  color: #ccc;
+  font-size: 12px;
+}
+
+.progress-percentage {
+  color: #888;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Animation */
+.progress-item {
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Pulse animation for active progress */
+.progress-item.active {
+  animation: slideInRight 0.3s ease-out, pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .progress-container {
+    bottom: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+
+  .progress-item {
+    padding: 12px;
+  }
+
+  .progress-message {
+    font-size: 13px;
+  }
+}

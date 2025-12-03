@@ -10,14 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/agent_api"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/history"
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
-	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
 // ReviewContext represents the context for a code review request
@@ -28,15 +27,12 @@ type ReviewContext struct {
 	RevisionID            string // Revision ID for change tracking
 	Config                *configuration.Config
 	Logger                *utils.Logger
-	History               *ReviewHistory // Review history for this context
-	SessionID             string         // Unique session identifier
-	CurrentIteration      int            // Current iteration number
-	FullFileContext       string         // Full file content for patch resolution context
-
-	// NEW: Agent workflow integration
-	WorkspaceContext *workspaceinfo.ProjectInfo // Workspace analysis and context
-	RelatedFiles     []string                   // Files that might be affected by changes
-	AgentClient      api.ClientInterface        // Agent API client for LLM calls
+	History               *ReviewHistory      // Review history for this context
+	SessionID             string              // Unique session identifier
+	CurrentIteration      int                 // Current iteration number
+	FullFileContext       string              // Full file content for patch resolution context
+	RelatedFiles          []string            // Files that might be affected by changes
+	AgentClient           api.ClientInterface // Agent API client for LLM calls
 }
 
 // ReviewType defines the type of code review being performed
@@ -59,13 +55,13 @@ type CodeReviewService struct {
 	config             *configuration.Config
 	logger             *utils.Logger
 	reviewConfig       *ReviewConfiguration
-	contextStore       map[string]*ReviewContext     // Store contexts by session ID for persistence
-			defaultAgentClient api.ClientInterface           // NEW: Default agent client for LLM calls
+	contextStore       map[string]*ReviewContext // Store contexts by session ID for persistence
+	defaultAgentClient api.ClientInterface       // NEW: Default agent client for LLM calls
 }
 
 // NewCodeReviewService creates a new code review service instance
 func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *CodeReviewService {
-	
+
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
 	if cfg != nil && cfg.LastUsedProvider != "" {
@@ -96,13 +92,13 @@ func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *Code
 		logger:             logger,
 		reviewConfig:       DefaultReviewConfiguration(),
 		contextStore:       make(map[string]*ReviewContext),
-				defaultAgentClient: agentClient,
+		defaultAgentClient: agentClient,
 	}
 }
 
 // NewCodeReviewServiceWithConfig creates a new code review service instance with custom configuration
 func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Logger, reviewConfig *ReviewConfiguration) *CodeReviewService {
-	
+
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
 	if cfg != nil && cfg.LastUsedProvider != "" {
@@ -133,7 +129,7 @@ func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Log
 		logger:             logger,
 		reviewConfig:       reviewConfig,
 		contextStore:       make(map[string]*ReviewContext),
-				defaultAgentClient: agentClient,
+		defaultAgentClient: agentClient,
 	}
 }
 
@@ -176,15 +172,6 @@ func (s *CodeReviewService) extractAffectedFilesFromDiff(diff string) []string {
 	}
 
 	return s.removeDuplicates(files)
-}
-
-// findRelatedFiles identifies files that might be related to the given file
-func (s *CodeReviewService) findRelatedFiles(filePath string, workspaceInfo *workspaceinfo.ProjectInfo) ([]string, error) {
-	var related []string
-
-	// TODO: Implement proper workspace file relationship detection
-	// This is currently disabled due to workspace integration refactoring
-	return related, nil
 }
 
 // removeDuplicates removes duplicate entries from a string slice
@@ -236,7 +223,7 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 
 	// Enhance context with workspace intelligence
 	s.logger.LogProcessStep("Enhancing context with workspace intelligence...")
-	
+
 	// Try to load existing context if session ID is provided
 	var existingCtx *ReviewContext
 	if ctx.SessionID != "" {
@@ -534,15 +521,6 @@ func (s *CodeReviewService) buildEnhancedReviewPrompt(ctx *ReviewContext, struct
 		promptParts = append(promptParts, "Please perform a structured code review of the following changes.")
 	} else {
 		promptParts = append(promptParts, prompts.CodeReviewStagedPrompt())
-	}
-
-	// Add workspace context if available
-	if ctx.WorkspaceContext != nil {
-		contextStr := fmt.Sprintf("Project: %s (%s), Language: %s", ctx.WorkspaceContext.Name, ctx.WorkspaceContext.Type, ctx.WorkspaceContext.Language)
-		if ctx.WorkspaceContext.Framework != "" {
-			contextStr += fmt.Sprintf(", Framework: %s", ctx.WorkspaceContext.Framework)
-		}
-		promptParts = append(promptParts, fmt.Sprintf("\n## Project Context\n%s", contextStr))
 	}
 
 	// Add related files context if available

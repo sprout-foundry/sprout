@@ -340,7 +340,29 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 
 	// Generate commit message
 	c.println("")
-	c.printf("Using model: %s\n From Provider: %s\n", chatAgent.GetModel(), chatAgent.GetProvider())
+	if chatAgent != nil {
+		// Try to get model and provider info, but handle gracefully if it fails
+		if func() bool {
+			defer func() {
+				if r := recover(); r != nil {
+					// Handle any panic during provider/model access
+					c.println("Using manual commit mode (agent access failed)")
+					chatAgent = nil
+				}
+			}()
+
+			model := chatAgent.GetModel()
+			provider := chatAgent.GetProvider()
+			c.printf("Using model: %s\n From Provider: %s\n", model, provider)
+			return true
+		}() {
+			// Success
+		} else {
+			// Failed, already handled above
+		}
+	} else {
+		c.println("Using manual commit mode (no AI agent available)")
+	}
 
 	// Get staged diff
 	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()

@@ -11,7 +11,6 @@ import (
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/index"
 	"github.com/alantheprice/ledit/pkg/utils"
-	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
 // FileDiscovery provides common file discovery and analysis functionality
@@ -52,19 +51,9 @@ func (fd *FileDiscovery) DiscoverFilesRobust(userIntent string, options *Discove
 
 	if options == nil {
 		options = &DiscoveryOptions{
-			MaxFiles:      50,
-			UseEmbeddings: true,
-			UseSymbols:    true,
-			UseShell:      true,
-		}
-	}
-
-	// Try embeddings first if enabled
-	if options.UseEmbeddings {
-		if result := fd.discoverWithEmbeddings(userIntent, options); result != nil && len(result.Files) > 0 {
-			result.Duration = time.Since(startTime)
-			result.Method = "embeddings"
-			return result
+			MaxFiles:   50,
+			UseSymbols: true,
+			UseShell:   true,
 		}
 	}
 
@@ -88,7 +77,6 @@ func (fd *FileDiscovery) DiscoverFilesRobust(userIntent string, options *Discove
 // DiscoveryOptions configures file discovery behavior
 type DiscoveryOptions struct {
 	MaxFiles      int
-	UseEmbeddings bool
 	UseSymbols    bool
 	UseShell      bool
 	IncludeHidden bool
@@ -96,34 +84,6 @@ type DiscoveryOptions struct {
 	IncludeExts   []string
 	ExcludeExts   []string
 	RootPath      string
-}
-
-// discoverWithEmbeddings uses embeddings to find relevant files
-func (fd *FileDiscovery) discoverWithEmbeddings(userIntent string, options *DiscoveryOptions) *FileResult {
-	workspaceFile, err := workspaceinfo.LoadWorkspaceFile()
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return &FileResult{Error: fmt.Errorf("failed to load workspace: %w", err)}
-		}
-		// No workspace file, skip embeddings
-		return nil
-	}
-
-	fullFiles, _, err := workspaceinfo.GetFilesForContextUsingEmbeddings(userIntent, workspaceFile, fd.config, fd.logger)
-	if err != nil {
-		return &FileResult{Error: fmt.Errorf("embedding search failed: %w", err)}
-	}
-
-	// Rerank using symbol index if enabled
-	if options.UseSymbols {
-		fullFiles = fd.rerankWithSymbols(fullFiles, userIntent)
-	}
-
-	// Apply limits and filters
-	result := fd.applyFiltersAndLimits(fullFiles, options)
-	result.TotalFiles = len(fullFiles)
-
-	return result
 }
 
 // discoverWithShell uses shell commands to find files

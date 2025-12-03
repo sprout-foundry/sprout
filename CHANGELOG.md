@@ -2,6 +2,11 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.8.4] - 2025-10-26
+
+- Updates cmd/agent.go - Updates streaming to respect environment variable (a5ab087)
+- docs: Update changelog for v0.8.3 (a0f811b)
+
 ## [v0.8.3] - 2025-10-12
 
 - Updates 5 files - Updates ZAI token pruning test case expectations (d766608)

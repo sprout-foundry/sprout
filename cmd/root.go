@@ -16,12 +16,11 @@ var rootCmd = &cobra.Command{
 	Use:   "ledit",
 	Short: "AI agent for code analysis and editing (interactive mode when run without arguments)",
 	Long: `Ledit is a command-line tool that leverages Large Language Models (LLMs)
-to automate and assist in software development tasks. It can understand your
-entire workspace, generate code, orchestrate complex features, and ground its
-responses with live web search results.
+to automate and assist in software development tasks. It features a modern CLI
+with automatic web UI startup for rich interactive experiences.
 
 Available commands:
-  agent    - AI agent mode (analyzes intent and decides actions)
+  agent    - AI agent mode with modern CLI + Web UI
   shell    - Generate shell scripts from natural language descriptions
   commit   - Generate commit messages
   review-staged - Review staged changes
@@ -30,12 +29,13 @@ Available commands:
 
 For autonomous operation, try: ledit agent "your intent here"
 
-Running just 'ledit' without arguments starts the interactive agent mode.`,
+Running just 'ledit' without arguments starts the enhanced agent mode with automatic web UI.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Initialize API keys and configuration
 		initializeSystem()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Default to interactive mode when no arguments provided
 		useInteractive := enableUI || os.Getenv("LEDIT_UI") == "1"
 		if !useInteractive && len(args) == 0 && cmd.Flags().NFlag() == 0 {
 			useInteractive = true
@@ -43,9 +43,10 @@ Running just 'ledit' without arguments starts the interactive agent mode.`,
 		if useInteractive {
 			chatAgent, err := createChatAgent()
 			if err != nil {
-				return fmt.Errorf("failed to initialize agent for interactive mode: %w", err)
+				return fmt.Errorf("failed to initialize agent for enhanced mode: %w", err)
 			}
-			return runInteractiveMode(chatAgent)
+			// Use the new enhanced mode instead of old interactive mode
+			return runSimpleEnhancedMode(chatAgent, true, args)
 		}
 		// Otherwise show help
 		return cmd.Help()

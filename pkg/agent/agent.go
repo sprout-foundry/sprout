@@ -195,23 +195,33 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			// Get ClientType for provider
 			clientType, err = getClientTypeFromName(providerName)
 			if err != nil {
-				return nil, fmt.Errorf("unknown provider '%s': %w", providerName, err)
-			}
-
-			// Ensure provider has API key
-			if err := configManager.EnsureAPIKey(clientType); err != nil {
+				fmt.Fprintf(os.Stderr, "⚠️  Unknown provider '%s' specified. Falling back to available provider...\n", providerName)
 				// Try to select a different provider
 				clientType, err = configManager.SelectNewProvider()
 				if err != nil {
-					return nil, fmt.Errorf("failed to select provider: %w", err)
+					return nil, fmt.Errorf("failed to select provider after unknown provider '%s': %w", providerName, err)
 				}
 				finalModel = configManager.GetModelForProvider(clientType)
+				fmt.Fprintf(os.Stderr, "✅ Using provider: %s with model: %s\n", api.GetProviderName(clientType), finalModel)
+			} else {
+				// Ensure provider has API key
+				if err := configManager.EnsureAPIKey(clientType); err != nil {
+					fmt.Fprintf(os.Stderr, "⚠️  Provider '%s' not configured. Falling back to available provider...\n", providerName)
+					// Try to select a different provider
+					clientType, err = configManager.SelectNewProvider()
+					if err != nil {
+						return nil, fmt.Errorf("failed to select provider after API key issue with '%s': %w", providerName, err)
+					}
+					finalModel = configManager.GetModelForProvider(clientType)
+					fmt.Fprintf(os.Stderr, "✅ Using provider: %s with model: %s\n", api.GetProviderName(clientType), finalModel)
+				}
 			}
 		} else {
 			// No provider specified, use current provider with specified model
 			clientType, err = configManager.GetProvider()
 			if err != nil {
 				// No provider set, select one
+				fmt.Fprintf(os.Stderr, "🔧 No provider configured. Selecting available provider...\n")
 				clientType, err = configManager.SelectNewProvider()
 				if err != nil {
 					return nil, fmt.Errorf("failed to select provider: %w", err)
@@ -224,6 +234,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		clientType, err = configManager.GetProvider()
 		if err != nil {
 			// No provider set, select one
+			fmt.Fprintf(os.Stderr, "🔧 No provider configured. Selecting available provider...\n")
 			clientType, err = configManager.SelectNewProvider()
 			if err != nil {
 				return nil, fmt.Errorf("failed to select provider: %w", err)
@@ -232,6 +243,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 		// Ensure provider has API key
 		if err := configManager.EnsureAPIKey(clientType); err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️  Provider not configured. Selecting available provider...\n")
 			// Try to select a different provider
 			clientType, err = configManager.SelectNewProvider()
 			if err != nil {
@@ -378,7 +390,7 @@ func (a *Agent) GetDebugLogPath() string { return a.debugLogPath }
 
 // getClientTypeFromName converts provider name to ClientType
 func getClientTypeFromName(name string) (api.ClientType, error) {
-	switch name {
+	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "chutes":
 		return api.ChutesClientType, nil
 	case "openai":
@@ -398,10 +410,11 @@ func getClientTypeFromName(name string) (api.ClientType, error) {
 	case "test":
 		return api.TestClientType, nil
 	// For providers not yet in ClientType constants
-	case "anthropic", "gemini", "groq", "cerebras":
+	case "anthropic", "gemini", "groq", "cerebras", "claude", "cohere", "mistral":
 		return api.ClientType(name), nil
 	default:
-		return "", fmt.Errorf("unknown provider: %s", name)
+		// Return error for unknown provider, but allow graceful fallback
+		return "", fmt.Errorf("unknown provider: %s (known providers: chutes, openai, deepinfra, openrouter, zai, ollama, ollama-local, ollama-turbo, anthropic, gemini, groq, cerebras)", name)
 	}
 }
 

@@ -1,0 +1,44 @@
+{
+  "name": "lmstudio",
+  "endpoint": "http://127.0.0.1:1234/v1/chat/completions",
+  "auth": {
+    "type": "bearer",
+    "env_var": ""
+  },
+  "headers": {},
+  "defaults": {
+    "model": "local-model",
+    "temperature": 0.7,
+    "max_tokens": -1,
+    "top_p": 1.0
+  },
+  "message_conversion": {
+    "include_tool_call_id": false,
+    "convert_tool_role_to_user": false,
+    "reasoning_content_field": ""
+  },
+  "streaming": {
+    "format": "sse",
+    "chunk_timeout_ms": 300000,
+    "done_marker": "[DONE]"
+  },
+  "models": {
+    "context_limit": 0,
+    "supports_vision": false,
+    "vision_model": "",
+    "default_model": "local-model",
+    "available_models": []
+  },
+  "retry": {
+    "max_attempts": 3,
+    "base_delay_ms": 1000,
+    "backoff_multiplier": 2.0,
+    "max_delay_ms": 30000,
+    "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
+  },
+  "cost": {
+    "input_token_cost": 0.0,
+    "output_token_cost": 0.0,
+    "currency": "USD"
+  }
+}

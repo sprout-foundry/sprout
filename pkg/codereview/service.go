@@ -17,7 +17,6 @@ import (
 	"github.com/alantheprice/ledit/pkg/prompts"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
-	"github.com/alantheprice/ledit/pkg/workspace"
 	"github.com/alantheprice/ledit/pkg/workspaceinfo"
 )
 
@@ -37,7 +36,6 @@ type ReviewContext struct {
 	// NEW: Agent workflow integration
 	WorkspaceContext *workspaceinfo.ProjectInfo // Workspace analysis and context
 	RelatedFiles     []string                   // Files that might be affected by changes
-	ProjectStructure *workspace.ProjectInsights // Project understanding
 	AgentClient      api.ClientInterface        // Agent API client for LLM calls
 }
 
@@ -62,15 +60,12 @@ type CodeReviewService struct {
 	logger             *utils.Logger
 	reviewConfig       *ReviewConfiguration
 	contextStore       map[string]*ReviewContext     // Store contexts by session ID for persistence
-	workspaceAnalyzer  *workspace.ConcurrentAnalyzer // NEW: Workspace analysis for better context
-	defaultAgentClient api.ClientInterface           // NEW: Default agent client for LLM calls
+			defaultAgentClient api.ClientInterface           // NEW: Default agent client for LLM calls
 }
 
 // NewCodeReviewService creates a new code review service instance
 func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *CodeReviewService {
-	// Create workspace analyzer for intelligent context building
-	workspaceAnalyzer := workspace.NewConcurrentAnalyzer(workspace.ConcurrentConfig{MaxWorkers: 4, BatchSize: 10})
-
+	
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
 	if cfg != nil && cfg.LastUsedProvider != "" {
@@ -101,16 +96,13 @@ func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *Code
 		logger:             logger,
 		reviewConfig:       DefaultReviewConfiguration(),
 		contextStore:       make(map[string]*ReviewContext),
-		workspaceAnalyzer:  workspaceAnalyzer,
-		defaultAgentClient: agentClient,
+				defaultAgentClient: agentClient,
 	}
 }
 
 // NewCodeReviewServiceWithConfig creates a new code review service instance with custom configuration
 func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Logger, reviewConfig *ReviewConfiguration) *CodeReviewService {
-	// Create workspace analyzer for intelligent context building
-	workspaceAnalyzer := workspace.NewConcurrentAnalyzer(workspace.ConcurrentConfig{MaxWorkers: 4, BatchSize: 10})
-
+	
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
 	if cfg != nil && cfg.LastUsedProvider != "" {
@@ -141,8 +133,7 @@ func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Log
 		logger:             logger,
 		reviewConfig:       reviewConfig,
 		contextStore:       make(map[string]*ReviewContext),
-		workspaceAnalyzer:  workspaceAnalyzer,
-		defaultAgentClient: agentClient,
+				defaultAgentClient: agentClient,
 	}
 }
 
@@ -157,51 +148,6 @@ func (s *CodeReviewService) storeContext(ctx *ReviewContext) {
 func (s *CodeReviewService) getStoredContext(sessionID string) (*ReviewContext, bool) {
 	ctx, exists := s.contextStore[sessionID]
 	return ctx, exists
-}
-
-// enhanceContextWithWorkspaceIntelligence adds workspace analysis and related file context to the review
-func (s *CodeReviewService) enhanceContextWithWorkspaceIntelligence(ctx *ReviewContext) error {
-	if s.workspaceAnalyzer == nil {
-		s.logger.LogProcessStep("Workspace analyzer not available, skipping workspace intelligence enhancement")
-		return nil
-	}
-
-	s.logger.LogProcessStep("Enhancing review context with workspace intelligence...")
-
-	// Get workspace information if not already present (disabled for now)
-	// if ctx.WorkspaceContext == nil {
-	//	if workspaceInfo, err := s.workspaceAnalyzer.GetWorkspaceInfo(); err == nil {
-	//		ctx.WorkspaceContext = workspaceInfo
-	//	} else {
-	//		s.logger.LogProcessStep(fmt.Sprintf("Warning: Could not load workspace info: %v", err))
-	//	}
-	// }
-
-	// Analyze diff to identify affected files and find related files
-	affectedFiles := s.extractAffectedFilesFromDiff(ctx.Diff)
-	if len(affectedFiles) > 0 {
-		s.logger.LogProcessStep(fmt.Sprintf("Found %d affected files in diff", len(affectedFiles)))
-
-		// Find files that might be related to the changes
-		for _, file := range affectedFiles {
-			if relatedFiles, err := s.findRelatedFiles(file, ctx.WorkspaceContext); err == nil {
-				ctx.RelatedFiles = append(ctx.RelatedFiles, relatedFiles...)
-			}
-		}
-
-		// Remove duplicates and the original files (they're already in the diff)
-		ctx.RelatedFiles = s.removeDuplicates(ctx.RelatedFiles)
-		ctx.RelatedFiles = s.removeAffectedFiles(ctx.RelatedFiles, affectedFiles)
-
-		s.logger.LogProcessStep(fmt.Sprintf("Identified %d related files for enhanced context", len(ctx.RelatedFiles)))
-	}
-
-	// Set agent client if not already provided
-	if ctx.AgentClient == nil {
-		ctx.AgentClient = s.defaultAgentClient
-	}
-
-	return nil
 }
 
 // extractAffectedFilesFromDiff parses a diff to find which files are being modified
@@ -290,10 +236,7 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 
 	// Enhance context with workspace intelligence
 	s.logger.LogProcessStep("Enhancing context with workspace intelligence...")
-	if err := s.enhanceContextWithWorkspaceIntelligence(ctx); err != nil {
-		s.logger.LogProcessStep(fmt.Sprintf("Warning: Could not enhance context with workspace intelligence: %v", err))
-	}
-
+	
 	// Try to load existing context if session ID is provided
 	var existingCtx *ReviewContext
 	if ctx.SessionID != "" {

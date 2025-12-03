@@ -317,6 +317,7 @@ func GetAvailableProviders(apiKeys *APIKeys) []string {
 	// The selection process will handle prompting for API keys
 	return []string{
 		"openai",
+		"chutes",
 		"zai",
 		"openrouter",
 		"deepinfra",
@@ -517,7 +518,7 @@ func ShowWelcomeMessage() {
 	fmt.Println()
 	fmt.Println("💡 Recommended for beginners:")
 	fmt.Println("   • OpenRouter - Access to 100+ AI models through one API")
-	fmt.Println("   • Tool-calling models work best with ledit (required for code editing)")
+	fmt.Println("   • Tool-calling models are required for ledit to function properly")
 	fmt.Println("   • Pay-as-you-go pricing starting from $0.0001 per request")
 	fmt.Println("   • Great model: qwen/qwen3-coder-30b-a3b-instruct (excellent for coding)")
 	fmt.Println()
@@ -536,7 +537,6 @@ func ShowNextSteps(provider, configDir string) {
 		fmt.Println()
 		fmt.Println("💰 Cost-effective tool-calling models:")
 		fmt.Println("  • qwen/qwen3-coder-30b-a3b-instruct - Excellent for coding tasks")
-		fmt.Println("  • anthropic/claude-3.5-haiku - Fast and affordable")
 		fmt.Println("  • openai/gpt-5-mini - Good performance, low cost")
 		fmt.Println("  • Note: Avoid models without tool-calling support - they won't work with ledit")
 		fmt.Println()

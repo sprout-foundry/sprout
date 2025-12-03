@@ -76,6 +76,23 @@ func BuildOpenAIChatMessages(messages []api.Message, opts MessageConversionOptio
 			messageMap["tool_call_id"] = msg.ToolCallId
 		}
 
+		// Include tool_calls for assistant messages (critical for tool conversation flow)
+		if len(msg.ToolCalls) > 0 {
+			toolCalls := make([]map[string]interface{}, len(msg.ToolCalls))
+			for i, tc := range msg.ToolCalls {
+				toolCall := map[string]interface{}{
+					"id":   tc.ID,
+					"type": tc.Type,
+					"function": map[string]interface{}{
+						"name":      tc.Function.Name,
+						"arguments": tc.Function.Arguments,
+					},
+				}
+				toolCalls[i] = toolCall
+			}
+			messageMap["tool_calls"] = toolCalls
+		}
+
 		result = append(result, messageMap)
 	}
 

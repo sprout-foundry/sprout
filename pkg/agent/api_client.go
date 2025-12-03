@@ -451,7 +451,11 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 			// Apply completion policy for streaming responses only for providers that require explicit completion
 			if result.resp != nil {
 				// Check if this provider allows implicit completion
-				if !ac.agent.shouldAllowImplicitCompletion() {
+				providerName := ac.agent.client.GetProvider()
+				implicitAllowed := ac.agent.shouldAllowImplicitCompletion()
+				ac.agent.debugLog("🔍 Provider: %s, Implicit completion allowed: %t\n", providerName, implicitAllowed)
+
+				if !implicitAllowed {
 					handler := NewConversationHandler(ac.agent)
 					shouldStop := handler.processResponse(result.resp)
 					if shouldStop {

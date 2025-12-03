@@ -1,0 +1,53 @@
+{
+  "name": "chutes",
+  "endpoint": "https://llm.chutes.ai/v1/chat/completions",
+  "auth": {
+    "type": "bearer",
+    "env_var": "CHUTES_API_KEY"
+  },
+  "headers": {},
+  "defaults": {
+    "model": "deepseek-ai/DeepSeek-R1-0528",
+    "temperature": 0.7,
+    "max_tokens": 1024,
+    "top_p": 1.0
+  },
+  "message_conversion": {
+    "include_tool_call_id": true,
+    "convert_tool_role_to_user": false,
+    "reasoning_content_field": ""
+  },
+  "streaming": {
+    "format": "sse",
+    "chunk_timeout_ms": 300000,
+    "done_marker": "[DONE]"
+  },
+  "models": {
+    "context_limit": 0,
+    "supports_vision": false,
+    "vision_model": "",
+    "default_model": "deepseek-ai/DeepSeek-R1-0528",
+    "available_models": [
+      "deepseek-ai/DeepSeek-R1-0528",
+      "deepseek-ai/DeepSeek-R1",
+      "deepseek-ai/DeepSeek-V3",
+      "meta-llama/Llama-3.1-8B-Instruct",
+      "meta-llama/Llama-3.1-70B-Instruct",
+      "meta-llama/Llama-3.3-70B-Instruct",
+      "mistralai/Mistral-7B-Instruct-v0.3",
+      "mistralai/Mixtral-8x7B-Instruct-v0.1"
+    ]
+  },
+  "retry": {
+    "max_attempts": 3,
+    "base_delay_ms": 1000,
+    "backoff_multiplier": 2.0,
+    "max_delay_ms": 30000,
+    "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
+  },
+  "cost": {
+    "input_token_cost": 0.0,
+    "output_token_cost": 0.0,
+    "currency": "USD"
+  }
+}

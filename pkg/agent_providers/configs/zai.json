@@ -1,0 +1,44 @@
+{
+  "name": "zai",
+  "endpoint": "https://api.zai.ai/v1/openai/chat/completions",
+  "auth": {
+    "type": "bearer",
+    "env_var": "ZAI_API_KEY"
+  },
+  "headers": {},
+  "defaults": {
+    "model": "GLM-4.6",
+    "temperature": 0.1,
+    "max_tokens": 4096,
+    "top_p": 1.0
+  },
+  "message_conversion": {
+    "include_tool_call_id": false,
+    "convert_tool_role_to_user": false,
+    "reasoning_content_field": ""
+  },
+  "streaming": {
+    "format": "sse",
+    "chunk_timeout_ms": 320000,
+    "done_marker": "[DONE]"
+  },
+  "models": {
+    "context_limit": 0,
+    "supports_vision": false,
+    "vision_model": "",
+    "default_model": "GLM-4.6",
+    "available_models": []
+  },
+  "retry": {
+    "max_attempts": 3,
+    "base_delay_ms": 1000,
+    "backoff_multiplier": 2.0,
+    "max_delay_ms": 30000,
+    "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
+  },
+  "cost": {
+    "input_token_cost": 0.0,
+    "output_token_cost": 0.0,
+    "currency": "USD"
+  }
+}

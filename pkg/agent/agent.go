@@ -379,6 +379,8 @@ func (a *Agent) GetDebugLogPath() string { return a.debugLogPath }
 // getClientTypeFromName converts provider name to ClientType
 func getClientTypeFromName(name string) (api.ClientType, error) {
 	switch name {
+	case "chutes":
+		return api.ChutesClientType, nil
 	case "openai":
 		return api.OpenAIClientType, nil
 	case "deepinfra":

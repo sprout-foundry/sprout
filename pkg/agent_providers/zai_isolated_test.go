@@ -15,7 +15,13 @@ func TestZAIProviderIsolated(t *testing.T) {
 		t.Skip("ZAI_API_KEY not set, skipping ZAI isolation test")
 	}
 
-	provider, err := NewZAIProvider()
+	// Create provider using factory
+	factory := NewProviderFactory()
+	if err := factory.LoadConfigFromFile("configs/zai.json"); err != nil {
+		t.Fatal("Failed to load zai config:", err)
+	}
+
+	provider, err := factory.CreateProvider("zai")
 	if err != nil {
 		t.Fatalf("Failed to create ZAI provider: %v", err)
 	}
@@ -79,7 +85,13 @@ func TestZAIProviderDirect(t *testing.T) {
 
 	fmt.Println("🔍 Testing ZAI provider directly...")
 
-	provider, err := NewZAIProvider()
+	// Create provider using factory
+	factory := NewProviderFactory()
+	if err := factory.LoadConfigFromFile("configs/zai.json"); err != nil {
+		t.Fatal("Failed to load zai config:", err)
+	}
+
+	provider, err := factory.CreateProvider("zai")
 	if err != nil {
 		t.Fatalf("❌ Failed to create ZAI provider: %v", err)
 	}

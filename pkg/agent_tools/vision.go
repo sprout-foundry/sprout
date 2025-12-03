@@ -13,7 +13,6 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	providers "github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/factory"
 )
 
@@ -168,13 +167,13 @@ func createVisionClient() (api.ClientInterface, error) {
 func createVisionClientWithModel(modelName string) (api.ClientInterface, error) {
 	// Determine which provider supports this model
 	if strings.HasPrefix(modelName, "google/") || strings.HasPrefix(modelName, "meta-llama/") {
-		// DeepInfra model
+		// DeepInfra model - use new generic provider system
 		if apiKey := os.Getenv("DEEPINFRA_API_KEY"); apiKey != "" {
-			wrapper, err := providers.NewDeepInfraProviderWithModel(modelName)
+			provider, err := factory.CreateGenericProvider("deepinfra", modelName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create DeepInfra client: %w", err)
 			}
-			return wrapper, nil
+			return provider, nil
 		}
 		return nil, fmt.Errorf("DEEPINFRA_API_KEY not set for model %s", modelName)
 	}

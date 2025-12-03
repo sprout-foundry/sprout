@@ -4,8 +4,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 func TestListModelsParsing(t *testing.T) {
@@ -15,8 +13,13 @@ func TestListModelsParsing(t *testing.T) {
 		t.Skip("OPENROUTER_API_KEY not set, skipping test")
 	}
 
-	// Create real provider instance
-	p, err := NewOpenRouterProvider()
+	// Create provider using factory
+	factory := NewProviderFactory()
+	if err := factory.LoadConfigFromFile("configs/openrouter.json"); err != nil {
+		t.Fatal("Failed to load openrouter config:", err)
+	}
+
+	p, err := factory.CreateProvider("openrouter")
 	if err != nil {
 		t.Fatal("Failed to create provider:", err)
 	}
@@ -68,10 +71,15 @@ func TestListModelsParsing(t *testing.T) {
 }
 
 func TestGetModelContextLimitFallback(t *testing.T) {
-	p := &OpenRouterProvider{
-		model:        "unknown-gpt-3.5",
-		models:       []api.ModelInfo{}, // Empty cache
-		modelsCached: true,
+	// Create provider using factory
+	factory := NewProviderFactory()
+	if err := factory.LoadConfigFromFile("configs/openrouter.json"); err != nil {
+		t.Fatal("Failed to load openrouter config:", err)
+	}
+
+	p, err := factory.CreateProviderWithModel("openrouter", "unknown-gpt-3.5")
+	if err != nil {
+		t.Fatal("Failed to create provider:", err)
 	}
 
 	cl, err := p.GetModelContextLimit()

@@ -23,6 +23,12 @@ type ProviderAPIKey struct {
 func getSupportedProviders() []ProviderAPIKey {
 	return []ProviderAPIKey{
 		{
+			Name:            "chutes",
+			FormattedName:   "Chutes",
+			RequiresKey:     true,
+			EnvVariableName: "CHUTES_API_KEY",
+		},
+		{
 			Name:            "openrouter",
 			FormattedName:   "OpenRouter (Recommended)",
 			RequiresKey:     true,

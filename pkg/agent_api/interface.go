@@ -31,6 +31,7 @@ type ClientInterface interface {
 type ClientType string
 
 const (
+	ChutesClientType      ClientType = "chutes"
 	DeepInfraClientType   ClientType = "deepinfra"
 	DeepSeekClientType    ClientType = "deepseek"
 	LMStudioClientType    ClientType = "lmstudio"
@@ -138,6 +139,8 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 func ParseProviderName(name string) (ClientType, error) {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	switch normalized {
+	case "chutes":
+		return ChutesClientType, nil
 	case "openai":
 		return OpenAIClientType, nil
 	case "zai", "zai-coding", "z.ai":
@@ -213,6 +216,8 @@ func GetAvailableProviders() []ClientType {
 // GetProviderName returns the human-readable name for a provider
 func GetProviderName(clientType ClientType) string {
 	switch clientType {
+	case ChutesClientType:
+		return "Chutes"
 	case OpenAIClientType:
 		return "OpenAI"
 	case ZAIClientType:

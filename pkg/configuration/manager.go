@@ -148,6 +148,8 @@ func (m *Manager) AddMCPServer(name string, server mcp.MCPServerConfig) error {
 // mapClientTypeToString converts ClientType to string
 func mapClientTypeToString(ct api.ClientType) string {
 	switch ct {
+	case api.ChutesClientType:
+		return "chutes"
 	case api.OpenAIClientType:
 		return "openai"
 	case api.ZAIClientType:
@@ -173,6 +175,8 @@ func mapClientTypeToString(ct api.ClientType) string {
 // mapStringToClientType converts string to ClientType
 func mapStringToClientType(s string) (api.ClientType, error) {
 	switch s {
+	case "chutes":
+		return api.ChutesClientType, nil
 	case "openai":
 		return api.OpenAIClientType, nil
 	case "zai":

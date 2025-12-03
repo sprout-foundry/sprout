@@ -26,3 +26,46 @@ out/
 .venv/
 
 temp/
+
+# Build artifacts and binaries
+*.exe
+ledit-*
+ledit-main
+test_webserver
+
+# Node.js and npm files
+package-lock.json
+package.json
+
+# Playwright test files
+playwright-report/
+playwright.config.js
+test-results/
+
+# WebUI build files
+webui/build/
+webui/node_modules/
+pkg/webui/static/
+
+# Go test files and binaries
+*.test
+test/**/test_*
+**/test_*
+
+# Debug and screenshots
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# Temporary development files
+*.md.tmp
+webui-websocket-test.js
+
+# Documentation and planning files that are work-in-progress
+*_plan.md
+mem.md
+minimum_requirements.md
+feature_review_plan.md
+run-prompt.md

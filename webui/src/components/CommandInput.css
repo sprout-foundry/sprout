@@ -1,0 +1,153 @@
+.command-input {
+  display: flex;
+  flex-direction: column;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.input-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #333;
+  border-bottom: 1px solid #444;
+  font-size: 11px;
+}
+
+.input-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: #ccc;
+}
+
+.history-indicator {
+  background: #4caf50;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.multiline-indicator {
+  background: #2196f3;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.length-indicator {
+  color: #888;
+  font-style: italic;
+}
+
+.input-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.multiline-toggle {
+  background: #555;
+  color: #fff;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.multiline-toggle:hover {
+  background: #666;
+}
+
+.input-field {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.4;
+  resize: none;
+  outline: none;
+  padding: 12px 16px;
+}
+
+.input-field.singleline {
+  min-height: 20px;
+  max-height: 20px;
+  overflow-y: hidden;
+}
+
+.input-field.multiline {
+  min-height: 80px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.input-field:focus {
+  background: #1a1a1a;
+}
+
+.input-field::placeholder {
+  color: #666;
+}
+
+.input-field:disabled {
+  color: #666;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #333;
+  border-top: 1px solid #444;
+}
+
+.send-button {
+  background: #007acc;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.send-button:hover:not(:disabled) {
+  background: #005a9e;
+}
+
+.send-button:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+.clear-button {
+  background: #666;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.clear-button:hover:not(:disabled) {
+  background: #777;
+}
+
+.clear-button:disabled {
+  background: #444;
+  cursor: not-allowed;
+}

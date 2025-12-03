@@ -57,9 +57,17 @@ func init() {
 	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, chutes, openrouter, deepinfra, zai, ollama, ollama-local, ollama-turbo, lmstudio)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
-	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines)")
+	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set LEDIT_NO_STREAM=1)")
 	agentCmd.Flags().StringVar(&agentSystemPromptFile, "system-prompt", "", "File path containing custom system prompt")
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
+
+	// Initialize environment-based defaults
+	cobra.OnInitialize(func() {
+		// Check for LEDIT_NO_STREAM environment variable
+		if os.Getenv("LEDIT_NO_STREAM") == "1" || os.Getenv("LEDIT_NO_STREAM") == "true" {
+			agentNoStreaming = true
+		}
+	})
 }
 
 // agentCmd represents the agent command

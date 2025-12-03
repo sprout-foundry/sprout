@@ -31,10 +31,14 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 		// Context cancelled, interrupt requested
 		var results []api.Message
 		for _, tc := range toolCalls {
+			toolCallID := tc.ID
+			if toolCallID == "" {
+				toolCallID = te.GenerateToolCallID(tc.Function.Name)
+			}
 			results = append(results, api.Message{
 				Role:       "tool",
 				Content:    "Execution interrupted by user",
-				ToolCallId: tc.ID,
+				ToolCallId: toolCallID,
 			})
 		}
 		return results
@@ -115,10 +119,14 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 		select {
 		case <-te.agent.interruptCtx.Done():
 			// Context cancelled, interrupt requested
+			toolCallID := tc.ID
+			if toolCallID == "" {
+				toolCallID = te.GenerateToolCallID(tc.Function.Name)
+			}
 			toolResults = append(toolResults, api.Message{
 				Role:       "tool",
 				Content:    "Execution interrupted by user",
-				ToolCallId: tc.ID,
+				ToolCallId: toolCallID,
 			})
 			return toolResults
 		default:
@@ -155,13 +163,21 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	if te.agent != nil {
 		te.agent.LogToolCall(toolCall, "executing")
 	}
+
+	// Generate a tool call ID if empty to prevent sanitization from dropping the result
+	toolCallID := toolCall.ID
+	if toolCallID == "" {
+		toolCallID = te.GenerateToolCallID(toolCall.Function.Name)
+		te.agent.debugLog("🔧 Generated missing tool call ID: %s for tool: %s\n", toolCallID, toolCall.Function.Name)
+	}
+
 	// Parse arguments
 	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
 		return api.Message{
 			Role:       "tool",
 			Content:    fmt.Sprintf("Error parsing arguments: %v", err),
-			ToolCallId: toolCall.ID,
+			ToolCallId: toolCallID,
 		}
 	}
 
@@ -170,7 +186,7 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		return api.Message{
 			Role:       "tool",
 			Content:    "Circuit breaker: This action has been attempted too many times with the same parameters.",
-			ToolCallId: toolCall.ID,
+			ToolCallId: toolCallID,
 		}
 	}
 
@@ -237,7 +253,7 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	return api.Message{
 		Role:       "tool",
 		Content:    result,
-		ToolCallId: toolCall.ID,
+		ToolCallId: toolCallID,
 	}
 }
 
@@ -353,6 +369,14 @@ func (te *ToolExecutor) generateActionKey(toolName string, args map[string]inter
 	// Create a deterministic key from tool name and arguments
 	argsJSON, _ := json.Marshal(args)
 	return fmt.Sprintf("%s:%s", toolName, string(argsJSON))
+}
+
+// GenerateToolCallID creates a unique tool call ID if one is missing
+func (te *ToolExecutor) GenerateToolCallID(toolName string) string {
+	// Use a simple timestamp + tool name pattern to create a unique ID
+	timestamp := getCurrentTime()
+	sanitizedName := strings.ReplaceAll(toolName, "_", "")
+	return fmt.Sprintf("call_%s_%d", sanitizedName, timestamp)
 }
 
 // getCurrentTime returns the current time (abstracted for testing)

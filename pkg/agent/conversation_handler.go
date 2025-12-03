@@ -203,12 +203,52 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		}
 	}
 
+	// Ensure tool calls always carry IDs so downstream sanitization can keep results
+	if len(choice.Message.ToolCalls) > 0 {
+		for i := range choice.Message.ToolCalls {
+			if choice.Message.ToolCalls[i].ID == "" {
+				choice.Message.ToolCalls[i].ID = ch.toolExecutor.GenerateToolCallID(choice.Message.ToolCalls[i].Function.Name)
+				ch.agent.debugLog("🔧 Generated missing tool call ID: %s for tool: %s\n",
+					choice.Message.ToolCalls[i].ID, choice.Message.ToolCalls[i].Function.Name)
+			}
+		}
+
+		// Some providers stream tool_calls multiple times per chunk. Deduplicate by ID (or arguments fallback)
+		deduped := make([]api.ToolCall, 0, len(choice.Message.ToolCalls))
+		seen := make(map[string]struct{}, len(choice.Message.ToolCalls))
+		for _, tc := range choice.Message.ToolCalls {
+			key := tc.ID
+			if key == "" {
+				key = fmt.Sprintf("%s|%s", tc.Function.Name, tc.Function.Arguments)
+			}
+			if _, exists := seen[key]; exists {
+				ch.agent.debugLog("♻️ Skipping duplicate tool call id=%s name=%s\n", tc.ID, tc.Function.Name)
+				continue
+			}
+			seen[key] = struct{}{}
+			deduped = append(deduped, tc)
+		}
+		if len(deduped) != len(choice.Message.ToolCalls) {
+			ch.agent.debugLog("♻️ Deduplicated tool calls: kept %d of %d\n", len(deduped), len(choice.Message.ToolCalls))
+		}
+		choice.Message.ToolCalls = deduped
+	}
+
 	// Add to conversation history
-	ch.agent.messages = append(ch.agent.messages, api.Message{
+	assistantMsg := api.Message{
 		Role:             "assistant",
 		Content:          contentUsed,
 		ReasoningContent: reasoningContent,
-	})
+	}
+
+	// Preserve tool calls (with generated IDs if needed) so tool outputs remain linked
+	if len(choice.Message.ToolCalls) > 0 {
+		toolCalls := make([]api.ToolCall, len(choice.Message.ToolCalls))
+		copy(toolCalls, choice.Message.ToolCalls)
+		assistantMsg.ToolCalls = toolCalls
+	}
+
+	ch.agent.messages = append(ch.agent.messages, assistantMsg)
 
 	// ZAI-specific completion detection
 	if ch.agent.client.GetProvider() == "zai" {

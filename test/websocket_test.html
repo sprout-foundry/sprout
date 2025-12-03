@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test - EventBus Fix</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .testing { background-color: #fff3cd; color: #856404; }
+        .log { margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px; max-height: 300px; overflow-y: auto; }
+        pre { margin: 0; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Connection Test - EventBus Fix</h1>
+
+    <div id="status" class="status testing">Testing WebSocket connection...</div>
+
+    <div>
+        <button onclick="testConnection()">Test Connection</button>
+        <button onclick="sendMessage()">Send Test Message</button>
+        <button onclick="disconnect()">Disconnect</button>
+    </div>
+
+    <div class="log">
+        <h3>Connection Log:</h3>
+        <pre id="log"></pre>
+    </div>
+
+    <script>
+        let ws = null;
+        let logElement = document.getElementById('log');
+        let statusElement = document.getElementById('status');
+
+        function log(message) {
+            console.log(message);
+            logElement.textContent += new Date().toLocaleTimeString() + ': ' + message + '\n';
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function updateStatus(status, className) {
+            statusElement.textContent = status;
+            statusElement.className = 'status ' + className;
+        }
+
+        function testConnection() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('WebSocket already connected');
+                return;
+            }
+
+            updateStatus('Connecting to WebSocket...', 'testing');
+            log('Attempting to connect to ws://localhost:8801/ws');
+
+            try {
+                ws = new WebSocket('ws://localhost:8801/ws');
+
+                ws.onopen = function(event) {
+                    log('✅ WebSocket connection opened successfully');
+                    updateStatus('Connected to WebSocket', 'connected');
+
+                    // Send a test message
+                    setTimeout(() => {
+                        sendMessage();
+                    }, 500);
+                };
+
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log('📨 Received message: ' + JSON.stringify(data, null, 2));
+                    } catch (e) {
+                        log('📨 Received raw message: ' + event.data);
+                    }
+                };
+
+                ws.onerror = function(error) {
+                    log('❌ WebSocket error: ' + error);
+                    updateStatus('WebSocket Error', 'disconnected');
+                };
+
+                ws.onclose = function(event) {
+                    log('🔌 WebSocket closed: ' + event.code + ' - ' + event.reason);
+                    updateStatus('Disconnected', 'disconnected');
+
+                    if (event.code !== 1000) {
+                        log('⚠️ WebSocket closed abnormally');
+                    }
+                };
+
+                // Connection timeout
+                setTimeout(() => {
+                    if (ws.readyState === WebSocket.CONNECTING) {
+                        log('⏰ Connection timeout');
+                        ws.close();
+                        updateStatus('Connection Timeout', 'disconnected');
+                    }
+                }, 10000);
+
+            } catch (error) {
+                log('❌ Failed to create WebSocket: ' + error.message);
+                updateStatus('Connection Failed', 'disconnected');
+            }
+        }
+
+        function sendMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ Cannot send message - WebSocket not connected');
+                return;
+            }
+
+            const message = {
+                type: 'test',
+                message: 'Hello from WebSocket test - EventBus fix verification',
+                timestamp: new Date().toISOString()
+            };
+
+            try {
+                ws.send(JSON.stringify(message));
+                log('📤 Sent message: ' + JSON.stringify(message, null, 2));
+            } catch (error) {
+                log('❌ Failed to send message: ' + error.message);
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close(1000, 'Test completed');
+                ws = null;
+            }
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', function() {
+            setTimeout(testConnection, 1000);
+        });
+    </script>
+</body>
+</html>

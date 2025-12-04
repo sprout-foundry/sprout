@@ -24,7 +24,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
   onSendCommand,
   placeholder = "Ask me anything about your code...",
   disabled = false,
-  multiline = false,
+  multiline = true,
   autoFocus = false
 }) => {
   const [currentInput, setCurrentInput] = useState(value || '');
@@ -32,7 +32,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
     commands: [],
     index: -1
   });
-  const [isMultilineMode, setIsMultilineMode] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Load command history from localStorage
@@ -61,6 +60,18 @@ const CommandInput: React.FC<CommandInputProps> = ({
       setCurrentInput(value);
     }
   }, [value, currentInput]);
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (textarea) {
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      // Calculate new height (min 44px, max 200px)
+      const newHeight = Math.max(44, Math.min(textarea.scrollHeight, 200));
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, [currentInput]);
 
   // Focus input if autoFocus is true
   useEffect(() => {
@@ -206,10 +217,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
     // Allow Enter key to send after IME composition
   };
 
-  const toggleMultiline = () => {
-    setIsMultilineMode(!isMultilineMode);
-  };
-
   return (
     <div className="command-input">
       <div className="input-header">
@@ -219,17 +226,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
               History ({history.index + 1}/{history.commands.length})
             </span>
           )}
-          {isMultilineMode && <span className="multiline-indicator">Multi-line</span>}
           {currentInput.length > 100 && <span className="length-indicator">{currentInput.length}</span>}
-        </div>
-        <div className="input-controls">
-          <button
-            onClick={toggleMultiline}
-            className="multiline-toggle"
-            title={isMultilineMode ? "Single-line mode" : "Multi-line mode"}
-          >
-            {isMultilineMode ? "↲" : "↳"}
-          </button>
         </div>
       </div>
 
@@ -248,8 +245,8 @@ const CommandInput: React.FC<CommandInputProps> = ({
         onCompositionEnd={handleCompositionEnd}
         placeholder={placeholder}
         disabled={disabled}
-        className={`input-field ${isMultilineMode ? 'multiline' : 'singleline'}`}
-        rows={isMultilineMode ? 4 : 1}
+        className="input-field autoscaling"
+        rows={1}
         spellCheck={false}
       />
 

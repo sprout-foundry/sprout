@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/gorilla/websocket"
 )
@@ -400,15 +401,18 @@ func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request
 		"message": "",
 	}
 
+	var messages []string
+
 	// Set provider if specified
 	if req.Provider != "" {
-		if err := ws.agent.SetProvider(req.Provider); err != nil {
+		provider := api.ClientType(req.Provider)
+		if err := ws.agent.SetProvider(provider); err != nil {
 			response["message"] = fmt.Sprintf("Failed to set provider: %v", err)
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-		response["message"] += fmt.Sprintf("Provider set to %s", req.Provider)
+		messages = append(messages, fmt.Sprintf("Provider set to %s", req.Provider))
 	}
 
 	// Set model if specified
@@ -419,15 +423,14 @@ func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-		if response["message"].(string) != "" {
-			response["message"] += ", "
-		}
-		response["message"] += fmt.Sprintf("model set to %s", req.Model)
+		messages = append(messages, fmt.Sprintf("model set to %s", req.Model))
 	}
 
 	response["success"] = true
-	if response["message"].(string) == "" {
+	if len(messages) == 0 {
 		response["message"] = "Configuration updated"
+	} else {
+		response["message"] = strings.Join(messages, ", ")
 	}
 
 	// Publish configuration change event

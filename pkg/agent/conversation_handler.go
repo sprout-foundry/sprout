@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -50,6 +51,9 @@ type TurnEvaluation struct {
 	ToolLogs          []string
 	TokenUsage        TokenUsage
 	CompletionReached bool
+	FinishReason      string
+	ReasoningSnippet  string
+	GuardrailTrigger  string
 }
 
 // NewConversationHandler creates a new conversation handler
@@ -235,6 +239,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 
 	turn.AssistantContent = contentUsed
+	turn.FinishReason = choice.FinishReason
 
 	// Optimize reasoning content for ZAI to prevent conversation bloat
 	reasoningContent := choice.Message.ReasoningContent
@@ -249,6 +254,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		}
 	}
 	*/
+	turn.ReasoningSnippet = abbreviate(reasoningContent, 280)
 
 	// Ensure tool calls always carry IDs so downstream sanitization can keep results
 	if len(choice.Message.ToolCalls) > 0 {
@@ -468,6 +474,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			})
 
 			// Guidance suppressed for now; guardrail already re-enqueues reminders
+			turn.GuardrailTrigger = "blank iteration reminder"
 			return ch.finalizeTurn(turn, false) // Continue conversation to get a proper response
 		} else if ch.consecutiveBlankIterations >= 2 {
 			// Two consecutive blank iterations - error out
@@ -518,10 +525,16 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	// Otherwise, decide whether this is a final (non-incomplete) response or we need more
 	// If the response appears incomplete, ask the model to continue. Otherwise treat it as final.
+	if choice.FinishReason == "tool_calls" {
+		turn.GuardrailTrigger = "tool_calls finish"
+		return ch.finalizeTurn(turn, false)
+	}
+
 	if ch.responseValidator.IsIncomplete(contentUsed) {
 		ch.agent.debugLog("⚠️ Response appears incomplete, asking model to continue\n")
 		ch.missingCompletionReminders = 0
 		ch.handleIncompleteResponse()
+		turn.GuardrailTrigger = "incomplete response reminder"
 		return ch.finalizeTurn(turn, false) // Continue conversation to get a complete response
 	}
 
@@ -536,6 +549,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 
 	ch.agent.debugLog("⏳ Waiting for explicit completion signal per provider/model policy\n")
+	turn.GuardrailTrigger = "missing completion reminder"
 	ch.handleMissingCompletionSignal()
 	return ch.finalizeTurn(turn, false)
 }
@@ -834,6 +848,7 @@ func (ch *ConversationHandler) finalizeTurn(turn TurnEvaluation, shouldStop bool
 	}
 	ch.turnHistory = append(ch.turnHistory, turn)
 	ch.logTurnSummary(turn)
+	ch.appendTurnLogFile(turn)
 	return shouldStop
 }
 
@@ -855,6 +870,9 @@ func (ch *ConversationHandler) logTurnSummary(turn TurnEvaluation) {
 	builder.WriteString(fmt.Sprintf("\n🔎 Turn %d summary (%s)\n", turn.Iteration, turn.Timestamp.Format("15:04:05")))
 	builder.WriteString(fmt.Sprintf("  User: %s\n", abbreviate(turn.UserInput, 120)))
 	builder.WriteString(fmt.Sprintf("  Assistant: %s\n", abbreviate(turn.AssistantContent, 240)))
+	if turn.ReasoningSnippet != "" {
+		builder.WriteString(fmt.Sprintf("  Reasoning: %s\n", abbreviate(turn.ReasoningSnippet, 240)))
+	}
 	if len(turn.ToolLogs) > 0 {
 		builder.WriteString("  Tool logs:\n")
 		for _, log := range turn.ToolLogs {
@@ -867,10 +885,16 @@ func (ch *ConversationHandler) logTurnSummary(turn TurnEvaluation) {
 	if len(turn.ToolResults) > 0 {
 		builder.WriteString(fmt.Sprintf("  Tool results: %d entries\n", len(turn.ToolResults)))
 	}
+	if turn.FinishReason != "" {
+		builder.WriteString(fmt.Sprintf("  Finish reason: %s\n", turn.FinishReason))
+	}
 	tokens := turn.TokenUsage
 	builder.WriteString(fmt.Sprintf("  Tokens: prompt=%d completion=%d total=%d\n", tokens.PromptTokens, tokens.CompletionTokens, tokens.TotalTokens))
 	if turn.CompletionReached {
 		builder.WriteString("  Completion: reached\n")
+	}
+	if turn.GuardrailTrigger != "" {
+		builder.WriteString(fmt.Sprintf("  Guardrail: %s\n", turn.GuardrailTrigger))
 	}
 	ch.agent.PrintLineAsync(builder.String())
 }
@@ -884,6 +908,27 @@ func abbreviate(text string, limit int) string {
 		return clean[:limit-1] + "…"
 	}
 	return clean[:limit]
+}
+
+func (ch *ConversationHandler) appendTurnLogFile(turn TurnEvaluation) {
+	path := os.Getenv("LEDIT_TURN_LOG_FILE")
+	if path == "" {
+		return
+	}
+	data, err := json.Marshal(turn)
+	if err != nil {
+		ch.agent.debugLog("⚠️ Failed to marshal turn log: %v\n", err)
+		return
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		ch.agent.debugLog("⚠️ Failed to open turn log file %s: %v\n", path, err)
+		return
+	}
+	defer f.Close()
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		ch.agent.debugLog("⚠️ Failed to write turn log: %v\n", err)
+	}
 }
 
 func (ch *ConversationHandler) finalizeConversation() (string, error) {

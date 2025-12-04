@@ -49,6 +49,11 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 		// Create commit command instance and execute
 		commitCmd := &commands.CommitCommand{}
 
+		// If agent creation failed, set the error for better reporting
+		if chatAgent == nil && err != nil {
+			commitCmd.SetAgentError(err)
+		}
+
 		// Parse CLI flags into appropriate args for the agent command
 		var cmdArgs []string
 

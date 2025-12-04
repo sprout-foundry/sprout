@@ -28,6 +28,26 @@ html, body, #root {
   height: 100%;
 }
 
+/* Editor View Layout */
+.editor-view {
+  flex: 1;
+  display: flex;
+  gap: 1px;
+  background: #3a3a4a;
+  overflow: hidden;
+}
+
+.editor-view .file-tree {
+  width: 300px;
+  min-width: 250px;
+  flex-shrink: 0;
+}
+
+.editor-view .code-editor {
+  flex: 1;
+  min-width: 0;
+}
+
 /* Custom scrollbar for the entire app */
 ::-webkit-scrollbar {
   width: 8px;

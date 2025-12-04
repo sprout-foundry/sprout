@@ -9,7 +9,6 @@
   "defaults": {
     "model": "glm-4.6",
     "temperature": 0.1,
-    "max_tokens": 180000,
     "top_p": 1.0
   },
   "message_conversion": {

@@ -4,17 +4,16 @@ import (
 	"strings"
 )
 
-var implicitCompletionProviders = map[string]string{
-	"openai": "allow",
-	"zai":    "allow",
+var explicitCompletionProviders = map[string]struct{}{
+	"openrouter": {},
+	"lmstudio":   {},
 }
 
 func (a *Agent) shouldAllowImplicitCompletion() bool {
-	// Simplified policy: disallow implicit completion for OpenAI, allow for all others.
 	if a == nil || a.client == nil {
-		return false
+		return true
 	}
 	provider := strings.ToLower(a.client.GetProvider())
-
-	return implicitCompletionProviders[provider] == "allow"
+	_, disallowed := explicitCompletionProviders[provider]
+	return !disallowed
 }

@@ -12,54 +12,92 @@ const PROVIDERS = [
 
 interface SidebarProps {
   isConnected: boolean;
-  provider: string;
-  model: string;
-  queryCount: number;
-  logs: string[];
-  files: Array<{ path: string; modified: boolean }>;
-  onProviderChange?: (provider: string) => void;
+  selectedModel?: string;
   onModelChange?: (model: string) => void;
-  currentView?: 'chat' | 'editor';
-  onViewChange?: (view: 'chat' | 'editor') => void;
+  availableModels?: string[];
+  currentView?: 'chat' | 'editor' | 'git';
+  onViewChange?: (view: 'chat' | 'editor' | 'git') => void;
+  stats?: {
+    queryCount: number;
+    filesModified: number;
+  };
+  recentFiles?: Array<{ path: string; modified: boolean }>;
+  recentLogs?: string[];
+  isMobileMenuOpen?: boolean;
+  onMobileMenuToggle?: () => void;
+  sidebarCollapsed?: boolean;
+  onSidebarToggle?: () => void;
+  // Legacy props for backward compatibility
+  provider?: string;
+  model?: string;
+  queryCount?: number;
+  logs?: string[];
+  files?: Array<{ path: string; modified: boolean }>;
+  onProviderChange?: (provider: string) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
+  isMobile?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
   isConnected,
+  selectedModel,
+  onModelChange,
+  availableModels,
+  currentView = 'chat',
+  onViewChange,
+  stats,
+  recentFiles,
+  recentLogs,
+  isMobileMenuOpen,
+  onMobileMenuToggle,
+  sidebarCollapsed,
+  onSidebarToggle,
+  // Legacy props for backward compatibility
   provider,
   model,
   queryCount,
   logs,
   files,
   onProviderChange,
-  onModelChange,
-  currentView = 'chat',
-  onViewChange
+  isOpen = true,
+  onClose,
+  isMobile = false
 }) => {
-  const [selectedProvider, setSelectedProvider] = useState(provider);
-  const [selectedModel, setSelectedModel] = useState(model);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState(provider || 'openai');
+  const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || 'gpt-4');
+  const [availableModelsState, setAvailableModelsState] = useState<string[]>(availableModels || []);
+
+  // Use new props if available, otherwise fall back to legacy props
+  const finalSelectedModel = selectedModel || selectedModelState;
+  const finalAvailableModels = availableModels || availableModelsState;
+  const finalStats = stats || { queryCount: queryCount || 0, filesModified: files?.filter(f => f.modified).length || 0 };
+  const finalRecentFiles = recentFiles || files || [];
+  const finalRecentLogs = recentLogs || logs || [];
+  const finalIsMobileMenuOpen = isMobileMenuOpen !== undefined ? isMobileMenuOpen : isOpen;
+  const finalOnMobileMenuToggle = onMobileMenuToggle || onClose;
 
   // Update available models when provider changes
   useEffect(() => {
     const providerData = PROVIDERS.find(p => p.id === selectedProvider);
     if (providerData) {
-      setAvailableModels(providerData.models);
+      setAvailableModelsState(providerData.models);
       // Reset model if current model is not in the new provider's models
-      if (!providerData.models.includes(selectedModel)) {
+      if (!providerData.models.includes(finalSelectedModel)) {
         const newModel = providerData.models[0];
-        setSelectedModel(newModel);
+        setSelectedModelState(newModel);
         onModelChange?.(newModel);
       }
     }
-  }, [selectedProvider, selectedModel, onModelChange]);
+  }, [selectedProvider, finalSelectedModel, onModelChange]);
 
   // Update local state when props change
   useEffect(() => {
-    setSelectedProvider(provider);
+    if (provider) setSelectedProvider(provider);
   }, [provider]);
 
   useEffect(() => {
-    setSelectedModel(model);
+    if (model) setSelectedModelState(model);
   }, [model]);
 
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -70,7 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newModel = e.target.value;
-    setSelectedModel(newModel);
+    setSelectedModelState(newModel);
     onModelChange?.(newModel);
   };
 
@@ -80,128 +118,168 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div className="sidebar">
-      <div className="sidebar-header">
-        <h3>🤖 ledit Web UI</h3>
-        <div className="connection-indicator">
-          <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></div>
-          <span className="status-text">
-            {isConnected ? 'Connected' : 'Disconnected'}
-          </span>
-        </div>
-      </div>
+    <div className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      {/* Desktop collapse button */}
+      {!isMobile && (
+        <button 
+          className="desktop-collapse-btn"
+          onClick={onSidebarToggle}
+          aria-label="Toggle sidebar"
+        >
+          {sidebarCollapsed ? '→' : '←'}
+        </button>
+      )}
+      
+      {isMobile && (
+        <button 
+          className="mobile-close-btn"
+          onClick={finalOnMobileMenuToggle}
+          aria-label="Close sidebar"
+        >
+          ✕
+        </button>
+      )}
+      
+      {!sidebarCollapsed && (
+        <>
+          <div className="sidebar-header">
+            <h3>🤖 ledit</h3>
+            <div className="connection-indicator">
+              <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></div>
+              <span className="status-text">
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+          </div>
 
-      {/* Configuration Section */}
-      <div className="config-section">
-        <h4>⚙️ Configuration</h4>
-        <div className="config-item">
-          <label htmlFor="provider-select">Provider:</label>
-          <select
-            id="provider-select"
-            value={selectedProvider}
-            onChange={handleProviderChange}
-            disabled={!isConnected}
-            className="styled-select"
-          >
-            {PROVIDERS.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="config-item">
-          <label htmlFor="model-select">Model:</label>
-          <select
-            id="model-select"
-            value={selectedModel}
-            onChange={handleModelChange}
-            disabled={!isConnected || availableModels.length === 0}
-            className="styled-select"
-          >
-            {availableModels.map(m => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+          {/* Main Navigation - 3 Icon View Switcher */}
+          <div className="main-nav-section">
+            <div className="nav-icons">
+              <button
+                className={`nav-icon ${currentView === 'chat' ? 'active' : ''}`}
+                onClick={() => {
+                  onViewChange?.('chat');
+                  if (isMobile && finalOnMobileMenuToggle) finalOnMobileMenuToggle();
+                }}
+                disabled={!onViewChange}
+                title="Chat View"
+              >
+                <span className="nav-icon-emoji">💬</span>
+                <span className="nav-icon-label">Chat</span>
+              </button>
+              <button
+                className={`nav-icon ${currentView === 'editor' ? 'active' : ''}`}
+                onClick={() => {
+                  onViewChange?.('editor');
+                  if (isMobile && finalOnMobileMenuToggle) finalOnMobileMenuToggle();
+                }}
+                disabled={!onViewChange}
+                title="Editor View"
+              >
+                <span className="nav-icon-emoji">📝</span>
+                <span className="nav-icon-label">Editor</span>
+              </button>
+              <button
+                className={`nav-icon ${currentView === 'git' ? 'active' : ''}`}
+                onClick={() => {
+                  onViewChange?.('git');
+                  if (isMobile && finalOnMobileMenuToggle) finalOnMobileMenuToggle();
+                }}
+                disabled={!onViewChange}
+                title="Git View"
+              >
+                <span className="nav-icon-emoji">🔀</span>
+                <span className="nav-icon-label">Git</span>
+              </button>
+            </div>
+          </div>
 
-      {/* View Switcher Section */}
-      <div className="view-section">
-        <h4>👁️ View Mode</h4>
-        <div className="view-switcher">
-          <button
-            className={`view-button ${currentView === 'chat' ? 'active' : ''}`}
-            onClick={() => onViewChange?.('chat')}
-            disabled={!onViewChange}
-          >
-            💬 Chat
-          </button>
-          <button
-            className={`view-button ${currentView === 'editor' ? 'active' : ''}`}
-            onClick={() => onViewChange?.('editor')}
-            disabled={!onViewChange}
-          >
-            📝 Editor
-          </button>
-        </div>
-      </div>
+          {/* Configuration Section */}
+          <div className="config-section">
+            <h4>⚙️ Config</h4>
+            <div className="config-item">
+              <label htmlFor="provider-select">Provider:</label>
+              <select
+                id="provider-select"
+                value={selectedProvider}
+                onChange={handleProviderChange}
+                disabled={!isConnected}
+                className="styled-select"
+              >
+                {PROVIDERS.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="config-item">
+              <label htmlFor="model-select">Model:</label>
+              <select
+                id="model-select"
+                value={finalSelectedModel}
+                onChange={handleModelChange}
+                disabled={!isConnected || finalAvailableModels.length === 0}
+                className="styled-select"
+              >
+                {finalAvailableModels.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-      {/* Stats Section */}
-      <div className="stats">
-        <h4>📊 Statistics</h4>
-        <div className="stat-item">
-          <span className="label">Provider:</span>
-          <span className="value">{getProviderDisplayName(selectedProvider)}</span>
-        </div>
-        <div className="stat-item">
-          <span className="label">Model:</span>
-          <span className="value">{selectedModel}</span>
-        </div>
-        <div className="stat-item">
-          <span className="label">Queries:</span>
-          <span className="value query-count">{queryCount}</span>
-        </div>
-        <div className="stat-item">
-          <span className="label">Status:</span>
-          <span className={`value status ${isConnected ? 'connected' : 'disconnected'}`}>
-            {isConnected ? '🟢 Online' : '🔴 Offline'}
-          </span>
-        </div>
-      </div>
+          {/* Stats Section - Simplified for mobile */}
+          <div className="stats">
+            <h4>📊 Stats</h4>
+            <div className="stat-item">
+              <span className="label">Queries:</span>
+              <span className="value query-count">{finalStats.queryCount}</span>
+            </div>
+            <div className="stat-item">
+              <span className="label">Status:</span>
+              <span className={`value status ${isConnected ? 'connected' : 'disconnected'}`}>
+                {isConnected ? '🟢' : '🔴'}
+              </span>
+            </div>
+          </div>
 
-      {/* Files Section */}
-      <div className="section">
-        <h4>📁 Files ({files.length})</h4>
-        <div className="files-list">
-          {files.length === 0 ? (
-            <span className="empty">No files tracked yet</span>
-          ) : (
-            files.map((file, index) => (
-              <div key={index} className="file-item">
-                <span className={`file-path ${file.modified ? 'modified' : ''}`}>
-                  {file.path}
-                </span>
-                {file.modified && <span className="badge">Modified</span>}
+          {/* Files Section - Collapsible on mobile */}
+          <div className="section">
+            <h4>📁 Files ({finalRecentFiles.length})</h4>
+            <div className="files-list">
+              {finalRecentFiles.length === 0 ? (
+                <span className="empty">No files</span>
+              ) : (
+                finalRecentFiles.slice(isMobile ? 3 : 5).map((file, index) => (
+                  <div key={index} className="file-item">
+                    <span className={`file-path ${file.modified ? 'modified' : ''}`}>
+                      {file.path.split('/').pop()}
+                    </span>
+                    {file.modified && <span className="badge">✓</span>}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Logs Section - Hidden on mobile to save space */}
+          {!isMobile && (
+            <div className="section">
+              <h4>📋 Recent Logs</h4>
+              <div className="logs-list">
+                {finalRecentLogs.length === 0 ? (
+                  <span className="empty">No logs yet</span>
+                ) : (
+                  finalRecentLogs.slice(-5).map((log, index) => (
+                    <div key={index} className="log-item">
+                      {log}
+                    </div>
+                  ))
+                )}
               </div>
-            ))
+            </div>
           )}
-        </div>
-      </div>
-
-      {/* Logs Section */}
-      <div className="section">
-        <h4>📋 Recent Logs</h4>
-        <div className="logs-list">
-          {logs.length === 0 ? (
-            <span className="empty">No logs yet</span>
-          ) : (
-            logs.slice(-5).map((log, index) => (
-              <div key={index} className="log-item">
-                {log}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 };

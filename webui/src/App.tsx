@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Chat from './components/Chat';
+import GitView from './components/GitView';
 import Status from './components/Status';
 import UIManager from './components/UIManager';
 import FileTree from './components/FileTree';
@@ -48,7 +49,7 @@ interface AppState {
   files: FileItem[];
   isProcessing: boolean;
   lastError: string | null;
-  currentView: 'chat' | 'editor';
+  currentView: 'chat' | 'editor' | 'git';
   selectedFile: FileInfo | null;
 }
 
@@ -90,6 +91,9 @@ function App() {
   });
 
   const [inputValue, setInputValue] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const wsService = WebSocketService.getInstance();
   const apiService = ApiService.getInstance();
 
@@ -187,9 +191,18 @@ function App() {
       }));
     }).catch(console.error);
 
+    // Check for mobile screen size
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
     // Cleanup
     return () => {
       wsService.disconnect();
+      window.removeEventListener('resize', checkMobile);
     };
   }, [handleEvent, wsService, apiService]);
 
@@ -257,7 +270,7 @@ function App() {
     }));
   }, [wsService]);
 
-  const handleViewChange = useCallback((view: 'chat' | 'editor') => {
+  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
     setState(prev => ({
       ...prev,
       currentView: view
@@ -271,27 +284,82 @@ function App() {
     }));
   }, []);
 
+  const handleGitCommit = useCallback((message: string, files: string[]) => {
+    console.log('Git commit:', message, files);
+    // TODO: Implement actual git commit API call
+    // This would call the backend to perform git operations
+  }, []);
+
+  const handleGitStage = useCallback((files: string[]) => {
+    console.log('Git stage:', files);
+    // TODO: Implement actual git stage API call
+  }, []);
+
+  const handleGitUnstage = useCallback((files: string[]) => {
+    console.log('Git unstage:', files);
+    // TODO: Implement actual git unstage API call
+  }, []);
+
+  const handleGitDiscard = useCallback((files: string[]) => {
+    console.log('Git discard:', files);
+    // TODO: Implement actual git discard API call
+  }, []);
+
   const handleFileSave = useCallback((content: string) => {
     console.log('File saved:', state.selectedFile?.path);
     // You could add additional logic here like refreshing the file tree
   }, [state.selectedFile]);
 
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarOpen(prev => !prev);
+  }, []);
+
+  const closeSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+  }, []);
+
   return (
     <UIManager>
       <div className="app">
+        {/* Mobile menu button */}
+        {isMobile && (
+          <button 
+            className="mobile-menu-btn"
+            onClick={toggleSidebar}
+            aria-label="Toggle sidebar"
+          >
+            ☰
+          </button>
+        )}
+
+        {/* Mobile overlay */}
+        {isMobile && isSidebarOpen && (
+          <div 
+            className="mobile-overlay"
+            onClick={closeSidebar}
+          />
+        )}
+
         <Sidebar
           isConnected={state.isConnected}
-          provider={state.provider}
-          model={state.model}
-          queryCount={state.queryCount}
-          logs={state.logs}
-          files={state.files}
-          onProviderChange={handleProviderChange}
+          selectedModel={state.model}
           onModelChange={handleModelChange}
+          availableModels={[state.model]} // You might want to fetch available models from API
           currentView={state.currentView}
           onViewChange={handleViewChange}
+          stats={{
+            queryCount: state.queryCount,
+            filesModified: state.files.filter(f => f.modified).length
+          }}
+          recentFiles={state.files.slice(-5)} // Show last 5 files
+          recentLogs={state.logs.slice(-10)} // Show last 10 log entries
+          isMobileMenuOpen={isSidebarOpen}
+          onMobileMenuToggle={toggleSidebar}
+          isMobile={isMobile}
+          sidebarCollapsed={sidebarCollapsed}
+          onSidebarToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
-        <div className="main">
+        <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''}`}>
           <Status isConnected={state.isConnected} />
 
           {state.currentView === 'chat' ? (
@@ -302,6 +370,13 @@ function App() {
               onInputChange={setInputValue}
               isProcessing={state.isProcessing}
               lastError={state.lastError}
+            />
+          ) : state.currentView === 'git' ? (
+            <GitView
+              onCommit={handleGitCommit}
+              onStage={handleGitStage}
+              onUnstage={handleGitUnstage}
+              onDiscard={handleGitDiscard}
             />
           ) : (
             <div className="editor-view">

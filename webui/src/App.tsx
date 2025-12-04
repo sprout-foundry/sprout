@@ -148,6 +148,34 @@ function App() {
     }
   }, [apiService]);
 
+  const handleProviderChange = useCallback((provider: string) => {
+    console.log('Provider changed to:', provider);
+    // Send provider change to backend
+    wsService.sendEvent({
+      type: 'provider_change',
+      data: { provider }
+    });
+
+    setState(prev => ({
+      ...prev,
+      provider
+    }));
+  }, [wsService]);
+
+  const handleModelChange = useCallback((model: string) => {
+    console.log('Model changed to:', model);
+    // Send model change to backend
+    wsService.sendEvent({
+      type: 'model_change',
+      data: { model }
+    });
+
+    setState(prev => ({
+      ...prev,
+      model
+    }));
+  }, [wsService]);
+
   return (
     <UIManager>
       <div className="app">
@@ -158,6 +186,8 @@ function App() {
           queryCount={state.queryCount}
           logs={state.logs}
           files={state.files}
+          onProviderChange={handleProviderChange}
+          onModelChange={handleModelChange}
         />
         <div className="main">
           <Status isConnected={state.isConnected} />

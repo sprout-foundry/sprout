@@ -213,19 +213,39 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			}
 		}
 
-		// Some providers stream tool_calls multiple times per chunk. Deduplicate by ID (or arguments fallback)
+		// Some providers stream tool_calls multiple times per chunk. Deduplicate by ID AND arguments.
 		deduped := make([]api.ToolCall, 0, len(choice.Message.ToolCalls))
-		seen := make(map[string]struct{}, len(choice.Message.ToolCalls))
+		seenIDs := make(map[string]struct{}, len(choice.Message.ToolCalls))
+		seenArgs := make(map[string]struct{}, len(choice.Message.ToolCalls))
 		for _, tc := range choice.Message.ToolCalls {
-			key := tc.ID
-			if key == "" {
-				key = fmt.Sprintf("%s|%s", tc.Function.Name, tc.Function.Arguments)
+			isDup := false
+			if tc.ID != "" {
+				if _, exists := seenIDs[tc.ID]; exists {
+					isDup = true
+				} else {
+					seenIDs[tc.ID] = struct{}{}
+				}
 			}
-			if _, exists := seen[key]; exists {
-				ch.agent.debugLog("♻️ Skipping duplicate tool call id=%s name=%s\n", tc.ID, tc.Function.Name)
+
+			argsKey := fmt.Sprintf("%s|%s", tc.Function.Name, strings.TrimSpace(tc.Function.Arguments))
+			if !isDup {
+				if _, exists := seenArgs[argsKey]; exists {
+					isDup = true
+				} else {
+					seenArgs[argsKey] = struct{}{}
+				}
+			}
+
+			if isDup {
+				sampleArgs := argsKey
+				if len(sampleArgs) > 120 {
+					sampleArgs = sampleArgs[:117] + "..."
+				}
+				ch.agent.debugLog("♻️ Skipping duplicate tool call id=%s name=%s args=%s\n",
+					tc.ID, tc.Function.Name, sampleArgs)
 				continue
 			}
-			seen[key] = struct{}{}
+
 			deduped = append(deduped, tc)
 		}
 		if len(deduped) != len(choice.Message.ToolCalls) {

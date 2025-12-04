@@ -14,13 +14,17 @@ interface ChatProps {
   onSendMessage: (message: string) => void;
   inputValue: string;
   onInputChange: (value: string) => void;
+  isProcessing?: boolean;
+  lastError?: string | null;
 }
 
 const Chat: React.FC<ChatProps> = ({
   messages,
   onSendMessage,
   inputValue,
-  onInputChange
+  onInputChange,
+  isProcessing = false,
+  lastError = null
 }) => {
 
   return (
@@ -49,6 +53,26 @@ const Chat: React.FC<ChatProps> = ({
               </div>
             </div>
           ))
+        )}
+
+        {/* Processing Indicator */}
+        {isProcessing && (
+          <div className="processing-indicator">
+            <div className="processing-content">
+              <div className="processing-spinner">⚡</div>
+              <div className="processing-text">Processing your request...</div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Display */}
+        {lastError && (
+          <div className="error-indicator">
+            <div className="error-content">
+              <div className="error-icon">⚠️</div>
+              <div className="error-text">{lastError}</div>
+            </div>
+          </div>
         )}
       </div>
 

@@ -155,7 +155,7 @@ func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Construct the full file path - use correct path for production server
-	fullPath := "./pkg/webui/static/" + filePath
+	fullPath := "./pkg/webui/static/static/" + filePath
 
 	// Set appropriate Content-Type header based on file extension
 	ext := ""

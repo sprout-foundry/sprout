@@ -3,6 +3,8 @@ import Sidebar from './components/Sidebar';
 import Chat from './components/Chat';
 import Status from './components/Status';
 import UIManager from './components/UIManager';
+import FileTree from './components/FileTree';
+import CodeEditor from './components/CodeEditor';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService } from './services/api';
@@ -15,6 +17,10 @@ interface AppState {
   messages: Message[];
   logs: string[];
   files: FileItem[];
+  isProcessing: boolean;
+  lastError: string | null;
+  currentView: 'chat' | 'editor';
+  selectedFile: FileInfo | null;
 }
 
 interface Message {
@@ -30,6 +36,15 @@ interface FileItem {
   content?: string;
 }
 
+interface FileInfo {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  modified: number;
+  ext?: string;
+}
+
 function App() {
   const [state, setState] = useState<AppState>({
     isConnected: false,
@@ -38,7 +53,11 @@ function App() {
     queryCount: 0,
     messages: [],
     logs: [],
-    files: []
+    files: [],
+    isProcessing: false,
+    lastError: null,
+    currentView: 'chat',
+    selectedFile: null
   });
 
   const [inputValue, setInputValue] = useState('');
@@ -89,7 +108,12 @@ function App() {
         break;
 
       case 'query_completed':
-        // Query completed, already handled in stream_chunk
+        setState(prev => ({
+          ...prev,
+          isProcessing: false,
+          lastError: null
+        }));
+        console.log('✅ Query completed');
         break;
 
       case 'error':
@@ -138,15 +162,40 @@ function App() {
   }, [handleEvent, wsService, apiService]);
 
   const handleSendMessage = useCallback(async (message: string) => {
-    if (!message.trim()) return;
+    if (!message.trim() || state.isProcessing) return;
+
+    // Clear any previous errors and set processing state
+    setState(prev => ({
+      ...prev,
+      isProcessing: true,
+      lastError: null
+    }));
 
     try {
+      console.log('🚀 Sending message:', message);
       await apiService.sendQuery(message);
       setInputValue('');
+      console.log('✅ Message sent successfully');
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('❌ Failed to send message:', error);
+      setState(prev => ({
+        ...prev,
+        isProcessing: false,
+        lastError: `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`
+      }));
+
+      // Add error message to chat
+      setState(prev => ({
+        ...prev,
+        messages: [...prev.messages, {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: `❌ Error: ${error instanceof Error ? error.message : 'Failed to send message'}`,
+          timestamp: new Date()
+        }]
+      }));
     }
-  }, [apiService]);
+  }, [apiService, state.isProcessing]);
 
   const handleProviderChange = useCallback((provider: string) => {
     console.log('Provider changed to:', provider);
@@ -176,6 +225,25 @@ function App() {
     }));
   }, [wsService]);
 
+  const handleViewChange = useCallback((view: 'chat' | 'editor') => {
+    setState(prev => ({
+      ...prev,
+      currentView: view
+    }));
+  }, []);
+
+  const handleFileSelect = useCallback((file: FileInfo) => {
+    setState(prev => ({
+      ...prev,
+      selectedFile: file
+    }));
+  }, []);
+
+  const handleFileSave = useCallback((content: string) => {
+    console.log('File saved:', state.selectedFile?.path);
+    // You could add additional logic here like refreshing the file tree
+  }, [state.selectedFile]);
+
   return (
     <UIManager>
       <div className="app">
@@ -188,15 +256,33 @@ function App() {
           files={state.files}
           onProviderChange={handleProviderChange}
           onModelChange={handleModelChange}
+          currentView={state.currentView}
+          onViewChange={handleViewChange}
         />
         <div className="main">
           <Status isConnected={state.isConnected} />
-          <Chat
-            messages={state.messages}
-            onSendMessage={handleSendMessage}
-            inputValue={inputValue}
-            onInputChange={setInputValue}
-          />
+
+          {state.currentView === 'chat' ? (
+            <Chat
+              messages={state.messages}
+              onSendMessage={handleSendMessage}
+              inputValue={inputValue}
+              onInputChange={setInputValue}
+              isProcessing={state.isProcessing}
+              lastError={state.lastError}
+            />
+          ) : (
+            <div className="editor-view">
+              <FileTree
+                onFileSelect={handleFileSelect}
+                selectedFile={state.selectedFile?.path}
+              />
+              <CodeEditor
+                file={state.selectedFile}
+                onSave={handleFileSave}
+              />
+            </div>
+          )}
         </div>
       </div>
     </UIManager>

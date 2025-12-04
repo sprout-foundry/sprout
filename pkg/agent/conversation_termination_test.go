@@ -43,8 +43,8 @@ func (s *stubClient) SetModel(model string) error {
 	return s.TestClient.SetModel(model)
 }
 
-// Test that a complete-looking response without the explicit [[TASK_COMPLETE]] continues when policy requires explicit stop
-func TestProcessResponse_RequiresExplicitCompletionWhenPolicyDisallowsImplicit(t *testing.T) {
+// Test that a provider allowing implicit completion stops without the reminder
+func TestProcessResponse_AllowsImplicitCompletionForOpenRouter(t *testing.T) {
 	agent := &Agent{client: newStubClient("openrouter", "anthropic/claude-3")}
 	ch := NewConversationHandler(agent)
 
@@ -56,7 +56,7 @@ func TestProcessResponse_RequiresExplicitCompletionWhenPolicyDisallowsImplicit(t
 	}
 
 	stopped := ch.processResponse(resp)
-	assert.False(t, stopped, "Expected conversation to continue until explicit completion signal is provided")
+	assert.True(t, stopped, "Expected implicit completion to be accepted")
 
 	reminderFound := false
 	for _, m := range ch.transientMessages {
@@ -65,7 +65,7 @@ func TestProcessResponse_RequiresExplicitCompletionWhenPolicyDisallowsImplicit(t
 			break
 		}
 	}
-	assert.True(t, reminderFound, "Expected reminder requesting [[TASK_COMPLETE]] to be appended")
+	assert.False(t, reminderFound, "Did not expect [[TASK_COMPLETE]] reminder for allowed provider")
 }
 
 // Test that an incomplete-looking response causes the handler to request continuation

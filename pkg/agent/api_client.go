@@ -90,6 +90,34 @@ func logAPIResponse(content string, streaming bool) {
 	LogAPIResponse(content, streaming)
 }
 
+func logChatResponseDetailed(resp *api.ChatResponse, provider string, streaming bool, iteration int) {
+	if os.Getenv("LEDIT_LOG_API_RESPONSES") == "" || resp == nil {
+		return
+	}
+
+	payload := map[string]interface{}{
+		"timestamp": time.Now().Format(time.RFC3339Nano),
+		"provider":  provider,
+		"model":     resp.Model,
+		"streaming": streaming,
+		"iteration": iteration,
+		"response":  resp,
+	}
+
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return
+	}
+
+	dir := filepath.Join(os.Getenv("HOME"), ".ledit")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+
+	filename := fmt.Sprintf("api_response_%s.json", time.Now().Format("20060102_150405.000000000"))
+	_ = os.WriteFile(filepath.Join(dir, filename), data, 0o644)
+}
+
 // APIClient handles all LLM API communication with retry logic
 type APIClient struct {
 	agent             *Agent
@@ -442,6 +470,7 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 			// Log the accumulated streaming response for debugging
 			if ac.agent.streamingEnabled {
 				logAPIResponse(ac.agent.streamingBuffer.String(), true)
+				logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), true, ac.agent.currentIteration)
 			}
 
 			if result.err != nil {
@@ -523,6 +552,7 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 		return nil, fmt.Errorf("API request timed out after %v", ac.overallTimeout)
 
 	case result := <-resultChan:
+		logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), false, ac.agent.currentIteration)
 		if result.err != nil {
 			if !ac.isRateLimit(result.err.Error()) {
 				ac.displayAPIError(result.err)

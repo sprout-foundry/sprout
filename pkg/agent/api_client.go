@@ -359,6 +359,9 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 		}
 		ac.agent.streamingBuffer.WriteString(sanitizedContent)
 
+		// Publish stream chunk for real-time UI updates
+		ac.agent.PublishStreamChunk(sanitizedContent)
+
 		// Call user callback or default output
 		if ac.agent.streamingCallback != nil {
 			ac.agent.streamingCallback(content)

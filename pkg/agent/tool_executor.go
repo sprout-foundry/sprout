@@ -162,6 +162,11 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	// Log prior to execution for diagnostics
 	if te.agent != nil {
 		te.agent.LogToolCall(toolCall, "executing")
+		// Publish tool execution start event for real-time UI updates
+		te.agent.PublishToolExecution(toolCall.Function.Name, "starting", map[string]interface{}{
+			"tool_call_id": toolCall.ID,
+			"arguments":    toolCall.Function.Arguments,
+		})
 	}
 
 	// Generate a tool call ID if empty to prevent sanitization from dropping the result
@@ -249,6 +254,19 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 
 	// Update circuit breaker
 	te.updateCircuitBreaker(toolCall.Function.Name, args)
+
+	// Publish tool execution completion event for real-time UI updates
+	if te.agent != nil {
+		status := "completed"
+		if err != nil {
+			status = "failed"
+		}
+		te.agent.PublishToolExecution(toolCall.Function.Name, status, map[string]interface{}{
+			"tool_call_id": toolCallID,
+			"result":       result,
+			"error":        err,
+		})
+	}
 
 	return api.Message{
 		Role:       "tool",

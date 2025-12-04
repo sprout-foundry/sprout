@@ -11,6 +11,7 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/mcp"
 	"golang.org/x/term"
@@ -51,6 +52,8 @@ type Agent struct {
 	conversationPruner    *ConversationPruner            // Automatic conversation pruning
 	completionSummarizer  *CompletionContextSummarizer   // Completion context summarization
 	toolCallGuidanceAdded bool                           // Prevent repeating tool call guidance
+	toolLogMutex          sync.Mutex                     // Protects tool log queue
+	toolLogQueue          []string                       // Queue for turn-aligned tool log messages
 
 	// Input injection handling
 	inputInjectionChan  chan string        // Channel for injecting new user input
@@ -75,6 +78,9 @@ type Agent struct {
 
 	// UI integration
 	ui UI // UI provider for dropdowns, etc.
+
+	// Event system
+	eventBus *events.EventBus // Event bus for real-time UI updates
 
 	// Debug logging
 	debugLogFile  *os.File   // File handle for debug logs
@@ -1080,4 +1086,31 @@ Use [[TASK_COMPLETE]] when you have completed all requested work, provided the f
 **DO NOT provide blank or empty responses**. If you have nothing more to do, use [[TASK_COMPLETE]].`
 
 	return prompt + stopInfo
+}
+
+// SetEventBus sets the event bus for real-time UI updates
+func (a *Agent) SetEventBus(eventBus *events.EventBus) {
+	a.eventBus = eventBus
+}
+
+// publishEvent publishes an event to the event bus if available
+func (a *Agent) publishEvent(eventType string, data any) {
+	if a.eventBus != nil {
+		a.eventBus.Publish(eventType, data)
+	}
+}
+
+// PublishStreamChunk publishes a streaming chunk for real-time updates
+func (a *Agent) PublishStreamChunk(chunk string) {
+	a.publishEvent(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk))
+}
+
+// PublishQueryProgress publishes query progress for real-time updates
+func (a *Agent) PublishQueryProgress(message string, iteration int, tokensUsed int) {
+	a.publishEvent(events.EventTypeQueryProgress, events.QueryProgressEvent(message, iteration, tokensUsed))
+}
+
+// PublishToolExecution publishes tool execution events for real-time updates
+func (a *Agent) PublishToolExecution(toolName, action string, details map[string]interface{}) {
+	a.publishEvent(events.EventTypeToolExecution, events.ToolExecutionEvent(toolName, action, details))
 }

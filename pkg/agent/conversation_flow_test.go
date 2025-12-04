@@ -1,8 +1,8 @@
 package agent
 
 import (
-	"testing"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"testing"
 )
 
 func TestBlankIterationDetection(t *testing.T) {
@@ -10,10 +10,10 @@ func TestBlankIterationDetection(t *testing.T) {
 	ch := &ConversationHandler{}
 
 	tests := []struct {
-		name     string
-		content  string
+		name      string
+		content   string
 		toolCalls []api.ToolCall
-		expected bool
+		expected  bool
 	}{
 		{
 			name:      "Empty content",
@@ -135,13 +135,13 @@ func TestRepetitiveContentDetection(t *testing.T) {
 			agent := &Agent{
 				messages: []api.Message{},
 			}
-			
+
 			// Add a user message first (required for the logic to work)
 			agent.messages = append(agent.messages, api.Message{
 				Role:    "user",
 				Content: "Some user message",
 			})
-			
+
 			// Add existing assistant message if provided
 			if tt.existingContent != "" {
 				agent.messages = append(agent.messages, api.Message{
@@ -149,14 +149,14 @@ func TestRepetitiveContentDetection(t *testing.T) {
 					Content: tt.existingContent,
 				})
 			}
-			
+
 			// Add the current message to simulate the actual flow
 			// (this is what happens in processResponse before isRepetitiveContent is called)
 			agent.messages = append(agent.messages, api.Message{
 				Role:    "assistant",
 				Content: tt.content,
 			})
-			
+
 			ch.agent = agent
 			result := ch.isRepetitiveContent(tt.content)
 			if result != tt.expected {
@@ -198,21 +198,24 @@ func TestMissingCompletionSignalHandling(t *testing.T) {
 		t.Errorf("Expected 4 reminders, got %d", ch.missingCompletionReminders)
 	}
 
-	// Check that the last message contains stronger guidance
-	lastMsg := ch.agent.messages[len(ch.agent.messages)-1]
+	// Check that the last transient message contains stronger guidance
+	if len(ch.transientMessages) == 0 {
+		t.Fatalf("expected transient reminder messages to be enqueued")
+	}
+	lastMsg := ch.transientMessages[len(ch.transientMessages)-1]
 	if lastMsg.Role != "user" {
 		t.Errorf("Expected user role for reminder, got %s", lastMsg.Role)
 	}
-	
+
 	if !containsStringForTest(lastMsg.Content, "You have not provided [[TASK_COMPLETE]] after multiple reminders") {
 		t.Error("Expected stronger guidance in 4th reminder")
 	}
 }
 
 func containsStringForTest(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		 findSubstringForTest(s, substr)))
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			findSubstringForTest(s, substr)))
 }
 
 func findSubstringForTest(s, substr string) bool {

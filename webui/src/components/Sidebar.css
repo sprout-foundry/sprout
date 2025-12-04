@@ -126,6 +126,73 @@
   color: #fff;
 }
 
+/* View Switcher Section */
+.view-section {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid #3a3a4a;
+}
+
+.view-section h4 {
+  margin: 0 0 16px 0;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.view-switcher {
+  display: flex;
+  gap: 8px;
+}
+
+.view-button {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.view-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.view-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.view-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.view-button.active {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-color: #6366f1;
+  color: white;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+.view-button.active:hover {
+  background: linear-gradient(135deg, #5558e3 0%, #7c4ce8 100%);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.3);
+}
+
 /* Stats Section */
 .stats {
   padding: 20px;

@@ -19,6 +19,8 @@ interface SidebarProps {
   files: Array<{ path: string; modified: boolean }>;
   onProviderChange?: (provider: string) => void;
   onModelChange?: (model: string) => void;
+  currentView?: 'chat' | 'editor';
+  onViewChange?: (view: 'chat' | 'editor') => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -29,7 +31,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   logs,
   files,
   onProviderChange,
-  onModelChange
+  onModelChange,
+  currentView = 'chat',
+  onViewChange
 }) => {
   const [selectedProvider, setSelectedProvider] = useState(provider);
   const [selectedModel, setSelectedModel] = useState(model);
@@ -117,6 +121,27 @@ const Sidebar: React.FC<SidebarProps> = ({
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* View Switcher Section */}
+      <div className="view-section">
+        <h4>👁️ View Mode</h4>
+        <div className="view-switcher">
+          <button
+            className={`view-button ${currentView === 'chat' ? 'active' : ''}`}
+            onClick={() => onViewChange?.('chat')}
+            disabled={!onViewChange}
+          >
+            💬 Chat
+          </button>
+          <button
+            className={`view-button ${currentView === 'editor' ? 'active' : ''}`}
+            onClick={() => onViewChange?.('editor')}
+            disabled={!onViewChange}
+          >
+            📝 Editor
+          </button>
         </div>
       </div>
 

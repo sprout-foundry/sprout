@@ -1071,6 +1071,10 @@ func (a *Agent) ensureStopInformation(prompt string) string {
 		return prompt
 	}
 
+	if a.shouldAllowImplicitCompletion() {
+		return prompt // Implicit completion allowed, no stop guard needed
+	}
+
 	// Add the critical stop information
 	stopInfo := `
 

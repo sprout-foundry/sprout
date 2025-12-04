@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,19 +20,18 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-
 // ReactWebServer provides the React web UI
 type ReactWebServer struct {
-	agent         *agent.Agent
-	eventBus      *events.EventBus
-	port          int
-	server        *http.Server
-	upgrader      websocket.Upgrader
-	connections   sync.Map // map[*websocket.Conn]bool
-	isRunning     bool
-	mutex         sync.RWMutex
-	startTime     time.Time
-	queryCount    int
+	agent       *agent.Agent
+	eventBus    *events.EventBus
+	port        int
+	server      *http.Server
+	upgrader    websocket.Upgrader
+	connections sync.Map // map[*websocket.Conn]bool
+	isRunning   bool
+	mutex       sync.RWMutex
+	startTime   time.Time
+	queryCount  int
 }
 
 // NewReactWebServer creates a new React web server
@@ -72,6 +73,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)
+	mux.HandleFunc("/api/file", ws.handleAPIFile)
 	mux.HandleFunc("/api/config", ws.handleAPIConfig)
 
 	// Serve static files (React build assets) with proper MIME types
@@ -193,7 +195,6 @@ func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Reque
 	// Serve the file
 	http.ServeFile(w, r, fullPath)
 }
-
 
 // handleWebSocket handles WebSocket connections for real-time events
 func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -343,13 +344,13 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 	}
 
 	stats := map[string]interface{}{
-		"provider":        provider,
-		"model":           model,
-		"query_count":     ws.queryCount,
-		"uptime":          time.Since(ws.startTime).String(),
-		"total_tokens":    totalTokens,
-		"total_cost":      totalCost,
-		"connections":     ws.countConnections(),
+		"provider":     provider,
+		"model":        model,
+		"query_count":  ws.queryCount,
+		"uptime":       time.Since(ws.startTime).String(),
+		"total_tokens": totalTokens,
+		"total_cost":   totalCost,
+		"connections":  ws.countConnections(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -358,15 +359,144 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 
 // handleAPIFiles returns file system information (placeholder)
 func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request) {
-	files := map[string]interface{}{
-		"message": "File browser not yet implemented",
-		"files":   []string{},
+	// Get the directory path from query parameter (default to current directory)
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		path = "."
+	}
+
+	// Security check - prevent directory traversal
+	cleanPath := filepath.Clean(path)
+	if strings.Contains(cleanPath, "..") {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	// Read directory
+	entries, err := os.ReadDir(cleanPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Build file tree response
+	var files []interface{}
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		fileInfo := map[string]interface{}{
+			"name":     entry.Name(),
+			"path":     filepath.Join(cleanPath, entry.Name()),
+			"isDir":    entry.IsDir(),
+			"size":     info.Size(),
+			"modified": info.ModTime().Unix(),
+		}
+
+		// Get file extension for files
+		if !entry.IsDir() {
+			fileInfo["ext"] = filepath.Ext(entry.Name())
+		}
+
+		files = append(files, fileInfo)
+	}
+
+	response := map[string]interface{}{
+		"message": "success",
+		"path":    cleanPath,
+		"files":   files,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(files)
+	json.NewEncoder(w).Encode(response)
 }
 
+// handleAPIFile handles reading and writing individual files
+func (ws *ReactWebServer) handleAPIFile(w http.ResponseWriter, r *http.Request) {
+	// Get file path from query parameter
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		http.Error(w, "Missing path parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Security check - prevent directory traversal
+	cleanPath := filepath.Clean(path)
+	if strings.Contains(cleanPath, "..") {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		// Read file
+		content, err := os.ReadFile(cleanPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				http.Error(w, "File not found", http.StatusNotFound)
+			} else {
+				http.Error(w, fmt.Sprintf("Failed to read file: %v", err), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		// Get file info
+		info, err := os.Stat(cleanPath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to get file info: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		response := map[string]interface{}{
+			"message":  "success",
+			"path":     cleanPath,
+			"content":  string(content),
+			"size":     info.Size(),
+			"modified": info.ModTime().Unix(),
+			"ext":      filepath.Ext(cleanPath),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+
+	case "POST":
+		// Write file
+		var request struct {
+			Content string `json:"content"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Create directory if it doesn't exist
+		dir := filepath.Dir(cleanPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create directory: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Write file
+		if err := os.WriteFile(cleanPath, []byte(request.Content), 0644); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to write file: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		response := map[string]interface{}{
+			"message": "File saved successfully",
+			"path":    cleanPath,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
 
 // handleAPIConfig handles provider and model configuration changes
 func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request) {

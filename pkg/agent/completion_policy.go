@@ -5,8 +5,7 @@ import (
 )
 
 var explicitCompletionProviders = map[string]struct{}{
-	"openrouter": {},
-	"lmstudio":   {},
+	"lmstudio": {},
 }
 
 func (a *Agent) shouldAllowImplicitCompletion() bool {

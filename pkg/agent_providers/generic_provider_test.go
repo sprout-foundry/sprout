@@ -1,6 +1,7 @@
 package providers
 
 import (
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"testing"
 )
 
@@ -153,5 +154,48 @@ func TestProviderModelContextLimits(t *testing.T) {
 	// Should return 128000 for GPT-4 based on our fallback logic
 	if contextLimit != 128000 {
 		t.Errorf("Expected context limit 128000 for GPT-4, got %d", contextLimit)
+	}
+}
+
+func TestConvertToolCallsArgumentsAsJSON(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Conversion: MessageConversion{
+			ArgumentsAsJSON: true,
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	toolCalls := []api.ToolCall{
+		{
+			ID:   "call_1",
+			Type: "function",
+		},
+	}
+	toolCalls[0].Function.Name = "shell_command"
+	toolCalls[0].Function.Arguments = "{\"command\":\"ls\"}"
+
+	converted := provider.convertToolCalls(toolCalls)
+	list, ok := converted.([]map[string]interface{})
+	if !ok {
+		t.Fatalf("expected converted tool calls to be []map[string]interface{}")
+	}
+	function, ok := list[0]["function"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected function to be map")
+	}
+	args, ok := function["arguments"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected arguments to be map after JSON conversion")
+	}
+	if args["command"] != "ls" {
+		t.Fatalf("unexpected arguments content: %#v", args)
 	}
 }

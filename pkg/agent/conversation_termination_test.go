@@ -59,7 +59,7 @@ func TestProcessResponse_RequiresExplicitCompletionWhenPolicyDisallowsImplicit(t
 	assert.False(t, stopped, "Expected conversation to continue until explicit completion signal is provided")
 
 	reminderFound := false
-	for _, m := range agent.messages {
+	for _, m := range ch.transientMessages {
 		if m.Role == "user" && strings.Contains(m.Content, "[[TASK_COMPLETE]]") {
 			reminderFound = true
 			break
@@ -80,9 +80,9 @@ func TestProcessResponse_RequestsContinuationForIncomplete(t *testing.T) {
 
 	stopped := ch.processResponse(resp)
 	assert.False(t, stopped, "Expected conversation to continue for incomplete response")
-	// Verify that a user prompt asking to continue was appended
+	// Verify that a user prompt asking to continue was enqueued
 	found := false
-	for _, m := range agent.messages {
+	for _, m := range ch.transientMessages {
 		if m.Role == "user" && m.Content == "Please continue with your response. The previous response appears incomplete." {
 			found = true
 			break
@@ -115,11 +115,11 @@ func TestProcessResponse_AllowsImplicitCompletionForAllowedModel(t *testing.T) {
 // Test that LMStudio does NOT allow implicit completion
 func TestProcessResponse_LMStudioDisallowsImplicitCompletion(t *testing.T) {
 	agent := &Agent{client: newStubClient("lmstudio", "test-model")}
-	
+
 	// Debug: Check the policy
 	t.Logf("Provider: %s", agent.GetProvider())
 	t.Logf("Should allow implicit completion: %t", agent.shouldAllowImplicitCompletion())
-	
+
 	ch := NewConversationHandler(agent)
 
 	choice := api.Choice{}
@@ -133,7 +133,7 @@ func TestProcessResponse_LMStudioDisallowsImplicitCompletion(t *testing.T) {
 	assert.False(t, stopped, "Expected conversation to continue until explicit completion signal is provided for LMStudio")
 
 	reminderFound := false
-	for _, m := range agent.messages {
+	for _, m := range ch.transientMessages {
 		if m.Role == "user" && strings.Contains(m.Content, "[[TASK_COMPLETE]]") {
 			reminderFound = true
 			break

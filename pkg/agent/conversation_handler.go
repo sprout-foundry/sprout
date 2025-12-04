@@ -26,6 +26,30 @@ type ConversationHandler struct {
 	conversationStartTime      time.Time
 	lastActivityTime           time.Time
 	timeoutDuration            time.Duration
+	transientMessages          []api.Message
+	pendingUserMessage         string
+	turnHistory                []TurnEvaluation
+}
+
+// TokenUsage captures key token metrics for each turn
+type TokenUsage struct {
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+	EstimatedCost    float64
+}
+
+// TurnEvaluation captures the inputs, outputs, and tool activity for each iteration
+type TurnEvaluation struct {
+	Iteration         int
+	Timestamp         time.Time
+	UserInput         string
+	AssistantContent  string
+	ToolCalls         []api.ToolCall
+	ToolResults       []api.Message
+	ToolLogs          []string
+	TokenUsage        TokenUsage
+	CompletionReached bool
 }
 
 // NewConversationHandler creates a new conversation handler
@@ -117,6 +141,13 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 			break
 		}
 
+		// Track latest user message for this iteration
+		if userMsg, ok := ch.lastUserMessage(); ok {
+			ch.pendingUserMessage = userMsg
+		} else {
+			ch.pendingUserMessage = ""
+		}
+
 		// Send message to LLM
 		if ch.agent.debug {
 			ch.agent.debugLog("DEBUG: ConversationHandler sending message (iteration %d) at %s\n", ch.agent.currentIteration, time.Now().Format("15:04:05.000"))
@@ -170,8 +201,20 @@ func (ch *ConversationHandler) sendMessage() (*api.ChatResponse, error) {
 
 // processResponse handles the LLM response including tool execution
 func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
+	turn := TurnEvaluation{
+		Iteration: ch.agent.currentIteration,
+		Timestamp: time.Now(),
+		UserInput: ch.pendingUserMessage,
+	}
+	turn.TokenUsage = TokenUsage{
+		PromptTokens:     resp.Usage.PromptTokens,
+		CompletionTokens: resp.Usage.CompletionTokens,
+		TotalTokens:      resp.Usage.TotalTokens,
+		EstimatedCost:    resp.Usage.EstimatedCost,
+	}
+
 	if len(resp.Choices) == 0 {
-		return true // Stop on empty response
+		return ch.finalizeTurn(turn, true)
 	}
 
 	choice := resp.Choices[0]
@@ -191,8 +234,11 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		contentUsed = ch.sanitizeContent(contentUsed)
 	}
 
+	turn.AssistantContent = contentUsed
+
 	// Optimize reasoning content for ZAI to prevent conversation bloat
 	reasoningContent := choice.Message.ReasoningContent
+	/* temporarily disable ZAI-specific reasoning truncation to focus on core flow
 	if ch.agent.client.GetProvider() == "zai" && reasoningContent != "" {
 		ch.agent.debugLog("🔍 ZAI reasoning content length: %d chars\n", len(reasoningContent))
 		// For ZAI, truncate extremely verbose reasoning to prevent loop detection
@@ -202,6 +248,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			reasoningContent = reasoningContent[:1000] + "\n... [reasoning truncated for ZAI] ...\n" + reasoningContent[len(reasoningContent)-1000:]
 		}
 	}
+	*/
 
 	// Ensure tool calls always carry IDs so downstream sanitization can keep results
 	if len(choice.Message.ToolCalls) > 0 {
@@ -253,6 +300,8 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		}
 		choice.Message.ToolCalls = deduped
 	}
+
+	turn.ToolCalls = append(turn.ToolCalls, choice.Message.ToolCalls...)
 
 	// Add to conversation history
 	assistantMsg := api.Message{
@@ -309,18 +358,23 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
 		ch.missingCompletionReminders = 0
 
-		// If the tool calls appear malformed (parse/unknown/validation), add guidance after tool results
-		if ch.shouldAddToolCallGuidance(toolResults) {
-			guidance := ch.buildToolCallGuidance()
-			ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
-			ch.agent.toolCallGuidanceAdded = true
-			ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
-		}
-		return false // Continue conversation
+		toolLogs := ch.flushToolLogsToOutput()
+		turn.ToolLogs = append(turn.ToolLogs, toolLogs...)
+		turn.ToolResults = append(turn.ToolResults, toolResults...)
+
+		// Guidance for malformed tool calls is temporarily disabled
+		/*
+			if ch.shouldAddToolCallGuidance(toolResults) {
+				guidance := ch.buildToolCallGuidance()
+				ch.enqueueTransientMessage(api.Message{Role: "system", Content: guidance})
+				ch.agent.toolCallGuidanceAdded = true
+				ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
+			}
+		*/
+		return ch.finalizeTurn(turn, false) // Continue conversation
 	}
 
-	// Fallback parsing: If no structured tool_calls came back but the content contains tool call patterns,
-	// attempt to parse tool calls from the content
+	/* temporarily disable fallback parser heuristics so we stay focused on explicit tool calls
 	if len(choice.Message.ToolCalls) == 0 && ch.fallbackParser.ShouldUseFallback(contentUsed, false) {
 		if result := ch.fallbackParser.Parse(contentUsed); result != nil && len(result.ToolCalls) > 0 {
 			ch.agent.debugLog("🔄 FallbackParser: Found %d tool calls in content\n", len(result.ToolCalls))
@@ -362,7 +416,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			// Add guidance about proper tool call formatting
 			if !ch.agent.toolCallGuidanceAdded {
 				guidance := ch.buildToolCallGuidance()
-				ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
+				ch.enqueueTransientMessage(api.Message{Role: "system", Content: guidance})
 				ch.agent.toolCallGuidanceAdded = true
 				ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
 			}
@@ -370,17 +424,13 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			return false // Continue conversation
 		}
 	}
+	*/
 
 	// If no tool_calls came back but the content suggests attempted tool usage,
 	// inject one-time guidance and try again.
 	if !ch.responseValidator.ValidateToolCalls(contentUsed) {
-		if !ch.agent.toolCallGuidanceAdded { // avoid spamming repeated hints
-			guidance := ch.buildToolCallGuidance()
-			ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
-			ch.agent.toolCallGuidanceAdded = true
-			ch.agent.debugLog("📝 Added system guidance due to attempted tool usage without tool_calls\n")
-		}
-		return false // Continue conversation to allow the model to issue proper tool_calls
+		// Guidance disabled for now; rely on ValidateToolCalls alone
+		return ch.finalizeTurn(turn, false) // Continue conversation to allow the model to issue proper tool_calls
 	}
 
 	// Check for blank iteration (no content and no tool calls)
@@ -412,26 +462,19 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 					"- If you intend to use tools, emit valid tool_calls with proper JSON arguments.\n" +
 					"- Otherwise, proceed with the actual result (not a plan)."
 			}
-			reminderMessage := api.Message{
+			ch.enqueueTransientMessage(api.Message{
 				Role:    "user",
 				Content: reminderContent,
-			}
-			ch.agent.messages = append(ch.agent.messages, reminderMessage)
+			})
 
-			// Add one-time tool call guidance to improve follow-up behavior on blank turns
-			if !ch.agent.toolCallGuidanceAdded {
-				guidance := ch.buildToolCallGuidance()
-				ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: guidance})
-				ch.agent.toolCallGuidanceAdded = true
-				ch.agent.debugLog("📝 Added system guidance due to blank iteration\n")
-			}
-			return false // Continue conversation to get a proper response
+			// Guidance suppressed for now; guardrail already re-enqueues reminders
+			return ch.finalizeTurn(turn, false) // Continue conversation to get a proper response
 		} else if ch.consecutiveBlankIterations >= 2 {
 			// Two consecutive blank iterations - error out
 			ch.agent.debugLog("❌ Too many consecutive blank iterations, stopping with error\n")
 			errorMessage := "Error: The agent provided two consecutive blank responses and appears to be stuck. Please try rephrasing your request or break it into smaller tasks."
 			ch.displayFinalResponse(errorMessage)
-			return true // Stop with error
+			return ch.finalizeTurn(turn, true) // Stop with error
 		}
 	} else {
 		// Reset blank iteration counter on any non-blank response
@@ -469,7 +512,8 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 		// Display final response
 		ch.displayFinalResponse(cleanContent)
-		return true // Stop - response explicitly indicates completion
+		turn.CompletionReached = true
+		return ch.finalizeTurn(turn, true) // Stop - response explicitly indicates completion
 	}
 
 	// Otherwise, decide whether this is a final (non-incomplete) response or we need more
@@ -478,7 +522,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ch.agent.debugLog("⚠️ Response appears incomplete, asking model to continue\n")
 		ch.missingCompletionReminders = 0
 		ch.handleIncompleteResponse()
-		return false // Continue conversation to get a complete response
+		return ch.finalizeTurn(turn, false) // Continue conversation to get a complete response
 	}
 
 	// No explicit completion signal and response doesn't look incomplete.
@@ -487,16 +531,18 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ch.agent.debugLog("📝 Treating response as final (implicit completion allowed for provider/model)\n")
 		ch.missingCompletionReminders = 0
 		ch.displayFinalResponse(contentUsed)
-		return true
+		turn.CompletionReached = true
+		return ch.finalizeTurn(turn, true)
 	}
 
 	ch.agent.debugLog("⏳ Waiting for explicit completion signal per provider/model policy\n")
 	ch.handleMissingCompletionSignal()
-	return false
+	return ch.finalizeTurn(turn, false)
 }
 
 // Helper methods...
 // shouldAddToolCallGuidance inspects tool results for common malformed tool call errors
+/* temporarily disable support messaging for tool_call formatting; reintroduce when help text is needed
 func (ch *ConversationHandler) shouldAddToolCallGuidance(results []api.Message) bool {
 	if ch.agent.toolCallGuidanceAdded {
 		return false
@@ -540,6 +586,7 @@ func (ch *ConversationHandler) buildToolCallGuidance() string {
 		"- Do not embed a 'tool_calls' JSON object in your message content.\n" +
 		"- If you need multiple tools, emit multiple function calls in order, each with valid JSON arguments."
 }
+*/
 func (ch *ConversationHandler) checkForInterrupt() bool {
 	// Check for context cancellation (new interrupt system)
 	select {
@@ -566,6 +613,15 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 	}
 
 	return false
+}
+
+func (ch *ConversationHandler) lastUserMessage() (string, bool) {
+	for i := len(ch.agent.messages) - 1; i >= 0; i-- {
+		if ch.agent.messages[i].Role == "user" {
+			return ch.agent.messages[i].Content, true
+		}
+	}
+	return "", false
 }
 
 func (ch *ConversationHandler) prepareMessages() []api.Message {
@@ -626,6 +682,8 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 		}
 	}
 
+	allMessages = ch.appendTransientMessages(allMessages)
+
 	allMessages = ch.sanitizeToolMessages(allMessages)
 
 	return allMessages
@@ -674,6 +732,19 @@ func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []ap
 	return sanitized
 }
 
+func (ch *ConversationHandler) enqueueTransientMessage(msg api.Message) {
+	ch.transientMessages = append(ch.transientMessages, msg)
+}
+
+func (ch *ConversationHandler) appendTransientMessages(messages []api.Message) []api.Message {
+	if len(ch.transientMessages) == 0 {
+		return messages
+	}
+	messages = append(messages, ch.transientMessages...)
+	ch.transientMessages = nil
+	return messages
+}
+
 func (ch *ConversationHandler) logDroppedToolMessage(reason string, msg api.Message) {
 	if ch.agent == nil || !ch.agent.debug {
 		return
@@ -718,7 +789,7 @@ func (ch *ConversationHandler) displayFinalResponse(content string) {
 }
 
 func (ch *ConversationHandler) handleIncompleteResponse() {
-	ch.agent.messages = append(ch.agent.messages, api.Message{
+	ch.enqueueTransientMessage(api.Message{
 		Role:    "user",
 		Content: "Please continue with your response. The previous response appears incomplete.",
 	})
@@ -733,15 +804,86 @@ func (ch *ConversationHandler) handleMissingCompletionSignal() {
 			"1. If your task is COMPLETE, respond exactly with: [[TASK_COMPLETE]]\n" +
 			"2. If your task is NOT complete, take a specific ACTION (use tools) or provide a concrete RESULT\n" +
 			"3. Do not provide explanations or plans - take action or confirm completion."
-		ch.agent.messages = append(ch.agent.messages, api.Message{Role: "user", Content: strongReminder})
+		ch.enqueueTransientMessage(api.Message{Role: "user", Content: strongReminder})
 		ch.missingCompletionReminders++
 		return
 	}
 
 	reminder := "Please confirm completion by responding with [[TASK_COMPLETE]] once all requested work is fully done. If you still have steps remaining, continue with the next action."
-	ch.agent.messages = append(ch.agent.messages, api.Message{Role: "user", Content: reminder})
+	ch.enqueueTransientMessage(api.Message{Role: "user", Content: reminder})
 	ch.missingCompletionReminders++
 	ch.agent.debugLog("🔔 Added reminder requesting explicit [[TASK_COMPLETE]] signal (reminder #%d)\n", ch.missingCompletionReminders)
+}
+
+func (ch *ConversationHandler) flushToolLogsToOutput() []string {
+	logs := ch.agent.drainToolLogs()
+	if len(logs) == 0 {
+		return nil
+	}
+	if ch.agent.streamingEnabled && ch.agent.streamingCallback != nil {
+		for _, log := range logs {
+			ch.agent.streamingCallback(log)
+		}
+	}
+	return logs
+}
+
+func (ch *ConversationHandler) finalizeTurn(turn TurnEvaluation, shouldStop bool) bool {
+	if shouldStop {
+		turn.CompletionReached = true
+	}
+	ch.turnHistory = append(ch.turnHistory, turn)
+	ch.logTurnSummary(turn)
+	return shouldStop
+}
+
+func (ch *ConversationHandler) shouldLogTurnSummaries() bool {
+	if ch.agent == nil {
+		return false
+	}
+	if ch.agent.debug {
+		return true
+	}
+	return os.Getenv("LEDIT_LOG_TURNS") == "1"
+}
+
+func (ch *ConversationHandler) logTurnSummary(turn TurnEvaluation) {
+	if !ch.shouldLogTurnSummaries() {
+		return
+	}
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("\n🔎 Turn %d summary (%s)\n", turn.Iteration, turn.Timestamp.Format("15:04:05")))
+	builder.WriteString(fmt.Sprintf("  User: %s\n", abbreviate(turn.UserInput, 120)))
+	builder.WriteString(fmt.Sprintf("  Assistant: %s\n", abbreviate(turn.AssistantContent, 240)))
+	if len(turn.ToolLogs) > 0 {
+		builder.WriteString("  Tool logs:\n")
+		for _, log := range turn.ToolLogs {
+			builder.WriteString(fmt.Sprintf("    %s\n", strings.TrimSpace(log)))
+		}
+	}
+	if len(turn.ToolCalls) > 0 {
+		builder.WriteString(fmt.Sprintf("  Tool calls: %d\n", len(turn.ToolCalls)))
+	}
+	if len(turn.ToolResults) > 0 {
+		builder.WriteString(fmt.Sprintf("  Tool results: %d entries\n", len(turn.ToolResults)))
+	}
+	tokens := turn.TokenUsage
+	builder.WriteString(fmt.Sprintf("  Tokens: prompt=%d completion=%d total=%d\n", tokens.PromptTokens, tokens.CompletionTokens, tokens.TotalTokens))
+	if turn.CompletionReached {
+		builder.WriteString("  Completion: reached\n")
+	}
+	ch.agent.PrintLineAsync(builder.String())
+}
+
+func abbreviate(text string, limit int) string {
+	clean := strings.TrimSpace(text)
+	if len(clean) <= limit || limit <= 0 {
+		return clean
+	}
+	if limit > 1 {
+		return clean[:limit-1] + "…"
+	}
+	return clean[:limit]
 }
 
 func (ch *ConversationHandler) finalizeConversation() (string, error) {
@@ -853,12 +995,16 @@ func (ch *ConversationHandler) isRepetitiveContent(content string) bool {
 	}
 
 	// Check if the content is exactly the same as the previous assistant message
-	if len(ch.agent.messages) >= 2 {
-		lastAssistantMsg := ch.agent.messages[len(ch.agent.messages)-2]
-		if lastAssistantMsg.Role == "assistant" && strings.TrimSpace(lastAssistantMsg.Content) == trimmedContent {
+	for idx := len(ch.agent.messages) - 2; idx >= 0; idx-- {
+		prevMsg := ch.agent.messages[idx]
+		if prevMsg.Role != "assistant" {
+			continue
+		}
+		if strings.TrimSpace(prevMsg.Content) == trimmedContent {
 			ch.agent.debugLog("🔄 Exact duplicate content detected\n")
 			return true
 		}
+		break
 	}
 
 	// Check for excessive repetition of the same phrase

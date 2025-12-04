@@ -41,6 +41,8 @@ func runSimpleEnhancedMode(chatAgent *agent.Agent, isInteractive bool, args []st
 	// Create web server if enabled
 	var webServer *webui.ReactWebServer
 	if enableWebUI {
+		// Connect agent to event bus for real-time UI updates
+		chatAgent.SetEventBus(eventBus)
 		webServer = webui.NewReactWebServer(chatAgent, eventBus, 8800)
 
 		// Start web server in background

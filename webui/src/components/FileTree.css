@@ -127,12 +127,12 @@
 .file-item {
   display: flex;
   align-items: center;
-  padding: 8px 20px;
+  padding: 4px 20px;
   cursor: pointer;
   transition: all 0.2s ease;
   border-left: 3px solid transparent;
-  gap: 12px;
-  min-height: 40px;
+  gap: 8px;
+  min-height: 22px;
 }
 
 .file-item:hover {
@@ -146,46 +146,20 @@
 }
 
 .file-icon {
-  font-size: 18px;
-  width: 24px;
+  font-size: 16px;
+  width: 20px;
   text-align: center;
   flex-shrink: 0;
 }
 
-.file-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
 .file-name {
   color: #e0e0e0;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.file-details {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 11px;
-  color: #888;
-}
-
-.file-size {
-  background: rgba(255, 255, 255, 0.05);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-family: 'Monaco', 'Menlo', monospace;
-}
-
-.file-modified {
-  font-style: italic;
+  flex: 1;
 }
 
 .empty-directory {
@@ -211,7 +185,7 @@
 
 /* Directory specific styles */
 .file-item.directory .file-name {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .file-item.directory:hover .file-icon {
@@ -323,14 +297,11 @@
   }
 
   .file-item {
-    padding: 10px 16px;
+    padding: 3px 16px;
+    min-height: 20px;
   }
 
   .file-name {
-    font-size: 13px;
-  }
-
-  .file-details {
-    font-size: 10px;
+    font-size: 12px;
   }
 }

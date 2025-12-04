@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -71,8 +72,8 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)
 
-	// Serve static files (React build assets)
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./pkg/webui/static"))))
+	// Serve static files (React build assets) with proper MIME types
+	mux.HandleFunc("/static/", ws.handleStaticFiles)
 
 	ws.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", ws.port),
@@ -134,8 +135,61 @@ func (ws *ReactWebServer) GetPort() int {
 
 // handleIndex serves the React application
 func (ws *ReactWebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
-	// Serve the React index.html
+	// Serve the React index.html - use correct path for production server
 	http.ServeFile(w, r, "./pkg/webui/static/index.html")
+}
+
+// handleStaticFiles serves static files with proper MIME types
+func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Request) {
+	// Remove /static/ prefix to get the relative path
+	filePath := r.URL.Path[len("/static/"):]
+
+	// Prevent directory traversal
+	if filePath == "" || filePath[0] == '.' || filePath[0] == '/' {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Construct the full file path - use correct path for production server
+	fullPath := "./pkg/webui/static/" + filePath
+
+	// Set appropriate Content-Type header based on file extension
+	ext := ""
+	if lastDot := strings.LastIndex(filePath, "."); lastDot != -1 {
+		ext = filePath[lastDot:]
+	}
+
+	switch ext {
+	case ".css":
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	case ".js":
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	case ".html":
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	case ".png":
+		w.Header().Set("Content-Type", "image/png")
+	case ".jpg", ".jpeg":
+		w.Header().Set("Content-Type", "image/jpeg")
+	case ".gif":
+		w.Header().Set("Content-Type", "image/gif")
+	case ".svg":
+		w.Header().Set("Content-Type", "image/svg+xml")
+	case ".ico":
+		w.Header().Set("Content-Type", "image/x-icon")
+	case ".json":
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	case ".txt":
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	default:
+		// Let Go's DetectContentType handle unknown types
+		w.Header().Set("Content-Type", "application/octet-stream")
+	}
+
+	// Enable caching for static assets
+	w.Header().Set("Cache-Control", "public, max-age=3600") // 1 hour cache
+
+	// Serve the file
+	http.ServeFile(w, r, fullPath)
 }
 
 

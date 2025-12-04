@@ -40,10 +40,12 @@ const Chat: React.FC<ChatProps> = ({
               key={message.id}
               className={`message ${message.type}`}
             >
-              <div className="message-content">
-                {message.content.split('\n').map((line, index) => (
-                  <div key={index}>{line || '\u00A0'}</div>
-                ))}
+              <div className="message-bubble">
+                <div className="message-content">
+                  {message.content.split('\n').map((line, index) => (
+                    <div key={index}>{line || '\u00A0'}</div>
+                  ))}
+                </div>
               </div>
             </div>
           ))

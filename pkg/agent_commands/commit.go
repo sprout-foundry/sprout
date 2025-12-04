@@ -19,6 +19,7 @@ type CommitCommand struct {
 	skipPrompt   bool
 	dryRun       bool
 	allowSecrets bool
+	agentError   error // Store agent creation error for better error reporting
 }
 
 // wrapText wraps text to a specific line length
@@ -183,6 +184,11 @@ func editInEditor(initial string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(data)), nil
+}
+
+// SetAgentError sets the agent creation error for better error reporting
+func (c *CommitCommand) SetAgentError(err error) {
+	c.agentError = err
 }
 
 // Execute runs the commit command
@@ -361,7 +367,11 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 			// Failed, already handled above
 		}
 	} else {
-		c.println("Using manual commit mode (no AI agent available)")
+		if c.agentError != nil {
+			c.printf("⚠️  Using manual commit mode (AI agent unavailable: %v)", c.agentError)
+		} else {
+			c.println("Using manual commit mode (no AI agent available)")
+		}
 	}
 
 	// Get staged diff

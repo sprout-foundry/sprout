@@ -132,20 +132,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile }) => {
     }
   };
 
-  // Format file size
-  const formatSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
-
-  // Format modified time
-  const formatDate = (timestamp: number): string => {
-    return new Date(timestamp * 1000).toLocaleDateString();
-  };
-
+  
   return (
     <div className="file-tree">
       <div className="file-tree-header">
@@ -200,15 +187,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile }) => {
             <div className="file-icon">
               {getFileIcon(file)}
             </div>
-            <div className="file-info">
-              <span className="file-name">{file.name}</span>
-              <div className="file-details">
-                {!file.isDir && (
-                  <span className="file-size">{formatSize(file.size)}</span>
-                )}
-                <span className="file-modified">{formatDate(file.modified)}</span>
-              </div>
-            </div>
+            <span className="file-name">{file.name}</span>
           </div>
         ))}
 

@@ -62,26 +62,47 @@ func (a *Agent) ToolLog(action, target string) {
 		message = fmt.Sprintf("\n%s%s %s%s\n", darkGray, iterInfo, action, reset)
 	}
 
+	// Always enqueue the message for turn-level logging
+	a.enqueueToolLog(message)
+
 	// Route through streaming callback if streaming is enabled
 	if a.streamingEnabled && a.streamingCallback != nil {
-		// Send through streaming callback to maintain proper order with narrative text
-		a.streamingCallback(message)
-	} else {
-		// Fallback to direct output for non-streaming mode
-		if a.outputMutex != nil {
-			a.outputMutex.Lock()
-			defer a.outputMutex.Unlock()
-		}
-
-		// In CI mode, don't use cursor control sequences
-		if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-			fmt.Print(message)
-		} else {
-			// Clear current line and move to start for interactive terminals
-			fmt.Print("\r\033[K")
-			fmt.Print(message)
-		}
+		// Streaming mode will flush the queued logs after each turn
+		return
 	}
+
+	// Fallback to direct output for non-streaming mode
+	if a.outputMutex != nil {
+		a.outputMutex.Lock()
+		defer a.outputMutex.Unlock()
+	}
+
+	// In CI mode, don't use cursor control sequences
+	if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		fmt.Print(message)
+	} else {
+		// Clear current line and move to start for interactive terminals
+		fmt.Print("\r\033[K")
+		fmt.Print(message)
+	}
+}
+
+func (a *Agent) enqueueToolLog(message string) {
+	a.toolLogMutex.Lock()
+	defer a.toolLogMutex.Unlock()
+	a.toolLogQueue = append(a.toolLogQueue, message)
+}
+
+func (a *Agent) drainToolLogs() []string {
+	a.toolLogMutex.Lock()
+	defer a.toolLogMutex.Unlock()
+	if len(a.toolLogQueue) == 0 {
+		return nil
+	}
+	logs := make([]string, len(a.toolLogQueue))
+	copy(logs, a.toolLogQueue)
+	a.toolLogQueue = nil
+	return logs
 }
 
 // PrintLine prints a line of text to the console content area synchronously.

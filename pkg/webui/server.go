@@ -71,6 +71,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)
+	mux.HandleFunc("/api/config", ws.handleAPIConfig)
 
 	// Serve static files (React build assets) with proper MIME types
 	mux.HandleFunc("/static/", ws.handleStaticFiles)
@@ -260,7 +261,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Process query (placeholder for now)
+	// Process query using real agent
 	go func() {
 		var provider, model string
 		if ws.agent != nil {
@@ -277,15 +278,40 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 			model,
 		))
 
-		// Simulate processing - would integrate with actual CLI
-		time.Sleep(1 * time.Second)
+		startTime := time.Now()
+
+		// Process with real agent if available
+		var response string
+		var tokensUsed int
+		var cost float64
+
+		if ws.agent != nil {
+			result, err := ws.agent.ProcessQuery(req.Query)
+			if err != nil {
+				response = fmt.Sprintf("Error processing query: %v", err)
+				tokensUsed = 0
+				cost = 0.0
+			} else {
+				response = result
+				tokensUsed = ws.agent.GetCurrentContextTokens()
+				cost = ws.agent.GetTotalCost()
+			}
+		} else {
+			// Fallback to simulated response if no agent is available
+			time.Sleep(1 * time.Second)
+			response = "This is a simulated response. The actual implementation would process the query using the CLI."
+			tokensUsed = 100
+			cost = 0.001
+		}
+
+		processingTime := time.Since(startTime)
 
 		ws.eventBus.Publish(events.EventTypeQueryCompleted, events.QueryCompletedEvent(
 			req.Query,
-			"This is a simulated response. The actual implementation would process the query using the CLI.",
-			100,
-			0.001,
-			time.Second,
+			response,
+			tokensUsed,
+			cost,
+			processingTime,
 		))
 
 		ws.queryCount++
@@ -340,6 +366,79 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(files)
 }
 
+
+// handleAPIConfig handles provider and model configuration changes
+func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		// Return current configuration
+		ws.handleAPIStats(w, r)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if ws.agent == nil {
+		http.Error(w, "Agent not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	response := map[string]interface{}{
+		"success": false,
+		"message": "",
+	}
+
+	// Set provider if specified
+	if req.Provider != "" {
+		if err := ws.agent.SetProvider(req.Provider); err != nil {
+			response["message"] = fmt.Sprintf("Failed to set provider: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		response["message"] += fmt.Sprintf("Provider set to %s", req.Provider)
+	}
+
+	// Set model if specified
+	if req.Model != "" {
+		if err := ws.agent.SetModel(req.Model); err != nil {
+			response["message"] = fmt.Sprintf("Failed to set model: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if response["message"].(string) != "" {
+			response["message"] += ", "
+		}
+		response["message"] += fmt.Sprintf("model set to %s", req.Model)
+	}
+
+	response["success"] = true
+	if response["message"].(string) == "" {
+		response["message"] = "Configuration updated"
+	}
+
+	// Publish configuration change event
+	ws.eventBus.Publish("config_changed", map[string]interface{}{
+		"provider": ws.agent.GetProvider(),
+		"model":    ws.agent.GetModel(),
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
 
 // countConnections returns the current number of WebSocket connections
 func (ws *ReactWebServer) countConnections() int {

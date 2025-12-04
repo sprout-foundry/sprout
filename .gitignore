@@ -33,9 +33,8 @@ ledit-*
 ledit-main
 test_webserver
 
-# Node.js and npm files
-package-lock.json
-package.json
+/package*.json
+
 
 # Playwright test files
 playwright-report/
@@ -69,3 +68,4 @@ mem.md
 minimum_requirements.md
 feature_review_plan.md
 run-prompt.md
+webui/package-lock.json

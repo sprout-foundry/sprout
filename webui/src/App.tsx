@@ -9,6 +9,35 @@ import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService } from './services/api';
 
+// Service Worker Registration
+const registerServiceWorker = async () => {
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      console.log('SW registered:', registration);
+
+      // Check for updates periodically
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // New version available, show update notification
+              console.log('New service worker available');
+              // You could show a toast notification here
+            }
+          });
+        }
+      });
+
+      return registration;
+    } catch (error) {
+      console.log('SW registration failed:', error);
+    }
+  }
+  return null;
+};
+
 interface AppState {
   isConnected: boolean;
   provider: string;
@@ -142,6 +171,9 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // Register Service Worker for PWA functionality
+    registerServiceWorker();
+
     // Initialize WebSocket connection
     wsService.connect();
     wsService.onEvent(handleEvent);

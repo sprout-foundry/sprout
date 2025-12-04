@@ -241,21 +241,8 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	turn.AssistantContent = contentUsed
 	turn.FinishReason = choice.FinishReason
 
-	// Optimize reasoning content for ZAI to prevent conversation bloat
 	reasoningContent := choice.Message.ReasoningContent
-	/* temporarily disable ZAI-specific reasoning truncation to focus on core flow
-	if ch.agent.client.GetProvider() == "zai" && reasoningContent != "" {
-		ch.agent.debugLog("🔍 ZAI reasoning content length: %d chars\n", len(reasoningContent))
-		// For ZAI, truncate extremely verbose reasoning to prevent loop detection
-		if len(reasoningContent) > 2000 {
-			ch.agent.debugLog("✂️ Truncating ZAI reasoning from %d to ~%d chars\n", len(reasoningContent), 2000)
-			// Keep only the first and last parts of very long reasoning
-			reasoningContent = reasoningContent[:1000] + "\n... [reasoning truncated for ZAI] ...\n" + reasoningContent[len(reasoningContent)-1000:]
-		}
-	}
-	*/
 	turn.ReasoningSnippet = abbreviate(reasoningContent, 280)
-
 	// Ensure tool calls always carry IDs so downstream sanitization can keep results
 	if len(choice.Message.ToolCalls) > 0 {
 		for i := range choice.Message.ToolCalls {
@@ -325,20 +312,6 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	ch.agent.messages = append(ch.agent.messages, assistantMsg)
 
-	// ZAI-specific completion detection
-	if ch.agent.client.GetProvider() == "zai" {
-		// Check if this looks like an incomplete or empty response that might cause loops
-		if strings.TrimSpace(contentUsed) == "" ||
-			strings.HasSuffix(strings.TrimSpace(contentUsed), "I understand") ||
-			len(strings.TrimSpace(contentUsed)) < 20 {
-			if ch.agent.debug {
-				ch.agent.debugLog("🔍 ZAI potential incomplete response detected: %q\n", contentUsed)
-			}
-			// Force completion to prevent infinite loops
-			return true
-		}
-	}
-
 	// Update token tracking
 	ch.agent.updateTokenUsage(resp.Usage)
 
@@ -361,6 +334,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 		// Add tool results immediately after the assistant message with tool calls
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
+		ch.appendToolExecutionSummary(choice.Message.ToolCalls)
 		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
 		ch.missingCompletionReminders = 0
 
@@ -953,6 +927,23 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 	}
 
 	return "", fmt.Errorf("no assistant response found")
+}
+
+func (ch *ConversationHandler) appendToolExecutionSummary(toolCalls []api.ToolCall) {
+	if len(toolCalls) == 0 {
+		return
+	}
+
+	names := make([]string, 0, len(toolCalls))
+	for _, tc := range toolCalls {
+		names = append(names, tc.Function.Name)
+	}
+
+	summary := fmt.Sprintf("Tool execution complete: %s.", strings.Join(names, ", "))
+	ch.agent.messages = append(ch.agent.messages, api.Message{
+		Role:    "assistant",
+		Content: summary,
+	})
 }
 
 // sanitizeContent removes ANSI escape sequences and other problematic characters from content

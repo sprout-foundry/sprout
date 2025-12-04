@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/logging"
 )
 
 // GenericProvider implements ClientInterface using JSON configuration
@@ -51,6 +52,7 @@ func (p *GenericProvider) SendChatRequest(messages []api.Message, tools []api.To
 	if err != nil {
 		return nil, fmt.Errorf("failed to build chat request: %w", err)
 	}
+	logging.LogRequestPayload(requestBody, p.config.Name, p.model, false)
 
 	req, err := p.buildHTTPRequest(requestBody, false)
 	if err != nil {
@@ -82,6 +84,7 @@ func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []
 	if err != nil {
 		return nil, fmt.Errorf("failed to build chat request: %w", err)
 	}
+	logging.LogRequestPayload(requestBody, p.config.Name, p.model, true)
 
 	req, err := p.buildHTTPRequest(requestBody, true)
 	if err != nil {

@@ -1,47 +1,103 @@
 .status-bar {
-  background: #333;
-  padding: 10px 20px;
+  background: linear-gradient(135deg, rgba(42, 42, 58, 0.8) 0%, rgba(58, 58, 74, 0.8) 100%);
+  padding: 12px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #444;
-  font-size: 12px;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .status-bar.connected {
   border-bottom-color: #4caf50;
+  background: linear-gradient(135deg, rgba(46, 125, 50, 0.1) 0%, rgba(58, 58, 74, 0.8) 100%);
 }
 
 .status-bar.disconnected {
   border-bottom-color: #f44336;
+  background: linear-gradient(135deg, rgba(211, 47, 47, 0.1) 0%, rgba(58, 58, 74, 0.8) 100%);
 }
 
 .status-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .indicator {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   display: inline-block;
+  position: relative;
 }
 
 .indicator.on {
   background: #4caf50;
-  box-shadow: 0 0 4px #4caf50;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+  animation: pulse-status-green 2s infinite;
 }
 
 .indicator.off {
   background: #f44336;
+  box-shadow: 0 0 8px rgba(244, 67, 54, 0.3);
+  animation: pulse-status-red 2s infinite;
+}
+
+@keyframes pulse-status-green {
+  0% {
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(76, 175, 80, 0.6);
+    transform: scale(1.1);
+  }
+  100% {
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.3);
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-status-red {
+  0% {
+    box-shadow: 0 0 8px rgba(244, 67, 54, 0.2);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(244, 67, 54, 0.4);
+    transform: scale(1.1);
+  }
+  100% {
+    box-shadow: 0 0 8px rgba(244, 67, 54, 0.2);
+    transform: scale(1);
+  }
 }
 
 .status-text {
-  color: #ccc;
+  color: #e0e0e0;
+  font-weight: 500;
 }
 
 .status-info {
-  color: #888;
+  color: #aaa;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.status-bar.connected .status-info {
+  background: rgba(76, 175, 80, 0.1);
+  border-color: rgba(76, 175, 80, 0.2);
+  color: #81c784;
+}
+
+.status-bar.disconnected .status-info {
+  background: rgba(244, 67, 54, 0.1);
+  border-color: rgba(244, 67, 54, 0.2);
+  color: #e57373;
 }

@@ -339,10 +339,40 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 
 		// Preserve tool calls if present
 		if len(msg.ToolCalls) > 0 {
-			convertedMsg["tool_calls"] = msg.ToolCalls
+			convertedMsg["tool_calls"] = p.convertToolCalls(msg.ToolCalls)
 		}
 
 		converted[i] = convertedMsg
+	}
+
+	return converted
+}
+
+func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{} {
+	if !p.config.Conversion.ArgumentsAsJSON {
+		return toolCalls
+	}
+
+	converted := make([]map[string]interface{}, 0, len(toolCalls))
+	for _, tc := range toolCalls {
+		function := map[string]interface{}{
+			"name": tc.Function.Name,
+		}
+
+		if tc.Function.Arguments != "" {
+			var parsed interface{}
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &parsed); err == nil {
+				function["arguments"] = parsed
+			} else {
+				function["arguments"] = tc.Function.Arguments
+			}
+		}
+
+		converted = append(converted, map[string]interface{}{
+			"id":       tc.ID,
+			"type":     tc.Type,
+			"function": function,
+		})
 	}
 
 	return converted

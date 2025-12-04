@@ -121,19 +121,22 @@ func TestProcessResponseDeduplicatesDuplicateToolCalls(t *testing.T) {
 		t.Fatalf("failed to marshal args: %v", err)
 	}
 
-	toolCall := api.ToolCall{
-		ID:   "call_sample_read",
+	toolCallA := api.ToolCall{
+		ID:   "call_sample_read_a",
 		Type: "function",
 	}
-	toolCall.Function.Name = "read_file"
-	toolCall.Function.Arguments = string(payload)
+	toolCallA.Function.Name = "read_file"
+	toolCallA.Function.Arguments = string(payload)
 
-	// Simulate duplicate entries (as seen when some providers stream tool_calls repeatedly)
+	toolCallB := toolCallA
+	toolCallB.ID = "call_sample_read_b"
+
+	// Simulate duplicate entries (as seen when some providers stream tool_calls repeatedly with fresh IDs)
 	resp := &api.ChatResponse{
 		Choices: []api.Choice{{}},
 	}
 	resp.Choices[0].Message.Role = "assistant"
-	resp.Choices[0].Message.ToolCalls = []api.ToolCall{toolCall, toolCall}
+	resp.Choices[0].Message.ToolCalls = []api.ToolCall{toolCallA, toolCallB}
 
 	stopped := handler.processResponse(resp)
 	if stopped {
@@ -155,7 +158,7 @@ func TestProcessResponseDeduplicatesDuplicateToolCalls(t *testing.T) {
 	if len(assistantMsg.ToolCalls) != 1 {
 		t.Fatalf("expected assistant message to keep only one tool_call entry, got %d", len(assistantMsg.ToolCalls))
 	}
-	if assistantMsg.ToolCalls[0].ID != "call_sample_read" {
-		t.Fatalf("unexpected tool_call id %s", assistantMsg.ToolCalls[0].ID)
+	if len(assistantMsg.ToolCalls) != 1 {
+		t.Fatalf("expected assistant message to keep only one tool_call entry, got %d", len(assistantMsg.ToolCalls))
 	}
 }

@@ -43,7 +43,7 @@ func runSimpleEnhancedMode(chatAgent *agent.Agent, isInteractive bool, args []st
 	if enableWebUI {
 		// Connect agent to event bus for real-time UI updates
 		chatAgent.SetEventBus(eventBus)
-		webServer = webui.NewReactWebServer(chatAgent, eventBus, 8800)
+		webServer = webui.NewReactWebServer(chatAgent, eventBus, 54321)
 
 		// Start web server in background
 		go func() {

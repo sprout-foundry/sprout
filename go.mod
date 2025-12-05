@@ -6,6 +6,7 @@ toolchain go1.24.4
 
 require (
 	github.com/fatih/color v1.18.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/ollama/ollama v0.11.10
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/sergi/go-diff v1.3.1
@@ -18,7 +19,6 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

@@ -16,14 +16,14 @@ type UIEvent struct {
 
 // Common event types
 const (
-	EventTypeQueryStarted    = "query_started"
-	EventTypeQueryProgress   = "query_progress"
-	EventTypeQueryCompleted  = "query_completed"
-	EventTypeError           = "error"
-	EventTypeToolExecution   = "tool_execution"
-	EventTypeFileChanged     = "file_changed"
-	EventTypeStreamChunk     = "stream_chunk"
-	EventTypeMetricsUpdate   = "metrics_update"
+	EventTypeQueryStarted   = "query_started"
+	EventTypeQueryProgress  = "query_progress"
+	EventTypeQueryCompleted = "query_completed"
+	EventTypeError          = "error"
+	EventTypeToolExecution  = "tool_execution"
+	EventTypeFileChanged    = "file_changed"
+	EventTypeStreamChunk    = "stream_chunk"
+	EventTypeMetricsUpdate  = "metrics_update"
 )
 
 // EventBus manages event distribution between CLI and Web UI

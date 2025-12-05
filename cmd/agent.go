@@ -87,7 +87,7 @@ The agent runs in two modes:
 
 1. **Interactive Mode**:
    - Clean CLI with real-time streaming
-   - Automatic web UI startup on localhost:8800
+   - Automatic web UI startup on localhost:54321
    - Modern web interface for rich interaction
    - Event-driven communication between CLI and web UI
 

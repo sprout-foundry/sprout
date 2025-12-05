@@ -37,7 +37,7 @@ type ReactWebServer struct {
 // NewReactWebServer creates a new React web server
 func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) *ReactWebServer {
 	if port == 0 {
-		port = 8800
+		port = 54321
 	}
 
 	return &ReactWebServer{

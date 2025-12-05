@@ -6,6 +6,8 @@ import Status from './components/Status';
 import UIManager from './components/UIManager';
 import FileTree from './components/FileTree';
 import CodeEditor from './components/CodeEditor';
+import LogsView from './components/LogsView';
+import Terminal from './components/Terminal';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService } from './services/api';
@@ -45,12 +47,25 @@ interface AppState {
   model: string;
   queryCount: number;
   messages: Message[];
-  logs: string[];
+  logs: LogEntry[];
   files: FileItem[];
   isProcessing: boolean;
   lastError: string | null;
-  currentView: 'chat' | 'editor' | 'git';
+  currentView: 'chat' | 'editor' | 'git' | 'logs';
   selectedFile: FileInfo | null;
+  toolExecutions: ToolExecution[];
+  queryProgress: any;
+  stats: any; // Enhanced stats from API
+}
+
+interface ToolExecution {
+  id: string;
+  tool: string;
+  status: 'started' | 'running' | 'completed' | 'error';
+  message?: string;
+  startTime: Date;
+  endTime?: Date;
+  details?: any;
 }
 
 interface Message {
@@ -58,6 +73,15 @@ interface Message {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+}
+
+interface LogEntry {
+  id: string;
+  type: string;
+  timestamp: Date;
+  data: any;
+  level: 'info' | 'warning' | 'error' | 'success';
+  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
 }
 
 interface FileItem {
@@ -87,7 +111,10 @@ function App() {
     isProcessing: false,
     lastError: null,
     currentView: 'chat',
-    selectedFile: null
+    selectedFile: null,
+    toolExecutions: [],
+    queryProgress: null,
+    stats: {}
   });
 
   const [inputValue, setInputValue] = useState('');
@@ -98,18 +125,34 @@ function App() {
   const apiService = ApiService.getInstance();
 
   const handleEvent = useCallback((event: any) => {
-    console.log('Received event:', event);
+    console.log('📨 Received event:', event.type, event.data);
 
+    // Create log entry for all events
+    const logEntry: LogEntry = {
+      id: `${Date.now()}-${Math.random()}`,
+      type: event.type,
+      timestamp: new Date(),
+      data: event.data,
+      level: 'info',
+      category: 'system'
+    };
+
+    // Determine log level and category based on event type
     switch(event.type) {
       case 'connection_status':
+        logEntry.category = 'system';
+        logEntry.level = event.data.connected ? 'success' : 'warning';
         setState(prev => ({
           ...prev,
-          isConnected: event.data.connected
+          isConnected: event.data.connected,
+          logs: [...prev.logs, logEntry]
         }));
         console.log('🔗 Connection status updated:', event.data.connected);
         break;
 
       case 'query_started':
+        logEntry.category = 'query';
+        logEntry.level = 'info';
         setState(prev => ({
           ...prev,
           queryCount: prev.queryCount + 1,
@@ -118,11 +161,28 @@ function App() {
             type: 'user',
             content: event.data.query,
             timestamp: new Date()
-          }]
+          }],
+          toolExecutions: [], // Clear previous tool executions
+          queryProgress: null, // Clear previous progress
+          logs: [...prev.logs, logEntry]
         }));
+        console.log('🚀 Query started:', event.data.query);
+        break;
+
+      case 'query_progress':
+        logEntry.category = 'query';
+        logEntry.level = 'info';
+        setState(prev => ({
+          ...prev,
+          queryProgress: event.data,
+          logs: [...prev.logs, logEntry]
+        }));
+        console.log('⏳ Query progress:', event.data);
         break;
 
       case 'stream_chunk':
+        logEntry.category = 'stream';
+        logEntry.level = 'info';
         setState(prev => {
           const newMessages = [...prev.messages];
           const lastMessage = newMessages[newMessages.length - 1];
@@ -136,20 +196,109 @@ function App() {
               timestamp: new Date()
             });
           }
-          return { ...prev, messages: newMessages };
+          return { 
+            ...prev, 
+            messages: newMessages,
+            logs: [...prev.logs, logEntry]
+          };
         });
         break;
 
       case 'query_completed':
+        logEntry.category = 'query';
+        logEntry.level = 'success';
         setState(prev => ({
           ...prev,
           isProcessing: false,
-          lastError: null
+          lastError: null,
+          logs: [...prev.logs, logEntry]
         }));
         console.log('✅ Query completed');
         break;
 
+      case 'tool_execution':
+        logEntry.category = 'tool';
+        logEntry.level = event.data.status === 'error' ? 'error' : 'info';
+        setState(prev => {
+          const existingExecution = prev.toolExecutions.find(t => t.tool === event.data.tool);
+          let updatedExecutions: ToolExecution[];
+          
+          if (existingExecution) {
+            // Update existing execution
+            updatedExecutions = prev.toolExecutions.map(t => 
+              t.tool === event.data.tool 
+                ? {
+                    ...t,
+                    status: event.data.status,
+                    message: event.data.message,
+                    endTime: event.data.status === 'completed' || event.data.status === 'error' ? new Date() : undefined,
+                    details: event.data
+                  }
+                : t
+            );
+          } else {
+            // Add new execution
+            const newExecution: ToolExecution = {
+              id: `${event.data.tool}-${Date.now()}`,
+              tool: event.data.tool,
+              status: event.data.status,
+              message: event.data.message,
+              startTime: new Date(),
+              details: event.data
+            };
+            updatedExecutions = [...prev.toolExecutions, newExecution];
+          }
+          
+          return {
+            ...prev,
+            toolExecutions: updatedExecutions,
+            logs: [...prev.logs, logEntry]
+          };
+        });
+        console.log('🔧 Tool execution:', event.data.tool, event.data.status);
+        break;
+
+      case 'file_changed':
+        logEntry.category = 'file';
+        logEntry.level = 'info';
+        setState(prev => {
+          const updatedFiles = prev.files.map(file => 
+            file.path === event.data.path 
+              ? { ...file, modified: true }
+              : file
+          );
+          
+          // If file not in list, add it
+          if (!updatedFiles.some(file => file.path === event.data.path)) {
+            updatedFiles.push({
+              path: event.data.path,
+              modified: true
+            });
+          }
+          
+          return {
+            ...prev,
+            files: updatedFiles,
+            logs: [...prev.logs, logEntry]
+          };
+        });
+        console.log('📝 File changed:', event.data.path);
+        break;
+
+      case 'terminal_output':
+        logEntry.category = 'system';
+        logEntry.level = 'info';
+        // Handle terminal output - this will be processed by the Terminal component
+        setState(prev => ({
+          ...prev,
+          logs: [...prev.logs, logEntry]
+        }));
+        console.log('🖥️ Terminal output received:', event.data);
+        break;
+
       case 'error':
+        logEntry.category = 'system';
+        logEntry.level = 'error';
         setState(prev => ({
           ...prev,
           messages: [...prev.messages, {
@@ -157,20 +306,39 @@ function App() {
             type: 'assistant',
             content: `❌ Error: ${event.data.message}`,
             timestamp: new Date()
-          }]
+          }],
+          logs: [...prev.logs, logEntry]
         }));
+        console.error('❌ Error event:', event.data);
         break;
 
       case 'metrics_update':
+        logEntry.category = 'system';
+        logEntry.level = 'info';
         // Update provider/model info if available
         if (event.data.provider && event.data.model) {
           setState(prev => ({
             ...prev,
             provider: event.data.provider,
-            model: event.data.model
+            model: event.data.model,
+            logs: [...prev.logs, logEntry]
+          }));
+        } else {
+          setState(prev => ({
+            ...prev,
+            logs: [...prev.logs, logEntry]
           }));
         }
         break;
+
+      default:
+        // Handle any unknown event types
+        logEntry.level = 'warning';
+        setState(prev => ({
+          ...prev,
+          logs: [...prev.logs, logEntry]
+        }));
+        console.log('❓ Unknown event type:', event.type, event.data);
     }
   }, []);
 
@@ -183,13 +351,22 @@ function App() {
     wsService.onEvent(handleEvent);
 
     // Load initial stats
-    apiService.getStats().then((stats: any) => {
-      setState(prev => ({
-        ...prev,
-        provider: stats.provider,
-        model: stats.model
-      }));
-    }).catch(console.error);
+    const loadStats = () => {
+      apiService.getStats().then((stats: any) => {
+        setState(prev => ({
+          ...prev,
+          provider: stats.provider,
+          model: stats.model,
+          stats: stats
+        }));
+      }).catch(console.error);
+    };
+
+    // Load initial stats
+    loadStats();
+
+    // Set up periodic stats updates
+    const statsInterval = setInterval(loadStats, 5000); // Update every 5 seconds
 
     // Check for mobile screen size
     const checkMobile = () => {
@@ -203,6 +380,7 @@ function App() {
     return () => {
       wsService.disconnect();
       window.removeEventListener('resize', checkMobile);
+      clearInterval(statsInterval);
     };
   }, [handleEvent, wsService, apiService]);
 
@@ -270,7 +448,7 @@ function App() {
     }));
   }, [wsService]);
 
-  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
+  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'logs') => {
     setState(prev => ({
       ...prev,
       currentView: view
@@ -309,6 +487,24 @@ function App() {
     console.log('File saved:', state.selectedFile?.path);
     // You could add additional logic here like refreshing the file tree
   }, [state.selectedFile]);
+
+  const handleTerminalCommand = useCallback(async (command: string) => {
+    try {
+      console.log('🖥️ Terminal command:', command);
+      // Send terminal command to backend via WebSocket
+      wsService.sendEvent({
+        type: 'terminal_command',
+        data: { command }
+      });
+    } catch (error) {
+      console.error('❌ Failed to send terminal command:', error);
+    }
+  }, [wsService]);
+
+  const handleTerminalOutput = useCallback((output: string) => {
+    // You could handle terminal output here if needed
+    console.log('🖥️ Terminal output:', output);
+  }, []);
 
   const toggleSidebar = useCallback(() => {
     setIsSidebarOpen(prev => !prev);
@@ -360,7 +556,7 @@ function App() {
           onSidebarToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
         <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''}`}>
-          <Status isConnected={state.isConnected} />
+          <Status isConnected={state.isConnected} stats={state.stats} />
 
           {state.currentView === 'chat' ? (
             <Chat
@@ -370,6 +566,8 @@ function App() {
               onInputChange={setInputValue}
               isProcessing={state.isProcessing}
               lastError={state.lastError}
+              toolExecutions={state.toolExecutions}
+              queryProgress={state.queryProgress}
             />
           ) : state.currentView === 'git' ? (
             <GitView
@@ -377,6 +575,11 @@ function App() {
               onStage={handleGitStage}
               onUnstage={handleGitUnstage}
               onDiscard={handleGitDiscard}
+            />
+          ) : state.currentView === 'logs' ? (
+            <LogsView
+              logs={state.logs}
+              onClearLogs={() => setState(prev => ({ ...prev, logs: [] }))}
             />
           ) : (
             <div className="editor-view">
@@ -391,6 +594,13 @@ function App() {
             </div>
           )}
         </div>
+
+        {/* Terminal Component */}
+        <Terminal
+          onCommand={handleTerminalCommand}
+          onOutput={handleTerminalOutput}
+          isConnected={state.isConnected}
+        />
       </div>
     </UIManager>
   );

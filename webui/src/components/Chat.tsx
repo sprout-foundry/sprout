@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import CommandInput from './CommandInput';
 import './Chat.css';
 
@@ -9,6 +9,16 @@ interface Message {
   timestamp: Date;
 }
 
+interface ToolExecution {
+  id: string;
+  tool: string;
+  status: 'started' | 'running' | 'completed' | 'error';
+  message?: string;
+  startTime: Date;
+  endTime?: Date;
+  details?: any;
+}
+
 interface ChatProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
@@ -16,6 +26,8 @@ interface ChatProps {
   onInputChange: (value: string) => void;
   isProcessing?: boolean;
   lastError?: string | null;
+  toolExecutions?: ToolExecution[];
+  queryProgress?: any;
 }
 
 const Chat: React.FC<ChatProps> = ({
@@ -24,13 +36,79 @@ const Chat: React.FC<ChatProps> = ({
   inputValue,
   onInputChange,
   isProcessing = false,
-  lastError = null
+  lastError = null,
+  toolExecutions = [],
+  queryProgress = null
 }) => {
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+
+  const toggleToolExpansion = (toolId: string) => {
+    setExpandedTools(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(toolId)) {
+        newSet.delete(toolId);
+      } else {
+        newSet.add(toolId);
+      }
+      return newSet;
+    });
+  };
+
+  const getToolIcon = (toolName: string) => {
+    const iconMap: { [key: string]: string } = {
+      'shell_command': '🖥️',
+      'read_file': '📖',
+      'write_file': '✏️',
+      'edit_file': '📝',
+      'search_files': '🔍',
+      'analyze_ui_screenshot': '🖼️',
+      'analyze_image_content': '🔬',
+      'web_search': '🌐',
+      'fetch_url': '📥',
+      'add_todos': '📋',
+      'update_todo_status': '✅',
+      'list_todos': '📝',
+      'get_active_todos_compact': '📊',
+      'archive_completed': '🗄️',
+      'view_history': '📚',
+      'rollback_changes': '⏪',
+      'mcp_tools': '🔧'
+    };
+    return iconMap[toolName] || '🔧';
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'started': return '🚀';
+      case 'running': return '⚡';
+      case 'completed': return '✅';
+      case 'error': return '❌';
+      default: return '⏳';
+    }
+  };
+
+  const formatDuration = (startTime: Date, endTime?: Date) => {
+    const end = endTime || new Date();
+    const duration = end.getTime() - startTime.getTime();
+    if (duration < 1000) {
+      return `${duration}ms`;
+    } else if (duration < 60000) {
+      return `${(duration / 1000).toFixed(1)}s`;
+    } else {
+      return `${(duration / 60000).toFixed(1)}m`;
+    }
+  };
 
   return (
     <>
       <div className="chat-header">
         <h2>💬 AI Assistant</h2>
+        {isProcessing && (
+          <div className="header-status">
+            <span className="status-dot processing"></span>
+            Processing
+          </div>
+        )}
       </div>
 
       <div className="chat-container">
@@ -55,8 +133,60 @@ const Chat: React.FC<ChatProps> = ({
           ))
         )}
 
+        {/* Tool Execution Progress */}
+        {toolExecutions.length > 0 && (
+          <div className="tool-executions">
+            <div className="tool-executions-header">
+              <h4>🔧 Tool Executions</h4>
+              <span className="tool-count">{toolExecutions.length} active</span>
+            </div>
+            {toolExecutions.map((tool) => (
+              <div
+                key={tool.id}
+                className={`tool-execution tool-${tool.status}`}
+                onClick={() => toggleToolExpansion(tool.id)}
+              >
+                <div className="tool-summary">
+                  <span className="tool-icon">{getToolIcon(tool.tool)}</span>
+                  <span className="tool-name">{tool.tool}</span>
+                  <span className="tool-status">{getStatusIcon(tool.status)}</span>
+                  <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
+                  <span className="tool-expand">
+                    {expandedTools.has(tool.id) ? '▼' : '▶'}
+                  </span>
+                </div>
+                
+                {tool.message && (
+                  <div className="tool-message">{tool.message}</div>
+                )}
+                
+                {expandedTools.has(tool.id) && tool.details && (
+                  <div className="tool-details">
+                    <pre>{JSON.stringify(tool.details, null, 2)}</pre>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Query Progress */}
+        {queryProgress && (
+          <div className="query-progress">
+            <div className="progress-header">
+              <span className="progress-icon">⚡</span>
+              <span className="progress-text">{queryProgress.message || 'Processing...'}</span>
+            </div>
+            {queryProgress.details && (
+              <div className="progress-details">
+                {queryProgress.details}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Processing Indicator */}
-        {isProcessing && (
+        {isProcessing && toolExecutions.length === 0 && !queryProgress && (
           <div className="processing-indicator">
             <div className="processing-content">
               <div className="processing-spinner">⚡</div>

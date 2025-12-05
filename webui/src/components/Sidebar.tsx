@@ -15,14 +15,14 @@ interface SidebarProps {
   selectedModel?: string;
   onModelChange?: (model: string) => void;
   availableModels?: string[];
-  currentView?: 'chat' | 'editor' | 'git';
-  onViewChange?: (view: 'chat' | 'editor' | 'git') => void;
+  currentView?: 'chat' | 'editor' | 'git' | 'logs';
+  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'logs') => void;
   stats?: {
     queryCount: number;
     filesModified: number;
   };
   recentFiles?: Array<{ path: string; modified: boolean }>;
-  recentLogs?: string[];
+  recentLogs?: string[] | Array<{ id: string; type: string; timestamp: Date; data: any; level: string; category: string }>;
   isMobileMenuOpen?: boolean;
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
@@ -152,7 +152,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          {/* Main Navigation - 3 Icon View Switcher */}
+          {/* Main Navigation - 4 Icon View Switcher */}
           <div className="main-nav-section">
             <div className="nav-icons">
               <button
@@ -190,6 +190,18 @@ const Sidebar: React.FC<SidebarProps> = ({
               >
                 <span className="nav-icon-emoji">🔀</span>
                 <span className="nav-icon-label">Git</span>
+              </button>
+              <button
+                className={`nav-icon ${currentView === 'logs' ? 'active' : ''}`}
+                onClick={() => {
+                  onViewChange?.('logs');
+                  if (isMobile && finalOnMobileMenuToggle) finalOnMobileMenuToggle();
+                }}
+                disabled={!onViewChange}
+                title="Logs View"
+              >
+                <span className="nav-icon-emoji">📋</span>
+                <span className="nav-icon-label">Logs</span>
               </button>
             </div>
           </div>
@@ -269,11 +281,51 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {finalRecentLogs.length === 0 ? (
                   <span className="empty">No logs yet</span>
                 ) : (
-                  finalRecentLogs.slice(-5).map((log, index) => (
-                    <div key={index} className="log-item">
-                      {log}
-                    </div>
-                  ))
+                  finalRecentLogs.slice(-5).map((log, index) => {
+                    // Handle both string and LogEntry formats
+                    if (typeof log === 'string') {
+                      return (
+                        <div key={index} className="log-item">
+                          {log}
+                        </div>
+                      );
+                    } else {
+                      // New LogEntry format
+                      const getLogIcon = (level: string) => {
+                        switch (level) {
+                          case 'success': return '✅';
+                          case 'error': return '❌';
+                          case 'warning': return '⚠️';
+                          case 'info': return 'ℹ️';
+                          default: return '📝';
+                        }
+                      };
+                      
+                      const getLogSummary = (logEntry: any) => {
+                        switch (logEntry.type) {
+                          case 'query_started':
+                            return `Query: ${logEntry.data.query?.substring(0, 30)}...`;
+                          case 'tool_execution':
+                            return `${logEntry.data.tool}: ${logEntry.data.status}`;
+                          case 'file_changed':
+                            return `File: ${logEntry.data.path?.split('/').pop()}`;
+                          case 'stream_chunk':
+                            return `Stream: ${logEntry.data.chunk?.substring(0, 30)}...`;
+                          case 'error':
+                            return `Error: ${logEntry.data.message?.substring(0, 30)}...`;
+                          default:
+                            return `${logEntry.type}`;
+                        }
+                      };
+                      
+                      return (
+                        <div key={log.id} className="log-item">
+                          <span className="log-icon">{getLogIcon(log.level)}</span>
+                          <span className="log-text">{getLogSummary(log)}</span>
+                        </div>
+                      );
+                    }
+                  })
                 )}
               </div>
             </div>

@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,9 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
+
+//go:embed configs/*.json
+var embeddedConfigs embed.FS
 
 // ProviderFactory creates provider instances from JSON configurations
 type ProviderFactory struct {
@@ -39,6 +43,32 @@ func (f *ProviderFactory) LoadConfigsFromDirectory(configDir string) error {
 	for _, file := range files {
 		if err := f.LoadConfigFromFile(file); err != nil {
 			return fmt.Errorf("failed to load config from %s: %w", file, err)
+		}
+	}
+
+	return nil
+}
+
+// LoadEmbeddedConfigs loads all provider configurations from the embedded filesystem
+func (f *ProviderFactory) LoadEmbeddedConfigs() error {
+	entries, err := embeddedConfigs.ReadDir("configs")
+	if err != nil {
+		return fmt.Errorf("failed to read embedded configs directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+
+		filename := filepath.Join("configs", entry.Name())
+		data, err := embeddedConfigs.ReadFile(filename)
+		if err != nil {
+			return fmt.Errorf("failed to read embedded config file %s: %w", filename, err)
+		}
+
+		if err := f.LoadConfigFromBytes(data); err != nil {
+			return fmt.Errorf("failed to load embedded config from %s: %w", filename, err)
 		}
 	}
 

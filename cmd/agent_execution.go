@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/agent_commands"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/webui"
@@ -218,6 +219,12 @@ func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events
 
 // processQuery processes a single query
 func processQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
+	// Check if this is a slash command
+	registry := commands.NewCommandRegistry()
+	if registry.IsSlashCommand(query) {
+		return registry.Execute(query, chatAgent)
+	}
+
 	// Publish query started event
 	eventBus.Publish(events.EventTypeQueryStarted, events.QueryStartedEvent(
 		query,

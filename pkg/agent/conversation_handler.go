@@ -139,9 +139,28 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	for ch.agent.currentIteration = 0; ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
 		ch.agent.debugLog("🔄 Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.messages))
 
-		// Check for interrupts
+		// Check for interrupts with enhanced pause/resume handling
 		if ch.checkForInterrupt() {
-			ch.agent.debugLog("⏹️ Conversation interrupted\n")
+			interruptResponse := ch.agent.HandleInterrupt()
+
+			switch interruptResponse {
+			case "STOP":
+				ch.agent.debugLog("⏹️ Conversation stopped by user\n")
+			case "CONTINUE_WITH_CLARIFICATION":
+				ch.agent.debugLog("🔄 Continuing with user clarification\n")
+				// Reset interrupt context and continue
+				ch.agent.ClearInterrupt()
+				continue
+			case "CONTINUE":
+				ch.agent.debugLog("🔄 Continuing without changes\n")
+				// Reset interrupt context and continue
+				ch.agent.ClearInterrupt()
+				continue
+			default:
+				ch.agent.debugLog("⏹️ Conversation interrupted\n")
+			}
+
+			// If we reach here, we're breaking out of the loop
 			break
 		}
 
@@ -576,7 +595,7 @@ func (ch *ConversationHandler) buildToolCallGuidance() string {
 }
 */
 func (ch *ConversationHandler) checkForInterrupt() bool {
-	// Check for context cancellation (new interrupt system)
+	// Check for context cancellation (new interrupt system) with blocking select
 	select {
 	case <-ch.agent.interruptCtx.Done():
 		ch.agent.debugLog("⏹️ Context cancelled, interrupt requested\n")
@@ -590,17 +609,14 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 		})
 		return false // Continue processing with new input
 	default:
-		// Context not cancelled, no input injection
+		// Check for timeout (5 minutes of inactivity)
+		if time.Since(ch.lastActivityTime) > ch.timeoutDuration {
+			ch.agent.debugLog("⏰ Conversation timeout after %v of inactivity\n", ch.timeoutDuration)
+			ch.agent.interruptCancel() // Cancel context to trigger interrupt
+			return true
+		}
+		return false
 	}
-
-	// Check for timeout (5 minutes of inactivity)
-	if time.Since(ch.lastActivityTime) > ch.timeoutDuration {
-		ch.agent.debugLog("⏰ Conversation timeout after %v of inactivity\n", ch.timeoutDuration)
-		ch.agent.interruptCancel() // Cancel context to trigger interrupt
-		return true
-	}
-
-	return false
 }
 
 func (ch *ConversationHandler) lastUserMessage() (string, bool) {

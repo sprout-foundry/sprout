@@ -159,7 +159,9 @@ const Sidebar = ({
           <div className="logs-list">
             {recentLogs.length > 0 ? (
               recentLogs.map((log, index) => (
-                <div key={index} className="log-item">{log}</div>
+                <div key={index} className="log-item">
+                  {typeof log === 'string' ? log : JSON.stringify(log)}
+                </div>
               ))
             ) : (
               <div className="empty">No recent activity</div>

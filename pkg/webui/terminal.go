@@ -51,21 +51,41 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 		return nil, fmt.Errorf("session %s already exists", sessionID)
 	}
 
-	// Determine shell based on OS
-	shell := "/bin/bash"
-	if runtime.GOOS == "windows" {
-		shell = "cmd.exe"
+	// Determine shell based on OS with better fallback logic
+	var shell string
+	var shellArgs []string
+	
+	switch runtime.GOOS {
+	case "windows":
+		shell = "cmd"
+		shellArgs = []string{"/c"}
+	default:
+		// Try to find a good shell in order of preference
+		if _, err := exec.LookPath("bash"); err == nil {
+			shell = "bash"
+			shellArgs = []string{"-i"}
+		} else if _, err := exec.LookPath("zsh"); err == nil {
+			shell = "zsh"
+			shellArgs = []string{"-i"}
+		} else if _, err := exec.LookPath("sh"); err == nil {
+			shell = "sh"
+			shellArgs = []string{"-i"}
+		} else {
+			return nil, fmt.Errorf("no suitable shell found")
+		}
 	}
 
 	// Create context for the command
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Setup command with interactive shell
-	cmd := exec.CommandContext(ctx, shell)
+	cmd := exec.CommandContext(ctx, shell, shellArgs...)
 	
-	// Set environment variables for interactive shell
+	// Set environment variables for better terminal experience
 	cmd.Env = append(os.Environ(), 
 		"TERM=xterm-256color",
+		"COLORTERM=truecolor",
+		"FORCE_COLOR=1",
 		"PS1=\\[\\033[01;32m\\]\\u@\\h\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ ",
 	)
 
@@ -332,6 +352,11 @@ func (tm *TerminalManager) GetSessionCount() int {
 		session.mutex.RUnlock()
 	}
 	return count
+}
+
+// SessionCount returns the number of active sessions (alias for GetSessionCount)
+func (tm *TerminalManager) SessionCount() int {
+	return tm.GetSessionCount()
 }
 
 // StartCleanupWorker starts a background worker to clean up inactive sessions

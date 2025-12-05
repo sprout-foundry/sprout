@@ -86,7 +86,7 @@ func TestGetModelContextLimitFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
-	if cl != 4096 { // Model-aware fallback for gpt-3.5
-		t.Errorf("Expected 4096 fallback, got %d", cl)
+	if cl != 16385 { // Model-aware fallback for gpt-3.5 (16k context)
+		t.Errorf("Expected 16385 fallback, got %d", cl)
 	}
 }

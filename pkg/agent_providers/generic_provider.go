@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -184,10 +185,15 @@ func (p *GenericProvider) ListModels() ([]api.ModelInfo, error) {
 
 	token, err := p.config.GetAuthToken()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get auth token: %w", err)
+		// For local instances like LM Studio, skip auth if no token is configured
+		if strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost") {
+			// No auth needed for local instances
+		} else {
+			return nil, fmt.Errorf("failed to get auth token: %w", err)
+		}
+	} else {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
-
-	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
 	// Add custom headers
@@ -214,10 +220,15 @@ func (p *GenericProvider) ListModels() ([]api.ModelInfo, error) {
 
 	var modelsResponse struct {
 		Data []struct {
-			ID      string `json:"id"`
-			Object  string `json:"object"`
-			Created int64  `json:"created"`
-			OwnedBy string `json:"owned_by"`
+			ID            string    `json:"id"`
+			Object        string    `json:"object"`
+			Created       int64     `json:"created"`
+			OwnedBy       string    `json:"owned_by"`
+			ContextLength int       `json:"context_length,omitempty"`
+			Pricing       *struct {
+				Prompt     string  `json:"prompt,omitempty"`
+				Completion string  `json:"completion,omitempty"`
+			} `json:"pricing,omitempty"`
 		} `json:"data"`
 	}
 
@@ -228,9 +239,20 @@ func (p *GenericProvider) ListModels() ([]api.ModelInfo, error) {
 	p.models = make([]api.ModelInfo, len(modelsResponse.Data))
 	for i, model := range modelsResponse.Data {
 		p.models[i] = api.ModelInfo{
-			ID:       model.ID,
-			Name:     model.ID,
-			Provider: p.config.Name,
+			ID:            model.ID,
+			Name:          model.ID,
+			Provider:      p.config.Name,
+			ContextLength: model.ContextLength,
+		}
+
+		// If we have pricing info, populate it
+		if model.Pricing != nil {
+			if promptCost, err := strconv.ParseFloat(model.Pricing.Prompt, 64); err == nil {
+				p.models[i].InputCost = promptCost
+			}
+			if completionCost, err := strconv.ParseFloat(model.Pricing.Completion, 64); err == nil {
+				p.models[i].OutputCost = completionCost
+			}
 		}
 	}
 	p.modelsCached = true
@@ -391,17 +413,24 @@ func (p *GenericProvider) buildHTTPRequest(body []byte, streaming bool) (*http.R
 	// Get authentication token
 	token, err := p.config.GetAuthToken()
 	if err != nil {
-		return nil, fmt.Errorf("authentication failed: %w", err)
+		// For local instances like LM Studio, skip auth if no token is configured
+		if strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost") {
+			// No auth needed for local instances - continue without Authorization header
+		} else {
+			return nil, fmt.Errorf("authentication failed: %w", err)
+		}
 	}
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 
-	switch p.config.Auth.Type {
-	case "bearer", "api_key":
-		req.Header.Set("Authorization", "Bearer "+token)
-	case "basic":
-		req.Header.Set("Authorization", "Basic "+token)
+	if token != "" {
+		switch p.config.Auth.Type {
+		case "bearer", "api_key":
+			req.Header.Set("Authorization", "Bearer "+token)
+		case "basic":
+			req.Header.Set("Authorization", "Basic "+token)
+		}
 	}
 
 	// Add custom headers

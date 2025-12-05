@@ -664,7 +664,7 @@ func handleAddTodos(ctx context.Context, a *Agent, args map[string]interface{}) 
 	a.debugLog("Adding %d todos\n", len(todos))
 
 	result := tools.AddBulkTodos(todos)
-	a.safePrint("%s", result)
+	fmt.Printf("%s", result)
 	a.debugLog("Add todos result: %s\n", result)
 	return result, nil
 }

@@ -7,7 +7,7 @@
   },
   "headers": {},
   "defaults": {
-    "model": "local-model",
+    "model": "qwen3-coder:30b",
     "temperature": 0.7,
     "max_tokens": -1,
     "top_p": 1.0
@@ -26,7 +26,7 @@
     "context_limit": 0,
     "supports_vision": false,
     "vision_model": "",
-    "default_model": "local-model",
+    "default_model": "qwen3-coder:30b",
     "available_models": []
   },
   "retry": {

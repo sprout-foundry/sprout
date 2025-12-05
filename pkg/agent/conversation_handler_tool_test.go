@@ -65,7 +65,28 @@ func TestProcessResponsePreservesToolOutputForLLM(t *testing.T) {
 		t.Fatalf("expected at least user, assistant, and tool messages, got %d", len(agent.messages))
 	}
 
-	assistantMsg := agent.messages[len(agent.messages)-2]
+	// Debug: Print all messages to understand the structure
+	t.Logf("All messages (%d):", len(agent.messages))
+	for i, msg := range agent.messages {
+		t.Logf("  [%d] Role: %s, ToolCalls: %d", i, msg.Role, len(msg.ToolCalls))
+		if len(msg.ToolCalls) > 0 {
+			for j, tc := range msg.ToolCalls {
+				t.Logf("    [%d] ID: %s, Function: %s", j, tc.ID, tc.Function.Name)
+			}
+		}
+	}
+
+	// Find the assistant message with tool calls (it should be before the tool result and summary)
+	var assistantMsg *api.Message
+	for i := len(agent.messages) - 1; i >= 0; i-- {
+		if agent.messages[i].Role == "assistant" && len(agent.messages[i].ToolCalls) > 0 {
+			assistantMsg = &agent.messages[i]
+			break
+		}
+	}
+	if assistantMsg == nil {
+		t.Fatalf("could not find assistant message with tool calls")
+	}
 	if len(assistantMsg.ToolCalls) != 1 {
 		t.Fatalf("expected assistant message to retain tool_calls metadata, got %d entries", len(assistantMsg.ToolCalls))
 	}
@@ -154,9 +175,16 @@ func TestProcessResponseDeduplicatesDuplicateToolCalls(t *testing.T) {
 		t.Fatalf("expected exactly one tool result message, got %d", toolMessages)
 	}
 
-	assistantMsg := agent.messages[len(agent.messages)-2]
-	if len(assistantMsg.ToolCalls) != 1 {
-		t.Fatalf("expected assistant message to keep only one tool_call entry, got %d", len(assistantMsg.ToolCalls))
+	// Find the assistant message with tool calls (it should be before the tool result and summary)
+	var assistantMsg *api.Message
+	for i := len(agent.messages) - 1; i >= 0; i-- {
+		if agent.messages[i].Role == "assistant" && len(agent.messages[i].ToolCalls) > 0 {
+			assistantMsg = &agent.messages[i]
+			break
+		}
+	}
+	if assistantMsg == nil {
+		t.Fatalf("could not find assistant message with tool calls")
 	}
 	if len(assistantMsg.ToolCalls) != 1 {
 		t.Fatalf("expected assistant message to keep only one tool_call entry, got %d", len(assistantMsg.ToolCalls))

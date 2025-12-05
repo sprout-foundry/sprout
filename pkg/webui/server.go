@@ -3,6 +3,7 @@ package webui
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -20,18 +21,22 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+//go:embed static/*
+var staticFiles embed.FS
+
 // ReactWebServer provides the React web UI
 type ReactWebServer struct {
-	agent       *agent.Agent
-	eventBus    *events.EventBus
-	port        int
-	server      *http.Server
-	upgrader    websocket.Upgrader
-	connections sync.Map // map[*websocket.Conn]bool
-	isRunning   bool
-	mutex       sync.RWMutex
-	startTime   time.Time
-	queryCount  int
+	agent            *agent.Agent
+	eventBus         *events.EventBus
+	port             int
+	server           *http.Server
+	upgrader         websocket.Upgrader
+	connections      sync.Map // map[*websocket.Conn]bool
+	terminalManager  *TerminalManager
+	isRunning        bool
+	mutex            sync.RWMutex
+	startTime        time.Time
+	queryCount       int
 }
 
 // NewReactWebServer creates a new React web server
@@ -41,9 +46,9 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 	}
 
 	return &ReactWebServer{
-		agent:    agent,
-		eventBus: eventBus,
-		port:     port,
+		agent:           agent,
+		eventBus:        eventBus,
+		port:            port,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				// Allow localhost connections
@@ -52,7 +57,8 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 					origin == "" // Allow same-origin and direct connections
 			},
 		},
-		startTime: time.Now(),
+		terminalManager: NewTerminalManager(),
+		startTime:       time.Now(),
 	}
 }
 
@@ -70,11 +76,16 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ws.handleIndex)
 	mux.HandleFunc("/ws", ws.handleWebSocket)
+	mux.HandleFunc("/terminal", ws.handleTerminalWebSocket)
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)
 	mux.HandleFunc("/api/file", ws.handleAPIFile)
 	mux.HandleFunc("/api/config", ws.handleAPIConfig)
+	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
+
+	// Serve Service Worker with proper MIME type
+	mux.HandleFunc("/sw.js", ws.handleServiceWorker)
 
 	// Serve static files (React build assets) with proper MIME types
 	mux.HandleFunc("/static/", ws.handleStaticFiles)
@@ -139,8 +150,17 @@ func (ws *ReactWebServer) GetPort() int {
 
 // handleIndex serves the React application
 func (ws *ReactWebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
-	// Serve the React index.html - use correct path for production server
-	http.ServeFile(w, r, "./pkg/webui/static/index.html")
+	// Try to serve from embedded filesystem first
+	data, err := staticFiles.ReadFile("static/index.html")
+	if err != nil {
+		// Fallback to filesystem
+		http.ServeFile(w, r, "./pkg/webui/static/index.html")
+		return
+	}
+
+	// Set proper HTML content type
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(data)
 }
 
 // handleStaticFiles serves static files with proper MIME types
@@ -154,8 +174,15 @@ func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Construct the full file path - use correct path for production server
-	fullPath := "./pkg/webui/static/static/" + filePath
+	// Try to serve from embedded filesystem first
+	embeddedPath := "static/static/" + filePath
+	data, err := staticFiles.ReadFile(embeddedPath)
+	if err != nil {
+		// Fallback to filesystem
+		fullPath := "./pkg/webui/static/static/" + filePath
+		http.ServeFile(w, r, fullPath)
+		return
+	}
 
 	// Set appropriate Content-Type header based on file extension
 	ext := ""
@@ -167,7 +194,13 @@ func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Reque
 	case ".css":
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	case ".js":
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		// Handle Service Worker files specifically
+		if filePath == "sw.js" {
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			w.Header().Set("Service-Worker-Allowed", "/")
+		} else {
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		}
 	case ".html":
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	case ".png":
@@ -192,8 +225,30 @@ func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Reque
 	// Enable caching for static assets
 	w.Header().Set("Cache-Control", "public, max-age=3600") // 1 hour cache
 
-	// Serve the file
-	http.ServeFile(w, r, fullPath)
+	// Serve the embedded data
+	w.Write(data)
+}
+
+// handleServiceWorker serves the Service Worker with proper MIME type
+func (ws *ReactWebServer) handleServiceWorker(w http.ResponseWriter, r *http.Request) {
+	// Try to serve from embedded filesystem first
+	data, err := staticFiles.ReadFile("static/sw.js")
+	if err != nil {
+		// Fallback to filesystem
+		fallbackPath := "./pkg/webui/static/sw.js"
+		data, err = os.ReadFile(fallbackPath)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+	}
+
+	// Set proper headers for Service Worker
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Header().Set("Service-Worker-Allowed", "/")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+
+	w.Write(data)
 }
 
 // handleWebSocket handles WebSocket connections for real-time events
@@ -328,36 +383,106 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 // handleAPIStats returns current statistics
 func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request) {
-	var provider, model string
-	var totalTokens, totalCost interface{}
+	var provider, model, sessionID string
+	var totalTokens, currentContextTokens, maxContextTokens, promptTokens, completionTokens, cachedTokens int
+	var totalCost, cachedCostSavings, lastTPS float64
+	var contextWarningIssued, streamingEnabled, debugMode bool
+	var currentIteration, maxIterations int
 
 	if ws.agent != nil {
 		provider = ws.agent.GetProvider()
 		model = ws.agent.GetModel()
-		totalTokens = ws.agent.GetCurrentContextTokens()
+		sessionID = ws.agent.GetSessionID()
+		totalTokens = ws.agent.GetTotalTokens()
+		currentContextTokens = ws.agent.GetCurrentContextTokens()
+		maxContextTokens = ws.agent.GetMaxContextTokens()
+		promptTokens = ws.agent.GetPromptTokens()
+		completionTokens = ws.agent.GetCompletionTokens()
+		cachedTokens = ws.agent.GetCachedTokens()
 		totalCost = ws.agent.GetTotalCost()
+		cachedCostSavings = ws.agent.GetCachedCostSavings()
+		lastTPS = ws.agent.GetLastTPS()
+		contextWarningIssued = ws.agent.GetContextWarningIssued()
+		streamingEnabled = ws.agent.IsStreamingEnabled()
+		debugMode = ws.agent.IsDebugMode()
+		currentIteration = ws.agent.GetCurrentIteration()
+		maxIterations = ws.agent.GetMaxIterations()
 	} else {
+		// Test values
 		provider = "test-provider"
 		model = "test-model"
+		sessionID = "test-session"
 		totalTokens = 0
+		currentContextTokens = 0
+		maxContextTokens = 0
+		promptTokens = 0
+		completionTokens = 0
+		cachedTokens = 0
 		totalCost = 0.0
+		cachedCostSavings = 0.0
+		lastTPS = 0.0
+		contextWarningIssued = false
+		streamingEnabled = true
+		debugMode = false
+		currentIteration = 0
+		maxIterations = 1000
+	}
+
+	// Calculate context usage percentage
+	contextUsagePercent := float64(0)
+	if maxContextTokens > 0 {
+		contextUsagePercent = float64(currentContextTokens) / float64(maxContextTokens) * 100
+	}
+
+	// Calculate cache efficiency
+	cacheEfficiency := float64(0)
+	if totalTokens > 0 {
+		cacheEfficiency = float64(cachedTokens) / float64(totalTokens) * 100
 	}
 
 	stats := map[string]interface{}{
+		// Basic info
 		"provider":     provider,
 		"model":        model,
+		"session_id":   sessionID,
 		"query_count":  ws.queryCount,
 		"uptime":       time.Since(ws.startTime).String(),
-		"total_tokens": totalTokens,
-		"total_cost":   totalCost,
 		"connections":  ws.countConnections(),
+
+		// Token usage
+		"total_tokens":        totalTokens,
+		"prompt_tokens":       promptTokens,
+		"completion_tokens":   completionTokens,
+		"cached_tokens":       cachedTokens,
+		"cache_efficiency":    cacheEfficiency,
+
+		// Context usage
+		"current_context_tokens": currentContextTokens,
+		"max_context_tokens":     maxContextTokens,
+		"context_usage_percent":  contextUsagePercent,
+		"context_warning_issued": contextWarningIssued,
+
+		// Cost tracking
+		"total_cost":          totalCost,
+		"cached_cost_savings": cachedCostSavings,
+
+		// Performance metrics
+		"last_tps": lastTPS,
+
+		// Iteration tracking
+		"current_iteration": currentIteration,
+		"max_iterations":     maxIterations,
+
+		// Configuration
+		"streaming_enabled": streamingEnabled,
+		"debug_mode":        debugMode,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
 }
 
-// handleAPIFiles returns file system information (placeholder)
+// handleAPIFiles returns file system information with enhanced security
 func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request) {
 	// Get the directory path from query parameter (default to current directory)
 	path := r.URL.Query().Get("path")
@@ -368,7 +493,29 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	// Security check - prevent directory traversal
 	cleanPath := filepath.Clean(path)
 	if strings.Contains(cleanPath, "..") {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
+		http.Error(w, "Invalid path: directory traversal not allowed", http.StatusBadRequest)
+		return
+	}
+
+	// Additional security: ensure path is within reasonable bounds
+	if len(cleanPath) > 1000 {
+		http.Error(w, "Path too long", http.StatusBadRequest)
+		return
+	}
+
+	// Check if path exists and is a directory
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "Directory not found", http.StatusNotFound)
+		} else {
+			http.Error(w, fmt.Sprintf("Failed to access directory: %v", err), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if !info.IsDir() {
+		http.Error(w, "Path is not a directory", http.StatusBadRequest)
 		return
 	}
 
@@ -379,11 +526,21 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Build file tree response
+	// Build file tree response with security filtering
 	var files []interface{}
 	for _, entry := range entries {
+		// Skip hidden files and directories (starting with .)
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+
 		info, err := entry.Info()
 		if err != nil {
+			continue
+		}
+
+		// Skip sensitive system files and directories
+		if ws.isSensitivePath(entry.Name()) {
 			continue
 		}
 
@@ -398,6 +555,8 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		// Get file extension for files
 		if !entry.IsDir() {
 			fileInfo["ext"] = filepath.Ext(entry.Name())
+			// Add file type categorization
+			fileInfo["type"] = ws.categorizeFile(entry.Name())
 		}
 
 		files = append(files, fileInfo)
@@ -407,10 +566,116 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		"message": "success",
 		"path":    cleanPath,
 		"files":   files,
+		"count":   len(files),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// isSensitivePath checks if a path should be hidden for security reasons
+func (ws *ReactWebServer) isSensitivePath(name string) bool {
+	sensitiveNames := []string{
+		".git", ".svn", ".hg", ".bzr", // Version control
+		"node_modules", "vendor", "target", "build", "dist", // Dependencies and build artifacts
+		".env", ".env.local", ".env.production", // Environment files
+		"*.key", "*.pem", "*.crt", "*.p12", // Certificates and keys
+		"id_rsa", "id_ed25519", "id_dsa", // SSH keys
+		".aws", ".azure", ".gcp", // Cloud credentials
+		"secrets", "credentials", "private", // Obvious sensitive directories
+		"*.log", "*.tmp", "*.cache", // Temporary files
+	}
+
+	lowerName := strings.ToLower(name)
+	for _, sensitive := range sensitiveNames {
+		if matched, _ := filepath.Match(sensitive, lowerName); matched {
+			return true
+		}
+	}
+
+	return false
+}
+
+// categorizeFile categorizes files by type for better UI handling
+func (ws *ReactWebServer) categorizeFile(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	
+	switch ext {
+	case ".go":
+		return "go"
+	case ".js", ".jsx", ".ts", ".tsx":
+		return "javascript"
+	case ".py":
+		return "python"
+	case ".java":
+		return "java"
+	case ".cpp", ".cc", ".cxx", ".c++", ".hpp", ".hh", ".hxx", ".h++":
+		return "cpp"
+	case ".c":
+		return "c"
+	case ".rs":
+		return "rust"
+	case ".php":
+		return "php"
+	case ".rb":
+		return "ruby"
+	case ".swift":
+		return "swift"
+	case ".kt":
+		return "kotlin"
+	case ".scala":
+		return "scala"
+	case ".sh", ".bash", ".zsh", ".fish":
+		return "shell"
+	case ".html", ".htm":
+		return "html"
+	case ".css":
+		return "css"
+	case ".scss", ".sass":
+		return "sass"
+	case ".less":
+		return "less"
+	case ".json":
+		return "json"
+	case ".xml":
+		return "xml"
+	case ".yaml", ".yml":
+		return "yaml"
+	case ".toml":
+		return "toml"
+	case ".md", ".markdown":
+		return "markdown"
+	case ".txt":
+		return "text"
+	case ".sql":
+		return "sql"
+	case ".dockerfile", "dockerfile":
+		return "docker"
+	case ".makefile", "makefile":
+		return "makefile"
+	case ".conf", ".config", ".ini":
+		return "config"
+	case ".lock":
+		return "lock"
+	case ".sum":
+		return "checksum"
+	case ".mod":
+		return "module"
+	case ".test", "_test.go":
+		return "test"
+	case ".proto":
+		return "protobuf"
+	case ".graphql", ".gql":
+		return "graphql"
+	case ".vue":
+		return "vue"
+	case ".svelte":
+		return "svelte"
+	case ".angular":
+		return "angular"
+	default:
+		return "unknown"
+	}
 }
 
 // handleAPIFile handles reading and writing individual files
@@ -425,27 +690,46 @@ func (ws *ReactWebServer) handleAPIFile(w http.ResponseWriter, r *http.Request) 
 	// Security check - prevent directory traversal
 	cleanPath := filepath.Clean(path)
 	if strings.Contains(cleanPath, "..") {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
+		http.Error(w, "Invalid path: directory traversal not allowed", http.StatusBadRequest)
+		return
+	}
+
+	// Additional security: ensure path is within reasonable bounds
+	if len(cleanPath) > 1000 {
+		http.Error(w, "Path too long", http.StatusBadRequest)
 		return
 	}
 
 	switch r.Method {
 	case "GET":
-		// Read file
-		content, err := os.ReadFile(cleanPath)
+		// Check if file exists and get info
+		info, err := os.Stat(cleanPath)
 		if err != nil {
 			if os.IsNotExist(err) {
 				http.Error(w, "File not found", http.StatusNotFound)
 			} else {
-				http.Error(w, fmt.Sprintf("Failed to read file: %v", err), http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("Failed to access file: %v", err), http.StatusInternalServerError)
 			}
 			return
 		}
 
-		// Get file info
-		info, err := os.Stat(cleanPath)
+		// Don't allow reading directories as files
+		if info.IsDir() {
+			http.Error(w, "Path is a directory, not a file", http.StatusBadRequest)
+			return
+		}
+
+		// Check file size - don't read extremely large files
+		const maxFileSize = 10 * 1024 * 1024 // 10MB
+		if info.Size() > maxFileSize {
+			http.Error(w, fmt.Sprintf("File too large (max %d MB)", maxFileSize/(1024*1024)), http.StatusRequestEntityTooLarge)
+			return
+		}
+
+		// Read file content
+		content, err := os.ReadFile(cleanPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to get file info: %v", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Failed to read file: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -462,14 +746,31 @@ func (ws *ReactWebServer) handleAPIFile(w http.ResponseWriter, r *http.Request) 
 		json.NewEncoder(w).Encode(response)
 
 	case "POST":
-		// Write file
+		// Parse request body
 		var request struct {
 			Content string `json:"content"`
+			Backup  bool   `json:"backup"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 			return
+		}
+
+		// Check content size
+		const maxContentLength = 10 * 1024 * 1024 // 10MB
+		if len(request.Content) > maxContentLength {
+			http.Error(w, fmt.Sprintf("Content too large (max %d MB)", maxContentLength/(1024*1024)), http.StatusRequestEntityTooLarge)
+			return
+		}
+
+		// Create backup if requested
+		if request.Backup {
+			backupPath := cleanPath + ".backup." + fmt.Sprintf("%d", time.Now().Unix())
+			if err := ws.createFileBackup(cleanPath, backupPath); err != nil {
+				// Log backup error but don't fail the operation
+				log.Printf("Warning: failed to create backup: %v", err)
+			}
 		}
 
 		// Create directory if it doesn't exist
@@ -479,15 +780,65 @@ func (ws *ReactWebServer) handleAPIFile(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		// Write file
+		// Write file with proper permissions
 		if err := os.WriteFile(cleanPath, []byte(request.Content), 0644); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to write file: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Verify file was written correctly
+		writtenContent, err := os.ReadFile(cleanPath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to verify written file: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if string(writtenContent) != request.Content {
+			http.Error(w, "File verification failed: written content doesn't match", http.StatusInternalServerError)
 			return
 		}
 
 		response := map[string]interface{}{
 			"message": "File saved successfully",
 			"path":    cleanPath,
+			"size":    len(request.Content),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+
+	case "DELETE":
+		// Delete file functionality
+		info, err := os.Stat(cleanPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				http.Error(w, "File not found", http.StatusNotFound)
+			} else {
+				http.Error(w, fmt.Sprintf("Failed to access file: %v", err), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		if info.IsDir() {
+			http.Error(w, "Cannot delete directories via this endpoint", http.StatusBadRequest)
+			return
+		}
+
+		// Create backup before deletion
+		backupPath := cleanPath + ".backup." + fmt.Sprintf("%d", time.Now().Unix())
+		if err := ws.createFileBackup(cleanPath, backupPath); err != nil {
+			log.Printf("Warning: failed to create backup before deletion: %v", err)
+		}
+
+		if err := os.Remove(cleanPath); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to delete file: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		response := map[string]interface{}{
+			"message": "File deleted successfully",
+			"path":    cleanPath,
+			"backup":  backupPath,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -496,6 +847,18 @@ func (ws *ReactWebServer) handleAPIFile(w http.ResponseWriter, r *http.Request) 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// createFileBackup creates a backup of the file
+func (ws *ReactWebServer) createFileBackup(originalPath, backupPath string) error {
+	// Read original file
+	content, err := os.ReadFile(originalPath)
+	if err != nil {
+		return err
+	}
+
+	// Write backup
+	return os.WriteFile(backupPath, content, 0644)
 }
 
 // handleAPIConfig handles provider and model configuration changes
@@ -581,4 +944,177 @@ func (ws *ReactWebServer) countConnections() int {
 		return true
 	})
 	return count
+}
+
+// handleTerminalWebSocket handles terminal WebSocket connections
+func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := ws.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("Terminal WebSocket upgrade error: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	// Generate session ID
+	sessionID := fmt.Sprintf("terminal_%d", time.Now().UnixNano())
+
+	// Create terminal session
+	session, err := ws.terminalManager.CreateSession(sessionID)
+	if err != nil {
+		log.Printf("Failed to create terminal session: %v", err)
+		conn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Failed to create terminal session"},
+		})
+		return
+	}
+
+	// Store connection
+	ws.connections.Store(conn, true)
+	defer ws.connections.Delete(conn)
+
+	// Send session created message
+	conn.WriteJSON(map[string]interface{}{
+		"type": "session_created",
+		"data": map[string]string{"session_id": sessionID},
+	})
+
+	// Start output reader goroutine
+	go func() {
+		if session.OutputCh != nil {
+			for output := range session.OutputCh {
+				select {
+				case <-r.Context().Done():
+					return
+				default:
+					if err := conn.WriteJSON(map[string]interface{}{
+						"type": "output",
+						"data": map[string]string{
+							"session_id": sessionID,
+							"output":     string(output),
+						},
+					}); err != nil {
+						log.Printf("Terminal WebSocket write error: %v", err)
+						return
+					}
+				}
+			}
+		}
+	}()
+
+	// Handle incoming messages
+	for {
+		var msg map[string]interface{}
+		if err := conn.ReadJSON(&msg); err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("Terminal WebSocket read error: %v", err)
+			}
+			break
+		}
+
+		msgType, ok := msg["type"].(string)
+		if !ok {
+			continue
+		}
+
+		switch msgType {
+		case "input":
+			data, ok := msg["data"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			
+			input, ok := data["input"].(string)
+			if !ok {
+				continue
+			}
+
+			if err := ws.terminalManager.ExecuteCommand(sessionID, input); err != nil {
+				conn.WriteJSON(map[string]interface{}{
+					"type": "error",
+					"data": map[string]string{
+						"session_id": sessionID,
+						"message":    err.Error(),
+					},
+				})
+			}
+
+		case "resize":
+			// Handle terminal resize if needed in the future
+			// For now, we'll just acknowledge it
+			conn.WriteJSON(map[string]interface{}{
+				"type": "resize_ack",
+				"data": map[string]string{"session_id": sessionID},
+			})
+
+		case "close":
+			// Close the terminal session
+			ws.terminalManager.CloseSession(sessionID)
+			return
+		}
+	}
+
+	// Clean up session when connection closes
+	ws.terminalManager.CloseSession(sessionID)
+}
+
+// handleTerminalHistory handles terminal history requests
+func (ws *ReactWebServer) handleTerminalHistory(w http.ResponseWriter, r *http.Request) {
+	// Get session ID from query parameter
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID == "" {
+		http.Error(w, "session_id parameter required", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		// Get terminal history
+		history, err := ws.terminalManager.GetHistory(sessionID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		
+		response := map[string]interface{}{
+			"message": "success",
+			"history": history,
+			"count":   len(history),
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		
+	case "POST":
+		// Add command to history
+		var req struct {
+			Command string `json:"command"`
+		}
+		
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		
+		if req.Command == "" {
+			http.Error(w, "Command cannot be empty", http.StatusBadRequest)
+			return
+		}
+		
+		if err := ws.terminalManager.AddToHistory(sessionID, req.Command); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		
+		response := map[string]interface{}{
+			"message": "success",
+			"command": req.Command,
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }

@@ -14,6 +14,7 @@ type ErrorManager struct {
 	recentErrors    []error
 	maxRecentErrors int
 	observers       []ErrorObserver
+	recoveryStats   map[string]int64 // Track recovery attempts and successes
 }
 
 // ErrorObserver can observe error events
@@ -38,6 +39,7 @@ func NewErrorManager(logger *Logger) *ErrorManager {
 		recentErrors:    make([]error, 0),
 		maxRecentErrors: 100,
 		observers:       make([]ErrorObserver, 0),
+		recoveryStats:   make(map[string]int64), // Initialize recovery stats
 	}
 }
 
@@ -138,10 +140,21 @@ func (em *ErrorManager) GetStats() ErrorStats {
 		stats.TotalErrors += count
 	}
 
-	// Calculate recovery rate (this is a simplified implementation)
-	// In a real system, you'd track successful recoveries
-	if stats.TotalErrors > 0 {
-		stats.RecoveryRate = float64(stats.TotalErrors/2) / float64(stats.TotalErrors) // Placeholder
+	// Calculate actual recovery rate based on tracked recovery statistics
+	totalRecoveryAttempts := em.recoveryStats["attempts"]
+	successfulRecoveries := em.recoveryStats["successes"]
+	
+	if totalRecoveryAttempts > 0 {
+		stats.RecoveryRate = float64(successfulRecoveries) / float64(totalRecoveryAttempts)
+	} else {
+		// Fallback to simplified calculation if no recovery stats available
+		if stats.TotalErrors > 0 {
+			// Estimate recovery rate based on error categories that typically recover well
+			recoverableErrors := em.errorCounts["NETWORK_ERROR"] + 
+				em.errorCounts["TEMPORARY_ERROR"] + 
+				em.errorCounts["RETRYABLE_ERROR"]
+			stats.RecoveryRate = float64(recoverableErrors) / float64(stats.TotalErrors)
+		}
 	}
 
 	return stats
@@ -210,6 +223,12 @@ func (em *ErrorManager) notifyError(err error, context string) {
 
 // notifyRecovery notifies all observers of a recovery attempt
 func (em *ErrorManager) notifyRecovery(success bool, err error, strategy string) {
+	// Track recovery statistics
+	em.recoveryStats["attempts"]++
+	if success {
+		em.recoveryStats["successes"]++
+	}
+	
 	for _, observer := range em.observers {
 		observer.OnRecovery(success, err, strategy)
 	}

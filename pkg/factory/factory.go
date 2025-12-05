@@ -128,7 +128,14 @@ var globalProviderFactory *providers.ProviderFactory
 // init initializes the global provider factory
 func init() {
 	globalProviderFactory = providers.NewProviderFactory()
-	// Load provider configs from the embedded configs directory
+
+	// First, try to load embedded configs (always available)
+	if err := globalProviderFactory.LoadEmbeddedConfigs(); err != nil {
+		// Log error but continue with fallback methods
+		fmt.Printf("Warning: Failed to load embedded provider configs: %v\n", err)
+	}
+
+	// Then try to load from filesystem (allows for customization/overriding)
 	if err := globalProviderFactory.LoadConfigsFromDirectory("pkg/agent_providers/configs"); err != nil {
 		// Try to load from the binary's location (for installed versions)
 		if err := globalProviderFactory.LoadConfigsFromDirectory("configs"); err != nil {

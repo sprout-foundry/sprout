@@ -1,0 +1,243 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import './LogsView.css';
+
+interface LogEntry {
+  id: string;
+  type: string;
+  timestamp: Date;
+  data: any;
+  level: 'info' | 'warning' | 'error' | 'success';
+  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
+}
+
+interface LogsViewProps {
+  logs: LogEntry[];
+  onClearLogs: () => void;
+}
+
+const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState({
+    level: 'all' as 'all' | 'info' | 'warning' | 'error' | 'success',
+    category: 'all' as 'all' | 'query' | 'tool' | 'file' | 'system' | 'stream',
+    searchTerm: ''
+  });
+  const [autoScroll, setAutoScroll] = useState(true);
+  const logsEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new logs arrive
+  useEffect(() => {
+    if (autoScroll) {
+      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, autoScroll]);
+
+  // Filter logs based on current filter settings
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      // Level filter
+      if (filter.level !== 'all' && log.level !== filter.level) {
+        return false;
+      }
+      
+      // Category filter
+      if (filter.category !== 'all' && log.category !== filter.category) {
+        return false;
+      }
+      
+      // Search filter
+      if (filter.searchTerm) {
+        const searchLower = filter.searchTerm.toLowerCase();
+        return (
+          log.type.toLowerCase().includes(searchLower) ||
+          JSON.stringify(log.data).toLowerCase().includes(searchLower) ||
+          log.category.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      return true;
+    });
+  }, [logs, filter]);
+
+  const toggleLogExpansion = (logId: string) => {
+    setExpandedLogs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(logId)) {
+        newSet.delete(logId);
+      } else {
+        newSet.add(logId);
+      }
+      return newSet;
+    });
+  };
+
+  const getLevelIcon = (level: string) => {
+    switch (level) {
+      case 'success': return '✅';
+      case 'error': return '❌';
+      case 'warning': return '⚠️';
+      case 'info': return 'ℹ️';
+      default: return '📝';
+    }
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'query': return '🚀';
+      case 'tool': return '🔧';
+      case 'file': return '📝';
+      case 'system': return '⚙️';
+      case 'stream': return '📡';
+      default: return '📋';
+    }
+  };
+
+  const formatTimestamp = (timestamp: Date) => {
+    return timestamp.toLocaleTimeString('en-US', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }) + '.' + timestamp.getMilliseconds().toString().padStart(3, '0');
+  };
+
+  const formatLogData = (data: any) => {
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch {
+      return String(data);
+    }
+  };
+
+  const getLogSummary = (log: LogEntry) => {
+    switch (log.type) {
+      case 'query_started':
+        return `Query: ${log.data.query?.substring(0, 50)}${log.data.query?.length > 50 ? '...' : ''}`;
+      case 'tool_execution':
+        return `Tool: ${log.data.tool} - ${log.data.status}`;
+      case 'file_changed':
+        return `File: ${log.data.path}`;
+      case 'stream_chunk':
+        return `Stream: ${log.data.chunk?.substring(0, 50)}${log.data.chunk?.length > 50 ? '...' : ''}`;
+      case 'error':
+        return `Error: ${log.data.message}`;
+      case 'connection_status':
+        return `Connection: ${log.data.connected ? 'Connected' : 'Disconnected'}`;
+      default:
+        return `${log.type}: ${JSON.stringify(log.data).substring(0, 50)}...`;
+    }
+  };
+
+  return (
+    <div className="logs-view">
+      <div className="logs-header">
+        <h2>📋 Event Logs</h2>
+        <div className="logs-controls">
+          <div className="filter-controls">
+            <select
+              value={filter.level}
+              onChange={(e) => setFilter(prev => ({ ...prev, level: e.target.value as any }))}
+              className="filter-select"
+            >
+              <option value="all">All Levels</option>
+              <option value="info">ℹ️ Info</option>
+              <option value="success">✅ Success</option>
+              <option value="warning">⚠️ Warning</option>
+              <option value="error">❌ Error</option>
+            </select>
+
+            <select
+              value={filter.category}
+              onChange={(e) => setFilter(prev => ({ ...prev, category: e.target.value as any }))}
+              className="filter-select"
+            >
+              <option value="all">All Categories</option>
+              <option value="query">🚀 Query</option>
+              <option value="tool">🔧 Tool</option>
+              <option value="file">📝 File</option>
+              <option value="system">⚙️ System</option>
+              <option value="stream">📡 Stream</option>
+            </select>
+
+            <input
+              type="text"
+              placeholder="Search logs..."
+              value={filter.searchTerm}
+              onChange={(e) => setFilter(prev => ({ ...prev, searchTerm: e.target.value }))}
+              className="search-input"
+            />
+          </div>
+
+          <div className="action-controls">
+            <button
+              onClick={() => setAutoScroll(!autoScroll)}
+              className={`control-btn ${autoScroll ? 'active' : ''}`}
+              title={autoScroll ? 'Auto-scroll enabled' : 'Auto-scroll disabled'}
+            >
+              {autoScroll ? '📍' : '📌'}
+            </button>
+            
+            <button
+              onClick={onClearLogs}
+              className="control-btn clear-btn"
+              title="Clear all logs"
+            >
+              🗑️ Clear
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="logs-stats">
+        <span>Total: {logs.length}</span>
+        <span>Filtered: {filteredLogs.length}</span>
+        <span>Auto-scroll: {autoScroll ? 'On' : 'Off'}</span>
+      </div>
+
+      <div className="logs-container">
+        {filteredLogs.length === 0 ? (
+          <div className="no-logs">
+            {logs.length === 0 ? 'No logs yet. Start a query to see events!' : 'No logs match current filters.'}
+          </div>
+        ) : (
+          filteredLogs.map((log) => (
+            <div
+              key={log.id}
+              className={`log-entry log-${log.level} log-${log.category}`}
+              onClick={() => toggleLogExpansion(log.id)}
+            >
+              <div className="log-summary">
+                <span className="log-time">{formatTimestamp(log.timestamp)}</span>
+                <span className="log-icons">
+                  {getLevelIcon(log.level)} {getCategoryIcon(log.category)}
+                </span>
+                <span className="log-type">{log.type}</span>
+                <span className="log-message">{getLogSummary(log)}</span>
+                <span className="log-expand">
+                  {expandedLogs.has(log.id) ? '▼' : '▶'}
+                </span>
+              </div>
+              
+              {expandedLogs.has(log.id) && (
+                <div className="log-details">
+                  <div className="log-meta">
+                    <span><strong>ID:</strong> {log.id}</span>
+                    <span><strong>Level:</strong> {log.level}</span>
+                    <span><strong>Category:</strong> {log.category}</span>
+                    <span><strong>Type:</strong> {log.type}</span>
+                  </div>
+                  <div className="log-data">
+                    <pre>{formatLogData(log.data)}</pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+        <div ref={logsEndRef} />
+      </div>
+    </div>
+  );
+};
+
+export default LogsView;

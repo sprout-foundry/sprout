@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // ErrorSeverity represents the severity level of an error
@@ -252,7 +253,7 @@ func captureStackTrace() string {
 
 // GetCurrentTimestamp returns the current timestamp
 func GetCurrentTimestamp() int64 {
-	return 0 // Placeholder - would use time.Now().Unix() in real implementation
+	return time.Now().Unix()
 }
 
 // Error handling utilities

@@ -1017,6 +1017,46 @@ func (a *Agent) GetLastTPS() float64 {
 	return 0.0
 }
 
+// GetPromptTokens returns the total prompt tokens used
+func (a *Agent) GetPromptTokens() int {
+	return a.promptTokens
+}
+
+// GetCompletionTokens returns the total completion tokens used
+func (a *Agent) GetCompletionTokens() int {
+	return a.completionTokens
+}
+
+// GetCachedTokens returns the total cached/reused tokens
+func (a *Agent) GetCachedTokens() int {
+	return a.cachedTokens
+}
+
+// GetCachedCostSavings returns the cost savings from cached tokens
+func (a *Agent) GetCachedCostSavings() float64 {
+	return a.cachedCostSavings
+}
+
+// GetContextWarningIssued returns whether a context warning has been issued
+func (a *Agent) GetContextWarningIssued() bool {
+	return a.contextWarningIssued
+}
+
+// GetMaxIterations returns the maximum iterations allowed
+func (a *Agent) GetMaxIterations() int {
+	return a.maxIterations
+}
+
+// IsStreamingEnabled returns whether streaming is enabled
+func (a *Agent) IsStreamingEnabled() bool {
+	return a.streamingEnabled
+}
+
+// IsDebugMode returns whether debug mode is enabled
+func (a *Agent) IsDebugMode() bool {
+	return a.debug
+}
+
 // GetCurrentTPS returns the current TPS value (alias for GetLastTPS)
 func (a *Agent) GetCurrentTPS() float64 {
 	return a.GetLastTPS()

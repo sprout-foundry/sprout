@@ -1,11 +1,39 @@
 interface StatsResponse {
+  // Basic info
   provider: string;
   model: string;
+  session_id: string;
   query_count: number;
   uptime: string;
-  total_tokens: number;
-  total_cost: number;
   connections: number;
+
+  // Token usage
+  total_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cached_tokens: number;
+  cache_efficiency: number;
+
+  // Context usage
+  current_context_tokens: number;
+  max_context_tokens: number;
+  context_usage_percent: number;
+  context_warning_issued: boolean;
+
+  // Cost tracking
+  total_cost: number;
+  cached_cost_savings: number;
+
+  // Performance metrics
+  last_tps: number;
+
+  // Iteration tracking
+  current_iteration: number;
+  max_iterations: number;
+
+  // Configuration
+  streaming_enabled: boolean;
+  debug_mode: boolean;
 }
 
 interface QueryRequest {
@@ -69,6 +97,40 @@ class ApiService {
       return response.ok;
     } catch {
       return false;
+    }
+  }
+
+  // Get terminal history
+  async getTerminalHistory(): Promise<{ history: string[]; count: number }> {
+    try {
+      const response = await fetch('/api/terminal/history');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get terminal history:', error);
+      throw error;
+    }
+  }
+
+  // Add command to terminal history
+  async addTerminalHistory(command: string): Promise<{ message: string; command: string }> {
+    try {
+      const response = await fetch('/api/terminal/history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ command }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to add terminal history:', error);
+      throw error;
     }
   }
 }

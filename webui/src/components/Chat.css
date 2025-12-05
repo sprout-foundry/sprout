@@ -3,6 +3,9 @@
   padding: 20px 24px;
   border-bottom: 1px solid #4a4a5a;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .chat-header h2 {
@@ -11,6 +14,27 @@
   font-size: 22px;
   font-weight: 600;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #a0a0ff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.status-dot.processing {
+  background: #6366f1;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
 }
 
 .chat-container {
@@ -501,5 +525,232 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Tool Executions */
+.tool-executions {
+  margin: 16px 0;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.tool-executions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.tool-executions-header h4 {
+  margin: 0;
+  color: #a0a0ff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tool-count {
+  background: rgba(99, 102, 241, 0.2);
+  color: #a0a0ff;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tool-execution {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+.tool-execution:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.tool-execution.tool-started {
+  border-left: 4px solid #6366f1;
+}
+
+.tool-execution.tool-running {
+  border-left: 4px solid #f59e0b;
+}
+
+.tool-execution.tool-completed {
+  border-left: 4px solid #10b981;
+}
+
+.tool-execution.tool-error {
+  border-left: 4px solid #ef4444;
+}
+
+.tool-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  font-size: 13px;
+}
+
+.tool-icon {
+  font-size: 16px;
+  min-width: 20px;
+}
+
+.tool-name {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 11px;
+  color: #e0e0e0;
+  min-width: 80px;
+  text-align: center;
+}
+
+.tool-status {
+  font-size: 14px;
+  min-width: 20px;
+}
+
+.tool-duration {
+  color: #888;
+  font-size: 11px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  margin-left: auto;
+}
+
+.tool-expand {
+  color: #666;
+  font-size: 12px;
+  transition: transform 0.2s ease;
+  margin-left: 8px;
+}
+
+.tool-message {
+  padding: 0 12px 8px;
+  color: #ccc;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.tool-details {
+  background: rgba(0, 0, 0, 0.3);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.tool-details pre {
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #e0e0e0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Query Progress */
+.query-progress {
+  margin: 16px 0;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.progress-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+}
+
+.progress-icon {
+  font-size: 16px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.progress-text {
+  color: #a0a0ff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.progress-details {
+  padding: 8px 12px 0;
+  color: #ccc;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Responsive adjustments for tool executions */
+@media (max-width: 768px) {
+  .tool-summary {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .tool-name {
+    min-width: auto;
+    font-size: 10px;
+  }
+
+  .tool-duration {
+    margin-left: 0;
+    width: 100%;
+    text-align: right;
+  }
+
+  .tool-executions-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tool-summary {
+    padding: 8px;
+  }
+
+  .tool-icon {
+    font-size: 14px;
+  }
+
+  .tool-name {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+
+  .tool-status {
+    font-size: 12px;
+  }
+
+  .tool-duration {
+    font-size: 10px;
+  }
+
+  .tool-message {
+    padding: 0 8px 6px;
+    font-size: 11px;
+  }
+
+  .tool-details {
+    padding: 8px;
+  }
+
+  .tool-details pre {
+    font-size: 10px;
   }
 }

@@ -22,6 +22,15 @@ const (
 	asyncOutputBufferSize    = 256
 )
 
+// PauseState tracks the state when a task is paused for clarification
+type PauseState struct {
+	IsPaused       bool      `json:"is_paused"`
+	PausedAt       time.Time `json:"paused_at"`
+	OriginalTask   string    `json:"original_task"`
+	Clarifications []string  `json:"clarifications"`
+	MessagesBefore []api.Message `json:"messages_before"`
+}
+
 type Agent struct {
 	client                api.ClientInterface
 	messages              []api.Message
@@ -71,6 +80,10 @@ type Agent struct {
 	asyncOutput         chan string        // Buffered channel for async PrintLine calls
 	asyncOutputOnce     sync.Once          // Ensure async worker initializes once
 	asyncBufferSize     int                // Optional override for async output buffer (tests)
+
+	// Pause/resume state management
+	pauseState           *PauseState        // Current pause state and context
+	pauseMutex           sync.Mutex         // Mutex for pause state operations
 
 	// Feature flags
 	falseStopDetectionEnabled bool
@@ -457,6 +470,10 @@ func (a *Agent) SetInterruptHandler(ch chan struct{}) {
 // EnableEscMonitoring starts monitoring for Esc key using context cancellation
 func (a *Agent) EnableEscMonitoring() {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		// Still enable basic interrupt handling even in non-terminal mode
+		if a.interruptCancel == nil {
+			a.interruptCtx, a.interruptCancel = context.WithCancel(context.Background())
+		}
 		return
 	}
 
@@ -467,6 +484,10 @@ func (a *Agent) EnableEscMonitoring() {
 	if a.ui != nil && a.ui.IsInteractive() {
 		if a.debug {
 			a.debugLog("DEBUG: Skipping ESC monitoring (interactive UI handles interrupts)\n")
+		}
+		// Still ensure interrupt context exists for other interrupt sources
+		if a.interruptCancel == nil {
+			a.interruptCtx, a.interruptCancel = context.WithCancel(context.Background())
 		}
 		return
 	}
@@ -533,6 +554,13 @@ func (a *Agent) monitorEscKey(ctx context.Context) {
 	}
 }
 
+// TriggerInterrupt manually triggers an interrupt for testing purposes
+func (a *Agent) TriggerInterrupt() {
+	if a.interruptCancel != nil {
+		a.interruptCancel()
+	}
+}
+
 // CheckForInterrupt checks if an interrupt was requested
 func (a *Agent) CheckForInterrupt() bool {
 	select {
@@ -544,26 +572,109 @@ func (a *Agent) CheckForInterrupt() bool {
 	}
 }
 
-// HandleInterrupt processes the interrupt request
+// HandleInterrupt processes the interrupt request with pause/resume functionality
 func (a *Agent) HandleInterrupt() string {
 	if !a.CheckForInterrupt() {
 		return ""
 	}
 
-	// Note: External interrupt channels are deprecated - interrupt handling is now context-based
+	a.pauseMutex.Lock()
+	defer a.pauseMutex.Unlock()
 
-	// Otherwise prompt for input
-	fmt.Println("\n🛑 Processing interrupted. Enter new instructions (or press Enter to stop):")
-
-	// Read user input
-	var input string
-	fmt.Scanln(&input)
-
-	if strings.TrimSpace(input) == "" {
-		return "STOP"
+	// Initialize pause state if needed
+	if a.pauseState == nil {
+		a.pauseState = &PauseState{}
 	}
 
-	return input
+	// Set pause state
+	a.pauseState.IsPaused = true
+	a.pauseState.PausedAt = time.Now()
+	
+	// Store current messages for context restoration
+	a.pauseState.MessagesBefore = make([]api.Message, len(a.messages))
+	copy(a.pauseState.MessagesBefore, a.messages)
+
+	// Enhanced pause/resume interface
+	fmt.Println("\n⏸️  Task interrupted! Choose an option:")
+	fmt.Println("1. Add clarification and continue")
+	fmt.Println("2. Stop current task")
+	fmt.Println("3. Resume without changes")
+	fmt.Println("4. Continue (default)")
+	fmt.Print("Enter choice (1-4, or just press Enter for #4): ")
+
+	// Disable ESC monitoring temporarily to avoid conflicts during input
+	a.DisableEscMonitoring()
+	
+	// Read input more reliably
+	var choice string
+	choiceBytes := make([]byte, 1024)
+	n, err := os.Stdin.Read(choiceBytes)
+	if err != nil {
+		fmt.Printf("Error reading input: %v\n", err)
+		choice = "4" // Default to continue
+	} else {
+		choice = strings.TrimSpace(string(choiceBytes[:n]))
+	}
+	
+	// Re-enable ESC monitoring
+	a.EnableEscMonitoring()
+
+	switch strings.TrimSpace(choice) {
+	case "1":
+		fmt.Print("Enter clarification: ")
+		var clarification string
+		clarificationBytes := make([]byte, 4096)
+		n, err := os.Stdin.Read(clarificationBytes)
+		if err != nil {
+			fmt.Printf("Error reading clarification: %v\n", err)
+		} else {
+			clarification = strings.TrimSpace(string(clarificationBytes[:n]))
+		}
+		
+		if strings.TrimSpace(clarification) != "" {
+			// Add clarification to pause state
+			a.pauseState.Clarifications = append(a.pauseState.Clarifications, clarification)
+			
+			// Add clarification as a system message for context
+			clarificationMsg := fmt.Sprintf("USER CLARIFICATION DURING PAUSE: %s", clarification)
+			a.messages = append(a.messages, api.Message{
+				Role:    "user", 
+				Content: clarificationMsg,
+			})
+			
+			// Reset interrupt and continue
+			a.ClearInterrupt()
+			a.pauseState.IsPaused = false
+			return "CONTINUE_WITH_CLARIFICATION"
+		}
+		// Fall through to continue if no clarification
+		
+	case "2":
+		a.pauseState.IsPaused = false
+		return "STOP"
+		
+	case "3":
+		// Just resume without changes
+		a.ClearInterrupt()
+		a.pauseState.IsPaused = false
+		return "CONTINUE"
+		
+	case "4", "":
+		// Default case - continue
+		fmt.Println("Continuing...")
+		a.ClearInterrupt()
+		a.pauseState.IsPaused = false
+		return "CONTINUE"
+		
+	default:
+		fmt.Printf("Invalid choice '%s', continuing...\n", choice)
+		a.ClearInterrupt()
+		a.pauseState.IsPaused = false
+		return "CONTINUE"
+	}
+	
+	// This should never be reached, but add for safety
+	return "CONTINUE"
 }
 
 // ClearInterrupt resets the interrupt state

@@ -1,17 +1,11 @@
 package agent
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"regexp"
 	"strings"
 	"time"
-	"unicode"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 // ConversationHandler manages the high-level conversation flow
@@ -32,30 +26,6 @@ type ConversationHandler struct {
 	turnHistory                []TurnEvaluation
 }
 
-// TokenUsage captures key token metrics for each turn
-type TokenUsage struct {
-	PromptTokens     int
-	CompletionTokens int
-	TotalTokens      int
-	EstimatedCost    float64
-}
-
-// TurnEvaluation captures the inputs, outputs, and tool activity for each iteration
-type TurnEvaluation struct {
-	Iteration         int
-	Timestamp         time.Time
-	UserInput         string
-	AssistantContent  string
-	ToolCalls         []api.ToolCall
-	ToolResults       []api.Message
-	ToolLogs          []string
-	TokenUsage        TokenUsage
-	CompletionReached bool
-	FinishReason      string
-	ReasoningSnippet  string
-	GuardrailTrigger  string
-}
-
 // NewConversationHandler creates a new conversation handler
 func NewConversationHandler(agent *Agent) *ConversationHandler {
 	now := time.Now()
@@ -68,7 +38,7 @@ func NewConversationHandler(agent *Agent) *ConversationHandler {
 		fallbackParser:        NewFallbackParser(agent),
 		conversationStartTime: now,
 		lastActivityTime:      now,
-		timeoutDuration:       7 * time.Minute, // 5-minute timeout
+		timeoutDuration:       7 * time.Minute, // 7-minute timeout
 	}
 }
 
@@ -213,13 +183,40 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	return ch.finalizeConversation()
 }
 
-// sendMessage handles the API communication with retry logic
-func (ch *ConversationHandler) sendMessage() (*api.ChatResponse, error) {
-	messages := ch.prepareMessages()
-	tools := ch.prepareTools()
-	reasoning := ch.determineReasoningEffort()
+// checkForInterrupt checks for user interrupts or timeouts
+func (ch *ConversationHandler) checkForInterrupt() bool {
+	// Check for context cancellation (new interrupt system) with blocking select
+	select {
+	case <-ch.agent.interruptCtx.Done():
+		ch.agent.debugLog("⏹️ Context cancelled, interrupt requested\n")
+		return true
+	case input := <-ch.agent.GetInputInjectionContext():
+		// Input injection detected - inject as new user message
+		ch.agent.debugLog("💬 Input injection detected: %s\n", input)
+		ch.agent.messages = append(ch.agent.messages, api.Message{
+			Role:    "user",
+			Content: input,
+		})
+		return false // Continue processing with new input
+	default:
+		// Check for timeout (5 minutes of inactivity)
+		if time.Since(ch.lastActivityTime) > ch.timeoutDuration {
+			ch.agent.debugLog("⏰ Conversation timeout after %v of inactivity\n", ch.timeoutDuration)
+			ch.agent.interruptCancel() // Cancel context to trigger interrupt
+			return true
+		}
+		return false
+	}
+}
 
-	return ch.apiClient.SendWithRetry(messages, tools, reasoning)
+// lastUserMessage gets the last user message from the conversation
+func (ch *ConversationHandler) lastUserMessage() (string, bool) {
+	for i := len(ch.agent.messages) - 1; i >= 0; i-- {
+		if ch.agent.messages[i].Role == "user" {
+			return ch.agent.messages[i].Content, true
+		}
+	}
+	return "", false
 }
 
 // processResponse handles the LLM response including tool execution
@@ -262,6 +259,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	reasoningContent := choice.Message.ReasoningContent
 	turn.ReasoningSnippet = abbreviate(reasoningContent, 280)
+
 	// Ensure tool calls always carry IDs so downstream sanitization can keep results
 	if len(choice.Message.ToolCalls) > 0 {
 		for i := range choice.Message.ToolCalls {
@@ -331,8 +329,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	ch.agent.messages = append(ch.agent.messages, assistantMsg)
 
-	// Update token tracking
-	ch.agent.updateTokenUsage(resp.Usage)
+	// Token tracking is handled by the agent struct fields
 
 	// Execute tools if present
 	if len(choice.Message.ToolCalls) > 0 {
@@ -361,69 +358,8 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		turn.ToolLogs = append(turn.ToolLogs, toolLogs...)
 		turn.ToolResults = append(turn.ToolResults, toolResults...)
 
-		// Guidance for malformed tool calls is temporarily disabled
-		/*
-			if ch.shouldAddToolCallGuidance(toolResults) {
-				guidance := ch.buildToolCallGuidance()
-				ch.enqueueTransientMessage(api.Message{Role: "system", Content: guidance})
-				ch.agent.toolCallGuidanceAdded = true
-				ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
-			}
-		*/
 		return ch.finalizeTurn(turn, false) // Continue conversation
 	}
-
-	/* temporarily disable fallback parser heuristics so we stay focused on explicit tool calls
-	if len(choice.Message.ToolCalls) == 0 && ch.fallbackParser.ShouldUseFallback(contentUsed, false) {
-		if result := ch.fallbackParser.Parse(contentUsed); result != nil && len(result.ToolCalls) > 0 {
-			ch.agent.debugLog("🔄 FallbackParser: Found %d tool calls in content\n", len(result.ToolCalls))
-
-			// Update the message with the parsed tool calls and cleaned content
-			if len(ch.agent.messages) > 0 {
-				last := &ch.agent.messages[len(ch.agent.messages)-1]
-				last.ToolCalls = result.ToolCalls
-				last.Content = strings.TrimSpace(result.CleanedContent)
-			}
-
-			// Log parsed tool calls
-			for _, tc := range result.ToolCalls {
-				ch.agent.LogToolCall(tc, "fallback_parsed")
-			}
-
-			displayContent := strings.TrimSpace(result.CleanedContent)
-			if displayContent == "" {
-				notice := "ℹ️ Fallback parser detected tool-only assistant content; executing parsed tool call."
-				ch.agent.safePrint("%s\n", notice)
-				if !ch.agent.streamingEnabled {
-					displayContent = "Executing tool call parsed from assistant content."
-				}
-			}
-
-			// Execute the parsed tool calls
-			if displayContent != "" {
-				ch.displayIntermediateResponse(displayContent)
-			} else if ch.agent.streamingEnabled {
-				ch.agent.safePrint("\n")
-			}
-			toolResults := ch.toolExecutor.ExecuteTools(result.ToolCalls)
-
-			// Add tool results immediately after the assistant message
-			ch.agent.messages = append(ch.agent.messages, toolResults...)
-			ch.agent.debugLog("✔️ Added %d fallback tool results to conversation\n", len(toolResults))
-			ch.missingCompletionReminders = 0
-
-			// Add guidance about proper tool call formatting
-			if !ch.agent.toolCallGuidanceAdded {
-				guidance := ch.buildToolCallGuidance()
-				ch.enqueueTransientMessage(api.Message{Role: "system", Content: guidance})
-				ch.agent.toolCallGuidanceAdded = true
-				ch.agent.debugLog("📝 Added system guidance for proper tool call formatting\n")
-			}
-
-			return false // Continue conversation
-		}
-	}
-	*/
 
 	// If no tool_calls came back but the content suggests attempted tool usage,
 	// inject one-time guidance and try again.
@@ -547,380 +483,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	return ch.finalizeTurn(turn, false)
 }
 
-// Helper methods...
-// shouldAddToolCallGuidance inspects tool results for common malformed tool call errors
-/* temporarily disable support messaging for tool_call formatting; reintroduce when help text is needed
-func (ch *ConversationHandler) shouldAddToolCallGuidance(results []api.Message) bool {
-	if ch.agent.toolCallGuidanceAdded {
-		return false
-	}
-	for _, r := range results {
-		if r.Role != "tool" {
-			continue
-		}
-		c := strings.ToLower(r.Content)
-		if strings.Contains(c, "error parsing arguments") ||
-			strings.Contains(c, "failed to parse tool arguments") ||
-			strings.Contains(c, "unknown tool") ||
-			strings.Contains(c, "invalid mcp tool name format") ||
-			strings.Contains(c, "parameter validation failed") ||
-			(strings.Contains(c, "tool ") && strings.Contains(c, " not found")) {
-			return true
-		}
-	}
-	return false
-}
-
-// buildToolCallGuidance returns a concise system message instructing correct tool call usage
-func (ch *ConversationHandler) buildToolCallGuidance() string {
-	return "When you need to use tools, emit structured function calls only (no plain text instructions about tools).\n" +
-		"Rules:\n" +
-		"- Use the exact tool name from the tools list.\n" +
-		"- Arguments must be valid JSON matching the schema keys.\n" +
-		"- Do not include extra fields, comments, or trailing commas.\n" +
-		"- Include all required parameters.\n\n" +
-		"Examples:\n" +
-		"1) read_file\n" +
-		"   name: read_file\n" +
-		"   arguments: {\"file_path\": \"pkg/agent/agent.go\"}\n\n" +
-		"2) shell_command\n" +
-		"   name: shell_command\n" +
-		"   arguments: {\"command\": \"go test ./... -v\"}\n\n" +
-		"3) edit_file\n" +
-		"   name: edit_file\n" +
-		"   arguments: {\"file_path\": \"README.md\", \"old_string\": \"old\", \"new_string\": \"new\"}\n\n" +
-		"Notes:\n" +
-		"- Do not embed a 'tool_calls' JSON object in your message content.\n" +
-		"- If you need multiple tools, emit multiple function calls in order, each with valid JSON arguments."
-}
-*/
-func (ch *ConversationHandler) checkForInterrupt() bool {
-	// Check for context cancellation (new interrupt system) with blocking select
-	select {
-	case <-ch.agent.interruptCtx.Done():
-		ch.agent.debugLog("⏹️ Context cancelled, interrupt requested\n")
-		return true
-	case input := <-ch.agent.GetInputInjectionContext():
-		// Input injection detected - inject as new user message
-		ch.agent.debugLog("💬 Input injection detected: %s\n", input)
-		ch.agent.messages = append(ch.agent.messages, api.Message{
-			Role:    "user",
-			Content: input,
-		})
-		return false // Continue processing with new input
-	default:
-		// Check for timeout (5 minutes of inactivity)
-		if time.Since(ch.lastActivityTime) > ch.timeoutDuration {
-			ch.agent.debugLog("⏰ Conversation timeout after %v of inactivity\n", ch.timeoutDuration)
-			ch.agent.interruptCancel() // Cancel context to trigger interrupt
-			return true
-		}
-		return false
-	}
-}
-
-func (ch *ConversationHandler) lastUserMessage() (string, bool) {
-	for i := len(ch.agent.messages) - 1; i >= 0; i-- {
-		if ch.agent.messages[i].Role == "user" {
-			return ch.agent.messages[i].Content, true
-		}
-	}
-	return "", false
-}
-
-func (ch *ConversationHandler) prepareMessages() []api.Message {
-	var optimizedMessages []api.Message
-
-	// Use conversation optimizer if enabled
-	if ch.agent.optimizer != nil && ch.agent.optimizer.IsEnabled() {
-		optimizedMessages = ch.agent.optimizer.OptimizeConversation(ch.agent.messages)
-	} else {
-		optimizedMessages = ch.agent.messages
-	}
-
-	// Belt-and-suspenders: ensure we don't carry a duplicate system prompt in history.
-	// If any system message matches the current systemPrompt verbatim, drop it from history here
-	// because we always prepend the active systemPrompt below.
-	filtered := make([]api.Message, 0, len(optimizedMessages))
-	for _, m := range optimizedMessages {
-		if m.Role == "system" && strings.TrimSpace(m.Content) == strings.TrimSpace(ch.agent.systemPrompt) {
-			continue
-		}
-		filtered = append(filtered, m)
-	}
-	optimizedMessages = filtered
-
-	// Always include system prompt at the beginning
-	allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
-	allMessages = append(allMessages, optimizedMessages...)
-
-	// Check context limits and apply pruning if needed
-	currentTokens := ch.estimateTokens(allMessages)
-	if ch.agent.maxContextTokens > 0 {
-		// Create pruner if needed and check if we should prune
-		if ch.agent.conversationPruner == nil {
-			ch.agent.conversationPruner = NewConversationPruner(ch.agent.debug)
-		}
-
-		if ch.agent.conversationPruner.ShouldPrune(currentTokens, ch.agent.maxContextTokens, ch.agent.GetProvider()) {
-			if ch.agent.debug {
-				contextUsage := float64(currentTokens) / float64(ch.agent.maxContextTokens)
-				ch.agent.PrintLineAsync(fmt.Sprintf("🔄 Context pruning triggered: %d/%d tokens (%.1f%%)",
-					currentTokens, ch.agent.maxContextTokens, contextUsage*100))
-			}
-
-			// Apply pruning to optimized messages (excluding system prompt)
-			prunedMessages := ch.agent.conversationPruner.PruneConversation(optimizedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider())
-
-			// Rebuild with system prompt
-			allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
-			allMessages = append(allMessages, prunedMessages...)
-			// Persist pruned history so future iterations don't re-trigger on stale counts
-			ch.agent.messages = prunedMessages
-
-			if ch.agent.debug {
-				newTokens := ch.estimateTokens(allMessages)
-				ch.agent.PrintLineAsync(fmt.Sprintf("✅ Context after pruning: %d tokens (%.1f%%)",
-					newTokens, float64(newTokens)/float64(ch.agent.maxContextTokens)*100))
-			}
-		}
-	}
-
-	allMessages = ch.appendTransientMessages(allMessages)
-
-	allMessages = ch.sanitizeToolMessages(allMessages)
-
-	return allMessages
-}
-
-func (ch *ConversationHandler) prepareTools() []api.Tool {
-	return ch.agent.getOptimizedToolDefinitions(ch.agent.messages)
-}
-
-func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []api.Message {
-	if len(messages) == 0 {
-		return messages
-	}
-
-	sanitized := make([]api.Message, 0, len(messages))
-	seenToolCalls := make(map[string]struct{})
-
-	for _, msg := range messages {
-		switch msg.Role {
-		case "assistant":
-			sanitized = append(sanitized, msg)
-			if len(msg.ToolCalls) > 0 {
-				for _, tc := range msg.ToolCalls {
-					if tc.ID != "" {
-						seenToolCalls[tc.ID] = struct{}{}
-					}
-				}
-			}
-		case "tool":
-			if msg.ToolCallId == "" {
-				ch.logDroppedToolMessage("missing tool_call_id", msg)
-				continue
-			}
-
-			if _, ok := seenToolCalls[msg.ToolCallId]; ok {
-				sanitized = append(sanitized, msg)
-				delete(seenToolCalls, msg.ToolCallId)
-			} else {
-				ch.logDroppedToolMessage(fmt.Sprintf("no matching assistant for %s", msg.ToolCallId), msg)
-			}
-		default:
-			sanitized = append(sanitized, msg)
-		}
-	}
-
-	return sanitized
-}
-
-func (ch *ConversationHandler) enqueueTransientMessage(msg api.Message) {
-	ch.transientMessages = append(ch.transientMessages, msg)
-}
-
-func (ch *ConversationHandler) appendTransientMessages(messages []api.Message) []api.Message {
-	if len(ch.transientMessages) == 0 {
-		return messages
-	}
-	messages = append(messages, ch.transientMessages...)
-	ch.transientMessages = nil
-	return messages
-}
-
-func (ch *ConversationHandler) logDroppedToolMessage(reason string, msg api.Message) {
-	if ch.agent == nil || !ch.agent.debug {
-		return
-	}
-
-	snippet := strings.TrimSpace(msg.Content)
-	if len(snippet) > 80 {
-		snippet = snippet[:77] + "..."
-	}
-
-	ch.agent.debugLog("⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
-}
-
-func (ch *ConversationHandler) determineReasoningEffort() string {
-	return ch.agent.determineReasoningEffort(ch.agent.messages)
-}
-
-func (ch *ConversationHandler) displayIntermediateResponse(content string) {
-	content = strings.TrimSpace(content)
-	if len(content) > 0 {
-		if ch.agent.streamingEnabled {
-			// During streaming, content has already been displayed in real-time
-			// But we need to ensure proper spacing and formatting after tool calls
-			// Add a newline to separate from tool execution output
-			ch.agent.safePrint("\n")
-		} else {
-			// Display thinking message for non-streaming mode
-			// In CI mode, don't use cursor control sequences
-			if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-				ch.agent.safePrint("💭 %s\n", content)
-			} else {
-				ch.agent.safePrint("\r\033[K💭 %s\n", content)
-			}
-		}
-	}
-}
-
-func (ch *ConversationHandler) displayFinalResponse(content string) {
-	if !ch.agent.streamingEnabled {
-		ch.agent.safePrint("%s\n", content)
-	}
-}
-
-func (ch *ConversationHandler) handleIncompleteResponse() {
-	ch.enqueueTransientMessage(api.Message{
-		Role:    "user",
-		Content: "Please continue with your response. The previous response appears incomplete.",
-	})
-}
-
-func (ch *ConversationHandler) handleMissingCompletionSignal() {
-	// Allow multiple reminders but with increasing intervals to avoid infinite loops
-	if ch.missingCompletionReminders >= 3 {
-		// After 3 reminders, assume the agent is stuck and provide stronger guidance
-		ch.agent.debugLog("⚠️ Multiple completion reminders sent, providing stronger guidance\n")
-		strongReminder := "You have not provided [[TASK_COMPLETE]] after multiple reminders. Please:\n" +
-			"1. If your task is COMPLETE, respond exactly with: [[TASK_COMPLETE]]\n" +
-			"2. If your task is NOT complete, take a specific ACTION (use tools) or provide a concrete RESULT\n" +
-			"3. Do not provide explanations or plans - take action or confirm completion."
-		ch.enqueueTransientMessage(api.Message{Role: "user", Content: strongReminder})
-		ch.missingCompletionReminders++
-		return
-	}
-
-	reminder := "Please confirm completion by responding with [[TASK_COMPLETE]] once all requested work is fully done. If you still have steps remaining, continue with the next action."
-	ch.enqueueTransientMessage(api.Message{Role: "user", Content: reminder})
-	ch.missingCompletionReminders++
-	ch.agent.debugLog("🔔 Added reminder requesting explicit [[TASK_COMPLETE]] signal (reminder #%d)\n", ch.missingCompletionReminders)
-}
-
-func (ch *ConversationHandler) flushToolLogsToOutput() []string {
-	logs := ch.agent.drainToolLogs()
-	if len(logs) == 0 {
-		return nil
-	}
-	if ch.agent.streamingEnabled && ch.agent.streamingCallback != nil {
-		for _, log := range logs {
-			ch.agent.streamingCallback(log)
-		}
-	}
-	return logs
-}
-
-func (ch *ConversationHandler) finalizeTurn(turn TurnEvaluation, shouldStop bool) bool {
-	if shouldStop {
-		turn.CompletionReached = true
-	}
-	ch.turnHistory = append(ch.turnHistory, turn)
-	ch.logTurnSummary(turn)
-	ch.appendTurnLogFile(turn)
-	return shouldStop
-}
-
-func (ch *ConversationHandler) shouldLogTurnSummaries() bool {
-	if ch.agent == nil {
-		return false
-	}
-	if ch.agent.debug {
-		return true
-	}
-	return os.Getenv("LEDIT_LOG_TURNS") == "1"
-}
-
-func (ch *ConversationHandler) logTurnSummary(turn TurnEvaluation) {
-	if !ch.shouldLogTurnSummaries() {
-		return
-	}
-	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("\n🔎 Turn %d summary (%s)\n", turn.Iteration, turn.Timestamp.Format("15:04:05")))
-	builder.WriteString(fmt.Sprintf("  User: %s\n", abbreviate(turn.UserInput, 120)))
-	builder.WriteString(fmt.Sprintf("  Assistant: %s\n", abbreviate(turn.AssistantContent, 240)))
-	if turn.ReasoningSnippet != "" {
-		builder.WriteString(fmt.Sprintf("  Reasoning: %s\n", abbreviate(turn.ReasoningSnippet, 240)))
-	}
-	if len(turn.ToolLogs) > 0 {
-		builder.WriteString("  Tool logs:\n")
-		for _, log := range turn.ToolLogs {
-			builder.WriteString(fmt.Sprintf("    %s\n", strings.TrimSpace(log)))
-		}
-	}
-	if len(turn.ToolCalls) > 0 {
-		builder.WriteString(fmt.Sprintf("  Tool calls: %d\n", len(turn.ToolCalls)))
-	}
-	if len(turn.ToolResults) > 0 {
-		builder.WriteString(fmt.Sprintf("  Tool results: %d entries\n", len(turn.ToolResults)))
-	}
-	if turn.FinishReason != "" {
-		builder.WriteString(fmt.Sprintf("  Finish reason: %s\n", turn.FinishReason))
-	}
-	tokens := turn.TokenUsage
-	builder.WriteString(fmt.Sprintf("  Tokens: prompt=%d completion=%d total=%d\n", tokens.PromptTokens, tokens.CompletionTokens, tokens.TotalTokens))
-	if turn.CompletionReached {
-		builder.WriteString("  Completion: reached\n")
-	}
-	if turn.GuardrailTrigger != "" {
-		builder.WriteString(fmt.Sprintf("  Guardrail: %s\n", turn.GuardrailTrigger))
-	}
-	ch.agent.PrintLineAsync(builder.String())
-}
-
-func abbreviate(text string, limit int) string {
-	clean := strings.TrimSpace(text)
-	if len(clean) <= limit || limit <= 0 {
-		return clean
-	}
-	if limit > 1 {
-		return clean[:limit-1] + "…"
-	}
-	return clean[:limit]
-}
-
-func (ch *ConversationHandler) appendTurnLogFile(turn TurnEvaluation) {
-	path := os.Getenv("LEDIT_TURN_LOG_FILE")
-	if path == "" {
-		return
-	}
-	data, err := json.Marshal(turn)
-	if err != nil {
-		ch.agent.debugLog("⚠️ Failed to marshal turn log: %v\n", err)
-		return
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		ch.agent.debugLog("⚠️ Failed to open turn log file %s: %v\n", path, err)
-		return
-	}
-	defer f.Close()
-	if _, err := f.Write(append(data, '\n')); err != nil {
-		ch.agent.debugLog("⚠️ Failed to write turn log: %v\n", err)
-	}
-}
-
+// finalizeConversation finalizes the conversation and returns the last assistant message
 func (ch *ConversationHandler) finalizeConversation() (string, error) {
 	// Commit tracked changes
 	if ch.agent.IsChangeTrackingEnabled() && ch.agent.GetChangeCount() > 0 {
@@ -943,205 +506,4 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 	}
 
 	return "", fmt.Errorf("no assistant response found")
-}
-
-func (ch *ConversationHandler) appendToolExecutionSummary(toolCalls []api.ToolCall) {
-	if len(toolCalls) == 0 {
-		return
-	}
-
-	names := make([]string, 0, len(toolCalls))
-	for _, tc := range toolCalls {
-		names = append(names, tc.Function.Name)
-	}
-
-	summary := fmt.Sprintf("Tool execution complete: %s.", strings.Join(names, ", "))
-	ch.agent.messages = append(ch.agent.messages, api.Message{
-		Role:    "assistant",
-		Content: summary,
-	})
-}
-
-// sanitizeContent removes ANSI escape sequences and other problematic characters from content
-func (ch *ConversationHandler) sanitizeContent(content string) string {
-	// Remove ANSI escape sequences
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[mGKHJABCD]`)
-	cleaned := ansiRegex.ReplaceAllString(content, "")
-
-	// Remove other potential ANSI sequences
-	ansiRegex2 := regexp.MustCompile(`\x1b\([0-9;]*[AB]`)
-	cleaned = ansiRegex2.ReplaceAllString(cleaned, "")
-
-	// Remove any remaining escape characters
-	cleaned = strings.ReplaceAll(cleaned, "\x1b", "")
-
-	if ch.agent.debug && cleaned != content {
-		ch.agent.debugLog("🧹 Sanitized content, removed %d ANSI chars\n", len(content)-len(cleaned))
-	}
-
-	return cleaned
-}
-
-// processImagesInQuery handles image processing in queries
-func (ch *ConversationHandler) processImagesInQuery(query string) (string, error) {
-	// Move image processing logic here
-	return ch.agent.processImagesInQuery(query)
-}
-
-// isBlankIteration checks if an iteration is considered blank (no meaningful content or tool calls)
-func (ch *ConversationHandler) isBlankIteration(content string, toolCalls []api.ToolCall) bool {
-	// Check if there are tool calls - if yes, not blank
-	if len(toolCalls) > 0 {
-		return false
-	}
-
-	// Check if content is empty or contains only whitespace
-	trimmedContent := strings.TrimSpace(content)
-	if len(trimmedContent) == 0 {
-		return true
-	}
-
-	// Check if content is just a very short response that doesn't seem meaningful
-	// Be less aggressive - only consider truly meaningless content as blank
-	if len(trimmedContent) <= 1 {
-		// Only single characters or empty content should be considered blank
-		return true
-	}
-
-	// Check if it's just punctuation or whitespace
-	if len(trimmedContent) <= 3 {
-		for _, char := range trimmedContent {
-			if !unicode.IsPunct(rune(char)) && !unicode.IsSpace(rune(char)) {
-				return false // Contains a non-punctuation character, not blank
-			}
-		}
-		return true // All punctuation/space, considered blank
-	}
-
-	return false
-}
-
-// isRepetitiveContent checks if the content is repetitive or indicates a loop
-func (ch *ConversationHandler) isRepetitiveContent(content string) bool {
-	trimmedContent := strings.TrimSpace(content)
-
-	// Check for common repetitive patterns that indicate the agent is stuck
-	// Focus on specific problematic patterns rather than common analysis phrases
-	repetitivePatterns := []string{
-		"let me check for any simple improvements",
-		"let me look for any obvious issues",
-		"let me check for any simple improvements by looking at the file more carefully",
-		"let me look for any obvious issues:",
-		"let me check for any simple improvements by looking at the file more carefully. let me look for any obvious issues:",
-		"let me look at the agent creation code more carefully:",
-		// Remove overly broad patterns like "let me examine the", "let me analyze the", etc.
-		// These are common legitimate analysis phrases that shouldn't trigger repetition detection
-	}
-
-	lowerContent := strings.ToLower(trimmedContent)
-	for _, pattern := range repetitivePatterns {
-		if strings.Contains(lowerContent, pattern) {
-			ch.agent.debugLog("🔄 Repetitive content pattern detected: %s\n", pattern)
-			return true
-		}
-	}
-
-	// Check if the content is exactly the same as the previous assistant message
-	for idx := len(ch.agent.messages) - 2; idx >= 0; idx-- {
-		prevMsg := ch.agent.messages[idx]
-		if prevMsg.Role != "assistant" {
-			continue
-		}
-		if strings.TrimSpace(prevMsg.Content) == trimmedContent {
-			ch.agent.debugLog("🔄 Exact duplicate content detected\n")
-			return true
-		}
-		break
-	}
-
-	// Check for excessive repetition of the same phrase
-	words := strings.Fields(lowerContent)
-	if len(words) > 10 {
-		// Count word frequency
-		wordCount := make(map[string]int)
-		for _, word := range words {
-			wordCount[word]++
-		}
-
-		// If any word appears more than 30% of the time, it's likely repetitive
-		for word, count := range wordCount {
-			if float64(count)/float64(len(words)) > 0.3 && len(word) > 3 {
-				ch.agent.debugLog("🔄 High word repetition detected: %s (%d/%d)\n", word, count, len(words))
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// estimateTokens provides a rough estimate of token count for messages
-func (ch *ConversationHandler) estimateTokens(messages []api.Message) int {
-	totalTokens := 0
-
-	for _, msg := range messages {
-		// Estimate core content tokens
-		totalTokens += EstimateTokens(msg.Content)
-
-		if msg.ReasoningContent != "" {
-			totalTokens += EstimateTokens(msg.ReasoningContent)
-		}
-
-		// Include tool call metadata (arguments can be sizeable JSON payloads)
-		for _, toolCall := range msg.ToolCalls {
-			totalTokens += EstimateTokens(toolCall.Function.Name)
-			totalTokens += EstimateTokens(toolCall.Function.Arguments)
-			// modest overhead for call framing/ids
-			totalTokens += 20
-		}
-
-		// Role/formatting overhead per message
-		totalTokens += 10
-	}
-
-	// Apply a small safety buffer but stay close to measured estimate
-	buffered := int(float64(totalTokens) * 1.05)
-	if buffered < totalTokens {
-		return totalTokens
-	}
-	return buffered
-}
-
-// displayUserFriendlyError shows contextual error messages to the user
-func (ch *ConversationHandler) displayUserFriendlyError(err error) {
-	errStr := err.Error()
-	providerName := cases.Title(language.Und).String(ch.agent.GetProvider())
-
-	var userMessage string
-
-	// Categorize errors for better user experience
-	if strings.Contains(errStr, "timed out") {
-		if strings.Contains(errStr, "no response received") {
-			userMessage = fmt.Sprintf("⏰ %s is taking longer than usual to respond. This might be due to high load or network issues.\n💡 Try again in a few moments, or use a simpler query if the problem persists.", providerName)
-		} else if strings.Contains(errStr, "no data received") {
-			userMessage = fmt.Sprintf("⏰ %s stopped sending data. The connection may have been interrupted.\n💡 Please try your request again.", providerName)
-		} else {
-			userMessage = fmt.Sprintf("⏰ %s request timed out. This usually indicates network issues or high server load.\n💡 Try again in a few moments, or break your request into smaller parts.", providerName)
-		}
-	} else if strings.Contains(errStr, "connection") || strings.Contains(errStr, "network") {
-		userMessage = fmt.Sprintf("🔌 Connection to %s failed. Please check your internet connection and try again.", providerName)
-	} else if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") {
-		userMessage = fmt.Sprintf("🚦 %s rate limit reached. Please wait a moment before trying again.", providerName)
-	} else if strings.Contains(errStr, "401") || strings.Contains(errStr, "unauthorized") {
-		userMessage = fmt.Sprintf("🔑 %s API key issue. Please check your authentication.", providerName)
-	} else if strings.Contains(errStr, "500") || strings.Contains(errStr, "502") || strings.Contains(errStr, "503") {
-		userMessage = fmt.Sprintf("🔧 %s is experiencing server issues. Please try again in a few minutes.", providerName)
-	} else {
-		userMessage = fmt.Sprintf("❌ %s API error: %v", providerName, err)
-	}
-
-	// Display the message in the content area via agent routing
-	ch.agent.PrintLine("")
-	ch.agent.PrintLine(userMessage)
-	ch.agent.PrintLine("")
 }

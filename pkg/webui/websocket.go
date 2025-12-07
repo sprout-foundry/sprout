@@ -40,6 +40,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	defer ws.eventBus.Unsubscribe("webui")
 
 	// Send events to WebSocket with improved event handling
+	conn.SetReadLimit(512 * 1024) // 512KB max message size
 	for {
 		select {
 		case event := <-eventCh:
@@ -48,8 +49,20 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 				return
 			}
 		case <-time.After(50 * time.Millisecond):
-			// Periodic non-blocking check for incoming messages
-			conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+			// Check if connection is still alive before reading
+			if _, _, err := conn.NextReader(); err != nil {
+				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
+					websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("WebSocket connection closed: %v", err)
+					return
+				}
+				// Continue if it's just a timeout or other non-fatal error
+				continue
+			}
+
+			// Connection is alive, try to read message
+			// Set a very short deadline just for the read
+			conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 			var msg map[string]interface{}
 			if err := conn.ReadJSON(&msg); err != nil {
 				// Handle timeout and normal closure gracefully
@@ -69,7 +82,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 			}
 			// Reset deadline since we got a message
 			conn.SetReadDeadline(time.Time{})
-			
+
 			// Handle incoming WebSocket messages
 			ws.handleWebSocketMessage(conn, msg)
 		}
@@ -175,7 +188,17 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	}()
 
 	// Handle incoming messages with improved focus handling
+	conn.SetReadLimit(512 * 1024) // 512KB max message size
 	for {
+		// Check if connection is still healthy before reading
+		if _, _, err := conn.NextReader(); err != nil {
+			if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
+				websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("Terminal WebSocket connection closed: %v", err)
+			}
+			break
+		}
+
 		var msg map[string]interface{}
 		if err := conn.ReadJSON(&msg); err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -212,16 +235,28 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			}
 
 		case "resize":
-			// Handle terminal resize - acknowledge and update session
+			// Handle terminal resize - actually resize the PTY
 			if data, ok := msg["data"].(map[string]interface{}); ok {
 				if rows, ok := data["rows"].(float64); ok {
 					if cols, ok := data["cols"].(float64); ok {
-						// This could be used to resize the terminal in the future
-						log.Printf("Terminal resize request: %dx%d", int(rows), int(cols))
+						// Resize the terminal PTY
+						err := ws.terminalManager.ResizeTerminal(sessionID, uint16(rows), uint16(cols))
+						if err != nil {
+							log.Printf("Failed to resize terminal %s: %v", sessionID, err)
+							conn.WriteJSON(map[string]interface{}{
+								"type": "error",
+								"data": map[string]string{
+									"session_id": sessionID,
+									"message":    fmt.Sprintf("Resize failed: %v", err),
+								},
+							})
+						} else {
+							log.Printf("Terminal %s resized to %dx%d", sessionID, int(rows), int(cols))
+						}
 					}
 				}
 			}
-			
+
 			conn.WriteJSON(map[string]interface{}{
 				"type": "resize_ack",
 				"data": map[string]interface{}{

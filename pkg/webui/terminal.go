@@ -10,22 +10,24 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/creack/pty"
 )
 
 // TerminalSession represents a terminal session
 type TerminalSession struct {
-	ID       string
-	Command  *exec.Cmd
-	Input    io.WriteCloser
-	Output   io.Reader
-	Error    io.Reader
-	Cancel   context.CancelFunc
-	Active   bool
-	mutex    sync.RWMutex
-	LastUsed time.Time
-	History  []string
+	ID         string
+	Command    *exec.Cmd
+	Pty        *os.File // PTY file handle
+	Output     io.Reader // PTY handles both input and output
+	Cancel     context.CancelFunc
+	Active     bool
+	mutex      sync.RWMutex
+	LastUsed   time.Time
+	History    []string
 	HistoryIndex int
-	OutputCh chan []byte
+	OutputCh   chan []byte
+	Size       *pty.Winsize // Terminal size for resizing
 }
 
 // TerminalManager manages terminal sessions
@@ -41,7 +43,7 @@ func NewTerminalManager() *TerminalManager {
 	}
 }
 
-// CreateSession creates a new terminal session
+// CreateSession creates a new terminal session with PTY support
 func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, error) {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
@@ -54,22 +56,22 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 	// Determine shell based on OS with better fallback logic
 	var shell string
 	var shellArgs []string
-	
+
 	switch runtime.GOOS {
 	case "windows":
-		shell = "cmd"
-		shellArgs = []string{"/c"}
+		// On Windows, fallback to basic exec approach
+		return tm.createWindowsSession(sessionID)
 	default:
-		// Try to find a good shell in order of preference
+		// Unix-like systems - use PTY
 		if _, err := exec.LookPath("bash"); err == nil {
 			shell = "bash"
-			shellArgs = []string{"-i"}
+			shellArgs = []string{"--login"}
 		} else if _, err := exec.LookPath("zsh"); err == nil {
 			shell = "zsh"
-			shellArgs = []string{"-i"}
+			shellArgs = []string{"--login"}
 		} else if _, err := exec.LookPath("sh"); err == nil {
 			shell = "sh"
-			shellArgs = []string{"-i"}
+			shellArgs = []string{"-l"}
 		} else {
 			return nil, fmt.Errorf("no suitable shell found")
 		}
@@ -80,16 +82,57 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 
 	// Setup command with interactive shell
 	cmd := exec.CommandContext(ctx, shell, shellArgs...)
-	
+
 	// Set environment variables for better terminal experience
-	cmd.Env = append(os.Environ(), 
+	cmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
 		"FORCE_COLOR=1",
-		"PS1=\\[\\033[01;32m\\]\\u@\\h\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ ",
+		"SHELL="+shell,
 	)
 
-	// Create pipes for stdin, stdout, stderr
+	// Set default terminal size
+	defaultSize := &pty.Winsize{
+		Rows: 24,
+		Cols: 80,
+	}
+
+	// Start the command with PTY
+	ptyFile, err := pty.StartWithSize(cmd, defaultSize)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to start PTY: %w", err)
+	}
+
+	// Create session
+	session := &TerminalSession{
+		ID:       sessionID,
+		Command:  cmd,
+		Pty:      ptyFile,
+		Output:   ptyFile, // PTY handles both input and output
+		Cancel:   cancel,
+		Active:   true,
+		LastUsed: time.Now(),
+		OutputCh: make(chan []byte, 100),
+		Size:     defaultSize,
+	}
+
+	tm.sessions[sessionID] = session
+
+	// Start monitoring the session
+	go tm.monitorSession(session)
+
+	return session, nil
+}
+
+// createWindowsSession creates a fallback session for Windows (non-PTY)
+func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSession, error) {
+	// Windows implementation - this is a simplified version
+	// Full PTY on Windows requires conpty which is more complex
+	cmd := exec.Command("cmd")
+	ctx, cancel := context.WithCancel(context.Background())
+	cmd = exec.CommandContext(ctx, cmd.Path)
+
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
@@ -102,35 +145,26 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	// Start the command
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to start command: %w", err)
 	}
 
-	// Create session
+	// Create a basic session (Windows fallback)
 	session := &TerminalSession{
 		ID:       sessionID,
 		Command:  cmd,
-		Input:    stdin,
-		Output:   stdout,
-		Error:    stderr,
+		Output:   stdout, // Limited functionality on Windows
 		Cancel:   cancel,
 		Active:   true,
 		LastUsed: time.Now(),
 		OutputCh: make(chan []byte, 100),
 	}
 
-	tm.sessions[sessionID] = session
-
-	// Start monitoring the session
-	go tm.monitorSession(session)
+	// For Windows, we'll store stdin separately in the PTY field for compatibility
+	if ptyFile, ok := stdin.(*os.File); ok {
+		session.Pty = ptyFile
+	}
 
 	return session, nil
 }
@@ -167,10 +201,15 @@ func (tm *TerminalManager) ExecuteCommand(sessionID, command string) error {
 		command += "\n"
 	}
 
-	// Write command to stdin
-	_, err := session.Input.Write([]byte(command))
-	if err != nil {
-		return fmt.Errorf("failed to write command: %w", err)
+	// Write command to PTY
+	if session.Pty != nil {
+		_, err := session.Pty.WriteString(command)
+		if err != nil {
+			return fmt.Errorf("failed to write command to PTY: %w", err)
+		}
+	} else {
+		// Fallback for systems without PTY
+		return fmt.Errorf("no PTY available for session %s", sessionID)
 	}
 
 	session.LastUsed = time.Now()
@@ -190,9 +229,9 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 	// Cancel the context
 	session.Cancel()
 
-	// Close pipes
-	if session.Input != nil {
-		session.Input.Close()
+	// Close PTY
+	if session.Pty != nil {
+		session.Pty.Close()
 	}
 
 	// Wait for command to finish
@@ -218,7 +257,7 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 		}
 	}()
 
-	// Start goroutines to read stdout and stderr
+	// Start goroutine to read from PTY (single stream for both stdout and stderr)
 	go func() {
 		buf := make([]byte, 1024)
 		for {
@@ -229,11 +268,11 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 			}
 			session.mutex.RUnlock()
 
-			// Read from stdout
+			// Read from PTY (handles both stdout and stderr)
 			n, err := session.Output.Read(buf)
 			if err != nil {
 				if err != io.EOF {
-					fmt.Printf("Terminal session %s stdout read error: %v\n", session.ID, err)
+					fmt.Printf("Terminal session %s PTY read error: %v\n", session.ID, err)
 				}
 				break
 			}
@@ -242,7 +281,7 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 				session.LastUsed = time.Now()
 				output := make([]byte, n)
 				copy(output, buf[:n])
-				
+
 				// Send to output channel (non-blocking)
 				select {
 				case session.OutputCh <- output:
@@ -251,48 +290,6 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 					// Channel is full, skip this output
 					fmt.Printf("Terminal %s output channel full, dropping data\n", session.ID)
 				}
-				
-				// Also print for debugging
-				fmt.Printf("Terminal %s stdout: %s", session.ID, string(output))
-			}
-		}
-	}()
-
-	go func() {
-		buf := make([]byte, 1024)
-		for {
-			session.mutex.RLock()
-			if !session.Active {
-				session.mutex.RUnlock()
-				break
-			}
-			session.mutex.RUnlock()
-
-			// Read from stderr
-			n, err := session.Error.Read(buf)
-			if err != nil {
-				if err != io.EOF {
-					fmt.Printf("Terminal session %s stderr read error: %v\n", session.ID, err)
-				}
-				break
-			}
-
-			if n > 0 {
-				session.LastUsed = time.Now()
-				output := make([]byte, n)
-				copy(output, buf[:n])
-				
-				// Send to output channel (non-blocking)
-				select {
-				case session.OutputCh <- output:
-					// Output sent successfully
-				default:
-					// Channel is full, skip this output
-					fmt.Printf("Terminal %s output channel full, dropping data\n", session.ID)
-				}
-				
-				// Also print for debugging
-				fmt.Printf("Terminal %s stderr: %s", session.ID, string(output))
 			}
 		}
 	}()
@@ -474,4 +471,62 @@ func (tm *TerminalManager) ResetHistoryIndex(sessionID string) error {
 
 	session.HistoryIndex = len(session.History)
 	return nil
+}
+
+// ResizeTerminal resizes the terminal for the given session
+func (tm *TerminalManager) ResizeTerminal(sessionID string, rows, cols uint16) error {
+	session, exists := tm.GetSession(sessionID)
+	if !exists {
+		return fmt.Errorf("session %s not found", sessionID)
+	}
+
+	session.mutex.Lock()
+	defer session.mutex.Unlock()
+
+	if !session.Active {
+		return fmt.Errorf("session %s is not active", sessionID)
+	}
+
+	if session.Pty == nil {
+		return fmt.Errorf("no PTY available for session %s", sessionID)
+	}
+
+	// Create new window size
+	newSize := &pty.Winsize{
+		Rows: rows,
+		Cols: cols,
+	}
+
+	// Resize the PTY
+	if err := pty.Setsize(session.Pty, newSize); err != nil {
+		return fmt.Errorf("failed to resize PTY: %w", err)
+	}
+
+	// Update the stored size
+	session.Size = newSize
+
+	return nil
+}
+
+// GetTerminalSize returns the current terminal size for the session
+func (tm *TerminalManager) GetTerminalSize(sessionID string) (*pty.Winsize, error) {
+	session, exists := tm.GetSession(sessionID)
+	if !exists {
+		return nil, fmt.Errorf("session %s not found", sessionID)
+	}
+
+	session.mutex.RLock()
+	defer session.mutex.RUnlock()
+
+	if session.Size == nil {
+		return nil, fmt.Errorf("terminal size not set for session %s", sessionID)
+	}
+
+	// Return a copy to prevent external modification
+	size := &pty.Winsize{
+		Rows: session.Size.Rows,
+		Cols: session.Size.Cols,
+	}
+
+	return size, nil
 }

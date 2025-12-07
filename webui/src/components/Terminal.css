@@ -7,17 +7,25 @@
   border-top: 1px solid #333;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 13px;
-  z-index: 1000;
+  z-index: 100;
   transition: all 0.3s ease;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
 }
 
 .terminal-container.collapsed {
   height: 40px;
+  /* When collapsed, ensure it doesn't block content */
+  pointer-events: none;
+}
+
+.terminal-container.collapsed .terminal-header {
+  /* Allow interaction with header when collapsed */
+  pointer-events: auto;
 }
 
 .terminal-container.expanded {
   height: 400px;
+  z-index: 1000; /* Higher z-index when expanded */
 }
 
 .terminal-header {
@@ -93,6 +101,11 @@
   flex-direction: column;
   height: calc(100% - 40px);
   background: #1a1a1a;
+  overflow: hidden;
+}
+
+.terminal-container.collapsed .terminal-body {
+  display: none;
 }
 
 .terminal-output {

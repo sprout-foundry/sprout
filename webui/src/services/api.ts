@@ -101,9 +101,10 @@ class ApiService {
   }
 
   // Get terminal history
-  async getTerminalHistory(): Promise<{ history: string[]; count: number }> {
+  async getTerminalHistory(sessionId?: string): Promise<{ history: string[]; count: number }> {
     try {
-      const response = await fetch('/api/terminal/history');
+      const url = sessionId ? `/api/terminal/history?session_id=${encodeURIComponent(sessionId)}` : '/api/terminal/history';
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }

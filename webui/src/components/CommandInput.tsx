@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
+import { TerminalWebSocketService } from '../services/terminalWebSocket';
 
 interface CommandInputProps {
   value?: string;
@@ -94,7 +95,9 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
       // Try to sync with terminal history
       try {
-        const response = await apiService.current.getTerminalHistory();
+        // Get current terminal session ID
+        const terminalService = TerminalWebSocketService.getInstance();
+        const response = await apiService.current.getTerminalHistory(terminalService.getSessionId() || undefined);
         if (response && response.history && Array.isArray(response.history)) {
           // Merge terminal history with local history, removing duplicates
           const terminalCommands = response.history.filter((cmd: string) => cmd.trim());

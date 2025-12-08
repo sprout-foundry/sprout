@@ -18,10 +18,10 @@ func GetEmbeddedSystemPrompt() string {
 	// Extract the prompt content from the markdown
 	promptContent := extractSystemPrompt()
 
-	// Add project validation context
-	validationContext, err := generateProjectValidationContext()
-	if err == nil && validationContext != "" {
-		promptContent = promptContent + "\n\n" + validationContext
+	// Add discovered context files (AGENTS.md, Claude.md, etc.)
+	contextFiles, err := LoadContextFiles()
+	if err == nil && contextFiles != "" {
+		promptContent = promptContent + contextFiles
 	}
 
 	// Add MCP server summary if available

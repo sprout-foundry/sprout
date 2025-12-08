@@ -100,10 +100,7 @@ type Agent struct {
 	debugLogPath  string     // Path to the debug log file
 	debugLogMutex sync.Mutex // Mutex for safe writes to debug log
 
-	// Base context cache (session scoped)
-	baseContextJSON     string
-	baseContextOnce     sync.Once
-	baseContextInjected bool // ensure we inject base context at most once per session
+
 }
 
 // Shutdown attempts to gracefully stop background work and child processes

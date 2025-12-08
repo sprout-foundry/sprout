@@ -22,7 +22,31 @@
     "done_marker": "[DONE]"
   },
   "models": {
-    "context_limit": 0,
+    "default_context_limit": 128000,
+    "model_overrides": {
+      "glm-4.6": 200000,
+      "glm-4.5": 128000,
+      "glm-4": 128000,
+      "glm-3-turbo": 128000
+    },
+    "pattern_overrides": [
+      {
+        "pattern": "glm-4\\.6.*",
+        "context_limit": 200000
+      },
+      {
+        "pattern": "glm-4\\.[5-9].*",
+        "context_limit": 128000
+      },
+      {
+        "pattern": "glm-4.*",
+        "context_limit": 128000
+      },
+      {
+        "pattern": "glm-3.*",
+        "context_limit": 128000
+      }
+    ],
     "supports_vision": false,
     "vision_model": "",
     "default_model": "glm-4.6",

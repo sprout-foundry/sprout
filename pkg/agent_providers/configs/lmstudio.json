@@ -23,7 +23,37 @@
     "done_marker": "[DONE]"
   },
   "models": {
-    "context_limit": 0,
+    "default_context_limit": 32768,
+    "model_overrides": {
+      "qwen2.5-coder-32b-instruct": 32768,
+      "qwen3-coder:30b": 128768,
+      "llama-3.1-70b-instruct": 128072,
+      "llama-3-70b-instruct": 8192,
+      "mistral-7b-instruct": 32768,
+      "yi-34b-chat": 4096
+    },
+    "pattern_overrides": [
+      {
+        "pattern": ".*llama-3\\.1.*",
+        "context_limit": 128072
+      },
+      {
+        "pattern": ".*llama-3.*",
+        "context_limit": 8192
+      },
+      {
+        "pattern": ".*qwen2\\.5.*",
+        "context_limit": 32768
+      },
+      {
+        "pattern": ".*codellama.*",
+        "context_limit": 16384
+      },
+      {
+        "pattern": ".*mistral.*",
+        "context_limit": 32768
+      }
+    ],
     "supports_vision": false,
     "vision_model": "",
     "default_model": "qwen3-coder:30b",

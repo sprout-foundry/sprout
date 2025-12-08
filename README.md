@@ -301,7 +301,6 @@ See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PR
   - `revisions/`: Per-session directories with instructions and LLM responses.
   - `runlogs/`: JSONL workflow traces.
   - `workspace.log`: Verbose execution log.
-  - `validation_context.md`: Project validation requirements.
 - **Global (~/.ledit/)**: config.json (global config), api_keys.json, mcp_config.json.
 - **Tests**: Unit in pkg/ (e.g., tps_tracker_test.go), integration_tests/ (git/file mods), e2e_tests/ (shell workflows), smoke_tests/ (API).
 

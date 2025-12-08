@@ -26,7 +26,48 @@
     "done_marker": "[DONE]"
   },
   "models": {
-    "context_limit": 0,
+    "default_context_limit": 128000,
+    "model_overrides": {
+      "openai/gpt-5": 272000,
+      "openai/gpt-5-turbo": 272000,
+      "anthropic/claude-3-5-sonnet": 200000,
+      "anthropic/claude-3-5-haiku": 200000,
+      "anthropic/claude-3-opus": 200000,
+      "anthropic/claude-3-sonnet": 200000,
+      "anthropic/claude-3-haiku": 200000,
+      "google/gemini-2.0-flash-exp": 1048576,
+      "google/gemini-1.5-pro": 2097152,
+      "google/gemini-1.5-flash": 1048576,
+      "meta-llama/llama-3.1-405b": 131072,
+      "meta-llama/llama-3.1-70b": 131072,
+      "meta-llama/llama-3.1-8b": 131072,
+      "meta-llama/llama-3-70b": 8192,
+      "mistralai/mistral-large": 32768,
+      "microsoft/wizardlm-2-8x22b": 65536,
+      "qwen/qwen-2.5-72b": 32768
+    },
+    "pattern_overrides": [
+      {
+        "pattern": "gpt-4.*",
+        "context_limit": 128000
+      },
+      {
+        "pattern": "gpt-3\\.5.*",
+        "context_limit": 16385
+      },
+      {
+        "pattern": "claude-.*",
+        "context_limit": 200000
+      },
+      {
+        "pattern": "llama-3.*",
+        "context_limit": 131072
+      },
+      {
+        "pattern": "gemini-.*",
+        "context_limit": 1048576
+      }
+    ],
     "supports_vision": true,
     "vision_model": "openai/gpt-4-vision-preview",
     "default_model": "openai/gpt-5",

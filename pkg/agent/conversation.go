@@ -76,7 +76,7 @@ func (a *Agent) ClearConversationHistory() {
 	a.messages = []api.Message{}
 	a.currentIteration = 0
 	a.previousSummary = ""
-	a.baseContextInjected = false
+
 	a.debugLog("🧹 Conversation history cleared\n")
 }
 

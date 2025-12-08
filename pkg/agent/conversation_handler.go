@@ -77,26 +77,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		return "", err
 	}
 
-	// Inject base repository context once per session to speed up discovery
-	if !ch.agent.baseContextInjected {
-		// Avoid duplicate base-context if already present (e.g., from a previous attempt)
-		alreadyPresent := false
-		for _, m := range ch.agent.messages {
-			if m.Role == "system" {
-				c := strings.TrimSpace(m.Content)
-				if strings.HasPrefix(c, "{") && strings.Contains(c, "\"repo_root\"") && strings.Contains(c, "\"files\"") {
-					alreadyPresent = true
-					break
-				}
-			}
-		}
-		if !alreadyPresent {
-			if base := ch.agent.GetOrBuildBaseContext(); strings.TrimSpace(base) != "" {
-				ch.agent.messages = append(ch.agent.messages, api.Message{Role: "system", Content: base})
-			}
-		}
-		ch.agent.baseContextInjected = true
-	}
+
 
 	// Add user message
 	userMessage := api.Message{

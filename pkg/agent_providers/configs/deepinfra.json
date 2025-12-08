@@ -23,7 +23,40 @@
     "done_marker": "[DONE]"
   },
   "models": {
-    "context_limit": 0,
+    "default_context_limit": 131072,
+    "model_overrides": {
+      "meta-llama/Llama-3.3-70B-Instruct": 131072,
+      "meta-llama/Llama-3.1-405B-Instruct": 131072,
+      "meta-llama/Llama-3.1-70B-Instruct": 131072,
+      "meta-llama/Llama-3.1-8B-Instruct": 131072,
+      "meta-llama/Llama-3-70B-Instruct": 8192,
+      "mistralai/Mistral-Small-24B-Instruct-2501": 32768,
+      "mistralai/Mistral-7B-Instruct-v0.3": 32768,
+      "Qwen/Qwen2.5-72B-Instruct": 32768,
+      "microsoft/WizardLM-2-8x22B": 65536
+    },
+    "pattern_overrides": [
+      {
+        "pattern": "meta-llama/Llama-3\\.3.*",
+        "context_limit": 131072
+      },
+      {
+        "pattern": "meta-llama/Llama-3\\.1.*",
+        "context_limit": 131072
+      },
+      {
+        "pattern": "meta-llama/Llama-3.*",
+        "context_limit": 8192
+      },
+      {
+        "pattern": "mistralai/.*",
+        "context_limit": 32768
+      },
+      {
+        "pattern": "Qwen/.*",
+        "context_limit": 32768
+      }
+    ],
     "supports_vision": false,
     "vision_model": "",
     "default_model": "meta-llama/Llama-3.3-70B-Instruct",

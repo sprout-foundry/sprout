@@ -86,6 +86,9 @@ func TestGenericProviderValidation(t *testing.T) {
 		Defaults: RequestDefaults{
 			Model: "test-model",
 		},
+		Models: ModelConfig{
+			DefaultContextLimit: 32000,
+		},
 	}
 
 	provider, err := NewGenericProvider(validConfig)

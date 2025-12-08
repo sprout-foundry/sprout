@@ -24,7 +24,39 @@
     "done_marker": "[DONE]"
   },
   "models": {
-    "context_limit": 0,
+    "default_context_limit": 64000,
+    "model_overrides": {
+      "deepseek-ai/DeepSeek-R1-0528": 64000,
+      "deepseek-ai/DeepSeek-R1": 64000,
+      "deepseek-ai/DeepSeek-V3": 64000,
+      "meta-llama/Llama-3.1-8B-Instruct": 131072,
+      "meta-llama/Llama-3.1-70B-Instruct": 131072,
+      "meta-llama/Llama-3.3-70B-Instruct": 131072,
+      "mistralai/Mistral-7B-Instruct-v0.3": 32768,
+      "mistralai/Mixtral-8x7B-Instruct-v0.1": 32768
+    },
+    "pattern_overrides": [
+      {
+        "pattern": "deepseek-ai/DeepSeek.*",
+        "context_limit": 64000
+      },
+      {
+        "pattern": "meta-llama/Llama-3\\.1.*",
+        "context_limit": 131072
+      },
+      {
+        "pattern": "meta-llama/Llama-3\\.3.*",
+        "context_limit": 131072
+      },
+      {
+        "pattern": "meta-llama/Llama-3.*",
+        "context_limit": 8192
+      },
+      {
+        "pattern": "mistralai/.*",
+        "context_limit": 32768
+      }
+    ],
     "supports_vision": false,
     "vision_model": "",
     "default_model": "deepseek-ai/DeepSeek-R1-0528",

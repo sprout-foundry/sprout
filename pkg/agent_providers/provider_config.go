@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"time"
 )
 
@@ -51,13 +52,23 @@ type StreamingConfig struct {
 	DoneMarker     string `json:"done_marker"`
 }
 
+// PatternOverride defines context limit overrides for model patterns
+type PatternOverride struct {
+	Pattern      string `json:"pattern"`
+	ContextLimit int    `json:"context_limit"`
+}
+
 // ModelConfig defines model-related configuration
 type ModelConfig struct {
-	ContextLimit    int      `json:"context_limit"`
-	SupportsVision  bool     `json:"supports_vision"`
-	VisionModel     string   `json:"vision_model"`
-	DefaultModel    string   `json:"default_model"`
-	AvailableModels []string `json:"available_models"`
+	DefaultContextLimit int                    `json:"default_context_limit"`
+	ModelOverrides      map[string]int         `json:"model_overrides"`
+	PatternOverrides    []PatternOverride      `json:"pattern_overrides"`
+	// Legacy fields for backward compatibility
+	ContextLimit        int                    `json:"context_limit,omitempty"`
+	SupportsVision      bool                   `json:"supports_vision"`
+	VisionModel         string                 `json:"vision_model"`
+	DefaultModel        string                 `json:"default_model"`
+	AvailableModels     []string               `json:"available_models"`
 }
 
 // RetryConfig defines retry behavior
@@ -153,6 +164,50 @@ func (c *ProviderConfig) Validate() error {
 	if c.Defaults.Model == "" {
 		return fmt.Errorf("default model is required")
 	}
+
+	// Validate model configuration
+	if err := c.validateModelConfig(); err != nil {
+		return fmt.Errorf("invalid model configuration: %w", err)
+	}
+
+	return nil
+}
+
+// validateModelConfig validates the model configuration
+func (c *ProviderConfig) validateModelConfig() error {
+	// At least one of default_context_limit or context_limit should be set
+	if c.Models.DefaultContextLimit == 0 && c.Models.ContextLimit == 0 {
+		return fmt.Errorf("either default_context_limit or context_limit must be set")
+	}
+
+	// Validate model overrides are positive
+	for modelName, contextLimit := range c.Models.ModelOverrides {
+		if contextLimit <= 0 {
+			return fmt.Errorf("model override for '%s' must have positive context limit", modelName)
+		}
+		if contextLimit > 2097152 { // 2M tokens is a practical upper bound
+			return fmt.Errorf("model override for '%s' has context limit %d which exceeds reasonable maximum (2M tokens)", modelName, contextLimit)
+		}
+	}
+
+	// Validate pattern overrides
+	for i, patternOverride := range c.Models.PatternOverrides {
+		if patternOverride.Pattern == "" {
+			return fmt.Errorf("pattern override at index %d has empty pattern", i)
+		}
+		if patternOverride.ContextLimit <= 0 {
+			return fmt.Errorf("pattern override '%s' must have positive context limit", patternOverride.Pattern)
+		}
+		if patternOverride.ContextLimit > 2097152 { // 2M tokens is a practical upper bound
+			return fmt.Errorf("pattern override '%s' has context limit %d which exceeds reasonable maximum (2M tokens)", patternOverride.Pattern, patternOverride.ContextLimit)
+		}
+
+		// Test if pattern is valid regex
+		if _, err := regexp.Compile(patternOverride.Pattern); err != nil {
+			return fmt.Errorf("pattern override '%s' has invalid regex pattern: %w", patternOverride.Pattern, err)
+		}
+	}
+
 	return nil
 }
 
@@ -170,4 +225,38 @@ func (c *ProviderConfig) GetStreamingTimeout() time.Duration {
 		return time.Duration(c.Streaming.ChunkTimeoutMs) * time.Millisecond
 	}
 	return 900 * time.Second // Default streaming timeout (15 minutes)
+}
+
+// GetContextLimit returns the context limit for a given model based on configuration
+// Uses the following priority:
+// 1. Exact model match in model_overrides
+// 2. Pattern match in pattern_overrides
+// 3. Provider default_context_limit
+// 4. Legacy context_limit field (for backward compatibility)
+// 5. Conservative fallback (32000)
+func (c *ProviderConfig) GetContextLimit(model string) int {
+	// 1. Check for exact model match in overrides
+	if contextLimit, exists := c.Models.ModelOverrides[model]; exists {
+		return contextLimit
+	}
+
+	// 2. Check for pattern matches in overrides
+	for _, patternOverride := range c.Models.PatternOverrides {
+		if matched, _ := regexp.MatchString(patternOverride.Pattern, model); matched {
+			return patternOverride.ContextLimit
+		}
+	}
+
+	// 3. Use provider default context limit (if configured)
+	if c.Models.DefaultContextLimit > 0 {
+		return c.Models.DefaultContextLimit
+	}
+
+	// 4. Fall back to legacy context_limit field (for backward compatibility)
+	if c.Models.ContextLimit > 0 {
+		return c.Models.ContextLimit
+	}
+
+	// 5. Conservative fallback
+	return 32000
 }

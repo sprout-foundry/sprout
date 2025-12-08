@@ -136,24 +136,7 @@ func (p *GenericProvider) GetProvider() string {
 
 // GetModelContextLimit returns the context limit for the current model
 func (p *GenericProvider) GetModelContextLimit() (int, error) {
-	if p.config.Models.ContextLimit > 0 {
-		return p.config.Models.ContextLimit, nil
-	}
-
-	// Default context limits based on model
-	modelLower := strings.ToLower(p.model)
-	switch {
-	case strings.Contains(modelLower, "gpt-4"):
-		return 128000, nil
-	case strings.Contains(modelLower, "gpt-3.5"):
-		return 16385, nil
-	case strings.Contains(modelLower, "claude-3"):
-		return 200000, nil
-	case strings.Contains(modelLower, "llama-3"):
-		return 128000, nil
-	default:
-		return 32000, nil // Conservative default
-	}
+	return p.config.GetContextLimit(p.model), nil
 }
 
 // ListModels returns available models

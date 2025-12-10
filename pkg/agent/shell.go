@@ -98,6 +98,9 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 		TruncatedLines:  truncatedLines,
 	}
 
+	// Also record as a task action for conversation summary
+	a.AddTaskAction("command_executed", fmt.Sprintf("Executed: %s", command), command)
+
 	return returnResult, err
 }
 

@@ -195,7 +195,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 		// Initialize change tracker
 		agent.changeTracker = NewChangeTracker(agent, "")
-		agent.changeTracker.Disable()
+		agent.changeTracker.Enable() // Start enabled by default
 
 		return agent, nil
 	}
@@ -356,7 +356,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 	// Initialize change tracker
 	agent.changeTracker = NewChangeTracker(agent, "")
-	agent.changeTracker.Disable() // Start disabled
+	agent.changeTracker.Enable() // Start enabled by default
 
 	// Initialize MCP manager
 	agent.mcpManager = mcp.NewMCPManager(nil)

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -118,11 +119,14 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	a.client = newClient
 	a.clientType = provider
 
+	// Get the actual model being used (might be different due to fallback)
+	actualModel := newClient.GetModel()
+
 	// Save to configuration
 	if err := a.configManager.SetProvider(provider); err != nil {
 		return fmt.Errorf("failed to save provider: %w", err)
 	}
-	if err := a.configManager.SetModelForProvider(provider, model); err != nil {
+	if err := a.configManager.SetModelForProvider(provider, actualModel); err != nil {
 		return fmt.Errorf("failed to save model: %w", err)
 	}
 
@@ -130,8 +134,13 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	a.maxContextTokens = a.getModelContextLimit()
 	a.currentContextTokens = 0
 
+	// Notify user if model was different due to fallback
+	if actualModel != model {
+		fmt.Fprintf(os.Stderr, "ℹ️  Using model: %s (requested: %s)\n", actualModel, model)
+	}
+
 	if a.debug {
-		a.debugLog("✅ Switched to provider %s with model %s\n", api.GetProviderName(provider), model)
+		a.debugLog("✅ Switched to provider %s with model %s\n", api.GetProviderName(provider), actualModel)
 	}
 
 	return nil

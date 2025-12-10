@@ -127,6 +127,9 @@ func LoadProviderRegistry(registryPath string) (*ProviderRegistry, error) {
 // GetAuthToken retrieves the authentication token based on the auth configuration
 func (c *ProviderConfig) GetAuthToken() (string, error) {
 	switch c.Auth.Type {
+	case "none":
+		// No authentication required
+		return "", nil
 	case "bearer", "api_key":
 		if c.Auth.EnvVar != "" {
 			token := os.Getenv(c.Auth.EnvVar)

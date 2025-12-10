@@ -1,12 +1,24 @@
 package agent
 
+import "fmt"
+
 // EnableChangeTracking enables change tracking for this agent session
 func (a *Agent) EnableChangeTracking(instructions string) {
+	if a.debug {
+		a.debugLog("DEBUG: EnableChangeTracking called (tracker nil: %v)\n", a.changeTracker == nil)
+	}
+	
 	if a.changeTracker == nil {
 		a.changeTracker = NewChangeTracker(a, instructions)
+		if a.debug {
+			a.debugLog("DEBUG: Created new change tracker and enabled it\n")
+		}
 	} else {
 		a.changeTracker.Reset(instructions)
 		a.changeTracker.Enable()
+		if a.debug {
+			a.debugLog("DEBUG: Reset existing change tracker and enabled it\n")
+		}
 	}
 }
 
@@ -19,7 +31,16 @@ func (a *Agent) DisableChangeTracking() {
 
 // IsChangeTrackingEnabled returns whether change tracking is enabled
 func (a *Agent) IsChangeTrackingEnabled() bool {
-	return a.changeTracker != nil && a.changeTracker.IsEnabled()
+	enabled := a.changeTracker != nil && a.changeTracker.IsEnabled()
+	if a.debug {
+		trackerEnabled := false
+		if a.changeTracker != nil {
+			trackerEnabled = a.changeTracker.IsEnabled()
+		}
+		a.debugLog("DEBUG: IsChangeTrackingEnabled = %v (tracker nil: %v, tracker enabled: %v)\n", 
+			enabled, a.changeTracker == nil, trackerEnabled)
+	}
+	return enabled
 }
 
 // GetChangeTracker returns the change tracker (can be nil)
@@ -79,6 +100,10 @@ func (a *Agent) TrackFileWrite(filePath string, content string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
 		return a.changeTracker.TrackFileWrite(filePath, content)
 	}
+	
+	// Also record as a task action for conversation summary
+	a.AddTaskAction("file_created", fmt.Sprintf("Created/updated file: %s", filePath), filePath)
+	
 	return nil
 }
 
@@ -87,5 +112,9 @@ func (a *Agent) TrackFileEdit(filePath string, originalContent string, newConten
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
 		return a.changeTracker.TrackFileEdit(filePath, originalContent, newContent)
 	}
+	
+	// Also record as a task action for conversation summary
+	a.AddTaskAction("file_modified", fmt.Sprintf("Modified file: %s", filePath), filePath)
+	
 	return nil
 }

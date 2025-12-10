@@ -79,8 +79,8 @@ func TestOllamaLocalClientSetModelUnknownModel(t *testing.T) {
 	require.NoError(t, err)
 
 	err = client.SetModel("model-missing")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "model model-missing not found locally")
+	// With fallback, SetModel should not error and should use fallback model
+	require.NoError(t, err)
 	require.Equal(t, "model-a", client.GetModel())
 }
 

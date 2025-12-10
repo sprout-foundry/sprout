@@ -5,6 +5,7 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/agent_providers"
+	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
 // TestClient implements a mock client for CI/testing environments
@@ -147,7 +148,80 @@ func init() {
 
 // CreateGenericProvider creates a generic provider by name
 func CreateGenericProvider(providerName, model string) (api.ClientInterface, error) {
-	return globalProviderFactory.CreateProviderWithModel(providerName, model)
+	// First try the generic provider system
+	provider, err := globalProviderFactory.CreateProviderWithModel(providerName, model)
+	if err == nil {
+		return provider, nil
+	}
+
+	// If not found in generic provider system, try to create from custom provider config
+	return CreateCustomProvider(providerName, model)
+}
+
+// CreateCustomProvider creates a provider from custom provider configuration
+func CreateCustomProvider(providerName, model string) (api.ClientInterface, error) {
+	// Load configuration to get custom provider details
+	config, err := configuration.LoadOrInitConfig(false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if config.CustomProviders == nil {
+		return nil, fmt.Errorf("no custom providers configured")
+	}
+
+	customProvider, exists := config.CustomProviders[providerName]
+	if !exists {
+		return nil, fmt.Errorf("custom provider not found: %s", providerName)
+	}
+
+	// Create a generic provider config from custom provider
+	authType := "api_key"
+	if !customProvider.RequiresAPIKey {
+		authType = "none"
+	}
+
+	genericConfig := &providers.ProviderConfig{
+		Name:     customProvider.Name,
+		Endpoint: customProvider.Endpoint,
+		Auth: providers.AuthConfig{
+			Type: authType,
+		},
+		Headers: make(map[string]string),
+		Defaults: providers.RequestDefaults{
+			Model:     customProvider.ModelName,
+			MaxTokens: &customProvider.ContextSize,
+		},
+		Conversion: providers.MessageConversion{
+			IncludeToolCallId:     true,
+			ConvertToolRoleToUser: false,
+			ArgumentsAsJSON:       false,
+		},
+		Streaming: providers.StreamingConfig{
+			Format:         "sse",
+			ChunkTimeoutMs: 5000,
+			DoneMarker:     "[DONE]",
+		},
+		Models: providers.ModelConfig{
+			DefaultContextLimit: customProvider.ContextSize,
+			DefaultModel:        customProvider.ModelName,
+			SupportsVision:      false,
+		},
+		Retry: providers.RetryConfig{
+			MaxAttempts:       3,
+			BaseDelayMs:        1000,
+			BackoffMultiplier: 2.0,
+			MaxDelayMs:         10000,
+			RetryableErrors:     []string{"timeout", "connection", "rate_limit"},
+		},
+		Cost: providers.CostConfig{
+			InputTokenCost:  0.001,
+			OutputTokenCost: 0.002,
+		},
+	}
+
+	// Create the provider using the generic config
+	return providers.NewGenericProvider(genericConfig)
 }
 
 // CreateProviderClient is a factory function that creates providers
@@ -182,6 +256,7 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 		}
 		return testClient, nil
 	default:
-		return nil, fmt.Errorf("unknown client type: %s", clientType)
+		// For custom providers, try to use the generic provider system
+		return CreateGenericProvider(string(clientType), model)
 	}
 }

@@ -58,12 +58,45 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 		return nil, fmt.Errorf("could not create ollama client: %w", err)
 	}
 
-	// Check if model exists locally
+	// Get list of available models first
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := ensureModelAvailable(ctx, client, model); err != nil {
-		return nil, err
+	listResp, err := client.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list local models: %w", err)
+	}
+
+	// If no models specified or empty, use first available model
+	if strings.TrimSpace(model) == "" {
+		if len(listResp.Models) == 0 {
+			return nil, fmt.Errorf("no models available locally. Please pull a model first using 'ollama pull <model>'")
+		}
+		model = listResp.Models[0].Name
+	} else {
+		// Check if requested model exists locally
+		availableModels := make([]string, 0, len(listResp.Models))
+		for _, m := range listResp.Models {
+			availableModels = append(availableModels, m.Name)
+			if m.Name == model {
+				// Model found, proceed with creation
+				return &OllamaLocalClient{
+					TPSBase:       NewTPSBase(),
+					model:         model,
+					debug:         false,
+					clientFactory: factory,
+				}, nil
+			}
+		}
+
+		// Model not found, fallback to first available model
+		if len(listResp.Models) > 0 {
+			fmt.Fprintf(os.Stderr, "⚠️  Model '%s' not found locally. Available models: %v\n", model, availableModels)
+			fmt.Fprintf(os.Stderr, "🔄 Falling back to first available model: %s\n", listResp.Models[0].Name)
+			model = listResp.Models[0].Name
+		} else {
+			return nil, fmt.Errorf("model %s not found locally and no other models available. Available models: %v", model, availableModels)
+		}
 	}
 
 	return &OllamaLocalClient{
@@ -340,15 +373,38 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := ensureModelAvailable(ctx, client, model); err != nil {
-		return err
+	// Get list of available models
+	listResp, err := client.List(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list local models: %w", err)
 	}
 
-	c.model = model
-	if c.debug {
-		fmt.Printf("DEBUG: Switched local Ollama model to: %s\n", model)
+	// Check if requested model exists locally
+	availableModels := make([]string, 0, len(listResp.Models))
+	for _, m := range listResp.Models {
+		availableModels = append(availableModels, m.Name)
+		if m.Name == model {
+			// Model found, proceed with switch
+			c.model = model
+			if c.debug {
+				fmt.Printf("DEBUG: Switched local Ollama model to: %s\n", model)
+			}
+			return nil
+		}
 	}
-	return nil
+
+	// Model not found, fallback to first available model
+	if len(listResp.Models) > 0 {
+		fmt.Fprintf(os.Stderr, "⚠️  Model '%s' not found locally. Available models: %v\n", model, availableModels)
+		fmt.Fprintf(os.Stderr, "🔄 Falling back to first available model: %s\n", listResp.Models[0].Name)
+		c.model = listResp.Models[0].Name
+		if c.debug {
+			fmt.Printf("DEBUG: Switched local Ollama model to fallback: %s\n", c.model)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("model %s not found locally and no other models available. Available models: %v", model, availableModels)
 }
 
 // ListModels returns available local models

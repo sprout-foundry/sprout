@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
@@ -68,9 +69,7 @@ func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manag
 		model := configManager.GetModelForProvider(provider)
 
 		// Check if provider is ready to use
-		requiresKey := api.IsProviderAvailable(provider) == false && provider != api.OllamaLocalClientType
-		hasKey := configManager.HasAPIKey(provider)
-		isReady := !requiresKey || hasKey
+		isReady := p.isProviderReady(configManager, provider)
 
 		icon := "❌"
 		statusText := "(API key required)"
@@ -109,9 +108,7 @@ func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) e
 		model := configManager.GetModelForProvider(provider)
 
 		// Check if provider is ready
-		requiresKey := api.IsProviderAvailable(provider) == false && provider != api.OllamaLocalClientType
-		hasKey := configManager.HasAPIKey(provider)
-		isReady := !requiresKey || hasKey
+		isReady := p.isProviderReady(configManager, provider)
 
 		status := "❌ (API key required)"
 		if isReady {
@@ -124,6 +121,30 @@ func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) e
 	return nil
 }
 
+// isProviderReady checks if a provider is ready to use (has API key if needed)
+func (p *ProvidersCommand) isProviderReady(configManager *configuration.Manager, provider api.ClientType) bool {
+	// Built-in providers that don't need API keys
+	if provider == api.OllamaLocalClientType {
+		return true
+	}
+
+	// Built-in providers that are available without API keys
+	if api.IsProviderAvailable(provider) {
+		return true
+	}
+
+	// Check if this is a custom provider that doesn't require an API key
+	config := configManager.GetConfig()
+	if config.CustomProviders != nil {
+		if customProvider, exists := config.CustomProviders[string(provider)]; exists && !customProvider.RequiresAPIKey {
+			return true
+		}
+	}
+
+	// For all other providers, check if they have an API key
+	return configManager.HasAPIKey(provider)
+}
+
 // selectProvider allows interactive provider selection
 func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, chatAgent *agent.Agent) error {
 	// Get all available providers
@@ -134,9 +155,7 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 	items := make([]ui.DropdownItem, 0, len(providers))
 	for _, provider := range providers {
 		// Check if provider is ready
-		requiresKey := !api.IsProviderAvailable(provider) && provider != api.OllamaLocalClientType
-		hasKey := configManager.HasAPIKey(provider)
-		isReady := !requiresKey || hasKey
+		isReady := p.isProviderReady(configManager, provider)
 
 		displayName := getProviderDisplayName(provider)
 
@@ -171,9 +190,7 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 
 			for i, provider := range providers {
 				// Check if provider is ready
-				requiresKey := !api.IsProviderAvailable(provider) && provider != api.OllamaLocalClientType
-				hasKey := configManager.HasAPIKey(provider)
-				isReady := !requiresKey || hasKey
+				isReady := p.isProviderReady(configManager, provider)
 
 				status := ""
 				if !isReady {
@@ -203,7 +220,7 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 	selectedProvider := selected.Value().(api.ClientType)
 
 	// Check if provider needs API key
-	if !api.IsProviderAvailable(selectedProvider) && selectedProvider != api.OllamaLocalClientType {
+	if !p.isProviderReady(configManager, selectedProvider) {
 		// Try to ensure API key
 		err = configManager.EnsureAPIKey(selectedProvider)
 		if err != nil {
@@ -241,18 +258,38 @@ func (p *providerDropdownItem) Value() interface{} { return p.provider }
 
 // setProvider sets a specific provider by name
 func (p *ProvidersCommand) setProvider(providerName string, configManager *configuration.Manager, chatAgent *agent.Agent) error {
-	// Convert name to provider type
-	provider, err := api.ParseProviderName(strings.ToLower(providerName))
+	// Convert name to provider type using the config manager to handle custom providers
+	provider, err := configManager.MapStringToClientType(strings.ToLower(providerName))
 	if err != nil {
-		return fmt.Errorf("unknown provider '%s'. Available: openai, zai, deepinfra, ollama, ollama-turbo, openrouter, lmstudio, test", providerName)
+		// Get list of available providers for better error message
+		available := configManager.GetAvailableProviders()
+		var names []string
+		for _, p := range available {
+			names = append(names, string(p))
+		}
+		return fmt.Errorf("unknown provider '%s'. Available: %s", providerName, strings.Join(names, ", "))
 	}
 
 	// Check if provider needs API key but doesn't have one
 	if !api.IsProviderAvailable(provider) && provider != api.OllamaLocalClientType {
-		// Try to ensure API key
-		err = configManager.EnsureAPIKey(provider)
-		if err != nil {
-			return fmt.Errorf("failed to configure %s: %w", getProviderDisplayName(provider), err)
+		// Check if this is a custom provider that doesn't require an API key
+		config := configManager.GetConfig()
+		if config.CustomProviders != nil {
+			if customProvider, exists := config.CustomProviders[string(provider)]; exists && !customProvider.RequiresAPIKey {
+				// Custom provider doesn't require API key, skip the prompt
+			} else {
+				// Try to ensure API key
+				err = configManager.EnsureAPIKey(provider)
+				if err != nil {
+					return fmt.Errorf("failed to configure %s: %w", getProviderDisplayName(provider), err)
+				}
+			}
+		} else {
+			// Try to ensure API key for non-custom providers
+			err = configManager.EnsureAPIKey(provider)
+			if err != nil {
+				return fmt.Errorf("failed to configure %s: %w", getProviderDisplayName(provider), err)
+			}
 		}
 	}
 
@@ -272,6 +309,56 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 	fmt.Printf("🤖 Using model: %s\n", model)
 
 	return nil
+}
+
+// selectModelFromList allows users to interactively select from available models
+func selectModelFromList(models []api.ModelInfo, preferredModel string) (string, error) {
+	if len(models) == 0 {
+		return "", fmt.Errorf("no models available")
+	}
+
+	// If preferred model is available, use it
+	for _, model := range models {
+		if model.ID == preferredModel {
+			return preferredModel, nil
+		}
+	}
+
+	fmt.Printf("⚠️  Preferred model '%s' not found.\n", preferredModel)
+	fmt.Println("Available models:")
+	for i, model := range models {
+		fmt.Printf("  %d) %s\n", i+1, model.ID)
+	}
+
+	fmt.Print("Select a model (or press Enter for first available): ")
+	var input string
+	fmt.Scanln(&input)
+
+	input = strings.TrimSpace(input)
+	if input == "" {
+		// Default to first model
+		selectedModel := models[0].ID
+		fmt.Printf("🔄 Selected first available model: %s\n", selectedModel)
+		return selectedModel, nil
+	}
+
+	// Try to parse as number
+	if selection, err := strconv.Atoi(input); err == nil && selection >= 1 && selection <= len(models) {
+		selectedModel := models[selection-1].ID
+		fmt.Printf("✅ Selected model: %s\n", selectedModel)
+		return selectedModel, nil
+	}
+
+	// Try to find exact match
+	for _, model := range models {
+		if strings.EqualFold(model.ID, input) {
+			fmt.Printf("✅ Selected model: %s\n", model.ID)
+			return model.ID, nil
+		}
+	}
+
+	fmt.Printf("❌ Invalid selection. Using first available model: %s\n", models[0].ID)
+	return models[0].ID, nil
 }
 
 // getProviderDisplayName returns a user-friendly name for the provider

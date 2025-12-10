@@ -54,7 +54,7 @@ func (m *Manager) GetProvider() (api.ClientType, error) {
 		return "", fmt.Errorf("no provider selected")
 	}
 
-	return mapStringToClientType(provider)
+	return m.mapStringToClientType(provider)
 }
 
 // SetProvider sets the current provider
@@ -108,7 +108,7 @@ func (m *Manager) SelectNewProvider() (api.ClientType, error) {
 		return "", err
 	}
 
-	return mapStringToClientType(selected)
+	return m.mapStringToClientType(selected)
 }
 
 // GetAvailableProviders returns all providers that can be used
@@ -117,12 +117,24 @@ func (m *Manager) GetAvailableProviders() []api.ClientType {
 	result := []api.ClientType{}
 
 	for _, p := range providers {
-		if ct, err := mapStringToClientType(p); err == nil {
+		if ct, err := m.mapStringToClientType(p); err == nil {
 			result = append(result, ct)
 		}
 	}
 
+	// Add custom providers
+	if m.config.CustomProviders != nil {
+		for name := range m.config.CustomProviders {
+			result = append(result, api.ClientType(name))
+		}
+	}
+
 	return result
+}
+
+// MapStringToClientType converts string to ClientType, handling custom providers
+func (m *Manager) MapStringToClientType(s string) (api.ClientType, error) {
+	return m.mapStringToClientType(s)
 }
 
 // GetMCPConfig returns the MCP configuration
@@ -173,7 +185,7 @@ func mapClientTypeToString(ct api.ClientType) string {
 }
 
 // mapStringToClientType converts string to ClientType
-func mapStringToClientType(s string) (api.ClientType, error) {
+func (m *Manager) mapStringToClientType(s string) (api.ClientType, error) {
 	switch s {
 	case "chutes":
 		return api.ChutesClientType, nil
@@ -194,6 +206,12 @@ func mapStringToClientType(s string) (api.ClientType, error) {
 	case "lmstudio":
 		return api.LMStudioClientType, nil
 	default:
+		// Check if it's a custom provider
+		if m.config.CustomProviders != nil {
+			if _, exists := m.config.CustomProviders[s]; exists {
+				return api.ClientType(s), nil
+			}
+		}
 		return "", fmt.Errorf("unknown provider: %s", s)
 	}
 }

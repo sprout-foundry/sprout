@@ -222,7 +222,13 @@ func processQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	// Check if this is a slash command
 	registry := commands.NewCommandRegistry()
 	if registry.IsSlashCommand(query) {
-		return registry.Execute(query, chatAgent)
+		if err := registry.Execute(query, chatAgent); err != nil {
+			// For slash commands, show error and exit immediately
+			fmt.Fprintf(os.Stderr, "❌ Slash command error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "💡 Use '/help' to see available commands\n")
+			return fmt.Errorf("slash command failed: %w", err)
+		}
+		return nil
 	}
 
 	// Publish query started event

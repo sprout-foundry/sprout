@@ -169,6 +169,11 @@ func TestConvertToolCallsArgumentsAsJSON(t *testing.T) {
 		Conversion: MessageConversion{
 			ArgumentsAsJSON: true,
 		},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "test-model",
+			SupportsVision:      false,
+		},
 	}
 
 	provider, err := NewGenericProvider(config)

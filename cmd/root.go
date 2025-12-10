@@ -20,12 +20,13 @@ to automate and assist in software development tasks. It features a modern CLI
 with automatic web UI startup for rich interactive experiences.
 
 Available commands:
-  agent    - AI agent mode with modern CLI + Web UI
-  shell    - Generate shell scripts from natural language descriptions
-  commit   - Generate commit messages
+  agent        - AI agent mode with modern CLI + Web UI
+  shell        - Generate shell scripts from natural language descriptions
+  commit       - Generate commit messages
   review-staged - Review staged changes
-  log      - View operation logs
-  mcp      - Manage MCP (Model Context Protocol) servers
+  log          - View operation logs
+  mcp          - Manage MCP (Model Context Protocol) servers
+  custom-model - Manage custom model providers
 
 For autonomous operation, try: ledit agent "your intent here"
 
@@ -100,6 +101,7 @@ func init() {
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(mcpCmd)
+	rootCmd.AddCommand(customModelCmd)
 	rootCmd.AddCommand(reviewStagedCmd)
 	rootCmd.AddCommand(shellCmd)
 

@@ -166,51 +166,6 @@ func TestRepetitiveContentDetection(t *testing.T) {
 	}
 }
 
-func TestMissingCompletionSignalHandling(t *testing.T) {
-	agent := &Agent{
-		messages: []api.Message{},
-	}
-	ch := &ConversationHandler{
-		agent: agent,
-	}
-
-	// Test first reminder
-	ch.handleMissingCompletionSignal()
-	if ch.missingCompletionReminders != 1 {
-		t.Errorf("Expected 1 reminder, got %d", ch.missingCompletionReminders)
-	}
-
-	// Test second reminder
-	ch.handleMissingCompletionSignal()
-	if ch.missingCompletionReminders != 2 {
-		t.Errorf("Expected 2 reminders, got %d", ch.missingCompletionReminders)
-	}
-
-	// Test third reminder
-	ch.handleMissingCompletionSignal()
-	if ch.missingCompletionReminders != 3 {
-		t.Errorf("Expected 3 reminders, got %d", ch.missingCompletionReminders)
-	}
-
-	// Test strong reminder (4th)
-	ch.handleMissingCompletionSignal()
-	if ch.missingCompletionReminders != 4 {
-		t.Errorf("Expected 4 reminders, got %d", ch.missingCompletionReminders)
-	}
-
-	// Check that the last transient message contains stronger guidance
-	if len(ch.transientMessages) == 0 {
-		t.Fatalf("expected transient reminder messages to be enqueued")
-	}
-	lastMsg := ch.transientMessages[len(ch.transientMessages)-1]
-	if lastMsg.Role != "user" {
-		t.Errorf("Expected user role for reminder, got %s", lastMsg.Role)
-	}
-
-	if !containsStringForTest(lastMsg.Content, "You have not provided [[TASK_COMPLETE]] after multiple reminders") {
-		t.Error("Expected stronger guidance in 4th reminder")
-	}
-}
 
 func containsStringForTest(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&

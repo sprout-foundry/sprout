@@ -18,7 +18,6 @@ type ConversationHandler struct {
 	errorHandler               *ErrorHandler
 	fallbackParser             *FallbackParser
 	consecutiveBlankIterations int
-	missingCompletionReminders int
 	conversationStartTime      time.Time
 	lastActivityTime           time.Time
 	timeoutDuration            time.Duration
@@ -371,7 +370,6 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			ch.appendToolExecutionSummary(choice.Message.ToolCalls)
 		}
 		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
-		ch.missingCompletionReminders = 0
 
 		toolLogs := ch.flushToolLogsToOutput()
 		turn.ToolLogs = append(turn.ToolLogs, toolLogs...)
@@ -402,16 +400,16 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 		if ch.consecutiveBlankIterations == 1 {
 			// First blank/repetitive iteration - provide explicit, actionable reminder
-			ch.agent.debugLog("🔔 Sending reminder about task completion signal and next action\n")
+			ch.agent.debugLog("🔔 Sending reminder about next action\n")
 			var reminderContent string
 			if isRepetitiveContent {
 				reminderContent = "You appear to be stuck in a repetitive loop. Please break out of this pattern and either:\n" +
-					"1. If you are finished, reply exactly with [[TASK_COMPLETE]]\n" +
+					"1. If you are finished, provide a final summary or result\n" +
 					"2. If not finished, take a concrete action (use tools) or provide a specific result\n" +
 					"3. Avoid repeating the same phrases and move forward with the actual task.\n" +
 					"- Focus on making actual changes or providing specific findings."
 			} else {
-				reminderContent = "You provided no content. If you are finished, reply exactly with [[TASK_COMPLETE]]. If not finished, continue now with your next concrete action/output.\n" +
+				reminderContent = "You provided no content. If you are finished, provide a final summary or result. If not finished, continue now with your next concrete action/output.\n" +
 					"- If you intend to use tools, emit valid tool_calls with proper JSON arguments.\n" +
 					"- Otherwise, proceed with the actual result (not a plan)."
 			}
@@ -435,41 +433,6 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ch.consecutiveBlankIterations = 0
 	}
 
-	// Check if the response indicates completion
-	if ch.responseValidator.IsComplete(contentUsed) {
-		ch.missingCompletionReminders = 0
-		// Remove all variations of the completion signal from the content
-		cleanContent := contentUsed
-		completionSignals := []string{
-			"[[TASK_COMPLETE]]",
-			"[[TASKCOMPLETE]]",
-			"[[TASK COMPLETE]]",
-			"[[task_complete]]",
-			"[[taskcomplete]]",
-			"[[task complete]]",
-		}
-
-		for _, signal := range completionSignals {
-			cleanContent = strings.ReplaceAll(cleanContent, signal, "")
-		}
-		cleanContent = strings.TrimSpace(cleanContent)
-
-		// Update the last message to remove the signal
-		if len(ch.agent.messages) > 0 {
-			ch.agent.messages[len(ch.agent.messages)-1].Content = cleanContent
-		}
-
-		// Apply completion context summarization to prevent contamination in follow-up questions
-		if ch.agent.completionSummarizer != nil && ch.agent.completionSummarizer.ShouldApplySummarization(ch.agent.messages) {
-			ch.agent.messages = ch.agent.completionSummarizer.ApplyCompletionSummarization(ch.agent.messages)
-		}
-
-		// Display final response
-		ch.displayFinalResponse(cleanContent)
-		turn.CompletionReached = true
-		return ch.finalizeTurn(turn, true) // Stop - response explicitly indicates completion
-	}
-
 	// Handle finish reason to respect model's intent
 	if choice.FinishReason == "" {
 		// No finish reason provided - model expects to continue working
@@ -487,25 +450,14 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	if ch.responseValidator.IsIncomplete(contentUsed) {
 		ch.agent.debugLog("⚠️ Response appears incomplete, asking model to continue\n")
-		ch.missingCompletionReminders = 0
 		ch.handleIncompleteResponse()
 		turn.GuardrailTrigger = "incomplete response reminder"
 		return ch.finalizeTurn(turn, false) // Continue conversation to get a complete response
 	}
 
-	// No explicit completion signal and response doesn't look incomplete.
-	// Decide based on provider/model policy whether implicit completion is acceptable.
-	if ch.agent.shouldAllowImplicitCompletion() {
-		ch.agent.debugLog("📝 Treating response as final (implicit completion allowed for provider/model)\n")
-		ch.missingCompletionReminders = 0
-		ch.displayFinalResponse(contentUsed)
-		turn.CompletionReached = true
-		return ch.finalizeTurn(turn, true)
-	}
-
-	ch.agent.debugLog("⏳ Waiting for explicit completion signal per provider/model policy\n")
-	turn.GuardrailTrigger = "missing completion reminder"
-	ch.handleMissingCompletionSignal()
+	// Response doesn't look incomplete.
+	// Respect the model's judgment - continue conversation without reminders
+	ch.agent.debugLog("⏳ Model response continuing conversation\n")
 	return ch.finalizeTurn(turn, false)
 }
 
@@ -565,28 +517,17 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 	case "tool_calls":
 		return false, "model tool_calls finish"
 	case "stop":
-		if ch.responseValidator.IsComplete(content) {
-			fmt.Printf("✅ Model completed task with explicit completion signal\n")
-			ch.agent.debugLog("🏁 Model signaled 'stop' with completion signal\n")
-			ch.displayFinalResponse(content)
-			return true, "completion"
-		} else if ch.responseValidator.IsIncomplete(content) {
+		if ch.responseValidator.IsIncomplete(content) {
 			fmt.Printf("🏁 Model finish reason: stop - Response appears incomplete, requesting continuation\n")
 			ch.agent.debugLog("⚠️ Model signaled 'stop' but response appears incomplete\n")
 			ch.handleIncompleteResponse()
 			return false, "model stop with incomplete content"
 		} else {
-			// Model stopped without explicit completion signal - respect model's judgment
-			if ch.agent.shouldAllowImplicitCompletion() {
-				ch.agent.debugLog("🏁 Model signaled 'stop' - treating as completion (implicit completion allowed)\n")
-				ch.displayFinalResponse(content)
-				return true, "implicit completion"
-			} else {
-				fmt.Printf("🏁 Model finish reason: stop - Explicit completion required, requesting task completion signal\n")
-				ch.agent.debugLog("⏳ Model signaled 'stop' but explicit completion required\n")
-				ch.handleMissingCompletionSignal()
-				return false, "model stop missing explicit completion"
-			}
+			// Model stopped with complete response - respect model's judgment
+			fmt.Printf("🏁 Model finish reason: stop - Response complete, finishing conversation\n")
+			ch.agent.debugLog("🏁 Model signaled 'stop' with complete response\n")
+			ch.displayFinalResponse(content)
+			return true, "completion"
 		}
 	case "length":
 		fmt.Printf("🏁 Model finish reason: length - Hit limit, requesting continuation\n")

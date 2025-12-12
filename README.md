@@ -55,7 +55,7 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 - **Self-Correction Loop**: During complex operations, the system automatically analyzes errors and retries with improved context.
 - **Smart Workspace Context**: Automatically builds and maintains an index of your workspace with syntactic analysis of files. An LLM selects the most relevant files to include as context for any given task.
 - **Leaked Credentials Check**: Automatically scans files for common security concerns like API keys, passwords, database/service URLs, SSH private keys, AWS credentials. This helps prevent accidental exposure of sensitive information.
-- **Search Grounding**: Augments prompts with fresh information from the web using the `#SG "query"` directive.
+- **Search Grounding**: Augments prompts with fresh information from the web using the `WebSearch` tool.
 - **Interactive and Automated Modes**: Confirm each change manually, or run in a fully automated mode with `--skip-prompt`.
 - **Multi-Provider LLM Support**: Works with DeepInfra, OpenAI, Ollama (local/Turbo), OpenRouter, Gemini, DeepSeek, and more.
   - Now includes Z.AI Coding Plan (OpenAI-compatible) via `--provider zai` with models like `GLM-4.6`.

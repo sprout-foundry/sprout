@@ -39,10 +39,11 @@ type RequestDefaults struct {
 
 // MessageConversion defines how messages should be converted
 type MessageConversion struct {
-	IncludeToolCallId     bool   `json:"include_tool_call_id"`
-	ConvertToolRoleToUser bool   `json:"convert_tool_role_to_user"`
-	ReasoningContentField string `json:"reasoning_content_field"`
-	ArgumentsAsJSON       bool   `json:"arguments_as_json"`
+	IncludeToolCallId         bool `json:"include_tool_call_id"`
+	ConvertToolRoleToUser     bool `json:"convert_tool_role_to_user"`
+	ReasoningContentField     string `json:"reasoning_content_field"`
+	ArgumentsAsJSON           bool `json:"arguments_as_json"`
+	SkipToolExecutionSummary  bool `json:"skip_tool_execution_summary"` // For providers with strict role alternation
 }
 
 // StreamingConfig defines streaming behavior

@@ -77,6 +77,13 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 
 // enqueueTransientMessage adds a message that will be sent once and then discarded
 func (ch *ConversationHandler) enqueueTransientMessage(msg api.Message) {
+	// Check for duplicate transient messages to avoid role alternation issues
+	for _, existing := range ch.transientMessages {
+		if existing.Role == msg.Role && existing.Content == msg.Content {
+			ch.agent.debugLog("⚠️ Skipping duplicate transient message: role=%s, content=%q\n", msg.Role, msg.Content)
+			return
+		}
+	}
 	ch.transientMessages = append(ch.transientMessages, msg)
 }
 

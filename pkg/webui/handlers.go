@@ -33,11 +33,11 @@ func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Try to serve from embedded filesystem first
-	embeddedPath := "static/static/" + filePath
+	embeddedPath := "static/" + filePath
 	data, err := staticFiles.ReadFile(embeddedPath)
 	if err != nil {
 		// Fallback to filesystem
-		fullPath := "./pkg/webui/static/static/" + filePath
+		fullPath := "./pkg/webui/static/" + filePath
 		http.ServeFile(w, r, fullPath)
 		return
 	}

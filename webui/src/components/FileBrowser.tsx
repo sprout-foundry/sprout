@@ -72,11 +72,16 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
     setError(null);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      const directoryFiles = mockFileSystem[path] || [];
-      const sortedFiles = directoryFiles.sort((a, b) => {
+      // Use the actual API to browse files
+      const response = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+      if (!response.ok) {
+        throw new Error(`Failed to browse directory: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      const directoryFiles = data.files || [];
+      
+      const sortedFiles = directoryFiles.sort((a: any, b: any) => {
         // Directories first
         if (a.type !== b.type) {
           return a.type === 'directory' ? -1 : 1;
@@ -88,7 +93,16 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
       setFiles(sortedFiles);
       setSelectedFile(null);
     } catch (err) {
-      setError('Failed to load directory');
+      setError(err instanceof Error ? err.message : 'Failed to load directory');
+      // Fallback to mock data for development
+      const directoryFiles = mockFileSystem[path] || [];
+      const sortedFiles = directoryFiles.sort((a, b) => {
+        if (a.type !== b.type) {
+          return a.type === 'directory' ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name);
+      });
+      setFiles(sortedFiles);
     } finally {
       setLoading(false);
     }

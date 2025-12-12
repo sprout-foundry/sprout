@@ -180,22 +180,42 @@ func runNewInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
-	scanner := bufio.NewScanner(os.Stdin)
+	// Create input reader with history support
+	inputReader := console.NewInputReader("ledit> ")
+	
+	// Initialize with existing history from agent
+	inputReader.SetHistory(chatAgent.GetHistory())
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			fmt.Print("ledit> ")
-
-			if !scanner.Scan() {
-				return nil
+			// Disable ESC monitoring temporarily to avoid conflicts during input
+			chatAgent.DisableEscMonitoring()
+			
+			query, err := inputReader.ReadLine()
+			
+			// Re-enable ESC monitoring
+			chatAgent.EnableEscMonitoring()
+			
+			if err != nil {
+				if err.Error() == "interrupted" {
+					fmt.Println("Use 'exit' or 'quit' to exit.")
+					continue
+				}
+				return err
 			}
 
-			query := strings.TrimSpace(scanner.Text())
+			query = strings.TrimSpace(query)
 			if query == "" {
 				continue
 			}
+
+			// Add to agent history
+			chatAgent.AddToHistory(query)
+			// Update input reader history to stay in sync
+			inputReader.SetHistory(chatAgent.GetHistory())
 
 			// Handle exit commands
 			if strings.ToLower(query) == "exit" || strings.ToLower(query) == "quit" {

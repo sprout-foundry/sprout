@@ -6,6 +6,7 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/events"
 )
 
 // ConversationHandler manages the high-level conversation flow
@@ -48,6 +49,9 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		ch.agent.debugLog("DEBUG: ProcessQuery called with: %s\n", userQuery)
 	}
 
+	// Publish query started event
+	ch.agent.publishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(userQuery, ch.agent.GetProvider(), ch.agent.GetModel()))
+
 	// Initialize timeout tracking
 	ch.conversationStartTime = time.Now()
 	ch.lastActivityTime = time.Now()
@@ -74,10 +78,9 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	// Process images if present
 	processedQuery, err := ch.processImagesInQuery(userQuery)
 	if err != nil {
+		ch.agent.publishEvent(events.EventTypeError, events.ErrorEvent("Image processing failed", err))
 		return "", err
 	}
-
-
 
 	// Add user message
 	userMessage := api.Message{
@@ -514,6 +517,25 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 			ch.agent.debugLog("Warning: Failed to commit changes: %v\n", err)
 		}
 	}
+
+	// Get the final response content
+	var finalContent string
+	for i := len(ch.agent.messages) - 1; i >= 0; i-- {
+		if ch.agent.messages[i].Role == "assistant" {
+			finalContent = ch.agent.messages[i].Content
+			break
+		}
+	}
+
+	// Publish query completed event
+	duration := time.Since(ch.conversationStartTime)
+	ch.agent.publishEvent(events.EventTypeQueryCompleted, events.QueryCompletedEvent(
+		ch.pendingUserMessage,
+		finalContent,
+		ch.agent.GetTotalTokens(),
+		ch.agent.GetTotalCost(),
+		duration,
+	))
 
 	// If streaming was enabled and content was streamed, return empty string
 	// to avoid duplicate display in the console

@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import './Sidebar.css';
+import FileTree from './FileTree';
+
+// FileInfo interface (matching FileTree component)
+interface FileInfo {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  modified: number;
+  ext?: string;
+  children?: FileInfo[];
+}
 
 // Provider and model options
 const PROVIDERS = [
@@ -27,6 +39,9 @@ interface SidebarProps {
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
   onSidebarToggle?: () => void;
+  // Props for FileTree when in editor view
+  onFileSelect?: (file: FileInfo) => void;
+  selectedFile?: string;
   // Legacy props for backward compatibility
   provider?: string;
   model?: string;
@@ -53,6 +68,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   onMobileMenuToggle,
   sidebarCollapsed,
   onSidebarToggle,
+  // Props for FileTree when in editor view
+  onFileSelect,
+  selectedFile,
   // Legacy props for backward compatibility
   provider,
   model,
@@ -239,94 +257,174 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          {/* Stats Section - Simplified for mobile */}
-          <div className="stats">
-            <h4>📊 Stats</h4>
-            <div className="stat-item">
-              <span className="label">Queries:</span>
-              <span className="value query-count">{finalStats.queryCount}</span>
+          {/* Context-Aware Content Section */}
+          {currentView === 'editor' ? (
+            /* Editor View - Show File Tree */
+            <div className="context-content">
+              <FileTree
+                onFileSelect={onFileSelect || (() => {})}
+                selectedFile={selectedFile}
+              />
             </div>
-            <div className="stat-item">
-              <span className="label">Status:</span>
-              <span className={`value status ${isConnected ? 'connected' : 'disconnected'}`}>
-                {isConnected ? '🟢' : '🔴'}
-              </span>
-            </div>
-          </div>
+          ) : currentView === 'chat' ? (
+            /* Chat View - Show Chat-specific content */
+            <div className="context-content">
+              {/* Chat Stats */}
+              <div className="stats">
+                <h4>💬 Chat Stats</h4>
+                <div className="stat-item">
+                  <span className="label">Queries:</span>
+                  <span className="value query-count">{finalStats.queryCount}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="label">Status:</span>
+                  <span className={`value status ${isConnected ? 'connected' : 'disconnected'}`}>
+                    {isConnected ? '🟢' : '🔴'}
+                  </span>
+                </div>
+              </div>
 
-          {/* Files Section - Collapsible on mobile */}
-          <div className="section">
-            <h4>📁 Files ({finalRecentFiles.length})</h4>
-            <div className="files-list">
-              {finalRecentFiles.length === 0 ? (
-                <span className="empty">No files</span>
-              ) : (
-                finalRecentFiles.slice(isMobile ? 3 : 5).map((file, index) => (
-                  <div key={index} className="file-item">
-                    <span className={`file-path ${file.modified ? 'modified' : ''}`}>
-                      {file.path.split('/').pop()}
-                    </span>
-                    {file.modified && <span className="badge">✓</span>}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+              {/* Recent Files in Chat */}
+              <div className="section">
+                <h4>📁 Recent Files ({finalRecentFiles.length})</h4>
+                <div className="files-list">
+                  {finalRecentFiles.length === 0 ? (
+                    <span className="empty">No files</span>
+                  ) : (
+                    finalRecentFiles.slice(isMobile ? 3 : 5).map((file, index) => (
+                      <div key={index} className="file-item">
+                        <span className={`file-path ${file.modified ? 'modified' : ''}`}>
+                          {file.path.split('/').pop()}
+                        </span>
+                        {file.modified && <span className="badge">✓</span>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
 
-          {/* Logs Section - Hidden on mobile to save space */}
-          {!isMobile && (
-            <div className="section">
-              <h4>📋 Recent Logs</h4>
-              <div className="logs-list">
-                {finalRecentLogs.length === 0 ? (
-                  <span className="empty">No logs yet</span>
-                ) : (
-                  finalRecentLogs.slice(-5).map((log, index) => {
-                    // Handle both string and LogEntry formats
-                    if (typeof log === 'string') {
-                      return (
-                        <div key={index} className="log-item">
-                          {log}
-                        </div>
-                      );
-                    } else {
-                      // New LogEntry format
-                      const getLogIcon = (level: string) => {
-                        switch (level) {
-                          case 'success': return '✅';
-                          case 'error': return '❌';
-                          case 'warning': return '⚠️';
-                          case 'info': return 'ℹ️';
-                          default: return '📝';
-                        }
-                      };
-                      
-                      const getLogSummary = (logEntry: any) => {
-                        switch (logEntry.type) {
-                          case 'query_started':
-                            return `Query: ${logEntry.data.query?.substring(0, 30)}...`;
-                          case 'tool_execution':
-                            return `${logEntry.data.tool}: ${logEntry.data.status}`;
-                          case 'file_changed':
-                            return `File: ${logEntry.data.path?.split('/').pop()}`;
-                          case 'stream_chunk':
-                            return `Stream: ${logEntry.data.chunk?.substring(0, 30)}...`;
-                          case 'error':
-                            return `Error: ${logEntry.data.message?.substring(0, 30)}...`;
-                          default:
-                            return `${logEntry.type}`;
-                        }
-                      };
-                      
-                      return (
-                        <div key={log.id} className="log-item">
-                          <span className="log-icon">{getLogIcon(log.level)}</span>
-                          <span className="log-text">{getLogSummary(log)}</span>
-                        </div>
-                      );
-                    }
-                  })
-                )}
+              {/* Chat Logs */}
+              <div className="section">
+                <h4>📋 Chat Activity</h4>
+                <div className="logs-list">
+                  {finalRecentLogs.length === 0 ? (
+                    <span className="empty">No activity yet</span>
+                  ) : (
+                    finalRecentLogs.slice(-5).map((log, index) => {
+                      // Handle both string and LogEntry formats
+                      if (typeof log === 'string') {
+                        return (
+                          <div key={index} className="log-item">
+                            {log}
+                          </div>
+                        );
+                      } else {
+                        // New LogEntry format
+                        const getLogIcon = (level: string) => {
+                          switch (level) {
+                            case 'success': return '✅';
+                            case 'error': return '❌';
+                            case 'warning': return '⚠️';
+                            case 'info': return 'ℹ️';
+                            default: return '📝';
+                          }
+                        };
+                        
+                        const getLogSummary = (logEntry: any) => {
+                          switch (logEntry.type) {
+                            case 'query_started':
+                              return `Query: ${logEntry.data.query?.substring(0, 30)}...`;
+                            case 'tool_execution':
+                              return `${logEntry.data.tool}: ${logEntry.data.status}`;
+                            case 'file_changed':
+                              return `File: ${logEntry.data.path?.split('/').pop()}`;
+                            case 'stream_chunk':
+                              return `Stream: ${logEntry.data.chunk?.substring(0, 30)}...`;
+                            case 'error':
+                              return `Error: ${logEntry.data.message?.substring(0, 30)}...`;
+                            default:
+                              return `${logEntry.type}`;
+                          }
+                        };
+                        
+                        return (
+                          <div key={log.id} className="log-item">
+                            <span className="log-icon">{getLogIcon(log.level)}</span>
+                            <span className="log-text">{getLogSummary(log)}</span>
+                          </div>
+                        );
+                      }
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : currentView === 'logs' ? (
+            /* Logs View - Show detailed logs */
+            <div className="context-content">
+              <div className="section">
+                <h4>📋 System Logs</h4>
+                <div className="logs-list logs-expanded">
+                  {finalRecentLogs.length === 0 ? (
+                    <span className="empty">No logs yet</span>
+                  ) : (
+                    finalRecentLogs.slice(-10).map((log, index) => {
+                      // Handle both string and LogEntry formats
+                      if (typeof log === 'string') {
+                        return (
+                          <div key={index} className="log-item">
+                            {log}
+                          </div>
+                        );
+                      } else {
+                        // New LogEntry format
+                        const getLogIcon = (level: string) => {
+                          switch (level) {
+                            case 'success': return '✅';
+                            case 'error': return '❌';
+                            case 'warning': return '⚠️';
+                            case 'info': return 'ℹ️';
+                            default: return '📝';
+                          }
+                        };
+                        
+                        const getLogSummary = (logEntry: any) => {
+                          switch (logEntry.type) {
+                            case 'query_started':
+                              return `Query: ${logEntry.data.query?.substring(0, 50)}...`;
+                            case 'tool_execution':
+                              return `${logEntry.data.tool}: ${logEntry.data.status}`;
+                            case 'file_changed':
+                              return `File: ${logEntry.data.path?.split('/').pop()}`;
+                            case 'stream_chunk':
+                              return `Stream: ${logEntry.data.chunk?.substring(0, 50)}...`;
+                            case 'error':
+                              return `Error: ${logEntry.data.message?.substring(0, 50)}...`;
+                            default:
+                              return `${logEntry.type}`;
+                          }
+                        };
+                        
+                        return (
+                          <div key={log.id} className="log-item">
+                            <span className="log-icon">{getLogIcon(log.level)}</span>
+                            <span className="log-text">{getLogSummary(log)}</span>
+                          </div>
+                        );
+                      }
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Git View - Show git-related content */
+            <div className="context-content">
+              <div className="section">
+                <h4>🔀 Git Status</h4>
+                <div className="files-list">
+                  <span className="empty">Git functionality coming soon</span>
+                </div>
               </div>
             </div>
           )}

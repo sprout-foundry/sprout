@@ -8,6 +8,7 @@ interface FileInfo {
   size: number;
   modified: number;
   ext?: string;
+  children?: FileInfo[]; // For hierarchical structure
 }
 
 interface FileTreeResponse {
@@ -19,20 +20,18 @@ interface FileTreeResponse {
 interface FileTreeProps {
   onFileSelect: (file: FileInfo) => void;
   selectedFile?: string;
+  rootPath?: string;
 }
 
-const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile }) => {
+const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPath = '.' }) => {
   const [files, setFiles] = useState<FileInfo[]>([]);
-  const [currentPath, setCurrentPath] = useState<string>('.');
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set(['.']));
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([rootPath]));
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState<string>(rootPath);
 
   // Fetch files for a given path
-  const fetchFiles = async (path: string) => {
-    setLoading(true);
-    setError(null);
-
+  const fetchFiles = async (path: string): Promise<FileInfo[]> => {
     try {
       const response = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
       if (!response.ok) {
@@ -41,11 +40,28 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile }) => {
 
       const data: FileTreeResponse = await response.json();
       if (data.message === 'success') {
-        setFiles(data.files);
-        setCurrentPath(data.path);
+        return data.files;
       } else {
         throw new Error(data.message);
       }
+    } catch (err) {
+      throw err instanceof Error ? err : new Error('Unknown error');
+    }
+  };
+
+  // Load initial files
+  useEffect(() => {
+    loadInitialFiles();
+  }, [rootPath]);
+
+  const loadInitialFiles = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const rootFiles = await fetchFiles(rootPath);
+      setFiles(rootFiles);
+      setCurrentPath(rootPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       setFiles([]);
@@ -54,48 +70,95 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile }) => {
     }
   };
 
-  // Initial load and path changes
-  useEffect(() => {
-    fetchFiles(currentPath);
-  }, [currentPath]);
+  // Load children for a directory when expanded
+  const loadDirectoryChildren = async (dirPath: string): Promise<FileInfo[]> => {
+    try {
+      return await fetchFiles(dirPath);
+    } catch (err) {
+      console.error(`Failed to load children for ${dirPath}:`, err);
+      return [];
+    }
+  };
 
   // Toggle directory expansion
-  const toggleDir = (path: string) => {
+  const toggleDir = async (dirPath: string) => {
     const newExpanded = new Set(expandedDirs);
-    if (newExpanded.has(path)) {
-      newExpanded.delete(path);
+    
+    if (newExpanded.has(dirPath)) {
+      // Collapse
+      newExpanded.delete(dirPath);
+      setExpandedDirs(newExpanded);
     } else {
-      newExpanded.add(path);
+      // Expand
+      newExpanded.add(dirPath);
+      setExpandedDirs(newExpanded);
+      
+      // Load children if not already loaded
+      const dir = findFileByPath(files, dirPath);
+      if (dir && (!dir.children || dir.children.length === 0)) {
+        const children = await loadDirectoryChildren(dirPath);
+        const updatedFiles = updateFileChildren(files, dirPath, children);
+        setFiles(updatedFiles);
+      }
     }
-    setExpandedDirs(newExpanded);
+  };
+
+  // Find a file by path in the tree
+  const findFileByPath = (fileList: FileInfo[], targetPath: string): FileInfo | null => {
+    for (const file of fileList) {
+      if (file.path === targetPath) {
+        return file;
+      }
+      if (file.children) {
+        const found = findFileByPath(file.children, targetPath);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  // Update children of a specific directory
+  const updateFileChildren = (fileList: FileInfo[], dirPath: string, children: FileInfo[]): FileInfo[] => {
+    return fileList.map(file => {
+      if (file.path === dirPath) {
+        return { ...file, children: children.length > 0 ? children : undefined };
+      }
+      if (file.children) {
+        return { ...file, children: updateFileChildren(file.children, dirPath, children) };
+      }
+      return file;
+    });
   };
 
   // Handle file/directory click
-  const handleClick = (file: FileInfo) => {
+  const handleClick = async (file: FileInfo) => {
     if (file.isDir) {
-      // Navigate into directory or toggle expansion
-      if (expandedDirs.has(file.path)) {
-        toggleDir(file.path);
-      } else {
-        toggleDir(file.path);
-        fetchFiles(file.path);
-      }
+      await toggleDir(file.path);
     } else {
-      // Select file
       onFileSelect(file);
     }
   };
 
-  // Navigate to parent directory
-  const navigateToParent = () => {
-    const parentPath = currentPath.split('/').slice(0, -1).join('.') || '.';
-    setCurrentPath(parentPath);
+  // Refresh the current directory
+  const refresh = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const rootFiles = await fetchFiles(rootPath);
+      setFiles(rootFiles);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Get file icon based on extension or type
   const getFileIcon = (file: FileInfo): string => {
     if (file.isDir) {
-      return expandedDirs.has(file.path) ? '📂' : '📁';
+      const isExpanded = expandedDirs.has(file.path);
+      return isExpanded ? '📂' : '📁';
     }
 
     const ext = file.ext?.toLowerCase();
@@ -132,29 +195,58 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile }) => {
     }
   };
 
-  
+  // Render file tree recursively
+  const renderFileTree = (fileList: FileInfo[], depth: number = 0): JSX.Element[] => {
+    return fileList.map((file) => {
+      const isExpanded = expandedDirs.has(file.path);
+      const isSelected = selectedFile === file.path;
+      const hasChildren = file.isDir && file.children && file.children.length > 0;
+      
+      return (
+        <React.Fragment key={file.path}>
+          <div
+            className={`file-item ${file.isDir ? 'directory' : 'file'} ${isSelected ? 'selected' : ''}`}
+            style={{ paddingLeft: `${depth * 16 + 8}px` }}
+            onClick={() => handleClick(file)}
+          >
+            <div className="file-icon">
+              {getFileIcon(file)}
+            </div>
+            {file.isDir && (
+              <span className="expand-icon">
+                {isExpanded ? '▼' : '▶'}
+              </span>
+            )}
+            <span className="file-name">{file.name}</span>
+            {file.isDir && hasChildren && (
+              <span className="child-count">({file.children?.length})</span>
+            )}
+          </div>
+          
+          {/* Render children if directory is expanded */}
+          {file.isDir && isExpanded && file.children && (
+            <div className="directory-children">
+              {renderFileTree(file.children, depth + 1)}
+            </div>
+          )}
+        </React.Fragment>
+      );
+    });
+  };
+
   return (
     <div className="file-tree">
       <div className="file-tree-header">
         <h3>📁 File Explorer</h3>
         <div className="file-tree-controls">
           <button
-            onClick={() => fetchFiles(currentPath)}
+            onClick={refresh}
             disabled={loading}
             className="refresh-button"
             title="Refresh"
           >
             🔄
           </button>
-          {currentPath !== '.' && (
-            <button
-              onClick={navigateToParent}
-              className="parent-button"
-              title="Parent directory"
-            >
-              ⬆️
-            </button>
-          )}
         </div>
       </div>
 
@@ -178,18 +270,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile }) => {
       )}
 
       <div className="file-list">
-        {files.map((file) => (
-          <div
-            key={file.path}
-            className={`file-item ${file.isDir ? 'directory' : 'file'} ${selectedFile === file.path ? 'selected' : ''}`}
-            onClick={() => handleClick(file)}
-          >
-            <div className="file-icon">
-              {getFileIcon(file)}
-            </div>
-            <span className="file-name">{file.name}</span>
-          </div>
-        ))}
+        {renderFileTree(files)}
 
         {files.length === 0 && !loading && !error && (
           <div className="empty-directory">

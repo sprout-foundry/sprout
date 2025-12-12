@@ -53,6 +53,10 @@ type Config struct {
 	// Custom Providers Configuration
 	CustomProviders map[string]CustomProviderConfig `json:"custom_providers,omitempty"`
 
+	// Command History Configuration
+	CommandHistory []string `json:"command_history,omitempty"`
+	HistoryIndex   int      `json:"history_index,omitempty"`
+
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
 }

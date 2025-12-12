@@ -39,16 +39,27 @@ const GitView: React.FC<GitViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Mock data for development - replace with actual API calls
+  // Load git status from API
   useEffect(() => {
     const loadGitStatus = async () => {
       setIsLoading(true);
       setError(null);
       
       try {
-        // Mock API call - replace with actual fetch
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const response = await fetch('/api/git/status');
+        if (!response.ok) {
+          throw new Error(`Failed to load git status: ${response.statusText}`);
+        }
         
+        const data = await response.json();
+        if (data.message === 'success') {
+          setGitStatus(data.status);
+        } else {
+          throw new Error(data.message || 'Unknown error');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load git status');
+        // Fallback to mock data for development
         const mockStatus: GitStatus = {
           branch: 'main',
           ahead: 0,
@@ -66,11 +77,7 @@ const GitView: React.FC<GitViewProps> = ({
           ],
           clean: false
         };
-        
         setGitStatus(mockStatus);
-      } catch (err) {
-        setError('Failed to load git status');
-        console.error('Git status error:', err);
       } finally {
         setIsLoading(false);
       }

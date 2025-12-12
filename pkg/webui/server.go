@@ -75,9 +75,11 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)
+	mux.HandleFunc("/api/browse", ws.handleAPIBrowse)
 	mux.HandleFunc("/api/file", ws.handleAPIFile)
 	mux.HandleFunc("/api/config", ws.handleAPIConfig)
 	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
+	mux.HandleFunc("/api/git/status", ws.handleAPIGitStatus)
 
 	// Serve Service Worker with proper MIME type
 	mux.HandleFunc("/sw.js", ws.handleServiceWorker)

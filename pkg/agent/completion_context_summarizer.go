@@ -55,19 +55,16 @@ func (ccs *CompletionContextSummarizer) CreateCompletionSummary(messages []api.M
 	summary.WriteString("**Status**: ✅ Task completed successfully\n")
 	summary.WriteString("**Next Steps**: Future instructions should be treated as new tasks.\n")
 
-	// Add specific completion markers
-	summary.WriteString("\n[[COMPLETION_CONTEXT_SUMMARY]]")
-
 	return summary.String()
 }
 
 // extractOriginalRequest finds the original user request
 func (ccs *CompletionContextSummarizer) extractOriginalRequest(messages []api.Message) string {
 	for _, msg := range messages {
-		if msg.Role == "user" && !strings.Contains(msg.Content, "[[TASK_COMPLETE]]") {
-			// Extract first meaningful user message (not completion signal)
+		if msg.Role == "user" {
+			// Extract first meaningful user message
 			content := strings.TrimSpace(msg.Content)
-			if content != "" && !strings.HasPrefix(content, "[[TASK_COMPLETE]]") {
+			if content != "" {
 				// Return first 200 chars of original request
 				if len(content) > 200 {
 					return content[:200] + "..."
@@ -83,14 +80,14 @@ func (ccs *CompletionContextSummarizer) extractOriginalRequest(messages []api.Me
 func (ccs *CompletionContextSummarizer) extractKeyAccomplishments(messages []api.Message) string {
 	var accomplishments []string
 
-	// Look for completion messages that describe what was done
-	for _, msg := range messages {
-		if msg.Role == "assistant" && strings.Contains(msg.Content, "[[TASK_COMPLETE]]") {
-			// Extract meaningful content before completion signal
-			content := strings.Split(msg.Content, "[[TASK_COMPLETE]]")[0]
-			content = strings.TrimSpace(content)
-			if content != "" {
+	// Look for the last meaningful assistant message that describes what was done
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		if msg.Role == "assistant" {
+			content := strings.TrimSpace(msg.Content)
+			if content != "" && len(content) > 20 { // Only consider substantial responses
 				accomplishments = append(accomplishments, "• "+content)
+				break // Take the last substantial response
 			}
 		}
 	}
@@ -142,7 +139,7 @@ func (ccs *CompletionContextSummarizer) ApplyCompletionSummarization(messages []
 		return messages // Keep short conversations intact
 	}
 
-	// Only apply summarization if we have completion signals
+	// Apply summarization to prevent context contamination in follow-up questions
 	if !ccs.ShouldApplySummarization(messages) {
 		return messages
 	}
@@ -166,10 +163,8 @@ func (ccs *CompletionContextSummarizer) ApplyCompletionSummarization(messages []
 	originalRequestFound := false
 	for _, msg := range messages {
 		if msg.Role == "user" && !originalRequestFound {
-			if !strings.Contains(msg.Content, "[[TASK_COMPLETE]]") {
-				summarizedMessages = append(summarizedMessages, msg)
-				originalRequestFound = true
-			}
+			summarizedMessages = append(summarizedMessages, msg)
+			originalRequestFound = true
 		}
 	}
 
@@ -184,12 +179,7 @@ func (ccs *CompletionContextSummarizer) ApplyCompletionSummarization(messages []
 
 // ShouldApplySummarization determines if summarization should be applied
 func (ccs *CompletionContextSummarizer) ShouldApplySummarization(messages []api.Message) bool {
-	// Apply summarization when we have completion signals
-	for _, msg := range messages {
-		if strings.Contains(msg.Content, "[[TASK_COMPLETE]]") {
-			return true
-		}
-	}
-
-	return false
+	// Always apply summarization for conversations longer than 3 messages
+	// to prevent context contamination in follow-up questions
+	return len(messages) > 3
 }

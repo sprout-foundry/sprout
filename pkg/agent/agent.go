@@ -1244,32 +1244,9 @@ func (a *Agent) SetSystemPromptFromFile(filePath string) error {
 	return nil
 }
 
-// ensureStopInformation checks if the stop information is present and adds it if missing
+// ensureStopInformation preserves the original prompt content
 func (a *Agent) ensureStopInformation(prompt string) string {
-	// Check if the completion signal pattern is already present
-	if strings.Contains(prompt, "[[TASK_COMPLETE]]") || strings.Contains(prompt, "TASK_COMPLETE") {
-		return prompt
-	}
-
-	if a.shouldAllowImplicitCompletion() {
-		return prompt // Implicit completion allowed, no stop guard needed
-	}
-
-	// Add the critical stop information
-	stopInfo := `
-
-## COMPLETION SIGNAL - CRITICAL FOR SYSTEM OPERATION
-
-When you have fully completed the user's request and have no more actions to take, you MUST end your response with:
-[[TASK_COMPLETE]]
-
-**IMPORTANT**: This completion signal is REQUIRED to stop the conversation loop. Without it, the system will continue waiting for more actions.
-
-Use [[TASK_COMPLETE]] when you have completed all requested work, provided the full answer, and have no more actions to perform.
-
-**DO NOT provide blank or empty responses**. If you have nothing more to do, use [[TASK_COMPLETE]].`
-
-	return prompt + stopInfo
+	return prompt
 }
 
 // PublishStreamChunk publishes a streaming chunk for real-time updates

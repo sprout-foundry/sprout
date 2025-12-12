@@ -28,7 +28,7 @@ func TestProcessResponse_BlankIterationAddsReminderAndGuidance(t *testing.T) {
 	reminderFound := false
 	guidanceFound := false
 	for _, m := range ch.transientMessages {
-		if m.Role == "user" && strings.Contains(m.Content, "You provided no content.") && strings.Contains(m.Content, "[[TASK_COMPLETE]]") {
+		if m.Role == "user" && strings.Contains(m.Content, "You provided no content.") {
 			reminderFound = true
 		}
 		if m.Role == "system" && strings.Contains(m.Content, "Use the exact tool name from the tools list.") {

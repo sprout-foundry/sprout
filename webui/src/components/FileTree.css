@@ -133,6 +133,7 @@
   border-left: 3px solid transparent;
   gap: 8px;
   min-height: 22px;
+  position: relative;
 }
 
 .file-item:hover {
@@ -152,6 +153,19 @@
   flex-shrink: 0;
 }
 
+.expand-icon {
+  font-size: 10px;
+  color: #888;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.file-item.directory:hover .expand-icon {
+  color: #a0a0ff;
+}
+
 .file-name {
   color: #e0e0e0;
   font-size: 13px;
@@ -160,6 +174,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+}
+
+.child-count {
+  color: #888;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+
+.directory-children {
+  animation: slideDown 0.2s ease-out;
 }
 
 .empty-directory {
@@ -278,6 +305,17 @@
   }
   75% {
     transform: translateX(4px);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
   }
 }
 

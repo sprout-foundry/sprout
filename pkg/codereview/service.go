@@ -64,22 +64,22 @@ func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *Code
 
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
-	if cfg != nil && cfg.LastUsedProvider != "" {
-		// Parse provider name to ClientType
-		if clientType, err := api.ParseProviderName(cfg.LastUsedProvider); err == nil {
-			// Get the model for this provider from configuration
-			model := cfg.ProviderModels[cfg.LastUsedProvider]
-			if model == "" {
-				logger.LogProcessStep("Warning: No model configured for provider " + cfg.LastUsedProvider + ", using default")
-			}
+	
+	// Check environment variable first
+	if providerEnv := os.Getenv("LEDIT_PROVIDER"); providerEnv != "" {
+		if clientType, err := api.ParseProviderName(providerEnv); err == nil {
 			// Use factory method to create provider client with the configured model
-			if client, err := factory.CreateProviderClient(clientType, model); err == nil {
+			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
 				agentClient = client
 			}
 		}
-	} else {
+	} else if cfg != nil && cfg.LastUsedProvider != "" {
 		// Fallback to auto-detection
-		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
+		var lastUsedProvider api.ClientType
+		if cfg != nil && cfg.LastUsedProvider != "" {
+			lastUsedProvider = api.ClientType(cfg.LastUsedProvider)
+		}
+		if clientType, detErr := api.DetermineProvider("", lastUsedProvider); detErr == nil {
 			// Use default model for auto-detected provider
 			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
 				agentClient = client
@@ -116,7 +116,11 @@ func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Log
 		}
 	} else {
 		// Fallback to auto-detection
-		if clientType, detErr := api.DetermineProvider("", ""); detErr == nil {
+		var lastUsedProvider api.ClientType
+		if cfg != nil && cfg.LastUsedProvider != "" {
+			lastUsedProvider = api.ClientType(cfg.LastUsedProvider)
+		}
+		if clientType, detErr := api.DetermineProvider("", lastUsedProvider); detErr == nil {
 			// Use default model for auto-detected provider
 			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
 				agentClient = client
@@ -131,6 +135,11 @@ func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Log
 		contextStore:       make(map[string]*ReviewContext),
 		defaultAgentClient: agentClient,
 	}
+}
+
+// GetDefaultAgentClient returns the default agent client for this service
+func (s *CodeReviewService) GetDefaultAgentClient() api.ClientInterface {
+	return s.defaultAgentClient
 }
 
 // storeContext stores a review context for later retrieval

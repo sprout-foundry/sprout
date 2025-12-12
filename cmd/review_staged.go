@@ -69,9 +69,10 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 
 		// Create the review context
 		ctx := &codereview.ReviewContext{
-			Diff:   stagedDiff,
-			Config: cfg,
-			Logger: logger,
+			Diff:        stagedDiff,
+			Config:      cfg,
+			Logger:      logger,
+			AgentClient: service.GetDefaultAgentClient(),
 		}
 
 		// Create review options for staged review

@@ -106,24 +106,3 @@ func (ch *ConversationHandler) handleIncompleteResponse() {
 		Content: "Please continue with your response. The previous response appears incomplete.",
 	})
 }
-
-// handleMissingCompletionSignal adds a reminder about the completion signal
-func (ch *ConversationHandler) handleMissingCompletionSignal() {
-	// Allow multiple reminders but with increasing intervals to avoid infinite loops
-	if ch.missingCompletionReminders >= 3 {
-		// After 3 reminders, assume the agent is stuck and provide stronger guidance
-		ch.agent.debugLog("⚠️ Multiple completion reminders sent, providing stronger guidance\n")
-		strongReminder := "You have not provided [[TASK_COMPLETE]] after multiple reminders. Please:\n" +
-			"1. If your task is COMPLETE, respond exactly with: [[TASK_COMPLETE]]\n" +
-			"2. If your task is NOT complete, take a specific ACTION (use tools) or provide a concrete RESULT\n" +
-			"3. Do not provide explanations or plans - take action or confirm completion."
-		ch.enqueueTransientMessage(api.Message{Role: "user", Content: strongReminder})
-		ch.missingCompletionReminders++
-		return
-	}
-
-	reminder := "Please confirm completion by responding with [[TASK_COMPLETE]] once all requested work is fully done. If you still have steps remaining, continue with the next action."
-	ch.enqueueTransientMessage(api.Message{Role: "user", Content: reminder})
-	ch.missingCompletionReminders++
-	ch.agent.debugLog("🔔 Added reminder requesting explicit [[TASK_COMPLETE]] signal (reminder #%d)\n", ch.missingCompletionReminders)
-}

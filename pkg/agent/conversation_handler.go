@@ -225,7 +225,9 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	if ch.agent.streamingEnabled && len(ch.agent.streamingBuffer.String()) > 0 {
 		// Use the fully streamed content if available
 		contentUsed = ch.agent.streamingBuffer.String()
-		if ch.agent.debug {
+	}
+
+	if ch.agent.debug {
 			// Debug: Check for ANSI codes in content being added to conversation
 			if strings.Contains(contentUsed, "\x1b[") || strings.Contains(contentUsed, "\x1b(") {
 				ch.agent.debugLog("🚨 ANSI DETECTED in conversation content: %q\n", contentUsed)
@@ -233,7 +235,6 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		}
 		// Sanitize content to remove ANSI codes that might have leaked in
 		contentUsed = ch.sanitizeContent(contentUsed)
-	}
 
 	turn.AssistantContent = contentUsed
 	turn.FinishReason = choice.FinishReason
@@ -294,21 +295,51 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	turn.ToolCalls = append(turn.ToolCalls, choice.Message.ToolCalls...)
 
+	// Preserve tool calls (with generated IDs if needed) so tool outputs remain linked
+	var toolCalls []api.ToolCall
+	if len(choice.Message.ToolCalls) > 0 {
+		toolCalls = make([]api.ToolCall, len(choice.Message.ToolCalls))
+		copy(toolCalls, choice.Message.ToolCalls)
+	}
+
 	// Add to conversation history
 	assistantMsg := api.Message{
 		Role:             "assistant",
 		Content:          contentUsed,
 		ReasoningContent: reasoningContent,
+		ToolCalls:        toolCalls,
 	}
 
-	// Preserve tool calls (with generated IDs if needed) so tool outputs remain linked
-	if len(choice.Message.ToolCalls) > 0 {
-		toolCalls := make([]api.ToolCall, len(choice.Message.ToolCalls))
-		copy(toolCalls, choice.Message.ToolCalls)
-		assistantMsg.ToolCalls = toolCalls
+	// Prevent duplicate assistant messages
+	// Check if this exact content already exists as the last assistant message
+	if len(ch.agent.messages) > 0 {
+		lastMsg := ch.agent.messages[len(ch.agent.messages)-1]
+		if lastMsg.Role == "assistant" && lastMsg.Content == contentUsed {
+			// Enhanced duplicate check: also compare tool call count and IDs
+			isToolDuplicate := len(lastMsg.ToolCalls) == len(toolCalls)
+			if isToolDuplicate {
+				for i, tc := range toolCalls {
+					if i >= len(lastMsg.ToolCalls) || lastMsg.ToolCalls[i].ID != tc.ID {
+						isToolDuplicate = false
+						break
+					}
+				}
+			}
+
+			if isToolDuplicate {
+				ch.agent.debugLog("⚠️ Skipping duplicate assistant message - content and tool calls already exist as last message\n")
+				// Don't add the duplicate, skip tool execution too
+				assistantMsg = api.Message{} // Empty message to skip append
+				// Skip tool execution since we've already done this
+				choice.Message.ToolCalls = nil
+			}
+		}
 	}
 
-	ch.agent.messages = append(ch.agent.messages, assistantMsg)
+	// Only append if we have a valid message (not a duplicate)
+	if assistantMsg.Role != "" {
+		ch.agent.messages = append(ch.agent.messages, assistantMsg)
+	}
 
 	// Token tracking is handled by the agent struct fields
 
@@ -331,7 +362,11 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 		// Add tool results immediately after the assistant message with tool calls
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
-		ch.appendToolExecutionSummary(choice.Message.ToolCalls)
+
+		// Add tool execution summary only if provider doesn't require strict role alternation
+		if !ch.agent.skipToolExecutionSummary() {
+			ch.appendToolExecutionSummary(choice.Message.ToolCalls)
+		}
 		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
 		ch.missingCompletionReminders = 0
 
@@ -343,10 +378,9 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 
 	// If no tool_calls came back but the content suggests attempted tool usage,
-	// inject one-time guidance and try again.
+	// try to parse and execute them using fallback parser
 	if !ch.responseValidator.ValidateToolCalls(contentUsed) {
-		// Guidance disabled for now; rely on ValidateToolCalls alone
-		return ch.finalizeTurn(turn, false) // Continue conversation to allow the model to issue proper tool_calls
+		return ch.handleMalformedToolCalls(contentUsed, turn)
 	}
 
 	// Check for blank iteration (no content and no tool calls)
@@ -433,11 +467,19 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		return ch.finalizeTurn(turn, true) // Stop - response explicitly indicates completion
 	}
 
-	// Otherwise, decide whether this is a final (non-incomplete) response or we need more
-	// If the response appears incomplete, ask the model to continue. Otherwise treat it as final.
-	if choice.FinishReason == "tool_calls" {
-		turn.GuardrailTrigger = "tool_calls finish"
-		return ch.finalizeTurn(turn, false)
+	// Handle finish reason to respect model's intent
+	if choice.FinishReason == "" {
+		// No finish reason provided - model expects to continue working
+		ch.agent.debugLog("🔄 No finish reason - model expects to continue\n")
+		return ch.finalizeTurn(turn, false) // Continue conversation
+	}
+
+	if shouldStop, stopReason := ch.handleFinishReason(choice.FinishReason, contentUsed); shouldStop {
+		turn.GuardrailTrigger = stopReason
+		if stopReason == "completion" || stopReason == "implicit completion" {
+			turn.CompletionReached = true
+		}
+		return ch.finalizeTurn(turn, shouldStop)
 	}
 
 	if ch.responseValidator.IsIncomplete(contentUsed) {
@@ -487,4 +529,97 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 	}
 
 	return "", fmt.Errorf("no assistant response found")
+}
+
+// handleFinishReason processes the model's finish reason and returns whether to stop
+func (ch *ConversationHandler) handleFinishReason(finishReason, content string) (bool, string) {
+	if finishReason == "" {
+		return false, ""
+	}
+
+	ch.agent.debugLog("🏁 Model finish reason: %s\n", finishReason)
+
+	switch finishReason {
+	case "tool_calls":
+		return false, "model tool_calls finish"
+	case "stop":
+		if ch.responseValidator.IsComplete(content) {
+			fmt.Printf("✅ Model completed task with explicit completion signal\n")
+			ch.agent.debugLog("🏁 Model signaled 'stop' with completion signal\n")
+			ch.displayFinalResponse(content)
+			return true, "completion"
+		} else if ch.responseValidator.IsIncomplete(content) {
+			fmt.Printf("🏁 Model finish reason: stop - Response appears incomplete, requesting continuation\n")
+			ch.agent.debugLog("⚠️ Model signaled 'stop' but response appears incomplete\n")
+			ch.handleIncompleteResponse()
+			return false, "model stop with incomplete content"
+		} else {
+			// Model stopped without explicit completion signal - respect model's judgment
+			if ch.agent.shouldAllowImplicitCompletion() {
+				ch.agent.debugLog("🏁 Model signaled 'stop' - treating as completion (implicit completion allowed)\n")
+				ch.displayFinalResponse(content)
+				return true, "implicit completion"
+			} else {
+				fmt.Printf("🏁 Model finish reason: stop - Explicit completion required, requesting task completion signal\n")
+				ch.agent.debugLog("⏳ Model signaled 'stop' but explicit completion required\n")
+				ch.handleMissingCompletionSignal()
+				return false, "model stop missing explicit completion"
+			}
+		}
+	case "length":
+		fmt.Printf("🏁 Model finish reason: length - Hit limit, requesting continuation\n")
+		ch.agent.debugLog("⚠️ Model hit length limit, asking to continue\n")
+		ch.handleIncompleteResponse()
+		return false, "model length limit"
+	case "content_filter":
+		ch.agent.debugLog("🚫 Model response was filtered\n")
+		return false, "content filtered"
+	default:
+		fmt.Printf("🏁 Model finish reason: %s - Unknown reason, continuing\n", finishReason)
+		ch.agent.debugLog("❓ Unknown finish reason: %s\n", finishReason)
+		return false, "unknown finish reason: " + finishReason
+	}
+}
+
+// handleMalformedToolCalls attempts to parse and execute tool calls from malformed content
+func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn TurnEvaluation) bool {
+	ch.agent.debugLog("🔧 Attempting to parse malformed tool calls from content\n")
+
+	fallbackResult := ch.fallbackParser.Parse(content)
+	if len(fallbackResult.ToolCalls) > 0 {
+		ch.agent.debugLog("🔧 Successfully parsed %d tool calls from malformed content\n", len(fallbackResult.ToolCalls))
+
+		// Generate IDs for parsed tool calls
+		for i := range fallbackResult.ToolCalls {
+			if fallbackResult.ToolCalls[i].ID == "" {
+				fallbackResult.ToolCalls[i].ID = ch.toolExecutor.GenerateToolCallID(fallbackResult.ToolCalls[i].Function.Name)
+			}
+		}
+
+		// Update the assistant message with cleaned content and parsed tool calls
+		if len(ch.agent.messages) > 0 {
+			ch.agent.messages[len(ch.agent.messages)-1].Content = fallbackResult.CleanedContent
+			ch.agent.messages[len(ch.agent.messages)-1].ToolCalls = fallbackResult.ToolCalls
+		}
+
+		// Execute the parsed tool calls
+		toolResults := ch.toolExecutor.ExecuteTools(fallbackResult.ToolCalls)
+		ch.agent.messages = append(ch.agent.messages, toolResults...)
+
+		// Add tool execution summary only if provider doesn't require strict role alternation
+		if !ch.agent.skipToolExecutionSummary() {
+			ch.appendToolExecutionSummary(fallbackResult.ToolCalls)
+		}
+		ch.agent.debugLog("✔️ Executed %d fallback-parsed tool calls\n", len(toolResults))
+
+		turn.ToolCalls = append(turn.ToolCalls, fallbackResult.ToolCalls...)
+		turn.ToolResults = append(turn.ToolResults, toolResults...)
+		turn.GuardrailTrigger = "fallback parser success"
+
+		return false // Continue conversation
+	}
+
+	ch.agent.debugLog("⚠️ Fallback parser could not extract valid tool calls\n")
+	turn.GuardrailTrigger = "fallback parser failed"
+	return false // Continue conversation to allow model to issue proper tool_calls
 }

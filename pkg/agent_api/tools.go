@@ -331,8 +331,6 @@ func GetToolDefinitions() []Tool {
 						"url": map[string]interface{}{
 							"type":        "string",
 							"description": "URL to fetch content from",
-							"format":      "uri",
-							"pattern":     "^https?://",
 						},
 					},
 					"required":             []string{"url"},
@@ -348,13 +346,13 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "search_files",
-				Description: "Search text patterns in files",
+				Description: "Search text in files using patterns",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
-						"pattern": map[string]interface{}{
+						"search_pattern": map[string]interface{}{
 							"type":        "string",
-							"description": "Text pattern or regular expression to search for",
+							"description": "Text or regular expression to search for",
 							"minLength":   1,
 						},
 						"directory": map[string]interface{}{
@@ -362,9 +360,9 @@ func GetToolDefinitions() []Tool {
 							"description": "Directory to search in (use '.' for current directory)",
 							"default":     ".",
 						},
-						"file_pattern": map[string]interface{}{
+						"file_glob": map[string]interface{}{
 							"type":        "string",
-							"description": "File pattern to limit search (e.g., '*.go', '*.js')",
+							"description": "File glob to limit search (e.g., '*.go', '*.js')",
 						},
 						"case_sensitive": map[string]interface{}{
 							"type":        "boolean",
@@ -379,7 +377,7 @@ func GetToolDefinitions() []Tool {
 							"default":     100,
 						},
 					},
-					"required":             []string{"pattern"},
+					"required":             []string{"search_pattern"},
 					"additionalProperties": false,
 				},
 			},

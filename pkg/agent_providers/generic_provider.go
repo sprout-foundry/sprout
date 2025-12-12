@@ -34,6 +34,7 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 	timeout := config.GetTimeout()
 	streamingTimeout := config.GetStreamingTimeout()
 
+	
 	return &GenericProvider{
 		config: config,
 		httpClient: &http.Client{

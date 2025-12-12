@@ -169,9 +169,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "search_files",
 		Description: "Search text pattern in files (cross-platform, ignores .git, node_modules, .ledit by default)",
 		Parameters: []ParameterConfig{
-			{"pattern", "string", true, []string{}, "Text pattern or regex to search for"},
+			{"search_pattern", "string", true, []string{"pattern"}, "Text pattern or regex to search for"},
 			{"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
-			{"file_pattern", "string", false, []string{"glob"}, "Glob to limit files (e.g., *.go)"},
+			{"file_glob", "string", false, []string{"file_pattern", "glob"}, "Glob to limit files (e.g., *.go)"},
 			{"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
 			{"max_results", "int", false, []string{}, "Maximum results to return (default: 50)"},
 			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 20480)"},
@@ -204,9 +204,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "find",
 		Description: "Find text pattern in files (alias of search_files)",
 		Parameters: []ParameterConfig{
-			{"pattern", "string", true, []string{}, "Text pattern or regex to search for"},
+			{"pattern", "string", true, []string{"search_pattern"}, "Text pattern or regex to search for"},
 			{"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
-			{"file_pattern", "string", false, []string{"glob"}, "Glob to limit files (e.g., *.go)"},
+			{"file_glob", "string", false, []string{"file_pattern", "glob"}, "Glob to limit files (e.g., *.go)"},
 			{"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
 			{"max_results", "int", false, []string{}, "Maximum results to return (default: 50)"},
 			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 20480)"},
@@ -217,9 +217,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "find_files",
 		Description: "Find text pattern in files (alias of search_files)",
 		Parameters: []ParameterConfig{
-			{"pattern", "string", true, []string{}, "Text pattern or regex to search for"},
+			{"pattern", "string", true, []string{"search_pattern"}, "Text pattern or regex to search for"},
 			{"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
-			{"file_pattern", "string", false, []string{"glob"}, "Glob to limit files (e.g., *.go)"},
+			{"file_glob", "string", false, []string{"file_pattern", "glob"}, "Glob to limit files (e.g., *.go)"},
 			{"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
 			{"max_results", "int", false, []string{}, "Maximum results to return (default: 50)"},
 			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 20480)"},
@@ -778,7 +778,14 @@ func normalizePositiveInt(value any) int {
 }
 
 func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	pattern := args["pattern"].(string)
+	var pattern string
+	if p, ok := args["search_pattern"].(string); ok {
+		pattern = p
+	} else if p, ok := args["pattern"].(string); ok {
+		pattern = p
+	} else {
+		return "", fmt.Errorf("missing required parameter 'search_pattern'")
+	}
 
 	root := "."
 	if v, ok := args["directory"].(string); ok && strings.TrimSpace(v) != "" {
@@ -786,7 +793,9 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 	}
 
 	glob := ""
-	if v, ok := args["file_pattern"].(string); ok {
+	if v, ok := args["file_glob"].(string); ok {
+		glob = v
+	} else if v, ok := args["file_pattern"].(string); ok {
 		glob = v
 	}
 

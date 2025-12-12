@@ -91,7 +91,8 @@ func (ws *ReactWebServer) gatherStats() map[string]interface{} {
 
 	uptime := time.Since(ws.startTime)
 	
-	return map[string]interface{}{
+	// Get agent stats if available
+	stats := map[string]interface{}{
 		"uptime_seconds":    int64(uptime.Seconds()),
 		"connections":       ws.countConnections(),
 		"queries":           ws.queryCount,
@@ -100,6 +101,129 @@ func (ws *ReactWebServer) gatherStats() map[string]interface{} {
 		"start_time":        ws.startTime.Unix(),
 		"uptime_formatted":  uptime.String(),
 	}
+	
+	// Add agent-specific stats if available
+	if ws.agent != nil {
+		stats["provider"] = ws.agent.GetProvider()
+		stats["model"] = ws.agent.GetModel()
+		stats["session_id"] = ws.agent.GetSessionID()
+		stats["total_tokens"] = ws.agent.GetTotalTokens()
+		stats["prompt_tokens"] = ws.agent.GetPromptTokens()
+		stats["completion_tokens"] = ws.agent.GetCompletionTokens()
+		stats["cached_tokens"] = ws.agent.GetCachedTokens()
+		stats["cached_cost_savings"] = ws.agent.GetCachedCostSavings()
+		stats["current_context_tokens"] = ws.agent.GetCurrentContextTokens()
+		stats["max_context_tokens"] = ws.agent.GetMaxContextTokens()
+		stats["context_usage_percent"] = float64(0)
+		if maxTokens := ws.agent.GetMaxContextTokens(); maxTokens > 0 {
+			stats["context_usage_percent"] = float64(ws.agent.GetCurrentContextTokens()) / float64(maxTokens) * 100
+		}
+		stats["context_warning_issued"] = ws.agent.GetContextWarningIssued()
+		stats["total_cost"] = ws.agent.GetTotalCost()
+		stats["last_tps"] = ws.agent.GetLastTPS()
+		stats["current_iteration"] = ws.agent.GetCurrentIteration()
+		stats["max_iterations"] = ws.agent.GetMaxIterations()
+		stats["streaming_enabled"] = ws.agent.IsStreamingEnabled()
+		stats["debug_mode"] = ws.agent.IsDebugMode()
+	}
+	
+	return stats
+}
+
+// handleAPIBrowse handles API requests for directory browsing
+func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get directory from query parameter
+	dir := r.URL.Query().Get("path")
+	if dir == "" {
+		dir = "."
+	}
+
+	// Prevent directory traversal
+	if strings.Contains(dir, "..") {
+		http.Error(w, "Invalid directory", http.StatusBadRequest)
+		return
+	}
+
+	// Read directory
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to JSON response
+	var files []map[string]interface{}
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		fileInfo := map[string]interface{}{
+			"name": entry.Name(),
+			"path": filepath.Join(dir, entry.Name()),
+			"type": "file",
+		}
+
+		if entry.IsDir() {
+			fileInfo["type"] = "directory"
+		}
+
+		if info != nil {
+			fileInfo["size"] = info.Size()
+			fileInfo["modified"] = info.ModTime().Unix()
+		}
+
+		files = append(files, fileInfo)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "success",
+		"files":   files,
+	})
+}
+
+// handleAPIGitStatus handles API requests for git status
+func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// For now, return mock data - in real implementation this would call git commands
+	status := map[string]interface{}{
+		"branch": "main",
+		"ahead":  0,
+		"behind": 0,
+		"staged": []map[string]interface{}{
+			{
+				"path": "pkg/webui/api.go",
+				"status": "M",
+				"changes": map[string]int{"additions": 10, "deletions": 5},
+			},
+		},
+		"modified": []map[string]interface{}{
+			{
+				"path": "webui/src/App.tsx",
+				"status": "M", 
+				"changes": map[string]int{"additions": 5, "deletions": 2},
+			},
+		},
+		"untracked": []map[string]interface{}{},
+		"clean": false,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "success",
+		"status":  status,
+	})
 }
 
 // handleAPIFiles handles API requests for file listing

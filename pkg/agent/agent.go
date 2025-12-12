@@ -78,6 +78,10 @@ type Agent struct {
 	reasoningBuffer     strings.Builder    // Buffer for reasoning content
 	flushCallback       func()             // Callback to flush buffered output
 	asyncOutput         chan string        // Buffered channel for async PrintLine calls
+
+	// Command history for interactive mode
+	commandHistory      []string           // History of entered commands
+	historyIndex        int                // Current position in history for navigation
 	asyncOutputOnce     sync.Once          // Ensure async worker initializes once
 	asyncBufferSize     int                // Optional override for async output buffer (tests)
 
@@ -109,6 +113,9 @@ func (a *Agent) Shutdown() {
 	if a == nil {
 		return
 	}
+
+	// Save command history to configuration before shutdown
+	a.saveHistoryToConfig()
 
 	// Stop MCP servers (best-effort)
 	if a.mcpManager != nil {
@@ -182,6 +189,9 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			falseStopDetectionEnabled: true,
 			conversationPruner:        NewConversationPruner(false),
 		}
+
+		// Load command history from configuration
+		agent.loadHistoryFromConfig()
 
 		// Initialize debug log file if debug enabled
 		if agent.debug {
@@ -339,6 +349,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		falseStopDetectionEnabled: true,
 		conversationPruner:        NewConversationPruner(debug),
 		completionSummarizer:      NewCompletionContextSummarizer(debug),
+		commandHistory:            []string{},
+		historyIndex:              -1,
 	}
 
 	// Initialize debug log file if debug enabled
@@ -373,6 +385,9 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			fmt.Printf("⚠️  MCP initialization skipped: %v\n", err)
 		}
 	}
+
+	// Load command history from configuration
+	agent.loadHistoryFromConfig()
 
 	return agent, nil
 }
@@ -877,6 +892,23 @@ func (a *Agent) GetConfig() *configuration.Config {
 	return a.configManager.GetConfig()
 }
 
+// SetEventBus sets the event bus for real-time UI updates
+func (a *Agent) SetEventBus(eventBus *events.EventBus) {
+	a.eventBus = eventBus
+}
+
+// GetEventBus returns the current event bus
+func (a *Agent) GetEventBus() *events.EventBus {
+	return a.eventBus
+}
+
+// publishEvent publishes an event to the event bus if available
+func (a *Agent) publishEvent(eventType string, data interface{}) {
+	if a.eventBus != nil {
+		a.eventBus.Publish(eventType, data)
+	}
+}
+
 // SelectProvider allows interactive provider selection
 func (a *Agent) SelectProvider() error {
 	newProvider, err := a.configManager.SelectNewProvider()
@@ -1240,18 +1272,6 @@ Use [[TASK_COMPLETE]] when you have completed all requested work, provided the f
 	return prompt + stopInfo
 }
 
-// SetEventBus sets the event bus for real-time UI updates
-func (a *Agent) SetEventBus(eventBus *events.EventBus) {
-	a.eventBus = eventBus
-}
-
-// publishEvent publishes an event to the event bus if available
-func (a *Agent) publishEvent(eventType string, data any) {
-	if a.eventBus != nil {
-		a.eventBus.Publish(eventType, data)
-	}
-}
-
 // PublishStreamChunk publishes a streaming chunk for real-time updates
 func (a *Agent) PublishStreamChunk(chunk string) {
 	a.publishEvent(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk))
@@ -1265,4 +1285,128 @@ func (a *Agent) PublishQueryProgress(message string, iteration int, tokensUsed i
 // PublishToolExecution publishes tool execution events for real-time updates
 func (a *Agent) PublishToolExecution(toolName, action string, details map[string]interface{}) {
 	a.publishEvent(events.EventTypeToolExecution, events.ToolExecutionEvent(toolName, action, details))
+}
+
+// AddToHistory adds a command to the history buffer
+func (a *Agent) AddToHistory(command string) {
+	// Don't add empty commands or duplicates of the last command
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return
+	}
+	
+	// Remove from history if it already exists (to avoid duplicates)
+	for i, cmd := range a.commandHistory {
+		if cmd == command {
+			a.commandHistory = append(a.commandHistory[:i], a.commandHistory[i+1:]...)
+			break
+		}
+	}
+	
+	// Add to history
+	a.commandHistory = append(a.commandHistory, command)
+	
+	// Limit history size
+	if len(a.commandHistory) > 100 {
+		a.commandHistory = a.commandHistory[1:]
+	}
+	
+	// Reset history index to end
+	a.historyIndex = -1
+	
+	// Save history to configuration for persistence
+	a.saveHistoryToConfig()
+}
+
+// GetHistoryCommand returns the command at the given index from history
+func (a *Agent) GetHistoryCommand(index int) string {
+	if index < 0 || index >= len(a.commandHistory) {
+		return ""
+	}
+	return a.commandHistory[index]
+}
+
+// NavigateHistory navigates through command history
+// direction: 1 for up (older), -1 for down (newer)
+// currentIndex: current position in the input line
+func (a *Agent) NavigateHistory(direction int, currentIndex int) (string, int) {
+	if len(a.commandHistory) == 0 {
+		return "", currentIndex
+	}
+	
+	switch direction {
+	case 1: // Up arrow - go to older commands
+		if a.historyIndex == -1 {
+			// Starting from current input, go to last command
+			a.historyIndex = len(a.commandHistory) - 1
+		} else if a.historyIndex > 0 {
+			// Go to older command
+			a.historyIndex--
+		}
+	case -1: // Down arrow - go to newer commands
+		if a.historyIndex == -1 {
+			// Already at newest, return empty
+			return "", currentIndex
+		} else if a.historyIndex < len(a.commandHistory)-1 {
+			// Go to newer command
+			a.historyIndex++
+		} else {
+			// At the newest command, reset to current input
+			a.historyIndex = -1
+			return "", currentIndex
+		}
+	}
+	
+	if a.historyIndex == -1 {
+		return "", currentIndex
+	}
+	
+	return a.commandHistory[a.historyIndex], currentIndex
+}
+
+// ResetHistoryIndex resets the history navigation index
+func (a *Agent) ResetHistoryIndex() {
+	a.historyIndex = -1
+}
+
+// GetHistorySize returns the number of commands in history
+func (a *Agent) GetHistorySize() int {
+	return len(a.commandHistory)
+}
+
+// GetHistory returns the command history
+func (a *Agent) GetHistory() []string {
+	return a.commandHistory
+}
+
+// loadHistoryFromConfig loads command history from the configuration
+func (a *Agent) loadHistoryFromConfig() {
+	if a.configManager == nil {
+		return
+	}
+
+	config := a.configManager.GetConfig()
+	if config != nil && len(config.CommandHistory) > 0 {
+		a.commandHistory = config.CommandHistory
+		a.historyIndex = config.HistoryIndex
+		// Reset history index to -1 for new session navigation
+		a.historyIndex = -1
+	}
+}
+
+// saveHistoryToConfig saves command history to the configuration
+func (a *Agent) saveHistoryToConfig() {
+	if a.configManager == nil {
+		return
+	}
+
+	config := a.configManager.GetConfig()
+	if config != nil {
+		config.CommandHistory = a.commandHistory
+		config.HistoryIndex = a.historyIndex
+		// Save configuration
+		if err := config.Save(); err != nil && a.debug {
+			a.debugLog("Failed to save command history to config: %v\n", err)
+		}
+	}
 }

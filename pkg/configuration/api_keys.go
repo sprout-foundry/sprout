@@ -237,6 +237,7 @@ func getProviderDisplayName(provider string) string {
 
 // RequiresAPIKey checks if a provider requires an API key
 func RequiresAPIKey(provider string) bool {
+	// First check hardcoded providers
 	switch provider {
 	case "ollama-local":
 		return false
@@ -249,7 +250,16 @@ func RequiresAPIKey(provider string) bool {
 	case "ollama-turbo":
 		// Ollama turbo requires API key for remote acceleration
 		return true
-	default:
-		return true
 	}
+	
+	// Check if it's a custom provider
+	config, err := Load()
+	if err == nil && config.CustomProviders != nil {
+		if customProvider, exists := config.CustomProviders[provider]; exists {
+			return customProvider.RequiresAPIKey
+		}
+	}
+	
+	// Default to true for unknown providers
+	return true
 }

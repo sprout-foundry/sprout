@@ -6,6 +6,7 @@ import (
 
 var explicitCompletionProviders = map[string]struct{}{
 	"lmstudio": {},
+	"ai-worker": {},
 }
 
 func (a *Agent) shouldAllowImplicitCompletion() bool {

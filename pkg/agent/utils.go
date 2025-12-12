@@ -49,8 +49,17 @@ func (a *Agent) ToolLog(action, target string) {
 	const slightlyLighterGray = "\033[38;5;246m" // Slightly lighter gray for the executed portion
 	const reset = "\033[0m"
 
-	// Format: [4] read file filename.go
-	iterInfo := fmt.Sprintf("[%d]", a.currentIteration)
+	// Calculate context usage percentage
+	var contextPercent string
+	if a.maxContextTokens > 0 && a.currentContextTokens > 0 {
+		percentage := float64(a.currentContextTokens) / float64(a.maxContextTokens) * 100
+		contextPercent = fmt.Sprintf(" - %.0f%%", percentage)
+	} else {
+		contextPercent = ""
+	}
+
+	// Format: [4 - 30%] read file filename.go
+	iterInfo := fmt.Sprintf("[%d%s]", a.currentIteration, contextPercent)
 
 	var message string
 	if target != "" {

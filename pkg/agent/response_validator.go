@@ -174,6 +174,8 @@ func (rv *ResponseValidator) containsAttemptedToolCalls(content string) bool {
 		`{"name":`,
 		`{"tool":`,
 		`{"function":`,
+		`<function=`,
+		`</function>`,
 		"I'll use the",
 		"I'll call the",
 		"Using the",

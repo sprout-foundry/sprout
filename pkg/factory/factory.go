@@ -193,13 +193,14 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 			MaxTokens: &customProvider.ContextSize,
 		},
 		Conversion: providers.MessageConversion{
-			IncludeToolCallId:     true,
-			ConvertToolRoleToUser: false,
-			ArgumentsAsJSON:       false,
+			IncludeToolCallId:        true,
+			ConvertToolRoleToUser:    false,  // Keep tool roles as "tool" - they're exempt from alternation
+			ArgumentsAsJSON:          false,
+			SkipToolExecutionSummary: true,   // Skip summary to avoid breaking role alternation
 		},
 		Streaming: providers.StreamingConfig{
 			Format:         "sse",
-			ChunkTimeoutMs: 5000,
+			ChunkTimeoutMs: 120000, // 2 minutes - reasonable for LLM streaming
 			DoneMarker:     "[DONE]",
 		},
 		Models: providers.ModelConfig{

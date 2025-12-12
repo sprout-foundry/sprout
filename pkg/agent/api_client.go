@@ -446,12 +446,29 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 				ac.agent.debugLog("🔍 Provider: %s, Implicit completion allowed: %t\n", providerName, implicitAllowed)
 
 				if !implicitAllowed {
-					handler := NewConversationHandler(ac.agent)
-					shouldStop := handler.processResponse(result.resp)
-					if shouldStop {
-						ac.agent.debugLog("✅ Streaming response complete - explicit completion signal received\n")
-					} else {
-						ac.agent.debugLog("➡️ Streaming response incomplete - waiting for explicit completion signal\n")
+					// Check if response has already been processed by the main conversation handler
+					// We can detect this by checking if the agent's messages already contains the response content
+					responseProcessed := false
+					if len(result.resp.Choices) > 0 && len(ac.agent.messages) > 0 {
+						responseContent := result.resp.Choices[0].Message.Content
+						// Look for this content in the last few messages
+						for i := len(ac.agent.messages) - 1; i >= 0 && i >= len(ac.agent.messages)-3; i-- {
+							if ac.agent.messages[i].Role == "assistant" && ac.agent.messages[i].Content == responseContent {
+								responseProcessed = true
+								ac.agent.debugLog("🔍 Response already processed by main conversation handler, skipping duplicate processing\n")
+								break
+							}
+						}
+					}
+
+					if !responseProcessed {
+						handler := NewConversationHandler(ac.agent)
+						shouldStop := handler.processResponse(result.resp)
+						if shouldStop {
+							ac.agent.debugLog("✅ Streaming response complete - explicit completion signal received\n")
+						} else {
+							ac.agent.debugLog("➡️ Streaming response incomplete - waiting for explicit completion signal\n")
+						}
 					}
 				} else {
 					ac.agent.debugLog("✅ Streaming response complete - implicit completion allowed for provider\n")

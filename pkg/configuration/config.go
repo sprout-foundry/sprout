@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/alantheprice/ledit/pkg/agent_providers"
 )
 
 const (
@@ -117,6 +118,7 @@ type CustomProviderConfig struct {
 	RequiresAPIKey bool   `json:"requires_api_key"`
 	APIKey         string `json:"api_key,omitempty"`   // Stored in config (not recommended for production)
 	EnvVar         string `json:"env_var,omitempty"`   // Environment variable name for API key
+	Conversion     providers.MessageConversion `json:"message_conversion,omitempty"` // Message conversion configuration
 }
 
 // Optional helpers

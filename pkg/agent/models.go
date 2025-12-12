@@ -25,6 +25,20 @@ func (a *Agent) GetProviderType() api.ClientType {
 	return a.clientType
 }
 
+// skipToolExecutionSummary returns true if the current provider requires skipping tool execution summaries
+// to maintain proper role alternation (e.g., for providers with strict Jinja2 template validation)
+func (a *Agent) skipToolExecutionSummary() bool {
+	providerName := a.GetProvider()
+
+	// List of providers that require strict role alternation
+	// These providers have Jinja2 templates that enforce user/assistant alternation
+	strictAlternationProviders := map[string]bool{
+		"ai-worker": true,  // Custom provider with strict alternation validation
+	}
+
+	return strictAlternationProviders[providerName]
+}
+
 // selectDefaultModel chooses an appropriate default model from available models
 func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientType) string {
 	// If there are no models, return empty

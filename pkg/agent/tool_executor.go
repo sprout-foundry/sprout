@@ -141,7 +141,7 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 
 		// Show progress
 		if len(toolCalls) > 1 {
-			te.agent.debugLog("🔧 Executing tool %d/%d: %s\n", i+1, len(toolCalls), tc.Function.Name)
+			te.agent.debugLog("🔧 Executing tool %d/%d [%.0f%%]: %s\n", i+1, len(toolCalls), float64(i+1)/float64(len(toolCalls))*100, tc.Function.Name)
 		}
 
 		// Execute tool

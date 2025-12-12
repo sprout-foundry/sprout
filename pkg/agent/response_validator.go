@@ -17,37 +17,7 @@ func NewResponseValidator(agent *Agent) *ResponseValidator {
 	}
 }
 
-// IsComplete checks if a response explicitly indicates completion
-func (rv *ResponseValidator) IsComplete(content string) bool {
-	if len(content) == 0 {
-		return false
-	}
 
-	// Check for various forms of the completion signal
-	// LLMs might use slightly different formats
-	completionSignals := []string{
-		"[[TASK_COMPLETE]]",
-		"[[TASKCOMPLETE]]",
-		"[[TASK COMPLETE]]",
-		"[[task_complete]]",
-		"[[taskcomplete]]",
-		"[[task complete]]",
-	}
-
-	// Normalize content for case-insensitive matching
-	contentNormalized := strings.ToLower(strings.ReplaceAll(content, " ", ""))
-
-	for _, signal := range completionSignals {
-		// Normalize signal for comparison
-		signalNormalized := strings.ToLower(strings.ReplaceAll(signal, " ", ""))
-		if strings.Contains(contentNormalized, signalNormalized) {
-			rv.agent.debugLog("✅ Found completion signal: %s\n", signal)
-			return true
-		}
-	}
-
-	return false
-}
 
 // IsIncomplete checks if a response appears to be incomplete
 func (rv *ResponseValidator) IsIncomplete(content string) bool {
@@ -65,8 +35,7 @@ func (rv *ResponseValidator) IsIncomplete(content string) bool {
 
 // hasIncompletePatterns checks for patterns indicating incomplete response
 func (rv *ResponseValidator) hasIncompletePatterns(content string) bool {
-	// With the explicit completion signal approach, we don't need complex pattern matching
-	// Just check for obvious incomplete endings
+	// Check for obvious incomplete endings
 	trimmed := strings.TrimSpace(content)
 
 	// Check for ellipsis at the end

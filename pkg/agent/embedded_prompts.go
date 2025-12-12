@@ -82,8 +82,7 @@ func GetEmbeddedSystemPromptWithProvider(provider string) string {
 - USE appropriate search strategies (grep vs file reading)
 - BALANCE thoroughness with efficiency
 
-### COMPLETION SIGNALING
-- CLEAR completion indicators: [[TASK_COMPLETE]]
+### COMPLETION CRITERIA
 - EVIDENCE-based completion: working code + passing tests
 - NO open loops or unresolved dependencies
 - READY for next phase or commit`

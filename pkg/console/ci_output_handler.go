@@ -79,38 +79,6 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 		fmt.Fprintf(os.Stderr, "[DEBUG CIOutputHandler.Write] Buffer now: %q\n", content)
 	}
 
-	// Check if we might be in the middle of a completion signal
-	partialSignals := []string{"[", "[[", "[[T", "[[TA", "[[TAS", "[[TASK",
-		"[[TASK_", "[[TASK_C", "[[TASK_CO", "[[TASK_COM", "[[TASK_COMP",
-		"[[TASK_COMPL", "[[TASK_COMPLE", "[[TASK_COMPLET", "[[TASK_COMPLETE"}
-
-	for _, partial := range partialSignals {
-		if strings.HasSuffix(content, partial) {
-			// Wait for more content
-			return len(p), nil
-		}
-	}
-
-	// Filter out task completion signals
-	completionSignals := []string{
-		"[[TASK_COMPLETE]]",
-		"[[TASKCOMPLETE]]",
-		"[[TASK COMPLETE]]",
-		"[[task_complete]]",
-		"[[taskcomplete]]",
-		"[[task complete]]",
-	}
-
-	originalContent := content
-	for _, signal := range completionSignals {
-		content = strings.ReplaceAll(content, signal, "")
-	}
-
-	// Debug: log if we filtered anything
-	if os.Getenv("LEDIT_DEBUG_OUTPUT") == "1" && originalContent != content {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Filtered completion signal from output\n")
-	}
-
 	// Clear buffer
 	h.buffer.Reset()
 

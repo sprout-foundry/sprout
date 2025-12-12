@@ -4,7 +4,6 @@ import Chat from './components/Chat';
 import GitView from './components/GitView';
 import Status from './components/Status';
 import UIManager from './components/UIManager';
-import FileTree from './components/FileTree';
 import CodeEditor from './components/CodeEditor';
 import LogsView from './components/LogsView';
 import Terminal from './components/Terminal';
@@ -554,6 +553,9 @@ function App() {
           isMobile={isMobile}
           sidebarCollapsed={sidebarCollapsed}
           onSidebarToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          // Props for FileTree when in editor view
+          onFileSelect={handleFileSelect}
+          selectedFile={state.selectedFile?.path}
         />
         <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''}`}>
           <Status isConnected={state.isConnected} stats={state.stats} />
@@ -583,10 +585,6 @@ function App() {
             />
           ) : (
             <div className="editor-view">
-              <FileTree
-                onFileSelect={handleFileSelect}
-                selectedFile={state.selectedFile?.path}
-              />
               <CodeEditor
                 file={state.selectedFile}
                 onSave={handleFileSave}

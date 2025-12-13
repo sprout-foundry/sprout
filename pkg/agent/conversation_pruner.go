@@ -46,10 +46,10 @@ type ConversationPruner struct {
 func NewConversationPruner(debug bool) *ConversationPruner {
 	return &ConversationPruner{
 		strategy:             PruneStrategyAdaptive, // Default to adaptive
-		contextThreshold:     0.7,                   // 70% threshold (used in hybrid approach)
-		minMessagesToKeep:    3,                     // Always keep at least system + first query + first response
-		recentMessagesToKeep: 10,                    // Keep last 10 messages
-		slidingWindowSize:    20,                    // For sliding window strategy
+		contextThreshold:     0.85,                  // 85% threshold (less aggressive pruning)
+		minMessagesToKeep:    5,                      // Always keep at least 5 messages
+		recentMessagesToKeep: 15,                     // Keep last 15 messages (more context)
+		slidingWindowSize:    30,                     // For sliding window strategy
 		debug:                debug,
 	}
 }
@@ -128,9 +128,9 @@ func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider
 		return false
 	}
 
-	// Fallback/default behavior: Hybrid threshold: 70K tokens OR 70% of context limit
-	const tokenCeiling = 70000      // 70K token absolute ceiling
-	const percentageThreshold = 0.7 // 70% threshold
+	// Fallback/default behavior: Higher threshold: 85K tokens OR 85% of context limit
+	const tokenCeiling = 85000      // 85K token absolute ceiling (less aggressive)
+	const percentageThreshold = 0.85 // 85% threshold (less aggressive)
 
 	// Check if we hit the absolute token ceiling
 	if currentTokens >= tokenCeiling {

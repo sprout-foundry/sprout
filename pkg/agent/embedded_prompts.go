@@ -38,56 +38,7 @@ func GetEmbeddedSystemPrompt() string {
 func GetEmbeddedSystemPromptWithProvider(provider string) string {
 	promptContent := GetEmbeddedSystemPrompt()
 
-	// Add provider-specific enhancements
-	switch provider {
-	case "zai":
-		// GLM-4.6 specific constraints based on research patterns for optimal coding performance
-		promptContent = promptContent + `
-
-## GLM-4.6 Critical Constraints (Optimized for Coding Tasks)
-
-### Cognitive Load Management
-- LIMIT concurrent cognitive tasks to maximum 3-5 todos
-- AVOID decision paralysis - make reasonable assumptions and proceed
-- PATTERN MATCH over exhaustive analysis when similar solutions exist
-- THINK step-by-step but ACT decisively
-
-### Tool Usage Optimization
-- BATCH related operations (read multiple files together)
-- CHAIN tool calls logically (analyze → plan → implement → verify)
-- MINIMIZE context switching between different types of operations
-- USE tools with purpose, not exploratory wandering
-
-### Code-Specific Reasoning
-- FOCUS on the specific programming language and framework patterns
-- LEVERAGE existing codebase conventions and idioms
-- PREFER refactoring over rewriting when possible
-- CONSIDER testability and maintainability in all changes
-
-### Response Efficiency Patterns
-- STRUCTURE responses: action → result → next step (if needed)
-- MINIMIZE meta-commentary about your thinking process
-- PROVIDE concrete evidence of success (test output, build results)
-- RECOGNIZE completion criteria explicitly
-
-### Error Recovery Protocol
-- SYSTEMATIC error analysis: symptom → root cause → solution
-- LEVERAGE error messages as diagnostic tools
-- ISOLATE variables when debugging (test one change at a time)
-- DOCUMENT fixes implicitly through working code
-
-### Performance Optimization
-- AVOID unnecessary file I/O operations
-- CACHE relevant context during extended sessions
-- USE appropriate search strategies (grep vs file reading)
-- BALANCE thoroughness with efficiency
-
-### COMPLETION CRITERIA
-- EVIDENCE-based completion: working code + passing tests
-- NO open loops or unresolved dependencies
-- READY for next phase or commit`
-	}
-
+	// No provider-specific enhancements needed
 	return promptContent
 }
 

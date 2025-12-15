@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 )
@@ -114,25 +115,56 @@ func (ir *InputReader) ReadLine() (string, error) {
 	}
 }
 
-// readEscapeSequence reads the rest of an escape sequence
+// readEscapeSequence reads the rest of an escape sequence with timeout
 func (ir *InputReader) readEscapeSequence() (string, error) {
+	// Use a small timeout to avoid blocking on incomplete sequences
 	buf := make([]byte, 2)
-	n, err := os.Stdin.Read(buf)
-	if err != nil {
-		return "", err
+	
+	// Try to read the first byte with a small timeout
+	done := make(chan bool, 1)
+	var n int
+	var readErr error
+	
+	go func() {
+		n, readErr = os.Stdin.Read(buf)
+		done <- true
+	}()
+	
+	// Wait for read with timeout
+	select {
+	case <-done:
+		// Read completed
+	case <-time.After(time.Millisecond * 50):
+		// Timeout - return error to avoid consuming input
+		return "", fmt.Errorf("escape sequence timeout")
 	}
-	if n < 2 {
+	
+	if readErr != nil || n == 0 {
 		return "", fmt.Errorf("incomplete escape sequence")
 	}
+	
+	// If we got the first byte, try to get the second
+	if n == 1 {
+		// Small delay to allow the second byte to arrive
+		time.Sleep(time.Millisecond * 10)
+		n2, err2 := os.Stdin.Read(buf[1:2])
+		if err2 != nil || n2 == 0 {
+			// Put the byte back if it's not part of an escape sequence
+			// This prevents consuming regular input
+			return "", fmt.Errorf("incomplete escape sequence")
+		}
+		n = 2
+	}
 
-	sequence := string(buf)
+	sequence := string(buf[:n])
 	
 	// Handle extended sequences (like Delete which is [3~)
 	if sequence == "[3" {
-		// Read the final ~
+		// Try to read the final ~ with timeout
+		time.Sleep(time.Millisecond * 10)
 		finalBuf := make([]byte, 1)
-		n, err := os.Stdin.Read(finalBuf)
-		if err != nil || n == 0 || finalBuf[0] != '~' {
+		n3, err3 := os.Stdin.Read(finalBuf)
+		if err3 != nil || n3 == 0 || finalBuf[0] != '~' {
 			return "", fmt.Errorf("incomplete escape sequence")
 		}
 		sequence += "~"

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/term"
@@ -66,6 +67,28 @@ func (ir *InputReader) ReadLine() (string, error) {
 			// Read the rest of the escape sequence
 			sequence, err := ir.readEscapeSequence()
 			if err != nil {
+				// Check if we have leftover bytes that need to be processed as regular input
+				if strings.Contains(err.Error(), "leftover byte:") {
+					// Extract the leftover character and process it as regular input
+					errStr := err.Error()
+					if len(errStr) > len("incomplete escape sequence with leftover byte: ") {
+						leftoverChar := errStr[len("incomplete escape sequence with leftover byte: ")]
+						if leftoverChar >= 32 && leftoverChar <= 126 {
+							ir.insertChar(rune(leftoverChar))
+						}
+					}
+				} else if strings.Contains(err.Error(), "leftover bytes:") {
+					// Extract the leftover characters and process them as regular input
+					errStr := err.Error()
+					if len(errStr) > len("incomplete escape sequence with leftover bytes: ") {
+						leftoverBytes := errStr[len("incomplete escape sequence with leftover bytes: "):]
+						for _, char := range leftoverBytes {
+							if char >= 32 && char <= 126 {
+								ir.insertChar(char)
+							}
+						}
+					}
+				}
 				continue
 			}
 
@@ -94,6 +117,17 @@ func (ir *InputReader) ReadLine() (string, error) {
 			fmt.Printf("\r\033[K")
 			fmt.Println("^C")
 			return "", fmt.Errorf("interrupted")
+		case 26: // Ctrl+Z - suspend to background
+			// Restore terminal state before suspending
+			term.Restore(int(os.Stdin.Fd()), oldState)
+			// Send SIGTSTP to ourselves to trigger suspension
+			syscall.Kill(syscall.Getpid(), syscall.SIGTSTP)
+			// This won't be reached until the process is resumed
+			// Set terminal back to raw mode after resume
+			if newState, err := term.MakeRaw(int(os.Stdin.Fd())); err == nil {
+				oldState = newState
+			}
+			ir.refreshLine()
 		case 13: // Enter/Return
 			// Move to next line and clear any remaining content
 			fmt.Println()
@@ -149,9 +183,10 @@ func (ir *InputReader) readEscapeSequence() (string, error) {
 		time.Sleep(time.Millisecond * 10)
 		n2, err2 := os.Stdin.Read(buf[1:2])
 		if err2 != nil || n2 == 0 {
-			// Put the byte back if it's not part of an escape sequence
-			// This prevents consuming regular input
-			return "", fmt.Errorf("incomplete escape sequence")
+			// CRITICAL FIX: Put the byte back by treating it as regular input
+			// We can't literally "unread" in Go, so we need to handle this differently
+			// Instead, we'll return a special error that indicates we have leftover bytes
+			return "", fmt.Errorf("incomplete escape sequence with leftover byte: %c", buf[0])
 		}
 		n = 2
 	}
@@ -165,7 +200,8 @@ func (ir *InputReader) readEscapeSequence() (string, error) {
 		finalBuf := make([]byte, 1)
 		n3, err3 := os.Stdin.Read(finalBuf)
 		if err3 != nil || n3 == 0 || finalBuf[0] != '~' {
-			return "", fmt.Errorf("incomplete escape sequence")
+			// CRITICAL FIX: Put the bytes back by treating them as regular input
+			return "", fmt.Errorf("incomplete escape sequence with leftover bytes: %s", sequence)
 		}
 		sequence += "~"
 	}

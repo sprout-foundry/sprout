@@ -62,6 +62,7 @@ func runSimpleEnhancedMode(chatAgent *agent.Agent, isInteractive bool, args []st
 	}
 
 	// Setup signal handling with buffered channel for multiple signals
+	// Note: We intentionally do NOT capture SIGTSTP (Ctrl+Z) to allow process suspension
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 

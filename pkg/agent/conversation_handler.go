@@ -312,32 +312,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ToolCalls:        toolCalls,
 	}
 
-	// Prevent duplicate assistant messages
-	// Check if this exact content already exists as the last assistant message
-	if len(ch.agent.messages) > 0 {
-		lastMsg := ch.agent.messages[len(ch.agent.messages)-1]
-		if lastMsg.Role == "assistant" && lastMsg.Content == contentUsed {
-			// Enhanced duplicate check: also compare tool call count and IDs
-			isToolDuplicate := len(lastMsg.ToolCalls) == len(toolCalls)
-			if isToolDuplicate {
-				for i, tc := range toolCalls {
-					if i >= len(lastMsg.ToolCalls) || lastMsg.ToolCalls[i].ID != tc.ID {
-						isToolDuplicate = false
-						break
-					}
-				}
-			}
-
-			if isToolDuplicate {
-				ch.agent.debugLog("⚠️ Skipping duplicate assistant message - content and tool calls already exist as last message\n")
-				// Don't add the duplicate, skip tool execution too
-				assistantMsg = api.Message{} // Empty message to skip append
-				// Skip tool execution since we've already done this
-				choice.Message.ToolCalls = nil
-			}
-		}
-	}
-
+	
 	// Only append if we have a valid message (not a duplicate)
 	if assistantMsg.Role != "" {
 		ch.agent.messages = append(ch.agent.messages, assistantMsg)

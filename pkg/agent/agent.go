@@ -522,6 +522,11 @@ func (a *Agent) DisableEscMonitoring() {
 		a.escMonitoringCancel()
 		a.escMonitoringCancel = nil
 	}
+	
+	// CRITICAL FIX: Clear the read deadline to prevent character loss on next input
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		os.Stdin.SetReadDeadline(time.Time{}) // Clear the deadline
+	}
 }
 
 // monitorEscKey monitors for Esc key press in a separate goroutine with context cancellation
@@ -617,6 +622,11 @@ func (a *Agent) HandleInterrupt() string {
 	// Disable ESC monitoring temporarily to avoid conflicts during input
 	a.DisableEscMonitoring()
 	
+	// CRITICAL FIX: Clear any remaining read deadline before user input
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		os.Stdin.SetReadDeadline(time.Time{}) // Clear the deadline
+	}
+	
 	// Read input more reliably
 	var choice string
 	choiceBytes := make([]byte, 1024)
@@ -634,6 +644,10 @@ func (a *Agent) HandleInterrupt() string {
 	switch strings.TrimSpace(choice) {
 	case "1":
 		fmt.Print("Enter clarification: ")
+		// CRITICAL FIX: Clear any remaining read deadline before clarification input
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			os.Stdin.SetReadDeadline(time.Time{}) // Clear the deadline
+		}
 		var clarification string
 		clarificationBytes := make([]byte, 4096)
 		n, err := os.Stdin.Read(clarificationBytes)

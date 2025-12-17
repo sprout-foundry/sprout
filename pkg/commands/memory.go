@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/ui"
 	"golang.org/x/term"
 )
 
@@ -85,11 +84,13 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 	}
 
 	// Convert sessions to dropdown items (reverse order for newest first)
-	items := make([]ui.DropdownItem, 0, len(sessions))
+	items := make([]agent.SessionItem, 0, len(sessions))
 	for i := len(sessions) - 1; i >= 0; i-- {
 		session := sessions[i]
 		preview := agent.GetSessionPreview(session.SessionID)
-		item := &ui.SessionItem{
+		item := agent.SessionItem{
+			Label:     fmt.Sprintf("%s - %s", session.LastUpdated.Format("2006-01-02 15:04:05"), preview),
+			Value:     session.SessionID,
 			SessionID: session.SessionID,
 			Timestamp: session.LastUpdated,
 			Preview:   preview,
@@ -103,23 +104,20 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 		return nil
 	}
 
-	selected, err := chatAgent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "=== SESSION SELECTOR ===",
-		SearchPrompt: "🔍 Search: ",
-		ShowCounts:   true,
-	})
-	if err != nil {
-		fmt.Printf("\r\nSession selection cancelled.\r\n")
+	// UI not available - select newest session or return
+	fmt.Println("Interactive session selection not available.")
+	var sessionID string
+	if len(sessions) > 0 {
+		sessionID = sessions[len(sessions)-1].SessionID // Get newest
+		fmt.Printf("Auto-selected newest session: %s\n", sessionID)
+	} else {
+		fmt.Println("No sessions available to load.")
 		return nil
 	}
-
-	// Get the selected session ID and load it
-	sessionID := selected.Value().(string)
 	state, err := chatAgent.LoadState(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to load session: %v", err)
 	}
-
 	chatAgent.ApplyState(state)
 	fmt.Printf("\r\n✅ Conversation memory loaded for session: %s\r\n", sessionID)
 

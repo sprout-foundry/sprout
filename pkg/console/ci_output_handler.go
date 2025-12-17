@@ -290,20 +290,20 @@ func (h *CIOutputHandler) stripANSIEscapeCodes(text string) string {
 
 // stripCursorSequences removes cursor control sequences from text
 func (h *CIOutputHandler) stripCursorSequences(text string) string {
-	// Remove sequences like \033[K (clear to end of line) and other cursor controls
-	replacements := []string{
-		"\033[K",    // Clear to end of line
-		"\033[2K",   // Clear entire line
-		"\033[J",    // Clear to end of screen
-		"\033[2J",   // Clear entire screen
-		"\033[H",    // Home cursor
-		"\033[?25l", // Hide cursor
-		"\033[?25h", // Show cursor
+	// Remove cursor control sequences using consolidated functions
+	replacements := map[string]string{
+		ClearToEndOfLineSeq():    "", // Clear to end of line
+		ClearLineSeq():            "", // Clear entire line
+		ClearToEndOfScreenSeq():   "", // Clear to end of screen
+		ClearScreenSeq():          "", // Clear entire screen
+		HomeCursorSeq():           "", // Home cursor
+		HideCursorSeq():           "", // Hide cursor
+		ShowCursorSeq():           "", // Show cursor
 	}
 
 	result := text
-	for _, seq := range replacements {
-		result = strings.ReplaceAll(result, seq, "")
+	for seq := range replacements {
+		result = strings.ReplaceAll(result, seq, replacements[seq])
 	}
 
 	// Remove any remaining cursor positioning sequences like \033[1;1H

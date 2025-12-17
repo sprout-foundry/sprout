@@ -23,3 +23,31 @@ func SetScrollRegionSeq(top, bottom int) string {
 
 // ResetScrollRegionSeq resets the scrolling region to the full screen.
 func ResetScrollRegionSeq() string { return "\033[r" }
+
+// MoveCursorUpSeq returns the escape sequence to move cursor up by n lines.
+func MoveCursorUpSeq(n int) string {
+	return fmt.Sprintf("\033[%dA", n)
+}
+
+// MoveCursorToColumnSeq returns the escape sequence to move cursor to column n (1-based).
+func MoveCursorToColumnSeq(n int) string {
+	return fmt.Sprintf("\033[%dG", n)
+}
+
+// ClearToStartOfLineSeq returns the escape sequence to clear from start of line to cursor.
+func ClearToStartOfLineSeq() string { return "\033[1K" }
+
+// HideCursorSeq returns the escape sequence to hide the cursor.
+func HideCursorSeq() string { return "\033[?25l" }
+
+// ShowCursorSeq returns the escape sequence to show the cursor.
+func ShowCursorSeq() string { return "\033[?25h" }
+
+// HomeCursorSeq returns the escape sequence to move cursor to home position (1,1).
+func HomeCursorSeq() string { return "\033[H" }
+
+// ClearScreenSeq returns the escape sequence to clear the entire screen.
+func ClearScreenSeq() string { return "\033[2J" }
+
+// ClearToEndOfScreenSeq returns the escape sequence to clear from cursor to end of screen.
+func ClearToEndOfScreenSeq() string { return "\033[J" }

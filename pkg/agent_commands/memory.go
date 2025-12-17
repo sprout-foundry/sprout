@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/ui"
 )
 
 // MemoryCommand handles memory features with auto-tracking and session recovery
@@ -61,38 +60,16 @@ func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 // selectSessionWithDropdown provides interactive session selection with dropdown
 func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
-	// Convert sessions to dropdown items (reverse order for newest first)
-	items := make([]ui.DropdownItem, 0, len(sessions))
-	for i := len(sessions) - 1; i >= 0; i-- {
-		session := sessions[i]
-		preview := agent.GetSessionPreview(session.SessionID)
-		item := &ui.SessionItem{
-			SessionID: session.SessionID,
-			Timestamp: session.LastUpdated,
-			Preview:   preview,
-		}
-		items = append(items, item)
+	// UI not available - select newest session or return
+	fmt.Println("Interactive session selection not available.")
+	var sessionID string
+	if len(sessions) > 0 {
+		sessionID = sessions[len(sessions)-1].SessionID // Get newest session
+		fmt.Printf("Auto-selected newest session: %s\n", sessionID)
+	} else {
+		fmt.Println("No sessions available.")
+		return nil
 	}
-
-	// Try to show dropdown using the agent's UI
-	selected, err := chatAgent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "🎯 Select a Session:",
-		SearchPrompt: "Search: ",
-		ShowCounts:   true,
-	})
-
-	if err != nil {
-		// Check if it was just cancelled
-		if err == ui.ErrCancelled {
-			fmt.Printf("\r\nSession selection cancelled.\r\n")
-			return nil
-		}
-		// If dropdown is not available, we could add a fallback here
-		return fmt.Errorf("failed to show session selection: %w", err)
-	}
-
-	// Get the selected session ID and load it
-	sessionID := selected.Value().(string)
 	state, err := chatAgent.LoadState(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to load session: %v", err)

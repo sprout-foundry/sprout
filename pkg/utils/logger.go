@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync" // For thread-safe initialization
 
-	ui "github.com/alantheprice/ledit/pkg/ui"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -76,14 +75,14 @@ func (w *Logger) LogWorkspaceOperation(operation, details string) {
 // LogUserInteraction logs user interactions that require a response, and prints to stdout.
 func (w *Logger) LogUserInteraction(message string) {
 	w.logger.Printf("User Interaction: %s", message)
-	ui.Out().Print(message + "\n")
+	fmt.Print(message + "\n")
 }
 
-// LogProcessStep logs the current step in a process, with smart UI filtering.
+// LogProcessStep logs the current step in a process.
 func (w *Logger) LogProcessStep(step string) {
 	w.logger.Printf("Process Step: %s", step)
-	// Use smart logging to determine if this should be shown in UI
-	ui.SmartLog(step)
+	// Print process step to stdout
+	fmt.Printf("Step: %s\n", step)
 }
 
 // Log logs a general message only to the log file.

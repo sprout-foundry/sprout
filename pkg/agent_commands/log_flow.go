@@ -7,7 +7,6 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/history"
-	"github.com/alantheprice/ledit/pkg/ui"
 	"golang.org/x/term"
 )
 
@@ -94,37 +93,16 @@ func (lf *LogFlow) showLogOptions() error {
 		return lf.viewChangeLog()
 	}
 
-	// Convert to dropdown items
-	items := make([]ui.DropdownItem, len(actions))
-	for i, action := range actions {
-		items[i] = &LogActionItem{
-			ID:          action.ID,
-			DisplayName: action.DisplayName,
-			Description: action.Description,
-		}
+	// UI not available - execute first action or return
+	fmt.Println("Interactive action selection not available.")
+	var selectedID string
+	if len(actions) > 0 {
+		selectedID = actions[0].ID
+		fmt.Printf("Auto-selected first action: %s\n", selectedID)
+	} else {
+		fmt.Println("No actions available.")
+		return nil
 	}
-
-	// Temporarily disable ESC monitoring during dropdown
-	lf.agent.DisableEscMonitoring()
-	defer lf.agent.EnableEscMonitoring()
-
-	// Create and show dropdown
-	selected, err := lf.agent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "📜 Change History:",
-		SearchPrompt: "Search: ",
-		ShowCounts:   false,
-	})
-
-	if err != nil {
-		if err == ui.ErrCancelled {
-			fmt.Printf("\r\nLog operation cancelled.\r\n")
-			return nil
-		}
-		return fmt.Errorf("failed to show action selection: %w", err)
-	}
-
-	// Execute selected action
-	selectedID := selected.Value().(string)
 	for _, action := range actions {
 		if action.ID == selectedID {
 			return action.Action(lf)
@@ -252,42 +230,16 @@ func (lf *LogFlow) interactiveRollback() error {
 		return nil
 	}
 
-	// Convert revisions to dropdown items
-	items := make([]ui.DropdownItem, len(revisions))
-	for i, revision := range revisions {
-		// Use first few words of Instructions as description
-		description := revision.Instructions
-		if len(description) > 50 {
-			description = description[:47] + "..."
-		}
-
-		items[i] = &RevisionItem{
-			RevisionID:  revision.RevisionID,
-			Description: description,
-			Timestamp:   revision.Timestamp.Format("2006-01-02 15:04:05"),
-		}
+	// UI not available - select first revision or return
+	fmt.Println("Interactive revision selection not available.")
+	var revisionID string
+	if len(revisions) > 0 {
+		revisionID = revisions[0].RevisionID
+		fmt.Printf("Auto-selected first revision: %s\n", revisionID)
+	} else {
+		fmt.Println("No revisions available for rollback.")
+		return nil
 	}
-
-	// Show dropdown
-	lf.agent.DisableEscMonitoring()
-	defer lf.agent.EnableEscMonitoring()
-
-	// Create revision selection dropdown
-	selected, err := lf.agent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "⏮️ Select Revision to Rollback:",
-		SearchPrompt: "Search: ",
-		ShowCounts:   false,
-	})
-
-	if err != nil {
-		if err == ui.ErrCancelled {
-			fmt.Printf("\r\nRollback cancelled.\r\n")
-			return nil
-		}
-		return fmt.Errorf("failed to show revision selection: %w", err)
-	}
-
-	revisionID := selected.Value().(string)
 
 	// Confirm rollback
 	fmt.Printf("\r\n🔄 Rolling back to revision: %s\r\n", revisionID)

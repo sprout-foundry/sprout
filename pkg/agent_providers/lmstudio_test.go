@@ -23,8 +23,9 @@ func TestLMStudioConnectionNoAuth(t *testing.T) {
 					Model: "qwen3-coder:30b",
 				},
 				Models: ModelConfig{
-					DefaultModel:    "qwen3-coder:30b",
-					AvailableModels: []string{"qwen3-coder:30b"},
+					DefaultModel:       "qwen3-coder:30b",
+					DefaultContextLimit: 4096, // Add required context limit
+					AvailableModels:    []string{"qwen3-coder:30b"},
 				},
 				Auth: AuthConfig{
 					Type:   "bearer",

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/ui"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"golang.org/x/term"
 )
@@ -273,42 +272,15 @@ func (cf *CommitFlow) singleFileCommit() error {
 	}
 
 	// Convert to dropdown items with status indicators
-	items := make([]ui.DropdownItem, len(allFiles))
-	for i, file := range allFiles {
-		status := "📝 (unstaged)"
-		for _, staged := range stagedFiles {
-			if file == staged {
-				status = "📦 (staged)"
-				break
-			}
-		}
-		items[i] = &FileItem{
-			Filename:    file,
-			Description: fmt.Sprintf("%s %s", status, file),
-		}
+	// UI not available - select first file or return error
+	cf.println("Interactive file selection not available.")
+	var selectedFile string
+	if len(allFiles) > 0 {
+		selectedFile = allFiles[0]
+		cf.println(fmt.Sprintf("Auto-selected first file: %s", selectedFile))
+	} else {
+		return fmt.Errorf("no files available for selection")
 	}
-
-	// Show dropdown
-	cf.agent.DisableEscMonitoring()
-	defer cf.agent.EnableEscMonitoring()
-
-	// Try to show dropdown using the agent's UI
-	selected, err := cf.agent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "📄 Select Single File to Commit:",
-		SearchPrompt: "Search files: ",
-		ShowCounts:   true,
-	})
-
-	if err != nil {
-		if err == ui.ErrCancelled {
-			cf.println("")
-			cf.println("Single file commit cancelled.")
-			return nil
-		}
-		return fmt.Errorf("failed to show file selection: %w", err)
-	}
-
-	selectedFile := selected.Value().(string)
 
 	// Reset staging area and stage only the selected file
 	cf.println("")

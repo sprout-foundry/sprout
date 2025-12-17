@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/filesystem"
-	ui "github.com/alantheprice/ledit/pkg/ui"
 )
 
 // RevisionGroup represents a group of changes that belong to the same revision
@@ -95,7 +94,7 @@ func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 		return err
 	}
 	if len(changes) == 0 {
-		ui.Out().Print("No changes recorded.\n")
+		fmt.Print("No changes recorded.\n")
 		return nil
 	}
 
@@ -103,7 +102,7 @@ func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 	revisionGroups := groupChangesByRevision(changes)
 
 	if len(revisionGroups) == 0 {
-		ui.Out().Print("No revisions found.\n")
+		fmt.Print("No revisions found.\n")
 		return nil
 	}
 
@@ -117,7 +116,7 @@ func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 	displayRevision(revisionGroups[currentIndex])
 
 	for {
-		ui.Out().Print("\nEnter: Show next revision | b: Show previous revision | x: Exit | d: Show all diffs | revert: Rollback revision | restore: Restore revision | p: Show original prompt | l: Show LLM details -> ")
+		fmt.Print("\nEnter: Show next revision | b: Show previous revision | x: Exit | d: Show all diffs | revert: Rollback revision | restore: Restore revision | p: Show original prompt | l: Show LLM details -> ")
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(strings.ToLower(input))
 
@@ -129,14 +128,14 @@ func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 				currentIndex--
 				displayRevision(revisionGroups[currentIndex])
 			} else {
-				ui.Out().Print("Already at the first revision.\n")
+				fmt.Print("Already at the first revision.\n")
 			}
 		case "d":
-			ui.Out().Print("\n\033[1mAll File Diffs for this Revision:\033[0m\n")
+			fmt.Print("\n\033[1mAll File Diffs for this Revision:\033[0m\n")
 			for _, change := range revisionGroups[currentIndex].Changes {
-				ui.Out().Printf("\n--- Diff for %s ---\n", change.Filename)
+				fmt.Printf("\n--- Diff for %s ---\n", change.Filename)
 				diff := GetDiff(change.Filename, change.OriginalCode, change.NewCode)
-				ui.Out().Print(diff + "\n")
+				fmt.Print(diff + "\n")
 			}
 		case "revert":
 			activeChanges := getActiveChanges(revisionGroups[currentIndex].Changes)
@@ -145,7 +144,7 @@ func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 					log.Printf("Error during revision rollback: %v", err)
 				}
 			} else {
-				ui.Out().Print("No active changes in this revision, cannot revert.\n")
+				fmt.Print("No active changes in this revision, cannot revert.\n")
 			}
 		case "restore":
 			if err := handleRevisionRestore(revisionGroups[currentIndex]); err != nil {
@@ -153,16 +152,16 @@ func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 			}
 		case "p": // Show original prompt
 			if revisionGroups[currentIndex].Instructions != "" {
-				ui.Out().Printf("\n\033[1mOriginal Prompt:\033[0m\n%s\n", revisionGroups[currentIndex].Instructions)
+				fmt.Printf("\n\033[1mOriginal Prompt:\033[0m\n%s\n", revisionGroups[currentIndex].Instructions)
 			} else {
-				ui.Out().Print("\nNo original prompt recorded.\n")
+				fmt.Print("\nNo original prompt recorded.\n")
 			}
 		case "l": // Show LLM details
-			ui.Out().Printf("\n\033[1mEditing Model:\033[0m %s\n", revisionGroups[currentIndex].AgentModel)
+			fmt.Printf("\n\033[1mEditing Model:\033[0m %s\n", revisionGroups[currentIndex].AgentModel)
 			if revisionGroups[currentIndex].Response != "" {
-				ui.Out().Printf("\n\033[1mFull LLM Response:\033[0m\n%s\n", revisionGroups[currentIndex].Response)
+				fmt.Printf("\n\033[1mFull LLM Response:\033[0m\n%s\n", revisionGroups[currentIndex].Response)
 			} else {
-				ui.Out().Print("\nNo LLM response recorded.\n")
+				fmt.Print("\nNo LLM response recorded.\n")
 			}
 		case "":
 			// Show next revision
@@ -170,8 +169,8 @@ func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 				currentIndex++
 				displayRevision(revisionGroups[currentIndex])
 			} else {
-				ui.Out().Print("No more revisions to show.\n")
-				ui.Out().Print("x: Exit | b: Show previous revision -> ")
+				fmt.Print("No more revisions to show.\n")
+				fmt.Print("x: Exit | b: Show previous revision -> ")
 				exitInput, _ := reader.ReadString('\n')
 				exitInput = strings.TrimSpace(strings.ToLower(exitInput))
 				if exitInput == "x" || exitInput == "exit" {
@@ -184,7 +183,7 @@ func PrintRevisionHistoryWithReader(inputReader *bufio.Reader) error {
 				}
 			}
 		default:
-			ui.Out().Print("Invalid option. Please try again.\n")
+			fmt.Print("Invalid option. Please try again.\n")
 		}
 	}
 }

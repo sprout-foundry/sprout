@@ -1,15 +1,23 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/ui"
 )
+
+// readInput reads a line of input from stdin without conflicting with other input systems
+func readInput() string {
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	return strings.TrimSpace(input)
+}
 
 // ProvidersCommand implements the /providers slash command
 type ProvidersCommand struct{}
@@ -149,99 +157,28 @@ func (p *ProvidersCommand) isProviderReady(configManager *configuration.Manager,
 func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, chatAgent *agent.Agent) error {
 	// Get all available providers
 	providers := configManager.GetAvailableProviders()
-	currentProvider := chatAgent.GetProviderType()
 
-	// Convert providers to dropdown items
-	items := make([]ui.DropdownItem, 0, len(providers))
-	for _, provider := range providers {
+	// UI not available - show provider list with help
+	fmt.Println("Interactive provider selection not available.")
+	fmt.Println("\n📋 Available Providers:")
+	fmt.Println("======================")
+
+	for i, provider := range providers {
 		// Check if provider is ready
 		isReady := p.isProviderReady(configManager, provider)
 
-		displayName := getProviderDisplayName(provider)
-
-		// Add status to display name
+		status := ""
 		if !isReady {
-			displayName += " (API key required)"
-		} else if provider == currentProvider {
-			displayName += " ✓"
+			status = " (API key required)"
+		} else if provider == chatAgent.GetProviderType() {
+			status = " ✓"
 		}
 
-		item := &providerDropdownItem{
-			provider:    provider,
-			displayName: displayName,
-			available:   isReady,
-		}
-		items = append(items, item)
+		fmt.Printf("%d. %s%s\n", i+1, getProviderDisplayName(provider), status)
 	}
 
-	// Try to show dropdown using the agent's UI
-	selected, err := chatAgent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "🎯 Select a Provider:",
-		SearchPrompt: "Search: ",
-		ShowCounts:   false,
-	})
-
-	if err != nil {
-		fmt.Printf("DEBUG: ShowDropdown error: %v\n", err)
-		// If dropdown is not available, show list with help
-		if err == ui.ErrUINotAvailable {
-			fmt.Println("\n📋 Available Providers:")
-			fmt.Println("======================")
-
-			for i, provider := range providers {
-				// Check if provider is ready
-				isReady := p.isProviderReady(configManager, provider)
-
-				status := ""
-				if !isReady {
-					status = " (API key required)"
-				} else if provider == chatAgent.GetProviderType() {
-					status = " ✓"
-				}
-
-				fmt.Printf("%d. %s%s\n", i+1, getProviderDisplayName(provider), status)
-			}
-
-			fmt.Println("\n💡 To select a provider, use: /providers <provider_name>")
-			fmt.Println("   Example: /providers openai")
-			return nil
-		}
-
-		// Check if it was just cancelled
-		if err == ui.ErrCancelled {
-			fmt.Printf("Provider selection cancelled.\n")
-			return nil
-		}
-
-		return fmt.Errorf("failed to show provider selection: %w", err)
-	}
-
-	// Get the selected provider
-	selectedProvider := selected.Value().(api.ClientType)
-
-	// Check if provider needs API key
-	if !p.isProviderReady(configManager, selectedProvider) {
-		// Try to ensure API key
-		err = configManager.EnsureAPIKey(selectedProvider)
-		if err != nil {
-			return fmt.Errorf("failed to configure %s: %w", getProviderDisplayName(selectedProvider), err)
-		}
-	}
-
-	// Switch to the provider
-	fmt.Printf("🔄 Switching to %s...\n", getProviderDisplayName(selectedProvider))
-
-	err = chatAgent.SetProvider(selectedProvider)
-	if err != nil {
-		return fmt.Errorf("failed to switch to provider: %w", err)
-	}
-
-	// Get the model that was set
-	model := chatAgent.GetModel()
-
-	fmt.Printf("✅ Provider switched to: %s\n", getProviderDisplayName(selectedProvider))
-	fmt.Printf("🤖 Using model: %s\n", model)
-
+	fmt.Println("\n💡 To select a provider, use: /providers <provider_name>")
+	fmt.Println("   Example: /providers openai")
 	return nil
 }
 
@@ -331,10 +268,8 @@ func selectModelFromList(models []api.ModelInfo, preferredModel string) (string,
 	}
 
 	fmt.Print("Select a model (or press Enter for first available): ")
-	var input string
-	fmt.Scanln(&input)
+	input := readInput()
 
-	input = strings.TrimSpace(input)
 	if input == "" {
 		// Default to first model
 		selectedModel := models[0].ID

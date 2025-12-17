@@ -10,7 +10,6 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/ui"
 	"golang.org/x/term"
 )
 
@@ -208,45 +207,9 @@ func (m *ModelsCommand) liveSearchInterface(models []api.ModelInfo, featuredIndi
 		return m.fallbackLineBasedInterface(models, featuredIndices, chatAgent)
 	}
 
-	// Convert models to dropdown items with proper formatting
-	items := make([]ui.DropdownItem, 0, len(models))
-	for _, model := range models {
-		item := &ui.ModelItem{
-			Provider:      model.Provider,
-			Model:         model.ID,
-			InputCost:     model.InputCost,
-			OutputCost:    model.OutputCost,
-			LegacyCost:    model.Cost,
-			ContextLength: model.ContextLength,
-			Tags:          model.Tags,
-		}
-		items = append(items, item)
-	}
-
-	// Try to show dropdown using the agent's UI
-	selected, err := chatAgent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "🎯 Select a Model:",
-		SearchPrompt: "Search: ",
-		ShowCounts:   true,
-	})
-
-	if err != nil {
-		// Check if it was just cancelled
-		if err == ui.ErrCancelled {
-			fmt.Printf("\r\nModel selection cancelled.\r\n")
-			return nil
-		}
-		// If dropdown is not available, fall back
-		if err == ui.ErrUINotAvailable {
-			return m.fallbackLineBasedInterface(models, featuredIndices, chatAgent)
-		}
-		return fmt.Errorf("failed to show model selection: %w", err)
-	}
-
-	// Get the selected model ID and set it
-	modelID := selected.Value().(string)
-	fmt.Printf("\r\n✅ Selected: %s\r\n", modelID)
-	return m.setModel(modelID, chatAgent)
+	// UI not available - use fallback interface
+	fmt.Println("Interactive model selection not available.")
+	return m.fallbackLineBasedInterface(models, featuredIndices, chatAgent)
 }
 
 // fallbackLineBasedInterface provides the old line-based interface for non-terminal environments
@@ -778,7 +741,7 @@ func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 	fmt.Printf("Provider: %s\n", api.GetProviderName(finalProvider))
 
 	// Publish model info event for UI
-	ui.PublishModel(finalModel)
+	agent.PublishModel(finalModel)
 
 	return nil
 }

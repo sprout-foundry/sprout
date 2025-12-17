@@ -11,10 +11,10 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/mcp"
-	"golang.org/x/term"
 )
 
 const (
@@ -69,7 +69,6 @@ type Agent struct {
 	inputInjectionMutex sync.Mutex         // Mutex for input injection operations
 	interruptCtx        context.Context    // Context for interrupt handling
 	interruptCancel     context.CancelFunc // Cancel function for interrupt context
-	escMonitoringCancel context.CancelFunc // Cancel function for Esc monitoring
 	outputMutex         *sync.Mutex        // Mutex for synchronized output
 	streamingEnabled    bool               // Whether streaming is enabled
 	streamingCallback   func(string)       // Custom streaming callback
@@ -124,8 +123,7 @@ func (a *Agent) Shutdown() {
 		cancel()
 	}
 
-	// Disable ESC monitoring and cancel interrupt context
-	a.DisableEscMonitoring()
+	// Cancel interrupt context
 	if a.interruptCancel != nil {
 		a.interruptCancel()
 	}
@@ -345,7 +343,6 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		inputInjectionChan:        make(chan string, inputInjectionBufferSize),
 		interruptCtx:              interruptCtx,
 		interruptCancel:           interruptCancel,
-		escMonitoringCancel:       nil,
 		falseStopDetectionEnabled: true,
 		conversationPruner:        NewConversationPruner(debug),
 		completionSummarizer:      NewCompletionContextSummarizer(debug),
@@ -479,98 +476,6 @@ func (a *Agent) SetInterruptHandler(ch chan struct{}) {
 	// Interrupts are now primarily handled via context cancellation
 }
 
-// EnableEscMonitoring starts monitoring for Esc key using context cancellation
-func (a *Agent) EnableEscMonitoring() {
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		// Still enable basic interrupt handling even in non-terminal mode
-		if a.interruptCancel == nil {
-			a.interruptCtx, a.interruptCancel = context.WithCancel(context.Background())
-		}
-		return
-	}
-
-	// When the interactive console UI is active, it already handles interrupt keys.
-	// Running our own monitor alongside it competes for stdin reads and interprets
-	// escape sequences (like arrow keys) as interrupts, prematurely cancelling
-	// conversations. Skip the standalone monitor in that scenario.
-	if a.ui != nil && a.ui.IsInteractive() {
-		if a.debug {
-			a.debugLog("DEBUG: Skipping ESC monitoring (interactive UI handles interrupts)\n")
-		}
-		// Still ensure interrupt context exists for other interrupt sources
-		if a.interruptCancel == nil {
-			a.interruptCtx, a.interruptCancel = context.WithCancel(context.Background())
-		}
-		return
-	}
-
-	// Cancel any existing monitoring
-	if a.escMonitoringCancel != nil {
-		a.escMonitoringCancel()
-	}
-
-	// Create new context for Esc monitoring
-	ctx, cancel := context.WithCancel(a.interruptCtx)
-	a.escMonitoringCancel = cancel
-
-	go a.monitorEscKey(ctx)
-}
-
-// DisableEscMonitoring stops monitoring for Esc key
-func (a *Agent) DisableEscMonitoring() {
-	if a.escMonitoringCancel != nil {
-		a.escMonitoringCancel()
-		a.escMonitoringCancel = nil
-	}
-	
-	// CRITICAL FIX: Clear the read deadline to prevent character loss on next input
-	if term.IsTerminal(int(os.Stdin.Fd())) {
-		os.Stdin.SetReadDeadline(time.Time{}) // Clear the deadline
-	}
-}
-
-// monitorEscKey monitors for Esc key press in a separate goroutine with context cancellation
-func (a *Agent) monitorEscKey(ctx context.Context) {
-	// Use non-blocking read with timeout instead of manipulating terminal state
-	// This avoids conflicts with the console app's terminal management
-	buf := make([]byte, 1)
-
-	// Add a safety timeout to prevent infinite loops
-	safetyTimeout := time.NewTimer(30 * time.Second)
-	defer safetyTimeout.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			// Context cancelled, exit gracefully
-			return
-		case <-safetyTimeout.C:
-			// Safety timeout reached, exit to prevent infinite loops
-			if a.debug {
-				a.debugLog("⚠️ Esc monitoring safety timeout reached\n")
-			}
-			return
-		default:
-			// Set a short timeout to avoid blocking indefinitely
-			os.Stdin.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-			n, err := os.Stdin.Read(buf)
-			if err != nil {
-				// Timeout or error, continue loop
-				if err, ok := err.(*os.PathError); ok && err.Timeout() {
-					continue
-				}
-				return
-			}
-
-			if n > 0 && buf[0] == 27 {
-				// ESC key pressed, trigger interrupt
-				a.interruptCancel()
-				return
-			}
-		}
-	}
-}
-
 // TriggerInterrupt manually triggers an interrupt for testing purposes
 func (a *Agent) TriggerInterrupt() {
 	if a.interruptCancel != nil {
@@ -618,44 +523,14 @@ func (a *Agent) HandleInterrupt() string {
 	fmt.Println("3. Resume without changes")
 	fmt.Println("4. Continue (default)")
 	fmt.Print("Enter choice (1-4, or just press Enter for #4): ")
-
-	// Disable ESC monitoring temporarily to avoid conflicts during input
-	a.DisableEscMonitoring()
 	
-	// CRITICAL FIX: Clear any remaining read deadline before user input
-	if term.IsTerminal(int(os.Stdin.Fd())) {
-		os.Stdin.SetReadDeadline(time.Time{}) // Clear the deadline
-	}
+	// Use a simple input reader that doesn't conflict with UnifiedInputManager
+	choice := a.readSimpleInput("4") // Default to continue
 	
-	// Read input more reliably
-	var choice string
-	choiceBytes := make([]byte, 1024)
-	n, err := os.Stdin.Read(choiceBytes)
-	if err != nil {
-		fmt.Printf("Error reading input: %v\n", err)
-		choice = "4" // Default to continue
-	} else {
-		choice = strings.TrimSpace(string(choiceBytes[:n]))
-	}
-	
-	// Re-enable ESC monitoring
-	a.EnableEscMonitoring()
-
 	switch strings.TrimSpace(choice) {
 	case "1":
 		fmt.Print("Enter clarification: ")
-		// CRITICAL FIX: Clear any remaining read deadline before clarification input
-		if term.IsTerminal(int(os.Stdin.Fd())) {
-			os.Stdin.SetReadDeadline(time.Time{}) // Clear the deadline
-		}
-		var clarification string
-		clarificationBytes := make([]byte, 4096)
-		n, err := os.Stdin.Read(clarificationBytes)
-		if err != nil {
-			fmt.Printf("Error reading clarification: %v\n", err)
-		} else {
-			clarification = strings.TrimSpace(string(clarificationBytes[:n]))
-		}
+		clarification := a.readSimpleInput("")
 		
 		if strings.TrimSpace(clarification) != "" {
 			// Add clarification to pause state
@@ -701,6 +576,25 @@ func (a *Agent) HandleInterrupt() string {
 	
 	// This should never be reached, but add for safety
 	return "CONTINUE"
+}
+
+// readSimpleInput reads a single line of input without interfering with UnifiedInputManager
+func (a *Agent) readSimpleInput(defaultValue string) string {
+	// Use a simple buffered reader that doesn't conflict with the main input system
+	reader := console.NewInputReader("> ")
+	input, err := reader.ReadLine()
+	if err != nil {
+		if a.debug {
+			fmt.Printf("Debug: readSimpleInput error: %v, using default: %s\n", err, defaultValue)
+		}
+		return defaultValue
+	}
+	
+	result := strings.TrimSpace(input)
+	if result == "" && defaultValue != "" {
+		return defaultValue
+	}
+	return result
 }
 
 // ClearInterrupt resets the interrupt state

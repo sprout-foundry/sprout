@@ -89,10 +89,6 @@ func (m *MCPCommand) addServer(chatAgent *agent.Agent) error {
 	fmt.Println("==================")
 	fmt.Println()
 
-	// Disable escape monitoring during interactive input
-	chatAgent.DisableEscMonitoring()
-	defer chatAgent.EnableEscMonitoring()
-
 	// Load existing config (no longer needed for MCP)
 
 	mcpConfig, err := mcp.LoadMCPConfig()
@@ -296,10 +292,6 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) error {
 	reader := bufio.NewReader(os.Stdin)
 
-	// Disable escape monitoring during interactive input
-	chatAgent.DisableEscMonitoring()
-	defer chatAgent.EnableEscMonitoring()
-
 	// Load existing config (no longer needed for MCP)
 
 	mcpConfig, err := mcp.LoadMCPConfig()
@@ -449,10 +441,6 @@ func (m *MCPCommand) listServers() error {
 // testServer tests an MCP server connection
 func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error {
 	reader := bufio.NewReader(os.Stdin)
-
-	// Disable escape monitoring during interactive input
-	chatAgent.DisableEscMonitoring()
-	defer chatAgent.EnableEscMonitoring()
 
 	// Load existing config (no longer needed for MCP)
 

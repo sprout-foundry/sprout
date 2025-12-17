@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/ui"
 	"golang.org/x/term"
 )
 
@@ -121,40 +120,16 @@ func (mf *MemoryFlow) selectAndLoadSession(sessions []agent.SessionInfo) error {
 		return nil
 	}
 
-	// Convert sessions to dropdown items (newest first)
-	items := make([]ui.DropdownItem, 0, len(sessions))
-	for i := len(sessions) - 1; i >= 0; i-- {
-		session := sessions[i]
-		preview := agent.GetSessionPreview(session.SessionID)
-		item := &ui.SessionItem{
-			SessionID: session.SessionID,
-			Timestamp: session.LastUpdated,
-			Preview:   preview,
-		}
-		items = append(items, item)
+	// UI not available - select newest session or return
+	fmt.Println("Interactive session selection not available.")
+	var sessionID string
+	if len(sessions) > 0 {
+		sessionID = sessions[len(sessions)-1].SessionID // Get newest
+		fmt.Printf("Auto-selected newest session: %s\n", sessionID)
+	} else {
+		fmt.Println("No sessions available to load.")
+		return nil
 	}
-
-	// Temporarily disable ESC monitoring during dropdown
-	mf.agent.DisableEscMonitoring()
-	defer mf.agent.EnableEscMonitoring()
-
-	// Create and show dropdown
-	selected, err := mf.agent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "📂 Select Session to Load:",
-		SearchPrompt: "Search: ",
-		ShowCounts:   false,
-	})
-
-	if err != nil {
-		if err == ui.ErrCancelled {
-			fmt.Printf("\r\nSession loading cancelled.\r\n")
-			return nil
-		}
-		return fmt.Errorf("failed to show session selection: %w", err)
-	}
-
-	// Load the selected session
-	sessionID := selected.Value().(string)
 	state, err := mf.agent.LoadState(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to load session: %w", err)

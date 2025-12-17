@@ -1,10 +1,40 @@
 package configuration
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
+
+// readInput reads a line of input from stdin without conflicting with other input systems
+func readInput() string {
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	return strings.TrimSpace(input)
+}
+
+// readIntInput reads an integer from stdin with validation
+func readIntInput(prompt string, min int, max int) (int, error) {
+	for {
+		fmt.Print(prompt)
+		input := readInput()
+		
+		choice, err := strconv.Atoi(input)
+		if err != nil {
+			fmt.Printf("Please enter a valid number between %d and %d\n", min, max)
+			continue
+		}
+		
+		if choice < min || choice > max {
+			fmt.Printf("Please enter a number between %d and %d\n", min, max)
+			continue
+		}
+		
+		return choice, nil
+	}
+}
 
 // Initialize loads or creates configuration with first-run setup
 func Initialize() (*Config, *APIKeys, error) {
@@ -213,11 +243,9 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	fmt.Println()
 
 	// Get user choice
-	var choice int
-	fmt.Printf("Select a provider (1-%d): ", len(allProviders))
-	_, err := fmt.Scanln(&choice)
-	if err != nil || choice < 1 || choice > len(allProviders) {
-		return "", fmt.Errorf("invalid choice, please enter a number between 1 and %d", len(allProviders))
+	choice, err := readIntInput(fmt.Sprintf("Select a provider (1-%d): ", len(allProviders)), 1, len(allProviders))
+	if err != nil {
+		return "", fmt.Errorf("invalid choice: %w", err)
 	}
 
 	selectedProvider := allProviders[choice-1]
@@ -285,11 +313,9 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 	fmt.Println("  2. Select a different provider")
 	fmt.Println()
 
-	var choice int
-	fmt.Print("Choice (1-2): ")
-	_, err := fmt.Scanln(&choice)
-	if err != nil || choice < 1 || choice > 2 {
-		return fmt.Errorf("invalid choice")
+	choice, err := readIntInput("Choice (1-2): ", 1, 2)
+	if err != nil {
+		return fmt.Errorf("invalid choice: %w", err)
 	}
 
 	if choice == 1 {
@@ -348,11 +374,9 @@ func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 	fmt.Printf("  %d. Add new provider with API key\n", len(available)+1)
 	fmt.Println()
 
-	var choice int
-	fmt.Print("Select provider: ")
-	_, err := fmt.Scanln(&choice)
-	if err != nil || choice < 1 {
-		return "", fmt.Errorf("invalid choice")
+	choice, err := readIntInput("Select provider: ", 1, len(available)+1)
+	if err != nil {
+		return "", fmt.Errorf("invalid choice: %w", err)
 	}
 
 	if choice <= len(available) {
@@ -402,11 +426,9 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 	}
 	fmt.Println()
 
-	var choice int
-	fmt.Print("Select provider to add: ")
-	_, err := fmt.Scanln(&choice)
-	if err != nil || choice < 1 || choice > len(needsKey) {
-		return "", fmt.Errorf("invalid choice")
+	choice, err := readIntInput("Select provider to add: ", 1, len(needsKey))
+	if err != nil {
+		return "", fmt.Errorf("invalid choice: %w", err)
 	}
 
 	provider := needsKey[choice-1]

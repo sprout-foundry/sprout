@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	"github.com/alantheprice/ledit/pkg/ui"
 	"golang.org/x/term"
 )
 
@@ -72,54 +71,12 @@ func ShowCommandSelector(registry *CommandRegistry, chatAgent *agent.Agent) (str
 		return "", fmt.Errorf("interactive command selection requires a terminal")
 	}
 
-	// Create dropdown items
-	items := make([]ui.DropdownItem, 0, len(commands))
-
-	// Build items
-	for _, name := range names {
-		cmd := cmdMap[name]
-
-		// Common aliases based on command name
-		aliases := []string{}
-		switch name {
-		case "help":
-			aliases = []string{"h", "?"}
-		case "exit":
-			aliases = []string{"quit", "q"}
-		case "models":
-			aliases = []string{"model"}
-		case "provider":
-			aliases = []string{"providers"}
-		case "changes":
-			aliases = []string{"diff"}
-		case "status":
-			aliases = []string{"st"}
-		case "exec":
-			aliases = []string{"run", "e"}
-		case "shell":
-			aliases = []string{"sh", "bash"}
-		}
-
-		item := &CommandItem{
-			Name:        name,
-			Description: cmd.Description(),
-			Aliases:     aliases,
-		}
-		items = append(items, item)
+	// UI not available - return first command as default
+	fmt.Println("Interactive command selection not available.")
+	if len(names) > 0 {
+		return "/" + names[0], nil // Return first available command
 	}
-
-	// Try to show dropdown using the agent's UI
-	selected, err := chatAgent.ShowDropdown(items, ui.DropdownOptions{
-		Prompt:       "🎯 Select a command:",
-		SearchPrompt: "Search: ",
-		ShowCounts:   false,
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	return selected.Value().(string), nil
+	return "", fmt.Errorf("no commands available")
 }
 
 // SelectAndExecuteCommand shows command selector and executes the selected command

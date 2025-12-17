@@ -61,10 +61,6 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	// Enable change tracking
 	ch.agent.EnableChangeTracking(userQuery)
 
-	// Enable escape monitoring
-	ch.agent.EnableEscMonitoring()
-	defer ch.agent.DisableEscMonitoring()
-
 	// Reset circuit breaker history for a fresh query to avoid carrying over
 	// repetitive-tool counts from previous requests.
 	if ch.agent.circuitBreaker != nil {

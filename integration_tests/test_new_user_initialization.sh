@@ -67,8 +67,10 @@ run_test_logic() {
 
     # In CI, skip the agent execution entirely since it may hang
     if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+        echo "=== CI MODE DETECTED ==="
         echo "✓ Skipping agent execution in CI environment (test:test model used)"
         echo "✓ Validated that ledit command would handle CI mode gracefully"
+        echo "=== END CI MODE ==="
     else
         # Local/non-CI: allow interactive selection; send a choice then exit
         # Use printf to send a choice + exit to progress flow even without real keys

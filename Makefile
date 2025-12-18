@@ -96,7 +96,7 @@ build-ui:
 		echo "Error: webui directory not found"; \
 		exit 1; \
 	fi
-	cd webui && CI=false npm run build
+	cd webui && npm run build
 	@echo "React web UI build completed in webui/build/"
 
 # Build React web UI and deploy to Go static directory

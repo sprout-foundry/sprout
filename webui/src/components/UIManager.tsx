@@ -3,7 +3,7 @@ import Dropdown, { DropdownItem } from './Dropdown';
 import QuickPrompt from './QuickPrompt';
 import Progress from './Progress';
 import FileBrowser from './FileBrowser';
-import { uiService, UIDropdownItem, UIDropdownOptions, UIQuickOption, UIProgressUpdate } from '../services/ui';
+import { uiService, UIDropdownItem, UIDropdownOptions, UIQuickOption } from '../services/ui';
 
 interface UIManagerProps {
   children: React.ReactNode;

@@ -81,6 +81,21 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Install Node.js dependencies
+      run: |
+        cd webui && npm install
+
+    - name: Build and deploy React UI
+      run: |
+        make deploy-ui
+        # Verify static files exist for Go embed
+        ls -la pkg/webui/static/ || echo "Static directory not found"
+
     - name: Set build variables
       id: set_vars
       shell: bash

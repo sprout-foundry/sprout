@@ -34,3 +34,8 @@ func reRaiseSignal(sig os.Signal) {
 	signal.Reset(sig)
 	syscall.Kill(syscall.Getpid(), sig.(syscall.Signal))
 }
+
+// suspendTerminal suspends the current process using SIGTSTP (Ctrl+Z) on Unix systems.
+func suspendTerminal() {
+	syscall.Kill(syscall.Getpid(), syscall.SIGTSTP)
+}

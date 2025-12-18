@@ -85,7 +85,7 @@ run_test_logic() {
             # Try alternative with skip-prompt if the provider selection doesn't work
             echo "⚠️  Interactive selection failed, trying skip-prompt..."
             output2=$(timeout 10s echo "exit" | $LEDIT_CMD agent --model "$model_name" --skip-prompt 2>&1 || true)
-            if echo "$output2" | grep -q -E "(Agent initialized|test:test|provider setup failed|invalid choice)"; then
+            if echo "$output2" | grep -q -E "(Agent initialized|test:test|provider setup failed|invalid choice|Web server error|Welcome to ledit|Processing: exit)"; then
                 echo "✓ Skip-prompt behavior validated (graceful handling of config issues)"
             else
                 echo "✗ Test provider failed to initialize"

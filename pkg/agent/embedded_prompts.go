@@ -38,7 +38,27 @@ func GetEmbeddedSystemPrompt() string {
 func GetEmbeddedSystemPromptWithProvider(provider string) string {
 	promptContent := GetEmbeddedSystemPrompt()
 
-	// No provider-specific enhancements needed
+	// Add provider-specific constraints for ZAI (GLM-4.6)
+	if strings.ToLower(provider) == "zai" {
+		zaiConstraints := `
+
+## GLM-4.6 Critical Constraints
+
+### Cognitive Load Management
+- LIMIT concurrent cognitive tasks to maximum 3-5 todos
+- EXECUTE tasks immediately rather than analyzing extensively  
+- MINIMIZE multitasking - focus on current task completion
+- PRIORIZE action over deliberation when ambiguity exists
+
+### Response Style (GLM-4.6 Specific)
+- Be extremely concise in responses
+- Focus on technical execution over explanation
+- Avoid verbose analysis or multi-step reasoning
+- Execute tool operations decisively`
+		return promptContent + zaiConstraints
+	}
+
+	// No provider-specific enhancements for other providers
 	return promptContent
 }
 

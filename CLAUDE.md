@@ -30,13 +30,13 @@ python3 test_runner.py          # Run E2E tests via Python test runner
 go test ./...                   # Run unit tests
 go test ./... -v                # Run unit tests with verbose output
 go test -race ./...             # Run unit tests with race detection
-go test ./pkg/console/components/ -v  # Run UI component tests (critical for console UI)
+go test ./pkg/console/ -v  # Run UI component tests (critical for console UI)
 ```
 
 **IMPORTANT - UI Testing Policy:**
-When making changes to console UI components (`pkg/console/components/`), **ALWAYS** run the UI component tests to ensure functionality remains intact:
+When making changes to console UI components (`pkg/console/`), **ALWAYS** run the UI component tests to ensure functionality remains intact:
 ```bash
-go test ./pkg/console/components/ -v
+go test ./pkg/console/ -v
 ```
 The UI components are critical for user interaction and terminal display. Any changes to input handling, footer display, agent console behavior, or related formatting should be validated with the test suite to prevent regressions in the user experience.
 

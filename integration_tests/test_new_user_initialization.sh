@@ -78,7 +78,7 @@ run_test_logic() {
     else
         # Local/non-CI: allow interactive selection; send a choice then exit
         # Use printf to send a choice + exit to progress flow even without real keys
-        output=$(timeout 10s printf "4\nexit\n" | $LEDIT_CMD agent --model "$model_name" 2>&1 || true)
+        output=$(timeout 10s printf "4\nexit\n" | $LEDIT_CMD agent --model "$model_name" --skip-prompt 2>&1 || true)
         if echo "$output" | grep -q -E "(Agent initialized|Console started|test:test|Selected provider)"; then
             echo "✓ Test provider selection works"
         else

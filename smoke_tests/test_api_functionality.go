@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/factory"
@@ -159,7 +160,8 @@ func main() {
 	}
 
 	// Test 6: OpenAI Streaming Token Tracking
-	if os.Getenv("OPENAI_API_KEY") != "" {
+	openaiKey := os.Getenv("OPENAI_API_KEY")
+	if openaiKey != "" && len(openaiKey) > 10 && !strings.Contains(openaiKey, "*") {
 		fmt.Print("6. Testing OpenAI streaming token tracking... ")
 
 		client, err := factory.CreateProviderClient(api.OpenAIClientType, "gpt-4o-mini")
@@ -176,8 +178,14 @@ func main() {
 			})
 
 			if err != nil {
-				fmt.Printf("FAILED - Streaming error: %v\n", err)
-				failed++
+				// Check if it's an auth error - if so, skip the test
+				if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "invalid_api_key") || strings.Contains(err.Error(), "Incorrect API key") {
+					fmt.Printf("SKIPPED - Invalid API key: %v\n", err)
+					// Don't count as failed, just skip
+				} else {
+					fmt.Printf("FAILED - Streaming error: %v\n", err)
+					failed++
+				}
 			} else if streamResp.Usage.TotalTokens > 0 {
 				fmt.Printf("FAILED - Streaming returned tokens: %d (expected 0)\n", streamResp.Usage.TotalTokens)
 				failed++
@@ -188,8 +196,14 @@ func main() {
 				}, nil, "")
 
 				if err != nil {
-					fmt.Printf("FAILED - Non-streaming error: %v\n", err)
-					failed++
+					// Check if it's an auth error - if so, skip the test
+					if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "invalid_api_key") || strings.Contains(err.Error(), "Incorrect API key") {
+						fmt.Printf("SKIPPED - Invalid API key for non-streaming test\n")
+						// Don't count as failed, just skip
+					} else {
+						fmt.Printf("FAILED - Non-streaming error: %v\n", err)
+						failed++
+					}
 				} else if nonStreamResp.Usage.TotalTokens == 0 {
 					fmt.Printf("FAILED - Non-streaming missing tokens\n")
 					failed++
@@ -200,7 +214,7 @@ func main() {
 			}
 		}
 	} else {
-		fmt.Println("6. Skipping OpenAI token tracking test (no API key)")
+		fmt.Println("6. Skipping OpenAI token tracking test (no valid API key)")
 	}
 
 	// Summary

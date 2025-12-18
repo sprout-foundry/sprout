@@ -59,8 +59,8 @@ func TestZAIPruningThresholds(t *testing.T) {
 			name:          "Other Provider Default",
 			currentTokens: 70000,
 			provider:      "anthropic",
-			expectedPrune: true,
-			description:   "70K should trigger pruning for other providers",
+			expectedPrune: false,
+			description:   "70K should not trigger pruning for other providers (below 85K absolute ceiling)",
 		},
 	}
 

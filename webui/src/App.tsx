@@ -419,20 +419,7 @@ function App() {
     }
   }, [apiService, state.isProcessing]);
 
-  const handleProviderChange = useCallback((provider: string) => {
-    console.log('Provider changed to:', provider);
-    // Send provider change to backend
-    wsService.sendEvent({
-      type: 'provider_change',
-      data: { provider }
-    });
-
-    setState(prev => ({
-      ...prev,
-      provider
-    }));
-  }, [wsService]);
-
+  
   const handleModelChange = useCallback((model: string) => {
     console.log('Model changed to:', model);
     // Send model change to backend

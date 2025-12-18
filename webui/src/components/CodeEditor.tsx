@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EditorView, keymap } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { defaultKeymap, indentWithTab } from '@codemirror/commands';
@@ -77,7 +77,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
   };
 
   // Load file content
-  const loadFile = async (filePath: string) => {
+  const loadFile = useCallback(async (filePath: string) => {
     setLoading(true);
     setError(null);
 
@@ -110,10 +110,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, setContent, setIsModified]);
 
   // Save file content
-  const saveFile = async () => {
+  const saveFile = useCallback(async () => {
     if (!file || !viewRef.current) return;
 
     setSaving(true);
@@ -149,7 +149,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     } finally {
       setSaving(false);
     }
-  };
+  }, [file, setSaving, setError, setContent, setIsModified, onSave, content]);
 
   // Initialize CodeMirror editor
   useEffect(() => {
@@ -231,7 +231,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
         });
       }
     }
-  }, [file]);
+  }, [file, loadFile, setContent, setIsModified, viewRef]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -244,7 +244,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [file, content]);
+  }, [file, content, saveFile]);
 
   if (!file || file.isDir) {
     return (

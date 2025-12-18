@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './FileBrowser.css';
 
 export interface FileNode {
@@ -61,13 +61,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
     ]
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      loadDirectory(currentPath);
-    }
-  }, [isOpen, currentPath]);
-
-  const loadDirectory = async (path: string) => {
+  const loadDirectory = useCallback(async (path: string) => {
     setLoading(true);
     setError(null);
 
@@ -106,7 +100,13 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, setFiles]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadDirectory(currentPath);
+    }
+  }, [isOpen, currentPath, loadDirectory]);
 
   const handleFileClick = (file: FileNode) => {
     if (file.type === 'directory') {

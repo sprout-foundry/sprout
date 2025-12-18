@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './QuickPrompt.css';
 
 export interface QuickOption {
@@ -30,7 +30,7 @@ const QuickPrompt: React.FC<QuickPromptProps> = ({
     setSelectedIndex(0);
   }, [isOpen]);
 
-  const handleKeyDown = (e: KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!isOpen) return;
 
     // Check hotkeys first
@@ -68,7 +68,7 @@ const QuickPrompt: React.FC<QuickPromptProps> = ({
         setSelectedIndex(prev => (prev + 1) % options.length);
         break;
     }
-  };
+  }, [isOpen, options, onSelect, onCancel, selectedIndex]);
 
   useEffect(() => {
     if (isOpen) {

@@ -11,12 +11,16 @@ import argparse
 import json
 from pathlib import Path
 
+# Force output to be immediate
+def print_flush(msg):
+    print(msg, flush=True)
+
 # Set default model for integration tests
 DEFAULT_MODEL = "test:test"
 TEST_DIR = "integration_tests"
 
 def main():
-    print("🚀 Starting integration test runner...")
+    print_flush("🚀 Starting integration test runner...")
 
     parser = argparse.ArgumentParser(description="Run ledit integration tests")
     parser.add_argument("-t", "--test", type=int, help="Run specific test by number")
@@ -26,20 +30,20 @@ def main():
 
     # Find test directory
     script_dir = Path(__file__).parent
-    print(f"📁 Script directory: {script_dir}")
-    print(f"🔍 Looking for test directory: {TEST_DIR}")
+    print_flush(f"📁 Script directory: {script_dir}")
+    print_flush(f"🔍 Looking for test directory: {TEST_DIR}")
 
     test_path = script_dir / TEST_DIR
 
     if not test_path.exists():
-        print(f"❌ Error: {TEST_DIR} directory not found at {test_path}")
+        print_flush(f"❌ Error: {TEST_DIR} directory not found at {test_path}")
         sys.exit(1)
 
-    print(f"✅ Test directory found: {test_path}")
+    print_flush(f"✅ Test directory found: {test_path}")
 
     # Discover tests
     tests = sorted([f for f in test_path.glob("*.sh") if f.is_file()])
-    print(f"🔍 Found {len(tests)} test files")
+    print_flush(f"🔍 Found {len(tests)} test files")
     
     if args.list:
         print("Available integration tests:")
@@ -49,11 +53,11 @@ def main():
     
     # If no specific test is requested, run all tests
     if not args.test:
-        print("Running ALL integration tests:")
+        print_flush("Running ALL integration tests:")
         for i, test in enumerate(tests, 1):
-            print(f"{i}: {test.stem}")
-        print(f"\nRunning {len(tests)} tests with model: {args.model}")
-        print("=" * 50)
+            print_flush(f"{i}: {test.stem}")
+        print_flush(f"\nRunning {len(tests)} tests with model: {args.model}")
+        print_flush("=" * 50)
         
         # Check if ledit binary already exists and build if needed
         ledit_binary = script_dir / "ledit"
@@ -73,8 +77,8 @@ def main():
         failed = 0
         
         for i, test_file in enumerate(tests, 1):
-            print(f"\n[{i}/{len(tests)}] Running: {test_file.stem}")
-            print("-" * 50)
+            print_flush(f"\n[{i}/{len(tests)}] Running: {test_file.stem}")
+            print_flush("-" * 50)
             
             try:
                 env = os.environ.copy()
@@ -85,20 +89,20 @@ def main():
                     cwd=script_dir,
                     capture_output=True,
                     text=True,
-                    timeout=120,  # 2 minute timeout per test
+                    timeout=60,  # 1 minute timeout per test
                     env=env,
                 )
                 
                 if result.returncode == 0:
-                    print("✅ PASSED")
+                    print_flush("✅ PASSED")
                     passed += 1
                 else:
-                    print("❌ FAILED")
-                    print("Return code:", result.returncode)
+                    print_flush("❌ FAILED")
+                    print_flush("Return code:", result.returncode)
                     if result.stdout:
-                        print("STDOUT:", result.stdout)
+                        print_flush("STDOUT:", result.stdout)
                     if result.stderr:
-                        print("STDERR:", result.stderr)
+                        print_flush("STDERR:", result.stderr)
                     failed += 1
                     
             except subprocess.TimeoutExpired:

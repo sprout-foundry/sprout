@@ -91,10 +91,8 @@ jobs:
         cd webui && npm install
 
     - name: Build and deploy React UI
-      run: |
-        make deploy-ui
-        # Verify static files exist for Go embed
-        ls -la pkg/webui/static/ || echo "Static directory not found"
+      shell: bash
+      run: make deploy-ui
 
     - name: Set build variables
       id: set_vars

@@ -20,22 +20,8 @@ interface FileBrowserProps {
   allowedExtensions?: string[];
 }
 
-const FileBrowser: React.FC<FileBrowserProps> = ({
-  isOpen,
-  initialPath = '/',
-  onSelect,
-  onCancel,
-  allowDirectories = false,
-  allowedExtensions = []
-}) => {
-  const [currentPath, setCurrentPath] = useState(initialPath);
-  const [files, setFiles] = useState<FileNode[]>([]);
-  const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Mock file system data - in real implementation, this would come from API
-  const mockFileSystem: { [key: string]: FileNode[] } = {
+// Mock file system data - in real implementation, this would come from API
+const mockFileSystem: { [key: string]: FileNode[] } = {
     '/': [
       { id: '1', name: 'src', path: '/src', type: 'directory' },
       { id: '2', name: 'pkg', path: '/pkg', type: 'directory' },
@@ -60,6 +46,20 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
       { id: '15', name: 'version.go', path: '/cmd/version.go', type: 'file', size: 512 }
     ]
   };
+
+const FileBrowser: React.FC<FileBrowserProps> = ({
+  isOpen,
+  initialPath = '/',
+  onSelect,
+  onCancel,
+  allowDirectories = false,
+  allowedExtensions = []
+}) => {
+  const [currentPath, setCurrentPath] = useState(initialPath);
+  const [files, setFiles] = useState<FileNode[]>([]);
+  const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadDirectory = useCallback(async (path: string) => {
     setLoading(true);

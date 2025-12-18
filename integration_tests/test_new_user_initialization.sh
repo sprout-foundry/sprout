@@ -67,7 +67,7 @@ run_test_logic() {
 
     # In CI, interactive selection isn't possible. Validate CI-friendly behavior.
     if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
-        output=$(timeout 10s $LEDIT_CMD agent --model "$model_name" 2>&1 || true)
+        output=$(timeout 10s $LEDIT_CMD agent --model "$model_name" --skip-prompt 2>&1 || true)
         if echo "$output" | grep -q -E "(Welcome to ledit|Agent initialized successfully)"; then
             echo "✓ CI non-interactive provider setup validated"
         else

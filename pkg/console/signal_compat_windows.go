@@ -23,3 +23,9 @@ func resizeSignal() os.Signal { return nil }
 
 // reRaiseSignal cannot re-raise POSIX signals on Windows; exit after cleanup.
 func reRaiseSignal(sig os.Signal) { os.Exit(0) }
+
+// suspendTerminal is a no-op on Windows since SIGTSTP is not available.
+func suspendTerminal() {
+	// Terminal suspension is not supported on Windows
+	// This function intentionally does nothing
+}

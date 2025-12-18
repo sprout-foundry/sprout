@@ -130,11 +130,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     onModelChange?.(newModel);
   };
 
-  const getProviderDisplayName = (providerId: string) => {
-    const providerData = PROVIDERS.find(p => p.id === providerId);
-    return providerData ? providerData.name : providerId;
-  };
-
+  
   return (
     <div className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${sidebarCollapsed ? 'collapsed' : ''}`}>
       {/* Desktop collapse button */}

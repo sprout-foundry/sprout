@@ -189,7 +189,7 @@ const Terminal: React.FC<TerminalProps> = ({
         }
         break;
     }
-  }, [currentInput, history, historyIndex, handleCommand, onCommand]);
+  }, [currentInput, history, historyIndex, handleCommand, onCommand, terminalConnected, addLine]);
 
   const toggleExpanded = useCallback(() => {
     setIsExpanded(prev => !prev);

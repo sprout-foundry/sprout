@@ -44,7 +44,8 @@ test-results/
 # WebUI build files
 webui/build/
 webui/node_modules/
-pkg/webui/static/
+# pkg/webui/static/ - Commented out to allow go install to work
+# The static files need to be included in the Go module for go install
 
 # Go test files and binaries
 *.test

@@ -11,9 +11,13 @@ func (ws *ReactWebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// Try to serve from embedded filesystem first
 	data, err := staticFiles.ReadFile("static/index.html")
 	if err != nil {
-		// Fallback to filesystem
-		http.ServeFile(w, r, "./pkg/webui/static/index.html")
-		return
+		// Try alternative path
+		data, err = staticFiles.ReadFile("static/static/index.html")
+		if err != nil {
+			// Fallback to filesystem
+			http.ServeFile(w, r, "./pkg/webui/static/index.html")
+			return
+		}
 	}
 
 	// Set proper HTML content type
@@ -36,10 +40,15 @@ func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Reque
 	embeddedPath := "static/" + filePath
 	data, err := staticFiles.ReadFile(embeddedPath)
 	if err != nil {
-		// Fallback to filesystem
-		fullPath := "./pkg/webui/static/" + filePath
-		http.ServeFile(w, r, fullPath)
-		return
+		// Try alternative path for nested static directory
+		altEmbeddedPath := "static/static/" + filePath
+		data, err = staticFiles.ReadFile(altEmbeddedPath)
+		if err != nil {
+			// Fallback to filesystem
+			fullPath := "./pkg/webui/static/" + filePath
+			http.ServeFile(w, r, fullPath)
+			return
+		}
 	}
 
 	// Set appropriate Content-Type header based on file extension
@@ -92,12 +101,16 @@ func (ws *ReactWebServer) handleServiceWorker(w http.ResponseWriter, r *http.Req
 	// Try to serve from embedded filesystem first
 	data, err := staticFiles.ReadFile("static/sw.js")
 	if err != nil {
-		// Fallback to filesystem
-		fallbackPath := "./pkg/webui/static/sw.js"
-		data, err = os.ReadFile(fallbackPath)
+		// Try alternative path
+		data, err = staticFiles.ReadFile("static/static/sw.js")
 		if err != nil {
-			http.NotFound(w, r)
-			return
+			// Fallback to filesystem
+			fallbackPath := "./pkg/webui/static/sw.js"
+			data, err = os.ReadFile(fallbackPath)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
 		}
 	}
 

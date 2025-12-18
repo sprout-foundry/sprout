@@ -149,7 +149,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     } finally {
       setSaving(false);
     }
-  }, [file, setSaving, setError, setContent, setIsModified, onSave, content]);
+  }, [file, setSaving, setError, setContent, setIsModified, onSave]);
 
   // Initialize CodeMirror editor
   useEffect(() => {
@@ -212,7 +212,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [file]);
+  }, [file, content, setContent, saveFile]);
 
   // Load file when file changes
   useEffect(() => {
@@ -234,17 +234,17 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
   }, [file, loadFile, setContent, setIsModified, viewRef]);
 
   // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        saveFile();
-      }
-    };
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+      e.preventDefault();
+      saveFile();
+    }
+  }, [saveFile]);
 
+  useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [file, content, saveFile]);
+  }, [handleKeyDown]);
 
   if (!file || file.isDir) {
     return (

@@ -51,6 +51,7 @@ type OpenAIResponse struct {
 			Role             string     `json:"role"`
 			Content          string     `json:"content"`
 			ReasoningContent string     `json:"reasoning_content,omitempty"`
+			ReasoningDetails string     `json:"reasoning_details,omitempty"` // Minimax reasoning_split format
 			ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 		} `json:"message"`
 		FinishReason string `json:"finish_reason"`

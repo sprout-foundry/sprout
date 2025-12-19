@@ -46,6 +46,11 @@ func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []ap
 		return messages
 	}
 
+	// Debug logging for DeepSeek
+	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
+		ch.agent.debugLog("🔍 DeepSeek sanitizing %d messages\n", len(messages))
+	}
+
 	sanitized := make([]api.Message, 0, len(messages))
 	seenToolCalls := make(map[string]struct{})
 
@@ -91,5 +96,10 @@ func (ch *ConversationHandler) logDroppedToolMessage(reason string, msg api.Mess
 		snippet = snippet[:77] + "..."
 	}
 
-	ch.agent.debugLog("⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+	// Enhanced logging for DeepSeek
+	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
+		ch.agent.debugLog("🚨 DeepSeek: ⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+	} else {
+		ch.agent.debugLog("⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
@@ -180,6 +181,8 @@ func mapClientTypeToString(ct api.ClientType) string {
 		return "ollama-turbo"
 	case api.LMStudioClientType:
 		return "lmstudio"
+	case api.TestClientType:
+		return "test"
 	default:
 		// For providers not yet in ClientType constants
 		return string(ct)
@@ -189,26 +192,16 @@ func mapClientTypeToString(ct api.ClientType) string {
 // mapStringToClientType converts string to ClientType
 func (m *Manager) mapStringToClientType(s string) (api.ClientType, error) {
 	switch s {
-	case "chutes":
-		return api.ChutesClientType, nil
 	case "openai":
 		return api.OpenAIClientType, nil
-	case "zai":
-		return api.ZAIClientType, nil
-	case "deepinfra":
-		return api.DeepInfraClientType, nil
-	case "deepseek":
-		return api.DeepSeekClientType, nil
-	case "openrouter":
-		return api.OpenRouterClientType, nil
 	case "ollama":
 		return api.OllamaClientType, nil
 	case "ollama-local":
 		return api.OllamaLocalClientType, nil
 	case "ollama-turbo":
 		return api.OllamaTurboClientType, nil
-	case "lmstudio":
-		return api.LMStudioClientType, nil
+	case "test":
+		return api.TestClientType, nil
 	default:
 		// Check if it's a custom provider
 		if m.config.CustomProviders != nil {
@@ -216,6 +209,19 @@ func (m *Manager) mapStringToClientType(s string) (api.ClientType, error) {
 				return api.ClientType(s), nil
 			}
 		}
+
+		// Check if it's a provider from the factory (dynamic providers)
+		providerFactory := providers.NewProviderFactory()
+		err := providerFactory.LoadEmbeddedConfigs()
+		if err == nil {
+			availableProviders := providerFactory.GetAvailableProviders()
+			for _, provider := range availableProviders {
+				if provider == s {
+					return api.ClientType(s), nil
+				}
+			}
+		}
+
 		return "", fmt.Errorf("unknown provider: %s", s)
 	}
 }

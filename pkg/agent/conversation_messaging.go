@@ -72,7 +72,43 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 	allMessages = ch.appendTransientMessages(allMessages)
 	allMessages = ch.sanitizeToolMessages(allMessages)
 
+	// DeepSeek-specific validation
+	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
+		ch.validateDeepSeekToolCalls(allMessages)
+	}
+
 	return allMessages
+}
+
+// validateDeepSeekToolCalls performs additional validation for DeepSeek tool call format
+func (ch *ConversationHandler) validateDeepSeekToolCalls(messages []api.Message) {
+	ch.agent.debugLog("🔍 DeepSeek: Validating tool call format for %d messages\n", len(messages))
+
+	for i, msg := range messages {
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			// Check if this assistant message is properly followed by tool messages
+			expectedToolCalls := len(msg.ToolCalls)
+			foundToolResponses := 0
+
+			// Look ahead for tool messages
+			for j := i + 1; j < len(messages); j++ {
+				if messages[j].Role == "tool" {
+					foundToolResponses++
+				} else if messages[j].Role == "assistant" || messages[j].Role == "user" {
+					// We've reached the next assistant/user message, stop counting
+					break
+				}
+			}
+
+			if foundToolResponses < expectedToolCalls {
+				ch.agent.debugLog("🚨 DeepSeek: WARNING - Assistant message at index %d has %d tool_calls but only %d tool responses found\n",
+					i, expectedToolCalls, foundToolResponses)
+			} else {
+				ch.agent.debugLog("✅ DeepSeek: Assistant message at index %d has %d tool_calls with %d tool responses\n",
+					i, expectedToolCalls, foundToolResponses)
+			}
+		}
+	}
 }
 
 // enqueueTransientMessage adds a message that will be sent once and then discarded

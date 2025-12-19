@@ -47,7 +47,7 @@ func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []ap
 	}
 
 	// Debug logging for DeepSeek
-	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
+	if ch.agent != nil && strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
 		ch.agent.debugLog("🔍 DeepSeek sanitizing %d messages\n", len(messages))
 	}
 

@@ -194,9 +194,9 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 		},
 		Conversion: providers.MessageConversion{
 			IncludeToolCallId:        true,
-			ConvertToolRoleToUser:    false,  // Keep tool roles as "tool" - they're exempt from alternation
+			ConvertToolRoleToUser:    false, // Keep tool roles as "tool" - they're exempt from alternation
 			ArgumentsAsJSON:          false,
-			SkipToolExecutionSummary: true,   // Skip summary to avoid breaking role alternation
+			SkipToolExecutionSummary: true, // Skip summary to avoid breaking role alternation
 		},
 		Streaming: providers.StreamingConfig{
 			Format:         "sse",
@@ -210,10 +210,10 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 		},
 		Retry: providers.RetryConfig{
 			MaxAttempts:       3,
-			BaseDelayMs:        1000,
+			BaseDelayMs:       1000,
 			BackoffMultiplier: 2.0,
-			MaxDelayMs:         10000,
-			RetryableErrors:     []string{"timeout", "connection", "rate_limit"},
+			MaxDelayMs:        10000,
+			RetryableErrors:   []string{"timeout", "connection", "rate_limit"},
 		},
 		Cost: providers.CostConfig{
 			InputTokenCost:  0.001,

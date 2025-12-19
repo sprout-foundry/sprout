@@ -184,7 +184,7 @@ func runNewInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus
 
 	// Create enhanced input reader with completion support
 	inputReader := console.NewInputReader("ledit> ")
-	
+
 	// Initialize with existing history from agent
 	inputReader.SetHistory(chatAgent.GetHistory())
 
@@ -194,7 +194,7 @@ func runNewInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus
 			return ctx.Err()
 		default:
 			query, err := inputReader.ReadLine()
-			
+
 			if err != nil {
 				if err.Error() == "interrupted" {
 					fmt.Println("Use 'exit' or 'quit' to exit.")
@@ -318,15 +318,15 @@ func processQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 // getCompletions provides tab completion for commands and files
 func getCompletions(input string, chatAgent *agent.Agent) []string {
 	var completions []string
-	
+
 	// Get current word for completion
 	words := strings.Fields(input)
 	if len(words) == 0 {
 		return completions
 	}
-	
+
 	currentWord := words[len(words)-1]
-	
+
 	// If it starts with '/', complete slash commands
 	if strings.HasPrefix(currentWord, "/") {
 		registry := commands.NewCommandRegistry()
@@ -351,7 +351,7 @@ func getCompletions(input string, chatAgent *agent.Agent) []string {
 			}
 		}
 	}
-	
+
 	return completions
 }
 

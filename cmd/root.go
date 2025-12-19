@@ -8,8 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// enableUI controls whether to enable interactive UI mode
-var enableUI bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -37,10 +35,7 @@ Running just 'ledit' without arguments starts the enhanced agent mode with autom
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Default to interactive mode when no arguments provided
-		useInteractive := enableUI || os.Getenv("LEDIT_UI") == "1"
-		if !useInteractive && len(args) == 0 && cmd.Flags().NFlag() == 0 {
-			useInteractive = true
-		}
+		useInteractive := len(args) == 0 && cmd.Flags().NFlag() == 0
 		if useInteractive {
 			chatAgent, err := createChatAgent()
 			if err != nil {
@@ -91,7 +86,6 @@ func init() {
 	// will be available to all subcommands in the application.
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ledit.yaml)")
-	rootCmd.PersistentFlags().BoolVar(&enableUI, "ui", false, "Enable interactive terminal UI (or set LEDIT_UI=1)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -104,9 +98,4 @@ func init() {
 	rootCmd.AddCommand(customModelCmd)
 	rootCmd.AddCommand(reviewStagedCmd)
 	rootCmd.AddCommand(shellCmd)
-
-	// Initialize environment-based defaults
-	cobra.OnInitialize(func() {
-		// UI is removed, nothing to initialize
-	})
 }

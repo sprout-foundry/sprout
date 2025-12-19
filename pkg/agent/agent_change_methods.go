@@ -7,7 +7,7 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 	if a.debug {
 		a.debugLog("DEBUG: EnableChangeTracking called (tracker nil: %v)\n", a.changeTracker == nil)
 	}
-	
+
 	if a.changeTracker == nil {
 		a.changeTracker = NewChangeTracker(a, instructions)
 		if a.debug {
@@ -37,7 +37,7 @@ func (a *Agent) IsChangeTrackingEnabled() bool {
 		if a.changeTracker != nil {
 			trackerEnabled = a.changeTracker.IsEnabled()
 		}
-		a.debugLog("DEBUG: IsChangeTrackingEnabled = %v (tracker nil: %v, tracker enabled: %v)\n", 
+		a.debugLog("DEBUG: IsChangeTrackingEnabled = %v (tracker nil: %v, tracker enabled: %v)\n",
 			enabled, a.changeTracker == nil, trackerEnabled)
 	}
 	return enabled
@@ -100,10 +100,10 @@ func (a *Agent) TrackFileWrite(filePath string, content string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
 		return a.changeTracker.TrackFileWrite(filePath, content)
 	}
-	
+
 	// Also record as a task action for conversation summary
 	a.AddTaskAction("file_created", fmt.Sprintf("Created/updated file: %s", filePath), filePath)
-	
+
 	return nil
 }
 
@@ -112,9 +112,9 @@ func (a *Agent) TrackFileEdit(filePath string, originalContent string, newConten
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
 		return a.changeTracker.TrackFileEdit(filePath, originalContent, newContent)
 	}
-	
+
 	// Also record as a task action for conversation summary
 	a.AddTaskAction("file_modified", fmt.Sprintf("Modified file: %s", filePath), filePath)
-	
+
 	return nil
 }

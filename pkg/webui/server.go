@@ -21,17 +21,17 @@ var staticFiles embed.FS
 
 // ReactWebServer provides the React web UI
 type ReactWebServer struct {
-	agent            *agent.Agent
-	eventBus         *events.EventBus
-	port             int
-	server           *http.Server
-	upgrader         websocket.Upgrader
-	connections      sync.Map // map[*websocket.Conn]bool
-	terminalManager  *TerminalManager
-	isRunning        bool
-	mutex            sync.RWMutex
-	startTime        time.Time
-	queryCount       int
+	agent           *agent.Agent
+	eventBus        *events.EventBus
+	port            int
+	server          *http.Server
+	upgrader        websocket.Upgrader
+	connections     sync.Map // map[*websocket.Conn]bool
+	terminalManager *TerminalManager
+	isRunning       bool
+	mutex           sync.RWMutex
+	startTime       time.Time
+	queryCount      int
 }
 
 // NewReactWebServer creates a new React web server
@@ -41,9 +41,9 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 	}
 
 	return &ReactWebServer{
-		agent:           agent,
-		eventBus:        eventBus,
-		port:            port,
+		agent:    agent,
+		eventBus: eventBus,
+		port:     port,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				// Allow localhost connections

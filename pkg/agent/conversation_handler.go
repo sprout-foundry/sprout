@@ -226,13 +226,13 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 
 	if ch.agent.debug {
-			// Debug: Check for ANSI codes in content being added to conversation
-			if strings.Contains(contentUsed, "\x1b[") || strings.Contains(contentUsed, "\x1b(") {
-				ch.agent.debugLog("🚨 ANSI DETECTED in conversation content: %q\n", contentUsed)
-			}
+		// Debug: Check for ANSI codes in content being added to conversation
+		if strings.Contains(contentUsed, "\x1b[") || strings.Contains(contentUsed, "\x1b(") {
+			ch.agent.debugLog("🚨 ANSI DETECTED in conversation content: %q\n", contentUsed)
 		}
-		// Sanitize content to remove ANSI codes that might have leaked in
-		contentUsed = ch.sanitizeContent(contentUsed)
+	}
+	// Sanitize content to remove ANSI codes that might have leaked in
+	contentUsed = ch.sanitizeContent(contentUsed)
 
 	turn.AssistantContent = contentUsed
 	turn.FinishReason = choice.FinishReason
@@ -308,7 +308,6 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ToolCalls:        toolCalls,
 	}
 
-	
 	// Only append if we have a valid message (not a duplicate)
 	if assistantMsg.Role != "" {
 		ch.agent.messages = append(ch.agent.messages, assistantMsg)
@@ -335,11 +334,6 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 		// Add tool results immediately after the assistant message with tool calls
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
-
-		// Add tool execution summary only if provider doesn't require strict role alternation
-		if !ch.agent.skipToolExecutionSummary() {
-			ch.appendToolExecutionSummary(choice.Message.ToolCalls)
-		}
 		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
 
 		toolLogs := ch.flushToolLogsToOutput()
@@ -539,11 +533,6 @@ func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn Tur
 		// Execute the parsed tool calls
 		toolResults := ch.toolExecutor.ExecuteTools(fallbackResult.ToolCalls)
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
-
-		// Add tool execution summary only if provider doesn't require strict role alternation
-		if !ch.agent.skipToolExecutionSummary() {
-			ch.appendToolExecutionSummary(fallbackResult.ToolCalls)
-		}
 		ch.agent.debugLog("✔️ Executed %d fallback-parsed tool calls\n", len(toolResults))
 
 		turn.ToolCalls = append(turn.ToolCalls, fallbackResult.ToolCalls...)

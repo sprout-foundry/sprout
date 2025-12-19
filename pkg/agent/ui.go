@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-
 )
 
 // UI provides UI capabilities to the agent

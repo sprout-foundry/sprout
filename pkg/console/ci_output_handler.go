@@ -61,7 +61,7 @@ func NewCIOutputHandler(writer io.Writer) *CIOutputHandler {
 
 	// Initialize markdown formatter
 	enableColors := isInteractive && !isCI // Enable colors in interactive mode, disable in CI
-	enableInline := true // Always enable inline formatting
+	enableInline := true                   // Always enable inline formatting
 
 	return &CIOutputHandler{
 		writer:            writer,
@@ -92,7 +92,7 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 
 	// In CI/non-interactive mode, fix line endings and strip ANSI codes
 	doStripANSI := !h.isInteractive || h.isCI
-	
+
 	if doStripANSI {
 		// Handle carriage returns properly - replace \r without \n with proper newlines
 		// This prevents overwriting issues in CLI mode
@@ -305,13 +305,13 @@ func (h *CIOutputHandler) stripANSIEscapeCodes(text string) string {
 func (h *CIOutputHandler) stripCursorSequences(text string) string {
 	// Remove cursor control sequences using consolidated functions
 	replacements := map[string]string{
-		ClearToEndOfLineSeq():    "", // Clear to end of line
-		ClearLineSeq():            "", // Clear entire line
-		ClearToEndOfScreenSeq():   "", // Clear to end of screen
-		ClearScreenSeq():          "", // Clear entire screen
-		HomeCursorSeq():           "", // Home cursor
-		HideCursorSeq():           "", // Hide cursor
-		ShowCursorSeq():           "", // Show cursor
+		ClearToEndOfLineSeq():   "", // Clear to end of line
+		ClearLineSeq():          "", // Clear entire line
+		ClearToEndOfScreenSeq(): "", // Clear to end of screen
+		ClearScreenSeq():        "", // Clear entire screen
+		HomeCursorSeq():         "", // Home cursor
+		HideCursorSeq():         "", // Hide cursor
+		ShowCursorSeq():         "", // Show cursor
 	}
 
 	result := text

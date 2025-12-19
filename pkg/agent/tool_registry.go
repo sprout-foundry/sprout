@@ -436,24 +436,24 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		a.debugLog("Reading file: %s (lines %d-%d)\n", filePath, startLine, endLine)
 		result, err := tools.ReadFileWithRange(ctx, filePath, startLine, endLine)
 		a.debugLog("Read file result: %s, error: %v\n", result, err)
-		
+
 		// Record as a task action for conversation summary
 		if err == nil {
 			a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s (lines %d-%d)", filePath, startLine, endLine), filePath)
 		}
-		
+
 		return result, err
 	} else {
 		a.ToolLog("reading file", filePath)
 		a.debugLog("Reading file: %s\n", filePath)
 		result, err := tools.ReadFile(ctx, filePath)
 		a.debugLog("Read file result: %s, error: %v\n", result, err)
-		
+
 		// Record as a task action for conversation summary
 		if err == nil {
 			a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s", filePath), filePath)
 		}
-		
+
 		return result, err
 	}
 }

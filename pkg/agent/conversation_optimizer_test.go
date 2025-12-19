@@ -40,20 +40,20 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 	messages := []api.Message{
 		{Role: "system", Content: "System prompt"}, // index 0
 		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallId: "call-1"}, // index 1 - FIRST read (should be optimized)
-		{Role: "assistant", Content: "Message 2"}, // index 2
-		{Role: "user", Content: "Message 3"},      // index 3
-		{Role: "assistant", Content: "Message 4"}, // index 4
-		{Role: "user", Content: "Message 5"},      // index 5
-		{Role: "assistant", Content: "Message 6"}, // index 6
-		{Role: "user", Content: "Message 7"},      // index 7
-		{Role: "assistant", Content: "Message 8"}, // index 8
-		{Role: "user", Content: "Message 9"},      // index 9
+		{Role: "assistant", Content: "Message 2"},  // index 2
+		{Role: "user", Content: "Message 3"},       // index 3
+		{Role: "assistant", Content: "Message 4"},  // index 4
+		{Role: "user", Content: "Message 5"},       // index 5
+		{Role: "assistant", Content: "Message 6"},  // index 6
+		{Role: "user", Content: "Message 7"},       // index 7
+		{Role: "assistant", Content: "Message 8"},  // index 8
+		{Role: "user", Content: "Message 9"},       // index 9
 		{Role: "assistant", Content: "Message 10"}, // index 10
-		{Role: "user", Content: "Message 11"},     // index 11
+		{Role: "user", Content: "Message 11"},      // index 11
 		{Role: "assistant", Content: "Message 12"}, // index 12
-		{Role: "user", Content: "Message 13"},     // index 13
+		{Role: "user", Content: "Message 13"},      // index 13
 		{Role: "assistant", Content: "Message 14"}, // index 14
-		{Role: "user", Content: "Message 15"},     // index 15
+		{Role: "user", Content: "Message 15"},      // index 15
 		{Role: "assistant", Content: "Message 16"}, // index 16
 		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallId: "call-2"}, // index 17 - LAST read (should be preserved)
 	}

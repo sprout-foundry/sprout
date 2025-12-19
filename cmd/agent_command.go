@@ -54,7 +54,7 @@ func createChatAgent() (*agent.Agent, error) {
 func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
-	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, chutes, openrouter, deepinfra, zai, ollama, ollama-local, ollama-turbo, lmstudio)")
+	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, chutes, openrouter, deepinfra, deepseek, zai, ollama, ollama-local, ollama-turbo, lmstudio, or custom providers)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
 	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set LEDIT_NO_STREAM=1)")
@@ -108,6 +108,10 @@ Examples:
   # With specific provider and model
   ledit agent --provider openrouter --model "qwen/qwen3-coder-30b" "Fix the login bug"
   ledit agent -p deepinfra -m "deepseek-v3" "Analyze the codebase structure"
+  ledit agent -p deepseek -m "deepseek-chat" "Write Python code for data analysis"
+
+  # With custom provider (configured via 'ledit custom-model add')
+  ledit agent --provider my-custom-llm --model "custom-model-v1" "Review this code"
 
   # Disable web UI
   ledit agent --no-web-ui "Analyze this code"`,

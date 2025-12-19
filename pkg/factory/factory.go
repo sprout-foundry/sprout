@@ -239,6 +239,9 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 	case api.DeepInfraClientType:
 		// Use the new generic provider system
 		return CreateGenericProvider("deepinfra", model)
+	case api.DeepSeekClientType:
+		// Use the new generic provider system
+		return CreateGenericProvider("deepseek", model)
 	case api.OllamaClientType, api.OllamaLocalClientType:
 		return api.NewOllamaLocalClient(model)
 	case api.OllamaTurboClientType:

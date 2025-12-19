@@ -2,6 +2,17 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.9.2] - 2025-12-19
+
+- Updates 2 files - Test response from mock provider (286f514)
+- Updates 27 files - Test response from mock provider (470b8a6)
+- Updates 46 files - Updates code formatting and removes unused tool summary logic (b1495df)
+- Updates pkg/agent_providers/generic_provider_test.go - Updates provider tests (b7e7ce0)
+- Updates 12 files - Updates DeepSeek provider support and custom provider handling (80d64fe)
+- Merge remote-tracking branch 'origin/main' (bc68a00)
+- Updates 3 files - Updates interactive mode detection logic (b4a5641)
+- docs: Update changelog for v0.9.1 (0fcae62)
+
 ## [v0.9.1] - 2025-12-18
 
 - Updates 11 files - Updates webui static files for go install support (0d74d40)

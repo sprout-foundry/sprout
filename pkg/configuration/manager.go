@@ -168,6 +168,8 @@ func mapClientTypeToString(ct api.ClientType) string {
 		return "zai"
 	case api.DeepInfraClientType:
 		return "deepinfra"
+	case api.DeepSeekClientType:
+		return "deepseek"
 	case api.OpenRouterClientType:
 		return "openrouter"
 	case api.OllamaClientType:
@@ -195,6 +197,8 @@ func (m *Manager) mapStringToClientType(s string) (api.ClientType, error) {
 		return api.ZAIClientType, nil
 	case "deepinfra":
 		return api.DeepInfraClientType, nil
+	case "deepseek":
+		return api.DeepSeekClientType, nil
 	case "openrouter":
 		return api.OpenRouterClientType, nil
 	case "ollama":

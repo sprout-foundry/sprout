@@ -60,7 +60,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	case response := <-responseCh:
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"response": response,
+			"response":  response,
 			"timestamp": time.Now().Unix(),
 		})
 	case err := <-errorCh:
@@ -90,7 +90,7 @@ func (ws *ReactWebServer) gatherStats() map[string]interface{} {
 	defer ws.mutex.RUnlock()
 
 	uptime := time.Since(ws.startTime)
-	
+
 	// Get agent stats if available
 	stats := map[string]interface{}{
 		"uptime_seconds":    int64(uptime.Seconds()),
@@ -101,7 +101,7 @@ func (ws *ReactWebServer) gatherStats() map[string]interface{} {
 		"start_time":        ws.startTime.Unix(),
 		"uptime_formatted":  uptime.String(),
 	}
-	
+
 	// Add agent-specific stats if available
 	if ws.agent != nil {
 		stats["provider"] = ws.agent.GetProvider()
@@ -126,7 +126,7 @@ func (ws *ReactWebServer) gatherStats() map[string]interface{} {
 		stats["streaming_enabled"] = ws.agent.IsStreamingEnabled()
 		stats["debug_mode"] = ws.agent.IsDebugMode()
 	}
-	
+
 	return stats
 }
 
@@ -203,20 +203,20 @@ func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Requ
 		"behind": 0,
 		"staged": []map[string]interface{}{
 			{
-				"path": "pkg/webui/api.go",
-				"status": "M",
+				"path":    "pkg/webui/api.go",
+				"status":  "M",
 				"changes": map[string]int{"additions": 10, "deletions": 5},
 			},
 		},
 		"modified": []map[string]interface{}{
 			{
-				"path": "webui/src/App.tsx",
-				"status": "M", 
+				"path":    "webui/src/App.tsx",
+				"status":  "M",
 				"changes": map[string]int{"additions": 5, "deletions": 2},
 			},
 		},
 		"untracked": []map[string]interface{}{},
-		"clean": false,
+		"clean":     false,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -261,10 +261,10 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		}
 
 		fileInfo := map[string]interface{}{
-			"name":    entry.Name(),
-			"path":    filepath.Join(dir, entry.Name()),
-			"is_dir":  entry.IsDir(),
-			"size":    info.Size(),
+			"name":     entry.Name(),
+			"path":     filepath.Join(dir, entry.Name()),
+			"is_dir":   entry.IsDir(),
+			"size":     info.Size(),
 			"mod_time": info.ModTime().Unix(),
 		}
 
@@ -273,7 +273,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"files": files,
+		"files":     files,
 		"directory": dir,
 	})
 }
@@ -400,12 +400,12 @@ func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request
 	config := map[string]interface{}{
 		"port": ws.port,
 		"agent": map[string]interface{}{
-			"name": "ledit",
+			"name":    "ledit",
 			"version": "1.0.0", // This should come from actual version info
 		},
 		"features": map[string]interface{}{
-			"terminal": true,
-			"file_operations": true,
+			"terminal":          true,
+			"file_operations":   true,
 			"real_time_updates": true,
 		},
 	}
@@ -437,7 +437,7 @@ func (ws *ReactWebServer) handleTerminalHistory(w http.ResponseWriter, r *http.R
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"history": history,
+		"history":    history,
 		"session_id": sessionID,
 	})
 }

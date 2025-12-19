@@ -40,24 +40,6 @@ func (ch *ConversationHandler) flushToolLogsToOutput() []string {
 	return logs
 }
 
-// appendToolExecutionSummary adds a summary of tool execution to the conversation
-func (ch *ConversationHandler) appendToolExecutionSummary(toolCalls []api.ToolCall) {
-	if len(toolCalls) == 0 {
-		return
-	}
-
-	names := make([]string, 0, len(toolCalls))
-	for _, tc := range toolCalls {
-		names = append(names, tc.Function.Name)
-	}
-
-	summary := fmt.Sprintf("Tool execution complete: %s.", strings.Join(names, ", "))
-	ch.agent.messages = append(ch.agent.messages, api.Message{
-		Role:    "assistant",
-		Content: summary,
-	})
-}
-
 // sanitizeToolMessages removes orphaned or duplicate tool messages
 func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []api.Message {
 	if len(messages) == 0 {

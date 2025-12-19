@@ -9,10 +9,10 @@ import (
 
 // ANSI color codes
 const (
-	ColorReset  = "\033[0m"
-	ColorBold   = "\033[1m"
-	ColorDim    = "\033[2m"
-	ColorItalic = "\033[3m"
+	ColorReset     = "\033[0m"
+	ColorBold      = "\033[1m"
+	ColorDim       = "\033[2m"
+	ColorItalic    = "\033[3m"
 	ColorUnderline = "\033[4m"
 
 	// Colors
@@ -67,13 +67,13 @@ func (f *MarkdownFormatter) Format(text string) string {
 	// Process line by line for better formatting
 	var result strings.Builder
 	scanner := bufio.NewScanner(strings.NewReader(text))
-	
+
 	inCodeBlock := false
 	inCodeBlockLang := ""
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		// Handle code blocks
 		if strings.HasPrefix(line, "```") {
 			if !inCodeBlock {
@@ -93,18 +93,18 @@ func (f *MarkdownFormatter) Format(text string) string {
 			}
 			continue
 		}
-		
+
 		if inCodeBlock {
 			// Inside code block - format with syntax highlighting hints
 			result.WriteString(fmt.Sprintf("%s│ %s%s\n", ColorDim, f.formatCodeLine(line, inCodeBlockLang), ColorReset))
 			continue
 		}
-		
+
 		// Process regular markdown line
 		formattedLine := f.formatMarkdownLine(line)
 		result.WriteString(formattedLine + "\n")
 	}
-	
+
 	return strings.TrimSuffix(result.String(), "\n") // Remove trailing newline
 }
 
@@ -123,10 +123,10 @@ func (f *MarkdownFormatter) formatMarkdownLine(line string) string {
 	if strings.HasPrefix(line, "#### ") {
 		return fmt.Sprintf("%s%s%s%s", ColorBold, "• ", line[5:], ColorReset)
 	}
-	
-	 // If it starts with "- " or "* " or "+ " with optional leading whitespace
-	if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") || strings.HasPrefix(line, "+ ") || 
-		 regexp.MustCompile(`^\s*[-*+]\s`).MatchString(line) {
+
+	// If it starts with "- " or "* " or "+ " with optional leading whitespace
+	if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") || strings.HasPrefix(line, "+ ") ||
+		regexp.MustCompile(`^\s*[-*+]\s`).MatchString(line) {
 		// Simple list style: color the bullet
 		bulletPattern := `^(\s*)([-*+])(\s+)(.*)$`
 		re := regexp.MustCompile(bulletPattern)
@@ -134,23 +134,23 @@ func (f *MarkdownFormatter) formatMarkdownLine(line string) string {
 			return fmt.Sprintf("%s%s%s%s%s", matches[1], ColorGreen+matches[2], ColorReset+matches[3], matches[4], ColorReset)
 		}
 	}
-	
+
 	// Horizontal rule
 	if strings.TrimSpace(line) == "---" || strings.TrimSpace(line) == "***" {
 		return fmt.Sprintf("%s%s%s", ColorDim, strings.Repeat("─", 40), ColorReset)
 	}
-	
+
 	// Blockquotes
 	if strings.HasPrefix(line, "> ") {
 		quoted := f.formatMarkdownLine(line[2:])
 		return fmt.Sprintf("%s│ %s%s", ColorDim, quoted, ColorReset)
 	}
-	
+
 	// Inline formatting
 	if f.enableInline {
 		line = f.formatInlineElements(line)
 	}
-	
+
 	return line
 }
 
@@ -167,7 +167,7 @@ func (f *MarkdownFormatter) formatInlineElements(text string) string {
 		}
 		return ColorBold + content + ColorReset
 	})
-	
+
 	// Italic text (*text* or _text_)
 	italicRegex := regexp.MustCompile(`\*(.*?)\*|_(.*?)_`)
 	text = italicRegex.ReplaceAllStringFunc(text, func(match string) string {
@@ -179,14 +179,14 @@ func (f *MarkdownFormatter) formatInlineElements(text string) string {
 		content = match[1 : len(match)-1]
 		return ColorItalic + content + ColorReset
 	})
-	
+
 	// Inline code (`code`)
 	codeRegex := regexp.MustCompile("`(.*?)`")
 	text = codeRegex.ReplaceAllStringFunc(text, func(match string) string {
 		content := match[1 : len(match)-1]
 		return fmt.Sprintf("%s%s%s", BgGray, content, ColorReset)
 	})
-	
+
 	// Links [text](url) - just highlight the text part
 	linkRegex := regexp.MustCompile(`\[(.*?)\]\((.*?)\)`)
 	text = linkRegex.ReplaceAllStringFunc(text, func(match string) string {
@@ -197,14 +197,14 @@ func (f *MarkdownFormatter) formatInlineElements(text string) string {
 		}
 		return match
 	})
-	
+
 	return text
 }
 
 // formatCodeLine provides basic syntax highlighting for code lines
 func (f *MarkdownFormatter) formatCodeLine(line, lang string) string {
 	lang = strings.ToLower(lang)
-	
+
 	switch lang {
 	case "go", "golang":
 		return f.highlightGo(line)
@@ -233,18 +233,18 @@ func (f *MarkdownFormatter) highlightGo(line string) string {
 		parts := strings.SplitN(line, "//", 2)
 		return ColorGreen + parts[0] + ColorDim + "//" + parts[1] + ColorReset
 	}
-	
+
 	// Keywords
 	keywords := []string{"func", "var", "const", "type", "struct", "interface", "if", "else", "for", "range", "return", "import", "package"}
 	for _, kw := range keywords {
 		re := regexp.MustCompile(`\b` + kw + `\b`)
 		line = re.ReplaceAllString(line, ColorBlue+kw+ColorReset)
 	}
-	
+
 	// Strings
 	stringRegex := regexp.MustCompile(`"(.*?)"`)
 	line = stringRegex.ReplaceAllString(line, ColorGreen+"$1"+ColorReset)
-	
+
 	return line
 }
 
@@ -254,14 +254,14 @@ func (f *MarkdownFormatter) highlightPython(line string) string {
 		parts := strings.SplitN(line, "#", 2)
 		return ColorGreen + parts[0] + ColorDim + "#" + parts[1] + ColorReset
 	}
-	
+
 	// Keywords
 	keywords := []string{"def", "class", "if", "elif", "else", "for", "in", "return", "import", "from", "as", "try", "except", "with"}
 	for _, kw := range keywords {
 		re := regexp.MustCompile(`\b` + kw + `\b`)
 		line = re.ReplaceAllString(line, ColorBlue+kw+ColorReset)
 	}
-	
+
 	// Strings
 	stringRegex := regexp.MustCompile(`"(.*?)"|'(.*?)'`)
 	line = stringRegex.ReplaceAllStringFunc(line, func(match string) string {
@@ -270,7 +270,7 @@ func (f *MarkdownFormatter) highlightPython(line string) string {
 		}
 		return ColorGreen + match + ColorReset
 	})
-	
+
 	return line
 }
 
@@ -279,18 +279,18 @@ func (f *MarkdownFormatter) highlightBash(line string) string {
 	if strings.HasPrefix(strings.TrimSpace(line), "#") {
 		return ColorDim + line + ColorReset
 	}
-	
+
 	// Commands
 	commands := []string{"cd", "ls", "pwd", "echo", "cat", "grep", "sed", "awk", "find", "mkdir", "rm", "cp", "mv", "chmod"}
 	for _, cmd := range commands {
 		re := regexp.MustCompile(`\b` + cmd + `\b`)
 		line = re.ReplaceAllString(line, ColorCyan+cmd+ColorReset)
 	}
-	
+
 	// Options
 	optionRegex := regexp.MustCompile(`(-\w+|--\w+)`)
 	line = optionRegex.ReplaceAllString(line, ColorYellow+"$1"+ColorReset)
-	
+
 	return line
 }
 
@@ -298,14 +298,14 @@ func (f *MarkdownFormatter) highlightJSON(line string) string {
 	// Strings (keys and values)
 	stringRegex := regexp.MustCompile(`"(.*?)"`)
 	line = stringRegex.ReplaceAllString(line, ColorGreen+"\"$1\""+ColorReset)
-	
+
 	// Brackets and braces
 	line = strings.ReplaceAll(line, "{", ColorBold+"{"+ColorReset)
 	line = strings.ReplaceAll(line, "}", ColorBold+"}"+ColorReset)
 	line = strings.ReplaceAll(line, "[", ColorBold+"["+ColorReset)
 	line = strings.ReplaceAll(line, "]", ColorBold+"]"+ColorReset)
-	
- return line
+
+	return line
 }
 
 func (f *MarkdownFormatter) highlightYAML(line string) string {
@@ -314,13 +314,13 @@ func (f *MarkdownFormatter) highlightYAML(line string) string {
 		parts := strings.SplitN(line, ":", 2)
 		return ColorCyan + parts[0] + ColorReset + ":" + ColorGreen + parts[1] + ColorReset
 	}
-	
+
 	// Comments
 	if strings.Contains(line, "#") {
 		parts := strings.SplitN(line, "#", 2)
 		return ColorGreen + parts[0] + ColorDim + "#" + parts[1] + ColorReset
 	}
-	
+
 	return line
 }
 
@@ -333,32 +333,32 @@ func (f *MarkdownFormatter) highlightJavaScript(line string) string {
 	if strings.Contains(line, "/*") {
 		return ColorDim + line + ColorReset
 	}
-	
+
 	// Keywords
 	keywords := []string{"function", "const", "let", "var", "if", "else", "for", "while", "return", "class", "import", "export"}
 	for _, kw := range keywords {
 		re := regexp.MustCompile(`\b` + kw + `\b`)
 		line = re.ReplaceAllString(line, ColorBlue+kw+ColorReset)
 	}
-	
+
 	// Strings
 	stringRegex := regexp.MustCompile("(\".*?\")|('.*?')|(`.*?`)")
 	line = stringRegex.ReplaceAllString(line, ColorGreen+"$1"+ColorReset)
-	
+
 	return line
 }
 
 func (f *MarkdownFormatter) highlightTypeScript(line string) string {
 	// Similar to JavaScript but with TypeScript specifics
 	result := f.highlightJavaScript(line)
-	
+
 	// TypeScript keywords
 	tsKeywords := []string{"interface", "type", "enum", "implements", "extends", "public", "private", "protected"}
 	for _, kw := range tsKeywords {
 		re := regexp.MustCompile(`\b` + kw + `\b`)
 		result = re.ReplaceAllString(result, ColorMagenta+kw+ColorReset)
 	}
-	
+
 	return result
 }
 
@@ -367,11 +367,11 @@ func (f *MarkdownFormatter) highlightGeneric(line string) string {
 	line = strings.ReplaceAll(line, "true", ColorGreen+"true"+ColorReset)
 	line = strings.ReplaceAll(line, "false", ColorRed+"false"+ColorReset)
 	line = strings.ReplaceAll(line, "null", ColorDim+"null"+ColorReset)
-	
+
 	// Strings
 	stringRegex := regexp.MustCompile(`"(.*?)"|'(.*?)'`)
 	line = stringRegex.ReplaceAllString(line, ColorGreen+"$1"+ColorReset)
-	
+
 	return line
 }
 
@@ -380,31 +380,31 @@ func (f *MarkdownFormatter) stripMarkdown(text string) string {
 	// Remove code blocks
 	codeBlockRegex := regexp.MustCompile("```[\\s\\S]*?```")
 	text = codeBlockRegex.ReplaceAllString(text, "[CODE BLOCK]")
-	
+
 	// Remove headers
 	text = regexp.MustCompile("^#{1,6}\\s").ReplaceAllString(text, "")
-	
+
 	// Remove bold/italic
 	text = regexp.MustCompile("\\*\\*(.*?)\\*\\*").ReplaceAllString(text, "$1")
 	text = regexp.MustCompile("__(.*?)__").ReplaceAllString(text, "$1")
 	text = regexp.MustCompile("\\*(.*?)\\*").ReplaceAllString(text, "$1")
 	text = regexp.MustCompile("_(.*?)_").ReplaceAllString(text, "$1")
-	
+
 	// Remove inline code
 	text = regexp.MustCompile("`(.*?)`").ReplaceAllString(text, "$1")
-	
+
 	// Remove links but keep text
 	text = regexp.MustCompile("\\[(.*?)\\]\\(.*?\\)").ReplaceAllString(text, "$1")
-	
+
 	// Remove list markers
 	text = regexp.MustCompile("^\\s*[-*+]\\s").ReplaceAllString(text, "• ")
-	
+
 	// Remove blockquotes
 	text = regexp.MustCompile("^>\\s").ReplaceAllString(text, "")
-	
+
 	// Remove horizontal rules
 	text = regexp.MustCompile("^---$|^---$").ReplaceAllString(text, "")
-	
+
 	return text
 }
 
@@ -421,21 +421,21 @@ func IsLikelyMarkdown(text string) bool {
 			}
 		}
 	}
-	
+
 	markdownPatterns := []string{
-		"`",        // Inline code
-		"```",      // Code blocks
-		"**",       // Bold
-		"[", "](",  // Links
-		"- ",       // Lists
-		"> ",       // Blockquotes
+		"`",       // Inline code
+		"```",     // Code blocks
+		"**",      // Bold
+		"[", "](", // Links
+		"- ", // Lists
+		"> ", // Blockquotes
 	}
-	
+
 	for _, pattern := range markdownPatterns {
 		if strings.Contains(text, pattern) {
 			return true
 		}
 	}
-	
+
 	return false
 }

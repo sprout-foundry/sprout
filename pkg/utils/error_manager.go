@@ -143,15 +143,15 @@ func (em *ErrorManager) GetStats() ErrorStats {
 	// Calculate actual recovery rate based on tracked recovery statistics
 	totalRecoveryAttempts := em.recoveryStats["attempts"]
 	successfulRecoveries := em.recoveryStats["successes"]
-	
+
 	if totalRecoveryAttempts > 0 {
 		stats.RecoveryRate = float64(successfulRecoveries) / float64(totalRecoveryAttempts)
 	} else {
 		// Fallback to simplified calculation if no recovery stats available
 		if stats.TotalErrors > 0 {
 			// Estimate recovery rate based on error categories that typically recover well
-			recoverableErrors := em.errorCounts["NETWORK_ERROR"] + 
-				em.errorCounts["TEMPORARY_ERROR"] + 
+			recoverableErrors := em.errorCounts["NETWORK_ERROR"] +
+				em.errorCounts["TEMPORARY_ERROR"] +
 				em.errorCounts["RETRYABLE_ERROR"]
 			stats.RecoveryRate = float64(recoverableErrors) / float64(stats.TotalErrors)
 		}
@@ -228,7 +228,7 @@ func (em *ErrorManager) notifyRecovery(success bool, err error, strategy string)
 	if success {
 		em.recoveryStats["successes"]++
 	}
-	
+
 	for _, observer := range em.observers {
 		observer.OnRecovery(success, err, strategy)
 	}

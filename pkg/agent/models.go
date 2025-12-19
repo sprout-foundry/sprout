@@ -13,11 +13,17 @@ import (
 // GetModel gets the current model being used by the agent
 func (a *Agent) GetModel() string {
 	// Use the interface method to get the model
+	if a.client == nil {
+		return "unknown"
+	}
 	return a.client.GetModel()
 }
 
 // GetProvider returns the current provider name
 func (a *Agent) GetProvider() string {
+	if a.client == nil {
+		return "unknown"
+	}
 	return a.client.GetProvider()
 }
 

@@ -17,8 +17,6 @@ func NewResponseValidator(agent *Agent) *ResponseValidator {
 	}
 }
 
-
-
 // IsIncomplete checks if a response appears to be incomplete
 func (rv *ResponseValidator) IsIncomplete(content string) bool {
 	// Skip validation if streaming or if content is empty

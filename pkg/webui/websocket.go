@@ -103,7 +103,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(conn *websocket.Conn, msg map[s
 			"type": "pong",
 			"data": map[string]interface{}{"timestamp": time.Now().Unix()},
 		})
-		
+
 	case "subscribe":
 		// Handle subscription requests for specific event types
 		if data, ok := msg["data"].(map[string]interface{}); ok {
@@ -112,7 +112,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(conn *websocket.Conn, msg map[s
 				log.Printf("WebSocket client subscribed to events: %v", eventTypes)
 			}
 		}
-		
+
 	case "request_stats":
 		// Send current stats immediately
 		go func() {
@@ -165,7 +165,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				log.Printf("Terminal output reader panic: %v", r)
 			}
 		}()
-		
+
 		if session.OutputCh != nil {
 			for output := range session.OutputCh {
 				select {
@@ -218,7 +218,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			if !ok {
 				continue
 			}
-			
+
 			input, ok := data["input"].(string)
 			if !ok {
 				continue

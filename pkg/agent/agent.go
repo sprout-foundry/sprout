@@ -24,10 +24,10 @@ const (
 
 // PauseState tracks the state when a task is paused for clarification
 type PauseState struct {
-	IsPaused       bool      `json:"is_paused"`
-	PausedAt       time.Time `json:"paused_at"`
-	OriginalTask   string    `json:"original_task"`
-	Clarifications []string  `json:"clarifications"`
+	IsPaused       bool          `json:"is_paused"`
+	PausedAt       time.Time     `json:"paused_at"`
+	OriginalTask   string        `json:"original_task"`
+	Clarifications []string      `json:"clarifications"`
 	MessagesBefore []api.Message `json:"messages_before"`
 }
 
@@ -79,14 +79,14 @@ type Agent struct {
 	asyncOutput         chan string        // Buffered channel for async PrintLine calls
 
 	// Command history for interactive mode
-	commandHistory      []string           // History of entered commands
-	historyIndex        int                // Current position in history for navigation
-	asyncOutputOnce     sync.Once          // Ensure async worker initializes once
-	asyncBufferSize     int                // Optional override for async output buffer (tests)
+	commandHistory  []string  // History of entered commands
+	historyIndex    int       // Current position in history for navigation
+	asyncOutputOnce sync.Once // Ensure async worker initializes once
+	asyncBufferSize int       // Optional override for async output buffer (tests)
 
 	// Pause/resume state management
-	pauseState           *PauseState        // Current pause state and context
-	pauseMutex           sync.Mutex         // Mutex for pause state operations
+	pauseState *PauseState // Current pause state and context
+	pauseMutex sync.Mutex  // Mutex for pause state operations
 
 	// Feature flags
 	falseStopDetectionEnabled bool
@@ -102,7 +102,6 @@ type Agent struct {
 	debugLogFile  *os.File   // File handle for debug logs
 	debugLogPath  string     // Path to the debug log file
 	debugLogMutex sync.Mutex // Mutex for safe writes to debug log
-
 
 }
 
@@ -514,7 +513,7 @@ func (a *Agent) HandleInterrupt() string {
 	// Set pause state
 	a.pauseState.IsPaused = true
 	a.pauseState.PausedAt = time.Now()
-	
+
 	// Store current messages for context restoration
 	a.pauseState.MessagesBefore = make([]api.Message, len(a.messages))
 	copy(a.pauseState.MessagesBefore, a.messages)
@@ -526,57 +525,57 @@ func (a *Agent) HandleInterrupt() string {
 	fmt.Println("3. Resume without changes")
 	fmt.Println("4. Continue (default)")
 	fmt.Print("Enter choice (1-4, or just press Enter for #4): ")
-	
+
 	// Use a simple input reader that doesn't conflict with UnifiedInputManager
 	choice := a.readSimpleInput("4") // Default to continue
-	
+
 	switch strings.TrimSpace(choice) {
 	case "1":
 		fmt.Print("Enter clarification: ")
 		clarification := a.readSimpleInput("")
-		
+
 		if strings.TrimSpace(clarification) != "" {
 			// Add clarification to pause state
 			a.pauseState.Clarifications = append(a.pauseState.Clarifications, clarification)
-			
+
 			// Add clarification as a system message for context
 			clarificationMsg := fmt.Sprintf("USER CLARIFICATION DURING PAUSE: %s", clarification)
 			a.messages = append(a.messages, api.Message{
-				Role:    "user", 
+				Role:    "user",
 				Content: clarificationMsg,
 			})
-			
+
 			// Reset interrupt and continue
 			a.ClearInterrupt()
 			a.pauseState.IsPaused = false
 			return "CONTINUE_WITH_CLARIFICATION"
 		}
 		// Fall through to continue if no clarification
-		
+
 	case "2":
 		a.pauseState.IsPaused = false
 		return "STOP"
-		
+
 	case "3":
 		// Just resume without changes
 		a.ClearInterrupt()
 		a.pauseState.IsPaused = false
 		return "CONTINUE"
-		
+
 	case "4", "":
 		// Default case - continue
 		fmt.Println("Continuing...")
 		a.ClearInterrupt()
 		a.pauseState.IsPaused = false
 		return "CONTINUE"
-		
+
 	default:
 		fmt.Printf("Invalid choice '%s', continuing...\n", choice)
 		a.ClearInterrupt()
 		a.pauseState.IsPaused = false
 		return "CONTINUE"
 	}
-	
+
 	// This should never be reached, but add for safety
 	return "CONTINUE"
 }
@@ -592,7 +591,7 @@ func (a *Agent) readSimpleInput(defaultValue string) string {
 		}
 		return defaultValue
 	}
-	
+
 	result := strings.TrimSpace(input)
 	if result == "" && defaultValue != "" {
 		return defaultValue
@@ -1182,7 +1181,7 @@ func (a *Agent) AddToHistory(command string) {
 	if command == "" {
 		return
 	}
-	
+
 	// Remove from history if it already exists (to avoid duplicates)
 	for i, cmd := range a.commandHistory {
 		if cmd == command {
@@ -1190,18 +1189,18 @@ func (a *Agent) AddToHistory(command string) {
 			break
 		}
 	}
-	
+
 	// Add to history
 	a.commandHistory = append(a.commandHistory, command)
-	
+
 	// Limit history size
 	if len(a.commandHistory) > 100 {
 		a.commandHistory = a.commandHistory[1:]
 	}
-	
+
 	// Reset history index to end
 	a.historyIndex = -1
-	
+
 	// Save history to configuration for persistence
 	a.saveHistoryToConfig()
 }
@@ -1221,7 +1220,7 @@ func (a *Agent) NavigateHistory(direction int, currentIndex int) (string, int) {
 	if len(a.commandHistory) == 0 {
 		return "", currentIndex
 	}
-	
+
 	switch direction {
 	case 1: // Up arrow - go to older commands
 		if a.historyIndex == -1 {
@@ -1244,11 +1243,11 @@ func (a *Agent) NavigateHistory(direction int, currentIndex int) (string, int) {
 			return "", currentIndex
 		}
 	}
-	
+
 	if a.historyIndex == -1 {
 		return "", currentIndex
 	}
-	
+
 	return a.commandHistory[a.historyIndex], currentIndex
 }
 

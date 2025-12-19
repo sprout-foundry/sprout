@@ -129,8 +129,8 @@ Examples:
 		// Check if stdin is a terminal (not piped)
 		stdinIsTerminal := term.IsTerminal(int(os.Stdin.Fd()))
 
-		// We're interactive only if we have a terminal, no args (or UI flag), and not in CI
-		isInteractive := (len(args) == 0 || enableUI) && !isCI && stdinIsTerminal
+		// We're interactive only if we have a terminal, no args, and not in CI
+		isInteractive := len(args) == 0 && !isCI && stdinIsTerminal
 
 		// Use the new simplified enhanced mode
 		return runSimpleEnhancedMode(chatAgent, isInteractive, args)

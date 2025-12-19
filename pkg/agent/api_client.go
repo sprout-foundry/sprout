@@ -128,10 +128,10 @@ func NewAPIClient(agent *Agent) *APIClient {
 // setTimeoutsFromConfig applies timeout settings from configuration
 func (ac *APIClient) setTimeoutsFromConfig() {
 	// Default timeout values (apply to all providers)
-	// Set to 2 minutes for connection, first-chunk, and inter-chunk timeouts.
-	connectionTimeoutSec := 120
-	firstChunkTimeoutSec := 120
-	chunkTimeoutSec := 120
+	// Set to 5 minutes for connection, first-chunk, and inter-chunk timeouts.
+	connectionTimeoutSec := 300
+	firstChunkTimeoutSec := 300
+	chunkTimeoutSec := 300
 	overallTimeoutSec := 600
 
 	// Get timeout config if available

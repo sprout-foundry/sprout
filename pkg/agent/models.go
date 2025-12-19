@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/factory"
 )
 
@@ -82,22 +83,66 @@ func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientTy
 	return models[0].ID
 }
 
+// getDefaultModelFromFactory gets the default model from the provider factory for dynamic providers
+func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
+	providerName := string(provider)
+
+	// Only check factory for dynamic providers (not built-in ones)
+	switch provider {
+	case api.OpenAIClientType, api.OllamaClientType, api.OllamaLocalClientType, api.OllamaTurboClientType, api.TestClientType:
+		return "" // These are built-in providers, don't check factory
+	}
+
+	// Create provider factory and load configs
+	providerFactory := providers.NewProviderFactory()
+	if err := providerFactory.LoadEmbeddedConfigs(); err != nil {
+		if a.debug {
+			a.debugLog("⚠️ Failed to load provider factory configs: %v\n", err)
+		}
+		return ""
+	}
+
+	// Get provider config
+	config, err := providerFactory.GetProviderConfig(providerName)
+	if err != nil {
+		if a.debug {
+			a.debugLog("⚠️ No factory config found for provider %s: %v\n", providerName, err)
+		}
+		return ""
+	}
+
+	// Return the default model from the config
+	if config.Defaults.Model != "" {
+		return config.Defaults.Model
+	}
+
+	return ""
+}
+
 // SetProvider switches to a specific provider with its default or current model
 func (a *Agent) SetProvider(provider api.ClientType) error {
 	// Get the configured model for this provider
 	model := a.configManager.GetModelForProvider(provider)
 	if model == "" {
-		// If no model configured, try to get the first available model from the provider
-		models, err := api.GetModelsForProvider(provider)
-		if err == nil && len(models) > 0 {
-			// Find a suitable default model
-			model = a.selectDefaultModel(models, provider)
+		// If no model configured, try to get default model from provider factory
+		if defaultModel := a.getDefaultModelFromFactory(provider); defaultModel != "" {
+			model = defaultModel
 			if a.debug {
-				a.debugLog("🔍 Auto-selected model %s for provider %s\n", model, api.GetProviderName(provider))
+				a.debugLog("🔍 Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
 			}
 		} else {
-			// No models available from API and no model specified
-			return fmt.Errorf("no models available from provider %v - please specify a model explicitly", api.GetProviderName(provider))
+			// If no factory default, try to get the first available model from the provider API
+			models, err := api.GetModelsForProvider(provider)
+			if err == nil && len(models) > 0 {
+				// Find a suitable default model
+				model = a.selectDefaultModel(models, provider)
+				if a.debug {
+					a.debugLog("🔍 Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
+				}
+			} else {
+				// No models available from API and no model specified
+				return fmt.Errorf("no models available from provider %v - please specify a model explicitly", api.GetProviderName(provider))
+			}
 		}
 	}
 

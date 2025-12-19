@@ -17,8 +17,8 @@ func TestConfigurationBasedContextLimits(t *testing.T) {
 		Models: ModelConfig{
 			DefaultContextLimit: 32000,
 			ModelOverrides: map[string]int{
-				"special-model":      64000,
-				"ultra-model":        128000,
+				"special-model": 64000,
+				"ultra-model":   128000,
 			},
 			PatternOverrides: []PatternOverride{
 				{
@@ -40,9 +40,9 @@ func TestConfigurationBasedContextLimits(t *testing.T) {
 
 	// Test various model names and their expected context limits
 	testCases := []struct {
-		modelName      string
-		expectedLimit  int
-		description    string
+		modelName     string
+		expectedLimit int
+		description   string
 	}{
 		{
 			modelName:     "special-model",

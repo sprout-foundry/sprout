@@ -57,8 +57,9 @@ Safety: Currently there are very few, and limited safety checks in place. Use at
 - **Leaked Credentials Check**: Automatically scans files for common security concerns like API keys, passwords, database/service URLs, SSH private keys, AWS credentials. This helps prevent accidental exposure of sensitive information.
 - **Search Grounding**: Augments prompts with fresh information from the web using the `WebSearch` tool.
 - **Interactive and Automated Modes**: Confirm each change manually, or run in a fully automated mode with `--skip-prompt`.
-- **Multi-Provider LLM Support**: Works with DeepInfra, OpenAI, Ollama (local/Turbo), OpenRouter, Gemini, DeepSeek, and more.
-  - Now includes Z.AI Coding Plan (OpenAI-compatible) via `--provider zai` with models like `GLM-4.6`.
+- **Multi-Provider LLM Support**: Works with OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama (local/Turbo), DeepSeek, Chutes, LMStudio, and custom providers.
+  - Gemini models available through OpenRouter integration.
+  - Z.AI Coding Plan support via `--provider zai` with models like `GLM-4.6`.
 - **MCP Server Integration**: Connect to Model Context Protocol (MCP) servers to extend functionality with external tools and services like GitHub.
 - **Change Tracking**: Keeps a local history of all changes made in `.ledit/changes/`.
 - **Git Integration**: Can automatically commit changes to Git with AI-generated conventional commit messages.
@@ -75,15 +76,24 @@ To get started with `ledit`, the preferred method is to install it via `go insta
 
 ### Prerequisites
 
-- Go 1.24+
+- Go 1.24.0+
 - Git (for version control integration)
 
 ### From Source (Preferred Method)
 
 Make sure you have Go installed and configured.
 
+**For public access (recommended):**
 ```bash
 go install github.com/alantheprice/ledit@latest
+```
+
+**For private repository access:**
+```bash
+# Clone the repository first
+git clone https://github.com/alantheprice/ledit.git
+cd ledit
+go install
 ```
 
 This will install the `ledit` executable in your `GOPATH/bin` directory (e.g., `~/go/bin` on Linux/macOS).
@@ -150,18 +160,22 @@ The configuration uses a flat structure focused on provider and model management
 ```json
 {
   "version": "2.0",
-  "last_used_provider": "ollama-turbo",
+  "last_used_provider": "openai",
   "provider_models": {
-    "deepinfra": "deepseek-ai/DeepSeek-V3.1-Terminus",
+    "openai": "gpt-5-mini",
+    "zai": "GLM-4.6",
+    "deepinfra": "meta-llama/Llama-3.3-70B-Instruct",
+    "openrouter": "openai/gpt-5",
     "ollama-local": "qwen3-coder:30b",
-    "ollama-turbo": "qwen3-coder:480b",
-    "openai": "gpt-5-mini-2025-08-07",
-    "openrouter": "qwen/qwen3-coder-30b-a3b-instruct",
-    "test": "test"
+    "ollama-turbo": "deepseek-v3.1:671b"
   },
   "provider_priority": [
+    "openai",
+    "zai",
     "openrouter",
-    "deepinfra"
+    "deepinfra",
+    "ollama-turbo",
+    "ollama-local"
   ],
   "mcp": {
     "enabled": false,
@@ -170,31 +184,25 @@ The configuration uses a flat structure focused on provider and model management
     "auto_discover": false,
     "timeout": 30000000000
   },
+  "file_batch_size": 10,
+  "max_concurrent_requests": 5,
+  "request_delay_ms": 100,
+  "enable_security_checks": true,
   "code_style": {
-    "indentation_type": "",
-    "indentation_size": 0,
-    "quote_style": "",
-    "line_endings": "",
-    "trailing_semicolons": false,
-    "trailing_commas": false,
-    "bracket_spacing": false,
-    "javascript_style": "",
-    "optional_chaining": false,
-    "arrow_parens": false,
-    "space_before_function_paren": false,
-    "jsx_single_quote": false,
-    "jsx_bracket_same_line": false
+    "indentation_type": "spaces",
+    "indentation_size": 4,
+    "quote_style": "double",
+    "line_endings": "unix",
+    "import_style": "grouped"
   },
-  "preferences": {
-    "auto_commit": false,
-    "auto_review": false,
-    "streaming": true,
-    "max_retries": 3,
-    "retry_delay": 1000,
-    "context_window": 128000,
-    "temperature": 0.7,
-    "max_tokens": 4096
-  }
+  "api_timeouts": {
+    "connection_timeout_sec": 30,
+    "first_chunk_timeout_sec": 60,
+    "chunk_timeout_sec": 320,
+    "overall_timeout_sec": 600
+  },
+  "preferences": {},
+  "custom_providers": {}
 }
 ```
 
@@ -292,8 +300,20 @@ See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PR
 
 ### Key files maintained by ledit
 
-- **Root**: main.go (entry), cmd/ (CLI subcommands: agent, commit, log, mcp, review, shell).
-- **pkg/**: agent/ (orchestration, state, tools), agent_api/ (providers, TPS tracker), configuration/ (config loading), workspace/ (indexing/syntactic analysis), changetracker/ (history/diffs), git/ (commit integration), security/ (credential scans, allowlist), mcp/ (protocol client), console/ (terminal UI, streaming), codereview/ (code review functionality).
+- **Root**: main.go (entry), cmd/ (CLI subcommands: agent, commit, log, mcp, review, shell, version).
+- **pkg/**: 
+  - `agent/`: Core agent orchestration and conversation handling
+  - `agent_api/`: LLM provider integrations and API clients
+  - `agent_providers/`: Provider-specific implementations and configurations
+  - `agent_tools/`: Built-in tools (file operations, web search, shell execution)
+  - `console/`: Terminal UI and streaming interfaces
+  - `configuration/`: Configuration management and API keys
+  - `history/`: Change tracking and rollback functionality
+  - `mcp/`: Model Context Protocol client implementation
+  - `security/`: Credential scanning and safety checks
+  - `codereview/`: Code review functionality
+  - `utils/`: Utility functions and helpers
+  - `tools/`: Tool registry and execution framework
 - **.ledit/** (project-local):
   - `config.json`: Local overrides.
   - `leditignore`: Ignore patterns (augments .gitignore).
@@ -302,7 +322,7 @@ See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PR
   - `runlogs/`: JSONL workflow traces.
   - `workspace.log`: Verbose execution log.
 - **Global (~/.ledit/)**: config.json (global config), api_keys.json, mcp_config.json.
-- **Tests**: Unit in pkg/ (e.g., tps_tracker_test.go), integration_tests/ (git/file mods), e2e_tests/ (shell workflows), smoke_tests/ (API).
+- **Tests**: Unit tests in each pkg/ subdirectory, integration_tests/, e2e_tests/, smoke_tests/.
 
 ## License
 
@@ -332,10 +352,10 @@ Releases are created through GitHub Actions and enforce strict quality gates:
 **Local Development (for testing)**:
 ```bash
 # Build with version information
-make build-release
+./scripts/version-manager.sh build
 
-# Create a release (local testing only)
-make deploy-release VERSION=v1.2.0
+# Manual release creation
+make build-version
 ```
 
 ### Version Information

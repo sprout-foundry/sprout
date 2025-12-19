@@ -336,6 +336,18 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
 		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
 
+		// Additional debugging for DeepSeek tool call format
+		if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
+			ch.agent.debugLog("🔍 DeepSeek conversation flow check:\n")
+			for i, msg := range ch.agent.messages {
+				if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+					ch.agent.debugLog("  [%d] Assistant with %d tool_calls\n", i, len(msg.ToolCalls))
+				} else if msg.Role == "tool" {
+					ch.agent.debugLog("  [%d] Tool response for tool_call_id: %s\n", i, msg.ToolCallId)
+				}
+			}
+		}
+
 		toolLogs := ch.flushToolLogsToOutput()
 		turn.ToolLogs = append(turn.ToolLogs, toolLogs...)
 		turn.ToolResults = append(turn.ToolResults, toolResults...)

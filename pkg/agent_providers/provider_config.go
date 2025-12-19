@@ -31,10 +31,11 @@ type AuthConfig struct {
 
 // RequestDefaults defines default request parameters
 type RequestDefaults struct {
-	Model       string   `json:"model"`
-	Temperature *float64 `json:"temperature"`
-	MaxTokens   *int     `json:"max_tokens"`
-	TopP        *float64 `json:"top_p"`
+	Model       string                 `json:"model"`
+	Temperature *float64               `json:"temperature"`
+	MaxTokens   *int                   `json:"max_tokens"`
+	TopP        *float64               `json:"top_p"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"` // Provider-specific parameters
 }
 
 // MessageConversion defines how messages should be converted
@@ -220,7 +221,7 @@ func (c *ProviderConfig) GetTimeout() time.Duration {
 	if c.Streaming.ChunkTimeoutMs > 0 {
 		return time.Duration(c.Streaming.ChunkTimeoutMs) * time.Millisecond
 	}
-	return 320 * time.Second // Default timeout
+	return 300 * time.Second // Default timeout (5 minutes)
 }
 
 // GetStreamingTimeout returns the configured streaming timeout duration

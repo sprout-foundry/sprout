@@ -19,12 +19,14 @@ func NewResponseValidator(agent *Agent) *ResponseValidator {
 
 // IsIncomplete checks if a response appears to be incomplete
 func (rv *ResponseValidator) IsIncomplete(content string) bool {
-	// Skip validation if streaming or if content is empty
-	if rv.agent.streamingEnabled || len(content) == 0 {
+	// Skip validation if content is empty (but still check even with streaming enabled)
+	if len(content) == 0 {
 		return false
 	}
 
 	// Check various indicators of incomplete responses
+	// Note: We validate responses regardless of streamingEnabled flag because
+	// the model can legitimately hit token limits even when streaming is enabled
 	return rv.hasIncompletePatterns(content) ||
 		rv.hasAbruptEnding(content) ||
 		rv.isUnusuallyShort(content) ||

@@ -53,29 +53,38 @@ func (p *GenericProvider) SendChatRequest(messages []api.Message, tools []api.To
 	if err != nil {
 		return nil, fmt.Errorf("failed to build chat request: %w", err)
 	}
-	logging.LogRequestPayload(requestBody, p.config.Name, p.model, false)
 
 	req, err := p.buildHTTPRequest(requestBody, false)
 	if err != nil {
+		// Log request on build error
+		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "build_http_request", err)
 		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
 	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
+		// Log request on HTTP error
+		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "http_request_failed", err)
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// Log request on API error
+		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
+			fmt.Sprintf("api_error_%d", resp.StatusCode), fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body)))
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
 	var response api.ChatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		// Log request on decode error
+		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "decode_response", err)
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	// Success - don't log the request
 	return &response, nil
 }
 
@@ -85,25 +94,39 @@ func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []
 	if err != nil {
 		return nil, fmt.Errorf("failed to build chat request: %w", err)
 	}
-	logging.LogRequestPayload(requestBody, p.config.Name, p.model, true)
 
 	req, err := p.buildHTTPRequest(requestBody, true)
 	if err != nil {
+		// Log request on build error
+		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "build_http_request", err)
 		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
 	}
 
 	resp, err := p.streamingClient.Do(req)
 	if err != nil {
+		// Log request on HTTP error
+		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "http_request_failed", err)
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// Log request on API error
+		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true,
+			fmt.Sprintf("api_error_%d", resp.StatusCode), fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body)))
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
-	return p.handleStreamingResponse(resp, callback)
+	response, err := p.handleStreamingResponse(resp, callback)
+	if err != nil {
+		// Log request on streaming error
+		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "streaming_response", err)
+		return nil, err
+	}
+
+	// Success - don't log the request
+	return response, nil
 }
 
 // CheckConnection tests provider connection
@@ -312,6 +335,13 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 		request["top_p"] = *p.config.Defaults.TopP
 	}
 
+	// Add provider-specific parameters
+	if p.config.Defaults.Parameters != nil {
+		for key, value := range p.config.Defaults.Parameters {
+			request[key] = value
+		}
+	}
+
 	// Add tools if provided
 	if len(tools) > 0 {
 		request["tools"] = tools
@@ -358,9 +388,40 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 
 func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{} {
 	if !p.config.Conversion.ArgumentsAsJSON {
-		return toolCalls
+		// For providers like Minimax that expect arguments as string,
+		// ensure the JSON string is properly formatted and escaped
+		converted := make([]map[string]interface{}, 0, len(toolCalls))
+		for _, tc := range toolCalls {
+			// Validate and clean the arguments JSON string
+			arguments := tc.Function.Arguments
+			if arguments != "" {
+				// Try to parse and re-marshal to ensure it's valid JSON
+				var parsed interface{}
+				if err := json.Unmarshal([]byte(arguments), &parsed); err == nil {
+					// Re-marshal to ensure proper formatting and escaping
+					if remarshaled, err := json.Marshal(parsed); err == nil {
+						arguments = string(remarshaled)
+					}
+					// If re-marshaling fails, keep original (it was valid)
+				} else {
+					// If parsing fails, fall back to empty object
+					arguments = "{}"
+				}
+			}
+
+			converted = append(converted, map[string]interface{}{
+				"id": tc.ID,
+				"type": tc.Type,
+				"function": map[string]interface{}{
+					"name":      tc.Function.Name,
+					"arguments": arguments,
+				},
+			})
+		}
+		return converted
 	}
 
+	// For providers that expect arguments as JSON object (original behavior)
 	converted := make([]map[string]interface{}, 0, len(toolCalls))
 	for _, tc := range toolCalls {
 		function := map[string]interface{}{

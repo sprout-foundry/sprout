@@ -216,8 +216,8 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			providerName := parts[0]
 			finalModel = parts[1]
 
-			// Get ClientType for provider
-			clientType, err = getClientTypeFromName(providerName)
+			// Get ClientType for provider using config manager to handle custom providers
+			clientType, err = configManager.MapStringToClientType(providerName)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "⚠️  Unknown provider '%s' specified. Falling back to available provider...\n", providerName)
 				// Try to select a different provider
@@ -417,6 +417,7 @@ func (a *Agent) initDebugLogger() error {
 func (a *Agent) GetDebugLogPath() string { return a.debugLogPath }
 
 // getClientTypeFromName converts provider name to ClientType
+// DEPRECATED: Use configManager.MapStringToClientType instead to handle custom providers
 func getClientTypeFromName(name string) (api.ClientType, error) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "chutes":
@@ -425,6 +426,8 @@ func getClientTypeFromName(name string) (api.ClientType, error) {
 		return api.OpenAIClientType, nil
 	case "deepinfra":
 		return api.DeepInfraClientType, nil
+	case "deepseek":
+		return api.DeepSeekClientType, nil
 	case "openrouter":
 		return api.OpenRouterClientType, nil
 	case "zai":
@@ -438,11 +441,11 @@ func getClientTypeFromName(name string) (api.ClientType, error) {
 	case "test":
 		return api.TestClientType, nil
 	// For providers not yet in ClientType constants
-	case "anthropic", "gemini", "groq", "cerebras", "claude", "cohere", "mistral":
+	case "anthropic", "gemini", "groq", "cerebras", "claude", "cohere", "mistral", "lmstudio":
 		return api.ClientType(name), nil
 	default:
 		// Return error for unknown provider, but allow graceful fallback
-		return "", fmt.Errorf("unknown provider: %s (known providers: chutes, openai, deepinfra, openrouter, zai, ollama, ollama-local, ollama-turbo, anthropic, gemini, groq, cerebras)", name)
+		return "", fmt.Errorf("unknown provider: %s (known providers: chutes, openai, deepinfra, openrouter, zai, ollama, ollama-local, ollama-turbo, anthropic, gemini, groq, cerebras, lmstudio)", name)
 	}
 }
 

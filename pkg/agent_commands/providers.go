@@ -305,6 +305,8 @@ func getProviderDisplayName(provider api.ClientType) string {
 		return "Z.AI Coding Plan"
 	case api.DeepInfraClientType:
 		return "DeepInfra"
+	case api.DeepSeekClientType:
+		return "DeepSeek"
 	case api.OpenRouterClientType:
 		return "OpenRouter"
 	case api.OllamaClientType:

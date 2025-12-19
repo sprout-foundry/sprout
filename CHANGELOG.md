@@ -2,6 +2,11 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.9.1] - 2025-12-18
+
+- Updates 11 files - Updates webui static files for go install support (0d74d40)
+- docs: Update changelog for v0.9.0 (3d56cd1)
+
 ## [v0.9.0] - 2025-12-18
 
 - Updates .github/workflows/release.yml - Updates release workflow (33288dc)

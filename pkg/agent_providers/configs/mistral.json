@@ -1,0 +1,87 @@
+{
+  "name": "mistral",
+  "endpoint": "https://api.mistral.ai/v1/chat/completions",
+  "auth": {
+    "type": "bearer",
+    "env_var": "MISTRAL_API_KEY"
+  },
+  "headers": {},
+  "defaults": {
+    "model": "devstral-2512",
+    "temperature": 0.7,
+    "max_tokens": 32000,
+    "top_p": 1.0
+  },
+  "message_conversion": {
+    "include_tool_call_id": true,
+    "convert_tool_role_to_user": false,
+    "reasoning_content_field": "",
+    "force_tool_call_type": "function"
+  },
+  "streaming": {
+    "format": "sse",
+    "chunk_timeout_ms": 120000,
+    "done_marker": "[DONE]"
+  },
+  "models": {
+    "default_context_limit": 32768,
+    "model_overrides": {
+      "mistral-large-latest": 131072,
+      "mistral-large-2411": 131072,
+      "mistral-large-2407": 131072,
+      "mistral-medium-latest": 32768,
+      "mistral-medium-2312": 32768,
+      "mistral-small-latest": 32768,
+      "mistral-small-2409": 32768,
+      "mistral-tiny-latest": 32768,
+      "open-mistral-nemo": 131072,
+      "open-mistral-7b": 32768,
+      "codestral-latest": 32768,
+      "devstral-2512": 32768,
+      "codestral-2405": 32768,
+      "mistral-embed": 32768
+    },
+    "pattern_overrides": [
+      {
+        "pattern": "mistral-large.*",
+        "context_limit": 131072
+      },
+      {
+        "pattern": "mistral-medium.*",
+        "context_limit": 32768
+      },
+      {
+        "pattern": "mistral-small.*",
+        "context_limit": 32768
+      },
+      {
+        "pattern": "mistral-tiny.*",
+        "context_limit": 32768
+      },
+      {
+        "pattern": "open-mistral.*",
+        "context_limit": 32768
+      },
+      {
+        "pattern": "codestral.*",
+        "context_limit": 32768
+      }
+    ],
+    "supports_vision": false,
+    "vision_model": "",
+    "default_model": "devstral-2512",
+    "available_models": []
+  },
+  "retry": {
+    "max_attempts": 3,
+    "base_delay_ms": 1000,
+    "backoff_multiplier": 2.0,
+    "max_delay_ms": 10000,
+    "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
+  },
+  "cost": {
+    "input_token_cost": 0.0,
+    "output_token_cost": 0.0,
+    "currency": "USD"
+  }
+}

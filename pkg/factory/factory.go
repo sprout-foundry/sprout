@@ -252,6 +252,9 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 	case api.LMStudioClientType:
 		// Use the new generic provider system
 		return CreateGenericProvider("lmstudio", model)
+	case api.MistralClientType:
+		// Use the new generic provider system
+		return CreateGenericProvider("mistral", model)
 	case api.TestClientType:
 		// Return test/mock client for CI environments
 		testClient := &TestClient{model: model}

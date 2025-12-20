@@ -45,6 +45,7 @@ type MessageConversion struct {
 	ReasoningContentField    string `json:"reasoning_content_field"`
 	ArgumentsAsJSON          bool   `json:"arguments_as_json"`
 	SkipToolExecutionSummary bool   `json:"skip_tool_execution_summary"` // For providers with strict role alternation
+	ForceToolCallType        string `json:"force_tool_call_type"`        // Force tool call type to specific value (e.g., "function" for Mistral)
 }
 
 // StreamingConfig defines streaming behavior

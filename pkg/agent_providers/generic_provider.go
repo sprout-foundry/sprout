@@ -409,9 +409,15 @@ func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{}
 				}
 			}
 
+			toolCallType := tc.Type
+			// Force tool call type if specified (needed for providers like Mistral)
+			if p.config.Conversion.ForceToolCallType != "" {
+				toolCallType = p.config.Conversion.ForceToolCallType
+			}
+
 			converted = append(converted, map[string]interface{}{
 				"id": tc.ID,
-				"type": tc.Type,
+				"type": toolCallType,
 				"function": map[string]interface{}{
 					"name":      tc.Function.Name,
 					"arguments": arguments,
@@ -437,9 +443,15 @@ func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{}
 			}
 		}
 
+		toolCallType := tc.Type
+		// Force tool call type if specified (needed for providers like Mistral)
+		if p.config.Conversion.ForceToolCallType != "" {
+			toolCallType = p.config.Conversion.ForceToolCallType
+		}
+
 		converted = append(converted, map[string]interface{}{
 			"id":       tc.ID,
-			"type":     tc.Type,
+			"type":     toolCallType,
 			"function": function,
 		})
 	}

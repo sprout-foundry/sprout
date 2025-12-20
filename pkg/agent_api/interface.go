@@ -35,6 +35,7 @@ const (
 	DeepInfraClientType   ClientType = "deepinfra"
 	DeepSeekClientType    ClientType = "deepseek"
 	LMStudioClientType    ClientType = "lmstudio"
+	MistralClientType     ClientType = "mistral"
 	OllamaClientType      ClientType = "ollama" // Maps to local ollama
 	OllamaLocalClientType ClientType = "ollama-local"
 	OllamaTurboClientType ClientType = "ollama-turbo"
@@ -192,6 +193,8 @@ func IsProviderAvailable(provider ClientType) bool {
 		return os.Getenv("DEEPINFRA_API_KEY") != ""
 	case DeepSeekClientType:
 		return os.Getenv("DEEPSEEK_API_KEY") != ""
+	case MistralClientType:
+		return os.Getenv("MISTRAL_API_KEY") != ""
 	default:
 		return false
 	}
@@ -204,6 +207,7 @@ func GetAvailableProviders() []ClientType {
 		ZAIClientType,
 		DeepInfraClientType,
 		DeepSeekClientType,
+		MistralClientType,
 		OllamaLocalClientType,
 		OllamaTurboClientType,
 		OpenRouterClientType,
@@ -240,6 +244,8 @@ func GetProviderName(clientType ClientType) string {
 		return "OpenRouter"
 	case LMStudioClientType:
 		return "LM Studio"
+	case MistralClientType:
+		return "Mistral"
 	default:
 		return string(clientType)
 	}

@@ -181,6 +181,8 @@ func mapClientTypeToString(ct api.ClientType) string {
 		return "ollama-turbo"
 	case api.LMStudioClientType:
 		return "lmstudio"
+	case api.MistralClientType:
+		return "mistral"
 	case api.TestClientType:
 		return "test"
 	default:
@@ -200,6 +202,8 @@ func (m *Manager) mapStringToClientType(s string) (api.ClientType, error) {
 		return api.OllamaLocalClientType, nil
 	case "ollama-turbo":
 		return api.OllamaTurboClientType, nil
+	case "mistral":
+		return api.MistralClientType, nil
 	case "test":
 		return api.TestClientType, nil
 	default:

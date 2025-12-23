@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 //go:embed prompts/system_prompt.md
@@ -17,6 +18,14 @@ var systemPromptContent string
 func GetEmbeddedSystemPrompt() string {
 	// Extract the prompt content from the markdown
 	promptContent := extractSystemPrompt()
+
+	// Add current date and time for temporal context
+	currentTime := time.Now()
+	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
+		currentTime.Format("2006-01-02"),
+		currentTime.Format("15:04:05"),
+		currentTime.Location().String())
+	promptContent = promptContent + dateTimeString
 
 	// Add discovered context files (AGENTS.md, Claude.md, etc.)
 	contextFiles, err := LoadContextFiles()

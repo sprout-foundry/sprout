@@ -67,8 +67,8 @@
         "context_limit": 32768
       }
     ],
-    "supports_vision": false,
-    "vision_model": "",
+    "supports_vision": true,
+    "vision_model": "mistral-ocr-2512",
     "default_model": "devstral-2512",
     "available_models": []
   },

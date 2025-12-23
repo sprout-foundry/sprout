@@ -54,8 +54,8 @@
         "context_limit": 32768
       }
     ],
-    "supports_vision": false,
-    "vision_model": "",
+    "supports_vision": true,
+    "vision_model": "gemma-3-12b-it-qat",
     "default_model": "qwen3-coder:30b",
     "available_models": []
   },

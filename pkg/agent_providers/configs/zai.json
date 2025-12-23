@@ -47,8 +47,8 @@
         "context_limit": 128000
       }
     ],
-    "supports_vision": false,
-    "vision_model": "",
+    "supports_vision": true,
+    "vision_model": "glm-4.6v",
     "default_model": "glm-4.6",
     "available_models": []
   },

@@ -202,30 +202,18 @@ func (a *Agent) SetModel(model string) error {
 	// Use the current provider - we don't need to determine it
 	// The user has already selected the provider via /providers select
 
-	// Verify the model exists for the current provider
-	models, err := a.getModelsForProvider(a.clientType)
-	if err != nil {
-		return fmt.Errorf("failed to get models for current provider %s: %w", api.GetProviderName(a.clientType), err)
-	}
-
-	// Check if the model exists (case-insensitive)
-	modelFound := false
-	for _, m := range models {
-		if strings.EqualFold(m.ID, model) {
-			modelFound = true
-			// Use the exact model ID from the provider's list
-			model = m.ID
-			break
-		}
-	}
-
-	if !modelFound {
-		return fmt.Errorf("model %s not found for provider %s", model, api.GetProviderName(a.clientType))
-	}
-
 	// Update the model on the current client
 	if err := a.client.SetModel(model); err != nil {
 		return fmt.Errorf("failed to set model on client: %w", err)
+	}
+
+	// Verify the model works by checking connection
+	if err := a.client.CheckConnection(); err != nil {
+		// Revert to previous model if connection check fails
+		if prevModel := a.client.GetModel(); prevModel != "" {
+			_ = a.client.SetModel(prevModel)
+		}
+		return fmt.Errorf("model %s failed connection check: %w", model, err)
 	}
 
 	// Save the selection

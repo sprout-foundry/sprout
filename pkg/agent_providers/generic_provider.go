@@ -129,10 +129,17 @@ func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []
 	return response, nil
 }
 
-// CheckConnection tests provider connection
+// CheckConnection tests provider connection with current model
 func (p *GenericProvider) CheckConnection() error {
-	// Simple health check - try to list models
-	_, err := p.ListModels()
+	// Send a minimal test request to verify the model works
+	testMessages := []api.Message{
+		{
+			Role:    "user",
+			Content: "Hi",
+		},
+	}
+
+	_, err := p.SendChatRequest(testMessages, nil, "")
 	return err
 }
 

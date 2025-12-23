@@ -494,18 +494,12 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 	case "tool_calls":
 		return false, "model tool_calls finish"
 	case "stop":
-		if ch.responseValidator.IsIncomplete(content) {
-			fmt.Printf("🏁 Model finish reason: stop - Response appears incomplete, requesting continuation\n")
-			ch.agent.debugLog("⚠️ Model signaled 'stop' but response appears incomplete\n")
-			ch.handleIncompleteResponse()
-			return false, "model stop with incomplete content"
-		} else {
-			// Model stopped with complete response - respect model's judgment
-			fmt.Printf("🏁 Model finish reason: stop - Response complete, finishing conversation\n")
-			ch.agent.debugLog("🏁 Model signaled 'stop' with complete response\n")
-			ch.displayFinalResponse(content)
-			return true, "completion"
-		}
+		// Model explicitly signaled it's done - respect that decision
+		// Don't override the model's judgment about whether its response is complete
+		fmt.Printf("🏁 Model finish reason: stop - Response complete, finishing conversation\n")
+		ch.agent.debugLog("🏁 Model signaled 'stop' - accepting response as complete\n")
+		ch.displayFinalResponse(content)
+		return true, "completion"
 	case "length":
 		fmt.Printf("🏁 Model finish reason: length - Hit limit, requesting continuation\n")
 		ch.agent.debugLog("⚠️ Model hit length limit, asking to continue\n")

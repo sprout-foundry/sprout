@@ -571,4 +571,3 @@ func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn Tur
 	turn.GuardrailTrigger = "fallback parser failed"
 	return false // Continue conversation to allow model to issue proper tool_calls
 }
-

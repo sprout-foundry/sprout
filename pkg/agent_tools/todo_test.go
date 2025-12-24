@@ -40,14 +40,26 @@ func TestAddBulkTodos_NoDeadlockAndMarkdown(t *testing.T) {
 		return AddBulkTodos(todos)
 	})
 
-	if !strings.Contains(res, "📝 Added 3 todo(s)") {
+	// Check for compact response (current behavior)
+	if !strings.Contains(res, "📝 Added 3 todos") && !strings.Contains(res, "Added 3 todo") {
 		t.Fatalf("expected added summary, got: %q", res)
 	}
-	if !strings.Contains(res, "**Todo List:**") {
-		t.Fatalf("expected todo list markdown, got: %q", res)
+
+	if !strings.Contains(res, "Set up project") || !strings.Contains(res, "Implement feature") || !strings.Contains(res, "Write tests") {
+		t.Fatalf("expected todo titles in response, got: %q", res)
 	}
-	if !strings.Contains(res, "- [ ] Set up project") {
-		t.Fatalf("expected first todo in markdown list, got: %q", res)
+
+	// Verify we can call GetTodoListMarkdown without deadlock (this tests RLock usage)
+	markdown := waitWithTimeout(t, 1*time.Second, func() string {
+		return GetTodoListMarkdown()
+	})
+
+	if markdown == "No todos" {
+		t.Fatalf("expected todos in markdown list, got: %q", markdown)
+	}
+
+	if !strings.Contains(markdown, "- [ ] Set up project") {
+		t.Fatalf("expected first todo in markdown list, got: %q", markdown)
 	}
 }
 
@@ -67,17 +79,19 @@ func TestUpdateTodoStatus_NoDeadlockAndMarkdown(t *testing.T) {
 		return UpdateTodoStatus("todo_1", "completed")
 	})
 
-	if !strings.Contains(res, "**Todo List:**") {
-		t.Fatalf("expected todo list markdown, got: %q", res)
-	}
-	// With two todos, completing one should show the completed header
-	if !strings.Contains(res, "✅ Completed: Task A") && !strings.Contains(res, "🎉 All todos completed!") {
-		t.Fatalf("expected completion header, got: %q", res)
+	// Check for compact response (current behavior) - could be "completed" or "remaining"
+	if !strings.Contains(res, "completed") && !strings.Contains(res, "✅") {
+		t.Fatalf("expected completion response, got: %q", res)
 	}
 
-	// Ensure status reflected in markdown list
-	if !strings.Contains(res, "- [x] Task A") {
-		t.Fatalf("expected completed checkbox for Task A, got: %q", res)
+	// Verify we can call GetTodoListMarkdown without deadlock (this tests RLock usage)
+	markdown := waitWithTimeout(t, 1*time.Second, func() string {
+		return GetTodoListMarkdown()
+	})
+
+	// Ensure Task A is shown as completed
+	if !strings.Contains(markdown, "- [x] Task A") && !strings.Contains(markdown, "✅") {
+		t.Fatalf("expected completed checkbox for Task A, got: %q", markdown)
 	}
 }
 

@@ -20,14 +20,14 @@ Available commands:
   agent        - AI agent mode with modern CLI + Web UI
   shell        - Generate shell scripts from natural language descriptions
   commit       - Generate commit messages
-  review-staged - Review staged changes
+  review       - Perform AI-powered code review on staged changes
   log          - View operation logs
   mcp          - Manage MCP (Model Context Protocol) servers
   custom-model - Manage custom model providers
 
 For autonomous operation, try: ledit agent "your intent here"
 
-Running just 'ledit' without arguments starts the enhanced agent mode with automatic web UI.`,
+Running just 'ledit' without arguments starts enhanced agent mode with automatic web UI.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Initialize API keys and configuration
 		initializeSystem()

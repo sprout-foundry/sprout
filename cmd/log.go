@@ -31,7 +31,6 @@ var logCmd = &cobra.Command{
 
 func init() {
 	logCmd.Flags().BoolVar(&rawLog, "raw-log", false, "Display the raw verbose internal log file (.ledit/workspace.log)")
-	rootCmd.AddCommand(logCmd)
 }
 
 // displayVerboseLog reads and displays the verbose log to a buffer for seamless console experience

@@ -423,7 +423,7 @@ func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{}
 			}
 
 			converted = append(converted, map[string]interface{}{
-				"id": tc.ID,
+				"id":   tc.ID,
 				"type": toolCallType,
 				"function": map[string]interface{}{
 					"name":      tc.Function.Name,

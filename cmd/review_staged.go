@@ -145,5 +145,4 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 func init() {
 	reviewStagedCmd.Flags().StringVarP(&reviewStagedModel, "model", "m", "", "Specify the LLM model to use for the code review (e.g., 'ollama:llama3')")
 	reviewStagedCmd.Flags().BoolVar(&reviewStagedSkipPrompt, "skip-prompt", false, "Skip any interactive prompts (e.g., for confirmation, though less relevant for review)")
-	rootCmd.AddCommand(reviewStagedCmd)
 }

@@ -2,6 +2,17 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.10.0] - 2025-12-24
+
+- Updates 2 files - Updates code formatting and alignment (1f90ec1)
+- Updates 4 files - Updates command registration logic (f672f62)
+- Updates 2 files - Updates review command logic (b70f9ad)
+- Updates 6 files - (8b0a2c9)
+- Updates pkg/agent/conversation_handler.go - Updates stop handling logic (a11075c)
+- Updates 9 files - Updates model validation and prompt context (c375401)
+- Updates 10 files - Updates add Mistral AI provider integration (4e7ee38)
+- docs: Update changelog for v0.9.2 (a444738)
+
 ## [v0.9.2] - 2025-12-19
 
 - Updates 2 files - Test response from mock provider (286f514)

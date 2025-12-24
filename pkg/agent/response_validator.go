@@ -21,16 +21,39 @@ func NewResponseValidator(agent *Agent) *ResponseValidator {
 func (rv *ResponseValidator) IsIncomplete(content string) bool {
 	// Skip validation if content is empty (but still check even with streaming enabled)
 	if len(content) == 0 {
+		rv.agent.debugLog("🔍 IsIncomplete: content empty, returning false\n")
 		return false
 	}
 
 	// Check various indicators of incomplete responses
 	// Note: We validate responses regardless of streamingEnabled flag because
 	// the model can legitimately hit token limits even when streaming is enabled
-	return rv.hasIncompletePatterns(content) ||
-		rv.hasAbruptEnding(content) ||
-		rv.isUnusuallyShort(content) ||
-		rv.hasIncompleteCodeBlock(content)
+
+	hasPatterns := rv.hasIncompletePatterns(content)
+	if hasPatterns {
+		rv.agent.debugLog("🔍 IsIncomplete: hasIncompletePatterns = true\n")
+	}
+
+	hasAbrupt := rv.hasAbruptEnding(content)
+	if hasAbrupt {
+		rv.agent.debugLog("🔍 IsIncomplete: hasAbruptEnding = true\n")
+	}
+
+	isShort := rv.isUnusuallyShort(content)
+	if isShort {
+		rv.agent.debugLog("🔍 IsIncomplete: isUnusuallyShort = true\n")
+	}
+
+	hasBadCode := rv.hasIncompleteCodeBlock(content)
+	if hasBadCode {
+		rv.agent.debugLog("🔍 IsIncomplete: hasIncompleteCodeBlock = true\n")
+	}
+
+	result := hasPatterns || hasAbrupt || isShort || hasBadCode
+	rv.agent.debugLog("🔍 IsIncomplete: final result = %v (patterns=%v, abrupt=%v, short=%v, code=%v)\n",
+		result, hasPatterns, hasAbrupt, isShort, hasBadCode)
+
+	return result
 }
 
 // hasIncompletePatterns checks for patterns indicating incomplete response
@@ -55,12 +78,33 @@ func (rv *ResponseValidator) hasAbruptEnding(content string) bool {
 
 	lastChar := trimmed[len(trimmed)-1]
 
-	// Check if it ends without proper punctuation
-	if !unicode.IsPunct(rune(lastChar)) || lastChar == ',' || lastChar == '-' {
-		// Exception for code blocks
-		if !strings.Contains(content, "```") {
-			return true
+	// Only consider it abrupt if it ends with specific incomplete patterns
+	// Most models know when they're done - trust them more
+	// Don't flag as abrupt if:
+	// - Ends with a letter/word (might be a URL or identifier)
+	// - Contains code blocks (might end with code)
+	// - Ends with common sentence closings
+	if !unicode.IsPunct(rune(lastChar)) {
+		// Check if it looks like a URL or identifier (letters, numbers, slashes)
+		if unicode.IsLetter(rune(lastChar)) || unicode.IsDigit(rune(lastChar)) || lastChar == '/' || lastChar == '\\' {
+			// Could be a URL, path, or identifier - these are valid endings
+			if !strings.HasSuffix(trimmed, "...") {
+				return false
+			}
 		}
+
+		// Exception for code blocks or technical content
+		if strings.Contains(content, "```") || strings.Contains(content, "http") {
+			return false
+		}
+
+		// Otherwise, ending without punctuation might be incomplete
+		return true
+	}
+
+	// Ends with punctuation - check for problematic punctuation
+	if lastChar == ',' || lastChar == '-' {
+		return true // Commas and hyphens suggest continuation
 	}
 
 	return false

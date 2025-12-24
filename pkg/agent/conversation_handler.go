@@ -411,9 +411,28 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 
 	// Handle finish reason to respect model's intent
+	ch.agent.debugLog("🔍 Finish reason received: '%s' (len=%d)\n", choice.FinishReason, len(choice.FinishReason))
+	contentPreview := contentUsed
+	if len(contentPreview) > 200 {
+		contentPreview = contentPreview[:200] + "..."
+	}
+	ch.agent.debugLog("🔍 Content length: %d, preview: %q\n", len(contentUsed), contentPreview)
+
 	if choice.FinishReason == "" {
 		// No finish reason provided - model expects to continue working
-		ch.agent.debugLog("🔄 No finish reason - model expects to continue\n")
+		// BUT: First check if this is truly incomplete or just a streaming artifact
+		// Some providers don't send finish_reason in every chunk
+		// Only continue if the response actually appears incomplete
+		isIncomplete := ch.responseValidator.IsIncomplete(contentUsed)
+		ch.agent.debugLog("🔍 IsIncomplete() result: %v\n", isIncomplete)
+
+		if !isIncomplete {
+			// Response looks complete despite no finish_reason - accept it
+			ch.agent.debugLog("✅ No finish_reason but response appears complete - accepting\n")
+			ch.displayFinalResponse(contentUsed)
+			return ch.finalizeTurn(turn, true)
+		}
+		ch.agent.debugLog("🔄 No finish reason and response appears incomplete - asking model to continue\n")
 		return ch.finalizeTurn(turn, false) // Continue conversation
 	}
 
@@ -552,3 +571,4 @@ func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn Tur
 	turn.GuardrailTrigger = "fallback parser failed"
 	return false // Continue conversation to allow model to issue proper tool_calls
 }
+

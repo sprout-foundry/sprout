@@ -555,5 +555,17 @@ func (p *GenericProvider) handleStreamingResponse(resp *http.Response, callback 
 		respObj.Model = p.model
 	}
 
+	// If the provider didn't send a finish_reason but we received content and the stream
+	// ended normally (not due to error), default to "stop" to prevent false incompleteness detection
+	// This handles providers like DeepInfra that don't always send finish_reason in streaming mode
+	if len(respObj.Choices) > 0 {
+		choice := &respObj.Choices[0]
+		if choice.FinishReason == "" && choice.Message.Content != "" {
+			// Stream ended normally with content but no explicit finish_reason
+			// Default to "stop" since the provider completed the response
+			choice.FinishReason = "stop"
+		}
+	}
+
 	return respObj, nil
 }

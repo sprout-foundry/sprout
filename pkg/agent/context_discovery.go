@@ -133,9 +133,9 @@ func processContextContent(content string) string {
 			strings.Contains(strings.ToLower(line), "contents") ||
 			strings.Contains(strings.ToLower(line), "navigation") ||
 			strings.Contains(strings.ToLower(line), "menu") ||
-			strings.HasPrefix(strings.TrimSpace(line), "#") && 
-			(strings.Contains(strings.ToLower(line), "index") || 
-			 strings.Contains(strings.ToLower(line), "toc")) {
+			strings.HasPrefix(strings.TrimSpace(line), "#") &&
+				(strings.Contains(strings.ToLower(line), "index") ||
+					strings.Contains(strings.ToLower(line), "toc")) {
 			skipNextLine = true
 			continue
 		}

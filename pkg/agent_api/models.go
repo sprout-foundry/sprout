@@ -485,8 +485,9 @@ func (w *zaiListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	if os.Getenv("ZAI_API_KEY") == "" {
 		return nil, fmt.Errorf("ZAI_API_KEY not set")
 	}
-	// Static list aligned with docs
+	// Static list including newer models
 	models := []ModelInfo{
+		{ID: "glm-4.7", Name: "GLM-4.7", Provider: "zai", ContextLength: 200000, Tags: []string{"tools"}},
 		{ID: "GLM-4.6", Name: "GLM-4.6", Provider: "zai", ContextLength: 200000, Tags: []string{"tools"}},
 		{ID: "GLM-4.5", Name: "GLM-4.5", Provider: "zai", ContextLength: 128000, Tags: []string{"tools"}},
 		{ID: "GLM-4.5-air", Name: "GLM-4.5-air", Provider: "zai", ContextLength: 128000, Tags: []string{"tools"}},

@@ -34,7 +34,6 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 	timeout := config.GetTimeout()
 	streamingTimeout := config.GetStreamingTimeout()
 
-	
 	return &GenericProvider{
 		config: config,
 		httpClient: &http.Client{
@@ -204,14 +203,14 @@ func (p *GenericProvider) ListModels() ([]api.ModelInfo, error) {
 
 	var modelsResponse struct {
 		Data []struct {
-			ID            string    `json:"id"`
-			Object        string    `json:"object"`
-			Created       int64     `json:"created"`
-			OwnedBy       string    `json:"owned_by"`
-			ContextLength int       `json:"context_length,omitempty"`
+			ID            string `json:"id"`
+			Object        string `json:"object"`
+			Created       int64  `json:"created"`
+			OwnedBy       string `json:"owned_by"`
+			ContextLength int    `json:"context_length,omitempty"`
 			Pricing       *struct {
-				Prompt     string  `json:"prompt,omitempty"`
-				Completion string  `json:"completion,omitempty"`
+				Prompt     string `json:"prompt,omitempty"`
+				Completion string `json:"completion,omitempty"`
 			} `json:"pricing,omitempty"`
 		} `json:"data"`
 	}

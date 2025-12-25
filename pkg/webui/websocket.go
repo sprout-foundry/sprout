@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -19,72 +20,96 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	}
 	defer conn.Close()
 
-	// Store connection
-	ws.connections.Store(conn, true)
+	// Generate unique session ID for this connection
+	sessionID := fmt.Sprintf("ws_%d", time.Now().UnixNano())
+
+	// Store connection with metadata
+	ws.connections.Store(conn, &ConnectionInfo{
+		SessionID:   sessionID,
+		Type:        "webui",
+		ConnectedAt: time.Now(),
+	})
 	defer ws.connections.Delete(conn)
+
+	log.Printf("WebSocket client connected: %s", sessionID)
 
 	// Send initial connection status
 	conn.WriteJSON(map[string]interface{}{
 		"type": "connection_status",
-		"data": map[string]bool{"connected": true},
+		"data": map[string]interface{}{"connected": true, "session_id": sessionID},
 	})
 
 	// Set up close handler to send disconnect status
 	conn.SetCloseHandler(func(code int, text string) error {
-		log.Printf("WebSocket closing with code %d: %s", code, text)
+		log.Printf("WebSocket %s closing with code %d: %s", sessionID, code, text)
 		return nil
 	})
 
-	// Subscribe to events - EventBus should always be available in real deployments
-	eventCh := ws.eventBus.Subscribe("webui")
-	defer ws.eventBus.Unsubscribe("webui")
+	// Subscribe to events with unique session ID to support multiple clients
+	eventCh := ws.eventBus.Subscribe(sessionID)
+	defer ws.eventBus.Unsubscribe(sessionID)
 
-	// Send events to WebSocket with improved event handling
-	conn.SetReadLimit(512 * 1024) // 512KB max message size
+	// Use separate goroutines for reading and writing
+	// This is the standard pattern for bidirectional WebSocket communication
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	// Read goroutine - handles incoming messages
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		conn.SetReadLimit(512 * 1024) // 512KB max message size
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				// Set read deadline for heartbeat (60 seconds)
+				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+
+				var msg map[string]interface{}
+				if err := conn.ReadJSON(&msg); err != nil {
+					if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
+						websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+						log.Printf("WebSocket %s closed: %v", sessionID, err)
+					} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+						// Heartbeat timeout, send ping
+						if err := conn.WriteJSON(map[string]interface{}{
+							"type": "ping",
+							"data": map[string]interface{}{"timestamp": time.Now().Unix()},
+						}); err != nil {
+							log.Printf("WebSocket %s ping failed: %v", sessionID, err)
+							return
+						}
+						continue
+					} else {
+						log.Printf("WebSocket %s read error: %v", sessionID, err)
+					}
+					return
+				}
+
+				// Handle incoming WebSocket messages
+				ws.handleWebSocketMessage(conn, msg)
+			}
+		}
+	}()
+
+	// Write loop - handles outgoing events
 	for {
 		select {
+		case <-ctx.Done():
+			log.Printf("WebSocket %s context cancelled", sessionID)
+			return
+
 		case event := <-eventCh:
 			if err := conn.WriteJSON(event); err != nil {
-				log.Printf("WebSocket write error: %v", err)
+				log.Printf("WebSocket %s write error: %v", sessionID, err)
 				return
 			}
-		case <-time.After(50 * time.Millisecond):
-			// Check if connection is still alive before reading
-			if _, _, err := conn.NextReader(); err != nil {
-				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
-					websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					log.Printf("WebSocket connection closed: %v", err)
-					return
-				}
-				// Continue if it's just a timeout or other non-fatal error
-				continue
-			}
 
-			// Connection is alive, try to read message
-			// Set a very short deadline just for the read
-			conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-			var msg map[string]interface{}
-			if err := conn.ReadJSON(&msg); err != nil {
-				// Handle timeout and normal closure gracefully
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					// Reset deadline for next iteration
-					conn.SetReadDeadline(time.Time{})
-					continue
-				}
-				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
-					websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					log.Printf("WebSocket read error: %v", err)
-					return
-				}
-				// Reset deadline for next iteration
-				conn.SetReadDeadline(time.Time{})
-				continue
-			}
-			// Reset deadline since we got a message
-			conn.SetReadDeadline(time.Time{})
-
-			// Handle incoming WebSocket messages
-			ws.handleWebSocketMessage(conn, msg)
+		case <-readDone:
+			// Read goroutine has exited
+			return
 		}
 	}
 }
@@ -103,7 +128,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(conn *websocket.Conn, msg map[s
 			"type": "pong",
 			"data": map[string]interface{}{"timestamp": time.Now().Unix()},
 		})
-		
+
 	case "subscribe":
 		// Handle subscription requests for specific event types
 		if data, ok := msg["data"].(map[string]interface{}); ok {
@@ -112,7 +137,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(conn *websocket.Conn, msg map[s
 				log.Printf("WebSocket client subscribed to events: %v", eventTypes)
 			}
 		}
-		
+
 	case "request_stats":
 		// Send current stats immediately
 		go func() {
@@ -137,6 +162,8 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	// Generate session ID
 	sessionID := fmt.Sprintf("terminal_%d", time.Now().UnixNano())
 
+	log.Printf("Terminal WebSocket connection starting: %s", sessionID)
+
 	// Create terminal session
 	session, err := ws.terminalManager.CreateSession(sessionID)
 	if err != nil {
@@ -148,8 +175,12 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Store connection
-	ws.connections.Store(conn, true)
+	// Store connection with metadata
+	ws.connections.Store(conn, &ConnectionInfo{
+		SessionID:   sessionID,
+		Type:        "terminal",
+		ConnectedAt: time.Now(),
+	})
 	defer ws.connections.Delete(conn)
 
 	// Send session created message
@@ -158,20 +189,36 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		"data": map[string]string{"session_id": sessionID},
 	})
 
-	// Start output reader goroutine with improved error handling
+	// Use context for proper cleanup coordination
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	// Write done channel for output sync
+	writeDone := make(chan struct{})
+
+	// Output writer goroutine - reads from terminal session and writes to WebSocket
 	go func() {
+		defer close(writeDone)
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("Terminal output reader panic: %v", r)
+				log.Printf("Terminal output writer panic: %v", r)
 			}
 		}()
-		
+
 		if session.OutputCh != nil {
-			for output := range session.OutputCh {
+			for {
 				select {
-				case <-r.Context().Done():
+				case <-ctx.Done():
+					log.Printf("Terminal %s output writer stopped (context cancelled)", sessionID)
 					return
-				default:
+
+				case output, ok := <-session.OutputCh:
+					if !ok {
+						// Output channel closed
+						log.Printf("Terminal %s output channel closed", sessionID)
+						return
+					}
+
 					if err := conn.WriteJSON(map[string]interface{}{
 						"type": "output",
 						"data": map[string]string{
@@ -179,7 +226,8 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 							"output":     string(output),
 						},
 					}); err != nil {
-						log.Printf("Terminal WebSocket write error: %v", err)
+						log.Printf("Terminal %s WebSocket write error: %v", sessionID, err)
+						cancel() // Signal other goroutines to stop
 						return
 					}
 				}
@@ -187,113 +235,114 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		}
 	}()
 
-	// Handle incoming messages with improved focus handling
+	// Read loop - handles incoming messages from WebSocket
 	conn.SetReadLimit(512 * 1024) // 512KB max message size
 	for {
-		// Check if connection is still healthy before reading
-		if _, _, err := conn.NextReader(); err != nil {
-			if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
-				websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Terminal WebSocket connection closed: %v", err)
+		select {
+		case <-ctx.Done():
+			log.Printf("Terminal %s read loop stopped (context cancelled)", sessionID)
+			return
+
+		case <-writeDone:
+			// Output writer stopped
+			log.Printf("Terminal %s read loop stopped (writer finished)", sessionID)
+			return
+
+		default:
+			// Set read deadline for heartbeat
+			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+
+			var msg map[string]interface{}
+			if err := conn.ReadJSON(&msg); err != nil {
+				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
+					websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("Terminal %s WebSocket closed: %v", sessionID, err)
+				} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					// Heartbeat timeout, continue
+					continue
+				} else {
+					log.Printf("Terminal %s read error: %v", sessionID, err)
+				}
+				return
 			}
-			break
-		}
 
-		var msg map[string]interface{}
-		if err := conn.ReadJSON(&msg); err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Terminal WebSocket read error: %v", err)
-			}
-			break
-		}
-
-		msgType, ok := msg["type"].(string)
-		if !ok {
-			continue
-		}
-
-		switch msgType {
-		case "input":
-			data, ok := msg["data"].(map[string]interface{})
+			// Process message
+			msgType, ok := msg["type"].(string)
 			if !ok {
 				continue
 			}
-			
-			input, ok := data["input"].(string)
-			if !ok {
-				continue
-			}
 
-			if err := ws.terminalManager.ExecuteCommand(sessionID, input); err != nil {
-				conn.WriteJSON(map[string]interface{}{
-					"type": "error",
-					"data": map[string]string{
-						"session_id": sessionID,
-						"message":    err.Error(),
-					},
-				})
-			}
+			switch msgType {
+			case "input":
+				data, ok := msg["data"].(map[string]interface{})
+				if !ok {
+					continue
+				}
 
-		case "resize":
-			// Handle terminal resize - actually resize the PTY
-			if data, ok := msg["data"].(map[string]interface{}); ok {
-				if rows, ok := data["rows"].(float64); ok {
-					if cols, ok := data["cols"].(float64); ok {
-						// Resize the terminal PTY
-						err := ws.terminalManager.ResizeTerminal(sessionID, uint16(rows), uint16(cols))
-						if err != nil {
-							log.Printf("Failed to resize terminal %s: %v", sessionID, err)
-							conn.WriteJSON(map[string]interface{}{
-								"type": "error",
-								"data": map[string]string{
-									"session_id": sessionID,
-									"message":    fmt.Sprintf("Resize failed: %v", err),
-								},
-							})
-						} else {
-							log.Printf("Terminal %s resized to %dx%d", sessionID, int(rows), int(cols))
+				input, ok := data["input"].(string)
+				if !ok {
+					continue
+				}
+
+				if err := ws.terminalManager.ExecuteCommand(sessionID, input); err != nil {
+					conn.WriteJSON(map[string]interface{}{
+						"type": "error",
+						"data": map[string]string{
+							"session_id": sessionID,
+							"message":    err.Error(),
+						},
+					})
+				}
+
+			case "resize":
+				if data, ok := msg["data"].(map[string]interface{}); ok {
+					if rows, ok := data["rows"].(float64); ok {
+						if cols, ok := data["cols"].(float64); ok {
+							err := ws.terminalManager.ResizeTerminal(sessionID, uint16(rows), uint16(cols))
+							if err != nil {
+								log.Printf("Failed to resize terminal %s: %v", sessionID, err)
+							} else {
+								log.Printf("Terminal %s resized to %dx%d", sessionID, int(rows), int(cols))
+							}
 						}
 					}
 				}
+
+				conn.WriteJSON(map[string]interface{}{
+					"type": "resize_ack",
+					"data": map[string]interface{}{
+						"session_id": sessionID,
+						"timestamp":  time.Now().Unix(),
+					},
+				})
+
+			case "focus":
+				conn.WriteJSON(map[string]interface{}{
+					"type": "focus_ack",
+					"data": map[string]interface{}{
+						"session_id": sessionID,
+						"focused":    true,
+						"timestamp":  time.Now().Unix(),
+					},
+				})
+
+			case "blur":
+				conn.WriteJSON(map[string]interface{}{
+					"type": "blur_ack",
+					"data": map[string]interface{}{
+						"session_id": sessionID,
+						"focused":    false,
+						"timestamp":  time.Now().Unix(),
+					},
+				})
+
+			case "close":
+				log.Printf("Terminal %s close requested", sessionID)
+				cancel() // Ensure goroutines stop
+				ws.terminalManager.CloseSession(sessionID)
+				return
 			}
-
-			conn.WriteJSON(map[string]interface{}{
-				"type": "resize_ack",
-				"data": map[string]interface{}{
-					"session_id": sessionID,
-					"timestamp":  time.Now().Unix(),
-				},
-			})
-
-		case "focus":
-			// Handle terminal focus requests - this helps with the focus issues
-			conn.WriteJSON(map[string]interface{}{
-				"type": "focus_ack",
-				"data": map[string]interface{}{
-					"session_id": sessionID,
-					"focused":    true,
-					"timestamp":  time.Now().Unix(),
-				},
-			})
-
-		case "blur":
-			// Handle terminal blur events
-			conn.WriteJSON(map[string]interface{}{
-				"type": "blur_ack",
-				"data": map[string]interface{}{
-					"session_id": sessionID,
-					"focused":    false,
-					"timestamp":  time.Now().Unix(),
-				},
-			})
-
-		case "close":
-			// Close the terminal session
-			ws.terminalManager.CloseSession(sessionID)
-			return
 		}
 	}
 
-	// Clean up session when connection closes
-	ws.terminalManager.CloseSession(sessionID)
 }

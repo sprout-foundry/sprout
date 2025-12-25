@@ -64,7 +64,7 @@ func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *Code
 
 	// Create default agent client - use the same model as configured for code editing
 	var agentClient api.ClientInterface
-	
+
 	// Check environment variable first
 	if providerEnv := os.Getenv("LEDIT_PROVIDER"); providerEnv != "" {
 		if clientType, err := api.ParseProviderName(providerEnv); err == nil {

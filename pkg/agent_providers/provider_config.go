@@ -39,11 +39,11 @@ type RequestDefaults struct {
 
 // MessageConversion defines how messages should be converted
 type MessageConversion struct {
-	IncludeToolCallId         bool `json:"include_tool_call_id"`
-	ConvertToolRoleToUser     bool `json:"convert_tool_role_to_user"`
-	ReasoningContentField     string `json:"reasoning_content_field"`
-	ArgumentsAsJSON           bool `json:"arguments_as_json"`
-	SkipToolExecutionSummary  bool `json:"skip_tool_execution_summary"` // For providers with strict role alternation
+	IncludeToolCallId        bool   `json:"include_tool_call_id"`
+	ConvertToolRoleToUser    bool   `json:"convert_tool_role_to_user"`
+	ReasoningContentField    string `json:"reasoning_content_field"`
+	ArgumentsAsJSON          bool   `json:"arguments_as_json"`
+	SkipToolExecutionSummary bool   `json:"skip_tool_execution_summary"` // For providers with strict role alternation
 }
 
 // StreamingConfig defines streaming behavior
@@ -61,15 +61,15 @@ type PatternOverride struct {
 
 // ModelConfig defines model-related configuration
 type ModelConfig struct {
-	DefaultContextLimit int                    `json:"default_context_limit"`
-	ModelOverrides      map[string]int         `json:"model_overrides"`
-	PatternOverrides    []PatternOverride      `json:"pattern_overrides"`
+	DefaultContextLimit int               `json:"default_context_limit"`
+	ModelOverrides      map[string]int    `json:"model_overrides"`
+	PatternOverrides    []PatternOverride `json:"pattern_overrides"`
 	// Legacy fields for backward compatibility
-	ContextLimit        int                    `json:"context_limit,omitempty"`
-	SupportsVision      bool                   `json:"supports_vision"`
-	VisionModel         string                 `json:"vision_model"`
-	DefaultModel        string                 `json:"default_model"`
-	AvailableModels     []string               `json:"available_models"`
+	ContextLimit    int      `json:"context_limit,omitempty"`
+	SupportsVision  bool     `json:"supports_vision"`
+	VisionModel     string   `json:"vision_model"`
+	DefaultModel    string   `json:"default_model"`
+	AvailableModels []string `json:"available_models"`
 }
 
 // RetryConfig defines retry behavior

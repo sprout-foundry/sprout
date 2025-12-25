@@ -20,18 +20,18 @@ func readIntInput(prompt string, min int, max int) (int, error) {
 	for {
 		fmt.Print(prompt)
 		input := readInput()
-		
+
 		choice, err := strconv.Atoi(input)
 		if err != nil {
 			fmt.Printf("Please enter a valid number between %d and %d\n", min, max)
 			continue
 		}
-		
+
 		if choice < min || choice > max {
 			fmt.Printf("Please enter a number between %d and %d\n", min, max)
 			continue
 		}
-		
+
 		return choice, nil
 	}
 }

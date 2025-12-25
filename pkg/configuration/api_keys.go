@@ -251,7 +251,7 @@ func RequiresAPIKey(provider string) bool {
 		// Ollama turbo requires API key for remote acceleration
 		return true
 	}
-	
+
 	// Check if it's a custom provider
 	config, err := Load()
 	if err == nil && config.CustomProviders != nil {
@@ -259,7 +259,7 @@ func RequiresAPIKey(provider string) bool {
 			return customProvider.RequiresAPIKey
 		}
 	}
-	
+
 	// Default to true for unknown providers
 	return true
 }

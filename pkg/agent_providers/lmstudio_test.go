@@ -23,9 +23,9 @@ func TestLMStudioConnectionNoAuth(t *testing.T) {
 					Model: "qwen3-coder:30b",
 				},
 				Models: ModelConfig{
-					DefaultModel:       "qwen3-coder:30b",
+					DefaultModel:        "qwen3-coder:30b",
 					DefaultContextLimit: 4096, // Add required context limit
-					AvailableModels:    []string{"qwen3-coder:30b"},
+					AvailableModels:     []string{"qwen3-coder:30b"},
 				},
 				Auth: AuthConfig{
 					Type:   "bearer",
@@ -56,9 +56,9 @@ func TestLMStudioConnectionNoAuth(t *testing.T) {
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		 indexOf(s, substr) >= 0))
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			indexOf(s, substr) >= 0))
 }
 
 func indexOf(s, substr string) int {

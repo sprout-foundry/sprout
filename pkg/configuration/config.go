@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/alantheprice/ledit/pkg/mcp"
 	"github.com/alantheprice/ledit/pkg/agent_providers"
+	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
 const (
@@ -115,13 +115,13 @@ type APIKeys map[string]string
 
 // CustomProviderConfig represents a custom model provider configuration
 type CustomProviderConfig struct {
-	Name           string `json:"name"`
-	Endpoint       string `json:"endpoint"`
-	ModelName      string `json:"model_name"`
-	ContextSize    int    `json:"context_size"`
-	RequiresAPIKey bool   `json:"requires_api_key"`
-	APIKey         string `json:"api_key,omitempty"`   // Stored in config (not recommended for production)
-	EnvVar         string `json:"env_var,omitempty"`   // Environment variable name for API key
+	Name           string                      `json:"name"`
+	Endpoint       string                      `json:"endpoint"`
+	ModelName      string                      `json:"model_name"`
+	ContextSize    int                         `json:"context_size"`
+	RequiresAPIKey bool                        `json:"requires_api_key"`
+	APIKey         string                      `json:"api_key,omitempty"`            // Stored in config (not recommended for production)
+	EnvVar         string                      `json:"env_var,omitempty"`            // Environment variable name for API key
 	Conversion     providers.MessageConversion `json:"message_conversion,omitempty"` // Message conversion configuration
 }
 

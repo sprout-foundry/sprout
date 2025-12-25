@@ -33,7 +33,7 @@ func (a *Agent) skipToolExecutionSummary() bool {
 	// List of providers that require strict role alternation
 	// These providers have Jinja2 templates that enforce user/assistant alternation
 	strictAlternationProviders := map[string]bool{
-		"ai-worker": true,  // Custom provider with strict alternation validation
+		"ai-worker": true, // Custom provider with strict alternation validation
 	}
 
 	return strictAlternationProviders[providerName]
@@ -165,30 +165,37 @@ func (a *Agent) SetModel(model string) error {
 	// Use the current provider - we don't need to determine it
 	// The user has already selected the provider via /providers select
 
-	// Verify the model exists for the current provider
-	models, err := a.getModelsForProvider(a.clientType)
+	// Try to set the model directly first - this allows testing unknown models
+	// Only validate against known models if the direct setting fails
+	err := a.client.SetModel(model)
 	if err != nil {
-		return fmt.Errorf("failed to get models for current provider %s: %w", api.GetProviderName(a.clientType), err)
-	}
-
-	// Check if the model exists (case-insensitive)
-	modelFound := false
-	for _, m := range models {
-		if strings.EqualFold(m.ID, model) {
-			modelFound = true
-			// Use the exact model ID from the provider's list
-			model = m.ID
-			break
+		// If direct setting failed, try to find the model in the known list
+		// This provides better error messages and handles case sensitivity
+		models, getModelErr := a.getModelsForProvider(a.clientType)
+		if getModelErr != nil {
+			return fmt.Errorf("failed to set model '%s' on provider %s and couldn't get available models: %w (original error: %v)",
+				model, api.GetProviderName(a.clientType), getModelErr, err)
 		}
-	}
 
-	if !modelFound {
-		return fmt.Errorf("model %s not found for provider %s", model, api.GetProviderName(a.clientType))
-	}
+		// Check if the model exists in the known list (case-insensitive)
+		modelFound := false
+		for _, m := range models {
+			if strings.EqualFold(m.ID, model) {
+				modelFound = true
+				// Use the exact model ID from the provider's list
+				model = m.ID
+				// Try again with the exact model ID
+				if retryErr := a.client.SetModel(model); retryErr != nil {
+					return fmt.Errorf("model '%s' found in list but failed to set: %w", model, retryErr)
+				}
+				break
+			}
+		}
 
-	// Update the model on the current client
-	if err := a.client.SetModel(model); err != nil {
-		return fmt.Errorf("failed to set model on client: %w", err)
+		if !modelFound {
+			return fmt.Errorf("model '%s' not found for provider %s and failed to set directly: %w",
+				model, api.GetProviderName(a.clientType), err)
+		}
 	}
 
 	// Save the selection

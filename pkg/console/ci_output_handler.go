@@ -292,13 +292,13 @@ func (h *CIOutputHandler) stripANSIEscapeCodes(text string) string {
 func (h *CIOutputHandler) stripCursorSequences(text string) string {
 	// Remove cursor control sequences using consolidated functions
 	replacements := map[string]string{
-		ClearToEndOfLineSeq():    "", // Clear to end of line
-		ClearLineSeq():            "", // Clear entire line
-		ClearToEndOfScreenSeq():   "", // Clear to end of screen
-		ClearScreenSeq():          "", // Clear entire screen
-		HomeCursorSeq():           "", // Home cursor
-		HideCursorSeq():           "", // Hide cursor
-		ShowCursorSeq():           "", // Show cursor
+		ClearToEndOfLineSeq():   "", // Clear to end of line
+		ClearLineSeq():          "", // Clear entire line
+		ClearToEndOfScreenSeq(): "", // Clear to end of screen
+		ClearScreenSeq():        "", // Clear entire screen
+		HomeCursorSeq():         "", // Home cursor
+		HideCursorSeq():         "", // Hide cursor
+		ShowCursorSeq():         "", // Show cursor
 	}
 
 	result := text

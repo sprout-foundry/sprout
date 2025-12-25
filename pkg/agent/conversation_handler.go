@@ -226,13 +226,13 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 
 	if ch.agent.debug {
-			// Debug: Check for ANSI codes in content being added to conversation
-			if strings.Contains(contentUsed, "\x1b[") || strings.Contains(contentUsed, "\x1b(") {
-				ch.agent.debugLog("🚨 ANSI DETECTED in conversation content: %q\n", contentUsed)
-			}
+		// Debug: Check for ANSI codes in content being added to conversation
+		if strings.Contains(contentUsed, "\x1b[") || strings.Contains(contentUsed, "\x1b(") {
+			ch.agent.debugLog("🚨 ANSI DETECTED in conversation content: %q\n", contentUsed)
 		}
-		// Sanitize content to remove ANSI codes that might have leaked in
-		contentUsed = ch.sanitizeContent(contentUsed)
+	}
+	// Sanitize content to remove ANSI codes that might have leaked in
+	contentUsed = ch.sanitizeContent(contentUsed)
 
 	turn.AssistantContent = contentUsed
 	turn.FinishReason = choice.FinishReason
@@ -308,7 +308,6 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ToolCalls:        toolCalls,
 	}
 
-	
 	// Only append if we have a valid message (not a duplicate)
 	if assistantMsg.Role != "" {
 		ch.agent.messages = append(ch.agent.messages, assistantMsg)

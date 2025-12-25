@@ -16,18 +16,18 @@ import (
 
 // TerminalSession represents a terminal session
 type TerminalSession struct {
-	ID         string
-	Command    *exec.Cmd
-	Pty        *os.File // PTY file handle
-	Output     io.Reader // PTY handles both input and output
-	Cancel     context.CancelFunc
-	Active     bool
-	mutex      sync.RWMutex
-	LastUsed   time.Time
-	History    []string
+	ID           string
+	Command      *exec.Cmd
+	Pty          *os.File  // PTY file handle
+	Output       io.Reader // PTY handles both input and output
+	Cancel       context.CancelFunc
+	Active       bool
+	mutex        sync.RWMutex
+	LastUsed     time.Time
+	History      []string
 	HistoryIndex int
-	OutputCh   chan []byte
-	Size       *pty.Winsize // Terminal size for resizing
+	OutputCh     chan []byte
+	Size         *pty.Winsize // Terminal size for resizing
 }
 
 // TerminalManager manages terminal sessions

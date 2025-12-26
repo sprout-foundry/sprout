@@ -1,4 +1,9 @@
 #!/bin/bash
+# Function to return test name
+get_test_name() {
+    echo "Testing CI Mode Behavior"
+}
+
 # Test script for CI/non-interactive mode
 
 echo "=== Testing CI Mode Behavior ==="

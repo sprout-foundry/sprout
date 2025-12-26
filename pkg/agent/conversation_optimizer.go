@@ -365,7 +365,7 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 
 	optimized := make([]api.Message, 0, len(messages))
 
-	// Always keep system message and recent messages (last 8 - more context)
+	// Always keep system message and recent messages (more context)
 	systemMsg := messages[0]
 	optimized = append(optimized, systemMsg)
 
@@ -375,7 +375,7 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 	}
 
 	// For middle messages, apply moderate summarization (less aggressive)
-	recentThreshold := len(messages) - 8 // Keep last 8 messages intact (more context)
+	recentThreshold := len(messages) - PruningConfig.Aggressive.RecentMessagesToKeep
 	if recentThreshold < 2 {
 		recentThreshold = 2
 	}
@@ -383,9 +383,9 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 	for i := 2; i < recentThreshold; i++ {
 		msg := messages[i]
 
-		// Only summarize file reads that are old (more than 12 messages ago - less aggressive)
+		// Only summarize file reads that are old (more than defined age threshold)
 		messageAge := len(messages) - i
-		if msg.Role == "tool" && strings.Contains(msg.Content, "Tool call result for read_file:") && messageAge > 12 {
+		if msg.Role == "tool" && strings.Contains(msg.Content, "Tool call result for read_file:") && messageAge > PruningConfig.Aggressive.FileReadAgeThreshold {
 			summary := co.createAggressiveSummary(msg)
 			rewritten := msg
 			rewritten.Content = summary
@@ -399,8 +399,8 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 		} else {
 			// Keep non-tool messages but truncate if very long (higher threshold)
 			content := msg.Content
-			if len(content) > 1200 { // Higher threshold to preserve more context
-				content = content[:1200] + "... [TRUNCATED for context limit]"
+			if len(content) > PruningConfig.Aggressive.TruncateAt {
+				content = content[:PruningConfig.Aggressive.TruncateAt] + "... [TRUNCATED for context limit]"
 			}
 			rewritten := msg
 			rewritten.Content = content
@@ -408,7 +408,7 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 		}
 	}
 
-	// Always keep recent messages (last 8) completely intact
+	// Always keep recent messages completely intact
 	for i := recentThreshold; i < len(messages); i++ {
 		optimized = append(optimized, messages[i])
 	}

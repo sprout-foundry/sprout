@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './FileTree.css';
 
 interface FileInfo {
@@ -49,12 +49,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
     }
   };
 
-  // Load initial files
-  useEffect(() => {
-    loadInitialFiles();
-  }, [rootPath]);
-
-  const loadInitialFiles = async () => {
+  const loadInitialFiles = useCallback(async () => {
     setLoading(true);
     setError(null);
     
@@ -68,7 +63,12 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, setFiles, setCurrentPath, rootPath]);
+
+  // Load initial files
+  useEffect(() => {
+    loadInitialFiles();
+  }, [loadInitialFiles]);
 
   // Load children for a directory when expanded
   const loadDirectoryChildren = async (dirPath: string): Promise<FileInfo[]> => {

@@ -167,21 +167,12 @@ func runSimpleEnhancedMode(chatAgent *agent.Agent, isInteractive bool, args []st
 
 // setupAgentEvents configures the agent to publish events to the event bus
 func setupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus) {
-	// Set up stats callback
-	chatAgent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
-		eventBus.Publish(events.EventTypeMetricsUpdate, events.MetricsUpdateEvent(
-			totalTokens,
-			chatAgent.GetCurrentContextTokens(),
-			chatAgent.GetMaxContextTokens(),
-			chatAgent.GetCurrentIteration(),
-			totalCost,
-		))
-	})
-
-	// Set up streaming callback
-	chatAgent.EnableStreaming(func(chunk string) {
-		eventBus.Publish(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk))
-	})
+	// Set up streaming callback (unless disabled)
+	if !agentNoStreaming {
+		chatAgent.EnableStreaming(func(chunk string) {
+			eventBus.Publish(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk))
+		})
+	}
 }
 
 // runNewInteractiveMode handles interactive mode with web UI
@@ -193,7 +184,7 @@ func runNewInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus
 
 	// Create enhanced input reader with completion support
 	inputReader := console.NewInputReader("ledit> ")
-	
+
 	// Initialize with existing history from agent
 	inputReader.SetHistory(chatAgent.GetHistory())
 
@@ -203,7 +194,7 @@ func runNewInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus
 			return ctx.Err()
 		default:
 			query, err := inputReader.ReadLine()
-			
+
 			if err != nil {
 				if err.Error() == "interrupted" {
 					fmt.Println("Use 'exit' or 'quit' to exit.")
@@ -268,12 +259,40 @@ func processQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	// Process the query using CI output handler for clean output
 	outputHandler := console.NewCIOutputHandler(os.Stdout)
 
-	// Replace streaming callback for direct output
-	chatAgent.EnableStreaming(func(chunk string) {
-		outputHandler.Write([]byte(chunk))
-		eventBus.Publish(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk))
+	// Set up progress callback
+	chatAgent.SetStatsUpdateCallback(func(totalTokens int, totalCost float64) {
+		// Update the CI output handler metrics
+		outputHandler.UpdateMetrics(
+			totalTokens,
+			chatAgent.GetCurrentContextTokens(),
+			chatAgent.GetMaxContextTokens(),
+			chatAgent.GetCurrentIteration(),
+			totalCost,
+		)
+
+		// Print progress if in CI mode
+		if outputHandler.ShouldShowProgress() {
+			outputHandler.PrintProgress()
+		}
+
+		// Also publish to event bus for web UI
+		eventBus.Publish(events.EventTypeMetricsUpdate, events.MetricsUpdateEvent(
+			totalTokens,
+			chatAgent.GetCurrentContextTokens(),
+			chatAgent.GetMaxContextTokens(),
+			chatAgent.GetCurrentIteration(),
+			totalCost,
+		))
 	})
-	defer chatAgent.DisableStreaming()
+
+	// Replace streaming callback for direct output (unless disabled)
+	if !agentNoStreaming {
+		chatAgent.EnableStreaming(func(chunk string) {
+			outputHandler.Write([]byte(chunk))
+			eventBus.Publish(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk))
+		})
+		defer chatAgent.DisableStreaming()
+	}
 
 	// Run agent processing in a goroutine to support cancellation
 	type result struct {
@@ -308,8 +327,12 @@ func processQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			duration,
 		))
 
-		// Print completion summary
-		fmt.Printf("\n✅ Completed in %s\n", formatDuration(duration))
+		// Print CI summary if in CI mode, otherwise regular completion message
+		if outputHandler.IsCI() {
+			outputHandler.PrintSummary()
+		} else {
+			fmt.Printf("\n✅ Completed in %s\n", formatDuration(duration))
+		}
 		return nil
 
 	case <-ctx.Done():
@@ -327,15 +350,15 @@ func processQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 // getCompletions provides tab completion for commands and files
 func getCompletions(input string, chatAgent *agent.Agent) []string {
 	var completions []string
-	
+
 	// Get current word for completion
 	words := strings.Fields(input)
 	if len(words) == 0 {
 		return completions
 	}
-	
+
 	currentWord := words[len(words)-1]
-	
+
 	// If it starts with '/', complete slash commands
 	if strings.HasPrefix(currentWord, "/") {
 		registry := commands.NewCommandRegistry()
@@ -360,7 +383,7 @@ func getCompletions(input string, chatAgent *agent.Agent) []string {
 			}
 		}
 	}
-	
+
 	return completions
 }
 

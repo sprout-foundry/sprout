@@ -338,6 +338,24 @@ func (r *ToolRegistry) extractParameter(param ParameterConfig, args map[string]i
 	return nil, false
 }
 
+// getMapKeys returns all keys from a map as a slice
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// mapToJSONString converts a map to a pretty-printed JSON string
+func (r *ToolRegistry) mapToJSONString(m map[string]interface{}) (string, error) {
+	jsonBytes, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal map to JSON: %w", err)
+	}
+	return string(jsonBytes), nil
+}
+
 // convertParameterType converts a parameter to the expected type
 func (r *ToolRegistry) convertParameterType(value interface{}, expectedType string) (interface{}, error) {
 	switch expectedType {
@@ -345,6 +363,24 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 		if str, ok := value.(string); ok {
 			return str, nil
 		}
+
+		// Handle case where content is passed as a map instead of string
+		if mapVal, ok := value.(map[string]interface{}); ok {
+			// Try to convert the map to JSON string
+			jsonStr, err := r.mapToJSONString(mapVal)
+			if err != nil {
+				fmt.Printf("🚨 DEBUG: Expected string, got map[string]interface {}. Failed to convert to JSON: %v\n", err)
+				fmt.Printf("🚨 DEBUG: Content as map keys: %v\n", getMapKeys(mapVal))
+				return "", fmt.Errorf("expected string, got %T (failed to convert map to JSON: %w)", value, err)
+			}
+
+			fmt.Printf("🚨 DEBUG: Converted map to JSON string. Length: %d\n", len(jsonStr))
+			return jsonStr, nil
+		}
+
+		// Debug logging for other type conversion failures
+		fmt.Printf("🚨 DEBUG: Expected string, got %T. Value: %+v\n", value, value)
+
 		return "", fmt.Errorf("expected string, got %T", value)
 
 	case "int":
@@ -676,7 +712,6 @@ func handleAddTodos(ctx context.Context, a *Agent, args map[string]interface{}) 
 	a.debugLog("Adding %d todos\n", len(todos))
 
 	result := tools.AddBulkTodos(todos)
-	fmt.Printf("%s", result)
 	a.debugLog("Add todos result: %s\n", result)
 	return result, nil
 }

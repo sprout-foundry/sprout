@@ -189,6 +189,43 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// handleAPIGitStatus handles API requests for git status
+func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// For now, return mock data - in real implementation this would call git commands
+	status := map[string]interface{}{
+		"branch": "main",
+		"ahead":  0,
+		"behind": 0,
+		"staged": []map[string]interface{}{
+			{
+				"path":    "pkg/webui/api.go",
+				"status":  "M",
+				"changes": map[string]int{"additions": 10, "deletions": 5},
+			},
+		},
+		"modified": []map[string]interface{}{
+			{
+				"path":    "webui/src/App.tsx",
+				"status":  "M",
+				"changes": map[string]int{"additions": 5, "deletions": 2},
+			},
+		},
+		"untracked": []map[string]interface{}{},
+		"clean":     false,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "success",
+		"status":  status,
+	})
+}
+
 // handleAPIFiles handles API requests for file listing
 func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

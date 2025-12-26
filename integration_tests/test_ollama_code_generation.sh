@@ -8,6 +8,13 @@ get_test_name() {
 # Function to run the test logic
 run_test_logic() {
     local model_name=$1 # Use the model passed from test runner
+
+    # Skip this test in CI environments since Ollama won't be running and requires GPU resources
+    if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+        echo "SKIP: Ollama code generation test in CI environment"
+        exit 0
+    fi
+
     echo "--- TEST: Ollama Model Code Generation Test ---"
     echo "This test verifies code generation functionality using an Ollama model."
 

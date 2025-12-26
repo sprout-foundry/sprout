@@ -98,7 +98,7 @@ func NewBaseProvider(name string, clientType ClientType, endpoint string, apiKey
 		endpoint:   endpoint,
 		apiKey:     apiKey,
 		httpClient: &http.Client{
-			Timeout: 2 * time.Minute,
+			Timeout: 5 * time.Minute,
 		},
 		supportsTools:     true, // Most providers support tools
 		supportsStreaming: true, // Most providers support streaming

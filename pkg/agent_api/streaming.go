@@ -25,6 +25,7 @@ type StreamingDelta struct {
 	Role             string              `json:"role,omitempty"`
 	Content          string              `json:"content,omitempty"`
 	ReasoningContent string              `json:"reasoning_content,omitempty"`
+	ReasoningDetails string              `json:"reasoning_details,omitempty"` // Minimax reasoning_split format
 	ToolCalls        []StreamingToolCall `json:"tool_calls,omitempty"`
 }
 
@@ -107,6 +108,7 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 		// Track timing for any content (including tool calls)
 		hasContent := choice.Delta.Content != "" ||
 			choice.Delta.ReasoningContent != "" ||
+			choice.Delta.ReasoningDetails != "" ||
 			len(choice.Delta.ToolCalls) > 0
 
 		if hasContent {
@@ -125,9 +127,14 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 			}
 		}
 
-		// Process reasoning content delta
-		if choice.Delta.ReasoningContent != "" {
-			b.reasoningContent.WriteString(choice.Delta.ReasoningContent)
+		// Process reasoning content delta (handle both formats)
+		reasoningDelta := choice.Delta.ReasoningContent
+		if choice.Delta.ReasoningDetails != "" {
+			reasoningDelta = choice.Delta.ReasoningDetails // Prioritize reasoning_details for Minimax
+		}
+
+		if reasoningDelta != "" {
+			b.reasoningContent.WriteString(reasoningDelta)
 			// Call stream callback for timeout reset (even if content is empty)
 			// This ensures timeout is properly reset when receiving reasoning tokens
 			if b.streamCallback != nil {

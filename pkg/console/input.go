@@ -111,11 +111,31 @@ func (ir *InputReader) ReadLine() (string, error) {
 				// Restore terminal for suspension
 				term.Restore(ir.termFd, oldState)
 				syscall.Kill(syscall.Getpid(), syscall.SIGTSTP)
+
 				// When resumed, set raw mode again
 				if newState, err := term.MakeRaw(ir.termFd); err == nil {
 					oldState = newState
 				}
-				ir.Refresh()
+
+				// Reset escape parser state to clear any partial escape sequences
+				escapeParser.Reset()
+
+				// Clear any pending input that may have been typed during suspension
+				// by draining the input buffer
+				_ = syscall.SetNonblock(ir.termFd, true)
+				discardBuf := make([]byte, 256)
+				for {
+					n, _ := os.Stdin.Read(discardBuf)
+					if n <= 0 {
+						break
+					}
+				}
+				_ = syscall.SetNonblock(ir.termFd, false)
+
+				// Clear the current line and redisplay the prompt
+				fmt.Printf("\r%s%s", ClearLineSeq(), ir.prompt)
+				ir.line = ""
+				ir.cursorPos = 0
 				continue
 
 			case 13: // Enter
@@ -272,12 +292,23 @@ func (ir *InputReader) NavigateHistory(direction int) {
 
 // Refresh redraws the current input line
 func (ir *InputReader) Refresh() {
-	// Simple and robust approach - just clear to end and redraw
-	fmt.Printf("\r%s%s%s", ir.prompt, ir.line, ClearToEndOfLineSeq())
+	// Move to start of line
+	fmt.Printf("\r")
+
+	// Clear entire line
+	fmt.Printf("%s", ClearLineSeq())
+
+	// Redraw the line
+	fmt.Printf("%s%s", ir.prompt, ir.line)
+
+	// Clear any remaining characters from previous longer content
+	fmt.Printf("%s", ClearToEndOfLineSeq())
 
 	// Position cursor correctly
-	totalCursorPos := len(ir.prompt) + ir.cursorPos
-	fmt.Printf("%s", MoveCursorToColumnSeq(totalCursorPos+1))
+	if ir.cursorPos > 0 {
+		totalCursorPos := len(ir.prompt) + ir.cursorPos
+		fmt.Printf("%s", MoveCursorToColumnSeq(totalCursorPos+1))
+	}
 }
 
 // AddToHistory adds a command to history

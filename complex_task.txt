@@ -1,0 +1,5 @@
+Please analyze this codebase and:
+1. List all functions
+2. Check for potential issues
+3. Suggest improvements
+4. Generate a summary report

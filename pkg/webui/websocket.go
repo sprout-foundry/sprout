@@ -420,8 +420,5 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			}
 		}
 	}
-
-	// Clean up session when connection closes
-	ws.terminalManager.CloseSession(sessionID)
 }
 

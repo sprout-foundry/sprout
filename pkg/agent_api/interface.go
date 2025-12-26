@@ -35,6 +35,7 @@ const (
 	DeepInfraClientType   ClientType = "deepinfra"
 	DeepSeekClientType    ClientType = "deepseek"
 	LMStudioClientType    ClientType = "lmstudio"
+	MistralClientType     ClientType = "mistral"
 	OllamaClientType      ClientType = "ollama" // Maps to local ollama
 	OllamaLocalClientType ClientType = "ollama-local"
 	OllamaTurboClientType ClientType = "ollama-turbo"
@@ -120,6 +121,7 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 		OpenRouterClientType,
 		ZAIClientType,
 		DeepInfraClientType,
+		DeepSeekClientType,
 		OllamaTurboClientType,
 		LMStudioClientType,
 		OllamaLocalClientType,
@@ -149,6 +151,8 @@ func ParseProviderName(name string) (ClientType, error) {
 		return OpenRouterClientType, nil
 	case "deepinfra":
 		return DeepInfraClientType, nil
+	case "deepseek":
+		return DeepSeekClientType, nil
 	case "ollama":
 		// "ollama" maps to local
 		return OllamaLocalClientType, nil
@@ -187,6 +191,10 @@ func IsProviderAvailable(provider ClientType) bool {
 		return os.Getenv("OPENROUTER_API_KEY") != ""
 	case DeepInfraClientType:
 		return os.Getenv("DEEPINFRA_API_KEY") != ""
+	case DeepSeekClientType:
+		return os.Getenv("DEEPSEEK_API_KEY") != ""
+	case MistralClientType:
+		return os.Getenv("MISTRAL_API_KEY") != ""
 	default:
 		return false
 	}
@@ -198,6 +206,8 @@ func GetAvailableProviders() []ClientType {
 		OpenAIClientType,
 		ZAIClientType,
 		DeepInfraClientType,
+		DeepSeekClientType,
+		MistralClientType,
 		OllamaLocalClientType,
 		OllamaTurboClientType,
 		OpenRouterClientType,
@@ -224,6 +234,8 @@ func GetProviderName(clientType ClientType) string {
 		return "Z.AI Coding Plan"
 	case DeepInfraClientType:
 		return "DeepInfra"
+	case DeepSeekClientType:
+		return "DeepSeek"
 	case OllamaClientType, OllamaLocalClientType:
 		return "Ollama (Local)"
 	case OllamaTurboClientType:
@@ -232,6 +244,8 @@ func GetProviderName(clientType ClientType) string {
 		return "OpenRouter"
 	case LMStudioClientType:
 		return "LM Studio"
+	case MistralClientType:
+		return "Mistral"
 	default:
 		return string(clientType)
 	}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"syscall"
 
 	"golang.org/x/term"
 )
@@ -110,7 +109,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 			case 26: // Ctrl+Z
 				// Restore terminal for suspension
 				term.Restore(ir.termFd, oldState)
-				syscall.Kill(syscall.Getpid(), syscall.SIGTSTP)
+				suspendTerminal()
 
 				// When resumed, set raw mode again
 				if newState, err := term.MakeRaw(ir.termFd); err == nil {

@@ -81,5 +81,4 @@ func init() {
 	commitCmd.Flags().StringVar(&commitModel, "model", "", "Specify the LLM model to use for commit message generation (e.g., 'ollama:llama3')")
 	commitCmd.Flags().BoolVar(&commitAllowSecrets, "allow-secrets", false, "Allow committing even if potential secrets are detected (override)")
 	commitCmd.Flags().BoolVar(&commitDryRun, "dry-run", false, "Generate and display the commit message without executing the commit")
-	rootCmd.AddCommand(commitCmd)
 }

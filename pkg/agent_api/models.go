@@ -102,6 +102,13 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 		// LM Studio doesn't require an API key or base URL (has default fallback)
 		// Create LM Studio wrapper that uses the provider's ListModels directly
 		return &lmStudioListModelsWrapper{}, nil
+	case MistralClientType:
+		// Check for API key first
+		if os.Getenv("MISTRAL_API_KEY") == "" {
+			return nil, fmt.Errorf("MISTRAL_API_KEY not set")
+		}
+		// Create Mistral wrapper using OpenAI-compatible models endpoint
+		return &mistralListModelsWrapper{}, nil
 	case ZAIClientType:
 		// Z.AI Coding Plan: no public models endpoint documented; return curated list
 		return &zaiListModelsWrapper{}, nil
@@ -473,6 +480,81 @@ func (w *lmStudioListModelsWrapper) ListModels() ([]ModelInfo, error) {
 			Provider:      "lmstudio",
 			ContextLength: 32768, // Assume 32k context length for LM Studio models
 		}
+		models = append(models, modelInfo)
+	}
+
+	return models, nil
+}
+
+type mistralListModelsWrapper struct{}
+
+func (w *mistralListModelsWrapper) ListModels() ([]ModelInfo, error) {
+	apiKey := os.Getenv("MISTRAL_API_KEY")
+	if apiKey == "" {
+		return nil, fmt.Errorf("MISTRAL_API_KEY not set")
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Use OpenAI-compatible models endpoint
+	req, err := http.NewRequest("GET", "https://api.mistral.ai/v1/models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch Mistral models: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("Mistral API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var modelsResp struct {
+		Data []struct {
+			ID      string `json:"id"`
+			Object  string `json:"object"`
+			Created int64  `json:"created"`
+			OwnedBy string `json:"owned_by"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &modelsResp); err != nil {
+		return nil, fmt.Errorf("failed to decode Mistral models: %w", err)
+	}
+
+	// Convert to ModelInfo format
+	models := make([]ModelInfo, 0, len(modelsResp.Data))
+	for _, model := range modelsResp.Data {
+		modelInfo := ModelInfo{
+			ID:       model.ID,
+			Name:     model.ID,
+			Provider: "mistral",
+		}
+
+		// Use the context length defaults from the config (will be set by the provider)
+		if strings.Contains(model.ID, "codestral") {
+			modelInfo.Tags = []string{"tools", "coding"}
+			modelInfo.ContextLength = 32768
+		} else if strings.Contains(model.ID, "large") {
+			modelInfo.Tags = []string{"tools"}
+			modelInfo.ContextLength = 131072
+		} else {
+			modelInfo.Tags = []string{"tools"}
+			modelInfo.ContextLength = 32768
+		}
+
 		models = append(models, modelInfo)
 	}
 

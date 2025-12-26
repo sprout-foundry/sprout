@@ -1,18 +1,19 @@
 {
-  "name": "zai",
-  "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions",
+  "name": "deepseek",
+  "endpoint": "https://api.deepseek.com/v1/chat/completions",
   "auth": {
     "type": "bearer",
-    "env_var": "ZAI_API_KEY"
+    "env_var": "DEEPSEEK_API_KEY"
   },
   "headers": {},
   "defaults": {
-    "model": "glm-4.6",
-    "temperature": 0.1,
+    "model": "deepseek-chat",
+    "temperature": 0.7,
+    "max_tokens": 16000,
     "top_p": 1.0
   },
   "message_conversion": {
-    "include_tool_call_id": false,
+    "include_tool_call_id": true,
     "convert_tool_role_to_user": false,
     "reasoning_content_field": ""
   },
@@ -24,32 +25,19 @@
   "models": {
     "default_context_limit": 128000,
     "model_overrides": {
-      "glm-4.6": 200000,
-      "glm-4.5": 128000,
-      "glm-4": 128000,
-      "glm-3-turbo": 128000
+      "deepseek-chat": 128000,
+      "deepseek-coder": 128000,
+      "deepseek-v3": 128000
     },
     "pattern_overrides": [
       {
-        "pattern": "glm-4\\.6.*",
-        "context_limit": 200000
-      },
-      {
-        "pattern": "glm-4\\.[5-9].*",
-        "context_limit": 128000
-      },
-      {
-        "pattern": "glm-4.*",
-        "context_limit": 128000
-      },
-      {
-        "pattern": "glm-3.*",
+        "pattern": "deepseek-.*",
         "context_limit": 128000
       }
     ],
-    "supports_vision": true,
-    "vision_model": "glm-4.6v",
-    "default_model": "glm-4.6",
+    "supports_vision": false,
+    "vision_model": "",
+    "default_model": "deepseek-chat",
     "available_models": []
   },
   "retry": {
@@ -60,8 +48,8 @@
     "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
   },
   "cost": {
-    "input_token_cost": 0.0,
-    "output_token_cost": 0.0,
+    "input_token_cost": 0.14,
+    "output_token_cost": 0.28,
     "currency": "USD"
   }
 }

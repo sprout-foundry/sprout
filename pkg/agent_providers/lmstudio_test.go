@@ -1,10 +1,15 @@
 package providers
 
 import (
+	"os"
 	"testing"
 )
 
 func TestLMStudioConnectionNoAuth(t *testing.T) {
+	// Skip this test in CI environments since LM Studio won't be running
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("Skipping LM Studio connection test in CI environment")
+	}
 	// Test that LM Studio provider can connect without API key for local instances
 	testCases := []struct {
 		name     string

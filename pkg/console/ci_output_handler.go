@@ -33,6 +33,9 @@ type CIOutputHandler struct {
 
 	// Buffer for handling split content
 	buffer strings.Builder
+
+	// Markdown formatting
+	markdownFormatter *MarkdownFormatter
 }
 
 // NewCIOutputHandler creates a new CI output handler
@@ -56,12 +59,17 @@ func NewCIOutputHandler(writer io.Writer) *CIOutputHandler {
 		progressInterval = 30 * time.Second
 	}
 
+	// Initialize markdown formatter
+	enableColors := isInteractive && !isCI // Enable colors in interactive mode, disable in CI
+	enableInline := true                   // Always enable inline formatting
+
 	return &CIOutputHandler{
-		writer:           writer,
-		isCI:             isCI,
-		isInteractive:    isInteractive,
-		progressInterval: progressInterval,
-		startTime:        time.Now(),
+		writer:            writer,
+		isCI:              isCI,
+		isInteractive:     isInteractive,
+		progressInterval:  progressInterval,
+		startTime:         time.Now(),
+		markdownFormatter: NewMarkdownFormatter(enableColors, enableInline),
 	}
 }
 
@@ -83,7 +91,9 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 	h.buffer.Reset()
 
 	// In CI/non-interactive mode, fix line endings and strip ANSI codes
-	if !h.isInteractive || h.isCI {
+	doStripANSI := !h.isInteractive || h.isCI
+
+	if doStripANSI {
 		// Handle carriage returns properly - replace \r without \n with proper newlines
 		// This prevents overwriting issues in CLI mode
 		if strings.Contains(content, "\r") {
@@ -115,6 +125,9 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 
 		// Also strip any cursor movement sequences
 		content = h.stripCursorSequences(content)
+	} else if h.markdownFormatter != nil && IsLikelyMarkdown(content) {
+		// Apply markdown formatting only if enabled and content looks like markdown
+		content = h.markdownFormatter.Format(content)
 	}
 
 	// Write the filtered content (even if empty, to maintain proper io.Writer behavior)

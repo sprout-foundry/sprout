@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EditorView, keymap } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { defaultKeymap, indentWithTab } from '@codemirror/commands';
@@ -80,7 +80,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
   };
 
   // Load file content
-  const loadFile = async (filePath: string) => {
+  const loadFile = useCallback(async (filePath: string) => {
     setLoading(true);
     setError(null);
 
@@ -114,10 +114,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, setContent, setIsModified]);
 
   // Save file content
-  const saveFile = async () => {
+  const saveFile = useCallback(async () => {
     if (!file || !viewRef.current) return;
 
     setSaving(true);
@@ -154,7 +154,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     } finally {
       setSaving(false);
     }
-  };
+  }, [file, setSaving, setError, setContent, setIsModified, onSave]);
 
   // Handle file switch with unsaved changes check
   useEffect(() => {
@@ -275,19 +275,38 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [file]);
+  }, [file, content, setContent, saveFile]);
 
-  // Keyboard shortcuts
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        saveFile();
+    if (file && !file.isDir) {
+      loadFile(file.path);
+    } else {
+      setContent('');
+      setIsModified(false);
+      if (viewRef.current) {
+        viewRef.current.dispatch({
+          changes: {
+            from: 0,
+            to: viewRef.current.state.doc.length,
+            insert: ''
+          }
+        });
       }
-    };
+    }
+  }, [file, loadFile, setContent, setIsModified, viewRef]);
 
+>>>>>>> origin/main
+  // Keyboard shortcuts
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+      saveFile();
+    }
+  }, [saveFile]);
+
+  useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+<<<<<<< HEAD
   }, [file]);
 
   // Handle dialog actions

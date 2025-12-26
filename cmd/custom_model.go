@@ -129,15 +129,15 @@ func runCustomModelAdd() error {
 	fmt.Print("Does this provider require an API key? (y/N): ")
 	apiKeyResponse, _ := reader.ReadString('\n')
 	apiKeyResponse = strings.ToLower(strings.TrimSpace(apiKeyResponse))
-	
+
 	var apiKey, envVar string
 	requiresAPIKey := apiKeyResponse == "y" || apiKeyResponse == "yes"
-	
+
 	if requiresAPIKey {
 		fmt.Print("Enter API key (or leave empty to use environment variable): ")
 		apiKey, _ = reader.ReadString('\n')
 		apiKey = strings.TrimSpace(apiKey)
-		
+
 		if apiKey == "" {
 			fmt.Print("Enter environment variable name for API key (e.g., 'CUSTOM_API_KEY'): ")
 			envVar, _ = reader.ReadString('\n')
@@ -150,10 +150,10 @@ func runCustomModelAdd() error {
 
 	// Create custom provider configuration
 	customProvider := configuration.CustomProviderConfig{
-		Name:        providerName,
-		Endpoint:    endpoint,
-		ModelName:   modelName,
-		ContextSize: contextSize,
+		Name:           providerName,
+		Endpoint:       endpoint,
+		ModelName:      modelName,
+		ContextSize:    contextSize,
 		RequiresAPIKey: requiresAPIKey,
 	}
 

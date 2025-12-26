@@ -8,9 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// enableUI controls whether to enable interactive UI mode
-var enableUI bool
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "ledit",
@@ -23,24 +20,21 @@ Available commands:
   agent        - AI agent mode with modern CLI + Web UI
   shell        - Generate shell scripts from natural language descriptions
   commit       - Generate commit messages
-  review-staged - Review staged changes
+  review       - Perform AI-powered code review on staged changes
   log          - View operation logs
   mcp          - Manage MCP (Model Context Protocol) servers
   custom-model - Manage custom model providers
 
 For autonomous operation, try: ledit agent "your intent here"
 
-Running just 'ledit' without arguments starts the enhanced agent mode with automatic web UI.`,
+Running just 'ledit' without arguments starts enhanced agent mode with automatic web UI.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Initialize API keys and configuration
 		initializeSystem()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Default to interactive mode when no arguments provided
-		useInteractive := enableUI || os.Getenv("LEDIT_UI") == "1"
-		if !useInteractive && len(args) == 0 && cmd.Flags().NFlag() == 0 {
-			useInteractive = true
-		}
+		useInteractive := len(args) == 0 && cmd.Flags().NFlag() == 0
 		if useInteractive {
 			chatAgent, err := createChatAgent()
 			if err != nil {
@@ -91,7 +85,6 @@ func init() {
 	// will be available to all subcommands in the application.
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ledit.yaml)")
-	rootCmd.PersistentFlags().BoolVar(&enableUI, "ui", false, "Enable interactive terminal UI (or set LEDIT_UI=1)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -104,9 +97,4 @@ func init() {
 	rootCmd.AddCommand(customModelCmd)
 	rootCmd.AddCommand(reviewStagedCmd)
 	rootCmd.AddCommand(shellCmd)
-
-	// Initialize environment-based defaults
-	cobra.OnInitialize(func() {
-		// UI is removed, nothing to initialize
-	})
 }

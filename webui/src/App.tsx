@@ -7,6 +7,12 @@ import UIManager from './components/UIManager';
 import CodeEditor from './components/CodeEditor';
 import LogsView from './components/LogsView';
 import Terminal from './components/Terminal';
+import NavigationBar from './components/NavigationBar';
+import FileTree from './components/FileTree';
+import EditorTabs from './components/EditorTabs';
+import EditorPane from './components/EditorPane';
+import GitChangesPanel from './components/GitChangesPanel';
+import { EditorManagerProvider, useEditorManager } from './contexts/EditorManagerContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService } from './services/api';
@@ -47,11 +53,9 @@ interface AppState {
   queryCount: number;
   messages: Message[];
   logs: LogEntry[];
-  files: FileItem[];
   isProcessing: boolean;
   lastError: string | null;
   currentView: 'chat' | 'editor' | 'git' | 'logs';
-  selectedFile: FileInfo | null;
   toolExecutions: ToolExecution[];
   queryProgress: any;
   stats: any; // Enhanced stats from API
@@ -83,21 +87,6 @@ interface LogEntry {
   category: 'query' | 'tool' | 'file' | 'system' | 'stream';
 }
 
-interface FileItem {
-  path: string;
-  modified: boolean;
-  content?: string;
-}
-
-interface FileInfo {
-  name: string;
-  path: string;
-  isDir: boolean;
-  size: number;
-  modified: number;
-  ext?: string;
-}
-
 function App() {
   const [state, setState] = useState<AppState>({
     isConnected: false,
@@ -106,11 +95,9 @@ function App() {
     queryCount: 0,
     messages: [],
     logs: [],
-    files: [],
     isProcessing: false,
     lastError: null,
     currentView: 'chat',
-    selectedFile: null,
     toolExecutions: [],
     queryProgress: null,
     stats: {}
@@ -261,25 +248,8 @@ function App() {
         logEntry.category = 'file';
         logEntry.level = 'info';
         setState(prev => {
-          const updatedFiles = prev.files.map(file => 
-            file.path === event.data.path 
-              ? { ...file, modified: true }
-              : file
-          );
-          
-          // If file not in list, add it
-          if (!updatedFiles.some(file => file.path === event.data.path)) {
-            updatedFiles.push({
-              path: event.data.path,
-              modified: true
-            });
-          }
-          
-          return {
-            ...prev,
-            files: updatedFiles,
-            logs: [...prev.logs, logEntry]
-          };
+          const newLogs = [...prev.logs, logEntry];
+          return { ...prev, logs: newLogs };
         });
         console.log('📝 File changed:', event.data.path);
         break;
@@ -454,13 +424,6 @@ function App() {
     }));
   }, []);
 
-  const handleFileSelect = useCallback((file: FileInfo) => {
-    setState(prev => ({
-      ...prev,
-      selectedFile: file
-    }));
-  }, []);
-
   const handleGitCommit = useCallback((message: string, files: string[]) => {
     console.log('Git commit:', message, files);
     // TODO: Implement actual git commit API call
@@ -481,11 +444,6 @@ function App() {
     console.log('Git discard:', files);
     // TODO: Implement actual git discard API call
   }, []);
-
-  const handleFileSave = useCallback((content: string) => {
-    console.log('File saved:', state.selectedFile?.path);
-    // You could add additional logic here like refreshing the file tree
-  }, [state.selectedFile]);
 
   const handleTerminalCommand = useCallback(async (command: string) => {
     try {
@@ -513,8 +471,19 @@ function App() {
     setIsSidebarOpen(false);
   }, []);
 
-  return (
-    <UIManager>
+  // Child component with access to editor manager
+  const AppContent: React.FC = () => {
+    const { panes, paneLayout, switchPane, splitPane, closeSplit, closePane } = useEditorManager();
+    const [sidebarPanel, setSidebarPanel] = useState<'files' | 'git'>('files');
+
+    const canSplit = panes.length < 3;
+    const canCloseSplit = panes.length > 1;
+
+    const handleSidebarFileClick = (file: any) => {
+      // Handle file selection from GitChangesPanel
+    };
+
+    return (
       <div className="app">
         {/* Mobile menu button */}
         {isMobile && (
@@ -540,26 +509,30 @@ function App() {
           selectedModel={state.model}
           onModelChange={handleModelChange}
           availableModels={[state.model]} // You might want to fetch available models from API
-          currentView={state.currentView}
-          onViewChange={handleViewChange}
+          // Note: onViewChange is no longer used in Sidebar - view switching is now in NavigationBar
           stats={{
             queryCount: state.queryCount,
-            filesModified: state.files.filter(f => f.modified).length
+            filesModified: 0 // TODO: track modified files from buffers
           }}
-          recentFiles={state.files.slice(-5)} // Show last 5 files
-          recentLogs={state.logs.slice(-10)} // Show last 10 log entries
+          recentFiles={[]}
+          recentLogs={state.logs.slice(-10)}
           isMobileMenuOpen={isSidebarOpen}
           onMobileMenuToggle={toggleSidebar}
           isMobile={isMobile}
           sidebarCollapsed={sidebarCollapsed}
           onSidebarToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-          // Props for FileTree when in editor view
-          onFileSelect={handleFileSelect}
-          selectedFile={state.selectedFile?.path}
+          onProviderChange={handleProviderChange}
         />
         <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''}`}>
+          {/* Top Navigation Bar */}
+          <NavigationBar
+            currentView={state.currentView}
+            onViewChange={handleViewChange}
+          />
+
           <Status isConnected={state.isConnected} stats={state.stats} />
 
+          {/* View Content */}
           {state.currentView === 'chat' ? (
             <Chat
               messages={state.messages}
@@ -583,14 +556,67 @@ function App() {
               logs={state.logs}
               onClearLogs={() => setState(prev => ({ ...prev, logs: [] }))}
             />
-          ) : (
+          ) : state.currentView === 'editor' ? (
             <div className="editor-view">
-              <CodeEditor
-                file={state.selectedFile}
-                onSave={handleFileSave}
-              />
+              {/* Pane Controls */}
+              <div className="pane-controls">
+                {canCloseSplit && (
+                  <button
+                    onClick={closeSplit}
+                    className="pane-control-btn"
+                    title="Close split pane"
+                  >
+                    ❌ Close Split
+                  </button>
+                )}
+                {canSplit && (
+                  <button
+                    onClick={() => panes.find(p => p.isActive) && splitPane(panes.find(p => p.isActive)!.id, 'vertical')}
+                    className="pane-control-btn"
+                    title="Split vertically"
+                  >
+                    ⬇️ Split ⟂
+                  </button>
+                )}
+                {canSplit && (
+                  <button
+                    onClick={() => panes.find(p => p.isActive) && splitPane(panes.find(p => p.isActive)!.id, 'horizontal')}
+                    className="pane-control-btn"
+                    title="Split horizontally"
+                  >
+                    ➡️ Split ↔
+                  </button>
+                )}
+              </div>
+
+              {/* Editor Tabs */}
+              <EditorTabs />
+
+              <div className={`editor-content ${paneLayout}`}>
+                {/* Editor Panes Container */}
+                <div className={`panes-container layout-${paneLayout}`}>
+                  <PaneWrapper>
+                    <FileTreeWrapper>
+                      <FileTreeWrapperInner>
+                        <FileTreeConnected />
+                      </FileTreeWrapperInner>
+                    </FileTreeWrapper>
+                  </PaneWrapper>
+                  {panes.map((pane) => (
+                    <PaneWrapper key={pane.id}>
+                      <EditorPaneWrapper>
+                        <EditorPaneComponent
+                          paneId={pane.id}
+                          isActive={pane.isActive}
+                          onClick={() => switchPane(pane.id)}
+                        />
+                      </EditorPaneWrapper>
+                    </PaneWrapper>
+                  ))}
+                </div>
+              </div>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Terminal Component */}
@@ -600,8 +626,59 @@ function App() {
           isConnected={state.isConnected}
         />
       </div>
-    </UIManager>
+    );
+  };
+
+  return (
+    <EditorManagerProvider>
+      <AppContent />
+    </EditorManagerProvider>
   );
 }
+
+// Wrapper components to avoid React hooks issues
+const PaneWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
+  <div className="pane-wrapper">{children}</div>
+);
+
+const FileTreeWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
+  <div className="filetree-wrapper">{children}</div>
+);
+
+const FileTreeWrapperInner: React.FC<{children: React.ReactNode}> = ({ children }) => (
+  <div>{children}</div>
+);
+
+const FileTreeConnected: React.FC = () => {
+  const { openFile } = useEditorManager();
+  return (
+    <FileTree
+      onFileSelect={openFile}
+      selectedFile={undefined}
+    />
+  );
+};
+
+const EditorPaneWrapper: React.FC<{children: React.ReactNode, isActive?: boolean, onClick?: () => void}> = ({ children, isActive, onClick }) => {
+  const { switchPane } = useEditorManager();
+  return (
+    <div 
+      className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
+      onClick={onClick}
+      tabIndex={isActive ? -1 : 0}
+      onFocus={() => isActive && (onClick?.())}
+    >
+      {children}
+    </div>
+  );
+};
+
+const EditorPaneComponent: React.FC<{paneId: string, isActive?: boolean, onClick?: () => void}> = ({ paneId, isActive, onClick }) => {
+  return (
+    <div onClick={onClick}>
+      <EditorPane paneId={paneId} />
+    </div>
+  );
+};
 
 export default App;

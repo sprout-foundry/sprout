@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EditorView, keymap } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { defaultKeymap, indentWithTab } from '@codemirror/commands';
@@ -14,7 +14,9 @@ import { json } from '@codemirror/lang-json';
 import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 
-import './CodeEditor.css';
+import { useEditorManager } from '../contexts/EditorManagerContext';
+import { EditorBuffer } from '../types/editor';
+import './EditorPane.css';
 
 interface FileInfo {
   name: string;
@@ -34,22 +36,32 @@ interface FileResponse {
   ext: string;
 }
 
-interface CodeEditorProps {
-  file: FileInfo | null;
-  onSave?: (content: string) => void;
+interface EditorPaneProps {
+  paneId: string;
 }
 
-const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
+const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const [content, setContent] = useState<string>('');
-  const [originalContent, setOriginalContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isModified, setIsModified] = useState<boolean>(false);
-  const [pendingFile, setPendingFile] = useState<FileInfo | null>(null);
+  const [localContent, setLocalContent] = useState<string>('');
   const [showUnsavedDialog, setShowUnsavedDialog] = useState<boolean>(false);
+  const [pendingFile, setPendingFile] = useState<EditorBuffer | null>(null);
+
+  const {
+    panes,
+    buffers,
+    switchPane,
+    updateBufferContent,
+    updateBufferCursor,
+    saveBuffer,
+    setBufferModified
+  } = useEditorManager();
+
+  // Get the buffer for this pane
+  const pane = panes.find(p => p.id === paneId);
+  const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
 
   // Get language support based on file extension
   const getLanguageSupport = (ext?: string) => {
@@ -92,9 +104,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
 
       const data: FileResponse = await response.json();
       if (data.message === 'success') {
-        setContent(data.content);
-        setOriginalContent(data.content);
-        setIsModified(false);
+        setLocalContent(data.content);
+        updateBufferContent(paneId!, data.content);
 
         // Update editor if it exists
         if (viewRef.current) {
@@ -116,52 +127,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     }
   };
 
-  // Save file content
-  const saveFile = async () => {
-    if (!file || !viewRef.current) return;
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      const currentContent = viewRef.current.state.doc.toString();
-
-      const response = await fetch(`/api/file?path=${encodeURIComponent(file.path)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content: currentContent }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to save file: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      if (data.message === 'File saved successfully') {
-        setIsModified(false);
-        setOriginalContent(currentContent);
-        setContent(currentContent);
-        if (onSave) {
-          onSave(currentContent);
-        }
-      } else {
-        throw new Error(data.message);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Handle file switch with unsaved changes check
+  // Load file when buffer changes
   useEffect(() => {
-    if (!file) {
-      setContent('');
-      setOriginalContent('');
-      setIsModified(false);
+    if (!buffer || !buffer.file || buffer.file.isDir) {
+      setLocalContent('');
       if (viewRef.current) {
         viewRef.current.dispatch({
           changes: {
@@ -171,48 +140,29 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
           }
         });
       }
+      setError(null);
       return;
     }
 
-    if (file.isDir) {
-      setContent('');
-      setOriginalContent('');
-      setIsModified(false);
+    // If buffer has content and hasn't been modified, use cached content
+    if (buffer.content && !buffer.isModified) {
+      setLocalContent(buffer.content);
       if (viewRef.current) {
         viewRef.current.dispatch({
           changes: {
             from: 0,
             to: viewRef.current.state.doc.length,
-            insert: ''
+            insert: buffer.content
           }
         });
       }
+      setError(null);
       return;
     }
 
-    // Check if there are unsaved changes in the current file
-    if (isModified && viewRef.current) {
-      const currentContent = viewRef.current.state.doc.toString();
-      if (currentContent !== originalContent) {
-        // Show unsaved changes dialog
-        setPendingFile(file);
-        setShowUnsavedDialog(true);
-        return; // Don't load the new file yet
-      }
-    }
-
-    // No unsaved changes, load the new file directly
-    loadFile(file.path);
-  }, [file]);
-
-  // Process pending file after dialog decision
-  useEffect(() => {
-    if (pendingFile && !showUnsavedDialog) {
-      // Load the pending file
-      loadFile(pendingFile.path);
-      setPendingFile(null);
-    }
-  }, [showUnsavedDialog]);
+    // Load file from server
+    loadFile(buffer.file.path);
+  }, [buffer?.id]);
 
   // Initialize CodeMirror editor
   useEffect(() => {
@@ -221,8 +171,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         const newContent = update.state.doc.toString();
-        setContent(newContent);
-        setIsModified(newContent !== originalContent);
+        setLocalContent(newContent);
+        updateBufferContent(paneId!, newContent);
+        setBufferModified(paneId!, newContent !== buffer?.originalContent);
       }
     });
 
@@ -230,13 +181,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       key: 'Mod-s',
       preventDefault: true,
       run: () => {
-        saveFile();
+        handleSave();
         return true;
       }
     };
 
     const state = EditorState.create({
-      doc: content,
+      doc: localContent,
       extensions: [
         updateListener,
         keymap.of(defaultKeymap),
@@ -260,7 +211,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
           }
         }),
         EditorView.lineWrapping,
-        ...getLanguageSupport(file?.ext)
+        ...getLanguageSupport(buffer?.file.ext)
       ]
     });
 
@@ -275,43 +226,35 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [file]);
+  }, [buffer?.id]);
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        saveFile();
+        handleSave();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [file]);
+  }, [buffer]);
 
-  // Handle dialog actions
-  const handleSaveAndSwitch = async () => {
-    await saveFile();
-    setShowUnsavedDialog(false);
+  // Save buffer
+  const handleSave = async () => {
+    if (!buffer || !viewRef.current) return;
+
+    try {
+      await saveBuffer(paneId!);
+    } catch (err) {
+      setError('Failed to save file');
+    }
   };
 
-  const handleDiscardAndSwitch = () => {
-    setIsModified(false);
-    setShowUnsavedDialog(false);
-  };
-
-  const handleCancel = () => {
-    setShowUnsavedDialog(false);
-    setPendingFile(null);
-  };
-
-  if (!file || file.isDir) {
+  if (!buffer || !buffer.file || buffer.file.isDir) {
     return (
-      <div className="code-editor">
-        <div className="editor-header">
-          <h3>📝 Code Editor</h3>
-        </div>
+      <div className="editor-pane empty">
         <div className="no-file-selected">
           <div className="no-file-icon">📄</div>
           <div className="no-file-text">Select a file to edit</div>
@@ -320,25 +263,24 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     );
   }
 
+  const isModified = buffer.content !== buffer.originalContent;
+
   return (
-    <div className="code-editor">
-      <div className="editor-header">
-        <div className="editor-info">
-          <h3>📝 Code Editor</h3>
-          <div className="file-info">
-            <span className="file-name">{file.name}</span>
-            <span className="file-path">{file.path}</span>
-            {isModified && <span className="modified-indicator">● Modified</span>}
-          </div>
+    <div className="editor-pane">
+      <div className="pane-header">
+        <div className="pane-info">
+          <span className="file-name">{buffer.file.name}</span>
+          <span className="file-path">{buffer.file.path}</span>
+          {isModified && <span className="modified-indicator">● Modified</span>}
         </div>
-        <div className="editor-controls">
+        <div className="pane-actions">
           <button
-            onClick={saveFile}
-            disabled={saving || !isModified}
+            onClick={handleSave}
+            disabled={!isModified}
             className="save-button"
             title="Save file (Ctrl+S)"
           >
-            {saving ? '⚡ Saving...' : '💾 Save'}
+            💾 Save
           </button>
         </div>
       </div>
@@ -357,51 +299,18 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
         </div>
       )}
 
-      <div className="editor-container">
+      <div className="pane-content">
         <div ref={editorRef} className="editor" />
       </div>
 
-      <div className="editor-footer">
+      <div className="pane-footer">
         <div className="editor-stats">
-          <span className="line-count">
-            Lines: {content.split('\n').length}
-          </span>
-          <span className="char-count">
-            Characters: {content.length}
-          </span>
-        </div>
-        <div className="editor-help">
-          <span className="help-text">Ctrl+S to save</span>
+          <span className="line-count">Lines: {localContent.split('\n').length}</span>
+          <span className="char-count">Chars: {localContent.length}</span>
         </div>
       </div>
-
-      {/* Unsaved Changes Dialog */}
-      {showUnsavedDialog && (
-        <div className="unsaved-dialog-overlay">
-          <div className="unsaved-dialog">
-            <div className="dialog-header">
-              <h3>⚠️ Unsaved Changes</h3>
-            </div>
-            <div className="dialog-body">
-              <p>You have unsaved changes in <strong>{file.name}</strong>.</p>
-              <p>Would you like to save your changes before switching files?</p>
-            </div>
-            <div className="dialog-actions">
-              <button onClick={handleSaveAndSwitch} className="dialog-btn primary">
-                💾 Save & Switch
-              </button>
-              <button onClick={handleDiscardAndSwitch} className="dialog-btn danger">
-                ❌ Don't Save
-              </button>
-              <button onClick={handleCancel} className="dialog-btn secondary">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-export default CodeEditor;
+export default EditorPane;

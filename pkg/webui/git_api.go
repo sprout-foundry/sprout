@@ -345,3 +345,56 @@ func getAllGitFiles(status *GitStatus) []GitFile {
 	files = append(files, status.Renamed...)
 	return files
 }
+
+// handleAPIGitCommit handles git commit with message
+func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Message string `json:"message"`
+		Files   []string `json:"files"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Message == "" {
+		http.Error(w, "Commit message is required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if there are staged changes
+	cmd := exec.Command("git", "diff", "--cached", "--quiet")
+	if err := cmd.Run(); err != nil {
+		// Exit code 1 means there ARE differences (staged changes)
+		// Exit code 0 means no differences
+		// We want exit code 1 to proceed
+	} else {
+		http.Error(w, "No staged changes to commit", http.StatusBadRequest)
+		return
+	}
+
+	// Create the commit
+	cmd = exec.Command("git", "commit", "-m", req.Message)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create commit: %v\nOutput: %s", err, string(output)), http.StatusInternalServerError)
+		return
+	}
+
+	// Publish event
+	if ws.eventBus != nil {
+		ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent("", "git_commit", req.Message))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Commit created successfully",
+		"commit":  strings.TrimSpace(string(output)),
+	})
+}

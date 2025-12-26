@@ -31,10 +31,11 @@ type AuthConfig struct {
 
 // RequestDefaults defines default request parameters
 type RequestDefaults struct {
-	Model       string   `json:"model"`
-	Temperature *float64 `json:"temperature"`
-	MaxTokens   *int     `json:"max_tokens"`
-	TopP        *float64 `json:"top_p"`
+	Model       string                 `json:"model"`
+	Temperature *float64               `json:"temperature"`
+	MaxTokens   *int                   `json:"max_tokens"`
+	TopP        *float64               `json:"top_p"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"` // Provider-specific parameters
 }
 
 // MessageConversion defines how messages should be converted
@@ -44,13 +45,14 @@ type MessageConversion struct {
 	ReasoningContentField    string `json:"reasoning_content_field"`
 	ArgumentsAsJSON          bool   `json:"arguments_as_json"`
 	SkipToolExecutionSummary bool   `json:"skip_tool_execution_summary"` // For providers with strict role alternation
+	ForceToolCallType        string `json:"force_tool_call_type"`        // Force tool call type to specific value (e.g., "function" for Mistral)
 }
 
 // StreamingConfig defines streaming behavior
 type StreamingConfig struct {
-	Format         string `json:"format"` // "sse", "json_lines", "raw"
+	Format        string `json:"format"` // "sse", "json_lines", "raw"
 	ChunkTimeoutMs int    `json:"chunk_timeout_ms"`
-	DoneMarker     string `json:"done_marker"`
+	DoneMarker    string `json:"done_marker"`
 }
 
 // PatternOverride defines context limit overrides for model patterns
@@ -220,7 +222,7 @@ func (c *ProviderConfig) GetTimeout() time.Duration {
 	if c.Streaming.ChunkTimeoutMs > 0 {
 		return time.Duration(c.Streaming.ChunkTimeoutMs) * time.Millisecond
 	}
-	return 320 * time.Second // Default timeout
+	return 300 * time.Second // Default timeout (5 minutes)
 }
 
 // GetStreamingTimeout returns the configured streaming timeout duration

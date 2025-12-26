@@ -16,7 +16,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: 1.22
+        go-version: 1.24
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -35,6 +35,18 @@ jobs:
 
     - name: Install dependencies
       run: go mod download
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Install Node.js dependencies
+      run: |
+        cd webui && npm install
+
+    - name: Build and deploy React UI
+      run: make deploy-ui
 
     - name: Run unit tests
       run: make test-unit
@@ -61,7 +73,23 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
+        go-version: '1.24'
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Install Node.js dependencies
+      run: |
+        cd webui && npm install
+
+    - name: Build and deploy React UI
+      shell: bash
+      run: make deploy-ui
 
     - name: Get the version
       id: get_version
@@ -121,6 +149,7 @@ jobs:
         git push origin HEAD:main
 
     - name: Update README with version
+      shell: bash
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         if [ -f "README.md" ]; then

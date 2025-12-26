@@ -5,8 +5,10 @@ import (
 	"os/exec"
 	"strings"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/codereview"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/utils"
 
 	"github.com/spf13/cobra"
@@ -32,7 +34,21 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		}
 
 		// Override model if specified by flag
-		// Model will be passed to the code review service
+		var customAgentClient api.ClientInterface
+		if reviewStagedModel != "" {
+			// Parse provider from model string (e.g., "ollama:llama3" or "openai:gpt-4")
+			clientType, err := api.DetermineProvider(reviewStagedModel, api.ClientType(cfg.LastUsedProvider))
+			if err != nil {
+				logger.LogError(fmt.Errorf("failed to determine provider from model '%s': %w", reviewStagedModel, err))
+				return
+			}
+			customAgentClient, err = factory.CreateProviderClient(clientType, reviewStagedModel)
+			if err != nil {
+				logger.LogError(fmt.Errorf("failed to create agent client with model '%s': %w", reviewStagedModel, err))
+				return
+			}
+			logger.LogProcessStep(fmt.Sprintf("Using custom model: %s", reviewStagedModel))
+		}
 
 		// Check for staged changes
 		cmdCheckStaged := exec.Command("git", "diff", "--cached", "--quiet", "--exit-code")
@@ -46,7 +62,7 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 				return
 			}
 		} else {
-			logger.LogUserInteraction("No staged changes found. Please stage your changes before running 'ledit review-staged'.")
+			logger.LogUserInteraction("No staged changes found. Please stage your changes before running 'ledit review'.")
 			return
 		}
 
@@ -64,15 +80,41 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			return
 		}
 
+		// Optimize diff for more efficient API usage
+		optimizer := utils.NewDiffOptimizer()
+		optimizedDiff := optimizer.OptimizeDiff(stagedDiff)
+
+		logger.LogProcessStep(fmt.Sprintf("Optimized diff: %d -> %d lines, %d bytes saved",
+			optimizedDiff.OriginalLines, optimizedDiff.OptimizedLines, optimizedDiff.BytesSaved))
+
+		// Create the review context with optimized diff
+		reviewDiff := optimizedDiff.OptimizedContent
+
+		// Add file summaries to context if available
+		if len(optimizedDiff.FileSummaries) > 0 {
+			var summaryInfo strings.Builder
+			summaryInfo.WriteString("\n\nLarge files optimized for review:\n")
+			for file, summary := range optimizedDiff.FileSummaries {
+				summaryInfo.WriteString(fmt.Sprintf("- %s: %s\n", file, summary))
+			}
+			reviewDiff += summaryInfo.String()
+		}
+
 		// Create the unified code review service
 		service := codereview.NewCodeReviewService(cfg, logger)
 
+		// Use custom agent client if model flag was set, otherwise use default
+		agentClient := customAgentClient
+		if agentClient == nil {
+			agentClient = service.GetDefaultAgentClient()
+		}
+
 		// Create the review context
 		ctx := &codereview.ReviewContext{
-			Diff:        stagedDiff,
+			Diff:        reviewDiff,
 			Config:      cfg,
 			Logger:      logger,
-			AgentClient: service.GetDefaultAgentClient(),
+			AgentClient: agentClient,
 		}
 
 		// Create review options for staged review
@@ -103,5 +145,4 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 func init() {
 	reviewStagedCmd.Flags().StringVarP(&reviewStagedModel, "model", "m", "", "Specify the LLM model to use for the code review (e.g., 'ollama:llama3')")
 	reviewStagedCmd.Flags().BoolVar(&reviewStagedSkipPrompt, "skip-prompt", false, "Skip any interactive prompts (e.g., for confirmation, though less relevant for review)")
-	rootCmd.AddCommand(reviewStagedCmd)
 }

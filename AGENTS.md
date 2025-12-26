@@ -12,7 +12,7 @@ This guide helps contributors work effectively on ledit, an AI‑assisted code e
 ## Build, Test, and Development Commands
 - Build: `go build` (binary: `ledit`), `go install` to GOPATH/bin.
 - Unit tests: `go test ./...` or verbose `go test ./... -v`.
-- Critical UI tests: `go test ./pkg/console/components/ -v` (run after UI changes).
+- Critical UI tests: `go test ./pkg/console/ -v` (run after UI changes).
 - E2E suite: `python3 test_runner.py` (supports single test mode and model override).
 - Local run: `./ledit agent "your intent"` or interactive `./ledit`.
 
@@ -25,7 +25,7 @@ This guide helps contributors work effectively on ledit, an AI‑assisted code e
 ## Testing Guidelines
 - Prefer focused unit tests near the code under test.
 - Use `stretchr/testify` for assertions where helpful.
-- Always run `go test ./pkg/console/components/ -v` after modifying console UI.
+- Always run `go test ./pkg/console/ -v` after modifying console UI.
 - In PRs, include a brief test plan and any UI screenshots/asciinema if UI changed.
 
 ## Commit & Pull Request Guidelines
@@ -34,7 +34,7 @@ This guide helps contributors work effectively on ledit, an AI‑assisted code e
 ## Security & Configuration Tips
 - Never commit secrets. API keys live in `~/.ledit/api_keys.json` or env vars (e.g., `OPENROUTER_API_KEY`).
 - Config at `~/.ledit/config.json`; first run selects provider/model. CI runs non‑interactive.
-- Useful envs: `LEDIT_DEBUG=1` (verbose), `LEDIT_UI=1` (force UI), `CI=1` (CI behavior).
+- Useful envs: `LEDIT_DEBUG=1` (verbose), `CI=1` (CI behavior).
 
 ## Agent‑Specific Notes
 - Select provider/model via flags: `ledit agent --provider openrouter --model qwen/qwen3-coder-30b "..."`.

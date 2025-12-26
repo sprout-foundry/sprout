@@ -25,7 +25,7 @@ const Terminal: React.FC<TerminalProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [cwd, setCwd] = useState('~');
+  const [cwd] = useState('~');
   const [terminalConnected, setTerminalConnected] = useState(false);
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -189,7 +189,7 @@ const Terminal: React.FC<TerminalProps> = ({
         }
         break;
     }
-  }, [currentInput, history, historyIndex, handleCommand, onCommand]);
+  }, [currentInput, history, historyIndex, handleCommand, onCommand, terminalConnected, addLine]);
 
   const toggleExpanded = useCallback(() => {
     setIsExpanded(prev => !prev);

@@ -1,0 +1,61 @@
+{
+  "name": "minimax",
+  "endpoint": "https://api.minimax.io/v1/chat/completions",
+  "auth": {
+    "type": "bearer",
+    "env_var": "MINIMAX_API_KEY"
+  },
+  "headers": {},
+  "defaults": {
+    "model": "MiniMax-M2",
+    "temperature": 1.0,
+    "max_tokens": 16000,
+    "top_p": 1.0,
+    "parameters": {
+      "reasoning_split": true
+    }
+  },
+  "message_conversion": {
+    "include_tool_call_id": true,
+    "convert_tool_role_to_user": false,
+    "reasoning_content_field": "reasoning_details",
+    "arguments_as_json": false
+  },
+  "streaming": {
+    "format": "sse",
+    "chunk_timeout_ms": 300000,
+    "done_marker": "[DONE]"
+  },
+  "models": {
+    "default_context_limit": 128000,
+    "model_overrides": {
+      "MiniMax-M2": 128000,
+      "MiniMax-M2-Stable": 128000
+    },
+    "pattern_overrides": [
+      {
+        "pattern": "MiniMax-.*",
+        "context_limit": 128000
+      }
+    ],
+    "supports_vision": false,
+    "vision_model": "",
+    "default_model": "MiniMax-M2",
+    "available_models": [
+      "MiniMax-M2",
+      "MiniMax-M2-Stable"
+    ]
+  },
+  "retry": {
+    "max_attempts": 3,
+    "base_delay_ms": 1000,
+    "backoff_multiplier": 2.0,
+    "max_delay_ms": 30000,
+    "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
+  },
+  "cost": {
+    "input_token_cost": 0.0,
+    "output_token_cost": 0.0,
+    "currency": "USD"
+  }
+}

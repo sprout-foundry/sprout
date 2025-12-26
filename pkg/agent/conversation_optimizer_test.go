@@ -35,17 +35,27 @@ func TestConversationOptimizer(t *testing.T) {
 func TestConversationOptimizerWithOldReads(t *testing.T) {
 	optimizer := NewConversationOptimizer(true, false)
 
-	// Create test with file reads that are far apart (>= 5 messages)
+	// Create test with file reads that are far apart (>= 15 messages)
 	// The FIRST read should be optimized, the LAST read should be preserved
 	messages := []api.Message{
 		{Role: "system", Content: "System prompt"}, // index 0
 		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallId: "call-1"}, // index 1 - FIRST read (should be optimized)
-		{Role: "assistant", Content: "Message 2"}, // index 2
-		{Role: "user", Content: "Message 3"},      // index 3
-		{Role: "assistant", Content: "Message 4"}, // index 4
-		{Role: "user", Content: "Message 5"},      // index 5
-		{Role: "assistant", Content: "Message 6"}, // index 6
-		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallId: "call-2"}, // index 7 - LAST read (should be preserved)
+		{Role: "assistant", Content: "Message 2"},  // index 2
+		{Role: "user", Content: "Message 3"},       // index 3
+		{Role: "assistant", Content: "Message 4"},  // index 4
+		{Role: "user", Content: "Message 5"},       // index 5
+		{Role: "assistant", Content: "Message 6"},  // index 6
+		{Role: "user", Content: "Message 7"},       // index 7
+		{Role: "assistant", Content: "Message 8"},  // index 8
+		{Role: "user", Content: "Message 9"},       // index 9
+		{Role: "assistant", Content: "Message 10"}, // index 10
+		{Role: "user", Content: "Message 11"},      // index 11
+		{Role: "assistant", Content: "Message 12"}, // index 12
+		{Role: "user", Content: "Message 13"},      // index 13
+		{Role: "assistant", Content: "Message 14"}, // index 14
+		{Role: "user", Content: "Message 15"},      // index 15
+		{Role: "assistant", Content: "Message 16"}, // index 16
+		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallId: "call-2"}, // index 17 - LAST read (should be preserved)
 	}
 
 	optimized := optimizer.OptimizeConversation(messages)
@@ -64,13 +74,13 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 		t.Errorf("Expected first read (index 1) to preserve ToolCallId, got: %s", firstReadMsg.ToolCallId)
 	}
 
-	// Check that the LAST file read was preserved (index 7)
-	lastReadMsg := optimized[7]
+	// Check that the LAST file read was preserved (index 17)
+	lastReadMsg := optimized[17]
 	if containsString(lastReadMsg.Content, "[OPTIMIZED]") {
-		t.Errorf("Expected last read (index 7) to NOT contain [OPTIMIZED], got: %s", lastReadMsg.Content)
+		t.Errorf("Expected last read (index 17) to NOT contain [OPTIMIZED], got: %s", lastReadMsg.Content)
 	}
 	if lastReadMsg.ToolCallId != "call-2" {
-		t.Errorf("Expected last read (index 7) to preserve ToolCallId, got: %s", lastReadMsg.ToolCallId)
+		t.Errorf("Expected last read (index 17) to preserve ToolCallId, got: %s", lastReadMsg.ToolCallId)
 	}
 
 }
@@ -78,6 +88,7 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 func TestAggressiveOptimizationPreservesToolCallId(t *testing.T) {
 	optimizer := NewConversationOptimizer(true, false)
 
+	// Create a longer conversation to trigger aggressive optimization
 	messages := []api.Message{
 		{Role: "system", Content: "System prompt"},
 		{Role: "user", Content: "Initial question"},
@@ -91,6 +102,15 @@ func TestAggressiveOptimizationPreservesToolCallId(t *testing.T) {
 		{Role: "assistant", Content: "Message 9"},
 		{Role: "user", Content: "Message 10"},
 		{Role: "assistant", Content: "Message 11"},
+		{Role: "user", Content: "Message 12"},
+		{Role: "assistant", Content: "Message 13"},
+		{Role: "user", Content: "Message 14"},
+		{Role: "assistant", Content: "Message 15"},
+		{Role: "user", Content: "Message 16"},
+		{Role: "assistant", Content: "Message 17"},
+		{Role: "user", Content: "Message 18"},
+		{Role: "assistant", Content: "Message 19"},
+		{Role: "user", Content: "Message 20"},
 	}
 
 	optimized := optimizer.AggressiveOptimization(messages)

@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/alantheprice/ledit/pkg/agent_providers"
 )
 
 // readInput reads a line of input from stdin without conflicting with other input systems
@@ -339,18 +341,53 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 
 // GetAvailableProviders returns all supported providers
 func GetAvailableProviders(apiKeys *APIKeys) []string {
-	// Return all supported providers, regardless of API key status
-	// The selection process will handle prompting for API keys
-	return []string{
+	// Use the provider factory to dynamically discover all available providers
+	providerFactory := providers.NewProviderFactory()
+	err := providerFactory.LoadEmbeddedConfigs()
+	if err != nil {
+		// Fallback to hardcoded list if factory fails to load
+		return []string{
+			"openai",
+			"chutes",
+			"zai",
+			"openrouter",
+			"deepinfra",
+			"ollama-local",
+			"ollama-turbo",
+			"lmstudio",
+		}
+	}
+
+	// Get all available providers from the factory
+	factoryProviders := providerFactory.GetAvailableProviders()
+
+	// Add the hardcoded providers that aren't in the factory (built-in ones)
+	hardcodedProviders := []string{
 		"openai",
-		"chutes",
-		"zai",
-		"openrouter",
-		"deepinfra",
 		"ollama-local",
 		"ollama-turbo",
-		"lmstudio",
 	}
+
+	// Combine and deduplicate
+	providerSet := make(map[string]bool)
+
+	// Add factory providers
+	for _, provider := range factoryProviders {
+		providerSet[provider] = true
+	}
+
+	// Add hardcoded providers
+	for _, provider := range hardcodedProviders {
+		providerSet[provider] = true
+	}
+
+	// Convert back to slice
+	result := make([]string, 0, len(providerSet))
+	for provider := range providerSet {
+		result = append(result, provider)
+	}
+
+	return result
 }
 
 // SelectProvider allows user to select a provider interactively

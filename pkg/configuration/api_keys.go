@@ -70,6 +70,12 @@ func getSupportedProviders() []ProviderAPIKey {
 			EnvVariableName: "LMSTUDIO_API_KEY",
 		},
 		{
+			Name:            "mistral",
+			FormattedName:   "Mistral",
+			RequiresKey:     true,
+			EnvVariableName: "MISTRAL_API_KEY",
+		},
+		{
 			Name:            "jinaai",
 			FormattedName:   "JinaAI",
 			RequiresKey:     true,

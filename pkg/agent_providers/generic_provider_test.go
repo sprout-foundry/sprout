@@ -16,7 +16,7 @@ func TestProviderFactory(t *testing.T) {
 
 	// Test that providers were loaded
 	providers := factory.GetAvailableProviders()
-	expectedProviders := []string{"chutes", "openrouter", "deepinfra", "zai", "lmstudio"}
+	expectedProviders := []string{"chutes", "openrouter", "deepinfra", "deepseek", "zai", "lmstudio", "minimax", "mistral"}
 
 	if len(providers) != len(expectedProviders) {
 		t.Fatalf("Expected %d providers, got %d", len(expectedProviders), len(providers))

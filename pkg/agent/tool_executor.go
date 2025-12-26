@@ -57,6 +57,11 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 
 // canExecuteInParallel checks if all tools can be executed in parallel
 func (te *ToolExecutor) canExecuteInParallel(toolCalls []api.ToolCall) bool {
+	// Disable parallel execution for DeepSeek due to strict tool call validation
+	if strings.EqualFold(te.agent.GetProvider(), "deepseek") {
+		return false
+	}
+
 	for _, tc := range toolCalls {
 		if tc.Function.Name != "read_file" {
 			return false

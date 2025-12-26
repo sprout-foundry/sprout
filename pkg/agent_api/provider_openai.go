@@ -43,9 +43,9 @@ func NewOpenAIProvider() (*OpenAIProvider, error) {
 		organization: os.Getenv("OPENAI_ORG_ID"),
 	}
 
-	// Override HTTP client timeout for OpenAI (3 minutes)
+	// Override HTTP client timeout for OpenAI (5 minutes)
 	provider.httpClient = &http.Client{
-		Timeout: 3 * time.Minute,
+		Timeout: 5 * time.Minute,
 	}
 
 	// Set default model if not already set
@@ -234,6 +234,12 @@ func (p *OpenAIProvider) convertToUnifiedResponse(resp *OpenAIResponse) *ChatRes
 
 	// Convert choices
 	for _, choice := range resp.Choices {
+		// Handle reasoning content - prioritize reasoning_details (Minimax format) over reasoning_content
+		reasoningContent := choice.Message.ReasoningContent
+		if choice.Message.ReasoningDetails != "" {
+			reasoningContent = choice.Message.ReasoningDetails
+		}
+
 		unifiedChoice := Choice{
 			Index: choice.Index,
 			Message: struct {
@@ -245,7 +251,7 @@ func (p *OpenAIProvider) convertToUnifiedResponse(resp *OpenAIResponse) *ChatRes
 			}{
 				Role:             choice.Message.Role,
 				Content:          choice.Message.Content,
-				ReasoningContent: choice.Message.ReasoningContent,
+				ReasoningContent: reasoningContent,
 				ToolCalls:        choice.Message.ToolCalls,
 			},
 			FinishReason: choice.FinishReason,

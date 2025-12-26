@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Function to return test name
+get_test_name() {
+    echo "Testing terminal cleanup"
+}
+
 # Test script for terminal cleanup
 echo "Testing terminal cleanup..."
 

@@ -1,4 +1,8 @@
 #!/bin/bash
+# Function to return test name
+get_test_name() {
+    echo "Testing dropdown UI improvements"
+}
 
 # Test script for dropdown UI improvements
 

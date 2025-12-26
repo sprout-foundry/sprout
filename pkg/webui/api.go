@@ -442,26 +442,6 @@ func (ws *ReactWebServer) handleTerminalHistory(w http.ResponseWriter, r *http.R
 	})
 }
 
-// handleAPIDiscover returns list of all running instances
-func (ws *ReactWebServer) handleAPIDiscover(w http.ResponseWriter, r *http.Request) {
-	if ws.instanceRegistry == nil {
-		http.Error(w, "Instance registry not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	instances, err := ws.instanceRegistry.ListInstances()
-	if err != nil {
-		http.Error(w, "Failed to list instances", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"instances":           instances,
-		"current_instance_id": ws.instanceID,
-	})
-}
-
 // handleAPITerminalSessions returns list of active terminal sessions
 func (ws *ReactWebServer) handleAPITerminalSessions(w http.ResponseWriter, r *http.Request) {
 	// Get list of session IDs

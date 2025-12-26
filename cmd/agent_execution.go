@@ -22,10 +22,12 @@ import (
 
 var (
 	disableWebUI bool
+	webPort      int
 )
 
 func init() {
 	agentCmd.Flags().BoolVar(&disableWebUI, "no-web-ui", false, "Disable web UI")
+	agentCmd.Flags().IntVar(&webPort, "web-port", 0, "Port for web UI (default: auto-find available port starting from 54321)")
 }
 
 // runSimpleEnhancedMode runs the new enhanced mode with web UI
@@ -45,7 +47,14 @@ func runSimpleEnhancedMode(chatAgent *agent.Agent, isInteractive bool, args []st
 	if enableWebUI {
 		// Connect agent to event bus for real-time UI updates
 		chatAgent.SetEventBus(eventBus)
-		webServer = webui.NewReactWebServer(chatAgent, eventBus, 54321)
+
+		// Determine port: use specified port or auto-find from 54321
+		port := webPort
+		if port == 0 {
+			port = webui.FindAvailablePort(54321)
+		}
+
+		webServer = webui.NewReactWebServer(chatAgent, eventBus, port)
 
 		// Start web server in background
 		go func() {

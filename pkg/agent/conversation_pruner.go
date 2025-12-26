@@ -18,6 +18,84 @@ const (
 	PruneStrategyAdaptive      PruningStrategy = "adaptive"
 )
 
+// PruningThresholds defines when and how aggressively to prune for each provider type
+type PruningThresholds struct {
+	ProviderName     string
+	StandardPercent  float64 // Percentage of max context to start pruning (e.g., 0.85 = 85%)
+	StandardTokens   int     // Absolute token limit to start pruning (e.g., 85000)
+	AggressivePercent float64 // Percentage to trigger aggressive mode (e.g., 0.90 = 90%)
+	MinMessages      int     // Minimum messages to always keep
+	RecentMessages   int     // Recent messages to always preserve
+	SlidingWindow    int     // Window size for sliding window strategy
+	RemainingTokensLimit int // For cached-discount providers: prune when remaining tokens < this
+	PercentLimit      float64 // For cached-discount providers: prune when remaining % < this
+}
+
+// PruningConfig is the single source of truth for all pruning thresholds
+var PruningConfig = struct {
+	// Threshold definitions by provider type
+	Default     PruningThresholds
+	HighContext PruningThresholds // For providers with large context windows (OpenAI, ZAI)
+	Cached      PruningThresholds // For providers with cached-token discounts (future use)
+
+	// Aggressive optimization settings
+	Aggressive struct {
+		RecentMessagesToKeep int // Messages from end to preserve during aggressive pruning
+		TruncateAt           int // Character limit for truncation during aggressive pruning
+		FileReadAgeThreshold  int // Message age below which old file reads are summarized
+	}
+
+	// Target token percentages when pruning
+	TargetPercentHighContext float64 // % of max tokens to target for high-context providers
+	TargetPercentDefault    float64 // % of max tokens to target for default providers
+}{
+	// Default thresholds (most providers)
+	Default: PruningThresholds{
+		ProviderName:     "default",
+		StandardPercent:  0.85, // Start pruning at 85% of context
+		StandardTokens:   85000, // Start pruning at 85K tokens
+		AggressivePercent: 0.90, // Aggressive mode at 90%
+		MinMessages:      5,
+		RecentMessages:   15,
+		SlidingWindow:    30,
+	},
+
+	// High-context providers (OpenAI, ZAI with 128K+ context)
+	HighContext: PruningThresholds{
+		ProviderName:      "high-context",
+		StandardPercent:   0.85, // Start pruning at 85% of context
+		AggressivePercent: 0.90, // Aggressive mode at 90%
+		MinMessages:       5,
+		RecentMessages:    15,
+		SlidingWindow:     30,
+	},
+
+	// Cached-token discount providers (future use - currently empty map)
+	Cached: PruningThresholds{
+		ProviderName:      "cached-discount",
+		RemainingTokensLimit: 20000, // Prune when fewer than this many tokens remain
+		PercentLimit:      0.20, // Prune when fewer than this % of tokens remain
+		MinMessages:       5,
+		RecentMessages:    15,
+		SlidingWindow:     30,
+	},
+
+	// Aggressive optimization settings
+	Aggressive: struct {
+		RecentMessagesToKeep int
+		TruncateAt           int
+		FileReadAgeThreshold int
+	}{
+		RecentMessagesToKeep: 8, // Keep last 8 messages during aggressive mode
+		TruncateAt:          1200, // Truncate at 1200 characters
+		FileReadAgeThreshold: 12, // Summarize file reads older than 12 messages
+	},
+
+	// Target percentages for pruning
+	TargetPercentHighContext: 0.85, // Target ~85% of max context when pruning
+	TargetPercentDefault:    0.60, // Target ~60% of context for most providers
+}
+
 // MessageImportance tracks the importance of a message
 type MessageImportance struct {
 	Index           int
@@ -44,107 +122,75 @@ type ConversationPruner struct {
 
 // NewConversationPruner creates a new conversation pruner with default settings
 func NewConversationPruner(debug bool) *ConversationPruner {
+	// Use PruningConfig.Default as single source of truth
 	return &ConversationPruner{
-		strategy:             PruneStrategyAdaptive, // Default to adaptive
-		contextThreshold:     0.85,                  // 85% threshold (less aggressive pruning)
-		minMessagesToKeep:    5,                     // Always keep at least 5 messages
-		recentMessagesToKeep: 15,                    // Keep last 15 messages (more context)
-		slidingWindowSize:    30,                    // For sliding window strategy
+		strategy:             PruneStrategyAdaptive,
+		contextThreshold:     PruningConfig.Default.StandardPercent,
+		minMessagesToKeep:    PruningConfig.Default.MinMessages,
+		recentMessagesToKeep: PruningConfig.Default.RecentMessages,
+		slidingWindowSize:    PruningConfig.Default.SlidingWindow,
 		debug:                debug,
 	}
 }
 
-// ShouldPrune checks if pruning should occur based on context usage
-// Default behavior: Hybrid approach (70K tokens OR 70% of context limit)
-// For providers with significant cached-token discounts (e.g., OpenAI) use an
-// alternative policy: allow the context to grow until the remaining tokens are
-// within min(20k, 20% of max) then prune.
+// ShouldPrune checks if pruning should occur based on context usage and provider type
+//
+// Pruning thresholds by provider type:
+// - High-context (OpenAI, ZAI): Starts at 85% of max tokens
+// - Default providers: Starts at 85K tokens OR 85% of max tokens
+// - Cached-discount providers: When remaining tokens <= 20K or <= 20%
+//
+// Aggressive mode triggers at 90% context usage for all providers
 func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider string) bool {
 	if cp.strategy == PruneStrategyNone {
 		return false
 	}
 
-	// Providers that should use the cached-token friendly threshold
-	cachedDiscountProviders := map[string]bool{
-		// Note: OpenAI moved to highThresholdProviders due to generous caching
-	}
-
-	// Providers that need higher context thresholds for better performance
+	// High-context providers (OpenAI, ZAI with 128K+ context)
 	highThresholdProviders := map[string]bool{
 		"openai": true,
 		"zai":    true,
 	}
 
 	if highThresholdProviders[provider] {
-		// High threshold providers use 85% of total model context
-		const percentageThreshold = 0.85 // 85% threshold
-		tokenCeiling := int(float64(maxTokens) * percentageThreshold)
+		tokenCeiling := int(float64(maxTokens) * PruningConfig.HighContext.StandardPercent)
 
 		if cp.debug {
-			fmt.Printf("🔍 High threshold provider (%s) pruning check: current=%d, max=%d, ceiling=%d, threshold=%.1f%%\n",
-				provider, currentTokens, maxTokens, tokenCeiling, percentageThreshold*100)
+			fmt.Printf("🔍 High-context provider (%s) pruning check: current=%d, max=%d, ceiling=%d, threshold=%.1f%%\n",
+				provider, currentTokens, maxTokens, tokenCeiling, PruningConfig.HighContext.StandardPercent*100)
 		}
 
 		// Check if we hit the percentage threshold (85% of max context)
 		contextUsage := float64(currentTokens) / float64(maxTokens)
-		if contextUsage >= percentageThreshold {
+		if contextUsage >= PruningConfig.HighContext.StandardPercent {
 			if cp.debug {
-				fmt.Printf("🔄 High threshold provider percentage threshold hit: %.1f%% >= %.1f%% (current=%d, ceiling=%d)\n",
-					contextUsage*100, percentageThreshold*100, currentTokens, tokenCeiling)
+				fmt.Printf("🔄 High-context provider threshold hit: %.1f%% >= %.1f%% (current=%d, ceiling=%d)\n",
+					contextUsage*100, PruningConfig.HighContext.StandardPercent*100, currentTokens, tokenCeiling)
 			}
 			return true
 		}
 
 		if cp.debug {
-			fmt.Printf("✅ High threshold provider pruning not needed: %.1f%% < %.1f%% and %d < %d\n",
-				contextUsage*100, percentageThreshold*100, currentTokens, tokenCeiling)
+			fmt.Printf("✅ High-context provider pruning not needed: %.1f%% < %.1f%% and %d < %d\n",
+				contextUsage*100, PruningConfig.HighContext.StandardPercent*100, currentTokens, tokenCeiling)
 		}
 		return false
 	}
 
-	if cachedDiscountProviders[provider] {
-		// Remaining tokens before hitting the model limit
-		remaining := maxTokens - currentTokens
-
-		// Compute threshold: whichever is lower of 20k or 20% of maxTokens
-		percentThreshold := int(0.2 * float64(maxTokens))
-		threshold := 20000
-		if percentThreshold < threshold {
-			threshold = percentThreshold
-		}
-
+	// Default providers: Use both absolute token limit AND percentage threshold
+	if currentTokens >= PruningConfig.Default.StandardTokens {
 		if cp.debug {
-			fmt.Printf("🔁 Cached-discount provider (%s): remaining=%d, threshold=%d (min of 20k and 20%% of %d)\n",
-				provider, remaining, threshold, maxTokens)
-		}
-
-		if remaining <= threshold {
-			if cp.debug {
-				fmt.Printf("🔄 Pruning triggered for cached-discount provider: remaining %d <= %d\n", remaining, threshold)
-			}
-			return true
-		}
-
-		return false
-	}
-
-	// Fallback/default behavior: Higher threshold: 85K tokens OR 85% of context limit
-	const tokenCeiling = 85000       // 85K token absolute ceiling (less aggressive)
-	const percentageThreshold = 0.85 // 85% threshold (less aggressive)
-
-	// Check if we hit the absolute token ceiling
-	if currentTokens >= tokenCeiling {
-		if cp.debug {
-			fmt.Printf("🔄 Token ceiling hit: %d >= %d tokens\n", currentTokens, tokenCeiling)
+			fmt.Printf("🔄 Default provider token ceiling hit: %d >= %d tokens\n",
+				currentTokens, PruningConfig.Default.StandardTokens)
 		}
 		return true
 	}
 
-	// Check if we hit the percentage threshold
 	contextUsage := float64(currentTokens) / float64(maxTokens)
-	if contextUsage >= percentageThreshold {
+	if contextUsage >= PruningConfig.Default.StandardPercent {
 		if cp.debug {
-			fmt.Printf("🔄 Percentage threshold hit: %.1f%% >= %.1f%%\n", contextUsage*100, percentageThreshold*100)
+			fmt.Printf("🔄 Default provider percentage threshold hit: %.1f%% >= %.1f%%\n",
+				contextUsage*100, PruningConfig.Default.StandardPercent*100)
 		}
 		return true
 	}
@@ -284,11 +330,12 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 	hasManyToolCalls := cp.countToolCalls(messages) > 20
 	hasLargeFiles := cp.hasLargeFileReads(messages)
 
-	// Apply different strategies based on context
-	if contextUsage > 0.9 {
+	// Apply different strategies based on context usage
+	if contextUsage > PruningConfig.Default.AggressivePercent {
 		// Critical - use aggressive optimization
 		if cp.debug {
-			fmt.Printf("🚨 Critical context usage (%.1f%%), using aggressive optimization\n", contextUsage*100)
+			fmt.Printf("🚨 Critical context usage (%.1f%% >= %.1f%%), using aggressive optimization\n",
+				contextUsage*100, PruningConfig.Default.AggressivePercent*100)
 		}
 		return optimizer.AggressiveOptimization(messages)
 	} else if hasLongHistory && hasManyToolCalls {
@@ -422,9 +469,10 @@ func (cp *ConversationPruner) estimateTokensForIndices(messages []api.Message, i
 	return tokens
 }
 
+// getTargetTokens returns default target tokens based on conversation size
 func (cp *ConversationPruner) getTargetTokens(messageCount int) int {
-	// Aim for about 60% of typical context window when pruning
-	baseTarget := 60000 // ~60K tokens
+	// Use PruningConfig.TargetPercentDefault - assumes 100K typical context
+	baseTarget := int(PruningConfig.TargetPercentDefault * 100000) // ~60K tokens
 
 	// Adjust based on message count
 	if messageCount < 20 {
@@ -438,15 +486,15 @@ func (cp *ConversationPruner) getTargetTokens(messageCount int) int {
 
 // getTargetTokensForProvider returns provider-specific target tokens
 func (cp *ConversationPruner) getTargetTokensForProvider(messageCount int, provider string) int {
-	// High threshold providers use 85% of model context
+	// High-context providers (OpenAI, ZAI with 128K+ context)
 	highThresholdProviders := map[string]bool{
 		"openai": true,
 		"zai":    true,
 	}
 
 	if highThresholdProviders[provider] {
-		// Use 85% of typical context window (assuming 128K context for most models)
-		baseTarget := int(0.85 * 128000) // ~108K tokens target for high threshold providers
+		// Use PruningConfig.TargetPercentHighContext - assumes 128K context
+		baseTarget := int(PruningConfig.TargetPercentHighContext * 128000) // ~108K tokens target for high-context providers
 
 		// Adjust based on message count
 		if messageCount < 20 {

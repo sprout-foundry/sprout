@@ -1,15 +1,11 @@
 package main
 
-import (
-	"fmt"
-	"os"
-
-	"github.com/alantheprice/ledit/cmd"
-)
+import "fmt"
 
 func main() {
-	if err := cmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+    fmt.Println("Hello, World!")
+}
+
+func add(a, b int) int {
+    return a + b
 }

@@ -7,12 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
-	"os/user"
-	"path/filepath"
-	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,32 +32,23 @@ type ConnectionInfo struct {
 
 // ReactWebServer provides the React web UI
 type ReactWebServer struct {
-	agent            *agent.Agent
-	eventBus         *events.EventBus
-	port             int
-	server           *http.Server
-	upgrader         websocket.Upgrader
-	connections      sync.Map // map[*websocket.Conn]*ConnectionInfo
-	terminalManager  *TerminalManager
-	isRunning        bool
-	mutex            sync.RWMutex
-	startTime        time.Time
-	queryCount       int
-	instanceRegistry *InstanceRegistry
-	instanceID       string
+	agent           *agent.Agent
+	eventBus        *events.EventBus
+	port            int
+	server          *http.Server
+	upgrader        websocket.Upgrader
+	connections     sync.Map // map[*websocket.Conn]*ConnectionInfo
+	terminalManager *TerminalManager
+	isRunning       bool
+	mutex           sync.RWMutex
+	startTime       time.Time
+	queryCount      int
 }
 
 // NewReactWebServer creates a new React web server
 func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) *ReactWebServer {
 	if port == 0 {
 		port = 54321
-	}
-
-	// Initialize instance registry
-	configDir := getConfigDir()
-	instanceRegistry, err := NewInstanceRegistry(configDir)
-	if err != nil {
-		log.Printf("Warning: failed to initialize instance registry: %v", err)
 	}
 
 	return &ReactWebServer{
@@ -73,8 +63,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 					origin == "" // Allow same-origin and direct connections
 			},
 		},
-		terminalManager:  NewTerminalManager(),
-		instanceRegistry: instanceRegistry,
+		terminalManager: NewTerminalManager(),
 		startTime:        time.Now(),
 	}
 }
@@ -89,34 +78,6 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	ws.isRunning = true
 	ws.mutex.Unlock()
 
-	// Register this instance
-	if ws.instanceRegistry != nil {
-		pid := os.Getpid()
-		wd, _ := os.Getwd()
-		if id, err := ws.instanceRegistry.RegisterInstance(ws.port, pid, wd); err != nil {
-			log.Printf("Warning: failed to register instance: %v", err)
-		} else {
-			ws.instanceID = id
-			log.Printf("📝 Registered instance: %s (port: %d)", id, ws.port)
-		}
-
-		// Start periodic ping
-		go func() {
-			ticker := time.NewTicker(30 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					if err := ws.instanceRegistry.Ping(); err != nil {
-						log.Printf("Warning: failed to ping instance registry: %v", err)
-					}
-				}
-			}
-		}()
-	}
-
 	// Setup routes
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ws.handleIndex)
@@ -130,8 +91,31 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/config", ws.handleAPIConfig)
 	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
 	mux.HandleFunc("/api/git/status", ws.handleAPIGitStatus)
-	mux.HandleFunc("/api/discover", ws.handleAPIDiscover)
 	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
+	mux.HandleFunc("/static/", ws.handleStaticFiles)
+	mux.HandleFunc("/sw.js", ws.handleServiceWorker)
+
+	// Additional asset files
+	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
+		ws.handleStaticAsset(w, r, "manifest.json", "application/json")
+	})
+	mux.HandleFunc("/browserconfig.xml", func(w http.ResponseWriter, r *http.Request) {
+		ws.handleStaticAsset(w, r, "browserconfig.xml", "application/xml")
+	})
+	mux.HandleFunc("/asset-manifest.json", func(w http.ResponseWriter, r *http.Request) {
+		ws.handleStaticAsset(w, r, "asset-manifest.json", "application/json")
+	})
+
+	// Icon patterns - try .png first, then .svg, then .ico
+	mux.HandleFunc("/icon-192.png", func(w http.ResponseWriter, r *http.Request) {
+		ws.handleStaticAsset(w, r, "static/icon-192.png", "image/png", false, true)
+	})
+	mux.HandleFunc("/icon-512.png", func(w http.ResponseWriter, r *http.Request) {
+		ws.handleStaticAsset(w, r, "static/icon-512.png", "image/png", false, true)
+	})
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		ws.handleStaticAsset(w, r, "favicon.ico", "image/x-icon", false, true)
+	})
 
 	// Health check endpoint for connectivity verification
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -187,47 +171,7 @@ func (ws *ReactWebServer) Shutdown() error {
 		return true
 	})
 
-	// Unregister instance
-	if ws.instanceRegistry != nil {
-		if err := ws.instanceRegistry.UnregisterInstance(); err != nil {
-			log.Printf("Warning: failed to unregister instance: %v", err)
-		}
-	}
-
 	return ws.server.Shutdown(ctx)
-}
-
-// getConfigDir returns the config directory path
-func getConfigDir() string {
-	// Try LEDIT_CONFIG env var first
-	if dir := os.Getenv("LEDIT_CONFIG"); dir != "" {
-		return dir
-	}
-
-	// Try XDG_CONFIG_HOME on Unix-like systems
-	if runtime.GOOS != "windows" {
-		if configHome := os.Getenv("XDG_CONFIG_HOME"); configHome != "" {
-			return filepath.Join(configHome, "ledit")
-		}
-	}
-
-	// Use user home directory
-	homeDir := ""
-	if u, err := user.Current(); err == nil {
-		homeDir = u.HomeDir
-	}
-
-	if homeDir == "" {
-		homeDir = os.Getenv("HOME")
-	}
-
-	if homeDir == "" {
-		// Fallback for Android or special environments
-		return "/data/data/com.termux/files/home/.ledit"
-	}
-
-	// Use .ledit in home directory
-	return filepath.Join(homeDir, ".ledit")
 }
 
 // IsRunning returns true if the web server is running
@@ -250,4 +194,75 @@ func (ws *ReactWebServer) countConnections() int {
 		return true
 	})
 	return count
+}
+
+// handleStaticAsset handles individual asset files (manifest, icons, etc.)
+func (ws *ReactWebServer) handleStaticAsset(w http.ResponseWriter, r *http.Request, embeddedPath string, contentType string, optional ...bool) {
+	// Check if this file is optional (don't return 404)
+	isOptional := len(optional) > 0 && optional[0]
+	// Check if we should look in the static subdirectory
+	lookInStatic := len(optional) > 1 && optional[1]
+
+	// Try embedded filesystem first
+	var data []byte
+	var err error
+
+	// Try the primary path
+	data, err = staticFiles.ReadFile(embeddedPath)
+	if err != nil && lookInStatic && !strings.HasPrefix(embeddedPath, "static/") {
+		// Try with static/ prefix
+		data, err = staticFiles.ReadFile("static/"+embeddedPath)
+	}
+
+	if err != nil {
+		// Fallback to filesystem
+		var fsPath string
+		if lookInStatic {
+			fsPath = "./pkg/webui/static/" + embeddedPath
+		} else {
+			fsPath = "./pkg/webui/static/" + embeddedPath
+		}
+
+		data, err = os.ReadFile(fsPath)
+		if err != nil {
+			if isOptional {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("404 Not Found"))
+			return
+		}
+	}
+
+	// Set content type
+	if contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+
+	// Enable caching for assets
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Write(data)
+}
+
+// CheckPortAvailable checks if a port is available to bind to
+func CheckPortAvailable(port int) bool {
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return false // Port is in use
+	}
+	listener.Close()
+	return true // Port is free
+}
+
+// FindAvailablePort finds an available port starting from a base port
+func FindAvailablePort(basePort int) int {
+	port := basePort
+	for port < basePort+100 {
+		if CheckPortAvailable(port) {
+			return port
+		}
+		port++
+	}
+	return basePort + 100 // Return last attempt even if not available
 }

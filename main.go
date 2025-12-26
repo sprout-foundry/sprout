@@ -1,9 +1,11 @@
 package main
 
-import (
-	"github.com/alantheprice/ledit/cmd"
-)
+import "fmt"
 
 func main() {
-	cmd.Execute()
+    fmt.Println("Hello, World!")
+}
+
+func add(a, b int) int {
+    return a + b
 }

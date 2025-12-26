@@ -1,0 +1,275 @@
+.editor-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(30, 30, 47, 0.98);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0 8px;
+  min-height: 40px;
+}
+
+.tabs-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tabs-list {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  min-width: 120px;
+  max-width: 200px;
+  height: 36px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tab.active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.5);
+  border-bottom-color: #6366f1;
+}
+
+.tab-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.tab-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.tab-name {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.tab.active .tab-name {
+  font-weight: 500;
+  color: white;
+}
+
+.tab-modified {
+  font-size: 12px;
+  color: #ffd93d;
+  flex-shrink: 0;
+  margin-left: 4px;
+  font-weight: bold;
+}
+
+.tab-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  margin-left: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.1s ease;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.tab:hover .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.no-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+}
+
+.no-tabs-icon {
+  font-size: 20px;
+}
+
+.tabs-actions {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.tab-count {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* Custom scrollbar for tabs */
+.tabs-list::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tabs-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabs-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+.tabs-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .tab {
+    min-width: 100px;
+    max-width: 150px;
+    height: 32px;
+    padding: 0 6px;
+  }
+
+  .tab-name {
+    font-size: 12px;
+  }
+
+  .tab-close {
+    opacity: 1; /* Always show close button on mobile */
+  }
+
+  .editor-tabs {
+    padding: 0 4px;
+    min-height: 36px;
+  }
+
+  .tab-icon {
+    font-size: 14px;
+  }
+
+  .tab-count {
+    display: none;
+  }
+}
+
+/* Close Confirmation Dialog */
+.close-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.1s ease;
+}
+
+.close-confirm-dialog {
+  background: linear-gradient(135deg, #2a2a3a 0%, #3a3a4a 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  max-width: 360px;
+  width: 90%;
+  animation: slideUp 0.2s ease;
+}
+
+.close-confirm-dialog .dialog-header {
+  padding: 16px 16px 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.close-confirm-dialog .dialog-header h3 {
+  margin: 0;
+  color: #ffd93d;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.close-confirm-dialog .dialog-body {
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.close-confirm-dialog .dialog-body p {
+  margin: 0 0 8px 0;
+}
+
+.close-confirm-dialog .dialog-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px 16px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  justify-content: flex-end;
+}
+
+.close-confirm-dialog .dialog-btn {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.close-confirm-dialog .dialog-btn.primary {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.close-confirm-dialog .dialog-btn.primary:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.close-confirm-dialog .dialog-btn.danger {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.close-confirm-dialog .dialog-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.3);
+}

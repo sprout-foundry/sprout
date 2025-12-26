@@ -7,12 +7,62 @@
   height: 100vh;
   background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #2d2d3d 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  overflow: hidden;
 }
 
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Editor View Layout */
+.editor-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.editor-content {
+  flex: 1;
+  display: flex;
+  gap: 1px;
+  background: #3a3a4a;
+  overflow: hidden;
+}
+
+.editor-sidebar {
+  width: 300px;
+  min-width: 250px;
+  max-width: 400px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: rgba(30, 30, 47, 0.95);
+  border-right: 1px solid #4a4a5a;
+}
+
+.editor-sidebar .file-tree {
+  flex: 1;
+  overflow: auto;
+}
+
+.editor-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: rgba(20, 20, 35, 0.95);
+}
+
+.editor-main .code-editor {
+  flex: 1;
   overflow: hidden;
 }
 
@@ -78,26 +128,25 @@
     backdrop-filter: blur(2px);
   }
 
-  /* Mobile Layout Adjustments */
-  .editor-view {
+  /* Mobile Editor View Adjustments */
+  .editor-content {
     flex-direction: column;
-    height: 100%;
   }
 
-  .editor-view .file-tree {
+  .editor-sidebar {
     width: 100%;
+    max-width: none;
     height: 35%;
     min-height: 180px;
-    flex-shrink: 0;
+    border-right: none;
     border-bottom: 1px solid #4a4a5a;
   }
 
-  .editor-view .code-editor {
-    flex: 1;
-    min-height: 0;
+  .editor-main {
     height: 65%;
   }
 
+  /* Chat View Mobile Adjustments */
   .chat {
     height: 100%;
     display: flex;
@@ -148,10 +197,12 @@
   }
 
   .mobile-menu-btn {
-    top: 15px;
-    left: 15px;
+    top: 12px;
+    left: 12px;
     padding: 10px 14px;
     font-size: 16px;
+    width: 44px;
+    height: 44px;
   }
 }
 
@@ -165,26 +216,6 @@ body {
 
 html, body, #root {
   height: 100%;
-}
-
-/* Editor View Layout */
-.editor-view {
-  flex: 1;
-  display: flex;
-  gap: 1px;
-  background: #3a3a4a;
-  overflow: hidden;
-}
-
-.editor-view .file-tree {
-  width: 300px;
-  min-width: 250px;
-  flex-shrink: 0;
-}
-
-.editor-view .code-editor {
-  flex: 1;
-  min-width: 0;
 }
 
 /* Custom scrollbar for the entire app */
@@ -213,4 +244,246 @@ html, body, #root {
 
 ::-moz-selection {
   background: rgba(99, 102, 241, 0.3);
+}
+
+/* Adjust sidebar file-tree within editor-sidebar */
+.editor-sidebar .file-tree {
+  border: none;
+  background: transparent;
+}
+
+.editor-sidebar .file-tree .file-tree-header {
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.editor-sidebar .file-tree .current-path {
+  padding: 8px 16px;
+  background: rgba(99, 102, 241, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+}
+
+.editor-sidebar .file-tree .file-list {
+  padding: 8px 0;
+}
+
+.editor-sidebar .file-tree .file-item {
+  padding: 6px 16px;
+}
+
+.editor-sidebar .file-tree .file-item:hover {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.editor-sidebar .file-tree .file-item.selected {
+  background: rgba(99, 102, 241, 0.3);
+}
+
+/* Pane Controls */
+.pane-controls {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  justify-content: flex-end;
+}
+
+.pane-control-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.8);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pane-control-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: white;
+}
+
+.pane-control-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Editor Panes Layout */
+.panes-container {
+  display: flex;
+  flex: 1;
+  gap: 1px;
+  background: #3a3a4a;
+  overflow: hidden;
+}
+
+/* Single Pane */
+.panes-container.layout-single {
+  display: flex;
+}
+
+.panes-container.layout-single .pane-wrapper {
+  flex: 0 0 260px;
+}
+
+.panes-container.layout-single .pane-wrapper:nth-child(n+2) {
+  flex: 1;
+}
+
+/* Split Vertical (2 panes side by side) */
+.panes-container.layout-split-vertical {
+  display: flex;
+}
+
+.panes-container.layout-split-vertical .pane-wrapper {
+  flex: 1;
+  min-width: 200px;
+}
+
+.panes-container.layout-split-vertical .pane-wrapper:first-child {
+  flex: 0 0 260px;
+}
+
+.panes-container.layout-split-vertical .pane-wrapper:not(:first-child):not(:last-child) {
+  border-left: 1px solid #4a4a5a;
+}
+
+/* Split Horizontal (2 panes stacked) */
+.panes-container.layout-split-horizontal {
+  display: flex;
+  flex-direction: column;
+}
+
+.panes-container.layout-split-horizontal .pane-wrapper {
+  flex: 1;
+  min-height: 200px;
+}
+
+.panes-container.layout-split-horizontal .pane-wrapper:first-child {
+  flex: 0 0 auto;
+}
+
+.panes-container.layout-split-horizontal .pane-wrapper:not(:first-child):not(:last-child) {
+  border-top: 1px solid #4a4a5a;
+}
+
+/* Split Grid (3 panes: files + 2 editors) */
+.panes-container.layout-split-grid {
+  display: flex;
+}
+
+.panes-container.layout-split-grid .pane-wrapper {
+  flex: 1;
+  min-width: 200px;
+}
+
+.panes-container.layout-split-grid .pane-wrapper:first-child {
+  flex: 0 0 260px;
+}
+
+.panes-container.layout-split-grid .pane-wrapper:not(:first-child) {
+  border-left: 1px solid #4a4a5a;
+}
+
+/* Pane Wrappers */
+.pane-wrapper {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #2a2a3a;
+}
+
+.filetree-wrapper {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgba(30, 30, 47, 0.95);
+}
+
+.editor-pane-wrapper {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  flex: 1;
+}
+
+.editor-pane-wrapper.active {
+  background: #2a2a3a;
+}
+
+.editor-pane-wrapper:not(.active)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.editor-pane-wrapper:not(.active) {
+  cursor: pointer;
+}
+
+.editor-pane-wrapper:not(.active):hover::before {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive layouts */
+@media (max-width: 1024px) {
+  .panes-container.layout-split-grid .pane-wrapper:first-child {
+    flex: 0 0 200px;
+  }
+  
+  .panes-container.layout-split-vertical .pane-wrapper:first-child {
+    flex: 0 0 200px;
+  }
+  
+  .panes-container.layout-split-horizontal .pane-wrapper:first-child {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 768px) {
+  /* On mobile, hide file tree and collapse splits */
+  .filetree-wrapper {
+    display: none;
+  }
+  
+  .panes-container {
+    flex-direction: column !important;
+  }
+  
+  .pane-wrapper {
+    min-width: 100% !important;
+    flex: 1 !important;
+  }
+  
+  .pane-wrapper:not(:first-child):not(:last-child) {
+    border-left: none;
+    border-top: 1px solid #4a4a5a;
+  }
+  
+  .pane-controls {
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+  
+  .pane-control-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 8px;
+  }
 }

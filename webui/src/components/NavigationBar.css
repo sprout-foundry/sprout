@@ -1,0 +1,140 @@
+.navigation-bar {
+  background: linear-gradient(135deg, #1e1e2f 0%, #2d2d3d 100%);
+  border-bottom: 1px solid #3a3a4a;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  min-height: 60px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 100;
+}
+
+.nav-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.app-logo {
+  font-size: 20px;
+  font-weight: 600;
+  color: #6366f1;
+  margin-right: 40px;
+  user-select: none;
+  letter-spacing: 0.5px;
+}
+
+.tab-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.nav-tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.nav-tab:active {
+  transform: translateY(0);
+}
+
+.nav-tab.active {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.tab-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.tab-label {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .navigation-bar {
+    padding: 0 12px;
+    min-height: 56px;
+  }
+
+  .app-logo {
+    font-size: 18px;
+    margin-right: 16px;
+  }
+
+  .tab-container {
+    gap: 4px;
+    padding: 3px;
+  }
+
+  .nav-tab {
+    padding: 8px 12px;
+    gap: 6px;
+  }
+
+  .tab-container .tab-label {
+    display: none;
+  }
+
+  .nav-tab .tab-icon {
+    font-size: 20px;
+  }
+
+  .nav-tab.active {
+    padding: 8px 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-tabs {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .app-logo {
+    text-align: center;
+    margin-right: 0;
+    margin-bottom: 4px;
+  }
+
+  .tab-container {
+    justify-content: center;
+  }
+}
+
+/* Focus states for accessibility */
+.nav-tab:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}

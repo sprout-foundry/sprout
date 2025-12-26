@@ -16,6 +16,8 @@ type MessageConversionOptions struct {
 	// Include tool_call_id when present. Required for OpenRouter when sending
 	// tool execution results back to the model.
 	IncludeToolCallID bool
+	// Force tool call type to specific value (e.g., "function" for Mistral)
+	ForceToolCallType string
 }
 
 // BuildOpenAIChatMessages converts agent messages into OpenAI/OpenRouter style
@@ -80,9 +82,15 @@ func BuildOpenAIChatMessages(messages []api.Message, opts MessageConversionOptio
 		if len(msg.ToolCalls) > 0 {
 			toolCalls := make([]map[string]interface{}, len(msg.ToolCalls))
 			for i, tc := range msg.ToolCalls {
+				toolCallType := tc.Type
+				// Force tool call type if specified (needed for providers like Mistral)
+				if opts.ForceToolCallType != "" {
+					toolCallType = opts.ForceToolCallType
+				}
+
 				toolCall := map[string]interface{}{
 					"id":   tc.ID,
-					"type": tc.Type,
+					"type": toolCallType,
 					"function": map[string]interface{}{
 						"name":      tc.Function.Name,
 						"arguments": tc.Function.Arguments,

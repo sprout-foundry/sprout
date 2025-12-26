@@ -334,12 +334,19 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 		// Add tool results immediately after the assistant message with tool calls
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
-
-		// Add tool execution summary only if provider doesn't require strict role alternation
-		if !ch.agent.skipToolExecutionSummary() {
-			ch.appendToolExecutionSummary(choice.Message.ToolCalls)
-		}
 		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
+
+		// Additional debugging for DeepSeek tool call format
+		if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
+			ch.agent.debugLog("🔍 DeepSeek conversation flow check:\n")
+			for i, msg := range ch.agent.messages {
+				if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+					ch.agent.debugLog("  [%d] Assistant with %d tool_calls\n", i, len(msg.ToolCalls))
+				} else if msg.Role == "tool" {
+					ch.agent.debugLog("  [%d] Tool response for tool_call_id: %s\n", i, msg.ToolCallId)
+				}
+			}
+		}
 
 		toolLogs := ch.flushToolLogsToOutput()
 		turn.ToolLogs = append(turn.ToolLogs, toolLogs...)
@@ -404,9 +411,28 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 
 	// Handle finish reason to respect model's intent
+	ch.agent.debugLog("🔍 Finish reason received: '%s' (len=%d)\n", choice.FinishReason, len(choice.FinishReason))
+	contentPreview := contentUsed
+	if len(contentPreview) > 200 {
+		contentPreview = contentPreview[:200] + "..."
+	}
+	ch.agent.debugLog("🔍 Content length: %d, preview: %q\n", len(contentUsed), contentPreview)
+
 	if choice.FinishReason == "" {
 		// No finish reason provided - model expects to continue working
-		ch.agent.debugLog("🔄 No finish reason - model expects to continue\n")
+		// BUT: First check if this is truly incomplete or just a streaming artifact
+		// Some providers don't send finish_reason in every chunk
+		// Only continue if the response actually appears incomplete
+		isIncomplete := ch.responseValidator.IsIncomplete(contentUsed)
+		ch.agent.debugLog("🔍 IsIncomplete() result: %v\n", isIncomplete)
+
+		if !isIncomplete {
+			// Response looks complete despite no finish_reason - accept it
+			ch.agent.debugLog("✅ No finish_reason but response appears complete - accepting\n")
+			ch.displayFinalResponse(contentUsed)
+			return ch.finalizeTurn(turn, true)
+		}
+		ch.agent.debugLog("🔄 No finish reason and response appears incomplete - asking model to continue\n")
 		return ch.finalizeTurn(turn, false) // Continue conversation
 	}
 
@@ -487,18 +513,12 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 	case "tool_calls":
 		return false, "model tool_calls finish"
 	case "stop":
-		if ch.responseValidator.IsIncomplete(content) {
-			fmt.Printf("🏁 Model finish reason: stop - Response appears incomplete, requesting continuation\n")
-			ch.agent.debugLog("⚠️ Model signaled 'stop' but response appears incomplete\n")
-			ch.handleIncompleteResponse()
-			return false, "model stop with incomplete content"
-		} else {
-			// Model stopped with complete response - respect model's judgment
-			fmt.Printf("🏁 Model finish reason: stop - Response complete, finishing conversation\n")
-			ch.agent.debugLog("🏁 Model signaled 'stop' with complete response\n")
-			ch.displayFinalResponse(content)
-			return true, "completion"
-		}
+		// Model explicitly signaled it's done - respect that decision
+		// Don't override the model's judgment about whether its response is complete
+		fmt.Printf("🏁 Model finish reason: stop - Response complete, finishing conversation\n")
+		ch.agent.debugLog("🏁 Model signaled 'stop' - accepting response as complete\n")
+		ch.displayFinalResponse(content)
+		return true, "completion"
 	case "length":
 		fmt.Printf("🏁 Model finish reason: length - Hit limit, requesting continuation\n")
 		ch.agent.debugLog("⚠️ Model hit length limit, asking to continue\n")
@@ -538,11 +558,6 @@ func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn Tur
 		// Execute the parsed tool calls
 		toolResults := ch.toolExecutor.ExecuteTools(fallbackResult.ToolCalls)
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
-
-		// Add tool execution summary only if provider doesn't require strict role alternation
-		if !ch.agent.skipToolExecutionSummary() {
-			ch.appendToolExecutionSummary(fallbackResult.ToolCalls)
-		}
 		ch.agent.debugLog("✔️ Executed %d fallback-parsed tool calls\n", len(toolResults))
 
 		turn.ToolCalls = append(turn.ToolCalls, fallbackResult.ToolCalls...)

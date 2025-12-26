@@ -40,28 +40,15 @@ func (ch *ConversationHandler) flushToolLogsToOutput() []string {
 	return logs
 }
 
-// appendToolExecutionSummary adds a summary of tool execution to the conversation
-func (ch *ConversationHandler) appendToolExecutionSummary(toolCalls []api.ToolCall) {
-	if len(toolCalls) == 0 {
-		return
-	}
-
-	names := make([]string, 0, len(toolCalls))
-	for _, tc := range toolCalls {
-		names = append(names, tc.Function.Name)
-	}
-
-	summary := fmt.Sprintf("Tool execution complete: %s.", strings.Join(names, ", "))
-	ch.agent.messages = append(ch.agent.messages, api.Message{
-		Role:    "assistant",
-		Content: summary,
-	})
-}
-
 // sanitizeToolMessages removes orphaned or duplicate tool messages
 func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []api.Message {
 	if len(messages) == 0 {
 		return messages
+	}
+
+	// Debug logging for DeepSeek
+	if ch.agent != nil && strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
+		ch.agent.debugLog("🔍 DeepSeek sanitizing %d messages\n", len(messages))
 	}
 
 	sanitized := make([]api.Message, 0, len(messages))
@@ -109,5 +96,10 @@ func (ch *ConversationHandler) logDroppedToolMessage(reason string, msg api.Mess
 		snippet = snippet[:77] + "..."
 	}
 
-	ch.agent.debugLog("⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+	// Enhanced logging for DeepSeek
+	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
+		ch.agent.debugLog("🚨 DeepSeek: ⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+	} else {
+		ch.agent.debugLog("⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+	}
 }

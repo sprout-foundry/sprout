@@ -48,7 +48,8 @@ func AddTodo(title, description, priority string) string {
 	}
 
 	globalTodoManager.items = append(globalTodoManager.items, item)
-	return fmt.Sprintf("✅ Added todo: %s (ID: %s)", title, item.ID)
+	// Return compact response - model just added it, doesn't need details echoed back
+	return fmt.Sprintf("✅ Added %s", item.ID)
 }
 
 // AddBulkTodos adds multiple todo items at once
@@ -80,9 +81,15 @@ func AddBulkTodos(todos []struct {
 	// Unlock before generating markdown to avoid deadlock (GetTodoListMarkdown uses RLock)
 	globalTodoManager.mutex.Unlock()
 
-	// Show the complete todo list for better context
-	markdown := GetTodoListMarkdown()
-	return fmt.Sprintf("📝 Added %d todo(s)\n\n**Todo List:**\n%s", len(todos), markdown)
+	// Return compact summary - model just made the changes, doesn't need full list back
+	if len(todos) == 1 {
+		return fmt.Sprintf("✅ Added todo: %s (ID: %s)", todos[0].Title, fmt.Sprintf("todo_%d", len(globalTodoManager.items)))
+	}
+	titles := make([]string, len(todos))
+	for i, t := range todos {
+		titles[i] = t.Title
+	}
+	return fmt.Sprintf("📝 Added %d todos: %s", len(todos), strings.Join(titles, ", "))
 }
 
 // UpdateTodoStatus updates the status of a todo item
@@ -101,16 +108,16 @@ func UpdateTodoStatus(id, status string) string {
 
 	globalTodoManager.mutex.Lock()
 
-	var header string
 	for i, item := range globalTodoManager.items {
 		if item.ID == id {
 			globalTodoManager.items[i].Status = status
 			globalTodoManager.items[i].UpdatedAt = time.Now()
 
-			// Build header while holding the lock
+			// Build compact response - model just made the change, doesn't need full list back
+			var response string
 			switch status {
 			case "in_progress":
-				header = fmt.Sprintf("🔄 Starting work on: %s\n\n", item.Title)
+				response = fmt.Sprintf("🔄 Updated %s to in_progress", item.ID)
 			case "completed":
 				// Count remaining todos to optionally add context
 				remainingCount := 0
@@ -120,19 +127,19 @@ func UpdateTodoStatus(id, status string) string {
 					}
 				}
 				if remainingCount == 0 {
-					header = "🎉 All todos completed!\n\n"
+					response = fmt.Sprintf("🎉 Completed %s - All todos done!", item.ID)
 				} else {
-					header = fmt.Sprintf("✅ Completed: %s\n\n", item.Title)
+					response = fmt.Sprintf("✅ Completed %s (%d remaining)", item.ID, remainingCount)
 				}
 			case "cancelled":
-				header = fmt.Sprintf("❌ Cancelled: %s\n\n", item.Title)
+				response = fmt.Sprintf("❌ Cancelled %s", item.ID)
 			default:
-				header = fmt.Sprintf("📝 Updated: %s to %s\n\n", item.Title, status)
+				response = fmt.Sprintf("📝 Updated %s to %s", item.ID, status)
 			}
 
-			// Unlock before generating markdown to avoid deadlock
+			// Unlock before returning
 			globalTodoManager.mutex.Unlock()
-			return header + "**Todo List:**\n" + GetTodoListMarkdown()
+			return response
 		}
 	}
 

@@ -424,25 +424,84 @@ function App() {
     }));
   }, []);
 
-  const handleGitCommit = useCallback((message: string, files: string[]) => {
+  const handleGitCommit = useCallback(async (message: string, files: string[]) => {
     console.log('Git commit:', message, files);
-    // TODO: Implement actual git commit API call
-    // This would call the backend to perform git operations
+    try {
+      const response = await fetch('/api/git/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, files })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create commit');
+      }
+
+      const data = await response.json();
+      console.log('Commit successful:', data);
+      return data;
+    } catch (err) {
+      console.error('Failed to commit:', err);
+      throw err;
+    }
   }, []);
 
-  const handleGitStage = useCallback((files: string[]) => {
+  const handleGitStage = useCallback(async (files: string[]) => {
     console.log('Git stage:', files);
-    // TODO: Implement actual git stage API call
+    try {
+      for (const file of files) {
+        const response = await fetch('/api/git/stage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: file })
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to stage ${file}`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to stage files:', err);
+      throw err;
+    }
   }, []);
 
-  const handleGitUnstage = useCallback((files: string[]) => {
+  const handleGitUnstage = useCallback(async (files: string[]) => {
     console.log('Git unstage:', files);
-    // TODO: Implement actual git unstage API call
+    try {
+      for (const file of files) {
+        const response = await fetch('/api/git/unstage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: file })
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to unstage ${file}`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to unstage files:', err);
+      throw err;
+    }
   }, []);
 
-  const handleGitDiscard = useCallback((files: string[]) => {
+  const handleGitDiscard = useCallback(async (files: string[]) => {
     console.log('Git discard:', files);
-    // TODO: Implement actual git discard API call
+    try {
+      for (const file of files) {
+        const response = await fetch('/api/git/discard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: file })
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to discard ${file}`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to discard files:', err);
+      throw err;
+    }
   }, []);
 
   const handleTerminalCommand = useCallback(async (command: string) => {

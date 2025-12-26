@@ -6,24 +6,85 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
+// SafeConn wraps a WebSocket connection with write mutex and panic recovery
+type SafeConn struct {
+	conn    *websocket.Conn
+	writeMu sync.Mutex
+	closed  bool
+}
+
+// NewSafeConn creates a new safe connection wrapper
+func NewSafeConn(conn *websocket.Conn) *SafeConn {
+	return &SafeConn{
+		conn:   conn,
+		closed: false,
+	}
+}
+
+// WriteJSON safely writes JSON to the WebSocket connection
+func (sc *SafeConn) WriteJSON(v interface{}) error {
+	if sc.closed {
+		return nil // Silently ignore writes to closed connections
+	}
+
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
+
+	if sc.closed {
+		return nil
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("WebSocket write panic recovered: %v", r)
+			sc.closed = true
+		}
+	}()
+
+	return sc.conn.WriteJSON(v)
+}
+
+// Close closes the underlying connection
+func (sc *SafeConn) Close() error {
+	sc.writeMu.Lock()
+	sc.closed = true
+	sc.writeMu.Unlock()
+	return sc.conn.Close()
+}
+
+// Underlying returns the underlying websocket.Conn for read operations (still need to be careful)
+func (sc *SafeConn) Underlying() *websocket.Conn {
+	return sc.conn
+}
+
 // handleWebSocket handles WebSocket connections for real-time events
 func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("WebSocket handler panic: %v", r)
+		}
+	}()
+
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
 		return
 	}
-	defer conn.Close()
+
+	// Wrap connection in SafeConn to prevent concurrent write panics
+	safeConn := NewSafeConn(conn)
+	defer safeConn.Close()
 
 	// Generate unique session ID for this connection
 	sessionID := fmt.Sprintf("ws_%d", time.Now().UnixNano())
 
-	// Store connection with metadata
+	// Store the underlying connection with metadata
 	ws.connections.Store(conn, &ConnectionInfo{
 		SessionID:   sessionID,
 		Type:        "webui",
@@ -34,7 +95,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	log.Printf("WebSocket client connected: %s", sessionID)
 
 	// Send initial connection status
-	conn.WriteJSON(map[string]interface{}{
+	safeConn.WriteJSON(map[string]interface{}{
 		"type": "connection_status",
 		"data": map[string]interface{}{"connected": true, "session_id": sessionID},
 	})
@@ -58,6 +119,12 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("WebSocket read goroutine panic recovered: %v", r)
+			}
+		}()
+
 		conn.SetReadLimit(512 * 1024) // 512KB max message size
 		for {
 			select {
@@ -74,7 +141,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 						log.Printf("WebSocket %s closed: %v", sessionID, err)
 					} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 						// Heartbeat timeout, send ping
-						if err := conn.WriteJSON(map[string]interface{}{
+						if err := safeConn.WriteJSON(map[string]interface{}{
 							"type": "ping",
 							"data": map[string]interface{}{"timestamp": time.Now().Unix()},
 						}); err != nil {
@@ -89,7 +156,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 				}
 
 				// Handle incoming WebSocket messages
-				ws.handleWebSocketMessage(conn, msg)
+				ws.handleWebSocketMessage(safeConn, msg)
 			}
 		}
 	}()
@@ -102,7 +169,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 			return
 
 		case event := <-eventCh:
-			if err := conn.WriteJSON(event); err != nil {
+			if err := safeConn.WriteJSON(event); err != nil {
 				log.Printf("WebSocket %s write error: %v", sessionID, err)
 				return
 			}
@@ -115,7 +182,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 }
 
 // handleWebSocketMessage processes incoming WebSocket messages
-func (ws *ReactWebServer) handleWebSocketMessage(conn *websocket.Conn, msg map[string]interface{}) {
+func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[string]interface{}) {
 	msgType, ok := msg["type"].(string)
 	if !ok {
 		return
@@ -124,7 +191,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(conn *websocket.Conn, msg map[s
 	switch msgType {
 	case "ping":
 		// Respond to ping with pong
-		conn.WriteJSON(map[string]interface{}{
+		safeConn.WriteJSON(map[string]interface{}{
 			"type": "pong",
 			"data": map[string]interface{}{"timestamp": time.Now().Unix()},
 		})
@@ -142,7 +209,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(conn *websocket.Conn, msg map[s
 		// Send current stats immediately
 		go func() {
 			stats := ws.gatherStats()
-			conn.WriteJSON(map[string]interface{}{
+			safeConn.WriteJSON(map[string]interface{}{
 				"type": "stats_update",
 				"data": stats,
 			})
@@ -152,12 +219,21 @@ func (ws *ReactWebServer) handleWebSocketMessage(conn *websocket.Conn, msg map[s
 
 // handleTerminalWebSocket handles terminal WebSocket connections
 func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Terminal WebSocket handler panic: %v", r)
+		}
+	}()
+
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Terminal WebSocket upgrade error: %v", err)
 		return
 	}
-	defer conn.Close()
+
+	// Wrap connection in SafeConn to prevent concurrent write panics
+	safeConn := NewSafeConn(conn)
+	defer safeConn.Close()
 
 	// Generate session ID
 	sessionID := fmt.Sprintf("terminal_%d", time.Now().UnixNano())
@@ -168,14 +244,14 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	session, err := ws.terminalManager.CreateSession(sessionID)
 	if err != nil {
 		log.Printf("Failed to create terminal session: %v", err)
-		conn.WriteJSON(map[string]interface{}{
+		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "Failed to create terminal session"},
 		})
 		return
 	}
 
-	// Store connection with metadata
+	// Store the underlying connection with metadata
 	ws.connections.Store(conn, &ConnectionInfo{
 		SessionID:   sessionID,
 		Type:        "terminal",
@@ -184,7 +260,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	defer ws.connections.Delete(conn)
 
 	// Send session created message
-	conn.WriteJSON(map[string]interface{}{
+	safeConn.WriteJSON(map[string]interface{}{
 		"type": "session_created",
 		"data": map[string]string{"session_id": sessionID},
 	})
@@ -219,7 +295,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 						return
 					}
 
-					if err := conn.WriteJSON(map[string]interface{}{
+					if err := safeConn.WriteJSON(map[string]interface{}{
 						"type": "output",
 						"data": map[string]string{
 							"session_id": sessionID,
@@ -285,7 +361,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				}
 
 				if err := ws.terminalManager.ExecuteCommand(sessionID, input); err != nil {
-					conn.WriteJSON(map[string]interface{}{
+					safeConn.WriteJSON(map[string]interface{}{
 						"type": "error",
 						"data": map[string]string{
 							"session_id": sessionID,
@@ -308,7 +384,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 					}
 				}
 
-				conn.WriteJSON(map[string]interface{}{
+				safeConn.WriteJSON(map[string]interface{}{
 					"type": "resize_ack",
 					"data": map[string]interface{}{
 						"session_id": sessionID,
@@ -317,7 +393,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				})
 
 			case "focus":
-				conn.WriteJSON(map[string]interface{}{
+				safeConn.WriteJSON(map[string]interface{}{
 					"type": "focus_ack",
 					"data": map[string]interface{}{
 						"session_id": sessionID,
@@ -327,7 +403,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				})
 
 			case "blur":
-				conn.WriteJSON(map[string]interface{}{
+				safeConn.WriteJSON(map[string]interface{}{
 					"type": "blur_ack",
 					"data": map[string]interface{}{
 						"session_id": sessionID,

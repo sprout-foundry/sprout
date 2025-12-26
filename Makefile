@@ -96,16 +96,43 @@ build-ui:
 		echo "Error: webui directory not found"; \
 		exit 1; \
 	fi
-	cd webui && npm run build
+	@# Install npm dependencies
+	@cd webui && npm install
+	@cd webui && npm run build
 	@echo "React web UI build completed in webui/build/"
 
 # Build React web UI and deploy to Go static directory
-deploy-ui: build-ui
+deploy-ui:
 	@echo "Deploying React web UI to Go static directory..."
+	@if [ ! -d "webui" ]; then \
+		echo "Error: webui directory not found"; \
+		exit 1; \
+	fi
+	@# Install npm dependencies
+	@cd webui && npm install
+	@# Build React UI
+	@cd webui && npm run build
+	@echo "React web UI build completed in webui/build/"
+	@# Deploy to Go static directory
 	@if [ ! -d "pkg/webui/static" ]; then \
 		mkdir -p pkg/webui/static; \
 	fi
-	cp -r webui/build/* pkg/webui/static/
+	@rm -rf pkg/webui/static/*
+	@# Copy root-level files (index.html, manifest.json, etc.)
+	@cp webui/build/*.html webui/build/*.json webui/build/*.xml webui/build/sw.js pkg/webui/static/ 2>/dev/null || true
+	@# Copy static assets directly (without the 'static/' prefix in the destination)
+	@if [ -d "webui/build/static/js" ]; then \
+		mkdir -p pkg/webui/static/js && \
+		cp -r webui/build/static/js/* pkg/webui/static/js/; \
+	fi
+	@if [ -d "webui/build/static/css" ]; then \
+		mkdir -p pkg/webui/static/css && \
+		cp -r webui/build/static/css/* pkg/webui/static/css/; \
+	fi
+	@if [ -d "webui/build/static/media" ] && [ "$$(ls -A webui/build/static/media)" ]; then \
+		mkdir -p pkg/webui/static/media && \
+		cp -r webui/build/static/media/* pkg/webui/static/media/; \
+	fi
 	@echo "React web UI deployed to pkg/webui/static/"
 	@echo "Run 'make build' to create Go binary with embedded UI"
 

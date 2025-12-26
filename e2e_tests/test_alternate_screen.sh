@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Function to return the test name
+get_test_name() {
+    echo "Testing alternate screen buffer"
+}
+
 # Test script for alternate screen functionality
 echo "Testing alternate screen buffer..."
 

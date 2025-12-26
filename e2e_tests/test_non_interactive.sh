@@ -1,4 +1,8 @@
 #!/bin/bash
+# Function to return test name
+get_test_name() {
+    echo "Testing non-interactive mode"
+}
 set -e
 
 echo "Testing non-interactive mode (piped output)..."

@@ -1,4 +1,8 @@
 #!/bin/bash
+# Function to return test name
+get_test_name() {
+    echo "Testing CI quick command"
+}
 set -e
 
 echo "Testing CI mode with simple query..."

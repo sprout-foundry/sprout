@@ -52,7 +52,8 @@ const CommandInput: React.FC<CommandInputProps> = ({
       setCurrentInput(value);
       resetHistoryNavigation();
     }
-  }, [value, currentInput]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]); // Only sync when external value changes, NOT when currentInput changes (to avoid loops)
 
   // Auto-resize textarea based on content
   useEffect(() => {

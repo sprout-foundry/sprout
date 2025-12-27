@@ -13,6 +13,7 @@ import (
 	"time"
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/events"
 )
 
 // ToolHandler represents a function that can handle a tool execution
@@ -541,6 +542,13 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 
 	result, err := tools.WriteFile(ctx, filePath, content)
 	a.debugLog("Write file result: %s, error: %v\n", result, err)
+
+	// Publish file change event for web UI auto-sync
+	if err == nil && a.eventBus != nil {
+		a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(filePath, "write", content))
+		a.debugLog("Published file_changed event: %s (write)\n", filePath)
+	}
+
 	return result, err
 }
 
@@ -580,6 +588,20 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 	result, err := tools.EditFile(ctx, filePath, oldString, newString)
 	a.debugLog("Edit file result: %s, error: %v\n", result, err)
+
+	// Publish file change event for web UI auto-sync
+	if err == nil && a.eventBus != nil {
+		// Read new content to include in event
+		var eventContent string
+		if eventContent, err = tools.ReadFile(ctx, filePath); err == nil {
+			a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(filePath, "edit", eventContent))
+			a.debugLog("Published file_changed event: %s (edit)\n", filePath)
+		} else {
+			// Still publish event even if we can't read file (just with empty content)
+			a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(filePath, "edit", ""))
+			a.debugLog("Published file_changed event: %s (edit, no content)\n", filePath)
+		}
+	}
 
 	// Display diff if successful
 	if err == nil {

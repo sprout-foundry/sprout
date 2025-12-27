@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 import './NavigationBar.css';
 
 type ViewType = 'chat' | 'editor' | 'git' | 'logs';
@@ -12,6 +13,11 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
   currentView,
   onViewChange
 }) => {
+  const { theme, toggleTheme } = useTheme();
+
+  const themeIcon = theme === 'dark' ? '☀️' : '🌙';
+  const themeLabel = theme === 'dark' ? 'Light mode' : 'Dark mode';
+
   const tabs = [
     { id: 'chat' as ViewType, icon: '💬', label: 'Chat' },
     { id: 'editor' as ViewType, icon: '📝', label: 'Editor' },
@@ -37,6 +43,14 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
           ))}
         </div>
       </div>
+      <button
+        className="theme-toggle-btn"
+        onClick={toggleTheme}
+        aria-label={themeLabel}
+        title={themeLabel}
+      >
+        <span>{themeIcon}</span>
+      </button>
     </div>
   );
 };

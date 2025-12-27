@@ -7,6 +7,11 @@
   border-radius: 8px;
 }
 
+/* Light theme support */
+.editor-pane[data-theme='light'] {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
 .editor-pane.empty {
   justify-content: center;
   align-items: center;
@@ -14,75 +19,7 @@
 }
 
 .pane-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 13px;
-}
-
-.pane-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
-}
-
-.pane-info .file-name {
-  color: #e0e0e0;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 14px;
-}
-
-.pane-info .file-path {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pane-info .modified-indicator {
-  display: inline-block;
-  font-size: 11px;
-  color: #ffd93d;
-  align-self: flex-start;
-}
-
-.pane-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.pane-actions button {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  color: rgba(255, 255, 255, 0.8);
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pane-actions button:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.2);
-  color: white;
-}
-
-.pane-actions button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+  display: none; /* Hidden since we now have toolbar */
 }
 
 .pane-content {

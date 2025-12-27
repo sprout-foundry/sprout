@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { EditorView, keymap } from '@codemirror/view';
+import { EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
@@ -15,7 +15,9 @@ import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { EditorBuffer } from '../types/editor';
+import EditorToolbar from './EditorToolbar';
 import './EditorPane.css';
 
 interface FileInfo {
@@ -46,8 +48,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<string>('');
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState<boolean>(false);
-  const [pendingFile, setPendingFile] = useState<EditorBuffer | null>(null);
+  const [showLineNumbers, setShowLineNumbers] = useState<boolean>(true);
 
   const {
     panes,
@@ -59,12 +60,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     setBufferModified
   } = useEditorManager();
 
-  // Get the buffer for this pane
+  const { theme } = useTheme();
+
+  // Get buffer for this pane
   const pane = panes.find(p => p.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
 
   // Get language support based on file extension
-  const getLanguageSupport = (ext?: string) => {
+  const getLanguageSupport = useCallback((ext?: string) => {
     if (!ext) return [];
 
     switch (ext.toLowerCase()) {
@@ -89,10 +92,17 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       default:
         return [];
     }
-  };
+  }, []);
+
+  // Get theme extension based on current theme
+  const getThemeExtension = useCallback(() => {
+    // For now, we use oneDark but support light theme via CSS overrides
+    // A full light theme implementation would require additional packages
+    return oneDark;
+  }, []);
 
   // Load file content
-  const loadFile = async (filePath: string) => {
+  const loadFile = useCallback(async (filePath: string) => {
     setLoading(true);
     setError(null);
 
@@ -105,7 +115,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       const data: FileResponse = await response.json();
       if (data.message === 'success') {
         setLocalContent(data.content);
-        updateBufferContent(paneId!, data.content);
+        updateBufferContent(paneId, data.content);
 
         // Update editor if it exists
         if (viewRef.current) {
@@ -125,7 +135,45 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [paneId, updateBufferContent]);
+
+  // Go to specific line
+  const handleGoToLine = useCallback((lineNum: number) => {
+    if (!viewRef.current) return;
+
+    // Use gotoLine command from CodeMirror commands
+    const dispatch = viewRef.current;
+    const state = dispatch.state;
+    const doc = state.doc;
+
+    // Convert line number (1-based) to position
+    const line = Math.min(Math.max(lineNum - 1, 0), doc.lines - 1);
+    const pos = doc.line(line + 1).from;
+
+    dispatch.dispatch({
+      selection: { anchor: pos, head: pos },
+      scrollIntoView: true
+    });
+
+    // Focus the editor after navigation
+    dispatch.focus();
+  }, []);
+
+  // Toggle line numbers
+  const handleToggleLineNumbers = useCallback(() => {
+    setShowLineNumbers(prev => !prev);
+  }, []);
+
+  // Save buffer
+  const handleSave = useCallback(async () => {
+    if (!buffer || !viewRef.current) return;
+
+    try {
+      await saveBuffer(paneId);
+    } catch (err) {
+      setError('Failed to save file');
+    }
+  }, [buffer, paneId, saveBuffer]);
 
   // Load file when buffer changes
   useEffect(() => {
@@ -162,7 +210,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
     // Load file from server
     loadFile(buffer.file.path);
-  }, [buffer?.id]);
+  }, [buffer?.id, buffer?.isModified, buffer?.content, buffer?.file, loadFile]);
 
   // Initialize CodeMirror editor
   useEffect(() => {
@@ -172,47 +220,87 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       if (update.docChanged) {
         const newContent = update.state.doc.toString();
         setLocalContent(newContent);
-        updateBufferContent(paneId!, newContent);
-        setBufferModified(paneId!, newContent !== buffer?.originalContent);
+        updateBufferContent(paneId, newContent);
+        setBufferModified(paneId, newContent !== buffer?.originalContent);
+
+        // Update cursor position
+        const selection = update.state.selection.main;
+        if (selection) {
+          const line = update.state.doc.lineAt(selection.head).number;
+          const column = selection.head - update.state.doc.line(selection.head).from;
+          updateBufferCursor(paneId, { line, column });
+        }
       }
     });
 
-    const saveKeymap = {
-      key: 'Mod-s',
-      preventDefault: true,
-      run: () => {
-        handleSave();
-        return true;
+    // Keyboard shortcuts
+    const customKeymap = [
+      {
+        key: 'Mod-s',
+        preventDefault: true,
+        run: () => {
+          handleSave();
+          return true;
+        }
+      },
+      {
+        key: 'Mod-l',
+        preventDefault: true,
+        run: () => {
+          handleToggleLineNumbers();
+          return true;
+        }
+      },
+      {
+        key: 'Mod-g',
+        preventDefault: true,
+        run: (view: EditorView) => {
+          // Trigger go to line via an event that the toolbar handles
+          const event = new CustomEvent('editor-goto-line');
+          document.dispatchEvent(event);
+          return true;
+        }
       }
-    };
+    ];
+
+    const extensions = [
+      updateListener,
+      keymap.of(defaultKeymap),
+      keymap.of([indentWithTab]),
+      keymap.of(searchKeymap),
+      keymap.of(customKeymap),
+      search(),
+      autocompletion(),
+      getThemeExtension(),
+      showLineNumbers ? lineNumbers() : [],
+      EditorView.theme({
+        '&': {
+          height: '100%',
+          fontSize: '13px',
+          fontFamily: "'Monaco', 'Menlo', 'Fira Code', monospace"
+        },
+        '.cm-content': {
+          padding: '16px'
+        },
+        '.cm-focused': {
+          outline: 'none'
+        },
+        '.cm-gutters': {
+          backgroundColor: 'var(--gutter-bg, #1e1e1e)',
+          border: 'none',
+          color: 'var(--gutter-fg, #666)'
+        },
+        '.cm-scroller': {
+          fontFamily: 'inherit'
+        }
+      }),
+      EditorView.lineWrapping,
+      ...getLanguageSupport(buffer?.file.ext)
+    ];
 
     const state = EditorState.create({
       doc: localContent,
-      extensions: [
-        updateListener,
-        keymap.of(defaultKeymap),
-        keymap.of([indentWithTab]),
-        keymap.of(searchKeymap),
-        keymap.of([saveKeymap]),
-        search(),
-        autocompletion(),
-        oneDark,
-        EditorView.theme({
-          '&': {
-            height: '100%',
-            fontSize: '13px',
-            fontFamily: "'Monaco', 'Menlo', monospace"
-          },
-          '.cm-content': {
-            padding: '16px'
-          },
-          '.cm-focused': {
-            outline: 'none'
-          }
-        }),
-        EditorView.lineWrapping,
-        ...getLanguageSupport(buffer?.file.ext)
-      ]
+      extensions
     });
 
     const view = new EditorView({
@@ -226,31 +314,22 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [buffer?.id]);
+  }, [paneId, buffer?.id, buffer?.file?.ext, showLineNumbers, theme, updateBufferContent, setBufferModified, handleToggleLineNumbers, handleSave]); // NOTE: localContent is NOT in deps to avoid re-init on every keystroke
 
-  // Keyboard shortcuts
+  // Listen for go to line event from toolbar
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        handleSave();
+    const handler = (e: Event) => {
+      if (e.type === 'editor-goto-line') {
+        const customEvent = e as CustomEvent;
+        if (customEvent.detail?.line) {
+          handleGoToLine(customEvent.detail.line);
+        }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [buffer]);
-
-  // Save buffer
-  const handleSave = async () => {
-    if (!buffer || !viewRef.current) return;
-
-    try {
-      await saveBuffer(paneId!);
-    } catch (err) {
-      setError('Failed to save file');
-    }
-  };
+    document.addEventListener('editor-goto-line', handler);
+    return () => document.removeEventListener('editor-goto-line', handler);
+  }, [handleGoToLine]);
 
   if (!buffer || !buffer.file || buffer.file.isDir) {
     return (
@@ -266,24 +345,13 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const isModified = buffer.content !== buffer.originalContent;
 
   return (
-    <div className="editor-pane">
-      <div className="pane-header">
-        <div className="pane-info">
-          <span className="file-name">{buffer.file.name}</span>
-          <span className="file-path">{buffer.file.path}</span>
-          {isModified && <span className="modified-indicator">● Modified</span>}
-        </div>
-        <div className="pane-actions">
-          <button
-            onClick={handleSave}
-            disabled={!isModified}
-            className="save-button"
-            title="Save file (Ctrl+S)"
-          >
-            💾 Save
-          </button>
-        </div>
-      </div>
+    <div className="editor-pane" data-theme={theme}>
+      <EditorToolbar
+        paneId={paneId}
+        showLineNumbers={showLineNumbers}
+        onToggleLineNumbers={handleToggleLineNumbers}
+        onGoToLine={handleGoToLine}
+      />
 
       {loading && (
         <div className="loading-indicator">
@@ -307,6 +375,9 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         <div className="editor-stats">
           <span className="line-count">Lines: {localContent.split('\n').length}</span>
           <span className="char-count">Chars: {localContent.length}</span>
+          <span className="cursor-position">
+            Ln {buffer.cursorPosition.line + 1}, Col {buffer.cursorPosition.column + 1}
+          </span>
         </div>
       </div>
     </div>

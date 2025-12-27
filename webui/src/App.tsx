@@ -13,6 +13,7 @@ import EditorTabs from './components/EditorTabs';
 import EditorPane from './components/EditorPane';
 import GitChangesPanel from './components/GitChangesPanel';
 import { EditorManagerProvider, useEditorManager } from './contexts/EditorManagerContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService } from './services/api';
@@ -404,6 +405,20 @@ function App() {
     }));
   }, [wsService]);
 
+  const handleProviderChange = useCallback((provider: string) => {
+    console.log('Provider changed to:', provider);
+    // Send provider change to backend
+    wsService.sendEvent({
+      type: 'provider_change',
+      data: { provider }
+    });
+
+    setState(prev => ({
+      ...prev,
+      provider
+    }));
+  }, [wsService]);
+
   const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'logs') => {
     setState(prev => ({
       ...prev,
@@ -676,9 +691,11 @@ function App() {
   };
 
   return (
-    <EditorManagerProvider>
-      <AppContent />
-    </EditorManagerProvider>
+    <ThemeProvider>
+      <EditorManagerProvider>
+        <AppContent />
+      </EditorManagerProvider>
+    </ThemeProvider>
   );
 }
 

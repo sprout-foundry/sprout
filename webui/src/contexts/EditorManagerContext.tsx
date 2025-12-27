@@ -7,7 +7,9 @@ interface EditorManagerContextValue {
   paneLayout: PaneLayout;
   activePaneId: string | null;
   activeBufferId: string | null;
-  
+  isAutoSaveEnabled: boolean;
+  autoSaveInterval: number; // milliseconds
+
   // Actions
   openFile: (file: any) => string; // Returns buffer ID
   closeBuffer: (bufferId: string) => void;
@@ -21,6 +23,7 @@ interface EditorManagerContextValue {
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
   saveBuffer: (bufferId: string) => Promise<void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
+  saveAllBuffers: () => Promise<void>;
 }
 
 const EditorManagerContext = createContext<EditorManagerContextValue | null>(null);
@@ -45,6 +48,8 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [paneLayout, setPaneLayoutState] = useState<PaneLayout>('single');
   const [activePaneId, setActivePaneId] = useState<string | null>('pane-1');
   const [activeBufferId, setActiveBufferId] = useState<string | null>(null);
+  const [isAutoSaveEnabled] = useState(true);
+  const [autoSaveInterval] = useState(30000); // 30 seconds
 
   // Open a file in an editor pane
   const openFile = useCallback((file: any) => {
@@ -79,21 +84,21 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     });
 
     // Assign to active pane
-    setPanes(prev => prev.map(pane => 
-      pane.id === activePaneId 
+    setPanes(prev => prev.map(pane =>
+      pane.id === activePaneId
         ? { ...pane, bufferId }
         : pane
     ));
 
     setActiveBufferId(bufferId);
-    
+
     return bufferId;
   }, [buffers, activePaneId]);
 
   // Activate a buffer (display in active pane)
   const activateBuffer = useCallback((bufferId: string) => {
     setActiveBufferId(bufferId);
-    
+
     // Update buffers
     setBuffers(prev => {
       const newBuffers = new Map(prev);
@@ -114,22 +119,114 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     });
 
     // Update pane
-    setPanes(prev => prev.map(pane => 
-      pane.id === activePaneId 
+    setPanes(prev => prev.map(pane =>
+      pane.id === activePaneId
         ? { ...pane, bufferId }
         : pane
     ));
   }, [activePaneId]);
 
-  // Close a buffer
+  // Update buffer content
+  const updateBufferContent = useCallback((bufferId: string, content: string) => {
+    setBuffers(prev => {
+      const newBuffers = new Map(prev);
+      const buffer = newBuffers.get(bufferId);
+      if (buffer) {
+        newBuffers.set(bufferId, { ...buffer, content, isModified: content !== buffer.originalContent });
+      }
+      return newBuffers;
+    });
+  }, []);
+
+  // Update buffer cursor position
+  const updateBufferCursor = useCallback((bufferId: string, position: { line: number; column: number }) => {
+    setBuffers(prev => {
+      const newBuffers = new Map(prev);
+      const buffer = newBuffers.get(bufferId);
+      if (buffer) {
+        newBuffers.set(bufferId, { ...buffer, cursorPosition: position });
+      }
+      return newBuffers;
+    });
+  }, []);
+
+  // Update buffer scroll position
+  const updateBufferScroll = useCallback((bufferId: string, position: { top: number; left: number }) => {
+    setBuffers(prev => {
+      const newBuffers = new Map(prev);
+      const buffer = newBuffers.get(bufferId);
+      if (buffer) {
+        newBuffers.set(bufferId, { ...buffer, scrollPosition: position });
+      }
+      return newBuffers;
+    });
+  }, []);
+
+  // Set buffer modified state
+  const setBufferModified = useCallback((bufferId: string, isModified: boolean) => {
+    setBuffers(prev => {
+      const newBuffers = new Map(prev);
+      const buffer = newBuffers.get(bufferId);
+      if (buffer) {
+        newBuffers.set(bufferId, { ...buffer, isModified });
+      }
+      return newBuffers;
+    });
+  }, []);
+
+  // Save a buffer to the server
+  const saveBuffer = useCallback(async (bufferId: string) => {
+    const buffer = buffers.get(bufferId);
+    if (!buffer) return;
+
+    try {
+      const response = await fetch(`/api/file?path=${encodeURIComponent(buffer.file.path)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content: buffer.content }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.message === 'File saved successfully') {
+          setBuffers(prev => {
+            const newBuffers = new Map(prev);
+            const buf = newBuffers.get(bufferId);
+            if (buf) {
+              newBuffers.set(bufferId, { ...buf, originalContent: buf.content, isModified: false });
+            }
+            return newBuffers;
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to save buffer:', bufferId, error);
+      throw error;
+    }
+  }, [buffers]);
+
+  // Save all modified buffers
+  const saveAllBuffers = useCallback(async () => {
+    const currentBuffers = buffers;
+    const savePromises = Array.from(currentBuffers.entries())
+      .filter(([_, buffer]) => buffer.isModified)
+      .map(([bufferId, _]) => saveBuffer(bufferId));
+
+    await Promise.all(savePromises);
+  }, [buffers, saveBuffer]);
+
+  // Close a buffer (triggers auto-save if modified)
   const closeBuffer = useCallback((bufferId: string) => {
     const buffer = buffers.get(bufferId);
     if (!buffer) return;
 
-    // If buffer is modified, we'd typically show a dialog here
-    // For now, we'll just warn in console
-    if (buffer.isModified) {
-      console.warn(`Closing modified buffer: ${buffer.file.name}`);
+    // Save before closing if modified and auto-save is enabled (fire-and-forget)
+    if (buffer.isModified && isAutoSaveEnabled) {
+      saveBuffer(bufferId).catch(err => {
+        console.error('Failed to save buffer before closing:', bufferId, err);
+      });
     }
 
     setBuffers(prev => {
@@ -140,14 +237,14 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     // If this was the active buffer, clear the pane
     if (bufferId === activeBufferId) {
-      activePaneId && setPanes(prev => prev.map(pane => 
-        pane.id === activePaneId 
+      activePaneId && setPanes(prev => prev.map(pane =>
+        pane.id === activePaneId
           ? { ...pane, bufferId: null }
           : pane
       ));
       setActiveBufferId(null);
     }
-  }, [buffers, activeBufferId, activePaneId]);
+  }, [buffers, activeBufferId, activePaneId, isAutoSaveEnabled, saveBuffer]);
 
   // Close a pane
   const closePane = useCallback((paneId: string) => {
@@ -190,7 +287,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     const newPaneId = `pane-${Date.now()}`;
     const pane = panes.find(p => p.id === paneId);
-    
+
     const newPanes: EditorPane[] = [
       ...panes,
       {
@@ -217,7 +314,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // Close split (reset to single pane)
   const closeSplit = useCallback(() => {
     const activePane = panes.find(p => p.id === activePaneId);
-    
+
     // Close all panes except the primary one
     panes.forEach(pane => {
       if (pane.position !== 'primary' && pane.id !== activePaneId) {
@@ -232,7 +329,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     setPaneLayoutState('single');
     setActivePaneId(panes[0]?.id || null);
-    
+
     const remainingBuffer = activePane?.bufferId;
     if (remainingBuffer) {
       setActiveBufferId(remainingBuffer);
@@ -242,7 +339,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // Set pane layout
   const setPaneLayout = useCallback((layout: PaneLayout) => {
     setPaneLayoutState(layout);
-    
+
     // Adjust panes based on layout
     if (layout === 'single') {
       setPanes(prev => {
@@ -253,86 +350,16 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     }
   }, [activePaneId]);
 
-  // Update buffer content
-  const updateBufferContent = useCallback((bufferId: string, content: string) => {
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, content, isModified: content !== buffer.originalContent });
-      }
-      return newBuffers;
-    });
-  }, []);
+  // Auto-save interval - saves all modified buffers every 30 seconds
+  useEffect(() => {
+    if (!isAutoSaveEnabled) return;
 
-  // Update buffer cursor position
-  const updateBufferCursor = useCallback((bufferId: string, position: { line: number; column: number }) => {
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, cursorPosition: position });
-      }
-      return newBuffers;
-    });
-  }, []);
+    const intervalId = setInterval(async () => {
+      await saveAllBuffers();
+    }, autoSaveInterval);
 
-  // Update buffer scroll position
-  const updateBufferScroll = useCallback((bufferId: string, position: { top: number; left: number }) => {
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, scrollPosition: position });
-      }
-      return newBuffers;
-    });
-  }, []);
-
-  // Save a buffer
-  const saveBuffer = useCallback(async (bufferId: string) => {
-    const buffer = buffers.get(bufferId);
-    if (!buffer) return;
-
-    try {
-      const response = await fetch(`/api/file?path=${encodeURIComponent(buffer.file.path)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content: buffer.content }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.message === 'File saved successfully') {
-          setBuffers(prev => {
-            const newBuffers = new Map(prev);
-            const buf = newBuffers.get(bufferId);
-            if (buf) {
-              newBuffers.set(bufferId, { ...buf, originalContent: buf.content, isModified: false });
-            }
-            return newBuffers;
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Failed to save buffer:', bufferId, error);
-      throw error;
-    }
-  }, [buffers]);
-
-  // Set buffer modified state
-  const setBufferModified = useCallback((bufferId: string, isModified: boolean) => {
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, isModified });
-      }
-      return newBuffers;
-    });
-  }, []);
+    return () => clearInterval(intervalId);
+  }, [isAutoSaveEnabled, autoSaveInterval, saveAllBuffers]);
 
   const value: EditorManagerContextValue = {
     buffers,
@@ -340,6 +367,8 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     paneLayout,
     activePaneId,
     activeBufferId,
+    isAutoSaveEnabled,
+    autoSaveInterval,
     openFile,
     closeBuffer,
     closePane,
@@ -351,7 +380,8 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     updateBufferCursor,
     updateBufferScroll,
     saveBuffer,
-    setBufferModified
+    setBufferModified,
+    saveAllBuffers
   };
 
   return (

@@ -295,7 +295,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     }
   }, [file, loadFile, setContent, setIsModified, viewRef]);
 
->>>>>>> origin/main
   // Keyboard shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
@@ -306,8 +305,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-<<<<<<< HEAD
-  }, [file]);
+  }, [handleKeyDown]);
 
   // Handle dialog actions
   const handleSaveAndSwitch = async () => {

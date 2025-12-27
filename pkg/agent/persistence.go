@@ -296,7 +296,12 @@ func (a *Agent) ApplyState(state *ConversationState) {
 
 	// Reset circuit breaker state to prevent false positives
 	if a.circuitBreaker != nil {
-		a.circuitBreaker.Actions = make(map[string]*CircuitBreakerAction)
+		a.circuitBreaker.mu.Lock()
+		// Clear entries instead of replacing map to avoid memory churn and reduce lock hold time
+		for key := range a.circuitBreaker.Actions {
+			delete(a.circuitBreaker.Actions, key)
+		}
+		a.circuitBreaker.mu.Unlock()
 	}
 
 	// Clear streaming buffer to prevent old content from interfering

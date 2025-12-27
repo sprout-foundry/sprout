@@ -64,7 +64,12 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	// Reset circuit breaker history for a fresh query to avoid carrying over
 	// repetitive-tool counts from previous requests.
 	if ch.agent.circuitBreaker != nil {
-		ch.agent.circuitBreaker.Actions = make(map[string]*CircuitBreakerAction)
+		ch.agent.circuitBreaker.mu.Lock()
+		// Clear entries instead of replacing map to avoid memory churn and reduce lock hold time
+		for key := range ch.agent.circuitBreaker.Actions {
+			delete(ch.agent.circuitBreaker.Actions, key)
+		}
+		ch.agent.circuitBreaker.mu.Unlock()
 		if ch.agent.debug {
 			ch.agent.debugLog("DEBUG: Reset circuit breaker for new query\n")
 		}

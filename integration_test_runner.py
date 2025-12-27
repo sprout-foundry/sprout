@@ -98,11 +98,13 @@ def main():
                     passed += 1
                 else:
                     print_flush("❌ FAILED")
-                    print_flush("Return code:", result.returncode)
+                    print_flush(f"Return code: {result.returncode}")
                     if result.stdout:
-                        print_flush("STDOUT:", result.stdout)
+                        print_flush("STDOUT:")
+                        print_flush(result.stdout)
                     if result.stderr:
-                        print_flush("STDERR:", result.stderr)
+                        print_flush("STDERR:")
+                        print_flush(result.stderr)
                     failed += 1
                     
             except subprocess.TimeoutExpired:

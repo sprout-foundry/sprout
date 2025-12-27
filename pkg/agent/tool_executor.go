@@ -318,8 +318,15 @@ func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]int
 	}
 
 	key := te.generateActionKey(toolName, args)
-	action, exists := te.agent.circuitBreaker.Actions[key]
-	if !exists {
+
+	// Copy action value outside the lock to reduce critical section hold time
+	action := func() *CircuitBreakerAction {
+		te.agent.circuitBreaker.mu.RLock()
+		defer te.agent.circuitBreaker.mu.RUnlock()
+		return te.agent.circuitBreaker.Actions[key]
+	}()
+
+	if action == nil {
 		return false
 	}
 
@@ -354,6 +361,9 @@ func (te *ToolExecutor) updateCircuitBreaker(toolName string, args map[string]in
 	}
 
 	key := te.generateActionKey(toolName, args)
+	te.agent.circuitBreaker.mu.Lock()
+	defer te.agent.circuitBreaker.mu.Unlock()
+
 	action, exists := te.agent.circuitBreaker.Actions[key]
 	if !exists {
 		action = &CircuitBreakerAction{
@@ -368,11 +378,12 @@ func (te *ToolExecutor) updateCircuitBreaker(toolName string, args map[string]in
 	action.LastUsed = getCurrentTime()
 
 	// Clean up old entries (older than 5 minutes) to prevent memory leaks
-	te.cleanupOldCircuitBreakerEntries()
+	te.cleanupOldCircuitBreakerEntriesLocked()
 }
 
 // cleanupOldCircuitBreakerEntries removes entries older than 5 minutes
-func (te *ToolExecutor) cleanupOldCircuitBreakerEntries() {
+// Note: This must be called while holding the mu lock
+func (te *ToolExecutor) cleanupOldCircuitBreakerEntriesLocked() {
 	if te.agent.circuitBreaker == nil {
 		return
 	}
@@ -385,6 +396,18 @@ func (te *ToolExecutor) cleanupOldCircuitBreakerEntries() {
 			delete(te.agent.circuitBreaker.Actions, key)
 		}
 	}
+}
+
+// cleanupOldCircuitBreakerEntries removes entries older than 5 minutes
+// This function handles locking internally and is safe to call from anywhere.
+func (te *ToolExecutor) cleanupOldCircuitBreakerEntries() {
+	if te.agent.circuitBreaker == nil {
+		return
+	}
+
+	te.agent.circuitBreaker.mu.Lock()
+	defer te.agent.circuitBreaker.mu.Unlock()
+	te.cleanupOldCircuitBreakerEntriesLocked()
 }
 
 // generateActionKey creates a unique key for an action

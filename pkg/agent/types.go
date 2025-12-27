@@ -1,6 +1,9 @@
 package agent
 
-import api "github.com/alantheprice/ledit/pkg/agent_api"
+import (
+	"sync"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
+)
 
 // TaskAction represents a completed action during task execution
 type TaskAction struct {
@@ -48,7 +51,27 @@ type CircuitBreakerAction struct {
 	LastUsed   int64  // unix timestamp of last use
 }
 
-// CircuitBreakerState tracks repetitive actions across the session
+// CircuitBreakerState tracks repetitive actions across the session.
+//
+// Locking Strategy:
+// - The Actions map is protected by mu (sync.RWMutex)
+// - Use RLock/RLock for read-only access when you don't need exclusive access
+// - Use Lock for write operations or when you need exclusive access
+// - Always use defer to unlock (defer mu.Unlock() or defer mu.RUnlock())
+// - Helper functions ending with "Locked" must be called while holding the lock
+//   (they perform no locking themselves, allowing callers to hold lock for multiple ops)
+//
+// Example patterns:
+//   // Read-only access:
+//   cb.mu.RLock()
+//   defer cb.mu.RUnlock()
+//   action := cb.Actions[key]
+//
+//   // Write access:
+//   cb.mu.Lock()
+//   defer cb.mu.Unlock()
+//   cb.Actions[key] = &CircuitBreakerAction{...}
 type CircuitBreakerState struct {
 	Actions map[string]*CircuitBreakerAction // key: actionType:target
+	mu      sync.RWMutex                     // protects Actions map
 }

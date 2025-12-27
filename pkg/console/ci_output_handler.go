@@ -60,8 +60,15 @@ func NewCIOutputHandler(writer io.Writer) *CIOutputHandler {
 	}
 
 	// Initialize markdown formatter
-	enableColors := isInteractive && !isCI // Enable colors in interactive mode, disable in CI
+	// Enable markdown colors for summary text unless explicitly disabled
+	// Check env vars: LEDIT_CI_COLORS=1 or LEDIT_COLOR=always to force colors
+	enableColors := isInteractive && !isCI // Default: only colors in interactive mode
 	enableInline := true                   // Always enable inline formatting
+
+	// Override: allow markdown colors via environment variable
+	if os.Getenv("LEDIT_CI_COLORS") == "1" || os.Getenv("LEDIT_COLOR") == "always" {
+		enableColors = true
+	}
 
 	return &CIOutputHandler{
 		writer:            writer,
@@ -90,12 +97,21 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 	// Clear buffer
 	h.buffer.Reset()
 
+	// First, apply markdown formatting if enabled and content looks like markdown
+	// Do this BEFORE any ANSI stripping so colors can be preserved
+	markdownWasApplied := false
+	if h.markdownFormatter != nil && IsLikelyMarkdown(content) {
+		content = h.markdownFormatter.Format(content)
+		markdownWasApplied = true
+	}
+
 	// In CI/non-interactive mode, fix line endings and strip ANSI codes
-	doStripANSI := !h.isInteractive || h.isCI
+	// Don't strip ANSI if markdown was applied, to preserve colored markdown
+	doStripANSI := !h.isInteractive && !markdownWasApplied
 
 	if doStripANSI {
 		// Handle carriage returns properly - replace \r without \n with proper newlines
-		// This prevents overwriting issues in CLI mode
+		// This prevents overwriting issues in CI mode
 		if strings.Contains(content, "\r") {
 			// Split by carriage returns and handle each segment
 			segments := strings.Split(content, "\r")
@@ -120,14 +136,16 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 			content = strings.Join(cleanedSegments, "")
 		}
 
-		// Strip ANSI escape codes
-		content = h.stripANSIEscapeCodes(content)
+		// Strip ANSI escape codes only if colors should be disabled
+		// Allow preserve of markdown colors via environment variable
+		shouldPreserveColors := os.Getenv("LEDIT_CI_COLORS") == "1" || os.Getenv("LEDIT_COLOR") == "always"
+
+		if !shouldPreserveColors {
+			content = h.stripANSIEscapeCodes(content)
+		}
 
 		// Also strip any cursor movement sequences
 		content = h.stripCursorSequences(content)
-	} else if h.markdownFormatter != nil && IsLikelyMarkdown(content) {
-		// Apply markdown formatting only if enabled and content looks like markdown
-		content = h.markdownFormatter.Format(content)
 	}
 
 	// Write the filtered content (even if empty, to maintain proper io.Writer behavior)

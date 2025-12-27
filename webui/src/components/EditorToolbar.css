@@ -1,0 +1,101 @@
+.editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--toolbar-bg, #1e1e1e);
+  border-bottom: 1px solid var(--border-color, #333);
+  gap: 8px;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--toolbar-fg, #ccc);
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.toolbar-button:hover {
+  background: var(--toolbar-hover-bg, #333);
+  color: var(--toolbar-hover-fg, #fff);
+}
+
+.toolbar-button.active {
+  background: var(--accent-bg, #0e7490);
+  color: var(--accent-fg, #fff);
+}
+
+.toolbar-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Go to Line Form */
+.go-to-line-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.go-to-line-input {
+  width: 60px;
+  padding: 2px 6px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  background: var(--input-bg, #252525);
+  color: var(--input-fg, #fff);
+  font-size: 12px;
+}
+
+.go-to-line-input:focus {
+  outline: none;
+  border-color: var(--accent-bg, #0e7490);
+}
+
+.go-to-line-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--toolbar-fg, #ccc);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.go-to-line-cancel:hover {
+  background: var(--toolbar-hover-bg, #333);
+  color: var(--toolbar-hover-fg, #fff);
+}
+
+/* Light theme support */
+:root[data-theme="light"] {
+  --toolbar-bg: #f0f0f0;
+  --toolbar-fg: #444;
+  --toolbar-hover-bg: #e0e0e0;
+  --toolbar-hover-fg: #000;
+  --accent-bg: #06b6d4;
+  --accent-fg: #fff;
+  --border-color: #ccc;
+  --input-bg: #fff;
+  --input-fg: #000;
+}

@@ -137,8 +137,11 @@ func (f *ProviderFactory) CreateProviderWithModel(name, model string) (api.Clien
 		return nil, err
 	}
 
-	if err := provider.SetModel(model); err != nil {
-		return nil, fmt.Errorf("failed to set model %s: %w", model, err)
+	// Only set model if it's not empty - otherwise use the default model from config
+	if model != "" {
+		if err := provider.SetModel(model); err != nil {
+			return nil, fmt.Errorf("failed to set model %s: %w", model, err)
+		}
 	}
 
 	return provider, nil

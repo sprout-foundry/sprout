@@ -488,10 +488,29 @@ Examples:
                 try:
                     with open(info['stdout_file_path'], "r") as f:
                         stdout = f.read()
+                except FileNotFoundError:
+                    logging.warning(f"Output files for {info['name']} not found at {info['stdout_file_path']}. Could not retrieve detailed failure reason.")
+                except UnicodeDecodeError:
+                    # Handle binary or non-UTF8 encoded output
+                    with open(info['stdout_file_path'], "rb") as f:
+                        binary_data = f.read()
+                    try:
+                        stdout = binary_data.decode('utf-8', errors='replace')
+                    except Exception:
+                        stdout = f"<binary data, {len(binary_data)} bytes, could not decode>"
+                try:
                     with open(info['stderr_file_path'], "r") as f:
                         stderr = f.read()
                 except FileNotFoundError:
-                    logging.warning(f"Output files for {info['name']} not found at {info['stdout_file_path']}. Could not retrieve detailed failure reason.")
+                    logging.warning(f"Error files for {info['name']} not found at {info['stderr_file_path']}. Could not retrieve detailed failure reason.")
+                except UnicodeDecodeError:
+                    # Handle binary or non-UTF8 encoded error output
+                    with open(info['stderr_file_path'], "rb") as f:
+                        binary_data = f.read()
+                    try:
+                        stderr = binary_data.decode('utf-8', errors='replace')
+                    except Exception:
+                        stderr = f"<binary data, {len(binary_data)} bytes, could not decode>"
 
                 # Extract and store a concise failure reason
                 if results[info['name']] != 'FAIL (Timeout)': # Don't overwrite timeout reason

@@ -620,6 +620,11 @@ func (a *Agent) SetMessages(messages []api.Message) {
 	a.messages = messages
 }
 
+// AddMessage adds a single message to the conversation history
+func (a *Agent) AddMessage(message api.Message) {
+	a.messages = append(a.messages, message)
+}
+
 // GetTotalCost returns the total cost of the conversation
 func (a *Agent) GetTotalCost() float64 {
 	return a.totalCost

@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/codereview"
 	"github.com/alantheprice/ledit/pkg/configuration"
@@ -87,10 +88,18 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	service := codereview.NewCodeReviewService(cfg, logger)
 
 	// Create the review context with optimized diff
+	// IMPORTANT: Must include AgentClient for the review to work
+	agentClient := service.GetDefaultAgentClient()
+	if agentClient == nil {
+		logger.LogError(fmt.Errorf("failed to get default agent client"))
+		return fmt.Errorf("agent client initialization failed")
+	}
+
 	ctx := &codereview.ReviewContext{
-		Diff:   optimizedDiff.OptimizedContent,
-		Config: cfg,
-		Logger: logger,
+		Diff:        optimizedDiff.OptimizedContent,
+		Config:      cfg,
+		Logger:      logger,
+		AgentClient: agentClient,
 	}
 
 	// Add file summaries to context if available
@@ -118,6 +127,31 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	logger.LogProcessStep("Code review completed successfully")
+
+	// Build review output string for conversation history
+	reviewOutput := fmt.Sprintf("📋 AI CODE REVIEW\n%s\n\nStatus: %s\n\nFeedback:\n%s",
+		strings.Repeat("═", 50),
+		strings.ToUpper(reviewResponse.Status),
+		reviewResponse.Feedback)
+
+	if reviewResponse.Status == "rejected" && reviewResponse.NewPrompt != "" {
+		reviewOutput += fmt.Sprintf("\n\nSuggested New Prompt:\n%s", reviewResponse.NewPrompt)
+	}
+
+	// Add review request and output to conversation history so the agent can chat about it
+	if chatAgent != nil {
+		// Add user message representing the review request
+		chatAgent.AddMessage(api.Message{
+			Role:    "user",
+			Content: "/review " + strings.Join(args, " "),
+		})
+
+		// Add assistant message containing the review output
+		chatAgent.AddMessage(api.Message{
+			Role:    "assistant",
+			Content: reviewOutput,
+		})
+	}
 
 	// Output the review using simple, reliable formatting with proper raw mode line endings
 	fmt.Print("\r\n" + strings.Repeat("═", 50) + "\r\n")

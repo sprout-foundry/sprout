@@ -3,15 +3,12 @@ import Sidebar from './components/Sidebar';
 import Chat from './components/Chat';
 import GitView from './components/GitView';
 import Status from './components/Status';
-import UIManager from './components/UIManager';
-import CodeEditor from './components/CodeEditor';
 import LogsView from './components/LogsView';
 import Terminal from './components/Terminal';
 import NavigationBar from './components/NavigationBar';
 import FileTree from './components/FileTree';
 import EditorTabs from './components/EditorTabs';
 import EditorPane from './components/EditorPane';
-import GitChangesPanel from './components/GitChangesPanel';
 import { EditorManagerProvider, useEditorManager } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import './App.css';
@@ -534,15 +531,10 @@ function App() {
 
   // Child component with access to editor manager
   const AppContent: React.FC = () => {
-    const { panes, paneLayout, switchPane, splitPane, closeSplit, closePane } = useEditorManager();
-    const [sidebarPanel, setSidebarPanel] = useState<'files' | 'git'>('files');
+    const { panes, paneLayout, switchPane, splitPane, closeSplit } = useEditorManager();
 
     const canSplit = panes.length < 3;
     const canCloseSplit = panes.length > 1;
-
-    const handleSidebarFileClick = (file: any) => {
-      // Handle file selection from GitChangesPanel
-    };
 
     return (
       <div className="app">
@@ -723,7 +715,6 @@ const FileTreeConnected: React.FC = () => {
 };
 
 const EditorPaneWrapper: React.FC<{children: React.ReactNode, isActive?: boolean, onClick?: () => void}> = ({ children, isActive, onClick }) => {
-  const { switchPane } = useEditorManager();
   return (
     <div 
       className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}

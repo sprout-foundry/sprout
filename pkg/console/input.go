@@ -3,13 +3,10 @@ package console
 import (
 	"fmt"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"golang.org/x/term"
 )
-
 
 // min returns the minimum of two integers
 func min(a, b int) int {
@@ -117,7 +114,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 				// Wait for SIGCONT (when fg resumes the process)
 				// The process continues here after resume
 				// Give the terminal a moment to stabilize
-				signal.Ignore(syscall.SIGTTIN, syscall.SIGTTOU)
+				ignoreTerminalSignals()
 
 				// Re-enter raw mode
 				if newState, err := term.MakeRaw(ir.termFd); err == nil {
@@ -128,7 +125,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 				escapeParser.Reset()
 
 				// Drain input buffer to clear any characters typed during suspension
-				_ = syscall.SetNonblock(ir.termFd, true)
+				_ = setNonblock(ir.termFd, true)
 				discardBuf := make([]byte, 256)
 				for {
 					n, _ := os.Stdin.Read(discardBuf)
@@ -136,9 +133,9 @@ func (ir *InputReader) ReadLine() (string, error) {
 						break
 					}
 				}
-				_ = syscall.SetNonblock(ir.termFd, false)
+				_ = setNonblock(ir.termFd, false)
 
-				signal.Reset(syscall.SIGTTIN, syscall.SIGTTOU)
+				resetTerminalSignals()
 
 				// Clear the current line and redisplay the prompt
 				fmt.Printf("\r%s%s", ClearLineSeq(), ir.prompt)

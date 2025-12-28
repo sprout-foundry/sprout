@@ -52,3 +52,18 @@ func prepareSuspension() (notifyResume func(), resume <-chan os.Signal) {
 func suspendTerminal() {
 	syscall.Kill(syscall.Getpid(), syscall.SIGTSTP)
 }
+
+// ignoreTerminalSignals ignores SIGTTIN and SIGTTOU to prevent background job warnings.
+func ignoreTerminalSignals() {
+	signal.Ignore(syscall.SIGTTIN, syscall.SIGTTOU)
+}
+
+// resetTerminalSignals resets SIGTTIN and SIGTTOU to default handlers.
+func resetTerminalSignals() {
+	signal.Reset(syscall.SIGTTIN, syscall.SIGTTOU)
+}
+
+// setNonblock sets a file descriptor to non-blocking mode on Unix.
+func setNonblock(fd int, nonblock bool) error {
+	return syscall.SetNonblock(fd, nonblock)
+}

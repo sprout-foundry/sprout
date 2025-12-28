@@ -34,3 +34,19 @@ func suspendTerminal() {
 func prepareSuspension() (notifyResume func(), resume <-chan os.Signal) {
 	return func() {}, nil
 }
+
+// ignoreTerminalSignals is a no-op on Windows since SIGTTIN/SIGTTOU don't exist.
+func ignoreTerminalSignals() {
+	// SIGTTIN/SIGTTOU are not available on Windows
+}
+
+// resetTerminalSignals is a no-op on Windows since SIGTTIN/SIGTTOU don't exist.
+func resetTerminalSignals() {
+	// SIGTTIN/SIGTTOU are not available on Windows
+}
+
+// setNonblock is a no-op on Windows since file descriptor non-blocking mode is not directly supported.
+func setNonblock(fd int, nonblock bool) error {
+	// Non-blocking mode works differently on Windows and is handled by os.Stdin.Read()
+	return nil
+}

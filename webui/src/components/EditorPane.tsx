@@ -16,18 +16,8 @@ import { css } from '@codemirror/lang-css';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { EditorBuffer } from '../types/editor';
 import EditorToolbar from './EditorToolbar';
 import './EditorPane.css';
-
-interface FileInfo {
-  name: string;
-  path: string;
-  isDir: boolean;
-  size: number;
-  modified: number;
-  ext?: string;
-}
 
 interface FileResponse {
   message: string;
@@ -53,7 +43,6 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
   const {
     panes,
     buffers,
-    switchPane,
     updateBufferContent,
     updateBufferCursor,
     saveBuffer,
@@ -210,7 +199,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
     // Load file from server
     loadFile(buffer.file.path);
-  }, [buffer?.id, buffer?.isModified, buffer?.content, buffer?.file, loadFile]);
+  }, [buffer, buffer?.id, buffer?.isModified, buffer?.content, buffer?.file, loadFile]);
 
   // Initialize CodeMirror editor
   useEffect(() => {
@@ -314,7 +303,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [paneId, buffer?.id, buffer?.file?.ext, showLineNumbers, theme, updateBufferContent, setBufferModified, handleToggleLineNumbers, handleSave]); // NOTE: localContent is NOT in deps to avoid re-init on every keystroke
+  }, [paneId, buffer?.id, buffer?.file?.ext, buffer?.originalContent, showLineNumbers, theme, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport, getThemeExtension, handleToggleLineNumbers, handleSave]); // eslint-disable-line react-hooks/exhaustive-deps -- localContent is intentionally excluded to avoid re-init on every keystroke
 
   // Listen for go to line event from toolbar
   useEffect(() => {
@@ -341,8 +330,6 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       </div>
     );
   }
-
-  const isModified = buffer.content !== buffer.originalContent;
 
   return (
     <div className="editor-pane" data-theme={theme}>

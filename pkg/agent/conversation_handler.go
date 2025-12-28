@@ -543,36 +543,43 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn TurnEvaluation) bool {
 	ch.agent.debugLog("🔧 Attempting to parse malformed tool calls from content\n")
 
-	fallbackResult := ch.fallbackParser.Parse(content)
-	if len(fallbackResult.ToolCalls) > 0 {
-		ch.agent.debugLog("🔧 Successfully parsed %d tool calls from malformed content\n", len(fallbackResult.ToolCalls))
-
-		// Generate IDs for parsed tool calls
-		for i := range fallbackResult.ToolCalls {
-			if fallbackResult.ToolCalls[i].ID == "" {
-				fallbackResult.ToolCalls[i].ID = ch.toolExecutor.GenerateToolCallID(fallbackResult.ToolCalls[i].Function.Name)
-			}
-		}
-
-		// Update the assistant message with cleaned content and parsed tool calls
-		if len(ch.agent.messages) > 0 {
-			ch.agent.messages[len(ch.agent.messages)-1].Content = fallbackResult.CleanedContent
-			ch.agent.messages[len(ch.agent.messages)-1].ToolCalls = fallbackResult.ToolCalls
-		}
-
-		// Execute the parsed tool calls
-		toolResults := ch.toolExecutor.ExecuteTools(fallbackResult.ToolCalls)
-		ch.agent.messages = append(ch.agent.messages, toolResults...)
-		ch.agent.debugLog("✔️ Executed %d fallback-parsed tool calls\n", len(toolResults))
-
-		turn.ToolCalls = append(turn.ToolCalls, fallbackResult.ToolCalls...)
-		turn.ToolResults = append(turn.ToolResults, toolResults...)
-		turn.GuardrailTrigger = "fallback parser success"
-
-		return false // Continue conversation
+	// Defensive nil check for fallbackParser
+	if ch.fallbackParser == nil {
+		ch.agent.debugLog("⚠️ Fallback parser is nil, cannot parse malformed tool calls\n")
+		turn.GuardrailTrigger = "fallback parser unavailable"
+		return false // Continue conversation to allow model to issue proper tool_calls
 	}
 
-	ch.agent.debugLog("⚠️ Fallback parser could not extract valid tool calls\n")
-	turn.GuardrailTrigger = "fallback parser failed"
-	return false // Continue conversation to allow model to issue proper tool_calls
+	fallbackResult := ch.fallbackParser.Parse(content)
+	if fallbackResult == nil || len(fallbackResult.ToolCalls) == 0 {
+		ch.agent.debugLog("⚠️ Fallback parser could not extract valid tool calls\n")
+		turn.GuardrailTrigger = "fallback parser failed"
+		return false // Continue conversation to allow model to issue proper tool_calls
+	}
+
+	ch.agent.debugLog("🔧 Successfully parsed %d tool calls from malformed content\n", len(fallbackResult.ToolCalls))
+
+	// Generate IDs for parsed tool calls
+	for i := range fallbackResult.ToolCalls {
+		if fallbackResult.ToolCalls[i].ID == "" {
+			fallbackResult.ToolCalls[i].ID = ch.toolExecutor.GenerateToolCallID(fallbackResult.ToolCalls[i].Function.Name)
+		}
+	}
+
+	// Update the assistant message with cleaned content and parsed tool calls
+	if len(ch.agent.messages) > 0 {
+		ch.agent.messages[len(ch.agent.messages)-1].Content = fallbackResult.CleanedContent
+		ch.agent.messages[len(ch.agent.messages)-1].ToolCalls = fallbackResult.ToolCalls
+	}
+
+	// Execute the parsed tool calls
+	toolResults := ch.toolExecutor.ExecuteTools(fallbackResult.ToolCalls)
+	ch.agent.messages = append(ch.agent.messages, toolResults...)
+	ch.agent.debugLog("✔️ Executed %d fallback-parsed tool calls\n", len(toolResults))
+
+	turn.ToolCalls = append(turn.ToolCalls, fallbackResult.ToolCalls...)
+	turn.ToolResults = append(turn.ToolResults, toolResults...)
+	turn.GuardrailTrigger = "fallback parser success"
+
+	return false // Continue conversation
 }

@@ -29,3 +29,8 @@ func suspendTerminal() {
 	// Terminal suspension is not supported on Windows
 	// This function intentionally does nothing
 }
+
+// prepareSuspension is a no-op on Windows since SIGCONT is not available.
+func prepareSuspension() (notifyResume func(), resume <-chan os.Signal) {
+	return func() {}, nil
+}

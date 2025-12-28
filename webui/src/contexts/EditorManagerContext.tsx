@@ -51,6 +51,37 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [isAutoSaveEnabled] = useState(true);
   const [autoSaveInterval] = useState(30000); // 30 seconds
 
+  // Activate a buffer (display in active pane)
+  const activateBuffer = useCallback((bufferId: string) => {
+    setActiveBufferId(bufferId);
+
+    // Update buffers
+    setBuffers(prev => {
+      const newBuffers = new Map(prev);
+      const buffer = newBuffers.get(bufferId);
+      if (buffer) {
+        // Deactivate previous active buffer for this pane
+        if (activePaneId) {
+          Array.from(newBuffers.entries()).forEach(([id, buf]) => {
+            if (buf.paneId === activePaneId && id !== bufferId) {
+              newBuffers.set(id, { ...buf, isActive: false, paneId: undefined });
+            }
+          });
+        }
+        // Activate new buffer
+        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: activePaneId });
+      }
+      return newBuffers;
+    });
+
+    // Update pane
+    setPanes(prev => prev.map(pane =>
+      pane.id === activePaneId
+        ? { ...pane, bufferId }
+        : pane
+    ));
+  }, [activePaneId]);
+
   // Open a file in an editor pane
   const openFile = useCallback((file: any) => {
     const filePath = file.path;
@@ -93,38 +124,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setActiveBufferId(bufferId);
 
     return bufferId;
-  }, [buffers, activePaneId]);
-
-  // Activate a buffer (display in active pane)
-  const activateBuffer = useCallback((bufferId: string) => {
-    setActiveBufferId(bufferId);
-
-    // Update buffers
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        // Deactivate previous active buffer for this pane
-        if (activePaneId) {
-          Array.from(newBuffers.entries()).forEach(([id, buf]) => {
-            if (buf.paneId === activePaneId && id !== bufferId) {
-              newBuffers.set(id, { ...buf, isActive: false, paneId: undefined });
-            }
-          });
-        }
-        // Activate new buffer
-        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: activePaneId });
-      }
-      return newBuffers;
-    });
-
-    // Update pane
-    setPanes(prev => prev.map(pane =>
-      pane.id === activePaneId
-        ? { ...pane, bufferId }
-        : pane
-    ));
-  }, [activePaneId]);
+  }, [buffers, activePaneId, activateBuffer]);
 
   // Update buffer content
   const updateBufferContent = useCallback((bufferId: string, content: string) => {
@@ -282,11 +282,11 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   }, [panes]);
 
   // Split a pane
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const splitPane = useCallback((paneId: string, direction: 'vertical' | 'horizontal') => {
     if (panes.length >= 3) return; // Max 3 panes
 
     const newPaneId = `pane-${Date.now()}`;
-    const pane = panes.find(p => p.id === paneId);
 
     const newPanes: EditorPane[] = [
       ...panes,

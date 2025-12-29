@@ -7,18 +7,18 @@ import (
 	"github.com/alantheprice/ledit/pkg/agent"
 )
 
-// MemoryCommand handles memory features with auto-tracking and session recovery
-type MemoryCommand struct{}
+// SessionsCommand handles session management with auto-tracking and session recovery
+type SessionsCommand struct{}
 
-func (c *MemoryCommand) Name() string {
-	return "memory"
+func (c *SessionsCommand) Name() string {
+	return "sessions"
 }
 
-func (c *MemoryCommand) Description() string {
+func (c *SessionsCommand) Description() string {
 	return "Show and load previous conversation sessions"
 }
 
-func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
+func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// List sessions immediately in reverse order (newest first)
 	sessions, err := agent.ListSessionsWithTimestamps()
 	if err != nil {
@@ -44,7 +44,7 @@ func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}
 
 		chatAgent.ApplyState(state)
-		fmt.Printf("✓ Conversation memory loaded for session: %s\n", sessionID)
+		fmt.Printf("✓ Conversation session loaded: %s\n", sessionID)
 		return nil
 	}
 
@@ -59,7 +59,7 @@ func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
 }
 
 // selectSessionWithDropdown provides interactive session selection with dropdown
-func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
+func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
 	// UI not available - select newest session or return
 	fmt.Println("Interactive session selection not available.")
 	var sessionID string
@@ -76,6 +76,6 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 	}
 
 	chatAgent.ApplyState(state)
-	fmt.Printf("\r\n✅ Conversation memory loaded for session: %s\r\n", sessionID)
+	fmt.Printf("\r\n✅ Conversation session loaded: %s\r\n", sessionID)
 	return nil
 }

@@ -355,6 +355,7 @@ func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]int
 }
 
 // updateCircuitBreaker updates the circuit breaker state
+// The caller expects this function to be thread-safe with respect to the circuitBreaker map.
 func (te *ToolExecutor) updateCircuitBreaker(toolName string, args map[string]interface{}) {
 	if te.agent.circuitBreaker == nil {
 		return
@@ -381,13 +382,9 @@ func (te *ToolExecutor) updateCircuitBreaker(toolName string, args map[string]in
 	te.cleanupOldCircuitBreakerEntriesLocked()
 }
 
-// cleanupOldCircuitBreakerEntries removes entries older than 5 minutes
-// Note: This must be called while holding the mu lock
+// cleanupOldCircuitBreakerEntriesLocked removes entries older than 5 minutes
+// Precondition: caller must hold te.agent.circuitBreaker.mu.Lock()
 func (te *ToolExecutor) cleanupOldCircuitBreakerEntriesLocked() {
-	if te.agent.circuitBreaker == nil {
-		return
-	}
-
 	currentTime := getCurrentTime()
 	fiveMinutesAgo := currentTime - 300 // 5 minutes in seconds
 

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // ExportState exports the current agent state for persistence
@@ -78,11 +80,13 @@ func (a *Agent) LoadSummaryFromFile(filename string) error {
 		if a.debug {
 			a.debugLog("📄 Loaded compact summary (%d chars)\n", len(state.CompactSummary))
 		}
-	} else if state.PreviousSummary != "" {
+	} else {
 		// Fallback to legacy summary if compact summary not available
-		a.previousSummary = state.PreviousSummary
-		if a.debug {
-			a.debugLog("📄 Loaded legacy summary (%d chars)\n", len(state.PreviousSummary))
+		if state.PreviousSummary != "" {
+			a.previousSummary = state.PreviousSummary
+			if a.debug {
+				a.debugLog("📄 Loaded legacy summary (%d chars)\n", len(state.PreviousSummary))
+			}
 		}
 	}
 
@@ -151,6 +155,19 @@ func (a *Agent) SetSessionID(sessionID string) {
 	a.sessionID = sessionID
 }
 
+// SetSessionName explicitly sets a custom name for the current session
+func (a *Agent) SetSessionName(name string) {
+	// Store custom name - will be used on next save
+	pattern := "[SESSION_NAME:]"
+	for i, msg := range a.messages {
+		if strings.HasPrefix(msg.Content, pattern) {
+			a.messages[i].Content = pattern + name
+			return
+		}
+	}
+	a.messages = append([]api.Message{{Role: "system", Content: pattern + name}}, a.messages...)
+}
+
 // GetSessionID returns the session identifier
 func (a *Agent) GetSessionID() string {
 	return a.sessionID
@@ -174,6 +191,9 @@ func (a *Agent) autoSaveState() {
 
 	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", a.sessionID))
 
+	// Generate session name from first user message if not already set
+	sessionName := a.generateSessionName()
+
 	// Create conversation state for persistence
 	state := ConversationState{
 		Messages:          a.messages,
@@ -186,6 +206,7 @@ func (a *Agent) autoSaveState() {
 		CachedCostSavings: a.cachedCostSavings,
 		LastUpdated:       time.Now(),
 		SessionID:         a.sessionID,
+		Name:              sessionName,
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -204,6 +225,31 @@ func (a *Agent) autoSaveState() {
 	}
 
 	if a.debug {
-		a.debugLog("💾 Auto-saved conversation state to %s\n", stateFile)
+		a.debugLog("💾 Auto-saved conversation state to %s (name: %s)\n", stateFile, sessionName)
 	}
+}
+
+// generateSessionName generates a readable session name from first user message
+func (a *Agent) generateSessionName() string {
+	// First check if a custom session name is set via SetSessionName
+	for _, msg := range a.messages {
+		if msg.Role == "system" && strings.HasPrefix(msg.Content, "[SESSION_NAME:]") {
+			name := strings.TrimPrefix(msg.Content, "[SESSION_NAME:]")
+			if strings.TrimSpace(name) != "" {
+				return strings.TrimSpace(name)
+			}
+		}
+	}
+	// Otherwise derive from first user message
+	for _, msg := range a.messages {
+		if msg.Role == "user" && strings.TrimSpace(msg.Content) != "" {
+			name := strings.TrimSpace(msg.Content)
+			name = strings.Join(strings.Fields(name), " ")
+			if len(name) > 60 {
+				name = name[:60] + "..."
+			}
+			return name
+		}
+	}
+	return "Unnamed session"
 }

@@ -28,15 +28,15 @@ func createTestAgent(t *testing.T) *agent.Agent {
 	return testAgent
 }
 
-func TestMemoryCommand_Name(t *testing.T) {
-	cmd := &MemoryCommand{}
-	if cmd.Name() != "memory" {
-		t.Errorf("Expected name 'memory', got '%s'", cmd.Name())
+func TestSessionsCommand_Name(t *testing.T) {
+	cmd := &SessionsCommand{}
+	if cmd.Name() != "sessions" {
+		t.Errorf("Expected name 'sessions', got '%s'", cmd.Name())
 	}
 }
 
-func TestMemoryCommand_Description(t *testing.T) {
-	cmd := &MemoryCommand{}
+func TestSessionsCommand_Description(t *testing.T) {
+	cmd := &SessionsCommand{}
 	desc := cmd.Description()
 	expectedDesc := "Show and load previous conversation sessions"
 	if desc != expectedDesc {
@@ -44,12 +44,12 @@ func TestMemoryCommand_Description(t *testing.T) {
 	}
 }
 
-func TestMemoryCommand_Execute_NoArgs(t *testing.T) {
-	cmd := &MemoryCommand{}
+func TestSessionsCommand_Execute_NoArgs(t *testing.T) {
+	cmd := &SessionsCommand{}
 	err := cmd.Execute([]string{}, nil)
-	// Memory command lists sessions interactively, so we expect it to work without error
+	// Sessions command lists sessions interactively, so we expect it to work without error
 	// The "invalid session number" error is expected since we're not providing interactive input
 	if err != nil && !strings.Contains(err.Error(), "invalid session number") {
-		t.Errorf("Expected no error or session number error for memory command with no args, got: %v", err)
+		t.Errorf("Expected no error or session number error for sessions command with no args, got: %v", err)
 	}
 }

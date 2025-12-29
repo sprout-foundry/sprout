@@ -24,6 +24,7 @@ type ConversationState struct {
 	CachedCostSavings float64       `json:"cached_cost_savings"`
 	LastUpdated       time.Time     `json:"last_updated"`
 	SessionID         string        `json:"session_id"`
+	Name              string        `json:"name"` // Human-readable session name
 }
 
 // GetStateDir returns the directory for storing conversation state
@@ -33,7 +34,7 @@ func GetStateDir() (string, error) {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	stateDir := filepath.Join(homeDir, ".gpt_chat_state")
+	stateDir := filepath.Join(homeDir, ".ledit", "sessions")
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return "", fmt.Errorf("failed to create state directory: %w", err)
 	}
@@ -48,6 +49,9 @@ func (a *Agent) SaveState(sessionID string) error {
 		return err
 	}
 
+	// Generate session name from first user message
+	sessionName := a.generateSessionName()
+
 	state := ConversationState{
 		Messages:          a.messages,
 		TaskActions:       a.taskActions,
@@ -59,6 +63,7 @@ func (a *Agent) SaveState(sessionID string) error {
 		CachedCostSavings: a.cachedCostSavings,
 		LastUpdated:       time.Now(),
 		SessionID:         sessionID,
+		Name:              sessionName,
 	}
 
 	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", sessionID))
@@ -71,8 +76,8 @@ func (a *Agent) SaveState(sessionID string) error {
 	return os.WriteFile(stateFile, data, 0600)
 }
 
-// LoadState loads a conversation state by session ID
-func (a *Agent) LoadState(sessionID string) (*ConversationState, error) {
+// LoadStateWithoutAgent loads a conversation state by session ID without an Agent instance
+func LoadStateWithoutAgent(sessionID string) (*ConversationState, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
 		return nil, err
@@ -100,6 +105,11 @@ func (a *Agent) LoadState(sessionID string) (*ConversationState, error) {
 	return &state, nil
 }
 
+// LoadState loads a conversation state by session ID
+func (a *Agent) LoadState(sessionID string) (*ConversationState, error) {
+	return LoadStateWithoutAgent(sessionID)
+}
+
 // ListSessionsWithTimestamps returns all available session IDs with their last updated timestamps
 func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 	stateDir, err := GetStateDir()
@@ -123,23 +133,26 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 				continue
 			}
 
-			// Try to read the session file to get the last updated time from metadata
+			// Try to read the session file to get the last updated time and name from state
 			stateFile := filepath.Join(stateDir, file.Name())
 			lastUpdated := fileInfo.ModTime()
+			name := ""
 
-			// Read the file to get the actual last updated time from the state
+			// Read the file to get the actual last updated time and name from the state
 			if data, err := os.ReadFile(stateFile); err == nil {
 				var state ConversationState
 				if err := json.Unmarshal(data, &state); err == nil {
 					if !state.LastUpdated.IsZero() {
 						lastUpdated = state.LastUpdated
 					}
+					name = state.Name
 				}
 			}
 
 			sessions = append(sessions, SessionInfo{
 				SessionID:   sessionID,
 				LastUpdated: lastUpdated,
+				Name:        name,
 			})
 		}
 	}
@@ -151,6 +164,7 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 type SessionInfo struct {
 	SessionID   string    `json:"session_id"`
 	LastUpdated time.Time `json:"last_updated"`
+	Name        string    `json:"name"` // Human-readable session name
 }
 
 // GetSessionPreview returns the first 50 characters of the first user message
@@ -192,6 +206,78 @@ func GetSessionPreview(sessionID string) string {
 	}
 
 	return ""
+}
+
+// GetSessionName returns the name of a session
+func GetSessionName(sessionID string) string {
+	stateDir, err := GetStateDir()
+	if err != nil {
+		return ""
+	}
+
+	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
+	cleanSessionID := sessionID
+	if strings.HasPrefix(sessionID, "session_") {
+		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
+	}
+
+	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		return ""
+	}
+
+	var state ConversationState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return ""
+	}
+
+	return state.Name
+}
+
+// RenameSession renames a session by updating the name field in the state file
+func RenameSession(sessionID string, newName string) error {
+	stateDir, err := GetStateDir()
+	if err != nil {
+		return err
+	}
+
+	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
+	cleanSessionID := sessionID
+	if strings.HasPrefix(sessionID, "session_") {
+		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
+	}
+
+	if strings.HasPrefix(cleanSessionID, "session_") {
+		cleanSessionID = strings.TrimPrefix(cleanSessionID, "session_")
+	}
+
+	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
+
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		return fmt.Errorf("failed to read session file: %w", err)
+	}
+
+	var state ConversationState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return fmt.Errorf("failed to unmarshal state: %w", err)
+	}
+
+	// Update the name
+	state.Name = newName
+
+	// Write back to file
+ newData, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal state: %w", err)
+	}
+
+	if err := os.WriteFile(stateFile, newData, 0600); err != nil {
+		return fmt.Errorf("failed to write session file: %w", err)
+	}
+
+	return nil
 }
 
 // ListSessions returns all available session IDs
@@ -363,4 +449,24 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// ExportStateToJSON converts a ConversationState to JSON bytes
+func ExportStateToJSON(state *ConversationState) ([]byte, error) {
+	return json.MarshalIndent(state, "", "  ")
+}
+
+// ImportStateFromJSONFile loads a ConversationState from a JSON file
+func ImportStateFromJSONFile(filename string) (*ConversationState, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read import file: %w", err)
+	}
+
+	var state ConversationState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal state from file: %w", err)
+	}
+
+	return &state, nil
 }

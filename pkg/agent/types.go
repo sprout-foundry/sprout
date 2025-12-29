@@ -2,6 +2,7 @@ package agent
 
 import (
 	"sync"
+
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
@@ -72,6 +73,6 @@ type CircuitBreakerAction struct {
 //   defer cb.mu.Unlock()
 //   cb.Actions[key] = &CircuitBreakerAction{...}
 type CircuitBreakerState struct {
+	mu      sync.RWMutex
 	Actions map[string]*CircuitBreakerAction // key: actionType:target
-	mu      sync.RWMutex                     // protects Actions map
 }

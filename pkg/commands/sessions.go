@@ -9,18 +9,18 @@ import (
 	"golang.org/x/term"
 )
 
-// MemoryCommand handles memory features with auto-tracking and session recovery
-type MemoryCommand struct{}
+// SessionsCommand handles session management with auto-tracking and session recovery
+type SessionsCommand struct{}
 
-func (c *MemoryCommand) Name() string {
-	return "memory"
+func (c *SessionsCommand) Name() string {
+	return "sessions"
 }
 
-func (c *MemoryCommand) Description() string {
+func (c *SessionsCommand) Description() string {
 	return "Show and load previous conversation sessions"
 }
 
-func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
+func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// List sessions immediately in reverse order (newest first)
 	sessions, err := agent.ListSessionsWithTimestamps()
 	if err != nil {
@@ -46,7 +46,7 @@ func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}
 
 		chatAgent.ApplyState(state)
-		fmt.Printf("✓ Conversation memory loaded for session: %s\n", sessionID)
+		fmt.Printf("✓ Conversation session loaded: %s\n", sessionID)
 
 		// Show conversation preview
 		c.displayConversationPreview(chatAgent)
@@ -58,7 +58,7 @@ func (c *MemoryCommand) Execute(args []string, chatAgent *agent.Agent) error {
 }
 
 // selectSessionWithDropdown provides interactive session selection with dropdown
-func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
+func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
 	// Check if we're in agent console - if so, show list with help
 	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
 		fmt.Println("\n📂 Available Sessions:")
@@ -71,15 +71,15 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 			fmt.Printf("%d. Session %s - %s\n", sessionNum, session.SessionID, session.LastUpdated.Format("2006-01-02 15:04:05"))
 		}
 
-		fmt.Println("\n💡 To load a session, use: /memory <session_number>")
-		fmt.Println("   Example: /memory 1")
+		fmt.Println("\n💡 To load a session, use: /sessions <session_number>")
+		fmt.Println("   Example: /sessions 1")
 		return nil
 	}
 
 	// Check if we're not in a terminal
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		fmt.Println("Interactive session selection requires a terminal.")
-		fmt.Println("Use /memory <session_number> to load a specific session.")
+		fmt.Println("Use /sessions <session_number> to load a specific session.")
 		return nil
 	}
 
@@ -87,20 +87,27 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 	items := make([]agent.SessionItem, 0, len(sessions))
 	for i := len(sessions) - 1; i >= 0; i-- {
 		session := sessions[i]
-		preview := agent.GetSessionPreview(session.SessionID)
+		name := session.Name
+		if name == "" {
+			name = agent.GetSessionPreview(session.SessionID)
+		}
+		label := session.LastUpdated.Format("2006-01-02 15:04:05")
+		if name != "" {
+			label = fmt.Sprintf("[%s] - %s", name, session.LastUpdated.Format("2006-01-02 15:04:05"))
+		}
 		item := agent.SessionItem{
-			Label:     fmt.Sprintf("%s - %s", session.LastUpdated.Format("2006-01-02 15:04:05"), preview),
-			Value:     session.SessionID,
-			SessionID: session.SessionID,
-			Timestamp: session.LastUpdated,
-			Preview:   preview,
+			Label:       label,
+			Value:       session.SessionID,
+			SessionID:   session.SessionID,
+			LastUpdated: session.LastUpdated,
+			Name:        name,
 		}
 		items = append(items, item)
 	}
 
 	// Use agent's integrated dropdown UI if available
 	if chatAgent == nil || !chatAgent.IsInteractiveMode() {
-		fmt.Println("Interactive selection not available. Use /memory <session_number> instead.")
+		fmt.Println("Interactive selection not available. Use /sessions <session_number> instead.")
 		return nil
 	}
 
@@ -119,7 +126,7 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 		return fmt.Errorf("failed to load session: %v", err)
 	}
 	chatAgent.ApplyState(state)
-	fmt.Printf("\r\n✅ Conversation memory loaded for session: %s\r\n", sessionID)
+	fmt.Printf("\r\n✅ Conversation session loaded: %s\r\n", sessionID)
 
 	// Show conversation preview
 	c.displayConversationPreview(chatAgent)
@@ -127,7 +134,7 @@ func (c *MemoryCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, 
 }
 
 // displayConversationPreview shows recent messages from the restored session
-func (c *MemoryCommand) displayConversationPreview(agent *agent.Agent) {
+func (c *SessionsCommand) displayConversationPreview(agent *agent.Agent) {
 	// Get last few messages for preview (e.g., last 5)
 	lastMessages := agent.GetLastMessages(5)
 

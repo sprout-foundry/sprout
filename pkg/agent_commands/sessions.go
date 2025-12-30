@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/ui"
 )
 
 // SessionsCommand handles session management with auto-tracking and session recovery
@@ -60,16 +61,49 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 // selectSessionWithDropdown provides interactive session selection with dropdown
 func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
-	// UI not available - select newest session or return
-	fmt.Println("Interactive session selection not available.")
-	var sessionID string
-	if len(sessions) > 0 {
-		sessionID = sessions[len(sessions)-1].SessionID // Get newest session
-		fmt.Printf("Auto-selected newest session: %s\n", sessionID)
-	} else {
-		fmt.Println("No sessions available.")
+	// Simple numeric selector - display sessions and prompt for choice
+	fmt.Println("\n📂 Available Sessions:")
+	fmt.Println("=====================")
+
+	// Display sessions in reverse order (newest first)
+	for i := len(sessions) - 1; i >= 0; i-- {
+		session := sessions[i]
+		sessionNum := len(sessions) - i
+		name := session.Name
+		if name == "" {
+			name = agent.GetSessionPreview(session.SessionID)
+		}
+		label := session.LastUpdated.Format("2006-01-02 15:04:05")
+		if name != "" {
+			label = fmt.Sprintf("[%s] - %s", name, session.LastUpdated.Format("2006-01-02 15:04:05"))
+		}
+		fmt.Printf("%d. %s\n", sessionNum, label)
+	}
+
+	// Build simple options list for display
+	var sessionOptions []string
+	for i := len(sessions) - 1; i >= 0; i-- {
+		session := sessions[i]
+		name := session.Name
+		if name == "" {
+			name = agent.GetSessionPreview(session.SessionID)
+		}
+		label := session.LastUpdated.Format("2006-01-02 15:04:05")
+		if name != "" {
+			label = fmt.Sprintf("[%s] - %s", name, session.LastUpdated.Format("2006-01-02 15:04:05"))
+		}
+		sessionOptions = append(sessionOptions, label)
+	}
+
+	// Use shared numeric selector
+	selection, ok := ui.PromptForSelection(sessionOptions, "Enter session number (or 0 to cancel): ")
+	if !ok || selection == 0 {
 		return nil
 	}
+
+	// Load the selected session (convert selection back to session index)
+	sessionIndex := len(sessions) - selection
+	sessionID := sessions[sessionIndex].SessionID
 	state, err := chatAgent.LoadState(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to load session: %v", err)

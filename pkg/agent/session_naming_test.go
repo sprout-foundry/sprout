@@ -107,6 +107,9 @@ func TestSessionPersistenceWithName(t *testing.T) {
 	// Override GetStateDir for this test
 	originalGetStateDir := getStateDirFunc
 	getStateDirFunc = func() (string, error) {
+		if err := os.MkdirAll(tmpDir, 0700); err != nil {
+			return "", err
+		}
 		return tmpDir, nil
 	}
 	defer func() {
@@ -158,6 +161,3 @@ func TestSessionPersistenceWithName(t *testing.T) {
 		t.Errorf("session name = %q, want Test Refactoring Session", sessions[0].Name)
 	}
 }
-
-// Mock function for GetStateDir override
-var getStateDirFunc = GetStateDir

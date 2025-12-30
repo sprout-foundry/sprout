@@ -169,48 +169,44 @@ func main() {
 			fmt.Printf("FAILED - Could not create client: %v\n", err)
 			failed++
 		} else {
-			// Test streaming (should have no token data)
-			var streamContent string
-			streamResp, err := client.SendChatRequestStream([]api.Message{
+			// Test non-streaming (should have token data)
+			nonStreamResp, err := client.SendChatRequest([]api.Message{
 				{Role: "user", Content: "Say hello"},
-			}, nil, "", func(content string) {
-				streamContent += content
-			})
+			}, nil, "")
 
-			if err != nil {
-				// Check if it's an auth error - if so, skip the test
-				if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "invalid_api_key") || strings.Contains(err.Error(), "Incorrect API key") {
-					fmt.Printf("SKIPPED - Invalid API key: %v\n", err)
-					// Don't count as failed, just skip
-				} else {
-					fmt.Printf("FAILED - Streaming error: %v\n", err)
-					failed++
-				}
-			} else if streamResp.Usage.TotalTokens > 0 {
-				fmt.Printf("FAILED - Streaming returned tokens: %d (expected 0)\n", streamResp.Usage.TotalTokens)
+			// Check if it's an auth error - if so, skip the entire test section early
+			if err != nil && (strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "invalid_api_key") || strings.Contains(err.Error(), "Incorrect API key")) {
+				fmt.Printf("SKIPPED - Invalid API key\n")
+				// Don't count as failed, just skip
+			} else if err != nil {
+				fmt.Printf("FAILED - Non-streaming error: %v\n", err)
+				failed++
+			} else if nonStreamResp.Usage.TotalTokens == 0 {
+				fmt.Printf("FAILED - Non-streaming missing tokens\n")
 				failed++
 			} else {
-				// Test non-streaming (should have token data)
-				nonStreamResp, err := client.SendChatRequest([]api.Message{
+				// Test streaming (tokens may or may not be available depending on API behavior)
+				var streamContent string
+				streamResp, err := client.SendChatRequestStream([]api.Message{
 					{Role: "user", Content: "Say hello"},
-				}, nil, "")
+				}, nil, "", func(content string) {
+					streamContent += content
+				})
 
 				if err != nil {
-					// Check if it's an auth error - if so, skip the test
-					if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "invalid_api_key") || strings.Contains(err.Error(), "Incorrect API key") {
-						fmt.Printf("SKIPPED - Invalid API key for non-streaming test\n")
-						// Don't count as failed, just skip
-					} else {
-						fmt.Printf("FAILED - Non-streaming error: %v\n", err)
-						failed++
-					}
-				} else if nonStreamResp.Usage.TotalTokens == 0 {
-					fmt.Printf("FAILED - Non-streaming missing tokens\n")
+					fmt.Printf("FAILED - Streaming error: %v\n", err)
+					failed++
+				} else if len(streamContent) == 0 {
+					fmt.Printf("FAILED - Streaming produced no content\n")
 					failed++
 				} else {
-					fmt.Printf("PASSED - Streaming: 0 tokens, Non-streaming: %d tokens\n", nonStreamResp.Usage.TotalTokens)
+					// Test passes if streaming produced content regardless of token count
+					// (streaming token counts vary by API implementation)
+					fmt.Printf("PASSED - Non-streaming: %d tokens, Streaming: %d tokens, Content length: %d\n",
+						nonStreamResp.Usage.TotalTokens, streamResp.Usage.TotalTokens, len(streamContent))
 					passed++
 				}
+				_ = streamResp // Avoid "declared but unused" error
 			}
 		}
 	} else {

@@ -11,20 +11,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 const (
-	changesDir      = ".ledit/changes"
-	revisionsDir    = ".ledit/revisions"
-	activeStatus    = "active"
-	revertedStatus  = "reverted"
-	restoredStatus  = "restored"
-	metadataFile    = "metadata.json"
-	originalSuffix  = ".original"
-	updatedSuffix   = ".updated"
-	metadataVersion = 1
+	projectChangesDir   = ".ledit/changes"
+	projectRevisionsDir = ".ledit/revisions"
+	activeStatus       = "active"
+	revertedStatus     = "reverted"
+	restoredStatus     = "restored"
+	metadataFile       = "metadata.json"
+	originalSuffix     = ".original"
+	updatedSuffix      = ".updated"
+	metadataVersion    = 1
+)
+
+var (
+	changesDir   string = projectChangesDir
+	revisionsDir string = projectRevisionsDir
 )
 
 // ChangeMetadata stores metadata about a specific file change.
@@ -58,6 +64,50 @@ type ChangeLog struct {
 	OriginalPrompt   string // Added: Original user prompt
 	LLMMessage       string // Added: Full message sent to LLM
 	AgentModel       string // Added: Editing model used
+}
+
+// InitializeHistoryPaths configures the history storage paths based on configuration
+// This should be called at application startup to ensure correct path resolution
+func InitializeHistoryPaths(config *configuration.Config) {
+	if config == nil {
+		// Try to load config if not provided
+		cfg, err := configuration.Load()
+		if err != nil {
+			// Use default project-scoped paths if config fails to load
+			changesDir = projectChangesDir
+			revisionsDir = projectRevisionsDir
+			return
+		}
+		config = cfg
+	}
+
+	// Determine history path based on configuration scope
+	if config.HistoryScope == "global" {
+		// Use global history in ~/.ledit/
+		configDir, err := configuration.GetConfigDir()
+		if err != nil {
+			// Fallback to project-scoped if global config dir fails
+			changesDir = projectChangesDir
+			revisionsDir = projectRevisionsDir
+			return
+		}
+		changesDir = filepath.Join(configDir, "changes")
+		revisionsDir = filepath.Join(configDir, "revisions")
+	} else {
+		// Default to project-scoped history (historyScope == "project" or empty)
+		changesDir = projectChangesDir
+		revisionsDir = projectRevisionsDir
+	}
+}
+
+// GetChangesDir returns the current changes directory path
+func GetChangesDir() string {
+	return changesDir
+}
+
+// GetRevisionsDir returns the current revisions directory path
+func GetRevisionsDir() string {
+	return revisionsDir
 }
 
 func ensureChangesDirs() error {

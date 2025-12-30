@@ -34,6 +34,9 @@ type TrackedFileChange struct {
 
 // NewChangeTracker creates a new change tracker for an agent session
 func NewChangeTracker(agent *Agent, instructions string) *ChangeTracker {
+	// Initialize history paths based on configuration
+	history.InitializeHistoryPaths(nil)
+
 	sessionID := agent.GetSessionID()
 	if sessionID == "" {
 		sessionID = generateSessionID()

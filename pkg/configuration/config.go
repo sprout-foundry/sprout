@@ -57,6 +57,9 @@ type Config struct {
 	CommandHistory []string `json:"command_history,omitempty"`
 	HistoryIndex   int      `json:"history_index,omitempty"`
 
+	// Change History Configuration
+	HistoryScope string `json:"history_scope,omitempty"` // "project" or "global"
+
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
 }
@@ -178,6 +181,7 @@ func NewConfig() *Config {
 			ChunkTimeoutSec:      320, // Increased from 90 to 320 seconds (5 minutes) for complex tasks
 			OverallTimeoutSec:    600, // 10 minutes
 		},
+		HistoryScope: "project", // Default to project-scoped history
 	}
 }
 

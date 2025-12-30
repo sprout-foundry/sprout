@@ -7,6 +7,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/history"
+	"github.com/alantheprice/ledit/pkg/ui"
 	"golang.org/x/term"
 )
 
@@ -74,13 +75,6 @@ func (lf *LogFlow) showLogOptions() error {
 		return fmt.Errorf("failed to get revision history: %w", err)
 	}
 
-	actions := lf.buildLogActions(revisions)
-
-	if len(actions) == 0 {
-		fmt.Printf("\r\n📭 No change history available.\r\n")
-		return nil
-	}
-
 	// Check if we're in agent console - just show the log
 	if os.Getenv("LEDIT_AGENT_CONSOLE") == "1" {
 		// In agent console, just display the change log by default
@@ -93,23 +87,33 @@ func (lf *LogFlow) showLogOptions() error {
 		return lf.viewChangeLog()
 	}
 
-	// UI not available - execute first action or return
-	fmt.Println("Interactive action selection not available.")
-	var selectedID string
-	if len(actions) > 0 {
-		selectedID = actions[0].ID
-		fmt.Printf("Auto-selected first action: %s\n", selectedID)
-	} else {
-		fmt.Println("No actions available.")
+	// Build available actions
+	actions := lf.buildLogActions(revisions)
+
+	if len(actions) == 0 {
+		fmt.Printf("\r\n📭 No change history available.\r\n")
 		return nil
 	}
-	for _, action := range actions {
-		if action.ID == selectedID {
-			return action.Action(lf)
-		}
+
+	// Build options for numeric prompt
+	var options []ui.NumericPromptOption
+	for i, action := range actions {
+		options = append(options, ui.NumericPromptOption{
+			Index:       i + 1,
+			DisplayName: action.DisplayName,
+			Description: action.Description,
+			Value:       action.ID,
+		})
 	}
 
-	return fmt.Errorf("unknown action: %s", selectedID)
+	// Use shared numeric selector
+	selection, ok := ui.PromptForSelectionWithOptions(options, "Enter option number (or 0 to cancel): ")
+	if !ok || selection == 0 {
+		return nil
+	}
+
+	// Execute the selected action
+	return actions[selection-1].Action(lf)
 }
 
 // buildLogActions creates dynamic actions based on available revisions
@@ -230,18 +234,42 @@ func (lf *LogFlow) interactiveRollback() error {
 		return nil
 	}
 
-	// UI not available - select first revision or return
-	fmt.Println("Interactive revision selection not available.")
-	var revisionID string
-	if len(revisions) > 0 {
-		revisionID = revisions[0].RevisionID
-		fmt.Printf("Auto-selected first revision: %s\n", revisionID)
-	} else {
-		fmt.Println("No revisions available for rollback.")
+	// Numeric selector for rollback
+	fmt.Println("\n⏮️ Available Revisions:")
+	fmt.Println("=======================")
+
+	for i, revision := range revisions {
+		description := revision.Instructions
+		if len(description) > 60 {
+			description = description[:57] + "..."
+		}
+		fmt.Printf("%d. %s - %s\n", i+1, revision.RevisionID, description)
+		fmt.Printf("   [Time: %s, Files: %d]\n", revision.Timestamp.Format("2006-01-02 15:04:05"), len(revision.Changes))
+	}
+
+	// Use shared numeric selector
+	selection, ok := ui.PromptForSelection(nil, "Enter revision number to rollback (or 0 to cancel): ")
+	if !ok || selection == 0 {
 		return nil
 	}
 
-	// Confirm rollback
+	// Validate selection is within range (extra safety check)
+	if selection < 1 || selection > len(revisions) {
+		fmt.Printf("Invalid selection. Please enter a number between 1 and %d.\n", len(revisions))
+		return nil
+	}
+
+	// Confirm before executing rollback
+	revisionID := revisions[selection-1].RevisionID
+	fmt.Printf("\n⚠️  Confirm rollback of revision: %s\n", revisionID)
+	fmt.Printf("This will restore %d file(s). Continue? (y/n): ", len(revisions[selection-1].Changes))
+
+	if !ui.PromptForConfirmation("") {
+		fmt.Println("Rollback cancelled.")
+		return nil
+	}
+
+	// Perform rollback
 	fmt.Printf("\r\n🔄 Rolling back to revision: %s\r\n", revisionID)
 
 	err = history.RevertChangeByRevisionID(revisionID)

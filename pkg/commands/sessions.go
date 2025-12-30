@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/ui"
 	"golang.org/x/term"
 )
 
@@ -49,7 +50,7 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		fmt.Printf("✓ Conversation session loaded: %s\n", sessionID)
 
 		// Show conversation preview
-		c.displayConversationPreview(chatAgent)
+		displayConversationPreview(chatAgent)
 		return nil
 	}
 
@@ -83,8 +84,27 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 		return nil
 	}
 
-	// Convert sessions to dropdown items (reverse order for newest first)
-	items := make([]agent.SessionItem, 0, len(sessions))
+	// Simple numeric selector - display sessions and prompt for choice
+	fmt.Println("\n📂 Available Sessions:")
+	fmt.Println("=====================")
+
+	// Display sessions in reverse order (newest first)
+	for i := len(sessions) - 1; i >= 0; i-- {
+		session := sessions[i]
+		sessionNum := len(sessions) - i
+		name := session.Name
+		if name == "" {
+			name = agent.GetSessionPreview(session.SessionID)
+		}
+		label := session.LastUpdated.Format("2006-01-02 15:04:05")
+		if name != "" {
+			label = fmt.Sprintf("[%s] - %s", name, session.LastUpdated.Format("2006-01-02 15:04:05"))
+		}
+		fmt.Printf("%d. %s\n", sessionNum, label)
+	}
+
+	// Build simple options list for display
+	var sessionOptions []string
 	for i := len(sessions) - 1; i >= 0; i-- {
 		session := sessions[i]
 		name := session.Name
@@ -95,48 +115,35 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 		if name != "" {
 			label = fmt.Sprintf("[%s] - %s", name, session.LastUpdated.Format("2006-01-02 15:04:05"))
 		}
-		item := agent.SessionItem{
-			Label:       label,
-			Value:       session.SessionID,
-			SessionID:   session.SessionID,
-			LastUpdated: session.LastUpdated,
-			Name:        name,
-		}
-		items = append(items, item)
+		sessionOptions = append(sessionOptions, label)
 	}
 
-	// Use agent's integrated dropdown UI if available
-	if chatAgent == nil || !chatAgent.IsInteractiveMode() {
-		fmt.Println("Interactive selection not available. Use /sessions <session_number> instead.")
+	// Use shared numeric selector
+	selection, ok := ui.PromptForSelection(sessionOptions, "Enter session number (or 0 to cancel): ")
+	if !ok || selection == 0 {
 		return nil
 	}
 
-	// UI not available - select newest session or return
-	fmt.Println("Interactive session selection not available.")
-	var sessionID string
-	if len(sessions) > 0 {
-		sessionID = sessions[len(sessions)-1].SessionID // Get newest
-		fmt.Printf("Auto-selected newest session: %s\n", sessionID)
-	} else {
-		fmt.Println("No sessions available to load.")
-		return nil
-	}
+	// Load the selected session (convert selection back to session index)
+	sessionIndex := len(sessions) - selection
+	sessionID := sessions[sessionIndex].SessionID
 	state, err := chatAgent.LoadState(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to load session: %v", err)
 	}
+
 	chatAgent.ApplyState(state)
 	fmt.Printf("\r\n✅ Conversation session loaded: %s\r\n", sessionID)
 
 	// Show conversation preview
-	c.displayConversationPreview(chatAgent)
+	displayConversationPreview(chatAgent)
 	return nil
 }
 
 // displayConversationPreview shows recent messages from the restored session
-func (c *SessionsCommand) displayConversationPreview(agent *agent.Agent) {
+func displayConversationPreview(chatAgent *agent.Agent) {
 	// Get last few messages for preview (e.g., last 5)
-	lastMessages := agent.GetLastMessages(5)
+	lastMessages := chatAgent.GetLastMessages(5)
 
 	if len(lastMessages) > 0 {
 		fmt.Println("\n📋 Recent conversation preview:")

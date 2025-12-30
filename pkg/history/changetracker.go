@@ -384,7 +384,11 @@ func handleRevisionRollback(group RevisionGroup) error {
 	activeChanges := getActiveChanges(group.Changes)
 	for _, change := range activeChanges {
 		fmt.Printf("  Rolling back %s...\n", change.Filename)
-		if err := filesystem.SaveFile(change.Filename, change.OriginalCode); err != nil {
+
+		// Write content directly to avoid any encoding transformations
+		// Use filesystem.WriteFileWithDir which does raw binary write
+		err := filesystem.WriteFileWithDir(change.Filename, []byte(change.OriginalCode), 0644)
+		if err != nil {
 			return fmt.Errorf("failed to rollback %s: %w", change.Filename, err)
 		}
 		if err := updateChangeStatus(change.FileRevisionHash, "reverted"); err != nil {
@@ -401,9 +405,13 @@ func handleRevisionRestore(group RevisionGroup) error {
 
 	for _, change := range group.Changes {
 		fmt.Printf("  Restoring %s...\n", change.Filename)
-		if err := filesystem.SaveFile(change.Filename, change.NewCode); err != nil {
+
+		// Write content directly to avoid any encoding transformations
+		err := filesystem.WriteFileWithDir(change.Filename, []byte(change.NewCode), 0644)
+		if err != nil {
 			return fmt.Errorf("failed to restore %s: %w", change.Filename, err)
 		}
+
 		// Update status to restored regardless of previous status
 		if err := updateChangeStatus(change.FileRevisionHash, "restored"); err != nil {
 			return fmt.Errorf("failed to update status for %s: %w", change.Filename, err)

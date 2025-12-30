@@ -329,9 +329,15 @@ func processQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 		// Print CI summary if in CI mode, otherwise regular completion message
 		if outputHandler.IsCI() {
+			// Include conversation summary in CI mode as well
+			summary := chatAgent.GenerateConversationSummary()
+			outputHandler.WriteString(summary)
 			outputHandler.PrintSummary()
 		} else {
-			fmt.Printf("\n✅ Completed in %s\n", formatDuration(duration))
+			// Print conversation summary with completed actions, tasks, files
+			summary := chatAgent.GenerateConversationSummary()
+			fmt.Printf("\n%s\n", summary)
+			fmt.Printf("✅ Completed in %s\n", formatDuration(duration))
 		}
 		return nil
 

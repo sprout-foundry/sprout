@@ -22,6 +22,10 @@ func TestBase64Encoding(t *testing.T) {
 	os.Chdir(testDir)
 	defer os.Chdir(oldDir)
 
+	// Ensure we're using project-scoped paths for this test
+	changesDir = projectChangesDir
+	revisionsDir = projectRevisionsDir
+
 	// Test data
 	originalCode := "func main() {\n\tfmt.Println(\"Hello, World!\")\n}"
 	newCode := "func main() {\n\tfmt.Println(\"Hello, Updated World!\")\n}"
@@ -118,6 +122,10 @@ func TestHistoryFiltering(t *testing.T) {
 	os.Chdir(testDir)
 	defer os.Chdir(oldDir)
 
+	// Ensure we're using project-scoped paths for this test
+	changesDir = projectChangesDir
+	revisionsDir = projectRevisionsDir
+
 	// Create multiple changes with different timestamps
 	now := time.Now()
 
@@ -209,6 +217,10 @@ func TestRollback(t *testing.T) {
 	oldDir, _ := os.Getwd()
 	os.Chdir(testDir)
 	defer os.Chdir(oldDir)
+
+	// Ensure we're using project-scoped paths for this test
+	changesDir = projectChangesDir
+	revisionsDir = projectRevisionsDir
 
 	// Create a test file
 	testFile := "rollback_test.txt"
@@ -317,6 +329,10 @@ func TestBackwardCompatibility(t *testing.T) {
 	oldDir, _ := os.Getwd()
 	os.Chdir(testDir)
 	defer os.Chdir(oldDir)
+
+	// Ensure we're using project-scoped paths for this test
+	changesDir = projectChangesDir
+	revisionsDir = projectRevisionsDir
 
 	// Create the changes directory structure manually
 	changeDir := ".ledit/changes/test_change"

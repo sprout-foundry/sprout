@@ -12,6 +12,11 @@ import (
 	"github.com/alantheprice/ledit/pkg/agent_api"
 )
 
+// Reset to default when running tests (helps with parallel test safety)
+func init() {
+	getStateDirFunc = defaultGetStateDir
+}
+
 // ConversationState represents the state of a conversation that can be persisted
 type ConversationState struct {
 	Messages          []api.Message `json:"messages"`
@@ -27,8 +32,16 @@ type ConversationState struct {
 	Name              string        `json:"name"` // Human-readable session name
 }
 
+// Variable to allow overriding GetStateDir for testing
+var getStateDirFunc = defaultGetStateDir
+
 // GetStateDir returns the directory for storing conversation state
 func GetStateDir() (string, error) {
+	return getStateDirFunc()
+}
+
+// defaultGetStateDir is the actual implementation of GetStateDir
+func defaultGetStateDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)

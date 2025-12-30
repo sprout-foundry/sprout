@@ -8,10 +8,13 @@ echo "============================================"
 # Optional model argument (default to test client)
 MODEL_ARG=${1:-test:test}
 
-# Create a test directory
-TEST_DIR="/tmp/ledit_ci_integration_$$"
+# Store original directory for reliable cleanup
+ORIGINAL_DIR=$(pwd)
+
+# Create a test directory (use current directory for more portability)
+TEST_DIR="./testing/ledit_ci_integration_$$"
 mkdir -p "$TEST_DIR"
-cd "$TEST_DIR"
+cd "$TEST_DIR" || { echo "Failed to cd to test dir: $TEST_DIR"; exit 1; }
 
 # Initialize a simple project
 cat > test.go << 'EOF'
@@ -65,7 +68,7 @@ else
 fi
 
 # Clean up
-cd /
+cd "$ORIGINAL_DIR" || { echo "Failed to return to original directory"; exit 1; }
 rm -rf "$TEST_DIR"
 unset CI
 unset GITHUB_ACTIONS

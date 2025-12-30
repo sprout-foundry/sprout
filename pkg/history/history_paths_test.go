@@ -8,13 +8,27 @@ import (
 	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
+// Reset globals to defaults before any test runs (helps with parallel test safety)
+func init() {
+	changesDir = projectChangesDir
+	revisionsDir = projectRevisionsDir
+}
+
 func TestInitializeHistoryPaths_ProjectScope(t *testing.T) {
+	// Reset to default before test
+	originalChanges := changesDir
+	originalRevisions := revisionsDir
+	defer func() {
+		changesDir = originalChanges
+		revisionsDir = originalRevisions
+	}()
+
 	// Create a test config with project scope
 	config := &configuration.Config{
 		HistoryScope: "project",
 	}
 
-	// Reset to default
+	// Set to project paths
 	changesDir = projectChangesDir
 	revisionsDir = projectRevisionsDir
 
@@ -39,6 +53,14 @@ func TestInitializeHistoryPaths_ProjectScope(t *testing.T) {
 }
 
 func TestInitializeHistoryPaths_GlobalScope(t *testing.T) {
+	// Reset to default before test
+	originalChanges := changesDir
+	originalRevisions := revisionsDir
+	defer func() {
+		changesDir = originalChanges
+		revisionsDir = originalRevisions
+	}()
+
 	// Create a test config with global scope
 	config := &configuration.Config{
 		HistoryScope: "global",
@@ -73,6 +95,14 @@ func TestInitializeHistoryPaths_GlobalScope(t *testing.T) {
 }
 
 func TestInitializeHistoryPaths_NilConfig(t *testing.T) {
+	// Reset to default before test
+	originalChanges := changesDir
+	originalRevisions := revisionsDir
+	defer func() {
+		changesDir = originalChanges
+		revisionsDir = originalRevisions
+	}()
+
 	// Store current directory
 	oldDir, _ := os.Getwd()
 	t.Cleanup(func() {
@@ -83,7 +113,7 @@ func TestInitializeHistoryPaths_NilConfig(t *testing.T) {
 	// Change to temp directory to test default behavior
 	os.Chdir(t.TempDir())
 
-	// Reset to default before test
+	// Reset to project paths
 	changesDir = projectChangesDir
 	revisionsDir = projectRevisionsDir
 

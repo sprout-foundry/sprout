@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -91,6 +93,9 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 		}
 		// Create OpenRouter wrapper that uses the provider's ListModels directly
 		return &openRouterListModelsWrapper{}, nil
+	case ZAIClientType:
+		// Use generic provider wrapper to get models from config
+		return &genericConfigListModelsWrapper{providerName: "zai"}, nil
 	case DeepInfraClientType:
 		// Check for API key first
 		if os.Getenv("DEEPINFRA_API_KEY") == "" {
@@ -109,9 +114,6 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 		}
 		// Create Mistral wrapper using OpenAI-compatible models endpoint
 		return &mistralListModelsWrapper{}, nil
-	case ZAIClientType:
-		// Z.AI Coding Plan: no public models endpoint documented; return curated list
-		return &zaiListModelsWrapper{}, nil
 	default:
 		return nil, fmt.Errorf("provider creation not supported for client type: %s", clientType)
 	}
@@ -561,18 +563,63 @@ func (w *mistralListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	return models, nil
 }
 
-type zaiListModelsWrapper struct{}
+// genericConfigListModelsWrapper uses provider config for model listing
+// This allows providers without dedicated model endpoints to fallback to config-based model info
+type genericConfigListModelsWrapper struct {
+	providerName string
+}
 
-func (w *zaiListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	if os.Getenv("ZAI_API_KEY") == "" {
-		return nil, fmt.Errorf("ZAI_API_KEY not set")
+// configModelInfo mirrors providers.ModelInfo for our local use
+type configModelInfo struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name,omitempty"`
+	Description   string   `json:"description,omitempty"`
+	ContextLength int      `json:"context_length"`
+	Tags          []string `json:"tags,omitempty"`
+}
+
+// configModels mirrors providers.ModelConfig for our local use
+type configModels struct {
+	ModelInfo []configModelInfo `json:"model_info,omitempty"`
+}
+
+// config mirrors providers.ProviderConfig for our local use
+type config struct {
+	Models configModels `json:"models"`
+}
+
+func (w *genericConfigListModelsWrapper) ListModels() ([]ModelInfo, error) {
+	// Load provider config from file - compute path relative to file location
+	var configPath string
+	// Use runtime path to find the config file
+	if _, filename, _, ok := runtime.Caller(0); ok {
+		configPath = filepath.Join(filepath.Dir(filename), "../agent_providers/configs", w.providerName+".json")
+	} else {
+		// Fallback to current directory
+		configPath = "pkg/agent_providers/configs/" + w.providerName + ".json"
 	}
-	// Static list including newer models
-	models := []ModelInfo{
-		{ID: "glm-4.7", Name: "GLM-4.7", Provider: "zai", ContextLength: 200000, Tags: []string{"tools"}},
-		{ID: "GLM-4.6", Name: "GLM-4.6", Provider: "zai", ContextLength: 200000, Tags: []string{"tools"}},
-		{ID: "GLM-4.5", Name: "GLM-4.5", Provider: "zai", ContextLength: 128000, Tags: []string{"tools"}},
-		{ID: "GLM-4.5-air", Name: "GLM-4.5-air", Provider: "zai", ContextLength: 128000, Tags: []string{"tools"}},
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load %s config: %w", w.providerName, err)
+	}
+
+	var providerConfig config
+	if err := json.Unmarshal(data, &providerConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse %s config: %w", w.providerName, err)
+	}
+
+	// Return models from config model_info (will have context_length, tags, etc.)
+	models := make([]ModelInfo, len(providerConfig.Models.ModelInfo))
+	for i, mi := range providerConfig.Models.ModelInfo {
+		models[i] = ModelInfo{
+			ID:            mi.ID,
+			Name:          mi.Name,
+			Description:   mi.Description,
+			Provider:      w.providerName,
+			ContextLength: mi.ContextLength,
+			Tags:          mi.Tags,
+		}
 	}
 	return models, nil
 }

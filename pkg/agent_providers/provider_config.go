@@ -61,11 +61,22 @@ type PatternOverride struct {
 	ContextLimit int    `json:"context_limit"`
 }
 
+// ModelInfo represents information about a model (simplified version for config)
+type ModelInfo struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name,omitempty"`
+	Description   string   `json:"description,omitempty"`
+	ContextLength int      `json:"context_length"`
+	Tags          []string `json:"tags,omitempty"`
+}
+
 // ModelConfig defines model-related configuration
 type ModelConfig struct {
 	DefaultContextLimit int               `json:"default_context_limit"`
 	ModelOverrides      map[string]int    `json:"model_overrides"`
 	PatternOverrides    []PatternOverride `json:"pattern_overrides"`
+	// Config-based model definitions (fallback when endpoint fetch fails or lacks details)
+	ModelInfo []ModelInfo `json:"model_info,omitempty"`
 	// Legacy fields for backward compatibility
 	ContextLimit    int      `json:"context_limit,omitempty"`
 	SupportsVision  bool     `json:"supports_vision"`
@@ -265,4 +276,14 @@ func (c *ProviderConfig) GetContextLimit(model string) int {
 
 	// 5. Conservative fallback
 	return 32000
+}
+
+// GetModelInfo returns model information from config if available
+func (c *ProviderConfig) GetModelInfo(modelID string) *ModelInfo {
+	for _, mi := range c.Models.ModelInfo {
+		if mi.ID == modelID {
+			return &mi
+		}
+	}
+	return nil
 }

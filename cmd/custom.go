@@ -12,7 +12,7 @@ import (
 )
 
 var customModelCmd = &cobra.Command{
-	Use:   "custom-model",
+	Use:   "custom",
 	Short: "Manage custom model providers",
 	Long: `Manage custom model providers that extend ledit with additional AI services.
 Use subcommands to add, remove, or list configured custom model providers.`,
@@ -294,7 +294,7 @@ func runCustomModelList() error {
 
 	if config.CustomProviders == nil || len(config.CustomProviders) == 0 {
 		fmt.Println("No custom model providers configured.")
-		fmt.Println("Use 'ledit custom-model add' to add a new provider.")
+		fmt.Println("Use 'ledit custom add' to add a new provider.")
 		return nil
 	}
 

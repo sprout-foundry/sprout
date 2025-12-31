@@ -139,6 +139,30 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler:     handleListTodos,
 	})
 
+	registry.RegisterTool(ToolConfig{
+		Name:        "find_todo_id",
+		Description: "Find todo ID by title (case-insensitive)",
+		Parameters: []ParameterConfig{
+			{"title", "string", true, []string{"task_title"}, "The title of the todo to find ID for"},
+		},
+		Handler: func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+			title, _ := args["title"].(string)
+			return tools.FindTodoID(title), nil
+		},
+	})
+
+	registry.RegisterTool(ToolConfig{
+		Name:        "remove_todo",
+		Description: "Remove a todo by ID or title",
+		Parameters: []ParameterConfig{
+			{"id", "string", true, []string{"identifier"}, "The ID or title of the todo to remove"},
+		},
+		Handler: func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+			id, _ := args["id"].(string)
+			return tools.RemoveTodo(id), nil
+		},
+	})
+
 	// Optional compact/maintenance todo tools (to avoid unknown tool calls)
 	registry.RegisterTool(ToolConfig{
 		Name:        "get_active_todos_compact",

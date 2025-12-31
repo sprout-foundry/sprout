@@ -547,3 +547,39 @@ func GetTodoListMarkdown() string {
 
 	return result.String()
 }
+
+// FindTodoID finds a todo ID by title or returns not found
+func FindTodoID(title string) string {
+	id, found := FindTodoIDByTitle(title)
+	if !found {
+		return fmt.Sprintf("Todo not found: %s", title)
+	}
+	return id
+}
+
+// RemoveTodo removes a todo by ID or title
+func RemoveTodo(identifier string) string {
+	globalTodoManager.mutex.Lock()
+	defer globalTodoManager.mutex.Unlock()
+
+	// First try exact ID match
+	for i, item := range globalTodoManager.items {
+		if item.ID == identifier {
+			title := item.Title
+			globalTodoManager.items = append(globalTodoManager.items[:i], globalTodoManager.items[i+1:]...)
+			return fmt.Sprintf("🗑️ Removed todo: %s", title)
+		}
+	}
+
+	// Try title match (case-insensitive)
+	titleNorm := strings.ToLower(strings.TrimSpace(identifier))
+	for i, item := range globalTodoManager.items {
+		if strings.ToLower(strings.TrimSpace(item.Title)) == titleNorm {
+			title := item.Title
+			globalTodoManager.items = append(globalTodoManager.items[:i], globalTodoManager.items[i+1:]...)
+			return fmt.Sprintf("🗑️ Removed todo: %s (by title)", title)
+		}
+	}
+
+	return fmt.Sprintf("Todo not found: %s", identifier)
+}

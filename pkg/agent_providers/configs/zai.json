@@ -35,8 +35,8 @@
         "context_limit": 200000
       },
       {
-        "pattern": "glm-4\\.[5-9].*",
-        "context_limit": 128000
+        "pattern": "glm-4\\.[7-9].*",
+        "context_limit": 200000
       },
       {
         "pattern": "glm-4.*",
@@ -45,6 +45,43 @@
       {
         "pattern": "glm-3.*",
         "context_limit": 128000
+      }
+    ],
+    "model_info": [
+      {
+        "id": "glm-4.7",
+        "name": "GLM-4.7",
+        "description": "Z.AI GLM-4.7 - Latest GLM model with 200K context window",
+        "context_length": 200000,
+        "tags": ["tools", "coding"]
+      },
+      {
+        "id": "GLM-4.6",
+        "name": "GLM-4.6",
+        "description": "Z.AI GLM-4.6 - Coding optimized model with 200K context window",
+        "context_length": 200000,
+        "tags": ["tools", "coding"]
+      },
+      {
+        "id": "glm-4.6v",
+        "name": "GLM-4.6 Vision",
+        "description": "Z.AI GLM-4.6 with vision capabilities",
+        "context_length": 200000,
+        "tags": ["tools", "coding", "vision"]
+      },
+      {
+        "id": "GLM-4.5",
+        "name": "GLM-4.5",
+        "description": "Z.AI GLM-4.5 - Previous generation with 128K context window",
+        "context_length": 128000,
+        "tags": ["tools"]
+      },
+      {
+        "id": "GLM-4.5-air",
+        "name": "GLM-4.5 Air",
+        "description": "Z.AI GLM-4.5 Air - Lightweight version with 128K context window",
+        "context_length": 128000,
+        "tags": ["tools"]
       }
     ],
     "supports_vision": true,

@@ -32,6 +32,7 @@ temp/
 ledit-*
 ledit-main
 test_webserver
+*.bak
 
 /package*.json
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/agent_commands"
+	"github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/webui"
@@ -327,18 +328,14 @@ func processQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			duration,
 		))
 
-		// Print CI summary if in CI mode, otherwise regular completion message
-		if outputHandler.IsCI() {
-			// Include conversation summary in CI mode as well
-			summary := chatAgent.GenerateConversationSummary()
-			outputHandler.WriteString(summary)
-			outputHandler.PrintSummary()
-		} else {
-			// Print conversation summary with completed actions, tasks, files
-			summary := chatAgent.GenerateConversationSummary()
-			fmt.Printf("\n%s\n", summary)
-			fmt.Printf("✅ Completed in %s\n", formatDuration(duration))
+		// Print completion message
+		fmt.Printf("✅ Completed in %s\n", formatDuration(duration))
+
+		// Print completed todos summary with proper markdown syntax
+		if err := printCompletedTodosSummary(chatAgent); err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️  Failed to print todos summary: %v\n", err)
 		}
+
 		return nil
 
 	case <-ctx.Done():
@@ -406,4 +403,21 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fm", d.Minutes())
 	}
 	return fmt.Sprintf("%.1fh", d.Hours())
+}
+
+// printCompletedTodosSummary prints a summary of completed todos with proper markdown syntax
+func printCompletedTodosSummary(chatAgent *agent.Agent) error {
+	// Get the task summary which has proper markdown formatting
+	todoSummary := tools.GetTaskSummary()
+
+	// Only print if there are actual tasks completed (not the "No tasks tracked" message)
+	if todoSummary == "No tasks tracked in this session." {
+		return nil
+	}
+
+	// Add a blank line for separation before printing summary
+	fmt.Println()
+	fmt.Println(todoSummary)
+
+	return nil
 }

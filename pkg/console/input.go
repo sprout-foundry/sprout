@@ -82,8 +82,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.historyIndex = -1
 	fmt.Printf("%s", ir.prompt) // Simple initial prompt
 
-	buf := make([]byte, 32) // Larger buffer for escape sequences
-	escapeParser := NewEscapeParser()
+	buf := make([]byte, 32)
 
 	for {
 		n, err := os.Stdin.Read(buf)
@@ -121,9 +120,6 @@ func (ir *InputReader) ReadLine() (string, error) {
 					oldState = newState
 				}
 
-				// Reset escape parser state to clear any partial sequences
-				escapeParser.Reset()
-
 				// Drain input buffer to clear any characters typed during suspension
 				_ = setNonblock(ir.termFd, true)
 				discardBuf := make([]byte, 256)
@@ -159,11 +155,14 @@ func (ir *InputReader) ReadLine() (string, error) {
 				continue
 
 			default:
-				// Try to parse as escape sequence first
-				if event := escapeParser.Parse(b); event != nil {
-					ir.HandleEvent(event)
+				// Escape sequence tracking disabled - treat bytes as characters directly
+				// This prevents input issues where characters are dropped
+				if b >= 32 && b <= 126 {
+					ir.InsertChar(string([]byte{b}))
+				} else if b == 27 {
+					// ESC key - treat as escape event but don't track sequences
+					ir.HandleEvent(&InputEvent{Type: EventEscape})
 				}
-				// Escape sequence parser now handles regular characters internally
 			}
 		}
 	}
@@ -349,8 +348,10 @@ func (ir *InputReader) GetHistory() []string {
 
 // EscapeParser handles escape sequences using a simple state machine
 type EscapeParser struct {
-	state  int
-	buffer []byte
+	state      int
+	buffer     []byte
+	pendingChar byte   // Stores a character that should be processed next
+	hasPending  bool   // Whether there's a pending character
 }
 
 // NewEscapeParser creates a new escape sequence parser
@@ -363,6 +364,12 @@ func NewEscapeParser() *EscapeParser {
 
 // Parse processes a byte and returns an event if complete
 func (ep *EscapeParser) Parse(b byte) *InputEvent {
+	// If we have a pending character, return it first
+	if ep.hasPending {
+		ep.hasPending = false
+		return &InputEvent{Type: EventChar, Data: string([]byte{ep.pendingChar})}
+	}
+
 	switch ep.state {
 	case 0: // Waiting for ESC or regular char
 		if b == 27 {
@@ -397,6 +404,11 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			return nil
 		}
 		// Not a CSI sequence, treat ESC as escape event
+		// This character could be printable, save it for next call
+		if b >= 32 && b <= 126 {
+			ep.pendingChar = b
+			ep.hasPending = true
+		}
 		ep.Reset()
 		return &InputEvent{Type: EventEscape}
 
@@ -444,9 +456,14 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 				// Part of a longer sequence (like page up/down)
 				return nil
 			}
-			// Unknown sequence, reset and ignore
+			// Unknown sequence - treat as standalone ESC
+			// This character could be printable, save it for next call
+			if b >= 32 && b <= 126 {
+				ep.pendingChar = b
+				ep.hasPending = true
+			}
 			ep.Reset()
-			return nil
+			return &InputEvent{Type: EventEscape}
 		}
 
 	case 3: // Expecting "~" for Delete
@@ -456,9 +473,13 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			ep.Reset()
 			return event
 		}
-		// Not Delete, reset and ignore
+		// Not Delete, the 'b' could be a printable character
+		if b >= 32 && b <= 126 {
+			ep.pendingChar = b
+			ep.hasPending = true
+		}
 		ep.Reset()
-		return nil
+		return &InputEvent{Type: EventEscape}
 
 	case 4: // ESC O sequences (function keys)
 		ep.buffer = append(ep.buffer, b)
@@ -472,9 +493,13 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			ep.Reset()
 			return event
 		default:
-			// Unknown sequence, reset and ignore
+			// Unknown sequence, this character could be printable
+			if b >= 32 && b <= 126 {
+				ep.pendingChar = b
+				ep.hasPending = true
+			}
 			ep.Reset()
-			return nil
+			return &InputEvent{Type: EventEscape}
 		}
 
 	case 5: // ESC [ 1 sequence (Home)
@@ -484,9 +509,13 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			ep.Reset()
 			return event
 		}
-		// Not Home, reset and ignore
+		// Not Home, this character could be printable
+		if b >= 32 && b <= 126 {
+			ep.pendingChar = b
+			ep.hasPending = true
+		}
 		ep.Reset()
-		return nil
+		return &InputEvent{Type: EventEscape}
 
 	case 6: // ESC [ 4 sequence (End)
 		ep.buffer = append(ep.buffer, b)
@@ -495,9 +524,13 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			ep.Reset()
 			return event
 		}
-		// Not End, reset and ignore
+		// Not End, this character could be printable
+		if b >= 32 && b <= 126 {
+			ep.pendingChar = b
+			ep.hasPending = true
+		}
 		ep.Reset()
-		return nil
+		return &InputEvent{Type: EventEscape}
 	}
 
 	return nil
@@ -507,4 +540,6 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 func (ep *EscapeParser) Reset() {
 	ep.state = 0
 	ep.buffer = ep.buffer[:0]
+	ep.hasPending = false
+	ep.pendingChar = 0
 }

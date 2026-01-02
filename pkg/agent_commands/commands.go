@@ -59,19 +59,36 @@ func (r *CommandRegistry) Register(cmd Command) {
 }
 
 // Execute processes a slash command input
+// Supports both / and ! prefixes (e.g., /exec ls or !exec ls)
 func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
-	if !strings.HasPrefix(input, "/") {
-		return fmt.Errorf("not a slash command")
+	trimmed := strings.TrimSpace(input)
+
+	// Check for slash or bang prefix
+	var prefix string
+	if strings.HasPrefix(trimmed, "/") {
+		prefix = "/"
+	} else if strings.HasPrefix(trimmed, "!") {
+		prefix = "!"
+	} else {
+		return fmt.Errorf("not a valid command (must start with / or !)")
 	}
 
 	// Parse command and arguments
-	parts := strings.Fields(input[1:]) // Remove leading slash
+	parts := strings.Fields(trimmed[1:]) // Remove leading prefix
 	if len(parts) == 0 {
 		return fmt.Errorf("empty command")
 	}
 
 	commandName := parts[0]
 	args := parts[1:]
+
+	// If using ! as prefix, default to exec command (to match other tools that use ! for shell commands)
+	if prefix == "!" && commandName != "exec" {
+		// Reconstruct the full command after the bang as exec arguments
+		fullCommand := strings.Join(parts, " ")
+		args = []string{fullCommand}
+		commandName = "exec"
+	}
 
 	// Find and execute command
 	cmd, exists := r.commands[commandName]
@@ -82,9 +99,10 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 	return cmd.Execute(args, chatAgent)
 }
 
-// IsSlashCommand checks if input starts with a slash
+// IsSlashCommand checks if input starts with a slash or bang
 func (r *CommandRegistry) IsSlashCommand(input string) bool {
-	return strings.HasPrefix(strings.TrimSpace(input), "/")
+	trimmed := strings.TrimSpace(input)
+	return strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, "!")
 }
 
 // GetCommand returns a command by name

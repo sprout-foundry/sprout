@@ -3,7 +3,6 @@ package console
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"golang.org/x/term"
 )
@@ -82,6 +81,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.historyIndex = -1
 	fmt.Printf("%s", ir.prompt) // Simple initial prompt
 
+	parser := NewEscapeParser()
 	buf := make([]byte, 32)
 
 	for {
@@ -94,18 +94,18 @@ func (ir *InputReader) ReadLine() (string, error) {
 			continue
 		}
 
-		// Process each byte
+		// Process each byte through the escape parser
 		for i := 0; i < n; i++ {
 			b := buf[i]
 
-			// Handle control characters directly
-			switch b {
-			case 3: // Ctrl+C
+			// Handle Ctrl+C and Ctrl+Z directly before parsing
+			if b == 3 { // Ctrl+C
 				fmt.Printf("\r%s", ClearToEndOfLineSeq()) // Clear line
 				fmt.Println("^C")
 				return "", fmt.Errorf("interrupted")
+			}
 
-			case 26: // Ctrl+Z
+			if b == 26 { // Ctrl+Z
 				// Restore terminal before suspension for clean shell state
 				term.Restore(ir.termFd, oldState)
 				suspendTerminal()
@@ -138,31 +138,21 @@ func (ir *InputReader) ReadLine() (string, error) {
 				ir.line = ""
 				ir.cursorPos = 0
 				continue
+			}
 
-			case 13: // Enter
-				fmt.Println() // Move to next line
-				input := strings.TrimSpace(ir.line)
-				if input != "" {
-					ir.AddToHistory(input)
+			// Parse the byte through the escape parser
+			event := parser.Parse(b)
+			if event != nil {
+				if event.Type == EventEnter {
+					// End of input
+					fmt.Println() // Move to next line
+					input := ir.line
+					if input != "" {
+						ir.AddToHistory(input)
+					}
+					return input, nil
 				}
-				return input, nil
-
-			case 8, 127: // Backspace
-				ir.Backspace()
-
-			case 9: // Tab
-				// Tab completion could be implemented here
-				continue
-
-			default:
-				// Escape sequence tracking disabled - treat bytes as characters directly
-				// This prevents input issues where characters are dropped
-				if b >= 32 && b <= 126 {
-					ir.InsertChar(string([]byte{b}))
-				} else if b == 27 {
-					// ESC key - treat as escape event but don't track sequences
-					ir.HandleEvent(&InputEvent{Type: EventEscape})
-				}
+				ir.HandleEvent(event)
 			}
 		}
 	}

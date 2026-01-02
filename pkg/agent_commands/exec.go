@@ -11,6 +11,7 @@ import (
 
 // ExecCommand handles the /exec slash command
 // Usage: /exec <shell-command-to-execute>
+// Alias: !<shell-command-to-execute> (matches other tools like Jupyter, R, etc.)
 type ExecCommand struct{}
 
 func (c *ExecCommand) Name() string {
@@ -18,7 +19,7 @@ func (c *ExecCommand) Name() string {
 }
 
 func (c *ExecCommand) Description() string {
-	return "Execute a shell command directly"
+	return "Execute a shell command directly (also use !<command> as shortcut)"
 }
 
 func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {

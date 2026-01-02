@@ -200,6 +200,44 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
+				Name:        "update_todo_status_bulk",
+				Description: "Update multiple todo statuses at once (use this for efficient batch updates)",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"updates": map[string]interface{}{
+							"type": "array",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"id": map[string]interface{}{
+										"type":        "string",
+										"description": "ID of the todo item to update",
+									},
+									"status": map[string]interface{}{
+										"type":        "string",
+										"description": "New status for the todo item",
+										"enum":        []string{"pending", "in_progress", "completed", "cancelled"},
+									},
+								},
+								"required": []string{"id", "status"},
+							},
+							"description": "Array of todo ID/status pairs to update",
+							"minItems":    1,
+						},
+					},
+					"required":             []string{"updates"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
 				Name:        "list_todos",
 				Description: "Show current task list and progress",
 				Parameters: map[string]interface{}{

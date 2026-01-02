@@ -133,6 +133,15 @@ func newDefaultToolRegistry() *ToolRegistry {
 	})
 
 	registry.RegisterTool(ToolConfig{
+		Name:        "update_todo_status_bulk",
+		Description: "Update multiple todo statuses at once (use for batch updates)",
+		Parameters: []ParameterConfig{
+			{"updates", "array", true, []string{}, "Array of {id, status} objects"},
+		},
+		Handler: handleUpdateTodoStatusBulk,
+	})
+
+	registry.RegisterTool(ToolConfig{
 		Name:        "list_todos",
 		Description: "List all todo items",
 		Parameters:  []ParameterConfig{},
@@ -692,6 +701,63 @@ func handleUpdateTodoStatus(ctx context.Context, a *Agent, args map[string]inter
 		}
 	}
 	a.debugLog("Update todo result: %s\n", result)
+	return result, nil
+}
+
+func handleUpdateTodoStatusBulk(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	updatesRaw, ok := args["updates"]
+	if !ok {
+		return "", fmt.Errorf("missing updates argument")
+	}
+
+	// Parse the updates array
+	updatesSlice, ok := updatesRaw.([]interface{})
+	if !ok {
+		return "", fmt.Errorf("updates must be an array")
+	}
+
+	var updates []struct {
+		ID     string
+		Status string
+	}
+
+	for _, updateRaw := range updatesSlice {
+		updateMap, ok := updateRaw.(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("each update must be an object")
+		}
+
+		update := struct {
+			ID     string
+			Status string
+		}{}
+
+		if id, ok := updateMap["id"].(string); ok {
+			update.ID = id
+		}
+		if status, ok := updateMap["status"].(string); ok {
+			// Validate status against allowed values
+			validStatuses := map[string]bool{"pending": true, "in_progress": true, "completed": true, "cancelled": true}
+			if !validStatuses[status] {
+				return "", fmt.Errorf("invalid status '%s', must be one of: pending, in_progress, completed, cancelled", status)
+			}
+			update.Status = status
+		}
+
+		if update.ID == "" {
+			return "", fmt.Errorf("each update requires an id")
+		}
+		if update.Status == "" {
+			return "", fmt.Errorf("each update requires a status")
+		}
+		updates = append(updates, update)
+	}
+
+	a.ToolLog("bulk updating todos", fmt.Sprintf("%d items", len(updates)))
+	a.debugLog("Bulk updating %d todos\n", len(updates))
+
+	result := tools.UpdateTodoStatusBulk(updates)
+	a.debugLog("Bulk update result: %s\n", result)
 	return result, nil
 }
 

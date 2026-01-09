@@ -33,9 +33,6 @@ type CIOutputHandler struct {
 
 	// Buffer for handling split content
 	buffer strings.Builder
-
-	// Markdown formatting
-	markdownFormatter *MarkdownFormatter
 }
 
 // NewCIOutputHandler creates a new CI output handler
@@ -59,24 +56,12 @@ func NewCIOutputHandler(writer io.Writer) *CIOutputHandler {
 		progressInterval = 30 * time.Second
 	}
 
-	// Initialize markdown formatter
-	// Enable markdown colors for summary text unless explicitly disabled
-	// Check env vars: LEDIT_CI_COLORS=1 or LEDIT_COLOR=always to force colors
-	enableColors := isInteractive && !isCI // Default: only colors in interactive mode
-	enableInline := true                   // Always enable inline formatting
-
-	// Override: allow markdown colors via environment variable
-	if os.Getenv("LEDIT_CI_COLORS") == "1" || os.Getenv("LEDIT_COLOR") == "always" {
-		enableColors = true
-	}
-
 	return &CIOutputHandler{
 		writer:            writer,
 		isCI:              isCI,
 		isInteractive:     isInteractive,
 		progressInterval:  progressInterval,
 		startTime:         time.Now(),
-		markdownFormatter: NewMarkdownFormatter(enableColors, enableInline),
 	}
 }
 
@@ -97,17 +82,8 @@ func (h *CIOutputHandler) Write(p []byte) (n int, err error) {
 	// Clear buffer
 	h.buffer.Reset()
 
-	// First, apply markdown formatting if enabled and content looks like markdown
-	// Do this BEFORE any ANSI stripping so colors can be preserved
-	markdownWasApplied := false
-	if h.markdownFormatter != nil && IsLikelyMarkdown(content) {
-		content = h.markdownFormatter.Format(content)
-		markdownWasApplied = true
-	}
-
 	// In CI/non-interactive mode, fix line endings and strip ANSI codes
-	// Don't strip ANSI if markdown was applied, to preserve colored markdown
-	doStripANSI := !h.isInteractive && !markdownWasApplied
+	doStripANSI := !h.isInteractive
 
 	if doStripANSI {
 		// Handle carriage returns properly - replace \r without \n with proper newlines

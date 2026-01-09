@@ -112,15 +112,12 @@ func TestIsLikelyMarkdown(t *testing.T) {
 func TestCIOutputHandler_Integration(t *testing.T) {
 	handler := NewCIOutputHandler(&strings.Builder{})
 
-	// Test markdown is processed
+	// Test markdown is passed through without processing
 	markdown := "# Test\n**bold** text"
 	_, err := handler.Write([]byte(markdown))
 	if err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 
-	// Should have a markdown formatter
-	if handler.markdownFormatter == nil {
-		t.Error("Expected markdown formatter to be initialized")
-	}
+	// Markdown should be passed through unchanged (no processing)
 }

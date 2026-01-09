@@ -29,7 +29,8 @@ type ConversationState struct {
 	CachedCostSavings float64       `json:"cached_cost_savings"`
 	LastUpdated       time.Time     `json:"last_updated"`
 	SessionID         string        `json:"session_id"`
-	Name              string        `json:"name"` // Human-readable session name
+	Name              string        `json:"name"`            // Human-readable session name
+	WorkingDirectory  string        `json:"working_directory"` // Directory where session was created
 }
 
 // Variable to allow overriding GetStateDir for testing
@@ -65,6 +66,9 @@ func (a *Agent) SaveState(sessionID string) error {
 	// Generate session name from first user message
 	sessionName := a.generateSessionName()
 
+	// Get current working directory
+	workingDir, _ := os.Getwd()
+
 	state := ConversationState{
 		Messages:          a.messages,
 		TaskActions:       a.taskActions,
@@ -77,6 +81,7 @@ func (a *Agent) SaveState(sessionID string) error {
 		LastUpdated:       time.Now(),
 		SessionID:         sessionID,
 		Name:              sessionName,
+		WorkingDirectory:  workingDir,
 	}
 
 	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", sessionID))
@@ -150,6 +155,7 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 			stateFile := filepath.Join(stateDir, file.Name())
 			lastUpdated := fileInfo.ModTime()
 			name := ""
+			workingDir := ""
 
 			// Read the file to get the actual last updated time and name from the state
 			if data, err := os.ReadFile(stateFile); err == nil {
@@ -159,16 +165,34 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 						lastUpdated = state.LastUpdated
 					}
 					name = state.Name
+					workingDir = state.WorkingDirectory
 				}
 			}
 
 			sessions = append(sessions, SessionInfo{
-				SessionID:   sessionID,
-				LastUpdated: lastUpdated,
-				Name:        name,
+				SessionID:       sessionID,
+				LastUpdated:     lastUpdated,
+				Name:            name,
+				WorkingDirectory: workingDir,
 			})
 		}
 	}
+
+	// Get current working directory for prioritization
+	currentDir, _ := os.Getwd()
+
+	// Sort sessions: current directory first, then by last updated (newest first)
+	sort.Slice(sessions, func(i, j int) bool {
+		// Always move current directory sessions to top
+		iIsCurrent := sessions[i].WorkingDirectory == currentDir
+		jIsCurrent := sessions[j].WorkingDirectory == currentDir
+		if iIsCurrent != jIsCurrent {
+			return iIsCurrent
+		}
+
+		// For same directory type, sort by last updated (newest first)
+		return sessions[i].LastUpdated.After(sessions[j].LastUpdated)
+	})
 
 	return sessions, nil
 }
@@ -177,7 +201,8 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 type SessionInfo struct {
 	SessionID   string    `json:"session_id"`
 	LastUpdated time.Time `json:"last_updated"`
-	Name        string    `json:"name"` // Human-readable session name
+	Name             string    `json:"name"`             // Human-readable session name
+	WorkingDirectory  string    `json:"working_directory"` // Directory where session was created
 }
 
 // GetSessionPreview returns the first 50 characters of the first user message

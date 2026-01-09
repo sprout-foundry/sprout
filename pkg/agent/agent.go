@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/mcp"
+	"golang.org/x/term"
 )
 
 const (
@@ -582,7 +584,27 @@ func (a *Agent) HandleInterrupt() string {
 
 // readSimpleInput reads a single line of input without interfering with UnifiedInputManager
 func (a *Agent) readSimpleInput(defaultValue string) string {
-	// Use a simple buffered reader that doesn't conflict with the main input system
+	// Check if we're in a terminal to avoid issues with nested terminal mode
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		// For simple input during agent processing, we should avoid nested terminal raw mode
+		// Just read a single line with buffered I/O instead of full terminal handling
+		fmt.Print("> ")
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			if a.debug {
+				fmt.Printf("Debug: readSimpleInput error: %v, using default: %s\n", err, defaultValue)
+			}
+			return defaultValue
+		}
+		result := strings.TrimSpace(input)
+		if result == "" {
+			result = defaultValue
+		}
+		return result
+	}
+
+	// Non-terminal fallback - use InputReader
 	reader := console.NewInputReader("> ")
 	input, err := reader.ReadLine()
 	if err != nil {
@@ -593,9 +615,10 @@ func (a *Agent) readSimpleInput(defaultValue string) string {
 	}
 
 	result := strings.TrimSpace(input)
-	if result == "" && defaultValue != "" {
-		return defaultValue
+	if result == "" {
+		result = defaultValue
 	}
+
 	return result
 }
 

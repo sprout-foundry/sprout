@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,12 +15,48 @@ import (
 	"golang.org/x/term"
 )
 
+// Commit status constants
+const (
+	CommitStatusSuccess = "success"
+	CommitStatusError   = "error"
+	CommitStatusDryRun  = "dry-run"
+)
+
 // CommitCommand implements the /commit slash command
 type CommitCommand struct {
 	skipPrompt   bool
 	dryRun       bool
 	allowSecrets bool
 	agentError   error // Store agent creation error for better error reporting
+}
+
+// CommitJSONResult is the JSON output structure for commit command
+type CommitJSONResult struct {
+	Status  string `json:"status"`  // success, error, dry-run
+	Commit  string `json:"commit,omitempty"`  // commit hash if successful
+	Message string `json:"message,omitempty"` // commit message
+	Branch  string `json:"branch,omitempty"`  // branch name
+	Error   string `json:"error,omitempty"`  // error message
+}
+
+// Validate checks that required fields are populated
+func (r *CommitJSONResult) Validate() error {
+	if r.Status == "" {
+		return errors.New("status field is required")
+	}
+	switch r.Status {
+	case CommitStatusSuccess:
+		if r.Commit == "" {
+			return errors.New("commit hash required for success status")
+		}
+	case CommitStatusError:
+		if r.Error == "" {
+			return errors.New("error message required for error status")
+		}
+	case CommitStatusDryRun:
+		// Only status required for dry-run
+	}
+	return nil
 }
 
 // wrapText wraps text to a specific line length
@@ -191,9 +228,8 @@ func (c *CommitCommand) SetAgentError(err error) {
 	c.agentError = err
 }
 
-// Execute runs the commit command
-func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	// Parse flags from args
+// parseFlags parses command-line flags and sets internal state
+func (c *CommitCommand) parseFlags(args []string) []string {
 	var cleanArgs []string
 	for _, arg := range args {
 		switch arg {
@@ -207,6 +243,31 @@ func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			cleanArgs = append(cleanArgs, arg)
 		}
 	}
+	return cleanArgs
+}
+
+// getGitCommitHash retrieves the current git commit hash
+func getGitCommitHash() (string, error) {
+	output, err := exec.Command("git", "rev-parse", "HEAD").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get commit hash: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// getGitBranchName retrieves the current git branch name
+func getGitBranchName() (string, error) {
+	output, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get branch name: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// Execute runs the commit command
+func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	// Parse flags and get clean args
+	cleanArgs := c.parseFlags(args)
 
 	// Handle subcommands
 	if len(cleanArgs) > 0 {
@@ -221,6 +282,65 @@ func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Default behavior: use new interactive commit flow with flags
 	flow := NewCommitFlowWithFlags(chatAgent, c.skipPrompt, c.dryRun, c.allowSecrets)
 	return flow.Execute()
+}
+
+// ExecuteWithJSONOutput runs the commit command with JSON output
+func (c *CommitCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
+	// Parse flags using helper
+	c.parseFlags(args)
+
+	// Run commit flow
+	flow := NewCommitFlowWithFlags(chatAgent, c.skipPrompt, c.dryRun, c.allowSecrets)
+	if err := flow.Execute(); err != nil {
+		result := CommitJSONResult{
+			Status: CommitStatusError,
+			Error:  err.Error(),
+		}
+		if err := result.Validate(); err != nil {
+			return fmt.Errorf("JSON validation failed: %w", err)
+		}
+		return WriteJSONToOutput(result)
+	}
+
+	// Handle dry-run mode
+	if c.dryRun {
+		result := CommitJSONResult{
+			Status: CommitStatusDryRun,
+			Message: "Dry-run mode: commit message generated successfully without creating commit",
+		}
+		if err := result.Validate(); err != nil {
+			return fmt.Errorf("JSON validation failed: %w", err)
+		}
+		return WriteJSONToOutput(result)
+	}
+
+	// Get commit hash using helper
+	commitHash, err := getGitCommitHash()
+	if err != nil {
+		return WriteJSONToOutput(CommitJSONResult{
+			Status: CommitStatusError,
+			Error:  err.Error(),
+		})
+	}
+
+	// Get branch name using helper
+	branch, err := getGitBranchName()
+	if err != nil {
+		return WriteJSONToOutput(CommitJSONResult{
+			Status: CommitStatusSuccess,
+			Commit: commitHash,
+		})
+	}
+
+	result := CommitJSONResult{
+		Status: CommitStatusSuccess,
+		Commit: commitHash,
+		Branch: branch,
+	}
+	if err := result.Validate(); err != nil {
+		return fmt.Errorf("JSON validation failed: %w", err)
+	}
+	return WriteJSONToOutput(result)
 }
 
 func (c *CommitCommand) selectAndStageFiles(chatAgent *agent.Agent, reader *bufio.Reader) ([]string, error) {
@@ -683,7 +803,7 @@ Generate a Git commit message summary. The message should follow these rules:
 					c.println("Commit cancelled")
 					return nil
 				default:
-					continue
+					// Continue to confirmation prompt
 				}
 			} else {
 				// Confirmation with retry option via stdin

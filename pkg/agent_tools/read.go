@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 func ReadFile(ctx context.Context, filePath string) (string, error) {
@@ -14,14 +16,13 @@ func ReadFile(ctx context.Context, filePath string) (string, error) {
 }
 
 func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine int) (string, error) {
-	if filePath == "" {
-		return "", fmt.Errorf("empty file path provided")
+	// SECURITY: Validate path is within working directory (handles symlinks properly)
+	cleanPath, err := filesystem.SafeResolvePath(filePath)
+	if err != nil {
+		return "", err
 	}
 
-	// Clean and validate the path
-	cleanPath := filepath.Clean(filePath)
-
-	// Check if file exists
+	// Security check passed - now check if file exists
 	info, err := os.Stat(cleanPath)
 	if os.IsNotExist(err) {
 		return "", fmt.Errorf("file does not exist: %s", cleanPath)

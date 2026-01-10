@@ -207,7 +207,7 @@ func (m *Manager) mapStringToClientType(s string) (api.ClientType, error) {
 	case "test":
 		return api.TestClientType, nil
 	default:
-		// Check if it's a custom provider
+		// Check if it's a custom provider FIRST (before checking factory providers)
 		if m.config.CustomProviders != nil {
 			if _, exists := m.config.CustomProviders[s]; exists {
 				return api.ClientType(s), nil

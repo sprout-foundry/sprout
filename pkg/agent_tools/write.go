@@ -5,24 +5,25 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 func WriteFile(ctx context.Context, filePath, content string) (string, error) {
-	if filePath == "" {
-		return "", fmt.Errorf("empty file path provided")
+	// SECURITY: Validate parent directory is safe to access (handles new files)
+	cleanPath, err := filesystem.SafeResolvePathForWrite(filePath)
+	if err != nil {
+		return "", err
 	}
 
-	// Clean the path
-	cleanPath := filepath.Clean(filePath)
-
-	// Create directory if it doesn't exist
+	// Security check passed - now create directory if it doesn't exist
 	dir := filepath.Dir(cleanPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
 	// Write the file
-	err := os.WriteFile(cleanPath, []byte(content), 0644)
+	err = os.WriteFile(cleanPath, []byte(content), 0644)
 	if err != nil {
 		return "", fmt.Errorf("failed to write file %s: %w", cleanPath, err)
 	}

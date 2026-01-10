@@ -1,19 +1,62 @@
+# Binaries
 ledit
-.ledit/
+ledit-*
+ledit-main
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test and coverage
+*.test
+*.out
+*.prof
+*.coverprofile
+coverage.out
+coverage.html
+
+# Go workspace and tools
+go.work
+env
+tags
+
+# Temporary files
 *.tmp
+*~
+*.swp
+*.swo
+*.bak
+
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Project-specific directories
+.ledit/
 testing/
-e2e_results.csv
+test_home/
+.bin/
+plans/
+
+# Project-specific log files
 debug.log
 debug_logs/
 ui_test_logs/
 tool_calls.log
-test_home/
-
-.DS_Store
-.vscode/
-.idea/
-.bin/
-plans/
+e2e_results.csv
 
 # Common build and dependency directories
 node_modules/
@@ -24,53 +67,41 @@ target/
 out/
 .cache/
 .venv/
-
 temp/
 
-# Build artifacts and binaries
-*.exe
-ledit-*
-ledit-main
-test_webserver
-*.bak
-
-/package*.json
-
+# WebUI
+webui/build/
+webui/node_modules/
+webui/package-lock.json
 
 # Playwright test files
 playwright-report/
 playwright.config.js
 test-results/
 
-# WebUI build files
-webui/build/
-webui/node_modules/
+# WebUI static files - commented out to allow go install
 # pkg/webui/static/ - Commented out to allow go install to work
 # The static files need to be included in the Go module for go install
 
-# Go test files and binaries
-*.test
+# Test files
 test/**/test_*
 **/test_*
 
-# Debug and screenshots
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.svg
-
-# Temporary development files
+# Development files
 *.md.tmp
 webui-websocket-test.js
+testing_area/
 
-# Documentation and planning files that are work-in-progress
+# Work-in-progress documentation and planning
 *_plan.md
 mem.md
 minimum_requirements.md
 feature_review_plan.md
 run-prompt.md
-webui/package-lock.json
-testing_area/
 
-__pycache__/
+# Debug screenshots
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg

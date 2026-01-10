@@ -18,6 +18,7 @@ with automatic web UI startup for rich interactive experiences.
 
 Available commands:
   agent  - AI agent mode with modern CLI + Web UI
+  plan   - Interactive planning mode for refining ideas and generating detailed plans
   shell  - Generate shell scripts from natural language descriptions
   commit - Generate commit messages
   review - Perform AI-powered code review on staged changes
@@ -97,4 +98,5 @@ func init() {
 	rootCmd.AddCommand(customModelCmd)
 	rootCmd.AddCommand(reviewStagedCmd)
 	rootCmd.AddCommand(shellCmd)
+	rootCmd.AddCommand(planCmd)
 }

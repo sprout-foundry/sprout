@@ -3,7 +3,6 @@ package agent
 import (
 	_ "embed"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 )
@@ -11,13 +10,19 @@ import (
 //go:embed prompts/system_prompt.md
 var systemPromptContent string
 
+//go:embed prompts/planning_prompt.md
+var planningPromptContent string
+
 // //go:embed prompts/project_goals_prompt.md
 // var projectGoalsPromptContent string
 
 // GetEmbeddedSystemPrompt returns the embedded system prompt
-func GetEmbeddedSystemPrompt() string {
+func GetEmbeddedSystemPrompt() (string, error) {
 	// Extract the prompt content from the markdown
-	promptContent := extractSystemPrompt()
+	promptContent, err := extractSystemPrompt()
+	if err != nil {
+		return "", err
+	}
 
 	// Add current date and time for temporal context
 	currentTime := time.Now()
@@ -40,12 +45,15 @@ func GetEmbeddedSystemPrompt() string {
 		promptContent = promptContent + "\n" + mcpServerSummary
 	}
 
-	return promptContent
+	return promptContent, nil
 }
 
 // GetEmbeddedSystemPromptWithProvider returns the embedded system prompt with provider-specific enhancements
-func GetEmbeddedSystemPromptWithProvider(provider string) string {
-	promptContent := GetEmbeddedSystemPrompt()
+func GetEmbeddedSystemPromptWithProvider(provider string) (string, error) {
+	promptContent, err := GetEmbeddedSystemPrompt()
+	if err != nil {
+		return "", err
+	}
 
 	// Add provider-specific constraints for ZAI (GLM-4.6)
 	if strings.ToLower(provider) == "zai" {
@@ -64,31 +72,83 @@ func GetEmbeddedSystemPromptWithProvider(provider string) string {
 - Focus on technical execution over explanation
 - Avoid verbose analysis or multi-step reasoning
 - Execute tool operations decisively`
-		return promptContent + zaiConstraints
+		return promptContent + zaiConstraints, nil
 	}
 
 	// No provider-specific enhancements for other providers
-	return promptContent
+	return promptContent, nil
 }
 
 // extractSystemPrompt extracts the prompt content from the system_prompt markdown
-func extractSystemPrompt() string {
+func extractSystemPrompt() (string, error) {
 	// The system_prompt.md has the prompt content in a code block
 	// We'll extract everything between the ``` markers
 	const promptStart = "# Ledit"
 
 	startIdx := strings.Index(systemPromptContent, promptStart)
 	if startIdx == -1 {
-		// If not found, throw an error and exit this is a critical failure
-		fmt.Fprintln(os.Stderr, "Critical error: system prompt content not found")
-		os.Exit(1)
+		return "", fmt.Errorf("critical error: system prompt content not found")
 	}
 
 	endIdx := strings.Index(systemPromptContent[startIdx:], "```")
 	if endIdx == -1 {
 		// If no closing marker, use the whole content from start
-		return strings.TrimSpace(systemPromptContent[startIdx:])
+		return strings.TrimSpace(systemPromptContent[startIdx:]), nil
 	}
 
-	return strings.TrimSpace(systemPromptContent[startIdx : startIdx+endIdx])
+	return strings.TrimSpace(systemPromptContent[startIdx : startIdx+endIdx]), nil
+}
+
+// GetEmbeddedPlanningPrompt returns the embedded planning prompt
+func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
+	// Extract the prompt content from the markdown
+	promptContent, err := extractPlanningPrompt()
+	if err != nil {
+		return "", err
+	}
+
+	// Add current date and time for temporal context
+	currentTime := time.Now()
+	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
+		currentTime.Format("2006-01-02"),
+		currentTime.Format("15:04:05"),
+		currentTime.Location().String())
+
+	// Add todo integration or not based on flag
+	todoIntegration := `
+
+# Todo Integration
+`
+	if createTodos {
+		todoIntegration += `- When you identify clear tasks, use the add_todos tool to create them
+- This creates a todo system that can be tracked during implementation
+- Structure todos by phases or categories
+- Include descriptions for complex todos
+`
+	} else {
+		todoIntegration += `- Disabled (user is managing tasks separately)
+`
+	}
+
+	return promptContent + dateTimeString + todoIntegration, nil
+}
+
+// extractPlanningPrompt extracts the prompt content from the planning_prompt markdown
+func extractPlanningPrompt() (string, error) {
+	// The planning_prompt.md has the prompt content in a code block
+	// We'll extract everything between the ``` markers
+	const promptStart = "You are an autonomous planning and execution assistant."
+
+	startIdx := strings.Index(planningPromptContent, promptStart)
+	if startIdx == -1 {
+		return "", fmt.Errorf("critical error: planning prompt content not found")
+	}
+
+	endIdx := strings.Index(planningPromptContent[startIdx:], "```")
+	if endIdx == -1 {
+		// If no closing marker, use the whole content from start
+		return strings.TrimSpace(planningPromptContent[startIdx:]), nil
+	}
+
+	return strings.TrimSpace(planningPromptContent[startIdx : startIdx+endIdx]), nil
 }

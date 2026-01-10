@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -154,4 +155,139 @@ func ReadFileBytes(path string) ([]byte, error) {
 // CreateTempFile creates a temporary file
 func CreateTempFile(dir, pattern string) (*os.File, error) {
 	return os.CreateTemp(dir, pattern)
+}
+
+// SafeResolvePath validates and resolves a file path, checking for path traversal
+// while allowing symlinks that stay within the working directory.
+//
+// Returns the resolved absolute path if it's safe to access, or an error otherwise.
+func SafeResolvePath(filePath string) (string, error) {
+	if filePath == "" {
+		return "", fmt.Errorf("empty file path provided")
+	}
+
+	// Clean the path
+	cleanPath := filepath.Clean(filePath)
+
+	// Get absolute paths
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	cwdAbs, err := filepath.Abs(cwd)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for cwd: %w", err)
+	}
+
+	// Resolve symlinks to their targets
+	resolvedAbs, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve path (including symlink evaluation): %w", err)
+	}
+
+	// Also resolve CWD in case it's a symlink
+	resolvedCwd, err := filepath.EvalSymlinks(cwdAbs)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve cwd symlink: %w", err)
+	}
+
+	// Check if the resolved path is within the resolved working directory
+	relPath, err := filepath.Rel(resolvedCwd, resolvedAbs)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine relative path: %w", err)
+	}
+
+	// If the relative path starts with "..", it's outside the working directory
+	if strings.HasPrefix(relPath, "..") {
+		return "", fmt.Errorf("security violation: attempt to access file outside working directory: %s (resolves to: %s)", cleanPath, resolvedAbs)
+	}
+
+	return resolvedAbs, nil
+}
+
+// SafeResolvePathForWrite validates a file path for writing, checking that the
+// parent directory is safe to access. This allows writing to new files that don't
+// exist yet while still preventing path traversal attacks.
+//
+// Returns the absolute path if it's safe to write, or an error otherwise.
+func SafeResolvePathForWrite(filePath string) (string, error) {
+	if filePath == "" {
+		return "", fmt.Errorf("empty file path provided")
+	}
+
+	// Clean the path
+	cleanPath := filepath.Clean(filePath)
+
+	// Get absolute paths
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	cwdAbs, err := filepath.Abs(cwd)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for cwd: %w", err)
+	}
+
+	// Get the parent directory and resolve it (file may not exist yet)
+	parentDir := filepath.Dir(absPath)
+	
+	// Find the nearest existing parent directory
+	maxDepth := 50 // Prevent infinite loops
+	depth := 0
+	for depth < maxDepth {
+		if _, statErr := os.Stat(parentDir); statErr == nil {
+			// Found an existing directory
+			break
+		}
+		
+		// Parent doesn't exist, try going up one level
+		newParent := filepath.Dir(parentDir)
+		if newParent == parentDir {
+			// We've reached the root without finding a valid directory
+			return "", fmt.Errorf("no safe parent directory found for path: %s", cleanPath)
+		}
+		parentDir = newParent
+		depth++
+	}
+	
+	if depth >= maxDepth {
+		return "", fmt.Errorf("parent directory search exceeded maximum depth for path: %s", cleanPath)
+	}
+
+	// Resolve symlinks in the parent directory path
+	resolvedParent, err := filepath.EvalSymlinks(parentDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve parent directory symlink: %w", err)
+	}
+
+	// Also resolve CWD in case it's a symlink
+	resolvedCwd, err := filepath.EvalSymlinks(cwdAbs)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve cwd symlink: %w", err)
+	}
+
+	// Check if the resolved parent directory is within the resolved working directory
+	relPath, err := filepath.Rel(resolvedCwd, resolvedParent)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine relative path: %w", err)
+	}
+
+	// If the relative path starts with "..", it's outside the working directory
+	if strings.HasPrefix(relPath, "..") {
+		return "", fmt.Errorf("security violation: attempt to write file outside working directory: %s (parent resolves to: %s)", cleanPath, resolvedParent)
+	}
+
+	return absPath, nil
 }

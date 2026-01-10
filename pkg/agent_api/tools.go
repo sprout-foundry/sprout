@@ -130,7 +130,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "add_todos",
-				Description: "Create task list for multi-step work",
+				Description: "Add todo items to track work progress (can add single or multiple)",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -201,12 +201,12 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "update_todo_status_bulk",
-				Description: "Update multiple todo statuses at once (use this for efficient batch updates)",
+				Description: "Update status of multiple todo items at once (use for efficiency)",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"updates": map[string]interface{}{
-							"type": "array",
+							"type":        "array",
 							"items": map[string]interface{}{
 								"type": "object",
 								"properties": map[string]interface{}{
@@ -222,8 +222,6 @@ func GetToolDefinitions() []Tool {
 								},
 								"required": []string{"id", "status"},
 							},
-							"description": "Array of todo ID/status pairs to update",
-							"minItems":    1,
 						},
 					},
 					"required":             []string{"updates"},
@@ -255,8 +253,8 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
-				Name:        "get_active_todos_compact",
-				Description: "Minimal task view (in-progress + pending summary)",
+				Name:        "archive_completed",
+				Description: "Remove completed/cancelled todos from active view",
 				Parameters: map[string]interface{}{
 					"type":                 "object",
 					"properties":           map[string]interface{}{},
@@ -272,8 +270,8 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
-				Name:        "archive_completed",
-				Description: "Remove completed/cancelled todos from active view",
+				Name:        "validate_build",
+				Description: "Validate that the project builds successfully after file operations",
 				Parameters: map[string]interface{}{
 					"type":                 "object",
 					"properties":           map[string]interface{}{},
@@ -372,6 +370,37 @@ func GetToolDefinitions() []Tool {
 						},
 					},
 					"required":             []string{"url"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "run_subagent",
+				Description: "IMPORTANT: Use this to delegate implementation tasks to subagents. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. This is the PRIMARY way to implement features during execution phase. Use for: creating files, feature implementations, multi-file changes, complex logic. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. Runs synchronously (blocking). 30-minute timeout per subagent.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"prompt": map[string]interface{}{
+							"type":        "string",
+							"description": "The prompt/task for the subagent to execute",
+							"minLength":   1,
+						},
+						"model": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional: Override model for this subagent (e.g., 'qwen/qwen-coder-32b')",
+						},
+						"provider": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional: Override provider (e.g., 'openrouter')",
+						},
+					},
+					"required":             []string{"prompt"},
 					"additionalProperties": false,
 				},
 			},

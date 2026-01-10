@@ -6,7 +6,11 @@ import (
 )
 
 func TestGetEmbeddedSystemPrompt(t *testing.T) {
-	prompt := GetEmbeddedSystemPrompt()
+	prompt, err := GetEmbeddedSystemPrompt()
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
 
 	if prompt == "" {
 		t.Error("Expected non-empty system prompt")
@@ -18,17 +22,26 @@ func TestGetEmbeddedSystemPrompt(t *testing.T) {
 }
 
 func TestGetEmbeddedSystemPromptWithProvider(t *testing.T) {
-	basePrompt := GetEmbeddedSystemPrompt()
+	basePrompt, err := GetEmbeddedSystemPrompt()
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
 
 	// Test with ZAI provider (GLM-4.6) - should have specific constraints
-	zaiPrompt := GetEmbeddedSystemPromptWithProvider("zai")
+	zaiPrompt, err := GetEmbeddedSystemPromptWithProvider("zai")
+	if err != nil {
+		t.Errorf("Expected no error for ZAI, got: %v", err)
+	}
 
 	if len(zaiPrompt) <= len(basePrompt) {
 		t.Error("ZAI prompt should be longer than base prompt (has GLM-4.6 specific constraints)")
 	}
 
 	// Test with other provider (should return base prompt)
-	otherPrompt := GetEmbeddedSystemPromptWithProvider("openai")
+	otherPrompt, err := GetEmbeddedSystemPromptWithProvider("openai")
+	if err != nil {
+		t.Errorf("Expected no error for OpenAI, got: %v", err)
+	}
 
 	if len(otherPrompt) != len(basePrompt) {
 		t.Error("Non-ZAI providers should return base prompt only")
@@ -55,7 +68,10 @@ func TestGetEmbeddedSystemPromptWithProvider(t *testing.T) {
 
 func TestConsolidatedEfficiencyGuidelines(t *testing.T) {
 	// Test that efficiency guidelines are integrated throughout the base prompt
-	basePrompt := GetEmbeddedSystemPrompt()
+	basePrompt, err := GetEmbeddedSystemPrompt()
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
 
 	// Check that efficiency concepts are integrated into existing sections
 	expectedIntegrations := []string{
@@ -81,14 +97,20 @@ func TestConsolidatedEfficiencyGuidelines(t *testing.T) {
 	// Verify non-ZAI providers get the consolidated base prompt
 	providers := []string{"openai", "deepinfra", "ollama"}
 	for _, provider := range providers {
-		providerPrompt := GetEmbeddedSystemPromptWithProvider(provider)
+		providerPrompt, err := GetEmbeddedSystemPromptWithProvider(provider)
+		if err != nil {
+			t.Errorf("Expected no error for %s, got: %v", provider, err)
+		}
 		if len(providerPrompt) != len(basePrompt) {
 			t.Errorf("Provider %s should get same consolidated base prompt", provider)
 		}
 	}
 
 	// Verify ZAI gets extra constraints
-	zaiPrompt := GetEmbeddedSystemPromptWithProvider("zai")
+	zaiPrompt, err := GetEmbeddedSystemPromptWithProvider("zai")
+	if err != nil {
+		t.Errorf("Expected no error for ZAI, got: %v", err)
+	}
 	if len(zaiPrompt) <= len(basePrompt) {
 		t.Error("ZAI should get base prompt plus extra constraints")
 	}

@@ -327,7 +327,11 @@ func processQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			duration,
 		))
 
-		// Print completion message
+		// Print completion message with conversation summary
+		summary := chatAgent.GenerateConversationSummary()
+		if summary != "" {
+			fmt.Printf("\n%s\n", summary)
+		}
 		fmt.Printf("✅ Completed in %s\n", formatDuration(duration))
 
 		return nil

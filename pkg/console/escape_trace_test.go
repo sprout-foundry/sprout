@@ -39,7 +39,7 @@ func TestTracePartialEscSeqThenLetter(t *testing.T) {
 	// and falls through to return nil
 }
 
-// Test the current behavior of state 2 (got '[')
+// Test === current behavior of state 2 (got '[')
 func TestEscapeParserState2Behavior(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -82,7 +82,8 @@ func TestEscapeParserState2Behavior(t *testing.T) {
 	}
 }
 
-// Test what happens when in the middle of an escape sequence and input arrives
+// FIXED: Test what happens when in middle of an escape sequence and input arrives
+// Previously had infinite loop bug - for { loop with proper termination
 func TestEscapeParserIncompleteSequences(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -111,19 +112,22 @@ func TestEscapeParserIncompleteSequences(t *testing.T) {
 			ep := NewEscapeParser()
 			events := []*InputEvent{}
 
+			// Process byte by byte - draining pending after each byte
 			for _, b := range tc.bytes {
-				// Process this byte and drain any pending characters
+				// Process this byte
+				event := ep.Parse(b)
+				if event != nil {
+					events = append(events, event)
+				}
+				// Drain pending character (if any) caused by Parse(b)
+				// Continue draining until no more pending characters
 				for {
-					event := ep.Parse(b)
-					if event != nil {
-						events = append(events, event)
-					} else {
-						break
-					}
-					// Drain pending character
 					event = ep.Parse(0)
 					if event != nil {
 						events = append(events, event)
+					} else {
+						// No more pending characters, exit drain loop
+						break
 					}
 				}
 			}
@@ -136,7 +140,7 @@ func TestEscapeParserIncompleteSequences(t *testing.T) {
 			t.Logf("Final state: %d", ep.state)
 
 			// The bug is that in incomplete sequences followed by a character,
-			// the character gets lost
+			// that character gets lost
 			if len(events) == 0 {
 				t.Errorf("BUG: No events generated for input %v - character(s) lost!", tc.bytes)
 			}

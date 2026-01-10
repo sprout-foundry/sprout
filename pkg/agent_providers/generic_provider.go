@@ -561,14 +561,22 @@ func (p *GenericProvider) buildHTTPRequest(body []byte, streaming bool) (*http.R
 		return nil, err
 	}
 
-	// Get authentication token
-	token, err := p.config.GetAuthToken()
-	if err != nil {
-		// For local instances like LM Studio, skip auth if no token is configured
-		if strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost") {
-			// No auth needed for local instances - continue without Authorization header
-		} else {
-			return nil, fmt.Errorf("authentication failed: %w", err)
+	// Check if authentication is needed
+	var token string
+	
+	// For local instances like LM Studio, skip auth check entirely if it would fail
+	isLocalInstance := strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost")
+	
+	if isLocalInstance && (p.config.Auth.Type == "bearer" || p.config.Auth.Type == "api_key") && 
+		p.config.Auth.EnvVar == "" && p.config.Auth.Key == "" {
+		// Local instance with no auth token configured - skip auth entirely
+		token = ""
+	} else {
+		// Get authentication token normally
+		var authErr error
+		token, authErr = p.config.GetAuthToken()
+		if authErr != nil {
+			return nil, fmt.Errorf("authentication failed: %w", authErr)
 		}
 	}
 

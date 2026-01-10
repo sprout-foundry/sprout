@@ -72,7 +72,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "read_file",
 		Description: "Read contents of a file",
 		Parameters: []ParameterConfig{
-			{"file_path", "string", true, []string{"path"}, "Path to the file to read"},
+			{"file_path", "string", true, []string{}, "Path to the file to read"},
 			{"start_line", "int", false, []string{}, "Starting line number (optional)"},
 			{"end_line", "int", false, []string{}, "Ending line number (optional)"},
 		},
@@ -84,7 +84,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "write_file",
 		Description: "Write content to a file",
 		Parameters: []ParameterConfig{
-			{"file_path", "string", true, []string{"path"}, "Path to the file to write"},
+			{"file_path", "string", true, []string{}, "Path to the file to write"},
 			{"content", "string", true, []string{}, "Content to write to the file"},
 		},
 		Handler: handleWriteFile,
@@ -95,7 +95,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "edit_file",
 		Description: "Edit a file by replacing old string with new string",
 		Parameters: []ParameterConfig{
-			{"file_path", "string", true, []string{"path"}, "Path to the file to edit"},
+			{"file_path", "string", true, []string{}, "Path to the file to edit"},
 			{"old_string", "string", true, []string{}, "String to replace"},
 			{"new_string", "string", true, []string{}, "Replacement string"},
 		},
@@ -103,19 +103,10 @@ func newDefaultToolRegistry() *ToolRegistry {
 	})
 
 	// Register todo tools
-	registry.RegisterTool(ToolConfig{
-		Name:        "add_todo",
-		Description: "Add a new todo item",
-		Parameters: []ParameterConfig{
-			{"task", "string", true, []string{"content", "description"}, "The todo task description"},
-		},
-		Handler: handleAddTodo,
-	})
-
-	// Register add_todos (bulk add) tool
+	// Register add_todos (handles both single and bulk)
 	registry.RegisterTool(ToolConfig{
 		Name:        "add_todos",
-		Description: "Create multiple todo items",
+		Description: "Add todo items (single or multiple)",
 		Parameters: []ParameterConfig{
 			{"todos", "array", true, []string{}, "Array of todos: {title, description?, priority?}"},
 		},
@@ -126,7 +117,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "update_todo_status",
 		Description: "Update the status of a todo item",
 		Parameters: []ParameterConfig{
-			{"task_id", "string", true, []string{"id"}, "The ID of the todo task (e.g., 'todo_1')"},
+			{"id", "string", true, []string{}, "The ID of the todo task (e.g., 'todo_1')"},
 			{"status", "string", true, []string{}, "New status: pending, in_progress, completed, cancelled"},
 		},
 		Handler: handleUpdateTodoStatus,
@@ -134,9 +125,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 
 	registry.RegisterTool(ToolConfig{
 		Name:        "update_todo_status_bulk",
-		Description: "Update multiple todo statuses at once (use for batch updates)",
+		Description: "Update the status of multiple todo items at once",
 		Parameters: []ParameterConfig{
-			{"updates", "array", true, []string{}, "Array of {id, status} objects"},
+			{"updates", "array", true, []string{}, "Array of updates: [{id, status}, ...]"},
 		},
 		Handler: handleUpdateTodoStatusBulk,
 	})
@@ -148,39 +139,6 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler:     handleListTodos,
 	})
 
-	registry.RegisterTool(ToolConfig{
-		Name:        "find_todo_id",
-		Description: "Find todo ID by title (case-insensitive)",
-		Parameters: []ParameterConfig{
-			{"title", "string", true, []string{"task_title"}, "The title of the todo to find ID for"},
-		},
-		Handler: func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-			title, _ := args["title"].(string)
-			return tools.FindTodoID(title), nil
-		},
-	})
-
-	registry.RegisterTool(ToolConfig{
-		Name:        "remove_todo",
-		Description: "Remove a todo by ID or title",
-		Parameters: []ParameterConfig{
-			{"id", "string", true, []string{"identifier"}, "The ID or title of the todo to remove"},
-		},
-		Handler: func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-			id, _ := args["id"].(string)
-			return tools.RemoveTodo(id), nil
-		},
-	})
-
-	// Optional compact/maintenance todo tools (to avoid unknown tool calls)
-	registry.RegisterTool(ToolConfig{
-		Name:        "get_active_todos_compact",
-		Description: "Get compact view of active todos",
-		Parameters:  []ParameterConfig{},
-		Handler: func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-			return tools.GetActiveTodosCompact(), nil
-		},
-	})
 	registry.RegisterTool(ToolConfig{
 		Name:        "archive_completed",
 		Description: "Archive completed/cancelled todos",
@@ -196,6 +154,18 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Description: "Validate project build after file operations",
 		Parameters:  []ParameterConfig{},
 		Handler:     handleValidateBuild,
+	})
+
+	// Register run_subagent tool - for multi-agent collaboration
+	registry.RegisterTool(ToolConfig{
+		Name:        "run_subagent",
+		Description: "IMPORTANT: Use this to delegate implementation tasks to subagents. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. This is the PRIMARY way to implement features during execution phase. Use for: creating files, feature implementations, multi-file changes, complex logic. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. Runs synchronously (blocking). 30-minute timeout per subagent.",
+		Parameters: []ParameterConfig{
+			{"prompt", "string", true, []string{}, "The prompt/task for the subagent to execute"},
+			{"model", "string", false, []string{}, "Optional: Override model for this subagent (e.g., 'qwen/qwen-coder-32b')"},
+			{"provider", "string", false, []string{}, "Optional: Override provider (e.g., 'openrouter')"},
+		},
+		Handler: handleRunSubagent,
 	})
 
 	// Register search_files tool (cross-platform file content search)
@@ -231,34 +201,6 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"url", "string", true, []string{}, "URL to fetch content from"},
 		},
 		Handler: handleFetchURL,
-	})
-
-	// Register aliases: find and find_files map to same handler/parameters
-	registry.RegisterTool(ToolConfig{
-		Name:        "find",
-		Description: "Find text pattern in files (alias of search_files)",
-		Parameters: []ParameterConfig{
-			{"pattern", "string", true, []string{"search_pattern"}, "Text pattern or regex to search for"},
-			{"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
-			{"file_glob", "string", false, []string{"file_pattern", "glob"}, "Glob to limit files (e.g., *.go)"},
-			{"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
-			{"max_results", "int", false, []string{}, "Maximum results to return (default: 50)"},
-			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 20480)"},
-		},
-		Handler: handleSearchFiles,
-	})
-	registry.RegisterTool(ToolConfig{
-		Name:        "find_files",
-		Description: "Find text pattern in files (alias of search_files)",
-		Parameters: []ParameterConfig{
-			{"pattern", "string", true, []string{"search_pattern"}, "Text pattern or regex to search for"},
-			{"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
-			{"file_glob", "string", false, []string{"file_pattern", "glob"}, "Glob to limit files (e.g., *.go)"},
-			{"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
-			{"max_results", "int", false, []string{}, "Maximum results to return (default: 50)"},
-			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 20480)"},
-		},
-		Handler: handleSearchFiles,
 	})
 
 	// Register vision analysis tools
@@ -660,20 +602,14 @@ func handleAddTodo(ctx context.Context, a *Agent, args map[string]interface{}) (
 func handleUpdateTodoStatus(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	// Accept id as string or number for robustness
 	var taskID string
-	if idStr, ok := args["task_id"].(string); ok {
+	if idStr, ok := args["id"].(string); ok {
 		taskID = idStr
-	} else if idAlt, ok := args["id"].(string); ok {
-		taskID = idAlt
-	} else if idNum, ok := args["task_id"].(float64); ok {
+	} else if idNum, ok := args["id"].(float64); ok {
 		taskID = fmt.Sprintf("todo_%d", int(idNum))
-	} else if idNumAlt, ok := args["id"].(float64); ok {
-		taskID = fmt.Sprintf("todo_%d", int(idNumAlt))
-	} else if idInt, ok := args["task_id"].(int); ok { // just in case
+	} else if idInt, ok := args["id"].(int); ok {
 		taskID = fmt.Sprintf("todo_%d", idInt)
-	} else if idIntAlt, ok := args["id"].(int); ok {
-		taskID = fmt.Sprintf("todo_%d", idIntAlt)
 	} else {
-		return "", fmt.Errorf("invalid or missing task_id/id argument")
+		return "", fmt.Errorf("invalid or missing id argument")
 	}
 
 	// Normalize string numeric IDs like "1" to internal format "todo_1"
@@ -835,6 +771,41 @@ func handleListTodos(ctx context.Context, a *Agent, args map[string]interface{})
 	result := tools.ListTodos()
 	a.debugLog("List todos result: %s\n", result)
 	return result, nil
+}
+
+func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	prompt, err := convertToString(args["prompt"], "prompt")
+	if err != nil {
+		return "", err
+	}
+
+	a.ToolLog("spawning subagent", fmt.Sprintf("task: %s", truncateString(prompt, 40)))
+	a.debugLog("Spawning subagent with prompt: %s\n", prompt)
+
+	// Optional model/provider overrides
+	model := ""
+	if v, ok := args["model"].(string); ok {
+		model = v
+	}
+	provider := ""
+	if v, ok := args["provider"].(string); ok {
+		provider = v
+	}
+
+	resultMap, err := tools.RunSubagent(prompt, model, provider)
+	if err != nil {
+		a.debugLog("Subagent spawn error: %v\n", err)
+		return "", err
+	}
+
+	// Convert map result to JSON for return
+	jsonBytes, jsonErr := json.MarshalIndent(resultMap, "", "  ")
+	if jsonErr != nil {
+		return "", fmt.Errorf("failed to marshal subagent result: %w", jsonErr)
+	}
+
+	a.debugLog("Subagent spawn result: %s\n", string(jsonBytes))
+	return string(jsonBytes), nil
 }
 
 // Helper function for string truncation

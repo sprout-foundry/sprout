@@ -170,11 +170,18 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			return nil, fmt.Errorf("failed to create API client for tests: %w", err)
 		}
 
+		// Load system prompt for test agent
+		providerName := api.GetProviderName(clientType)
+		systemPrompt, err := GetEmbeddedSystemPromptWithProvider(providerName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load system prompt: %w", err)
+		}
+
 		// Create agent with minimal initialization using test client
 		agent := &Agent{
 			client:                    client,
 			messages:                  []api.Message{},
-			systemPrompt:              GetEmbeddedSystemPrompt(),
+			systemPrompt:              systemPrompt,
 			maxIterations:             1000,
 			totalCost:                 0.0,
 			clientType:                clientType,
@@ -315,7 +322,10 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 	// Use embedded system prompt with provider-specific enhancements
 	providerName := api.GetProviderName(clientType)
-	systemPrompt := GetEmbeddedSystemPromptWithProvider(providerName)
+	systemPrompt, err := GetEmbeddedSystemPromptWithProvider(providerName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load system prompt: %w", err)
+	}
 
 	// Clear old todos at session start
 	tools.ClearTodos()

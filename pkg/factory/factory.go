@@ -185,19 +185,29 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 		Name:     customProvider.Name,
 		Endpoint: customProvider.Endpoint,
 		Auth: providers.AuthConfig{
-			Type: authType,
+			Type:   authType,
+			EnvVar: customProvider.EnvVar,
+			Key:    customProvider.APIKey,
 		},
 		Headers: make(map[string]string),
 		Defaults: providers.RequestDefaults{
 			Model:     customProvider.ModelName,
 			MaxTokens: &customProvider.ContextSize,
 		},
-		Conversion: providers.MessageConversion{
-			IncludeToolCallId:        true,
-			ConvertToolRoleToUser:    false, // Keep tool roles as "tool" - they're exempt from alternation
-			ArgumentsAsJSON:          false,
-			SkipToolExecutionSummary: true, // Skip summary to avoid breaking role alternation
-		},
+		Conversion: func() providers.MessageConversion {
+			if customProvider.Conversion.IncludeToolCallId || 
+			   customProvider.Conversion.ConvertToolRoleToUser || 
+			   customProvider.Conversion.ReasoningContentField != "" {
+				return customProvider.Conversion
+			}
+			// Default conversion
+			return providers.MessageConversion{
+				IncludeToolCallId:        true,
+				ConvertToolRoleToUser:    false, // Keep tool roles as "tool" - they're exempt from alternation
+				ArgumentsAsJSON:          false,
+				SkipToolExecutionSummary: true, // Skip summary to avoid breaking role alternation
+			}
+		}(),
 		Streaming: providers.StreamingConfig{
 			Format:         "sse",
 			ChunkTimeoutMs: 120000, // 2 minutes - reasonable for LLM streaming

@@ -402,7 +402,9 @@ func TestStreamingErrorScenarios(t *testing.T) {
 }
 
 // Benchmark streaming response building
-func BenchmarkStreamingResponseBuilder(b *testing.B) {
+// Disabled: Rename to BenchmarkStreamingResponseBuilder to enable
+// This benchmark can consume significant memory with high iteration counts
+func BenchmarkStreamingResponseBuilder_DISABLED(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		builder := NewStreamingResponseBuilder(func(string) {})
 

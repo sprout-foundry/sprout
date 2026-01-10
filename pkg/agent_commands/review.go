@@ -95,7 +95,7 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("agent client initialization failed")
 	}
 
-	ctx := &codereview.ReviewContext{
+	reviewCtx := &codereview.ReviewContext{
 		Diff:        optimizedDiff.OptimizedContent,
 		Config:      cfg,
 		Logger:      logger,
@@ -109,7 +109,7 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		for file, summary := range optimizedDiff.FileSummaries {
 			summaryInfo.WriteString(fmt.Sprintf("- %s: %s\n", file, summary))
 		}
-		ctx.Diff += summaryInfo.String()
+		reviewCtx.Diff += summaryInfo.String()
 	}
 
 	// Create review options for staged review
@@ -120,7 +120,7 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	logger.LogProcessStep("Sending staged changes to LLM for review...")
-	reviewResponse, err := service.PerformReview(ctx, opts)
+	reviewResponse, err := service.PerformReview(reviewCtx, opts)
 	if err != nil {
 		logger.LogError(fmt.Errorf("failed to get code review from LLM: %w", err))
 		return fmt.Errorf("LLM error: failed to perform code review: %v", err)

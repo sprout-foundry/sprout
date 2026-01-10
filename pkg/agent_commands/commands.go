@@ -1,7 +1,10 @@
 package commands
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
@@ -13,6 +16,25 @@ type Command interface {
 	Description() string
 	Execute(args []string, chatAgent *agent.Agent) error
 }
+
+// JSONCommand extends Command to support JSON output
+type JSONCommand interface {
+	Command
+	ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error
+}
+
+// CommandContext provides context for command execution
+type CommandContext struct {
+	OutputFormat OutputFormat
+}
+
+// OutputFormat defines output format for commands
+type OutputFormat int
+
+const (
+	OutputText OutputFormat = iota
+	OutputJSON
+)
 
 // CommandRegistry manages all available slash commands
 type CommandRegistry struct {
@@ -59,7 +81,7 @@ func (r *CommandRegistry) Register(cmd Command) {
 }
 
 // Execute processes a slash command input
-// Supports both / and ! prefixes (e.g., /exec ls or !exec ls)
+// Supports both / and ! prefixes (e.g. /exec ls or !exec ls)
 func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 	trimmed := strings.TrimSpace(input)
 
@@ -96,6 +118,17 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("unknown command: %s", commandName)
 	}
 
+	// Check if command supports JSON output (--json flag is in args)
+	if jsonCmd, ok := cmd.(JSONCommand); ok && contains(args, "--json") {
+		ctx := &CommandContext{
+			OutputFormat: OutputJSON,
+		}
+		// Filter out --json flag for the command
+		filteredArgs := filterArgs(args, "--json")
+		return jsonCmd.ExecuteWithJSONOutput(filteredArgs, chatAgent, ctx)
+	}
+
+	// Default execution for commands without context support
 	return cmd.Execute(args, chatAgent)
 }
 
@@ -118,4 +151,54 @@ func (r *CommandRegistry) ListCommands() []Command {
 		commands = append(commands, cmd)
 	}
 	return commands
+}
+
+// Helper functions for working with args and output
+
+// contains checks if a string is in a slice
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+// filterArgs removes specified items from a slice
+func filterArgs(slice []string, item string) []string {
+	filtered := make([]string, 0, len(slice))
+	for _, s := range slice {
+		if s != item {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
+}
+
+// OutputWriter captures and buffers output
+type OutputWriter struct {
+	Buffer bytes.Buffer
+}
+
+// Write implements io.Writer
+func (ow *OutputWriter) Write(p []byte) (n int, err error) {
+	return ow.Buffer.Write(p)
+}
+
+// String returns the captured output
+func (ow *OutputWriter) String() string {
+	return ow.Buffer.String()
+}
+
+// WriteToOutput writes a string to os.Stdout
+func WriteToOutput(output string) {
+	os.Stdout.WriteString(output)
+}
+
+// WriteJSONToOutput writes a JSON representation of value to stdout
+func WriteJSONToOutput(value interface{}) error {
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(value)
 }

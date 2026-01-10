@@ -28,6 +28,17 @@ This guide helps contributors work effectively on ledit, an AI‑assisted code e
 - Always run `go test ./pkg/console/ -v` after modifying console UI.
 - In PRs, include a brief test plan and any UI screenshots/asciinema if UI changed.
 
+## Test Debugging & OOM Investigation (2025-01-10) - RESOLVED
+
+**Issue**: Tests were causing terminal crashes (suspected OOM).
+
+**Root Cause Found**: `TestEscapeParserIncompleteSequences` in `pkg/console/escape_trace_test.go` had an **infinite loop bug**.
+**The Bug**: Test nested loop had no proper exit condition - processed same byte repeatedly forever.
+**Resolution**: Rewrite loop with proper byte-by-byte iteration and drain termination.
+**Result**: Test now completes in 0.01s instead of infinite loop. All console tests pass.
+
+**Note**: Benchmark in `pkg/agent_api/streaming_test.go` renamed to `_DISABLED` as a precaution.
+
 ## Commit & Pull Request Guidelines
 - Users will do commits, never, ever do commits, notify the user when you think a commit is needed.
 - 

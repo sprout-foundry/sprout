@@ -262,7 +262,13 @@ func (cp *ConversationPruner) pruneSlidingWindow(messages []api.Message) []api.M
 
 // pruneByImportance keeps messages based on importance scoring
 func (cp *ConversationPruner) pruneByImportance(messages []api.Message, provider string) []api.Message {
-	// Score all messages
+	// For providers with strict tool call requirements (Minimax, DeepSeek),
+	// ensure tool calls and results are linked
+	if strings.EqualFold(provider, "minimax") || strings.EqualFold(provider, "deepseek") {
+		return cp.pruneByImportanceToolCallAware(messages, provider)
+	}
+
+	// Original scoring for other providers
 	scores := cp.scoreMessages(messages)
 
 	// Always keep system message and recent messages
@@ -310,6 +316,234 @@ func (cp *ConversationPruner) pruneByImportance(messages []api.Message, provider
 	}
 
 	return pruned
+}
+
+// pruneByImportanceToolCallAware keeps messages based on importance scoring while preserving tool call/result pairing
+// This is critical for providers like Minimax and DeepSeek that require strict tool call format
+func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Message, provider string) []api.Message {
+	if cp.debug {
+		fmt.Printf("🔧 Using tool-call aware pruning for %s\n", provider)
+	}
+
+	// Step 1: Group messages into tool call groups
+	type MessageGroup struct {
+		AssistantIndex int      // Index of assistant message with tool calls
+		ToolCallIDs    []string // Tool call IDs
+		ToolIndices    []int    // Indices of corresponding tool results
+		IsToolGroup    bool
+		Importance     float64
+		TokenEstimate  int
+	}
+
+	groups := make([]*MessageGroup, 0)
+	currentGroup := &MessageGroup{IsToolGroup: false}
+
+	// Track seen tool call IDs to match with tool results
+	seenToolCallIDs := make(map[string]int) // tool_call_id -> message index
+
+	for i, msg := range messages {
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			// Start a new tool group
+			if currentGroup.IsToolGroup {
+				groups = append(groups, currentGroup)
+			}
+
+			toolCallIDs := make([]string, 0, len(msg.ToolCalls))
+			for _, tc := range msg.ToolCalls {
+				if tc.ID != "" {
+					toolCallIDs = append(toolCallIDs, tc.ID)
+					seenToolCallIDs[tc.ID] = i
+				}
+			}
+
+			currentGroup = &MessageGroup{
+				AssistantIndex: i,
+				ToolCallIDs:    toolCallIDs,
+				ToolIndices:    make([]int, 0),
+				IsToolGroup:    true,
+			}
+		} else if msg.Role == "tool" {
+			// Check if this tool result belongs to current group
+			assistantIdx, found := seenToolCallIDs[msg.ToolCallId]
+			if found && assistantIdx == currentGroup.AssistantIndex {
+				currentGroup.ToolIndices = append(currentGroup.ToolIndices, i)
+			} else {
+				// Orphaned tool result - shouldn't happen but handle gracefully
+				if cp.debug {
+					fmt.Printf("⚠️ Found orphaned tool result at index %d with tool_call_id=%s\n", i, msg.ToolCallId)
+				}
+				// Add current group first if it's a tool group
+				if currentGroup.IsToolGroup {
+					groups = append(groups, currentGroup)
+				}
+				// Create a single-message group for this orphan
+				groups = append(groups, &MessageGroup{
+					AssistantIndex: i,
+					ToolIndices:    []int{},
+					IsToolGroup:    false,
+				})
+				currentGroup = &MessageGroup{IsToolGroup: false}
+			}
+		} else {
+			// Non-tool-related message
+			if currentGroup.IsToolGroup {
+				groups = append(groups, currentGroup)
+				currentGroup = &MessageGroup{IsToolGroup: false}
+			}
+
+			// Add as a single-message group
+			groups = append(groups, &MessageGroup{
+				AssistantIndex: i,
+				ToolIndices:    []int{},
+				IsToolGroup:    false,
+			})
+		}
+	}
+
+	// Don't forget the last group
+	if currentGroup.IsToolGroup || (len(groups) == 0 || currentGroup.AssistantIndex != groups[len(groups)-1].AssistantIndex) {
+		groups = append(groups, currentGroup)
+	}
+
+	// Step 2: Score each group
+	for _, group := range groups {
+		if group.IsToolGroup {
+			// For tool groups, score is max of all messages in the group
+			maxScore := 0.0
+			totalTokens := 0
+
+			// Score assistant message
+			asstScore := cp.scoreSingleMessage(messages[group.AssistantIndex])
+			maxScore = asstScore
+			totalTokens += EstimateTokens(messages[group.AssistantIndex].Content)
+
+			// Score tool results
+			for _, toolIdx := range group.ToolIndices {
+				toolScore := cp.scoreSingleMessage(messages[toolIdx])
+				if toolScore > maxScore {
+					maxScore = toolScore
+				}
+				totalTokens += EstimateTokens(messages[toolIdx].Content)
+			}
+
+			group.Importance = maxScore
+			group.TokenEstimate = totalTokens
+		} else {
+			// Single message
+			group.Importance = cp.scoreSingleMessage(messages[group.AssistantIndex])
+			group.TokenEstimate = EstimateTokens(messages[group.AssistantIndex].Content)
+		}
+	}
+
+	// Step 3: Select groups to keep (always keep first and last groups)
+	keepGroups := make(map[int]bool)
+	keepGroups[0] = true // First group
+	if len(groups) > 1 {
+		keepGroups[len(groups)-1] = true // Last group
+	}
+
+	// Keep recent groups (last few groups)
+	recentGroups := 5
+	if len(groups) <= recentGroups {
+		recentGroups = len(groups) - 1
+	}
+	for i := len(groups) - recentGroups; i < len(groups); i++ {
+		if i >= 0 {
+			keepGroups[i] = true
+		}
+	}
+
+	// Keep high-importance groups
+	targetTokens := cp.getTargetTokensForProvider(len(messages), provider)
+	currentTokens := 0
+	for i := range groups {
+		if keepGroups[i] {
+			currentTokens += groups[i].TokenEstimate
+		}
+	}
+
+	// Sort groups by importance and add high-scoring ones
+	sortedGroups := make([]int, 0, len(groups))
+	for i := range groups {
+		if !keepGroups[i] {
+			sortedGroups = append(sortedGroups, i)
+		}
+	}
+	// Simple sort by importance
+	for i := 0; i < len(sortedGroups); i++ {
+		for j := i + 1; j < len(sortedGroups); j++ {
+			if groups[sortedGroups[i]].Importance < groups[sortedGroups[j]].Importance {
+				sortedGroups[i], sortedGroups[j] = sortedGroups[j], sortedGroups[i]
+			}
+		}
+	}
+
+	// Add high-importance groups until we reach target
+	for _, groupIdx := range sortedGroups {
+		if groups[groupIdx].Importance > 0.5 {
+			testTokens := currentTokens + groups[groupIdx].TokenEstimate
+			if testTokens < targetTokens {
+				keepGroups[groupIdx] = true
+				currentTokens += groups[groupIdx].TokenEstimate
+			}
+		}
+	}
+
+	// Step 4: Build pruned message list from kept groups
+	pruned := make([]api.Message, 0, len(messages))
+	for i := range groups {
+		if keepGroups[i] {
+			group := groups[i]
+			pruned = append(pruned, messages[group.AssistantIndex])
+			for _, toolIdx := range group.ToolIndices {
+				pruned = append(pruned, messages[toolIdx])
+			}
+		}
+	}
+
+	if cp.debug {
+		oldTokens := cp.estimateTokens(messages)
+		newTokens := cp.estimateTokens(pruned)
+		fmt.Printf("✅ Tool-call aware pruning: %d → %d messages, ~%dK → ~%dK tokens\n",
+			len(messages), len(pruned), oldTokens/1000, newTokens/1000)
+	}
+
+	return pruned
+}
+
+// scoreSingleMessage scores a single message (simplified version of scoreMessages)
+func (cp *ConversationPruner) scoreSingleMessage(msg api.Message) float64 {
+	importance := 0.0
+
+	if msg.Role == "system" {
+		return 1.0
+	} else if msg.Role == "user" {
+		importance = 0.6
+
+		// Tool results vary in importance
+		if strings.Contains(msg.Content, "Tool call result") {
+			importance = 0.5 // Tool results get moderate score to match their assistant
+		}
+
+		// Errors are important
+		if strings.Contains(strings.ToLower(msg.Content), "error") {
+			importance = 0.8
+		}
+	} else if msg.Role == "assistant" {
+		// Assistant messages are moderately important
+		importance = 0.5
+
+		// Assistant messages with tool calls are more important
+		if len(msg.ToolCalls) > 0 {
+			importance = 0.6
+		}
+	}
+
+	if importance > 1.0 {
+		importance = 1.0
+	}
+
+	return importance
 }
 
 // pruneHybrid combines sliding window with importance scoring

@@ -27,18 +27,18 @@ type CommitCommand struct {
 	skipPrompt   bool
 	dryRun       bool
 	allowSecrets bool
-	agentError   error // Store agent creation error for better error reporting
+	agentError   error  // Store agent creation error for better error reporting
 	review       string // Store the commit review result
 }
 
 // CommitJSONResult is the JSON output structure for commit command
 type CommitJSONResult struct {
-	Status  string `json:"status"`  // success, error, dry-run
+	Status  string `json:"status"`            // success, error, dry-run
 	Commit  string `json:"commit,omitempty"`  // commit hash if successful
 	Message string `json:"message,omitempty"` // commit message
 	Branch  string `json:"branch,omitempty"`  // branch name
-	Error   string `json:"error,omitempty"`  // error message
-	Review  string `json:"review,omitempty"` // commit review (critical concerns)
+	Error   string `json:"error,omitempty"`   // error message
+	Review  string `json:"review,omitempty"`  // commit review (critical concerns)
 }
 
 // Validate checks that required fields are populated

@@ -211,11 +211,29 @@ func (b *StreamingResponseBuilder) GetResponse() *ChatResponse {
 		choice.FinishReason = b.finishReason
 
 		// Convert tool calls map to slice
+		// IMPORTANT: Sort by index to ensure deterministic ordering
+		// Providers like Minimax require tool calls and results to be in the same order
 		if len(b.toolCalls) > 0 {
-			choice.Message.ToolCalls = make([]ToolCall, len(b.toolCalls))
-			for idx, tc := range b.toolCalls {
+			// Collect and sort indices
+			indices := make([]int, 0, len(b.toolCalls))
+			for idx := range b.toolCalls {
+				indices = append(indices, idx)
+			}
+			// Simple bubble sort for small slices (tool call count is typically small)
+			for i := 0; i < len(indices); i++ {
+				for j := i + 1; j < len(indices); j++ {
+					if indices[i] > indices[j] {
+						indices[i], indices[j] = indices[j], indices[i]
+					}
+				}
+			}
+
+			// Build slice in sorted order
+			choice.Message.ToolCalls = make([]ToolCall, len(indices))
+			for i, idx := range indices {
+				tc := b.toolCalls[idx]
 				tc.Function.Arguments = b.toolCallArgs[idx].String()
-				choice.Message.ToolCalls[idx] = *tc
+				choice.Message.ToolCalls[i] = *tc
 			}
 		}
 	}

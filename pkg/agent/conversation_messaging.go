@@ -77,6 +77,11 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 		ch.validateDeepSeekToolCalls(allMessages)
 	}
 
+	// Minimax-specific validation
+	if strings.EqualFold(ch.agent.GetProvider(), "minimax") {
+		ch.validateMinimaxToolCalls(allMessages)
+	}
+
 	return allMessages
 }
 
@@ -107,6 +112,90 @@ func (ch *ConversationHandler) validateDeepSeekToolCalls(messages []api.Message)
 				ch.agent.debugLog("✅ DeepSeek: Assistant message at index %d has %d tool_calls with %d tool responses\n",
 					i, expectedToolCalls, foundToolResponses)
 			}
+		}
+	}
+}
+
+// validateMinimaxToolCalls performs additional validation for Minimax tool call format
+// Minimax requires that tool results immediately follow their corresponding tool calls
+// and that each tool result's tool_call_id matches a tool call from the previous assistant message
+func (ch *ConversationHandler) validateMinimaxToolCalls(messages []api.Message) {
+	ch.agent.debugLog("🔍 Minimax: Validating tool call format for %d messages\n", len(messages))
+
+	// Track expected tool call IDs from the last assistant message
+	var expectedToolCallIDs []string
+
+	for i, msg := range messages {
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			// Collect tool call IDs from this assistant message
+			expectedToolCallIDs = nil
+			for _, tc := range msg.ToolCalls {
+				expectedToolCallIDs = append(expectedToolCallIDs, tc.ID)
+				ch.agent.debugLog("  Minimax: Assistant[%d] has tool_call id=%s name=%s\n",
+					i, tc.ID, tc.Function.Name)
+			}
+
+			// Check that tool results immediately follow
+			if i+1 >= len(messages) {
+				ch.agent.debugLog("⚠️ Minimax: Assistant message at end with no tool results\n")
+				continue
+			}
+
+			// Count tool results that immediately follow
+			foundToolResults := 0
+			for j := i + 1; j < len(messages); j++ {
+				if messages[j].Role == "tool" {
+					foundToolResults++
+					// Verify this tool_call_id is in our expected list
+					found := false
+					for _, expectedID := range expectedToolCallIDs {
+						if messages[j].ToolCallId == expectedID {
+							found = true
+							break
+						}
+					}
+					if !found {
+						ch.agent.debugLog("🚨 Minimax: ERROR - Tool result at index %d has tool_call_id=%s which doesn't match any tool call from assistant at index %d\n",
+							j, messages[j].ToolCallId, i)
+						ch.agent.debugLog("   Expected IDs: %v\n", expectedToolCallIDs)
+						// THIS IS THE BUG - we have orphaned tool results
+						ch.agent.debugLog("🚨🚨🚨 MINIMAX BUG: Orphaned tool result detected! This will cause error 2013!\n")
+					} else {
+						ch.agent.debugLog("  Minimax: Tool[%d] result for tool_call_id=%s\n", j, messages[j].ToolCallId)
+					}
+
+					// Check if we've found all expected tool results
+					if foundToolResults >= len(expectedToolCallIDs) {
+						break
+					}
+				} else if messages[j].Role == "assistant" || messages[j].Role == "user" {
+					// Tool results block ended
+					break
+				}
+			}
+
+			if foundToolResults < len(expectedToolCallIDs) {
+				ch.agent.debugLog("🚨 Minimax: WARNING - Expected %d tool results but only found %d after assistant at index %d\n",
+					len(expectedToolCallIDs), foundToolResults, i)
+			}
+		}
+	}
+
+	// NEW: Check for tool results that appear BEFORE any assistant message with tool calls
+	// This can happen if conversation pruning removes the assistant message
+	firstAssistantWithTools := -1
+	for i, msg := range messages {
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			firstAssistantWithTools = i
+			break
+		}
+	}
+
+	for i, msg := range messages {
+		if msg.Role == "tool" && (firstAssistantWithTools == -1 || i < firstAssistantWithTools) {
+			ch.agent.debugLog("🚨 Minimax: CRITICAL - Tool result at index %d appears before any assistant message with tool calls!\n", i)
+			ch.agent.debugLog("   tool_call_id=%s\n", msg.ToolCallId)
+			ch.agent.debugLog("🚨🚨🚨 MINIMAX BUG: Orphaned tool result at beginning! This will cause error 2013!\n")
 		}
 	}
 }

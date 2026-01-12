@@ -46,9 +46,12 @@ func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []ap
 		return messages
 	}
 
-	// Debug logging for DeepSeek
-	if ch.agent != nil && strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
-		ch.agent.debugLog("🔍 DeepSeek sanitizing %d messages\n", len(messages))
+	// Debug logging for DeepSeek and Minimax
+	if ch.agent != nil {
+		provider := ch.agent.GetProvider()
+		if strings.EqualFold(provider, "deepseek") || strings.EqualFold(provider, "minimax") {
+			ch.agent.debugLog("🔍 %s sanitizing %d messages\n", strings.ToUpper(provider), len(messages))
+		}
 	}
 
 	sanitized := make([]api.Message, 0, len(messages))
@@ -82,6 +85,40 @@ func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []ap
 		}
 	}
 
+	// Minimax-specific: After sanitization, make absolutely sure there are no orphaned tool results
+	if ch.agent != nil && strings.EqualFold(ch.agent.GetProvider(), "minimax") {
+		// Second pass: verify each tool result has a matching assistant message
+		finalSanitized := make([]api.Message, 0, len(sanitized))
+		validToolCallIds := make(map[string]struct{})
+
+		for _, msg := range sanitized {
+			if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+				for _, tc := range msg.ToolCalls {
+					if tc.ID != "" {
+						validToolCallIds[tc.ID] = struct{}{}
+					}
+				}
+				finalSanitized = append(finalSanitized, msg)
+			} else if msg.Role == "tool" {
+				// Only keep tool result if we've seen a matching tool call ID
+				if _, ok := validToolCallIds[msg.ToolCallId]; ok {
+					finalSanitized = append(finalSanitized, msg)
+					delete(validToolCallIds, msg.ToolCallId)
+				} else {
+					ch.agent.debugLog("🚨 Minimax: DROPPING orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
+				}
+			} else {
+				finalSanitized = append(finalSanitized, msg)
+			}
+		}
+
+		if len(finalSanitized) != len(sanitized) {
+			ch.agent.debugLog("✅ Minimax: Sanitization removed %d orphaned tool result(s)\n", len(sanitized)-len(finalSanitized))
+		}
+
+		return finalSanitized
+	}
+
 	return sanitized
 }
 
@@ -96,9 +133,12 @@ func (ch *ConversationHandler) logDroppedToolMessage(reason string, msg api.Mess
 		snippet = snippet[:77] + "..."
 	}
 
-	// Enhanced logging for DeepSeek
-	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
+	// Enhanced logging for DeepSeek and Minimax
+	provider := ch.agent.GetProvider()
+	if strings.EqualFold(provider, "deepseek") {
 		ch.agent.debugLog("🚨 DeepSeek: ⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+	} else if strings.EqualFold(provider, "minimax") {
+		ch.agent.debugLog("🚨 Minimax: ⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
 	} else {
 		ch.agent.debugLog("⚠️ Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
 	}

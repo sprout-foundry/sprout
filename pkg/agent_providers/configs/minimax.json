@@ -27,22 +27,24 @@
     "done_marker": "[DONE]"
   },
   "models": {
-    "default_context_limit": 128000,
+    "default_context_limit": 204800,
     "model_overrides": {
-      "MiniMax-M2": 128000,
-      "MiniMax-M2-Stable": 128000
+      "MiniMax-M2": 204800,
+      "MiniMax-M2.1": 204800,
+      "MiniMax-M2-Stable": 204800
     },
     "pattern_overrides": [
       {
         "pattern": "MiniMax-.*",
-        "context_limit": 128000
+        "context_limit": 204800
       }
     ],
     "supports_vision": false,
     "vision_model": "",
-    "default_model": "MiniMax-M2",
+    "default_model": "MiniMax-M2.1",
     "available_models": [
       "MiniMax-M2",
+      "MiniMax-M2.1",
       "MiniMax-M2-Stable"
     ]
   },

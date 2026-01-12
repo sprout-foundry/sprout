@@ -29,7 +29,7 @@ type ConversationState struct {
 	CachedCostSavings float64       `json:"cached_cost_savings"`
 	LastUpdated       time.Time     `json:"last_updated"`
 	SessionID         string        `json:"session_id"`
-	Name              string        `json:"name"`            // Human-readable session name
+	Name              string        `json:"name"`              // Human-readable session name
 	WorkingDirectory  string        `json:"working_directory"` // Directory where session was created
 }
 
@@ -170,9 +170,9 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 			}
 
 			sessions = append(sessions, SessionInfo{
-				SessionID:       sessionID,
-				LastUpdated:     lastUpdated,
-				Name:            name,
+				SessionID:        sessionID,
+				LastUpdated:      lastUpdated,
+				Name:             name,
 				WorkingDirectory: workingDir,
 			})
 		}
@@ -199,10 +199,10 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 
 // SessionInfo represents session information with timestamp
 type SessionInfo struct {
-	SessionID   string    `json:"session_id"`
-	LastUpdated time.Time `json:"last_updated"`
-	Name             string    `json:"name"`             // Human-readable session name
-	WorkingDirectory  string    `json:"working_directory"` // Directory where session was created
+	SessionID        string    `json:"session_id"`
+	LastUpdated      time.Time `json:"last_updated"`
+	Name             string    `json:"name"`              // Human-readable session name
+	WorkingDirectory string    `json:"working_directory"` // Directory where session was created
 }
 
 // GetSessionPreview returns the first 50 characters of the first user message
@@ -306,7 +306,7 @@ func RenameSession(sessionID string, newName string) error {
 	state.Name = newName
 
 	// Write back to file
- newData, err := json.MarshalIndent(state, "", "  ")
+	newData, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}

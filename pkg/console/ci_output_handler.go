@@ -57,11 +57,11 @@ func NewCIOutputHandler(writer io.Writer) *CIOutputHandler {
 	}
 
 	return &CIOutputHandler{
-		writer:            writer,
-		isCI:              isCI,
-		isInteractive:     isInteractive,
-		progressInterval:  progressInterval,
-		startTime:         time.Now(),
+		writer:           writer,
+		isCI:             isCI,
+		isInteractive:    isInteractive,
+		progressInterval: progressInterval,
+		startTime:        time.Now(),
 	}
 }
 

@@ -42,51 +42,51 @@ func TestSafeResolvePath(t *testing.T) {
 		anyErrorContains []string // Any of these strings in error message is acceptable
 	}{
 		{
-			name:            "valid file in current directory",
-			path:            "test.txt",
-			wantErr:         true, // File doesn't exist, but path validation passes
+			name:             "valid file in current directory",
+			path:             "test.txt",
+			wantErr:          true, // File doesn't exist, but path validation passes
 			anyErrorContains: nil,
 		},
 		{
-			name:            "valid file in subdirectory",
-			path:            filepath.Join("testdir", "testfile.txt"),
-			wantErr:         false,
+			name:             "valid file in subdirectory",
+			path:             filepath.Join("testdir", "testfile.txt"),
+			wantErr:          false,
 			anyErrorContains: nil,
 		},
 		{
-			name:            "path traversal attempt - absolute",
-			path:            "/etc/passwd",
-			wantErr:         true,
+			name:             "path traversal attempt - absolute",
+			path:             "/etc/passwd",
+			wantErr:          true,
 			anyErrorContains: []string{"security violation", "failed to resolve", "no such file"},
 		},
 		{
-			name:            "path traversal attempt - parent",
-			path:            "../../../etc/passwd",
-			wantErr:         true,
+			name:             "path traversal attempt - parent",
+			path:             "../../../etc/passwd",
+			wantErr:          true,
 			anyErrorContains: []string{"security violation", "no such file"},
 		},
 		{
-			name:            "path traversal attempt - dotdot",
-			path:            "../test.txt",
-			wantErr:         true,
+			name:             "path traversal attempt - dotdot",
+			path:             "../test.txt",
+			wantErr:          true,
 			anyErrorContains: []string{"security violation", "no such file"},
 		},
 		{
-			name:            "path traversal attempt - windows style",
-			path:            "..\\test.txt",
-			wantErr:         true,
+			name:             "path traversal attempt - windows style",
+			path:             "..\\test.txt",
+			wantErr:          true,
 			anyErrorContains: []string{"security violation", "no such file"},
 		},
 		{
-			name:            "empty path",
-			path:            "",
-			wantErr:         true,
+			name:             "empty path",
+			path:             "",
+			wantErr:          true,
 			anyErrorContains: nil,
 		},
 		{
-			name:            "valid relative path with subdirs",
-			path:            "testdir/testfile.txt",
-			wantErr:         false,
+			name:             "valid relative path with subdirs",
+			path:             "testdir/testfile.txt",
+			wantErr:          false,
 			anyErrorContains: nil,
 		},
 	}
@@ -159,9 +159,9 @@ func TestSafeResolvePathSymlinks(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		path      string
-		wantErr   bool
+		name    string
+		path    string
+		wantErr bool
 	}{
 		{
 			name:    "valid symlink to file",
@@ -213,9 +213,9 @@ func TestSafeResolvePathForWrite(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		path      string
-		wantErr   bool
+		name    string
+		path    string
+		wantErr bool
 	}{
 		{
 			name:    "valid write to current directory",

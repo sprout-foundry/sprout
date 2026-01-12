@@ -43,7 +43,7 @@ func NewDiffOptimizer() *DiffOptimizer {
 // This uses much higher thresholds to ensure reviewers get full context
 func NewDiffOptimizerForReview() *DiffOptimizer {
 	return &DiffOptimizer{
-		MaxDiffLines: 5000, // 10x higher for code reviews
+		MaxDiffLines: 5000,   // 10x higher for code reviews
 		MaxFileSize:  100000, // 100KB for code reviews
 		LargeFileExtensions: []string{
 			// Only optimize lock files and generated content for reviews

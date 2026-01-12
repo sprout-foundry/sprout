@@ -59,10 +59,10 @@ func validateEditInputs(filePath, oldString, newString string) error {
 	// Sanitize input strings to prevent injection attacks
 	// Check for suspicious patterns in oldString and newString
 	suspiciousPatterns := []string{
-		"../",   // Path traversal attempt
-		"..\\",  // Windows path traversal
-		"\\0",   // Null byte attempts in string literals
-		"\x00",  // Actual null bytes
+		"../",  // Path traversal attempt
+		"..\\", // Windows path traversal
+		"\\0",  // Null byte attempts in string literals
+		"\x00", // Actual null bytes
 	}
 
 	checkString := func(s, name string) error {

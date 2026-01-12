@@ -242,7 +242,7 @@ func SafeResolvePathForWrite(filePath string) (string, error) {
 
 	// Get the parent directory and resolve it (file may not exist yet)
 	parentDir := filepath.Dir(absPath)
-	
+
 	// Find the nearest existing parent directory
 	maxDepth := 50 // Prevent infinite loops
 	depth := 0
@@ -251,7 +251,7 @@ func SafeResolvePathForWrite(filePath string) (string, error) {
 			// Found an existing directory
 			break
 		}
-		
+
 		// Parent doesn't exist, try going up one level
 		newParent := filepath.Dir(parentDir)
 		if newParent == parentDir {
@@ -261,7 +261,7 @@ func SafeResolvePathForWrite(filePath string) (string, error) {
 		parentDir = newParent
 		depth++
 	}
-	
+
 	if depth >= maxDepth {
 		return "", fmt.Errorf("parent directory search exceeded maximum depth for path: %s", cleanPath)
 	}

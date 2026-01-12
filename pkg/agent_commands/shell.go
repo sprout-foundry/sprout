@@ -22,7 +22,10 @@ import (
 // This command generates shell scripts from natural language descriptions
 // with full environmental context. It does not execute the script - just generates it.
 
-type ShellCommand struct{}
+type ShellCommand struct {
+	Provider string
+	Model    string
+}
 
 func (c *ShellCommand) Name() string {
 	return "shell"
@@ -51,11 +54,43 @@ func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to initialize configuration: %v", err)
 	}
 
-	clientType, err := configManager.GetProvider()
-	if err != nil {
-		return fmt.Errorf("failed to get provider: %v", err)
+	// Determine provider and model from flags, model override string, or config
+	var clientType api.ClientType
+	var model string
+
+	provider := c.Provider
+	modelOverride := c.Model
+
+	if provider != "" && modelOverride != "" {
+		// Both provider and model specified via flags
+		clientType, err = api.DetermineProvider(provider, "")
+		if err != nil {
+			return fmt.Errorf("invalid provider '%s': %v", provider, err)
+		}
+		model = modelOverride
+	} else if provider != "" {
+		// Only provider specified, get default model for that provider
+		clientType, err = api.DetermineProvider(provider, "")
+		if err != nil {
+			return fmt.Errorf("invalid provider '%s': %v", provider, err)
+		}
+		model = configManager.GetModelForProvider(clientType)
+	} else if modelOverride != "" {
+		// Only model specified, parse provider from model string (e.g., "openai:gpt-4")
+		lastUsedProvider, _ := configManager.GetProvider()
+		clientType, err = api.DetermineProvider(modelOverride, lastUsedProvider)
+		if err != nil {
+			return fmt.Errorf("failed to determine provider from model '%s': %v", modelOverride, err)
+		}
+		model = modelOverride
+	} else {
+		// Use default from config
+		clientType, err = configManager.GetProvider()
+		if err != nil {
+			return fmt.Errorf("failed to get provider: %v", err)
+		}
+		model = configManager.GetModelForProvider(clientType)
 	}
-	model := configManager.GetModelForProvider(clientType)
 
 	clientWrapper, err := factory.CreateProviderClient(clientType, model)
 	if err != nil {

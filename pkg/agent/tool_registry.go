@@ -106,28 +106,28 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register add_todos (handles both single and bulk)
 	registry.RegisterTool(ToolConfig{
 		Name:        "add_todos",
-		Description: "Add todo items (single or multiple)",
+		Description: "Add multiple todo items at once. Use single-todo add only for rare cases. Returns todo IDs for reference.",
 		Parameters: []ParameterConfig{
-			{"todos", "array", true, []string{}, "Array of todos: {title, description?, priority?}"},
+			{"todos", "array", true, []string{}, "Array of todos: [{title, description?, priority?}]"},
 		},
 		Handler: handleAddTodos,
 	})
 
 	registry.RegisterTool(ToolConfig{
 		Name:        "update_todo_status",
-		Description: "Update the status of a todo item",
+		Description: "Update the status of a single todo. Accepts id as 'todo_1', '1', or the todo title. For multiple updates, use update_todo_status_bulk.",
 		Parameters: []ParameterConfig{
-			{"id", "string", true, []string{}, "The ID of the todo task (e.g., 'todo_1')"},
-			{"status", "string", true, []string{}, "New status: pending, in_progress, completed, cancelled"},
+			{"id", "string", true, []string{}, "Todo identifier (format: 'todo_1', numeric '1', or todo title)"},
+			{"status", "string", true, []string{}, "New status (one of: pending, in_progress, completed, cancelled)"},
 		},
 		Handler: handleUpdateTodoStatus,
 	})
 
 	registry.RegisterTool(ToolConfig{
 		Name:        "update_todo_status_bulk",
-		Description: "Update the status of multiple todo items at once",
+		Description: "Update the status of multiple todo items efficiently. Accepts IDs as 'todo_1', numeric '1', or titles.",
 		Parameters: []ParameterConfig{
-			{"updates", "array", true, []string{}, "Array of updates: [{id, status}, ...]"},
+			{"updates", "array", true, []string{}, "Array of updates: [{id, status}, ...] where status is one of: pending, in_progress, completed, cancelled"},
 		},
 		Handler: handleUpdateTodoStatusBulk,
 	})
@@ -600,28 +600,20 @@ func handleAddTodo(ctx context.Context, a *Agent, args map[string]interface{}) (
 }
 
 func handleUpdateTodoStatus(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	// Accept id as string or number for robustness
-	var taskID string
-	if idStr, ok := args["id"].(string); ok {
-		taskID = idStr
-	} else if idNum, ok := args["id"].(float64); ok {
-		taskID = fmt.Sprintf("todo_%d", int(idNum))
-	} else if idInt, ok := args["id"].(int); ok {
-		taskID = fmt.Sprintf("todo_%d", idInt)
-	} else {
+	// Normalize ID using shared utility function
+	taskID := tools.NormalizeTodoID(args["id"])
+	if taskID == "" {
 		return "", fmt.Errorf("invalid or missing id argument")
-	}
-
-	// Normalize string numeric IDs like "1" to internal format "todo_1"
-	if !strings.HasPrefix(taskID, "todo_") {
-		if _, err := strconv.Atoi(taskID); err == nil {
-			taskID = fmt.Sprintf("todo_%s", taskID)
-		}
 	}
 
 	status, ok := args["status"].(string)
 	if !ok {
 		return "", fmt.Errorf("invalid status argument")
+	}
+
+	// Validate status using shared utility function
+	if !tools.IsValidStatus(status) {
+		return "", fmt.Errorf("%s", tools.FormatTodoStatusError(status))
 	}
 
 	a.ToolLog("updating todo", fmt.Sprintf("task %s to %s", taskID, status))
@@ -668,14 +660,13 @@ func handleUpdateTodoStatusBulk(ctx context.Context, a *Agent, args map[string]i
 			Status string
 		}{}
 
-		if id, ok := updateMap["id"].(string); ok {
-			update.ID = id
-		}
+		// Normalize ID using shared utility function
+		update.ID = tools.NormalizeTodoID(updateMap["id"])
+
 		if status, ok := updateMap["status"].(string); ok {
-			// Validate status against allowed values
-			validStatuses := map[string]bool{"pending": true, "in_progress": true, "completed": true, "cancelled": true}
-			if !validStatuses[status] {
-				return "", fmt.Errorf("invalid status '%s', must be one of: pending, in_progress, completed, cancelled", status)
+			// Validate status using shared utility function
+			if !tools.IsValidStatus(status) {
+				return "", fmt.Errorf("%s", tools.FormatTodoStatusError(status))
 			}
 			update.Status = status
 		}

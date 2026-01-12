@@ -11,6 +11,10 @@ import (
 
 // TestZAIProviderIsolated tests the ZAI provider in isolation
 func TestZAIProviderIsolated(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping ZAI provider test in short mode (network-dependent)")
+	}
+
 	if os.Getenv("ZAI_API_KEY") == "" {
 		t.Skip("ZAI_API_KEY not set, skipping ZAI isolation test")
 	}

@@ -50,9 +50,9 @@ type MessageConversion struct {
 
 // StreamingConfig defines streaming behavior
 type StreamingConfig struct {
-	Format        string `json:"format"` // "sse", "json_lines", "raw"
+	Format         string `json:"format"` // "sse", "json_lines", "raw"
 	ChunkTimeoutMs int    `json:"chunk_timeout_ms"`
-	DoneMarker    string `json:"done_marker"`
+	DoneMarker     string `json:"done_marker"`
 }
 
 // PatternOverride defines context limit overrides for model patterns

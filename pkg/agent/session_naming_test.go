@@ -12,9 +12,9 @@ import (
 
 func TestGenerateSessionName(t *testing.T) {
 	tests := []struct {
-		name            string
-		messages        []api.Message
-		expectedName    string
+		name         string
+		messages     []api.Message
+		expectedName string
 	}{
 		{
 			name: "first user message as name",

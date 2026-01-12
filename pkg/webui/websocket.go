@@ -421,4 +421,3 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		}
 	}
 }
-

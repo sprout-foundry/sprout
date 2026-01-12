@@ -347,6 +347,118 @@ func TestStreamingWithToolCalls(t *testing.T) {
 	}
 }
 
+// TestStreamingWithMultipleToolCalls verifies that tool calls maintain their order
+// This is critical for providers like Minimax that require tool calls and results
+// to be in the same order
+func TestStreamingWithMultipleToolCalls(t *testing.T) {
+	builder := NewStreamingResponseBuilder(nil)
+
+	// Simulate multiple tool calls streaming in out-of-order chunks
+	// This tests that the final ordering is correct (sorted by index)
+	chunks := []StreamingChatResponse{
+		{
+			ID: "test-multi-tool",
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						ToolCalls: []StreamingToolCall{
+							{
+								Index: 1, // Second tool call arrives first
+								ID:    "call_456",
+								Type:  "function",
+								Function: &StreamingToolCallFunction{
+									Name:      "read_file",
+									Arguments: `{"path": "file2.txt"}`,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						ToolCalls: []StreamingToolCall{
+							{
+								Index: 0, // First tool call arrives second
+								ID:    "call_123",
+								Type:  "function",
+								Function: &StreamingToolCallFunction{
+									Name:      "read_file",
+									Arguments: `{"path": "file1.txt"}`,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						ToolCalls: []StreamingToolCall{
+							{
+								Index: 2, // Third tool call arrives third
+								ID:    "call_789",
+								Type:  "function",
+								Function: &StreamingToolCallFunction{
+									Name:      "write_file",
+									Arguments: `{"path": "output.txt"}`,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Process chunks
+	for _, chunk := range chunks {
+		err := builder.ProcessChunk(&chunk)
+		if err != nil {
+			t.Fatalf("ProcessChunk() error = %v", err)
+		}
+	}
+
+	// Get final response
+	response := builder.GetResponse()
+
+	// Verify tool calls
+	if len(response.Choices) == 0 || len(response.Choices[0].Message.ToolCalls) != 3 {
+		t.Fatalf("Expected 3 tool calls, got %d", len(response.Choices[0].Message.ToolCalls))
+	}
+
+	// CRITICAL: Verify tool calls are in index order (0, 1, 2), not arrival order
+	toolCalls := response.Choices[0].Message.ToolCalls
+	if toolCalls[0].ID != "call_123" {
+		t.Errorf("Expected first tool call ID 'call_123', got '%s'", toolCalls[0].ID)
+	}
+	if toolCalls[1].ID != "call_456" {
+		t.Errorf("Expected second tool call ID 'call_456', got '%s'", toolCalls[1].ID)
+	}
+	if toolCalls[2].ID != "call_789" {
+		t.Errorf("Expected third tool call ID 'call_789', got '%s'", toolCalls[2].ID)
+	}
+
+	// Verify tool call names are also in correct order
+	if toolCalls[0].Function.Name != "read_file" || toolCalls[0].Function.Arguments != `{"path": "file1.txt"}` {
+		t.Errorf("First tool call has incorrect data: %v", toolCalls[0])
+	}
+	if toolCalls[1].Function.Name != "read_file" || toolCalls[1].Function.Arguments != `{"path": "file2.txt"}` {
+		t.Errorf("Second tool call has incorrect data: %v", toolCalls[1])
+	}
+	if toolCalls[2].Function.Name != "write_file" || toolCalls[2].Function.Arguments != `{"path": "output.txt"}` {
+		t.Errorf("Third tool call has incorrect data: %v", toolCalls[2])
+	}
+}
+
 // Helper function for string pointers
 func stringPtr(s string) *string {
 	return &s

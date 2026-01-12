@@ -71,6 +71,21 @@ func (p *OpenAIProvider) SendChatRequest(ctx context.Context, req *ProviderChatR
 		fmt.Printf("[OpenAI] Request: %s\n", string(body))
 	}
 
+	// Minimax-specific tool call validation
+	if p.debug && strings.Contains(strings.ToLower(p.model), "minimax") {
+		fmt.Printf("[Minimax] Validating tool call ordering in request:\n")
+		for i, msg := range openAIReq.Messages {
+			if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+				fmt.Printf("  [%d] Assistant with %d tool calls:\n", i, len(msg.ToolCalls))
+				for j, tc := range msg.ToolCalls {
+					fmt.Printf("    [%d] id=%s name=%s\n", j, tc.ID, tc.Function.Name)
+				}
+			} else if msg.Role == "tool" {
+				fmt.Printf("  [%d] Tool result for tool_call_id=%s\n", i, msg.ToolCallId)
+			}
+		}
+	}
+
 	// Create HTTP request
 	httpReq, err := p.MakeAuthRequest(ctx, "POST", p.endpoint, bytes.NewReader(body))
 	if err != nil {

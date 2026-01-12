@@ -159,11 +159,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register run_subagent tool - for multi-agent collaboration
 	registry.RegisterTool(ToolConfig{
 		Name:        "run_subagent",
-		Description: "IMPORTANT: Use this to delegate implementation tasks to subagents. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. This is the PRIMARY way to implement features during execution phase. Use for: creating files, feature implementations, multi-file changes, complex logic. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. Runs synchronously (blocking). 30-minute timeout per subagent.",
+		Description: "CRITICAL - Use this to delegate implementation tasks to subagents. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. This is the PRIMARY way to implement features during execution phase. Use for: creating files, feature implementations, multi-file changes, complex logic. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. NO TIMEOUT - runs until completion. After each subagent completes, review its output (stdout/stderr) to verify success before proceeding to the next task. If a subagent fails, you can spawn another to fix issues. Designed specifically for planning workflow: delegate, review, adjust. Subagent provider and model are configured via config settings (subagent_provider and subagent_model).",
 		Parameters: []ParameterConfig{
 			{"prompt", "string", true, []string{}, "The prompt/task for the subagent to execute"},
-			{"model", "string", false, []string{}, "Optional: Override model for this subagent (e.g., 'qwen/qwen-coder-32b')"},
-			{"provider", "string", false, []string{}, "Optional: Override provider (e.g., 'openrouter')"},
 		},
 		Handler: handleRunSubagent,
 	})
@@ -773,14 +771,19 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	a.ToolLog("spawning subagent", fmt.Sprintf("task: %s", truncateString(prompt, 40)))
 	a.debugLog("Spawning subagent with prompt: %s\n", prompt)
 
-	// Optional model/provider overrides
-	model := ""
-	if v, ok := args["model"].(string); ok {
-		model = v
-	}
-	provider := ""
-	if v, ok := args["provider"].(string); ok {
-		provider = v
+	// Get subagent provider and model from configuration
+	var provider string
+	var model string
+
+	if a.configManager != nil {
+		config := a.configManager.GetConfig()
+		provider = config.GetSubagentProvider()
+		model = config.GetSubagentModel()
+		a.debugLog("Using subagent provider=%s model=%s from config\n", provider, model)
+	} else {
+		a.debugLog("Warning: No config manager available, using defaults\n")
+		provider = ""  // Will use system default
+		model = ""     // Will use system default
 	}
 
 	resultMap, err := tools.RunSubagent(prompt, model, provider)

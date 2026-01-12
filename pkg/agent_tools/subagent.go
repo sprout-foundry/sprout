@@ -60,13 +60,13 @@ func GetSubagentTimeout() time.Duration {
 // their work regardless of how long it takes.
 //
 // Example workflow:
-//   1. Planning Agent: "Create a plan..."
-//   2. Planning Agent: run_subagent("Implement JWT token service")
-//      → spawns Sub-Agent with that task and WAITS for completion
-//   3. Sub-Agent: Works on task... (returns output)
-//   4. Planning Agent: Receives stdout/stderr, evaluates with other tools
-//   5. Planning Agent: run_subagent("Fix token expiration bug")
-//      → spawns another subagent for follow-up
+//  1. Planning Agent: "Create a plan..."
+//  2. Planning Agent: run_subagent("Implement JWT token service")
+//     → spawns Sub-Agent with that task and WAITS for completion
+//  3. Sub-Agent: Works on task... (returns output)
+//  4. Planning Agent: Receives stdout/stderr, evaluates with other tools
+//  5. Planning Agent: run_subagent("Fix token expiration bug")
+//     → spawns another subagent for follow-up
 //
 // Parameters:
 //   - prompt: The task/prompt for the subagent

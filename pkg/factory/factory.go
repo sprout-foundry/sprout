@@ -195,9 +195,9 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 			MaxTokens: &customProvider.ContextSize,
 		},
 		Conversion: func() providers.MessageConversion {
-			if customProvider.Conversion.IncludeToolCallId || 
-			   customProvider.Conversion.ConvertToolRoleToUser || 
-			   customProvider.Conversion.ReasoningContentField != "" {
+			if customProvider.Conversion.IncludeToolCallId ||
+				customProvider.Conversion.ConvertToolRoleToUser ||
+				customProvider.Conversion.ReasoningContentField != "" {
 				return customProvider.Conversion
 			}
 			// Default conversion

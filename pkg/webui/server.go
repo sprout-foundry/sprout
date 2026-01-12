@@ -64,7 +64,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 			},
 		},
 		terminalManager: NewTerminalManager(),
-		startTime:        time.Now(),
+		startTime:       time.Now(),
 	}
 }
 
@@ -217,7 +217,7 @@ func (ws *ReactWebServer) handleStaticAsset(w http.ResponseWriter, r *http.Reque
 	data, err = staticFiles.ReadFile(embeddedPath)
 	if err != nil && lookInStatic && !strings.HasPrefix(embeddedPath, "static/") {
 		// Try with static/ prefix
-		data, err = staticFiles.ReadFile("static/"+embeddedPath)
+		data, err = staticFiles.ReadFile("static/" + embeddedPath)
 	}
 
 	if err != nil {

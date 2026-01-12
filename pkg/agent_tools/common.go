@@ -31,6 +31,7 @@ func ValidTodoStatuses() []string {
 //   - string: "todo_1" -> "todo_1", "1" -> "todo_1"
 //   - float64: 1.0 -> "todo_1"
 //   - int: 1 -> "todo_1"
+//
 // Returns empty string for unsupported types.
 func NormalizeTodoID(id interface{}) string {
 	switch v := id.(type) {

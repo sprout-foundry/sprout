@@ -32,12 +32,12 @@ var (
 
 // SessionItem represents a session in dropdown selections
 type SessionItem struct {
-	Label        string
-	Value        string
-	SessionID    string
-	Model        string
-	LastUpdated  time.Time
-	Name         string // Human-readable session name
+	Label       string
+	Value       string
+	SessionID   string
+	Model       string
+	LastUpdated time.Time
+	Name        string // Human-readable session name
 }
 
 // ModelItem represents a model in dropdown selections

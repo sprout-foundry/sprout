@@ -338,10 +338,10 @@ func (ir *InputReader) GetHistory() []string {
 
 // EscapeParser handles escape sequences using a simple state machine
 type EscapeParser struct {
-	state      int
-	buffer     []byte
-	pendingChar byte   // Stores a character that should be processed next
-	hasPending  bool   // Whether there's a pending character
+	state       int
+	buffer      []byte
+	pendingChar byte // Stores a character that should be processed next
+	hasPending  bool // Whether there's a pending character
 }
 
 // NewEscapeParser creates a new escape sequence parser

@@ -18,15 +18,15 @@ func TestGetSubagentTimeout(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name      string
-		envValue  string
-		want      time.Duration
-		setEnv    bool
+		name     string
+		envValue string
+		want     time.Duration
+		setEnv   bool
 	}{
 		{
-			name:     "default when no env var set",
-			want:     0, // No timeout by default
-			setEnv:   false,
+			name:   "default when no env var set",
+			want:   0, // No timeout by default
+			setEnv: false,
 		},
 		{
 			name:     "valid duration string with minutes",

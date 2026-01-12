@@ -782,8 +782,8 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		a.debugLog("Using subagent provider=%s model=%s from config\n", provider, model)
 	} else {
 		a.debugLog("Warning: No config manager available, using defaults\n")
-		provider = ""  // Will use system default
-		model = ""     // Will use system default
+		provider = "" // Will use system default
+		model = ""    // Will use system default
 	}
 
 	resultMap, err := tools.RunSubagent(prompt, model, provider)

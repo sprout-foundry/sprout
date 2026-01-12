@@ -25,9 +25,9 @@ func TestRollbackMultipleFiles(t *testing.T) {
 	revisionID, _ := RecordBaseRevision("multi-revision", "Modify multiple files", "LLM response")
 
 	files := map[string]string{
-		"file1.go":   "original content 1",
-		"file2.py":   "original content 2",
-		"file3.txt":   "original content 3",
+		"file1.go":         "original content 1",
+		"file2.py":         "original content 2",
+		"file3.txt":        "original content 3",
 		"deep/dir/file.go": "original content deep",
 	}
 

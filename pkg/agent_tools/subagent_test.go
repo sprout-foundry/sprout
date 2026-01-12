@@ -25,7 +25,7 @@ func TestGetSubagentTimeout(t *testing.T) {
 	}{
 		{
 			name:     "default when no env var set",
-			want:     DefaultSubagentTimeout,
+			want:     0, // No timeout by default
 			setEnv:   false,
 		},
 		{
@@ -53,21 +53,21 @@ func TestGetSubagentTimeout(t *testing.T) {
 			setEnv:   true,
 		},
 		{
-			name:     "zero value defaults to default",
+			name:     "zero value means no timeout",
 			envValue: "0",
-			want:     DefaultSubagentTimeout,
+			want:     0, // No timeout
 			setEnv:   true,
 		},
 		{
-			name:     "invalid duration string defaults to default",
+			name:     "invalid duration string defaults to no timeout",
 			envValue: "invalid",
-			want:     DefaultSubagentTimeout,
+			want:     0, // No timeout
 			setEnv:   true,
 		},
 		{
-			name:     "empty string defaults to default",
+			name:     "empty string defaults to no timeout",
 			envValue: "",
-			want:     DefaultSubagentTimeout,
+			want:     0, // No timeout
 			setEnv:   true,
 		},
 		{
@@ -96,8 +96,8 @@ func TestGetSubagentTimeout(t *testing.T) {
 }
 
 func TestDefaultSubagentTimeout(t *testing.T) {
-	// Tests for default timeout (should be 30 minutes)
-	want := 30 * time.Minute
+	// Tests for default timeout (should be 0 - no timeout)
+	want := 0 * time.Minute
 	if DefaultSubagentTimeout != want {
 		t.Errorf("DefaultSubagentTimeout = %v, want %v", DefaultSubagentTimeout, want)
 	}

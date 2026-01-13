@@ -1,0 +1,29 @@
+{
+  "dependencies": {
+    "@playwright/test": "^1.57.0",
+    "ws": "^8.18.3"
+  },
+  "name": "ledit",
+  "version": "1.0.0",
+  "description": "`ledit` is an AI-powered code editing and assistance tool designed to streamline software development by leveraging Large Language Models (LLMs) to understand your entire workspace, generate code, and orchestrate complex features.",
+  "main": "playwright.config.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alantheprice/ledit.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alantheprice/ledit/issues"
+  },
+  "homepage": "https://github.com/alantheprice/ledit#readme"
+}

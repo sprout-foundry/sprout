@@ -22,7 +22,6 @@ type TurnEvaluation struct {
 	AssistantContent  string
 	ToolCalls         []api.ToolCall
 	ToolResults       []api.Message
-	ToolLogs          []string
 	TokenUsage        TokenUsage
 	CompletionReached bool
 	FinishReason      string

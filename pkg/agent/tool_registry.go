@@ -399,6 +399,7 @@ func (r *ToolRegistry) GetAvailableTools() []string {
 
 func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	command := args["command"].(string)
+	a.ToolLog("executing command", command)
 	return a.executeShellCommandWithTruncation(ctx, command)
 }
 
@@ -505,7 +506,7 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 		return "", err
 	}
 
-	a.ToolLog("writing file", filePath)
+	a.ToolLog("writing file", fmt.Sprintf("%s (%d bytes)", filePath, len(content)))
 	a.debugLog("Writing file: %s\n", filePath)
 
 	// Track the file write for change tracking
@@ -548,8 +549,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return "", fmt.Errorf("failed to read original file for diff: %w", err)
 	}
 
-	a.ToolLog("editing file", fmt.Sprintf("%s (%s → %s)", filePath,
-		truncateString(oldString, 30), truncateString(newString, 30)))
+	a.ToolLog("editing file", fmt.Sprintf("%s (replacing %d bytes → %d bytes)", filePath, len(oldString), len(newString)))
 	a.debugLog("Editing file: %s\n", filePath)
 	a.debugLog("Old string: %s\n", oldString)
 	a.debugLog("New string: %s\n", newString)
@@ -589,7 +589,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 func handleAddTodo(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	task := args["task"].(string)
-	a.ToolLog("adding todo", task)
+	a.ToolLog("adding todo", fmt.Sprintf("task=%q", truncateString(task, 40)))
 	a.debugLog("Adding todo: %s\n", task)
 
 	result := tools.AddTodo(task, "", "medium") // title, description, priority
@@ -614,14 +614,13 @@ func handleUpdateTodoStatus(ctx context.Context, a *Agent, args map[string]inter
 		return "", fmt.Errorf("%s", tools.FormatTodoStatusError(status))
 	}
 
-	a.ToolLog("updating todo", fmt.Sprintf("task %s to %s", taskID, status))
+	a.ToolLog("updating todo", fmt.Sprintf("id=%s status=%s", taskID, status))
 	a.debugLog("Updating todo %s to status: %s\n", taskID, status)
 
 	result := tools.UpdateTodoStatus(taskID, status)
 	if result == "Todo not found" && !strings.HasPrefix(taskID, "todo_") {
 		if resolved, ok := tools.FindTodoIDByTitle(taskID); ok {
 			a.debugLog("Resolved todo title '%s' to id %s\n", taskID, resolved)
-			a.ToolLog("updating todo", fmt.Sprintf("resolved '%s' -> %s", taskID, resolved))
 			taskID = resolved
 			result = tools.UpdateTodoStatus(taskID, status)
 		}
@@ -692,6 +691,13 @@ func handleAddTodos(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return "", fmt.Errorf("missing todos argument")
 	}
 
+	// Count todos for logging
+	todoCount := 0
+	if todosSlice, ok := todosRaw.([]interface{}); ok {
+		todoCount = len(todosSlice)
+	}
+	a.ToolLog("adding todos", fmt.Sprintf("%d items", todoCount))
+
 	// Parse the todos array
 	todosSlice, ok := todosRaw.([]interface{})
 	if !ok {
@@ -734,20 +740,7 @@ func handleAddTodos(ctx context.Context, a *Agent, args map[string]interface{}) 
 		todos = append(todos, todo)
 	}
 
-	// Log compact summary
-	titles := make([]string, len(todos))
-	for i, t := range todos {
-		titles[i] = t.Title
-	}
-	if len(titles) == 1 {
-		a.ToolLog("adding todo", titles[0])
-	} else if len(titles) <= 3 {
-		a.ToolLog("adding todos", strings.Join(titles, ", "))
-	} else {
-		a.ToolLog("adding todos", fmt.Sprintf("%s, %s, +%d more", titles[0], titles[1], len(titles)-2))
-	}
 	a.debugLog("Adding %d todos\n", len(todos))
-
 	result := tools.AddBulkTodos(todos)
 	a.debugLog("Add todos result: %s\n", result)
 	return result, nil
@@ -768,7 +761,6 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		return "", err
 	}
 
-	a.ToolLog("spawning subagent", fmt.Sprintf("task: %s", truncateString(prompt, 40)))
 	a.debugLog("Spawning subagent with prompt: %s\n", prompt)
 
 	// Get subagent provider and model from configuration
@@ -811,7 +803,6 @@ func truncateString(s string, maxLen int) string {
 }
 
 func handleValidateBuild(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	a.ToolLog("running build validation", "")
 	a.debugLog("Running build validation\n")
 
 	result, err := tools.ValidateBuild()
@@ -930,8 +921,7 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
-	// Log the search action so users can see that the tool actually executed
-	a.ToolLog("searching files", fmt.Sprintf("%q in %s (max %d)", pattern, root, maxResults))
+	a.ToolLog("searching files", fmt.Sprintf("pattern=%q in %s", pattern, root))
 	a.debugLog("Searching files: pattern=%q, root=%s, max_results=%d\n", pattern, root, maxResults)
 
 	// Prepare matcher: try regex first, then fallback to substring
@@ -1060,7 +1050,7 @@ func handleWebSearch(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 
 	query := args["query"].(string)
-	a.ToolLog("web search", query)
+	a.ToolLog("searching web", fmt.Sprintf("query=%q", truncateString(query, 50)))
 	a.debugLog("Performing web search: %s\n", query)
 
 	if a.configManager == nil {
@@ -1078,7 +1068,7 @@ func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	url := args["url"].(string)
-	a.ToolLog("fetching url", url)
+	a.ToolLog("fetching URL", fmt.Sprintf("url=%q", truncateString(url, 50)))
 	a.debugLog("Fetching URL: %s\n", url)
 
 	if a.configManager == nil {
@@ -1096,7 +1086,6 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 	}
 
 	imagePath := args["image_path"].(string)
-	a.ToolLog("analyzing ui screenshot", imagePath)
 	a.debugLog("Analyzing UI screenshot: %s\n", imagePath)
 
 	result, err := tools.AnalyzeImage(imagePath, "", "frontend")
@@ -1119,7 +1108,6 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		analysisMode = v
 	}
 
-	a.ToolLog("analyzing image", imagePath)
 	a.debugLog("Analyzing image: %s (mode=%s)\n", imagePath, analysisMode)
 
 	result, err := tools.AnalyzeImage(imagePath, analysisPrompt, analysisMode)
@@ -1167,7 +1155,6 @@ func handleViewHistory(ctx context.Context, a *Agent, args map[string]interface{
 		logParts = append(logParts, "with_content")
 	}
 
-	a.ToolLog("viewing history", strings.Join(logParts, " "))
 	a.debugLog("Executing view_history with limit=%d, file_filter=%q, since=%s, show_content=%v\n", limit, fileFilter, sinceDisplay, showContent)
 
 	res, err := tools.ViewHistory(limit, fileFilter, sincePtr, showContent)
@@ -1195,31 +1182,6 @@ func handleRollbackChanges(ctx context.Context, a *Agent, args map[string]interf
 		confirm = v
 	}
 
-	logAction := "previewing rollback"
-	if revisionID == "" {
-		logAction = "listing revisions"
-	} else if filePath != "" {
-		if confirm {
-			logAction = "rolling back file"
-		} else {
-			logAction = "previewing file rollback"
-		}
-	} else if confirm {
-		logAction = "rolling back revision"
-	}
-
-	logDetails := []string{}
-	if revisionID != "" {
-		logDetails = append(logDetails, fmt.Sprintf("rev=%s", revisionID))
-	}
-	if filePath != "" {
-		logDetails = append(logDetails, fmt.Sprintf("file=%s", filePath))
-	}
-	if confirm {
-		logDetails = append(logDetails, "confirm")
-	}
-
-	a.ToolLog(logAction, strings.Join(logDetails, " "))
 	a.debugLog("Executing rollback_changes with revision_id=%q, file_path=%q, confirm=%v\n", revisionID, filePath, confirm)
 
 	res, err := tools.RollbackChanges(revisionID, filePath, confirm)

@@ -61,8 +61,8 @@ func validateEditInputs(filePath, oldString, newString string) error {
 	suspiciousPatterns := []string{
 		"../",  // Path traversal attempt
 		"..\\", // Windows path traversal
-		"\\0",  // Null byte attempts in string literals
 		"\x00", // Actual null bytes
+		// Note: "\0" pattern removed - it was blocking legitimate code edits (e.g., \0 in string literals)
 	}
 
 	checkString := func(s, name string) error {

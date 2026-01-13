@@ -29,12 +29,6 @@ func (ch *ConversationHandler) logTurnSummary(turn TurnEvaluation) {
 	if turn.ReasoningSnippet != "" {
 		builder.WriteString(fmt.Sprintf("  Reasoning: %s\n", abbreviate(turn.ReasoningSnippet, 240)))
 	}
-	if len(turn.ToolLogs) > 0 {
-		builder.WriteString("  Tool logs:\n")
-		for _, log := range turn.ToolLogs {
-			builder.WriteString(fmt.Sprintf("    %s\n", strings.TrimSpace(log)))
-		}
-	}
 	if len(turn.ToolCalls) > 0 {
 		builder.WriteString(fmt.Sprintf("  Tool calls: %d\n", len(turn.ToolCalls)))
 	}

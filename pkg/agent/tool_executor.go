@@ -26,6 +26,18 @@ func NewToolExecutor(agent *Agent) *ToolExecutor {
 
 // ExecuteTools executes a list of tool calls and returns the results
 func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
+	// Log tool calls at the beginning of the process
+	if te.agent != nil {
+		te.agent.debugLog("🛠️ Executing %d tool calls\n", len(toolCalls))
+		for _, tc := range toolCalls {
+			te.agent.LogToolCall(tc, "executing")
+			te.agent.PublishToolExecution(tc.Function.Name, "starting", map[string]interface{}{
+				"tool_call_id": tc.ID,
+				"arguments":    tc.Function.Arguments,
+			})
+		}
+	}
+
 	// Check for interrupt before executing
 	select {
 	case <-te.agent.interruptCtx.Done():
@@ -169,18 +181,6 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 
 // executeSingleTool executes a single tool call
 func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
-	// Log prior to execution for diagnostics
-	if te.agent != nil {
-		// Print tool call information before execution
-		te.agent.PrintLineAsync(formatToolCall(toolCall))
-		te.agent.LogToolCall(toolCall, "executing")
-		// Publish tool execution start event for real-time UI updates
-		te.agent.PublishToolExecution(toolCall.Function.Name, "starting", map[string]interface{}{
-			"tool_call_id": toolCall.ID,
-			"arguments":    toolCall.Function.Arguments,
-		})
-	}
-
 	// Generate a tool call ID if empty to prevent sanitization from dropping the result
 	toolCallID := toolCall.ID
 	if toolCallID == "" {

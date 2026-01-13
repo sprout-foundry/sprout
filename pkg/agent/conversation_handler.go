@@ -353,8 +353,6 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			}
 		}
 
-		toolLogs := ch.flushToolLogsToOutput()
-		turn.ToolLogs = append(turn.ToolLogs, toolLogs...)
 		turn.ToolResults = append(turn.ToolResults, toolResults...)
 
 		return ch.finalizeTurn(turn, false) // Continue conversation

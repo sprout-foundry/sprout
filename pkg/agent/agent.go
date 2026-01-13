@@ -63,8 +63,6 @@ type Agent struct {
 	conversationPruner    *ConversationPruner            // Automatic conversation pruning
 	completionSummarizer  *CompletionContextSummarizer   // Completion context summarization
 	toolCallGuidanceAdded bool                           // Prevent repeating tool call guidance
-	toolLogMutex          sync.Mutex                     // Protects tool log queue
-	toolLogQueue          []string                       // Queue for turn-aligned tool log messages
 
 	// Input injection handling
 	inputInjectionChan  chan string        // Channel for injecting new user input

@@ -56,14 +56,14 @@ func TestEscapeParserState2Behavior(t *testing.T) {
 		{"Home prefix '1'", '1', -1},  // go to state 5
 		{"End prefix '4'", '4', -1},   // go to state 6
 		{"Digit '0'", '0', -1},        // stay in state 2
-		{"Letter 'x'", 'x', -1},      // stay in state 2 (will return nil!)
+		{"Letter 'x'", 'x', -1},       // stay in state 2 (will return nil!)
 		{"Semicolon ';'", ';', -1},    // stay in state 2
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ep := NewEscapeParser()
-			ep.Parse(27) // ESC
+			ep.Parse(27)  // ESC
 			ep.Parse('[') // [
 			// Now in state 2
 			event := ep.Parse(tc.input)

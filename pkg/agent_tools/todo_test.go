@@ -110,7 +110,7 @@ func TestUpdateTodoStatus_InvalidStatusDoesNotLock(t *testing.T) {
 	res := waitWithTimeout(t, 1*time.Second, func() string {
 		return UpdateTodoStatus("todo_1", "invalid_status")
 	})
-	if !strings.Contains(res, "Invalid status:") {
+	if !strings.Contains(res, "invalid status") {
 		t.Fatalf("expected invalid status message, got: %q", res)
 	}
 

@@ -60,6 +60,10 @@ type Config struct {
 	// Change History Configuration
 	HistoryScope string `json:"history_scope,omitempty"` // "project" or "global"
 
+	// Subagent Configuration
+	SubagentProvider string `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
+	SubagentModel    string `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
+
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
 }
@@ -161,13 +165,13 @@ func NewConfig() *Config {
 			"ollama-turbo",
 			"ollama-local",
 		},
-		CustomProviders:  make(map[string]CustomProviderConfig),
-		MCP:             mcp.DefaultMCPConfig(),
-		Preferences:     make(map[string]interface{}),
-		FileBatchSize:   10,
+		CustomProviders:       make(map[string]CustomProviderConfig),
+		MCP:                   mcp.DefaultMCPConfig(),
+		Preferences:           make(map[string]interface{}),
+		FileBatchSize:         10,
 		MaxConcurrentRequests: 5,
-		RequestDelayMs:  100,
-		EnableSecurityChecks: true,
+		RequestDelayMs:        100,
+		EnableSecurityChecks:  true,
 		CodeStyle: &CodeStyleConfig{
 			IndentationType: "spaces",
 			IndentationSize: 4,
@@ -326,6 +330,44 @@ func (c *Config) GetMCPTimeout() time.Duration {
 		return 30 * time.Second
 	}
 	return c.MCP.Timeout
+}
+
+// GetSubagentProvider returns the configured provider for subagents
+// If not explicitly set, falls back to the last used provider
+func (c *Config) GetSubagentProvider() string {
+	if c.SubagentProvider != "" {
+		return c.SubagentProvider
+	}
+	// Fall back to last used provider
+	if c.LastUsedProvider != "" {
+		return c.LastUsedProvider
+	}
+	// Fall back to first priority provider
+	if len(c.ProviderPriority) > 0 {
+		return c.ProviderPriority[0]
+	}
+	return "openai" // Ultimate fallback
+}
+
+// GetSubagentModel returns the configured model for subagents
+// If not explicitly set, falls back to the provider's default model
+func (c *Config) GetSubagentModel() string {
+	if c.SubagentModel != "" {
+		return c.SubagentModel
+	}
+	// Use the provider for subagents
+	provider := c.GetSubagentProvider()
+	return c.GetModelForProvider(provider)
+}
+
+// SetSubagentProvider sets the provider for subagents
+func (c *Config) SetSubagentProvider(provider string) {
+	c.SubagentProvider = provider
+}
+
+// SetSubagentModel sets the model for subagents
+func (c *Config) SetSubagentModel(model string) {
+	c.SubagentModel = model
 }
 
 // GetMCPServerTimeout moved to pkg/mcp package with MCPServerConfig

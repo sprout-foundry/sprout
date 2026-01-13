@@ -36,10 +36,10 @@ func TestBangPrefixRouting(t *testing.T) {
 	registry := NewCommandRegistry()
 
 	testCases := []struct {
-		name             string
-		input            string
-		expectedCmd      string
-		expectedArgs     []string
+		name         string
+		input        string
+		expectedCmd  string
+		expectedArgs []string
 	}{
 		{"bang simple", "!ls", "exec", []string{"ls"}},
 		{"bang with flags", "!ls -la", "exec", []string{"ls -la"}},

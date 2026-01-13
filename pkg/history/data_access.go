@@ -19,13 +19,13 @@ import (
 const (
 	projectChangesDir   = ".ledit/changes"
 	projectRevisionsDir = ".ledit/revisions"
-	activeStatus       = "active"
-	revertedStatus     = "reverted"
-	restoredStatus     = "restored"
-	metadataFile       = "metadata.json"
-	originalSuffix     = ".original"
-	updatedSuffix      = ".updated"
-	metadataVersion    = 1
+	activeStatus        = "active"
+	revertedStatus      = "reverted"
+	restoredStatus      = "restored"
+	metadataFile        = "metadata.json"
+	originalSuffix      = ".original"
+	updatedSuffix       = ".updated"
+	metadataVersion     = 1
 )
 
 var (

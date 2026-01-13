@@ -27,18 +27,18 @@ type CommitCommand struct {
 	skipPrompt   bool
 	dryRun       bool
 	allowSecrets bool
-	agentError   error // Store agent creation error for better error reporting
+	agentError   error  // Store agent creation error for better error reporting
 	review       string // Store the commit review result
 }
 
 // CommitJSONResult is the JSON output structure for commit command
 type CommitJSONResult struct {
-	Status  string `json:"status"`  // success, error, dry-run
+	Status  string `json:"status"`            // success, error, dry-run
 	Commit  string `json:"commit,omitempty"`  // commit hash if successful
 	Message string `json:"message,omitempty"` // commit message
 	Branch  string `json:"branch,omitempty"`  // branch name
-	Error   string `json:"error,omitempty"`  // error message
-	Review  string `json:"review,omitempty"` // commit review (critical concerns)
+	Error   string `json:"error,omitempty"`   // error message
+	Review  string `json:"review,omitempty"`  // commit review (critical concerns)
 }
 
 // Validate checks that required fields are populated
@@ -439,18 +439,11 @@ func (c *CommitCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 		return WriteJSONToOutput(result)
 	}
 
-	// Generate review of staged changes
-	review, err := generateCommitReview(chatAgent)
-	if err != nil {
-		review = ""
-	}
-
 	// Handle dry-run mode
 	if c.dryRun {
 		result := CommitJSONResult{
 			Status:  CommitStatusDryRun,
 			Message: "Dry-run mode: commit message generated successfully without creating commit",
-			Review:  review,
 		}
 		if err := result.Validate(); err != nil {
 			return fmt.Errorf("JSON validation failed: %w", err)
@@ -480,7 +473,6 @@ func (c *CommitCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 		Status: CommitStatusSuccess,
 		Commit: commitHash,
 		Branch: branch,
-		Review: review,
 	}
 	if err := result.Validate(); err != nil {
 		return fmt.Errorf("JSON validation failed: %w", err)
@@ -777,19 +769,6 @@ retryLoop:
 				return nil
 			}
 
-			// Generate review in manual mode too
-			review, err := generateCommitReview(chatAgent)
-			if err == nil && review != "" {
-				c.review = review
-				if review != "No critical concerns found." {
-					c.println("")
-					c.println("⚠️  Review:")
-					c.println("")
-					c.println(review)
-					c.println("")
-				}
-			}
-
 			break
 		}
 		// Multi-file mode - full format with file actions
@@ -889,20 +868,6 @@ Generate a Git commit message summary. The message should follow these rules:
 
 		// Show token usage (both requests)
 		c.printf("\n💰 Tokens used: ~%d (model: %s/%s)\n", resp.Usage.TotalTokens*2, clientType, model)
-
-		// Generate review of staged changes
-		review, err := generateCommitReview(chatAgent)
-		if err == nil && review != "" {
-			c.review = review
-			// Display review if concerns found
-			if review != "No critical concerns found." {
-				c.println("")
-				c.println("⚠️  Review:")
-				c.println("")
-				c.println(review)
-				c.println("")
-			}
-		}
 
 		// Show staged files summary and commit message (minimal, no emoji)
 		c.println("")
@@ -1013,17 +978,6 @@ Generate a Git commit message summary. The message should follow these rules:
 		}
 
 	} // End of retry loop
-
-	// Display review summary if available and not in skip-prompt mode
-	if c.review != "" && !c.skipPrompt {
-		if c.review != "No critical concerns found." {
-			c.println("")
-			c.println("⚠️ ⚠️ ⚠️  Review Summary  ⚠️ ⚠️ ⚠️")
-			c.println("")
-			c.println(c.review)
-			c.println("")
-		}
-	}
 
 	// Handle dry-run mode
 	if c.dryRun {

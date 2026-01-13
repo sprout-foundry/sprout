@@ -42,78 +42,6 @@ func (a *Agent) getModelContextLimit() int {
 	return limit
 }
 
-// ToolLog logs tool execution messages that are always visible with blue formatting
-func (a *Agent) ToolLog(action, target string) {
-	// Use muted gray colors for tool call logging - both very close in darkness
-	const darkGray = "\033[90m"                  // Bright black (darker gray) for tool call info
-	const slightlyLighterGray = "\033[38;5;246m" // Slightly lighter gray for the executed portion
-	const reset = "\033[0m"
-
-	// Calculate context usage percentage
-	var contextPercent string
-	if a.maxContextTokens > 0 && a.currentContextTokens > 0 {
-		percentage := float64(a.currentContextTokens) / float64(a.maxContextTokens) * 100
-		contextPercent = fmt.Sprintf(" - %.0f%%", percentage)
-	} else {
-		contextPercent = ""
-	}
-
-	// Format: [4 - 30%] read file filename.go
-	iterInfo := fmt.Sprintf("[%d%s]", a.currentIteration, contextPercent)
-
-	var message string
-	if target != "" {
-		// Add newline before tool call to put it on its own line
-		// Use darker gray for tool call info and slightly lighter gray for target
-		message = fmt.Sprintf("\n%s%s %s%s %s%s%s\n", darkGray, iterInfo, action, reset, slightlyLighterGray, target, reset)
-	} else {
-		// Add newline before tool call to put it on its own line
-		message = fmt.Sprintf("\n%s%s %s%s\n", darkGray, iterInfo, action, reset)
-	}
-
-	// Always enqueue the message for turn-level logging
-	a.enqueueToolLog(message)
-
-	// Route through streaming callback if streaming is enabled
-	if a.streamingEnabled && a.streamingCallback != nil {
-		// Streaming mode will flush the queued logs after each turn
-		return
-	}
-
-	// Fallback to direct output for non-streaming mode
-	if a.outputMutex != nil {
-		a.outputMutex.Lock()
-		defer a.outputMutex.Unlock()
-	}
-
-	// In CI mode, don't use cursor control sequences
-	if os.Getenv("LEDIT_CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-		fmt.Print(message)
-	} else {
-		// Clear current line and move to start for interactive terminals
-		fmt.Print("\r\033[K")
-		fmt.Print(message)
-	}
-}
-
-func (a *Agent) enqueueToolLog(message string) {
-	a.toolLogMutex.Lock()
-	defer a.toolLogMutex.Unlock()
-	a.toolLogQueue = append(a.toolLogQueue, message)
-}
-
-func (a *Agent) drainToolLogs() []string {
-	a.toolLogMutex.Lock()
-	defer a.toolLogMutex.Unlock()
-	if len(a.toolLogQueue) == 0 {
-		return nil
-	}
-	logs := make([]string, len(a.toolLogQueue))
-	copy(logs, a.toolLogQueue)
-	a.toolLogQueue = nil
-	return logs
-}
-
 // PrintLine prints a line of text to the console content area synchronously.
 // It delegates to the internal renderer that handles streaming vs CLI output.
 func (a *Agent) PrintLine(text string) {
@@ -315,4 +243,44 @@ func (a *Agent) LogToolCall(tc api.ToolCall, phase string) {
 	// best-effort write; ignore errors on close
 	_, _ = f.Write(append(b, '\n'))
 	_ = f.Close()
+}
+
+// ToolLog formats and prints a tool call message immediately for user visibility.
+// This prints synchronously (not queued) to ensure the tool call information appears
+// exactly when the operation starts, not after buffering/queuing delays.
+// Format: [4 - 30%] read file filename.go
+func (a *Agent) ToolLog(action string, target string) {
+	if a == nil {
+		return
+	}
+
+	// Use muted gray colors for tool call logging - both very close in darkness
+	const darkGray = "\033[90m"                  // Bright black (darker gray) for tool call info
+	const slightlyLighterGray = "\033[38;5;246m" // Slightly lighter gray for the executed portion
+	const reset = "\033[0m"
+
+	// Calculate context usage percentage
+	var contextPercent string
+	if a.maxContextTokens > 0 && a.currentContextTokens > 0 {
+		percentage := float64(a.currentContextTokens) / float64(a.maxContextTokens) * 100
+		contextPercent = fmt.Sprintf(" - %.0f%%", percentage)
+	} else {
+		contextPercent = ""
+	}
+
+	// Format: [4 - 30%] read file filename.go
+	iterInfo := fmt.Sprintf("[%d%s]", a.currentIteration, contextPercent)
+
+	var message string
+	if target != "" {
+		// Add newline before tool call to put it on its own line
+		// Use darker gray for tool call info and slightly lighter gray for target
+		message = fmt.Sprintf("%s%s %s%s %s%s%s", darkGray, iterInfo, action, reset, slightlyLighterGray, target, reset)
+	} else {
+		// Add newline before tool call to put it on its own line
+		message = fmt.Sprintf("%s%s %s%s", darkGray, iterInfo, action, reset)
+	}
+
+	// Print immediately - bypass the async queue to ensure it appears at the right time
+	a.printLineInternal(message)
 }

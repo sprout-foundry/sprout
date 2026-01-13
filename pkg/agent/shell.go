@@ -27,7 +27,6 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 		a.updatePreviousShellCommandMessage(prevResult)
 	}
 
-	a.ToolLog("executing command", command)
 	a.debugLog("Executing shell command: %s\n", command)
 
 	fullResult, err := tools.ExecuteShellCommand(ctx, command)

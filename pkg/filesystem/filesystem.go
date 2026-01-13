@@ -3,6 +3,7 @@ package filesystem
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -162,6 +163,13 @@ func CreateTempFile(dir, pattern string) (*os.File, error) {
 //
 // Returns the resolved absolute path if it's safe to access, or an error otherwise.
 func SafeResolvePath(filePath string) (string, error) {
+	return SafeResolvePathWithBypass(context.Background(), filePath)
+}
+
+// SafeResolvePathWithBypass validates a file path for reading, checking that it's
+// within the working directory and handling symlinks properly. Optional bypass
+// can be enabled via context when user has explicitly approved the operation.
+func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, error) {
 	if filePath == "" {
 		return "", fmt.Errorf("empty file path provided")
 	}
@@ -205,6 +213,10 @@ func SafeResolvePath(filePath string) (string, error) {
 
 	// If the relative path starts with "..", it's outside the working directory
 	if strings.HasPrefix(relPath, "..") {
+		if SecurityBypassEnabled(ctx) {
+			// Security bypass enabled - allow access outside working directory
+			return resolvedAbs, nil
+		}
 		return "", fmt.Errorf("security violation: attempt to access file outside working directory: %s (resolves to: %s)", cleanPath, resolvedAbs)
 	}
 
@@ -217,6 +229,16 @@ func SafeResolvePath(filePath string) (string, error) {
 //
 // Returns the absolute path if it's safe to write, or an error otherwise.
 func SafeResolvePathForWrite(filePath string) (string, error) {
+	return SafeResolvePathForWriteWithBypass(context.Background(), filePath)
+}
+
+// SafeResolvePathForWriteWithBypass validates a file path for writing with optional bypass.
+// This allows writing to new files that don't exist yet while still preventing path
+// traversal attacks. When security bypass is enabled via context, writes outside the
+// working directory are allowed.
+//
+// Returns the absolute path if it's safe to write, or an error otherwise.
+func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (string, error) {
 	if filePath == "" {
 		return "", fmt.Errorf("empty file path provided")
 	}
@@ -286,6 +308,10 @@ func SafeResolvePathForWrite(filePath string) (string, error) {
 
 	// If the relative path starts with "..", it's outside the working directory
 	if strings.HasPrefix(relPath, "..") {
+		if SecurityBypassEnabled(ctx) {
+			// Security bypass enabled - allow writing outside working directory
+			return absPath, nil
+		}
 		return "", fmt.Errorf("security violation: attempt to write file outside working directory: %s (parent resolves to: %s)", cleanPath, resolvedParent)
 	}
 

@@ -11,7 +11,7 @@ import (
 
 func WriteFile(ctx context.Context, filePath, content string) (string, error) {
 	// SECURITY: Validate parent directory is safe to access (handles new files)
-	cleanPath, err := filesystem.SafeResolvePathForWrite(filePath)
+	cleanPath, err := filesystem.SafeResolvePathForWriteWithBypass(ctx, filePath)
 	if err != nil {
 		return "", err
 	}

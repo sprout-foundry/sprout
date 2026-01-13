@@ -5,8 +5,8 @@ import (
 	"os/exec"
 	"strings"
 
-	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/agent"
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/codereview"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -78,7 +78,8 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	logger.LogProcessStep(fmt.Sprintf("Retrieved staged diff (%d bytes)", len(stagedDiff)))
 
 	// Optimize diff for more efficient API usage
-	optimizer := utils.NewDiffOptimizer()
+	// NOTE: Disable aggressive optimization for code review to ensure proper context
+	optimizer := utils.NewDiffOptimizerForReview()
 	optimizedDiff := optimizer.OptimizeDiff(stagedDiff)
 
 	logger.LogProcessStep(fmt.Sprintf("Optimized diff: %d -> %d lines, %d bytes saved",

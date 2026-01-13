@@ -20,15 +20,15 @@ const (
 
 // PruningThresholds defines when and how aggressively to prune for each provider type
 type PruningThresholds struct {
-	ProviderName     string
-	StandardPercent  float64 // Percentage of max context to start pruning (e.g., 0.85 = 85%)
-	StandardTokens   int     // Absolute token limit to start pruning (e.g., 85000)
-	AggressivePercent float64 // Percentage to trigger aggressive mode (e.g., 0.90 = 90%)
-	MinMessages      int     // Minimum messages to always keep
-	RecentMessages   int     // Recent messages to always preserve
-	SlidingWindow    int     // Window size for sliding window strategy
-	RemainingTokensLimit int // For cached-discount providers: prune when remaining tokens < this
-	PercentLimit      float64 // For cached-discount providers: prune when remaining % < this
+	ProviderName         string
+	StandardPercent      float64 // Percentage of max context to start pruning (e.g., 0.85 = 85%)
+	StandardTokens       int     // Absolute token limit to start pruning (e.g., 85000)
+	AggressivePercent    float64 // Percentage to trigger aggressive mode (e.g., 0.90 = 90%)
+	MinMessages          int     // Minimum messages to always keep
+	RecentMessages       int     // Recent messages to always preserve
+	SlidingWindow        int     // Window size for sliding window strategy
+	RemainingTokensLimit int     // For cached-discount providers: prune when remaining tokens < this
+	PercentLimit         float64 // For cached-discount providers: prune when remaining % < this
 }
 
 // PruningConfig is the single source of truth for all pruning thresholds
@@ -42,22 +42,22 @@ var PruningConfig = struct {
 	Aggressive struct {
 		RecentMessagesToKeep int // Messages from end to preserve during aggressive pruning
 		TruncateAt           int // Character limit for truncation during aggressive pruning
-		FileReadAgeThreshold  int // Message age below which old file reads are summarized
+		FileReadAgeThreshold int // Message age below which old file reads are summarized
 	}
 
 	// Target token percentages when pruning
 	TargetPercentHighContext float64 // % of max tokens to target for high-context providers
-	TargetPercentDefault    float64 // % of max tokens to target for default providers
+	TargetPercentDefault     float64 // % of max tokens to target for default providers
 }{
 	// Default thresholds (most providers)
 	Default: PruningThresholds{
-		ProviderName:     "default",
-		StandardPercent:  0.85, // Start pruning at 85% of context
-		StandardTokens:   85000, // Start pruning at 85K tokens
-		AggressivePercent: 0.90, // Aggressive mode at 90%
-		MinMessages:      5,
-		RecentMessages:   15,
-		SlidingWindow:    30,
+		ProviderName:      "default",
+		StandardPercent:   0.85,  // Start pruning at 85% of context
+		StandardTokens:    85000, // Start pruning at 85K tokens
+		AggressivePercent: 0.90,  // Aggressive mode at 90%
+		MinMessages:       5,
+		RecentMessages:    15,
+		SlidingWindow:     30,
 	},
 
 	// High-context providers (OpenAI, ZAI with 128K+ context)
@@ -72,12 +72,12 @@ var PruningConfig = struct {
 
 	// Cached-token discount providers (future use - currently empty map)
 	Cached: PruningThresholds{
-		ProviderName:      "cached-discount",
+		ProviderName:         "cached-discount",
 		RemainingTokensLimit: 20000, // Prune when fewer than this many tokens remain
-		PercentLimit:      0.20, // Prune when fewer than this % of tokens remain
-		MinMessages:       5,
-		RecentMessages:    15,
-		SlidingWindow:     30,
+		PercentLimit:         0.20,  // Prune when fewer than this % of tokens remain
+		MinMessages:          5,
+		RecentMessages:       15,
+		SlidingWindow:        30,
 	},
 
 	// Aggressive optimization settings
@@ -86,14 +86,14 @@ var PruningConfig = struct {
 		TruncateAt           int
 		FileReadAgeThreshold int
 	}{
-		RecentMessagesToKeep: 8, // Keep last 8 messages during aggressive mode
-		TruncateAt:          1200, // Truncate at 1200 characters
-		FileReadAgeThreshold: 12, // Summarize file reads older than 12 messages
+		RecentMessagesToKeep: 8,    // Keep last 8 messages during aggressive mode
+		TruncateAt:           1200, // Truncate at 1200 characters
+		FileReadAgeThreshold: 12,   // Summarize file reads older than 12 messages
 	},
 
 	// Target percentages for pruning
 	TargetPercentHighContext: 0.85, // Target ~85% of max context when pruning
-	TargetPercentDefault:    0.60, // Target ~60% of context for most providers
+	TargetPercentDefault:     0.60, // Target ~60% of context for most providers
 }
 
 // MessageImportance tracks the importance of a message

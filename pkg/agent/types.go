@@ -55,23 +55,24 @@ type CircuitBreakerAction struct {
 // CircuitBreakerState tracks repetitive actions across the session.
 //
 // Locking Strategy:
-// - The Actions map is protected by mu (sync.RWMutex)
-// - Use RLock/RLock for read-only access when you don't need exclusive access
-// - Use Lock for write operations or when you need exclusive access
-// - Always use defer to unlock (defer mu.Unlock() or defer mu.RUnlock())
-// - Helper functions ending with "Locked" must be called while holding the lock
-//   (they perform no locking themselves, allowing callers to hold lock for multiple ops)
+//   - The Actions map is protected by mu (sync.RWMutex)
+//   - Use RLock/RLock for read-only access when you don't need exclusive access
+//   - Use Lock for write operations or when you need exclusive access
+//   - Always use defer to unlock (defer mu.Unlock() or defer mu.RUnlock())
+//   - Helper functions ending with "Locked" must be called while holding the lock
+//     (they perform no locking themselves, allowing callers to hold lock for multiple ops)
 //
 // Example patterns:
-//   // Read-only access:
-//   cb.mu.RLock()
-//   defer cb.mu.RUnlock()
-//   action := cb.Actions[key]
 //
-//   // Write access:
-//   cb.mu.Lock()
-//   defer cb.mu.Unlock()
-//   cb.Actions[key] = &CircuitBreakerAction{...}
+//	// Read-only access:
+//	cb.mu.RLock()
+//	defer cb.mu.RUnlock()
+//	action := cb.Actions[key]
+//
+//	// Write access:
+//	cb.mu.Lock()
+//	defer cb.mu.Unlock()
+//	cb.Actions[key] = &CircuitBreakerAction{...}
 type CircuitBreakerState struct {
 	mu      sync.RWMutex
 	Actions map[string]*CircuitBreakerAction // key: actionType:target

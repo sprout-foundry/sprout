@@ -39,6 +39,31 @@ func NewDiffOptimizer() *DiffOptimizer {
 	}
 }
 
+// NewDiffOptimizerForReview creates a diff optimizer optimized for code review
+// This uses much higher thresholds to ensure reviewers get full context
+func NewDiffOptimizerForReview() *DiffOptimizer {
+	return &DiffOptimizer{
+		MaxDiffLines: 5000,   // 10x higher for code reviews
+		MaxFileSize:  100000, // 100KB for code reviews
+		LargeFileExtensions: []string{
+			// Only optimize lock files and generated content for reviews
+			".lock", ".sum",
+			".min.js", ".min.css", ".bundle.js", ".dist.js",
+		},
+		LockFilePatterns: []string{
+			"package-lock.json", "yarn.lock", "Cargo.lock", "Pipfile.lock",
+			"go.sum", "composer.lock", "Gemfile.lock", "poetry.lock",
+			"pnpm-lock.yaml", "bun.lockb",
+		},
+		GeneratedFilePatterns: []string{
+			"*.min.*", "*.bundle.*", "*.dist.*", "*.generated.*",
+			"bundle.*", "*.bundle.js", "*.bundle.css",
+			"dist/", "build/", "node_modules/", "vendor/",
+			".git/", ".svn/", ".hg/",
+		},
+	}
+}
+
 // OptimizedDiffResult represents the result of diff optimization
 type OptimizedDiffResult struct {
 	OptimizedContent string            // The optimized diff content

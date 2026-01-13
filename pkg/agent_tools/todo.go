@@ -48,8 +48,7 @@ func AddTodo(title, description, priority string) string {
 	}
 
 	globalTodoManager.items = append(globalTodoManager.items, item)
-	// Return compact response - model just added it, doesn't need details echoed back
-	return fmt.Sprintf("✅ Added %s", item.ID)
+	return formatTodoSuccess(title, item.ID)
 }
 
 // AddBulkTodos adds multiple todo items at once
@@ -59,6 +58,9 @@ func AddBulkTodos(todos []struct {
 	Priority    string
 }) string {
 	globalTodoManager.mutex.Lock()
+
+	// Store base ID for consistent ID tracking in response
+	baseID := len(globalTodoManager.items) + 1
 
 	for _, todo := range todos {
 		priority := todo.Priority
@@ -81,29 +83,38 @@ func AddBulkTodos(todos []struct {
 	// Unlock before generating markdown to avoid deadlock (GetTodoListMarkdown uses RLock)
 	globalTodoManager.mutex.Unlock()
 
-	// Return compact summary - model just made the changes, doesn't need full list back
+	if len(todos) == 0 {
+		return "No todos added"
+	}
+
 	if len(todos) == 1 {
-		return fmt.Sprintf("✅ Added todo: %s (ID: %s)", todos[0].Title, fmt.Sprintf("todo_%d", len(globalTodoManager.items)))
+		return formatTodoSuccess(todos[0].Title, fmt.Sprintf("todo_%d", baseID))
 	}
-	titles := make([]string, len(todos))
-	for i, t := range todos {
-		titles[i] = t.Title
+
+	// Build summary for multiple todos
+	var itemsFormatted []string
+	maxToShow := MaxNumberTodosToShowFull
+	if len(todos) > maxToShow {
+		maxToShow = TidyMaxTodos
 	}
-	return fmt.Sprintf("📝 Added %d todos: %s", len(todos), strings.Join(titles, ", "))
+
+	for i := 0; i < maxToShow && i < len(todos); i++ {
+		itemsFormatted = append(itemsFormatted, formatTodoResponseForID(todos[i].Title, fmt.Sprintf("todo_%d", baseID+i)))
+	}
+
+	moreCount := 0
+	if len(todos) > maxToShow {
+		moreCount = len(todos) - maxToShow
+	}
+
+	return formatBulkTodoSuccess(len(todos), itemsFormatted, moreCount)
 }
 
 // UpdateTodoStatus updates the status of a todo item
 func UpdateTodoStatus(id, status string) string {
 	// Validate status before taking the lock
-	validStatuses := map[string]bool{
-		"pending":     true,
-		"in_progress": true,
-		"completed":   true,
-		"cancelled":   true,
-	}
-
-	if !validStatuses[status] {
-		return fmt.Sprintf("Invalid status: %s", status)
+	if !IsValidStatus(status) {
+		return FormatTodoStatusError(status)
 	}
 
 	globalTodoManager.mutex.Lock()
@@ -113,33 +124,17 @@ func UpdateTodoStatus(id, status string) string {
 			globalTodoManager.items[i].Status = status
 			globalTodoManager.items[i].UpdatedAt = time.Now()
 
-			// Build compact response - model just made the change, doesn't need full list back
-			var response string
-			switch status {
-			case "in_progress":
-				response = fmt.Sprintf("🔄 Updated %s to in_progress", item.ID)
-			case "completed":
-				// Count remaining todos to optionally add context
-				remainingCount := 0
-				for _, todo := range globalTodoManager.items {
-					if todo.Status == "pending" || todo.Status == "in_progress" {
-						remainingCount++
-					}
+			// Count remaining todos to optionally add context
+			remainingCount := 0
+			for _, todo := range globalTodoManager.items {
+				if todo.Status == "pending" || todo.Status == "in_progress" {
+					remainingCount++
 				}
-				if remainingCount == 0 {
-					response = fmt.Sprintf("🎉 Completed %s - All todos done!", item.ID)
-				} else {
-					response = fmt.Sprintf("✅ Completed %s (%d remaining)", item.ID, remainingCount)
-				}
-			case "cancelled":
-				response = fmt.Sprintf("❌ Cancelled %s", item.ID)
-			default:
-				response = fmt.Sprintf("📝 Updated %s to %s", item.ID, status)
 			}
 
 			// Unlock before returning
 			globalTodoManager.mutex.Unlock()
-			return response
+			return formatStatusUpdate(status, item.Title, item.ID, remainingCount)
 		}
 	}
 
@@ -185,24 +180,14 @@ func UpdateTodoStatusBulk(updates []struct {
 					globalTodoManager.items[i].UpdatedAt = time.Now()
 					updateCount++
 
-					symbol := getCompactStatusSymbol(update.Status)
-					results = append(results, fmt.Sprintf("%s %s", symbol, item.Title))
+					results = append(results, formatStatusWithID(update.Status, item.Title, item.ID))
 				}
 				break
 			}
 		}
 	}
 
-	if updateCount == 0 {
-		return "No updates made"
-	}
-
-	// Return compact summary instead of verbose list
-	if len(results) <= 3 {
-		return strings.Join(results, ", ")
-	}
-
-	return fmt.Sprintf("Updated %d todos: %s, +%d more", updateCount, results[0], len(results)-1)
+	return formatBulkStatusSummary(updateCount, results)
 }
 
 // ListTodos returns a markdown-formatted list of all todos for UI display
@@ -528,7 +513,8 @@ func GetTodoListMarkdown() string {
 			statusIndicator = ""
 		}
 
-		result.WriteString(fmt.Sprintf("- %s %s", checkbox, item.Title))
+		// Use ID for reference since models need the exact ID for updates
+		result.WriteString(fmt.Sprintf("- %s %s (%s)", checkbox, item.Title, item.ID))
 
 		// Add priority indicator
 		if item.Priority == "high" {

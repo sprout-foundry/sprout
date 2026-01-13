@@ -563,11 +563,11 @@ func (p *GenericProvider) buildHTTPRequest(body []byte, streaming bool) (*http.R
 
 	// Check if authentication is needed
 	var token string
-	
+
 	// For local instances like LM Studio, skip auth check entirely if it would fail
 	isLocalInstance := strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost")
-	
-	if isLocalInstance && (p.config.Auth.Type == "bearer" || p.config.Auth.Type == "api_key") && 
+
+	if isLocalInstance && (p.config.Auth.Type == "bearer" || p.config.Auth.Type == "api_key") &&
 		p.config.Auth.EnvVar == "" && p.config.Auth.Key == "" {
 		// Local instance with no auth token configured - skip auth entirely
 		token = ""

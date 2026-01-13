@@ -10,18 +10,25 @@ import (
 	"time"
 )
 
-// Default timeout for subagent execution (30 minutes)
-const DefaultSubagentTimeout = 30 * time.Minute
+// No timeout for subagent execution - runs until completion
+// Subagents are designed for long-running tasks and should not be restricted
+const DefaultSubagentTimeout = 0 // 0 means no timeout
 
 // GetSubagentTimeout returns the configured timeout for subagent execution.
-// It reads from LEDIT_SUBAGENT_TIMEOUT environment variable if set,
-// otherwise returns DefaultSubagentTimeout.
+// It reads from LEDIT_SUBAGENT_TIMEOUT environment variable if set.
+// A value of "0" or unset means NO timeout (runs indefinitely).
 //
 // Environment variable format: number followed by unit (e.g., "30m", "1h", "90s")
+// Set to "0" or leave unset to disable timeout completely (recommended)
 func GetSubagentTimeout() time.Duration {
 	envTimeout := os.Getenv("LEDIT_SUBAGENT_TIMEOUT")
 	if envTimeout == "" {
-		return DefaultSubagentTimeout
+		return 0 // No timeout by default
+	}
+
+	// Check if explicitly set to 0 (no timeout)
+	if envTimeout == "0" {
+		return 0
 	}
 
 	// First try to parse as a duration string (e.g., "30m")
@@ -30,8 +37,8 @@ func GetSubagentTimeout() time.Duration {
 		if duration > 0 {
 			return duration
 		}
-		// Zero or negative duration - fall back to default
-		return DefaultSubagentTimeout
+		// Zero or negative duration - no timeout
+		return 0
 	}
 
 	// If that fails, try to parse as just minutes (e.g., "30")
@@ -40,24 +47,26 @@ func GetSubagentTimeout() time.Duration {
 		return time.Duration(minutes) * time.Minute
 	}
 
-	// If all else fails, return default
-	return DefaultSubagentTimeout
+	// If all else fails, return no timeout
+	return 0
 }
 
 // RunSubagent spawns an agent subprocess, waits for completion, and returns all output.
 // This enables the planner agent to delegate work to execution sub-agents, wait for them
 // to complete, and immediately retrieve their output for evaluation.
 //
-// The function runs synchronously (blocking) and captures stdout/stderr.
+// The function runs synchronously (blocking) with NO TIMEOUT by default.
+// Subagents are designed for long-running implementation tasks and should complete
+// their work regardless of how long it takes.
 //
 // Example workflow:
-//   1. Planning Agent: "Create a plan..."
-//   2. Planning Agent: run_subagent("Implement JWT token service")
-//      → spawns Sub-Agent with that task and WAITS for completion
-//   3. Sub-Agent: Works on task... (returns output)
-//   4. Planning Agent: Receives stdout/stderr, evaluates with other tools
-//   5. Planning Agent: run_subagent("Fix token expiration bug")
-//      → spawns another subagent for follow-up
+//  1. Planning Agent: "Create a plan..."
+//  2. Planning Agent: run_subagent("Implement JWT token service")
+//     → spawns Sub-Agent with that task and WAITS for completion
+//  3. Sub-Agent: Works on task... (returns output)
+//  4. Planning Agent: Receives stdout/stderr, evaluates with other tools
+//  5. Planning Agent: run_subagent("Fix token expiration bug")
+//     → spawns another subagent for follow-up
 //
 // Parameters:
 //   - prompt: The task/prompt for the subagent
@@ -69,7 +78,7 @@ func GetSubagentTimeout() time.Duration {
 //   - stderr: Combined stderr output
 //   - exit_code: Process exit code (0 for success)
 //   - completed: true if process ran to completion (always true for blocking mode)
-//   - timed_out: true if the subprocess was terminated due to timeout
+//   - timed_out: true if the subprocess was terminated due to timeout (always false with no timeout)
 func RunSubagent(prompt, model, provider string) (map[string]string, error) {
 	// Build command: ledit agent with the given prompt
 	args := []string{"agent"}
@@ -93,10 +102,19 @@ func RunSubagent(prompt, model, provider string) (map[string]string, error) {
 		return nil, fmt.Errorf("failed to get current executable path: %w", err)
 	}
 
-	// Create context with timeout to prevent indefinite hangs
-	// Timeout is configurable via LEDIT_SUBAGENT_TIMEOUT environment variable
-	ctx, cancel := context.WithTimeout(context.Background(), GetSubagentTimeout())
-	defer cancel()
+	// Create context (with optional timeout)
+	timeout := GetSubagentTimeout()
+	var ctx context.Context
+	var cancel context.CancelFunc
+
+	if timeout > 0 {
+		// Only create timeout context if explicitly configured
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+	} else {
+		// No timeout - run until completion
+		ctx = context.Background()
+	}
 
 	cmd := exec.CommandContext(ctx, leditPath, args...)
 
@@ -105,7 +123,7 @@ func RunSubagent(prompt, model, provider string) (map[string]string, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	// Run the command and wait for completion (blocking with timeout)
+	// Run the command and wait for completion (blocking)
 	err = cmd.Run()
 
 	// Determine exit code and timeout status
@@ -113,8 +131,8 @@ func RunSubagent(prompt, model, provider string) (map[string]string, error) {
 	timedOut := false
 
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			// Timeout occurred
+		if timeout > 0 && ctx.Err() == context.DeadlineExceeded {
+			// Timeout occurred (only if timeout was configured)
 			exitCode = -1
 			timedOut = true
 		} else if exitError, ok := err.(*exec.ExitError); ok {

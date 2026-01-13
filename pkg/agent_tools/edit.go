@@ -16,7 +16,7 @@ func EditFile(ctx context.Context, filePath, oldString, newString string) (strin
 	}
 
 	// Step 2: Resolve and validate file
-	cleanPath, originalMode, err := resolveAndValidateFile(filePath)
+	cleanPath, originalMode, err := resolveAndValidateFile(ctx, filePath)
 	if err != nil {
 		return "", err
 	}
@@ -87,9 +87,9 @@ func validateEditInputs(filePath, oldString, newString string) error {
 
 // resolveAndValidateFile resolves path using filesystem.SafeResolvePath and checks file exists
 // Returns the resolved path, original file mode, and any error
-func resolveAndValidateFile(filePath string) (string, os.FileMode, error) {
+func resolveAndValidateFile(ctx context.Context, filePath string) (string, os.FileMode, error) {
 	// SECURITY: Validate path is within working directory (handles symlinks properly)
-	cleanPath, err := filesystem.SafeResolvePath(filePath)
+	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, filePath)
 	if err != nil {
 		return "", 0, err
 	}

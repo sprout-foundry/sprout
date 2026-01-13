@@ -17,7 +17,7 @@ func ReadFile(ctx context.Context, filePath string) (string, error) {
 
 func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine int) (string, error) {
 	// SECURITY: Validate path is within working directory (handles symlinks properly)
-	cleanPath, err := filesystem.SafeResolvePath(filePath)
+	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, filePath)
 	if err != nil {
 		return "", err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -170,6 +171,8 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	// Log prior to execution for diagnostics
 	if te.agent != nil {
+		// Print tool call information before execution
+		te.agent.PrintLineAsync(formatToolCall(toolCall))
 		te.agent.LogToolCall(toolCall, "executing")
 		// Publish tool execution start event for real-time UI updates
 		te.agent.PublishToolExecution(toolCall.Function.Name, "starting", map[string]interface{}{
@@ -429,4 +432,51 @@ func (te *ToolExecutor) GenerateToolCallID(toolName string) string {
 // getCurrentTime returns the current time (abstracted for testing)
 func getCurrentTime() int64 {
 	return time.Now().Unix()
+}
+
+// formatToolCall formats a tool call for display before execution
+// Maximum display length for tool call arguments before truncation
+const maxToolArgDisplayLength = 50
+
+// formatTruncateString truncates a string to the maximum display length and adds ellipsis if needed,
+// then wraps it in quotes for unambiguous display
+func formatTruncateString(s string) string {
+	if len(s) > maxToolArgDisplayLength {
+		s = s[:maxToolArgDisplayLength-3] + "..."
+	}
+	return fmt.Sprintf("%q", s)
+}
+
+func formatToolCall(toolCall api.ToolCall) string {
+	// Format: [tool_name]
+	// Example: [read_file] "path/to/file.go"
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
+		log.Printf("Warning: Failed to unmarshal tool arguments for tool '%s': %v", toolCall.Function.Name, err)
+		return fmt.Sprintf("[%s]", toolCall.Function.Name)
+	}
+
+	// Extract meaningful arguments for display
+	var parts []string
+	parts = append(parts, toolCall.Function.Name)
+
+	// Add common parameters consistently with quoting
+	if filePath, ok := args["file_path"].(string); ok && filePath != "" {
+		parts = append(parts, formatTruncateString(filePath))
+	}
+	if query, ok := args["query"].(string); ok && query != "" {
+		parts = append(parts, formatTruncateString(query))
+	}
+	if command, ok := args["command"].(string); ok && command != "" {
+		parts = append(parts, formatTruncateString(command))
+	}
+	if content, ok := args["content"].(string); ok && len(content) > 0 {
+		parts = append(parts, fmt.Sprintf("(%d bytes)", len(content)))
+	}
+	if pattern, ok := args["pattern"].(string); ok && pattern != "" {
+		parts = append(parts, formatTruncateString(pattern))
+	}
+
+	result := fmt.Sprintf("[%s]", strings.Join(parts, " "))
+	return result
 }

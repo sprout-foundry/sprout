@@ -26,20 +26,6 @@ func (ch *ConversationHandler) determineReasoningEffort() string {
 	return ch.agent.determineReasoningEffort(ch.agent.messages)
 }
 
-// flushToolLogsToOutput flushes any accumulated tool logs to the output
-func (ch *ConversationHandler) flushToolLogsToOutput() []string {
-	logs := ch.agent.drainToolLogs()
-	if len(logs) == 0 {
-		return nil
-	}
-	if ch.agent.streamingEnabled && ch.agent.streamingCallback != nil {
-		for _, log := range logs {
-			ch.agent.streamingCallback(log)
-		}
-	}
-	return logs
-}
-
 // sanitizeToolMessages removes orphaned or duplicate tool messages
 func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []api.Message {
 	if len(messages) == 0 {

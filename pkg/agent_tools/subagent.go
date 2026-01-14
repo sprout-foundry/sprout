@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -131,11 +133,10 @@ func RunSubagent(prompt, model, provider string) (map[string]string, error) {
 	timedOut := false
 
 	if err != nil {
-		if timeout > 0 && ctx.Err() == context.DeadlineExceeded {
-			// Timeout occurred (only if timeout was configured)
-			exitCode = -1
-			timedOut = true
-		} else if exitError, ok := err.(*exec.ExitError); ok {
+			if timeout > 0 && ctx.Err() == context.DeadlineExceeded {
+		// Timeout occurred (only if timeout was configured)
+		exitCode = 124
+		timedOut = true} else if exitError, ok := err.(*exec.ExitError); ok {
 			// Command ran but exited with non-zero status
 			exitCode = exitError.ExitCode()
 		} else {
@@ -153,3 +154,207 @@ func RunSubagent(prompt, model, provider string) (map[string]string, error) {
 		"timed_out": fmt.Sprintf("%t", timedOut),
 	}, nil
 }
+
+// ParallelSubagentTask represents a single parallel subagent run task
+type ParallelSubagentTask struct {
+	ID      string
+	Prompt  string
+	Model   string
+	Provider string
+}
+
+// ParallelSubagentResult represents the result of a single parallel subagent run
+type ParallelSubagentResult struct {
+	ID       string
+	Stdout   string
+	Stderr   string
+	ExitCode  int
+	Completed bool
+	Error     error
+}
+
+// RunParallelSubagents spawns multiple agent subprocesses in parallel, waits for all to complete,
+// and returns all results. This enables the planning agent to execute independent tasks
+// concurrently for faster overall completion time.
+//
+// Example use case: Writing production code and test cases simultaneously
+//
+// Parameters:
+//   - tasks: List of subagent tasks to run in parallel
+//   - noTimeout: If true, uses context.Background() (no timeout). If false, respects GetSubagentTimeout()
+//
+// Returns map where key is task ID and value contains that task's result
+func RunParallelSubagents(tasks []ParallelSubagentTask, noTimeout bool) (map[string]map[string]string, error) {
+	if len(tasks) == 0 {
+		return nil, fmt.Errorf("no tasks provided")
+	}
+
+	var wg sync.WaitGroup
+	results := make(chan *ParallelSubagentResult, len(tasks))
+
+	// Determine the caller method for logging
+	callerMethod := "RunParallelSubagents"
+
+	// Launch all subagents in parallel goroutines using the shared helper
+	for _, task := range tasks {
+		wg.Add(1)
+		go func(t ParallelSubagentTask) {
+			defer wg.Done()
+
+			// Use spawnSubagent helper with the provided noTimeout flag
+			result := spawnSubagent(t, noTimeout, callerMethod)
+			results <- result
+		}(task)
+	}
+
+	// Wait for all goroutines to complete, then close the results channel
+	wg.Wait()
+	close(results)
+
+	// Collect all results into output map
+	outputMap := make(map[string]map[string]string)
+	for result := range results {
+		if result.Error != nil {
+			outputMap[result.ID] = map[string]string{
+				"error":     result.Error.Error(),
+				"exit_code": "-1",
+				"completed": "false",
+				"timed_out": "false",
+			}
+			continue
+		}
+
+		timedOut := result.ExitCode == -1 && result.Completed
+
+		outputMap[result.ID] = map[string]string{
+			"stdout":    result.Stdout,
+			"stderr":    result.Stderr,
+			"exit_code": fmt.Sprintf("%d", result.ExitCode),
+			"completed": fmt.Sprintf("%t", result.Completed),
+			"timed_out": fmt.Sprintf("%t", timedOut),
+		}
+	}
+
+	return outputMap, nil
+}
+
+// spawnSubagent is a shared helper that spawns a single subagent subprocess.
+// It handles all the common logic for building and executing the subagent command.
+//
+// Parameters:
+//   - task: The subagent task to run
+//   - noTimeout: If true, use context.Background() (no timeout). If false, respect GetSubagentTimeout()
+//   - callerMethod: Name of the calling method for audit logging (e.g., "RunParallelSubagents")
+//
+// Returns the result of the subagent execution.
+func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod string) *ParallelSubagentResult {
+	// Generate a unique task ID for tracking
+	taskID := task.ID
+	if taskID == "" {
+		taskID = fmt.Sprintf("task-%d", time.Now().UnixNano())
+	}
+
+	// Log spawn event
+	log.Printf("[SUBAGENT_SPAWN] method=%s task_id=%s model=%s provider=%s timeout=%v",
+		callerMethod, taskID, task.Model, task.Provider, !noTimeout)
+
+	// Build command: ledit agent with the given prompt
+	args := []string{"agent"}
+
+	// Add provider/model if specified
+	if task.Provider != "" {
+		args = append(args, "--provider", task.Provider)
+		if task.Model != "" {
+			args = append(args, "--model", task.Model)
+		}
+	} else if task.Model != "" {
+		args = append(args, "--model", task.Model)
+	}
+
+	args = append(args, task.Prompt)
+
+	// Use the currently running ledit binary path to ensure consistency
+	leditPath, err := os.Executable()
+	if err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=get_executable_failed details=%v",
+			callerMethod, taskID, err)
+		return &ParallelSubagentResult{
+			ID:    taskID,
+			Error: fmt.Errorf("failed to get current executable path: %w", err),
+		}
+	}
+
+	// Create context based on noTimeout flag
+	var ctx context.Context
+	var cancel context.CancelFunc
+
+	if noTimeout {
+		ctx = context.Background()
+	} else {
+		timeout := GetSubagentTimeout()
+		if timeout > 0 {
+			ctx, cancel = context.WithTimeout(context.Background(), timeout)
+			defer cancel()
+		} else {
+			ctx = context.Background()
+		}
+	}
+
+	cmd := exec.CommandContext(ctx, leditPath, args...)
+
+	// Capture stdout and stderr
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	// Run the command and wait for completion (blocking)
+	err = cmd.Run()
+
+	// Determine exit code and timeout status
+	exitCode := 0
+	completed := true
+
+	if err != nil {
+		if !noTimeout && ctx.Err() == context.DeadlineExceeded {
+			// Timeout occurred (only if timeout was configured)
+			exitCode = 124
+			log.Printf("[SUBAGENT_TIMEOUT] method=%s task_id=%s", callerMethod, taskID)
+		} else if exitError, ok := err.(*exec.ExitError); ok {
+			// Command ran but exited with non-zero status
+			exitCode = exitError.ExitCode()
+			log.Printf("[SUBAGENT_FAILED] method=%s task_id=%s exit_code=%d",
+				callerMethod, taskID, exitCode)
+		} else {
+			// Couldn't start the command (e.g., ledit not found)
+			exitCode = -1
+			completed = false
+			log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=exec_failed details=%v",
+				callerMethod, taskID, err)
+
+			return &ParallelSubagentResult{
+				ID:    taskID,
+				Error: err,
+			}
+		}
+	}
+
+	// Log completion
+	if exitCode == 0 {
+		log.Printf("[SUBAGENT_COMPLETE] method=%s task_id=%s status=success",
+			callerMethod, taskID)
+	} else if completed {
+		log.Printf("[SUBAGENT_COMPLETE] method=%s task_id=%s status=non_zero_exit exit_code=%d",
+			callerMethod, taskID, exitCode)
+	}
+
+	return &ParallelSubagentResult{
+		ID:        taskID,
+		Stdout:    stdout.String(),
+		Stderr:    stderr.String(),
+		ExitCode:  exitCode,
+		Completed: completed,
+		Error:     nil,
+	}
+}
+
+

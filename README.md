@@ -294,6 +294,7 @@ ledit mcp remove [name]
 ```
 
 Config: `~/.ledit/mcp_config.json`. Use in agent: "Create GitHub PR for feature #WS".
+
 ## Contributing
 
 See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PRs.
@@ -316,6 +317,7 @@ See CONTRIBUTING.md for guidelines. Run `go test ./...` and e2e_tests/ before PR
   - `codereview/`: Code review functionality
   - `utils/`: Utility functions and helpers
   - `tools/`: Tool registry and execution framework
+  - `agent_commands/`: Command implementations for CLI commands (commit, shell, etc.)
 - **.ledit/** (project-local):
   - `config.json`: Local overrides.
   - `leditignore`: Ignore patterns (augments .gitignore).

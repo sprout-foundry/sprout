@@ -6,21 +6,21 @@ import (
 	"github.com/alantheprice/ledit/pkg/agent"
 )
 
-// InfoCommand implements the /info slash command
-type InfoCommand struct{}
+// StatsCommand implements the /stats slash command
+type StatsCommand struct{}
 
 // Name returns the command name
-func (i *InfoCommand) Name() string {
-	return "info"
+func (s *StatsCommand) Name() string {
+	return "stats"
 }
 
 // Description returns the command description
-func (i *InfoCommand) Description() string {
+func (s *StatsCommand) Description() string {
 	return "Show detailed conversation summary and token usage"
 }
 
-// Execute runs the info command
-func (i *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
+// Execute runs the stats command
+func (s *StatsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Println("\n📊 Detailed Conversation Summary:")
 	fmt.Println("=====================================")
 	chatAgent.PrintConversationSummary(true)

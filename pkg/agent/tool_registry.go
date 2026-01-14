@@ -16,6 +16,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/filesystem"
 	"github.com/alantheprice/ledit/pkg/security_validator"
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 const (
@@ -270,6 +271,11 @@ func newDefaultToolRegistry() *ToolRegistry {
 	return registry
 }
 
+// GetValidator returns the security validator (used for fast path optimization)
+func (r *ToolRegistry) GetValidator() *security_validator.Validator {
+	return r.validator
+}
+
 // RegisterTool adds a tool to the registry
 func (r *ToolRegistry) RegisterTool(config ToolConfig) {
 	r.tools[config.Name] = config
@@ -307,15 +313,17 @@ func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string
 	}
 
 	config := agent.configManager.GetConfig()
-	if config.SecurityValidation == nil || !config.SecurityValidation.Enabled {
+	if config == nil || config.SecurityValidation == nil || !config.SecurityValidation.Enabled {
 		return nil // Security validation disabled
 	}
 
 	// Create or reuse validator
 	if r.validator == nil {
 		// Get logger and interactive mode from agent
-		logger := utils.GetLogger(agent.config.SkipPrompt || agent.NonInteractive)
-		interactive := !agent.config.SkipPrompt && !agent.NonInteractive
+		agentConfig := agent.GetConfig()
+		isNonInteractive := agentConfig != nil && agentConfig.SkipPrompt
+		logger := utils.GetLogger(isNonInteractive)
+		interactive := !isNonInteractive
 
 		validator, err := security_validator.NewValidator(config.SecurityValidation, logger, interactive)
 		if err != nil {
@@ -323,6 +331,7 @@ func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string
 			return nil // Fail open - don't block operations if validator fails to init
 		}
 		r.validator = validator
+		agent.debugLog("✓ Security validator initialized successfully\n")
 	}
 
 	// Perform validation
@@ -343,9 +352,13 @@ func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string
 
 	// Confirmation is already handled in ValidateToolCall for interactive mode
 	// For non-interactive mode, log a warning
-	if result.ShouldConfirm && (agent.config.SkipPrompt || agent.NonInteractive) {
-		agent.PrintLine(fmt.Sprintf("⚠️  Security Warning: %s (risk level: %s)", toolName, result.RiskLevel))
-		agent.PrintLine(fmt.Sprintf("   Reasoning: %s", result.Reasoning))
+	if result.ShouldConfirm {
+		agentConfig := agent.GetConfig()
+		isNonInteractive := agentConfig != nil && agentConfig.SkipPrompt
+		if isNonInteractive {
+			agent.PrintLine(fmt.Sprintf("⚠️  Security Warning: %s (risk level: %s)", toolName, result.RiskLevel))
+			agent.PrintLine(fmt.Sprintf("   Reasoning: %s", result.Reasoning))
+		}
 	}
 
 	return nil

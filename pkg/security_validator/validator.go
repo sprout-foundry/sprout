@@ -89,32 +89,70 @@ func NewValidator(cfg *configuration.SecurityValidationConfig, logger *utils.Log
 		modelPath = filepath.Join(configDir, "models", "qwen2.5-coder-0.5b-q4_k_m.gguf")
 	}
 
-	// Check if model file exists, if not, download it
+	// Check if model file exists, if not, skip download (will use Ollama fallback)
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 		if logger != nil {
 			logger.Logf("Security validation model not found at %s", modelPath)
-			logger.Logf("Downloading Qwen 2.5 Coder 0.5B Q4_K_M (~300MB)...")
-
-			if err := downloadModel(modelPath, logger); err != nil {
-				return nil, fmt.Errorf("failed to download security validation model: %w", err)
-			}
-
-			logger.Logf("✓ Model downloaded successfully")
-		} else {
-			return nil, fmt.Errorf("security validation model not found at %s and download not available (no logger)", modelPath)
+			logger.Logf("Will attempt Ollama fallback instead of downloading...")
 		}
+		// Don't try to download - just proceed to Ollama fallback
+		modelPath = ""
 	}
 
 	// Load the model
 	var model LLMModel
 
-	// Try to load the actual llama.cpp model
-	// This will only work in production (when go-llama.cpp is built)
-	llamaModel, loadErr := loadLlamaModel(modelPath)
-	if loadErr != nil {
-		return nil, fmt.Errorf("failed to load security validation model from %s: %w", modelPath, loadErr)
+	// If modelPath is empty (file doesn't exist), go straight to Ollama
+	if modelPath == "" {
+		if logger != nil {
+			logger.Logf("Skipping llama.cpp model (no file), using Ollama...")
+		}
+
+		// Use model name from config or default to qwen2.5-coder:1.5b
+		ollamaModelName := cfg.Model
+		if ollamaModelName == "" {
+			ollamaModelName = "qwen2.5-coder:1.5b"
+		}
+
+		ollamaModel, ollamaErr := loadOllamaModel(ollamaModelName)
+		if ollamaErr != nil {
+			return nil, fmt.Errorf("failed to load Ollama model: %w", ollamaErr)
+		}
+
+		model = ollamaModel
+		if logger != nil {
+			logger.Logf("✓ Using Ollama model: %s", ollamaModelName)
+		}
+	} else {
+		// Try to load the actual llama.cpp model
+		// This will only work in production (when go-llama.cpp is built)
+		llamaModel, loadErr := loadLlamaModel(modelPath)
+		if loadErr != nil {
+			// llama.cpp not available, try Ollama fallback
+			if logger != nil {
+				logger.Logf("llama.cpp model loading failed: %v", loadErr)
+				logger.Logf("Attempting to use Ollama as fallback...")
+			}
+
+			// Use model name from config or default to qwen2.5-coder:1.5b
+			ollamaModelName := cfg.Model
+			if ollamaModelName == "" {
+				ollamaModelName = "qwen2.5-coder:1.5b"
+			}
+
+			ollamaModel, ollamaErr := loadOllamaModel(ollamaModelName)
+			if ollamaErr != nil {
+				return nil, fmt.Errorf("failed to load llama.cpp model (%v) and Ollama fallback also failed (%v)", loadErr, ollamaErr)
+			}
+
+			model = ollamaModel
+			if logger != nil {
+				logger.Logf("✓ Using Ollama model: %s", ollamaModelName)
+			}
+		} else {
+			model = llamaModel
+		}
 	}
-	model = llamaModel
 
 	return &Validator{
 		config:     cfg,
@@ -285,6 +323,10 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 			result.ShouldBlock = true
 			result.Reasoning = "User rejected the operation based on security warning"
 		}
+	} else if result.RiskLevel == RiskCaution && v.logger != nil {
+		// Log CAUTION operations for transparency (but don't prompt)
+		argsJSON, _ := json.Marshal(args)
+		v.logger.Logf("🔒 Security validation: %s - %s (CAUTION: %s)", toolName, string(argsJSON), result.Reasoning)
 	}
 
 	return result, nil
@@ -517,15 +559,16 @@ func (v *Validator) applyThreshold(result *ValidationResult) *ValidationResult {
 
 	// Determine if we should block or request confirmation based on risk level and threshold
 	if int(result.RiskLevel) > threshold {
-		// Risk level exceeds threshold - request user confirmation
+		// Risk level exceeds threshold (DANGEROUS) - request user confirmation
 		result.ShouldBlock = false
 		result.ShouldConfirm = true
 	} else if int(result.RiskLevel) == threshold {
-		// Risk level equals threshold - request user confirmation
+		// Risk level equals threshold (CAUTION) - allow without confirmation
+		// CAUTION operations are recoverable or low-risk (e.g., rm -rf node_modules)
 		result.ShouldBlock = false
-		result.ShouldConfirm = true
+		result.ShouldConfirm = false
 	} else {
-		// Risk level below threshold - allow
+		// Risk level below threshold (SAFE) - allow
 		result.ShouldBlock = false
 		result.ShouldConfirm = false
 	}
@@ -638,4 +681,99 @@ func isObviouslySafe(toolName string, args map[string]interface{}) bool {
 // SetDebug enables or disables debug mode
 func (v *Validator) SetDebug(debug bool) {
 	v.debug = debug
+}
+
+// DetectDirectCommand uses the local LLM to detect if a query is requesting a direct command execution
+// Returns (isDirectCommand, detectedCommand, confidence, error)
+func (v *Validator) DetectDirectCommand(ctx context.Context, query string) (bool, string, float64, error) {
+	prompt := fmt.Sprintf(`You are a command detection assistant. Your job is to determine if the user's request is asking to execute a specific shell command DIRECTLY.
+
+USER REQUEST: %s
+
+Analyze the request and answer these questions:
+
+1. Is the user asking to execute a specific, known shell command?
+2. If YES, what is the exact command to execute?
+
+IMPORTANT - Be VERY CONSERVATIVE. Only return YES if:
+- It's a bare command like "pwd", "ls", "git status", "git add .", etc.
+- They're asking for information that a simple command can provide
+- The command is OBVIOUS and doesn't require reasoning
+- It's a common git operation (add, commit, status, log, diff, push, pull)
+
+Return NO if:
+- ANY code generation is needed ("write", "create", "implement", "define")
+- ANY analysis or explanation is needed ("explain", "how does", "why")
+- Multiple steps or reasoning is required
+- The request is vague or ambiguous
+
+EXAMPLES - YES (Direct Command):
+- "pwd" → YES: "pwd"
+- "ls" → YES: "ls"
+- "git status" → YES: "git status"
+- "git add ." → YES: "git add ."
+- "git add file.txt" → YES: "git add file.txt"
+- "git commit -m message" → YES: "git commit -m 'message'"
+- "git push" → YES: "git push"
+- "git pull" → YES: "git pull"
+- "What is your current working directory?" → YES: "pwd"
+- "Show me the files" → YES: "ls -la"
+- "What's the git status?" → YES: "git status"
+
+EXAMPLES - NO (Needs Agent):
+- "Write a function" → NO (code generation)
+- "Create a file" → NO (file creation)
+- "How do I fix this bug?" → NO (analysis)
+- "Implement a parser" → NO (code generation)
+- "Write hello world" → NO (code generation, NOT echo)
+- "Make a script" → NO (code generation)
+- "Commit these changes" → NO (needs reasoning about what to commit)
+
+Return your response as JSON:
+{
+  "is_direct_command": true/false,
+  "detected_command": "the exact command if is_direct_command is true",
+  "confidence": 0.0 to 1.0
+}
+
+Only return valid JSON, nothing else.`, query)
+
+	response, err := v.callLLM(ctx, prompt)
+	if err != nil {
+		return false, "", 0, err
+	}
+
+	// Debug: log the raw response
+	if v.debug {
+		v.logger.Logf("Raw LLM response: %s", response)
+	}
+
+	// Parse the response
+	var result struct {
+		IsDirectCommand bool    `json:"is_direct_command"`
+		DetectedCommand  string  `json:"detected_command"`
+		Confidence      float64 `json:"confidence"`
+	}
+
+	response = strings.TrimSpace(response)
+	if strings.HasPrefix(response, "```json") {
+		response = strings.TrimPrefix(response, "```json")
+		response = strings.TrimSuffix(response, "```")
+		response = strings.TrimSpace(response)
+	} else if strings.HasPrefix(response, "```") {
+		response = strings.TrimPrefix(response, "```")
+		response = strings.TrimSuffix(response, "```")
+		response = strings.TrimSpace(response)
+	}
+
+	if err := json.Unmarshal([]byte(response), &result); err != nil {
+		// Log the parsing error and raw response for debugging
+		if v.logger != nil {
+			v.logger.Logf("Failed to parse LLM response as JSON: %v", err)
+			v.logger.Logf("Raw response was: %s", response)
+		}
+		return false, "", 0, fmt.Errorf("failed to parse LLM response: %w", err)
+	}
+
+	return result.IsDirectCommand, result.DetectedCommand, result.Confidence, nil
 }

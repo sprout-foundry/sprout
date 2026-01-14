@@ -711,6 +711,10 @@ EXAMPLES - YES (Direct Command):
 - "pwd" → YES: "pwd"
 - "ls" → YES: "ls"
 - "git status" → YES: "git status"
+- "git log" → YES: "git log"
+- "git diff" → YES: "git diff"
+- "git show" → YES: "git show"
+- "git branch" → YES: "git branch"
 - "git add ." → YES: "git add ."
 - "git add file.txt" → YES: "git add file.txt"
 - "git commit -m message" → YES: "git commit -m 'message'"
@@ -719,6 +723,7 @@ EXAMPLES - YES (Direct Command):
 - "What is your current working directory?" → YES: "pwd"
 - "Show me the files" → YES: "ls -la"
 - "What's the git status?" → YES: "git status"
+- "Show me git log" → YES: "git log"
 
 EXAMPLES - NO (Needs Agent):
 - "Write a function" → NO (code generation)

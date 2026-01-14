@@ -15,6 +15,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/agent_commands"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/security_validator"
@@ -218,7 +219,9 @@ func runNewInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus
 
 			// Handle exit commands
 			if strings.ToLower(query) == "exit" || strings.ToLower(query) == "quit" {
-				fmt.Println("Goodbye! 👋")
+				fmt.Println("\n👋 Goodbye! Here's your session summary:")
+				fmt.Println("=====================================")
+				chatAgent.PrintConversationSummary(true)
 				return nil
 			}
 
@@ -247,8 +250,25 @@ func tryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 	if validator == nil {
 		// Try to initialize the validator
 		agentConfig := chatAgent.GetConfig()
-		if agentConfig == nil || agentConfig.SecurityValidation == nil || !agentConfig.SecurityValidation.Enabled {
-			return false, nil // Security validation not enabled
+		if agentConfig == nil {
+			return false, nil
+		}
+
+		// If SecurityValidation is not configured, create a default one
+		var securityConfig *configuration.SecurityValidationConfig
+		if agentConfig.SecurityValidation == nil {
+			securityConfig = &configuration.SecurityValidationConfig{
+				Enabled:        true,
+				Model:          "qwen2.5-coder:1.5b",
+				Threshold:      1,
+				TimeoutSeconds: 10,
+			}
+		} else {
+			securityConfig = agentConfig.SecurityValidation
+		}
+
+		if !securityConfig.Enabled {
+			return false, nil
 		}
 
 		// Create a logger
@@ -256,7 +276,7 @@ func tryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 		logger := utils.GetLogger(isNonInteractive)
 
 		// Create the validator
-		newValidator, err := security_validator.NewValidator(agentConfig.SecurityValidation, logger, !isNonInteractive)
+		newValidator, err := security_validator.NewValidator(securityConfig, logger, !isNonInteractive)
 		if err != nil {
 			return false, nil // Failed to create validator, proceed with normal flow
 		}
@@ -272,7 +292,7 @@ func tryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 
 	// Only execute directly if high confidence (>0.8)
 	if isDirect && confidence > 0.8 && detectedCommand != "" {
-		fmt.Printf("⚡ Fast path detected: %s\n", detectedCommand)
+		fmt.Printf("⚡ Fast path: %s\n", detectedCommand)
 
 		// Execute the command directly using bash
 		output, err := executeCommand(detectedCommand)
@@ -407,11 +427,7 @@ func processQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			duration,
 		))
 
-		// Print completion message with conversation summary
-		summary := chatAgent.GenerateConversationSummary()
-		if summary != "" {
-			fmt.Printf("\n%s\n", summary)
-		}
+		// Print completion message without automatic summary (use /stats to see summary)
 		fmt.Printf("✅ Completed in %s\n", formatDuration(duration))
 
 		return nil

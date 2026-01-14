@@ -78,7 +78,7 @@ test-ci: test-unit test-integration
 # Build ledit binary
 build:
 	@echo "Building ledit..."
-	go build -o ledit .
+	go build -tags ollama_test -o ledit .
 	@echo "Build completed"
 
 # Build with version information

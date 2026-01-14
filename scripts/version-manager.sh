@@ -44,11 +44,11 @@ build_with_version() {
     ldflags="$ldflags -X 'github.com/alantheprice/ledit/cmd.gitCommit=$commit'"
     ldflags="$ldflags -X 'github.com/alantheprice/ledit/cmd.buildDate=$date'"
     ldflags="$ldflags -X 'github.com/alantheprice/ledit/cmd.gitTag=$tag'"
-    
+
     echo -e "${GREEN}Using ldflags: $ldflags${NC}"
-    
-    go build -ldflags "$ldflags" -o ledit .
-    
+
+    go build -tags ollama_test -ldflags "$ldflags" -o ledit .
+
     echo -e "${GREEN}Build completed successfully!${NC}"
     echo -e "${BLUE}Version information:${NC}"
     ./ledit version
@@ -94,7 +94,7 @@ usage() {
     echo ""
     echo "For GitHub Actions integration:"
     echo "  LD_FLAGS=\$(./scripts/version-manager.sh ldflags | tr '\\n' ' ')"
-    echo "  go build -ldflags \"\$LD_FLAGS\" -o ledit ."
+    echo "  go build -tags ollama_test -ldflags \"\$LD_FLAGS\" -o ledit ."
 }
 
 # Main execution

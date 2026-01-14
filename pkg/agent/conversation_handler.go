@@ -518,12 +518,10 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 	case "stop":
 		// Model explicitly signaled it's done - respect that decision
 		// Don't override the model's judgment about whether its response is complete
-		fmt.Printf("🏁 Model finish reason: stop - Response complete, finishing conversation\n")
 		ch.agent.debugLog("🏁 Model signaled 'stop' - accepting response as complete\n")
 		ch.displayFinalResponse(content)
 		return true, "completion"
 	case "length":
-		fmt.Printf("🏁 Model finish reason: length - Hit limit, requesting continuation\n")
 		ch.agent.debugLog("⚠️ Model hit length limit, asking to continue\n")
 		ch.handleIncompleteResponse()
 		return false, "model length limit"
@@ -531,7 +529,6 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 		ch.agent.debugLog("🚫 Model response was filtered\n")
 		return false, "content filtered"
 	default:
-		fmt.Printf("🏁 Model finish reason: %s - Unknown reason, continuing\n", finishReason)
 		ch.agent.debugLog("❓ Unknown finish reason: %s\n", finishReason)
 		return false, "unknown finish reason: " + finishReason
 	}

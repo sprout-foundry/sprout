@@ -275,10 +275,10 @@ func (a *Agent) ToolLog(action string, target string) {
 	if target != "" {
 		// Add newline before tool call to put it on its own line
 		// Use darker gray for tool call info and slightly lighter gray for target
-		message = fmt.Sprintf("%s%s %s%s %s%s%s", darkGray, iterInfo, action, reset, slightlyLighterGray, target, reset)
+		message = fmt.Sprintf("%s%s %s%s %s%s%s\n", darkGray, iterInfo, action, reset, slightlyLighterGray, target, reset)
 	} else {
 		// Add newline before tool call to put it on its own line
-		message = fmt.Sprintf("%s%s %s%s", darkGray, iterInfo, action, reset)
+		message = fmt.Sprintf("%s%s %s%s\n", darkGray, iterInfo, action, reset)
 	}
 
 	// Print immediately - bypass the async queue to ensure it appears at the right time

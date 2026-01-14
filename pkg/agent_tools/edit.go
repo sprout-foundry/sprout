@@ -56,13 +56,13 @@ func validateEditInputs(filePath, oldString, newString string) error {
 		return fmt.Errorf("empty old string provided")
 	}
 
-	// Sanitize input strings to prevent injection attacks
-	// Check for suspicious patterns in oldString and newString
+	// Content validation removed - LLM-based security validator handles this
+	// Pattern matching on content (like "../") was blocking legitimate code edits
+	// Path security is handled by SafeResolvePathWithBypass
+	// Operation security is handled by the LLM-based security validation system
+	// Only check for actual null bytes which could cause issues
 	suspiciousPatterns := []string{
-		"../",  // Path traversal attempt
-		"..\\", // Windows path traversal
-		"\x00", // Actual null bytes
-		// Note: "\0" pattern removed - it was blocking legitimate code edits (e.g., \0 in string literals)
+		"\x00", // Actual null bytes (can cause issues with string handling)
 	}
 
 	checkString := func(s, name string) error {

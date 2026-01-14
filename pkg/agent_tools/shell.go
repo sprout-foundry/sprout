@@ -22,30 +22,10 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 		return "", fmt.Errorf("empty command provided")
 	}
 
-	// Check for destructive commands
-	if destructiveCmd, isDestructive := IsDestructiveCommand(command); isDestructive {
-		// In interactive mode, ask for confirmation
-		if interactiveMode {
-			fmt.Printf("⚠️  Potentially destructive command detected:\n")
-			fmt.Printf("   Command: %s\n", command)
-			fmt.Printf("   Risk Level: %s - %s\n", destructiveCmd.RiskLevel, destructiveCmd.Description)
-			fmt.Printf("\n🤔 Do you want to proceed? (yes/no): ")
+	// NOTE: Security validation is now handled by the LLM-based validator at the tool registry level
+	// This provides context-aware evaluation instead of regex pattern matching
 
-			reader := bufio.NewReader(os.Stdin)
-			userResponse, err := reader.ReadString('\n')
-			if err != nil {
-				return "", fmt.Errorf("failed to read user response: %v", err)
-			}
-
-			userResponse = strings.ToLower(strings.TrimSpace(userResponse))
-			if userResponse != "yes" && userResponse != "y" {
-				return "", fmt.Errorf("command execution cancelled by user")
-			}
-		}
-		// In non-interactive mode, proceed without confirmation but track the action
-	}
-
-	// Track file deletions in changelog
+	// Track file deletions in changelog (for change history, not security validation)
 	if IsFileDeletionCommand(command) && sessionID != "" {
 		trackFileDeletion(command, sessionID)
 	}

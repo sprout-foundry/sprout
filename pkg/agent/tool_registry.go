@@ -16,6 +16,12 @@ import (
 	"github.com/alantheprice/ledit/pkg/events"
 )
 
+const (
+	MAX_SUBAGENT_OUTPUT_SIZE    = 10 * 1024 * 1024 // 10MB
+	MAX_SUBAGENT_CONTEXT_SIZE   = 1024 * 1024      // 1MB
+	MAX_PARALLEL_SUBAGENTS      = 5
+)
+
 // ToolHandler represents a function that can handle a tool execution
 type ToolHandler func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error)
 
@@ -161,9 +167,21 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "run_subagent",
 		Description: "CRITICAL - Use this to delegate implementation tasks to subagents. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. This is the PRIMARY way to implement features during execution phase. Use for: creating files, feature implementations, multi-file changes, complex logic. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. NO TIMEOUT - runs until completion. After each subagent completes, review its output (stdout/stderr) to verify success before proceeding to the next task. If a subagent fails, you can spawn another to fix issues. Designed specifically for planning workflow: delegate, review, adjust. Subagent provider and model are configured via config settings (subagent_provider and subagent_model).",
 		Parameters: []ParameterConfig{
-			{"prompt", "string", true, []string{}, "The prompt/task for the subagent to execute"},
+			{"prompt", "string", true, []string{}, "The prompt/task for the subagent to execute (required)"},
+			{"context", "string", false, []string{}, "Context from previous subagent work (files created, summaries, etc.)"},
+			{"files", "string", false, []string{}, "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')"},
 		},
 		Handler: handleRunSubagent,
+	})
+
+	// Register run_parallel_subagents tool - for concurrent multi-agent execution
+	registry.RegisterTool(ToolConfig{
+		Name:        "run_parallel_subagents",
+		Description: "Execute multiple subagent tasks concurrently in parallel. Useful for independent tasks that can be done simultaneously (e.g., writing production code and test cases concurrently). Waits for all tasks to complete and returns results for each task by ID. Each task has its own ID, prompt, optional model, and optional provider. Results include stdout, stderr, exit_code, completed status, and timed_out status for each task ID.",
+		Parameters: []ParameterConfig{
+			{"tasks", "array", true, []string{}, "Array of subagent tasks: [{id, prompt, model?, provider?}] where id is a unique identifier for the task"},
+		},
+		Handler: handleRunParallelSubagents,
 	})
 
 	// Register search_files tool (cross-platform file content search)
@@ -755,13 +773,182 @@ func handleListTodos(ctx context.Context, a *Agent, args map[string]interface{})
 	return result, nil
 }
 
+// extractSubagentSummary parses stdout from a subagent execution to extract key information
+func extractSubagentSummary(stdout string) map[string]string {
+	summary := make(map[string]string)
+	lines := strings.Split(stdout, "\n")
+
+	var fileChanges []string
+	var buildStatus string
+	var testStatus string
+	var errors []string
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Extract file operations
+		switch {
+		case strings.HasPrefix(line, "Created:") || strings.HasPrefix(line, "Wrote"):
+			file := strings.TrimSpace(strings.TrimPrefix(line, "Created:"))
+			file = strings.TrimSpace(strings.TrimPrefix(file, "Wrote"))
+			fileChanges = append(fileChanges, "Created: "+file)
+		case strings.HasPrefix(line, "Modified:"):
+			file := strings.TrimSpace(strings.TrimPrefix(line, "Modified:"))
+			fileChanges = append(fileChanges, "Modified: "+file)
+		case strings.HasPrefix(line, "Deleted:"):
+			file := strings.TrimSpace(strings.TrimPrefix(line, "Deleted:"))
+			fileChanges = append(fileChanges, "Deleted: "+file)
+		case strings.HasPrefix(line, "Updated:"):
+			file := strings.TrimSpace(strings.TrimPrefix(line, "Updated:"))
+			fileChanges = append(fileChanges, "Updated: "+file)
+		}
+
+		// Extract build status
+		if strings.Contains(line, "Build:") {
+			if strings.Contains(line, "✅ Passed") {
+				buildStatus = "passed"
+			} else if strings.Contains(line, "✅ Failed") || strings.Contains(line, "❌ Failed") {
+				buildStatus = "failed"
+			}
+		}
+
+		// Extract test status
+		if strings.Contains(line, "Test:") || strings.Contains(line, "Tests:") {
+			if strings.Contains(line, "✅ Passed") {
+				testStatus = "passed"
+			} else if strings.Contains(line, "✅ Failed") || strings.Contains(line, "❌ Failed") {
+				testStatus = "failed"
+			}
+		}
+
+		// Extract errors
+		if strings.HasPrefix(line, "Error:") || strings.HasPrefix(line, "error:") {
+			errors = append(errors, line)
+		}
+	}
+
+	if len(fileChanges) > 0 {
+		summary["files"] = strings.Join(fileChanges, "; ")
+	}
+	if buildStatus != "" {
+		summary["build_status"] = buildStatus
+	}
+	if testStatus != "" {
+		summary["test_status"] = testStatus
+	}
+	if len(errors) > 0 {
+		summary["errors"] = strings.Join(errors, "; ")
+	}
+
+	return summary
+}
+
 func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	prompt, err := convertToString(args["prompt"], "prompt")
 	if err != nil {
 		return "", err
 	}
 
-	a.debugLog("Spawning subagent with prompt: %s\n", prompt)
+	// Parse optional context parameter
+	var context string
+	if ctxVal, ok := args["context"]; ok && ctxVal != nil {
+		if ctxStr, ok := ctxVal.(string); ok && ctxStr != "" {
+			context = ctxStr
+			a.debugLog("Subagent context provided: %s\n", truncateString(context, 100))
+		}
+	}
+
+	// Parse optional files parameter (comma-separated list)
+	var files []string
+	var filesStr string
+	if filesVal, ok := args["files"]; ok && filesVal != nil {
+		if filesRaw, ok := filesVal.(string); ok && filesRaw != "" {
+			// Split by comma and trim spaces
+			rawFiles := strings.Split(filesRaw, ",")
+			for _, f := range rawFiles {
+				if f = strings.TrimSpace(f); f != "" {
+					files = append(files, f)
+				}
+			}
+			filesStr = strings.Join(files, ",")
+			a.debugLog("Subagent files provided: %s\n", filesStr)
+
+			// Validate each file path before proceeding
+			for _, filePath := range files {
+				// Check for suspicious patterns (path traversal, absolute paths)
+				if strings.Contains(filePath, "..") || filepath.IsAbs(filePath) {
+					return "", fmt.Errorf("suspicious file path detected: %s (path contains '..' or absolute path)", filePath)
+				}
+
+				// Clean the path to eliminate any . or redundant separators
+				cleanedPath := filepath.Clean(filePath)
+				absPath, err := filepath.Abs(cleanedPath)
+				if err != nil {
+					return "", fmt.Errorf("failed to resolve absolute path for %s: %w", filePath, err)
+				}
+
+				// Get workspace directory (current working directory)
+				workspaceDir, err := os.Getwd()
+				if err != nil {
+					return "", fmt.Errorf("failed to get workspace directory: %w", err)
+				}
+				absWorkspaceDir, err := filepath.Abs(workspaceDir)
+				if err != nil {
+					return "", fmt.Errorf("failed to resolve absolute workspace path: %w", err)
+				}
+
+				// Verify the file is within the workspace
+				if !strings.HasPrefix(absPath, absWorkspaceDir+string(filepath.Separator)) && absPath != absWorkspaceDir {
+					return "", fmt.Errorf("file path is outside workspace: %s (workspace: %s)", filePath, absWorkspaceDir)
+				}
+
+				// Verify the file exists (missing is OK - subagent can create it)
+				if _, err := os.Stat(absPath); err != nil && !os.IsNotExist(err) {
+					return "", fmt.Errorf("failed to access file %s: %w", filePath, err)
+				}
+
+				a.debugLog("Validated file path: %s -> %s\n", filePath, absPath)
+			}
+		}
+	}
+
+	// Build enhanced prompt with context and files
+	enhancedPrompt := new(strings.Builder)
+
+	// Add previous work context section if provided
+	if context != "" {
+		enhancedPrompt.WriteString("# Previous Work Context\n\n")
+		enhancedPrompt.WriteString(context)
+		enhancedPrompt.WriteString("\n\n---\n\n")
+	}
+
+	// Add relevant files section if provided
+	if len(files) > 0 {
+		enhancedPrompt.WriteString("# Relevant Files\n\n")
+		for _, filePath := range files {
+			enhancedPrompt.WriteString(fmt.Sprintf("## File: %s\n\n", filePath))
+			content, err := tools.ReadFile(ctx, filePath)
+			if err != nil {
+				enhancedPrompt.WriteString(fmt.Sprintf("[Error reading file: %v]\n\n", err))
+				a.debugLog("Failed to read file %s for subagent context: %v\n", filePath, err)
+			} else {
+				enhancedPrompt.WriteString(content)
+				enhancedPrompt.WriteString("\n\n")
+			}
+		}
+		enhancedPrompt.WriteString("---\n\n")
+	}
+
+	// Add task section
+	enhancedPrompt.WriteString("# Your Task\n\n")
+	enhancedPrompt.WriteString(prompt)
+
+	a.debugLog("Spawning subagent with enhanced prompt (length: %d)\n", enhancedPrompt.Len())
+
+	// Validate enhanced prompt size
+	if enhancedPrompt.Len() > MAX_SUBAGENT_CONTEXT_SIZE {
+		return "", fmt.Errorf("enhanced prompt exceeds maximum size of %d bytes", MAX_SUBAGENT_CONTEXT_SIZE)
+	}
 
 	// Get subagent provider and model from configuration
 	var provider string
@@ -778,10 +965,49 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		model = ""    // Will use system default
 	}
 
-	resultMap, err := tools.RunSubagent(prompt, model, provider)
+	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider)
 	if err != nil {
 		a.debugLog("Subagent spawn error: %v\n", err)
 		return "", err
+	}
+
+	// Truncate output if it exceeds size limit
+	if stdout, ok := resultMap["stdout"]; ok {
+		if len(stdout) > MAX_SUBAGENT_OUTPUT_SIZE {
+			resultMap["stdout"] = stdout[:MAX_SUBAGENT_OUTPUT_SIZE] + "... (truncated, too large)"
+		}
+	}
+	if stderr, ok := resultMap["stderr"]; ok {
+		if len(stderr) > MAX_SUBAGENT_OUTPUT_SIZE {
+			resultMap["stderr"] = stderr[:MAX_SUBAGENT_OUTPUT_SIZE] + "... (truncated, too large)"
+		}
+	}
+
+	// Extract summary from stdout
+	if stdout, ok := resultMap["stdout"]; ok {
+		summary := extractSubagentSummary(stdout)
+		summaryJSON, err := json.MarshalIndent(summary, "", "  ")
+		if err != nil {
+			a.debugLog("Failed to marshal summary: %v\n", err)
+			resultMap["summary"] = fmt.Sprintf("Error creating summary: %v", err)
+		} else {
+			resultMap["summary"] = string(summaryJSON)
+			a.debugLog("Extracted subagent summary: %s\n", string(summaryJSON))
+		}
+	}
+
+	// Add context_used field
+	if context != "" {
+		resultMap["context_used"] = "true"
+	} else {
+		resultMap["context_used"] = "false"
+	}
+
+	// Add files_used field
+	if filesStr != "" {
+		resultMap["files_used"] = filesStr
+	} else {
+		resultMap["files_used"] = ""
 	}
 
 	// Convert map result to JSON for return
@@ -791,6 +1017,75 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	}
 
 	a.debugLog("Subagent spawn result: %s\n", string(jsonBytes))
+	return string(jsonBytes), nil
+}
+
+func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	tasksRaw, ok := args["tasks"]
+	if !ok {
+		return "", fmt.Errorf("missing tasks argument")
+	}
+
+	// Parse the tasks array
+	tasksSlice, ok := tasksRaw.([]interface{})
+	if !ok {
+		return "", fmt.Errorf("tasks must be an array")
+	}
+
+	var parallelTasks []tools.ParallelSubagentTask
+	for _, taskRaw := range tasksSlice {
+		taskMap, ok := taskRaw.(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("each task must be an object")
+		}
+
+		task := tools.ParallelSubagentTask{}
+
+		if id, ok := taskMap["id"].(string); ok {
+			task.ID = id
+		}
+
+		prompt, err := convertToString(taskMap["prompt"], "prompt")
+		if err != nil {
+			return "", err
+		}
+		task.Prompt = prompt
+
+		if model, ok := taskMap["model"].(string); ok {
+			task.Model = model
+		}
+
+		if provider, ok := taskMap["provider"].(string); ok {
+			task.Provider = provider
+		}
+
+		if task.ID == "" {
+			return "", fmt.Errorf("each task requires an id")
+		}
+
+		parallelTasks = append(parallelTasks, task)
+	}
+
+	// Validate number of parallel tasks
+	if len(parallelTasks) > MAX_PARALLEL_SUBAGENTS {
+		return "", fmt.Errorf("too many parallel tasks: %d exceeds max of %d", len(parallelTasks), MAX_PARALLEL_SUBAGENTS)
+	}
+
+	a.debugLog("Spawning %d parallel subagents\n", len(parallelTasks))
+
+	resultMap, err := tools.RunParallelSubagents(parallelTasks, false)
+	if err != nil {
+		a.debugLog("Parallel subagents spawn error: %v\n", err)
+		return "", err
+	}
+
+	// Convert map result to JSON for return
+	jsonBytes, jsonErr := json.MarshalIndent(resultMap, "", "  ")
+	if jsonErr != nil {
+		return "", fmt.Errorf("failed to marshal parallel subagents result: %w", jsonErr)
+	}
+
+	a.debugLog("Parallel subagents spawn result: %s\n", string(jsonBytes))
 	return string(jsonBytes), nil
 }
 

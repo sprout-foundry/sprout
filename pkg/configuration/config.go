@@ -18,6 +18,26 @@ const (
 	APIKeysFileName = "api_keys.json"
 )
 
+// SecurityValidationConfig configures LLM-based security validation
+type SecurityValidationConfig struct {
+	// Enabled turns on LLM-based security validation
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Model is the path to the GGUF model file for security validation
+	// Example: ~/.ledit/models/qwen2.5-coder-0.5b-q4_k_m.gguf
+	// Download from: https://huggingface.co/models?search=gguf+qwen+2.5+coder
+	Model string `json:"model,omitempty"`
+
+	// Threshold controls sensitivity (0=allow_all, 1=cautious, 2=strict)
+	// 0: Allow all operations (validation disabled but still logs)
+	// 1: Allow safe operations, ask user for cautious ones
+	// 2: Block dangerous operations, require explicit approval
+	Threshold int `json:"threshold,omitempty"`
+
+	// TimeoutSeconds is max time to wait for security validation
+	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
+}
+
 // Config represents the unified application configuration
 type Config struct {
 	Version string `json:"version"`
@@ -49,6 +69,9 @@ type Config struct {
 
 	// Security Configuration
 	EnableSecurityChecks bool `json:"enable_security_checks,omitempty"`
+
+	// Security Validation Configuration
+	SecurityValidation *SecurityValidationConfig `json:"security_validation,omitempty"`
 
 	// Custom Providers Configuration
 	CustomProviders map[string]CustomProviderConfig `json:"custom_providers,omitempty"`
@@ -172,6 +195,12 @@ func NewConfig() *Config {
 		MaxConcurrentRequests: 5,
 		RequestDelayMs:        100,
 		EnableSecurityChecks:  true,
+		SecurityValidation: &SecurityValidationConfig{
+			Enabled:        false, // Disabled by default until user downloads model
+			Model:          "",    // User must set this to path of GGUF model file
+			Threshold:      1,     // Cautious by default
+			TimeoutSeconds: 10,    // 10 second timeout
+		},
 		CodeStyle: &CodeStyleConfig{
 			IndentationType: "spaces",
 			IndentationSize: 4,

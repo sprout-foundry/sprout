@@ -14,6 +14,8 @@ import (
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/alantheprice/ledit/pkg/security_validator"
 )
 
 const (
@@ -44,7 +46,8 @@ type ToolConfig struct {
 
 // ToolRegistry manages tool configurations in a data-driven way
 type ToolRegistry struct {
-	tools map[string]ToolConfig
+	tools     map[string]ToolConfig
+	validator *security_validator.Validator
 }
 
 var defaultToolRegistry *ToolRegistry
@@ -279,6 +282,13 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		return "", fmt.Errorf("unknown tool '%s'", toolName)
 	}
 
+	// Security validation (if enabled and not bypassed)
+	if agent != nil && !filesystem.SecurityBypassEnabled(ctx) {
+		if validationErr := r.validateToolSecurity(ctx, toolName, args, agent); validationErr != nil {
+			return "", validationErr
+		}
+	}
+
 	// Validate and extract parameters
 	validatedArgs, err := r.validateParameters(tool, args)
 	if err != nil {
@@ -287,6 +297,58 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 
 	// Execute the tool handler
 	return tool.Handler(ctx, agent, validatedArgs)
+}
+
+// validateToolSecurity performs LLM-based security validation if enabled
+func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) error {
+	// Get config from agent
+	if agent.configManager == nil {
+		return nil // No config manager, skip validation
+	}
+
+	config := agent.configManager.GetConfig()
+	if config.SecurityValidation == nil || !config.SecurityValidation.Enabled {
+		return nil // Security validation disabled
+	}
+
+	// Create or reuse validator
+	if r.validator == nil {
+		// Get logger and interactive mode from agent
+		logger := utils.GetLogger(agent.config.SkipPrompt || agent.NonInteractive)
+		interactive := !agent.config.SkipPrompt && !agent.NonInteractive
+
+		validator, err := security_validator.NewValidator(config.SecurityValidation, logger, interactive)
+		if err != nil {
+			agent.debugLog("Failed to create security validator: %v\n", err)
+			return nil // Fail open - don't block operations if validator fails to init
+		}
+		r.validator = validator
+	}
+
+	// Perform validation
+	result, err := r.validator.ValidateToolCall(ctx, toolName, args)
+	if err != nil {
+		agent.debugLog("Security validation error: %v\n", err)
+		return nil // Fail open on errors
+	}
+
+	// Log the validation result
+	agent.debugLog("🔒 Security validation: %s (%s) - %s\n", toolName, result.RiskLevel, result.Reasoning)
+
+	// Handle blocking operations
+	if result.ShouldBlock {
+		return fmt.Errorf("operation blocked by security validation: %s (risk level: %s)\nReasoning: %s",
+			toolName, result.RiskLevel, result.Reasoning)
+	}
+
+	// Confirmation is already handled in ValidateToolCall for interactive mode
+	// For non-interactive mode, log a warning
+	if result.ShouldConfirm && (agent.config.SkipPrompt || agent.NonInteractive) {
+		agent.PrintLine(fmt.Sprintf("⚠️  Security Warning: %s (risk level: %s)", toolName, result.RiskLevel))
+		agent.PrintLine(fmt.Sprintf("   Reasoning: %s", result.Reasoning))
+	}
+
+	return nil
 }
 
 // validateParameters validates and extracts parameters according to tool configuration
@@ -875,11 +937,6 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 
 			// Validate each file path before proceeding
 			for _, filePath := range files {
-				// Check for suspicious patterns (path traversal, absolute paths)
-				if strings.Contains(filePath, "..") || filepath.IsAbs(filePath) {
-					return "", fmt.Errorf("suspicious file path detected: %s (path contains '..' or absolute path)", filePath)
-				}
-
 				// Clean the path to eliminate any . or redundant separators
 				cleanedPath := filepath.Clean(filePath)
 				absPath, err := filepath.Abs(cleanedPath)

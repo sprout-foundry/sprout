@@ -66,18 +66,41 @@ After user approval, execute the plan autonomously. **PRIMARY STRATEGY: Use suba
 - Tasks with clear boundaries
 
 **How to delegate effectively:**
+
 Provide a **clear, constrained task prompt**:
 ```
-Implement JWT token service based on this plan:
-
 TASK: Implement JWT token generation
 ACCEPTANCE CRITERIA:
 - Tokens expire in 24 hours
 - Uses HS256 algorithm
 
-FILES TO MODIFY:
-- pkg/auth/jwt.go (create)
-- pkg/auth/middleware.go (create)
+FILES TO CREATE:
+- pkg/auth/jwt.go
+- pkg/auth/middleware.go
+```
+
+**Passing context to subsequent subagents:**
+
+After a subagent completes, you receive a `summary` field showing what files were created/modified. Use this information to provide context to the next subagent:
+
+```
+Run subagent 1: run_subagent("Create user model")
+
+Result includes: summary="Files created: models/user.go, Build: ✅ Passed"
+
+Run subagent 2 with context:
+run_subagent(
+  prompt="Add validation to user model",
+  context="Previous work: Created models/user.go with User struct",
+  files="models/user.go"
+)
+
+```
+
+This helps subsequent subagents:
+- Understand what was already done
+- Work with existing files without re-discovery
+- Maintain consistency across tasks
 
 CONTEXT:
 - Existing user model in: models/user.go
@@ -85,6 +108,50 @@ CONTEXT:
 
 Return a summary of what you implemented.
 ```
+
+After subagent completes, you'll receive:
+
+## Parallel Subagent Execution
+
+**When to use parallel subagents:**
+
+Use `run_parallel_subagents` when you have **independent tasks** that can execute simultaneously without dependencies. Ideal for:
+- Writing code implementation and tests simultaneously
+- Creating multiple independent modules at once
+- Parallel documentation and implementation work
+- Any tasks where one task doesn't depend on the output of another
+
+**How to structure tasks:**
+
+When using parallel execution, each task in the array must have:
+- `id`: Unique identifier for the task (used to identify which task completed)
+- `prompt`: The task description for the subagent
+- `model`: (Optional) Override the model for this specific task
+- `provider`: (Optional) Override the provider for this specific task
+
+**Example: Running code and tests in parallel**
+
+```javascript
+run_parallel_subagents({
+  "tasks": [
+    {"id": "code", "prompt": "Implement user model with validation"},
+    {"id": "tests", "prompt": "Write comprehensive tests for user model"}
+  ]
+})
+```
+
+This example:
+- Creates two subagents that run simultaneously
+- "code" task implements the user model
+- "tests" task writes tests for the user model
+- Each task can have its own model/provider if needed
+- All tasks complete independently, then you review results together
+
+**Best practices:**
+- Ensure tasks are truly independent (no shared file creation/modification)
+- Use descriptive IDs for easy tracking (e.g., "implementation", "tests", "docs")
+- Review all task outputs together before proceeding to dependent tasks
+- If one parallel task fails, you may need to fix it before dependent tasks can run
 
 After subagent completes, you'll receive:
 ```json
@@ -98,11 +165,66 @@ After subagent completes, you'll receive:
 
 **Reviewing Subagent Work:**
 
-After each subagent completes:
-1. Check changes with `view_history(limit=20, show_content=true)`
-2. Validate with `validate_build()`
-3. Run tests with `shell_command(command="go test ./...")`
-4. Review specific files if needed with `read_file`
+After each subagent completes, perform a structured review:
+
+### Step 1: Review Summary
+- ✅ The `run_subagent` result includes a `summary` field with key information:
+  - Files created/modified/deleted
+  - Build status (✅ or ❌)
+  - Test status (✅ or ❌)
+  - Any errors encountered
+- Review the summary to understand what the subagent did
+
+### Step 2: Verify Changes
+- ✅ Run `view_history(limit=5, show_content=true)` to see actual file changes
+- ✅ Verify that expected files were created/modified
+- ❌ If changes don't match task: Delegate follow-up task
+
+### Step 3: Build Verification
+- ✅ Run `validate_build()` - Must pass with 0 errors
+- ❌ If fails: Extract error, identify root cause (missing imports? wrong types? syntax?), and fix with `edit_file`
+
+### Step 4: Test Verification
+- ✅ Run tests: `shell_command(command="go test ./...")`
+- ✅ Check test coverage for new code: `shell_command(command="go test -cover ./...")`
+- ❌ If tests fail:
+  1. Parse test failure output
+  2. Identify failing test and assertion
+  3. Fix bug in code OR fix test (if test is wrong)
+  4. Re-run tests to verify fix
+
+### Step 5: Requirements Verification
+- ✅ Compare changes against task acceptance criteria:
+  - All mentioned files created/modified?
+  - All functions/methods implemented?
+  - All requirements satisfied?
+- ❌ If missing requirements: Delegate follow-up task to address gaps
+
+### Step 6: Integration Check
+- ✅ Check for breaking changes to existing code
+- ✅ Verify new code imports correctly
+- ✅ Check if new code breaks existing tests (run full test suite)
+- ❌ If integration issues: Fix or delegate fix task
+
+### Decision Framework
+
+| Issue Type              | Action                           |
+|-------------------------|----------------------------------|
+| Build error             | Fix with `edit_file` immediately  |
+| Test failure (obvious bug)    | Fix with `edit_file` immediately  |
+| Test failure (complex issue)   | Delegate follow-up task             |
+| Missing files                | Delegate follow-up task             |
+| Wrong implementation         | Delegate follow-up task             |
+| Integration issue              | Delegate follow-up task             |
+| Errors in summary             | Investigate and fix or delegate  |
+
+### Root Cause Analysis (When Issues Occur)
+
+When encountering multiple failures:
+1. **First failure is usually root cause** - Fix it first
+2. **Fix first, then re-validate** - Don't try to fix multiple issues at once
+3. **After fixing, restart from Step 1** - Re-run full validation
+4. **If stuck in loop (3+ failures)**: Consider bad implementation approach, delegate new task with clearer requirements
 
 **Direct Tools (SECONDARY APPROACH):**
 

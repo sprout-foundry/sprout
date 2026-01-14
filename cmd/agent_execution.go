@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,8 @@ import (
 	"github.com/alantheprice/ledit/pkg/agent_commands"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
+	"github.com/alantheprice/ledit/pkg/security_validator"
+	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/webui"
 	"golang.org/x/term"
 )
@@ -219,17 +222,94 @@ func runNewInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus
 				return nil
 			}
 
-			// Process the query
-			if err := processQuery(ctx, chatAgent, eventBus, query); err != nil {
+			// Try fast path: direct command execution
+			if executed, err := tryDirectExecution(ctx, chatAgent, query); err != nil {
 				fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+			} else if !executed {
+				// Fast path didn't trigger, process normally
+				if err := processQuery(ctx, chatAgent, eventBus, query); err != nil {
+					fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+				}
 			}
 		}
 	}
 }
 
+// tryDirectExecution attempts to execute simple commands directly using local LLM
+// Returns true if command was executed directly, false if normal agent flow should proceed
+func tryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query string) (bool, error) {
+	// Get the tool registry (has security validator with local LLM access)
+	registry := agent.GetToolRegistry()
+	if registry == nil {
+		return false, nil
+	}
+	validator := registry.GetValidator()
+	if validator == nil {
+		// Try to initialize the validator
+		agentConfig := chatAgent.GetConfig()
+		if agentConfig == nil || agentConfig.SecurityValidation == nil || !agentConfig.SecurityValidation.Enabled {
+			return false, nil // Security validation not enabled
+		}
+
+		// Create a logger
+		isNonInteractive := agentConfig.SkipPrompt
+		logger := utils.GetLogger(isNonInteractive)
+
+		// Create the validator
+		newValidator, err := security_validator.NewValidator(agentConfig.SecurityValidation, logger, !isNonInteractive)
+		if err != nil {
+			return false, nil // Failed to create validator, proceed with normal flow
+		}
+		validator = newValidator
+	}
+
+	// Use the LLM to detect if this is a direct command request
+	isDirect, detectedCommand, confidence, err := validator.DetectDirectCommand(ctx, query)
+	if err != nil {
+		// If LLM fails, just proceed with normal agent flow
+		return false, nil
+	}
+
+	// Only execute directly if high confidence (>0.8)
+	if isDirect && confidence > 0.8 && detectedCommand != "" {
+		fmt.Printf("⚡ Fast path detected: %s\n", detectedCommand)
+
+		// Execute the command directly using bash
+		output, err := executeCommand(detectedCommand)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+		} else {
+			fmt.Printf("%s\n", output)
+		}
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// executeCommand runs a shell command and returns its output
+func executeCommand(cmd string) (string, error) {
+	// Run command through bash -c
+	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return string(output), err
+	}
+	return string(output), nil
+}
+
 // runDirectMode handles direct command execution
 func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
 	fmt.Printf("🚀 Processing: %s\n", query)
+
+	// Try fast path: direct command execution
+	if executed, err := tryDirectExecution(ctx, chatAgent, query); err != nil {
+		return err
+	} else if executed {
+		// Command was executed directly, skip normal agent flow
+		return nil
+	}
+
+	// Proceed with normal agent flow
 	return processQuery(ctx, chatAgent, eventBus, query)
 }
 

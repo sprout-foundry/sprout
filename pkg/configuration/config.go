@@ -196,8 +196,8 @@ func NewConfig() *Config {
 		RequestDelayMs:        100,
 		EnableSecurityChecks:  true,
 		SecurityValidation: &SecurityValidationConfig{
-			Enabled:        false, // Disabled by default until user downloads model
-			Model:          "",    // User must set this to path of GGUF model file
+			Enabled:        true,  // Enabled by default (uses Ollama fallback if llama.cpp unavailable)
+			Model:          "",    // Empty = use default Ollama model (qwen2.5-coder:1.5b)
 			Threshold:      1,     // Cautious by default
 			TimeoutSeconds: 10,    // 10 second timeout
 		},

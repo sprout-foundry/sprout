@@ -11,7 +11,7 @@ import (
 func (a *Agent) PrintConversationSummary(forceFull bool) {
 
 	if !forceFull {
-		fmt.Println("Use /info command for detailed conversation summary")
+		fmt.Println("Use /stats command for detailed conversation summary")
 		return
 	}
 

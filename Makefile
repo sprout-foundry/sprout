@@ -33,7 +33,7 @@ help:
 # Unit Tests - Fast, no external dependencies
 test-unit:
 	@echo "Running unit tests..."
-	go test ./pkg/... ./cmd/... -v -timeout=60s -short
+	go test -tags ollama_test ./pkg/... ./cmd/... -v -timeout=60s -short
 
 # Integration Tests - Mocked AI, file operations
 test-integration:

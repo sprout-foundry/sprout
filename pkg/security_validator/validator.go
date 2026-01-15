@@ -183,6 +183,15 @@ func downloadModel(targetPath string, logger *utils.Logger) error {
 	}
 	defer out.Close()
 
+	// Clean up temp file on failure
+	// We'll use a flag to track success
+	success := false
+	defer func() {
+		if !success {
+			os.Remove(tempPath)
+		}
+	}()
+
 	// Download with progress tracking
 	resp, err := http.Get(modelURL)
 	if err != nil {
@@ -226,10 +235,11 @@ func downloadModel(targetPath string, logger *utils.Logger) error {
 
 	// Rename temp file to final path
 	if err := os.Rename(tempPath, targetPath); err != nil {
-		os.Remove(tempPath)
 		return fmt.Errorf("failed to save downloaded model: %w", err)
 	}
 
+	// Mark as successful so the temp file isn't cleaned up
+	success = true
 	return nil
 }
 
@@ -477,15 +487,23 @@ func (v *Validator) parseValidationResponse(response string, startTime time.Time
 	// Try to extract JSON from the response
 	response = strings.TrimSpace(response)
 
-	// Remove markdown code blocks if present
-	if strings.HasPrefix(response, "```json") {
-		response = strings.TrimPrefix(response, "```json")
-		response = strings.TrimSuffix(response, "```")
-		response = strings.TrimSpace(response)
-	} else if strings.HasPrefix(response, "```") {
-		response = strings.TrimPrefix(response, "```")
-		response = strings.TrimSuffix(response, "```")
-		response = strings.TrimSpace(response)
+	// Try to extract JSON from markdown code blocks (anywhere in the response)
+	if strings.Contains(response, "```json") {
+		// Extract content between ```json and ```
+		startIdx := strings.Index(response, "```json")
+		endIdx := strings.Index(response[startIdx+7:], "```")
+		if endIdx != -1 {
+			response = response[startIdx+7 : startIdx+7+endIdx]
+			response = strings.TrimSpace(response)
+		}
+	} else if strings.Contains(response, "```") {
+		// Extract content between ``` and ``` (without language identifier)
+		startIdx := strings.Index(response, "```")
+		endIdx := strings.Index(response[startIdx+3:], "```")
+		if endIdx != -1 {
+			response = response[startIdx+3 : startIdx+3+endIdx]
+			response = strings.TrimSpace(response)
+		}
 	}
 
 	// Parse JSON
@@ -528,11 +546,16 @@ func (v *Validator) parseTextResponse(response string, startTime time.Time) (*Va
 
 	// Look for risk indicators
 	riskLevel := RiskSafe
+
+	// Check for dangerous indicators (has higher priority)
 	if strings.Contains(responseLower, "dangerous") || strings.Contains(responseLower, "unsafe") ||
-	   strings.Contains(responseLower, "risk: 2") || strings.Contains(responseLower, "block") {
+	   strings.Contains(responseLower, "risk: 2") || strings.Contains(responseLower, "risk level 2") ||
+	   strings.Contains(responseLower, "risk level is 2") || strings.Contains(responseLower, "block") {
 		riskLevel = RiskDangerous
-	} else if strings.Contains(responseLower, "caution") || strings.Contains(responseLower, "careful") ||
-	   strings.Contains(responseLower, "risk: 1") || strings.Contains(responseLower, "confirm") {
+	} else if strings.Contains(responseLower, "caution") || strings.Contains(responseLower, "cautious") ||
+	   strings.Contains(responseLower, "careful") || strings.Contains(responseLower, "risk: 1") ||
+	   strings.Contains(responseLower, "risk level 1") || strings.Contains(responseLower, "risk level is 1") ||
+	   strings.Contains(responseLower, "confirm") {
 		riskLevel = RiskCaution
 	}
 
@@ -557,22 +580,27 @@ func (v *Validator) applyThreshold(result *ValidationResult) *ValidationResult {
 		threshold = 2
 	}
 
-	// Determine if we should block or request confirmation based on risk level and threshold
-	if int(result.RiskLevel) > threshold {
-		// Risk level exceeds threshold (DANGEROUS) - request user confirmation
-		result.ShouldBlock = false
-		result.ShouldConfirm = true
-	} else if int(result.RiskLevel) == threshold {
-		// Risk level equals threshold (CAUTION) - allow without confirmation
-		// CAUTION operations are recoverable or low-risk (e.g., rm -rf node_modules)
-		result.ShouldBlock = false
-		result.ShouldConfirm = false
-	} else {
-		// Risk level below threshold (SAFE) - allow
-		result.ShouldBlock = false
-		result.ShouldConfirm = false
+	// Determine if we should request confirmation based on risk level and threshold
+	// Threshold meanings:
+	// - Threshold 0: Only SAFE (risk 0) operations are auto-confirmed, caution/dangerous need confirmation
+	// - Threshold 1: SAFE is auto-confirmed, CAUTION/DANGEROUS need confirmation
+	// - Threshold 2: SAFE and CAUTION are auto-confirmed, only DANGEROUS needs confirmation
+
+	// For all thresholds: operations with risk >= threshold require confirmation
+	// Special case: when threshold=0 and risk=0, don't confirm (auto-accept safe operations)
+	if int(result.RiskLevel) >= threshold {
+		// Risk level meets or exceeds threshold
+		// Exception: threshold 0 and risk 0 should not require confirmation
+		if !(threshold == 0 && result.RiskLevel == RiskSafe) {
+			result.ShouldBlock = false
+			result.ShouldConfirm = true
+			return result
+		}
 	}
 
+	// Risk level below threshold (or threshold 0 with risk 0): allow without confirmation
+	result.ShouldBlock = false
+	result.ShouldConfirm = false
 	return result
 }
 

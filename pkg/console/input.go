@@ -42,23 +42,27 @@ const (
 
 // InputReader handles interactive input with proper escape sequence handling
 type InputReader struct {
-	prompt       string
-	line         string
-	cursorPos    int
-	history      []string
-	historyIndex int
-	termFd       int
-	oldState     *term.State
+	prompt         string
+	line           string
+	cursorPos      int
+	history        []string
+	historyIndex   int
+	termFd         int
+	oldState       *term.State
+	terminalWidth  int
+	lastLineLength int
 }
 
 // NewInputReader creates a new input reader
 func NewInputReader(prompt string) *InputReader {
-	return &InputReader{
+	ir := &InputReader{
 		prompt:       prompt,
 		termFd:       int(os.Stdin.Fd()),
 		history:      make([]string, 0, 100),
 		historyIndex: -1,
 	}
+	ir.updateTerminalWidth()
+	return ir
 }
 
 // ReadLine reads a line of input with proper escape sequence handling
@@ -79,6 +83,8 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.line = ""
 	ir.cursorPos = 0
 	ir.historyIndex = -1
+	ir.updateTerminalWidth()
+	ir.lastLineLength = 0
 	fmt.Printf("%s", ir.prompt) // Simple initial prompt
 
 	parser := NewEscapeParser()
@@ -196,33 +202,28 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 
 // InsertChar inserts a character at the cursor position
 func (ir *InputReader) InsertChar(char string) {
-	// For regular typing, just output the character directly
-	// and update internal state without calling Refresh
-	fmt.Printf("%s", char)
-
 	before := ir.line[:ir.cursorPos]
 	after := ir.line[ir.cursorPos:]
 	ir.line = before + char + after
 	ir.cursorPos += len(char)
+
+	// For typing at end of line, just output the character (more efficient)
+	if ir.cursorPos == len(ir.line) {
+		fmt.Printf("%s", char)
+	} else {
+		// Inserting in middle requires full refresh
+		ir.Refresh()
+	}
 }
 
 // Backspace deletes the character before the cursor
 func (ir *InputReader) Backspace() {
 	if ir.cursorPos > 0 {
-		// If we're at the end of the line, just move back and clear
-		if ir.cursorPos == len(ir.line) {
-			fmt.Printf("\b%s", ClearToEndOfLineSeq())
-			before := ir.line[:ir.cursorPos-1]
-			ir.line = before
-			ir.cursorPos--
-		} else {
-			// Complex case: character in the middle, need full refresh
-			before := ir.line[:ir.cursorPos-1]
-			after := ir.line[ir.cursorPos:]
-			ir.line = before + after
-			ir.cursorPos--
-			ir.Refresh()
-		}
+		before := ir.line[:ir.cursorPos-1]
+		after := ir.line[ir.cursorPos:]
+		ir.line = before + after
+		ir.cursorPos--
+		ir.Refresh()
 	}
 }
 
@@ -286,23 +287,52 @@ func (ir *InputReader) NavigateHistory(direction int) {
 
 // Refresh redraws the current input line
 func (ir *InputReader) Refresh() {
+	// Calculate how many physical lines the content takes up
+	totalLength := len(ir.prompt) + len(ir.line)
+	currentLineCount := (totalLength + ir.terminalWidth - 1) / ir.terminalWidth
+	previousLineCount := (ir.lastLineLength + ir.terminalWidth - 1) / ir.terminalWidth
+
+	// Move cursor up to the start of the first line if we had wrapped content
+	if previousLineCount > 1 {
+		fmt.Printf("%s", MoveCursorUpSeq(previousLineCount-1))
+	}
+
 	// Move to start of line
 	fmt.Printf("\r")
 
 	// Clear entire line
 	fmt.Printf("%s", ClearLineSeq())
 
-	// Redraw the line
+	// Redraw the prompt and line content
 	fmt.Printf("%s%s", ir.prompt, ir.line)
 
-	// Clear any remaining characters from previous longer content
-	fmt.Printf("%s", ClearToEndOfLineSeq())
+	// Clear any remaining content from previous longer lines
+	if currentLineCount < previousLineCount {
+		for i := currentLineCount; i < previousLineCount; i++ {
+			fmt.Printf("\n%s", ClearLineSeq())
+		}
+		// Move back up
+		fmt.Printf("%s", MoveCursorUpSeq(previousLineCount - currentLineCount))
+	}
+
+	// Update tracked length
+	ir.lastLineLength = totalLength
 
 	// Position cursor correctly
-	if ir.cursorPos > 0 {
-		totalCursorPos := len(ir.prompt) + ir.cursorPos
-		fmt.Printf("%s", MoveCursorToColumnSeq(totalCursorPos+1))
+	if ir.cursorPos < len(ir.line) {
+		// Cursor is in the middle - need to move it
+		cursorPos := len(ir.prompt) + ir.cursorPos
+		cursorLine := cursorPos / ir.terminalWidth
+		cursorCol := cursorPos % ir.terminalWidth
+
+		// Move down to the correct line if wrapped
+		if cursorLine > 0 {
+			fmt.Printf("%s", MoveCursorDownSeq(cursorLine))
+		}
+		// Move to correct column (1-based)
+		fmt.Printf("\r%s", MoveCursorToColumnSeq(cursorCol+1))
 	}
+	// If cursor is at end, it's already in the right position after printing
 }
 
 // AddToHistory adds a command to history
@@ -334,6 +364,15 @@ func (ir *InputReader) GetHistory() []string {
 	result := make([]string, len(ir.history))
 	copy(result, ir.history)
 	return result
+}
+
+// updateTerminalWidth gets the current terminal width
+func (ir *InputReader) updateTerminalWidth() {
+	if width, _, err := term.GetSize(ir.termFd); err == nil {
+		ir.terminalWidth = width
+	} else {
+		ir.terminalWidth = 80 // Fallback to standard width
+	}
 }
 
 // EscapeParser handles escape sequences using a simple state machine

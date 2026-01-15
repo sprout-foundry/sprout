@@ -220,6 +220,16 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 			}
 		}
 		if err == nil {
+			// Track metrics from successful API response
+			if resp != nil {
+				ac.agent.TrackMetricsFromResponse(
+					resp.Usage.PromptTokens,
+					resp.Usage.CompletionTokens,
+					resp.Usage.TotalTokens,
+					resp.Usage.EstimatedCost,
+					resp.Usage.PromptTokensDetails.CachedTokens,
+				)
+			}
 			break // Success
 		}
 

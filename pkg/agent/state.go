@@ -17,11 +17,17 @@ func (a *Agent) ExportState() ([]byte, error) {
 	compactSummary := a.GenerateCompactSummary()
 
 	state := AgentState{
-		Messages:        a.messages,
-		PreviousSummary: a.previousSummary,
-		CompactSummary:  compactSummary, // Store 5K-limited summary for continuity
-		TaskActions:     a.taskActions,
-		SessionID:       a.sessionID,
+		Messages:          a.messages,
+		PreviousSummary:   a.previousSummary,
+		CompactSummary:    compactSummary, // Store 5K-limited summary for continuity
+		TaskActions:       a.taskActions,
+		SessionID:         a.sessionID,
+		TotalTokens:       a.totalTokens,
+		TotalCost:         a.totalCost,
+		PromptTokens:      a.promptTokens,
+		CompletionTokens:  a.completionTokens,
+		CachedTokens:      a.cachedTokens,
+		CachedCostSavings: a.cachedCostSavings,
 	}
 	return json.Marshal(state)
 }
@@ -41,6 +47,13 @@ func (a *Agent) ImportState(data []byte) error {
 	}
 	a.taskActions = state.TaskActions
 	a.sessionID = state.SessionID
+	// Restore metrics
+	a.totalTokens = state.TotalTokens
+	a.totalCost = state.TotalCost
+	a.promptTokens = state.PromptTokens
+	a.completionTokens = state.CompletionTokens
+	a.cachedTokens = state.CachedTokens
+	a.cachedCostSavings = state.CachedCostSavings
 	return nil
 }
 

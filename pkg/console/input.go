@@ -402,7 +402,7 @@ func (ir *InputReader) Refresh() {
 		for i := currentLineCount; i < previousLineCount; i++ {
 			fmt.Printf("\n%s", ClearLineSeq())
 		}
-		// Move back up
+		// Move back up to the last line with content
 		fmt.Printf("%s", MoveCursorUpSeq(previousLineCount - currentLineCount))
 	}
 
@@ -416,11 +416,18 @@ func (ir *InputReader) Refresh() {
 		cursorLine := cursorPos / ir.terminalWidth
 		cursorCol := cursorPos % ir.terminalWidth
 
-		// Move down to the correct line if wrapped
-		if cursorLine > 0 {
-			fmt.Printf("%s", MoveCursorDownSeq(cursorLine))
+		// After printing, cursor is at end of content (line 'currentLineCount - 1')
+		// We need to move to line 'cursorLine'
+		endLine := currentLineCount - 1
+		if endLine > cursorLine {
+			// Move up to the cursor line
+			fmt.Printf("%s", MoveCursorUpSeq(endLine-cursorLine))
+		} else if endLine < cursorLine {
+			// Move down to the cursor line
+			fmt.Printf("%s", MoveCursorDownSeq(cursorLine-endLine))
 		}
-		// Move to correct column (1-based)
+
+		// Now position cursor at correct column (1-based)
 		fmt.Printf("\r%s", MoveCursorToColumnSeq(cursorCol+1))
 	}
 	// If cursor is at end, it's already in the right position after printing

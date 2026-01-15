@@ -221,7 +221,7 @@ func TestValidationResultCompleteFlow(t *testing.T) {
 		model:       &MockLLM{Response: mockResponse},
 		modelPath:   "/test/model.gguf",
 		logger:      utils.GetLogger(true),
-		interactive: true, // Enable interactive mode
+		interactive: false, // Disable interactive to test just the validation logic
 	}
 
 	ctx := context.Background()

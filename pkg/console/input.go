@@ -3,6 +3,8 @@ package console
 import (
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"golang.org/x/term"
 )
@@ -51,6 +53,14 @@ type InputReader struct {
 	oldState       *term.State
 	terminalWidth  int
 	lastLineLength int
+
+	// Paste detection
+	pasteBuffer      strings.Builder
+	pasteTimer       *time.Timer
+	pasteActive      bool
+	lastCharTime     time.Time
+	inPasteMode      bool
+	pasteStartPrompt string
 }
 
 // NewInputReader creates a new input reader
@@ -85,24 +95,68 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.historyIndex = -1
 	ir.updateTerminalWidth()
 	ir.lastLineLength = 0
+	ir.pasteBuffer.Reset()
+	ir.pasteActive = false
+	ir.inPasteMode = false
+	ir.lastCharTime = time.Now()
 	fmt.Printf("%s", ir.prompt) // Simple initial prompt
 
 	parser := NewEscapeParser()
 	buf := make([]byte, 32)
 
+	// Set stdin to non-blocking for paste detection
+	if err := setNonblock(ir.termFd, true); err != nil {
+		// Fall back to blocking mode if non-blocking fails
+		term.Restore(ir.termFd, oldState)
+		return ir.fallbackReadLine()
+	}
+	defer func() {
+		_ = setNonblock(ir.termFd, false)
+	}()
+
 	for {
 		n, err := os.Stdin.Read(buf)
+
+		// Handle non-blocking read errors
 		if err != nil {
-			return "", err
+			errStr := err.Error()
+			// Check if it's just "no data available" (EAGAIN/EWOULDBLOCK)
+			// Common error messages: "no data", "resource temporarily unavailable", "EAGAIN"
+			isNoData := strings.Contains(errStr, "no data") ||
+			           strings.Contains(errStr, "temporarily unavailable") ||
+			           errStr == "EAGAIN" ||
+			           errStr == "EWOULDBLOCK"
+
+			if isNoData {
+				// Check if paste timer should fire
+				if ir.pasteActive && time.Since(ir.lastCharTime) > 100*time.Millisecond {
+					// Paste detected - process it
+					if ir.finalizePaste() {
+						// Paste was finalized, continue reading
+						continue
+					}
+				}
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			// Real error - return it wrapped with context
+			return "", fmt.Errorf("stdin read error: %w", err)
 		}
 
 		if n == 0 {
+			// In non-blocking mode, this means no data
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 
 		// Process each byte through the escape parser
 		for i := 0; i < n; i++ {
 			b := buf[i]
+			now := time.Now()
+
+			// Detect paste: rapid character input
+			timeSinceLastChar := now.Sub(ir.lastCharTime)
+			isRapidInput := timeSinceLastChar < 30*time.Millisecond && n > 1
 
 			// Handle Ctrl+C and Ctrl+Z directly before parsing
 			if b == 3 { // Ctrl+C
@@ -127,7 +181,6 @@ func (ir *InputReader) ReadLine() (string, error) {
 				}
 
 				// Drain input buffer to clear any characters typed during suspension
-				_ = setNonblock(ir.termFd, true)
 				discardBuf := make([]byte, 256)
 				for {
 					n, _ := os.Stdin.Read(discardBuf)
@@ -135,7 +188,6 @@ func (ir *InputReader) ReadLine() (string, error) {
 						break
 					}
 				}
-				_ = setNonblock(ir.termFd, false)
 
 				resetTerminalSignals()
 
@@ -145,6 +197,45 @@ func (ir *InputReader) ReadLine() (string, error) {
 				ir.cursorPos = 0
 				continue
 			}
+
+			// Start paste mode on rapid input
+			if !ir.inPasteMode && isRapidInput && ir.line == "" {
+				ir.inPasteMode = true
+				ir.pasteActive = true
+				ir.pasteStartPrompt = ir.prompt
+				ir.pasteBuffer.Reset()
+				ir.pasteBuffer.WriteRune(rune(b))
+				ir.lastCharTime = now
+				continue
+			}
+
+			// Collect paste content
+			if ir.inPasteMode {
+				// Check if paste is ending (slow input or Enter at end)
+				if timeSinceLastChar > 100*time.Millisecond || (b == 13 && ir.pasteBuffer.Len() > 0) {
+					// Finalize paste on Enter or timeout
+					if b != 13 {
+						ir.pasteBuffer.WriteRune(rune(b))
+					}
+					if ir.finalizePaste() {
+						// Continue after paste
+						continue
+					}
+				} else {
+					// Convert \r to \n for proper multiline handling
+					if b == 13 {
+						ir.pasteBuffer.WriteRune('\n')
+					} else if b >= 32 && b <= 126 {
+						ir.pasteBuffer.WriteRune(rune(b))
+					} else if b == 9 { // Tab
+						ir.pasteBuffer.WriteRune('\t')
+					}
+					ir.lastCharTime = now
+					continue
+				}
+			}
+
+			ir.lastCharTime = now
 
 			// Parse the byte through the escape parser
 			event := parser.Parse(b)
@@ -373,6 +464,80 @@ func (ir *InputReader) updateTerminalWidth() {
 	} else {
 		ir.terminalWidth = 80 // Fallback to standard width
 	}
+}
+
+// finalizePaste processes the pasted content and formats it appropriately
+func (ir *InputReader) finalizePaste() bool {
+	pastedContent := ir.pasteBuffer.String()
+	ir.pasteBuffer.Reset()
+	ir.inPasteMode = false
+	ir.pasteActive = false
+
+	// Strip trailing newline that triggered the paste
+	pastedContent = strings.TrimRight(pastedContent, "\n")
+
+	// Check if content is multiline
+	lineCount := strings.Count(pastedContent, "\n") + 1
+
+	// Check if content looks like code or structured data
+	looksLikeCode := ir.detectCodePattern(pastedContent)
+
+	// Format the pasted content
+	var formatted string
+	if looksLikeCode && lineCount > 1 {
+		// Wrap in triple backticks for code blocks
+		formatted = fmt.Sprintf("```\n%s\n```", pastedContent)
+	} else if lineCount > 1 {
+		// Multiline but not code - use quotes
+		formatted = fmt.Sprintf("\"\"\"\n%s\n\"\"\"", pastedContent)
+	} else {
+		// Single line - insert as-is
+		formatted = pastedContent
+	}
+
+	// Insert the formatted content
+	ir.line = ir.line + formatted
+	ir.cursorPos = len(ir.line)
+
+	// Show feedback and refresh
+	ir.Refresh()
+
+	ir.lastLineLength = len(ir.prompt) + len(ir.line)
+
+	return true
+}
+
+// detectCodePattern checks if the pasted content looks like code
+func (ir *InputReader) detectCodePattern(content string) bool {
+	// Check for common code patterns
+	codeIndicators := []string{
+		"function ", "def ", "class ", "func ", "var ", "let ", "const ",
+		"if ", "for ", "while ", "return ", "import ", "from ", "export ",
+		"//", "/*", "*/", "#", "<!--",
+		"package ", "struct ", "type ", "interface ",
+	}
+
+	hasSpace := strings.Contains(content, " ")
+	braceCount := strings.Count(content, "{") + strings.Count(content, "}")
+	parenCount := strings.Count(content, "(") + strings.Count(content, ")")
+	bracketCount := strings.Count(content, "[") + strings.Count(content, "]")
+
+	// Check for code indicators
+	isCode := false
+	for _, indicator := range codeIndicators {
+		if strings.Contains(content, indicator) {
+			isCode = true
+			break
+		}
+	}
+
+	// Also check for multiple pairs of brackets (common in code)
+	totalBrackets := braceCount + parenCount + bracketCount
+	if totalBrackets >= 4 && hasSpace {
+		return true
+	}
+
+	return isCode
 }
 
 // EscapeParser handles escape sequences using a simple state machine

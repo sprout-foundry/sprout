@@ -128,10 +128,19 @@ func runSimpleEnhancedMode(chatAgent *agent.Agent, isInteractive bool, args []st
 		if len(args) > 0 {
 			query = strings.Join(args, " ")
 		} else if !term.IsTerminal(int(os.Stdin.Fd())) {
-			// Read from stdin
-			scanner := bufio.NewScanner(os.Stdin)
-			if scanner.Scan() {
-				query = scanner.Text()
+			// Read from stdin - but first check if it's actually available
+			stat, statErr := os.Stdin.Stat()
+			if statErr == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
+				// stdin is not a character device (e.g., pipe or file), try to read
+				scanner := bufio.NewScanner(os.Stdin)
+				if scanner.Scan() {
+					query = scanner.Text()
+				}
+				// Check if scan encountered an error (like "resource temporarily unavailable")
+				if err := scanner.Err(); err != nil {
+					// stdin not available - ignore and show welcome message
+					query = ""
+				}
 			}
 		}
 

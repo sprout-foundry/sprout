@@ -29,6 +29,11 @@ func MoveCursorUpSeq(n int) string {
 	return fmt.Sprintf("\033[%dA", n)
 }
 
+// MoveCursorDownSeq returns the escape sequence to move cursor down by n lines.
+func MoveCursorDownSeq(n int) string {
+	return fmt.Sprintf("\033[%dB", n)
+}
+
 // MoveCursorToColumnSeq returns the escape sequence to move cursor to column n (1-based).
 func MoveCursorToColumnSeq(n int) string {
 	return fmt.Sprintf("\033[%dG", n)

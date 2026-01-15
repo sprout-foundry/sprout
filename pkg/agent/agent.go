@@ -1108,6 +1108,31 @@ func (a *Agent) GetPromptTokens() int {
 	return a.promptTokens
 }
 
+// TrackMetricsFromResponse updates agent metrics from API response usage data
+func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens int) {
+	a.totalTokens += totalTokens
+	a.promptTokens += promptTokens
+	a.completionTokens += completionTokens
+	a.totalCost += estimatedCost
+	a.cachedTokens += cachedTokens
+
+	// Calculate cost savings from cached tokens
+	// Assuming cached tokens save approximately 90% of the cost (since they're reused)
+	if cachedTokens > 0 {
+		// Rough estimate: cached token value = tokens * average cost per token
+		avgCostPerToken := 0.0
+		if totalTokens > 0 && estimatedCost > 0 {
+			avgCostPerToken = estimatedCost / float64(totalTokens)
+		}
+		a.cachedCostSavings += float64(cachedTokens) * avgCostPerToken * 0.9
+	}
+
+	// Trigger stats update callback if registered
+	if a.statsUpdateCallback != nil {
+		a.statsUpdateCallback(a.totalTokens, a.totalCost)
+	}
+}
+
 // GetCompletionTokens returns the total completion tokens used
 func (a *Agent) GetCompletionTokens() int {
 	return a.completionTokens

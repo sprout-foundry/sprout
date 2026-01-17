@@ -65,7 +65,13 @@ def main():
             print("✅ Using existing ledit binary")
         else:
             print("Building ledit binary...")
-            build_result = subprocess.run(["go", "build", "-o", "ledit"], capture_output=True, text=True, cwd=script_dir)
+            # Use ollama_test tag to skip llama.cpp dependency in CI
+            build_result = subprocess.run(
+                ["go", "build", "-tags", "ollama_test", "-o", "ledit"],
+                capture_output=True,
+                text=True,
+                cwd=script_dir
+            )
             if build_result.returncode != 0:
                 print("❌ Build failed:")
                 print("STDOUT:", build_result.stdout)

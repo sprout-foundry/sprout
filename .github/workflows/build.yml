@@ -116,7 +116,7 @@ jobs:
       env:
         GOOS: ${{ steps.set_vars.outputs.os_name }}
         GOARCH: ${{ matrix.arch }}
-      run: go build -o ${{ steps.set_vars.outputs.binary_name }}${{ steps.set_vars.outputs.ext }} .
+      run: go build -tags ollama_test -o ${{ steps.set_vars.outputs.binary_name }}${{ steps.set_vars.outputs.ext }} .
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4

@@ -2,6 +2,27 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.10.1] - 2026-01-17
+
+- Updates 2 files - Updates build tags for integration tests (677d38b)
+- Updates integration_test_runner.py - Updates CI build tags (1730f8b)
+- Updates pkg/console/input.go - Updates code formatting (b87728d)
+- Updates pkg/agent_commands/shell.go - Updates provider mapping (068a636)
+- Updates pkg/console/input.go - Updates paste mode and refresh logic (5db0dd3)
+- Updates 5 files - Updates to security validator and test suite (ce73514)
+- Updates 2 files - Updates stdin handling and paste detection in terminal input (92a4b1c)
+- Updates 2 files - Updates terminal input handling for multi-line wrapping (dc03cb4)
+- Updates 4 files - Updates agent metrics tracking and persistence (7093e23)
+- Updates 9 files - Updates: build tags, summaries, and /stats command (bb0bff8)
+- test (3963533)
+- Updates 28 files - Updates security to use LLM validation (7b624f3)
+- Updates 4 files - Updates agent planning and parallel execution (530cf5f)
+- Updates 10 files - Updates tool logging to print immediately (7ed04b6)
+- Adds 8 files - Adds context-based security bypass (e086e30)
+- Merge remote-tracking branch 'origin/main' (6005e6a)
+- docs: Update changelog for v0.9.3 (9a79fc1)
+- Updates 10 files - Updates provider selection and tool ordering (663f113)
+
 ## [v0.9.3] - 2026-01-12
 
 - test: Skip TestZAIProviderIsolated in short/CI mode - network dependent test (46440f2)

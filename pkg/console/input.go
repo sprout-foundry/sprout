@@ -198,8 +198,12 @@ func (ir *InputReader) ReadLine() (string, error) {
 				continue
 			}
 
-			// Start paste mode on rapid input
-			if !ir.inPasteMode && isRapidInput && ir.line == "" {
+			// Check for escape sequences BEFORE paste detection
+			// Arrow keys send escape sequences which look like rapid input
+			isEscapeSeq := (b == 27) || (parser.state > 0)
+
+			// Start paste mode on rapid input (but not for escape sequences)
+			if !ir.inPasteMode && !isEscapeSeq && isRapidInput && ir.line == "" {
 				ir.inPasteMode = true
 				ir.pasteActive = true
 				ir.pasteStartPrompt = ir.prompt
@@ -211,8 +215,17 @@ func (ir *InputReader) ReadLine() (string, error) {
 
 			// Collect paste content
 			if ir.inPasteMode {
-				// Check if paste is ending (slow input or Enter at end)
-				if timeSinceLastChar > 100*time.Millisecond || (b == 13 && ir.pasteBuffer.Len() > 0) {
+				// Exit paste mode for control characters that indicate user intent
+				if b == 27 || b == 8 || b == 127 { // ESC, Backspace, Delete
+					ir.inPasteMode = false
+					ir.pasteActive = false
+					// For ESC, let escape parser handle it
+					// For Backspace/Delete, handle them normally
+					if b != 27 {
+						continue
+					}
+				} else if timeSinceLastChar > 100*time.Millisecond || (b == 13 && ir.pasteBuffer.Len() > 0) {
+					// Check if paste is ending (slow input or Enter at end)
 					// Finalize paste on Enter or timeout
 					if b != 13 {
 						ir.pasteBuffer.WriteRune(rune(b))
@@ -391,22 +404,27 @@ func (ir *InputReader) Refresh() {
 	// Move to start of line
 	fmt.Printf("\r")
 
-	// Clear entire line
-	fmt.Printf("%s", ClearLineSeq())
+	// Clear all old lines FIRST, before drawing new content
+	// This prevents visual artifacts when content shrinks
+	for i := 0; i < previousLineCount; i++ {
+		fmt.Printf("%s%s", ClearLineSeq(), MoveCursorDownSeq(1))
+	}
+
+	// Move back up to the first line
+	// After the loop above, we're at line `previousLineCount`
+	// We need to go back to line 0, so move up `previousLineCount` lines
+	fmt.Printf("%s", MoveCursorUpSeq(previousLineCount))
+	fmt.Printf("\r") // Back to start of first line
 
 	// Redraw the prompt and line content
 	fmt.Printf("%s%s", ir.prompt, ir.line)
 
-	// Clear any remaining content from previous longer lines
-	if currentLineCount < previousLineCount {
-		for i := currentLineCount; i < previousLineCount; i++ {
-			fmt.Printf("\n%s", ClearLineSeq())
-		}
-		// Move back up to the last line with content
-		fmt.Printf("%s", MoveCursorUpSeq(previousLineCount - currentLineCount))
+	// Clear any trailing content if current line is shorter than terminal width
+	if totalLength % ir.terminalWidth != 0 {
+		fmt.Printf("%s", ClearToEndOfLineSeq())
 	}
 
-	// Update tracked length
+	// Update tracked length AFTER drawing
 	ir.lastLineLength = totalLength
 
 	// Position cursor correctly

@@ -142,7 +142,7 @@ def main():
         print("-" * 50)
         
         # Build ledit if needed
-        build_result = subprocess.run(["go", "build", "-o", "ledit"], 
+        build_result = subprocess.run(["go", "build", "-tags", "ollama_test", "-o", "ledit"],
                                     capture_output=True, text=True)
         if build_result.returncode != 0:
             print(f"Build failed: {build_result.stderr}")

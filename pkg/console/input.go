@@ -123,9 +123,9 @@ func (ir *InputReader) ReadLine() (string, error) {
 			// Check if it's just "no data available" (EAGAIN/EWOULDBLOCK)
 			// Common error messages: "no data", "resource temporarily unavailable", "EAGAIN"
 			isNoData := strings.Contains(errStr, "no data") ||
-			           strings.Contains(errStr, "temporarily unavailable") ||
-			           errStr == "EAGAIN" ||
-			           errStr == "EWOULDBLOCK"
+				strings.Contains(errStr, "temporarily unavailable") ||
+				errStr == "EAGAIN" ||
+				errStr == "EWOULDBLOCK"
 
 			if isNoData {
 				// Check if paste timer should fire
@@ -420,7 +420,7 @@ func (ir *InputReader) Refresh() {
 	fmt.Printf("%s%s", ir.prompt, ir.line)
 
 	// Clear any trailing content if current line is shorter than terminal width
-	if totalLength % ir.terminalWidth != 0 {
+	if totalLength%ir.terminalWidth != 0 {
 		fmt.Printf("%s", ClearToEndOfLineSeq())
 	}
 

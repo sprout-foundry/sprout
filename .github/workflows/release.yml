@@ -173,23 +173,23 @@ jobs:
         echo "Using ldflags: $LDFLAGS"
         
         # Build for Linux (AMD64)
-        GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ledit-linux-amd64 .
+        GOOS=linux GOARCH=amd64 go build -tags ollama_test -ldflags "$LDFLAGS" -o ledit-linux-amd64 .
         tar -czvf ledit-linux-amd64.tar.gz ledit-linux-amd64
-        
+
         # Build for Linux (ARM64)
-        GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ledit-linux-arm64 .
+        GOOS=linux GOARCH=arm64 go build -tags ollama_test -ldflags "$LDFLAGS" -o ledit-linux-arm64 .
         tar -czvf ledit-linux-arm64.tar.gz ledit-linux-arm64
 
         # Build for Windows (AMD64)
-        GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ledit-windows-amd64.exe .
+        GOOS=windows GOARCH=amd64 go build -tags ollama_test -ldflags "$LDFLAGS" -o ledit-windows-amd64.exe .
         zip ledit-windows-amd64.zip ledit-windows-amd64.exe
 
         # Build for macOS (AMD64)
-        GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ledit-darwin-amd64 .
+        GOOS=darwin GOARCH=amd64 go build -tags ollama_test -ldflags "$LDFLAGS" -o ledit-darwin-amd64 .
         tar -czvf ledit-darwin-amd64.tar.gz ledit-darwin-amd64
 
         # Build for macOS (ARM64)
-        GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ledit-darwin-arm64 .
+        GOOS=darwin GOARCH=arm64 go build -tags ollama_test -ldflags "$LDFLAGS" -o ledit-darwin-arm64 .
         tar -czvf ledit-darwin-arm64.tar.gz ledit-darwin-arm64
 
     - name: Create Release

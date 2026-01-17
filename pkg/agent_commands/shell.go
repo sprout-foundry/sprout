@@ -63,14 +63,14 @@ func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	if provider != "" && modelOverride != "" {
 		// Both provider and model specified via flags
-		clientType, err = api.DetermineProvider(provider, "")
+		clientType, err = configManager.MapStringToClientType(provider)
 		if err != nil {
 			return fmt.Errorf("invalid provider '%s': %v", provider, err)
 		}
 		model = modelOverride
 	} else if provider != "" {
 		// Only provider specified, get default model for that provider
-		clientType, err = api.DetermineProvider(provider, "")
+		clientType, err = configManager.MapStringToClientType(provider)
 		if err != nil {
 			return fmt.Errorf("invalid provider '%s': %v", provider, err)
 		}
@@ -78,11 +78,23 @@ func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	} else if modelOverride != "" {
 		// Only model specified, parse provider from model string (e.g., "openai:gpt-4")
 		lastUsedProvider, _ := configManager.GetProvider()
+		// For model-only specification, still use DetermineProvider to parse "provider:model" format
 		clientType, err = api.DetermineProvider(modelOverride, lastUsedProvider)
 		if err != nil {
-			return fmt.Errorf("failed to determine provider from model '%s': %v", modelOverride, err)
+			// If DetermineProvider fails, try MapStringToClientType for custom providers
+			if strings.Contains(modelOverride, ":") {
+				parts := strings.SplitN(modelOverride, ":", 2)
+				clientType, err = configManager.MapStringToClientType(parts[0])
+				if err != nil {
+					return fmt.Errorf("failed to determine provider from model '%s': %v", modelOverride, err)
+				}
+				model = parts[1]
+			} else {
+				return fmt.Errorf("failed to determine provider from model '%s': %v", modelOverride, err)
+			}
+		} else {
+			model = modelOverride
 		}
-		model = modelOverride
 	} else {
 		// Use default from config
 		clientType, err = configManager.GetProvider()

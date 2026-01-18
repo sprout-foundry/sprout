@@ -124,33 +124,20 @@ func NewValidator(cfg *configuration.SecurityValidationConfig, logger *utils.Log
 			logger.Logf("✓ Using Ollama model: %s", ollamaModelName)
 		}
 	} else {
-		// Try to load the actual llama.cpp model
-		// This will only work in production (when go-llama.cpp is built)
-		llamaModel, loadErr := loadLlamaModel(modelPath)
-		if loadErr != nil {
-			// llama.cpp not available, try Ollama fallback
-			if logger != nil {
-				logger.Logf("llama.cpp model loading failed: %v", loadErr)
-				logger.Logf("Attempting to use Ollama as fallback...")
-			}
+		// Use Ollama model directly
+		ollamaModelName := cfg.Model
+		if ollamaModelName == "" {
+			ollamaModelName = "qwen2.5-coder:1.5b"
+		}
 
-			// Use model name from config or default to qwen2.5-coder:1.5b
-			ollamaModelName := cfg.Model
-			if ollamaModelName == "" {
-				ollamaModelName = "qwen2.5-coder:1.5b"
-			}
+		ollamaModel, err := loadOllamaModel(ollamaModelName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load Ollama model: %w", err)
+		}
 
-			ollamaModel, ollamaErr := loadOllamaModel(ollamaModelName)
-			if ollamaErr != nil {
-				return nil, fmt.Errorf("failed to load llama.cpp model (%v) and Ollama fallback also failed (%v)", loadErr, ollamaErr)
-			}
-
-			model = ollamaModel
-			if logger != nil {
-				logger.Logf("✓ Using Ollama model: %s", ollamaModelName)
-			}
-		} else {
-			model = llamaModel
+		model = ollamaModel
+		if logger != nil {
+			logger.Logf("✓ Using Ollama model: %s", ollamaModelName)
 		}
 	}
 

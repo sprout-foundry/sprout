@@ -519,6 +519,10 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 		// Model explicitly signaled it's done - respect that decision
 		// Don't override the model's judgment about whether its response is complete
 		ch.agent.debugLog("🏁 Model signaled 'stop' - accepting response as complete\n")
+		if content == "" {
+			ch.agent.debugLog("⚠️ WARNING: Model returned finish_reason='stop' with empty content!\n")
+			ch.agent.debugLog("⚠️ This may indicate a timeout or incomplete response from the provider.\n")
+		}
 		ch.displayFinalResponse(content)
 		return true, "completion"
 	case "length":

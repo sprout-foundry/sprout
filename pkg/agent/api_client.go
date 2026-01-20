@@ -187,6 +187,16 @@ func (ac *APIClient) setTimeoutsFromConfig() {
 		ac.chunkTimeout = 320 * time.Second      // 320 seconds between chunks (matches provider config)
 	}
 
+	if ac.agent != nil && strings.EqualFold(ac.agent.GetProvider(), "openrouter") {
+		// OpenRouter: Use extended timeouts for high-latency models
+		// Some models routed through OpenRouter can have significant latency
+		// especially after tool execution when processing large tool results
+		ac.connectionTimeout = 120 * time.Second  // 2 minutes to establish connection
+		ac.firstChunkTimeout = 600 * time.Second  // 10 minutes for first chunk
+		ac.chunkTimeout = 300 * time.Second       // 5 minutes between chunks
+		ac.overallTimeout = 900 * time.Second     // 15 minutes total (allows for tool execution + final response)
+	}
+
 	if ac.agent.debug {
 		ac.agent.debugLog("DEBUG: API Timeouts - Connection: %v, First Chunk: %v, Chunk: %v, Overall: %v\n",
 			ac.connectionTimeout, ac.firstChunkTimeout, ac.chunkTimeout, ac.overallTimeout)
@@ -639,7 +649,7 @@ func (ac *APIClient) estimateRequestTokens(messages []api.Message, tools []api.T
 
 // displayTimeoutError shows a user-friendly timeout error
 func (ac *APIClient) displayTimeoutError(message string, timeout time.Duration) {
-	errorMsg := fmt.Sprintf("🔌 %s (waited %v)", message, timeout)
+	errorMsg := fmt.Sprintf("🔌 TIMEOUT ERROR: %s (waited %v)\n\nThis usually means the API is taking too long to respond.\nPossible causes:\n- High model latency (common with large models or complex queries)\n- Network issues\n- API overloaded\n\nThe request has been aborted. Try:\n- Using a faster model\n- Reducing query complexity\n- Checking your network connection", message, timeout)
 	// Route through agent so interactive console places it in content area
 	ac.agent.PrintLine(errorMsg)
 }

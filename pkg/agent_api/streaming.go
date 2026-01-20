@@ -24,8 +24,9 @@ type StreamingChoice struct {
 type StreamingDelta struct {
 	Role             string              `json:"role,omitempty"`
 	Content          string              `json:"content,omitempty"`
+	Reasoning        string              `json:"reasoning,omitempty"`        // GLM reasoning field
 	ReasoningContent string              `json:"reasoning_content,omitempty"`
-	ReasoningDetails string              `json:"reasoning_details,omitempty"` // Minimax reasoning_split format
+	ReasoningDetails json.RawMessage     `json:"reasoning_details,omitempty"` // Can be string (Minimax) or array (GLM models)
 	ToolCalls        []StreamingToolCall `json:"tool_calls,omitempty"`
 }
 
@@ -108,7 +109,8 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 		// Track timing for any content (including tool calls)
 		hasContent := choice.Delta.Content != "" ||
 			choice.Delta.ReasoningContent != "" ||
-			choice.Delta.ReasoningDetails != "" ||
+			choice.Delta.Reasoning != "" ||
+			len(choice.Delta.ReasoningDetails) > 0 ||
 			len(choice.Delta.ToolCalls) > 0
 
 		if hasContent {
@@ -127,10 +129,20 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 			}
 		}
 
-		// Process reasoning content delta (handle both formats)
+		// Process reasoning content delta (handle multiple formats)
+		// Priority: reasoning_content > reasoning > reasoning_details (for Minimax string format)
 		reasoningDelta := choice.Delta.ReasoningContent
-		if choice.Delta.ReasoningDetails != "" {
-			reasoningDelta = choice.Delta.ReasoningDetails // Prioritize reasoning_details for Minimax
+		if reasoningDelta == "" && choice.Delta.Reasoning != "" {
+			reasoningDelta = choice.Delta.Reasoning // GLM format
+		}
+		if reasoningDelta == "" && len(choice.Delta.ReasoningDetails) > 0 {
+			// For Minimax, reasoning_details is a string
+			// For GLM models, it's an array (which we ignore since we already used the reasoning field)
+			var detailsStr string
+			if err := json.Unmarshal(choice.Delta.ReasoningDetails, &detailsStr); err == nil {
+				reasoningDelta = detailsStr // Prioritize reasoning_details for Minimax
+			}
+			// If it's an array (GLM format), we ignore it since we already used the reasoning field
 		}
 
 		if reasoningDelta != "" {

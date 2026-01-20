@@ -859,26 +859,44 @@ func isInTmpPath(toolName string, args map[string]interface{}) bool {
 	return false
 }
 
-// isCriticalSystemOperation checks if this is a critical system operation that should be hard blocked
+// IsCriticalSystemOperation checks if this is a critical system operation that should be hard blocked
 // These are the few operations that would permanently damage the operating system
-func isCriticalSystemOperation(toolName string, args map[string]interface{}, result *ValidationResult) bool {
+// This function is called even in unsafe mode to prevent truly catastrophic operations
+func IsCriticalSystemOperation(toolName string, args map[string]interface{}) bool {
 	// For shell commands, check for critical system operations
 	if toolName == "shell_command" {
 		if command, ok := args["command"].(string); ok {
 			commandLower := strings.ToLower(strings.TrimSpace(command))
 
 			// Filesystem destruction commands (permanently destroys data)
-			if strings.HasPrefix(commandLower, "mkfs") ||     // Create filesystem - destroys all data
-			   strings.HasPrefix(commandLower, "fdisk ") ||    // Partition disk - dangerous
-			   strings.HasPrefix(commandLower, "parted ") ||   // Partition tool - dangerous
-			   strings.Contains(commandLower, "dd if=/dev/zero of=/dev/sd") ||  // Zero out disk
-			   strings.Contains(commandLower, "dd if=/dev/random of=/dev/sd") || // Destroy disk
-			   commandLower == "rm -rf /" ||                   // Delete entire root filesystem
-			   commandLower == "rm -rf ." ||                   // Delete current directory (could be root)
+			// Only block the most destructive operations that have no legitimate use case
+			if strings.HasPrefix(commandLower, "mkfs") || // Create filesystem - typically destructive
+			   commandLower == "rm -rf /" ||              // Delete entire root filesystem
+			   commandLower == "rm -rf ." ||              // Delete current directory (could be root)
 			   strings.HasPrefix(commandLower, ":(){:|:&};:") || // Fork bomb
-			   strings.HasPrefix(commandLower, "killall -9") || // Kill all processes
-			   strings.HasPrefix(commandLower, "chmod 000 /") { // Remove all permissions
+			   strings.HasPrefix(commandLower, "killall -9") ||   // Kill all processes
+			   strings.HasPrefix(commandLower, "chmod 000 /") {   // Remove all permissions
 				return true
+			}
+
+			// Only block fdisk/parted on the primary disk (/dev/sda)
+			// Allow partitioning secondary disks (legitimate use case)
+			if (strings.HasPrefix(commandLower, "fdisk ") || strings.HasPrefix(commandLower, "parted ")) &&
+			   (strings.Contains(commandLower, "/dev/sda") || strings.Contains(commandLower, " /dev/sda ")) {
+				return true
+			}
+
+			// Only block dd operations that are clearly destructive to primary storage
+			// Allow: dd to secondary disks (/dev/sdb, /dev/sdc, etc.) - legitimate for creating bootable drives
+			// Allow: dd from files to devices - common for disk imaging
+			// Block: dd with destructive patterns to primary disk or clearly malicious
+			if strings.Contains(commandLower, "dd ") {
+				// Block dd to primary disk with zero/random (clearly destructive)
+				if (strings.Contains(commandLower, "dd if=/dev/zero") || strings.Contains(commandLower, "dd if=/dev/random")) &&
+				   strings.Contains(commandLower, "/dev/sda") {
+					return true
+				}
+				// Don't block other dd operations - they have legitimate uses
 			}
 		}
 	}
@@ -898,6 +916,12 @@ func isCriticalSystemOperation(toolName string, args map[string]interface{}, res
 	}
 
 	return false
+}
+
+// isCriticalSystemOperation checks if this is a critical system operation that should be hard blocked
+// These are the few operations that would permanently damage the operating system
+func isCriticalSystemOperation(toolName string, args map[string]interface{}, result *ValidationResult) bool {
+	return IsCriticalSystemOperation(toolName, args)
 }
 
 // CallLLMForConfirmation makes a second LLM call for confirmation in non-interactive mode

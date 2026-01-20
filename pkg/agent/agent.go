@@ -103,6 +103,9 @@ type Agent struct {
 	debugLogPath  string     // Path to the debug log file
 	debugLogMutex sync.Mutex // Mutex for safe writes to debug log
 
+	// Unsafe mode - bypass most security checks
+	unsafeMode bool // Allow operations without security prompting
+
 }
 
 // Shutdown attempts to gracefully stop background work and child processes
@@ -424,6 +427,12 @@ func (a *Agent) initDebugLogger() error {
 
 // GetDebugLogPath returns the path to the current debug log file (if any)
 func (a *Agent) GetDebugLogPath() string { return a.debugLogPath }
+
+// GetUnsafeMode returns whether unsafe mode is enabled
+func (a *Agent) GetUnsafeMode() bool { return a.unsafeMode }
+
+// SetUnsafeMode sets the unsafe mode flag
+func (a *Agent) SetUnsafeMode(unsafe bool) { a.unsafeMode = unsafe }
 
 // getClientTypeFromName converts provider name to ClientType
 // DEPRECATED: Use configManager.MapStringToClientType instead to handle custom providers

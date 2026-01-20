@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,13 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 )
+
+// ErrOutsideWorkingDirectory is returned when a path is outside the working directory
+// This should be caught by tool handlers to prompt the user for confirmation
+var ErrOutsideWorkingDirectory = errors.New("file access outside working directory")
+
+// ErrWriteOutsideWorkingDirectory is returned when a write path is outside the working directory
+var ErrWriteOutsideWorkingDirectory = errors.New("file write outside working directory")
 
 // FileExists checks if a file exists at the given path
 func FileExists(filename string) bool {
@@ -205,6 +213,11 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 		return "", fmt.Errorf("failed to resolve cwd symlink: %w", err)
 	}
 
+	// Allow all /tmp/* operations without security checks
+	if isInTmpPath(resolvedAbs) {
+		return resolvedAbs, nil
+	}
+
 	// Check if the resolved path is within the resolved working directory
 	relPath, err := filepath.Rel(resolvedCwd, resolvedAbs)
 	if err != nil {
@@ -217,10 +230,26 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 			// Security bypass enabled - allow access outside working directory
 			return resolvedAbs, nil
 		}
-		return "", fmt.Errorf("security violation: attempt to access file outside working directory: %s (resolves to: %s)", cleanPath, resolvedAbs)
+		// Return custom error that can be caught for user confirmation
+		return "", fmt.Errorf("%w: attempt to access file outside working directory: %s (resolves to: %s)", ErrOutsideWorkingDirectory, cleanPath, resolvedAbs)
 	}
 
 	return resolvedAbs, nil
+}
+
+// isInTmpPath checks if a path is within /tmp
+func isInTmpPath(path string) bool {
+	// Check for /tmp paths
+	cleanPath := filepath.Clean(path)
+	if strings.HasPrefix(cleanPath, "/tmp/") || cleanPath == "/tmp" {
+		return true
+	}
+	// Also check for Windows-style temp paths
+	lowerPath := strings.ToLower(cleanPath)
+	if strings.Contains(lowerPath, "\\temp\\") || strings.Contains(lowerPath, "\\tmp\\") {
+		return true
+	}
+	return false
 }
 
 // SafeResolvePathForWrite validates a file path for writing, checking that the
@@ -250,6 +279,11 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 	absPath, err := filepath.Abs(cleanPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	// Allow all /tmp/* operations without security checks
+	if isInTmpPath(absPath) {
+		return absPath, nil
 	}
 
 	cwd, err := os.Getwd()
@@ -312,7 +346,8 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 			// Security bypass enabled - allow writing outside working directory
 			return absPath, nil
 		}
-		return "", fmt.Errorf("security violation: attempt to write file outside working directory: %s (parent resolves to: %s)", cleanPath, resolvedParent)
+		// Return custom error that can be caught for user confirmation
+		return "", fmt.Errorf("%w: attempt to write file outside working directory: %s (parent resolves to: %s)", ErrWriteOutsideWorkingDirectory, cleanPath, resolvedParent)
 	}
 
 	return absPath, nil

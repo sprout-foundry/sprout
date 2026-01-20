@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -312,6 +313,17 @@ func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string
 		return nil // No config manager, skip validation
 	}
 
+	// Check for critical system operations FIRST - these are ALWAYS blocked, even in unsafe mode
+	if security_validator.IsCriticalSystemOperation(toolName, args) {
+		return fmt.Errorf("CRITICAL: operation blocked - this would permanently damage the system: %s", toolName)
+	}
+
+	// Unsafe mode bypasses most security checks
+	if agent.GetUnsafeMode() {
+		agent.debugLog("🔓 Unsafe mode enabled: skipping security validation for %s\n", toolName)
+		return nil
+	}
+
 	config := agent.configManager.GetConfig()
 	if config == nil || config.SecurityValidation == nil || !config.SecurityValidation.Enabled {
 		return nil // Security validation disabled
@@ -409,6 +421,35 @@ Only return valid JSON, nothing else.`, toolName, string(argsJSON), result.RiskL
 	}
 
 	return nil
+}
+
+// handleFileSecurityError checks if an error is due to filesystem security and prompts the user
+// Returns a context with security bypass enabled if user approves, original context otherwise
+func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePath string, err error) context.Context {
+	// Check if this is a filesystem security error
+	if errors.Is(err, filesystem.ErrOutsideWorkingDirectory) || errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) {
+		// Unsafe mode bypasses filesystem security checks automatically
+		if agent.GetUnsafeMode() {
+			agent.debugLog("🔓 Unsafe mode: automatically allowing file access outside working directory: %s\n", filePath)
+			return filesystem.WithSecurityBypass(ctx)
+		}
+
+		// Prompt user for confirmation
+		agentConfig := agent.GetConfig()
+		logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
+
+		prompt := fmt.Sprintf("⚠️  Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
+
+		if logger.AskForConfirmation(prompt, false, false) {
+			// User approved - enable security bypass for this operation
+			agent.debugLog("User approved file access outside working directory: %s\n", filePath)
+			return filesystem.WithSecurityBypass(ctx)
+		} else {
+			// User rejected - error will be returned as-is
+			agent.debugLog("User rejected file access outside working directory: %s\n", filePath)
+		}
+	}
+	return ctx
 }
 
 // validateParameters validates and extracts parameters according to tool configuration
@@ -586,6 +627,16 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		a.ToolLog("reading file", fmt.Sprintf("%s (lines %d-%d)", filePath, startLine, endLine))
 		a.debugLog("Reading file: %s (lines %d-%d)\n", filePath, startLine, endLine)
 		result, err := tools.ReadFileWithRange(ctx, filePath, startLine, endLine)
+
+			// Handle filesystem security errors - prompt user for confirmation
+		if err != nil {
+			ctx2 := handleFileSecurityError(ctx, a, "read_file", filePath, err)
+			if ctx2 != ctx {
+				// User approved, retry with bypass
+				result, err = tools.ReadFileWithRange(ctx2, filePath, startLine, endLine)
+			}
+		}
+
 		a.debugLog("Read file result: %s, error: %v\n", result, err)
 
 		// Record as a task action for conversation summary
@@ -598,6 +649,16 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		a.ToolLog("reading file", filePath)
 		a.debugLog("Reading file: %s\n", filePath)
 		result, err := tools.ReadFile(ctx, filePath)
+
+		// Handle filesystem security errors - prompt user for confirmation
+		if err != nil {
+			ctx2 := handleFileSecurityError(ctx, a, "read_file", filePath, err)
+			if ctx2 != ctx {
+				// User approved, retry with bypass
+				result, err = tools.ReadFile(ctx2, filePath)
+			}
+		}
+
 		a.debugLog("Read file result: %s, error: %v\n", result, err)
 
 		// Record as a task action for conversation summary
@@ -655,6 +716,16 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 
 	result, err := tools.WriteFile(ctx, filePath, content)
+
+	// Handle filesystem security errors - prompt user for confirmation
+	if err != nil {
+		ctx2 := handleFileSecurityError(ctx, a, "write_file", filePath, err)
+		if ctx2 != ctx {
+			// User approved, retry with bypass
+			result, err = tools.WriteFile(ctx2, filePath, content)
+		}
+	}
+
 	a.debugLog("Write file result: %s, error: %v\n", result, err)
 
 	// Publish file change event for web UI auto-sync
@@ -700,6 +771,21 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	result, err := tools.EditFile(ctx, filePath, oldString, newString)
+
+	// Handle filesystem security errors - prompt user for confirmation
+	if err != nil {
+		ctx2 := handleFileSecurityError(ctx, a, "edit_file", filePath, err)
+		if ctx2 != ctx {
+			// User approved, retry with bypass
+			// Re-read original content with bypass
+			originalContent, err = tools.ReadFile(ctx2, filePath)
+			if err != nil {
+				return "", fmt.Errorf("failed to read original file for diff: %w", err)
+			}
+			result, err = tools.EditFile(ctx2, filePath, oldString, newString)
+		}
+	}
+
 	a.debugLog("Edit file result: %s, error: %v\n", result, err)
 
 	// Publish file change event for web UI auto-sync

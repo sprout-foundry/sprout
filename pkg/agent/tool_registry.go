@@ -342,23 +342,70 @@ func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string
 	}
 
 	// Log the validation result
-	agent.debugLog("🔒 Security validation: %s (%s) - %s\n", toolName, result.RiskLevel, result.Reasoning)
+	agent.debugLog("🔒 Security validation: %s (%s) - IsSoftBlock: %v, ShouldBlock: %v, ShouldConfirm: %v\n",
+		toolName, result.RiskLevel, result.IsSoftBlock, result.ShouldBlock, result.ShouldConfirm)
 
-	// Handle blocking operations
+	// Handle blocks (user rejected in interactive mode or hard block)
 	if result.ShouldBlock {
 		return fmt.Errorf("operation blocked by security validation: %s (risk level: %s)\nReasoning: %s",
 			toolName, result.RiskLevel, result.Reasoning)
 	}
 
-	// Confirmation is already handled in ValidateToolCall for interactive mode
-	// For non-interactive mode, log a warning
+	// Handle confirmation needed (for non-interactive mode, use second LLM validation)
 	if result.ShouldConfirm {
 		agentConfig := agent.GetConfig()
 		isNonInteractive := agentConfig != nil && agentConfig.SkipPrompt
+
 		if isNonInteractive {
-			agent.PrintLine(fmt.Sprintf("⚠️  Security Warning: %s (risk level: %s)", toolName, result.RiskLevel))
+			// For non-interactive mode, make a second LLM validation call
+			// Ask the LLM to confirm if this operation should proceed
+			agent.PrintLine(fmt.Sprintf("⚠️  Security Block: %s (risk level: %s)", toolName, result.RiskLevel))
 			agent.PrintLine(fmt.Sprintf("   Reasoning: %s", result.Reasoning))
+			agent.PrintLine("   Requesting second LLM validation...")
+
+			// Build a prompt for the second validation
+			argsJSON, _ := json.Marshal(args)
+			confirmPrompt := fmt.Sprintf(`The following operation was flagged as needing user confirmation:
+
+Tool: %s
+Arguments: %s
+Risk Level: %s
+Reasoning: %s
+
+As an automated validation system, you need to decide if this operation should proceed.
+
+CRITICAL: Only approve operations that are:
+1. Clearly safe and necessary for the task
+2. Not destructive or irreversible
+3. Not accessing/modifying critical system files
+4. Part of normal development workflows
+
+HARD BLOCK these operations immediately:
+- Filesystem destruction (mkfs, fdisk, dd to devices)
+- Deleting system directories (rm -rf /usr, /bin, /etc, /lib, etc.)
+- Modifying critical system config (/etc/shadow, /etc/passwd, sudoers)
+- System-ruining commands (fork bombs, killall -9, chmod 000 /)
+
+Respond with JSON:
+{"approved": true/false, "reasoning": "brief explanation"}
+
+Only return valid JSON, nothing else.`, toolName, string(argsJSON), result.RiskLevel, result.Reasoning)
+
+			// Call the LLM for second validation
+			secondResult, err := r.validator.CallLLMForConfirmation(ctx, confirmPrompt)
+			if err != nil {
+				// If second validation fails, block by default
+				return fmt.Errorf("operation blocked: second LLM validation failed: %v\nOriginal reasoning: %s", err, result.Reasoning)
+			}
+
+			if !secondResult.Approved {
+				return fmt.Errorf("operation blocked by second LLM validation: %s\nReasoning: %s", toolName, secondResult.Reasoning)
+			}
+
+			agent.PrintLine("   ✓ Second validation approved the operation")
 		}
+		// In interactive mode, ShouldConfirm should have been handled by ValidateToolCall
+		// If we reach here with ShouldConfirm=true in interactive mode, it's unexpected
 	}
 
 	return nil

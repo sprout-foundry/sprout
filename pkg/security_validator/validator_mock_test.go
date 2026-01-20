@@ -416,3 +416,145 @@ func TestValidationResultSerializationRoundTrip(t *testing.T) {
 		t.Errorf("ShouldConfirm mismatch")
 	}
 }
+
+// TestIsCriticalSystemOperation tests the critical system operation detection
+func TestIsCriticalSystemOperation(t *testing.T) {
+	tests := []struct {
+		name     string
+		toolName string
+		args     map[string]interface{}
+		expected bool
+	}{
+		// Always blocked - truly destructive operations
+		{
+			name:     "mkfs command - critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "mkfs /dev/sda1"},
+			expected: true,
+		},
+		{
+			name:     "rm -rf / - critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "rm -rf /"},
+			expected: true,
+		},
+		{
+			name:     "rm -rf . - critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "rm -rf ."},
+			expected: true,
+		},
+		{
+			name:     "fork bomb - critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": ":(){:|:&};:"},
+			expected: true,
+		},
+		{
+			name:     "killall -9 - critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "killall -9 python"},
+			expected: true,
+		},
+		{
+			name:     "chmod 000 / - critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "chmod 000 /"},
+			expected: true,
+		},
+		{
+			name:     "fdisk on primary disk - critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "fdisk /dev/sda"},
+			expected: true,
+		},
+		{
+			name:     "dd zero to primary disk - critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "dd if=/dev/zero of=/dev/sda"},
+			expected: true,
+		},
+		{
+			name:     "write to /etc/shadow - critical",
+			toolName: "write_file",
+			args:     map[string]interface{}{"file_path": "/etc/shadow", "content": "malicious"},
+			expected: true,
+		},
+		{
+			name:     "write to /etc/passwd - critical",
+			toolName: "write_file",
+			args:     map[string]interface{}{"file_path": "/etc/passwd", "content": "malicious"},
+			expected: true,
+		},
+		{
+			name:     "edit /etc/sudoers - critical",
+			toolName: "edit_file",
+			args:     map[string]interface{}{"file_path": "/etc/sudoers", "content": "malicious"},
+			expected: true,
+		},
+		// Allowed operations - have legitimate use cases
+		{
+			name:     "normal shell command - not critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "ls -la"},
+			expected: false,
+		},
+		{
+			name:     "write to normal file - not critical",
+			toolName: "write_file",
+			args:     map[string]interface{}{"file_path": "/tmp/test.txt", "content": "test"},
+			expected: false,
+		},
+		{
+			name:     "read file - not critical",
+			toolName: "read_file",
+			args:     map[string]interface{}{"file_path": "/etc/passwd"},
+			expected: false,
+		},
+		{
+			name:     "fdisk on secondary disk - not critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "fdisk /dev/sdb"},
+			expected: false,
+		},
+		{
+			name:     "parted on secondary disk - not critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "parted /dev/sdc"},
+			expected: false,
+		},
+		{
+			name:     "dd to secondary disk - not critical (legitimate use)",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "dd if=bootable.img of=/dev/sdb"},
+			expected: false,
+		},
+		{
+			name:     "dd from secondary disk - not critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "dd if=/dev/sdb of=backup.img"},
+			expected: false,
+		},
+		{
+			name:     "dd zero to secondary disk - not critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "dd if=/dev/zero of=/dev/sdb"},
+			expected: false,
+		},
+		{
+			name:     "mkfs on secondary disk - still critical",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "mkfs /dev/sdb1"},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsCriticalSystemOperation(tt.toolName, tt.args)
+			if result != tt.expected {
+				t.Errorf("IsCriticalSystemOperation() = %v, expected %v", result, tt.expected)
+			}
+		})
+	}
+}

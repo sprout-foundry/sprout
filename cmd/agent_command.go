@@ -19,6 +19,7 @@ var (
 	agentNoStreaming      bool
 	agentSystemPromptFile string
 	agentSystemPrompt     string
+	agentUnsafe           bool
 )
 
 func createChatAgent() (*agent.Agent, error) {
@@ -60,6 +61,7 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set LEDIT_NO_STREAM=1)")
 	agentCmd.Flags().StringVar(&agentSystemPromptFile, "system-prompt", "", "File path containing custom system prompt")
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
+	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")
 
 	// Initialize environment-based defaults
 	cobra.OnInitialize(func() {
@@ -121,6 +123,9 @@ Examples:
 		if err != nil {
 			return err
 		}
+
+		// Set unsafe mode if flag is provided
+		chatAgent.SetUnsafeMode(agentUnsafe)
 
 		_ = os.Setenv("LEDIT_FROM_AGENT", "1")
 		if agentDryRun {

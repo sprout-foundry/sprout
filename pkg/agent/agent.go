@@ -183,7 +183,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			maxIterations:             1000,
 			totalCost:                 0.0,
 			clientType:                clientType,
-			debug:                     os.Getenv("LEDIT_DEBUG") == "true",
+			debug:                     os.Getenv("LEDIT_DEBUG") == "true" || os.Getenv("LEDIT_DEBUG") == "1" || os.Getenv("LEDIT_DEBUG") != "",
 			optimizer:                 NewConversationOptimizer(true, false),
 			configManager:             configManager,
 			shellCommandHistory:       make(map[string]*ShellCommandResult),

@@ -396,25 +396,29 @@ func (ir *InputReader) Refresh() {
 	currentLineCount := (totalLength + ir.terminalWidth - 1) / ir.terminalWidth
 	previousLineCount := (ir.lastLineLength + ir.terminalWidth - 1) / ir.terminalWidth
 
-	// Move cursor up to the start of the first line if we had wrapped content
-	if previousLineCount > 1 {
-		fmt.Printf("%s", MoveCursorUpSeq(previousLineCount-1))
-	}
-
 	// Move to start of line
 	fmt.Printf("\r")
 
-	// Clear all old lines FIRST, before drawing new content
-	// This prevents visual artifacts when content shrinks
-	for i := 0; i < previousLineCount; i++ {
-		fmt.Printf("%s%s", ClearLineSeq(), MoveCursorDownSeq(1))
-	}
+	// If we had multiple lines before, clear them all
+	if previousLineCount > 1 {
+		// Move cursor up to the start of the first line if we had wrapped content
+		fmt.Printf("%s", MoveCursorUpSeq(previousLineCount-1))
 
-	// Move back up to the first line
-	// After the loop above, we're at line `previousLineCount`
-	// We need to go back to line 0, so move up `previousLineCount` lines
-	fmt.Printf("%s", MoveCursorUpSeq(previousLineCount))
-	fmt.Printf("\r") // Back to start of first line
+		// Clear all old lines FIRST, before drawing new content
+		// This prevents visual artifacts when content shrinks
+		for i := 0; i < previousLineCount; i++ {
+			fmt.Printf("%s%s", ClearLineSeq(), MoveCursorDownSeq(1))
+		}
+
+		// Move back up to the first line
+		// After the loop above, we're at line `previousLineCount`
+		// We need to go back to line 0, so move up `previousLineCount` lines
+		fmt.Printf("%s", MoveCursorUpSeq(previousLineCount))
+		fmt.Printf("\r") // Back to start of first line
+	} else {
+		// Single line - just clear it
+		fmt.Printf("%s", ClearLineSeq())
+	}
 
 	// Redraw the prompt and line content
 	fmt.Printf("%s%s", ir.prompt, ir.line)

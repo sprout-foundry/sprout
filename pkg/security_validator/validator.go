@@ -51,6 +51,7 @@ type ValidationResult struct {
 	LatencyMs     int64     `json:"latency_ms"`
 	ShouldBlock   bool      `json:"should_block"`
 	ShouldConfirm bool      `json:"should_confirm"`
+	IsSoftBlock   bool      `json:"is_soft_block"` // True if this is a soft block that can be overridden with timeout
 }
 
 // Validator handles LLM-based security validation using local llama.cpp
@@ -245,6 +246,7 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 			LatencyMs:     0,
 			ShouldBlock:   false,
 			ShouldConfirm: false,
+			IsSoftBlock:   false,
 		}, nil
 	}
 
@@ -259,6 +261,7 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 			LatencyMs:     0,
 			ShouldBlock:   false,
 			ShouldConfirm: false,
+			IsSoftBlock:   false,
 		}, nil
 	}
 
@@ -273,6 +276,7 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 			LatencyMs:     0,
 			ShouldBlock:   false,
 			ShouldConfirm: false,
+			IsSoftBlock:   false,
 		}, nil
 	}
 
@@ -292,6 +296,7 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 			LatencyMs:     time.Since(startTime).Milliseconds(),
 			ShouldBlock:   false,
 			ShouldConfirm: false,
+			IsSoftBlock:   false,
 		}, nil
 	}
 
@@ -304,6 +309,20 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 	// Apply threshold logic and request user confirmation if needed
 	result = v.applyThreshold(result)
 
+	// Check for hard block operations (critical system-ruining operations)
+	if isCriticalSystemOperation(toolName, args, result) {
+		result.IsSoftBlock = false
+		result.ShouldConfirm = false
+		result.ShouldBlock = true
+		result.Reasoning = "Hard block: Critical system operation that could damage the operating system. " + result.Reasoning
+		return result, nil
+	}
+
+	// All non-critical blocks are soft blocks - user can override
+	if result.ShouldConfirm || result.RiskLevel != RiskSafe {
+		result.IsSoftBlock = true
+	}
+
 	// If confirmation is needed and in interactive mode, ask the user
 	if result.ShouldConfirm && v.interactive && v.logger != nil {
 		argsJSON, _ := json.Marshal(args)
@@ -315,7 +334,7 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 			result.ShouldConfirm = false
 			result.ShouldBlock = false
 		} else {
-			// User rejected, block the operation
+			// User rejected, block the operation (but still a soft block)
 			result.ShouldConfirm = false
 			result.ShouldBlock = true
 			result.Reasoning = "User rejected the operation based on security warning"
@@ -524,6 +543,7 @@ func (v *Validator) parseValidationResponse(response string, startTime time.Time
 		LatencyMs:     time.Since(startTime).Milliseconds(),
 		ShouldBlock:   false,
 		ShouldConfirm: false,
+		IsSoftBlock:   false,
 	}, nil
 }
 
@@ -555,6 +575,7 @@ func (v *Validator) parseTextResponse(response string, startTime time.Time) (*Va
 		LatencyMs:     time.Since(startTime).Milliseconds(),
 		ShouldBlock:   false,
 		ShouldConfirm: false,
+		IsSoftBlock:   false,
 	}, nil
 }
 
@@ -594,6 +615,11 @@ func (v *Validator) applyThreshold(result *ValidationResult) *ValidationResult {
 // isObviouslySafe checks if an operation is clearly safe without needing LLM validation
 // This pre-filters read-only and informational operations to reduce latency
 func isObviouslySafe(toolName string, args map[string]interface{}) bool {
+	// Check if the operation is on /tmp/* paths - always allow without security checks
+	if isInTmpPath(toolName, args) {
+		return true
+	}
+
 	// List of obviously safe tools (read-only and informational)
 	safeTools := map[string]bool{
 		// Read operations
@@ -796,4 +822,133 @@ Only return valid JSON, nothing else.`, query)
 	}
 
 	return result.IsDirectCommand, result.DetectedCommand, result.Confidence, nil
+}
+
+// isInTmpPath checks if an operation is on /tmp/* paths
+// All reads and writes to /tmp/* should be fully available without any security violations
+func isInTmpPath(toolName string, args map[string]interface{}) bool {
+	// Check file_path argument for file operations
+	if filePath, ok := args["file_path"].(string); ok {
+		cleanPath := filepath.Clean(filePath)
+		// Check if path starts with /tmp/ or is exactly /tmp
+		if strings.HasPrefix(cleanPath, "/tmp/") || cleanPath == "/tmp" {
+			return true
+		}
+		// Also check for Windows-style temp paths
+		if strings.Contains(strings.ToLower(cleanPath), "\\temp\\") || strings.Contains(strings.ToLower(cleanPath), "\\tmp\\") {
+			return true
+		}
+	}
+
+	// For shell commands, check if the command operates on /tmp
+	if toolName == "shell_command" {
+		if command, ok := args["command"].(string); ok {
+			commandLower := strings.ToLower(command)
+			// Check if command mentions /tmp
+			if strings.Contains(commandLower, "/tmp/") ||
+			   strings.Contains(commandLower, " /tmp ") ||
+			   strings.Contains(commandLower, "> /tmp") ||
+			   strings.Contains(commandLower, "< /tmp") ||
+			   strings.HasPrefix(strings.TrimSpace(commandLower), "rm /tmp") ||
+			   strings.HasPrefix(strings.TrimSpace(commandLower), "rm -rf /tmp") {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// isCriticalSystemOperation checks if this is a critical system operation that should be hard blocked
+// These are the few operations that would permanently damage the operating system
+func isCriticalSystemOperation(toolName string, args map[string]interface{}, result *ValidationResult) bool {
+	// For shell commands, check for critical system operations
+	if toolName == "shell_command" {
+		if command, ok := args["command"].(string); ok {
+			commandLower := strings.ToLower(strings.TrimSpace(command))
+
+			// Filesystem destruction commands (permanently destroys data)
+			if strings.HasPrefix(commandLower, "mkfs") ||     // Create filesystem - destroys all data
+			   strings.HasPrefix(commandLower, "fdisk ") ||    // Partition disk - dangerous
+			   strings.HasPrefix(commandLower, "parted ") ||   // Partition tool - dangerous
+			   strings.Contains(commandLower, "dd if=/dev/zero of=/dev/sd") ||  // Zero out disk
+			   strings.Contains(commandLower, "dd if=/dev/random of=/dev/sd") || // Destroy disk
+			   commandLower == "rm -rf /" ||                   // Delete entire root filesystem
+			   commandLower == "rm -rf ." ||                   // Delete current directory (could be root)
+			   strings.HasPrefix(commandLower, ":(){:|:&};:") || // Fork bomb
+			   strings.HasPrefix(commandLower, "killall -9") || // Kill all processes
+			   strings.HasPrefix(commandLower, "chmod 000 /") { // Remove all permissions
+				return true
+			}
+		}
+	}
+
+	// For file operations, check for critical authentication/config files
+	if toolName == "write_file" || toolName == "edit_file" {
+		if filePath, ok := args["file_path"].(string); ok {
+			cleanPath := filepath.Clean(filePath)
+			// Only the most critical system files
+			if cleanPath == "/etc/shadow" ||
+			   cleanPath == "/etc/passwd" ||
+			   cleanPath == "/etc/sudoers" ||
+			   cleanPath == "/etc/sudoers.d/" {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// CallLLMForConfirmation makes a second LLM call for confirmation in non-interactive mode
+func (v *Validator) CallLLMForConfirmation(ctx context.Context, prompt string) (*LLMConfirmationResult, error) {
+	// Set timeout
+	timeout := time.Duration(v.config.TimeoutSeconds) * time.Second
+	if timeout == 0 {
+		timeout = 30 * time.Second // Longer timeout for confirmation
+	}
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Call the LLM
+	response, err := v.callLLM(ctx, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("LLM confirmation call failed: %w", err)
+	}
+
+	// Parse the response
+	response = strings.TrimSpace(response)
+
+	// Try to extract JSON from markdown code blocks
+	if strings.Contains(response, "```json") {
+		startIdx := strings.Index(response, "```json")
+		endIdx := strings.Index(response[startIdx+7:], "```")
+		if endIdx != -1 {
+			response = response[startIdx+7 : startIdx+7+endIdx]
+			response = strings.TrimSpace(response)
+		}
+	} else if strings.Contains(response, "```") {
+		startIdx := strings.Index(response, "```")
+		endIdx := strings.Index(response[startIdx+3:], "```")
+		if endIdx != -1 {
+			response = response[startIdx+3 : startIdx+3+endIdx]
+			response = strings.TrimSpace(response)
+		}
+	}
+
+	// Parse JSON
+	var result LLMConfirmationResult
+	if err := json.Unmarshal([]byte(response), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse confirmation response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// LLMConfirmationResult represents the result of a second LLM confirmation call
+type LLMConfirmationResult struct {
+	Approved  bool   `json:"approved"`
+	Reasoning string `json:"reasoning"`
 }

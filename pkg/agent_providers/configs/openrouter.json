@@ -18,7 +18,7 @@
   "message_conversion": {
     "include_tool_call_id": true,
     "convert_tool_role_to_user": false,
-    "reasoning_content_field": ""
+    "reasoning_content_field": "reasoning_content"
   },
   "streaming": {
     "format": "sse",

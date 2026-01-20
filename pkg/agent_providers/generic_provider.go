@@ -470,6 +470,12 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 			convertedMsg[p.config.Conversion.ReasoningContentField] = reasoning
 		}
 
+		// Preserve reasoning content from previous assistant messages
+		// This is critical for models like z-ai/glm-4.7-flash that use reasoning tokens
+		if msg.ReasoningContent != "" && p.config.Conversion.ReasoningContentField != "" {
+			convertedMsg[p.config.Conversion.ReasoningContentField] = msg.ReasoningContent
+		}
+
 		// Preserve tool calls if present
 		if len(msg.ToolCalls) > 0 {
 			convertedMsg["tool_calls"] = p.convertToolCalls(msg.ToolCalls)

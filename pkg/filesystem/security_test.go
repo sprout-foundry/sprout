@@ -12,16 +12,20 @@ func TestSafeResolvePath(t *testing.T) {
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "ledit-security-test-")
+	// Create a test directory in the user's home directory (not /tmp to avoid the /tmp exception)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatalf("Failed to get home dir: %v", err)
+	}
+	tempDir := filepath.Join(homeDir, ".ledit-test-path-security")
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		t.Fatalf("Failed to create test dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Change to temp directory
+	// Change to test directory
 	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("Failed to chdir to temp: %v", err)
+		t.Fatalf("Failed to chdir to test dir: %v", err)
 	}
 
 	// Create test file structure
@@ -57,25 +61,25 @@ func TestSafeResolvePath(t *testing.T) {
 			name:             "path traversal attempt - absolute",
 			path:             "/etc/passwd",
 			wantErr:          true,
-			anyErrorContains: []string{"security violation", "failed to resolve", "no such file"},
+			anyErrorContains: []string{"file access outside working directory", "failed to resolve", "no such file"},
 		},
 		{
 			name:             "path traversal attempt - parent",
 			path:             "../../../etc/passwd",
 			wantErr:          true,
-			anyErrorContains: []string{"security violation", "no such file"},
+			anyErrorContains: []string{"file access outside working directory", "no such file"},
 		},
 		{
 			name:             "path traversal attempt - dotdot",
 			path:             "../test.txt",
 			wantErr:          true,
-			anyErrorContains: []string{"security violation", "no such file"},
+			anyErrorContains: []string{"file access outside working directory", "no such file"},
 		},
 		{
 			name:             "path traversal attempt - windows style",
 			path:             "..\\test.txt",
 			wantErr:          true,
-			anyErrorContains: []string{"security violation", "no such file"},
+			anyErrorContains: []string{"file access outside working directory", "no such file"},
 		},
 		{
 			name:             "empty path",
@@ -123,16 +127,20 @@ func TestSafeResolvePathSymlinks(t *testing.T) {
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "ledit-symlink-test-")
+	// Create a test directory in the user's home directory (not /tmp to avoid the /tmp exception)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatalf("Failed to get home dir: %v", err)
+	}
+	tempDir := filepath.Join(homeDir, ".ledit-test-symlink-security")
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		t.Fatalf("Failed to create test dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Change to temp directory
+	// Change to test directory
 	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("Failed to chdir to temp: %v", err)
+		t.Fatalf("Failed to chdir to test dir: %v", err)
 	}
 
 	// Create test directory and file
@@ -194,16 +202,20 @@ func TestSafeResolvePathForWrite(t *testing.T) {
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "ledit-security-write-test-")
+	// Create a test directory in the user's home directory (not /tmp to avoid the /tmp exception)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatalf("Failed to get home dir: %v", err)
+	}
+	tempDir := filepath.Join(homeDir, ".ledit-test-write-security")
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		t.Fatalf("Failed to create test dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Change to temp directory
+	// Change to test directory
 	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("Failed to chdir to temp: %v", err)
+		t.Fatalf("Failed to chdir to test dir: %v", err)
 	}
 
 	// Create test directory

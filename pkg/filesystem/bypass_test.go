@@ -13,22 +13,25 @@ func TestSafeResolvePathWithBypass(t *testing.T) {
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "ledit-security-bypass-test-")
+	// Create a test directory in the user's home directory (not /tmp to avoid the /tmp exception)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatalf("Failed to get home dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	testDir := filepath.Join(homeDir, ".ledit-test-security")
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		t.Fatalf("Failed to create test dir: %v", err)
+	}
+	defer os.RemoveAll(testDir)
 
-	// Change to temp directory
-	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("Failed to chdir to temp: %v", err)
+	// Change to test directory
+	if err := os.Chdir(testDir); err != nil {
+		t.Fatalf("Failed to chdir to test dir: %v", err)
 	}
 
 	// Create a test file in a sibling directory (outside working directory)
-	siblingDirName := "sibling-test-dir-" + filepath.Base(filepath.Dir(tempDir))
-	siblingDir := filepath.Join(filepath.Dir(tempDir), siblingDirName)
-	if err := os.Mkdir(siblingDir, 0755); err != nil {
+	siblingDir := filepath.Join(homeDir, ".ledit-test-sibling")
+	if err := os.MkdirAll(siblingDir, 0755); err != nil {
 		t.Fatalf("Failed to create sibling dir: %v", err)
 	}
 	defer os.RemoveAll(siblingDir)
@@ -49,7 +52,7 @@ func TestSafeResolvePathWithBypass(t *testing.T) {
 			ctx:        context.Background(),
 			path:       siblingFile,
 			wantErr:    true,
-			errorContains: "security violation",
+			errorContains: "file access outside working directory",
 		},
 		{
 			name:       "bypass ctx - path outside working dir allowed",
@@ -82,19 +85,23 @@ func TestSafeResolvePathForWriteWithBypass(t *testing.T) {
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
-	tempDir, err := os.MkdirTemp("", "ledit-write-bypass-test-")
+	// Create a test directory in the user's home directory (not /tmp to avoid the /tmp exception)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatalf("Failed to get home dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	testDir := filepath.Join(homeDir, ".ledit-test-write")
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		t.Fatalf("Failed to create test dir: %v", err)
+	}
+	defer os.RemoveAll(testDir)
 
-	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("Failed to chdir to temp: %v", err)
+	if err := os.Chdir(testDir); err != nil {
+		t.Fatalf("Failed to chdir to test dir: %v", err)
 	}
 
-	siblingDirName := "sibling-write-dir-" + filepath.Base(filepath.Dir(tempDir))
-	siblingDir := filepath.Join(filepath.Dir(tempDir), siblingDirName)
-	if err := os.Mkdir(siblingDir, 0755); err != nil {
+	siblingDir := filepath.Join(homeDir, ".ledit-test-write-sibling")
+	if err := os.MkdirAll(siblingDir, 0755); err != nil {
 		t.Fatalf("Failed to create sibling write dir: %v", err)
 	}
 	defer os.RemoveAll(siblingDir)
@@ -111,7 +118,7 @@ func TestSafeResolvePathForWriteWithBypass(t *testing.T) {
 			ctx:        context.Background(),
 			path:       filepath.Join(siblingDir, "newfile.txt"),
 			wantErr:    true,
-			errorContains: "security violation",
+			errorContains: "file write outside working directory",
 		},
 		{
 			name:       "bypass ctx - write outside working dir allowed",

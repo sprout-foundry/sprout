@@ -364,6 +364,45 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		return ch.handleMalformedToolCalls(contentUsed, turn)
 	}
 
+	// Handle finish reason FIRST to respect model's intent
+	// This must happen BEFORE blank/repetitive content checks to avoid forcing continuation
+	// when the model has explicitly signaled completion
+	ch.agent.debugLog("🔍 Finish reason received: '%s' (len=%d)\n", choice.FinishReason, len(choice.FinishReason))
+	contentPreview := contentUsed
+	if len(contentPreview) > 200 {
+		contentPreview = contentPreview[:200] + "..."
+	}
+	ch.agent.debugLog("🔍 Content length: %d, preview: %q\n", len(contentUsed), contentPreview)
+
+	if choice.FinishReason == "" {
+		// No finish reason provided - model expects to continue working
+		// BUT: First check if this is truly incomplete or just a streaming artifact
+		// Some providers don't send finish_reason in every chunk
+		// Only continue if the response actually appears incomplete
+		isIncomplete := ch.responseValidator.IsIncomplete(contentUsed)
+		ch.agent.debugLog("🔍 IsIncomplete() result: %v\n", isIncomplete)
+
+		if !isIncomplete {
+			// Response looks complete despite no finish_reason - accept it
+			ch.agent.debugLog("✅ No finish_reason but response appears complete - accepting\n")
+			ch.displayFinalResponse(contentUsed)
+			return ch.finalizeTurn(turn, true)
+		}
+		ch.agent.debugLog("🔄 No finish reason and response appears incomplete - asking model to continue\n")
+		return ch.finalizeTurn(turn, false) // Continue conversation
+	}
+
+	// Check if model explicitly signaled completion - respect it BEFORE other checks
+	if shouldStop, stopReason := ch.handleFinishReason(choice.FinishReason, contentUsed); shouldStop {
+		turn.GuardrailTrigger = stopReason
+		if stopReason == "completion" || stopReason == "implicit completion" {
+			turn.CompletionReached = true
+		}
+		return ch.finalizeTurn(turn, shouldStop)
+	}
+
+	// Only check for blank/repetitive content if finish_reason indicates continuation
+	// (e.g., "tool_calls", "length", or other non-stop reasons)
 	// Check for blank iteration (no content and no tool calls)
 	isBlankIteration := ch.isBlankIteration(contentUsed, choice.Message.ToolCalls)
 
@@ -413,40 +452,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ch.consecutiveBlankIterations = 0
 	}
 
-	// Handle finish reason to respect model's intent
-	ch.agent.debugLog("🔍 Finish reason received: '%s' (len=%d)\n", choice.FinishReason, len(choice.FinishReason))
-	contentPreview := contentUsed
-	if len(contentPreview) > 200 {
-		contentPreview = contentPreview[:200] + "..."
-	}
-	ch.agent.debugLog("🔍 Content length: %d, preview: %q\n", len(contentUsed), contentPreview)
-
-	if choice.FinishReason == "" {
-		// No finish reason provided - model expects to continue working
-		// BUT: First check if this is truly incomplete or just a streaming artifact
-		// Some providers don't send finish_reason in every chunk
-		// Only continue if the response actually appears incomplete
-		isIncomplete := ch.responseValidator.IsIncomplete(contentUsed)
-		ch.agent.debugLog("🔍 IsIncomplete() result: %v\n", isIncomplete)
-
-		if !isIncomplete {
-			// Response looks complete despite no finish_reason - accept it
-			ch.agent.debugLog("✅ No finish_reason but response appears complete - accepting\n")
-			ch.displayFinalResponse(contentUsed)
-			return ch.finalizeTurn(turn, true)
-		}
-		ch.agent.debugLog("🔄 No finish reason and response appears incomplete - asking model to continue\n")
-		return ch.finalizeTurn(turn, false) // Continue conversation
-	}
-
-	if shouldStop, stopReason := ch.handleFinishReason(choice.FinishReason, contentUsed); shouldStop {
-		turn.GuardrailTrigger = stopReason
-		if stopReason == "completion" || stopReason == "implicit completion" {
-			turn.CompletionReached = true
-		}
-		return ch.finalizeTurn(turn, shouldStop)
-	}
-
+	// Final check for incomplete responses (only reached if not stopped and not blank/repetitive)
 	if ch.responseValidator.IsIncomplete(contentUsed) {
 		ch.agent.debugLog("⚠️ Response appears incomplete, asking model to continue\n")
 		ch.handleIncompleteResponse()

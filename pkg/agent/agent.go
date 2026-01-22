@@ -59,6 +59,9 @@ type Agent struct {
 	changeTracker         *ChangeTracker                 // Track file changes for rollback support
 	mcpManager            mcp.MCPManager                 // MCP server management
 	mcpToolsCache         []api.Tool                     // Cached MCP tools to avoid reloading
+	mcpInitialized        bool                           // Track whether MCP has been initialized
+	mcpInitErr            error                          // Store initialization error
+	mcpInitMu             sync.Mutex                    // Protect concurrent initialization
 	circuitBreaker        *CircuitBreakerState           // Track repetitive actions
 	conversationPruner    *ConversationPruner            // Automatic conversation pruning
 	completionSummarizer  *CompletionContextSummarizer   // Completion context summarization
@@ -379,20 +382,22 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	agent.changeTracker = NewChangeTracker(agent, "")
 	agent.changeTracker.Enable() // Start enabled by default
 
-	// Initialize MCP manager
+	// Pre-initialize tool registry to avoid first-use overhead
+	if debug {
+		fmt.Printf("⚙️  Pre-initializing tool registry...\n")
+	}
+	InitializeToolRegistry()
+	if debug {
+		fmt.Printf("✓ Tool registry initialized\n")
+	}
+
+	// Initialize MCP manager (but don't start servers yet - lazy load)
 	agent.mcpManager = mcp.NewMCPManager(nil)
+	// MCP servers will be initialized on first use to improve startup performance
 
 	// Initialize circuit breaker
 	agent.circuitBreaker = &CircuitBreakerState{
 		Actions: make(map[string]*CircuitBreakerAction),
-	}
-
-	// Initialize MCP if config has it enabled
-	if err := agent.initializeMCP(); err != nil {
-		// Non-fatal - MCP is optional
-		if debug {
-			fmt.Printf("⚠️  MCP initialization skipped: %v\n", err)
-		}
 	}
 
 	// Load command history from configuration
@@ -788,15 +793,46 @@ func (a *Agent) RefreshMCPTools() error {
 func (a *Agent) getMCPTools() []api.Tool {
 	if a.mcpManager == nil {
 		if a.debug {
-			fmt.Printf("⚠️  Warning: MCP manager is nil\n")
+			a.debugLog("⚠️  Warning: MCP manager is nil\n")
 		}
+		return nil
+	}
+
+	// Initialize MCP on first use (lazy loading for better startup performance)
+	a.mcpInitMu.Lock()
+	defer a.mcpInitMu.Unlock()
+
+	if !a.mcpInitialized {
+		if a.debug {
+			a.debugLog("⚙️  Initializing MCP (first use)...\n")
+		}
+		if err := a.initializeMCP(); err != nil {
+			// Non-fatal - MCP is optional
+			a.mcpInitErr = err
+			if a.debug {
+				a.debugLog("⚠️  MCP initialization failed: %v\n", err)
+			}
+			// Don't set mcpInitialized to allow retry
+			a.mcpInitialized = false
+		} else {
+			// Success - mark as initialized
+			a.mcpInitialized = true
+			a.mcpInitErr = nil
+			if a.debug {
+				a.debugLog("✅ MCP initialized\n")
+			}
+		}
+	}
+
+	// Return nil if not initialized
+	if !a.mcpInitialized {
 		return nil
 	}
 
 	// Return cached tools if available
 	if a.mcpToolsCache != nil {
 		if a.debug {
-			fmt.Printf("🔧 Using cached MCP tools: %d\n", len(a.mcpToolsCache))
+			a.debugLog("🔧 Using cached MCP tools: %d\n", len(a.mcpToolsCache))
 		}
 		return a.mcpToolsCache
 	}
@@ -805,13 +841,13 @@ func (a *Agent) getMCPTools() []api.Tool {
 	mcpTools, err := a.mcpManager.GetAllTools(ctx)
 	if err != nil {
 		if a.debug {
-			fmt.Printf("⚠️  Warning: Failed to get MCP tools: %v\n", err)
+			a.debugLog("⚠️  Warning: Failed to get MCP tools: %v\n", err)
 		}
 		return nil
 	}
 
 	if a.debug {
-		fmt.Printf("🔧 Loading %d MCP tools from manager (first time)\n", len(mcpTools))
+		a.debugLog("🔧 Loading %d MCP tools from manager (first time)\n", len(mcpTools))
 	}
 
 	var agentTools []api.Tool

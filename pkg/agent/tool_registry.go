@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
@@ -53,13 +54,22 @@ type ToolRegistry struct {
 }
 
 var defaultToolRegistry *ToolRegistry
+var registryOnce sync.Once
 
-// GetToolRegistry returns the default tool registry
+// GetToolRegistry returns the default tool registry, initializing it lazily if needed (thread-safe)
 func GetToolRegistry() *ToolRegistry {
-	if defaultToolRegistry == nil {
+	registryOnce.Do(func() {
 		defaultToolRegistry = newDefaultToolRegistry()
-	}
+	})
 	return defaultToolRegistry
+}
+
+// InitializeToolRegistry pre-creates the tool registry to avoid first-use overhead
+// This should be called during agent initialization for better performance
+func InitializeToolRegistry() {
+	registryOnce.Do(func() {
+		defaultToolRegistry = newDefaultToolRegistry()
+	})
 }
 
 // newDefaultToolRegistry creates the registry with all tool configurations

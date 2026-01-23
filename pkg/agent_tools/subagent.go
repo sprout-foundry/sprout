@@ -120,6 +120,15 @@ func RunSubagent(prompt, model, provider string) (map[string]string, error) {
 
 	cmd := exec.CommandContext(ctx, leditPath, args...)
 
+	// Propagate important environment variables to subagent processes
+	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1")
+	if debug := os.Getenv("LEDIT_DEBUG"); debug != "" {
+		cmd.Env = append(cmd.Env, "LEDIT_DEBUG="+debug)
+	}
+	if unsafe := os.Getenv("LEDIT_UNSAFE_MODE"); unsafe != "" {
+		cmd.Env = append(cmd.Env, "LEDIT_UNSAFE_MODE="+unsafe)
+	}
+
 	// Capture stdout and stderr
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -301,6 +310,15 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 	}
 
 	cmd := exec.CommandContext(ctx, leditPath, args...)
+
+	// Propagate important environment variables to subagent processes
+	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1")
+	if debug := os.Getenv("LEDIT_DEBUG"); debug != "" {
+		cmd.Env = append(cmd.Env, "LEDIT_DEBUG="+debug)
+	}
+	if unsafe := os.Getenv("LEDIT_UNSAFE_MODE"); unsafe != "" {
+		cmd.Env = append(cmd.Env, "LEDIT_UNSAFE_MODE="+unsafe)
+	}
 
 	// Capture stdout and stderr
 	var stdout, stderr bytes.Buffer

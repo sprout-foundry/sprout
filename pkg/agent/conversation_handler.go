@@ -376,20 +376,27 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	if choice.FinishReason == "" {
 		// No finish reason provided - model expects to continue working
-		// BUT: First check if this is truly incomplete or just a streaming artifact
-		// Some providers don't send finish_reason in every chunk
-		// Only continue if the response actually appears incomplete
-		isIncomplete := ch.responseValidator.IsIncomplete(contentUsed)
-		ch.agent.debugLog("🔍 IsIncomplete() result: %v\n", isIncomplete)
+		// First check if this is a blank iteration - if so, fall through to blank iteration handling
+		// Blank responses should not be treated as "complete" just because they're not "incomplete"
+		if ch.isBlankIteration(contentUsed, choice.Message.ToolCalls) {
+			ch.agent.debugLog("🔍 Blank response with no finish reason - falling through to blank iteration handling\n")
+			// Fall through to blank iteration handling below
+		} else {
+			// Not a blank iteration - check if truly incomplete or just a streaming artifact
+			// Some providers don't send finish_reason in every chunk
+			// Only continue if the response actually appears incomplete
+			isIncomplete := ch.responseValidator.IsIncomplete(contentUsed)
+			ch.agent.debugLog("🔍 IsIncomplete() result: %v\n", isIncomplete)
 
-		if !isIncomplete {
-			// Response looks complete despite no finish_reason - accept it
-			ch.agent.debugLog("✅ No finish_reason but response appears complete - accepting\n")
-			ch.displayFinalResponse(contentUsed)
-			return ch.finalizeTurn(turn, true)
+			if !isIncomplete {
+				// Response looks complete despite no finish_reason - accept it
+				ch.agent.debugLog("✅ No finish_reason but response appears complete - accepting\n")
+				ch.displayFinalResponse(contentUsed)
+				return ch.finalizeTurn(turn, true)
+			}
+			ch.agent.debugLog("🔄 No finish reason and response appears incomplete - asking model to continue\n")
+			return ch.finalizeTurn(turn, false) // Continue conversation
 		}
-		ch.agent.debugLog("🔄 No finish reason and response appears incomplete - asking model to continue\n")
-		return ch.finalizeTurn(turn, false) // Continue conversation
 	}
 
 	// Check if model explicitly signaled completion - respect it BEFORE other checks

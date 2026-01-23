@@ -185,6 +185,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"prompt", "string", true, []string{}, "The prompt/task for the subagent to execute (required)"},
 			{"context", "string", false, []string{}, "Context from previous subagent work (files created, summaries, etc.)"},
 			{"files", "string", false, []string{}, "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')"},
+			{"auto_files", "bool", false, []string{}, "Automatically extract file paths mentioned in the prompt and include them in the context (default: true)"},
 		},
 		Handler: handleRunSubagent,
 	})
@@ -991,6 +992,61 @@ func handleListTodos(ctx context.Context, a *Agent, args map[string]interface{})
 	return result, nil
 }
 
+// extractFilePathsFromPrompt uses regex to find file paths mentioned in a prompt.
+// Returns a deduplicated list of file paths that exist in the workspace.
+func extractFilePathsFromPrompt(prompt string) []string {
+	// Common patterns for file paths in prompts:
+	// 1. "modify/create/delete FILE_PATH"
+	// 2. "in FILE_PATH"
+	// 3. "file FILE_PATH"
+	// 4. quoted paths: "path/to/file.go" or 'path/to/file.go'
+	// 5. Backtick paths: `path/to/file.go`
+	// 6. Paths with extensions: .go, .js, .py, .ts, .tsx, .jsx, .md, .json, .yaml, .yml, .txt, etc.
+
+	patterns := []string{
+		`"(?:[a-zA-Z]:)?[\w/\-\\.]+\.[\w]+"`,                    // Double-quoted paths with extension
+		`'(?:[a-zA-Z]:)?[\w/\-\\.]+\.[\w]+'`,                    // Single-quoted paths with extension
+		"`(?:[a-zA-Z]:)?[\\w/\\-\\.]+\\.[\\w]+`",                 // Backtick paths with extension
+		`(?:modify|create|delete|update|edit|write|read)\s+["']?([\w/\-\.]+\.[\w]+)`, // Action words + path
+		`(?:in|file|at)\s+["']?([\w/\-\.]+\.[\w]+)`,             // Prepositions + path
+	}
+
+	seen := make(map[string]bool)
+	var filePaths []string
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllStringSubmatch(prompt, -1)
+
+		for _, match := range matches {
+			// Use the last capturing group if available, otherwise use the full match
+			var path string
+			if len(match) > 1 {
+				path = match[len(match)-1]
+			} else {
+				path = match[0]
+			}
+
+			// Clean up the path (remove quotes, backticks)
+			path = strings.Trim(path, "\"'`")
+			path = strings.TrimSpace(path)
+
+			// Validate it looks like a file path (contains extension or slash)
+			if path != "" && (strings.Contains(path, ".") || strings.Contains(path, "/") || strings.Contains(path, "\\")) {
+				// Check if file exists in workspace
+				if _, err := os.Stat(path); err == nil {
+					if !seen[path] {
+						seen[path] = true
+						filePaths = append(filePaths, path)
+					}
+				}
+			}
+		}
+	}
+
+	return filePaths
+}
+
 // extractSubagentSummary parses stdout from a subagent execution to extract key information
 func extractSubagentSummary(stdout string) map[string]string {
 	summary := make(map[string]string)
@@ -1000,6 +1056,9 @@ func extractSubagentSummary(stdout string) map[string]string {
 	var buildStatus string
 	var testStatus string
 	var errors []string
+	var todosCreated []string
+	var commandsExecuted []string
+	var testPassCount, testFailCount int
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -1030,12 +1089,50 @@ func extractSubagentSummary(stdout string) map[string]string {
 			}
 		}
 
-		// Extract test status
+		// Extract test status and counts
 		if strings.Contains(line, "Test:") || strings.Contains(line, "Tests:") {
 			if strings.Contains(line, "✅ Passed") {
 				testStatus = "passed"
 			} else if strings.Contains(line, "✅ Failed") || strings.Contains(line, "❌ Failed") {
 				testStatus = "failed"
+			}
+
+			// Extract test counts (e.g., "Tests: 5 passed, 2 failed")
+			re := regexp.MustCompile(`(\d+)\s+passed`)
+			if matches := re.FindStringSubmatch(line); len(matches) > 1 {
+				fmt.Sscanf(matches[1], "%d", &testPassCount)
+			}
+			re = regexp.MustCompile(`(\d+)\s+failed`)
+			if matches := re.FindStringSubmatch(line); len(matches) > 1 {
+				fmt.Sscanf(matches[1], "%d", &testFailCount)
+			}
+		}
+
+		// Extract todo list operations
+		if strings.Contains(line, "TodoWrite") || strings.Contains(line, "todo list") {
+			// Look for patterns like "Added 3 todos" or "Marked 2 todos as completed"
+			todoRe := regexp.MustCompile(`(Added|Marked|Created|Updated|Completed|Removed)\s+(\d+)\s+todos?`)
+			if matches := todoRe.FindStringSubmatch(line); len(matches) > 2 {
+				todosCreated = append(todosCreated, matches[0])
+			}
+		}
+
+		// Extract shell commands executed
+		if strings.Contains(line, "$") || strings.Contains(line, "shell_command") {
+			// Look for command execution patterns
+			if strings.HasPrefix(line, "$") {
+				// Extract command after $
+				cmd := strings.TrimSpace(strings.TrimPrefix(line, "$"))
+				if cmd != "" {
+					commandsExecuted = append(commandsExecuted, cmd)
+				}
+			}
+			// Also look for explicit shell command mentions
+			if strings.Contains(line, "Executing command") || strings.Contains(line, "Running") {
+				cmdRe := regexp.MustCompile(`(?:command|Running):\s+([^\n]+)`)
+				if matches := cmdRe.FindStringSubmatch(line); len(matches) > 1 {
+					commandsExecuted = append(commandsExecuted, strings.TrimSpace(matches[1]))
+				}
 			}
 		}
 
@@ -1053,9 +1150,24 @@ func extractSubagentSummary(stdout string) map[string]string {
 	}
 	if testStatus != "" {
 		summary["test_status"] = testStatus
+		if testPassCount > 0 || testFailCount > 0 {
+			summary["test_counts"] = fmt.Sprintf("%d passed, %d failed", testPassCount, testFailCount)
+		}
 	}
 	if len(errors) > 0 {
 		summary["errors"] = strings.Join(errors, "; ")
+	}
+	if len(todosCreated) > 0 {
+		summary["todos"] = strings.Join(todosCreated, "; ")
+	}
+	if len(commandsExecuted) > 0 {
+		// Limit to first 10 commands to avoid overwhelming output
+		if len(commandsExecuted) > 10 {
+			commandsExecuted = commandsExecuted[:10]
+			summary["commands"] = strings.Join(commandsExecuted, "; ") + "..."
+		} else {
+			summary["commands"] = strings.Join(commandsExecuted, "; ")
+		}
 	}
 
 	return summary
@@ -1066,6 +1178,10 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	if err != nil {
 		return "", err
 	}
+
+	// Log the subagent execution for visibility
+	a.ToolLog("spawning subagent", fmt.Sprintf("task=%q", truncateString(prompt, 60)))
+	a.debugLog("Spawning subagent with task: %s\n", truncateString(prompt, 100))
 
 	// Parse optional context parameter
 	var context string
@@ -1090,39 +1206,76 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			}
 			filesStr = strings.Join(files, ",")
 			a.debugLog("Subagent files provided: %s\n", filesStr)
+		}
+	}
 
-			// Validate each file path before proceeding
-			for _, filePath := range files {
-				// Clean the path to eliminate any . or redundant separators
-				cleanedPath := filepath.Clean(filePath)
-				absPath, err := filepath.Abs(cleanedPath)
-				if err != nil {
-					return "", fmt.Errorf("failed to resolve absolute path for %s: %w", filePath, err)
-				}
+	// Parse auto_files parameter (default: true)
+	autoFiles := true // Default to true
+	if autoFilesVal, ok := args["auto_files"]; ok && autoFilesVal != nil {
+		if autoFilesBool, ok := autoFilesVal.(bool); ok {
+			autoFiles = autoFilesBool
+			a.debugLog("Auto files: %v\n", autoFiles)
+		}
+	}
 
-				// Get workspace directory (current working directory)
-				workspaceDir, err := os.Getwd()
-				if err != nil {
-					return "", fmt.Errorf("failed to get workspace directory: %w", err)
+	// Automatically extract file paths from prompt if auto_files is enabled
+	if autoFiles {
+		extractedFiles := extractFilePathsFromPrompt(prompt)
+		if len(extractedFiles) > 0 {
+			a.debugLog("Auto-extracted %d file paths from prompt: %v\n", len(extractedFiles), extractedFiles)
+			// Add extracted files that aren't already in the list
+			for _, extractedFile := range extractedFiles {
+				alreadyIncluded := false
+				for _, existingFile := range files {
+					if existingFile == extractedFile {
+						alreadyIncluded = true
+						break
+					}
 				}
-				absWorkspaceDir, err := filepath.Abs(workspaceDir)
-				if err != nil {
-					return "", fmt.Errorf("failed to resolve absolute workspace path: %w", err)
+				if !alreadyIncluded {
+					files = append(files, extractedFile)
+					a.debugLog("Added auto-extracted file: %s\n", extractedFile)
 				}
-
-				// Verify the file is within the workspace
-				if !strings.HasPrefix(absPath, absWorkspaceDir+string(filepath.Separator)) && absPath != absWorkspaceDir {
-					return "", fmt.Errorf("file path is outside workspace: %s (workspace: %s)", filePath, absWorkspaceDir)
-				}
-
-				// Verify the file exists (missing is OK - subagent can create it)
-				if _, err := os.Stat(absPath); err != nil && !os.IsNotExist(err) {
-					return "", fmt.Errorf("failed to access file %s: %w", filePath, err)
-				}
-
-				a.debugLog("Validated file path: %s -> %s\n", filePath, absPath)
+			}
+			// Update filesStr to include auto-extracted files
+			if filesStr != "" {
+				filesStr = strings.Join(files, ",")
+			} else {
+				filesStr = strings.Join(files, ",")
 			}
 		}
+	}
+
+	// Validate each file path before proceeding
+	for _, filePath := range files {
+		// Clean the path to eliminate any . or redundant separators
+		cleanedPath := filepath.Clean(filePath)
+		absPath, err := filepath.Abs(cleanedPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve absolute path for %s: %w", filePath, err)
+		}
+
+		// Get workspace directory (current working directory)
+		workspaceDir, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get workspace directory: %w", err)
+		}
+		absWorkspaceDir, err := filepath.Abs(workspaceDir)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve absolute workspace path: %w", err)
+		}
+
+		// Verify the file is within the workspace
+		if !strings.HasPrefix(absPath, absWorkspaceDir+string(filepath.Separator)) && absPath != absWorkspaceDir {
+			return "", fmt.Errorf("file path is outside workspace: %s (workspace: %s)", filePath, absWorkspaceDir)
+		}
+
+		// Verify the file exists (missing is OK - subagent can create it)
+		if _, err := os.Stat(absPath); err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("failed to access file %s: %w", filePath, err)
+		}
+
+		a.debugLog("Validated file path: %s -> %s\n", filePath, absPath)
 	}
 
 	// Build enhanced prompt with context and files
@@ -1133,6 +1286,18 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		enhancedPrompt.WriteString("# Previous Work Context\n\n")
 		enhancedPrompt.WriteString(context)
 		enhancedPrompt.WriteString("\n\n---\n\n")
+	}
+
+	// Add recent session work summary if available
+	if len(a.taskActions) > 0 {
+		enhancedPrompt.WriteString("# Recent Work in This Session\n\n")
+		for i, action := range a.taskActions {
+			// Show last 10 actions to avoid overwhelming the subagent
+			if i >= len(a.taskActions)-10 {
+				enhancedPrompt.WriteString(fmt.Sprintf("- %s: %s\n", action.Type, action.Description))
+			}
+		}
+		enhancedPrompt.WriteString("\n---\n\n")
 	}
 
 	// Add relevant files section if provided
@@ -1229,6 +1394,12 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		return "", fmt.Errorf("failed to marshal subagent result: %w", jsonErr)
 	}
 
+	// Log subagent completion
+	exitCode := "0"
+	if ec, ok := resultMap["exit_code"]; ok {
+		exitCode = ec
+	}
+	a.ToolLog("subagent completed", fmt.Sprintf("exit_code=%s", exitCode))
 	a.debugLog("Subagent spawn result: %s\n", string(jsonBytes))
 	return string(jsonBytes), nil
 }
@@ -1244,6 +1415,10 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	if !ok {
 		return "", fmt.Errorf("tasks must be an array")
 	}
+
+	// Log the parallel subagent execution for visibility
+	a.ToolLog("spawning parallel subagents", fmt.Sprintf("%d tasks", len(tasksSlice)))
+	a.debugLog("Spawning %d parallel subagents\n", len(tasksSlice))
 
 	var parallelTasks []tools.ParallelSubagentTask
 	for _, taskRaw := range tasksSlice {
@@ -1299,6 +1474,9 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	}
 
 	a.debugLog("Parallel subagents spawn result: %s\n", string(jsonBytes))
+
+	// Log parallel subagent completion
+	a.ToolLog("parallel subagents completed", fmt.Sprintf("%d tasks", len(resultMap)))
 	return string(jsonBytes), nil
 }
 

@@ -5,12 +5,45 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
+
+// getToolTimeout returns the timeout duration for tool execution
+// Subagents get 30 minutes (for large file operations), other tools get 5 minutes
+// Can be overridden via LEDIT_TOOL_TIMEOUT environment variable (in seconds)
+func getToolTimeout(toolName string) time.Duration {
+	// Check for environment variable override first
+	if envTimeout := os.Getenv("LEDIT_TOOL_TIMEOUT"); envTimeout != "" {
+		if seconds, err := strconv.Atoi(envTimeout); err == nil && seconds > 0 {
+			return time.Duration(seconds) * time.Second
+		}
+	}
+
+	// Tool-specific defaults
+	// Subagents can take a long time for large file operations
+	if isSubagentTool(toolName) {
+		return 30 * time.Minute
+	}
+
+	// Default timeout for regular tools
+	return 5 * time.Minute
+}
+
+// isSubagentTool checks if a tool is a subagent that needs extended timeout
+func isSubagentTool(toolName string) bool {
+	switch toolName {
+	case "run_subagent", "run_parallel_subagents":
+		return true
+	default:
+		return false
+	}
+}
 
 // ToolExecutor handles tool execution logic
 type ToolExecutor struct {
@@ -208,7 +241,10 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	}
 
 	// Create a context with a timeout for the tool execution
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Subagents get 30 minutes (for large file operations), other tools get 5 minutes
+	// Can be overridden via LEDIT_TOOL_TIMEOUT environment variable
+	toolTimeout := getToolTimeout(toolCall.Function.Name)
+	ctx, cancel := context.WithTimeout(context.Background(), toolTimeout)
 	defer cancel()
 
 	// Create a channel to receive the result of the tool execution
@@ -251,7 +287,7 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		result = res.result
 		err = res.err
 	case <-ctx.Done():
-		err = fmt.Errorf("tool execution timed out after 5 minutes")
+		err = fmt.Errorf("tool execution timed out after %v", toolTimeout)
 	case <-te.agent.interruptCtx.Done():
 		err = fmt.Errorf("tool execution interrupted by user")
 	}

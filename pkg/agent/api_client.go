@@ -128,11 +128,11 @@ func NewAPIClient(agent *Agent) *APIClient {
 // setTimeoutsFromConfig applies timeout settings from configuration
 func (ac *APIClient) setTimeoutsFromConfig() {
 	// Default timeout values (apply to all providers)
-	// Set to 5 minutes for connection, first-chunk, and inter-chunk timeouts.
-	connectionTimeoutSec := 300
-	firstChunkTimeoutSec := 300
-	chunkTimeoutSec := 300
-	overallTimeoutSec := 600
+	// Increased to handle large file writes and slow token generation
+	connectionTimeoutSec := 300   // 5 minutes to establish connection
+	firstChunkTimeoutSec := 600   // 10 minutes for first response (was 300)
+	chunkTimeoutSec := 600        // 10 minutes between chunks (was 300)
+	overallTimeoutSec := 1800     // 30 minutes total (was 600)
 
 	// Get timeout config if available
 	if config := ac.agent.GetConfig(); config != nil && config.APITimeouts != nil {
@@ -191,10 +191,10 @@ func (ac *APIClient) setTimeoutsFromConfig() {
 		// OpenRouter: Use extended timeouts for high-latency models
 		// Some models routed through OpenRouter can have significant latency
 		// especially after tool execution when processing large tool results
-		ac.connectionTimeout = 120 * time.Second  // 2 minutes to establish connection
-		ac.firstChunkTimeout = 600 * time.Second  // 10 minutes for first chunk
-		ac.chunkTimeout = 300 * time.Second       // 5 minutes between chunks
-		ac.overallTimeout = 900 * time.Second     // 15 minutes total (allows for tool execution + final response)
+		ac.connectionTimeout = 120 * time.Second // 2 minutes to establish connection
+		ac.firstChunkTimeout = 600 * time.Second // 10 minutes for first chunk
+		ac.chunkTimeout = 300 * time.Second      // 5 minutes between chunks
+		ac.overallTimeout = 900 * time.Second    // 15 minutes total (allows for tool execution + final response)
 	}
 
 	if ac.agent.debug {

@@ -396,25 +396,20 @@ func (ir *InputReader) Refresh() {
 	currentLineCount := (totalLength + ir.terminalWidth - 1) / ir.terminalWidth
 	previousLineCount := (ir.lastLineLength + ir.terminalWidth - 1) / ir.terminalWidth
 
-	// Move to start of line
+	// Move to start of current line
 	fmt.Printf("\r")
 
-	// If we had multiple lines before, clear them all
+	// Clear old content based on how many lines it occupied
+	// If we had multi-line content, we need to clear all wrapped lines
 	if previousLineCount > 1 {
-		// Move cursor up to the start of the first line if we had wrapped content
-		fmt.Printf("%s", MoveCursorUpSeq(previousLineCount-1))
-
-		// Clear all old lines FIRST, before drawing new content
-		// This prevents visual artifacts when content shrinks
+		// For multi-line content, clear each line from our current position
+		// We assume cursor is at or near the last line of wrapped content
 		for i := 0; i < previousLineCount; i++ {
-			fmt.Printf("%s%s", ClearLineSeq(), MoveCursorDownSeq(1))
+			fmt.Printf("%s", ClearLineSeq())
+			if i < previousLineCount-1 {
+				fmt.Printf("%s", MoveCursorUpSeq(1))
+			}
 		}
-
-		// Move back up to the first line
-		// After the loop above, we're at line `previousLineCount`
-		// We need to go back to line 0, so move up `previousLineCount` lines
-		fmt.Printf("%s", MoveCursorUpSeq(previousLineCount))
-		fmt.Printf("\r") // Back to start of first line
 	} else {
 		// Single line - just clear it
 		fmt.Printf("%s", ClearLineSeq())
@@ -423,10 +418,8 @@ func (ir *InputReader) Refresh() {
 	// Redraw the prompt and line content
 	fmt.Printf("%s%s", ir.prompt, ir.line)
 
-	// Clear any trailing content if current line is shorter than terminal width
-	if totalLength%ir.terminalWidth != 0 {
-		fmt.Printf("%s", ClearToEndOfLineSeq())
-	}
+	// Clear any trailing content on the last line
+	fmt.Printf("%s", ClearToEndOfLineSeq())
 
 	// Update tracked length AFTER drawing
 	ir.lastLineLength = totalLength

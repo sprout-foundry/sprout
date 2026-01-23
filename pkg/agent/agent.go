@@ -702,7 +702,21 @@ func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 
 // initializeMCP initializes MCP configuration and starts servers if needed
 func (a *Agent) initializeMCP() error {
+	if a.configManager == nil {
+		if a.debug {
+			fmt.Println("🔧 Config manager is nil, skipping MCP initialization")
+		}
+		return nil
+	}
+
 	config := a.configManager.GetConfig()
+	if config == nil {
+		if a.debug {
+			fmt.Println("🔧 Config is nil, skipping MCP initialization")
+		}
+		return nil
+	}
+
 	if !config.MCP.Enabled {
 		if a.debug {
 			fmt.Println("🔧 MCP is disabled in configuration")

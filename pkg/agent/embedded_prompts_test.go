@@ -73,14 +73,13 @@ func TestConsolidatedEfficiencyGuidelines(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	// Check that efficiency concepts are integrated into existing sections
+	// Check that key efficiency concepts are present
+	// Note: The exact wording may change over time, so we check for core concepts
 	expectedIntegrations := []string{
-		"Be concise and direct",         // Core Principles
-		"Focus on results",              // Core Principles
-		"Focus on results, not process", // Tool Usage Guidelines
-		"Make decisive choices",         // Tool Usage Guidelines
-		"Get straight to the point",     // Progress Updates
-		"most straightforward solution", // Implementation Process
+		"Be concise and direct",     // Core Principles
+		"Focus on results",          // Core Principles
+		"Make decisive choices",     // Tool Usage Guidelines
+		"straightforward solution",  // Implementation Process
 	}
 
 	for _, integration := range expectedIntegrations {

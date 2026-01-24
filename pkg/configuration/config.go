@@ -229,6 +229,13 @@ func NewConfig() *Config {
 		},
 		HistoryScope: "project", // Default to project-scoped history
 		SubagentTypes: map[string]SubagentType{
+			"general": {
+				ID:           "general",
+				Name:         "General",
+				Description:  "General-purpose subagent for tasks that don't require specialized expertise",
+				SystemPrompt: "pkg/agent/prompts/subagent_prompts/general.md",
+				Enabled:      true,
+			},
 			"coder": {
 				ID:           "coder",
 				Name:         "Coder",

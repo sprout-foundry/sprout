@@ -382,14 +382,27 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "run_subagent",
-				Description: "IMPORTANT: Use this to delegate implementation tasks to subagents. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. This is the PRIMARY way to implement features during execution phase. Use for: creating files, feature implementations, multi-file changes, complex logic. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. Runs synchronously (blocking). 30-minute timeout per subagent.",
+				Description: "Delegate a SINGLE implementation task to a subagent. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. Use this when: (1) Tasks must be done SEQUENTIALLY with dependencies between them, (2) You need to review results before deciding next steps, (3) Working on a single focused feature. For MULTIPLE INDEPENDENT tasks, use run_parallel_subagents instead for faster completion.\n\n**REQUIRED**: You MUST specify a persona parameter. Choose the most appropriate persona for the task:\n- general: General-purpose tasks (default if unsure)\n- debugger: Bug fixing, error investigation, troubleshooting\n- code_reviewer: Security review, code quality, best practices\n- tester: Writing unit tests, test coverage\n- qa_engineer: Test planning, integration testing\n- coder: Feature implementation, writing production code\n- web_researcher: Documentation lookup, API research\n\nThe subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. NO TIMEOUT - runs until completion. Subagent provider and model are configured via config settings (subagent_provider and subagent_model).",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"prompt": map[string]interface{}{
 							"type":        "string",
-							"description": "The prompt/task for the subagent to execute",
+							"description": "The prompt/task for the subagent to execute (required)",
 							"minLength":   1,
+						},
+						"persona": map[string]interface{}{
+							"type":        "string",
+							"description": "REQUIRED: Subagent persona - choose from: general, debugger, code_reviewer, tester, qa_engineer, coder, web_researcher",
+							"enum":        []string{"general", "debugger", "code_reviewer", "tester", "qa_engineer", "coder", "web_researcher"},
+						},
+						"context": map[string]interface{}{
+							"type":        "string",
+							"description": "Context from previous subagent work (files created, summaries, etc.)",
+						},
+						"files": map[string]interface{}{
+							"type":        "string",
+							"description": "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')",
 						},
 						"model": map[string]interface{}{
 							"type":        "string",
@@ -400,7 +413,7 @@ func GetToolDefinitions() []Tool {
 							"description": "Optional: Override provider (e.g., 'openrouter')",
 						},
 					},
-					"required":             []string{"prompt"},
+					"required":             []string{"prompt", "persona"},
 					"additionalProperties": false,
 				},
 			},

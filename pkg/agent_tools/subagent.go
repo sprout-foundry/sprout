@@ -158,7 +158,7 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 	cmd := exec.CommandContext(ctx, leditPath, args...)
 
 	// Propagate important environment variables to subagent processes
-	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1")
+	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1", "LEDIT_SUBAGENT=1")
 	if debug := os.Getenv("LEDIT_DEBUG"); debug != "" {
 		cmd.Env = append(cmd.Env, "LEDIT_DEBUG="+debug)
 	}
@@ -450,7 +450,7 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 	cmd := exec.CommandContext(ctx, leditPath, args...)
 
 	// Propagate important environment variables to subagent processes
-	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1")
+	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1", "LEDIT_SUBAGENT=1")
 	if debug := os.Getenv("LEDIT_DEBUG"); debug != "" {
 		cmd.Env = append(cmd.Env, "LEDIT_DEBUG="+debug)
 	}

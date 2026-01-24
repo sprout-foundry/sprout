@@ -180,13 +180,13 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register run_subagent tool - for multi-agent collaboration
 	registry.RegisterTool(ToolConfig{
 		Name:        "run_subagent",
-		Description: "Delegate a SINGLE implementation task to a subagent. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. Use this when: (1) Tasks must be done SEQUENTIALLY with dependencies between them, (2) You need to review results before deciding next steps, (3) Working on a single focused feature. For MULTIPLE INDEPENDENT tasks, use run_parallel_subagents instead for faster completion. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. NO TIMEOUT - runs until completion. Subagent provider and model are configured via config settings (subagent_provider and subagent_model). Optional persona parameter selects a specialized subagent type (coder, tester, qa_engineer, code_reviewer, debugger, web_researcher).",
+		Description: "Delegate a SINGLE implementation task to a subagent. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. Use this when: (1) Tasks must be done SEQUENTIALLY with dependencies between them, (2) You need to review results before deciding next steps, (3) Working on a single focused feature. For MULTIPLE INDEPENDENT tasks, use run_parallel_subagents instead for faster completion.\n\n**REQUIRED**: You MUST specify a persona parameter. Choose the most appropriate persona for the task:\n- general: General-purpose tasks (default if unsure)\n- debugger: Bug fixing, error investigation, troubleshooting\n- code_reviewer: Security review, code quality, best practices\n- tester: Writing unit tests, test coverage\n- qa_engineer: Test planning, integration testing\n- coder: Feature implementation, writing production code\n- web_researcher: Documentation lookup, API research\n\nThe subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. NO TIMEOUT - runs until completion. Subagent provider and model are configured via config settings (subagent_provider and subagent_model).",
 		Parameters: []ParameterConfig{
 			{"prompt", "string", true, []string{}, "The prompt/task for the subagent to execute (required)"},
+			{"persona", "string", true, []string{}, "REQUIRED: Subagent persona - choose from: general, debugger, code_reviewer, tester, qa_engineer, coder, web_researcher"},
 			{"context", "string", false, []string{}, "Context from previous subagent work (files created, summaries, etc.)"},
 			{"files", "string", false, []string{}, "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')"},
 			{"auto_files", "bool", false, []string{}, "Automatically extract file paths mentioned in the prompt and include them in the context (default: true)"},
-			{"persona", "string", false, []string{}, "Optional subagent persona to use: coder, tester, qa_engineer, code_reviewer, debugger, web_researcher"},
 		},
 		Handler: handleRunSubagent,
 	})
@@ -1245,7 +1245,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
-	// Parse optional persona parameter
+	// Parse persona parameter (required, but default to "general" if not specified)
 	var persona string
 	var systemPromptPath string
 	if personaVal, ok := args["persona"]; ok && personaVal != nil {
@@ -1253,6 +1253,12 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			persona = personaStr
 			a.debugLog("Subagent persona specified: %s\n", persona)
 		}
+	}
+
+	// Default to "general" persona if not specified
+	if persona == "" {
+		persona = "general"
+		a.debugLog("No persona specified, using default: general\n")
 	}
 
 	// Automatically extract file paths from prompt if auto_files is enabled

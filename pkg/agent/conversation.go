@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"os"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
@@ -58,6 +59,20 @@ Note: The user cannot see the previous session's responses, so please provide a 
 func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	// Start with standard tools
 	tools := api.GetToolDefinitions()
+
+	// Filter out run_subagent and run_parallel_subagents when running as a subagent
+	// This prevents nested subagents which are inefficient and ineffective
+	if os.Getenv("LEDIT_SUBAGENT") == "1" {
+		filtered := make([]api.Tool, 0, len(tools))
+		for _, tool := range tools {
+			// Skip run_subagent and run_parallel_subagents
+			if tool.Function.Name == "run_subagent" || tool.Function.Name == "run_parallel_subagents" {
+				continue
+			}
+			filtered = append(filtered, tool)
+		}
+		tools = filtered
+	}
 
 	// Add MCP tools if available
 	mcpTools := a.getMCPTools()

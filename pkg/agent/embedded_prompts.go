@@ -82,21 +82,34 @@ func GetEmbeddedSystemPromptWithProvider(provider string) (string, error) {
 // extractSystemPrompt extracts the prompt content from the system_prompt markdown
 func extractSystemPrompt() (string, error) {
 	// The system_prompt.md has the prompt content in a code block
-	// We'll extract everything between the ``` markers
-	const promptStart = "# Ledit"
+	// We need to extract from the first ``` marker to the last ``` marker
+	// to include all content including examples with nested code blocks
 
+	const promptStart = "```"
+
+	// Find the first ``` marker
 	startIdx := strings.Index(systemPromptContent, promptStart)
 	if startIdx == -1 {
-		return "", fmt.Errorf("critical error: system prompt content not found")
+		return "", fmt.Errorf("critical error: system prompt start marker not found")
 	}
 
-	endIdx := strings.Index(systemPromptContent[startIdx:], "```")
-	if endIdx == -1 {
-		// If no closing marker, use the whole content from start
-		return strings.TrimSpace(systemPromptContent[startIdx:]), nil
+	// Skip the opening ``` marker and any following newlines
+	contentStart := startIdx + len(promptStart)
+	for contentStart < len(systemPromptContent) && (systemPromptContent[contentStart] == '\n' || systemPromptContent[contentStart] == '\r') {
+		contentStart++
 	}
 
-	return strings.TrimSpace(systemPromptContent[startIdx : startIdx+endIdx]), nil
+	// Find the LAST ``` marker (this handles nested code blocks)
+	endIdx := strings.LastIndex(systemPromptContent, "```")
+	if endIdx == -1 || endIdx <= startIdx {
+		// If no closing marker, use everything after the start marker
+		return strings.TrimSpace(systemPromptContent[contentStart:]), nil
+	}
+
+	// Extract everything between the first ``` and the last ```
+	promptText := strings.TrimSpace(systemPromptContent[contentStart:endIdx])
+
+	return promptText, nil
 }
 
 // GetEmbeddedPlanningPrompt returns the embedded planning prompt

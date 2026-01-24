@@ -54,6 +54,9 @@ type InputReader struct {
 	terminalWidth  int
 	lastLineLength int
 
+	// Edit tracking for history vs text navigation
+	hasEditedLine bool
+
 	// Paste detection
 	pasteBuffer      strings.Builder
 	pasteTimer       *time.Timer
@@ -93,6 +96,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.line = ""
 	ir.cursorPos = 0
 	ir.historyIndex = -1
+	ir.hasEditedLine = false
 	ir.updateTerminalWidth()
 	ir.lastLineLength = 0
 	ir.pasteBuffer.Reset()
@@ -306,7 +310,8 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 
 // InsertChar inserts a character at the cursor position
 func (ir *InputReader) InsertChar(char string) {
-	// Reset history index when user starts typing after navigating history
+	// Mark line as edited and disconnect from history
+	ir.hasEditedLine = true
 	ir.historyIndex = -1
 
 	before := ir.line[:ir.cursorPos]
@@ -326,7 +331,8 @@ func (ir *InputReader) InsertChar(char string) {
 // Backspace deletes the character before the cursor
 func (ir *InputReader) Backspace() {
 	if ir.cursorPos > 0 {
-		// Reset history index when user modifies line after navigating history
+		// Mark line as edited and disconnect from history
+		ir.hasEditedLine = true
 		ir.historyIndex = -1
 
 		before := ir.line[:ir.cursorPos-1]
@@ -340,7 +346,8 @@ func (ir *InputReader) Backspace() {
 // Delete deletes the character at the cursor position
 func (ir *InputReader) Delete() {
 	if ir.cursorPos < len(ir.line) {
-		// Reset history index when user modifies line after navigating history
+		// Mark line as edited and disconnect from history
+		ir.hasEditedLine = true
 		ir.historyIndex = -1
 
 		before := ir.line[:ir.cursorPos]
@@ -394,6 +401,8 @@ func (ir *InputReader) NavigateHistory(direction int) {
 		}
 	}
 
+	// Reset edit flag when loading from history
+	ir.hasEditedLine = false
 	ir.cursorPos = len(ir.line)
 	ir.Refresh()
 }
@@ -401,8 +410,8 @@ func (ir *InputReader) NavigateHistory(direction int) {
 // NavigateVertically handles both history navigation and multi-line text navigation
 // direction: -1 for up, 1 for down
 func (ir *InputReader) NavigateVertically(direction int) {
-	// If line is empty, navigate history
-	if len(ir.line) == 0 {
+	// Navigate history if: line is empty OR we haven't edited the current line
+	if len(ir.line) == 0 || !ir.hasEditedLine {
 		// Invert direction for history (up arrow = older commands)
 		ir.NavigateHistory(-direction)
 		return

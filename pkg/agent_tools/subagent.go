@@ -1,9 +1,11 @@
 package tools
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -11,6 +13,18 @@ import (
 	"sync"
 	"time"
 )
+
+// StreamCallback is a function that receives streamed output from subagents
+// line is the output line from the subagent
+// taskID is the optional task identifier for parallel subagents
+type StreamCallback func(line string, taskID string)
+
+// emptyStdinReader is a reader that immediately returns EOF
+type emptyStdinReader struct{}
+
+func (r *emptyStdinReader) Read(p []byte) (n int, err error) {
+	return 0, io.EOF
+}
 
 // No timeout for subagent execution - runs until completion
 // Subagents are designed for long-running tasks and should not be restricted
@@ -81,7 +95,7 @@ func GetSubagentTimeout() time.Duration {
 //   - exit_code: Process exit code (0 for success)
 //   - completed: true if process ran to completion (always true for blocking mode)
 //   - timed_out: true if the subprocess was terminated due to timeout (always false with no timeout)
-func RunSubagent(prompt, model, provider string) (map[string]string, error) {
+func RunSubagent(prompt, model, provider string, streamCallback StreamCallback) (map[string]string, error) {
 	// Build command: ledit agent with the given prompt
 	args := []string{"agent"}
 
@@ -118,6 +132,23 @@ func RunSubagent(prompt, model, provider string) (map[string]string, error) {
 		ctx = context.Background()
 	}
 
+	// Open /dev/null for stdin before creating pipes so we can clean up on error
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open /dev/null: %w", err)
+	}
+	defer devNull.Close()
+
+	// Create pipes for stdout and stderr to enable streaming
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
 	cmd := exec.CommandContext(ctx, leditPath, args...)
 
 	// Propagate important environment variables to subagent processes
@@ -129,23 +160,90 @@ func RunSubagent(prompt, model, provider string) (map[string]string, error) {
 		cmd.Env = append(cmd.Env, "LEDIT_UNSAFE_MODE="+unsafe)
 	}
 
-	// Capture stdout and stderr
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Redirect stdin to /dev/null to prevent subagent from inheriting parent's terminal
+	// This ensures the subagent runs in non-interactive mode even if called with no args
+	cmd.Stdin = devNull
 
-	// Run the command and wait for completion (blocking)
-	err = cmd.Run()
+	// Also collect full output for return value
+	var stdoutBuffer, stderrBuffer bytes.Buffer
+
+	// Set up multi-writers: write to both buffer and pipe for streaming
+	// We create a combined writer that sends output to both the buffer (for collection)
+	// and the pipe (for streaming). The pipe's write end must stay open.
+	cmd.Stdout = io.MultiWriter(&stdoutBuffer, stdoutWriter)
+	cmd.Stderr = io.MultiWriter(&stderrBuffer, stderrWriter)
+
+	// Start the command (non-blocking)
+	if err = cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start subagent: %w", err)
+	}
+
+	// Close the write ends of the pipes in the parent process after Start
+	// The child process has its own copies, so it's safe to close ours
+	// NOTE: Don't close these yet - the MultiWriter needs them to stay open
+	// They will be closed automatically when the process exits
+
+	// Stream output in real-time if callback provided
+	var wg sync.WaitGroup
+	if streamCallback != nil {
+		// Stream stdout
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			scanner := bufio.NewScanner(stdoutReader)
+			for scanner.Scan() {
+				line := scanner.Text()
+				// Stream the line to the callback
+				streamCallback(line, "")
+			}
+		}()
+
+		// Stream stderr
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			scanner := bufio.NewScanner(stderrReader)
+			for scanner.Scan() {
+				line := scanner.Text()
+				// Stream stderr lines with a prefix to distinguish them
+				if line != "" {
+					streamCallback("STDERR: "+line, "")
+				}
+			}
+		}()
+	} else {
+		// No callback, just drain the pipes to prevent blocking
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			io.Copy(&stdoutBuffer, stdoutReader)
+		}()
+		go func() {
+			defer wg.Done()
+			io.Copy(&stderrBuffer, stderrReader)
+		}()
+	}
+
+	// Wait for the command to complete
+	err = cmd.Wait()
+
+	// Wait for all streaming to complete
+	wg.Wait()
+
+	// Close readers
+	stdoutReader.Close()
+	stderrReader.Close()
 
 	// Determine exit code and timeout status
 	exitCode := 0
 	timedOut := false
 
 	if err != nil {
-			if timeout > 0 && ctx.Err() == context.DeadlineExceeded {
-		// Timeout occurred (only if timeout was configured)
-		exitCode = 124
-		timedOut = true} else if exitError, ok := err.(*exec.ExitError); ok {
+		if timeout > 0 && ctx.Err() == context.DeadlineExceeded {
+			// Timeout occurred (only if timeout was configured)
+			exitCode = 124
+			timedOut = true
+		} else if exitError, ok := err.(*exec.ExitError); ok {
 			// Command ran but exited with non-zero status
 			exitCode = exitError.ExitCode()
 		} else {
@@ -156,8 +254,8 @@ func RunSubagent(prompt, model, provider string) (map[string]string, error) {
 
 	// Return all output with exit status and timeout indicator
 	return map[string]string{
-		"stdout":    stdout.String(),
-		"stderr":    stderr.String(),
+		"stdout":    stdoutBuffer.String(),
+		"stderr":    stderrBuffer.String(),
 		"exit_code": fmt.Sprintf("%d", exitCode),
 		"completed": "true",
 		"timed_out": fmt.Sprintf("%t", timedOut),
@@ -191,9 +289,10 @@ type ParallelSubagentResult struct {
 // Parameters:
 //   - tasks: List of subagent tasks to run in parallel
 //   - noTimeout: If true, uses context.Background() (no timeout). If false, respects GetSubagentTimeout()
+//   - streamCallback: Optional callback for real-time output streaming
 //
 // Returns map where key is task ID and value contains that task's result
-func RunParallelSubagents(tasks []ParallelSubagentTask, noTimeout bool) (map[string]map[string]string, error) {
+func RunParallelSubagents(tasks []ParallelSubagentTask, noTimeout bool, streamCallback StreamCallback) (map[string]map[string]string, error) {
 	if len(tasks) == 0 {
 		return nil, fmt.Errorf("no tasks provided")
 	}
@@ -210,8 +309,8 @@ func RunParallelSubagents(tasks []ParallelSubagentTask, noTimeout bool) (map[str
 		go func(t ParallelSubagentTask) {
 			defer wg.Done()
 
-			// Use spawnSubagent helper with the provided noTimeout flag
-			result := spawnSubagent(t, noTimeout, callerMethod)
+			// Use spawnSubagent helper with the provided noTimeout flag and stream callback
+			result := spawnSubagent(t, noTimeout, callerMethod, streamCallback)
 			results <- result
 		}(task)
 	}
@@ -254,9 +353,10 @@ func RunParallelSubagents(tasks []ParallelSubagentTask, noTimeout bool) (map[str
 //   - task: The subagent task to run
 //   - noTimeout: If true, use context.Background() (no timeout). If false, respect GetSubagentTimeout()
 //   - callerMethod: Name of the calling method for audit logging (e.g., "RunParallelSubagents")
+//   - streamCallback: Optional callback for real-time output streaming
 //
 // Returns the result of the subagent execution.
-func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod string) *ParallelSubagentResult {
+func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod string, streamCallback StreamCallback) *ParallelSubagentResult {
 	// Generate a unique task ID for tracking
 	taskID := task.ID
 	if taskID == "" {
@@ -309,6 +409,38 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 		}
 	}
 
+	// Open /dev/null for stdin before creating pipes so we can clean up on error
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=devnull_failed details=%v",
+			callerMethod, taskID, err)
+		return &ParallelSubagentResult{
+			ID:    taskID,
+			Error: fmt.Errorf("failed to open /dev/null: %w", err),
+		}
+	}
+	defer devNull.Close()
+
+	// Create pipes for stdout and stderr to enable streaming
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=pipe_creation_failed details=%v",
+			callerMethod, taskID, err)
+		return &ParallelSubagentResult{
+			ID:    taskID,
+			Error: fmt.Errorf("failed to create stdout pipe: %w", err),
+		}
+	}
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=pipe_creation_failed details=%v",
+			callerMethod, taskID, err)
+		return &ParallelSubagentResult{
+			ID:    taskID,
+			Error: fmt.Errorf("failed to create stderr pipe: %w", err),
+		}
+	}
+
 	cmd := exec.CommandContext(ctx, leditPath, args...)
 
 	// Propagate important environment variables to subagent processes
@@ -320,13 +452,84 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 		cmd.Env = append(cmd.Env, "LEDIT_UNSAFE_MODE="+unsafe)
 	}
 
-	// Capture stdout and stderr
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Redirect stdin to /dev/null to prevent subagent from inheriting parent's terminal
+	// This ensures the subagent runs in non-interactive mode even if called with no args
+	cmd.Stdin = devNull
 
-	// Run the command and wait for completion (blocking)
-	err = cmd.Run()
+	// Also collect full output for return value
+	var stdoutBuffer, stderrBuffer bytes.Buffer
+
+	// Set up multi-writers: write to both buffer and pipe for streaming
+	// We create a combined writer that sends output to both the buffer (for collection)
+	// and the pipe (for streaming). The pipe's write end must stay open.
+	cmd.Stdout = io.MultiWriter(&stdoutBuffer, stdoutWriter)
+	cmd.Stderr = io.MultiWriter(&stderrBuffer, stderrWriter)
+
+	// Start the command (non-blocking)
+	if err = cmd.Start(); err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=start_failed details=%v",
+			callerMethod, taskID, err)
+		return &ParallelSubagentResult{
+			ID:    taskID,
+			Error: fmt.Errorf("failed to start subagent: %w", err),
+		}
+	}
+
+	// Close the write ends of the pipes in the parent process after Start
+	// The child process has its own copies, so it's safe to close ours
+	// NOTE: Don't close these yet - the MultiWriter needs them to stay open
+	// They will be closed automatically when the process exits
+
+	// Stream output in real-time if callback provided
+	var wg sync.WaitGroup
+	if streamCallback != nil {
+		// Stream stdout with task ID prefix
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			scanner := bufio.NewScanner(stdoutReader)
+			for scanner.Scan() {
+				line := scanner.Text()
+				// Stream the line with task ID for parallel subagents
+				streamCallback(line, taskID)
+			}
+		}()
+
+		// Stream stderr with task ID prefix
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			scanner := bufio.NewScanner(stderrReader)
+			for scanner.Scan() {
+				line := scanner.Text()
+				// Stream stderr lines with a prefix to distinguish them
+				if line != "" {
+					streamCallback("STDERR: "+line, taskID)
+				}
+			}
+		}()
+	} else {
+		// No callback, just drain the pipes to prevent blocking
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			io.Copy(&stdoutBuffer, stdoutReader)
+		}()
+		go func() {
+			defer wg.Done()
+			io.Copy(&stderrBuffer, stderrReader)
+		}()
+	}
+
+	// Wait for the command to complete
+	err = cmd.Wait()
+
+	// Wait for all streaming to complete
+	wg.Wait()
+
+	// Close readers
+	stdoutReader.Close()
+	stderrReader.Close()
 
 	// Determine exit code and timeout status
 	exitCode := 0
@@ -367,8 +570,8 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 
 	return &ParallelSubagentResult{
 		ID:        taskID,
-		Stdout:    stdout.String(),
-		Stderr:    stderr.String(),
+		Stdout:    stdoutBuffer.String(),
+		Stderr:    stderrBuffer.String(),
 		ExitCode:  exitCode,
 		Completed: completed,
 		Error:     nil,

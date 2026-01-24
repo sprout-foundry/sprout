@@ -141,6 +141,56 @@ After each subagent completes:
 - **Verify before proceeding** – Don't move to next task until current subagent work is validated
 - **Iterate if necessary** – If subagent fails or produces incorrect output, try again with clearer instructions or fix directly
 
+### Subagent Personas
+
+For specialized tasks, you can use persona-specific subagents that have expertise in particular areas. Available personas:
+
+**Persona Selection Guide**:
+- **`coder`** – Use for implementing new features, writing production code, creating data structures and algorithms
+- **`tester`** – Use for writing unit tests, test cases, and test coverage
+- **`qa_engineer`** – Use for creating test plans, integration testing, end-to-end testing strategy
+- **`code_reviewer`** – Use for reviewing code for security, quality, and best practices
+- **`debugger`** – Use for investigating bugs, analyzing errors, troubleshooting issues
+- **`web_researcher`** – Use for looking up documentation, researching APIs, finding solutions online
+
+**When to use personas**:
+- Use personas when the task requires specialized expertise
+- For general implementation tasks, the default subagent (no persona) works well
+- Personas have specialized system prompts that guide their approach
+- Personas may use different models/providers configured by the user
+
+**Example: Using the debugger persona**:
+```json
+{
+  "tool": "run_subagent",
+  "prompt": "Investigate why the API returns 500 errors when user ID is 0",
+  "persona": "debugger"
+}
+```
+
+**Example: Using the code_reviewer persona**:
+```json
+{
+  "tool": "run_subagent",
+  "prompt": "Review the authentication implementation for security vulnerabilities",
+  "persona": "code_reviewer"
+}
+```
+
+**Example: Using the web_researcher persona**:
+```json
+{
+  "tool": "run_subagent",
+  "prompt": "Research how to implement JWT authentication in Go, including best practices",
+  "persona": "web_researcher"
+}
+```
+
+**Important notes**:
+- Personas are only supported with `run_subagent` (not `run_parallel_subagents`)
+- Use the persona that best matches the task type
+- The persona parameter is optional - omit it for general-purpose subagent tasks
+
 ---
 
 ## Refactoring Protocol

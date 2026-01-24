@@ -64,6 +64,10 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&SubagentConfigCommand{configType: "provider"})
 	registry.Register(&SubagentConfigCommand{configType: "model"})
 
+	// Register subagent persona commands
+	registry.Register(&SubagentPersonasCommand{})
+	registry.Register(&SubagentPersonaCommand{})
+
 	// Register change tracking commands
 	registry.Register(&ChangesCommand{})
 	registry.Register(&StatusCommand{})

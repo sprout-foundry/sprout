@@ -19,12 +19,12 @@ func readInput() string {
 	return strings.TrimSpace(input)
 }
 
-// ProvidersCommand implements the /providers slash command
+// ProvidersCommand implements the /provider slash command
 type ProvidersCommand struct{}
 
 // Name returns the command name
 func (p *ProvidersCommand) Name() string {
-	return "providers"
+	return "provider"
 }
 
 // Description returns the command description
@@ -96,10 +96,10 @@ func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manag
 	}
 
 	fmt.Println("Usage:")
-	fmt.Println("  /providers                    - Show this status")
-	fmt.Println("  /providers list              - List available providers only")
-	fmt.Println("  /providers select            - Interactive provider selection")
-	fmt.Println("  /providers <provider_name>   - Switch to specific provider")
+	fmt.Println("  /provider                    - Show this status")
+	fmt.Println("  /provider list              - List available providers only")
+	fmt.Println("  /provider select            - Interactive provider selection")
+	fmt.Println("  /provider <provider_name>   - Switch to specific provider")
 
 	return nil
 }
@@ -177,8 +177,8 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 		fmt.Printf("%d. %s%s\n", i+1, getProviderDisplayName(provider), status)
 	}
 
-	fmt.Println("\n💡 To select a provider, use: /providers <provider_name>")
-	fmt.Println("   Example: /providers openai")
+	fmt.Println("\n💡 To select a provider, use: /provider <provider_name>")
+	fmt.Println("   Example: /provider openai")
 	return nil
 }
 

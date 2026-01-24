@@ -180,7 +180,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register run_subagent tool - for multi-agent collaboration
 	registry.RegisterTool(ToolConfig{
 		Name:        "run_subagent",
-		Description: "CRITICAL - Use this to delegate implementation tasks to subagents. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. This is the PRIMARY way to implement features during execution phase. Use for: creating files, feature implementations, multi-file changes, complex logic. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. NO TIMEOUT - runs until completion. After each subagent completes, review its output (stdout/stderr) to verify success before proceeding to the next task. If a subagent fails, you can spawn another to fix issues. Designed specifically for planning workflow: delegate, review, adjust. Subagent provider and model are configured via config settings (subagent_provider and subagent_model).",
+		Description: "Delegate a SINGLE implementation task to a subagent. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. Use this when: (1) Tasks must be done SEQUENTIALLY with dependencies between them, (2) You need to review results before deciding next steps, (3) Working on a single focused feature. For MULTIPLE INDEPENDENT tasks, use run_parallel_subagents instead for faster completion. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. NO TIMEOUT - runs until completion. Subagent provider and model are configured via config settings (subagent_provider and subagent_model).",
 		Parameters: []ParameterConfig{
 			{"prompt", "string", true, []string{}, "The prompt/task for the subagent to execute (required)"},
 			{"context", "string", false, []string{}, "Context from previous subagent work (files created, summaries, etc.)"},
@@ -193,9 +193,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register run_parallel_subagents tool - for concurrent multi-agent execution
 	registry.RegisterTool(ToolConfig{
 		Name:        "run_parallel_subagents",
-		Description: "Execute multiple subagent tasks concurrently in parallel. Useful for independent tasks that can be done simultaneously (e.g., writing production code and test cases concurrently). Waits for all tasks to complete and returns results for each task by ID. Each task has its own ID, prompt, optional model, and optional provider. Results include stdout, stderr, exit_code, completed status, and timed_out status for each task ID.",
+		Description: "Execute MULTIPLE INDEPENDENT subagent tasks CONCURRENTLY in parallel. Use this when you have 2+ tasks that can be done SIMULTANEOUSLY without dependencies (e.g., researching different code areas, writing code + tests concurrently, analyzing multiple files). This is MUCH FASTER than running tasks sequentially. Waits for ALL tasks to complete and returns results for each task by ID. Results include stdout, stderr, exit_code, completed status, and timed_out status for each task ID. Prefer this over run_subagent when tasks are independent.\n\nAccepts simple array of strings: [\"task 1 description\", \"task 2 description\", \"task 3\"]. IDs will be auto-generated (task-1, task-2, etc.).\n\nSubagent provider and model are configured via config settings (subagent_provider and subagent_model).",
 		Parameters: []ParameterConfig{
-			{"tasks", "array", true, []string{}, "Array of subagent tasks: [{id, prompt, model?, provider?}] where id is a unique identifier for the task"},
+			{"subagents", "array", true, []string{}, "Array of task descriptions as strings: [\"task 1\", \"task 2\", \"task 3\"]. Auto-generates IDs like task-1, task-2, etc. Example: [\"Research X\", \"Implement Y\", \"Write tests for Z\"]"},
 		},
 		Handler: handleRunParallelSubagents,
 	})
@@ -1140,6 +1140,32 @@ func extractSubagentSummary(stdout string) map[string]string {
 		if strings.HasPrefix(line, "Error:") || strings.HasPrefix(line, "error:") {
 			errors = append(errors, line)
 		}
+
+		// Extract subagent cost/token metrics
+		// Format: SUBAGENT_METRICS: total_tokens=X prompt_tokens=Y completion_tokens=Z total_cost=C.C cached_tokens=D
+		if strings.HasPrefix(line, "SUBAGENT_METRICS:") {
+			// Parse the metrics using regex
+			metricsRe := regexp.MustCompile(`total_tokens=(\d+)`)
+			if matches := metricsRe.FindStringSubmatch(line); len(matches) > 1 {
+				summary["subagent_total_tokens"] = matches[1]
+			}
+			metricsRe = regexp.MustCompile(`prompt_tokens=(\d+)`)
+			if matches := metricsRe.FindStringSubmatch(line); len(matches) > 1 {
+				summary["subagent_prompt_tokens"] = matches[1]
+			}
+			metricsRe = regexp.MustCompile(`completion_tokens=(\d+)`)
+			if matches := metricsRe.FindStringSubmatch(line); len(matches) > 1 {
+				summary["subagent_completion_tokens"] = matches[1]
+			}
+			metricsRe = regexp.MustCompile(`total_cost=([\d.]+)`)
+			if matches := metricsRe.FindStringSubmatch(line); len(matches) > 1 {
+				summary["subagent_total_cost"] = matches[1]
+			}
+			metricsRe = regexp.MustCompile(`cached_tokens=(\d+)`)
+			if matches := metricsRe.FindStringSubmatch(line); len(matches) > 1 {
+				summary["subagent_cached_tokens"] = matches[1]
+			}
+		}
 	}
 
 	if len(fileChanges) > 0 {
@@ -1343,7 +1369,33 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		model = ""    // Will use system default
 	}
 
-	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider)
+	// Create a streaming callback for real-time output
+	streamCallback := func(line string, taskID string) {
+		// Format the output line for display
+		// Don't show context percentage since this is subagent output, not parent agent
+		const subagentGray = "\033[38;5;244m" // Even lighter gray for subagent output
+		const reset = "\033[0m"
+
+		// Clean ANSI codes from the line to avoid display issues
+		cleanLine := stripAnsiCodes(line)
+
+		// Skip empty lines
+		if strings.TrimSpace(cleanLine) == "" {
+			return
+		}
+
+		// Format: → Subagent: <output>
+		// For parallel subagents: → [task-id] Subagent: <output>
+		var prefix string
+		if taskID != "" && taskID != "task-0" {
+			prefix = fmt.Sprintf("[%s] ", taskID)
+		}
+
+		message := fmt.Sprintf("%s→ %sSubagent: %s%s\n", subagentGray, prefix, cleanLine, reset)
+		a.printLineInternal(message)
+	}
+
+	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider, streamCallback)
 	if err != nil {
 		a.debugLog("Subagent spawn error: %v\n", err)
 		return "", err
@@ -1371,6 +1423,29 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		} else {
 			resultMap["summary"] = string(summaryJSON)
 			a.debugLog("Extracted subagent summary: %s\n", string(summaryJSON))
+		}
+
+		// Track subagent costs in parent agent's totals
+		// Parse the cost metrics from the summary and add to parent's tracking
+		if totalTokensStr, ok := summary["subagent_total_tokens"]; ok {
+			if totalCostStr, ok := summary["subagent_total_cost"]; ok {
+				promptTokensStr := summary["subagent_prompt_tokens"]
+				completionTokensStr := summary["subagent_completion_tokens"]
+				cachedTokensStr := summary["subagent_cached_tokens"]
+
+				// Parse the values
+				var totalTokens, promptTokens, completionTokens, cachedTokens int
+				var totalCost float64
+				fmt.Sscanf(totalTokensStr, "%d", &totalTokens)
+				fmt.Sscanf(promptTokensStr, "%d", &promptTokens)
+				fmt.Sscanf(completionTokensStr, "%d", &completionTokens)
+				fmt.Sscanf(cachedTokensStr, "%d", &cachedTokens)
+				fmt.Sscanf(totalCostStr, "%f", &totalCost)
+
+				// Add to parent agent's totals using TrackMetricsFromResponse
+				a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens)
+				a.debugLog("Tracked subagent costs: %d tokens, $%.6f\n", totalTokens, totalCost)
+			}
 		}
 	}
 
@@ -1405,15 +1480,23 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 }
 
 func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	tasksRaw, ok := args["tasks"]
+	// Accept "tasks", "prompts", or "subagents" parameter names for LLM flexibility
+	var tasksRaw interface{}
+	var ok bool
+
+	if tasksRaw, ok = args["tasks"]; !ok {
+		if tasksRaw, ok = args["prompts"]; !ok {
+			tasksRaw, ok = args["subagents"]
+		}
+	}
 	if !ok {
-		return "", fmt.Errorf("missing tasks argument")
+		return "", fmt.Errorf("missing tasks, prompts, or subagents argument")
 	}
 
 	// Parse the tasks array
 	tasksSlice, ok := tasksRaw.([]interface{})
 	if !ok {
-		return "", fmt.Errorf("tasks must be an array")
+		return "", fmt.Errorf("tasks/prompts must be an array")
 	}
 
 	// Log the parallel subagent execution for visibility
@@ -1421,37 +1504,56 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	a.debugLog("Spawning %d parallel subagents\n", len(tasksSlice))
 
 	var parallelTasks []tools.ParallelSubagentTask
-	for _, taskRaw := range tasksSlice {
-		taskMap, ok := taskRaw.(map[string]interface{})
-		if !ok {
-			return "", fmt.Errorf("each task must be an object")
-		}
-
+	for i, taskRaw := range tasksSlice {
 		task := tools.ParallelSubagentTask{}
 
-		if id, ok := taskMap["id"].(string); ok {
-			task.ID = id
-		}
+		// Support two formats:
+		// 1. Simple string: "task description"
+		// 2. Object: {"id": "task-id", "prompt": "task description", ...}
+		if taskStr, ok := taskRaw.(string); ok {
+			// Simple string format - auto-generate ID
+			task.ID = fmt.Sprintf("task-%d", i+1)
+			task.Prompt = taskStr
+		} else if taskMap, ok := taskRaw.(map[string]interface{}); ok {
+			// Object format
+			if id, ok := taskMap["id"].(string); ok {
+				task.ID = id
+			} else {
+				// Auto-generate ID if not provided
+				task.ID = fmt.Sprintf("task-%d", i+1)
+			}
 
-		prompt, err := convertToString(taskMap["prompt"], "prompt")
-		if err != nil {
-			return "", err
-		}
-		task.Prompt = prompt
+			prompt, err := convertToString(taskMap["prompt"], "prompt")
+			if err != nil {
+				return "", err
+			}
+			task.Prompt = prompt
 
-		if model, ok := taskMap["model"].(string); ok {
-			task.Model = model
-		}
-
-		if provider, ok := taskMap["provider"].(string); ok {
-			task.Provider = provider
-		}
-
-		if task.ID == "" {
-			return "", fmt.Errorf("each task requires an id")
+			// Note: model and provider are set from configuration, not from LLM parameters
+			// This ensures consistent subagent behavior configured by the user
+		} else {
+			return "", fmt.Errorf("each task must be a string or an object")
 		}
 
 		parallelTasks = append(parallelTasks, task)
+	}
+
+	// Get configured subagent model/provider and apply to all tasks
+	var subagentProvider, subagentModel string
+	if a.configManager != nil {
+		config := a.configManager.GetConfig()
+		subagentProvider = config.GetSubagentProvider()
+		subagentModel = config.GetSubagentModel()
+	}
+
+	// Apply configuration to all tasks (overriding any empty values)
+	for i := range parallelTasks {
+		if subagentProvider != "" && parallelTasks[i].Provider == "" {
+			parallelTasks[i].Provider = subagentProvider
+		}
+		if subagentModel != "" && parallelTasks[i].Model == "" {
+			parallelTasks[i].Model = subagentModel
+		}
 	}
 
 	// Validate number of parallel tasks
@@ -1461,10 +1563,63 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 	a.debugLog("Spawning %d parallel subagents\n", len(parallelTasks))
 
-	resultMap, err := tools.RunParallelSubagents(parallelTasks, false)
+	// Create a streaming callback for real-time output (same as single subagent)
+	streamCallback := func(line string, taskID string) {
+		// Format the output line for display
+		const subagentGray = "\033[38;5;244m" // Even lighter gray for subagent output
+		const reset = "\033[0m"
+
+		// Clean ANSI codes from the line to avoid display issues
+		cleanLine := stripAnsiCodes(line)
+
+		// Skip empty lines
+		if strings.TrimSpace(cleanLine) == "" {
+			return
+		}
+
+		// Format: → [task-id] Subagent: <output>
+		var prefix string
+		if taskID != "" && taskID != "task-0" {
+			prefix = fmt.Sprintf("[%s] ", taskID)
+		}
+
+		message := fmt.Sprintf("%s→ %sSubagent: %s%s\n", subagentGray, prefix, cleanLine, reset)
+		a.printLineInternal(message)
+	}
+
+	resultMap, err := tools.RunParallelSubagents(parallelTasks, false, streamCallback)
 	if err != nil {
 		a.debugLog("Parallel subagents spawn error: %v\n", err)
 		return "", err
+	}
+
+	// Track costs from all parallel subagents
+	for taskID, result := range resultMap {
+		if stdout, ok := result["stdout"]; ok {
+			summary := extractSubagentSummary(stdout)
+
+			// Track subagent costs in parent agent's totals
+			if totalTokensStr, ok := summary["subagent_total_tokens"]; ok {
+				if totalCostStr, ok := summary["subagent_total_cost"]; ok {
+					promptTokensStr := summary["subagent_prompt_tokens"]
+					completionTokensStr := summary["subagent_completion_tokens"]
+					cachedTokensStr := summary["subagent_cached_tokens"]
+
+					// Parse the values
+					var totalTokens, promptTokens, completionTokens, cachedTokens int
+					var totalCost float64
+					fmt.Sscanf(totalTokensStr, "%d", &totalTokens)
+					fmt.Sscanf(promptTokensStr, "%d", &promptTokens)
+					fmt.Sscanf(completionTokensStr, "%d", &completionTokens)
+					fmt.Sscanf(cachedTokensStr, "%d", &cachedTokens)
+					fmt.Sscanf(totalCostStr, "%f", &totalCost)
+
+					// Add to parent agent's totals using TrackMetricsFromResponse
+					a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens)
+					a.debugLog("Tracked parallel subagent [%s] costs: %d tokens, $%.6f\n", taskID, totalTokens, totalCost)
+				}
+			}
+		}
 	}
 
 	// Convert map result to JSON for return
@@ -1486,6 +1641,13 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// stripAnsiCodes removes ANSI escape codes from a string
+func stripAnsiCodes(s string) string {
+	// ANSI escape code regex pattern
+	ansiEscape := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	return ansiEscape.ReplaceAllString(s, "")
 }
 
 func handleValidateBuild(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {

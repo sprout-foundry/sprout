@@ -37,7 +37,8 @@ func init() {
 // runSimpleEnhancedMode runs the new enhanced mode with web UI
 func runSimpleEnhancedMode(chatAgent *agent.Agent, isInteractive bool, args []string) error {
 	// Determine if web UI should be enabled
-	enableWebUI := !disableWebUI && !isCI()
+	// Web UI requires interactive mode (terminal), not disabled, and not in CI/subagent
+	enableWebUI := isInteractive && !disableWebUI && !isCI()
 
 	// Create event bus
 	eventBus := events.NewEventBus()

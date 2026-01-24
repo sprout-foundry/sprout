@@ -127,7 +127,6 @@ Examples:
 		// Set unsafe mode if flag is provided
 		chatAgent.SetUnsafeMode(agentUnsafe)
 
-		_ = os.Setenv("LEDIT_FROM_AGENT", "1")
 		if agentDryRun {
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")
 		}

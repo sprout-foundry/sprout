@@ -13,12 +13,12 @@ import (
 	"golang.org/x/term"
 )
 
-// ModelsCommand implements the /models slash command
+// ModelsCommand implements the /model slash command
 type ModelsCommand struct{}
 
 // Name returns the command name
 func (m *ModelsCommand) Name() string {
-	return "models"
+	return "model"
 }
 
 // Description returns the command description
@@ -43,7 +43,7 @@ func (m *ModelsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}
 	}
 
-	return fmt.Errorf("usage: /models [select|<model_id>]")
+	return fmt.Errorf("usage: /model [select|<model_id>]")
 }
 
 // listModels displays all available models for the current provider
@@ -63,7 +63,7 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	if len(models) == 0 {
 		fmt.Printf("No models available for %s.\n", providerName)
 		fmt.Println()
-		fmt.Println("💡 Tip: Use '/providers select' to switch to a different provider")
+		fmt.Println("💡 Tip: Use '/provider select' to switch to a different provider")
 		return nil
 	}
 
@@ -142,10 +142,10 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	}
 
 	fmt.Println("Usage:")
-	fmt.Println("  /models select          - Interactive model selection (current provider)")
-	fmt.Println("  /models <model_id>      - Set model directly")
-	fmt.Println("  /models                 - Show this list")
-	fmt.Println("  /providers select        - Switch providers first, then select models")
+	fmt.Println("  /model select          - Interactive model selection (current provider)")
+	fmt.Println("  /model <model_id>      - Set model directly")
+	fmt.Println("  /model                 - Show this list")
+	fmt.Println("  /provider select        - Switch providers first, then select models")
 
 	return nil
 }
@@ -171,7 +171,7 @@ func (m *ModelsCommand) selectModel(chatAgent *agent.Agent) error {
 	if len(models) == 0 {
 		fmt.Printf("No models available for %s.\n", providerName)
 		fmt.Println()
-		fmt.Println("💡 Tip: Use '/providers select' to switch to a different provider with available models")
+		fmt.Println("💡 Tip: Use '/provider select' to switch to a different provider with available models")
 		return nil
 	}
 

@@ -131,6 +131,15 @@ func (a *Agent) PrintConciseSummary() {
 		a.formatTokenCount(actualProcessed),
 		a.formatTokenCount(a.cachedTokens),
 		costStr)
+
+	// Also output machine-parseable cost information for parent agent to extract
+	// This allows subagent costs to be propagated to parent agent's totals
+	fmt.Printf("SUBAGENT_METRICS: total_tokens=%d prompt_tokens=%d completion_tokens=%d total_cost=%.6f cached_tokens=%d\n",
+		a.totalTokens,
+		a.promptTokens,
+		a.completionTokens,
+		a.totalCost,
+		a.cachedTokens)
 }
 
 // PrintCompactProgress prints a minimal progress indicator for non-interactive mode

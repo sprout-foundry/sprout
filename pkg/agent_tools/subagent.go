@@ -88,6 +88,7 @@ func GetSubagentTimeout() time.Duration {
 //   - prompt: The task/prompt for the subagent
 //   - model: Optional model override (e.g., "qwen/qwen-coder-32b")
 //   - provider: Optional provider override (e.g., "openrouter")
+//   - systemPrompt: Optional path to system prompt file for specialized personas
 //
 // Returns map containing:
 //   - stdout: Combined stdout output
@@ -95,9 +96,14 @@ func GetSubagentTimeout() time.Duration {
 //   - exit_code: Process exit code (0 for success)
 //   - completed: true if process ran to completion (always true for blocking mode)
 //   - timed_out: true if the subprocess was terminated due to timeout (always false with no timeout)
-func RunSubagent(prompt, model, provider string, streamCallback StreamCallback) (map[string]string, error) {
+func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, systemPrompt string) (map[string]string, error) {
 	// Build command: ledit agent with the given prompt
 	args := []string{"agent"}
+
+	// Add system prompt file if specified (for personas)
+	if systemPrompt != "" {
+		args = append(args, "--system-prompt", systemPrompt)
+	}
 
 	// Add provider/model if specified
 	if provider != "" {

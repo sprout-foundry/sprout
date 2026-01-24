@@ -84,8 +84,10 @@ type Config struct {
 	HistoryScope string `json:"history_scope,omitempty"` // "project" or "global"
 
 	// Subagent Configuration
-	SubagentProvider string `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
-	SubagentModel    string `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
+	SubagentProvider string            `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
+	SubagentModel    string            `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
+	SubagentTypes   map[string]SubagentType `json:"subagent_types,omitempty"`  // Named subagent personas (coder, tester, etc.)
+
 
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
@@ -155,6 +157,17 @@ type CustomProviderConfig struct {
 	Conversion     providers.MessageConversion `json:"message_conversion,omitempty"` // Message conversion configuration
 }
 
+// SubagentType defines a specialized subagent persona with its own configuration
+type SubagentType struct {
+	ID             string `json:"id"`              // Unique identifier (e.g., "coder", "tester", "debugger")
+	Name           string `json:"name"`            // Human-readable name (e.g., "Coder", "Tester")
+	Description    string `json:"description"`     // What this subagent specializes in
+	Provider       string `json:"provider"`        // Provider for this subagent type (optional, falls back to SubagentProvider)
+	Model          string `json:"model"`           // Model for this subagent type (optional, falls back to SubagentModel)
+	SystemPrompt   string `json:"system_prompt"`   // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
+	Enabled        bool   `json:"enabled"`         // Whether this subagent type is available for use
+}
+
 // Optional helpers
 func (a APIKeys) Get(provider string) string {
 	return a[provider]
@@ -215,6 +228,50 @@ func NewConfig() *Config {
 			OverallTimeoutSec:    600, // 10 minutes
 		},
 		HistoryScope: "project", // Default to project-scoped history
+		SubagentTypes: map[string]SubagentType{
+			"coder": {
+				ID:           "coder",
+				Name:         "Coder",
+				Description:  "Implementation and feature development specialist",
+				SystemPrompt: "pkg/agent/prompts/subagent_prompts/coder.md",
+				Enabled:      true,
+			},
+			"tester": {
+				ID:           "tester",
+				Name:         "Tester",
+				Description:  "Unit test writing and test coverage specialist",
+				SystemPrompt: "pkg/agent/prompts/subagent_prompts/tester.md",
+				Enabled:      true,
+			},
+			"qa_engineer": {
+				ID:           "qa_engineer",
+				Name:         "QA Engineer",
+				Description:  "Quality assurance, test planning, and integration testing specialist",
+				SystemPrompt: "pkg/agent/prompts/subagent_prompts/qa_engineer.md",
+				Enabled:      true,
+			},
+			"code_reviewer": {
+				ID:           "code_reviewer",
+				Name:         "Code Reviewer",
+				Description:  "Code review, security, and best practices specialist",
+				SystemPrompt: "pkg/agent/prompts/subagent_prompts/code_reviewer.md",
+				Enabled:      true,
+			},
+			"debugger": {
+				ID:           "debugger",
+				Name:         "Debugger",
+				Description:  "Bug investigation, root cause analysis, and fixes specialist",
+				SystemPrompt: "pkg/agent/prompts/subagent_prompts/debugger.md",
+				Enabled:      true,
+			},
+			"web_researcher": {
+				ID:           "web_researcher",
+				Name:         "Web Researcher",
+				Description:  "Documentation lookup, API research, and solution discovery specialist",
+				SystemPrompt: "pkg/agent/prompts/subagent_prompts/web_researcher.md",
+				Enabled:      true,
+			},
+		},
 	}
 }
 
@@ -276,6 +333,9 @@ func Load() (*Config, error) {
 	}
 	if config.CustomProviders == nil {
 		config.CustomProviders = make(map[string]CustomProviderConfig)
+	}
+	if config.SubagentTypes == nil {
+		config.SubagentTypes = make(map[string]SubagentType)
 	}
 
 	// Set version if not present
@@ -397,6 +457,36 @@ func (c *Config) SetSubagentProvider(provider string) {
 // SetSubagentModel sets the model for subagents
 func (c *Config) SetSubagentModel(model string) {
 	c.SubagentModel = model
+}
+
+// GetSubagentType retrieves a subagent type configuration by ID
+// Returns nil if the subagent type doesn't exist or is disabled
+func (c *Config) GetSubagentType(id string) *SubagentType {
+	if c.SubagentTypes == nil {
+		return nil
+	}
+	if subagentType, exists := c.SubagentTypes[id]; exists && subagentType.Enabled {
+		return &subagentType
+	}
+	return nil
+}
+
+// GetSubagentTypeProvider returns the provider for a specific subagent type
+// Falls back to the general subagent provider if not specified
+func (c *Config) GetSubagentTypeProvider(id string) string {
+	if st := c.GetSubagentType(id); st != nil && st.Provider != "" {
+		return st.Provider
+	}
+	return c.GetSubagentProvider()
+}
+
+// GetSubagentTypeModel returns the model for a specific subagent type
+// Falls back to the general subagent model if not specified
+func (c *Config) GetSubagentTypeModel(id string) string {
+	if st := c.GetSubagentType(id); st != nil && st.Model != "" {
+		return st.Model
+	}
+	return c.GetSubagentModel()
 }
 
 // GetMCPServerTimeout moved to pkg/mcp package with MCPServerConfig

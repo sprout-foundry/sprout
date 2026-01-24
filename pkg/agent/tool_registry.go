@@ -180,12 +180,13 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register run_subagent tool - for multi-agent collaboration
 	registry.RegisterTool(ToolConfig{
 		Name:        "run_subagent",
-		Description: "Delegate a SINGLE implementation task to a subagent. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. Use this when: (1) Tasks must be done SEQUENTIALLY with dependencies between them, (2) You need to review results before deciding next steps, (3) Working on a single focused feature. For MULTIPLE INDEPENDENT tasks, use run_parallel_subagents instead for faster completion. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. NO TIMEOUT - runs until completion. Subagent provider and model are configured via config settings (subagent_provider and subagent_model).",
+		Description: "Delegate a SINGLE implementation task to a subagent. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. Use this when: (1) Tasks must be done SEQUENTIALLY with dependencies between them, (2) You need to review results before deciding next steps, (3) Working on a single focused feature. For MULTIPLE INDEPENDENT tasks, use run_parallel_subagents instead for faster completion. The subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. NO TIMEOUT - runs until completion. Subagent provider and model are configured via config settings (subagent_provider and subagent_model). Optional persona parameter selects a specialized subagent type (coder, tester, qa_engineer, code_reviewer, debugger, web_researcher).",
 		Parameters: []ParameterConfig{
 			{"prompt", "string", true, []string{}, "The prompt/task for the subagent to execute (required)"},
 			{"context", "string", false, []string{}, "Context from previous subagent work (files created, summaries, etc.)"},
 			{"files", "string", false, []string{}, "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')"},
 			{"auto_files", "bool", false, []string{}, "Automatically extract file paths mentioned in the prompt and include them in the context (default: true)"},
+			{"persona", "string", false, []string{}, "Optional subagent persona to use: coder, tester, qa_engineer, code_reviewer, debugger, web_researcher"},
 		},
 		Handler: handleRunSubagent,
 	})
@@ -193,7 +194,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register run_parallel_subagents tool - for concurrent multi-agent execution
 	registry.RegisterTool(ToolConfig{
 		Name:        "run_parallel_subagents",
-		Description: "Execute MULTIPLE INDEPENDENT subagent tasks CONCURRENTLY in parallel. Use this when you have 2+ tasks that can be done SIMULTANEOUSLY without dependencies (e.g., researching different code areas, writing code + tests concurrently, analyzing multiple files). This is MUCH FASTER than running tasks sequentially. Waits for ALL tasks to complete and returns results for each task by ID. Results include stdout, stderr, exit_code, completed status, and timed_out status for each task ID. Prefer this over run_subagent when tasks are independent.\n\nAccepts simple array of strings: [\"task 1 description\", \"task 2 description\", \"task 3\"]. IDs will be auto-generated (task-1, task-2, etc.).\n\nSubagent provider and model are configured via config settings (subagent_provider and subagent_model).",
+		Description: "Execute MULTIPLE INDEPENDENT subagent tasks CONCURRENTLY in parallel. Use this when you have 2+ tasks that can be done SIMULTANEOUSLY without dependencies (e.g., researching different code areas, writing code + tests concurrently, analyzing multiple files). This is MUCH FASTER than running tasks sequentially. Waits for ALL tasks to complete and returns results for each task by ID. Results include stdout, stderr, exit_code, completed status, and timed_out status for each task ID. Prefer this over run_subagent when tasks are independent.\n\nAccepts simple array of strings: [\"task 1 description\", \"task 2 description\", \"task 3\"]. IDs will be auto-generated (task-1, task-2, etc.).\n\nNote: Personas are only supported for single subagent execution via run_subagent. Parallel subagents use the default subagent configuration.\n\nSubagent provider and model are configured via config settings (subagent_provider and subagent_model).",
 		Parameters: []ParameterConfig{
 			{"subagents", "array", true, []string{}, "Array of task descriptions as strings: [\"task 1\", \"task 2\", \"task 3\"]. Auto-generates IDs like task-1, task-2, etc. Example: [\"Research X\", \"Implement Y\", \"Write tests for Z\"]"},
 		},
@@ -1244,6 +1245,16 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
+	// Parse optional persona parameter
+	var persona string
+	var systemPromptPath string
+	if personaVal, ok := args["persona"]; ok && personaVal != nil {
+		if personaStr, ok := personaVal.(string); ok && personaStr != "" {
+			persona = personaStr
+			a.debugLog("Subagent persona specified: %s\n", persona)
+		}
+	}
+
 	// Automatically extract file paths from prompt if auto_files is enabled
 	if autoFiles {
 		extractedFiles := extractFilePathsFromPrompt(prompt)
@@ -1355,14 +1366,33 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	}
 
 	// Get subagent provider and model from configuration
+	// If persona is specified, use persona-specific provider/model
 	var provider string
 	var model string
 
 	if a.configManager != nil {
 		config := a.configManager.GetConfig()
-		provider = config.GetSubagentProvider()
-		model = config.GetSubagentModel()
-		a.debugLog("Using subagent provider=%s model=%s from config\n", provider, model)
+
+		if persona != "" {
+			// Get persona-specific configuration
+			subagentType := config.GetSubagentType(persona)
+			if subagentType != nil {
+				provider = config.GetSubagentTypeProvider(persona)
+				model = config.GetSubagentTypeModel(persona)
+				systemPromptPath = subagentType.SystemPrompt
+				a.debugLog("Using persona '%s': provider=%s model=%s system_prompt=%s\n",
+					persona, provider, model, systemPromptPath)
+			} else {
+				a.debugLog("Warning: Persona '%s' not found or disabled, using default subagent config\n", persona)
+				provider = config.GetSubagentProvider()
+				model = config.GetSubagentModel()
+			}
+		} else {
+			// No persona specified, use default subagent config
+			provider = config.GetSubagentProvider()
+			model = config.GetSubagentModel()
+			a.debugLog("Using subagent provider=%s model=%s from config\n", provider, model)
+		}
 	} else {
 		a.debugLog("Warning: No config manager available, using defaults\n")
 		provider = "" // Will use system default
@@ -1395,7 +1425,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		a.printLineInternal(message)
 	}
 
-	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider, streamCallback)
+	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath)
 	if err != nil {
 		a.debugLog("Subagent spawn error: %v\n", err)
 		return "", err

@@ -529,6 +529,14 @@ func (a *Agent) HandleInterrupt() string {
 	a.pauseMutex.Lock()
 	defer a.pauseMutex.Unlock()
 
+	// Check if running as a subagent - if so, just continue without prompting
+	// Subagents can't handle interactive prompts (stdin is /dev/null)
+	if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+		a.debugLog("Subagent interrupt detected, auto-continuing...\n")
+		a.ClearInterrupt()
+		return "CONTINUE"
+	}
+
 	// Initialize pause state if needed
 	if a.pauseState == nil {
 		a.pauseState = &PauseState{}

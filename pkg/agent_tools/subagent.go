@@ -233,6 +233,11 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 	// Wait for the command to complete
 	err = cmd.Wait()
 
+	// Close the write ends of the pipes to signal EOF to readers
+	// This is critical - otherwise the pipe-draining goroutines will block indefinitely
+	stdoutWriter.Close()
+	stderrWriter.Close()
+
 	// Wait for all streaming to complete
 	wg.Wait()
 
@@ -529,6 +534,11 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 
 	// Wait for the command to complete
 	err = cmd.Wait()
+
+	// Close the write ends of the pipes to signal EOF to readers
+	// This is critical - otherwise the pipe-draining goroutines will block indefinitely
+	stdoutWriter.Close()
+	stderrWriter.Close()
 
 	// Wait for all streaming to complete
 	wg.Wait()

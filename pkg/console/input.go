@@ -294,9 +294,9 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 	case EventEnd:
 		ir.SetCursor(len(ir.line))
 	case EventUp:
-		ir.NavigateHistory(1)
+		ir.NavigateVertically(-1)
 	case EventDown:
-		ir.NavigateHistory(-1)
+		ir.NavigateVertically(1)
 	case EventTab, EventEscape:
 		// Handle as needed
 	default:
@@ -306,6 +306,9 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 
 // InsertChar inserts a character at the cursor position
 func (ir *InputReader) InsertChar(char string) {
+	// Reset history index when user starts typing after navigating history
+	ir.historyIndex = -1
+
 	before := ir.line[:ir.cursorPos]
 	after := ir.line[ir.cursorPos:]
 	ir.line = before + char + after
@@ -323,6 +326,9 @@ func (ir *InputReader) InsertChar(char string) {
 // Backspace deletes the character before the cursor
 func (ir *InputReader) Backspace() {
 	if ir.cursorPos > 0 {
+		// Reset history index when user modifies line after navigating history
+		ir.historyIndex = -1
+
 		before := ir.line[:ir.cursorPos-1]
 		after := ir.line[ir.cursorPos:]
 		ir.line = before + after
@@ -334,6 +340,9 @@ func (ir *InputReader) Backspace() {
 // Delete deletes the character at the cursor position
 func (ir *InputReader) Delete() {
 	if ir.cursorPos < len(ir.line) {
+		// Reset history index when user modifies line after navigating history
+		ir.historyIndex = -1
+
 		before := ir.line[:ir.cursorPos]
 		after := ir.line[ir.cursorPos+1:]
 		ir.line = before + after
@@ -387,6 +396,81 @@ func (ir *InputReader) NavigateHistory(direction int) {
 
 	ir.cursorPos = len(ir.line)
 	ir.Refresh()
+}
+
+// NavigateVertically handles both history navigation and multi-line text navigation
+// direction: -1 for up, 1 for down
+func (ir *InputReader) NavigateVertically(direction int) {
+	// If line is empty, navigate history
+	if len(ir.line) == 0 {
+		// Invert direction for history (up arrow = older commands)
+		ir.NavigateHistory(-direction)
+		return
+	}
+
+	// Otherwise, navigate within multi-line text
+	ir.navigateInLine(direction)
+}
+
+// navigateInLine moves cursor up/down within multi-line text
+func (ir *InputReader) navigateInLine(direction int) {
+	lines := ir.splitIntoLines()
+	if len(lines) == 1 {
+		// Single line - no vertical movement possible
+		return
+	}
+
+	// Find current line and column
+	currentLineIdx, currentCol := ir.getLineAndColumn()
+
+	// Calculate target line
+	targetLineIdx := currentLineIdx + direction
+	if targetLineIdx < 0 || targetLineIdx >= len(lines) {
+		// Would move outside the text - stay at current position
+		return
+	}
+
+	// Calculate new cursor position
+	// Move to start of target line, then add column (clamped to line length)
+	targetLine := lines[targetLineIdx]
+	targetCol := min(currentCol, len([]rune(targetLine)))
+
+	// Calculate cursor position: sum of all previous lines + target column
+	newPos := 0
+	for i := 0; i < targetLineIdx; i++ {
+		newPos += len([]rune(lines[i])) + 1 // +1 for newline
+	}
+	newPos += targetCol
+
+	ir.cursorPos = newPos
+	ir.Refresh()
+}
+
+// splitIntoLines splits the current line into individual lines
+func (ir *InputReader) splitIntoLines() []string {
+	return strings.Split(ir.line, "\n")
+}
+
+// getLineAndColumn returns the current line index and column within that line
+func (ir *InputReader) getLineAndColumn() (lineIdx, col int) {
+	lines := ir.splitIntoLines()
+	pos := ir.cursorPos
+
+	for i, line := range lines {
+		lineLen := len([]rune(line)) + 1 // +1 for newline
+		if pos < lineLen {
+			// We're on this line
+			if i == len(lines)-1 {
+				// Last line - no trailing newline in original
+				return i, len([]rune(line))
+			}
+			return i, min(pos, len([]rune(line)))
+		}
+		pos -= lineLen
+	}
+
+	// Shouldn't reach here, but return last position if we do
+	return len(lines) - 1, len([]rune(lines[len(lines)-1]))
 }
 
 // Refresh redraws the current input line

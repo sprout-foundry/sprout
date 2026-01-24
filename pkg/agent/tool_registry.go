@@ -1049,8 +1049,23 @@ func extractFilePathsFromPrompt(prompt string) []string {
 }
 
 // extractSubagentSummary parses stdout from a subagent execution to extract key information
+// Optimized to avoid regex compilation in loops and process only relevant lines
 func extractSubagentSummary(stdout string) map[string]string {
 	summary := make(map[string]string)
+
+	// Pre-compile regex patterns once (outside the loop)
+	passedRe := regexp.MustCompile(`(\d+)\s+passed`)
+	failedRe := regexp.MustCompile(`(\d+)\s+failed`)
+	todoRe := regexp.MustCompile(`(Added|Marked|Created|Updated|Completed|Removed)\s+(\d+)\s+todos?`)
+	cmdRe := regexp.MustCompile(`(?:command|Running):\s+([^\n]+)`)
+
+	// Compile metrics regex patterns once
+	totalTokensRe := regexp.MustCompile(`total_tokens=(\d+)`)
+	promptTokensRe := regexp.MustCompile(`prompt_tokens=(\d+)`)
+	completionTokensRe := regexp.MustCompile(`completion_tokens=(\d+)`)
+	totalCostRe := regexp.MustCompile(`total_cost=([\d.]+)`)
+	cachedTokensRe := regexp.MustCompile(`cached_tokens=(\d+)`)
+
 	lines := strings.Split(stdout, "\n")
 
 	var fileChanges []string
@@ -1061,110 +1076,127 @@ func extractSubagentSummary(stdout string) map[string]string {
 	var commandsExecuted []string
 	var testPassCount, testFailCount int
 
+	// Process lines but limit to first 10,000 to avoid excessive processing
+	maxLines := 10000
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		// Extract file operations
-		switch {
-		case strings.HasPrefix(line, "Created:") || strings.HasPrefix(line, "Wrote"):
-			file := strings.TrimSpace(strings.TrimPrefix(line, "Created:"))
-			file = strings.TrimSpace(strings.TrimPrefix(file, "Wrote"))
-			fileChanges = append(fileChanges, "Created: "+file)
-		case strings.HasPrefix(line, "Modified:"):
-			file := strings.TrimSpace(strings.TrimPrefix(line, "Modified:"))
-			fileChanges = append(fileChanges, "Modified: "+file)
-		case strings.HasPrefix(line, "Deleted:"):
-			file := strings.TrimSpace(strings.TrimPrefix(line, "Deleted:"))
-			fileChanges = append(fileChanges, "Deleted: "+file)
-		case strings.HasPrefix(line, "Updated:"):
-			file := strings.TrimSpace(strings.TrimPrefix(line, "Updated:"))
-			fileChanges = append(fileChanges, "Updated: "+file)
+		// Skip empty lines early
+		if line == "" {
+			continue
 		}
 
-		// Extract build status
-		if strings.Contains(line, "Build:") {
-			if strings.Contains(line, "✅ Passed") {
-				buildStatus = "passed"
-			} else if strings.Contains(line, "✅ Failed") || strings.Contains(line, "❌ Failed") {
-				buildStatus = "failed"
-			}
+		// Only trim if needed (check if line has leading/trailing whitespace)
+		trimmedLine := line
+		if line[0] == ' ' || line[0] == '\t' || line[len(line)-1] == ' ' || line[len(line)-1] == '\t' {
+			trimmedLine = strings.TrimSpace(line)
 		}
 
-		// Extract test status and counts
-		if strings.Contains(line, "Test:") || strings.Contains(line, "Tests:") {
-			if strings.Contains(line, "✅ Passed") {
-				testStatus = "passed"
-			} else if strings.Contains(line, "✅ Failed") || strings.Contains(line, "❌ Failed") {
-				testStatus = "failed"
-			}
+		// Fast-path checks using byte operations for common prefixes
+		if len(trimmedLine) > 0 {
+			firstChar := trimmedLine[0]
 
-			// Extract test counts (e.g., "Tests: 5 passed, 2 failed")
-			re := regexp.MustCompile(`(\d+)\s+passed`)
-			if matches := re.FindStringSubmatch(line); len(matches) > 1 {
-				fmt.Sscanf(matches[1], "%d", &testPassCount)
-			}
-			re = regexp.MustCompile(`(\d+)\s+failed`)
-			if matches := re.FindStringSubmatch(line); len(matches) > 1 {
-				fmt.Sscanf(matches[1], "%d", &testFailCount)
-			}
-		}
-
-		// Extract todo list operations
-		if strings.Contains(line, "TodoWrite") || strings.Contains(line, "todo list") {
-			// Look for patterns like "Added 3 todos" or "Marked 2 todos as completed"
-			todoRe := regexp.MustCompile(`(Added|Marked|Created|Updated|Completed|Removed)\s+(\d+)\s+todos?`)
-			if matches := todoRe.FindStringSubmatch(line); len(matches) > 2 {
-				todosCreated = append(todosCreated, matches[0])
-			}
-		}
-
-		// Extract shell commands executed
-		if strings.Contains(line, "$") || strings.Contains(line, "shell_command") {
-			// Look for command execution patterns
-			if strings.HasPrefix(line, "$") {
-				// Extract command after $
-				cmd := strings.TrimSpace(strings.TrimPrefix(line, "$"))
-				if cmd != "" {
-					commandsExecuted = append(commandsExecuted, cmd)
+			// Extract file operations (fast ASCII checks)
+			switch firstChar {
+			case 'C', 'c':
+				if strings.HasPrefix(trimmedLine, "Created:") || strings.HasPrefix(trimmedLine, "Wrote") {
+					file := strings.TrimSpace(trimmedLine[8:])
+					if strings.HasPrefix(trimmedLine, "Created:") {
+						file = strings.TrimSpace(trimmedLine[8:])
+					} else if strings.HasPrefix(trimmedLine, "Wrote") {
+						file = strings.TrimSpace(trimmedLine[6:])
+					}
+					fileChanges = append(fileChanges, "Created: "+file)
+				}
+			case 'M', 'm':
+				if strings.HasPrefix(trimmedLine, "Modified:") {
+					file := strings.TrimSpace(trimmedLine[9:])
+					fileChanges = append(fileChanges, "Modified: "+file)
+				}
+			case 'D', 'd':
+				if strings.HasPrefix(trimmedLine, "Deleted:") {
+					file := strings.TrimSpace(trimmedLine[8:])
+					fileChanges = append(fileChanges, "Deleted: "+file)
+				}
+			case 'U', 'u':
+				if strings.HasPrefix(trimmedLine, "Updated:") {
+					file := strings.TrimSpace(trimmedLine[8:])
+					fileChanges = append(fileChanges, "Updated: "+file)
+				}
+			case 'E', 'e':
+				if strings.HasPrefix(trimmedLine, "Error:") || strings.HasPrefix(trimmedLine, "error:") {
+					errors = append(errors, trimmedLine)
+				}
+			case 'S', 's':
+				if strings.HasPrefix(trimmedLine, "SUBAGENT_METRICS:") {
+					// Parse the metrics using pre-compiled regex
+					if matches := totalTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						summary["subagent_total_tokens"] = matches[1]
+					}
+					if matches := promptTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						summary["subagent_prompt_tokens"] = matches[1]
+					}
+					if matches := completionTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						summary["subagent_completion_tokens"] = matches[1]
+					}
+					if matches := totalCostRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						summary["subagent_total_cost"] = matches[1]
+					}
+					if matches := cachedTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						summary["subagent_cached_tokens"] = matches[1]
+					}
+					continue // Skip further processing for metrics lines
 				}
 			}
-			// Also look for explicit shell command mentions
-			if strings.Contains(line, "Executing command") || strings.Contains(line, "Running") {
-				cmdRe := regexp.MustCompile(`(?:command|Running):\s+([^\n]+)`)
-				if matches := cmdRe.FindStringSubmatch(line); len(matches) > 1 {
-					commandsExecuted = append(commandsExecuted, strings.TrimSpace(matches[1]))
+
+			// Extract build status (only if line contains "Build:")
+			if strings.Contains(trimmedLine, "Build:") {
+				if strings.Contains(trimmedLine, "✅ Passed") {
+					buildStatus = "passed"
+				} else if strings.Contains(trimmedLine, "✅ Failed") || strings.Contains(trimmedLine, "❌ Failed") {
+					buildStatus = "failed"
 				}
 			}
-		}
 
-		// Extract errors
-		if strings.HasPrefix(line, "Error:") || strings.HasPrefix(line, "error:") {
-			errors = append(errors, line)
-		}
+			// Extract test status and counts
+			if strings.Contains(trimmedLine, "Test:") || strings.Contains(trimmedLine, "Tests:") {
+				if strings.Contains(trimmedLine, "✅ Passed") {
+					testStatus = "passed"
+				} else if strings.Contains(trimmedLine, "✅ Failed") || strings.Contains(trimmedLine, "❌ Failed") {
+					testStatus = "failed"
+				}
 
-		// Extract subagent cost/token metrics
-		// Format: SUBAGENT_METRICS: total_tokens=X prompt_tokens=Y completion_tokens=Z total_cost=C.C cached_tokens=D
-		if strings.HasPrefix(line, "SUBAGENT_METRICS:") {
-			// Parse the metrics using regex
-			metricsRe := regexp.MustCompile(`total_tokens=(\d+)`)
-			if matches := metricsRe.FindStringSubmatch(line); len(matches) > 1 {
-				summary["subagent_total_tokens"] = matches[1]
+				// Extract test counts using pre-compiled regex
+				if matches := passedRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+					fmt.Sscanf(matches[1], "%d", &testPassCount)
+				}
+				if matches := failedRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+					fmt.Sscanf(matches[1], "%d", &testFailCount)
+				}
 			}
-			metricsRe = regexp.MustCompile(`prompt_tokens=(\d+)`)
-			if matches := metricsRe.FindStringSubmatch(line); len(matches) > 1 {
-				summary["subagent_prompt_tokens"] = matches[1]
+
+			// Extract todo list operations
+			if strings.Contains(trimmedLine, "TodoWrite") || strings.Contains(trimmedLine, "todo list") {
+				if matches := todoRe.FindStringSubmatch(trimmedLine); len(matches) > 2 {
+					todosCreated = append(todosCreated, matches[0])
+				}
 			}
-			metricsRe = regexp.MustCompile(`completion_tokens=(\d+)`)
-			if matches := metricsRe.FindStringSubmatch(line); len(matches) > 1 {
-				summary["subagent_completion_tokens"] = matches[1]
-			}
-			metricsRe = regexp.MustCompile(`total_cost=([\d.]+)`)
-			if matches := metricsRe.FindStringSubmatch(line); len(matches) > 1 {
-				summary["subagent_total_cost"] = matches[1]
-			}
-			metricsRe = regexp.MustCompile(`cached_tokens=(\d+)`)
-			if matches := metricsRe.FindStringSubmatch(line); len(matches) > 1 {
-				summary["subagent_cached_tokens"] = matches[1]
+
+			// Extract shell commands executed
+			if strings.Contains(trimmedLine, "$") || strings.Contains(trimmedLine, "shell_command") {
+				if strings.HasPrefix(trimmedLine, "$") {
+					cmd := strings.TrimSpace(trimmedLine[1:])
+					if cmd != "" {
+						commandsExecuted = append(commandsExecuted, cmd)
+					}
+				}
+				if strings.Contains(trimmedLine, "Executing command") || strings.Contains(trimmedLine, "Running") {
+					if matches := cmdRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						commandsExecuted = append(commandsExecuted, strings.TrimSpace(matches[1]))
+					}
+				}
 			}
 		}
 	}

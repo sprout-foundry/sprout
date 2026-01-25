@@ -100,18 +100,20 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 			switch interruptResponse {
 			case "STOP":
 				ch.agent.debugLog("⏹️ Conversation stopped by user\n")
+				break
 			case "CONTINUE_WITH_CLARIFICATION":
 				ch.agent.debugLog("🔄 Continuing with user clarification\n")
-				// Reset interrupt context and continue
-				ch.agent.ClearInterrupt()
+				// Update activity time to prevent immediate timeout re-trigger
+				ch.lastActivityTime = time.Now()
 				continue
 			case "CONTINUE":
 				ch.agent.debugLog("🔄 Continuing without changes\n")
-				// Reset interrupt context and continue
-				ch.agent.ClearInterrupt()
+				// Update activity time to prevent immediate timeout re-trigger
+				ch.lastActivityTime = time.Now()
 				continue
 			default:
 				ch.agent.debugLog("⏹️ Conversation interrupted\n")
+				break
 			}
 
 			// If we reach here, we're breaking out of the loop

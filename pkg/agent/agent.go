@@ -556,14 +556,15 @@ func (a *Agent) HandleInterrupt() string {
 	fmt.Println("2. Stop current task")
 	fmt.Println("3. Resume without changes")
 	fmt.Println("4. Continue (default)")
-	fmt.Print("Enter choice (1-4, or just press Enter for #4): ")
 
 	// Use a simple input reader that doesn't conflict with UnifiedInputManager
+	// Don't print the prompt here - readSimpleInput will do it
 	choice := a.readSimpleInput("4") // Default to continue
+
+	a.debugLog("HandleInterrupt: Got choice '%s'\n", choice)
 
 	switch strings.TrimSpace(choice) {
 	case "1":
-		fmt.Print("Enter clarification: ")
 		clarification := a.readSimpleInput("")
 
 		if strings.TrimSpace(clarification) != "" {
@@ -580,18 +581,21 @@ func (a *Agent) HandleInterrupt() string {
 			// Reset interrupt and continue
 			a.ClearInterrupt()
 			a.pauseState.IsPaused = false
+			a.debugLog("HandleInterrupt: Returning CONTINUE_WITH_CLARIFICATION\n")
 			return "CONTINUE_WITH_CLARIFICATION"
 		}
 		// Fall through to continue if no clarification
 
 	case "2":
 		a.pauseState.IsPaused = false
+		a.debugLog("HandleInterrupt: Returning STOP\n")
 		return "STOP"
 
 	case "3":
 		// Just resume without changes
 		a.ClearInterrupt()
 		a.pauseState.IsPaused = false
+		a.debugLog("HandleInterrupt: Returning CONTINUE (option 3)\n")
 		return "CONTINUE"
 
 	case "4", "":
@@ -599,16 +603,19 @@ func (a *Agent) HandleInterrupt() string {
 		fmt.Println("Continuing...")
 		a.ClearInterrupt()
 		a.pauseState.IsPaused = false
+		a.debugLog("HandleInterrupt: Returning CONTINUE (option 4/default)\n")
 		return "CONTINUE"
 
 	default:
 		fmt.Printf("Invalid choice '%s', continuing...\n", choice)
 		a.ClearInterrupt()
 		a.pauseState.IsPaused = false
+		a.debugLog("HandleInterrupt: Invalid choice, returning CONTINUE\n")
 		return "CONTINUE"
 	}
 
 	// This should never be reached, but add for safety
+	a.debugLog("HandleInterrupt: Reached end of function, returning CONTINUE\n")
 	return "CONTINUE"
 }
 

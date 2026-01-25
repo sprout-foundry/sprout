@@ -446,7 +446,16 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 			return filesystem.WithSecurityBypass(ctx)
 		}
 
-		// Prompt user for confirmation
+		// CRITICAL: When running as a subagent, we CANNOT prompt for user confirmation
+		// because stdin is /dev/null. Instead, we must return the error and let the primary
+		// agent handle the security decision.
+		if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+			agent.debugLog("Subagent encountered filesystem security error for %s, delegating to primary agent\n", filePath)
+			// Return the original context (without bypass) so the error is propagated
+			return ctx
+		}
+
+		// Prompt user for confirmation (primary agent only)
 		agentConfig := agent.GetConfig()
 		logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
 
@@ -1531,6 +1540,73 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		resultMap["files_used"] = ""
 	}
 
+	// Check if subagent failed with security-related errors
+	// When running as a subagent (LEDIT_FROM_AGENT=1), we can't prompt the user
+	// So we need to delegate the security decision back to the primary agent
+	if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+		stderr := resultMap["stderr"]
+		exitCode := resultMap["exit_code"]
+
+		// Check for filesystem security errors
+		if strings.Contains(stderr, "outside working directory") ||
+		   strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
+		   strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+		   strings.Contains(stderr, "security warning") ||
+		   exitCode != "0" {
+
+			// Subagent encountered a security error or failed
+			// Return a special error format that tells the primary agent to stop retrying
+			errorMsg := fmt.Sprintf("SUBAGENT_SECURITY_ERROR: The subagent encountered a security-related error or requires user authorization.\n\n"+
+				"Exit code: %s\n"+
+				"Stderr: %s\n"+
+				"Stdout: %s\n\n"+
+				"IMPORTANT: This subagent task requires user authorization or encountered a blocking error. "+
+				"Do NOT retry this subagent call with the same parameters. "+
+				"Instead, inform the user about the error and ask for guidance on how to proceed.",
+				exitCode, stderr, resultMap["stdout"])
+
+			a.debugLog("Subagent failed with security error, delegating to primary agent\n")
+			return errorMsg, nil
+		}
+	}
+
+	// For non-subagent context (primary agent), check if the subagent failed
+	// and add a clear message to prevent retry loops
+	exitCode := "0"
+	if ec, ok := resultMap["exit_code"]; ok {
+		exitCode = ec
+	}
+
+	if exitCode != "0" {
+		// Subagent failed - add clear message to prevent infinite retry loops
+		stderr := resultMap["stderr"]
+		stdout := resultMap["stdout"]
+
+		// Check for specific error patterns that indicate we should stop retrying
+		if strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
+		   strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+		   strings.Contains(stderr, "security") ||
+		   strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
+
+			// This is a security/authorization error - don't retry
+			errorMsg := fmt.Sprintf("SUBAGENT_FAILED: The subagent encountered a security or authorization error that prevents it from completing the task.\n\n"+
+				"Exit code: %s\n"+
+				"Error: %s\n\n"+
+				"This error requires user intervention. Do NOT retry the subagent call. "+
+				"Instead, report the error to the user and ask for guidance.",
+				exitCode, stderr)
+
+			a.debugLog("Subagent failed with security error, stopping retry loop\n")
+			return errorMsg, nil
+		}
+
+		// For other errors, add a warning but don't prevent retries entirely
+		// The agent may still retry, but we add tracking to prevent infinite loops
+		a.debugLog("Subagent failed with exit code %s\n", exitCode)
+		// Add error indicator to result map
+		resultMap["error"] = fmt.Sprintf("Subagent failed with exit code %s. Error output: %s", exitCode, stderr)
+	}
+
 	// Convert map result to JSON for return
 	jsonBytes, jsonErr := json.MarshalIndent(resultMap, "", "  ")
 	if jsonErr != nil {
@@ -1538,10 +1614,6 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	}
 
 	// Log subagent completion
-	exitCode := "0"
-	if ec, ok := resultMap["exit_code"]; ok {
-		exitCode = ec
-	}
 	a.ToolLog("subagent completed", fmt.Sprintf("exit_code=%s", exitCode))
 	a.debugLog("Subagent spawn result: %s\n", string(jsonBytes))
 	return string(jsonBytes), nil
@@ -1690,6 +1762,79 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		}
 	}
 
+	// Check for security errors in any of the parallel subagents
+	// When running as a subagent, we need to delegate security decisions to the primary agent
+	if os.Getenv("LEDIT_FROM_AGENT") == "1" {
+		for taskID, result := range resultMap {
+			exitCode := result["exit_code"]
+			stderr := result["stderr"]
+
+			// Check for filesystem security errors or failures
+			if strings.Contains(stderr, "outside working directory") ||
+			   strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
+			   strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+			   strings.Contains(stderr, "security warning") ||
+			   exitCode != "0" {
+
+				// One of the parallel subagents encountered a security error or failed
+				// Return a special error format that tells the primary agent to stop retrying
+				errorMsg := fmt.Sprintf("SUBAGENT_SECURITY_ERROR: A parallel subagent encountered a security-related error or requires user authorization.\n\n"+
+					"Task ID: %s\n"+
+					"Exit code: %s\n"+
+					"Stderr: %s\n"+
+					"Stdout: %s\n\n"+
+					"IMPORTANT: This subagent task requires user authorization or encountered a blocking error. "+
+					"Do NOT retry this parallel subagent call with the same parameters. "+
+					"Instead, inform the user about the error and ask for guidance on how to proceed.",
+					taskID, exitCode, stderr, result["stdout"])
+
+				a.debugLog("Parallel subagent [%s] failed with security error, delegating to primary agent\n", taskID)
+				return errorMsg, nil
+			}
+		}
+	}
+
+	// For non-subagent context (primary agent), check if any subagent failed
+	// and add a clear message to prevent retry loops
+	var failedTasks []string
+	var securityErrors []string
+
+	for taskID, result := range resultMap {
+		exitCode := result["exit_code"]
+		stderr := result["stderr"]
+		stdout := result["stdout"]
+
+		if exitCode != "0" {
+			// Check for specific error patterns that indicate we should stop retrying
+			if strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
+			   strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+			   strings.Contains(stderr, "security") ||
+			   strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
+
+				// This is a security/authorization error - don't retry
+				securityErrors = append(securityErrors, fmt.Sprintf(
+					"Task %s: exit code %s, error: %s", taskID, exitCode, stderr))
+			} else {
+				// Other failures - track but allow potential retry
+				failedTasks = append(failedTasks, fmt.Sprintf(
+					"Task %s: exit code %s", taskID, exitCode))
+				result["error"] = fmt.Sprintf("Subagent failed with exit code %s. Error output: %s", exitCode, stderr)
+			}
+		}
+	}
+
+	// If we have security errors, return a clear error message to prevent retry loops
+	if len(securityErrors) > 0 {
+		errorMsg := fmt.Sprintf("SUBAGENT_FAILED: One or more parallel subagents encountered security or authorization errors that prevent them from completing their tasks.\n\n"+
+			"%s\n\n"+
+			"These errors require user intervention. Do NOT retry the parallel subagent call. "+
+			"Instead, report the errors to the user and ask for guidance.",
+			strings.Join(securityErrors, "\n"))
+
+		a.debugLog("Parallel subagents failed with security errors, stopping retry loop\n")
+		return errorMsg, nil
+	}
+
 	// Convert map result to JSON for return
 	jsonBytes, jsonErr := json.MarshalIndent(resultMap, "", "  ")
 	if jsonErr != nil {
@@ -1699,7 +1844,11 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	a.debugLog("Parallel subagents spawn result: %s\n", string(jsonBytes))
 
 	// Log parallel subagent completion
-	a.ToolLog("parallel subagents completed", fmt.Sprintf("%d tasks", len(resultMap)))
+	logMessage := fmt.Sprintf("%d tasks", len(resultMap))
+	if len(failedTasks) > 0 {
+		logMessage += fmt.Sprintf(" (%d failed)", len(failedTasks))
+	}
+	a.ToolLog("parallel subagents completed", logMessage)
 	return string(jsonBytes), nil
 }
 

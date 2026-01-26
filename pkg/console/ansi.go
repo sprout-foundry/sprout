@@ -4,6 +4,16 @@ import "fmt"
 
 // ANSI escape sequence helpers for consistent terminal control.
 
+// Colorize wraps text with a color code and reset
+func Colorize(text, color string) string {
+	return color + text + ColorReset
+}
+
+// ColorizeBold wraps text with bold and a color code
+func ColorizeBold(text, color string) string {
+	return ColorBold + color + text + ColorReset
+}
+
 // MoveCursorSeq returns the escape sequence to move the cursor to (x,y)
 // Note: ANSI uses row (y) first, then column (x).
 func MoveCursorSeq(x, y int) string {

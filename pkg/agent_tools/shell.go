@@ -1,9 +1,10 @@
 package tools
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -17,6 +18,7 @@ func ExecuteShellCommand(ctx context.Context, command string) (string, error) {
 }
 
 // ExecuteShellCommandWithSafety executes a shell command with configurable safety checks
+// and streams output in real-time to the terminal.
 func ExecuteShellCommandWithSafety(ctx context.Context, command string, interactiveMode bool, sessionID string) (string, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", fmt.Errorf("empty command provided")
@@ -52,39 +54,30 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 		return "", fmt.Errorf("failed to start command: %w", err)
 	}
 
-	// Create a string builder to capture the output
-	var output strings.Builder
+	// Buffer to capture output for return value
+	var outputBuf bytes.Buffer
 
-	// Create scanners to read the output line by line
-	stdoutScanner := bufio.NewScanner(stdout)
-	stderrScanner := bufio.NewScanner(stderr)
-
-	// Read from stdout and stderr concurrently with proper synchronization
+	// Stream stdout and stderr in real-time
+	// Use goroutines to handle both concurrently
 	var wg sync.WaitGroup
-	var outputMutex sync.Mutex
-
 	wg.Add(2)
+
+	// Copy stdout to both terminal and buffer
 	go func() {
 		defer wg.Done()
-		for stdoutScanner.Scan() {
-			line := stdoutScanner.Text()
-			outputMutex.Lock()
-			output.WriteString(line + "\n")
-			outputMutex.Unlock()
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		for stderrScanner.Scan() {
-			line := stderrScanner.Text()
-			outputMutex.Lock()
-			output.WriteString(line + "\n")
-			outputMutex.Unlock()
-		}
+		io.Copy(io.MultiWriter(os.Stdout, &outputBuf), stdout)
 	}()
 
-	// Wait for both readers to finish and the command to complete
+	// Copy stderr to both terminal and buffer
+	go func() {
+		defer wg.Done()
+		io.Copy(io.MultiWriter(os.Stderr, &outputBuf), stderr)
+	}()
+
+	// Wait for both streams to finish
 	wg.Wait()
+
+	// Wait for command to complete
 	err = cmd.Wait()
 
 	// Get the exit code for status reporting
@@ -99,7 +92,7 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	}
 
 	// Build the final output with status header
-	finalOutput := buildShellOutputWithStatus(output.String(), command, exitCode, err)
+	finalOutput := buildShellOutputWithStatus(outputBuf.String(), command, exitCode, err)
 
 	// Shell tool execution is always successful as long as we can run the command
 	// Non-zero exit codes are normal command outcomes, not tool failures

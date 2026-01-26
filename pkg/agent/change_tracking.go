@@ -124,13 +124,16 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 }
 
 // Commit commits all tracked changes to the change tracker
-func (ct *ChangeTracker) Commit(llmResponse string) error {
+func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) error {
 	if !ct.enabled || len(ct.changes) == 0 || ct.committed {
 		return nil // Already committed or nothing to commit
 	}
 
-	// Record base revision
-	revisionID, err := history.RecordBaseRevision(ct.revisionID, ct.instructions, llmResponse)
+	// Convert agent_api.Message to history.APIMessage for storage
+	historyConversation := convertToHistoryMessages(conversation)
+
+	// Record base revision with conversation
+	revisionID, err := history.RecordBaseRevision(ct.revisionID, ct.instructions, llmResponse, historyConversation)
 	if err != nil {
 		return fmt.Errorf("failed to record base revision: %w", err)
 	}
@@ -162,6 +165,43 @@ func (ct *ChangeTracker) Commit(llmResponse string) error {
 	// Mark as committed
 	ct.committed = true
 	return nil
+}
+
+// convertToHistoryMessages converts api.Message to history.APIMessage format
+func convertToHistoryMessages(messages []api.Message) []history.APIMessage {
+	if messages == nil {
+		return nil
+	}
+
+	result := make([]history.APIMessage, len(messages))
+	for i, msg := range messages {
+		result[i] = history.APIMessage{
+			Role:             msg.Role,
+			Content:          msg.Content,
+			ReasoningContent: msg.ReasoningContent,
+			ToolCallId:       msg.ToolCallId,
+		}
+
+		// Convert tool calls if present
+		if len(msg.ToolCalls) > 0 {
+			result[i].ToolCalls = make([]history.APIToolCall, len(msg.ToolCalls))
+			for j, tc := range msg.ToolCalls {
+				result[i].ToolCalls[j] = history.APIToolCall{
+					ID:   tc.ID,
+					Type: tc.Type,
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      tc.Function.Name,
+						Arguments: tc.Function.Arguments,
+					},
+				}
+			}
+		}
+	}
+
+	return result
 }
 
 // GetTrackedFiles returns a list of files that have been modified

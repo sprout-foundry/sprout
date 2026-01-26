@@ -218,7 +218,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 
 	if isSingleCommand {
 		// Execute single command directly (output streams in real-time)
-		_, execErr = tools.ExecuteShellCommand(context.Background(), generatedScript)
+		_, execErr = tools.ExecuteShellCommandWithSafety(context.Background(), generatedScript, true, "", true)
 	} else {
 		// For scripts, save to temporary file and execute
 		tmpFile, err := os.CreateTemp("", "ledit-script-*.sh")
@@ -241,7 +241,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 		}
 
 		// Execute the script (output streams in real-time)
-		_, execErr = tools.ExecuteShellCommand(context.Background(), tmpFile.Name())
+		_, execErr = tools.ExecuteShellCommandWithSafety(context.Background(), tmpFile.Name(), true, "", true)
 	}
 
 	// Display results (output has been streamed in real-time)

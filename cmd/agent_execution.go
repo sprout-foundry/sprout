@@ -3,13 +3,16 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -351,7 +354,25 @@ func tryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 		console.ColorReset,
 		query,
 	)
-	output, err := executeCommand(query)
+
+	// Print separator before streaming output
+	separatorWidth := getTerminalWidth()
+	separator := strings.Repeat("─", separatorWidth)
+	fmt.Printf("%s%s%s\n",
+		console.ColorGray,
+		separator,
+		console.ColorReset,
+	)
+
+	_, err = executeCommand(query)
+
+	// Print separator after output
+	fmt.Printf("%s%s%s\n",
+		console.ColorGray,
+		separator,
+		console.ColorReset,
+	)
+
 	if err != nil {
 		fmt.Printf("%s❌ Error:%s %v\n",
 			console.ColorRed,
@@ -380,25 +401,6 @@ func tryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 		return false, nil
 	}
 
-	if output != "" {
-		// Get terminal width for separators (default to 80 if can't detect)
-		separatorWidth := getTerminalWidth()
-		separator := strings.Repeat("─", separatorWidth)
-
-		// Print separator before output
-		fmt.Printf("%s%s%s\n",
-			console.ColorGray,
-			separator,
-			console.ColorReset,
-		)
-		fmt.Printf("%s\n", output)
-		// Print separator after output
-		fmt.Printf("%s%s%s\n",
-			console.ColorGray,
-			separator,
-			console.ColorReset,
-		)
-	}
 	return true, nil
 }
 
@@ -462,34 +464,31 @@ func tryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 			detectedCommand,
 		)
 
-		// Execute the command directly using bash
-		output, err := executeCommand(detectedCommand)
+		// Print separator before streaming output
+		separatorWidth := getTerminalWidth()
+		separator := strings.Repeat("─", separatorWidth)
+		fmt.Printf("%s%s%s\n",
+			console.ColorGray,
+			separator,
+			console.ColorReset,
+		)
+
+		// Execute the command directly using bash (output streams in real-time)
+		_, err := executeCommand(detectedCommand)
+
+		// Print separator after output
+		fmt.Printf("%s%s%s\n",
+			console.ColorGray,
+			separator,
+			console.ColorReset,
+		)
+
 		if err != nil {
 			fmt.Printf("%s❌ Error:%s %v\n",
 				console.ColorRed,
 				console.ColorReset,
 				err,
 			)
-		} else {
-			if output != "" {
-				// Get terminal width for separators (default to 80 if can't detect)
-				separatorWidth := getTerminalWidth()
-				separator := strings.Repeat("─", separatorWidth)
-
-				// Print separator before output
-				fmt.Printf("%s%s%s\n",
-					console.ColorGray,
-					separator,
-					console.ColorReset,
-				)
-				fmt.Printf("%s\n", output)
-				// Print separator after output
-				fmt.Printf("%s%s%s\n",
-					console.ColorGray,
-					separator,
-					console.ColorReset,
-				)
-			}
 		}
 		return true, nil
 	}
@@ -497,7 +496,8 @@ func tryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 	return false, nil
 }
 
-// executeCommand runs a shell command and returns its output
+// executeCommand runs a shell command and streams its output in real-time.
+// Returns the combined output (for error messages) and any error that occurred.
 func executeCommand(cmd string) (string, error) {
 	// Enhance command to force colors for git and other tools
 	enhancedCmd := enhanceCommandForColors(cmd)
@@ -513,11 +513,50 @@ func executeCommand(cmd string) (string, error) {
 		"NO_COLOR=", // Unset NO_COLOR if it exists
 	)
 
-	output, err := command.CombinedOutput()
+	// Create pipes for stdout and stderr
+	stdout, err := command.StdoutPipe()
 	if err != nil {
-		return string(output), err
+		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	return string(output), nil
+	stderr, err := command.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Buffer to capture output for error messages
+	var outputBuf bytes.Buffer
+
+	// Start the command
+	if err := command.Start(); err != nil {
+		return "", err
+	}
+
+	// Stream stdout and stderr in real-time
+	// Use goroutines to handle both concurrently
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Copy stdout to both terminal and buffer
+	go func() {
+		defer wg.Done()
+		io.Copy(io.MultiWriter(os.Stdout, &outputBuf), stdout)
+	}()
+
+	// Copy stderr to both terminal and buffer
+	go func() {
+		defer wg.Done()
+		io.Copy(io.MultiWriter(os.Stderr, &outputBuf), stderr)
+	}()
+
+	// Wait for both streams to finish
+	wg.Wait()
+
+	// Wait for command to complete
+	if err := command.Wait(); err != nil {
+		return outputBuf.String(), err
+	}
+
+	return outputBuf.String(), nil
 }
 
 // enhanceCommandForColors modifies commands to force color output

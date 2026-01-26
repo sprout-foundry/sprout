@@ -83,7 +83,9 @@ func (a *Agent) GetChangesSummary() string {
 // CommitChanges commits all tracked changes to the change tracker
 func (a *Agent) CommitChanges(llmResponse string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
-		return a.changeTracker.Commit(llmResponse)
+		// Get the full conversation from the agent
+		conversation := a.messages
+		return a.changeTracker.Commit(llmResponse, conversation)
 	}
 	return nil
 }

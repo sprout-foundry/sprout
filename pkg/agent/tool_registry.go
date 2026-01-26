@@ -281,6 +281,22 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleRollbackChanges,
 	})
 
+	// Register self-review tool for canonical spec validation
+	registry.RegisterTool(ToolConfig{
+		Name:        "self_review",
+		Description: "Review the agent's own work against a canonical specification extracted from the conversation to detect scope creep and ensure alignment with user requirements",
+		Parameters: []ParameterConfig{
+			{
+				Name:        "revision_id",
+				Type:        "string",
+				Required:    false,
+				Alternatives: []string{},
+				Description: "Optional revision ID to review (defaults to current/most recent revision)",
+			},
+		},
+		Handler: handleSelfReview,
+	})
+
 	return registry
 }
 

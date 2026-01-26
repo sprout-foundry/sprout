@@ -64,6 +64,7 @@ type ChangeLog struct {
 	OriginalPrompt   string // Added: Original user prompt
 	LLMMessage       string // Added: Full message sent to LLM
 	AgentModel       string // Added: Editing model used
+	HasConversation  bool   // Added: Whether conversation.json exists for this revision
 }
 
 // InitializeHistoryPaths configures the history storage paths based on configuration
@@ -121,7 +122,8 @@ func ensureChangesDirs() error {
 }
 
 // RecordBaseRevision saves the initial request and response, returning a revision ID.
-func RecordBaseRevision(requestHash, instructions, response string) (string, error) {
+// conversation is the full conversation history (all user/assistant/tool messages)
+func RecordBaseRevision(requestHash, instructions, response string, conversation []APIMessage) (string, error) {
 	if err := ensureChangesDirs(); err != nil {
 		return "", err
 	}
@@ -137,6 +139,17 @@ func RecordBaseRevision(requestHash, instructions, response string) (string, err
 	}
 	if err := filesystem.WriteFileWithDir(filepath.Join(revisionPath, "llm_response.txt"), []byte(response), 0644); err != nil {
 		return "", fmt.Errorf("failed to save LLM response: %w", err)
+	}
+
+	// Save conversation as JSON for multi-turn spec extraction
+	if conversation != nil && len(conversation) > 0 {
+		conversationBytes, err := json.MarshalIndent(conversation, "", "  ")
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal conversation: %w", err)
+		}
+		if err := filesystem.WriteFileWithDir(filepath.Join(revisionPath, "conversation.json"), conversationBytes, 0644); err != nil {
+			return "", fmt.Errorf("failed to save conversation: %w", err)
+		}
 	}
 
 	return revisionID, nil
@@ -322,6 +335,7 @@ func fetchAllChanges() ([]ChangeLog, error) {
 			OriginalPrompt:   metadata.OriginalPrompt,
 			LLMMessage:       metadata.LLMMessage,
 			AgentModel:       metadata.AgentModel,
+			HasConversation:  fileExists(filepath.Join(revisionPath, "conversation.json")), // Track if conversation exists
 		})
 	}
 
@@ -369,4 +383,13 @@ func GetChangedFilesSince(since time.Time) ([]string, error) {
 	}
 	// Keep file list stable order by timestamp order already provided
 	return files, nil
+}
+
+// fileExists checks if a file exists without following symlinks
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
 }

@@ -2,9 +2,11 @@ package history
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -19,7 +21,27 @@ type RevisionGroup struct {
 	Response     string
 	Changes      []ChangeLog
 	Timestamp    time.Time
-	AgentModel   string // Added: Editing model used for this revision
+	AgentModel   string      // Editing model used for this revision
+	Conversation []APIMessage // Full conversation history for multi-turn conversations
+}
+
+// APIMessage represents a message in the conversation (imported from agent_api to avoid circular dependency)
+type APIMessage struct {
+	Role             string      `json:"role"`
+	Content          string      `json:"content"`
+	ReasoningContent string      `json:"reasoning_content,omitempty"`
+	ToolCallId       string      `json:"tool_call_id,omitempty"`
+	ToolCalls        []APIToolCall `json:"tool_calls,omitempty"`
+}
+
+// APIToolCall represents a tool call in a message
+type APIToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }
 
 // HasActiveChangesForRevision returns whether a revision ID exists and has any active changes
@@ -335,13 +357,20 @@ func groupChangesByRevision(changes []ChangeLog) []RevisionGroup {
 				group.Timestamp = change.Timestamp
 			}
 		} else {
+			// Load conversation if it exists
+			var conversation []APIMessage
+			if change.HasConversation {
+				conversation = loadConversationForRevision(revisionID)
+			}
+
 			groupMap[revisionID] = &RevisionGroup{
 				RevisionID:   revisionID,
 				Instructions: change.Instructions,
 				Response:     change.Response,
 				Changes:      []ChangeLog{change},
 				Timestamp:    change.Timestamp,
-				AgentModel:   change.AgentModel, // Added: Include editing model in group
+				AgentModel:   change.AgentModel,
+				Conversation: conversation,
 			}
 		}
 	}
@@ -360,6 +389,24 @@ func groupChangesByRevision(changes []ChangeLog) []RevisionGroup {
 	})
 
 	return groups
+}
+
+// loadConversationForRevision loads the conversation JSON file for a revision
+func loadConversationForRevision(revisionID string) []APIMessage {
+	revisionPath := filepath.Join(GetRevisionsDir(), revisionID, "conversation.json")
+	conversationBytes, err := filesystem.ReadFileBytes(revisionPath)
+	if err != nil {
+		// Conversation doesn't exist or couldn't be read
+		return nil
+	}
+
+	var conversation []APIMessage
+	if err := json.Unmarshal(conversationBytes, &conversation); err != nil {
+		// Failed to parse conversation
+		return nil
+	}
+
+	return conversation
 }
 
 func sortChangesByTimestamp(changes []ChangeLog) {

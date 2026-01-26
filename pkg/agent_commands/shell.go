@@ -215,11 +215,10 @@ Example format: find . -name "*.go" | wc -l`, description)},
 	fmt.Printf("\n🚀 Executing %s...\n\n", c.getScriptType(isSingleCommand))
 
 	var execErr error
-	var output string
 
 	if isSingleCommand {
-		// Execute single command directly
-		output, execErr = tools.ExecuteShellCommand(context.Background(), generatedScript)
+		// Execute single command directly (output streams in real-time)
+		_, execErr = tools.ExecuteShellCommand(context.Background(), generatedScript)
 	} else {
 		// For scripts, save to temporary file and execute
 		tmpFile, err := os.CreateTemp("", "ledit-script-*.sh")
@@ -241,23 +240,17 @@ Example format: find . -name "*.go" | wc -l`, description)},
 			return fmt.Errorf("failed to make script executable: %v", err)
 		}
 
-		// Execute the script
-		output, execErr = tools.ExecuteShellCommand(context.Background(), tmpFile.Name())
+		// Execute the script (output streams in real-time)
+		_, execErr = tools.ExecuteShellCommand(context.Background(), tmpFile.Name())
 	}
 
-	// Display results
+	// Display results (output has been streamed in real-time)
 	if execErr != nil {
 		fmt.Printf("❌ Execution failed: %v\n", execErr)
-		if output != "" {
-			fmt.Printf("\nOutput:\n%s\n", output)
-		}
 		return nil
 	}
 
 	fmt.Printf("✅ %s executed successfully!\n", c.getScriptType(isSingleCommand))
-	if output != "" {
-		fmt.Printf("\nOutput:\n%s\n", output)
-	}
 
 	return nil
 }

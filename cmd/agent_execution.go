@@ -291,8 +291,11 @@ func tryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 	}
 	displayMsg.WriteString("\n")
 
+	// Check if we should auto-execute (either '!' prefix or config setting)
+	shouldAutoExecute := autoExecute || config.AutoExecuteDetectedCommands
+
 	// Ask for confirmation (unless auto-execute)
-	if !autoExecute {
+	if !shouldAutoExecute {
 		fmt.Print(displayMsg.String())
 		fmt.Print("Execute directly? [Y/n] ")
 
@@ -310,8 +313,12 @@ func tryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 			return false, nil
 		}
 	} else {
-		// Auto-execute with '!'
-		fmt.Printf("%s[Auto-executing with !]\n", displayMsg.String())
+		// Auto-execute
+		if autoExecute {
+			fmt.Printf("%s[Auto-executing with !]\n", displayMsg.String())
+		} else {
+			fmt.Printf("%s[Auto-executing]\n", displayMsg.String())
+		}
 	}
 
 	// Execute the command

@@ -22,7 +22,7 @@ func TestRollbackMultipleFiles(t *testing.T) {
 	}()
 
 	// Create revision with multiple files
-	revisionID, _ := RecordBaseRevision("multi-revision", "Modify multiple files", "LLM response")
+	revisionID, _ := RecordBaseRevision("multi-revision", "Modify multiple files", "LLM response", []APIMessage{})
 
 	files := map[string]string{
 		"file1.go":         "original content 1",
@@ -88,7 +88,7 @@ func TestRollbackWithLargeFiles(t *testing.T) {
 		}
 	}()
 
-	revisionID, _ := RecordBaseRevision("large-revision", "Large file update", "Response")
+	revisionID, _ := RecordBaseRevision("large-revision", "Large file update", "Response", []APIMessage{})
 
 	// Create a large original file (10KB)
 	largeOriginal := string(make([]byte, 10240))
@@ -139,7 +139,7 @@ func TestRollbackWithSpecialCharacters(t *testing.T) {
 		}
 	}()
 
-	revisionID, _ := RecordBaseRevision("special-revision", "Special chars update", "Response")
+	revisionID, _ := RecordBaseRevision("special-revision", "Special chars update", "Response", []APIMessage{})
 
 	testCases := []struct {
 		filename string
@@ -189,7 +189,7 @@ func TestRollbackAfterPartialState(t *testing.T) {
 		}
 	}()
 
-	revisionID, _ := RecordBaseRevision("partial-revision", "Partial changes", "Response")
+	revisionID, _ := RecordBaseRevision("partial-revision", "Partial changes", "Response", []APIMessage{})
 
 	// File A: tracked with changes
 	fileA := "tracked.go"
@@ -238,12 +238,12 @@ func TestMultipleRevisionsSameFile(t *testing.T) {
 	os.WriteFile(filename, []byte("v1"), 0600)
 
 	// First revision
-	rev1, _ := RecordBaseRevision("rev1", "Change to v2", "Response1")
+	rev1, _ := RecordBaseRevision("rev1", "Change to v2", "Response1", []APIMessage{})
 	RecordChangeWithDetails(rev1, filename, "v1", "v2", "update to v2", "", "", "", "test-model")
 	os.WriteFile(filename, []byte("v2"), 0600)
 
 	// Second revision
-	rev2, _ := RecordBaseRevision("rev2", "Change to v3", "Response2")
+	rev2, _ := RecordBaseRevision("rev2", "Change to v3", "Response2", []APIMessage{})
 	RecordChangeWithDetails(rev2, filename, "v2", "v3", "update to v3", "", "", "", "test-model")
 	os.WriteFile(filename, []byte("v3"), 0600)
 
@@ -288,7 +288,7 @@ func TestRollbackEmptyFile(t *testing.T) {
 		}
 	}()
 
-	revisionID, _ := RecordBaseRevision("empty-revision", "Empty file test", "Response")
+	revisionID, _ := RecordBaseRevision("empty-revision", "Empty file test", "Response", []APIMessage{})
 
 	filename := "empty.go"
 	// Empty with content
@@ -328,7 +328,7 @@ func TestRollbackBinaryFile(t *testing.T) {
 		}
 	}()
 
-	revisionID, _ := RecordBaseRevision("binary-revision", "Binary file update", "Response")
+	revisionID, _ := RecordBaseRevision("binary-revision", "Binary file update", "Response", []APIMessage{})
 
 	filename := "image.png"
 	original := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A} // PNG header
@@ -366,7 +366,7 @@ func TestRollbackNonexistentFile(t *testing.T) {
 		}
 	}()
 
-	revisionID, _ := RecordBaseRevision("create-file", "Create new file", "Response")
+	revisionID, _ := RecordBaseRevision("create-file", "Create new file", "Response", []APIMessage{})
 
 	filename := "newfile.js"
 	// File didn't exist originally (empty string for original)

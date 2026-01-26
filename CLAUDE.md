@@ -117,7 +117,7 @@ Key configuration aspects:
 
 ## Zsh Command Detection
 
-By default (when using zsh), ledit detects zsh commands before sending them to the AI. This can be disabled by setting `enable_zsh_command_detection: false` in the config:
+By default (when using zsh), ledit detects zsh commands before sending them to the AI. This can be disabled by setting `enable_zsh_command_detection: false` in the config. Commands are auto-executed by default, which can be changed with `auto_execute_detected_commands: false`.
 
 **Implementation:**
 - `pkg/zsh/command.go`: Core zsh command detection logic
@@ -128,11 +128,18 @@ By default (when using zsh), ledit detects zsh commands before sending them to t
 **Integration Flow:**
 - `cmd/agent_execution.go`: `tryZshCommandExecution()` called before `tryDirectExecution()`
 - Only active when `$SHELL` contains "zsh" and config flag is not explicitly disabled
-- Shows confirmation prompt (unless `!` prefix is used for auto-execute)
+- Auto-executes by default (configurable via `auto_execute_detected_commands`)
+- Shows confirmation prompt only if auto-execute is disabled
+- `!` prefix always forces auto-execution (overrides config)
 - Falls back to LLM-based detection if zsh detection fails or user declines
+
+**Configuration:**
+- `enable_zsh_command_detection`: Enable/disable feature (default: `true`)
+- `auto_execute_detected_commands`: Auto-execute without prompting (default: `true`)
 
 **Key Design Points:**
 - Respects existing `!` prefix for auto-execution (compatibility with slash commands)
 - Enabled by default when using zsh (can be disabled in config)
+- Auto-execution enabled by default for smoother UX
 - Gracefully falls back if zsh is not available or command is unclear
 - All command types supported: external, builtin, alias, function

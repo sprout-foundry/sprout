@@ -217,6 +217,47 @@ Key sections:
 
 Additional settings are managed internally and configured through the agent interface rather than the config file.
 
+### Zsh Command Detection
+
+When using zsh as your shell, `ledit` automatically detects commands available in your environment (external commands, builtins, aliases, and functions) and offers to execute them directly instead of sending them to the AI. This feature is **enabled by default** when using zsh.
+
+**To disable this feature**, add to your `~/.ledit/config.json`:
+
+```json
+{
+  "enable_zsh_command_detection": false
+}
+```
+
+**How it works:**
+
+1. When you type a command that matches an available zsh command (e.g., `git status`, `ls -la`), `ledit` detects it
+2. Shows you what type of command it detected and asks for confirmation:
+   ```
+   [Detected external command: git] [/usr/bin/git]
+   Execute directly? [Y/n]: _
+   ```
+3. If you confirm, executes the command directly without involving the AI
+4. If you decline or if it's not a clear command, falls through to normal AI processing
+
+**Auto-execution with `!`:**
+
+Prefix your command with `!` to skip confirmation and auto-execute:
+```bash
+ledit> !git status  # Executes immediately without asking
+```
+
+**Why use this?**
+
+- **Faster execution**: Skip the AI for simple shell commands
+- **Predictable behavior**: Exact command execution vs AI interpretation
+- **Safer**: See exactly what will be executed before running
+- **Better for routine tasks**: Use AI for complex tasks, shell for simple ones
+
+**Fallback behavior:**
+
+If the input is not clearly a command, it will be passed to the AI as normal. This feature only triggers when zsh can confirm the first word is a valid command, builtin, alias, or function.
+
 ## Usage and Commands
 
 **Quick Start**: Just type `ledit` to start the interactive AI agent mode with terminal UI!

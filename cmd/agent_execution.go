@@ -358,8 +358,26 @@ func tryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 			console.ColorReset,
 			err,
 		)
-		// Still return true since we attempted execution
-		return true, nil
+		// Command execution failed - ask user if they want to send to LLM instead
+		fmt.Print("The command failed. Send this query to the AI assistant instead? [Y/n] ")
+
+		// Read response
+		reader := bufio.NewReader(os.Stdin)
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			// If we can't read response, just return true (we attempted)
+			return true, nil
+		}
+		response = strings.TrimSpace(strings.ToLower(response))
+
+		// Default to yes (send to LLM) unless user explicitly says no
+		if response == "n" || response == "no" {
+			// User declined, return true since we attempted execution
+			return true, nil
+		}
+
+		// User wants to send to LLM, return false to proceed with normal agent flow
+		return false, nil
 	}
 
 	if output != "" {

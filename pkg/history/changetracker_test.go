@@ -50,7 +50,7 @@ func TestRecordAndFetchChanges_Roundtrip(t *testing.T) {
 	_ = os.Chdir(dir)
 
 	// Create base revision and a change
-	revID, err := RecordBaseRevision("req1", "do x", "ok")
+	revID, err := RecordBaseRevision("req1", "do x", "ok", []APIMessage{})
 	if err != nil {
 		t.Fatalf("RecordBaseRevision: %v", err)
 	}

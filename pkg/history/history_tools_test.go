@@ -33,7 +33,7 @@ func TestBase64Encoding(t *testing.T) {
 	description := "Update greeting message"
 
 	// Record a change
-	revisionID, err := RecordBaseRevision("test-revision", "Update the greeting", "Changes applied successfully")
+	revisionID, err := RecordBaseRevision("test-revision", "Update the greeting", "Changes applied successfully", []APIMessage{})
 	if err != nil {
 		t.Fatalf("Failed to record base revision: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestHistoryFiltering(t *testing.T) {
 	now := time.Now()
 
 	// Revision 1 - older
-	rev1, err := RecordBaseRevision("rev1", "First change", "First response")
+	rev1, err := RecordBaseRevision("rev1", "First change", "First response", []APIMessage{})
 	if err != nil {
 		t.Fatalf("Failed to record revision 1: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestHistoryFiltering(t *testing.T) {
 	}
 
 	// Revision 2 - newer
-	rev2, err := RecordBaseRevision("rev2", "Second change", "Second response")
+	rev2, err := RecordBaseRevision("rev2", "Second change", "Second response", []APIMessage{})
 	if err != nil {
 		t.Fatalf("Failed to record revision 2: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestRollback(t *testing.T) {
 	}
 
 	// Record a change
-	revisionID, err := RecordBaseRevision("rollback-test", "Test rollback", "Rollback test response")
+	revisionID, err := RecordBaseRevision("rollback-test", "Test rollback", "Rollback test response", []APIMessage{})
 	if err != nil {
 		t.Fatalf("Failed to record base revision: %v", err)
 	}

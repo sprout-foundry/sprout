@@ -89,7 +89,8 @@ type Config struct {
 	SubagentTypes   map[string]SubagentType `json:"subagent_types,omitempty"`  // Named subagent personas (coder, tester, etc.)
 
 	// Zsh Command Execution
-	EnableZshCommandDetection bool `json:"enable_zsh_command_detection,omitempty"` // Enable zsh-aware command detection (default: false)
+	EnableZshCommandDetection  bool `json:"enable_zsh_command_detection,omitempty"`  // Enable zsh-aware command detection (default: false)
+	AutoExecuteDetectedCommands bool `json:"auto_execute_detected_commands,omitempty"` // Auto-execute detected commands without prompting (default: true)
 
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
@@ -231,6 +232,7 @@ func NewConfig() *Config {
 		},
 		HistoryScope: "project", // Default to project-scoped history
 		EnableZshCommandDetection: true, // Enable zsh command detection by default
+		AutoExecuteDetectedCommands: true, // Auto-execute detected commands without prompting
 		SubagentTypes: map[string]SubagentType{
 			"general": {
 				ID:           "general",
@@ -400,6 +402,10 @@ func Load() (*Config, error) {
 		if _, exists := rawConfig["enable_zsh_command_detection"]; !exists {
 			// Field doesn't exist in config file, apply default
 			config.EnableZshCommandDetection = true
+		}
+		if _, exists := rawConfig["auto_execute_detected_commands"]; !exists {
+			// Field doesn't exist in config file, apply default
+			config.AutoExecuteDetectedCommands = true
 		}
 	}
 

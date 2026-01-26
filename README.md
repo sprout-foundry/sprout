@@ -219,10 +219,30 @@ Additional settings are managed internally and configured through the agent inte
 
 ### Zsh Command Detection
 
-When using zsh as your shell, `ledit` automatically detects commands available in your environment (external commands, builtins, aliases, and functions) and offers to execute them directly instead of sending them to the AI. This feature is **enabled by default** when using zsh.
+When using zsh as your shell, `ledit` automatically detects commands available in your environment (external commands, builtins, aliases, and functions) and executes them directly instead of sending them to the AI. This feature is **enabled by default** when using zsh.
 
-**To disable this feature**, add to your `~/.ledit/config.json`:
+**Configuration Options:**
 
+To modify behavior, add to your `~/.ledit/config.json`:
+
+```json
+{
+  "enable_zsh_command_detection": true,
+  "auto_execute_detected_commands": true
+}
+```
+
+- `enable_zsh_command_detection`: Enable/disable command detection (default: `true`)
+- `auto_execute_detected_commands`: Auto-execute detected commands without prompting (default: `true`)
+
+**To disable auto-execution** (prompt for confirmation):
+```json
+{
+  "auto_execute_detected_commands": false
+}
+```
+
+**To disable the feature entirely**:
 ```json
 {
   "enable_zsh_command_detection": false
@@ -232,27 +252,28 @@ When using zsh as your shell, `ledit` automatically detects commands available i
 **How it works:**
 
 1. When you type a command that matches an available zsh command (e.g., `git status`, `ls -la`), `ledit` detects it
-2. Shows you what type of command it detected and asks for confirmation:
+2. By default, **auto-executes** the command immediately (configurable):
    ```
    [Detected external command: git] [/usr/bin/git]
-   Execute directly? [Y/n]: _
+   [Auto-executing]
+   ▶ Executing: git status
    ```
-3. If you confirm, executes the command directly without involving the AI
-4. If you decline or if it's not a clear command, falls through to normal AI processing
+3. If you've disabled auto-execution, it will ask for confirmation first
+4. If it's not a clear command, falls through to normal AI processing
 
-**Auto-execution with `!`:**
+**Manual execution with `!`:**
 
-Prefix your command with `!` to skip confirmation and auto-execute:
+Prefix your command with `!` to force auto-execution (overrides config):
 ```bash
-ledit> !git status  # Executes immediately without asking
+ledit> !git status  # Always executes immediately
 ```
 
 **Why use this?**
 
-- **Faster execution**: Skip the AI for simple shell commands
+- **Faster execution**: Commands run instantly without AI involvement
 - **Predictable behavior**: Exact command execution vs AI interpretation
-- **Safer**: See exactly what will be executed before running
-- **Better for routine tasks**: Use AI for complex tasks, shell for simple ones
+- **Better for routine tasks**: Use shell for simple commands, AI for complex ones
+- **Configurable safety**: Choose between auto-execute or confirmation prompts
 
 **Fallback behavior:**
 

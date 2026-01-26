@@ -47,6 +47,7 @@ func NewDiffOptimizerForReview() *DiffOptimizer {
 		MaxFileSize:  100000, // 100KB for code reviews
 		LargeFileExtensions: []string{
 			// Only optimize lock files and generated content for reviews
+			// Note: .mod files (go.mod) are NOT included - they're important for reviews
 			".lock", ".sum",
 			".min.js", ".min.css", ".bundle.js", ".dist.js",
 		},
@@ -58,6 +59,8 @@ func NewDiffOptimizerForReview() *DiffOptimizer {
 		GeneratedFilePatterns: []string{
 			"*.min.*", "*.bundle.*", "*.dist.*", "*.generated.*",
 			"bundle.*", "*.bundle.js", "*.bundle.css",
+			"*.map", // Source maps are fully generated
+			"asset-manifest.json", "manifest.json", // Build asset manifests
 			"dist/", "build/", "node_modules/", "vendor/",
 			".git/", ".svn/", ".hg/",
 		},

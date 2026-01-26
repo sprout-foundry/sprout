@@ -114,3 +114,25 @@ Key configuration aspects:
 ## Environment Variables
 
 - **`CI`** or **`GITHUB_ACTIONS`**: When set, agent runs in non-interactive mode suitable for CI/CD pipelines
+
+## Zsh Command Detection
+
+By default (when using zsh), ledit detects zsh commands before sending them to the AI. This can be disabled by setting `enable_zsh_command_detection: false` in the config:
+
+**Implementation:**
+- `pkg/zsh/command.go`: Core zsh command detection logic
+  - `IsCommand(input)`: Checks if input starts with a valid zsh command
+  - Queries zsh's command tables: `${commands}`, `${builtins}`, `${aliases}`, `${functions}`
+  - Returns command type and metadata (path, alias value, etc.)
+
+**Integration Flow:**
+- `cmd/agent_execution.go`: `tryZshCommandExecution()` called before `tryDirectExecution()`
+- Only active when `$SHELL` contains "zsh" and config flag is not explicitly disabled
+- Shows confirmation prompt (unless `!` prefix is used for auto-execute)
+- Falls back to LLM-based detection if zsh detection fails or user declines
+
+**Key Design Points:**
+- Respects existing `!` prefix for auto-execution (compatibility with slash commands)
+- Enabled by default when using zsh (can be disabled in config)
+- Gracefully falls back if zsh is not available or command is unclear
+- All command types supported: external, builtin, alias, function

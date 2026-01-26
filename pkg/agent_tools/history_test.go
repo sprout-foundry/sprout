@@ -31,7 +31,7 @@ func withTempWorkspace(t *testing.T) func() {
 func recordSampleChange(t *testing.T, filename, original, updated string) string {
 	t.Helper()
 
-	revisionID, err := history.RecordBaseRevision("test-revision", "Update file", "Changes applied")
+	revisionID, err := history.RecordBaseRevision("test-revision", "Update file", "Changes applied", []history.APIMessage{})
 	if err != nil {
 		t.Fatalf("failed to record base revision: %v", err)
 	}

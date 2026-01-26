@@ -280,14 +280,30 @@ func tryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 		return false, nil
 	}
 
-	// Build the display message
+	// Build the display message with colors
 	var displayMsg strings.Builder
-	displayMsg.WriteString(fmt.Sprintf("\n[Detected %s command: %s]", cmdInfo.Type, cmdInfo.Name))
+	displayMsg.WriteString(fmt.Sprintf("\n%s[Detected %s command: %s%s]%s",
+		console.ColorCyan,
+		cmdInfo.Type,
+		cmdInfo.Name,
+		console.ColorReset,
+		console.ColorReset,
+	))
 	switch cmdInfo.Type {
 	case zsh.CommandTypeExternal:
-		displayMsg.WriteString(fmt.Sprintf(" [%s]", cmdInfo.Path))
+		displayMsg.WriteString(fmt.Sprintf(" %s[%s%s]%s",
+			console.ColorGray,
+			cmdInfo.Path,
+			console.ColorReset,
+			console.ColorReset,
+		))
 	case zsh.CommandTypeAlias:
-		displayMsg.WriteString(fmt.Sprintf(" [%s]", cmdInfo.Value))
+		displayMsg.WriteString(fmt.Sprintf(" %s[%s%s]%s",
+			console.ColorGray,
+			cmdInfo.Value,
+			console.ColorReset,
+			console.ColorReset,
+		))
 	}
 	displayMsg.WriteString("\n")
 
@@ -313,25 +329,57 @@ func tryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 			return false, nil
 		}
 	} else {
-		// Auto-execute
+		// Auto-execute with color
 		if autoExecute {
-			fmt.Printf("%s[Auto-executing with !]\n", displayMsg.String())
+			fmt.Printf("%s%s[Auto-executing with !]%s\n",
+				displayMsg.String(),
+				console.ColorizeBold("Auto-executing with !", console.ColorYellow),
+				console.ColorReset,
+			)
 		} else {
-			fmt.Printf("%s[Auto-executing]\n", displayMsg.String())
+			fmt.Printf("%s%s[Auto-executing]%s\n",
+				displayMsg.String(),
+				console.ColorizeBold("Auto-executing", console.ColorGreen),
+				console.ColorReset,
+			)
 		}
 	}
 
-	// Execute the command
-	fmt.Printf("▶ Executing: %s\n", query)
+	// Execute the command with color indicator
+	fmt.Printf("%s▶ Executing:%s %s\n",
+		console.ColorizeBold("▶ Executing:", console.ColorBlue),
+		console.ColorReset,
+		query,
+	)
 	output, err := executeCommand(query)
 	if err != nil {
-		fmt.Printf("❌ Error: %v\n", err)
+		fmt.Printf("%s❌ Error:%s %v\n",
+			console.ColorRed,
+			console.ColorReset,
+			err,
+		)
 		// Still return true since we attempted execution
 		return true, nil
 	}
 
 	if output != "" {
+		// Get terminal width for separators (default to 80 if can't detect)
+		separatorWidth := getTerminalWidth()
+		separator := strings.Repeat("─", separatorWidth)
+
+		// Print separator before output
+		fmt.Printf("%s%s%s\n",
+			console.ColorGray,
+			separator,
+			console.ColorReset,
+		)
 		fmt.Printf("%s\n", output)
+		// Print separator after output
+		fmt.Printf("%s%s%s\n",
+			console.ColorGray,
+			separator,
+			console.ColorReset,
+		)
 	}
 	return true, nil
 }
@@ -390,14 +438,40 @@ func tryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 
 	// Only execute directly if high confidence (>0.8)
 	if isDirect && confidence > 0.8 && detectedCommand != "" {
-		fmt.Printf("⚡ Fast path: %s\n", detectedCommand)
+		fmt.Printf("%s⚡ Fast path:%s %s\n",
+			console.ColorizeBold("⚡ Fast path:", console.ColorYellow),
+			console.ColorReset,
+			detectedCommand,
+		)
 
 		// Execute the command directly using bash
 		output, err := executeCommand(detectedCommand)
 		if err != nil {
-			fmt.Printf("Error: %v\n", err)
+			fmt.Printf("%s❌ Error:%s %v\n",
+				console.ColorRed,
+				console.ColorReset,
+				err,
+			)
 		} else {
-			fmt.Printf("%s\n", output)
+			if output != "" {
+				// Get terminal width for separators (default to 80 if can't detect)
+				separatorWidth := getTerminalWidth()
+				separator := strings.Repeat("─", separatorWidth)
+
+				// Print separator before output
+				fmt.Printf("%s%s%s\n",
+					console.ColorGray,
+					separator,
+					console.ColorReset,
+				)
+				fmt.Printf("%s\n", output)
+				// Print separator after output
+				fmt.Printf("%s%s%s\n",
+					console.ColorGray,
+					separator,
+					console.ColorReset,
+				)
+			}
 		}
 		return true, nil
 	}
@@ -407,12 +481,57 @@ func tryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 
 // executeCommand runs a shell command and returns its output
 func executeCommand(cmd string) (string, error) {
-	// Run command through bash -c
-	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	// Enhance command to force colors for git and other tools
+	enhancedCmd := enhanceCommandForColors(cmd)
+
+	// Run command through bash -c with color support
+	command := exec.Command("bash", "-c", enhancedCmd)
+
+	// Set environment to force color output
+	command.Env = append(os.Environ(),
+		"FORCE_COLOR=1",
+		"TERM=xterm-256color",
+		"CLICOLOR_FORCE=1",
+		"NO_COLOR=", // Unset NO_COLOR if it exists
+	)
+
+	output, err := command.CombinedOutput()
 	if err != nil {
 		return string(output), err
 	}
 	return string(output), nil
+}
+
+// enhanceCommandForColors modifies commands to force color output
+func enhanceCommandForColors(cmd string) string {
+	trimmed := strings.TrimSpace(cmd)
+
+	// For git commands, inject -c color.ui=always after "git"
+	if strings.HasPrefix(trimmed, "git ") {
+		// Split "git" and the rest
+		parts := strings.SplitN(trimmed, " ", 2)
+		if len(parts) == 2 {
+			subcommand := strings.TrimSpace(parts[1])
+			// Inject color config before the subcommand
+			return fmt.Sprintf("git -c color.ui=always %s", subcommand)
+		}
+	}
+
+	// For ls, ensure --color=auto is present (works with FORCE_COLOR)
+	if strings.HasPrefix(trimmed, "ls ") {
+		if !strings.Contains(trimmed, "--color") {
+			return strings.Replace(trimmed, "ls", "ls --color=auto", 1)
+		}
+	}
+
+	// For grep, ensure --color=auto is present
+	if strings.HasPrefix(trimmed, "grep ") {
+		if !strings.Contains(trimmed, "--color") {
+			return strings.Replace(trimmed, "grep", "grep --color=auto", 1)
+		}
+	}
+
+	return cmd
 }
 
 // runDirectMode handles direct command execution
@@ -603,4 +722,27 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fm", d.Minutes())
 	}
 	return fmt.Sprintf("%.1fh", d.Hours())
+}
+
+// getTerminalWidth attempts to get the terminal width for separators
+// Returns a conservative width to avoid wrapping
+func getTerminalWidth() int {
+	// Try using golang.org/x/term to get terminal width
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err == nil && width > 0 {
+		// Subtract 2 to be conservative and avoid wrapping
+		width = width - 2
+
+		// Cap at reasonable limits
+		if width > 200 {
+			return 200
+		}
+		if width < 40 {
+			return 40
+		}
+		return width
+	}
+
+	// Fallback to a safe default that works in most terminals
+	return 78
 }

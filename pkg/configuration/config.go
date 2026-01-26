@@ -88,6 +88,8 @@ type Config struct {
 	SubagentModel    string            `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
 	SubagentTypes   map[string]SubagentType `json:"subagent_types,omitempty"`  // Named subagent personas (coder, tester, etc.)
 
+	// Zsh Command Execution
+	EnableZshCommandDetection bool `json:"enable_zsh_command_detection,omitempty"` // Enable zsh-aware command detection (default: false)
 
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
@@ -228,6 +230,7 @@ func NewConfig() *Config {
 			OverallTimeoutSec:    600, // 10 minutes
 		},
 		HistoryScope: "project", // Default to project-scoped history
+		EnableZshCommandDetection: true, // Enable zsh command detection by default
 		SubagentTypes: map[string]SubagentType{
 			"general": {
 				ID:           "general",
@@ -373,6 +376,30 @@ func Load() (*Config, error) {
 		}
 		if config.APITimeouts.OverallTimeoutSec == 0 {
 			config.APITimeouts.OverallTimeoutSec = def.OverallTimeoutSec
+		}
+	}
+
+	// Apply default for EnableZshCommandDetection if not explicitly set
+	// Note: We can't distinguish between "not set" and "set to false" in JSON unmarshaling
+	// for booleans, so we only apply the default if the config version is old
+	// However, since this is a new field in an existing config, we need to check
+	// if it was explicitly set. A simple heuristic: if version < 2.1, enable it
+	// Actually, better approach: Use the zero value as a signal to apply default
+	// But since we want it true by default, we need to be careful
+	// For now, let's just set it to true if it's false and the config was recently created
+	// A better solution would be to use a pointer, but that would break the API
+	// For now, we'll rely on the fact that new configs get the default via NewConfig()
+	// and existing configs will need to be manually updated or we add migration logic
+	// As a pragmatic solution: if the field doesn't exist in the JSON, it will be false,
+	// so we need to detect this case and apply the default
+	// The cleanest way is to check if the field exists in the raw JSON
+
+	// Check if enable_zsh_command_detection exists in the raw JSON
+	var rawConfig map[string]interface{}
+	if err := json.Unmarshal(data, &rawConfig); err == nil {
+		if _, exists := rawConfig["enable_zsh_command_detection"]; !exists {
+			// Field doesn't exist in config file, apply default
+			config.EnableZshCommandDetection = true
 		}
 	}
 

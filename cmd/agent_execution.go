@@ -21,6 +21,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/security_validator"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/webui"
+	"github.com/alantheprice/ledit/pkg/zsh"
 	"golang.org/x/term"
 )
 
@@ -235,17 +236,97 @@ func runNewInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus
 				return nil
 			}
 
-			// Try fast path: direct command execution
-			if executed, err := tryDirectExecution(ctx, chatAgent, query); err != nil {
+			// Try zsh command detection first (fast path)
+			if executed, err := tryZshCommandExecution(ctx, chatAgent, query); err != nil {
 				fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
 			} else if !executed {
-				// Fast path didn't trigger, process normally
-				if err := processQuery(ctx, chatAgent, eventBus, query); err != nil {
+				// Zsh detection didn't trigger, try LLM-based detection
+				if executed, err := tryDirectExecution(ctx, chatAgent, query); err != nil {
 					fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+				} else if !executed {
+					// Neither fast path triggered, process normally
+					if err := processQuery(ctx, chatAgent, eventBus, query); err != nil {
+						fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+					}
 				}
 			}
 		}
 	}
+}
+
+// tryZshCommandExecution attempts to detect and execute zsh commands directly
+// Returns true if command was executed, false if normal flow should proceed
+func tryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query string) (bool, error) {
+	// Check if zsh command detection is enabled
+	config := chatAgent.GetConfig()
+	if config == nil || !config.EnableZshCommandDetection {
+		return false, nil
+	}
+
+	// Check if this starts with '!' for auto-execution (skip confirmation)
+	autoExecute := strings.HasPrefix(query, "!")
+	if autoExecute {
+		query = strings.TrimPrefix(query, "!")
+		query = strings.TrimSpace(query)
+	}
+
+	// Check if this is a zsh command
+	isCommand, cmdInfo, err := zsh.IsCommand(query)
+	if err != nil {
+		// If there's an error checking, just proceed with normal flow
+		return false, nil
+	}
+	if !isCommand || cmdInfo == nil {
+		return false, nil
+	}
+
+	// Build the display message
+	var displayMsg strings.Builder
+	displayMsg.WriteString(fmt.Sprintf("\n[Detected %s command: %s]", cmdInfo.Type, cmdInfo.Name))
+	switch cmdInfo.Type {
+	case zsh.CommandTypeExternal:
+		displayMsg.WriteString(fmt.Sprintf(" [%s]", cmdInfo.Path))
+	case zsh.CommandTypeAlias:
+		displayMsg.WriteString(fmt.Sprintf(" [%s]", cmdInfo.Value))
+	}
+	displayMsg.WriteString("\n")
+
+	// Ask for confirmation (unless auto-execute)
+	if !autoExecute {
+		fmt.Print(displayMsg.String())
+		fmt.Print("Execute directly? [Y/n] ")
+
+		// Read response
+		reader := bufio.NewReader(os.Stdin)
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			return false, fmt.Errorf("failed to read response: %w", err)
+		}
+		response = strings.TrimSpace(strings.ToLower(response))
+
+		// Default to yes if empty, otherwise check for y/yes
+		if response != "" && response != "y" && response != "yes" {
+			// User declined, proceed with normal agent flow
+			return false, nil
+		}
+	} else {
+		// Auto-execute with '!'
+		fmt.Printf("%s[Auto-executing with !]\n", displayMsg.String())
+	}
+
+	// Execute the command
+	fmt.Printf("▶ Executing: %s\n", query)
+	output, err := executeCommand(query)
+	if err != nil {
+		fmt.Printf("❌ Error: %v\n", err)
+		// Still return true since we attempted execution
+		return true, nil
+	}
+
+	if output != "" {
+		fmt.Printf("%s\n", output)
+	}
+	return true, nil
 }
 
 // tryDirectExecution attempts to execute simple commands directly using local LLM
@@ -331,7 +412,15 @@ func executeCommand(cmd string) (string, error) {
 func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
 	fmt.Printf("🚀 Processing: %s\n", query)
 
-	// Try fast path: direct command execution
+	// Try zsh command detection first
+	if executed, err := tryZshCommandExecution(ctx, chatAgent, query); err != nil {
+		return err
+	} else if executed {
+		// Command was executed directly, skip normal agent flow
+		return nil
+	}
+
+	// Try LLM-based fast path: direct command execution
 	if executed, err := tryDirectExecution(ctx, chatAgent, query); err != nil {
 		return err
 	} else if executed {

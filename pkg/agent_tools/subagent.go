@@ -157,6 +157,12 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 
 	cmd := exec.CommandContext(ctx, leditPath, args...)
 
+	// Explicitly set working directory to current directory to ensure subagent
+	// runs in the same location as the parent process
+	if wd, err := os.Getwd(); err == nil {
+		cmd.Dir = wd
+	}
+
 	// Propagate important environment variables to subagent processes
 	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1", "LEDIT_SUBAGENT=1")
 	if debug := os.Getenv("LEDIT_DEBUG"); debug != "" {
@@ -453,6 +459,12 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 	}
 
 	cmd := exec.CommandContext(ctx, leditPath, args...)
+
+	// Explicitly set working directory to current directory to ensure subagent
+	// runs in the same location as the parent process
+	if wd, err := os.Getwd(); err == nil {
+		cmd.Dir = wd
+	}
 
 	// Propagate important environment variables to subagent processes
 	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1", "LEDIT_SUBAGENT=1")

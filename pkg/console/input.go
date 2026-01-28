@@ -64,6 +64,9 @@ type InputReader struct {
 	lastCharTime     time.Time
 	inPasteMode      bool
 	pasteStartPrompt string
+
+	// Track current physical line (for multi-line wrapped input)
+	currentPhysicalLine int
 }
 
 // NewInputReader creates a new input reader
@@ -484,47 +487,76 @@ func (ir *InputReader) getLineAndColumn() (lineIdx, col int) {
 
 // Refresh redraws the current input line
 func (ir *InputReader) Refresh() {
-	// Calculate how many physical lines the content takes up
-	totalLength := len(ir.prompt) + len(ir.line)
-	currentLineCount := (totalLength + ir.terminalWidth - 1) / ir.terminalWidth
+	// Calculate display width (accounting for multibyte characters)
+	promptRunes := []rune(ir.prompt)
+	lineRunes := []rune(ir.line)
+	promptWidth := len(promptRunes)
+	lineWidth := len(lineRunes)
+	totalWidth := promptWidth + lineWidth
+
+	currentLineCount := (totalWidth + ir.terminalWidth - 1) / ir.terminalWidth
 	previousLineCount := (ir.lastLineLength + ir.terminalWidth - 1) / ir.terminalWidth
 
-	// Move to start of current line
+	// Calculate which physical line the cursor is currently on (1-indexed)
+	cursorPos := promptWidth + ir.cursorPos
+	ir.currentPhysicalLine = cursorPos / ir.terminalWidth
+	if cursorPos > 0 && cursorPos%ir.terminalWidth == 0 {
+		// Exact multiple of terminal width means cursor is at start of next line
+		ir.currentPhysicalLine++
+	}
+	if ir.currentPhysicalLine < 1 {
+		ir.currentPhysicalLine = 1
+	}
+
+	// Maximum number of wrapped lines we need to clear
+	// Always clear at least as many as we have now, plus what we had before
+	maxLines := currentLineCount
+	if previousLineCount > maxLines {
+		maxLines = previousLineCount
+	}
+
+	// Move to start of current physical line
 	fmt.Printf("\r")
 
-	// Clear old content based on how many lines it occupied
-	// If we had multi-line content, we need to clear all wrapped lines
-	if previousLineCount > 1 {
-		// For multi-line content, clear each line from our current position
-		// We assume cursor is at or near the last line of wrapped content
-		for i := 0; i < previousLineCount; i++ {
-			fmt.Printf("%s", ClearLineSeq())
-			if i < previousLineCount-1 {
-				fmt.Printf("%s", MoveCursorUpSeq(1))
-			}
-		}
-	} else {
-		// Single line - just clear it
+	// If we're on a wrapped line (not the first), move up to the first line
+	if ir.currentPhysicalLine > 1 {
+		// Move up to the top wrapped line
+		linesToMoveUp := ir.currentPhysicalLine - 1
+		fmt.Printf("%s", MoveCursorUpSeq(linesToMoveUp))
+	}
+
+	// Clear all wrapped lines from top to bottom
+	for i := 0; i < maxLines; i++ {
 		fmt.Printf("%s", ClearLineSeq())
+		if i < maxLines-1 {
+			// Move down to next line
+			fmt.Printf("%s", MoveCursorDownSeq(1))
+		}
+	}
+
+	// Move back to the top line to redraw
+	if maxLines > 1 {
+		fmt.Printf("%s", MoveCursorUpSeq(maxLines - 1))
 	}
 
 	// Redraw the prompt and line content
 	fmt.Printf("%s%s", ir.prompt, ir.line)
 
-	// Clear any trailing content on the last line
+	// Clear any trailing content on the last line (in case new content is shorter than old)
 	fmt.Printf("%s", ClearToEndOfLineSeq())
 
-	// Update tracked length AFTER drawing
-	ir.lastLineLength = totalLength
+	// Update tracked length AFTER drawing (use display width, not byte length)
+	ir.lastLineLength = totalWidth
 
 	// Position cursor correctly
-	if ir.cursorPos < len(ir.line) {
+	// Note: cursorPos was already calculated above as promptWidth + ir.cursorPos
+	if ir.cursorPos < lineWidth {
 		// Cursor is in the middle - need to move it
-		cursorPos := len(ir.prompt) + ir.cursorPos
+		// Recalculate cursorLine and cursorCol based on cursorPos
 		cursorLine := cursorPos / ir.terminalWidth
 		cursorCol := cursorPos % ir.terminalWidth
 
-		// After printing, cursor is at end of content (line 'currentLineCount - 1')
+		// After printing, cursor is at end of content (on line 'currentLineCount - 1')
 		// We need to move to line 'cursorLine'
 		endLine := currentLineCount - 1
 		if endLine > cursorLine {
@@ -535,8 +567,14 @@ func (ir *InputReader) Refresh() {
 			fmt.Printf("%s", MoveCursorDownSeq(cursorLine-endLine))
 		}
 
-		// Now position cursor at correct column (1-based)
-		fmt.Printf("\r%s", MoveCursorToColumnSeq(cursorCol+1))
+		// Move cursor to correct position
+		// The cursorCol is 0-based from start of line
+		// Use \r to go to start, then move right by cursorCol positions
+		if cursorCol > 0 {
+			fmt.Printf("\r\033[%dC", cursorCol)
+		} else {
+			fmt.Printf("\r")
+		}
 	}
 	// If cursor is at end, it's already in the right position after printing
 }

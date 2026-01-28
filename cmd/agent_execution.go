@@ -505,6 +505,11 @@ func executeCommand(cmd string) (string, error) {
 	// Run command through bash -c with color support
 	command := exec.Command("bash", "-c", enhancedCmd)
 
+	// Explicitly set working directory to current directory
+	if wd, err := os.Getwd(); err == nil {
+		command.Dir = wd
+	}
+
 	// Set environment to force color output
 	command.Env = append(os.Environ(),
 		"FORCE_COLOR=1",

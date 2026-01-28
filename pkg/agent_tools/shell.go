@@ -40,6 +40,11 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	}
 	cmd := exec.CommandContext(ctx, shell, "-c", command)
 
+	// Explicitly set working directory to current directory
+	if wd, err := os.Getwd(); err == nil {
+		cmd.Dir = wd
+	}
+
 	if streamOutput {
 		// STREAMING MODE: Use pipes for real-time output
 		// Get pipes for stdout and stderr

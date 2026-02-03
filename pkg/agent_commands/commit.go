@@ -24,11 +24,12 @@ const (
 
 // CommitCommand implements the /commit slash command
 type CommitCommand struct {
-	skipPrompt   bool
-	dryRun       bool
-	allowSecrets bool
-	agentError   error  // Store agent creation error for better error reporting
-	review       string // Store the commit review result
+	skipPrompt       bool
+	dryRun           bool
+	allowSecrets     bool
+	agentError       error  // Store agent creation error for better error reporting
+	review           string // Store the commit review result
+	userInstructions string // User-provided instructions for the commit message
 }
 
 // CommitJSONResult is the JSON output structure for commit command
@@ -63,29 +64,47 @@ func (r *CommitJSONResult) Validate() error {
 
 // wrapText wraps text to a specific line length
 func wrapText(text string, lineLength int) string {
-	words := strings.Fields(text)
-	if len(words) == 0 {
+	if text == "" {
 		return ""
 	}
 
-	var lines []string
-	currentLine := words[0]
+	paragraphs := strings.Split(text, "\n\n")
+	var wrappedParagraphs []string
 
-	for i := 1; i < len(words); i++ {
-		word := words[i]
-		if len(currentLine)+1+len(word) <= lineLength {
-			currentLine += " " + word
-		} else {
-			lines = append(lines, currentLine)
-			currentLine = word
+	for _, paragraph := range paragraphs {
+		// Skip empty paragraphs
+		if strings.TrimSpace(paragraph) == "" {
+			wrappedParagraphs = append(wrappedParagraphs, "")
+			continue
 		}
+
+		words := strings.Fields(paragraph)
+		if len(words) == 0 {
+			wrappedParagraphs = append(wrappedParagraphs, "")
+			continue
+		}
+
+		var lines []string
+		currentLine := words[0]
+
+		for i := 1; i < len(words); i++ {
+			word := words[i]
+			if len(currentLine)+1+len(word) <= lineLength {
+				currentLine += " " + word
+			} else {
+				lines = append(lines, currentLine)
+				currentLine = word
+			}
+		}
+
+		if currentLine != "" {
+			lines = append(lines, currentLine)
+		}
+
+		wrappedParagraphs = append(wrappedParagraphs, strings.Join(lines, "\n"))
 	}
 
-	if currentLine != "" {
-		lines = append(lines, currentLine)
-	}
-
-	return strings.Join(lines, "\n")
+	return strings.Join(wrappedParagraphs, "\n\n")
 }
 
 // generateCommitReview generates a review of staged files to flag critical concerns
@@ -406,28 +425,32 @@ func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Parse flags and get clean args
 	cleanArgs := c.parseFlags(args)
 
-	// Handle subcommands
+	// Store any remaining args as user instructions
 	if len(cleanArgs) > 0 {
-		switch cleanArgs[0] {
-		case "help", "--help", "-h":
+		c.userInstructions = strings.Join(cleanArgs, " ")
+		// Check for help command first
+		if c.userInstructions == "help" || c.userInstructions == "--help" || c.userInstructions == "-h" {
 			return c.showHelp()
-		default:
-			return fmt.Errorf("unknown subcommand: %s. Use '/commit help' for usage", cleanArgs[0])
 		}
 	}
 
 	// Default behavior: use new interactive commit flow with flags
 	flow := NewCommitFlowWithFlags(chatAgent, c.skipPrompt, c.dryRun, c.allowSecrets)
+	flow.SetUserInstructions(c.userInstructions)
 	return flow.Execute()
 }
 
 // ExecuteWithJSONOutput runs the commit command with JSON output
 func (c *CommitCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
 	// Parse flags using helper
-	c.parseFlags(args)
+	cleanArgs := c.parseFlags(args)
+	if len(cleanArgs) > 0 {
+		c.userInstructions = strings.Join(cleanArgs, " ")
+	}
 
 	// Run commit flow
 	flow := NewCommitFlowWithFlags(chatAgent, c.skipPrompt, c.dryRun, c.allowSecrets)
+	flow.SetUserInstructions(c.userInstructions)
 	if err := flow.Execute(); err != nil {
 		result := CommitJSONResult{
 			Status: CommitStatusError,
@@ -790,14 +813,23 @@ retryLoop:
 		}
 
 		// Create the commit message generation prompt
+		promptContent := fmt.Sprintf("%s%s", optimizedDiff.OptimizedContent, contextInfo)
+
+		// Add user instructions at the beginning for higher priority
+		if c.userInstructions != "" {
+			promptContent = fmt.Sprintf("USER INSTRUCTIONS:\n%s\n\nCODE CHANGES:\n%s", c.userInstructions, promptContent)
+		}
+
 		commitPrompt := fmt.Sprintf(`Base responses on the following changes:
 
-%s%s
+%s
 
-Generate a concise git commit title starting with the word: '%s'. 
-The total length MUST be under %d characters. Don't include the file name or any 
-colons. The title should be a single line without any markdown formatting. Only 
-return the short title and nothing else.`, optimizedDiff.OptimizedContent, contextInfo, primaryAction, availableSpace)
+Generate a concise git commit title starting with the word: '%s'.
+The total length MUST be under %d characters. Don't include the file name or any
+colons. The title should be a single line without any markdown formatting. Only
+return the short title and nothing else.
+
+CRITICAL: Do NOT use markdown code blocks. Return plain text only.`, promptContent, primaryAction, availableSpace)
 
 		// Get commit message title using fast model
 		messages := []api.Message{
@@ -823,24 +855,42 @@ return the short title and nothing else.`, optimizedDiff.OptimizedContent, conte
 		shortTitle := strings.TrimSpace(resp.Choices[0].Message.Content)
 
 		// Now generate the description (reuse the optimized diff)
+		// Build prompt content with user instructions if provided
+		descPromptContent := fmt.Sprintf("%s%s", optimizedDiff.OptimizedContent, contextInfo)
+
+		// Add user instructions at the beginning for higher priority
+		if c.userInstructions != "" {
+			descPromptContent = fmt.Sprintf("USER INSTRUCTIONS:\n%s\n\nCODE CHANGES:\n%s", c.userInstructions, descPromptContent)
+		}
+
 		descPrompt := fmt.Sprintf(`Base responses on the following changes:
 
-%s%s
+%s
 
 Generate a Git commit message summary. The message should follow these rules:
 1. The total length MUST be under 500 characters.
 2. DO NOT include a title.
 3. DO NOT include any code blocks or filenames.
-4. DO NOT include any user messages.
-5. Message will be a single paragraph without any markdown formatting.
-6. The message should be clear and concise and only give reasoning for the change 
-   if provided by the user.`, optimizedDiff.OptimizedContent, contextInfo)
+4. DO NOT include any markdown formatting. 
+5. DO NOT include any ordered lists or unordered lists.
+6. Message will be a SINGLE paragraph without any markdown formatting.
+7. The message should be clear and concise and only give reasoning for the change if provided by the user.`, descPromptContent)
 
 		// Get description
 		messages = []api.Message{
 			{
-				Role:    "system",
-				Content: "You are a git commit message generator. Generate clear, concise descriptions.",
+				Role: "system",
+				Content: `
+					You are a git commit message generator. Generate clear, concise descriptions that follow these immutable rules.
+					RULES:
+					1. The total length MUST be under 500 characters.
+					2. DO NOT include a title.
+					3. DO NOT include any code blocks or filenames.
+					4. DO NOT include any markdown formatting. 
+					5. DO NOT include any ordered lists or unordered lists.
+					6. Message will be a SINGLE paragraph without any markdown formatting.
+					7. The message should be clear and concise and only give reasoning for the change if provided by the user.
+					`,
 			},
 			{
 				Role:    "user",

@@ -14,11 +14,12 @@ import (
 
 // CommitFlow manages the interactive commit workflow
 type CommitFlow struct {
-	agent        *agent.Agent
-	optimizer    *utils.DiffOptimizer
-	skipPrompt   bool
-	dryRun       bool
-	allowSecrets bool
+	agent            *agent.Agent
+	optimizer        *utils.DiffOptimizer
+	skipPrompt       bool
+	dryRun           bool
+	allowSecrets     bool
+	userInstructions string
 }
 
 // NewCommitFlow creates a new commit flow
@@ -38,6 +39,11 @@ func NewCommitFlowWithFlags(chatAgent *agent.Agent, skipPrompt, dryRun, allowSec
 		dryRun:       dryRun,
 		allowSecrets: allowSecrets,
 	}
+}
+
+// SetUserInstructions sets the user instructions for commit message generation
+func (cf *CommitFlow) SetUserInstructions(instructions string) {
+	cf.userInstructions = instructions
 }
 
 func (cf *CommitFlow) printf(format string, args ...interface{}) {
@@ -317,9 +323,10 @@ func (cf *CommitFlow) generateCommitMessageAndCommit() error {
 
 	// Create a temporary CommitCommand to reuse the existing logic
 	commitCmd := &CommitCommand{
-		skipPrompt:   cf.skipPrompt,
-		dryRun:       cf.dryRun,
-		allowSecrets: cf.allowSecrets,
+		skipPrompt:       cf.skipPrompt,
+		dryRun:           cf.dryRun,
+		allowSecrets:     cf.allowSecrets,
+		userInstructions: cf.userInstructions,
 	}
 	return commitCmd.generateAndCommit(cf.agent, nil)
 }

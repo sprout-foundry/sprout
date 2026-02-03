@@ -1,43 +1,36 @@
 {
-  "name": "deepseek",
-  "endpoint": "https://api.deepseek.com/v1/chat/completions",
+  "name": "cerebras",
+  "endpoint": "https://api.cerebras.ai/v1/chat/completions",
   "auth": {
     "type": "bearer",
-    "env_var": "DEEPSEEK_API_KEY"
+    "env_var": "CEREBRAS_API_KEY"
   },
   "headers": {},
   "defaults": {
-    "model": "deepseek-chat",
-    "temperature": 0.7,
-    "max_tokens": 8192,
-    "top_p": 1.0
+    "model": "zai-glm-4.7",
+    "temperature": 1.0,
+    "max_tokens": 4096,
+    "top_p": 0.95
   },
   "message_conversion": {
     "include_tool_call_id": true,
     "convert_tool_role_to_user": false,
-    "reasoning_content_field": ""
+    "reasoning_content_field": "reasoning"
   },
   "streaming": {
     "format": "sse",
-    "chunk_timeout_ms": 320000,
+    "chunk_timeout_ms": 300000,
     "done_marker": "[DONE]"
   },
   "models": {
-    "default_context_limit": 128000,
+    "default_context_limit": 65536,
     "model_overrides": {
-      "deepseek-chat": 128000,
-      "deepseek-coder": 128000,
-      "deepseek-v3": 128000
+      "zai-glm-4.7": 65536
     },
-    "pattern_overrides": [
-      {
-        "pattern": "deepseek-.*",
-        "context_limit": 128000
-      }
-    ],
+    "pattern_overrides": [],
     "supports_vision": false,
     "vision_model": "",
-    "default_model": "deepseek-chat",
+    "default_model": "zai-glm-4.7",
     "available_models": []
   },
   "retry": {
@@ -48,8 +41,8 @@
     "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
   },
   "cost": {
-    "input_token_cost": 0.14,
-    "output_token_cost": 0.28,
+    "input_token_cost": 0.0,
+    "output_token_cost": 0.0,
     "currency": "USD"
   }
 }

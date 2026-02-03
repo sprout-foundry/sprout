@@ -317,6 +317,22 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		return "", fmt.Errorf("unknown tool '%s'", toolName)
 	}
 
+	// CRITICAL: Prevent subagents from creating nested subagents
+	// This check ensures that subagents (identified by LEDIT_SUBAGENT env var)
+	// cannot spawn further subagents, preventing runaway agent chains
+	if os.Getenv("LEDIT_SUBAGENT") == "1" {
+		if toolName == "run_subagent" || toolName == "run_parallel_subagents" {
+			const errMsg = "SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. " +
+				"This restriction prevents runaway agent chains and ensures proper task delegation. " +
+				"If you need additional work done, please complete your current task and return " +
+				"your results to the primary agent for further delegation."
+			if agent != nil && agent.debug {
+				agent.debugLog("🚫 Blocked subagent tool '%s' - nested subagents are not allowed\n", toolName)
+			}
+			return "", fmt.Errorf("%s", errMsg)
+		}
+	}
+
 	// Security validation (if enabled and not bypassed)
 	if agent != nil && !filesystem.SecurityBypassEnabled(ctx) {
 		if validationErr := r.validateToolSecurity(ctx, toolName, args, agent); validationErr != nil {

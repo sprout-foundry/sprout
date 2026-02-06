@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -86,6 +87,17 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"command", "string", true, []string{"cmd"}, "The shell command to execute"},
 		},
 		Handler: handleShellCommand,
+	})
+
+	// Register git tool - handles all git operations with approval for write operations
+	registry.RegisterTool(ToolConfig{
+		Name:        "git",
+		Description: "Execute git operations. All git write operations (commit, push, add, etc.) require user approval. Commit operations should use the /commit slash command for the interactive commit flow. Read-only operations (status, log, diff, show, branch, remote) execute without approval.",
+		Parameters: []ParameterConfig{
+			{"operation", "string", true, []string{"op"}, "Git operation type: status, log, diff, show, branch, remote, rev_parse, ls_files, ls_tree, ls_remote, blame, reflog, config (read-only), commit, push, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert (write operations require approval)"},
+			{"args", "string", false, []string{}, "Arguments to pass to the git command (optional)"},
+		},
+		Handler: handleGitOperation,
 	})
 
 	// Register read_file tool
@@ -633,8 +645,157 @@ func (r *ToolRegistry) GetAvailableTools() []string {
 
 func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	command := args["command"].(string)
+
+	// Hard block on git operations - all git operations must use the git tool
+	if isGitCommand(command) {
+		return "", fmt.Errorf("git operations require the git tool. Please use the git tool instead (operation: '%s')", command)
+	}
+
 	a.ToolLog("executing command", command)
 	return a.executeShellCommandWithTruncation(ctx, command)
+}
+
+// isGitCommand checks if a command is a git operation
+func isGitCommand(command string) bool {
+	trimmed := strings.TrimSpace(command)
+	// Check if command starts with "git "
+	if strings.HasPrefix(trimmed, "git ") {
+		return true
+	}
+	return false
+}
+
+// handleGitOperation handles git operations with approval for write operations
+func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	// Extract operation parameter
+	operationParam, err := convertToString(args["operation"], "operation")
+	if err != nil {
+		return "", err
+	}
+
+	// Parse and validate the operation type
+	operation := tools.GitOperationType(operationParam)
+
+	// Validate that the operation type is known
+	if !isValidGitOperation(operation) {
+		// Build a list of valid operations for the error message
+		writeOps := tools.GitWriteOperations()
+		writeOpNames := make([]string, len(writeOps))
+		for i, op := range writeOps {
+			writeOpNames[i] = string(op)
+		}
+		readOnlyOpNames := []string{"status", "log", "diff", "show", "branch", "remote", "rev_parse", "ls_files", "ls_tree", "ls_remote", "blame", "reflog", "config"}
+		return "", fmt.Errorf("invalid git operation type '%s'. Valid operations: %s (plus read-only: %s)",
+			operationParam, strings.Join(writeOpNames, ", "), strings.Join(readOnlyOpNames, ", "))
+	}
+
+	// Extract args parameter (optional)
+	var argsStr string
+	if argsParam, exists := args["args"]; exists {
+		argsStr, _ = convertToString(argsParam, "args")
+	}
+
+	// Log the operation
+	a.ToolLog("executing git operation", fmt.Sprintf("%s %s", operation, argsStr))
+
+	// For commit operations, use the commit command directly
+	if operation == tools.GitOpCommit {
+		return handleGitCommitOperation(a)
+	}
+
+	// Create an approval prompter
+	approvalPrompter := &gitApprovalPrompterAdapter{agent: a}
+
+	// Execute the git operation
+	result, err := tools.ExecuteGitOperation(ctx, tools.GitOperation{
+		Operation: operation,
+		Args:      argsStr,
+	}, "", nil, approvalPrompter)
+
+	if err != nil {
+		return "", err
+	}
+
+	return result, nil
+}
+
+// isValidGitOperation checks if a git operation type is valid
+func isValidGitOperation(op tools.GitOperationType) bool {
+	// Check against all valid operations
+	writeOps := tools.GitWriteOperations()
+	for _, validOp := range writeOps {
+		if op == validOp {
+			return true
+		}
+	}
+
+	// Also check read-only operations
+	readOnlyOps := []tools.GitOperationType{
+		tools.GitOpStatus, tools.GitOpLog, tools.GitOpDiff, tools.GitOpShow,
+		tools.GitOpBranch, tools.GitOpRemote, tools.GitOpRevParse,
+		tools.GitOpLsFiles, tools.GitOpLsTree, tools.GitOpLsRemote,
+		tools.GitOpBlame, tools.GitOpRefLog, tools.GitOpConfig,
+	}
+
+	for _, validOp := range readOnlyOps {
+		if op == validOp {
+			return true
+		}
+	}
+
+	return false
+}
+
+// handleGitCommitOperation handles git commit operations
+// Note: For the full interactive commit flow, users should use the /commit slash command
+func handleGitCommitOperation(a *Agent) (string, error) {
+	// Check for staged changes first
+	stagedOutput, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to check for staged changes: %w", err)
+	}
+
+	if len(strings.TrimSpace(string(stagedOutput))) == 0 {
+		return "No staged changes to commit. Use 'git add' to stage files first.", nil
+	}
+
+	// For commit operations, we use a simple git commit with a message prompt
+	// This is a simplified version - for full interactive commit flow, users should use /commit
+	return "", fmt.Errorf("git commit requires the interactive commit flow. Please use the '/commit' slash command instead for the full interactive experience with message generation")
+}
+
+// gitApprovalPrompterAdapter implements the GitApprovalPrompter interface using the Agent
+type gitApprovalPrompterAdapter struct {
+	agent *Agent
+}
+
+// PromptForApproval prompts the user for approval to execute a git write operation
+func (a *gitApprovalPrompterAdapter) PromptForApproval(command string) (bool, error) {
+	// Build the approval prompt
+	prompt := fmt.Sprintf("Execute git command: %s", command)
+
+	// Define choices
+	choices := []ChoiceOption{
+		{Label: "Approve", Value: "y"},
+		{Label: "Cancel", Value: "n"},
+	}
+
+	// Show the command to be executed
+	fmt.Printf("\n🔒 Git Operation Requires Approval\n")
+	fmt.Printf("Command: %s\n", command)
+	fmt.Printf("\n")
+
+	// Prompt for choice
+	choice, err := a.agent.PromptChoice(prompt, choices)
+	if err != nil {
+		// If UI is not available, fall back to stdin prompt
+		if err == ErrUINotAvailable {
+			return tools.PromptForGitApprovalStdin(command)
+		}
+		return false, err
+	}
+
+	return choice == "y", nil
 }
 
 func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
@@ -1607,6 +1768,50 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	exitCode := "0"
 	if ec, ok := resultMap["exit_code"]; ok {
 		exitCode = ec
+	}
+
+	// Check if subagent exceeded token budget
+	budgetExceeded := false
+	if be, ok := resultMap["budget_exceeded"]; ok {
+		budgetExceeded = be == "true"
+	}
+
+	if budgetExceeded {
+		// Subagent exceeded token budget - provide clear guidance to primary agent
+		stdout := resultMap["stdout"]
+
+		// Get token usage from summary if available
+		tokensUsed := "unknown"
+		if summary, ok := resultMap["summary"]; ok {
+			// Try to extract token count from summary
+			if strings.Contains(summary, "subagent_total_tokens") {
+				parts := strings.Split(summary, ":")
+				for i, part := range parts {
+					if strings.Contains(part, "subagent_total_tokens") && i+1 < len(parts) {
+						tokenStr := strings.TrimSpace(strings.Split(parts[i+1], ",")[0])
+						tokenStr = strings.TrimSuffix(tokenStr, "\"")
+						tokensUsed = tokenStr
+						break
+					}
+				}
+			}
+		}
+
+		errorMsg := fmt.Sprintf("SUBAGENT_TOKEN_BUDGET_EXCEEDED: The subagent consumed its entire token budget and was terminated to control costs.\n\n"+
+			"Tokens used: %s\n"+
+			"Budget limit: %d tokens\n\n"+
+			"The subagent has produced partial output and made progress on the task. "+
+			"IMPORTANT: Do NOT automatically retry the subagent with the same prompt. "+
+			"Instead, evaluate the partial output below and decide:\n"+
+			"1. Is the task complete enough to continue?\n"+
+			"2. Can you complete the remaining work yourself?\n"+
+			"3. Should you ask the user for guidance on how to proceed?\n\n"+
+			"Partial subagent output:\n%s",
+			tokensUsed, tools.GetSubagentMaxTokens(), stdout)
+
+		a.ToolLog("subagent", fmt.Sprintf("budget_exceeded=true tokens=%s", tokensUsed))
+		a.debugLog("Subagent exceeded token budget, returning partial output to primary agent\n")
+		return errorMsg, nil
 	}
 
 	if exitCode != "0" {

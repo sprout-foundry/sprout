@@ -28,11 +28,6 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	// NOTE: Security validation is now handled by the LLM-based validator at the tool registry level
 	// This provides context-aware evaluation instead of regex pattern matching
 
-	// Track file deletions in changelog (for change history, not security validation)
-	if IsFileDeletionCommand(command) && sessionID != "" {
-		trackFileDeletion(command, sessionID)
-	}
-
 	// Create command with context
 	shell := os.Getenv("SHELL")
 	if shell == "" {
@@ -161,14 +156,6 @@ func truncateOutput(output string, maxLines int) string {
 	visibleLines := lines[:maxLines]
 	truncated := strings.Join(visibleLines, "\n")
 	return fmt.Sprintf("%s\n... (truncated, %d more lines)", strings.TrimSpace(truncated), len(lines)-maxLines)
-}
-
-// trackFileDeletion records file deletion commands in the changelog
-// Note: This currently only prints a message. Full changelog integration
-// will be added when the changelog system is enhanced to support session-based
-// file operations tracking.
-func trackFileDeletion(command string, sessionID string) {
-	fmt.Printf("📝 Tracking file deletion: %s (session: %s)\n", command, sessionID)
 }
 
 // buildShellOutputWithStatus enhances shell output with status information

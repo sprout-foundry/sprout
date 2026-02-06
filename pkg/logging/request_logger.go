@@ -20,7 +20,7 @@ func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
 	if err := os.WriteFile(lastPath, payload, 0o644); err != nil {
 		return
 	}
-	WriteLocalCopy("lastRequest.json", payload)
+	WriteLocalCopyRequest("lastRequest.json", payload)
 
 	entry := map[string]interface{}{
 		"timestamp": time.Now().Format(time.RFC3339Nano),
@@ -39,7 +39,7 @@ func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
 	if err := os.WriteFile(filepath.Join(dir, filename), data, 0o644); err != nil {
 		return
 	}
-	WriteLocalCopy(filename, data)
+	WriteLocalCopyRequest(filename, data)
 }
 
 // LogRequestPayloadOnError saves the JSON payload only when an error occurs.
@@ -55,7 +55,7 @@ func LogRequestPayloadOnError(payload []byte, provider, model string, streaming 
 	if err := os.WriteFile(lastPath, payload, 0o644); err != nil {
 		return
 	}
-	WriteLocalCopy("lastRequest.json", payload)
+	WriteLocalCopyRequest("lastRequest.json", payload)
 
 	entry := map[string]interface{}{
 		"timestamp":  time.Now().Format(time.RFC3339Nano),
@@ -76,11 +76,11 @@ func LogRequestPayloadOnError(payload []byte, provider, model string, streaming 
 	if err := os.WriteFile(filepath.Join(dir, filename), data, 0o644); err != nil {
 		return
 	}
-	WriteLocalCopy(filename, data)
+	WriteLocalCopyRequest(filename, data)
 }
 
 // WriteLocalCopy optionally mirrors log files to the current working directory.
-func WriteLocalCopy(filename string, data []byte) {
+func WriteLocalCopyRequest(filename string, data []byte) {
 	if os.Getenv("LEDIT_COPY_LOGS_TO_CWD") != "1" {
 		return
 	}

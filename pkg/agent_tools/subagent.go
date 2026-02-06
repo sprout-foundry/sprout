@@ -30,6 +30,9 @@ func (r *emptyStdinReader) Read(p []byte) (n int, err error) {
 // Subagents are designed for long-running tasks and should not be restricted
 const DefaultSubagentTimeout = 0 // 0 means no timeout
 
+// Default max tokens for subagent execution
+const DefaultSubagentMaxTokens = 2_000_000 // 2M tokens default budget
+
 // GetSubagentTimeout returns the configured timeout for subagent execution.
 // It reads from LEDIT_SUBAGENT_TIMEOUT environment variable if set.
 // A value of "0" or unset means NO timeout (runs indefinitely).
@@ -65,6 +68,28 @@ func GetSubagentTimeout() time.Duration {
 
 	// If all else fails, return no timeout
 	return 0
+}
+
+// GetSubagentMaxTokens returns the configured token budget for subagent execution.
+// It reads from LEDIT_SUBAGENT_MAX_TOKENS environment variable if set.
+// A value of "0" or unset means use the default 2M token budget.
+//
+// Environment variable format: integer number of tokens (e.g., "1000000" for 1M tokens)
+func GetSubagentMaxTokens() int {
+	envMaxTokens := os.Getenv("LEDIT_SUBAGENT_MAX_TOKENS")
+	if envMaxTokens == "" {
+		return DefaultSubagentMaxTokens // Use default
+	}
+
+	// Parse as integer
+	maxTokens, err := strconv.Atoi(envMaxTokens)
+	if err == nil && maxTokens >= 0 {
+		return maxTokens
+	}
+
+	// If parsing failed, return default
+	log.Printf("[WARNING] Invalid LEDIT_SUBAGENT_MAX_TOKENS value '%s', using default %d\n", envMaxTokens, DefaultSubagentMaxTokens)
+	return DefaultSubagentMaxTokens
 }
 
 // RunSubagent spawns an agent subprocess, waits for completion, and returns all output.
@@ -126,6 +151,7 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 
 	// Create context (with optional timeout)
 	timeout := GetSubagentTimeout()
+	maxTokens := GetSubagentMaxTokens()
 	var ctx context.Context
 	var cancel context.CancelFunc
 
@@ -134,8 +160,23 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 	} else {
-		// No timeout - run until completion
-		ctx = context.Background()
+		// No timeout - create cancelable context for token budget monitoring
+		ctx, cancel = context.WithCancel(context.Background())
+		defer cancel()
+	}
+
+	// Create temporary metrics file for token budget monitoring
+	metricsFile := ""
+	if maxTokens > 0 {
+		tmpFile, err := os.CreateTemp("", "ledit-subagent-metrics-*.txt")
+		if err != nil {
+			log.Printf("[WARNING] Failed to create metrics file: %v (token budget monitoring disabled)", err)
+		} else {
+			metricsFile = tmpFile.Name()
+			tmpFile.Close()
+			defer os.Remove(metricsFile) // Clean up after subagent completes
+			log.Printf("[SUBAGENT] Token budget monitoring enabled: max_tokens=%d, metrics_file=%s\n", maxTokens, metricsFile)
+		}
 	}
 
 	// Open /dev/null for stdin before creating pipes so we can clean up on error
@@ -236,6 +277,33 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 		}()
 	}
 
+	// Monitor token budget if enabled
+	var budgetExceeded bool
+	if metricsFile != "" && maxTokens > 0 {
+		monitorDone := make(chan bool)
+		go func() {
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					tokens, _, _ := readSubagentMetrics(metricsFile)
+					if tokens >= maxTokens {
+						log.Printf("[SUBAGENT] Token budget exceeded: %d >= %d, cancelling subagent\n", tokens, maxTokens)
+						cancel() // Cancel the subagent context
+						budgetExceeded = true
+						return
+					}
+				case <-monitorDone:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+		defer close(monitorDone)
+	}
+
 	// Wait for the command to complete
 	err = cmd.Wait()
 
@@ -260,6 +328,9 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 			// Timeout occurred (only if timeout was configured)
 			exitCode = 124
 			timedOut = true
+		} else if budgetExceeded {
+			// Token budget exceeded - cancel the subagent
+			exitCode = 125 // Custom exit code for budget exceeded
 		} else if exitError, ok := err.(*exec.ExitError); ok {
 			// Command ran but exited with non-zero status
 			exitCode = exitError.ExitCode()
@@ -269,13 +340,14 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 		}
 	}
 
-	// Return all output with exit status and timeout indicator
+	// Return all output with exit status and timeout/budget indicator
 	return map[string]string{
-		"stdout":    stdoutBuffer.String(),
-		"stderr":    stderrBuffer.String(),
-		"exit_code": fmt.Sprintf("%d", exitCode),
-		"completed": "true",
-		"timed_out": fmt.Sprintf("%t", timedOut),
+		"stdout":          stdoutBuffer.String(),
+		"stderr":          stderrBuffer.String(),
+		"exit_code":       fmt.Sprintf("%d", exitCode),
+		"completed":       "true",
+		"timed_out":       fmt.Sprintf("%t", timedOut),
+		"budget_exceeded": fmt.Sprintf("%t", budgetExceeded),
 	}, nil
 }
 
@@ -606,4 +678,48 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 	}
 }
 
+// readSubagentMetrics reads token usage from a metrics file
+func readSubagentMetrics(metricsFile string) (tokens int, cost float64, err error) {
+	if metricsFile == "" {
+		return 0, 0, fmt.Errorf("no metrics file specified")
+	}
+
+	data, err := os.ReadFile(metricsFile)
+	if err != nil {
+		// File doesn't exist yet (subagent hasn't written anything)
+		return 0, 0, nil
+	}
+
+	// Parse format: "tokens:123,cost:0.123"
+	content := string(data)
+	tokensStr := ""
+	costStr := ""
+
+	_, err = fmt.Sscanf(content, "tokens:%s,cost:%s", &tokensStr, &costStr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to parse metrics: %w", err)
+	}
+
+	// Parse and validate token count
+	tokens, err = strconv.Atoi(tokensStr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid token value '%s': %w", tokensStr, err)
+	}
+
+	// Parse and validate cost
+	cost, err = strconv.ParseFloat(costStr, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid cost value '%s': %w", costStr, err)
+	}
+
+	// Validate values are non-negative
+	if tokens < 0 {
+		return 0, 0, fmt.Errorf("tokens cannot be negative: %d", tokens)
+	}
+	if cost < 0 {
+		return 0, 0, fmt.Errorf("cost cannot be negative: %f", cost)
+	}
+
+	return tokens, cost, nil
+}
 

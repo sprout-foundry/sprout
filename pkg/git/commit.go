@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
@@ -103,6 +104,10 @@ func PerformGitCommit(message string) error {
 
 // CleanCommitMessage cleans up LLM-generated commit messages
 func CleanCommitMessage(message string) string {
+	// Remove think tags (some models output <think>...</think> tags)
+	thinkRegex := regexp.MustCompile(`(?s)<think>.*?</think>`)
+	message = thinkRegex.ReplaceAllString(message, "")
+
 	// Check if the message looks like JSON (starts and ends with braces)
 	trimmed := strings.TrimSpace(message)
 	if strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}") {

@@ -222,11 +222,15 @@ func (ch *ConversationHandler) appendTransientMessages(messages []api.Message) [
 	return messages
 }
 
-// sanitizeContent removes ANSI escape sequences and other problematic characters from content
+// sanitizeContent removes ANSI escape sequences, think tags, and other problematic characters from content
 func (ch *ConversationHandler) sanitizeContent(content string) string {
+	// Remove think tags (some models output <think>...</think>)
+	thinkRegex := regexp.MustCompile(`<think>.*?</think>`)
+	cleaned := thinkRegex.ReplaceAllString(content, "")
+
 	// Remove ANSI escape sequences
 	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[mGKHJABCD]`)
-	cleaned := ansiRegex.ReplaceAllString(content, "")
+	cleaned = ansiRegex.ReplaceAllString(cleaned, "")
 
 	// Remove other potential ANSI sequences
 	ansiRegex2 := regexp.MustCompile(`\x1b\([0-9;]*[AB]`)
@@ -236,7 +240,7 @@ func (ch *ConversationHandler) sanitizeContent(content string) string {
 	cleaned = strings.ReplaceAll(cleaned, "\x1b", "")
 
 	if ch.agent.debug && cleaned != content {
-		ch.agent.debugLog("🧹 Sanitized content, removed %d ANSI chars\n", len(content)-len(cleaned))
+		ch.agent.debugLog("🧹 Sanitized content, removed %d chars\n", len(content)-len(cleaned))
 	}
 
 	return cleaned

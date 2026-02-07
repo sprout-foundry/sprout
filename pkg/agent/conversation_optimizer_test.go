@@ -218,3 +218,36 @@ func findSubstring(text, substr string) int {
 	}
 	return -1
 }
+
+func TestInvalidateFile(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, true) // Enable debug mode
+
+	// Track a file read
+	msg := api.Message{
+		Role:    "tool",
+		Content: "Tool call result for read_file: test.go\npackage main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}",
+	}
+	optimizer.trackFileRead(msg, 0)
+
+	// Verify the file is tracked
+	stats := optimizer.GetOptimizationStats()
+	if stats["tracked_files"].(int) != 1 {
+		t.Errorf("Expected 1 tracked file, got %d", stats["tracked_files"])
+	}
+
+	// Invalidate the file
+	optimizer.InvalidateFile("test.go")
+
+	// Verify the file is no longer tracked
+	stats = optimizer.GetOptimizationStats()
+	if stats["tracked_files"].(int) != 0 {
+		t.Errorf("Expected 0 tracked files after invalidation, got %d", stats["tracked_files"])
+	}
+
+	// Verify invalidating a non-existent file doesn't cause issues
+	optimizer.InvalidateFile("nonexistent.go")
+	stats = optimizer.GetOptimizationStats()
+	if stats["tracked_files"].(int) != 0 {
+		t.Errorf("Expected 0 tracked files, got %d", stats["tracked_files"])
+	}
+}

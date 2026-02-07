@@ -942,6 +942,12 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 
 	a.debugLog("Write file result: %s, error: %v\n", result, err)
 
+	// Invalidate cached file metadata when file is successfully written
+	// This prevents stale line counts from misleading the model
+	if err == nil && a.optimizer != nil {
+		a.optimizer.InvalidateFile(filePath)
+	}
+
 	// Publish file change event for web UI auto-sync
 	if err == nil && a.eventBus != nil {
 		a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(filePath, "write", content))
@@ -1001,6 +1007,12 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	a.debugLog("Edit file result: %s, error: %v\n", result, err)
+
+	// Invalidate cached file metadata when file is successfully edited
+	// This prevents stale line counts from misleading the model
+	if err == nil && a.optimizer != nil {
+		a.optimizer.InvalidateFile(filePath)
+	}
 
 	// Publish file change event for web UI auto-sync
 	if err == nil && a.eventBus != nil {

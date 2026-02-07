@@ -11,6 +11,17 @@ import (
 	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
+// File size constants for read operations
+const (
+	// defaultMaxFileSize is the maximum file size (in bytes) for reading files
+	// Files larger than this will be truncated with a warning
+	defaultMaxFileSize = 100 * 1024 // 100KB default
+
+	// lineRangeMaxSize is the maximum file size (in bytes) when a line range is requested
+	// This is larger to ensure we can read enough content for accurate line counts
+	lineRangeMaxSize = 10 * 1024 * 1024 // 10MB for line range requests
+)
+
 func ReadFile(ctx context.Context, filePath string) (string, error) {
 	return ReadFileWithRange(ctx, filePath, 0, 0)
 }
@@ -41,6 +52,15 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		return "", fmt.Errorf("only text content files can be read. %s appears to be a non-text file", cleanPath)
 	}
 
+	// When a line range is requested, we need to read the full file to ensure accuracy
+	// Otherwise, truncation can cause incorrect line counts (e.g., 700-line file truncated to 295 lines)
+
+	maxFileSize := defaultMaxFileSize
+	if startLine > 0 || endLine > 0 {
+		// For line range requests, read much more to ensure we get the requested lines
+		maxFileSize = lineRangeMaxSize
+	}
+
 	// Open and read the file
 	file, err := os.Open(cleanPath)
 	if err != nil {
@@ -48,12 +68,11 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 	}
 	defer file.Close()
 
-	const maxFileSize = 100 * 1024 // Increased to 100KB
 	var content []byte
 	var truncated bool
 
-	if info.Size() > maxFileSize {
-		// For large files, read only the maximum size and truncate
+	if info.Size() > int64(maxFileSize) {
+		// For very large files, read only the maximum size and truncate
 		content = make([]byte, maxFileSize)
 		n, err := file.Read(content)
 		if err != nil && err != io.EOF {
@@ -99,14 +118,25 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		selectedLines := lines[startLine-1 : endLine]
 		fileContent = strings.Join(selectedLines, "\n")
 
+		// Warn if file was truncated during line range request
+		if truncated {
+			fileContent = fmt.Sprintf("⚠️  Warning: File was truncated due to size. Requested lines %d-%d, but only %d lines were available in the truncated content.\n\n%s",
+				startLine, endLine, totalLines, fileContent)
+		}
+
 		// Add line range info to result
 		return fmt.Sprintf("Lines %d-%d of %s:\n%s", startLine, endLine, cleanPath, fileContent), nil
 	}
 
 	// Add truncation warning if file was truncated
 	if truncated {
-		fileContent = fmt.Sprintf("⚠️ File truncated (>100KB). Showing first %dKB of %s:\n%s\n\n[Content truncated - file is %d bytes total]",
-			maxFileSize/1024, cleanPath, fileContent, info.Size())
+		actualSizeKB := info.Size() / 1024
+		if info.Size()%1024 > 0 {
+			actualSizeKB++
+		}
+		limitKB := maxFileSize / 1024
+		fileContent = fmt.Sprintf("⚠️  File truncated (file is %d bytes, exceeds %dKB limit). Showing first %dKB of %s:\n%s\n\n[Content truncated - use line range to read specific sections]",
+			info.Size(), limitKB, limitKB, cleanPath, fileContent)
 	}
 
 	return fileContent, nil

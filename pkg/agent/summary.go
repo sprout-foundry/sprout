@@ -90,34 +90,6 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 		fmt.Printf("📋 Cost per iteration: $%.6f\n", costPerIteration)
 	}
 
-	// Show optimization stats if enabled
-	if a.optimizer != nil && a.optimizer.IsEnabled() {
-		stats := a.optimizer.GetOptimizationStats()
-		fmt.Println()
-		fmt.Println("🔄 Conversation Optimization")
-		fmt.Println("──────────────────────────────")
-		fmt.Printf("📁 Files tracked:     %d\n", stats["tracked_files"])
-		fmt.Printf("⚡ Commands tracked:  %d\n", stats["tracked_commands"])
-
-		if trackedFiles, ok := stats["file_paths"].([]string); ok && len(trackedFiles) > 0 {
-			if len(trackedFiles) <= 3 {
-				fmt.Printf("📂 Tracked files:     %s\n", strings.Join(trackedFiles, ", "))
-			} else {
-				fmt.Printf("📂 Tracked files:     %s, +%d more\n",
-					strings.Join(trackedFiles[:2], ", "), len(trackedFiles)-2)
-			}
-		}
-
-		if trackedCommands, ok := stats["shell_commands"].([]string); ok && len(trackedCommands) > 0 {
-			if len(trackedCommands) <= 3 {
-				fmt.Printf("🔧 Tracked commands:  %s\n", strings.Join(trackedCommands, ", "))
-			} else {
-				fmt.Printf("🔧 Tracked commands:  %s, +%d more\n",
-					strings.Join(trackedCommands[:2], ", "), len(trackedCommands)-2)
-			}
-		}
-	}
-
 	fmt.Println("══════════════════════════════")
 	fmt.Println()
 }

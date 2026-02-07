@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -123,9 +124,11 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 		// Process content delta
 		if choice.Delta.Content != "" {
 			b.content.WriteString(choice.Delta.Content)
+			// Sanitize content before displaying (remove think tags and ANSI codes)
+			sanitizedContent := sanitizeStreamingContent(choice.Delta.Content)
 			// Call stream callback for UI updates and timeout reset
 			if b.streamCallback != nil {
-				b.streamCallback(choice.Delta.Content)
+				b.streamCallback(sanitizedContent)
 			}
 		}
 
@@ -378,4 +381,26 @@ func ParseSSEData(data string) (*StreamingChatResponse, error) {
 	}
 
 	return &chunk, nil
+}
+
+// sanitizeStreamingContent removes think tags and ANSI codes from streaming content
+// This prevents models from outputting think tags or ANSI codes that clutter the display
+func sanitizeStreamingContent(content string) string {
+	// Remove think tags by constructing the pattern
+	openTag := string(rune(60)) + "think" + string(rune(62))
+	closeTag := string(rune(60)) + "/think" + string(rune(62))
+	thinkRegex := regexp.MustCompile(regexp.QuoteMeta(openTag) + ".*?" + regexp.QuoteMeta(closeTag))
+	content = thinkRegex.ReplaceAllString(content, "")
+
+	// Remove ANSI escape sequences
+	ansiRegex := regexp.MustCompile("\x1b\\[[0-9;]*[mGKHJABCD]")
+	content = ansiRegex.ReplaceAllString(content, "")
+
+	ansiRegex2 := regexp.MustCompile("\x1b\\([0-9;]*[AB]")
+	content = ansiRegex2.ReplaceAllString(content, "")
+
+	// Remove any remaining escape characters
+	content = strings.ReplaceAll(content, "\x1b", "")
+
+	return content
 }

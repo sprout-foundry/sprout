@@ -43,15 +43,26 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	fmt.Printf("📨 Total messages:   %d\n", len(a.messages))
 	fmt.Println()
 
-	// Calculate actual processed tokens (excluding cached ones)
-	actualProcessedTokens := a.totalTokens - a.cachedTokens
+	// Calculate processed tokens (excluding cached ones)
+	processedPromptTokens := a.promptTokens - a.cachedTokens
+	if processedPromptTokens < 0 {
+		processedPromptTokens = 0
+	}
+	processedTokens := processedPromptTokens + a.completionTokens
 
-	// Token usage section with better formatting
+	// Verify consistency: total - cached should approximately equal prompt-processed + completion
+	expectedProcessed := a.totalTokens - a.cachedTokens
+	if expectedProcessed != processedTokens {
+		// Log discrepancy for debugging (only in debug mode)
+		a.debugLog("Token count discrepancy: computed %d vs expected %d\n", processedTokens, expectedProcessed)
+	}
+
+	// Token usage section
 	fmt.Println("🔢 Token Usage")
 	fmt.Println("──────────────────────────────")
-	fmt.Printf("📦 Total processed:    %s\n", a.formatTokenCount(a.totalTokens))
-	fmt.Printf("📝 Actual processed:   %s (%d prompt + %d completion)\n",
-		a.formatTokenCount(actualProcessedTokens), a.promptTokens, a.completionTokens)
+	fmt.Printf("📦 Total:              %s\n", a.formatTokenCount(a.totalTokens))
+	fmt.Printf("📝 Processed:          %s (%d prompt + %d completion)\n",
+		a.formatTokenCount(processedTokens), processedPromptTokens, a.completionTokens)
 
 	// Context window information
 	contextUsage := float64(a.currentContextTokens) / float64(a.maxContextTokens) * 100
@@ -96,22 +107,34 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 
 // PrintConciseSummary displays a single line with essential token and cost information
 func (a *Agent) PrintConciseSummary() {
-	actualProcessed := a.totalTokens - a.cachedTokens
+	processedPromptTokens := a.promptTokens - a.cachedTokens
+	if processedPromptTokens < 0 {
+		processedPromptTokens = 0
+	}
+	processedTokens := processedPromptTokens + a.completionTokens
+
+	// Verify consistency: total - cached should approximately equal prompt-processed + completion
+	expectedProcessed := a.totalTokens - a.cachedTokens
+	if expectedProcessed != processedTokens {
+		a.debugLog("Token count discrepancy: computed %d vs expected %d\n", processedTokens, expectedProcessed)
+	}
+
 	costStr := fmt.Sprintf("$%.6f", a.totalCost)
 	fmt.Printf("\n💰 Session: %s total (%s processed + %s cached) | %s\n",
 		a.formatTokenCount(a.totalTokens),
-		a.formatTokenCount(actualProcessed),
+		a.formatTokenCount(processedTokens),
 		a.formatTokenCount(a.cachedTokens),
 		costStr)
 
-	// Also output machine-parseable cost information for parent agent to extract
-	// This allows subagent costs to be propagated to parent agent's totals
-	fmt.Printf("SUBAGENT_METRICS: total_tokens=%d prompt_tokens=%d completion_tokens=%d total_cost=%.6f cached_tokens=%d\n",
+	// Output machine-parseable metrics for parent agent extraction
+	fmt.Printf("SUBAGENT_METRICS: total_tokens=%d prompt_tokens=%d completion_tokens=%d total_cost=%.6f cached_tokens=%d processed_prompt_tokens=%d processed_tokens=%d\n",
 		a.totalTokens,
 		a.promptTokens,
 		a.completionTokens,
 		a.totalCost,
-		a.cachedTokens)
+		a.cachedTokens,
+		processedPromptTokens,
+		processedTokens)
 }
 
 // PrintCompactProgress prints a minimal progress indicator for non-interactive mode

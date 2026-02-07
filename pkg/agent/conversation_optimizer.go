@@ -341,6 +341,18 @@ func (co *ConversationOptimizer) createShellCommandSummary(msg api.Message) stri
 		command, commandType, lineCount, charCount)
 }
 
+// InvalidateFile clears cached data for a specific file when it's modified
+// This ensures stale metadata (like line counts) doesn't mislead the model
+func (co *ConversationOptimizer) InvalidateFile(filePath string) {
+	if filePath == "" {
+		return
+	}
+	if co.debug {
+		fmt.Printf("🔄 Invalidating cached file data: %s\n", filePath)
+	}
+	delete(co.fileReads, filePath)
+}
+
 // Reset clears all optimization state
 func (co *ConversationOptimizer) Reset() {
 	co.fileReads = make(map[string]*FileReadRecord)

@@ -13,34 +13,21 @@ import (
 type GitOperationType string
 
 const (
-	GitOpStatus    GitOperationType = "status"
-	GitOpLog       GitOperationType = "log"
-	GitOpDiff      GitOperationType = "diff"
-	GitOpShow      GitOperationType = "show"
-	GitOpBranch    GitOperationType = "branch"
-	GitOpRemote    GitOperationType = "remote"
-	GitOpRevParse  GitOperationType = "rev_parse"
-	GitOpLsFiles   GitOperationType = "ls_files"
-	GitOpLsTree    GitOperationType = "ls_tree"
-	GitOpLsRemote  GitOperationType = "ls_remote"
-	GitOpBlame     GitOperationType = "blame"
-	GitOpRefLog    GitOperationType = "reflog"
-	GitOpConfig    GitOperationType = "config"
-	GitOpCommit    GitOperationType = "commit"
-	GitOpPush      GitOperationType = "push"
-	GitOpAdd       GitOperationType = "add"
-	GitOpRm        GitOperationType = "rm"
-	GitOpMv        GitOperationType = "mv"
-	GitOpReset     GitOperationType = "reset"
-	GitOpRebase    GitOperationType = "rebase"
-	GitOpMerge     GitOperationType = "merge"
-	GitOpCheckout  GitOperationType = "checkout"
+	GitOpCommit      GitOperationType = "commit"
+	GitOpPush        GitOperationType = "push"
+	GitOpAdd         GitOperationType = "add"
+	GitOpRm          GitOperationType = "rm"
+	GitOpMv          GitOperationType = "mv"
+	GitOpReset       GitOperationType = "reset"
+	GitOpRebase     GitOperationType = "rebase"
+	GitOpMerge      GitOperationType = "merge"
+	GitOpCheckout   GitOperationType = "checkout"
 	GitOpBranchDelete GitOperationType = "branch_delete"
-	GitOpTag       GitOperationType = "tag"
-	GitOpClean     GitOperationType = "clean"
-	GitOpStash     GitOperationType = "stash"
-	GitOpAm        GitOperationType = "am"
-	GitOpApply     GitOperationType = "apply"
+	GitOpTag        GitOperationType = "tag"
+	GitOpClean      GitOperationType = "clean"
+	GitOpStash      GitOperationType = "stash"
+	GitOpAm         GitOperationType = "am"
+	GitOpApply      GitOperationType = "apply"
 	GitOpCherryPick GitOperationType = "cherry_pick"
 	GitOpRevert    GitOperationType = "revert"
 )
@@ -63,28 +50,7 @@ type GitApprovalPrompter interface {
 	PromptForApproval(command string) (bool, error)
 }
 
-// isWriteOperation returns true if the git operation is a write operation
-func isWriteOperation(op GitOperationType) bool {
-	switch op {
-	case GitOpCommit, GitOpPush, GitOpAdd, GitOpRm, GitOpMv, GitOpReset,
-		GitOpRebase, GitOpMerge, GitOpCheckout, GitOpBranchDelete, GitOpTag,
-		GitOpClean, GitOpStash, GitOpAm, GitOpApply, GitOpCherryPick, GitOpRevert:
-		return true
-	default:
-		return false
-	}
-}
-
-// GitWriteOperations returns a list of all git write operations
-func GitWriteOperations() []GitOperationType {
-	return []GitOperationType{
-		GitOpCommit, GitOpPush, GitOpAdd, GitOpRm, GitOpMv, GitOpReset,
-		GitOpRebase, GitOpMerge, GitOpCheckout, GitOpBranchDelete, GitOpTag,
-		GitOpClean, GitOpStash, GitOpAm, GitOpApply, GitOpCherryPick, GitOpRevert,
-	}
-}
-
-// ExecuteGitOperation executes a git operation with approval for write operations
+// ExecuteGitOperation executes a git operation with approval (all git operations require approval)
 func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string, commitFlowExecutor GitCommitFlowExecutor, approvalPrompter GitApprovalPrompter) (string, error) {
 	// For commit operations, delegate to the commit flow executor
 	if op.Operation == GitOpCommit {
@@ -94,20 +60,17 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 		return commitFlowExecutor.ExecuteGitCommitFlow()
 	}
 
-	// Check if this is a write operation
-	if isWriteOperation(op.Operation) {
-		// Build the full git command for display
-		cmd := buildGitCommand(op.Operation, op.Args)
+	// All git operations require user approval - build the full git command for display
+	cmd := buildGitCommand(op.Operation, op.Args)
 
-		// Require user approval
-		if approvalPrompter != nil {
-			approved, err := approvalPrompter.PromptForApproval(cmd)
-			if err != nil {
-				return "", fmt.Errorf("failed to get user approval: %w", err)
-			}
-			if !approved {
-				return "", fmt.Errorf("git operation cancelled by user")
-			}
+	// Require user approval
+	if approvalPrompter != nil {
+		approved, err := approvalPrompter.PromptForApproval(cmd)
+		if err != nil {
+			return "", fmt.Errorf("failed to get user approval: %w", err)
+		}
+		if !approved {
+			return "", fmt.Errorf("git operation cancelled by user")
 		}
 	}
 

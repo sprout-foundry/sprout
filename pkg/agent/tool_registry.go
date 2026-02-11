@@ -89,12 +89,12 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleShellCommand,
 	})
 
-	// Register git tool - handles all git operations with approval for write operations
+	// Register git tool - handles write operations that require approval
 	registry.RegisterTool(ToolConfig{
 		Name:        "git",
-		Description: "Execute git operations. All git write operations (commit, push, add, etc.) require user approval. Commit operations should use the /commit slash command for the interactive commit flow. Read-only operations (status, log, diff, show, branch, remote) execute without approval.",
+		Description: "Execute git write operations that modify the repository. All operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, etc.), use the shell_command tool instead.",
 		Parameters: []ParameterConfig{
-			{"operation", "string", true, []string{"op"}, "Git operation type: status, log, diff, show, branch, remote, rev_parse, ls_files, ls_tree, ls_remote, blame, reflog, config (read-only), commit, push, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert (write operations require approval)"},
+			{"operation", "string", true, []string{"op"}, "Git operation type: commit, push, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert"},
 			{"args", "string", false, []string{}, "Arguments to pass to the git command (optional)"},
 		},
 		Handler: handleGitOperation,
@@ -646,22 +646,74 @@ func (r *ToolRegistry) GetAvailableTools() []string {
 func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	command := args["command"].(string)
 
-	// Hard block on git operations - all git operations must use the git tool
-	if isGitCommand(command) {
-		return "", fmt.Errorf("git operations require the git tool. Please use the git tool instead (operation: '%s')", command)
+	// Block git write operations - these must use the git tool for approval
+	// Read-only operations (status, log, diff, etc.) are allowed through shell_command
+	if isGitWriteCommand(command) {
+		return "", fmt.Errorf("git write operations require the git tool for approval. Please use the git tool instead (operation: '%s')", command)
 	}
 
 	a.ToolLog("executing command", command)
 	return a.executeShellCommandWithTruncation(ctx, command)
 }
 
-// isGitCommand checks if a command is a git operation
-func isGitCommand(command string) bool {
+// isGitWriteCommand checks if a command is a git write operation (which should use git tool for approval)
+func isGitWriteCommand(command string) bool {
 	trimmed := strings.TrimSpace(command)
-	// Check if command starts with "git "
-	if strings.HasPrefix(trimmed, "git ") {
-		return true
+	if !strings.HasPrefix(trimmed, "git ") {
+		return false
 	}
+
+	// Extract the git subcommand (e.g., "git log" -> "log")
+	// Handle git -c flag and other options before subcommand
+	parts := strings.Fields(trimmed)
+	if len(parts) < 2 {
+		return false // Not a complete git command
+	}
+
+	// Find the actual subcommand (skip "git" and any leading flags like -c, -C, etc.)
+	subcommand := ""
+	for i := 1; i < len(parts); i++ {
+		part := parts[i]
+		// Skip common git options that appear before subcommand
+		if strings.HasPrefix(part, "-") {
+			continue
+		}
+		subcommand = part
+		break
+	}
+
+	if subcommand == "" {
+		return false
+	}
+
+	// Normalize subcommand (remove dashes, handle branch -d/-D as "branch")
+	subcommand = strings.TrimPrefix(subcommand, "--")
+	subcommand = strings.TrimPrefix(subcommand, "-")
+
+	// Handle special case: "branch -d" or "branch -D"
+	if subcommand == "branch" && len(parts) > 2 {
+		// If there's a -d or -D flag, it's a write operation
+		for i := 2; i < len(parts); i++ {
+			if parts[i] == "-d" || parts[i] == "-D" {
+				return true
+			}
+		}
+	}
+
+	// Check if it's a write operation
+	writeCommands := []string{
+		"commit", "push", "add", "rm", "mv", "reset",
+		"rebase", "merge", "checkout", "tag", "clean",
+		"stash", "am", "apply", "cherry-pick", "revert",
+		"branch", // branch with flags is handled above
+	}
+
+	for _, writeCmd := range writeCommands {
+		if subcommand == writeCmd {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -678,15 +730,9 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 
 	// Validate that the operation type is known
 	if !isValidGitOperation(operation) {
-		// Build a list of valid operations for the error message
-		writeOps := tools.GitWriteOperations()
-		writeOpNames := make([]string, len(writeOps))
-		for i, op := range writeOps {
-			writeOpNames[i] = string(op)
-		}
-		readOnlyOpNames := []string{"status", "log", "diff", "show", "branch", "remote", "rev_parse", "ls_files", "ls_tree", "ls_remote", "blame", "reflog", "config"}
-		return "", fmt.Errorf("invalid git operation type '%s'. Valid operations: %s (plus read-only: %s)",
-			operationParam, strings.Join(writeOpNames, ", "), strings.Join(readOnlyOpNames, ", "))
+		validOpNames := []string{"commit", "push", "add", "rm", "mv", "reset", "rebase", "merge", "checkout", "branch_delete", "tag", "clean", "stash", "am", "apply", "cherry_pick", "revert"}
+		return "", fmt.Errorf("invalid git operation type '%s'. Valid operations: %s. For read-only operations like status, log, diff, etc., use shell_command instead.",
+			operationParam, strings.Join(validOpNames, ", "))
 	}
 
 	// Extract args parameter (optional)
@@ -721,23 +767,16 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 
 // isValidGitOperation checks if a git operation type is valid
 func isValidGitOperation(op tools.GitOperationType) bool {
-	// Check against all valid operations
-	writeOps := tools.GitWriteOperations()
-	for _, validOp := range writeOps {
-		if op == validOp {
-			return true
-		}
+	// All valid operations are write operations
+	validOps := []tools.GitOperationType{
+		tools.GitOpCommit, tools.GitOpPush, tools.GitOpAdd, tools.GitOpRm,
+		tools.GitOpMv, tools.GitOpReset, tools.GitOpRebase,
+		tools.GitOpMerge, tools.GitOpCheckout, tools.GitOpBranchDelete,
+		tools.GitOpTag, tools.GitOpClean, tools.GitOpStash,
+		tools.GitOpAm, tools.GitOpApply, tools.GitOpCherryPick, tools.GitOpRevert,
 	}
 
-	// Also check read-only operations
-	readOnlyOps := []tools.GitOperationType{
-		tools.GitOpStatus, tools.GitOpLog, tools.GitOpDiff, tools.GitOpShow,
-		tools.GitOpBranch, tools.GitOpRemote, tools.GitOpRevParse,
-		tools.GitOpLsFiles, tools.GitOpLsTree, tools.GitOpLsRemote,
-		tools.GitOpBlame, tools.GitOpRefLog, tools.GitOpConfig,
-	}
-
-	for _, validOp := range readOnlyOps {
+	for _, validOp := range validOps {
 		if op == validOp {
 			return true
 		}

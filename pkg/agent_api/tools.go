@@ -237,7 +237,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "list_todos",
-				Description: "Show current task list and progress",
+				Description: "List todo items created via add_todos tool. Shows current todo list with statuses (pending/in_progress/completed/cancelled) or returns 'No todos' if none exist. Only use for implementation tasks requiring todo tracking - NOT for exploratory/informational requests.",
 				Parameters: map[string]interface{}{
 					"type":                 "object",
 					"properties":           map[string]interface{}{},

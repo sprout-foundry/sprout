@@ -153,17 +153,56 @@ type FileChangeSummary struct {
 // processFileDiff processes a single file's diff and returns optimized content and summary
 func (do *DiffOptimizer) processFileDiff(filename string, fileLines []string, changes *FileChangeSummary) ([]string, string) {
 	if do.shouldOptimizeFile(filename, fileLines) {
-		// Create summary for large/lock files
-		summary := do.createFileSummary(filename, changes)
-
-		// Return just the file header with summary
+		// For review mode, be smarter about what content to include
 		headerLines := do.extractFileHeaders(fileLines)
+
+		// Find first hunk to get some actual changed content
+		firstHunkIdx := -1
+		for i, line := range fileLines {
+			if strings.HasPrefix(line, "@@") {
+				firstHunkIdx = i
+				break
+			}
+		}
+
+		var contentLines []string
+		var summary string
+
+		if firstHunkIdx >= 0 && do.isReviewMode() {
+			// For review mode, distinguish code files from lock files
+			if do.isCodeFile(filename) {
+				// Code files get more context (up to 500 lines)
+				maxContentLines := 500
+				contentEnd := firstHunkIdx + maxContentLines
+				if contentEnd > len(fileLines) {
+					contentEnd = len(fileLines)
+				}
+
+				contentLines = fileLines[firstHunkIdx:contentEnd]
+				linesIncluded := len(contentLines)
+				totalLines := len(fileLines) - firstHunkIdx
+
+				summary = fmt.Sprintf("code file (showing first %d of %d changed lines)",
+					linesIncluded, totalLines)
+			} else {
+				// Lock files get summary only (no need for 500 lines of deps)
+				summary = do.createFileSummary(filename, changes)
+			}
+		} else {
+			// For non-review mode, just use summary
+			summary = do.createFileSummary(filename, changes)
+		}
+
 		summaryLines := []string{
 			"", // Empty line
 			fmt.Sprintf("# %s", filename),
-			fmt.Sprintf("# Large file optimized: %s", summary),
-			"# Full diff omitted for brevity",
-			"",
+			fmt.Sprintf("# Optimized: %s", summary),
+		}
+
+		if len(contentLines) > 0 {
+			summaryLines = append(summaryLines, contentLines...)
+			summaryLines = append(summaryLines, "")
+			summaryLines = append(summaryLines, fmt.Sprintf("# ... (%d more lines omitted)", len(fileLines)-firstHunkIdx-len(contentLines)))
 		}
 
 		return append(headerLines, summaryLines...), summary
@@ -171,6 +210,46 @@ func (do *DiffOptimizer) processFileDiff(filename string, fileLines []string, ch
 
 	// Return full diff for normal files
 	return fileLines, ""
+}
+
+// isCodeFile determines if a file is source code (not lock/generated)
+// Code files should get more context in review mode
+func (do *DiffOptimizer) isCodeFile(filename string) bool {
+	// Lock and generated files are NOT code files
+	if do.isLockFile(filename) || do.isGeneratedFile(filename) {
+		return false
+	}
+
+	// Check file extension against code extensions
+	codeExtensions := []string{
+		".go", ".js", ".ts", ".jsx", ".tsx",
+		".py", ".rb", ".rs", ".java", ".kt",
+		".c", ".cpp", ".h", ".cs", ".swift",
+		".php", ".scala", ".clj", ".ex", ".exs",
+	}
+
+	ext := strings.ToLower(filepath.Ext(filename))
+	for _, codeExt := range codeExtensions {
+		if ext == codeExt {
+			return true
+		}
+	}
+
+	// Also check for files without extension that are likely code
+	// (e.g., Dockerfile, Makefile, etc.)
+	if ext == "" {
+		// File has no extension - likely a config or build file
+		// These are typically useful for review
+		return true
+	}
+
+	return false
+}
+
+// isReviewMode checks if this optimizer is configured for review mode
+func (do *DiffOptimizer) isReviewMode() bool {
+	// Review mode has higher thresholds (5000 lines, 100KB)
+	return do.MaxDiffLines >= 5000
 }
 
 // shouldOptimizeFile determines if a file should be optimized

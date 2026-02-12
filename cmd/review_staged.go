@@ -86,9 +86,7 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		optimizer := utils.NewDiffOptimizerForReview()
 		optimizedDiff := optimizer.OptimizeDiff(stagedDiff)
 
-		logger.LogProcessStep(fmt.Sprintf("Optimized diff for review: %d -> %d lines, %d bytes saved",
-			optimizedDiff.OriginalLines, optimizedDiff.OptimizedLines, optimizedDiff.BytesSaved))
-
+	
 		// Create the review context with optimized diff
 		reviewDiff := optimizedDiff.OptimizedContent
 
@@ -113,9 +111,6 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		// This prevents false positives where LLM thinks functionality is "missing"
 		// when it was just moved or refactored
 		fullFileContext := extractFileContextForChanges(stagedDiff)
-		if fullFileContext != "" {
-			logger.LogProcessStep("Extracted full file context for changed files")
-		}
 
 
 		// Create the unified code review service
@@ -147,8 +142,7 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			RollbackOnReject: false, // Don't rollback for staged reviews
 		}
 
-		logger.LogProcessStep("Sending staged changes to LLM for review...")
-		reviewResponse, err := service.PerformReview(ctx, opts)
+	reviewResponse, err := service.PerformReview(ctx, opts)
 		if err != nil {
 			logger.LogError(fmt.Errorf("failed to get code review from LLM: %w", err))
 			return
@@ -164,12 +158,9 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			prompt := "The review identified issues that need attention. Would you like to run a deeper agentic review (with file reading tools) for more accurate analysis? This may take longer but can provide better context. (yes/no): "
 
 			if logger.AskForConfirmation(prompt, false, false) {
-				logger.LogProcessStep("Running agentic review with file exploration tools...")
 				agenticResponse, err := service.PerformAgenticReview(ctx, opts)
 				if err != nil {
-					logger.LogProcessStep("Agentic review not yet available")
-					logger.LogUserInteraction("Note: Agentic review mode is not yet implemented. The fast review with full file context provides excellent accuracy (95%+).")
-					logger.LogUserInteraction("\nContinuing with initial review results.")
+					logger.LogUserInteraction("Note: Agentic review mode is not yet implemented. Using initial review results.")
 				} else {
 					logger.LogUserInteraction("\n--- Agentic Review Results ---")
 					logger.LogUserInteraction(fmt.Sprintf("Status: %s", strings.ToUpper(agenticResponse.Status)))
@@ -179,8 +170,6 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 						logger.LogUserInteraction(fmt.Sprintf("\nSuggested New Prompt:\n%s", agenticResponse.NewPrompt))
 					}
 				}
-			} else {
-				logger.LogProcessStep("Skipping agentic review. Using initial review results.")
 			}
 		}
 
@@ -440,9 +429,9 @@ func extractFileContextForChanges(diff string) string {
 			continue
 		}
 
-		// Add file context (limit to first 100 lines to save tokens)
+		// Add file context (limit to first 500 lines for better review accuracy)
 		fileLines := strings.Split(string(content), "\n")
-		maxLines := 100
+		maxLines := 500
 		if len(fileLines) < maxLines {
 			maxLines = len(fileLines)
 		}

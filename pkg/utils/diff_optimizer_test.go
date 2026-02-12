@@ -114,7 +114,7 @@ index abc123..def456 100644
 	}
 
 	// Should contain summary in optimized content
-	if !strings.Contains(result.OptimizedContent, "Large file optimized") {
+	if !strings.Contains(result.OptimizedContent, "Optimized:") {
 		t.Error("Expected optimized content to contain summary information")
 	}
 

@@ -222,7 +222,6 @@ func (s *CodeReviewService) removeAffectedFiles(related, affected []string) []st
 
 // PerformReview performs a code review based on the provided context and options
 func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
-	s.logger.LogProcessStep("Performing code review...")
 
 	// Validate input parameters
 	if ctx == nil {
@@ -235,24 +234,16 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 		return nil, fmt.Errorf("no diff content provided for review")
 	}
 
-	// Enhance context with workspace intelligence
-	s.logger.LogProcessStep("Enhancing context with workspace intelligence...")
-
 	// Try to load existing context if session ID is provided
 	var existingCtx *ReviewContext
 	if ctx.SessionID != "" {
-		s.logger.LogProcessStep(fmt.Sprintf("Looking for existing review context for session %s", ctx.SessionID))
 		if storedCtx, exists := s.getStoredContext(ctx.SessionID); exists {
 			existingCtx = storedCtx
-			s.logger.LogProcessStep(fmt.Sprintf("Loaded existing review context for session %s", ctx.SessionID))
-		} else {
-			s.logger.LogProcessStep(fmt.Sprintf("No existing context found for session %s", ctx.SessionID))
 		}
 	}
 
 	// Merge with existing context or initialize new history
 	if existingCtx != nil {
-		s.logger.LogProcessStep("Merging with existing review context...")
 		// Update existing context with new information
 		existingCtx.Diff = ctx.Diff
 		existingCtx.OriginalPrompt = ctx.OriginalPrompt
@@ -264,7 +255,6 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 		existingCtx.FullFileContext = ctx.FullFileContext
 		ctx = existingCtx
 	} else {
-		s.logger.LogProcessStep("Initializing new review context...")
 		// Initialize review history if not provided
 		if ctx.History == nil {
 			ctx.History = s.initializeReviewHistory(ctx)
@@ -273,13 +263,11 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 
 	// Check iteration limits
 	if s.hasExceededIterationLimit(ctx) {
-		s.logger.LogProcessStep("Iteration limit exceeded, handling gracefully...")
 		return s.handleIterationLimitExceeded(ctx)
 	}
 
 	// Check for convergence
 	if s.reviewConfig.EnableConvergenceDetection && s.hasConverged(ctx) {
-		s.logger.LogProcessStep("Review has converged, handling gracefully...")
 		return s.handleConvergence(ctx)
 	}
 
@@ -291,23 +279,18 @@ func (s *CodeReviewService) PerformReview(ctx *ReviewContext, opts *ReviewOption
 		return nil, fmt.Errorf("only staged review type is supported, requested type: %v", opts.Type)
 	}
 
-	s.logger.LogProcessStep("Performing staged code review...")
 	result, err = s.performStagedReview(ctx)
 
 	if err != nil {
-		s.logger.LogProcessStep(fmt.Sprintf("Code review failed: %v", err))
 		return nil, fmt.Errorf("failed to perform code review: %w", err)
 	}
 
-	s.logger.LogProcessStep("Recording review iteration...")
 	// Record the iteration
 	s.recordReviewIteration(ctx, result, ctx.Diff)
 
-	s.logger.LogProcessStep("Storing updated context...")
 	// Store the updated context for future iterations
 	s.storeContext(ctx)
 
-	s.logger.LogProcessStep("Handling review result...")
 	// Handle the review result based on options
 	return s.handleReviewResult(result, ctx, opts)
 }
@@ -499,8 +482,6 @@ func (s *CodeReviewService) performAgentBasedCodeReview(ctx *ReviewContext, stru
 		return nil, fmt.Errorf("agent client not available for enhanced code review")
 	}
 
-	s.logger.LogProcessStep("Performing agent-based code review with workspace intelligence...")
-
 	// Build enhanced review prompt with workspace context
 	prompt := s.buildEnhancedReviewPrompt(ctx, structured)
 
@@ -593,8 +574,6 @@ func (s *CodeReviewService) parseStructuredReviewResponse(response *api.ChatResp
 	}
 
 	content := response.Choices[0].Message.Content
-	s.logger.LogProcessStep("Parsing structured review response from agent API")
-
 	// Parse JSON response similar to llm.GetCodeReview
 	jsonStr, err := utils.ExtractJSON(content)
 	if err != nil || jsonStr == "" {
@@ -632,8 +611,6 @@ func (s *CodeReviewService) parseHumanReadableReviewResponse(response *api.ChatR
 	}
 
 	content := response.Choices[0].Message.Content
-	s.logger.LogProcessStep("Parsing human-readable review response from agent API")
-
 	// For staged reviews, we typically return the content as-is with approved status
 	// unless there are clear rejection indicators
 	status := "approved"
@@ -653,8 +630,6 @@ func (s *CodeReviewService) parseHumanReadableReviewResponse(response *api.ChatR
 func (s *CodeReviewService) handleReviewResult(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
 	switch result.Status {
 	case "approved":
-		s.logger.LogProcessStep("Code review approved.")
-		s.logger.LogProcessStep(fmt.Sprintf("Feedback: %s", result.Feedback))
 		ctx.History.Converged = true
 		ctx.History.FinalStatus = "approved"
 		return result, nil
@@ -672,24 +647,16 @@ func (s *CodeReviewService) handleReviewResult(result *types.CodeReviewResult, c
 
 // handleNeedsRevision handles the case where the code review requires revisions
 func (s *CodeReviewService) handleNeedsRevision(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
-	s.logger.LogProcessStep(fmt.Sprintf("Code review requires revisions (iteration %d/%d).",
-		ctx.CurrentIteration, s.reviewConfig.MaxIterations))
-	s.logger.LogProcessStep(fmt.Sprintf("Feedback: %s", result.Feedback))
-
 	// Check if we're approaching iteration limits
 	if ctx.CurrentIteration >= s.reviewConfig.MaxIterations-1 {
-		s.logger.LogProcessStep("Approaching iteration limit. Evaluating whether to continue...")
-
 		// If we have a previous approved result, prefer it over continuing
 		if s.hasPreviousApprovedResult(ctx) {
-			s.logger.LogProcessStep("Previous approved result found. Using that instead of continuing iterations.")
 			return s.getMostRecentApprovedResult(ctx)
 		}
 	}
 
 	// For pre-apply review phase, provide advisory feedback only to avoid loops
 	if opts.PreapplyReview && !opts.SkipPrompt {
-		s.logger.LogProcessStep("Pre-apply review: advisory only (no auto-fixes applied)")
 		return result, nil
 	}
 
@@ -701,12 +668,8 @@ func (s *CodeReviewService) handleNeedsRevision(result *types.CodeReviewResult, 
 
 // handleRejected handles the case where the code review is rejected
 func (s *CodeReviewService) handleRejected(result *types.CodeReviewResult, ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
-	s.logger.LogProcessStep("Code review rejected.")
-	s.logger.LogProcessStep(fmt.Sprintf("Feedback: %s", result.Feedback))
-
 	// For pre-apply review phase, provide advisory feedback only
 	if opts.PreapplyReview && !opts.SkipPrompt {
-		s.logger.LogProcessStep("Pre-apply review: advisory only (no rollback/retry)")
 		return result, nil
 	}
 

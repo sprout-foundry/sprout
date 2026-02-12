@@ -167,7 +167,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 
 	registry.RegisterTool(ToolConfig{
 		Name:        "list_todos",
-		Description: "List all todo items",
+		Description: "List todo items created via add_todos tool. Shows current todo list with statuses (pending/in_progress/completed/cancelled) or returns 'No todos' if none exist. Only use for implementation tasks requiring todo tracking - NOT for exploratory/informational requests.",
 		Parameters:  []ParameterConfig{},
 		Handler:     handleListTodos,
 	})

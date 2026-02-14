@@ -508,3 +508,346 @@ func BenchmarkValidationPrompt(b *testing.B) {
 		_ = validator.buildValidationPrompt("shell_command", args)
 	}
 }
+
+// TestIsInTmpPath tests the /tmp path detection
+func TestIsInTmpPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		toolName string
+		args     map[string]interface{}
+		expected bool
+	}{
+		{
+			name:     "read_file with /tmp path",
+			toolName: "read_file",
+			args: map[string]interface{}{
+				"file_path": "/tmp/test.txt",
+			},
+			expected: true,
+		},
+		{
+			name:     "read_file with /tmp/subdir path",
+			toolName: "read_file",
+			args: map[string]interface{}{
+				"file_path": "/tmp/subdir/test.txt",
+			},
+			expected: true,
+		},
+		{
+			name:     "read_file with regular path",
+			toolName: "read_file",
+			args: map[string]interface{}{
+				"file_path": "/home/user/test.txt",
+			},
+			expected: false,
+		},
+		{
+			name:     "shell_command with /tmp",
+			toolName: "shell_command",
+			args: map[string]interface{}{
+				"command": "rm -rf /tmp/test",
+			},
+			expected: true,
+		},
+		{
+			name:     "shell_command with /tmp/ prefix",
+			toolName: "shell_command",
+			args: map[string]interface{}{
+				"command": "/tmp/test.sh",
+			},
+			expected: true,
+		},
+		{
+			name:     "shell_command without /tmp",
+			toolName: "shell_command",
+			args: map[string]interface{}{
+				"command": "ls -la",
+			},
+			expected: false,
+		},
+		{
+			name:     "write_file with /tmp path",
+			toolName: "write_file",
+			args: map[string]interface{}{
+				"file_path": "/tmp/output.txt",
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isInTmpPath(tt.toolName, tt.args)
+			if result != tt.expected {
+				t.Errorf("isInTmpPath() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestIsObviouslySafe tests the obviously safe pre-filter
+func TestIsObviouslySafe(t *testing.T) {
+	tests := []struct {
+		name     string
+		toolName string
+		args     map[string]interface{}
+		expected bool
+	}{
+		{
+			name:     "read_file tool",
+			toolName: "read_file",
+			args:     map[string]interface{}{"file_path": "test.go"},
+			expected: true,
+		},
+		{
+			name:     "glob tool",
+			toolName: "glob",
+			args:     map[string]interface{}{"pattern": "*.go"},
+			expected: true,
+		},
+		{
+			name:     "grep tool",
+			toolName: "grep",
+			args:     map[string]interface{}{"pattern": "func"},
+			expected: true,
+		},
+		{
+			name:     "git_status tool",
+			toolName: "git_status",
+			args:     nil,
+			expected: true,
+		},
+		{
+			name:     "git_log tool",
+			toolName: "git_log",
+			args:     nil,
+			expected: true,
+		},
+		{
+			name:     "git_diff tool",
+			toolName: "git_diff",
+			args:     nil,
+			expected: true,
+		},
+		{
+			name:     "shell_command git status",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "git status"},
+			expected: true,
+		},
+		{
+			name:     "shell_command git log",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "git log"},
+			expected: true,
+		},
+		{
+			name:     "shell_command ls",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "ls -la"},
+			expected: true,
+		},
+		{
+			name:     "shell_command go build",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "go build"},
+			expected: true,
+		},
+		{
+			name:     "shell_command go test",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "go test ./..."},
+			expected: true,
+		},
+		{
+			name:     "shell_command cat file",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "cat README.md"},
+			expected: true,
+		},
+		{
+			name:     "shell_command head file",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "head -20 file.txt"},
+			expected: true,
+		},
+		{
+			name:     "shell_command rm (dangerous)",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "rm -rf node_modules"},
+			expected: false,
+		},
+		{
+			name:     "shell_command chmod 777 (dangerous)",
+			toolName: "shell_command",
+			args:     map[string]interface{}{"command": "chmod 777 script.sh"},
+			expected: false,
+		},
+		{
+			name:     "tmp path file operation",
+			toolName: "read_file",
+			args:     map[string]interface{}{"file_path": "/tmp/test.txt"},
+			expected: true,
+		},
+		{
+			name:     "unknown tool",
+			toolName: "unknown_tool",
+			args:     map[string]interface{}{},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isObviouslySafe(tt.toolName, tt.args)
+			if result != tt.expected {
+				t.Errorf("isObviouslySafe() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestValidateToolCallObviouslySafe tests that obviously safe operations skip LLM validation
+func TestValidateToolCallObviouslySafe(t *testing.T) {
+	cfg := &configuration.SecurityValidationConfig{
+		Enabled:    true,
+		Threshold:  1,
+		Model:      "/nonexistent/model.gguf",
+	}
+
+	validator := &Validator{
+		config:    cfg,
+		model:     nil, // No model loaded
+		modelPath: cfg.Model,
+	}
+
+	ctx := context.Background()
+
+	// Test that read operations skip LLM validation even without model
+	result, err := validator.ValidateToolCall(ctx, "read_file", map[string]interface{}{
+		"file_path": "test.go",
+	})
+
+	if err != nil {
+		t.Fatalf("ValidateToolCall failed: %v", err)
+	}
+
+	// Should return SAFE immediately without requiring model
+	if result.RiskLevel != RiskSafe {
+		t.Errorf("Expected RiskSafe for read_file, got %v", result.RiskLevel)
+	}
+
+	if result.ModelUsed != "prefilter" {
+		t.Errorf("Expected modelUsed 'prefilter', got %s", result.ModelUsed)
+	}
+}
+
+// TestValidationResultFields tests all fields of ValidationResult
+func TestValidationResultFields(t *testing.T) {
+	now := time.Now()
+	result := ValidationResult{
+		RiskLevel:     RiskDangerous,
+		Reasoning:     "Test reasoning",
+		Confidence:    0.95,
+		Timestamp:     now.Unix(),
+		ModelUsed:     "test-model",
+		LatencyMs:     100,
+		ShouldBlock:   true,
+		ShouldConfirm: false,
+		IsSoftBlock:   false,
+	}
+
+	if result.RiskLevel != RiskDangerous {
+		t.Errorf("RiskLevel mismatch")
+	}
+
+	if result.Reasoning != "Test reasoning" {
+		t.Errorf("Reasoning mismatch")
+	}
+
+	if result.Confidence != 0.95 {
+		t.Errorf("Confidence mismatch")
+	}
+
+	if result.Timestamp != now.Unix() {
+		t.Errorf("Timestamp mismatch")
+	}
+
+	if result.ModelUsed != "test-model" {
+		t.Errorf("ModelUsed mismatch")
+	}
+
+	if result.LatencyMs != 100 {
+		t.Errorf("LatencyMs mismatch")
+	}
+
+	if !result.ShouldBlock {
+		t.Error("ShouldBlock should be true")
+	}
+
+	if result.ShouldConfirm {
+		t.Error("ShouldConfirm should be false")
+	}
+
+	if result.IsSoftBlock {
+		t.Error("IsSoftBlock should be false")
+	}
+}
+
+// TestParseValidationResponseMarkdownBlock tests parsing JSON from various markdown formats
+func TestParseValidationResponseMarkdownBlock(t *testing.T) {
+	validator := &Validator{
+		config:    &configuration.SecurityValidationConfig{Threshold: 1},
+		modelPath: "/test/model.gguf",
+	}
+
+	tests := []struct {
+		name           string
+		response       string
+		expectedRisk   RiskLevel
+		expectedReason string
+	}{
+		{
+			name:           "JSON with ```json code block",
+			response:       "```json\n{\"risk_level\": 2, \"reasoning\": \"Dangerous!\", \"confidence\": 0.9}\n```",
+			expectedRisk:   RiskDangerous,
+			expectedReason: "Dangerous!",
+		},
+		{
+			name:           "JSON with ``` code block (no language)",
+			response:       "```\n{\"risk_level\": 1, \"reasoning\": \"Caution needed\", \"confidence\": 0.8}\n```",
+			expectedRisk:   RiskCaution,
+			expectedReason: "Caution needed",
+		},
+		{
+			name:           "JSON with extra text before",
+			response:       "Here is the result:\n```json\n{\"risk_level\": 0, \"reasoning\": \"Safe\", \"confidence\": 0.95}\n```",
+			expectedRisk:   RiskSafe,
+			expectedReason: "Safe",
+		},
+		{
+			name:           "JSON with extra text after",
+			response:       "```json\n{\"risk_level\": 1, \"reasoning\": \"Caution\", \"confidence\": 0.7}\n```\nHope this helps!",
+			expectedRisk:   RiskCaution,
+			expectedReason: "Caution",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			startTime := time.Now()
+			result, err := validator.parseValidationResponse(tt.response, startTime)
+			if err != nil {
+				t.Fatalf("parseValidationResponse failed: %v", err)
+			}
+
+			if result.RiskLevel != tt.expectedRisk {
+				t.Errorf("Expected risk level %v, got %v", tt.expectedRisk, result.RiskLevel)
+			}
+
+			if result.Reasoning != tt.expectedReason {
+				t.Errorf("Expected reasoning '%s', got '%s'", tt.expectedReason, result.Reasoning)
+			}
+		})
+	}
+}

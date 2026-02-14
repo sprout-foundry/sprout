@@ -82,7 +82,75 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 		ch.validateMinimaxToolCalls(allMessages)
 	}
 
+	// Final safeguard: remove any orphaned tool results before sending to API
+	allMessages = ch.removeOrphanedToolResults(allMessages)
+
 	return allMessages
+}
+
+// removeOrphanedToolResults removes tool result messages whose tool_call_id
+// doesn't match any assistant message with tool_calls. This can happen when
+// conversation pruning removes assistant messages but leaves their tool results.
+func (ch *ConversationHandler) removeOrphanedToolResults(messages []api.Message) []api.Message {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	// Collect all valid tool_call_ids from assistant messages with tool_calls
+	validToolCallIDs := make(map[string]struct{})
+	for _, msg := range messages {
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			for _, tc := range msg.ToolCalls {
+				if tc.ID != "" {
+					validToolCallIDs[tc.ID] = struct{}{}
+				}
+			}
+		}
+	}
+
+	if len(validToolCallIDs) == 0 {
+		// No tool calls, remove all tool results
+		filtered := make([]api.Message, 0, len(messages))
+		removedCount := 0
+		for _, msg := range messages {
+			if msg.Role == "tool" {
+				removedCount++
+				if ch.agent.debug {
+					ch.agent.debugLog("🧹 Removed orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
+				}
+			} else {
+				filtered = append(filtered, msg)
+			}
+		}
+		if removedCount > 0 && ch.agent.debug {
+			ch.agent.debugLog("🧹 Removed %d orphaned tool result(s) (no assistant with tool_calls)\n", removedCount)
+		}
+		return filtered
+	}
+
+	// Filter out tool results whose tool_call_id isn't in the valid set
+	filtered := make([]api.Message, 0, len(messages))
+	removedCount := 0
+	for _, msg := range messages {
+		if msg.Role == "tool" {
+			if _, ok := validToolCallIDs[msg.ToolCallId]; ok {
+				filtered = append(filtered, msg)
+			} else {
+				removedCount++
+				if ch.agent.debug {
+					ch.agent.debugLog("🧹 Removed orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
+				}
+			}
+		} else {
+			filtered = append(filtered, msg)
+		}
+	}
+
+	if removedCount > 0 && ch.agent.debug {
+		ch.agent.debugLog("🧹 Removed %d orphaned tool result(s)\n", removedCount)
+	}
+
+	return filtered
 }
 
 // validateDeepSeekToolCalls performs additional validation for DeepSeek tool call format

@@ -20,6 +20,7 @@ var (
 	agentSystemPromptFile string
 	agentSystemPrompt     string
 	agentUnsafe           bool
+	agentNoSubagents      bool
 )
 
 func createChatAgent() (*agent.Agent, error) {
@@ -62,12 +63,17 @@ func init() {
 	agentCmd.Flags().StringVar(&agentSystemPromptFile, "system-prompt", "", "File path containing custom system prompt")
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
 	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")
+	agentCmd.Flags().BoolVar(&agentNoSubagents, "no-subagents", false, "Disable subagent tools (run_subagent, run_parallel_subagents)")
 
 	// Initialize environment-based defaults
 	cobra.OnInitialize(func() {
 		// Check for LEDIT_NO_STREAM environment variable
 		if os.Getenv("LEDIT_NO_STREAM") == "1" || os.Getenv("LEDIT_NO_STREAM") == "true" {
 			agentNoStreaming = true
+		}
+		// Check for LEDIT_NO_SUBAGENTS environment variable
+		if os.Getenv("LEDIT_NO_SUBAGENTS") == "1" || os.Getenv("LEDIT_NO_SUBAGENTS") == "true" {
+			agentNoSubagents = true
 		}
 	})
 }
@@ -126,6 +132,11 @@ Examples:
 
 		// Set unsafe mode if flag is provided
 		chatAgent.SetUnsafeMode(agentUnsafe)
+
+		// Disable subagents if flag is set
+		if agentNoSubagents {
+			os.Setenv("LEDIT_NO_SUBAGENTS", "1")
+		}
 
 		if agentDryRun {
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")

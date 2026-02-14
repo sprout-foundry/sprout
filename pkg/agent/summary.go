@@ -261,12 +261,18 @@ func (a *Agent) GenerateConversationSummary() string {
 		summary.WriteString("\n")
 	}
 
-	// Add todo summary
-	todoSummary := tools.GetTaskSummary()
-	if todoSummary != "No tasks tracked in this session." {
+	// Add todo summary (using TodoRead to get current state)
+	todos := tools.TodoRead()
+	if len(todos) > 0 {
+		completed := 0
+		for _, t := range todos {
+			if t.Status == "completed" {
+				completed++
+			}
+		}
 		summary.WriteString("📋 TASK PROGRESS:\n")
 		summary.WriteString("──────────────────────────────\n")
-		summary.WriteString(todoSummary)
+		summary.WriteString(fmt.Sprintf("• Completed: %d/%d tasks\n", completed, len(todos)))
 		summary.WriteString("\n")
 	}
 
@@ -308,30 +314,20 @@ func (a *Agent) GenerateCompactSummary() string {
 	summary.WriteString("🔄 PREVIOUS SESSION CONTEXT\n")
 	summary.WriteString("════════════════════════════\n\n")
 
-	// Add accomplished todos with context
-	todoSummary := tools.GetTaskSummary()
-	if todoSummary != "No tasks tracked in this session." {
+	// Add accomplished todos
+	todos := tools.TodoRead()
+	if len(todos) > 0 {
 		summary.WriteString("✅ ACCOMPLISHED TASKS:\n")
 		summary.WriteString("─────────────────────────────\n")
-
-		// Get completed tasks with more detail
-		completedTasks := tools.GetCompletedTasks()
-		if len(completedTasks) > 0 {
-			for i, task := range completedTasks {
-				if i >= 8 { // Limit to 8 tasks to control size
-					summary.WriteString("  ... and more\n")
-					break
-				}
-				summary.WriteString(fmt.Sprintf("• %s\n", task))
+		count := 0
+		for _, t := range todos {
+			if t.Status == "completed" && count < 8 {
+				summary.WriteString(fmt.Sprintf("• %s\n", t.Content))
+				count++
 			}
-		} else {
-			// Fallback to basic summary if detailed tasks not available
-			lines := strings.Split(todoSummary, "\n")
-			for _, line := range lines {
-				if strings.Contains(line, "completed") || strings.Contains(line, "✅") {
-					summary.WriteString(fmt.Sprintf("• %s\n", strings.TrimSpace(line)))
-				}
-			}
+		}
+		if count < len(todos) {
+			summary.WriteString("  ... and more\n")
 		}
 		summary.WriteString("\n")
 	}

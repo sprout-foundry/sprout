@@ -133,7 +133,7 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 # Todo Integration
 `
 	if createTodos {
-		todoIntegration += `- When you identify clear tasks, use the add_todos tool to create them
+		todoIntegration += `- When you identify clear tasks, use the TodoWrite tool to create them
 - This creates a todo system that can be tracked during implementation
 - Structure todos by phases or categories
 - Include descriptions for complex todos

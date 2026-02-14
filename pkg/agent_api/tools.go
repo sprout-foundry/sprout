@@ -1,11 +1,6 @@
 package api
 
 func GetToolDefinitions() []Tool {
-	// Added ask_user tool for user clarification interactions
-	// This tool simply returns a prompt string that the agent can display to the user.
-	// It does not perform I/O in this non‑interactive environment.
-	// The implementation is defined in tools/ask_user.go.
-
 	return []Tool{
 		{
 			Type: "function",
@@ -151,8 +146,8 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
-				Name:        "add_todos",
-				Description: "Add todo items to track work progress (can add single or multiple)",
+				Name:        "TodoWrite",
+				Description: "Use this tool to create and manage a structured task list for your current coding session.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -161,26 +156,31 @@ func GetToolDefinitions() []Tool {
 							"items": map[string]interface{}{
 								"type": "object",
 								"properties": map[string]interface{}{
-									"title": map[string]interface{}{
+									"content": map[string]interface{}{
 										"type":        "string",
-										"description": "Brief title of the todo item",
-										"minLength":   1,
+										"description": "The task description",
 									},
-									"description": map[string]interface{}{
+									"status": map[string]interface{}{
 										"type":        "string",
-										"description": "Optional detailed description",
+										"description": "Current status of the task",
+										"enum":        []string{"pending", "in_progress", "completed"},
 									},
 									"priority": map[string]interface{}{
 										"type":        "string",
-										"description": "Priority level for the todo item",
+										"description": "Priority of the task",
 										"enum":        []string{"high", "medium", "low"},
-										"default":     "medium",
+									},
+									"activeForm": map[string]interface{}{
+										"type":        "string",
+										"description": "Active form for display",
+									},
+									"id": map[string]interface{}{
+										"type":        "string",
+										"description": "Task identifier",
 									},
 								},
-								"required": []string{"title"},
+								"required": []string{"content", "status"},
 							},
-							"description": "Array of todo items to add (can be single item or multiple)",
-							"minItems":    1,
 						},
 					},
 					"required":             []string{"todos"},
@@ -195,88 +195,8 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
-				Name:        "update_todo_status",
-				Description: "Update task status (pending/in_progress/completed/cancelled)",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"id": map[string]interface{}{
-							"type":        "string",
-							"description": "ID of the todo item to update",
-						},
-						"status": map[string]interface{}{
-							"type":        "string",
-							"description": "New status for the todo item",
-							"enum":        []string{"pending", "in_progress", "completed", "cancelled"},
-						},
-					},
-					"required":             []string{"id", "status"},
-					"additionalProperties": false,
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
-				Name:        "update_todo_status_bulk",
-				Description: "Update status of multiple todo items at once (use for efficiency)",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"updates": map[string]interface{}{
-							"type": "array",
-							"items": map[string]interface{}{
-								"type": "object",
-								"properties": map[string]interface{}{
-									"id": map[string]interface{}{
-										"type":        "string",
-										"description": "ID of the todo item to update",
-									},
-									"status": map[string]interface{}{
-										"type":        "string",
-										"description": "New status for the todo item",
-										"enum":        []string{"pending", "in_progress", "completed", "cancelled"},
-									},
-								},
-								"required": []string{"id", "status"},
-							},
-						},
-					},
-					"required":             []string{"updates"},
-					"additionalProperties": false,
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
-				Name:        "list_todos",
-				Description: "List todo items created via add_todos tool. Shows current todo list with statuses (pending/in_progress/completed/cancelled) or returns 'No todos' if none exist. Only use for implementation tasks requiring todo tracking - NOT for exploratory/informational requests.",
-				Parameters: map[string]interface{}{
-					"type":                 "object",
-					"properties":           map[string]interface{}{},
-					"required":             []string{},
-					"additionalProperties": false,
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
-				Name:        "archive_completed",
-				Description: "Remove completed/cancelled todos from active view",
+				Name:        "TodoRead",
+				Description: "Use this tool to read the current to-do list for the session.",
 				Parameters: map[string]interface{}{
 					"type":                 "object",
 					"properties":           map[string]interface{}{},
@@ -404,7 +324,7 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "run_subagent",
-				Description: "Delegate a SINGLE implementation task to a subagent. Spawns an agent subprocess with a focused task, waits for completion, and returns all output. Use this when: (1) Tasks must be done SEQUENTIALLY with dependencies between them, (2) You need to review results before deciding next steps, (3) Working on a single focused feature. For MULTIPLE INDEPENDENT tasks, use run_parallel_subagents instead for faster completion.\n\n**REQUIRED**: You MUST specify a persona parameter. Choose the most appropriate persona for the task:\n- general: General-purpose tasks (default if unsure)\n- debugger: Bug fixing, error investigation, troubleshooting\n- code_reviewer: Security review, code quality, best practices\n- tester: Writing unit tests, test coverage\n- qa_engineer: Test planning, integration testing\n- coder: Feature implementation, writing production code\n- web_researcher: Documentation lookup, API research\n\nThe subagent has full access to all tools (read, write, edit, search) and will complete the scoped task. NO TIMEOUT - runs until completion. Subagent provider and model are configured via config settings (subagent_provider and subagent_model).",
+				Description: "Delegate a SINGLE implementation task to a subagent.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -420,19 +340,19 @@ func GetToolDefinitions() []Tool {
 						},
 						"context": map[string]interface{}{
 							"type":        "string",
-							"description": "Context from previous subagent work (files created, summaries, etc.)",
+							"description": "Context from previous subagent work",
 						},
 						"files": map[string]interface{}{
 							"type":        "string",
-							"description": "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')",
+							"description": "Comma-separated list of relevant file paths",
 						},
 						"model": map[string]interface{}{
 							"type":        "string",
-							"description": "Optional: Override model for this subagent (e.g., 'qwen/qwen-coder-32b')",
+							"description": "Optional: Override model for this subagent",
 						},
 						"provider": map[string]interface{}{
 							"type":        "string",
-							"description": "Optional: Override provider (e.g., 'openrouter')",
+							"description": "Optional: Override provider",
 						},
 					},
 					"required":             []string{"prompt", "persona"},
@@ -492,13 +412,13 @@ func GetToolDefinitions() []Tool {
 				Parameters  interface{} `json:"parameters"`
 			}{
 				Name:        "view_history",
-				Description: "View change history of files across sessions to see what writes/edits have happened",
+				Description: "View change history of files across sessions",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"limit": map[string]interface{}{
 							"type":        "integer",
-							"description": "Maximum number of changes to return (default: 10)",
+							"description": "Maximum number of changes to return",
 							"minimum":     1,
 							"maximum":     100,
 							"default":     10,
@@ -513,7 +433,7 @@ func GetToolDefinitions() []Tool {
 						},
 						"show_content": map[string]interface{}{
 							"type":        "boolean",
-							"description": "Include actual file content changes in output (default: false)",
+							"description": "Include actual file content changes in output",
 							"default":     false,
 						},
 					},
@@ -536,7 +456,7 @@ func GetToolDefinitions() []Tool {
 					"properties": map[string]interface{}{
 						"revision_id": map[string]interface{}{
 							"type":        "string",
-							"description": "Revision ID to rollback (get from view_history). If not provided, shows available revisions",
+							"description": "Revision ID to rollback",
 						},
 						"file_path": map[string]interface{}{
 							"type":        "string",
@@ -544,7 +464,7 @@ func GetToolDefinitions() []Tool {
 						},
 						"confirm": map[string]interface{}{
 							"type":        "boolean",
-							"description": "Must be true to actually perform rollback (default: false for preview)",
+							"description": "Must be true to actually perform rollback",
 							"default":     false,
 						},
 					},
@@ -572,7 +492,7 @@ func GetToolDefinitions() []Tool {
 						},
 						"server": map[string]interface{}{
 							"type":        "string",
-							"description": "Server name (optional for list, required for call). Examples: github-mcp, filesystem",
+							"description": "Server name (optional for list, required for call)",
 						},
 						"tool": map[string]interface{}{
 							"type":        "string",

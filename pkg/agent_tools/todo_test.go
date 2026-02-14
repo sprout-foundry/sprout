@@ -7,9 +7,9 @@ import (
 )
 
 // waitWithTimeout runs fn in a goroutine and fails the test if it does not complete in time.
-func waitWithTimeout(t *testing.T, timeout time.Duration, fn func() string) string {
+func waitWithTimeout(t *testing.T, timeout time.Duration, fn func() []TodoItem) []TodoItem {
 	t.Helper()
-	done := make(chan string, 1)
+	done := make(chan []TodoItem, 1)
 	go func() {
 		done <- fn()
 	}()
@@ -18,125 +18,111 @@ func waitWithTimeout(t *testing.T, timeout time.Duration, fn func() string) stri
 		return res
 	case <-time.After(timeout):
 		t.Fatalf("operation timed out after %v (possible deadlock)", timeout)
-		return ""
+		return nil
 	}
 }
 
-func TestAddBulkTodos_NoDeadlockAndMarkdown(t *testing.T) {
+func TestTodoWrite_NoDeadlock(t *testing.T) {
 	// Reset global state
-	ClearTodos()
+	TodoWrite([]TodoItem{})
 
-	todos := []struct {
-		Title       string
-		Description string
-		Priority    string
-	}{
-		{Title: "Set up project", Description: "Initialize repo and modules", Priority: "high"},
-		{Title: "Implement feature", Description: "Add core logic", Priority: "medium"},
-		{Title: "Write tests", Description: "Cover main flows", Priority: "low"},
+	todos := []TodoItem{
+		{Content: "Set up project", Status: "pending", Priority: "high"},
+		{Content: "Implement feature", Status: "pending", Priority: "medium"},
+		{Content: "Write tests", Status: "pending", Priority: "low"},
 	}
 
-	res := waitWithTimeout(t, 2*time.Second, func() string {
-		return AddBulkTodos(todos)
+	res := waitWithTimeout(t, 2*time.Second, func() []TodoItem {
+		TodoWrite(todos)
+		return TodoRead()
 	})
 
-	// Check for compact response (current behavior)
-	if !strings.Contains(res, "📝 Added 3 todos") && !strings.Contains(res, "Added 3 todo") {
-		t.Fatalf("expected added summary, got: %q", res)
+	if len(res) != 3 {
+		t.Fatalf("expected 3 todos, got: %d", len(res))
 	}
 
-	if !strings.Contains(res, "Set up project") || !strings.Contains(res, "Implement feature") || !strings.Contains(res, "Write tests") {
-		t.Fatalf("expected todo titles in response, got: %q", res)
-	}
-
-	// Verify we can call GetTodoListMarkdown without deadlock (this tests RLock usage)
-	markdown := waitWithTimeout(t, 1*time.Second, func() string {
-		return GetTodoListMarkdown()
+	// Verify we can call TodoRead without deadlock (this tests RLock usage)
+	todos2 := waitWithTimeout(t, 1*time.Second, func() []TodoItem {
+		return TodoRead()
 	})
 
-	if markdown == "No todos" {
-		t.Fatalf("expected todos in markdown list, got: %q", markdown)
-	}
-
-	if !strings.Contains(markdown, "- [ ] Set up project") {
-		t.Fatalf("expected first todo in markdown list, got: %q", markdown)
+	if len(todos2) != 3 {
+		t.Fatalf("expected 3 todos in second read, got: %d", len(todos2))
 	}
 }
 
-func TestUpdateTodoStatus_NoDeadlockAndMarkdown(t *testing.T) {
-	// Reset and add two todos
-	ClearTodos()
-	_ = AddBulkTodos([]struct {
-		Title       string
-		Description string
-		Priority    string
-	}{
-		{Title: "Task A", Description: "desc", Priority: ""},
-		{Title: "Task B", Description: "desc", Priority: ""},
+func TestTodoRead_EmptyList(t *testing.T) {
+	// Reset and read
+	TodoWrite([]TodoItem{})
+
+	todos := waitWithTimeout(t, 1*time.Second, func() []TodoItem {
+		return TodoRead()
 	})
 
-	res := waitWithTimeout(t, 2*time.Second, func() string {
-		return UpdateTodoStatus("todo_1", "completed")
-	})
-
-	// Check for compact response (current behavior) - could be "completed" or "remaining"
-	if !strings.Contains(res, "completed") && !strings.Contains(res, "✅") {
-		t.Fatalf("expected completion response, got: %q", res)
-	}
-
-	// Verify we can call GetTodoListMarkdown without deadlock (this tests RLock usage)
-	markdown := waitWithTimeout(t, 1*time.Second, func() string {
-		return GetTodoListMarkdown()
-	})
-
-	// Ensure Task A is shown as completed
-	if !strings.Contains(markdown, "- [x] Task A") && !strings.Contains(markdown, "✅") {
-		t.Fatalf("expected completed checkbox for Task A, got: %q", markdown)
+	if len(todos) != 0 {
+		t.Fatalf("expected 0 todos, got: %d", len(todos))
 	}
 }
 
-func TestUpdateTodoStatus_InvalidStatusDoesNotLock(t *testing.T) {
-	// Reset and add one todo
-	ClearTodos()
-	_ = AddBulkTodos([]struct {
-		Title       string
-		Description string
-		Priority    string
-	}{
-		{Title: "Task A", Description: "desc", Priority: ""},
+func TestTodoWrite_OverwriteList(t *testing.T) {
+	// Start with initial list
+	TodoWrite([]TodoItem{
+		{Content: "Initial task", Status: "pending"},
 	})
 
-	// Call with invalid status and ensure it returns and does not hold the lock
-	res := waitWithTimeout(t, 1*time.Second, func() string {
-		return UpdateTodoStatus("todo_1", "invalid_status")
+	// Replace with new list
+	TodoWrite([]TodoItem{
+		{Content: "New task 1", Status: "pending"},
+		{Content: "New task 2", Status: "in_progress"},
 	})
-	if !strings.Contains(res, "invalid status") {
-		t.Fatalf("expected invalid status message, got: %q", res)
+
+	todos := TodoRead()
+
+	if len(todos) != 2 {
+		t.Fatalf("expected 2 todos after overwrite, got: %d", len(todos))
 	}
 
-	// Now try another operation that needs the same mutex; it should complete
-	_ = waitWithTimeout(t, 1*time.Second, func() string {
-		return AddTodo("Another", "", "")
-	})
+	if todos[0].Content != "New task 1" {
+		t.Fatalf("expected first task to be 'New task 1', got: %s", todos[0].Content)
+	}
 }
 
-func TestUpdateTodoStatus_NotFoundDoesNotLock(t *testing.T) {
-	ClearTodos()
-	_ = AddBulkTodos([]struct {
-		Title       string
-		Description string
-		Priority    string
-	}{
-		{Title: "Task X", Description: "desc", Priority: ""},
-	})
+func TestTodoWrite_WithPriority(t *testing.T) {
+	TodoWrite([]TodoItem{})
 
-	res := waitWithTimeout(t, 1*time.Second, func() string {
-		return UpdateTodoStatus("todo_999", "completed")
-	})
-	if res != "Todo not found" {
-		t.Fatalf("expected 'Todo not found', got: %q", res)
+	todos := []TodoItem{
+		{Content: "High priority task", Status: "pending", Priority: "high"},
+		{Content: "Low priority task", Status: "pending", Priority: "low"},
+	}
+	TodoWrite(todos)
+
+	result := TodoRead()
+
+	if len(result) != 2 {
+		t.Fatalf("expected 2 todos, got: %d", len(result))
 	}
 
-	// Subsequent list should return promptly
-	_ = waitWithTimeout(t, 1*time.Second, func() string { return ListTodos() })
+	// Check that priorities are preserved
+	foundHigh := false
+	for _, t := range result {
+		if t.Priority == "high" && strings.Contains(t.Content, "High priority") {
+			foundHigh = true
+		}
+	}
+	if !foundHigh {
+		t.Fatalf("expected to find high priority task")
+	}
+}
+
+func TestGetTodoListCompact(t *testing.T) {
+	TodoWrite([]TodoItem{
+		{Content: "Task 1", Status: "pending"},
+		{Content: "Task 2", Status: "in_progress"},
+	})
+
+	result := GetTodoListCompact()
+
+	if len(result) != 2 {
+		t.Fatalf("expected 2 todos, got: %d", len(result))
+	}
 }

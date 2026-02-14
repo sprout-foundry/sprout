@@ -251,10 +251,6 @@ func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, re
 	// Track request timing
 	startTime := time.Now()
 
-	if c.debug {
-		fmt.Printf("DEBUG: Calling local Ollama with model: %s\n", c.model)
-	}
-
 	err = client.Chat(ctx, req, respFunc)
 	if err != nil {
 		return nil, fmt.Errorf("ollama chat failed: %w", err)
@@ -386,9 +382,6 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 		if m.Name == model {
 			// Model found, proceed with switch
 			c.model = model
-			if c.debug {
-				fmt.Printf("DEBUG: Switched local Ollama model to: %s\n", model)
-			}
 			return nil
 		}
 	}
@@ -398,9 +391,6 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 		fmt.Fprintf(os.Stderr, "⚠️  Model '%s' not found locally. Available models: %v\n", model, availableModels)
 		fmt.Fprintf(os.Stderr, "🔄 Falling back to first available model: %s\n", listResp.Models[0].Name)
 		c.model = listResp.Models[0].Name
-		if c.debug {
-			fmt.Printf("DEBUG: Switched local Ollama model to fallback: %s\n", c.model)
-		}
 		return nil
 	}
 
@@ -465,10 +455,6 @@ func (c *OllamaLocalClient) SendChatRequestStream(messages []Message, tools []To
 	var lastDoneReason string
 
 	startTime := time.Now()
-
-	if c.debug {
-		fmt.Printf("DEBUG: Streaming local Ollama with model: %s\n", c.model)
-	}
 
 	err = client.Chat(ctx, req, func(res ollama.ChatResponse) error {
 		chunk := convertOllamaResponseToStreamingChunk(res)

@@ -328,28 +328,28 @@ func TestFilesExist(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
+		name      string
 		filenames []string
-		want     bool
-		wantErr  bool
+		want      bool
+		wantErr   bool
 	}{
 		{
-			name:     "all files exist",
+			name:      "all files exist",
 			filenames: []string{file1, file2},
-			want:     true,
-			wantErr:  false,
+			want:      true,
+			wantErr:   false,
 		},
 		{
-			name:     "one file missing",
+			name:      "one file missing",
 			filenames: []string{file1, file3},
-			want:     false,
-			wantErr:  false,
+			want:      false,
+			wantErr:   false,
 		},
 		{
-			name:     "no files provided",
+			name:      "no files provided",
 			filenames: []string{},
-			want:     true,
-			wantErr:  false,
+			want:      true,
+			wantErr:   false,
 		},
 	}
 

@@ -95,7 +95,7 @@ func TestTokenDiscrepancy(t *testing.T) {
 	}
 
 	// Simulate the calculation from summary.go
-	processedPromptTokens := agent.promptTokens - agent.cachedTokens // 500
+	processedPromptTokens := agent.promptTokens - agent.cachedTokens  // 500
 	processedTokens := processedPromptTokens + agent.completionTokens // 700
 
 	expectedProcessed := agent.totalTokens - agent.cachedTokens // 1000

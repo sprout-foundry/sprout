@@ -335,7 +335,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	}
 
 	// Validate and extract parameters
-	validatedArgs, err := r.validateParameters(tool, args)
+	validatedArgs, err := r.validateParameters(tool, args, agent)
 	if err != nil {
 		return "", fmt.Errorf("parameter validation failed for tool '%s': %w", toolName, err)
 	}
@@ -500,7 +500,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 }
 
 // validateParameters validates and extracts parameters according to tool configuration
-func (r *ToolRegistry) validateParameters(tool ToolConfig, args map[string]interface{}) (map[string]interface{}, error) {
+func (r *ToolRegistry) validateParameters(tool ToolConfig, args map[string]interface{}, agent *Agent) (map[string]interface{}, error) {
 	validated := make(map[string]interface{})
 
 	for _, param := range tool.Parameters {
@@ -512,7 +512,7 @@ func (r *ToolRegistry) validateParameters(tool ToolConfig, args map[string]inter
 
 		if found {
 			// Type validation and conversion
-			convertedValue, err := r.convertParameterType(value, param.Type)
+			convertedValue, err := r.convertParameterType(value, param.Type, agent)
 			if err != nil {
 				return nil, fmt.Errorf("parameter '%s': %w", param.Name, err)
 			}
@@ -559,7 +559,7 @@ func (r *ToolRegistry) mapToJSONString(m map[string]interface{}) (string, error)
 }
 
 // convertParameterType converts a parameter to the expected type
-func (r *ToolRegistry) convertParameterType(value interface{}, expectedType string) (interface{}, error) {
+func (r *ToolRegistry) convertParameterType(value interface{}, expectedType string, agent *Agent) (interface{}, error) {
 	switch expectedType {
 	case "string":
 		if str, ok := value.(string); ok {
@@ -571,17 +571,23 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 			// Try to convert the map to JSON string
 			jsonStr, err := r.mapToJSONString(mapVal)
 			if err != nil {
-				fmt.Printf("🚨 DEBUG: Expected string, got map[string]interface {}. Failed to convert to JSON: %v\n", err)
-				fmt.Printf("🚨 DEBUG: Content as map keys: %v\n", getMapKeys(mapVal))
+				if agent != nil && agent.debug {
+					agent.debugLog("Expected string, got map[string]interface {}. Failed to convert to JSON: %v\n", err)
+					agent.debugLog("Content as map keys: %v\n", getMapKeys(mapVal))
+				}
 				return "", fmt.Errorf("expected string, got %T (failed to convert map to JSON: %w)", value, err)
 			}
 
-			fmt.Printf("🚨 DEBUG: Converted map to JSON string. Length: %d\n", len(jsonStr))
+			if agent != nil && agent.debug {
+				agent.debugLog("Converted map to JSON string. Length: %d\n", len(jsonStr))
+			}
 			return jsonStr, nil
 		}
 
 		// Debug logging for other type conversion failures
-		fmt.Printf("🚨 DEBUG: Expected string, got %T. Value: %+v\n", value, value)
+		if agent != nil && agent.debug {
+			agent.debugLog("Expected string, got %T. Value: %+v\n", value, value)
+		}
 
 		return "", fmt.Errorf("expected string, got %T", value)
 

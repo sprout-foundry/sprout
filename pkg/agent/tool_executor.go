@@ -130,12 +130,23 @@ func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message 
 
 	te.agent.debugLog("🚀 Executing %d read_file operations in parallel\n", len(toolCalls))
 
+	// Pre-generate tool call IDs for any tool calls that don't have them
+	// This ensures each goroutine has its own unique ID before parallel execution
+	for i := range toolCalls {
+		if toolCalls[i].ID == "" {
+			toolCalls[i].ID = te.GenerateToolCallID(toolCalls[i].Function.Name)
+		}
+	}
+
 	var wg sync.WaitGroup
 	results := make([]api.Message, len(toolCalls))
 	resultsMutex := &sync.Mutex{}
 
 	for i, tc := range toolCalls {
 		wg.Add(1)
+		// Pass toolCall by VALUE (create a copy with tc := toolCall)
+		// This ensures each goroutine has its own unique data
+		tc := tc
 		go func(index int, toolCall api.ToolCall) {
 			defer func() {
 				if r := recover(); r != nil {

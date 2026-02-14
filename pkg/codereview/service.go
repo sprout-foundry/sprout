@@ -21,10 +21,10 @@ import (
 
 // ReviewContext represents the context for a code review request
 type ReviewContext struct {
-	Diff                  string   // The code diff to review
-	OriginalPrompt        string   // The original user prompt (for automated reviews)
-	ProcessedInstructions string   // Processed instructions (for automated reviews)
-	RevisionID            string   // Revision ID for change tracking
+	Diff                  string // The code diff to review
+	OriginalPrompt        string // The original user prompt (for automated reviews)
+	ProcessedInstructions string // Processed instructions (for automated reviews)
+	RevisionID            string // Revision ID for change tracking
 	Config                *configuration.Config
 	Logger                *utils.Logger
 	History               *ReviewHistory      // Review history for this context
@@ -34,10 +34,10 @@ type ReviewContext struct {
 	RelatedFiles          []string            // Files that might be affected by changes
 	AgentClient           api.ClientInterface // Agent API client for LLM calls
 	// Metadata for enhanced context
-	ProjectType        string // Project type (Go, Node.js, etc.)
-	CommitMessage      string // Commit message/intent
-	KeyComments        string // Key code comments explaining WHY
-	ChangeCategories   string // Categorization of changes
+	ProjectType      string // Project type (Go, Node.js, etc.)
+	CommitMessage    string // Commit message/intent
+	KeyComments      string // Key code comments explaining WHY
+	ChangeCategories string // Categorization of changes
 }
 
 // ReviewType defines the type of code review being performed

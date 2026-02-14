@@ -61,7 +61,7 @@ type Agent struct {
 	mcpToolsCache         []api.Tool                     // Cached MCP tools to avoid reloading
 	mcpInitialized        bool                           // Track whether MCP has been initialized
 	mcpInitErr            error                          // Store initialization error
-	mcpInitMu             sync.Mutex                    // Protect concurrent initialization
+	mcpInitMu             sync.Mutex                     // Protect concurrent initialization
 	circuitBreaker        *CircuitBreakerState           // Track repetitive actions
 	conversationPruner    *ConversationPruner            // Automatic conversation pruning
 	completionSummarizer  *CompletionContextSummarizer   // Completion context summarization
@@ -810,7 +810,12 @@ func (a *Agent) initializeMCP() error {
 
 // RefreshMCPTools refreshes the MCP tools cache
 func (a *Agent) RefreshMCPTools() error {
+	// Clear cache with mutex protection to avoid race conditions
+	a.mcpInitMu.Lock()
 	a.mcpToolsCache = nil // Clear cache to force reload
+	a.mcpInitialized = false // Mark as needing reinitialization
+	a.mcpInitMu.Unlock()
+
 	tools := a.getMCPTools()
 	if a.debug {
 		fmt.Printf("🔧 Refreshed MCP tools: %d available\n", len(tools))

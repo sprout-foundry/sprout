@@ -72,13 +72,13 @@ func (em *ErrorManager) HandleError(ctx context.Context, err error, context stri
 }
 
 // HandleFatalError handles a fatal error
-func (em *ErrorManager) HandleFatalError(err error, context string) {
+func (em *ErrorManager) HandleFatalError(err error, context string) error {
 	em.mu.Lock()
 	em.recordError(err)
 	em.mu.Unlock()
 
 	em.notifyError(err, context)
-	em.errorHandler.HandleFatalError(err, context)
+	return em.errorHandler.HandleFatalError(err, context)
 }
 
 // HandleValidationError handles validation errors

@@ -269,19 +269,15 @@ func (e *ErrorHandler) HandleError(ctx context.Context, err error, context strin
 }
 
 // HandleFatalError handles a fatal error that should terminate the application
-func (e *ErrorHandler) HandleFatalError(err error, context string) {
+// Instead of panicking, this logs the error and returns it for graceful handling
+func (e *ErrorHandler) HandleFatalError(err error, context string) error {
 	if e.logger != nil {
 		e.logger.Logf("FATAL ERROR [%s]: %v", context, err)
 	}
 
-	// In a real application, you might want to:
-	// - Send error to monitoring system
-	// - Attempt graceful shutdown
-	// - Log stack traces
-	// - Exit with appropriate code
-
-	// For now, just re-panic with the error
-	panic(err)
+	// Return the error instead of panicking for graceful error handling
+	// Callers should check the error and exit appropriately
+	return fmt.Errorf("fatal error in %s: %w", context, err)
 }
 
 // HandleValidationError handles validation errors specifically

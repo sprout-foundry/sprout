@@ -48,17 +48,17 @@ func TestSafeResolvePathWithBypass(t *testing.T) {
 		errorContains string
 	}{
 		{
-			name:       "normal ctx - path outside working dir blocked",
-			ctx:        context.Background(),
-			path:       siblingFile,
-			wantErr:    true,
+			name:          "normal ctx - path outside working dir blocked",
+			ctx:           context.Background(),
+			path:          siblingFile,
+			wantErr:       true,
 			errorContains: "file access outside working directory",
 		},
 		{
-			name:       "bypass ctx - path outside working dir allowed",
-			ctx:        WithSecurityBypass(context.Background()),
-			path:       siblingFile,
-			wantErr:    false,
+			name:    "bypass ctx - path outside working dir allowed",
+			ctx:     WithSecurityBypass(context.Background()),
+			path:    siblingFile,
+			wantErr: false,
 		},
 	}
 
@@ -114,17 +114,17 @@ func TestSafeResolvePathForWriteWithBypass(t *testing.T) {
 		errorContains string
 	}{
 		{
-			name:       "normal ctx - write outside working dir blocked",
-			ctx:        context.Background(),
-			path:       filepath.Join(siblingDir, "newfile.txt"),
-			wantErr:    true,
+			name:          "normal ctx - write outside working dir blocked",
+			ctx:           context.Background(),
+			path:          filepath.Join(siblingDir, "newfile.txt"),
+			wantErr:       true,
 			errorContains: "file write outside working directory",
 		},
 		{
-			name:       "bypass ctx - write outside working dir allowed",
-			ctx:        WithSecurityBypass(context.Background()),
-			path:       filepath.Join(siblingDir, "newfile.txt"),
-			wantErr:    false,
+			name:    "bypass ctx - write outside working dir allowed",
+			ctx:     WithSecurityBypass(context.Background()),
+			path:    filepath.Join(siblingDir, "newfile.txt"),
+			wantErr: false,
 		},
 	}
 

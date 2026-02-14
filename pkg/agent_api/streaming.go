@@ -25,7 +25,7 @@ type StreamingChoice struct {
 type StreamingDelta struct {
 	Role             string              `json:"role,omitempty"`
 	Content          string              `json:"content,omitempty"`
-	Reasoning        string              `json:"reasoning,omitempty"`        // GLM reasoning field
+	Reasoning        string              `json:"reasoning,omitempty"` // GLM reasoning field
 	ReasoningContent string              `json:"reasoning_content,omitempty"`
 	ReasoningDetails json.RawMessage     `json:"reasoning_details,omitempty"` // Can be string (Minimax) or array (GLM models)
 	ToolCalls        []StreamingToolCall `json:"tool_calls,omitempty"`

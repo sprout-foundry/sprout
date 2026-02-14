@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	MAX_SUBAGENT_OUTPUT_SIZE    = 10 * 1024 * 1024 // 10MB
-	MAX_SUBAGENT_CONTEXT_SIZE   = 1024 * 1024      // 1MB
-	MAX_PARALLEL_SUBAGENTS      = 5
+	MAX_SUBAGENT_OUTPUT_SIZE  = 10 * 1024 * 1024 // 10MB
+	MAX_SUBAGENT_CONTEXT_SIZE = 1024 * 1024      // 1MB
+	MAX_PARALLEL_SUBAGENTS    = 5
 )
 
 // ToolHandler represents a function that can handle a tool execution
@@ -281,11 +281,11 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Description: "Review the agent's own work against a canonical specification extracted from the conversation to detect scope creep and ensure alignment with user requirements",
 		Parameters: []ParameterConfig{
 			{
-				Name:        "revision_id",
-				Type:        "string",
-				Required:    false,
+				Name:         "revision_id",
+				Type:         "string",
+				Required:     false,
 				Alternatives: []string{},
-				Description: "Optional revision ID to review (defaults to current/most recent revision)",
+				Description:  "Optional revision ID to review (defaults to current/most recent revision)",
 			},
 		},
 		Handler: handleSelfReview,
@@ -1190,11 +1190,11 @@ func extractFilePathsFromPrompt(prompt string) []string {
 	// 6. Paths with extensions: .go, .js, .py, .ts, .tsx, .jsx, .md, .json, .yaml, .yml, .txt, etc.
 
 	patterns := []string{
-		`"(?:[a-zA-Z]:)?[\w/\-\\.]+\.[\w]+"`,                    // Double-quoted paths with extension
-		`'(?:[a-zA-Z]:)?[\w/\-\\.]+\.[\w]+'`,                    // Single-quoted paths with extension
-		"`(?:[a-zA-Z]:)?[\\w/\\-\\.]+\\.[\\w]+`",                 // Backtick paths with extension
+		`"(?:[a-zA-Z]:)?[\w/\-\\.]+\.[\w]+"`,                                         // Double-quoted paths with extension
+		`'(?:[a-zA-Z]:)?[\w/\-\\.]+\.[\w]+'`,                                         // Single-quoted paths with extension
+		"`(?:[a-zA-Z]:)?[\\w/\\-\\.]+\\.[\\w]+`",                                     // Backtick paths with extension
 		`(?:modify|create|delete|update|edit|write|read)\s+["']?([\w/\-\.]+\.[\w]+)`, // Action words + path
-		`(?:in|file|at)\s+["']?([\w/\-\.]+\.[\w]+)`,             // Prepositions + path
+		`(?:in|file|at)\s+["']?([\w/\-\.]+\.[\w]+)`,                                  // Prepositions + path
 	}
 
 	seen := make(map[string]bool)
@@ -1725,10 +1725,10 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 
 		// Check for filesystem security errors
 		if strings.Contains(stderr, "outside working directory") ||
-		   strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-		   strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-		   strings.Contains(stderr, "security warning") ||
-		   exitCode != "0" {
+			strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
+			strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+			strings.Contains(stderr, "security warning") ||
+			exitCode != "0" {
 
 			// Subagent encountered a security error or failed
 			// Return a special error format that tells the primary agent to stop retrying
@@ -1804,9 +1804,9 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 
 		// Check for specific error patterns that indicate we should stop retrying
 		if strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-		   strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-		   strings.Contains(stderr, "security") ||
-		   strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
+			strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+			strings.Contains(stderr, "security") ||
+			strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
 
 			// This is a security/authorization error - don't retry
 			errorMsg := fmt.Sprintf("SUBAGENT_FAILED: The subagent encountered a security or authorization error that prevents it from completing the task.\n\n"+
@@ -1991,10 +1991,10 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 			// Check for filesystem security errors or failures
 			if strings.Contains(stderr, "outside working directory") ||
-			   strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-			   strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-			   strings.Contains(stderr, "security warning") ||
-			   exitCode != "0" {
+				strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
+				strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+				strings.Contains(stderr, "security warning") ||
+				exitCode != "0" {
 
 				// One of the parallel subagents encountered a security error or failed
 				// Return a special error format that tells the primary agent to stop retrying
@@ -2027,9 +2027,9 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		if exitCode != "0" {
 			// Check for specific error patterns that indicate we should stop retrying
 			if strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-			   strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-			   strings.Contains(stderr, "security") ||
-			   strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
+				strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+				strings.Contains(stderr, "security") ||
+				strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
 
 				// This is a security/authorization error - don't retry
 				securityErrors = append(securityErrors, fmt.Sprintf(

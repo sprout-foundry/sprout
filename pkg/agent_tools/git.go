@@ -13,29 +13,29 @@ import (
 type GitOperationType string
 
 const (
-	GitOpCommit      GitOperationType = "commit"
-	GitOpPush        GitOperationType = "push"
-	GitOpAdd         GitOperationType = "add"
-	GitOpRm          GitOperationType = "rm"
-	GitOpMv          GitOperationType = "mv"
-	GitOpReset       GitOperationType = "reset"
-	GitOpRebase     GitOperationType = "rebase"
-	GitOpMerge      GitOperationType = "merge"
-	GitOpCheckout   GitOperationType = "checkout"
+	GitOpCommit       GitOperationType = "commit"
+	GitOpPush         GitOperationType = "push"
+	GitOpAdd          GitOperationType = "add"
+	GitOpRm           GitOperationType = "rm"
+	GitOpMv           GitOperationType = "mv"
+	GitOpReset        GitOperationType = "reset"
+	GitOpRebase       GitOperationType = "rebase"
+	GitOpMerge        GitOperationType = "merge"
+	GitOpCheckout     GitOperationType = "checkout"
 	GitOpBranchDelete GitOperationType = "branch_delete"
-	GitOpTag        GitOperationType = "tag"
-	GitOpClean      GitOperationType = "clean"
-	GitOpStash      GitOperationType = "stash"
-	GitOpAm         GitOperationType = "am"
-	GitOpApply      GitOperationType = "apply"
-	GitOpCherryPick GitOperationType = "cherry_pick"
-	GitOpRevert    GitOperationType = "revert"
+	GitOpTag          GitOperationType = "tag"
+	GitOpClean        GitOperationType = "clean"
+	GitOpStash        GitOperationType = "stash"
+	GitOpAm           GitOperationType = "am"
+	GitOpApply        GitOperationType = "apply"
+	GitOpCherryPick   GitOperationType = "cherry_pick"
+	GitOpRevert       GitOperationType = "revert"
 )
 
 // GitOperation defines a git operation request
 type GitOperation struct {
 	Operation GitOperationType `json:"operation"`
-	Args      string            `json:"args,omitempty"`
+	Args      string           `json:"args,omitempty"`
 }
 
 // GitCommitFlowExecutor is an interface for executing the commit flow

@@ -65,11 +65,8 @@ const Chat: React.FC<ChatProps> = ({
       'analyze_image_content': '🔬',
       'web_search': '🌐',
       'fetch_url': '📥',
-      'add_todos': '📋',
-      'update_todo_status': '✅',
-      'list_todos': '📝',
-      'get_active_todos_compact': '📊',
-      'archive_completed': '🗄️',
+      'TodoWrite': '📋',
+      'TodoRead': '📝',
       'view_history': '📚',
       'rollback_changes': '⏪',
       'mcp_tools': '🔧'

@@ -27,14 +27,12 @@ func (h *HelpCommand) Execute(args []string, chatAgent *agent.Agent) error {
 🤖 Coder Agent
 
 A command-line coding assistant using OpenAI's gpt-oss-120b model with 8 core tools:
-- shell_command: Execute shell commands for exploration and testing  
+- shell_command: Execute shell commands for exploration and testing
 - read_file: Read file contents
 - write_file: Create new files
 - edit_file: Modify existing files with precise string replacement
-- add_todo: Create and track development tasks
-- update_todo_status: Update progress on tracked tasks
-- update_todo_status_bulk: Mark multiple tasks complete at once (use for efficiency)
-- list_todos: View all current tasks and their status
+- TodoWrite: Create and manage structured task lists
+- TodoRead: View current task list
 
 USAGE:
   Interactive mode:     ./ledit

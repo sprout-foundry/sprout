@@ -139,6 +139,8 @@ func LogAndContinue(err error, ctx string) {
 func LogAndExit(err error, ctx string) {
 	if err != nil {
 		GetErrorManager().HandleFatalError(err, ctx)
+		// In a real application, you might want to exit here
+		// os.Exit(1)
 	}
 }
 

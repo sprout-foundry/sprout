@@ -59,10 +59,10 @@ func TestConsolidatedEfficiencyGuidelines(t *testing.T) {
 
 	// Check that key efficiency concepts are present
 	expectedIntegrations := []string{
-		"Be concise and direct",     // Core Principles
-		"Focus on results",          // Core Principles
-		"Make decisive choices",     // Tool Usage Guidelines
-		"straightforward solution",  // Implementation Process
+		"Be concise and direct",    // Core Principles
+		"Focus on results",         // Core Principles
+		"Make decisive choices",    // Tool Usage Guidelines
+		"straightforward solution", // Implementation Process
 	}
 
 	for _, integration := range expectedIntegrations {

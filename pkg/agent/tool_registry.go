@@ -145,50 +145,22 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleEditFile,
 	})
 
-	// Register todo tools
-	// Register add_todos (handles both single and bulk)
+	// TodoWrite - Creates and manages a structured task list
 	registry.RegisterTool(ToolConfig{
-		Name:        "add_todos",
-		Description: "Add multiple todo items at once. Use single-todo add only for rare cases. Returns todo IDs for reference.",
+		Name:        "TodoWrite",
+		Description: "Use this tool to create and manage a structured task list for your current coding session.",
 		Parameters: []ParameterConfig{
-			{"todos", "array", true, []string{}, "Array of todos: [{title, description?, priority?}]"},
+			{"todos", "array", true, []string{}, "Array of todo items: [{content, status, activeForm?, priority?, id?}]"},
 		},
-		Handler: handleAddTodos,
+		Handler: handleTodoWrite,
 	})
 
+	// TodoRead - Returns the current todo list (no parameters)
 	registry.RegisterTool(ToolConfig{
-		Name:        "update_todo_status",
-		Description: "Update the status of a single todo. Accepts id as 'todo_1', '1', or the todo title. For multiple updates, use update_todo_status_bulk.",
-		Parameters: []ParameterConfig{
-			{"id", "string", true, []string{}, "Todo identifier (format: 'todo_1', numeric '1', or todo title)"},
-			{"status", "string", true, []string{}, "New status (one of: pending, in_progress, completed, cancelled)"},
-		},
-		Handler: handleUpdateTodoStatus,
-	})
-
-	registry.RegisterTool(ToolConfig{
-		Name:        "update_todo_status_bulk",
-		Description: "Update the status of multiple todo items efficiently. Accepts IDs as 'todo_1', numeric '1', or titles.",
-		Parameters: []ParameterConfig{
-			{"updates", "array", true, []string{}, "Array of updates: [{id, status}, ...] where status is one of: pending, in_progress, completed, cancelled"},
-		},
-		Handler: handleUpdateTodoStatusBulk,
-	})
-
-	registry.RegisterTool(ToolConfig{
-		Name:        "list_todos",
-		Description: "List todo items created via add_todos tool. Shows current todo list with statuses (pending/in_progress/completed/cancelled) or returns 'No todos' if none exist. Only use for implementation tasks requiring todo tracking - NOT for exploratory/informational requests.",
+		Name:        "TodoRead",
+		Description: "Use this tool to read the current to-do list for the session.",
 		Parameters:  []ParameterConfig{},
-		Handler:     handleListTodos,
-	})
-
-	registry.RegisterTool(ToolConfig{
-		Name:        "archive_completed",
-		Description: "Archive completed/cancelled todos",
-		Parameters:  []ParameterConfig{},
-		Handler: func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-			return tools.ArchiveCompleted(), nil
-		},
+		Handler:     handleTodoRead,
 	})
 
 	// Register build validation tool
@@ -1132,116 +1104,11 @@ func handleCreate(ctx context.Context, a *Agent, args map[string]interface{}) (s
 	return result, err
 }
 
-func handleAddTodo(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	task := args["task"].(string)
-	a.ToolLog("adding todo", fmt.Sprintf("task=%q", truncateString(task, 40)))
-	a.debugLog("Adding todo: %s\n", task)
-
-	result := tools.AddTodo(task, "", "medium") // title, description, priority
-	a.debugLog("Add todo result: %s\n", result)
-	return result, nil
-}
-
-func handleUpdateTodoStatus(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	// Normalize ID using shared utility function
-	taskID := tools.NormalizeTodoID(args["id"])
-	if taskID == "" {
-		return "", fmt.Errorf("invalid or missing id argument")
-	}
-
-	status, ok := args["status"].(string)
-	if !ok {
-		return "", fmt.Errorf("invalid status argument")
-	}
-
-	// Validate status using shared utility function
-	if !tools.IsValidStatus(status) {
-		return "", fmt.Errorf("%s", tools.FormatTodoStatusError(status))
-	}
-
-	a.ToolLog("updating todo", fmt.Sprintf("id=%s status=%s", taskID, status))
-	a.debugLog("Updating todo %s to status: %s\n", taskID, status)
-
-	result := tools.UpdateTodoStatus(taskID, status)
-	if result == "Todo not found" && !strings.HasPrefix(taskID, "todo_") {
-		if resolved, ok := tools.FindTodoIDByTitle(taskID); ok {
-			a.debugLog("Resolved todo title '%s' to id %s\n", taskID, resolved)
-			taskID = resolved
-			result = tools.UpdateTodoStatus(taskID, status)
-		}
-	}
-	a.debugLog("Update todo result: %s\n", result)
-	return result, nil
-}
-
-func handleUpdateTodoStatusBulk(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	updatesRaw, ok := args["updates"]
-	if !ok {
-		return "", fmt.Errorf("missing updates argument")
-	}
-
-	// Parse the updates array
-	updatesSlice, ok := updatesRaw.([]interface{})
-	if !ok {
-		return "", fmt.Errorf("updates must be an array")
-	}
-
-	var updates []struct {
-		ID     string
-		Status string
-	}
-
-	for _, updateRaw := range updatesSlice {
-		updateMap, ok := updateRaw.(map[string]interface{})
-		if !ok {
-			return "", fmt.Errorf("each update must be an object")
-		}
-
-		update := struct {
-			ID     string
-			Status string
-		}{}
-
-		// Normalize ID using shared utility function
-		update.ID = tools.NormalizeTodoID(updateMap["id"])
-
-		if status, ok := updateMap["status"].(string); ok {
-			// Validate status using shared utility function
-			if !tools.IsValidStatus(status) {
-				return "", fmt.Errorf("%s", tools.FormatTodoStatusError(status))
-			}
-			update.Status = status
-		}
-
-		if update.ID == "" {
-			return "", fmt.Errorf("each update requires an id")
-		}
-		if update.Status == "" {
-			return "", fmt.Errorf("each update requires a status")
-		}
-		updates = append(updates, update)
-	}
-
-	a.ToolLog("bulk updating todos", fmt.Sprintf("%d items", len(updates)))
-	a.debugLog("Bulk updating %d todos\n", len(updates))
-
-	result := tools.UpdateTodoStatusBulk(updates)
-	a.debugLog("Bulk update result: %s\n", result)
-	return result, nil
-}
-
-func handleAddTodos(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	todosRaw, ok := args["todos"]
 	if !ok {
 		return "", fmt.Errorf("missing todos argument")
 	}
-
-	// Count todos for logging
-	todoCount := 0
-	if todosSlice, ok := todosRaw.([]interface{}); ok {
-		todoCount = len(todosSlice)
-	}
-	a.ToolLog("adding todos", fmt.Sprintf("%d items", todoCount))
 
 	// Parse the todos array
 	todosSlice, ok := todosRaw.([]interface{})
@@ -1249,11 +1116,7 @@ func handleAddTodos(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return "", fmt.Errorf("todos must be an array")
 	}
 
-	var todos []struct {
-		Title       string
-		Description string
-		Priority    string
-	}
+	var todos []tools.TodoItem
 
 	for _, todoRaw := range todosSlice {
 		todoMap, ok := todoRaw.(map[string]interface{})
@@ -1261,43 +1124,52 @@ func handleAddTodos(ctx context.Context, a *Agent, args map[string]interface{}) 
 			return "", fmt.Errorf("each todo must be an object")
 		}
 
-		todo := struct {
-			Title       string
-			Description string
-			Priority    string
-		}{}
+		todo := tools.TodoItem{}
 
-		if title, ok := todoMap["title"].(string); ok {
-			todo.Title = title
+		if content, ok := todoMap["content"].(string); ok {
+			todo.Content = content
 		}
-		if desc, ok := todoMap["description"].(string); ok {
-			todo.Description = desc
+		if status, ok := todoMap["status"].(string); ok {
+			todo.Status = status
 		}
-		if prio, ok := todoMap["priority"].(string); ok {
-			todo.Priority = prio
-		} else {
-			todo.Priority = "medium"
+		if priority, ok := todoMap["priority"].(string); ok {
+			todo.Priority = priority
+		}
+		if id, ok := todoMap["id"].(string); ok {
+			todo.ID = id
 		}
 
-		if todo.Title == "" {
-			return "", fmt.Errorf("each todo requires a title")
+		if todo.Content == "" {
+			return "", fmt.Errorf("each todo requires content")
+		}
+		if todo.Status == "" {
+			return "", fmt.Errorf("each todo requires status")
 		}
 		todos = append(todos, todo)
 	}
 
-	a.debugLog("Adding %d todos\n", len(todos))
-	result := tools.AddBulkTodos(todos)
-	a.debugLog("Add todos result: %s\n", result)
+	a.debugLog("TodoWrite: processing %d todos\n", len(todos))
+	result := tools.TodoWrite(todos)
+	a.debugLog("TodoWrite result: %s\n", result)
 	return result, nil
 }
 
-func handleListTodos(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	a.ToolLog("listing todos", "")
-	a.debugLog("Listing todos\n")
+func handleTodoRead(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	a.debugLog("TodoRead: returning current todo list\n")
+	todos := tools.TodoRead()
+	if len(todos) == 0 {
+		return "No todos", nil
+	}
 
-	result := tools.ListTodos()
-	a.debugLog("List todos result: %s\n", result)
-	return result, nil
+	var result strings.Builder
+	for _, todo := range todos {
+		status := todo.Status
+		if status == "in_progress" {
+			status = "active"
+		}
+		result.WriteString(fmt.Sprintf("- [%s] %s\n", status[:1], todo.Content))
+	}
+	return result.String(), nil
 }
 
 // extractFilePathsFromPrompt uses regex to find file paths mentioned in a prompt.

@@ -123,3 +123,19 @@ func formatStatusWithID(status, title, id string) string {
 	symbol := getCompactStatusSymbol(status)
 	return fmt.Sprintf("%s %s", symbol, formatTodoResponseForID(title, id))
 }
+
+// getCompactStatusSymbol returns single-character status symbols for compact display
+func getCompactStatusSymbol(status string) string {
+	switch status {
+	case "pending":
+		return "○"
+	case "in_progress":
+		return "►"
+	case "completed":
+		return "✓"
+	case "cancelled":
+		return "✗"
+	default:
+		return "·"
+	}
+}

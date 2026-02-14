@@ -38,8 +38,8 @@ func TestCommitJSONResult_Validate(t *testing.T) {
 		{
 			name: "valid error result",
 			result: CommitJSONResult{
-				Status:  CommitStatusError,
-				Error:   "something went wrong",
+				Status: CommitStatusError,
+				Error:  "something went wrong",
 			},
 			wantErr: false,
 		},

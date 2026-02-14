@@ -353,17 +353,17 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 
 // ParallelSubagentTask represents a single parallel subagent run task
 type ParallelSubagentTask struct {
-	ID      string
-	Prompt  string
-	Model   string
+	ID       string
+	Prompt   string
+	Model    string
 	Provider string
 }
 
 // ParallelSubagentResult represents the result of a single parallel subagent run
 type ParallelSubagentResult struct {
-	ID       string
-	Stdout   string
-	Stderr   string
+	ID        string
+	Stdout    string
+	Stderr    string
 	ExitCode  int
 	Completed bool
 	Error     error
@@ -722,4 +722,3 @@ func readSubagentMetrics(metricsFile string) (tokens int, cost float64, err erro
 
 	return tokens, cost, nil
 }
-

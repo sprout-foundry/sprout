@@ -35,11 +35,11 @@ type AgentState struct {
 	TaskActions     []TaskAction  `json:"task_actions"`
 	SessionID       string        `json:"session_id"`
 	// Token and cost metrics
-	TotalTokens      int     `json:"total_tokens"`
-	TotalCost        float64 `json:"total_cost"`
-	PromptTokens     int     `json:"prompt_tokens"`
-	CompletionTokens int     `json:"completion_tokens"`
-	CachedTokens     int     `json:"cached_tokens"`
+	TotalTokens       int     `json:"total_tokens"`
+	TotalCost         float64 `json:"total_cost"`
+	PromptTokens      int     `json:"prompt_tokens"`
+	CompletionTokens  int     `json:"completion_tokens"`
+	CachedTokens      int     `json:"cached_tokens"`
 	CachedCostSavings float64 `json:"cached_cost_savings"`
 }
 

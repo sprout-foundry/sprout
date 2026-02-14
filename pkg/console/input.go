@@ -536,7 +536,7 @@ func (ir *InputReader) Refresh() {
 
 	// Move back to the top line to redraw
 	if maxLines > 1 {
-		fmt.Printf("%s", MoveCursorUpSeq(maxLines - 1))
+		fmt.Printf("%s", MoveCursorUpSeq(maxLines-1))
 	}
 
 	// Redraw the prompt and line content

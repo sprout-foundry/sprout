@@ -21,16 +21,16 @@ type RevisionGroup struct {
 	Response     string
 	Changes      []ChangeLog
 	Timestamp    time.Time
-	AgentModel   string      // Editing model used for this revision
+	AgentModel   string       // Editing model used for this revision
 	Conversation []APIMessage // Full conversation history for multi-turn conversations
 }
 
 // APIMessage represents a message in the conversation (imported from agent_api to avoid circular dependency)
 type APIMessage struct {
-	Role             string      `json:"role"`
-	Content          string      `json:"content"`
-	ReasoningContent string      `json:"reasoning_content,omitempty"`
-	ToolCallId       string      `json:"tool_call_id,omitempty"`
+	Role             string        `json:"role"`
+	Content          string        `json:"content"`
+	ReasoningContent string        `json:"reasoning_content,omitempty"`
+	ToolCallId       string        `json:"tool_call_id,omitempty"`
 	ToolCalls        []APIToolCall `json:"tool_calls,omitempty"`
 }
 

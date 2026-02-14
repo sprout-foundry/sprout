@@ -129,10 +129,10 @@ func NewAPIClient(agent *Agent) *APIClient {
 func (ac *APIClient) setTimeoutsFromConfig() {
 	// Default timeout values (apply to all providers)
 	// Increased to handle large file writes and slow token generation
-	connectionTimeoutSec := 300   // 5 minutes to establish connection
-	firstChunkTimeoutSec := 600   // 10 minutes for first response (was 300)
-	chunkTimeoutSec := 600        // 10 minutes between chunks (was 300)
-	overallTimeoutSec := 1800     // 30 minutes total (was 600)
+	connectionTimeoutSec := 300 // 5 minutes to establish connection
+	firstChunkTimeoutSec := 600 // 10 minutes for first response (was 300)
+	chunkTimeoutSec := 600      // 10 minutes between chunks (was 300)
+	overallTimeoutSec := 1800   // 30 minutes total (was 600)
 
 	// Get timeout config if available
 	if config := ac.agent.GetConfig(); config != nil && config.APITimeouts != nil {

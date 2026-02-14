@@ -84,12 +84,12 @@ type Config struct {
 	HistoryScope string `json:"history_scope,omitempty"` // "project" or "global"
 
 	// Subagent Configuration
-	SubagentProvider string            `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
-	SubagentModel    string            `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
-	SubagentTypes   map[string]SubagentType `json:"subagent_types,omitempty"`  // Named subagent personas (coder, tester, etc.)
+	SubagentProvider string                  `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
+	SubagentModel    string                  `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
+	SubagentTypes    map[string]SubagentType `json:"subagent_types,omitempty"`    // Named subagent personas (coder, tester, etc.)
 
 	// Zsh Command Execution
-	EnableZshCommandDetection  bool `json:"enable_zsh_command_detection,omitempty"`  // Enable zsh-aware command detection (default: false)
+	EnableZshCommandDetection   bool `json:"enable_zsh_command_detection,omitempty"`   // Enable zsh-aware command detection (default: false)
 	AutoExecuteDetectedCommands bool `json:"auto_execute_detected_commands,omitempty"` // Auto-execute detected commands without prompting (default: true)
 
 	// Other flags
@@ -162,13 +162,13 @@ type CustomProviderConfig struct {
 
 // SubagentType defines a specialized subagent persona with its own configuration
 type SubagentType struct {
-	ID             string `json:"id"`              // Unique identifier (e.g., "coder", "tester", "debugger")
-	Name           string `json:"name"`            // Human-readable name (e.g., "Coder", "Tester")
-	Description    string `json:"description"`     // What this subagent specializes in
-	Provider       string `json:"provider"`        // Provider for this subagent type (optional, falls back to SubagentProvider)
-	Model          string `json:"model"`           // Model for this subagent type (optional, falls back to SubagentModel)
-	SystemPrompt   string `json:"system_prompt"`   // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
-	Enabled        bool   `json:"enabled"`         // Whether this subagent type is available for use
+	ID           string `json:"id"`            // Unique identifier (e.g., "coder", "tester", "debugger")
+	Name         string `json:"name"`          // Human-readable name (e.g., "Coder", "Tester")
+	Description  string `json:"description"`   // What this subagent specializes in
+	Provider     string `json:"provider"`      // Provider for this subagent type (optional, falls back to SubagentProvider)
+	Model        string `json:"model"`         // Model for this subagent type (optional, falls back to SubagentModel)
+	SystemPrompt string `json:"system_prompt"` // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
+	Enabled      bool   `json:"enabled"`       // Whether this subagent type is available for use
 }
 
 // Optional helpers
@@ -212,10 +212,10 @@ func NewConfig() *Config {
 		RequestDelayMs:        100,
 		EnableSecurityChecks:  true,
 		SecurityValidation: &SecurityValidationConfig{
-			Enabled:        true,  // Enabled by default (uses Ollama fallback if llama.cpp unavailable)
-			Model:          "",    // Empty = use default Ollama model (qwen2.5-coder:1.5b)
-			Threshold:      1,     // Cautious by default
-			TimeoutSeconds: 10,    // 10 second timeout
+			Enabled:        true, // Enabled by default (uses Ollama fallback if llama.cpp unavailable)
+			Model:          "",   // Empty = use default Ollama model (qwen2.5-coder:1.5b)
+			Threshold:      1,    // Cautious by default
+			TimeoutSeconds: 10,   // 10 second timeout
 		},
 		CodeStyle: &CodeStyleConfig{
 			IndentationType: "spaces",
@@ -230,9 +230,9 @@ func NewConfig() *Config {
 			ChunkTimeoutSec:      320, // Increased from 90 to 320 seconds (5 minutes) for complex tasks
 			OverallTimeoutSec:    600, // 10 minutes
 		},
-		HistoryScope: "project", // Default to project-scoped history
-		EnableZshCommandDetection: true, // Enable zsh command detection by default
-		AutoExecuteDetectedCommands: true, // Auto-execute detected commands without prompting
+		HistoryScope:                "project", // Default to project-scoped history
+		EnableZshCommandDetection:   true,      // Enable zsh command detection by default
+		AutoExecuteDetectedCommands: true,      // Auto-execute detected commands without prompting
 		SubagentTypes: map[string]SubagentType{
 			"general": {
 				ID:           "general",

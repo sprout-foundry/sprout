@@ -8,9 +8,8 @@ import (
 
 // TestMCPConcurrency_BasicConcurrentAccess tests that concurrent calls to getMCPTools()
 // don't cause race conditions
+// Note: Not parallel because history package initialization races when tests run in parallel
 func TestMCPConcurrency_BasicConcurrentAccess(t *testing.T) {
-	t.Parallel()
-
 	// Create a test agent (uses test mode automatically when running tests)
 	agent, err := NewAgent()
 	if err != nil {
@@ -64,9 +63,8 @@ func TestMCPConcurrency_BasicConcurrentAccess(t *testing.T) {
 
 // TestMCPConcurrency_InitializedFlag tests that mcpInitialized is set correctly
 // even with concurrent access
+// Note: Not parallel because history package initialization races when tests run in parallel
 func TestMCPConcurrency_InitializedFlag(t *testing.T) {
-	t.Parallel()
-
 	agent, err := NewAgent()
 	if err != nil {
 		t.Skipf("Skipping test due to agent creation error: %v", err)
@@ -114,9 +112,8 @@ func TestMCPConcurrency_InitializedFlag(t *testing.T) {
 
 // TestMCPConcurrency_MutexProtection tests that initialization happens only once
 // with mutex protection (mcpInitMu)
+// Note: Not parallel because history package initialization races when tests run in parallel
 func TestMCPConcurrency_MutexProtection(t *testing.T) {
-	t.Parallel()
-
 	agent, err := NewAgent()
 	if err != nil {
 		t.Skipf("Skipping test due to agent creation error: %v", err)
@@ -154,9 +151,8 @@ func TestMCPConcurrency_MutexProtection(t *testing.T) {
 }
 
 // TestMCPConcurrency_ErrorHandling tests that mcpInitErr is stored correctly on failure
+// Note: Not parallel because history package initialization races when tests run in parallel
 func TestMCPConcurrency_ErrorHandling(t *testing.T) {
-	t.Parallel()
-
 	agent, err := NewAgent()
 	if err != nil {
 		t.Skipf("Skipping test due to agent creation error: %v", err)
@@ -202,9 +198,8 @@ func TestMCPConcurrency_ErrorHandling(t *testing.T) {
 
 // TestMCPConcurrency_StateConsistency tests that all MCP-related state remains
 // consistent under concurrent access
+// Note: Not parallel because history package initialization races when tests run in parallel
 func TestMCPConcurrency_StateConsistency(t *testing.T) {
-	t.Parallel()
-
 	agent, err := NewAgent()
 	if err != nil {
 		t.Skipf("Skipping test due to agent creation error: %v", err)
@@ -213,8 +208,8 @@ func TestMCPConcurrency_StateConsistency(t *testing.T) {
 	// Track state observations from each goroutine
 	type stateObservation struct {
 		initialized bool
-		err          error
-		hasCache     bool
+		err         error
+		hasCache    bool
 	}
 
 	const numGoroutines = 60
@@ -266,9 +261,8 @@ func TestMCPConcurrency_StateConsistency(t *testing.T) {
 }
 
 // TestMCPConcurrency_StressTest is a stress test with very high concurrency
+// Note: Not parallel because history package initialization races when tests run in parallel
 func TestMCPConcurrency_StressTest(t *testing.T) {
-	t.Parallel()
-
 	agent, err := NewAgent()
 	if err != nil {
 		t.Skipf("Skipping test due to agent creation error: %v", err)
@@ -303,9 +297,8 @@ func TestMCPConcurrency_StressTest(t *testing.T) {
 
 // TestMCPConcurrency_InterleavedAccess tests interleaved access patterns
 // to ensure the mutex properly prevents race conditions under complex access patterns
+// Note: Not parallel because history package initialization races when tests run in parallel
 func TestMCPConcurrency_InterleavedAccess(t *testing.T) {
-	t.Parallel()
-
 	agent, err := NewAgent()
 	if err != nil {
 		t.Skipf("Skipping test due to agent creation error: %v", err)
@@ -339,9 +332,8 @@ func TestMCPConcurrency_InterleavedAccess(t *testing.T) {
 
 // TestMCPConcurrency_WithDisabledMCP tests concurrency when MCP is disabled
 // (simulated by checking behavior when no tools are available)
+// Note: Not parallel because history package initialization races when tests run in parallel
 func TestMCPConcurrency_WithDisabledMCP(t *testing.T) {
-	t.Parallel()
-
 	agent, err := NewAgent()
 	if err != nil {
 		t.Skipf("Skipping test due to agent creation error: %v", err)
@@ -384,9 +376,8 @@ func TestMCPConcurrency_WithDisabledMCP(t *testing.T) {
 
 // TestConcurrentRefreshMCPTools tests concurrent RefreshMCPTools() calls
 // don't cause issues
+// Note: Not parallel because history package initialization races when tests run in parallel
 func TestConcurrentRefreshMCPTools(t *testing.T) {
-	t.Parallel()
-
 	agent, err := NewAgent()
 	if err != nil {
 		t.Skipf("Skipping test due to agent creation error: %v", err)

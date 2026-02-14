@@ -332,7 +332,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	}
 
 	// Clear old todos at session start
-	tools.ClearTodos()
+	tools.TodoWrite([]tools.TodoItem{})
 
 	// Clean up old sessions (keep only most recent 20)
 	cleanupMemorySessions()

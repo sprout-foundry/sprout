@@ -42,55 +42,18 @@ func GetToolDefinitions() []Tool {
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
-						"file_path": map[string]interface{}{
+						"path": map[string]interface{}{
 							"type":        "string",
 							"description": "Path to file to read",
 							"minLength":   1,
 						},
-						"start_line": map[string]interface{}{
-							"type":        "integer",
-							"description": "Optional: Start line number (1-based) for reading a specific range",
-							"minimum":     1,
-						},
-						"end_line": map[string]interface{}{
-							"type":        "integer",
-							"description": "Optional: End line number (1-based) for reading a specific range",
-							"minimum":     1,
+						"view_range": map[string]interface{}{
+							"type":        "array",
+							"items":       map[string]interface{}{"type": "integer"},
+							"description": "Line range as [start, end] array (1-based)",
 						},
 					},
-					"required":             []string{"file_path"},
-					"additionalProperties": false,
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
-				Name:        "edit_file",
-				Description: "Replace exact string match in file",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"file_path": map[string]interface{}{
-							"type":        "string",
-							"description": "Path to file to edit",
-							"minLength":   1,
-						},
-						"old_string": map[string]interface{}{
-							"type":        "string",
-							"description": "Exact string to replace (must match exactly including whitespace)",
-							"minLength":   1,
-						},
-						"new_string": map[string]interface{}{
-							"type":        "string",
-							"description": "New string to replace with",
-						},
-					},
-					"required":             []string{"file_path", "old_string", "new_string"},
+					"required":             []string{"path"},
 					"additionalProperties": false,
 				},
 			},
@@ -107,7 +70,7 @@ func GetToolDefinitions() []Tool {
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
-						"file_path": map[string]interface{}{
+						"path": map[string]interface{}{
 							"type":        "string",
 							"description": "Path to file to write",
 							"minLength":   1,
@@ -117,7 +80,66 @@ func GetToolDefinitions() []Tool {
 							"description": "Content to write to file",
 						},
 					},
-					"required":             []string{"file_path", "content"},
+					"required":             []string{"path", "content"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "create",
+				Description: "Create a new file with content. Fails if file already exists (use write_file to overwrite)",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "Path to file to create",
+							"minLength":   1,
+						},
+						"file_text": map[string]interface{}{
+							"type":        "string",
+							"description": "Content to write to the new file",
+						},
+					},
+					"required":             []string{"path", "file_text"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "edit_file",
+				Description: "Replace exact string match in file",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "Path to file to edit",
+							"minLength":   1,
+						},
+						"old_str": map[string]interface{}{
+							"type":        "string",
+							"description": "Exact string to replace (must match exactly including whitespace)",
+							"minLength":   1,
+						},
+						"new_str": map[string]interface{}{
+							"type":        "string",
+							"description": "New string to replace with",
+						},
+					},
+					"required":             []string{"path", "old_str", "new_str"},
 					"additionalProperties": false,
 				},
 			},

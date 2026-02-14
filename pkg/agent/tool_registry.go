@@ -105,9 +105,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "read_file",
 		Description: "Read contents of a file",
 		Parameters: []ParameterConfig{
-			{"file_path", "string", true, []string{}, "Path to the file to read"},
-			{"start_line", "int", false, []string{}, "Starting line number (optional)"},
-			{"end_line", "int", false, []string{}, "Ending line number (optional)"},
+			{"path", "string", true, []string{"file_path"}, "Path to the file to read"},
+			{"view_range", "array", false, []string{}, "Line range as [start, end] array (1-based)"},
 		},
 		Handler: handleReadFile,
 	})
@@ -117,10 +116,21 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "write_file",
 		Description: "Write content to a file",
 		Parameters: []ParameterConfig{
-			{"file_path", "string", true, []string{}, "Path to the file to write"},
+			{"path", "string", true, []string{"file_path"}, "Path to the file to write"},
 			{"content", "string", true, []string{}, "Content to write to the file"},
 		},
 		Handler: handleWriteFile,
+	})
+
+	// Register create tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "create",
+		Description: "Create a new file with content. Fails if file already exists (use write_file to overwrite)",
+		Parameters: []ParameterConfig{
+			{"path", "string", true, []string{"file_path"}, "Path to the file to create"},
+			{"file_text", "string", true, []string{"content"}, "Content to write to the new file"},
+		},
+		Handler: handleCreate,
 	})
 
 	// Register edit_file tool
@@ -128,9 +138,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "edit_file",
 		Description: "Edit a file by replacing old string with new string",
 		Parameters: []ParameterConfig{
-			{"file_path", "string", true, []string{}, "Path to the file to edit"},
-			{"old_string", "string", true, []string{}, "String to replace"},
-			{"new_string", "string", true, []string{}, "Replacement string"},
+			{"path", "string", true, []string{"file_path"}, "Path to the file to edit"},
+			{"old_str", "string", true, []string{"old_string"}, "String to replace"},
+			{"new_str", "string", true, []string{"new_string"}, "Replacement string"},
 		},
 		Handler: handleEditFile,
 	})
@@ -838,89 +848,68 @@ func (a *gitApprovalPrompterAdapter) PromptForApproval(command string) (bool, er
 }
 
 func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	// Convert arguments to proper types with type checking
-	filePath, err := convertToString(args["file_path"], "file_path")
+	// Get file path - supports both "path" (new) and "file_path" (legacy)
+	path, err := getFilePath(args)
 	if err != nil {
 		return "", err
 	}
 
-	// Check for optional line range parameters
-	var startLine int
-	var hasStart bool
-	if startLineParam, exists := args["start_line"]; exists {
-		switch v := startLineParam.(type) {
-		case int:
-			startLine = v
-			hasStart = true
-		case float64: // JSON numbers are often unmarshaled as float64
-			startLine = int(v)
-			hasStart = true
-		default:
-			return "", fmt.Errorf("parameter 'start_line' has invalid type %T, expected integer", startLineParam)
+	// Parse view_range (Claude Code style: [start, end])
+	var startLine, endLine int
+	var hasRange bool
+
+	if viewRange, exists := args["view_range"]; exists {
+		if arr, ok := viewRange.([]interface{}); ok && len(arr) == 2 {
+			if s, ok := toInt(arr[0]); ok {
+				startLine = s
+				if e, ok := toInt(arr[1]); ok {
+					endLine = e
+					hasRange = true
+				}
+			}
 		}
 	}
 
-	var endLine int
-	var hasEnd bool
-	if endLineParam, exists := args["end_line"]; exists {
-		switch v := endLineParam.(type) {
-		case int:
-			endLine = v
-			hasEnd = true
-		case float64: // JSON numbers are often unmarshaled as float64
-			endLine = int(v)
-			hasEnd = true
-		default:
-			return "", fmt.Errorf("parameter 'end_line' has invalid type %T, expected integer", endLineParam)
-		}
-	}
+	// Log and execute
+	if hasRange {
+		a.ToolLog("reading file", fmt.Sprintf("%s (lines %d-%d)", path, startLine, endLine))
+		a.debugLog("Reading file: %s (lines %d-%d)\n", path, startLine, endLine)
+		result, err := tools.ReadFileWithRange(ctx, path, startLine, endLine)
 
-	// Log the operation
-	if hasStart || hasEnd {
-		a.ToolLog("reading file", fmt.Sprintf("%s (lines %d-%d)", filePath, startLine, endLine))
-		a.debugLog("Reading file: %s (lines %d-%d)\n", filePath, startLine, endLine)
-		result, err := tools.ReadFileWithRange(ctx, filePath, startLine, endLine)
-
-			// Handle filesystem security errors - prompt user for confirmation
 		if err != nil {
-			ctx2 := handleFileSecurityError(ctx, a, "read_file", filePath, err)
+			ctx2 := handleFileSecurityError(ctx, a, "read_file", path, err)
 			if ctx2 != ctx {
-				// User approved, retry with bypass
-				result, err = tools.ReadFileWithRange(ctx2, filePath, startLine, endLine)
+				result, err = tools.ReadFileWithRange(ctx2, path, startLine, endLine)
 			}
 		}
 
 		a.debugLog("Read file result: %s, error: %v\n", result, err)
 
-		// Record as a task action for conversation summary
 		if err == nil {
-			a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s (lines %d-%d)", filePath, startLine, endLine), filePath)
-		}
-
-		return result, err
-	} else {
-		a.ToolLog("reading file", filePath)
-		a.debugLog("Reading file: %s\n", filePath)
-		result, err := tools.ReadFile(ctx, filePath)
-
-		// Handle filesystem security errors - prompt user for confirmation
-		if err != nil {
-			ctx2 := handleFileSecurityError(ctx, a, "read_file", filePath, err)
-			if ctx2 != ctx {
-				// User approved, retry with bypass
-				result, err = tools.ReadFile(ctx2, filePath)
-			}
-		}
-
-		a.debugLog("Read file result: %s, error: %v\n", result, err)
-
-		// Record as a task action for conversation summary
-		if err == nil {
-			a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s", filePath), filePath)
+			a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s (lines %d-%d)", path, startLine, endLine), path)
 		}
 
 		return result, err
 	}
+
+	a.ToolLog("reading file", path)
+	a.debugLog("Reading file: %s\n", path)
+	result, err := tools.ReadFile(ctx, path)
+
+	if err != nil {
+		ctx2 := handleFileSecurityError(ctx, a, "read_file", path, err)
+		if ctx2 != ctx {
+			result, err = tools.ReadFile(ctx2, path)
+		}
+	}
+
+	a.debugLog("Read file result: %s, error: %v\n", result, err)
+
+	if err == nil {
+		a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s", path), path)
+	}
+
+	return result, err
 }
 
 // convertToString safely converts a parameter to string with proper error handling
@@ -948,34 +937,62 @@ func convertToString(param interface{}, paramName string) (string, error) {
 	}
 }
 
+// getFilePath extracts file path from args, supporting both "path" (new) and "file_path" (legacy)
+func getFilePath(args map[string]interface{}) (string, error) {
+	if path, exists := args["path"]; exists {
+		return convertToString(path, "path")
+	}
+	if filePath, exists := args["file_path"]; exists {
+		return convertToString(filePath, "file_path")
+	}
+	return "", fmt.Errorf("parameter 'path' is required")
+}
+
+// getRequiredString extracts a required string parameter
+func getRequiredString(args map[string]interface{}, key string) (string, error) {
+	val, exists := args[key]
+	if !exists {
+		return "", fmt.Errorf("parameter '%s' is required", key)
+	}
+	return convertToString(val, key)
+}
+
+// toInt converts an interface{} to int, handling float64 from JSON
+func toInt(v interface{}) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case float64:
+		return int(n), true
+	default:
+		return 0, false
+	}
+}
+
 func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	// Convert arguments to strings with proper type checking
-	filePath, err := convertToString(args["file_path"], "file_path")
+	path, err := getFilePath(args)
 	if err != nil {
 		return "", err
 	}
 
-	content, err := convertToString(args["content"], "content")
+	content, err := getRequiredString(args, "content")
 	if err != nil {
 		return "", err
 	}
 
-	a.ToolLog("writing file", fmt.Sprintf("%s (%d bytes)", filePath, len(content)))
-	a.debugLog("Writing file: %s\n", filePath)
+	a.ToolLog("writing file", fmt.Sprintf("%s (%d bytes)", path, len(content)))
+	a.debugLog("Writing file: %s\n", path)
 
-	// Track the file write for change tracking
-	if trackErr := a.TrackFileWrite(filePath, content); trackErr != nil {
+	if trackErr := a.TrackFileWrite(path, content); trackErr != nil {
 		a.debugLog("Warning: Failed to track file write: %v\n", trackErr)
 	}
 
-	result, err := tools.WriteFile(ctx, filePath, content)
+	result, err := tools.WriteFile(ctx, path, content)
 
-	// Handle filesystem security errors - prompt user for confirmation
 	if err != nil {
-		ctx2 := handleFileSecurityError(ctx, a, "write_file", filePath, err)
+		ctx2 := handleFileSecurityError(ctx, a, "write_file", path, err)
 		if ctx2 != ctx {
-			// User approved, retry with bypass
-			result, err = tools.WriteFile(ctx2, filePath, content)
+			result, err = tools.WriteFile(ctx2, path, content)
 		}
 	}
 
@@ -984,64 +1001,59 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 	// Invalidate cached file metadata when file is successfully written
 	// This prevents stale line counts from misleading the model
 	if err == nil && a.optimizer != nil {
-		a.optimizer.InvalidateFile(filePath)
+		a.optimizer.InvalidateFile(path)
 	}
 
 	// Publish file change event for web UI auto-sync
 	if err == nil && a.eventBus != nil {
-		a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(filePath, "write", content))
-		a.debugLog("Published file_changed event: %s (write)\n", filePath)
+		a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "write", content))
+		a.debugLog("Published file_changed event: %s (write)\n", path)
 	}
 
 	return result, err
 }
 
 func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	// Convert arguments to strings with proper type checking
-	filePath, err := convertToString(args["file_path"], "file_path")
+	path, err := getFilePath(args)
 	if err != nil {
 		return "", err
 	}
 
-	oldString, err := convertToString(args["old_string"], "old_string")
+	oldStr, err := getRequiredString(args, "old_str")
 	if err != nil {
 		return "", err
 	}
 
-	newString, err := convertToString(args["new_string"], "new_string")
+	newStr, err := getRequiredString(args, "new_str")
 	if err != nil {
 		return "", err
 	}
 
-	// Read the original content for diff display
-	originalContent, err := tools.ReadFile(ctx, filePath)
+	// Read original for diff
+	originalContent, err := tools.ReadFile(ctx, path)
 	if err != nil {
 		return "", fmt.Errorf("failed to read original file for diff: %w", err)
 	}
 
-	a.ToolLog("editing file", fmt.Sprintf("%s (replacing %d bytes → %d bytes)", filePath, len(oldString), len(newString)))
-	a.debugLog("Editing file: %s\n", filePath)
-	a.debugLog("Old string: %s\n", oldString)
-	a.debugLog("New string: %s\n", newString)
+	a.ToolLog("editing file", fmt.Sprintf("%s (replacing %d bytes → %d bytes)", path, len(oldStr), len(newStr)))
+	a.debugLog("Editing file: %s\n", path)
+	a.debugLog("Old string: %s\n", oldStr)
+	a.debugLog("New string: %s\n", newStr)
 
-	// Track the file edit for change tracking
-	if trackErr := a.TrackFileEdit(filePath, oldString, newString); trackErr != nil {
+	if trackErr := a.TrackFileEdit(path, oldStr, newStr); trackErr != nil {
 		a.debugLog("Warning: Failed to track file edit: %v\n", trackErr)
 	}
 
-	result, err := tools.EditFile(ctx, filePath, oldString, newString)
+	result, err := tools.EditFile(ctx, path, oldStr, newStr)
 
-	// Handle filesystem security errors - prompt user for confirmation
 	if err != nil {
-		ctx2 := handleFileSecurityError(ctx, a, "edit_file", filePath, err)
+		ctx2 := handleFileSecurityError(ctx, a, "edit_file", path, err)
 		if ctx2 != ctx {
-			// User approved, retry with bypass
-			// Re-read original content with bypass
-			originalContent, err = tools.ReadFile(ctx2, filePath)
+			originalContent, err = tools.ReadFile(ctx2, path)
 			if err != nil {
 				return "", fmt.Errorf("failed to read original file for diff: %w", err)
 			}
-			result, err = tools.EditFile(ctx2, filePath, oldString, newString)
+			result, err = tools.EditFile(ctx2, path, oldStr, newStr)
 		}
 	}
 
@@ -1050,29 +1062,71 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	// Invalidate cached file metadata when file is successfully edited
 	// This prevents stale line counts from misleading the model
 	if err == nil && a.optimizer != nil {
-		a.optimizer.InvalidateFile(filePath)
+		a.optimizer.InvalidateFile(path)
 	}
 
 	// Publish file change event for web UI auto-sync
 	if err == nil && a.eventBus != nil {
-		// Read new content to include in event
 		var eventContent string
-		if eventContent, err = tools.ReadFile(ctx, filePath); err == nil {
-			a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(filePath, "edit", eventContent))
-			a.debugLog("Published file_changed event: %s (edit)\n", filePath)
+		if eventContent, err = tools.ReadFile(ctx, path); err == nil {
+			a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", eventContent))
+			a.debugLog("Published file_changed event: %s (edit)\n", path)
 		} else {
-			// Still publish event even if we can't read file (just with empty content)
-			a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(filePath, "edit", ""))
-			a.debugLog("Published file_changed event: %s (edit, no content)\n", filePath)
+			a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", ""))
+			a.debugLog("Published file_changed event: %s (edit, no content)\n", path)
 		}
 	}
 
 	// Display diff if successful
 	if err == nil {
-		newContent, readErr := tools.ReadFile(ctx, filePath)
+		newContent, readErr := tools.ReadFile(ctx, path)
 		if readErr == nil {
 			a.ShowColoredDiff(originalContent, newContent, 50)
 		}
+	}
+
+	return result, err
+}
+
+// handleCreate creates a new file with content. Fails if file already exists.
+func handleCreate(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	path, err := getFilePath(args)
+	if err != nil {
+		return "", err
+	}
+
+	fileText, err := getRequiredString(args, "file_text")
+	if err != nil {
+		return "", err
+	}
+
+	a.ToolLog("creating file", fmt.Sprintf("%s (%d bytes)", path, len(fileText)))
+	a.debugLog("Creating file: %s\n", path)
+
+	// Fail if file exists (safe create)
+	if filesystem.FileExists(path) {
+		return "", fmt.Errorf("file already exists: %s (use write_file to overwrite)", path)
+	}
+
+	result, err := tools.WriteFile(ctx, path, fileText)
+	if err != nil {
+		ctx2 := handleFileSecurityError(ctx, a, "create", path, err)
+		if ctx2 != ctx {
+			result, err = tools.WriteFile(ctx2, path, fileText)
+		}
+	}
+
+	a.debugLog("Create file result: %s, error: %v\n", result, err)
+
+	if err == nil {
+		if trackErr := a.TrackFileWrite(path, fileText); trackErr != nil {
+			a.debugLog("Warning: Failed to track file create: %v\n", trackErr)
+		}
+	}
+
+	if err == nil && a.eventBus != nil {
+		a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "create", fileText))
+		a.debugLog("Published file_changed event: %s (create)\n", path)
 	}
 
 	return result, err

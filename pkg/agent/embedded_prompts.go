@@ -48,35 +48,9 @@ func GetEmbeddedSystemPrompt() (string, error) {
 	return promptContent, nil
 }
 
-// GetEmbeddedSystemPromptWithProvider returns the embedded system prompt with provider-specific enhancements
+// GetEmbeddedSystemPromptWithProvider returns the embedded system prompt
 func GetEmbeddedSystemPromptWithProvider(provider string) (string, error) {
-	promptContent, err := GetEmbeddedSystemPrompt()
-	if err != nil {
-		return "", err
-	}
-
-	// Add provider-specific constraints for ZAI (GLM-4.6)
-	if strings.ToLower(provider) == "zai" {
-		zaiConstraints := `
-
-## GLM-4.6 Critical Constraints
-
-### Cognitive Load Management
-- LIMIT concurrent cognitive tasks to maximum 3-5 todos
-- EXECUTE tasks immediately rather than analyzing extensively  
-- MINIMIZE multitasking - focus on current task completion
-- PRIORIZE action over deliberation when ambiguity exists
-
-### Response Style (GLM-4.6 Specific)
-- Be extremely concise in responses
-- Focus on technical execution over explanation
-- Avoid verbose analysis or multi-step reasoning
-- Execute tool operations decisively`
-		return promptContent + zaiConstraints, nil
-	}
-
-	// No provider-specific enhancements for other providers
-	return promptContent, nil
+	return GetEmbeddedSystemPrompt()
 }
 
 // extractSystemPrompt extracts the prompt content from the system_prompt markdown

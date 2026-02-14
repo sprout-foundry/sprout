@@ -27,33 +27,17 @@ func TestGetEmbeddedSystemPromptWithProvider(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	// Test with ZAI provider (GLM-4.6) - should have specific constraints
-	zaiPrompt, err := GetEmbeddedSystemPromptWithProvider("zai")
-	if err != nil {
-		t.Errorf("Expected no error for ZAI, got: %v", err)
-	}
+	// All providers should return the same base prompt (GLM-4.6 constraints removed)
+	providers := []string{"zai", "openai", "deepinfra"}
 
-	if len(zaiPrompt) <= len(basePrompt) {
-		t.Error("ZAI prompt should be longer than base prompt (has GLM-4.6 specific constraints)")
-	}
-
-	// Test with other provider (should return base prompt)
-	otherPrompt, err := GetEmbeddedSystemPromptWithProvider("openai")
-	if err != nil {
-		t.Errorf("Expected no error for OpenAI, got: %v", err)
-	}
-
-	if len(otherPrompt) != len(basePrompt) {
-		t.Error("Non-ZAI providers should return base prompt only")
-	}
-
-	// Verify ZAI-specific constraints
-	if !strings.Contains(zaiPrompt, "GLM-4.6 Critical Constraints") {
-		t.Error("ZAI prompt should contain GLM-4.6 specific constraints")
-	}
-
-	if !strings.Contains(zaiPrompt, "LIMIT concurrent cognitive tasks to maximum 3-5 todos") {
-		t.Error("ZAI prompt should contain todo limits")
+	for _, provider := range providers {
+		providerPrompt, err := GetEmbeddedSystemPromptWithProvider(provider)
+		if err != nil {
+			t.Errorf("Expected no error for %s, got: %v", provider, err)
+		}
+		if len(providerPrompt) != len(basePrompt) {
+			t.Errorf("Provider %s should get same base prompt", provider)
+		}
 	}
 
 	// Verify base prompt has consolidated efficiency guidelines
@@ -74,7 +58,6 @@ func TestConsolidatedEfficiencyGuidelines(t *testing.T) {
 	}
 
 	// Check that key efficiency concepts are present
-	// Note: The exact wording may change over time, so we check for core concepts
 	expectedIntegrations := []string{
 		"Be concise and direct",     // Core Principles
 		"Focus on results",          // Core Principles
@@ -93,8 +76,8 @@ func TestConsolidatedEfficiencyGuidelines(t *testing.T) {
 		t.Error("Redundant efficiency section should have been removed")
 	}
 
-	// Verify non-ZAI providers get the consolidated base prompt
-	providers := []string{"openai", "deepinfra", "ollama"}
+	// Verify all providers get the same base prompt
+	providers := []string{"openai", "deepinfra", "ollama", "zai"}
 	for _, provider := range providers {
 		providerPrompt, err := GetEmbeddedSystemPromptWithProvider(provider)
 		if err != nil {
@@ -105,17 +88,6 @@ func TestConsolidatedEfficiencyGuidelines(t *testing.T) {
 		}
 	}
 
-	// Verify ZAI gets extra constraints
-	zaiPrompt, err := GetEmbeddedSystemPromptWithProvider("zai")
-	if err != nil {
-		t.Errorf("Expected no error for ZAI, got: %v", err)
-	}
-	if len(zaiPrompt) <= len(basePrompt) {
-		t.Error("ZAI should get base prompt plus extra constraints")
-	}
-
-	t.Logf("✅ Consolidated efficiency guidelines verified")
+	t.Logf("✅ All providers use consolidated base prompt")
 	t.Logf("Base prompt length: %d", len(basePrompt))
-	t.Logf("ZAI prompt length: %d (with constraints)", len(zaiPrompt))
-	t.Logf("Non-ZAI providers get consolidated base prompt")
 }

@@ -285,6 +285,10 @@ After each subagent completes:
 - **Focus on results, not process**: Don't over-explain tool usage or reasoning
 - **Make decisive choices**: Avoid excessive analysis when a straightforward solution is evident
 - **Dangerous operations** (e.g., `rm -rf`, installs, network changes): require explicit user confirmation; prefer dry-runs when available
+- **File locations**:
+  - **Transient documentation** (scratch notes, examples, debugging output): use `/tmp/ledit_examples/`
+  - **Permanent files** (code, tests, long-term documentation, configs): use current working directory (cwd)
+- **Long-running commands**: If you need to run a dev server or long-running process while continuing other work, use `tmux` or `nohup` inside the bash tool (e.g., `nohup npm run dev > /dev/null 2>&1 &`)
 
 ---
 

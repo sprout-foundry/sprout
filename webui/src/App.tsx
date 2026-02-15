@@ -111,6 +111,12 @@ function App() {
   const handleEvent = useCallback((event: any) => {
     console.log('📨 Received event:', event.type, event.data);
 
+    // Filter out webpack dev server events
+    const webpackEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot'];
+    if (webpackEvents.includes(event.type)) {
+      return; // Don't process these events
+    }
+
     // Create log entry for all events
     const logEntry: LogEntry = {
       id: `${Date.now()}-${Math.random()}`,

@@ -35,16 +35,21 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
   // Filter logs based on current filter settings
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
+      // Filter out webpack dev server events
+      if (['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot'].includes(log.type)) {
+        return false;
+      }
+
       // Level filter
       if (filter.level !== 'all' && log.level !== filter.level) {
         return false;
       }
-      
+
       // Category filter
       if (filter.category !== 'all' && log.category !== filter.category) {
         return false;
       }
-      
+
       // Search filter
       if (filter.searchTerm) {
         const searchLower = filter.searchTerm.toLowerCase();
@@ -54,7 +59,7 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
           log.category.toLowerCase().includes(searchLower)
         );
       }
-      
+
       return true;
     });
   }, [logs, filter]);
@@ -110,21 +115,40 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
   };
 
   const getLogSummary = (log: LogEntry) => {
-    switch (log.type) {
-      case 'query_started':
-        return `Query: ${log.data.query?.substring(0, 50)}${log.data.query?.length > 50 ? '...' : ''}`;
-      case 'tool_execution':
-        return `Tool: ${log.data.tool} - ${log.data.status}`;
-      case 'file_changed':
-        return `File: ${log.data.path}`;
-      case 'stream_chunk':
-        return `Stream: ${log.data.chunk?.substring(0, 50)}${log.data.chunk?.length > 50 ? '...' : ''}`;
-      case 'error':
-        return `Error: ${log.data.message}`;
-      case 'connection_status':
-        return `Connection: ${log.data.connected ? 'Connected' : 'Disconnected'}`;
-      default:
-        return `${log.type}: ${JSON.stringify(log.data).substring(0, 50)}...`;
+    try {
+      switch (log.type) {
+        case 'query_started':
+          return `Query: ${log.data?.query?.substring(0, 50) || 'No query'}${log.data?.query?.length > 50 ? '...' : ''}`;
+        case 'tool_execution':
+          return `Tool: ${log.data?.tool || 'Unknown'} - ${log.data?.status || 'Unknown'}`;
+        case 'file_changed':
+          return `File: ${log.data?.path || 'Unknown path'}`;
+        case 'stream_chunk':
+          return `Stream: ${log.data?.chunk?.substring(0, 50) || 'No chunk'}${log.data?.chunk?.length > 50 ? '...' : ''}`;
+        case 'error':
+          return `Error: ${log.data?.message || 'Unknown error'}`;
+        case 'connection_status':
+          return `Connection: ${log.data?.connected ? 'Connected' : 'Disconnected'}`;
+        case 'metrics_update':
+          return `Metrics updated`;
+        case 'query_progress':
+          return `Progress: ${log.data?.step || 'Unknown'}`;
+        case 'query_completed':
+          return `Query completed`;
+        case 'terminal_output':
+          return `Terminal output`;
+        default: {
+          // Filter out webpack dev server events
+          if (['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot'].includes(log.type)) {
+            return null; // Don't display these
+          }
+          // Safely stringify data
+          const dataStr = log.data ? JSON.stringify(log.data) : '{}';
+          return `${log.type}: ${dataStr.substring(0, 50)}${dataStr.length > 50 ? '...' : ''}`;
+        }
+      }
+    } catch (error) {
+      return `${log.type}: [Unable to format]`;
     }
   };
 

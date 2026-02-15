@@ -306,16 +306,46 @@ const Sidebar: React.FC<SidebarProps> = ({
                   {finalRecentLogs.length === 0 ? (
                     <span className="empty">No activity yet</span>
                   ) : (
-                    finalRecentLogs.slice(-5).map((log, index) => {
-                      // Handle both string and LogEntry formats
-                      if (typeof log === 'string') {
-                        return (
-                          <div key={index} className="log-item">
-                            {log}
-                          </div>
-                        );
-                      } else {
-                        // New LogEntry format
+                    (finalRecentLogs as any[])
+                      .filter((log: any) => {
+                        // Filter out webpack dev server events
+                        let parsedLog = log;
+
+                        // If log is a string, try to parse it as JSON
+                        if (typeof log === 'string') {
+                          try {
+                            parsedLog = JSON.parse(log);
+                          } catch {
+                            // Not valid JSON, keep as is
+                            return true;
+                          }
+                        }
+
+                        // Check if it's a webpack event
+                        if (parsedLog && typeof parsedLog === 'object' && parsedLog.type) {
+                          const webpackEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'invalid', 'warnings', 'errors', 'still-ok'];
+                          return !webpackEvents.includes(parsedLog.type);
+                        }
+                        return true;
+                      })
+                      .slice(-5)
+                      .map((originalLog: any, index: number) => {
+                        // Parse log if it's a string
+                        let log = originalLog;
+                        if (typeof originalLog === 'string') {
+                          try {
+                            log = JSON.parse(originalLog);
+                          } catch {
+                            // Not valid JSON, display as is
+                            return (
+                              <div key={index} className="log-item">
+                                {originalLog}
+                              </div>
+                            );
+                          }
+                        }
+
+                        // At this point, log should be an object
                         const getLogIcon = (level: string) => {
                           switch (level) {
                             case 'success': return '✅';
@@ -325,32 +355,37 @@ const Sidebar: React.FC<SidebarProps> = ({
                             default: return '📝';
                           }
                         };
-                        
+
                         const getLogSummary = (logEntry: any) => {
-                          switch (logEntry.type) {
-                            case 'query_started':
-                              return `Query: ${logEntry.data.query?.substring(0, 30)}...`;
-                            case 'tool_execution':
-                              return `${logEntry.data.tool}: ${logEntry.data.status}`;
-                            case 'file_changed':
-                              return `File: ${logEntry.data.path?.split('/').pop()}`;
-                            case 'stream_chunk':
-                              return `Stream: ${logEntry.data.chunk?.substring(0, 30)}...`;
-                            case 'error':
-                              return `Error: ${logEntry.data.message?.substring(0, 30)}...`;
-                            default:
-                              return `${logEntry.type}`;
+                          try {
+                            switch (logEntry.type) {
+                              case 'query_started':
+                                return `Query: ${logEntry.data?.query?.substring(0, 30) || 'No query'}...`;
+                              case 'tool_execution':
+                                return `${logEntry.data?.tool || 'Unknown'}: ${logEntry.data?.status || 'Unknown'}`;
+                              case 'file_changed':
+                                return `File: ${logEntry.data?.path?.split('/').pop() || 'Unknown'}`;
+                              case 'stream_chunk':
+                                return `Stream: ${logEntry.data?.chunk?.substring(0, 30) || 'No chunk'}...`;
+                              case 'error':
+                                return `Error: ${logEntry.data?.message?.substring(0, 30) || 'Unknown error'}...`;
+                              case 'connection_status':
+                                return logEntry.data?.connected ? 'Connected' : 'Disconnected';
+                              default:
+                                return `${logEntry.type}`;
+                            }
+                          } catch {
+                            return `${logEntry.type}`;
                           }
                         };
-                        
+
                         return (
-                          <div key={log.id} className="log-item">
+                          <div key={log.id || index} className="log-item">
                             <span className="log-icon">{getLogIcon(log.level)}</span>
                             <span className="log-text">{getLogSummary(log)}</span>
                           </div>
                         );
-                      }
-                    })
+                      })
                   )}
                 </div>
               </div>
@@ -364,9 +399,44 @@ const Sidebar: React.FC<SidebarProps> = ({
                   {finalRecentLogs.length === 0 ? (
                     <span className="empty">No logs yet</span>
                   ) : (
-                    finalRecentLogs.slice(-10).map((log, index) => {
+                    (finalRecentLogs as any[])
+                      .filter((log: any) => {
+                        // Filter out webpack dev server events
+                        let logObj = log;
+
+                        // If log is a string, try to parse it as JSON
+                        if (typeof log === 'string') {
+                          try {
+                            logObj = JSON.parse(log);
+                          } catch {
+                            // Not valid JSON, keep as is
+                            return true;
+                          }
+                        }
+
+                        // Check if it's a webpack event
+                        if (logObj && typeof logObj === 'object' && logObj.type) {
+                          const webpackEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'invalid', 'warnings', 'errors', 'still-ok'];
+                          return !webpackEvents.includes(logObj.type);
+                        }
+                        return true;
+                      })
+                      .slice(-10)
+                      .map((log: any, index: number) => {
                       // Handle both string and LogEntry formats
+                      let parsedLog = log;
+                      let isString = false;
+
                       if (typeof log === 'string') {
+                        try {
+                          parsedLog = JSON.parse(log);
+                        } catch {
+                          // Not valid JSON, display as is
+                          isString = true;
+                        }
+                      }
+
+                      if (isString) {
                         return (
                           <div key={index} className="log-item">
                             {log}
@@ -383,28 +453,34 @@ const Sidebar: React.FC<SidebarProps> = ({
                             default: return '📝';
                           }
                         };
-                        
+
                         const getLogSummary = (logEntry: any) => {
-                          switch (logEntry.type) {
-                            case 'query_started':
-                              return `Query: ${logEntry.data.query?.substring(0, 50)}...`;
-                            case 'tool_execution':
-                              return `${logEntry.data.tool}: ${logEntry.data.status}`;
-                            case 'file_changed':
-                              return `File: ${logEntry.data.path?.split('/').pop()}`;
-                            case 'stream_chunk':
-                              return `Stream: ${logEntry.data.chunk?.substring(0, 50)}...`;
-                            case 'error':
-                              return `Error: ${logEntry.data.message?.substring(0, 50)}...`;
-                            default:
-                              return `${logEntry.type}`;
+                          try {
+                            switch (logEntry.type) {
+                              case 'query_started':
+                                return `Query: ${logEntry.data?.query?.substring(0, 50) || 'No query'}...`;
+                              case 'tool_execution':
+                                return `${logEntry.data?.tool || 'Unknown'}: ${logEntry.data?.status || 'Unknown'}`;
+                              case 'file_changed':
+                                return `File: ${logEntry.data?.path?.split('/').pop() || 'Unknown'}`;
+                              case 'stream_chunk':
+                                return `Stream: ${logEntry.data?.chunk?.substring(0, 50) || 'No chunk'}...`;
+                              case 'error':
+                                return `Error: ${logEntry.data?.message?.substring(0, 50) || 'Unknown error'}...`;
+                              case 'connection_status':
+                                return logEntry.data?.connected ? 'Connected' : 'Disconnected';
+                              default:
+                                return `${logEntry.type}`;
+                            }
+                          } catch {
+                            return `${logEntry.type}`;
                           }
                         };
-                        
+
                         return (
-                          <div key={log.id} className="log-item">
-                            <span className="log-icon">{getLogIcon(log.level)}</span>
-                            <span className="log-text">{getLogSummary(log)}</span>
+                          <div key={parsedLog.id || index} className="log-item">
+                            <span className="log-icon">{getLogIcon(parsedLog.level)}</span>
+                            <span className="log-text">{getLogSummary(parsedLog)}</span>
                           </div>
                         );
                       }

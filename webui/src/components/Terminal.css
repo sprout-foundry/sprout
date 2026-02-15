@@ -166,6 +166,7 @@
   padding: 8px 12px;
   border-top: 1px solid #333;
   background: #1a1a1a;
+  position: relative;
 }
 
 .terminal-prompt {
@@ -282,6 +283,45 @@
 /* Terminal cursor effect */
 .terminal-input {
   caret-color: #60a5fa;
+}
+
+/* Terminal status message */
+.terminal-status-message {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(255, 152, 0, 0.15);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  color: #ffb74d;
+  font-size: 13px;
+  line-height: 1.5;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.terminal-status-message code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  color: #fff;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Selection styling */

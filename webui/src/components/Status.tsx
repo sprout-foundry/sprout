@@ -57,7 +57,7 @@ const Status: React.FC<StatusProps> = ({ isConnected, stats }) => {
       <div className="status-indicator">
         <span className={`indicator ${isConnected ? 'on' : 'off'}`}></span>
         <span className="status-text">
-          {isConnected ? 'Connected to ledit server' : 'Disconnected from ledit server'}
+          {isConnected ? 'Connected to ledit server' : 'Backend not connected - Start with: ./ledit agent --web-port 54321'}
         </span>
       </div>
 
@@ -66,6 +66,12 @@ const Status: React.FC<StatusProps> = ({ isConnected, stats }) => {
         <span className={`status-item ${isConnected ? 'connected' : 'disconnected'}`}>
           WebSocket: {isConnected ? 'Live' : 'Offline'}
         </span>
+
+        {!isConnected && (
+          <span className="status-item disconnected-help">
+            Run: <code>./ledit agent</code> in parent directory
+          </span>
+        )}
 
         {isConnected && stats && (
           <>
@@ -81,7 +87,7 @@ const Status: React.FC<StatusProps> = ({ isConnected, stats }) => {
 
             {/* Context Usage */}
             <span className={`status-item context-${contextStatus}`} title={`Current: ${formatTokens(stats.current_context_tokens || 0)} / Max: ${formatTokens(stats.max_context_tokens || 0)}`}>
-              Context: {stats.context_usage_percent?.toFixed(1)}%
+              Context: {stats.context_usage_percent !== undefined && stats.context_usage_percent !== null ? `${stats.context_usage_percent.toFixed(1)}%` : 'N/A'}
             </span>
 
             {/* Cache Efficiency */}

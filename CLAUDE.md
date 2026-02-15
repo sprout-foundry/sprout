@@ -40,6 +40,37 @@ go test ./pkg/console/ -v
 ```
 The UI components are critical for user interaction and terminal display. Any changes to input handling, footer display, agent console behavior, or related formatting should be validated with the test suite to prevent regressions in the user experience.
 
+## Code Quality Evaluation
+
+Before making changes, evaluate code against these metrics:
+
+### File Size Guidelines
+- **Target**: Under 500 lines per file
+- **Review threshold**: Files over 800 lines need splitting consideration
+- Large files violate Single Responsibility Principle and are hard to maintain
+
+### SRP (Single Responsibility Principle)
+- Each type should have one primary responsibility
+- Functions should do one thing well
+- If a file imports many unrelated packages, it likely violates SRP
+
+### Code Duplication
+- Use existing utilities rather than duplicating logic
+- Look for similar patterns across files before adding new code
+- Consolidate repeated error handling, validation, or utility patterns
+
+### Self-Documenting Code
+- Prefer descriptive names; code should explain itself
+- Comments only for "why", not "what"
+- Avoid explaining obvious logic with comments
+
+### Refactoring Protocol
+- **INCREMENTAL** – Extract one logical unit at a time
+- **BUILD FIRST** – Ensure code compiles after each change
+- **PRACTICAL** – Balance validation with efficiency
+- **MAINTAIN FUNCTIONALITY** – Refactor without changing behavior
+- **MINIMIZE IMPACT** – Do the minimum necessary
+
 ## Architecture Overview
 
 ### Core Components

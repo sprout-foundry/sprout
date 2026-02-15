@@ -21,8 +21,12 @@ class TerminalWebSocketService {
   }
 
   connect() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/terminal`;
+    // Use environment variable in development, otherwise use relative URL
+    const baseUrl = process.env.REACT_APP_TERMINAL_WS_URL;
+    const wsUrl = baseUrl ? `${baseUrl}/terminal` : (() => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${protocol}//${window.location.host}/terminal`;
+    })();
 
     console.log('Connecting to Terminal WebSocket:', wsUrl);
 

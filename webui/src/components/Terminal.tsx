@@ -260,10 +260,15 @@ const Terminal: React.FC<TerminalProps> = ({
               onChange={(e) => setCurrentInput(e.target.value)}
               onKeyDown={handleKeyDown}
               className="terminal-input"
-              placeholder="Type a command..."
+              placeholder={terminalConnected ? "Type a command..." : "Terminal not connected - start ledit backend"}
               disabled={!terminalConnected}
               autoFocus
             />
+            {!terminalConnected && (
+              <div className="terminal-status-message">
+                ⚠️ Backend not connected. Start with: <code>./ledit agent --web-port 54321</code>
+              </div>
+            )}
           </div>
         </div>
       )}

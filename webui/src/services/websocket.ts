@@ -18,8 +18,11 @@ class WebSocketService {
   }
 
   connect() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    // Use environment variable in development, otherwise use relative URL
+    const wsUrl = process.env.REACT_APP_WS_URL || (() => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${protocol}//${window.location.host}/ws`;
+    })();
 
     console.log('Connecting to WebSocket:', wsUrl);
 

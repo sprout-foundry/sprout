@@ -39,10 +39,10 @@ Running just 'ledit' without arguments starts enhanced agent mode with automatic
 		if useInteractive {
 			chatAgent, err := createChatAgent()
 			if err != nil {
-				return fmt.Errorf("failed to initialize agent for enhanced mode: %w", err)
+				return fmt.Errorf("failed to initialize agent: %w", err)
 			}
-			// Use the new enhanced mode instead of old interactive mode
-			return runSimpleEnhancedMode(chatAgent, true, args)
+			// Use enhanced mode
+			return RunAgent(chatAgent, true, args)
 		}
 		// Otherwise show help
 		return cmd.Help()

@@ -301,12 +301,6 @@ class SDLCManager:
 
         issues = []
 
-        # Check for DEFER todos (good scope management)
-        defer_pattern = re.compile(r'add_todos.*DEFER:', re.IGNORECASE)
-        if defer_pattern.search(agent_output):
-            # Agent is properly deferring improvements - this is GOOD
-            return []
-
         # Check for scope expansion signals
         # These patterns suggest agent is adding beyond plan scope
         expansion_patterns = [
@@ -328,13 +322,6 @@ class SDLCManager:
                 break
 
         # If agent created todos for items not in plan
-        # This is harder to detect, but we can warn if MANY new todos appear
-        todo_pattern = re.compile(r'add_todos.*\{.*\}', re.DOTALL)
-        todos_created = len(todo_pattern.findall(agent_output))
-        if todos_created > 3:  # Threshold for suspicious activity
-            # Might be many legitimate todos, but flag as potential issue
-            pass
-
         return issues
 
     def evaluate_with_agent(self, output: str, phase_name: str, criteria: List[str]) -> Tuple[bool, List[Issue]]:
@@ -1037,7 +1024,7 @@ TASK_CONFIG = {
             'evaluation_type': 'multi',  # Build + test
             'prompt': (
                 "Implement the project-plan.md tasks. "
-                "Create todos for each task using add_todos. "
+                "Create todos for each task using TodoWrite. "
                 "Mark todos complete as you implement each task. "
                 "Write clean, production-ready code with error handling. "
                 "After each significant change, run 'go build' to verify compilation."

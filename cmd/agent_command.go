@@ -152,6 +152,6 @@ Examples:
 		isInteractive := len(args) == 0 && !isCI && stdinIsTerminal
 
 		// Use the new simplified enhanced mode
-		return runSimpleEnhancedMode(chatAgent, isInteractive, args)
+		return RunAgent(chatAgent, isInteractive, args)
 	},
 }

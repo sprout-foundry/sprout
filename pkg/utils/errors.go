@@ -277,6 +277,14 @@ func IsNetworkError(err error) bool {
 	return false
 }
 
+// WrapError wraps an error with additional context
+func WrapError(err error, message string) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", message, err)
+}
+
 // IsValidationError checks if an error is validation-related
 func IsValidationError(err error) bool {
 	if structuredErr, ok := err.(*StructuredError); ok {
@@ -314,13 +322,4 @@ func FormatError(err error) string {
 	return err.Error()
 }
 
-// LogError logs an error with context
-func (h *ErrorHandler) LogError(err error, context string) {
-	if h.logger != nil {
-		message := FormatError(err)
-		if context != "" {
-			message = fmt.Sprintf("%s | Context: %s", message, context)
-		}
-		h.logger.LogProcessStep(fmt.Sprintf("ERROR: %s", message))
-	}
-}
+

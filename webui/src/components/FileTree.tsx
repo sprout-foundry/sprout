@@ -45,6 +45,10 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
         throw new Error(data.message);
       }
     } catch (err) {
+      // Check if it's a JSON parsing error (backend not available)
+      if (err instanceof Error && err.message.includes('Unexpected token')) {
+        throw new Error('Backend not connected. Start with: ./ledit agent --web-port 54321');
+      }
       throw err instanceof Error ? err : new Error('Unknown error');
     }
   };

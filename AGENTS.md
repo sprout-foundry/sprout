@@ -9,6 +9,37 @@ This guide helps contributors work effectively on ledit, an AI‑assisted code e
 - `pkg/`: Other core packages (currently under development).
 - Tests: Go unit tests co‑located; E2E runner `test_runner.py`; integration tests in `integration_tests/`.
 
+## Code Quality Evaluation Metrics
+
+When evaluating and modifying this codebase, prioritize these metrics:
+
+### 1. File Size
+- **Target**: Files should generally be under 500 lines
+- **Hard limit**: Files over 800 lines should be reviewed for splitting
+- **Rationale**: Large files are harder to understand, test, and maintain
+
+### 2. Single Responsibility Principle (SRP)
+- Each type/struct should have one primary responsibility
+- Each function should do one thing well
+- Signs of SRP violations:
+  - Files with multiple unrelated `type X struct` definitions
+  - Functions exceeding 100 lines with multiple concerns
+  - Files that import many unrelated packages
+
+### 3. Code Duplication
+- DRY principle: Don't Repeat Yourself
+- Look for:
+  - Similar logic patterns repeated across files
+  - Duplicate utility functions
+  - Repeated error handling patterns
+  - Identical struct definitions
+
+### 4. Self-Documenting Code
+- Prefer descriptive names over comments
+- Comments should only explain **why**, not **what** (the code explains what)
+- Avoid comments that just restate the obvious
+- Use well-named functions and variables to convey intent
+
 ## Build, Test, and Development Commands
 - Build: `go build` (binary: `ledit`), `go install` to GOPATH/bin.
 - Unit tests: `go test ./...` or verbose `go test ./... -v`.

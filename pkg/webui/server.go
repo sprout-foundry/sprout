@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -57,10 +56,13 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		port:     port,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				// Allow localhost connections
+				// Allow localhost connections from any port (for development)
 				origin := r.Header.Get("Origin")
-				return origin == "http://localhost:"+strconv.Itoa(port) ||
-					origin == "" // Allow same-origin and direct connections
+				if origin == "" {
+					return true // Allow same-origin and direct connections
+				}
+				// Allow any localhost connection in development
+				return strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1")
 			},
 		},
 		terminalManager: NewTerminalManager(),
@@ -85,6 +87,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/terminal", ws.handleTerminalWebSocket)
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
+	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)
 	mux.HandleFunc("/api/browse", ws.handleAPIBrowse)
 	mux.HandleFunc("/api/file", ws.handleAPIFile)
@@ -97,31 +100,21 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/git/commit", ws.handleAPIGitCommit)
 	mux.HandleFunc("/api/git/stage-all", ws.handleAPIGitStageAll)
 	mux.HandleFunc("/api/git/unstage-all", ws.handleAPIGitUnstageAll)
+	mux.HandleFunc("/api/history/changelog", ws.handleAPIHistoryChangelog)
+	mux.HandleFunc("/api/history/rollback", ws.handleAPIHistoryRollback)
+	mux.HandleFunc("/api/history/changes", ws.handleAPIHistoryChanges)
 	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
 	mux.HandleFunc("/static/", ws.handleStaticFiles)
 	mux.HandleFunc("/sw.js", ws.handleServiceWorker)
 
-	// Additional asset files
-	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
-		ws.handleStaticAsset(w, r, "manifest.json", "application/json")
-	})
-	mux.HandleFunc("/browserconfig.xml", func(w http.ResponseWriter, r *http.Request) {
-		ws.handleStaticAsset(w, r, "browserconfig.xml", "application/xml")
-	})
-	mux.HandleFunc("/asset-manifest.json", func(w http.ResponseWriter, r *http.Request) {
-		ws.handleStaticAsset(w, r, "asset-manifest.json", "application/json")
-	})
-
-	// Icon patterns - try .png first, then .svg, then .ico
-	mux.HandleFunc("/icon-192.png", func(w http.ResponseWriter, r *http.Request) {
-		ws.handleStaticAsset(w, r, "static/icon-192.png", "image/png", false, true)
-	})
-	mux.HandleFunc("/icon-512.png", func(w http.ResponseWriter, r *http.Request) {
-		ws.handleStaticAsset(w, r, "static/icon-512.png", "image/png", false, true)
-	})
-	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		ws.handleStaticAsset(w, r, "favicon.ico", "image/x-icon", false, true)
-	})
+	// Additional asset files - serve from filesystem directly
+	assetHandler := http.FileServer(http.Dir("./pkg/webui/static"))
+	mux.Handle("/manifest.json", assetHandler)
+	mux.Handle("/browserconfig.xml", assetHandler)
+	mux.Handle("/asset-manifest.json", assetHandler)
+	mux.Handle("/icon-192.png", assetHandler)
+	mux.Handle("/icon-512.png", assetHandler)
+	mux.Handle("/favicon.ico", assetHandler)
 
 	// Health check endpoint for connectivity verification
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -209,11 +202,12 @@ func (ws *ReactWebServer) handleStaticAsset(w http.ResponseWriter, r *http.Reque
 	// Check if we should look in the static subdirectory
 	lookInStatic := len(optional) > 1 && optional[1]
 
+	// For now, use filesystem directly since embedded files aren't working correctly
 	// Try embedded filesystem first
 	var data []byte
 	var err error
 
-	// Try the primary path
+	// Try the primary path in embedded FS
 	data, err = staticFiles.ReadFile(embeddedPath)
 	if err != nil && lookInStatic && !strings.HasPrefix(embeddedPath, "static/") {
 		// Try with static/ prefix

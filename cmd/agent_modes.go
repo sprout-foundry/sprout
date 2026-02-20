@@ -21,8 +21,8 @@ import (
 // RunAgent runs the agent in interactive or direct mode
 func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) error {
 	// Determine if web UI should be enabled
-	// Web UI requires interactive mode (terminal), not disabled, and not in CI/subagent
-	enableWebUI := isInteractive && !disableWebUI && !IsCI()
+	// Web UI requires: interactive mode, daemon mode, not disabled, and not in CI/subagent
+	enableWebUI := (isInteractive || daemonMode) && !disableWebUI && !IsCI()
 
 	// Create event bus
 	eventBus := events.NewEventBus()
@@ -130,6 +130,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) error {
 		}
 
 		if query == "" {
+			// No query provided - check if we should keep running (daemon mode)
+			if daemonMode && webServer != nil && webServer.IsRunning() {
+				// Daemon mode: keep web UI running
+				fmt.Printf("🌐 Web UI running at http://localhost:%d\n", webServer.GetPort())
+				fmt.Println("Press Ctrl+C to stop the server.")
+
+				// Wait for interrupt signal
+				<-ctx.Done()
+				return nil
+			}
 			fmt.Println("Welcome to ledit! 🤖")
 			fmt.Println("Agent initialized successfully.")
 			fmt.Println("Use 'ledit agent \"your query\"' to execute commands.")

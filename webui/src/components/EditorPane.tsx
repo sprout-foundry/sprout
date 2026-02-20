@@ -90,10 +90,13 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     return oneDark;
   }, []);
 
-  // Load file content
+  const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
+
+  // Load file content - does NOT update buffer in context to avoid infinite loop
   const loadFile = useCallback(async (filePath: string) => {
     setLoading(true);
     setError(null);
+    isExternalUpdateRef.current = true;
 
     try {
       const response = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`);
@@ -105,9 +108,6 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       const content = await response.text();
 
       setLocalContent(content);
-      if (buffer) {
-        updateBufferContent(buffer.id, content);
-      }
 
       // Update editor if it exists
       if (viewRef.current) {
@@ -123,9 +123,13 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       console.error('[EditorPane loadFile] Error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
+      isExternalUpdateRef.current = false;
       setLoading(false);
     }
-  }, [paneId, updateBufferContent]);
+  }, []);
+
+  // Keep ref in sync
+  loadFileRef.current = loadFile;
 
   // Go to specific line
   const handleGoToLine = useCallback((lineNum: number) => {
@@ -165,8 +169,13 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     }
   }, [buffer, paneId, saveBuffer]);
 
-  // Load file when buffer changes
+  const isExternalUpdateRef = useRef<boolean>(false);
+  const lastLoadedRef = useRef<{bufferId: string, filePath: string} | null>(null);
+  const currentBufferIdRef = useRef<string | null>(null);
+
+  // Load file when pane has a buffer assigned
   useEffect(() => {
+    // Skip if no buffer or no file
     if (!buffer || !buffer.file || buffer.file.isDir) {
       setLocalContent('');
       if (viewRef.current) {
@@ -179,35 +188,41 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         });
       }
       setError(null);
+      lastLoadedRef.current = null;
+      currentBufferIdRef.current = null;
       return;
     }
 
-    // If buffer has content and hasn't been modified, use cached content
-    if (buffer.content && !buffer.isModified) {
-      setLocalContent(buffer.content);
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          changes: {
-            from: 0,
-            to: viewRef.current.state.doc.length,
-            insert: buffer.content
-          }
-        });
-      }
-      setError(null);
+    // Skip if same buffer already tracked
+    if (currentBufferIdRef.current === buffer.id) {
+      return;
+    }
+
+    // Mark new buffer as tracked
+    currentBufferIdRef.current = buffer.id;
+
+    // Skip if same buffer and same file already loaded
+    if (lastLoadedRef.current && 
+        lastLoadedRef.current.bufferId === buffer.id && 
+        lastLoadedRef.current.filePath === buffer.file.path) {
       return;
     }
 
     // Load file from server
-    loadFile(buffer.file.path);
-  }, [buffer?.id, buffer?.file?.path]); // eslint-disable-line react-hooks/exhaustive-deps -- loadFile intentionally excluded to prevent infinite loop
+    lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
+    
+    // Use ref to avoid dependency issues - only pass filePath now
+    if (loadFileRef.current) {
+      loadFileRef.current(buffer.file.path);
+    }
+  }, [paneId]);
 
   // Initialize CodeMirror editor
   useEffect(() => {
     if (!editorRef.current) return;
 
     const updateListener = EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
+      if (update.docChanged && !isExternalUpdateRef.current) {
         const newContent = update.state.doc.toString();
         // Only update localContent if this is a user edit (content differs from localContent)
         // This prevents infinite loop with external content loading

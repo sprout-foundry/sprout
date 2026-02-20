@@ -117,13 +117,13 @@ const Status: React.FC<StatusProps> = ({ isConnected, stats }) => {
             {/* Status Indicators */}
             <span className="status-item">
               {stats.streaming_enabled && (
-                <span className="status-badge streaming" title="Streaming enabled">📡</span>
+                <span className="status-badge streaming" title="Streaming enabled">S</span>
               )}
               {stats.debug_mode && (
-                <span className="status-badge debug" title="Debug mode">🐛</span>
+                <span className="status-badge debug" title="Debug mode">D</span>
               )}
               {stats.context_warning_issued && (
-                <span className="status-badge warning" title="Context limit warning">⚠️</span>
+                <span className="status-badge warning" title="Context limit warning">!</span>
               )}
             </span>
           </>

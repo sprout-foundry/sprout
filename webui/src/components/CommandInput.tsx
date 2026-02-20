@@ -21,7 +21,7 @@ interface CommandHistory {
 }
 
 const CommandInput: React.FC<CommandInputProps> = ({
-  value,
+  value = '',
   onChange,
   onSend,
   onSendCommand,
@@ -30,7 +30,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
   multiline = true,
   autoFocus = false
 }) => {
-  const [currentInput, setCurrentInput] = useState(value || '');
   const [history, setHistory] = useState<CommandHistory>({
     commands: [],
     index: -1,
@@ -45,27 +44,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
   useEffect(() => {
     loadHistory();
   }, []);
-
-  // Sync with external value changes
-  useEffect(() => {
-    if (value !== undefined && value !== currentInput) {
-      setCurrentInput(value);
-      resetHistoryNavigation();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]); // Only sync when external value changes, NOT when currentInput changes (to avoid loops)
-
-  // Auto-resize textarea based on content
-  useEffect(() => {
-    const textarea = inputRef.current;
-    if (textarea) {
-      // Reset height to auto to get the correct scrollHeight
-      textarea.style.height = 'auto';
-      // Calculate new height (min 44px, max 200px)
-      const newHeight = Math.max(44, Math.min(textarea.scrollHeight, 200));
-      textarea.style.height = `${newHeight}px`;
-    }
-  }, [currentInput]);
 
   // Focus input if autoFocus is true
   useEffect(() => {
@@ -172,6 +150,10 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (disabled) return;
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    const currentValue = textarea.value;
 
     // Handle special key combinations
     if (e.ctrlKey || e.metaKey) {
@@ -179,48 +161,46 @@ const CommandInput: React.FC<CommandInputProps> = ({
         case 'c':
           // Clear input (Ctrl+C)
           e.preventDefault();
-          setCurrentInput('');
           resetHistoryNavigation();
+          if (onChange) onChange('');
           return;
         case 'u':
           // Clear to beginning of line (Ctrl+U)
           e.preventDefault();
-          setCurrentInput('');
           resetHistoryNavigation();
+          if (onChange) onChange('');
           return;
         case 'a':
           // Go to beginning of line (Ctrl+A)
           e.preventDefault();
-          inputRef.current?.setSelectionRange(0, 0);
+          textarea.setSelectionRange(0, 0);
           return;
         case 'e':
           // Go to end of line (Ctrl+E)
           e.preventDefault();
-          inputRef.current?.setSelectionRange(currentInput.length, currentInput.length);
+          textarea.setSelectionRange(currentValue.length, currentValue.length);
           return;
         case 'k':
           // Clear line (Ctrl+K)
           e.preventDefault();
-          setCurrentInput('');
           resetHistoryNavigation();
+          if (onChange) onChange('');
           return;
         case 'w':
           // Delete previous word (Ctrl+W)
           e.preventDefault();
-          const words = currentInput.split(' ');
+          const words = currentValue.split(' ');
           words.pop();
           const newInput = words.join(' ');
-          setCurrentInput(newInput);
           if (onChange) onChange(newInput);
           return;
         case 'd':
           // Delete next character (Ctrl+D)
           e.preventDefault();
-          const pos = inputRef.current?.selectionStart || 0;
-          if (pos < currentInput.length) {
-            const newInput = currentInput.slice(0, pos) + currentInput.slice(pos + 1);
-            setCurrentInput(newInput);
-            if (onChange) onChange(newInput);
+          const pos = textarea.selectionStart || 0;
+          if (pos < currentValue.length) {
+            const newValue = currentValue.slice(0, pos) + currentValue.slice(pos + 1);
+            if (onChange) onChange(newValue);
           }
           return;
         case 'r':
@@ -258,11 +238,11 @@ const CommandInput: React.FC<CommandInputProps> = ({
         e.preventDefault();
         if (isHistoryMode) {
           // Restore temp input and exit history mode
-          setCurrentInput(history.tempInput);
           resetHistoryNavigation();
+          if (onChange) onChange(history.tempInput);
         } else {
           // Clear input if not in history mode
-          setCurrentInput('');
+          resetHistoryNavigation();
           if (onChange) onChange('');
         }
         break;
@@ -276,9 +256,11 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
   const navigateHistory = (direction: number) => {
     if (history.commands.length === 0) return;
+    const textarea = inputRef.current;
+    if (!textarea) return;
 
     let newIndex = history.index + direction;
-    let newInput = currentInput;
+    const currentInputValue = textarea.value;
 
     if (newIndex < -1) {
       newIndex = -1;
@@ -286,9 +268,11 @@ const CommandInput: React.FC<CommandInputProps> = ({
       newIndex = history.commands.length - 1;
     }
 
+    let newInputValue = '';
+
     if (newIndex === -1) {
       // Return to temp input
-      newInput = history.tempInput;
+      newInputValue = history.tempInput;
       setIsHistoryMode(false);
     } else {
       // Navigate to history item
@@ -296,37 +280,39 @@ const CommandInput: React.FC<CommandInputProps> = ({
         // Save current input as temp
         setHistory(prev => ({
           ...prev,
-          tempInput: currentInput
+          tempInput: currentInputValue
         }));
       }
-      newInput = history.commands[history.commands.length - 1 - newIndex];
+      newInputValue = history.commands[history.commands.length - 1 - newIndex];
       setIsHistoryMode(true);
     }
 
-    setCurrentInput(newInput);
     setHistory(prev => ({
       ...prev,
       index: newIndex
     }));
 
-    // Update external value if controlled
+    // Update external value if controlled - this updates the textarea value
     if (onChange) {
-      onChange(newInput);
+      onChange(newInputValue);
     }
   };
 
   const handleTabCompletion = () => {
     // Basic auto-completion logic could be added here
     // For now, just insert a tab character
-    const newInput = currentInput + '\t';
-    setCurrentInput(newInput);
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    const newInput = textarea.value + '\t';
     if (onChange) onChange(newInput);
   };
 
   const handleSend = async () => {
-    if (currentInput.trim() === '') return;
+    const textareaValue = inputRef.current?.value || '';
+    if (textareaValue.trim() === '') return;
 
-    const commandToSend = currentInput.trim();
+    const commandToSend = textareaValue.trim();
 
     // Save to history
     await saveToHistory(commandToSend);
@@ -341,8 +327,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
       onSendCommand(commandToSend);
     }
 
-    // Update local state and notify external change handler
-    setCurrentInput('');
+    // Clear textarea using onChange for controlled component
     if (onChange) {
       onChange('');
     }
@@ -357,8 +342,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
-    setCurrentInput(newValue);
-    
+
     if (onChange) {
       onChange(newValue);
     }
@@ -389,14 +373,14 @@ const CommandInput: React.FC<CommandInputProps> = ({
           {isLoadingHistory && (
             <span className="loading-indicator">Loading history...</span>
           )}
-          {currentInput.length > 100 && <span className="length-indicator">{currentInput.length}</span>}
+          {(inputRef.current?.value?.length || 0) > 100 && <span className="length-indicator">{inputRef.current?.value?.length}</span>}
         </div>
         {isHistoryMode && (
           <button
             className="history-exit-btn"
             onClick={() => {
-              setCurrentInput(history.tempInput);
               resetHistoryNavigation();
+              if (onChange) onChange(history.tempInput);
             }}
             title="Exit history mode (Esc)"
           >
@@ -407,7 +391,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
       <textarea
         ref={inputRef}
-        value={currentInput}
+        value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         onCompositionStart={handleCompositionStart}
@@ -420,40 +404,34 @@ const CommandInput: React.FC<CommandInputProps> = ({
       />
 
       <div className="input-actions">
+        <div className="action-buttons">
+          <button
+            onClick={() => {
+              resetHistoryNavigation();
+              if (onChange) onChange('');
+            }}
+            disabled={disabled || !value}
+            className="clear-button"
+            title="Clear input (Ctrl+C)"
+          >
+            Clear
+          </button>
+          <button
+            onClick={loadHistory}
+            disabled={disabled || isLoadingHistory}
+            className="refresh-button"
+            title="Refresh history from terminal (Ctrl+R)"
+          >
+            🔄
+          </button>
+        </div>
         <button
           onClick={handleSend}
-          disabled={disabled || !currentInput.trim()}
+          disabled={disabled || !(value?.trim())}
           className="send-button"
         >
           Send
         </button>
-        <button
-          onClick={() => {
-            setCurrentInput('');
-            resetHistoryNavigation();
-            if (onChange) onChange('');
-          }}
-          disabled={disabled || !currentInput}
-          className="clear-button"
-          title="Clear input (Ctrl+C)"
-        >
-          Clear
-        </button>
-        <button
-          onClick={loadHistory}
-          disabled={disabled || isLoadingHistory}
-          className="refresh-button"
-          title="Refresh history from terminal (Ctrl+R)"
-        >
-          🔄
-        </button>
-      </div>
-
-      <div className="keyboard-hints">
-        <span className="hint">↑↓ Navigate</span>
-        <span className="hint">Esc Exit</span>
-        <span className="hint">Ctrl+R Refresh</span>
-        {multiline && <span className="hint">Shift+Enter New line</span>}
       </div>
     </div>
   );

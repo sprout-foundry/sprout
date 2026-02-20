@@ -103,18 +103,54 @@ func createVisionClientWithProvider(providerType api.ClientType) (api.ClientInte
 }
 
 // GetVisionModelForProvider returns the appropriate vision model for a given provider
+// Vision models are configured in the provider JSON config files in pkg/agent_providers/configs/
+// This function creates a temporary provider client to get the configured vision model
 func GetVisionModelForProvider(providerType api.ClientType) string {
+	// Skip providers that don't use generic provider system
 	switch providerType {
-	case api.OpenRouterClientType:
-		return "google/gemma-3-27b-it"
 	case api.OpenAIClientType:
-		return "gpt-5-mini"
-	case api.OllamaClientType:
-		// Ollama requires manual verification of vision support
+		// OpenAI uses built-in client - handled separately
 		return ""
+	case api.OllamaClientType, api.OllamaLocalClientType, api.OllamaTurboClientType:
+		// Ollama requires manual model verification
+		return ""
+	case api.TestClientType:
+		return ""
+	}
+
+	// Try to create a provider to get its vision model
+	// Use the default model for this provider
+	model := getDefaultModelForProvider(providerType)
+	if model == "" {
+		return ""
+	}
+
+	client, err := factory.CreateProviderClient(providerType, model)
+	if err != nil {
+		return ""
+	}
+
+	// Get vision model from the provider
+	return client.GetVisionModel()
+}
+
+// getDefaultModelForProvider returns the default model for a given provider type
+func getDefaultModelForProvider(providerType api.ClientType) string {
+	switch providerType {
 	case api.DeepInfraClientType:
-		// DeepInfra vision-capable model
-		return "google/gemma-3-27b-it"
+		return "meta-llama/Llama-3.3-70B-Instruct"
+	case api.OpenRouterClientType:
+		return "openai/gpt-5"
+	case api.MistralClientType:
+		return "devstral-2512"
+	case api.DeepSeekClientType:
+		return "deepseek-ai/DeepSeek-V3"
+	case api.ZAIClientType:
+		return "glm-4.6"
+	case api.LMStudioClientType:
+		return "" // Depends on locally installed models
+	case api.ChutesClientType:
+		return "" // Depends on chutes service
 	default:
 		return ""
 	}
@@ -122,32 +158,31 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 
 // createVisionClient creates a client capable of vision analysis
 func createVisionClient() (api.ClientInterface, error) {
-	// List of providers to try, in order of preference
-	providers := []struct {
-		clientType       api.ClientType
-		envVar           string
-		visionModel      string
-		hasVisionSupport bool
-	}{
-		{api.OpenRouterClientType, "OPENROUTER_API_KEY", "gpt-4o-mini", true},
-		{api.OpenAIClientType, "OPENAI_API_KEY", "gpt-4o-mini", true},
-		// DeepInfra doesn't have vision support - skip it
-		{api.OllamaClientType, "", "", false}, // Ollama vision support needs manual verification
+	// Priority: DeepInfra (cheapest) -> OpenRouter -> OpenAI -> Mistral -> ZAI
+	providers := []api.ClientType{
+		api.DeepInfraClientType,
+		api.OpenRouterClientType,
+		api.OpenAIClientType,
+		api.MistralClientType,
+		api.ZAIClientType,
+		api.DeepSeekClientType,
 	}
 
-	for _, provider := range providers {
-		// Check if provider is available
-		if provider.envVar != "" && os.Getenv(provider.envVar) == "" {
+	for _, providerType := range providers {
+		// Get API key env var for this provider
+		envVar := getAPIKeyEnvVar(providerType)
+		if envVar != "" && os.Getenv(envVar) == "" {
 			continue // Skip if API key not set
 		}
 
-		// Skip providers that don't have vision support
-		if !provider.hasVisionSupport {
-			continue
+		// Get vision model from provider config
+		visionModel := GetVisionModelForProvider(providerType)
+		if visionModel == "" {
+			continue // Skip if no vision model configured
 		}
 
 		// Try to create client with vision model
-		client, err := factory.CreateProviderClient(provider.clientType, provider.visionModel)
+		client, err := factory.CreateProviderClient(providerType, visionModel)
 		if err != nil {
 			continue // Try next provider
 		}
@@ -160,7 +195,27 @@ func createVisionClient() (api.ClientInterface, error) {
 		return client, nil
 	}
 
-	return nil, fmt.Errorf("no vision-capable providers available - please set up OPENROUTER_API_KEY or OPENAI_API_KEY for vision capabilities")
+	return nil, fmt.Errorf("no vision-capable providers available - please set up DEEPINFRA_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY for vision capabilities")
+}
+
+// getAPIKeyEnvVar returns the environment variable name for the provider's API key
+func getAPIKeyEnvVar(providerType api.ClientType) string {
+	switch providerType {
+	case api.DeepInfraClientType:
+		return "DEEPINFRA_API_KEY"
+	case api.OpenRouterClientType:
+		return "OPENROUTER_API_KEY"
+	case api.OpenAIClientType:
+		return "OPENAI_API_KEY"
+	case api.MistralClientType:
+		return "MISTRAL_API_KEY"
+	case api.ZAIClientType:
+		return "ZAI_API_KEY"
+	case api.DeepSeekClientType:
+		return "DEEPSEEK_API_KEY"
+	default:
+		return ""
+	}
 }
 
 // createVisionClientWithModel creates a vision client using a specific model
@@ -643,10 +698,14 @@ func (vp *VisionProcessor) enhanceTextWithAnalysis(text, imagePath string, analy
 // HasVisionCapability checks if vision processing is available
 func HasVisionCapability() bool {
 	// Check if any provider with vision capability is available
+	// Priority: DeepInfra (cheapest) -> OpenRouter -> OpenAI -> Mistral
 	providers := []api.ClientType{
+		api.DeepInfraClientType,
 		api.OpenRouterClientType,
 		api.OpenAIClientType,
-		api.DeepInfraClientType,
+		api.MistralClientType,
+		api.DeepSeekClientType,
+		api.ZAIClientType,
 		api.OllamaClientType,
 	}
 
@@ -669,6 +728,18 @@ func HasVisionCapability() bool {
 			}
 		case api.DeepInfraClientType:
 			if os.Getenv("DEEPINFRA_API_KEY") == "" {
+				continue
+			}
+		case api.MistralClientType:
+			if os.Getenv("MISTRAL_API_KEY") == "" {
+				continue
+			}
+		case api.DeepSeekClientType:
+			if os.Getenv("DEEPSEEK_API_KEY") == "" {
+				continue
+			}
+		case api.ZAIClientType:
+			if os.Getenv("ZAI_API_KEY") == "" {
 				continue
 			}
 		case api.OllamaClientType:
@@ -726,7 +797,7 @@ func GetVisionCacheStats() map[string]interface{} {
 // AnalyzeImage is the tool function called by the agent for image analysis
 func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) (string, error) {
 	if !HasVisionCapability() {
-		return "", fmt.Errorf("vision analysis not available - please set up OPENROUTER_API_KEY, OPENAI_API_KEY, or DEEPINFRA_API_KEY for vision capabilities")
+		return "", fmt.Errorf("vision analysis not available - please set up DEEPINFRA_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY for vision capabilities")
 	}
 
 	// Create cache key based on image path, mode, and prompt

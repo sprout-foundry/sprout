@@ -16,11 +16,13 @@ import (
 var (
 	disableWebUI bool
 	webPort      int
+	daemonMode   bool
 )
 
 func init() {
 	agentCmd.Flags().BoolVar(&disableWebUI, "no-web-ui", false, "Disable web UI")
 	agentCmd.Flags().IntVar(&webPort, "web-port", 0, "Port for web UI (default: auto-find available port starting from 54321)")
+	agentCmd.Flags().BoolVarP(&daemonMode, "daemon", "d", false, "Run in daemon mode - keep web UI running without interactive prompt")
 }
 
 // Ensure imports are used

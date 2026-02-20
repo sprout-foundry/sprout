@@ -106,14 +106,7 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
   };
 
   if (edits.length === 0) {
-    return (
-      <div className="file-edits-panel empty">
-        <div className="empty-state">
-          <span className="empty-icon">📝</span>
-          <span className="empty-text">No edits yet</span>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // Group edits by file path, showing only the most recent action

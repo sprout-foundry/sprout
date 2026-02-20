@@ -5,8 +5,11 @@ class WebSocketService {
   private ws: WebSocket | null = null;
   private callbacks: EventCallback[] = [];
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 2;
+  private maxReconnectAttempts = 5;
   private reconnectDelay = 2000;
+  private pingInterval: NodeJS.Timeout | null = null;
+  private lastPongTime = Date.now();
+  private intentionalClose = false;
 
   private constructor() {}
 
@@ -15,6 +18,27 @@ class WebSocketService {
       WebSocketService.instance = new WebSocketService();
     }
     return WebSocketService.instance;
+  }
+
+  private startPingInterval() {
+    this.stopPingInterval();
+    // Send ping every 30 seconds to keep connection alive
+    this.pingInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000);
+  }
+
+  private stopPingInterval() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  private handlePong() {
+    this.lastPongTime = Date.now();
   }
 
   connect() {
@@ -31,21 +55,26 @@ class WebSocketService {
     this.ws.onopen = () => {
       console.log('WebSocket connected');
       this.reconnectAttempts = 0;
+      this.lastPongTime = Date.now();
+      this.startPingInterval();
       this.notifyCallbacks({ type: 'connection_status', data: { connected: true } });
     };
 
     this.ws.onclose = (event) => {
       console.log('WebSocket disconnected:', event);
+      this.stopPingInterval();
       this.notifyCallbacks({ type: 'connection_status', data: { connected: false } });
 
-      // Try to reconnect
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      // Only reconnect if not intentionally closed and not already reconnecting
+      if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
         setTimeout(() => {
           console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
           this.connect();
         }, this.reconnectDelay * this.reconnectAttempts);
       }
+      // Reset intentional close flag after handling
+      this.intentionalClose = false;
     };
 
     this.ws.onerror = (error) => {
@@ -60,6 +89,22 @@ class WebSocketService {
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        
+        // Handle pong responses from server
+        if (data.type === 'pong') {
+          this.handlePong();
+          return;
+        }
+        
+        // Handle server ping requests
+        if (data.type === 'ping') {
+          // Respond to server ping with pong
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'pong' }));
+          }
+          return;
+        }
+        
         this.notifyCallbacks(data);
       } catch (error) {
         console.error('Failed to parse WebSocket message:', error, event.data);
@@ -68,6 +113,7 @@ class WebSocketService {
   }
 
   disconnect() {
+    this.intentionalClose = true;
     if (this.ws) {
       this.reconnectAttempts = this.maxReconnectAttempts; // Prevent auto-reconnect
       this.ws.close();

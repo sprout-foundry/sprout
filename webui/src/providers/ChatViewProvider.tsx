@@ -28,19 +28,14 @@ export class ChatViewProvider implements ContentProvider {
           return (
             <div className="stats">
               <div className="stat-item">
-                <span className="label">Queries:</span>
-                <span className="value query-count">{data.queryCount}</span>
-              </div>
-              <div className="stat-item">
-                <span className="label">Status:</span>
                 <span className={`value status ${status}`}>
-                  {status === 'connected' ? '🟢' : '🔴'}
+                  {status === 'connected' ? 'Connected' : 'Disconnected'}
                 </span>
               </div>
             </div>
           );
         },
-        title: (data: any) => `💬 Chat Stats`,
+        title: (data: any) => `Chat Status`,
         order: 1
       },
       {
@@ -62,15 +57,15 @@ export class ChatViewProvider implements ContentProvider {
                 const isDirectory = file.path.endsWith('/') || !fileName.includes('.');
 
                 const getFileIcon = (ext: string, isDir: boolean) => {
-                  if (isDir) return '📁';
+                  if (isDir) return '>';
                   const iconMap: { [key: string]: string } = {
-                    'js': '📜', 'jsx': '⚛️', 'ts': '📘', 'tsx': '⚛️',
-                    'go': '🐹', 'py': '🐍', 'rs': '🦀', 'java': '☕',
-                    'md': '📝', 'json': '📋', 'yaml': '⚙️', 'yml': '⚙️',
-                    'txt': '📄', 'css': '🎨', 'html': '🌐', 'sh': '💻',
-                    'mod': '📦', 'sum': '🔒'
+                    'js': '.js', 'jsx': '.jsx', 'ts': '.ts', 'tsx': '.tsx',
+                    'go': '.go', 'py': '.py', 'rs': '.rs', 'java': '.java',
+                    'md': '.md', 'json': '{}', 'yaml': '.yml', 'yml': '.yml',
+                    'txt': '.txt', 'css': '.css', 'html': '.html', 'sh': '.sh',
+                    'mod': '.mod', 'sum': '.sum'
                   };
-                  return iconMap[ext] || '📄';
+                  return iconMap[ext] || '';
                 };
 
                 return (

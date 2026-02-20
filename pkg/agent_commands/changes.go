@@ -57,42 +57,56 @@ func (s *StatusCommand) Name() string {
 
 // Description returns the command description
 func (s *StatusCommand) Description() string {
-	return "Show change tracking status and session info"
+	return "Show session status, provider, model, token usage, and files modified"
 }
 
 // Execute shows the current status
 func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
-		// Gracefully handle nil agent
-		fmt.Print("📊 Agent Session Status\r\n")
-		fmt.Print("=" + fmt.Sprintf("%*s", 25, "=") + "\r\n")
-		fmt.Print("Change Tracking: ❌ Disabled\r\n")
+		fmt.Print("📊 Agent Session Status\n")
+		fmt.Println("========================")
+		fmt.Println("Change Tracking: ❌ Disabled")
 		return nil
 	}
-	fmt.Print("📊 Agent Session Status\r\n")
-	fmt.Print("=" + fmt.Sprintf("%*s", 25, "=") + "\r\n")
 
-	// Session info
-	fmt.Printf("Session ID: %s\r\n", chatAgent.GetSessionID())
-	fmt.Printf("Model: %s\r\n", chatAgent.GetModel())
-	fmt.Printf("Provider: %s\r\n", chatAgent.GetProvider())
+	fmt.Print("📊 Agent Session Status\n")
+	fmt.Println("========================")
 
-	// Change tracking info
+	// Provider and Model (critical)
+	fmt.Printf("Provider: %s\n", chatAgent.GetProvider())
+	fmt.Printf("Model: %s\n", chatAgent.GetModel())
+
+	// Token usage
+	fmt.Println("\n📈 Token Usage:")
+	fmt.Printf("  Prompt Tokens: %d\n", chatAgent.GetPromptTokens())
+	fmt.Printf("  Completion Tokens: %d\n", chatAgent.GetCompletionTokens())
+	fmt.Printf("  Total Tokens: %d\n", chatAgent.GetTotalTokens())
+	fmt.Printf("  Cached Tokens: %d\n", chatAgent.GetCachedTokens())
+
+	// Cost
+	cost := chatAgent.GetTotalCost()
+	fmt.Printf("\n💰 Cost: $%.6f\n", cost)
+
+	// Change tracking and files
+	fmt.Println("\n📝 Changes:")
 	if chatAgent.IsChangeTrackingEnabled() {
-		fmt.Print("Change Tracking: ✅ Enabled\r\n")
-		fmt.Printf("Revision ID: %s\r\n", chatAgent.GetRevisionID())
-		fmt.Printf("Files Modified: %d\r\n", chatAgent.GetChangeCount())
+		fmt.Println("Tracking: ✅ Enabled")
+		fmt.Printf("Revision: %s\n", chatAgent.GetRevisionID())
+		fmt.Printf("Files Modified: %d\n", chatAgent.GetChangeCount())
 
 		files := chatAgent.GetTrackedFiles()
 		if len(files) > 0 {
-			fmt.Print("\r\nModified Files:\r\n")
+			fmt.Println("\nModified Files:")
 			for _, file := range files {
-				fmt.Printf("  • %s\r\n", file)
+				fmt.Printf("  • %s\n", file)
 			}
 		}
 	} else {
-		fmt.Print("Change Tracking: ❌ Disabled\r\n")
+		fmt.Println("Tracking: ❌ Disabled")
 	}
+
+	// Session
+	fmt.Printf("\n🔖 Session: %s\n", chatAgent.GetSessionID())
 
 	return nil
 }

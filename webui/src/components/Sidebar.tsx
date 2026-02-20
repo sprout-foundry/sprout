@@ -375,7 +375,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 disabled={!onViewChange}
                 title="Chat View"
               >
-                <span className="nav-icon-emoji">💬</span>
                 <span className="nav-icon-label">Chat</span>
               </button>
               <button
@@ -387,7 +386,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 disabled={!onViewChange}
                 title="Editor View"
               >
-                <span className="nav-icon-emoji">📝</span>
                 <span className="nav-icon-label">Editor</span>
               </button>
               <button
@@ -399,7 +397,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 disabled={!onViewChange}
                 title="Git View"
               >
-                <span className="nav-icon-emoji">🔀</span>
                 <span className="nav-icon-label">Git</span>
               </button>
               <button
@@ -411,7 +408,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 disabled={!onViewChange}
                 title="Logs View"
               >
-                <span className="nav-icon-emoji">📋</span>
                 <span className="nav-icon-label">Logs</span>
               </button>
             </div>
@@ -419,7 +415,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Configuration Section */}
           <div className="config-section">
-            <h4>⚙️ Config</h4>
+            <h4>Config</h4>
             <div className="config-item">
               <label htmlFor="provider-select">Provider:</label>
               <select

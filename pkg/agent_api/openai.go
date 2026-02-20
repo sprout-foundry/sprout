@@ -389,8 +389,8 @@ func (c *OpenAIClient) SupportsVision() bool {
 
 // GetVisionModel returns the vision model for OpenAI
 func (c *OpenAIClient) GetVisionModel() string {
-	// Return default vision model
-	return "gpt-5"
+	// Return default vision model - configuration should be in provider config
+	return "gpt-4o-mini"
 }
 
 // SendVisionRequest sends a vision-enabled chat request

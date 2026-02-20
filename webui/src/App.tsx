@@ -1,19 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import Chat from './components/Chat';
 import GitView from './components/GitView';
 import Status from './components/Status';
 import LogsView from './components/LogsView';
+import FileEditsPanel from './components/FileEditsPanel';
 import Terminal from './components/Terminal';
 import NavigationBar from './components/NavigationBar';
-import FileTree from './components/FileTree';
 import EditorTabs from './components/EditorTabs';
 import EditorPane from './components/EditorPane';
+import ErrorBoundary from './components/ErrorBoundary';
+import ResizeHandle from './components/ResizeHandle';
 import { EditorManagerProvider, useEditorManager } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService } from './services/api';
+import { viewRegistry, ChatViewProvider, EditorViewProvider, GitViewProvider, LogsViewProvider } from './providers';
 
 // Service Worker Registration
 const registerServiceWorker = async () => {
@@ -57,6 +60,13 @@ interface AppState {
   toolExecutions: ToolExecution[];
   queryProgress: any;
   stats: any; // Enhanced stats from API
+  fileEdits: Array<{
+    path: string;
+    action: string;
+    timestamp: Date;
+    linesAdded?: number;
+    linesDeleted?: number;
+  }>;
 }
 
 interface ToolExecution {
@@ -98,24 +108,50 @@ function App() {
     currentView: 'chat',
     toolExecutions: [],
     queryProgress: null,
-    stats: {}
+    stats: {},
+    fileEdits: []
   });
 
   const [inputValue, setInputValue] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
+  const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
+  const [gitRefreshKey, setGitRefreshKey] = useState(0);
+
+  // Memoize recent logs to prevent unnecessary Sidebar remounts
+  const recentLogs = useMemo(() => state.logs.slice(-10), [state.logs]);
+
+  // Memoize stats to prevent unnecessary Sidebar remounts
+  const stats = useMemo(() => ({
+    queryCount: state.queryCount,
+    filesModified: 0 // TODO: track modified files from buffers
+  }), [state.queryCount]);
+
+  // Memoize available models to prevent unnecessary Sidebar remounts
+  const availableModels = useMemo(() => [state.model], [state.model]);
+
+  // Memoize sidebar toggle handler
+  const handleSidebarToggle = useCallback(() => {
+    setSidebarCollapsed(prev => !prev);
+  }, []);
+
   const wsService = WebSocketService.getInstance();
   const apiService = ApiService.getInstance();
 
-  const handleEvent = useCallback((event: any) => {
-    console.log('📨 Received event:', event.type, event.data);
+  // Debounce connection status updates to prevent flashing
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastConnectionStateRef = useRef<boolean>(false);
 
-    // Filter out webpack dev server events
-    const webpackEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot'];
-    if (webpackEvents.includes(event.type)) {
+  const handleEvent = useCallback((event: any) => {
+    // Filter out ping events and webpack dev server events early to prevent console spam
+    const filteredEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'ping'];
+    if (filteredEvents.includes(event.type)) {
       return; // Don't process these events
     }
+
+    console.log('📨 Received event:', event.type, event.data);
 
     // Create log entry for all events
     const logEntry: LogEntry = {
@@ -132,12 +168,28 @@ function App() {
       case 'connection_status':
         logEntry.category = 'system';
         logEntry.level = event.data.connected ? 'success' : 'warning';
-        setState(prev => ({
-          ...prev,
-          isConnected: event.data.connected,
-          logs: [...prev.logs, logEntry]
-        }));
-        console.log('🔗 Connection status updated:', event.data.connected);
+
+        // Debounce connection status updates to prevent rapid re-renders
+        const newConnectionState = event.data.connected;
+
+        // Only update if state actually changed
+        if (newConnectionState !== lastConnectionStateRef.current) {
+          // Clear any pending timeout
+          if (connectionTimeoutRef.current) {
+            clearTimeout(connectionTimeoutRef.current);
+          }
+
+          // Debounce the state update
+          connectionTimeoutRef.current = setTimeout(() => {
+            lastConnectionStateRef.current = newConnectionState;
+            setState(prev => ({
+              ...prev,
+              isConnected: newConnectionState,
+              logs: [...prev.logs, logEntry]
+            }));
+          }, 300); // Wait 300ms to confirm the connection state is stable
+        }
+        console.log('🔗 Connection status updated:', newConnectionState);
         break;
 
       case 'query_started':
@@ -253,7 +305,20 @@ function App() {
         logEntry.level = 'info';
         setState(prev => {
           const newLogs = [...prev.logs, logEntry];
-          return { ...prev, logs: newLogs };
+
+          // Track file edits
+          const newFileEdit = {
+            path: event.data.path || event.data.file_path || 'Unknown',
+            action: event.data.action || event.data.operation || 'edited',
+            timestamp: new Date(),
+            linesAdded: event.data.lines_added,
+            linesDeleted: event.data.lines_deleted
+          };
+
+          // Add to file edits (keep last 50)
+          const updatedFileEdits = [...prev.fileEdits, newFileEdit].slice(-50);
+
+          return { ...prev, logs: newLogs, fileEdits: updatedFileEdits };
         });
         console.log('📝 File changed:', event.data.path);
         break;
@@ -335,8 +400,25 @@ function App() {
       }).catch(console.error);
     };
 
+    // Load recent files
+    const loadFiles = () => {
+      apiService.getFiles().then((response: any) => {
+        if (response && response.files) {
+          // Convert files array to expected format
+          const files = response.files.map((file: any) => ({
+            path: file.name,
+            modified: false
+          }));
+          setRecentFiles(files);
+        }
+      }).catch(console.error);
+    };
+
     // Load initial stats
     loadStats();
+
+    // Load initial files
+    loadFiles();
 
     // Set up periodic stats updates
     const statsInterval = setInterval(loadStats, 5000); // Update every 5 seconds
@@ -351,11 +433,25 @@ function App() {
 
     // Cleanup
     return () => {
+      // Clear any pending connection timeout
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+      }
       wsService.disconnect();
       window.removeEventListener('resize', checkMobile);
       clearInterval(statsInterval);
     };
   }, [handleEvent, wsService, apiService]);
+
+  // Register content providers
+  useEffect(() => {
+    viewRegistry.register(new ChatViewProvider());
+    viewRegistry.register(new EditorViewProvider());
+    viewRegistry.register(new GitViewProvider());
+    viewRegistry.register(new LogsViewProvider());
+
+    console.log('✅ Content providers registered');
+  }, []);
 
   const handleSendMessage = useCallback(async (message: string) => {
     if (!message.trim() || state.isProcessing) return;
@@ -445,6 +541,7 @@ function App() {
 
       const data = await response.json();
       console.log('Commit successful:', data);
+      setGitRefreshKey(k => k + 1);
       return data;
     } catch (err) {
       console.error('Failed to commit:', err);
@@ -465,6 +562,7 @@ function App() {
           throw new Error(`Failed to stage ${file}`);
         }
       }
+      setGitRefreshKey(k => k + 1);
     } catch (err) {
       console.error('Failed to stage files:', err);
       throw err;
@@ -484,6 +582,7 @@ function App() {
           throw new Error(`Failed to unstage ${file}`);
         }
       }
+      setGitRefreshKey(k => k + 1);
     } catch (err) {
       console.error('Failed to unstage files:', err);
       throw err;
@@ -503,6 +602,7 @@ function App() {
           throw new Error(`Failed to discard ${file}`);
         }
       }
+      setGitRefreshKey(k => k + 1);
     } catch (err) {
       console.error('Failed to discard files:', err);
       throw err;
@@ -537,16 +637,118 @@ function App() {
 
   // Child component with access to editor manager
   const AppContent: React.FC = () => {
-    const { panes, paneLayout, switchPane, splitPane, closeSplit } = useEditorManager();
+    const { panes, paneLayout, switchPane, splitPane, closeSplit, openFile, paneSizes, updatePaneSize } = useEditorManager();
 
     const canSplit = panes.length < 3;
     const canCloseSplit = panes.length > 1;
+
+    // Handle file clicks in a context-aware manner based on current view
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const handleFileClick = useCallback((filePath: string) => {
+      const view = state.currentView;
+
+      switch (view) {
+        case 'chat':
+          // In chat view, insert @file reference into chat input
+          setInputValue(prev => prev + ` @${filePath}`);
+          // Focus the chat input
+          setTimeout(() => {
+            const textarea = document.querySelector('textarea[placeholder*="Ask me"]');
+            if (textarea instanceof HTMLTextAreaElement) {
+              textarea.focus();
+            }
+          }, 100);
+          break;
+
+        case 'editor':
+          // In editor view, open file in editor
+          openFile({ path: filePath });
+          break;
+
+        case 'git':
+          // In git view, show git diff/status for file
+          console.log('Git status for file:', filePath);
+          // TODO: Implement git diff view for specific file
+          break;
+
+        case 'logs':
+          // In logs view, maybe filter logs by file
+          console.log('Filter logs by file:', filePath);
+          break;
+
+        default:
+          console.log('File clicked in unknown view:', view, filePath);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state.currentView, openFile]);
+
+    // Component that renders panes with resize handles
+    const ResizablePanesContainer: React.FC = () => {
+      const containerRef = useRef<HTMLDivElement>(null);
+
+      // Handle resize for a specific pane
+      const handlePaneResize = useCallback((paneId: string) => (deltaPixels: number) => {
+        if (!containerRef.current) return;
+
+        const container = containerRef.current;
+        const containerRect = container.getBoundingClientRect();
+
+        // Convert pixel delta to percentage
+        const isVertical = paneLayout === 'split-vertical';
+        const containerSize = isVertical ? containerRect.width : containerRect.height;
+        const deltaPercent = (deltaPixels / containerSize) * 100;
+
+        // Update pane sizes (we're resizing the pane to the left or above the handle)
+        const currentSize = paneSizes[paneId] || 50;
+        const newSize = Math.max(10, Math.min(90, currentSize + deltaPercent)); // Min 10%, max 90%
+        updatePaneSize(paneId, newSize);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [paneLayout, paneSizes, updatePaneSize]);
+
+      // Determine if we should show resize handles
+      const showResizeHandles = panes.length > 1;
+
+      return (
+        <div
+          ref={containerRef}
+          className={`panes-container layout-${paneLayout}`}
+        >
+          {panes.map((pane, index) => {
+            const paneSize = paneSizes[pane.id] || (100 / panes.length);
+            const isLast = index === panes.length - 1;
+
+            return (
+              <React.Fragment key={pane.id}>
+                {/* Pane */}
+                <PaneWrapper style={{ flex: `0 0 ${paneSize}%` }}>
+                  <EditorPaneWrapper>
+                    <EditorPaneComponent
+                      paneId={pane.id}
+                      isActive={pane.isActive}
+                      onClick={() => switchPane(pane.id)}
+                    />
+                  </EditorPaneWrapper>
+                </PaneWrapper>
+
+                {/* Resize Handle (after pane, except for last pane) */}
+                {showResizeHandles && !isLast && (
+                  <ResizeHandle
+                    direction={paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal'}
+                    onResize={handlePaneResize(pane.id)}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      );
+    };
 
     return (
       <div className="app">
         {/* Mobile menu button */}
         {isMobile && (
-          <button 
+          <button
             className="mobile-menu-btn"
             onClick={toggleSidebar}
             aria-label="Toggle sidebar"
@@ -557,7 +759,7 @@ function App() {
 
         {/* Mobile overlay */}
         {isMobile && isSidebarOpen && (
-          <div 
+          <div
             className="mobile-overlay"
             onClick={closeSidebar}
           />
@@ -565,24 +767,26 @@ function App() {
 
         <Sidebar
           isConnected={state.isConnected}
+          provider={state.provider}
+          model={state.model}
           selectedModel={state.model}
           onModelChange={handleModelChange}
-          availableModels={[state.model]} // You might want to fetch available models from API
-          // Note: onViewChange is no longer used in Sidebar - view switching is now in NavigationBar
-          stats={{
-            queryCount: state.queryCount,
-            filesModified: 0 // TODO: track modified files from buffers
-          }}
-          recentFiles={[]}
-          recentLogs={state.logs.slice(-10)}
+          availableModels={availableModels}
+          currentView={state.currentView}
+          onViewChange={handleViewChange}
+          onFileClick={handleFileClick}
+          stats={stats}
+          recentFiles={recentFiles}
+          recentLogs={recentLogs}
+          key="sidebar" // Add key to prevent remounts
           isMobileMenuOpen={isSidebarOpen}
           onMobileMenuToggle={toggleSidebar}
           isMobile={isMobile}
           sidebarCollapsed={sidebarCollapsed}
-          onSidebarToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onSidebarToggle={handleSidebarToggle}
           onProviderChange={handleProviderChange}
         />
-        <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''}`}>
+        <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
           {/* Top Navigation Bar */}
           <NavigationBar
             currentView={state.currentView}
@@ -593,18 +797,25 @@ function App() {
 
           {/* View Content */}
           {state.currentView === 'chat' ? (
-            <Chat
-              messages={state.messages}
-              onSendMessage={handleSendMessage}
-              inputValue={inputValue}
-              onInputChange={setInputValue}
-              isProcessing={state.isProcessing}
-              lastError={state.lastError}
-              toolExecutions={state.toolExecutions}
-              queryProgress={state.queryProgress}
-            />
+            <>
+              <FileEditsPanel
+                edits={state.fileEdits}
+                onFileClick={handleFileClick}
+              />
+              <Chat
+                messages={state.messages}
+                onSendMessage={handleSendMessage}
+                inputValue={inputValue}
+                onInputChange={setInputValue}
+                isProcessing={state.isProcessing}
+                lastError={state.lastError}
+                toolExecutions={state.toolExecutions}
+                queryProgress={state.queryProgress}
+              />
+            </>
           ) : state.currentView === 'git' ? (
             <GitView
+              key={gitRefreshKey}
               onCommit={handleGitCommit}
               onStage={handleGitStage}
               onUnstage={handleGitUnstage}
@@ -652,27 +863,8 @@ function App() {
               <EditorTabs />
 
               <div className={`editor-content ${paneLayout}`}>
-                {/* Editor Panes Container */}
-                <div className={`panes-container layout-${paneLayout}`}>
-                  <PaneWrapper>
-                    <FileTreeWrapper>
-                      <FileTreeWrapperInner>
-                        <FileTreeConnected />
-                      </FileTreeWrapperInner>
-                    </FileTreeWrapper>
-                  </PaneWrapper>
-                  {panes.map((pane) => (
-                    <PaneWrapper key={pane.id}>
-                      <EditorPaneWrapper>
-                        <EditorPaneComponent
-                          paneId={pane.id}
-                          isActive={pane.isActive}
-                          onClick={() => switchPane(pane.id)}
-                        />
-                      </EditorPaneWrapper>
-                    </PaneWrapper>
-                  ))}
-                </div>
+                {/* Editor Panes Container with Resize Handles */}
+                <ResizablePanesContainer />
               </div>
             </div>
           ) : null}
@@ -683,42 +875,33 @@ function App() {
           onCommand={handleTerminalCommand}
           onOutput={handleTerminalOutput}
           isConnected={state.isConnected}
+          isExpanded={isTerminalExpanded}
+          onToggleExpand={setIsTerminalExpanded}
         />
       </div>
     );
   };
 
   return (
-    <ThemeProvider>
-      <EditorManagerProvider>
-        <AppContent />
-      </EditorManagerProvider>
-    </ThemeProvider>
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        console.error('Application error:', error, errorInfo);
+        // You could send this to an error reporting service here
+      }}
+    >
+      <ThemeProvider>
+        <EditorManagerProvider>
+          <AppContent />
+        </EditorManagerProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 
 // Wrapper components to avoid React hooks issues
-const PaneWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
-  <div className="pane-wrapper">{children}</div>
+const PaneWrapper: React.FC<{children: React.ReactNode, style?: React.CSSProperties}> = ({ children, style }) => (
+  <div className="pane-wrapper" style={style}>{children}</div>
 );
-
-const FileTreeWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
-  <div className="filetree-wrapper">{children}</div>
-);
-
-const FileTreeWrapperInner: React.FC<{children: React.ReactNode}> = ({ children }) => (
-  <div>{children}</div>
-);
-
-const FileTreeConnected: React.FC = () => {
-  const { openFile } = useEditorManager();
-  return (
-    <FileTree
-      onFileSelect={openFile}
-      selectedFile={undefined}
-    />
-  );
-};
 
 const EditorPaneWrapper: React.FC<{children: React.ReactNode, isActive?: boolean, onClick?: () => void}> = ({ children, isActive, onClick }) => {
   return (

@@ -88,6 +88,9 @@ type Config struct {
 	SubagentModel    string                  `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
 	SubagentTypes    map[string]SubagentType `json:"subagent_types,omitempty"`    // Named subagent personas (coder, tester, etc.)
 
+	// Skills Configuration
+	Skills map[string]Skill `json:"skills,omitempty"` // Agent Skills that can be loaded into context
+
 	// Zsh Command Execution
 	EnableZshCommandDetection   bool `json:"enable_zsh_command_detection,omitempty"`   // Enable zsh-aware command detection (default: false)
 	AutoExecuteDetectedCommands bool `json:"auto_execute_detected_commands,omitempty"` // Auto-execute detected commands without prompting (default: true)
@@ -169,6 +172,17 @@ type SubagentType struct {
 	Model        string `json:"model"`         // Model for this subagent type (optional, falls back to SubagentModel)
 	SystemPrompt string `json:"system_prompt"` // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
 	Enabled      bool   `json:"enabled"`       // Whether this subagent type is available for use
+}
+
+// Skill defines an Agent Skill that can be loaded into context
+type Skill struct {
+	ID           string            `json:"id"`            // Unique identifier (e.g., "go-best-practices")
+	Name         string            `json:"name"`          // Human-readable name
+	Description  string            `json:"description"`   // What this skill provides and when to use it
+	Path         string            `json:"path"`          // Relative path to skill directory
+	Enabled      bool              `json:"enabled"`       // Whether this skill is available
+	Metadata     map[string]string `json:"metadata"`      // Optional metadata (author, version, etc.)
+	AllowedTools string            `json:"allowed_tools"` // Optional space-delimited list of pre-approved tools
 }
 
 // Optional helpers
@@ -283,6 +297,39 @@ func NewConfig() *Config {
 				SystemPrompt: "pkg/agent/prompts/subagent_prompts/web_researcher.md",
 				Enabled:      true,
 			},
+			"researcher": {
+				ID:           "researcher",
+				Name:         "Researcher",
+				Description:  "Local codebase analysis and web research specialist - investigates code, architecture, and finds external information",
+				SystemPrompt: "pkg/agent/prompts/subagent_prompts/researcher.md",
+				Enabled:      true,
+			},
+		},
+		Skills: map[string]Skill{
+			"go-conventions": {
+				ID:          "go-conventions",
+				Name:        "Go Conventions",
+				Description: "Go coding conventions, best practices, and style guidelines. Use when writing or reviewing Go code.",
+				Path:        "pkg/agent/skills/go-conventions",
+				Enabled:     true,
+				Metadata:    map[string]string{"version": "1.0"},
+			},
+			"test-writing": {
+				ID:          "test-writing",
+				Name:        "Test Writing",
+				Description: "Guidelines for writing effective unit tests, integration tests, and test coverage. Use when creating tests.",
+				Path:        "pkg/agent/skills/test-writing",
+				Enabled:     true,
+				Metadata:    map[string]string{"version": "1.0"},
+			},
+			"commit-msg": {
+				ID:          "commit-msg",
+				Name:        "Commit Message",
+				Description: "Conventional commits format and best practices for writing clear commit messages.",
+				Path:        "pkg/agent/skills/commit-msg",
+				Enabled:     true,
+				Metadata:    map[string]string{"version": "1.0"},
+			},
 		},
 	}
 }
@@ -348,6 +395,9 @@ func Load() (*Config, error) {
 	}
 	if config.SubagentTypes == nil {
 		config.SubagentTypes = make(map[string]SubagentType)
+	}
+	if config.Skills == nil {
+		config.Skills = make(map[string]Skill)
 	}
 
 	// Set version if not present
@@ -527,6 +577,42 @@ func (c *Config) GetSubagentTypeModel(id string) string {
 		return st.Model
 	}
 	return c.GetSubagentModel()
+}
+
+// GetSkill retrieves a skill configuration by ID
+// Returns nil if the skill doesn't exist or is disabled
+func (c *Config) GetSkill(id string) *Skill {
+	if c.Skills == nil {
+		return nil
+	}
+	if skill, exists := c.Skills[id]; exists && skill.Enabled {
+		return &skill
+	}
+	return nil
+}
+
+// GetSkillPath returns the full path to a skill directory
+func (c *Config) GetSkillPath(id string) string {
+	skill := c.GetSkill(id)
+	if skill == nil || skill.Path == "" {
+		return ""
+	}
+	// Skill path is relative to ledit source root
+	return skill.Path
+}
+
+// GetAllEnabledSkills returns all enabled skills
+func (c *Config) GetAllEnabledSkills() map[string]Skill {
+	if c.Skills == nil {
+		return nil
+	}
+	result := make(map[string]Skill)
+	for id, skill := range c.Skills {
+		if skill.Enabled {
+			result[id] = skill
+		}
+	}
+	return result
 }
 
 // GetMCPServerTimeout moved to pkg/mcp package with MCPServerConfig

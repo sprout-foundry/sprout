@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -245,7 +246,13 @@ func (c *MCPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 		} `json:"tools"`
 	}
 
-	if err := json.Unmarshal([]byte(fmt.Sprintf("%v", response.Result)), &result); err != nil {
+	// Marshal and unmarshal properly to handle interface{} result
+	resultBytes, err := json.Marshal(response.Result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal tools result: %w", err)
+	}
+
+	if err := json.Unmarshal(resultBytes, &result); err != nil {
 		return nil, fmt.Errorf("failed to parse tools list response: %w", err)
 	}
 
@@ -528,6 +535,13 @@ func (c *MCPClient) handleMessages() {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
+			continue
+		}
+
+		// Skip lines that don't start with { (not JSON)
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "{") {
+			// Non-JSON output (warnings, logs, etc.) - skip silently
 			continue
 		}
 

@@ -21,9 +21,20 @@ class TerminalWebSocketService {
   }
 
   connect() {
-    // Use environment variable in development, otherwise use relative URL
-    const baseUrl = process.env.REACT_APP_TERMINAL_WS_URL;
-    const wsUrl = baseUrl ? `${baseUrl}/terminal` : (() => {
+    // Don't connect if already connected
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log('Terminal WebSocket already connected');
+      return;
+    }
+    
+    // Don't connect if connecting
+    if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+      console.log('Terminal WebSocket already connecting');
+      return;
+    }
+
+    // Use environment variable if provided, otherwise use relative URL
+    const wsUrl = process.env.REACT_APP_TERMINAL_WS_URL || (() => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       return `${protocol}//${window.location.host}/terminal`;
     })();

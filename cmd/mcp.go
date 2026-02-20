@@ -101,13 +101,25 @@ func runMCPAdd() error {
 		return fmt.Errorf("failed to load MCP config: %w", err)
 	}
 
-	// Server type selection
+	// Get templates from registry
+	registry := mcp.NewMCPServerRegistry()
+	templates := registry.ListTemplates()
+
+	if len(templates) == 0 {
+		return fmt.Errorf("no templates available. Add templates to ~/.ledit/mcp_templates.json")
+	}
+
+	// Display templates (filter out generic templates for main menu)
 	fmt.Println("Select server type:")
-	fmt.Println("1. Git MCP Server (local Git operations)")
-	fmt.Println("2. GitHub MCP Server (GitHub API, issues, PRs)")
-	fmt.Println("3. Playwright MCP Server (browser automation)")
-	fmt.Println("4. Custom MCP Server")
-	fmt.Print("Choice (1-4): ")
+	for i, t := range templates {
+		// Skip generic templates in the main menu
+		if t.ID == "http-generic" || t.ID == "stdio-generic" {
+			continue
+		}
+		fmt.Printf("%d. %s\n    %s\n", i+1, t.Name, t.Description)
+	}
+	fmt.Printf("%d. Custom MCP Server (stdio or http)\n", len(templates)+1)
+	fmt.Print("Choice: ")
 
 	choice, err := reader.ReadString('\n')
 	if err != nil {
@@ -115,18 +127,108 @@ func runMCPAdd() error {
 	}
 	choice = strings.TrimSpace(choice)
 
-	switch choice {
-	case "1":
-		return setupGitMCPServer(&mcpConfig, reader)
-	case "2":
-		return setupGitHubMCPServer(&mcpConfig, reader)
-	case "3":
-		return setupPlaywrightMCPServer(&mcpConfig, reader)
-	case "4":
-		return setupCustomMCPServer(&mcpConfig, reader)
-	default:
+	choiceNum, err := strconv.Atoi(choice)
+	if err != nil || choiceNum < 1 || choiceNum > len(templates)+1 {
 		return fmt.Errorf("invalid choice: %s", choice)
 	}
+
+	// Handle custom server option
+	if choiceNum == len(templates)+1 {
+		return setupCustomMCPServer(&mcpConfig, reader, registry)
+	}
+
+	// Get selected template (adjust for skipped generics)
+	selectedTemplate := templates[choiceNum-1]
+
+	// Prompt for server name (with default from template)
+	serverName := selectedTemplate.ID
+	if selectedTemplate.Type == "stdio" || selectedTemplate.Type == "http" {
+		fmt.Printf("Enter server name [%s]: ", selectedTemplate.ID)
+		nameInput, _ := reader.ReadString('\n')
+		nameInput = strings.TrimSpace(nameInput)
+		if nameInput != "" {
+			serverName = nameInput
+		}
+	}
+
+	// Check if server already exists
+	if _, exists := mcpConfig.Servers[serverName]; exists {
+		fmt.Printf("Server '%s' is already configured. Reconfigure? (y/N): ", serverName)
+		confirm, _ := reader.ReadString('\n')
+		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
+			fmt.Println("Setup cancelled.")
+			return nil
+		}
+	}
+
+	// Collect environment variables if required
+	envValues := make(map[string]string)
+	for _, envVar := range selectedTemplate.EnvVars {
+		prompt := fmt.Sprintf("Enter %s", envVar.Name)
+		if envVar.Description != "" {
+			prompt += fmt.Sprintf(" (%s)", envVar.Description)
+		}
+		if envVar.Default != "" {
+			prompt += fmt.Sprintf(" [%s]", envVar.Default)
+		}
+		prompt += ": "
+
+		fmt.Print(prompt)
+		value, _ := reader.ReadString('\n')
+		value = strings.TrimSpace(value)
+		if value == "" && envVar.Default != "" {
+			value = envVar.Default
+		}
+		if value != "" || envVar.Required {
+			envValues[envVar.Name] = value
+		}
+	}
+
+	// For HTTP servers, prompt for URL if not set in template
+	customURL := ""
+	if selectedTemplate.Type == "http" && selectedTemplate.URL == "" {
+		fmt.Print("Enter server URL: ")
+		customURL, _ = reader.ReadString('\n')
+		customURL = strings.TrimSpace(customURL)
+	}
+
+	// For stdio servers, allow custom command/args
+	customCommand := ""
+	customArgs := []string{}
+	if selectedTemplate.ID == "git-uvx" || selectedTemplate.ID == "git" {
+		// Special handling for git - ask for repo path
+		fmt.Print("Enter repository path (optional, leave empty to use current directory): ")
+		repoPath, _ := reader.ReadString('\n')
+		repoPath = strings.TrimSpace(repoPath)
+		if repoPath != "" {
+			customArgs = []string{"mcp-server-git", "--repository", repoPath}
+		}
+	}
+
+	// Create server config from template
+	serverConfig := selectedTemplate.CreateServerConfig(serverName, envValues, customURL, customCommand, customArgs)
+
+	// Add server to config
+	mcpConfig.Servers[serverName] = serverConfig
+	mcpConfig.Enabled = true
+
+	// Save config
+	if err := mcp.SaveMCPConfig(&mcpConfig); err != nil {
+		return fmt.Errorf("failed to save MCP config: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Printf("✅ %s configured successfully!\n", serverConfig.Name)
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Println()
+	fmt.Printf("To test the configuration, run: ledit mcp test %s\n", serverName)
+	fmt.Println()
+
+	if selectedTemplate.Docs != "" {
+		fmt.Printf("📖 Documentation: %s\n", selectedTemplate.Docs)
+	}
+
+	return nil
 }
 
 func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
@@ -203,7 +305,7 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	mcpConfig.Enabled = true
 
 	// Save config
-	if err := mcp.SaveMCPConfig(*mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -322,7 +424,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	mcpConfig.Enabled = true
 
 	// Save config
-	if err := mcp.SaveMCPConfig(*mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -417,7 +519,7 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 	mcpConfig.Enabled = true
 
 	// Save config
-	if err := mcp.SaveMCPConfig(*mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -440,7 +542,91 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 	return nil
 }
 
-func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
+func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
+	fmt.Println()
+	fmt.Println("🌐 Chrome DevTools MCP Server Setup")
+	fmt.Println("====================================")
+	fmt.Println()
+
+	// Check if Chrome DevTools server already exists
+	if _, exists := mcpConfig.Servers["chrome-devtools"]; exists {
+		fmt.Print("Chrome DevTools MCP server is already configured. Reconfigure? (y/N): ")
+		confirm, _ := reader.ReadString('\n')
+		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
+			fmt.Println("Setup cancelled.")
+			return nil
+		}
+	}
+
+	// Chrome DevTools MCP Server
+	serverConfig := mcp.MCPServerConfig{
+		Name:        "chrome-devtools",
+		Command:     "npx",
+		Args:        []string{"-y", "chrome-devtools-mcp@latest", "--isolated"},
+		AutoStart:   true,
+		MaxRestarts: 3,
+		Timeout:     60 * time.Second, // Longer timeout for browser operations
+	}
+
+	// Optional: Ask about additional options
+	fmt.Println("Optional configuration:")
+	fmt.Println("1. Default settings (recommended)")
+	fmt.Println("2. Headless mode (no visible browser window)")
+	fmt.Println("3. Custom Chrome channel (stable/beta/dev/canary)")
+	fmt.Print("Choice (1-3): ")
+
+	configChoice, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read input: %w", err)
+	}
+	configChoice = strings.TrimSpace(configChoice)
+
+	switch configChoice {
+	case "2":
+		// Headless mode
+		serverConfig.Args = append(serverConfig.Args, "--headless=true")
+	case "3":
+		fmt.Print("Enter Chrome channel (stable/beta/dev/canary) [stable]: ")
+		channelInput, _ := reader.ReadString('\n')
+		channel := strings.TrimSpace(channelInput)
+		if channel == "" {
+			channel = "stable"
+		}
+		serverConfig.Args = append(serverConfig.Args, "--channel="+channel)
+	}
+
+	// Add server to config
+	mcpConfig.Servers["chrome-devtools"] = serverConfig
+	mcpConfig.Enabled = true
+
+	// Save config
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
+		return fmt.Errorf("failed to save MCP config: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✅ Chrome DevTools MCP Server configured successfully!")
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+	fmt.Println()
+	fmt.Println("To test the configuration, run: ledit mcp test chrome-devtools")
+	fmt.Println()
+	fmt.Println("📦 Installation (if not already installed):")
+	fmt.Println("npx will install the package automatically")
+	fmt.Println()
+	fmt.Println("🌐 Features available:")
+	fmt.Println("• Browser automation (click, fill forms, navigation)")
+	fmt.Println("• Performance analysis and tracing")
+	fmt.Println("• Network request inspection")
+	fmt.Println("• Console message capture")
+	fmt.Println("• Screenshot and snapshot capture")
+	fmt.Println("• DOM inspection and scripting")
+	fmt.Println()
+	fmt.Println("📖 Documentation: https://github.com/ChromeDevTools/chrome-devtools-mcp")
+
+	return nil
+}
+
+func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, registry *mcp.MCPServerRegistry) error {
 	fmt.Println()
 	fmt.Println("🔧 Custom MCP Server Setup")
 	fmt.Println("==========================")
@@ -560,7 +746,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	mcpConfig.Enabled = true
 
 	// Save config
-	if err := mcp.SaveMCPConfig(*mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -643,7 +829,7 @@ func runMCPRemove(serverName string) error {
 	}
 
 	// Save config
-	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(&mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 

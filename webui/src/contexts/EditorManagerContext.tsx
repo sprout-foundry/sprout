@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
 
+interface PaneSize {
+  [paneId: string]: number; // Size in pixels or percentage
+}
+
 interface EditorManagerContextValue {
   buffers: Map<string, EditorBuffer>;
   panes: EditorPane[];
@@ -9,6 +13,7 @@ interface EditorManagerContextValue {
   activeBufferId: string | null;
   isAutoSaveEnabled: boolean;
   autoSaveInterval: number; // milliseconds
+  paneSizes: PaneSize; // Track pane sizes for resizable split panes
 
   // Actions
   openFile: (file: any) => string; // Returns buffer ID
@@ -24,6 +29,7 @@ interface EditorManagerContextValue {
   saveBuffer: (bufferId: string) => Promise<void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   saveAllBuffers: () => Promise<void>;
+  updatePaneSize: (paneId: string, size: number) => void; // Update pane size
 }
 
 const EditorManagerContext = createContext<EditorManagerContextValue | null>(null);
@@ -50,6 +56,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [activeBufferId, setActiveBufferId] = useState<string | null>(null);
   const [isAutoSaveEnabled] = useState(true);
   const [autoSaveInterval] = useState(30000); // 30 seconds
+  const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 50 }); // Initial sizes in percentage
 
   // Activate a buffer (display in active pane)
   const activateBuffer = useCallback((bufferId: string) => {
@@ -303,8 +310,19 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     // Update layout
     if (panes.length === 1) {
       setPaneLayoutState(direction === 'vertical' ? 'split-vertical' : 'split-horizontal');
+      // Initialize pane sizes (50/50 split)
+      setPaneSizes({
+        [panes[0].id]: 50,
+        [newPaneId]: 50
+      });
     } else {
       setPaneLayoutState('split-grid');
+      // For 3 panes, split evenly
+      setPaneSizes({
+        [panes[0].id]: 33.33,
+        [panes[1].id]: 33.33,
+        [newPaneId]: 33.34
+      });
     }
 
     // Activate new pane
@@ -329,6 +347,9 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
     setPaneLayoutState('single');
     setActivePaneId(panes[0]?.id || null);
+
+    // Reset pane sizes
+    setPaneSizes({ [panes[0]?.id || 'pane-1']: 100 });
 
     const remainingBuffer = activePane?.bufferId;
     if (remainingBuffer) {
@@ -361,6 +382,14 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     return () => clearInterval(intervalId);
   }, [isAutoSaveEnabled, autoSaveInterval, saveAllBuffers]);
 
+  // Update pane size (for resizable split panes)
+  const updatePaneSize = useCallback((paneId: string, size: number) => {
+    setPaneSizes(prev => ({
+      ...prev,
+      [paneId]: size
+    }));
+  }, []);
+
   const value: EditorManagerContextValue = {
     buffers,
     panes,
@@ -369,6 +398,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     activeBufferId,
     isAutoSaveEnabled,
     autoSaveInterval,
+    paneSizes,
     openFile,
     closeBuffer,
     closePane,
@@ -381,7 +411,8 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     updateBufferScroll,
     saveBuffer,
     setBufferModified,
-    saveAllBuffers
+    saveAllBuffers,
+    updatePaneSize
   };
 
   return (

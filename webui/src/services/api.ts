@@ -69,6 +69,14 @@ class ApiService {
     return response.json();
   }
 
+  async getProviders(): Promise<{ providers: Array<{ id: string; name: string; models: string[] }> }> {
+    const response = await fetch('/api/providers');
+    if (!response.ok) {
+      throw new Error('Failed to fetch providers');
+    }
+    return response.json();
+  }
+
   async getFiles(): Promise<FilesResponse> {
     const response = await fetch('/api/files');
     if (!response.ok) {
@@ -134,7 +142,211 @@ class ApiService {
       throw error;
     }
   }
+
+  // Git API methods
+  async getGitStatus(): Promise<{
+    message: string;
+    status: {
+      branch: string;
+      ahead: number;
+      behind: number;
+      staged: Array<{ path: string; status: string; staged: boolean }>;
+      modified: Array<{ path: string; status: string; staged: boolean }>;
+      untracked: Array<{ path: string; status: string; staged: boolean }>;
+      deleted: Array<{ path: string; status: string; staged: boolean }>;
+      renamed: Array<{ path: string; status: string; staged: boolean }>;
+    };
+    files: Array<{ path: string; status: string; staged?: boolean }>;
+  }> {
+    try {
+      const response = await fetch('/api/git/status');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get git status:', error);
+      throw error;
+    }
+  }
+
+  async stageFile(path: string): Promise<{ message: string; path: string }> {
+    try {
+      const response = await fetch('/api/git/stage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to stage file:', error);
+      throw error;
+    }
+  }
+
+  async unstageFile(path: string): Promise<{ message: string; path: string }> {
+    try {
+      const response = await fetch('/api/git/unstage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to unstage file:', error);
+      throw error;
+    }
+  }
+
+  async discardChanges(path: string): Promise<{ message: string; path: string }> {
+    try {
+      const response = await fetch('/api/git/discard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to discard changes:', error);
+      throw error;
+    }
+  }
+
+  async stageAll(): Promise<{ message: string }> {
+    try {
+      const response = await fetch('/api/git/stage-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to stage all:', error);
+      throw error;
+    }
+  }
+
+  async unstageAll(): Promise<{ message: string }> {
+    try {
+      const response = await fetch('/api/git/unstage-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to unstage all:', error);
+      throw error;
+    }
+  }
+
+  async createCommit(message: string): Promise<{ message: string; commit: string }> {
+    try {
+      const response = await fetch('/api/git/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to create commit:', error);
+      throw error;
+    }
+  }
+
+  // History and Rollback API methods
+  async getChangelog(): Promise<{
+    message: string;
+    revisions: Array<{
+      revision_id: string;
+      timestamp: string;
+      files: Array<{
+        path: string;
+        operation: string;
+        lines_added: number;
+        lines_deleted: number;
+      }>;
+      description: string;
+    }>;
+  }> {
+    try {
+      const response = await fetch('/api/history/changelog');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get changelog:', error);
+      throw error;
+    }
+  }
+
+  async getChanges(): Promise<{
+    message: string;
+    changes: Array<{
+      revision_id: string;
+      timestamp: string;
+      files: Array<{
+        path: string;
+        operation: string;
+        lines_added: number;
+        lines_deleted: number;
+      }>;
+      description: string;
+    }>;
+  }> {
+    try {
+      const response = await fetch('/api/history/changes');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get changes:', error);
+      throw error;
+    }
+  }
+
+  async rollbackToRevision(revisionId: string): Promise<{ message: string; revision_id: string }> {
+    try {
+      const response = await fetch('/api/history/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revision_id: revisionId }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to rollback:', error);
+      throw error;
+    }
+  }
 }
 
 export { ApiService };
 export type { StatsResponse, QueryRequest, FilesResponse };
+export interface ProvidersResponse {
+  providers: Array<{
+    id: string;
+    name: string;
+    models: string[];
+  }>;
+}

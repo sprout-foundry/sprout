@@ -58,7 +58,7 @@
       }
     ],
     "supports_vision": true,
-    "vision_model": "Qwen/Qwen3-VL-30B-A3B-Instruct",
+    "vision_model": "google/gemma-3-27b-it",
     "default_model": "meta-llama/Llama-3.3-70B-Instruct",
     "available_models": []
   },

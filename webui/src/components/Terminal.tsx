@@ -6,6 +6,8 @@ interface TerminalProps {
   onCommand?: (command: string) => void;
   onOutput?: (output: string) => void;
   isConnected?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: (expanded: boolean) => void;
 }
 
 interface TerminalLine {
@@ -15,18 +17,21 @@ interface TerminalLine {
   timestamp: Date;
 }
 
-const Terminal: React.FC<TerminalProps> = ({ 
-  onCommand, 
-  onOutput, 
-  isConnected = true 
+const Terminal: React.FC<TerminalProps> = ({
+  onCommand,
+  onOutput,
+  isConnected = true,
+  isExpanded: externalIsExpanded = false,
+  onToggleExpand
 }) => {
   const [lines, setLines] = useState<TerminalLine[]>([]);
   const [currentInput, setCurrentInput] = useState('');
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(externalIsExpanded);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [cwd] = useState('~');
   const [terminalConnected, setTerminalConnected] = useState(false);
+  const hasMountedRef = useRef(false);
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const terminalWS = useRef<TerminalWebSocketService | null>(null);
@@ -45,12 +50,20 @@ const Terminal: React.FC<TerminalProps> = ({
     }
   }, [onOutput]);
 
+  // Sync internal isExpanded state with external prop
+  useEffect(() => {
+    setIsExpanded(externalIsExpanded);
+  }, [externalIsExpanded]);
+
   // Initialize terminal WebSocket connection
   useEffect(() => {
+    const terminalService = TerminalWebSocketService.getInstance();
+    
     if (isExpanded && isConnected) {
+      // Only connect if not already connected
       if (!terminalWS.current) {
-        terminalWS.current = TerminalWebSocketService.getInstance();
-        
+        terminalWS.current = terminalService;
+
         // Set up event handlers
         terminalWS.current.onEvent((event) => {
           if (event.type === 'connection_status') {
@@ -83,12 +96,10 @@ const Terminal: React.FC<TerminalProps> = ({
     }
 
     return () => {
-      if (terminalWS.current) {
-        terminalWS.current.disconnect();
-        terminalWS.current = null;
-      }
+      // Don't disconnect on unmount - keep the singleton alive
     };
-  }, [isExpanded, isConnected, addLine]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExpanded, isConnected]);
 
   // Auto-scroll to bottom when new lines are added
   useEffect(() => {
@@ -192,8 +203,15 @@ const Terminal: React.FC<TerminalProps> = ({
   }, [currentInput, history, historyIndex, handleCommand, onCommand, terminalConnected, addLine]);
 
   const toggleExpanded = useCallback(() => {
-    setIsExpanded(prev => !prev);
-  }, []);
+    setIsExpanded(prev => {
+      const newExpanded = !prev;
+      // Notify parent about the change
+      if (onToggleExpand) {
+        onToggleExpand(newExpanded);
+      }
+      return newExpanded;
+    });
+  }, [onToggleExpand]);
 
   const clearTerminal = useCallback(() => {
     setLines([]);
@@ -207,8 +225,19 @@ const Terminal: React.FC<TerminalProps> = ({
     }
   }, [isExpanded, lines.length, addLine]);
 
+  // Set mount flag after first render to prevent re-animation
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      const timer = setTimeout(() => {
+        hasMountedRef.current = false;
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   return (
-    <div className={`terminal-container ${isExpanded ? 'expanded' : 'collapsed'}`}>
+    <div className={`terminal-container ${isExpanded ? 'expanded' : 'collapsed'} ${hasMountedRef.current ? 'initial-mount' : ''}`}>
       <div className="terminal-header">
         <div className="terminal-title">
           <span className="terminal-icon">💻</span>

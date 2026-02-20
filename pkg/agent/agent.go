@@ -66,6 +66,7 @@ type Agent struct {
 	conversationPruner    *ConversationPruner            // Automatic conversation pruning
 	completionSummarizer  *CompletionContextSummarizer   // Completion context summarization
 	toolCallGuidanceAdded bool                           // Prevent repeating tool call guidance
+	activeSkills          []string                       // Currently activated skills (by ID)
 
 	// Input injection handling
 	inputInjectionChan  chan string        // Channel for injecting new user input
@@ -732,25 +733,62 @@ func (a *Agent) initializeMCP() error {
 		return nil
 	}
 
-	if !config.MCP.Enabled {
+	ctx := context.Background()
+
+	// First, load servers from the legacy mcp_config.json file (if it exists)
+	// This ensures servers added via CLI commands are available
+	// Load BEFORE checking if MCP is enabled - legacy config may have servers
+	var legacyEnabled bool
+	if legacyMCPConfig, err := mcp.LoadMCPConfig(); err == nil {
+		legacyEnabled = len(legacyMCPConfig.Servers) > 0 && legacyMCPConfig.Enabled
+		for name, serverConfig := range legacyMCPConfig.Servers {
+			// Only add if not already in main config
+			if _, exists := config.MCP.Servers[name]; !exists {
+				mcpServer := mcp.MCPServerConfig{
+					Name:        serverConfig.Name,
+					Type:        serverConfig.Type,
+					Command:     serverConfig.Command,
+					Args:        serverConfig.Args,
+					URL:         serverConfig.URL,
+					Env:         serverConfig.Env,
+					WorkingDir:  serverConfig.WorkingDir,
+					Timeout:     serverConfig.Timeout,
+					AutoStart:   serverConfig.AutoStart,
+					MaxRestarts: serverConfig.MaxRestarts,
+				}
+				if err := a.mcpManager.AddServer(mcpServer); err != nil {
+					if a.debug {
+						fmt.Printf("⚠️  Warning: Failed to add legacy MCP server %s: %v\n", name, err)
+					}
+				} else if a.debug {
+					fmt.Printf("🔧 Added legacy MCP server: %s\n", name)
+				}
+			}
+		}
+	}
+
+	// Check if MCP should be enabled - either from main config or legacy config
+	mcpEnabled := config.MCP.Enabled || legacyEnabled
+	if !mcpEnabled {
 		if a.debug {
 			fmt.Println("🔧 MCP is disabled in configuration")
 		}
 		return nil
 	}
 
-	ctx := context.Background()
-
-	// Add configured servers
+	// Add configured servers from main config
 	for name, serverConfig := range config.MCP.Servers {
 		mcpServer := mcp.MCPServerConfig{
 			Name:        serverConfig.Name,
+			Type:        serverConfig.Type,
 			Command:     serverConfig.Command,
 			Args:        serverConfig.Args,
+			URL:         serverConfig.URL,
+			Env:         serverConfig.Env,
+			WorkingDir:  serverConfig.WorkingDir,
+			Timeout:     serverConfig.Timeout,
 			AutoStart:   serverConfig.AutoStart,
 			MaxRestarts: serverConfig.MaxRestarts,
-			Timeout:     serverConfig.Timeout,
-			Env:         serverConfig.Env,
 		}
 
 		if err := a.mcpManager.AddServer(mcpServer); err != nil {
@@ -761,8 +799,10 @@ func (a *Agent) initializeMCP() error {
 		}
 	}
 
-	// Auto-start servers if configured
-	if config.MCP.AutoStart {
+	// Auto-start servers if configured (either from main config or legacy config)
+	// If legacy config has enabled servers, start them regardless of main config settings
+	shouldAutoStart := config.MCP.AutoStart || legacyEnabled
+	if shouldAutoStart {
 		if err := a.mcpManager.StartAll(ctx); err != nil {
 			return fmt.Errorf("failed to start MCP servers: %w", err)
 		}
@@ -812,7 +852,7 @@ func (a *Agent) initializeMCP() error {
 func (a *Agent) RefreshMCPTools() error {
 	// Clear cache with mutex protection to avoid race conditions
 	a.mcpInitMu.Lock()
-	a.mcpToolsCache = nil // Clear cache to force reload
+	a.mcpToolsCache = nil    // Clear cache to force reload
 	a.mcpInitialized = false // Mark as needing reinitialization
 	a.mcpInitMu.Unlock()
 

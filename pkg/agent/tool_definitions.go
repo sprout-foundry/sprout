@@ -276,6 +276,24 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleSelfReview,
 	})
 
+	// Register list_skills tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "list_skills",
+		Description: "List all available skills that can be activated. Skills are instruction bundles that can be loaded into context to provide domain expertise.",
+		Parameters:  []ParameterConfig{},
+		Handler:     handleListSkills,
+	})
+
+	// Register activate_skill tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "activate_skill",
+		Description: "Activate a skill to load its instructions into your context. Use this when you need the skill's expertise for the current task.",
+		Parameters: []ParameterConfig{
+			{"skill_id", "string", true, []string{"skill", "id"}, "The ID of the skill to activate (e.g., 'go-conventions', 'test-writing')"},
+		},
+		Handler: handleActivateSkill,
+	})
+
 	return registry
 }
 

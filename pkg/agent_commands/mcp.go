@@ -262,7 +262,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	mcpConfig.Enabled = true
 
 	// Save config
-	if err := mcp.SaveMCPConfig(*mcpConfig); err != nil {
+	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
@@ -355,10 +355,10 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 	}
 
 	// Save config
-	if err := mcp.SaveMCPConfig(mcpConfig); err != nil {
+	config := &mcpConfig
+	if err := mcp.SaveMCPConfig(config); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
-
 	fmt.Printf("✅ Server '%s' removed successfully!\n", serverName)
 
 	if len(mcpConfig.Servers) == 0 {

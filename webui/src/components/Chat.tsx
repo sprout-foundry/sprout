@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import CommandInput from './CommandInput';
+import { stripAnsiCodes } from '../utils/ansi';
 import './Chat.css';
 
 interface Message {
@@ -41,6 +42,14 @@ const Chat: React.FC<ChatProps> = ({
   queryProgress = null
 }) => {
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages, tool executions, or progress updates
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages, toolExecutions, queryProgress, isProcessing]);
 
   const toggleToolExpansion = (toolId: string) => {
     setExpandedTools(prev => {
@@ -108,7 +117,7 @@ const Chat: React.FC<ChatProps> = ({
         )}
       </div>
 
-      <div className="chat-container">
+      <div className="chat-container" ref={chatContainerRef}>
         {messages.length === 0 ? (
           <div className="welcome-message">
             Welcome to ledit! I'm ready to help you with code analysis, editing, and more.
@@ -121,7 +130,7 @@ const Chat: React.FC<ChatProps> = ({
             >
               <div className="message-bubble">
                 <div className="message-content">
-                  {message.content.split('\n').map((line, index) => (
+                  {stripAnsiCodes(message.content).split('\n').map((line, index) => (
                     <div key={index}>{line || '\u00A0'}</div>
                   ))}
                 </div>
@@ -154,7 +163,7 @@ const Chat: React.FC<ChatProps> = ({
                 </div>
                 
                 {tool.message && (
-                  <div className="tool-message">{tool.message}</div>
+                  <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
                 )}
                 
                 {expandedTools.has(tool.id) && tool.details && (

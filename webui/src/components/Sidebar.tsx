@@ -1,19 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import './Sidebar.css';
-import FileTree from './FileTree';
+import { ApiService } from '../services/api';
+import { viewRegistry, ProviderContext, SidebarSection } from '../providers';
 
-// FileInfo interface (matching FileTree component)
-interface FileInfo {
-  name: string;
-  path: string;
-  isDir: boolean;
-  size: number;
-  modified: number;
-  ext?: string;
-  children?: FileInfo[];
-}
+// Module-level flag to track if providers have been fetched
+let providersFetched = false;
 
-// Provider and model options
+// Provider and model options (kept for configuration section)
 const PROVIDERS = [
   { id: 'openai', name: 'OpenAI', models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
   { id: 'anthropic', name: 'Anthropic', models: ['claude-3-sonnet', 'claude-3-haiku'] },
@@ -39,9 +32,7 @@ interface SidebarProps {
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
   onSidebarToggle?: () => void;
-  // Props for FileTree when in editor view
-  onFileSelect?: (file: FileInfo) => void;
-  selectedFile?: string;
+  onFileClick?: (filePath: string) => void;
   // Legacy props for backward compatibility
   provider?: string;
   model?: string;
@@ -54,6 +45,13 @@ interface SidebarProps {
   isMobile?: boolean;
 }
 
+interface SectionData {
+  section: SidebarSection;
+  data: any;
+  loading: boolean;
+  error: string | null;
+}
+
 const Sidebar: React.FC<SidebarProps> = ({
   isConnected,
   selectedModel,
@@ -62,16 +60,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentView = 'chat',
   onViewChange,
   stats,
-  recentFiles,
-  recentLogs,
+  recentFiles = [],
+  recentLogs = [],
   isMobileMenuOpen,
   onMobileMenuToggle,
   sidebarCollapsed,
   onSidebarToggle,
-  // Props for FileTree when in editor view
-  onFileSelect,
-  selectedFile,
-  // Legacy props for backward compatibility
+  onFileClick,
   provider,
   model,
   queryCount,
@@ -84,39 +79,199 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [selectedProvider, setSelectedProvider] = useState(provider || 'openai');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || 'gpt-4');
-  const [availableModelsState, setAvailableModelsState] = useState<string[]>(availableModels || []);
+  const [providers, setProviders] = useState(PROVIDERS);
+  const [isLoadingProviders, setIsLoadingProviders] = useState(false);
+  const [sectionsData, setSectionsData] = useState<Map<string, SectionData>>(new Map());
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const apiService = ApiService.getInstance();
 
-  // Use new props if available, otherwise fall back to legacy props
   const finalSelectedModel = selectedModel || selectedModelState;
+  // Compute available models from providers and selectedProvider
+  const availableModelsState = useMemo(() => {
+    const providerData = providers.find(p => p.id === selectedProvider);
+    return providerData?.models || [];
+  }, [providers, selectedProvider]);
   const finalAvailableModels = availableModels || availableModelsState;
-  const finalStats = stats || { queryCount: queryCount || 0, filesModified: files?.filter(f => f.modified).length || 0 };
-  const finalRecentFiles = recentFiles || files || [];
-  const finalRecentLogs = recentLogs || logs || [];
+
+  // Memoize computed values to prevent unnecessary re-renders
+  const finalStats = useMemo(() =>
+    stats || { queryCount: queryCount || 0, filesModified: files?.filter(f => f.modified).length || 0 },
+    [stats, queryCount, files]
+  );
+
+  const finalRecentFiles = useMemo(() =>
+    recentFiles.length > 0 ? recentFiles : (files || []),
+    [recentFiles, files]
+  );
+
+  const finalRecentLogs = useMemo(() =>
+    recentLogs.length > 0 ? recentLogs : (logs || []),
+    [recentLogs, logs]
+  );
+
   const finalIsMobileMenuOpen = isMobileMenuOpen !== undefined ? isMobileMenuOpen : isOpen;
   const finalOnMobileMenuToggle = onMobileMenuToggle || onClose;
 
-  // Update available models when provider changes
+  // Update provider context in registry
   useEffect(() => {
-    const providerData = PROVIDERS.find(p => p.id === selectedProvider);
-    if (providerData) {
-      setAvailableModelsState(providerData.models);
-      // Reset model if current model is not in the new provider's models
-      if (!providerData.models.includes(finalSelectedModel)) {
-        const newModel = providerData.models[0];
-        setSelectedModelState(newModel);
-        onModelChange?.(newModel);
+    const context: ProviderContext = {
+      isConnected,
+      currentView,
+      onFileClick,
+      onModelChange,
+      recentFiles: finalRecentFiles,
+      recentLogs: finalRecentLogs,
+      stats: finalStats
+    };
+
+    viewRegistry.setContext(context);
+  }, [isConnected, currentView, onFileClick, onModelChange, finalRecentFiles, finalRecentLogs, finalStats]);
+
+  // Subscribe to provider updates for current view
+  useEffect(() => {
+    const provider = viewRegistry.getProvider(currentView);
+    if (!provider || !provider.subscribe) {
+      return;
+    }
+
+    // Subscribe to provider state changes
+    const unsubscribe = provider.subscribe(() => {
+      // Trigger a re-fetch of sections by incrementing refresh trigger
+      setRefreshTrigger(prev => prev + 1);
+    });
+
+    // Cleanup subscription on unmount or view change
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [currentView]);
+
+  // Fetch and render sections for current view
+  useEffect(() => {
+    const sections = viewRegistry.getSections(currentView);
+
+    // Load data for each section
+    sections.forEach(async (section) => {
+      setSectionsData(prev => {
+        const updated = new Map(prev);
+        updated.set(section.id, { section, data: null, loading: true, error: null });
+        return updated;
+      });
+
+      try {
+        let data: any;
+
+        // Fetch data based on data source type
+        switch (section.dataSource.type) {
+          case 'state':
+            // Transform context data
+            const context = viewRegistry.getContext();
+            if (!context) {
+              console.warn('Provider context not set, skipping section', section.id);
+              return;
+            }
+            data = section.dataSource.transform?.(context) || null;
+            break;
+
+          case 'api':
+            // Fetch from API endpoint
+            if (section.dataSource.endpoint) {
+              const response = await fetch(section.dataSource.endpoint);
+              data = await response.json();
+              data = section.dataSource.transform?.(data) || data;
+            }
+            break;
+
+          case 'websocket':
+            // Data will come from websocket events
+            // For now, use state data
+            const wsContext = viewRegistry.getContext();
+            if (!wsContext) {
+              console.warn('Provider context not set, skipping section', section.id);
+              return;
+            }
+            data = section.dataSource.transform?.(wsContext) || null;
+            break;
+        }
+
+        setSectionsData(prev => {
+          const updated = new Map(prev);
+          updated.set(section.id, { section, data, loading: false, error: null });
+          return updated;
+        });
+      } catch (error) {
+        console.error(`Failed to load data for section ${section.id}:`, error);
+        setSectionsData(prev => {
+          const updated = new Map(prev);
+          updated.set(section.id, { section, data: null, loading: false, error: 'Failed to load' });
+          return updated;
+        });
+      }
+    });
+  }, [currentView, isConnected, refreshTrigger]);
+
+  // Fetch providers from API - only run once on mount, not on reconnect
+  useEffect(() => {
+    // Check localStorage to prevent multiple fetches across remounts
+    const storedProviders = localStorage.getItem('ledit_providers');
+    if (storedProviders) {
+      try {
+        const parsed = JSON.parse(storedProviders);
+        setProviders(parsed);
+        setIsLoadingProviders(false);
+        return;
+      } catch {
+        localStorage.removeItem('ledit_providers');
       }
     }
-  }, [selectedProvider, finalSelectedModel, onModelChange]);
 
-  // Update local state when props change
+    if (providersFetched) return;
+    providersFetched = true;
+
+    const fetchProviders = async () => {
+      setIsLoadingProviders(true);
+      try {
+        const data = await apiService.getProviders();
+        if (data.providers && data.providers.length > 0) {
+          setProviders(data.providers);
+          localStorage.setItem('ledit_providers', JSON.stringify(data.providers));
+        } else {
+          setProviders(PROVIDERS);
+        }
+      } catch (error) {
+        console.error('Failed to fetch providers, using defaults:', error);
+        setProviders(PROVIDERS);
+      } finally {
+        setIsLoadingProviders(false);
+      }
+    };
+
+    fetchProviders();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run ONCE on mount, never again
+
+  // Update local state when props change (only if provider exists in fetched list)
   useEffect(() => {
-    if (provider) setSelectedProvider(provider);
-  }, [provider]);
+    if (provider && provider !== 'unknown') {
+      // Only sync if provider exists in our fetched providers list
+      const providerExists = providers.some(p => p.id === provider);
+      if (providerExists) {
+        setSelectedProvider(provider);
+      }
+    }
+  }, [provider, providers]);
 
   useEffect(() => {
-    if (model) setSelectedModelState(model);
-  }, [model]);
+    if (model && model !== 'unknown') {
+      // Only sync if the model exists in the current provider's model list
+      const currentProviderData = providers.find(p => p.id === selectedProvider);
+      if (currentProviderData && currentProviderData.models.includes(model)) {
+        setSelectedModelState(model);
+      }
+    }
+  }, [model, providers, selectedProvider]);
 
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newProvider = e.target.value;
@@ -126,16 +281,59 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newModel = e.target.value;
-    setSelectedModelState(newModel);
-    onModelChange?.(newModel);
+    // Only update if the model actually changed
+    if (newModel !== finalSelectedModel) {
+      setSelectedModelState(newModel);
+      onModelChange?.(newModel);
+    }
   };
 
-  
+  // Render sidebar content sections from providers
+  const renderContentSections = () => {
+    if (sectionsData.size === 0) {
+      return <div className="empty">No content available</div>;
+    }
+
+    // Sort sections by order
+    const sortedSections = Array.from(sectionsData.values()).sort((a, b) =>
+      (a.section.order || 0) - (b.section.order || 0)
+    );
+
+    return sortedSections.map(({ section, data, loading, error }) => {
+      if (loading) {
+        return (
+          <div key={section.id} className="section">
+            <h4>{section.title?.(data) || section.id}</h4>
+            <div className="empty">Loading...</div>
+          </div>
+        );
+      }
+
+      if (error) {
+        return (
+          <div key={section.id} className="section">
+            <h4>{section.title?.(data) || section.id}</h4>
+            <div className="empty" style={{ color: 'var(--error)' }}>{error}</div>
+          </div>
+        );
+      }
+
+      const context = viewRegistry.getContext();
+
+      return (
+        <div key={section.id} className="section">
+          <h4>{section.title?.(data) || section.id}</h4>
+          {section.renderItem(data, context!)}
+        </div>
+      );
+    });
+  };
+
   return (
     <div className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${sidebarCollapsed ? 'collapsed' : ''}`}>
       {/* Desktop collapse button */}
       {!isMobile && (
-        <button 
+        <button
           className="desktop-collapse-btn"
           onClick={onSidebarToggle}
           aria-label="Toggle sidebar"
@@ -143,9 +341,9 @@ const Sidebar: React.FC<SidebarProps> = ({
           {sidebarCollapsed ? '→' : '←'}
         </button>
       )}
-      
+
       {isMobile && (
-        <button 
+        <button
           className="mobile-close-btn"
           onClick={finalOnMobileMenuToggle}
           aria-label="Close sidebar"
@@ -153,11 +351,10 @@ const Sidebar: React.FC<SidebarProps> = ({
           ✕
         </button>
       )}
-      
+
       {!sidebarCollapsed && (
         <>
           <div className="sidebar-header">
-            <h3>🤖 ledit</h3>
             <div className="connection-indicator">
               <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></div>
               <span className="status-text">
@@ -229,10 +426,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                 id="provider-select"
                 value={selectedProvider}
                 onChange={handleProviderChange}
-                disabled={!isConnected}
+                disabled={!isConnected || isLoadingProviders}
                 className="styled-select"
               >
-                {PROVIDERS.map(p => (
+                {providers.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
@@ -253,253 +450,10 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          {/* Context-Aware Content Section */}
-          {currentView === 'editor' ? (
-            /* Editor View - Show File Tree */
-            <div className="context-content">
-              <FileTree
-                onFileSelect={onFileSelect || (() => {})}
-                selectedFile={selectedFile}
-              />
-            </div>
-          ) : currentView === 'chat' ? (
-            /* Chat View - Show Chat-specific content */
-            <div className="context-content">
-              {/* Chat Stats */}
-              <div className="stats">
-                <h4>💬 Chat Stats</h4>
-                <div className="stat-item">
-                  <span className="label">Queries:</span>
-                  <span className="value query-count">{finalStats.queryCount}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="label">Status:</span>
-                  <span className={`value status ${isConnected ? 'connected' : 'disconnected'}`}>
-                    {isConnected ? '🟢' : '🔴'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Recent Files in Chat */}
-              <div className="section">
-                <h4>📁 Recent Files ({finalRecentFiles.length})</h4>
-                <div className="files-list">
-                  {finalRecentFiles.length === 0 ? (
-                    <span className="empty">No files</span>
-                  ) : (
-                    finalRecentFiles.slice(isMobile ? 3 : 5).map((file, index) => (
-                      <div key={index} className="file-item">
-                        <span className={`file-path ${file.modified ? 'modified' : ''}`}>
-                          {file.path.split('/').pop()}
-                        </span>
-                        {file.modified && <span className="badge">✓</span>}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Chat Logs */}
-              <div className="section">
-                <h4>📋 Chat Activity</h4>
-                <div className="logs-list">
-                  {finalRecentLogs.length === 0 ? (
-                    <span className="empty">No activity yet</span>
-                  ) : (
-                    (finalRecentLogs as any[])
-                      .filter((log: any) => {
-                        // Filter out webpack dev server events
-                        let parsedLog = log;
-
-                        // If log is a string, try to parse it as JSON
-                        if (typeof log === 'string') {
-                          try {
-                            parsedLog = JSON.parse(log);
-                          } catch {
-                            // Not valid JSON, keep as is
-                            return true;
-                          }
-                        }
-
-                        // Check if it's a webpack event
-                        if (parsedLog && typeof parsedLog === 'object' && parsedLog.type) {
-                          const webpackEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'invalid', 'warnings', 'errors', 'still-ok'];
-                          return !webpackEvents.includes(parsedLog.type);
-                        }
-                        return true;
-                      })
-                      .slice(-5)
-                      .map((originalLog: any, index: number) => {
-                        // Parse log if it's a string
-                        let log = originalLog;
-                        if (typeof originalLog === 'string') {
-                          try {
-                            log = JSON.parse(originalLog);
-                          } catch {
-                            // Not valid JSON, display as is
-                            return (
-                              <div key={index} className="log-item">
-                                {originalLog}
-                              </div>
-                            );
-                          }
-                        }
-
-                        // At this point, log should be an object
-                        const getLogIcon = (level: string) => {
-                          switch (level) {
-                            case 'success': return '✅';
-                            case 'error': return '❌';
-                            case 'warning': return '⚠️';
-                            case 'info': return 'ℹ️';
-                            default: return '📝';
-                          }
-                        };
-
-                        const getLogSummary = (logEntry: any) => {
-                          try {
-                            switch (logEntry.type) {
-                              case 'query_started':
-                                return `Query: ${logEntry.data?.query?.substring(0, 30) || 'No query'}...`;
-                              case 'tool_execution':
-                                return `${logEntry.data?.tool || 'Unknown'}: ${logEntry.data?.status || 'Unknown'}`;
-                              case 'file_changed':
-                                return `File: ${logEntry.data?.path?.split('/').pop() || 'Unknown'}`;
-                              case 'stream_chunk':
-                                return `Stream: ${logEntry.data?.chunk?.substring(0, 30) || 'No chunk'}...`;
-                              case 'error':
-                                return `Error: ${logEntry.data?.message?.substring(0, 30) || 'Unknown error'}...`;
-                              case 'connection_status':
-                                return logEntry.data?.connected ? 'Connected' : 'Disconnected';
-                              default:
-                                return `${logEntry.type}`;
-                            }
-                          } catch {
-                            return `${logEntry.type}`;
-                          }
-                        };
-
-                        return (
-                          <div key={log.id || index} className="log-item">
-                            <span className="log-icon">{getLogIcon(log.level)}</span>
-                            <span className="log-text">{getLogSummary(log)}</span>
-                          </div>
-                        );
-                      })
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : currentView === 'logs' ? (
-            /* Logs View - Show detailed logs */
-            <div className="context-content">
-              <div className="section">
-                <h4>📋 System Logs</h4>
-                <div className="logs-list logs-expanded">
-                  {finalRecentLogs.length === 0 ? (
-                    <span className="empty">No logs yet</span>
-                  ) : (
-                    (finalRecentLogs as any[])
-                      .filter((log: any) => {
-                        // Filter out webpack dev server events
-                        let logObj = log;
-
-                        // If log is a string, try to parse it as JSON
-                        if (typeof log === 'string') {
-                          try {
-                            logObj = JSON.parse(log);
-                          } catch {
-                            // Not valid JSON, keep as is
-                            return true;
-                          }
-                        }
-
-                        // Check if it's a webpack event
-                        if (logObj && typeof logObj === 'object' && logObj.type) {
-                          const webpackEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'invalid', 'warnings', 'errors', 'still-ok'];
-                          return !webpackEvents.includes(logObj.type);
-                        }
-                        return true;
-                      })
-                      .slice(-10)
-                      .map((log: any, index: number) => {
-                      // Handle both string and LogEntry formats
-                      let parsedLog = log;
-                      let isString = false;
-
-                      if (typeof log === 'string') {
-                        try {
-                          parsedLog = JSON.parse(log);
-                        } catch {
-                          // Not valid JSON, display as is
-                          isString = true;
-                        }
-                      }
-
-                      if (isString) {
-                        return (
-                          <div key={index} className="log-item">
-                            {log}
-                          </div>
-                        );
-                      } else {
-                        // New LogEntry format
-                        const getLogIcon = (level: string) => {
-                          switch (level) {
-                            case 'success': return '✅';
-                            case 'error': return '❌';
-                            case 'warning': return '⚠️';
-                            case 'info': return 'ℹ️';
-                            default: return '📝';
-                          }
-                        };
-
-                        const getLogSummary = (logEntry: any) => {
-                          try {
-                            switch (logEntry.type) {
-                              case 'query_started':
-                                return `Query: ${logEntry.data?.query?.substring(0, 50) || 'No query'}...`;
-                              case 'tool_execution':
-                                return `${logEntry.data?.tool || 'Unknown'}: ${logEntry.data?.status || 'Unknown'}`;
-                              case 'file_changed':
-                                return `File: ${logEntry.data?.path?.split('/').pop() || 'Unknown'}`;
-                              case 'stream_chunk':
-                                return `Stream: ${logEntry.data?.chunk?.substring(0, 50) || 'No chunk'}...`;
-                              case 'error':
-                                return `Error: ${logEntry.data?.message?.substring(0, 50) || 'Unknown error'}...`;
-                              case 'connection_status':
-                                return logEntry.data?.connected ? 'Connected' : 'Disconnected';
-                              default:
-                                return `${logEntry.type}`;
-                            }
-                          } catch {
-                            return `${logEntry.type}`;
-                          }
-                        };
-
-                        return (
-                          <div key={parsedLog.id || index} className="log-item">
-                            <span className="log-icon">{getLogIcon(parsedLog.level)}</span>
-                            <span className="log-text">{getLogSummary(parsedLog)}</span>
-                          </div>
-                        );
-                      }
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Git View - Show git-related content */
-            <div className="context-content">
-              <div className="section">
-                <h4>🔀 Git Status</h4>
-                <div className="files-list">
-                  <span className="empty">Git functionality coming soon</span>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Context-Aware Content Section (from Data-Driven Providers) */}
+          <div className="context-content">
+            {renderContentSections()}
+          </div>
         </>
       )}
     </div>

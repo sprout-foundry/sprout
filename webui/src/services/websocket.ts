@@ -5,8 +5,8 @@ class WebSocketService {
   private ws: WebSocket | null = null;
   private callbacks: EventCallback[] = [];
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000;
+  private maxReconnectAttempts = 2;
+  private reconnectDelay = 2000;
 
   private constructor() {}
 
@@ -18,7 +18,7 @@ class WebSocketService {
   }
 
   connect() {
-    // Use environment variable in development, otherwise use relative URL
+    // Use environment variable if provided, otherwise use relative URL
     const wsUrl = process.env.REACT_APP_WS_URL || (() => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       return `${protocol}//${window.location.host}/ws`;
@@ -50,6 +50,11 @@ class WebSocketService {
 
     this.ws.onerror = (error) => {
       console.error('WebSocket error:', error);
+      // If connection fails immediately, stop trying to reconnect
+      if (this.reconnectAttempts === 0) {
+        console.log('WebSocket failed to connect, will not retry');
+        this.reconnectAttempts = this.maxReconnectAttempts;
+      }
     };
 
     this.ws.onmessage = (event) => {

@@ -28,7 +28,6 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
   return (
     <div className="navigation-bar">
       <div className="nav-tabs">
-        <div className="app-logo">🤖 ledit</div>
         <div className="tab-container">
           {tabs.map(tab => (
             <button

@@ -8,6 +8,8 @@ interface GitStatus {
   staged: GitFile[];
   modified: GitFile[];
   untracked: GitFile[];
+  deleted: GitFile[];
+  renamed: GitFile[];
   clean: boolean;
 }
 
@@ -53,7 +55,19 @@ const GitView: React.FC<GitViewProps> = ({
         
         const data = await response.json();
         if (data.message === 'success') {
-          setGitStatus(data.status);
+          // Handle null values from API
+          const status = data.status || {};
+          setGitStatus({
+            branch: status.branch || 'main',
+            ahead: status.ahead || 0,
+            behind: status.behind || 0,
+            staged: status.staged || [],
+            modified: status.modified || [],
+            untracked: status.untracked || [],
+            deleted: status.deleted || [],
+            renamed: status.renamed || [],
+            clean: !(status.staged?.length || status.modified?.length || status.untracked?.length || status.deleted?.length)
+          });
         } else {
           throw new Error(data.message || 'Unknown error');
         }
@@ -75,6 +89,8 @@ const GitView: React.FC<GitViewProps> = ({
           untracked: [
             { path: 'src/components/NewComponent.tsx', status: '??' }
           ],
+          deleted: [],
+          renamed: [],
           clean: false
         };
         setGitStatus(mockStatus);

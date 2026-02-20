@@ -20,7 +20,7 @@ This document outlines useful tools that would enhance ledit's coding agent capa
 - `search_files` - File content search ✓
 - `web_search`, `fetch_url` - Web capabilities ✓
 - `analyze_ui_screenshot`, `analyze_image_content` - Vision capabilities ✓
-- `add_todo`, `add_todos`, `update_todo_status`, `list_todos`, `get_active_todos_compact`, `archive_completed` - Task management ✓
+- `TodoWrite`, `TodoRead` - Task management ✓
 - `validate_build` - Build validation ✓
 - `view_history`, `rollback_changes` - History/rollback capability ✓
 - `mcp_tools` - MCP server management ✓ (similar to tool-search-tool but more extensible)

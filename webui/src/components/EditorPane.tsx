@@ -5,6 +5,8 @@ import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { autocompletion } from '@codemirror/autocomplete';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter } from '@codemirror/language';
+import { bracketMatching } from '@codemirror/language';
 
 // Language support
 import { javascript } from '@codemirror/lang-javascript';
@@ -13,20 +15,13 @@ import { go } from '@codemirror/lang-go';
 import { json } from '@codemirror/lang-json';
 import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
+import { markdown } from '@codemirror/lang-markdown';
+import { php } from '@codemirror/lang-php';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTheme } from '../contexts/ThemeContext';
 import EditorToolbar from './EditorToolbar';
 import './EditorPane.css';
-
-interface FileResponse {
-  message: string;
-  path: string;
-  content: string;
-  size: number;
-  modified: number;
-  ext: string;
-}
 
 interface EditorPaneProps {
   paneId: string;
@@ -63,10 +58,10 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       case '.js':
       case '.jsx':
       case '.mjs':
-        return [javascript({ typescript: false })];
+        return [javascript({ typescript: false }), javascript()];
       case '.ts':
       case '.tsx':
-        return [javascript({ typescript: true })];
+        return [javascript({ typescript: true }), javascript()];
       case '.py':
         return [python()];
       case '.go':
@@ -78,6 +73,11 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         return [html()];
       case '.css':
         return [css()];
+      case '.md':
+      case '.markdown':
+        return [markdown()];
+      case '.php':
+        return [php()];
       default:
         return [];
     }
@@ -101,25 +101,26 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         throw new Error(`Failed to load file: ${response.statusText}`);
       }
 
-      const data: FileResponse = await response.json();
-      if (data.message === 'success') {
-        setLocalContent(data.content);
-        updateBufferContent(paneId, data.content);
+      // Server returns raw file content as text, not JSON
+      const content = await response.text();
 
-        // Update editor if it exists
-        if (viewRef.current) {
-          viewRef.current.dispatch({
-            changes: {
-              from: 0,
-              to: viewRef.current.state.doc.length,
-              insert: data.content
-            }
-          });
-        }
-      } else {
-        throw new Error(data.message);
+      setLocalContent(content);
+      if (buffer) {
+        updateBufferContent(buffer.id, content);
+      }
+
+      // Update editor if it exists
+      if (viewRef.current) {
+        viewRef.current.dispatch({
+          changes: {
+            from: 0,
+            to: viewRef.current.state.doc.length,
+            insert: content
+          }
+        });
       }
     } catch (err) {
+      console.error('[EditorPane loadFile] Error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
@@ -199,7 +200,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
     // Load file from server
     loadFile(buffer.file.path);
-  }, [buffer, buffer?.id, buffer?.isModified, buffer?.content, buffer?.file, loadFile]);
+  }, [buffer?.id, buffer?.file?.path]); // eslint-disable-line react-hooks/exhaustive-deps -- loadFile intentionally excluded to prevent infinite loop
 
   // Initialize CodeMirror editor
   useEffect(() => {
@@ -208,16 +209,27 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         const newContent = update.state.doc.toString();
-        setLocalContent(newContent);
-        updateBufferContent(paneId, newContent);
-        setBufferModified(paneId, newContent !== buffer?.originalContent);
+        // Only update localContent if this is a user edit (content differs from localContent)
+        // This prevents infinite loop with external content loading
+        if (newContent !== localContent) {
+          setLocalContent(newContent);
+        }
+        if (buffer) {
+          updateBufferContent(buffer.id, newContent);
+          setBufferModified(buffer.id, newContent !== buffer.originalContent);
+        }
 
-        // Update cursor position
-        const selection = update.state.selection.main;
-        if (selection) {
-          const line = update.state.doc.lineAt(selection.head).number;
-          const column = selection.head - update.state.doc.line(selection.head).from;
-          updateBufferCursor(paneId, { line, column });
+        // Update cursor position - wrap in try-catch to handle invalid positions during content loads
+        try {
+          const selection = update.state.selection.main;
+          if (selection && buffer) {
+            const line = update.state.doc.lineAt(selection.head).number;
+            const column = selection.head - update.state.doc.line(selection.head).from;
+            updateBufferCursor(buffer.id, { line, column });
+          }
+        } catch (e) {
+          // Ignore position errors during large content changes
+          console.debug('Cursor position update skipped during content change');
         }
       }
     });
@@ -260,8 +272,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       keymap.of(customKeymap),
       search(),
       autocompletion(),
-      getThemeExtension(),
-      showLineNumbers ? lineNumbers() : [],
+      bracketMatching(),
+      syntaxHighlighting(defaultHighlightStyle),
+      lineNumbers(),
+      foldGutter({
+        openText: '▼',
+        closedText: '▶',
+      }),
+      codeFolding(),
       EditorView.theme({
         '&': {
           height: '100%',
@@ -281,6 +299,23 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
         },
         '.cm-scroller': {
           fontFamily: 'inherit'
+        },
+        '&.cm-focused .cm-activeLine': {
+          backgroundColor: 'rgba(99, 102, 241, 0.1)'
+        },
+        '.cm-activeLineGutter': {
+          backgroundColor: 'rgba(99, 102, 241, 0.1)',
+          color: 'var(--gutter-fg-active, #ccc)'
+        },
+        '.cm-foldGutter': {
+          width: '20px'
+        },
+        '.cm-foldGutter .cm-gutterElement': {
+          padding: '0 4px',
+          fontSize: '12px'
+        },
+        '.cm-foldGutter .cm-gutterElement:hover': {
+          color: 'var(--accent-primary, #6366f1)'
         }
       }),
       EditorView.lineWrapping,
@@ -303,7 +338,8 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [paneId, buffer?.id, buffer?.file?.ext, buffer?.originalContent, showLineNumbers, theme, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport, getThemeExtension, handleToggleLineNumbers, handleSave]); // eslint-disable-line react-hooks/exhaustive-deps -- localContent is intentionally excluded to avoid re-init on every keystroke
+  }, [paneId, buffer?.id, buffer?.file?.ext, showLineNumbers, theme, updateBufferContent, setBufferModified, updateBufferCursor, getLanguageSupport, getThemeExtension]); // eslint-disable-line react-hooks/exhaustive-deps -- handleSave and handleToggleLineNumbers intentionally excluded to prevent infinite re-init loop when buffer changes
+
 
   // Listen for go to line event from toolbar
   useEffect(() => {
@@ -360,8 +396,8 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
       <div className="pane-footer">
         <div className="editor-stats">
-          <span className="line-count">Lines: {localContent.split('\n').length}</span>
-          <span className="char-count">Chars: {localContent.length}</span>
+          <span className="line-count">Lines: {(buffer?.content || '').split('\n').length}</span>
+          <span className="char-count">Chars: {(buffer?.content || '').length}</span>
           <span className="cursor-position">
             Ln {buffer.cursorPosition.line + 1}, Col {buffer.cursorPosition.column + 1}
           </span>

@@ -320,11 +320,22 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	}
 
 	// Read request body
-	content, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
 		return
 	}
+
+	// Parse JSON to extract content field
+	var requestData struct {
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(body, &requestData); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to parse JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	content := []byte(requestData.Content)
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
@@ -384,10 +395,17 @@ func (ws *ReactWebServer) handleTerminalHistory(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Get session ID from query parameter
+	// Get session ID from query parameter (optional)
 	sessionID := r.URL.Query().Get("session_id")
+
+	// If no session ID provided, return empty history
 	if sessionID == "" {
-		http.Error(w, "Session ID is required", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"history":    []string{},
+			"session_id": "",
+			"count":      0,
+		})
 		return
 	}
 
@@ -402,6 +420,7 @@ func (ws *ReactWebServer) handleTerminalHistory(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"history":    history,
 		"session_id": sessionID,
+		"count":      len(history),
 	})
 }
 
@@ -430,5 +449,57 @@ func (ws *ReactWebServer) handleAPITerminalSessions(w http.ResponseWriter, r *ht
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"sessions": sessions,
 		"count":    len(sessions),
+	})
+}
+
+// handleAPIProviders returns list of available providers and their models
+func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Define default providers with their models
+	providers := []map[string]interface{}{
+		{
+			"id":     "openai",
+			"name":   "OpenAI",
+			"models": []string{"gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"},
+		},
+		{
+			"id":     "anthropic",
+			"name":   "Anthropic",
+			"models": []string{"claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"},
+		},
+		{
+			"id":     "ollama",
+			"name":   "Ollama",
+			"models": []string{"llama3.2", "llama3.1", "codellama", "mistral", "deepseek-coder"},
+		},
+		{
+			"id":     "deepinfra",
+			"name":   "DeepInfra",
+			"models": []string{"mistralai/Mixtral-8x7B-Instruct-v0.1", "deepseek-ai/DeepSeek-V3"},
+		},
+		{
+			"id":     "cerebras",
+			"name":   "Cerebras",
+			"models": []string{"llama3.1-70b", "llama3.1-8b"},
+		},
+		{
+			"id":     "zai",
+			"name":   "Z.AI",
+			"models": []string{"glm-5", "glm-4", "glm-3-turbo"},
+		},
+		{
+			"id":     "minimax",
+			"name":   "MiniMax",
+			"models": []string{"MiniMax-M2", "MiniMax-M2.1", "MiniMax-M2.5", "MiniMax-M2-Stable"},
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"providers": providers,
 	})
 }

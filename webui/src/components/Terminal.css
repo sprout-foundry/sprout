@@ -266,8 +266,8 @@
   outline-offset: -1px;
 }
 
-/* Animation for expand/collapse */
-.terminal-container {
+/* Animation for expand/collapse - only on initial mount */
+.terminal-container.initial-mount {
   animation: slideUp 0.3s ease-out;
 }
 

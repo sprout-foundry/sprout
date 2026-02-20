@@ -64,50 +64,11 @@ func (c *MCPConfig) UnmarshalJSON(data []byte) error {
 // DefaultMCPConfig returns the default MCP configuration
 func DefaultMCPConfig() MCPConfig {
 	return MCPConfig{
-		Enabled:      false, // Disabled by default until user configures it
+		Enabled:      true, // Enabled by default
 		Servers:      make(map[string]MCPServerConfig),
-		AutoStart:    true,
+		AutoStart:    false, // Don't auto-start until user configures servers
 		AutoDiscover: true,
 		Timeout:      30 * time.Second,
-	}
-}
-
-// GetGitHubServerConfig returns a default GitHub MCP server configuration
-func GetGitHubServerConfig() MCPServerConfig {
-	return MCPServerConfig{
-		Name:        "github",
-		Command:     "npx",
-		Args:        []string{"-y", "@modelcontextprotocol/server-github"},
-		AutoStart:   true,
-		MaxRestarts: 3,
-		Timeout:     30 * time.Second,
-		Env: map[string]string{
-			"GITHUB_PERSONAL_ACCESS_TOKEN": "", // User needs to set this
-		},
-	}
-}
-
-// GetPlaywrightServerConfig returns a default Playwright MCP server configuration
-func GetPlaywrightServerConfig() MCPServerConfig {
-	return MCPServerConfig{
-		Name:        "playwright",
-		Command:     "npx",
-		Args:        []string{"-y", "@playwright/mcp"},
-		AutoStart:   true,
-		MaxRestarts: 3,
-		Timeout:     60 * time.Second, // Longer timeout for browser operations
-	}
-}
-
-// GetPlaywrightServerConfigUvx returns a Playwright MCP server configuration using uvx
-func GetPlaywrightServerConfigUvx() MCPServerConfig {
-	return MCPServerConfig{
-		Name:        "playwright-uvx",
-		Command:     "uvx",
-		Args:        []string{"playwright-mcp-server"},
-		AutoStart:   true,
-		MaxRestarts: 3,
-		Timeout:     60 * time.Second, // Longer timeout for browser operations
 	}
 }
 
@@ -157,9 +118,17 @@ func LoadMCPConfig() (MCPConfig, error) {
 	// Check for GitHub token and enable GitHub server if available
 	if githubToken := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN"); githubToken != "" && mcpConfig.AutoDiscover {
 		if _, exists := mcpConfig.Servers["github"]; !exists {
-			githubConfig := GetGitHubServerConfig()
-			githubConfig.Env["GITHUB_PERSONAL_ACCESS_TOKEN"] = githubToken
-			mcpConfig.Servers["github"] = githubConfig
+			mcpConfig.Servers["github"] = MCPServerConfig{
+				Name:        "github",
+				Command:     "npx",
+				Args:        []string{"-y", "@modelcontextprotocol/server-github"},
+				AutoStart:   true,
+				MaxRestarts: 3,
+				Timeout:     30 * time.Second,
+				Env: map[string]string{
+					"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
+				},
+			}
 			mcpConfig.Enabled = true // Auto-enable if GitHub token is available
 		}
 	}
@@ -170,7 +139,14 @@ func LoadMCPConfig() (MCPConfig, error) {
 		if _, exists := mcpConfig.Servers["playwright"]; !exists {
 			// Try to detect if playwright packages are available
 			if isPlaywrightAvailable() {
-				mcpConfig.Servers["playwright"] = GetPlaywrightServerConfig()
+				mcpConfig.Servers["playwright"] = MCPServerConfig{
+					Name:        "playwright",
+					Command:     "npx",
+					Args:        []string{"-y", "@playwright/mcp"},
+					AutoStart:   true,
+					MaxRestarts: 3,
+					Timeout:     60 * time.Second,
+				}
 				mcpConfig.Enabled = true
 			}
 		}
@@ -204,7 +180,7 @@ func isPlaywrightAvailable() bool {
 }
 
 // SaveMCPConfig saves MCP configuration to file
-func SaveMCPConfig(mcpConfig MCPConfig) error {
+func SaveMCPConfig(mcpConfig *MCPConfig) error {
 	configDir, err := getConfigDir()
 	if err != nil {
 		return fmt.Errorf("failed to get config directory: %w", err)
@@ -230,11 +206,17 @@ func SaveMCPConfig(mcpConfig MCPConfig) error {
 
 // AddGitHubServer adds a GitHub MCP server to the configuration
 func (c *MCPConfig) AddGitHubServer(githubToken string) {
-	githubConfig := GetGitHubServerConfig()
-	if githubToken != "" {
-		githubConfig.Env["GITHUB_PERSONAL_ACCESS_TOKEN"] = githubToken
+	c.Servers["github"] = MCPServerConfig{
+		Name:        "github",
+		Command:     "npx",
+		Args:        []string{"-y", "@modelcontextprotocol/server-github"},
+		AutoStart:   true,
+		MaxRestarts: 3,
+		Timeout:     30 * time.Second,
+		Env: map[string]string{
+			"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
+		},
 	}
-	c.Servers["github"] = githubConfig
 	c.Enabled = true
 }
 

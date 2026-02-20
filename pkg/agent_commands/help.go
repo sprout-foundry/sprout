@@ -24,102 +24,55 @@ func (h *HelpCommand) Description() string {
 // Execute runs the help command
 func (h *HelpCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Print(`
-🤖 Coder Agent
+🤖 Ledit - AI Coding Agent
 
-A command-line coding assistant using OpenAI's gpt-oss-120b model with 8 core tools:
-- shell_command: Execute shell commands for exploration and testing
-- read_file: Read file contents
-- write_file: Create new files
-- edit_file: Modify existing files with precise string replacement
-- TodoWrite: Create and manage structured task lists
-- TodoRead: View current task list
+A command-line coding assistant that uses AI to help you build software.
 
 USAGE:
   Interactive mode:     ./ledit
   Non-interactive:      ./ledit "your query here"
-  Local inference:      ./ledit --local "your query"
-  Custom model:         ./ledit --model=meta-llama/Meta-Llama-3.1-70B-Instruct "your query"
+  Custom model:         ./ledit --provider openrouter --model qwen/qwen3-coder-30b "your query"
   Piped input:         echo "your query" | ./ledit
-  Help:                ./ledit --help
-
-INPUT FEATURES:
-  - Arrow keys for navigation and command history
-  - Backspace/Delete for editing
-  - Tab for completion (where available)
-  - Ctrl+C to exit
 
 EXAMPLES:
   # Interactive mode
   ./ledit
-  > Create a simple Go HTTP server in server.go
-  
-  # Non-interactive mode
-  ./ledit "Create a simple Go HTTP server in server.go"
-  
-  # Multi-word prompts (use quotes)
-  ./ledit "Fix the bug in main.go and add unit tests"
-  
-  # Local inference
-  ./ledit --local "Create a Python calculator"
-  
-  # Use a different model
-  ./ledit --model=meta-llama/Meta-Llama-3.1-70B-Instruct "Create a Python calculator"
-  
+  > Create a simple Go HTTP server
+
+  # Non-interactive
+  ./ledit "Create a simple Go HTTP server"
+
+  # Use specific provider/model
+  ./ledit --provider openrouter --model qwen/qwen3-coder-30b "Fix the bug"
+
   # Piped input
-  echo "Fix the bug in main.go where the variable is undefined" | ./ledit
+  echo "Explain this code" | ./ledit
 
-ENVIRONMENT:
-  DEEPINFRA_API_KEY: API token for DeepInfra models
-  OLLAMA_API_KEY: API token for Ollama Turbo models (optional, enables remote acceleration)
-  LEDIT_DEBUG_HANG: Enable hang detection and monitoring (true/false)
-  LEDIT_HANG_TIMEOUT: Timeout for hang detection (e.g., "5m", "300s")
+AVAILABLE TOOLS:
+  • shell_command - Execute shell commands
+  • read_file - Read file contents  
+  • write_file - Create new files
+  • edit_file - Modify existing files
+  • TodoWrite/TodoRead - Task management
+  • run_subagent - Delegate to subagent
+  • run_parallel_subagents - Run multiple subagents in parallel
+  • list_skills/activate_skill - Load skill instructions into context
 
-MODEL OPTIONS:
-  🏠 Local (Ollama):    Various models - FREE, runs locally
-  ⚡ Turbo (Ollama):    Remote acceleration with datacenter-grade hardware
-     • gpt-oss:20b - 128k context
-     • gpt-oss:120b - 256k context  
-     • deepseek-v3.1:671b - 128k context
-  ☁️  Remote (DeepInfra): Multiple models available:
-     • openai/gpt-oss-120b (default) - Uses harmony syntax
-     • meta-llama/Meta-Llama-3.1-70B-Instruct - Standard format
-     • microsoft/WizardLM-2-8x22B - Standard format
-     • And many others - check DeepInfra docs for full list
+KEY COMMANDS:
+  /help       - Show this help message
+  /commit     - Interactive commit workflow
+  /subagent-provider - Configure subagent provider
+  /subagent-model - Configure subagent model
+  /subagent-personas - List available subagent personas
+  /subagent-persona - Configure a specific persona
 
-SETUP:
-  Local:  ollama pull <model-name>
-  Turbo:  export OLLAMA_API_KEY="your_api_key_here" (get from https://ollama.com/settings/keys)
-  Remote: export DEEPINFRA_API_KEY="your_api_key_here"
-
-The agent follows a systematic exploration process and will autonomously:
-- Explore your codebase using shell commands
-- Read and understand relevant files
-- Make precise modifications using the edit tool
-- Create new files when needed
-- Test and verify changes
-- Continue iterating until the task is complete
-
-Type 'help' during interactive mode for this help message.
 Type 'exit' or 'quit' to end the session.
 
-DEBUGGING HANGS:
-  If ledit appears to hang or freeze:
-  • Run: ./debug_hanging.sh (to analyze current state)
-  • Enable hang detection: ./debug_hang_mode.sh
-  • Check logs: less .ledit/workspace.log
-  • Monitor progress: tail -f .ledit/runlogs/run-*.jsonl
-
-────────────────────────────────────────────────────────────────
-
-🤖 SLASH COMMANDS:
-  • Press TAB after typing '/' for tab completion
-  • Type '/' and press ENTER for interactive command selection
-  • Use '!' to execute shell commands directly (matches other tools)
-    Example: !ls -la executes the same as /exec ls -la
 `)
 
-	// List all registered commands at the bottom for easy access
+	// List all registered commands
 	commands := h.registry.ListCommands()
+	fmt.Println("AVAILABLE SLASH COMMANDS:")
 	for _, cmd := range commands {
 		fmt.Printf("  /%s - %s\n", cmd.Name(), cmd.Description())
 	}

@@ -10,8 +10,30 @@ class TerminalWebSocketService {
   private sessionId: string | null = null;
   private isConnected = false;
   private eventHandler: TerminalEventCallback | null = null;
+  private pingInterval: NodeJS.Timeout | null = null;
+  private intentionalClose = false;
 
   private constructor() {}
+
+  private startPingInterval() {
+    this.stopPingInterval();
+    this.pingInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000);
+  }
+
+  private stopPingInterval() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  private handlePong() {
+    // Got pong response, connection is alive
+  }
 
   static getInstance(): TerminalWebSocketService {
     if (!TerminalWebSocketService.instance) {
@@ -47,23 +69,26 @@ class TerminalWebSocketService {
       console.log('Terminal WebSocket connected');
       this.reconnectAttempts = 0;
       this.isConnected = true;
+      this.startPingInterval();
       this.notifyCallbacks({ type: 'connection_status', data: { connected: true } });
     };
 
     this.ws.onclose = (event) => {
       console.log('Terminal WebSocket disconnected:', event);
+      this.stopPingInterval();
       this.isConnected = false;
       this.sessionId = null;
       this.notifyCallbacks({ type: 'connection_status', data: { connected: false } });
 
-      // Try to reconnect
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      // Only reconnect if not intentionally closed
+      if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
         setTimeout(() => {
           console.log(`Attempting terminal reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
           this.connect();
         }, this.reconnectDelay * this.reconnectAttempts);
       }
+      this.intentionalClose = false;
     };
 
     this.ws.onerror = (error) => {
@@ -75,6 +100,20 @@ class TerminalWebSocketService {
       try {
         const data = JSON.parse(event.data);
         console.log('Terminal WebSocket message:', data);
+        
+        // Handle pong response
+        if (data.type === 'pong') {
+          this.handlePong();
+          return;
+        }
+        
+        // Handle server ping
+        if (data.type === 'ping') {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'pong' }));
+          }
+          return;
+        }
         
         // Handle session creation
         if (data.type === 'session_created') {
@@ -90,6 +129,7 @@ class TerminalWebSocketService {
   }
 
   disconnect() {
+    this.intentionalClose = true;
     if (this.ws) {
       this.reconnectAttempts = this.maxReconnectAttempts; // Prevent auto-reconnect
       this.ws.close();

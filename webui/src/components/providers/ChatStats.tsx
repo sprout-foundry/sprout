@@ -14,13 +14,14 @@ interface ChatStatsProps {
 }
 
 export const ChatStats: React.FC<ChatStatsProps> = ({ stats }) => {
-  const queryCount = stats?.queryCount || 0;
+  const isConnected = stats?.queryCount !== undefined;
 
   return (
     <div className="stats">
       <div className="stat-item">
-        <span className="label">Queries:</span>
-        <span className="value query-count">{queryCount}</span>
+        <span className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
+          {isConnected ? 'Connected' : 'Disconnected'}
+        </span>
       </div>
     </div>
   );

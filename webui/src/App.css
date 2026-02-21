@@ -163,28 +163,20 @@ html, body, #root {
   background: rgba(99, 102, 241, 0.25);
 }
 
-/* Editor View Layout */
+/* Editor View Layout - Using Grid */
 .editor-view {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: auto 1fr;
   overflow: hidden;
   background: var(--bg-secondary);
 }
 
-.editor-content {
-  flex: 1;
-  display: flex;
-  gap: 1px;
-  background: var(--bg-elevated);
-  overflow: hidden;
-}
-
 .editor-sidebar {
-  width: 280px;
+  grid-row: 1 / -1;
   min-width: 250px;
   max-width: 350px;
-  flex-shrink: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -198,17 +190,59 @@ html, body, #root {
 }
 
 .editor-main {
-  flex: 1;
-  min-width: 0;
+  grid-column: 2;
+  grid-row: 1 / -1;
+  display: grid;
+  grid-template-rows: auto 1fr;
   overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.pane-controls {
+  grid-row: 1;
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+  justify-content: flex-end;
+}
+
+.panes-container {
+  grid-row: 2;
+  display: grid;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.panes-container.layout-split-vertical {
+  grid-template-columns: 1fr 1fr;
+}
+
+.panes-container.layout-split-horizontal {
+  grid-template-rows: 1fr 1fr;
+}
+
+.panes-container.layout-split-grid {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.editor-pane-wrapper {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.editor-pane-wrapper.active {
   background: var(--bg-secondary);
 }
 
 .editor-main .code-editor {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
+  min-height: 0;
 }
 
 /* Pane Controls */

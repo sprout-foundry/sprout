@@ -220,7 +220,7 @@ const Terminal: React.FC<TerminalProps> = ({
   // Add welcome message on first expand
   useEffect(() => {
     if (isExpanded && lines.length === 0) {
-      addLine('output', 'Welcome to Ledit Terminal 🖥️');
+      addLine('output', 'Welcome to Ledit Terminal');
       addLine('output', 'Type "help" for available commands or "exit" to close');
     }
   }, [isExpanded, lines.length, addLine]);
@@ -240,7 +240,7 @@ const Terminal: React.FC<TerminalProps> = ({
     <div className={`terminal-container ${isExpanded ? 'expanded' : 'collapsed'} ${hasMountedRef.current ? 'initial-mount' : ''}`}>
       <div className="terminal-header">
         <div className="terminal-title">
-          <span className="terminal-icon">💻</span>
+          <span className="terminal-icon">$</span>
           <span>Terminal</span>
           {!terminalConnected && <span className="connection-status disconnected">●</span>}
           {terminalConnected && <span className="connection-status connected">●</span>}

@@ -108,7 +108,7 @@ const Chat: React.FC<ChatProps> = ({
   return (
     <>
       <div className="chat-header">
-        <h2>💬 AI Assistant</h2>
+        <h2>AI Assistant</h2>
         {isProcessing && (
           <div className="header-status">
             <span className="status-dot processing"></span>

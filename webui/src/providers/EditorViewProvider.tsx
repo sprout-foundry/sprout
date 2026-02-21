@@ -32,7 +32,7 @@ export class EditorViewProvider implements ContentProvider {
             />
           );
         },
-        title: (files: any[]) => `📁 Files (${files.length})`,
+        title: (files: any[]) => `Files (${files.length})`,
         order: 1
       }
     ];
@@ -72,15 +72,8 @@ const FilesListWithSearch: React.FC<FilesListWithSearchProps> = ({ files, onFile
   }, [files, searchQuery]);
 
   const getFileIcon = (ext: string, isDir: boolean) => {
-    if (isDir) return '📁';
-    const iconMap: { [key: string]: string } = {
-      'js': '📜', 'jsx': '⚛️', 'ts': '📘', 'tsx': '⚛️',
-      'go': '🐹', 'py': '🐍', 'rs': '🦀', 'java': '☕',
-      'md': '📝', 'json': '📋', 'yaml': '⚙️', 'yml': '⚙️',
-      'txt': '📄', 'css': '🎨', 'html': '🌐', 'sh': '💻',
-      'mod': '📦', 'sum': '🔒'
-    };
-    return iconMap[ext] || '📄';
+    if (isDir) return '>';
+    return '';
   };
 
   return (

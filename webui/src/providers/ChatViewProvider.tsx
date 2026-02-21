@@ -58,14 +58,7 @@ export class ChatViewProvider implements ContentProvider {
 
                 const getFileIcon = (ext: string, isDir: boolean) => {
                   if (isDir) return '>';
-                  const iconMap: { [key: string]: string } = {
-                    'js': '.js', 'jsx': '.jsx', 'ts': '.ts', 'tsx': '.tsx',
-                    'go': '.go', 'py': '.py', 'rs': '.rs', 'java': '.java',
-                    'md': '.md', 'json': '{}', 'yaml': '.yml', 'yml': '.yml',
-                    'txt': '.txt', 'css': '.css', 'html': '.html', 'sh': '.sh',
-                    'mod': '.mod', 'sum': '.sum'
-                  };
-                  return iconMap[ext] || '';
+                  return '';
                 };
 
                 return (
@@ -94,7 +87,7 @@ export class ChatViewProvider implements ContentProvider {
             </div>
           );
         },
-        title: (files: any[]) => `📁 Files (${files.length})`,
+        title: (files: any[]) => `Files (${files.length})`,
         order: 2
       },
       {
@@ -110,11 +103,11 @@ export class ChatViewProvider implements ContentProvider {
 
           const getLogIcon = (level: string) => {
             switch (level) {
-              case 'success': return '✅';
-              case 'error': return '❌';
-              case 'warning': return '⚠️';
-              case 'info': return 'ℹ️';
-              default: return '📝';
+              case 'success': return '✓';
+              case 'error': return '✕';
+              case 'warning': return '!';
+              case 'info': return 'i';
+              default: return '•';
             }
           };
 
@@ -167,7 +160,7 @@ export class ChatViewProvider implements ContentProvider {
             </div>
           );
         },
-        title: () => `📋 Chat Activity`,
+        title: () => `Activity`,
         order: 3
       }
     ];

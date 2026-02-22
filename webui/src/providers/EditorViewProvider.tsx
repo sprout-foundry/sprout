@@ -72,8 +72,38 @@ const FilesListWithSearch: React.FC<FilesListWithSearchProps> = ({ files, onFile
   }, [files, searchQuery]);
 
   const getFileIcon = (ext: string, isDir: boolean) => {
-    if (isDir) return '>';
-    return '';
+    if (isDir) return '📁';
+    
+    const extension = ext?.toLowerCase();
+    switch (extension) {
+      case '.js':
+      case '.jsx':
+        return '🟨';
+      case '.ts':
+      case '.tsx':
+        return '🔷';
+      case '.go':
+        return '🐹';
+      case '.py':
+        return '🐍';
+      case '.json':
+        return '📋';
+      case '.html':
+        return '🌐';
+      case '.css':
+        return '🎨';
+      case '.md':
+        return '📝';
+      case '.txt':
+        return '📄';
+      case '.yml':
+      case '.yaml':
+        return '⚙️';
+      case '.sh':
+        return '🐚';
+      default:
+        return '📄';
+    }
   };
 
   return (
@@ -85,6 +115,7 @@ const FilesListWithSearch: React.FC<FilesListWithSearchProps> = ({ files, onFile
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="files-search-input"
+          aria-label="Search files"
         />
         {searchQuery && (
           <button 
@@ -107,27 +138,24 @@ const FilesListWithSearch: React.FC<FilesListWithSearchProps> = ({ files, onFile
             const extension = fileName.split('.').pop()?.toLowerCase() || '';
             const isDirectory = file.path.endsWith('/') || !fileName.includes('.');
 
+            const handleClick = () => {
+              onFileClick?.(file.path);
+            };
+
             return (
-              <div
+              <button
                 key={index}
-                className="file-item clickable"
+                type="button"
+                className="file-item"
                 title={file.path}
-                role="button"
-                tabIndex={0}
-                onClick={() => onFileClick?.(file.path)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onFileClick?.(file.path);
-                  }
-                }}
+                onClick={handleClick}
               >
                 <span className="file-icon">{getFileIcon(extension, isDirectory)}</span>
                 <span className={`file-path ${file.modified ? 'modified' : ''}`}>
                   {fileName}
                 </span>
                 {file.modified && <span className="badge">✓</span>}
-              </div>
+              </button>
             );
           })
         )}

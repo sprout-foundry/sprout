@@ -170,6 +170,16 @@
   border-left-color: var(--accent-primary);
 }
 
+.file-item:focus {
+  outline: none;
+  background: var(--bg-elevated);
+}
+
+.file-item:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
 .file-icon {
   font-size: var(--text-md);
   width: 20px;

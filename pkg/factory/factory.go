@@ -209,9 +209,8 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 			}
 		}(),
 		Streaming: providers.StreamingConfig{
-			Format:         "sse",
-			ChunkTimeoutMs: 120000, // 2 minutes - reasonable for LLM streaming
-			DoneMarker:     "[DONE]",
+			Format:     "sse",
+			DoneMarker: "[DONE]",
 		},
 		Models: providers.ModelConfig{
 			DefaultContextLimit: customProvider.ContextSize,
@@ -229,6 +228,13 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 			InputTokenCost:  0.001,
 			OutputTokenCost: 0.002,
 		},
+	}
+
+	// Set chunk timeout - use custom value if provided, otherwise default to 5 minutes
+	if customProvider.ChunkTimeoutMs > 0 {
+		genericConfig.Streaming.ChunkTimeoutMs = customProvider.ChunkTimeoutMs
+	} else {
+		genericConfig.Streaming.ChunkTimeoutMs = 300000 // 5 minutes default
 	}
 
 	// Create the provider using the generic config

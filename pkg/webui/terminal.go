@@ -203,10 +203,14 @@ func (tm *TerminalManager) ExecuteCommand(sessionID, command string) error {
 
 	// Write command to PTY
 	if session.Pty != nil {
-		_, err := session.Pty.WriteString(command)
+		fmt.Printf("Terminal %s: Writing command: %q\n", sessionID, command)
+		n, err := session.Pty.WriteString(command)
+		fmt.Printf("Terminal %s: Wrote %d bytes, err: %v\n", sessionID, n, err)
 		if err != nil {
 			return fmt.Errorf("failed to write command to PTY: %w", err)
 		}
+		// Flush to ensure command is sent
+		session.Pty.Sync()
 	} else {
 		// Fallback for systems without PTY
 		return fmt.Errorf("no PTY available for session %s", sessionID)
@@ -281,6 +285,7 @@ func (tm *TerminalManager) monitorSession(session *TerminalSession) {
 				session.LastUsed = time.Now()
 				output := make([]byte, n)
 				copy(output, buf[:n])
+				fmt.Printf("Terminal %s: Read %d bytes from PTY: %q\n", session.ID, n, string(output))
 
 				// Send to output channel (non-blocking)
 				select {

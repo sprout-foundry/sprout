@@ -160,6 +160,7 @@ type CustomProviderConfig struct {
 	RequiresAPIKey bool                        `json:"requires_api_key"`
 	APIKey         string                      `json:"api_key,omitempty"`            // Stored in config (not recommended for production)
 	EnvVar         string                      `json:"env_var,omitempty"`            // Environment variable name for API key
+	ChunkTimeoutMs int                         `json:"chunk_timeout_ms,omitempty"`   // Streaming chunk timeout in milliseconds
 	Conversion     providers.MessageConversion `json:"message_conversion,omitempty"` // Message conversion configuration
 }
 

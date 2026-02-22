@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
@@ -226,10 +226,26 @@ const CommandInput: React.FC<CommandInputProps> = ({
         handleTabCompletion();
         break;
       case 'Enter':
-        if (e.shiftKey && multiline) {
-          // Shift+Enter for multiline in multiline mode
-          return;
-        } else if (!e.shiftKey) {
+        if (multiline) {
+          if (e.shiftKey) {
+            e.preventDefault();
+            const textarea = inputRef.current;
+            if (!textarea) return;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const currentValue = textarea.value;
+            const newValue = currentValue.substring(0, start) + '\n' + currentValue.substring(end);
+            if (onChange) onChange(newValue);
+            setTimeout(() => {
+              if (inputRef.current) {
+                inputRef.current.setSelectionRange(start + 1, start + 1);
+              }
+            }, 0);
+          } else {
+            e.preventDefault();
+            handleSend();
+          }
+        } else {
           e.preventDefault();
           handleSend();
         }
@@ -340,19 +356,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
     }, 100);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-
-    if (onChange) {
-      onChange(newValue);
-    }
-
-    // Reset history navigation when user types
-    if (isHistoryMode) {
-      resetHistoryNavigation();
-    }
-  };
-
   const handleCompositionStart = () => {
     // Prevent Enter key from sending during IME composition
   };
@@ -392,7 +395,18 @@ const CommandInput: React.FC<CommandInputProps> = ({
       <textarea
         ref={inputRef}
         value={value}
-        onChange={handleChange}
+        onChange={(e) => {
+          const newValue = e.target.value;
+          if (onChange) {
+            onChange(newValue);
+          }
+          requestAnimationFrame(() => {
+            if (inputRef.current) {
+              const length = inputRef.current.value.length;
+              inputRef.current.setSelectionRange(length, length);
+            }
+          });
+        }}
         onKeyDown={handleKeyDown}
         onCompositionStart={handleCompositionStart}
         onCompositionEnd={handleCompositionEnd}
@@ -401,6 +415,14 @@ const CommandInput: React.FC<CommandInputProps> = ({
         className={`input-field autoscaling ${isHistoryMode ? 'history-mode' : ''}`}
         rows={1}
         spellCheck={false}
+        data-testid="command-input"
+        onInput={(e) => {
+          // Native event handler for better test compatibility
+          const newValue = (e.target as HTMLTextAreaElement).value;
+          if (onChange) {
+            onChange(newValue);
+          }
+        }}
       />
 
       <div className="input-actions">
@@ -429,12 +451,25 @@ const CommandInput: React.FC<CommandInputProps> = ({
           onClick={handleSend}
           disabled={disabled || !(value?.trim())}
           className="send-button"
+          aria-label="Send message"
         >
-          Send
+          <span className="send-icon">➤</span>
+          <span className="send-text">Send</span>
         </button>
+      </div>
+
+      <div className="keyboard-hints">
+        <span><kbd>Enter</kbd> Send</span>
+        <span><kbd>Shift+Enter</kbd> New line</span>
+        <span><kbd>↑↓</kbd> History</span>
+        <span><kbd>Esc</kbd> Clear</span>
       </div>
     </div>
   );
 };
 
-export default CommandInput;
+// Memoize to prevent unnecessary re-renders that cause cursor jumping
+const MemoizedCommandInput = memo(CommandInput);
+MemoizedCommandInput.displayName = 'CommandInput';
+
+export default MemoizedCommandInput;

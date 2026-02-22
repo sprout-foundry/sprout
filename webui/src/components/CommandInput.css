@@ -15,15 +15,28 @@
 }
 
 .input-header {
-  display: none; /* Hidden for cleaner look */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px 0;
+  background: transparent;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 8px;
 }
 
 .input-info {
-  display: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .history-indicator {
-  display: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--accent-warning);
+  font-size: var(--text-xs);
+  font-weight: 500;
 }
 
 .multiline-indicator {
@@ -39,11 +52,42 @@
 }
 
 .history-exit-btn {
-  display: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 10px;
+  transition: all 0.15s;
+}
+
+.history-exit-btn:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .keyboard-hints {
-  display: none; /* Hidden for cleaner modern look */
+  display: flex;
+  gap: 12px;
+  padding: 6px 16px 8px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.keyboard-hints kbd {
+  background: var(--bg-surface);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  margin-right: 3px;
+  border: 1px solid var(--border-subtle);
 }
 
 .hint {
@@ -126,13 +170,24 @@
   background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
   color: #fff;
   border: none;
-  padding: 10px 20px;
+  padding: 10px 16px;
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
   font-size: 14px;
   transition: all 0.2s ease;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.send-icon {
+  font-size: 14px;
+}
+
+.send-text {
+  font-size: 14px;
 }
 
 .send-button:hover:not(:disabled) {

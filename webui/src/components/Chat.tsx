@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import CommandInput from './CommandInput';
 import { stripAnsiCodes } from '../utils/ansi';
 import './Chat.css';
@@ -105,10 +105,39 @@ const Chat: React.FC<ChatProps> = ({
     }
   };
 
+  const formatTime = (date: Date) => {
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const copyToClipboard = useCallback((text: string) => {
+    navigator.clipboard.writeText(text);
+  }, []);
+
+  const renderContent = (content: string) => {
+    const parts = content.split(/(```[\s\S]*?```)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('```') && part.endsWith('```')) {
+        const code = part.slice(3, -3).trim();
+        const firstNewline = code.indexOf('\n');
+        const language = firstNewline > 0 ? code.slice(0, firstNewline) : '';
+        const codeContent = firstNewline > 0 ? code.slice(firstNewline + 1) : code;
+        return (
+          <pre key={i} className="code-block">
+            {language && <span className="code-language">{language}</span>}
+            <code>{codeContent}</code>
+          </pre>
+        );
+      }
+      return stripAnsiCodes(part).split('\n').map((line, j) => (
+        <div key={`${i}-${j}`} className="message-line">{line || '\u00A0'}</div>
+      ));
+    });
+  };
+
   return (
     <>
       <div className="chat-header">
-        <h2>AI Assistant</h2>
+        <h2><span className="header-icon">🤖</span>AI Assistant</h2>
         {isProcessing && (
           <div className="header-status">
             <span className="status-dot processing"></span>
@@ -120,19 +149,36 @@ const Chat: React.FC<ChatProps> = ({
       <div className="chat-container" ref={chatContainerRef}>
         {messages.length === 0 ? (
           <div className="welcome-message">
-            Welcome to ledit! I'm ready to help you with code analysis, editing, and more.
+            <div className="welcome-icon">🤖</div>
+            <div className="welcome-text">
+              Welcome to ledit! I'm ready to help you with code analysis, editing, and more.
+            </div>
+            <div className="welcome-hint">
+              Try asking: "Show me the project structure" or "Find the main function"
+            </div>
           </div>
         ) : (
           messages.map((message) => (
             <div
               key={message.id}
               className={`message ${message.type}`}
+              role={message.type === 'user' ? 'user-message' : 'assistant-message'}
+              aria-label={`${message.type} message`}
             >
               <div className="message-bubble">
+                <button
+                  className="copy-button"
+                  onClick={() => copyToClipboard(message.content)}
+                  title="Copy message"
+                  aria-label="Copy message"
+                >
+                  📋
+                </button>
                 <div className="message-content">
-                  {stripAnsiCodes(message.content).split('\n').map((line, index) => (
-                    <div key={index}>{line || '\u00A0'}</div>
-                  ))}
+                  {renderContent(message.content)}
+                </div>
+                <div className="message-timestamp">
+                  {formatTime(message.timestamp)}
                 </div>
               </div>
             </div>

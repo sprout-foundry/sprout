@@ -17,6 +17,7 @@ import (
 
 // handleAPIQuery handles API queries to the agent
 func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request) {
+	log.Printf("handleAPIQuery called")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -27,14 +28,18 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
+		log.Printf("handleAPIQuery: invalid JSON: %v", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	if query.Query == "" {
+		log.Printf("handleAPIQuery: empty query")
 		http.Error(w, "Query is required", http.StatusBadRequest)
 		return
 	}
+
+	log.Printf("handleAPIQuery: processing query: %s", query.Query)
 
 	// Increment query count
 	ws.mutex.Lock()
@@ -47,11 +52,14 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 	// Run the query in a goroutine
 	go func() {
+		log.Printf("handleAPIQuery: calling ProcessQuery")
 		response, err := ws.agent.ProcessQuery(query.Query)
 		if err != nil {
+			log.Printf("handleAPIQuery: ProcessQuery error: %v", err)
 			errorCh <- err
 			return
 		}
+		log.Printf("handleAPIQuery: ProcessQuery returned: %s", response)
 		responseCh <- response
 	}()
 

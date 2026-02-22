@@ -2,6 +2,7 @@ package webui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -260,10 +261,19 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	defer ws.connections.Delete(conn)
 
 	// Send session created message
-	safeConn.WriteJSON(map[string]interface{}{
+	log.Printf("Terminal %s about to send session_created message", sessionID)
+	msg := map[string]interface{}{
 		"type": "session_created",
 		"data": map[string]string{"session_id": sessionID},
-	})
+	}
+	msgBytes, _ := json.Marshal(msg)
+	log.Printf("Terminal %s message bytes: %s", sessionID, string(msgBytes))
+
+	if err := safeConn.WriteJSON(msg); err != nil {
+		log.Printf("Terminal %s FAILED to send session_created: %v", sessionID, err)
+	} else {
+		log.Printf("Terminal %s successfully sent session_created", sessionID)
+	}
 
 	// Use context for proper cleanup coordination
 	ctx, cancel := context.WithCancel(r.Context())
@@ -360,6 +370,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 					continue
 				}
 
+				fmt.Printf("Terminal WebSocket: Received input command for session %s: %q\n", sessionID, input)
 				if err := ws.terminalManager.ExecuteCommand(sessionID, input); err != nil {
 					safeConn.WriteJSON(map[string]interface{}{
 						"type": "error",

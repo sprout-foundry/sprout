@@ -215,7 +215,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     if (loadFileRef.current) {
       loadFileRef.current(buffer.file.path);
     }
-  }, [paneId]);
+  }, [buffer, paneId]);
 
   // Initialize CodeMirror editor
   useEffect(() => {

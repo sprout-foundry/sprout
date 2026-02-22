@@ -26,53 +26,53 @@ func (m *MockLLM) Completion(ctx context.Context, prompt string, opts ...interfa
 // TestValidateToolCallWithMock tests validation with a mock LLM
 func TestValidateToolCallWithMock(t *testing.T) {
 	tests := []struct {
-		name             string
-		mockResponse     string
-		mockError        error
-		expectedRisk     RiskLevel
-		expectedReason   string
-		expectedConfirm  bool
-		threshold        int
+		name            string
+		mockResponse    string
+		mockError       error
+		expectedRisk    RiskLevel
+		expectedReason  string
+		expectedConfirm bool
+		threshold       int
 	}{
 		{
-			name:          "Safe operation",
-			mockResponse:  `{"risk_level": 0, "reasoning": "Safe to execute", "confidence": 0.95}`,
-			expectedRisk:  RiskSafe,
-			expectedReason: "Safe to execute",
+			name:            "Safe operation",
+			mockResponse:    `{"risk_level": 0, "reasoning": "Safe to execute", "confidence": 0.95}`,
+			expectedRisk:    RiskSafe,
+			expectedReason:  "Safe to execute",
 			expectedConfirm: false,
-			threshold:     1,
+			threshold:       1,
 		},
 		{
-			name:          "Cautious operation with threshold 1",
-			mockResponse:  `{"risk_level": 1, "reasoning": "Be careful", "confidence": 0.8}`,
-			expectedRisk:  RiskCaution,
-			expectedReason: "Be careful",
+			name:            "Cautious operation with threshold 1",
+			mockResponse:    `{"risk_level": 1, "reasoning": "Be careful", "confidence": 0.8}`,
+			expectedRisk:    RiskCaution,
+			expectedReason:  "Be careful",
 			expectedConfirm: true,
-			threshold:     1,
+			threshold:       1,
 		},
 		{
-			name:          "Dangerous operation with threshold 1",
-			mockResponse:  `{"risk_level": 2, "reasoning": "Very dangerous", "confidence": 0.9}`,
-			expectedRisk:  RiskDangerous,
-			expectedReason: "Very dangerous",
+			name:            "Dangerous operation with threshold 1",
+			mockResponse:    `{"risk_level": 2, "reasoning": "Very dangerous", "confidence": 0.9}`,
+			expectedRisk:    RiskDangerous,
+			expectedReason:  "Very dangerous",
 			expectedConfirm: true,
-			threshold:     1,
+			threshold:       1,
 		},
 		{
-			name:          "Dangerous operation with threshold 2",
-			mockResponse:  `{"risk_level": 2, "reasoning": "Very dangerous", "confidence": 0.9}`,
-			expectedRisk:  RiskDangerous,
-			expectedReason: "Very dangerous",
+			name:            "Dangerous operation with threshold 2",
+			mockResponse:    `{"risk_level": 2, "reasoning": "Very dangerous", "confidence": 0.9}`,
+			expectedRisk:    RiskDangerous,
+			expectedReason:  "Very dangerous",
 			expectedConfirm: true,
-			threshold:     2,
+			threshold:       2,
 		},
 		{
-			name:          "Caution operation with threshold 2",
-			mockResponse:  `{"risk_level": 1, "reasoning": "Be careful", "confidence": 0.8}`,
-			expectedRisk:  RiskCaution,
-			expectedReason: "Be careful",
+			name:            "Caution operation with threshold 2",
+			mockResponse:    `{"risk_level": 1, "reasoning": "Be careful", "confidence": 0.8}`,
+			expectedRisk:    RiskCaution,
+			expectedReason:  "Be careful",
 			expectedConfirm: false,
-			threshold:     2,
+			threshold:       2,
 		},
 	}
 
@@ -170,27 +170,27 @@ func TestBuildValidationPromptVariousTools(t *testing.T) {
 		shouldMatch []string
 	}{
 		{
-			name:     "Read file",
-			toolName: "read_file",
-			args:     map[string]interface{}{"file_path": "main.go"},
+			name:        "Read file",
+			toolName:    "read_file",
+			args:        map[string]interface{}{"file_path": "main.go"},
 			shouldMatch: []string{"read_file", "main.go"},
 		},
 		{
-			name:     "Write file",
-			toolName: "write_file",
-			args:     map[string]interface{}{"file_path": "test.txt", "content": "hello"},
+			name:        "Write file",
+			toolName:    "write_file",
+			args:        map[string]interface{}{"file_path": "test.txt", "content": "hello"},
 			shouldMatch: []string{"write_file", "test.txt", "hello"},
 		},
 		{
-			name:     "Shell command",
-			toolName: "shell_command",
-			args:     map[string]interface{}{"command": "rm -rf /tmp/test"},
+			name:        "Shell command",
+			toolName:    "shell_command",
+			args:        map[string]interface{}{"command": "rm -rf /tmp/test"},
 			shouldMatch: []string{"shell_command", "rm -rf /tmp/test"},
 		},
 		{
-			name:     "Search files",
-			toolName: "search_files",
-			args:     map[string]interface{}{"search_pattern": "TODO", "directory": "."},
+			name:        "Search files",
+			toolName:    "search_files",
+			args:        map[string]interface{}{"search_pattern": "TODO", "directory": "."},
 			shouldMatch: []string{"search_files", "TODO", "."},
 		},
 	}

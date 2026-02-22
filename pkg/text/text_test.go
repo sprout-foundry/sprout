@@ -10,14 +10,14 @@ import (
 
 func TestGetSummary(t *testing.T) {
 	tests := []struct {
-		name         string
-		content      string
-		path         string
-		cfg          *configuration.Config
-		wantSummary  string
-		wantExports  string
-		wantRefs     string
-		wantErr      bool
+		name        string
+		content     string
+		path        string
+		cfg         *configuration.Config
+		wantSummary string
+		wantExports string
+		wantRefs    string
+		wantErr     bool
 	}{
 		{
 			name:        "empty content with nil config",
@@ -40,14 +40,14 @@ func TestGetSummary(t *testing.T) {
 			wantErr:     false,
 		},
 		{
-			name:         "content with config",
-			content:      "package test\n\nfunc TestFunction() int { return 42 }\n",
-			path:         "test/test.go",
-			cfg:          configuration.NewConfig(),
-			wantSummary:  "File summary",
-			wantExports:  "File exports",
-			wantRefs:     "File references",
-			wantErr:      false,
+			name:        "content with config",
+			content:     "package test\n\nfunc TestFunction() int { return 42 }\n",
+			path:        "test/test.go",
+			cfg:         configuration.NewConfig(),
+			wantSummary: "File summary",
+			wantExports: "File exports",
+			wantRefs:    "File references",
+			wantErr:     false,
 		},
 		{
 			name:        "large content",

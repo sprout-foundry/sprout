@@ -74,7 +74,7 @@ func TestValidateToolCallDisabled(t *testing.T) {
 func TestValidateToolCallModelNotLoaded(t *testing.T) {
 	cfg := &configuration.SecurityValidationConfig{
 		Enabled: true,
-		Model:    "/nonexistent/path/to/model.gguf",
+		Model:   "/nonexistent/path/to/model.gguf",
 	}
 
 	// Create a temp directory for testing
@@ -91,10 +91,10 @@ func TestValidateToolCallModelNotLoaded(t *testing.T) {
 	if validator == nil {
 		// Create a validator without model manually for testing
 		validator = &Validator{
-			config:     cfg,
-			model:      nil,
-			modelPath:  cfg.Model,
-			logger:     nil,
+			config:      cfg,
+			model:       nil,
+			modelPath:   cfg.Model,
+			logger:      nil,
 			interactive: false,
 		}
 	}
@@ -120,7 +120,7 @@ func TestValidateToolCallModelNotLoaded(t *testing.T) {
 // TestParseValidationResponseJSON tests parsing JSON responses
 func TestParseValidationResponseJSON(t *testing.T) {
 	validator := &Validator{
-		config:  &configuration.SecurityValidationConfig{Threshold: 1},
+		config:    &configuration.SecurityValidationConfig{Threshold: 1},
 		modelPath: "/test/model.gguf",
 	}
 
@@ -183,9 +183,9 @@ func TestParseValidationResponseText(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		response       string
-		expectedRisk   RiskLevel
+		name         string
+		response     string
+		expectedRisk RiskLevel
 	}{
 		{
 			name:         "Text with dangerous",
@@ -227,11 +227,11 @@ func TestParseValidationResponseText(t *testing.T) {
 // TestApplyThreshold tests threshold application logic
 func TestApplyThreshold(t *testing.T) {
 	tests := []struct {
-		name             string
-		threshold        int
-		riskLevel        RiskLevel
-		shouldConfirm    bool
-		shouldBlock      bool
+		name          string
+		threshold     int
+		riskLevel     RiskLevel
+		shouldConfirm bool
+		shouldBlock   bool
 	}{
 		{
 			name:          "Threshold 0, risk 0",
@@ -710,9 +710,9 @@ func TestIsObviouslySafe(t *testing.T) {
 // TestValidateToolCallObviouslySafe tests that obviously safe operations skip LLM validation
 func TestValidateToolCallObviouslySafe(t *testing.T) {
 	cfg := &configuration.SecurityValidationConfig{
-		Enabled:    true,
-		Threshold:  1,
-		Model:      "/nonexistent/model.gguf",
+		Enabled:   true,
+		Threshold: 1,
+		Model:     "/nonexistent/model.gguf",
 	}
 
 	validator := &Validator{

@@ -116,10 +116,10 @@ func (ws *ReactWebServer) handleAPIHistoryRollback(w http.ResponseWriter, r *htt
 	if ws.eventBus != nil {
 		ws.eventBus.Publish("rollback", map[string]interface{}{
 			"revision_id": req.RevisionID,
-			"timestamp": fmt.Sprintf("%d", 123), // Dummy timestamp
+			"timestamp":   fmt.Sprintf("%d", 123), // Dummy timestamp
 			"data": map[string]interface{}{
-				"action": "rollback",
-				"path": "multiple",
+				"action":      "rollback",
+				"path":        "multiple",
 				"revision_id": req.RevisionID,
 			},
 		})
@@ -127,7 +127,7 @@ func (ws *ReactWebServer) handleAPIHistoryRollback(w http.ResponseWriter, r *htt
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Rollback successful",
+		"message":     "Rollback successful",
 		"revision_id": req.RevisionID,
 	})
 }

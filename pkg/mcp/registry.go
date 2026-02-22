@@ -155,7 +155,7 @@ func (r *MCPServerRegistry) loadBuiltinTemplates() {
 		Command:     "npx",
 		Args:        []string{"-y", "chrome-devtools-mcp@latest", "--isolated"},
 		EnvVars:     []EnvVarTemplate{}, // No required env vars
-		Timeout:     60 * time.Second, // Longer timeout for browser operations
+		Timeout:     60 * time.Second,   // Longer timeout for browser operations
 		Features:    []string{"Browser automation", "Performance analysis", "Network inspection", "Console access", "Screenshots", "Page navigation"},
 		AuthType:    "none",
 		Docs:        "https://github.com/ChromeDevTools/chrome-devtools-mcp",

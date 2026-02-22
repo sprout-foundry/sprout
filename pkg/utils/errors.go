@@ -321,5 +321,3 @@ func FormatError(err error) string {
 
 	return err.Error()
 }
-
-

@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/events"
@@ -87,6 +89,10 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 		return "", err
 	}
 
+	if warning := validateJSONContent(content, path); warning != "" {
+		a.debugLog("%s\n", warning)
+	}
+
 	a.ToolLog("writing file", fmt.Sprintf("%s (%d bytes)", path, len(content)))
 	a.debugLog("Writing file: %s\n", path)
 
@@ -134,6 +140,10 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	newStr, err := getRequiredString(args, "new_str")
 	if err != nil {
 		return "", err
+	}
+
+	if warning := validateJSONContent(newStr, path); warning != "" {
+		a.debugLog("%s\n", warning)
 	}
 
 	// Read original for diff
@@ -207,6 +217,10 @@ func handleCreate(ctx context.Context, a *Agent, args map[string]interface{}) (s
 		return "", err
 	}
 
+	if warning := validateJSONContent(fileText, path); warning != "" {
+		a.debugLog("%s\n", warning)
+	}
+
 	a.ToolLog("creating file", fmt.Sprintf("%s (%d bytes)", path, len(fileText)))
 	a.debugLog("Creating file: %s\n", path)
 
@@ -271,4 +285,20 @@ func toInt(v interface{}) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func validateJSONContent(content, path string) string {
+	if filepath.Ext(path) != ".json" {
+		return ""
+	}
+
+	if len(content) == 0 {
+		return ""
+	}
+
+	if err := json.Unmarshal([]byte(content), new(any)); err != nil {
+		return fmt.Sprintf("Warning: invalid JSON in %s: %v", filepath.Base(path), err)
+	}
+
+	return ""
 }

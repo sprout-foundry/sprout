@@ -119,6 +119,8 @@ class TerminalWebSocketService {
         if (data.type === 'session_created') {
           this.sessionId = data.data.session_id;
           console.log('Terminal session created:', this.sessionId);
+          // Notify that we're now ready to send commands
+          this.notifyCallbacks({ type: 'session_ready', data: { session_id: this.sessionId } });
         }
         
         this.notifyCallbacks(data);

@@ -60,6 +60,11 @@ const Terminal: React.FC<TerminalProps> = ({
     const terminalService = TerminalWebSocketService.getInstance();
     
     if (isExpanded && isConnected) {
+      // Set initial state from singleton (it might already be connected)
+      if (terminalService.isReady()) {
+        setTerminalConnected(true);
+      }
+
       // Only connect if not already connected
       if (!terminalWS.current) {
         terminalWS.current = terminalService;
@@ -68,12 +73,15 @@ const Terminal: React.FC<TerminalProps> = ({
         terminalWS.current.onEvent((event) => {
           if (event.type === 'connection_status') {
             if (event.data.connected) {
-              setTerminalConnected(true);
-              addLine('output', 'Terminal connected');
+              // Don't set connected yet - wait for session_ready
+              console.log('Terminal WebSocket connected, waiting for session...');
             } else {
               setTerminalConnected(false);
               addLine('error', 'Terminal disconnected');
             }
+          } else if (event.type === 'session_ready') {
+            setTerminalConnected(true);
+            addLine('output', 'Terminal session ready');
           } else if (event.type === 'output') {
             addLine('output', event.data.output);
           } else if (event.type === 'error_output') {

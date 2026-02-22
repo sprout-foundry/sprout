@@ -211,7 +211,18 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
           <div
             className={`file-item ${file.isDir ? 'directory' : 'file'} ${isSelected ? 'selected' : ''}`}
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
+            data-ext={file.ext || ''}
             onClick={() => handleClick(file)}
+            role="treeitem"
+            tabIndex={0}
+            aria-selected={isSelected}
+            aria-expanded={file.isDir ? isExpanded : undefined}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleClick(file);
+              }
+            }}
           >
             <div className="file-icon">
               {getFileIcon(file)}
@@ -239,16 +250,17 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
   };
 
   return (
-    <div className="file-tree">
-      <div className="file-tree-header">
-        <h3>📁 File Explorer</h3>
-        <div className="file-tree-controls">
-          <button
-            onClick={refresh}
-            disabled={loading}
-            className="refresh-button"
-            title="Refresh"
-          >
+      <div className="file-tree">
+        <div className="file-tree-header">
+          <h3>📁 File Explorer</h3>
+          <div className="file-tree-controls">
+            <button
+              onClick={refresh}
+              disabled={loading}
+              className="refresh-button"
+              title="Refresh file tree"
+              aria-label="Refresh file tree"
+            >
             🔄
           </button>
         </div>

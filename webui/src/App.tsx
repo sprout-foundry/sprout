@@ -117,6 +117,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
+  const lastChunkRef = useRef<string>('');
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshKey, setGitRefreshKey] = useState(0);
 
@@ -195,6 +196,7 @@ function App() {
       case 'query_started':
         logEntry.category = 'query';
         logEntry.level = 'info';
+        lastChunkRef.current = ''; // Reset chunk tracking for new query
         setState(prev => ({
           ...prev,
           queryCount: prev.queryCount + 1,
@@ -225,6 +227,16 @@ function App() {
       case 'stream_chunk':
         logEntry.category = 'stream';
         logEntry.level = 'info';
+        
+        // Only skip duplicates for non-empty chunks to prevent message duplication
+        // Empty chunks (heartbeats) should always be passed through
+        if (event.data.chunk && event.data.chunk === lastChunkRef.current) {
+          break;
+        }
+        if (event.data.chunk) {
+          lastChunkRef.current = event.data.chunk;
+        }
+        
         setState(prev => {
           const newMessages = [...prev.messages];
           const lastMessage = newMessages[newMessages.length - 1];

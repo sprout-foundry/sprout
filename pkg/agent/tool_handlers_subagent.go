@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	MAX_SUBAGENT_OUTPUT_SIZE = 10 * 1024 * 1024 // 10MB
-	MAX_SUBAGENT_CONTEXT_SIZE = 1024 * 1024     // 1MB
+	MAX_SUBAGENT_OUTPUT_SIZE  = 10 * 1024 * 1024 // 10MB
+	MAX_SUBAGENT_CONTEXT_SIZE = 1024 * 1024      // 1MB
 	MAX_PARALLEL_SUBAGENTS    = 5
 )
 
@@ -461,7 +461,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	} else {
 		a.debugLog("Warning: No config manager available, using defaults\n")
 		provider = "" // Will use system default
-		model = ""   // Will use system default
+		model = ""    // Will use system default
 	}
 
 	// Create a streaming callback for real-time output

@@ -58,7 +58,7 @@ func (l *Logger) Log(level string, format string, args ...interface{}) {
 		// If we can't write to log file, at least print to stderr
 		fmt.Fprintf(os.Stderr, "Failed to write to log: %v\n", err)
 	}
-	
+
 	// Also write to stdout for immediate visibility
 	fmt.Print(logLine)
 }
@@ -95,7 +95,7 @@ func (l *Logger) Close() error {
 func WriteLocalCopy(filename string, content []byte) {
 	leditDir := filepath.Join(os.Getenv("HOME"), ".ledit")
 	logPath := filepath.Join(leditDir, filename)
-	
+
 	if err := os.WriteFile(logPath, content, 0644); err != nil {
 		fmt.Printf("Failed to write local copy: %v\n", err)
 	}

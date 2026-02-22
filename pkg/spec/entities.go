@@ -42,8 +42,8 @@ type ScopeViolation struct {
 
 // ScopeReviewResult represents result of scope validation
 type ScopeReviewResult struct {
-	InScope     bool             `json:"in_scope"`     // Overall pass/fail
-	Violations  []ScopeViolation `json:"violations"`   // Specific violations
-	Summary     string           `json:"summary"`      // Human-readable summary
-	Suggestions []string         `json:"suggestions"`  // How to fix violations
+	InScope     bool             `json:"in_scope"`    // Overall pass/fail
+	Violations  []ScopeViolation `json:"violations"`  // Specific violations
+	Summary     string           `json:"summary"`     // Human-readable summary
+	Suggestions []string         `json:"suggestions"` // How to fix violations
 }

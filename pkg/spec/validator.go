@@ -79,9 +79,9 @@ func (v *ScopeValidator) ValidateScope(diff string, spec *CanonicalSpec) (*Scope
 			v.logger.LogProcessStep("⚠️  Rate limited - skipping scope validation (would require retry/backoff)")
 			// Return a "pass" result when rate limited so the workflow can continue
 			return &ScopeReviewResult{
-				InScope:    true,
-				Violations: []ScopeViolation{},
-				Summary:    "Scope validation skipped due to rate limiting",
+				InScope:     true,
+				Violations:  []ScopeViolation{},
+				Summary:     "Scope validation skipped due to rate limiting",
 				Suggestions: []string{"Retry self-review later when API rate limits reset"},
 			}, nil
 		}

@@ -86,7 +86,6 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		optimizer := utils.NewDiffOptimizerForReview()
 		optimizedDiff := optimizer.OptimizeDiff(stagedDiff)
 
-	
 		// Create the review context with optimized diff
 		reviewDiff := optimizedDiff.OptimizedContent
 
@@ -111,7 +110,6 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		// This prevents false positives where LLM thinks functionality is "missing"
 		// when it was just moved or refactored
 		fullFileContext := extractFileContextForChanges(stagedDiff)
-
 
 		// Create the unified code review service
 		service := codereview.NewCodeReviewService(cfg, logger)
@@ -142,7 +140,7 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			RollbackOnReject: false, // Don't rollback for staged reviews
 		}
 
-	reviewResponse, err := service.PerformReview(ctx, opts)
+		reviewResponse, err := service.PerformReview(ctx, opts)
 		if err != nil {
 			logger.LogError(fmt.Errorf("failed to get code review from LLM: %w", err))
 			return

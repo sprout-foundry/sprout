@@ -13,14 +13,14 @@ import (
 
 // GitStatus represents the git status response
 type GitStatus struct {
-	Branch   string     `json:"branch"`
-	Ahead    int        `json:"ahead"`
-	Behind   int        `json:"behind"`
-	Staged   []GitFile  `json:"staged"`
-	Modified []GitFile  `json:"modified"`
+	Branch    string    `json:"branch"`
+	Ahead     int       `json:"ahead"`
+	Behind    int       `json:"behind"`
+	Staged    []GitFile `json:"staged"`
+	Modified  []GitFile `json:"modified"`
 	Untracked []GitFile `json:"untracked"`
-	Deleted  []GitFile  `json:"deleted"`
-	Renamed  []GitFile  `json:"renamed"`
+	Deleted   []GitFile `json:"deleted"`
+	Renamed   []GitFile `json:"renamed"`
 }
 
 // GitFile represents a file with its git status
@@ -228,9 +228,9 @@ func getGitStatus() (*GitStatus, error) {
 	if err := cmd.Run(); err != nil {
 		// Not in a git repository
 		return &GitStatus{
-			Branch:   "",
-			Staged:   []GitFile{},
-			Modified: []GitFile{},
+			Branch:    "",
+			Staged:    []GitFile{},
+			Modified:  []GitFile{},
 			Untracked: []GitFile{},
 		}, nil
 	}
@@ -354,7 +354,7 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req struct {
-		Message string `json:"message"`
+		Message string   `json:"message"`
 		Files   []string `json:"files"`
 	}
 

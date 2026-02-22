@@ -82,13 +82,13 @@ func (e *SpecExtractor) ExtractSpec(conversation []Message, userIntent string) (
 
 	// Parse JSON response
 	var result struct {
-		Objective   string   `json:"objective"`
-		InScope     []string `json:"in_scope"`
-		OutOfScope  []string `json:"out_of_scope"`
-		Acceptance  []string `json:"acceptance"`
-		Context     string   `json:"context"`
-		Confidence  float64  `json:"confidence"`
-		Reasoning   string   `json:"reasoning"`
+		Objective  string   `json:"objective"`
+		InScope    []string `json:"in_scope"`
+		OutOfScope []string `json:"out_of_scope"`
+		Acceptance []string `json:"acceptance"`
+		Context    string   `json:"context"`
+		Confidence float64  `json:"confidence"`
+		Reasoning  string   `json:"reasoning"`
 	}
 
 	if err := json.Unmarshal([]byte(response), &result); err != nil {

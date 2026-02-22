@@ -56,12 +56,12 @@ type ValidationResult struct {
 
 // Validator handles LLM-based security validation using local llama.cpp
 type Validator struct {
-	config       *configuration.SecurityValidationConfig
-	model        LLMModel
-	modelPath    string
-	logger       *utils.Logger
-	interactive  bool
-	debug        bool
+	config      *configuration.SecurityValidationConfig
+	model       LLMModel
+	modelPath   string
+	logger      *utils.Logger
+	interactive bool
+	debug       bool
 }
 
 // NewValidator creates a new security validator
@@ -72,10 +72,10 @@ func NewValidator(cfg *configuration.SecurityValidationConfig, logger *utils.Log
 
 	if !cfg.Enabled {
 		return &Validator{
-			config:     cfg,
-			logger:     logger,
+			config:      cfg,
+			logger:      logger,
 			interactive: interactive,
-			debug:      false,
+			debug:       false,
 		}, nil
 	}
 
@@ -143,12 +143,12 @@ func NewValidator(cfg *configuration.SecurityValidationConfig, logger *utils.Log
 	}
 
 	return &Validator{
-		config:     cfg,
-		model:      model,
-		modelPath:  modelPath,
-		logger:     logger,
+		config:      cfg,
+		model:       model,
+		modelPath:   modelPath,
+		logger:      logger,
 		interactive: interactive,
-		debug:      false,
+		debug:       false,
 	}, nil
 }
 
@@ -556,13 +556,13 @@ func (v *Validator) parseTextResponse(response string, startTime time.Time) (*Va
 
 	// Check for dangerous indicators (has higher priority)
 	if strings.Contains(responseLower, "dangerous") || strings.Contains(responseLower, "unsafe") ||
-	   strings.Contains(responseLower, "risk: 2") || strings.Contains(responseLower, "risk level 2") ||
-	   strings.Contains(responseLower, "risk level is 2") || strings.Contains(responseLower, "block") {
+		strings.Contains(responseLower, "risk: 2") || strings.Contains(responseLower, "risk level 2") ||
+		strings.Contains(responseLower, "risk level is 2") || strings.Contains(responseLower, "block") {
 		riskLevel = RiskDangerous
 	} else if strings.Contains(responseLower, "caution") || strings.Contains(responseLower, "cautious") ||
-	   strings.Contains(responseLower, "careful") || strings.Contains(responseLower, "risk: 1") ||
-	   strings.Contains(responseLower, "risk level 1") || strings.Contains(responseLower, "risk level is 1") ||
-	   strings.Contains(responseLower, "confirm") {
+		strings.Contains(responseLower, "careful") || strings.Contains(responseLower, "risk: 1") ||
+		strings.Contains(responseLower, "risk level 1") || strings.Contains(responseLower, "risk level is 1") ||
+		strings.Contains(responseLower, "confirm") {
 		riskLevel = RiskCaution
 	}
 
@@ -623,25 +623,25 @@ func isObviouslySafe(toolName string, args map[string]interface{}) bool {
 	// List of obviously safe tools (read-only and informational)
 	safeTools := map[string]bool{
 		// Read operations
-		"read_file":        true,
-		"glob":             true,
-		"grep":             true,
-		"list_directory":   true,
+		"read_file":      true,
+		"glob":           true,
+		"grep":           true,
+		"list_directory": true,
 
 		// Informational git commands
-		"git_status":       true,
-		"git_log":          true,
-		"git_diff":         true,
-		"git_show":         true,
-		"git_branch":       true,
+		"git_status": true,
+		"git_log":    true,
+		"git_diff":   true,
+		"git_show":   true,
+		"git_branch": true,
 
 		// Informational system commands
-		"list_processes":   true,
-		"get_file_info":    true,
+		"list_processes": true,
+		"get_file_info":  true,
 
 		// Build and test operations (in workspace)
-		"build":            true,
-		"test":             true,
+		"build": true,
+		"test":  true,
 	}
 
 	// Check if tool is in the safe list
@@ -708,10 +708,10 @@ func isObviouslySafe(toolName string, args map[string]interface{}) bool {
 
 		// Check for read-only file operations
 		if strings.HasPrefix(commandLower, "cat ") ||
-		   strings.HasPrefix(commandLower, "head ") ||
-		   strings.HasPrefix(commandLower, "tail ") ||
-		   strings.HasPrefix(commandLower, "less ") ||
-		   strings.HasPrefix(commandLower, "more ") {
+			strings.HasPrefix(commandLower, "head ") ||
+			strings.HasPrefix(commandLower, "tail ") ||
+			strings.HasPrefix(commandLower, "less ") ||
+			strings.HasPrefix(commandLower, "more ") {
 			return true
 		}
 	}
@@ -797,7 +797,7 @@ Only return valid JSON, nothing else.`, query)
 	// Parse the response
 	var result struct {
 		IsDirectCommand bool    `json:"is_direct_command"`
-		DetectedCommand  string  `json:"detected_command"`
+		DetectedCommand string  `json:"detected_command"`
 		Confidence      float64 `json:"confidence"`
 	}
 
@@ -846,11 +846,11 @@ func isInTmpPath(toolName string, args map[string]interface{}) bool {
 			commandLower := strings.ToLower(command)
 			// Check if command mentions /tmp
 			if strings.Contains(commandLower, "/tmp/") ||
-			   strings.Contains(commandLower, " /tmp ") ||
-			   strings.Contains(commandLower, "> /tmp") ||
-			   strings.Contains(commandLower, "< /tmp") ||
-			   strings.HasPrefix(strings.TrimSpace(commandLower), "rm /tmp") ||
-			   strings.HasPrefix(strings.TrimSpace(commandLower), "rm -rf /tmp") {
+				strings.Contains(commandLower, " /tmp ") ||
+				strings.Contains(commandLower, "> /tmp") ||
+				strings.Contains(commandLower, "< /tmp") ||
+				strings.HasPrefix(strings.TrimSpace(commandLower), "rm /tmp") ||
+				strings.HasPrefix(strings.TrimSpace(commandLower), "rm -rf /tmp") {
 				return true
 			}
 		}
@@ -871,18 +871,18 @@ func IsCriticalSystemOperation(toolName string, args map[string]interface{}) boo
 			// Filesystem destruction commands (permanently destroys data)
 			// Only block the most destructive operations that have no legitimate use case
 			if strings.HasPrefix(commandLower, "mkfs") || // Create filesystem - typically destructive
-			   commandLower == "rm -rf /" ||              // Delete entire root filesystem
-			   commandLower == "rm -rf ." ||              // Delete current directory (could be root)
-			   strings.HasPrefix(commandLower, ":(){:|:&};:") || // Fork bomb
-			   strings.HasPrefix(commandLower, "killall -9") ||   // Kill all processes
-			   strings.HasPrefix(commandLower, "chmod 000 /") {   // Remove all permissions
+				commandLower == "rm -rf /" || // Delete entire root filesystem
+				commandLower == "rm -rf ." || // Delete current directory (could be root)
+				strings.HasPrefix(commandLower, ":(){:|:&};:") || // Fork bomb
+				strings.HasPrefix(commandLower, "killall -9") || // Kill all processes
+				strings.HasPrefix(commandLower, "chmod 000 /") { // Remove all permissions
 				return true
 			}
 
 			// Only block fdisk/parted on the primary disk (/dev/sda)
 			// Allow partitioning secondary disks (legitimate use case)
 			if (strings.HasPrefix(commandLower, "fdisk ") || strings.HasPrefix(commandLower, "parted ")) &&
-			   (strings.Contains(commandLower, "/dev/sda") || strings.Contains(commandLower, " /dev/sda ")) {
+				(strings.Contains(commandLower, "/dev/sda") || strings.Contains(commandLower, " /dev/sda ")) {
 				return true
 			}
 
@@ -893,7 +893,7 @@ func IsCriticalSystemOperation(toolName string, args map[string]interface{}) boo
 			if strings.Contains(commandLower, "dd ") {
 				// Block dd to primary disk with zero/random (clearly destructive)
 				if (strings.Contains(commandLower, "dd if=/dev/zero") || strings.Contains(commandLower, "dd if=/dev/random")) &&
-				   strings.Contains(commandLower, "/dev/sda") {
+					strings.Contains(commandLower, "/dev/sda") {
 					return true
 				}
 				// Don't block other dd operations - they have legitimate uses
@@ -907,9 +907,9 @@ func IsCriticalSystemOperation(toolName string, args map[string]interface{}) boo
 			cleanPath := filepath.Clean(filePath)
 			// Only the most critical system files
 			if cleanPath == "/etc/shadow" ||
-			   cleanPath == "/etc/passwd" ||
-			   cleanPath == "/etc/sudoers" ||
-			   cleanPath == "/etc/sudoers.d/" {
+				cleanPath == "/etc/passwd" ||
+				cleanPath == "/etc/sudoers" ||
+				cleanPath == "/etc/sudoers.d/" {
 				return true
 			}
 		}

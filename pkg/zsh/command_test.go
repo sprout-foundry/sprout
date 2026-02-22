@@ -19,7 +19,7 @@ func TestExtractFirstWord(t *testing.T) {
 		{"", ""},
 		{"   git status", "git"}, // leading spaces
 		{"git", "git"},
-		{"'git' status", "git"}, // single quotes
+		{"'git' status", "git"},   // single quotes
 		{"\"git\" status", "git"}, // double quotes
 		{"npm install", "npm"},
 		{"docker build -t test .", "docker"},
@@ -111,10 +111,10 @@ func TestIsCommand(t *testing.T) {
 	}
 
 	tests := []struct {
-		input          string
-		shouldBeFound  bool
-		expectedName   string
-		expectedType   CommandType
+		input         string
+		shouldBeFound bool
+		expectedName  string
+		expectedType  CommandType
 	}{
 		{"git status", true, "git", CommandTypeExternal},
 		{"ls -la", true, "ls", CommandTypeExternal},

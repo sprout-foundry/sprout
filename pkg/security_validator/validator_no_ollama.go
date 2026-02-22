@@ -1,3 +1,4 @@
+//go:build !ollama_test
 // +build !ollama_test
 
 package security_validator

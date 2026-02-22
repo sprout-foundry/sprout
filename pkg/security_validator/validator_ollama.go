@@ -1,3 +1,4 @@
+//go:build ollama_test
 // +build ollama_test
 
 package security_validator
@@ -7,9 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	ollama "github.com/ollama/ollama/api"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/utils"
+	ollama "github.com/ollama/ollama/api"
 )
 
 // loadOllamaModel loads an Ollama model for testing
@@ -38,7 +39,7 @@ type ollamaClient interface {
 
 func (w *ollamaWrapper) Completion(ctx context.Context, prompt string, opts ...interface{}) (string, error) {
 	req := &ollama.ChatRequest{
-		Model:    w.model,
+		Model: w.model,
 		Messages: []ollama.Message{
 			{
 				Role:    "user",
@@ -46,8 +47,8 @@ func (w *ollamaWrapper) Completion(ctx context.Context, prompt string, opts ...i
 			},
 		},
 		Options: map[string]interface{}{
-			"num_predict": 256,    // Limit to 256 tokens
-			"temperature": 0.1,   // Low temperature for consistent classification
+			"num_predict": 256, // Limit to 256 tokens
+			"temperature": 0.1, // Low temperature for consistent classification
 			"top_p":       0.9,
 			"top_k":       40,
 		},
@@ -75,10 +76,10 @@ func NewOllamaValidator(cfg *configuration.SecurityValidationConfig, logger *uti
 
 	if !cfg.Enabled {
 		return &Validator{
-			config:     cfg,
-			logger:     logger,
+			config:      cfg,
+			logger:      logger,
 			interactive: interactive,
-			debug:      false,
+			debug:       false,
 		}, nil
 	}
 
@@ -95,11 +96,11 @@ func NewOllamaValidator(cfg *configuration.SecurityValidationConfig, logger *uti
 	}
 
 	return &Validator{
-		config:     cfg,
-		model:      model,
-		modelPath:  modelName, // Store model name instead of path
-		logger:     logger,
+		config:      cfg,
+		model:       model,
+		modelPath:   modelName, // Store model name instead of path
+		logger:      logger,
 		interactive: interactive,
-		debug:      false,
+		debug:       false,
 	}, nil
 }

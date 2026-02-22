@@ -131,10 +131,10 @@ func TestLoggerLevels(t *testing.T) {
 	logger, _ := setupTestLogger(t)
 
 	tests := []struct {
-		name     string
-		logFunc  func(string, ...interface{})
-		level    string
-		message  string
+		name    string
+		logFunc func(string, ...interface{})
+		level   string
+		message string
 	}{
 		{"Debug", logger.Debug, "DEBUG", "debug message"},
 		{"Info", logger.Info, "INFO", "info message"},
@@ -242,10 +242,10 @@ func TestLoggerFormatSpecifiers(t *testing.T) {
 	logger, _ := setupTestLogger(t)
 
 	tests := []struct {
-		name    string
-		format  string
-		args    []interface{}
-		want    string
+		name   string
+		format string
+		args   []interface{}
+		want   string
 	}{
 		{
 			name:   "integer",
@@ -301,9 +301,9 @@ func TestLogRequestPayload(t *testing.T) {
 	tmpDir := setupTestHome(t)
 
 	payload := map[string]interface{}{
-		"model":    "gpt-4",
-		"prompt":   "test prompt",
-		"stream":   true,
+		"model":  "gpt-4",
+		"prompt": "test prompt",
+		"stream": true,
 	}
 	payloadJSON, err := json.Marshal(payload)
 	if err != nil {

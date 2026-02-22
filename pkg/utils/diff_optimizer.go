@@ -59,7 +59,7 @@ func NewDiffOptimizerForReview() *DiffOptimizer {
 		GeneratedFilePatterns: []string{
 			"*.min.*", "*.bundle.*", "*.dist.*", "*.generated.*",
 			"bundle.*", "*.bundle.js", "*.bundle.css",
-			"*.map", // Source maps are fully generated
+			"*.map",                                // Source maps are fully generated
 			"asset-manifest.json", "manifest.json", // Build asset manifests
 			"dist/", "build/", "node_modules/", "vendor/",
 			".git/", ".svn/", ".hg/",

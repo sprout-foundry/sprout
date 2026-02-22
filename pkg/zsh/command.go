@@ -35,72 +35,72 @@ var allowedCommands = map[string]bool{
 	"git": true,
 
 	// File viewing and info (read-only)
-	"ls":     true,
-	"cat":    true,
-	"less":   true,
-	"more":   true,
-	"head":   true,
-	"tail":   true,
-	"wc":     true,
-	"file":   true,
-	"stat":   true,
-	"du":     true,
-	"df":     true,
-	"tree":   true,
+	"ls":   true,
+	"cat":  true,
+	"less": true,
+	"more": true,
+	"head": true,
+	"tail": true,
+	"wc":   true,
+	"file": true,
+	"stat": true,
+	"du":   true,
+	"df":   true,
+	"tree": true,
 
 	// Searching
-	"grep":   true,
-	"find":   true,
-	"rg":     true, // ripgrep
-	"fd":     true, // find alternative
+	"grep": true,
+	"find": true,
+	"rg":   true, // ripgrep
+	"fd":   true, // find alternative
 
 	// Basic utilities
-	"echo":   true,
-	"printf": true,
-	"pwd":    true,
-	"date":   true,
-	"which":  true,
-	"type":   true,
+	"echo":    true,
+	"printf":  true,
+	"pwd":     true,
+	"date":    true,
+	"which":   true,
+	"type":    true,
 	"whereis": true,
 
 	// System info (read-only)
-	"uname":  true,
-	"uptime": true,
-	"id":     true,
-	"whoami": true,
+	"uname":    true,
+	"uptime":   true,
+	"id":       true,
+	"whoami":   true,
 	"hostname": true,
 
 	// Network info (read-only)
-	"ping":   true,
-	"curl":   true,
-	"wget":   true,
+	"ping":     true,
+	"curl":     true,
+	"wget":     true,
 	"nslookup": true,
-	"dig":    true,
+	"dig":      true,
 
 	// Process viewing (read-only)
-	"ps":     true,
-	"top":    true, // Note: top is interactive, might not work well
-	"htop":   true, // Note: htop is interactive
+	"ps":   true,
+	"top":  true, // Note: top is interactive, might not work well
+	"htop": true, // Note: htop is interactive
 
 	// Build tools (safe operations)
-	"make":   true, // For running makefiles
-	"cargo":  true, // For cargo build, test, etc.
-	"npm":    true, // For npm scripts
-	"yarn":   true,
-	"pnpm":   true,
-	"go":     true, // For go build, test, run, etc.
+	"make":  true, // For running makefiles
+	"cargo": true, // For cargo build, test, etc.
+	"npm":   true, // For npm scripts
+	"yarn":  true,
+	"pnpm":  true,
+	"go":    true, // For go build, test, run, etc.
 
 	// File operations (safe, require explicit targets)
-	"cp":     true, // Copy files
-	"mv":     true, // Move/rename files
+	"cp": true, // Copy files
+	"mv": true, // Move/rename files
 
 	// Package managers (require sudo for system changes, safe for user operations)
-	"apt":    true, // APT package manager
+	"apt":     true, // APT package manager
 	"apt-get": true,
-	"brew":   true, // Homebrew package manager
-	"yum":    true,
-	"dnf":    true,
-	"pacman": true,
+	"brew":    true, // Homebrew package manager
+	"yum":     true,
+	"dnf":     true,
+	"pacman":  true,
 
 	// Testing
 	"pytest": true,
@@ -111,15 +111,15 @@ var allowedCommands = map[string]bool{
 // These are either dangerous or don't make sense in the ledit context.
 var blockedCommands = map[string]bool{
 	// Dangerous - destructive operations
-	"rm":    true,  // delete files (too easy to accidentally delete)
-	"rmdir": true,  // remove directories
+	"rm":    true, // delete files (too easy to accidentally delete)
+	"rmdir": true, // remove directories
 
 	// Dangerous - system modification
-	"dd":    true,  // disk destroyer
-	"mkfs":  true,  // make filesystem
-	"fdisk": true,  // partition editor
+	"dd":       true, // disk destroyer
+	"mkfs":     true, // make filesystem
+	"fdisk":    true, // partition editor
 	"shutdown": true,
-	"reboot": true,
+	"reboot":   true,
 	"poweroff": true,
 
 	// Don't make sense in ledit context (interactive editors)
@@ -132,12 +132,12 @@ var blockedCommands = map[string]bool{
 	"gedit": true,
 
 	// Interactive shells
-	"bash":  true,
-	"zsh":   true,
-	"fish":  true,
+	"bash": true,
+	"zsh":  true,
+	"fish": true,
 
 	// Package manager - snap (can auto-install with less friction)
-	"snap":  true,
+	"snap": true,
 }
 
 // IsCommand checks if the given input starts with a valid zsh command that is

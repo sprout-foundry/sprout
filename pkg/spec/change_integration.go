@@ -11,12 +11,12 @@ import (
 
 // ChangeReviewResult represents the result of reviewing tracked changes
 type ChangeReviewResult struct {
-	SpecResult         *SpecExtractionResult  `json:"spec_result"`
-	ScopeResult        *ScopeReviewResult     `json:"scope_result"`
-	FilesChanged       int                    `json:"files_changed"`
-	TotalChanges       int                    `json:"total_changes"`
-	RevisionID         string                 `json:"revision_id"`
-	Summary            string                 `json:"summary"`
+	SpecResult   *SpecExtractionResult `json:"spec_result"`
+	ScopeResult  *ScopeReviewResult    `json:"scope_result"`
+	FilesChanged int                   `json:"files_changed"`
+	TotalChanges int                   `json:"total_changes"`
+	RevisionID   string                `json:"revision_id"`
+	Summary      string                `json:"summary"`
 }
 
 // ReviewTrackedChanges reviews changes tracked in the current revision against a canonical spec

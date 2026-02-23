@@ -11,7 +11,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
+	
+	"github.com/ledongthuc/pdf"
+	
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/factory"
 )
@@ -21,6 +23,22 @@ var lastVisionUsage *VisionUsageInfo
 var visionCache = make(map[string]string)                // cache key -> result
 var visionCacheUsage = make(map[string]*VisionUsageInfo) // cache key -> usage info
 
+// Error codes for analyze_image_content tool
+const (
+	ErrCodeInputUnsupported    = "INPUT_UNSUPPORTED_TYPE"
+	ErrCodeRemoteFetchFailed   = "REMOTE_FETCH_FAILED"
+	ErrCodeLocalFileNotFound   = "LOCAL_FILE_NOT_FOUND"
+	ErrCodeOCRNoTextDetected   = "OCR_NO_TEXT_DETECTED"
+	ErrCodePDFNotSupported     = "PDF_NOT_SUPPORTED"
+	ErrCodeVisionNotAvailable  = "VISION_NOT_AVAILABLE"
+	ErrCodeVisionRequestFailed = "VISION_REQUEST_FAILED"
+	ErrCodeInvalidResponse     = "INVALID_RESPONSE"
+
+	// Special error for model download needed
+	ErrCodeModelDownloadNeeded = "MODEL_DOWNLOAD_NEEDED"
+	ErrModelDownloadNeeded     = "PDF_OCR_MODEL_NEEDS_DOWNLOAD:"
+)
+
 // VisionAnalysis represents the result of vision model analysis
 type VisionAnalysis struct {
 	ImagePath   string      `json:"image_path"`
@@ -28,6 +46,31 @@ type VisionAnalysis struct {
 	Elements    []UIElement `json:"elements,omitempty"`
 	Issues      []string    `json:"issues,omitempty"`
 	Suggestions []string    `json:"suggestions,omitempty"`
+}
+
+// ImageAnalysisResponse represents a structured response for the analyze_image_content tool
+type ImageAnalysisResponse struct {
+	Success        bool                   `json:"success"`
+	ToolInvoked    bool                   `json:"tool_invoked"`
+	InputResolved  bool                   `json:"input_resolved"`
+	OCRAttempted   bool                   `json:"ocr_attempted"`
+	InputType      string                 `json:"input_type"` // "local_file", "remote_url", "unknown"
+	InputPath      string                 `json:"input_path"`
+	ErrorCode      string                 `json:"error_code,omitempty"`
+	ErrorMessage   string                 `json:"error_message,omitempty"`
+	ExtractedText  string                 `json:"extracted_text,omitempty"`
+	Analysis       *VisionAnalysis        `json:"analysis,omitempty"`
+	SupportedInput ImageAnalysisSupported `json:"supported_input"`
+}
+
+// ImageAnalysisSupported describes what input types are supported
+type ImageAnalysisSupported struct {
+	RemoteURL     bool   `json:"remote_url"`
+	LocalFile     bool   `json:"local_file"`
+	ImageFormats  bool   `json:"image_formats"`  // jpg, png, gif, webp, etc.
+	PDFSupport    bool   `json:"pdf_support"`    // PDF support status
+	PDFWorkaround string `json:"pdf_workaround"` // Instructions for PDF handling
+	MaxFileSizeMB int    `json:"max_file_size_mb"`
 }
 
 // UIElement represents a UI element detected in an image
@@ -519,6 +562,8 @@ func (vp *VisionProcessor) getImageData(imagePath string) (string, error) {
 	return base64.StdEncoding.EncodeToString(data), nil
 }
 
+
+
 // downloadImage downloads an image from URL
 func (vp *VisionProcessor) downloadImage(url string) ([]byte, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -795,79 +840,343 @@ func GetVisionCacheStats() map[string]interface{} {
 }
 
 // AnalyzeImage is the tool function called by the agent for image analysis
+// Returns a structured JSON response with metadata for robust error handling
 func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) (string, error) {
-	if !HasVisionCapability() {
-		return "", fmt.Errorf("vision analysis not available - please set up DEEPINFRA_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY for vision capabilities")
+	response := ImageAnalysisResponse{
+		Success:     false,
+		ToolInvoked: true,
+		InputPath:   imagePath,
+		SupportedInput: ImageAnalysisSupported{
+			RemoteURL:     true,
+			LocalFile:     true,
+			ImageFormats:  true,
+			PDFSupport:    true,
+			PDFWorkaround: "",
+			MaxFileSizeMB: 20,
+		},
 	}
 
-	// Create cache key based on image path, mode, and prompt
+	if !HasVisionCapability() {
+		response.Success = false
+		response.InputResolved = false
+		response.ErrorCode = ErrCodeVisionNotAvailable
+		response.ErrorMessage = "vision analysis not available - please set up DEEPINFRA_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY for vision capabilities"
+		respJSON, _ := json.Marshal(response)
+		return string(respJSON), nil
+	}
+
+	inputType := "unknown"
+	if strings.HasPrefix(imagePath, "http://") || strings.HasPrefix(imagePath, "https://") {
+		inputType = "remote_url"
+	} else if imagePath != "" {
+		inputType = "local_file"
+	}
+	response.InputType = inputType
+
+	ext := strings.ToLower(filepath.Ext(imagePath))
+	if ext == ".pdf" {
+		// Try simplified PDF processing
+		pdfText, err := ProcessPDFWithVision(imagePath)
+		if err != nil {
+			response.Success = false
+			response.InputResolved = true
+			response.OCRAttempted = true
+			response.ErrorCode = ErrCodePDFNotSupported
+			response.ErrorMessage = fmt.Sprintf("PDF processing failed: %v", err)
+			respJSON, _ := json.Marshal(response)
+			return string(respJSON), nil
+		}
+
+		// Success - return the PDF text
+		response.Success = true
+		response.InputResolved = true
+		response.OCRAttempted = true
+		response.ExtractedText = pdfText
+		response.Analysis = &VisionAnalysis{
+			ImagePath:   imagePath,
+			Description: pdfText,
+		}
+		respJSON, _ := json.Marshal(response)
+		return string(respJSON), nil
+	}
+
 	cacheKey := fmt.Sprintf("%s|%s|%s", imagePath, analysisMode, analysisPrompt)
 
-	// Check cache first
 	if cachedResult, exists := visionCache[cacheKey]; exists {
 		fmt.Printf("🔄 Using cached vision analysis for %s [%s]\n", filepath.Base(imagePath), analysisMode)
 
-		// Restore cached usage info for cost tracking
 		if cachedUsage, hasUsage := visionCacheUsage[cacheKey]; hasUsage {
 			lastVisionUsage = cachedUsage
+		}
+
+		var cachedResp ImageAnalysisResponse
+		if err := json.Unmarshal([]byte(cachedResult), &cachedResp); err == nil {
+			cachedResp.Success = true
+			respJSON, _ := json.Marshal(cachedResp)
+			return string(respJSON), nil
 		}
 
 		return cachedResult, nil
 	}
 
-	// Create vision processor with appropriate model based on mode
-	processor, err := NewVisionProcessorWithMode(false, analysisMode) // debug = false
+	processor, err := NewVisionProcessorWithMode(false, analysisMode)
 	if err != nil {
-		return "", fmt.Errorf("failed to create vision processor: %w", err)
+		response.Success = false
+		response.InputResolved = false
+		response.ErrorCode = ErrCodeVisionRequestFailed
+		response.ErrorMessage = fmt.Sprintf("failed to create vision processor: %v", err)
+		respJSON, _ := json.Marshal(response)
+		return string(respJSON), nil
 	}
 
-	// Determine the appropriate prompt based on analysis mode
 	var prompt string
 	if analysisPrompt != "" {
-		// User provided custom prompt - use it directly
 		prompt = analysisPrompt
 	} else {
-		// Generate appropriate prompt based on mode
 		prompt = generatePromptForMode(analysisMode)
 	}
 
+	response.InputResolved = true
+	response.OCRAttempted = true
+
 	analysis, err := processor.analyzeImageWithPrompt(imagePath, prompt)
 	if err != nil {
-		return "", fmt.Errorf("image analysis failed: %w", err)
-	}
+		errMsg := err.Error()
 
-	// Format the response
-	result := fmt.Sprintf("## Image Analysis: %s\n\n", filepath.Base(imagePath))
-	result += fmt.Sprintf("**Description:** %s\n\n", analysis.Description)
-
-	if len(analysis.Elements) > 0 {
-		result += "**UI Elements:**\n"
-		for _, element := range analysis.Elements {
-			result += fmt.Sprintf("- %s (%s): %s\n", element.Type, element.Position, element.Description)
+		if strings.Contains(errMsg, "failed to get image data") || strings.Contains(errMsg, "failed to download image") {
+			if inputType == "remote_url" {
+				response.ErrorCode = ErrCodeRemoteFetchFailed
+				response.ErrorMessage = fmt.Sprintf("failed to fetch image from remote URL: %v", err)
+			} else {
+				response.ErrorCode = ErrCodeLocalFileNotFound
+				response.ErrorMessage = fmt.Sprintf("failed to read local file: %v", err)
+			}
+		} else if strings.Contains(errMsg, "no response from vision model") {
+			response.ErrorCode = ErrCodeInvalidResponse
+			response.ErrorMessage = "vision model returned empty response"
+		} else {
+			response.ErrorCode = ErrCodeVisionRequestFailed
+			response.ErrorMessage = fmt.Sprintf("vision analysis failed: %v", err)
 		}
-		result += "\n"
+
+		respJSON, _ := json.Marshal(response)
+		return string(respJSON), nil
 	}
 
-	if len(analysis.Issues) > 0 {
-		result += "**Issues:**\n"
-		for _, issue := range analysis.Issues {
-			result += fmt.Sprintf("- %s\n", issue)
-		}
-		result += "\n"
+	description := strings.TrimSpace(analysis.Description)
+	if description == "" {
+		description = "No text or content detected in the image"
+		response.ErrorCode = ErrCodeOCRNoTextDetected
+		response.ErrorMessage = description
+		response.ExtractedText = ""
+		response.Analysis = &analysis
+		respJSON, _ := json.Marshal(response)
+		return string(respJSON), nil
 	}
 
-	if len(analysis.Suggestions) > 0 {
-		result += "**Suggestions:**\n"
-		for _, suggestion := range analysis.Suggestions {
-			result += fmt.Sprintf("- %s\n", suggestion)
-		}
+	response.Success = true
+	response.ExtractedText = description
+	response.Analysis = &analysis
+
+	respJSON, err := json.Marshal(response)
+	if err != nil {
+		response.Success = false
+		response.ErrorCode = ErrCodeInvalidResponse
+		response.ErrorMessage = fmt.Sprintf("failed to marshal response: %v", err)
+		respJSON, _ := json.Marshal(response)
+		return string(respJSON), nil
 	}
 
-	// Cache the result and usage info for future calls
-	visionCache[cacheKey] = result
+	visionCache[cacheKey] = string(respJSON)
 	if lastVisionUsage != nil {
 		visionCacheUsage[cacheKey] = lastVisionUsage
 	}
 
-	return result, nil
+	return string(respJSON), nil
+}
+
+// ProcessPDFWithVision processes a PDF file using simplified approach
+func ProcessPDFWithVision(pdfPath string) (string, error) {
+	processor, err := NewVisionProcessorWithMode(false, "general")
+	if err != nil {
+		return "", fmt.Errorf("failed to create vision processor: %w", err)
+	}
+
+	analysis, err := processor.ProcessPDFForVision(pdfPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to process PDF: %w", err)
+	}
+
+	return analysis.Description, nil
+}
+
+// SimplePDFInfo returns basic info about PDF file
+func SimplePDFInfo(pdfPath string) (map[string]interface{}, error) {
+	// Check file size before processing (limit to 20MB for safety)
+	fileInfo, err := os.Stat(pdfPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat PDF file: %w", err)
+	}
+	
+	maxSize := int64(20 * 1024 * 1024) // 20MB
+	if fileInfo.Size() > maxSize {
+		return nil, fmt.Errorf("PDF file too large (%d MB), maximum size is %d MB", fileInfo.Size()/1024/1024, maxSize/1024/1024)
+	}
+	
+	f, r, err := pdf.Open(pdfPath)
+	defer func() {
+		_ = f.Close()
+	}()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open PDF: %w", err)
+	}
+
+	info := make(map[string]interface{})
+	info["page_count"] = r.NumPage()
+	info["has_text"] = false
+
+	// Check if PDF has extractable text
+	for pageNum := 1; pageNum <= r.NumPage(); pageNum++ {
+		p := r.Page(pageNum)
+		if p.V.IsNull() {
+			continue
+		}
+
+		text, err := p.GetPlainText(nil)
+		if err == nil && strings.TrimSpace(text) != "" {
+			info["has_text"] = true
+			break
+		}
+	}
+
+	return info, nil
+}
+
+// ProcessPDFForVision tries to send PDF directly to vision model or falls back to text extraction
+func (vp *VisionProcessor) ProcessPDFForVision(pdfPath string) (VisionAnalysis, error) {
+	// First try to send PDF directly to vision model
+	analysis, err := vp.tryDirectPDFProcessing(pdfPath)
+	if err == nil {
+		return analysis, nil
+	}
+
+	// Fall back to simple text extraction
+	text, err := vp.extractPDFText(pdfPath)
+	if err != nil {
+		return VisionAnalysis{}, fmt.Errorf("PDF processing failed: direct vision failed (%v), text extraction failed (%v)", err, err)
+	}
+
+	return VisionAnalysis{
+		ImagePath:   pdfPath,
+		Description: text,
+	}, nil
+}
+
+// tryDirectPDFProcessing attempts to send PDF directly to vision model
+func (vp *VisionProcessor) tryDirectPDFProcessing(pdfPath string) (VisionAnalysis, error) {
+	// Check file size before reading into memory (limit to 20MB for safety)
+	fileInfo, err := os.Stat(pdfPath)
+	if err != nil {
+		return VisionAnalysis{}, fmt.Errorf("failed to stat PDF file: %w", err)
+	}
+	
+	maxSize := int64(20 * 1024 * 1024) // 20MB
+	if fileInfo.Size() > maxSize {
+		return VisionAnalysis{}, fmt.Errorf("PDF file too large (%d MB), maximum size is %d MB", fileInfo.Size()/1024/1024, maxSize/1024/1024)
+	}
+	
+	// Read PDF file
+	data, err := os.ReadFile(pdfPath)
+	if err != nil {
+		return VisionAnalysis{}, fmt.Errorf("failed to read PDF: %w", err)
+	}
+
+	// Convert to base64
+	pdfBase64 := base64.StdEncoding.EncodeToString(data)
+
+	// Create vision request with PDF
+	prompt := "Analyze this PDF document in detail. Please provide:\n\n1. **Content Summary**: What is this document about?\n2. **Text Content**: Extract all readable text in order\n3. **Structure**: Describe the document structure (headings, sections, tables, etc.)\n4. **Key Information**: Highlight important data, figures, or findings\n5. **Context**: How this document relates to software development or the user's task"
+
+	messages := []api.Message{
+		{
+			Role:    "user",
+			Content: prompt,
+			Images:  []api.ImageData{{Base64: pdfBase64, Type: "application/pdf"}},
+		},
+	}
+
+	// Send to vision model
+	response, err := vp.visionClient.SendVisionRequest(messages, nil, "")
+	if err != nil {
+		return VisionAnalysis{}, fmt.Errorf("vision model rejected PDF: %w", err)
+	}
+
+	// Extract response
+	if len(response.Choices) == 0 {
+		return VisionAnalysis{}, fmt.Errorf("no response from vision model")
+	}
+
+	resultText := response.Choices[0].Message.Content
+
+	return VisionAnalysis{
+		ImagePath:   pdfPath,
+		Description: resultText,
+	}, nil
+}
+
+// extractPDFText extracts text from PDF using simple fallback method
+func (vp *VisionProcessor) extractPDFText(pdfPath string) (string, error) {
+	// Check file size before processing (limit to 20MB for safety)
+	fileInfo, err := os.Stat(pdfPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to stat PDF file: %w", err)
+	}
+	
+	maxSize := int64(20 * 1024 * 1024) // 20MB
+	if fileInfo.Size() > maxSize {
+		return "", fmt.Errorf("PDF file too large (%d MB), maximum size is %d MB", fileInfo.Size()/1024/1024, maxSize/1024/1024)
+	}
+	
+	// Open the PDF file
+	f, r, err := pdf.Open(pdfPath)
+	defer func() {
+		_ = f.Close()
+	}()
+	if err != nil {
+		return "", fmt.Errorf("failed to open PDF: %w", err)
+	}
+
+	// Get total page count
+	totalPage := r.NumPage()
+
+	// Extract text from all pages
+	var allText strings.Builder
+	for pageNum := 1; pageNum <= totalPage; pageNum++ {
+		p := r.Page(pageNum)
+		if p.V.IsNull() {
+			continue
+		}
+
+		text, err := p.GetPlainText(nil)
+		if err != nil {
+			// Log error but continue with other pages
+			continue
+		}
+
+		// Add page separator if we have multiple pages
+		if pageNum > 1 {
+			allText.WriteString("\n\n--- Page ")
+			allText.WriteString(fmt.Sprintf("%d", pageNum))
+			allText.WriteString(" ---\n\n")
+		}
+
+		allText.WriteString(text)
+	}
+
+	// If no text was extracted, the PDF might be scanned images
+	if allText.Len() == 0 {
+		return "This PDF contains no extractable text. It may be a scanned document or image-based PDF. Consider converting the PDF to images using an external tool for OCR.", nil
+	}
+
+	return allText.String(), nil
 }

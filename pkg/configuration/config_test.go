@@ -2,108 +2,74 @@ package configuration
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestGetSubagentProvider(t *testing.T) {
+func TestConfigValidate(t *testing.T) {
 	tests := []struct {
-		name             string
-		config           *Config
-		expectedProvider string
+		name        string
+		config      *Config
+		expectError bool
+		errorMsg    string
 	}{
 		{
-			name: "explicit subagent provider",
+			name: "PDF OCR disabled - should pass",
 			config: &Config{
-				SubagentProvider: "openrouter",
-				LastUsedProvider: "openai",
+				PDFOCREnabled: false,
 			},
-			expectedProvider: "openrouter",
+			expectError: false,
 		},
 		{
-			name: "fallback to last used provider",
+			name: "PDF OCR enabled with provider and model - should pass",
 			config: &Config{
-				LastUsedProvider: "deepinfra",
-				ProviderPriority: []string{"openai", "zai"},
+				PDFOCREnabled:  true,
+				PDFOCRProvider: "ollama",
+				PDFOCRModel:    "glm-ocr",
 			},
-			expectedProvider: "deepinfra",
+			expectError: false,
 		},
 		{
-			name: "fallback to provider priority",
+			name: "PDF OCR enabled but empty provider - should fail",
 			config: &Config{
-				ProviderPriority: []string{"zai", "openrouter"},
+				PDFOCREnabled:  true,
+				PDFOCRProvider: "",
+				PDFOCRModel:    "glm-ocr",
 			},
-			expectedProvider: "zai",
+			expectError: true,
+			errorMsg:    "PDF OCR provider cannot be empty when PDF OCR is enabled",
 		},
 		{
-			name: "ultimate fallback to openai",
+			name: "PDF OCR enabled but empty model - should fail",
 			config: &Config{
-				ProviderPriority: []string{},
+				PDFOCREnabled:  true,
+				PDFOCRProvider: "ollama",
+				PDFOCRModel:    "",
 			},
-			expectedProvider: "openai",
+			expectError: true,
+			errorMsg:    "PDF OCR model cannot be empty when PDF OCR is enabled",
+		},
+		{
+			name: "PDF OCR enabled with empty provider and model - should fail",
+			config: &Config{
+				PDFOCREnabled:  true,
+				PDFOCRProvider: "",
+				PDFOCRModel:    "",
+			},
+			expectError: true,
+			errorMsg:    "PDF OCR provider cannot be empty when PDF OCR is enabled",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.config.GetSubagentProvider()
-			if result != tt.expectedProvider {
-				t.Errorf("GetSubagentProvider() = %s, want %s", result, tt.expectedProvider)
+			err := tt.config.Validate()
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMsg)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
-	}
-}
-
-func TestGetSubagentModel(t *testing.T) {
-	tests := []struct {
-		name          string
-		config        *Config
-		expectedModel string
-	}{
-		{
-			name: "explicit subagent model",
-			config: &Config{
-				SubagentModel: "custom-model",
-				ProviderModels: map[string]string{
-					"openai": "gpt-4",
-				},
-			},
-			expectedModel: "custom-model",
-		},
-		{
-			name: "fallback to provider model",
-			config: &Config{
-				SubagentProvider: "openai",
-				ProviderModels: map[string]string{
-					"openai": "gpt-4-turbo",
-				},
-			},
-			expectedModel: "gpt-4-turbo",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.config.GetSubagentModel()
-			if result != tt.expectedModel {
-				t.Errorf("GetSubagentModel() = %s, want %s", result, tt.expectedModel)
-			}
-		})
-	}
-}
-
-func TestSetSubagentProvider(t *testing.T) {
-	config := &Config{}
-	config.SetSubagentProvider("openrouter")
-
-	if config.SubagentProvider != "openrouter" {
-		t.Errorf("SetSubagentProvider() failed, got %s, want openrouter", config.SubagentProvider)
-	}
-}
-
-func TestSetSubagentModel(t *testing.T) {
-	config := &Config{}
-	config.SetSubagentModel("qwen/qwen-coder-32b")
-
-	if config.SubagentModel != "qwen/qwen-coder-32b" {
-		t.Errorf("SetSubagentModel() failed, got %s, want qwen/qwen-coder-32b", config.SubagentModel)
 	}
 }

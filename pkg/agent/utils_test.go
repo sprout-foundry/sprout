@@ -145,6 +145,7 @@ func TestSuggestCorrectToolName(t *testing.T) {
 		{"cmd", "shell_command"},
 		{"read", "read_file"},
 		{"cat", "read_file"},
+		{"open_file", "read_file"},
 		{"write", "write_file"},
 		{"edit", "edit_file"},
 		{"todo", "TodoWrite"},

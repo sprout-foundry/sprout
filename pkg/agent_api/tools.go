@@ -87,33 +87,6 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
-				Name:        "create",
-				Description: "Create a new file with content. Fails if file already exists (use write_file to overwrite)",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"path": map[string]interface{}{
-							"type":        "string",
-							"description": "Path to file to create",
-							"minLength":   1,
-						},
-						"file_text": map[string]interface{}{
-							"type":        "string",
-							"description": "Content to write to the new file",
-						},
-					},
-					"required":             []string{"path", "file_text"},
-					"additionalProperties": false,
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
 				Name:        "edit_file",
 				Description: "Replace exact string match in file",
 				Parameters: map[string]interface{}{
@@ -197,23 +170,6 @@ func GetToolDefinitions() []Tool {
 			}{
 				Name:        "TodoRead",
 				Description: "Use this tool to read the current to-do list for the session.",
-				Parameters: map[string]interface{}{
-					"type":                 "object",
-					"properties":           map[string]interface{}{},
-					"required":             []string{},
-					"additionalProperties": false,
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
-				Name:        "validate_build",
-				Description: "Validate that the project builds successfully after file operations",
 				Parameters: map[string]interface{}{
 					"type":                 "object",
 					"properties":           map[string]interface{}{},

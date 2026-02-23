@@ -173,6 +173,7 @@ func (a *Agent) suggestCorrectToolName(invalidName string) string {
 		"read":                        "read_file",
 		"cat":                         "read_file",
 		"open":                        "read_file",
+		"open_file":                   "read_file",
 		"write":                       "write_file",
 		"save":                        "write_file",
 		"create":                      "write_file",

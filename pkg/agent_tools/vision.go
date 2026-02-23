@@ -11,9 +11,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	
+
 	"github.com/ledongthuc/pdf"
-	
+
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/factory"
 )
@@ -562,8 +562,6 @@ func (vp *VisionProcessor) getImageData(imagePath string) (string, error) {
 	return base64.StdEncoding.EncodeToString(data), nil
 }
 
-
-
 // downloadImage downloads an image from URL
 func (vp *VisionProcessor) downloadImage(url string) ([]byte, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -1017,12 +1015,12 @@ func SimplePDFInfo(pdfPath string) (map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat PDF file: %w", err)
 	}
-	
+
 	maxSize := int64(20 * 1024 * 1024) // 20MB
 	if fileInfo.Size() > maxSize {
 		return nil, fmt.Errorf("PDF file too large (%d MB), maximum size is %d MB", fileInfo.Size()/1024/1024, maxSize/1024/1024)
 	}
-	
+
 	f, r, err := pdf.Open(pdfPath)
 	defer func() {
 		_ = f.Close()
@@ -1079,12 +1077,12 @@ func (vp *VisionProcessor) tryDirectPDFProcessing(pdfPath string) (VisionAnalysi
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("failed to stat PDF file: %w", err)
 	}
-	
+
 	maxSize := int64(20 * 1024 * 1024) // 20MB
 	if fileInfo.Size() > maxSize {
 		return VisionAnalysis{}, fmt.Errorf("PDF file too large (%d MB), maximum size is %d MB", fileInfo.Size()/1024/1024, maxSize/1024/1024)
 	}
-	
+
 	// Read PDF file
 	data, err := os.ReadFile(pdfPath)
 	if err != nil {
@@ -1131,12 +1129,12 @@ func (vp *VisionProcessor) extractPDFText(pdfPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to stat PDF file: %w", err)
 	}
-	
+
 	maxSize := int64(20 * 1024 * 1024) // 20MB
 	if fileInfo.Size() > maxSize {
 		return "", fmt.Errorf("PDF file too large (%d MB), maximum size is %d MB", fileInfo.Size()/1024/1024, maxSize/1024/1024)
 	}
-	
+
 	// Open the PDF file
 	f, r, err := pdf.Open(pdfPath)
 	defer func() {

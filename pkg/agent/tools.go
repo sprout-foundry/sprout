@@ -12,9 +12,9 @@ import (
 
 // executeTool handles the execution of individual tool calls
 func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
-	// Some models (e.g., Qwen) append "<|channel|>commentary" suffix to tool names.
-	// Strip it if present to extract the actual tool name.
-	toolName := strings.TrimSuffix(toolCall.Function.Name, "<|channel|>commentary")
+	// Some models (e.g., Harmony/GPT-OSS) append "<|channel|>xxx" suffix to tool names
+	// where xxx can be "commentary", "json", "tool_use", etc. Strip it to get the actual tool name.
+	toolName := strings.Split(toolCall.Function.Name, "<|channel|>")[0]
 
 	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {

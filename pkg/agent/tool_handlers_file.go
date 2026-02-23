@@ -8,7 +8,6 @@ import (
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/filesystem"
 )
 
 // Tool handler implementations for file operations
@@ -200,54 +199,6 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		if readErr == nil {
 			a.ShowColoredDiff(originalContent, newContent, 50)
 		}
-	}
-
-	return result, err
-}
-
-// handleCreate creates a new file with content. Fails if file already exists.
-func handleCreate(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	path, err := getFilePath(args)
-	if err != nil {
-		return "", err
-	}
-
-	fileText, err := getRequiredString(args, "file_text")
-	if err != nil {
-		return "", err
-	}
-
-	if warning := validateJSONContent(fileText, path); warning != "" {
-		a.debugLog("%s\n", warning)
-	}
-
-	a.ToolLog("creating file", fmt.Sprintf("%s (%d bytes)", path, len(fileText)))
-	a.debugLog("Creating file: %s\n", path)
-
-	// Fail if file exists (safe create)
-	if filesystem.FileExists(path) {
-		return "", fmt.Errorf("file already exists: %s (use write_file to overwrite)", path)
-	}
-
-	result, err := tools.WriteFile(ctx, path, fileText)
-	if err != nil {
-		ctx2 := handleFileSecurityError(ctx, a, "create", path, err)
-		if ctx2 != ctx {
-			result, err = tools.WriteFile(ctx2, path, fileText)
-		}
-	}
-
-	a.debugLog("Create file result: %s, error: %v\n", result, err)
-
-	if err == nil {
-		if trackErr := a.TrackFileWrite(path, fileText); trackErr != nil {
-			a.debugLog("Warning: Failed to track file create: %v\n", trackErr)
-		}
-	}
-
-	if err == nil && a.eventBus != nil {
-		a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "create", fileText))
-		a.debugLog("Published file_changed event: %s (create)\n", path)
 	}
 
 	return result, err

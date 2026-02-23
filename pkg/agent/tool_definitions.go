@@ -107,17 +107,6 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleWriteFile,
 	})
 
-	// Register create tool
-	registry.RegisterTool(ToolConfig{
-		Name:        "create",
-		Description: "Create a new file with content. Fails if file already exists (use write_file to overwrite)",
-		Parameters: []ParameterConfig{
-			{"path", "string", true, []string{"file_path"}, "Path to the file to create"},
-			{"file_text", "string", true, []string{"content"}, "Content to write to the new file"},
-		},
-		Handler: handleCreate,
-	})
-
 	// Register edit_file tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "edit_file",
@@ -146,14 +135,6 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Description: "Use this tool to read the current to-do list for the session.",
 		Parameters:  []ParameterConfig{},
 		Handler:     handleTodoRead,
-	})
-
-	// Register build validation tool
-	registry.RegisterTool(ToolConfig{
-		Name:        "validate_build",
-		Description: "Validate project build after file operations",
-		Parameters:  []ParameterConfig{},
-		Handler:     handleValidateBuild,
 	})
 
 	// Register run_subagent tool - for multi-agent collaboration

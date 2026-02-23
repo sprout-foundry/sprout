@@ -322,7 +322,7 @@ func (fp *FallbackParser) convertRawToolCall(raw json.RawMessage) (api.ToolCall,
 		}
 	}
 
-	call.Function.Name = name
+	call.Function.Name = strings.Split(name, "<|channel|>")[0]
 	call.Function.Arguments = arguments
 
 	return call, true
@@ -482,7 +482,7 @@ func (fp *FallbackParser) createToolCallFromArgs(name string, args map[string]in
 	}
 
 	call := api.ToolCall{}
-	call.Function.Name = strings.TrimSpace(name)
+	call.Function.Name = strings.Split(strings.TrimSpace(name), "<|channel|>")[0]
 	call.Function.Arguments = string(argsJSON)
 	return call
 }

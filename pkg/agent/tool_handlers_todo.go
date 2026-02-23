@@ -77,11 +77,3 @@ func handleTodoRead(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 	return result.String(), nil
 }
-
-func handleValidateBuild(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	a.debugLog("Running build validation\n")
-
-	result, err := tools.ValidateBuild()
-	a.debugLog("Build validation result: %s, error: %v\n", result, err)
-	return result, err
-}

@@ -195,7 +195,9 @@ func (b *StreamingResponseBuilder) processToolCallDelta(choiceIndex int, delta *
 	}
 	if delta.Function != nil {
 		if delta.Function.Name != "" {
-			toolCall.Function.Name = delta.Function.Name
+			// Some models (e.g., Harmony/GPT-OSS) append "<|channel|>xxx" suffix to tool names
+			// Strip it to get the actual tool name
+			toolCall.Function.Name = strings.Split(delta.Function.Name, "<|channel|>")[0]
 		}
 		if delta.Function.Arguments != "" {
 			b.toolCallArgs[delta.Index].WriteString(delta.Function.Arguments)

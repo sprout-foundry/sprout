@@ -651,7 +651,8 @@ func convertOllamaToolCalls(calls []ollama.ToolCall) []ToolCall {
 		}
 
 		toolCall := ToolCall{Type: "function"}
-		toolCall.Function.Name = call.Function.Name
+		// Some models append "<|channel|>xxx" suffix to tool names - strip it
+		toolCall.Function.Name = strings.Split(call.Function.Name, "<|channel|>")[0]
 		toolCall.Function.Arguments = arguments
 		result = append(result, toolCall)
 	}

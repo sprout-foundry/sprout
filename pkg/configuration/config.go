@@ -88,6 +88,12 @@ type Config struct {
 	SubagentModel    string                  `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
 	SubagentTypes    map[string]SubagentType `json:"subagent_types,omitempty"`    // Named subagent personas (coder, tester, etc.)
 
+	// PDF OCR Configuration
+	PDFOCREnabled    bool   `json:"pdf_ocr_enabled,omitempty"`    // Enable PDF OCR processing
+	PDFOCRProvider   string `json:"pdf_ocr_provider,omitempty"`   // Provider for PDF OCR (e.g., "ollama", "openai", "deepinfra")
+	PDFOCRModel      string `json:"pdf_ocr_model,omitempty"`      // Model for PDF OCR (e.g., "glm-ocr", "llama3.2-vision")
+	PDFOCRDownloaded bool   `json:"pdf_ocr_downloaded,omitempty"` // Whether the model has been downloaded
+
 	// Skills Configuration
 	Skills map[string]Skill `json:"skills,omitempty"` // Agent Skills that can be loaded into context
 
@@ -617,3 +623,18 @@ func (c *Config) GetAllEnabledSkills() map[string]Skill {
 }
 
 // GetMCPServerTimeout moved to pkg/mcp package with MCPServerConfig
+
+// Validate validates the configuration and returns any errors
+func (c *Config) Validate() error {
+	// Validate PDF OCR configuration
+	if c.PDFOCREnabled {
+		if c.PDFOCRProvider == "" {
+			return fmt.Errorf("PDF OCR provider cannot be empty when PDF OCR is enabled")
+		}
+		if c.PDFOCRModel == "" {
+			return fmt.Errorf("PDF OCR model cannot be empty when PDF OCR is enabled")
+		}
+	}
+
+	return nil
+}

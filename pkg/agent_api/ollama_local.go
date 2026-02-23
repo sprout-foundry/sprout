@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -24,6 +26,52 @@ type OllamaLocalClient struct {
 	model         string
 	debug         bool
 	clientFactory ollamaClientFactory
+}
+
+func isWSL() bool {
+	if _, err := os.Stat("/proc/version"); err != nil {
+		return false
+	}
+	data, err := os.ReadFile("/proc/version")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(data)), "microsoft")
+}
+
+func getWindowsHostIP() string {
+	if !isWSL() {
+		return ""
+	}
+
+	cmd := exec.Command("ip", "route", "show")
+	cmd.Stdout = nil
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "default") {
+			parts := strings.Fields(line)
+			for i, part := range parts {
+				if part == "default" && i+2 < len(parts) {
+					ip := parts[i+2]
+					if net.ParseIP(ip) != nil {
+						return ip
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func init() {
+	if hostIP := getWindowsHostIP(); hostIP != "" {
+		os.Setenv("OLLAMA_HOST", "http://"+hostIP+":11434")
+	}
 }
 
 func defaultOllamaClientFactory() (ollamaClient, error) {

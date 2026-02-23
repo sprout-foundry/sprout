@@ -250,6 +250,10 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	// Ensure tool calls always carry IDs so downstream sanitization can keep results
 	if len(choice.Message.ToolCalls) > 0 {
 		for i := range choice.Message.ToolCalls {
+			// Some models (e.g., Harmony/GPT-OSS) append "<|channel|>xxx" suffix to tool names
+			// Strip it to get the actual tool name
+			choice.Message.ToolCalls[i].Function.Name = strings.Split(choice.Message.ToolCalls[i].Function.Name, "<|channel|>")[0]
+
 			if choice.Message.ToolCalls[i].ID == "" {
 				choice.Message.ToolCalls[i].ID = ch.toolExecutor.GenerateToolCallID(choice.Message.ToolCalls[i].Function.Name)
 				ch.agent.debugLog("🔧 Generated missing tool call ID: %s for tool: %s\n",

@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.10.6] - 2026-02-24
+
+- Merge remote-tracking branch 'origin/main' (5baaf27)
+- Updates 3 files - Updates vision support for Ollama, PDF OCR defaults (d89a4e2)
+- docs: Update changelog for v0.10.5 (3aa3cff)
+
 ## [v0.10.5] - 2026-02-23
 
 - Updates 2 files - Updates code formatting and whitespace (2d48d20)

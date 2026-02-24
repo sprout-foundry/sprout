@@ -338,6 +338,9 @@ func NewConfig() *Config {
 				Metadata:    map[string]string{"version": "1.0"},
 			},
 		},
+		PDFOCREnabled:  true,
+		PDFOCRProvider: "ollama",
+		PDFOCRModel:    "glm-ocr",
 	}
 }
 
@@ -436,6 +439,15 @@ func Load() (*Config, error) {
 		if config.APITimeouts.OverallTimeoutSec == 0 {
 			config.APITimeouts.OverallTimeoutSec = def.OverallTimeoutSec
 		}
+	}
+
+	// Apply PDF OCR defaults if not configured
+	if !config.PDFOCREnabled && config.PDFOCRProvider == "" && config.PDFOCRModel == "" {
+		// Only apply defaults if none of the PDF OCR settings are configured
+		def := NewConfig()
+		config.PDFOCREnabled = def.PDFOCREnabled
+		config.PDFOCRProvider = def.PDFOCRProvider
+		config.PDFOCRModel = def.PDFOCRModel
 	}
 
 	// Apply default for EnableZshCommandDetection if not explicitly set

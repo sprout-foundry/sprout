@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -200,7 +201,22 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 		}
 	} else {
 		for _, msg := range messages {
-			ollamaMessages = append(ollamaMessages, ollama.Message{Role: msg.Role, Content: msg.Content})
+			ollamaMsg := ollama.Message{Role: msg.Role, Content: msg.Content}
+			// Handle images - convert ImageData to Ollama image format
+			if len(msg.Images) > 0 {
+				ollamaImages := []ollama.ImageData{}
+				for _, img := range msg.Images {
+					// Images should be base64 encoded - decode and use as bytes
+					if img.Base64 != "" {
+						data, err := base64.StdEncoding.DecodeString(img.Base64)
+						if err == nil {
+							ollamaImages = append(ollamaImages, data)
+						}
+					}
+				}
+				ollamaMsg.Images = ollamaImages
+			}
+			ollamaMessages = append(ollamaMessages, ollamaMsg)
 		}
 	}
 
@@ -471,9 +487,13 @@ func (c *OllamaLocalClient) ListModels() ([]ModelInfo, error) {
 	return models, nil
 }
 
-// SupportsVision returns false as local Ollama doesn't support vision through this interface
+// SupportsVision returns true for OCR-capable models
 func (c *OllamaLocalClient) SupportsVision() bool {
-	return false
+	// glm-ocr and similar vision models support image input
+	modelLower := strings.ToLower(c.model)
+	return strings.Contains(modelLower, "ocr") ||
+		strings.Contains(modelLower, "vision") ||
+		strings.Contains(modelLower, "llama3.2")
 }
 
 // GetVisionModel returns empty string as vision is not supported
@@ -481,9 +501,10 @@ func (c *OllamaLocalClient) GetVisionModel() string {
 	return ""
 }
 
-// SendVisionRequest returns an error as vision is not supported
+// SendVisionRequest handles vision/OCR requests for Ollama
+// Delegates to SendChatRequest since the image handling is done in buildChatRequest
 func (c *OllamaLocalClient) SendVisionRequest(messages []Message, tools []Tool, reasoning string) (*ChatResponse, error) {
-	return nil, fmt.Errorf("vision requests are not supported by local Ollama through this interface")
+	return c.SendChatRequest(messages, tools, reasoning)
 }
 
 // SendChatRequestStream streams responses from local Ollama as they arrive

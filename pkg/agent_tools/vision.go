@@ -178,8 +178,19 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 	case api.OpenAIClientType:
 		// OpenAI uses built-in client with a fixed vision model.
 		return "gpt-4o-mini"
-	case api.OllamaClientType, api.OllamaLocalClientType, api.OllamaTurboClientType:
-		// Ollama requires manual model verification
+	case api.OllamaClientType, api.OllamaLocalClientType:
+		// Prefer configured Ollama OCR model when available.
+		configManager, err := configuration.NewManager()
+		if err == nil {
+			config := configManager.GetConfig()
+			if config.PDFOCREnabled && config.PDFOCRProvider == "ollama" && strings.TrimSpace(config.PDFOCRModel) != "" {
+				return ensureOllamaModelTag(config.PDFOCRModel)
+			}
+		}
+		// Fallback to default local OCR/vision model.
+		return "glm-ocr:latest"
+	case api.OllamaTurboClientType:
+		// Ollama turbo currently does not support vision.
 		return ""
 	case api.TestClientType:
 		return ""
@@ -225,8 +236,9 @@ func getDefaultModelForProvider(providerType api.ClientType) string {
 
 // createVisionClient creates a client capable of vision analysis
 func createVisionClient() (api.ClientInterface, error) {
-	// Priority: DeepInfra (cheapest) -> OpenRouter -> OpenAI -> Mistral -> ZAI
+	// Priority: Local Ollama -> DeepInfra -> OpenRouter -> OpenAI -> Mistral -> ZAI
 	providers := []api.ClientType{
+		api.OllamaClientType,
 		api.DeepInfraClientType,
 		api.OpenRouterClientType,
 		api.OpenAIClientType,
@@ -778,15 +790,16 @@ func (vp *VisionProcessor) enhanceTextWithAnalysis(text, imagePath string, analy
 // HasVisionCapability checks if vision processing is available
 func HasVisionCapability() bool {
 	// Check if any provider with vision capability is available
-	// Priority: DeepInfra (cheapest) -> OpenRouter -> OpenAI -> Mistral
+	// Priority: local providers first, then remote providers.
 	providers := []api.ClientType{
+		api.OllamaClientType,
+		api.OllamaLocalClientType,
 		api.DeepInfraClientType,
 		api.OpenRouterClientType,
 		api.OpenAIClientType,
 		api.MistralClientType,
 		api.DeepSeekClientType,
 		api.ZAIClientType,
-		api.OllamaClientType,
 	}
 
 	for _, providerType := range providers {
@@ -822,9 +835,8 @@ func HasVisionCapability() bool {
 			if os.Getenv("ZAI_API_KEY") == "" {
 				continue
 			}
-		case api.OllamaClientType:
-			// Ollama doesn't require API key, but still needs manual verification
-			continue // Skip Ollama for now as it requires manual setup
+		case api.OllamaClientType, api.OllamaLocalClientType:
+			// Local providers do not require API keys.
 		}
 
 		// Try to create client with vision model
@@ -1342,11 +1354,23 @@ func processPDFWithVisionModel(pdfPath, provider, model string) (string, error) 
 
 // createOllamaClient creates an Ollama client with the specified model
 func createOllamaClient(model string) (api.ClientInterface, error) {
+	model = ensureOllamaModelTag(model)
 	client, err := factory.CreateProviderClient(api.OllamaClientType, model)
 	if err != nil {
 		return nil, err
 	}
 	return client, nil
+}
+
+func ensureOllamaModelTag(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return model
+	}
+	if strings.Contains(model, ":") {
+		return model
+	}
+	return model + ":latest"
 }
 
 // SimplePDFInfo returns basic info about PDF file

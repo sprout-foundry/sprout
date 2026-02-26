@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -106,15 +105,12 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
 	mux.HandleFunc("/static/", ws.handleStaticFiles)
 	mux.HandleFunc("/sw.js", ws.handleServiceWorker)
-
-	// Additional asset files - serve from filesystem directly
-	assetHandler := http.FileServer(http.Dir("./pkg/webui/static"))
-	mux.Handle("/manifest.json", assetHandler)
-	mux.Handle("/browserconfig.xml", assetHandler)
-	mux.Handle("/asset-manifest.json", assetHandler)
-	mux.Handle("/icon-192.png", assetHandler)
-	mux.Handle("/icon-512.png", assetHandler)
-	mux.Handle("/favicon.ico", assetHandler)
+	mux.HandleFunc("/manifest.json", ws.handleManifest)
+	mux.HandleFunc("/browserconfig.xml", ws.handleBrowserConfig)
+	mux.HandleFunc("/asset-manifest.json", ws.handleAssetManifest)
+	mux.HandleFunc("/icon-192.png", ws.handleIcon192)
+	mux.HandleFunc("/icon-512.png", ws.handleIcon512)
+	mux.HandleFunc("/favicon.ico", ws.handleFavicon)
 
 	// Health check endpoint for connectivity verification
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -193,56 +189,6 @@ func (ws *ReactWebServer) countConnections() int {
 		return true
 	})
 	return count
-}
-
-// handleStaticAsset handles individual asset files (manifest, icons, etc.)
-func (ws *ReactWebServer) handleStaticAsset(w http.ResponseWriter, r *http.Request, embeddedPath string, contentType string, optional ...bool) {
-	// Check if this file is optional (don't return 404)
-	isOptional := len(optional) > 0 && optional[0]
-	// Check if we should look in the static subdirectory
-	lookInStatic := len(optional) > 1 && optional[1]
-
-	// For now, use filesystem directly since embedded files aren't working correctly
-	// Try embedded filesystem first
-	var data []byte
-	var err error
-
-	// Try the primary path in embedded FS
-	data, err = staticFiles.ReadFile(embeddedPath)
-	if err != nil && lookInStatic && !strings.HasPrefix(embeddedPath, "static/") {
-		// Try with static/ prefix
-		data, err = staticFiles.ReadFile("static/" + embeddedPath)
-	}
-
-	if err != nil {
-		// Fallback to filesystem
-		var fsPath string
-		if lookInStatic {
-			fsPath = "./pkg/webui/static/" + embeddedPath
-		} else {
-			fsPath = "./pkg/webui/static/" + embeddedPath
-		}
-
-		data, err = os.ReadFile(fsPath)
-		if err != nil {
-			if isOptional {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("404 Not Found"))
-			return
-		}
-	}
-
-	// Set content type
-	if contentType != "" {
-		w.Header().Set("Content-Type", contentType)
-	}
-
-	// Enable caching for assets
-	w.Header().Set("Cache-Control", "public, max-age=3600")
-	w.Write(data)
 }
 
 // CheckPortAvailable checks if a port is available to bind to

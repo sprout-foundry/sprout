@@ -35,6 +35,7 @@ const Terminal: React.FC<TerminalProps> = ({
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const terminalWS = useRef<TerminalWebSocketService | null>(null);
+  const terminalEventHandlerRef = useRef<((event: any) => void) | null>(null);
 
   const addLine = useCallback((type: 'input' | 'output' | 'error', content: string) => {
     const newLine: TerminalLine = {
@@ -70,7 +71,7 @@ const Terminal: React.FC<TerminalProps> = ({
         terminalWS.current = terminalService;
 
         // Set up event handlers
-        terminalWS.current.onEvent((event) => {
+        const eventHandler = (event: any) => {
           if (event.type === 'connection_status') {
             if (event.data.connected) {
               // Don't set connected yet - wait for session_ready
@@ -89,7 +90,9 @@ const Terminal: React.FC<TerminalProps> = ({
           } else if (event.type === 'error') {
             addLine('error', event.data.message);
           }
-        });
+        };
+        terminalEventHandlerRef.current = eventHandler;
+        terminalWS.current.onEvent(eventHandler);
 
         // Connect to terminal
         terminalWS.current.connect();
@@ -97,6 +100,10 @@ const Terminal: React.FC<TerminalProps> = ({
     } else {
       // Disconnect when collapsed or not connected
       if (terminalWS.current) {
+        if (terminalEventHandlerRef.current) {
+          terminalWS.current.removeEvent(terminalEventHandlerRef.current);
+          terminalEventHandlerRef.current = null;
+        }
         terminalWS.current.disconnect();
         terminalWS.current = null;
         setTerminalConnected(false);
@@ -104,7 +111,10 @@ const Terminal: React.FC<TerminalProps> = ({
     }
 
     return () => {
-      // Don't disconnect on unmount - keep the singleton alive
+      if (terminalWS.current && terminalEventHandlerRef.current) {
+        terminalWS.current.removeEvent(terminalEventHandlerRef.current);
+        terminalEventHandlerRef.current = null;
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExpanded, isConnected]);

@@ -142,14 +142,13 @@ class TerminalWebSocketService {
   }
 
   onEvent(callback: TerminalEventCallback) {
-    this.callbacks.push(callback);
+    if (!this.callbacks.includes(callback)) {
+      this.callbacks.push(callback);
+    }
   }
 
   removeEvent(callback: TerminalEventCallback) {
-    const index = this.callbacks.indexOf(callback);
-    if (index > -1) {
-      this.callbacks.splice(index, 1);
-    }
+    this.callbacks = this.callbacks.filter(cb => cb !== callback);
   }
 
   private notifyCallbacks(event: any) {

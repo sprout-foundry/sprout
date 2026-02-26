@@ -196,21 +196,24 @@ function App() {
       case 'query_started':
         logEntry.category = 'query';
         logEntry.level = 'info';
+        const startedQuery = event.data?.query || '';
         lastChunkRef.current = ''; // Reset chunk tracking for new query
         setState(prev => ({
           ...prev,
+          isProcessing: true,
+          lastError: null,
           queryCount: prev.queryCount + 1,
           messages: [...prev.messages, {
             id: Date.now().toString(),
             type: 'user',
-            content: event.data.query,
+            content: startedQuery,
             timestamp: new Date()
           }],
           toolExecutions: [], // Clear previous tool executions
           queryProgress: null, // Clear previous progress
           logs: [...prev.logs, logEntry]
         }));
-        console.log('🚀 Query started:', event.data.query);
+        console.log('🚀 Query started:', startedQuery);
         break;
 
       case 'query_progress':
@@ -265,6 +268,7 @@ function App() {
           ...prev,
           isProcessing: false,
           lastError: null,
+          queryProgress: null,
           logs: [...prev.logs, logEntry]
         }));
         console.log('✅ Query completed');
@@ -349,12 +353,16 @@ function App() {
       case 'error':
         logEntry.category = 'system';
         logEntry.level = 'error';
+        const errorMessage = event.data?.message || 'Unknown error';
         setState(prev => ({
           ...prev,
+          isProcessing: false,
+          queryProgress: null,
+          lastError: errorMessage,
           messages: [...prev.messages, {
             id: Date.now().toString(),
             type: 'assistant',
-            content: `❌ Error: ${event.data.message}`,
+            content: `❌ Error: ${errorMessage}`,
             timestamp: new Date()
           }],
           logs: [...prev.logs, logEntry]
@@ -418,7 +426,7 @@ function App() {
         if (response && response.files) {
           // Convert files array to expected format
           const files = response.files.map((file: any) => ({
-            path: file.name,
+            path: file.path || file.name,
             modified: false
           }));
           setRecentFiles(files);
@@ -449,6 +457,7 @@ function App() {
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current);
       }
+      wsService.removeEvent(handleEvent);
       wsService.disconnect();
       window.removeEventListener('resize', checkMobile);
       clearInterval(statsInterval);

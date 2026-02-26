@@ -94,38 +94,19 @@ func NewVisionProcessorWithMode(debug bool, mode string) (*VisionProcessor, erro
 	var client api.ClientInterface
 	var err error
 
-	// Check if PDF OCR is configured - use glm-ocr from Ollama if available
-	configManager, configErr := configuration.NewManager()
-	if configErr == nil {
-		config := configManager.GetConfig()
-		if config.PDFOCREnabled && config.PDFOCRProvider == "ollama" {
-			// Use the configured OCR model from Ollama
-			model := config.PDFOCRModel
-			if model != "" {
-				client, err = createOllamaClient(model)
-				if err == nil {
-					return &VisionProcessor{
-						visionClient: client,
-						debug:        debug,
-					}, nil
-				}
-			}
-		}
-	}
-
-	// Choose optimal model based on analysis mode
+	// Choose preferred provider/model by analysis mode, then fall back through provider vision setups.
 	switch strings.ToLower(mode) {
 	case "frontend", "design", "ui", "html", "css":
-		// Use gemma-3-27b-it for comprehensive frontend analysis
+		// Prefer a high-quality frontend vision model when available.
 		client, err = createVisionClientWithModel("google/gemma-3-27b-it")
-	case "general", "text", "content", "extract", "analyze":
-		// Try Ollama with glm-ocr first, then fall back to remote
-		client, err = createOllamaClient("glm-ocr:latest")
 		if err != nil {
-			client, err = createVisionClientWithModel("google/gemma-3-27b-it")
+			client, err = createVisionClient()
 		}
+	case "general", "text", "content", "extract", "analyze":
+		// Prefer configured provider vision models first, then Ollama as last fallback.
+		client, err = createVisionClient()
 	default:
-		// Default to balanced approach (current implementation)
+		// Default to provider-first selection with Ollama as fallback.
 		client, err = createVisionClient()
 	}
 
@@ -236,15 +217,15 @@ func getDefaultModelForProvider(providerType api.ClientType) string {
 
 // createVisionClient creates a client capable of vision analysis
 func createVisionClient() (api.ClientInterface, error) {
-	// Priority: Local Ollama -> DeepInfra -> OpenRouter -> OpenAI -> Mistral -> ZAI
+	// Priority: configured provider vision models first, local Ollama last.
 	providers := []api.ClientType{
-		api.OllamaClientType,
 		api.DeepInfraClientType,
 		api.OpenRouterClientType,
 		api.OpenAIClientType,
 		api.MistralClientType,
 		api.ZAIClientType,
 		api.DeepSeekClientType,
+		api.OllamaClientType,
 	}
 
 	for _, providerType := range providers {
@@ -274,7 +255,7 @@ func createVisionClient() (api.ClientInterface, error) {
 		return client, nil
 	}
 
-	return nil, fmt.Errorf("no vision-capable providers available - please set up DEEPINFRA_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY for vision capabilities")
+	return nil, fmt.Errorf("no vision-capable providers available - please configure a provider vision model or local Ollama OCR model")
 }
 
 // getAPIKeyEnvVar returns the environment variable name for the provider's API key
@@ -790,16 +771,16 @@ func (vp *VisionProcessor) enhanceTextWithAnalysis(text, imagePath string, analy
 // HasVisionCapability checks if vision processing is available
 func HasVisionCapability() bool {
 	// Check if any provider with vision capability is available
-	// Priority: local providers first, then remote providers.
+	// Priority: provider vision models first, local providers last.
 	providers := []api.ClientType{
-		api.OllamaClientType,
-		api.OllamaLocalClientType,
 		api.DeepInfraClientType,
 		api.OpenRouterClientType,
 		api.OpenAIClientType,
 		api.MistralClientType,
 		api.DeepSeekClientType,
 		api.ZAIClientType,
+		api.OllamaClientType,
+		api.OllamaLocalClientType,
 	}
 
 	for _, providerType := range providers {

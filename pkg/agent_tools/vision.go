@@ -137,17 +137,29 @@ func NewVisionProcessorWithProvider(debug bool, providerType api.ClientType) (*V
 func createVisionClientWithProvider(providerType api.ClientType) (api.ClientInterface, error) {
 	// Get the vision model for this provider
 	visionModel := GetVisionModelForProvider(providerType)
-	if visionModel == "" {
-		return nil, fmt.Errorf("provider %s does not support vision models", providerType)
+	if visionModel != "" {
+		// Create client with the vision model
+		client, err := factory.CreateProviderClient(providerType, visionModel)
+		if err == nil && client.SupportsVision() {
+			return client, nil
+		}
 	}
 
-	// Create client with the vision model
-	client, err := factory.CreateProviderClient(providerType, visionModel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create vision client for provider %s: %w", providerType, err)
+	// For custom providers, support explicit vision fallback provider/model.
+	fallbackProvider, fallbackModel, hasFallback := getCustomVisionFallback(providerType)
+	if hasFallback {
+		if fallbackModel == "" {
+			fallbackModel = GetVisionModelForProvider(fallbackProvider)
+		}
+		if fallbackModel != "" {
+			client, err := factory.CreateProviderClient(fallbackProvider, fallbackModel)
+			if err == nil && client.SupportsVision() {
+				return client, nil
+			}
+		}
 	}
 
-	return client, nil
+	return nil, fmt.Errorf("provider %s does not support vision models and no usable fallback is configured", providerType)
 }
 
 // GetVisionModelForProvider returns the appropriate vision model for a given provider
@@ -175,6 +187,17 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 		return ""
 	case api.TestClientType:
 		return ""
+	}
+
+	// Check custom provider config first for explicit vision settings.
+	if customConfig, ok := getCustomProviderConfig(providerType); ok {
+		if !customConfig.SupportsVision {
+			return ""
+		}
+		if strings.TrimSpace(customConfig.VisionModel) != "" {
+			return strings.TrimSpace(customConfig.VisionModel)
+		}
+		return strings.TrimSpace(customConfig.ModelName)
 	}
 
 	// Try to create a provider to get its vision model
@@ -225,8 +248,9 @@ func createVisionClient() (api.ClientInterface, error) {
 		api.MistralClientType,
 		api.ZAIClientType,
 		api.DeepSeekClientType,
-		api.OllamaClientType,
 	}
+	providers = append(providers, getCustomVisionProviders()...)
+	providers = append(providers, api.OllamaClientType)
 
 	for _, providerType := range providers {
 		// Get API key env var for this provider
@@ -779,9 +803,12 @@ func HasVisionCapability() bool {
 		api.MistralClientType,
 		api.DeepSeekClientType,
 		api.ZAIClientType,
+	}
+	providers = append(providers, getCustomVisionProviders()...)
+	providers = append(providers,
 		api.OllamaClientType,
 		api.OllamaLocalClientType,
-	}
+	)
 
 	for _, providerType := range providers {
 		// Get the vision model for this provider
@@ -1352,6 +1379,67 @@ func ensureOllamaModelTag(model string) string {
 		return model
 	}
 	return model + ":latest"
+}
+
+func getCustomProviderConfig(providerType api.ClientType) (configuration.CustomProviderConfig, bool) {
+	configManager, err := configuration.NewManager()
+	if err != nil {
+		return configuration.CustomProviderConfig{}, false
+	}
+	config := configManager.GetConfig()
+	if config == nil || config.CustomProviders == nil {
+		return configuration.CustomProviderConfig{}, false
+	}
+
+	customConfig, exists := config.CustomProviders[string(providerType)]
+	if !exists {
+		return configuration.CustomProviderConfig{}, false
+	}
+	return customConfig, true
+}
+
+func getCustomVisionProviders() []api.ClientType {
+	configManager, err := configuration.NewManager()
+	if err != nil {
+		return nil
+	}
+	config := configManager.GetConfig()
+	if config == nil || config.CustomProviders == nil {
+		return nil
+	}
+
+	providers := make([]api.ClientType, 0, len(config.CustomProviders))
+	for name, custom := range config.CustomProviders {
+		if !custom.SupportsVision {
+			continue
+		}
+		providers = append(providers, api.ClientType(name))
+	}
+	return providers
+}
+
+func getCustomVisionFallback(providerType api.ClientType) (api.ClientType, string, bool) {
+	customConfig, ok := getCustomProviderConfig(providerType)
+	if !ok {
+		return "", "", false
+	}
+
+	fallbackProvider := strings.TrimSpace(customConfig.VisionFallbackProvider)
+	if fallbackProvider == "" {
+		return "", "", false
+	}
+
+	configManager, err := configuration.NewManager()
+	if err != nil {
+		return "", "", false
+	}
+
+	fallbackClientType, err := configManager.MapStringToClientType(fallbackProvider)
+	if err != nil {
+		return "", "", false
+	}
+
+	return fallbackClientType, strings.TrimSpace(customConfig.VisionFallbackModel), true
 }
 
 // SimplePDFInfo returns basic info about PDF file

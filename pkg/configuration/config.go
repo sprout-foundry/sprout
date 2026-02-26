@@ -159,15 +159,19 @@ type APIKeys map[string]string
 
 // CustomProviderConfig represents a custom model provider configuration
 type CustomProviderConfig struct {
-	Name           string                      `json:"name"`
-	Endpoint       string                      `json:"endpoint"`
-	ModelName      string                      `json:"model_name"`
-	ContextSize    int                         `json:"context_size"`
-	RequiresAPIKey bool                        `json:"requires_api_key"`
-	APIKey         string                      `json:"api_key,omitempty"`            // Stored in config (not recommended for production)
-	EnvVar         string                      `json:"env_var,omitempty"`            // Environment variable name for API key
-	ChunkTimeoutMs int                         `json:"chunk_timeout_ms,omitempty"`   // Streaming chunk timeout in milliseconds
-	Conversion     providers.MessageConversion `json:"message_conversion,omitempty"` // Message conversion configuration
+	Name                   string                      `json:"name"`
+	Endpoint               string                      `json:"endpoint"`
+	ModelName              string                      `json:"model_name"`
+	ContextSize            int                         `json:"context_size"`
+	RequiresAPIKey         bool                        `json:"requires_api_key"`
+	APIKey                 string                      `json:"api_key,omitempty"`                  // Stored in config (not recommended for production)
+	EnvVar                 string                      `json:"env_var,omitempty"`                  // Environment variable name for API key
+	ChunkTimeoutMs         int                         `json:"chunk_timeout_ms,omitempty"`         // Streaming chunk timeout in milliseconds
+	Conversion             providers.MessageConversion `json:"message_conversion,omitempty"`       // Message conversion configuration
+	SupportsVision         bool                        `json:"supports_vision,omitempty"`          // Whether this provider supports vision requests
+	VisionModel            string                      `json:"vision_model,omitempty"`             // Vision-capable model for this provider
+	VisionFallbackProvider string                      `json:"vision_fallback_provider,omitempty"` // Optional fallback provider for vision
+	VisionFallbackModel    string                      `json:"vision_fallback_model,omitempty"`    // Optional fallback model for vision provider
 }
 
 // SubagentType defines a specialized subagent persona with its own configuration

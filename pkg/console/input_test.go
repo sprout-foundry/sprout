@@ -1,6 +1,7 @@
 package console
 
 import (
+	"os"
 	"testing"
 )
 
@@ -67,5 +68,96 @@ func TestInputReaderHistory(t *testing.T) {
 	currentHistory = ir.GetHistory()
 	if len(currentHistory) != 3 {
 		t.Errorf("Expected history length 3, got %d", len(currentHistory))
+	}
+}
+
+func TestVisualLineCount(t *testing.T) {
+	tests := []struct {
+		name          string
+		terminalWidth int
+		renderedWidth int
+		want          int
+	}{
+		{name: "zero width terminal", terminalWidth: 0, renderedWidth: 10, want: 1},
+		{name: "empty content", terminalWidth: 10, renderedWidth: 0, want: 1},
+		{name: "single line partial", terminalWidth: 10, renderedWidth: 9, want: 1},
+		{name: "exact boundary stays one line", terminalWidth: 10, renderedWidth: 10, want: 1},
+		{name: "one over boundary", terminalWidth: 10, renderedWidth: 11, want: 2},
+		{name: "two exact boundaries", terminalWidth: 10, renderedWidth: 20, want: 2},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := visualLineCount(tc.terminalWidth, tc.renderedWidth)
+			if got != tc.want {
+				t.Fatalf("visualLineCount(%d, %d) = %d, want %d",
+					tc.terminalWidth, tc.renderedWidth, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCursorLineIndex(t *testing.T) {
+	tests := []struct {
+		name          string
+		terminalWidth int
+		cursorPos     int
+		want          int
+	}{
+		{name: "zero width terminal", terminalWidth: 0, cursorPos: 10, want: 0},
+		{name: "zero cursor pos", terminalWidth: 10, cursorPos: 0, want: 0},
+		{name: "partial first line", terminalWidth: 10, cursorPos: 9, want: 0},
+		{name: "exact boundary still first line", terminalWidth: 10, cursorPos: 10, want: 0},
+		{name: "one over boundary", terminalWidth: 10, cursorPos: 11, want: 1},
+		{name: "second exact boundary", terminalWidth: 10, cursorPos: 20, want: 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := cursorLineIndex(tc.terminalWidth, tc.cursorPos)
+			if got != tc.want {
+				t.Fatalf("cursorLineIndex(%d, %d) = %d, want %d",
+					tc.terminalWidth, tc.cursorPos, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestInsertCharFastPathTracking(t *testing.T) {
+	ir := NewInputReader(">")
+	ir.terminalWidth = 10
+	ir.termFd = int(os.Stdout.Fd())
+
+	// Simulate typing at end-of-line (fast path, no Refresh call).
+	for _, ch := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"} {
+		ir.InsertChar(ch)
+	}
+
+	// Prompt width 1 + line width 9 => total width 10 (exact boundary).
+	if ir.lastLineLength != 10 {
+		t.Fatalf("expected lastLineLength=10, got %d", ir.lastLineLength)
+	}
+
+	// Cursor should still be on first visual line at exact boundary.
+	if ir.currentPhysicalLine != 0 {
+		t.Fatalf("expected currentPhysicalLine=0, got %d", ir.currentPhysicalLine)
+	}
+}
+
+func TestInsertCharFastPathTrackingWithANSIPrompt(t *testing.T) {
+	ir := NewInputReader("\033[32mledit>\033[0m ")
+	ir.terminalWidth = 10
+	ir.termFd = int(os.Stdout.Fd())
+
+	// Visible prompt width is 7 ("ledit> "), so 3 chars reaches exact boundary.
+	for _, ch := range []string{"a", "b", "c"} {
+		ir.InsertChar(ch)
+	}
+
+	if ir.lastLineLength != 10 {
+		t.Fatalf("expected lastLineLength=10, got %d", ir.lastLineLength)
+	}
+	if ir.currentPhysicalLine != 0 {
+		t.Fatalf("expected currentPhysicalLine=0, got %d", ir.currentPhysicalLine)
 	}
 }

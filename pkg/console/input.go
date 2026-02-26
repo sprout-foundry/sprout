@@ -210,8 +210,9 @@ func (ir *InputReader) ReadLine() (string, error) {
 			// Arrow keys send escape sequences which look like rapid input
 			isEscapeSeq := (b == 27) || (parser.state > 0)
 
-			// Start paste mode on rapid input (but not for escape sequences)
-			if !ir.inPasteMode && !isEscapeSeq && isRapidInput && ir.line == "" {
+			// Start paste mode on rapid input (but not for escape sequences).
+			// Allow paste detection while editing an existing line too.
+			if !ir.inPasteMode && !isEscapeSeq && isRapidInput {
 				ir.inPasteMode = true
 				ir.pasteActive = true
 				ir.pasteStartPrompt = ir.prompt
@@ -636,7 +637,7 @@ func (ir *InputReader) updateTerminalWidth() {
 	}
 }
 
-// finalizePaste processes the pasted content and formats it appropriately
+// finalizePaste processes pasted content and inserts it literally at cursor.
 func (ir *InputReader) finalizePaste() bool {
 	pastedContent := ir.pasteBuffer.String()
 	ir.pasteBuffer.Reset()
@@ -645,29 +646,18 @@ func (ir *InputReader) finalizePaste() bool {
 
 	// Strip trailing newline that triggered the paste
 	pastedContent = strings.TrimRight(pastedContent, "\n")
-
-	// Check if content is multiline
-	lineCount := strings.Count(pastedContent, "\n") + 1
-
-	// Check if content looks like code or structured data
-	looksLikeCode := ir.detectCodePattern(pastedContent)
-
-	// Format the pasted content
-	var formatted string
-	if looksLikeCode && lineCount > 1 {
-		// Wrap in triple backticks for code blocks
-		formatted = fmt.Sprintf("```\n%s\n```", pastedContent)
-	} else if lineCount > 1 {
-		// Multiline but not code - use quotes
-		formatted = fmt.Sprintf("\"\"\"\n%s\n\"\"\"", pastedContent)
-	} else {
-		// Single line - insert as-is
-		formatted = pastedContent
+	if pastedContent == "" {
+		return true
 	}
 
-	// Insert the formatted content
-	ir.line = ir.line + formatted
-	ir.cursorPos = len(ir.line)
+	ir.hasEditedLine = true
+	ir.historyIndex = -1
+
+	// Insert at cursor position instead of always appending.
+	before := ir.line[:ir.cursorPos]
+	after := ir.line[ir.cursorPos:]
+	ir.line = before + pastedContent + after
+	ir.cursorPos += len(pastedContent)
 
 	// Show feedback and refresh
 	ir.Refresh()

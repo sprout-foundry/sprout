@@ -215,7 +215,8 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 		Models: providers.ModelConfig{
 			DefaultContextLimit: customProvider.ContextSize,
 			DefaultModel:        customProvider.ModelName,
-			SupportsVision:      false,
+			SupportsVision:      customProvider.SupportsVision,
+			VisionModel:         customProvider.VisionModel,
 		},
 		Retry: providers.RetryConfig{
 			MaxAttempts:       3,

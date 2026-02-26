@@ -192,12 +192,16 @@ func (tm *TerminalManager) ExecuteCommand(sessionID, command string) error {
 		return fmt.Errorf("session %s is not active", sessionID)
 	}
 
-	// Add to history (without newline)
+	// Add to history (without newline) for normal commands only.
 	cleanCommand := strings.TrimSuffix(command, "\n")
-	tm.AddToHistory(sessionID, cleanCommand)
+	controlOnly := isControlOnlyCommand(cleanCommand)
+	if !controlOnly {
+		tm.AddToHistory(sessionID, cleanCommand)
+	}
 
-	// Add newline if not present
-	if !strings.HasSuffix(command, "\n") {
+	// Add newline for standard shell commands. Control-only input (for example Ctrl+C)
+	// should be forwarded as-is.
+	if !controlOnly && !strings.HasSuffix(command, "\n") {
 		command += "\n"
 	}
 
@@ -218,6 +222,22 @@ func (tm *TerminalManager) ExecuteCommand(sessionID, command string) error {
 
 	session.LastUsed = time.Now()
 	return nil
+}
+
+func isControlOnlyCommand(command string) bool {
+	if command == "" {
+		return false
+	}
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return false
+	}
+	for _, ch := range trimmed {
+		if ch >= 32 {
+			return false
+		}
+	}
+	return true
 }
 
 // CloseSession closes a terminal session

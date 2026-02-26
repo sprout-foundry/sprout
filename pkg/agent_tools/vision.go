@@ -176,8 +176,8 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 	// Skip providers that don't use generic provider system
 	switch providerType {
 	case api.OpenAIClientType:
-		// OpenAI uses built-in client - handled separately
-		return ""
+		// OpenAI uses built-in client with a fixed vision model.
+		return "gpt-4o-mini"
 	case api.OllamaClientType, api.OllamaLocalClientType, api.OllamaTurboClientType:
 		// Ollama requires manual model verification
 		return ""

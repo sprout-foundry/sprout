@@ -445,14 +445,65 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	return json.Marshal(request)
 }
 
+// buildMultiModalContent creates a multi-part content array for messages with images
+func (p *GenericProvider) buildMultiModalContent(text string, images []api.ImageData) interface{} {
+	parts := make([]map[string]interface{}, 0, len(images)+1)
+	
+	// Add text part if present
+	if strings.TrimSpace(text) != "" {
+		parts = append(parts, map[string]interface{}{
+			"type": "text",
+			"text": text,
+		})
+	}
+
+	// Add image parts
+	for _, img := range images {
+		imageURL := p.buildImageURL(img)
+		if imageURL == "" {
+			// Skip invalid images - caller should ensure valid image data
+			continue
+		}
+		parts = append(parts, map[string]interface{}{
+			"type": "image_url",
+			"image_url": map[string]interface{}{
+				"url": imageURL,
+			},
+		})
+	}
+
+	if len(parts) == 0 {
+		return text // Fall back to text if no valid parts
+	}
+	return parts
+}
+
+// buildImageURL constructs the image URL from either a URL or base64 data
+func (p *GenericProvider) buildImageURL(img api.ImageData) string {
+	imageURL := strings.TrimSpace(img.URL)
+	if imageURL == "" && strings.TrimSpace(img.Base64) != "" {
+		mimeType := strings.TrimSpace(img.Type)
+		if mimeType == "" {
+			mimeType = "image/png"
+		}
+		imageURL = "data:" + mimeType + ";base64," + img.Base64
+	}
+	return imageURL
+}
+
 // convertMessages converts messages according to provider configuration
 func (p *GenericProvider) convertMessages(messages []api.Message, reasoning string) []map[string]interface{} {
 	converted := make([]map[string]interface{}, len(messages))
 
 	for i, msg := range messages {
+		content := interface{}(msg.Content)
+		if len(msg.Images) > 0 {
+			content = p.buildMultiModalContent(msg.Content, msg.Images)
+		}
+
 		convertedMsg := map[string]interface{}{
 			"role":    msg.Role,
-			"content": msg.Content,
+			"content": content,
 		}
 
 		// Handle tool call ID inclusion

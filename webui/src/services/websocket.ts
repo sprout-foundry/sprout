@@ -122,7 +122,13 @@ class WebSocketService {
   }
 
   onEvent(callback: EventCallback) {
-    this.callbacks.push(callback);
+    if (!this.callbacks.includes(callback)) {
+      this.callbacks.push(callback);
+    }
+  }
+
+  removeEvent(callback: EventCallback) {
+    this.callbacks = this.callbacks.filter(cb => cb !== callback);
   }
 
   private notifyCallbacks(event: any) {

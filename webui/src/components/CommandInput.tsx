@@ -214,11 +214,11 @@ const CommandInput: React.FC<CommandInputProps> = ({
     switch (e.key) {
       case 'ArrowUp':
         e.preventDefault();
-        navigateHistory(-1);
+        navigateHistory(1);
         break;
       case 'ArrowDown':
         e.preventDefault();
-        navigateHistory(1);
+        navigateHistory(-1);
         break;
       case 'Tab':
         e.preventDefault();
@@ -400,12 +400,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
           if (onChange) {
             onChange(newValue);
           }
-          requestAnimationFrame(() => {
-            if (inputRef.current) {
-              const length = inputRef.current.value.length;
-              inputRef.current.setSelectionRange(length, length);
-            }
-          });
         }}
         onKeyDown={handleKeyDown}
         onCompositionStart={handleCompositionStart}
@@ -416,13 +410,6 @@ const CommandInput: React.FC<CommandInputProps> = ({
         rows={1}
         spellCheck={false}
         data-testid="command-input"
-        onInput={(e) => {
-          // Native event handler for better test compatibility
-          const newValue = (e.target as HTMLTextAreaElement).value;
-          if (onChange) {
-            onChange(newValue);
-          }
-        }}
       />
 
       <div className="input-actions">

@@ -161,3 +161,46 @@ func TestInsertCharFastPathTrackingWithANSIPrompt(t *testing.T) {
 		t.Fatalf("expected currentPhysicalLine=0, got %d", ir.currentPhysicalLine)
 	}
 }
+
+func TestFinalizePasteInsertsAtCursorLiterally(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.terminalWidth = 80
+	ir.termFd = int(os.Stdout.Fd())
+	ir.line = "hello world"
+	ir.cursorPos = 6
+	ir.inPasteMode = true
+	ir.pasteActive = true
+	ir.pasteBuffer.WriteString("foo\nbar\n")
+
+	ok := ir.finalizePaste()
+	if !ok {
+		t.Fatal("finalizePaste() returned false")
+	}
+
+	if ir.line != "hello foo\nbarworld" {
+		t.Fatalf("unexpected line after paste: %q", ir.line)
+	}
+
+	wantCursor := len("hello foo\nbar")
+	if ir.cursorPos != wantCursor {
+		t.Fatalf("unexpected cursorPos: got %d want %d", ir.cursorPos, wantCursor)
+	}
+}
+
+func TestFinalizePasteDoesNotAutoFormatCode(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.terminalWidth = 80
+	ir.termFd = int(os.Stdout.Fd())
+	ir.inPasteMode = true
+	ir.pasteActive = true
+	ir.pasteBuffer.WriteString("func main() {\n\tprintln(\"hi\")\n}\n")
+
+	ok := ir.finalizePaste()
+	if !ok {
+		t.Fatal("finalizePaste() returned false")
+	}
+
+	if ir.line != "func main() {\n\tprintln(\"hi\")\n}" {
+		t.Fatalf("unexpected formatted paste result: %q", ir.line)
+	}
+}

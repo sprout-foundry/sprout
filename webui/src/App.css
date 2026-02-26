@@ -5,40 +5,37 @@
 }
 
 :root {
-  /* Sophisticated Dark Theme - Rich depth and refined elegance */
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #0f0f16;
-  --bg-tertiary: #16161f;
-  --bg-elevated: #1e1e28;
-  --bg-surface: #2a2a38;
+  --bg-primary: #040b16;
+  --bg-secondary: #081120;
+  --bg-tertiary: #0f172a;
+  --bg-elevated: #162136;
+  --bg-surface: #1f2d46;
 
-  --border-subtle: #1a1a24;
-  --border-default: #2a2a38;
-  --border-strong: #3a3a4a;
-  --border-focus: #4a4a5e;
+  --border-subtle: rgba(148, 163, 184, 0.12);
+  --border-default: rgba(148, 163, 184, 0.2);
+  --border-strong: rgba(148, 163, 184, 0.32);
+  --border-focus: rgba(56, 189, 248, 0.72);
 
-  --text-primary: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
-  --text-muted: #52525b;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-muted: #475569;
 
-  /* Refined accent colors - more sophisticated and less saturated */
-  --accent-primary: #6366f1;
-  --accent-secondary: #818cf8;
+  --accent-primary: #0ea5e9;
+  --accent-secondary: #14b8a6;
   --accent-success: #10b981;
   --accent-warning: #f59e0b;
   --accent-error: #f43f5e;
-  --accent-purple: #c084fc;
-  --accent-cyan: #06b6d4;
+  --accent-cyan: #22d3ee;
+  --accent-primary-alpha: rgba(14, 165, 233, 0.18);
 
-  /* Semantic colors with better opacity */
-  --color-success-bg: rgba(16, 185, 129, 0.08);
-  --color-warning-bg: rgba(245, 158, 11, 0.08);
-  --color-error-bg: rgba(244, 63, 94, 0.08);
-  --color-info-bg: rgba(99, 102, 241, 0.08);
+  --color-success-bg: rgba(16, 185, 129, 0.1);
+  --color-warning-bg: rgba(245, 158, 11, 0.1);
+  --color-error-bg: rgba(244, 63, 94, 0.12);
+  --color-info-bg: rgba(14, 165, 233, 0.1);
 
   /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
 
   --text-xs: 12px;
@@ -67,14 +64,12 @@
   --radius-lg: 8px;
   --radius-xl: 12px;
 
-  /* Effects with subtle color */
-  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.6), 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-subtle: 0 2px 6px rgba(2, 6, 23, 0.32);
+  --shadow-elevated: 0 10px 22px rgba(2, 6, 23, 0.42);
+  --shadow-float: 0 20px 38px rgba(2, 6, 23, 0.52);
 
-  /* Subtle gradient overlays */
-  --gradient-subtle: linear-gradient(135deg, rgba(99, 102, 241, 0.03) 0%, rgba(139, 92, 246, 0.02) 100%);
-  --gradient-elevated: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, rgba(139, 92, 246, 0.04) 100%);
+  --gradient-subtle: radial-gradient(1200px 420px at -5% -10%, rgba(56, 189, 248, 0.1), transparent 55%), radial-gradient(1100px 420px at 105% -10%, rgba(45, 212, 191, 0.08), transparent 58%);
+  --gradient-elevated: linear-gradient(145deg, rgba(56, 189, 248, 0.16), rgba(45, 212, 191, 0.12));
 
   /* Transitions */
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
@@ -94,7 +89,7 @@ body {
 .app {
   display: flex;
   height: 100vh;
-  background: var(--bg-primary);
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.92), rgba(7, 14, 29, 0.95));
   overflow: hidden;
   position: relative;
 }
@@ -117,7 +112,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   position: relative;
-  background: var(--bg-secondary);
+  background: rgba(8, 17, 32, 0.9);
   z-index: 1;
   padding-bottom: 40px; /* Space for collapsed terminal */
   transition: padding-bottom 0.3s ease;
@@ -156,11 +151,11 @@ html, body, #root {
 
 /* Selection */
 ::selection {
-  background: rgba(99, 102, 241, 0.25);
+  background: rgba(14, 165, 233, 0.3);
 }
 
 ::-moz-selection {
-  background: rgba(99, 102, 241, 0.25);
+  background: rgba(14, 165, 233, 0.3);
 }
 
 /* Editor View Layout - Using Grid */

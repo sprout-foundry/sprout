@@ -398,10 +398,17 @@ func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request
 
 // handleTerminalHistory handles API requests for terminal history
 func (ws *ReactWebServer) handleTerminalHistory(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		ws.handleTerminalHistoryGet(w, r)
+	case http.MethodPost:
+		ws.handleTerminalHistoryPost(w, r)
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
+}
+
+func (ws *ReactWebServer) handleTerminalHistoryGet(w http.ResponseWriter, r *http.Request) {
 
 	// Get session ID from query parameter (optional)
 	sessionID := r.URL.Query().Get("session_id")
@@ -429,6 +436,48 @@ func (ws *ReactWebServer) handleTerminalHistory(w http.ResponseWriter, r *http.R
 		"history":    history,
 		"session_id": sessionID,
 		"count":      len(history),
+	})
+}
+
+func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SessionID string `json:"session_id"`
+		Command   string `json:"command"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	command := strings.TrimSpace(req.Command)
+	if command == "" {
+		http.Error(w, "Command is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.SessionID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":    "Command accepted without active terminal session",
+			"command":    command,
+			"session_id": "",
+			"stored":     false,
+		})
+		return
+	}
+
+	if err := ws.terminalManager.AddToHistory(req.SessionID, command); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to add history: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":    "History updated",
+		"command":    command,
+		"session_id": req.SessionID,
+		"stored":     true,
 	})
 }
 

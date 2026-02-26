@@ -151,6 +151,9 @@ const Terminal: React.FC<TerminalProps> = ({
 
     if (command === 'exit') {
       setIsExpanded(false);
+      if (onToggleExpand) {
+        onToggleExpand(false);
+      }
       return;
     }
 
@@ -165,7 +168,7 @@ const Terminal: React.FC<TerminalProps> = ({
     if (onCommand) {
       onCommand(command);
     }
-  }, [cwd, addLine, onCommand, terminalConnected]);
+  }, [cwd, addLine, onCommand, onToggleExpand, terminalConnected]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     switch (e.key) {

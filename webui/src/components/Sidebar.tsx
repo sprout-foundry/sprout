@@ -151,9 +151,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   // Fetch and render sections for current view
   useEffect(() => {
     const sections = viewRegistry.getSections(currentView);
+    let cancelled = false;
+
+    // Reset sections immediately when view changes so stale content does not linger.
+    setSectionsData(new Map());
 
     // Load data for each section
     sections.forEach(async (section) => {
+      if (cancelled) return;
       setSectionsData(prev => {
         const updated = new Map(prev);
         updated.set(section.id, { section, data: null, loading: true, error: null });
@@ -196,6 +201,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             break;
         }
 
+        if (cancelled) return;
         setSectionsData(prev => {
           const updated = new Map(prev);
           updated.set(section.id, { section, data, loading: false, error: null });
@@ -203,6 +209,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         });
       } catch (error) {
         console.error(`Failed to load data for section ${section.id}:`, error);
+        if (cancelled) return;
         setSectionsData(prev => {
           const updated = new Map(prev);
           updated.set(section.id, { section, data: null, loading: false, error: 'Failed to load' });
@@ -210,6 +217,10 @@ const Sidebar: React.FC<SidebarProps> = ({
         });
       }
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentView, isConnected, refreshTrigger]);
 
   // Fetch providers from API - only run once on mount, not on reconnect

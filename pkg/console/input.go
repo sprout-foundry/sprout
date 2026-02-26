@@ -102,6 +102,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.hasEditedLine = false
 	ir.updateTerminalWidth()
 	ir.lastLineLength = 0
+	ir.currentPhysicalLine = 0
 	ir.pasteBuffer.Reset()
 	ir.pasteActive = false
 	ir.inPasteMode = false
@@ -325,6 +326,13 @@ func (ir *InputReader) InsertChar(char string) {
 	// For typing at end of line, just output the character (more efficient)
 	if ir.cursorPos == len(ir.line) {
 		fmt.Printf("%s", char)
+		// Keep refresh bookkeeping in sync even on fast-path writes.
+		promptWidth := visibleRuneWidth(ir.prompt)
+		lineWidth := len([]rune(ir.line))
+		totalWidth := promptWidth + lineWidth
+		ir.lastLineLength = totalWidth
+		cursorPos := promptWidth + ir.cursorPos
+		ir.currentPhysicalLine = cursorLineIndex(ir.terminalWidth, cursorPos)
 	} else {
 		// Inserting in middle requires full refresh
 		ir.Refresh()
@@ -488,24 +496,22 @@ func (ir *InputReader) getLineAndColumn() (lineIdx, col int) {
 // Refresh redraws the current input line
 func (ir *InputReader) Refresh() {
 	// Calculate display width (accounting for multibyte characters)
-	promptRunes := []rune(ir.prompt)
+	promptRunes := []rune(stripANSIEscapeCodes(ir.prompt))
 	lineRunes := []rune(ir.line)
 	promptWidth := len(promptRunes)
 	lineWidth := len(lineRunes)
 	totalWidth := promptWidth + lineWidth
 
-	currentLineCount := (totalWidth + ir.terminalWidth - 1) / ir.terminalWidth
-	previousLineCount := (ir.lastLineLength + ir.terminalWidth - 1) / ir.terminalWidth
+	currentLineCount := visualLineCount(ir.terminalWidth, totalWidth)
+	previousLineCount := visualLineCount(ir.terminalWidth, ir.lastLineLength)
+	previousCursorLine := ir.currentPhysicalLine
 
-	// Calculate which physical line the cursor is currently on (1-indexed)
+	// Calculate current cursor visual position.
 	cursorPos := promptWidth + ir.cursorPos
-	ir.currentPhysicalLine = cursorPos / ir.terminalWidth
-	if cursorPos > 0 && cursorPos%ir.terminalWidth == 0 {
-		// Exact multiple of terminal width means cursor is at start of next line
-		ir.currentPhysicalLine++
-	}
-	if ir.currentPhysicalLine < 1 {
-		ir.currentPhysicalLine = 1
+	cursorLine := cursorLineIndex(ir.terminalWidth, cursorPos)
+	cursorCol := 0
+	if ir.terminalWidth > 0 {
+		cursorCol = cursorPos % ir.terminalWidth
 	}
 
 	// Maximum number of wrapped lines we need to clear
@@ -518,11 +524,10 @@ func (ir *InputReader) Refresh() {
 	// Move to start of current physical line
 	fmt.Printf("\r")
 
-	// If we're on a wrapped line (not the first), move up to the first line
-	if ir.currentPhysicalLine > 1 {
+	// Move up from previous rendered cursor line to the top wrapped line.
+	if previousCursorLine > 0 {
 		// Move up to the top wrapped line
-		linesToMoveUp := ir.currentPhysicalLine - 1
-		fmt.Printf("%s", MoveCursorUpSeq(linesToMoveUp))
+		fmt.Printf("%s", MoveCursorUpSeq(previousCursorLine))
 	}
 
 	// Clear all wrapped lines from top to bottom
@@ -548,35 +553,47 @@ func (ir *InputReader) Refresh() {
 	// Update tracked length AFTER drawing (use display width, not byte length)
 	ir.lastLineLength = totalWidth
 
-	// Position cursor correctly
-	// Note: cursorPos was already calculated above as promptWidth + ir.cursorPos
-	if ir.cursorPos < lineWidth {
-		// Cursor is in the middle - need to move it
-		// Recalculate cursorLine and cursorCol based on cursorPos
-		cursorLine := cursorPos / ir.terminalWidth
-		cursorCol := cursorPos % ir.terminalWidth
-
-		// After printing, cursor is at end of content (on line 'currentLineCount - 1')
-		// We need to move to line 'cursorLine'
-		endLine := currentLineCount - 1
-		if endLine > cursorLine {
-			// Move up to the cursor line
-			fmt.Printf("%s", MoveCursorUpSeq(endLine-cursorLine))
-		} else if endLine < cursorLine {
-			// Move down to the cursor line
-			fmt.Printf("%s", MoveCursorDownSeq(cursorLine-endLine))
-		}
-
-		// Move cursor to correct position
-		// The cursorCol is 0-based from start of line
-		// Use \r to go to start, then move right by cursorCol positions
-		if cursorCol > 0 {
-			fmt.Printf("\r\033[%dC", cursorCol)
-		} else {
-			fmt.Printf("\r")
-		}
+	// Position cursor correctly.
+	// After printing, cursor is at end of content (on line 'currentLineCount - 1').
+	endLine := currentLineCount - 1
+	if endLine > cursorLine {
+		fmt.Printf("%s", MoveCursorUpSeq(endLine-cursorLine))
+	} else if endLine < cursorLine {
+		fmt.Printf("%s", MoveCursorDownSeq(cursorLine-endLine))
 	}
-	// If cursor is at end, it's already in the right position after printing
+
+	// Move to target column on that line.
+	if cursorCol > 0 {
+		fmt.Printf("\r\033[%dC", cursorCol)
+	} else {
+		fmt.Printf("\r")
+	}
+
+	// Track current rendered cursor line (0-based wrapped line index).
+	ir.currentPhysicalLine = cursorLine
+}
+
+// visualLineCount calculates how many terminal lines are occupied for a given
+// rendered character width. Exact-width boundaries consume an additional line
+// because terminals wrap to column 0 on the next line.
+func visualLineCount(terminalWidth, renderedWidth int) int {
+	if terminalWidth <= 0 {
+		return 1
+	}
+	if renderedWidth <= 0 {
+		return 1
+	}
+	return (renderedWidth-1)/terminalWidth + 1
+}
+
+// cursorLineIndex calculates the 0-based wrapped line index for a cursor
+// position measured in rendered columns. Exact-width boundaries are treated as
+// the previous visual line to avoid over-shooting when redrawing.
+func cursorLineIndex(terminalWidth, cursorPos int) int {
+	if terminalWidth <= 0 || cursorPos <= 0 {
+		return 0
+	}
+	return (cursorPos - 1) / terminalWidth
 }
 
 // AddToHistory adds a command to history
@@ -655,9 +672,38 @@ func (ir *InputReader) finalizePaste() bool {
 	// Show feedback and refresh
 	ir.Refresh()
 
-	ir.lastLineLength = len(ir.prompt) + len(ir.line)
+	ir.lastLineLength = visibleRuneWidth(ir.prompt) + len([]rune(ir.line))
 
 	return true
+}
+
+// visibleRuneWidth returns the printable rune width of a string after removing
+// ANSI control sequences.
+func visibleRuneWidth(s string) int {
+	return len([]rune(stripANSIEscapeCodes(s)))
+}
+
+// stripANSIEscapeCodes removes ANSI CSI escape sequences like \x1b[31m.
+func stripANSIEscapeCodes(text string) string {
+	var result strings.Builder
+	inEscape := false
+
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\033' && i+1 < len(text) && text[i+1] == '[' {
+			inEscape = true
+			i++ // skip '['
+			continue
+		}
+		if inEscape {
+			if (text[i] >= 'A' && text[i] <= 'Z') || (text[i] >= 'a' && text[i] <= 'z') {
+				inEscape = false
+			}
+			continue
+		}
+		result.WriteByte(text[i])
+	}
+
+	return result.String()
 }
 
 // detectCodePattern checks if the pasted content looks like code

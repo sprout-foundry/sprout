@@ -2,6 +2,16 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.10.7] - 2026-02-26
+
+- Updates 3 files - Updates vision client to use custom config fallback (a6c0d47)
+- Merge remote-tracking branch 'origin/main' (66b93c3)
+- Updates pkg/agent_tools/vision.go - Updates vision provider priority (9b60b73)
+- Updates pkg/agent_tools/vision.go - Updates vision priority order (c523f39)
+- Updates 4 files - Updates image handling, vision defaults, tool mode (a3376af)
+- Updates 8 files - Updates server auto-start flags and webui assets (5969113)
+- docs: Update changelog for v0.10.6 (44b22a9)
+
 ## [v0.10.6] - 2026-02-24
 
 - Merge remote-tracking branch 'origin/main' (5baaf27)

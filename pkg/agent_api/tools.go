@@ -220,6 +220,10 @@ func GetToolDefinitions() []Tool {
 							"type":        "string",
 							"description": "Optional specific prompt for content extraction (extract text, read code, analyze diagram, etc.)",
 						},
+						"analysis_mode": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional analysis mode override (e.g. frontend, general, text)",
+						},
 					},
 					"required":             []string{"image_path"},
 					"additionalProperties": false,

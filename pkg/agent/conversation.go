@@ -122,8 +122,8 @@ func (a *Agent) GetOptimizationStats() map[string]interface{} {
 
 // processImagesInQuery detects and processes images in user queries
 func (a *Agent) processImagesInQuery(query string) (string, error) {
-	// Skip if the current client doesn't support vision
-	if a.client == nil || !a.client.SupportsVision() {
+	// Skip if no client is available
+	if a.client == nil {
 		return query, nil
 	}
 

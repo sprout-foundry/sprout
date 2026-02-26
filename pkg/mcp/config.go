@@ -122,7 +122,7 @@ func LoadMCPConfig() (MCPConfig, error) {
 				Name:        "github",
 				Command:     "npx",
 				Args:        []string{"-y", "@modelcontextprotocol/server-github"},
-				AutoStart:   true,
+				AutoStart:   false, // Don't auto-start auto-discovered servers to prevent blocking
 				MaxRestarts: 3,
 				Timeout:     30 * time.Second,
 				Env: map[string]string{
@@ -143,7 +143,7 @@ func LoadMCPConfig() (MCPConfig, error) {
 					Name:        "playwright",
 					Command:     "npx",
 					Args:        []string{"-y", "@playwright/mcp"},
-					AutoStart:   true,
+					AutoStart:   false, // Don't auto-start auto-discovered servers to prevent blocking
 					MaxRestarts: 3,
 					Timeout:     60 * time.Second,
 				}

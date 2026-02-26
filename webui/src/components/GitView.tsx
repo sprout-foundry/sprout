@@ -23,10 +23,10 @@ interface GitFile {
 }
 
 interface GitViewProps {
-  onCommit?: (message: string, files: string[]) => void;
-  onStage?: (files: string[]) => void;
-  onUnstage?: (files: string[]) => void;
-  onDiscard?: (files: string[]) => void;
+  onCommit?: (message: string, files: string[]) => void | Promise<unknown>;
+  onStage?: (files: string[]) => void | Promise<unknown>;
+  onUnstage?: (files: string[]) => void | Promise<unknown>;
+  onDiscard?: (files: string[]) => void | Promise<unknown>;
 }
 
 const GitView: React.FC<GitViewProps> = ({
@@ -39,7 +39,9 @@ const GitView: React.FC<GitViewProps> = ({
   const [commitMessage, setCommitMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [isActing, setIsActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Load git status from API
   useEffect(() => {
@@ -73,27 +75,6 @@ const GitView: React.FC<GitViewProps> = ({
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load git status');
-        // Fallback to mock data for development
-        const mockStatus: GitStatus = {
-          branch: 'main',
-          ahead: 0,
-          behind: 0,
-          staged: [
-            { path: 'src/components/CommandInput.tsx', status: 'M', changes: { additions: 15, deletions: 5 } },
-            { path: 'src/components/Sidebar.tsx', status: 'M', changes: { additions: 8, deletions: 3 } }
-          ],
-          modified: [
-            { path: 'src/App.tsx', status: 'M', changes: { additions: 12, deletions: 4 } },
-            { path: 'webui/src/components/GitView.css', status: 'A', changes: { additions: 45, deletions: 0 } }
-          ],
-          untracked: [
-            { path: 'src/components/NewComponent.tsx', status: '??' }
-          ],
-          deleted: [],
-          renamed: [],
-          clean: false
-        };
-        setGitStatus(mockStatus);
       } finally {
         setIsLoading(false);
       }
@@ -120,7 +101,9 @@ const GitView: React.FC<GitViewProps> = ({
     const allFiles = [
       ...gitStatus.staged.map(f => f.path),
       ...gitStatus.modified.map(f => f.path),
-      ...gitStatus.untracked.map(f => f.path)
+      ...gitStatus.untracked.map(f => f.path),
+      ...gitStatus.deleted.map(f => f.path),
+      ...gitStatus.renamed.map(f => f.path)
     ];
     
     setSelectedFiles(new Set(allFiles));
@@ -130,27 +113,56 @@ const GitView: React.FC<GitViewProps> = ({
     setSelectedFiles(new Set());
   };
 
+  const selectedPaths = Array.from(selectedFiles);
+  const stagedSet = new Set(gitStatus?.staged.map(f => f.path) || []);
+  const modifiedSet = new Set(gitStatus?.modified.map(f => f.path) || []);
+  const deletedSet = new Set(gitStatus?.deleted.map(f => f.path) || []);
+  const renamedSet = new Set(gitStatus?.renamed.map(f => f.path) || []);
+  const untrackedSet = new Set(gitStatus?.untracked.map(f => f.path) || []);
+
+  const stageablePaths = selectedPaths.filter(
+    p => modifiedSet.has(p) || deletedSet.has(p) || renamedSet.has(p) || untrackedSet.has(p),
+  );
+  const unstageablePaths = selectedPaths.filter(p => stagedSet.has(p));
+  const discardablePaths = selectedPaths.filter(
+    p => modifiedSet.has(p) || deletedSet.has(p) || renamedSet.has(p),
+  );
+
+  const runAction = async (action: () => void | Promise<unknown>, fallbackMessage: string) => {
+    setActionError(null);
+    setIsActing(true);
+    try {
+      await action();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : fallbackMessage);
+    } finally {
+      setIsActing(false);
+    }
+  };
+
   const handleStageSelected = () => {
-    if (selectedFiles.size === 0) return;
-    onStage?.(Array.from(selectedFiles));
+    if (stageablePaths.length === 0 || !onStage) return;
+    runAction(() => onStage(stageablePaths), 'Failed to stage selected files');
   };
 
   const handleUnstageSelected = () => {
-    if (selectedFiles.size === 0) return;
-    onUnstage?.(Array.from(selectedFiles));
+    if (unstageablePaths.length === 0 || !onUnstage) return;
+    runAction(() => onUnstage(unstageablePaths), 'Failed to unstage selected files');
   };
 
   const handleCommit = () => {
-    if (!commitMessage.trim() || !gitStatus?.staged.length) return;
+    if (!commitMessage.trim() || !gitStatus?.staged.length || !onCommit) return;
     
     const stagedFiles = gitStatus.staged.map(f => f.path);
-    onCommit?.(commitMessage, stagedFiles);
-    setCommitMessage('');
+    runAction(async () => {
+      await onCommit(commitMessage, stagedFiles);
+      setCommitMessage('');
+    }, 'Failed to create commit');
   };
 
   const handleDiscardSelected = () => {
-    if (selectedFiles.size === 0) return;
-    onDiscard?.(Array.from(selectedFiles));
+    if (discardablePaths.length === 0 || !onDiscard) return;
+    runAction(() => onDiscard(discardablePaths), 'Failed to discard selected files');
   };
 
   const getStatusIcon = (status: string) => {
@@ -244,27 +256,28 @@ const GitView: React.FC<GitViewProps> = ({
         <div className="file-actions">
           <button 
             onClick={handleStageSelected}
-            disabled={selectedFiles.size === 0}
+            disabled={stageablePaths.length === 0 || isActing}
             className="action-btn primary"
           >
-            Stage Selected
+            Stage Selected {stageablePaths.length > 0 ? `(${stageablePaths.length})` : ''}
           </button>
           <button 
             onClick={handleUnstageSelected}
-            disabled={selectedFiles.size === 0}
+            disabled={unstageablePaths.length === 0 || isActing}
             className="action-btn"
           >
-            Unstage Selected
+            Unstage Selected {unstageablePaths.length > 0 ? `(${unstageablePaths.length})` : ''}
           </button>
           <button 
             onClick={handleDiscardSelected}
-            disabled={selectedFiles.size === 0}
+            disabled={discardablePaths.length === 0 || isActing}
             className="action-btn danger"
           >
-            Discard Selected
+            Discard Selected {discardablePaths.length > 0 ? `(${discardablePaths.length})` : ''}
           </button>
         </div>
       </div>
+      {actionError && <div className="git-action-error">{actionError}</div>}
 
       {/* File Sections */}
       <div className="git-files">
@@ -282,6 +295,7 @@ const GitView: React.FC<GitViewProps> = ({
                   <input 
                     type="checkbox" 
                     checked={selectedFiles.has(file.path)}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={() => handleFileSelect(file.path)}
                   />
                   <span className="file-icon">{getStatusIcon(file.status)}</span>
@@ -313,6 +327,7 @@ const GitView: React.FC<GitViewProps> = ({
                   <input 
                     type="checkbox" 
                     checked={selectedFiles.has(file.path)}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={() => handleFileSelect(file.path)}
                   />
                   <span className="file-icon">{getStatusIcon(file.status)}</span>
@@ -344,6 +359,7 @@ const GitView: React.FC<GitViewProps> = ({
                   <input 
                     type="checkbox" 
                     checked={selectedFiles.has(file.path)}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={() => handleFileSelect(file.path)}
                   />
                   <span className="file-icon">{getStatusIcon(file.status)}</span>
@@ -377,7 +393,7 @@ const GitView: React.FC<GitViewProps> = ({
           />
           <button 
             onClick={handleCommit}
-            disabled={!commitMessage.trim() || gitStatus.staged.length === 0}
+            disabled={!commitMessage.trim() || gitStatus.staged.length === 0 || isActing}
             className="commit-btn primary"
           >
             Commit {gitStatus.staged.length} file{gitStatus.staged.length !== 1 ? 's' : ''}

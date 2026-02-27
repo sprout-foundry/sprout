@@ -15,6 +15,12 @@ import (
 	"github.com/alantheprice/ledit/pkg/events"
 )
 
+const (
+	maxQueryBodyBytes    = 1 << 20  // 1 MiB
+	maxFileWriteBodySize = 10 << 20 // 10 MiB
+	consentTokenHeader   = "X-Ledit-Consent-Token"
+)
+
 // handleAPIQuery handles API queries to the agent
 func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request) {
 	log.Printf("handleAPIQuery called")
@@ -23,6 +29,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var query struct {
 		Query string `json:"query"`
 	}
@@ -270,14 +277,14 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Prevent directory traversal
-	if strings.Contains(path, "..") {
-		http.Error(w, "Invalid file path", http.StatusBadRequest)
+	canonicalPath, err := canonicalizePath(path, ws.workspaceRoot, false)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid file path: %v", err), http.StatusBadRequest)
 		return
 	}
 
 	// Check if file exists and is not a directory
-	info, err := os.Stat(path)
+	info, err := os.Stat(canonicalPath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("File not found: %v", err), http.StatusNotFound)
 		return
@@ -288,8 +295,19 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+		consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
+		if consentToken == "" {
+			consentToken = strings.TrimSpace(r.URL.Query().Get("consent_token"))
+		}
+		if !ws.fileConsents.consume(consentToken, canonicalPath, "read") {
+			ws.writeExternalPathConsentRequired(w, canonicalPath, "read")
+			return
+		}
+	}
+
 	// Read file content
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(canonicalPath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read file: %v", err), http.StatusInternalServerError)
 		return
@@ -297,13 +315,13 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 
 	// Determine content type
 	contentType := "text/plain"
-	if strings.HasSuffix(path, ".json") {
+	if strings.HasSuffix(canonicalPath, ".json") {
 		contentType = "application/json"
-	} else if strings.HasSuffix(path, ".js") {
+	} else if strings.HasSuffix(canonicalPath, ".js") {
 		contentType = "application/javascript"
-	} else if strings.HasSuffix(path, ".css") {
+	} else if strings.HasSuffix(canonicalPath, ".css") {
 		contentType = "text/css"
-	} else if strings.HasSuffix(path, ".html") {
+	} else if strings.HasSuffix(canonicalPath, ".html") {
 		contentType = "text/html"
 	}
 
@@ -321,12 +339,24 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Prevent directory traversal
-	if strings.Contains(path, "..") {
-		http.Error(w, "Invalid file path", http.StatusBadRequest)
+	canonicalPath, err := canonicalizePath(path, ws.workspaceRoot, true)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid file path: %v", err), http.StatusBadRequest)
 		return
 	}
 
+	if !isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+		consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
+		if consentToken == "" {
+			consentToken = strings.TrimSpace(r.URL.Query().Get("consent_token"))
+		}
+		if !ws.fileConsents.consume(consentToken, canonicalPath, "write") {
+			ws.writeExternalPathConsentRequired(w, canonicalPath, "write")
+			return
+		}
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxFileWriteBodySize)
 	// Read request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -346,28 +376,87 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	content := []byte(requestData.Content)
 
 	// Create directory if it doesn't exist
-	dir := filepath.Dir(path)
+	dir := filepath.Dir(canonicalPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create directory: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Write file
-	if err := os.WriteFile(path, content, 0644); err != nil {
+	if err := os.WriteFile(canonicalPath, content, 0644); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to write file: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Publish file change event
 	if ws.eventBus != nil {
-		ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "write", string(content)))
+		ws.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "write", string(content)))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"path":    path,
+		"path":    canonicalPath,
 		"size":    len(content),
+	})
+}
+
+func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	var req struct {
+		Path      string `json:"path"`
+		Operation string `json:"operation"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	operation := strings.ToLower(strings.TrimSpace(req.Operation))
+	if operation != "read" && operation != "write" {
+		http.Error(w, "operation must be read or write", http.StatusBadRequest)
+		return
+	}
+
+	canonicalPath, err := canonicalizePath(req.Path, ws.workspaceRoot, operation == "write")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid file path: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if isWithinWorkspace(canonicalPath, ws.workspaceRoot) {
+		http.Error(w, "Path does not require external consent", http.StatusBadRequest)
+		return
+	}
+
+	token, expiresAt, err := ws.fileConsents.issue(canonicalPath, operation, defaultConsentTTL)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create consent token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"token":      token,
+		"path":       canonicalPath,
+		"operation":  operation,
+		"expires_at": expiresAt.UTC().Format(time.RFC3339),
+	})
+}
+
+func (ws *ReactWebServer) writeExternalPathConsentRequired(w http.ResponseWriter, canonicalPath, operation string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":     "external path access requires explicit user consent",
+		"code":      "external_path_consent_required",
+		"path":      canonicalPath,
+		"operation": operation,
 	})
 }
 
@@ -499,6 +588,7 @@ func (ws *ReactWebServer) handleAPITerminalSessions(w http.ResponseWriter, r *ht
 				"last_used": session.LastUsed,
 				"has_size":  size != nil,
 			})
+			session.mutex.RUnlock()
 		}
 	}
 

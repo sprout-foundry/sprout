@@ -9,7 +9,6 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -22,15 +21,9 @@ type SpecExtractor struct {
 
 // NewSpecExtractor creates a new spec extractor
 func NewSpecExtractor(cfg *configuration.Config, logger *utils.Logger) (*SpecExtractor, error) {
-	// Create agent client for LLM calls using factory to avoid import cycles
-	clientType, err := api.DetermineProvider("", api.ClientType(cfg.LastUsedProvider))
+	agentClient, err := resolveSpecAgentClient(cfg, logger, "Spec extraction")
 	if err != nil {
-		return nil, fmt.Errorf("failed to determine provider: %w", err)
-	}
-
-	agentClient, err := factory.CreateProviderClient(clientType, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create agent client: %w", err)
+		return nil, err
 	}
 
 	return &SpecExtractor{

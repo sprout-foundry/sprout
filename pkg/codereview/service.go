@@ -66,31 +66,7 @@ type CodeReviewService struct {
 
 // NewCodeReviewService creates a new code review service instance
 func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *CodeReviewService {
-
-	// Create default agent client - use the same model as configured for code editing
-	var agentClient api.ClientInterface
-
-	// Check environment variable first
-	if providerEnv := os.Getenv("LEDIT_PROVIDER"); providerEnv != "" {
-		if clientType, err := api.ParseProviderName(providerEnv); err == nil {
-			// Use factory method to create provider client with the configured model
-			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
-				agentClient = client
-			}
-		}
-	} else if cfg != nil && cfg.LastUsedProvider != "" {
-		// Fallback to auto-detection
-		var lastUsedProvider api.ClientType
-		if cfg != nil && cfg.LastUsedProvider != "" {
-			lastUsedProvider = api.ClientType(cfg.LastUsedProvider)
-		}
-		if clientType, detErr := api.DetermineProvider("", lastUsedProvider); detErr == nil {
-			// Use default model for auto-detected provider
-			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
-				agentClient = client
-			}
-		}
-	}
+	agentClient := createReviewAgentClient(cfg, logger)
 
 	return &CodeReviewService{
 		config:             cfg,
@@ -103,35 +79,7 @@ func NewCodeReviewService(cfg *configuration.Config, logger *utils.Logger) *Code
 
 // NewCodeReviewServiceWithConfig creates a new code review service instance with custom configuration
 func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Logger, reviewConfig *ReviewConfiguration) *CodeReviewService {
-
-	// Create default agent client - use the same model as configured for code editing
-	var agentClient api.ClientInterface
-	if cfg != nil && cfg.LastUsedProvider != "" {
-		// Parse provider name to ClientType
-		if clientType, err := api.ParseProviderName(cfg.LastUsedProvider); err == nil {
-			// Get the model for this provider from configuration
-			model := cfg.ProviderModels[cfg.LastUsedProvider]
-			if model == "" {
-				logger.LogProcessStep("Warning: No model configured for provider " + cfg.LastUsedProvider + ", using default")
-			}
-			// Use factory method to create provider client with the configured model
-			if client, err := factory.CreateProviderClient(clientType, model); err == nil {
-				agentClient = client
-			}
-		}
-	} else {
-		// Fallback to auto-detection
-		var lastUsedProvider api.ClientType
-		if cfg != nil && cfg.LastUsedProvider != "" {
-			lastUsedProvider = api.ClientType(cfg.LastUsedProvider)
-		}
-		if clientType, detErr := api.DetermineProvider("", lastUsedProvider); detErr == nil {
-			// Use default model for auto-detected provider
-			if client, err := factory.CreateProviderClient(clientType, ""); err == nil {
-				agentClient = client
-			}
-		}
-	}
+	agentClient := createReviewAgentClient(cfg, logger)
 
 	return &CodeReviewService{
 		config:             cfg,
@@ -140,6 +88,34 @@ func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Log
 		contextStore:       make(map[string]*ReviewContext),
 		defaultAgentClient: agentClient,
 	}
+}
+
+func createReviewAgentClient(cfg *configuration.Config, logger *utils.Logger) api.ClientInterface {
+	providerName := strings.TrimSpace(os.Getenv("LEDIT_PROVIDER"))
+	model := strings.TrimSpace(os.Getenv("LEDIT_MODEL"))
+
+	if providerName == "" && cfg != nil {
+		providerName = strings.TrimSpace(cfg.LastUsedProvider)
+	}
+	if model == "" && cfg != nil && providerName != "" {
+		model = strings.TrimSpace(cfg.GetModelForProvider(providerName))
+	}
+	if providerName == "" {
+		if logger != nil {
+			logger.LogProcessStep("Warning: no provider configured for code review; review commands require explicit provider selection")
+		}
+		return nil
+	}
+
+	client, err := factory.CreateProviderClient(api.ClientType(providerName), model)
+	if err != nil {
+		if logger != nil {
+			logger.LogProcessStep(fmt.Sprintf("Warning: failed to initialize review provider '%s' (model '%s'): %v", providerName, model, err))
+		}
+		return nil
+	}
+
+	return client
 }
 
 // GetDefaultAgentClient returns the default agent client for this service

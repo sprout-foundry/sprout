@@ -1,6 +1,15 @@
 {
   "profiles": [
     {
+      "id": "openai-gpt-oss-family",
+      "match_prefixes": ["gpt-oss-", "gpt-oss."],
+      "parameters": {
+        "reasoning_effort": "high"
+      },
+      "source": "https://platform.openai.com/docs/guides/reasoning",
+      "source_type": "creator"
+    },
+    {
       "id": "openai-gpt5-family",
       "match_prefixes": ["gpt-5", "gpt-5.", "gpt-5-"],
       "parameters": {

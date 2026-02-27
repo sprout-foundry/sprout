@@ -363,6 +363,7 @@ func Load() (*Config, error) {
 		config.SubagentTypes = make(map[string]SubagentType)
 	}
 	mergeMissingDefaultSubagentTypes(&config)
+	warnUnknownPersonaTools(config.SubagentTypes)
 	if config.Skills == nil {
 		config.Skills = make(map[string]Skill)
 	}

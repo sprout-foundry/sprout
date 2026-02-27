@@ -121,13 +121,15 @@ func GetSubagentMaxTokens() int {
 //   - exit_code: Process exit code (0 for success)
 //   - completed: true if process ran to completion (always true for blocking mode)
 //   - timed_out: true if the subprocess was terminated due to timeout (always false with no timeout)
-func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, systemPrompt string) (map[string]string, error) {
+func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, systemPromptPath, systemPromptText, persona string) (map[string]string, error) {
 	// Build command: ledit agent with the given prompt
 	args := []string{"agent"}
 
-	// Add system prompt file if specified (for personas)
-	if systemPrompt != "" {
-		args = append(args, "--system-prompt", systemPrompt)
+	// Add persona prompt override, preferring inline text if provided.
+	if systemPromptText != "" {
+		args = append(args, "--system-prompt-str", systemPromptText)
+	} else if systemPromptPath != "" {
+		args = append(args, "--system-prompt", systemPromptPath)
 	}
 
 	// Add provider/model if specified
@@ -206,6 +208,9 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 
 	// Propagate important environment variables to subagent processes
 	cmd.Env = append(os.Environ(), "LEDIT_FROM_AGENT=1", "LEDIT_SUBAGENT=1")
+	if persona != "" {
+		cmd.Env = append(cmd.Env, "LEDIT_PERSONA="+persona)
+	}
 	if debug := os.Getenv("LEDIT_DEBUG"); debug != "" {
 		cmd.Env = append(cmd.Env, "LEDIT_DEBUG="+debug)
 	}

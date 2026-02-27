@@ -2,6 +2,13 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.10.8] - 2026-02-26
+
+- Updates 2 files - Updates paste handling to insert at cursor (c1a1695)
+- Merge remote-tracking branch 'origin/main' (4e5786f)
+- Updates 9 files - Updates console input rendering and web UI assets (6398d32)
+- docs: Update changelog for v0.10.7 (20f6bb1)
+
 ## [v0.10.7] - 2026-02-26
 
 - Updates 3 files - Updates vision client to use custom config fallback (a6c0d47)

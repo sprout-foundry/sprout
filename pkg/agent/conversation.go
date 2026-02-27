@@ -3,10 +3,22 @@ package agent
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/configuration"
 )
+
+var defaultCustomProviderTools = []string{
+	"shell_command",
+	"read_file",
+	"write_file",
+	"edit_file",
+	"search_files",
+	"TodoWrite",
+	"TodoRead",
+}
 
 // ProcessQuery handles the main conversation loop with the LLM
 func (a *Agent) ProcessQuery(userQuery string) (string, error) {
@@ -82,9 +94,57 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 		tools = append(tools, mcpTools...)
 	}
 
+	// For custom providers, reduce tool-load by default and allow explicit override.
+	if customProvider, ok := a.getCurrentCustomProvider(); ok {
+		allowedToolSet := makeAllowedToolSet(customProvider.ToolCalls)
+		if len(customProvider.ToolCalls) == 0 {
+			allowedToolSet = makeAllowedToolSet(defaultCustomProviderTools)
+		}
+		tools = filterToolsByName(tools, allowedToolSet)
+	}
+
 	// Future: Could optimize by analyzing conversation context
 	// and only returning relevant tools
 	return tools
+}
+
+func (a *Agent) getCurrentCustomProvider() (*configuration.CustomProviderConfig, bool) {
+	if a.configManager == nil {
+		return nil, false
+	}
+	config := a.configManager.GetConfig()
+	if config == nil || config.CustomProviders == nil {
+		return nil, false
+	}
+
+	provider, exists := config.CustomProviders[string(a.clientType)]
+	if !exists {
+		return nil, false
+	}
+	return &provider, true
+}
+
+func makeAllowedToolSet(toolNames []string) map[string]struct{} {
+	toolSet := make(map[string]struct{}, len(toolNames))
+	for _, name := range toolNames {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		toolSet[trimmed] = struct{}{}
+	}
+	return toolSet
+}
+
+func filterToolsByName(tools []api.Tool, allowed map[string]struct{}) []api.Tool {
+	filtered := make([]api.Tool, 0, len(tools))
+	for _, tool := range tools {
+		if _, ok := allowed[tool.Function.Name]; !ok {
+			continue
+		}
+		filtered = append(filtered, tool)
+	}
+	return filtered
 }
 
 // ClearConversationHistory clears the conversation history

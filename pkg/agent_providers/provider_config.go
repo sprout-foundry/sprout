@@ -72,9 +72,12 @@ type ModelInfo struct {
 
 // ModelConfig defines model-related configuration
 type ModelConfig struct {
-	DefaultContextLimit int               `json:"default_context_limit"`
-	ModelOverrides      map[string]int    `json:"model_overrides"`
-	PatternOverrides    []PatternOverride `json:"pattern_overrides"`
+	DefaultContextLimit        int               `json:"default_context_limit"`
+	DefaultMaxCompletionTokens int               `json:"default_max_completion_tokens,omitempty"`
+	ModelOverrides             map[string]int    `json:"model_overrides"`
+	MaxCompletionOverrides     map[string]int    `json:"max_completion_overrides,omitempty"`
+	PatternOverrides           []PatternOverride `json:"pattern_overrides"`
+	CompletionPatternOverrides []PatternOverride `json:"completion_pattern_overrides,omitempty"`
 	// Config-based model definitions (fallback when endpoint fetch fails or lacks details)
 	ModelInfo []ModelInfo `json:"model_info,omitempty"`
 	// Legacy fields for backward compatibility
@@ -225,6 +228,32 @@ func (c *ProviderConfig) validateModelConfig() error {
 		}
 	}
 
+	// Validate max completion overrides are positive
+	for modelName, maxCompletion := range c.Models.MaxCompletionOverrides {
+		if maxCompletion <= 0 {
+			return fmt.Errorf("max completion override for '%s' must have positive value", modelName)
+		}
+		if maxCompletion > 2097152 {
+			return fmt.Errorf("max completion override for '%s' has value %d which exceeds reasonable maximum (2M tokens)", modelName, maxCompletion)
+		}
+	}
+
+	// Validate completion pattern overrides
+	for i, patternOverride := range c.Models.CompletionPatternOverrides {
+		if patternOverride.Pattern == "" {
+			return fmt.Errorf("completion pattern override at index %d has empty pattern", i)
+		}
+		if patternOverride.ContextLimit <= 0 {
+			return fmt.Errorf("completion pattern override '%s' must have positive limit", patternOverride.Pattern)
+		}
+		if patternOverride.ContextLimit > 2097152 {
+			return fmt.Errorf("completion pattern override '%s' has limit %d which exceeds reasonable maximum (2M tokens)", patternOverride.Pattern, patternOverride.ContextLimit)
+		}
+		if _, err := regexp.Compile(patternOverride.Pattern); err != nil {
+			return fmt.Errorf("completion pattern override '%s' has invalid regex pattern: %w", patternOverride.Pattern, err)
+		}
+	}
+
 	return nil
 }
 
@@ -276,6 +305,32 @@ func (c *ProviderConfig) GetContextLimit(model string) int {
 
 	// 5. Conservative fallback
 	return 32000
+}
+
+// GetMaxCompletionLimit returns the completion-token limit for a given model.
+// Uses the following priority:
+// 1. Exact model match in max_completion_overrides
+// 2. Pattern match in completion_pattern_overrides
+// 3. Provider default_max_completion_tokens
+// 4. 0 (unknown/unset)
+func (c *ProviderConfig) GetMaxCompletionLimit(model string) int {
+	if c.Models.MaxCompletionOverrides != nil {
+		if maxCompletion, exists := c.Models.MaxCompletionOverrides[model]; exists && maxCompletion > 0 {
+			return maxCompletion
+		}
+	}
+
+	for _, patternOverride := range c.Models.CompletionPatternOverrides {
+		if matched, _ := regexp.MatchString(patternOverride.Pattern, model); matched && patternOverride.ContextLimit > 0 {
+			return patternOverride.ContextLimit
+		}
+	}
+
+	if c.Models.DefaultMaxCompletionTokens > 0 {
+		return c.Models.DefaultMaxCompletionTokens
+	}
+
+	return 0
 }
 
 // GetModelInfo returns model information from config if available

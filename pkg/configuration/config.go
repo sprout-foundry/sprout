@@ -5,11 +5,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/alantheprice/ledit/pkg/personas"
 )
+
+var personaDefaultsWarningOnce sync.Once
 
 const (
 	ConfigVersion   = "2.0"
@@ -177,13 +182,16 @@ type CustomProviderConfig struct {
 
 // SubagentType defines a specialized subagent persona with its own configuration
 type SubagentType struct {
-	ID           string `json:"id"`            // Unique identifier (e.g., "coder", "tester", "debugger")
-	Name         string `json:"name"`          // Human-readable name (e.g., "Coder", "Tester")
-	Description  string `json:"description"`   // What this subagent specializes in
-	Provider     string `json:"provider"`      // Provider for this subagent type (optional, falls back to SubagentProvider)
-	Model        string `json:"model"`         // Model for this subagent type (optional, falls back to SubagentModel)
-	SystemPrompt string `json:"system_prompt"` // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
-	Enabled      bool   `json:"enabled"`       // Whether this subagent type is available for use
+	ID               string   `json:"id"`                           // Unique identifier (e.g., "coder", "tester", "debugger")
+	Name             string   `json:"name"`                         // Human-readable name (e.g., "Coder", "Tester")
+	Description      string   `json:"description"`                  // What this subagent specializes in
+	Provider         string   `json:"provider"`                     // Provider for this subagent type (optional, falls back to SubagentProvider)
+	Model            string   `json:"model"`                        // Model for this subagent type (optional, falls back to SubagentModel)
+	SystemPrompt     string   `json:"system_prompt"`                // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
+	SystemPromptText string   `json:"system_prompt_text,omitempty"` // Optional inline system prompt text
+	AllowedTools     []string `json:"allowed_tools,omitempty"`      // Optional explicit tool allowlist for focused persona behavior
+	Aliases          []string `json:"aliases,omitempty"`            // Optional aliases (e.g., "web-scraper")
+	Enabled          bool     `json:"enabled"`                      // Whether this subagent type is available for use
 }
 
 // Skill defines an Agent Skill that can be loaded into context
@@ -259,64 +267,7 @@ func NewConfig() *Config {
 		HistoryScope:                "project", // Default to project-scoped history
 		EnableZshCommandDetection:   true,      // Enable zsh command detection by default
 		AutoExecuteDetectedCommands: true,      // Auto-execute detected commands without prompting
-		SubagentTypes: map[string]SubagentType{
-			"general": {
-				ID:           "general",
-				Name:         "General",
-				Description:  "General-purpose subagent for tasks that don't require specialized expertise",
-				SystemPrompt: "pkg/agent/prompts/subagent_prompts/general.md",
-				Enabled:      true,
-			},
-			"coder": {
-				ID:           "coder",
-				Name:         "Coder",
-				Description:  "Implementation and feature development specialist",
-				SystemPrompt: "pkg/agent/prompts/subagent_prompts/coder.md",
-				Enabled:      true,
-			},
-			"tester": {
-				ID:           "tester",
-				Name:         "Tester",
-				Description:  "Unit test writing and test coverage specialist",
-				SystemPrompt: "pkg/agent/prompts/subagent_prompts/tester.md",
-				Enabled:      true,
-			},
-			"qa_engineer": {
-				ID:           "qa_engineer",
-				Name:         "QA Engineer",
-				Description:  "Quality assurance, test planning, and integration testing specialist",
-				SystemPrompt: "pkg/agent/prompts/subagent_prompts/qa_engineer.md",
-				Enabled:      true,
-			},
-			"code_reviewer": {
-				ID:           "code_reviewer",
-				Name:         "Code Reviewer",
-				Description:  "Code review, security, and best practices specialist",
-				SystemPrompt: "pkg/agent/prompts/subagent_prompts/code_reviewer.md",
-				Enabled:      true,
-			},
-			"debugger": {
-				ID:           "debugger",
-				Name:         "Debugger",
-				Description:  "Bug investigation, root cause analysis, and fixes specialist",
-				SystemPrompt: "pkg/agent/prompts/subagent_prompts/debugger.md",
-				Enabled:      true,
-			},
-			"web_researcher": {
-				ID:           "web_researcher",
-				Name:         "Web Researcher",
-				Description:  "Documentation lookup, API research, and solution discovery specialist",
-				SystemPrompt: "pkg/agent/prompts/subagent_prompts/web_researcher.md",
-				Enabled:      true,
-			},
-			"researcher": {
-				ID:           "researcher",
-				Name:         "Researcher",
-				Description:  "Local codebase analysis and web research specialist - investigates code, architecture, and finds external information",
-				SystemPrompt: "pkg/agent/prompts/subagent_prompts/researcher.md",
-				Enabled:      true,
-			},
-		},
+		SubagentTypes:               defaultSubagentTypes(),
 		Skills: map[string]Skill{
 			"go-conventions": {
 				ID:          "go-conventions",
@@ -411,6 +362,7 @@ func Load() (*Config, error) {
 	if config.SubagentTypes == nil {
 		config.SubagentTypes = make(map[string]SubagentType)
 	}
+	mergeMissingDefaultSubagentTypes(&config)
 	if config.Skills == nil {
 		config.Skills = make(map[string]Skill)
 	}
@@ -579,10 +531,87 @@ func (c *Config) GetSubagentType(id string) *SubagentType {
 	if c.SubagentTypes == nil {
 		return nil
 	}
-	if subagentType, exists := c.SubagentTypes[id]; exists && subagentType.Enabled {
-		return &subagentType
+
+	normalizedID := normalizePersonaID(id)
+
+	var resolved SubagentType
+	found := false
+	for personaID, subagentType := range c.SubagentTypes {
+		if normalizePersonaID(personaID) == normalizedID {
+			resolved = subagentType
+			found = true
+			break
+		}
+		for _, alias := range subagentType.Aliases {
+			if normalizePersonaID(alias) == normalizedID {
+				resolved = subagentType
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
 	}
+
+	if found && resolved.Enabled {
+		if len(resolved.AllowedTools) == 0 {
+			if defaultPersona, ok := defaultSubagentTypes()[normalizePersonaID(resolved.ID)]; ok && len(defaultPersona.AllowedTools) > 0 {
+				resolved.AllowedTools = append([]string{}, defaultPersona.AllowedTools...)
+			}
+		}
+		return &resolved
+	}
+
 	return nil
+}
+
+func mergeMissingDefaultSubagentTypes(config *Config) {
+	if config == nil {
+		return
+	}
+	if config.SubagentTypes == nil {
+		config.SubagentTypes = make(map[string]SubagentType)
+	}
+
+	for id, persona := range defaultSubagentTypes() {
+		if _, exists := config.SubagentTypes[id]; !exists {
+			config.SubagentTypes[id] = persona
+		}
+	}
+}
+
+func defaultSubagentTypes() map[string]SubagentType {
+	definitions, err := personas.DefaultDefinitions()
+	if err != nil {
+		personaDefaultsWarningOnce.Do(func() {
+			fmt.Fprintf(os.Stderr, "WARNING: failed to load embedded persona definitions, using fallback defaults: %v\n", err)
+		})
+	}
+
+	types := make(map[string]SubagentType, len(definitions))
+	for id, definition := range definitions {
+		types[normalizePersonaID(id)] = SubagentType{
+			ID:               normalizePersonaID(definition.ID),
+			Name:             definition.Name,
+			Description:      definition.Description,
+			Provider:         definition.Provider,
+			Model:            definition.Model,
+			SystemPrompt:     definition.SystemPrompt,
+			SystemPromptText: definition.SystemPromptText,
+			AllowedTools:     append([]string{}, definition.AllowedTools...),
+			Aliases:          append([]string{}, definition.Aliases...),
+			Enabled:          definition.Enabled,
+		}
+	}
+
+	return types
+}
+
+func normalizePersonaID(raw string) string {
+	normalized := strings.TrimSpace(strings.ToLower(raw))
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+	return normalized
 }
 
 // GetSubagentTypeProvider returns the provider for a specific subagent type

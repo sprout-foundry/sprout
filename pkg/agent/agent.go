@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +38,7 @@ type Agent struct {
 	client                api.ClientInterface
 	messages              []api.Message
 	systemPrompt          string
+	baseSystemPrompt      string // Base prompt restored when persona is cleared
 	maxIterations         int
 	currentIteration      int
 	totalCost             float64
@@ -67,6 +69,7 @@ type Agent struct {
 	completionSummarizer  *CompletionContextSummarizer   // Completion context summarization
 	toolCallGuidanceAdded bool                           // Prevent repeating tool call guidance
 	activeSkills          []string                       // Currently activated skills (by ID)
+	activePersona         string                         // Currently active persona ID (direct agent or subagent env)
 
 	// Input injection handling
 	inputInjectionChan  chan string        // Channel for injecting new user input
@@ -187,6 +190,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			client:                    client,
 			messages:                  []api.Message{},
 			systemPrompt:              systemPrompt,
+			baseSystemPrompt:          systemPrompt,
 			maxIterations:             1000,
 			totalCost:                 0.0,
 			clientType:                clientType,
@@ -199,6 +203,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			interruptCancel:           func() { /* no-op */ },
 			falseStopDetectionEnabled: true,
 			conversationPruner:        NewConversationPruner(false),
+			activePersona:             "orchestrator",
 		}
 
 		// Load command history from configuration
@@ -213,6 +218,10 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 		// Initialize MCP manager
 		agent.mcpManager = mcp.NewMCPManager(nil)
+
+		if persona := strings.TrimSpace(os.Getenv("LEDIT_PERSONA")); persona != "" {
+			agent.activePersona = strings.ReplaceAll(strings.ToLower(persona), "-", "_")
+		}
 
 		// Initialize change tracker
 		agent.changeTracker = NewChangeTracker(agent, "")
@@ -349,6 +358,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		client:                    client,
 		messages:                  []api.Message{},
 		systemPrompt:              systemPrompt,
+		baseSystemPrompt:          systemPrompt,
 		maxIterations:             1000,
 		totalCost:                 0.0,
 		clientType:                clientType,
@@ -364,6 +374,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		completionSummarizer:      NewCompletionContextSummarizer(debug),
 		commandHistory:            []string{},
 		historyIndex:              -1,
+		activePersona:             "orchestrator",
 	}
 
 	// Initialize debug log file if debug enabled
@@ -403,6 +414,10 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 	// Load command history from configuration
 	agent.loadHistoryFromConfig()
+
+	if persona := strings.TrimSpace(os.Getenv("LEDIT_PERSONA")); persona != "" {
+		agent.activePersona = strings.ReplaceAll(strings.ToLower(persona), "-", "_")
+	}
 
 	return agent, nil
 }
@@ -1313,6 +1328,14 @@ func (a *Agent) SetSystemPrompt(prompt string) {
 	a.systemPrompt = a.ensureStopInformation(prompt)
 }
 
+// SetBaseSystemPrompt updates the baseline prompt used when persona overrides are cleared.
+func (a *Agent) SetBaseSystemPrompt(prompt string) {
+	a.baseSystemPrompt = a.ensureStopInformation(prompt)
+	if strings.TrimSpace(a.baseSystemPrompt) == "" {
+		a.baseSystemPrompt = a.systemPrompt
+	}
+}
+
 // GetSystemPrompt returns the current system prompt
 func (a *Agent) GetSystemPrompt() string {
 	return a.systemPrompt
@@ -1320,7 +1343,12 @@ func (a *Agent) GetSystemPrompt() string {
 
 // SetSystemPromptFromFile loads a custom system prompt from a file
 func (a *Agent) SetSystemPromptFromFile(filePath string) error {
-	content, err := os.ReadFile(filePath)
+	resolvedPath, err := resolvePromptPath(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve system prompt file: %w", err)
+	}
+
+	content, err := os.ReadFile(resolvedPath)
 	if err != nil {
 		return fmt.Errorf("failed to read system prompt file: %w", err)
 	}
@@ -1332,6 +1360,52 @@ func (a *Agent) SetSystemPromptFromFile(filePath string) error {
 
 	a.systemPrompt = a.ensureStopInformation(promptContent)
 	return nil
+}
+
+func resolvePromptPath(filePath string) (string, error) {
+	trimmed := strings.TrimSpace(filePath)
+	if trimmed == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+
+	// Preserve existing behavior first: relative paths resolve from cwd.
+	if _, err := os.Stat(trimmed); err == nil {
+		return trimmed, nil
+	}
+
+	if filepath.IsAbs(trimmed) {
+		return trimmed, nil
+	}
+
+	// Fallback for repo-relative prompt paths like pkg/agent/prompts/... when cwd is nested.
+	repoRoot, err := findRepoRootFromCWD()
+	if err != nil {
+		return trimmed, nil
+	}
+	candidate := filepath.Join(repoRoot, trimmed)
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate, nil
+	}
+
+	return trimmed, nil
+}
+
+func findRepoRootFromCWD() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("go.mod not found from cwd")
+		}
+		dir = parent
+	}
 }
 
 // ensureStopInformation preserves the original prompt content

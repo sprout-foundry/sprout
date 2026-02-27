@@ -67,6 +67,7 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register subagent persona commands
 	registry.Register(&SubagentPersonasCommand{})
 	registry.Register(&SubagentPersonaCommand{})
+	registry.Register(&PersonaCommand{})
 
 	// Register change tracking commands
 	registry.Register(&ChangesCommand{})

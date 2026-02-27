@@ -72,6 +72,29 @@ func TestFindAvailablePort(t *testing.T) {
 	}
 }
 
+// TestStartFailsWhenPortAlreadyInUse verifies startup state remains consistent on bind failures.
+func TestStartFailsWhenPortAlreadyInUse(t *testing.T) {
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("failed to reserve test port: %v", err)
+	}
+	defer listener.Close()
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	server := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = server.Start(ctx)
+	if err == nil {
+		t.Fatalf("expected Start to fail when port %d is already in use", port)
+	}
+	if server.IsRunning() {
+		t.Fatalf("server should not report running after failed start on port %d", port)
+	}
+}
+
 // TestMultipleServersOnDifferentPorts verifies multiple servers can start simultaneously
 func TestMultipleServersOnDifferentPorts(t *testing.T) {
 	// Skip if agent initialization would fail

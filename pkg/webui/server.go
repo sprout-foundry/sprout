@@ -34,6 +34,7 @@ type ReactWebServer struct {
 	eventBus        *events.EventBus
 	port            int
 	server          *http.Server
+	listener        net.Listener
 	upgrader        websocket.Upgrader
 	connections     sync.Map // map[*websocket.Conn]*ConnectionInfo
 	terminalManager *TerminalManager
@@ -71,14 +72,6 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 
 // Start starts the web server
 func (ws *ReactWebServer) Start(ctx context.Context) error {
-	ws.mutex.Lock()
-	if ws.isRunning {
-		ws.mutex.Unlock()
-		return fmt.Errorf("web server is already running")
-	}
-	ws.isRunning = true
-	ws.mutex.Unlock()
-
 	// Setup routes
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ws.handleIndex)
@@ -128,10 +121,25 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		Handler: mux,
 	}
 
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ws.server.Addr)
+	if err != nil {
+		return fmt.Errorf("failed to bind web server on %s: %w", ws.server.Addr, err)
+	}
+
+	ws.mutex.Lock()
+	if ws.isRunning {
+		ws.mutex.Unlock()
+		listener.Close()
+		return fmt.Errorf("web server is already running")
+	}
+	ws.listener = listener
+	ws.isRunning = true
+	ws.mutex.Unlock()
+
 	// Start server in goroutine
 	go func() {
 		log.Printf("🌐 Web UI starting at http://localhost:%d", ws.port)
-		if err := ws.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := ws.server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			log.Printf("Web server error: %v", err)
 		}
 	}()
@@ -153,6 +161,8 @@ func (ws *ReactWebServer) Shutdown() error {
 		return nil
 	}
 	ws.isRunning = false
+	listener := ws.listener
+	ws.listener = nil
 	ws.mutex.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -165,6 +175,10 @@ func (ws *ReactWebServer) Shutdown() error {
 		}
 		return true
 	})
+
+	if listener != nil {
+		_ = listener.Close()
+	}
 
 	return ws.server.Shutdown(ctx)
 }

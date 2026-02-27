@@ -75,17 +75,9 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 		}
 		return &ollamaLocalListModelsWrapper{client: client}, nil
 	case OllamaTurboClientType:
-		client, err := NewOllamaTurboClient("dummy") // Model parameter not used for ListModels
-		if err != nil {
-			return nil, err
-		}
-		return &ollamaTurboListModelsWrapper{client: client}, nil
+		return &genericConfigListModelsWrapper{providerName: "ollama-turbo"}, nil
 	case OpenAIClientType:
-		client, err := NewOpenAIClient()
-		if err != nil {
-			return nil, err
-		}
-		return &openAIListModelsWrapper{client: client}, nil
+		return &genericConfigListModelsWrapper{providerName: "openai"}, nil
 	case OpenRouterClientType:
 		// Check for API key first
 		if os.Getenv("OPENROUTER_API_KEY") == "" {
@@ -230,27 +222,6 @@ type ollamaLocalListModelsWrapper struct {
 
 func (w *ollamaLocalListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	return w.client.ListModels()
-}
-
-type ollamaTurboListModelsWrapper struct {
-	client *OllamaTurboClient
-}
-
-func (w *ollamaTurboListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	turboModels, err := w.client.ListOllamaModels()
-	if err != nil {
-		return nil, err
-	}
-	// Convert OllamaTurboModel to ModelInfo
-	models := make([]ModelInfo, len(turboModels))
-	for i, tm := range turboModels {
-		models[i] = ModelInfo{
-			ID:       tm.ID,
-			Name:     tm.ID, // Use ID as name since Name field doesn't exist
-			Provider: "ollama-turbo",
-		}
-	}
-	return models, nil
 }
 
 type openRouterListModelsWrapper struct{}

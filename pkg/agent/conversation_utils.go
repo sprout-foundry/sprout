@@ -57,12 +57,6 @@ func containsFrontendKeywords(query string) bool {
 
 // determineReasoningEffort determines the appropriate reasoning effort level based on the query
 func (a *Agent) determineReasoningEffort(messages []api.Message) string {
-	// Always use highest reasoning for gpt-oss models (they support reasoning_effort)
-	currentModel := a.GetModel()
-	if strings.Contains(strings.ToLower(currentModel), "gpt-oss") {
-		return "high"
-	}
-
 	// Only certain providers support reasoning effort
 	if a.GetProvider() != "openai" && a.GetProvider() != "deepseek" {
 		return "" // Default - provider will ignore it

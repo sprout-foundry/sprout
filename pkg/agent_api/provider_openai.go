@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	modelsettings "github.com/alantheprice/ledit/pkg/model_settings"
 )
 
 const defaultProviderOpenAIMaxRequestTokensCap = 64000
@@ -168,11 +170,25 @@ func (p *OpenAIProvider) buildOpenAIRequest(req *ProviderChatRequest) *OpenAIReq
 		Stream:   false,
 	}
 
-	// Apply request options
+	settings := modelsettings.ResolveModelSettings(p.model)
+
+	// Apply model guidance first (explicit request options override this below).
+	p.applyModelSettings(openAIReq, settings, false)
+
+	// Apply request options (highest precedence)
 	if req.Options != nil {
-		// Temperature (not for GPT-5 models)
-		if req.Options.Temperature != nil && !strings.Contains(p.model, "gpt-5") {
+		// Temperature
+		if req.Options.Temperature != nil {
 			openAIReq.Temperature = req.Options.Temperature
+		}
+		if req.Options.TopP != nil {
+			openAIReq.TopP = req.Options.TopP
+		}
+		if req.Options.FrequencyPenalty != nil {
+			openAIReq.FrequencyPenalty = req.Options.FrequencyPenalty
+		}
+		if req.Options.PresencePenalty != nil {
+			openAIReq.PresencePenalty = req.Options.PresencePenalty
 		}
 
 		// Max tokens
@@ -196,6 +212,52 @@ func (p *OpenAIProvider) buildOpenAIRequest(req *ProviderChatRequest) *OpenAIReq
 	}
 
 	return openAIReq
+}
+
+func (p *OpenAIProvider) applyModelSettings(req *OpenAIRequest, settings modelsettings.ModelSettings, preserveExplicit bool) {
+	if !settings.Known {
+		if req.Temperature == nil {
+			defaultTemp := 0.1
+			req.Temperature = &defaultTemp
+		}
+		return
+	}
+
+	if (settings.Unsupported["temperature"] || !settings.Supported["temperature"]) && (!preserveExplicit || req.Temperature == nil) {
+		req.Temperature = nil
+	}
+	if (settings.Unsupported["top_p"] || !settings.Supported["top_p"]) && (!preserveExplicit || req.TopP == nil) {
+		req.TopP = nil
+	}
+	if (settings.Unsupported["frequency_penalty"] || !settings.Supported["frequency_penalty"]) && (!preserveExplicit || req.FrequencyPenalty == nil) {
+		req.FrequencyPenalty = nil
+	}
+
+	if req.Temperature == nil {
+		if value, ok := settings.Parameters["temperature"]; ok {
+			req.Temperature = asFloatPtr(value)
+		}
+	}
+	if req.TopP == nil {
+		if value, ok := settings.Parameters["top_p"]; ok {
+			req.TopP = asFloatPtr(value)
+		}
+	}
+	if req.FrequencyPenalty == nil {
+		if value, ok := settings.Parameters["frequency_penalty"]; ok {
+			req.FrequencyPenalty = asFloatPtr(value)
+		}
+	}
+	if req.PresencePenalty == nil {
+		if value, ok := settings.Parameters["presence_penalty"]; ok {
+			req.PresencePenalty = asFloatPtr(value)
+		}
+	}
+
+	if req.Temperature == nil && settings.Supported["temperature"] {
+		defaultTemp := 0.1
+		req.Temperature = &defaultTemp
+	}
 }
 
 // calculateMaxTokens estimates appropriate max tokens based on context

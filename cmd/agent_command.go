@@ -4,8 +4,11 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -73,6 +76,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
 	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")
 	agentCmd.Flags().BoolVar(&agentNoSubagents, "no-subagents", false, "Disable subagent tools (run_subagent, run_parallel_subagents)")
+	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)
 
 	// Initialize environment-based defaults
 	cobra.OnInitialize(func() {
@@ -85,6 +89,34 @@ func init() {
 			agentNoSubagents = true
 		}
 	})
+}
+
+func completePersonaFlag(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg, err := configuration.Load()
+	if err != nil || cfg == nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return availablePersonaCompletions(cfg, toComplete), cobra.ShellCompDirectiveNoFileComp
+}
+
+func availablePersonaCompletions(cfg *configuration.Config, toComplete string) []string {
+	if cfg == nil || cfg.SubagentTypes == nil {
+		return nil
+	}
+
+	prefix := strings.ToLower(strings.TrimSpace(toComplete))
+	options := make([]string, 0, len(cfg.SubagentTypes))
+	for id, persona := range cfg.SubagentTypes {
+		if !persona.Enabled {
+			continue
+		}
+		if prefix != "" && !strings.HasPrefix(strings.ToLower(id), prefix) {
+			continue
+		}
+		options = append(options, id)
+	}
+	sort.Strings(options)
+	return options
 }
 
 // agentCmd represents the agent command

@@ -2,6 +2,19 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.10.9] - 2026-02-27
+
+- Updates 7 files - Updates persona flag completion and error messages (365aace)
+- Updates 5 files - Updates persona tool validation and path resolution (5eee122)
+- Updates 21 files - Updates persona behavior and command support (0a08c64)
+- Updates 5 files - Updates custom provider tool allowlist and filtering (d629a77)
+- Merge remote-tracking branch 'origin/main' (18acd9a)
+- Updates 4 files - Updates event ID format, server bind handling, tests (997a39a)
+- Updates 22 files - Updates terminal history API and UI theme (1a3912b)
+- Updates 14 files - Updates web UI assets and Git view enhancements (241e179)
+- Updates 18 files - Updates static asset handling and test coverage (35c2bdb)
+- docs: Update changelog for v0.10.8 (98ab3c5)
+
 ## [v0.10.8] - 2026-02-26
 
 - Updates 2 files - Updates paste handling to insert at cursor (c1a1695)

@@ -7,12 +7,14 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	OpenAIURL = "https://api.openai.com/v1/chat/completions"
+	OpenAIURL                        = "https://api.openai.com/v1/chat/completions"
+	defaultOpenAIMaxRequestTokensCap = 64000
 )
 
 type OpenAIClient struct {
@@ -292,6 +294,10 @@ func (c *OpenAIClient) calculateMaxTokens(messages []Message, tools []Tool) int 
 	if completionCap > 0 && maxOutput > completionCap {
 		maxOutput = completionCap
 	}
+	requestCap := c.getMaxRequestTokensCap()
+	if requestCap > 0 && maxOutput > requestCap {
+		maxOutput = requestCap
+	}
 
 	return maxOutput
 }
@@ -308,6 +314,18 @@ func (c *OpenAIClient) getModelCompletionTokenLimit() int {
 	default:
 		return 0 // unknown/unbounded here; rely on context-derived sizing
 	}
+}
+
+func (c *OpenAIClient) getMaxRequestTokensCap() int {
+	raw := strings.TrimSpace(os.Getenv("LEDIT_MAX_REQUEST_COMPLETION_TOKENS"))
+	if raw == "" {
+		return defaultOpenAIMaxRequestTokensCap
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return defaultOpenAIMaxRequestTokensCap
+	}
+	return value
 }
 
 func (c *OpenAIClient) CheckConnection() error {

@@ -33,7 +33,11 @@ func (a *Agent) ApplyPersona(personaID string) error {
 
 	persona := config.GetSubagentType(personaID)
 	if persona == nil {
-		return fmt.Errorf("persona not found or disabled: %s", personaID)
+		available := a.GetAvailablePersonaIDs()
+		if len(available) == 0 {
+			return fmt.Errorf("persona not found or disabled: %s (no enabled personas configured)", personaID)
+		}
+		return fmt.Errorf("persona not found or disabled: %s (available personas: %s)", personaID, strings.Join(available, ", "))
 	}
 
 	// Composition rules:

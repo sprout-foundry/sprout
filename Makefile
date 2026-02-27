@@ -118,8 +118,8 @@ deploy-ui:
 		mkdir -p pkg/webui/static; \
 	fi
 	@rm -rf pkg/webui/static/*
-	@# Copy root-level files (index.html, manifest.json, etc.)
-	@cp webui/build/*.html webui/build/*.json webui/build/*.xml webui/build/sw.js pkg/webui/static/ 2>/dev/null || true
+	@# Copy root-level files (index.html, manifest.json, icons, etc.)
+	@cp webui/build/*.html webui/build/*.json webui/build/*.xml webui/build/*.png webui/build/*.ico webui/build/sw.js pkg/webui/static/ 2>/dev/null || true
 	@# Copy static assets directly (without the 'static/' prefix in the destination)
 	@if [ -d "webui/build/static/js" ]; then \
 		mkdir -p pkg/webui/static/js && \

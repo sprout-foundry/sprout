@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
@@ -62,5 +63,24 @@ func TestGetPersonaProviderModelProviderOverrideUsesConfiguredModel(t *testing.T
 	wantModel := cfg.GetModelForProvider("deepinfra")
 	if model != wantModel {
 		t.Fatalf("expected model %q, got %q", wantModel, model)
+	}
+}
+
+func TestApplyPersonaNotFoundIncludesAvailablePersonas(t *testing.T) {
+	agent, err := NewAgent()
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	err = agent.ApplyPersona("definitely_not_real")
+	if err == nil {
+		t.Fatalf("expected error for unknown persona")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "available personas:") {
+		t.Fatalf("expected available personas in error, got: %s", msg)
+	}
+	if !strings.Contains(msg, "orchestrator") {
+		t.Fatalf("expected orchestrator in available persona list, got: %s", msg)
 	}
 }

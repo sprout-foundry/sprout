@@ -20,7 +20,6 @@ type ConversationHandler struct {
 	consecutiveBlankIterations int
 	conversationStartTime      time.Time
 	lastActivityTime           time.Time
-	timeoutDuration            time.Duration
 	transientMessages          []api.Message
 	pendingUserMessage         string
 	turnHistory                []TurnEvaluation
@@ -38,7 +37,6 @@ func NewConversationHandler(agent *Agent) *ConversationHandler {
 		fallbackParser:        NewFallbackParser(agent),
 		conversationStartTime: now,
 		lastActivityTime:      now,
-		timeoutDuration:       7 * time.Minute, // 7-minute timeout
 	}
 }
 
@@ -51,7 +49,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	// Publish query started event
 	ch.agent.publishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(userQuery, ch.agent.GetProvider(), ch.agent.GetModel()))
 
-	// Initialize timeout tracking
+	// Initialize conversation tracking
 	ch.conversationStartTime = time.Now()
 	ch.lastActivityTime = time.Now()
 
@@ -93,7 +91,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	for ch.agent.currentIteration = 0; ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
 		ch.agent.debugLog("🔄 Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.messages))
 
-		// Check for interrupts with enhanced pause/resume handling
+		// Check for explicit interrupts
 		if ch.checkForInterrupt() {
 			interruptResponse := ch.agent.HandleInterrupt()
 
@@ -101,15 +99,8 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 			case "STOP":
 				ch.agent.debugLog("⏹️ Conversation stopped by user\n")
 				break
-			case "CONTINUE_WITH_CLARIFICATION":
-				ch.agent.debugLog("🔄 Continuing with user clarification\n")
-				// Update activity time to prevent immediate timeout re-trigger
-				ch.lastActivityTime = time.Now()
-				continue
 			case "CONTINUE":
 				ch.agent.debugLog("🔄 Continuing without changes\n")
-				// Update activity time to prevent immediate timeout re-trigger
-				ch.lastActivityTime = time.Now()
 				continue
 			default:
 				ch.agent.debugLog("⏹️ Conversation interrupted\n")
@@ -133,6 +124,24 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		}
 		response, err := ch.sendMessage()
 		if err != nil {
+			// If this iteration was interrupted, continue the loop based on
+			// interrupt handling instead of treating it as an API failure.
+			if ch.checkForInterrupt() {
+				interruptResponse := ch.agent.HandleInterrupt()
+				switch interruptResponse {
+				case "STOP":
+					ch.agent.debugLog("⏹️ Conversation stopped by user\n")
+					break
+				case "CONTINUE":
+					ch.agent.debugLog("🔄 Continuing without changes\n")
+					continue
+				default:
+					ch.agent.debugLog("⏹️ Conversation interrupted\n")
+					break
+				}
+				break
+			}
+
 			if ch.agent.debug {
 				ch.agent.debugLog("DEBUG: ConversationHandler got error at %s: %v\n", time.Now().Format("15:04:05.000"), err)
 			}
@@ -169,7 +178,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	return ch.finalizeConversation()
 }
 
-// checkForInterrupt checks for user interrupts or timeouts
+// checkForInterrupt checks for explicit user interrupts or injected input.
 func (ch *ConversationHandler) checkForInterrupt() bool {
 	// Check for context cancellation (new interrupt system) with blocking select
 	select {
@@ -185,12 +194,6 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 		})
 		return false // Continue processing with new input
 	default:
-		// Check for timeout (5 minutes of inactivity)
-		if time.Since(ch.lastActivityTime) > ch.timeoutDuration {
-			ch.agent.debugLog("⏰ Conversation timeout after %v of inactivity\n", ch.timeoutDuration)
-			ch.agent.interruptCancel() // Cancel context to trigger interrupt
-			return true
-		}
 		return false
 	}
 }

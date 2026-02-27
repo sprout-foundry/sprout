@@ -12,6 +12,7 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/logging"
+	modelsettings "github.com/alantheprice/ledit/pkg/model_settings"
 )
 
 // GenericProvider implements ClientInterface using JSON configuration
@@ -441,12 +442,35 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 		}
 	}
 
+	// Apply model-specific defaults and suppress unsupported fields.
+	applyModelSpecificSettings(p.model, request)
+
 	// Add tools if provided
 	if len(tools) > 0 {
 		request["tools"] = tools
 	}
 
 	return json.Marshal(request)
+}
+
+func applyModelSpecificSettings(model string, request map[string]interface{}) {
+	settings := modelsettings.ResolveModelSettings(model)
+	if !settings.Known {
+		return
+	}
+	for param := range settings.Unsupported {
+		delete(request, param)
+	}
+	for param, value := range settings.Parameters {
+		if !settings.Supported[param] {
+			continue
+		}
+		if value == nil {
+			delete(request, param)
+			continue
+		}
+		request[param] = value
+	}
 }
 
 // buildMultiModalContent creates a multi-part content array for messages with images
@@ -522,6 +546,8 @@ func (p *GenericProvider) getModelCompletionLimit() int {
 // convertMessages converts messages according to provider configuration
 func (p *GenericProvider) convertMessages(messages []api.Message, reasoning string) []map[string]interface{} {
 	converted := make([]map[string]interface{}, len(messages))
+	reasoningField := p.config.Conversion.ReasoningContentField
+	skipReasoningHistory := p.shouldSkipReasoningContentHistory()
 
 	for i, msg := range messages {
 		content := interface{}(msg.Content)
@@ -544,15 +570,10 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 			convertedMsg["role"] = "user"
 		}
 
-		// Handle reasoning content
-		if reasoning != "" && p.config.Conversion.ReasoningContentField != "" {
-			convertedMsg[p.config.Conversion.ReasoningContentField] = reasoning
-		}
-
 		// Preserve reasoning content from previous assistant messages
 		// This is critical for models like z-ai/glm-4.7-flash that use reasoning tokens
-		if msg.ReasoningContent != "" && p.config.Conversion.ReasoningContentField != "" {
-			convertedMsg[p.config.Conversion.ReasoningContentField] = msg.ReasoningContent
+		if !skipReasoningHistory && msg.ReasoningContent != "" && reasoningField != "" {
+			convertedMsg[reasoningField] = msg.ReasoningContent
 		}
 
 		// Preserve tool calls if present
@@ -563,7 +584,16 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 		converted[i] = convertedMsg
 	}
 
+	_ = reasoning // reasoning effort is sent via provider/model-specific request params, not message fields
+
 	return converted
+}
+
+func (p *GenericProvider) shouldSkipReasoningContentHistory() bool {
+	// MiniMax expects reasoning_details to be a structured array, not a plain string.
+	// Replaying historical ReasoningContent verbatim causes type mismatch 400s.
+	return strings.EqualFold(p.config.Name, "minimax") &&
+		strings.EqualFold(p.config.Conversion.ReasoningContentField, "reasoning_details")
 }
 
 func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{} {

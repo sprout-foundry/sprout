@@ -210,3 +210,121 @@ func TestConvertToolCallsArgumentsAsJSON(t *testing.T) {
 		t.Fatalf("unexpected arguments content: %#v", args)
 	}
 }
+
+func TestApplyModelSpecificSettingsRemovesUnsupportedFields(t *testing.T) {
+	request := map[string]interface{}{
+		"temperature": 0.7,
+		"top_p":       1.0,
+	}
+
+	applyModelSpecificSettings("openai/gpt-5", request)
+
+	if _, ok := request["temperature"]; ok {
+		t.Fatalf("expected temperature to be removed for gpt-5")
+	}
+	if _, ok := request["top_p"]; ok {
+		t.Fatalf("expected top_p to be removed for gpt-5")
+	}
+}
+
+func TestConvertMessagesDoesNotInjectReasoningEffort(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "openrouter",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Conversion: MessageConversion{
+			ReasoningContentField: "reasoning_content",
+		},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "test-model",
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	messages := []api.Message{
+		{Role: "user", Content: "hello"},
+	}
+
+	converted := provider.convertMessages(messages, "high")
+	if _, exists := converted[0]["reasoning_content"]; exists {
+		t.Fatalf("did not expect reasoning effort to be injected into message payload")
+	}
+}
+
+func TestConvertMessagesSkipsMinimaxReasoningDetailsHistory(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "minimax",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "MiniMax-M2.5"},
+		Conversion: MessageConversion{
+			ReasoningContentField: "reasoning_details",
+		},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "MiniMax-M2.5",
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	messages := []api.Message{
+		{
+			Role:             "assistant",
+			Content:          "answer",
+			ReasoningContent: "chain of thought from previous provider",
+		},
+	}
+
+	converted := provider.convertMessages(messages, "")
+	if _, exists := converted[0]["reasoning_details"]; exists {
+		t.Fatalf("did not expect reasoning_details to be sent as string history for minimax")
+	}
+}
+
+func TestConvertMessagesPreservesReasoningContentForCompatibleProviders(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "zai",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "GLM-4.6"},
+		Conversion: MessageConversion{
+			ReasoningContentField: "reasoning_content",
+		},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "GLM-4.6",
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	messages := []api.Message{
+		{
+			Role:             "assistant",
+			Content:          "answer",
+			ReasoningContent: "preserve me",
+		},
+	}
+
+	converted := provider.convertMessages(messages, "")
+	value, exists := converted[0]["reasoning_content"]
+	if !exists {
+		t.Fatalf("expected reasoning_content to be preserved for compatible provider")
+	}
+	if value != "preserve me" {
+		t.Fatalf("unexpected reasoning_content value: %v", value)
+	}
+}

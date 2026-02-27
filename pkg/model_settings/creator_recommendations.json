@@ -1,0 +1,137 @@
+{
+  "profiles": [
+    {
+      "id": "openai-gpt5-family",
+      "match_prefixes": ["gpt-5", "gpt-5.", "gpt-5-"],
+      "parameters": {
+        "temperature": null,
+        "top_p": null,
+        "frequency_penalty": null,
+        "presence_penalty": null
+      },
+      "unsupported_parameters": ["temperature", "top_p", "frequency_penalty", "presence_penalty"],
+      "source": "https://platform.openai.com/docs/guides/latest-model",
+      "source_type": "creator"
+    },
+    {
+      "id": "mistral-family",
+      "match_prefixes": ["mistral-", "ministral-", "codestral", "devstral", "voxtral", "open-mistral"],
+      "parameters": {
+        "temperature": 0.7,
+        "top_p": 1.0
+      },
+      "source": "https://docs.mistral.ai/api/",
+      "source_type": "creator"
+    },
+    {
+      "id": "anthropic-claude-family",
+      "match_prefixes": ["claude-"],
+      "parameters": {
+        "temperature": 1.0
+      },
+      "source": "https://docs.anthropic.com/en/api/messages",
+      "source_type": "creator"
+    },
+    {
+      "id": "google-gemini-family",
+      "match_prefixes": ["gemini-"],
+      "parameters": {
+        "temperature": 1.0
+      },
+      "source": "https://ai.google.dev/gemini-api/docs/text-generation",
+      "source_type": "creator"
+    },
+    {
+      "id": "deepseek-family",
+      "match_prefixes": ["deepseek-"],
+      "parameters": {
+        "temperature": 1.0,
+        "top_p": 1.0
+      },
+      "source": "https://api-docs.deepseek.com/api/create-chat-completion",
+      "source_type": "creator"
+    },
+    {
+      "id": "deepseek-r1-family",
+      "match_prefixes": ["deepseek-r1", "deepseek-r1-distill-"],
+      "parameters": {
+        "do_sample": true,
+        "temperature": 0.6,
+        "top_p": 0.95
+      },
+      "source": "https://huggingface.co/deepseek-ai/DeepSeek-R1/raw/main/generation_config.json",
+      "source_type": "creator"
+    },
+    {
+      "id": "minimax-m2-family",
+      "match_prefixes": ["minimax-m2", "minimax-m2.1", "minimax-m2.5", "minimax-m2-her"],
+      "parameters": {
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 40
+      },
+      "source": "https://huggingface.co/MiniMaxAI/MiniMax-M2/raw/main/README.md",
+      "source_type": "creator"
+    },
+    {
+      "id": "qwen3-family",
+      "match_prefixes": ["qwen3", "qwen3.", "qwen3-", "qwen3.5"],
+      "parameters": {
+        "do_sample": true,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20
+      },
+      "source": "https://huggingface.co/Qwen/Qwen3-8B/raw/main/generation_config.json",
+      "source_type": "creator"
+    },
+    {
+      "id": "qwen2.5-family",
+      "match_prefixes": ["qwen2.5-", "qwen2.5"],
+      "parameters": {
+        "do_sample": true,
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "repetition_penalty": 1.05
+      },
+      "source": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/raw/main/generation_config.json",
+      "source_type": "creator"
+    },
+    {
+      "id": "qwen2.5-coder-family",
+      "match_prefixes": ["qwen2.5-coder-"],
+      "parameters": {
+        "do_sample": true,
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "repetition_penalty": 1.1
+      },
+      "source": "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct/raw/main/generation_config.json",
+      "source_type": "creator"
+    },
+    {
+      "id": "zai-glm-4.6-exact",
+      "match_prefixes": [],
+      "match_exact": ["glm-4.6"],
+      "parameters": {
+        "temperature": 1.0
+      },
+      "source": "https://huggingface.co/zai-org/GLM-4.6/raw/main/generation_config.json",
+      "source_type": "creator"
+    },
+    {
+      "id": "zai-glm-4-9b-chat-exact",
+      "match_prefixes": [],
+      "match_exact": ["glm-4-9b-chat"],
+      "parameters": {
+        "do_sample": true,
+        "temperature": 0.8,
+        "top_p": 0.8
+      },
+      "source": "https://huggingface.co/zai-org/GLM-4-9B-Chat/raw/main/generation_config.json",
+      "source_type": "creator"
+    }
+  ]
+}

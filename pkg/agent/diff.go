@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/alantheprice/ledit/pkg/pythonruntime"
 )
 
 // ShowColoredDiff displays a colored diff between old and new content, focusing on actual changes
@@ -24,10 +26,10 @@ func (a *Agent) ShowColoredDiff(oldContent, newContent string, maxLines int) {
 // showPythonDiff attempts to use Python's difflib for superior diff output
 // Returns true if successful, false if Python is unavailable or execution fails
 func (a *Agent) showPythonDiff(oldContent, newContent string, maxLines int) bool {
-	// Check if Python is available
-	if !isPythonAvailable() {
+	pythonExec, err := getPythonDiffExecutable()
+	if err != nil {
 		if a.debug {
-			a.debugLog("Python not available, falling back to Go diff implementation")
+			a.debugLog("Python 3 runtime not available, falling back to Go diff implementation: %v", err)
 		}
 		return false
 	}
@@ -139,21 +141,13 @@ if __name__ == "__main__":
 	}
 
 	// Execute Python script
-	cmd := exec.Command("python3", scriptFile)
+	cmd := exec.Command(pythonExec, scriptFile)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if a.debug {
-			a.debugLog("python3 execution failed: %v, trying python", err)
+			a.debugLog("python diff execution failed: %v, falling back to Go diff", err)
 		}
-		// Try python instead of python3
-		cmd = exec.Command("python", scriptFile)
-		out, err = cmd.CombinedOutput()
-		if err != nil {
-			if a.debug {
-				a.debugLog("python execution also failed: %v, falling back to Go diff", err)
-			}
-			return false
-		}
+		return false
 	}
 
 	// Route diff output through agent's streaming-aware printer to avoid being overwritten
@@ -226,17 +220,16 @@ func (a *Agent) showGoDiff(oldContent, newContent string, maxLines int) {
 
 // isPythonAvailable checks if Python is available on the system
 func isPythonAvailable() bool {
-	// Try python3 first
-	if _, err := exec.LookPath("python3"); err == nil {
-		return true
-	}
+	_, err := getPythonDiffExecutable()
+	return err == nil
+}
 
-	// Try python
-	if _, err := exec.LookPath("python"); err == nil {
-		return true
+func getPythonDiffExecutable() (string, error) {
+	interpreter, err := pythonruntime.FindPython3Interpreter()
+	if err != nil {
+		return "", err
 	}
-
-	return false
+	return interpreter.Path, nil
 }
 
 // findChanges identifies regions where content differs between old and new versions

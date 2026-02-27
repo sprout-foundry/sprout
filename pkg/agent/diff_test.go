@@ -2,9 +2,10 @@ package agent
 
 import (
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/alantheprice/ledit/pkg/pythonruntime"
 )
 
 // TestShowColoredDiff tests the main diff functionality
@@ -37,18 +38,9 @@ func TestShowColoredDiff(t *testing.T) {
 func TestIsPythonAvailable(t *testing.T) {
 	result := isPythonAvailable()
 
-	// Check if the result matches actual system state
-	python3Available := false
-	pythonAvailable := false
-
-	if _, err := exec.LookPath("python3"); err == nil {
-		python3Available = true
-	}
-	if _, err := exec.LookPath("python"); err == nil {
-		pythonAvailable = true
-	}
-
-	expectedResult := python3Available || pythonAvailable
+	// Check if the result matches resolved Python 3 availability.
+	_, err := pythonruntime.FindPython3Interpreter()
+	expectedResult := err == nil
 
 	if result != expectedResult {
 		t.Errorf("isPythonAvailable() = %v, expected %v", result, expectedResult)

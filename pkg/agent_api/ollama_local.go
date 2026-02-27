@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -251,6 +252,10 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 	if numPredict < 512 {
 		numPredict = 512
 	}
+	maxPredict := getOllamaMaxPredictCap(contextLimit)
+	if numPredict > maxPredict {
+		numPredict = maxPredict
+	}
 
 	// Keep sampling options minimal to align with provider defaults
 	options := map[string]any{
@@ -275,6 +280,27 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 	req.Stream = &stream
 
 	return req, totalTokens
+}
+
+func getOllamaMaxPredictCap(contextLimit int) int {
+	// Keep a practical default, while allowing users to raise/lower as needed.
+	cap := 8192
+	raw := strings.TrimSpace(os.Getenv("LEDIT_OLLAMA_MAX_PREDICT"))
+	if raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			cap = parsed
+		}
+	}
+
+	// Also bound by model context so generation does not monopolize context.
+	maxByContext := contextLimit / 2
+	if maxByContext < 1024 {
+		maxByContext = 1024
+	}
+	if cap > maxByContext {
+		cap = maxByContext
+	}
+	return cap
 }
 
 // SendChatRequest sends a chat request to local Ollama

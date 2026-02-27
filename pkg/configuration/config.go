@@ -164,6 +164,7 @@ type CustomProviderConfig struct {
 	ModelName              string                      `json:"model_name"`
 	ContextSize            int                         `json:"context_size"`
 	RequiresAPIKey         bool                        `json:"requires_api_key"`
+	ToolCalls              []string                    `json:"tool_calls,omitempty"`               // Optional explicit tool allowlist; when set, only these tools are exposed
 	APIKey                 string                      `json:"api_key,omitempty"`                  // Stored in config (not recommended for production)
 	EnvVar                 string                      `json:"env_var,omitempty"`                  // Environment variable name for API key
 	ChunkTimeoutMs         int                         `json:"chunk_timeout_ms,omitempty"`         // Streaming chunk timeout in milliseconds

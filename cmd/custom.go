@@ -148,6 +148,10 @@ func runCustomModelAdd() error {
 		}
 	}
 
+	fmt.Print("Optional tool allowlist (comma-separated tool names; leave empty for default custom-provider tool set): ")
+	toolCallsInput, _ := reader.ReadString('\n')
+	toolCalls := parseToolCallList(toolCallsInput)
+
 	// Create custom provider configuration
 	customProvider := configuration.CustomProviderConfig{
 		Name:           providerName,
@@ -155,6 +159,7 @@ func runCustomModelAdd() error {
 		ModelName:      modelName,
 		ContextSize:    contextSize,
 		RequiresAPIKey: requiresAPIKey,
+		ToolCalls:      toolCalls,
 	}
 
 	if apiKey != "" {
@@ -195,6 +200,11 @@ func runCustomModelAdd() error {
 	fmt.Printf("   Endpoint: %s\n", endpoint)
 	fmt.Printf("   Model: %s\n", modelName)
 	fmt.Printf("   Context Size: %d tokens\n", contextSize)
+	if len(toolCalls) > 0 {
+		fmt.Printf("   Tool Calls: %s\n", strings.Join(toolCalls, ", "))
+	} else {
+		fmt.Printf("   Tool Calls: [default custom-provider set]\n")
+	}
 	if requiresAPIKey {
 		if apiKey != "" {
 			fmt.Printf("   API Key: [configured]\n")
@@ -308,6 +318,11 @@ func runCustomModelList() error {
 		fmt.Printf("  Model: %s\n", provider.ModelName)
 		fmt.Printf("  Context Size: %d tokens\n", provider.ContextSize)
 		fmt.Printf("  API Key Required: %t\n", provider.RequiresAPIKey)
+		if len(provider.ToolCalls) > 0 {
+			fmt.Printf("  Tool Calls: %s\n", strings.Join(provider.ToolCalls, ", "))
+		} else {
+			fmt.Printf("  Tool Calls: [default custom-provider set]\n")
+		}
 		if provider.RequiresAPIKey {
 			if provider.APIKey != "" {
 				fmt.Printf("  API Key: [configured]\n")
@@ -323,6 +338,26 @@ func runCustomModelList() error {
 	fmt.Println()
 
 	return nil
+}
+
+func parseToolCallList(raw string) []string {
+	parts := strings.Split(strings.TrimSpace(raw), ",")
+	toolCalls := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+
+	for _, part := range parts {
+		toolName := strings.TrimSpace(part)
+		if toolName == "" {
+			continue
+		}
+		if _, exists := seen[toolName]; exists {
+			continue
+		}
+		seen[toolName] = struct{}{}
+		toolCalls = append(toolCalls, toolName)
+	}
+
+	return toolCalls
 }
 
 func init() {

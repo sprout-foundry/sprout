@@ -68,15 +68,43 @@ func (p *GenericProvider) SendChatRequest(messages []api.Message, tools []api.To
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "http_request_failed", err)
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		// Compatibility fallback for OpenAI-compatible backends that require
+		// max_completion_tokens instead of max_tokens for certain models.
+		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(requestBody, false, body)
+		if retried {
+			requestBody = retryBody
+			if retryErr != nil {
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
+					"retry_max_completion_tokens_build", retryErr)
+				return nil, fmt.Errorf("failed retry with max_completion_tokens: %w", retryErr)
+			}
+			defer retryResp.Body.Close()
+			if retryResp.StatusCode != http.StatusOK {
+				retryErrBody, _ := io.ReadAll(retryResp.Body)
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
+					fmt.Sprintf("api_error_%d", retryResp.StatusCode), fmt.Errorf("HTTP %d: %s", retryResp.StatusCode, string(retryErrBody)))
+				return nil, fmt.Errorf("HTTP %d: %s", retryResp.StatusCode, string(retryErrBody))
+			}
+
+			var retryResponse api.ChatResponse
+			if err := json.NewDecoder(retryResp.Body).Decode(&retryResponse); err != nil {
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "decode_response", err)
+				return nil, fmt.Errorf("failed to decode response: %w", err)
+			}
+			return &retryResponse, nil
+		}
+
 		// Log request on API error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
 			fmt.Sprintf("api_error_%d", resp.StatusCode), fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body)))
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
+	defer resp.Body.Close()
 
 	var response api.ChatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
@@ -109,15 +137,41 @@ func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "http_request_failed", err)
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(requestBody, true, body)
+		if retried {
+			requestBody = retryBody
+			if retryErr != nil {
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true,
+					"retry_max_completion_tokens_build", retryErr)
+				return nil, fmt.Errorf("failed retry with max_completion_tokens: %w", retryErr)
+			}
+			defer retryResp.Body.Close()
+			if retryResp.StatusCode != http.StatusOK {
+				retryErrBody, _ := io.ReadAll(retryResp.Body)
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true,
+					fmt.Sprintf("api_error_%d", retryResp.StatusCode), fmt.Errorf("HTTP %d: %s", retryResp.StatusCode, string(retryErrBody)))
+				return nil, fmt.Errorf("HTTP %d: %s", retryResp.StatusCode, string(retryErrBody))
+			}
+
+			response, err := p.handleStreamingResponse(retryResp, callback)
+			if err != nil {
+				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "streaming_response", err)
+				return nil, err
+			}
+			return response, nil
+		}
+
 		// Log request on API error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true,
 			fmt.Sprintf("api_error_%d", resp.StatusCode), fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body)))
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
+	defer resp.Body.Close()
 
 	response, err := p.handleStreamingResponse(resp, callback)
 	if err != nil {
@@ -541,6 +595,67 @@ func (p *GenericProvider) getModelCompletionLimit() int {
 	}
 
 	return 0
+}
+
+func shouldRetryWithMaxCompletionTokens(errBody []byte) bool {
+	bodyLower := strings.ToLower(string(errBody))
+	return strings.Contains(bodyLower, "max_tokens") &&
+		strings.Contains(bodyLower, "max_completion_tokens") &&
+		strings.Contains(bodyLower, "unsupported")
+}
+
+func rewriteMaxTokensToMaxCompletionTokens(requestBody []byte) ([]byte, bool, error) {
+	var payload map[string]interface{}
+	if err := json.Unmarshal(requestBody, &payload); err != nil {
+		return nil, false, err
+	}
+
+	maxTokens, hasMaxTokens := payload["max_tokens"]
+	if !hasMaxTokens {
+		return requestBody, false, nil
+	}
+	if _, exists := payload["max_completion_tokens"]; exists {
+		return requestBody, false, nil
+	}
+
+	payload["max_completion_tokens"] = maxTokens
+	delete(payload, "max_tokens")
+
+	updated, err := json.Marshal(payload)
+	if err != nil {
+		return nil, false, err
+	}
+	return updated, true, nil
+}
+
+func (p *GenericProvider) tryMaxCompletionTokensRetry(originalRequestBody []byte, streaming bool, firstErrorBody []byte) ([]byte, *http.Response, bool, error) {
+	if !shouldRetryWithMaxCompletionTokens(firstErrorBody) {
+		return originalRequestBody, nil, false, nil
+	}
+
+	retryBody, changed, err := rewriteMaxTokensToMaxCompletionTokens(originalRequestBody)
+	if err != nil {
+		return originalRequestBody, nil, true, err
+	}
+	if !changed {
+		return originalRequestBody, nil, false, nil
+	}
+
+	req, err := p.buildHTTPRequest(retryBody, streaming)
+	if err != nil {
+		return retryBody, nil, true, err
+	}
+
+	client := p.httpClient
+	if streaming {
+		client = p.streamingClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return retryBody, nil, true, err
+	}
+
+	return retryBody, resp, true, nil
 }
 
 // convertMessages converts messages according to provider configuration

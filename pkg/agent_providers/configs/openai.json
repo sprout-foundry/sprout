@@ -1,0 +1,77 @@
+{
+  "name": "openai",
+  "endpoint": "https://api.openai.com/v1/chat/completions",
+  "auth": {
+    "type": "bearer",
+    "env_var": "OPENAI_API_KEY"
+  },
+  "headers": {},
+  "defaults": {
+    "model": "gpt-5-mini",
+    "temperature": 0.7,
+    "max_tokens": -1,
+    "top_p": 1.0
+  },
+  "message_conversion": {
+    "include_tool_call_id": true,
+    "convert_tool_role_to_user": false,
+    "reasoning_content_field": "reasoning_content"
+  },
+  "streaming": {
+    "format": "sse",
+    "chunk_timeout_ms": 300000,
+    "done_marker": "[DONE]"
+  },
+  "models": {
+    "default_context_limit": 200000,
+    "default_max_completion_tokens": 128000,
+    "max_completion_overrides": {
+      "gpt-5": 128000,
+      "gpt-5-mini": 128000,
+      "gpt-5-nano": 128000
+    },
+    "completion_pattern_overrides": [
+      {
+        "pattern": "gpt-5.*",
+        "context_limit": 128000
+      }
+    ],
+    "model_overrides": {
+      "gpt-5": 400000,
+      "gpt-5-mini": 400000,
+      "gpt-5-nano": 400000,
+      "gpt-4o": 128000,
+      "gpt-4o-mini": 128000
+    },
+    "pattern_overrides": [
+      {
+        "pattern": "gpt-5.*",
+        "context_limit": 400000
+      },
+      {
+        "pattern": "gpt-4o.*",
+        "context_limit": 128000
+      }
+    ],
+    "supports_vision": true,
+    "vision_model": "gpt-4o",
+    "default_model": "gpt-5-mini",
+    "available_models": []
+  },
+  "retry": {
+    "max_attempts": 3,
+    "base_delay_ms": 1000,
+    "backoff_multiplier": 2.0,
+    "max_delay_ms": 30000,
+    "retryable_errors": [
+      "rate_limit_exceeded",
+      "temporary_error",
+      "timeout"
+    ]
+  },
+  "cost": {
+    "input_token_cost": 0.0,
+    "output_token_cost": 0.0,
+    "currency": "USD"
+  }
+}

@@ -423,8 +423,12 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	if p.config.Defaults.Temperature != nil {
 		request["temperature"] = *p.config.Defaults.Temperature
 	}
-	if p.config.Defaults.MaxTokens != nil {
+	if p.config.Defaults.MaxTokens != nil && *p.config.Defaults.MaxTokens > 0 {
 		request["max_tokens"] = *p.config.Defaults.MaxTokens
+	} else {
+		contextLimit, _ := p.GetModelContextLimit()
+		completionLimit := p.getModelCompletionLimit()
+		request["max_tokens"] = CalculateMaxTokensWithLimits(contextLimit, completionLimit, messages, tools)
 	}
 	if p.config.Defaults.TopP != nil {
 		request["top_p"] = *p.config.Defaults.TopP
@@ -448,7 +452,7 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 // buildMultiModalContent creates a multi-part content array for messages with images
 func (p *GenericProvider) buildMultiModalContent(text string, images []api.ImageData) interface{} {
 	parts := make([]map[string]interface{}, 0, len(images)+1)
-	
+
 	// Add text part if present
 	if strings.TrimSpace(text) != "" {
 		parts = append(parts, map[string]interface{}{
@@ -489,6 +493,30 @@ func (p *GenericProvider) buildImageURL(img api.ImageData) string {
 		imageURL = "data:" + mimeType + ";base64," + img.Base64
 	}
 	return imageURL
+}
+
+func (p *GenericProvider) getModelCompletionLimit() int {
+	// First honor explicit config overrides.
+	if limit := p.config.GetMaxCompletionLimit(p.model); limit > 0 {
+		return limit
+	}
+
+	// Then apply provider/model-specific known limits.
+	provider := strings.ToLower(p.config.Name)
+	model := strings.ToLower(p.model)
+
+	switch provider {
+	case "openrouter":
+		if strings.Contains(model, "gpt-5") {
+			return 128000
+		}
+	case "minimax":
+		if strings.Contains(model, "minimax-m2") {
+			return 196608
+		}
+	}
+
+	return 0
 }
 
 // convertMessages converts messages according to provider configuration

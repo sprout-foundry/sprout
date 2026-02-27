@@ -282,14 +282,32 @@ func (c *OpenAIClient) calculateMaxTokens(messages []Message, tools []Tool) int 
 	// Reserve buffer for safety and leave room for response
 	maxOutput := contextLimit - inputTokens - 1000 // 1000 token safety buffer
 
-	// Ensure reasonable bounds
-	if maxOutput > 4096 {
-		maxOutput = 4096 // Cap at 4K for most responses
-	} else if maxOutput < 1000 {
-		maxOutput = 1000 // Minimum useful response size
+	// Keep a small floor to avoid invalid zero/negative requests.
+	if maxOutput < 256 {
+		maxOutput = 256
+	}
+
+	// Respect model-specific completion token caps (distinct from context window).
+	completionCap := c.getModelCompletionTokenLimit()
+	if completionCap > 0 && maxOutput > completionCap {
+		maxOutput = completionCap
 	}
 
 	return maxOutput
+}
+
+// getModelCompletionTokenLimit returns the maximum completion tokens accepted by the model.
+// This is not the same as context window size.
+func (c *OpenAIClient) getModelCompletionTokenLimit() int {
+	model := strings.ToLower(c.model)
+
+	switch {
+	case strings.Contains(model, "gpt-5"):
+		// OpenAI GPT-5 family currently enforces 128K completion-token maximum.
+		return 128000
+	default:
+		return 0 // unknown/unbounded here; rely on context-derived sizing
+	}
 }
 
 func (c *OpenAIClient) CheckConnection() error {
@@ -349,11 +367,12 @@ func (c *OpenAIClient) GetModelContextLimit() (int, error) {
 		}
 	}
 
-	// Fallback to hardcoded limits if API doesn't provide context length (2025 updated)
+	// Fallback to hardcoded limits if API doesn't provide context length.
+	// These values are used as practical request ceilings in token budgeting.
 	switch {
-	// GPT-5 series (2025) - up to 272K context
+	// GPT-5 series
 	case strings.Contains(model, "gpt-5"):
-		return 272000, nil // GPT-5 supports up to 272K context
+		return 200000, nil
 	// O3 series (2025) - large context models
 	case strings.Contains(model, "o3-mini"):
 		return 200000, nil // O3-mini supports ~200K context
@@ -362,9 +381,6 @@ func (c *OpenAIClient) GetModelContextLimit() (int, error) {
 	// O1 series - reasoning models
 	case strings.Contains(model, "o1"):
 		return 128000, nil // O1 models support 128K context
-	// GPT-5 series - multimodal models
-	case strings.Contains(model, "gpt-5"):
-		return 128000, nil // GPT-5 supports 128K context
 	// GPT-4 series
 	case strings.Contains(model, "gpt-4-turbo"):
 		return 128000, nil // GPT-4 Turbo supports 128K context

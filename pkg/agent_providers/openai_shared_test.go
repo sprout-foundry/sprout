@@ -98,8 +98,18 @@ func TestCalculateMaxTokensBounds(t *testing.T) {
 	}
 
 	maxTokens = CalculateMaxTokens(2000, []api.Message{{Content: string(make([]byte, 8000))}}, nil)
-	if maxTokens < 1000 {
-		t.Fatalf("expected lower bound of 1000, got %d", maxTokens)
+	if maxTokens < 256 {
+		t.Fatalf("expected lower bound of 256, got %d", maxTokens)
+	}
+}
+
+func TestCalculateMaxTokensWithCompletionLimit(t *testing.T) {
+	messages := []api.Message{{Role: "user", Content: "hello"}}
+	tools := []api.Tool{}
+
+	maxTokens := CalculateMaxTokensWithLimits(200000, 128000, messages, tools)
+	if maxTokens != 128000 {
+		t.Fatalf("expected completion cap 128000, got %d", maxTokens)
 	}
 }
 

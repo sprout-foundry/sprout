@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/webui"
@@ -259,6 +260,15 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				return nil
 			}
 
+			// Slash/bang commands should bypass command-detection fast paths.
+			registry := agent_commands.NewCommandRegistry()
+			if registry.IsSlashCommand(query) {
+				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
+					fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+				}
+				continue
+			}
+
 			// Try zsh command detection first (fast path)
 			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
 				fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
@@ -280,6 +290,12 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 // runDirectMode handles single query execution
 func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
 	fmt.Printf("🚀 Processing: %s\n", query)
+
+	// Slash/bang commands should bypass command-detection fast paths.
+	registry := agent_commands.NewCommandRegistry()
+	if registry.IsSlashCommand(query) {
+		return ProcessQuery(ctx, chatAgent, eventBus, query)
+	}
 
 	// Try zsh command detection first
 	if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {

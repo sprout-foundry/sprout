@@ -251,9 +251,6 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 	if numPredict < 512 {
 		numPredict = 512
 	}
-	if numPredict > 4096 {
-		numPredict = 4096
-	}
 
 	// Keep sampling options minimal to align with provider defaults
 	options := map[string]any{

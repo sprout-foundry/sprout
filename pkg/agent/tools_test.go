@@ -36,12 +36,8 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 	// Get the tools that would be passed to the LLM
 	tools := agent.getOptimizedToolDefinitions(agent.messages)
 
-	// Get standard tools for comparison
-	standardTools := api.GetToolDefinitions()
-
-	// Verify we have at least the standard tools
-	if len(tools) < len(standardTools) {
-		t.Errorf("Expected at least %d tools (standard tools), but got %d", len(standardTools), len(tools))
+	if len(tools) == 0 {
+		t.Fatal("expected at least one tool definition")
 	}
 
 	// Check that specific standard tools are present
@@ -58,7 +54,7 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 		}
 	}
 
-	t.Logf("✅ Agent has access to %d tools (including %d standard tools)", len(tools), len(standardTools))
+	t.Logf("✅ Agent has access to %d tools", len(tools))
 }
 
 // TestOllamaAPIKeyDetection verifies that OLLAMA_API_KEY is properly detected

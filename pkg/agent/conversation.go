@@ -103,6 +103,11 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 		tools = filterToolsByName(tools, allowedToolSet)
 	}
 
+	// Apply active persona tool filter (used for direct /persona and subagent persona runs).
+	if personaAllowlist := a.getActivePersonaToolAllowlist(); len(personaAllowlist) > 0 {
+		tools = filterToolsByName(tools, makeAllowedToolSet(personaAllowlist))
+	}
+
 	// Future: Could optimize by analyzing conversation context
 	// and only returning relevant tools
 	return tools

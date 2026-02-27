@@ -307,6 +307,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	// Parse persona parameter (required, but default to "general" if not specified)
 	var persona string
 	var systemPromptPath string
+	var systemPromptText string
 	if personaVal, ok := args["persona"]; ok && personaVal != nil {
 		if personaStr, ok := personaVal.(string); ok && personaStr != "" {
 			persona = personaStr
@@ -319,6 +320,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		persona = "general"
 		a.debugLog("No persona specified, using default: general\n")
 	}
+	persona = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(persona)), "-", "_")
 
 	// Automatically extract file paths from prompt if auto_files is enabled
 	if autoFiles {
@@ -445,6 +447,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				provider = config.GetSubagentTypeProvider(persona)
 				model = config.GetSubagentTypeModel(persona)
 				systemPromptPath = subagentType.SystemPrompt
+				systemPromptText = subagentType.SystemPromptText
 				a.debugLog("Using persona '%s': provider=%s model=%s system_prompt=%s\n",
 					persona, provider, model, systemPromptPath)
 			} else {
@@ -490,7 +493,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		a.printLineInternal(message)
 	}
 
-	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath)
+	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath, systemPromptText, persona)
 	if err != nil {
 		a.debugLog("Subagent spawn error: %v\n", err)
 		return "", err

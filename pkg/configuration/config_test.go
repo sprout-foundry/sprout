@@ -73,3 +73,41 @@ func TestConfigValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
+	cfg := NewConfig()
+	assert.NotNil(t, cfg.SubagentTypes)
+
+	persona, ok := cfg.SubagentTypes["web_scraper"]
+	assert.True(t, ok, "expected web_scraper persona in defaults")
+	assert.True(t, persona.Enabled)
+	assert.NotEmpty(t, persona.SystemPrompt)
+	assert.NotEmpty(t, persona.AllowedTools)
+	assert.Contains(t, persona.AllowedTools, "web_search")
+	assert.Contains(t, persona.AllowedTools, "fetch_url")
+
+	orchestrator, ok := cfg.SubagentTypes["orchestrator"]
+	assert.True(t, ok, "expected orchestrator persona in defaults")
+	assert.True(t, orchestrator.Enabled)
+
+	computerUser, ok := cfg.SubagentTypes["computer_user"]
+	assert.True(t, ok, "expected computer_user persona in defaults")
+	assert.True(t, computerUser.Enabled)
+}
+
+func TestGetSubagentTypeFillsDefaultAllowedTools(t *testing.T) {
+	cfg := &Config{
+		SubagentTypes: map[string]SubagentType{
+			"general": {
+				ID:      "general",
+				Name:    "General",
+				Enabled: true,
+			},
+		},
+	}
+
+	persona := cfg.GetSubagentType("general")
+	assert.NotNil(t, persona)
+	assert.NotEmpty(t, persona.AllowedTools)
+	assert.Contains(t, persona.AllowedTools, "read_file")
+}

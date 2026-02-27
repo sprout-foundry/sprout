@@ -1,0 +1,197 @@
+{
+  "personas": [
+    {
+      "id": "orchestrator",
+      "name": "Orchestrator",
+      "description": "Primary planning and delegation persona for end-to-end coding tasks",
+      "enabled": true,
+      "aliases": [
+        "orchestration"
+      ],
+      "allowed_tools": [
+        "shell_command",
+        "git",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "web_search",
+        "fetch_url",
+        "run_subagent",
+        "run_parallel_subagents",
+        "mcp_tools",
+        "TodoWrite",
+        "TodoRead"
+      ]
+    },
+    {
+      "id": "general",
+      "name": "General",
+      "description": "General-purpose persona for tasks that do not require deep specialization",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/general.md",
+      "enabled": true,
+      "aliases": [
+        "default"
+      ],
+      "allowed_tools": [
+        "shell_command",
+        "git",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "TodoWrite",
+        "TodoRead"
+      ]
+    },
+    {
+      "id": "coder",
+      "name": "Coder",
+      "description": "Feature implementation and production code writing specialist",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/coder.md",
+      "enabled": true,
+      "allowed_tools": [
+        "shell_command",
+        "git",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "TodoWrite",
+        "TodoRead"
+      ]
+    },
+    {
+      "id": "debugger",
+      "name": "Debugger",
+      "description": "Bug investigation, root cause analysis, and targeted fixes specialist",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/debugger.md",
+      "enabled": true,
+      "allowed_tools": [
+        "shell_command",
+        "git",
+        "read_file",
+        "edit_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "TodoWrite",
+        "TodoRead"
+      ]
+    },
+    {
+      "id": "tester",
+      "name": "Tester",
+      "description": "Unit test writing and test coverage specialist",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/tester.md",
+      "enabled": true,
+      "allowed_tools": [
+        "shell_command",
+        "git",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "TodoWrite",
+        "TodoRead"
+      ]
+    },
+    {
+      "id": "code_reviewer",
+      "name": "Code Reviewer",
+      "description": "Code review, security review, and best-practices specialist",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/code_reviewer.md",
+      "enabled": true,
+      "aliases": [
+        "reviewer"
+      ],
+      "allowed_tools": [
+        "git",
+        "read_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "TodoWrite",
+        "TodoRead",
+        "web_search",
+        "fetch_url"
+      ]
+    },
+    {
+      "id": "researcher",
+      "name": "Researcher",
+      "description": "Combined local codebase analysis and external research specialist",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/researcher.md",
+      "enabled": true,
+      "allowed_tools": [
+        "git",
+        "web_search",
+        "fetch_url",
+        "read_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "TodoWrite",
+        "TodoRead"
+      ]
+    },
+    {
+      "id": "web_scraper",
+      "name": "Web Scraper",
+      "description": "Web extraction and structured content collection specialist",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/web_scraper.md",
+      "enabled": true,
+      "aliases": [
+        "web-scraper",
+        "scraper"
+      ],
+      "allowed_tools": [
+        "git",
+        "web_search",
+        "fetch_url",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "TodoWrite",
+        "TodoRead"
+      ]
+    },
+    {
+      "id": "computer_user",
+      "name": "Computer User",
+      "description": "Hands-on system administration and engineering execution persona",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/computer_user.md",
+      "enabled": true,
+      "aliases": [
+        "sysadmin",
+        "ops"
+      ],
+      "allowed_tools": [
+        "shell_command",
+        "git",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "web_search",
+        "fetch_url",
+        "mcp_tools",
+        "TodoWrite",
+        "TodoRead"
+      ]
+    }
+  ]
+}

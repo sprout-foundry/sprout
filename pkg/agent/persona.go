@@ -2,7 +2,7 @@ package agent
 
 import (
 	"fmt"
-	"slices"
+	"sort"
 	"strings"
 )
 
@@ -120,7 +120,7 @@ func (a *Agent) GetAvailablePersonaIDs() []string {
 		}
 		personaIDs = append(personaIDs, id)
 	}
-	slices.Sort(personaIDs)
+	sort.Strings(personaIDs)
 	return personaIDs
 }
 

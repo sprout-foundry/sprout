@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/pythonruntime"
 	"github.com/spf13/cobra"
 )
 
@@ -65,6 +67,25 @@ func runDiag() {
 			fmt.Printf("    Model: %s\n", provider.ModelName)
 			fmt.Printf("    Context: %d tokens\n", provider.ContextSize)
 		}
+	}
+	fmt.Println()
+
+	// Check python availability for runtime tooling
+	fmt.Println("Python runtime:")
+	if interp, err := pythonruntime.FindPython3Interpreter(); err != nil {
+		fmt.Printf("  ❌ Python 3 runtime not found: %v\n", err)
+	} else {
+		fmt.Printf("  ✅ Python 3 runtime: %s (%s)\n", interp.Path, interp.Version)
+	}
+	fmt.Println()
+
+	fmt.Println("PDF Python runtime (requires 3.10+):")
+	if err := tools.CheckPDFPython3Available(); err != nil {
+		fmt.Printf("  ❌ PDF runtime precheck failed: %v\n", err)
+	} else if interp, err := pythonruntime.FindPython3InterpreterAtLeast(10); err == nil {
+		fmt.Printf("  ✅ PDF runtime: %s (%s)\n", interp.Path, interp.Version)
+	} else {
+		fmt.Println("  ✅ PDF runtime available")
 	}
 	fmt.Println()
 

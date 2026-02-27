@@ -411,6 +411,9 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 
 	for {
 		select {
+		case <-ac.agent.interruptCtx.Done():
+			return nil, fmt.Errorf("request interrupted by user")
+
 		case <-ctx.Done():
 			ac.displayTimeoutError("Request timed out", ac.overallTimeout)
 			return nil, fmt.Errorf("API request timed out after %v", ac.overallTimeout)
@@ -505,6 +508,9 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 
 	// Wait for result or timeout
 	select {
+	case <-ac.agent.interruptCtx.Done():
+		return nil, fmt.Errorf("request interrupted by user")
+
 	case <-ctx.Done():
 		ac.displayTimeoutError("Request timed out", ac.overallTimeout)
 		return nil, fmt.Errorf("API request timed out after %v", ac.overallTimeout)

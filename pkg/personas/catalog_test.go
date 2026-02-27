@@ -20,7 +20,7 @@ func TestDefaultDefinitionsIncludesWebScraper(t *testing.T) {
 	}
 }
 
-func TestDefaultDefinitionsIncludesOrchestratorAndComputerUser(t *testing.T) {
+func TestDefaultDefinitionsIncludesOrchestratorComputerUserAndRefactor(t *testing.T) {
 	definitions, err := DefaultDefinitions()
 	if err != nil {
 		t.Fatalf("expected embedded persona configs to load, got error: %v", err)
@@ -31,6 +31,9 @@ func TestDefaultDefinitionsIncludesOrchestratorAndComputerUser(t *testing.T) {
 	}
 	if _, exists := definitions["computer_user"]; !exists {
 		t.Fatalf("expected computer_user in default persona definitions")
+	}
+	if _, exists := definitions["refactor"]; !exists {
+		t.Fatalf("expected refactor in default persona definitions")
 	}
 }
 

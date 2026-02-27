@@ -8,6 +8,7 @@ Subagent personas allow you to delegate tasks to specialized agents with experti
 
 **Available Personas:**
 - **Coder** - Implementation and feature development
+- **Refactor** - Behavior-preserving refactoring and maintainability improvements
 - **Tester** - Test case writing and test coverage
 - **QA_Engineer** - Quality assurance, integration testing, test plans
 - **Code_Reviewer** - Code review, analysis, and best practices verification
@@ -20,6 +21,7 @@ Subagent personas allow you to delegate tasks to specialized agents with experti
 | Persona | Best For | Example Tasks |
 |---------|----------|---------------|
 | **Coder** | Writing production code | "Implement user authentication", "Create REST API endpoint" |
+| **Refactor** | Low-risk code improvements | "Extract duplicated validation logic", "Split a large file without behavior changes" |
 | **Tester** | Writing unit tests | "Write tests for user service", "Add test coverage for payment module" |
 | **QA_Engineer** | Test planning and integration tests | "Create test plan for checkout flow", "Design integration tests" |
 | **Code_Reviewer** | Security and quality review | "Review auth code for security issues", "Check for bugs in user service" |
@@ -471,4 +473,3 @@ Subagent personas are configured in `.ledit/subagents.json`:
 
 - [Subagent Prompts README](../pkg/agent/prompts/subagent_prompts/README.md) - Quick reference for all personas
 - [Main System Prompt](../pkg/agent/prompts/system_prompt.md) - Includes persona selection guide
-

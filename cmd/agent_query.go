@@ -260,6 +260,9 @@ func TryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 
 // ProcessQuery processes a single query
 func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
+	setQueryInProgress(true)
+	defer setQueryInProgress(false)
+
 	// Check if this is a slash command
 	registry := agent_commands.NewCommandRegistry()
 	if registry.IsSlashCommand(query) {
@@ -359,8 +362,15 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 	case <-ctx.Done():
 		// Context was cancelled - agent processing was interrupted
+		chatAgent.TriggerInterrupt()
 		duration := time.Since(startTime)
 		fmt.Printf("\n⏹️ Query interrupted after %s\n", FormatDuration(duration))
+
+		// Allow the agent goroutine to stop cleanly after receiving interrupt.
+		select {
+		case <-resultCh:
+		case <-time.After(3 * time.Second):
+		}
 
 		eventBus.Publish(events.EventTypeError, events.ErrorEvent(
 			fmt.Sprintf("Query interrupted: %s", query), ctx.Err(),

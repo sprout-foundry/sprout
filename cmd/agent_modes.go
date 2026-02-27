@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -17,6 +18,16 @@ import (
 	"github.com/alantheprice/ledit/pkg/webui"
 	"golang.org/x/term"
 )
+
+var queryInProgress atomic.Bool
+
+func setQueryInProgress(active bool) {
+	queryInProgress.Store(active)
+}
+
+func isQueryInProgress() bool {
+	return queryInProgress.Load()
+}
 
 // RunAgent runs the agent in interactive or direct mode
 func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) error {
@@ -68,31 +79,50 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) error {
 	// Handle shutdown gracefully
 	shutdown := make(chan struct{})
 	go func() {
-		sigCount := 0
+		var lastInterruptAt int64
 		for {
 			select {
 			case sig := <-sigCh:
-				sigCount++
-				if sigCount == 1 {
-					fmt.Printf("\n🛑 Received signal %v, shutting down gracefully...\n", sig)
-					fmt.Printf("  (Press Ctrl+C again to force quit)\n")
-
-					// Cancel the context which will stop all operations
-					cancel()
-
-					// Signal that shutdown has started
-					close(shutdown)
-
-					// Start a timeout goroutine for force quit
-					go func() {
-						time.Sleep(5 * time.Second)
-						fmt.Printf("\n⚡ Force quitting...\n")
+				if isInteractive && isQueryInProgress() {
+					nowUnix := time.Now().UnixNano()
+					prev := atomic.LoadInt64(&lastInterruptAt)
+					if prev > 0 && time.Duration(nowUnix-prev) < 2*time.Second {
+						fmt.Printf("\n⚡ Force quitting immediately...\n")
 						os.Exit(1)
-					}()
-				} else {
-					// Multiple Ctrl+C presses - force quit immediately
-					fmt.Printf("\n⚡ Force quitting immediately...\n")
+					}
+
+					atomic.StoreInt64(&lastInterruptAt, nowUnix)
+					fmt.Printf("\n⏸️ Received signal %v, interrupting active task...\n", sig)
+					fmt.Printf("  (Press Ctrl+C again quickly to force quit)\n")
+					chatAgent.TriggerInterrupt()
+					continue
+				}
+
+				fmt.Printf("\n🛑 Received signal %v, shutting down gracefully...\n", sig)
+				fmt.Printf("  (Press Ctrl+C again to force quit)\n")
+
+				// Cancel the context which will stop all operations
+				cancel()
+
+				// Signal that shutdown has started
+				close(shutdown)
+
+				// Start a timeout goroutine for force quit
+				go func() {
+					time.Sleep(5 * time.Second)
+					fmt.Printf("\n⚡ Force quitting...\n")
 					os.Exit(1)
+				}()
+
+				// Any subsequent signal after shutdown starts should force quit.
+				for {
+					select {
+					case <-sigCh:
+						fmt.Printf("\n⚡ Force quitting immediately...\n")
+						os.Exit(1)
+					case <-ctx.Done():
+						return
+					}
 				}
 			case <-ctx.Done():
 				return

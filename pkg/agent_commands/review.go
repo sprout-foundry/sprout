@@ -9,6 +9,7 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/codereview"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
@@ -123,6 +124,18 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	// Create the review context with optimized diff and metadata.
 	// IMPORTANT: Must include AgentClient for the review to work.
 	agentClient := service.GetDefaultAgentClient()
+	if chatAgent != nil {
+		activeProvider := strings.TrimSpace(chatAgent.GetProvider())
+		activeModel := strings.TrimSpace(chatAgent.GetModel())
+		if activeProvider != "" {
+			if sessionClient, err := factory.CreateProviderClient(api.ClientType(activeProvider), activeModel); err == nil {
+				agentClient = sessionClient
+				logger.LogProcessStep(fmt.Sprintf("Using active session provider/model for review: %s | %s", activeProvider, activeModel))
+			} else {
+				logger.LogProcessStep(fmt.Sprintf("Warning: failed to use active session provider/model (%s | %s): %v", activeProvider, activeModel, err))
+			}
+		}
+	}
 	if agentClient == nil {
 		logger.LogError(fmt.Errorf("failed to get default agent client"))
 		return fmt.Errorf("agent client initialization failed")

@@ -450,21 +450,25 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				systemPromptText = subagentType.SystemPromptText
 				a.debugLog("Using persona '%s': provider=%s model=%s system_prompt=%s\n",
 					persona, provider, model, systemPromptPath)
+				a.warnSubagentFallback(fmt.Sprintf("persona '%s'", persona), strings.TrimSpace(subagentType.Provider), strings.TrimSpace(subagentType.Model), provider, model)
 			} else {
 				a.debugLog("Warning: Persona '%s' not found or disabled, using default subagent config\n", persona)
 				provider = config.GetSubagentProvider()
 				model = config.GetSubagentModel()
+				a.warnSubagentFallback("default subagent config", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 			}
 		} else {
 			// No persona specified, use default subagent config
 			provider = config.GetSubagentProvider()
 			model = config.GetSubagentModel()
 			a.debugLog("Using subagent provider=%s model=%s from config\n", provider, model)
+			a.warnSubagentFallback("default subagent config", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 		}
 	} else {
 		a.debugLog("Warning: No config manager available, using defaults\n")
 		provider = "" // Will use system default
 		model = ""    // Will use system default
+		a.warnSubagentFallback("missing config manager", "", "", provider, model)
 	}
 
 	// Create a streaming callback for real-time output
@@ -749,6 +753,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		config := a.configManager.GetConfig()
 		subagentProvider = config.GetSubagentProvider()
 		subagentModel = config.GetSubagentModel()
+		a.warnSubagentFallback("parallel subagent defaults", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), subagentProvider, subagentModel)
 	}
 
 	// Apply configuration to all tasks (overriding any empty values)
@@ -915,6 +920,25 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	}
 	a.ToolLog("parallel subagents completed", logMessage)
 	return string(jsonBytes), nil
+}
+
+func (a *Agent) warnSubagentFallback(scope, configuredProvider, configuredModel, effectiveProvider, effectiveModel string) {
+	usesProviderFallback := configuredProvider == "" && strings.TrimSpace(effectiveProvider) != ""
+	usesModelFallback := configuredModel == "" && strings.TrimSpace(effectiveModel) != ""
+	if !usesProviderFallback && !usesModelFallback {
+		return
+	}
+
+	provider := strings.TrimSpace(effectiveProvider)
+	if provider == "" {
+		provider = "<system default>"
+	}
+	model := strings.TrimSpace(effectiveModel)
+	if model == "" {
+		model = "<provider default>"
+	}
+
+	a.PrintLineAsync(fmt.Sprintf("⚠️ Subagent fallback active (%s): provider=%s model=%s", scope, provider, model))
 }
 
 // Helper functions for subagent handlers

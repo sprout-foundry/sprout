@@ -21,6 +21,7 @@ import { php } from '@codemirror/lang-php';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTheme } from '../contexts/ThemeContext';
 import EditorToolbar from './EditorToolbar';
+import { readFileWithConsent } from '../services/fileAccess';
 import './EditorPane.css';
 
 interface EditorPaneProps {
@@ -99,7 +100,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     isExternalUpdateRef.current = true;
 
     try {
-      const response = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`);
+      const response = await readFileWithConsent(filePath);
       if (!response.ok) {
         throw new Error(`Failed to load file: ${response.statusText}`);
       }

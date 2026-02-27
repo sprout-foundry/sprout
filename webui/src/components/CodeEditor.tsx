@@ -13,6 +13,7 @@ import { go } from '@codemirror/lang-go';
 import { json } from '@codemirror/lang-json';
 import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
+import { readFileWithConsent, writeFileWithConsent } from '../services/fileAccess';
 
 import './CodeEditor.css';
 
@@ -85,29 +86,25 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     setError(null);
 
     try {
-      const response = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`);
+      const response = await readFileWithConsent(filePath);
       if (!response.ok) {
         throw new Error(`Failed to load file: ${response.statusText}`);
       }
 
-      const data: FileResponse = await response.json();
-      if (data.message === 'success') {
-        setContent(data.content);
-        setOriginalContent(data.content);
-        setIsModified(false);
+      const rawContent = await response.text();
+      setContent(rawContent);
+      setOriginalContent(rawContent);
+      setIsModified(false);
 
-        // Update editor if it exists
-        if (viewRef.current) {
-          viewRef.current.dispatch({
-            changes: {
-              from: 0,
-              to: viewRef.current.state.doc.length,
-              insert: data.content
-            }
-          });
-        }
-      } else {
-        throw new Error(data.message);
+      // Update editor if it exists
+      if (viewRef.current) {
+        viewRef.current.dispatch({
+          changes: {
+            from: 0,
+            to: viewRef.current.state.doc.length,
+            insert: rawContent
+          }
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -126,20 +123,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     try {
       const currentContent = viewRef.current.state.doc.toString();
 
-      const response = await fetch(`/api/file?path=${encodeURIComponent(file.path)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content: currentContent }),
-      });
+      const response = await writeFileWithConsent(file.path, currentContent);
 
       if (!response.ok) {
         throw new Error(`Failed to save file: ${response.statusText}`);
       }
 
       const data = await response.json();
-      if (data.message === 'File saved successfully') {
+      if (data.success === true || data.message === 'File saved successfully') {
         setIsModified(false);
         setOriginalContent(currentContent);
         setContent(currentContent);

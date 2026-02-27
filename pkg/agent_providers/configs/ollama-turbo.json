@@ -1,0 +1,46 @@
+{
+  "name": "ollama-turbo",
+  "endpoint": "https://ollama.com/v1/chat/completions",
+  "auth": {
+    "type": "bearer",
+    "env_var": "OLLAMA_API_KEY"
+  },
+  "headers": {},
+  "defaults": {
+    "model": "deepseek-v3.1:671b",
+    "temperature": 0.7,
+    "max_tokens": -1,
+    "top_p": 1.0
+  },
+  "message_conversion": {
+    "include_tool_call_id": true,
+    "convert_tool_role_to_user": false,
+    "reasoning_content_field": "reasoning_content"
+  },
+  "streaming": {
+    "format": "sse",
+    "chunk_timeout_ms": 300000,
+    "done_marker": "[DONE]"
+  },
+  "models": {
+    "default_context_limit": 131072,
+    "default_model": "deepseek-v3.1:671b",
+    "available_models": []
+  },
+  "retry": {
+    "max_attempts": 3,
+    "base_delay_ms": 1000,
+    "backoff_multiplier": 2.0,
+    "max_delay_ms": 30000,
+    "retryable_errors": [
+      "rate_limit_exceeded",
+      "temporary_error",
+      "timeout"
+    ]
+  },
+  "cost": {
+    "input_token_cost": 0.0,
+    "output_token_cost": 0.0,
+    "currency": "USD"
+  }
+}

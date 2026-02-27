@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"encoding/json"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestProviderFactory(t *testing.T) {
 
 	// Test that providers were loaded
 	providers := factory.GetAvailableProviders()
-	expectedProviders := []string{"cerebras", "chutes", "openrouter", "deepinfra", "deepseek", "zai", "lmstudio", "minimax", "mistral"}
+	expectedProviders := []string{"cerebras", "chutes", "openrouter", "deepinfra", "deepseek", "zai", "lmstudio", "minimax", "mistral", "ollama-turbo", "openai"}
 
 	// Debug: print actual providers
 	t.Logf("Actual providers loaded (%d): %v", len(providers), providers)
@@ -227,6 +228,18 @@ func TestApplyModelSpecificSettingsRemovesUnsupportedFields(t *testing.T) {
 	}
 }
 
+func TestApplyModelSpecificSettingsAddsGptOssReasoningEffort(t *testing.T) {
+	request := map[string]interface{}{
+		"temperature": 0.7,
+	}
+
+	applyModelSpecificSettings("openai/gpt-oss-20b", request)
+
+	if request["reasoning_effort"] != "high" {
+		t.Fatalf("expected reasoning_effort=high for gpt-oss model, got %#v", request["reasoning_effort"])
+	}
+}
+
 func TestConvertMessagesDoesNotInjectReasoningEffort(t *testing.T) {
 	config := &ProviderConfig{
 		Name:     "openrouter",
@@ -326,5 +339,36 @@ func TestConvertMessagesPreservesReasoningContentForCompatibleProviders(t *testi
 	}
 	if value != "preserve me" {
 		t.Fatalf("unexpected reasoning_content value: %v", value)
+	}
+}
+
+func TestShouldRetryWithMaxCompletionTokens(t *testing.T) {
+	body := []byte(`{"error":{"message":"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."}}`)
+	if !shouldRetryWithMaxCompletionTokens(body) {
+		t.Fatalf("expected retry detection to be true")
+	}
+}
+
+func TestRewriteMaxTokensToMaxCompletionTokens(t *testing.T) {
+	request := []byte(`{"model":"openai/gpt-oss-20b","messages":[],"max_tokens":1234,"stream":false}`)
+
+	updated, changed, err := rewriteMaxTokensToMaxCompletionTokens(request)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected payload to be rewritten")
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(updated, &payload); err != nil {
+		t.Fatalf("failed to decode updated payload: %v", err)
+	}
+
+	if _, exists := payload["max_tokens"]; exists {
+		t.Fatalf("expected max_tokens to be removed")
+	}
+	if payload["max_completion_tokens"] != float64(1234) {
+		t.Fatalf("expected max_completion_tokens=1234, got %#v", payload["max_completion_tokens"])
 	}
 }

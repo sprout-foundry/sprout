@@ -60,3 +60,16 @@ func TestResolveCreatorOverrideForZAIExactModel(t *testing.T) {
 		t.Fatalf("expected glm-4.6 temperature 1.0, got %#v", settings.Parameters["temperature"])
 	}
 }
+
+func TestResolveCreatorOverrideForGptOssFamily(t *testing.T) {
+	settings := ResolveModelSettings("openai/gpt-oss-20b")
+	if !settings.Known {
+		t.Fatalf("expected known settings")
+	}
+	if settings.SourceType != "creator" {
+		t.Fatalf("expected creator source type, got %s", settings.SourceType)
+	}
+	if settings.Parameters["reasoning_effort"] != "high" {
+		t.Fatalf("expected reasoning_effort high, got %#v", settings.Parameters["reasoning_effort"])
+	}
+}

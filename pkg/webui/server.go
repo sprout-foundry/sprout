@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -139,7 +140,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// Start server in goroutine
 	go func() {
 		log.Printf("🌐 Web UI starting at http://localhost:%d", ws.port)
-		if err := ws.server.Serve(listener); err != nil && err != http.ErrServerClosed {
+		if err := ws.server.Serve(listener); err != nil && !isExpectedServerCloseError(err) {
 			log.Printf("Web server error: %v", err)
 		}
 	}()
@@ -180,7 +181,21 @@ func (ws *ReactWebServer) Shutdown() error {
 		_ = listener.Close()
 	}
 
-	return ws.server.Shutdown(ctx)
+	if err := ws.server.Shutdown(ctx); err != nil && !isExpectedServerCloseError(err) {
+		return err
+	}
+	return nil
+}
+
+func isExpectedServerCloseError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) {
+		return true
+	}
+	// Go stdlib may wrap this in plain text depending on call path.
+	return strings.Contains(strings.ToLower(err.Error()), "use of closed network connection")
 }
 
 // IsRunning returns true if the web server is running

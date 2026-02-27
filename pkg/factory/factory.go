@@ -246,7 +246,7 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 func CreateProviderClient(clientType api.ClientType, model string) (api.ClientInterface, error) {
 	switch clientType {
 	case api.OpenAIClientType:
-		return api.NewOpenAIClientWrapper(model)
+		return CreateGenericProvider("openai", model)
 	case api.ChutesClientType:
 		// Use the new generic provider system
 		return CreateGenericProvider("chutes", model)
@@ -262,7 +262,7 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 	case api.OllamaClientType, api.OllamaLocalClientType:
 		return api.NewOllamaLocalClient(model)
 	case api.OllamaTurboClientType:
-		return api.NewOllamaTurboClient(model)
+		return CreateGenericProvider("ollama-turbo", model)
 	case api.OpenRouterClientType:
 		// Use the new generic provider system
 		return CreateGenericProvider("openrouter", model)

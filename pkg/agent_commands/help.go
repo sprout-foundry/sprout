@@ -65,6 +65,7 @@ KEY COMMANDS:
   /subagent-model - Configure subagent model
   /subagent-personas - List available subagent personas
   /subagent-persona - Configure a specific persona
+  /persona    - Apply/configure direct personas (provider/model/tools/prompt)
 
 Type 'exit' or 'quit' to end the session.
 

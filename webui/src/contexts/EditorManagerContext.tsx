@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
+import { writeFileWithConsent } from '../services/fileAccess';
 
 interface PaneSize {
   [paneId: string]: number; // Size in pixels or percentage
@@ -187,13 +188,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     if (!buffer) return;
 
     try {
-      const response = await fetch(`/api/file?path=${encodeURIComponent(buffer.file.path)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content: buffer.content }),
-      });
+      const response = await writeFileWithConsent(buffer.file.path, buffer.content);
 
       if (response.ok) {
         const data = await response.json();

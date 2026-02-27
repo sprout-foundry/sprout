@@ -8,7 +8,6 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
-	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -21,15 +20,9 @@ type ScopeValidator struct {
 
 // NewScopeValidator creates a new scope validator
 func NewScopeValidator(cfg *configuration.Config, logger *utils.Logger) (*ScopeValidator, error) {
-	// Create agent client for LLM calls using factory to avoid import cycles
-	clientType, err := api.DetermineProvider("", api.ClientType(cfg.LastUsedProvider))
+	agentClient, err := resolveSpecAgentClient(cfg, logger, "Scope validation")
 	if err != nil {
-		return nil, fmt.Errorf("failed to determine provider: %w", err)
-	}
-
-	agentClient, err := factory.CreateProviderClient(clientType, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create agent client: %w", err)
+		return nil, err
 	}
 
 	return &ScopeValidator{

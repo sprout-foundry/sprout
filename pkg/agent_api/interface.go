@@ -117,7 +117,6 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 
 	// 4. First available provider based on API keys
 	priorityOrder := []ClientType{
-		OpenAIClientType,
 		OpenRouterClientType,
 		ZAIClientType,
 		DeepInfraClientType,

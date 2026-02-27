@@ -10,6 +10,9 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +36,8 @@ type ConnectionInfo struct {
 type ReactWebServer struct {
 	agent           *agent.Agent
 	eventBus        *events.EventBus
+	workspaceRoot   string
+	fileConsents    *fileConsentManager
 	port            int
 	server          *http.Server
 	listener        net.Listener
@@ -51,19 +56,35 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 		port = 54321
 	}
 
+	workspaceRoot, err := os.Getwd()
+	if err != nil {
+		workspaceRoot = "."
+	}
+	workspaceRoot, err = filepathAbsEval(workspaceRoot)
+	if err != nil {
+		workspaceRoot = "."
+	}
+
 	return &ReactWebServer{
-		agent:    agent,
-		eventBus: eventBus,
-		port:     port,
+		agent:         agent,
+		eventBus:      eventBus,
+		workspaceRoot: workspaceRoot,
+		fileConsents:  newFileConsentManager(),
+		port:          port,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				// Allow localhost connections from any port (for development)
+				// Allow localhost connections only.
 				origin := r.Header.Get("Origin")
 				if origin == "" {
 					return true // Allow same-origin and direct connections
 				}
-				// Allow any localhost connection in development
-				return strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1")
+
+				parsed, err := url.Parse(origin)
+				if err != nil {
+					return false
+				}
+				host := strings.ToLower(parsed.Hostname())
+				return host == "localhost" || host == "127.0.0.1"
 			},
 		},
 		terminalManager: NewTerminalManager(),
@@ -84,6 +105,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)
 	mux.HandleFunc("/api/browse", ws.handleAPIBrowse)
 	mux.HandleFunc("/api/file", ws.handleAPIFile)
+	mux.HandleFunc("/api/file/consent", ws.handleAPIFileConsent)
 	mux.HandleFunc("/api/config", ws.handleAPIConfig)
 	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
 	mux.HandleFunc("/api/git/status", ws.handleAPIGitStatus)
@@ -118,7 +140,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	})
 
 	ws.server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", ws.port),
+		Addr:    fmt.Sprintf("127.0.0.1:%d", ws.port),
 		Handler: mux,
 	}
 
@@ -222,12 +244,27 @@ func (ws *ReactWebServer) countConnections() int {
 
 // CheckPortAvailable checks if a port is available to bind to
 func CheckPortAvailable(port int) bool {
-	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf(":%d", port))
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return false // Port is in use
 	}
 	listener.Close()
 	return true // Port is free
+}
+
+func filepathAbsEval(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return abs, nil
+		}
+		return "", err
+	}
+	return resolved, nil
 }
 
 // FindAvailablePort finds an available port starting from a base port

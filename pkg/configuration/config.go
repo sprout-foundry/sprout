@@ -231,12 +231,12 @@ func NewConfig() *Config {
 			"ollama-turbo": "deepseek-v3.1:671b",
 		},
 		ProviderPriority: []string{
-			"openai",
-			"zai",
 			"openrouter",
+			"zai",
 			"deepinfra",
 			"ollama-turbo",
 			"ollama-local",
+			"openai",
 		},
 		CustomProviders:       make(map[string]CustomProviderConfig),
 		MCP:                   mcp.DefaultMCPConfig(),
@@ -478,7 +478,7 @@ func (c *Config) GetSubagentProvider() string {
 	if len(c.ProviderPriority) > 0 {
 		return c.ProviderPriority[0]
 	}
-	return "openai" // Ultimate fallback
+	return "ollama-local" // Ultimate fallback
 }
 
 // GetSubagentModel returns the configured model for subagents

@@ -2,6 +2,18 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.10.10] - 2026-02-27
+
+- Updates 10 files - Updates provider retry logic, drops Ollama Turbo (24310bd)
+- Updates 9 files - Updates model settings registry and request handling (c49169b)
+- Updates 6 files - Updates token limits context extraction for review (957995a)
+- Updates 30 files - Updates agent skills, review commands, and token limits (1cfed9b)
+- Updates pkg/webui/server.go - Updates shutdown error handling (fbed95d)
+- Updates 23 files - Updates: add refactor persona, better interrupts (667612f)
+- Merge remote-tracking branch 'origin/main' (73f54e6)
+- Updates 8 files - Updates Python runtime detection and PDF processing (47366b0)
+- docs: Update changelog for v0.10.9 (ca66312)
+
 ## [v0.10.9] - 2026-02-27
 
 - Updates 7 files - Updates persona flag completion and error messages (365aace)

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -121,6 +121,9 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			persona.AllowedTools = nil
 		} else {
 			persona.AllowedTools = parseCommaList(toolsArg)
+			if unknown := configuration.UnknownPersonaTools(persona.AllowedTools); len(unknown) > 0 {
+				fmt.Fprintf(os.Stderr, "⚠️  Unknown tools in allowlist: %s\n", strings.Join(unknown, ", "))
+			}
 		}
 	case "prompt":
 		if len(args) < 3 {
@@ -130,7 +133,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			persona.SystemPrompt = ""
 		} else {
 			promptPath := strings.TrimSpace(args[2])
-			if _, err := os.Stat(promptPath); err != nil {
+			if _, err := os.Stat(resolveRepoRelativePath(promptPath)); err != nil {
 				return fmt.Errorf("prompt file not accessible: %s", promptPath)
 			}
 			persona.SystemPrompt = promptPath
@@ -172,7 +175,7 @@ func (p *PersonaCommand) listPersonas(config *configuration.Config, chatAgent *a
 	for id := range config.SubagentTypes {
 		ids = append(ids, id)
 	}
-	slices.Sort(ids)
+	sort.Strings(ids)
 
 	for _, id := range ids {
 		persona := config.SubagentTypes[id]
@@ -321,4 +324,33 @@ func personaTitle(personaID string) string {
 	}
 
 	return strings.Join(words, " ")
+}
+
+func resolveRepoRelativePath(path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return path
+	}
+	dir := wd
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			candidate := filepath.Join(dir, path)
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate
+			}
+			return path
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return path
+		}
+		dir = parent
+	}
 }

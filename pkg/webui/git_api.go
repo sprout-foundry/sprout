@@ -73,7 +73,7 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Stage the file
-	cmd := exec.Command("git", "add", req.Path)
+	cmd := exec.Command("git", "add", "--", req.Path)
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to stage file: %v", err), http.StatusInternalServerError)
 		return

@@ -10,16 +10,6 @@ import (
 	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
-var defaultCustomProviderTools = []string{
-	"shell_command",
-	"read_file",
-	"write_file",
-	"edit_file",
-	"search_files",
-	"TodoWrite",
-	"TodoRead",
-}
-
 // ProcessQuery handles the main conversation loop with the LLM
 func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 	handler := NewConversationHandler(a)
@@ -94,13 +84,12 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 		tools = append(tools, mcpTools...)
 	}
 
-	// For custom providers, reduce tool-load by default and allow explicit override.
+	// For custom providers, apply tool filtering only when tool_calls is explicitly configured.
 	if customProvider, ok := a.getCurrentCustomProvider(); ok {
-		allowedToolSet := makeAllowedToolSet(customProvider.ToolCalls)
-		if len(customProvider.ToolCalls) == 0 {
-			allowedToolSet = makeAllowedToolSet(defaultCustomProviderTools)
+		if len(customProvider.ToolCalls) > 0 {
+			allowedToolSet := makeAllowedToolSet(customProvider.ToolCalls)
+			tools = filterToolsByName(tools, allowedToolSet)
 		}
-		tools = filterToolsByName(tools, allowedToolSet)
 	}
 
 	// Apply active persona tool filter (used for direct /persona and subagent persona runs).

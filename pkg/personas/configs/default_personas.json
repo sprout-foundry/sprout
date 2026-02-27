@@ -44,6 +44,9 @@
         "search_files",
         "analyze_ui_screenshot",
         "analyze_image_content",
+        "run_subagent",
+        "run_parallel_subagents",
+        "mcp_tools",
         "TodoWrite",
         "TodoRead"
       ]
@@ -63,6 +66,9 @@
         "search_files",
         "analyze_ui_screenshot",
         "analyze_image_content",
+        "run_subagent",
+        "run_parallel_subagents",
+        "mcp_tools",
         "TodoWrite",
         "TodoRead"
       ]
@@ -81,6 +87,9 @@
         "search_files",
         "analyze_ui_screenshot",
         "analyze_image_content",
+        "run_subagent",
+        "run_parallel_subagents",
+        "mcp_tools",
         "TodoWrite",
         "TodoRead"
       ]
@@ -100,6 +109,7 @@
         "search_files",
         "analyze_ui_screenshot",
         "analyze_image_content",
+        "mcp_tools",
         "TodoWrite",
         "TodoRead"
       ]

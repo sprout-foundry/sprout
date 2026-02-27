@@ -9,6 +9,7 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/codereview"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/types"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -31,10 +32,37 @@ func (c *ReviewCommand) Description() string {
 
 // Execute runs the code review command
 func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	return runReviewCommand("review", false, args, chatAgent)
+}
+
+// ReviewDeepCommand implements the /review-deep slash command
+// This command performs a deeper evidence-focused review on staged Git changes
+type ReviewDeepCommand struct{}
+
+// Name returns the command name
+func (c *ReviewDeepCommand) Name() string {
+	return "review-deep"
+}
+
+// Description returns the command description
+func (c *ReviewDeepCommand) Description() string {
+	return "Perform deep evidence-based code review on staged Git changes"
+}
+
+// Execute runs the deep code review command
+func (c *ReviewDeepCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	return runReviewCommand("review-deep", true, args, chatAgent)
+}
+
+func runReviewCommand(commandName string, deepReview bool, args []string, chatAgent *agent.Agent) error {
 	// Create a logger (skip prompt for non-interactive mode)
 	logger := utils.GetLogger(true)
 
-	logger.LogProcessStep("Starting code review of staged changes...")
+	if deepReview {
+		logger.LogProcessStep("Starting deep code review of staged changes...")
+	} else {
+		logger.LogProcessStep("Starting code review of staged changes...")
+	}
 
 	// Load configuration
 	cfg, err := configuration.LoadOrInitConfig(true)
@@ -51,13 +79,17 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		// If err is not nil, it means there are staged changes (exit code 1) or another error
 		if _, ok := err.(*exec.ExitError); ok {
 			// ExitError means git exited with a non-zero status, which is what we want for staged changes
-			logger.LogProcessStep("Staged changes detected. Performing code review...")
+			if deepReview {
+				logger.LogProcessStep("Staged changes detected. Performing deep review...")
+			} else {
+				logger.LogProcessStep("Staged changes detected. Performing code review...")
+			}
 		} else {
 			logger.LogError(fmt.Errorf("failed to check for staged changes: %w", err))
 			return fmt.Errorf("git error: failed to check for staged changes: %v", err)
 		}
 	} else {
-		logger.LogUserInteraction("No staged changes found. Please stage your changes before running '/review'.")
+		logger.LogUserInteraction(fmt.Sprintf("No staged changes found. Please stage your changes before running '/%s'.", commandName))
 		return fmt.Errorf("no staged changes found")
 	}
 
@@ -88,8 +120,8 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Create the unified code review service
 	service := codereview.NewCodeReviewService(cfg, logger)
 
-	// Create the review context with optimized diff
-	// IMPORTANT: Must include AgentClient for the review to work
+	// Create the review context with optimized diff and metadata.
+	// IMPORTANT: Must include AgentClient for the review to work.
 	agentClient := service.GetDefaultAgentClient()
 	if agentClient == nil {
 		logger.LogError(fmt.Errorf("failed to get default agent client"))
@@ -97,10 +129,15 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	reviewCtx := &codereview.ReviewContext{
-		Diff:        optimizedDiff.OptimizedContent,
-		Config:      cfg,
-		Logger:      logger,
-		AgentClient: agentClient,
+		Diff:             optimizedDiff.OptimizedContent,
+		Config:           cfg,
+		Logger:           logger,
+		AgentClient:      agentClient,
+		ProjectType:      detectProjectType(),
+		CommitMessage:    extractStagedChangesSummary(),
+		KeyComments:      extractKeyCommentsFromDiff(stagedDiff),
+		ChangeCategories: categorizeChanges(stagedDiff),
+		FullFileContext:  extractFileContextForChanges(stagedDiff),
 	}
 
 	// Add file summaries to context if available
@@ -120,20 +157,40 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		RollbackOnReject: false, // Don't rollback for staged reviews
 	}
 
-	logger.LogProcessStep("Sending staged changes to LLM for review...")
-	reviewResponse, err := service.PerformReview(reviewCtx, opts)
+	var reviewResponse *types.CodeReviewResult
+	if deepReview {
+		logger.LogProcessStep("Sending staged changes to LLM for deep review...")
+		reviewResponse, err = service.PerformAgenticReview(reviewCtx, opts)
+	} else {
+		logger.LogProcessStep("Sending staged changes to LLM for review...")
+		reviewResponse, err = service.PerformReview(reviewCtx, opts)
+	}
 	if err != nil {
 		logger.LogError(fmt.Errorf("failed to get code review from LLM: %w", err))
-		return fmt.Errorf("LLM error: failed to perform code review: %v", err)
+		return fmt.Errorf("LLM error: failed to perform %s: %v", commandName, err)
 	}
 
-	logger.LogProcessStep("Code review completed successfully")
+	if deepReview {
+		logger.LogProcessStep("Deep code review completed successfully")
+	} else {
+		logger.LogProcessStep("Code review completed successfully")
+	}
+
+	header := "📋 AI CODE REVIEW"
+	if deepReview {
+		header = "📋 AI CODE REVIEW (DEEP PASS)"
+	}
 
 	// Build review output string for conversation history
-	reviewOutput := fmt.Sprintf("📋 AI CODE REVIEW\n%s\n\nStatus: %s\n\nFeedback:\n%s",
+	reviewOutput := fmt.Sprintf("%s\n%s\n\nStatus: %s\n\nFeedback:\n%s",
+		header,
 		strings.Repeat("═", 50),
 		strings.ToUpper(reviewResponse.Status),
 		reviewResponse.Feedback)
+
+	if strings.TrimSpace(reviewResponse.DetailedGuidance) != "" {
+		reviewOutput += fmt.Sprintf("\n\nDetailed Guidance:\n%s", reviewResponse.DetailedGuidance)
+	}
 
 	if reviewResponse.Status == "rejected" && reviewResponse.NewPrompt != "" {
 		reviewOutput += fmt.Sprintf("\n\nSuggested New Prompt:\n%s", reviewResponse.NewPrompt)
@@ -144,7 +201,7 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		// Add user message representing the review request
 		chatAgent.AddMessage(api.Message{
 			Role:    "user",
-			Content: "/review " + strings.Join(args, " "),
+			Content: "/" + commandName + " " + strings.Join(args, " "),
 		})
 
 		// Add assistant message containing the review output
@@ -156,7 +213,7 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	// Output the review using simple, reliable formatting with proper raw mode line endings
 	fmt.Print("\r\n" + strings.Repeat("═", 50) + "\r\n")
-	fmt.Print("📋 AI CODE REVIEW\r\n")
+	fmt.Print(header + "\r\n")
 	fmt.Print(strings.Repeat("═", 50) + "\r\n\r\n")
 
 	fmt.Printf("Status: %s\r\n\r\n", strings.ToUpper(reviewResponse.Status))
@@ -166,6 +223,13 @@ func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Convert any \n in the feedback to \r\n for raw mode compatibility
 	feedback := strings.ReplaceAll(reviewResponse.Feedback, "\n", "\r\n")
 	fmt.Print(feedback + "\r\n")
+
+	if strings.TrimSpace(reviewResponse.DetailedGuidance) != "" {
+		fmt.Print("\r\nDetailed Guidance:\r\n")
+		fmt.Print(strings.Repeat("-", 30) + "\r\n")
+		details := strings.ReplaceAll(reviewResponse.DetailedGuidance, "\n", "\r\n")
+		fmt.Print(details + "\r\n")
+	}
 
 	if reviewResponse.Status == "rejected" && reviewResponse.NewPrompt != "" {
 		fmt.Print("\r\nSuggested New Prompt:\r\n")

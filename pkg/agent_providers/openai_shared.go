@@ -157,6 +157,11 @@ func EstimateInputTokens(messages []api.Message, tools []api.Tool) int {
 // window and prompt size. The caller passes the effective context limit, making
 // it easy to reuse across providers with custom limit lookups.
 func CalculateMaxTokens(contextLimit int, messages []api.Message, tools []api.Tool) int {
+	return CalculateMaxTokensWithLimits(contextLimit, 0, messages, tools)
+}
+
+// CalculateMaxTokensWithLimits computes a token budget from context and optional completion caps.
+func CalculateMaxTokensWithLimits(contextLimit int, completionLimit int, messages []api.Message, tools []api.Tool) int {
 	if contextLimit == 0 {
 		contextLimit = 32000
 	}
@@ -168,10 +173,12 @@ func CalculateMaxTokens(contextLimit int, messages []api.Message, tools []api.To
 	inputTokens += len(tools) * 200
 
 	maxOutput := contextLimit - inputTokens - 1000
-	if maxOutput > 16000 {
-		maxOutput = 16000
-	} else if maxOutput < 1000 {
-		maxOutput = 1000
+	if maxOutput < 256 {
+		maxOutput = 256
+	}
+
+	if completionLimit > 0 && maxOutput > completionLimit {
+		maxOutput = completionLimit
 	}
 	return maxOutput
 }

@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	modelsettings "github.com/alantheprice/ledit/pkg/model_settings"
 )
 
 const (
@@ -31,6 +33,9 @@ type OpenAIRequest struct {
 	Messages            []Message            `json:"messages"`
 	Tools               []Tool               `json:"tools,omitempty"`
 	Temperature         *float64             `json:"temperature,omitempty"`
+	TopP                *float64             `json:"top_p,omitempty"`
+	FrequencyPenalty    *float64             `json:"frequency_penalty,omitempty"`
+	PresencePenalty     *float64             `json:"presence_penalty,omitempty"`
 	MaxTokens           int                  `json:"max_tokens,omitempty"`
 	MaxCompletionTokens int                  `json:"max_completion_tokens,omitempty"`
 	Stream              bool                 `json:"stream"`
@@ -103,11 +108,7 @@ func (c *OpenAIClient) SendChatRequest(messages []Message, tools []Tool, reasoni
 		Stream:   false,
 	}
 
-	// Only include temperature for models that support it (not GPT-5 models)
-	if !strings.Contains(c.model, "gpt-5") {
-		temp := 0.1 // Low for consistency
-		req.Temperature = &temp
-	}
+	c.applyModelSettings(&req)
 
 	// Handle token limits based on model type
 	if strings.Contains(c.model, "gpt-5") {
@@ -593,11 +594,7 @@ func (c *OpenAIClient) SendChatRequestStream(messages []Message, tools []Tool, r
 		},
 	}
 
-	// Only include temperature for models that support it (not GPT-5 models)
-	if !strings.Contains(c.model, "gpt-5") {
-		temp := 0.1 // Low for consistency
-		req.Temperature = &temp
-	}
+	c.applyModelSettings(&req)
 
 	// Handle token limits based on model type
 	if strings.Contains(c.model, "gpt-5") {
@@ -685,6 +682,58 @@ func (c *OpenAIClient) SendChatRequestStream(messages []Message, tools []Tool, r
 	}
 
 	return response, nil
+}
+
+func (c *OpenAIClient) applyModelSettings(req *OpenAIRequest) {
+	settings := modelsettings.ResolveModelSettings(c.model)
+
+	// Preserve prior coding-focused fallback when no model guidance exists.
+	defaultTemp := 0.1
+	req.Temperature = &defaultTemp
+
+	if !settings.Known {
+		return
+	}
+	if settings.Unsupported["temperature"] || !settings.Supported["temperature"] {
+		req.Temperature = nil
+	}
+	if settings.Unsupported["top_p"] || !settings.Supported["top_p"] {
+		req.TopP = nil
+	}
+	if settings.Unsupported["frequency_penalty"] || !settings.Supported["frequency_penalty"] {
+		req.FrequencyPenalty = nil
+	}
+	if settings.Unsupported["presence_penalty"] || !settings.Supported["presence_penalty"] {
+		req.PresencePenalty = nil
+	}
+
+	if value, ok := settings.Parameters["temperature"]; ok {
+		req.Temperature = asFloatPtr(value)
+	}
+	if value, ok := settings.Parameters["top_p"]; ok {
+		req.TopP = asFloatPtr(value)
+	}
+	if value, ok := settings.Parameters["frequency_penalty"]; ok {
+		req.FrequencyPenalty = asFloatPtr(value)
+	}
+	if value, ok := settings.Parameters["presence_penalty"]; ok {
+		req.PresencePenalty = asFloatPtr(value)
+	}
+}
+
+func asFloatPtr(value interface{}) *float64 {
+	switch v := value.(type) {
+	case float64:
+		return &v
+	case float32:
+		x := float64(v)
+		return &x
+	case int:
+		x := float64(v)
+		return &x
+	default:
+		return nil
+	}
 }
 
 // ListModels returns available OpenAI models

@@ -2,10 +2,14 @@ package providers
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
+
+const defaultMaxRequestCompletionTokens = 64000
 
 // MessageConversionOptions controls how agent messages are transformed into
 // OpenAI-compatible payloads.
@@ -180,5 +184,21 @@ func CalculateMaxTokensWithLimits(contextLimit int, completionLimit int, message
 	if completionLimit > 0 && maxOutput > completionLimit {
 		maxOutput = completionLimit
 	}
+	requestCap := getMaxRequestCompletionTokensCap()
+	if requestCap > 0 && maxOutput > requestCap {
+		maxOutput = requestCap
+	}
 	return maxOutput
+}
+
+func getMaxRequestCompletionTokensCap() int {
+	raw := strings.TrimSpace(os.Getenv("LEDIT_MAX_REQUEST_COMPLETION_TOKENS"))
+	if raw == "" {
+		return defaultMaxRequestCompletionTokens
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return defaultMaxRequestCompletionTokens
+	}
+	return value
 }

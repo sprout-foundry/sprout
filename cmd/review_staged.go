@@ -106,11 +106,6 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		keyComments := extractKeyCommentsFromDiff(stagedDiff)
 		changeCategories := categorizeChanges(stagedDiff)
 
-		// Extract full file context for changed files
-		// This prevents false positives where LLM thinks functionality is "missing"
-		// when it was just moved or refactored
-		fullFileContext := extractFileContextForChanges(stagedDiff)
-
 		// Create the unified code review service
 		service := codereview.NewCodeReviewService(cfg, logger)
 
@@ -119,6 +114,9 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		if agentClient == nil {
 			agentClient = service.GetDefaultAgentClient()
 		}
+
+		// This helps avoid false positives when functionality moved across files.
+		fullFileContext := extractFileContextForChanges(stagedDiff)
 
 		// Create the review context with metadata
 		ctx := &codereview.ReviewContext{

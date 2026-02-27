@@ -8,9 +8,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
+
+const defaultProviderOpenAIMaxRequestTokensCap = 64000
 
 // OpenAIProvider implements the Provider interface for OpenAI
 type OpenAIProvider struct {
@@ -222,6 +225,10 @@ func (p *OpenAIProvider) calculateMaxTokens(messages []Message, tools []Tool) in
 	if completionCap > 0 && maxTokens > completionCap {
 		maxTokens = completionCap
 	}
+	requestCap := p.getMaxRequestTokensCap()
+	if requestCap > 0 && maxTokens > requestCap {
+		maxTokens = requestCap
+	}
 
 	return maxTokens
 }
@@ -234,6 +241,18 @@ func (p *OpenAIProvider) getModelCompletionTokenLimit() int {
 	default:
 		return 0
 	}
+}
+
+func (p *OpenAIProvider) getMaxRequestTokensCap() int {
+	raw := strings.TrimSpace(os.Getenv("LEDIT_MAX_REQUEST_COMPLETION_TOKENS"))
+	if raw == "" {
+		return defaultProviderOpenAIMaxRequestTokensCap
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return defaultProviderOpenAIMaxRequestTokensCap
+	}
+	return value
 }
 
 // convertToUnifiedResponse converts OpenAI response to unified format

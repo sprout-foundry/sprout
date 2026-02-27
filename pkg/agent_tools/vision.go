@@ -1052,6 +1052,11 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 
 // ProcessPDFWithVision processes a PDF file using Ollama with glm-ocr model
 func ProcessPDFWithVision(pdfPath string) (string, error) {
+	pythonExec, err := GetPDFPythonExecutable()
+	if err != nil {
+		return "", fmt.Errorf("PDF precheck failed: %w", err)
+	}
+
 	// Load config to check PDF OCR settings
 	configManager, err := configuration.NewManager()
 	if err != nil {
@@ -1078,7 +1083,7 @@ func ProcessPDFWithVision(pdfPath string) (string, error) {
 	}
 
 	// Process PDF with the configured provider
-	text, err := processPDFWithProvider(pdfPath, provider, model)
+	text, err := processPDFWithProvider(pdfPath, provider, model, pythonExec)
 	if err != nil {
 		return "", fmt.Errorf("PDF OCR failed: %w", err)
 	}
@@ -1088,7 +1093,7 @@ func ProcessPDFWithVision(pdfPath string) (string, error) {
 
 // processPDFWithProvider processes a PDF using the specified provider and model
 // Works cross-platform without system dependencies (poppler, tesseract, etc.)
-func processPDFWithProvider(pdfPath, provider, model string) (string, error) {
+func processPDFWithProvider(pdfPath, provider, model, pythonExec string) (string, error) {
 	// Check file size
 	fileInfo, err := os.Stat(pdfPath)
 	if err != nil {
@@ -1101,7 +1106,7 @@ func processPDFWithProvider(pdfPath, provider, model string) (string, error) {
 	}
 
 	// First try to extract text using pypdf (works for text-based PDFs, cross-platform)
-	text, hasText, err := extractTextWithPypdf(pdfPath)
+	text, hasText, err := extractTextWithPypdf(pdfPath, pythonExec)
 	if err == nil && hasText && len(strings.TrimSpace(text)) > 0 {
 		return text, nil
 	}
@@ -1109,7 +1114,7 @@ func processPDFWithProvider(pdfPath, provider, model string) (string, error) {
 	// If no text found, try OCR by extracting images from PDF
 	if !hasText || len(strings.TrimSpace(text)) == 0 {
 		// Try OCR by extracting images from PDF
-		ocrText, ocrErr := processPDFWithOCR(pdfPath, provider, model)
+		ocrText, ocrErr := processPDFWithOCR(pdfPath, provider, model, pythonExec)
 		if ocrErr == nil && len(strings.TrimSpace(ocrText)) > 0 {
 			return ocrText, nil
 		}
@@ -1128,8 +1133,8 @@ func processPDFWithProvider(pdfPath, provider, model string) (string, error) {
 }
 
 // extractTextWithPypdf extracts text from PDF using pypdf
-func extractTextWithPypdf(pdfPath string) (string, bool, error) {
-	cmd := exec.Command("python3", "-c", fmt.Sprintf(`
+func extractTextWithPypdf(pdfPath, pythonExec string) (string, bool, error) {
+	cmd := exec.Command(pythonExec, "-c", fmt.Sprintf(`
 import sys
 try:
     from pypdf import PdfReader
@@ -1161,9 +1166,9 @@ except Exception as e:
 
 // processPDFWithOCR extracts images from PDF and uses vision model for OCR
 // Cross-platform solution using pypdf for image extraction (BSD licensed)
-func processPDFWithOCR(pdfPath, provider, model string) (string, error) {
+func processPDFWithOCR(pdfPath, provider, model, pythonExec string) (string, error) {
 	// Extract images from PDF using pypdf (cross-platform, no external deps)
-	images, err := extractImagesFromPDF(pdfPath)
+	images, err := extractImagesFromPDF(pdfPath, pythonExec)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract images from PDF: %w", err)
 	}
@@ -1236,8 +1241,8 @@ func processPDFWithOCR(pdfPath, provider, model string) (string, error) {
 
 // extractImagesFromPDF extracts all images from a PDF using pypdf and Pillow
 // Returns properly formatted PNG images for OCR
-func extractImagesFromPDF(pdfPath string) ([][]byte, error) {
-	cmd := exec.Command("python3", "-c", fmt.Sprintf(`
+func extractImagesFromPDF(pdfPath, pythonExec string) ([][]byte, error) {
+	cmd := exec.Command(pythonExec, "-c", fmt.Sprintf(`
 import sys
 import base64
 try:

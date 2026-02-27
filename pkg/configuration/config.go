@@ -268,35 +268,10 @@ func NewConfig() *Config {
 		EnableZshCommandDetection:   true,      // Enable zsh command detection by default
 		AutoExecuteDetectedCommands: true,      // Auto-execute detected commands without prompting
 		SubagentTypes:               defaultSubagentTypes(),
-		Skills: map[string]Skill{
-			"go-conventions": {
-				ID:          "go-conventions",
-				Name:        "Go Conventions",
-				Description: "Go coding conventions, best practices, and style guidelines. Use when writing or reviewing Go code.",
-				Path:        "pkg/agent/skills/go-conventions",
-				Enabled:     true,
-				Metadata:    map[string]string{"version": "1.0"},
-			},
-			"test-writing": {
-				ID:          "test-writing",
-				Name:        "Test Writing",
-				Description: "Guidelines for writing effective unit tests, integration tests, and test coverage. Use when creating tests.",
-				Path:        "pkg/agent/skills/test-writing",
-				Enabled:     true,
-				Metadata:    map[string]string{"version": "1.0"},
-			},
-			"commit-msg": {
-				ID:          "commit-msg",
-				Name:        "Commit Message",
-				Description: "Conventional commits format and best practices for writing clear commit messages.",
-				Path:        "pkg/agent/skills/commit-msg",
-				Enabled:     true,
-				Metadata:    map[string]string{"version": "1.0"},
-			},
-		},
-		PDFOCREnabled:  true,
-		PDFOCRProvider: "ollama",
-		PDFOCRModel:    "glm-ocr",
+		Skills:                      defaultSkills(),
+		PDFOCREnabled:               true,
+		PDFOCRProvider:              "ollama",
+		PDFOCRModel:                 "glm-ocr",
 	}
 }
 
@@ -367,6 +342,7 @@ func Load() (*Config, error) {
 	if config.Skills == nil {
 		config.Skills = make(map[string]Skill)
 	}
+	mergeMissingDefaultSkills(&config)
 
 	// Set version if not present
 	if config.Version == "" {
@@ -607,6 +583,106 @@ func defaultSubagentTypes() map[string]SubagentType {
 	}
 
 	return types
+}
+
+func defaultSkills() map[string]Skill {
+	return map[string]Skill{
+		"go-conventions": {
+			ID:          "go-conventions",
+			Name:        "Go Conventions",
+			Description: "Go coding conventions, best practices, and style guidelines. Use when writing or reviewing Go code.",
+			Path:        "pkg/agent/skills/go-conventions",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"test-writing": {
+			ID:          "test-writing",
+			Name:        "Test Writing",
+			Description: "Guidelines for writing effective unit tests, integration tests, and test coverage. Use when creating tests.",
+			Path:        "pkg/agent/skills/test-writing",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"commit-msg": {
+			ID:          "commit-msg",
+			Name:        "Commit Message",
+			Description: "Conventional commits format and best practices for writing clear commit messages.",
+			Path:        "pkg/agent/skills/commit-msg",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"repo-onboarding": {
+			ID:          "repo-onboarding",
+			Name:        "Repo Onboarding",
+			Description: "Standard process for quickly mapping project structure, entry points, and local development commands.",
+			Path:        "pkg/agent/skills/repo-onboarding",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"bug-triage": {
+			ID:          "bug-triage",
+			Name:        "Bug Triage",
+			Description: "Repro-first debugging workflow with root-cause validation and minimal-risk fix planning.",
+			Path:        "pkg/agent/skills/bug-triage",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"safe-refactor": {
+			ID:          "safe-refactor",
+			Name:        "Safe Refactor",
+			Description: "Behavior-preserving refactor workflow focused on small steps, verification gates, and low regression risk.",
+			Path:        "pkg/agent/skills/safe-refactor",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"test-author": {
+			ID:          "test-author",
+			Name:        "Test Author",
+			Description: "Process for adding targeted tests, edge cases, and regressions for changed behavior.",
+			Path:        "pkg/agent/skills/test-author",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"release-preflight": {
+			ID:          "release-preflight",
+			Name:        "Release Preflight",
+			Description: "Pre-release checklist for build, test, and risk validation with clear go/no-go output.",
+			Path:        "pkg/agent/skills/release-preflight",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"docs-sync": {
+			ID:          "docs-sync",
+			Name:        "Docs Sync",
+			Description: "Process to keep docs aligned with shipped behavior and command surface.",
+			Path:        "pkg/agent/skills/docs-sync",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"review-workflow": {
+			ID:          "review-workflow",
+			Name:        "Review Workflow",
+			Description: "Evidence-first review process for triaging findings, reducing false positives, and prioritizing must-fix risks.",
+			Path:        "pkg/agent/skills/review-workflow",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+	}
+}
+
+func mergeMissingDefaultSkills(config *Config) {
+	if config == nil {
+		return
+	}
+	if config.Skills == nil {
+		config.Skills = make(map[string]Skill)
+	}
+
+	for id, skill := range defaultSkills() {
+		if _, exists := config.Skills[id]; !exists {
+			config.Skills[id] = skill
+		}
+	}
 }
 
 func normalizePersonaID(raw string) string {

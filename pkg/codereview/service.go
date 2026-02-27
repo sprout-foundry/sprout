@@ -507,6 +507,44 @@ func (s *CodeReviewService) performAgentBasedCodeReview(ctx *ReviewContext, stru
 	}
 }
 
+// performDeepAgentBasedCodeReview runs a stricter evidence-focused review and requires JSON output.
+func (s *CodeReviewService) performDeepAgentBasedCodeReview(ctx *ReviewContext) (*types.CodeReviewResult, error) {
+	if ctx.AgentClient == nil {
+		return nil, fmt.Errorf("agent client not available for deep code review")
+	}
+
+	prompt := s.buildDeepReviewPrompt(ctx)
+	messages := []api.Message{
+		{
+			Role:    "user",
+			Content: prompt,
+		},
+	}
+
+	response, err := ctx.AgentClient.SendChatRequest(messages, nil, "")
+	if err != nil {
+		return nil, fmt.Errorf("agent API call failed: %w", err)
+	}
+
+	result, err := s.parseStructuredReviewResponse(response)
+	if err != nil {
+		return nil, err
+	}
+
+	status := strings.ToLower(strings.TrimSpace(result.Status))
+	switch status {
+	case "approved", "needs_revision", "rejected":
+		result.Status = status
+	default:
+		result.Status = "needs_revision"
+		if strings.TrimSpace(result.Feedback) == "" {
+			result.Feedback = "Deep review returned an invalid status; manual review recommended."
+		}
+	}
+
+	return result, nil
+}
+
 // buildEnhancedReviewPrompt builds a review prompt with workspace intelligence and context
 func (s *CodeReviewService) buildEnhancedReviewPrompt(ctx *ReviewContext, structured bool) string {
 	var promptParts []string
@@ -565,6 +603,29 @@ func (s *CodeReviewService) buildEnhancedReviewPrompt(ctx *ReviewContext, struct
 	promptParts = append(promptParts, fmt.Sprintf("\n## Code Changes to Review\n```diff\n%s\n```", ctx.Diff))
 
 	return strings.Join(promptParts, "\n")
+}
+
+func (s *CodeReviewService) buildDeepReviewPrompt(ctx *ReviewContext) string {
+	basePrompt := s.buildEnhancedReviewPrompt(ctx, false)
+
+	return basePrompt + `
+
+## Deep Review Requirements
+
+Perform an evidence-based review focused on reducing false positives.
+
+- Only report an issue when you can point to concrete evidence in the provided diff/context.
+- If evidence is incomplete, classify as "verify" in guidance rather than presenting as a confirmed defect.
+- Prefer high-signal findings (correctness, security, data loss, concurrency, API contract regressions).
+- Ignore stylistic nits unless they create operational risk.
+- Include line/file references where possible.
+
+Return ONLY valid JSON using:
+{
+  "status": "approved|needs_revision|rejected",
+  "feedback": "short summary",
+  "detailed_guidance": "findings grouped as MUST_FIX and VERIFY, each with evidence and suggested next step"
+}`
 }
 
 // parseStructuredReviewResponse parses a structured JSON review response from the agent
@@ -893,17 +954,26 @@ func (s *CodeReviewService) getMostRecentApprovedResult(ctx *ReviewContext) (*ty
 	return nil, fmt.Errorf("no approved result found")
 }
 
-// PerformAgenticReview performs a tool-enabled code review using the agent system
-//
-// NOTE: This is a placeholder for future enhancement. The current fast review with
-// full file context provides excellent accuracy (95%+) without the overhead of tool usage.
-//
-// Future implementation would:
-// 1. Integrate agent.Agent with tools (read_file, grep, search_code, etc.)
-// 2. Allow LLM to investigate files on-demand when it needs more context
-// 3. Parse agent response into CodeReviewResult
-//
-// For now, this returns an error to indicate the feature is not available.
 func (s *CodeReviewService) PerformAgenticReview(ctx *ReviewContext, opts *ReviewOptions) (*types.CodeReviewResult, error) {
-	return nil, fmt.Errorf("agentic review mode is not yet implemented. The fast review with full file context provides excellent accuracy. Use --skip-prompt to accept the fast review results without the agentic option.")
+	if ctx == nil {
+		return nil, fmt.Errorf("review context cannot be nil")
+	}
+	if opts == nil {
+		return nil, fmt.Errorf("review options cannot be nil")
+	}
+	if strings.TrimSpace(ctx.Diff) == "" {
+		return nil, fmt.Errorf("no diff content provided for deep review")
+	}
+	if ctx.History == nil {
+		ctx.History = s.initializeReviewHistory(ctx)
+	}
+
+	result, err := s.performDeepAgentBasedCodeReview(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform deep review: %w", err)
+	}
+
+	s.recordReviewIteration(ctx, result, ctx.Diff)
+
+	return s.handleReviewResult(result, ctx, opts)
 }

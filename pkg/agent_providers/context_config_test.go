@@ -15,10 +15,14 @@ func TestConfigurationBasedContextLimits(t *testing.T) {
 			Model: "default-model",
 		},
 		Models: ModelConfig{
-			DefaultContextLimit: 32000,
+			DefaultContextLimit:        32000,
+			DefaultMaxCompletionTokens: 16000,
 			ModelOverrides: map[string]int{
 				"special-model": 64000,
 				"ultra-model":   128000,
+			},
+			MaxCompletionOverrides: map[string]int{
+				"special-model": 20000,
 			},
 			PatternOverrides: []PatternOverride{
 				{
@@ -28,6 +32,12 @@ func TestConfigurationBasedContextLimits(t *testing.T) {
 				{
 					Pattern:      "claude-.*",
 					ContextLimit: 200000,
+				},
+			},
+			CompletionPatternOverrides: []PatternOverride{
+				{
+					Pattern:      "gpt-.*",
+					ContextLimit: 64000,
 				},
 			},
 		},
@@ -81,6 +91,50 @@ func TestConfigurationBasedContextLimits(t *testing.T) {
 			if limit != tc.expectedLimit {
 				t.Errorf("Expected context limit %d for %s (%s), got %d",
 					tc.expectedLimit, tc.modelName, tc.description, limit)
+			}
+		})
+	}
+}
+
+func TestConfigurationBasedCompletionLimits(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test-provider",
+		Endpoint: "https://api.example.com",
+		Auth: AuthConfig{
+			Type: "bearer",
+		},
+		Defaults: RequestDefaults{
+			Model: "default-model",
+		},
+		Models: ModelConfig{
+			DefaultContextLimit:        32000,
+			DefaultMaxCompletionTokens: 16000,
+			MaxCompletionOverrides: map[string]int{
+				"special-model": 20000,
+			},
+			CompletionPatternOverrides: []PatternOverride{
+				{
+					Pattern:      "gpt-.*",
+					ContextLimit: 64000,
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		modelName     string
+		expectedLimit int
+	}{
+		{"special-model", 20000},
+		{"gpt-4-turbo", 64000},
+		{"unknown-model", 16000},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.modelName, func(t *testing.T) {
+			limit := config.GetMaxCompletionLimit(tc.modelName)
+			if limit != tc.expectedLimit {
+				t.Errorf("expected completion limit %d for %s, got %d", tc.expectedLimit, tc.modelName, limit)
 			}
 		})
 	}

@@ -3,7 +3,7 @@
     {
       "id": "orchestrator",
       "name": "Orchestrator",
-      "description": "Primary planning and delegation persona for end-to-end coding tasks",
+      "description": "Process-oriented planning and delegation persona: classify -> activate skills -> delegate -> verify",
       "enabled": true,
       "aliases": [
         "orchestration"

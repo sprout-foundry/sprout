@@ -144,9 +144,9 @@ func (p *OpenAIProvider) CheckConnection(ctx context.Context) error {
 
 // GetModelContextLimit returns the context window size for the current model
 func (p *OpenAIProvider) GetModelContextLimit() (int, error) {
-	// Most modern OpenAI models support 128K context
+	// Most modern OpenAI models support large context windows.
 	// This should ideally come from the API, not hardcoded
-	return 128000, nil
+	return 200000, nil
 }
 
 // GetAvailableModels returns the list of available OpenAI models
@@ -212,15 +212,28 @@ func (p *OpenAIProvider) calculateMaxTokens(messages []Message, tools []Tool) in
 	remaining := contextLimit - estimatedUsage
 	maxTokens := int(float64(remaining) * 0.75)
 
-	// Apply reasonable limits
-	if maxTokens < 1000 {
-		maxTokens = 1000
+	// Keep a small floor to avoid invalid zero/negative requests.
+	if maxTokens < 256 {
+		maxTokens = 256
 	}
-	if maxTokens > 16000 {
-		maxTokens = 16000
+
+	// Respect model-specific completion token caps.
+	completionCap := p.getModelCompletionTokenLimit()
+	if completionCap > 0 && maxTokens > completionCap {
+		maxTokens = completionCap
 	}
 
 	return maxTokens
+}
+
+func (p *OpenAIProvider) getModelCompletionTokenLimit() int {
+	model := strings.ToLower(p.model)
+	switch {
+	case strings.Contains(model, "gpt-5"):
+		return 128000
+	default:
+		return 0
+	}
 }
 
 // convertToUnifiedResponse converts OpenAI response to unified format

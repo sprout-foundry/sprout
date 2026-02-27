@@ -94,3 +94,41 @@ func TestOllamaAPIKeyDetection(t *testing.T) {
 		t.Error("Agent is nil")
 	}
 }
+
+func TestFilterToolsByName(t *testing.T) {
+	allTools := api.GetToolDefinitions()
+	allowed := makeAllowedToolSet([]string{"read_file", "search_files", "missing_tool"})
+
+	filtered := filterToolsByName(allTools, allowed)
+	if len(filtered) == 0 {
+		t.Fatalf("expected filtered tools to include configured tools")
+	}
+
+	found := make(map[string]bool, len(filtered))
+	for _, tool := range filtered {
+		found[tool.Function.Name] = true
+	}
+
+	if !found["read_file"] {
+		t.Fatalf("expected read_file to be included")
+	}
+	if !found["search_files"] {
+		t.Fatalf("expected search_files to be included")
+	}
+	if found["write_file"] {
+		t.Fatalf("expected write_file to be excluded")
+	}
+}
+
+func TestMakeAllowedToolSetTrimsAndDeduplicates(t *testing.T) {
+	toolSet := makeAllowedToolSet([]string{" read_file ", "read_file", "", "  ", "write_file"})
+	if len(toolSet) != 2 {
+		t.Fatalf("expected 2 unique tools, got %d", len(toolSet))
+	}
+	if _, ok := toolSet["read_file"]; !ok {
+		t.Fatalf("expected read_file to exist")
+	}
+	if _, ok := toolSet["write_file"]; !ok {
+		t.Fatalf("expected write_file to exist")
+	}
+}

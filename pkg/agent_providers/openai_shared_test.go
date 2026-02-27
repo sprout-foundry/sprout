@@ -108,8 +108,14 @@ func TestCalculateMaxTokensWithCompletionLimit(t *testing.T) {
 	tools := []api.Tool{}
 
 	maxTokens := CalculateMaxTokensWithLimits(200000, 128000, messages, tools)
+	if maxTokens != 64000 {
+		t.Fatalf("expected default request cap 64000, got %d", maxTokens)
+	}
+
+	t.Setenv("LEDIT_MAX_REQUEST_COMPLETION_TOKENS", "200000")
+	maxTokens = CalculateMaxTokensWithLimits(200000, 128000, messages, tools)
 	if maxTokens != 128000 {
-		t.Fatalf("expected completion cap 128000, got %d", maxTokens)
+		t.Fatalf("expected completion cap 128000 with raised request cap, got %d", maxTokens)
 	}
 }
 

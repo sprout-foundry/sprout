@@ -74,6 +74,25 @@
       ]
     },
     {
+      "id": "refactor",
+      "name": "Refactor",
+      "description": "Behavior-preserving refactoring specialist focused on low-risk, incremental improvements",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/refactor.md",
+      "enabled": true,
+      "allowed_tools": [
+        "shell_command",
+        "git",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "TodoWrite",
+        "TodoRead"
+      ]
+    },
+    {
       "id": "debugger",
       "name": "Debugger",
       "description": "Bug investigation, root cause analysis, and targeted fixes specialist",

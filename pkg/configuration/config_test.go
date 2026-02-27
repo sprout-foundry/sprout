@@ -93,6 +93,14 @@ func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
 	computerUser, ok := cfg.SubagentTypes["computer_user"]
 	assert.True(t, ok, "expected computer_user persona in defaults")
 	assert.True(t, computerUser.Enabled)
+
+	refactorPersona, ok := cfg.SubagentTypes["refactor"]
+	assert.True(t, ok, "expected refactor persona in defaults")
+	assert.True(t, refactorPersona.Enabled)
+	assert.NotEmpty(t, refactorPersona.SystemPrompt)
+	assert.NotEmpty(t, refactorPersona.AllowedTools)
+	assert.Contains(t, refactorPersona.AllowedTools, "edit_file")
+	assert.Contains(t, refactorPersona.AllowedTools, "search_files")
 }
 
 func TestGetSubagentTypeFillsDefaultAllowedTools(t *testing.T) {

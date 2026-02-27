@@ -2,6 +2,7 @@
 package events
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -90,7 +91,7 @@ func (eb *EventBus) Publish(eventType string, data any) {
 
 // generateEventID creates a unique event ID
 func generateEventID(id int64) string {
-	return time.Now().Format("20060102-150405") + "-" + string(rune(id))
+	return fmt.Sprintf("%s-%d", time.Now().Format("20060102-150405"), id)
 }
 
 // Helper functions for creating specific event types

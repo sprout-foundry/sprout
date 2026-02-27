@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/alantheprice/ledit/pkg/filesystem"
+	"github.com/alantheprice/ledit/pkg/pythonruntime"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
@@ -78,17 +79,9 @@ if __name__ == "__main__":
 
 func checkPython() {
 	checkPythonOnce.Do(func() {
-		// Try python3 first
-		cmd := exec.Command("python3", "-c", "import difflib")
-		if err := cmd.Run(); err == nil {
-			pythonExecutor = "python3"
-			pythonAvailable = true
-			return
-		}
-		// Fallback to python
-		cmd = exec.Command("python", "-c", "import difflib")
-		if err := cmd.Run(); err == nil {
-			pythonExecutor = "python"
+		interpreter, err := pythonruntime.FindPython3Interpreter()
+		if err == nil {
+			pythonExecutor = interpreter.Path
 			pythonAvailable = true
 		}
 	})

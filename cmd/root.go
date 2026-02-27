@@ -3,10 +3,15 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sync"
 
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/pythonruntime"
 	"github.com/spf13/cobra"
 )
+
+var startupChecksOnce sync.Once
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -78,6 +83,20 @@ func initializeSystem() {
 		fmt.Fprintln(os.Stderr, "   Try running 'ledit' again to set up your AI provider.")
 		os.Exit(1)
 	}
+
+	runStartupChecks()
+}
+
+func runStartupChecks() {
+	startupChecksOnce.Do(func() {
+		if _, err := pythonruntime.FindPython3Interpreter(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Python-based diff features are unavailable: %v\n", err)
+			return
+		}
+		if err := tools.CheckPDFPython3Available(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: PDF extraction features are unavailable: %v\n", err)
+		}
+	})
 }
 
 func init() {

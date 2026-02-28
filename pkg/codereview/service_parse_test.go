@@ -88,3 +88,60 @@ trailing text`
 		t.Fatalf("expected feedback \"looks good\", got %q", result.Feedback)
 	}
 }
+
+func TestParseStructuredReviewResponse_ParsesDetailedGuidanceObject(t *testing.T) {
+	service := NewCodeReviewService(&configuration.Config{}, utils.GetLogger(true))
+	content := "```json\n{\n  \"status\": \"approved\",\n  \"feedback\": \"The changes look good.\",\n  \"detailed_guidance\": {\n    \"MUST_FIX\": [],\n    \"VERIFY\": [\n      {\n        \"issue\": \"Style cleanup\",\n        \"evidence\": \"redundant condition\",\n        \"suggestion\": \"simplify if desired\"\n      }\n    ]\n  }\n}\n```"
+	response := &api.ChatResponse{
+		Choices: []api.Choice{
+			{
+				Message: struct {
+					Role             string          `json:"role"`
+					Content          string          `json:"content"`
+					ReasoningContent string          `json:"reasoning_content,omitempty"`
+					Images           []api.ImageData `json:"images,omitempty"`
+					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
+				}{Content: content},
+			},
+		},
+	}
+
+	result, err := service.parseStructuredReviewResponse(response)
+	if err != nil {
+		t.Fatalf("parseStructuredReviewResponse returned error: %v", err)
+	}
+	if result.Status != "approved" {
+		t.Fatalf("expected status approved, got %q", result.Status)
+	}
+	if result.Feedback != "The changes look good." {
+		t.Fatalf("unexpected feedback: %q", result.Feedback)
+	}
+	if result.DetailedGuidance == "" {
+		t.Fatal("expected detailed guidance to be populated")
+	}
+}
+
+func TestParseStructuredReviewResponse_NormalizesNeedsRevisionStatus(t *testing.T) {
+	service := NewCodeReviewService(&configuration.Config{}, utils.GetLogger(true))
+	response := &api.ChatResponse{
+		Choices: []api.Choice{
+			{
+				Message: struct {
+					Role             string          `json:"role"`
+					Content          string          `json:"content"`
+					ReasoningContent string          `json:"reasoning_content,omitempty"`
+					Images           []api.ImageData `json:"images,omitempty"`
+					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
+				}{Content: `{"status":"needs revision","feedback":"Please adjust this."}`},
+			},
+		},
+	}
+
+	result, err := service.parseStructuredReviewResponse(response)
+	if err != nil {
+		t.Fatalf("parseStructuredReviewResponse returned error: %v", err)
+	}
+	if result.Status != "needs_revision" {
+		t.Fatalf("expected status needs_revision, got %q", result.Status)
+	}
+}

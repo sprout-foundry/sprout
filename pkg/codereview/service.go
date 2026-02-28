@@ -91,26 +91,18 @@ func NewCodeReviewServiceWithConfig(cfg *configuration.Config, logger *utils.Log
 }
 
 func createReviewAgentClient(cfg *configuration.Config, logger *utils.Logger) api.ClientInterface {
-	providerName := strings.TrimSpace(os.Getenv("LEDIT_PROVIDER"))
-	model := strings.TrimSpace(os.Getenv("LEDIT_MODEL"))
-
-	if providerName == "" && cfg != nil {
-		providerName = strings.TrimSpace(cfg.LastUsedProvider)
-	}
-	if model == "" && cfg != nil && providerName != "" {
-		model = strings.TrimSpace(cfg.GetModelForProvider(providerName))
-	}
-	if providerName == "" {
+	clientType, model, err := configuration.ResolveProviderModel(cfg, "", "")
+	if err != nil {
 		if logger != nil {
-			logger.LogProcessStep("Warning: no provider configured for code review; review commands require explicit provider selection")
+			logger.LogProcessStep(fmt.Sprintf("Warning: failed to resolve provider/model for code review: %v", err))
 		}
 		return nil
 	}
 
-	client, err := factory.CreateProviderClient(api.ClientType(providerName), model)
+	client, err := factory.CreateProviderClient(clientType, model)
 	if err != nil {
 		if logger != nil {
-			logger.LogProcessStep(fmt.Sprintf("Warning: failed to initialize review provider '%s' (model '%s'): %v", providerName, model, err))
+			logger.LogProcessStep(fmt.Sprintf("Warning: failed to initialize review provider '%s' (model '%s'): %v", clientType, model, err))
 		}
 		return nil
 	}

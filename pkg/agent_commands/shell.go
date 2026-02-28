@@ -54,54 +54,9 @@ func (c *ShellCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to initialize configuration: %v", err)
 	}
 
-	// Determine provider and model from flags, model override string, or config
-	var clientType api.ClientType
-	var model string
-
-	provider := c.Provider
-	modelOverride := c.Model
-
-	if provider != "" && modelOverride != "" {
-		// Both provider and model specified via flags
-		clientType, err = configManager.MapStringToClientType(provider)
-		if err != nil {
-			return fmt.Errorf("invalid provider '%s': %v", provider, err)
-		}
-		model = modelOverride
-	} else if provider != "" {
-		// Only provider specified, get default model for that provider
-		clientType, err = configManager.MapStringToClientType(provider)
-		if err != nil {
-			return fmt.Errorf("invalid provider '%s': %v", provider, err)
-		}
-		model = configManager.GetModelForProvider(clientType)
-	} else if modelOverride != "" {
-		// Only model specified, parse provider from model string (e.g., "openai:gpt-4")
-		lastUsedProvider, _ := configManager.GetProvider()
-		// For model-only specification, still use DetermineProvider to parse "provider:model" format
-		clientType, err = api.DetermineProvider(modelOverride, lastUsedProvider)
-		if err != nil {
-			// If DetermineProvider fails, try MapStringToClientType for custom providers
-			if strings.Contains(modelOverride, ":") {
-				parts := strings.SplitN(modelOverride, ":", 2)
-				clientType, err = configManager.MapStringToClientType(parts[0])
-				if err != nil {
-					return fmt.Errorf("failed to determine provider from model '%s': %v", modelOverride, err)
-				}
-				model = parts[1]
-			} else {
-				return fmt.Errorf("failed to determine provider from model '%s': %v", modelOverride, err)
-			}
-		} else {
-			model = modelOverride
-		}
-	} else {
-		// Use default from config
-		clientType, err = configManager.GetProvider()
-		if err != nil {
-			return fmt.Errorf("failed to get provider: %v", err)
-		}
-		model = configManager.GetModelForProvider(clientType)
+	clientType, model, err := configManager.ResolveProviderModel(c.Provider, c.Model)
+	if err != nil {
+		return fmt.Errorf("failed to resolve provider/model: %v", err)
 	}
 
 	clientWrapper, err := factory.CreateProviderClient(clientType, model)

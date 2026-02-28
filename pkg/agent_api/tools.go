@@ -295,8 +295,8 @@ func GetToolDefinitions() []Tool {
 						},
 						"persona": map[string]interface{}{
 							"type":        "string",
-							"description": "REQUIRED: Subagent persona - choose from: general, debugger, code_reviewer, tester, qa_engineer, coder, web_researcher",
-							"enum":        []string{"general", "debugger", "code_reviewer", "tester", "qa_engineer", "coder", "web_researcher"},
+							"description": "REQUIRED: Subagent persona - choose from: general, coder, refactor, debugger, tester, code_reviewer, researcher, web_scraper",
+							"enum":        []string{"general", "coder", "refactor", "debugger", "tester", "code_reviewer", "researcher", "web_scraper"},
 						},
 						"context": map[string]interface{}{
 							"type":        "string",

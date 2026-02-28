@@ -69,6 +69,12 @@ type InputReader struct {
 	currentPhysicalLine int
 }
 
+const (
+	// Heuristic paste detection should be conservative to avoid misclassifying
+	// normal typing over high-latency links as paste bursts.
+	minHeuristicPasteBytes = 12
+)
+
 // NewInputReader creates a new input reader
 func NewInputReader(prompt string) *InputReader {
 	ir := &InputReader{
@@ -164,7 +170,6 @@ func (ir *InputReader) ReadLine() (string, error) {
 
 			// Detect paste: rapid character input
 			timeSinceLastChar := now.Sub(ir.lastCharTime)
-			isRapidInput := timeSinceLastChar < 30*time.Millisecond && n > 1
 
 			// Handle Ctrl+C and Ctrl+Z directly before parsing
 			if b == 3 { // Ctrl+C
@@ -210,9 +215,10 @@ func (ir *InputReader) ReadLine() (string, error) {
 			// Arrow keys send escape sequences which look like rapid input
 			isEscapeSeq := (b == 27) || (parser.state > 0)
 
-			// Start paste mode on rapid input (but not for escape sequences).
-			// Allow paste detection while editing an existing line too.
-			if !ir.inPasteMode && !isEscapeSeq && isRapidInput {
+			// Start paste mode only when input looks strongly like a paste burst.
+			// This avoids false positives on remote/high-latency links where
+			// regular keypresses may be delivered in small batches.
+			if !ir.inPasteMode && !isEscapeSeq && i == 0 && shouldStartHeuristicPaste(buf[:n], timeSinceLastChar) {
 				ir.inPasteMode = true
 				ir.pasteActive = true
 				ir.pasteStartPrompt = ir.prompt
@@ -663,6 +669,39 @@ func (ir *InputReader) finalizePaste() bool {
 	ir.Refresh()
 
 	ir.lastLineLength = visibleRuneWidth(ir.prompt) + len([]rune(ir.line))
+
+	return true
+}
+
+func shouldStartHeuristicPaste(chunk []byte, timeSinceLastChar time.Duration) bool {
+	if len(chunk) < minHeuristicPasteBytes {
+		return false
+	}
+
+	printable := 0
+	for _, b := range chunk {
+		switch {
+		case b >= 32 && b <= 126:
+			printable++
+		case b == 9 || b == 10 || b == 13:
+			printable++
+		case b == 27 || b == 8 || b == 127:
+			// Explicitly exclude ESC/backspace/delete bursts.
+			return false
+		default:
+			// Ignore unsupported control bytes for paste detection.
+		}
+	}
+
+	// Require nearly all bytes to be printable paste content.
+	if printable < len(chunk)-1 {
+		return false
+	}
+
+	// For moderate bursts, still require rapid arrival.
+	if len(chunk) < 20 && timeSinceLastChar >= 30*time.Millisecond {
+		return false
+	}
 
 	return true
 }

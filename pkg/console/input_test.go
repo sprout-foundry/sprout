@@ -3,6 +3,7 @@ package console
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestNewInputReader(t *testing.T) {
@@ -202,5 +203,54 @@ func TestFinalizePasteDoesNotAutoFormatCode(t *testing.T) {
 
 	if ir.line != "func main() {\n\tprintln(\"hi\")\n}" {
 		t.Fatalf("unexpected formatted paste result: %q", ir.line)
+	}
+}
+
+func TestShouldStartHeuristicPaste(t *testing.T) {
+	tests := []struct {
+		name      string
+		chunk     []byte
+		delay     time.Duration
+		wantStart bool
+	}{
+		{
+			name:      "small burst should not trigger",
+			chunk:     []byte("hello"),
+			delay:     5 * time.Millisecond,
+			wantStart: false,
+		},
+		{
+			name:      "moderate printable burst with fast timing should trigger",
+			chunk:     []byte("this is pasted"),
+			delay:     5 * time.Millisecond,
+			wantStart: true,
+		},
+		{
+			name:      "moderate printable burst with slow timing should not trigger",
+			chunk:     []byte("this is pasted"),
+			delay:     50 * time.Millisecond,
+			wantStart: false,
+		},
+		{
+			name:      "burst containing backspace should not trigger",
+			chunk:     []byte{'h', 'e', 'l', 'l', 'o', 127, 'w', 'o', 'r', 'l', 'd', '!'},
+			delay:     5 * time.Millisecond,
+			wantStart: false,
+		},
+		{
+			name:      "large printable burst should trigger regardless of timing",
+			chunk:     []byte("abcdefghijklmnopqrstuvwxyz"),
+			delay:     80 * time.Millisecond,
+			wantStart: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldStartHeuristicPaste(tc.chunk, tc.delay)
+			if got != tc.wantStart {
+				t.Fatalf("shouldStartHeuristicPaste(%q, %v) = %v, want %v", string(tc.chunk), tc.delay, got, tc.wantStart)
+			}
+		})
 	}
 }

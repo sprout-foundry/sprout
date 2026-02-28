@@ -81,6 +81,8 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register code review command
 	registry.Register(&ReviewCommand{})
 	registry.Register(&ReviewDeepCommand{})
+	registry.Register(&SelfReviewCommand{})
+	registry.Register(&SelfReviewGateCommand{})
 
 	return registry
 }

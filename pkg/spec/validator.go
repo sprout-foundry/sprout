@@ -69,13 +69,22 @@ func (v *ScopeValidator) ValidateScope(diff string, spec *CanonicalSpec) (*Scope
 		// Check for rate limiting or timeout errors
 		errStr := err.Error()
 		if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") {
-			v.logger.LogProcessStep("⚠️  Rate limited - skipping scope validation (would require retry/backoff)")
-			// Return a "pass" result when rate limited so the workflow can continue
+			v.logger.LogProcessStep("⚠️  Rate limited - scope validation unavailable")
+			// Fail closed to avoid silently approving out-of-scope changes.
 			return &ScopeReviewResult{
-				InScope:     true,
-				Violations:  []ScopeViolation{},
-				Summary:     "Scope validation skipped due to rate limiting",
-				Suggestions: []string{"Retry self-review later when API rate limits reset"},
+				InScope: false,
+				Violations: []ScopeViolation{
+					{
+						File:        "<validation>",
+						Line:        0,
+						Type:        "validation_unavailable",
+						Severity:    "high",
+						Description: "Scope validation could not run because the provider was rate limited",
+						Why:         "Cannot verify scope compliance without a successful validation pass",
+					},
+				},
+				Summary:     "Scope validation unavailable due to rate limiting",
+				Suggestions: []string{"Retry self-review after rate limits reset", "Reduce diff size before retrying"},
 			}, nil
 		}
 		return nil, fmt.Errorf("failed to validate scope: %w", err)

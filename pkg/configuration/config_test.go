@@ -119,3 +119,28 @@ func TestGetSubagentTypeFillsDefaultAllowedTools(t *testing.T) {
 	assert.NotEmpty(t, persona.AllowedTools)
 	assert.Contains(t, persona.AllowedTools, "read_file")
 }
+
+func TestSelfReviewGateModeDefaultsAndNormalization(t *testing.T) {
+	cfg := NewConfig()
+	assert.Equal(t, SelfReviewGateModeCode, cfg.GetSelfReviewGateMode())
+
+	cfg.SelfReviewGateMode = ""
+	assert.Equal(t, SelfReviewGateModeCode, cfg.GetSelfReviewGateMode())
+
+	err := cfg.SetSelfReviewGateMode("ALWAYS")
+	assert.NoError(t, err)
+	assert.Equal(t, SelfReviewGateModeAlways, cfg.GetSelfReviewGateMode())
+
+	err = cfg.SetSelfReviewGateMode("off")
+	assert.NoError(t, err)
+	assert.Equal(t, SelfReviewGateModeOff, cfg.GetSelfReviewGateMode())
+}
+
+func TestConfigValidateSelfReviewGateMode(t *testing.T) {
+	cfg := NewConfig()
+	cfg.SelfReviewGateMode = "invalid-mode"
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "self_review_gate_mode")
+}

@@ -614,19 +614,26 @@ func (s *CodeReviewService) parseStructuredReviewResponse(response *api.ChatResp
 	// Parse JSON response similar to llm.GetCodeReview
 	jsonStr, err := utils.ExtractJSON(content)
 	if err != nil || jsonStr == "" {
-		// If JSON extraction fails, create a simple result
+		// Fail closed for structured reviews to avoid accidental approvals.
+		feedback := strings.TrimSpace(content)
+		if feedback == "" {
+			feedback = "Structured review returned no parseable JSON output."
+		}
 		return &types.CodeReviewResult{
-			Status:   "approved",
-			Feedback: content,
+			Status:   "needs_revision",
+			Feedback: feedback,
 		}, nil
 	}
 
 	var reviewResult types.CodeReviewResult
 	if err := json.Unmarshal([]byte(jsonStr), &reviewResult); err != nil {
-		// If JSON parsing fails, create a simple result
+		feedback := strings.TrimSpace(content)
+		if feedback == "" {
+			feedback = "Structured review returned invalid JSON output."
+		}
 		return &types.CodeReviewResult{
-			Status:   "approved",
-			Feedback: content,
+			Status:   "needs_revision",
+			Feedback: feedback,
 		}, nil
 	}
 

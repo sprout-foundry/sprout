@@ -66,6 +66,7 @@ KEY COMMANDS:
   /subagent-personas - List available subagent personas
   /subagent-persona - Configure a specific persona
   /persona    - Apply/configure direct personas (provider/model/tools/prompt)
+  /self-review-gate - Configure automatic self-review gate mode
 
 Type 'exit' or 'quit' to end the session.
 

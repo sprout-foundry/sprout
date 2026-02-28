@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"embed"
 	_ "embed"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -12,6 +14,9 @@ var systemPromptContent string
 
 //go:embed prompts/planning_prompt.md
 var planningPromptContent string
+
+//go:embed prompts/*.md prompts/subagent_prompts/*.md
+var embeddedPromptFiles embed.FS
 
 // //go:embed prompts/project_goals_prompt.md
 // var projectGoalsPromptContent string
@@ -138,4 +143,45 @@ func extractPlanningPrompt() (string, error) {
 	}
 
 	return strings.TrimSpace(planningPromptContent[startIdx : startIdx+endIdx]), nil
+}
+
+func readEmbeddedPromptFile(filePath string) ([]byte, error) {
+	trimmed := strings.TrimSpace(filePath)
+	if trimmed == "" {
+		return nil, fmt.Errorf("path is empty")
+	}
+
+	normalized := filepath.ToSlash(trimmed)
+	normalized = strings.TrimPrefix(normalized, "./")
+
+	candidates := []string{}
+	seen := map[string]struct{}{}
+	addCandidate := func(candidate string) {
+		candidate = strings.TrimSpace(strings.TrimPrefix(candidate, "./"))
+		if candidate == "" {
+			return
+		}
+		if _, exists := seen[candidate]; exists {
+			return
+		}
+		seen[candidate] = struct{}{}
+		candidates = append(candidates, candidate)
+	}
+
+	addCandidate(normalized)
+	if strings.HasPrefix(normalized, "pkg/agent/") {
+		addCandidate(strings.TrimPrefix(normalized, "pkg/agent/"))
+	}
+	if idx := strings.Index(normalized, "/prompts/"); idx >= 0 {
+		addCandidate(normalized[idx+1:])
+	}
+
+	for _, candidate := range candidates {
+		content, err := embeddedPromptFiles.ReadFile(candidate)
+		if err == nil {
+			return content, nil
+		}
+	}
+
+	return nil, fmt.Errorf("embedded prompt not found: %s", filePath)
 }

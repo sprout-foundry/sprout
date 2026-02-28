@@ -2,6 +2,15 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.10.11] - 2026-02-28
+
+- Merge remote-tracking branch 'origin/main' (5234c13)
+- Updates cmd/custom.go - Updates provider vision support & fallback (22bbc98)
+- Updates 4 files - Updates structured review parsing and paste detection (1e4def8)
+- Updates 11 files - Updates self-review gate, fail-closed logic, commands (224ad9a)
+- Updates 17 files - Updates subagent fallback and file access consent (d1ef429)
+- docs: Update changelog for v0.10.10 (d1ab4c6)
+
 ## [v0.10.10] - 2026-02-27
 
 - Updates 10 files - Updates provider retry logic, drops Ollama Turbo (24310bd)

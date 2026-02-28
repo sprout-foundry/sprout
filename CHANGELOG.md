@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.10.13] - 2026-02-28
+
+- Merge remote-tracking branch 'origin/main' (1edd923)
+- Updates 3 files - Updates provider startup with interactive recovery (2201207)
+- docs: Update changelog for v0.10.12 (58ff08e)
+
 ## [v0.10.12] - 2026-02-28
 
 - Merge remote-tracking branch 'origin/main' (2b01e68)

@@ -91,3 +91,13 @@ func TestConsolidatedEfficiencyGuidelines(t *testing.T) {
 	t.Logf("✅ All providers use consolidated base prompt")
 	t.Logf("Base prompt length: %d", len(basePrompt))
 }
+
+func TestReadEmbeddedPromptFileWithRepoRelativePath(t *testing.T) {
+	content, err := readEmbeddedPromptFile("pkg/agent/prompts/subagent_prompts/web_scraper.md")
+	if err != nil {
+		t.Fatalf("expected embedded prompt lookup to succeed, got: %v", err)
+	}
+	if len(strings.TrimSpace(string(content))) == 0 {
+		t.Fatal("expected non-empty embedded prompt content")
+	}
+}

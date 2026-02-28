@@ -281,6 +281,22 @@ func resolvePersona(config *configuration.Config, raw string) (string, *configur
 			}
 		}
 	}
+
+	// Backward compatibility: map old persona names to new ones
+	legacyMappings := map[string]string{
+		"qa_engineer":   "tester",
+		"web_researcher": "web_scraper",
+	}
+	if mappedID, exists := legacyMappings[needle]; exists {
+		// Try to find the new persona ID (case-insensitive)
+		for id, persona := range config.SubagentTypes {
+			if normalizePersonaKey(id) == normalizePersonaKey(mappedID) || normalizePersonaKey(persona.Name) == normalizePersonaKey(mappedID) {
+				p := persona
+				return id, &p, true
+			}
+		}
+	}
+
 	return "", nil, false
 }
 

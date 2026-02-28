@@ -106,7 +106,7 @@ func (vp *VisionProcessor) extractImageReferences(text string) []string {
 // AnalyzeImage processes a single image with the vision model
 func (vp *VisionProcessor) AnalyzeImage(imagePath string) (VisionAnalysis, error) {
 	// Download or read the image
-	imageData, err := vp.GetImageData(imagePath)
+	imageData, imageType, err := vp.GetImageData(imagePath)
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("failed to get image data: %w", err)
 	}
@@ -119,7 +119,7 @@ func (vp *VisionProcessor) AnalyzeImage(imagePath string) (VisionAnalysis, error
 		{
 			Role:    "user",
 			Content: prompt,
-			Images:  []api.ImageData{{Base64: imageData, Type: "image/png"}},
+			Images:  []api.ImageData{{Base64: imageData, Type: imageType}},
 		},
 	}
 
@@ -165,7 +165,7 @@ func (vp *VisionProcessor) AnalyzeImage(imagePath string) (VisionAnalysis, error
 // AnalyzeImageWithPrompt analyzes an image with a custom prompt
 func (vp *VisionProcessor) AnalyzeImageWithPrompt(imagePath string, customPrompt string) (VisionAnalysis, error) {
 	// Download or read the image
-	imageData, err := vp.GetImageData(imagePath)
+	imageData, imageType, err := vp.GetImageData(imagePath)
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("failed to get image data: %w", err)
 	}
@@ -174,20 +174,6 @@ func (vp *VisionProcessor) AnalyzeImageWithPrompt(imagePath string, customPrompt
 	prompt := customPrompt
 	if prompt == "" {
 		prompt = vp.CreateVisionPrompt(imagePath)
-	}
-
-	// Create messages for the vision model
-	// Detect image type from the file extension or content
-	imageType := "image/png" // default to png since most images we process are png
-	lowerPath := strings.ToLower(imagePath)
-	if strings.HasSuffix(lowerPath, ".png") {
-		imageType = "image/png"
-	} else if strings.HasSuffix(lowerPath, ".gif") {
-		imageType = "image/gif"
-	} else if strings.HasSuffix(lowerPath, ".webp") {
-		imageType = "image/webp"
-	} else if strings.HasSuffix(lowerPath, ".avif") {
-		imageType = "image/avif"
 	}
 
 	messages := []api.Message{

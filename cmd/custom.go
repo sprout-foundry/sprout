@@ -148,6 +148,33 @@ func runCustomModelAdd() error {
 		}
 	}
 
+	fmt.Print("Does this provider support vision/image inputs? (y/N): ")
+	supportsVisionResponse, _ := reader.ReadString('\n')
+	supportsVisionResponse = strings.ToLower(strings.TrimSpace(supportsVisionResponse))
+	supportsVision := supportsVisionResponse == "y" || supportsVisionResponse == "yes"
+
+	var visionModel string
+	var visionFallbackProvider string
+	var visionFallbackModel string
+
+	if supportsVision {
+		fmt.Print("Enter vision model name (leave empty to use the primary model): ")
+		visionModel, _ = reader.ReadString('\n')
+		visionModel = strings.TrimSpace(visionModel)
+		if visionModel == "" {
+			visionModel = modelName
+		}
+	} else {
+		fmt.Print("Optional vision fallback provider (leave empty for none): ")
+		visionFallbackProvider, _ = reader.ReadString('\n')
+		visionFallbackProvider = strings.TrimSpace(visionFallbackProvider)
+		if visionFallbackProvider != "" {
+			fmt.Print("Optional vision fallback model (leave empty to use fallback provider default): ")
+			visionFallbackModel, _ = reader.ReadString('\n')
+			visionFallbackModel = strings.TrimSpace(visionFallbackModel)
+		}
+	}
+
 	fmt.Print("Optional tool allowlist (comma-separated tool names; leave empty for default custom-provider tool set): ")
 	toolCallsInput, _ := reader.ReadString('\n')
 	toolCalls := parseToolCallList(toolCallsInput)
@@ -160,6 +187,8 @@ func runCustomModelAdd() error {
 		ContextSize:    contextSize,
 		RequiresAPIKey: requiresAPIKey,
 		ToolCalls:      toolCalls,
+		SupportsVision: supportsVision,
+		VisionModel:    visionModel,
 	}
 
 	if apiKey != "" {
@@ -167,6 +196,10 @@ func runCustomModelAdd() error {
 	}
 	if envVar != "" {
 		customProvider.EnvVar = envVar
+	}
+	if visionFallbackProvider != "" {
+		customProvider.VisionFallbackProvider = visionFallbackProvider
+		customProvider.VisionFallbackModel = visionFallbackModel
 	}
 
 	// Save to configuration
@@ -200,6 +233,16 @@ func runCustomModelAdd() error {
 	fmt.Printf("   Endpoint: %s\n", endpoint)
 	fmt.Printf("   Model: %s\n", modelName)
 	fmt.Printf("   Context Size: %d tokens\n", contextSize)
+	fmt.Printf("   Supports Vision: %t\n", supportsVision)
+	if supportsVision {
+		fmt.Printf("   Vision Model: %s\n", visionModel)
+	} else if visionFallbackProvider != "" {
+		fmt.Printf("   Vision Fallback: %s", visionFallbackProvider)
+		if visionFallbackModel != "" {
+			fmt.Printf(" (%s)", visionFallbackModel)
+		}
+		fmt.Println()
+	}
 	if len(toolCalls) > 0 {
 		fmt.Printf("   Tool Calls: %s\n", strings.Join(toolCalls, ", "))
 	} else {
@@ -318,6 +361,19 @@ func runCustomModelList() error {
 		fmt.Printf("  Model: %s\n", provider.ModelName)
 		fmt.Printf("  Context Size: %d tokens\n", provider.ContextSize)
 		fmt.Printf("  API Key Required: %t\n", provider.RequiresAPIKey)
+		fmt.Printf("  Supports Vision: %t\n", provider.SupportsVision)
+		if provider.SupportsVision {
+			if provider.VisionModel != "" {
+				fmt.Printf("  Vision Model: %s\n", provider.VisionModel)
+			} else {
+				fmt.Printf("  Vision Model: %s\n", provider.ModelName)
+			}
+		} else if provider.VisionFallbackProvider != "" {
+			fmt.Printf("  Vision Fallback Provider: %s\n", provider.VisionFallbackProvider)
+			if provider.VisionFallbackModel != "" {
+				fmt.Printf("  Vision Fallback Model: %s\n", provider.VisionFallbackModel)
+			}
+		}
 		if len(provider.ToolCalls) > 0 {
 			fmt.Printf("  Tool Calls: %s\n", strings.Join(provider.ToolCalls, ", "))
 		} else {

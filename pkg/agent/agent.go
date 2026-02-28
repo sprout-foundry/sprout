@@ -1,10 +1,13 @@
 package agent
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,12 +18,15 @@ import (
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/mcp"
+	"golang.org/x/term"
 )
 
 const (
 	inputInjectionBufferSize = 10
 	asyncOutputBufferSize    = 256
 )
+
+var errProviderStartupClosed = errors.New("provider startup cancelled by user")
 
 // PauseState tracks the state when a task is paused for clarification
 type PauseState struct {
@@ -241,25 +247,54 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		}
 	}
 
-	// Ensure provider has API key
-	if err := configManager.EnsureAPIKey(clientType); err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Provider not configured. Selecting available provider...\n")
-		// Try to select a different provider
-		clientType, err = configManager.SelectNewProvider()
-		if err != nil {
-			return nil, fmt.Errorf("failed to select provider: %w", err)
+	// Ensure provider can be initialized; allow recovery in interactive mode.
+	var client api.ClientInterface
+	for {
+		if err := configManager.EnsureAPIKey(clientType); err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️  Provider %s is not configured: %v\n", api.GetProviderName(clientType), err)
+			nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
+			if recoverErr != nil {
+				return nil, recoverErr
+			}
+			clientType = nextClientType
+			finalModel = nextModel
+			continue
 		}
-		if model != "" && !looksLikeProviderModelSpecifier(configManager, model) {
-			finalModel = model
-		} else {
-			finalModel = configManager.GetModelForProvider(clientType)
-		}
-	}
 
-	// Create the client
-	client, err := factory.CreateProviderClient(clientType, finalModel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create API client: %w", err)
+		// Create the client
+		client, err = factory.CreateProviderClient(clientType, finalModel)
+		if err != nil {
+			nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
+			if recoverErr != nil {
+				return nil, recoverErr
+			}
+			clientType = nextClientType
+			finalModel = nextModel
+			continue
+		}
+
+		// Set debug mode on the client
+		debug := os.Getenv("LEDIT_DEBUG") == "true" || os.Getenv("LEDIT_DEBUG") == "1" || os.Getenv("LEDIT_DEBUG") != ""
+		client.SetDebug(debug)
+
+		// Check connection (allow tests to skip by setting LEDIT_SKIP_CONNECTION_CHECK)
+		// Also skip for providers where a fast/reliable connectivity probe is not available (e.g., Z.AI Coding Plan).
+		skipConnectionCheck := os.Getenv("LEDIT_SKIP_CONNECTION_CHECK") != "" || clientType == api.ZAIClientType
+		if !skipConnectionCheck {
+			if err := client.CheckConnection(); err != nil {
+				nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
+				if recoverErr != nil {
+					return nil, recoverErr
+				}
+				clientType = nextClientType
+				finalModel = nextModel
+				continue
+			}
+		} else if debug {
+			fmt.Printf("⚠️  Skipping provider connection check for %s\n", api.GetProviderName(clientType))
+		}
+
+		break
 	}
 
 	// Save the selection
@@ -274,21 +309,6 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 	// Check if debug mode is enabled
 	debug := os.Getenv("LEDIT_DEBUG") == "true" || os.Getenv("LEDIT_DEBUG") == "1" || os.Getenv("LEDIT_DEBUG") != ""
-
-	// Set debug mode on the client
-	client.SetDebug(debug)
-
-	// Check connection (allow tests to skip by setting LEDIT_SKIP_CONNECTION_CHECK)
-	// Also skip for providers where a fast/reliable connectivity probe is not available (e.g., Z.AI Coding Plan).
-	skipConnectionCheck := os.Getenv("LEDIT_SKIP_CONNECTION_CHECK") != "" || clientType == api.ZAIClientType
-
-	if !skipConnectionCheck {
-		if err := client.CheckConnection(); err != nil {
-			return nil, fmt.Errorf("client connection check failed: %w", err)
-		}
-	} else if debug {
-		fmt.Printf("⚠️  Skipping provider connection check for %s\n", api.GetProviderName(clientType))
-	}
 
 	// Use embedded system prompt with provider-specific enhancements
 	providerName := api.GetProviderName(clientType)
@@ -654,6 +674,60 @@ func looksLikeProviderModelSpecifier(configManager *configuration.Manager, model
 		return false
 	}
 	return true
+}
+
+func recoverProviderStartup(configManager *configuration.Manager, failedProvider api.ClientType, modelArg string, startupErr error) (api.ClientType, string, error) {
+	failedProviderName := api.GetProviderName(failedProvider)
+	fmt.Fprintf(os.Stderr, "⚠️  Failed to initialize provider '%s': %v\n", failedProviderName, startupErr)
+
+	// Non-interactive mode cannot recover via prompt.
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return "", "", fmt.Errorf("failed to initialize provider '%s': %w", failedProviderName, startupErr)
+	}
+
+	choice, err := promptProviderRecoveryChoice()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read provider recovery choice: %w", err)
+	}
+
+	if choice == 2 {
+		return "", "", fmt.Errorf("%w: %s", errProviderStartupClosed, failedProviderName)
+	}
+
+	nextProvider, err := configManager.SelectNewProvider()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to select provider: %w", err)
+	}
+
+	nextModel := configManager.GetModelForProvider(nextProvider)
+	if modelArg != "" && !looksLikeProviderModelSpecifier(configManager, modelArg) {
+		nextModel = modelArg
+	}
+
+	return nextProvider, nextModel, nil
+}
+
+func promptProviderRecoveryChoice() (int, error) {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Fprintln(os.Stderr, "Options:")
+		fmt.Fprintln(os.Stderr, "  1. Select a different provider")
+		fmt.Fprintln(os.Stderr, "  2. Close")
+		fmt.Fprint(os.Stderr, "Choice (1-2): ")
+
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return 0, err
+		}
+
+		choice, err := strconv.Atoi(strings.TrimSpace(input))
+		if err != nil || choice < 1 || choice > 2 {
+			fmt.Fprintln(os.Stderr, "Please enter 1 or 2.")
+			continue
+		}
+
+		return choice, nil
+	}
 }
 
 // ensureStopInformation preserves the original prompt content

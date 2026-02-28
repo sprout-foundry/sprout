@@ -1,6 +1,7 @@
 package codereview
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
@@ -647,20 +648,97 @@ func extractStructuredReviewCandidates(content string) []string {
 }
 
 func parseStructuredReviewCandidate(candidate string) (*types.CodeReviewResult, bool) {
-	var reviewResult types.CodeReviewResult
-	if err := json.Unmarshal([]byte(candidate), &reviewResult); err != nil {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(candidate), &raw); err != nil {
 		return nil, false
 	}
 
-	// Ensure required fields are present
+	reviewResult := &types.CodeReviewResult{}
+
+	// status (required)
+	if v, ok := raw["status"]; ok {
+		if err := json.Unmarshal(v, &reviewResult.Status); err != nil {
+			return nil, false
+		}
+		reviewResult.Status = normalizeStructuredReviewStatus(reviewResult.Status)
+	}
+
+	// feedback (required)
+	if v, ok := raw["feedback"]; ok {
+		if err := json.Unmarshal(v, &reviewResult.Feedback); err != nil {
+			return nil, false
+		}
+	}
+
+	// Optional bool fallback if status is omitted in rare cases
 	if reviewResult.Status == "" {
+		if v, ok := raw["approved"]; ok {
+			var approved bool
+			if err := json.Unmarshal(v, &approved); err == nil {
+				if approved {
+					reviewResult.Status = "approved"
+				} else {
+					reviewResult.Status = "needs_revision"
+				}
+			}
+		}
+	}
+
+	// Optional fields
+	if v, ok := raw["new_prompt"]; ok {
+		_ = json.Unmarshal(v, &reviewResult.NewPrompt)
+	}
+	if v, ok := raw["detailed_guidance"]; ok {
+		reviewResult.DetailedGuidance = parseDetailedGuidance(v)
+	}
+
+	// Ensure required fields are present and valid.
+	switch reviewResult.Status {
+	case "approved", "needs_revision", "rejected":
+	default:
 		return nil, false
 	}
 	if reviewResult.Feedback == "" {
 		return nil, false
 	}
 
-	return &reviewResult, true
+	return reviewResult, true
+}
+
+func normalizeStructuredReviewStatus(status string) string {
+	s := strings.ToLower(strings.TrimSpace(status))
+	s = strings.ReplaceAll(s, "-", "_")
+	s = strings.ReplaceAll(s, " ", "_")
+	switch s {
+	case "needsrevision":
+		return "needs_revision"
+	default:
+		return s
+	}
+}
+
+func parseDetailedGuidance(raw json.RawMessage) string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return ""
+	}
+
+	// Common case: string guidance.
+	var guidanceText string
+	if err := json.Unmarshal(trimmed, &guidanceText); err == nil {
+		return strings.TrimSpace(guidanceText)
+	}
+
+	// Also accept object/array guidance and render it as indented JSON.
+	var structured any
+	if err := json.Unmarshal(trimmed, &structured); err != nil {
+		return ""
+	}
+	pretty, err := json.MarshalIndent(structured, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(pretty)
 }
 
 // parseHumanReadableReviewResponse parses a human-readable review response from the agent

@@ -21,6 +21,10 @@ const (
 	ConfigDirName   = ".ledit"
 	ConfigFileName  = "config.json"
 	APIKeysFileName = "api_keys.json"
+
+	SelfReviewGateModeOff    = "off"
+	SelfReviewGateModeCode   = "code"
+	SelfReviewGateModeAlways = "always"
 )
 
 // SecurityValidationConfig configures LLM-based security validation
@@ -87,6 +91,9 @@ type Config struct {
 
 	// Change History Configuration
 	HistoryScope string `json:"history_scope,omitempty"` // "project" or "global"
+
+	// Self-Review Gate Configuration
+	SelfReviewGateMode string `json:"self_review_gate_mode,omitempty"` // "off", "code", or "always"
 
 	// Subagent Configuration
 	SubagentProvider string                  `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
@@ -265,8 +272,9 @@ func NewConfig() *Config {
 			OverallTimeoutSec:    600, // 10 minutes
 		},
 		HistoryScope:                "project", // Default to project-scoped history
-		EnableZshCommandDetection:   true,      // Enable zsh command detection by default
-		AutoExecuteDetectedCommands: true,      // Auto-execute detected commands without prompting
+		SelfReviewGateMode:          SelfReviewGateModeCode,
+		EnableZshCommandDetection:   true, // Enable zsh command detection by default
+		AutoExecuteDetectedCommands: true, // Auto-execute detected commands without prompting
 		SubagentTypes:               defaultSubagentTypes(),
 		Skills:                      defaultSkills(),
 		PDFOCREnabled:               true,
@@ -445,6 +453,39 @@ func (c *Config) GetModelForProvider(provider string) string {
 	}
 
 	return ""
+}
+
+// NormalizeSelfReviewGateMode validates and normalizes self-review gate mode.
+func NormalizeSelfReviewGateMode(mode string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case SelfReviewGateModeOff:
+		return SelfReviewGateModeOff, true
+	case "", SelfReviewGateModeCode:
+		return SelfReviewGateModeCode, true
+	case SelfReviewGateModeAlways:
+		return SelfReviewGateModeAlways, true
+	default:
+		return "", false
+	}
+}
+
+// GetSelfReviewGateMode returns the effective self-review gate mode.
+func (c *Config) GetSelfReviewGateMode() string {
+	mode, ok := NormalizeSelfReviewGateMode(c.SelfReviewGateMode)
+	if !ok {
+		return SelfReviewGateModeCode
+	}
+	return mode
+}
+
+// SetSelfReviewGateMode sets the self-review gate mode.
+func (c *Config) SetSelfReviewGateMode(mode string) error {
+	normalized, ok := NormalizeSelfReviewGateMode(mode)
+	if !ok {
+		return fmt.Errorf("invalid self-review gate mode %q (allowed: off, code, always)", mode)
+	}
+	c.SelfReviewGateMode = normalized
+	return nil
 }
 
 // SetModelForProvider sets the model for a specific provider
@@ -749,6 +790,10 @@ func (c *Config) GetAllEnabledSkills() map[string]Skill {
 
 // Validate validates the configuration and returns any errors
 func (c *Config) Validate() error {
+	if _, ok := NormalizeSelfReviewGateMode(c.SelfReviewGateMode); !ok {
+		return fmt.Errorf("invalid self_review_gate_mode: %q (allowed: off, code, always)", c.SelfReviewGateMode)
+	}
+
 	// Validate PDF OCR configuration
 	if c.PDFOCREnabled {
 		if c.PDFOCRProvider == "" {

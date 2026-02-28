@@ -611,41 +611,64 @@ func (s *CodeReviewService) parseStructuredReviewResponse(response *api.ChatResp
 	}
 
 	content := response.Choices[0].Message.Content
-	// Parse JSON response similar to llm.GetCodeReview
-	jsonStr, err := utils.ExtractJSON(content)
-	if err != nil || jsonStr == "" {
-		// Fail closed for structured reviews to avoid accidental approvals.
-		feedback := strings.TrimSpace(content)
-		if feedback == "" {
-			feedback = "Structured review returned no parseable JSON output."
+	candidates := extractStructuredReviewCandidates(content)
+	for _, candidate := range candidates {
+		if parsed, ok := parseStructuredReviewCandidate(candidate); ok {
+			return parsed, nil
 		}
-		return &types.CodeReviewResult{
-			Status:   "needs_revision",
-			Feedback: feedback,
-		}, nil
 	}
 
-	var reviewResult types.CodeReviewResult
-	if err := json.Unmarshal([]byte(jsonStr), &reviewResult); err != nil {
-		feedback := strings.TrimSpace(content)
-		if feedback == "" {
-			feedback = "Structured review returned invalid JSON output."
+	// Fail closed for structured reviews to avoid accidental approvals.
+	feedback := strings.TrimSpace(content)
+	if feedback == "" {
+		feedback = "Structured review returned no parseable JSON output."
+	}
+	return &types.CodeReviewResult{
+		Status:   "needs_revision",
+		Feedback: feedback,
+	}, nil
+}
+
+func extractStructuredReviewCandidates(content string) []string {
+	candidates := make([]string, 0, 4)
+	seen := make(map[string]struct{})
+
+	if jsonStr, err := utils.ExtractJSON(content); err == nil && strings.TrimSpace(jsonStr) != "" {
+		jsonStr = strings.TrimSpace(jsonStr)
+		seen[jsonStr] = struct{}{}
+		candidates = append(candidates, jsonStr)
+	}
+
+	for _, part := range utils.SplitTopLevelJSONObjects(content) {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
 		}
-		return &types.CodeReviewResult{
-			Status:   "needs_revision",
-			Feedback: feedback,
-		}, nil
+		if _, exists := seen[part]; exists {
+			continue
+		}
+		seen[part] = struct{}{}
+		candidates = append(candidates, part)
+	}
+
+	return candidates
+}
+
+func parseStructuredReviewCandidate(candidate string) (*types.CodeReviewResult, bool) {
+	var reviewResult types.CodeReviewResult
+	if err := json.Unmarshal([]byte(candidate), &reviewResult); err != nil {
+		return nil, false
 	}
 
 	// Ensure required fields are present
 	if reviewResult.Status == "" {
-		reviewResult.Status = "needs_revision"
+		return nil, false
 	}
 	if reviewResult.Feedback == "" {
-		reviewResult.Feedback = "No specific feedback provided"
+		return nil, false
 	}
 
-	return &reviewResult, nil
+	return &reviewResult, true
 }
 
 // parseHumanReadableReviewResponse parses a human-readable review response from the agent

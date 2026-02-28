@@ -37,20 +37,19 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 
 		// Override model if specified by flag
 		var customAgentClient api.ClientInterface
-		if reviewStagedModel != "" {
-			// Parse provider from model string (e.g., "ollama:llama3" or "openai:gpt-4")
-			clientType, err := api.DetermineProvider(reviewStagedModel, api.ClientType(cfg.LastUsedProvider))
-			if err != nil {
-				logger.LogError(fmt.Errorf("failed to determine provider from model '%s': %w", reviewStagedModel, err))
-				return
+			if reviewStagedModel != "" {
+				clientType, resolvedModel, err := configuration.ResolveProviderModel(cfg, "", reviewStagedModel)
+				if err != nil {
+					logger.LogError(fmt.Errorf("failed to resolve provider/model from '%s': %w", reviewStagedModel, err))
+					return
+				}
+				customAgentClient, err = factory.CreateProviderClient(clientType, resolvedModel)
+				if err != nil {
+					logger.LogError(fmt.Errorf("failed to create agent client with provider '%s' model '%s': %w", clientType, resolvedModel, err))
+					return
+				}
+				logger.LogProcessStep(fmt.Sprintf("Using custom provider/model: %s | %s", clientType, resolvedModel))
 			}
-			customAgentClient, err = factory.CreateProviderClient(clientType, reviewStagedModel)
-			if err != nil {
-				logger.LogError(fmt.Errorf("failed to create agent client with model '%s': %w", reviewStagedModel, err))
-				return
-			}
-			logger.LogProcessStep(fmt.Sprintf("Using custom model: %s", reviewStagedModel))
-		}
 
 		// Check for staged changes
 		cmdCheckStaged := exec.Command("git", "diff", "--cached", "--quiet", "--exit-code")

@@ -227,74 +227,33 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		return agent, nil
 	}
 
-	if model != "" {
-		// Check if model includes provider prefix (e.g., "openai:gpt-4")
-		parts := strings.SplitN(model, ":", 2)
-		if len(parts) == 2 {
-			// Provider explicitly specified
-			providerName := parts[0]
-			finalModel = parts[1]
-
-			// Get ClientType for provider using config manager to handle custom providers
-			clientType, err = configManager.MapStringToClientType(providerName)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "⚠️  Unknown provider '%s' specified. Falling back to available provider...\n", providerName)
-				// Try to select a different provider
-				clientType, err = configManager.SelectNewProvider()
-				if err != nil {
-					return nil, fmt.Errorf("failed to select provider after unknown provider '%s': %w", providerName, err)
-				}
-				finalModel = configManager.GetModelForProvider(clientType)
-				fmt.Fprintf(os.Stderr, "✅ Using provider: %s with model: %s\n", api.GetProviderName(clientType), finalModel)
-			} else {
-				// Ensure provider has API key
-				if err := configManager.EnsureAPIKey(clientType); err != nil {
-					fmt.Fprintf(os.Stderr, "⚠️  Provider '%s' not configured. Falling back to available provider...\n", providerName)
-					// Try to select a different provider
-					clientType, err = configManager.SelectNewProvider()
-					if err != nil {
-						return nil, fmt.Errorf("failed to select provider after API key issue with '%s': %w", providerName, err)
-					}
-					finalModel = configManager.GetModelForProvider(clientType)
-					fmt.Fprintf(os.Stderr, "✅ Using provider: %s with model: %s\n", api.GetProviderName(clientType), finalModel)
-				}
-			}
-		} else {
-			// No provider specified, use current provider with specified model
-			clientType, err = configManager.GetProvider()
-			if err != nil {
-				// No provider set, select one
-				fmt.Fprintf(os.Stderr, "🔧 No provider configured. Selecting available provider...\n")
-				clientType, err = configManager.SelectNewProvider()
-				if err != nil {
-					return nil, fmt.Errorf("failed to select provider: %w", err)
-				}
-			}
+	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Failed to resolve configured provider/model: %v\n", err)
+		fmt.Fprintf(os.Stderr, "🔧 Selecting an available provider...\n")
+		clientType, err = configManager.SelectNewProvider()
+		if err != nil {
+			return nil, fmt.Errorf("failed to select provider: %w", err)
+		}
+		finalModel = configManager.GetModelForProvider(clientType)
+		if model != "" && !looksLikeProviderModelSpecifier(configManager, model) {
 			finalModel = model
 		}
-	} else {
-		// Use configured provider and model
-		clientType, err = configManager.GetProvider()
+	}
+
+	// Ensure provider has API key
+	if err := configManager.EnsureAPIKey(clientType); err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Provider not configured. Selecting available provider...\n")
+		// Try to select a different provider
+		clientType, err = configManager.SelectNewProvider()
 		if err != nil {
-			// No provider set, select one
-			fmt.Fprintf(os.Stderr, "🔧 No provider configured. Selecting available provider...\n")
-			clientType, err = configManager.SelectNewProvider()
-			if err != nil {
-				return nil, fmt.Errorf("failed to select provider: %w", err)
-			}
+			return nil, fmt.Errorf("failed to select provider: %w", err)
 		}
-
-		// Ensure provider has API key
-		if err := configManager.EnsureAPIKey(clientType); err != nil {
-			fmt.Fprintf(os.Stderr, "⚠️  Provider not configured. Selecting available provider...\n")
-			// Try to select a different provider
-			clientType, err = configManager.SelectNewProvider()
-			if err != nil {
-				return nil, fmt.Errorf("failed to select provider: %w", err)
-			}
+		if model != "" && !looksLikeProviderModelSpecifier(configManager, model) {
+			finalModel = model
+		} else {
+			finalModel = configManager.GetModelForProvider(clientType)
 		}
-
-		finalModel = configManager.GetModelForProvider(clientType)
 	}
 
 	// Create the client
@@ -617,7 +576,15 @@ func (a *Agent) SetSystemPromptFromFile(filePath string) error {
 
 	content, err := os.ReadFile(resolvedPath)
 	if err != nil {
-		return fmt.Errorf("failed to read system prompt file: %w", err)
+		if os.IsNotExist(err) {
+			embeddedContent, embeddedErr := readEmbeddedPromptFile(filePath)
+			if embeddedErr != nil {
+				return fmt.Errorf("failed to read system prompt file: %w", err)
+			}
+			content = embeddedContent
+		} else {
+			return fmt.Errorf("failed to read system prompt file: %w", err)
+		}
 	}
 
 	promptContent := strings.TrimSpace(string(content))
@@ -673,6 +640,20 @@ func findRepoRootFromCWD() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+func looksLikeProviderModelSpecifier(configManager *configuration.Manager, model string) bool {
+	parts := strings.SplitN(strings.TrimSpace(model), ":", 2)
+	if len(parts) != 2 {
+		return false
+	}
+	if strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return false
+	}
+	if _, err := configManager.MapStringToClientType(parts[0]); err != nil {
+		return false
+	}
+	return true
 }
 
 // ensureStopInformation preserves the original prompt content

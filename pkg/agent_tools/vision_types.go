@@ -1,9 +1,12 @@
 package tools
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
 	"net/http"
 	"os"
@@ -14,6 +17,19 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/factory"
+	"github.com/alantheprice/ledit/pkg/utils"
+)
+
+const (
+	visionMaxImageFileSizeBytes    = 20 * 1024 * 1024 // 20MB hard cap (API limit)
+	visionOptimizeThresholdBytes   = 8 * 1024 * 1024  // Try optimization above 8MB
+	visionTargetOptimizedSizeBytes = 2 * 1024 * 1024  // Target ~2MB for vision API calls
+	visionMaxOptimizedJPEGQuality  = 85
+	visionMinOptimizedJPEGQuality  = 35
+	visionOptimizedJPEGQualityStep = 10
+	visionResizeStepPercent        = 0.8              // Resize to 80% of original dimensions each iteration
+	visionMinDimension             = 256              // Minimum dimension in pixels
+	visionMaxDimension             = 4096             // Maximum pixels on longest edge for vision models
 )
 
 // ============================================================================
@@ -93,13 +109,15 @@ type VisionUsageInfo struct {
 // VisionProcessor handles image analysis using vision-capable models
 type VisionProcessor struct {
 	visionClient api.ClientInterface
+	logger       *utils.Logger
 	debug        bool
 }
 
 // NewVisionProcessor creates a vision processor with the given client
-func NewVisionProcessor(client api.ClientInterface, debug bool) *VisionProcessor {
+func NewVisionProcessor(client api.ClientInterface, logger *utils.Logger, debug bool) *VisionProcessor {
 	return &VisionProcessor{
 		visionClient: client,
+		logger:       logger,
 		debug:        debug,
 	}
 }
@@ -258,6 +276,7 @@ func NewVisionProcessorWithMode(debug bool, mode string) (*VisionProcessor, erro
 
 	return &VisionProcessor{
 		visionClient: client,
+		logger:       nil,
 		debug:        debug,
 	}, nil
 }
@@ -271,6 +290,7 @@ func NewVisionProcessorWithProvider(debug bool, providerType api.ClientType) (*V
 
 	return &VisionProcessor{
 		visionClient: client,
+		logger:       nil,
 		debug:        debug,
 	}, nil
 }
@@ -538,7 +558,7 @@ func HasVisionCapability() bool {
 // ============================================================================
 
 // GetImageData reads image data from file or URL
-func (vp *VisionProcessor) GetImageData(imagePath string) (string, error) {
+func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error) {
 	var data []byte
 	var err error
 
@@ -551,11 +571,50 @@ func (vp *VisionProcessor) GetImageData(imagePath string) (string, error) {
 	}
 
 	if err != nil {
-		return "", err
+		return "", "", err
+	}
+
+	originalSize := len(data)
+
+	if len(data) > visionMaxImageFileSizeBytes {
+		return "", "", fmt.Errorf("image file too large (%d MB), maximum size is %d MB",
+			len(data)/1024/1024, visionMaxImageFileSizeBytes/1024/1024)
+	}
+
+	// Warn user if image is approaching the limit
+	if len(data) > visionOptimizeThresholdBytes {
+		if vp.logger != nil {
+			vp.logger.LogProcessStep(fmt.Sprintf("⚠️ Large image detected (%d MB), attempting optimization to stay under %d MB limit",
+				originalSize/1024/1024, visionMaxImageFileSizeBytes/1024/1024))
+		}
+	}
+
+	optimizedData, mimeType, optErr := optimizeImageData(imagePath, data)
+	if optErr != nil {
+		// Log optimization error but continue with original data
+		if vp.logger != nil {
+			vp.logger.LogProcessStep(fmt.Sprintf("⚠️ Image optimization failed: %v, using original data", optErr))
+		}
+	} else if optimizedData != nil && len(optimizedData) > 0 {
+		data = optimizedData
+		if len(data) < originalSize && vp.logger != nil {
+			vp.logger.LogProcessStep(fmt.Sprintf("✓ Image optimized: %d MB → %d MB (%.1f%% reduction)",
+				originalSize/1024/1024, len(data)/1024/1024, 100-float64(len(data))/float64(originalSize)*100))
+		}
+	}
+
+	if mimeType == "" {
+		mimeType = detectImageMimeType(imagePath)
+	}
+
+	// Final check: if still over limit, return error with clear message
+	if len(data) > visionMaxImageFileSizeBytes {
+		return "", "", fmt.Errorf("image still too large after optimization (%d MB), maximum size is %d MB. Try a smaller image.",
+			len(data)/1024/1024, visionMaxImageFileSizeBytes/1024/1024)
 	}
 
 	// Convert to base64
-	return base64.StdEncoding.EncodeToString(data), nil
+	return base64.StdEncoding.EncodeToString(data), mimeType, nil
 }
 
 // DownloadImage downloads an image from URL
@@ -572,6 +631,169 @@ func (vp *VisionProcessor) DownloadImage(url string) ([]byte, error) {
 	}
 
 	return io.ReadAll(resp.Body)
+}
+
+func optimizeImageData(imagePath string, data []byte) ([]byte, string, error) {
+	// Phase 0: Check and resize dimensions if image exceeds visionMaxDimension
+	// This runs first, before any file size optimization
+	img, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		// Not all formats can be decoded with the stdlib (e.g., webp/avif). Keep original bytes.
+		return data, detectImageMimeType(imagePath), nil
+	}
+
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	maxEdge := width
+	if height > maxEdge {
+		maxEdge = height
+	}
+
+	// Resize if dimensions exceed maximum
+	if maxEdge > visionMaxDimension {
+		// Calculate new dimensions while maintaining aspect ratio
+		scale := float64(visionMaxDimension) / float64(maxEdge)
+		newWidth := int(float64(width) * scale)
+		newHeight := int(float64(height) * scale)
+
+		// Ensure we don't go below minimum
+		if newWidth < visionMinDimension {
+			newWidth = visionMinDimension
+		}
+		if newHeight < visionMinDimension {
+			newHeight = visionMinDimension
+		}
+
+		// Resize using nearest neighbor (fast and good enough for OCR/vision)
+		resized := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
+		for y := 0; y < newHeight; y++ {
+			for x := 0; x < newWidth; x++ {
+				srcX := x * width / newWidth
+				srcY := y * height / newHeight
+				if srcX >= width {
+					srcX = width - 1
+				}
+				if srcY >= height {
+					srcY = height - 1
+				}
+				resized.Set(x, y, img.At(srcX, srcY))
+			}
+		}
+
+		img = resized
+		width = newWidth
+		height = newHeight
+		fmt.Printf("📐 Resized image from %dx%d to %dx%d (exceeded max dimension of %d)\n",
+			bounds.Dx(), bounds.Dy(), width, height, visionMaxDimension)
+	}
+
+	// Early return if no file size optimization needed
+	if len(data) <= visionOptimizeThresholdBytes {
+		// Re-encode the potentially resized image to JPEG
+		var buf bytes.Buffer
+		if encodeErr := jpeg.Encode(&buf, img, &jpeg.Options{Quality: visionMaxOptimizedJPEGQuality}); encodeErr == nil {
+			return buf.Bytes(), "image/jpeg", nil
+		}
+		return data, detectImageMimeType(imagePath), nil
+	}
+
+	// Phase 1: Quality reduction
+	best := data
+	bestMime := detectImageMimeType(imagePath)
+
+	// If we resized in Phase 0, use the resized image; otherwise use original format
+	if format != "" {
+		bestMime = "image/jpeg"
+	}
+
+	for quality := visionMaxOptimizedJPEGQuality; quality >= visionMinOptimizedJPEGQuality; quality -= visionOptimizedJPEGQualityStep {
+		var buf bytes.Buffer
+		if encodeErr := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); encodeErr != nil {
+			continue
+		}
+
+		candidate := buf.Bytes()
+		if len(candidate) < len(best) {
+			best = candidate
+			bestMime = "image/jpeg"
+		}
+		// Target ~2MB instead of 8MB for vision APIs
+		if len(candidate) <= visionTargetOptimizedSizeBytes {
+			return candidate, "image/jpeg", nil
+		}
+	}
+
+	// Phase 2: Dimension resizing if quality reduction wasn't enough
+	// Start from current dimensions and progressively reduce
+	currentWidth := width
+	currentHeight := height
+
+	for currentWidth > visionMinDimension && currentHeight > visionMinDimension {
+		// Resize image
+		newWidth := int(float64(currentWidth) * visionResizeStepPercent)
+		newHeight := int(float64(currentHeight) * visionResizeStepPercent)
+
+		resized := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
+		// Use nearest neighbor for speed (good enough for OCR/vision analysis)
+		for y := 0; y < newHeight; y++ {
+			for x := 0; x < newWidth; x++ {
+				srcX := x * currentWidth / newWidth
+				srcY := y * currentHeight / newHeight
+				if srcX >= currentWidth {
+					srcX = currentWidth - 1
+				}
+				if srcY >= currentHeight {
+					srcY = currentHeight - 1
+				}
+				resized.Set(x, y, img.At(srcX, srcY))
+			}
+		}
+
+		// Try encoding with best quality first at new size
+		var buf bytes.Buffer
+		if encodeErr := jpeg.Encode(&buf, resized, &jpeg.Options{Quality: visionMaxOptimizedJPEGQuality}); encodeErr != nil {
+			currentWidth = newWidth
+			currentHeight = newHeight
+			continue
+		}
+
+		candidate := buf.Bytes()
+		if len(candidate) < len(best) {
+			best = candidate
+			bestMime = "image/jpeg"
+		}
+		if len(candidate) <= visionTargetOptimizedSizeBytes {
+			return candidate, "image/jpeg", nil
+		}
+
+		currentWidth = newWidth
+		currentHeight = newHeight
+	}
+
+	return best, bestMime, nil
+}
+
+func detectImageMimeType(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".avif":
+		return "image/avif"
+	case ".bmp":
+		return "image/bmp"
+	case ".svg":
+		return "image/svg+xml"
+	default:
+		return "image/png"
+	}
 }
 
 // ============================================================================

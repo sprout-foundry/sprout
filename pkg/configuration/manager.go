@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/agent_providers"
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
@@ -138,6 +137,11 @@ func (m *Manager) MapStringToClientType(s string) (api.ClientType, error) {
 	return m.mapStringToClientType(s)
 }
 
+// ResolveProviderModel resolves provider+model selection using canonical precedence.
+func (m *Manager) ResolveProviderModel(explicitProvider, explicitModel string) (api.ClientType, string, error) {
+	return ResolveProviderModel(m.config, explicitProvider, explicitModel)
+}
+
 // GetMCPConfig returns the MCP configuration
 func (m *Manager) GetMCPConfig() mcp.MCPConfig {
 	return m.config.MCP
@@ -183,6 +187,8 @@ func mapClientTypeToString(ct api.ClientType) string {
 		return "lmstudio"
 	case api.MistralClientType:
 		return "mistral"
+	case api.MinimaxClientType:
+		return "minimax"
 	case api.TestClientType:
 		return "test"
 	default:
@@ -193,39 +199,5 @@ func mapClientTypeToString(ct api.ClientType) string {
 
 // mapStringToClientType converts string to ClientType
 func (m *Manager) mapStringToClientType(s string) (api.ClientType, error) {
-	switch s {
-	case "openai":
-		return api.OpenAIClientType, nil
-	case "ollama":
-		return api.OllamaClientType, nil
-	case "ollama-local":
-		return api.OllamaLocalClientType, nil
-	case "ollama-turbo":
-		return api.OllamaTurboClientType, nil
-	case "mistral":
-		return api.MistralClientType, nil
-	case "test":
-		return api.TestClientType, nil
-	default:
-		// Check if it's a custom provider FIRST (before checking factory providers)
-		if m.config.CustomProviders != nil {
-			if _, exists := m.config.CustomProviders[s]; exists {
-				return api.ClientType(s), nil
-			}
-		}
-
-		// Check if it's a provider from the factory (dynamic providers)
-		providerFactory := providers.NewProviderFactory()
-		err := providerFactory.LoadEmbeddedConfigs()
-		if err == nil {
-			availableProviders := providerFactory.GetAvailableProviders()
-			for _, provider := range availableProviders {
-				if provider == s {
-					return api.ClientType(s), nil
-				}
-			}
-		}
-
-		return "", fmt.Errorf("unknown provider: %s", s)
-	}
+	return MapProviderStringToClientType(m.config, s)
 }

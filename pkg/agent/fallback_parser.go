@@ -19,6 +19,7 @@ var (
 	xmlOpenWrapperRegex  = regexp.MustCompile(`(?s)<tool_call>\s*$`)
 	xmlCloseWrapperRegex = regexp.MustCompile(`(?s)^\s*</tool_call>`)
 	functionNameRegex    = regexp.MustCompile(`name:\s*(\w[\w\.-]*)`) // allow tool names with dots/dashes
+	toolBlockStartRegex  = regexp.MustCompile(`(?m)(^|\n)\s*([a-zA-Z_][\w\.-]*)\s*\{`)
 )
 
 // FallbackParser handles parsing tool calls from content when they should have been structured tool_calls
@@ -116,6 +117,49 @@ func (fp *FallbackParser) collectBlocks(content string) []extractedBlock {
 	blocks = append(blocks, fp.parseJSONBlocks(content)...)
 	blocks = append(blocks, fp.parseXMLBlocks(content)...)
 	blocks = append(blocks, fp.parseFunctionBlocks(content)...)
+	blocks = append(blocks, fp.parseNamedToolJSONBlocks(content)...)
+
+	return blocks
+}
+
+func (fp *FallbackParser) parseNamedToolJSONBlocks(content string) []extractedBlock {
+	var blocks []extractedBlock
+
+	matches := toolBlockStartRegex.FindAllStringSubmatchIndex(content, -1)
+	for _, match := range matches {
+		if len(match) < 6 {
+			continue
+		}
+
+		nameStart, nameEnd := match[4], match[5]
+		name := strings.TrimSpace(content[nameStart:nameEnd])
+		if !fp.isKnownToolName(name) {
+			continue
+		}
+
+		braceStart := strings.Index(content[match[0]:match[1]], "{")
+		if braceStart < 0 {
+			continue
+		}
+		braceStart += match[0]
+
+		segment, ok := fp.readBalancedJSON(content, braceStart)
+		if !ok {
+			continue
+		}
+
+		args := fp.parseJSONArguments(segment.raw)
+		call := fp.createToolCallFromArgs(name, args)
+		if call.Function.Name == "" {
+			continue
+		}
+
+		blocks = append(blocks, extractedBlock{
+			calls: []api.ToolCall{call},
+			start: match[0],
+			end:   segment.end,
+		})
+	}
 
 	return blocks
 }
@@ -594,6 +638,23 @@ func (fp *FallbackParser) containsToolCallPatterns(content string) bool {
 
 	for _, pattern := range patterns {
 		if strings.Contains(content, pattern) {
+			return true
+		}
+	}
+	if toolBlockStartRegex.MatchString(content) {
+		return true
+	}
+	return false
+}
+
+func (fp *FallbackParser) isKnownToolName(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	registry := GetToolRegistry()
+	for _, tool := range registry.GetAvailableTools() {
+		if tool == name {
 			return true
 		}
 	}

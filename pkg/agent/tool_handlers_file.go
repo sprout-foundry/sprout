@@ -89,7 +89,32 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 		return "", err
 	}
 
+	// Compatibility path: if a model still uses write_file for JSON and provides valid
+	// structured content, route internally to the structured writer.
+	if strings.EqualFold(filepath.Ext(path), ".json") {
+		if parsed, ok := parseStructuredJSONContent(content); ok {
+			return handleWriteStructuredFile(ctx, a, map[string]interface{}{
+				"path":   path,
+				"format": "json",
+				"data":   parsed,
+			})
+		}
+	}
+
 	return writeFileContent(ctx, a, path, content, "write_file", false)
+}
+
+func parseStructuredJSONContent(content string) (interface{}, bool) {
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+		return nil, false
+	}
+	switch parsed.(type) {
+	case map[string]interface{}, []interface{}:
+		return parsed, true
+	default:
+		return nil, false
+	}
 }
 
 func writeFileContent(ctx context.Context, a *Agent, path, content, toolName string, allowStructured bool) (string, error) {

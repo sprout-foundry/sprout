@@ -32,6 +32,100 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
+				Name:        "write_structured_file",
+				Description: "Write structured JSON/YAML from tool arguments with optional schema validation",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "Path to target structured file",
+							"minLength":   1,
+						},
+						"format": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional format override",
+							"enum":        []string{"json", "yaml"},
+						},
+						"data": map[string]interface{}{
+							"description": "Structured object/array payload to write",
+							"oneOf": []map[string]interface{}{
+								{"type": "object"},
+								{"type": "array"},
+							},
+						},
+						"schema": map[string]interface{}{
+							"type":        "object",
+							"description": "Optional JSON Schema subset for validation",
+						},
+					},
+					"required":             []string{"path", "data"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "patch_structured_file",
+				Description: "Apply JSON Patch operations to a JSON/YAML file with optional schema validation",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "Path to target structured file",
+							"minLength":   1,
+						},
+						"format": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional format override",
+							"enum":        []string{"json", "yaml"},
+						},
+						"patch_ops": map[string]interface{}{
+							"type":        "array",
+							"description": "JSON Patch operation list",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"op": map[string]interface{}{
+										"type": "string",
+										"enum": []string{"add", "replace", "remove", "test"},
+									},
+									"path": map[string]interface{}{
+										"type": "string",
+									},
+									"from": map[string]interface{}{
+										"type": "string",
+									},
+									"value": map[string]interface{}{
+										"description": "Value used by add/replace/test",
+									},
+								},
+								"required": []string{"op", "path"},
+							},
+						},
+						"schema": map[string]interface{}{
+							"type":        "object",
+							"description": "Optional JSON Schema subset for post-patch validation",
+						},
+					},
+					"required":             []string{"path", "patch_ops"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
 				Name:        "read_file",
 				Description: "Read file contents, optionally with line range",
 				Parameters: map[string]interface{}{

@@ -119,6 +119,32 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleEditFile,
 	})
 
+	// Register write_structured_file tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "write_structured_file",
+		Description: "Write schema-validated structured data to JSON/YAML with deterministic formatting",
+		Parameters: []ParameterConfig{
+			{"path", "string", true, []string{"file_path"}, "Path to the structured file to write"},
+			{"format", "string", false, []string{}, "Optional format override: json or yaml (otherwise inferred from extension)"},
+			{"data", "object", true, []string{}, "Structured data object/array to serialize"},
+			{"schema", "object", false, []string{}, "Optional JSON Schema subset used to validate data before writing"},
+		},
+		Handler: handleWriteStructuredFile,
+	})
+
+	// Register patch_structured_file tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "patch_structured_file",
+		Description: "Apply JSON Patch operations (add/replace/remove/test) to existing JSON/YAML then write it back",
+		Parameters: []ParameterConfig{
+			{"path", "string", true, []string{"file_path"}, "Path to the structured file to patch"},
+			{"format", "string", false, []string{}, "Optional format override: json or yaml (otherwise inferred from extension)"},
+			{"patch_ops", "array", true, []string{"ops"}, "JSON Patch operations array"},
+			{"schema", "object", false, []string{}, "Optional JSON Schema subset used to validate document after patch"},
+		},
+		Handler: handlePatchStructuredFile,
+	})
+
 	// TodoWrite - Creates and manages a structured task list
 	registry.RegisterTool(ToolConfig{
 		Name:        "TodoWrite",
@@ -607,6 +633,23 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 			return b, nil
 		}
 		return false, fmt.Errorf("expected bool, got %T", value)
+
+	case "array":
+		if arr, ok := value.([]interface{}); ok {
+			return arr, nil
+		}
+		return nil, fmt.Errorf("expected array, got %T", value)
+
+	case "object":
+		switch typed := value.(type) {
+		case map[string]interface{}:
+			return typed, nil
+		case []interface{}:
+			// Allow top-level arrays for structured content payloads.
+			return typed, nil
+		default:
+			return nil, fmt.Errorf("expected object, got %T", value)
+		}
 
 	default:
 		return value, nil // No conversion needed for unknown types

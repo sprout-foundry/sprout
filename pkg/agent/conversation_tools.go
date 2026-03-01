@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -18,7 +19,29 @@ func (ch *ConversationHandler) sendMessage() (*api.ChatResponse, error) {
 
 // prepareTools gets the optimized tool definitions for the current context
 func (ch *ConversationHandler) prepareTools() []api.Tool {
-	return ch.agent.getOptimizedToolDefinitions(ch.agent.messages)
+	tools := ch.agent.getOptimizedToolDefinitions(ch.agent.messages)
+	if len(tools) > 0 {
+		return tools
+	}
+
+	if ch.agent != nil {
+		ch.agent.debugLog("⚠️ prepareTools produced 0 tools; falling back to default tool definitions\n")
+	}
+
+	fallback := api.GetToolDefinitions()
+	noSubagents := os.Getenv("LEDIT_SUBAGENT") == "1" || os.Getenv("LEDIT_NO_SUBAGENTS") == "1"
+	if noSubagents {
+		filtered := make([]api.Tool, 0, len(fallback))
+		for _, tool := range fallback {
+			if tool.Function.Name == "run_subagent" || tool.Function.Name == "run_parallel_subagents" {
+				continue
+			}
+			filtered = append(filtered, tool)
+		}
+		return filtered
+	}
+
+	return fallback
 }
 
 // determineReasoningEffort determines the reasoning effort level for the current context

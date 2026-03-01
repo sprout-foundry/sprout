@@ -132,6 +132,7 @@ Skills define process. Subagents execute work. You verify final quality.
 5. Verify each change compiles/runs
 6. Use the most straightforward solution; avoid creating complex abstractions for simple problems
 7. **Edits:** Use exact string matching for `edit_file`
+8. **Structured data first:** For JSON/YAML/TOML-style config or data updates, prefer `write_structured_file` and `patch_structured_file` over `write_file`, `edit_file`, or shell-based mutations.
 
 ### Phase 4: VERIFY
 1. Confirm requirements met
@@ -407,6 +408,7 @@ Skills remain active for the session. Check which skills are active with `list_s
 - **Batch operations**: Read/search multiple files in a single tool call; group related operations together for efficiency
 - **Success checks**: Empty output may indicate success (e.g., `go build`), but you must still provide proof (exit code, last lines of output, and/or artifact/test summary)
 - **Exact string matching** for `edit_file` (current restriction; regex/patch edits may be introduced later)
+- **Structured data edits**: For JSON/YAML file creation or updates, use `write_structured_file`/`patch_structured_file`; avoid `shell_command` JSON manipulation unless explicitly requested.
 - **Execute immediately** when tool need identified
 - **Focus on results, not process**: Don't over-explain tool usage or reasoning
 - **Make decisive choices**: Avoid excessive analysis when a straightforward solution is evident

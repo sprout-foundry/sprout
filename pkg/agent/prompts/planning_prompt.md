@@ -45,6 +45,7 @@ After user approval, execute the plan autonomously. **PRIMARY STRATEGY: Use suba
    - Review output and changes using `view_history`
    - Validate using `validate_build` and `shell_command("go test ...")`
    - If validation fails, decide: quick fix with `edit_file` OR delegate follow-up task
+   - For JSON/YAML data/config changes, use `write_structured_file` and `patch_structured_file` instead of ad-hoc text/shell edits
    - Mark task complete, move to next task
 3. Report progress regularly
 4. Continue until all tasks complete
@@ -228,11 +229,12 @@ When encountering multiple failures:
 
 **Direct Tools (SECONDARY APPROACH):**
 
-**When to use direct tools (write_file, edit_file):**
+**When to use direct tools (write_file, edit_file, write_structured_file, patch_structured_file):**
 - Quick fixes after subagent work (imports, typos, small adjustments)
 - Test failures that are obvious/simple
 - Build errors that are trivial to fix
 - Small tweaks (<10 lines)
+- JSON/YAML value-level updates (prefer structured tools)
 
 **Decision framework:**
 - Subagent: "Create this feature/fix this complex issue"

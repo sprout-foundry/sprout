@@ -85,6 +85,10 @@ func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
 	assert.NotEmpty(t, persona.AllowedTools)
 	assert.Contains(t, persona.AllowedTools, "web_search")
 	assert.Contains(t, persona.AllowedTools, "fetch_url")
+	assert.Contains(t, persona.AllowedTools, "edit_file")
+	assert.Contains(t, persona.AllowedTools, "shell_command")
+	assert.Contains(t, persona.AllowedTools, "write_structured_file")
+	assert.Contains(t, persona.AllowedTools, "patch_structured_file")
 
 	orchestrator, ok := cfg.SubagentTypes["orchestrator"]
 	assert.True(t, ok, "expected orchestrator persona in defaults")
@@ -93,6 +97,14 @@ func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
 	computerUser, ok := cfg.SubagentTypes["computer_user"]
 	assert.True(t, ok, "expected computer_user persona in defaults")
 	assert.True(t, computerUser.Enabled)
+	assert.Contains(t, computerUser.AllowedTools, "write_structured_file")
+	assert.Contains(t, computerUser.AllowedTools, "patch_structured_file")
+
+	coderPersona, ok := cfg.SubagentTypes["coder"]
+	assert.True(t, ok, "expected coder persona in defaults")
+	assert.True(t, coderPersona.Enabled)
+	assert.Contains(t, coderPersona.AllowedTools, "write_structured_file")
+	assert.Contains(t, coderPersona.AllowedTools, "patch_structured_file")
 
 	refactorPersona, ok := cfg.SubagentTypes["refactor"]
 	assert.True(t, ok, "expected refactor persona in defaults")
@@ -100,6 +112,8 @@ func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
 	assert.NotEmpty(t, refactorPersona.SystemPrompt)
 	assert.NotEmpty(t, refactorPersona.AllowedTools)
 	assert.Contains(t, refactorPersona.AllowedTools, "edit_file")
+	assert.Contains(t, refactorPersona.AllowedTools, "write_structured_file")
+	assert.Contains(t, refactorPersona.AllowedTools, "patch_structured_file")
 	assert.Contains(t, refactorPersona.AllowedTools, "search_files")
 }
 
@@ -143,4 +157,42 @@ func TestConfigValidateSelfReviewGateMode(t *testing.T) {
 	err := cfg.Validate()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "self_review_gate_mode")
+}
+
+func TestMergeLegacyStructuredToolsIntoPersonaAllowlists(t *testing.T) {
+	cfg := &Config{
+		SubagentTypes: map[string]SubagentType{
+			"orchestrator": {
+				ID:           "orchestrator",
+				Name:         "Orchestrator",
+				Enabled:      true,
+				AllowedTools: []string{"read_file", "write_file", "edit_file"},
+			},
+			"researcher": {
+				ID:           "researcher",
+				Name:         "Researcher",
+				Enabled:      true,
+				AllowedTools: []string{"read_file", "search_files"},
+			},
+			"web_scraper": {
+				ID:           "web_scraper",
+				Name:         "Web Scraper",
+				Enabled:      true,
+				AllowedTools: []string{"read_file", "write_file", "edit_file", "search_files"},
+			},
+		},
+	}
+
+	mergeLegacyStructuredToolsIntoPersonaAllowlists(cfg)
+
+	orchestrator := cfg.SubagentTypes["orchestrator"]
+	assert.Contains(t, orchestrator.AllowedTools, "write_structured_file")
+	assert.Contains(t, orchestrator.AllowedTools, "patch_structured_file")
+
+	researcher := cfg.SubagentTypes["researcher"]
+	assert.NotContains(t, researcher.AllowedTools, "write_structured_file")
+	assert.NotContains(t, researcher.AllowedTools, "patch_structured_file")
+
+	webScraper := cfg.SubagentTypes["web_scraper"]
+	assert.Contains(t, webScraper.AllowedTools, "shell_command")
 }

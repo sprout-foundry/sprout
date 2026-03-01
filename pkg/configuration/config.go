@@ -346,6 +346,7 @@ func Load() (*Config, error) {
 		config.SubagentTypes = make(map[string]SubagentType)
 	}
 	mergeMissingDefaultSubagentTypes(&config)
+	mergeLegacyStructuredToolsIntoPersonaAllowlists(&config)
 	warnUnknownPersonaTools(config.SubagentTypes)
 	if config.Skills == nil {
 		config.Skills = make(map[string]Skill)
@@ -597,6 +598,73 @@ func mergeMissingDefaultSubagentTypes(config *Config) {
 			config.SubagentTypes[id] = persona
 		}
 	}
+}
+
+func mergeLegacyStructuredToolsIntoPersonaAllowlists(config *Config) {
+	if config == nil || config.SubagentTypes == nil {
+		return
+	}
+
+	defaults := defaultSubagentTypes()
+	for id, persona := range config.SubagentTypes {
+		normalizedID := normalizePersonaID(id)
+		if _, exists := defaults[normalizedID]; !exists {
+			continue
+		}
+		if len(persona.AllowedTools) == 0 {
+			continue
+		}
+		if !hasAnyTool(persona.AllowedTools, "write_file", "edit_file") {
+			continue
+		}
+
+		changed := false
+		if !hasTool(persona.AllowedTools, "write_structured_file") {
+			persona.AllowedTools = append(persona.AllowedTools, "write_structured_file")
+			changed = true
+		}
+		if !hasTool(persona.AllowedTools, "patch_structured_file") {
+			persona.AllowedTools = append(persona.AllowedTools, "patch_structured_file")
+			changed = true
+		}
+
+		if changed {
+			config.SubagentTypes[id] = persona
+		}
+	}
+
+	for id, persona := range config.SubagentTypes {
+		normalizedID := normalizePersonaID(id)
+		if normalizedID != "web_scraper" {
+			continue
+		}
+		if len(persona.AllowedTools) == 0 {
+			continue
+		}
+		if hasTool(persona.AllowedTools, "shell_command") {
+			continue
+		}
+		persona.AllowedTools = append(persona.AllowedTools, "shell_command")
+		config.SubagentTypes[id] = persona
+	}
+}
+
+func hasAnyTool(tools []string, candidates ...string) bool {
+	for _, candidate := range candidates {
+		if hasTool(tools, candidate) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasTool(tools []string, candidate string) bool {
+	for _, tool := range tools {
+		if strings.TrimSpace(tool) == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func defaultSubagentTypes() map[string]SubagentType {

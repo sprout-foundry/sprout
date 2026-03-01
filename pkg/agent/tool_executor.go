@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -92,7 +93,7 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 		// Context not cancelled
 	}
 
-	// Optimize parallel execution for read_file operations
+	// Optimize parallel execution for independent, side-effect-free batched tools.
 	if te.canExecuteInParallel(toolCalls) {
 		return te.executeParallel(toolCalls)
 	}
@@ -103,6 +104,10 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 
 // canExecuteInParallel checks if all tools can be executed in parallel
 func (te *ToolExecutor) canExecuteInParallel(toolCalls []api.ToolCall) bool {
+	if len(toolCalls) <= 1 {
+		return false
+	}
+
 	// Disable parallel execution for providers with strict tool call ordering requirements
 	provider := te.agent.GetProvider()
 	if strings.EqualFold(provider, "deepseek") {
@@ -112,15 +117,67 @@ func (te *ToolExecutor) canExecuteInParallel(toolCalls []api.ToolCall) bool {
 		return false
 	}
 
-	for _, tc := range toolCalls {
-		if tc.Function.Name != "read_file" {
-			return false
-		}
-	}
-	return len(toolCalls) > 1
+	return te.parallelBatchToolName(toolCalls) != ""
 }
 
-// executeParallel executes tools in parallel (for read_file operations)
+func (te *ToolExecutor) parallelBatchToolName(toolCalls []api.ToolCall) string {
+	if len(toolCalls) == 0 {
+		return ""
+	}
+
+	first := te.normalizeToolNameForScheduling(toolCalls[0].Function.Name)
+	if !isParallelSafeBatchTool(first) {
+		return ""
+	}
+
+	for i := 1; i < len(toolCalls); i++ {
+		name := te.normalizeToolNameForScheduling(toolCalls[i].Function.Name)
+		if name != first {
+			return ""
+		}
+	}
+
+	return first
+}
+
+func (te *ToolExecutor) normalizeToolNameForScheduling(toolName string) string {
+	name := strings.Split(toolName, "<|channel|>")[0]
+	if alias := te.agent.suggestCorrectToolName(name); alias != "" {
+		return alias
+	}
+	return name
+}
+
+func isParallelSafeBatchTool(toolName string) bool {
+	switch toolName {
+	case "read_file", "fetch_url", "search_files":
+		return true
+	default:
+		return false
+	}
+}
+
+func parallelWorkerLimit(toolName string, batchSize int) int {
+	if batchSize <= 1 {
+		return 1
+	}
+
+	var capValue int
+	switch toolName {
+	case "fetch_url":
+		// Keep network fan-out conservative to avoid provider throttling.
+		capValue = 4
+	case "search_files":
+		// Search is CPU/IO-heavy; keep concurrency moderate.
+		capValue = 6
+	default:
+		capValue = 12
+	}
+
+	return int(math.Min(float64(batchSize), float64(capValue)))
+}
+
+// executeParallel executes a same-tool batch in parallel when safe.
 func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message {
 	// Flush any buffered streaming content before parallel tool execution
 	// This ensures narrative text appears before tool calls for better flow
@@ -128,7 +185,13 @@ func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message 
 		te.agent.flushCallback()
 	}
 
-	te.agent.debugLog("🚀 Executing %d read_file operations in parallel\n", len(toolCalls))
+	toolName := te.parallelBatchToolName(toolCalls)
+	if toolName == "" {
+		return te.executeSequential(toolCalls)
+	}
+
+	limit := parallelWorkerLimit(toolName, len(toolCalls))
+	te.agent.debugLog("🚀 Executing %d %s operations in parallel (workers=%d)\n", len(toolCalls), toolName, limit)
 
 	// Pre-generate tool call IDs for any tool calls that don't have them
 	// This ensures each goroutine has its own unique ID before parallel execution
@@ -141,6 +204,7 @@ func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message 
 	var wg sync.WaitGroup
 	results := make([]api.Message, len(toolCalls))
 	resultsMutex := &sync.Mutex{}
+	workers := make(chan struct{}, limit)
 
 	for i, tc := range toolCalls {
 		wg.Add(1)
@@ -148,7 +212,9 @@ func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message 
 		// This ensures each goroutine has its own unique data
 		tc := tc
 		go func(index int, toolCall api.ToolCall) {
+			workers <- struct{}{}
 			defer func() {
+				<-workers
 				if r := recover(); r != nil {
 					te.agent.debugLog("⚠️ Tool execution panicked: %v\n", r)
 					// Create error result

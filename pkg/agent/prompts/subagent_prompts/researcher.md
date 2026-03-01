@@ -149,13 +149,11 @@ Structure your research reports clearly:
 
 For local research:
 - `read_file` - Read any file in the project
-- `glob` - Find files by pattern
-- `grep` - Search file contents
-- `list_directory` - Explore directory structure
+- `search_files` - Find files and search code patterns
 
 For web research:
 - `web_search` - Search the web for information
-- `fetch` - Get content from specific URLs
+- `fetch_url` - Get content from specific URLs
 
 For both:
 - Use both tool types as needed to complete your research

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/events"
@@ -82,6 +83,9 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 	if err != nil {
 		return "", err
 	}
+	if err := disallowRawStructuredWrite(path, "write_file"); err != nil {
+		return "", err
+	}
 
 	content, err := getRequiredString(args, "content")
 	if err != nil {
@@ -128,6 +132,9 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
+		return "", err
+	}
+	if err := disallowRawStructuredWrite(path, "edit_file"); err != nil {
 		return "", err
 	}
 
@@ -252,4 +259,14 @@ func validateJSONContent(content, path string) string {
 	}
 
 	return ""
+}
+
+func disallowRawStructuredWrite(path, toolName string) error {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".json", ".yaml", ".yml":
+		return fmt.Errorf("%s is not allowed for structured files (%s). Use write_structured_file or patch_structured_file", toolName, ext)
+	default:
+		return nil
+	}
 }

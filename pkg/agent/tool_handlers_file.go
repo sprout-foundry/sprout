@@ -83,13 +83,20 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 	if err != nil {
 		return "", err
 	}
-	if err := disallowRawStructuredWrite(path, "write_file"); err != nil {
-		return "", err
-	}
 
 	content, err := getRequiredString(args, "content")
 	if err != nil {
 		return "", err
+	}
+
+	return writeFileContent(ctx, a, path, content, "write_file", false)
+}
+
+func writeFileContent(ctx context.Context, a *Agent, path, content, toolName string, allowStructured bool) (string, error) {
+	if !allowStructured {
+		if err := disallowRawStructuredWrite(path, toolName); err != nil {
+			return "", err
+		}
 	}
 
 	if warning := validateJSONContent(content, path); warning != "" {

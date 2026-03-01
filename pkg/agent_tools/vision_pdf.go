@@ -5,17 +5,22 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/ledongthuc/pdf"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
-	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
 // ============================================================================
 // PDF Processing
 // ============================================================================
+
+const (
+	maxPDFOCRImages = 4
+	maxPDFOCRPages  = 8
+)
 
 // ProcessPDFWithVision processes a PDF file using Ollama with glm-ocr model
 func ProcessPDFWithVision(pdfPath string) (string, error) {
@@ -24,33 +29,12 @@ func ProcessPDFWithVision(pdfPath string) (string, error) {
 		return "", fmt.Errorf("PDF precheck failed: %w", err)
 	}
 
-	// Load config to check PDF OCR settings
-	configManager, err := configuration.NewManager()
+	client, err := CreateVisionClient()
 	if err != nil {
-		return "", fmt.Errorf("failed to load config: %w", err)
-	}
-	config := configManager.GetConfig()
-
-	// Check if PDF OCR is enabled
-	if !config.PDFOCREnabled {
-		return "", fmt.Errorf("PDF OCR is not enabled. Please enable PDF OCR in config with provider 'ollama' and model 'glm-ocr'")
+		return "", fmt.Errorf("failed to create vision client for PDF OCR: %w", err)
 	}
 
-	// Use the configured provider and model
-	provider := config.PDFOCRProvider
-	model := config.PDFOCRModel
-
-	// Add :latest suffix if not present (Ollama convention)
-	if model != "" && !strings.Contains(model, ":") {
-		model = model + ":latest"
-	}
-
-	if provider == "" || model == "" {
-		return "", fmt.Errorf("PDF OCR provider and model must be configured")
-	}
-
-	// Process PDF with the configured provider
-	text, err := processPDFWithProvider(pdfPath, provider, model, pythonExec)
+	text, err := processPDFWithProvider(pdfPath, pythonExec, client)
 	if err != nil {
 		return "", fmt.Errorf("PDF OCR failed: %w", err)
 	}
@@ -60,7 +44,7 @@ func ProcessPDFWithVision(pdfPath string) (string, error) {
 
 // processPDFWithProvider processes a PDF using the specified provider and model
 // Works cross-platform without system dependencies (poppler, tesseract, etc.)
-func processPDFWithProvider(pdfPath, provider, model, pythonExec string) (string, error) {
+func processPDFWithProvider(pdfPath, pythonExec string, client api.ClientInterface) (string, error) {
 	// Check file size
 	fileInfo, err := os.Stat(pdfPath)
 	if err != nil {
@@ -78,22 +62,19 @@ func processPDFWithProvider(pdfPath, provider, model, pythonExec string) (string
 		return text, nil
 	}
 
-	// If no text found, try OCR by extracting images from PDF
+	// For scanned/image-heavy PDFs, first try direct PDF OCR in a single model request.
+	directOCRText, directOCRErr := processPDFWithVisionModel(pdfPath, client)
+	if directOCRErr == nil && len(strings.TrimSpace(directOCRText)) > 0 {
+		return directOCRText, nil
+	}
+
+	// If no text found, try OCR by extracting images from PDF (bounded work).
 	if !hasText || len(strings.TrimSpace(text)) == 0 {
-		// Try OCR by extracting images from PDF
-		ocrText, ocrErr := processPDFWithOCR(pdfPath, provider, model, pythonExec)
+		ocrText, ocrErr := processPDFWithOCR(pdfPath, pythonExec, client)
 		if ocrErr == nil && len(strings.TrimSpace(ocrText)) > 0 {
 			return ocrText, nil
 		}
-		// If image extraction OCR failed, try sending PDF directly
-		if ocrErr != nil {
-			ocrText2, ocrErr2 := processPDFWithVisionModel(pdfPath, provider, model)
-			if ocrErr2 == nil && len(strings.TrimSpace(ocrText2)) > 0 {
-				return ocrText2, nil
-			}
-			// Return original error if all fail
-			return "", fmt.Errorf("PDF has no extractable text and OCR failed: %w", ocrErr)
-		}
+		return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %v; image OCR error: %v", directOCRErr, ocrErr)
 	}
 
 	return text, nil
@@ -101,11 +82,11 @@ func processPDFWithProvider(pdfPath, provider, model, pythonExec string) (string
 
 // extractTextWithPypdf extracts text from PDF using pypdf
 func extractTextWithPypdf(pdfPath, pythonExec string) (string, bool, error) {
-	cmd := exec.Command(pythonExec, "-c", fmt.Sprintf(`
+	cmd := exec.Command(pythonExec, "-c", `
 import sys
 try:
     from pypdf import PdfReader
-    reader = PdfReader('%s')
+    reader = PdfReader(sys.argv[1])
     text = ''
     for page in reader.pages:
         page_text = page.extract_text()
@@ -119,7 +100,7 @@ try:
 except Exception as e:
     print(f'Error: {e}', file=sys.stderr)
     sys.exit(2)
-`, pdfPath))
+`, pdfPath)
 
 	output, err := cmd.CombinedOutput()
 	exitCode := cmd.ProcessState.ExitCode()
@@ -133,10 +114,25 @@ except Exception as e:
 
 // processPDFWithOCR extracts images from PDF and uses vision model for OCR
 // Cross-platform solution using pypdf for image extraction (BSD licensed)
-func processPDFWithOCR(pdfPath, provider, model, pythonExec string) (string, error) {
+func processPDFWithOCR(pdfPath, pythonExec string, client api.ClientInterface) (string, error) {
+	// Prefer page-level rasterization so OCR is one request per page.
+	pageImages, pageErr := extractPageImagesFromPDF(pdfPath, pythonExec)
+	if pageErr == nil && len(pageImages) > 0 {
+		if len(pageImages) > maxPDFOCRPages {
+			pageImages = pageImages[:maxPDFOCRPages]
+		}
+		pageText, pageOCRErr := processOCRImages(pageImages, client, "Page")
+		if pageOCRErr == nil && len(strings.TrimSpace(pageText)) > 0 {
+			return pageText, nil
+		}
+	}
+
 	// Extract images from PDF using pypdf (cross-platform, no external deps)
 	images, err := extractImagesFromPDF(pdfPath, pythonExec)
 	if err != nil {
+		if pageErr != nil {
+			return "", fmt.Errorf("failed page rasterization (%v) and image extraction (%w)", pageErr, err)
+		}
 		return "", fmt.Errorf("failed to extract images from PDF: %w", err)
 	}
 
@@ -144,32 +140,45 @@ func processPDFWithOCR(pdfPath, provider, model, pythonExec string) (string, err
 		return "", fmt.Errorf("no images found in PDF (scanned PDF may be single raster image)")
 	}
 
-	// Create client
-	var client api.ClientInterface
-	switch provider {
-	case "ollama":
-		client, err = CreateOllamaClient(model)
-		if err != nil {
-			return "", fmt.Errorf("failed to create Ollama client: %w", err)
-		}
-	default:
-		return "", fmt.Errorf("unsupported PDF OCR provider: %s", provider)
+	if len(images) > maxPDFOCRImages {
+		images = selectImagesForOCR(images, maxPDFOCRImages)
 	}
 
-	// Process each extracted image
-	var allText strings.Builder
-	for i, imgData := range images {
-		imgBase64 := base64.StdEncoding.EncodeToString(imgData)
+	text, ocrErr := processOCRImages(images, client, "Image")
+	if ocrErr != nil {
+		if pageErr != nil {
+			return "", fmt.Errorf("page OCR path failed (%v) and image OCR path failed (%w)", pageErr, ocrErr)
+		}
+		return "", ocrErr
+	}
 
-		// Determine image type from first bytes
-		imgType := "image/png"
-		if len(imgData) >= 4 {
-			if imgData[0] == 0xFF && imgData[1] == 0xD8 {
-				imgType = "image/jpeg"
-			} else if imgData[0] == 0x89 && string(imgData[1:4]) == "PNG" {
-				imgType = "image/png"
+	return text, nil
+}
+
+func processOCRImages(images [][]byte, client api.ClientInterface, sectionLabel string) (string, error) {
+	var allText strings.Builder
+	failures := 0
+	for i, imgData := range images {
+		imagePathHint := fmt.Sprintf("pdf_%s_%d.png", strings.ToLower(sectionLabel), i+1)
+		preparedData := imgData
+		imgType := detectImageMimeType(imagePathHint)
+
+		optimizedData, optimizedMimeType, optErr := optimizeImageData(imagePathHint, preparedData)
+		if optErr == nil && len(optimizedData) > 0 {
+			preparedData = optimizedData
+			if optimizedMimeType != "" {
+				imgType = optimizedMimeType
 			}
 		}
+		if len(preparedData) > visionMaxImageFileSizeBytes {
+			failures++
+			if failures >= 2 {
+				break
+			}
+			continue
+		}
+
+		imgBase64 := base64.StdEncoding.EncodeToString(preparedData)
 
 		// Create prompt for OCR
 		prompt := GetOCRPrompt()
@@ -184,14 +193,20 @@ func processPDFWithOCR(pdfPath, provider, model, pythonExec string) (string, err
 		}
 
 		// Send request
-		response, err := client.SendChatRequest(messages, nil, "")
+		response, err := client.SendVisionRequest(messages, nil, "")
 		if err != nil {
-			continue // Try next image
+			failures++
+			if failures >= 2 {
+				break
+			}
+			continue
 		}
 
 		if len(response.Choices) > 0 && response.Choices[0].Message.Content != "" {
 			if allText.Len() > 0 {
-				allText.WriteString("\n\n--- Image ")
+				allText.WriteString("\n\n--- ")
+				allText.WriteString(sectionLabel)
+				allText.WriteString(" ")
 				allText.WriteString(fmt.Sprintf("%d", i+1))
 				allText.WriteString(" ---\n\n")
 			}
@@ -200,16 +215,54 @@ func processPDFWithOCR(pdfPath, provider, model, pythonExec string) (string, err
 	}
 
 	if allText.Len() == 0 {
-		return "", fmt.Errorf("OCR failed for all extracted images")
+		return "", fmt.Errorf("OCR failed for all extracted %ss", strings.ToLower(sectionLabel))
 	}
 
 	return allText.String(), nil
 }
 
+// extractPageImagesFromPDF rasterizes pages into PNGs for page-level OCR.
+func extractPageImagesFromPDF(pdfPath, pythonExec string) ([][]byte, error) {
+	cmd := exec.Command(pythonExec, "-c", `
+import sys
+import io
+import base64
+
+try:
+    import pypdfium2 as pdfium
+except Exception as e:
+    print(f'MISSING_PDFIUM: {e}', file=sys.stderr)
+    sys.exit(3)
+
+try:
+    doc = pdfium.PdfDocument(sys.argv[1])
+    images = []
+    for i in range(len(doc)):
+        page = doc[i]
+        # ~144 DPI equivalent: good OCR quality with manageable size.
+        rendered = page.render(scale=2.0)
+        pil_img = rendered.to_pil()
+        out = io.BytesIO()
+        pil_img.save(out, 'PNG')
+        images.append(base64.b64encode(out.getvalue()).decode('ascii'))
+    print('|'.join(images))
+except Exception as e:
+    print(f'Error: {e}', file=sys.stderr)
+    sys.exit(1)
+`, pdfPath)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("pypdfium2 page render failed: %s", strings.TrimSpace(string(output)))
+	}
+
+	return decodeBase64ImagePayload(output), nil
+}
+
 // extractImagesFromPDF extracts all images from a PDF using pypdf and Pillow
 // Returns properly formatted PNG images for OCR
 func extractImagesFromPDF(pdfPath, pythonExec string) ([][]byte, error) {
-	cmd := exec.Command(pythonExec, "-c", fmt.Sprintf(`
+	cmd := exec.Command(pythonExec, "-c", `
 import sys
 import base64
 try:
@@ -217,7 +270,7 @@ try:
     from PIL import Image
     import io
     
-    reader = PdfReader('%s')
+    reader = PdfReader(sys.argv[1])
     images = []
     for page_num, page in enumerate(reader.pages):
         if '/XObject' in page['/Resources']:
@@ -257,35 +310,19 @@ try:
 except Exception as e:
     print(f'Error: {{e}}', file=sys.stderr)
     sys.exit(1)
-`, pdfPath))
+`, pdfPath)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("pypdf image extraction failed: %s", string(output))
 	}
 
-	// Parse base64-encoded images
-	var images [][]byte
-	if len(output) > 0 {
-		encoded := strings.TrimSpace(string(output))
-		if encoded != "" {
-			for _, enc := range strings.Split(encoded, "|") {
-				if enc != "" {
-					data, err := base64.StdEncoding.DecodeString(enc)
-					if err == nil {
-						images = append(images, data)
-					}
-				}
-			}
-		}
-	}
-
-	return images, nil
+	return decodeBase64ImagePayload(output), nil
 }
 
 // processPDFWithVisionModel sends PDF directly to glm-ocr model for OCR
 // This is cross-platform and doesn't require poppler or tesseract
-func processPDFWithVisionModel(pdfPath, provider, model string) (string, error) {
+func processPDFWithVisionModel(pdfPath string, client api.ClientInterface) (string, error) {
 	// Read PDF file
 	data, err := os.ReadFile(pdfPath)
 	if err != nil {
@@ -294,18 +331,6 @@ func processPDFWithVisionModel(pdfPath, provider, model string) (string, error) 
 
 	// Convert to base64
 	pdfBase64 := base64.StdEncoding.EncodeToString(data)
-
-	// Create client
-	var client api.ClientInterface
-	switch provider {
-	case "ollama":
-		client, err = CreateOllamaClient(model)
-		if err != nil {
-			return "", fmt.Errorf("failed to create Ollama client: %w", err)
-		}
-	default:
-		return "", fmt.Errorf("unsupported PDF OCR provider: %s", provider)
-	}
 
 	// Create prompt for OCR
 	prompt := GetPDFOCRPrompt()
@@ -320,7 +345,7 @@ func processPDFWithVisionModel(pdfPath, provider, model string) (string, error) 
 	}
 
 	// Send request to Ollama
-	response, err := client.SendChatRequest(messages, nil, "")
+	response, err := client.SendVisionRequest(messages, nil, "")
 	if err != nil {
 		return "", fmt.Errorf("OCR request failed: %w", err)
 	}
@@ -330,6 +355,64 @@ func processPDFWithVisionModel(pdfPath, provider, model string) (string, error) 
 	}
 
 	return response.Choices[0].Message.Content, nil
+}
+
+func selectImagesForOCR(images [][]byte, maxImages int) [][]byte {
+	if maxImages <= 0 || len(images) <= maxImages {
+		return images
+	}
+
+	type imageCandidate struct {
+		index int
+		size  int
+	}
+
+	candidates := make([]imageCandidate, 0, len(images))
+	for i, imageData := range images {
+		candidates = append(candidates, imageCandidate{index: i, size: len(imageData)})
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].size == candidates[j].size {
+			return candidates[i].index < candidates[j].index
+		}
+		return candidates[i].size > candidates[j].size
+	})
+	candidates = candidates[:maxImages]
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].index < candidates[j].index
+	})
+
+	selected := make([][]byte, 0, len(candidates))
+	for _, candidate := range candidates {
+		selected = append(selected, images[candidate.index])
+	}
+
+	return selected
+}
+
+func decodeBase64ImagePayload(output []byte) [][]byte {
+	var images [][]byte
+	if len(output) == 0 {
+		return images
+	}
+
+	encoded := strings.TrimSpace(string(output))
+	if encoded == "" {
+		return images
+	}
+
+	for _, enc := range strings.Split(encoded, "|") {
+		if enc == "" {
+			continue
+		}
+		data, err := base64.StdEncoding.DecodeString(enc)
+		if err == nil {
+			images = append(images, data)
+		}
+	}
+
+	return images
 }
 
 // SimplePDFInfo returns basic info about PDF file

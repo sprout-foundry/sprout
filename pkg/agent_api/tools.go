@@ -109,12 +109,35 @@ func GetToolDefinitions() []Tool {
 								"required": []string{"op", "path"},
 							},
 						},
+						"operations": map[string]interface{}{
+							"type":        "array",
+							"description": "Alias of patch_ops (JSON Patch operation list)",
+							"items": map[string]interface{}{
+								"type": "object",
+								"properties": map[string]interface{}{
+									"op": map[string]interface{}{
+										"type": "string",
+										"enum": []string{"add", "replace", "remove", "test"},
+									},
+									"path": map[string]interface{}{
+										"type": "string",
+									},
+									"from": map[string]interface{}{
+										"type": "string",
+									},
+									"value": map[string]interface{}{
+										"description": "Value used by add/replace/test",
+									},
+								},
+								"required": []string{"op", "path"},
+							},
+						},
 						"schema": map[string]interface{}{
 							"type":        "object",
 							"description": "Optional JSON Schema subset for post-patch validation",
 						},
 					},
-					"required":             []string{"path", "patch_ops"},
+					"required":             []string{"path"},
 					"additionalProperties": false,
 				},
 			},

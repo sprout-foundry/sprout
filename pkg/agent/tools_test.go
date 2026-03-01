@@ -2,6 +2,8 @@ package agent
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -126,5 +128,99 @@ func TestMakeAllowedToolSetTrimsAndDeduplicates(t *testing.T) {
 	}
 	if _, ok := toolSet["write_file"]; !ok {
 		t.Fatalf("expected write_file to exist")
+	}
+}
+
+func TestExecuteToolAppliesOpenFileAlias(t *testing.T) {
+	originalCI := os.Getenv("CI")
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("CI", "1")
+	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+		if originalCI != "" {
+			os.Setenv("CI", originalCI)
+		} else {
+			os.Unsetenv("CI")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Failed to create agent: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "alias_read_test.txt")
+	if err := os.WriteFile(filePath, []byte("alias works"), 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	toolCall := api.ToolCall{
+		ID:   "call_alias_test",
+		Type: "function",
+	}
+	toolCall.Function.Name = "open_file"
+	toolCall.Function.Arguments = `{"path":"` + filePath + `"}`
+
+	result, err := agent.executeTool(toolCall)
+	if err != nil {
+		t.Fatalf("expected open_file alias to execute as read_file, got error: %v", err)
+	}
+	if !strings.Contains(result, "alias works") {
+		t.Fatalf("expected file contents in result, got: %s", result)
+	}
+}
+
+func TestExecuteToolRejectsRawStructuredWrites(t *testing.T) {
+	originalCI := os.Getenv("CI")
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("CI", "1")
+	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+		if originalCI != "" {
+			os.Setenv("CI", originalCI)
+		} else {
+			os.Unsetenv("CI")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Failed to create agent: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	jsonPath := filepath.Join(tmpDir, "guard_test.json")
+
+	writeCall := api.ToolCall{ID: "call_guard_write", Type: "function"}
+	writeCall.Function.Name = "write_file"
+	writeCall.Function.Arguments = `{"path":"` + jsonPath + `","content":"{}"}`
+
+	_, err = agent.executeTool(writeCall)
+	if err == nil || !strings.Contains(err.Error(), "write_structured_file") {
+		t.Fatalf("expected write_file guard to suggest structured tools, got: %v", err)
+	}
+
+	if err := os.WriteFile(jsonPath, []byte(`{"x":1}`), 0644); err != nil {
+		t.Fatalf("failed to seed json file: %v", err)
+	}
+
+	editCall := api.ToolCall{ID: "call_guard_edit", Type: "function"}
+	editCall.Function.Name = "edit_file"
+	editCall.Function.Arguments = `{"path":"` + jsonPath + `","old_str":"1","new_str":"2"}`
+
+	_, err = agent.executeTool(editCall)
+	if err == nil || !strings.Contains(err.Error(), "patch_structured_file") {
+		t.Fatalf("expected edit_file guard to suggest structured tools, got: %v", err)
 	}
 }

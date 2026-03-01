@@ -75,6 +75,7 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 		return "medium" // Default
 	}
 
+	templatePayload := isPromptTemplatePayload(lastUserMessage)
 	queryLower := strings.ToLower(lastUserMessage)
 
 	// High reasoning effort indicators
@@ -122,17 +123,65 @@ func (a *Agent) determineReasoningEffort(messages []api.Message) string {
 
 	// Determine effort level based on matches and query characteristics
 	if highMatches >= 2 || (highMatches > lowMatches && len(lastUserMessage) > 100) {
-		return "high"
+		if templatePayload {
+			return a.capReasoningEffortForModel("medium")
+		}
+		return a.capReasoningEffortForModel("high")
 	} else if lowMatches >= 2 || (lowMatches > highMatches) {
-		return "low"
+		return a.capReasoningEffortForModel("low")
 	}
 
 	// Check query length as additional factor
 	if len(lastUserMessage) > 200 {
-		return "high" // Complex queries likely need more reasoning
+		if templatePayload {
+			return a.capReasoningEffortForModel("medium")
+		}
+		return a.capReasoningEffortForModel("high") // Complex queries likely need more reasoning
 	} else if len(lastUserMessage) < 50 {
-		return "low" // Short queries are usually simple
+		return a.capReasoningEffortForModel("low") // Short queries are usually simple
 	}
 
-	return "medium" // Default for balanced tasks
+	return a.capReasoningEffortForModel("medium") // Default for balanced tasks
+}
+
+func (a *Agent) capReasoningEffortForModel(effort string) string {
+	if effort != "high" {
+		return effort
+	}
+
+	model := strings.ToLower(a.GetModel())
+	// gpt-oss high effort tends to over-deliberate in tool-heavy workflows.
+	// Cap to medium for better latency/token performance while preserving quality.
+	if strings.Contains(model, "gpt-oss") {
+		return "medium"
+	}
+
+	return effort
+}
+
+func isPromptTemplatePayload(text string) bool {
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+
+	lower := strings.ToLower(text)
+	markers := []string{
+		"agentic restaurant extraction prompt",
+		"ocr trigger policy",
+		"output directory layout",
+		"common json envelope",
+		"canonical structured tool calls",
+		"schema: organization",
+		"schema: menu",
+		"schema: offer",
+	}
+
+	hits := 0
+	for _, m := range markers {
+		if strings.Contains(lower, m) {
+			hits++
+		}
+	}
+
+	return hits >= 2
 }

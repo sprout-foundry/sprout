@@ -28,6 +28,7 @@ type ConversationHandler struct {
 	transientMessages          []api.Message
 	pendingUserMessage         string
 	turnHistory                []TurnEvaluation
+	ocrEnforcementAttempts     int
 }
 
 // NewConversationHandler creates a new conversation handler
@@ -308,6 +309,13 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			ch.agent.debugLog("♻️ Deduplicated tool calls: kept %d of %d\n", len(deduped), len(choice.Message.ToolCalls))
 		}
 		choice.Message.ToolCalls = deduped
+
+		for _, tc := range choice.Message.ToolCalls {
+			if strings.Split(tc.Function.Name, "<|channel|>")[0] == "analyze_image_content" {
+				ch.ocrEnforcementAttempts = 0
+				break
+			}
+		}
 	}
 
 	turn.ToolCalls = append(turn.ToolCalls, choice.Message.ToolCalls...)
@@ -404,6 +412,9 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 			if !isIncomplete {
 				// Response looks complete despite no finish_reason - accept it
+				if handled, stop := ch.handleOCRCompletionGate(&turn); handled {
+					return ch.finalizeTurn(turn, stop)
+				}
 				ch.agent.debugLog("✅ No finish_reason but response appears complete - accepting\n")
 				ch.displayFinalResponse(contentUsed)
 				return ch.finalizeTurn(turn, true)
@@ -418,6 +429,9 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		turn.GuardrailTrigger = stopReason
 		if stopReason == "completion" || stopReason == "implicit completion" {
 			turn.CompletionReached = true
+		}
+		if handled, stop := ch.handleOCRCompletionGate(&turn); handled {
+			return ch.finalizeTurn(turn, stop)
 		}
 		return ch.finalizeTurn(turn, shouldStop)
 	}

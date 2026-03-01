@@ -46,7 +46,55 @@ func (ch *ConversationHandler) prepareTools() []api.Tool {
 
 // determineReasoningEffort determines the reasoning effort level for the current context
 func (ch *ConversationHandler) determineReasoningEffort() string {
-	return ch.agent.determineReasoningEffort(ch.agent.messages)
+	if !ch.isGptOSSModel() {
+		return ch.agent.determineReasoningEffort(ch.agent.messages)
+	}
+
+	base := ch.initialReasoningEffort()
+	adjusted := ch.applyRuntimeReasoningDownshift(base)
+	if ch.agent != nil && ch.agent.debug && adjusted != base {
+		ch.agent.debugLog("🧠 Reasoning effort downshifted: %s -> %s (iteration=%d, provider=%s, model=%s)\n",
+			base, adjusted, ch.agent.currentIteration, ch.agent.GetProvider(), ch.agent.GetModel())
+	}
+	return adjusted
+}
+
+func (ch *ConversationHandler) initialReasoningEffort() string {
+	return "high"
+}
+
+func (ch *ConversationHandler) applyRuntimeReasoningDownshift(effort string) string {
+	if effort == "" || ch.agent == nil || !ch.isGptOSSModel() {
+		return effort
+	}
+
+	toolCalls := ch.executedToolCallCount()
+	if effort == "high" && toolCalls >= 3 {
+		return "medium"
+	}
+
+	return effort
+}
+
+func (ch *ConversationHandler) executedToolCallCount() int {
+	if ch == nil || ch.agent == nil {
+		return 0
+	}
+	count := 0
+	for _, msg := range ch.agent.messages {
+		if msg.Role != "tool" {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
+func (ch *ConversationHandler) isGptOSSModel() bool {
+	if ch == nil || ch.agent == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(ch.agent.GetModel()), "gpt-oss")
 }
 
 // sanitizeToolMessages removes orphaned or duplicate tool messages

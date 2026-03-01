@@ -53,10 +53,7 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 		return "", err
 	}
 
-	return handleWriteFile(ctx, a, map[string]interface{}{
-		"path":    path,
-		"content": content,
-	})
+	return writeFileContent(ctx, a, path, content, "write_structured_file", true)
 }
 
 func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
@@ -122,10 +119,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 		return "", err
 	}
 
-	return handleWriteFile(ctx, a, map[string]interface{}{
-		"path":    path,
-		"content": updated,
-	})
+	return writeFileContent(ctx, a, path, updated, "patch_structured_file", true)
 }
 
 func inferStructuredFormat(path, provided string) string {

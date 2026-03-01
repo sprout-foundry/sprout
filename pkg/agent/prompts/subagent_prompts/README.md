@@ -16,13 +16,13 @@ This directory contains the system prompts for each specialized subagent persona
 
 | Persona | Best For | Model Suggestion | Primary Tool |
 |---------|----------|-------------------|--------------|
-| Coder | Writing production code | ai-worker, qwen-coder | read, write, edit |
-| Refactor | Low-risk code cleanup | ai-worker, qwen-coder | read, edit, search_files |
-| Tester | Writing unit tests | ai-worker, qwen-coder | read, write, edit |
-| QA_Engineer | Test planning, integration tests | deepseek-chat, claude | read, write, edit, web_search |
-| Code_Reviewer | Security, code quality | claude, deepseek-chat | read, search_files |
-| Debugger | Bug fixing, root cause | ai-worker, claude | read, write, edit, search_files, execute_command |
-| Web_Researcher | Documentation, APIs, solutions | claude, deepseek-chat | web_search, read |
+| Coder | Writing production code | ai-worker, qwen-coder | read_file, write_file, edit_file |
+| Refactor | Low-risk code cleanup | ai-worker, qwen-coder | read_file, edit_file, search_files |
+| Tester | Writing unit tests | ai-worker, qwen-coder | read_file, write_file, edit_file |
+| QA_Engineer | Test planning, integration tests | deepseek-chat, claude | read_file, write_file, edit_file, web_search |
+| Code_Reviewer | Security, code quality | claude, deepseek-chat | read_file, search_files |
+| Debugger | Bug fixing, root cause | ai-worker, claude | read_file, write_file, edit_file, search_files, shell_command |
+| Web_Researcher | Documentation, APIs, solutions | claude, deepseek-chat | web_search, read_file |
 
 ## Usage
 

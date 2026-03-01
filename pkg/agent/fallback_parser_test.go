@@ -76,6 +76,21 @@ func TestFallbackParserParsesMultipleFormats(t *testing.T) {
 			},
 			wantCleaned: "Attempting fallback\nThanks.",
 		},
+		{
+			name: "named tool json block",
+			content: "Creating file now\nwrite_structured_file {\n  \"path\": \"./task_progress.json\",\n  \"format\": \"json\",\n  \"data\": {\"status\":\"completed\"}\n}\nDone.",
+			wantCalls: []expectedToolCall{
+				{
+					name: "write_structured_file",
+					args: map[string]interface{}{
+						"path":   "./task_progress.json",
+						"format": "json",
+						"data":   map[string]interface{}{"status": "completed"},
+					},
+				},
+			},
+			wantCleaned: "Creating file now\nDone.",
+		},
 	}
 
 	for _, tc := range tests {

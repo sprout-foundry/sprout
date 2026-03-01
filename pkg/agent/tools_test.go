@@ -204,11 +204,27 @@ func TestExecuteToolRejectsRawStructuredWrites(t *testing.T) {
 
 	writeCall := api.ToolCall{ID: "call_guard_write", Type: "function"}
 	writeCall.Function.Name = "write_file"
-	writeCall.Function.Arguments = `{"path":"` + jsonPath + `","content":"{}"}`
+	writeCall.Function.Arguments = `{"path":"` + jsonPath + `","content":"{\"k\":1}"}`
 
 	_, err = agent.executeTool(writeCall)
+	if err != nil {
+		t.Fatalf("expected valid JSON write_file call to auto-route to structured write, got: %v", err)
+	}
+
+	written, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("failed to read auto-routed json file: %v", err)
+	}
+	if !strings.Contains(string(written), `"k": 1`) {
+		t.Fatalf("expected structured JSON formatting in file, got: %s", string(written))
+	}
+
+	invalidCall := api.ToolCall{ID: "call_guard_write_invalid", Type: "function"}
+	invalidCall.Function.Name = "write_file"
+	invalidCall.Function.Arguments = `{"path":"` + jsonPath + `","content":"{invalid"}`
+	_, err = agent.executeTool(invalidCall)
 	if err == nil || !strings.Contains(err.Error(), "write_structured_file") {
-		t.Fatalf("expected write_file guard to suggest structured tools, got: %v", err)
+		t.Fatalf("expected invalid JSON write_file to be blocked with structured-tools guidance, got: %v", err)
 	}
 
 	if err := os.WriteFile(jsonPath, []byte(`{"x":1}`), 0644); err != nil {

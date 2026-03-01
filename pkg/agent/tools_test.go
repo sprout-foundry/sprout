@@ -224,3 +224,50 @@ func TestExecuteToolRejectsRawStructuredWrites(t *testing.T) {
 		t.Fatalf("expected edit_file guard to suggest structured tools, got: %v", err)
 	}
 }
+
+func TestPatchStructuredFileAcceptsOperationsAlias(t *testing.T) {
+	originalCI := os.Getenv("CI")
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("CI", "1")
+	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+		if originalCI != "" {
+			os.Setenv("CI", originalCI)
+		} else {
+			os.Unsetenv("CI")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Failed to create agent: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	jsonPath := filepath.Join(tmpDir, "alias_patch.json")
+	if err := os.WriteFile(jsonPath, []byte(`{"items":[]}`), 0644); err != nil {
+		t.Fatalf("failed to seed json file: %v", err)
+	}
+
+	patchCall := api.ToolCall{ID: "call_patch_alias", Type: "function"}
+	patchCall.Function.Name = "patch_structured_file"
+	patchCall.Function.Arguments = `{"path":"` + jsonPath + `","operations":[{"op":"add","path":"/items/0","value":"x"}]}`
+
+	_, err = agent.executeTool(patchCall)
+	if err != nil {
+		t.Fatalf("expected operations alias to work, got error: %v", err)
+	}
+
+	b, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("failed to read patched file: %v", err)
+	}
+	if !strings.Contains(string(b), `"x"`) {
+		t.Fatalf("expected patched value in file, got: %s", string(b))
+	}
+}

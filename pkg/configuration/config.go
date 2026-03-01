@@ -272,7 +272,7 @@ func NewConfig() *Config {
 			OverallTimeoutSec:    600, // 10 minutes
 		},
 		HistoryScope:                "project", // Default to project-scoped history
-		SelfReviewGateMode:          SelfReviewGateModeCode,
+		SelfReviewGateMode:          SelfReviewGateModeOff,
 		EnableZshCommandDetection:   true, // Enable zsh command detection by default
 		AutoExecuteDetectedCommands: true, // Auto-execute detected commands without prompting
 		SubagentTypes:               defaultSubagentTypes(),
@@ -458,9 +458,9 @@ func (c *Config) GetModelForProvider(provider string) string {
 // NormalizeSelfReviewGateMode validates and normalizes self-review gate mode.
 func NormalizeSelfReviewGateMode(mode string) (string, bool) {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case SelfReviewGateModeOff:
+	case "", SelfReviewGateModeOff:
 		return SelfReviewGateModeOff, true
-	case "", SelfReviewGateModeCode:
+	case SelfReviewGateModeCode:
 		return SelfReviewGateModeCode, true
 	case SelfReviewGateModeAlways:
 		return SelfReviewGateModeAlways, true
@@ -473,7 +473,7 @@ func NormalizeSelfReviewGateMode(mode string) (string, bool) {
 func (c *Config) GetSelfReviewGateMode() string {
 	mode, ok := NormalizeSelfReviewGateMode(c.SelfReviewGateMode)
 	if !ok {
-		return SelfReviewGateModeCode
+		return SelfReviewGateModeOff
 	}
 	return mode
 }

@@ -122,10 +122,10 @@ func TestGetSubagentTypeFillsDefaultAllowedTools(t *testing.T) {
 
 func TestSelfReviewGateModeDefaultsAndNormalization(t *testing.T) {
 	cfg := NewConfig()
-	assert.Equal(t, SelfReviewGateModeCode, cfg.GetSelfReviewGateMode())
+	assert.Equal(t, SelfReviewGateModeOff, cfg.GetSelfReviewGateMode())
 
 	cfg.SelfReviewGateMode = ""
-	assert.Equal(t, SelfReviewGateModeCode, cfg.GetSelfReviewGateMode())
+	assert.Equal(t, SelfReviewGateModeOff, cfg.GetSelfReviewGateMode())
 
 	err := cfg.SetSelfReviewGateMode("ALWAYS")
 	assert.NoError(t, err)

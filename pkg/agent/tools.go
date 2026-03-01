@@ -15,6 +15,9 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	// Some models (e.g., Harmony/GPT-OSS) append "<|channel|>xxx" suffix to tool names
 	// where xxx can be "commentary", "json", "tool_use", etc. Strip it to get the actual tool name.
 	toolName := strings.Split(toolCall.Function.Name, "<|channel|>")[0]
+	if alias := a.suggestCorrectToolName(toolName); alias != "" {
+		toolName = alias
+	}
 
 	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {

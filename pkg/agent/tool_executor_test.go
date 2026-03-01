@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/mcp"
 )
 
@@ -138,5 +139,124 @@ func TestToolExecutorDoesNotTranslateLegacyNames(t *testing.T) {
 	}
 	if manager.lastServer != "" {
 		t.Fatalf("expected MCP manager not to be invoked, but CallTool captured server=%q", manager.lastServer)
+	}
+}
+
+type providerOverrideClient struct {
+	*factory.TestClient
+	provider string
+}
+
+func (c *providerOverrideClient) GetProvider() string {
+	return c.provider
+}
+
+func TestCanExecuteInParallelFetchURL(t *testing.T) {
+	agent := &Agent{
+		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
+		interruptCtx: context.Background(),
+		outputMutex:  &sync.Mutex{},
+	}
+	executor := NewToolExecutor(agent)
+
+	calls := []api.ToolCall{
+		{Type: "function"},
+		{Type: "function"},
+	}
+	calls[0].Function.Name = "fetch_url"
+	calls[0].Function.Arguments = `{"url":"https://example.com/a"}`
+	calls[1].Function.Name = "fetch_url"
+	calls[1].Function.Arguments = `{"url":"https://example.com/b"}`
+
+	if !executor.canExecuteInParallel(calls) {
+		t.Fatalf("expected fetch_url batch to execute in parallel")
+	}
+}
+
+func TestCanExecuteInParallelMixedBatchDenied(t *testing.T) {
+	agent := &Agent{
+		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
+		interruptCtx: context.Background(),
+		outputMutex:  &sync.Mutex{},
+	}
+	executor := NewToolExecutor(agent)
+
+	calls := []api.ToolCall{
+		{Type: "function"},
+		{Type: "function"},
+	}
+	calls[0].Function.Name = "fetch_url"
+	calls[0].Function.Arguments = `{"url":"https://example.com/a"}`
+	calls[1].Function.Name = "read_file"
+	calls[1].Function.Arguments = `{"path":"README.md"}`
+
+	if executor.canExecuteInParallel(calls) {
+		t.Fatalf("expected mixed tool batch to remain sequential")
+	}
+}
+
+func TestCanExecuteInParallelProviderOrderingRestrictions(t *testing.T) {
+	agent := &Agent{
+		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "deepseek"},
+		interruptCtx: context.Background(),
+		outputMutex:  &sync.Mutex{},
+	}
+	executor := NewToolExecutor(agent)
+
+	calls := []api.ToolCall{
+		{Type: "function"},
+		{Type: "function"},
+	}
+	calls[0].Function.Name = "fetch_url"
+	calls[0].Function.Arguments = `{"url":"https://example.com/a"}`
+	calls[1].Function.Name = "fetch_url"
+	calls[1].Function.Arguments = `{"url":"https://example.com/b"}`
+
+	if executor.canExecuteInParallel(calls) {
+		t.Fatalf("expected deepseek provider to keep strict sequential ordering")
+	}
+}
+
+func TestCanExecuteInParallelSearchFiles(t *testing.T) {
+	agent := &Agent{
+		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
+		interruptCtx: context.Background(),
+		outputMutex:  &sync.Mutex{},
+	}
+	executor := NewToolExecutor(agent)
+
+	calls := []api.ToolCall{
+		{Type: "function"},
+		{Type: "function"},
+	}
+	calls[0].Function.Name = "search_files"
+	calls[0].Function.Arguments = `{"search_pattern":"foo","file_glob":"*.go"}`
+	calls[1].Function.Name = "search_files"
+	calls[1].Function.Arguments = `{"search_pattern":"bar","file_glob":"*.go"}`
+
+	if !executor.canExecuteInParallel(calls) {
+		t.Fatalf("expected search_files batch to execute in parallel")
+	}
+}
+
+func TestCanExecuteInParallelSearchFilesProviderRestrictions(t *testing.T) {
+	agent := &Agent{
+		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "minimax"},
+		interruptCtx: context.Background(),
+		outputMutex:  &sync.Mutex{},
+	}
+	executor := NewToolExecutor(agent)
+
+	calls := []api.ToolCall{
+		{Type: "function"},
+		{Type: "function"},
+	}
+	calls[0].Function.Name = "search_files"
+	calls[0].Function.Arguments = `{"search_pattern":"foo","file_glob":"*.go"}`
+	calls[1].Function.Name = "search_files"
+	calls[1].Function.Arguments = `{"search_pattern":"bar","file_glob":"*.go"}`
+
+	if executor.canExecuteInParallel(calls) {
+		t.Fatalf("expected minimax provider to keep strict sequential ordering")
 	}
 }

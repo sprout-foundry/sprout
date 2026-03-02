@@ -36,9 +36,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		}
 	}
 
-	// Log and execute
 	if hasRange {
-		a.ToolLog("reading file", fmt.Sprintf("%s (lines %d-%d)", path, startLine, endLine))
 		a.debugLog("Reading file: %s (lines %d-%d)\n", path, startLine, endLine)
 		result, err := tools.ReadFileWithRange(ctx, path, startLine, endLine)
 
@@ -58,7 +56,6 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return result, err
 	}
 
-	a.ToolLog("reading file", path)
 	a.debugLog("Reading file: %s\n", path)
 	result, err := tools.ReadFile(ctx, path)
 
@@ -89,16 +86,17 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 		return "", err
 	}
 
-	// Compatibility path: if a model still uses write_file for JSON and provides valid
-	// structured content, route internally to the structured writer.
+	// JSON writes are transparently routed through structured serialization/validation.
 	if strings.EqualFold(filepath.Ext(path), ".json") {
-		if parsed, ok := parseStructuredJSONContent(content); ok {
-			return handleWriteStructuredFile(ctx, a, map[string]interface{}{
-				"path":   path,
-				"format": "json",
-				"data":   parsed,
-			})
+		parsed, ok := parseStructuredJSONContent(content)
+		if !ok {
+			return "", fmt.Errorf("invalid JSON content for %s", path)
 		}
+		return handleWriteStructuredFile(ctx, a, map[string]interface{}{
+			"path":   path,
+			"format": "json",
+			"data":   parsed,
+		})
 	}
 
 	return writeFileContent(ctx, a, path, content, "write_file", false)
@@ -128,7 +126,6 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		a.debugLog("%s\n", warning)
 	}
 
-	a.ToolLog("writing file", fmt.Sprintf("%s (%d bytes)", path, len(content)))
 	a.debugLog("Writing file: %s\n", path)
 
 	if trackErr := a.TrackFileWrite(path, content); trackErr != nil {
@@ -166,9 +163,6 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	if err != nil {
 		return "", err
 	}
-	if err := disallowRawStructuredWrite(path, "edit_file"); err != nil {
-		return "", err
-	}
 
 	oldStr, err := getRequiredString(args, "old_str")
 	if err != nil {
@@ -190,7 +184,6 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return "", fmt.Errorf("failed to read original file for diff: %w", err)
 	}
 
-	a.ToolLog("editing file", fmt.Sprintf("%s (replacing %d bytes → %d bytes)", path, len(oldStr), len(newStr)))
 	a.debugLog("Editing file: %s\n", path)
 	a.debugLog("Old string: %s\n", oldStr)
 	a.debugLog("New string: %s\n", newStr)
@@ -213,6 +206,32 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	a.debugLog("Edit file result: %s, error: %v\n", result, err)
+
+	// JSON edits are transparently validated and normalized through structured writes.
+	if err == nil && strings.EqualFold(filepath.Ext(path), ".json") {
+		editedContent, readErr := tools.ReadFile(ctx, path)
+		if readErr != nil {
+			return "", fmt.Errorf("json edit succeeded but failed to read edited file: %w", readErr)
+		}
+		parsed, ok := parseStructuredJSONContent(editedContent)
+		if !ok {
+			restoreErr := func() error {
+				_, werr := tools.WriteFile(ctx, path, originalContent)
+				return werr
+			}()
+			if restoreErr != nil {
+				return "", fmt.Errorf("edit would produce invalid JSON in %s (and restore failed: %v)", path, restoreErr)
+			}
+			return "", fmt.Errorf("edit would produce invalid JSON in %s", path)
+		}
+		if _, werr := handleWriteStructuredFile(ctx, a, map[string]interface{}{
+			"path":   path,
+			"format": "json",
+			"data":   parsed,
+		}); werr != nil {
+			return "", fmt.Errorf("json edit normalization failed: %w", werr)
+		}
+	}
 
 	// Invalidate cached file metadata when file is successfully edited
 	// This prevents stale line counts from misleading the model

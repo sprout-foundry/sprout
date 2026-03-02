@@ -139,8 +139,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Parameters: []ParameterConfig{
 			{"path", "string", true, []string{"file_path"}, "Path to the structured file to patch"},
 			{"format", "string", false, []string{}, "Optional format override: json or yaml (otherwise inferred from extension)"},
-			{"patch_ops", "array", true, []string{"ops", "operations"}, "JSON Patch operations array"},
+			{"patch_ops", "array", false, []string{"ops", "operations"}, "JSON Patch operations array"},
 			{"schema", "object", false, []string{}, "Optional JSON Schema subset used to validate document after patch"},
+			{"data", "object", false, []string{}, "Optional full-document structured payload; if provided without patch_ops, this call is treated as write_structured_file"},
 		},
 		Handler: handlePatchStructuredFile,
 	})

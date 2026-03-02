@@ -64,7 +64,22 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 
 	opsRaw, ok := args["patch_ops"]
 	if !ok {
-		return "", fmt.Errorf("parameter 'patch_ops' is required")
+		// Compatibility path: some models call patch_structured_file with full `data`
+		// instead of patch operations. Treat this as a structured write.
+		if data, hasData := args["data"]; hasData {
+			writeArgs := map[string]interface{}{
+				"path": path,
+				"data": data,
+			}
+			if format, hasFormat := args["format"]; hasFormat {
+				writeArgs["format"] = format
+			}
+			if schema, hasSchema := args["schema"]; hasSchema {
+				writeArgs["schema"] = schema
+			}
+			return handleWriteStructuredFile(ctx, a, writeArgs)
+		}
+		return "", fmt.Errorf("parameter 'patch_ops' is required (or provide 'data' for full write)")
 	}
 
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))

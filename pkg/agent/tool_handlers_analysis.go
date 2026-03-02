@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -20,7 +21,15 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 
 	result, err := tools.AnalyzeImage(imagePath, "", "frontend")
 	a.debugLog("Analyze UI screenshot error: %v\n", err)
-	return result, err
+	if err != nil {
+		return result, err
+	}
+
+	normalized, normalizeErr := normalizeVisionToolOutput(result, true)
+	if normalizeErr != nil {
+		return "", normalizeErr
+	}
+	return normalized, nil
 }
 
 func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
@@ -67,5 +76,57 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		}
 	}
 
-	return result, err
+	if err != nil {
+		return result, err
+	}
+
+	normalized, normalizeErr := normalizeVisionToolOutput(result, false)
+	if normalizeErr != nil {
+		return "", normalizeErr
+	}
+	return normalized, nil
+}
+
+func normalizeVisionToolOutput(result string, preferPlainText bool) (string, error) {
+	trimmed := strings.TrimSpace(result)
+	if trimmed == "" {
+		return result, nil
+	}
+	if !strings.HasPrefix(trimmed, "{") {
+		return result, nil
+	}
+
+	var parsed tools.ImageAnalysisResponse
+	if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil {
+		return result, nil
+	}
+
+	if !parsed.Success {
+		code := strings.TrimSpace(parsed.ErrorCode)
+		msg := strings.TrimSpace(parsed.ErrorMessage)
+		if code == "" && msg == "" {
+			return "", fmt.Errorf("vision analysis failed")
+		}
+		if code == "" {
+			return "", fmt.Errorf("vision analysis failed: %s", msg)
+		}
+		if msg == "" {
+			return "", fmt.Errorf("vision analysis failed (%s)", code)
+		}
+		return "", fmt.Errorf("vision analysis failed (%s): %s", code, msg)
+	}
+
+	if !preferPlainText {
+		return result, nil
+	}
+
+	if text := strings.TrimSpace(parsed.ExtractedText); text != "" {
+		return text, nil
+	}
+	if parsed.Analysis != nil {
+		if desc := strings.TrimSpace(parsed.Analysis.Description); desc != "" {
+			return desc, nil
+		}
+	}
+	return result, nil
 }

@@ -127,7 +127,6 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
-	a.ToolLog("searching files", fmt.Sprintf("pattern=%q in %s", pattern, root))
 	a.debugLog("Searching files: pattern=%q, root=%s, max_results=%d\n", pattern, root, maxResults)
 
 	// Prepare matcher: try regex first, then fallback to substring
@@ -256,7 +255,6 @@ func handleWebSearch(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 
 	query := args["query"].(string)
-	a.ToolLog("searching web", fmt.Sprintf("query=%q", truncateString(query, 50)))
 	a.debugLog("Performing web search: %s\n", query)
 
 	if a.configManager == nil {
@@ -274,7 +272,6 @@ func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	url := args["url"].(string)
-	a.ToolLog("fetching URL", fmt.Sprintf("url=%q", truncateString(url, 50)))
 	a.debugLog("Fetching URL: %s\n", url)
 
 	if a.configManager == nil {

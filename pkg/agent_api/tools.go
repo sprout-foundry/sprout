@@ -104,6 +104,14 @@ func GetToolDefinitions() []Tool {
 									},
 									"value": map[string]interface{}{
 										"description": "Value used by add/replace/test",
+										"oneOf": []map[string]interface{}{
+											{"type": "object"},
+											{"type": "array"},
+											{"type": "string"},
+											{"type": "number"},
+											{"type": "boolean"},
+											{"type": "null"},
+										},
 									},
 								},
 								"required": []string{"op", "path"},
@@ -127,6 +135,14 @@ func GetToolDefinitions() []Tool {
 									},
 									"value": map[string]interface{}{
 										"description": "Value used by add/replace/test",
+										"oneOf": []map[string]interface{}{
+											{"type": "object"},
+											{"type": "array"},
+											{"type": "string"},
+											{"type": "number"},
+											{"type": "boolean"},
+											{"type": "null"},
+										},
 									},
 								},
 								"required": []string{"op", "path"},

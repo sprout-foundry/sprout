@@ -7,7 +7,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/factory"
 )
 
-func TestApplyRuntimeReasoningDownshift_HighStaysHighBeforeThreeToolCalls(t *testing.T) {
+func TestApplyRuntimeReasoningDownshift_LeavesMediumUnchanged(t *testing.T) {
 	agent := &Agent{
 		client: &reasoningProviderClient{
 			TestClient: &factory.TestClient{},
@@ -22,33 +22,12 @@ func TestApplyRuntimeReasoningDownshift_HighStaysHighBeforeThreeToolCalls(t *tes
 	}
 	ch := NewConversationHandler(agent)
 
-	if got := ch.applyRuntimeReasoningDownshift("high"); got != "high" {
-		t.Fatalf("expected high to remain high before 3 tool calls, got %q", got)
+	if got := ch.applyRuntimeReasoningDownshift("medium"); got != "medium" {
+		t.Fatalf("expected medium to stay medium, got %q", got)
 	}
 }
 
-func TestApplyRuntimeReasoningDownshift_HighToMediumAfterThreeToolCalls(t *testing.T) {
-	agent := &Agent{
-		client: &reasoningProviderClient{
-			TestClient: &factory.TestClient{},
-			provider:   "openai",
-			model:      "gpt-oss:20b",
-		},
-		currentIteration: 1,
-		messages: []api.Message{
-			{Role: "tool", Content: "ok"},
-			{Role: "tool", Content: "ok"},
-			{Role: "tool", Content: "ok"},
-		},
-	}
-	ch := NewConversationHandler(agent)
-
-	if got := ch.applyRuntimeReasoningDownshift("high"); got != "medium" {
-		t.Fatalf("expected high to downshift to medium after 3 tool calls, got %q", got)
-	}
-}
-
-func TestConversationDetermineReasoningEffort_StartsHigh(t *testing.T) {
+func TestConversationDetermineReasoningEffort_StartsMediumForGptOSS(t *testing.T) {
 	agent := &Agent{
 		client: &reasoningProviderClient{
 			TestClient: &factory.TestClient{},
@@ -60,8 +39,8 @@ func TestConversationDetermineReasoningEffort_StartsHigh(t *testing.T) {
 	}
 	ch := NewConversationHandler(agent)
 
-	if got := ch.determineReasoningEffort(); got != "high" {
-		t.Fatalf("expected reasoning to start at high, got %q", got)
+	if got := ch.determineReasoningEffort(); got != "medium" {
+		t.Fatalf("expected reasoning to start at medium for gpt-oss, got %q", got)
 	}
 }
 
@@ -87,7 +66,7 @@ func TestConversationDetermineReasoningEffort_DynamicDownshiftApplied(t *testing
 	ch := NewConversationHandler(agent)
 
 	if got := ch.determineReasoningEffort(); got != "medium" {
-		t.Fatalf("expected runtime downshift to produce medium, got %q", got)
+		t.Fatalf("expected gpt-oss policy to keep medium, got %q", got)
 	}
 }
 
@@ -122,8 +101,8 @@ func TestConversationDetermineReasoningEffort_GptOSSModelPolicyAppliesAcrossProv
 	}
 	ch := NewConversationHandler(agent)
 
-	if got := ch.determineReasoningEffort(); got != "high" {
-		t.Fatalf("expected model-based policy for gpt-oss to start at high regardless of provider, got %q", got)
+	if got := ch.determineReasoningEffort(); got != "medium" {
+		t.Fatalf("expected model-based policy for gpt-oss to start at medium regardless of provider, got %q", got)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
 // TestGetOptimizedToolDefinitions verifies that the agent gets both standard and MCP tools
@@ -176,7 +177,7 @@ func TestExecuteToolAppliesOpenFileAlias(t *testing.T) {
 	}
 }
 
-func TestExecuteToolRejectsRawStructuredWrites(t *testing.T) {
+func TestExecuteToolRoutesJSONWritesAndEditsThroughStructuredValidation(t *testing.T) {
 	originalCI := os.Getenv("CI")
 	originalKey := os.Getenv("OPENROUTER_API_KEY")
 	os.Setenv("CI", "1")
@@ -223,8 +224,8 @@ func TestExecuteToolRejectsRawStructuredWrites(t *testing.T) {
 	invalidCall.Function.Name = "write_file"
 	invalidCall.Function.Arguments = `{"path":"` + jsonPath + `","content":"{invalid"}`
 	_, err = agent.executeTool(invalidCall)
-	if err == nil || !strings.Contains(err.Error(), "write_structured_file") {
-		t.Fatalf("expected invalid JSON write_file to be blocked with structured-tools guidance, got: %v", err)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "invalid json") {
+		t.Fatalf("expected invalid JSON write_file to fail with invalid json error, got: %v", err)
 	}
 
 	if err := os.WriteFile(jsonPath, []byte(`{"x":1}`), 0644); err != nil {
@@ -236,8 +237,114 @@ func TestExecuteToolRejectsRawStructuredWrites(t *testing.T) {
 	editCall.Function.Arguments = `{"path":"` + jsonPath + `","old_str":"1","new_str":"2"}`
 
 	_, err = agent.executeTool(editCall)
-	if err == nil || !strings.Contains(err.Error(), "patch_structured_file") {
-		t.Fatalf("expected edit_file guard to suggest structured tools, got: %v", err)
+	if err != nil {
+		t.Fatalf("expected valid edit_file on json to succeed via structured validation, got: %v", err)
+	}
+
+	edited, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("failed to read edited json file: %v", err)
+	}
+	if !strings.Contains(string(edited), `"x": 2`) {
+		t.Fatalf("expected normalized structured json after edit, got: %s", string(edited))
+	}
+
+	badEdit := api.ToolCall{ID: "call_guard_edit_invalid", Type: "function"}
+	badEdit.Function.Name = "edit_file"
+	badEdit.Function.Arguments = `{"path":"` + jsonPath + `","old_str":"2","new_str":"2}"}` // makes JSON invalid
+	_, err = agent.executeTool(badEdit)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "invalid json") {
+		t.Fatalf("expected edit_file invalid json mutation to fail, got: %v", err)
+	}
+
+	restored, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("failed to read restored json file: %v", err)
+	}
+	if !strings.Contains(string(restored), `"x": 2`) {
+		t.Fatalf("expected file content to be restored after invalid json edit, got: %s", string(restored))
+	}
+}
+
+func TestGetOptimizedToolDefinitions_DeepInfraIncludesAnalyzeUIScreenshot(t *testing.T) {
+	originalCI := os.Getenv("CI")
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("CI", "1")
+	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+		if originalCI != "" {
+			os.Setenv("CI", originalCI)
+		} else {
+			os.Unsetenv("CI")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Failed to create agent: %v", err)
+	}
+
+	agent.clientType = api.DeepInfraClientType
+	agent.activePersona = "orchestrator"
+
+	tools := agent.getOptimizedToolDefinitions(nil)
+	found := false
+	for _, tool := range tools {
+		if tool.Function.Name == "analyze_ui_screenshot" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected analyze_ui_screenshot in deepinfra/orchestrator tool set")
+	}
+}
+
+func TestGetOptimizedToolDefinitions_CustomProviderAllowlistCanExcludeAnalyzeUIScreenshot(t *testing.T) {
+	originalCI := os.Getenv("CI")
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("CI", "1")
+	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+		if originalCI != "" {
+			os.Setenv("CI", originalCI)
+		} else {
+			os.Unsetenv("CI")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Failed to create agent: %v", err)
+	}
+
+	cfg := agent.GetConfigManager().GetConfig()
+	if cfg.CustomProviders == nil {
+		cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
+	}
+	cfg.CustomProviders["deepinfra"] = configuration.CustomProviderConfig{
+		Name:      "deepinfra",
+		ToolCalls: []string{"read_file", "shell_command"},
+	}
+
+	agent.clientType = api.DeepInfraClientType
+	agent.activePersona = "orchestrator"
+
+	tools := agent.getOptimizedToolDefinitions(nil)
+	for _, tool := range tools {
+		if tool.Function.Name == "analyze_ui_screenshot" {
+			t.Fatalf("did not expect analyze_ui_screenshot when deepinfra custom provider allowlist excludes it")
+		}
 	}
 }
 
@@ -285,5 +392,52 @@ func TestPatchStructuredFileAcceptsOperationsAlias(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `"x"`) {
 		t.Fatalf("expected patched value in file, got: %s", string(b))
+	}
+}
+
+func TestPatchStructuredFileAcceptsDataFallbackToWrite(t *testing.T) {
+	originalCI := os.Getenv("CI")
+	originalKey := os.Getenv("OPENROUTER_API_KEY")
+	os.Setenv("CI", "1")
+	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("OPENROUTER_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("OPENROUTER_API_KEY")
+		}
+		if originalCI != "" {
+			os.Setenv("CI", originalCI)
+		} else {
+			os.Unsetenv("CI")
+		}
+	}()
+
+	agent, err := NewAgent()
+	if err != nil {
+		t.Skipf("Failed to create agent: %v", err)
+	}
+
+	tmpDir := t.TempDir()
+	jsonPath := filepath.Join(tmpDir, "patch_data_fallback.json")
+	if err := os.WriteFile(jsonPath, []byte(`{"old":1}`), 0644); err != nil {
+		t.Fatalf("failed to seed json file: %v", err)
+	}
+
+	call := api.ToolCall{ID: "call_patch_data_fallback", Type: "function"}
+	call.Function.Name = "patch_structured_file"
+	call.Function.Arguments = `{"path":"` + jsonPath + `","format":"json","data":{"new":2}}`
+
+	_, err = agent.executeTool(call)
+	if err != nil {
+		t.Fatalf("expected patch_structured_file data fallback to succeed, got: %v", err)
+	}
+
+	b, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("failed reading result file: %v", err)
+	}
+	if !strings.Contains(string(b), `"new": 2`) {
+		t.Fatalf("expected fallback write result, got: %s", string(b))
 	}
 }

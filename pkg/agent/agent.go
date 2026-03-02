@@ -112,6 +112,8 @@ type Agent struct {
 	debugLogFile  *os.File   // File handle for debug logs
 	debugLogPath  string     // Path to the debug log file
 	debugLogMutex sync.Mutex // Mutex for safe writes to debug log
+	preparedTools sync.RWMutex
+	lastToolNames []string
 
 	// Unsafe mode - bypass most security checks
 	unsafeMode bool // Allow operations without security prompting

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // GetActivePersona returns the currently active persona ID.
@@ -162,4 +164,28 @@ func (a *Agent) GetPersonaProviderModel(personaID string) (string, string, error
 	}
 
 	return provider, model, nil
+}
+
+// GetAvailableToolNames returns the effective tool names available to the active session.
+func (a *Agent) GetAvailableToolNames() []string {
+	tools := a.getOptimizedToolDefinitions(nil)
+	if len(tools) == 0 {
+		tools = api.GetToolDefinitions()
+	}
+
+	names := make([]string, 0, len(tools))
+	seen := make(map[string]struct{}, len(tools))
+	for _, tool := range tools {
+		name := strings.TrimSpace(tool.Function.Name)
+		if name == "" {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

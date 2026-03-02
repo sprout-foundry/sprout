@@ -2,8 +2,10 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/alantheprice/ledit/pkg/agent"
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/history"
 )
 
@@ -75,6 +77,26 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Provider and Model (critical)
 	fmt.Printf("Provider: %s\n", chatAgent.GetProvider())
 	fmt.Printf("Model: %s\n", chatAgent.GetModel())
+	fmt.Printf("Persona: %s\n", chatAgent.GetActivePersona())
+	if tools.HasVisionCapability() {
+		fmt.Println("Vision Capability: ✅ Available")
+	} else {
+		fmt.Println("Vision Capability: ❌ Not configured")
+	}
+
+	toolNames := chatAgent.GetAvailableToolNames()
+	if len(toolNames) == 0 {
+		fmt.Println("Available Tools: none")
+	} else {
+		fmt.Printf("Available Tools (%d): %s\n", len(toolNames), strings.Join(toolNames, ", "))
+	}
+
+	lastToolNames := chatAgent.GetLastPreparedToolNames()
+	if len(lastToolNames) == 0 {
+		fmt.Println("Last Request Tools: none yet")
+	} else {
+		fmt.Printf("Last Request Tools (%d): %s\n", len(lastToolNames), strings.Join(lastToolNames, ", "))
+	}
 
 	// Token usage
 	fmt.Println("\n📈 Token Usage:")

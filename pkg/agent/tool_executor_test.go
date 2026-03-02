@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -139,6 +141,31 @@ func TestToolExecutorDoesNotTranslateLegacyNames(t *testing.T) {
 	}
 	if manager.lastServer != "" {
 		t.Fatalf("expected MCP manager not to be invoked, but CallTool captured server=%q", manager.lastServer)
+	}
+}
+
+func TestToolExecutorAppliesOpenFileAlias(t *testing.T) {
+	agent := &Agent{
+		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
+		interruptCtx: context.Background(),
+		outputMutex:  &sync.Mutex{},
+	}
+
+	executor := NewToolExecutor(agent)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "alias_open_file.txt")
+	if err := os.WriteFile(filePath, []byte("alias path works"), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	tc := api.ToolCall{ID: "call_open_file_alias", Type: "function"}
+	tc.Function.Name = "open_file"
+	tc.Function.Arguments = `{"path":"` + filePath + `"}`
+
+	msg := executor.executeSingleTool(tc)
+	if !strings.Contains(msg.Content, "alias path works") {
+		t.Fatalf("expected open_file alias to resolve to read_file, got: %q", msg.Content)
 	}
 }
 

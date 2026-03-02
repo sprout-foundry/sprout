@@ -42,22 +42,64 @@ func isGitWriteCommand(command string) bool {
 	subcommand = strings.TrimPrefix(subcommand, "--")
 	subcommand = strings.TrimPrefix(subcommand, "-")
 
-	// Handle special case: "branch -d" or "branch -D"
-	if subcommand == "branch" && len(parts) > 2 {
-		// If there's a -d or -D flag, it's a write operation
-		for i := 2; i < len(parts); i++ {
-			if parts[i] == "-d" || parts[i] == "-D" {
+	// Handle special subcommands that can be read or write depending on flags/args.
+	rest := parts[2:]
+	switch subcommand {
+	case "branch":
+		// Read-only examples: git branch, git branch -a, git branch --list
+		// Write examples: git branch new-feature, git branch -d old-feature
+		branchWriteFlags := map[string]struct{}{
+			"-d": {}, "-D": {}, "--delete": {}, "-m": {}, "-M": {}, "--move": {},
+			"-c": {}, "-C": {}, "--copy": {}, "-f": {}, "--force": {},
+			"-u": {}, "--set-upstream-to": {}, "--unset-upstream": {}, "--edit-description": {},
+		}
+		for _, arg := range rest {
+			if _, ok := branchWriteFlags[arg]; ok {
 				return true
 			}
+			// A positional argument (that isn't a list flag) generally means create/update branch.
+			if !strings.HasPrefix(arg, "-") {
+				return true
+			}
+		}
+		return false
+	case "tag":
+		// Read-only examples: git tag, git tag -l
+		// Write examples: git tag v1.2.3, git tag -d v1.2.3
+		tagWriteFlags := map[string]struct{}{
+			"-d": {}, "--delete": {}, "-a": {}, "-s": {}, "-u": {}, "-f": {}, "--force": {},
+		}
+		for _, arg := range rest {
+			if _, ok := tagWriteFlags[arg]; ok {
+				return true
+			}
+			if !strings.HasPrefix(arg, "-") {
+				return true
+			}
+		}
+		return false
+	case "stash":
+		// Read-only: git stash list/show
+		// Write: git stash [push|pop|apply|drop|clear|branch|store]
+		if len(rest) == 0 {
+			return true // plain `git stash` is equivalent to push
+		}
+		action := rest[0]
+		switch action {
+		case "list", "show":
+			return false
+		default:
+			return true
 		}
 	}
 
 	// Check if it's a write operation
 	writeCommands := []string{
 		"commit", "push", "add", "rm", "mv", "reset",
-		"rebase", "merge", "checkout", "tag", "clean",
-		"stash", "am", "apply", "cherry-pick", "revert",
-		"branch", // branch with flags is handled above
+		"rebase", "merge", "checkout", "clean",
+		"am", "apply", "cherry-pick", "revert",
+		"switch", "restore", "fetch", "pull", "clone",
+		"init", "worktree",
 	}
 
 	for _, writeCmd := range writeCommands {

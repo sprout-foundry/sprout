@@ -21,6 +21,7 @@ func (ch *ConversationHandler) sendMessage() (*api.ChatResponse, error) {
 func (ch *ConversationHandler) prepareTools() []api.Tool {
 	tools := ch.agent.getOptimizedToolDefinitions(ch.agent.messages)
 	if len(tools) > 0 {
+		ch.agent.SetLastPreparedToolNames(tools)
 		return tools
 	}
 
@@ -38,9 +39,11 @@ func (ch *ConversationHandler) prepareTools() []api.Tool {
 			}
 			filtered = append(filtered, tool)
 		}
+		ch.agent.SetLastPreparedToolNames(filtered)
 		return filtered
 	}
 
+	ch.agent.SetLastPreparedToolNames(fallback)
 	return fallback
 }
 
@@ -60,19 +63,13 @@ func (ch *ConversationHandler) determineReasoningEffort() string {
 }
 
 func (ch *ConversationHandler) initialReasoningEffort() string {
-	return "high"
+	return "low"
 }
 
 func (ch *ConversationHandler) applyRuntimeReasoningDownshift(effort string) string {
 	if effort == "" || ch.agent == nil || !ch.isGptOSSModel() {
 		return effort
 	}
-
-	toolCalls := ch.executedToolCallCount()
-	if effort == "high" && toolCalls >= 3 {
-		return "medium"
-	}
-
 	return effort
 }
 

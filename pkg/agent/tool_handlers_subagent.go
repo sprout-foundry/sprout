@@ -265,8 +265,6 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		return "", err
 	}
 
-	// Log the subagent execution for visibility
-	a.ToolLog("spawning subagent", fmt.Sprintf("task=%q", truncateString(prompt, 60)))
 	a.debugLog("Spawning subagent with task: %s\n", truncateString(prompt, 100))
 
 	// Parse optional context parameter
@@ -641,7 +639,6 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			"Partial subagent output:\n%s",
 			tokensUsed, tools.GetSubagentMaxTokens(), stdout)
 
-		a.ToolLog("subagent", fmt.Sprintf("budget_exceeded=true tokens=%s", tokensUsed))
 		a.debugLog("Subagent exceeded token budget, returning partial output to primary agent\n")
 		return errorMsg, nil
 	}
@@ -682,8 +679,6 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		return "", fmt.Errorf("failed to marshal subagent result: %w", jsonErr)
 	}
 
-	// Log subagent completion
-	a.ToolLog("subagent completed", fmt.Sprintf("exit_code=%s", exitCode))
 	a.debugLog("Subagent spawn result: %s\n", string(jsonBytes))
 	return string(jsonBytes), nil
 }
@@ -708,8 +703,6 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		return "", fmt.Errorf("tasks/prompts must be an array")
 	}
 
-	// Log the parallel subagent execution for visibility
-	a.ToolLog("spawning parallel subagents", fmt.Sprintf("%d tasks", len(tasksSlice)))
 	a.debugLog("Spawning %d parallel subagents\n", len(tasksSlice))
 
 	var parallelTasks []tools.ParallelSubagentTask
@@ -913,12 +906,6 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 	a.debugLog("Parallel subagents spawn result: %s\n", string(jsonBytes))
 
-	// Log parallel subagent completion
-	logMessage := fmt.Sprintf("%d tasks", len(resultMap))
-	if len(failedTasks) > 0 {
-		logMessage += fmt.Sprintf(" (%d failed)", len(failedTasks))
-	}
-	a.ToolLog("parallel subagents completed", logMessage)
 	return string(jsonBytes), nil
 }
 

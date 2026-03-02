@@ -291,6 +291,13 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 
 // executeSingleTool executes a single tool call
 func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
+	// Single canonical execution log for all tools (including MCP-prefixed tools).
+	te.agent.ToolLog("executing tool", formatToolCall(toolCall))
+	normalizedToolName := te.normalizeToolNameForScheduling(toolCall.Function.Name)
+	if normalizedToolName != toolCall.Function.Name {
+		te.agent.debugLog("🔁 Normalized tool name: %s -> %s\n", toolCall.Function.Name, normalizedToolName)
+	}
+
 	// Generate a tool call ID if empty to prevent sanitization from dropping the result
 	toolCallID := toolCall.ID
 	if toolCallID == "" {
@@ -309,7 +316,7 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	}
 
 	// Execute with circuit breaker check
-	if te.checkCircuitBreaker(toolCall.Function.Name, args) {
+	if te.checkCircuitBreaker(normalizedToolName, args) {
 		return api.Message{
 			Role:       "tool",
 			Content:    "Circuit breaker: This action has been attempted too many times with the same parameters.",
@@ -320,7 +327,7 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	// Create a context with a timeout for the tool execution
 	// Subagents get 30 minutes (for large file operations), other tools get 5 minutes
 	// Can be overridden via LEDIT_TOOL_TIMEOUT environment variable
-	toolTimeout := getToolTimeout(toolCall.Function.Name)
+	toolTimeout := getToolTimeout(normalizedToolName)
 	ctx, cancel := context.WithTimeout(context.Background(), toolTimeout)
 	defer cancel()
 
@@ -335,14 +342,14 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		var result string
 		var err error
 
-		if toolCall.Function.Name == "mcp_tools" {
+		if normalizedToolName == "mcp_tools" {
 			result, err = te.agent.handleMCPToolsCommand(args)
 		} else {
 			registry := GetToolRegistry()
-			result, err = registry.ExecuteTool(ctx, toolCall.Function.Name, args, te.agent)
+			result, err = registry.ExecuteTool(ctx, normalizedToolName, args, te.agent)
 
 			if err != nil && strings.Contains(err.Error(), "unknown tool") {
-				if fallbackResult, fallbackErr, handled := te.tryExecuteMCPTool(toolCall.Function.Name, args); handled {
+				if fallbackResult, fallbackErr, handled := te.tryExecuteMCPTool(normalizedToolName, args); handled {
 					result = fallbackResult
 					err = fallbackErr
 				}
@@ -372,13 +379,13 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	if err != nil {
 		// Ensure the error is visible to the user immediately
 		te.agent.PrintLine("")
-		te.agent.PrintLine(fmt.Sprintf("❌ Tool '%s' failed: %v", toolCall.Function.Name, err))
+		te.agent.PrintLine(fmt.Sprintf("❌ Tool '%s' failed: %v", normalizedToolName, err))
 		te.agent.PrintLine("")
 		result = fmt.Sprintf("Error: %v", err)
 	}
 
 	// Update circuit breaker
-	te.updateCircuitBreaker(toolCall.Function.Name, args)
+	te.updateCircuitBreaker(normalizedToolName, args)
 
 	// Publish tool execution completion event for real-time UI updates
 	if te.agent != nil {
@@ -386,7 +393,7 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		if err != nil {
 			status = "failed"
 		}
-		te.agent.PublishToolExecution(toolCall.Function.Name, status, map[string]interface{}{
+		te.agent.PublishToolExecution(normalizedToolName, status, map[string]interface{}{
 			"tool_call_id": toolCallID,
 			"result":       result,
 			"error":        err,
@@ -573,15 +580,26 @@ func formatToolCall(toolCall api.ToolCall) string {
 	var parts []string
 	parts = append(parts, toolCall.Function.Name)
 
-	// Add common parameters consistently with quoting
-	if filePath, ok := args["file_path"].(string); ok && filePath != "" {
+	// Add common parameters consistently with quoting.
+	if path, ok := args["path"].(string); ok && path != "" {
+		parts = append(parts, formatTruncateString(path))
+	} else if filePath, ok := args["file_path"].(string); ok && filePath != "" {
 		parts = append(parts, formatTruncateString(filePath))
+	}
+	if url, ok := args["url"].(string); ok && url != "" {
+		parts = append(parts, formatTruncateString(url))
+	}
+	if imagePath, ok := args["image_path"].(string); ok && imagePath != "" {
+		parts = append(parts, formatTruncateString(imagePath))
 	}
 	if query, ok := args["query"].(string); ok && query != "" {
 		parts = append(parts, formatTruncateString(query))
 	}
 	if command, ok := args["command"].(string); ok && command != "" {
 		parts = append(parts, formatTruncateString(command))
+	}
+	if operation, ok := args["operation"].(string); ok && operation != "" {
+		parts = append(parts, formatTruncateString(operation))
 	}
 	if content, ok := args["content"].(string); ok && len(content) > 0 {
 		parts = append(parts, fmt.Sprintf("(%d bytes)", len(content)))

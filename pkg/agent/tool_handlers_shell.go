@@ -20,7 +20,6 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", fmt.Errorf("git write operations require the git tool for approval. Please use the git tool instead (operation: '%s')", command)
 	}
 
-	a.ToolLog("executing command", command)
 	return a.executeShellCommandWithTruncation(ctx, command)
 }
 
@@ -47,9 +46,6 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	if argsParam, exists := args["args"]; exists {
 		argsStr, _ = convertToString(argsParam, "args")
 	}
-
-	// Log the operation
-	a.ToolLog("executing git operation", fmt.Sprintf("%s %s", operation, argsStr))
 
 	// For commit operations, use the commit command directly
 	if operation == tools.GitOpCommit {

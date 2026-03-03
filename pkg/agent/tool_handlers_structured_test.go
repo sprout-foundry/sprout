@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -79,5 +80,38 @@ func TestInferStructuredFormat(t *testing.T) {
 	}
 	if got := inferStructuredFormat("config.txt", ""); got != "" {
 		t.Fatalf("expected empty format, got %s", got)
+	}
+}
+
+func TestFormatStructuredValidationError_IncludesPathsAndCount(t *testing.T) {
+	err := formatStructuredValidationError("write_structured_file", []string{
+		"$.content.name: expected string",
+		"$.content.price: expected number",
+		"$.content.price: expected number",
+	}, "")
+	msg := err.Error()
+	if !strings.Contains(msg, "tool=write_structured_file") {
+		t.Fatalf("expected tool name in message, got: %s", msg)
+	}
+	if !strings.Contains(msg, "error_count=3") {
+		t.Fatalf("expected error count in message, got: %s", msg)
+	}
+	if !strings.Contains(msg, "failed_paths=$.content.name,$.content.price") {
+		t.Fatalf("expected failed paths in message, got: %s", msg)
+	}
+}
+
+func TestExtractValidationPaths(t *testing.T) {
+	paths := extractValidationPaths([]string{
+		"$.a.b: expected string",
+		"$.a.b: expected string",
+		"$.arr[0]: expected integer",
+		"not-a-schema-error",
+	})
+	if len(paths) != 2 {
+		t.Fatalf("expected 2 unique paths, got %d (%v)", len(paths), paths)
+	}
+	if paths[0] != "$.a.b" || paths[1] != "$.arr[0]" {
+		t.Fatalf("unexpected paths: %v", paths)
 	}
 }

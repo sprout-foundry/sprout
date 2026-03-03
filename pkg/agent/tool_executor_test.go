@@ -183,6 +183,69 @@ func TestSanitizeToolFailureMessage_RedactsAndTruncates(t *testing.T) {
 	}
 }
 
+func TestParseToolArgumentsWithRepair_MissingClosingBrace(t *testing.T) {
+	args, repaired, err := parseToolArgumentsWithRepair(`{"path":"README.md"`)
+	if err != nil {
+		t.Fatalf("expected repaired args, got error: %v", err)
+	}
+	if !repaired {
+		t.Fatalf("expected repair flag to be true")
+	}
+	if got, ok := args["path"].(string); !ok || got != "README.md" {
+		t.Fatalf("unexpected parsed args: %#v", args)
+	}
+}
+
+func TestParseToolArgumentsWithRepair_ExtractsObjectFromTrailingText(t *testing.T) {
+	args, repaired, err := parseToolArgumentsWithRepair("{\"path\":\"README.md\"}\nNow I will continue...")
+	if err != nil {
+		t.Fatalf("expected repaired args, got error: %v", err)
+	}
+	if !repaired {
+		t.Fatalf("expected repair flag to be true")
+	}
+	if got, ok := args["path"].(string); !ok || got != "README.md" {
+		t.Fatalf("unexpected parsed args: %#v", args)
+	}
+}
+
+func TestParseToolArgumentsWithRepair_RemovesTrailingCommas(t *testing.T) {
+	args, repaired, err := parseToolArgumentsWithRepair(`{"path":"README.md","data":{"k":"v",},}`)
+	if err != nil {
+		t.Fatalf("expected repaired args, got error: %v", err)
+	}
+	if !repaired {
+		t.Fatalf("expected repair flag to be true")
+	}
+	if got, ok := args["path"].(string); !ok || got != "README.md" {
+		t.Fatalf("unexpected parsed args: %#v", args)
+	}
+}
+
+func TestExecuteSingleTool_UsesRepairedArguments(t *testing.T) {
+	agent := &Agent{
+		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
+		interruptCtx: context.Background(),
+		outputMutex:  &sync.Mutex{},
+	}
+	executor := NewToolExecutor(agent)
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "repaired_args.txt")
+	if err := os.WriteFile(filePath, []byte("repaired args work"), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	tc := api.ToolCall{ID: "call_repair", Type: "function"}
+	tc.Function.Name = "read_file"
+	tc.Function.Arguments = `{"path":"` + filePath + `"`
+
+	msg := executor.executeSingleTool(tc)
+	if !strings.Contains(msg.Content, "repaired args work") {
+		t.Fatalf("expected repaired arguments to allow tool execution, got: %q", msg.Content)
+	}
+}
+
 type providerOverrideClient struct {
 	*factory.TestClient
 	provider string

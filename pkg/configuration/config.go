@@ -90,8 +90,10 @@ type Config struct {
 	CustomProviders map[string]CustomProviderConfig `json:"custom_providers,omitempty"`
 
 	// Command History Configuration
-	CommandHistory []string `json:"command_history,omitempty"`
-	HistoryIndex   int      `json:"history_index,omitempty"`
+	CommandHistory       []string            `json:"command_history,omitempty"` // Legacy global history (fallback only)
+	HistoryIndex         int                 `json:"history_index,omitempty"`   // Legacy global history index
+	CommandHistoryByPath map[string][]string `json:"command_history_by_path,omitempty"`
+	HistoryIndexByPath   map[string]int      `json:"history_index_by_path,omitempty"`
 
 	// Change History Configuration
 	HistoryScope string `json:"history_scope,omitempty"` // "project" or "global"
@@ -254,6 +256,8 @@ func NewConfig() *Config {
 			"openai",
 		},
 		CustomProviders:       make(map[string]CustomProviderConfig),
+		CommandHistoryByPath:  make(map[string][]string),
+		HistoryIndexByPath:    make(map[string]int),
 		MCP:                   mcp.DefaultMCPConfig(),
 		Preferences:           make(map[string]interface{}),
 		FileBatchSize:         10,

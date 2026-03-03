@@ -89,7 +89,7 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 
 	// JSON writes are transparently routed through structured serialization/validation.
 	if strings.EqualFold(filepath.Ext(path), ".json") {
-		parsed, parseErr := parseStructuredJSONContent(content)
+		parsed, parseErr := parseStructuredJSONContent(content, "write_file")
 		if parseErr != nil {
 			return "", fmt.Errorf("write_file JSON forwarding failed for %s: %w", path, parseErr)
 		}
@@ -103,20 +103,20 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 	return writeFileContent(ctx, a, path, content, "write_file", false)
 }
 
-func parseStructuredJSONContent(content string) (interface{}, error) {
+func parseStructuredJSONContent(content string, callerTool string) (interface{}, error) {
 	var parsed interface{}
 	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
-		return nil, formatJSONParseError(content, err)
+		return nil, formatJSONParseError(content, err, callerTool)
 	}
 	switch parsed.(type) {
 	case map[string]interface{}, []interface{}:
 		return parsed, nil
 	default:
-		return nil, fmt.Errorf("top-level JSON must be an object or array for structured write forwarding")
+		return nil, fmt.Errorf("top-level JSON must be an object or array")
 	}
 }
 
-func formatJSONParseError(content string, err error) error {
+func formatJSONParseError(content string, err error, callerTool string) error {
 	var syntaxErr *json.SyntaxError
 	var typeErr *json.UnmarshalTypeError
 
@@ -129,19 +129,28 @@ func formatJSONParseError(content string, err error) error {
 	}
 
 	if offset <= 0 {
-		return fmt.Errorf("invalid JSON: %v", err)
+		return fmt.Errorf("invalid JSON: %v; next_step=%s", err, sameToolJSONFixHint(callerTool))
 	}
 
 	line, col := lineColFromOffset(content, offset)
 	snippet := snippetAtLine(content, line)
 	if snippet == "" {
-		return fmt.Errorf("invalid JSON at line=%d col=%d: %v", line, col, err)
+		return fmt.Errorf("invalid JSON at line=%d col=%d: %v; next_step=%s", line, col, err, sameToolJSONFixHint(callerTool))
 	}
 
 	return fmt.Errorf(
-		"invalid JSON at line=%d col=%d: %v; snippet=%q; next_step=call write_structured_file with corrected JSON object/array",
-		line, col, err, snippet,
+		"invalid JSON at line=%d col=%d: %v; snippet=%q; next_step=%s",
+		line, col, err, snippet, sameToolJSONFixHint(callerTool),
 	)
+}
+
+func sameToolJSONFixHint(callerTool string) string {
+	switch strings.TrimSpace(callerTool) {
+	case "edit_file":
+		return "fix JSON syntax and retry edit_file so resulting file is valid JSON"
+	default:
+		return "fix JSON syntax and retry write_file with valid JSON object/array content"
+	}
 }
 
 func lineColFromOffset(content string, offset int64) (line int, col int) {
@@ -278,7 +287,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		if readErr != nil {
 			return "", fmt.Errorf("json edit succeeded but failed to read edited file: %w", readErr)
 		}
-		parsed, parseErr := parseStructuredJSONContent(editedContent)
+		parsed, parseErr := parseStructuredJSONContent(editedContent, "edit_file")
 		if parseErr != nil {
 			restoreErr := func() error {
 				_, werr := tools.WriteFile(ctx, path, originalContent)

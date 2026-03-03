@@ -2,6 +2,27 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.10.14] - 2026-03-03
+
+- Updates 2 files - Updates JSON parsing error handling and tool hints (550dbab)
+- Updates 6 files - Updates resource capture implementation and CLI flag (d465290)
+- Updates 2 files - Updates tool argument parser with JSON repair (8e66d7d)
+- Updates 4 files - Updates structured validation errors to include paths (f757761)
+- Updates 2 files - Updates PDF error handling and tests (0f7de81)
+- Updates 4 files - Updates command history to use path-based storage (dd43fc2)
+- Updates 4 files - Updates remove OpenAI client wrapper (79cac1d)
+- Updates 12 files - Add custom model reasoning effort and global config option (74d5c8e)
+- Updates 12 files - Updates: custom model params, todo tracking, PDF handling (14c51bb)
+- Updates 6 files - Redact base64 data in error messages and improve PDF error handling (12f4376)
+- Updates 22 files - Update tool tracking, reasoning, and JSON handling (336712b)
+- Updates 7 files - Updates reasoning effort and OCR enforcement controls (37a846c)
+- Updates 4 files - Updates fallback parser to handle named tool blocks (d9fd773)
+- Updates 5 files - Updates patch_structured_file operations alias (6a29689)
+- Updates 20 files - Updates agent to support structured file tools (af68619)
+- Updates 3 files - Updates PDF Python deps and OCR image selection logic (8886deb)
+- Updates 2 files - Updates default self-review gate mode to off (80e9b3f)
+- docs: Update changelog for v0.10.13 (ae98976)
+
 ## [v0.10.13] - 2026-02-28
 
 - Merge remote-tracking branch 'origin/main' (1edd923)

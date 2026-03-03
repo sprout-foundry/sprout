@@ -1,0 +1,88 @@
+{
+  "initial": {
+    "prompt_file": "prompts/initial_task.md",
+    "provider": "my-custom-llm",
+    "model": "custom-model-v1",
+    "persona": "coder",
+    "reasoning_effort": "low",
+    "system_prompt_file": "prompts/system/coding_policy.md",
+    "max_iterations": 300,
+    "skip_prompt": true,
+    "dry_run": false,
+    "no_stream": false,
+    "unsafe": false,
+    "no_subagents": false,
+    "resource_directory": "captures"
+  },
+  "persist_runtime_overrides": false,
+  "continue_on_error": true,
+  "no_web_ui": false,
+  "web_port": 0,
+  "daemon": false,
+  "steps": [
+    {
+      "name": "deep_code_audit",
+      "when": "on_success",
+      "file_exists": ["go.mod"],
+      "file_not_exists": ["AUDIT_COMPLETE.md"],
+      "reasoning_effort": "high",
+      "max_iterations": 500,
+      "prompt": "Audit the implementation you just completed. List risks, likely bugs, and missing tests, then apply fixes where appropriate."
+    },
+    {
+      "name": "write_audit_marker",
+      "when": "on_success",
+      "file_exists": ["go.mod"],
+      "file_not_exists": ["AUDIT_COMPLETE.md"],
+      "reasoning_effort": "low",
+      "prompt": "Create AUDIT_COMPLETE.md with a concise checklist of what was audited and what remains."
+    },
+    {
+      "name": "generate_missing_docs",
+      "when": "on_success",
+      "file_not_exists": ["docs/IMPLEMENTATION_NOTES.md"],
+      "reasoning_effort": "medium",
+      "system_prompt": "Be concise, prioritize actionable documentation, and avoid filler.",
+      "prompt": "Create docs/IMPLEMENTATION_NOTES.md with a short implementation summary, API changes, and test plan."
+    },
+    {
+      "name": "cross_model_review",
+      "when": "always",
+      "provider": "openrouter",
+      "model": "openai/gpt-5",
+      "persona": "code_reviewer",
+      "reasoning_effort": "high",
+      "prompt": "Perform a second-pass review focused on regressions, edge cases, and test quality. If issues are found, fix them."
+    },
+    {
+      "name": "failure_recovery",
+      "when": "on_error",
+      "reasoning_effort": "high",
+      "no_subagents": true,
+      "prompt": "The previous step failed. Provide a concise root-cause analysis and a concrete repair plan."
+    },
+    {
+      "name": "final_summary",
+      "when": "always",
+      "reasoning_effort": "low",
+      "prompt_file": "prompts/final_summary.md"
+    },
+    {
+      "name": "release_mode",
+      "when": "always",
+      "file_exists": ["CHANGELOG.md"],
+      "unsafe": false,
+      "dry_run": true,
+      "prompt": "Do a safe release-preflight pass and report only; do not apply changes."
+    },
+    {
+      "name": "ops_escalation_path",
+      "when": "on_error",
+      "file_exists": ["ops/runbook.md"],
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-4",
+      "system_prompt_file": "prompts/system/incident_response.md",
+      "prompt": "Provide a final summary of completed work, key file changes, and any remaining risks."
+    }
+  ]
+}

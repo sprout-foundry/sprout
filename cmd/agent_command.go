@@ -26,6 +26,7 @@ var (
 	agentUnsafe            bool
 	agentNoSubagents       bool
 	agentResourceDirectory string
+	agentWorkflowConfig    string
 )
 
 func createChatAgent() (*agent.Agent, error) {
@@ -78,6 +79,7 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")
 	agentCmd.Flags().BoolVar(&agentNoSubagents, "no-subagents", false, "Disable subagent tools (run_subagent, run_parallel_subagents)")
 	agentCmd.Flags().StringVar(&agentResourceDirectory, "resource-directory", "", "Optional directory (relative to current working directory) to store captured web/vision resources")
+	agentCmd.Flags().StringVar(&agentWorkflowConfig, "workflow-config", "", "JSON file that defines agent workflow steps for non-interactive runs")
 	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)
 
 	// Initialize environment-based defaults
@@ -166,6 +168,9 @@ Examples:
 
   # With custom provider (configured via 'ledit custom-model add')
   ledit agent --provider my-custom-llm --model "custom-model-v1" "Review this code"
+
+  # Non-interactive run with an agent workflow
+  ledit agent --workflow-config examples/agent_workflow.json
 
   # Disable web UI
   ledit agent --no-web-ui "Analyze this code"`,

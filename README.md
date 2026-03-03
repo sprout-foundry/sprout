@@ -320,6 +320,12 @@ The `.ledit/` directory is automatically created when you first run `ledit` comm
 
 - **`ledit mcp`**: Manage MCP servers (see MCP section).
 
+- **Agent workflow automation**: Run config-driven non-interactive orchestration with triggers and per-step runtime overrides.
+  - Documentation: [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)
+  ```bash
+  ledit agent --workflow-config examples/agent_workflow.json
+  ```
+
 ### Slash Commands in Interactive Mode
 
 In interactive `ledit` or `ledit agent`, use `/` for commands (tab-complete):

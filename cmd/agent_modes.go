@@ -31,7 +31,13 @@ func isQueryInProgress() bool {
 }
 
 // RunAgent runs the agent in interactive or direct mode
-func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) error {
+func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err error) {
+	workflowConfig, workflowLoadErr := loadAgentWorkflowConfig(agentWorkflowConfig)
+	if workflowLoadErr != nil {
+		return workflowLoadErr
+	}
+	applyWorkflowCommandOverrides(workflowConfig)
+
 	// Determine if web UI should be enabled
 	// Web UI requires: interactive mode, daemon mode, not disabled, and not in CI/subagent
 	enableWebUI := (isInteractive || daemonMode) && !disableWebUI && !IsCI()
@@ -135,10 +141,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) error {
 	SetupAgentEvents(chatAgent, eventBus)
 
 	// Handle different modes
-	var err error
 	if isInteractive {
+		if cfg := chatAgent.GetConfig(); cfg != nil {
+			cfg.SkipPrompt = agentSkipPrompt
+		}
 		err = runInteractiveMode(ctx, chatAgent, eventBus)
 	} else {
+		if cfg := chatAgent.GetConfig(); cfg != nil {
+			cfg.SkipPrompt = true
+		}
+
 		// Direct mode
 		var query string
 		if len(args) > 0 {
@@ -160,6 +172,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) error {
 			}
 		}
 
+		query, err = resolveWorkflowInitialPrompt(query, workflowConfig)
+		if err != nil {
+			return fmt.Errorf("failed to resolve workflow initial prompt: %w", err)
+		}
 		if query == "" {
 			// No query provided - check if we should keep running (daemon mode)
 			if daemonMode && webServer != nil && webServer.IsRunning() {
@@ -177,7 +193,34 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) error {
 			return nil
 		}
 
+		restoreRuntimeOverrides, restoreSetupErr := prepareWorkflowRuntimeRestorer(chatAgent, workflowConfig)
+		if restoreSetupErr != nil {
+			return fmt.Errorf("failed to prepare runtime override restoration: %w", restoreSetupErr)
+		}
+		if restoreRuntimeOverrides != nil {
+			defer func() {
+				if restoreErr := restoreRuntimeOverrides(); restoreErr != nil {
+					if err == nil {
+						err = restoreErr
+					} else {
+						err = fmt.Errorf("%w (restore: %v)", err, restoreErr)
+					}
+				}
+			}()
+		}
+		if err := applyWorkflowInitialOverrides(chatAgent, workflowConfig); err != nil {
+			return fmt.Errorf("failed to apply workflow initial runtime overrides: %w", err)
+		}
+
 		err = runDirectMode(ctx, chatAgent, eventBus, query)
+		workflowErr := runAgentWorkflow(ctx, chatAgent, eventBus, workflowConfig, err)
+		if workflowErr != nil {
+			if err != nil {
+				return fmt.Errorf("%w (workflow: %v)", err, workflowErr)
+			}
+			return workflowErr
+		}
+		return err
 	}
 
 	// Graceful shutdown

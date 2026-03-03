@@ -229,7 +229,10 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 
 	if len(resp.Choices) == 0 {
-		return ch.finalizeTurn(turn, true)
+		ch.agent.debugLog("⚠️ Response had no choices; asking model to continue\n")
+		ch.handleIncompleteResponse()
+		turn.GuardrailTrigger = "empty choices response"
+		return ch.finalizeTurn(turn, false)
 	}
 
 	choice := resp.Choices[0]
@@ -670,13 +673,23 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 	case "tool_calls":
 		return false, "model tool_calls finish"
 	case "stop":
-		// Model explicitly signaled it's done - respect that decision
-		// Don't override the model's judgment about whether its response is complete
-		ch.agent.debugLog("🏁 Model signaled 'stop' - accepting response as complete\n")
-		if content == "" {
-			ch.agent.debugLog("⚠️ WARNING: Model returned finish_reason='stop' with empty content!\n")
-			ch.agent.debugLog("⚠️ This may indicate a timeout or incomplete response from the provider.\n")
+		if strings.TrimSpace(content) == "" {
+			ch.agent.debugLog("⚠️ WARNING: Model returned finish_reason='stop' with empty content\n")
+			ch.agent.debugLog("⚠️ Treating as incomplete and asking model to continue\n")
+			ch.handleIncompleteResponse()
+			return false, "empty stop response"
 		}
+		if ch.responseValidator != nil && ch.responseValidator.IsIncomplete(content) {
+			ch.agent.debugLog("⚠️ Model returned finish_reason='stop' with incomplete content\n")
+			ch.enqueueTransientMessage(api.Message{
+				Role: "user",
+				Content: "You indicated completion, but your answer appears incomplete. " +
+					"Provide a concise final answer to the original user request now.",
+			})
+			return false, "incomplete stop response"
+		}
+		// Model explicitly signaled it's done with non-empty content - accept completion.
+		ch.agent.debugLog("🏁 Model signaled 'stop' - accepting response as complete\n")
 		ch.displayFinalResponse(content)
 		return true, "completion"
 	case "length":

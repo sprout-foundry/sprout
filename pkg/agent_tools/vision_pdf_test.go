@@ -1,6 +1,9 @@
 package tools
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -54,6 +57,57 @@ func TestLooksLikePDF(t *testing.T) {
 	}
 	if looksLikePDF([]byte("<!doctype html>")) {
 		t.Fatalf("expected non-PDF content to be rejected")
+	}
+}
+
+func TestResolvePDFInputPath_LocalPathPassthrough(t *testing.T) {
+	path, cleanup, err := resolvePDFInputPath("/tmp/sample.pdf")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	defer cleanup()
+	if path != "/tmp/sample.pdf" {
+		t.Fatalf("expected path passthrough, got: %s", path)
+	}
+}
+
+func TestResolvePDFInputPath_RemoteURLDownloadsToTemp(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/pdf")
+		_, _ = w.Write([]byte("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n"))
+	}))
+	defer server.Close()
+
+	path, cleanup, err := resolvePDFInputPath(server.URL + "/menu.pdf")
+	if err != nil {
+		t.Fatalf("expected remote PDF to resolve, got: %v", err)
+	}
+	if path == "" {
+		t.Fatal("expected non-empty temp path")
+	}
+	if _, statErr := os.Stat(path); statErr != nil {
+		t.Fatalf("expected temp file to exist: %v", statErr)
+	}
+	cleanup()
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("expected temp file cleanup, stat err=%v", statErr)
+	}
+}
+
+func TestResolvePDFInputPath_RemoteURLRejectsNonPDF(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte("<html>not a pdf</html>"))
+	}))
+	defer server.Close()
+
+	_, cleanup, err := resolvePDFInputPath(server.URL + "/menu.pdf")
+	defer cleanup()
+	if err == nil {
+		t.Fatal("expected non-PDF remote content to be rejected")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "not a valid pdf") {
+		t.Fatalf("expected invalid PDF error, got: %v", err)
 	}
 }
 

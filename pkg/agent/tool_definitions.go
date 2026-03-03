@@ -235,9 +235,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 
 	registry.RegisterTool(ToolConfig{
 		Name:        "analyze_image_content",
-		Description: "Analyze images for text/code extraction or general insights",
+		Description: "Analyze images/PDFs for text/code extraction or general insights. Supports local file paths and remote HTTP(S) URLs.",
 		Parameters: []ParameterConfig{
-			{"image_path", "string", true, []string{}, "Path or URL to the image to analyze"},
+			{"image_path", "string", true, []string{}, "Path or URL to an image or PDF to analyze (local path or HTTP(S) URL)"},
 			{"analysis_prompt", "string", false, []string{}, "Optional custom vision prompt"},
 			{"analysis_mode", "string", false, []string{}, "Optional analysis mode override"},
 		},

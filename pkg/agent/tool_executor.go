@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,6 +51,8 @@ func isSubagentTool(toolName string) bool {
 type ToolExecutor struct {
 	agent *Agent
 }
+
+const maxToolFailureMessageChars = 4000 // ~1000 tokens worst-case (4 chars/token heuristic)
 
 // NewToolExecutor creates a new tool executor
 func NewToolExecutor(agent *Agent) *ToolExecutor {
@@ -377,11 +380,12 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	}
 
 	if err != nil {
+		safeErr := sanitizeToolFailureMessage(err.Error())
 		// Ensure the error is visible to the user immediately
 		te.agent.PrintLine("")
-		te.agent.PrintLine(fmt.Sprintf("❌ Tool '%s' failed: %v", normalizedToolName, err))
+		te.agent.PrintLine(fmt.Sprintf("❌ Tool '%s' failed: %s", normalizedToolName, safeErr))
 		te.agent.PrintLine("")
-		result = fmt.Sprintf("Error: %v", err)
+		result = fmt.Sprintf("Error: %s", safeErr)
 	}
 
 	// Update circuit breaker
@@ -610,4 +614,28 @@ func formatToolCall(toolCall api.ToolCall) string {
 
 	result := fmt.Sprintf("[%s]", strings.Join(parts, " "))
 	return result
+}
+
+var toolFailureDataURLPattern = regexp.MustCompile(`data:[^;\s]+;base64,[A-Za-z0-9+/=]+`)
+var toolFailureBase64RunPattern = regexp.MustCompile(`[A-Za-z0-9+/=]{512,}`)
+
+func sanitizeToolFailureMessage(msg string) string {
+	if strings.TrimSpace(msg) == "" {
+		return "unknown tool error"
+	}
+
+	msg = toolFailureDataURLPattern.ReplaceAllStringFunc(msg, func(m string) string {
+		mime := "application/octet-stream"
+		if semi := strings.Index(m, ";"); semi > len("data:") {
+			mime = m[len("data:"):semi]
+		}
+		return "data:" + mime + ";base64,[REDACTED]"
+	})
+
+	msg = toolFailureBase64RunPattern.ReplaceAllString(msg, "[BASE64_REDACTED]")
+
+	if len(msg) > maxToolFailureMessageChars {
+		msg = msg[:maxToolFailureMessageChars] + "... (truncated)"
+	}
+	return msg
 }

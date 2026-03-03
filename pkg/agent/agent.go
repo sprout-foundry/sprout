@@ -846,10 +846,22 @@ func (a *Agent) loadHistoryFromConfig() {
 	}
 
 	config := a.configManager.GetConfig()
-	if config != nil && len(config.CommandHistory) > 0 {
-		a.commandHistory = config.CommandHistory
-		a.historyIndex = config.HistoryIndex
-		// Reset history index to -1 for new session navigation
+	if config == nil {
+		return
+	}
+
+	pathKey := a.historyPathKey()
+	if len(config.CommandHistoryByPath) > 0 {
+		if history, ok := config.CommandHistoryByPath[pathKey]; ok && len(history) > 0 {
+			a.commandHistory = append([]string(nil), history...)
+			a.historyIndex = -1
+			return
+		}
+	}
+
+	// Legacy fallback for older config files that stored one global history list.
+	if len(config.CommandHistory) > 0 {
+		a.commandHistory = append([]string(nil), config.CommandHistory...)
 		a.historyIndex = -1
 	}
 }
@@ -862,11 +874,42 @@ func (a *Agent) saveHistoryToConfig() {
 
 	config := a.configManager.GetConfig()
 	if config != nil {
-		config.CommandHistory = a.commandHistory
-		config.HistoryIndex = a.historyIndex
+		if config.CommandHistoryByPath == nil {
+			config.CommandHistoryByPath = make(map[string][]string)
+		}
+		if config.HistoryIndexByPath == nil {
+			config.HistoryIndexByPath = make(map[string]int)
+		}
+
+		pathKey := a.historyPathKey()
+		if len(a.commandHistory) == 0 {
+			delete(config.CommandHistoryByPath, pathKey)
+			delete(config.HistoryIndexByPath, pathKey)
+		} else {
+			config.CommandHistoryByPath[pathKey] = append([]string(nil), a.commandHistory...)
+			config.HistoryIndexByPath[pathKey] = a.historyIndex
+		}
+
+		// Legacy fields are no longer actively written.
+		config.CommandHistory = nil
+		config.HistoryIndex = 0
+
 		// Save configuration
 		if err := config.Save(); err != nil && a.debug {
 			a.debugLog("Failed to save command history to config: %v\n", err)
 		}
 	}
+}
+
+func (a *Agent) historyPathKey() string {
+	wd, err := os.Getwd()
+	if err != nil || strings.TrimSpace(wd) == "" {
+		return "unknown"
+	}
+	cleaned := filepath.Clean(wd)
+	abs, err := filepath.Abs(cleaned)
+	if err == nil && strings.TrimSpace(abs) != "" {
+		return filepath.Clean(abs)
+	}
+	return cleaned
 }

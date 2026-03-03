@@ -12,7 +12,7 @@ type HarmonyFormatter struct {
 
 // HarmonyOptions configures the harmony formatting
 type HarmonyOptions struct {
-	ReasoningLevel string // "low", "medium", "high" - defaults to "medium"
+	ReasoningLevel string // "low", "medium", "high" - empty disables explicit reasoning tag
 	EnableAnalysis bool   // Whether to enable analysis channel guidance
 }
 
@@ -20,14 +20,16 @@ type HarmonyOptions struct {
 func (h *HarmonyFormatter) FormatMessagesForCompletion(messages []Message, tools []Tool, opts *HarmonyOptions) string {
 	if opts == nil {
 		opts = &HarmonyOptions{
-			ReasoningLevel: "medium",
 			EnableAnalysis: true,
 		}
 	}
 
-	// Ensure default reasoning level is set
-	if opts.ReasoningLevel == "" {
-		opts.ReasoningLevel = "medium"
+	reasoningLevel := strings.ToLower(strings.TrimSpace(opts.ReasoningLevel))
+	if reasoningLevel == "" {
+		reasoningLevel = strings.ToLower(strings.TrimSpace(h.reasoningLevel))
+	}
+	if reasoningLevel != "low" && reasoningLevel != "medium" && reasoningLevel != "high" {
+		reasoningLevel = ""
 	}
 
 	// Validate messages
@@ -44,8 +46,8 @@ func (h *HarmonyFormatter) FormatMessagesForCompletion(messages []Message, tools
 		case "system":
 			// Add reasoning level to system message
 			systemContent := msg.Content
-			if opts.ReasoningLevel != "" {
-				systemContent += fmt.Sprintf("\n\nReasoning: %s", opts.ReasoningLevel)
+			if reasoningLevel != "" {
+				systemContent += fmt.Sprintf("\n\nReasoning: %s", reasoningLevel)
 			}
 			result.WriteString(fmt.Sprintf("<|start|>system<|message|>%s<|end|>\n\n", systemContent))
 		case "user":
@@ -184,7 +186,7 @@ func (h *HarmonyFormatter) StripReturnToken(response string) string {
 // NewHarmonyFormatter creates a new harmony formatter
 func NewHarmonyFormatter() *HarmonyFormatter {
 	return &HarmonyFormatter{
-		reasoningLevel: "medium",
+		reasoningLevel: "",
 	}
 }
 

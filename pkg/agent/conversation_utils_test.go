@@ -65,7 +65,7 @@ func TestDetermineReasoningEffort_KeepsHighForNonGptOSS(t *testing.T) {
 	}
 }
 
-func TestDetermineReasoningEffort_TemplatePayloadUsesMedium(t *testing.T) {
+func TestDetermineReasoningEffort_TemplatePayloadUsesHeuristic(t *testing.T) {
 	agent := &Agent{
 		client: &reasoningProviderClient{
 			TestClient: &factory.TestClient{},
@@ -91,7 +91,7 @@ Please analyze and implement extraction for this site.
 		{Role: "user", Content: longTemplatePrompt},
 	}
 
-	if got := agent.determineReasoningEffort(messages); got != "medium" {
-		t.Fatalf("expected template-style payload to resolve to medium effort, got %q", got)
+	if got := agent.determineReasoningEffort(messages); got != "high" {
+		t.Fatalf("expected template-style payload to use default heuristic and resolve to high effort, got %q", got)
 	}
 }

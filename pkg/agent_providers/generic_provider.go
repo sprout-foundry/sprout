@@ -498,6 +498,7 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 
 	// Apply model-specific defaults and suppress unsupported fields.
 	applyModelSpecificSettings(p.model, request)
+	applyReasoningEffort(p.model, reasoning, request)
 
 	// Add tools if provided
 	if len(tools) > 0 {
@@ -505,6 +506,20 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 	}
 
 	return json.Marshal(request)
+}
+
+func applyReasoningEffort(model, reasoning string, request map[string]interface{}) {
+	effort := strings.ToLower(strings.TrimSpace(reasoning))
+	if effort == "" {
+		return
+	}
+	if effort != "low" && effort != "medium" && effort != "high" {
+		return
+	}
+	if !strings.Contains(strings.ToLower(model), "gpt-oss") {
+		return
+	}
+	request["reasoning_effort"] = effort
 }
 
 func applyModelSpecificSettings(model string, request map[string]interface{}) {

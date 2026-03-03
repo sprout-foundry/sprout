@@ -134,6 +134,12 @@ func runCustomModelAdd() error {
 	if err != nil {
 		return err
 	}
+	fmt.Print("Optional default reasoning effort [low|medium|high] (leave empty for automatic): ")
+	reasoningEffort, _ := reader.ReadString('\n')
+	reasoningEffort = strings.ToLower(strings.TrimSpace(reasoningEffort))
+	if reasoningEffort != "" && reasoningEffort != "low" && reasoningEffort != "medium" && reasoningEffort != "high" {
+		return fmt.Errorf("invalid reasoning effort %q (expected low, medium, high, or empty)", reasoningEffort)
+	}
 
 	// Ask about API key
 	fmt.Print("Does this provider require an API key? (y/N): ")
@@ -191,16 +197,17 @@ func runCustomModelAdd() error {
 
 	// Create custom provider configuration
 	customProvider := configuration.CustomProviderConfig{
-		Name:           providerName,
-		Endpoint:       endpoint,
-		ModelName:      modelName,
-		ContextSize:    contextSize,
-		Temperature:    temperature,
-		TopP:           topP,
-		RequiresAPIKey: requiresAPIKey,
-		ToolCalls:      toolCalls,
-		SupportsVision: supportsVision,
-		VisionModel:    visionModel,
+		Name:            providerName,
+		Endpoint:        endpoint,
+		ModelName:       modelName,
+		ContextSize:     contextSize,
+		ReasoningEffort: reasoningEffort,
+		Temperature:     temperature,
+		TopP:            topP,
+		RequiresAPIKey:  requiresAPIKey,
+		ToolCalls:       toolCalls,
+		SupportsVision:  supportsVision,
+		VisionModel:     visionModel,
 	}
 
 	if apiKey != "" {
@@ -250,6 +257,9 @@ func runCustomModelAdd() error {
 	}
 	if topP != nil {
 		fmt.Printf("   Top P: %.4g\n", *topP)
+	}
+	if reasoningEffort != "" {
+		fmt.Printf("   Reasoning Effort: %s\n", reasoningEffort)
 	}
 	fmt.Printf("   Supports Vision: %t\n", supportsVision)
 	if supportsVision {

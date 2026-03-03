@@ -24,6 +24,7 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 	if err != nil {
 		return result, err
 	}
+	a.captureVisionInputAndOutput(imagePath, result)
 
 	normalized, normalizeErr := normalizeVisionToolOutput(result, true)
 	if normalizeErr != nil {
@@ -79,6 +80,7 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 	if err != nil {
 		return result, err
 	}
+	a.captureVisionInputAndOutput(imagePath, result)
 
 	normalized, normalizeErr := normalizeVisionToolOutput(result, false)
 	if normalizeErr != nil {

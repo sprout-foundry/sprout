@@ -42,7 +42,7 @@ const (
 	ErrCodeRemoteFetchFailed   = "REMOTE_FETCH_FAILED"
 	ErrCodeLocalFileNotFound   = "LOCAL_FILE_NOT_FOUND"
 	ErrCodeOCRNoTextDetected   = "OCR_NO_TEXT_DETECTED"
-	ErrCodePDFNotSupported     = "PDF_NOT_SUPPORTED"
+	ErrCodePDFProcessingFailed = "PDF_PROCESSING_FAILED"
 	ErrCodeVisionNotAvailable  = "VISION_NOT_AVAILABLE"
 	ErrCodeVisionRequestFailed = "VISION_REQUEST_FAILED"
 	ErrCodeInvalidResponse     = "INVALID_RESPONSE"
@@ -958,9 +958,21 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 
 func classifyPDFProcessingErrorCode(err error) string {
 	if err == nil {
-		return ErrCodePDFNotSupported
+		return ErrCodePDFProcessingFailed
 	}
 	msg := strings.ToLower(err.Error())
+
+	// Input path / retrieval failures.
+	if strings.Contains(msg, "failed to download pdf") ||
+		strings.Contains(msg, "status 404") ||
+		strings.Contains(msg, "status 403") ||
+		strings.Contains(msg, "status 401") {
+		return ErrCodeRemoteFetchFailed
+	}
+	if strings.Contains(msg, "failed to stat pdf file") ||
+		strings.Contains(msg, "no such file or directory") {
+		return ErrCodeLocalFileNotFound
+	}
 
 	// Provider/inference transport failures: model call failed, not PDF support.
 	if strings.Contains(msg, "ocr request failed") ||
@@ -973,15 +985,14 @@ func classifyPDFProcessingErrorCode(err error) string {
 		return ErrCodeVisionRequestFailed
 	}
 
-	// True PDF/input support failures.
+	// Invalid/unsupported PDF content.
 	if strings.Contains(msg, "missing %pdf header") ||
-		strings.Contains(msg, "not a valid pdf") ||
-		strings.Contains(msg, "failed to open pdf") {
-		return ErrCodePDFNotSupported
+		strings.Contains(msg, "not a valid pdf") {
+		return ErrCodeInputUnsupported
 	}
 
-	// Conservative default for unknown PDF-specific failures.
-	return ErrCodePDFNotSupported
+	// Conservative default for unknown PDF failures.
+	return ErrCodePDFProcessingFailed
 }
 
 // GetFileExtension returns the file extension (with dot) in lowercase

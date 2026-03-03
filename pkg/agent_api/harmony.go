@@ -12,7 +12,7 @@ type HarmonyFormatter struct {
 
 // HarmonyOptions configures the harmony formatting
 type HarmonyOptions struct {
-	ReasoningLevel string // "low", "medium", "high" - defaults to "high"
+	ReasoningLevel string // "low", "medium", "high" - defaults to "medium"
 	EnableAnalysis bool   // Whether to enable analysis channel guidance
 }
 
@@ -20,14 +20,14 @@ type HarmonyOptions struct {
 func (h *HarmonyFormatter) FormatMessagesForCompletion(messages []Message, tools []Tool, opts *HarmonyOptions) string {
 	if opts == nil {
 		opts = &HarmonyOptions{
-			ReasoningLevel: "high",
+			ReasoningLevel: "medium",
 			EnableAnalysis: true,
 		}
 	}
 
 	// Ensure default reasoning level is set
 	if opts.ReasoningLevel == "" {
-		opts.ReasoningLevel = "high"
+		opts.ReasoningLevel = "medium"
 	}
 
 	// Validate messages
@@ -184,7 +184,7 @@ func (h *HarmonyFormatter) StripReturnToken(response string) string {
 // NewHarmonyFormatter creates a new harmony formatter
 func NewHarmonyFormatter() *HarmonyFormatter {
 	return &HarmonyFormatter{
-		reasoningLevel: "high",
+		reasoningLevel: "medium",
 	}
 }
 

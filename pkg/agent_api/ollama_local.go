@@ -264,7 +264,7 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 		"stream":      stream,
 	}
 
-	if reasoning != "" {
+	if reasoning != "" && strings.Contains(strings.ToLower(c.model), "gpt-oss") {
 		options["reasoning_effort"] = reasoning
 	}
 

@@ -228,15 +228,23 @@ func TestApplyModelSpecificSettingsRemovesUnsupportedFields(t *testing.T) {
 	}
 }
 
-func TestApplyModelSpecificSettingsAddsGptOssReasoningEffort(t *testing.T) {
+func TestApplyModelSpecificSettingsDoesNotForceGptOssReasoningEffort(t *testing.T) {
 	request := map[string]interface{}{
 		"temperature": 0.7,
 	}
 
 	applyModelSpecificSettings("openai/gpt-oss-20b", request)
 
-	if request["reasoning_effort"] != "high" {
-		t.Fatalf("expected reasoning_effort=high for gpt-oss model, got %#v", request["reasoning_effort"])
+	if _, exists := request["reasoning_effort"]; exists {
+		t.Fatalf("expected no model-settings reasoning_effort injection for gpt-oss")
+	}
+}
+
+func TestApplyReasoningEffortAddsGptOssReasoningEffort(t *testing.T) {
+	request := map[string]interface{}{}
+	applyReasoningEffort("openai/gpt-oss-20b", "medium", request)
+	if request["reasoning_effort"] != "medium" {
+		t.Fatalf("expected reasoning_effort=medium for gpt-oss model, got %#v", request["reasoning_effort"])
 	}
 }
 

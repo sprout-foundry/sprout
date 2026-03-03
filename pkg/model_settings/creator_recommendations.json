@@ -4,7 +4,7 @@
       "id": "openai-gpt-oss-family",
       "match_prefixes": ["gpt-oss-", "gpt-oss."],
       "parameters": {
-        "reasoning_effort": "high"
+        "reasoning_effort": "medium"
       },
       "source": "https://platform.openai.com/docs/guides/reasoning",
       "source_type": "creator"

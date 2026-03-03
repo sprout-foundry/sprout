@@ -3,11 +3,14 @@ package tools
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ledongthuc/pdf"
 
@@ -25,6 +28,12 @@ const (
 
 // ProcessPDFWithVision processes a PDF file using Ollama with glm-ocr model
 func ProcessPDFWithVision(pdfPath string) (string, error) {
+	resolvedPath, cleanup, err := resolvePDFInputPath(pdfPath)
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
+
 	pythonExec, err := GetPDFPythonExecutable()
 	if err != nil {
 		return "", fmt.Errorf("PDF precheck failed: %w", err)
@@ -35,12 +44,64 @@ func ProcessPDFWithVision(pdfPath string) (string, error) {
 		return "", fmt.Errorf("failed to create vision client for PDF OCR: %w", err)
 	}
 
-	text, err := processPDFWithProvider(pdfPath, pythonExec, client)
+	text, err := processPDFWithProvider(resolvedPath, pythonExec, client)
 	if err != nil {
 		return "", fmt.Errorf("PDF OCR failed: %w", err)
 	}
 
 	return text, nil
+}
+
+func resolvePDFInputPath(inputPath string) (string, func(), error) {
+	if strings.HasPrefix(inputPath, "http://") || strings.HasPrefix(inputPath, "https://") {
+		return downloadRemotePDFToTemp(inputPath)
+	}
+	return inputPath, func() {}, nil
+}
+
+func downloadRemotePDFToTemp(url string) (string, func(), error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", func() {}, fmt.Errorf("failed to download PDF: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", func() {}, fmt.Errorf("failed to download PDF: status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", func() {}, fmt.Errorf("failed reading downloaded PDF bytes: %w", err)
+	}
+	if len(data) == 0 {
+		return "", func() {}, fmt.Errorf("downloaded PDF is empty")
+	}
+	if !looksLikePDF(data) {
+		return "", func() {}, fmt.Errorf("downloaded content is not a valid PDF")
+	}
+
+	tmp, err := os.CreateTemp("", "ledit_pdf_*.pdf")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("failed to create temp PDF file: %w", err)
+	}
+
+	cleanup := func() {
+		_ = os.Remove(tmp.Name())
+	}
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return "", func() {}, fmt.Errorf("failed to write temp PDF file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return "", func() {}, fmt.Errorf("failed to finalize temp PDF file: %w", err)
+	}
+
+	return tmp.Name(), cleanup, nil
 }
 
 // processPDFWithProvider processes a PDF using the specified provider and model

@@ -169,6 +169,20 @@ func TestToolExecutorAppliesOpenFileAlias(t *testing.T) {
 	}
 }
 
+func TestSanitizeToolFailureMessage_RedactsAndTruncates(t *testing.T) {
+	msg := "HTTP 500: failed for data:application/pdf;base64," + strings.Repeat("A", 6000)
+	safe := sanitizeToolFailureMessage(msg)
+	if strings.Contains(safe, "base64,AAAA") {
+		t.Fatalf("expected base64 payload to be redacted")
+	}
+	if !strings.Contains(safe, "base64,[REDACTED]") {
+		t.Fatalf("expected redaction marker in sanitized error")
+	}
+	if len(safe) > maxToolFailureMessageChars+20 {
+		t.Fatalf("expected sanitized message to be bounded, got length=%d", len(safe))
+	}
+}
+
 type providerOverrideClient struct {
 	*factory.TestClient
 	provider string

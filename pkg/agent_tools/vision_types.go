@@ -27,9 +27,9 @@ const (
 	visionMaxOptimizedJPEGQuality  = 85
 	visionMinOptimizedJPEGQuality  = 35
 	visionOptimizedJPEGQualityStep = 10
-	visionResizeStepPercent        = 0.8              // Resize to 80% of original dimensions each iteration
-	visionMinDimension             = 256              // Minimum dimension in pixels
-	visionMaxDimension             = 4096             // Maximum pixels on longest edge for vision models
+	visionResizeStepPercent        = 0.8  // Resize to 80% of original dimensions each iteration
+	visionMinDimension             = 256  // Minimum dimension in pixels
+	visionMaxDimension             = 4096 // Maximum pixels on longest edge for vision models
 )
 
 // ============================================================================
@@ -842,7 +842,7 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 			response.Success = false
 			response.InputResolved = true
 			response.OCRAttempted = true
-			response.ErrorCode = ErrCodePDFNotSupported
+			response.ErrorCode = classifyPDFProcessingErrorCode(err)
 			response.ErrorMessage = fmt.Sprintf("PDF processing failed: %v", err)
 			respJSON, _ := json.Marshal(response)
 			return string(respJSON), nil
@@ -954,6 +954,34 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	}
 
 	return string(respJSON), nil
+}
+
+func classifyPDFProcessingErrorCode(err error) string {
+	if err == nil {
+		return ErrCodePDFNotSupported
+	}
+	msg := strings.ToLower(err.Error())
+
+	// Provider/inference transport failures: model call failed, not PDF support.
+	if strings.Contains(msg, "ocr request failed") ||
+		strings.Contains(msg, "http 5") ||
+		strings.Contains(msg, "http 4") ||
+		strings.Contains(msg, "timeout") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "failed to create vision client") ||
+		strings.Contains(msg, "no response from ocr model") {
+		return ErrCodeVisionRequestFailed
+	}
+
+	// True PDF/input support failures.
+	if strings.Contains(msg, "missing %pdf header") ||
+		strings.Contains(msg, "not a valid pdf") ||
+		strings.Contains(msg, "failed to open pdf") {
+		return ErrCodePDFNotSupported
+	}
+
+	// Conservative default for unknown PDF-specific failures.
+	return ErrCodePDFNotSupported
 }
 
 // GetFileExtension returns the file extension (with dot) in lowercase

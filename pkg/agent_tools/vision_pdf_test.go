@@ -2,6 +2,7 @@ package tools
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -32,3 +33,32 @@ func TestSelectImagesForOCR_ChoosesLargestAndPreservesOriginalOrder(t *testing.T
 		t.Fatalf("unexpected selected images")
 	}
 }
+
+func TestCompactVisionError_RedactsDataURLAndTruncates(t *testing.T) {
+	raw := "OCR request failed: Failed to process data:application/pdf;base64," + strings.Repeat("A", 2000)
+	msg := compactVisionError(assertErrString(raw))
+	if strings.Contains(msg, "base64,AAAA") {
+		t.Fatalf("expected base64 payload to be redacted, got: %s", msg)
+	}
+	if !strings.Contains(msg, "base64,[REDACTED]") {
+		t.Fatalf("expected redaction marker, got: %s", msg)
+	}
+	if len(msg) > 820 {
+		t.Fatalf("expected truncated compact error, got length=%d", len(msg))
+	}
+}
+
+func TestLooksLikePDF(t *testing.T) {
+	if !looksLikePDF([]byte("%PDF-1.7\n...")) {
+		t.Fatalf("expected valid PDF header to be detected")
+	}
+	if looksLikePDF([]byte("<!doctype html>")) {
+		t.Fatalf("expected non-PDF content to be rejected")
+	}
+}
+
+type stringErr string
+
+func (e stringErr) Error() string { return string(e) }
+
+func assertErrString(s string) error { return stringErr(s) }

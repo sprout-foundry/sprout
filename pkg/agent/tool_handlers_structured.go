@@ -22,6 +22,8 @@ type jsonPatchOperation struct {
 	Value interface{}
 }
 
+const maxStructuredErrorDetails = 8
+
 func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
@@ -44,7 +46,7 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 			return "", err
 		}
 		if errs := validateDataAgainstSchema(data, schema, "$"); len(errs) > 0 {
-			return "", fmt.Errorf("schema validation failed: %s", strings.Join(errs, "; "))
+			return "", formatStructuredValidationError("write_structured_file", errs, "")
 		}
 	}
 
@@ -112,11 +114,16 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 		return "", err
 	}
 
-	for _, op := range ops {
+	applied := 0
+	for i, op := range ops {
 		doc, err = applyPatchOperation(doc, op)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf(
+				"patch operation failed: tool=patch_structured_file index=%d op=%s path=%s applied=%d/%d err=%v",
+				i, op.Op, op.Path, applied, len(ops), err,
+			)
 		}
+		applied++
 	}
 
 	if schemaRaw, ok := args["schema"]; ok && schemaRaw != nil {
@@ -125,7 +132,8 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 			return "", err
 		}
 		if errs := validateDataAgainstSchema(doc, schema, "$"); len(errs) > 0 {
-			return "", fmt.Errorf("schema validation failed after patch: %s", strings.Join(errs, "; "))
+			context := fmt.Sprintf("applied=%d/%d", applied, len(ops))
+			return "", formatStructuredValidationError("patch_structured_file", errs, context)
 		}
 	}
 
@@ -321,6 +329,68 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 	}
 
 	return errs
+}
+
+func formatStructuredValidationError(toolName string, errs []string, context string) error {
+	if len(errs) == 0 {
+		return fmt.Errorf("schema validation failed")
+	}
+
+	paths := extractValidationPaths(errs)
+	pathSummary := strings.Join(limitStrings(paths, maxStructuredErrorDetails), ",")
+	if pathSummary == "" {
+		pathSummary = "unknown"
+	}
+
+	details := strings.Join(limitStrings(errs, maxStructuredErrorDetails), " | ")
+	if len(errs) > maxStructuredErrorDetails {
+		details += fmt.Sprintf(" | ...(%d more)", len(errs)-maxStructuredErrorDetails)
+	}
+
+	if context == "" {
+		return fmt.Errorf(
+			"schema validation failed: tool=%s error_count=%d failed_paths=%s details=%s",
+			toolName, len(errs), pathSummary, details,
+		)
+	}
+
+	return fmt.Errorf(
+		"schema validation failed: tool=%s %s error_count=%d failed_paths=%s details=%s",
+		toolName, context, len(errs), pathSummary, details,
+	)
+}
+
+func extractValidationPaths(errs []string) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(errs))
+	for _, errText := range errs {
+		text := strings.TrimSpace(errText)
+		if text == "" {
+			continue
+		}
+
+		path := text
+		if idx := strings.Index(path, ":"); idx > 0 {
+			path = strings.TrimSpace(path[:idx])
+		}
+
+		if !strings.HasPrefix(path, "$") {
+			continue
+		}
+		if _, exists := seen[path]; exists {
+			continue
+		}
+		seen[path] = struct{}{}
+		out = append(out, path)
+	}
+	return out
+}
+
+func limitStrings(values []string, max int) []string {
+	if max <= 0 || len(values) <= max {
+		return values
+	}
+	return values[:max]
 }
 
 func isNumberValue(v interface{}) bool {

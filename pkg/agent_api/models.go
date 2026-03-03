@@ -113,9 +113,7 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 
 // Wrapper adapters to normalize ListModels return types
 
-type openAIListModelsWrapper struct {
-	client *OpenAIClient
-}
+type openAIListModelsWrapper struct{}
 
 func (w *openAIListModelsWrapper) ListModels() ([]ModelInfo, error) {
 	apiKey := os.Getenv("OPENAI_API_KEY")

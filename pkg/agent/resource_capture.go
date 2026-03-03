@@ -92,13 +92,36 @@ func (a *Agent) captureVisionInputAndOutput(imagePath, rawResult string) {
 		a.appendResourceCaptureLog("saved_asset", imagePath, savedPath, size, "")
 	}
 
-	extracted := extractVisionText(rawResult)
+	extracted, meta := extractVisionTextAndMetadata(rawResult)
 	if strings.TrimSpace(extracted) != "" {
 		textPath := filepath.Join(dir, captureBaseName("vision_text", imagePath)+".txt")
 		if err := os.WriteFile(textPath, []byte(extracted), 0o644); err != nil {
 			a.debugLog("resource capture: failed writing OCR text %s: %v\n", textPath, err)
 		} else {
-			a.appendResourceCaptureLog("saved_text", imagePath, textPath, int64(len(extracted)), "")
+			logMeta := map[string]interface{}{}
+			if meta.OutputTruncated {
+				logMeta["output_truncated"] = true
+				logMeta["original_chars"] = meta.OriginalChars
+				logMeta["returned_chars"] = meta.ReturnedChars
+			}
+			if meta.FullOutputPath != "" {
+				logMeta["full_output_path"] = meta.FullOutputPath
+			}
+			a.appendResourceCaptureLogWithMeta("saved_text", imagePath, textPath, int64(len(extracted)), "", logMeta)
+		}
+	}
+
+	if meta.FullOutputPath != "" {
+		fullPath := meta.FullOutputPath
+		if strings.HasPrefix(fullPath, "./") || strings.HasPrefix(fullPath, "../") {
+			if wd, err := os.Getwd(); err == nil {
+				fullPath = filepath.Join(wd, filepath.FromSlash(strings.TrimPrefix(meta.FullOutputPath, "./")))
+			}
+		}
+		if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
+			a.appendResourceCaptureLogWithMeta("saved_full_text", imagePath, meta.FullOutputPath, info.Size(), "", map[string]interface{}{
+				"output_truncated": true,
+			})
 		}
 	}
 }
@@ -175,6 +198,10 @@ func (a *Agent) captureRemoteAsset(source, dir string) (string, int64, error) {
 }
 
 func (a *Agent) appendResourceCaptureLog(action, source, path string, size int64, note string) {
+	a.appendResourceCaptureLogWithMeta(action, source, path, size, note, nil)
+}
+
+func (a *Agent) appendResourceCaptureLogWithMeta(action, source, path string, size int64, note string, meta map[string]interface{}) {
 	dir := a.resourceDirectory()
 	if dir == "" {
 		return
@@ -190,6 +217,9 @@ func (a *Agent) appendResourceCaptureLog(action, source, path string, size int64
 		"path":   path,
 		"size":   size,
 		"note":   note,
+	}
+	for k, v := range meta {
+		entry[k] = v
 	}
 	blob, _ := json.Marshal(entry)
 	logPath := filepath.Join(dir, "resource_capture.log")
@@ -263,21 +293,34 @@ func extensionFromContentType(ct string) string {
 	}
 }
 
-func extractVisionText(rawResult string) string {
+type visionCaptureMetadata struct {
+	OutputTruncated bool
+	OriginalChars   int
+	ReturnedChars   int
+	FullOutputPath  string
+}
+
+func extractVisionTextAndMetadata(rawResult string) (string, visionCaptureMetadata) {
+	meta := visionCaptureMetadata{}
 	rawResult = strings.TrimSpace(rawResult)
 	if rawResult == "" || !strings.HasPrefix(rawResult, "{") {
-		return rawResult
+		return rawResult, meta
 	}
 	var parsed tools.ImageAnalysisResponse
 	if err := json.Unmarshal([]byte(rawResult), &parsed); err != nil {
-		return rawResult
+		return rawResult, meta
 	}
+	meta.OutputTruncated = parsed.OutputTruncated
+	meta.OriginalChars = parsed.OriginalChars
+	meta.ReturnedChars = parsed.ReturnedChars
+	meta.FullOutputPath = strings.TrimSpace(parsed.FullOutputPath)
+
 	if txt := strings.TrimSpace(parsed.ExtractedText); txt != "" {
-		return txt
+		return txt, meta
 	}
 	if parsed.Analysis != nil {
 		if desc := strings.TrimSpace(parsed.Analysis.Description); desc != "" {
-			return desc
+			return desc, meta
 		}
 	}
 	// Preserve raw JSON if no extracted field to keep debuggability.
@@ -285,7 +328,7 @@ func extractVisionText(rawResult string) string {
 	enc := json.NewEncoder(&out)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(parsed); err == nil {
-		return strings.TrimSpace(out.String())
+		return strings.TrimSpace(out.String()), meta
 	}
-	return rawResult
+	return rawResult, meta
 }

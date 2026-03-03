@@ -2,7 +2,9 @@ package tools
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -30,6 +32,7 @@ const (
 	visionResizeStepPercent        = 0.8  // Resize to 80% of original dimensions each iteration
 	visionMinDimension             = 256  // Minimum dimension in pixels
 	visionMaxDimension             = 4096 // Maximum pixels on longest edge for vision models
+	visionMaxReturnedTextChars     = 12000
 )
 
 // ============================================================================
@@ -67,17 +70,21 @@ type VisionAnalysis struct {
 
 // ImageAnalysisResponse represents a structured response for the analyze_image_content tool
 type ImageAnalysisResponse struct {
-	Success        bool                   `json:"success"`
-	ToolInvoked    bool                   `json:"tool_invoked"`
-	InputResolved  bool                   `json:"input_resolved"`
-	OCRAttempted   bool                   `json:"ocr_attempted"`
-	InputType      string                 `json:"input_type"` // "local_file", "remote_url", "unknown"
-	InputPath      string                 `json:"input_path"`
-	ErrorCode      string                 `json:"error_code,omitempty"`
-	ErrorMessage   string                 `json:"error_message,omitempty"`
-	ExtractedText  string                 `json:"extracted_text,omitempty"`
-	Analysis       *VisionAnalysis        `json:"analysis,omitempty"`
-	SupportedInput ImageAnalysisSupported `json:"supported_input"`
+	Success         bool                   `json:"success"`
+	ToolInvoked     bool                   `json:"tool_invoked"`
+	InputResolved   bool                   `json:"input_resolved"`
+	OCRAttempted    bool                   `json:"ocr_attempted"`
+	InputType       string                 `json:"input_type"` // "local_file", "remote_url", "unknown"
+	InputPath       string                 `json:"input_path"`
+	ErrorCode       string                 `json:"error_code,omitempty"`
+	ErrorMessage    string                 `json:"error_message,omitempty"`
+	ExtractedText   string                 `json:"extracted_text,omitempty"`
+	OutputTruncated bool                   `json:"output_truncated,omitempty"`
+	OriginalChars   int                    `json:"original_chars,omitempty"`
+	ReturnedChars   int                    `json:"returned_chars,omitempty"`
+	FullOutputPath  string                 `json:"full_output_path,omitempty"` // Path to full OCR/analysis text when truncated
+	Analysis        *VisionAnalysis        `json:"analysis,omitempty"`
+	SupportedInput  ImageAnalysisSupported `json:"supported_input"`
 }
 
 // ImageAnalysisSupported describes what input types are supported
@@ -848,14 +855,23 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 			return string(respJSON), nil
 		}
 
-		// Success - return the PDF text
+		// Success - return bounded PDF text to avoid blowing up model context.
+		limitedText, truncated, originalCount := limitVisionOutputText(pdfText)
 		response.Success = true
 		response.InputResolved = true
 		response.OCRAttempted = true
-		response.ExtractedText = pdfText
+		response.ExtractedText = limitedText
+		response.OutputTruncated = truncated
+		response.OriginalChars = originalCount
+		response.ReturnedChars = len(limitedText)
+		if truncated {
+			if fullPath, saveErr := persistVisionFullText(imagePath, strings.TrimSpace(pdfText)); saveErr == nil {
+				response.FullOutputPath = fullPath
+			}
+		}
 		response.Analysis = &VisionAnalysis{
 			ImagePath:   imagePath,
-			Description: pdfText,
+			Description: limitedText,
 		}
 		respJSON, _ := json.Marshal(response)
 		return string(respJSON), nil
@@ -935,8 +951,18 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 		return string(respJSON), nil
 	}
 
+	limitedDescription, truncated, originalCount := limitVisionOutputText(description)
 	response.Success = true
-	response.ExtractedText = description
+	response.ExtractedText = limitedDescription
+	response.OutputTruncated = truncated
+	response.OriginalChars = originalCount
+	response.ReturnedChars = len(limitedDescription)
+	if truncated {
+		if fullPath, saveErr := persistVisionFullText(imagePath, strings.TrimSpace(description)); saveErr == nil {
+			response.FullOutputPath = fullPath
+		}
+	}
+	analysis.Description = limitedDescription
 	response.Analysis = &analysis
 
 	respJSON, err := json.Marshal(response)
@@ -954,6 +980,106 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	}
 
 	return string(respJSON), nil
+}
+
+func limitVisionOutputText(text string) (string, bool, int) {
+	trimmed := strings.TrimSpace(text)
+	original := len(trimmed)
+	if original <= visionMaxReturnedTextChars {
+		return trimmed, false, original
+	}
+
+	suffix := fmt.Sprintf("\n\n[TRUNCATED: returned first %d of %d characters]", visionMaxReturnedTextChars, original)
+	keep := visionMaxReturnedTextChars - len(suffix)
+	if keep < 0 {
+		keep = visionMaxReturnedTextChars
+		suffix = ""
+	}
+	return strings.TrimSpace(trimmed[:keep]) + suffix, true, original
+}
+
+func persistVisionFullText(sourcePath, fullText string) (string, error) {
+	fullText = strings.TrimSpace(fullText)
+	if fullText == "" {
+		return "", fmt.Errorf("full text is empty")
+	}
+
+	dir := resolveVisionOutputDirectory()
+	if dir == "" {
+		return "", fmt.Errorf("vision output directory unavailable")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create vision output directory: %w", err)
+	}
+
+	base := sanitizeVisionFileComponent(strings.TrimSuffix(filepath.Base(sourcePath), filepath.Ext(sourcePath)))
+	if base == "" {
+		base = "vision_output"
+	}
+	hash := sha1.Sum([]byte(strings.TrimSpace(sourcePath)))
+	shortHash := hex.EncodeToString(hash[:])[:12]
+	fileName := fmt.Sprintf("%s_%s_full.txt", base, shortHash)
+	fullPath := filepath.Join(dir, fileName)
+
+	if err := os.WriteFile(fullPath, []byte(fullText), 0o644); err != nil {
+		return "", fmt.Errorf("failed to write full vision output: %w", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return fullPath, nil
+	}
+	rel, err := filepath.Rel(wd, fullPath)
+	if err != nil {
+		return fullPath, nil
+	}
+	rel = filepath.ToSlash(rel)
+	if strings.HasPrefix(rel, "../") {
+		return fullPath, nil
+	}
+	return "./" + rel, nil
+}
+
+func resolveVisionOutputDirectory() string {
+	raw := strings.TrimSpace(os.Getenv("LEDIT_RESOURCE_DIRECTORY"))
+	if raw == "" {
+		raw = ".ledit_ocr_outputs"
+	}
+	cleaned := filepath.Clean(raw)
+	if filepath.IsAbs(cleaned) {
+		if vol := filepath.VolumeName(cleaned); vol != "" {
+			cleaned = strings.TrimPrefix(cleaned, vol)
+		}
+		cleaned = strings.TrimLeft(cleaned, `/\`)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(wd, cleaned)
+}
+
+func sanitizeVisionFileComponent(input string) string {
+	input = strings.TrimSpace(strings.ToLower(input))
+	if input == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range input {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if len(out) > 64 {
+		out = out[:64]
+	}
+	return out
 }
 
 func classifyPDFProcessingErrorCode(err error) string {

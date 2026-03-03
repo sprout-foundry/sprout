@@ -65,6 +65,10 @@ type Config struct {
 	// Preferences
 	Preferences map[string]interface{} `json:"preferences,omitempty"`
 
+	// ReasoningEffort sets a global default reasoning effort for chat requests.
+	// Valid values: "low", "medium", "high". Empty means automatic selection.
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+
 	// SkipPrompt - for non-interactive mode
 	SkipPrompt bool `json:"skip_prompt,omitempty"`
 
@@ -175,9 +179,10 @@ type CustomProviderConfig struct {
 	Endpoint               string                      `json:"endpoint"`
 	ModelName              string                      `json:"model_name"`
 	ContextSize            int                         `json:"context_size"`
-	Temperature            *float64                    `json:"temperature,omitempty"` // Optional default temperature
-	TopP                   *float64                    `json:"top_p,omitempty"`       // Optional default top_p
-	Parameters             map[string]interface{}      `json:"parameters,omitempty"`  // Optional provider-specific default parameters
+	ReasoningEffort        string                      `json:"reasoning_effort,omitempty"` // Optional provider-specific reasoning effort override
+	Temperature            *float64                    `json:"temperature,omitempty"`      // Optional default temperature
+	TopP                   *float64                    `json:"top_p,omitempty"`            // Optional default top_p
+	Parameters             map[string]interface{}      `json:"parameters,omitempty"`       // Optional provider-specific default parameters
 	RequiresAPIKey         bool                        `json:"requires_api_key"`
 	ToolCalls              []string                    `json:"tool_calls,omitempty"`               // Optional explicit tool allowlist; when set, only these tools are exposed
 	APIKey                 string                      `json:"api_key,omitempty"`                  // Stored in config (not recommended for production)

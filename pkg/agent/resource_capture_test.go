@@ -1,11 +1,13 @@
 package agent
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
@@ -151,5 +153,59 @@ func TestResourceDirectory_NormalizesAbsoluteEnvToRelativeWorkingDir(t *testing.
 	want := filepath.Join(workDir, "tmp", "captures")
 	if got != want {
 		t.Fatalf("expected normalized relative path %s, got %s", want, got)
+	}
+}
+
+func TestCaptureVisionInputAndOutput_LogsTruncationAndFullOutputPath(t *testing.T) {
+	workDir := t.TempDir()
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(originalWD) })
+
+	t.Setenv("LEDIT_RESOURCE_DIRECTORY", "captures")
+	dir := filepath.Join(workDir, "captures")
+
+	fullOutputRel := "./captures/full_ocr.txt"
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(workDir, fullOutputRel)), 0o755); err != nil {
+		t.Fatalf("failed to create full output dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workDir, fullOutputRel), []byte(strings.Repeat("x", 2000)), 0o644); err != nil {
+		t.Fatalf("failed to write full output file: %v", err)
+	}
+
+	resp := tools.ImageAnalysisResponse{
+		Success:         true,
+		ExtractedText:   "short excerpt",
+		OutputTruncated: true,
+		OriginalChars:   50000,
+		ReturnedChars:   12000,
+		FullOutputPath:  fullOutputRel,
+	}
+	raw, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+
+	a := &Agent{}
+	a.captureVisionInputAndOutput("https://example.com/menu.pdf", string(raw))
+
+	logBytes, err := os.ReadFile(filepath.Join(dir, "resource_capture.log"))
+	if err != nil {
+		t.Fatalf("expected resource_capture.log: %v", err)
+	}
+	logText := string(logBytes)
+	if !strings.Contains(logText, `"output_truncated":true`) {
+		t.Fatalf("expected truncation metadata in log, got: %s", logText)
+	}
+	if !strings.Contains(logText, `"full_output_path":"./captures/full_ocr.txt"`) {
+		t.Fatalf("expected full_output_path in log, got: %s", logText)
+	}
+	if !strings.Contains(logText, `"action":"saved_full_text"`) {
+		t.Fatalf("expected saved_full_text action in log, got: %s", logText)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -74,7 +75,8 @@ func processPDFWithProvider(pdfPath, pythonExec string, client api.ClientInterfa
 		if ocrErr == nil && len(strings.TrimSpace(ocrText)) > 0 {
 			return ocrText, nil
 		}
-		return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %v; image OCR error: %v", directOCRErr, ocrErr)
+		return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %s; image OCR error: %s",
+			compactVisionError(directOCRErr), compactVisionError(ocrErr))
 	}
 
 	return text, nil
@@ -328,6 +330,9 @@ func processPDFWithVisionModel(pdfPath string, client api.ClientInterface) (stri
 	if err != nil {
 		return "", fmt.Errorf("failed to read PDF: %w", err)
 	}
+	if !looksLikePDF(data) {
+		return "", fmt.Errorf("input is not a valid PDF file (missing %%PDF header)")
+	}
 
 	// Convert to base64
 	pdfBase64 := base64.StdEncoding.EncodeToString(data)
@@ -347,7 +352,7 @@ func processPDFWithVisionModel(pdfPath string, client api.ClientInterface) (stri
 	// Send request to Ollama
 	response, err := client.SendVisionRequest(messages, nil, "")
 	if err != nil {
-		return "", fmt.Errorf("OCR request failed: %w", err)
+		return "", fmt.Errorf("OCR request failed: %s", compactVisionError(err))
 	}
 
 	if len(response.Choices) == 0 {
@@ -355,6 +360,35 @@ func processPDFWithVisionModel(pdfPath string, client api.ClientInterface) (stri
 	}
 
 	return response.Choices[0].Message.Content, nil
+}
+
+var dataURLPattern = regexp.MustCompile(`data:[^;\s]+;base64,[A-Za-z0-9+/=]+`)
+
+func compactVisionError(err error) string {
+	if err == nil {
+		return "none"
+	}
+	msg := err.Error()
+	msg = dataURLPattern.ReplaceAllStringFunc(msg, func(m string) string {
+		mime := "application/octet-stream"
+		if semi := strings.Index(m, ";"); semi > len("data:") {
+			mime = m[len("data:"):semi]
+		}
+		return "data:" + mime + ";base64,[REDACTED]"
+	})
+
+	const maxChars = 800
+	if len(msg) > maxChars {
+		msg = msg[:maxChars] + "... (truncated)"
+	}
+	return msg
+}
+
+func looksLikePDF(data []byte) bool {
+	if len(data) < 5 {
+		return false
+	}
+	return string(data[:5]) == "%PDF-"
 }
 
 func selectImagesForOCR(images [][]byte, maxImages int) [][]byte {

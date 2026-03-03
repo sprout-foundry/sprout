@@ -67,20 +67,6 @@ func NewOpenRouterClientWrapper(model string) (ClientInterface, error) {
 	return nil, fmt.Errorf("OpenRouter client wrapper deprecated - use factory.CreateProviderClient instead")
 }
 
-// NewOpenAIClientWrapper creates an OpenAI client wrapper
-func NewOpenAIClientWrapper(model string) (ClientInterface, error) {
-	client, err := NewOpenAIClient()
-	if err != nil {
-		return nil, err
-	}
-	if model != "" {
-		if err := client.SetModel(model); err != nil {
-			return nil, err
-		}
-	}
-	return client, nil
-}
-
 // NewDeepSeekClientWrapper creates a DeepSeek client wrapper
 // DeepSeek provider removed (unimplemented)
 

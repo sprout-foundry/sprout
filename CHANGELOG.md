@@ -2,6 +2,14 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.0] - 2026-03-03
+
+- Merge remote-tracking branch 'origin/main' (b0d8421)
+- Updates 7 files - Updates agent workflow support and tests (ae85488)
+- Updates 2 files - Updates config manager merging logic and concurrency (5ffb337)
+- Updates 4 files - Updates vision capture log truncation and full output (30d8070)
+- docs: Update changelog for v0.10.14 (65f1f84)
+
 ## [v0.10.14] - 2026-03-03
 
 - Updates 2 files - Updates JSON parsing error handling and tool hints (550dbab)

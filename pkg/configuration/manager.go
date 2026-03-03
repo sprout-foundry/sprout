@@ -1,7 +1,10 @@
 package configuration
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
+	"sync"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	"github.com/alantheprice/ledit/pkg/mcp"
@@ -9,8 +12,10 @@ import (
 
 // Manager provides a unified interface for configuration management
 type Manager struct {
-	config  *Config
-	apiKeys *APIKeys
+	mu         sync.Mutex
+	config     *Config
+	apiKeys    *APIKeys
+	baseConfig *Config
 }
 
 // NewManager creates a new configuration manager
@@ -22,8 +27,9 @@ func NewManager() (*Manager, error) {
 	}
 
 	return &Manager{
-		config:  config,
-		apiKeys: apiKeys,
+		config:     config,
+		apiKeys:    apiKeys,
+		baseConfig: cloneConfig(config),
 	}, nil
 }
 
@@ -39,7 +45,26 @@ func (m *Manager) GetAPIKeys() *APIKeys {
 
 // SaveConfig saves the configuration to disk
 func (m *Manager) SaveConfig() error {
-	return m.config.Save()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	latest, err := Load()
+	if err != nil {
+		return err
+	}
+
+	merged, err := mergeConfigChanges(m.baseConfig, m.config, latest)
+	if err != nil {
+		return err
+	}
+
+	if err := merged.Save(); err != nil {
+		return err
+	}
+
+	m.config = merged
+	m.baseConfig = cloneConfig(merged)
+	return nil
 }
 
 // SaveAPIKeys saves the API keys to disk
@@ -60,7 +85,9 @@ func (m *Manager) GetProvider() (api.ClientType, error) {
 // SetProvider sets the current provider
 func (m *Manager) SetProvider(clientType api.ClientType) error {
 	provider := mapClientTypeToString(clientType)
+	m.mu.Lock()
 	m.config.LastUsedProvider = provider
+	m.mu.Unlock()
 	return m.SaveConfig()
 }
 
@@ -73,7 +100,9 @@ func (m *Manager) GetModelForProvider(clientType api.ClientType) string {
 // SetModelForProvider sets the model for a provider
 func (m *Manager) SetModelForProvider(clientType api.ClientType, model string) error {
 	provider := mapClientTypeToString(clientType)
+	m.mu.Lock()
 	m.config.SetModelForProvider(provider, model)
+	m.mu.Unlock()
 	return m.SaveConfig()
 }
 
@@ -97,13 +126,17 @@ func (m *Manager) HasAPIKey(clientType api.ClientType) bool {
 
 // SelectNewProvider allows interactive provider selection
 func (m *Manager) SelectNewProvider() (api.ClientType, error) {
+	m.mu.Lock()
 	currentProvider := m.config.LastUsedProvider
+	m.mu.Unlock()
 	selected, err := SelectProvider(currentProvider, m.apiKeys)
 	if err != nil {
 		return "", err
 	}
 
+	m.mu.Lock()
 	m.config.LastUsedProvider = selected
+	m.mu.Unlock()
 	if err := m.SaveConfig(); err != nil {
 		return "", err
 	}
@@ -149,17 +182,149 @@ func (m *Manager) GetMCPConfig() mcp.MCPConfig {
 
 // SetMCPEnabled enables or disables MCP
 func (m *Manager) SetMCPEnabled(enabled bool) error {
+	m.mu.Lock()
 	m.config.MCP.Enabled = enabled
+	m.mu.Unlock()
 	return m.SaveConfig()
 }
 
 // AddMCPServer adds an MCP server configuration
 func (m *Manager) AddMCPServer(name string, server mcp.MCPServerConfig) error {
+	m.mu.Lock()
 	if m.config.MCP.Servers == nil {
 		m.config.MCP.Servers = make(map[string]mcp.MCPServerConfig)
 	}
 	m.config.MCP.Servers[name] = server
+	m.mu.Unlock()
 	return m.SaveConfig()
+}
+
+func cloneConfig(cfg *Config) *Config {
+	if cfg == nil {
+		return nil
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return nil
+	}
+	var out Config
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil
+	}
+	return &out
+}
+
+func mergeConfigChanges(base, current, latest *Config) (*Config, error) {
+	if current == nil {
+		return cloneConfig(latest), nil
+	}
+	if latest == nil {
+		latest = NewConfig()
+	}
+
+	baseMap, err := configToMap(base)
+	if err != nil {
+		return nil, err
+	}
+	currentMap, err := configToMap(current)
+	if err != nil {
+		return nil, err
+	}
+	latestMap, err := configToMap(latest)
+	if err != nil {
+		return nil, err
+	}
+
+	applyMapDiff(baseMap, currentMap, latestMap)
+	return mapToConfig(latestMap)
+}
+
+func configToMap(cfg *Config) (map[string]interface{}, error) {
+	if cfg == nil {
+		return map[string]interface{}{}, nil
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func mapToConfig(m map[string]interface{}) (*Config, error) {
+	data, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	var out Config
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+
+	// Keep canonical zero-value protections that Load() applies.
+	if out.ProviderModels == nil {
+		out.ProviderModels = make(map[string]string)
+	}
+	if out.Preferences == nil {
+		out.Preferences = make(map[string]interface{})
+	}
+	if out.MCP.Servers == nil {
+		out.MCP.Servers = make(map[string]mcp.MCPServerConfig)
+	}
+	if out.CustomProviders == nil {
+		out.CustomProviders = make(map[string]CustomProviderConfig)
+	}
+	if out.SubagentTypes == nil {
+		out.SubagentTypes = make(map[string]SubagentType)
+	}
+	if out.Skills == nil {
+		out.Skills = make(map[string]Skill)
+	}
+	return &out, nil
+}
+
+func applyMapDiff(base, current, target map[string]interface{}) {
+	if current == nil {
+		return
+	}
+	for key := range target {
+		if _, ok := current[key]; !ok {
+			if _, existed := base[key]; existed {
+				// Deletion in current relative to base: apply deletion.
+				delete(target, key)
+			}
+		}
+	}
+
+	for key, currentVal := range current {
+		baseVal, baseHas := base[key]
+		targetVal, targetHas := target[key]
+		if !baseHas {
+			target[key] = currentVal
+			continue
+		}
+		if reflect.DeepEqual(baseVal, currentVal) {
+			continue
+		}
+
+		baseMap, baseMapOK := baseVal.(map[string]interface{})
+		currentMap, currentMapOK := currentVal.(map[string]interface{})
+		targetMap, targetMapOK := targetVal.(map[string]interface{})
+		if baseMapOK && currentMapOK {
+			if !targetMapOK || !targetHas {
+				targetMap = map[string]interface{}{}
+			}
+			applyMapDiff(baseMap, currentMap, targetMap)
+			target[key] = targetMap
+			continue
+		}
+
+		// Scalars/slices/type changes: overwrite with current value.
+		target[key] = currentVal
+	}
 }
 
 // mapClientTypeToString converts ClientType to string

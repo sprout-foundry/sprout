@@ -263,6 +263,9 @@ func handleWebSearch(ctx context.Context, a *Agent, args map[string]interface{})
 
 	result, err := tools.WebSearch(query, a.configManager)
 	a.debugLog("Web search error: %v\n", err)
+	if err == nil {
+		a.captureWebText("web_search", query, result)
+	}
 	return result, err
 }
 
@@ -280,6 +283,9 @@ func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 	result, err := tools.FetchURL(url, a.configManager)
 	a.debugLog("Fetch URL error: %v\n", err)
+	if err == nil {
+		a.captureWebText("fetch_url", url, result)
+	}
 	return result, err
 }
 

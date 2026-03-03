@@ -65,6 +65,10 @@ type Config struct {
 	// Preferences
 	Preferences map[string]interface{} `json:"preferences,omitempty"`
 
+	// ResourceDirectory stores captured web/vision resources relative to the current working directory.
+	// This can be overridden at runtime with --resource-directory.
+	ResourceDirectory string `json:"resource_directory,omitempty"`
+
 	// ReasoningEffort sets a global default reasoning effort for chat requests.
 	// Valid values: "low", "medium", "high". Empty means automatic selection.
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`

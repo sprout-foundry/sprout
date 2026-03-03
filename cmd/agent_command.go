@@ -14,17 +14,18 @@ import (
 )
 
 var (
-	agentSkipPrompt       bool
-	agentModel            string
-	agentProvider         string
-	agentPersona          string
-	agentDryRun           bool
-	maxIterations         int
-	agentNoStreaming      bool
-	agentSystemPromptFile string
-	agentSystemPrompt     string
-	agentUnsafe           bool
-	agentNoSubagents      bool
+	agentSkipPrompt        bool
+	agentModel             string
+	agentProvider          string
+	agentPersona           string
+	agentDryRun            bool
+	maxIterations          int
+	agentNoStreaming       bool
+	agentSystemPromptFile  string
+	agentSystemPrompt      string
+	agentUnsafe            bool
+	agentNoSubagents       bool
+	agentResourceDirectory string
 )
 
 func createChatAgent() (*agent.Agent, error) {
@@ -76,6 +77,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
 	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")
 	agentCmd.Flags().BoolVar(&agentNoSubagents, "no-subagents", false, "Disable subagent tools (run_subagent, run_parallel_subagents)")
+	agentCmd.Flags().StringVar(&agentResourceDirectory, "resource-directory", "", "Optional directory (relative to current working directory) to store captured web/vision resources")
 	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)
 
 	// Initialize environment-based defaults
@@ -184,6 +186,9 @@ Examples:
 
 		if agentDryRun {
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")
+		}
+		if strings.TrimSpace(agentResourceDirectory) != "" {
+			_ = os.Setenv("LEDIT_RESOURCE_DIRECTORY", strings.TrimSpace(agentResourceDirectory))
 		}
 
 		// Check if we're in a CI environment or non-interactive mode

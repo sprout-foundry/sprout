@@ -61,15 +61,12 @@ func TestResolveCreatorOverrideForZAIExactModel(t *testing.T) {
 	}
 }
 
-func TestResolveCreatorOverrideForGptOssFamily(t *testing.T) {
+func TestResolveOpenRouterSettingsForGptOssFamily(t *testing.T) {
 	settings := ResolveModelSettings("openai/gpt-oss-20b")
 	if !settings.Known {
 		t.Fatalf("expected known settings")
 	}
-	if settings.SourceType != "creator" {
-		t.Fatalf("expected creator source type, got %s", settings.SourceType)
-	}
-	if settings.Parameters["reasoning_effort"] != "high" {
-		t.Fatalf("expected reasoning_effort high, got %#v", settings.Parameters["reasoning_effort"])
+	if settings.SourceType != "third_party" {
+		t.Fatalf("expected third_party source type without creator override, got %s", settings.SourceType)
 	}
 }

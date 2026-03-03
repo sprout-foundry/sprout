@@ -258,6 +258,39 @@ func TestCanExecuteInParallelProviderOrderingRestrictions(t *testing.T) {
 	}
 }
 
+func TestFormatToolCall_TodoWriteIncludesChecklistSummary(t *testing.T) {
+	tc := api.ToolCall{Type: "function"}
+	tc.Function.Name = "TodoWrite"
+	tc.Function.Arguments = `{"todos":[{"content":"First","status":"pending"},{"content":"Second","status":"in_progress"},{"content":"Third","status":"completed"}]}`
+
+	got := formatToolCall(tc)
+	if !strings.Contains(got, "todos=3") {
+		t.Fatalf("expected todo count in formatted call, got: %q", got)
+	}
+	if !strings.Contains(got, "[ ]=1") || !strings.Contains(got, "[~]=1") || !strings.Contains(got, "[x]=1") {
+		t.Fatalf("expected status breakdown in formatted call, got: %q", got)
+	}
+}
+
+func TestTodoStatusSymbol(t *testing.T) {
+	tests := []struct {
+		status string
+		want   string
+	}{
+		{status: "pending", want: "[ ]"},
+		{status: "in_progress", want: "[~]"},
+		{status: "completed", want: "[x]"},
+		{status: "cancelled", want: "[-]"},
+		{status: "other", want: "[?]"},
+	}
+
+	for _, tt := range tests {
+		if got := todoStatusSymbol(tt.status); got != tt.want {
+			t.Fatalf("todoStatusSymbol(%q) = %q, want %q", tt.status, got, tt.want)
+		}
+	}
+}
+
 func TestCanExecuteInParallelSearchFiles(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},

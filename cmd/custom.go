@@ -125,6 +125,16 @@ func runCustomModelAdd() error {
 		return fmt.Errorf("invalid context size: must be a positive integer")
 	}
 
+	// Optional sampling defaults
+	temperature, err := readOptionalFloat(reader, "Optional default temperature (leave empty for provider default): ")
+	if err != nil {
+		return err
+	}
+	topP, err := readOptionalFloat(reader, "Optional default top_p (leave empty for provider default): ")
+	if err != nil {
+		return err
+	}
+
 	// Ask about API key
 	fmt.Print("Does this provider require an API key? (y/N): ")
 	apiKeyResponse, _ := reader.ReadString('\n')
@@ -185,6 +195,8 @@ func runCustomModelAdd() error {
 		Endpoint:       endpoint,
 		ModelName:      modelName,
 		ContextSize:    contextSize,
+		Temperature:    temperature,
+		TopP:           topP,
 		RequiresAPIKey: requiresAPIKey,
 		ToolCalls:      toolCalls,
 		SupportsVision: supportsVision,
@@ -233,6 +245,12 @@ func runCustomModelAdd() error {
 	fmt.Printf("   Endpoint: %s\n", endpoint)
 	fmt.Printf("   Model: %s\n", modelName)
 	fmt.Printf("   Context Size: %d tokens\n", contextSize)
+	if temperature != nil {
+		fmt.Printf("   Temperature: %.4g\n", *temperature)
+	}
+	if topP != nil {
+		fmt.Printf("   Top P: %.4g\n", *topP)
+	}
 	fmt.Printf("   Supports Vision: %t\n", supportsVision)
 	if supportsVision {
 		fmt.Printf("   Vision Model: %s\n", visionModel)
@@ -360,6 +378,12 @@ func runCustomModelList() error {
 		fmt.Printf("  Endpoint: %s\n", provider.Endpoint)
 		fmt.Printf("  Model: %s\n", provider.ModelName)
 		fmt.Printf("  Context Size: %d tokens\n", provider.ContextSize)
+		if provider.Temperature != nil {
+			fmt.Printf("  Temperature: %.4g\n", *provider.Temperature)
+		}
+		if provider.TopP != nil {
+			fmt.Printf("  Top P: %.4g\n", *provider.TopP)
+		}
 		fmt.Printf("  API Key Required: %t\n", provider.RequiresAPIKey)
 		fmt.Printf("  Supports Vision: %t\n", provider.SupportsVision)
 		if provider.SupportsVision {
@@ -414,6 +438,20 @@ func parseToolCallList(raw string) []string {
 	}
 
 	return toolCalls
+}
+
+func readOptionalFloat(reader *bufio.Reader, prompt string) (*float64, error) {
+	fmt.Print(prompt)
+	valueStr, _ := reader.ReadString('\n')
+	valueStr = strings.TrimSpace(valueStr)
+	if valueStr == "" {
+		return nil, nil
+	}
+	value, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid numeric value %q", valueStr)
+	}
+	return &value, nil
 }
 
 func init() {

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 // getToolTimeout returns the timeout duration for tool execution
@@ -301,6 +302,11 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		te.agent.debugLog("🔁 Normalized tool name: %s -> %s\n", toolCall.Function.Name, normalizedToolName)
 	}
 
+	var todoBefore []tools.TodoItem
+	if normalizedToolName == "TodoWrite" {
+		todoBefore = tools.TodoRead()
+	}
+
 	// Generate a tool call ID if empty to prevent sanitization from dropping the result
 	toolCallID := toolCall.ID
 	if toolCallID == "" {
@@ -386,6 +392,10 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		te.agent.PrintLine(fmt.Sprintf("❌ Tool '%s' failed: %s", normalizedToolName, safeErr))
 		te.agent.PrintLine("")
 		result = fmt.Sprintf("Error: %s", safeErr)
+	}
+
+	if err == nil && normalizedToolName == "TodoWrite" {
+		te.emitTodoChecklistUpdate(todoBefore, tools.TodoRead())
 	}
 
 	// Update circuit breaker
@@ -611,9 +621,126 @@ func formatToolCall(toolCall api.ToolCall) string {
 	if pattern, ok := args["pattern"].(string); ok && pattern != "" {
 		parts = append(parts, formatTruncateString(pattern))
 	}
+	if todoSummary := summarizeTodoWriteArgs(args); todoSummary != "" {
+		parts = append(parts, todoSummary)
+	}
 
 	result := fmt.Sprintf("[%s]", strings.Join(parts, " "))
 	return result
+}
+
+func summarizeTodoWriteArgs(args map[string]interface{}) string {
+	todosRaw, ok := args["todos"].([]interface{})
+	if !ok || len(todosRaw) == 0 {
+		return ""
+	}
+
+	var pending, inProgress, completed, cancelled int
+	for _, todoRaw := range todosRaw {
+		todoMap, ok := todoRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		status, _ := todoMap["status"].(string)
+		switch status {
+		case "pending":
+			pending++
+		case "in_progress":
+			inProgress++
+		case "completed":
+			completed++
+		case "cancelled":
+			cancelled++
+		}
+	}
+
+	return fmt.Sprintf("todos=%d [ ]=%d [~]=%d [x]=%d [-]=%d", len(todosRaw), pending, inProgress, completed, cancelled)
+}
+
+func (te *ToolExecutor) emitTodoChecklistUpdate(before, after []tools.TodoItem) {
+	if te.agent == nil {
+		return
+	}
+
+	type todoKey struct {
+		ID      string
+		Content string
+	}
+	getKey := func(t tools.TodoItem) todoKey {
+		return todoKey{
+			ID:      strings.TrimSpace(t.ID),
+			Content: strings.TrimSpace(t.Content),
+		}
+	}
+	statusBefore := make(map[todoKey]string, len(before))
+	for _, t := range before {
+		statusBefore[getKey(t)] = t.Status
+	}
+
+	var pending, inProgress, completed, cancelled int
+	changed := make([]string, 0, len(after))
+
+	for _, t := range after {
+		switch t.Status {
+		case "pending":
+			pending++
+		case "in_progress":
+			inProgress++
+		case "completed":
+			completed++
+		case "cancelled":
+			cancelled++
+		}
+
+		key := getKey(t)
+		prevStatus, existed := statusBefore[key]
+		if !existed || prevStatus != t.Status {
+			statusSymbol := todoStatusSymbol(t.Status)
+			label := strings.TrimSpace(t.Content)
+			if label == "" {
+				label = "<untitled>"
+			}
+			if existed {
+				changed = append(changed, fmt.Sprintf("%s %s (%s -> %s)", statusSymbol, label, prevStatus, t.Status))
+			} else {
+				changed = append(changed, fmt.Sprintf("%s %s (new)", statusSymbol, label))
+			}
+		}
+	}
+
+	te.agent.PrintLine("")
+	te.agent.PrintLine(fmt.Sprintf("📝 Todo update: %d total | [ ] %d pending | [~] %d in progress | [x] %d completed | [-] %d cancelled",
+		len(after), pending, inProgress, completed, cancelled))
+	if len(changed) == 0 {
+		te.agent.PrintLine("   No checklist changes detected.")
+		te.agent.PrintLine("")
+		return
+	}
+
+	maxLines := 8
+	for i, line := range changed {
+		if i >= maxLines {
+			te.agent.PrintLine(fmt.Sprintf("   ... and %d more changes", len(changed)-maxLines))
+			break
+		}
+		te.agent.PrintLine("   " + line)
+	}
+	te.agent.PrintLine("")
+}
+
+func todoStatusSymbol(status string) string {
+	switch status {
+	case "pending":
+		return "[ ]"
+	case "in_progress":
+		return "[~]"
+	case "completed":
+		return "[x]"
+	case "cancelled":
+		return "[-]"
+	default:
+		return "[?]"
+	}
 }
 
 var toolFailureDataURLPattern = regexp.MustCompile(`data:[^;\s]+;base64,[A-Za-z0-9+/=]+`)

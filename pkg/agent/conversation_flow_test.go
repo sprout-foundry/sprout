@@ -166,6 +166,51 @@ func TestRepetitiveContentDetection(t *testing.T) {
 	}
 }
 
+func TestHandleFinishReason_StopWithEmptyContentContinues(t *testing.T) {
+	ch := &ConversationHandler{
+		agent: &Agent{},
+	}
+
+	shouldStop, reason := ch.handleFinishReason("stop", "   ")
+	if shouldStop {
+		t.Fatalf("expected empty stop response to continue, got stop=true (reason=%q)", reason)
+	}
+	if reason != "empty stop response" {
+		t.Fatalf("expected reason 'empty stop response', got %q", reason)
+	}
+	if len(ch.transientMessages) != 1 {
+		t.Fatalf("expected one transient continuation message, got %d", len(ch.transientMessages))
+	}
+	if ch.transientMessages[0].Role != "user" {
+		t.Fatalf("expected transient message role user, got %q", ch.transientMessages[0].Role)
+	}
+	if !containsStringForTest(ch.transientMessages[0].Content, "Please continue") {
+		t.Fatalf("expected continuation prompt, got %q", ch.transientMessages[0].Content)
+	}
+}
+
+func TestHandleFinishReason_StopWithIncompleteContentContinues(t *testing.T) {
+	agent := &Agent{}
+	ch := &ConversationHandler{
+		agent:             agent,
+		responseValidator: NewResponseValidator(agent),
+	}
+
+	shouldStop, reason := ch.handleFinishReason("stop", "I checked.")
+	if shouldStop {
+		t.Fatalf("expected incomplete stop response to continue, got stop=true (reason=%q)", reason)
+	}
+	if reason != "incomplete stop response" {
+		t.Fatalf("expected reason 'incomplete stop response', got %q", reason)
+	}
+	if len(ch.transientMessages) != 1 {
+		t.Fatalf("expected one transient message, got %d", len(ch.transientMessages))
+	}
+	if !containsStringForTest(ch.transientMessages[0].Content, "appears incomplete") {
+		t.Fatalf("expected incomplete-response nudge, got %q", ch.transientMessages[0].Content)
+	}
+}
+
 func containsStringForTest(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
 		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||

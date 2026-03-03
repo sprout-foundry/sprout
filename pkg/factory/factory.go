@@ -191,8 +191,10 @@ func CreateCustomProvider(providerName, model string) (api.ClientInterface, erro
 		},
 		Headers: make(map[string]string),
 		Defaults: providers.RequestDefaults{
-			Model:     customProvider.ModelName,
-			MaxTokens: &customProvider.ContextSize,
+			Model:       customProvider.ModelName,
+			Temperature: customProvider.Temperature,
+			TopP:        customProvider.TopP,
+			Parameters:  customProvider.Parameters,
 		},
 		Conversion: func() providers.MessageConversion {
 			if customProvider.Conversion.IncludeToolCallId ||

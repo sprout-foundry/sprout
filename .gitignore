@@ -91,6 +91,7 @@ test/**/test_*
 *.md.tmp
 webui-websocket-test.js
 testing_area/
+pkg/agent/tmp
 
 # Work-in-progress documentation and planning
 *_plan.md
@@ -109,3 +110,4 @@ run-prompt.md
 !webui/public/icon-512.png
 !pkg/webui/static/icon-192.png
 !pkg/webui/static/icon-512.png
+

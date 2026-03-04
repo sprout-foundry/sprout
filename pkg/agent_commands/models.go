@@ -739,6 +739,9 @@ func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 
 	fmt.Printf("Model set to: %s\n", finalModel)
 	fmt.Printf("Provider: %s\n", api.GetProviderName(finalProvider))
+	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {
+		fmt.Printf("ℹ️  %s\n", note)
+	}
 
 	// Publish model info event for UI
 	agent.PublishModel(finalModel)

@@ -244,6 +244,9 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 
 	fmt.Printf("✅ Provider switched to: %s\n", getProviderDisplayName(provider))
 	fmt.Printf("🤖 Using model: %s\n", model)
+	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {
+		fmt.Printf("ℹ️  %s\n", note)
+	}
 
 	return nil
 }

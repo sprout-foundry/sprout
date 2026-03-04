@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -20,23 +21,19 @@ const (
 
 // PruningThresholds defines when and how aggressively to prune for each provider type
 type PruningThresholds struct {
-	ProviderName         string
-	StandardPercent      float64 // Percentage of max context to start pruning (e.g., 0.85 = 85%)
-	StandardTokens       int     // Absolute token limit to start pruning (e.g., 85000)
-	AggressivePercent    float64 // Percentage to trigger aggressive mode (e.g., 0.90 = 90%)
-	MinMessages          int     // Minimum messages to always keep
-	RecentMessages       int     // Recent messages to always preserve
-	SlidingWindow        int     // Window size for sliding window strategy
-	RemainingTokensLimit int     // For cached-discount providers: prune when remaining tokens < this
-	PercentLimit         float64 // For cached-discount providers: prune when remaining % < this
+	ProviderName       string
+	StandardPercent    float64 // Percentage of max context to start pruning (e.g., 0.85 = 85%)
+	MinAvailableTokens int     // Start pruning when remaining context is below this value
+	AggressivePercent  float64 // Percentage to trigger aggressive mode (e.g., 0.90 = 90%)
+	MinMessages        int     // Minimum messages to always keep
+	RecentMessages     int     // Recent messages to always preserve
+	SlidingWindow      int     // Window size for sliding window strategy
 }
 
 // PruningConfig is the single source of truth for all pruning thresholds
 var PruningConfig = struct {
-	// Threshold definitions by provider type
-	Default     PruningThresholds
-	HighContext PruningThresholds // For providers with large context windows (OpenAI, ZAI)
-	Cached      PruningThresholds // For providers with cached-token discounts (future use)
+	// Threshold definitions
+	Default PruningThresholds
 
 	// Aggressive optimization settings
 	Aggressive struct {
@@ -46,38 +43,20 @@ var PruningConfig = struct {
 	}
 
 	// Target token percentages when pruning
-	TargetPercentHighContext float64 // % of max tokens to target for high-context providers
-	TargetPercentDefault     float64 // % of max tokens to target for default providers
+	TargetPercentDefault float64 // % of max tokens to target after pruning
+
+	// Agentic-flow safeguard: required headroom after pruning when possible.
+	AgenticRequiredAvailableTokens int
 }{
 	// Default thresholds (most providers)
 	Default: PruningThresholds{
-		ProviderName:      "default",
-		StandardPercent:   0.85,  // Start pruning at 85% of context
-		StandardTokens:    85000, // Start pruning at 85K tokens
-		AggressivePercent: 0.90,  // Aggressive mode at 90%
-		MinMessages:       5,
-		RecentMessages:    15,
-		SlidingWindow:     30,
-	},
-
-	// High-context providers (OpenAI, ZAI with 128K+ context)
-	HighContext: PruningThresholds{
-		ProviderName:      "high-context",
-		StandardPercent:   0.85, // Start pruning at 85% of context
-		AggressivePercent: 0.90, // Aggressive mode at 90%
-		MinMessages:       5,
-		RecentMessages:    15,
-		SlidingWindow:     30,
-	},
-
-	// Cached-token discount providers (future use - currently empty map)
-	Cached: PruningThresholds{
-		ProviderName:         "cached-discount",
-		RemainingTokensLimit: 20000, // Prune when fewer than this many tokens remain
-		PercentLimit:         0.20,  // Prune when fewer than this % of tokens remain
-		MinMessages:          5,
-		RecentMessages:       15,
-		SlidingWindow:        30,
+		ProviderName:       "default",
+		StandardPercent:    0.92, // Start pruning at 92% of context
+		MinAvailableTokens: 8000, // Start pruning when remaining context drops below 8K tokens
+		AggressivePercent:  0.95, // Aggressive mode at 95%
+		MinMessages:        5,
+		RecentMessages:     15,
+		SlidingWindow:      30,
 	},
 
 	// Aggressive optimization settings
@@ -92,8 +71,8 @@ var PruningConfig = struct {
 	},
 
 	// Target percentages for pruning
-	TargetPercentHighContext: 0.85, // Target ~85% of max context when pruning
-	TargetPercentDefault:     0.60, // Target ~60% of context for most providers
+	TargetPercentDefault:           0.85,  // Target ~85% of context when pruning
+	AgenticRequiredAvailableTokens: 12000, // Keep at least 12K headroom for agentic/tool-heavy loops
 }
 
 // MessageImportance tracks the importance of a message
@@ -133,64 +112,46 @@ func NewConversationPruner(debug bool) *ConversationPruner {
 	}
 }
 
-// ShouldPrune checks if pruning should occur based on context usage and provider type
-//
-// Pruning thresholds by provider type:
-// - High-context (OpenAI, ZAI): Starts at 85% of max tokens
-// - Default providers: Starts at 85K tokens OR 85% of max tokens
-// - Cached-discount providers: When remaining tokens <= 20K or <= 20%
-//
-// Aggressive mode triggers at 90% context usage for all providers
-func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider string) bool {
+// ShouldPrune checks if pruning should occur.
+// It triggers when either:
+// 1) usage >= threshold percentage, or
+// 2) remaining tokens <= minimum available threshold.
+func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider string, isAgenticFlow bool) bool {
 	if cp.strategy == PruneStrategyNone {
 		return false
 	}
-
-	// High-context providers (OpenAI, ZAI with 128K+ context)
-	highThresholdProviders := map[string]bool{
-		"openai": true,
-		"zai":    true,
-	}
-
-	if highThresholdProviders[provider] {
-		tokenCeiling := int(float64(maxTokens) * PruningConfig.HighContext.StandardPercent)
-
-		if cp.debug {
-			fmt.Printf("🔍 High-context provider (%s) pruning check: current=%d, max=%d, ceiling=%d, threshold=%.1f%%\n",
-				provider, currentTokens, maxTokens, tokenCeiling, PruningConfig.HighContext.StandardPercent*100)
-		}
-
-		// Check if we hit the percentage threshold (85% of max context)
-		contextUsage := float64(currentTokens) / float64(maxTokens)
-		if contextUsage >= PruningConfig.HighContext.StandardPercent {
-			if cp.debug {
-				fmt.Printf("🔄 High-context provider threshold hit: %.1f%% >= %.1f%% (current=%d, ceiling=%d)\n",
-					contextUsage*100, PruningConfig.HighContext.StandardPercent*100, currentTokens, tokenCeiling)
-			}
-			return true
-		}
-
-		if cp.debug {
-			fmt.Printf("✅ High-context provider pruning not needed: %.1f%% < %.1f%% and %d < %d\n",
-				contextUsage*100, PruningConfig.HighContext.StandardPercent*100, currentTokens, tokenCeiling)
-		}
+	if maxTokens <= 0 {
 		return false
 	}
+	_ = provider
 
-	// Default providers: Use both absolute token limit AND percentage threshold
-	if currentTokens >= PruningConfig.Default.StandardTokens {
+	defaultThreshold := PruningConfig.Default.StandardPercent
+	if cp.contextThreshold > 0 && cp.contextThreshold < 1 {
+		defaultThreshold = cp.contextThreshold
+	}
+
+	remaining := maxTokens - currentTokens
+	if remaining <= PruningConfig.Default.MinAvailableTokens {
 		if cp.debug {
-			fmt.Printf("🔄 Default provider token ceiling hit: %d >= %d tokens\n",
-				currentTokens, PruningConfig.Default.StandardTokens)
+			fmt.Printf("🔄 Minimum available tokens threshold hit: remaining=%d <= %d\n",
+				remaining, PruningConfig.Default.MinAvailableTokens)
+		}
+		return true
+	}
+
+	if isAgenticFlow && remaining <= PruningConfig.AgenticRequiredAvailableTokens {
+		if cp.debug {
+			fmt.Printf("🔄 Agentic headroom threshold hit: remaining=%d <= %d\n",
+				remaining, PruningConfig.AgenticRequiredAvailableTokens)
 		}
 		return true
 	}
 
 	contextUsage := float64(currentTokens) / float64(maxTokens)
-	if contextUsage >= PruningConfig.Default.StandardPercent {
+	if contextUsage >= defaultThreshold {
 		if cp.debug {
 			fmt.Printf("🔄 Default provider percentage threshold hit: %.1f%% >= %.1f%%\n",
-				contextUsage*100, PruningConfig.Default.StandardPercent*100)
+				contextUsage*100, defaultThreshold*100)
 		}
 		return true
 	}
@@ -199,8 +160,8 @@ func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider
 }
 
 // PruneConversation automatically prunes conversation based on strategy
-func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentTokens, maxTokens int, optimizer *ConversationOptimizer, provider string) []api.Message {
-	if !cp.ShouldPrune(currentTokens, maxTokens, provider) {
+func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentTokens, maxTokens int, optimizer *ConversationOptimizer, provider string, isAgenticFlow bool) []api.Message {
+	if !cp.ShouldPrune(currentTokens, maxTokens, provider, isAgenticFlow) {
 		return messages
 	}
 
@@ -215,9 +176,9 @@ func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentT
 	case PruneStrategySlidingWindow:
 		pruned = cp.pruneSlidingWindow(messages)
 	case PruneStrategyImportance:
-		pruned = cp.pruneByImportance(messages, provider)
+		pruned = cp.pruneByImportance(messages, provider, maxTokens)
 	case PruneStrategyHybrid:
-		pruned = cp.pruneHybrid(messages, optimizer, provider)
+		pruned = cp.pruneHybrid(messages, optimizer, provider, maxTokens)
 	case PruneStrategyAdaptive:
 		pruned = cp.pruneAdaptive(messages, currentTokens, maxTokens, optimizer, provider)
 	default:
@@ -226,11 +187,23 @@ func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentT
 
 	// Ensure we never prune too aggressively
 	if len(pruned) < cp.minMessagesToKeep && len(messages) >= cp.minMessagesToKeep {
-		// Keep at least the minimum required messages
-		pruned = messages[:cp.minMessagesToKeep]
-		if len(messages) > cp.recentMessagesToKeep {
-			// Add recent messages
-			pruned = append(pruned, messages[len(messages)-cp.recentMessagesToKeep:]...)
+		keepIndices := make(map[int]struct{}, cp.minMessagesToKeep+cp.recentMessagesToKeep)
+		for i := 0; i < cp.minMessagesToKeep && i < len(messages); i++ {
+			keepIndices[i] = struct{}{}
+		}
+		recentStart := len(messages) - cp.recentMessagesToKeep
+		if recentStart < 0 {
+			recentStart = 0
+		}
+		for i := recentStart; i < len(messages); i++ {
+			keepIndices[i] = struct{}{}
+		}
+
+		pruned = make([]api.Message, 0, len(keepIndices))
+		for i := range messages {
+			if _, ok := keepIndices[i]; ok {
+				pruned = append(pruned, messages[i])
+			}
 		}
 	}
 
@@ -239,6 +212,10 @@ func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentT
 		newTokens := cp.estimateTokens(pruned)
 		fmt.Printf("✅ Pruning complete: %d → %d messages, ~%dK → ~%dK tokens\n",
 			len(messages), len(pruned), oldTokens/1000, newTokens/1000)
+	}
+
+	if isAgenticFlow {
+		pruned = cp.ensureRequiredHeadroom(pruned, maxTokens, PruningConfig.AgenticRequiredAvailableTokens)
 	}
 
 	return pruned
@@ -261,11 +238,11 @@ func (cp *ConversationPruner) pruneSlidingWindow(messages []api.Message) []api.M
 }
 
 // pruneByImportance keeps messages based on importance scoring
-func (cp *ConversationPruner) pruneByImportance(messages []api.Message, provider string) []api.Message {
+func (cp *ConversationPruner) pruneByImportance(messages []api.Message, provider string, maxTokens int) []api.Message {
 	// For providers with strict tool call requirements (Minimax, DeepSeek),
 	// ensure tool calls and results are linked
 	if strings.EqualFold(provider, "minimax") || strings.EqualFold(provider, "deepseek") {
-		return cp.pruneByImportanceToolCallAware(messages, provider)
+		return cp.pruneByImportanceToolCallAware(messages, provider, maxTokens)
 	}
 
 	// Original scoring for other providers
@@ -294,7 +271,7 @@ func (cp *ConversationPruner) pruneByImportance(messages []api.Message, provider
 	}
 
 	// Keep high-importance messages from the middle
-	targetTokens := cp.getTargetTokensForProvider(len(messages), provider)
+	targetTokens := cp.getTargetTokensForProvider(len(messages), provider, maxTokens)
 	currentTokens := cp.estimateTokensForIndices(messages, keepIndices)
 
 	// Sort messages by importance (excluding already kept ones)
@@ -320,7 +297,7 @@ func (cp *ConversationPruner) pruneByImportance(messages []api.Message, provider
 
 // pruneByImportanceToolCallAware keeps messages based on importance scoring while preserving tool call/result pairing
 // This is critical for providers like Minimax and DeepSeek that require strict tool call format
-func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Message, provider string) []api.Message {
+func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Message, provider string, maxTokens int) []api.Message {
 	if cp.debug {
 		fmt.Printf("🔧 Using tool-call aware pruning for %s\n", provider)
 	}
@@ -335,16 +312,13 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 		TokenEstimate  int
 	}
 
-	groups := make([]*MessageGroup, 0)
-	currentGroup := &MessageGroup{IsToolGroup: false}
-
-	// Track seen tool call IDs to match with tool results
-	seenToolCallIDs := make(map[string]int) // tool_call_id -> message index
+	groups := make([]*MessageGroup, 0, len(messages))
+	var currentGroup *MessageGroup
 
 	for i, msg := range messages {
 		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 			// Start a new tool group
-			if currentGroup.IsToolGroup {
+			if currentGroup != nil {
 				groups = append(groups, currentGroup)
 			}
 
@@ -352,7 +326,6 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 			for _, tc := range msg.ToolCalls {
 				if tc.ID != "" {
 					toolCallIDs = append(toolCallIDs, tc.ID)
-					seenToolCallIDs[tc.ID] = i
 				}
 			}
 
@@ -364,8 +337,7 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 			}
 		} else if msg.Role == "tool" {
 			// Check if this tool result belongs to current group
-			assistantIdx, found := seenToolCallIDs[msg.ToolCallId]
-			if found && assistantIdx == currentGroup.AssistantIndex {
+			if currentGroup != nil && msg.ToolCallId != "" && slices.Contains(currentGroup.ToolCallIDs, msg.ToolCallId) {
 				currentGroup.ToolIndices = append(currentGroup.ToolIndices, i)
 			} else {
 				// Orphaned tool result - shouldn't happen but handle gracefully
@@ -373,7 +345,7 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 					fmt.Printf("⚠️ Found orphaned tool result at index %d with tool_call_id=%s\n", i, msg.ToolCallId)
 				}
 				// Add current group first if it's a tool group
-				if currentGroup.IsToolGroup {
+				if currentGroup != nil {
 					groups = append(groups, currentGroup)
 				}
 				// Create a single-message group for this orphan
@@ -382,13 +354,13 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 					ToolIndices:    []int{},
 					IsToolGroup:    false,
 				})
-				currentGroup = &MessageGroup{IsToolGroup: false}
+				currentGroup = nil
 			}
 		} else {
 			// Non-tool-related message
-			if currentGroup.IsToolGroup {
+			if currentGroup != nil {
 				groups = append(groups, currentGroup)
-				currentGroup = &MessageGroup{IsToolGroup: false}
+				currentGroup = nil
 			}
 
 			// Add as a single-message group
@@ -401,7 +373,7 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 	}
 
 	// Don't forget the last group
-	if currentGroup.IsToolGroup || (len(groups) == 0 || currentGroup.AssistantIndex != groups[len(groups)-1].AssistantIndex) {
+	if currentGroup != nil {
 		groups = append(groups, currentGroup)
 	}
 
@@ -454,7 +426,7 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 	}
 
 	// Keep high-importance groups
-	targetTokens := cp.getTargetTokensForProvider(len(messages), provider)
+	targetTokens := cp.getTargetTokensForProvider(len(messages), provider, maxTokens)
 	currentTokens := 0
 	for i := range groups {
 		if keepGroups[i] {
@@ -520,12 +492,12 @@ func (cp *ConversationPruner) scoreSingleMessage(msg api.Message) float64 {
 	} else if msg.Role == "user" {
 		importance = 0.6
 
-		// Tool results vary in importance
-		if strings.Contains(msg.Content, "Tool call result") {
-			importance = 0.5 // Tool results get moderate score to match their assistant
-		}
-
 		// Errors are important
+		if strings.Contains(strings.ToLower(msg.Content), "error") {
+			importance = 0.8
+		}
+	} else if msg.Role == "tool" {
+		importance = 0.5
 		if strings.Contains(strings.ToLower(msg.Content), "error") {
 			importance = 0.8
 		}
@@ -547,12 +519,15 @@ func (cp *ConversationPruner) scoreSingleMessage(msg api.Message) float64 {
 }
 
 // pruneHybrid combines sliding window with importance scoring
-func (cp *ConversationPruner) pruneHybrid(messages []api.Message, optimizer *ConversationOptimizer, provider string) []api.Message {
+func (cp *ConversationPruner) pruneHybrid(messages []api.Message, optimizer *ConversationOptimizer, provider string, maxTokens int) []api.Message {
+	if optimizer == nil {
+		return cp.pruneByImportance(messages, provider, maxTokens)
+	}
 	// First apply optimizer's deduplication
 	optimized := optimizer.OptimizeConversation(messages)
 
 	// Then apply importance-based pruning
-	return cp.pruneByImportance(optimized, provider)
+	return cp.pruneByImportance(optimized, provider, maxTokens)
 }
 
 // pruneAdaptive uses different strategies based on conversation characteristics
@@ -571,17 +546,23 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 			fmt.Printf("🚨 Critical context usage (%.1f%% >= %.1f%%), using aggressive optimization\n",
 				contextUsage*100, PruningConfig.Default.AggressivePercent*100)
 		}
+		if optimizer == nil {
+			return cp.pruneByImportance(messages, provider, maxTokens)
+		}
 		return optimizer.AggressiveOptimization(messages)
 	} else if hasLongHistory && hasManyToolCalls {
 		// Long technical conversation - use hybrid approach
 		if cp.debug {
 			fmt.Printf("📊 Long technical conversation detected, using hybrid pruning\n")
 		}
-		return cp.pruneHybrid(messages, optimizer, provider)
+		return cp.pruneHybrid(messages, optimizer, provider, maxTokens)
 	} else if hasLargeFiles {
 		// File-heavy conversation - focus on deduplication
 		if cp.debug {
 			fmt.Printf("📄 File-heavy conversation detected, focusing on deduplication\n")
+		}
+		if optimizer == nil {
+			return cp.pruneSlidingWindow(messages)
 		}
 		optimized := optimizer.OptimizeConversation(messages)
 		if cp.estimateTokens(optimized) < int(float64(maxTokens)*0.8) {
@@ -594,7 +575,7 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 		if cp.debug {
 			fmt.Printf("⚖️ Using importance-based pruning\n")
 		}
-		return cp.pruneByImportance(messages, provider)
+		return cp.pruneByImportance(messages, provider, maxTokens)
 	}
 }
 
@@ -627,15 +608,18 @@ func (cp *ConversationPruner) scoreMessages(messages []api.Message) []MessageImp
 				score.IsUserQuery = true
 			}
 
-			// Tool results vary in importance
-			if strings.Contains(msg.Content, "Tool call result") {
-				score.IsToolResult = true
-				// Recent tool results are more important
-				if score.Age < 5 {
-					importance = 0.7
-				} else {
-					importance = 0.3
-				}
+			// Errors are important
+			if strings.Contains(strings.ToLower(msg.Content), "error") {
+				score.IsError = true
+				importance = 0.8
+			}
+		} else if msg.Role == "tool" {
+			score.IsToolResult = true
+			// Recent tool results are more important
+			if score.Age < 5 {
+				importance = 0.7
+			} else {
+				importance = 0.3
 			}
 
 			// Errors are important
@@ -704,57 +688,37 @@ func (cp *ConversationPruner) estimateTokensForIndices(messages []api.Message, i
 }
 
 // getTargetTokens returns default target tokens based on conversation size
-func (cp *ConversationPruner) getTargetTokens(messageCount int) int {
-	// Use PruningConfig.TargetPercentDefault - assumes 100K typical context
-	baseTarget := int(PruningConfig.TargetPercentDefault * 100000) // ~60K tokens
+func (cp *ConversationPruner) getTargetTokens(messageCount, maxTokens int) int {
+	if maxTokens <= 0 {
+		maxTokens = 100000
+	}
+	baseTarget := int(PruningConfig.TargetPercentDefault * float64(maxTokens))
 
 	// Adjust based on message count
 	if messageCount < 20 {
-		return baseTarget
+		return clampTargetTokens(baseTarget, maxTokens)
 	} else if messageCount < 50 {
-		return baseTarget - 10000
+		return clampTargetTokens(baseTarget-int(0.08*float64(maxTokens)), maxTokens)
 	} else {
-		return baseTarget - 20000
+		return clampTargetTokens(baseTarget-int(0.15*float64(maxTokens)), maxTokens)
 	}
 }
 
-// getTargetTokensForProvider returns provider-specific target tokens
-func (cp *ConversationPruner) getTargetTokensForProvider(messageCount int, provider string) int {
-	// High-context providers (OpenAI, ZAI with 128K+ context)
-	highThresholdProviders := map[string]bool{
-		"openai": true,
-		"zai":    true,
-	}
-
-	if highThresholdProviders[provider] {
-		// Use PruningConfig.TargetPercentHighContext - assumes 128K context
-		baseTarget := int(PruningConfig.TargetPercentHighContext * 128000) // ~108K tokens target for high-context providers
-
-		// Adjust based on message count
-		if messageCount < 20 {
-			return baseTarget
-		} else if messageCount < 50 {
-			return baseTarget - 10000
-		} else {
-			return baseTarget - 20000
-		}
-	}
-
-	// Default for other providers
-	return cp.getTargetTokens(messageCount)
+// getTargetTokensForProvider is kept for compatibility and currently uses default targets.
+func (cp *ConversationPruner) getTargetTokensForProvider(messageCount int, provider string, maxTokens int) int {
+	_ = provider
+	return cp.getTargetTokens(messageCount, maxTokens)
 }
 
 func (cp *ConversationPruner) countToolCalls(messages []api.Message) int {
 	count := 0
 	for _, msg := range messages {
-		// Count tool results in user messages
-		if msg.Role == "user" && strings.Contains(msg.Content, "Tool call result") {
+		// Count tool result messages directly
+		if msg.Role == "tool" {
 			count++
 		}
-		// Count assistant messages that appear to be initiating tool calls
-		if msg.Role == "assistant" && (strings.Contains(msg.Content, "I'll use") ||
-			strings.Contains(msg.Content, "Let me") ||
-			strings.Contains(msg.Content, "I'll execute")) {
+		// Count assistant messages that explicitly contain tool calls
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 			count++
 		}
 	}
@@ -763,13 +727,48 @@ func (cp *ConversationPruner) countToolCalls(messages []api.Message) int {
 
 func (cp *ConversationPruner) hasLargeFileReads(messages []api.Message) bool {
 	for _, msg := range messages {
-		if msg.Role == "user" && strings.Contains(msg.Content, "Tool call result for read_file") {
+		if msg.Role == "tool" && strings.Contains(msg.Content, "Tool call result for read_file") {
 			if len(msg.Content) > 5000 { // Large file read
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func clampTargetTokens(target, maxTokens int) int {
+	minTarget := int(0.25 * float64(maxTokens))
+	if minTarget < 1000 {
+		minTarget = 1000
+	}
+	if target < minTarget {
+		return minTarget
+	}
+	if target > maxTokens {
+		return maxTokens
+	}
+	return target
+}
+
+func (cp *ConversationPruner) ensureRequiredHeadroom(messages []api.Message, maxTokens, requiredAvailable int) []api.Message {
+	if maxTokens <= 0 || requiredAvailable <= 0 || len(messages) <= cp.minMessagesToKeep {
+		return messages
+	}
+
+	pruned := messages
+	for len(pruned) > cp.minMessagesToKeep {
+		remaining := maxTokens - cp.estimateTokens(pruned)
+		if remaining >= requiredAvailable {
+			return pruned
+		}
+		// Keep system message and trim oldest non-system message.
+		if len(pruned) <= 1 {
+			return pruned
+		}
+		pruned = append(pruned[:1], pruned[2:]...)
+	}
+
+	return pruned
 }
 
 // SetStrategy sets the pruning strategy

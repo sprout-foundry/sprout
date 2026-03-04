@@ -115,6 +115,11 @@ type Agent struct {
 	preparedTools sync.RWMutex
 	lastToolNames []string
 
+	// One-shot context note injected after provider/model switches that require syntax normalization.
+	pendingSwitchContextRefresh string
+	// One-shot user-facing status notice for slash commands after strict-syntax switch normalization.
+	pendingStrictSwitchNotice string
+
 	// Unsafe mode - bypass most security checks
 	unsafeMode bool // Allow operations without security prompting
 

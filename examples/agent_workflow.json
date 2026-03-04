@@ -16,6 +16,13 @@
   },
   "persist_runtime_overrides": false,
   "continue_on_error": true,
+  "orchestration": {
+    "enabled": true,
+    "resume": true,
+    "yield_on_provider_handoff": true,
+    "state_file": ".ledit/workflow_state.json",
+    "events_file": ".ledit/workflow_events.jsonl"
+  },
   "no_web_ui": false,
   "web_port": 0,
   "daemon": false,

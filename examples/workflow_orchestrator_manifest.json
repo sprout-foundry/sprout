@@ -1,0 +1,21 @@
+{
+  "provider_limits": {
+    "ai-worker": 6,
+    "zai": 3,
+    "default": 2
+  },
+  "jobs": [
+    {
+      "name": "restaurant_batch_001",
+      "cwd": ".",
+      "workflow": "examples/agent_workflow.json",
+      "extra_args": []
+    },
+    {
+      "name": "restaurant_batch_002",
+      "cwd": ".",
+      "workflow": "examples/agent_workflow.json",
+      "extra_args": []
+    }
+  ]
+}

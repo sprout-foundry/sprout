@@ -50,7 +50,7 @@ func TestReasoningContentPreservation(t *testing.T) {
 	maxTokens := 128000
 	currentTokens := 1000 // Small amount to avoid triggering pruning
 
-	pruned := pruner.PruneConversation(optimized, currentTokens, maxTokens, optimizer, "zai")
+	pruned := pruner.PruneConversation(optimized, currentTokens, maxTokens, optimizer, "zai", false)
 
 	for i, msg := range pruned {
 		if i == 2 || i == 4 { // Assistant messages with reasoning

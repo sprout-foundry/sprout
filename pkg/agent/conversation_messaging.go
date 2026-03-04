@@ -25,6 +25,14 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 	optimizedMessages = ch.sanitizeToolMessages(optimizedMessages)
 	optimizedMessages = ch.removeOrphanedToolResults(optimizedMessages)
 
+	// One-shot context refresh injected after provider/model switches that required strict syntax normalization.
+	if switchRefresh := ch.agent.consumePendingSwitchContextRefresh(); switchRefresh != "" {
+		optimizedMessages = append(optimizedMessages, api.Message{
+			Role:    "user",
+			Content: switchRefresh,
+		})
+	}
+
 	// Belt-and-suspenders: ensure we don't carry a duplicate system prompt in history.
 	// If any system message matches the current systemPrompt verbatim, drop it from history here
 	// because we always prepend the active systemPrompt below.
@@ -76,13 +84,13 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 	allMessages = ch.appendTransientMessages(allMessages)
 	allMessages = ch.sanitizeToolMessages(allMessages)
 
-	// DeepSeek-specific validation
-	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
+	// DeepSeek-specific validation (including DeepSeek model families behind proxy providers)
+	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") || strings.Contains(strings.ToLower(ch.agent.GetModel()), "deepseek") {
 		ch.validateDeepSeekToolCalls(allMessages)
 	}
 
-	// Minimax-specific validation
-	if strings.EqualFold(ch.agent.GetProvider(), "minimax") {
+	// Minimax-specific validation (including Minimax model families behind proxy providers)
+	if strings.EqualFold(ch.agent.GetProvider(), "minimax") || strings.Contains(strings.ToLower(ch.agent.GetModel()), "minimax") {
 		ch.validateMinimaxToolCalls(allMessages)
 	}
 

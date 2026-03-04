@@ -31,15 +31,36 @@ func TestZAIPruningThresholds(t *testing.T) {
 			name:          "ZAI At 85% Threshold",
 			currentTokens: 108800, // 85% of 128K
 			provider:      "zai",
-			expectedPrune: true,
-			description:   "85% should trigger pruning for ZAI",
+			expectedPrune: false,
+			description:   "85% should not trigger pruning with 92% threshold",
 		},
 		{
 			name:          "ZAI At 100K Tokens",
 			currentTokens: 100000,
 			provider:      "zai",
 			expectedPrune: false,
-			description:   "100K tokens should not trigger pruning for ZAI (78.1% < 85% threshold)",
+			description:   "100K tokens should not trigger pruning with 92% and sufficient remaining headroom",
+		},
+		{
+			name:          "ZAI At 90% Threshold",
+			currentTokens: 115200, // 90% of 128K
+			provider:      "zai",
+			expectedPrune: false,
+			description:   "90% should not trigger pruning with 92% threshold",
+		},
+		{
+			name:          "ZAI At 92% Threshold",
+			currentTokens: 117760, // 92% of 128K
+			provider:      "zai",
+			expectedPrune: true,
+			description:   "92% should trigger pruning",
+		},
+		{
+			name:          "ZAI Remaining Below Min Available",
+			currentTokens: 121500, // leaves <8K
+			provider:      "zai",
+			expectedPrune: true,
+			description:   "remaining tokens below min available threshold should trigger pruning",
 		},
 		{
 			name:          "ZAI Below Thresholds",
@@ -50,23 +71,23 @@ func TestZAIPruningThresholds(t *testing.T) {
 		},
 		{
 			name:          "OpenAI Default Behavior",
-			currentTokens: 110000, // Close to limit to trigger cached-discount logic
+			currentTokens: 110000,
 			provider:      "openai",
-			expectedPrune: true,
-			description:   "110K should trigger pruning for OpenAI (cached-discount provider)",
+			expectedPrune: false,
+			description:   "110K should not trigger pruning when under 92% and with sufficient remaining tokens",
 		},
 		{
 			name:          "Other Provider Default",
 			currentTokens: 70000,
 			provider:      "anthropic",
 			expectedPrune: false,
-			description:   "70K should not trigger pruning for other providers (below 85K threshold and 85%)",
+			description:   "70K should not trigger pruning for other providers (below 92%)",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			shouldPrune := pruner.ShouldPrune(tt.currentTokens, maxTokens, tt.provider)
+			shouldPrune := pruner.ShouldPrune(tt.currentTokens, maxTokens, tt.provider, false)
 			if shouldPrune != tt.expectedPrune {
 				t.Errorf("ShouldPrune() = %v, expected %v. %s",
 					shouldPrune, tt.expectedPrune, tt.description)
@@ -96,15 +117,15 @@ func TestZAITargetTokens(t *testing.T) {
 			name:         "ZAI Medium Conversation",
 			messageCount: 30,
 			provider:     "zai",
-			expectedMin:  98800,
-			expectedMax:  98800,
+			expectedMin:  98560,
+			expectedMax:  98560,
 		},
 		{
 			name:         "ZAI Large Conversation",
 			messageCount: 60,
 			provider:     "zai",
-			expectedMin:  88800,
-			expectedMax:  88800,
+			expectedMin:  89600,
+			expectedMax:  89600,
 		},
 		{
 			name:         "OpenAI High Threshold",
@@ -117,7 +138,7 @@ func TestZAITargetTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			target := pruner.getTargetTokensForProvider(tt.messageCount, tt.provider)
+			target := pruner.getTargetTokensForProvider(tt.messageCount, tt.provider, 128000)
 			if target < tt.expectedMin || target > tt.expectedMax {
 				t.Errorf("getTargetTokensForProvider() = %v, expected between %v and %v",
 					target, tt.expectedMin, tt.expectedMax)
@@ -142,7 +163,7 @@ func TestZAIPruningIntegration(t *testing.T) {
 	maxTokens := 128000
 	currentTokens := 1000 // Small conversation
 
-	pruned := pruner.PruneConversation(messages, currentTokens, maxTokens, optimizer, "zai")
+	pruned := pruner.PruneConversation(messages, currentTokens, maxTokens, optimizer, "zai", false)
 
 	if len(pruned) != len(messages) {
 		t.Errorf("Expected no pruning for small conversation, got %d messages from %d original",

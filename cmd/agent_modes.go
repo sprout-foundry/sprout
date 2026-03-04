@@ -176,7 +176,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		if err != nil {
 			return fmt.Errorf("failed to resolve workflow initial prompt: %w", err)
 		}
-		if query == "" {
+		if query == "" && (workflowConfig == nil || len(workflowConfig.Steps) == 0) {
 			// No query provided - check if we should keep running (daemon mode)
 			if daemonMode && webServer != nil && webServer.IsRunning() {
 				// Daemon mode: keep web UI running
@@ -208,12 +208,50 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				}
 			}()
 		}
-		if err := applyWorkflowInitialOverrides(chatAgent, workflowConfig); err != nil {
-			return fmt.Errorf("failed to apply workflow initial runtime overrides: %w", err)
+		workflowState, workflowStateErr := loadWorkflowExecutionState(workflowConfig)
+		if workflowStateErr != nil {
+			return workflowStateErr
+		}
+		if workflowConfig != nil && workflowConfig.orchestrationEnabled() {
+			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_run_started", map[string]interface{}{
+				"initial_completed": workflowState.InitialCompleted,
+				"next_step_index":   workflowState.NextStepIndex,
+			}); eventErr != nil {
+				return eventErr
+			}
 		}
 
-		err = runDirectMode(ctx, chatAgent, eventBus, query)
-		workflowErr := runAgentWorkflow(ctx, chatAgent, eventBus, workflowConfig, err)
+		shouldRunInitialQuery := strings.TrimSpace(query) != "" && !workflowState.InitialCompleted
+		if shouldRunInitialQuery {
+			if err := applyWorkflowInitialOverrides(chatAgent, workflowConfig); err != nil {
+				return fmt.Errorf("failed to apply workflow initial runtime overrides: %w", err)
+			}
+
+			err = runDirectMode(ctx, chatAgent, eventBus, query)
+			workflowState.InitialCompleted = true
+			workflowState.HasError = err != nil
+			workflowState.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
+			if err != nil {
+				workflowState.FirstError = err.Error()
+			}
+			if persistErr := persistWorkflowExecutionState(workflowConfig, workflowState); persistErr != nil {
+				return persistErr
+			}
+			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_initial_completed", map[string]interface{}{
+				"provider":  workflowState.LastProvider,
+				"has_error": workflowState.HasError,
+			}); eventErr != nil {
+				return eventErr
+			}
+		} else {
+			err = nil
+		}
+
+		workflowState.HasError = workflowState.HasError || err != nil
+		workflowYielded, workflowErr := runAgentWorkflow(ctx, chatAgent, eventBus, workflowConfig, workflowState)
+		if workflowYielded {
+			return nil
+		}
 		if workflowErr != nil {
 			if err != nil {
 				return fmt.Errorf("%w (workflow: %v)", err, workflowErr)

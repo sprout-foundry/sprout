@@ -33,6 +33,7 @@ If both are provided, the CLI prompt is used as the initial prompt.
    - file triggers (`file_exists`, `file_not_exists`)
    - per-step runtime overrides
 7. If `persist_runtime_overrides` is `false`, runtime changes are restored at workflow end.
+8. If `orchestration.enabled` is `true`, workflow progress is checkpointed and can yield at provider handoffs for external schedulers.
 
 ## Config Schema
 
@@ -44,6 +45,13 @@ If both are provided, the CLI prompt is used as the initial prompt.
 
   "persist_runtime_overrides": false,
   "continue_on_error": true,
+  "orchestration": {
+    "enabled": true,
+    "resume": true,
+    "yield_on_provider_handoff": true,
+    "state_file": ".ledit/workflow_state.json",
+    "events_file": ".ledit/workflow_events.jsonl"
+  },
 
   "initial": {
     "prompt": "...",
@@ -102,6 +110,12 @@ If both are provided, the CLI prompt is used as the initial prompt.
 - `continue_on_error` (`bool`, default `false`): continue to later steps after a step error.
 - `initial` (object): optional initial prompt/runtime block.
 - `steps` (array): ordered workflow steps.
+- `orchestration` (object, optional): enable external orchestration hooks.
+  - `enabled` (`bool`): turn orchestration mode on.
+  - `resume` (`bool`, default `true`): resume from `state_file` if present.
+  - `yield_on_provider_handoff` (`bool`, default `true`): stop before a step whose provider differs from the previous executed provider.
+  - `state_file` (`string`, default `.ledit/workflow_state.json`): JSON checkpoint path.
+  - `events_file` (`string`, default `.ledit/workflow_events.jsonl`): JSONL event stream path.
 
 Validation rule: workflow must include at least one `steps` item, or an `initial.prompt`/`initial.prompt_file`.
 
@@ -225,6 +239,41 @@ Note: hard termination (for example `SIGKILL`) can prevent restoration.
 ## Current Example File
 
 See: `examples/agent_workflow.json`
+
+## External Orchestration
+
+When orchestration mode is enabled, `ledit` emits:
+
+- State checkpoint (`state_file`) with:
+  - `initial_completed`
+  - `next_step_index`
+  - `has_error`
+  - `first_error`
+  - `last_provider`
+  - `complete`
+- Event stream (`events_file`) JSONL records such as:
+  - `workflow_run_started`
+  - `workflow_initial_completed`
+  - `workflow_step_started`
+  - `workflow_step_skipped`
+  - `workflow_step_completed`
+  - `workflow_step_failed`
+  - `workflow_yielded`
+  - `workflow_completed`
+
+This allows an external orchestrator to:
+
+1. Read `next_step_index` and determine required provider.
+2. Acquire provider-specific concurrency slot.
+3. Invoke `ledit agent --workflow-config ...`.
+4. Repeat until `complete=true`.
+
+See: `examples/workflow_orchestrator.py` for a full asyncio-based orchestrator with per-provider concurrency limits.
+Use it with `examples/workflow_orchestrator_manifest.json`:
+
+```bash
+python3 examples/workflow_orchestrator.py --manifest examples/workflow_orchestrator_manifest.json
+```
 
 ## Troubleshooting
 

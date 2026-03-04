@@ -127,6 +127,9 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 
 // SetProvider switches to a specific provider with its default or current model
 func (a *Agent) SetProvider(provider api.ClientType) error {
+	prevProvider := a.GetProvider()
+	prevModel := a.GetModel()
+
 	// Get the configured model for this provider
 	model := a.configManager.GetModelForProvider(provider)
 	if model == "" {
@@ -184,6 +187,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	// Update context limits for the new model
 	a.maxContextTokens = a.getModelContextLimit()
 	a.currentContextTokens = 0
+	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	// Notify user if model was different due to fallback
 	if actualModel != model {
@@ -199,6 +203,9 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 
 // SetModel changes the current model and persists the choice
 func (a *Agent) SetModel(model string) error {
+	prevProvider := a.GetProvider()
+	prevModel := a.GetModel()
+
 	// Use the current provider - we don't need to determine it
 	// The user has already selected the provider via /providers select
 
@@ -261,6 +268,7 @@ func (a *Agent) SetModel(model string) error {
 	// Update context limits for the new model
 	a.maxContextTokens = a.getModelContextLimit()
 	a.currentContextTokens = 0
+	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	return nil
 }

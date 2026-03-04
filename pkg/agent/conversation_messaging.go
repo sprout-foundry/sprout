@@ -21,6 +21,10 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 		optimizedMessages = ch.agent.messages
 	}
 
+	// Sanitize before pruning so token estimates and pruning decisions are based on valid message chains.
+	optimizedMessages = ch.sanitizeToolMessages(optimizedMessages)
+	optimizedMessages = ch.removeOrphanedToolResults(optimizedMessages)
+
 	// Belt-and-suspenders: ensure we don't carry a duplicate system prompt in history.
 	// If any system message matches the current systemPrompt verbatim, drop it from history here
 	// because we always prepend the active systemPrompt below.
@@ -45,7 +49,7 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 			ch.agent.conversationPruner = NewConversationPruner(ch.agent.debug)
 		}
 
-		if ch.agent.conversationPruner.ShouldPrune(currentTokens, ch.agent.maxContextTokens, ch.agent.GetProvider()) {
+		if ch.agent.conversationPruner.ShouldPrune(currentTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
 			if ch.agent.debug {
 				contextUsage := float64(currentTokens) / float64(ch.agent.maxContextTokens)
 				ch.agent.PrintLineAsync(fmt.Sprintf("🔄 Context pruning triggered: %d/%d tokens (%.1f%%)",
@@ -53,7 +57,7 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 			}
 
 			// Apply pruning to optimized messages (excluding system prompt)
-			prunedMessages := ch.agent.conversationPruner.PruneConversation(optimizedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider())
+			prunedMessages := ch.agent.conversationPruner.PruneConversation(optimizedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider(), true)
 
 			// Rebuild with system prompt
 			allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}

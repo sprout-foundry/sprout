@@ -156,6 +156,36 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 			t.Fatalf("expected validation error")
 		}
 	})
+
+	t.Run("orchestration defaults", func(t *testing.T) {
+		path := filepath.Join(dir, "orchestration-defaults.json")
+		content := `{
+			"orchestration": {"enabled": true},
+			"steps":[{"prompt":"hi"}]
+		}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		cfg, err := loadAgentWorkflowConfig(path)
+		if err != nil {
+			t.Fatalf("load config: %v", err)
+		}
+		if cfg.Orchestration == nil || !cfg.Orchestration.Enabled {
+			t.Fatalf("expected orchestration enabled")
+		}
+		if cfg.Orchestration.StateFile != defaultWorkflowOrchestrationStateFile {
+			t.Fatalf("unexpected default state file: %q", cfg.Orchestration.StateFile)
+		}
+		if cfg.Orchestration.EventsFile != defaultWorkflowOrchestrationEventsFile {
+			t.Fatalf("unexpected default events file: %q", cfg.Orchestration.EventsFile)
+		}
+		if !cfg.orchestrationResumeEnabled() {
+			t.Fatalf("expected resume default enabled")
+		}
+		if !cfg.orchestrationYieldOnProviderHandoff() {
+			t.Fatalf("expected yield_on_provider_handoff default enabled")
+		}
+	})
 }
 
 func TestShouldRunWorkflowStep(t *testing.T) {
@@ -287,4 +317,37 @@ func TestStepFileTriggersSatisfied(t *testing.T) {
 			t.Fatalf("expected triggers to fail")
 		}
 	})
+}
+
+func TestWorkflowExecutionStateRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	cfg := &AgentWorkflowConfig{
+		Orchestration: &AgentWorkflowOrchestrationConfig{
+			Enabled:    true,
+			StateFile:  filepath.Join(dir, "state", "workflow_state.json"),
+			EventsFile: filepath.Join(dir, "events", "workflow_events.jsonl"),
+		},
+	}
+
+	state := &workflowExecutionState{
+		Version:          1,
+		InitialCompleted: true,
+		NextStepIndex:    2,
+		HasError:         true,
+		FirstError:       "boom",
+		LastProvider:     "ai-worker",
+	}
+	if err := persistWorkflowExecutionState(cfg, state); err != nil {
+		t.Fatalf("persist state: %v", err)
+	}
+
+	loaded, err := loadWorkflowExecutionState(cfg)
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if loaded.NextStepIndex != 2 || !loaded.InitialCompleted || loaded.LastProvider != "ai-worker" {
+		t.Fatalf("unexpected loaded state: %#v", loaded)
+	}
 }

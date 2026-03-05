@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.2] - 2026-03-05
+
+- Merge remote-tracking branch 'origin/main' (828ffbe)
+- Updates 4 files - Updates isolated config for per-directory use (1ba4b9f)
+- docs: Update changelog for v0.11.1 (952b07a)
+
 ## [v0.11.1] - 2026-03-04
 
 - Updates 7 files - Updates workflow orchestration support persistence (1f34fd3)

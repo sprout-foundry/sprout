@@ -30,8 +30,29 @@ func isQueryInProgress() bool {
 	return queryInProgress.Load()
 }
 
+func ensureContinuationSessionID(chatAgent *agent.Agent) string {
+	if chatAgent == nil {
+		return ""
+	}
+	sessionID := strings.TrimSpace(chatAgent.GetSessionID())
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("session_%d", time.Now().UnixNano())
+		chatAgent.SetSessionID(sessionID)
+	}
+	return sessionID
+}
+
+func printContinuationHint(chatAgent *agent.Agent) {
+	sessionID := ensureContinuationSessionID(chatAgent)
+	if sessionID == "" {
+		return
+	}
+	fmt.Printf("To Continue: `ledit agent --session-id %s`\n", sessionID)
+}
+
 // RunAgent runs the agent in interactive or direct mode
 func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err error) {
+	ensureContinuationSessionID(chatAgent)
 	workflowConfig, workflowLoadErr := loadAgentWorkflowConfig(agentWorkflowConfig)
 	if workflowLoadErr != nil {
 		return workflowLoadErr
@@ -276,6 +297,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	}
 
 	// Check if context was cancelled due to interrupt
+	continuationPrinted := false
 	if ctx.Err() == context.Canceled {
 		select {
 		case <-shutdown:
@@ -283,6 +305,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		default:
 			fmt.Printf("👋 Goodbye!\n")
 		}
+		printContinuationHint(chatAgent)
+		continuationPrinted = true
+	}
+
+	if !isInteractive && !continuationPrinted {
+		printContinuationHint(chatAgent)
 	}
 
 	return err
@@ -341,6 +369,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				fmt.Println("\n👋 Goodbye! Here's your session summary:")
 				fmt.Println("=====================================")
 				chatAgent.PrintConversationSummary(true)
+				printContinuationHint(chatAgent)
 				return nil
 			}
 

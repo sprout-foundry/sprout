@@ -26,18 +26,19 @@ func init() {
 
 // ConversationState represents the state of a conversation that can be persisted
 type ConversationState struct {
-	Messages          []api.Message `json:"messages"`
-	TaskActions       []TaskAction  `json:"task_actions"`
-	TotalCost         float64       `json:"total_cost"`
-	TotalTokens       int           `json:"total_tokens"`
-	PromptTokens      int           `json:"prompt_tokens"`
-	CompletionTokens  int           `json:"completion_tokens"`
-	CachedTokens      int           `json:"cached_tokens"`
-	CachedCostSavings float64       `json:"cached_cost_savings"`
-	LastUpdated       time.Time     `json:"last_updated"`
-	SessionID         string        `json:"session_id"`
-	Name              string        `json:"name"`              // Human-readable session name
-	WorkingDirectory  string        `json:"working_directory"` // Directory where session was created
+	Messages                []api.Message `json:"messages"`
+	TaskActions             []TaskAction  `json:"task_actions"`
+	TotalCost               float64       `json:"total_cost"`
+	TotalTokens             int           `json:"total_tokens"`
+	PromptTokens            int           `json:"prompt_tokens"`
+	CompletionTokens        int           `json:"completion_tokens"`
+	EstimatedTokenResponses int           `json:"estimated_token_responses"`
+	CachedTokens            int           `json:"cached_tokens"`
+	CachedCostSavings       float64       `json:"cached_cost_savings"`
+	LastUpdated             time.Time     `json:"last_updated"`
+	SessionID               string        `json:"session_id"`
+	Name                    string        `json:"name"`              // Human-readable session name
+	WorkingDirectory        string        `json:"working_directory"` // Directory where session was created
 }
 
 // Variable to allow overriding GetStateDir for testing
@@ -210,18 +211,19 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 	sessionName := a.generateSessionName()
 
 	state := ConversationState{
-		Messages:          a.messages,
-		TaskActions:       a.taskActions,
-		TotalCost:         a.totalCost,
-		TotalTokens:       a.totalTokens,
-		PromptTokens:      a.promptTokens,
-		CompletionTokens:  a.completionTokens,
-		CachedTokens:      a.cachedTokens,
-		CachedCostSavings: a.cachedCostSavings,
-		LastUpdated:       time.Now(),
-		SessionID:         cleanSessionID,
-		Name:              sessionName,
-		WorkingDirectory:  cleanWorkingDir,
+		Messages:                a.messages,
+		TaskActions:             a.taskActions,
+		TotalCost:               a.totalCost,
+		TotalTokens:             a.totalTokens,
+		PromptTokens:            a.promptTokens,
+		CompletionTokens:        a.completionTokens,
+		EstimatedTokenResponses: a.estimatedTokenResponses,
+		CachedTokens:            a.cachedTokens,
+		CachedCostSavings:       a.cachedCostSavings,
+		LastUpdated:             time.Now(),
+		SessionID:               cleanSessionID,
+		Name:                    sessionName,
+		WorkingDirectory:        cleanWorkingDir,
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -559,6 +561,7 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.totalTokens = state.TotalTokens
 	a.promptTokens = state.PromptTokens
 	a.completionTokens = state.CompletionTokens
+	a.estimatedTokenResponses = state.EstimatedTokenResponses
 	a.cachedTokens = state.CachedTokens
 	a.cachedCostSavings = state.CachedCostSavings
 

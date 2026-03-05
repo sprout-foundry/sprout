@@ -212,6 +212,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		if workflowStateErr != nil {
 			return workflowStateErr
 		}
+		if restoreErr := restoreWorkflowConversationState(chatAgent, workflowConfig, workflowState); restoreErr != nil {
+			return restoreErr
+		}
 		if workflowConfig != nil && workflowConfig.orchestrationEnabled() {
 			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_run_started", map[string]interface{}{
 				"initial_completed": workflowState.InitialCompleted,
@@ -234,7 +237,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			if err != nil {
 				workflowState.FirstError = err.Error()
 			}
-			if persistErr := persistWorkflowExecutionState(workflowConfig, workflowState); persistErr != nil {
+			if persistErr := persistWorkflowCheckpoint(workflowConfig, workflowState, chatAgent); persistErr != nil {
 				return persistErr
 			}
 			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_initial_completed", map[string]interface{}{

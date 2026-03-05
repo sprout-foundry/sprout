@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.3] - 2026-03-05
+
+- Merge remote-tracking branch 'origin/main' (0876a8d)
+- Updates 2 files - Updates isolated config bootstrap to omit API keys (e45bb5f)
+- docs: Update changelog for v0.11.2 (1e3f4a2)
+
 ## [v0.11.2] - 2026-03-05
 
 - Merge remote-tracking branch 'origin/main' (828ffbe)

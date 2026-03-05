@@ -16,7 +16,6 @@ import (
 // - If configDir/config.json already exists, does nothing.
 // - Otherwise clones default config from the main config location (if present).
 // - Removes command-history fields from the cloned config.
-// - Copies api_keys.json from main location when present and not already copied.
 func BootstrapIsolatedConfig(configDir string) error {
 	targetDir := strings.TrimSpace(configDir)
 	if targetDir == "" {
@@ -38,8 +37,6 @@ func BootstrapIsolatedConfig(configDir string) error {
 		return err
 	}
 	sourceConfigPath := filepath.Join(defaultDir, ConfigFileName)
-	sourceAPIKeysPath := filepath.Join(defaultDir, APIKeysFileName)
-	targetAPIKeysPath := filepath.Join(targetDir, APIKeysFileName)
 
 	if _, err := os.Stat(sourceConfigPath); err == nil {
 		data, err := os.ReadFile(sourceConfigPath)
@@ -63,14 +60,6 @@ func BootstrapIsolatedConfig(configDir string) error {
 		}
 		if err := os.WriteFile(targetConfigPath, out, 0600); err != nil {
 			return fmt.Errorf("failed to write isolated config file %q: %w", targetConfigPath, err)
-		}
-	}
-
-	if _, err := os.Stat(targetAPIKeysPath); os.IsNotExist(err) {
-		if data, err := os.ReadFile(sourceAPIKeysPath); err == nil {
-			if err := os.WriteFile(targetAPIKeysPath, data, 0600); err != nil {
-				return fmt.Errorf("failed to write isolated api keys file %q: %w", targetAPIKeysPath, err)
-			}
 		}
 	}
 

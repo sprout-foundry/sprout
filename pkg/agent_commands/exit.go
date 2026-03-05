@@ -3,9 +3,13 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 )
+
+var exitProcess = os.Exit
 
 // ExitCommand implements the /exit slash command
 type ExitCommand struct{}
@@ -26,6 +30,13 @@ func (e *ExitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Println("\n👋 Goodbye! Here's your session summary:")
 	fmt.Println("=====================================")
 	chatAgent.PrintConversationSummary(true)
-	os.Exit(0)
+	sessionID := strings.TrimSpace(chatAgent.GetSessionID())
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("session_%d", time.Now().UnixNano())
+		chatAgent.SetSessionID(sessionID)
+	}
+	fmt.Printf("To Continue: `ledit agent --session-id %s`\n", sessionID)
+	fmt.Println("Or Resume Latest: `ledit agent --last-session`")
+	exitProcess(0)
 	return nil // This line won't be reached due to os.Exit
 }

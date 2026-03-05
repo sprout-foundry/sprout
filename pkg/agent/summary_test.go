@@ -1,7 +1,13 @@
 package agent
 
 import (
+	"bytes"
+	"io"
+	"os"
+	"strings"
 	"testing"
+
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
 // TestTokenTrackingAccuracy verifies that token tracking is accurate
@@ -170,5 +176,103 @@ func TestClampingBehavior(t *testing.T) {
 				t.Errorf("processedTokens = %d, want %d", processedTokens, tt.wantProcessed)
 			}
 		})
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stdout = w
+	defer func() {
+		os.Stdout = oldStdout
+	}()
+
+	fn()
+
+	_ = w.Close()
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	return buf.String()
+}
+
+func TestComputeConversationSummaryMetrics(t *testing.T) {
+	messages := []api.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "do thing"},
+		{
+			Role:    "assistant",
+			Content: "calling tools",
+			ToolCalls: []api.ToolCall{
+				{ID: "t1", Type: "function"},
+				{ID: "t2", Type: "function"},
+			},
+		},
+		{Role: "tool", Content: "{}"},
+		{Role: "assistant", Content: "done"},
+	}
+
+	metrics := computeConversationSummaryMetrics(messages)
+	if metrics.systemMessages != 1 {
+		t.Fatalf("expected 1 system message, got %d", metrics.systemMessages)
+	}
+	if metrics.userMessages != 1 {
+		t.Fatalf("expected 1 user message, got %d", metrics.userMessages)
+	}
+	if metrics.assistantMessages != 2 {
+		t.Fatalf("expected 2 assistant messages, got %d", metrics.assistantMessages)
+	}
+	if metrics.toolMessages != 1 {
+		t.Fatalf("expected 1 tool message, got %d", metrics.toolMessages)
+	}
+	if metrics.toolCalls != 2 {
+		t.Fatalf("expected 2 tool calls, got %d", metrics.toolCalls)
+	}
+}
+
+func TestPrintConversationSummaryDoesNotPanicWithSingleMessage(t *testing.T) {
+	agent := &Agent{
+		messages:         []api.Message{{Role: "user", Content: "hello"}},
+		maxContextTokens: 120000,
+	}
+
+	output := captureStdout(t, func() {
+		agent.PrintConversationSummary(true)
+	})
+
+	if !strings.Contains(output, "📊 Conversation Summary") {
+		t.Fatalf("expected summary header in output, got: %s", output)
+	}
+	if !strings.Contains(output, "👤 User msgs:        1") {
+		t.Fatalf("expected user message count in output, got: %s", output)
+	}
+}
+
+func TestPrintConversationSummaryShowsEstimatedTokenNote(t *testing.T) {
+	agent := &Agent{
+		messages:                []api.Message{{Role: "user", Content: "hello"}},
+		estimatedTokenResponses: 2,
+		totalTokens:             1234,
+		promptTokens:            1000,
+		completionTokens:        234,
+		maxContextTokens:        120000,
+		currentContextTokens:    5000,
+	}
+
+	output := captureStdout(t, func() {
+		agent.PrintConversationSummary(true)
+	})
+
+	if !strings.Contains(output, "includes estimates for 2 response(s)") {
+		t.Fatalf("expected estimated usage note in output, got: %s", output)
+	}
+	if !strings.Contains(output, "📦 Total (estimated):") {
+		t.Fatalf("expected estimated marker on total line, got: %s", output)
+	}
+	if !strings.Contains(output, "📝 Processed (estimated):") {
+		t.Fatalf("expected estimated marker on processed line, got: %s", output)
 	}
 }

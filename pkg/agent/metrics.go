@@ -79,6 +79,16 @@ func (a *Agent) GetCompletionTokens() int {
 	return a.completionTokens
 }
 
+// GetEstimatedTokenResponses returns how many responses used estimated token usage.
+func (a *Agent) GetEstimatedTokenResponses() int {
+	return a.estimatedTokenResponses
+}
+
+// MarkEstimatedTokenUsageResponse records that token usage for one response was estimated.
+func (a *Agent) MarkEstimatedTokenUsageResponse() {
+	a.estimatedTokenResponses++
+}
+
 // GetCachedTokens returns the total cached/reused tokens
 func (a *Agent) GetCachedTokens() int {
 	return a.cachedTokens

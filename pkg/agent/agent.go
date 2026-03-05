@@ -38,41 +38,42 @@ type PauseState struct {
 }
 
 type Agent struct {
-	client                api.ClientInterface
-	messages              []api.Message
-	systemPrompt          string
-	baseSystemPrompt      string // Base prompt restored when persona is cleared
-	maxIterations         int
-	currentIteration      int
-	totalCost             float64
-	clientType            api.ClientType
-	taskActions           []TaskAction                   // Track what was accomplished
-	debug                 bool                           // Enable debug logging
-	totalTokens           int                            // Track total tokens used across all requests
-	promptTokens          int                            // Track total prompt tokens
-	completionTokens      int                            // Track total completion tokens
-	cachedTokens          int                            // Track tokens that were cached/reused
-	cachedCostSavings     float64                        // Track cost savings from cached tokens
-	previousSummary       string                         // Summary of previous actions for continuity
-	sessionID             string                         // Unique session identifier
-	optimizer             *ConversationOptimizer         // Conversation optimization
-	configManager         *configuration.Manager         // Configuration management
-	currentContextTokens  int                            // Current context size being sent to model
-	maxContextTokens      int                            // Model's maximum context window
-	contextWarningIssued  bool                           // Whether we've warned about approaching context limit
-	shellCommandHistory   map[string]*ShellCommandResult // Track shell commands for deduplication
-	changeTracker         *ChangeTracker                 // Track file changes for rollback support
-	mcpManager            mcp.MCPManager                 // MCP server management
-	mcpToolsCache         []api.Tool                     // Cached MCP tools to avoid reloading
-	mcpInitialized        bool                           // Track whether MCP has been initialized
-	mcpInitErr            error                          // Store initialization error
-	mcpInitMu             sync.Mutex                     // Protect concurrent initialization
-	circuitBreaker        *CircuitBreakerState           // Track repetitive actions
-	conversationPruner    *ConversationPruner            // Automatic conversation pruning
-	completionSummarizer  *CompletionContextSummarizer   // Completion context summarization
-	toolCallGuidanceAdded bool                           // Prevent repeating tool call guidance
-	activeSkills          []string                       // Currently activated skills (by ID)
-	activePersona         string                         // Currently active persona ID (direct agent or subagent env)
+	client                  api.ClientInterface
+	messages                []api.Message
+	systemPrompt            string
+	baseSystemPrompt        string // Base prompt restored when persona is cleared
+	maxIterations           int
+	currentIteration        int
+	totalCost               float64
+	clientType              api.ClientType
+	taskActions             []TaskAction                   // Track what was accomplished
+	debug                   bool                           // Enable debug logging
+	totalTokens             int                            // Track total tokens used across all requests
+	promptTokens            int                            // Track total prompt tokens
+	completionTokens        int                            // Track total completion tokens
+	estimatedTokenResponses int                            // Number of responses where token usage was estimated
+	cachedTokens            int                            // Track tokens that were cached/reused
+	cachedCostSavings       float64                        // Track cost savings from cached tokens
+	previousSummary         string                         // Summary of previous actions for continuity
+	sessionID               string                         // Unique session identifier
+	optimizer               *ConversationOptimizer         // Conversation optimization
+	configManager           *configuration.Manager         // Configuration management
+	currentContextTokens    int                            // Current context size being sent to model
+	maxContextTokens        int                            // Model's maximum context window
+	contextWarningIssued    bool                           // Whether we've warned about approaching context limit
+	shellCommandHistory     map[string]*ShellCommandResult // Track shell commands for deduplication
+	changeTracker           *ChangeTracker                 // Track file changes for rollback support
+	mcpManager              mcp.MCPManager                 // MCP server management
+	mcpToolsCache           []api.Tool                     // Cached MCP tools to avoid reloading
+	mcpInitialized          bool                           // Track whether MCP has been initialized
+	mcpInitErr              error                          // Store initialization error
+	mcpInitMu               sync.Mutex                     // Protect concurrent initialization
+	circuitBreaker          *CircuitBreakerState           // Track repetitive actions
+	conversationPruner      *ConversationPruner            // Automatic conversation pruning
+	completionSummarizer    *CompletionContextSummarizer   // Completion context summarization
+	toolCallGuidanceAdded   bool                           // Prevent repeating tool call guidance
+	activeSkills            []string                       // Currently activated skills (by ID)
+	activePersona           string                         // Currently active persona ID (direct agent or subagent env)
 
 	// Input injection handling
 	inputInjectionChan  chan string        // Channel for injecting new user input

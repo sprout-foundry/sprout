@@ -4,8 +4,36 @@ import (
 	"fmt"
 	"strings"
 
+	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
 )
+
+type conversationSummaryMetrics struct {
+	assistantMessages int
+	userMessages      int
+	systemMessages    int
+	toolMessages      int
+	toolCalls         int
+}
+
+func computeConversationSummaryMetrics(messages []api.Message) conversationSummaryMetrics {
+	metrics := conversationSummaryMetrics{}
+	for _, msg := range messages {
+		role := strings.ToLower(strings.TrimSpace(msg.Role))
+		switch role {
+		case "assistant":
+			metrics.assistantMessages++
+			metrics.toolCalls += len(msg.ToolCalls)
+		case "user":
+			metrics.userMessages++
+		case "system":
+			metrics.systemMessages++
+		case "tool":
+			metrics.toolMessages++
+		}
+	}
+	return metrics
+}
 
 // PrintConversationSummary displays a comprehensive conversation summary with formatting
 func (a *Agent) PrintConversationSummary(forceFull bool) {
@@ -18,28 +46,14 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	fmt.Println("\n📊 Conversation Summary")
 	fmt.Println("══════════════════════════════")
 
-	assistantMsgCount := 0
-	userMsgCount := 0
-	toolCallCount := 0
-
-	for _, msg := range a.messages {
-		switch msg.Role {
-		case "assistant":
-			assistantMsgCount++
-			if strings.Contains(msg.Content, "tool_calls") {
-				toolCallCount++
-			}
-		case "user":
-			if msg.Content != a.messages[1].Content { // Skip original user query
-				userMsgCount++
-			}
-		}
-	}
+	metrics := computeConversationSummaryMetrics(a.messages)
 
 	// Conversation metrics
 	fmt.Printf("🔄 Iterations:      %d\n", a.currentIteration)
-	fmt.Printf("🤖 Assistant msgs:   %d\n", assistantMsgCount)
-	fmt.Printf("⚡ Tool executions:  %d\n", userMsgCount) // Tool results come back as user messages
+	fmt.Printf("👤 User msgs:        %d\n", metrics.userMessages)
+	fmt.Printf("🤖 Assistant msgs:   %d\n", metrics.assistantMessages)
+	fmt.Printf("⚙️  Tool calls:      %d\n", metrics.toolCalls)
+	fmt.Printf("🧰 Tool results:    %d\n", metrics.toolMessages)
 	fmt.Printf("📨 Total messages:   %d\n", len(a.messages))
 	fmt.Println()
 
@@ -60,19 +74,36 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	// Token usage section
 	fmt.Println("🔢 Token Usage")
 	fmt.Println("──────────────────────────────")
-	fmt.Printf("📦 Total:              %s\n", a.formatTokenCount(a.totalTokens))
-	fmt.Printf("📝 Processed:          %s (%d prompt + %d completion)\n",
+	estimateLabel := ""
+	if a.estimatedTokenResponses > 0 {
+		estimateLabel = " (estimated)"
+	}
+	fmt.Printf("📦 Total%s:            %s\n", estimateLabel, a.formatTokenCount(a.totalTokens))
+	fmt.Printf("📝 Processed%s:        %s (%d prompt + %d completion)\n", estimateLabel,
 		a.formatTokenCount(processedTokens), processedPromptTokens, a.completionTokens)
 
 	// Context window information
-	contextUsage := float64(a.currentContextTokens) / float64(a.maxContextTokens) * 100
-	fmt.Printf("🪟 Context window:     %s/%s (%.1f%% used)\n",
-		a.formatTokenCount(a.currentContextTokens),
-		a.formatTokenCount(a.maxContextTokens),
-		contextUsage)
+	if a.maxContextTokens > 0 {
+		contextUsage := float64(a.currentContextTokens) / float64(a.maxContextTokens) * 100
+		fmt.Printf("🪟 Context window:     %s/%s (%.1f%% used)\n",
+			a.formatTokenCount(a.currentContextTokens),
+			a.formatTokenCount(a.maxContextTokens),
+			contextUsage)
+	} else {
+		fmt.Printf("🪟 Context window:     %s (limit unavailable)\n", a.formatTokenCount(a.currentContextTokens))
+	}
+
+	if a.estimatedTokenResponses > 0 {
+		fmt.Printf("ℹ️  Token usage includes estimates for %d response(s) where provider usage was unavailable.\n", a.estimatedTokenResponses)
+	} else if a.totalTokens == 0 && a.currentContextTokens > 0 {
+		fmt.Println("ℹ️  Token usage from provider was unavailable for this run.")
+	}
 
 	if a.cachedTokens > 0 {
-		efficiency := float64(a.cachedTokens) / float64(a.totalTokens) * 100
+		efficiency := 0.0
+		if a.totalTokens > 0 {
+			efficiency = float64(a.cachedTokens) / float64(a.totalTokens) * 100
+		}
 		fmt.Printf("♻️  Cached reused:     %s\n", a.formatTokenCount(a.cachedTokens))
 		fmt.Printf("💰 Cost savings:       $%.6f\n", a.cachedCostSavings)
 		fmt.Printf("📈 Efficiency:        %.1f%% tokens cached\n", efficiency)

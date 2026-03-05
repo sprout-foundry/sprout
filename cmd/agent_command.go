@@ -17,6 +17,8 @@ var (
 	agentSkipPrompt        bool
 	agentModel             string
 	agentProvider          string
+	agentSessionID         string
+	agentLastSession       bool
 	agentPersona           string
 	agentDryRun            bool
 	maxIterations          int
@@ -70,6 +72,8 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
 	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, chutes, openrouter, deepinfra, deepseek, zai, mistral, ollama, ollama-local, ollama-turbo, lmstudio, or custom providers)")
+	agentCmd.Flags().StringVar(&agentSessionID, "session-id", "", "Resume a specific session ID in the current working directory scope")
+	agentCmd.Flags().BoolVar(&agentLastSession, "last-session", false, "Resume the most recent session from the current working directory scope")
 	agentCmd.Flags().StringVar(&agentPersona, "persona", "", "Persona to activate at startup (e.g., general, coder, refactor, debugger, tester, code_reviewer, researcher, web_scraper)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 1000, "Maximum iterations before stopping (default: 1000)")
@@ -172,6 +176,12 @@ Examples:
   # Non-interactive run with an agent workflow
   ledit agent --workflow-config examples/agent_workflow.json
 
+  # Resume a previous session in this directory scope
+  ledit agent --session-id session_1234567890
+
+  # Resume the most recent session from this directory
+  ledit agent --last-session
+
   # Disable web UI
   ledit agent --no-web-ui "Analyze this code"`,
 	Args: cobra.MaximumNArgs(1),
@@ -194,6 +204,37 @@ Examples:
 		}
 		if strings.TrimSpace(agentResourceDirectory) != "" {
 			_ = os.Setenv("LEDIT_RESOURCE_DIRECTORY", strings.TrimSpace(agentResourceDirectory))
+		}
+		if agentLastSession && strings.TrimSpace(agentSessionID) != "" {
+			return fmt.Errorf("--session-id and --last-session are mutually exclusive")
+		}
+		if agentLastSession || strings.TrimSpace(agentSessionID) != "" {
+			workingDir, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to resolve current working directory for session restore: %w", err)
+			}
+			targetSessionID := strings.TrimSpace(agentSessionID)
+			if agentLastSession {
+				sessions, err := agent.ListSessionsWithTimestamps()
+				if err != nil {
+					return fmt.Errorf("failed to list sessions: %w", err)
+				}
+				for _, session := range sessions {
+					if strings.TrimSpace(session.WorkingDirectory) == workingDir {
+						targetSessionID = strings.TrimSpace(session.SessionID)
+						break
+					}
+				}
+				if targetSessionID == "" {
+					return fmt.Errorf("no prior session found for current directory: %s", workingDir)
+				}
+			}
+			state, err := chatAgent.LoadStateScoped(targetSessionID, workingDir)
+			if err != nil {
+				return fmt.Errorf("failed to load session %q: %w", targetSessionID, err)
+			}
+			chatAgent.ApplyState(state)
+			chatAgent.SetSessionID(state.SessionID)
 		}
 
 		// Check if we're in a CI environment or non-interactive mode

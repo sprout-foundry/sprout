@@ -301,17 +301,32 @@ func NewConfig() *Config {
 
 // GetConfigDir returns the configuration directory path
 func GetConfigDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get home directory: %w", err)
+	configDir := strings.TrimSpace(os.Getenv("LEDIT_CONFIG"))
+	if configDir == "" {
+		var err error
+		configDir, err = getDefaultConfigDir()
+		if err != nil {
+			return "", err
+		}
 	}
-
-	configDir := filepath.Join(homeDir, ConfigDirName)
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	return configDir, nil
+}
+
+func getDefaultConfigDir() (string, error) {
+	xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
+	if xdgConfigHome != "" {
+		return filepath.Join(xdgConfigHome, "ledit"), nil
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return filepath.Join(homeDir, ConfigDirName), nil
 }
 
 // GetConfigPath returns the full path to the config file

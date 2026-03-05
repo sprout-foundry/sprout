@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
@@ -12,6 +13,7 @@ import (
 )
 
 var startupChecksOnce sync.Once
+var isolatedConfig bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -35,6 +37,22 @@ For autonomous operation, try: ledit agent "your intent here"
 
 Running just 'ledit' without arguments starts enhanced agent mode with automatic web UI.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if isolatedConfig {
+			cwd, err := os.Getwd()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to resolve working directory for --isolated-config: %v\n", err)
+				os.Exit(1)
+			}
+			isolatedDir := filepath.Join(cwd, ".ledit")
+			if err := os.Setenv("LEDIT_CONFIG", isolatedDir); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to set LEDIT_CONFIG for --isolated-config: %v\n", err)
+				os.Exit(1)
+			}
+			if err := configuration.BootstrapIsolatedConfig(isolatedDir); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to bootstrap isolated config: %v\n", err)
+				os.Exit(1)
+			}
+		}
 		// Initialize API keys and configuration
 		initializeSystem()
 	},
@@ -105,6 +123,7 @@ func init() {
 	// will be available to all subcommands in the application.
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ledit.yaml)")
+	rootCmd.PersistentFlags().BoolVar(&isolatedConfig, "isolated-config", false, "Use per-working-directory config at ./.ledit (clone from main config on first run)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

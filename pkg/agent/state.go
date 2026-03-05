@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -193,44 +192,7 @@ func (a *Agent) autoSaveState() {
 		a.sessionID = fmt.Sprintf("session_%d", time.Now().Unix())
 	}
 
-	// Save state to persistent storage
-	stateDir, err := GetStateDir()
-	if err != nil {
-		if a.debug {
-			a.debugLog("⚠️ Failed to get state directory for auto-save: %v\n", err)
-		}
-		return
-	}
-
-	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", a.sessionID))
-
-	// Generate session name from first user message if not already set
-	sessionName := a.generateSessionName()
-
-	// Create conversation state for persistence
-	state := ConversationState{
-		Messages:          a.messages,
-		TaskActions:       a.taskActions,
-		TotalCost:         a.totalCost,
-		TotalTokens:       a.totalTokens,
-		PromptTokens:      a.promptTokens,
-		CompletionTokens:  a.completionTokens,
-		CachedTokens:      a.cachedTokens,
-		CachedCostSavings: a.cachedCostSavings,
-		LastUpdated:       time.Now(),
-		SessionID:         a.sessionID,
-		Name:              sessionName,
-	}
-
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		if a.debug {
-			a.debugLog("⚠️ Failed to marshal state for auto-save: %v\n", err)
-		}
-		return
-	}
-
-	if err := os.WriteFile(stateFile, data, 0600); err != nil {
+	if err := a.SaveStateScoped(a.sessionID, ""); err != nil {
 		if a.debug {
 			a.debugLog("⚠️ Failed to write state file for auto-save: %v\n", err)
 		}
@@ -238,7 +200,7 @@ func (a *Agent) autoSaveState() {
 	}
 
 	if a.debug {
-		a.debugLog("💾 Auto-saved conversation state to %s (name: %s)\n", stateFile, sessionName)
+		a.debugLog("💾 Auto-saved scoped conversation state for session %s\n", a.sessionID)
 	}
 }
 

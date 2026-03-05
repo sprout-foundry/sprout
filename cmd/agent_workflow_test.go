@@ -179,6 +179,9 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		if cfg.Orchestration.EventsFile != defaultWorkflowOrchestrationEventsFile {
 			t.Fatalf("unexpected default events file: %q", cfg.Orchestration.EventsFile)
 		}
+		if cfg.Orchestration.ConversationSessionID != defaultWorkflowConversationSessionID {
+			t.Fatalf("unexpected default conversation session id: %q", cfg.Orchestration.ConversationSessionID)
+		}
 		if !cfg.orchestrationResumeEnabled() {
 			t.Fatalf("expected resume default enabled")
 		}
@@ -349,5 +352,50 @@ func TestWorkflowExecutionStateRoundTrip(t *testing.T) {
 	}
 	if loaded.NextStepIndex != 2 || !loaded.InitialCompleted || loaded.LastProvider != "ai-worker" {
 		t.Fatalf("unexpected loaded state: %#v", loaded)
+	}
+}
+
+func TestShouldRestoreWorkflowConversationState(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		state *workflowExecutionState
+		want  bool
+	}{
+		{
+			name:  "nil state",
+			state: nil,
+			want:  false,
+		},
+		{
+			name:  "fresh state does not restore",
+			state: &workflowExecutionState{Version: 1},
+			want:  false,
+		},
+		{
+			name:  "initial completed restores",
+			state: &workflowExecutionState{Version: 1, InitialCompleted: true},
+			want:  true,
+		},
+		{
+			name:  "advanced step restores",
+			state: &workflowExecutionState{Version: 1, NextStepIndex: 2},
+			want:  true,
+		},
+		{
+			name:  "error state restores",
+			state: &workflowExecutionState{Version: 1, HasError: true},
+			want:  true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldRestoreWorkflowConversationState(tc.state)
+			if got != tc.want {
+				t.Fatalf("shouldRestoreWorkflowConversationState()=%t want=%t", got, tc.want)
+			}
+		})
 	}
 }

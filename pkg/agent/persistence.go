@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +12,11 @@ import (
 	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent_api"
+)
+
+const (
+	scopedSessionsDirName = "scoped"
+	legacySessionPrefix   = "session_"
 )
 
 // Reset to default when running tests (helps with parallel test safety)
@@ -41,6 +48,121 @@ func GetStateDir() (string, error) {
 	return getStateDirFunc()
 }
 
+func normalizeSessionID(sessionID string) (string, error) {
+	clean := strings.TrimSpace(sessionID)
+	clean = strings.TrimPrefix(clean, legacySessionPrefix)
+	if clean == "" {
+		return "", fmt.Errorf("session ID is required")
+	}
+	if strings.Contains(clean, string(os.PathSeparator)) || strings.Contains(clean, "/") {
+		return "", fmt.Errorf("session ID %q cannot contain path separators", sessionID)
+	}
+	return clean, nil
+}
+
+func normalizeWorkingDirectory(workingDir string) (string, error) {
+	trimmed := strings.TrimSpace(workingDir)
+	if trimmed == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve current working directory: %w", err)
+		}
+		trimmed = cwd
+	}
+	abs, err := filepath.Abs(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve absolute working directory %q: %w", trimmed, err)
+	}
+	return filepath.Clean(abs), nil
+}
+
+func workingDirectoryScopeHash(workingDir string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(workingDir))))
+	return hex.EncodeToString(sum[:8])
+}
+
+func buildScopedSessionFilePath(stateDir, sessionID, workingDir string) (string, error) {
+	cleanSessionID, err := normalizeSessionID(sessionID)
+	if err != nil {
+		return "", err
+	}
+	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
+	if err != nil {
+		return "", err
+	}
+	scopeHash := workingDirectoryScopeHash(cleanWorkingDir)
+	return filepath.Join(stateDir, scopedSessionsDirName, scopeHash, fmt.Sprintf("%s%s.json", legacySessionPrefix, cleanSessionID)), nil
+}
+
+func buildLegacySessionFilePath(stateDir, sessionID string) (string, error) {
+	cleanSessionID, err := normalizeSessionID(sessionID)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(stateDir, fmt.Sprintf("%s%s.json", legacySessionPrefix, cleanSessionID)), nil
+}
+
+func listScopedSessionCandidates(stateDir, sessionID string) ([]string, error) {
+	cleanSessionID, err := normalizeSessionID(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	scopedRoot := filepath.Join(stateDir, scopedSessionsDirName)
+	if _, err := os.Stat(scopedRoot); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to stat scoped sessions root: %w", err)
+	}
+	targetName := fmt.Sprintf("%s%s.json", legacySessionPrefix, cleanSessionID)
+	var candidates []string
+	walkErr := filepath.WalkDir(scopedRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if d.Name() == targetName {
+			candidates = append(candidates, path)
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return nil, fmt.Errorf("failed to scan scoped session directories: %w", walkErr)
+	}
+	return candidates, nil
+}
+
+func resolveSessionStateFile(stateDir, sessionID, workingDir string) (string, error) {
+	scopedPath, scopedErr := buildScopedSessionFilePath(stateDir, sessionID, workingDir)
+	if scopedErr == nil {
+		if _, err := os.Stat(scopedPath); err == nil {
+			return scopedPath, nil
+		}
+	}
+
+	candidates, err := listScopedSessionCandidates(stateDir, sessionID)
+	if err != nil {
+		return "", err
+	}
+	if len(candidates) == 1 {
+		return candidates[0], nil
+	}
+	if len(candidates) > 1 {
+		return "", fmt.Errorf("session ID %q is ambiguous across directories (%d matches); load with directory scope", sessionID, len(candidates))
+	}
+
+	legacyPath, err := buildLegacySessionFilePath(stateDir, sessionID)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(legacyPath); err == nil {
+		return legacyPath, nil
+	}
+	return "", fmt.Errorf("session %q not found", sessionID)
+}
+
 // defaultGetStateDir is the actual implementation of GetStateDir
 func defaultGetStateDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
@@ -58,16 +180,34 @@ func defaultGetStateDir() (string, error) {
 
 // SaveState saves the current conversation state
 func (a *Agent) SaveState(sessionID string) error {
+	workingDir, _ := os.Getwd()
+	return a.SaveStateScoped(sessionID, workingDir)
+}
+
+// SaveStateScoped saves conversation state under a directory-scoped session namespace.
+func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
 		return err
 	}
+	cleanSessionID, err := normalizeSessionID(sessionID)
+	if err != nil {
+		return err
+	}
+	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
+	if err != nil {
+		return err
+	}
+	stateFile, err := buildScopedSessionFilePath(stateDir, cleanSessionID, cleanWorkingDir)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(stateFile), 0700); err != nil {
+		return fmt.Errorf("failed to create scoped session directory: %w", err)
+	}
 
 	// Generate session name from first user message
 	sessionName := a.generateSessionName()
-
-	// Get current working directory
-	workingDir, _ := os.Getwd()
 
 	state := ConversationState{
 		Messages:          a.messages,
@@ -79,12 +219,10 @@ func (a *Agent) SaveState(sessionID string) error {
 		CachedTokens:      a.cachedTokens,
 		CachedCostSavings: a.cachedCostSavings,
 		LastUpdated:       time.Now(),
-		SessionID:         sessionID,
+		SessionID:         cleanSessionID,
 		Name:              sessionName,
-		WorkingDirectory:  workingDir,
+		WorkingDirectory:  cleanWorkingDir,
 	}
-
-	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", sessionID))
 
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
@@ -96,19 +234,20 @@ func (a *Agent) SaveState(sessionID string) error {
 
 // LoadStateWithoutAgent loads a conversation state by session ID without an Agent instance
 func LoadStateWithoutAgent(sessionID string) (*ConversationState, error) {
+	workingDir, _ := os.Getwd()
+	return LoadStateWithoutAgentScoped(sessionID, workingDir)
+}
+
+// LoadStateWithoutAgentScoped loads a state for a specific working directory scope.
+func LoadStateWithoutAgentScoped(sessionID, workingDir string) (*ConversationState, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
 		return nil, err
 	}
-
-	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
-	cleanSessionID := sessionID
-	if strings.HasPrefix(sessionID, "session_") {
-		// Remove the "session_" prefix if it's already there
-		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
+	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
+	if err != nil {
+		return nil, err
 	}
-
-	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
 
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
@@ -128,6 +267,11 @@ func (a *Agent) LoadState(sessionID string) (*ConversationState, error) {
 	return LoadStateWithoutAgent(sessionID)
 }
 
+// LoadStateScoped loads a conversation state by session ID within a specific working directory scope.
+func (a *Agent) LoadStateScoped(sessionID, workingDir string) (*ConversationState, error) {
+	return LoadStateWithoutAgentScoped(sessionID, workingDir)
+}
+
 // ListSessionsWithTimestamps returns all available session IDs with their last updated timestamps
 func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 	stateDir, err := GetStateDir()
@@ -135,47 +279,51 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 		return nil, err
 	}
 
-	files, err := os.ReadDir(stateDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read state directory: %w", err)
-	}
-
 	var sessions []SessionInfo
-	for _, file := range files {
-		if !file.IsDir() && filepath.Ext(file.Name()) == ".json" {
-			sessionID := file.Name()[:len(file.Name())-5] // Remove .json extension
+	walkErr := filepath.WalkDir(stateDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() || filepath.Ext(d.Name()) != ".json" {
+			return nil
+		}
+		fileInfo, err := d.Info()
+		if err != nil {
+			return nil
+		}
 
-			// Get file info for timestamp
-			fileInfo, err := file.Info()
-			if err != nil {
-				continue
-			}
-
-			// Try to read the session file to get the last updated time and name from state
-			stateFile := filepath.Join(stateDir, file.Name())
-			lastUpdated := fileInfo.ModTime()
-			name := ""
-			workingDir := ""
-
-			// Read the file to get the actual last updated time and name from the state
-			if data, err := os.ReadFile(stateFile); err == nil {
-				var state ConversationState
-				if err := json.Unmarshal(data, &state); err == nil {
-					if !state.LastUpdated.IsZero() {
-						lastUpdated = state.LastUpdated
-					}
-					name = state.Name
-					workingDir = state.WorkingDirectory
+		lastUpdated := fileInfo.ModTime()
+		name := ""
+		workingDir := ""
+		sessionID := strings.TrimSuffix(d.Name(), ".json")
+		if strings.HasPrefix(sessionID, legacySessionPrefix) {
+			sessionID = strings.TrimPrefix(sessionID, legacySessionPrefix)
+		}
+		if data, err := os.ReadFile(path); err == nil {
+			var state ConversationState
+			if err := json.Unmarshal(data, &state); err == nil {
+				if !state.LastUpdated.IsZero() {
+					lastUpdated = state.LastUpdated
+				}
+				name = state.Name
+				workingDir = state.WorkingDirectory
+				if strings.TrimSpace(state.SessionID) != "" {
+					sessionID = strings.TrimSpace(state.SessionID)
 				}
 			}
-
-			sessions = append(sessions, SessionInfo{
-				SessionID:        sessionID,
-				LastUpdated:      lastUpdated,
-				Name:             name,
-				WorkingDirectory: workingDir,
-			})
 		}
+
+		sessions = append(sessions, SessionInfo{
+			SessionID:        sessionID,
+			LastUpdated:      lastUpdated,
+			Name:             name,
+			WorkingDirectory: workingDir,
+			StoragePath:      path,
+		})
+		return nil
+	})
+	if walkErr != nil {
+		return nil, fmt.Errorf("failed to scan session directory: %w", walkErr)
 	}
 
 	// Get current working directory for prioritization
@@ -203,22 +351,24 @@ type SessionInfo struct {
 	LastUpdated      time.Time `json:"last_updated"`
 	Name             string    `json:"name"`              // Human-readable session name
 	WorkingDirectory string    `json:"working_directory"` // Directory where session was created
+	StoragePath      string    `json:"storage_path,omitempty"`
 }
 
 // GetSessionPreview returns the first 50 characters of the first user message
 func GetSessionPreview(sessionID string) string {
+	workingDir, _ := os.Getwd()
+	return GetSessionPreviewScoped(sessionID, workingDir)
+}
+
+func GetSessionPreviewScoped(sessionID, workingDir string) string {
 	stateDir, err := GetStateDir()
 	if err != nil {
 		return ""
 	}
-
-	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
-	cleanSessionID := sessionID
-	if strings.HasPrefix(sessionID, "session_") {
-		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
+	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
+	if err != nil {
+		return ""
 	}
-
-	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		return ""
@@ -248,18 +398,19 @@ func GetSessionPreview(sessionID string) string {
 
 // GetSessionName returns the name of a session
 func GetSessionName(sessionID string) string {
+	workingDir, _ := os.Getwd()
+	return GetSessionNameScoped(sessionID, workingDir)
+}
+
+func GetSessionNameScoped(sessionID, workingDir string) string {
 	stateDir, err := GetStateDir()
 	if err != nil {
 		return ""
 	}
-
-	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
-	cleanSessionID := sessionID
-	if strings.HasPrefix(sessionID, "session_") {
-		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
+	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
+	if err != nil {
+		return ""
 	}
-
-	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		return ""
@@ -275,22 +426,19 @@ func GetSessionName(sessionID string) string {
 
 // RenameSession renames a session by updating the name field in the state file
 func RenameSession(sessionID string, newName string) error {
+	workingDir, _ := os.Getwd()
+	return RenameSessionScoped(sessionID, newName, workingDir)
+}
+
+func RenameSessionScoped(sessionID, newName, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
 		return err
 	}
-
-	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
-	cleanSessionID := sessionID
-	if strings.HasPrefix(sessionID, "session_") {
-		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
+	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
+	if err != nil {
+		return err
 	}
-
-	if strings.HasPrefix(cleanSessionID, "session_") {
-		cleanSessionID = strings.TrimPrefix(cleanSessionID, "session_")
-	}
-
-	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
 
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
@@ -335,19 +483,19 @@ func ListSessions() ([]string, error) {
 
 // DeleteSession removes a session state file
 func DeleteSession(sessionID string) error {
+	workingDir, _ := os.Getwd()
+	return DeleteSessionScoped(sessionID, workingDir)
+}
+
+func DeleteSessionScoped(sessionID, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
 		return err
 	}
-
-	// Ensure the session ID doesn't already contain "session_" prefix to prevent duplication
-	cleanSessionID := sessionID
-	if strings.HasPrefix(sessionID, "session_") {
-		// Remove the "session_" prefix if it's already there
-		cleanSessionID = strings.TrimPrefix(sessionID, "session_")
+	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
+	if err != nil {
+		return err
 	}
-
-	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", cleanSessionID))
 	return os.Remove(stateFile)
 }
 

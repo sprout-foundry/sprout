@@ -33,7 +33,7 @@ func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error
 		name := session.Name
 		preview := ""
 		if name == "" {
-			preview = agent.GetSessionPreview(session.SessionID)
+			preview = agent.GetSessionPreviewScoped(session.SessionID, session.WorkingDirectory)
 		}
 
 		// Format: #ID  [Name]  Timestamp  SessionID
@@ -67,22 +67,23 @@ func (f *SessionsFlow) ExecuteSessionLoad(chatAgent *agent.Agent, args []string)
 	}
 
 	// Find session by number or ID
-	var sessionID string
+	var selectedSession *agent.SessionInfo
 	if len(args) > 0 && args[0] != "--full" {
 		// Try to parse as number
 		num := 0
 		if _, err := fmt.Sscanf(args[0], "%d", &num); err == nil && num >= 1 && num <= len(sessions) {
 			// List is indexed 0-based but displayed 1-based
-			sessionID = sessions[len(sessions)-num].SessionID
+			selectedSession = &sessions[len(sessions)-num]
 		} else {
 			// Try to find by ID prefix
-			for _, s := range sessions {
+			for i := range sessions {
+				s := sessions[i]
 				if strings.HasPrefix(s.SessionID, args[0]) {
-					sessionID = s.SessionID
+					selectedSession = &sessions[i]
 					break
 				}
 			}
-			if sessionID == "" {
+			if selectedSession == nil {
 				return "", fmt.Errorf("session number or ID not found: %s", args[0])
 			}
 		}
@@ -102,7 +103,7 @@ func (f *SessionsFlow) ExecuteSessionLoad(chatAgent *agent.Agent, args []string)
 	}
 
 	// Load state
-	state, err := agent.LoadStateWithoutAgent(sessionID)
+	state, err := agent.LoadStateWithoutAgentScoped(selectedSession.SessionID, selectedSession.WorkingDirectory)
 	if err != nil {
 		return "", fmt.Errorf("failed to load session: %v", err)
 	}
@@ -129,19 +130,20 @@ func (f *SessionsFlow) ExecuteSessionRename(chatAgent *agent.Agent, args []strin
 	}
 
 	// Find session by number or ID
-	var sessionID string
+	var selectedSession *agent.SessionInfo
 	num := 0
 	if _, err := fmt.Sscanf(args[0], "%d", &num); err == nil && num >= 1 && num <= len(sessions) {
-		sessionID = sessions[len(sessions)-num].SessionID
+		selectedSession = &sessions[len(sessions)-num]
 	} else {
 		// Try to find by ID prefix
-		for _, s := range sessions {
+		for i := range sessions {
+			s := sessions[i]
 			if strings.HasPrefix(s.SessionID, args[0]) {
-				sessionID = s.SessionID
+				selectedSession = &sessions[i]
 				break
 			}
 		}
-		if sessionID == "" {
+		if selectedSession == nil {
 			return "", fmt.Errorf("session number or ID not found: %s", args[0])
 		}
 	}
@@ -150,7 +152,7 @@ func (f *SessionsFlow) ExecuteSessionRename(chatAgent *agent.Agent, args []strin
 	newName := strings.Join(args[1:], " ")
 
 	// Load the session state, update name, and save it
-	if err := agent.RenameSession(sessionID, newName); err != nil {
+	if err := agent.RenameSessionScoped(selectedSession.SessionID, newName, selectedSession.WorkingDirectory); err != nil {
 		return "", fmt.Errorf("failed to rename session: %v", err)
 	}
 
@@ -169,29 +171,30 @@ func (f *SessionsFlow) ExecuteSessionDelete(args []string) (string, error) {
 	}
 
 	// Find session by number or ID
-	var sessionID string
+	var selectedSession *agent.SessionInfo
 	num := 0
 	if _, err := fmt.Sscanf(args[0], "%d", &num); err == nil && num >= 1 && num <= len(sessions) {
-		sessionID = sessions[len(sessions)-num].SessionID
+		selectedSession = &sessions[len(sessions)-num]
 	} else {
 		// Try to find by ID
-		for _, s := range sessions {
+		for i := range sessions {
+			s := sessions[i]
 			if s.SessionID == args[0] || strings.HasPrefix(s.SessionID, args[0]) {
-				sessionID = s.SessionID
+				selectedSession = &sessions[i]
 				break
 			}
 		}
-		if sessionID == "" {
+		if selectedSession == nil {
 			return "", fmt.Errorf("session number or ID not found: %s", args[0])
 		}
 	}
 
 	// Delete the session file
-	if err := agent.DeleteSession(sessionID); err != nil {
+	if err := agent.DeleteSessionScoped(selectedSession.SessionID, selectedSession.WorkingDirectory); err != nil {
 		return "", fmt.Errorf("failed to delete session: %v", err)
 	}
 
-	return fmt.Sprintf("✅ Session deleted: %s", sessionID), nil
+	return fmt.Sprintf("✅ Session deleted: %s", selectedSession.SessionID), nil
 }
 
 // ExecuteSessionExport exports a session to a JSON file
@@ -206,25 +209,26 @@ func (f *SessionsFlow) ExecuteSessionExport(args []string) (string, error) {
 	}
 
 	// Find session by number or ID
-	var sessionID string
+	var selectedSession *agent.SessionInfo
 	num := 0
 	if _, err := fmt.Sscanf(args[0], "%d", &num); err == nil && num >= 1 && num <= len(sessions) {
-		sessionID = sessions[len(sessions)-num].SessionID
+		selectedSession = &sessions[len(sessions)-num]
 	} else {
 		// Try to find by ID
-		for _, s := range sessions {
+		for i := range sessions {
+			s := sessions[i]
 			if s.SessionID == args[0] || strings.HasPrefix(s.SessionID, args[0]) {
-				sessionID = s.SessionID
+				selectedSession = &sessions[i]
 				break
 			}
 		}
-		if sessionID == "" {
+		if selectedSession == nil {
 			return "", fmt.Errorf("session number or ID not found: %s", args[0])
 		}
 	}
 
 	// Load state and export to file
-	state, err := agent.LoadStateWithoutAgent(sessionID)
+	state, err := agent.LoadStateWithoutAgentScoped(selectedSession.SessionID, selectedSession.WorkingDirectory)
 	if err != nil {
 		return "", fmt.Errorf("failed to load session for export: %v", err)
 	}

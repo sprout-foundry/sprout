@@ -2,6 +2,13 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.4] - 2026-03-05
+
+- Updates 13 files - Updates session restore and summary metrics (74f299c)
+- Merge remote-tracking branch 'origin/main' (80cce15)
+- Updates 10 files - Updates workflow to persist and restore session state (923833d)
+- docs: Update changelog for v0.11.3 (5c6144f)
+
 ## [v0.11.3] - 2026-03-05
 
 - Merge remote-tracking branch 'origin/main' (0876a8d)

@@ -232,13 +232,18 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 		if err == nil {
 			// Track metrics from successful API response
 			if resp != nil {
+				promptTokens, completionTokens, totalTokens, estimatedCost, cachedTokens, estimatedUsage :=
+					ac.deriveUsageMetrics(resp, messages, tools)
 				ac.agent.TrackMetricsFromResponse(
-					resp.Usage.PromptTokens,
-					resp.Usage.CompletionTokens,
-					resp.Usage.TotalTokens,
-					resp.Usage.EstimatedCost,
-					resp.Usage.PromptTokensDetails.CachedTokens,
+					promptTokens,
+					completionTokens,
+					totalTokens,
+					estimatedCost,
+					cachedTokens,
 				)
+				if estimatedUsage {
+					ac.agent.MarkEstimatedTokenUsageResponse()
+				}
 			}
 			break // Success
 		}
@@ -651,6 +656,44 @@ func (ac *APIClient) estimateRequestTokens(messages []api.Message, tools []api.T
 	tokenEstimate += 100
 
 	return tokenEstimate
+}
+
+func estimateCompletionTokensFromResponse(resp *api.ChatResponse) int {
+	if resp == nil {
+		return 0
+	}
+	total := 0
+	for _, choice := range resp.Choices {
+		total += EstimateTokens(choice.Message.Content)
+		total += EstimateTokens(choice.Message.ReasoningContent)
+	}
+	return total
+}
+
+func (ac *APIClient) deriveUsageMetrics(resp *api.ChatResponse, messages []api.Message, tools []api.Tool) (promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens int, estimatedUsage bool) {
+	if resp == nil {
+		return 0, 0, 0, 0, 0, false
+	}
+
+	promptTokens = resp.Usage.PromptTokens
+	completionTokens = resp.Usage.CompletionTokens
+	totalTokens = resp.Usage.TotalTokens
+	estimatedCost = resp.Usage.EstimatedCost
+	cachedTokens = resp.Usage.PromptTokensDetails.CachedTokens
+
+	hasProviderUsage := promptTokens > 0 || completionTokens > 0 || totalTokens > 0
+	if hasProviderUsage {
+		if totalTokens == 0 {
+			totalTokens = promptTokens + completionTokens
+		}
+		return promptTokens, completionTokens, totalTokens, estimatedCost, cachedTokens, false
+	}
+
+	// Provider did not return usage; compute a best-effort estimate.
+	promptTokens = ac.estimateRequestTokens(messages, tools)
+	completionTokens = estimateCompletionTokensFromResponse(resp)
+	totalTokens = promptTokens + completionTokens
+	return promptTokens, completionTokens, totalTokens, estimatedCost, cachedTokens, true
 }
 
 // displayTimeoutError shows a user-friendly timeout error

@@ -40,8 +40,9 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			return fmt.Errorf("invalid session number. Please select 1-%d", len(sessions))
 		}
 
-		sessionID := sessions[sessionNum-1].SessionID
-		state, err := chatAgent.LoadState(sessionID)
+		selected := sessions[sessionNum-1]
+		sessionID := selected.SessionID
+		state, err := chatAgent.LoadStateScoped(sessionID, selected.WorkingDirectory)
 		if err != nil {
 			return fmt.Errorf("failed to load session: %v", err)
 		}
@@ -94,7 +95,7 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 		sessionNum := len(sessions) - i
 		name := session.Name
 		if name == "" {
-			name = agent.GetSessionPreview(session.SessionID)
+			name = agent.GetSessionPreviewScoped(session.SessionID, session.WorkingDirectory)
 		}
 		label := session.LastUpdated.Format("2006-01-02 15:04:05")
 		if name != "" {
@@ -109,7 +110,7 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 		session := sessions[i]
 		name := session.Name
 		if name == "" {
-			name = agent.GetSessionPreview(session.SessionID)
+			name = agent.GetSessionPreviewScoped(session.SessionID, session.WorkingDirectory)
 		}
 		label := session.LastUpdated.Format("2006-01-02 15:04:05")
 		if name != "" {
@@ -126,8 +127,9 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 
 	// Load the selected session (convert selection back to session index)
 	sessionIndex := len(sessions) - selection
-	sessionID := sessions[sessionIndex].SessionID
-	state, err := chatAgent.LoadState(sessionID)
+	selected := sessions[sessionIndex]
+	sessionID := selected.SessionID
+	state, err := chatAgent.LoadStateScoped(sessionID, selected.WorkingDirectory)
 	if err != nil {
 		return fmt.Errorf("failed to load session: %v", err)
 	}

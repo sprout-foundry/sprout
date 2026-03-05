@@ -23,6 +23,7 @@ const (
 
 	defaultWorkflowOrchestrationStateFile  = ".ledit/workflow_state.json"
 	defaultWorkflowOrchestrationEventsFile = ".ledit/workflow_events.jsonl"
+	defaultWorkflowConversationSessionID   = "workflow"
 )
 
 // AgentWorkflowConfig defines non-interactive workflow orchestration.
@@ -44,6 +45,7 @@ type AgentWorkflowOrchestrationConfig struct {
 	YieldOnProviderHandoff *bool  `json:"yield_on_provider_handoff,omitempty"`
 	StateFile              string `json:"state_file,omitempty"`
 	EventsFile             string `json:"events_file,omitempty"`
+	ConversationSessionID  string `json:"conversation_session_id,omitempty"`
 }
 
 type workflowExecutionState struct {
@@ -122,11 +124,15 @@ func (c *AgentWorkflowConfig) validate() error {
 	if c.Orchestration != nil {
 		c.Orchestration.StateFile = strings.TrimSpace(c.Orchestration.StateFile)
 		c.Orchestration.EventsFile = strings.TrimSpace(c.Orchestration.EventsFile)
+		c.Orchestration.ConversationSessionID = strings.TrimSpace(c.Orchestration.ConversationSessionID)
 		if c.Orchestration.StateFile == "" {
 			c.Orchestration.StateFile = defaultWorkflowOrchestrationStateFile
 		}
 		if c.Orchestration.EventsFile == "" {
 			c.Orchestration.EventsFile = defaultWorkflowOrchestrationEventsFile
+		}
+		if c.Orchestration.ConversationSessionID == "" {
+			c.Orchestration.ConversationSessionID = defaultWorkflowConversationSessionID
 		}
 		if c.Orchestration.Enabled {
 			if c.Orchestration.StateFile == "" {
@@ -134,6 +140,9 @@ func (c *AgentWorkflowConfig) validate() error {
 			}
 			if c.Orchestration.EventsFile == "" {
 				return fmt.Errorf("orchestration.events_file is required when orchestration.enabled=true")
+			}
+			if c.Orchestration.ConversationSessionID == "" {
+				return fmt.Errorf("orchestration.conversation_session_id is required when orchestration.enabled=true")
 			}
 		}
 	}
@@ -632,6 +641,64 @@ func persistWorkflowExecutionState(cfg *AgentWorkflowConfig, state *workflowExec
 	return nil
 }
 
+func shouldRestoreWorkflowConversationState(state *workflowExecutionState) bool {
+	if state == nil {
+		return false
+	}
+	return state.InitialCompleted || state.NextStepIndex > 0 || state.HasError || strings.TrimSpace(state.FirstError) != ""
+}
+
+func restoreWorkflowConversationState(chatAgent *agent.Agent, cfg *AgentWorkflowConfig, state *workflowExecutionState) error {
+	if chatAgent == nil || cfg == nil || !cfg.orchestrationEnabled() || !cfg.orchestrationResumeEnabled() {
+		return nil
+	}
+	if !shouldRestoreWorkflowConversationState(state) {
+		return nil
+	}
+	sessionID := strings.TrimSpace(cfg.Orchestration.ConversationSessionID)
+	if sessionID == "" {
+		return nil
+	}
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to resolve current working directory for workflow restore: %w", err)
+	}
+	restoredState, err := chatAgent.LoadStateScoped(sessionID, workingDir)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil
+		}
+		return fmt.Errorf("failed to load orchestration conversation session %q: %w", sessionID, err)
+	}
+	chatAgent.ApplyState(restoredState)
+	return nil
+}
+
+func persistWorkflowConversationState(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) error {
+	if chatAgent == nil || cfg == nil || !cfg.orchestrationEnabled() {
+		return nil
+	}
+	sessionID := strings.TrimSpace(cfg.Orchestration.ConversationSessionID)
+	if sessionID == "" {
+		return nil
+	}
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to resolve current working directory for workflow checkpoint: %w", err)
+	}
+	if err := chatAgent.SaveStateScoped(sessionID, workingDir); err != nil {
+		return fmt.Errorf("failed to write orchestration conversation session %q: %w", sessionID, err)
+	}
+	return nil
+}
+
+func persistWorkflowCheckpoint(cfg *AgentWorkflowConfig, state *workflowExecutionState, chatAgent *agent.Agent) error {
+	if err := persistWorkflowExecutionState(cfg, state); err != nil {
+		return err
+	}
+	return persistWorkflowConversationState(chatAgent, cfg)
+}
+
 func emitWorkflowOrchestrationEvent(cfg *AgentWorkflowConfig, eventType string, payload map[string]interface{}) error {
 	if !cfg.orchestrationEnabled() {
 		return nil
@@ -731,7 +798,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			if firstErr != nil {
 				state.FirstError = firstErr.Error()
 			}
-			if err := persistWorkflowExecutionState(cfg, state); err != nil {
+			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, err
 			}
 			fmt.Printf("⏸️ Workflow yielded for orchestration before step %s\n", stepName)
@@ -740,7 +807,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 
 		if !shouldRunWorkflowStep(step.When, hasError) {
 			state.NextStepIndex = i + 1
-			if err := persistWorkflowExecutionState(cfg, state); err != nil {
+			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, err
 			}
 			continue
@@ -766,7 +833,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			if firstErr != nil {
 				state.FirstError = firstErr.Error()
 			}
-			if err := persistWorkflowExecutionState(cfg, state); err != nil {
+			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, err
 			}
 			if !cfg.ContinueOnError {
@@ -784,7 +851,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				return false, err
 			}
 			state.NextStepIndex = i + 1
-			if err := persistWorkflowExecutionState(cfg, state); err != nil {
+			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, err
 			}
 			continue
@@ -801,7 +868,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				state.FirstError = firstErr.Error()
 			}
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-			if err := persistWorkflowExecutionState(cfg, state); err != nil {
+			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, err
 			}
 			if !cfg.ContinueOnError {
@@ -822,7 +889,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				state.FirstError = firstErr.Error()
 			}
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-			if err := persistWorkflowExecutionState(cfg, state); err != nil {
+			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, err
 			}
 			if !cfg.ContinueOnError {
@@ -841,7 +908,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 				state.FirstError = firstErr.Error()
 			}
 			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
-			if err := persistWorkflowExecutionState(cfg, state); err != nil {
+			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, err
 			}
 			if !cfg.ContinueOnError {
@@ -870,7 +937,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			}); err != nil {
 				return false, err
 			}
-			if err := persistWorkflowExecutionState(cfg, state); err != nil {
+			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, err
 			}
 			if !cfg.ContinueOnError {
@@ -890,7 +957,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 		}); err != nil {
 			return false, err
 		}
-		if err := persistWorkflowExecutionState(cfg, state); err != nil {
+		if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 			return false, err
 		}
 	}
@@ -900,7 +967,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 		state.FirstError = firstErr.Error()
 		state.HasError = true
 	}
-	if err := persistWorkflowExecutionState(cfg, state); err != nil {
+	if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 		return false, err
 	}
 	if err := emitWorkflowOrchestrationEvent(cfg, "workflow_completed", map[string]interface{}{

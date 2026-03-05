@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 // LoadSessionInfo loads session information including timestamp
@@ -13,8 +12,11 @@ func LoadSessionInfo(sessionID string) (*ConversationState, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	stateFile := filepath.Join(stateDir, fmt.Sprintf("session_%s.json", sessionID))
+	workingDir, _ := os.Getwd()
+	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve session file: %w", err)
+	}
 
 	data, err := os.ReadFile(stateFile)
 	if err != nil {

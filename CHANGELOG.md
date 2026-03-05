@@ -2,6 +2,14 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.1] - 2026-03-04
+
+- Updates 7 files - Updates workflow orchestration support persistence (1f34fd3)
+- Updates 7 files - Updates provider syntax handling and context refresh (b0f8707)
+- Updates 5 files - Updates pruning for tool sanitization and headroom (75b3c96)
+- Deletes tst - Deletes temporary binary (69f0d60)
+- docs: Update changelog for v0.11.0 (1e4092c)
+
 ## [v0.11.0] - 2026-03-03
 
 - Merge remote-tracking branch 'origin/main' (b0d8421)

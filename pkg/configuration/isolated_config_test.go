@@ -64,8 +64,8 @@ func TestBootstrapIsolatedConfig_ClonesWithoutHistory(t *testing.T) {
 	if len(isolatedCfg.HistoryIndexByPath) != 0 {
 		t.Fatalf("expected path history index cleared, got %#v", isolatedCfg.HistoryIndexByPath)
 	}
-	if _, err := os.Stat(filepath.Join(isolatedDir, APIKeysFileName)); err != nil {
-		t.Fatalf("expected api keys copied: %v", err)
+	if _, err := os.Stat(filepath.Join(isolatedDir, APIKeysFileName)); !os.IsNotExist(err) {
+		t.Fatalf("expected api keys to remain global-only, got err=%v", err)
 	}
 }
 

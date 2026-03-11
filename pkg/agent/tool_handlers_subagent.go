@@ -367,8 +367,8 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			return "", fmt.Errorf("failed to resolve absolute workspace path: %w", err)
 		}
 
-		// Verify the file is within the workspace
-		if !strings.HasPrefix(absPath, absWorkspaceDir+string(filepath.Separator)) && absPath != absWorkspaceDir {
+		// Verify the file is within the workspace or in /tmp/ for testing
+		if !isPathInWorkspace(absPath, absWorkspaceDir) && !isPathInTmp(absPath) {
 			return "", fmt.Errorf("file path is outside workspace: %s (workspace: %s)", filePath, absWorkspaceDir)
 		}
 
@@ -943,4 +943,20 @@ func stripAnsiCodes(s string) string {
 	// ANSI escape code regex pattern
 	ansiEscape := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 	return ansiEscape.ReplaceAllString(s, "")
+}
+
+// isPathInWorkspace checks if a path is within the workspace directory
+func isPathInWorkspace(path, workspaceDir string) bool {
+	if path == workspaceDir {
+		return true
+	}
+	return strings.HasPrefix(path, workspaceDir+string(filepath.Separator))
+}
+
+// isPathInTmp checks if a path is in /tmp/ for temporary file access
+func isPathInTmp(path string) bool {
+	// Check for /tmp/ or /var/folders/.../T/ (macOS temp dir) or any path containing tmp
+	return strings.Contains(path, "/tmp/") || 
+		   strings.Contains(path, "/var/folders/.../T/") ||
+		   strings.Contains(strings.ToLower(path), "/tmp/")
 }

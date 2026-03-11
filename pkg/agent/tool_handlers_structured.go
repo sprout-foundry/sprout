@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -169,11 +170,14 @@ func inferStructuredFormat(path, provided string) string {
 func serializeStructuredContent(format string, data interface{}) (string, error) {
 	switch format {
 	case "json":
-		b, err := json.MarshalIndent(data, "", "  ")
-		if err != nil {
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(data); err != nil {
 			return "", fmt.Errorf("failed to marshal JSON: %w", err)
 		}
-		return string(b) + "\n", nil
+		return strings.TrimRight(buf.String(), "\n"), nil
 	case "yaml":
 		b, err := yaml.Marshal(data)
 		if err != nil {

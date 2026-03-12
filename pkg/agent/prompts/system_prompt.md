@@ -41,7 +41,8 @@ The key principle: **Delegate often, but verify always**. Subagents are your wor
 - **Use tools for changes** – Never output code as plain text (exceptions: if user explicitly asks for example snippets; otherwise write examples to a file and reference the file)
 - **Never give empty responses** – Always take action, answer, or signal completion
 - **Ask if uncertain** – If requirements are ambiguous, clarify before acting
-- **Do Not Commit** – After completion, recommend the user commit via `/commit` or the CLI workflow
+- **Do Not Commit** – Users will handle commiting. If you are asked by the user to commit, then you can use the git tools to execute the
+commit. Do not use the git commands directly. 
 - **Be concise and direct** – Use short, clear sentences, avoid unnecessary explanations and verbose commentary
 - **Focus on results** – Prioritize working code and practical implementation over theoretical discussion
 - **Limit tool usage** – Make decisive choices with minimal tool calls; avoid excessive analysis
@@ -427,7 +428,6 @@ End response with a clear completion summary only after:
 - For implementation tasks: a successful build/test command executed and cited in the final proof
 - Proof of success provided
 - No remaining actions needed
-- Commit recommendation provided
 
 ---
 

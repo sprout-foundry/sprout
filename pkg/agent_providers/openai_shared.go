@@ -176,15 +176,19 @@ func CalculateMaxTokensWithLimits(contextLimit int, completionLimit int, message
 	}
 	inputTokens += len(tools) * 200
 
-	maxOutput := contextLimit - inputTokens - 1000
-	if maxOutput < 256 {
-		maxOutput = 256
-	}
-
-	if completionLimit > 0 && maxOutput > completionLimit {
-		maxOutput = completionLimit
-	}
-	requestCap := getMaxRequestCompletionTokensCap()
+	remaining := contextLimit - inputTokens
+buffer := (remaining * 2) / 100
+if buffer < 2000 {
+    buffer = 2000
+}
+maxOutput := contextLimit - inputTokens - buffer
+if maxOutput < 256 {
+    maxOutput = 256
+}
+if completionLimit > 0 && maxOutput > completionLimit {
+    maxOutput = completionLimit
+}
+requestCap := getMaxRequestCompletionTokensCap()
 	if requestCap > 0 && maxOutput > requestCap {
 		maxOutput = requestCap
 	}

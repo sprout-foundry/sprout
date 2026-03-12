@@ -7,11 +7,11 @@ import (
 )
 
 func TestZAIPruningThresholds(t *testing.T) {
-	debug := true
+	debug := false
 	pruner := NewConversationPruner(debug)
 
-	// Test ZAI-specific thresholds
-	maxTokens := 128000 // ZAI's context limit
+	// Test thresholds - all providers now use the same percentage-based thresholds
+	maxTokens := 128000 // Example context limit
 
 	tests := []struct {
 		name          string
@@ -21,67 +21,53 @@ func TestZAIPruningThresholds(t *testing.T) {
 		description   string
 	}{
 		{
-			name:          "ZAI Low Context",
+			name:          "Low Context",
 			currentTokens: 50000,
 			provider:      "zai",
 			expectedPrune: false,
-			description:   "50K tokens should not trigger pruning for ZAI",
+			description:   "50K tokens should not trigger pruning (below 90%)",
 		},
 		{
-			name:          "ZAI At 85% Threshold",
+			name:          "At 85% Threshold",
 			currentTokens: 108800, // 85% of 128K
 			provider:      "zai",
 			expectedPrune: false,
-			description:   "85% should not trigger pruning with 92% threshold",
+			description:   "85% should not trigger pruning (below 90%)",
 		},
 		{
-			name:          "ZAI At 100K Tokens",
-			currentTokens: 100000,
+			name:          "At 89% Threshold",
+			currentTokens: 113920, // 89% of 128K
 			provider:      "zai",
 			expectedPrune: false,
-			description:   "100K tokens should not trigger pruning with 92% and sufficient remaining headroom",
+			description:   "89% should not trigger pruning (below 90%)",
 		},
 		{
-			name:          "ZAI At 90% Threshold",
+			name:          "At 90% Threshold",
 			currentTokens: 115200, // 90% of 128K
 			provider:      "zai",
 			expectedPrune: false,
-			description:   "90% should not trigger pruning with 92% threshold",
+			description:   "90% should NOT trigger pruning (threshold uses > not >=)",
 		},
 		{
-			name:          "ZAI At 92% Threshold",
-			currentTokens: 117760, // 92% of 128K
+			name:          "At 91% Threshold",
+			currentTokens: 116480, // 91% of 128K
 			provider:      "zai",
 			expectedPrune: true,
-			description:   "92% should trigger pruning",
-		},
-		{
-			name:          "ZAI Remaining Below Min Available",
-			currentTokens: 121500, // leaves <8K
-			provider:      "zai",
-			expectedPrune: true,
-			description:   "remaining tokens below min available threshold should trigger pruning",
-		},
-		{
-			name:          "ZAI Below Thresholds",
-			currentTokens: 70000,
-			provider:      "zai",
-			expectedPrune: false,
-			description:   "70K tokens should not trigger pruning for ZAI (below 60% threshold)",
-		},
-		{
-			name:          "OpenAI Default Behavior",
-			currentTokens: 110000,
-			provider:      "openai",
-			expectedPrune: false,
-			description:   "110K should not trigger pruning when under 92% and with sufficient remaining tokens",
+			description:   "91% should trigger pruning (above 90%)",
 		},
 		{
 			name:          "Other Provider Default",
-			currentTokens: 70000,
-			provider:      "anthropic",
+			currentTokens: 110000,
+			provider:      "openai",
 			expectedPrune: false,
-			description:   "70K should not trigger pruning for other providers (below 92%)",
+			description:   "110K/128K = 86% should not trigger pruning",
+		},
+		{
+			name:          "All Providers Same",
+			currentTokens: 116000,
+			provider:      "anthropic",
+			expectedPrune: true,
+			description:   "All providers use same thresholds now",
 		},
 	}
 

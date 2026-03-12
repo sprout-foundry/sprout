@@ -15,7 +15,7 @@ type Manager struct {
 	mu         sync.Mutex
 	config     *Config
 	apiKeys    *APIKeys
-	baseConfig *Config
+	lastSaved  *Config // Track last saved state, not initial snapshot
 }
 
 // NewManager creates a new configuration manager
@@ -29,7 +29,7 @@ func NewManager() (*Manager, error) {
 	return &Manager{
 		config:     config,
 		apiKeys:    apiKeys,
-		baseConfig: cloneConfig(config),
+		lastSaved:  config, // Track last saved state as the base
 	}, nil
 }
 
@@ -48,22 +48,13 @@ func (m *Manager) SaveConfig() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	latest, err := Load()
-	if err != nil {
+	// Save the current manager config directly
+	if err := m.config.Save(); err != nil {
 		return err
 	}
 
-	merged, err := mergeConfigChanges(m.baseConfig, m.config, latest)
-	if err != nil {
-		return err
-	}
-
-	if err := merged.Save(); err != nil {
-		return err
-	}
-
-	m.config = merged
-	m.baseConfig = cloneConfig(merged)
+	// Update lastSaved
+	m.lastSaved = cloneConfig(m.config)
 	return nil
 }
 
@@ -235,6 +226,8 @@ func mergeConfigChanges(base, current, latest *Config) (*Config, error) {
 		return nil, err
 	}
 
+	// Apply changes: start from latest, then merge in current changes
+	// The current state (manager's in-memory state) should be applied on top of the file
 	applyMapDiff(baseMap, currentMap, latestMap)
 	return mapToConfig(latestMap)
 }
@@ -296,6 +289,7 @@ func applyMapDiff(base, current, target map[string]interface{}) {
 				// Deletion in current relative to base: apply deletion.
 				delete(target, key)
 			}
+			// Keys not in base are new additions (manual edits) - preserve them
 		}
 	}
 

@@ -6,18 +6,33 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/alantheprice/ledit/pkg/configuration" // Updated to new config
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
+const (
+	// Max content size in bytes (1MB) - larger content gets truncated with warning
+	maxContentSize = 1024 * 1024
+	// Truncated suffix to append when content exceeds limit
+	truncatedSuffix = "\n\n[CONTENT TRUNCATED: Original was larger than 1MB. Only first 1MB returned.]"
+)
+
 // WebContentFetcher handles fetching content from URLs.
-type WebContentFetcher struct{}
+type WebContentFetcher struct {
+	httpClient *http.Client
+}
 
 // NewWebContentFetcher creates a new WebContentFetcher instance.
 func NewWebContentFetcher() *WebContentFetcher {
-	return &WebContentFetcher{}
+	return &WebContentFetcher{
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
 }
 
 // FetchWebContent fetches content from a given URL, using a cache to avoid refetching.
@@ -36,7 +51,7 @@ func (w *WebContentFetcher) FetchWebContent(url string, cfg *configuration.Manag
 
 	if err := w.saveURLCache(url, content); err != nil {
 		// Log warning but don't fail the operation
-		fmt.Printf("Warning: Failed to cache content for URL %s: %v\n", url, err)
+		utils.GetLogger(false).LogError(err)
 	}
 
 	return content, nil
@@ -46,6 +61,11 @@ func (w *WebContentFetcher) FetchWebContent(url string, cfg *configuration.Manag
 func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Manager) (string, error) { // Use Manager instead of Config
 	isLocalhost := strings.HasPrefix(url, "http://localhost") || strings.HasPrefix(url, "https://localhost")
 	jinaAPIKey := cfg.GetAPIKeys().GetAPIKey("jinaai")
+
+	// Check if this is a URL type that should bypass Jina (JSON, APIs, static assets)
+	if w.shouldBypassJina(url) {
+		return w.fetchDirectURL(url)
+	}
 
 	useJina := !isLocalhost && jinaAPIKey != ""
 	if useJina {
@@ -59,9 +79,68 @@ func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Manager)
 	// Fallback to direct fetch for localhost or if Jina is not configured.
 	if !isLocalhost {
 		// Get your Jina AI API key for free: https://jina.ai/?sui=apikey
-		fmt.Printf("Warning: Jina AI API key not found or provided. Jina Reader will not be used for URL: %s. Falling back to direct HTTP GET.\n", url)
+		utils.GetLogger(false).Logf("Jina AI API key not found or provided. Jina Reader will not be used for URL: %s. Falling back to direct HTTP GET.", url)
 	}
 	return w.fetchDirectURL(url)
+}
+
+// shouldBypassJina checks if the URL should bypass Jina Reader and use direct fetch.
+// This is important for JSON files, APIs, static assets, and other non-HTML content.
+func (w *WebContentFetcher) shouldBypassJina(urlStr string) bool {
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		// If we can't parse the URL, fall back to direct fetch to be safe
+		return true
+	}
+
+	lowerPath := strings.ToLower(parsedURL.Path)
+	lowerRawQuery := strings.ToLower(parsedURL.RawQuery)
+	lowerURL := lowerPath + lowerRawQuery
+
+	// List of file extensions and patterns that should bypass Jina
+	bypassPatterns := []string{
+		// JSON and data files
+		".json",
+		".yaml",
+		".yml",
+		".xml",
+		".csv",
+		// API endpoints (often return JSON)
+		"/api/",
+		// Static assets that don't need markdown conversion
+		".css",
+		".js",
+		".map",       // source maps
+		".ico",
+		".png",
+		".jpg",
+		".jpeg",
+		".gif",
+		".svg",
+		".webp",
+		".pdf",
+		".zip",
+		".tar",
+		".gz",
+	}
+
+	for _, pattern := range bypassPatterns {
+		if strings.Contains(lowerURL, pattern) {
+			return true
+		}
+	}
+
+	// Additional check: look for query params that indicate JSON/API
+	if strings.Contains(lowerRawQuery, "format=json") ||
+		strings.Contains(lowerRawQuery, "format=xml") ||
+		strings.Contains(lowerRawQuery, "?json") ||
+		strings.Contains(lowerRawQuery, "&json") ||
+		strings.Contains(lowerRawQuery, "?xml") ||
+		strings.Contains(lowerRawQuery, "&xml") {
+		return true
+	}
+
+	return false
 }
 
 // fetchWithJinaReader fetches content using the Jina Reader API.
@@ -76,8 +155,7 @@ func (w *WebContentFetcher) fetchWithJinaReader(url string, cfg *configuration.M
 		return "", err
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := w.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to make request to Jina Reader: %w", err)
 	}
@@ -134,16 +212,40 @@ func parseJinaResponse(body io.Reader) (string, error) {
 	return jinaResponse.Data.Content, nil
 }
 
+// truncateContent truncates content if it exceeds max size and adds a warning.
+func (w *WebContentFetcher) truncateContent(content string) (string, error) {
+	contentLen := len(content)
+	if contentLen <= maxContentSize {
+		return content, nil
+	}
+
+	// Truncate and add warning
+	truncated := content[:maxContentSize]
+	return fmt.Sprintf("%s%s (original: %.1f MB)", truncated, truncatedSuffix, float64(contentLen)/(1024*1024)), nil
+}
+
 // fetchDirectURL performs a direct HTTP GET request to the given URL.
 func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
-	resp, err := http.Get(url)
+	resp, err := w.httpClient.Get(url)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.ReadAll(resp.Body)
+		return "", fmt.Errorf("HTTP %d for URL: %s", resp.StatusCode, url)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
-	return string(body), nil
+
+	// Truncate if content is too large
+	truncated, err := w.truncateContent(string(body))
+	if err != nil {
+		return "", err
+	}
+	return truncated, nil
 }

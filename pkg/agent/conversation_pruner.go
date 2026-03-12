@@ -48,11 +48,11 @@ var PruningConfig = struct {
 	// Agentic-flow safeguard: required headroom after pruning when possible.
 	AgenticRequiredAvailableTokens int
 }{
-	// Default thresholds (most providers)
+	// Default thresholds (applies to all providers - based on total context)
 	Default: PruningThresholds{
 		ProviderName:       "default",
-		StandardPercent:    0.92, // Start pruning at 92% of context
-		MinAvailableTokens: 8000, // Start pruning when remaining context drops below 8K tokens
+		StandardPercent:    0.90, // Start pruning at 90% of context (don't prune until 90%+)
+		MinAvailableTokens: 0,   // Disabled - use percentage-based threshold only
 		AggressivePercent:  0.95, // Aggressive mode at 95%
 		MinMessages:        5,
 		RecentMessages:     15,
@@ -113,9 +113,8 @@ func NewConversationPruner(debug bool) *ConversationPruner {
 }
 
 // ShouldPrune checks if pruning should occur.
-// It triggers when either:
-// 1) usage >= threshold percentage, or
-// 2) remaining tokens <= minimum available threshold.
+// It triggers when usage exceeds the threshold percentage (based on model's max context).
+// All thresholds are percentage-based to work with any context size.
 func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider string, isAgenticFlow bool) bool {
 	if cp.strategy == PruneStrategyNone {
 		return false
@@ -123,35 +122,20 @@ func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider
 	if maxTokens <= 0 {
 		return false
 	}
-	_ = provider
 
-	defaultThreshold := PruningConfig.Default.StandardPercent
+	// Use default thresholds for all providers (based on model's max context)
+	// The threshold is calculated as a percentage of maxTokens, not an absolute value
+	standardThreshold := PruningConfig.Default.StandardPercent
 	if cp.contextThreshold > 0 && cp.contextThreshold < 1 {
-		defaultThreshold = cp.contextThreshold
+		standardThreshold = cp.contextThreshold
 	}
 
-	remaining := maxTokens - currentTokens
-	if remaining <= PruningConfig.Default.MinAvailableTokens {
-		if cp.debug {
-			fmt.Printf("🔄 Minimum available tokens threshold hit: remaining=%d <= %d\n",
-				remaining, PruningConfig.Default.MinAvailableTokens)
-		}
-		return true
-	}
-
-	if isAgenticFlow && remaining <= PruningConfig.AgenticRequiredAvailableTokens {
-		if cp.debug {
-			fmt.Printf("🔄 Agentic headroom threshold hit: remaining=%d <= %d\n",
-				remaining, PruningConfig.AgenticRequiredAvailableTokens)
-		}
-		return true
-	}
-
+	// Check if usage exceeds the main percentage threshold
 	contextUsage := float64(currentTokens) / float64(maxTokens)
-	if contextUsage >= defaultThreshold {
+	if contextUsage > standardThreshold {
 		if cp.debug {
-			fmt.Printf("🔄 Default provider percentage threshold hit: %.1f%% >= %.1f%%\n",
-				contextUsage*100, defaultThreshold*100)
+			fmt.Printf("🔄 Context usage exceeds threshold: %.1f%% > %.1f%%\n",
+				contextUsage*100, standardThreshold*100)
 		}
 		return true
 	}
@@ -165,8 +149,8 @@ func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentT
 		return messages
 	}
 
+	contextUsage := float64(currentTokens) / float64(maxTokens)
 	if cp.debug {
-		contextUsage := float64(currentTokens) / float64(maxTokens)
 		fmt.Printf("🔄 Auto-pruning triggered (%.1f%% context used, strategy: %s, provider: %s)\n", contextUsage*100, cp.strategy, provider)
 	}
 
@@ -550,14 +534,14 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 			return cp.pruneByImportance(messages, provider, maxTokens)
 		}
 		return optimizer.AggressiveOptimization(messages)
-	} else if hasLongHistory && hasManyToolCalls {
-		// Long technical conversation - use hybrid approach
+	} else if hasLongHistory && hasManyToolCalls && contextUsage > 0.80 {
+		// Long technical conversation - use hybrid approach (only above 80% context)
 		if cp.debug {
 			fmt.Printf("📊 Long technical conversation detected, using hybrid pruning\n")
 		}
 		return cp.pruneHybrid(messages, optimizer, provider, maxTokens)
-	} else if hasLargeFiles {
-		// File-heavy conversation - focus on deduplication
+	} else if hasLargeFiles && contextUsage > 0.80 {
+		// File-heavy conversation - focus on deduplication (only above 80% context)
 		if cp.debug {
 			fmt.Printf("📄 File-heavy conversation detected, focusing on deduplication\n")
 		}

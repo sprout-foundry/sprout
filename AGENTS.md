@@ -72,6 +72,15 @@ When evaluating and modifying this codebase, prioritize these metrics:
 
 ## Commit & Pull Request Guidelines
 - Users will do commits, never, ever do commits, notify the user when you think a commit is needed.
+- Recommend committing after:
+  - Completing complex multi-file implementation tasks
+  - After multiple subagent delegations with significant changes
+  - When asked by the user or at natural section boundaries
+- Skip commit reminders after:
+  - Simple single-file edits (under 2 tool calls)
+  - Quick troubleshooting or debugging tasks
+  - When user has explicitly requested "keep going"
+- Default behavior: Don't recommend commits after every action
 - 
 ## Security & Configuration Tips
 - Never commit secrets. API keys live in `~/.ledit/api_keys.json` or env vars (e.g., `OPENROUTER_API_KEY`).

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 // ClientInterface defines the common interface for all API clients
@@ -153,6 +155,9 @@ func ParseProviderName(name string) (ClientType, error) {
 	case "test":
 		return TestClientType, nil
 	default:
+		if normalized != "" {
+			return ClientType(normalized), nil
+		}
 		return "", fmt.Errorf("unknown provider: %s", name)
 	}
 }
@@ -170,23 +175,31 @@ func IsProviderAvailable(provider ClientType) bool {
 		// LM Studio is a local provider and doesn't require API key
 		return true
 	case OllamaTurboClientType:
-		return os.Getenv("OLLAMA_API_KEY") != ""
+		resolved, _ := credentials.Resolve(string(provider), "OLLAMA_API_KEY")
+		return strings.TrimSpace(resolved.Value) != ""
 	case OpenAIClientType:
-		return os.Getenv("OPENAI_API_KEY") != ""
+		resolved, _ := credentials.Resolve(string(provider), "OPENAI_API_KEY")
+		return strings.TrimSpace(resolved.Value) != ""
 	case ZAIClientType:
-		return os.Getenv("ZAI_API_KEY") != ""
+		resolved, _ := credentials.Resolve(string(provider), "ZAI_API_KEY")
+		return strings.TrimSpace(resolved.Value) != ""
 	case OpenRouterClientType:
-		return os.Getenv("OPENROUTER_API_KEY") != ""
+		resolved, _ := credentials.Resolve(string(provider), "OPENROUTER_API_KEY")
+		return strings.TrimSpace(resolved.Value) != ""
 	case DeepInfraClientType:
-		return os.Getenv("DEEPINFRA_API_KEY") != ""
+		resolved, _ := credentials.Resolve(string(provider), "DEEPINFRA_API_KEY")
+		return strings.TrimSpace(resolved.Value) != ""
 	case DeepSeekClientType:
-		return os.Getenv("DEEPSEEK_API_KEY") != ""
+		resolved, _ := credentials.Resolve(string(provider), "DEEPSEEK_API_KEY")
+		return strings.TrimSpace(resolved.Value) != ""
 	case MinimaxClientType:
-		return os.Getenv("MINIMAX_API_KEY") != ""
+		resolved, _ := credentials.Resolve(string(provider), "MINIMAX_API_KEY")
+		return strings.TrimSpace(resolved.Value) != ""
 	case MistralClientType:
-		return os.Getenv("MISTRAL_API_KEY") != ""
+		resolved, _ := credentials.Resolve(string(provider), "MISTRAL_API_KEY")
+		return strings.TrimSpace(resolved.Value) != ""
 	default:
-		return false
+		return strings.TrimSpace(string(provider)) != ""
 	}
 }
 

@@ -317,3 +317,87 @@ func TestConsumeBracketedPasteBytePreservesUTF8(t *testing.T) {
 		t.Fatalf("unexpected pasted UTF-8 content: %q", got)
 	}
 }
+
+func TestRenderLineWithCollapsedPastes(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.line = "preline1\nline2post"
+	ir.collapsedPastes = []pasteSpan{{start: 3, end: len("preline1\nline2")}}
+	ir.cursorPos = len("preline1\nline2")
+
+	display, cursor := ir.renderLineWithCollapsedPastes()
+	if display != "pre[pasted 11 chars]post" {
+		t.Fatalf("unexpected display: %q", display)
+	}
+	if cursor != len("pre[pasted 11 chars]") {
+		t.Fatalf("unexpected display cursor: %d", cursor)
+	}
+}
+
+func TestSetCursorInsideCollapsedPasteExpands(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.line = "abcPASTEdef"
+	ir.collapsedPastes = []pasteSpan{{start: 3, end: 8}}
+	ir.cursorPos = 0
+	ir.SetCursor(5)
+
+	if len(ir.collapsedPastes) != 0 {
+		t.Fatalf("expected collapsed span to expand, got %d spans", len(ir.collapsedPastes))
+	}
+	if ir.cursorPos != 5 {
+		t.Fatalf("unexpected cursor position: %d", ir.cursorPos)
+	}
+}
+
+func TestBackspaceAtCollapsedPasteBoundaryDeletesWholePaste(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.line = "prePASTEsuf"
+	ir.collapsedPastes = []pasteSpan{{start: 3, end: 8}}
+	ir.cursorPos = 8
+
+	ir.Backspace()
+
+	if ir.line != "presuf" {
+		t.Fatalf("unexpected line after backspace: %q", ir.line)
+	}
+	if ir.cursorPos != 3 {
+		t.Fatalf("unexpected cursor after backspace: %d", ir.cursorPos)
+	}
+	if len(ir.collapsedPastes) != 0 {
+		t.Fatalf("expected collapsed spans to be removed, got %d", len(ir.collapsedPastes))
+	}
+}
+
+func TestDeleteAtCollapsedPasteBoundaryDeletesWholePaste(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.line = "prePASTEsuf"
+	ir.collapsedPastes = []pasteSpan{{start: 3, end: 8}}
+	ir.cursorPos = 3
+
+	ir.Delete()
+
+	if ir.line != "presuf" {
+		t.Fatalf("unexpected line after delete: %q", ir.line)
+	}
+	if ir.cursorPos != 3 {
+		t.Fatalf("unexpected cursor after delete: %d", ir.cursorPos)
+	}
+	if len(ir.collapsedPastes) != 0 {
+		t.Fatalf("expected collapsed spans to be removed, got %d", len(ir.collapsedPastes))
+	}
+}
+
+func TestNavigateHistoryClearsCollapsedPastes(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.SetHistory([]string{"cmd-one"})
+	ir.line = "prePASTE"
+	ir.collapsedPastes = []pasteSpan{{start: 3, end: 8}}
+
+	ir.NavigateHistory(1)
+
+	if ir.line != "cmd-one" {
+		t.Fatalf("unexpected history line: %q", ir.line)
+	}
+	if len(ir.collapsedPastes) != 0 {
+		t.Fatalf("expected collapsed spans to clear on history nav, got %d", len(ir.collapsedPastes))
+	}
+}

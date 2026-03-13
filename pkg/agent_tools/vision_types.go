@@ -422,9 +422,7 @@ func CreateVisionClient() (api.ClientInterface, error) {
 	providers = append(providers, api.OllamaClientType)
 
 	for _, providerType := range providers {
-		// Get API key env var for this provider
-		envVar := GetAPIKeyEnvVar(providerType)
-		if envVar != "" && os.Getenv(envVar) == "" {
+		if !configuration.HasProviderCredential(string(providerType), nil) {
 			continue // Skip if API key not set
 		}
 
@@ -451,39 +449,19 @@ func CreateVisionClient() (api.ClientInterface, error) {
 	return nil, fmt.Errorf("no vision-capable providers available - please configure a provider vision model or local Ollama OCR model")
 }
 
-// GetAPIKeyEnvVar returns the environment variable name for the provider's API key
-func GetAPIKeyEnvVar(providerType api.ClientType) string {
-	switch providerType {
-	case api.DeepInfraClientType:
-		return "DEEPINFRA_API_KEY"
-	case api.OpenRouterClientType:
-		return "OPENROUTER_API_KEY"
-	case api.OpenAIClientType:
-		return "OPENAI_API_KEY"
-	case api.MistralClientType:
-		return "MISTRAL_API_KEY"
-	case api.ZAIClientType:
-		return "ZAI_API_KEY"
-	case api.DeepSeekClientType:
-		return "DEEPSEEK_API_KEY"
-	default:
-		return ""
-	}
-}
-
 // CreateVisionClientWithModel creates a vision client using a specific model
 func CreateVisionClientWithModel(modelName string) (api.ClientInterface, error) {
 	// Determine which provider supports this model
 	if strings.HasPrefix(modelName, "google/") || strings.HasPrefix(modelName, "meta-llama/") {
 		// DeepInfra model - use new generic provider system
-		if apiKey := os.Getenv("DEEPINFRA_API_KEY"); apiKey != "" {
+		if configuration.HasProviderCredential("deepinfra", nil) {
 			provider, err := factory.CreateGenericProvider("deepinfra", modelName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create DeepInfra client: %w", err)
 			}
 			return provider, nil
 		}
-		return nil, fmt.Errorf("DEEPINFRA_API_KEY not set for model %s", modelName)
+		return nil, fmt.Errorf("deepinfra credentials not configured for model %s", modelName)
 	}
 
 	// Fall back to default client creation
@@ -515,34 +493,13 @@ func HasVisionCapability() bool {
 			continue // Skip providers without vision support
 		}
 
-		// Check if provider is available (has API key if required)
-		switch providerType {
-		case api.OpenRouterClientType:
-			if os.Getenv("OPENROUTER_API_KEY") == "" {
+		if !configuration.HasProviderCredential(string(providerType), nil) {
+			switch providerType {
+			case api.OllamaClientType, api.OllamaLocalClientType:
+				// Local providers do not require API keys.
+			default:
 				continue
 			}
-		case api.OpenAIClientType:
-			if os.Getenv("OPENAI_API_KEY") == "" {
-				continue
-			}
-		case api.DeepInfraClientType:
-			if os.Getenv("DEEPINFRA_API_KEY") == "" {
-				continue
-			}
-		case api.MistralClientType:
-			if os.Getenv("MISTRAL_API_KEY") == "" {
-				continue
-			}
-		case api.DeepSeekClientType:
-			if os.Getenv("DEEPSEEK_API_KEY") == "" {
-				continue
-			}
-		case api.ZAIClientType:
-			if os.Getenv("ZAI_API_KEY") == "" {
-				continue
-			}
-		case api.OllamaClientType, api.OllamaLocalClientType:
-			// Local providers do not require API keys.
 		}
 
 		// Try to create client with vision model

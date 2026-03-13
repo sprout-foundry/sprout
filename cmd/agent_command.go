@@ -170,7 +170,7 @@ Examples:
   # Start with a persona
   ledit agent --persona web-scraper "Collect pricing table data from docs pages"
 
-  # With custom provider (configured via 'ledit custom-model add')
+  # With custom provider (configured via 'ledit custom add')
   ledit agent --provider my-custom-llm --model "custom-model-v1" "Review this code"
 
   # Non-interactive run with an agent workflow

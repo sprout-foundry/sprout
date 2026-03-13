@@ -148,10 +148,21 @@ func init() {
 
 // CreateGenericProvider creates a generic provider by name
 func CreateGenericProvider(providerName, model string) (api.ClientInterface, error) {
-	// First try the generic provider system
-	provider, err := globalProviderFactory.CreateProviderWithModel(providerName, model)
-	if err == nil {
-		return provider, nil
+	if config, err := globalProviderFactory.GetProviderConfig(providerName); err == nil {
+		configCopy := *config
+		resolved, resolveErr := configuration.ResolveProviderCredential(providerName, nil)
+		if resolveErr == nil && resolved.Value != "" {
+			configCopy.Auth.Key = resolved.Value
+		}
+		provider, providerErr := providers.NewGenericProvider(&configCopy)
+		if providerErr == nil {
+			if model != "" {
+				if err := provider.SetModel(model); err != nil {
+					return nil, err
+				}
+			}
+			return provider, nil
+		}
 	}
 
 	// If not found in generic provider system, try to create from custom provider config
@@ -160,88 +171,38 @@ func CreateGenericProvider(providerName, model string) (api.ClientInterface, err
 
 // CreateCustomProvider creates a provider from custom provider configuration
 func CreateCustomProvider(providerName, model string) (api.ClientInterface, error) {
-	// Load configuration to get custom provider details
-	config, err := configuration.LoadOrInitConfig(false)
+	customProviders, err := configuration.LoadCustomProviders()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, fmt.Errorf("failed to load custom providers: %w", err)
 	}
 
-	if config.CustomProviders == nil {
+	if len(customProviders) == 0 {
 		return nil, fmt.Errorf("no custom providers configured")
 	}
 
-	customProvider, exists := config.CustomProviders[providerName]
+	customProvider, exists := customProviders[providerName]
 	if !exists {
 		return nil, fmt.Errorf("custom provider not found: %s", providerName)
 	}
 
-	// Create a generic provider config from custom provider
-	authType := "api_key"
-	if !customProvider.RequiresAPIKey {
-		authType = "none"
+	genericConfig, err := customProvider.ToProviderConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build provider config: %w", err)
+	}
+	if resolved, resolveErr := configuration.ResolveProviderCredential(providerName, nil); resolveErr == nil && resolved.Value != "" {
+		genericConfig.Auth.Key = resolved.Value
 	}
 
-	genericConfig := &providers.ProviderConfig{
-		Name:     customProvider.Name,
-		Endpoint: customProvider.Endpoint,
-		Auth: providers.AuthConfig{
-			Type:   authType,
-			EnvVar: customProvider.EnvVar,
-			Key:    customProvider.APIKey,
-		},
-		Headers: make(map[string]string),
-		Defaults: providers.RequestDefaults{
-			Model:       customProvider.ModelName,
-			Temperature: customProvider.Temperature,
-			TopP:        customProvider.TopP,
-			Parameters:  customProvider.Parameters,
-		},
-		Conversion: func() providers.MessageConversion {
-			if customProvider.Conversion.IncludeToolCallId ||
-				customProvider.Conversion.ConvertToolRoleToUser ||
-				customProvider.Conversion.ReasoningContentField != "" {
-				return customProvider.Conversion
-			}
-			// Default conversion
-			return providers.MessageConversion{
-				IncludeToolCallId:        true,
-				ConvertToolRoleToUser:    false, // Keep tool roles as "tool" - they're exempt from alternation
-				ArgumentsAsJSON:          false,
-				SkipToolExecutionSummary: true, // Skip summary to avoid breaking role alternation
-			}
-		}(),
-		Streaming: providers.StreamingConfig{
-			Format:     "sse",
-			DoneMarker: "[DONE]",
-		},
-		Models: providers.ModelConfig{
-			DefaultContextLimit: customProvider.ContextSize,
-			DefaultModel:        customProvider.ModelName,
-			SupportsVision:      customProvider.SupportsVision,
-			VisionModel:         customProvider.VisionModel,
-		},
-		Retry: providers.RetryConfig{
-			MaxAttempts:       3,
-			BaseDelayMs:       1000,
-			BackoffMultiplier: 2.0,
-			MaxDelayMs:        10000,
-			RetryableErrors:   []string{"timeout", "connection", "rate_limit"},
-		},
-		Cost: providers.CostConfig{
-			InputTokenCost:  0.001,
-			OutputTokenCost: 0.002,
-		},
+	client, err := providers.NewGenericProvider(genericConfig)
+	if err != nil {
+		return nil, err
 	}
-
-	// Set chunk timeout - use custom value if provided, otherwise default to 5 minutes
-	if customProvider.ChunkTimeoutMs > 0 {
-		genericConfig.Streaming.ChunkTimeoutMs = customProvider.ChunkTimeoutMs
-	} else {
-		genericConfig.Streaming.ChunkTimeoutMs = 300000 // 5 minutes default
+	if model != "" {
+		if err := client.SetModel(model); err != nil {
+			return nil, err
+		}
 	}
-
-	// Create the provider using the generic config
-	return providers.NewGenericProvider(genericConfig)
+	return client, nil
 }
 
 // CreateProviderClient is a factory function that creates providers

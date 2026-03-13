@@ -208,7 +208,7 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 	}
 
 	// Check if provider needs API key but doesn't have one
-	if !api.IsProviderAvailable(provider) && provider != api.OllamaLocalClientType {
+	if !p.isProviderReady(configManager, provider) && provider != api.OllamaLocalClientType {
 		// Check if this is a custom provider that doesn't require an API key
 		config := configManager.GetConfig()
 		if config.CustomProviders != nil {

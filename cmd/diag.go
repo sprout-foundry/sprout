@@ -50,6 +50,10 @@ func runDiag() {
 	fmt.Println("(Note: ledit currently ONLY uses global config, not project-local)")
 	fmt.Println()
 
+	providersDir, _ := configuration.GetProvidersDir()
+	fmt.Printf("Custom provider directory: %s\n", providersDir)
+	fmt.Println()
+
 	// Load and show custom providers
 	config, err := configuration.Load()
 	if err != nil {

@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"strconv"
+	"sort"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
@@ -13,22 +13,21 @@ import (
 
 var customModelCmd = &cobra.Command{
 	Use:   "custom",
-	Short: "Manage custom model providers",
-	Long: `Manage custom model providers that extend ledit with additional AI services.
-Use subcommands to add, remove, or list configured custom model providers.`,
+	Short: "Manage custom OpenAI-compatible providers",
+	Long: `Manage custom OpenAI-compatible providers backed by ~/.ledit/providers/*.json.
+Each custom provider stores an endpoint URL and optional API-key environment variable,
+and ledit discovers available models from the provider's /v1/models endpoint.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 
 var customModelAddCmd = &cobra.Command{
 	Use:   "add",
-	Short: "Add a new custom model provider interactively",
-	Long: `Interactively add a new custom model provider configuration.
-This will guide you through setting up a custom AI provider with URL, model name, context size, and API key.`,
+	Short: "Add a custom provider",
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := runCustomModelAdd(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error adding custom model provider: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error adding custom provider: %v\n", err)
 			os.Exit(1)
 		}
 	},
@@ -36,16 +35,15 @@ This will guide you through setting up a custom AI provider with URL, model name
 
 var customModelRemoveCmd = &cobra.Command{
 	Use:   "remove [provider-name]",
-	Short: "Remove a custom model provider",
-	Long:  `Remove a custom model provider from the configuration.`,
+	Short: "Remove a custom provider",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		var providerName string
+		name := ""
 		if len(args) > 0 {
-			providerName = args[0]
+			name = args[0]
 		}
-		if err := runCustomModelRemove(providerName); err != nil {
-			fmt.Fprintf(os.Stderr, "Error removing custom model provider: %v\n", err)
+		if err := runCustomModelRemove(name); err != nil {
+			fmt.Fprintf(os.Stderr, "Error removing custom provider: %v\n", err)
 			os.Exit(1)
 		}
 	},
@@ -53,11 +51,10 @@ var customModelRemoveCmd = &cobra.Command{
 
 var customModelListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List configured custom model providers",
-	Long:  `Display all configured custom model providers and their details.`,
+	Short: "List custom providers",
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := runCustomModelList(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing custom model providers: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error listing custom providers: %v\n", err)
 			os.Exit(1)
 		}
 	},
@@ -65,376 +62,260 @@ var customModelListCmd = &cobra.Command{
 
 func runCustomModelAdd() error {
 	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Println("Custom Model Provider Setup")
-	fmt.Println("============================")
-	fmt.Println()
-
-	// Load existing config
-	config, err := configuration.LoadOrInitConfig(false)
+	cfg, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Initialize custom providers map if it doesn't exist
-	if config.CustomProviders == nil {
-		config.CustomProviders = make(map[string]configuration.CustomProviderConfig)
+	fmt.Println("Custom Provider Setup")
+	fmt.Println("=====================")
+	fmt.Println("Ledit assumes the endpoint is OpenAI-compatible and discovers models from /v1/models.")
+	fmt.Println()
+
+	name, err := promptLine(reader, "Provider name (e.g. my-gateway): ")
+	if err != nil {
+		return err
 	}
 
-	// Get provider name
-	fmt.Print("Enter provider name (e.g., 'my-custom-llm'): ")
-	providerName, _ := reader.ReadString('\n')
-	providerName = strings.TrimSpace(providerName)
-	if providerName == "" {
-		return fmt.Errorf("provider name cannot be empty")
-	}
-
-	// Check if provider already exists
-	if _, exists := config.CustomProviders[providerName]; exists {
-		fmt.Printf("Provider '%s' already exists. Would you like to update it? (y/N): ", providerName)
-		response, _ := reader.ReadString('\n')
-		response = strings.ToLower(strings.TrimSpace(response))
-		if response != "y" && response != "yes" {
-			fmt.Println("Operation cancelled.")
+	existingProviders := cfg.CustomProviders
+	if _, exists := existingProviders[strings.ToLower(strings.TrimSpace(name))]; exists {
+		answer, err := promptLine(reader, "Provider exists. Replace it? [y/N]: ")
+		if err != nil {
+			return err
+		}
+		if !isYes(answer) {
 			return nil
 		}
 	}
 
-	// Get endpoint URL
-	fmt.Print("Enter endpoint URL (e.g., 'https://api.example.com/v1/chat/completions'): ")
-	endpoint, _ := reader.ReadString('\n')
-	endpoint = strings.TrimSpace(endpoint)
-	if endpoint == "" {
-		return fmt.Errorf("endpoint URL cannot be empty")
-	}
-
-	// Get model name
-	fmt.Print("Enter model name (e.g., 'custom-llm-v1'): ")
-	modelName, _ := reader.ReadString('\n')
-	modelName = strings.TrimSpace(modelName)
-	if modelName == "" {
-		return fmt.Errorf("model name cannot be empty")
-	}
-
-	// Get context size
-	fmt.Print("Enter max context size (tokens, e.g., 32000): ")
-	contextSizeStr, _ := reader.ReadString('\n')
-	contextSizeStr = strings.TrimSpace(contextSizeStr)
-	contextSize, err := strconv.Atoi(contextSizeStr)
-	if err != nil || contextSize <= 0 {
-		return fmt.Errorf("invalid context size: must be a positive integer")
-	}
-
-	// Optional sampling defaults
-	temperature, err := readOptionalFloat(reader, "Optional default temperature (leave empty for provider default): ")
+	endpoint, err := promptLine(reader, "Endpoint URL (base /v1, /v1/chat/completions, or /v1/models): ")
 	if err != nil {
 		return err
 	}
-	topP, err := readOptionalFloat(reader, "Optional default top_p (leave empty for provider default): ")
+
+	envVar, err := promptLine(reader, "API key env var (leave empty for no auth): ")
 	if err != nil {
 		return err
 	}
-	fmt.Print("Optional default reasoning effort [low|medium|high] (leave empty for automatic): ")
-	reasoningEffort, _ := reader.ReadString('\n')
-	reasoningEffort = strings.ToLower(strings.TrimSpace(reasoningEffort))
-	if reasoningEffort != "" && reasoningEffort != "low" && reasoningEffort != "medium" && reasoningEffort != "high" {
-		return fmt.Errorf("invalid reasoning effort %q (expected low, medium, high, or empty)", reasoningEffort)
+
+	provider := configuration.CustomProviderConfig{
+		Name:           name,
+		Endpoint:       endpoint,
+		EnvVar:         strings.TrimSpace(envVar),
+		RequiresAPIKey: strings.TrimSpace(envVar) != "",
 	}
 
-	// Ask about API key
-	fmt.Print("Does this provider require an API key? (y/N): ")
-	apiKeyResponse, _ := reader.ReadString('\n')
-	apiKeyResponse = strings.ToLower(strings.TrimSpace(apiKeyResponse))
-
-	var apiKey, envVar string
-	requiresAPIKey := apiKeyResponse == "y" || apiKeyResponse == "yes"
-
-	if requiresAPIKey {
-		fmt.Print("Enter API key (or leave empty to use environment variable): ")
-		apiKey, _ = reader.ReadString('\n')
-		apiKey = strings.TrimSpace(apiKey)
-
-		if apiKey == "" {
-			fmt.Print("Enter environment variable name for API key (e.g., 'CUSTOM_API_KEY'): ")
-			envVar, _ = reader.ReadString('\n')
-			envVar = strings.TrimSpace(envVar)
-			if envVar == "" {
-				return fmt.Errorf("either API key or environment variable name must be provided")
-			}
-		}
-	}
-
-	fmt.Print("Does this provider support vision/image inputs? (y/N): ")
-	supportsVisionResponse, _ := reader.ReadString('\n')
-	supportsVisionResponse = strings.ToLower(strings.TrimSpace(supportsVisionResponse))
-	supportsVision := supportsVisionResponse == "y" || supportsVisionResponse == "yes"
-
-	var visionModel string
-	var visionFallbackProvider string
-	var visionFallbackModel string
-
-	if supportsVision {
-		fmt.Print("Enter vision model name (leave empty to use the primary model): ")
-		visionModel, _ = reader.ReadString('\n')
-		visionModel = strings.TrimSpace(visionModel)
-		if visionModel == "" {
-			visionModel = modelName
-		}
+	models, discoverErr := configuration.DiscoverCustomProviderModels(provider)
+	if discoverErr != nil {
+		fmt.Printf("\n⚠️  Model discovery failed: %v\n", discoverErr)
+		fmt.Println("The provider can still be saved, but model selection will rely on runtime discovery.")
 	} else {
-		fmt.Print("Optional vision fallback provider (leave empty for none): ")
-		visionFallbackProvider, _ = reader.ReadString('\n')
-		visionFallbackProvider = strings.TrimSpace(visionFallbackProvider)
-		if visionFallbackProvider != "" {
-			fmt.Print("Optional vision fallback model (leave empty to use fallback provider default): ")
-			visionFallbackModel, _ = reader.ReadString('\n')
-			visionFallbackModel = strings.TrimSpace(visionFallbackModel)
+		fmt.Printf("\n✅ Discovered %d model(s)\n", len(models))
+		maxShow := len(models)
+		if maxShow > 10 {
+			maxShow = 10
+		}
+		for i := 0; i < maxShow; i++ {
+			fmt.Printf("  %d. %s\n", i+1, models[i].ID)
+		}
+		if len(models) > maxShow {
+			fmt.Printf("  ... and %d more\n", len(models)-maxShow)
+		}
+
+		preferred, err := promptLine(reader, "Preferred default model (leave empty to auto-select later): ")
+		if err != nil {
+			return err
+		}
+		provider.ModelName = strings.TrimSpace(preferred)
+		if provider.ModelName == "" && len(models) > 0 {
+			provider.ModelName = models[0].ID
 		}
 	}
 
-	fmt.Print("Optional tool allowlist (comma-separated tool names; leave empty for default custom-provider tool set): ")
-	toolCallsInput, _ := reader.ReadString('\n')
-	toolCalls := parseToolCallList(toolCallsInput)
-
-	// Create custom provider configuration
-	customProvider := configuration.CustomProviderConfig{
-		Name:            providerName,
-		Endpoint:        endpoint,
-		ModelName:       modelName,
-		ContextSize:     contextSize,
-		ReasoningEffort: reasoningEffort,
-		Temperature:     temperature,
-		TopP:            topP,
-		RequiresAPIKey:  requiresAPIKey,
-		ToolCalls:       toolCalls,
-		SupportsVision:  supportsVision,
-		VisionModel:     visionModel,
+	if err := configuration.SaveCustomProvider(provider); err != nil {
+		return fmt.Errorf("failed to save provider: %w", err)
 	}
 
-	if apiKey != "" {
-		customProvider.APIKey = apiKey
-	}
-	if envVar != "" {
-		customProvider.EnvVar = envVar
-	}
-	if visionFallbackProvider != "" {
-		customProvider.VisionFallbackProvider = visionFallbackProvider
-		customProvider.VisionFallbackModel = visionFallbackModel
+	normalized, err := configuration.NormalizeCustomProviderConfig(provider)
+	if err != nil {
+		return err
 	}
 
-	// Save to configuration
-	config.CustomProviders[providerName] = customProvider
-
-	// Add to provider models and priority if not already present
-	if config.ProviderModels == nil {
-		config.ProviderModels = make(map[string]string)
+	if cfg.ProviderModels == nil {
+		cfg.ProviderModels = make(map[string]string)
 	}
-	config.ProviderModels[providerName] = modelName
-
-	// Add to provider priority if not already present
-	found := false
-	for _, existingProvider := range config.ProviderPriority {
-		if existingProvider == providerName {
-			found = true
-			break
-		}
+	if normalized.ModelName != "" {
+		cfg.ProviderModels[normalized.Name] = normalized.ModelName
 	}
-	if !found {
-		config.ProviderPriority = append(config.ProviderPriority, providerName)
+	if !containsString(cfg.ProviderPriority, normalized.Name) {
+		cfg.ProviderPriority = append(cfg.ProviderPriority, normalized.Name)
+	}
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	// Save configuration
-	if err := config.Save(); err != nil {
-		return fmt.Errorf("failed to save configuration: %w", err)
-	}
-
+	path, _ := configuration.GetCustomProviderPath(normalized.Name)
 	fmt.Println()
-	fmt.Printf("✅ Custom model provider '%s' has been successfully added!\n", providerName)
-	fmt.Printf("   Endpoint: %s\n", endpoint)
-	fmt.Printf("   Model: %s\n", modelName)
-	fmt.Printf("   Context Size: %d tokens\n", contextSize)
-	if temperature != nil {
-		fmt.Printf("   Temperature: %.4g\n", *temperature)
+	fmt.Printf("Saved provider '%s'\n", normalized.Name)
+	fmt.Printf("  Chat endpoint: %s\n", normalized.Endpoint)
+	fmt.Printf("  Models endpoint: %s\n", normalized.ModelsEndpoint())
+	if normalized.EnvVar != "" {
+		fmt.Printf("  API key env: %s\n", normalized.EnvVar)
 	}
-	if topP != nil {
-		fmt.Printf("   Top P: %.4g\n", *topP)
+	if normalized.ModelName != "" {
+		fmt.Printf("  Default model: %s\n", normalized.ModelName)
 	}
-	if reasoningEffort != "" {
-		fmt.Printf("   Reasoning Effort: %s\n", reasoningEffort)
-	}
-	fmt.Printf("   Supports Vision: %t\n", supportsVision)
-	if supportsVision {
-		fmt.Printf("   Vision Model: %s\n", visionModel)
-	} else if visionFallbackProvider != "" {
-		fmt.Printf("   Vision Fallback: %s", visionFallbackProvider)
-		if visionFallbackModel != "" {
-			fmt.Printf(" (%s)", visionFallbackModel)
-		}
-		fmt.Println()
-	}
-	if len(toolCalls) > 0 {
-		fmt.Printf("   Tool Calls: %s\n", strings.Join(toolCalls, ", "))
-	} else {
-		fmt.Printf("   Tool Calls: [default custom-provider set]\n")
-	}
-	if requiresAPIKey {
-		if apiKey != "" {
-			fmt.Printf("   API Key: [configured]\n")
-		} else {
-			fmt.Printf("   API Key: from environment variable '%s'\n", envVar)
-		}
-	}
-	fmt.Println()
-	fmt.Printf("You can now use this provider with: ledit agent --provider %s\n", providerName)
-	fmt.Println()
-
+	fmt.Printf("  File: %s\n", path)
 	return nil
 }
 
 func runCustomModelRemove(providerName string) error {
-	// Load existing config
-	config, err := configuration.LoadOrInitConfig(false)
+	cfg, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if config.CustomProviders == nil {
-		fmt.Println("No custom model providers configured.")
+	customProviders := cfg.CustomProviders
+	if len(customProviders) == 0 {
+		fmt.Println("No custom providers configured.")
 		return nil
 	}
 
-	// If no provider name provided, list them and ask to choose
-	if providerName == "" {
-		if len(config.CustomProviders) == 0 {
-			fmt.Println("No custom model providers configured.")
-			return nil
-		}
-
-		fmt.Println("Configured custom model providers:")
-		var names []string
-		for name := range config.CustomProviders {
-			fmt.Printf("  - %s\n", name)
+	reader := bufio.NewReader(os.Stdin)
+	if strings.TrimSpace(providerName) == "" {
+		names := make([]string, 0, len(customProviders))
+		for name := range customProviders {
 			names = append(names, name)
 		}
-		fmt.Println()
-
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Enter provider name to remove: ")
-		providerName, _ = reader.ReadString('\n')
-		providerName = strings.TrimSpace(providerName)
-		if providerName == "" {
-			return fmt.Errorf("provider name cannot be empty")
+		sort.Strings(names)
+		fmt.Println("Custom providers:")
+		for _, name := range names {
+			fmt.Printf("  - %s\n", name)
 		}
+		value, err := promptLine(reader, "Provider to remove: ")
+		if err != nil {
+			return err
+		}
+		providerName = value
 	}
 
-	// Check if provider exists
-	provider, exists := config.CustomProviders[providerName]
-	if !exists {
-		return fmt.Errorf("custom model provider '%s' not found", providerName)
+	normalizedName, err := configuration.CanonicalizeCustomProviderName(providerName)
+	if err != nil {
+		return err
+	}
+	providerName = normalizedName
+
+	if _, exists := customProviders[providerName]; !exists {
+		return fmt.Errorf("custom provider '%s' not found", providerName)
 	}
 
-	// Confirm removal
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("Are you sure you want to remove provider '%s' (model: %s)? (y/N): ", providerName, provider.ModelName)
-	response, _ := reader.ReadString('\n')
-	response = strings.ToLower(strings.TrimSpace(response))
-	if response != "y" && response != "yes" {
-		fmt.Println("Operation cancelled.")
+	answer, err := promptLine(reader, fmt.Sprintf("Remove provider '%s'? [y/N]: ", providerName))
+	if err != nil {
+		return err
+	}
+	if !isYes(answer) {
 		return nil
 	}
 
-	// Remove from custom providers
-	delete(config.CustomProviders, providerName)
-
-	// Remove from provider models
-	delete(config.ProviderModels, providerName)
-
-	// Remove from provider priority
-	var newPriority []string
-	for _, p := range config.ProviderPriority {
-		if p != providerName {
-			newPriority = append(newPriority, p)
-		}
+	if err := configuration.DeleteCustomProvider(providerName); err != nil {
+		return err
 	}
-	config.ProviderPriority = newPriority
-
-	// Save configuration
-	if err := config.Save(); err != nil {
-		return fmt.Errorf("failed to save configuration: %w", err)
+	delete(cfg.ProviderModels, providerName)
+	cfg.ProviderPriority = removeString(cfg.ProviderPriority, providerName)
+	if cfg.LastUsedProvider == providerName {
+		cfg.LastUsedProvider = ""
+	}
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("✅ Custom model provider '%s' has been removed.\n", providerName)
+	fmt.Printf("Removed provider '%s'\n", providerName)
 	return nil
 }
 
 func runCustomModelList() error {
-	// Load existing config
-	config, err := configuration.LoadOrInitConfig(false)
+	cfg, err := configuration.LoadOrInitConfig(false)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if config.CustomProviders == nil || len(config.CustomProviders) == 0 {
-		fmt.Println("No custom model providers configured.")
-		fmt.Println("Use 'ledit custom add' to add a new provider.")
+	if len(cfg.CustomProviders) == 0 {
+		fmt.Println("No custom providers configured.")
+		fmt.Println("Use 'ledit custom add' to add one.")
 		return nil
 	}
 
-	fmt.Println("Custom Model Providers")
-	fmt.Println("======================")
-	fmt.Println()
+	names := make([]string, 0, len(cfg.CustomProviders))
+	for name := range cfg.CustomProviders {
+		names = append(names, name)
+	}
+	sort.Strings(names)
 
-	for name, provider := range config.CustomProviders {
-		fmt.Printf("Provider: %s\n", name)
-		fmt.Printf("  Endpoint: %s\n", provider.Endpoint)
-		fmt.Printf("  Model: %s\n", provider.ModelName)
-		fmt.Printf("  Context Size: %d tokens\n", provider.ContextSize)
-		if provider.Temperature != nil {
-			fmt.Printf("  Temperature: %.4g\n", *provider.Temperature)
-		}
-		if provider.TopP != nil {
-			fmt.Printf("  Top P: %.4g\n", *provider.TopP)
-		}
-		fmt.Printf("  API Key Required: %t\n", provider.RequiresAPIKey)
-		fmt.Printf("  Supports Vision: %t\n", provider.SupportsVision)
-		if provider.SupportsVision {
-			if provider.VisionModel != "" {
-				fmt.Printf("  Vision Model: %s\n", provider.VisionModel)
-			} else {
-				fmt.Printf("  Vision Model: %s\n", provider.ModelName)
-			}
-		} else if provider.VisionFallbackProvider != "" {
-			fmt.Printf("  Vision Fallback Provider: %s\n", provider.VisionFallbackProvider)
-			if provider.VisionFallbackModel != "" {
-				fmt.Printf("  Vision Fallback Model: %s\n", provider.VisionFallbackModel)
-			}
-		}
-		if len(provider.ToolCalls) > 0 {
-			fmt.Printf("  Tool Calls: %s\n", strings.Join(provider.ToolCalls, ", "))
+	fmt.Println("Custom Providers")
+	fmt.Println("================")
+	for _, name := range names {
+		provider := cfg.CustomProviders[name]
+		path, _ := configuration.GetCustomProviderPath(name)
+		fmt.Printf("%s\n", name)
+		fmt.Printf("  Chat endpoint: %s\n", provider.Endpoint)
+		fmt.Printf("  Models endpoint: %s\n", provider.ModelsEndpoint())
+		if provider.EnvVar != "" {
+			fmt.Printf("  API key env: %s\n", provider.EnvVar)
 		} else {
-			fmt.Printf("  Tool Calls: [default custom-provider set]\n")
+			fmt.Printf("  API key env: none\n")
 		}
-		if provider.RequiresAPIKey {
-			if provider.APIKey != "" {
-				fmt.Printf("  API Key: [configured]\n")
-			} else if provider.EnvVar != "" {
-				fmt.Printf("  API Key: from environment variable '%s'\n", provider.EnvVar)
-			}
+		if model := cfg.ProviderModels[name]; model != "" {
+			fmt.Printf("  Selected model: %s\n", model)
 		}
+		fmt.Printf("  File: %s\n", path)
 		fmt.Println()
 	}
 
-	fmt.Println("Usage:")
-	fmt.Println("  ledit agent --provider <provider-name>")
-	fmt.Println()
-
 	return nil
+}
+
+func promptLine(reader *bufio.Reader, prompt string) (string, error) {
+	fmt.Print(prompt)
+	value, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(value), nil
+}
+
+func isYes(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "y", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func removeString(values []string, target string) []string {
+	filtered := values[:0]
+	for _, value := range values {
+		if value == target {
+			continue
+		}
+		filtered = append(filtered, value)
+	}
+	return filtered
 }
 
 func parseToolCallList(raw string) []string {
 	parts := strings.Split(strings.TrimSpace(raw), ",")
 	toolCalls := make([]string, 0, len(parts))
 	seen := make(map[string]struct{}, len(parts))
-
 	for _, part := range parts {
 		toolName := strings.TrimSpace(part)
 		if toolName == "" {
@@ -446,22 +327,7 @@ func parseToolCallList(raw string) []string {
 		seen[toolName] = struct{}{}
 		toolCalls = append(toolCalls, toolName)
 	}
-
 	return toolCalls
-}
-
-func readOptionalFloat(reader *bufio.Reader, prompt string) (*float64, error) {
-	fmt.Print(prompt)
-	valueStr, _ := reader.ReadString('\n')
-	valueStr = strings.TrimSpace(valueStr)
-	if valueStr == "" {
-		return nil, nil
-	}
-	value, err := strconv.ParseFloat(valueStr, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid numeric value %q", valueStr)
-	}
-	return &value, nil
 }
 
 func init() {

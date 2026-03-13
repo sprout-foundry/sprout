@@ -177,3 +177,71 @@ func TestChangeTrackingE2E(t *testing.T) {
 
 	t.Log("✅ End-to-end change tracking and rollback test passed!")
 }
+
+func TestChangeTrackingSupportsIncrementalCommits(t *testing.T) {
+	testDir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	defer func() {
+		_ = os.Chdir(oldDir)
+	}()
+	if err := os.Chdir(testDir); err != nil {
+		t.Fatalf("change dir: %v", err)
+	}
+
+	agent := &Agent{}
+	agent.changeTracker = NewChangeTracker(agent, "Make a series of edits")
+	agent.changeTracker.Enable()
+
+	fileA := "file_a.go"
+	fileB := "file_b.go"
+
+	if err := os.WriteFile(fileA, []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write fileA: %v", err)
+	}
+	if err := os.WriteFile(fileB, []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write fileB: %v", err)
+	}
+
+	if err := agent.TrackFileWrite(fileA, "package main\nfunc a() {}\n"); err != nil {
+		t.Fatalf("track fileA: %v", err)
+	}
+	if err := agent.CommitChanges("checkpoint 1"); err != nil {
+		t.Fatalf("commit checkpoint 1: %v", err)
+	}
+	revisionID := agent.GetRevisionID()
+	if revisionID == "" {
+		t.Fatal("expected revision ID after first checkpoint")
+	}
+
+	if err := agent.TrackFileWrite(fileB, "package main\nfunc b() {}\n"); err != nil {
+		t.Fatalf("track fileB: %v", err)
+	}
+	if err := agent.CommitChanges("checkpoint 2"); err != nil {
+		t.Fatalf("commit checkpoint 2: %v", err)
+	}
+
+	allChanges, err := history.GetAllChanges()
+	if err != nil {
+		t.Fatalf("fetch changes: %v", err)
+	}
+	if len(allChanges) != 2 {
+		t.Fatalf("expected 2 persisted changes after incremental commits, got %d", len(allChanges))
+	}
+
+	foundA := false
+	foundB := false
+	for _, change := range allChanges {
+		if change.RequestHash != revisionID {
+			t.Fatalf("expected change revision %s, got %s", revisionID, change.RequestHash)
+		}
+		switch change.Filename {
+		case fileA:
+			foundA = true
+		case fileB:
+			foundB = true
+		}
+	}
+	if !foundA || !foundB {
+		t.Fatalf("expected both tracked files to be persisted, foundA=%v foundB=%v", foundA, foundB)
+	}
+}

@@ -186,6 +186,10 @@ func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []
 
 // CheckConnection tests provider connection with current model
 func (p *GenericProvider) CheckConnection() error {
+	if err := p.ensureModel(); err != nil {
+		return err
+	}
+
 	// Send a minimal test request to verify the model works
 	testMessages := []api.Message{
 		{
@@ -465,6 +469,10 @@ func (p *GenericProvider) ResetTPSStats() {
 
 // buildChatRequest builds the request body for chat completion
 func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.Tool, reasoning string, stream bool) ([]byte, error) {
+	if err := p.ensureModel(); err != nil {
+		return nil, err
+	}
+
 	// Convert messages according to provider configuration
 	convertedMessages := p.convertMessages(messages, reasoning)
 
@@ -520,6 +528,23 @@ func applyReasoningEffort(model, reasoning string, request map[string]interface{
 		return
 	}
 	request["reasoning_effort"] = effort
+}
+
+func (p *GenericProvider) ensureModel() error {
+	if strings.TrimSpace(p.model) != "" {
+		return nil
+	}
+
+	models, err := p.ListModels()
+	if err != nil {
+		return fmt.Errorf("failed to discover models for provider %s: %w", p.config.Name, err)
+	}
+	if len(models) == 0 || strings.TrimSpace(models[0].ID) == "" {
+		return fmt.Errorf("provider %s did not return any models", p.config.Name)
+	}
+
+	p.model = strings.TrimSpace(models[0].ID)
+	return nil
 }
 
 func applyModelSpecificSettings(model string, request map[string]interface{}) {

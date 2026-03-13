@@ -181,10 +181,6 @@ func (c *ProviderConfig) Validate() error {
 	if c.Auth.Type == "" {
 		return fmt.Errorf("authentication type is required")
 	}
-	if c.Defaults.Model == "" {
-		return fmt.Errorf("default model is required")
-	}
-
 	// Validate model configuration
 	if err := c.validateModelConfig(); err != nil {
 		return fmt.Errorf("invalid model configuration: %w", err)

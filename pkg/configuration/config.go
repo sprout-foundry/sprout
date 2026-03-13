@@ -374,6 +374,11 @@ func Load() (*Config, error) {
 	if config.CustomProviders == nil {
 		config.CustomProviders = make(map[string]CustomProviderConfig)
 	}
+	fileCustomProviders, err := MigrateLegacyCustomProviders(&config)
+	if err != nil {
+		return nil, err
+	}
+	config.CustomProviders = fileCustomProviders
 	if config.SubagentTypes == nil {
 		config.SubagentTypes = make(map[string]SubagentType)
 	}
@@ -467,8 +472,10 @@ func (c *Config) Save() error {
 	}
 
 	c.Version = ConfigVersion
-
-	data, err := json.MarshalIndent(c, "", "  ")
+	persisted := *c
+	persisted.Version = ConfigVersion
+	persisted.CustomProviders = nil
+	data, err := json.MarshalIndent(&persisted, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}

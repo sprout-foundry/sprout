@@ -3,8 +3,10 @@ package console
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/term"
 )
@@ -69,9 +71,15 @@ type InputReader struct {
 	bracketedPaste   bool
 	bracketedMatch   int
 	bracketedSawCR   bool
+	collapsedPastes  []pasteSpan
 
 	// Track current physical line (for multi-line wrapped input)
 	currentPhysicalLine int
+}
+
+type pasteSpan struct {
+	start int
+	end   int
 }
 
 const (
@@ -86,10 +94,11 @@ const (
 // NewInputReader creates a new input reader
 func NewInputReader(prompt string) *InputReader {
 	ir := &InputReader{
-		prompt:       prompt,
-		termFd:       int(os.Stdin.Fd()),
-		history:      make([]string, 0, 100),
-		historyIndex: -1,
+		prompt:          prompt,
+		termFd:          int(os.Stdin.Fd()),
+		history:         make([]string, 0, 100),
+		historyIndex:    -1,
+		collapsedPastes: make([]pasteSpan, 0, 8),
 	}
 	ir.updateTerminalWidth()
 	return ir
@@ -125,6 +134,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.bracketedPaste = false
 	ir.bracketedMatch = 0
 	ir.bracketedSawCR = false
+	ir.collapsedPastes = ir.collapsedPastes[:0]
 	ir.lastCharTime = time.Now()
 	fmt.Printf("%s", ir.prompt) // Simple initial prompt
 
@@ -400,17 +410,21 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 
 // InsertChar inserts a character at the cursor position
 func (ir *InputReader) InsertChar(char string) {
+	ir.expandPasteAtCursor()
+
 	// Mark line as edited and disconnect from history
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
 
+	insertAt := ir.cursorPos
 	before := ir.line[:ir.cursorPos]
 	after := ir.line[ir.cursorPos:]
 	ir.line = before + char + after
 	ir.cursorPos += len(char)
+	ir.shiftPasteSpans(insertAt, len(char))
 
 	// For typing at end of line, just output the character (more efficient)
-	if ir.cursorPos == len(ir.line) {
+	if ir.cursorPos == len(ir.line) && len(ir.collapsedPastes) == 0 {
 		fmt.Printf("%s", char)
 		// Keep refresh bookkeeping in sync even on fast-path writes.
 		promptWidth := visibleRuneWidth(ir.prompt)
@@ -428,14 +442,22 @@ func (ir *InputReader) InsertChar(char string) {
 // Backspace deletes the character before the cursor
 func (ir *InputReader) Backspace() {
 	if ir.cursorPos > 0 {
+		if ir.deleteCollapsedPasteEndingAtCursor() {
+			ir.Refresh()
+			return
+		}
+		ir.expandPasteAtCursor()
+
 		// Mark line as edited and disconnect from history
 		ir.hasEditedLine = true
 		ir.historyIndex = -1
 
-		before := ir.line[:ir.cursorPos-1]
+		deletePos := ir.cursorPos - 1
+		before := ir.line[:deletePos]
 		after := ir.line[ir.cursorPos:]
 		ir.line = before + after
 		ir.cursorPos--
+		ir.shiftPasteSpans(deletePos+1, -1)
 		ir.Refresh()
 	}
 }
@@ -443,6 +465,12 @@ func (ir *InputReader) Backspace() {
 // Delete deletes the character at the cursor position
 func (ir *InputReader) Delete() {
 	if ir.cursorPos < len(ir.line) {
+		if ir.deleteCollapsedPasteStartingAtCursor() {
+			ir.Refresh()
+			return
+		}
+		ir.expandPasteAtCursor()
+
 		// Mark line as edited and disconnect from history
 		ir.hasEditedLine = true
 		ir.historyIndex = -1
@@ -450,6 +478,7 @@ func (ir *InputReader) Delete() {
 		before := ir.line[:ir.cursorPos]
 		after := ir.line[ir.cursorPos+1:]
 		ir.line = before + after
+		ir.shiftPasteSpans(ir.cursorPos+1, -1)
 		ir.Refresh()
 	}
 }
@@ -459,6 +488,7 @@ func (ir *InputReader) MoveCursor(delta int) {
 	newPos := ir.cursorPos + delta
 	if newPos >= 0 && newPos <= len(ir.line) {
 		ir.cursorPos = newPos
+		ir.expandPasteAtCursor()
 		ir.Refresh()
 	}
 }
@@ -467,6 +497,7 @@ func (ir *InputReader) MoveCursor(delta int) {
 func (ir *InputReader) SetCursor(pos int) {
 	if pos >= 0 && pos <= len(ir.line) {
 		ir.cursorPos = pos
+		ir.expandPasteAtCursor()
 		ir.Refresh()
 	}
 }
@@ -500,6 +531,7 @@ func (ir *InputReader) NavigateHistory(direction int) {
 
 	// Reset edit flag when loading from history
 	ir.hasEditedLine = false
+	ir.collapsedPastes = ir.collapsedPastes[:0]
 	ir.cursorPos = len(ir.line)
 	ir.Refresh()
 }
@@ -549,6 +581,7 @@ func (ir *InputReader) navigateInLine(direction int) {
 	newPos += targetCol
 
 	ir.cursorPos = newPos
+	ir.expandPasteAtCursor()
 	ir.Refresh()
 }
 
@@ -583,7 +616,8 @@ func (ir *InputReader) getLineAndColumn() (lineIdx, col int) {
 func (ir *InputReader) Refresh() {
 	// Calculate display width (accounting for multibyte characters)
 	promptRunes := []rune(stripANSIEscapeCodes(ir.prompt))
-	lineRunes := []rune(ir.line)
+	displayLine, displayCursorByte := ir.renderLineWithCollapsedPastes()
+	lineRunes := []rune(displayLine)
 	promptWidth := len(promptRunes)
 	lineWidth := len(lineRunes)
 	totalWidth := promptWidth + lineWidth
@@ -593,7 +627,8 @@ func (ir *InputReader) Refresh() {
 	previousCursorLine := ir.currentPhysicalLine
 
 	// Calculate current cursor visual position.
-	cursorPos := promptWidth + ir.cursorPos
+	displayCursorRunes := runeCountAtByteIndex(displayLine, displayCursorByte)
+	cursorPos := promptWidth + displayCursorRunes
 	cursorLine := cursorLineIndex(ir.terminalWidth, cursorPos)
 	cursorCol := 0
 	if ir.terminalWidth > 0 {
@@ -631,7 +666,7 @@ func (ir *InputReader) Refresh() {
 	}
 
 	// Redraw the prompt and line content
-	fmt.Printf("%s%s", ir.prompt, ir.line)
+	fmt.Printf("%s%s", ir.prompt, displayLine)
 
 	// Clear any trailing content on the last line (in case new content is shorter than old)
 	fmt.Printf("%s", ClearToEndOfLineSeq())
@@ -739,10 +774,13 @@ func (ir *InputReader) finalizePaste() bool {
 	ir.historyIndex = -1
 
 	// Insert at cursor position instead of always appending.
+	start := ir.cursorPos
 	before := ir.line[:ir.cursorPos]
 	after := ir.line[ir.cursorPos:]
 	ir.line = before + pastedContent + after
 	ir.cursorPos += len(pastedContent)
+	ir.shiftPasteSpans(start, len(pastedContent))
+	ir.addCollapsedPaste(start, start+len(pastedContent))
 
 	// Show feedback and refresh
 	ir.Refresh()
@@ -750,6 +788,144 @@ func (ir *InputReader) finalizePaste() bool {
 	ir.lastLineLength = visibleRuneWidth(ir.prompt) + len([]rune(ir.line))
 
 	return true
+}
+
+func (ir *InputReader) addCollapsedPaste(start, end int) {
+	if start < 0 || end <= start || end > len(ir.line) {
+		return
+	}
+	ir.collapsedPastes = append(ir.collapsedPastes, pasteSpan{start: start, end: end})
+	sort.Slice(ir.collapsedPastes, func(i, j int) bool {
+		return ir.collapsedPastes[i].start < ir.collapsedPastes[j].start
+	})
+}
+
+func (ir *InputReader) shiftPasteSpans(pos, delta int) {
+	if delta == 0 || len(ir.collapsedPastes) == 0 {
+		return
+	}
+	filtered := ir.collapsedPastes[:0]
+	for _, span := range ir.collapsedPastes {
+		if span.end <= pos {
+			filtered = append(filtered, span)
+			continue
+		}
+		if span.start >= pos {
+			span.start += delta
+			span.end += delta
+		} else {
+			// Edits inside a collapsed span are ambiguous; expand it.
+			continue
+		}
+		if span.start < 0 {
+			span.start = 0
+		}
+		if span.end > len(ir.line) {
+			span.end = len(ir.line)
+		}
+		if span.end > span.start {
+			filtered = append(filtered, span)
+		}
+	}
+	ir.collapsedPastes = filtered
+}
+
+func (ir *InputReader) findCollapsedPasteAtCursor() int {
+	for i, span := range ir.collapsedPastes {
+		if ir.cursorPos > span.start && ir.cursorPos < span.end {
+			return i
+		}
+	}
+	return -1
+}
+
+func (ir *InputReader) expandPasteAtCursor() {
+	if idx := ir.findCollapsedPasteAtCursor(); idx >= 0 {
+		ir.collapsedPastes = append(ir.collapsedPastes[:idx], ir.collapsedPastes[idx+1:]...)
+	}
+}
+
+func (ir *InputReader) deleteCollapsedPasteEndingAtCursor() bool {
+	for i, span := range ir.collapsedPastes {
+		if span.end == ir.cursorPos {
+			ir.line = ir.line[:span.start] + ir.line[span.end:]
+			ir.cursorPos = span.start
+			ir.hasEditedLine = true
+			ir.historyIndex = -1
+			removed := span.end - span.start
+			ir.collapsedPastes = append(ir.collapsedPastes[:i], ir.collapsedPastes[i+1:]...)
+			ir.shiftPasteSpans(span.end, -removed)
+			return true
+		}
+	}
+	return false
+}
+
+func (ir *InputReader) deleteCollapsedPasteStartingAtCursor() bool {
+	for i, span := range ir.collapsedPastes {
+		if span.start == ir.cursorPos {
+			ir.line = ir.line[:span.start] + ir.line[span.end:]
+			ir.hasEditedLine = true
+			ir.historyIndex = -1
+			removed := span.end - span.start
+			ir.collapsedPastes = append(ir.collapsedPastes[:i], ir.collapsedPastes[i+1:]...)
+			ir.shiftPasteSpans(span.end, -removed)
+			return true
+		}
+	}
+	return false
+}
+
+func (ir *InputReader) renderLineWithCollapsedPastes() (string, int) {
+	if len(ir.collapsedPastes) == 0 {
+		return ir.line, ir.cursorPos
+	}
+	var out strings.Builder
+	rawPos := 0
+	displayCursor := 0
+	cursorSet := false
+
+	for _, span := range ir.collapsedPastes {
+		if span.start < rawPos || span.end > len(ir.line) || span.start >= span.end {
+			continue
+		}
+		out.WriteString(ir.line[rawPos:span.start])
+		if !cursorSet && ir.cursorPos <= span.start {
+			displayCursor = out.Len() - (span.start - ir.cursorPos)
+			cursorSet = true
+		}
+
+		label := fmt.Sprintf("[pasted %d chars]", utf8.RuneCountInString(ir.line[span.start:span.end]))
+		if !cursorSet && ir.cursorPos > span.start && ir.cursorPos <= span.end {
+			displayCursor = out.Len() + len(label)
+			cursorSet = true
+		}
+		out.WriteString(label)
+		rawPos = span.end
+	}
+	out.WriteString(ir.line[rawPos:])
+
+	if !cursorSet {
+		displayCursor = out.Len() - (len(ir.line) - ir.cursorPos)
+	}
+	if displayCursor < 0 {
+		displayCursor = 0
+	}
+	if displayCursor > out.Len() {
+		displayCursor = out.Len()
+	}
+
+	return out.String(), displayCursor
+}
+
+func runeCountAtByteIndex(s string, byteIndex int) int {
+	if byteIndex <= 0 {
+		return 0
+	}
+	if byteIndex >= len(s) {
+		return utf8.RuneCountInString(s)
+	}
+	return utf8.RuneCountInString(s[:byteIndex])
 }
 
 func shouldStartHeuristicPaste(chunk []byte, timeSinceLastChar time.Duration) bool {

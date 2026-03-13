@@ -13,13 +13,14 @@ import (
 
 // ChangeTracker manages change tracking for the agent workflow
 type ChangeTracker struct {
-	revisionID   string
-	sessionID    string
-	instructions string
-	changes      []TrackedFileChange
-	enabled      bool
-	agent        *Agent
-	committed    bool // Track whether changes have been committed
+	revisionID           string
+	sessionID            string
+	instructions         string
+	changes              []TrackedFileChange
+	enabled              bool
+	agent                *Agent
+	baseRevisionRecorded bool
+	committedChangeCount int
 }
 
 // TrackedFileChange represents a file change made during agent execution
@@ -52,7 +53,6 @@ func NewChangeTracker(agent *Agent, instructions string) *ChangeTracker {
 		changes:      make([]TrackedFileChange, 0),
 		enabled:      true,
 		agent:        agent,
-		committed:    false,
 	}
 }
 
@@ -125,24 +125,30 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 
 // Commit commits all tracked changes to the change tracker
 func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) error {
-	if !ct.enabled || len(ct.changes) == 0 || ct.committed {
-		return nil // Already committed or nothing to commit
+	if !ct.enabled || len(ct.changes) == 0 {
+		return nil
+	}
+	if ct.committedChangeCount >= len(ct.changes) {
+		return nil
 	}
 
 	// Convert agent_api.Message to history.APIMessage for storage
 	historyConversation := convertToHistoryMessages(conversation)
 
-	// Record base revision with conversation
-	revisionID, err := history.RecordBaseRevision(ct.revisionID, ct.instructions, llmResponse, historyConversation)
-	if err != nil {
-		return fmt.Errorf("failed to record base revision: %w", err)
+	if !ct.baseRevisionRecorded {
+		// Record base revision with conversation
+		revisionID, err := history.RecordBaseRevision(ct.revisionID, ct.instructions, llmResponse, historyConversation)
+		if err != nil {
+			return fmt.Errorf("failed to record base revision: %w", err)
+		}
+
+		// Update our revision ID to match what was actually recorded
+		ct.revisionID = revisionID
+		ct.baseRevisionRecorded = true
 	}
 
-	// Update our revision ID to match what was actually recorded
-	ct.revisionID = revisionID
-
 	// Record each file change
-	for _, change := range ct.changes {
+	for _, change := range ct.changes[ct.committedChangeCount:] {
 		description := fmt.Sprintf("%s via %s", change.Operation, change.ToolCall)
 		note := fmt.Sprintf("Agent session: %s", ct.sessionID)
 
@@ -162,8 +168,7 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 		}
 	}
 
-	// Mark as committed
-	ct.committed = true
+	ct.committedChangeCount = len(ct.changes)
 	return nil
 }
 
@@ -228,7 +233,8 @@ func (ct *ChangeTracker) GetChanges() []TrackedFileChange {
 // Clear clears all tracked changes (but keeps the tracker enabled)
 func (ct *ChangeTracker) Clear() {
 	ct.changes = ct.changes[:0]
-	ct.committed = false
+	ct.baseRevisionRecorded = false
+	ct.committedChangeCount = 0
 }
 
 // Reset resets the change tracker with a new revision ID and instructions

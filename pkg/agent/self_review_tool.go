@@ -13,19 +13,16 @@ import (
 // handleSelfReview implements the self_review tool
 // This tool allows the agent to review its own work against a canonical spec extracted from the conversation
 func handleSelfReview(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	// Check if change tracker has uncommitted changes
-	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
-		// Check if there are uncommitted changes in memory
-		if len(a.changeTracker.changes) > 0 {
-			// Changes exist but may not be committed yet
-			// Try to commit them first to ensure they're in the filesystem
-			// Note: CommitChanges is called by agent at end of task, but we can check if it's done
-		}
-	}
-
 	// Get the current revision ID from the agent's change tracker
 	revisionID := ""
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
+		// Self-review reads persisted history, so checkpoint any pending in-memory
+		// changes before looking up the revision.
+		if len(a.changeTracker.changes) > a.changeTracker.committedChangeCount {
+			if err := a.CommitChanges("Self-review checkpoint"); err != nil {
+				return "", fmt.Errorf("failed to checkpoint tracked changes for self-review: %w", err)
+			}
+		}
 		revisionID = a.changeTracker.GetRevisionID()
 	}
 

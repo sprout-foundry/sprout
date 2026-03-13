@@ -125,9 +125,29 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 		return default_response
 	}
 	reader := bufio.NewReader(os.Stdin)
+	consecutiveErrors := 0
+	const maxConsecutiveErrors = 3
+
 	for {
 		w.LogUserInteraction(fmt.Sprintf("%s (yes/no): ", prompt))
-		response, _ := reader.ReadString('\n')
+		response, err := reader.ReadString('\n')
+
+		// Handle EOF or read errors - these indicate stdin is closed/unavailable
+		// Without this check, we'd loop infinitely printing the prompt
+		if err != nil {
+			consecutiveErrors++
+			w.Log(fmt.Sprintf("AskForConfirmation: read error (attempt %d/%d): %v", consecutiveErrors, maxConsecutiveErrors, err))
+
+			if consecutiveErrors >= maxConsecutiveErrors {
+				w.LogUserInteraction(" stdin unavailable - rejecting for safety.")
+				return false // Reject for safety when stdin is unavailable
+			}
+			continue
+		}
+
+		// Reset error counter on successful read
+		consecutiveErrors = 0
+
 		response = strings.ToLower(strings.TrimSpace(response))
 		switch response {
 		case "yes", "y":

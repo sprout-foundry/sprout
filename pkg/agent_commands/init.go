@@ -1,16 +1,11 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/alantheprice/ledit/pkg/agent"
-	agent_tools "github.com/alantheprice/ledit/pkg/agent_tools"
 )
 
 // InitCommand implements the /init slash command
@@ -23,65 +18,40 @@ func (i *InitCommand) Name() string {
 
 // Description returns the command description
 func (i *InitCommand) Description() string {
-	return "Generate or regenerate the project context documentation"
+	return "Generate or improve AGENTS.md with intelligent codebase analysis"
 }
 
-// Execute runs the init command to generate project context
+// Execute runs the init command using the LLM to analyze the codebase
 func (i *InitCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	fmt.Println("🔧 Generating project context...")
-	fmt.Println("🔍 Exploring codebase structure...")
+	fmt.Println("🔧 Analyzing codebase and generating AGENTS.md...")
+	fmt.Println("📖 The agent will explore your project and create/update AGENTS.md")
+	fmt.Println()
 
-	// Get current directory info
-	wd, err := os.Getwd()
+	// Check for existing context files to include as reference
+	existingFiles := i.discoverExistingContextFiles()
+
+	// Build the prompt for the LLM
+	prompt := i.buildInitPrompt(existingFiles)
+
+	// Inject the prompt so the agent processes it like user input
+	// This allows the agent to use its tools to explore and write
+	err := chatAgent.InjectInputContext(prompt)
 	if err != nil {
-		return fmt.Errorf("failed to get working directory: %v", err)
+		return fmt.Errorf("failed to inject init prompt: %w", err)
 	}
-
-	// Discover existing context files
-	existingContext := i.discoverExistingContext()
-
-	// Analyze actual project structure
-	projectName := filepath.Base(wd)
-	projectStructure := i.analyzeProjectStructure()
-	testingInfo := i.discoverTestingFramework()
-	entrypoints := i.findEntrypoints()
-	buildInfo := i.analyzeBuildSystem()
-
-	// Get current timestamp with local timezone
-	timestamp := time.Now().Format("2006-01-02 15:04:05 MST")
-
-	// Generate comprehensive project context based on actual exploration
-	context := i.generateEnhancedContext(projectName, existingContext, projectStructure, testingInfo, entrypoints, buildInfo, timestamp)
-
-	// Write to .project_context.md file
-	err = os.WriteFile(".project_context.md", []byte(context), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write project context: %v", err)
-	}
-
-	fmt.Printf("✅ Project context generated successfully!\n")
-	fmt.Printf("📄 File: .project_context.md\n")
-	fmt.Printf("🕒 Generated: %s\n", timestamp)
-	if len(existingContext) > 0 {
-		fmt.Printf("📋 Found existing context files: %s\n", strings.Join(existingContext, ", "))
-	}
-	fmt.Printf("\nUse \"/help\" to see all available commands\n")
 
 	return nil
 }
 
-// discoverExistingContext finds existing context files in the project
-func (i *InitCommand) discoverExistingContext() []string {
+// discoverExistingContextFiles finds existing context/instruction files
+func (i *InitCommand) discoverExistingContextFiles() []string {
 	contextFiles := []string{
+		"AGENTS.md",
 		"CLAUDE.md",
 		".claude/project.md",
-		".claude/context.md",
-		".cursor/markdown/project.md",
-		".cursor/markdown/context.md",
-		".project_context.md",
-		"PROJECT_CONTEXT.md",
 		".cursorrules",
-		".cursor-rules",
+		".cursor/rules",
+		".github/copilot-instructions.md",
 		"README.md",
 	}
 
@@ -91,348 +61,96 @@ func (i *InitCommand) discoverExistingContext() []string {
 			found = append(found, file)
 		}
 	}
-
 	return found
 }
 
-// analyzeProjectStructure explores the actual codebase structure
-func (i *InitCommand) analyzeProjectStructure() map[string][]string {
-	structure := make(map[string][]string)
-
-	// Find main directories
-	dirs := []string{"cmd", "pkg", "internal", "src", "lib", "app", "api", "web", "ui"}
-	for _, dir := range dirs {
-		if files := i.findGoFiles(dir); len(files) > 0 {
-			structure[dir] = files
-		}
-	}
-
-	// Root level Go files
-	if files := i.findGoFiles("."); len(files) > 0 {
-		structure["."] = files
-	}
-
-	return structure
-}
-
-// discoverTestingFramework finds testing files and patterns
-func (i *InitCommand) discoverTestingFramework() map[string]interface{} {
-	testing := make(map[string]interface{})
-
-	// Find test files
-	testFiles := i.findTestFiles()
-	testing["test_files"] = testFiles
-
-	// Check for test runners and scripts
-	scripts := []string{"test.sh", "test_e2e.sh", "validate.sh", "test_runner.py"}
-	var foundScripts []string
-	for _, script := range scripts {
-		if _, err := os.Stat(script); err == nil {
-			foundScripts = append(foundScripts, script)
-		}
-	}
-	testing["test_scripts"] = foundScripts
-
-	// Check for E2E test directory
-	if _, err := os.Stat("e2e_test_scripts"); err == nil {
-		e2eFiles, _ := filepath.Glob("e2e_test_scripts/*.sh")
-		testing["e2e_scripts"] = e2eFiles
-	}
-
-	return testing
-}
-
-// findEntrypoints discovers main entry points and CLI commands
-func (i *InitCommand) findEntrypoints() []string {
-	var entrypoints []string
-
-	// Check for main.go
-	if _, err := os.Stat("main.go"); err == nil {
-		entrypoints = append(entrypoints, "main.go")
-	}
-
-	// Check cmd directory for multiple entrypoints
-	if entries, err := os.ReadDir("cmd"); err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() {
-				// Check if directory has main.go or <name>.go
-				cmdPath := filepath.Join("cmd", entry.Name())
-				if files := i.findGoFiles(cmdPath); len(files) > 0 {
-					entrypoints = append(entrypoints, cmdPath)
-				}
-			} else if strings.HasSuffix(entry.Name(), ".go") {
-				entrypoints = append(entrypoints, filepath.Join("cmd", entry.Name()))
-			}
-		}
-	}
-
-	return entrypoints
-}
-
-// analyzeBuildSystem checks build configuration and dependencies
-func (i *InitCommand) analyzeBuildSystem() map[string]interface{} {
-	build := make(map[string]interface{})
-
-	// Read go.mod
-	if goModContent, err := os.ReadFile("go.mod"); err == nil {
-		build["go_mod"] = string(goModContent)
-
-		// Extract Go version and key dependencies
-		lines := strings.Split(string(goModContent), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "go ") {
-				build["go_version"] = strings.TrimPrefix(line, "go ")
-			}
-		}
-	}
-
-	// Check for Makefile, Dockerfile, etc.
-	buildFiles := []string{"Makefile", "Dockerfile", "docker-compose.yml", ".github/workflows"}
-	var foundBuildFiles []string
-	for _, file := range buildFiles {
-		if _, err := os.Stat(file); err == nil {
-			foundBuildFiles = append(foundBuildFiles, file)
-		}
-	}
-	build["build_files"] = foundBuildFiles
-
-	return build
-}
-
-// findGoFiles recursively finds Go files in a directory
-func (i *InitCommand) findGoFiles(dir string) []string {
-	var files []string
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return files
-	}
-
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".") {
-			continue // Skip hidden files/directories
-		}
-
-		path := filepath.Join(dir, entry.Name())
-		if entry.IsDir() {
-			// Don't recurse too deep, just check immediate subdirectories
-			if dir == "." {
-				subFiles := i.findGoFiles(path)
-				files = append(files, subFiles...)
-			}
-		} else if strings.HasSuffix(entry.Name(), ".go") && !strings.HasSuffix(entry.Name(), "_test.go") {
-			files = append(files, path)
-		}
-	}
-
-	sort.Strings(files)
-	return files
-}
-
-// findTestFiles finds all test files in the project
-func (i *InitCommand) findTestFiles() []string {
-	var testFiles []string
-
-	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Continue walking
-		}
-
-		// Skip hidden directories (but not the root .) and vendor/node_modules
-		if info.IsDir() && path != "." && (strings.HasPrefix(info.Name(), ".") ||
-			info.Name() == "vendor" || info.Name() == "node_modules") {
-			return filepath.SkipDir
-		}
-
-		if strings.HasSuffix(path, "_test.go") {
-			testFiles = append(testFiles, path)
-		}
-
-		return nil
-	})
-
-	if err == nil {
-		sort.Strings(testFiles)
-	}
-
-	return testFiles
-}
-
-// generateEnhancedContext creates a comprehensive context based on actual code exploration
-func (i *InitCommand) generateEnhancedContext(projectName string, existingContext []string,
-	structure map[string][]string, testing map[string]interface{},
-	entrypoints []string, build map[string]interface{}, timestamp string) string {
-
+// buildInitPrompt creates the prompt for generating AGENTS.md
+func (i *InitCommand) buildInitPrompt(existingFiles []string) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("# Project Context: %s\n\n", projectName))
+	sb.WriteString(`Analyze this codebase and create or improve the AGENTS.md file, which will be given to future instances of this AI coding agent to operate effectively in this repository.
 
-	// Overview section - check if we have CLAUDE.md to extract real overview
-	overview := i.extractOverviewFromExisting(existingContext)
-	if overview != "" {
-		sb.WriteString("## Overview\n")
-		sb.WriteString(overview)
-		sb.WriteString("\n\n")
-	}
+## What to include
 
-	// Discovered project structure
-	sb.WriteString("## Project Structure\n")
-	sb.WriteString("*Auto-discovered from codebase exploration*\n\n")
+1. **Build, Test, and Development Commands**
+   - How to build the project
+   - How to run tests (including running a single test)
+   - How to lint/format code
+   - Any other commonly needed development commands
 
-	if len(entrypoints) > 0 {
-		sb.WriteString("**Entry Points:**\n")
-		for _, entry := range entrypoints {
-			sb.WriteString(fmt.Sprintf("- `%s`\n", entry))
-		}
-		sb.WriteString("\n")
-	}
+2. **High-Level Architecture**
+   - The "big picture" structure that requires reading multiple files to understand
+   - Key abstractions and how they relate
+   - Important patterns or conventions used
+   - Module/package organization
 
-	if len(structure) > 0 {
-		sb.WriteString("**Code Organization:**\n")
-		for dir, files := range structure {
-			if dir == "." {
-				sb.WriteString("**Root level:**\n")
-			} else {
-				sb.WriteString(fmt.Sprintf("**%s/:** \n", dir))
-			}
-			for _, file := range files {
-				if len(files) > 10 {
-					sb.WriteString(fmt.Sprintf("- %d Go files\n", len(files)))
-					break
-				}
-				sb.WriteString(fmt.Sprintf("  - `%s`\n", file))
-			}
-		}
-		sb.WriteString("\n")
-	}
+3. **Project-Specific Conventions**
+   - Naming conventions (if non-standard)
+   - File organization patterns
+   - Any non-obvious workflow requirements
 
-	// Testing information
-	if testFiles, ok := testing["test_files"].([]string); ok && len(testFiles) > 0 {
-		sb.WriteString("## Testing Framework\n")
-		sb.WriteString(fmt.Sprintf("**Test Files:** %d discovered\n", len(testFiles)))
-		if len(testFiles) <= 10 {
-			for _, file := range testFiles {
-				sb.WriteString(fmt.Sprintf("- `%s`\n", file))
-			}
-		} else {
-			// Show first few and count
-			for i, file := range testFiles[:5] {
-				sb.WriteString(fmt.Sprintf("- `%s`\n", file))
-				if i == 4 {
-					sb.WriteString(fmt.Sprintf("- ... and %d more\n", len(testFiles)-5))
-				}
-			}
-		}
-		sb.WriteString("\n")
-	}
+## Important Guidelines
 
-	if scripts, ok := testing["test_scripts"].([]string); ok && len(scripts) > 0 {
-		sb.WriteString("**Test Scripts:**\n")
-		for _, script := range scripts {
-			sb.WriteString(fmt.Sprintf("- `%s`\n", script))
-		}
-		sb.WriteString("\n")
-	}
+- **Be concise** - Aim for under 200-300 lines. Less is more.
+- **Don't repeat obvious things** - Skip generic advice like "write tests" or "handle errors"
+- **Don't list every file** - Focus on architecture, not directory listings
+- **Point to files, don't copy** - Use file references for details that might change
+- **Only include what's universally useful** - Task-specific info should be in separate docs
+- **Be accurate** - Only include information you can verify from the actual codebase
 
-	if e2eScripts, ok := testing["e2e_scripts"].([]string); ok && len(e2eScripts) > 0 {
-		sb.WriteString("**E2E Test Scripts:**\n")
-		for _, script := range e2eScripts {
-			sb.WriteString(fmt.Sprintf("- `%s`\n", script))
-		}
-		sb.WriteString("\n")
-	}
+`)
 
-	// Build system information
-	if goVersion, ok := build["go_version"].(string); ok {
-		sb.WriteString("## Build System\n")
-		sb.WriteString(fmt.Sprintf("**Go Version:** %s\n", goVersion))
-
-		if buildFiles, ok := build["build_files"].([]string); ok && len(buildFiles) > 0 {
-			sb.WriteString("**Build Files:**\n")
-			for _, file := range buildFiles {
-				sb.WriteString(fmt.Sprintf("- `%s`\n", file))
-			}
-		}
-		sb.WriteString("\n")
-	}
-
-	// Existing context files
-	if len(existingContext) > 0 {
-		sb.WriteString("## Existing Documentation\n")
-		sb.WriteString("*Found existing context files that may contain additional details:*\n")
-		for _, file := range existingContext {
+	// Add info about existing context files
+	if len(existingFiles) > 0 {
+		sb.WriteString("## Existing Context Files\n\n")
+		sb.WriteString("The following files already exist and contain useful context. Read them and incorporate important parts:\n\n")
+		for _, file := range existingFiles {
 			sb.WriteString(fmt.Sprintf("- `%s`\n", file))
 		}
 		sb.WriteString("\n")
 	}
 
-	// Go module information
-	if goMod, ok := build["go_mod"].(string); ok && goMod != "" {
-		sb.WriteString("## Dependencies\n")
-		sb.WriteString("```\n")
-		sb.WriteString(goMod)
-		sb.WriteString("```\n\n")
-	}
-
-	// Generation timestamp
-	sb.WriteString("## Generated\n")
-	sb.WriteString(fmt.Sprintf("Context generated on %s by `/init` command with codebase exploration\n", timestamp))
-
-	return sb.String()
-}
-
-// extractOverviewFromExisting tries to extract overview from existing context files
-func (i *InitCommand) extractOverviewFromExisting(existingFiles []string) string {
-	// Priority order for extracting overview
-	priority := []string{"CLAUDE.md", "README.md", ".claude/project.md", "PROJECT_CONTEXT.md"}
-
-	for _, priorityFile := range priority {
-		for _, existingFile := range existingFiles {
-			if existingFile == priorityFile {
-				if content, err := agent_tools.ReadFile(context.Background(), existingFile); err == nil {
-					// Extract overview section or first few paragraphs
-					lines := strings.Split(content, "\n")
-					var overview strings.Builder
-					inOverview := false
-
-					for _, line := range lines {
-						trimmed := strings.TrimSpace(line)
-
-						// Look for overview section
-						if strings.Contains(strings.ToLower(trimmed), "overview") && strings.HasPrefix(trimmed, "#") {
-							inOverview = true
-							continue
-						}
-
-						// Stop at next major section
-						if inOverview && strings.HasPrefix(trimmed, "#") &&
-							!strings.Contains(strings.ToLower(trimmed), "overview") {
-							break
-						}
-
-						if inOverview && trimmed != "" && !strings.HasPrefix(trimmed, "#") {
-							overview.WriteString(line + "\n")
-						}
-
-						// If we haven't found overview section, take first substantial paragraph
-						if !inOverview && overview.Len() == 0 && len(trimmed) > 50 && !strings.HasPrefix(trimmed, "#") {
-							overview.WriteString(trimmed + "\n")
-						}
-
-						// Limit overview length
-						if overview.Len() > 500 {
-							break
-						}
-					}
-
-					if overview.Len() > 0 {
-						return strings.TrimSpace(overview.String())
-					}
-				}
-			}
+	// Add specific instructions based on what exists
+	hasAgentsMd := false
+	for _, f := range existingFiles {
+		if f == "AGENTS.md" {
+			hasAgentsMd = true
+			break
 		}
 	}
 
-	return ""
+	if hasAgentsMd {
+		sb.WriteString(`## Task
+
+Read the existing AGENTS.md and suggest improvements. Look for:
+- Outdated information
+- Missing critical commands or architecture details
+- Verbose sections that could be trimmed
+- Generic advice that could be removed
+- Important info from other context files that should be incorporated
+
+Update AGENTS.md with your improvements. Focus on making it more useful and concise.
+`)
+	} else {
+		sb.WriteString(`## Task
+
+Explore the codebase to understand:
+- Project type and language(s)
+- Build system and dependencies (go.mod, package.json, Cargo.toml, etc.)
+- Test framework and how to run tests
+- Key entry points and module structure
+- Any existing documentation or context files
+
+Then create a new AGENTS.md file with the essential information for working in this codebase.
+`)
+	}
+
+	sb.WriteString(`
+## Output
+
+Write the final AGENTS.md file directly using the write_file tool. Do NOT show me the content - just write it and confirm completion.
+
+Start by reading key files to understand the project, then write AGENTS.md.`)
+
+	return sb.String()
 }

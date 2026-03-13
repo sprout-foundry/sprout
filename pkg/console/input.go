@@ -40,6 +40,8 @@ const (
 	EventInterrupt
 	EventSuspend
 	EventEscape
+	EventPasteStart
+	EventPasteEnd
 )
 
 // InputReader handles interactive input with proper escape sequence handling
@@ -64,6 +66,9 @@ type InputReader struct {
 	lastCharTime     time.Time
 	inPasteMode      bool
 	pasteStartPrompt string
+	bracketedPaste   bool
+	bracketedMatch   int
+	bracketedSawCR   bool
 
 	// Track current physical line (for multi-line wrapped input)
 	currentPhysicalLine int
@@ -73,6 +78,9 @@ const (
 	// Heuristic paste detection should be conservative to avoid misclassifying
 	// normal typing over high-latency links as paste bursts.
 	minHeuristicPasteBytes = 12
+	bracketedPasteEnable   = "\033[?2004h"
+	bracketedPasteDisable  = "\033[?2004l"
+	bracketedPasteEndSeq   = "\x1b[201~"
 )
 
 // NewInputReader creates a new input reader
@@ -100,6 +108,8 @@ func (ir *InputReader) ReadLine() (string, error) {
 		return ir.fallbackReadLine()
 	}
 	defer term.Restore(ir.termFd, oldState)
+	fmt.Print(bracketedPasteEnable)
+	defer fmt.Print(bracketedPasteDisable)
 
 	// Initialize line state
 	ir.line = ""
@@ -112,6 +122,9 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.pasteBuffer.Reset()
 	ir.pasteActive = false
 	ir.inPasteMode = false
+	ir.bracketedPaste = false
+	ir.bracketedMatch = 0
+	ir.bracketedSawCR = false
 	ir.lastCharTime = time.Now()
 	fmt.Printf("%s", ir.prompt) // Simple initial prompt
 
@@ -168,6 +181,14 @@ func (ir *InputReader) ReadLine() (string, error) {
 			b := buf[i]
 			now := time.Now()
 
+			if ir.bracketedPaste {
+				if ir.consumeBracketedPasteByte(b) {
+					ir.finalizePaste()
+				}
+				ir.lastCharTime = now
+				continue
+			}
+
 			// Detect paste: rapid character input
 			timeSinceLastChar := now.Sub(ir.lastCharTime)
 
@@ -223,7 +244,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 				ir.pasteActive = true
 				ir.pasteStartPrompt = ir.prompt
 				ir.pasteBuffer.Reset()
-				ir.pasteBuffer.WriteRune(rune(b))
+				ir.pasteBuffer.WriteByte(b)
 				ir.lastCharTime = now
 				continue
 			}
@@ -243,7 +264,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 					// Check if paste is ending (slow input or Enter at end)
 					// Finalize paste on Enter or timeout
 					if b != 13 {
-						ir.pasteBuffer.WriteRune(rune(b))
+						ir.pasteBuffer.WriteByte(b)
 					}
 					if ir.finalizePaste() {
 						// Continue after paste
@@ -253,10 +274,10 @@ func (ir *InputReader) ReadLine() (string, error) {
 					// Convert \r to \n for proper multiline handling
 					if b == 13 {
 						ir.pasteBuffer.WriteRune('\n')
-					} else if b >= 32 && b <= 126 {
-						ir.pasteBuffer.WriteRune(rune(b))
+					} else if b >= 32 {
+						ir.pasteBuffer.WriteByte(b)
 					} else if b == 9 { // Tab
-						ir.pasteBuffer.WriteRune('\t')
+						ir.pasteBuffer.WriteByte('\t')
 					}
 					ir.lastCharTime = now
 					continue
@@ -268,6 +289,22 @@ func (ir *InputReader) ReadLine() (string, error) {
 			// Parse the byte through the escape parser
 			event := parser.Parse(b)
 			if event != nil {
+				if event.Type == EventPasteStart {
+					ir.bracketedPaste = true
+					ir.bracketedMatch = 0
+					ir.bracketedSawCR = false
+					ir.inPasteMode = true
+					ir.pasteActive = true
+					ir.pasteBuffer.Reset()
+					continue
+				}
+				if event.Type == EventPasteEnd {
+					ir.bracketedPaste = false
+					ir.bracketedMatch = 0
+					ir.bracketedSawCR = false
+					ir.finalizePaste()
+					continue
+				}
 				if event.Type == EventEnter {
 					// End of input
 					fmt.Println() // Move to next line
@@ -279,8 +316,50 @@ func (ir *InputReader) ReadLine() (string, error) {
 				}
 				ir.HandleEvent(event)
 			}
+			for {
+				pending := parser.Parse(0)
+				if pending == nil {
+					break
+				}
+				ir.HandleEvent(pending)
+			}
 		}
 	}
+}
+
+func (ir *InputReader) consumeBracketedPasteByte(b byte) bool {
+	expected := bracketedPasteEndSeq[ir.bracketedMatch]
+	if b == expected {
+		ir.bracketedMatch++
+		if ir.bracketedMatch == len(bracketedPasteEndSeq) {
+			ir.bracketedPaste = false
+			ir.bracketedMatch = 0
+			return true
+		}
+		return false
+	}
+
+	if ir.bracketedMatch > 0 {
+		ir.pasteBuffer.WriteString(bracketedPasteEndSeq[:ir.bracketedMatch])
+		ir.bracketedMatch = 0
+	}
+
+	if b == 13 {
+		ir.pasteBuffer.WriteRune('\n')
+		ir.bracketedSawCR = true
+		return false
+	}
+	if b == 10 && ir.bracketedSawCR {
+		ir.bracketedSawCR = false
+		return false
+	}
+	ir.bracketedSawCR = false
+
+	if b == 9 || b == 10 || b >= 32 {
+		ir.pasteBuffer.WriteByte(b)
+	}
+
+	return false
 }
 
 // fallbackReadLine provides simple input for non-terminal environments
@@ -827,11 +906,11 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 		}
 		// Not a CSI sequence, treat ESC as escape event
 		// This character could be printable, save it for next call
+		ep.Reset()
 		if b >= 32 && b <= 126 {
 			ep.pendingChar = b
 			ep.hasPending = true
 		}
-		ep.Reset()
 		return &InputEvent{Type: EventEscape}
 
 	case 2: // Got '[', reading sequence
@@ -863,28 +942,43 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			event := &InputEvent{Type: EventEnd}
 			ep.Reset()
 			return event
-		case '3': // Start of Delete sequence
-			ep.state = 3
-			return nil
-		case '1': // Start of Home/End with numeric prefix
-			ep.state = 5
-			return nil
-		case '4': // Start of End with numeric prefix
-			ep.state = 6
-			return nil
 		default:
-			// Handle longer sequences or numeric parameters
-			if b >= '0' && b <= '9' || b == ';' {
-				// Part of a longer sequence (like page up/down)
+			// Handle numeric CSI params and terminated forms like ESC [ 3 ~ and ESC [ 200 ~.
+			if (b >= '0' && b <= '9') || b == ';' {
 				return nil
+			}
+			if b == '~' {
+				param := ""
+				if len(ep.buffer) >= 3 {
+					param = string(ep.buffer[1 : len(ep.buffer)-1])
+				}
+				firstParam := param
+				if idx := strings.IndexByte(param, ';'); idx >= 0 {
+					firstParam = param[:idx]
+				}
+				ep.Reset()
+				switch firstParam {
+				case "1", "7":
+					return &InputEvent{Type: EventHome}
+				case "4", "8":
+					return &InputEvent{Type: EventEnd}
+				case "3":
+					return &InputEvent{Type: EventDelete}
+				case "200":
+					return &InputEvent{Type: EventPasteStart}
+				case "201":
+					return &InputEvent{Type: EventPasteEnd}
+				default:
+					return &InputEvent{Type: EventEscape}
+				}
 			}
 			// Unknown sequence - treat as standalone ESC
 			// This character could be printable, save it for next call
+			ep.Reset()
 			if b >= 32 && b <= 126 {
 				ep.pendingChar = b
 				ep.hasPending = true
 			}
-			ep.Reset()
 			return &InputEvent{Type: EventEscape}
 		}
 
@@ -896,11 +990,11 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			return event
 		}
 		// Not Delete, the 'b' could be a printable character
+		ep.Reset()
 		if b >= 32 && b <= 126 {
 			ep.pendingChar = b
 			ep.hasPending = true
 		}
-		ep.Reset()
 		return &InputEvent{Type: EventEscape}
 
 	case 4: // ESC O sequences (function keys)
@@ -916,43 +1010,13 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			return event
 		default:
 			// Unknown sequence, this character could be printable
+			ep.Reset()
 			if b >= 32 && b <= 126 {
 				ep.pendingChar = b
 				ep.hasPending = true
 			}
-			ep.Reset()
 			return &InputEvent{Type: EventEscape}
 		}
-
-	case 5: // ESC [ 1 sequence (Home)
-		ep.buffer = append(ep.buffer, b)
-		if b == '~' {
-			event := &InputEvent{Type: EventHome}
-			ep.Reset()
-			return event
-		}
-		// Not Home, this character could be printable
-		if b >= 32 && b <= 126 {
-			ep.pendingChar = b
-			ep.hasPending = true
-		}
-		ep.Reset()
-		return &InputEvent{Type: EventEscape}
-
-	case 6: // ESC [ 4 sequence (End)
-		ep.buffer = append(ep.buffer, b)
-		if b == '~' {
-			event := &InputEvent{Type: EventEnd}
-			ep.Reset()
-			return event
-		}
-		// Not End, this character could be printable
-		if b >= 32 && b <= 126 {
-			ep.pendingChar = b
-			ep.hasPending = true
-		}
-		ep.Reset()
-		return &InputEvent{Type: EventEscape}
 	}
 
 	return nil
@@ -962,6 +1026,4 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 func (ep *EscapeParser) Reset() {
 	ep.state = 0
 	ep.buffer = ep.buffer[:0]
-	ep.hasPending = false
-	ep.pendingChar = 0
 }

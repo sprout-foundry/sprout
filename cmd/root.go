@@ -31,7 +31,7 @@ Available commands:
   review - Perform AI-powered code review on staged changes
   log    - View operation logs
   mcp    - Manage MCP (Model Context Protocol) servers
-  custom - Manage custom model providers
+  custom - Manage custom OpenAI-compatible providers
 
 For autonomous operation, try: ledit agent "your intent here"
 

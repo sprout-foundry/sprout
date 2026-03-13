@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/alantheprice/ledit/pkg/credentials"
 )
 
 // ModelInfo represents information about an available model
@@ -79,20 +81,12 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 	case OpenAIClientType:
 		return &genericConfigListModelsWrapper{providerName: "openai"}, nil
 	case OpenRouterClientType:
-		// Check for API key first
-		if os.Getenv("OPENROUTER_API_KEY") == "" {
-			return nil, fmt.Errorf("OPENROUTER_API_KEY not set")
-		}
 		// Create OpenRouter wrapper that uses the provider's ListModels directly
 		return &openRouterListModelsWrapper{}, nil
 	case ZAIClientType:
 		// Use generic provider wrapper to get models from config
 		return &genericConfigListModelsWrapper{providerName: "zai"}, nil
 	case DeepInfraClientType:
-		// Check for API key first
-		if os.Getenv("DEEPINFRA_API_KEY") == "" {
-			return nil, fmt.Errorf("DEEPINFRA_API_KEY not set")
-		}
 		// Create DeepInfra wrapper that uses the provider's ListModels directly
 		return &deepInfraListModelsWrapper{}, nil
 	case LMStudioClientType:
@@ -100,14 +94,10 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 		// Create LM Studio wrapper that uses the provider's ListModels directly
 		return &lmStudioListModelsWrapper{}, nil
 	case MistralClientType:
-		// Check for API key first
-		if os.Getenv("MISTRAL_API_KEY") == "" {
-			return nil, fmt.Errorf("MISTRAL_API_KEY not set")
-		}
 		// Create Mistral wrapper using OpenAI-compatible models endpoint
 		return &mistralListModelsWrapper{}, nil
 	default:
-		return nil, fmt.Errorf("provider creation not supported for client type: %s", clientType)
+		return &genericConfigListModelsWrapper{providerName: string(clientType)}, nil
 	}
 }
 
@@ -116,9 +106,9 @@ func createProviderForType(clientType ClientType) (interface{ ListModels() ([]Mo
 type openAIListModelsWrapper struct{}
 
 func (w *openAIListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("OPENAI_API_KEY not set")
+	apiKey, err := resolveCredentialValue("openai", "OPENAI_API_KEY")
+	if err != nil {
+		return nil, err
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -225,9 +215,9 @@ func (w *ollamaLocalListModelsWrapper) ListModels() ([]ModelInfo, error) {
 type openRouterListModelsWrapper struct{}
 
 func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("OPENROUTER_API_KEY not set")
+	apiKey, err := resolveCredentialValue("openrouter", "OPENROUTER_API_KEY")
+	if err != nil {
+		return nil, err
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -309,9 +299,9 @@ func (w *openRouterListModelsWrapper) ListModels() ([]ModelInfo, error) {
 type deepInfraListModelsWrapper struct{}
 
 func (w *deepInfraListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	apiKey := os.Getenv("DEEPINFRA_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("DEEPINFRA_API_KEY not set")
+	apiKey, err := resolveCredentialValue("deepinfra", "DEEPINFRA_API_KEY")
+	if err != nil {
+		return nil, err
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -460,9 +450,9 @@ func (w *lmStudioListModelsWrapper) ListModels() ([]ModelInfo, error) {
 type mistralListModelsWrapper struct{}
 
 func (w *mistralListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	apiKey := os.Getenv("MISTRAL_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("MISTRAL_API_KEY not set")
+	apiKey, err := resolveCredentialValue("mistral", "MISTRAL_API_KEY")
+	if err != nil {
+		return nil, err
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -554,31 +544,51 @@ type configModels struct {
 
 // config mirrors providers.ProviderConfig for our local use
 type config struct {
-	Models configModels `json:"models"`
+	Endpoint string       `json:"endpoint,omitempty"`
+	Auth     configAuth   `json:"auth,omitempty"`
+	Name     string       `json:"name,omitempty"`
+	Models   configModels `json:"models"`
+}
+
+type configAuth struct {
+	EnvVar string `json:"env_var,omitempty"`
+	Key    string `json:"key,omitempty"`
+}
+
+type customProviderFile struct {
+	Name     string `json:"name"`
+	Endpoint string `json:"endpoint"`
+	Model    string `json:"model_name,omitempty"`
+	EnvVar   string `json:"env_var,omitempty"`
+	APIKey   string `json:"api_key,omitempty"`
 }
 
 func (w *genericConfigListModelsWrapper) ListModels() ([]ModelInfo, error) {
-	// Load provider config from file - compute path relative to file location
+	if builtInModels, err := w.loadBuiltInProviderModels(); err == nil {
+		return builtInModels, nil
+	}
+
+	return w.loadCustomProviderModels()
+}
+
+func (w *genericConfigListModelsWrapper) loadBuiltInProviderModels() ([]ModelInfo, error) {
 	var configPath string
-	// Use runtime path to find the config file
 	if _, filename, _, ok := runtime.Caller(0); ok {
 		configPath = filepath.Join(filepath.Dir(filename), "../agent_providers/configs", w.providerName+".json")
 	} else {
-		// Fallback to current directory
 		configPath = "pkg/agent_providers/configs/" + w.providerName + ".json"
 	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load %s config: %w", w.providerName, err)
+		return nil, err
 	}
 
 	var providerConfig config
 	if err := json.Unmarshal(data, &providerConfig); err != nil {
-		return nil, fmt.Errorf("failed to parse %s config: %w", w.providerName, err)
+		return nil, err
 	}
 
-	// Return models from config model_info (will have context_length, tags, etc.)
 	models := make([]ModelInfo, len(providerConfig.Models.ModelInfo))
 	for i, mi := range providerConfig.Models.ModelInfo {
 		models[i] = ModelInfo{
@@ -589,6 +599,111 @@ func (w *genericConfigListModelsWrapper) ListModels() ([]ModelInfo, error) {
 			ContextLength: mi.ContextLength,
 			Tags:          mi.Tags,
 		}
+	}
+	return models, nil
+}
+
+func (w *genericConfigListModelsWrapper) loadCustomProviderModels() ([]ModelInfo, error) {
+	data, err := os.ReadFile(customProviderFilePath(w.providerName))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load %s provider config: %w", w.providerName, err)
+	}
+
+	var providerConfig customProviderFile
+	if err := json.Unmarshal(data, &providerConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse %s provider config: %w", w.providerName, err)
+	}
+
+	models, err := fetchOpenAICompatibleModels(w.providerName, providerConfig.Endpoint, providerConfig.EnvVar, providerConfig.APIKey)
+	if err == nil && len(models) > 0 {
+		for i := range models {
+			models[i].Provider = w.providerName
+		}
+		return models, nil
+	}
+
+	if strings.TrimSpace(providerConfig.Model) != "" {
+		return []ModelInfo{{
+			ID:       strings.TrimSpace(providerConfig.Model),
+			Name:     strings.TrimSpace(providerConfig.Model),
+			Provider: w.providerName,
+		}}, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return nil, fmt.Errorf("no models available for provider %s", w.providerName)
+}
+
+func customProviderFilePath(providerName string) string {
+	configRoot := strings.TrimSpace(os.Getenv("LEDIT_CONFIG"))
+	if configRoot == "" {
+		xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
+		if xdgConfigHome != "" {
+			configRoot = filepath.Join(xdgConfigHome, "ledit")
+		} else if homeDir, err := os.UserHomeDir(); err == nil {
+			configRoot = filepath.Join(homeDir, ".ledit")
+		}
+	}
+	return filepath.Join(configRoot, "providers", providerName+".json")
+}
+
+func fetchOpenAICompatibleModels(providerName, endpoint, envVar, inlineAPIKey string) ([]ModelInfo, error) {
+	modelsEndpoint := strings.TrimSuffix(strings.TrimSpace(endpoint), "/chat/completions") + "/models"
+	req, err := http.NewRequest("GET", modelsEndpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	apiKey := strings.TrimSpace(inlineAPIKey)
+	if resolved, err := credentials.Resolve(strings.TrimSpace(providerName), strings.TrimSpace(envVar)); err == nil && strings.TrimSpace(resolved.Value) != "" {
+		apiKey = strings.TrimSpace(resolved.Value)
+	}
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("models endpoint returned HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var payload struct {
+		Data []struct {
+			ID            string   `json:"id"`
+			Name          string   `json:"name,omitempty"`
+			Description   string   `json:"description,omitempty"`
+			ContextLength int      `json:"context_length,omitempty"`
+			Tags          []string `json:"tags,omitempty"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+
+	models := make([]ModelInfo, 0, len(payload.Data))
+	for _, entry := range payload.Data {
+		id := strings.TrimSpace(entry.ID)
+		if id == "" {
+			continue
+		}
+		models = append(models, ModelInfo{
+			ID:            id,
+			Name:          strings.TrimSpace(entry.Name),
+			Description:   strings.TrimSpace(entry.Description),
+			Provider:      "",
+			ContextLength: entry.ContextLength,
+			Tags:          entry.Tags,
+		})
 	}
 	return models, nil
 }
@@ -612,4 +727,18 @@ func parseFloat(s string) (float64, error) {
 	// Remove any currency symbols and parse
 	cleaned := strings.TrimPrefix(s, "$")
 	return strconv.ParseFloat(cleaned, 64)
+}
+
+func resolveCredentialValue(provider, envVar string) (string, error) {
+	resolved, err := credentials.Resolve(provider, envVar)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(resolved.Value) == "" {
+		if strings.TrimSpace(envVar) != "" {
+			return "", fmt.Errorf("%s not set and no stored API key configured", envVar)
+		}
+		return "", fmt.Errorf("no stored API key configured for %s", provider)
+	}
+	return resolved.Value, nil
 }

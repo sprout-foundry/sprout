@@ -12,10 +12,10 @@ import (
 
 // Manager provides a unified interface for configuration management
 type Manager struct {
-	mu         sync.Mutex
-	config     *Config
-	apiKeys    *APIKeys
-	lastSaved  *Config // Track last saved state, not initial snapshot
+	mu        sync.Mutex
+	config    *Config
+	apiKeys   *APIKeys
+	lastSaved *Config // Track last saved state, not initial snapshot
 }
 
 // NewManager creates a new configuration manager
@@ -27,9 +27,9 @@ func NewManager() (*Manager, error) {
 	}
 
 	return &Manager{
-		config:     config,
-		apiKeys:    apiKeys,
-		lastSaved:  config, // Track last saved state as the base
+		config:    config,
+		apiKeys:   apiKeys,
+		lastSaved: config, // Track last saved state as the base
 	}, nil
 }
 
@@ -112,7 +112,7 @@ func (m *Manager) EnsureAPIKey(clientType api.ClientType) error {
 // HasAPIKey checks if a provider has an API key
 func (m *Manager) HasAPIKey(clientType api.ClientType) bool {
 	provider := mapClientTypeToString(clientType)
-	return m.apiKeys.HasAPIKey(provider)
+	return HasProviderCredential(provider, m.apiKeys)
 }
 
 // SelectNewProvider allows interactive provider selection
@@ -139,9 +139,14 @@ func (m *Manager) SelectNewProvider() (api.ClientType, error) {
 func (m *Manager) GetAvailableProviders() []api.ClientType {
 	providers := GetAvailableProviders(m.apiKeys)
 	result := []api.ClientType{}
+	seen := map[api.ClientType]struct{}{}
 
 	for _, p := range providers {
 		if ct, err := m.mapStringToClientType(p); err == nil {
+			if _, exists := seen[ct]; exists {
+				continue
+			}
+			seen[ct] = struct{}{}
 			result = append(result, ct)
 		}
 	}
@@ -149,7 +154,12 @@ func (m *Manager) GetAvailableProviders() []api.ClientType {
 	// Add custom providers
 	if m.config.CustomProviders != nil {
 		for name := range m.config.CustomProviders {
-			result = append(result, api.ClientType(name))
+			ct := api.ClientType(name)
+			if _, exists := seen[ct]; exists {
+				continue
+			}
+			seen[ct] = struct{}{}
+			result = append(result, ct)
 		}
 	}
 

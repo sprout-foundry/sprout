@@ -3,6 +3,9 @@ package providers
 import (
 	"encoding/json"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -275,6 +278,81 @@ func TestConvertMessagesDoesNotInjectReasoningEffort(t *testing.T) {
 	converted := provider.convertMessages(messages, "high")
 	if _, exists := converted[0]["reasoning_content"]; exists {
 		t.Fatalf("did not expect reasoning effort to be injected into message payload")
+	}
+}
+
+func TestGenericProviderAllowsEmptyDefaultModelAndDiscoversModelOnDemand(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/models":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"id":"discovered-model","context_length":64000}]}`))
+		case "/v1/chat/completions":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"resp","object":"chat.completion","created":1,"model":"discovered-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2,"estimated_cost":0}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	config := &ProviderConfig{
+		Name:     "dynamic-test",
+		Endpoint: server.URL + "/v1/chat/completions",
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{},
+		Models: ModelConfig{
+			DefaultContextLimit: 64000,
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "")
+	if err != nil {
+		t.Fatalf("expected provider to discover model and send request, got error: %v", err)
+	}
+
+	if provider.GetModel() != "discovered-model" {
+		t.Fatalf("expected discovered model to be selected, got %q", provider.GetModel())
+	}
+}
+
+func TestGenericProviderErrorsWhenNoModelConfiguredOrDiscoverable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/models" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[]}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	config := &ProviderConfig{
+		Name:     "dynamic-test",
+		Endpoint: server.URL + "/v1/chat/completions",
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{},
+		Models: ModelConfig{
+			DefaultContextLimit: 64000,
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "")
+	if err == nil {
+		t.Fatal("expected error when no model can be discovered")
+	}
+	if got := err.Error(); got == "" || !strings.Contains(got, "did not return any models") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

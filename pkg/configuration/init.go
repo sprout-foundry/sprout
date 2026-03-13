@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -69,7 +70,7 @@ func Initialize() (*Config, *APIKeys, error) {
 
 	// Check if we have any usable providers from environment variables
 	for _, provider := range getSupportedProviders() {
-		if provider.RequiresKey && apiKeys.HasAPIKey(provider.Name) {
+		if provider.RequiresKey && HasProviderCredential(provider.Name, apiKeys) {
 			// Found at least one usable provider
 			break
 		}
@@ -82,7 +83,7 @@ func Initialize() (*Config, *APIKeys, error) {
 	needsSetup := false
 	if !isFirstRun {
 		currentProvider := config.LastUsedProvider
-		if RequiresAPIKey(currentProvider) && !apiKeys.HasAPIKey(currentProvider) {
+		if RequiresAPIKey(currentProvider) && !HasProviderCredential(currentProvider, apiKeys) {
 			needsSetup = true
 			if !isCI {
 				fmt.Printf("⚠️  Current provider '%s' requires an API key but none is configured.\n", getProviderDisplayName(currentProvider))
@@ -98,10 +99,10 @@ func Initialize() (*Config, *APIKeys, error) {
 		}
 
 		// Set a default provider that works in CI
-		if apiKeys.HasAPIKey("openrouter") {
+		if HasProviderCredential("openrouter", apiKeys) {
 			config.LastUsedProvider = "openrouter"
 			fmt.Printf("✅ Using OpenRouter provider from environment\n")
-		} else if apiKeys.HasAPIKey("openai") {
+		} else if HasProviderCredential("openai", apiKeys) {
 			config.LastUsedProvider = "openai"
 			fmt.Printf("✅ Using OpenAI provider from environment\n")
 		} else {
@@ -190,7 +191,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 
 	// Check which providers have API keys already (from file)
 	for _, provider := range allProviders {
-		if !provider.RequiresKey || apiKeys.HasAPIKey(provider.Name) {
+		if !provider.RequiresKey || HasProviderCredential(provider.Name, apiKeys) {
 			providersWithKeys = append(providersWithKeys, provider.Name)
 		}
 	}
@@ -214,9 +215,9 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		status := ""
 		description := ""
 
-		if provider.RequiresKey && !apiKeys.HasAPIKey(provider.Name) {
+		if provider.RequiresKey && !HasProviderCredential(provider.Name, apiKeys) {
 			status = " (needs API key)"
-		} else if provider.RequiresKey && apiKeys.HasAPIKey(provider.Name) {
+		} else if provider.RequiresKey && HasProviderCredential(provider.Name, apiKeys) {
 			status = " ✅"
 		} else {
 			status = " (local, no key needed)"
@@ -253,7 +254,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	selectedProvider := allProviders[choice-1]
 
 	// Check if API key is needed
-	if selectedProvider.RequiresKey && !apiKeys.HasAPIKey(selectedProvider.Name) {
+	if selectedProvider.RequiresKey && !HasProviderCredential(selectedProvider.Name, apiKeys) {
 		fmt.Println()
 		fmt.Printf("📋 Setting up %s:\n", selectedProvider.FormattedName)
 
@@ -303,7 +304,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 		return nil
 	}
 
-	if apiKeys.HasAPIKey(provider) {
+	if HasProviderCredential(provider, apiKeys) {
 		return nil
 	}
 
@@ -387,6 +388,15 @@ func GetAvailableProviders(apiKeys *APIKeys) []string {
 		result = append(result, provider)
 	}
 
+	if cfg, err := Load(); err == nil {
+		for provider := range cfg.CustomProviders {
+			if !providerSet[provider] {
+				result = append(result, provider)
+			}
+		}
+	}
+	sort.Strings(result)
+
 	return result
 }
 
@@ -420,7 +430,7 @@ func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 		selectedProvider := available[choice-1]
 
 		// Check if this provider needs an API key but doesn't have one
-		if RequiresAPIKey(selectedProvider) && !apiKeys.HasAPIKey(selectedProvider) {
+		if RequiresAPIKey(selectedProvider) && !HasProviderCredential(selectedProvider, apiKeys) {
 			// Prompt for API key
 			err := EnsureProviderAPIKey(selectedProvider, apiKeys)
 			if err != nil {
@@ -449,7 +459,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 	for _, provider := range []string{
 		"openai", "openrouter", "deepinfra", "ollama-turbo", "lmstudio",
 	} {
-		if !apiKeys.HasAPIKey(provider) {
+		if !HasProviderCredential(provider, apiKeys) {
 			needsKey = append(needsKey, provider)
 		}
 	}
@@ -493,13 +503,20 @@ func validateProviderSetup(provider string, apiKeys *APIKeys) error {
 
 	// Check if provider requires API key
 	if RequiresAPIKey(provider) {
-		if !apiKeys.HasAPIKey(provider) {
+		if !HasProviderCredential(provider, apiKeys) {
 			return fmt.Errorf("provider '%s' requires an API key but none is configured", provider)
 		}
 
 		// Basic API key format validation - skip in CI/test environments
 		isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
-		key := apiKeys.GetAPIKey(provider)
+		resolved, err := ResolveProviderCredential(provider, apiKeys)
+		if err != nil {
+			return err
+		}
+		key := resolved.Value
+		if key == "" {
+			return nil
+		}
 
 		// In CI environments, accept test keys that start with "test"
 		if isCI && len(key) >= 4 && (key[:4] == "test" || key[:4] == "fake" || key[:4] == "mock") {

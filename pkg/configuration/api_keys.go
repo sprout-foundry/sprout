@@ -2,13 +2,12 @@ package configuration
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"syscall"
 
+	"github.com/alantheprice/ledit/pkg/credentials"
 	"golang.org/x/term"
 )
 
@@ -86,72 +85,39 @@ func getSupportedProviders() []ProviderAPIKey {
 
 // GetAPIKeysPath returns the full path to the API keys file
 func GetAPIKeysPath() (string, error) {
-	configDir, err := GetConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(configDir, APIKeysFileName), nil
+	return credentials.GetAPIKeysPath()
 }
 
 // LoadAPIKeys loads API keys from the file
 func LoadAPIKeys() (*APIKeys, error) {
-	apiKeysPath, err := GetAPIKeysPath()
+	store, err := credentials.Load()
 	if err != nil {
 		return nil, err
 	}
-
-	// If API keys file doesn't exist, create empty
-	if _, err := os.Stat(apiKeysPath); os.IsNotExist(err) {
-		return &APIKeys{}, nil
-	}
-
-	data, err := os.ReadFile(apiKeysPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read API keys file: %w", err)
-	}
-
-	var keys APIKeys
-	if err := json.Unmarshal(data, &keys); err != nil {
-		return nil, fmt.Errorf("failed to parse API keys file: %w", err)
-	}
-
+	keys := APIKeys(store)
 	return &keys, nil
 }
 
 // SaveAPIKeys saves API keys to file
 func SaveAPIKeys(keys *APIKeys) error {
-	apiKeysPath, err := GetAPIKeysPath()
-	if err != nil {
-		return err
+	if keys == nil {
+		empty := credentials.Store{}
+		return credentials.Save(empty)
 	}
-
-	data, err := json.MarshalIndent(keys, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal API keys: %w", err)
-	}
-
-	return os.WriteFile(apiKeysPath, data, 0600)
+	return credentials.Save(credentials.Store(*keys))
 }
 
 // PopulateFromEnvironment populates API keys from environment variables
-// This is called on startup to capture any keys set via environment
+// This is called on startup only to detect whether environment credentials are available.
 func (keys *APIKeys) PopulateFromEnvironment() bool {
-	updated := false
 	for _, provider := range getSupportedProviders() {
 		if provider.RequiresKey && provider.EnvVariableName != "" {
-			if envKey := os.Getenv(provider.EnvVariableName); envKey != "" && keys.GetAPIKey(provider.Name) == "" {
-				keys.SetAPIKey(provider.Name, envKey)
-				updated = true
+			if envKey := strings.TrimSpace(os.Getenv(provider.EnvVariableName)); envKey != "" {
+				return true
 			}
 		}
 	}
-	if updated {
-		// Save updated keys to file
-		if err := SaveAPIKeys(keys); err != nil {
-			fmt.Printf("Warning: failed to save API keys after populating from environment: %v\n", err)
-		}
-	}
-	return updated
+	return false
 }
 
 // GetAPIKey returns the API key for a provider
@@ -177,6 +143,18 @@ func (keys *APIKeys) HasAPIKey(provider string) bool {
 		return true
 	}
 	return false
+}
+
+func HasProviderCredential(provider string, apiKeys *APIKeys) bool {
+	metadata, _ := GetProviderAuthMetadata(provider)
+	if !metadata.RequiresAPIKey {
+		return true
+	}
+	resolved, err := ResolveProviderCredential(provider, apiKeys)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(resolved.Value) != ""
 }
 
 // PromptForAPIKey prompts the user for an API key with helpful guidance
@@ -236,6 +214,13 @@ func getProviderDisplayName(provider string) string {
 	for _, p := range getSupportedProviders() {
 		if p.Name == provider {
 			return p.FormattedName
+		}
+	}
+	if cfg, err := Load(); err == nil {
+		if custom, exists := cfg.CustomProviders[provider]; exists {
+			if custom.Name != "" {
+				return custom.Name
+			}
 		}
 	}
 	return provider

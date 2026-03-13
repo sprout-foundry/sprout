@@ -221,20 +221,23 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 		}
 	}
 
-	totalTokens := 0
-	for _, msg := range ollamaMessages {
-		totalTokens += c.estimateTokens(msg.Content)
-	}
+	// Use centralized token estimation for consistency with other providers
+	totalTokens := EstimateInputTokens(messages, tools)
 
 	// Derive conservative context/prediction sizing based on model limit
 	contextLimit, _ := c.GetModelContextLimit()
 	if contextLimit <= 0 {
 		contextLimit = 32000
 	}
-	// Keep headroom for generation but do not exceed limit
-	headroom := 4096
-	if headroom > contextLimit/2 {
-		headroom = contextLimit / 2
+
+	// Calculate num_ctx: the context window to allocate
+	// Use 10% headroom for generation, bounded reasonably
+	headroom := contextLimit / 10
+	if headroom < 2048 {
+		headroom = 2048
+	}
+	if headroom > 8192 {
+		headroom = 8192
 	}
 	numCtx := totalTokens + headroom
 	if numCtx > contextLimit {
@@ -247,10 +250,11 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 		}
 	}
 
-	// Compute safe prediction cap
-	numPredict := contextLimit - totalTokens - 512
-	if numPredict < 512 {
-		numPredict = 512
+	// Calculate safe prediction cap using centralized budget calculation
+	numPredict, ok := CalculateOutputBudget(contextLimit, totalTokens)
+	if !ok {
+		// Input exceeds context - use minimum and log warning
+		numPredict = MinOutputTokens
 	}
 	maxPredict := getOllamaMaxPredictCap(contextLimit)
 	if numPredict > maxPredict {
@@ -377,7 +381,7 @@ func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, re
 		promptTokens = lastMetrics.PromptEvalCount
 	}
 
-	completionTokens := c.estimateTokens(responseContent.String())
+	completionTokens := EstimateTokens(responseContent.String())
 	if lastMetrics.EvalCount > 0 {
 		completionTokens = lastMetrics.EvalCount
 	}
@@ -602,7 +606,7 @@ func (c *OllamaLocalClient) SendChatRequestStream(messages []Message, tools []To
 		promptTokens = lastMetrics.PromptEvalCount
 	}
 
-	completionTokens := c.estimateTokens(choice.Message.Content)
+	completionTokens := EstimateTokens(choice.Message.Content)
 	if lastMetrics.EvalCount > 0 {
 		completionTokens = lastMetrics.EvalCount
 	}
@@ -617,12 +621,6 @@ func (c *OllamaLocalClient) SendChatRequestStream(messages []Message, tools []To
 	}
 
 	return response, nil
-}
-
-// estimateTokens provides a rough token count estimate
-func (c *OllamaLocalClient) estimateTokens(text string) int {
-	// Rough approximation: 1 token ≈ 4 characters
-	return len(text) / 4
 }
 
 func convertToolsToOllamaTools(tools []Tool) ollama.Tools {

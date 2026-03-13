@@ -147,14 +147,9 @@ func BuildOpenAIToolsPayload(tools []api.Tool) []map[string]interface{} {
 
 // EstimateInputTokens provides a quick upper bound for prompt tokens based on
 // message lengths and attached tool metadata.
+// Delegates to the centralized implementation in agent_api for consistency.
 func EstimateInputTokens(messages []api.Message, tools []api.Tool) int {
-	inputTokens := 0
-	for _, msg := range messages {
-		inputTokens += len(msg.Content) / 4
-	}
-	inputTokens += len(tools) * 200
-	inputTokens += 500 // buffer for system instructions / formatting
-	return inputTokens
+	return api.EstimateInputTokens(messages, tools)
 }
 
 // CalculateMaxTokens returns an appropriate max_tokens value given the context
@@ -165,30 +160,29 @@ func CalculateMaxTokens(contextLimit int, messages []api.Message, tools []api.To
 }
 
 // CalculateMaxTokensWithLimits computes a token budget from context and optional completion caps.
+// Uses centralized token estimation for consistency across all providers.
 func CalculateMaxTokensWithLimits(contextLimit int, completionLimit int, messages []api.Message, tools []api.Tool) int {
 	if contextLimit == 0 {
 		contextLimit = 32000
 	}
 
-	inputTokens := 0
-	for _, msg := range messages {
-		inputTokens += len(msg.Content) / 4
-	}
-	inputTokens += len(tools) * 200
+	// Use centralized token estimation
+	inputTokens := api.EstimateInputTokens(messages, tools)
 
-	remaining := contextLimit - inputTokens
-buffer := (remaining * 2) / 100
-if buffer < 2000 {
-    buffer = 2000
-}
-maxOutput := contextLimit - inputTokens - buffer
-if maxOutput < 256 {
-    maxOutput = 256
-}
-if completionLimit > 0 && maxOutput > completionLimit {
-    maxOutput = completionLimit
-}
-requestCap := getMaxRequestCompletionTokensCap()
+	// Use centralized output budget calculation
+	maxOutput, ok := api.CalculateOutputBudget(contextLimit, inputTokens)
+	if !ok {
+		// Input exceeds context - return minimum
+		maxOutput = api.MinOutputTokens
+	}
+
+	// Apply completion limit if specified
+	if completionLimit > 0 && maxOutput > completionLimit {
+		maxOutput = completionLimit
+	}
+
+	// Apply request cap from environment
+	requestCap := getMaxRequestCompletionTokensCap()
 	if requestCap > 0 && maxOutput > requestCap {
 		maxOutput = requestCap
 	}

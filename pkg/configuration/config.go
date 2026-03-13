@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -383,6 +384,9 @@ func Load() (*Config, error) {
 		config.Skills = make(map[string]Skill)
 	}
 	mergeMissingDefaultSkills(&config)
+
+	// Discover project-specific skills from .ledit/skills/
+	discoverProjectSkills(&config)
 
 	// Set version if not present
 	if config.Version == "" {
@@ -807,6 +811,30 @@ func defaultSkills() map[string]Skill {
 			Enabled:     true,
 			Metadata:    map[string]string{"version": "1.0"},
 		},
+		"python-conventions": {
+			ID:          "python-conventions",
+			Name:        "Python Conventions",
+			Description: "Python 3.11+ coding conventions, best practices, and style guidelines. Use when writing or reviewing Python code.",
+			Path:        "pkg/agent/skills/python-conventions",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"typescript-conventions": {
+			ID:          "typescript-conventions",
+			Name:        "TypeScript Conventions",
+			Description: "TypeScript 5.x and JavaScript ES2022+ coding conventions, best practices, and style guidelines. Use when writing or reviewing TypeScript/JavaScript code.",
+			Path:        "pkg/agent/skills/typescript-conventions",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"rust-conventions": {
+			ID:          "rust-conventions",
+			Name:        "Rust Conventions",
+			Description: "Rust 2021 edition coding conventions, best practices, and style guidelines. Use when writing or reviewing Rust code.",
+			Path:        "pkg/agent/skills/rust-conventions",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
 	}
 }
 
@@ -823,6 +851,95 @@ func mergeMissingDefaultSkills(config *Config) {
 			config.Skills[id] = skill
 		}
 	}
+}
+
+// discoverProjectSkills scans the .ledit/skills/ directory for project-specific skills
+// and adds them to the config. This allows users to create custom skills without
+// modifying the global config.
+func discoverProjectSkills(config *Config) {
+	if config == nil {
+		return
+	}
+	if config.Skills == nil {
+		config.Skills = make(map[string]Skill)
+	}
+
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	// Check for .ledit/skills directory
+	skillsDir := filepath.Join(cwd, ".ledit", "skills")
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		return // No project skills directory, that's fine
+	}
+
+	// Scan for skill directories
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		skillID := entry.Name()
+		skillFile := filepath.Join(skillsDir, skillID, "SKILL.md")
+
+		// Check if SKILL.md exists
+		if _, err := os.Stat(skillFile); err != nil {
+			continue
+		}
+
+		// Read skill file to extract metadata
+		content, err := os.ReadFile(skillFile)
+		if err != nil {
+			continue
+		}
+
+		// Parse front matter
+		name, description := parseSkillFrontMatter(string(content))
+		if name == "" {
+			name = skillID
+		}
+		if description == "" {
+			description = fmt.Sprintf("Project-specific skill: %s", skillID)
+		}
+
+		// Add to config (don't override if already exists)
+		if _, exists := config.Skills[skillID]; !exists {
+			config.Skills[skillID] = Skill{
+				ID:          skillID,
+				Name:        name,
+				Description: description,
+				Path:        filepath.Join(".ledit", "skills", skillID),
+				Enabled:     true,
+				Metadata:    map[string]string{"source": "project"},
+			}
+		}
+	}
+}
+
+// parseSkillFrontMatter extracts name and description from SKILL.md front matter
+func parseSkillFrontMatter(content string) (name, description string) {
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	inFrontMatter := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "---" {
+			inFrontMatter = !inFrontMatter
+			continue
+		}
+		if inFrontMatter {
+			if strings.HasPrefix(line, "name:") {
+				name = strings.TrimSpace(strings.TrimPrefix(line, "name:"))
+			} else if strings.HasPrefix(line, "description:") {
+				description = strings.TrimSpace(strings.TrimPrefix(line, "description:"))
+			}
+		}
+	}
+	return name, description
 }
 
 func normalizePersonaID(raw string) string {

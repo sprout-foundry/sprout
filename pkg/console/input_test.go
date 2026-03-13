@@ -254,3 +254,66 @@ func TestShouldStartHeuristicPaste(t *testing.T) {
 		})
 	}
 }
+
+func TestEscapeParserBracketedPasteMarkers(t *testing.T) {
+	ep := NewEscapeParser()
+
+	// ESC [ 200 ~ => paste start
+	var event *InputEvent
+	for _, b := range []byte{27, '[', '2', '0', '0', '~'} {
+		event = ep.Parse(b)
+	}
+	if event == nil || event.Type != EventPasteStart {
+		t.Fatalf("expected EventPasteStart, got %v", event)
+	}
+
+	// ESC [ 201 ~ => paste end
+	for _, b := range []byte{27, '[', '2', '0', '1', '~'} {
+		event = ep.Parse(b)
+	}
+	if event == nil || event.Type != EventPasteEnd {
+		t.Fatalf("expected EventPasteEnd, got %v", event)
+	}
+}
+
+func TestConsumeBracketedPasteByteCollectsMultiline(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.bracketedPaste = true
+
+	input := []byte("line1\r\nline2\x1b[201~")
+	ended := false
+	for _, b := range input {
+		if ir.consumeBracketedPasteByte(b) {
+			ended = true
+			break
+		}
+	}
+	if !ended {
+		t.Fatal("expected bracketed paste to end")
+	}
+
+	if got := ir.pasteBuffer.String(); got != "line1\nline2" {
+		t.Fatalf("unexpected pasted content: %q", got)
+	}
+}
+
+func TestConsumeBracketedPasteBytePreservesUTF8(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.bracketedPaste = true
+
+	input := append([]byte("caf\xc3\xa9 日本語"), []byte("\x1b[201~")...)
+	ended := false
+	for _, b := range input {
+		if ir.consumeBracketedPasteByte(b) {
+			ended = true
+			break
+		}
+	}
+	if !ended {
+		t.Fatal("expected bracketed paste to end")
+	}
+
+	if got := ir.pasteBuffer.String(); got != "café 日本語" {
+		t.Fatalf("unexpected pasted UTF-8 content: %q", got)
+	}
+}

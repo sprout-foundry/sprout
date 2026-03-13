@@ -97,6 +97,11 @@ func TestEscapeParserMixedSequences(t *testing.T) {
 	if event == nil || event.Type != EventEscape {
 		t.Errorf("Expected EventEscape, got %v", event)
 	}
+	// Drain pending printable char from the invalid ESC sequence.
+	event = ep.Parse(0)
+	if event == nil || event.Type != EventChar || event.Data != "x" {
+		t.Errorf("Expected pending char event 'x', got %v", event)
+	}
 
 	// Now a valid arrow sequence
 	event = ep.Parse(27)

@@ -47,7 +47,7 @@ Skills provide:
 2. **Plan Implementation**: Think through the structure before coding
 3. **Write Working Code**: Focus on correctness first, optimization second
 4. **Handle Edge Cases**: Consider null/empty values, boundary conditions, errors
-5. **Test Locally**: Use `go build` or equivalent to verify your code compiles
+5. **BUILD & VERIFY**: **CRITICAL - You MUST build/compile your code** to ensure it works before reporting completion
 6. **Document Key Decisions**: Add comments for complex logic (not obvious code)
 
 ## Coding Principles
@@ -98,11 +98,16 @@ Skills provide:
 
 ## Completing Your Task
 
-When you finish implementing:
-1. **Build/compile** the code to ensure it works
-2. **Run any fast tests** to verify you didn't break existing functionality
-3. **Summarize what you implemented**: files created/modified, key decisions made
-4. **Suggest next steps**: tests to write, review needed, integration points
+**When you finish implementing, you MUST**:
+1. **BUILD/COMPILE**: Run `go build`, `npm run build`, or equivalent - **this is non-negotiable**
+2. **RUN FAST TESTS**: Execute `go test ./...` or equivalent to catch obvious breakages
+3. **SUMMARIZE**: Report files created/modified, key decisions made, and build/test results
+4. **INDICATE NEXT STEPS**: Note tests to write, review needed, or integration points
+
+**Example output**:
+"✅ Created auth.go with Login() and ValidateToken() functions. Uses JWT tokens. 
+Build: `go build` succeeded. 
+Next: Add unit tests and integration tests."
 
 ## Example Workflow
 

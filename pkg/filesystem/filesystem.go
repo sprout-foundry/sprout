@@ -42,7 +42,7 @@ func SaveFile(filename, content string) error {
 	if content == "" {
 		if _, err := os.Stat(filename); err == nil {
 			// File exists, remove it
-			fmt.Printf("🗑️  Removing file: %s\n", filename)
+			fmt.Printf("\n🗑️  Removing file: %s\n", filename)
 			return os.Remove(filename)
 		} else if os.IsNotExist(err) {
 			// File does not exist, nothing to do
@@ -54,7 +54,7 @@ func SaveFile(filename, content string) error {
 	}
 
 	// Notify user about file being written
-	fmt.Printf("💾 Writing file: %s (%d bytes)\n", filename, len(content))
+	fmt.Printf("\n💾 Writing file: %s (%d bytes)\n", filename, len(content))
 
 	// Ensure the directory exists
 	dir := filepath.Dir(filename)

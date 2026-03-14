@@ -32,14 +32,16 @@ type TerminalSession struct {
 
 // TerminalManager manages terminal sessions
 type TerminalManager struct {
-	sessions map[string]*TerminalSession
-	mutex    sync.RWMutex
+	sessions      map[string]*TerminalSession
+	mutex         sync.RWMutex
+	workspaceRoot string
 }
 
 // NewTerminalManager creates a new terminal manager
-func NewTerminalManager() *TerminalManager {
+func NewTerminalManager(workspaceRoot string) *TerminalManager {
 	return &TerminalManager{
-		sessions: make(map[string]*TerminalSession),
+		sessions:      make(map[string]*TerminalSession),
+		workspaceRoot: workspaceRoot,
 	}
 }
 
@@ -82,6 +84,9 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 
 	// Setup command with interactive shell
 	cmd := exec.CommandContext(ctx, shell, shellArgs...)
+	if strings.TrimSpace(tm.workspaceRoot) != "" {
+		cmd.Dir = tm.workspaceRoot
+	}
 
 	// Set environment variables for better terminal experience
 	cmd.Env = append(os.Environ(),
@@ -132,6 +137,9 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 	cmd := exec.Command("cmd")
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd = exec.CommandContext(ctx, cmd.Path)
+	if strings.TrimSpace(tm.workspaceRoot) != "" {
+		cmd.Dir = tm.workspaceRoot
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -192,29 +200,38 @@ func (tm *TerminalManager) ExecuteCommand(sessionID, command string) error {
 		return fmt.Errorf("session %s is not active", sessionID)
 	}
 
-	// Add to history (without newline) for normal commands only.
-	cleanCommand := strings.TrimSuffix(command, "\n")
+	// Add to history (without the trailing enter key) for normal commands only.
+	cleanCommand := strings.TrimRight(command, "\r\n")
 	controlOnly := isControlOnlyCommand(cleanCommand)
 	if !controlOnly {
-		tm.AddToHistory(sessionID, cleanCommand)
+		// Trim whitespace and skip empty commands.
+		trimmedCommand := strings.TrimSpace(cleanCommand)
+		if trimmedCommand != "" {
+			// Avoid consecutive duplicates.
+			if len(session.History) == 0 || session.History[len(session.History)-1] != trimmedCommand {
+				session.History = append(session.History, trimmedCommand)
+				if len(session.History) > 1000 {
+					session.History = session.History[1:]
+				}
+			}
+			session.HistoryIndex = len(session.History)
+		}
 	}
 
-	// Add newline for standard shell commands. Control-only input (for example Ctrl+C)
-	// should be forwarded as-is.
-	if !controlOnly && !strings.HasSuffix(command, "\n") {
-		command += "\n"
+	// PTY terminals expect carriage return for Enter. Control-only input
+	// (for example Ctrl+C) should be forwarded as-is.
+	if !controlOnly && !strings.HasSuffix(command, "\r") {
+		command += "\r"
 	}
 
 	// Write command to PTY
 	if session.Pty != nil {
 		fmt.Printf("Terminal %s: Writing command: %q\n", sessionID, command)
-		n, err := session.Pty.WriteString(command)
+		n, err := session.Pty.Write([]byte(command))
 		fmt.Printf("Terminal %s: Wrote %d bytes, err: %v\n", sessionID, n, err)
 		if err != nil {
 			return fmt.Errorf("failed to write command to PTY: %w", err)
 		}
-		// Flush to ensure command is sent
-		session.Pty.Sync()
 	} else {
 		// Fallback for systems without PTY
 		return fmt.Errorf("no PTY available for session %s", sessionID)

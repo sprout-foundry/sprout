@@ -245,7 +245,7 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 	fmt.Printf("✅ Provider switched to: %s\n", getProviderDisplayName(provider))
 	fmt.Printf("🤖 Using model: %s\n", model)
 	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {
-		fmt.Printf("ℹ️  %s\n", note)
+		fmt.Printf("\nℹ️  %s\n", note)
 	}
 
 	return nil
@@ -264,7 +264,7 @@ func selectModelFromList(models []api.ModelInfo, preferredModel string) (string,
 		}
 	}
 
-	fmt.Printf("⚠️  Preferred model '%s' not found.\n", preferredModel)
+	fmt.Printf("\n⚠️  Preferred model '%s' not found.\n", preferredModel)
 	fmt.Println("Available models:")
 	for i, model := range models {
 		fmt.Printf("  %d) %s\n", i+1, model.ID)

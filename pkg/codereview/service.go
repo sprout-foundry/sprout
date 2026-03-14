@@ -551,14 +551,25 @@ func (s *CodeReviewService) prepareReviewContextForPrompt(ctx *ReviewContext) *R
 	}
 
 	promptBudget := s.reviewPromptByteBudget(&prepared)
-	prompt := s.buildEnhancedReviewPrompt(&prepared, false)
+	promptDirty := true
+	prompt := ""
+	rebuildPrompt := func() string {
+		if promptDirty {
+			prompt = s.buildEnhancedReviewPrompt(&prepared, false)
+			promptDirty = false
+		}
+		return prompt
+	}
+
+	prompt = rebuildPrompt()
 	if len(prompt) <= promptBudget {
 		return &prepared
 	}
 
 	if prepared.FullFileContext != "" {
 		prepared.FullFileContext = ""
-		prompt = s.buildEnhancedReviewPrompt(&prepared, false)
+		promptDirty = true
+		prompt = rebuildPrompt()
 	}
 
 	if len(prompt) <= promptBudget {
@@ -567,7 +578,8 @@ func (s *CodeReviewService) prepareReviewContextForPrompt(ctx *ReviewContext) *R
 
 	if len(prepared.RelatedFiles) > 0 {
 		prepared.RelatedFiles = nil
-		prompt = s.buildEnhancedReviewPrompt(&prepared, false)
+		promptDirty = true
+		prompt = rebuildPrompt()
 	}
 
 	if len(prompt) <= promptBudget {
@@ -579,7 +591,8 @@ func (s *CodeReviewService) prepareReviewContextForPrompt(ctx *ReviewContext) *R
 	prepared.CommitMessage = truncateForPromptSection(prepared.CommitMessage, 4*1024, "commit message")
 	prepared.OriginalPrompt = truncateForPromptSection(prepared.OriginalPrompt, 4*1024, "original request")
 	prepared.ProcessedInstructions = truncateForPromptSection(prepared.ProcessedInstructions, 4*1024, "processed instructions")
-	prompt = s.buildEnhancedReviewPrompt(&prepared, false)
+	promptDirty = true
+	prompt = rebuildPrompt()
 
 	if len(prompt) <= promptBudget {
 		return &prepared

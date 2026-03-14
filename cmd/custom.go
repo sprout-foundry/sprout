@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
@@ -122,13 +123,18 @@ func runCustomModelAdd() error {
 			fmt.Printf("  ... and %d more\n", len(models)-maxShow)
 		}
 
-		preferred, err := promptLine(reader, "Preferred default model (leave empty to auto-select later): ")
-		if err != nil {
-			return err
-		}
-		provider.ModelName = strings.TrimSpace(preferred)
-		if provider.ModelName == "" && len(models) > 0 {
-			provider.ModelName = models[0].ID
+		for {
+			preferred, err := promptLine(reader, "Preferred default model (name or number, leave empty for first discovered): ")
+			if err != nil {
+				return err
+			}
+			selectedModel, err := resolvePreferredCustomProviderModel(preferred, models)
+			if err != nil {
+				fmt.Printf("⚠️  %v\n", err)
+				continue
+			}
+			provider.ModelName = selectedModel
+			break
 		}
 	}
 
@@ -299,6 +305,31 @@ func containsString(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func resolvePreferredCustomProviderModel(input string, models []configuration.ProviderDiscoveryModel) (string, error) {
+	trimmed := strings.TrimSpace(input)
+	if len(models) == 0 {
+		return trimmed, nil
+	}
+	if trimmed == "" {
+		return models[0].ID, nil
+	}
+
+	if selectedIndex, err := strconv.Atoi(trimmed); err == nil {
+		if selectedIndex < 1 || selectedIndex > len(models) {
+			return "", fmt.Errorf("model selection %d is out of range", selectedIndex)
+		}
+		return models[selectedIndex-1].ID, nil
+	}
+
+	for _, model := range models {
+		if strings.EqualFold(model.ID, trimmed) {
+			return model.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("model %q was not found in the discovered model list", trimmed)
 }
 
 func removeString(values []string, target string) []string {

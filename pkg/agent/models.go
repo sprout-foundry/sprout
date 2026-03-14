@@ -129,6 +129,7 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 func (a *Agent) SetProvider(provider api.ClientType) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
+	availableModels, _ := a.getModelsForProvider(provider)
 
 	// Get the configured model for this provider
 	model := a.configManager.GetModelForProvider(provider)
@@ -141,10 +142,9 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 			}
 		} else {
 			// If no factory default, try to get the first available model from the provider API
-			models, err := api.GetModelsForProvider(provider)
-			if err == nil && len(models) > 0 {
+			if len(availableModels) > 0 {
 				// Find a suitable default model
-				model = a.selectDefaultModel(models, provider)
+				model = a.selectDefaultModel(availableModels, provider)
 				if a.debug {
 					a.debugLog("🔍 Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
 				}
@@ -153,6 +153,15 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 				return fmt.Errorf("no models available from provider %v - please specify a model explicitly", api.GetProviderName(provider))
 			}
 		}
+	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
+		model = resolvedModel
+	} else if len(availableModels) > 0 {
+		fallbackModel := a.selectDefaultModel(availableModels, provider)
+		if fallbackModel == "" {
+			fallbackModel = availableModels[0].ID
+		}
+		fmt.Fprintf(os.Stderr, "ℹ️  Configured model %s is not available for %s. Using %s.\n", model, api.GetProviderName(provider), fallbackModel)
+		model = fallbackModel
 	}
 
 	// Create a new client with the specified provider
@@ -199,6 +208,19 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	}
 
 	return nil
+}
+
+func resolveModelIDForProvider(model string, models []api.ModelInfo) (string, bool) {
+	trimmed := strings.TrimSpace(model)
+	if trimmed == "" {
+		return "", false
+	}
+	for _, candidate := range models {
+		if strings.EqualFold(strings.TrimSpace(candidate.ID), trimmed) {
+			return candidate.ID, true
+		}
+	}
+	return "", false
 }
 
 // SetModel changes the current model and persists the choice

@@ -17,6 +17,7 @@ import (
 const (
 	scopedSessionsDirName = "scoped"
 	legacySessionPrefix   = "session_"
+	sessionRetentionLimit = 20
 )
 
 // Reset to default when running tests (helps with parallel test safety)
@@ -274,8 +275,14 @@ func (a *Agent) LoadStateScoped(sessionID, workingDir string) (*ConversationStat
 	return LoadStateWithoutAgentScoped(sessionID, workingDir)
 }
 
-// ListSessionsWithTimestamps returns all available session IDs with their last updated timestamps
+// ListSessionsWithTimestamps returns sessions for the current working directory scope.
 func ListSessionsWithTimestamps() ([]SessionInfo, error) {
+	workingDir, _ := os.Getwd()
+	return ListSessionsWithTimestampsScoped(workingDir)
+}
+
+// ListAllSessionsWithTimestamps returns all available sessions across all scopes.
+func ListAllSessionsWithTimestamps() ([]SessionInfo, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
 		return nil, err
@@ -289,39 +296,10 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 		if d.IsDir() || filepath.Ext(d.Name()) != ".json" {
 			return nil
 		}
-		fileInfo, err := d.Info()
-		if err != nil {
-			return nil
+		session, ok := readSessionInfo(path, d)
+		if ok {
+			sessions = append(sessions, session)
 		}
-
-		lastUpdated := fileInfo.ModTime()
-		name := ""
-		workingDir := ""
-		sessionID := strings.TrimSuffix(d.Name(), ".json")
-		if strings.HasPrefix(sessionID, legacySessionPrefix) {
-			sessionID = strings.TrimPrefix(sessionID, legacySessionPrefix)
-		}
-		if data, err := os.ReadFile(path); err == nil {
-			var state ConversationState
-			if err := json.Unmarshal(data, &state); err == nil {
-				if !state.LastUpdated.IsZero() {
-					lastUpdated = state.LastUpdated
-				}
-				name = state.Name
-				workingDir = state.WorkingDirectory
-				if strings.TrimSpace(state.SessionID) != "" {
-					sessionID = strings.TrimSpace(state.SessionID)
-				}
-			}
-		}
-
-		sessions = append(sessions, SessionInfo{
-			SessionID:        sessionID,
-			LastUpdated:      lastUpdated,
-			Name:             name,
-			WorkingDirectory: workingDir,
-			StoragePath:      path,
-		})
 		return nil
 	})
 	if walkErr != nil {
@@ -347,6 +325,44 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 	return sessions, nil
 }
 
+// ListSessionsWithTimestampsScoped returns sessions only for the given working directory scope.
+func ListSessionsWithTimestampsScoped(workingDir string) ([]SessionInfo, error) {
+	stateDir, err := GetStateDir()
+	if err != nil {
+		return nil, err
+	}
+	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
+	if err != nil {
+		return nil, err
+	}
+
+	sessionFiles, err := listSessionFilesForScope(stateDir, cleanWorkingDir)
+	if err != nil {
+		return nil, err
+	}
+
+	sessions := make([]SessionInfo, 0, len(sessionFiles))
+	for _, path := range sessionFiles {
+		entry, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		session, ok := readSessionInfo(path, fileInfoDirEntry{FileInfo: entry})
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(session.WorkingDirectory) != cleanWorkingDir {
+			continue
+		}
+		sessions = append(sessions, session)
+	}
+
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].LastUpdated.After(sessions[j].LastUpdated)
+	})
+	return sessions, nil
+}
+
 // SessionInfo represents session information with timestamp
 type SessionInfo struct {
 	SessionID        string    `json:"session_id"`
@@ -354,6 +370,84 @@ type SessionInfo struct {
 	Name             string    `json:"name"`              // Human-readable session name
 	WorkingDirectory string    `json:"working_directory"` // Directory where session was created
 	StoragePath      string    `json:"storage_path,omitempty"`
+}
+
+type fileInfoDirEntry struct {
+	os.FileInfo
+}
+
+func (f fileInfoDirEntry) Type() os.FileMode          { return f.Mode().Type() }
+func (f fileInfoDirEntry) Info() (os.FileInfo, error) { return f.FileInfo, nil }
+
+func readSessionInfo(path string, d os.DirEntry) (SessionInfo, bool) {
+	fileInfo, err := d.Info()
+	if err != nil {
+		return SessionInfo{}, false
+	}
+
+	lastUpdated := fileInfo.ModTime()
+	name := ""
+	workingDir := ""
+	sessionID := strings.TrimSuffix(d.Name(), ".json")
+	if strings.HasPrefix(sessionID, legacySessionPrefix) {
+		sessionID = strings.TrimPrefix(sessionID, legacySessionPrefix)
+	}
+	if data, err := os.ReadFile(path); err == nil {
+		var state ConversationState
+		if err := json.Unmarshal(data, &state); err == nil {
+			if !state.LastUpdated.IsZero() {
+				lastUpdated = state.LastUpdated
+			}
+			name = state.Name
+			if strings.TrimSpace(state.WorkingDirectory) != "" {
+				normalizedWorkingDir, normErr := normalizeWorkingDirectory(state.WorkingDirectory)
+				if normErr == nil {
+					workingDir = normalizedWorkingDir
+				}
+			}
+			if strings.TrimSpace(state.SessionID) != "" {
+				sessionID = strings.TrimSpace(state.SessionID)
+			}
+		}
+	}
+
+	return SessionInfo{
+		SessionID:        sessionID,
+		LastUpdated:      lastUpdated,
+		Name:             name,
+		WorkingDirectory: workingDir,
+		StoragePath:      path,
+	}, true
+}
+
+func listSessionFilesForScope(stateDir, workingDir string) ([]string, error) {
+	scopeDir := filepath.Join(stateDir, scopedSessionsDirName, workingDirectoryScopeHash(workingDir))
+	files := make([]string, 0, 16)
+
+	if entries, err := os.ReadDir(scopeDir); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+				continue
+			}
+			files = append(files, filepath.Join(scopeDir, entry.Name()))
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to read scoped session directory: %w", err)
+	}
+
+	// Include any legacy root sessions that explicitly recorded the same working directory.
+	if entries, err := os.ReadDir(stateDir); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+				continue
+			}
+			files = append(files, filepath.Join(stateDir, entry.Name()))
+		}
+	} else {
+		return nil, fmt.Errorf("failed to read session root directory: %w", err)
+	}
+
+	return files, nil
 }
 
 // GetSessionPreview returns the first 50 characters of the first user message
@@ -607,14 +701,18 @@ func (a *Agent) GetLastMessages(n int) []api.Message {
 	return a.messages[start:]
 }
 
-// cleanupMemorySessions removes old sessions, keeping only the last 20
+// cleanupMemorySessions removes old sessions for the current working directory scope.
 func cleanupMemorySessions() error {
-	sessions, err := ListSessionsWithTimestamps()
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to resolve current working directory for session cleanup: %w", err)
+	}
+	sessions, err := ListSessionsWithTimestampsScoped(workingDir)
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %w", err)
 	}
 
-	if len(sessions) <= 20 {
+	if len(sessions) <= sessionRetentionLimit {
 		return nil // No cleanup needed
 	}
 
@@ -623,9 +721,9 @@ func cleanupMemorySessions() error {
 		return sessions[i].LastUpdated.Before(sessions[j].LastUpdated)
 	})
 
-	// Delete oldest sessions beyond the 20 most recent
-	for i := 0; i < len(sessions)-20; i++ {
-		if err := DeleteSession(sessions[i].SessionID); err != nil {
+	// Delete oldest sessions beyond the retention limit for this directory scope.
+	for i := 0; i < len(sessions)-sessionRetentionLimit; i++ {
+		if err := DeleteSessionScoped(sessions[i].SessionID, sessions[i].WorkingDirectory); err != nil {
 			return fmt.Errorf("failed to delete session %s: %w", sessions[i].SessionID, err)
 		}
 	}

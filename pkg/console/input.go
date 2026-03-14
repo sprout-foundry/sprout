@@ -142,14 +142,17 @@ func (ir *InputReader) ReadLine() (string, error) {
 	buf := make([]byte, 32)
 
 	// Set stdin to non-blocking for paste detection
+	nonBlocking := true
 	if err := setNonblock(ir.termFd, true); err != nil {
-		// Fall back to blocking mode if non-blocking fails
-		term.Restore(ir.termFd, oldState)
-		return ir.fallbackReadLine()
+		// Some terminals/PTYs reject non-blocking mode. Keep raw mode enabled and
+		// continue with blocking reads so arrow keys/history still work.
+		nonBlocking = false
 	}
-	defer func() {
-		_ = setNonblock(ir.termFd, false)
-	}()
+	if nonBlocking {
+		defer func() {
+			_ = setNonblock(ir.termFd, false)
+		}()
+	}
 
 	for {
 		n, err := os.Stdin.Read(buf)
@@ -164,7 +167,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 				errStr == "EAGAIN" ||
 				errStr == "EWOULDBLOCK"
 
-			if isNoData {
+			if nonBlocking && isNoData {
 				// Check if paste timer should fire
 				if ir.pasteActive && time.Since(ir.lastCharTime) > 100*time.Millisecond {
 					// Paste detected - process it
@@ -182,7 +185,9 @@ func (ir *InputReader) ReadLine() (string, error) {
 
 		if n == 0 {
 			// In non-blocking mode, this means no data
-			time.Sleep(10 * time.Millisecond)
+			if nonBlocking {
+				time.Sleep(10 * time.Millisecond)
+			}
 			continue
 		}
 

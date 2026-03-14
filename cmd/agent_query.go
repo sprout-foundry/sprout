@@ -347,16 +347,27 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		}
 
 		// Publish query completed event
-		eventBus.Publish(events.EventTypeQueryCompleted, events.QueryCompletedEvent(
+		completedEvent := events.QueryCompletedEvent(
 			query,
 			res.response,
 			chatAgent.GetCurrentContextTokens(),
 			chatAgent.GetTotalCost(),
 			duration,
-		))
+		)
+		if reason := chatAgent.GetLastRunTerminationReason(); reason != "" {
+			completedEvent["status"] = reason
+		}
+		eventBus.Publish(events.EventTypeQueryCompleted, completedEvent)
 
-		// Print completion message without automatic summary (use /stats to see summary)
-		fmt.Printf("✅ Completed in %s\n", FormatDuration(duration))
+		switch chatAgent.GetLastRunTerminationReason() {
+		case agent.RunTerminationMaxIterations:
+			fmt.Printf("⚠️ Reached max iterations (%d) in %s\n", chatAgent.GetMaxIterations(), FormatDuration(duration))
+		case agent.RunTerminationInterrupted:
+			fmt.Printf("⏹️ Stopped in %s\n", FormatDuration(duration))
+		default:
+			// Print completion message without automatic summary (use /stats to see summary)
+			fmt.Printf("✅ Completed in %s\n", FormatDuration(duration))
+		}
 
 		return nil
 

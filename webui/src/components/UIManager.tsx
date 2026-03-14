@@ -14,7 +14,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
     isOpen: boolean;
     items: DropdownItem[];
     options: UIDropdownOptions;
-    resolve?: (value: any) => void;
+    promptId?: string;
   }>({
     isOpen: false,
     items: [],
@@ -26,12 +26,25 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
     prompt: string;
     options: UIQuickOption[];
     horizontal: boolean;
-    resolve?: (value: any) => void;
+    promptId?: string;
   }>({
     isOpen: false,
     prompt: '',
     options: [],
     horizontal: true
+  });
+
+  const [inputPromptState, setInputPromptState] = useState<{
+    isOpen: boolean;
+    prompt: string;
+    value: string;
+    mask: boolean;
+    promptId?: string;
+  }>({
+    isOpen: false,
+    prompt: '',
+    value: '',
+    mask: false
   });
 
   const [progressItems, setProgressItems] = useState<Map<string, {
@@ -71,14 +84,7 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
         isOpen: true,
         items: convertedItems,
         options: options || { prompt },
-        resolve: (selected) => {
-          uiService.respondToPrompt({
-            id,
-            type: 'dropdown',
-            selected,
-            cancelled: false
-          });
-        }
+        promptId: id
       });
     };
 
@@ -90,27 +96,35 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
         prompt,
         options: options || [],
         horizontal: horizontal !== false,
-        resolve: (selected) => {
-          uiService.respondToPrompt({
-            id,
-            type: 'quick_prompt',
-            selected,
-            cancelled: false
-          });
-        }
+        promptId: id
+      });
+    };
+
+    const handleInputPrompt = (event: CustomEvent) => {
+      const { id, prompt, default_value: defaultValue, mask } = event.detail;
+      setInputPromptState({
+        isOpen: true,
+        prompt,
+        value: defaultValue || '',
+        mask: Boolean(mask),
+        promptId: id
       });
     };
 
     const handleProgressStart = (event: CustomEvent) => {
       const { id, message, current = 0, total = 0 } = event.detail;
 
-      setProgressItems(prev => new Map(prev.set(id, {
-        message,
-        current,
-        total,
-        done: false,
-        startTime: Date.now()
-      })));
+      setProgressItems(prev => {
+        const next = new Map(prev);
+        next.set(id, {
+          message,
+          current,
+          total,
+          done: false,
+          startTime: Date.now()
+        });
+        return next;
+      });
     };
 
     const handleProgressUpdate = (event: CustomEvent) => {
@@ -136,37 +150,86 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
 
     document.addEventListener('ui:show_dropdown', handleDropdown as EventListener);
     document.addEventListener('ui:show_quick_prompt', handleQuickPrompt as EventListener);
+    document.addEventListener('ui:show_input', handleInputPrompt as EventListener);
     document.addEventListener('ui:progress_start', handleProgressStart as EventListener);
     document.addEventListener('ui:progress_update', handleProgressUpdate as EventListener);
 
     return () => {
       document.removeEventListener('ui:show_dropdown', handleDropdown as EventListener);
       document.removeEventListener('ui:show_quick_prompt', handleQuickPrompt as EventListener);
+      document.removeEventListener('ui:show_input', handleInputPrompt as EventListener);
       document.removeEventListener('ui:progress_start', handleProgressStart as EventListener);
       document.removeEventListener('ui:progress_update', handleProgressUpdate as EventListener);
     };
   }, []);
 
   const handleDropdownSelect = (item: DropdownItem) => {
-    if (dropdownState.resolve) {
-      dropdownState.resolve(item.value);
+    if (dropdownState.promptId) {
+      uiService.respondToPrompt({
+        id: dropdownState.promptId,
+        type: 'dropdown',
+        selected: item.value,
+        cancelled: false
+      });
     }
-    setDropdownState(prev => ({ ...prev, isOpen: false }));
+    setDropdownState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
   const handleDropdownCancel = () => {
-    setDropdownState(prev => ({ ...prev, isOpen: false }));
+    if (dropdownState.promptId) {
+      uiService.respondToPrompt({
+        id: dropdownState.promptId,
+        type: 'dropdown',
+        cancelled: true
+      });
+    }
+    setDropdownState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
   const handleQuickPromptSelect = (option: UIQuickOption) => {
-    if (quickPromptState.resolve) {
-      quickPromptState.resolve(option.value);
+    if (quickPromptState.promptId) {
+      uiService.respondToPrompt({
+        id: quickPromptState.promptId,
+        type: 'quick_prompt',
+        selected: option.value,
+        cancelled: false
+      });
     }
-    setQuickPromptState(prev => ({ ...prev, isOpen: false }));
+    setQuickPromptState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
   const handleQuickPromptCancel = () => {
-    setQuickPromptState(prev => ({ ...prev, isOpen: false }));
+    if (quickPromptState.promptId) {
+      uiService.respondToPrompt({
+        id: quickPromptState.promptId,
+        type: 'quick_prompt',
+        cancelled: true
+      });
+    }
+    setQuickPromptState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
+  };
+
+  const handleInputPromptSubmit = () => {
+    if (inputPromptState.promptId) {
+      uiService.respondToPrompt({
+        id: inputPromptState.promptId,
+        type: 'input',
+        value: inputPromptState.value,
+        cancelled: false
+      });
+    }
+    setInputPromptState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
+  };
+
+  const handleInputPromptCancel = () => {
+    if (inputPromptState.promptId) {
+      uiService.respondToPrompt({
+        id: inputPromptState.promptId,
+        type: 'input',
+        cancelled: true
+      });
+    }
+    setInputPromptState(prev => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
   const handleFileBrowserSelect = (file: any) => {
@@ -224,6 +287,38 @@ const UIManager: React.FC<UIManagerProps> = ({ children }) => {
         onSelect={handleQuickPromptSelect}
         onCancel={handleQuickPromptCancel}
       />
+
+      {inputPromptState.isOpen && (
+        <div className="quickprompt-overlay" onClick={handleInputPromptCancel}>
+          <div className="quickprompt-container vertical" onClick={(e) => e.stopPropagation()}>
+            <div className="quickprompt-prompt">{inputPromptState.prompt}</div>
+            <input
+              type={inputPromptState.mask ? 'password' : 'text'}
+              value={inputPromptState.value}
+              onChange={(e) => setInputPromptState(prev => ({ ...prev, value: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleInputPromptSubmit();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  handleInputPromptCancel();
+                }
+              }}
+              className="dropdown-search-input"
+              autoFocus
+            />
+            <div className="filebrowser-actions">
+              <button className="filebrowser-button secondary" onClick={handleInputPromptCancel}>
+                Cancel
+              </button>
+              <button className="filebrowser-button primary" onClick={handleInputPromptSubmit}>
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Progress Indicators */}
       <Progress

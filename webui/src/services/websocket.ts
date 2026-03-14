@@ -1,3 +1,5 @@
+import { debugLog } from '../utils/log';
+
 type EventCallback = (event: any) => void;
 
 class WebSocketService {
@@ -58,12 +60,12 @@ class WebSocketService {
       return `${protocol}//${window.location.host}/ws`;
     })();
 
-    console.log('Connecting to WebSocket:', wsUrl);
+    debugLog('Connecting to WebSocket:', wsUrl);
 
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      console.log('WebSocket connected');
+      debugLog('WebSocket connected');
       this.reconnectAttempts = 0;
       this.lastPongTime = Date.now();
       this.startPingInterval();
@@ -71,7 +73,7 @@ class WebSocketService {
     };
 
     this.ws.onclose = (event) => {
-      console.log('WebSocket disconnected:', event);
+      debugLog('WebSocket disconnected:', event);
       this.stopPingInterval();
       this.notifyCallbacks({ type: 'connection_status', data: { connected: false } });
 
@@ -79,7 +81,7 @@ class WebSocketService {
       if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
         this.reconnectTimeout = setTimeout(() => {
-          console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+          debugLog(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
           this.reconnectTimeout = null;
           this.connect();
         }, this.reconnectDelay * this.reconnectAttempts);
@@ -92,7 +94,7 @@ class WebSocketService {
       console.error('WebSocket error:', error);
       // If connection fails immediately, stop trying to reconnect
       if (this.reconnectAttempts === 0) {
-        console.log('WebSocket failed to connect, will not retry');
+        debugLog('WebSocket failed to connect, will not retry');
         this.reconnectAttempts = this.maxReconnectAttempts;
       }
     };

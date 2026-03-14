@@ -147,19 +147,22 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	}
 
 	// Get directory from query parameter
-	dir := r.URL.Query().Get("path")
+	dir := strings.TrimSpace(r.URL.Query().Get("path"))
 	if dir == "" {
 		dir = "."
 	}
-
-	// Prevent directory traversal
-	if strings.Contains(dir, "..") {
-		http.Error(w, "Invalid directory", http.StatusBadRequest)
+	canonicalDir, err := canonicalizePath(dir, ws.workspaceRoot, false)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid directory: %v", err), http.StatusBadRequest)
+		return
+	}
+	if !isWithinWorkspace(canonicalDir, ws.workspaceRoot) {
+		http.Error(w, "Directory outside workspace", http.StatusForbidden)
 		return
 	}
 
 	// Read directory
-	entries, err := os.ReadDir(dir)
+	entries, err := os.ReadDir(canonicalDir)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), http.StatusInternalServerError)
 		return
@@ -175,7 +178,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 
 		fileInfo := map[string]interface{}{
 			"name": entry.Name(),
-			"path": filepath.Join(dir, entry.Name()),
+			"path": filepath.Join(canonicalDir, entry.Name()),
 			"type": "file",
 		}
 
@@ -194,6 +197,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "success",
+		"path":    canonicalDir,
 		"files":   files,
 	})
 }
@@ -206,19 +210,25 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Get directory from query parameter
-	dir := r.URL.Query().Get("dir")
+	dir := strings.TrimSpace(r.URL.Query().Get("path"))
+	if dir == "" {
+		dir = strings.TrimSpace(r.URL.Query().Get("dir"))
+	}
 	if dir == "" {
 		dir = "."
 	}
-
-	// Prevent directory traversal
-	if strings.Contains(dir, "..") {
-		http.Error(w, "Invalid directory", http.StatusBadRequest)
+	canonicalDir, err := canonicalizePath(dir, ws.workspaceRoot, false)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid directory: %v", err), http.StatusBadRequest)
+		return
+	}
+	if !isWithinWorkspace(canonicalDir, ws.workspaceRoot) {
+		http.Error(w, "Directory outside workspace", http.StatusForbidden)
 		return
 	}
 
 	// Read directory
-	entries, err := os.ReadDir(dir)
+	entries, err := os.ReadDir(canonicalDir)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), http.StatusInternalServerError)
 		return
@@ -234,7 +244,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 
 		fileInfo := map[string]interface{}{
 			"name":     entry.Name(),
-			"path":     filepath.Join(dir, entry.Name()),
+			"path":     filepath.Join(canonicalDir, entry.Name()),
 			"is_dir":   entry.IsDir(),
 			"size":     info.Size(),
 			"mod_time": info.ModTime().Unix(),
@@ -245,8 +255,10 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":   "success",
 		"files":     files,
-		"directory": dir,
+		"path":      canonicalDir,
+		"directory": canonicalDir,
 	})
 }
 

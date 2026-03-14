@@ -188,7 +188,7 @@ func runSeamlessPlanning(ctx context.Context, chatAgent *agent.Agent, initialQue
 		// Process query using the agent (which handles tools, streaming, etc.)
 		_, err := chatAgent.ProcessQueryWithContinuity(currentQuery)
 		if err != nil {
-			fmt.Printf("⚠️  Agent error: %v\n", err)
+			fmt.Printf("\n⚠️  Agent error: %v\n", err)
 		}
 
 		// Print summary after response

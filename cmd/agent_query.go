@@ -361,12 +361,12 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 		switch chatAgent.GetLastRunTerminationReason() {
 		case agent.RunTerminationMaxIterations:
-			fmt.Printf("⚠️ Reached max iterations (%d) in %s\n", chatAgent.GetMaxIterations(), FormatDuration(duration))
+			fmt.Printf("\n⚠️ Reached max iterations (%d) in %s\n", chatAgent.GetMaxIterations(), FormatDuration(duration))
 		case agent.RunTerminationInterrupted:
-			fmt.Printf("⏹️ Stopped in %s\n", FormatDuration(duration))
+			fmt.Printf("\n⏹️ Stopped in %s\n", FormatDuration(duration))
 		default:
 			// Print completion message without automatic summary (use /stats to see summary)
-			fmt.Printf("✅ Completed in %s\n", FormatDuration(duration))
+			fmt.Printf("\n✅ Completed in %s\n", FormatDuration(duration))
 		}
 
 		return nil

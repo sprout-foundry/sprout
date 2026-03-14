@@ -143,9 +143,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     const sections = viewRegistry.getSections(currentView);
     let cancelled = false;
 
-    // Reset sections immediately when view changes so stale content does not linger.
-    setSectionsData(new Map());
-
     // Load data for each section
     sections.forEach(async (section) => {
       if (cancelled) return;

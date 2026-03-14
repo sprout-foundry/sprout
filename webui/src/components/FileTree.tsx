@@ -14,7 +14,10 @@ interface FileInfo {
 interface FileTreeResponse {
   message: string;
   path: string;
-  files: FileInfo[];
+  files: Array<FileInfo & {
+    is_dir?: boolean;
+    mod_time?: number;
+  }>;
 }
 
 interface FileTreeProps {
@@ -40,7 +43,23 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
 
       const data: FileTreeResponse = await response.json();
       if (data.message === 'success') {
-        return data.files;
+        return (data.files || [])
+          .map((file) => ({
+            name: file.name,
+            path: file.path,
+            size: file.size || 0,
+            modified: file.modified ?? file.mod_time ?? 0,
+            isDir: Boolean(file.isDir ?? file.is_dir),
+            ext: (file.isDir ?? file.is_dir)
+              ? ''
+              : (file.name.includes('.') ? `.${file.name.split('.').pop() || ''}` : '')
+          }))
+          .sort((a, b) => {
+            if (a.isDir !== b.isDir) {
+              return a.isDir ? -1 : 1;
+            }
+            return a.name.localeCompare(b.name);
+          });
       } else {
         throw new Error(data.message);
       }
@@ -151,6 +170,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
     try {
       const rootFiles = await fetchFiles(rootPath);
       setFiles(rootFiles);
+      setCurrentPath(rootPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {

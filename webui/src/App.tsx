@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import AppContent from './components/AppContent';
+import UIManager from './components/UIManager';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService } from './services/api';
 import { viewRegistry, ChatViewProvider, EditorViewProvider, GitViewProvider, LogsViewProvider } from './providers';
+import { debugLog } from './utils/log';
 
 // Service Worker Registration
 const registerServiceWorker = async () => {
@@ -23,14 +25,14 @@ const registerServiceWorker = async () => {
   try {
     const swUrl = `${process.env.PUBLIC_URL || ''}/sw.js`;
     const registration = await navigator.serviceWorker.register(swUrl);
-    console.log('SW registered:', registration);
+    debugLog('SW registered:', registration);
 
     registration.addEventListener('updatefound', () => {
       const newWorker = registration.installing;
       if (newWorker) {
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('New service worker available');
+            debugLog('New service worker available');
           }
         });
       }
@@ -38,7 +40,7 @@ const registerServiceWorker = async () => {
 
     return registration;
   } catch (error) {
-    console.log('SW registration failed:', error);
+    debugLog('SW registration failed:', error);
   }
 
   return null;
@@ -146,7 +148,7 @@ function App() {
       return; // Don't process these events
     }
 
-    console.log('📨 Received event:', event.type, event.data);
+    debugLog('📨 Received event:', event.type, event.data);
 
     // Create log entry for all events
     const logEntry: LogEntry = {
@@ -184,7 +186,7 @@ function App() {
             }));
           }, 300); // Wait 300ms to confirm the connection state is stable
         }
-        console.log('🔗 Connection status updated:', newConnectionState);
+        debugLog('🔗 Connection status updated:', newConnectionState);
         break;
 
       case 'query_started':
@@ -207,7 +209,7 @@ function App() {
           queryProgress: null, // Clear previous progress
           logs: [...prev.logs, logEntry]
         }));
-        console.log('🚀 Query started:', startedQuery);
+        debugLog('🚀 Query started:', startedQuery);
         break;
 
       case 'query_progress':
@@ -215,7 +217,7 @@ function App() {
           ...prev,
           queryProgress: event.data
         }));
-        console.log('⏳ Query progress:', event.data);
+        debugLog('⏳ Query progress:', event.data);
         break;
 
       case 'stream_chunk':
@@ -261,7 +263,7 @@ function App() {
           queryProgress: null,
           logs: [...prev.logs, logEntry]
         }));
-        console.log('✅ Query completed');
+        debugLog('✅ Query completed');
         break;
 
       case 'tool_execution':
@@ -303,7 +305,7 @@ function App() {
             logs: [...prev.logs, logEntry]
           };
         });
-        console.log('🔧 Tool execution:', event.data.tool, event.data.status);
+        debugLog('🔧 Tool execution:', event.data.tool, event.data.status);
         break;
 
       case 'file_changed':
@@ -326,7 +328,7 @@ function App() {
 
           return { ...prev, logs: newLogs, fileEdits: updatedFileEdits };
         });
-        console.log('📝 File changed:', event.data.path);
+        debugLog('📝 File changed:', event.data.path);
         break;
 
       case 'terminal_output':
@@ -337,7 +339,7 @@ function App() {
           ...prev,
           logs: [...prev.logs, logEntry]
         }));
-        console.log('🖥️ Terminal output received:', event.data);
+        debugLog('🖥️ Terminal output received:', event.data);
         break;
 
       case 'error':
@@ -382,7 +384,7 @@ function App() {
           ...prev,
           logs: [...prev.logs, logEntry]
         }));
-        console.log('❓ Unknown event type:', event.type, event.data);
+        debugLog('❓ Unknown event type:', event.type, event.data);
     }
   }, []);
 
@@ -457,7 +459,7 @@ function App() {
     viewRegistry.register(new GitViewProvider());
     viewRegistry.register(new LogsViewProvider());
 
-    console.log('✅ Content providers registered');
+    debugLog('✅ Content providers registered');
   }, []);
 
   const handleSendMessage = useCallback(async (message: string) => {
@@ -471,10 +473,10 @@ function App() {
     }));
 
     try {
-      console.log('🚀 Sending message:', message);
+      debugLog('🚀 Sending message:', message);
       await apiService.sendQuery(message);
       setInputValue('');
-      console.log('✅ Message sent successfully');
+      debugLog('✅ Message sent successfully');
     } catch (error) {
       console.error('❌ Failed to send message:', error);
       setState(prev => ({
@@ -498,7 +500,7 @@ function App() {
 
   
   const handleModelChange = useCallback((model: string) => {
-    console.log('Model changed to:', model);
+    debugLog('Model changed to:', model);
     wsService.sendEvent({
       type: 'model_change',
       data: { model }
@@ -506,7 +508,7 @@ function App() {
   }, [wsService]);
 
   const handleProviderChange = useCallback((provider: string) => {
-    console.log('Provider changed to:', provider);
+    debugLog('Provider changed to:', provider);
     wsService.sendEvent({
       type: 'provider_change',
       data: { provider }
@@ -521,7 +523,7 @@ function App() {
   }, []);
 
   const handleGitCommit = useCallback(async (message: string, files: string[]) => {
-    console.log('Git commit:', message, files);
+    debugLog('Git commit:', message, files);
     try {
       const response = await fetch('/api/git/commit', {
         method: 'POST',
@@ -535,7 +537,7 @@ function App() {
       }
 
       const data = await response.json();
-      console.log('Commit successful:', data);
+      debugLog('Commit successful:', data);
       setGitRefreshToken(k => k + 1);
       return data;
     } catch (err) {
@@ -545,7 +547,7 @@ function App() {
   }, []);
 
   const handleGitStage = useCallback(async (files: string[]) => {
-    console.log('Git stage:', files);
+    debugLog('Git stage:', files);
     try {
       for (const file of files) {
         const response = await fetch('/api/git/stage', {
@@ -565,7 +567,7 @@ function App() {
   }, []);
 
   const handleGitUnstage = useCallback(async (files: string[]) => {
-    console.log('Git unstage:', files);
+    debugLog('Git unstage:', files);
     try {
       for (const file of files) {
         const response = await fetch('/api/git/unstage', {
@@ -585,7 +587,7 @@ function App() {
   }, []);
 
   const handleGitDiscard = useCallback(async (files: string[]) => {
-    console.log('Git discard:', files);
+    debugLog('Git discard:', files);
     try {
       for (const file of files) {
         const response = await fetch('/api/git/discard', {
@@ -606,7 +608,7 @@ function App() {
 
   const handleTerminalOutput = useCallback((output: string) => {
     // You could handle terminal output here if needed
-    console.log('🖥️ Terminal output:', output);
+    debugLog('🖥️ Terminal output:', output);
   }, []);
 
   const toggleSidebar = useCallback(() => {
@@ -626,33 +628,35 @@ function App() {
     >
       <ThemeProvider>
         <EditorManagerProvider>
-          <AppContent
-            state={state}
-            inputValue={inputValue}
-            onInputChange={setInputValue}
-            isMobile={isMobile}
-            isSidebarOpen={isSidebarOpen}
-            sidebarCollapsed={sidebarCollapsed}
-            isTerminalExpanded={isTerminalExpanded}
-            stats={stats}
-            recentFiles={recentFiles}
-            recentLogs={recentLogs}
-            gitRefreshToken={gitRefreshToken}
-            onSidebarToggle={handleSidebarToggle}
-            onToggleSidebar={toggleSidebar}
-            onCloseSidebar={closeSidebar}
-            onViewChange={handleViewChange}
-            onModelChange={handleModelChange}
-            onProviderChange={handleProviderChange}
-            onSendMessage={handleSendMessage}
-            onGitCommit={handleGitCommit}
-            onGitStage={handleGitStage}
-            onGitUnstage={handleGitUnstage}
-            onGitDiscard={handleGitDiscard}
-            onClearLogs={() => setState(prev => ({ ...prev, logs: [] }))}
-            onTerminalOutput={handleTerminalOutput}
-            onTerminalExpandedChange={setIsTerminalExpanded}
-          />
+          <UIManager>
+            <AppContent
+              state={state}
+              inputValue={inputValue}
+              onInputChange={setInputValue}
+              isMobile={isMobile}
+              isSidebarOpen={isSidebarOpen}
+              sidebarCollapsed={sidebarCollapsed}
+              isTerminalExpanded={isTerminalExpanded}
+              stats={stats}
+              recentFiles={recentFiles}
+              recentLogs={recentLogs}
+              gitRefreshToken={gitRefreshToken}
+              onSidebarToggle={handleSidebarToggle}
+              onToggleSidebar={toggleSidebar}
+              onCloseSidebar={closeSidebar}
+              onViewChange={handleViewChange}
+              onModelChange={handleModelChange}
+              onProviderChange={handleProviderChange}
+              onSendMessage={handleSendMessage}
+              onGitCommit={handleGitCommit}
+              onGitStage={handleGitStage}
+              onGitUnstage={handleGitUnstage}
+              onGitDiscard={handleGitDiscard}
+              onClearLogs={() => setState(prev => ({ ...prev, logs: [] }))}
+              onTerminalOutput={handleTerminalOutput}
+              onTerminalExpandedChange={setIsTerminalExpanded}
+            />
+          </UIManager>
         </EditorManagerProvider>
       </ThemeProvider>
     </ErrorBoundary>

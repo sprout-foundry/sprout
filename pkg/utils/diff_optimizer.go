@@ -216,7 +216,8 @@ func (do *DiffOptimizer) processFileDiff(filename string, fileLines []string, ch
 // Code files should get more context in review mode
 func (do *DiffOptimizer) isCodeFile(filename string) bool {
 	// Lock and generated files are NOT code files
-	if do.isLockFile(filename) || do.isGeneratedFile(filename) {
+	class := ClassifyReviewFile(filename)
+	if class.IsLockFile || class.IsGenerated || class.IsVendored || class.IsBinary {
 		return false
 	}
 
@@ -254,13 +255,8 @@ func (do *DiffOptimizer) isReviewMode() bool {
 
 // shouldOptimizeFile determines if a file should be optimized
 func (do *DiffOptimizer) shouldOptimizeFile(filename string, fileLines []string) bool {
-	// Check if it's a lock file
-	if do.isLockFile(filename) {
-		return true
-	}
-
-	// Check if it's a generated file
-	if do.isGeneratedFile(filename) {
+	class := ClassifyReviewFile(filename)
+	if class.IsLockFile || class.IsGenerated || class.IsVendored || class.IsBinary {
 		return true
 	}
 
@@ -291,30 +287,12 @@ func (do *DiffOptimizer) shouldOptimizeFile(filename string, fileLines []string)
 
 // isLockFile checks if the file is a lock file
 func (do *DiffOptimizer) isLockFile(filename string) bool {
-	basename := filepath.Base(filename)
-	for _, pattern := range do.LockFilePatterns {
-		if matched, _ := filepath.Match(pattern, basename); matched {
-			return true
-		}
-		// Also check exact match
-		if basename == pattern {
-			return true
-		}
-	}
-	return false
+	return ClassifyReviewFile(filename).IsLockFile
 }
 
 // isGeneratedFile checks if the file is a generated file
 func (do *DiffOptimizer) isGeneratedFile(filename string) bool {
-	for _, pattern := range do.GeneratedFilePatterns {
-		if matched, _ := filepath.Match(pattern, filename); matched {
-			return true
-		}
-		if strings.Contains(filename, strings.TrimSuffix(pattern, "*")) {
-			return true
-		}
-	}
-	return false
+	return ClassifyReviewFile(filename).IsGenerated
 }
 
 // extractFilename extracts filename from git diff header

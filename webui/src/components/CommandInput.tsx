@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
-import { TerminalWebSocketService } from '../services/terminalWebSocket';
+import { CommandHistoryState, loadCommandHistory, saveCommandHistory } from './command_input_history';
 
 interface CommandInputProps {
   value?: string;
@@ -12,12 +12,6 @@ interface CommandInputProps {
   disabled?: boolean;
   multiline?: boolean;
   autoFocus?: boolean;
-}
-
-interface CommandHistory {
-  commands: string[];
-  index: number;
-  tempInput: string; // Store current input when navigating history
 }
 
 const CommandInput: React.FC<CommandInputProps> = ({
@@ -31,7 +25,7 @@ const CommandInput: React.FC<CommandInputProps> = ({
   autoFocus = false
 }) => {
   const [draftValue, setDraftValue] = useState(value);
-  const [history, setHistory] = useState<CommandHistory>({
+  const [history, setHistory] = useState<CommandHistoryState>({
     commands: [],
     index: -1,
     tempInput: ''
@@ -84,45 +78,10 @@ const CommandInput: React.FC<CommandInputProps> = ({
   const loadHistory = async () => {
     setIsLoadingHistory(true);
     try {
-      // Load from localStorage first
-      const localHistory = localStorage.getItem('ledit-command-history');
-      let commands: string[] = [];
-      
-      if (localHistory) {
-        try {
-          const parsed = JSON.parse(localHistory);
-          if (parsed && Array.isArray(parsed.commands)) {
-            commands = parsed.commands;
-          } else if (Array.isArray(parsed)) {
-            commands = parsed;
-          }
-        } catch (error) {
-          console.warn('Failed to parse local command history:', error);
-        }
-      }
-
-      // Try to sync with terminal history
-      try {
-        // Get current terminal session ID
-        const terminalService = TerminalWebSocketService.getInstance();
-        const response = await apiService.current.getTerminalHistory(terminalService.getSessionId() || undefined);
-        if (response && response.history && Array.isArray(response.history)) {
-          // Merge terminal history with local history, removing duplicates
-          const terminalCommands = response.history.filter((cmd: string) => cmd.trim());
-          const commandSet = new Set([...terminalCommands, ...commands]);
-          const allCommands = Array.from(commandSet);
-          commands = allCommands.slice(-100); // Keep last 100 commands
-          
-          // Update localStorage with merged history
-          localStorage.setItem('ledit-command-history', JSON.stringify({ commands, index: -1, tempInput: '' }));
-        }
-      } catch (error) {
-        console.log('Could not sync with terminal history, using local only');
-      }
-
+      const commands = await loadCommandHistory(apiService.current);
       setHistory(prev => ({
         ...prev,
-        commands: commands
+        commands
       }));
     } catch (error) {
       console.error('Failed to load command history:', error);
@@ -133,39 +92,8 @@ const CommandInput: React.FC<CommandInputProps> = ({
 
   const saveToHistory = useCallback(async (command: string) => {
     if (!command.trim()) return;
-
-    const trimmedCommand = command.trim();
-    const newCommands = [...history.commands];
-    
-    // Remove duplicate if it exists
-    const existingIndex = newCommands.indexOf(trimmedCommand);
-    if (existingIndex > -1) {
-      newCommands.splice(existingIndex, 1);
-    }
-    
-    // Add to end
-    newCommands.push(trimmedCommand);
-    
-    // Keep only last 100 commands
-    const limitedCommands = newCommands.slice(-100);
-    
-    const newHistory = {
-      commands: limitedCommands,
-      index: -1,
-      tempInput: ''
-    };
-    
+    const newHistory = await saveCommandHistory(apiService.current, history.commands, command);
     setHistory(newHistory);
-
-    // Save to localStorage
-    localStorage.setItem('ledit-command-history', JSON.stringify(newHistory));
-
-    // Try to sync with terminal
-    try {
-      await apiService.current.addTerminalHistory(trimmedCommand);
-    } catch (error) {
-      console.log('Could not sync command to terminal history');
-    }
   }, [history.commands]);
 
   const resetHistoryNavigation = () => {

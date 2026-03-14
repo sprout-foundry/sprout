@@ -1,3 +1,5 @@
+import { debugLog } from '../utils/log';
+
 type TerminalEventCallback = (event: any) => void;
 
 class TerminalWebSocketService {
@@ -12,6 +14,7 @@ class TerminalWebSocketService {
   private eventHandler: TerminalEventCallback | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
   private intentionalClose = false;
+  private reconnectTimeout: NodeJS.Timeout | null = null;
 
   private constructor() {}
 
@@ -45,14 +48,19 @@ class TerminalWebSocketService {
   connect() {
     // Don't connect if already connected
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log('Terminal WebSocket already connected');
+      debugLog('Terminal WebSocket already connected');
       return;
     }
     
     // Don't connect if connecting
     if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
-      console.log('Terminal WebSocket already connecting');
+      debugLog('Terminal WebSocket already connecting');
       return;
+    }
+
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
     }
 
     // Use environment variable if provided, otherwise use relative URL
@@ -61,12 +69,12 @@ class TerminalWebSocketService {
       return `${protocol}//${window.location.host}/terminal`;
     })();
 
-    console.log('Connecting to Terminal WebSocket:', wsUrl);
+    debugLog('Connecting to Terminal WebSocket:', wsUrl);
 
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      console.log('Terminal WebSocket connected');
+      debugLog('Terminal WebSocket connected');
       this.reconnectAttempts = 0;
       this.isConnected = true;
       this.startPingInterval();
@@ -74,7 +82,7 @@ class TerminalWebSocketService {
     };
 
     this.ws.onclose = (event) => {
-      console.log('Terminal WebSocket disconnected:', event);
+      debugLog('Terminal WebSocket disconnected:', event);
       this.stopPingInterval();
       this.isConnected = false;
       this.sessionId = null;
@@ -83,8 +91,9 @@ class TerminalWebSocketService {
       // Only reconnect if not intentionally closed
       if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
-        setTimeout(() => {
-          console.log(`Attempting terminal reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        this.reconnectTimeout = setTimeout(() => {
+          debugLog(`Attempting terminal reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+          this.reconnectTimeout = null;
           this.connect();
         }, this.reconnectDelay * this.reconnectAttempts);
       }
@@ -99,7 +108,7 @@ class TerminalWebSocketService {
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('Terminal WebSocket message:', data);
+        debugLog('Terminal WebSocket message:', data);
         
         // Handle pong response
         if (data.type === 'pong') {
@@ -118,7 +127,7 @@ class TerminalWebSocketService {
         // Handle session creation
         if (data.type === 'session_created') {
           this.sessionId = data.data.session_id;
-          console.log('Terminal session created:', this.sessionId);
+          debugLog('Terminal session created:', this.sessionId);
           // Notify that we're now ready to send commands
           this.notifyCallbacks({ type: 'session_ready', data: { session_id: this.sessionId } });
         }
@@ -132,6 +141,11 @@ class TerminalWebSocketService {
 
   disconnect() {
     this.intentionalClose = true;
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    this.stopPingInterval();
     if (this.ws) {
       this.reconnectAttempts = this.maxReconnectAttempts; // Prevent auto-reconnect
       this.ws.close();
@@ -173,7 +187,7 @@ class TerminalWebSocketService {
         }
       };
       this.ws.send(JSON.stringify(message));
-      console.log('Sent terminal command:', command);
+      debugLog('Sent terminal command:', command);
       return true;
     } else {
       console.warn('Terminal WebSocket not ready, cannot send command:', command);
@@ -214,7 +228,7 @@ class TerminalWebSocketService {
         }
       };
       this.ws.send(JSON.stringify(message));
-      console.log('Sent terminal close session');
+      debugLog('Sent terminal close session');
       return true;
     }
     return false;

@@ -109,6 +109,7 @@
         "shell_command",
         "git",
         "read_file",
+        "write_file",
         "edit_file",
         "write_structured_file",
         "patch_structured_file",

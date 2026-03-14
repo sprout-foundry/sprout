@@ -5,12 +5,20 @@
  */
 
 import React from 'react';
+import { ProviderLogEntry } from '../../providers';
 
 interface ChatActivityLogProps {
-  logs: any[];
+  logs: ProviderLogEntry[];
 }
 
 export const ChatActivityLog: React.FC<ChatActivityLogProps> = ({ logs }) => {
+  const getLogData = (logEntry: ProviderLogEntry): Record<string, unknown> => {
+    if (logEntry.data && typeof logEntry.data === 'object') {
+      return logEntry.data as Record<string, unknown>;
+    }
+    return {};
+  };
+
   const getLogIcon = (level: string) => {
     switch (level) {
       case 'success': return '✅';
@@ -21,21 +29,23 @@ export const ChatActivityLog: React.FC<ChatActivityLogProps> = ({ logs }) => {
     }
   };
 
-  const getLogSummary = (logEntry: any) => {
+  const getLogSummary = (logEntry: ProviderLogEntry) => {
+    const data = getLogData(logEntry);
+
     try {
       switch (logEntry.type) {
         case 'query_started':
-          return `Query: ${logEntry.data?.query?.substring(0, 30) || 'No query'}...`;
+          return `Query: ${String(data.query || 'No query').substring(0, 30)}...`;
         case 'tool_execution':
-          return `${logEntry.data?.tool || 'Unknown'}: ${logEntry.data?.status || 'Unknown'}`;
+          return `${String(data.tool || 'Unknown')}: ${String(data.status || 'Unknown')}`;
         case 'file_changed':
-          return `File: ${logEntry.data?.path?.split('/').pop() || 'Unknown'}`;
+          return `File: ${String(data.path || 'Unknown').split('/').pop() || 'Unknown'}`;
         case 'stream_chunk':
-          return `Stream: ${logEntry.data?.chunk?.substring(0, 30) || 'No chunk'}...`;
+          return `Stream: ${String(data.chunk || 'No chunk').substring(0, 30)}...`;
         case 'error':
-          return `Error: ${logEntry.data?.message?.substring(0, 30) || 'Unknown error'}...`;
+          return `Error: ${String(data.message || 'Unknown error').substring(0, 30)}...`;
         case 'connection_status':
-          return logEntry.data?.connected ? 'Connected' : 'Disconnected';
+          return data.connected ? 'Connected' : 'Disconnected';
         default:
           return `${logEntry.type}`;
       }
@@ -44,23 +54,9 @@ export const ChatActivityLog: React.FC<ChatActivityLogProps> = ({ logs }) => {
     }
   };
 
-  const filteredLogs = logs.filter((log: any) => {
-    // Filter out webpack dev server events
-    let parsedLog = log;
-
-    if (typeof log === 'string') {
-      try {
-        parsedLog = JSON.parse(log);
-      } catch {
-        return true;
-      }
-    }
-
-    if (parsedLog && typeof parsedLog === 'object' && parsedLog.type) {
-      const webpackEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'invalid', 'warnings', 'errors', 'still-ok'];
-      return !webpackEvents.includes(parsedLog.type);
-    }
-    return true;
+  const filteredLogs = logs.filter((log) => {
+    const webpackEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'invalid', 'warnings', 'errors', 'still-ok'];
+    return !webpackEvents.includes(log.type);
   });
 
   if (filteredLogs.length === 0) {
@@ -69,20 +65,7 @@ export const ChatActivityLog: React.FC<ChatActivityLogProps> = ({ logs }) => {
 
   return (
     <div className="logs-list">
-      {filteredLogs.map((originalLog: any, index: number) => {
-        let log = originalLog;
-        if (typeof originalLog === 'string') {
-          try {
-            log = JSON.parse(originalLog);
-          } catch {
-            return (
-              <div key={index} className="log-item">
-                {originalLog}
-              </div>
-            );
-          }
-        }
-
+      {filteredLogs.map((log, index) => {
         return (
           <div key={log.id || index} className="log-item">
             <span className="log-icon">{getLogIcon(log.level)}</span>

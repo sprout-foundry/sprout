@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/alantheprice/ledit/pkg/utils"
 )
 
 func detectProjectType() string {
@@ -190,6 +192,10 @@ func extractFileContextForChanges(diff string) string {
 }
 
 func shouldSkipFileForContext(filePath string) bool {
+	if utils.ClassifyReviewFile(filePath).SkipForReview {
+		return true
+	}
+
 	if strings.HasSuffix(filePath, ".sum") ||
 		strings.HasSuffix(filePath, ".lock") ||
 		strings.HasSuffix(filePath, "package-lock.json") ||

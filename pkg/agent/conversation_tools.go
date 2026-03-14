@@ -10,8 +10,8 @@ import (
 
 // sendMessage handles the API communication with retry logic
 func (ch *ConversationHandler) sendMessage() (*api.ChatResponse, error) {
-	messages := ch.prepareMessages()
 	tools := ch.prepareTools()
+	messages := ch.prepareMessages(tools)
 	reasoning := ch.determineReasoningEffort()
 
 	return ch.apiClient.SendWithRetry(messages, tools, reasoning)

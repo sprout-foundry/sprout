@@ -7,6 +7,15 @@
 
 import { ReactNode } from 'react';
 
+export interface ProviderLogEntry {
+  id: string;
+  type: string;
+  timestamp: Date;
+  data: unknown;
+  level: 'info' | 'warning' | 'error' | 'success';
+  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
+}
+
 /** Generic action that can be performed by providers */
 export interface Action {
   type: string;
@@ -32,7 +41,7 @@ export interface ProviderContext {
 
   // Data accessors (not hardcoded - providers fetch what they need)
   recentFiles: Array<{ path: string; modified: boolean }>;
-  recentLogs: any[];
+  recentLogs: ProviderLogEntry[];
   stats?: {
     queryCount: number;
     filesModified: number;

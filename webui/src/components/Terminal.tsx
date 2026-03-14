@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Terminal.css';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
+import { debugLog } from '../utils/log';
 
 interface TerminalProps {
   onCommand?: (command: string) => void;
@@ -75,7 +76,7 @@ const Terminal: React.FC<TerminalProps> = ({
           if (event.type === 'connection_status') {
             if (event.data.connected) {
               // Don't set connected yet - wait for session_ready
-              console.log('Terminal WebSocket connected, waiting for session...');
+              debugLog('Terminal WebSocket connected, waiting for session...');
             } else {
               setTerminalConnected(false);
               addLine('error', 'Terminal disconnected');
@@ -255,6 +256,19 @@ const Terminal: React.FC<TerminalProps> = ({
       }, 300);
       return () => clearTimeout(timer);
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (terminalWS.current && terminalEventHandlerRef.current) {
+        terminalWS.current.removeEvent(terminalEventHandlerRef.current);
+        terminalEventHandlerRef.current = null;
+      }
+      if (terminalWS.current) {
+        terminalWS.current.disconnect();
+        terminalWS.current = null;
+      }
+    };
   }, []);
 
   return (

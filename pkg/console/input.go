@@ -331,7 +331,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 				}
 				ir.HandleEvent(event)
 			}
-			for {
+			for parser.hasPending {
 				pending := parser.Parse(0)
 				if pending == nil {
 					break

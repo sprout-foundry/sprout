@@ -94,7 +94,7 @@ func TestProcessResponsePreservesToolOutputForLLM(t *testing.T) {
 		t.Fatalf("expected missing tool call IDs to be generated and recorded")
 	}
 
-	prepared := handler.prepareMessages()
+	prepared := handler.prepareMessages(nil)
 	foundTool := false
 	for _, msg := range prepared {
 		if msg.Role == "tool" {

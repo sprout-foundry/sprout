@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"bytes"
 	"bufio"
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,9 +44,13 @@ var generatedMarkers = []string{
 func ClassifyReviewFile(path string) ReviewFileClass {
 	class := ReviewFileClass{}
 	base := filepath.Base(path)
+	lowerBase := strings.ToLower(base)
 	lowerPath := strings.ToLower(path)
 
 	if _, ok := explicitLockFiles[base]; ok {
+		class.IsLockFile = true
+		class.SkipForReview = true
+	} else if _, ok := explicitLockFiles[lowerBase]; ok {
 		class.IsLockFile = true
 		class.SkipForReview = true
 	}
@@ -56,10 +60,11 @@ func ClassifyReviewFile(path string) ReviewFileClass {
 		class.SkipForReview = true
 	}
 
-	if attrs := getGitReviewAttributes(path); attrs.generated {
+	attrs := getGitReviewAttributes(path)
+	if attrs.generated {
 		class.IsGenerated = true
 	}
-	if attrs := getGitReviewAttributes(path); attrs.vendored {
+	if attrs.vendored {
 		class.IsVendored = true
 		class.SkipForReview = true
 	}

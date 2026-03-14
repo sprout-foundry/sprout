@@ -206,3 +206,54 @@ func TestPruneConversationEnforcesAgenticRequiredHeadroom(t *testing.T) {
 		t.Fatalf("expected non-empty nonAgentic output")
 	}
 }
+
+func TestAggressivePruningUsesStructuralCompaction(t *testing.T) {
+	pruner := NewConversationPruner(false)
+	pruner.SetStrategy(PruneStrategyAdaptive)
+	optimizer := NewConversationOptimizer(true, false)
+
+	messages := []api.Message{
+		{Role: "system", Content: "system"},
+		{Role: "user", Content: "Investigate the regression and fix it"},
+		{Role: "assistant", Content: "I will inspect the recent changes first."},
+	}
+
+	for i := 0; i < 20; i++ {
+		toolCallID := ""
+		if i%3 == 0 {
+			toolCallID = "call-" + string(rune('a'+i))
+			messages = append(messages, api.Message{
+				Role:    "assistant",
+				Content: "",
+				ToolCalls: []api.ToolCall{
+					{ID: toolCallID},
+				},
+			})
+			messages = append(messages, api.Message{
+				Role:       "tool",
+				ToolCallId: toolCallID,
+				Content:    "Tool call result for read_file: pkg/agent/thing.go\n" + strings.Repeat("x", 400),
+			})
+			continue
+		}
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: "Updated the implementation and reran the targeted verification steps.",
+		})
+	}
+
+	out := pruner.PruneConversation(messages, 97000, 100000, optimizer, "anthropic", false)
+	if len(out) >= len(messages) {
+		t.Fatalf("expected aggressive pruning to shrink message count, got %d -> %d", len(messages), len(out))
+	}
+
+	foundSummary := false
+	for _, msg := range out {
+		if msg.Role == "assistant" && strings.Contains(msg.Content, "Compacted earlier conversation state:") {
+			foundSummary = true
+		}
+	}
+	if !foundSummary {
+		t.Fatalf("expected structural compaction summary in aggressive pruning output")
+	}
+}

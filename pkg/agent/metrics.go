@@ -4,6 +4,12 @@ import (
 	"github.com/alantheprice/ledit/pkg/configuration"
 )
 
+const (
+	RunTerminationCompleted     = "completed"
+	RunTerminationMaxIterations = "max_iterations"
+	RunTerminationInterrupted   = "interrupted"
+)
+
 // GetTotalTokens returns the total tokens used across all requests
 func (a *Agent) GetTotalTokens() int {
 	return a.totalTokens
@@ -107,6 +113,10 @@ func (a *Agent) GetContextWarningIssued() bool {
 // GetMaxIterations returns the maximum iterations allowed
 func (a *Agent) GetMaxIterations() int {
 	return a.maxIterations
+}
+
+func (a *Agent) GetLastRunTerminationReason() string {
+	return a.lastRunTerminationReason
 }
 
 // IsDebugMode returns whether debug mode is enabled

@@ -53,37 +53,25 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	ws.queryCount++
 	ws.mutex.Unlock()
 
-	// Create a channel to receive the response
-	responseCh := make(chan string, 1)
-	errorCh := make(chan error, 1)
-
-	// Run the query in a goroutine
+	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
 	go func() {
 		log.Printf("handleAPIQuery: calling ProcessQuery")
-		response, err := ws.agent.ProcessQuery(query.Query)
+		_, err := ws.agent.ProcessQuery(query.Query)
 		if err != nil {
 			log.Printf("handleAPIQuery: ProcessQuery error: %v", err)
-			errorCh <- err
-			return
+			if ws.eventBus != nil {
+				ws.eventBus.Publish(events.EventTypeError, events.ErrorEvent("Query failed", err))
+			}
 		}
-		log.Printf("handleAPIQuery: ProcessQuery returned: %s", response)
-		responseCh <- response
 	}()
 
-	// Wait for response or timeout
-	select {
-	case response := <-responseCh:
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"response":  response,
-			"timestamp": time.Now().Unix(),
-		})
-	case err := <-errorCh:
-		log.Printf("Agent query error: %v", err)
-		http.Error(w, fmt.Sprintf("Query failed: %v", err), http.StatusInternalServerError)
-	case <-time.After(30 * time.Second):
-		http.Error(w, "Query timeout", http.StatusRequestTimeout)
-	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"accepted":  true,
+		"query":     query.Query,
+		"timestamp": time.Now().Unix(),
+	})
 }
 
 // handleAPIStats handles API requests for server statistics
@@ -111,10 +99,12 @@ func (ws *ReactWebServer) gatherStats() map[string]interface{} {
 		"uptime_seconds":    int64(uptime.Seconds()),
 		"connections":       ws.countConnections(),
 		"queries":           ws.queryCount,
+		"query_count":       ws.queryCount,
 		"terminal_sessions": ws.terminalManager.SessionCount(),
 		"server_time":       time.Now().Unix(),
 		"start_time":        ws.startTime.Unix(),
 		"uptime_formatted":  uptime.String(),
+		"uptime":            uptime.String(),
 	}
 
 	// Add agent-specific stats if available
@@ -126,6 +116,10 @@ func (ws *ReactWebServer) gatherStats() map[string]interface{} {
 		stats["prompt_tokens"] = ws.agent.GetPromptTokens()
 		stats["completion_tokens"] = ws.agent.GetCompletionTokens()
 		stats["cached_tokens"] = ws.agent.GetCachedTokens()
+		stats["cache_efficiency"] = float64(0)
+		if totalTokens := ws.agent.GetTotalTokens(); totalTokens > 0 {
+			stats["cache_efficiency"] = float64(ws.agent.GetCachedTokens()) / float64(totalTokens) * 100
+		}
 		stats["cached_cost_savings"] = ws.agent.GetCachedCostSavings()
 		stats["current_context_tokens"] = ws.agent.GetCurrentContextTokens()
 		stats["max_context_tokens"] = ws.agent.GetMaxContextTokens()
@@ -596,57 +590,5 @@ func (ws *ReactWebServer) handleAPITerminalSessions(w http.ResponseWriter, r *ht
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"sessions": sessions,
 		"count":    len(sessions),
-	})
-}
-
-// handleAPIProviders returns list of available providers and their models
-func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Define default providers with their models
-	providers := []map[string]interface{}{
-		{
-			"id":     "openai",
-			"name":   "OpenAI",
-			"models": []string{"gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"},
-		},
-		{
-			"id":     "anthropic",
-			"name":   "Anthropic",
-			"models": []string{"claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"},
-		},
-		{
-			"id":     "ollama",
-			"name":   "Ollama",
-			"models": []string{"llama3.2", "llama3.1", "codellama", "mistral", "deepseek-coder"},
-		},
-		{
-			"id":     "deepinfra",
-			"name":   "DeepInfra",
-			"models": []string{"mistralai/Mixtral-8x7B-Instruct-v0.1", "deepseek-ai/DeepSeek-V3"},
-		},
-		{
-			"id":     "cerebras",
-			"name":   "Cerebras",
-			"models": []string{"llama3.1-70b", "llama3.1-8b"},
-		},
-		{
-			"id":     "zai",
-			"name":   "Z.AI",
-			"models": []string{"glm-5", "glm-4", "glm-3-turbo"},
-		},
-		{
-			"id":     "minimax",
-			"name":   "MiniMax",
-			"models": []string{"MiniMax-M2", "MiniMax-M2.1", "MiniMax-M2.5", "MiniMax-M2-Stable"},
-		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"providers": providers,
 	})
 }

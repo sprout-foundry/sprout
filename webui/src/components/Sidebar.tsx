@@ -1,19 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import './Sidebar.css';
-import { ApiService } from '../services/api';
+import { ApiService, ProviderOption } from '../services/api';
 import { viewRegistry, ProviderContext, SidebarSection } from '../providers';
-
-// Module-level flag to track if providers have been fetched
-let providersFetched = false;
-
-// Provider and model options (kept for configuration section)
-const PROVIDERS = [
-  { id: 'openai', name: 'OpenAI', models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
-  { id: 'anthropic', name: 'Anthropic', models: ['claude-3-sonnet', 'claude-3-haiku'] },
-  { id: 'ollama', name: 'Ollama', models: ['llama2', 'codellama', 'mistral'] },
-  { id: 'deepinfra', name: 'DeepInfra', models: ['mistralai/Mixtral-8x7B-Instruct-v0.1'] },
-  { id: 'cerebras', name: 'Cerebras', models: ['llama3.1-70b', 'llama3.1-8b'] }
-];
 
 interface SidebarProps {
   isConnected: boolean;
@@ -77,9 +65,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   isMobile = false
 }) => {
-  const [selectedProvider, setSelectedProvider] = useState(provider || 'openai');
-  const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || 'gpt-4');
-  const [providers, setProviders] = useState(PROVIDERS);
+  const [selectedProvider, setSelectedProvider] = useState(provider || '');
+  const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
+  const [providers, setProviders] = useState<ProviderOption[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const [sectionsData, setSectionsData] = useState<Map<string, SectionData>>(new Map());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -88,10 +76,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   const finalSelectedModel = selectedModel || selectedModelState;
   // Compute available models from providers and selectedProvider
   const availableModelsState = useMemo(() => {
-    const providerData = providers.find(p => p.id === selectedProvider);
+    const providerData = providers.find((p) => p.id === selectedProvider);
     return providerData?.models || [];
   }, [providers, selectedProvider]);
-  const finalAvailableModels = availableModels || availableModelsState;
+  const finalAvailableModels = availableModels && availableModels.length > 1
+    ? availableModels
+    : availableModelsState;
 
   // Memoize computed values to prevent unnecessary re-renders
   const finalStats = useMemo(() =>
@@ -223,66 +213,72 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [currentView, isConnected, refreshTrigger]);
 
-  // Fetch providers from API - only run once on mount, not on reconnect
   useEffect(() => {
-    // Check localStorage to prevent multiple fetches across remounts
-    const storedProviders = localStorage.getItem('ledit_providers');
-    if (storedProviders) {
-      try {
-        const parsed = JSON.parse(storedProviders);
-        setProviders(parsed);
-        setIsLoadingProviders(false);
-        return;
-      } catch {
-        localStorage.removeItem('ledit_providers');
-      }
-    }
-
-    if (providersFetched) return;
-    providersFetched = true;
-
     const fetchProviders = async () => {
       setIsLoadingProviders(true);
       try {
         const data = await apiService.getProviders();
         if (data.providers && data.providers.length > 0) {
           setProviders(data.providers);
-          localStorage.setItem('ledit_providers', JSON.stringify(data.providers));
-        } else {
-          setProviders(PROVIDERS);
+          if (data.current_provider) {
+            setSelectedProvider(data.current_provider);
+          }
+          if (data.current_model) {
+            setSelectedModelState(data.current_model);
+          }
         }
       } catch (error) {
-        console.error('Failed to fetch providers, using defaults:', error);
-        setProviders(PROVIDERS);
+        console.error('Failed to fetch providers:', error);
       } finally {
         setIsLoadingProviders(false);
       }
     };
 
     fetchProviders();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run ONCE on mount, never again
+  }, [apiService, isConnected]);
 
-  // Update local state when props change (only if provider exists in fetched list)
   useEffect(() => {
-    if (provider && provider !== 'unknown') {
-      // Only sync if provider exists in our fetched providers list
-      const providerExists = providers.some(p => p.id === provider);
-      if (providerExists) {
-        setSelectedProvider(provider);
-      }
+    if (!provider || provider === 'unknown') {
+      return;
     }
+    setSelectedProvider(provider);
   }, [provider, providers]);
 
   useEffect(() => {
-    if (model && model !== 'unknown') {
-      // Only sync if the model exists in the current provider's model list
-      const currentProviderData = providers.find(p => p.id === selectedProvider);
-      if (currentProviderData && currentProviderData.models.includes(model)) {
-        setSelectedModelState(model);
-      }
+    if (!model || model === 'unknown') {
+      return;
     }
+    setSelectedModelState(model);
   }, [model, providers, selectedProvider]);
+
+  useEffect(() => {
+    if (!selectedProvider) {
+      if (providers.length > 0) {
+        setSelectedProvider(providers[0].id);
+      }
+      return;
+    }
+
+    const providerExists = providers.some((item) => item.id === selectedProvider);
+    if (!providerExists && providers.length > 0) {
+      setSelectedProvider(providers[0].id);
+    }
+  }, [providers, selectedProvider]);
+
+  useEffect(() => {
+    if (!selectedProvider) {
+      return;
+    }
+
+    const providerData = providers.find((item) => item.id === selectedProvider);
+    if (!providerData || providerData.models.length === 0) {
+      return;
+    }
+
+    if (!providerData.models.includes(finalSelectedModel)) {
+      setSelectedModelState(providerData.models[0]);
+    }
+  }, [providers, selectedProvider, finalSelectedModel]);
 
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newProvider = e.target.value;
@@ -436,6 +432,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 disabled={!isConnected || isLoadingProviders}
                 className="styled-select"
               >
+                {providers.length === 0 && (
+                  <option value="">
+                    {isLoadingProviders ? 'Loading providers...' : 'No providers available'}
+                  </option>
+                )}
                 {providers.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}

@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -215,7 +216,127 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, msg map[str
 				"data": stats,
 			})
 		}()
+
+	case "provider_change":
+		go ws.handleProviderChangeMessage(safeConn, msg)
+
+	case "model_change":
+		go ws.handleModelChangeMessage(safeConn, msg)
 	}
+}
+
+func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg map[string]interface{}) {
+	if ws.agent == nil || ws.agent.GetConfigManager() == nil {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Agent is not available"},
+		})
+		return
+	}
+
+	data, ok := msg["data"].(map[string]interface{})
+	if !ok {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Invalid provider change payload"},
+		})
+		return
+	}
+
+	providerName, _ := data["provider"].(string)
+	providerName = strings.TrimSpace(providerName)
+	if providerName == "" {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Provider is required"},
+		})
+		return
+	}
+
+	providerType, err := ws.agent.GetConfigManager().MapStringToClientType(providerName)
+	if err != nil {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": err.Error()},
+		})
+		return
+	}
+
+	if err := ws.agent.SetProvider(providerType); err != nil {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": err.Error()},
+		})
+		return
+	}
+
+	ws.publishProviderState()
+}
+
+func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[string]interface{}) {
+	if ws.agent == nil {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Agent is not available"},
+		})
+		return
+	}
+
+	data, ok := msg["data"].(map[string]interface{})
+	if !ok {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Invalid model change payload"},
+		})
+		return
+	}
+
+	modelName, _ := data["model"].(string)
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Model is required"},
+		})
+		return
+	}
+
+	previousProvider := ws.agent.GetProviderType()
+	previousModel := ws.agent.GetModel()
+	providerChanged := false
+
+	if providerName, _ := data["provider"].(string); strings.TrimSpace(providerName) != "" {
+		providerType, err := ws.agent.GetConfigManager().MapStringToClientType(providerName)
+		if err == nil && providerType != ws.agent.GetProviderType() {
+			if err := ws.agent.SetProvider(providerType); err != nil {
+				_ = safeConn.WriteJSON(map[string]interface{}{
+					"type": "error",
+					"data": map[string]string{"message": err.Error()},
+				})
+				return
+			}
+			providerChanged = true
+		}
+	}
+
+	if err := ws.agent.SetModel(modelName); err != nil {
+		if providerChanged && previousProvider != "" {
+			if rollbackErr := ws.agent.SetProvider(previousProvider); rollbackErr != nil {
+				log.Printf("webui: failed to rollback provider change after model switch failure: provider=%s model=%s rollback_err=%v", previousProvider, previousModel, rollbackErr)
+			} else if strings.TrimSpace(previousModel) != "" {
+				if rollbackModelErr := ws.agent.SetModel(previousModel); rollbackModelErr != nil {
+					log.Printf("webui: provider rollback succeeded but failed to restore model %q: %v", previousModel, rollbackModelErr)
+				}
+			}
+		}
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": err.Error()},
+		})
+		return
+	}
+
+	ws.publishProviderState()
 }
 
 // handleTerminalWebSocket handles terminal WebSocket connections

@@ -130,9 +130,6 @@ function App() {
     filesModified: 0 // TODO: track modified files from buffers
   }), [state.queryCount]);
 
-  // Memoize available models to prevent unnecessary Sidebar remounts
-  const availableModels = useMemo(() => [state.model], [state.model]);
-
   // Memoize sidebar toggle handler
   const handleSidebarToggle = useCallback(() => {
     setSidebarCollapsed(prev => !prev);
@@ -373,20 +370,16 @@ function App() {
       case 'metrics_update':
         logEntry.category = 'system';
         logEntry.level = 'info';
-        // Update provider/model info if available
-        if (event.data.provider && event.data.model) {
-          setState(prev => ({
-            ...prev,
-            provider: event.data.provider,
-            model: event.data.model,
-            logs: [...prev.logs, logEntry]
-          }));
-        } else {
-          setState(prev => ({
-            ...prev,
-            logs: [...prev.logs, logEntry]
-          }));
-        }
+        setState(prev => ({
+          ...prev,
+          provider: event.data?.provider || prev.provider,
+          model: event.data?.model || prev.model,
+          stats: {
+            ...prev.stats,
+            ...event.data
+          },
+          logs: [...prev.logs, logEntry]
+        }));
         break;
 
       default:
@@ -513,30 +506,18 @@ function App() {
   
   const handleModelChange = useCallback((model: string) => {
     console.log('Model changed to:', model);
-    // Send model change to backend
     wsService.sendEvent({
       type: 'model_change',
       data: { model }
     });
-
-    setState(prev => ({
-      ...prev,
-      model
-    }));
   }, [wsService]);
 
   const handleProviderChange = useCallback((provider: string) => {
     console.log('Provider changed to:', provider);
-    // Send provider change to backend
     wsService.sendEvent({
       type: 'provider_change',
       data: { provider }
     });
-
-    setState(prev => ({
-      ...prev,
-      provider
-    }));
   }, [wsService]);
 
   const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'logs') => {
@@ -792,7 +773,6 @@ function App() {
           model={state.model}
           selectedModel={state.model}
           onModelChange={handleModelChange}
-          availableModels={availableModels}
           currentView={state.currentView}
           onViewChange={handleViewChange}
           onFileClick={handleFileClick}

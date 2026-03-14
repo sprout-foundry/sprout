@@ -4,7 +4,9 @@ interface StatsResponse {
   model: string;
   session_id: string;
   query_count: number;
+  queries?: number;
   uptime: string;
+  uptime_formatted?: string;
   connections: number;
 
   // Token usage
@@ -49,6 +51,12 @@ interface FilesResponse {
   }>;
 }
 
+export interface ProviderOption {
+  id: string;
+  name: string;
+  models: string[];
+}
+
 class ApiService {
   private static instance: ApiService;
 
@@ -69,7 +77,11 @@ class ApiService {
     return response.json();
   }
 
-  async getProviders(): Promise<{ providers: Array<{ id: string; name: string; models: string[] }> }> {
+  async getProviders(): Promise<{
+    providers: ProviderOption[];
+    current_provider?: string;
+    current_model?: string;
+  }> {
     const response = await fetch('/api/providers');
     if (!response.ok) {
       throw new Error('Failed to fetch providers');

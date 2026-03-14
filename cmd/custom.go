@@ -88,7 +88,7 @@ func runCustomModelAdd() error {
 		}
 	}
 
-	endpoint, err := promptLine(reader, "Endpoint URL (base /v1, /v1/chat/completions, or /v1/models): ")
+	endpoint, err := promptLine(reader, "Base URL (e.g., https://example.com/v1): ")
 	if err != nil {
 		return err
 	}

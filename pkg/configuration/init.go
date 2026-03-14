@@ -63,18 +63,7 @@ func Initialize() (*Config, *APIKeys, error) {
 	}
 
 	// Populate from environment variables FIRST - prioritize env vars over stored keys
-	envKeysFound := apiKeys.PopulateFromEnvironment()
-	if envKeysFound {
-		fmt.Println("✅ Found API keys from environment variables")
-	}
-
-	// Check if we have any usable providers from environment variables
-	for _, provider := range getSupportedProviders() {
-		if provider.RequiresKey && HasProviderCredential(provider.Name, apiKeys) {
-			// Found at least one usable provider
-			break
-		}
-	}
+	_ = apiKeys.PopulateFromEnvironment()
 
 	// Check if this is first run (no provider selected)
 	isFirstRun := config.LastUsedProvider == ""

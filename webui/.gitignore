@@ -5,6 +5,9 @@ node_modules/
 build/
 dist/
 
+# Deployment target - generated files
+pkg/webui/static/
+
 # TypeScript build info
 *.tsbuildinfo
 

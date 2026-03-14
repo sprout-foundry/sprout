@@ -801,7 +801,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, err
 			}
-			fmt.Printf("⏸️ Workflow yielded for orchestration before step %s\n", stepName)
+			fmt.Printf("\n⏸️ Workflow yielded for orchestration before step %s\n", stepName)
 			return true, nil
 		}
 
@@ -813,7 +813,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			continue
 		}
 
-		fmt.Printf("🔁 Workflow step %d/%d (%s)\n", i+1, len(cfg.Steps), stepName)
+		fmt.Printf("\n🔁 Workflow step %d/%d (%s)\n", i+1, len(cfg.Steps), stepName)
 		if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_started", map[string]interface{}{
 			"step_index": i,
 			"step_name":  stepName,
@@ -842,7 +842,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			continue
 		}
 		if !triggersSatisfied {
-			fmt.Printf("⏭️ Skipping workflow step %s: file trigger conditions not met\n", stepName)
+			fmt.Printf("\n⏭️ Skipping workflow step %s: file trigger conditions not met\n", stepName)
 			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_skipped", map[string]interface{}{
 				"step_index": i,
 				"step_name":  stepName,

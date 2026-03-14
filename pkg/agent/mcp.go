@@ -51,12 +51,11 @@ func (a *Agent) initializeMCP() error {
 					AutoStart:   serverConfig.AutoStart,
 					MaxRestarts: serverConfig.MaxRestarts,
 				}
-				if err := a.mcpManager.AddServer(mcpServer); err != nil {
-					if a.debug {
-						fmt.Printf("⚠️  Warning: Failed to add legacy MCP server %s: %v\n", name, err)
-					}
-				} else if a.debug {
-					fmt.Printf("🔧 Added legacy MCP server: %s\n", name)
+						if err := a.mcpManager.AddServer(mcpServer); err != nil {
+			if a.debug {
+				fmt.Printf("\n⚠️  Warning: Failed to add legacy MCP server %s: %v\n", name, err)
+			}
+		} else if a.debug {fmt.Printf("🔧 Added legacy MCP server: %s\n", name)
 				}
 			}
 		}
@@ -88,7 +87,7 @@ func (a *Agent) initializeMCP() error {
 
 		if err := a.mcpManager.AddServer(mcpServer); err != nil {
 			if a.debug {
-				fmt.Printf("⚠️  Warning: Failed to add MCP server %s: %v\n", name, err)
+				fmt.Printf("\n⚠️  Warning: Failed to add MCP server %s: %v\n", name, err)
 			}
 			continue
 		}
@@ -104,7 +103,7 @@ func (a *Agent) initializeMCP() error {
 
 		if a.debug {
 			tools, _ := a.mcpManager.GetAllTools(ctx)
-			fmt.Printf("✅ MCP initialized with %d tools available\n", len(tools))
+			fmt.Printf("\n✅ MCP initialized with %d tools available\n", len(tools))
 		}
 	}
 
@@ -129,7 +128,7 @@ func (a *Agent) initializeMCP() error {
 					if config.MCP.AutoStart {
 						if err := a.mcpManager.StartAll(ctx); err != nil {
 							if a.debug {
-								fmt.Printf("⚠️  Failed to start GitHub MCP server (npx): %v\n", err)
+								fmt.Printf("\n⚠️  Failed to start GitHub MCP server (npx): %v\n", err)
 							}
 						} else if a.debug {
 							fmt.Println("✅ GitHub MCP server auto-discovered and started (npx)")

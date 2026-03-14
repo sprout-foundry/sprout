@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+build/
+dist/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Temporary/backup files
+*.tmp
+*.cache
+*.log
+*.bak
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

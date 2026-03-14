@@ -69,7 +69,7 @@ func TestEstimateInputTokens(t *testing.T) {
 				{Role: "user", Content: "Hello world"},
 			},
 			tools: nil,
-			min:   SystemInstructionBuffer + 4, // buffer + message overhead
+			min:   SystemInstructionBuffer + MessageOverheadTokens, // buffer + message overhead
 		},
 		{
 			name: "message with tools",
@@ -88,7 +88,36 @@ func TestEstimateInputTokens(t *testing.T) {
 					Parameters  interface{} `json:"parameters"`
 				}{Name: "test2"}},
 			},
-			min: SystemInstructionBuffer + 4 + (2 * ToolTokenEstimate),
+			min: SystemInstructionBuffer + MessageOverheadTokens + (2 * ToolTokenEstimate),
+		},
+		{
+			name: "message with reasoning content",
+			messages: []Message{
+				{
+					Role:             "assistant",
+					Content:          "Short answer",
+					ReasoningContent: "Longer hidden reasoning content that must count toward prompt tokens",
+				},
+			},
+			tools: nil,
+			min:   SystemInstructionBuffer + MessageOverheadTokens + EstimateTokens("Longer hidden reasoning content that must count toward prompt tokens"),
+		},
+		{
+			name: "message with image payload",
+			messages: []Message{
+				{
+					Role:    "user",
+					Content: "Describe this image",
+					Images: []ImageData{
+						{
+							URL:  "https://example.com/cat.png",
+							Type: "image/png",
+						},
+					},
+				},
+			},
+			tools: nil,
+			min:   SystemInstructionBuffer + MessageOverheadTokens + ImageMessageOverheadTokens,
 		},
 	}
 
@@ -142,6 +171,14 @@ func TestCalculateOutputBudget(t *testing.T) {
 			wantOK:       true,
 			minOutput:    MinOutputTokens, // Should clamp to minimum
 			maxOutput:    1500,
+		},
+		{
+			name:         "budget never exceeds remaining context",
+			contextLimit: 1200,
+			inputTokens:  900,
+			wantOK:       true,
+			minOutput:    300,
+			maxOutput:    300,
 		},
 		{
 			name:         "zero context limit uses default",

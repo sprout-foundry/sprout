@@ -66,6 +66,9 @@ type Config struct {
 	// Preferences
 	Preferences map[string]interface{} `json:"preferences,omitempty"`
 
+	// Pre-write Validation Configuration
+	EnablePreWriteValidation bool `json:"enable_pre_write_validation,omitempty"`
+
 	// ResourceDirectory stores captured web/vision resources relative to the current working directory.
 	// This can be overridden at runtime with --resource-directory.
 	ResourceDirectory string `json:"resource_directory,omitempty"`

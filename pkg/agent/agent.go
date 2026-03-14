@@ -18,6 +18,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/factory"
 	"github.com/alantheprice/ledit/pkg/mcp"
+	"github.com/alantheprice/ledit/pkg/validation"
 	"golang.org/x/term"
 )
 
@@ -103,12 +104,16 @@ type Agent struct {
 	falseStopDetectionEnabled bool
 	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
 	lastRunTerminationReason  string
+	enablePreWriteValidation  bool               // Enable syntax validation before writes
 
 	// UI integration
 	ui UI // UI provider for dropdowns, etc.
 
 	// Event system
 	eventBus *events.EventBus // Event bus for real-time UI updates
+
+	// Validation system
+	validator *validation.Validator // Syntax validation and async diagnostics
 
 	// Debug logging
 	debugLogFile  *os.File   // File handle for debug logs
@@ -538,9 +543,12 @@ func (a *Agent) GetConfig() *configuration.Config {
 	return a.configManager.GetConfig()
 }
 
-// SetEventBus sets the event bus for real-time UI updates
+// SetEventBus sets the event bus for real-time UI updates and initializes the validator
 func (a *Agent) SetEventBus(eventBus *events.EventBus) {
 	a.eventBus = eventBus
+	// Initialize validator for syntax checking and async diagnostics
+	a.validator = validation.NewValidator(eventBus)
+	a.enablePreWriteValidation = true
 }
 
 // GetEventBus returns the current event bus

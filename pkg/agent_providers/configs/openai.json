@@ -26,6 +26,8 @@
     "default_context_limit": 200000,
     "default_max_completion_tokens": 128000,
     "max_completion_overrides": {
+      "gpt-4o": 16384,
+      "gpt-4o-mini": 16384,
       "gpt-5": 128000,
       "gpt-5-mini": 128000,
       "gpt-5-nano": 128000

@@ -25,6 +25,7 @@ const (
 	EventTypeFileChanged    = "file_changed"
 	EventTypeStreamChunk    = "stream_chunk"
 	EventTypeMetricsUpdate  = "metrics_update"
+	EventTypeValidation     = "validation"
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -169,5 +170,14 @@ func MetricsUpdateEvent(totalTokens, contextTokens, maxContextTokens, iteration 
 		"max_context_tokens": maxContextTokens,
 		"iteration":          iteration,
 		"total_cost":         totalCost,
+	}
+}
+
+// ValidationEvent creates a validation event
+func ValidationEvent(filePath string, diagnostics []map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"file_path":   filePath,
+		"diagnostics": diagnostics,
+		"timestamp":   time.Now().Format(time.RFC3339),
 	}
 }

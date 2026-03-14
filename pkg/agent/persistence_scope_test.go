@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,5 +112,129 @@ func TestSaveStateScoped_WritesScopedPath(t *testing.T) {
 	}
 	if state.WorkingDirectory != workingDir {
 		t.Fatalf("unexpected working directory: %q", state.WorkingDirectory)
+	}
+}
+
+func TestListSessionsWithTimestampsScoped_OnlyReturnsCurrentDirectorySessions(t *testing.T) {
+	stateDir := t.TempDir()
+	orig := getStateDirFunc
+	getStateDirFunc = func() (string, error) { return stateDir, nil }
+	t.Cleanup(func() { getStateDirFunc = orig })
+
+	wd1 := filepath.Join(stateDir, "project-a")
+	wd2 := filepath.Join(stateDir, "project-b")
+	for _, wd := range []string{wd1, wd2} {
+		if err := os.MkdirAll(wd, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", wd, err)
+		}
+	}
+
+	writeScopedSession := func(workingDir, sessionID string, updated time.Time) {
+		path, err := buildScopedSessionFilePath(stateDir, sessionID, workingDir)
+		if err != nil {
+			t.Fatalf("build path: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatalf("mkdir scope: %v", err)
+		}
+		payload, err := json.MarshalIndent(ConversationState{
+			SessionID:        sessionID,
+			WorkingDirectory: workingDir,
+			LastUpdated:      updated,
+		}, "", "  ")
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if err := os.WriteFile(path, payload, 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	writeScopedSession(wd1, "a-older", time.Now().Add(-2*time.Hour))
+	writeScopedSession(wd1, "a-newer", time.Now().Add(-1*time.Hour))
+	writeScopedSession(wd2, "b-only", time.Now())
+
+	sessions, err := ListSessionsWithTimestampsScoped(wd1)
+	if err != nil {
+		t.Fatalf("ListSessionsWithTimestampsScoped: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("expected 2 sessions for wd1, got %d", len(sessions))
+	}
+	if sessions[0].SessionID != "a-newer" || sessions[1].SessionID != "a-older" {
+		t.Fatalf("unexpected session order/content: %#v", sessions)
+	}
+}
+
+func TestCleanupMemorySessions_PrunesOnlyCurrentDirectoryScope(t *testing.T) {
+	stateDir := t.TempDir()
+	orig := getStateDirFunc
+	getStateDirFunc = func() (string, error) { return stateDir, nil }
+	t.Cleanup(func() { getStateDirFunc = orig })
+
+	wd1 := filepath.Join(stateDir, "project-a")
+	wd2 := filepath.Join(stateDir, "project-b")
+	for _, wd := range []string{wd1, wd2} {
+		if err := os.MkdirAll(wd, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", wd, err)
+		}
+	}
+
+	writeScopedSession := func(workingDir, sessionID string, updated time.Time) {
+		path, err := buildScopedSessionFilePath(stateDir, sessionID, workingDir)
+		if err != nil {
+			t.Fatalf("build path: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatalf("mkdir scope: %v", err)
+		}
+		payload, err := json.MarshalIndent(ConversationState{
+			SessionID:        sessionID,
+			WorkingDirectory: workingDir,
+			LastUpdated:      updated,
+		}, "", "  ")
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if err := os.WriteFile(path, payload, 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	base := time.Now().Add(-24 * time.Hour)
+	for i := 0; i < sessionRetentionLimit+2; i++ {
+		writeScopedSession(wd1, fmt.Sprintf("a-%02d", i), base.Add(time.Duration(i)*time.Minute))
+	}
+	for i := 0; i < 3; i++ {
+		writeScopedSession(wd2, fmt.Sprintf("b-%02d", i), base.Add(time.Duration(i)*time.Minute))
+	}
+
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	if err := os.Chdir(wd1); err != nil {
+		t.Fatalf("Chdir wd1: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origWD) })
+
+	if err := cleanupMemorySessions(); err != nil {
+		t.Fatalf("cleanupMemorySessions: %v", err)
+	}
+
+	wd1Sessions, err := ListSessionsWithTimestampsScoped(wd1)
+	if err != nil {
+		t.Fatalf("list wd1 sessions: %v", err)
+	}
+	if len(wd1Sessions) != sessionRetentionLimit {
+		t.Fatalf("expected %d retained sessions for wd1, got %d", sessionRetentionLimit, len(wd1Sessions))
+	}
+
+	wd2Sessions, err := ListSessionsWithTimestampsScoped(wd2)
+	if err != nil {
+		t.Fatalf("list wd2 sessions: %v", err)
+	}
+	if len(wd2Sessions) != 3 {
+		t.Fatalf("expected wd2 sessions to remain untouched, got %d", len(wd2Sessions))
 	}
 }

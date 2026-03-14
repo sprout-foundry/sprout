@@ -12,7 +12,7 @@ import (
 // SessionsFlow handles advanced session operations
 type SessionsFlow struct{}
 
-// ExecuteSessionList lists sessions (current dir first, then newest first)
+// ExecuteSessionList lists sessions for the current working directory, newest first.
 func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error) {
 	sessions, err := agent.ListSessionsWithTimestamps()
 	if err != nil {
@@ -24,7 +24,7 @@ func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error
 	}
 
 	var builder strings.Builder
-	builder.WriteString("📋 Saved Sessions (current dir first, then newest):\n")
+	builder.WriteString("📋 Saved Sessions (current directory, newest first):\n")
 	builder.WriteString(strings.Repeat("-", 100))
 	builder.WriteString("\n")
 

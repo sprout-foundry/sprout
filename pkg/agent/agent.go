@@ -175,8 +175,8 @@ func NewAgent() (*Agent, error) {
 
 // NewAgentWithModel creates a new agent with optional model override
 func NewAgentWithModel(model string) (*Agent, error) {
-	// Initialize configuration manager
-	configManager, err := configuration.NewManager()
+	// Initialize configuration manager (silent mode for faster startup)
+	configManager, err := configuration.NewManagerSilent()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize configuration: %w", err)
 	}

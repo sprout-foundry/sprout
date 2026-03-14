@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -25,6 +26,7 @@ type ConversationHandler struct {
 	consecutiveBlankIterations int
 	conversationStartTime      time.Time
 	lastActivityTime           time.Time
+	transientMessagesMu        sync.Mutex
 	transientMessages          []api.Message
 	pendingUserMessage         string
 	turnHistory                []TurnEvaluation

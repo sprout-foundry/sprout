@@ -124,18 +124,27 @@ func TestSessionPersistenceWithName(t *testing.T) {
 		sessionID: "test_session_123",
 	}
 
+	workingDir := t.TempDir()
+
 	// Save session
 	stateDir, err := GetStateDir()
 	if err != nil {
 		t.Fatalf("GetStateDir() failed: %v", err)
 	}
-	stateFile := filepath.Join(stateDir, "session_test_session_123.json")
+	stateFile, err := buildScopedSessionFilePath(stateDir, "test_session_123", workingDir)
+	if err != nil {
+		t.Fatalf("buildScopedSessionFilePath failed: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(stateFile), 0o700); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
 
 	state := ConversationState{
-		Messages:    agent.messages,
-		SessionID:   agent.sessionID,
-		Name:        "Test Refactoring Session",
-		LastUpdated: time.Now(),
+		Messages:         agent.messages,
+		SessionID:        agent.sessionID,
+		Name:             "Test Refactoring Session",
+		LastUpdated:      time.Now(),
+		WorkingDirectory: workingDir,
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -148,9 +157,9 @@ func TestSessionPersistenceWithName(t *testing.T) {
 	}
 
 	// Verify name is in session info
-	sessions, err := ListSessionsWithTimestamps()
+	sessions, err := ListSessionsWithTimestampsScoped(workingDir)
 	if err != nil {
-		t.Fatalf("ListSessionsWithTimestamps failed: %v", err)
+		t.Fatalf("ListSessionsWithTimestampsScoped failed: %v", err)
 	}
 
 	if len(sessions) != 1 {

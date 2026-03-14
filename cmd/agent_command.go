@@ -29,6 +29,7 @@ var (
 	agentNoSubagents       bool
 	agentResourceDirectory string
 	agentWorkflowConfig    string
+	agentNoConnectionCheck bool
 )
 
 func createChatAgent() (*agent.Agent, error) {
@@ -70,6 +71,7 @@ func createChatAgent() (*agent.Agent, error) {
 
 func init() {
 	agentCmd.Flags().BoolVar(&agentSkipPrompt, "skip-prompt", false, "Skip user prompts (enhanced by automated validation)")
+	agentCmd.Flags().BoolVar(&agentNoConnectionCheck, "no-connection-check", false, "Skip provider connection check at startup (saves 1-3 seconds)")
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
 	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, chutes, openrouter, deepinfra, deepseek, zai, mistral, ollama, ollama-local, ollama-turbo, lmstudio, or custom providers)")
 	agentCmd.Flags().StringVar(&agentSessionID, "session-id", "", "Resume a specific session ID in the current working directory scope")
@@ -95,6 +97,10 @@ func init() {
 		// Check for LEDIT_NO_SUBAGENTS environment variable
 		if os.Getenv("LEDIT_NO_SUBAGENTS") == "1" || os.Getenv("LEDIT_NO_SUBAGENTS") == "true" {
 			agentNoSubagents = true
+		}
+		// Check for LEDIT_NO_CONNECTION_CHECK environment variable
+		if os.Getenv("LEDIT_NO_CONNECTION_CHECK") == "1" || os.Getenv("LEDIT_NO_CONNECTION_CHECK") == "true" {
+			agentNoConnectionCheck = true
 		}
 	})
 }
@@ -171,7 +177,11 @@ Examples:
   ledit agent --persona web-scraper "Collect pricing table data from docs pages"
 
   # With custom provider (configured via 'ledit custom add')
-  ledit agent --provider my-custom-llm --model "custom-model-v1" "Review this code"
+  ledit agent --provider my-custom-slow --model "custom-model-v1" "Review this code"
+
+  # Skip connection check for faster startup (saves 1-3 seconds)
+  ledit agent --no-connection-check "Quick analysis"
+  LEDIT_NO_CONNECTION_CHECK=1 ledit agent "Another quick analysis"
 
   # Non-interactive run with an agent workflow
   ledit agent --workflow-config examples/agent_workflow.json
@@ -201,6 +211,9 @@ Examples:
 
 		if agentDryRun {
 			_ = os.Setenv("LEDIT_DRY_RUN", "1")
+		}
+		if agentNoConnectionCheck {
+			os.Setenv("LEDIT_SKIP_CONNECTION_CHECK", "1")
 		}
 		if strings.TrimSpace(agentResourceDirectory) != "" {
 			_ = os.Setenv("LEDIT_RESOURCE_DIRECTORY", strings.TrimSpace(agentResourceDirectory))

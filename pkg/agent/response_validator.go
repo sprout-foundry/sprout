@@ -167,6 +167,11 @@ func (rv *ResponseValidator) LooksLikeTentativePostToolResponse(content string) 
 		"i'll ",
 		"i will ",
 		"i'm going to ",
+		"i need to ",
+		"now i need to ",
+		"next i need to ",
+		"now i can ",
+		"next i can ",
 		"now i'll ",
 		"next i'll ",
 		"next, i'll ",
@@ -191,10 +196,33 @@ func (rv *ResponseValidator) LooksLikeTentativePostToolResponse(content string) 
 		"i'll inspect",
 		"i'll verify",
 		"i'll look into",
+		"now i need to",
+		"next i need to",
+		"the next step is",
+		"the next thing i need to do is",
 	}
 	for _, phrase := range planningPhrases {
 		if strings.Contains(lower, phrase) && wordCount <= 40 {
 			return true
+		}
+	}
+
+	acknowledgementPrefixes := []string{
+		"good,",
+		"okay,",
+		"ok,",
+		"great,",
+		"alright,",
+	}
+	for _, prefix := range acknowledgementPrefixes {
+		if strings.HasPrefix(lower, prefix) && wordCount <= 50 {
+			if strings.Contains(lower, "now i need to") ||
+				strings.Contains(lower, "next i need to") ||
+				strings.Contains(lower, "now i'll") ||
+				strings.Contains(lower, "next i'll") ||
+				strings.Contains(lower, "the next step is") {
+				return true
+			}
 		}
 	}
 

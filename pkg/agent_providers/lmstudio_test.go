@@ -1,7 +1,13 @@
 package providers
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -10,13 +16,47 @@ func TestLMStudioConnectionNoAuth(t *testing.T) {
 	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("Skipping LM Studio connection test in CI environment")
 	}
-	// Test that LM Studio provider can connect without API key for local instances
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if authHeader := strings.TrimSpace(r.Header.Get("Authorization")); authHeader != "" {
+			t.Fatalf("expected no authorization header for local LM Studio test, got %q", authHeader)
+		}
+
+		if r.URL.Path != "/" {
+			t.Fatalf("expected request path /, got %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":      "test-chatcmpl",
+			"object":  "chat.completion",
+			"created": 1234567890,
+			"model":   "qwen3-coder:30b",
+			"choices": []map[string]any{
+				{
+					"index": 0,
+					"message": map[string]any{
+						"role":    "assistant",
+						"content": "ok",
+					},
+					"finish_reason": "stop",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	parsed, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("failed to parse test server URL: %v", err)
+	}
+
 	testCases := []struct {
 		name     string
 		endpoint string
 	}{
-		{"127.0.0.1", "http://127.0.0.1:1234"},
-		{"localhost", "http://localhost:1234"},
+		{"127.0.0.1", fmt.Sprintf("http://127.0.0.1:%s", parsed.Port())},
+		{"localhost", fmt.Sprintf("http://localhost:%s", parsed.Port())},
 	}
 
 	for _, tc := range testCases {
@@ -29,48 +69,23 @@ func TestLMStudioConnectionNoAuth(t *testing.T) {
 				},
 				Models: ModelConfig{
 					DefaultModel:        "qwen3-coder:30b",
-					DefaultContextLimit: 4096, // Add required context limit
+					DefaultContextLimit: 4096,
 					AvailableModels:     []string{"qwen3-coder:30b"},
 				},
 				Auth: AuthConfig{
 					Type:   "bearer",
-					EnvVar: "", // Empty env var for local LM Studio
+					EnvVar: "",
 				},
 			}
 
 			provider, err := NewGenericProvider(config)
 			if err != nil {
-				t.Fatalf("Failed to create provider: %v", err)
+				t.Fatalf("failed to create provider: %v", err)
 			}
 
-			// This should not fail due to auth issues for local instances
-			// It may fail due to connection issues if LM Studio is not running, but not due to auth
-			err = provider.CheckConnection()
-			if err != nil {
-				// Check if it's an auth error - if so, the fix didn't work
-				if contains(err.Error(), "authentication") || contains(err.Error(), "auth") || contains(err.Error(), "token") {
-					t.Fatalf("Connection failed due to auth error (fix didn't work): %v", err)
-				}
-				// Otherwise it's a connection error (LM Studio not running), which is expected
-				t.Logf("Connection failed (expected if LM Studio not running): %v", err)
-			} else {
-				t.Logf("✅ Connection successful - LM Studio is running and accessible")
+			if err := provider.CheckConnection(); err != nil {
+				t.Fatalf("expected local LM Studio connection check to succeed without auth, got: %v", err)
 			}
 		})
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-			indexOf(s, substr) >= 0))
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

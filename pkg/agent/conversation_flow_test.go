@@ -240,6 +240,32 @@ func TestHandleFinishReason_StopWithTentativePostToolContentContinues(t *testing
 	}
 }
 
+func TestHandleFinishReason_StopWithAcknowledgedNextStepPostToolContentContinues(t *testing.T) {
+	agent := &Agent{
+		messages: []api.Message{
+			{Role: "user", Content: "Add validation events"},
+			{Role: "assistant", Content: "I will inspect the events package.", ToolCalls: []api.ToolCall{{ID: "call_1"}}},
+			{Role: "tool", ToolCallId: "call_1", Content: "events constants already exist"},
+			{Role: "assistant", Content: "Good, the constant already exists. Now I need to add the ValidationEvent struct type and helper functions to the events package:"},
+		},
+	}
+	ch := &ConversationHandler{
+		agent:             agent,
+		responseValidator: NewResponseValidator(agent),
+	}
+
+	shouldStop, reason := ch.handleFinishReason("stop", "Good, the constant already exists. Now I need to add the ValidationEvent struct type and helper functions to the events package:")
+	if shouldStop {
+		t.Fatalf("expected acknowledged next-step post-tool response to continue, got stop=true (reason=%q)", reason)
+	}
+	if reason != "tentative post-tool stop response" {
+		t.Fatalf("expected reason 'tentative post-tool stop response', got %q", reason)
+	}
+	if len(ch.transientMessages) != 1 {
+		t.Fatalf("expected one transient message, got %d", len(ch.transientMessages))
+	}
+}
+
 func TestHandleFinishReason_StopWithConcretePostToolAnswerCompletes(t *testing.T) {
 	agent := &Agent{
 		messages: []api.Message{

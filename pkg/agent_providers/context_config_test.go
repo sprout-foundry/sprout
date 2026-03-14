@@ -111,6 +111,7 @@ func TestConfigurationBasedCompletionLimits(t *testing.T) {
 			DefaultMaxCompletionTokens: 16000,
 			MaxCompletionOverrides: map[string]int{
 				"special-model": 20000,
+				"gpt-4o-mini":   16384,
 			},
 			CompletionPatternOverrides: []PatternOverride{
 				{
@@ -126,6 +127,7 @@ func TestConfigurationBasedCompletionLimits(t *testing.T) {
 		expectedLimit int
 	}{
 		{"special-model", 20000},
+		{"gpt-4o-mini", 16384},
 		{"gpt-4-turbo", 64000},
 		{"unknown-model", 16000},
 	}

@@ -206,6 +206,15 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		a.debugLog("Warning: Failed to track file write: %v\n", trackErr)
 	}
 
+	// Pre-write validation: check syntax before writing
+	if a.validator != nil && a.configManager.GetConfig().EnablePreWriteValidation {
+		if err := a.validator.ValidateSyntax(ctx, path, content); err != nil {
+			a.debugLog("Pre-write validation failed: %v\n", err)
+			// Don't fail the write - let it through but log the warning
+			a.debugLog("Proceeding with write despite validation warning\n")
+		}
+	}
+
 	result, err := tools.WriteFile(ctx, path, content)
 
 	if err != nil {
@@ -227,6 +236,11 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 	if err == nil && a.eventBus != nil {
 		a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "write", content))
 		a.debugLog("Published file_changed event: %s (write)\n", path)
+	}
+
+	// Start async validation (fire-and-forget)
+	if a.validator != nil {
+		a.validator.RunAsyncValidation(ctx, path, content)
 	}
 
 	return result, err
@@ -322,6 +336,13 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		} else {
 			a.eventBus.Publish(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", ""))
 			a.debugLog("Published file_changed event: %s (edit, no content)\n", path)
+		}
+
+		// Start async validation (fire-and-forget)
+		if a.validator != nil {
+			if content, readErr := tools.ReadFile(ctx, path); readErr == nil {
+				a.validator.RunAsyncValidation(ctx, path, content)
+			}
 		}
 	}
 

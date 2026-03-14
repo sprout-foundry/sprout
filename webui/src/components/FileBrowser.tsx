@@ -7,7 +7,7 @@ export interface FileNode {
   path: string;
   type: 'file' | 'directory';
   size?: number;
-  modified?: string;
+  modified?: number;
   children?: FileNode[];
 }
 
@@ -19,33 +19,6 @@ interface FileBrowserProps {
   allowDirectories?: boolean;
   allowedExtensions?: string[];
 }
-
-// Mock file system data - in real implementation, this would come from API
-const mockFileSystem: { [key: string]: FileNode[] } = {
-    '/': [
-      { id: '1', name: 'src', path: '/src', type: 'directory' },
-      { id: '2', name: 'pkg', path: '/pkg', type: 'directory' },
-      { id: '3', name: 'cmd', path: '/cmd', type: 'directory' },
-      { id: '4', name: 'go.mod', path: '/go.mod', type: 'file', size: 1024 },
-      { id: '5', name: 'README.md', path: '/README.md', type: 'file', size: 2048 },
-      { id: '6', name: 'package.json', path: '/package.json', type: 'file', size: 512 }
-    ],
-    '/src': [
-      { id: '7', name: 'main.go', path: '/src/main.go', type: 'file', size: 4096 },
-      { id: '8', name: 'utils', path: '/src/utils', type: 'directory' },
-      { id: '9', name: 'config', path: '/src/config', type: 'directory' }
-    ],
-    '/pkg': [
-      { id: '10', name: 'ui', path: '/pkg/ui', type: 'directory' },
-      { id: '11', name: 'agent', path: '/pkg/agent', type: 'directory' },
-      { id: '12', name: 'console', path: '/pkg/console', type: 'directory' }
-    ],
-    '/cmd': [
-      { id: '13', name: 'agent.go', path: '/cmd/agent.go', type: 'file', size: 8192 },
-      { id: '14', name: 'root.go', path: '/cmd/root.go', type: 'file', size: 2048 },
-      { id: '15', name: 'version.go', path: '/cmd/version.go', type: 'file', size: 512 }
-    ]
-  };
 
 const FileBrowser: React.FC<FileBrowserProps> = ({
   isOpen,
@@ -61,6 +34,13 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentPath(initialPath);
+      setSelectedFile(null);
+    }
+  }, [initialPath, isOpen]);
+
   const loadDirectory = useCallback(async (path: string) => {
     setLoading(true);
     setError(null);
@@ -73,7 +53,14 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
       }
       
       const data = await response.json();
-      const directoryFiles = data.files || [];
+      const directoryFiles: FileNode[] = (data.files || []).map((file: any) => ({
+        id: file.path || `${path}/${file.name}`,
+        name: file.name,
+        path: file.path,
+        type: file.type === 'directory' ? 'directory' : 'file',
+        size: file.size,
+        modified: typeof file.modified === 'number' ? file.modified : undefined
+      }));
       
       const sortedFiles = directoryFiles.sort((a: any, b: any) => {
         // Directories first
@@ -88,19 +75,12 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
       setSelectedFile(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load directory');
-      // Fallback to mock data for development
-      const directoryFiles = mockFileSystem[path] || [];
-      const sortedFiles = directoryFiles.sort((a, b) => {
-        if (a.type !== b.type) {
-          return a.type === 'directory' ? -1 : 1;
-        }
-        return a.name.localeCompare(b.name);
-      });
-      setFiles(sortedFiles);
+      setFiles([]);
+      setSelectedFile(null);
     } finally {
       setLoading(false);
     }
-  }, [setLoading, setError, setFiles]);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -205,7 +185,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
                     <div className="filebrowser-name">{file.name}</div>
                     <div className="filebrowser-details">
                       {file.type === 'directory' ? 'Directory' : formatFileSize(file.size || 0)}
-                      {file.modified && ` • ${new Date(file.modified).toLocaleDateString()}`}
+                      {file.modified && ` • ${new Date(file.modified * 1000).toLocaleDateString()}`}
                     </div>
                   </div>
                 </div>

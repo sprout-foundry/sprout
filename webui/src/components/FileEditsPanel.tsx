@@ -145,6 +145,12 @@ const FileEditsPanel: React.FC<FileEditsPanelProps> = ({ edits, onFileClick }) =
               key={index}
               className="edit-item"
               onClick={() => onFileClick?.(edit.path)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onFileClick?.(edit.path);
+                }
+              }}
               role="button"
               tabIndex={0}
               title={edit.path}

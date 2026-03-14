@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import './Sidebar.css';
 import { ApiService, ProviderOption } from '../services/api';
-import { viewRegistry, ProviderContext, SidebarSection } from '../providers';
+import { viewRegistry, ProviderContext, SidebarSection, ProviderLogEntry } from '../providers';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -98,6 +98,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     recentLogs.length > 0 ? recentLogs : (logs || []),
     [recentLogs, logs]
   );
+  const normalizedRecentLogs = useMemo<ProviderLogEntry[]>(
+    () => (finalRecentLogs as Array<string | ProviderLogEntry>)
+      .filter((log): log is ProviderLogEntry => typeof log !== 'string'),
+    [finalRecentLogs]
+  );
 
   const finalIsMobileMenuOpen = isMobileMenuOpen !== undefined ? isMobileMenuOpen : isOpen;
   const finalOnMobileMenuToggle = onMobileMenuToggle || onClose;
@@ -110,12 +115,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       onFileClick,
       onModelChange,
       recentFiles: finalRecentFiles,
-      recentLogs: finalRecentLogs,
+      recentLogs: normalizedRecentLogs,
       stats: finalStats
     };
 
     viewRegistry.setContext(context);
-  }, [isConnected, currentView, onFileClick, onModelChange, finalRecentFiles, finalRecentLogs, finalStats]);
+  }, [isConnected, currentView, onFileClick, onModelChange, finalRecentFiles, normalizedRecentLogs, finalStats]);
 
   // Subscribe to provider updates for current view
   useEffect(() => {

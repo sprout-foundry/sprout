@@ -10,9 +10,18 @@ import (
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 )
 
-// prepareMessages prepares and optimizes the message list for API submission
-func (ch *ConversationHandler) prepareMessages() []api.Message {
+// prepareMessages prepares and optimizes the message list for API submission.
+// Pruning must run against the same payload shape that will actually be sent,
+// including transient messages and tool definitions.
+func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	var optimizedMessages []api.Message
+	pendingTransientMessages := append([]api.Message(nil), ch.transientMessages...)
+	appendPendingTransient := func(messages []api.Message) []api.Message {
+		if len(pendingTransientMessages) == 0 {
+			return messages
+		}
+		return append(messages, pendingTransientMessages...)
+	}
 
 	// Use conversation optimizer if enabled
 	if ch.agent.optimizer != nil && ch.agent.optimizer.IsEnabled() {
@@ -49,8 +58,13 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 	allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
 	allMessages = append(allMessages, optimizedMessages...)
 
-	// Check context limits and apply pruning if needed
-	currentTokens := ch.estimateTokens(allMessages)
+	allMessages = appendPendingTransient(allMessages)
+	allMessages = collapseSystemMessagesToFront(allMessages)
+	allMessages = ch.sanitizeToolMessages(allMessages)
+
+	// Check context limits and apply pruning against the actual request payload,
+	// not just the persisted conversation history.
+	currentTokens := ch.apiClient.estimateRequestTokens(allMessages, tools)
 	if ch.agent.maxContextTokens > 0 {
 		// Create pruner if needed and check if we should prune
 		if ch.agent.conversationPruner == nil {
@@ -64,26 +78,36 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 					currentTokens, ch.agent.maxContextTokens, contextUsage*100))
 			}
 
-			// Apply pruning to optimized messages (excluding system prompt)
-			prunedMessages := ch.agent.conversationPruner.PruneConversation(optimizedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider(), true)
+			prunedMessages := optimizedMessages
+			for pass := 0; pass < 2; pass++ {
+				// Apply pruning to persisted messages, then rebuild the final payload
+				// with transient messages and tool definitions included in the estimate.
+				prunedMessages = ch.agent.conversationPruner.PruneConversation(prunedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider(), true)
 
-			// Rebuild with system prompt
-			allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
-			allMessages = append(allMessages, prunedMessages...)
+				allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+				allMessages = append(allMessages, prunedMessages...)
+				allMessages = appendPendingTransient(allMessages)
+				allMessages = collapseSystemMessagesToFront(allMessages)
+				allMessages = ch.sanitizeToolMessages(allMessages)
+				currentTokens = ch.apiClient.estimateRequestTokens(allMessages, tools)
+
+				if !ch.agent.conversationPruner.ShouldPrune(currentTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
+					break
+				}
+				if ch.agent.debug {
+					ch.agent.PrintLineAsync(fmt.Sprintf("🔁 Context still high after prune pass %d: %d/%d tokens", pass+1, currentTokens, ch.agent.maxContextTokens))
+				}
+			}
+
 			// Persist pruned history so future iterations don't re-trigger on stale counts
 			ch.agent.messages = prunedMessages
 
 			if ch.agent.debug {
-				newTokens := ch.estimateTokens(allMessages)
 				ch.agent.PrintLineAsync(fmt.Sprintf("✅ Context after pruning: %d tokens (%.1f%%)",
-					newTokens, float64(newTokens)/float64(ch.agent.maxContextTokens)*100))
+					currentTokens, float64(currentTokens)/float64(ch.agent.maxContextTokens)*100))
 			}
 		}
 	}
-
-	allMessages = ch.appendTransientMessages(allMessages)
-	allMessages = collapseSystemMessagesToFront(allMessages)
-	allMessages = ch.sanitizeToolMessages(allMessages)
 
 	// DeepSeek-specific validation (including DeepSeek model families behind proxy providers)
 	if strings.EqualFold(ch.agent.GetProvider(), "deepseek") || strings.Contains(strings.ToLower(ch.agent.GetModel()), "deepseek") {
@@ -97,6 +121,7 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 
 	// Final safeguard: remove any orphaned tool results before sending to API
 	allMessages = ch.removeOrphanedToolResults(allMessages)
+	ch.transientMessages = nil
 
 	return allMessages
 }

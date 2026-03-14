@@ -6,6 +6,7 @@
  */
 
 import { ContentProvider, ProviderContext, SidebarSection, Action, ActionResult } from './types';
+import { debugLog } from '../utils/log';
 
 class ViewRegistry {
   private providers = new Map<string, ContentProvider>();
@@ -13,7 +14,7 @@ class ViewRegistry {
 
   register(provider: ContentProvider): void {
     this.providers.set(provider.viewType, provider);
-    console.log(`Registered provider: ${provider.name} for view: ${provider.viewType}`);
+    debugLog(`Registered provider: ${provider.name} for view: ${provider.viewType}`);
   }
 
   unregister(viewType: string): void {

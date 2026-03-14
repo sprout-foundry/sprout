@@ -82,6 +82,7 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 	}
 
 	allMessages = ch.appendTransientMessages(allMessages)
+	allMessages = collapseSystemMessagesToFront(allMessages)
 	allMessages = ch.sanitizeToolMessages(allMessages)
 
 	// DeepSeek-specific validation (including DeepSeek model families behind proxy providers)
@@ -98,6 +99,40 @@ func (ch *ConversationHandler) prepareMessages() []api.Message {
 	allMessages = ch.removeOrphanedToolResults(allMessages)
 
 	return allMessages
+}
+
+func collapseSystemMessagesToFront(messages []api.Message) []api.Message {
+	if len(messages) <= 1 {
+		return messages
+	}
+
+	firstSystemIndex := -1
+	var systemParts []string
+	nonSystem := make([]api.Message, 0, len(messages))
+
+	for i, msg := range messages {
+		if msg.Role != "system" {
+			nonSystem = append(nonSystem, msg)
+			continue
+		}
+
+		if firstSystemIndex == -1 {
+			firstSystemIndex = i
+		}
+		if content := strings.TrimSpace(msg.Content); content != "" {
+			systemParts = append(systemParts, content)
+		}
+	}
+
+	if firstSystemIndex <= 0 && len(systemParts) <= 1 {
+		return messages
+	}
+
+	merged := api.Message{Role: "system", Content: strings.Join(systemParts, "\n\n")}
+	result := make([]api.Message, 0, len(nonSystem)+1)
+	result = append(result, merged)
+	result = append(result, nonSystem...)
+	return result
 }
 
 // removeOrphanedToolResults removes tool result messages whose tool_call_id

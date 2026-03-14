@@ -1,19 +1,32 @@
 package cmd
 
-import "testing"
+import (
+	"testing"
 
-func TestParseToolCallList(t *testing.T) {
-	got := parseToolCallList(" read_file,write_file, read_file , ,search_files ")
-	if len(got) != 3 {
-		t.Fatalf("expected 3 tool names, got %d", len(got))
+	"github.com/alantheprice/ledit/pkg/configuration"
+)
+
+func TestResolvePreferredCustomProviderModelAllowsNumericSelection(t *testing.T) {
+	models := []configuration.ProviderDiscoveryModel{
+		{ID: "qwen3.5-4b"},
+		{ID: "qwen3.5-35-A3B"},
 	}
-	if got[0] != "read_file" {
-		t.Fatalf("expected first tool to be read_file, got %q", got[0])
+
+	selected, err := resolvePreferredCustomProviderModel("2", models)
+	if err != nil {
+		t.Fatalf("expected numeric selection to succeed, got error: %v", err)
 	}
-	if got[1] != "write_file" {
-		t.Fatalf("expected second tool to be write_file, got %q", got[1])
+	if selected != "qwen3.5-35-A3B" {
+		t.Fatalf("expected second discovered model, got %q", selected)
 	}
-	if got[2] != "search_files" {
-		t.Fatalf("expected third tool to be search_files, got %q", got[2])
+}
+
+func TestResolvePreferredCustomProviderModelRejectsUnknownName(t *testing.T) {
+	models := []configuration.ProviderDiscoveryModel{
+		{ID: "qwen3.5-4b"},
+	}
+
+	if _, err := resolvePreferredCustomProviderModel("missing-model", models); err == nil {
+		t.Fatal("expected unknown discovered model to fail validation")
 	}
 }

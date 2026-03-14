@@ -30,6 +30,14 @@ type GitFile struct {
 	Staged bool   `json:"staged,omitempty"`
 }
 
+func (ws *ReactWebServer) gitCommand(args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	if strings.TrimSpace(ws.workspaceRoot) != "" {
+		cmd.Dir = ws.workspaceRoot
+	}
+	return cmd
+}
+
 // handleAPIGitStatus handles git status requests
 func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -37,7 +45,7 @@ func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	status, err := getGitStatus()
+	status, err := ws.getGitStatus()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get git status: %v", err), http.StatusInternalServerError)
 		return
@@ -73,7 +81,7 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Stage the file
-	cmd := exec.Command("git", "add", "--", req.Path)
+	cmd := ws.gitCommand("add", "--", req.Path)
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to stage file: %v", err), http.StatusInternalServerError)
 		return
@@ -113,7 +121,7 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 	}
 
 	// Unstage the file
-	cmd := exec.Command("git", "reset", "HEAD", "--", req.Path)
+	cmd := ws.gitCommand("reset", "HEAD", "--", req.Path)
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to unstage file: %v", err), http.StatusInternalServerError)
 		return
@@ -153,7 +161,7 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 	}
 
 	// Discard changes (checkout from HEAD)
-	cmd := exec.Command("git", "checkout", "--", req.Path)
+	cmd := ws.gitCommand("checkout", "--", req.Path)
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to discard changes: %v", err), http.StatusInternalServerError)
 		return
@@ -179,7 +187,7 @@ func (ws *ReactWebServer) handleAPIGitStageAll(w http.ResponseWriter, r *http.Re
 	}
 
 	// Stage all changes
-	cmd := exec.Command("git", "add", "-A")
+	cmd := ws.gitCommand("add", "-A")
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to stage all: %v", err), http.StatusInternalServerError)
 		return
@@ -204,7 +212,7 @@ func (ws *ReactWebServer) handleAPIGitUnstageAll(w http.ResponseWriter, r *http.
 	}
 
 	// Unstage all changes
-	cmd := exec.Command("git", "reset", "HEAD")
+	cmd := ws.gitCommand("reset", "HEAD")
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to unstage all: %v", err), http.StatusInternalServerError)
 		return
@@ -222,9 +230,9 @@ func (ws *ReactWebServer) handleAPIGitUnstageAll(w http.ResponseWriter, r *http.
 }
 
 // getGitStatus parses git status output
-func getGitStatus() (*GitStatus, error) {
+func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
 	// Check if we're in a git repository
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
+	cmd := ws.gitCommand("rev-parse", "--git-dir")
 	if err := cmd.Run(); err != nil {
 		// Not in a git repository
 		return &GitStatus{
@@ -239,14 +247,14 @@ func getGitStatus() (*GitStatus, error) {
 	status := &GitStatus{}
 
 	// Get current branch
-	cmd = exec.Command("git", "branch", "--show-current")
+	cmd = ws.gitCommand("branch", "--show-current")
 	output, err := cmd.Output()
 	if err == nil {
 		status.Branch = strings.TrimSpace(string(output))
 	}
 
 	// Get ahead/behind info
-	cmd = exec.Command("git", "rev-list", "--count", "--left-right", "@{u}...HEAD")
+	cmd = ws.gitCommand("rev-list", "--count", "--left-right", "@{u}...HEAD")
 	output, err = cmd.Output()
 	if err == nil {
 		parts := strings.Fields(string(output))
@@ -257,7 +265,7 @@ func getGitStatus() (*GitStatus, error) {
 	}
 
 	// Get staged changes
-	cmd = exec.Command("git", "diff", "--name-status", "--cached")
+	cmd = ws.gitCommand("diff", "--name-status", "--cached")
 	output, err = cmd.Output()
 	if err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
@@ -276,7 +284,7 @@ func getGitStatus() (*GitStatus, error) {
 	}
 
 	// Get unstaged changes
-	cmd = exec.Command("git", "diff", "--name-status")
+	cmd = ws.gitCommand("diff", "--name-status")
 	output, err = cmd.Output()
 	if err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
@@ -317,7 +325,7 @@ func getGitStatus() (*GitStatus, error) {
 	}
 
 	// Get untracked files
-	cmd = exec.Command("git", "ls-files", "--others", "--exclude-standard")
+	cmd = ws.gitCommand("ls-files", "--others", "--exclude-standard")
 	output, err = cmd.Output()
 	if err == nil {
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
@@ -369,7 +377,7 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Check if there are staged changes
-	cmd := exec.Command("git", "diff", "--cached", "--quiet")
+	cmd := ws.gitCommand("diff", "--cached", "--quiet")
 	if err := cmd.Run(); err != nil {
 		// Exit code 1 means there ARE differences (staged changes)
 		// Exit code 0 means no differences
@@ -380,7 +388,7 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Create the commit
-	cmd = exec.Command("git", "commit", "-m", req.Message)
+	cmd = ws.gitCommand("commit", "-m", req.Message)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create commit: %v\nOutput: %s", err, string(output)), http.StatusInternalServerError)

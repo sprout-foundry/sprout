@@ -130,7 +130,7 @@ func runCustomModelAdd() error {
 			}
 			selectedModel, err := resolvePreferredCustomProviderModel(preferred, models)
 			if err != nil {
-				fmt.Printf("⚠️  %v\n", err)
+				fmt.Printf("\n⚠️  %v\n", err)
 				continue
 			}
 			provider.ModelName = selectedModel

@@ -75,7 +75,7 @@ func Initialize() (*Config, *APIKeys, error) {
 		if RequiresAPIKey(currentProvider) && !HasProviderCredential(currentProvider, apiKeys) {
 			needsSetup = true
 			if !isCI {
-				fmt.Printf("⚠️  Current provider '%s' requires an API key but none is configured.\n", getProviderDisplayName(currentProvider))
+				fmt.Printf("\n⚠️  Current provider '%s' requires an API key but none is configured.\n", getProviderDisplayName(currentProvider))
 			}
 		}
 	}

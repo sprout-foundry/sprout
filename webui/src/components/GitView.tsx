@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './GitView.css';
+import { ApiService } from '../services/api';
 
 interface GitStatus {
   branch: string;
@@ -23,6 +24,7 @@ interface GitFile {
 }
 
 interface GitViewProps {
+  refreshToken?: number;
   onCommit?: (message: string, files: string[]) => void | Promise<unknown>;
   onStage?: (files: string[]) => void | Promise<unknown>;
   onUnstage?: (files: string[]) => void | Promise<unknown>;
@@ -30,6 +32,7 @@ interface GitViewProps {
 }
 
 const GitView: React.FC<GitViewProps> = ({
+  refreshToken = 0,
   onCommit,
   onStage,
   onUnstage,
@@ -42,46 +45,49 @@ const GitView: React.FC<GitViewProps> = ({
   const [isActing, setIsActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const apiService = ApiService.getInstance();
 
-  // Load git status from API
-  useEffect(() => {
-    const loadGitStatus = async () => {
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const response = await fetch('/api/git/status');
-        if (!response.ok) {
-          throw new Error(`Failed to load git status: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        if (data.message === 'success') {
-          // Handle null values from API
-          const status = data.status || {};
-          setGitStatus({
-            branch: status.branch || 'main',
-            ahead: status.ahead || 0,
-            behind: status.behind || 0,
-            staged: status.staged || [],
-            modified: status.modified || [],
-            untracked: status.untracked || [],
-            deleted: status.deleted || [],
-            renamed: status.renamed || [],
-            clean: !(status.staged?.length || status.modified?.length || status.untracked?.length || status.deleted?.length)
-          });
-        } else {
-          throw new Error(data.message || 'Unknown error');
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load git status');
-      } finally {
-        setIsLoading(false);
+  const loadGitStatus = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const data = await apiService.getGitStatus();
+      if (data.message === 'success') {
+        const status = data.status || {
+          branch: '',
+          ahead: 0,
+          behind: 0,
+          staged: [],
+          modified: [],
+          untracked: [],
+          deleted: [],
+          renamed: []
+        };
+        setGitStatus({
+          branch: status.branch || '',
+          ahead: status.ahead || 0,
+          behind: status.behind || 0,
+          staged: status.staged || [],
+          modified: status.modified || [],
+          untracked: status.untracked || [],
+          deleted: status.deleted || [],
+          renamed: status.renamed || [],
+          clean: !(status.staged?.length || status.modified?.length || status.untracked?.length || status.deleted?.length || status.renamed?.length)
+        });
+      } else {
+        throw new Error(data.message || 'Unknown error');
       }
-    };
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load git status');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiService]);
 
+  useEffect(() => {
     loadGitStatus();
-  }, []);
+  }, [loadGitStatus, refreshToken]);
 
   const handleFileSelect = (filePath: string) => {
     setSelectedFiles(prev => {
@@ -133,6 +139,8 @@ const GitView: React.FC<GitViewProps> = ({
     setIsActing(true);
     try {
       await action();
+      await loadGitStatus();
+      setSelectedFiles(new Set());
     } catch (err) {
       setActionError(err instanceof Error ? err.message : fallbackMessage);
     } finally {
@@ -204,7 +212,7 @@ const GitView: React.FC<GitViewProps> = ({
         <div className="git-error">
           <span className="error-icon">❌</span>
           <p>{error}</p>
-          <button onClick={() => window.location.reload()}>Retry</button>
+          <button onClick={() => loadGitStatus()}>Retry</button>
         </div>
       </div>
     );

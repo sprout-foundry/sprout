@@ -10,6 +10,7 @@ class WebSocketService {
   private pingInterval: NodeJS.Timeout | null = null;
   private lastPongTime = Date.now();
   private intentionalClose = false;
+  private reconnectTimeout: NodeJS.Timeout | null = null;
 
   private constructor() {}
 
@@ -42,6 +43,15 @@ class WebSocketService {
   }
 
   connect() {
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+
     // Use environment variable if provided, otherwise use relative URL
     const wsUrl = process.env.REACT_APP_WS_URL || (() => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -68,8 +78,9 @@ class WebSocketService {
       // Only reconnect if not intentionally closed and not already reconnecting
       if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
-        setTimeout(() => {
+        this.reconnectTimeout = setTimeout(() => {
           console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+          this.reconnectTimeout = null;
           this.connect();
         }, this.reconnectDelay * this.reconnectAttempts);
       }
@@ -114,6 +125,11 @@ class WebSocketService {
 
   disconnect() {
     this.intentionalClose = true;
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    this.stopPingInterval();
     if (this.ws) {
       this.reconnectAttempts = this.maxReconnectAttempts; // Prevent auto-reconnect
       this.ws.close();

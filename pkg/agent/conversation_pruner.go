@@ -134,7 +134,7 @@ func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider
 	contextUsage := float64(currentTokens) / float64(maxTokens)
 	if contextUsage > standardThreshold {
 		if cp.debug {
-			fmt.Printf("🔄 Context usage exceeds threshold: %.1f%% > %.1f%%\n",
+			fmt.Printf("\n🔄 Context usage exceeds threshold: %.1f%% > %.1f%%\n",
 				contextUsage*100, standardThreshold*100)
 		}
 		return true
@@ -151,7 +151,7 @@ func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentT
 
 	contextUsage := float64(currentTokens) / float64(maxTokens)
 	if cp.debug {
-		fmt.Printf("🔄 Auto-pruning triggered (%.1f%% context used, strategy: %s, provider: %s)\n", contextUsage*100, cp.strategy, provider)
+		fmt.Printf("\n🔄 Auto-pruning triggered (%.1f%% context used, strategy: %s, provider: %s)\n", contextUsage*100, cp.strategy, provider)
 	}
 
 	var pruned []api.Message
@@ -194,7 +194,7 @@ func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentT
 	if cp.debug {
 		oldTokens := cp.estimateTokens(messages)
 		newTokens := cp.estimateTokens(pruned)
-		fmt.Printf("✅ Pruning complete: %d → %d messages, ~%dK → ~%dK tokens\n",
+		fmt.Printf("\n✅ Pruning complete: %d → %d messages, ~%dK → ~%dK tokens\n",
 			len(messages), len(pruned), oldTokens/1000, newTokens/1000)
 	}
 
@@ -326,7 +326,7 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 			} else {
 				// Orphaned tool result - shouldn't happen but handle gracefully
 				if cp.debug {
-					fmt.Printf("⚠️ Found orphaned tool result at index %d with tool_call_id=%s\n", i, msg.ToolCallId)
+					fmt.Printf("\n⚠️ Found orphaned tool result at index %d with tool_call_id=%s\n", i, msg.ToolCallId)
 				}
 				// Add current group first if it's a tool group
 				if currentGroup != nil {
@@ -460,7 +460,7 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 	if cp.debug {
 		oldTokens := cp.estimateTokens(messages)
 		newTokens := cp.estimateTokens(pruned)
-		fmt.Printf("✅ Tool-call aware pruning: %d → %d messages, ~%dK → ~%dK tokens\n",
+		fmt.Printf("\n✅ Tool-call aware pruning: %d → %d messages, ~%dK → ~%dK tokens\n",
 			len(messages), len(pruned), oldTokens/1000, newTokens/1000)
 	}
 
@@ -557,7 +557,7 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 	} else {
 		// Default - importance-based pruning
 		if cp.debug {
-			fmt.Printf("⚖️ Using importance-based pruning\n")
+			fmt.Printf("\n⚖️ Using importance-based pruning\n")
 		}
 		return cp.pruneByImportance(messages, provider, maxTokens)
 	}

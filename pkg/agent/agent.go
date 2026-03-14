@@ -300,7 +300,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 				continue
 			}
 		} else if debug {
-			fmt.Printf("⚠️  Skipping provider connection check for %s\n", api.GetProviderName(clientType))
+			fmt.Printf("\n⚠️  Skipping provider connection check for %s\n", api.GetProviderName(clientType))
 		}
 
 		break
@@ -312,7 +312,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	}
 	if finalModel != "" && finalModel != configManager.GetModelForProvider(clientType) {
 		if err := configManager.SetModelForProvider(clientType, finalModel); err != nil {
-			fmt.Printf("⚠️  Warning: Failed to save model selection: %v\n", err)
+			fmt.Printf("\n⚠️  Warning: Failed to save model selection: %v\n", err)
 		}
 	}
 
@@ -381,7 +381,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 
 	// Pre-initialize tool registry to avoid first-use overhead
 	if debug {
-		fmt.Printf("⚙️  Pre-initializing tool registry...\n")
+		fmt.Printf("\n⚙️  Pre-initializing tool registry...\n")
 	}
 	InitializeToolRegistry()
 	if debug {

@@ -70,7 +70,7 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 			rewritten.Content = summary
 			optimized = append(optimized, rewritten)
 			if co.debug {
-				fmt.Printf("🔄 Optimized redundant file read: %s\n", co.extractFilePath(msg.Content))
+				fmt.Printf("\n🔄 Optimized redundant file read: %s\n", co.extractFilePath(msg.Content))
 			}
 		} else if co.isRedundantShellCommand(msg, i) {
 			// Replace with summary
@@ -79,7 +79,7 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 			rewritten.Content = summary
 			optimized = append(optimized, rewritten)
 			if co.debug {
-				fmt.Printf("🔄 Optimized redundant shell command: %s\n", co.extractShellCommand(msg.Content))
+				fmt.Printf("\n🔄 Optimized redundant shell command: %s\n", co.extractShellCommand(msg.Content))
 			}
 		} else {
 			optimized = append(optimized, msg)
@@ -348,7 +348,7 @@ func (co *ConversationOptimizer) InvalidateFile(filePath string) {
 		return
 	}
 	if co.debug {
-		fmt.Printf("🔄 Invalidating cached file data: %s\n", filePath)
+		fmt.Printf("\n🔄 Invalidating cached file data: %s\n", filePath)
 	}
 	delete(co.fileReads, filePath)
 }

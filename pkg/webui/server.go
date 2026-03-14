@@ -87,7 +87,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int) 
 				return host == "localhost" || host == "127.0.0.1"
 			},
 		},
-		terminalManager: NewTerminalManager(),
+		terminalManager: NewTerminalManager(workspaceRoot),
 		startTime:       time.Now(),
 	}
 }

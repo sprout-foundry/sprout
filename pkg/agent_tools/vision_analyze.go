@@ -42,7 +42,7 @@ func (vp *VisionProcessor) ProcessImagesInText(text string) (string, []VisionAna
 		analysis, err := vp.AnalyzeImage(imgPath)
 		if err != nil {
 			if vp.debug {
-				fmt.Printf("⚠️  Failed to analyze %s: %v\n", imgPath, err)
+				fmt.Printf("\n⚠️  Failed to analyze %s: %v\n", imgPath, err)
 			}
 			continue
 		}

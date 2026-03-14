@@ -95,7 +95,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// Give web server a moment to start
 		time.Sleep(100 * time.Millisecond)
 		if webServer.IsRunning() {
-			fmt.Printf("🌐 Web UI available at http://localhost:%d\n", webServer.GetPort())
+			fmt.Printf("\n🌐 Web UI available at http://localhost:%d\n", webServer.GetPort())
 		}
 	}
 
@@ -201,7 +201,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			// No query provided - check if we should keep running (daemon mode)
 			if daemonMode && webServer != nil && webServer.IsRunning() {
 				// Daemon mode: keep web UI running
-				fmt.Printf("🌐 Web UI running at http://localhost:%d\n", webServer.GetPort())
+				fmt.Printf("\n🌐 Web UI running at http://localhost:%d\n", webServer.GetPort())
 				fmt.Println("Press Ctrl+C to stop the server.")
 
 				// Wait for interrupt signal

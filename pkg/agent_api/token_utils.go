@@ -15,6 +15,10 @@ const (
 	ToolTokenEstimate = 200
 	// SystemInstructionBuffer accounts for system prompt overhead
 	SystemInstructionBuffer = 500
+	// MessageOverheadTokens accounts for role/message wrapper overhead
+	MessageOverheadTokens = 4
+	// ImageMessageOverheadTokens conservatively accounts for multimodal image parts
+	ImageMessageOverheadTokens = 256
 )
 
 var (
@@ -120,8 +124,12 @@ func EstimateInputTokens(messages []Message, tools []Tool) int {
 	inputTokens := 0
 	for _, msg := range messages {
 		inputTokens += EstimateTokens(msg.Content)
+		inputTokens += EstimateTokens(msg.ReasoningContent)
+		for _, img := range msg.Images {
+			inputTokens += estimateImageTokens(img)
+		}
 		// Account for message role and formatting overhead
-		inputTokens += 4 // ~4 tokens for role and message structure
+		inputTokens += MessageOverheadTokens
 	}
 	// Add tool tokens
 	inputTokens += len(tools) * ToolTokenEstimate
@@ -155,15 +163,39 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 
 	// Ensure we don't subtract more than available
 	if buffer >= remaining {
+		if remaining < MinOutputTokens {
+			return remaining, true
+		}
 		return MinOutputTokens, true // Minimum viable output
 	}
 
 	maxOutput := remaining - buffer
 
 	// Ensure minimum output tokens
-	if maxOutput < MinOutputTokens {
+	if maxOutput < MinOutputTokens && remaining >= MinOutputTokens {
 		maxOutput = MinOutputTokens
+	}
+	if maxOutput > remaining {
+		maxOutput = remaining
 	}
 
 	return maxOutput, true
+}
+
+func estimateImageTokens(img ImageData) int {
+	tokens := ImageMessageOverheadTokens
+
+	if img.URL != "" {
+		tokens += EstimateTokens(img.URL)
+	}
+
+	if img.Type != "" {
+		tokens += EstimateTokens(img.Type)
+	}
+
+	if img.Base64 != "" {
+		tokens += EstimateTokens(img.Base64)
+	}
+
+	return tokens
 }

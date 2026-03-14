@@ -39,6 +39,11 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 	// Get the tools that would be passed to the LLM
 	tools := agent.getOptimizedToolDefinitions(agent.messages)
 
+	t.Logf("DEBUG: Total tools returned: %d", len(tools))
+	for i, tool := range tools {
+		t.Logf("DEBUG: Tool %d: %s", i, tool.Function.Name)
+	}
+
 	if len(tools) == 0 {
 		t.Fatal("expected at least one tool definition")
 	}
@@ -58,6 +63,19 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 	}
 
 	t.Logf("✅ Agent has access to %d tools", len(tools))
+
+	// Verify write_file is available
+	foundWriteFile := false
+	for _, tool := range tools {
+		if tool.Function.Name == "write_file" {
+			foundWriteFile = true
+			break
+		}
+	}
+
+	if !foundWriteFile {
+		t.Fatal("Required tool 'write_file' not found in tool definitions")
+	}
 }
 
 // TestOllamaAPIKeyDetection verifies that OLLAMA_API_KEY is properly detected

@@ -115,16 +115,94 @@ func TestAggressiveOptimizationPreservesToolCallId(t *testing.T) {
 
 	optimized := optimizer.AggressiveOptimization(messages)
 
-	if len(optimized) != len(messages) {
-		t.Fatalf("Expected same message count after aggressive optimization, got %d -> %d", len(messages), len(optimized))
+	if len(optimized) >= len(messages) {
+		t.Fatalf("Expected aggressive optimization to shrink message count, got %d -> %d", len(messages), len(optimized))
 	}
 
-	rewritten := optimized[2]
-	if !containsString(rewritten.Content, "[COMPACT]") {
-		t.Fatalf("Expected aggressive summary to contain [COMPACT], got: %s", rewritten.Content)
+	foundCompactSummary := false
+	foundLegacyReadSummary := false
+	for _, msg := range optimized {
+		if containsString(msg.Content, "Compacted earlier conversation state:") {
+			foundCompactSummary = true
+		}
+		if containsString(msg.Content, "Read file: pkg/foo.go") {
+			foundLegacyReadSummary = true
+		}
 	}
-	if rewritten.ToolCallId != "agg-call" {
-		t.Fatalf("Expected aggressive summary to preserve ToolCallId, got: %s", rewritten.ToolCallId)
+	if !foundCompactSummary {
+		t.Fatalf("Expected aggressive optimization to emit a compacted summary message")
+	}
+	if !foundLegacyReadSummary {
+		t.Fatalf("Expected compacted summary to preserve the old file-read context")
+	}
+}
+
+func TestCompactConversationRewritesOldMiddleHistory(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	messages := []api.Message{
+		{Role: "system", Content: "System prompt"},
+		{Role: "user", Content: "Fix the failing tests"},
+		{Role: "assistant", Content: "I will inspect the repo and run the failing suite."},
+	}
+
+	for i := 0; i < 14; i++ {
+		toolCallID := ""
+		if i%2 == 0 {
+			toolCallID = "call-old-" + string(rune('a'+i))
+			messages = append(messages, api.Message{
+				Role:    "assistant",
+				Content: "",
+				ToolCalls: []api.ToolCall{
+					{ID: toolCallID},
+				},
+			})
+			messages = append(messages, api.Message{
+				Role:       "tool",
+				ToolCallId: toolCallID,
+				Content:    "Tool call result for read_file: pkg/foo.go\npackage foo\n\nfunc Example() {}\n",
+			})
+			continue
+		}
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: "Updated tests and verified the package builds cleanly.",
+		})
+	}
+
+	messages = append(messages,
+		api.Message{Role: "user", Content: "Check the remaining failures"},
+		api.Message{Role: "assistant", Content: "Looking at the latest failures now."},
+		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call"}}},
+		api.Message{Role: "tool", ToolCallId: "recent-call", Content: "Tool call result for shell_command: go test ./pkg/agent/...\nok"},
+		api.Message{Role: "assistant", Content: "The recent failure is isolated to the new pruning path."},
+	)
+
+	compacted := optimizer.CompactConversation(messages)
+	if len(compacted) >= len(messages) {
+		t.Fatalf("expected compacted history to shrink message count, got %d -> %d", len(messages), len(compacted))
+	}
+
+	foundSummary := false
+	foundRecentTool := false
+	for _, msg := range compacted {
+		if msg.Role == "assistant" && containsString(msg.Content, "Compacted earlier conversation state:") {
+			foundSummary = true
+		}
+		if msg.Role == "tool" && msg.ToolCallId == "recent-call" {
+			foundRecentTool = true
+		}
+	}
+
+	if !foundSummary {
+		t.Fatalf("expected compacted conversation summary message")
+	}
+	if !foundRecentTool {
+		t.Fatalf("expected recent tool chain to remain intact")
+	}
+
+	if compacted[0].Role != "system" || compacted[1].Role != "user" {
+		t.Fatalf("expected leading system/user anchor to remain intact")
 	}
 }
 

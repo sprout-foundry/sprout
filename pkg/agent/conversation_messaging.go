@@ -15,7 +15,9 @@ import (
 // including transient messages and tool definitions.
 func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	var optimizedMessages []api.Message
+	ch.transientMessagesMu.Lock()
 	pendingTransientMessages := append([]api.Message(nil), ch.transientMessages...)
+	ch.transientMessagesMu.Unlock()
 	appendPendingTransient := func(messages []api.Message) []api.Message {
 		if len(pendingTransientMessages) == 0 {
 			return messages
@@ -121,7 +123,9 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 
 	// Final safeguard: remove any orphaned tool results before sending to API
 	allMessages = ch.removeOrphanedToolResults(allMessages)
+	ch.transientMessagesMu.Lock()
 	ch.transientMessages = nil
+	ch.transientMessagesMu.Unlock()
 
 	return allMessages
 }
@@ -342,6 +346,9 @@ func (ch *ConversationHandler) validateMinimaxToolCalls(messages []api.Message) 
 
 // enqueueTransientMessage adds a message that will be sent once and then discarded
 func (ch *ConversationHandler) enqueueTransientMessage(msg api.Message) {
+	ch.transientMessagesMu.Lock()
+	defer ch.transientMessagesMu.Unlock()
+
 	// Check for duplicate transient messages to avoid role alternation issues
 	for _, existing := range ch.transientMessages {
 		if existing.Role == msg.Role && existing.Content == msg.Content {
@@ -354,6 +361,9 @@ func (ch *ConversationHandler) enqueueTransientMessage(msg api.Message) {
 
 // appendTransientMessages adds transient messages to the message list and clears the buffer
 func (ch *ConversationHandler) appendTransientMessages(messages []api.Message) []api.Message {
+	ch.transientMessagesMu.Lock()
+	defer ch.transientMessagesMu.Unlock()
+
 	if len(ch.transientMessages) == 0 {
 		return messages
 	}

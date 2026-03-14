@@ -42,6 +42,15 @@ var PruningConfig = struct {
 		FileReadAgeThreshold int // Message age below which old file reads are summarized
 	}
 
+	// Structural compaction settings
+	Structural struct {
+		RecentMessagesToKeep int // Recent live message chain to preserve intact
+		MinMessagesToCompact int // Minimum total messages before structural compaction applies
+		MinMiddleMessages    int // Minimum middle-segment size before rewriting into a summary
+		MaxSummaryEntries    int // Maximum summary bullets retained in the compacted message
+		MaxEntryChars        int // Maximum chars per summarized entry
+	}
+
 	// Target token percentages when pruning
 	TargetPercentDefault float64 // % of max tokens to target after pruning
 
@@ -52,7 +61,7 @@ var PruningConfig = struct {
 	Default: PruningThresholds{
 		ProviderName:       "default",
 		StandardPercent:    0.90, // Start pruning at 90% of context (don't prune until 90%+)
-		MinAvailableTokens: 0,   // Disabled - use percentage-based threshold only
+		MinAvailableTokens: 0,    // Disabled - use percentage-based threshold only
 		AggressivePercent:  0.95, // Aggressive mode at 95%
 		MinMessages:        5,
 		RecentMessages:     15,
@@ -68,6 +77,20 @@ var PruningConfig = struct {
 		RecentMessagesToKeep: 8,    // Keep last 8 messages during aggressive mode
 		TruncateAt:           1200, // Truncate at 1200 characters
 		FileReadAgeThreshold: 12,   // Summarize file reads older than 12 messages
+	},
+
+	Structural: struct {
+		RecentMessagesToKeep int
+		MinMessagesToCompact int
+		MinMiddleMessages    int
+		MaxSummaryEntries    int
+		MaxEntryChars        int
+	}{
+		RecentMessagesToKeep: 12,
+		MinMessagesToCompact: 18,
+		MinMiddleMessages:    6,
+		MaxSummaryEntries:    10,
+		MaxEntryChars:        180,
 	},
 
 	// Target percentages for pruning
@@ -509,6 +532,7 @@ func (cp *ConversationPruner) pruneHybrid(messages []api.Message, optimizer *Con
 	}
 	// First apply optimizer's deduplication
 	optimized := optimizer.OptimizeConversation(messages)
+	optimized = optimizer.CompactConversation(optimized)
 
 	// Then apply importance-based pruning
 	return cp.pruneByImportance(optimized, provider, maxTokens)
@@ -549,6 +573,7 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 			return cp.pruneSlidingWindow(messages)
 		}
 		optimized := optimizer.OptimizeConversation(messages)
+		optimized = optimizer.CompactConversation(optimized)
 		if cp.estimateTokens(optimized) < int(float64(maxTokens)*0.8) {
 			return optimized
 		}

@@ -89,6 +89,40 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 	return optimized
 }
 
+// CompactConversation rewrites older middle history into a durable summary while
+// preserving the opening task anchor and the recent causal chain intact.
+func (co *ConversationOptimizer) CompactConversation(messages []api.Message) []api.Message {
+	if !co.enabled || len(messages) < PruningConfig.Structural.MinMessagesToCompact {
+		return messages
+	}
+
+	anchorEnd := co.compactionAnchorEnd(messages)
+	recentStart := len(messages) - PruningConfig.Structural.RecentMessagesToKeep
+	if recentStart <= anchorEnd {
+		return messages
+	}
+
+	recentStart = co.adjustCompactionBoundary(messages, recentStart, anchorEnd)
+	if recentStart-anchorEnd < PruningConfig.Structural.MinMiddleMessages {
+		return messages
+	}
+
+	middle := messages[anchorEnd:recentStart]
+	summary := co.buildCompactionSummary(middle)
+	if summary == "" {
+		return messages
+	}
+
+	compacted := make([]api.Message, 0, anchorEnd+1+len(messages)-recentStart)
+	compacted = append(compacted, messages[:anchorEnd]...)
+	compacted = append(compacted, api.Message{
+		Role:    "assistant",
+		Content: summary,
+	})
+	compacted = append(compacted, messages[recentStart:]...)
+	return compacted
+}
+
 // isRedundantFileRead checks if this message is a redundant file read
 func (co *ConversationOptimizer) isRedundantFileRead(msg api.Message, index int) bool {
 	if msg.Role != "tool" {
@@ -147,6 +181,153 @@ func (co *ConversationOptimizer) trackFileRead(msg api.Message, index int) {
 		Timestamp:    time.Now(),
 		MessageIndex: index,
 	}
+}
+
+func (co *ConversationOptimizer) compactionAnchorEnd(messages []api.Message) int {
+	anchorEnd := 0
+	if len(messages) == 0 {
+		return anchorEnd
+	}
+
+	if messages[0].Role == "system" {
+		anchorEnd = 1
+	}
+
+	for i := anchorEnd; i < len(messages); i++ {
+		if messages[i].Role != "user" {
+			continue
+		}
+		anchorEnd = i + 1
+		if i+1 < len(messages) && messages[i+1].Role == "assistant" && len(messages[i+1].ToolCalls) == 0 {
+			anchorEnd = i + 2
+		}
+		break
+	}
+
+	if anchorEnd == 0 && len(messages) > 0 {
+		anchorEnd = 1
+	}
+	return anchorEnd
+}
+
+func (co *ConversationOptimizer) adjustCompactionBoundary(messages []api.Message, recentStart, anchorEnd int) int {
+	for recentStart > anchorEnd {
+		if recentStart < len(messages) && messages[recentStart].Role == "tool" {
+			recentStart--
+			continue
+		}
+		if recentStart-1 >= anchorEnd && messages[recentStart-1].Role == "assistant" && len(messages[recentStart-1].ToolCalls) > 0 {
+			recentStart--
+			continue
+		}
+		break
+	}
+	return recentStart
+}
+
+func (co *ConversationOptimizer) buildCompactionSummary(messages []api.Message) string {
+	if len(messages) == 0 {
+		return ""
+	}
+
+	limit := PruningConfig.Structural.MaxSummaryEntries
+	if limit <= 0 {
+		limit = 8
+	}
+
+	entries := make([]string, 0, limit)
+	seen := make(map[string]struct{}, limit)
+	addEntry := func(entry string) {
+		entry = co.normalizeSummaryEntry(entry)
+		if entry == "" {
+			return
+		}
+		if _, ok := seen[entry]; ok {
+			return
+		}
+		seen[entry] = struct{}{}
+		entries = append(entries, entry)
+	}
+
+	for _, msg := range messages {
+		switch msg.Role {
+		case "user":
+			addEntry("User request: " + msg.Content)
+		case "assistant":
+			if len(msg.ToolCalls) > 0 {
+				addEntry(summarizeAssistantToolCalls(msg))
+				continue
+			}
+			content := strings.TrimSpace(msg.Content)
+			if content == "" {
+				continue
+			}
+			if looksLikeDurableAssistantState(content) {
+				addEntry("Assistant outcome: " + content)
+			}
+		case "tool":
+			summary, _ := summarizeToolMessage(msg)
+			if summary == "" {
+				continue
+			}
+			if strings.Contains(strings.ToLower(msg.Content), "error") || strings.Contains(strings.ToLower(msg.Content), "failed") {
+				summary += " [error]"
+			}
+			addEntry(summary)
+		}
+		if len(entries) >= limit {
+			break
+		}
+	}
+
+	if len(entries) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("Compacted earlier conversation state:\n")
+	b.WriteString(fmt.Sprintf("- Summarized %d earlier messages to preserve context headroom.\n", len(messages)))
+	for _, entry := range entries {
+		b.WriteString("- ")
+		b.WriteString(entry)
+		b.WriteString("\n")
+	}
+	b.WriteString("- Use newer messages for the exact current step-by-step state.")
+	return strings.TrimSpace(b.String())
+}
+
+func (co *ConversationOptimizer) normalizeSummaryEntry(entry string) string {
+	entry = strings.TrimSpace(entry)
+	if entry == "" {
+		return ""
+	}
+	entry = strings.Join(strings.Fields(entry), " ")
+	maxChars := PruningConfig.Structural.MaxEntryChars
+	if maxChars <= 0 {
+		maxChars = 180
+	}
+	if len(entry) > maxChars {
+		entry = entry[:maxChars-3] + "..."
+	}
+	return entry
+}
+
+func looksLikeDurableAssistantState(content string) bool {
+	contentLower := strings.ToLower(strings.TrimSpace(content))
+	if contentLower == "" {
+		return false
+	}
+	keywords := []string{
+		"fixed", "updated", "changed", "implemented", "added", "removed",
+		"found", "verified", "build", "test", "lint", "error", "failed",
+		"pass", "resolved", "refactored",
+	}
+	for _, keyword := range keywords {
+		if strings.Contains(contentLower, keyword) {
+			return true
+		}
+	}
+	return len(content) < 220
 }
 
 // extractFilePath extracts the file path from a tool call result message
@@ -374,6 +555,8 @@ func (co *ConversationOptimizer) AggressiveOptimization(messages []api.Message) 
 	if !co.enabled {
 		return messages
 	}
+
+	messages = co.CompactConversation(messages)
 
 	optimized := make([]api.Message, 0, len(messages))
 

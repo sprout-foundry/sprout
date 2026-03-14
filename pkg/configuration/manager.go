@@ -3,6 +3,7 @@ package configuration
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"sync"
 
@@ -16,6 +17,63 @@ type Manager struct {
 	config    *Config
 	apiKeys   *APIKeys
 	lastSaved *Config // Track last saved state, not initial snapshot
+	loaded    bool      // Track if config has been loaded
+}
+
+// loadConfigSilently loads configuration without showing welcome messages
+func loadConfigSilently() (*Config, *APIKeys, error) {
+	// Ensure config directory exists (ignore errors - we'll handle them later)
+	_, _ = GetConfigDir()
+
+	// Load or create config
+	config, err := Load()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Load API keys
+	apiKeys, err := LoadAPIKeys()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load API keys: %w", err)
+	}
+
+	// Populate from environment variables FIRST - prioritize env vars over stored keys
+	_ = apiKeys.PopulateFromEnvironment()
+
+	// Check if we need to set a default provider
+	if config.LastUsedProvider == "" {
+		// Check for environment variables
+		allProviders := getSupportedProviders()
+		for _, provider := range allProviders {
+			if provider.RequiresKey && provider.EnvVariableName != "" {
+				if envKey := os.Getenv(provider.EnvVariableName); envKey != "" {
+					config.LastUsedProvider = provider.Name
+					break
+				}
+			}
+		}
+
+		// If no env provider, check for saved API keys
+		if config.LastUsedProvider == "" {
+			for _, provider := range allProviders {
+				if provider.RequiresKey && HasProviderCredential(provider.Name, apiKeys) {
+					config.LastUsedProvider = provider.Name
+					break
+				}
+			}
+		}
+
+		// Default to test provider if nothing found
+		if config.LastUsedProvider == "" {
+			config.LastUsedProvider = "test"
+		}
+
+		if err := config.Save(); err != nil {
+			return nil, nil, fmt.Errorf("failed to save config: %w", err)
+		}
+	}
+
+	return config, apiKeys, nil
 }
 
 // NewManager creates a new configuration manager
@@ -30,6 +88,23 @@ func NewManager() (*Manager, error) {
 		config:    config,
 		apiKeys:   apiKeys,
 		lastSaved: config, // Track last saved state as the base
+		loaded:    true,
+	}, nil
+}
+
+// NewManagerSilent creates a new configuration manager without showing welcome messages
+func NewManagerSilent() (*Manager, error) {
+	// Load configuration silently
+	config, apiKeys, err := loadConfigSilently()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Manager{
+		config:    config,
+		apiKeys:   apiKeys,
+		lastSaved: config,
+		loaded:    true,
 	}, nil
 }
 

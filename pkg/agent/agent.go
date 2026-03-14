@@ -102,6 +102,7 @@ type Agent struct {
 	// Feature flags
 	falseStopDetectionEnabled bool
 	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
+	lastRunTerminationReason  string
 
 	// UI integration
 	ui UI // UI provider for dropdowns, etc.

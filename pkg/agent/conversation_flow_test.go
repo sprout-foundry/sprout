@@ -211,6 +211,58 @@ func TestHandleFinishReason_StopWithIncompleteContentContinues(t *testing.T) {
 	}
 }
 
+func TestHandleFinishReason_StopWithTentativePostToolContentContinues(t *testing.T) {
+	agent := &Agent{
+		messages: []api.Message{
+			{Role: "user", Content: "Investigate the issue"},
+			{Role: "assistant", Content: "Let me inspect the logs first.", ToolCalls: []api.ToolCall{{ID: "call_1"}}},
+			{Role: "tool", ToolCallId: "call_1", Content: "log output"},
+			{Role: "assistant", Content: "Let me investigate the issue by checking the backend logs and testing directly:"},
+		},
+	}
+	ch := &ConversationHandler{
+		agent:             agent,
+		responseValidator: NewResponseValidator(agent),
+	}
+
+	shouldStop, reason := ch.handleFinishReason("stop", "Let me investigate the issue by checking the backend logs and testing directly:")
+	if shouldStop {
+		t.Fatalf("expected tentative post-tool stop response to continue, got stop=true (reason=%q)", reason)
+	}
+	if reason != "tentative post-tool stop response" {
+		t.Fatalf("expected reason 'tentative post-tool stop response', got %q", reason)
+	}
+	if len(ch.transientMessages) != 1 {
+		t.Fatalf("expected one transient message, got %d", len(ch.transientMessages))
+	}
+	if !containsStringForTest(ch.transientMessages[0].Content, "Do not stop with a planning note") {
+		t.Fatalf("expected post-tool continuation nudge, got %q", ch.transientMessages[0].Content)
+	}
+}
+
+func TestHandleFinishReason_StopWithConcretePostToolAnswerCompletes(t *testing.T) {
+	agent := &Agent{
+		messages: []api.Message{
+			{Role: "user", Content: "Investigate the issue"},
+			{Role: "assistant", Content: "Checking logs.", ToolCalls: []api.ToolCall{{ID: "call_1"}}},
+			{Role: "tool", ToolCallId: "call_1", Content: "panic on startup"},
+			{Role: "assistant", Content: "I found the root cause and updated the startup guard to handle nil config safely."},
+		},
+	}
+	ch := &ConversationHandler{
+		agent:             agent,
+		responseValidator: NewResponseValidator(agent),
+	}
+
+	shouldStop, reason := ch.handleFinishReason("stop", "I found the root cause and updated the startup guard to handle nil config safely.")
+	if !shouldStop {
+		t.Fatalf("expected concrete post-tool stop response to complete, got stop=false (reason=%q)", reason)
+	}
+	if reason != "completion" {
+		t.Fatalf("expected completion reason, got %q", reason)
+	}
+}
+
 func containsStringForTest(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
 		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||

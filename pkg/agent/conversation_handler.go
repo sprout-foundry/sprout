@@ -51,6 +51,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	if ch.agent.debug {
 		ch.agent.debugLog("DEBUG: ProcessQuery called with: %s\n", userQuery)
 	}
+	ch.agent.lastRunTerminationReason = ""
 
 	// Publish query started event
 	ch.agent.publishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(userQuery, ch.agent.GetProvider(), ch.agent.GetModel()))
@@ -94,6 +95,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	ch.agent.messages = append(ch.agent.messages, userMessage)
 
 	// Main conversation loop
+	completed := false
 	for ch.agent.currentIteration = 0; ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
 		ch.agent.debugLog("🔄 Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.messages))
 
@@ -104,6 +106,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 			switch interruptResponse {
 			case "STOP":
 				ch.agent.debugLog("⏹️ Conversation stopped by user\n")
+				ch.agent.lastRunTerminationReason = RunTerminationInterrupted
 				break
 			case "CONTINUE":
 				ch.agent.debugLog("🔄 Continuing without changes\n")
@@ -137,6 +140,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 				switch interruptResponse {
 				case "STOP":
 					ch.agent.debugLog("⏹️ Conversation stopped by user\n")
+					ch.agent.lastRunTerminationReason = RunTerminationInterrupted
 					break
 				case "CONTINUE":
 					ch.agent.debugLog("🔄 Continuing without changes\n")
@@ -172,6 +176,8 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		// Process response
 		if shouldStop := ch.processResponse(response); shouldStop {
 			ch.agent.debugLog("✅ Conversation complete\n")
+			completed = true
+			ch.agent.lastRunTerminationReason = RunTerminationCompleted
 			break
 		} else {
 			ch.agent.debugLog("➡️ Continuing conversation...\n")
@@ -179,6 +185,10 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	}
 
 	ch.agent.debugLog("🏁 Exited conversation loop - Iteration: %d, Messages: %d\n", ch.agent.currentIteration, len(ch.agent.messages))
+	if !completed && ch.agent.currentIteration >= ch.agent.maxIterations {
+		ch.agent.lastRunTerminationReason = RunTerminationMaxIterations
+		ch.agent.PrintLineAsync(fmt.Sprintf("⚠️ Reached maximum iterations (%d) before the task completed.", ch.agent.maxIterations))
+	}
 
 	// Finalize conversation
 	return ch.finalizeConversation()
@@ -533,13 +543,17 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 
 	// Publish query completed event
 	duration := time.Since(ch.conversationStartTime)
-	ch.agent.publishEvent(events.EventTypeQueryCompleted, events.QueryCompletedEvent(
+	completedEvent := events.QueryCompletedEvent(
 		ch.pendingUserMessage,
 		finalContent,
 		ch.agent.GetTotalTokens(),
 		ch.agent.GetTotalCost(),
 		duration,
-	))
+	)
+	if reason := ch.agent.GetLastRunTerminationReason(); reason != "" {
+		completedEvent["status"] = reason
+	}
+	ch.agent.publishEvent(events.EventTypeQueryCompleted, completedEvent)
 
 	// If streaming was enabled and content was streamed, return empty string
 	// to avoid duplicate display in the console
@@ -688,6 +702,16 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 			})
 			return false, "incomplete stop response"
 		}
+		if ch.responseValidator != nil && ch.followsRecentToolResults() &&
+			ch.responseValidator.LooksLikeTentativePostToolResponse(content) {
+			ch.agent.debugLog("⚠️ Model returned finish_reason='stop' immediately after tool results with tentative content\n")
+			ch.enqueueTransientMessage(api.Message{
+				Role: "user",
+				Content: "You just received tool results. Do not stop with a planning note. " +
+					"Either take the next concrete action or provide the actual final answer now.",
+			})
+			return false, "tentative post-tool stop response"
+		}
 		// Model explicitly signaled it's done with non-empty content - accept completion.
 		ch.agent.debugLog("🏁 Model signaled 'stop' - accepting response as complete\n")
 		ch.displayFinalResponse(content)
@@ -703,6 +727,26 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 		ch.agent.debugLog("❓ Unknown finish reason: %s\n", finishReason)
 		return false, "unknown finish reason: " + finishReason
 	}
+}
+
+func (ch *ConversationHandler) followsRecentToolResults() bool {
+	if ch == nil || ch.agent == nil || len(ch.agent.messages) == 0 {
+		return false
+	}
+
+	i := len(ch.agent.messages) - 1
+	if ch.agent.messages[i].Role == "assistant" {
+		i--
+	}
+	if i < 0 {
+		return false
+	}
+
+	foundTool := false
+	for ; i >= 0 && ch.agent.messages[i].Role == "tool"; i-- {
+		foundTool = true
+	}
+	return foundTool
 }
 
 // handleMalformedToolCalls attempts to parse and execute tool calls from malformed content

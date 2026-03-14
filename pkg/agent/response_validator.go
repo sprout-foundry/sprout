@@ -147,6 +147,60 @@ func (rv *ResponseValidator) isCompleteShortAnswer(content string) bool {
 	return false
 }
 
+// LooksLikeTentativePostToolResponse reports whether content reads like a
+// planning/transition stub rather than a final answer after tool execution.
+func (rv *ResponseValidator) LooksLikeTentativePostToolResponse(content string) bool {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return false
+	}
+
+	lower := strings.ToLower(trimmed)
+	wordCount := len(strings.Fields(lower))
+
+	if strings.HasSuffix(lower, ":") && wordCount <= 40 {
+		return true
+	}
+
+	planningPrefixes := []string{
+		"let me ",
+		"i'll ",
+		"i will ",
+		"i'm going to ",
+		"now i'll ",
+		"next i'll ",
+		"next, i'll ",
+		"first, i'll ",
+		"first i'll ",
+	}
+	for _, prefix := range planningPrefixes {
+		if strings.HasPrefix(lower, prefix) && wordCount <= 40 {
+			return true
+		}
+	}
+
+	planningPhrases := []string{
+		"let me investigate",
+		"let me check",
+		"let me look into",
+		"let me verify",
+		"let me inspect",
+		"i need to check",
+		"i'll investigate",
+		"i'll check",
+		"i'll inspect",
+		"i'll verify",
+		"i'll look into",
+	}
+	for _, phrase := range planningPhrases {
+		if strings.Contains(lower, phrase) && wordCount <= 40 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // hasIncompleteCodeBlock checks for unclosed code blocks
 func (rv *ResponseValidator) hasIncompleteCodeBlock(content string) bool {
 	// Count code block markers

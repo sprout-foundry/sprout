@@ -1,17 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import Sidebar from './components/Sidebar';
-import Chat from './components/Chat';
-import GitView from './components/GitView';
-import Status from './components/Status';
-import LogsView from './components/LogsView';
-import FileEditsPanel from './components/FileEditsPanel';
-import Terminal from './components/Terminal';
-import NavigationBar from './components/NavigationBar';
-import EditorTabs from './components/EditorTabs';
-import EditorPane from './components/EditorPane';
 import ErrorBoundary from './components/ErrorBoundary';
-import ResizeHandle from './components/ResizeHandle';
-import { EditorManagerProvider, useEditorManager } from './contexts/EditorManagerContext';
+import AppContent from './components/AppContent';
+import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
@@ -20,30 +10,37 @@ import { viewRegistry, ChatViewProvider, EditorViewProvider, GitViewProvider, Lo
 
 // Service Worker Registration
 const registerServiceWorker = async () => {
-  if ('serviceWorker' in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      console.log('SW registered:', registration);
-
-      // Check for updates periodically
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New version available, show update notification
-              console.log('New service worker available');
-              // You could show a toast notification here
-            }
-          });
-        }
-      });
-
-      return registration;
-    } catch (error) {
-      console.log('SW registration failed:', error);
-    }
+  if (!('serviceWorker' in navigator)) {
+    return null;
   }
+
+  if (process.env.NODE_ENV !== 'production') {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+    return null;
+  }
+
+  try {
+    const swUrl = `${process.env.PUBLIC_URL || ''}/sw.js`;
+    const registration = await navigator.serviceWorker.register(swUrl);
+    console.log('SW registered:', registration);
+
+    registration.addEventListener('updatefound', () => {
+      const newWorker = registration.installing;
+      if (newWorker) {
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('New service worker available');
+          }
+        });
+      }
+    });
+
+    return registration;
+  } catch (error) {
+    console.log('SW registration failed:', error);
+  }
+
   return null;
 };
 
@@ -93,37 +90,6 @@ interface LogEntry {
   data: any;
   level: 'info' | 'warning' | 'error' | 'success';
   category: 'query' | 'tool' | 'file' | 'system' | 'stream';
-}
-
-interface AppContentProps {
-  state: AppState;
-  inputValue: string;
-  onInputChange: React.Dispatch<React.SetStateAction<string>>;
-  isMobile: boolean;
-  isSidebarOpen: boolean;
-  sidebarCollapsed: boolean;
-  isTerminalExpanded: boolean;
-  stats: {
-    queryCount: number;
-    filesModified: number;
-  };
-  recentFiles: Array<{ path: string; modified: boolean }>;
-  recentLogs: LogEntry[];
-  gitRefreshToken: number;
-  onSidebarToggle: () => void;
-  onToggleSidebar: () => void;
-  onCloseSidebar: () => void;
-  onViewChange: (view: 'chat' | 'editor' | 'git' | 'logs') => void;
-  onModelChange: (model: string) => void;
-  onProviderChange: (provider: string) => void;
-  onSendMessage: (message: string) => void;
-  onGitCommit: (message: string, files: string[]) => Promise<unknown>;
-  onGitStage: (files: string[]) => Promise<void>;
-  onGitUnstage: (files: string[]) => Promise<void>;
-  onGitDiscard: (files: string[]) => Promise<void>;
-  onClearLogs: () => void;
-  onTerminalOutput: (output: string) => void;
-  onTerminalExpandedChange: (expanded: boolean) => void;
 }
 
 function App() {
@@ -692,270 +658,5 @@ function App() {
     </ErrorBoundary>
   );
 }
-
-const AppContent: React.FC<AppContentProps> = ({
-  state,
-  inputValue,
-  onInputChange,
-  isMobile,
-  isSidebarOpen,
-  sidebarCollapsed,
-  isTerminalExpanded,
-  stats,
-  recentFiles,
-  recentLogs,
-  gitRefreshToken,
-  onSidebarToggle,
-  onToggleSidebar,
-  onCloseSidebar,
-  onViewChange,
-  onModelChange,
-  onProviderChange,
-  onSendMessage,
-  onGitCommit,
-  onGitStage,
-  onGitUnstage,
-  onGitDiscard,
-  onClearLogs,
-  onTerminalOutput,
-  onTerminalExpandedChange
-}) => {
-  const { panes, paneLayout, switchPane, splitPane, closeSplit, openFile, paneSizes, updatePaneSize } = useEditorManager();
-
-  const canSplit = panes.length < 3;
-  const canCloseSplit = panes.length > 1;
-
-  const handleFileClick = useCallback((filePath: string) => {
-    const segments = filePath.split('/').filter(Boolean);
-    const fileName = segments[segments.length - 1] || filePath;
-    const extensionIndex = fileName.lastIndexOf('.');
-    const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
-
-    switch (state.currentView) {
-      case 'chat':
-        onInputChange(prev => prev + ` @${filePath}`);
-        setTimeout(() => {
-          const textarea = document.querySelector('textarea[placeholder*="Ask me"]');
-          if (textarea instanceof HTMLTextAreaElement) {
-            textarea.focus();
-          }
-        }, 100);
-        break;
-      case 'editor':
-        openFile({
-          path: filePath,
-          name: fileName,
-          isDir: false,
-          size: 0,
-          modified: 0,
-          ext: fileExt
-        });
-        break;
-      case 'git':
-        console.log('Git status for file:', filePath);
-        break;
-      case 'logs':
-        console.log('Filter logs by file:', filePath);
-        break;
-      default:
-        console.log('File clicked in unknown view:', state.currentView, filePath);
-    }
-  }, [state.currentView, onInputChange, openFile]);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const handlePaneResize = useCallback((paneId: string) => (deltaPixels: number) => {
-    if (!containerRef.current) return;
-
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const isVertical = paneLayout === 'split-vertical';
-    const containerSize = isVertical ? containerRect.width : containerRect.height;
-    const deltaPercent = (deltaPixels / containerSize) * 100;
-    const currentSize = paneSizes[paneId] || 50;
-    const newSize = Math.max(10, Math.min(90, currentSize + deltaPercent));
-    updatePaneSize(paneId, newSize);
-  }, [paneLayout, paneSizes, updatePaneSize]);
-
-  const showResizeHandles = panes.length > 1;
-
-  return (
-    <div className="app">
-      {isMobile && (
-        <button
-          className="mobile-menu-btn"
-          onClick={onToggleSidebar}
-          aria-label="Toggle sidebar"
-        >
-          ☰
-        </button>
-      )}
-
-      {isMobile && isSidebarOpen && (
-        <div
-          className="mobile-overlay"
-          onClick={onCloseSidebar}
-        />
-      )}
-
-      <Sidebar
-        isConnected={state.isConnected}
-        provider={state.provider}
-        model={state.model}
-        selectedModel={state.model}
-        onModelChange={onModelChange}
-        currentView={state.currentView}
-        onViewChange={onViewChange}
-        onFileClick={handleFileClick}
-        stats={stats}
-        recentFiles={recentFiles}
-        recentLogs={recentLogs}
-        isMobileMenuOpen={isSidebarOpen}
-        onMobileMenuToggle={onToggleSidebar}
-        isMobile={isMobile}
-        sidebarCollapsed={sidebarCollapsed}
-        onSidebarToggle={onSidebarToggle}
-        onProviderChange={onProviderChange}
-      />
-      <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
-        <NavigationBar
-          currentView={state.currentView}
-          onViewChange={onViewChange}
-        />
-
-        <Status isConnected={state.isConnected} stats={state.stats} />
-
-        {state.currentView === 'chat' ? (
-          <>
-            <FileEditsPanel
-              edits={state.fileEdits}
-              onFileClick={handleFileClick}
-            />
-            <Chat
-              messages={state.messages}
-              onSendMessage={onSendMessage}
-              inputValue={inputValue}
-              onInputChange={onInputChange}
-              isProcessing={state.isProcessing}
-              lastError={state.lastError}
-              toolExecutions={state.toolExecutions}
-              queryProgress={state.queryProgress}
-            />
-          </>
-        ) : state.currentView === 'git' ? (
-          <GitView
-            refreshToken={gitRefreshToken}
-            onCommit={onGitCommit}
-            onStage={onGitStage}
-            onUnstage={onGitUnstage}
-            onDiscard={onGitDiscard}
-          />
-        ) : state.currentView === 'logs' ? (
-          <LogsView
-            logs={state.logs}
-            onClearLogs={onClearLogs}
-          />
-        ) : state.currentView === 'editor' ? (
-          <div className="editor-view">
-            <div className="pane-controls">
-              {canCloseSplit && (
-                <button
-                  onClick={closeSplit}
-                  className="pane-control-btn"
-                  title="Close split pane"
-                >
-                  ❌ Close Split
-                </button>
-              )}
-              {canSplit && (
-                <button
-                  onClick={() => panes.find(p => p.isActive) && splitPane(panes.find(p => p.isActive)!.id, 'vertical')}
-                  className="pane-control-btn"
-                  title="Split vertically"
-                >
-                  ⬇️ Split ⟂
-                </button>
-              )}
-              {canSplit && (
-                <button
-                  onClick={() => panes.find(p => p.isActive) && splitPane(panes.find(p => p.isActive)!.id, 'horizontal')}
-                  className="pane-control-btn"
-                  title="Split horizontally"
-                >
-                  ➡️ Split ↔
-                </button>
-              )}
-            </div>
-
-            <EditorTabs />
-
-            <div className={`editor-content ${paneLayout}`}>
-              <div
-                ref={containerRef}
-                className={`panes-container layout-${paneLayout}`}
-              >
-                {panes.map((pane, index) => {
-                  const paneSize = paneSizes[pane.id] || (100 / panes.length);
-                  const isLast = index === panes.length - 1;
-
-                  return (
-                    <React.Fragment key={pane.id}>
-                      <PaneWrapper style={{ flex: `0 0 ${paneSize}%` }}>
-                        <EditorPaneWrapper>
-                          <EditorPaneComponent
-                            paneId={pane.id}
-                            isActive={pane.isActive}
-                            onClick={() => switchPane(pane.id)}
-                          />
-                        </EditorPaneWrapper>
-                      </PaneWrapper>
-
-                      {showResizeHandles && !isLast && (
-                        <ResizeHandle
-                          direction={paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal'}
-                          onResize={handlePaneResize(pane.id)}
-                        />
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <Terminal
-        onOutput={onTerminalOutput}
-        isExpanded={isTerminalExpanded}
-        onToggleExpand={onTerminalExpandedChange}
-      />
-    </div>
-  );
-};
-
-// Wrapper components to avoid React hooks issues
-const PaneWrapper: React.FC<{children: React.ReactNode, style?: React.CSSProperties}> = ({ children, style }) => (
-  <div className="pane-wrapper" style={style}>{children}</div>
-);
-
-const EditorPaneWrapper: React.FC<{children: React.ReactNode, isActive?: boolean, onClick?: () => void}> = ({ children, isActive, onClick }) => {
-  return (
-    <div 
-      className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
-      onClick={onClick}
-      tabIndex={isActive ? -1 : 0}
-      onFocus={() => isActive && (onClick?.())}
-    >
-      {children}
-    </div>
-  );
-};
-
-const EditorPaneComponent: React.FC<{paneId: string, isActive?: boolean, onClick?: () => void}> = ({ paneId, isActive, onClick }) => {
-  return (
-    <div onClick={onClick}>
-      <EditorPane paneId={paneId} />
-    </div>
-  );
-};
 
 export default App;

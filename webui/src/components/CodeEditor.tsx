@@ -26,15 +26,6 @@ interface FileInfo {
   ext?: string;
 }
 
-interface FileResponse {
-  message: string;
-  path: string;
-  content: string;
-  size: number;
-  modified: number;
-  ext: string;
-}
-
 interface CodeEditorProps {
   file: FileInfo | null;
   onSave?: (content: string) => void;
@@ -44,13 +35,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [content, setContent] = useState<string>('');
-  const [originalContent, setOriginalContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isModified, setIsModified] = useState<boolean>(false);
   const [pendingFile, setPendingFile] = useState<FileInfo | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState<boolean>(false);
+  const originalContentRef = useRef('');
 
   // Get language support based on file extension
   const getLanguageSupport = (ext?: string) => {
@@ -93,7 +84,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
 
       const rawContent = await response.text();
       setContent(rawContent);
-      setOriginalContent(rawContent);
+      originalContentRef.current = rawContent;
       setIsModified(false);
 
       // Update editor if it exists
@@ -132,7 +123,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       const data = await response.json();
       if (data.success === true || data.message === 'File saved successfully') {
         setIsModified(false);
-        setOriginalContent(currentContent);
+        originalContentRef.current = currentContent;
         setContent(currentContent);
         if (onSave) {
           onSave(currentContent);
@@ -145,13 +136,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     } finally {
       setSaving(false);
     }
-  }, [file, setSaving, setError, setContent, setIsModified, onSave]);
+  }, [file, onSave]);
 
   // Handle file switch with unsaved changes check
   useEffect(() => {
     if (!file) {
       setContent('');
-      setOriginalContent('');
+      originalContentRef.current = '';
       setIsModified(false);
       if (viewRef.current) {
         viewRef.current.dispatch({
@@ -167,7 +158,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
 
     if (file.isDir) {
       setContent('');
-      setOriginalContent('');
+      originalContentRef.current = '';
       setIsModified(false);
       if (viewRef.current) {
         viewRef.current.dispatch({
@@ -184,7 +175,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
     // Check if there are unsaved changes in the current file
     if (isModified && viewRef.current) {
       const currentContent = viewRef.current.state.doc.toString();
-      if (currentContent !== originalContent) {
+      if (currentContent !== originalContentRef.current) {
         // Show unsaved changes dialog
         setPendingFile(file);
         setShowUnsavedDialog(true);
@@ -194,7 +185,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
 
     // No unsaved changes, load the new file directly
     loadFile(file.path);
-  }, [file]);
+  }, [file, isModified, loadFile]);
 
   // Process pending file after dialog decision
   useEffect(() => {
@@ -203,7 +194,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       loadFile(pendingFile.path);
       setPendingFile(null);
     }
-  }, [showUnsavedDialog]);
+  }, [loadFile, pendingFile, showUnsavedDialog]);
 
   // Initialize CodeMirror editor
   useEffect(() => {
@@ -213,7 +204,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       if (update.docChanged) {
         const newContent = update.state.doc.toString();
         setContent(newContent);
-        setIsModified(newContent !== originalContent);
+        setIsModified(newContent !== originalContentRef.current);
       }
     });
 
@@ -266,25 +257,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ file, onSave }) => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [file, content, setContent, saveFile]);
-
-  useEffect(() => {
-    if (file && !file.isDir) {
-      loadFile(file.path);
-    } else {
-      setContent('');
-      setIsModified(false);
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          changes: {
-            from: 0,
-            to: viewRef.current.state.doc.length,
-            insert: ''
-          }
-        });
-      }
-    }
-  }, [file, loadFile, setContent, setIsModified, viewRef]);
+  }, [file, content, saveFile]);
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

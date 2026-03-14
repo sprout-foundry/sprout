@@ -44,7 +44,7 @@ const GitChangesPanel: React.FC<GitChangesPanelProps> = ({ onFileClick }) => {
       }
 
       const data = await response.json();
-      if (data.status === 'success') {
+      if (data.message === 'success') {
         setFiles(data.files || []);
       } else {
         throw new Error(data.message || 'Unknown error');
@@ -97,7 +97,7 @@ const GitChangesPanel: React.FC<GitChangesPanelProps> = ({ onFileClick }) => {
     if (!file.path) return;
 
     const confirmMsg = `Are you sure you want to discard all changes in "${file.path}"? This cannot be undone.`;
-    if (!confirm(confirmMsg)) {
+    if (!window.confirm(confirmMsg)) {
       return;
     }
 

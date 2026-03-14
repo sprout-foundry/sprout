@@ -142,6 +142,18 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     const sections = viewRegistry.getSections(currentView);
     let cancelled = false;
+    const validSectionIds = new Set(sections.map(section => section.id));
+
+    setSectionsData(prev => {
+      const next = new Map<string, SectionData>();
+      validSectionIds.forEach((id) => {
+        const existing = prev.get(id);
+        if (existing) {
+          next.set(id, existing);
+        }
+      });
+      return next;
+    });
 
     // Load data for each section
     sections.forEach(async (section) => {

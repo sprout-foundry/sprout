@@ -22,7 +22,7 @@ func (c *SessionsCommand) Description() string {
 }
 
 func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	// List sessions immediately in reverse order (newest first)
+	// List sessions newest first.
 	sessions, err := agent.ListSessionsWithTimestamps()
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %v", err)
@@ -66,10 +66,9 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 		fmt.Println("\n📂 Available Sessions:")
 		fmt.Println("=====================")
 
-		// Display sessions in reverse order (newest first)
-		for i := len(sessions) - 1; i >= 0; i-- {
-			session := sessions[i]
-			sessionNum := len(sessions) - i
+		// Display sessions newest first.
+		for i, session := range sessions {
+			sessionNum := i + 1
 			fmt.Printf("%d. Session %s - %s\n", sessionNum, session.SessionID, session.LastUpdated.Format("2006-01-02 15:04:05"))
 		}
 
@@ -89,10 +88,9 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 	fmt.Println("\n📂 Available Sessions:")
 	fmt.Println("=====================")
 
-	// Display sessions in reverse order (newest first)
-	for i := len(sessions) - 1; i >= 0; i-- {
-		session := sessions[i]
-		sessionNum := len(sessions) - i
+	// Display sessions newest first.
+	for i, session := range sessions {
+		sessionNum := i + 1
 		name := session.Name
 		if name == "" {
 			name = agent.GetSessionPreviewScoped(session.SessionID, session.WorkingDirectory)
@@ -106,8 +104,7 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 
 	// Build simple options list for display
 	var sessionOptions []string
-	for i := len(sessions) - 1; i >= 0; i-- {
-		session := sessions[i]
+	for _, session := range sessions {
 		name := session.Name
 		if name == "" {
 			name = agent.GetSessionPreviewScoped(session.SessionID, session.WorkingDirectory)
@@ -125,8 +122,8 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 		return nil
 	}
 
-	// Load the selected session (convert selection back to session index)
-	sessionIndex := len(sessions) - selection
+	// Load the selected session using the same newest-first order shown to the user.
+	sessionIndex := selection - 1
 	selected := sessions[sessionIndex]
 	sessionID := selected.SessionID
 	state, err := chatAgent.LoadStateScoped(sessionID, selected.WorkingDirectory)

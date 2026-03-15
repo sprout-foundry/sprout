@@ -14,6 +14,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
+	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/webui"
@@ -163,13 +164,19 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 	// Handle different modes
 	if isInteractive {
-		if cfg := chatAgent.GetConfig(); cfg != nil {
+		if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
 			cfg.SkipPrompt = agentSkipPrompt
+			return nil
+		}); err != nil {
+			return err
 		}
 		err = runInteractiveMode(ctx, chatAgent, eventBus)
 	} else {
-		if cfg := chatAgent.GetConfig(); cfg != nil {
+		if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
 			cfg.SkipPrompt = true
+			return nil
+		}); err != nil {
+			return err
 		}
 
 		// Direct mode

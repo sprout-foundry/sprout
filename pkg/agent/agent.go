@@ -104,7 +104,7 @@ type Agent struct {
 	falseStopDetectionEnabled bool
 	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
 	lastRunTerminationReason  string
-	enablePreWriteValidation  bool               // Enable syntax validation before writes
+	enablePreWriteValidation  bool // Enable syntax validation before writes
 
 	// UI integration
 	ui UI // UI provider for dropdowns, etc.
@@ -130,6 +130,19 @@ type Agent struct {
 	// Unsafe mode - bypass most security checks
 	unsafeMode bool // Allow operations without security prompting
 
+}
+
+func isDebugEnvEnabled() bool {
+	value := strings.TrimSpace(os.Getenv("LEDIT_DEBUG"))
+	if value == "" {
+		return false
+	}
+	switch strings.ToLower(value) {
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
 
 // Shutdown attempts to gracefully stop background work and child processes
@@ -211,7 +224,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			maxIterations:             1000,
 			totalCost:                 0.0,
 			clientType:                clientType,
-			debug:                     os.Getenv("LEDIT_DEBUG") == "true" || os.Getenv("LEDIT_DEBUG") == "1" || os.Getenv("LEDIT_DEBUG") != "",
+			debug:                     isDebugEnvEnabled(),
 			optimizer:                 NewConversationOptimizer(true, false),
 			configManager:             configManager,
 			shellCommandHistory:       make(map[string]*ShellCommandResult),
@@ -288,7 +301,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		}
 
 		// Set debug mode on the client
-		debug := os.Getenv("LEDIT_DEBUG") == "true" || os.Getenv("LEDIT_DEBUG") == "1" || os.Getenv("LEDIT_DEBUG") != ""
+		debug := isDebugEnvEnabled()
 		client.SetDebug(debug)
 
 		// Check connection (allow tests to skip by setting LEDIT_SKIP_CONNECTION_CHECK)
@@ -322,7 +335,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	}
 
 	// Check if debug mode is enabled
-	debug := os.Getenv("LEDIT_DEBUG") == "true" || os.Getenv("LEDIT_DEBUG") == "1" || os.Getenv("LEDIT_DEBUG") != ""
+	debug := isDebugEnvEnabled()
 
 	// Use embedded system prompt with provider-specific enhancements
 	providerName := api.GetProviderName(clientType)
@@ -334,8 +347,10 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Clear old todos at session start
 	tools.TodoWrite([]tools.TodoItem{})
 
-	// Clean up old sessions (keep only most recent 20)
-	cleanupMemorySessions()
+	// Clean up old sessions (keep only most recent 20 for this working directory scope).
+	if err := cleanupMemorySessions(); err != nil && debug {
+		fmt.Fprintf(os.Stderr, "WARNING: Failed to clean up old sessions: %v\n", err)
+	}
 
 	// Conversation optimization is always enabled
 	optimizationEnabled := true
@@ -887,8 +902,7 @@ func (a *Agent) saveHistoryToConfig() {
 		return
 	}
 
-	config := a.configManager.GetConfig()
-	if config != nil {
+	if err := a.configManager.UpdateConfig(func(config *configuration.Config) error {
 		if config.CommandHistoryByPath == nil {
 			config.CommandHistoryByPath = make(map[string][]string)
 		}
@@ -908,11 +922,9 @@ func (a *Agent) saveHistoryToConfig() {
 		// Legacy fields are no longer actively written.
 		config.CommandHistory = nil
 		config.HistoryIndex = 0
-
-		// Save configuration
-		if err := config.Save(); err != nil && a.debug {
-			a.debugLog("Failed to save command history to config: %v\n", err)
-		}
+		return nil
+	}); err != nil && a.debug {
+		a.debugLog("Failed to save command history to config: %v\n", err)
 	}
 }
 

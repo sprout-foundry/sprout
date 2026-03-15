@@ -21,22 +21,26 @@ func TestSaveConfig_AppliesDeletionAndScalarUpdates(t *testing.T) {
 		t.Fatalf("new manager 2: %v", err)
 	}
 
-	cfg1 := m1.GetConfig()
-	cfg1.ProviderPriority = []string{"openrouter", "deepinfra"}
-	cfg1.ResourceDirectory = "resources-a"
-	if err := m1.SaveConfig(); err != nil {
+	if err := m1.UpdateConfig(func(cfg *Config) error {
+		cfg.ProviderPriority = []string{"openrouter", "deepinfra"}
+		cfg.ResourceDirectory = "resources-a"
+		return nil
+	}); err != nil {
 		t.Fatalf("save manager 1 config: %v", err)
 	}
 
 	// Stale manager updates one scalar and clears provider priority (deletion/change).
 	cfg2 := m2.GetConfig()
 	t.Logf("m2 config before: ResourceDirectory=%q, ProviderPriority=%v", cfg2.ResourceDirectory, cfg2.ProviderPriority)
-	cfg2.ResourceDirectory = "resources-b"
-	cfg2.ProviderPriority = nil
-	t.Logf("m2 config after: ResourceDirectory=%q, ProviderPriority=%v", cfg2.ResourceDirectory, cfg2.ProviderPriority)
-	if err := m2.SaveConfig(); err != nil {
+	if err := m2.UpdateConfig(func(cfg *Config) error {
+		cfg.ResourceDirectory = "resources-b"
+		cfg.ProviderPriority = nil
+		return nil
+	}); err != nil {
 		t.Fatalf("save manager 2 config: %v", err)
 	}
+	cfg2 = m2.GetConfig()
+	t.Logf("m2 config after: ResourceDirectory=%q, ProviderPriority=%v", cfg2.ResourceDirectory, cfg2.ProviderPriority)
 
 	loaded, err := Load()
 	if err != nil {

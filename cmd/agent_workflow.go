@@ -373,8 +373,26 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 		return fmt.Errorf("agent config is unavailable")
 	}
 
-	if runtime.SkipPrompt != nil {
-		cfg.SkipPrompt = *runtime.SkipPrompt
+	if runtime.SkipPrompt != nil || normalizeReasoningEffort(runtime.ReasoningEffort) != "" {
+		normalized := normalizeReasoningEffort(runtime.ReasoningEffort)
+		if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+			if runtime.SkipPrompt != nil {
+				cfg.SkipPrompt = *runtime.SkipPrompt
+			}
+			if normalized != "" {
+				cfg.ReasoningEffort = normalized
+				currentProvider := strings.TrimSpace(chatAgent.GetProvider())
+				if currentProvider != "" && cfg.CustomProviders != nil {
+					if providerCfg, ok := cfg.CustomProviders[currentProvider]; ok {
+						providerCfg.ReasoningEffort = normalized
+						cfg.CustomProviders[currentProvider] = providerCfg
+					}
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
 	}
 	if runtime.MaxIterations != nil {
 		chatAgent.SetMaxIterations(*runtime.MaxIterations)
@@ -431,17 +449,6 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 	if runtime.Persona != "" {
 		if err := chatAgent.ApplyPersona(runtime.Persona); err != nil {
 			return fmt.Errorf("failed to apply persona %q: %w", runtime.Persona, err)
-		}
-	}
-
-	if normalized := normalizeReasoningEffort(runtime.ReasoningEffort); normalized != "" {
-		cfg.ReasoningEffort = normalized
-		currentProvider := strings.TrimSpace(chatAgent.GetProvider())
-		if currentProvider != "" && cfg.CustomProviders != nil {
-			if providerCfg, ok := cfg.CustomProviders[currentProvider]; ok {
-				providerCfg.ReasoningEffort = normalized
-				cfg.CustomProviders[currentProvider] = providerCfg
-			}
 		}
 	}
 

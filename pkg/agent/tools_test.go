@@ -346,13 +346,17 @@ func TestGetOptimizedToolDefinitions_CustomProviderAllowlistCanExcludeAnalyzeUIS
 		t.Skipf("Failed to create agent: %v", err)
 	}
 
-	cfg := agent.GetConfigManager().GetConfig()
-	if cfg.CustomProviders == nil {
-		cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
-	}
-	cfg.CustomProviders["deepinfra"] = configuration.CustomProviderConfig{
-		Name:      "deepinfra",
-		ToolCalls: []string{"read_file", "shell_command"},
+	if err := agent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.CustomProviders == nil {
+			cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
+		}
+		cfg.CustomProviders["deepinfra"] = configuration.CustomProviderConfig{
+			Name:      "deepinfra",
+			ToolCalls: []string{"read_file", "shell_command"},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to configure custom provider: %v", err)
 	}
 
 	agent.clientType = api.DeepInfraClientType

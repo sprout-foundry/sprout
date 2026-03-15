@@ -121,7 +121,12 @@ func TestResourceDirectory_UsesConfigFallbackAndIsRelativeToWorkingDir(t *testin
 	if err != nil {
 		t.Fatalf("failed to create config manager: %v", err)
 	}
-	manager.GetConfig().ResourceDirectory = "captures"
+	if err := manager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.ResourceDirectory = "captures"
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to update config: %v", err)
+	}
 
 	a := &Agent{configManager: manager}
 	got := a.resourceDirectory()

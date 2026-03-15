@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -188,5 +189,65 @@ func TestProcessResponseDeduplicatesDuplicateToolCalls(t *testing.T) {
 	}
 	if len(assistantMsg.ToolCalls) != 1 {
 		t.Fatalf("expected assistant message to keep only one tool_call entry, got %d", len(assistantMsg.ToolCalls))
+	}
+}
+
+func TestProcessResponseDoesNotExecuteIrreparableStructuredToolCall(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	agent := &Agent{
+		client:          newStubClient("openrouter", "openai/gpt-4o-mini"),
+		systemPrompt:    "system",
+		messages:        []api.Message{{Role: "user", Content: "Delegate this to a subagent"}},
+		interruptCtx:    ctx,
+		interruptCancel: cancel,
+		outputMutex:     &sync.Mutex{},
+	}
+
+	handler := NewConversationHandler(agent)
+
+	toolCall := api.ToolCall{
+		ID:   "call_subagent",
+		Type: "function",
+	}
+	toolCall.Function.Name = "run_subagent"
+	toolCall.Function.Arguments = `{"prompt":"review the diff","persona":"code_reviewer`
+
+	resp := &api.ChatResponse{
+		Choices: []api.Choice{{FinishReason: "length"}},
+	}
+	resp.Choices[0].Message.Role = "assistant"
+	resp.Choices[0].Message.ToolCalls = []api.ToolCall{toolCall}
+
+	stopped := handler.processResponse(resp)
+	if stopped {
+		t.Fatalf("expected conversation to continue so the model can re-emit the tool call")
+	}
+
+	for _, msg := range agent.messages {
+		if msg.Role == "tool" {
+			t.Fatalf("expected malformed structured tool call not to execute, found tool result: %#v", msg)
+		}
+	}
+
+	last := agent.messages[len(agent.messages)-1]
+	if last.Role != "assistant" {
+		t.Fatalf("expected assistant message to remain last, got %s", last.Role)
+	}
+	if len(last.ToolCalls) != 0 {
+		t.Fatalf("expected malformed tool calls to be cleared from history, got %d", len(last.ToolCalls))
+	}
+
+	prepared := handler.prepareMessages(nil)
+	foundReminder := false
+	for _, msg := range prepared {
+		if msg.Role == "user" && strings.Contains(msg.Content, "incomplete or invalid JSON") {
+			foundReminder = true
+			break
+		}
+	}
+	if !foundReminder {
+		t.Fatalf("expected reminder asking the model to re-emit valid JSON tool arguments")
 	}
 }

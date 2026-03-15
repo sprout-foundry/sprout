@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -325,6 +326,23 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		}
 		choice.Message.ToolCalls = deduped
 
+		normalizedToolCalls, malformedToolCalls := normalizeToolCallsForExecution(choice.Message.ToolCalls)
+		choice.Message.ToolCalls = normalizedToolCalls
+		if len(malformedToolCalls) > 0 {
+			names := make([]string, 0, len(malformedToolCalls))
+			for _, tc := range malformedToolCalls {
+				names = append(names, tc.Function.Name)
+			}
+			ch.agent.debugLog("⚠️ Received %d malformed structured tool call(s): %s\n", len(malformedToolCalls), strings.Join(names, ", "))
+			ch.enqueueTransientMessage(api.Message{
+				Role: "user",
+				Content: "Your previous tool call arguments were incomplete or invalid JSON. " +
+					"Re-emit the intended tool call(s) with complete valid JSON arguments only.",
+			})
+			turn.GuardrailTrigger = "malformed structured tool call"
+			choice.Message.ToolCalls = nil
+		}
+
 		for _, tc := range choice.Message.ToolCalls {
 			if strings.Split(tc.Function.Name, "<|channel|>")[0] == "analyze_image_content" {
 				ch.ocrEnforcementAttempts = 0
@@ -514,6 +532,31 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	// Respect the model's judgment - continue conversation without reminders
 	ch.agent.debugLog("⏳ Model response continuing conversation\n")
 	return ch.finalizeTurn(turn, false)
+}
+
+func normalizeToolCallsForExecution(toolCalls []api.ToolCall) ([]api.ToolCall, []api.ToolCall) {
+	if len(toolCalls) == 0 {
+		return nil, nil
+	}
+
+	normalized := make([]api.ToolCall, 0, len(toolCalls))
+	malformed := make([]api.ToolCall, 0)
+
+	for _, tc := range toolCalls {
+		args, repaired, err := parseToolArgumentsWithRepair(tc.Function.Arguments)
+		if err != nil {
+			malformed = append(malformed, tc)
+			continue
+		}
+		if repaired {
+			if encoded, marshalErr := json.Marshal(args); marshalErr == nil {
+				tc.Function.Arguments = string(encoded)
+			}
+		}
+		normalized = append(normalized, tc)
+	}
+
+	return normalized, malformed
 }
 
 // finalizeConversation finalizes the conversation and returns the last assistant message

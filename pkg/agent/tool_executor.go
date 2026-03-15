@@ -587,9 +587,9 @@ func formatTruncateString(s string) string {
 func formatToolCall(toolCall api.ToolCall) string {
 	// Format: [tool_name]
 	// Example: [read_file] "path/to/file.go"
-	var args map[string]interface{}
-	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-		log.Printf("Warning: Failed to unmarshal tool arguments for tool '%s': %v", toolCall.Function.Name, err)
+	args, _, err := parseToolArgumentsWithRepair(toolCall.Function.Arguments)
+	if err != nil {
+		log.Printf("Warning: Failed to parse tool arguments for tool '%s': %v", toolCall.Function.Name, err)
 		return fmt.Sprintf("[%s]", toolCall.Function.Name)
 	}
 

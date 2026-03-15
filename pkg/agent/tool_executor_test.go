@@ -335,6 +335,23 @@ func TestFormatToolCall_TodoWriteIncludesChecklistSummary(t *testing.T) {
 	}
 }
 
+func TestFormatToolCall_UsesRepairPath(t *testing.T) {
+	tc := api.ToolCall{Type: "function"}
+	tc.Function.Name = "run_subagent"
+	tc.Function.Arguments = `{"prompt":"review the diff","persona":"code_reviewer"}`
+
+	got := formatToolCall(tc)
+	if !strings.Contains(got, "run_subagent") {
+		t.Fatalf("expected tool name in formatted call, got: %q", got)
+	}
+
+	tc.Function.Arguments = `{"prompt":"review the diff","persona":"code_reviewer"`
+	got = formatToolCall(tc)
+	if !strings.Contains(got, "run_subagent") {
+		t.Fatalf("expected repaired formatted call to still include tool name, got: %q", got)
+	}
+}
+
 func TestTodoStatusSymbol(t *testing.T) {
 	tests := []struct {
 		status string

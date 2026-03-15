@@ -72,8 +72,7 @@ func (f *SessionsFlow) ExecuteSessionLoad(chatAgent *agent.Agent, args []string)
 		// Try to parse as number
 		num := 0
 		if _, err := fmt.Sscanf(args[0], "%d", &num); err == nil && num >= 1 && num <= len(sessions) {
-			// List is indexed 0-based but displayed 1-based
-			selectedSession = &sessions[len(sessions)-num]
+			selectedSession = &sessions[num-1]
 		} else {
 			// Try to find by ID prefix
 			for i := range sessions {
@@ -133,7 +132,7 @@ func (f *SessionsFlow) ExecuteSessionRename(chatAgent *agent.Agent, args []strin
 	var selectedSession *agent.SessionInfo
 	num := 0
 	if _, err := fmt.Sscanf(args[0], "%d", &num); err == nil && num >= 1 && num <= len(sessions) {
-		selectedSession = &sessions[len(sessions)-num]
+		selectedSession = &sessions[num-1]
 	} else {
 		// Try to find by ID prefix
 		for i := range sessions {
@@ -174,7 +173,7 @@ func (f *SessionsFlow) ExecuteSessionDelete(args []string) (string, error) {
 	var selectedSession *agent.SessionInfo
 	num := 0
 	if _, err := fmt.Sscanf(args[0], "%d", &num); err == nil && num >= 1 && num <= len(sessions) {
-		selectedSession = &sessions[len(sessions)-num]
+		selectedSession = &sessions[num-1]
 	} else {
 		// Try to find by ID
 		for i := range sessions {
@@ -212,7 +211,7 @@ func (f *SessionsFlow) ExecuteSessionExport(args []string) (string, error) {
 	var selectedSession *agent.SessionInfo
 	num := 0
 	if _, err := fmt.Sscanf(args[0], "%d", &num); err == nil && num >= 1 && num <= len(sessions) {
-		selectedSession = &sessions[len(sessions)-num]
+		selectedSession = &sessions[num-1]
 	} else {
 		// Try to find by ID
 		for i := range sessions {

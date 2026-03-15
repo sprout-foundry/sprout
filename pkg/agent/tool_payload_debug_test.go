@@ -78,14 +78,18 @@ func TestDebugToolPayload_DeepInfraOrchestratorIncludesAnalyzeUIScreenshot(t *te
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	cfg := agent.GetConfigManager().GetConfig()
-	if cfg.CustomProviders == nil {
-		cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
+	if err := agent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.CustomProviders == nil {
+			cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
+		}
+		// Ensure deepinfra custom provider does not restrict tools in this scenario.
+		cp := cfg.CustomProviders["deepinfra"]
+		cp.ToolCalls = nil
+		cfg.CustomProviders["deepinfra"] = cp
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to configure custom provider: %v", err)
 	}
-	// Ensure deepinfra custom provider does not restrict tools in this scenario.
-	cp := cfg.CustomProviders["deepinfra"]
-	cp.ToolCalls = nil
-	cfg.CustomProviders["deepinfra"] = cp
 
 	capture := &captureToolsClient{}
 	agent.client = capture
@@ -111,13 +115,17 @@ func TestDebugToolPayload_DeepInfraCustomAllowlistExcludesAnalyzeUIScreenshot(t 
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	cfg := agent.GetConfigManager().GetConfig()
-	if cfg.CustomProviders == nil {
-		cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
-	}
-	cfg.CustomProviders["deepinfra"] = configuration.CustomProviderConfig{
-		Name:      "deepinfra",
-		ToolCalls: []string{"read_file", "shell_command"},
+	if err := agent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.CustomProviders == nil {
+			cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
+		}
+		cfg.CustomProviders["deepinfra"] = configuration.CustomProviderConfig{
+			Name:      "deepinfra",
+			ToolCalls: []string{"read_file", "shell_command"},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to configure custom provider: %v", err)
 	}
 
 	capture := &captureToolsClient{}

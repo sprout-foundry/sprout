@@ -17,7 +17,7 @@ type Manager struct {
 	config    *Config
 	apiKeys   *APIKeys
 	lastSaved *Config // Track last saved state, not initial snapshot
-	loaded    bool      // Track if config has been loaded
+	loaded    bool    // Track if config has been loaded
 }
 
 // loadConfigSilently loads configuration without showing welcome messages
@@ -87,7 +87,7 @@ func NewManager() (*Manager, error) {
 	return &Manager{
 		config:    config,
 		apiKeys:   apiKeys,
-		lastSaved: config, // Track last saved state as the base
+		lastSaved: cloneConfig(config), // Track last saved state as the base
 		loaded:    true,
 	}, nil
 }
@@ -103,14 +103,16 @@ func NewManagerSilent() (*Manager, error) {
 	return &Manager{
 		config:    config,
 		apiKeys:   apiKeys,
-		lastSaved: config,
+		lastSaved: cloneConfig(config),
 		loaded:    true,
 	}, nil
 }
 
 // GetConfig returns the current configuration
 func (m *Manager) GetConfig() *Config {
-	return m.config
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return cloneConfig(m.config)
 }
 
 // GetAPIKeys returns the current API keys
@@ -130,6 +132,40 @@ func (m *Manager) SaveConfig() error {
 
 	// Update lastSaved
 	m.lastSaved = cloneConfig(m.config)
+	return nil
+}
+
+// UpdateConfig mutates the live config under lock and persists it to disk.
+func (m *Manager) UpdateConfig(mutator func(*Config) error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.config == nil {
+		return fmt.Errorf("configuration not loaded")
+	}
+	if mutator != nil {
+		if err := mutator(m.config); err != nil {
+			return err
+		}
+	}
+	if err := m.config.Save(); err != nil {
+		return err
+	}
+	m.lastSaved = cloneConfig(m.config)
+	return nil
+}
+
+// UpdateConfigNoSave mutates the live config under lock without persisting it.
+func (m *Manager) UpdateConfigNoSave(mutator func(*Config) error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.config == nil {
+		return fmt.Errorf("configuration not loaded")
+	}
+	if mutator != nil {
+		return mutator(m.config)
+	}
 	return nil
 }
 

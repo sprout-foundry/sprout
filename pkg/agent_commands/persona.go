@@ -33,9 +33,15 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if config == nil {
 		return fmt.Errorf("configuration not available")
 	}
-	if config.SubagentTypes == nil {
-		config.SubagentTypes = make(map[string]configuration.SubagentType)
+	if err := configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to initialize persona config: %w", err)
 	}
+	config = configManager.GetConfig()
 
 	if len(args) == 0 || args[0] == "list" {
 		return p.listPersonas(config, chatAgent)
@@ -76,16 +82,26 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return p.showPersona(personaID, *persona, chatAgent)
 	case "enable":
 		persona.Enabled = true
-		config.SubagentTypes[personaID] = *persona
-		if err := configManager.SaveConfig(); err != nil {
+		if err := configManager.UpdateConfig(func(cfg *configuration.Config) error {
+			if cfg.SubagentTypes == nil {
+				cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+			}
+			cfg.SubagentTypes[personaID] = *persona
+			return nil
+		}); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 		fmt.Printf("✅ Enabled persona %s\n", personaID)
 		return nil
 	case "disable":
 		persona.Enabled = false
-		config.SubagentTypes[personaID] = *persona
-		if err := configManager.SaveConfig(); err != nil {
+		if err := configManager.UpdateConfig(func(cfg *configuration.Config) error {
+			if cfg.SubagentTypes == nil {
+				cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+			}
+			cfg.SubagentTypes[personaID] = *persona
+			return nil
+		}); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 		fmt.Printf("✅ Disabled persona %s\n", personaID)
@@ -152,8 +168,13 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("unknown action: %s", action)
 	}
 
-	config.SubagentTypes[personaID] = *persona
-	if err := configManager.SaveConfig(); err != nil {
+	if err := configManager.UpdateConfig(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes[personaID] = *persona
+		return nil
+	}); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
@@ -229,9 +250,13 @@ func (p *PersonaCommand) createPersona(personaID string, config *configuration.C
 		return fmt.Errorf("persona already exists: %s", personaID)
 	}
 
-	config.SubagentTypes[personaID] = buildCustomPersonaTemplate(personaID)
-
-	if err := configManager.SaveConfig(); err != nil {
+	if err := configManager.UpdateConfig(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes[personaID] = buildCustomPersonaTemplate(personaID)
+		return nil
+	}); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
@@ -284,7 +309,7 @@ func resolvePersona(config *configuration.Config, raw string) (string, *configur
 
 	// Backward compatibility: map old persona names to new ones
 	legacyMappings := map[string]string{
-		"qa_engineer":   "tester",
+		"qa_engineer":    "tester",
 		"web_researcher": "web_scraper",
 	}
 	if mappedID, exists := legacyMappings[needle]; exists {

@@ -44,17 +44,20 @@ func TestLoadHistoryFromConfig_UsesPathScopedHistory(t *testing.T) {
 	}
 
 	agent := newHistoryTestAgent(t, workDir)
-	cfg := agent.configManager.GetConfig()
-
 	pathKey := agent.historyPathKey()
-	cfg.CommandHistoryByPath = map[string][]string{
-		pathKey: {"status", "help"},
+	if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.CommandHistoryByPath = map[string][]string{
+			pathKey: {"status", "help"},
+		}
+		cfg.HistoryIndexByPath = map[string]int{
+			pathKey: 1,
+		}
+		cfg.CommandHistory = []string{"legacy-should-not-win"}
+		cfg.HistoryIndex = 5
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to seed config: %v", err)
 	}
-	cfg.HistoryIndexByPath = map[string]int{
-		pathKey: 1,
-	}
-	cfg.CommandHistory = []string{"legacy-should-not-win"}
-	cfg.HistoryIndex = 5
 
 	agent.loadHistoryFromConfig()
 
@@ -73,11 +76,15 @@ func TestLoadHistoryFromConfig_FallsBackToLegacyGlobalHistory(t *testing.T) {
 	}
 
 	agent := newHistoryTestAgent(t, workDir)
-	cfg := agent.configManager.GetConfig()
-	cfg.CommandHistoryByPath = map[string][]string{}
-	cfg.HistoryIndexByPath = map[string]int{}
-	cfg.CommandHistory = []string{"legacy-1", "legacy-2"}
-	cfg.HistoryIndex = 1
+	if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.CommandHistoryByPath = map[string][]string{}
+		cfg.HistoryIndexByPath = map[string]int{}
+		cfg.CommandHistory = []string{"legacy-1", "legacy-2"}
+		cfg.HistoryIndex = 1
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to seed config: %v", err)
+	}
 
 	agent.loadHistoryFromConfig()
 

@@ -45,13 +45,22 @@ func TestGetPersonaProviderModelProviderOverrideUsesConfiguredModel(t *testing.T
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	cfg := agent.GetConfigManager().GetConfig()
-	cfg.SubagentTypes["tmp_provider_override"] = configuration.SubagentType{
-		ID:       "tmp_provider_override",
-		Name:     "Temp Provider Override",
-		Provider: "deepinfra",
-		Enabled:  true,
+	if err := agent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes["tmp_provider_override"] = configuration.SubagentType{
+			ID:       "tmp_provider_override",
+			Name:     "Temp Provider Override",
+			Provider: "deepinfra",
+			Enabled:  true,
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to seed persona config: %v", err)
 	}
+
+	cfg := agent.GetConfigManager().GetConfig()
 
 	provider, model, err := agent.GetPersonaProviderModel("tmp_provider_override")
 	if err != nil {

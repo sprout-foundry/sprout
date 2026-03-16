@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	api "github.com/alantheprice/ledit/pkg/agent_api"
@@ -490,10 +491,9 @@ retryLoop:
 
 			break
 		}
-		// Multi-file mode - full format with file actions
-		// Calculate available space for title
+		// Title budget applies to model-generated message text only.
 		prefixAndActions := branchPrefix + fileActionsSummary + " - "
-		availableSpace := 72 - len(prefixAndActions)
+		availableSpace := 72
 
 		// Optimize diff for API efficiency
 		optimizer := utils.NewDiffOptimizer()
@@ -548,7 +548,8 @@ CRITICAL: Do NOT use markdown code blocks. Return plain text only.`, promptConte
 			return fmt.Errorf("no response from model")
 		}
 
-		shortTitle := strings.TrimSpace(resp.Choices[0].Message.Content)
+		shortTitle := normalizeShortTitle(resp.Choices[0].Message.Content)
+		shortTitle = truncateRunes(shortTitle, availableSpace)
 
 		// Now generate the description (reuse the optimized diff)
 		// Build prompt content with user instructions if provided
@@ -609,7 +610,7 @@ Generate a Git commit message summary. The message should follow these rules:
 		wrappedDesc := wrapText(description, 72)
 
 		// Build the full commit message
-		commitTitle := branchPrefix + fileActionsSummary + " - " + shortTitle
+		commitTitle := prefixAndActions + shortTitle
 		commitMessage = commitTitle + "\n\n" + wrappedDesc
 
 		// Show token usage (both requests)
@@ -756,4 +757,29 @@ Generate a Git commit message summary. The message should follow these rules:
 	c.printf("Output: %s\n", string(output))
 
 	return nil
+}
+
+func normalizeShortTitle(raw string) string {
+	title := strings.TrimSpace(raw)
+	if strings.Contains(title, "\n") {
+		title = strings.TrimSpace(strings.SplitN(title, "\n", 2)[0])
+	}
+	title = strings.Trim(title, "`")
+	title = strings.TrimSpace(strings.TrimPrefix(title, "title:"))
+	title = strings.TrimSpace(strings.TrimPrefix(title, "Title:"))
+	return title
+}
+
+func truncateRunes(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	if max <= 3 {
+		return string([]rune(s)[:max])
+	}
+	runes := []rune(s)
+	return strings.TrimSpace(string(runes[:max-3])) + "..."
 }

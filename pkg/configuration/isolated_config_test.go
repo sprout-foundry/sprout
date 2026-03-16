@@ -10,6 +10,7 @@ import (
 func TestBootstrapIsolatedConfig_ClonesWithoutHistory(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("LEDIT_CONFIG", "")
 
 	mainDir := filepath.Join(homeDir, ".ledit")
@@ -72,6 +73,7 @@ func TestBootstrapIsolatedConfig_ClonesWithoutHistory(t *testing.T) {
 func TestBootstrapIsolatedConfig_NoOverwriteWhenConfigExists(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("LEDIT_CONFIG", "")
 
 	isolatedDir := filepath.Join(t.TempDir(), ".ledit")

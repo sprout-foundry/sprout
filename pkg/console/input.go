@@ -3,6 +3,7 @@ package console
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
 	"time"
@@ -48,15 +49,16 @@ const (
 
 // InputReader handles interactive input with proper escape sequence handling
 type InputReader struct {
-	prompt         string
-	line           string
-	cursorPos      int
-	history        []string
-	historyIndex   int
-	termFd         int
-	oldState       *term.State
-	terminalWidth  int
-	lastLineLength int
+	prompt          string
+	line            string
+	cursorPos       int
+	history         []string
+	historyIndex    int
+	termFd          int
+	oldState        *term.State
+	terminalWidth   int
+	lastLineLength  int
+	lastWrapPending bool
 
 	// Edit tracking for history vs text navigation
 	hasEditedLine bool
@@ -127,6 +129,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.hasEditedLine = false
 	ir.updateTerminalWidth()
 	ir.lastLineLength = 0
+	ir.lastWrapPending = false
 	ir.currentPhysicalLine = 0
 	ir.pasteBuffer.Reset()
 	ir.pasteActive = false
@@ -140,6 +143,12 @@ func (ir *InputReader) ReadLine() (string, error) {
 
 	parser := NewEscapeParser()
 	buf := make([]byte, 32)
+	var resizeCh chan os.Signal
+	if sig := resizeSignal(); sig != nil {
+		resizeCh = make(chan os.Signal, 1)
+		signal.Notify(resizeCh, sig)
+		defer signal.Stop(resizeCh)
+	}
 
 	// Set stdin to non-blocking for paste detection
 	nonBlocking := true
@@ -155,6 +164,10 @@ func (ir *InputReader) ReadLine() (string, error) {
 	}
 
 	for {
+		if ir.processPendingResize(resizeCh, parser) {
+			continue
+		}
+
 		n, err := os.Stdin.Read(buf)
 
 		// Handle non-blocking read errors
@@ -166,8 +179,13 @@ func (ir *InputReader) ReadLine() (string, error) {
 				strings.Contains(errStr, "temporarily unavailable") ||
 				errStr == "EAGAIN" ||
 				errStr == "EWOULDBLOCK"
+			isInterrupted := strings.Contains(errStr, "interrupted system call") ||
+				errStr == "EINTR"
 
 			if nonBlocking && isNoData {
+				if ir.processPendingResize(resizeCh, parser) {
+					continue
+				}
 				// Check if paste timer should fire
 				if ir.pasteActive && time.Since(ir.lastCharTime) > 100*time.Millisecond {
 					// Paste detected - process it
@@ -177,6 +195,9 @@ func (ir *InputReader) ReadLine() (string, error) {
 					}
 				}
 				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			if isInterrupted && ir.processPendingResize(resizeCh, parser) {
 				continue
 			}
 			// Real error - return it wrapped with context
@@ -342,6 +363,52 @@ func (ir *InputReader) ReadLine() (string, error) {
 	}
 }
 
+func (ir *InputReader) processPendingResize(resizeCh <-chan os.Signal, parser *EscapeParser) bool {
+	if resizeCh == nil {
+		return false
+	}
+
+	handled := false
+	for {
+		select {
+		case <-resizeCh:
+			parser.Reset()
+			if ir.handleResize() {
+				handled = true
+			}
+		default:
+			return handled
+		}
+	}
+}
+
+func (ir *InputReader) handleResize() bool {
+	oldWidth := ir.terminalWidth
+	ir.updateTerminalWidth()
+	return ir.applyTerminalWidthChange(oldWidth, ir.terminalWidth)
+}
+
+func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
+	if newWidth <= 0 {
+		newWidth = 80
+	}
+	if oldWidth == newWidth {
+		ir.terminalWidth = newWidth
+		return false
+	}
+
+	ir.terminalWidth = newWidth
+	ir.lastLineLength = 0
+	ir.currentPhysicalLine = 0
+	ir.lastWrapPending = false
+
+	// After a terminal resize, the previous wrapped geometry is invalid.
+	// Redraw on a fresh line rather than trying to clear using stale counts.
+	fmt.Printf("\r%s\n", ClearLineSeq())
+	ir.Refresh()
+	return true
+}
+
 func (ir *InputReader) consumeBracketedPasteByte(b byte) bool {
 	expected := bracketedPasteEndSeq[ir.bracketedMatch]
 	if b == expected {
@@ -438,6 +505,7 @@ func (ir *InputReader) InsertChar(char string) {
 		ir.lastLineLength = totalWidth
 		cursorPos := promptWidth + ir.cursorPos
 		ir.currentPhysicalLine = cursorLineIndex(ir.terminalWidth, cursorPos)
+		ir.lastWrapPending = isWrapPending(ir.terminalWidth, totalWidth, cursorPos, totalWidth)
 	} else {
 		// Inserting in middle requires full refresh
 		ir.Refresh()
@@ -630,15 +698,13 @@ func (ir *InputReader) Refresh() {
 	currentLineCount := visualLineCount(ir.terminalWidth, totalWidth)
 	previousLineCount := visualLineCount(ir.terminalWidth, ir.lastLineLength)
 	previousCursorLine := ir.currentPhysicalLine
+	previousWrapPending := ir.lastWrapPending
 
 	// Calculate current cursor visual position.
 	displayCursorRunes := runeCountAtByteIndex(displayLine, displayCursorByte)
 	cursorPos := promptWidth + displayCursorRunes
 	cursorLine := cursorLineIndex(ir.terminalWidth, cursorPos)
-	cursorCol := 0
-	if ir.terminalWidth > 0 {
-		cursorCol = cursorPos % ir.terminalWidth
-	}
+	cursorCol := cursorColumnOffset(ir.terminalWidth, cursorPos)
 
 	// Maximum number of wrapped lines we need to clear
 	// Always clear at least as many as we have now, plus what we had before
@@ -648,6 +714,11 @@ func (ir *InputReader) Refresh() {
 	}
 
 	// Move to start of current physical line
+	if previousWrapPending {
+		// Terminals in autowrap-pending state can treat the next redraw
+		// relative to the wrapped line. Step left once to normalize.
+		fmt.Printf("%s", MoveCursorLeftSeq(1))
+	}
 	fmt.Printf("\r")
 
 	// Move up from previous rendered cursor line to the top wrapped line.
@@ -697,6 +768,7 @@ func (ir *InputReader) Refresh() {
 
 	// Track current rendered cursor line (0-based wrapped line index).
 	ir.currentPhysicalLine = cursorLine
+	ir.lastWrapPending = isWrapPending(ir.terminalWidth, totalWidth, cursorPos, promptWidth+lineWidth)
 }
 
 // visualLineCount calculates how many terminal lines are occupied for a given
@@ -720,6 +792,27 @@ func cursorLineIndex(terminalWidth, cursorPos int) int {
 		return 0
 	}
 	return (cursorPos - 1) / terminalWidth
+}
+
+func cursorColumnOffset(terminalWidth, cursorPos int) int {
+	if terminalWidth <= 0 || cursorPos <= 0 {
+		return 0
+	}
+	offset := cursorPos % terminalWidth
+	if offset == 0 {
+		return terminalWidth - 1
+	}
+	return offset
+}
+
+func isWrapPending(terminalWidth, cursorPos, renderedCursorPos, renderedWidth int) bool {
+	if terminalWidth <= 0 || cursorPos <= 0 || renderedWidth <= 0 {
+		return false
+	}
+	if renderedCursorPos != renderedWidth {
+		return false
+	}
+	return cursorPos%terminalWidth == 0
 }
 
 // AddToHistory adds a command to history
@@ -791,6 +884,7 @@ func (ir *InputReader) finalizePaste() bool {
 	ir.Refresh()
 
 	ir.lastLineLength = visibleRuneWidth(ir.prompt) + len([]rune(ir.line))
+	ir.lastWrapPending = isWrapPending(ir.terminalWidth, ir.lastLineLength, visibleRuneWidth(ir.prompt)+len([]rune(ir.line)), ir.lastLineLength)
 
 	return true
 }

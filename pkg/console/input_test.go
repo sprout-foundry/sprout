@@ -1,7 +1,9 @@
 package console
 
 import (
+	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -124,6 +126,32 @@ func TestCursorLineIndex(t *testing.T) {
 	}
 }
 
+func TestCursorColumnOffset(t *testing.T) {
+	tests := []struct {
+		name          string
+		terminalWidth int
+		cursorPos     int
+		want          int
+	}{
+		{name: "zero width terminal", terminalWidth: 0, cursorPos: 10, want: 0},
+		{name: "zero cursor pos", terminalWidth: 10, cursorPos: 0, want: 0},
+		{name: "first char", terminalWidth: 10, cursorPos: 1, want: 1},
+		{name: "middle of line", terminalWidth: 10, cursorPos: 7, want: 7},
+		{name: "exact boundary stays at line end", terminalWidth: 10, cursorPos: 10, want: 9},
+		{name: "wrapped next line offset", terminalWidth: 10, cursorPos: 11, want: 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := cursorColumnOffset(tc.terminalWidth, tc.cursorPos)
+			if got != tc.want {
+				t.Fatalf("cursorColumnOffset(%d, %d) = %d, want %d",
+					tc.terminalWidth, tc.cursorPos, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestInsertCharFastPathTracking(t *testing.T) {
 	ir := NewInputReader(">")
 	ir.terminalWidth = 10
@@ -160,6 +188,91 @@ func TestInsertCharFastPathTrackingWithANSIPrompt(t *testing.T) {
 	}
 	if ir.currentPhysicalLine != 0 {
 		t.Fatalf("expected currentPhysicalLine=0, got %d", ir.currentPhysicalLine)
+	}
+	if !ir.lastWrapPending {
+		t.Fatalf("expected lastWrapPending=true at exact boundary")
+	}
+}
+
+func TestRefreshCancelsPendingWrapBeforeRedraw(t *testing.T) {
+	ir := NewInputReader(">")
+	ir.terminalWidth = 10
+	ir.termFd = int(os.Stdout.Fd())
+	ir.line = "abcdefghi"
+	ir.cursorPos = len(ir.line)
+	ir.lastLineLength = 10
+	ir.currentPhysicalLine = 0
+	ir.lastWrapPending = true
+
+	output := captureStdout(t, func() {
+		ir.Backspace()
+	})
+
+	if !strings.HasPrefix(output, MoveCursorLeftSeq(1)+"\r") {
+		t.Fatalf("expected redraw to normalize pending wrap first, got %q", output)
+	}
+	if ir.lastWrapPending {
+		t.Fatalf("expected lastWrapPending=false after shrinking off boundary")
+	}
+}
+
+func TestRefreshPlacesCursorAtLineEndForExactBoundary(t *testing.T) {
+	ir := NewInputReader(">")
+	ir.terminalWidth = 10
+	ir.termFd = int(os.Stdout.Fd())
+	ir.line = "abcdefghi"
+	ir.cursorPos = len(ir.line)
+
+	output := captureStdout(t, func() {
+		ir.Refresh()
+	})
+
+	if !strings.Contains(output, "\r\033[9C") {
+		t.Fatalf("expected cursor to move to last column at wrap boundary, got %q", output)
+	}
+}
+
+func TestApplyTerminalWidthChangeResetsRedrawState(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.terminalWidth = 10
+	ir.termFd = int(os.Stdout.Fd())
+	ir.line = "abcdefghi"
+	ir.cursorPos = len(ir.line)
+	ir.lastLineLength = 10
+	ir.currentPhysicalLine = 0
+	ir.lastWrapPending = true
+
+	output := captureStdout(t, func() {
+		changed := ir.applyTerminalWidthChange(10, 6)
+		if !changed {
+			t.Fatal("expected width change to be handled")
+		}
+	})
+
+	if !strings.HasPrefix(output, "\r"+ClearLineSeq()+"\n") {
+		t.Fatalf("expected resize redraw to start on a fresh line, got %q", output)
+	}
+	if ir.terminalWidth != 6 {
+		t.Fatalf("unexpected terminal width: %d", ir.terminalWidth)
+	}
+	if ir.lastWrapPending {
+		t.Fatalf("expected wrap-pending state to be recalculated after resize")
+	}
+}
+
+func TestApplyTerminalWidthChangeNoOpWhenWidthUnchanged(t *testing.T) {
+	ir := NewInputReader("> ")
+	ir.terminalWidth = 10
+
+	output := captureStdout(t, func() {
+		changed := ir.applyTerminalWidthChange(10, 10)
+		if changed {
+			t.Fatal("expected unchanged width to be ignored")
+		}
+	})
+
+	if output != "" {
+		t.Fatalf("expected no output for unchanged width, got %q", output)
 	}
 }
 
@@ -384,6 +497,32 @@ func TestDeleteAtCollapsedPasteBoundaryDeletesWholePaste(t *testing.T) {
 	if len(ir.collapsedPastes) != 0 {
 		t.Fatalf("expected collapsed spans to be removed, got %d", len(ir.collapsedPastes))
 	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = w
+	defer func() {
+		os.Stdout = oldStdout
+	}()
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	return string(out)
 }
 
 func TestNavigateHistoryClearsCollapsedPastes(t *testing.T) {

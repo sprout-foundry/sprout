@@ -326,6 +326,11 @@ func getDefaultConfigDir() (string, error) {
 		return filepath.Join(xdgConfigHome, "ledit"), nil
 	}
 
+	homeEnv := strings.TrimSpace(os.Getenv("HOME"))
+	if homeEnv != "" {
+		return filepath.Join(homeEnv, ConfigDirName), nil
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)

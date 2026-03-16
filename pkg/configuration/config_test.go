@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -157,6 +158,24 @@ func TestConfigValidateSelfReviewGateMode(t *testing.T) {
 	err := cfg.Validate()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "self_review_gate_mode")
+}
+
+func TestGetDefaultConfigDirPrefersXDGConfigHome(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "/tmp/xdg-home")
+	t.Setenv("HOME", "/tmp/home-ignored")
+
+	dir, err := getDefaultConfigDir()
+	assert.NoError(t, err)
+	assert.Equal(t, filepath.Join("/tmp/xdg-home", "ledit"), dir)
+}
+
+func TestGetDefaultConfigDirUsesHomeEnvWhenXDGUnset(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", "/tmp/home-preferred")
+
+	dir, err := getDefaultConfigDir()
+	assert.NoError(t, err)
+	assert.Equal(t, filepath.Join("/tmp/home-preferred", ConfigDirName), dir)
 }
 
 func TestMergeLegacyStructuredToolsIntoPersonaAllowlists(t *testing.T) {

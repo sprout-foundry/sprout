@@ -93,10 +93,30 @@ func loadCatalogs() {
 func ResolveModelSettings(model string) ModelSettings {
 	ensureLoaded()
 	key := normalizeModelKey(model)
+	exact, family := matchCreatorProfile(key)
 
 	entry, ok := modelsByKey[key]
 	if !ok {
-		return ModelSettings{Known: false}
+		// Allow creator-backed profiles to apply even when a model is not in
+		// the OpenRouter snapshot (for example custom-provider model IDs).
+		profile := exact
+		if profile == nil {
+			profile = family
+		}
+		if profile == nil {
+			return ModelSettings{Known: false}
+		}
+		settings := ModelSettings{
+			Known:       true,
+			Parameters:  map[string]interface{}{},
+			Supported:   map[string]bool{},
+			Unsupported: map[string]bool{},
+		}
+		for param := range profile.Parameters {
+			settings.Supported[strings.ToLower(strings.TrimSpace(param))] = true
+		}
+		mergeCreatorProfile(&settings, profile)
+		return settings
 	}
 
 	settings := ModelSettings{
@@ -108,7 +128,6 @@ func ResolveModelSettings(model string) ModelSettings {
 		SourceType:  "third_party",
 	}
 
-	exact, family := matchCreatorProfile(key)
 	if exact != nil {
 		mergeCreatorProfile(&settings, exact)
 		return settings

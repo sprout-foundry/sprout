@@ -2,6 +2,22 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.6] - 2026-03-16
+
+- Updates pkg/configuration/isolated_config_test.go - Updates XDG tests (05ea4c0)
+- Updates 3 files - Updates terminal resize handling and wrap tracking (b519c4f)
+- Updates 4 files - Updates tool call validation and malformed argument handling (ec444e8)
+- Updates 13 files - (ed3166f)
+- Updates 16 files - Updates agent startup, conversation history optimization (4182693)
+- chore: fix .gitignore for webui static files - track icons, ignore build artifacts (8a94da9)
+- chore: update .gitignore to ignore build artifacts and track icon assets (33b37f3)
+- chore: add icon assets to pkg/webui/static and update .gitignore (ed46116)
+- chore: add pkg/webui/static to .gitignore and remove build artifacts (25d5b63)
+- chore: add .gitignore and remove generated/backup files (2f0e68b)
+- Updates 35 files - Updates code review context and agent conversation (7bd53db)
+- Updates 6 files - Updates refactor app structure and editor state (c65597d)
+- Updates 10 files - Updates add syntax validation and conversation flow (9ce2020)
+
 ## [v0.11.4] - 2026-03-05
 
 - Updates 13 files - Updates session restore and summary metrics (74f299c)

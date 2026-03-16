@@ -277,3 +277,15 @@ func TestWrapText_MultipleParagraphs(t *testing.T) {
 	result := wrapText(input, 40)
 	assert.Contains(t, result, "\n\n")
 }
+
+func TestNormalizeShortTitle(t *testing.T) {
+	assert.Equal(t, "Updates parser edge cases", normalizeShortTitle("Updates parser edge cases\n\nextra"))
+	assert.Equal(t, "Fix wrapping issue", normalizeShortTitle("`Fix wrapping issue`"))
+	assert.Equal(t, "Improve commit prompt", normalizeShortTitle("Title: Improve commit prompt"))
+}
+
+func TestTruncateRunes(t *testing.T) {
+	assert.Equal(t, "short", truncateRunes("short", 10))
+	assert.Equal(t, "abcdefg...", truncateRunes("abcdefghijklmnopqrstuvwxyz", 10))
+	assert.Equal(t, "", truncateRunes("abc", 0))
+}

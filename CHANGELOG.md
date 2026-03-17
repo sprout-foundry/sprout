@@ -2,6 +2,13 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.7] - 2026-03-16
+
+- Merge remote-tracking branch 'origin/main' (dadb2a2)
+- Updates 2 files - Updates title normalization and UTF-8 truncation (52741c1)
+- Updates 5 files - Updates config HOME fallback and model profiles (7ce331c)
+- docs: Update changelog for v0.11.6 (2d23162)
+
 ## [v0.11.6] - 2026-03-16
 
 - Updates pkg/configuration/isolated_config_test.go - Updates XDG tests (05ea4c0)

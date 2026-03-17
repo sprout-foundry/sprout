@@ -93,7 +93,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	// Add user message
 	userMessage := api.Message{
 		Role:    "user",
-		Content: processedQuery,
+		Content: ch.prepareUserInputForModel(processedQuery),
 	}
 	ch.agent.messages = append(ch.agent.messages, userMessage)
 
@@ -209,7 +209,7 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 		ch.agent.debugLog("💬 Input injection detected: %s\n", input)
 		ch.agent.messages = append(ch.agent.messages, api.Message{
 			Role:    "user",
-			Content: input,
+			Content: ch.prepareUserInputForModel(input),
 		})
 		return false // Continue processing with new input
 	default:

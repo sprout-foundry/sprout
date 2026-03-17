@@ -414,3 +414,75 @@ func TestCanExecuteInParallelSearchFilesProviderRestrictions(t *testing.T) {
 		t.Fatalf("expected minimax provider to keep strict sequential ordering")
 	}
 }
+
+func TestConstrainToolResultForModel_NonFetchURLUnchanged(t *testing.T) {
+	input := strings.Repeat("a", defaultFetchURLResultMaxChars+1000)
+	got := constrainToolResultForModel("read_file", nil, input)
+	if got != input {
+		t.Fatalf("expected non-fetch tool output to remain unchanged")
+	}
+}
+
+func TestConstrainToolResultForModel_FetchURLTruncatesLargeOutput(t *testing.T) {
+	t.Setenv("LEDIT_FETCH_URL_MAX_CHARS", "100")
+	input := strings.Repeat("x", 220)
+
+	got := constrainToolResultForModel("fetch_url", map[string]interface{}{"url": "https://example.com"}, input)
+	if !strings.Contains(got, "FETCH_URL OUTPUT TRUNCATED FOR MODEL CONTEXT") {
+		t.Fatalf("expected truncation marker in output")
+	}
+	if !strings.Contains(got, "Full output saved to ") {
+		t.Fatalf("expected saved path marker in output")
+	}
+	if !strings.HasPrefix(got, strings.Repeat("x", 70)) {
+		t.Fatalf("expected head segment to be preserved")
+	}
+	if !strings.HasSuffix(got, strings.Repeat("x", 30)) {
+		t.Fatalf("expected tail segment to be preserved")
+	}
+}
+
+func TestConstrainToolResultForModel_FetchURLRespectsSmallOutput(t *testing.T) {
+	t.Setenv("LEDIT_FETCH_URL_MAX_CHARS", "500")
+	input := strings.Repeat("b", 120)
+
+	got := constrainToolResultForModel("fetch_url", nil, input)
+	if got != input {
+		t.Fatalf("expected output below limit to remain unchanged")
+	}
+}
+
+func TestConstrainToolResultForModel_FetchURLSavesFullOutputToArchive(t *testing.T) {
+	t.Setenv("LEDIT_FETCH_URL_MAX_CHARS", "100")
+	archiveDir := t.TempDir()
+	t.Setenv("LEDIT_FETCH_URL_ARCHIVE_DIR", archiveDir)
+
+	input := strings.Repeat("z", 220)
+	got := constrainToolResultForModel("fetch_url", map[string]interface{}{"url": "https://example.com/long"}, input)
+
+	if !strings.Contains(got, "Full output saved to ") {
+		t.Fatalf("expected full output path in truncation notice")
+	}
+
+	entries, err := os.ReadDir(archiveDir)
+	if err != nil {
+		t.Fatalf("failed to read archive dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 archived file, got %d", len(entries))
+	}
+
+	path := filepath.Join(archiveDir, entries[0].Name())
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read archived file: %v", err)
+	}
+
+	text := string(data)
+	if !strings.Contains(text, "URL: https://example.com/long") {
+		t.Fatalf("expected URL header in archived file")
+	}
+	if !strings.Contains(text, input) {
+		t.Fatalf("expected full fetch output in archived file")
+	}
+}

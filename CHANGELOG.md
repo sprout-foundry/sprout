@@ -2,6 +2,14 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.10] - 2026-03-18
+
+- Updates 2 files - Updates default interactive input limit to 50000 (5e5c564)
+- Updates 3 files - Updates tool call type normalization (ffafb2d)
+- Merge remote-tracking branch 'origin/main' (8c31bbc)
+- Updates 10 files - Updates dataset tracing support (054b0fb)
+- docs: Update changelog for v0.11.9 (5071963)
+
 ## [v0.11.9] - 2026-03-18
 
 - Merge remote-tracking branch 'origin/main' (8396ec9)

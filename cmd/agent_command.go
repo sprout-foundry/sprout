@@ -9,6 +9,7 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/trace"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -30,6 +31,7 @@ var (
 	agentResourceDirectory string
 	agentWorkflowConfig    string
 	agentNoConnectionCheck bool
+	agentTraceDatasetDir   string
 )
 
 func createChatAgent() (*agent.Agent, error) {
@@ -86,6 +88,7 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentNoSubagents, "no-subagents", false, "Disable subagent tools (run_subagent, run_parallel_subagents)")
 	agentCmd.Flags().StringVar(&agentResourceDirectory, "resource-directory", "", "Optional directory (relative to current working directory) to store captured web/vision resources")
 	agentCmd.Flags().StringVar(&agentWorkflowConfig, "workflow-config", "", "JSON file that defines agent workflow steps for non-interactive runs")
+	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via LEDIT_TRACE_DATASET_DIR env var)")
 	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)
 
 	// Initialize environment-based defaults
@@ -201,6 +204,19 @@ Examples:
 			return err
 		}
 
+		// Initialize trace session if requested
+		traceDir := getTraceDatasetDir(agentTraceDatasetDir)
+		if traceDir != "" {
+			provider := chatAgent.GetProvider()
+			model := chatAgent.GetModel()
+			traceSession, err := trace.NewTraceSession(traceDir, provider, model)
+			if err != nil {
+				return fmt.Errorf("failed to initialize trace session: %w", err)
+			}
+			chatAgent.SetTraceSession(traceSession)
+			fmt.Printf("Dataset tracing enabled: %s\n", traceSession.GetRunID())
+		}
+
 		// Set unsafe mode if flag is provided
 		chatAgent.SetUnsafeMode(agentUnsafe)
 
@@ -263,3 +279,4 @@ Examples:
 		return RunAgent(chatAgent, isInteractive, args)
 	},
 }
+

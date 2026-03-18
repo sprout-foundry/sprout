@@ -100,6 +100,9 @@ type Agent struct {
 	pauseState *PauseState // Current pause state and context
 	pauseMutex sync.Mutex  // Mutex for pause state operations
 
+	// Trace session for dataset collection
+	traceSession interface{} // Using interface{} to avoid circular dependency
+
 	// Feature flags
 	falseStopDetectionEnabled bool
 	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
@@ -646,6 +649,11 @@ func (a *Agent) SetSystemPromptFromFile(filePath string) error {
 
 	a.systemPrompt = a.ensureStopInformation(promptContent)
 	return nil
+}
+
+// SetTraceSession sets the trace session for dataset collection
+func (a *Agent) SetTraceSession(traceSession interface{}) {
+	a.traceSession = traceSession
 }
 
 func resolvePromptPath(filePath string) (string, error) {

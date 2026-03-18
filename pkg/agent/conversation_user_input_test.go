@@ -58,3 +58,52 @@ func TestPrepareUserInputForModel_TruncatesAndArchivesLargeInput(t *testing.T) {
 		t.Fatalf("expected archived file to contain full input")
 	}
 }
+
+func TestPrepareUserInputForModel_UseAutomationLimitByDefault(t *testing.T) {
+	ch := &ConversationHandler{}
+	// No environment variables set - should use default automation limit of 50000
+
+	// Input larger than interactive limit (15000) but smaller than automation limit (50000)
+	input := strings.Repeat("x", 20000)
+	got := ch.prepareUserInputForModel(input)
+
+	// Should NOT truncate since input is below automation limit
+	if strings.Contains(got, "USER INPUT TRUNCATED FOR MODEL CONTEXT") {
+		t.Fatalf("unexpected truncation for input within automation limit")
+	}
+}
+
+func TestPrepareUserInputForModel_UseInteractiveLimitWhenInteractive(t *testing.T) {
+	agent := &Agent{}
+	ch := &ConversationHandler{agent: agent}
+	t.Setenv("LEDIT_INTERACTIVE", "1")
+
+	// Input larger than interactive limit (15000) but smaller than automation limit (50000)
+	input := strings.Repeat("y", 20000)
+	got := ch.prepareUserInputForModel(input)
+
+	// SHOULD truncate since input exceeds interactive limit
+	if !strings.Contains(got, "USER INPUT TRUNCATED FOR MODEL CONTEXT") {
+		t.Fatalf("expected truncation for input exceeding interactive limit")
+	}
+	// The returned content should mention LEDIT_INTERACTIVE_INPUT_MAX_CHARS
+	if !strings.Contains(got, "LEDIT_INTERACTIVE_INPUT_MAX_CHARS") {
+		t.Fatalf("expected truncation notice to mention LEDIT_INTERACTIVE_INPUT_MAX_CHARS")
+	}
+}
+
+func TestPrepareUserInputForModel_UseAutomationLimitWhenAutomation(t *testing.T) {
+	agent := &Agent{}
+	ch := &ConversationHandler{agent: agent}
+	t.Setenv("LEDIT_FROM_AGENT", "1") // Forces automation mode
+
+	// Input larger than interactive limit (15000) but smaller than automation limit (50000)
+	input := strings.Repeat("z", 20000)
+	got := ch.prepareUserInputForModel(input)
+
+	// Should NOT truncate since input is within automation limit
+	if strings.Contains(got, "USER INPUT TRUNCATED FOR MODEL CONTEXT") {
+		t.Fatalf("unexpected truncation for input within automation limit")
+	}
+}
+

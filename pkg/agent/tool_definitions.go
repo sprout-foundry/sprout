@@ -198,7 +198,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"file_glob", "string", false, []string{"file_pattern", "glob"}, "Glob to limit files (e.g., *.go)"},
 			{"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
 			{"max_results", "int", false, []string{}, "Maximum results to return (default: 50)"},
-			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 20480)"},
+			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 102400)"},
 		},
 		Handler: handleSearchFiles,
 	})

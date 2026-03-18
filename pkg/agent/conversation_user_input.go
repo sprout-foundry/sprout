@@ -9,17 +9,12 @@ import (
 	"time"
 )
 
-const defaultUserInputMaxChars = 2000
+const defaultInteractiveInputMaxChars = 15000
+const defaultAutomationInputMaxChars = 50000
 const defaultUserInputArchiveDir = "/tmp/ledit/inputs"
 
 func (ch *ConversationHandler) prepareUserInputForModel(input string) string {
-	maxChars := defaultUserInputMaxChars
-	if raw := strings.TrimSpace(os.Getenv("LEDIT_USER_INPUT_MAX_CHARS")); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			maxChars = parsed
-		}
-	}
-
+	maxChars, inputType := ch.getInputLimit()
 	if len(input) <= maxChars {
 		return input
 	}
@@ -38,18 +33,78 @@ func (ch *ConversationHandler) prepareUserInputForModel(input string) string {
 		omitted = 0
 	}
 
-	notice := buildUserInputTruncationNotice(omitted, path, saveErr)
-	return input[:headLen] + notice + input[len(input)-tailLen:]
+	notice := buildUserInputTruncationNotice(omitted, path, saveErr, inputType)
+	truncatedInput := input[:headLen] + notice + input[len(input)-tailLen:]
+
+	// Print warning to console when truncation occurs
+	if path != "" {
+		ch.agent.PrintLineAsync(fmt.Sprintf("⚠️  INPUT TRUNCATED: %d characters omitted from %s (limit: %d chars). Full input saved to %s\n",
+			omitted, inputType, maxChars, path))
+	} else {
+		ch.agent.PrintLineAsync(fmt.Sprintf("⚠️  INPUT TRUNCATED: %d characters omitted from %s (limit: %d chars). Failed to save full input: %v\n",
+			omitted, inputType, maxChars, saveErr))
+	}
+
+	return truncatedInput
 }
 
-func buildUserInputTruncationNotice(omitted int, archivePath string, archiveErr error) string {
+func (ch *ConversationHandler) getInputLimit() (int, string) {
+	// Default to automation mode if agent is not set (e.g., in tests)
+	isInteractive := false
+	if ch.agent != nil {
+		isInteractive = ch.agent.IsInteractiveMode()
+	}
+
+	var maxChars int
+	var inputType string
+
+	if isInteractive {
+		maxChars = defaultInteractiveInputMaxChars
+		inputType = "interactive input"
+		if raw := strings.TrimSpace(os.Getenv("LEDIT_INTERACTIVE_INPUT_MAX_CHARS")); raw != "" {
+			if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+				maxChars = parsed
+			}
+		}
+	} else {
+		maxChars = defaultAutomationInputMaxChars
+		inputType = "automation input"
+		if raw := strings.TrimSpace(os.Getenv("LEDIT_AUTOMATION_INPUT_MAX_CHARS")); raw != "" {
+			if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+				maxChars = parsed
+			}
+		}
+	}
+
+	// Legacy support for LEDIT_USER_INPUT_MAX_CHARS
+	// This overrides mode-specific limits for backward compatibility
+	if raw := strings.TrimSpace(os.Getenv("LEDIT_USER_INPUT_MAX_CHARS")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			maxChars = parsed
+		}
+	}
+
+	return maxChars, inputType
+}
+
+func buildUserInputTruncationNotice(omitted int, archivePath string, archiveErr error, inputType string) string {
+	var envVarHint string
+	switch inputType {
+	case "interactive input":
+		envVarHint = "LEDIT_INTERACTIVE_INPUT_MAX_CHARS"
+	case "automation input":
+		envVarHint = "LEDIT_AUTOMATION_INPUT_MAX_CHARS"
+	default:
+		envVarHint = "LEDIT_USER_INPUT_MAX_CHARS"
+	}
+
 	if archivePath == "" {
 		if archiveErr != nil {
-			return fmt.Sprintf("\n\n[USER INPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set LEDIT_USER_INPUT_MAX_CHARS to adjust. Failed to save full input: %v]\n\n", omitted, archiveErr)
+			return fmt.Sprintf("\n\n[USER INPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set %s to adjust. Failed to save full input: %v]\n\n", omitted, envVarHint, archiveErr)
 		}
-		return fmt.Sprintf("\n\n[USER INPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set LEDIT_USER_INPUT_MAX_CHARS to adjust. Full input path unavailable.]\n\n", omitted)
+		return fmt.Sprintf("\n\n[USER INPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set %s to adjust. Full input path unavailable.]\n\n", omitted, envVarHint)
 	}
-	return fmt.Sprintf("\n\n[USER INPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set LEDIT_USER_INPUT_MAX_CHARS to adjust. Full input saved to %s. Use read_file on this path for the complete pasted content.]\n\n", omitted, archivePath)
+	return fmt.Sprintf("\n\n[USER INPUT TRUNCATED FOR MODEL CONTEXT: omitted %d characters. Set %s to adjust. Full input saved to %s. Use read_file on this path for the complete pasted content.]\n\n", omitted, envVarHint, archivePath)
 }
 
 func saveUserInputArchive(input string) (string, error) {

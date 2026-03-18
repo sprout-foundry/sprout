@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.9] - 2026-03-18
+
+- Merge remote-tracking branch 'origin/main' (8396ec9)
+- Updates 10 files - Updates input and output size limits (b5663b9)
+- docs: Update changelog for v0.11.8 (689465e)
+
 ## [v0.11.8] - 2026-03-17
 
 - Merge remote-tracking branch 'origin/main' (36039f0)

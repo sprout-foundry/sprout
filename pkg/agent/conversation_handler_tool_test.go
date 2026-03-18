@@ -251,3 +251,288 @@ func TestProcessResponseDoesNotExecuteIrreparableStructuredToolCall(t *testing.T
 		t.Fatalf("expected reminder asking the model to re-emit valid JSON tool arguments")
 	}
 }
+
+// TestNormalizeToolCallsForExecution_TypeFieldNormalization tests that the normalizeToolCallsForExecution
+// function properly validates and normalizes the Type field of tool calls to always be "function".
+func TestNormalizeToolCallsForExecution_TypeFieldNormalization(t *testing.T) {
+	tests := []struct {
+		name          string
+		toolCalls     []api.ToolCall
+		wantNormalized int    // expected number of normalized tool calls
+		wantMalformed  int    // expected number of malformed tool calls
+		wantTypeValues map[int]string // map of index -> expected Type value in normalized slice
+	}{
+		{
+			name: "Type='function' remains unchanged",
+			toolCalls: []api.ToolCall{
+				{
+					ID:   "call_1",
+					Type: "function",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "read_file",
+						Arguments: `{"file_path":"test.txt"}`,
+					},
+				},
+			},
+			wantNormalized: 1,
+			wantMalformed:  0,
+			wantTypeValues: map[int]string{0: "function"},
+		},
+		{
+			name: "Type='' (empty) should be normalized to 'function'",
+			toolCalls: []api.ToolCall{
+				{
+					ID:   "call_1",
+					Type: "",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "read_file",
+						Arguments: `{"file_path":"test.txt"}`,
+					},
+				},
+			},
+			wantNormalized: 1,
+			wantMalformed:  0,
+			wantTypeValues: map[int]string{0: "function"},
+		},
+		{
+			name: "Type='invalid' should be normalized to 'function'",
+			toolCalls: []api.ToolCall{
+				{
+					ID:   "call_1",
+					Type: "invalid",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "read_file",
+						Arguments: `{"file_path":"test.txt"}`,
+					},
+				},
+			},
+			wantNormalized: 1,
+			wantMalformed:  0,
+			wantTypeValues: map[int]string{0: "function"},
+		},
+		{
+			name: "Type='xyz' should be normalized to 'function'",
+			toolCalls: []api.ToolCall{
+				{
+					ID:   "call_1",
+					Type: "xyz",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "write_file",
+						Arguments: `{"file_path":"test.txt","content":"hello"}`,
+					},
+				},
+			},
+			wantNormalized: 1,
+			wantMalformed:  0,
+			wantTypeValues: map[int]string{0: "function"},
+		},
+		{
+			name: "Multiple tool calls with various Type values",
+			toolCalls: []api.ToolCall{
+				{
+					ID:   "call_1",
+					Type: "function",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "read_file",
+						Arguments: `{"file_path":"test.txt"}`,
+					},
+				},
+				{
+					ID:   "call_2",
+					Type: "",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "write_file",
+						Arguments: `{"file_path":"out.txt","content":"data"}`,
+					},
+				},
+				{
+					ID:   "call_3",
+					Type: "invalid",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "shell",
+						Arguments: `{"command":"ls"}`,
+					},
+				},
+			},
+			wantNormalized: 3,
+			wantMalformed:  0,
+			wantTypeValues: map[int]string{0: "function", 1: "function", 2: "function"},
+		},
+		{
+			name: "Mix of valid and malformed (invalid JSON) tool calls",
+			toolCalls: []api.ToolCall{
+				{
+					ID:   "call_1",
+					Type: "function",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "read_file",
+						Arguments: `{"file_path":"test.txt"}`,
+					},
+				},
+				{
+					ID:   "call_2",
+					Type: "",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "write_file",
+						Arguments: `invalid json`, // This should go to malformed
+					},
+				},
+			},
+			wantNormalized: 1,
+			wantMalformed:  1,
+			wantTypeValues: map[int]string{0: "function"},
+		},
+		{
+			name: "Empty input returns nil slices",
+			toolCalls:     []api.ToolCall{},
+			wantNormalized: 0,
+			wantMalformed:  0,
+			wantTypeValues: map[int]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			normalized, malformed := normalizeToolCallsForExecution(tt.toolCalls)
+
+			if len(normalized) != tt.wantNormalized {
+				t.Errorf("normalizeToolCallsForExecution() returned %d normalized calls, want %d",
+					len(normalized), tt.wantNormalized)
+			}
+
+			if len(malformed) != tt.wantMalformed {
+				t.Errorf("normalizeToolCallsForExecution() returned %d malformed calls, want %d",
+					len(malformed), tt.wantMalformed)
+			}
+
+			// Verify that all normalized tool calls have Type = "function"
+			for i, tc := range normalized {
+				if tc.Type != "function" {
+					t.Errorf("normalized tool call at index %d has Type=%q, want 'function'", i, tc.Type)
+				}
+			}
+
+			// Verify specific Type values if expected
+			for idx, expectedType := range tt.wantTypeValues {
+				if idx >= len(normalized) {
+					t.Errorf("wantTypeValues specifies index %d but normalized slice only has %d elements",
+						idx, len(normalized))
+					continue
+				}
+				if normalized[idx].Type != expectedType {
+					t.Errorf("normalized[%d].Type = %q, want %q", idx, normalized[idx].Type, expectedType)
+				}
+			}
+		})
+	}
+}
+
+// TestNormalizeToolCallsForExecution_PreservesOtherFields verifies that Type normalization
+// doesn't modify other fields of the tool call.
+func TestNormalizeToolCallsForExecution_PreservesOtherFields(t *testing.T) {
+	toolCalls := []api.ToolCall{
+		{
+			ID:   "call_abc123",
+			Type: "", // Should be normalized to "function"
+			Function: struct {
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			}{
+				Name:      "read_file",
+				Arguments: `{"file_path":"sample.txt","start_line":1,"end_line":10}`,
+			},
+		},
+	}
+
+	normalized, malformed := normalizeToolCallsForExecution(toolCalls)
+
+	if len(malformed) != 0 {
+		t.Errorf("expected 0 malformed calls, got %d", len(malformed))
+	}
+	if len(normalized) != 1 {
+		t.Fatalf("expected 1 normalized call, got %d", len(normalized))
+	}
+
+	tc := normalized[0]
+
+	// Verify Type was normalized
+	if tc.Type != "function" {
+		t.Errorf("Type = %q, want 'function'", tc.Type)
+	}
+
+	// Verify other fields are preserved
+	if tc.ID != "call_abc123" {
+		t.Errorf("ID = %q, want 'call_abc123'", tc.ID)
+	}
+	if tc.Function.Name != "read_file" {
+		t.Errorf("Function.Name = %q, want 'read_file'", tc.Function.Name)
+	}
+	if tc.Function.Arguments != `{"file_path":"sample.txt","start_line":1,"end_line":10}` {
+		t.Errorf("Function.Arguments = %q, want original value", tc.Function.Arguments)
+	}
+}
+
+// TestNormalizeToolCallsForExecution_TypeNormalizationIsPrioritized verifies that
+// Type normalization happens regardless of other factors (as long as JSON is valid).
+func TestNormalizeToolCallsForExecution_TypeNormalizationIsPrioritized(t *testing.T) {
+	// Test with various invalid Type values but valid JSON
+	invalidTypes := []string{"", "invalid", "xyz", "NOT_A_FUNCTION", "123", "  ", "\t\n"}
+
+	for _, invalidType := range invalidTypes {
+		t.Run(invalidType, func(t *testing.T) {
+			toolCalls := []api.ToolCall{
+				{
+					ID:   "call_1",
+					Type: invalidType,
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "test_tool",
+						Arguments: `{"arg":"value"}`,
+					},
+				},
+			}
+
+			normalized, malformed := normalizeToolCallsForExecution(toolCalls)
+
+			if len(malformed) != 0 {
+				t.Errorf("expected 0 malformed calls for Type=%q, got %d", invalidType, len(malformed))
+			}
+			if len(normalized) != 1 {
+				t.Fatalf("expected 1 normalized call, got %d", len(normalized))
+			}
+
+			if normalized[0].Type != "function" {
+				t.Errorf("Type=%q was not normalized to 'function', got %q", invalidType, normalized[0].Type)
+			}
+		})
+	}
+}

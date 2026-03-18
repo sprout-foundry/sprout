@@ -539,7 +539,9 @@ func (fp *FallbackParser) ensureToolCallDefaults(call api.ToolCall) api.ToolCall
 	if call.ID == "" {
 		call.ID = fp.generateToolCallID(call.Function.Name)
 	}
-	if call.Type == "" {
+	// Normalize Type field to "function" (required by OpenAI-compatible API schema)
+	// Handles cases where Type is empty, missing, or has an invalid value
+	if call.Type != "function" {
 		call.Type = "function"
 	}
 	if strings.TrimSpace(call.Function.Arguments) == "" {

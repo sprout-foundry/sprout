@@ -13,6 +13,7 @@ import (
 	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/events"
 	"github.com/alantheprice/ledit/pkg/spec"
+	"github.com/alantheprice/ledit/pkg/trace"
 	"github.com/alantheprice/ledit/pkg/utils"
 )
 
@@ -32,6 +33,8 @@ type ConversationHandler struct {
 	pendingUserMessage         string
 	turnHistory                []TurnEvaluation
 	ocrEnforcementAttempts     int
+	traceSession              interface{} // Using interface{} to avoid circular import
+	currentTurnRecord         *trace.TurnRecord // Temporary storage for current turn, updated with response data later
 }
 
 // NewConversationHandler creates a new conversation handler
@@ -46,6 +49,7 @@ func NewConversationHandler(agent *Agent) *ConversationHandler {
 		fallbackParser:        NewFallbackParser(agent),
 		conversationStartTime: now,
 		lastActivityTime:      now,
+		traceSession:          agent.traceSession, // Pass trace session from agent
 	}
 }
 
@@ -101,6 +105,11 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	completed := false
 	for ch.agent.currentIteration = 0; ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
 		ch.agent.debugLog("🔄 Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.messages))
+
+		// Record turn data if trace session is enabled
+		if ch.traceSession != nil {
+			ch.recordTurnStart(userQuery, processedQuery)
+		}
 
 		// Check for explicit interrupts
 		if ch.checkForInterrupt() {
@@ -227,6 +236,44 @@ func (ch *ConversationHandler) lastUserMessage() (string, bool) {
 	return "", false
 }
 
+// recordTurnStart creates and records a turn record at the start of each iteration
+func (ch *ConversationHandler) recordTurnStart(originalQuery, processedQuery string) {
+	// Type assert to trace session with GetRunID and RecordTurn methods
+	type traceSessionInterface interface {
+		GetRunID() string
+		RecordTurn(record trace.TurnRecord) error
+	}
+
+	traceSession, ok := ch.traceSession.(traceSessionInterface)
+	if !ok {
+		// Not a valid trace session, skip recording
+		ch.agent.debugLog("DEBUG: traceSession is not a valid trace session, skipping turn recording\n")
+		return
+	}
+
+	// Create turn record with initial data
+	ch.currentTurnRecord = &trace.TurnRecord{
+		RunID:              traceSession.GetRunID(),
+		TurnIndex:          ch.agent.currentIteration,
+		SystemPrompt:       ch.agent.systemPrompt,
+		UserPrompt:         processedQuery,     // What model sees (after truncation)
+		UserPromptOriginal: originalQuery,      // What user typed (before truncation)
+		MessagesSent:       ch.agent.messages,  // Messages array as sent to provider
+		RawResponse:        "",                 // Will be set later
+		ParsedToolCalls:    []api.ToolCall{},   // Will be set later
+		ParserErrors:       []string{},         // Will be set later
+		FallbackUsed:       false,              // Will be set later
+		FallbackOutput:     "",                 // Will be set later
+		MachineLabels:      []string{},         // Empty initially
+		Timestamp:          time.Now().Format(time.RFC3339),
+	}
+
+	// Record the turn
+	if err := traceSession.RecordTurn(*ch.currentTurnRecord); err != nil {
+		ch.agent.debugLog("DEBUG: Failed to record turn: %v\n", err)
+	}
+}
+
 // processResponse handles the LLM response including tool execution
 func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	turn := TurnEvaluation{
@@ -241,10 +288,18 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		EstimatedCost:    resp.Usage.EstimatedCost,
 	}
 
+	// Collect parser errors for turn recording
+	var parserErrors []string
+	fallbackUsed := false
+	fallbackOutput := ""
+
 	if len(resp.Choices) == 0 {
 		ch.agent.debugLog("⚠️ Response had no choices; asking model to continue\n")
 		ch.handleIncompleteResponse()
 		turn.GuardrailTrigger = "empty choices response"
+
+		// Update turn record with empty response
+		ch.updateTurnRecord("", nil, parserErrors, fallbackUsed, fallbackOutput)
 		return ch.finalizeTurn(turn, false)
 	}
 
@@ -341,6 +396,9 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			})
 			turn.GuardrailTrigger = "malformed structured tool call"
 			choice.Message.ToolCalls = nil
+
+			// Track parser errors for turn recording
+			parserErrors = append(parserErrors, fmt.Sprintf("malformed tool calls: %s", strings.Join(names, ", ")))
 		}
 
 		for _, tc := range choice.Message.ToolCalls {
@@ -410,13 +468,15 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 		turn.ToolResults = append(turn.ToolResults, toolResults...)
 
+		// Update turn record with response data and tool calls
+		ch.updateTurnRecord(contentUsed, choice.Message.ToolCalls, parserErrors, fallbackUsed, fallbackOutput)
 		return ch.finalizeTurn(turn, false) // Continue conversation
 	}
 
 	// If no tool_calls came back but the content suggests attempted tool usage,
 	// try to parse and execute them using fallback parser
 	if !ch.responseValidator.ValidateToolCalls(contentUsed) {
-		return ch.handleMalformedToolCalls(contentUsed, turn)
+		return ch.handleMalformedToolCalls(contentUsed, turn, parserErrors)
 	}
 
 	// Handle finish reason FIRST to respect model's intent
@@ -446,13 +506,19 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			if !isIncomplete {
 				// Response looks complete despite no finish_reason - accept it
 				if handled, stop := ch.handleOCRCompletionGate(&turn); handled {
+					// Update turn record before returning
+					ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 					return ch.finalizeTurn(turn, stop)
 				}
 				ch.agent.debugLog("✅ No finish_reason but response appears complete - accepting\n")
 				ch.displayFinalResponse(contentUsed)
+				// Update turn record before returning
+				ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 				return ch.finalizeTurn(turn, true)
 			}
 			ch.agent.debugLog("🔄 No finish reason and response appears incomplete - asking model to continue\n")
+			// Update turn record before returning
+			ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 			return ch.finalizeTurn(turn, false) // Continue conversation
 		}
 	}
@@ -464,8 +530,12 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			turn.CompletionReached = true
 		}
 		if handled, stop := ch.handleOCRCompletionGate(&turn); handled {
+			// Update turn record before returning
+			ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 			return ch.finalizeTurn(turn, stop)
 		}
+		// Update turn record before returning
+		ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 		return ch.finalizeTurn(turn, shouldStop)
 	}
 
@@ -507,12 +577,16 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 			// Guidance suppressed for now; guardrail already re-enqueues reminders
 			turn.GuardrailTrigger = "blank iteration reminder"
+			// Update turn record before returning
+			ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 			return ch.finalizeTurn(turn, false) // Continue conversation to get a proper response
 		} else if ch.consecutiveBlankIterations >= 2 {
 			// Two consecutive blank iterations - error out
 			ch.agent.debugLog("❌ Too many consecutive blank iterations, stopping with error\n")
 			errorMessage := "Error: The agent provided two consecutive blank responses and appears to be stuck. Please try rephrasing your request or break it into smaller tasks."
 			ch.displayFinalResponse(errorMessage)
+			// Update turn record before returning
+			ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 			return ch.finalizeTurn(turn, true) // Stop with error
 		}
 	} else {
@@ -525,12 +599,16 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		ch.agent.debugLog("⚠️ Response appears incomplete, asking model to continue\n")
 		ch.handleIncompleteResponse()
 		turn.GuardrailTrigger = "incomplete response reminder"
+		// Update turn record before returning
+		ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 		return ch.finalizeTurn(turn, false) // Continue conversation to get a complete response
 	}
 
 	// Response doesn't look incomplete.
 	// Respect the model's judgment - continue conversation without reminders
 	ch.agent.debugLog("⏳ Model response continuing conversation\n")
+	// Update turn record before returning
+	ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 	return ch.finalizeTurn(turn, false)
 }
 
@@ -795,13 +873,16 @@ func (ch *ConversationHandler) followsRecentToolResults() bool {
 }
 
 // handleMalformedToolCalls attempts to parse and execute tool calls from malformed content
-func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn TurnEvaluation) bool {
+func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn TurnEvaluation, parserErrors []string) bool {
 	ch.agent.debugLog("🔧 Attempting to parse malformed tool calls from content\n")
 
 	// Defensive nil check for fallbackParser
 	if ch.fallbackParser == nil {
 		ch.agent.debugLog("⚠️ Fallback parser is nil, cannot parse malformed tool calls\n")
 		turn.GuardrailTrigger = "fallback parser unavailable"
+
+		// Update turn record without fallback usage
+		ch.updateTurnRecord(content, nil, append(parserErrors, "fallback parser unavailable"), false, "")
 		return false // Continue conversation to allow model to issue proper tool_calls
 	}
 
@@ -809,6 +890,9 @@ func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn Tur
 	if fallbackResult == nil || len(fallbackResult.ToolCalls) == 0 {
 		ch.agent.debugLog("⚠️ Fallback parser could not extract valid tool calls\n")
 		turn.GuardrailTrigger = "fallback parser failed"
+
+		// Update turn record without fallback success
+		ch.updateTurnRecord(content, nil, append(parserErrors, "fallback parser failed"), false, "")
 		return false // Continue conversation to allow model to issue proper tool_calls
 	}
 
@@ -836,5 +920,50 @@ func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn Tur
 	turn.ToolResults = append(turn.ToolResults, toolResults...)
 	turn.GuardrailTrigger = "fallback parser success"
 
+	// Update turn record with fallback parser usage
+	fallbackOutputStr := ""
+	if fallbackResult.CleanedContent != "" {
+		fallbackOutputStr = fallbackResult.CleanedContent
+	}
+	ch.updateTurnRecord(content, fallbackResult.ToolCalls, parserErrors, true, fallbackOutputStr)
+
 	return false // Continue conversation
+}
+
+// updateTurnRecord updates the current turn record with response data and persists it
+func (ch *ConversationHandler) updateTurnRecord(rawResponse string, parsedToolCalls []api.ToolCall, parserErrors []string, fallbackUsed bool, fallbackOutput string) {
+	// Only proceed if tracing is enabled and we have a current turn record
+	if ch.traceSession == nil || ch.currentTurnRecord == nil {
+		return
+	}
+
+	// Type assert to trace session with RecordTurn method
+	type traceSessionInterface interface {
+		RecordTurn(record trace.TurnRecord) error
+	}
+
+	traceSession, ok := ch.traceSession.(traceSessionInterface)
+	if !ok {
+		// Not a valid trace session, skip recording
+		ch.agent.debugLog("DEBUG: traceSession is not a valid trace session, skipping turn update\n")
+		return
+	}
+
+	// Update the turn record with response data
+	ch.currentTurnRecord.RawResponse = rawResponse
+	if parsedToolCalls != nil {
+		ch.currentTurnRecord.ParsedToolCalls = parsedToolCalls
+	}
+	if len(parserErrors) > 0 {
+		ch.currentTurnRecord.ParserErrors = parserErrors
+	}
+	ch.currentTurnRecord.FallbackUsed = fallbackUsed
+	if fallbackOutput != "" {
+		ch.currentTurnRecord.FallbackOutput = fallbackOutput
+	}
+
+	// Record the updated turn
+	if err := traceSession.RecordTurn(*ch.currentTurnRecord); err != nil {
+		ch.agent.debugLog("DEBUG: Failed to update turn record: %v\n", err)
+	}
 }

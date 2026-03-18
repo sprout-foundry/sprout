@@ -2,19 +2,23 @@ package cmd
 
 import (
 	"log"
+	"os"
 
 	"github.com/alantheprice/ledit/pkg/configuration"
+	"github.com/alantheprice/ledit/pkg/trace"
 	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
 // CommandConfig represents the common configuration shared across commands
 type CommandConfig struct {
-	SkipPrompt bool
-	Model      string
-	DryRun     bool
-	Logger     *utils.Logger
-	Config     *configuration.Config
+	SkipPrompt    bool
+	Model         string
+	DryRun        bool
+	Logger        *utils.Logger
+	Config        *configuration.Config
+	TraceSession  *trace.TraceSession
+	TraceDatasetDir string
 }
 
 // BaseCommand provides common functionality for all CLI commands
@@ -26,9 +30,10 @@ type BaseCommand struct {
 
 // CommandFlags defines common flags used across commands
 type CommandFlags struct {
-	SkipPrompt *bool
-	Model      *string
-	DryRun     *bool
+	SkipPrompt      *bool
+	Model           *string
+	DryRun         *bool
+	TraceDatasetDir *string
 }
 
 // NewBaseCommand creates a new base command with common functionality
@@ -45,6 +50,7 @@ func NewBaseCommand(use, short, long string) *BaseCommand {
 	// Initialize common flags
 	base.flags.SkipPrompt = base.cmd.Flags().Bool("skip-prompt", false, "Skip user confirmation prompts")
 	base.flags.DryRun = base.cmd.Flags().Bool("dry-run", false, "Run in simulation mode")
+	base.flags.TraceDatasetDir = base.cmd.Flags().String("trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via LEDIT_TRACE_DATASET_DIR env var)")
 
 	return base
 }
@@ -67,16 +73,78 @@ func (b *BaseCommand) Initialize() error {
 	// Create logger
 	logger := utils.GetLogger(*b.flags.SkipPrompt)
 
+	// Initialize trace session if requested
+	traceDir := getTraceDatasetDir(*b.flags.TraceDatasetDir)
+	var traceSession *trace.TraceSession
+	if traceDir != "" {
+		// Use provider/model from flags, will be refined later
+		provider := getProviderFromConfig(cfg)
+		model := getModelFromConfig(cfg, *b.flags.Model)
+		traceSession, err = trace.NewTraceSession(traceDir, provider, model)
+		if err != nil {
+			return err
+		}
+		logger.Logf("Dataset tracing enabled: %s", traceSession.GetRunID())
+	}
+
 	// Update command config
 	b.cfg = &CommandConfig{
-		SkipPrompt: *b.flags.SkipPrompt,
-		Model:      *b.flags.Model,
-		DryRun:     *b.flags.DryRun,
-		Logger:     logger,
-		Config:     cfg,
+		SkipPrompt:    *b.flags.SkipPrompt,
+		Model:         *b.flags.Model,
+		DryRun:        *b.flags.DryRun,
+		Logger:        logger,
+		Config:        cfg,
+		TraceSession:  traceSession,
+		TraceDatasetDir: traceDir,
 	}
 
 	return nil
+}
+
+// getTraceDatasetDir returns trace dataset directory from flag or env var
+func getTraceDatasetDir(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	// Check env var as fallback
+	dir, ok := os.LookupEnv("LEDIT_TRACE_DATASET_DIR")
+	if ok && dir != "" {
+		return dir
+	}
+	return ""
+}
+
+// getProviderFromConfig extracts provider name from config
+func getProviderFromConfig(cfg *configuration.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	// Extract from provider settings
+	// Use LastUsedProvider if available, otherwise use first from Priority
+	if cfg.LastUsedProvider != "" {
+		return cfg.LastUsedProvider
+	}
+	if len(cfg.ProviderPriority) > 0 {
+		return cfg.ProviderPriority[0]
+	}
+	return ""
+}
+
+// getModelFromConfig extracts model name from config
+func getModelFromConfig(cfg *configuration.Config, flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	if cfg == nil {
+		return ""
+	}
+	// Get from ProviderModels using LastUsedProvider
+	if cfg.LastUsedProvider != "" {
+		if model, ok := cfg.ProviderModels[cfg.LastUsedProvider]; ok {
+			return model
+		}
+	}
+	return ""
 }
 
 // AddCustomFlag adds a custom flag to the command

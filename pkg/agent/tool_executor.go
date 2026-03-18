@@ -16,6 +16,7 @@ import (
 
 	api "github.com/alantheprice/ledit/pkg/agent_api"
 	tools "github.com/alantheprice/ledit/pkg/agent_tools"
+	"github.com/alantheprice/ledit/pkg/trace"
 )
 
 // getToolTimeout returns the timeout duration for tool execution
@@ -51,7 +52,8 @@ func isSubagentTool(toolName string) bool {
 
 // ToolExecutor handles tool execution logic
 type ToolExecutor struct {
-	agent *Agent
+	agent       *Agent
+	toolIndex   int // Counter for tool execution order within each turn
 }
 
 const maxToolFailureMessageChars = 4000 // ~1000 tokens worst-case (4 chars/token heuristic)
@@ -67,6 +69,9 @@ func NewToolExecutor(agent *Agent) *ToolExecutor {
 
 // ExecuteTools executes a list of tool calls and returns the results
 func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
+	// Reset tool index counter at the start of each tool execution batch
+	te.toolIndex = 0
+
 	// Log tool calls at the beginning of the process
 	if te.agent != nil {
 		te.agent.debugLog("🛠️ Executing %d tool calls\n", len(toolCalls))
@@ -202,6 +207,7 @@ func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message 
 
 	// Pre-generate tool call IDs for any tool calls that don't have them
 	// This ensures each goroutine has its own unique ID before parallel execution
+	// Also assign tool indices for trace recording
 	for i := range toolCalls {
 		if toolCalls[i].ID == "" {
 			toolCalls[i].ID = te.GenerateToolCallID(toolCalls[i].Function.Name)
@@ -235,8 +241,15 @@ func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message 
 				wg.Done()
 			}()
 
-			// Execute tool
-			result := te.executeSingleTool(toolCall)
+			// Assign tool index for this parallel execution
+			// Use atomic increment to ensure unique indices
+			resultsMutex.Lock()
+			currentToolIndex := te.toolIndex
+			te.toolIndex++
+			resultsMutex.Unlock()
+
+			// Execute tool with assigned tool index
+			result := te.executeSingleToolWithIndex(toolCall, currentToolIndex)
 
 			// Store result
 			resultsMutex.Lock()
@@ -298,6 +311,14 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 
 // executeSingleTool executes a single tool call
 func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
+	// Use automatic tool index assignment
+	currentToolIndex := te.toolIndex
+	te.toolIndex++
+	return te.executeSingleToolWithIndex(toolCall, currentToolIndex)
+}
+
+// executeSingleToolWithIndex executes a single tool call with a specific tool index
+func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIndex int) api.Message {
 	// Single canonical execution log for all tools (including MCP-prefixed tools).
 	te.agent.ToolLog("executing tool", formatToolCall(toolCall))
 	normalizedToolName := te.normalizeToolNameForScheduling(toolCall.Function.Name)
@@ -320,6 +341,8 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 	// Parse arguments
 	args, repairedArgs, parseErr := parseToolArgumentsWithRepair(toolCall.Function.Arguments)
 	if parseErr != nil {
+		// Record failed tool call to trace session
+		te.recordToolExecutionWithIndex(normalizedToolName, toolCall.Function.Arguments, args, "", "", parseErr, toolIndex)
 		return api.Message{
 			Role:       "tool",
 			Content:    fmt.Sprintf("Error parsing arguments: %v", parseErr),
@@ -332,6 +355,9 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 
 	// Execute with circuit breaker check
 	if te.checkCircuitBreaker(normalizedToolName, args) {
+		// Record failed tool call to trace session
+		err := fmt.Errorf("circuit breaker triggered")
+		te.recordToolExecutionWithIndex(normalizedToolName, toolCall.Function.Arguments, args, "", "", err, toolIndex)
 		return api.Message{
 			Role:       "tool",
 			Content:    "Circuit breaker: This action has been attempted too many times with the same parameters.",
@@ -377,13 +403,13 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		}{result, err}
 	}()
 
-	var result string
+	var fullResult string
 	var err error
 
 	// Wait for the tool to complete, timeout, or interrupt
 	select {
 	case res := <-resultChan:
-		result = res.result
+		fullResult = res.result
 		err = res.err
 	case <-ctx.Done():
 		err = fmt.Errorf("tool execution timed out after %v", toolTimeout)
@@ -391,22 +417,32 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		err = fmt.Errorf("tool execution interrupted by user")
 	}
 
+	// Capture error for trace recording before modifying result
+	recordErr := err
+
 	if err != nil {
 		safeErr := sanitizeToolFailureMessage(err.Error())
 		// Ensure the error is visible to the user immediately
 		te.agent.PrintLine("")
 		te.agent.PrintLine(fmt.Sprintf("❌ Tool '%s' failed: %s", normalizedToolName, safeErr))
 		te.agent.PrintLine("")
-		result = fmt.Sprintf("Error: %s", safeErr)
+		fullResult = fmt.Sprintf("Error: %s", safeErr)
 	}
 
 	if err == nil && normalizedToolName == "TodoWrite" {
 		te.emitTodoChecklistUpdate(todoBefore, tools.TodoRead())
 	}
 
+	// Apply model-specific constraints (truncation for fetch_url, etc.)
+	// fullResult is the actual tool output
+	// modelResult is what gets sent to the model (may be truncated)
+	modelResult := fullResult
 	if err == nil {
-		result = constrainToolResultForModel(normalizedToolName, args, result)
+		modelResult = constrainToolResultForModel(normalizedToolName, args, fullResult)
 	}
+
+	// Record tool execution to trace session
+	te.recordToolExecutionWithIndex(normalizedToolName, toolCall.Function.Arguments, args, fullResult, modelResult, recordErr, toolIndex)
 
 	// Update circuit breaker
 	te.updateCircuitBreaker(normalizedToolName, args)
@@ -419,14 +455,14 @@ func (te *ToolExecutor) executeSingleTool(toolCall api.ToolCall) api.Message {
 		}
 		te.agent.PublishToolExecution(normalizedToolName, status, map[string]interface{}{
 			"tool_call_id": toolCallID,
-			"result":       result,
+			"result":       modelResult,
 			"error":        err,
 		})
 	}
 
 	return api.Message{
 		Role:       "tool",
-		Content:    result,
+		Content:    modelResult,
 		ToolCallId: toolCallID,
 	}
 }
@@ -505,6 +541,136 @@ func saveFetchURLOutputToFile(args map[string]interface{}, output string) (strin
 	}
 	return path, nil
 }
+
+// recordToolExecutionWithIndex records tool execution data to the trace session
+func (te *ToolExecutor) recordToolExecutionWithIndex(toolName string, rawArgs string, args map[string]interface{}, fullResult, modelResult string, err error, toolIndex int) {
+	if te.agent == nil || te.agent.traceSession == nil {
+		return // Trace session not enabled
+	}
+
+	// Type assert to trace session interface
+	type traceSessionInterface interface {
+		GetRunID() string
+		RecordToolCall(record interface{}) error
+	}
+
+	traceSession, ok := te.agent.traceSession.(traceSessionInterface)
+	if !ok {
+		te.agent.debugLog("DEBUG: traceSession is not a valid trace session, skipping tool call recording\n")
+		return
+	}
+
+	// Categorize the error
+	errorCategory, errorMessage := te.categorizeError(toolName, err)
+
+	// Create normalized arguments
+	argsNormalized := te.normalizeArguments(args)
+
+	// Build ToolCallRecord
+	toolCallRecord := trace.ToolCallRecord{
+		RunID:          traceSession.GetRunID(),
+		TurnIndex:      te.agent.currentIteration,
+		ToolIndex:      toolIndex,
+		ToolName:       toolName,
+		Args:           args,
+		ArgsNormalized: argsNormalized,
+		Success:        err == nil,
+		FullResult:     fullResult,
+		ModelResult:    modelResult,
+		ErrorCategory:  errorCategory,
+		ErrorMessage:   errorMessage,
+		MachineLabels:  []string{},
+		Timestamp:      time.Now().Format(time.RFC3339),
+	}
+
+	// Record the tool call
+	if err := traceSession.RecordToolCall(toolCallRecord); err != nil {
+		te.agent.debugLog("DEBUG: Failed to record tool call: %v\n", err)
+	}
+}
+
+// normalizeArguments normalizes arguments for consistent representation in traces
+func (te *ToolExecutor) normalizeArguments(args map[string]interface{}) map[string]interface{} {
+	if args == nil {
+		return nil
+	}
+
+	normalized := make(map[string]interface{})
+	for key, value := range args {
+		// Stringify the key for consistency
+		stringKey := fmt.Sprintf("%v", key)
+
+		// Normalize numeric values to positive integers where applicable
+		switch v := value.(type) {
+		case int, int8, int16, int32, int64:
+			if normalizedInt := normalizePositiveInt(v); normalizedInt > 0 {
+				normalized[stringKey] = normalizedInt
+			} else {
+				normalized[stringKey] = v
+			}
+		case uint, uint8, uint16, uint32, uint64:
+			if normalizedInt := normalizePositiveInt(v); normalizedInt > 0 {
+				normalized[stringKey] = normalizedInt
+			} else {
+				normalized[stringKey] = v
+			}
+		case float32, float64:
+			// Convert floats to int if they're whole numbers
+			var floatValue float64
+			if f32, ok := value.(float32); ok {
+				floatValue = float64(f32)
+			} else {
+				floatValue = value.(float64)
+			}
+			if floatValue == float64(int(floatValue)) {
+				if normalizedInt := normalizePositiveInt(int(floatValue)); normalizedInt > 0 {
+					normalized[stringKey] = normalizedInt
+				} else {
+					normalized[stringKey] = int(floatValue)
+				}
+			} else {
+				normalized[stringKey] = floatValue
+			}
+		default:
+			normalized[stringKey] = value
+		}
+	}
+	return normalized
+}
+
+// categorizeError categorizes errors for trace recording
+func (te *ToolExecutor) categorizeError(toolName string, err error) (string, string) {
+	if err == nil {
+		return "", ""
+	}
+
+	errorMsg := err.Error()
+
+	// Check for unknown tool
+	if strings.Contains(errorMsg, "unknown tool") || strings.Contains(errorMsg, "tool not found") {
+		return "unknown_tool", errorMsg
+	}
+
+	// Check for timeout
+	if strings.Contains(errorMsg, "timed out") || strings.Contains(errorMsg, "timeout") {
+		return "timeout", errorMsg
+	}
+
+	// Check for validation errors (argument parsing, schema validation)
+	if strings.Contains(errorMsg, "parsing arguments") || strings.Contains(errorMsg, "invalid arguments") ||
+		strings.Contains(errorMsg, "validation") || strings.Contains(errorMsg, "schema") {
+		return "validation", errorMsg
+	}
+
+	// Check for circuit breaker
+	if strings.Contains(errorMsg, "circuit breaker") {
+		return "execution_error", errorMsg
+	}
+
+	// Default to execution error
+	return "execution_error", errorMsg
+}
+
 
 // tryExecuteMCPTool attempts to execute an MCP tool name using the agent's MCP manager.
 // Returns handled=false when the tool name doesn't correspond to an MCP tool.

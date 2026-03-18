@@ -631,6 +631,11 @@ func normalizeToolCallsForExecution(toolCalls []api.ToolCall) ([]api.ToolCall, [
 				tc.Function.Arguments = string(encoded)
 			}
 		}
+		// Normalize Type field to "function" (required by OpenAI-compatible API schema)
+		// Handles cases where Type is empty, missing, or has an invalid value
+		if tc.Type != "function" {
+			tc.Type = "function"
+		}
 		normalized = append(normalized, tc)
 	}
 

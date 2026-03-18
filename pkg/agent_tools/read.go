@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/alantheprice/ledit/pkg/filesystem"
@@ -15,12 +16,22 @@ import (
 const (
 	// defaultMaxFileSize is the maximum file size (in bytes) for reading files
 	// Files larger than this will be truncated with a warning
-	defaultMaxFileSize = 100 * 1024 // 100KB default
+	// ~50,000 tokens at 4 chars/token heuristic (~39% of 128K context window)
+	defaultMaxFileSize = 200 * 1024 // 200KB default (raised from 100KB)
 
 	// lineRangeMaxSize is the maximum file size (in bytes) when a line range is requested
 	// This is larger to ensure we can read enough content for accurate line counts
 	lineRangeMaxSize = 10 * 1024 * 1024 // 10MB for line range requests
 )
+
+func getFileReadMaxSize() int {
+	if raw := os.Getenv("LEDIT_READ_FILE_MAX_BYTES"); raw != "" {
+		if size, err := strconv.Atoi(raw); err == nil && size > 0 {
+			return size
+		}
+	}
+	return defaultMaxFileSize
+}
 
 func ReadFile(ctx context.Context, filePath string) (string, error) {
 	return ReadFileWithRange(ctx, filePath, 0, 0)
@@ -55,7 +66,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 	// When a line range is requested, we need to read the full file to ensure accuracy
 	// Otherwise, truncation can cause incorrect line counts (e.g., 700-line file truncated to 295 lines)
 
-	maxFileSize := defaultMaxFileSize
+	maxFileSize := getFileReadMaxSize()
 	if startLine > 0 || endLine > 0 {
 		// For line range requests, read much more to ensure we get the requested lines
 		maxFileSize = lineRangeMaxSize
@@ -135,7 +146,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 			actualSizeKB++
 		}
 		limitKB := maxFileSize / 1024
-		fileContent = fmt.Sprintf("⚠️  File truncated (file is %d bytes, exceeds %dKB limit). Showing first %dKB of %s:\n%s\n\n[Content truncated - use line range to read specific sections]",
+		fileContent = fmt.Sprintf("⚠️  File truncated (file is %d bytes, exceeds %dKB limit). Showing first %dKB of %s. Use line range to read specific sections or adjust LEDIT_READ_FILE_MAX_BYTES.\n%s\n\n[Content truncated]",
 			info.Size(), limitKB, limitKB, cleanPath, fileContent)
 	}
 

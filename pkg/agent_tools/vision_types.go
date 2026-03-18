@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,8 +33,18 @@ const (
 	visionResizeStepPercent        = 0.8  // Resize to 80% of original dimensions each iteration
 	visionMinDimension             = 256  // Minimum dimension in pixels
 	visionMaxDimension             = 4096 // Maximum pixels on longest edge for vision models
-	visionMaxReturnedTextChars     = 12000
+	visionMaxReturnedTextChars     = 20000 // Raised from 12000 to 20000 for better PDF/doc coverage
 )
+
+// getVisionMaxReturnedTextChars returns the max text chars limit from env or default
+func getVisionMaxReturnedTextChars() int {
+	if raw := os.Getenv("LEDIT_VISION_MAX_TEXT_CHARS"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return visionMaxReturnedTextChars
+}
 
 // ============================================================================
 // Error Codes
@@ -942,14 +953,15 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 func limitVisionOutputText(text string) (string, bool, int) {
 	trimmed := strings.TrimSpace(text)
 	original := len(trimmed)
-	if original <= visionMaxReturnedTextChars {
+	maxChars := getVisionMaxReturnedTextChars()
+	if original <= maxChars {
 		return trimmed, false, original
 	}
 
-	suffix := fmt.Sprintf("\n\n[TRUNCATED: returned first %d of %d characters]", visionMaxReturnedTextChars, original)
-	keep := visionMaxReturnedTextChars - len(suffix)
+	suffix := fmt.Sprintf("\n\n[TRUNCATED: returned first %d of %d characters]", maxChars, original)
+	keep := maxChars - len(suffix)
 	if keep < 0 {
-		keep = visionMaxReturnedTextChars
+		keep = maxChars
 		suffix = ""
 	}
 	return strings.TrimSpace(trimmed[:keep]) + suffix, true, original

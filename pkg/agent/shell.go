@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,12 +15,32 @@ import (
 
 var nonWhitespaceTokenRegex = regexp.MustCompile(`\S+`)
 
+// Default shell output truncation limits (raised from 700 to 2500 total tokens)
+// Debug builds and complex commands often produce lots of output
+const defaultShellHeadTokenLimit = 800  // head: 800 tokens
+const defaultShellTailTokenLimit = 1700 // tail: 1700 tokens
+
+// getShellOutputTokenLimits returns head and tail token limits from config or defaults
+func getShellOutputTokenLimits() (head, tail int) {
+	head = defaultShellHeadTokenLimit
+	tail = defaultShellTailTokenLimit
+
+	if raw := os.Getenv("LEDIT_SHELL_HEAD_TOKENS"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			head = parsed
+		}
+	}
+	if raw := os.Getenv("LEDIT_SHELL_TAIL_TOKENS"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			tail = parsed
+		}
+	}
+	return head, tail
+}
+
 // executeShellCommandWithTruncation handles shell command execution with smart truncation and deduplication
 func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command string) (string, error) {
-	const (
-		headTokenLimit = 200
-		tailTokenLimit = 500
-	)
+	headTokenLimit, tailTokenLimit := getShellOutputTokenLimits()
 
 	// Check if we've run this exact command before
 	if prevResult, exists := a.shellCommandHistory[command]; exists {

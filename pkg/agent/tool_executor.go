@@ -55,7 +55,7 @@ type ToolExecutor struct {
 }
 
 const maxToolFailureMessageChars = 4000 // ~1000 tokens worst-case (4 chars/token heuristic)
-const defaultFetchURLResultMaxChars = 60000
+const defaultFetchURLResultMaxChars = 80000 // Raised from 60000 to 80000 (better web content coverage)
 const defaultFetchURLArchiveDir = "/tmp/ledit/downloads"
 
 // NewToolExecutor creates a new tool executor

@@ -10,17 +10,17 @@ import (
 )
 
 // TestReadFileTruncationBehavior tests that:
-// 1. Full file reads truncate to 100KB
+// 1. Full file reads truncate to 200KB
 // 2. Line range reads use 10MB limit
 // 3. Truncation warnings are shown appropriately
 func TestReadFileTruncationBehavior(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a file larger than 100KB but smaller than 10MB
-	// 1000 lines, each ~150 bytes = ~150KB
+	// Create a file larger than 200KB but smaller than 10MB
+	// 2000 lines, each ~150 bytes = ~300KB
 	largeFile := filepath.Join(tmpDir, "large.txt")
 	var content strings.Builder
-	for i := 1; i <= 1000; i++ {
+	for i := 1; i <= 2000; i++ {
 		content.WriteString(fmt.Sprintf("Line %d: %s\n", i, strings.Repeat("x", 130)))
 	}
 
@@ -44,38 +44,38 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 		}
 
 		// Should mention using line ranges
-		if !strings.Contains(result, "use line range") {
+		if !strings.Contains(result, "Use line range") {
 			t.Errorf("Expected hint to use line ranges, got: %s", result[:min(300, len(result))])
 		}
 
-		// Should not contain all 1000 lines (truncated)
+		// Should not contain all 2000 lines (truncated)
 		lineCount := strings.Count(result, "Line ")
-		if lineCount > 800 {
-			t.Errorf("Expected truncation to ~700 lines (100KB), got %d lines", lineCount)
+		if lineCount > 1600 {
+			t.Errorf("Expected truncation to ~1400 lines (200KB), got %d lines", lineCount)
 		}
-		if lineCount < 600 {
-			t.Errorf("Expected more lines from 100KB read, got only %d lines", lineCount)
+		if lineCount < 1200 {
+			t.Errorf("Expected more lines from 200KB read, got only %d lines", lineCount)
 		}
 	})
 
 	// Test 2: Line range read should NOT truncate for this size file
 	t.Run("LineRangeReadNoTruncate", func(t *testing.T) {
-		result, err := ReadFileWithRange(ctx, largeFile, 500, 510)
+		result, err := ReadFileWithRange(ctx, largeFile, 1000, 1010)
 		if err != nil {
 			t.Fatalf("ReadFileWithRange failed: %v", err)
 		}
 
-		// Should NOT contain truncation warning (file is only 150KB)
+		// Should NOT contain truncation warning (file is only 300KB)
 		if strings.Contains(result, "⚠️") {
-			t.Errorf("Should not truncate for 150KB file with line range, got: %s", result)
+			t.Errorf("Should not truncate for 300KB file with line range, got: %s", result)
 		}
 
 		// Should contain requested lines
-		if !strings.Contains(result, "Line 500:") {
-			t.Errorf("Expected Line 500 in result, got: %s", result)
+		if !strings.Contains(result, "Line 1000:") {
+			t.Errorf("Expected Line 1000 in result, got: %s", result)
 		}
-		if !strings.Contains(result, "Line 510:") {
-			t.Errorf("Expected Line 510 in result, got: %s", result)
+		if !strings.Contains(result, "Line 1010:") {
+			t.Errorf("Expected Line 1010 in result, got: %s", result)
 		}
 	})
 
@@ -105,22 +105,22 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 func TestEditAfterTruncatedRead(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a file > 100KB
+	// Create a file > 200KB
 	testFile := filepath.Join(tmpDir, "test.go")
 	var content strings.Builder
 
-	// First 700 lines: filler content
-	for i := 1; i <= 700; i++ {
+	// First 1500 lines: filler content
+	for i := 1; i <= 1500; i++ {
 		content.WriteString(fmt.Sprintf("// Line %d: %s\n", i, strings.Repeat("x", 140)))
 	}
 
-	// Lines 701-703: target function
+	// Lines 1501-1503: target function
 	content.WriteString("func targetFunction() {\n")
 	content.WriteString("    // Important code here\n")
 	content.WriteString("}\n")
 
-	// More filler to ensure file > 100KB
-	for i := 704; i <= 1000; i++ {
+	// More filler to ensure file > 200KB
+	for i := 1504; i <= 2000; i++ {
 		content.WriteString(fmt.Sprintf("// Line %d: %s\n", i, strings.Repeat("x", 140)))
 	}
 
@@ -142,14 +142,14 @@ func TestEditAfterTruncatedRead(t *testing.T) {
 		t.Error("Expected truncation warning in full read")
 	}
 
-	// Should NOT contain function (it's beyond 100KB)
+	// Should NOT contain function (it's beyond 200KB)
 	if strings.Contains(fullRead, "targetFunction") {
 		t.Logf("WARNING: Full read contains targetFunction (file might be smaller than expected)")
 		// This is OK - it just means our test file isn't large enough
 	}
 
 	// Step 2: Model follows the hint and uses line range
-	lineRangeRead, err := ReadFileWithRange(ctx, testFile, 701, 703)
+	lineRangeRead, err := ReadFileWithRange(ctx, testFile, 1501, 1503)
 	if err != nil {
 		t.Fatalf("ReadFileWithRange failed: %v", err)
 	}

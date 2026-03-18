@@ -16,9 +16,19 @@ import (
 
 const (
 	defaultSearchMaxResults = 50
-	defaultSearchMaxBytes   = 20 * 1024
+	defaultSearchMaxBytes   = 100 * 1024 // Raised from 20KB to 100KB
 	defaultSearchLineLength = 240
 )
+
+// getSearchMaxBytes returns the max bytes limit from env or default
+func getSearchMaxBytes() int {
+	if raw := os.Getenv("LEDIT_SEARCH_MAX_BYTES"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return defaultSearchMaxBytes
+}
 
 // Tool handler implementations for search operations
 
@@ -120,7 +130,7 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
-	maxBytes := defaultSearchMaxBytes
+	maxBytes := getSearchMaxBytes()
 	if v, ok := args["max_bytes"]; ok {
 		if normalized := normalizePositiveInt(v); normalized > 0 {
 			maxBytes = normalized
@@ -245,6 +255,11 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 
 	if matched == 0 {
 		return fmt.Sprintf("No matches found for pattern '%s' in %s", pattern, root), nil
+	}
+
+	// Add truncation warning if search was capped by max_bytes limit
+	if searchCapped {
+		return fmt.Sprintf("%s\n\n[Search results truncated due to max_bytes limit (%d bytes). Consider increasing max_bytes parameter or using LEDIT_SEARCH_MAX_BYTES env var.]", b.String(), maxBytes), nil
 	}
 	return b.String(), nil
 }

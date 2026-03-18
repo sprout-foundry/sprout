@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const defaultInteractiveInputMaxChars = 15000
+const defaultInteractiveInputMaxChars = 50000
 const defaultAutomationInputMaxChars = 50000
 const defaultUserInputArchiveDir = "/tmp/ledit/inputs"
 

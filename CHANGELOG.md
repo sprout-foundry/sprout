@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.8] - 2026-03-17
+
+- Merge remote-tracking branch 'origin/main' (36039f0)
+- Updates 5 files - Updates truncation logic for inputs (412ef13)
+- docs: Update changelog for v0.11.7 (87f2616)
+
 ## [v0.11.7] - 2026-03-16
 
 - Merge remote-tracking branch 'origin/main' (dadb2a2)

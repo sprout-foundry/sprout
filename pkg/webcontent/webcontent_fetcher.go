@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
+	neturl "net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/alantheprice/ledit/pkg/configuration" // Updated to new config
 	"github.com/alantheprice/ledit/pkg/utils"
@@ -23,7 +24,8 @@ const (
 
 // WebContentFetcher handles fetching content from URLs.
 type WebContentFetcher struct {
-	httpClient *http.Client
+	httpClient  *http.Client
+	rateLimiter *rateLimiter
 }
 
 // NewWebContentFetcher creates a new WebContentFetcher instance.
@@ -32,35 +34,61 @@ func NewWebContentFetcher() *WebContentFetcher {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		rateLimiter: newRateLimiter(1*time.Second, 1800*time.Millisecond),
 	}
 }
 
+// urlBannerPrefix is used to detect whether cached content already includes
+// the URL banner wrapper (produced by older versions that cached wrapped output).
+const urlBannerPrefix = "\n--- Content from URL: "
+
 // FetchWebContent fetches content from a given URL, using a cache to avoid refetching.
 // It uses Jina Reader for external URLs if available, otherwise falls back to a direct HTTP GET.
+// Content is always returned wrapped in URL banners.
 func (w *WebContentFetcher) FetchWebContent(url string, cfg *configuration.Manager) (string, error) { // Use Manager instead of Config
 	utils.GetLogger(false).LogProcessStep(fmt.Sprintf("Starting web content search for query: %s", url))
 	// Check cache first
 	if cachedEntry, found := w.loadURLCache(url); found {
+		// Backwards-compatible: old cached entries may already include the banner.
+		if !strings.HasPrefix(cachedEntry.Content, urlBannerPrefix) {
+			return wrapWithBanner(url, cachedEntry.Content), nil
+		}
 		return cachedEntry.Content, nil
 	}
 
-	content, err := w.fetchContent(url, cfg) // Pass cfg
+	content, err := w.fetchContent(url, cfg)
 	if err != nil {
 		return "", err
 	}
 
+	// Cache the raw content so the same entry is valid regardless of how it was fetched.
 	if err := w.saveURLCache(url, content); err != nil {
 		// Log warning but don't fail the operation
 		utils.GetLogger(false).LogError(err)
 	}
 
-	return content, nil
+	return wrapWithBanner(url, content), nil
+}
+
+// wrapWithBanner formats content with URL boundary markers.
+func wrapWithBanner(url, content string) string {
+	return fmt.Sprintf("\n--- Content from URL: %s ---\n\n%s\n--- End of content from URL: %s ---\n", url, content, url)
 }
 
 // fetchContent determines the best method to fetch content and retrieves it.
+// The returned content is raw (no URL banners) — the caller is responsible
+// for wrapping. This ensures both Jina and direct-fetch paths cache the
+// same shape of data.
 func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Manager) (string, error) { // Use Manager instead of Config
 	isLocalhost := strings.HasPrefix(url, "http://localhost") || strings.HasPrefix(url, "https://localhost")
 	jinaAPIKey := cfg.GetAPIKeys().GetAPIKey("jinaai")
+
+	// Rate limit: wait before fetching from the same domain again.
+	if !isLocalhost {
+		if u, err := neturl.Parse(url); err == nil {
+			w.rateLimiter.wait(u.Hostname())
+		}
+	}
 
 	// Check if this is a URL type that should bypass Jina (JSON, APIs, static assets)
 	if w.shouldBypassJina(url) {
@@ -73,7 +101,7 @@ func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Manager)
 		if err != nil {
 			return "", fmt.Errorf("failed to fetch with Jina Reader: %w", err)
 		}
-		return fmt.Sprintf("\n--- Content from URL: %s ---\n\n%s\n--- End of content from URL: %s ---\n", url, content, url), nil
+		return content, nil
 	}
 
 	// Fallback to direct fetch for localhost or if Jina is not configured.
@@ -87,7 +115,7 @@ func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Manager)
 // shouldBypassJina checks if the URL should bypass Jina Reader and use direct fetch.
 // This is important for JSON files, APIs, static assets, and other non-HTML content.
 func (w *WebContentFetcher) shouldBypassJina(urlStr string) bool {
-	parsedURL, err := url.Parse(urlStr)
+	parsedURL, err := neturl.Parse(urlStr)
 	if err != nil {
 		// If we can't parse the URL, fall back to direct fetch to be safe
 		return true
@@ -213,18 +241,25 @@ func parseJinaResponse(body io.Reader) (string, error) {
 }
 
 // truncateContent truncates content if it exceeds max size and adds a warning.
+// Truncation is UTF-8 safe — it will not split multi-byte characters.
 func (w *WebContentFetcher) truncateContent(content string) (string, error) {
 	contentLen := len(content)
 	if contentLen <= maxContentSize {
 		return content, nil
 	}
 
-	// Truncate and add warning
-	truncated := content[:maxContentSize]
+	// Find the last rune boundary at or before maxContentSize.
+	boundary := maxContentSize
+	for boundary > 0 && !utf8.RuneStart(content[boundary]) {
+		boundary--
+	}
+	truncated := content[:boundary]
 	return fmt.Sprintf("%s%s (original: %.1f MB)", truncated, truncatedSuffix, float64(contentLen)/(1024*1024)), nil
 }
 
 // fetchDirectURL performs a direct HTTP GET request to the given URL.
+// If the response Content-Type is text/html, the body is cleaned to extract
+// visible text content before truncation.
 func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
 	resp, err := w.httpClient.Get(url)
 	if err != nil {
@@ -233,19 +268,46 @@ func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		_, _ = io.ReadAll(resp.Body)
+		if isHTMLContent(resp.Header.Get("Content-Type")) {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+			text := HTMLToText(string(body))
+			text = strings.TrimSpace(text)
+			const maxErrorLen = 500
+			if len(text) > maxErrorLen {
+				text = text[:maxErrorLen] + "..."
+			}
+			if text != "" {
+				return "", fmt.Errorf("HTTP %d for URL: %s\n\nServer response:\n%s", resp.StatusCode, url, text)
+			}
+		} else {
+			_, _ = io.ReadAll(resp.Body)
+		}
 		return "", fmt.Errorf("HTTP %d for URL: %s", resp.StatusCode, url)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxContentSize+1024))
 	if err != nil {
 		return "", err
 	}
 
+	content := string(body)
+
+	// If the response is HTML, clean it to readable text before truncation.
+	if isHTMLContent(resp.Header.Get("Content-Type")) {
+		content = HTMLToText(content)
+	}
+
 	// Truncate if content is too large
-	truncated, err := w.truncateContent(string(body))
+	truncated, err := w.truncateContent(content)
 	if err != nil {
 		return "", err
 	}
 	return truncated, nil
+}
+
+// isHTMLContent returns true if the Content-Type header indicates HTML.
+func isHTMLContent(contentType string) bool {
+	// Match text/html, application/xhtml+xml, etc. — anything containing "html"
+	ct := strings.ToLower(contentType)
+	return strings.Contains(ct, "text/html") || strings.Contains(ct, "application/xhtml")
 }

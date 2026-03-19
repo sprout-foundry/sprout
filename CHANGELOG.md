@@ -2,6 +2,11 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.12] - 2026-03-19
+
+- Updates 2 files - Updates HTML cleaner and adds tests (5489fc5)
+- docs: Update changelog for v0.11.11 (36ec6f1)
+
 ## [v0.11.11] - 2026-03-19
 
 - Updates 10 files - Updates webcontent with rate limiter and HTML cleaner (3e4ee7b)

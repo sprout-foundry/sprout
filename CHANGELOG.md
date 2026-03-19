@@ -2,6 +2,11 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.11] - 2026-03-19
+
+- Updates 10 files - Updates webcontent with rate limiter and HTML cleaner (3e4ee7b)
+- docs: Update changelog for v0.11.10 (a50021b)
+
 ## [v0.11.10] - 2026-03-18
 
 - Updates 2 files - Updates default interactive input limit to 50000 (5e5c564)

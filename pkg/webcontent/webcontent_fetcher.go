@@ -2,12 +2,14 @@ package webcontent
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	neturl "net/url"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -21,6 +23,22 @@ const (
 	// Truncated suffix to append when content exceeds limit
 	truncatedSuffix = "\n\n[CONTENT TRUNCATED: Original was larger than 1MB. Only first 1MB returned.]"
 )
+
+// globalBrowser is a lazily-initialized singleton BrowserRenderer shared by
+// all fetchers. This avoids launching a separate Chromium process per
+// WebContentFetcher. The singleton is protected by sync.Once and is never
+// closed during normal operation (it lives for the process lifetime).
+var (
+	globalBrowser     BrowserRenderer
+	globalBrowserOnce sync.Once
+)
+
+func getGlobalBrowser() BrowserRenderer {
+	globalBrowserOnce.Do(func() {
+		globalBrowser = NewBrowserRenderer()
+	})
+	return globalBrowser
+}
 
 // WebContentFetcher handles fetching content from URLs.
 type WebContentFetcher struct {
@@ -259,7 +277,9 @@ func (w *WebContentFetcher) truncateContent(content string) (string, error) {
 
 // fetchDirectURL performs a direct HTTP GET request to the given URL.
 // If the response Content-Type is text/html, the body is cleaned to extract
-// visible text content before truncation.
+// visible text content before truncation.  When the raw HTML appears to be
+// an SPA shell (detected by NeedsRendering), a headless browser is used to
+// render the page instead, falling back to the raw HTML on browser failure.
 func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
 	resp, err := w.httpClient.Get(url)
 	if err != nil {
@@ -294,6 +314,17 @@ func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
 
 	// If the response is HTML, clean it to readable text before truncation.
 	if isHTMLContent(resp.Header.Get("Content-Type")) {
+		// Detect SPA shells: when the raw HTML yields no useful text,
+		// try rendering with a headless browser before falling back.
+		if NeedsRendering(content) {
+			if rendered, err := getGlobalBrowser().RenderPage(context.Background(), url); err == nil {
+				utils.GetLogger(false).Logf("SPA detected for %s — rendered with headless browser", url)
+				content = HTMLToText(rendered)
+				return w.truncateContent(content)
+			} else if _, ok := getGlobalBrowser().(*nopRenderer); !ok {
+				utils.GetLogger(false).Logf("SPA detected for %s — browser render failed: %v, falling back to raw HTML", url, err)
+			}
+		}
 		content = HTMLToText(content)
 	}
 

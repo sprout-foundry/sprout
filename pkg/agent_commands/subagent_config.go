@@ -31,19 +31,18 @@ func (s *SubagentConfigCommand) Description() string {
 // Execute runs the subagent config command
 func (s *SubagentConfigCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	configManager := chatAgent.GetConfigManager()
-	config := configManager.GetConfig()
 
 	// If no arguments, show current status
 	if len(args) == 0 {
-		return s.showStatus(config)
+		return s.showStatus(configManager.GetConfig())
 	}
 
 	// Set the value
 	value := args[0]
 	if s.configType == "provider" {
-		return s.setProvider(value, config, configManager)
+		return s.setProvider(value, configManager)
 	}
-	return s.setModel(value, config, configManager)
+	return s.setModel(value, configManager)
 }
 
 // showStatus displays current subagent configuration
@@ -66,29 +65,15 @@ func (s *SubagentConfigCommand) showStatus(config *configuration.Config) error {
 }
 
 // setProvider sets the subagent provider
-func (s *SubagentConfigCommand) setProvider(provider string, config *configuration.Config, configManager *configuration.Manager) error {
-	// Validate provider exists by converting to ClientType
-	providerType, err := configManager.MapStringToClientType(provider)
-	if err != nil {
-		return fmt.Errorf("invalid provider: %s\n\n%v", provider, err)
+func (s *SubagentConfigCommand) setProvider(provider string, configManager *configuration.Manager) error {
+	if err := validateProvider(provider, configManager); err != nil {
+		return err
 	}
 
-	// Check if it's a real provider (not the error type)
-	available := configManager.GetAvailableProviders()
-	isValid := false
-	for _, p := range available {
-		if p == providerType {
-			isValid = true
-			break
-		}
-	}
-
-	if !isValid {
-		return fmt.Errorf("invalid provider: %s\n\nAvailable providers: %v", provider, available)
-	}
-
-	config.SetSubagentProvider(provider)
-	if err := configManager.SaveConfig(); err != nil {
+	if err := configManager.UpdateConfig(func(c *configuration.Config) error {
+		c.SetSubagentProvider(provider)
+		return nil
+	}); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
@@ -98,15 +83,33 @@ func (s *SubagentConfigCommand) setProvider(provider string, config *configurati
 }
 
 // setModel sets the subagent model
-func (s *SubagentConfigCommand) setModel(model string, config *configuration.Config, configManager *configuration.Manager) error {
-	config.SetSubagentModel(model)
-	if err := configManager.SaveConfig(); err != nil {
+func (s *SubagentConfigCommand) setModel(model string, configManager *configuration.Manager) error {
+	if err := configManager.UpdateConfig(func(c *configuration.Config) error {
+		c.SetSubagentModel(model)
+		return nil
+	}); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	fmt.Printf("\n✅ Subagent model set to: %s\n", model)
 	fmt.Println("💡 Subagents will now use this model for all executions.")
 	return nil
+}
+
+// validateProvider checks that a provider name is valid and available.
+func validateProvider(provider string, configManager *configuration.Manager) error {
+	providerType, err := configManager.MapStringToClientType(provider)
+	if err != nil {
+		return fmt.Errorf("invalid provider: %s\n\n%v", provider, err)
+	}
+
+	available := configManager.GetAvailableProviders()
+	for _, p := range available {
+		if p == providerType {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid provider: %s\n\nAvailable providers: %v", provider, available)
 }
 
 // formatValue formats a config value for display

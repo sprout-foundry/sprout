@@ -70,6 +70,35 @@ When evaluating and modifying this codebase, prioritize these metrics:
 
 **Note**: Benchmark in `pkg/agent_api/streaming_test.go` renamed to `_DISABLED` as a precaution.
 
+## Code Writing Workflow: Code → Review → Fix
+
+When implementing non-trivial features (multiple files, new logic, or architectural changes), use this structured workflow. It uses exactly two sequential subagent calls plus orchestrator verification — no more.
+
+### Step 1 — Write Code (`coder` subagent)
+Delegate to the `coder` persona with a clear description of what to build. A good coder writes tests for new behavior alongside the implementation naturally. Provide existing file paths, describe the expected API/behavior, and specify acceptance criteria.
+
+For large features, break the work into sequential `coder` subagent calls — each scoped to one logical unit (e.g., a data structure, then the functions that use it, then the integration). After each call, read what was produced, run the build and tests, and verify progress before delegating the next unit. This catches problems early and keeps each subagent focused.
+
+**Completion criteria per subagent call:** `go test ./...` passes and `go build ./...` compiles clean.
+
+### Step 2 — Code Review (`code_reviewer` subagent)
+Delegate to the `code_reviewer` persona to review **all** changed files — production code and tests. Provide the full list of changed file paths. Ask the reviewer to categorize findings as `MUST_FIX`, `SHOULD_FIX`, `VERIFY`, and `SUGGEST`.
+
+### Step 3 — Fix Issues
+Fix every `MUST_FIX` and `SHOULD_FIX`. Address `VERIFY` items by confirming acceptable or fixing. `SUGGEST` items may be deferred. Run `go test ./...` and `go build ./...` after each fix. For complex or numerous fixes, delegate to a `coder` subagent; for small fixes, do them directly.
+
+### Step 4 — Re-Review (once, if fixes were non-trivial)
+If the fixes in Step 3 were substantial or touched multiple files, run a single additional `code_reviewer` pass on the changed files. This re-review is a safety check, not an infinite improvement loop — accept that code can be "good enough" and shipped.
+
+### Declare Success
+Build passes, tests pass, no open `MUST_FIX`/`SHOULD_FIX`. Read the final files yourself to confirm. Summarize and recommend commit.
+
+### When to Skip This Workflow
+- Single-line fixes or trivial edits
+- Pure refactoring with no logic changes (existing tests already pass)
+- Bug fixes where a `debugger` subagent already identified root cause — fix, write regression test, run suite, single review pass
+- Documentation-only changes
+
 ## Commit & Pull Request Guidelines
 - Users will do commits, never, ever do commits, notify the user when you think a commit is needed.
 - Recommend committing after:

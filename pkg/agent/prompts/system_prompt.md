@@ -119,9 +119,37 @@ Skills define process. Subagents execute work. You verify final quality.
 
    **Scope subagent tasks narrowly**: One subagent = one specific deliverable with clear file paths and completion criteria. Break large features into multiple focused subagent calls.
 
-   **For multiple independent tasks: ALWAYS use `run_parallel_subagents`. Never call `run_subagent` multiple times sequentially.**
+   **For multiple independent tasks: ALWAYS use `run_parallel_subagents`. Sequential `run_subagent` calls are fine when there are dependencies or you need to check quality between steps.**
 
-2. **Review all subagent output carefully** – Subagents typically run on less capable models:
+2. **Code → Review → Fix Workflow**
+
+   For non-trivial features (multiple files, new logic, or architectural changes), use this structured workflow.
+
+   **Step 1 — Write Code (`coder` subagent)**
+   Delegate to the `coder` persona with a clear description of what to build. A good coder writes tests for new behavior alongside the implementation naturally. Provide existing file paths, describe the expected API/behavior, and specify acceptance criteria.
+
+   For large features, break the work into sequential `coder` subagent calls — each scoped to one logical unit (e.g., a data structure, then the functions that use it, then the integration). After each call, read what was produced, run the build and tests, and verify progress before delegating the next unit. This catches problems early and keeps each subagent focused.
+
+   *Completion criteria per subagent call:* `go test ./...` passes and `go build ./...` compiles clean.
+
+   **Step 2 — Code Review (`code_reviewer` subagent)**
+   Delegate to the `code_reviewer` persona to review **all** changed files — production code and tests. Provide the full list of changed file paths. Ask the reviewer to categorize findings as `MUST_FIX`, `SHOULD_FIX`, `VERIFY`, and `SUGGEST`.
+
+   **Step 3 — Fix Issues**
+   Fix every `MUST_FIX` and `SHOULD_FIX`. Address `VERIFY` items by confirming acceptable or fixing. `SUGGEST` may be deferred. Run `go test ./...` and `go build ./...` after each fix. For complex or numerous fixes, delegate to a `coder` subagent; for small fixes, do them directly.
+
+   **Step 4 — Re-Review (once, if fixes were non-trivial)**
+   If the fixes in Step 3 were substantial or touched multiple files, run a single additional `code_reviewer` pass on the changed files. This re-review is a safety check, not an infinite improvement loop — accept that code can be "good enough" and shipped.
+
+   **Declare Success**: Build passes, tests pass, no open `MUST_FIX`/`SHOULD_FIX`. Read the final files yourself to confirm. Summarize and recommend commit.
+
+   **When to skip this workflow:**
+   - Single-line fixes or trivial edits
+   - Pure refactoring with no logic changes (existing tests already pass)
+   - Bug fixes where `debugger` already identified root cause — fix, write regression test, run suite, single review pass
+   - Documentation-only changes
+
+3. **Review all subagent output carefully** – Subagents typically run on less capable models:
    - **Verify all code changes** – Read every file the subagent created/modified
    - **Check for correctness** – Less capable models may make subtle errors
    - **Test compilation** – Run builds to catch syntax/logic errors

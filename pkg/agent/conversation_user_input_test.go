@@ -61,9 +61,8 @@ func TestPrepareUserInputForModel_TruncatesAndArchivesLargeInput(t *testing.T) {
 
 func TestPrepareUserInputForModel_UseAutomationLimitByDefault(t *testing.T) {
 	ch := &ConversationHandler{}
-	// No environment variables set - should use default automation limit of 50000
 
-	// Input within automation limit (50000)
+	// Input within automation limit
 	input := strings.Repeat("x", 20000)
 	got := ch.prepareUserInputForModel(input)
 
@@ -78,8 +77,8 @@ func TestPrepareUserInputForModel_UseInteractiveLimitWhenInteractive(t *testing.
 	ch := &ConversationHandler{agent: agent}
 	t.Setenv("LEDIT_INTERACTIVE", "1")
 
-	// Input larger than interactive limit (50000) but smaller than automation limit (50000)
-	input := strings.Repeat("y", 60000)
+	// Input larger than interactive limit (100000)
+	input := strings.Repeat("y", 110000)
 	got := ch.prepareUserInputForModel(input)
 
 	// SHOULD truncate since input exceeds interactive limit

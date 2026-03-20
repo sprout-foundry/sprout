@@ -51,11 +51,12 @@ func (a *Agent) initializeMCP() error {
 					AutoStart:   serverConfig.AutoStart,
 					MaxRestarts: serverConfig.MaxRestarts,
 				}
-						if err := a.mcpManager.AddServer(mcpServer); err != nil {
-			if a.debug {
-				fmt.Printf("\n⚠️  Warning: Failed to add legacy MCP server %s: %v\n", name, err)
-			}
-		} else if a.debug {fmt.Printf("🔧 Added legacy MCP server: %s\n", name)
+				if err := a.mcpManager.AddServer(mcpServer); err != nil {
+					if a.debug {
+						fmt.Printf("\n⚠️  Warning: Failed to add legacy MCP server %s: %v\n", name, err)
+					}
+				} else if a.debug {
+					fmt.Printf("🔧 Added legacy MCP server: %s\n", name)
 				}
 			}
 		}
@@ -107,7 +108,11 @@ func (a *Agent) initializeMCP() error {
 		}
 	}
 
-	// Auto-discover GitHub server if token is available
+	// Auto-discover GitHub server if PAT token is available.
+	// Note: This only applies to PAT-based (local) GitHub MCP servers.
+	// The remote OAuth server (https://api.githubcopilot.com/mcp/) is configured
+	// explicitly via `ledit mcp add` and is NOT auto-discovered here, since it
+	// requires a Copilot seat and uses OAuth rather than a PAT.
 	if config.MCP.AutoDiscover {
 		if githubToken := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN"); githubToken != "" {
 			if _, exists := config.MCP.Servers["github"]; !exists {

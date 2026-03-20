@@ -80,6 +80,9 @@ type Config struct {
 	// SkipPrompt - for non-interactive mode
 	SkipPrompt bool `json:"skip_prompt,omitempty"`
 
+	// DismissedPrompts tracks which one-time prompts the user has dismissed.
+	DismissedPrompts map[string]bool `json:"dismissed_prompts,omitempty"`
+
 	// Performance Configuration
 	FileBatchSize         int `json:"file_batch_size,omitempty"`
 	MaxConcurrentRequests int `json:"max_concurrent_requests,omitempty"`
@@ -378,6 +381,9 @@ func Load() (*Config, error) {
 	}
 	if config.MCP.Servers == nil {
 		config.MCP.Servers = make(map[string]mcp.MCPServerConfig)
+	}
+	if config.DismissedPrompts == nil {
+		config.DismissedPrompts = make(map[string]bool)
 	}
 	if config.CustomProviders == nil {
 		config.CustomProviders = make(map[string]CustomProviderConfig)

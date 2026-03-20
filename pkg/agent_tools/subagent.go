@@ -142,7 +142,7 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 		args = append(args, "--model", model)
 	}
 
-	args = append(args, prompt)
+	args = append(args, "--prompt-stdin")
 
 	// Use the currently running ledit binary path to ensure consistency
 	// This avoids issues where exec.LookPath might find a different binary
@@ -181,24 +181,30 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 		}
 	}
 
-	// Open /dev/null for stdin before creating pipes so we can clean up on error
-	devNull, err := os.Open(os.DevNull)
+	// Create stdin pipe to pass the prompt to the subagent (avoids ARG_MAX limits)
+	promptReader, promptWriter, err := os.Pipe()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open /dev/null: %w", err)
+		return nil, fmt.Errorf("failed to create stdin pipe for prompt: %w", err)
 	}
-	defer devNull.Close()
 
 	// Create pipes for stdout and stderr to enable streaming
 	stdoutReader, stdoutWriter, err := os.Pipe()
 	if err != nil {
+		promptReader.Close()
+		promptWriter.Close()
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 	stderrReader, stderrWriter, err := os.Pipe()
 	if err != nil {
+		promptReader.Close()
+		promptWriter.Close()
 		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
 	cmd := exec.CommandContext(ctx, leditPath, args...)
+
+	// Pass the prompt via stdin (child reads it with --prompt-stdin)
+	cmd.Stdin = promptReader
 
 	// Explicitly set working directory to current directory to ensure subagent
 	// runs in the same location as the parent process
@@ -218,10 +224,6 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 		cmd.Env = append(cmd.Env, "LEDIT_UNSAFE_MODE="+unsafe)
 	}
 
-	// Redirect stdin to /dev/null to prevent subagent from inheriting parent's terminal
-	// This ensures the subagent runs in non-interactive mode even if called with no args
-	cmd.Stdin = devNull
-
 	// Also collect full output for return value
 	var stdoutBuffer, stderrBuffer bytes.Buffer
 
@@ -233,13 +235,19 @@ func RunSubagent(prompt, model, provider string, streamCallback StreamCallback, 
 
 	// Start the command (non-blocking)
 	if err = cmd.Start(); err != nil {
+		promptReader.Close()
+		promptWriter.Close()
 		return nil, fmt.Errorf("failed to start subagent: %w", err)
 	}
 
-	// Close the write ends of the pipes in the parent process after Start
-	// The child process has its own copies, so it's safe to close ours
-	// NOTE: Don't close these yet - the MultiWriter needs them to stay open
-	// They will be closed automatically when the process exits
+	// Write the prompt to stdin and close the write end
+	if _, err := promptWriter.Write([]byte(prompt)); err != nil {
+		log.Printf("[SUBAGENT] Failed to write prompt to stdin: %v\n", err)
+	}
+	promptWriter.Close()
+
+	// Close the stdin read end in the parent (child has its own copy)
+	promptReader.Close()
 
 	// Stream output in real-time if callback provided
 	var wg sync.WaitGroup
@@ -474,7 +482,7 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 		args = append(args, "--model", task.Model)
 	}
 
-	args = append(args, task.Prompt)
+	args = append(args, "--prompt-stdin")
 
 	// Use the currently running ledit binary path to ensure consistency
 	leditPath, err := os.Executable()
@@ -503,23 +511,24 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 		}
 	}
 
-	// Open /dev/null for stdin before creating pipes so we can clean up on error
-	devNull, err := os.Open(os.DevNull)
+	// Create stdin pipe to pass the prompt to the subagent (avoids ARG_MAX limits)
+	promptReader, promptWriter, err := os.Pipe()
 	if err != nil {
-		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=devnull_failed details=%v",
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=stdin_pipe_failed details=%v",
 			callerMethod, taskID, err)
 		return &ParallelSubagentResult{
 			ID:    taskID,
-			Error: fmt.Errorf("failed to open /dev/null: %w", err),
+			Error: fmt.Errorf("failed to create stdin pipe for prompt: %w", err),
 		}
 	}
-	defer devNull.Close()
 
 	// Create pipes for stdout and stderr to enable streaming
 	stdoutReader, stdoutWriter, err := os.Pipe()
 	if err != nil {
 		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=pipe_creation_failed details=%v",
 			callerMethod, taskID, err)
+		promptReader.Close()
+		promptWriter.Close()
 		return &ParallelSubagentResult{
 			ID:    taskID,
 			Error: fmt.Errorf("failed to create stdout pipe: %w", err),
@@ -529,6 +538,8 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 	if err != nil {
 		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=pipe_creation_failed details=%v",
 			callerMethod, taskID, err)
+		promptReader.Close()
+		promptWriter.Close()
 		return &ParallelSubagentResult{
 			ID:    taskID,
 			Error: fmt.Errorf("failed to create stderr pipe: %w", err),
@@ -536,6 +547,9 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 	}
 
 	cmd := exec.CommandContext(ctx, leditPath, args...)
+
+	// Pass the prompt via stdin (child reads it with --prompt-stdin)
+	cmd.Stdin = promptReader
 
 	// Explicitly set working directory to current directory to ensure subagent
 	// runs in the same location as the parent process
@@ -552,10 +566,6 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 		cmd.Env = append(cmd.Env, "LEDIT_UNSAFE_MODE="+unsafe)
 	}
 
-	// Redirect stdin to /dev/null to prevent subagent from inheriting parent's terminal
-	// This ensures the subagent runs in non-interactive mode even if called with no args
-	cmd.Stdin = devNull
-
 	// Also collect full output for return value
 	var stdoutBuffer, stderrBuffer bytes.Buffer
 
@@ -569,11 +579,23 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 	if err = cmd.Start(); err != nil {
 		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=start_failed details=%v",
 			callerMethod, taskID, err)
+		promptReader.Close()
+		promptWriter.Close()
 		return &ParallelSubagentResult{
 			ID:    taskID,
 			Error: fmt.Errorf("failed to start subagent: %w", err),
 		}
 	}
+
+	// Write the prompt to stdin and close the write end
+	if _, err := promptWriter.Write([]byte(task.Prompt)); err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=prompt_write_failed details=%v\n",
+			callerMethod, taskID, err)
+	}
+	promptWriter.Close()
+
+	// Close the stdin read end in the parent (child has its own copy)
+	promptReader.Close()
 
 	// Close the write ends of the pipes in the parent process after Start
 	// The child process has its own copies, so it's safe to close ours
@@ -656,11 +678,6 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 			completed = false
 			log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=exec_failed details=%v",
 				callerMethod, taskID, err)
-
-			return &ParallelSubagentResult{
-				ID:    taskID,
-				Error: err,
-			}
 		}
 	}
 
@@ -671,6 +688,17 @@ func spawnSubagent(task ParallelSubagentTask, noTimeout bool, callerMethod strin
 	} else if completed {
 		log.Printf("[SUBAGENT_COMPLETE] method=%s task_id=%s status=non_zero_exit exit_code=%d",
 			callerMethod, taskID, exitCode)
+	}
+
+	if !completed && err != nil {
+		return &ParallelSubagentResult{
+			ID:        taskID,
+			Stdout:    stdoutBuffer.String(),
+			Stderr:    stderrBuffer.String(),
+			ExitCode:  exitCode,
+			Completed: completed,
+			Error:     err,
+		}
 	}
 
 	return &ParallelSubagentResult{

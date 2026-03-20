@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -32,6 +33,7 @@ var (
 	agentWorkflowConfig    string
 	agentNoConnectionCheck bool
 	agentTraceDatasetDir   string
+	agentPromptStdin       bool
 )
 
 func createChatAgent() (*agent.Agent, error) {
@@ -89,6 +91,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentResourceDirectory, "resource-directory", "", "Optional directory (relative to current working directory) to store captured web/vision resources")
 	agentCmd.Flags().StringVar(&agentWorkflowConfig, "workflow-config", "", "JSON file that defines agent workflow steps for non-interactive runs")
 	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via LEDIT_TRACE_DATASET_DIR env var)")
+	agentCmd.Flags().BoolVar(&agentPromptStdin, "prompt-stdin", false, "Read the prompt from stdin (avoids OS ARG_MAX limits for large prompts)")
 	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)
 
 	// Initialize environment-based defaults
@@ -271,6 +274,21 @@ Examples:
 
 		// Check if stdin is a terminal (not piped)
 		stdinIsTerminal := term.IsTerminal(int(os.Stdin.Fd()))
+
+		// When --prompt-stdin is set, read the full prompt from stdin to avoid
+		// OS ARG_MAX limits when passing large prompts as CLI arguments.
+		if agentPromptStdin {
+			promptData, readErr := io.ReadAll(os.Stdin)
+			if readErr != nil {
+				return fmt.Errorf("failed to read prompt from stdin: %w", readErr)
+			}
+			promptText := strings.TrimSpace(string(promptData))
+			if promptText == "" {
+				return fmt.Errorf("--prompt-stdin specified but stdin was empty")
+			}
+			args = []string{promptText}
+			stdinIsTerminal = false
+		}
 
 		// We're interactive only if we have a terminal, no args, and not in CI
 		isInteractive := len(args) == 0 && !isCI && stdinIsTerminal

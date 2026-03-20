@@ -223,6 +223,21 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleFetchURL,
 	})
 
+	// Register browse_url tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "browse_url",
+		Description: "Open a URL in a headless browser. Use for: (1) taking screenshots of web pages including localhost apps, (2) capturing rendered DOM output after JavaScript execution, (3) extracting visible text from JS-rendered pages. Supports custom viewport sizes and user-agents for responsive testing.",
+		Parameters: []ParameterConfig{
+			{"url", "string", true, []string{}, "URL to browse — works with localhost URLs for testing local apps"},
+			{"action", "string", false, []string{}, "What to do: 'screenshot' (save PNG), 'dom' (return rendered HTML), 'text' (return visible text, default)"},
+			{"screenshot_path", "string", false, []string{}, "File path to save screenshot (required when action=screenshot, e.g. /tmp/ledit_examples/screenshot.png)"},
+			{"viewport_width", "int", false, []string{}, "Browser viewport width in pixels (default: 1280)"},
+			{"viewport_height", "int", false, []string{}, "Browser viewport height in pixels (default: 720)"},
+			{"user_agent", "string", false, []string{}, "Override the browser User-Agent string"},
+		},
+		Handler: handleBrowseURL,
+	})
+
 	// Register vision analysis tools
 	registry.RegisterTool(ToolConfig{
 		Name:        "analyze_ui_screenshot",

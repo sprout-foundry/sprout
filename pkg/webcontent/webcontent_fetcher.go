@@ -98,7 +98,7 @@ func wrapWithBanner(url, content string) string {
 // for wrapping. This ensures both Jina and direct-fetch paths cache the
 // same shape of data.
 func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Manager) (string, error) { // Use Manager instead of Config
-	isLocalhost := strings.HasPrefix(url, "http://localhost") || strings.HasPrefix(url, "https://localhost")
+	isLocalhost := isLocalhostURL(url)
 	jinaAPIKey := cfg.GetAPIKeys().GetAPIKey("jinaai")
 
 	// Rate limit: wait before fetching from the same domain again.
@@ -126,6 +126,15 @@ func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Manager)
 		content, err := w.fetchWithJinaReader(url, cfg) // Pass cfg
 		if err != nil {
 			return "", fmt.Errorf("failed to fetch with Jina Reader: %w", err)
+		}
+		// If Jina returned suspiciously little content, try browser as fallback.
+		trimmedContent := strings.TrimSpace(content)
+		if len(trimmedContent) < 50 {
+			utils.GetLogger(false).Logf("Jina returned very little content (%d chars) for %s, trying browser fallback", len(trimmedContent), url)
+			directContent, directErr := w.fetchDirectURL(url)
+			if directErr == nil && len(strings.TrimSpace(directContent)) > len(trimmedContent) {
+				return directContent, nil
+			}
 		}
 		return content, nil
 	}
@@ -285,11 +294,32 @@ func (w *WebContentFetcher) truncateContent(content string) (string, error) {
 	return fmt.Sprintf("%s%s (original: %.1f MB)", truncated, truncatedSuffix, float64(contentLen)/(1024*1024)), nil
 }
 
+// isLocalhostURL returns true if the URL points to localhost.
+func isLocalhostURL(url string) bool {
+	lower := strings.ToLower(url)
+	return strings.HasPrefix(lower, "http://localhost") ||
+		strings.HasPrefix(lower, "https://localhost") ||
+		strings.HasPrefix(lower, "http://127.0.0.1") ||
+		strings.HasPrefix(lower, "https://127.0.0.1") ||
+		strings.HasPrefix(lower, "http://[::1]") ||
+		strings.HasPrefix(lower, "https://[::1]")
+}
+
+// localhostOrSPA returns a human-readable reason string for why browser rendering
+// was attempted for a given URL.
+func localhostOrSPA(url string) string {
+	if isLocalhostURL(url) {
+		return "localhost URL (JS likely needed)"
+	}
+	return "SPA shell detected"
+}
+
 // fetchDirectURL performs a direct HTTP GET request to the given URL.
 // If the response Content-Type is text/html, the body is cleaned to extract
-// visible text content before truncation.  When the raw HTML appears to be
-// an SPA shell (detected by NeedsRendering), a headless browser is used to
-// render the page instead, falling back to the raw HTML on browser failure.
+// visible text content before truncation.  For localhost URLs, a headless
+// browser is always tried first for HTML content (since JS is likely needed).
+// For non-localhost URLs, browser rendering is only triggered when the raw
+// HTML appears to be an SPA shell (detected by NeedsRendering).
 func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
 	resp, err := w.httpClient.Get(url)
 	if err != nil {
@@ -324,15 +354,14 @@ func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
 
 	// If the response is HTML, clean it to readable text before truncation.
 	if isHTMLContent(resp.Header.Get("Content-Type")) {
-		// Detect SPA shells: when the raw HTML yields no useful text,
-		// try rendering with a headless browser before falling back.
-		if NeedsRendering(content) {
+		tryBrowser := isLocalhostURL(url) || NeedsRendering(content)
+		if tryBrowser {
 			if rendered, err := getGlobalBrowser().RenderPage(context.Background(), url); err == nil {
-				utils.GetLogger(false).Logf("SPA detected for %s — rendered with headless browser", url)
+				utils.GetLogger(false).Logf("Browser rendering for %s (reason: %s)", url, localhostOrSPA(url))
 				content = HTMLToText(rendered)
 				return w.truncateContent(content)
 			} else if _, ok := getGlobalBrowser().(*nopRenderer); !ok {
-				utils.GetLogger(false).Logf("SPA detected for %s — browser render failed: %v, falling back to raw HTML", url, err)
+				utils.GetLogger(false).Logf("Browser render failed for %s: %v, falling back to raw HTML", url, err)
 			}
 		}
 		content = HTMLToText(content)

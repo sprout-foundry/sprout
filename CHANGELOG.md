@@ -2,6 +2,15 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.13] - 2026-03-20
+
+- Updates 3 files - Updates input limits and terminal suspend handling (332cb39)
+- Updates 13 files - Updates GitHub MCP setup with OAuth and URL routing (f277788)
+- Updates 2 files - Updates code writing workflow documentation (3be6a25)
+- Merge remote-tracking branch 'origin/main' (c4ee0ef)
+- Updates 12 files - Updates with SPA detection and browser rendering support (068bc44)
+- docs: Update changelog for v0.11.12 (d8452ba)
+
 ## [v0.11.12] - 2026-03-19
 
 - Updates 2 files - Updates HTML cleaner and adds tests (5489fc5)

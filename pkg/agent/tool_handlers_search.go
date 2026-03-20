@@ -296,6 +296,15 @@ func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return "", fmt.Errorf("configuration manager not initialized for URL fetch")
 	}
 
+	// Try routing GitHub URLs to the GitHub MCP server when available.
+	// This gives structured data for issues, PRs, and repos instead of
+	// scraping JS-heavy GitHub pages.
+	if result, handled, err := a.tryRouteGitHubToMCP(ctx, url); handled {
+		a.debugLog("GitHub URL routed to MCP\n")
+		a.captureWebText("fetch_url", url, result)
+		return result, err
+	}
+
 	result, err := tools.FetchURL(url, a.configManager)
 	a.debugLog("Fetch URL error: %v\n", err)
 	if err == nil {

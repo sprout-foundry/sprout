@@ -170,6 +170,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		}); err != nil {
 			return err
 		}
+
+		// Check if we should prompt for GitHub MCP setup (interactive, non-SkipPrompt)
+		promptGitHubMCPSetupIfNeeded(chatAgent)
+
 		err = runInteractiveMode(ctx, chatAgent, eventBus)
 	} else {
 		if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {

@@ -33,7 +33,7 @@ var (
 	globalBrowserOnce sync.Once
 )
 
-func getGlobalBrowser() BrowserRenderer {
+func GetGlobalBrowser() BrowserRenderer {
 	globalBrowserOnce.Do(func() {
 		globalBrowser = NewBrowserRenderer()
 	})
@@ -356,11 +356,11 @@ func (w *WebContentFetcher) fetchDirectURL(url string) (string, error) {
 	if isHTMLContent(resp.Header.Get("Content-Type")) {
 		tryBrowser := isLocalhostURL(url) || NeedsRendering(content)
 		if tryBrowser {
-			if rendered, err := getGlobalBrowser().RenderPage(context.Background(), url); err == nil {
+			if rendered, err := GetGlobalBrowser().RenderPage(context.Background(), url); err == nil {
 				utils.GetLogger(false).Logf("Browser rendering for %s (reason: %s)", url, localhostOrSPA(url))
 				content = HTMLToText(rendered)
 				return w.truncateContent(content)
-			} else if _, ok := getGlobalBrowser().(*nopRenderer); !ok {
+			} else if _, ok := GetGlobalBrowser().(*nopRenderer); !ok {
 				utils.GetLogger(false).Logf("Browser render failed for %s: %v, falling back to raw HTML", url, err)
 			}
 		}

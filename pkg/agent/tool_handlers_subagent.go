@@ -434,6 +434,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	// If persona is specified, use persona-specific provider/model
 	var provider string
 	var model string
+	explicitSubagentConfig := false
 
 	if a.configManager != nil {
 		config := a.configManager.GetConfig()
@@ -446,6 +447,10 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				model = config.GetSubagentTypeModel(persona)
 				systemPromptPath = subagentType.SystemPrompt
 				systemPromptText = subagentType.SystemPromptText
+				// Track if persona had explicit provider/model (not from global fallback)
+				if subagentType.Provider != "" || subagentType.Model != "" {
+					explicitSubagentConfig = true
+				}
 				a.debugLog("Using persona '%s': provider=%s model=%s system_prompt=%s\n",
 					persona, provider, model, systemPromptPath)
 				a.warnSubagentFallback(fmt.Sprintf("persona '%s'", persona), strings.TrimSpace(subagentType.Provider), strings.TrimSpace(subagentType.Model), provider, model)
@@ -462,10 +467,25 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			a.debugLog("Using subagent provider=%s model=%s from config\n", provider, model)
 			a.warnSubagentFallback("default subagent config", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 		}
+
+		// If no explicit subagent config is set (SubagentProvider and SubagentModel are empty
+		// and persona doesn't have explicit provider/model), inherit from parent agent.
+		// This ensures subagents use the model the user actually selected for the main agent.
+		if !explicitSubagentConfig && config.SubagentProvider == "" && config.SubagentModel == "" {
+			parentProvider := a.GetProvider()
+			parentModel := a.GetModel()
+			if parentProvider != "" && parentProvider != "unknown" {
+				provider = parentProvider
+			}
+			if parentModel != "" && parentModel != "unknown" {
+				model = parentModel
+			}
+			a.debugLog("Inheriting parent agent provider/model: provider=%s model=%s\n", provider, model)
+		}
 	} else {
-		a.debugLog("Warning: No config manager available, using defaults\n")
-		provider = "" // Will use system default
-		model = ""    // Will use system default
+		a.debugLog("Warning: No config manager available, using parent agent defaults\n")
+		provider = a.GetProvider()
+		model = a.GetModel()
 		a.warnSubagentFallback("missing config manager", "", "", provider, model)
 	}
 
@@ -758,6 +778,19 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		subagentProvider = config.GetSubagentProvider()
 		subagentModel = config.GetSubagentModel()
 		a.warnSubagentFallback("parallel subagent defaults", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), subagentProvider, subagentModel)
+
+		// If no explicit subagent config, inherit from parent agent's runtime values.
+		if config.SubagentProvider == "" && config.SubagentModel == "" {
+			if parentProvider := a.GetProvider(); parentProvider != "" && parentProvider != "unknown" {
+				subagentProvider = parentProvider
+			}
+			if parentModel := a.GetModel(); parentModel != "" && parentModel != "unknown" {
+				subagentModel = parentModel
+			}
+		}
+	} else {
+		subagentProvider = a.GetProvider()
+		subagentModel = a.GetModel()
 	}
 
 	// Apply configuration to all tasks (overriding any empty values)

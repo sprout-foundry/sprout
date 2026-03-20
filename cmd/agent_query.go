@@ -11,11 +11,8 @@ import (
 
 	"github.com/alantheprice/ledit/pkg/agent"
 	agent_commands "github.com/alantheprice/ledit/pkg/agent_commands"
-	"github.com/alantheprice/ledit/pkg/configuration"
 	"github.com/alantheprice/ledit/pkg/console"
 	"github.com/alantheprice/ledit/pkg/events"
-	"github.com/alantheprice/ledit/pkg/security_validator"
-	"github.com/alantheprice/ledit/pkg/utils"
 	"github.com/alantheprice/ledit/pkg/zsh"
 )
 
@@ -166,96 +163,123 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 	return true, nil
 }
 
-// tryDirectExecution attempts to execute simple commands directly using local LLM
-// Returns true if command was executed directly, false if normal agent flow should proceed
+// TryDirectExecution attempts to execute simple commands directly using static pattern matching.
+// Returns true if command was executed directly, false if normal agent flow should proceed.
 func TryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query string) (bool, error) {
-	// Get the tool registry (has security validator with local LLM access)
-	registry := agent.GetToolRegistry()
-	if registry == nil {
-		return false, nil
-	}
-	validator := registry.GetValidator()
-	if validator == nil {
-		// Try to initialize the validator
-		agentConfig := chatAgent.GetConfig()
-		if agentConfig == nil {
-			return false, nil
-		}
-
-		// If SecurityValidation is not configured, create a default one
-		var securityConfig *configuration.SecurityValidationConfig
-		if agentConfig.SecurityValidation == nil {
-			securityConfig = &configuration.SecurityValidationConfig{
-				Enabled:        true,
-				Model:          "qwen2.5-coder:1.5b",
-				Threshold:      1,
-				TimeoutSeconds: 10,
-			}
-		} else {
-			securityConfig = agentConfig.SecurityValidation
-		}
-
-		if !securityConfig.Enabled {
-			return false, nil
-		}
-
-		// Create a logger
-		isNonInteractive := agentConfig.SkipPrompt
-		logger := utils.GetLogger(isNonInteractive)
-
-		// Create the validator
-		newValidator, err := security_validator.NewValidator(securityConfig, logger, !isNonInteractive)
-		if err != nil {
-			return false, nil // Failed to create validator, proceed with normal flow
-		}
-		validator = newValidator
-	}
-
-	// Use the LLM to detect if this is a direct command request
-	isDirect, detectedCommand, confidence, err := validator.DetectDirectCommand(ctx, query)
-	if err != nil {
-		// If LLM fails, just proceed with normal agent flow
+	// Trim and check for empty
+	query = strings.TrimSpace(query)
+	if query == "" {
 		return false, nil
 	}
 
-	// Only execute directly if high confidence (>0.8)
-	if isDirect && confidence > 0.8 && detectedCommand != "" {
-		fmt.Printf("%s⚡ Fast path:%s %s\n",
-			console.ColorizeBold("⚡ Fast path:", console.ColorYellow),
-			console.ColorReset,
-			detectedCommand,
-		)
+	// Static list of commands that can be executed directly without LLM involvement.
+	// These are safe, informational commands that an LLM is not needed for.
+	directCommands := map[string]string{
+		"pwd":          "pwd",
+		"ls":           "ls -la",
+		"ll":           "ls -la",
+		"la":           "ls -la",
+		"date":         "date",
+		"whoami":       "whoami",
+		"id":           "id",
+		"uname":        "uname -a",
+		"hostname":     "hostname",
+		"uptime":       "uptime",
+		"git status":   "git status",
+		"git st":       "git status",
+		"git log":      "git log --oneline -20",
+		"git branch":   "git branch",
+		"git diff":     "git diff",
+		"git remote":   "git remote -v",
+		"git stash":    "git stash list",
+		"git tag":      "git tag",
+		"free":         "free -h",
+		"df":           "df -h",
+		"du":           "du -sh .",
+		"ps":           "ps aux",
+		"env":          "env",
+		"which":        "", // Requires additional argument matching below
+		"whereis":      "", // Requires additional argument matching below
+	}
 
-		// Print separator before streaming output
-		separatorWidth := GetTerminalWidth()
-		separator := strings.Repeat("─", separatorWidth)
-		fmt.Printf("%s%s%s\n",
-			console.ColorGray,
-			separator,
-			console.ColorReset,
-		)
+	// Check for exact match first
+	if cmd, ok := directCommands[query]; ok && cmd != "" {
+		return executeDirectCommand(cmd)
+	}
 
-		// Execute the command directly using bash (output streams in real-time)
-		_, err := ExecuteCommand(detectedCommand)
-
-		// Print separator after output
-		fmt.Printf("%s%s%s\n",
-			console.ColorGray,
-			separator,
-			console.ColorReset,
-		)
-
-		if err != nil {
-			fmt.Printf("%s❌ Error:%s %v\n",
-				console.ColorRed,
-				console.ColorReset,
-				err,
-			)
+	// Check for commands that take a single argument
+	for prefix, cmd := range directCommands {
+		if cmd == "" && strings.HasPrefix(query, prefix+" ") {
+			return executeDirectCommand(query)
 		}
-		return true, nil
+	}
+
+	// Also check "how to see X" patterns — e.g., "how to see current directory" → pwd
+	queryLower := strings.ToLower(query)
+	naturalLanguageMap := []struct {
+		pattern string
+		cmd     string
+	}{
+		{"current directory", "pwd"},
+		{"current dir", "pwd"},
+		{"working directory", "pwd"},
+		{"what's the date", "date"},
+		{"what time", "date"},
+		{"who am i", "whoami"},
+		{"what user", "whoami"},
+		{"disk space", "df -h"},
+		{"disk usage", "du -sh ."},
+		{"memory", "free -h"},
+		{"ram", "free -h"},
+		{"git status", "git status"},
+		{"git log", "git log --oneline -20"},
+		{"show me the files", "ls -la"},
+		{"list files", "ls -la"},
+	}
+	for _, entry := range naturalLanguageMap {
+		if strings.Contains(queryLower, entry.pattern) && len(query) < 60 {
+			return executeDirectCommand(entry.cmd)
+		}
 	}
 
 	return false, nil
+}
+
+// executeDirectCommand executes a command directly and prints output
+func executeDirectCommand(command string) (bool, error) {
+	fmt.Printf("%s⚡ Fast path:%s %s\n",
+		console.ColorizeBold("⚡ Fast path:", console.ColorYellow),
+		console.ColorReset,
+		command,
+	)
+
+	// Print separator before streaming output
+	separatorWidth := GetTerminalWidth()
+	separator := strings.Repeat("─", separatorWidth)
+	fmt.Printf("%s%s%s\n",
+		console.ColorGray,
+		separator,
+		console.ColorReset,
+	)
+
+	// Execute the command directly (output streams in real-time)
+	_, err := ExecuteCommand(command)
+
+	// Print separator after output
+	fmt.Printf("%s%s%s\n",
+		console.ColorGray,
+		separator,
+		console.ColorReset,
+	)
+
+	if err != nil {
+		fmt.Printf("%s❌ Error:%s %v\n",
+			console.ColorRed,
+			console.ColorReset,
+			err,
+		)
+	}
+	return true, nil
 }
 
 // ProcessQuery processes a single query

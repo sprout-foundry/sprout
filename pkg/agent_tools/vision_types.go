@@ -792,6 +792,10 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 		},
 	}
 
+	// Note: HTML input detection is handled at the tool-handler level
+	// (handleAnalyzeUIScreenshot / handleAnalyzeImageContent) to avoid
+	// redundant HTTP HEAD requests on every remote image URL call.
+
 	if !HasVisionCapability() {
 		response.Success = false
 		response.InputResolved = false
@@ -1099,4 +1103,22 @@ func GetFileExtension(path string) string {
 // GetBaseName returns the base name of a file path
 func GetBaseName(path string) string {
 	return filepath.Base(path)
+}
+
+// IsHTMLInput checks if the input path appears to be HTML content.
+// For URLs, it does a HEAD request to check Content-Type.
+// For local files, it checks the file extension.
+func IsHTMLInput(path string) bool {
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Head(path)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		ct := strings.ToLower(resp.Header.Get("Content-Type"))
+		return strings.Contains(ct, "text/html") || strings.Contains(ct, "application/xhtml")
+	}
+	ext := strings.ToLower(GetFileExtension(path))
+	return ext == ".html" || ext == ".htm"
 }

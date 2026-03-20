@@ -241,9 +241,12 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register vision analysis tools
 	registry.RegisterTool(ToolConfig{
 		Name:        "analyze_ui_screenshot",
-		Description: "Analyze UI screenshots or mockups for implementation guidance",
+		Description: "Analyze UI screenshots, mockups, or live HTML pages for implementation feedback. Accepts image files (PNG/JPG/WebP), remote image URLs, and local HTML files which are automatically rendered via a headless browser before analysis. Ideal for quick visual testing of dev builds and design reviews.",
 		Parameters: []ParameterConfig{
-			{"image_path", "string", true, []string{}, "Path or URL to the UI screenshot"},
+			{"image_path", "string", true, []string{}, "Path or URL to the UI screenshot or HTML file"},
+			{"analysis_prompt", "string", false, []string{}, "Optional custom vision prompt for analysis"},
+			{"viewport_width", "int", false, []string{}, "Browser viewport width in pixels for HTML files (default: 1280)"},
+			{"viewport_height", "int", false, []string{}, "Browser viewport height in pixels for HTML files (default: 720)"},
 		},
 		Handler: handleAnalyzeUIScreenshot,
 	})

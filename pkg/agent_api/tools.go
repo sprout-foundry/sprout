@@ -318,14 +318,25 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
-				Name:        "analyze_ui_screenshot",
-				Description: "Analyze UI/mockup images for implementation details",
-				Parameters: map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"image_path": map[string]interface{}{
+							Name:        "analyze_ui_screenshot",
+			Description: "Analyze UI screenshots, mockups, or HTML files for implementation guidance. Supports image files, URLs, and local HTML files (rendered via headless browser).",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"image_path": map[string]interface{}{
+						"type":        "string",
+						"description": "Path to UI screenshot, mockup, HTML file, or URL to the UI screenshot",
+					},"analysis_prompt": map[string]interface{}{
 							"type":        "string",
-							"description": "Path to UI screenshot, mockup, or design file",
+							"description": "Optional custom vision prompt for analysis",
+						},
+						"viewport_width": map[string]interface{}{
+							"type":        "integer",
+							"description": "Browser viewport width in pixels for HTML files (default: 1280)",
+						},
+						"viewport_height": map[string]interface{}{
+							"type":        "integer",
+							"description": "Browser viewport height in pixels for HTML files (default: 720)",
 						},
 					},
 					"required":             []string{"image_path"},

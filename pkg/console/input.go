@@ -236,32 +236,40 @@ func (ir *InputReader) ReadLine() (string, error) {
 			}
 
 			if b == 26 { // Ctrl+Z
-				// Restore terminal before suspension for clean shell state
+				// Re-enter cooked mode before suspension so the shell
+				// state is clean while the user is away.
 				term.Restore(ir.termFd, oldState)
 				suspendTerminal()
 
-				// Wait for SIGCONT (when fg resumes the process)
-				// The process continues here after resume
-				// Give the terminal a moment to stabilize
+				// Execution resumes here after SIGCONT (e.g. "fg").
 				ignoreTerminalSignals()
 
-				// Re-enter raw mode
+				// Drain any bytes that arrived while suspended (e.g.
+				// keystrokes, newline from "fg" command).  Only possible
+				// when the fd is in non-blocking mode; otherwise there is
+				// no safe way to poll without blocking indefinitely.
+				if nonBlocking {
+					time.Sleep(50 * time.Millisecond)
+					discardBuf := make([]byte, 256)
+					for {
+						n, _ := os.Stdin.Read(discardBuf)
+						if n <= 0 {
+							break
+						}
+					}
+				}
+
+				// Re-enter raw mode.
 				if newState, err := term.MakeRaw(ir.termFd); err == nil {
 					oldState = newState
 				}
 
-				// Drain input buffer to clear any characters typed during suspension
-				discardBuf := make([]byte, 256)
-				for {
-					n, _ := os.Stdin.Read(discardBuf)
-					if n <= 0 {
-						break
-					}
-				}
+				// Re-enable bracketed paste mode (lost when we exited raw mode).
+				fmt.Print(bracketedPasteEnable)
 
 				resetTerminalSignals()
 
-				// Clear the current line and redisplay the prompt
+				// Clear the current line and redisplay the prompt.
 				fmt.Printf("\r%s%s", ClearLineSeq(), ir.prompt)
 				ir.line = ""
 				ir.cursorPos = 0

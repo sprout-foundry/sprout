@@ -43,6 +43,8 @@ func createChatAgent() (*agent.Agent, error) {
 	if agentProvider != "" && agentModel != "" {
 		modelWithProvider := fmt.Sprintf("%s:%s", agentProvider, agentModel)
 		chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
+	} else if agentProvider != "" {
+		chatAgent, err = agent.NewAgentWithModel(agentProvider)
 	} else if agentModel != "" {
 		chatAgent, err = agent.NewAgentWithModel(agentModel)
 	} else {

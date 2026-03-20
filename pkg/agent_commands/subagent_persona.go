@@ -66,19 +66,19 @@ func (s *SubagentPersonaCommand) Execute(args []string, chatAgent *agent.Agent) 
 
 	switch action {
 	case "enable":
-		return setPersonaEnabled(personaName, true, config, configManager)
+		return setPersonaEnabled(personaName, true, configManager)
 	case "disable":
-		return setPersonaEnabled(personaName, false, config, configManager)
+		return setPersonaEnabled(personaName, false, configManager)
 	case "provider":
 		if len(args) < 3 {
 			return fmt.Errorf("usage: /subagent-persona %s provider <provider>", personaName)
 		}
-		return setPersonaProvider(personaName, args[2], config, configManager)
+		return setPersonaProvider(personaName, args[2], configManager)
 	case "model":
 		if len(args) < 3 {
 			return fmt.Errorf("usage: /subagent-persona %s model <model>", personaName)
 		}
-		return setPersonaModel(personaName, args[2], config, configManager)
+		return setPersonaModel(personaName, args[2], configManager)
 	default:
 		return fmt.Errorf("unknown action: %s\n\nValid actions: enable, disable, provider, model", action)
 	}
@@ -189,28 +189,18 @@ func showPersonaDetails(personaName string, config *configuration.Config) error 
 }
 
 // setPersonaEnabled enables or disables a persona
-func setPersonaEnabled(personaName string, enabled bool, config *configuration.Config, configManager *configuration.Manager) error {
-	// Find the persona (case-insensitive)
-	var personaID string
-	for id, p := range config.SubagentTypes {
-		if strings.EqualFold(p.Name, personaName) || strings.EqualFold(id, personaName) {
-			personaID = id
-			break
-		}
+func setPersonaEnabled(personaName string, enabled bool, configManager *configuration.Manager) error {
+	personaID, personaNameDisplay, err := findPersonaID(personaName, configManager.GetConfig())
+	if err != nil {
+		return err
 	}
 
-	if personaID == "" {
-		return fmt.Errorf("persona not found: %s\n\nAvailable personas: %s",
-			personaName, getAvailablePersonaNames(config))
-	}
-
-	// Update enabled status by creating a copy and replacing it
-	persona := config.SubagentTypes[personaID]
-	persona.Enabled = enabled
-	config.SubagentTypes[personaID] = persona
-
-	// Save config
-	if err := configManager.SaveConfig(); err != nil {
+	if err := configManager.UpdateConfig(func(c *configuration.Config) error {
+		persona := c.SubagentTypes[personaID]
+		persona.Enabled = enabled
+		c.SubagentTypes[personaID] = persona
+		return nil
+	}); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
@@ -219,92 +209,66 @@ func setPersonaEnabled(personaName string, enabled bool, config *configuration.C
 		action = "disabled"
 	}
 
-	fmt.Printf("\n✅ Persona '%s' (%s) %s\n", persona.Name, personaID, action)
+	fmt.Printf("\n✅ Persona '%s' (%s) %s\n", personaNameDisplay, personaID, action)
 	return nil
 }
 
 // setPersonaProvider sets the provider for a persona
-func setPersonaProvider(personaName, provider string, config *configuration.Config, configManager *configuration.Manager) error {
-	// Find the persona (case-insensitive)
-	var personaID string
-	for id, p := range config.SubagentTypes {
-		if strings.EqualFold(p.Name, personaName) || strings.EqualFold(id, personaName) {
-			personaID = id
-			break
-		}
-	}
-
-	if personaID == "" {
-		return fmt.Errorf("persona not found: %s\n\nAvailable personas: %s",
-			personaName, getAvailablePersonaNames(config))
-	}
-
-	// Validate provider exists by converting to ClientType
-	providerType, err := configManager.MapStringToClientType(provider)
+func setPersonaProvider(personaName, provider string, configManager *configuration.Manager) error {
+	personaID, personaNameDisplay, err := findPersonaID(personaName, configManager.GetConfig())
 	if err != nil {
-		return fmt.Errorf("invalid provider: %s\n\n%v", provider, err)
+		return err
 	}
 
-	// Check if it's a real provider (not the error type)
-	available := configManager.GetAvailableProviders()
-	isValid := false
-	for _, p := range available {
-		if p == providerType {
-			isValid = true
-			break
-		}
+	if err := validateProvider(provider, configManager); err != nil {
+		return err
 	}
-
-	if !isValid {
-		return fmt.Errorf("invalid provider: %s\n\nAvailable providers: %v", provider, available)
-	}
-
-	// Update provider by creating a copy and replacing it
-	persona := config.SubagentTypes[personaID]
-	persona.Provider = provider
-	config.SubagentTypes[personaID] = persona
-
-	// Save config
-	if err := configManager.SaveConfig(); err != nil {
+	if err := configManager.UpdateConfig(func(c *configuration.Config) error {
+		persona := c.SubagentTypes[personaID]
+		persona.Provider = provider
+		c.SubagentTypes[personaID] = persona
+		return nil
+	}); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	fmt.Printf("\n✅ Provider for persona '%s' (%s) set to: %s\n",
-		persona.Name, personaID, provider)
+		personaNameDisplay, personaID, provider)
 	fmt.Println("💡 This persona will now use the specified provider instead of the default subagent provider.")
 	return nil
 }
 
 // setPersonaModel sets the model for a persona
-func setPersonaModel(personaName, model string, config *configuration.Config, configManager *configuration.Manager) error {
-	// Find the persona (case-insensitive)
-	var personaID string
-	for id, p := range config.SubagentTypes {
-		if strings.EqualFold(p.Name, personaName) || strings.EqualFold(id, personaName) {
-			personaID = id
-			break
-		}
+func setPersonaModel(personaName, model string, configManager *configuration.Manager) error {
+	personaID, personaNameDisplay, err := findPersonaID(personaName, configManager.GetConfig())
+	if err != nil {
+		return err
 	}
 
-	if personaID == "" {
-		return fmt.Errorf("persona not found: %s\n\nAvailable personas: %s",
-			personaName, getAvailablePersonaNames(config))
-	}
-
-	// Update model by creating a copy and replacing it
-	persona := config.SubagentTypes[personaID]
-	persona.Model = model
-	config.SubagentTypes[personaID] = persona
-
-	// Save config
-	if err := configManager.SaveConfig(); err != nil {
+	if err := configManager.UpdateConfig(func(c *configuration.Config) error {
+		persona := c.SubagentTypes[personaID]
+		persona.Model = model
+		c.SubagentTypes[personaID] = persona
+		return nil
+	}); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	fmt.Printf("\n✅ Model for persona '%s' (%s) set to: %s\n",
-		persona.Name, personaID, model)
+		personaNameDisplay, personaID, model)
 	fmt.Println("💡 This persona will now use the specified model instead of the default subagent model.")
 	return nil
+}
+
+// findPersonaID looks up a persona by name or ID (case-insensitive), returning its ID and display name.
+func findPersonaID(personaName string, config *configuration.Config) (string, string, error) {
+	for id, p := range config.SubagentTypes {
+		if strings.EqualFold(p.Name, personaName) || strings.EqualFold(id, personaName) {
+			return id, p.Name, nil
+		}
+	}
+	return "", "", fmt.Errorf("persona not found: %s\n\nAvailable personas: %s",
+		personaName, getAvailablePersonaNames(config))
 }
 
 // getAvailablePersonaNames returns a comma-separated list of available persona names

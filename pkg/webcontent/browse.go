@@ -26,7 +26,7 @@ func BrowseURL(url string, opts BrowseOptions) (string, error) {
 	}
 
 	ctx := effectiveCtx(opts)
-	browser := getGlobalBrowser()
+	browser := GetGlobalBrowser()
 
 	switch opts.Action {
 	case "screenshot":

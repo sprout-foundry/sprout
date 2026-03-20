@@ -43,14 +43,13 @@ func (c *SelfReviewGateCommand) Execute(args []string, chatAgent *agent.Agent) e
 	}
 
 	modeInput := strings.TrimSpace(args[0])
-	if err := cfg.SetSelfReviewGateMode(modeInput); err != nil {
+	if err := configManager.UpdateConfig(func(c *configuration.Config) error {
+		return c.SetSelfReviewGateMode(modeInput)
+	}); err != nil {
 		return err
 	}
-	if err := configManager.SaveConfig(); err != nil {
-		return fmt.Errorf("failed to save configuration: %w", err)
-	}
 
-	mode := cfg.GetSelfReviewGateMode()
+	mode := configManager.GetConfig().GetSelfReviewGateMode()
 	fmt.Printf("✅ Self-review gate mode set to: %s\n", mode)
 	switch mode {
 	case configuration.SelfReviewGateModeOff:

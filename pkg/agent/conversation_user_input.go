@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-const defaultInteractiveInputMaxChars = 50000
-const defaultAutomationInputMaxChars = 50000
+const defaultInteractiveInputMaxChars = 100000
+const defaultAutomationInputMaxChars = 100000
 const defaultUserInputArchiveDir = "/tmp/ledit/inputs"
 
 func (ch *ConversationHandler) prepareUserInputForModel(input string) string {

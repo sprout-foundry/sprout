@@ -2,6 +2,14 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.14] - 2026-03-20
+
+- Updates 11 files - Updates headless browser with screenshot and DOM capture (6adf24e)
+- Updates 26 files - Updates security validation to static pattern matching (303001d)
+- Merge remote-tracking branch 'origin/main' (6279b4d)
+- Updates 3 files - Updates subagent to pass prompts via stdin pipe (1c5f475)
+- docs: Update changelog for v0.11.13 (c9be847)
+
 ## [v0.11.13] - 2026-03-20
 
 - Updates 3 files - Updates input limits and terminal suspend handling (332cb39)

@@ -421,63 +421,10 @@ func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string
 			toolName, result.RiskLevel, result.Reasoning)
 	}
 
-	// Handle confirmation needed (for non-interactive mode, use second LLM validation)
-	if result.ShouldConfirm {
-		agentConfig := agent.GetConfig()
-		isNonInteractive := agentConfig != nil && agentConfig.SkipPrompt
-
-		if isNonInteractive {
-			// For non-interactive mode, make a second LLM validation call
-			// Ask the LLM to confirm if this operation should proceed
-			agent.PrintLine(fmt.Sprintf("⚠️  Security Block: %s (risk level: %s)", toolName, result.RiskLevel))
-			agent.PrintLine(fmt.Sprintf("   Reasoning: %s", result.Reasoning))
-			agent.PrintLine("   Requesting second LLM validation...")
-
-			// Build a prompt for the second validation
-			argsJSON, _ := json.Marshal(args)
-			confirmPrompt := fmt.Sprintf(`The following operation was flagged as needing user confirmation:
-
-Tool: %s
-Arguments: %s
-Risk Level: %s
-Reasoning: %s
-
-As an automated validation system, you need to decide if this operation should proceed.
-
-CRITICAL: Only approve operations that are:
-1. Clearly safe and necessary for the task
-2. Not destructive or irreversible
-3. Not accessing/modifying critical system files
-4. Part of normal development workflows
-
-HARD BLOCK these operations immediately:
-- Filesystem destruction (mkfs, fdisk, dd to devices)
-- Deleting system directories (rm -rf /usr, /bin, /etc, /lib, etc.)
-- Modifying critical system config (/etc/shadow, /etc/passwd, sudoers)
-- System-ruining commands (fork bombs, killall -9, chmod 000 /)
-
-Respond with JSON:
-{"approved": true/false, "reasoning": "brief explanation"}
-
-Only return valid JSON, nothing else.`, toolName, string(argsJSON), result.RiskLevel, result.Reasoning)
-
-			// Call the LLM for second validation
-			secondResult, err := r.validator.CallLLMForConfirmation(ctx, confirmPrompt)
-			if err != nil {
-				// If second validation fails, block by default
-				return fmt.Errorf("operation blocked: second LLM validation failed: %v\nOriginal reasoning: %s", err, result.Reasoning)
-			}
-
-			if !secondResult.Approved {
-				return fmt.Errorf("operation blocked by second LLM validation: %s\nReasoning: %s", toolName, secondResult.Reasoning)
-			}
-
-			agent.PrintLine("   ✓ Second validation approved the operation")
-		}
-		// In interactive mode, ShouldConfirm should have been handled by ValidateToolCall
-		// If we reach here with ShouldConfirm=true in interactive mode, it's unexpected
-	}
-
+	// ShouldConfirm is already handled by ValidateToolCall in interactive mode
+	// (the user is prompted there). In non-interactive mode, the validator's
+	// applyThreshold sets ShouldBlock=true for dangerous operations, so
+	// CAUTION is auto-allowed with a log warning.
 	return nil
 }
 
@@ -489,6 +436,12 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		// Unsafe mode bypasses filesystem security checks automatically
 		if agent.GetUnsafeMode() {
 			agent.debugLog("🔓 Unsafe mode: automatically allowing file access outside working directory: %s\n", filePath)
+			return filesystem.WithSecurityBypass(ctx)
+		}
+
+		// If user already approved filesystem access this session, skip re-prompting
+		if agent.IsSecurityBypassApproved() {
+			agent.debugLog("🔓 Session-level security bypass: allowing file access outside working directory: %s\n", filePath)
 			return filesystem.WithSecurityBypass(ctx)
 		}
 
@@ -508,8 +461,9 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		prompt := fmt.Sprintf("⚠️  Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
 
 		if logger.AskForConfirmation(prompt, false, false) {
-			// User approved - enable security bypass for this operation
+			// User approved - enable security bypass for this operation and remember for the session
 			agent.debugLog("User approved file access outside working directory: %s\n", filePath)
+			agent.SetSecurityBypassApproved()
 			return filesystem.WithSecurityBypass(ctx)
 		} else {
 			// User rejected - error will be returned as-is

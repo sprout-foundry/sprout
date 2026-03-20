@@ -133,6 +133,11 @@ type Agent struct {
 	// Unsafe mode - bypass most security checks
 	unsafeMode bool // Allow operations without security prompting
 
+	// Filesystem security bypass approval - once user approves access outside CWD,
+	// all subsequent requests in the session are allowed without re-prompting
+	securityBypassApproved bool
+securityBypassMu       sync.RWMutex
+
 }
 
 func isDebugEnvEnabled() bool {
@@ -462,6 +467,20 @@ func (a *Agent) GetUnsafeMode() bool { return a.unsafeMode }
 
 // SetUnsafeMode sets the unsafe mode flag
 func (a *Agent) SetUnsafeMode(unsafe bool) { a.unsafeMode = unsafe }
+
+// IsSecurityBypassApproved returns whether the user has approved filesystem access outside CWD
+func (a *Agent) IsSecurityBypassApproved() bool {
+	a.securityBypassMu.RLock()
+	defer a.securityBypassMu.RUnlock()
+	return a.securityBypassApproved
+}
+
+// SetSecurityBypassApproved marks that the user has approved filesystem access outside CWD for this session
+func (a *Agent) SetSecurityBypassApproved() {
+	a.securityBypassMu.Lock()
+	defer a.securityBypassMu.Unlock()
+	a.securityBypassApproved = true
+}
 
 // getClientTypeFromName converts provider name to ClientType
 // DEPRECATED: Use configManager.MapStringToClientType instead to handle custom providers

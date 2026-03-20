@@ -28,15 +28,10 @@ const (
 	SelfReviewGateModeAlways = "always"
 )
 
-// SecurityValidationConfig configures LLM-based security validation
+// SecurityValidationConfig configures static heuristic-based security validation
 type SecurityValidationConfig struct {
-	// Enabled turns on LLM-based security validation
+	// Enabled turns on security validation
 	Enabled bool `json:"enabled,omitempty"`
-
-	// Model is the path to the GGUF model file for security validation
-	// Example: ~/.ledit/models/qwen2.5-coder-0.5b-q4_k_m.gguf
-	// Download from: https://huggingface.co/models?search=gguf+qwen+2.5+coder
-	Model string `json:"model,omitempty"`
 
 	// Threshold controls sensitivity (0=allow_all, 1=cautious, 2=strict)
 	// 0: Allow all operations (validation disabled but still logs)
@@ -44,7 +39,7 @@ type SecurityValidationConfig struct {
 	// 2: Block dangerous operations, require explicit approval
 	Threshold int `json:"threshold,omitempty"`
 
-	// TimeoutSeconds is max time to wait for security validation
+	// TimeoutSeconds is reserved for future use
 	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
 }
 
@@ -276,10 +271,9 @@ func NewConfig() *Config {
 		RequestDelayMs:        100,
 		EnableSecurityChecks:  true,
 		SecurityValidation: &SecurityValidationConfig{
-			Enabled:        true, // Enabled by default (uses Ollama fallback if llama.cpp unavailable)
-			Model:          "",   // Empty = use default Ollama model (qwen2.5-coder:1.5b)
+			Enabled:        true, // Enabled by default (uses static heuristic rules)
 			Threshold:      1,    // Cautious by default
-			TimeoutSeconds: 10,   // 10 second timeout
+			TimeoutSeconds: 10,   // Reserved for future use
 		},
 		CodeStyle: &CodeStyleConfig{
 			IndentationType: "spaces",

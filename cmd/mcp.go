@@ -344,42 +344,23 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 		}
 	}
 
-	// Check for existing GitHub token
-	githubToken := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
-
-	if githubToken == "" {
-		fmt.Println("GitHub Personal Access Token is required.")
-		fmt.Println("You can create one at: https://github.com/settings/tokens")
-		fmt.Println("Required permissions: repo, read:user, read:org, issues")
-		fmt.Println()
-		fmt.Print("Enter your GitHub Personal Access Token: ")
-
-		tokenInput, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read token: %w", err)
-		}
-		githubToken = strings.TrimSpace(tokenInput)
-
-		if githubToken == "" {
-			return fmt.Errorf("GitHub token is required")
-		}
-
-		// Offer to set environment variable
-		fmt.Print("Would you like to set GITHUB_PERSONAL_ACCESS_TOKEN environment variable? (y/N): ")
-		setEnv, _ := reader.ReadString('\n')
-		if strings.ToLower(strings.TrimSpace(setEnv)) == "y" {
-			fmt.Println()
-			fmt.Printf("Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
-			fmt.Printf("\nexport GITHUB_PERSONAL_ACCESS_TOKEN=\"%s\"\n", githubToken)
-			fmt.Println()
-		}
-	}
-
 	// Installation method selection
 	fmt.Println("Select installation method:")
-	fmt.Println("1. Remote server (recommended - no Docker needed)")
-	fmt.Println("2. Local Docker")
-	fmt.Print("Choice (1-2): ")
+	fmt.Println()
+	fmt.Println("  1. GitHub Remote MCP (OAuth) — recommended")
+	fmt.Println("     • GitHub's hosted endpoint: https://api.githubcopilot.com/mcp/")
+	fmt.Println("     • OAuth authentication (no token management needed)")
+	fmt.Println("     • Requires a GitHub Copilot or Copilot Enterprise seat")
+	fmt.Println()
+	fmt.Println("  2. GitHub Local MCP (Docker + PAT)")
+	fmt.Println("     • Runs via Docker locally")
+	fmt.Println("     • Requires a Personal Access Token (PAT)")
+	fmt.Println()
+	fmt.Println("  3. GitHub Local MCP (npx + PAT)")
+	fmt.Println("     • Runs via npx locally")
+	fmt.Println("     • Requires a Personal Access Token (PAT)")
+	fmt.Println()
+	fmt.Print("Choice (1-3): ")
 
 	installChoice, err := reader.ReadString('\n')
 	if err != nil {
@@ -391,19 +372,30 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 
 	switch installChoice {
 	case "1", "":
-		// Remote HTTP server configuration (recommended)
+		// Remote OAuth server — no token needed
+		fmt.Println()
+		fmt.Println("ℹ️  Remote OAuth server selected.")
+		fmt.Println("   Authentication will happen automatically via OAuth")
+		fmt.Println("   when the agent first connects to the server.")
+		fmt.Println()
+		fmt.Println("   ⚠️  This requires an active GitHub Copilot or Copilot Enterprise seat.")
+		fmt.Println("   If you don't have a Copilot seat, choose option 2 or 3 instead.")
+
 		serverConfig = mcp.MCPServerConfig{
 			Name:      "github",
 			Type:      "http",
 			URL:       "https://api.githubcopilot.com/mcp/",
 			AutoStart: true,
 			Timeout:   30 * time.Second,
-			Env: map[string]string{
-				"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
-			},
 		}
+
 	case "2":
-		// Docker configuration
+		// Docker + PAT configuration
+		githubToken, err := promptForGitHubToken(reader)
+		if err != nil {
+			return err
+		}
+
 		serverConfig = mcp.MCPServerConfig{
 			Name:        "github",
 			Command:     "docker",
@@ -415,6 +407,26 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 				"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
 			},
 		}
+
+	case "3":
+		// npx + PAT configuration
+		githubToken, err := promptForGitHubToken(reader)
+		if err != nil {
+			return err
+		}
+
+		serverConfig = mcp.MCPServerConfig{
+			Name:        "github",
+			Command:     "npx",
+			Args:        []string{"-y", "@modelcontextprotocol/server-github"},
+			AutoStart:   true,
+			MaxRestarts: 3,
+			Timeout:     30 * time.Second,
+			Env: map[string]string{
+				"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
+			},
+		}
+
 	default:
 		return fmt.Errorf("invalid choice: %s", installChoice)
 	}
@@ -431,13 +443,27 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	fmt.Println()
 	fmt.Println("✅ GitHub MCP Server configured successfully!")
 	if serverConfig.Type == "http" {
-		fmt.Printf("Type: Remote HTTP server\n")
-		fmt.Printf("URL: %s\n", serverConfig.URL)
+		fmt.Printf("   Type: Remote HTTP server (OAuth)\n")
+		fmt.Printf("   URL:  %s\n", serverConfig.URL)
 	} else {
-		fmt.Printf("Command: %s %v\n", serverConfig.Command, serverConfig.Args)
+		fmt.Printf("   Command: %s %v\n", serverConfig.Command, serverConfig.Args)
 	}
 	fmt.Println()
-	fmt.Println("To test the configuration, run: ledit mcp test github")
+
+	// Offer to test the connection
+	fmt.Print("Test the connection now? (Y/n): ")
+	testChoice, _ := reader.ReadString('\n')
+	if strings.ToLower(strings.TrimSpace(testChoice)) != "n" {
+		fmt.Println()
+		if err := runMCPTest("github"); err != nil {
+			fmt.Printf("⚠️  Test failed: %v\n", err)
+			fmt.Println("You can retry later with: ledit mcp test github")
+		}
+		return nil
+	}
+
+	fmt.Println()
+	fmt.Println("To test the configuration later, run: ledit mcp test github")
 	fmt.Println()
 	fmt.Println("📦 Features available:")
 	fmt.Println("• Repository management and file operations")
@@ -446,6 +472,44 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	fmt.Println("• Code analysis and security findings")
 
 	return nil
+}
+
+// promptForGitHubToken prompts the user for a GitHub Personal Access Token.
+// It checks the environment first, and if not set, asks interactively.
+// If a new token is entered, it offers to add it to the user's shell profile.
+func promptForGitHubToken(reader *bufio.Reader) (string, error) {
+	githubToken := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
+
+	if githubToken == "" {
+		fmt.Println()
+		fmt.Println("GitHub Personal Access Token is required for local MCP servers.")
+		fmt.Println("Create one at: https://github.com/settings/personal-access-tokens/new")
+		fmt.Println("Required permissions: repo, read:user, read:org, issues")
+		fmt.Println()
+		fmt.Print("Enter your GitHub Personal Access Token: ")
+
+		tokenInput, err := reader.ReadString('\n')
+		if err != nil {
+			return "", fmt.Errorf("failed to read token: %w", err)
+		}
+		githubToken = strings.TrimSpace(tokenInput)
+
+		if githubToken == "" {
+			return "", fmt.Errorf("GitHub token is required for local MCP servers")
+		}
+
+		// Offer to set environment variable in the user's shell profile
+		fmt.Print("Add GITHUB_PERSONAL_ACCESS_TOKEN to your shell profile? (y/N): ")
+		setEnv, _ := reader.ReadString('\n')
+		if strings.ToLower(strings.TrimSpace(setEnv)) == "y" {
+			fmt.Println()
+			fmt.Println("Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):")
+			fmt.Printf("  export GITHUB_PERSONAL_ACCESS_TOKEN=\"%s\"\n", githubToken)
+			fmt.Println()
+		}
+	}
+
+	return githubToken, nil
 }
 
 func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {

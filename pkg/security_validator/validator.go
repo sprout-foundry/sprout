@@ -249,55 +249,112 @@ func (v *Validator) classifyShellCommand(args map[string]interface{}) RiskLevel 
 	return maxRisk
 }
 
-// splitChainedCommands splits a command string on &&, ||, ; and | operators
-// while respecting single and double quoted strings.
+// splitChainedCommands splits a command string on &&, ||, ;, |, and newline
+// operators while respecting single quotes, double quotes, $(...) subshell
+// expressions (with parenthesis nesting), and backtick subshell expressions.
 func splitChainedCommands(cmd string) []string {
 	var results []string
 	var current strings.Builder
 	inSingle := false
 	inDouble := false
+	inBacktick := false
+	subShellDepth := 0 // depth of $(...) nesting
 	runes := []rune(cmd)
+
 	for i := 0; i < len(runes); i++ {
 		r := runes[i]
-		if r == '\'' && !inDouble {
-			inSingle = !inSingle
+
+		if inSingle {
+			// Inside single quotes — nothing is special except closing quote
 			current.WriteRune(r)
+			if r == '\'' {
+				inSingle = false
+			}
 			continue
 		}
-		if r == '"' && !inSingle {
-			inDouble = !inDouble
+
+		if inDouble {
+			// Inside double quotes — nothing is special except closing quote
 			current.WriteRune(r)
+			if r == '"' {
+				inDouble = false
+			}
 			continue
 		}
-		if !inSingle && !inDouble {
-			// Check for &&
-			if r == '&' && i+1 < len(runes) && runes[i+1] == '&' {
-				results = append(results, current.String())
-				current.Reset()
-				i++ // skip second '&'
-				continue
+
+		if inBacktick {
+			// Inside backticks — nothing is special except closing backtick
+			current.WriteRune(r)
+			if r == '`' {
+				inBacktick = false
 			}
-			// Check for || (but not a single |)
-			if r == '|' && i+1 < len(runes) && runes[i+1] == '|' {
-				results = append(results, current.String())
-				current.Reset()
-				i++ // skip second '|'
-				continue
-			}
-			// Check for ; (but not within a URL like http://...)
-			if r == ';' {
-				results = append(results, current.String())
-				current.Reset()
-				continue
-			}
-			// Check for single | (pipe)
-			if r == '|' {
-				results = append(results, current.String())
-				current.Reset()
-				continue
-			}
+			continue
 		}
+
+		// Not inside any quoting context from here on.
 		current.WriteRune(r)
+
+		// Track $( ... ) subshell nesting
+		if r == '$' && i+1 < len(runes) && runes[i+1] == '(' {
+			subShellDepth++
+			continue
+		}
+		if r == '(' && subShellDepth > 0 {
+			// Nested parens inside $()
+			subShellDepth++
+			continue
+		}
+		if r == ')' && subShellDepth > 0 {
+			subShellDepth--
+			continue
+		}
+
+		// At subShellDepth > 0 we are inside $(…) — do NOT split
+		if subShellDepth > 0 {
+			continue
+		}
+
+		// Check for &&
+		if r == '&' && i+1 < len(runes) && runes[i+1] == '&' {
+			results = append(results, current.String())
+			current.Reset()
+			i++ // skip second '&'
+			continue
+		}
+		// Check for || (but not a single |)
+		if r == '|' && i+1 < len(runes) && runes[i+1] == '|' {
+			results = append(results, current.String())
+			current.Reset()
+			i++ // skip second '|'
+			continue
+		}
+		// Check for ;
+		if r == ';' {
+			results = append(results, current.String())
+			current.Reset()
+			continue
+		}
+		// Check for single | (pipe)
+		if r == '|' {
+			results = append(results, current.String())
+			current.Reset()
+			continue
+		}
+		// Check for newline — treat as command separator
+		if r == '\n' {
+			results = append(results, current.String())
+			current.Reset()
+			continue
+		}
+
+		// Track entering double quotes, single quotes, backticks
+		if r == '"' {
+			inDouble = true
+		} else if r == '\'' {
+			inSingle = true
+		} else if r == '`' {
+			inBacktick = true
+		}
 	}
 	if current.Len() > 0 {
 		results = append(results, current.String())

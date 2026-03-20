@@ -108,6 +108,14 @@ func (w *WebContentFetcher) fetchContent(url string, cfg *configuration.Manager)
 		}
 	}
 
+	// GitHub blob URLs: rewrite to raw.githubusercontent.com for direct, Jina-free fetch.
+	if isGitHubURL(url) {
+		if rawURL := rewriteGitHubBlobToRaw(url); rawURL != "" {
+			utils.GetLogger(false).Logf("Rewriting GitHub blob URL to raw: %s → %s", url, rawURL)
+			return w.fetchDirectURL(rawURL)
+		}
+	}
+
 	// Check if this is a URL type that should bypass Jina (JSON, APIs, static assets)
 	if w.shouldBypassJina(url) {
 		return w.fetchDirectURL(url)
@@ -153,6 +161,8 @@ func (w *WebContentFetcher) shouldBypassJina(urlStr string) bool {
 		".csv",
 		// API endpoints (often return JSON)
 		"/api/",
+		// GitHub blob pages — prefer raw content over Jina-rendered HTML
+		"github.com/blob/",
 		// Static assets that don't need markdown conversion
 		".css",
 		".js",

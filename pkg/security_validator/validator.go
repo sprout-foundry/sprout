@@ -2,12 +2,10 @@ package security_validator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -47,194 +45,35 @@ type ValidationResult struct {
 	Reasoning     string    `json:"reasoning"`
 	Confidence    float64   `json:"confidence"`
 	Timestamp     int64     `json:"timestamp"`
-	ModelUsed     string    `json:"model_used"`
-	LatencyMs     int64     `json:"latency_ms"`
 	ShouldBlock   bool      `json:"should_block"`
 	ShouldConfirm bool      `json:"should_confirm"`
-	IsSoftBlock   bool      `json:"is_soft_block"` // True if this is a soft block that can be overridden with timeout
+	IsSoftBlock   bool      `json:"is_soft_block"`
 }
 
-// Validator handles LLM-based security validation using local llama.cpp
+// Validator handles static heuristic-based security validation
 type Validator struct {
 	config      *configuration.SecurityValidationConfig
-	model       LLMModel
-	modelPath   string
 	logger      *utils.Logger
 	interactive bool
 	debug       bool
 }
 
-// NewValidator creates a new security validator
+// NewValidator creates a new security validator using static heuristic rules
 func NewValidator(cfg *configuration.SecurityValidationConfig, logger *utils.Logger, interactive bool) (*Validator, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("security validation config is nil")
 	}
 
-	if !cfg.Enabled {
-		return &Validator{
-			config:      cfg,
-			logger:      logger,
-			interactive: interactive,
-			debug:       false,
-		}, nil
-	}
-
-	// Resolve model path
-	modelPath := cfg.Model
-	if modelPath == "" {
-		// Use default model path if not specified
-		configDir, err := configuration.GetConfigDir()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get config directory: %w", err)
-		}
-		modelPath = filepath.Join(configDir, "models", "qwen2.5-coder-0.5b-q4_k_m.gguf")
-	}
-
-	// Check if model file exists, if not, skip download (will use Ollama fallback)
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		if logger != nil {
-			logger.Logf("Security validation model not found at %s", modelPath)
-			logger.Logf("Will attempt Ollama fallback instead of downloading...")
-		}
-		// Don't try to download - just proceed to Ollama fallback
-		modelPath = ""
-	}
-
-	// Load the model
-	var model LLMModel
-
-	// If modelPath is empty (file doesn't exist), go straight to Ollama
-	if modelPath == "" {
-		if logger != nil {
-			logger.Logf("Skipping llama.cpp model (no file), using Ollama...")
-		}
-
-		// Use model name from config or default to qwen2.5-coder:1.5b
-		ollamaModelName := cfg.Model
-		if ollamaModelName == "" {
-			ollamaModelName = "qwen2.5-coder:1.5b"
-		}
-
-		ollamaModel, ollamaErr := loadOllamaModel(ollamaModelName)
-		if ollamaErr != nil {
-			return nil, fmt.Errorf("failed to load Ollama model: %w", ollamaErr)
-		}
-
-		model = ollamaModel
-		if logger != nil {
-			logger.Logf("✓ Using Ollama model: %s", ollamaModelName)
-		}
-	} else {
-		// Use Ollama model directly
-		ollamaModelName := cfg.Model
-		if ollamaModelName == "" {
-			ollamaModelName = "qwen2.5-coder:1.5b"
-		}
-
-		ollamaModel, err := loadOllamaModel(ollamaModelName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load Ollama model: %w", err)
-		}
-
-		model = ollamaModel
-		if logger != nil {
-			logger.Logf("✓ Using Ollama model: %s", ollamaModelName)
-		}
-	}
-
 	return &Validator{
 		config:      cfg,
-		model:       model,
-		modelPath:   modelPath,
 		logger:      logger,
 		interactive: interactive,
 		debug:       false,
 	}, nil
 }
 
-// downloadModel downloads the Qwen 2.5 Coder 0.5B model
-func downloadModel(targetPath string, logger *utils.Logger) error {
-	// Ensure target directory exists
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-		return fmt.Errorf("failed to create models directory: %w", err)
-	}
-
-	// Model URL from HuggingFace
-	modelURL := "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-GGUF/resolve/main/qwen2.5-coder-0.5b-q4_k_m.gguf"
-
-	// Create temp file for download
-	tempPath := targetPath + ".tmp"
-
-	out, err := os.Create(tempPath)
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	defer out.Close()
-
-	// Clean up temp file on failure
-	// We'll use a flag to track success
-	success := false
-	defer func() {
-		if !success {
-			os.Remove(tempPath)
-		}
-	}()
-
-	// Download with progress tracking
-	resp, err := http.Get(modelURL)
-	if err != nil {
-		return fmt.Errorf("failed to download model: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to download model: HTTP %d", resp.StatusCode)
-	}
-
-	// Track progress
-	totalSize := resp.ContentLength
-	var downloaded int64
-	buffer := make([]byte, 32*1024) // 32KB chunks
-	lastLogTime := time.Now()
-
-	for {
-		n, err := resp.Body.Read(buffer)
-		if n > 0 {
-			written, err := out.Write(buffer[:n])
-			if err != nil {
-				return fmt.Errorf("failed to write to file: %w", err)
-			}
-			downloaded += int64(written)
-
-			// Log progress every 2 seconds
-			if time.Since(lastLogTime) > 2*time.Second {
-				progress := float64(downloaded) / float64(totalSize) * 100
-				logger.Logf("Downloading... %.1f%% (%d / %d bytes)", progress, downloaded, totalSize)
-				lastLogTime = time.Now()
-			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("download error: %w", err)
-		}
-	}
-
-	// Rename temp file to final path
-	if err := os.Rename(tempPath, targetPath); err != nil {
-		return fmt.Errorf("failed to save downloaded model: %w", err)
-	}
-
-	// Mark as successful so the temp file isn't cleaned up
-	success = true
-	return nil
-}
-
-// ValidateToolCall evaluates whether a tool call is safe to execute
+// ValidateToolCall evaluates whether a tool call is safe to execute using static heuristic rules
 func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args map[string]interface{}) (*ValidationResult, error) {
-	startTime := time.Now()
-
 	// If validation is disabled, return safe immediately
 	if v.config == nil || !v.config.Enabled {
 		return &ValidationResult{
@@ -242,341 +81,690 @@ func (v *Validator) ValidateToolCall(ctx context.Context, toolName string, args 
 			Reasoning:     "Security validation is disabled",
 			Confidence:    1.0,
 			Timestamp:     time.Now().Unix(),
-			ModelUsed:     "none",
-			LatencyMs:     0,
 			ShouldBlock:   false,
 			ShouldConfirm: false,
 			IsSoftBlock:   false,
 		}, nil
 	}
 
-	// Pre-filter: Skip LLM validation for obviously safe operations
-	if isObviouslySafe(toolName, args) {
-		return &ValidationResult{
-			RiskLevel:     RiskSafe,
-			Reasoning:     "Obviously safe operation (read-only or informational)",
-			Confidence:    1.0,
-			Timestamp:     time.Now().Unix(),
-			ModelUsed:     "prefilter",
-			LatencyMs:     0,
-			ShouldBlock:   false,
-			ShouldConfirm: false,
-			IsSoftBlock:   false,
-		}, nil
+	// Classify the command using static heuristic rules
+	riskLevel := v.classifyCommand(toolName, args)
+	reasoning := v.explainRisk(toolName, args, riskLevel)
+
+	result := &ValidationResult{
+		RiskLevel:     riskLevel,
+		Reasoning:     reasoning,
+		Confidence:    1.0,
+		Timestamp:     time.Now().Unix(),
+		IsSoftBlock:   false,
 	}
 
-	// Check if model is loaded
-	if v.model == nil {
-		return &ValidationResult{
-			RiskLevel:     RiskCaution,
-			Reasoning:     "Security validation model not loaded. Please ensure the model file exists.",
-			Confidence:    0.0,
-			Timestamp:     time.Now().Unix(),
-			ModelUsed:     v.modelPath,
-			LatencyMs:     0,
-			ShouldBlock:   false,
-			ShouldConfirm: false,
-			IsSoftBlock:   false,
-		}, nil
-	}
-
-	// Create prompt for the LLM
-	prompt := v.buildValidationPrompt(toolName, args)
-
-	// Call the LLM
-	response, err := v.callLLM(ctx, prompt)
-	if err != nil {
-		// If LLM call fails, log it but default to cautious
-		return &ValidationResult{
-			RiskLevel:     RiskCaution,
-			Reasoning:     fmt.Sprintf("Security validation failed: %v. Defaulting to caution.", err),
-			Confidence:    0.0,
-			Timestamp:     time.Now().Unix(),
-			ModelUsed:     v.modelPath,
-			LatencyMs:     time.Since(startTime).Milliseconds(),
-			ShouldBlock:   false,
-			ShouldConfirm: false,
-			IsSoftBlock:   false,
-		}, nil
-	}
-
-	// Parse the response
-	result, err := v.parseValidationResponse(response, startTime)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse validation response: %w", err)
-	}
-
-	// Apply threshold logic and request user confirmation if needed
+	// Apply threshold logic
 	result = v.applyThreshold(result)
 
-	// Check for hard block operations (critical system-ruining operations)
-	if isCriticalSystemOperation(toolName, args, result) {
-		result.IsSoftBlock = false
-		result.ShouldConfirm = false
+	// Check for hard block operations (critical system-ruining operations) — always blocked, overrides threshold
+	if IsCriticalSystemOperation(toolName, args) {
 		result.ShouldBlock = true
-		result.Reasoning = "Hard block: Critical system operation that could damage the operating system. " + result.Reasoning
+		result.ShouldConfirm = false
+		result.IsSoftBlock = false
+		result.RiskLevel = RiskDangerous
+		result.Reasoning = "Hard block: Critical system operation that could damage the operating system. " + reasoning
 		return result, nil
 	}
 
-	// All non-critical blocks are soft blocks - user can override
+	// All non-critical blocks are soft blocks — user can override
 	if result.ShouldConfirm || result.RiskLevel != RiskSafe {
 		result.IsSoftBlock = true
 	}
 
-	// If confirmation is needed and in interactive mode, ask the user
-	if result.ShouldConfirm && v.interactive && v.logger != nil {
-		argsJSON, _ := json.Marshal(args)
-		prompt := fmt.Sprintf("⚠️  Security Validation Warning\n\nTool: %s\nArguments: %s\n\nRisk Level: %s\nReasoning: %s\n\nDo you want to proceed? (yes/no): ",
-			toolName, string(argsJSON), result.RiskLevel, result.Reasoning)
+	// In non-interactive mode, DANGEROUS operations are blocked
+	if result.RiskLevel == RiskDangerous && !v.interactive {
+		result.ShouldBlock = true
+		result.ShouldConfirm = false
+	} else if result.RiskLevel == RiskDangerous && v.interactive && v.logger != nil {
+		// Interactive DANGEROUS: prompt user
+		prompt := fmt.Sprintf("⚠️  Security Validation Warning\n\nTool: %s\nArguments: %v\n\nRisk Level: %s\nReasoning: %s\n\nDo you want to proceed? (yes/no): ",
+			toolName, args, result.RiskLevel, result.Reasoning)
 
 		if v.logger.AskForConfirmation(prompt, false, false) {
-			// User approved, clear the confirmation flag
 			result.ShouldConfirm = false
 			result.ShouldBlock = false
+			result.IsSoftBlock = false
 		} else {
-			// User rejected, block the operation (but still a soft block)
 			result.ShouldConfirm = false
 			result.ShouldBlock = true
+			result.IsSoftBlock = true
+			result.Reasoning = "User rejected the operation based on security warning"
+		}
+	} else if result.ShouldConfirm && v.interactive && v.logger != nil {
+		// Interactive CAUTION: prompt user
+		prompt := fmt.Sprintf("⚠️  Security Validation Warning\n\nTool: %s\nArguments: %v\n\nRisk Level: %s\nReasoning: %s\n\nDo you want to proceed? (yes/no): ",
+			toolName, args, result.RiskLevel, result.Reasoning)
+
+		if v.logger.AskForConfirmation(prompt, false, false) {
+			result.ShouldConfirm = false
+			result.ShouldBlock = false
+			result.IsSoftBlock = false
+		} else {
+			result.ShouldConfirm = false
+			result.ShouldBlock = true
+			result.IsSoftBlock = true
 			result.Reasoning = "User rejected the operation based on security warning"
 		}
 	} else if result.RiskLevel == RiskCaution && v.logger != nil {
-		// Log CAUTION operations for transparency (but don't prompt)
-		argsJSON, _ := json.Marshal(args)
-		v.logger.Logf("🔒 Security validation: %s - %s (CAUTION: %s)", toolName, string(argsJSON), result.Reasoning)
+		// Non-interactive CAUTION: auto-allow with logging
+		v.logger.Logf("🔒 Security validation: %s %v - CAUTION: %s", toolName, args, result.Reasoning)
 	}
 
 	return result, nil
 }
 
-// buildValidationPrompt creates a prompt for security validation
-func (v *Validator) buildValidationPrompt(toolName string, args map[string]interface{}) string {
-	argsJSON, _ := json.Marshal(args)
-
-	prompt := fmt.Sprintf(`You are a security validation assistant for an AI coding tool. Your job is to evaluate whether an operation is safe to execute without user supervision.
-
-TOOL: %s
-ARGUMENTS: %s
-
-INSTRUCTIONS:
-Evaluate this operation and classify it into one of three risk levels:
-
-**RISK LEVEL 0 (SAFE)** - Execute immediately without user intervention:
-- Read-only operations (reading files, listing directories)
-- Informational commands (git status, ls, ps, git remote show)
-- Building/testing in the workspace (go build, go test, make, go vet)
-- Operations that have no side effects or are easily reversible
-- Creating new files or directories in non-system locations
-- Process listing and system information queries
-
-**RISK LEVEL 1 (CAUTION)** - May need user confirmation:
-- Modifications that could break things (git reset, git rebase, git amend)
-- Single or multiple file deletions WITHOUT -rf (rm file.txt, rm file1 file2)
-- Writing to configuration files in project directory
-- Package management operations (npm install, pip install, go get, docker build)
-- Build cleanup (make clean, git clean -fd)
-- Deleting dependency directories (rm -rf node_modules, vendor/, target/) - recoverable via package manager
-- Deleting lock files (package-lock.json, Podfile.lock, Gemfile.lock) - easily regenerated
-- Permission changes (chmod +x, chmod 644) but NOT chmod 777
-- Stopping services (systemctl stop) but NOT disabling (systemctl disable)
-- In-place file editing (sed -i, tee to project files)
-- Deleting build artifacts (rm -rf dist/, build/, out/) - easily rebuilt
-- Operations that modify state but are recoverable
-
-**RISK LEVEL 2 (DANGEROUS)** - Should require explicit user approval:
-- ANY filesystem operations (mkfs, fdisk, parted - destroy data)
-- Destructive system operations (dd if=/dev of=...)
-- Writing to system directories (/usr, /etc, /bin, /sbin, /var, /opt)
-- Force delete operations (git branch -D, git clean -ffd)
-- Insecure permissions (chmod 777 - world-writable is security risk)
-- Privilege escalation (sudo with destructive commands)
-- Downloading executables to system directories (wget/curl to /usr/bin)
-- Deleting git history (rm -rf .git) - permanent version history loss
-- Deleting project source code (rm -rf src/, rm -rf *.go, rm -rf ~/project)
-- Deleting user data or home directories (rm -rf ~/*)
-- System persistence changes (systemctl disable/enable)
-- Pipe to bash with curl/wget (arbitrary code execution)
-- Recursive deletion of system directories or critical data
-- Operations that could cause permanent data loss or security compromise
-
-EXAMPLES FOR REFERENCE:
-- "read_file main.go" → SAFE (read-only, no side effects)
-- "shell_command: git status" → SAFE (informational)
-- "shell_command: go test" → SAFE (standard operation)
-- "shell_command: cat README.md" → SAFE (read file content)
-- "shell_command: rm test.txt" → CAUTION (single file deletion, recoverable)
-- "shell_command: rm file1.txt file2.txt" → CAUTION (multiple files but not recursive)
-- "shell_command: rm -rf node_modules" → CAUTION (dependencies, recoverable via npm install)
-- "shell_command: rm -rf vendor/" → CAUTION (dependencies, recoverable via bundle install)
-- "shell_command: rm -rf dist/" → CAUTION (build artifacts, easily rebuilt)
-- "shell_command: rm package-lock.json" → CAUTION (lock file, easily regenerated)
-- "shell_command: git reset --hard HEAD" → CAUTION (destructive but recoverable)
-- "shell_command: npm install express" → CAUTION (package management, recoverable)
-- "shell_command: make clean" → CAUTION (build cleanup, recoverable)
-- "shell_command: chmod +x script.sh" → CAUTION (permission change, reversible)
-- "shell_command: rm -rf /tmp/test" → CAUTION (temp directory, not critical)
-- "shell_command: rm -rf ~/important-project" → DANGEROUS (deletes user project/data)
-- "shell_command: rm -rf .git" → DANGEROUS (deletes version history)
-- "shell_command: rm -rf src/" → DANGEROUS (deletes source code)
-- "shell_command: git branch -D feature" → DANGEROUS (force delete loses unmerged work)
-- "shell_command: chmod 777 /file" → DANGEROUS (insecure permissions)
-- "shell_command: mkfs.ext4 /dev/sdb1" → DANGEROUS (destroys filesystem)
-- "shell_command: systemctl disable nginx" → DANGEROUS (persistent system change)
-- "shell_command: rm -rf /usr/local/bin/app" → DANGEROUS (system directory + recursive)
-- "write_file /usr/bin/app" → DANGEROUS (system directory, privilege escalation)
-
-CRITICAL RULES:
-- "-rf flag on dependencies" → CAUTION (node_modules, vendor/, bundle, pods) - recoverable via package manager
-- "-rf flag on build artifacts" → CAUTION (dist/, build/, out/, target/, __pycache__) - easily rebuilt
-- "-rf flag on lock files" → CAUTION (package-lock.json, Podfile.lock, Gemfile.lock) - easily regenerated
-- "-rf flag on SOURCE CODE directories" → DANGEROUS (src/, lib/, include/, app/, components/) - permanent loss
-- "-rf flag on .git" → DANGEROUS (version history) - permanent loss
-- "-rf flag on home/project" → DANGEROUS (user data: ~/*, ~/project) - permanent loss
-- "-rf flag on system dirs" → DANGEROUS (/usr, /etc, /var, /opt, /bin, /sbin) - system critical
-- "-rf flag on temp" → CAUTION (/tmp/*, /var/tmp/*) - not critical
-- Writing to /usr, /etc, /bin, /sbin, /var → Always DANGEROUS (2)
-- "chmod 777" → Always DANGEROUS (2) (security risk)
-- "git branch -D" → Always DANGEROUS (2) (force delete)
-- mkfs/fdisk/parted → Always DANGEROUS (2) (filesystem ops)
-
-IMPORTANT: The -rf flag alone doesn't determine risk - what's being deleted matters:
-**CAUTION (recoverable):**
-- Dependencies: node_modules, vendor, bundle, pods, .venv
-- Build output: dist, build, out, target, bin, .next
-- Cache: __pycache__, .cache, .gradle, node_modules/.cache
-- Lock files: package-lock.json, Podfile.lock, Gemfile.lock, Cargo.lock
-
-**DANGEROUS (permanent loss):**
-- Source code: src/, lib/, include/, app/, components/, pages/
-- Tests: tests/, spec/, test/, __tests__/
-- Config: .git, .github/, config/, cfg/
-- User data: ~/*, ~/Documents, ~/projects
-- System: /usr, /etc, /var, /opt, /bin, /sbin
-
-Be conservative but fair. Most operations in normal development workflows should be SAFE (0).
-
-Return your response as JSON:
-{
-  "risk_level": 0,
-  "reasoning": "Brief explanation of the risk level",
-  "confidence": 0.95
-}
-
-Only return valid JSON, nothing else.`, toolName, string(argsJSON))
-
-	return prompt
-}
-
-// callLLM calls the llama.cpp model for security validation
-func (v *Validator) callLLM(ctx context.Context, prompt string) (string, error) {
-	// Set timeout
-	timeout := time.Duration(v.config.TimeoutSeconds) * time.Second
-	if timeout == 0 {
-		timeout = 10 * time.Second
+// classifyCommand uses pattern matching to classify a tool call's risk level
+func (v *Validator) classifyCommand(toolName string, args map[string]interface{}) RiskLevel {
+	// Check IsCriticalSystemOperation first — always dangerous
+	if IsCriticalSystemOperation(toolName, args) {
+		return RiskDangerous
 	}
 
-	// Create a context with timeout for inference
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// Run inference with llama.cpp through our interface
-	tokens, err := v.model.Completion(ctx, prompt)
-
-	if err != nil {
-		return "", fmt.Errorf("llama.cpp inference failed: %w", err)
+	// Check isObviouslySafe — already static heuristic
+	if isObviouslySafe(toolName, args) {
+		return RiskSafe
 	}
 
-	return tokens, nil
+	// Classify by tool type
+	switch toolName {
+	case "read_file", "search_files", "fetch_url", "glob", "TodoRead", "TodoWrite",
+		"analyze_image_content", "analyze_ui_screenshot", "list_skills", "activate_skill",
+		"view_history", "self_review", "web_search", "list_directory", "get_file_info",
+		"list_processes":
+		return RiskSafe
+
+	case "write_file", "edit_file", "patch_structured_file", "write_structured_file":
+		return v.classifyWriteOperation(toolName, args)
+
+	case "shell_command":
+		return v.classifyShellCommand(args)
+
+	case "run_subagent", "run_parallel_subagents":
+		return RiskSafe
+
+	case "git":
+		return v.classifyGitOperation(args)
+
+	default:
+		// Unknown tools default to CAUTION
+		return RiskCaution
+	}
 }
 
-// parseValidationResponse parses the LLM response into a ValidationResult
-func (v *Validator) parseValidationResponse(response string, startTime time.Time) (*ValidationResult, error) {
-	// Try to extract JSON from the response
-	response = strings.TrimSpace(response)
+// classifyShellCommand classifies shell commands using pattern matching.
+// For chained commands (&&, ||, ;, |), each sub-command is classified
+// independently and the maximum risk level is returned.
+func (v *Validator) classifyShellCommand(args map[string]interface{}) RiskLevel {
+	command, ok := args["command"].(string)
+	if !ok {
+		return RiskCaution
+	}
+	cmd := strings.TrimSpace(command)
+	if cmd == "" {
+		return RiskCaution
+	}
 
-	// Try to extract JSON from markdown code blocks (anywhere in the response)
-	if strings.Contains(response, "```json") {
-		// Extract content between ```json and ```
-		startIdx := strings.Index(response, "```json")
-		endIdx := strings.Index(response[startIdx+7:], "```")
-		if endIdx != -1 {
-			response = response[startIdx+7 : startIdx+7+endIdx]
-			response = strings.TrimSpace(response)
+	cmdLower := strings.ToLower(cmd)
+
+	// Check pipe-based dangerous patterns on the FULL command before splitting.
+	// These are dangerous regardless of what each sub-command does individually.
+	// e.g., "curl http://x | bash" — the pipe INTO bash/sh is the danger.
+	if (strings.Contains(cmdLower, "curl ") || strings.Contains(cmdLower, "wget ")) &&
+		(strings.Contains(cmdLower, "| bash") || strings.Contains(cmdLower, "| sh") ||
+			strings.Contains(cmdLower, "|/bin/bash") || strings.Contains(cmdLower, "|/bin/sh")) {
+		return RiskDangerous
+	}
+
+	// Split on command chaining operators and classify each part.
+	// Take the maximum risk level across all sub-commands.
+	subCmds := splitChainedCommands(cmd)
+	maxRisk := RiskSafe
+	for _, subCmd := range subCmds {
+		subCmd = strings.TrimSpace(subCmd)
+		if subCmd == "" {
+			continue
 		}
-	} else if strings.Contains(response, "```") {
-		// Extract content between ``` and ``` (without language identifier)
-		startIdx := strings.Index(response, "```")
-		endIdx := strings.Index(response[startIdx+3:], "```")
-		if endIdx != -1 {
-			response = response[startIdx+3 : startIdx+3+endIdx]
-			response = strings.TrimSpace(response)
+		cmdLower := strings.ToLower(subCmd)
+
+		if v.isDangerousShellCommand(subCmd, cmdLower) {
+			return RiskDangerous // Can't get worse
+		}
+		if v.isCautionShellCommand(subCmd, cmdLower) {
+			maxRisk = RiskCaution
+			continue
+		}
+		if maxRisk == RiskSafe && isSafeShellCommand(cmdLower) {
+			continue // stays SAFE
+		}
+		if maxRisk == RiskSafe {
+			maxRisk = RiskCaution // Couldn't classify → cautious
 		}
 	}
-
-	// Parse JSON
-	var result struct {
-		RiskLevel  int     `json:"risk_level"`
-		Reasoning  string  `json:"reasoning"`
-		Confidence float64 `json:"confidence"`
-	}
-
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		// If JSON parsing fails, try to extract risk level from text
-		return v.parseTextResponse(response, startTime)
-	}
-
-	// Validate risk level
-	if result.RiskLevel < 0 || result.RiskLevel > 2 {
-		return nil, fmt.Errorf("invalid risk level: %d", result.RiskLevel)
-	}
-
-	// Set default confidence if not provided
-	if result.Confidence == 0 {
-		result.Confidence = 0.8
-	}
-
-	return &ValidationResult{
-		RiskLevel:     RiskLevel(result.RiskLevel),
-		Reasoning:     result.Reasoning,
-		Confidence:    result.Confidence,
-		Timestamp:     time.Now().Unix(),
-		ModelUsed:     v.modelPath,
-		LatencyMs:     time.Since(startTime).Milliseconds(),
-		ShouldBlock:   false,
-		ShouldConfirm: false,
-		IsSoftBlock:   false,
-	}, nil
+	return maxRisk
 }
 
-// parseTextResponse parses a non-JSON response
-func (v *Validator) parseTextResponse(response string, startTime time.Time) (*ValidationResult, error) {
-	responseLower := strings.ToLower(response)
+// splitChainedCommands splits a command string on &&, ||, ; and | operators
+// while respecting single and double quoted strings.
+func splitChainedCommands(cmd string) []string {
+	var results []string
+	var current strings.Builder
+	inSingle := false
+	inDouble := false
+	runes := []rune(cmd)
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if r == '\'' && !inDouble {
+			inSingle = !inSingle
+			current.WriteRune(r)
+			continue
+		}
+		if r == '"' && !inSingle {
+			inDouble = !inDouble
+			current.WriteRune(r)
+			continue
+		}
+		if !inSingle && !inDouble {
+			// Check for &&
+			if r == '&' && i+1 < len(runes) && runes[i+1] == '&' {
+				results = append(results, current.String())
+				current.Reset()
+				i++ // skip second '&'
+				continue
+			}
+			// Check for || (but not a single |)
+			if r == '|' && i+1 < len(runes) && runes[i+1] == '|' {
+				results = append(results, current.String())
+				current.Reset()
+				i++ // skip second '|'
+				continue
+			}
+			// Check for ; (but not within a URL like http://...)
+			if r == ';' {
+				results = append(results, current.String())
+				current.Reset()
+				continue
+			}
+			// Check for single | (pipe)
+			if r == '|' {
+				results = append(results, current.String())
+				current.Reset()
+				continue
+			}
+		}
+		current.WriteRune(r)
+	}
+	if current.Len() > 0 {
+		results = append(results, current.String())
+	}
+	return results
+}
 
-	// Look for risk indicators
-	riskLevel := RiskSafe
-
-	// Check for dangerous indicators (has higher priority)
-	if strings.Contains(responseLower, "dangerous") || strings.Contains(responseLower, "unsafe") ||
-		strings.Contains(responseLower, "risk: 2") || strings.Contains(responseLower, "risk level 2") ||
-		strings.Contains(responseLower, "risk level is 2") || strings.Contains(responseLower, "block") {
-		riskLevel = RiskDangerous
-	} else if strings.Contains(responseLower, "caution") || strings.Contains(responseLower, "cautious") ||
-		strings.Contains(responseLower, "careful") || strings.Contains(responseLower, "risk: 1") ||
-		strings.Contains(responseLower, "risk level 1") || strings.Contains(responseLower, "risk level is 1") ||
-		strings.Contains(responseLower, "confirm") {
-		riskLevel = RiskCaution
+// isDangerousShellCommand checks if a shell command is dangerous
+func (v *Validator) isDangerousShellCommand(cmd, cmdLower string) bool {
+	// chmod 777 — insecure permissions
+	if strings.Contains(cmdLower, "chmod") && strings.Contains(cmdLower, "777") {
+		return true
 	}
 
-	return &ValidationResult{
-		RiskLevel:     riskLevel,
-		Reasoning:     response,
-		Confidence:    0.6, // Lower confidence for text parsing
-		Timestamp:     time.Now().Unix(),
-		ModelUsed:     v.modelPath,
-		LatencyMs:     time.Since(startTime).Milliseconds(),
-		ShouldBlock:   false,
-		ShouldConfirm: false,
-		IsSoftBlock:   false,
-	}, nil
+	// sudo with anything
+	if strings.HasPrefix(cmdLower, "sudo ") {
+		return true
+	}
+
+	// Writing to system directories — check that the system dir is the TARGET of the write,
+	// not just mentioned anywhere in the command string
+	if containsSystemDirWrite(cmd) {
+		return true
+	}
+
+	// rm -rf on non-whitelisted paths (handles -rf, -r -f, -R -f, --recursive -f, --force combined with -r)
+	if hasRecursiveRm(cmdLower) {
+		normalized := normalizeWhitespace(cmdLower)
+		if !v.isRecoverableRmRfTarget(normalized) && !v.isRecoverableRmRfTarget(cmdLower) {
+			return true
+		}
+	}
+
+	// git branch -D (force delete) — -D is case-sensitive in git; -d is safe
+	if strings.Contains(cmd, " -D ") || strings.Contains(cmd, " --delete --force") {
+		return true
+	}
+	if strings.Contains(cmdLower, "git branch -d ") && strings.Contains(cmdLower, "--force") {
+		return true
+	}
+
+	// git clean -f (any form with -f: -fd, -ffd, -df, etc.)
+	if strings.Contains(cmdLower, "git clean") && strings.Contains(cmdLower, "-f") {
+		return true
+	}
+
+	// git push --force or -f (short form)
+	if strings.Contains(cmdLower, "git push") && (strings.Contains(cmdLower, "--force") || strings.Contains(cmd, " -f ")) {
+		return true
+	}
+
+	// Raw disk operations
+	if strings.Contains(cmdLower, "> /dev/sd") || strings.Contains(cmdLower, "of=/dev/sd") {
+		return true
+	}
+
+	// Pipe to bash with $() or backtick substitution
+	if strings.Contains(cmdLower, "eval ") || strings.Contains(cmdLower, "exec ") {
+		return true
+	}
+
+	// fork bombs
+	if strings.Contains(cmdLower, ":(){:|:&};:") || strings.Contains(cmdLower, "bash -i >& /dev/tcp") {
+		return true
+	}
+
+	return false
+}
+
+// hasRecursiveRm checks if the command is a recursive forced rm:
+// matches -rf, -fr, -r -f, -R -f, --recursive --force, etc.
+func hasRecursiveRm(cmdLower string) bool {
+	if !strings.Contains(cmdLower, "rm ") {
+		return false
+	}
+	// Combined flags: -rf, -fr, -fd, -df, etc.
+	if strings.Contains(cmdLower, "-rf") || strings.Contains(cmdLower, "-fr") ||
+		strings.Contains(cmdLower, "-Rf") || strings.Contains(cmdLower, "-fR") {
+		return true
+	}
+	// Separated flags: -r -f, -R -f, --recursive -f, etc.
+	hasR := strings.Contains(cmdLower, "-r") || strings.Contains(cmdLower, "-R") || strings.Contains(cmdLower, "--recursive")
+	hasF := strings.Contains(cmdLower, " -f") || strings.Contains(cmdLower, "--force")
+	return hasR && hasF
+}
+
+// isCautionShellCommand checks if a shell command warrants caution
+func (v *Validator) isCautionShellCommand(cmd, cmdLower string) bool {
+	// rm without -rf/-r (single file deletion)
+	hasRm := strings.Contains(cmdLower, "rm ")
+	if hasRm && !hasRecursiveRm(cmdLower) {
+		return true
+	}
+
+	// rm -rf on recoverable targets (node_modules, vendor, dist, etc.)
+	if hasRm && hasRecursiveRm(cmdLower) {
+		normalized := normalizeWhitespace(cmdLower)
+		if v.isRecoverableRmRfTarget(normalized) || v.isRecoverableRmRfTarget(cmdLower) {
+			return true
+		}
+	}
+
+	// git reset, rebase, amend
+	if strings.HasPrefix(cmdLower, "git reset") || strings.HasPrefix(cmdLower, "git rebase") || strings.Contains(cmdLower, "git commit --amend") {
+		return true
+	}
+
+	// git cherry-pick, stash drop/pop
+	if strings.HasPrefix(cmdLower, "git cherry-pick") || strings.Contains(cmdLower, "git stash drop") || strings.Contains(cmdLower, "git stash pop") {
+		return true
+	}
+
+	// Package installs
+	packageInstallPrefixes := []string{
+		"npm install", "yarn install", "yarn add", "pnpm install", "pnpm add",
+		"pip install", "pip3 install", "pipenv install",
+		"go get ", "go install ",
+		"cargo install", "cargo add",
+		"gem install", "bundle install",
+		"composer require", "composer install",
+		"apt-get install", "apt install",
+		"brew install",
+		"docker build", "docker-compose build", "docker compose build",
+	}
+	for _, prefix := range packageInstallPrefixes {
+		if strings.HasPrefix(cmdLower, prefix) {
+			return true
+		}
+	}
+
+	// make clean
+	if strings.HasPrefix(cmdLower, "make clean") {
+		return true
+	}
+
+	// chmod (non-777)
+	if strings.HasPrefix(cmdLower, "chmod ") && !strings.Contains(cmdLower, "777") {
+		return true
+	}
+
+	// sed -i (in-place editing)
+	if strings.Contains(cmdLower, "sed -i") || strings.Contains(cmdLower, "sed --in-place") {
+		return true
+	}
+
+	// systemctl stop
+	if strings.HasPrefix(cmdLower, "systemctl stop") {
+		return true
+	}
+
+	// Build artifact deletion (not already in SAFE list)
+	if strings.Contains(cmdLower, "rm ") && !strings.Contains(cmdLower, "-rf") {
+		buildArtifactDirs := []string{"dist", "build", "out", "target", ".next", "__pycache__", "bin"}
+		for _, dir := range buildArtifactDirs {
+			if strings.Contains(cmd, dir) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// isRecoverableRmRfTarget checks if rm -rf targets a recoverable directory.
+func (v *Validator) isRecoverableRmRfTarget(cmd string) bool {
+	// Normalize whitespace to handle variations like "rm  -rf  node_modules"
+	cmdLower := normalizeWhitespace(strings.ToLower(cmd))
+
+	// Directories that are safe to rm -rf (dependencies, caches, build artifacts)
+	recoverableDirs := []string{
+		"node_modules", "vendor", "bundle", "pods", ".venv", "venv",
+		"dist", "build", "out", "target", "bin",
+		".next", "__pycache__", ".cache", ".gradle",
+	}
+
+	for _, dir := range recoverableDirs {
+		patterns := []string{
+			"rm -rf " + dir,
+			"rm -rf ./" + dir,
+			"rm -rf .\\" + dir,
+			"rm -rf ~/" + dir,
+		}
+		for _, pattern := range patterns {
+			if strings.Contains(cmdLower, pattern) {
+				return true
+			}
+		}
+	}
+
+	// /tmp/* paths are always recoverable
+	if strings.Contains(cmdLower, "/tmp/") {
+		return true
+	}
+
+	// Lock files are recoverable
+	lockFiles := []string{
+		"package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+		"Podfile.lock", "Gemfile.lock", "Cargo.lock", "go.sum",
+		"composer.lock", "pipfile.lock",
+	}
+	for _, lf := range lockFiles {
+		if strings.Contains(cmd, lf) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// classifyWriteOperation classifies file write/edit operations
+func (v *Validator) classifyWriteOperation(toolName string, args map[string]interface{}) RiskLevel {
+	filePath := ""
+	for _, key := range []string{"path", "file_path"} {
+		if val, ok := args[key].(string); ok && val != "" {
+			filePath = val
+			break
+		}
+	}
+
+	if filePath == "" {
+		return RiskCaution
+	}
+
+	cleanPath := filepath.Clean(filePath)
+
+	// /tmp paths are always safe
+	if strings.HasPrefix(cleanPath, "/tmp") || strings.HasPrefix(cleanPath, filepath.Clean(os.TempDir())) {
+		return RiskSafe
+	}
+
+	// System directories are dangerous
+	systemPaths := []string{"/usr", "/etc", "/bin", "/sbin", "/var", "/opt"}
+	for _, sysDir := range systemPaths {
+		if strings.HasPrefix(cleanPath, sysDir) {
+			return RiskDangerous
+		}
+	}
+
+	// Home directory root or system config files
+	if cleanPath == "/etc/shadow" || cleanPath == "/etc/passwd" || cleanPath == "/etc/sudoers" {
+		return RiskDangerous
+	}
+
+	// Default: write operations in workspace are SAFE (the filesystem security layer handles workspace boundaries)
+	return RiskSafe
+}
+
+// classifyGitOperation classifies git write operations
+func (v *Validator) classifyGitOperation(args map[string]interface{}) RiskLevel {
+	operation, _ := args["operation"].(string)
+	operation = strings.ToLower(strings.TrimSpace(operation))
+
+	switch operation {
+	case "commit", "add", "status", "log", "diff", "show", "branch", "remote", "stash", "tag", "revert":
+		return RiskSafe
+	case "reset", "rebase", "cherry_pick", "am", "apply":
+		return RiskCaution
+	case "branch_delete", "clean":
+		return RiskDangerous
+	case "push":
+		// Check for force push
+		if argsStr, ok := args["args"].(string); ok {
+			if strings.Contains(strings.ToLower(argsStr), "--force") || strings.Contains(strings.ToLower(argsStr), "-f") {
+				return RiskDangerous
+			}
+		}
+		return RiskSafe
+	case "rm", "mv":
+		return RiskCaution
+	default:
+		return RiskCaution
+	}
+}
+
+// explainRisk provides a human-readable explanation for the risk classification
+func (v *Validator) explainRisk(toolName string, args map[string]interface{}, risk RiskLevel) string {
+	switch risk {
+	case RiskSafe:
+		return fmt.Sprintf("%s is a safe, read-only or informational operation", toolName)
+	case RiskCaution:
+		return fmt.Sprintf("%s is a potentially risky operation — may modify state but is recoverable", toolName)
+	case RiskDangerous:
+		return fmt.Sprintf("%s is a dangerous operation — could cause permanent data loss or security issues", toolName)
+	default:
+		return "Unknown risk classification"
+	}
+}
+
+// isSafeShellCommand checks if a shell command is unconditionally safe.
+// Returns false for commands that use output redirection (> or >>), which
+// could write to arbitrary locations.
+func isSafeShellCommand(cmdLower string) bool {
+	// Reject commands with output redirection — they could write anywhere
+	if containsRedirection(cmdLower) {
+		return false
+	}
+
+	// Informational git
+	safeGitPrefixes := []string{
+		"git status", "git log", "git diff", "git show", "git branch",
+		"git remote", "git config", "git stash list", "git tag",
+		"git shortlog", "git blame", "git reflog",
+	}
+	for _, prefix := range safeGitPrefixes {
+		if strings.HasPrefix(cmdLower, prefix+" ") || cmdLower == prefix {
+			return true
+		}
+	}
+
+	// List/info commands
+	safeListCommands := map[string]bool{
+		"ls": true, "ll": true, "la": true,
+		"find": true, "which": true, "whereis": true, "type": true,
+		"cat": true, "head": true, "tail": true, "less": true, "more": true, "wc": true,
+		"tree": true, "file": true, "stat": true,
+		"du": true, "df": true,
+		"ps": true, "top": true, "htop": true,
+		"uname": true, "env": true, "printenv": true, "export": true,
+		"echo": true, "pwd": true, "hostname": true, "date": true, "cal": true,
+		"whoami": true, "id": true,
+		"lsb_release": true, "lscpu": true, "free": true, "uptime": true,
+		"basename": true, "dirname": true, "realpath": true,
+	}
+	for cmd := range safeListCommands {
+		if cmdLower == cmd || strings.HasPrefix(cmdLower, cmd+" ") {
+			return true
+		}
+	}
+
+	// Build and test commands
+	safeBuildPrefixes := []string{
+		"go build", "go test", "go run", "go fmt", "go vet",
+		"go mod ", "go list", "go version", "go env",
+		"make test", "make build", "make check", "make lint",
+		"npm run build", "npm run test", "npm run lint", "npm run check",
+		"npm test", "npm run ", "npm ls", "npm outdated",
+		"cargo build", "cargo test", "cargo check", "cargo doc", "cargo clippy",
+		"cargo fmt", "cargo metadata",
+		"yarn build", "yarn test", "yarn lint", "yarn check",
+		"pnpm build", "pnpm test", "pnpm lint",
+		"pip list", "pip3 list", "pip show", "pip3 show",
+		"python -m pytest", "python3 -m pytest",
+		"pytest",
+		"mvn test", "mvn compile", "mvn package",
+		"gradle test", "gradle build", "gradle check",
+		"bundle exec",
+		"swift build", "swift test",
+		"rustc ",
+	}
+	for _, prefix := range safeBuildPrefixes {
+		if strings.HasPrefix(cmdLower, prefix) {
+			return true
+		}
+	}
+
+	// grep/rg/egrep (read-only)
+	if strings.HasPrefix(cmdLower, "grep ") || strings.HasPrefix(cmdLower, "egrep ") ||
+		strings.HasPrefix(cmdLower, "fgrep ") || strings.HasPrefix(cmdLower, "rg ") {
+		return true
+	}
+
+	// sed without -i (read-only)
+	if strings.HasPrefix(cmdLower, "sed ") && !strings.Contains(cmdLower, "-i") {
+		return true
+	}
+
+	// Simple no-arg commands
+	if cmdLower == "echo" || cmdLower == "true" || cmdLower == "false" || cmdLower == "pwd" || cmdLower == "ls" {
+		return true
+	}
+
+	return false
+}
+
+// normalizeWhitespace collapses multiple whitespace characters into single spaces
+var multipleSpaces = regexp.MustCompile(`\s+`)
+
+func normalizeWhitespace(s string) string {
+	return strings.TrimSpace(multipleSpaces.ReplaceAllString(s, " "))
+}
+
+// containsRedirection returns true if the command contains output redirection
+// operators (>, >>) that could write to arbitrary paths
+func containsRedirection(cmd string) bool {
+	for i := 0; i < len(cmd); i++ {
+		r := cmd[i]
+		// Skip inside quotes
+		if r == '\'' {
+			for i++; i < len(cmd) && cmd[i] != '\''; i++ {
+			}
+			continue
+		}
+		if r == '"' {
+			for i++; i < len(cmd) && cmd[i] != '"'; i++ {
+			}
+			continue
+		}
+		// Check for >> (append redirect)
+		if r == '>' && i+1 < len(cmd) && cmd[i+1] == '>' {
+			return true
+		}
+		// Check for > (write redirect) but not >= or > used in HTML tags
+		if r == '>' && (i+1 >= len(cmd) || cmd[i+1] != '=' && cmd[i+1] != ' ') ||
+			(r == '>' && i+1 < len(cmd) && cmd[i+1] == ' ') {
+			// Make sure it's not part of a >> that we already caught
+			if i == 0 || cmd[i-1] != '>' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// containsSystemDirWrite returns true if the command redirects output to a system directory.
+// This checks that the system dir appears as the TARGET of a write operation (after > or >>),
+// not just mentioned anywhere in the command string.
+func containsSystemDirWrite(cmd string) bool {
+	systemDirs := []string{"/usr", "/etc", "/bin", "/sbin", "/var", "/opt"}
+	lower := strings.ToLower(cmd)
+
+	for _, dir := range systemDirs {
+		// Check patterns: "> /dir", ">> /dir", ">/dir", '>>"dir'
+		redirects := []string{
+			"> " + dir,
+			">>" + " " + dir,
+			">" + dir,
+			">>" + dir,
+		}
+		for _, pattern := range redirects {
+			if strings.Contains(lower, pattern) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isObviouslySafe checks if an operation is clearly safe without deeper analysis
+// This pre-filters read-only and informational operations
+func isObviouslySafe(toolName string, args map[string]interface{}) bool {
+	// Check if the operation is on /tmp/* paths
+	if isInTmpPath(toolName, args) {
+		return true
+	}
+
+	// List of obviously safe tools (read-only and informational)
+	safeTools := map[string]bool{
+		"read_file":      true,
+		"glob":           true,
+		"search_files":   true,
+		"fetch_url":      true,
+		"list_directory": true,
+		"TodoRead":       true,
+		"TodoWrite":      true,
+	}
+
+	// Check if tool is in the safe list
+	if safeTools[toolName] {
+		return true
+	}
+
+	return false
+}
+
+// SetDebug enables or disables debug mode
+func (v *Validator) SetDebug(debug bool) {
+	v.debug = debug
 }
 
 // applyThreshold applies the configured threshold to the validation result
@@ -588,16 +776,13 @@ func (v *Validator) applyThreshold(result *ValidationResult) *ValidationResult {
 		threshold = 2
 	}
 
-	// Determine if we should request confirmation based on risk level and threshold
 	// Threshold meanings:
-	// - Threshold 0: Only SAFE (risk 0) operations are auto-confirmed, caution/dangerous need confirmation
+	// - Threshold 0: Only SAFE (risk 0) operations are auto-confirmed
 	// - Threshold 1: SAFE is auto-confirmed, CAUTION/DANGEROUS need confirmation
 	// - Threshold 2: SAFE and CAUTION are auto-confirmed, only DANGEROUS needs confirmation
 
 	// For all thresholds: operations with risk >= threshold require confirmation
-	// Special case: when threshold=0 and risk=0, don't confirm (auto-accept safe operations)
 	if int(result.RiskLevel) >= threshold {
-		// Risk level meets or exceeds threshold
 		// Exception: threshold 0 and risk 0 should not require confirmation
 		if !(threshold == 0 && result.RiskLevel == RiskSafe) {
 			result.ShouldBlock = false
@@ -606,237 +791,25 @@ func (v *Validator) applyThreshold(result *ValidationResult) *ValidationResult {
 		}
 	}
 
-	// Risk level below threshold (or threshold 0 with risk 0): allow without confirmation
+	// Risk level below threshold: allow without confirmation
 	result.ShouldBlock = false
 	result.ShouldConfirm = false
 	return result
 }
 
-// isObviouslySafe checks if an operation is clearly safe without needing LLM validation
-// This pre-filters read-only and informational operations to reduce latency
-func isObviouslySafe(toolName string, args map[string]interface{}) bool {
-	// Check if the operation is on /tmp/* paths - always allow without security checks
-	if isInTmpPath(toolName, args) {
-		return true
-	}
-
-	// List of obviously safe tools (read-only and informational)
-	safeTools := map[string]bool{
-		// Read operations
-		"read_file":      true,
-		"glob":           true,
-		"grep":           true,
-		"list_directory": true,
-
-		// Informational git commands
-		"git_status": true,
-		"git_log":    true,
-		"git_diff":   true,
-		"git_show":   true,
-		"git_branch": true,
-
-		// Informational system commands
-		"list_processes": true,
-		"get_file_info":  true,
-
-		// Build and test operations (in workspace)
-		"build": true,
-		"test":  true,
-	}
-
-	// Check if tool is in the safe list
-	if safeTools[toolName] {
-		return true
-	}
-
-	// For shell_command, check if it's obviously safe
-	if toolName == "shell_command" {
-		command, ok := args["command"].(string)
-		if !ok {
-			return false
-		}
-
-		// List of safe shell commands
-		safeCommands := []string{
-			// Informational
-			"git status",
-			"git log",
-			"git diff",
-			"git show",
-			"git branch",
-			"git remote",
-			"git config --get",
-
-			// Listing
-			"ls ",
-			"ll ",
-			"la ",
-			"find ",
-			"which ",
-			"whereis ",
-
-			// Build and test
-			"go build",
-			"go test",
-			"go run",
-			"go fmt",
-			"go vet",
-			"make ",
-			"npm run build",
-			"npm test",
-			"npm run test",
-			"cargo build",
-			"cargo test",
-			"cargo check",
-
-			// Informational system
-			"ps ",
-			"top",
-			"htop",
-			"df ",
-			"du ",
-			"uname",
-			"env",
-		}
-
-		commandLower := strings.ToLower(strings.TrimSpace(command))
-		for _, safe := range safeCommands {
-			if strings.HasPrefix(commandLower, strings.ToLower(safe)) {
+// isInTmpPath checks if an operation is on /tmp/* paths
+func isInTmpPath(toolName string, args map[string]interface{}) bool {
+	// Check file_path/path argument for file operations
+	for _, key := range []string{"file_path", "path"} {
+		if filePath, ok := args[key].(string); ok {
+			cleanPath := filepath.Clean(filePath)
+			if strings.HasPrefix(cleanPath, "/tmp/") || cleanPath == "/tmp" {
 				return true
 			}
-		}
-
-		// Check for read-only file operations
-		if strings.HasPrefix(commandLower, "cat ") ||
-			strings.HasPrefix(commandLower, "head ") ||
-			strings.HasPrefix(commandLower, "tail ") ||
-			strings.HasPrefix(commandLower, "less ") ||
-			strings.HasPrefix(commandLower, "more ") {
-			return true
-		}
-	}
-
-	return false
-}
-
-// SetDebug enables or disables debug mode
-func (v *Validator) SetDebug(debug bool) {
-	v.debug = debug
-}
-
-// DetectDirectCommand uses the local LLM to detect if a query is requesting a direct command execution
-// Returns (isDirectCommand, detectedCommand, confidence, error)
-func (v *Validator) DetectDirectCommand(ctx context.Context, query string) (bool, string, float64, error) {
-	prompt := fmt.Sprintf(`You are a command detection assistant. Your job is to determine if the user's request is asking to execute a specific shell command DIRECTLY.
-
-USER REQUEST: %s
-
-Analyze the request and answer these questions:
-
-1. Is the user asking to execute a specific, known shell command?
-2. If YES, what is the exact command to execute?
-
-IMPORTANT - Be VERY CONSERVATIVE. Only return YES if:
-- It's a bare command like "pwd", "ls", "git status", "git add .", etc.
-- They're asking for information that a simple command can provide
-- The command is OBVIOUS and doesn't require reasoning
-- It's a common git operation (add, commit, status, log, diff, push, pull)
-
-Return NO if:
-- ANY code generation is needed ("write", "create", "implement", "define")
-- ANY analysis or explanation is needed ("explain", "how does", "why")
-- Multiple steps or reasoning is required
-- The request is vague or ambiguous
-
-EXAMPLES - YES (Direct Command):
-- "pwd" → YES: "pwd"
-- "ls" → YES: "ls"
-- "git status" → YES: "git status"
-- "git log" → YES: "git log"
-- "git diff" → YES: "git diff"
-- "git show" → YES: "git show"
-- "git branch" → YES: "git branch"
-- "git add ." → YES: "git add ."
-- "git add file.txt" → YES: "git add file.txt"
-- "git commit -m message" → YES: "git commit -m 'message'"
-- "git push" → YES: "git push"
-- "git pull" → YES: "git pull"
-- "What is your current working directory?" → YES: "pwd"
-- "Show me the files" → YES: "ls -la"
-- "What's the git status?" → YES: "git status"
-- "Show me git log" → YES: "git log"
-
-EXAMPLES - NO (Needs Agent):
-- "Write a function" → NO (code generation)
-- "Create a file" → NO (file creation)
-- "How do I fix this bug?" → NO (analysis)
-- "Implement a parser" → NO (code generation)
-- "Write hello world" → NO (code generation, NOT echo)
-- "Make a script" → NO (code generation)
-- "Commit these changes" → NO (needs reasoning about what to commit)
-
-Return your response as JSON:
-{
-  "is_direct_command": true/false,
-  "detected_command": "the exact command if is_direct_command is true",
-  "confidence": 0.0 to 1.0
-}
-
-Only return valid JSON, nothing else.`, query)
-
-	response, err := v.callLLM(ctx, prompt)
-	if err != nil {
-		return false, "", 0, err
-	}
-
-	// Debug: log the raw response
-	if v.debug {
-		v.logger.Logf("Raw LLM response: %s", response)
-	}
-
-	// Parse the response
-	var result struct {
-		IsDirectCommand bool    `json:"is_direct_command"`
-		DetectedCommand string  `json:"detected_command"`
-		Confidence      float64 `json:"confidence"`
-	}
-
-	response = strings.TrimSpace(response)
-	if strings.HasPrefix(response, "```json") {
-		response = strings.TrimPrefix(response, "```json")
-		response = strings.TrimSuffix(response, "```")
-		response = strings.TrimSpace(response)
-	} else if strings.HasPrefix(response, "```") {
-		response = strings.TrimPrefix(response, "```")
-		response = strings.TrimSuffix(response, "```")
-		response = strings.TrimSpace(response)
-	}
-
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		// Log the parsing error and raw response for debugging
-		if v.logger != nil {
-			v.logger.Logf("Failed to parse LLM response as JSON: %v", err)
-			v.logger.Logf("Raw response was: %s", response)
-		}
-		return false, "", 0, fmt.Errorf("failed to parse LLM response: %w", err)
-	}
-
-	return result.IsDirectCommand, result.DetectedCommand, result.Confidence, nil
-}
-
-// isInTmpPath checks if an operation is on /tmp/* paths
-// All reads and writes to /tmp/* should be fully available without any security violations
-func isInTmpPath(toolName string, args map[string]interface{}) bool {
-	// Check file_path argument for file operations
-	if filePath, ok := args["file_path"].(string); ok {
-		cleanPath := filepath.Clean(filePath)
-		// Check if path starts with /tmp/ or is exactly /tmp
-		if strings.HasPrefix(cleanPath, "/tmp/") || cleanPath == "/tmp" {
-			return true
-		}
-		// Also check for Windows-style temp paths
-		if strings.Contains(strings.ToLower(cleanPath), "\\temp\\") || strings.Contains(strings.ToLower(cleanPath), "\\tmp\\") {
-			return true
+			if strings.Contains(strings.ToLower(cleanPath), "\\temp\\") ||
+				strings.Contains(strings.ToLower(cleanPath), "\\tmp\\") {
+				return true
+			}
 		}
 	}
 
@@ -844,7 +817,6 @@ func isInTmpPath(toolName string, args map[string]interface{}) bool {
 	if toolName == "shell_command" {
 		if command, ok := args["command"].(string); ok {
 			commandLower := strings.ToLower(command)
-			// Check if command mentions /tmp
 			if strings.Contains(commandLower, "/tmp/") ||
 				strings.Contains(commandLower, " /tmp ") ||
 				strings.Contains(commandLower, "> /tmp") ||
@@ -859,44 +831,37 @@ func isInTmpPath(toolName string, args map[string]interface{}) bool {
 	return false
 }
 
-// IsCriticalSystemOperation checks if this is a critical system operation that should be hard blocked
-// These are the few operations that would permanently damage the operating system
-// This function is called even in unsafe mode to prevent truly catastrophic operations
+// IsCriticalSystemOperation checks if this is a critical system operation that should be hard blocked.
+// These are the few operations that would permanently damage the operating system.
+// This function is public so it can be called independently for a pre-filter check.
 func IsCriticalSystemOperation(toolName string, args map[string]interface{}) bool {
 	// For shell commands, check for critical system operations
 	if toolName == "shell_command" {
 		if command, ok := args["command"].(string); ok {
 			commandLower := strings.ToLower(strings.TrimSpace(command))
 
-			// Filesystem destruction commands (permanently destroys data)
-			// Only block the most destructive operations that have no legitimate use case
-			if strings.HasPrefix(commandLower, "mkfs") || // Create filesystem - typically destructive
-				commandLower == "rm -rf /" || // Delete entire root filesystem
-				commandLower == "rm -rf ." || // Delete current directory (could be root)
-				strings.HasPrefix(commandLower, ":(){:|:&};:") || // Fork bomb
-				strings.HasPrefix(commandLower, "killall -9") || // Kill all processes
-				strings.HasPrefix(commandLower, "chmod 000 /") { // Remove all permissions
+			// Filesystem destruction commands
+			if strings.HasPrefix(commandLower, "mkfs") ||
+				commandLower == "rm -rf /" ||
+				commandLower == "rm -rf ." ||
+				strings.HasPrefix(commandLower, ":(){:|:&};:") ||
+				strings.HasPrefix(commandLower, "killall -9") ||
+				strings.HasPrefix(commandLower, "chmod 000 /") {
 				return true
 			}
 
-			// Only block fdisk/parted on the primary disk (/dev/sda)
-			// Allow partitioning secondary disks (legitimate use case)
+			// Only block fdisk/parted on the primary disk
 			if (strings.HasPrefix(commandLower, "fdisk ") || strings.HasPrefix(commandLower, "parted ")) &&
-				(strings.Contains(commandLower, "/dev/sda") || strings.Contains(commandLower, " /dev/sda ")) {
+				strings.Contains(commandLower, "/dev/sda") {
 				return true
 			}
 
-			// Only block dd operations that are clearly destructive to primary storage
-			// Allow: dd to secondary disks (/dev/sdb, /dev/sdc, etc.) - legitimate for creating bootable drives
-			// Allow: dd from files to devices - common for disk imaging
-			// Block: dd with destructive patterns to primary disk or clearly malicious
+			// Block dd operations on primary disk
 			if strings.Contains(commandLower, "dd ") {
-				// Block dd to primary disk with zero/random (clearly destructive)
 				if (strings.Contains(commandLower, "dd if=/dev/zero") || strings.Contains(commandLower, "dd if=/dev/random")) &&
 					strings.Contains(commandLower, "/dev/sda") {
 					return true
 				}
-				// Don't block other dd operations - they have legitimate uses
 			}
 		}
 	}
@@ -905,7 +870,6 @@ func IsCriticalSystemOperation(toolName string, args map[string]interface{}) boo
 	if toolName == "write_file" || toolName == "edit_file" {
 		if filePath, ok := args["file_path"].(string); ok {
 			cleanPath := filepath.Clean(filePath)
-			// Only the most critical system files
 			if cleanPath == "/etc/shadow" ||
 				cleanPath == "/etc/passwd" ||
 				cleanPath == "/etc/sudoers" ||
@@ -916,63 +880,4 @@ func IsCriticalSystemOperation(toolName string, args map[string]interface{}) boo
 	}
 
 	return false
-}
-
-// isCriticalSystemOperation checks if this is a critical system operation that should be hard blocked
-// These are the few operations that would permanently damage the operating system
-func isCriticalSystemOperation(toolName string, args map[string]interface{}, result *ValidationResult) bool {
-	return IsCriticalSystemOperation(toolName, args)
-}
-
-// CallLLMForConfirmation makes a second LLM call for confirmation in non-interactive mode
-func (v *Validator) CallLLMForConfirmation(ctx context.Context, prompt string) (*LLMConfirmationResult, error) {
-	// Set timeout
-	timeout := time.Duration(v.config.TimeoutSeconds) * time.Second
-	if timeout == 0 {
-		timeout = 30 * time.Second // Longer timeout for confirmation
-	}
-
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// Call the LLM
-	response, err := v.callLLM(ctx, prompt)
-	if err != nil {
-		return nil, fmt.Errorf("LLM confirmation call failed: %w", err)
-	}
-
-	// Parse the response
-	response = strings.TrimSpace(response)
-
-	// Try to extract JSON from markdown code blocks
-	if strings.Contains(response, "```json") {
-		startIdx := strings.Index(response, "```json")
-		endIdx := strings.Index(response[startIdx+7:], "```")
-		if endIdx != -1 {
-			response = response[startIdx+7 : startIdx+7+endIdx]
-			response = strings.TrimSpace(response)
-		}
-	} else if strings.Contains(response, "```") {
-		startIdx := strings.Index(response, "```")
-		endIdx := strings.Index(response[startIdx+3:], "```")
-		if endIdx != -1 {
-			response = response[startIdx+3 : startIdx+3+endIdx]
-			response = strings.TrimSpace(response)
-		}
-	}
-
-	// Parse JSON
-	var result LLMConfirmationResult
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse confirmation response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// LLMConfirmationResult represents the result of a second LLM confirmation call
-type LLMConfirmationResult struct {
-	Approved  bool   `json:"approved"`
-	Reasoning string `json:"reasoning"`
 }

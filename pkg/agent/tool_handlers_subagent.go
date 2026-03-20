@@ -495,6 +495,17 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		a.printLineInternal(message)
 	}
 
+	// Print the provider/model being used for this subagent
+	displayProvider := provider
+	if displayProvider == "" {
+		displayProvider = "default"
+	}
+	displayModel := model
+	if displayModel == "" {
+		displayModel = "default"
+	}
+	fmt.Fprintf(os.Stderr, "🔄 Spawning subagent [%s]: provider=%s, model=%s\n", persona, displayProvider, displayModel)
+
 	resultMap, err := tools.RunSubagent(enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath, systemPromptText, persona)
 	if err != nil {
 		a.debugLog("Subagent spawn error: %v\n", err)
@@ -789,6 +800,17 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		message := fmt.Sprintf("%s→ %sSubagent: %s%s\n", subagentGray, prefix, cleanLine, reset)
 		a.printLineInternal(message)
 	}
+
+	// Print the provider/model being used for these parallel subagents
+	displayProvider := subagentProvider
+	if displayProvider == "" {
+		displayProvider = "default"
+	}
+	displayModel := subagentModel
+	if displayModel == "" {
+		displayModel = "default"
+	}
+	fmt.Fprintf(os.Stderr, "🔄 Spawning %d parallel subagents: provider=%s, model=%s\n", len(parallelTasks), displayProvider, displayModel)
 
 	resultMap, err := tools.RunParallelSubagents(parallelTasks, false, streamCallback)
 	if err != nil {

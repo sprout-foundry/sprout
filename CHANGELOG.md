@@ -2,6 +2,12 @@
 
 All notable changes to ledit will be documented in this file.
 
+## [v0.11.15] - 2026-03-21
+
+- Merge remote-tracking branch 'origin/main' (1f691f3)
+- Updates 12 files - Updates HTML rendering for vision tools and subagent inheritance (d3d9d39)
+- docs: Update changelog for v0.11.14 (ee4f9e2)
+
 ## [v0.11.14] - 2026-03-20
 
 - Updates 11 files - Updates headless browser with screenshot and DOM capture (6adf24e)

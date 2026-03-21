@@ -117,6 +117,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
   const lastChunkRef = useRef<string>('');
+  const isProcessingRef = useRef(false);
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
 
@@ -237,7 +238,11 @@ function App() {
           const newMessages = [...prev.messages];
           const lastMessage = newMessages[newMessages.length - 1];
           if (lastMessage && lastMessage.type === 'assistant') {
-            lastMessage.content += event.data.chunk;
+            // Create new message object instead of mutating
+            newMessages[newMessages.length - 1] = {
+              ...lastMessage,
+              content: lastMessage.content + (event.data.chunk || '')
+            };
           } else {
             newMessages.push({
               id: Date.now().toString(),
@@ -256,6 +261,7 @@ function App() {
       case 'query_completed':
         logEntry.category = 'query';
         logEntry.level = 'success';
+        isProcessingRef.current = false;
         setState(prev => ({
           ...prev,
           isProcessing: false,
@@ -345,6 +351,7 @@ function App() {
       case 'error':
         logEntry.category = 'system';
         logEntry.level = 'error';
+        isProcessingRef.current = false;
         const errorMessage = event.data?.message || 'Unknown error';
         setState(prev => ({
           ...prev,
@@ -463,7 +470,8 @@ function App() {
   }, []);
 
   const handleSendMessage = useCallback(async (message: string) => {
-    if (!message.trim() || state.isProcessing) return;
+    if (!message.trim() || isProcessingRef.current) return;
+    isProcessingRef.current = true;
 
     // Clear any previous errors and set processing state
     setState(prev => ({
@@ -479,24 +487,21 @@ function App() {
       debugLog('✅ Message sent successfully');
     } catch (error) {
       console.error('❌ Failed to send message:', error);
+      isProcessingRef.current = false;
+      const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        lastError: `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`
-      }));
-
-      // Add error message to chat
-      setState(prev => ({
-        ...prev,
+        lastError: `Failed to send message: ${errorMsg}`,
         messages: [...prev.messages, {
           id: Date.now().toString(),
           type: 'assistant',
-          content: `❌ Error: ${error instanceof Error ? error.message : 'Failed to send message'}`,
+          content: `❌ Error: ${errorMsg}`,
           timestamp: new Date()
         }]
       }));
     }
-  }, [apiService, state.isProcessing]);
+  }, [apiService]);
 
   
   const handleModelChange = useCallback((model: string) => {

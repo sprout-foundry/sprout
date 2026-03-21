@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
 import { writeFileWithConsent } from '../services/fileAccess';
 
@@ -59,6 +59,12 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [autoSaveInterval] = useState(30000); // 30 seconds
   const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 50 }); // Initial sizes in percentage
 
+  // Keep a ref to the latest buffers Map so async closures don't read stale data
+  const buffersRef = useRef(buffers);
+  useEffect(() => {
+    buffersRef.current = buffers;
+  }, [buffers]);
+
   // Activate a buffer (display in active pane)
   const activateBuffer = useCallback((bufferId: string) => {
     setActiveBufferId(bufferId);
@@ -95,9 +101,20 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     const filePath = file.path;
 
     // Check if file is already open in a buffer
-    const existingBuffer = Array.from(buffers.entries()).find(([_, buffer]) => buffer.file.path === filePath);
+    const currentBuffers = buffersRef.current;
+    const existingBuffer = Array.from(currentBuffers.entries()).find(([_, buffer]) => buffer.file.path === filePath);
     if (existingBuffer) {
-      const [bufferId] = existingBuffer;
+      const [bufferId, buffer] = existingBuffer;
+      // If buffer is already in a pane, switch to that pane instead of moving it
+      if (buffer.paneId) {
+        const pane = panes.find(p => p.id === buffer.paneId);
+        if (pane) {
+          setActivePaneId(buffer.paneId);
+          setActiveBufferId(bufferId);
+          return bufferId;
+        }
+      }
+      // Otherwise activate in current pane
       activateBuffer(bufferId);
       return bufferId;
     }
@@ -132,7 +149,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setActiveBufferId(bufferId);
 
     return bufferId;
-  }, [buffers, activePaneId, activateBuffer]);
+  }, [buffers, activePaneId, activateBuffer, panes]);
 
   // Update buffer content
   const updateBufferContent = useCallback((bufferId: string, content: string) => {
@@ -184,7 +201,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
   // Save a buffer to the server
   const saveBuffer = useCallback(async (bufferId: string) => {
-    const buffer = buffers.get(bufferId);
+    const buffer = buffersRef.current.get(bufferId);
     if (!buffer) return;
 
     try {
@@ -207,21 +224,21 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       console.error('Failed to save buffer:', bufferId, error);
       throw error;
     }
-  }, [buffers]);
+  }, []);
 
   // Save all modified buffers
   const saveAllBuffers = useCallback(async () => {
-    const currentBuffers = buffers;
+    const currentBuffers = buffersRef.current;
     const savePromises = Array.from(currentBuffers.entries())
       .filter(([_, buffer]) => buffer.isModified)
       .map(([bufferId, _]) => saveBuffer(bufferId));
 
     await Promise.all(savePromises);
-  }, [buffers, saveBuffer]);
+  }, [saveBuffer]);
 
   // Close a buffer (triggers auto-save if modified)
   const closeBuffer = useCallback((bufferId: string) => {
-    const buffer = buffers.get(bufferId);
+    const buffer = buffersRef.current.get(bufferId);
     if (!buffer) return;
 
     // Save before closing if modified and auto-save is enabled (fire-and-forget)
@@ -246,7 +263,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       ));
       setActiveBufferId(null);
     }
-  }, [buffers, activeBufferId, activePaneId, isAutoSaveEnabled, saveBuffer]);
+  }, [activeBufferId, activePaneId, isAutoSaveEnabled, saveBuffer]);
 
   // Close a pane
   const closePane = useCallback((paneId: string) => {

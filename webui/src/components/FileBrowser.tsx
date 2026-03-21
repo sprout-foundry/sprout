@@ -29,6 +29,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
   allowedExtensions = []
 }) => {
   const [currentPath, setCurrentPath] = useState(initialPath);
+  const [pathInput, setPathInput] = useState(initialPath);
   const [files, setFiles] = useState<FileNode[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,6 +38,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
   useEffect(() => {
     if (isOpen) {
       setCurrentPath(initialPath);
+      setPathInput(initialPath);
       setSelectedFile(null);
     }
   }, [initialPath, isOpen]);
@@ -91,6 +93,7 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
   const handleFileClick = (file: FileNode) => {
     if (file.type === 'directory') {
       setCurrentPath(file.path);
+      setPathInput(file.path);
     } else {
       setSelectedFile(file);
     }
@@ -111,8 +114,9 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
   const navigateUp = () => {
     const parts = currentPath.split('/').filter(Boolean);
     parts.pop();
-    const parentPath = '/' + parts.join('/');
-    setCurrentPath(parentPath || '/');
+    const newPath = '/' + parts.join('/') || '/';
+    setCurrentPath(newPath);
+    setPathInput(newPath);
   };
 
   const formatFileSize = (bytes: number) => {
@@ -156,8 +160,14 @@ const FileBrowser: React.FC<FileBrowserProps> = ({
           <div className="filebrowser-path">
             <input
               type="text"
-              value={currentPath}
-              onChange={(e) => setCurrentPath(e.target.value)}
+              value={pathInput}
+              onChange={(e) => setPathInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setCurrentPath(pathInput);
+                }
+              }}
               className="filebrowser-path-input"
             />
           </div>

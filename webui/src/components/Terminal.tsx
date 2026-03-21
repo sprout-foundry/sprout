@@ -57,62 +57,55 @@ const Terminal: React.FC<TerminalProps> = ({
     setIsExpanded(externalIsExpanded);
   }, [externalIsExpanded]);
 
-  // Initialize terminal WebSocket connection
+  // Initialize terminal WebSocket connection - subscribe/unsubscribe only
   useEffect(() => {
     const terminalService = TerminalWebSocketService.getInstance();
-    
+
     if (isExpanded && isConnected) {
-      // Set initial state from singleton (it might already be connected)
+      // Check if already ready
       if (terminalService.isReady()) {
         setTerminalConnected(true);
       }
 
-      // Only connect if not already connected
-      if (!terminalWS.current) {
-        terminalWS.current = terminalService;
-
-        // Set up event handlers
-        const eventHandler = (event: any) => {
-          if (event.type === 'connection_status') {
-            if (event.data.connected) {
-              // Don't set connected yet - wait for session_ready
-              debugLog('Terminal WebSocket connected, waiting for session...');
-            } else {
-              setTerminalConnected(false);
-              addLine('error', 'Terminal disconnected');
-            }
-          } else if (event.type === 'session_ready') {
-            setTerminalConnected(true);
-            addLine('output', 'Terminal session ready');
-          } else if (event.type === 'output') {
-            addLine('output', event.data.output);
-          } else if (event.type === 'error_output') {
-            addLine('error', event.data.output);
-          } else if (event.type === 'error') {
-            addLine('error', event.data.message);
+      // Set up event handlers
+      const eventHandler = (event: any) => {
+        if (event.type === 'connection_status') {
+          if (event.data.connected) {
+            debugLog('Terminal WebSocket connected, waiting for session...');
+          } else {
+            setTerminalConnected(false);
+            addLine('error', 'Terminal disconnected');
           }
-        };
-        terminalEventHandlerRef.current = eventHandler;
-        terminalWS.current.onEvent(eventHandler);
+        } else if (event.type === 'session_ready') {
+          setTerminalConnected(true);
+        } else if (event.type === 'output') {
+          addLine('output', event.data.output);
+        } else if (event.type === 'error_output') {
+          addLine('error', event.data.output);
+        } else if (event.type === 'error') {
+          addLine('error', event.data.message);
+        }
+      };
+      terminalEventHandlerRef.current = eventHandler;
+      terminalWS.current = terminalService;
+      terminalService.onEvent(eventHandler);
 
-        // Connect to terminal
-        terminalWS.current.connect();
+      // Connect if not already session-ready (connect() is idempotent)
+      if (!terminalService.isReady()) {
+        terminalService.connect();
       }
     } else {
-      // Disconnect when collapsed or not connected
-      if (terminalWS.current) {
-        if (terminalEventHandlerRef.current) {
-          terminalWS.current.removeEvent(terminalEventHandlerRef.current);
-          terminalEventHandlerRef.current = null;
-        }
-        terminalWS.current.disconnect();
-        terminalWS.current = null;
-        setTerminalConnected(false);
+      // Only unsubscribe from events, don't disconnect the singleton
+      if (terminalEventHandlerRef.current && terminalWS.current) {
+        terminalWS.current.removeEvent(terminalEventHandlerRef.current);
       }
+      terminalEventHandlerRef.current = null;
+      terminalWS.current = null;
+      setTerminalConnected(false);
     }
 
     return () => {
-      if (terminalWS.current && terminalEventHandlerRef.current) {
+      if (terminalEventHandlerRef.current && terminalWS.current) {
         terminalWS.current.removeEvent(terminalEventHandlerRef.current);
         terminalEventHandlerRef.current = null;
       }
@@ -256,19 +249,6 @@ const Terminal: React.FC<TerminalProps> = ({
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (terminalWS.current && terminalEventHandlerRef.current) {
-        terminalWS.current.removeEvent(terminalEventHandlerRef.current);
-        terminalEventHandlerRef.current = null;
-      }
-      if (terminalWS.current) {
-        terminalWS.current.disconnect();
-        terminalWS.current = null;
-      }
-    };
   }, []);
 
   return (

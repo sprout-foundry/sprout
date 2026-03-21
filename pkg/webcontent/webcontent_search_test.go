@@ -9,6 +9,9 @@ import (
 )
 
 func TestGetSearchResults_FallbackToDuckDuckGo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping network-dependent test in short mode")
+	}
 	// Create a config manager without Jina API key
 	cfg, err := configuration.NewManager()
 	assert.NoError(t, err, "Should create config manager successfully")
@@ -38,6 +41,9 @@ func TestSearchProviderInterface(t *testing.T) {
 }
 
 func TestDuckDuckGoSearch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping network-dependent test in short mode")
+	}
 	logger := utils.GetLogger(false)
 
 	results, err := performDuckDuckGoSearch("golang programming", logger)

@@ -203,26 +203,6 @@ html, body, #root {
   justify-content: flex-end;
 }
 
-.panes-container {
-  grid-row: 2;
-  display: grid;
-  overflow: hidden;
-  min-height: 0;
-}
-
-.panes-container.layout-split-vertical {
-  grid-template-columns: 1fr 1fr;
-}
-
-.panes-container.layout-split-horizontal {
-  grid-template-rows: 1fr 1fr;
-}
-
-.panes-container.layout-split-grid {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-}
-
 .editor-pane-wrapper {
   display: flex;
   flex-direction: column;

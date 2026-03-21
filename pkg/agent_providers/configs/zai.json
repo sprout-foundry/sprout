@@ -1,106 +1,151 @@
 {
-  "name": "zai",
-  "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions",
   "auth": {
-    "type": "bearer",
-    "env_var": "ZAI_API_KEY"
+    "env_var": "ZAI_API_KEY",
+    "type": "bearer"
   },
-  "headers": {},
+  "cost": {
+    "currency": "USD",
+    "input_token_cost": 0,
+    "output_token_cost": 0
+  },
   "defaults": {
-    "model": "glm-4.6",
+    "model": "glm-5",
     "temperature": 0.1,
-    "top_p": 1.0
+    "top_p": 1
   },
+  "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions",
+  "headers": {},
   "message_conversion": {
-    "include_tool_call_id": false,
     "convert_tool_role_to_user": false,
+    "include_tool_call_id": false,
     "reasoning_content_field": ""
   },
-  "streaming": {
-    "format": "sse",
-    "chunk_timeout_ms": 320000,
-    "done_marker": "[DONE]"
-  },
   "models": {
+    "available_models": [],
     "default_context_limit": 128000,
+    "default_model": "glm-5",
+    "model_info": [
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-4.7 - Latest GLM-4.x model with 200K context window",
+        "id": "glm-4.7",
+        "name": "GLM-4.7",
+        "tags": [
+          "tools",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-5-Turbo - Optimized for agent/tool tasks with 200K context, 128K max output",
+        "id": "glm-5-turbo",
+        "name": "GLM-5 Turbo",
+        "tags": [
+          "tools",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-5 - Flagship model with 200K context, 128K max output, agentic coding",
+        "id": "glm-5",
+        "name": "GLM-5",
+        "tags": [
+          "tools",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-4.6 - Coding optimized model with 200K context window",
+        "id": "GLM-4.6",
+        "name": "GLM-4.6",
+        "tags": [
+          "tools",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-4.6 with vision capabilities",
+        "id": "glm-4.6v",
+        "name": "GLM-4.6 Vision",
+        "tags": [
+          "tools",
+          "coding",
+          "vision"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "Z.AI GLM-4.5 - Previous generation with 128K context window",
+        "id": "GLM-4.5",
+        "name": "GLM-4.5",
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "Z.AI GLM-4.5 Air - Lightweight version with 128K context window",
+        "id": "GLM-4.5-air",
+        "name": "GLM-4.5 Air",
+        "tags": [
+          "tools"
+        ]
+      }
+    ],
     "model_overrides": {
-      "glm-4.6": 200000,
+      "glm-3-turbo": 128000,
+      "glm-4": 128000,
       "glm-4.5": 128000,
       "glm-4.5-air": 128000,
+      "glm-4.6": 200000,
       "glm-4.6V": 128000,
-      "glm-4": 128000,
-      "glm-3-turbo": 128000
+      "glm-4.7": 200000,
+      "glm-5": 200000,
+      "glm-5-turbo": 200000
     },
     "pattern_overrides": [
       {
-        "pattern": "glm-4\\.6.*",
-        "context_limit": 200000
+        "context_limit": 200000,
+        "pattern": "glm-5.*"
       },
       {
-        "pattern": "glm-4\\.[7-9].*",
-        "context_limit": 200000
+        "context_limit": 200000,
+        "pattern": "glm-4\\.6.*"
       },
       {
-        "pattern": "glm-4.*",
-        "context_limit": 128000
+        "context_limit": 200000,
+        "pattern": "glm-4\\.[7-9].*"
       },
       {
-        "pattern": "glm-3.*",
-        "context_limit": 128000
-      }
-    ],
-    "model_info": [
-      {
-        "id": "glm-4.7",
-        "name": "GLM-4.7",
-        "description": "Z.AI GLM-4.7 - Latest GLM model with 200K context window",
-        "context_length": 200000,
-        "tags": ["tools", "coding"]
+        "context_limit": 128000,
+        "pattern": "glm-4.*"
       },
       {
-        "id": "GLM-4.6",
-        "name": "GLM-4.6",
-        "description": "Z.AI GLM-4.6 - Coding optimized model with 200K context window",
-        "context_length": 200000,
-        "tags": ["tools", "coding"]
-      },
-      {
-        "id": "glm-4.6v",
-        "name": "GLM-4.6 Vision",
-        "description": "Z.AI GLM-4.6 with vision capabilities",
-        "context_length": 200000,
-        "tags": ["tools", "coding", "vision"]
-      },
-      {
-        "id": "GLM-4.5",
-        "name": "GLM-4.5",
-        "description": "Z.AI GLM-4.5 - Previous generation with 128K context window",
-        "context_length": 128000,
-        "tags": ["tools"]
-      },
-      {
-        "id": "GLM-4.5-air",
-        "name": "GLM-4.5 Air",
-        "description": "Z.AI GLM-4.5 Air - Lightweight version with 128K context window",
-        "context_length": 128000,
-        "tags": ["tools"]
+        "context_limit": 128000,
+        "pattern": "glm-3.*"
       }
     ],
     "supports_vision": true,
-    "vision_model": "glm-4.6v",
-    "default_model": "glm-4.6",
-    "available_models": []
+    "vision_model": "glm-4.6v"
   },
+  "name": "zai",
   "retry": {
-    "max_attempts": 3,
+    "backoff_multiplier": 2,
     "base_delay_ms": 1000,
-    "backoff_multiplier": 2.0,
+    "max_attempts": 3,
     "max_delay_ms": 30000,
-    "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
+    "retryable_errors": [
+      "rate_limit_exceeded",
+      "temporary_error",
+      "timeout"
+    ]
   },
-  "cost": {
-    "input_token_cost": 0.0,
-    "output_token_cost": 0.0,
-    "currency": "USD"
+  "streaming": {
+    "chunk_timeout_ms": 320000,
+    "done_marker": "[DONE]",
+    "format": "sse"
   }
 }

@@ -413,7 +413,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 // runDirectMode handles single query execution
 func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
-	fmt.Printf("🚀 Processing: %s\n", query)
+	if os.Getenv("LEDIT_SUBAGENT") != "1" {
+		fmt.Printf("🚀 Processing: %s\n", query)
+	}
 
 	// Slash/bang commands should bypass command-detection fast paths.
 	registry := agent_commands.NewCommandRegistry()

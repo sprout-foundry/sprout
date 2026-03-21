@@ -130,6 +130,7 @@ func init() {
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	rootCmd.AddCommand(agentCmd)
+	rootCmd.AddCommand(exportTrainingCmd)
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(logCmd)
 	rootCmd.AddCommand(mcpCmd)

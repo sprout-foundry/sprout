@@ -158,10 +158,6 @@ func (rv *ResponseValidator) LooksLikeTentativePostToolResponse(content string) 
 	lower := strings.ToLower(trimmed)
 	wordCount := len(strings.Fields(lower))
 
-	if strings.HasSuffix(lower, ":") && wordCount <= 40 {
-		return true
-	}
-
 	planningPrefixes := []string{
 		"let me ",
 		"i'll ",

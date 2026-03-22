@@ -33,6 +33,7 @@ type ConversationHandler struct {
 	pendingUserMessage         string
 	turnHistory                []TurnEvaluation
 	ocrEnforcementAttempts     int
+	tentativeRejectionCount     int
 	traceSession              interface{} // Using interface{} to avoid circular import
 	currentTurnRecord         *trace.TurnRecord // Temporary storage for current turn, updated with response data later
 }
@@ -592,6 +593,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	} else {
 		// Reset blank iteration counter on any non-blank response
 		ch.consecutiveBlankIterations = 0
+		ch.tentativeRejectionCount = 0
 	}
 
 	// Final check for incomplete responses (only reached if not stopped and not blank/repetitive)
@@ -832,7 +834,15 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 		}
 		if ch.responseValidator != nil && ch.followsRecentToolResults() &&
 			ch.responseValidator.LooksLikeTentativePostToolResponse(content) {
-			ch.agent.debugLog("⚠️ Model returned finish_reason='stop' immediately after tool results with tentative content\n")
+			ch.tentativeRejectionCount++
+			if ch.tentativeRejectionCount >= 2 {
+				// Accept the response after 2 rejections to avoid loops
+				ch.tentativeRejectionCount = 0
+				ch.agent.debugLog("⚠️ Tentative post-tool rejection limit reached, accepting response\n")
+				ch.displayFinalResponse(content)
+				return true, "completion"
+			}
+			ch.agent.debugLog("⚠️ Model returned finish_reason='stop' immediately after tool results with tentative content (rejection %d/2)\n", ch.tentativeRejectionCount)
 			ch.enqueueTransientMessage(api.Message{
 				Role: "user",
 				Content: "You just received tool results. Do not stop with a planning note. " +

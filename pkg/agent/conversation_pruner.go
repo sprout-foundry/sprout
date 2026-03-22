@@ -60,7 +60,7 @@ var PruningConfig = struct {
 	// Default thresholds (applies to all providers - based on total context)
 	Default: PruningThresholds{
 		ProviderName:       "default",
-		StandardPercent:    0.90, // Start pruning at 90% of context (don't prune until 90%+)
+		StandardPercent:    0.87, // Start pruning at 87% of context (don't prune until 87%+)
 		MinAvailableTokens: 0,    // Disabled - use percentage-based threshold only
 		AggressivePercent:  0.95, // Aggressive mode at 95%
 		MinMessages:        5,

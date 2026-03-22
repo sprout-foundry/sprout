@@ -149,7 +149,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setActiveBufferId(bufferId);
 
     return bufferId;
-  }, [buffers, activePaneId, activateBuffer, panes]);
+  }, [activePaneId, activateBuffer, panes]);
 
   // Update buffer content
   const updateBufferContent = useCallback((bufferId: string, content: string) => {

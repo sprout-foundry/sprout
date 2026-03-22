@@ -59,32 +59,75 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	// Always include system prompt at the beginning
 	allMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
 	allMessages = append(allMessages, optimizedMessages...)
-
 	allMessages = appendPendingTransient(allMessages)
 	allMessages = collapseSystemMessagesToFront(allMessages)
 	allMessages = ch.sanitizeToolMessages(allMessages)
 
-	// Check context limits and apply pruning against the actual request payload,
-	// not just the persisted conversation history.
+	// Check context limits. Pruning trigger is based on persisted history only
+	// (system + optimized messages) so transient guard-rail messages don't cause
+	// premature pruning of real conversation history.
 	currentTokens := ch.apiClient.estimateRequestTokens(allMessages, tools)
 	if ch.agent.maxContextTokens > 0 {
-		// Create pruner if needed and check if we should prune
+		// Create pruner if needed
 		if ch.agent.conversationPruner == nil {
 			ch.agent.conversationPruner = NewConversationPruner(ch.agent.debug)
 		}
 
-		if ch.agent.conversationPruner.ShouldPrune(currentTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
+		// Build a history-only payload (no transient messages) to decide whether pruning is needed.
+		historyOnlyMessages := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+		historyOnlyMessages = append(historyOnlyMessages, optimizedMessages...)
+		historyOnlyMessages = collapseSystemMessagesToFront(historyOnlyMessages)
+		historyOnlyMessages = ch.sanitizeToolMessages(historyOnlyMessages)
+		historyTokens := ch.apiClient.estimateRequestTokens(historyOnlyMessages, tools)
+
+		if ch.agent.conversationPruner.ShouldPrune(historyTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
 			if ch.agent.debug {
-				contextUsage := float64(currentTokens) / float64(ch.agent.maxContextTokens)
-				ch.agent.PrintLineAsync(fmt.Sprintf("🔄 Context pruning triggered: %d/%d tokens (%.1f%%)",
-					currentTokens, ch.agent.maxContextTokens, contextUsage*100))
+				contextUsage := float64(historyTokens) / float64(ch.agent.maxContextTokens)
+				ch.agent.PrintLineAsync(fmt.Sprintf("🔄 Context pruning triggered: %d/%d tokens (%.1f%%, history only)",
+					historyTokens, ch.agent.maxContextTokens, contextUsage*100))
 			}
 
 			prunedMessages := optimizedMessages
 			for pass := 0; pass < 2; pass++ {
-				// Apply pruning to persisted messages, then rebuild the final payload
-				// with transient messages and tool definitions included in the estimate.
+				// Apply pruning to persisted messages based on history token count.
+				prunedMessages = ch.agent.conversationPruner.PruneConversation(prunedMessages, historyTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider(), true)
+
+				// Rebuild history-only estimate to check if we're below threshold
+				historyOnlyMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+				historyOnlyMessages = append(historyOnlyMessages, prunedMessages...)
+				historyOnlyMessages = collapseSystemMessagesToFront(historyOnlyMessages)
+				historyOnlyMessages = ch.sanitizeToolMessages(historyOnlyMessages)
+				historyTokens = ch.apiClient.estimateRequestTokens(historyOnlyMessages, tools)
+
+				if !ch.agent.conversationPruner.ShouldPrune(historyTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
+					break
+				}
+				if ch.agent.debug {
+					ch.agent.PrintLineAsync(fmt.Sprintf("🔁 Context still high after prune pass %d: %d/%d tokens", pass+1, historyTokens, ch.agent.maxContextTokens))
+				}
+			}
+
+			// Persist pruned history so future iterations don't re-trigger on stale counts
+			ch.agent.messages = prunedMessages
+			optimizedMessages = prunedMessages
+
+			// Rebuild full payload with transients after pruning
+			allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
+			allMessages = append(allMessages, prunedMessages...)
+			allMessages = appendPendingTransient(allMessages)
+			allMessages = collapseSystemMessagesToFront(allMessages)
+			allMessages = ch.sanitizeToolMessages(allMessages)
+			currentTokens = ch.apiClient.estimateRequestTokens(allMessages, tools)
+
+			// Safety net: if the full payload (with transients) still exceeds max,
+			// do one more prune pass targeting the full payload size.
+			if currentTokens > ch.agent.maxContextTokens {
+				if ch.agent.debug {
+					ch.agent.PrintLineAsync(fmt.Sprintf("🔁 Full payload exceeds max after history prune: %d/%d tokens, pruning once more",
+						currentTokens, ch.agent.maxContextTokens))
+				}
 				prunedMessages = ch.agent.conversationPruner.PruneConversation(prunedMessages, currentTokens, ch.agent.maxContextTokens, ch.agent.optimizer, ch.agent.GetProvider(), true)
+				ch.agent.messages = prunedMessages
 
 				allMessages = []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
 				allMessages = append(allMessages, prunedMessages...)
@@ -92,17 +135,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 				allMessages = collapseSystemMessagesToFront(allMessages)
 				allMessages = ch.sanitizeToolMessages(allMessages)
 				currentTokens = ch.apiClient.estimateRequestTokens(allMessages, tools)
-
-				if !ch.agent.conversationPruner.ShouldPrune(currentTokens, ch.agent.maxContextTokens, ch.agent.GetProvider(), true) {
-					break
-				}
-				if ch.agent.debug {
-					ch.agent.PrintLineAsync(fmt.Sprintf("🔁 Context still high after prune pass %d: %d/%d tokens", pass+1, currentTokens, ch.agent.maxContextTokens))
-				}
 			}
-
-			// Persist pruned history so future iterations don't re-trigger on stale counts
-			ch.agent.messages = prunedMessages
 
 			if ch.agent.debug {
 				ch.agent.PrintLineAsync(fmt.Sprintf("✅ Context after pruning: %d tokens (%.1f%%)",

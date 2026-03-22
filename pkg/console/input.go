@@ -75,6 +75,9 @@ type InputReader struct {
 	bracketedSawCR   bool
 	collapsedPastes  []pasteSpan
 
+	// Raw binary buffer for image paste detection (accumulated alongside text pasteBuffer)
+	rawPasteBuffer []byte
+
 	// Track current physical line (for multi-line wrapped input)
 	currentPhysicalLine int
 }
@@ -138,6 +141,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.bracketedMatch = 0
 	ir.bracketedSawCR = false
 	ir.collapsedPastes = ir.collapsedPastes[:0]
+	ir.rawPasteBuffer = nil
 	ir.lastCharTime = time.Now()
 	fmt.Printf("%s", ir.prompt) // Simple initial prompt
 
@@ -340,6 +344,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 					ir.inPasteMode = true
 					ir.pasteActive = true
 					ir.pasteBuffer.Reset()
+					ir.rawPasteBuffer = nil
 					continue
 				}
 				if event.Type == EventPasteEnd {
@@ -444,6 +449,11 @@ func (ir *InputReader) consumeBracketedPasteByte(b byte) bool {
 		return false
 	}
 	ir.bracketedSawCR = false
+
+	// Always accumulate raw bytes for image paste detection (capped to prevent unbounded growth)
+	if len(ir.rawPasteBuffer) < MaxPastedImageSize+1024 {
+		ir.rawPasteBuffer = append(ir.rawPasteBuffer, b)
+	}
 
 	if b == 9 || b == 10 || b >= 32 {
 		ir.pasteBuffer.WriteByte(b)
@@ -865,10 +875,41 @@ func (ir *InputReader) updateTerminalWidth() {
 
 // finalizePaste processes pasted content and inserts it literally at cursor.
 func (ir *InputReader) finalizePaste() bool {
+	// Snapshot and clear raw binary buffer for image paste detection
+	rawBytes := ir.rawPasteBuffer
+	ir.rawPasteBuffer = nil
+
 	pastedContent := ir.pasteBuffer.String()
 	ir.pasteBuffer.Reset()
 	ir.inPasteMode = false
 	ir.pasteActive = false
+
+	// Check for binary image paste data (bracketed paste may contain raw image bytes)
+	if len(rawBytes) > 4 && len(rawBytes) <= MaxPastedImageSize {
+		if ext, mimeType := DetectImageMagic(rawBytes); ext != "" {
+			fmt.Fprintf(os.Stderr, "\n📷 Image paste detected (%s, %d bytes)\n", mimeType, len(rawBytes))
+			savedPath, err := SavePastedImage(rawBytes)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "❌ Failed to save pasted image: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "💾 Saved to %s\n", savedPath)
+				placeholder := fmt.Sprintf("Pasted image saved to disk: %s ", savedPath)
+				// Insert placeholder at cursor position
+				before := ir.line[:ir.cursorPos]
+				after := ir.line[ir.cursorPos:]
+				ir.line = before + placeholder + after
+				ir.cursorPos += len(placeholder)
+				ir.shiftPasteSpans(len(before), len(placeholder))
+				ir.addCollapsedPaste(len(before), ir.cursorPos)
+				ir.hasEditedLine = true
+				ir.historyIndex = -1
+				ir.Refresh()
+				ir.lastLineLength = visibleRuneWidth(ir.prompt) + len([]rune(ir.line))
+				ir.lastWrapPending = isWrapPending(ir.terminalWidth, ir.lastLineLength, visibleRuneWidth(ir.prompt)+len([]rune(ir.line)), ir.lastLineLength)
+				return true
+			}
+		}
+	}
 
 	// Strip trailing newline that triggered the paste
 	pastedContent = strings.TrimRight(pastedContent, "\n")

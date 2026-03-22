@@ -25,35 +25,35 @@ func TestZAIPruningThresholds(t *testing.T) {
 			currentTokens: 50000,
 			provider:      "zai",
 			expectedPrune: false,
-			description:   "50K tokens should not trigger pruning (below 90%)",
+			description:   "50K tokens should not trigger pruning (below 87%)",
 		},
 		{
 			name:          "At 85% Threshold",
 			currentTokens: 108800, // 85% of 128K
 			provider:      "zai",
 			expectedPrune: false,
-			description:   "85% should not trigger pruning (below 90%)",
+			description:   "85% should not trigger pruning (below 87%)",
 		},
 		{
-			name:          "At 89% Threshold",
-			currentTokens: 113920, // 89% of 128K
+			name:          "Below 87% Threshold",
+			currentTokens: 110080, // 86% of 128K
 			provider:      "zai",
 			expectedPrune: false,
-			description:   "89% should not trigger pruning (below 90%)",
+			description:   "86% should not trigger pruning (below 87%)",
 		},
 		{
-			name:          "At 90% Threshold",
-			currentTokens: 115200, // 90% of 128K
+			name:          "At 87% Threshold",
+			currentTokens: 111360, // 87% of 128K
 			provider:      "zai",
 			expectedPrune: false,
-			description:   "90% should NOT trigger pruning (threshold uses > not >=)",
+			description:   "87% should NOT trigger pruning (threshold uses > not >=)",
 		},
 		{
-			name:          "At 91% Threshold",
-			currentTokens: 116480, // 91% of 128K
+			name:          "Above 87% Threshold",
+			currentTokens: 112640, // 88% of 128K
 			provider:      "zai",
 			expectedPrune: true,
-			description:   "91% should trigger pruning (above 90%)",
+			description:   "88% should trigger pruning (above 87%)",
 		},
 		{
 			name:          "Other Provider Default",

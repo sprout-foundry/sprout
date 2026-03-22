@@ -35,6 +35,9 @@ type ConversationOptimizer struct {
 	shellCommands map[string]*ShellCommandRecord // command -> latest execution record
 	enabled       bool
 	debug         bool
+	client       api.ClientInterface // LLM client for generating summaries (nil = use Go fallback)
+	providerName string              // Provider name for summary logging
+	printLine    func(string)        // Console output callback (nil = silent)
 }
 
 // NewConversationOptimizer creates a new conversation optimizer
@@ -108,7 +111,7 @@ func (co *ConversationOptimizer) CompactConversation(messages []api.Message) []a
 	}
 
 	middle := messages[anchorEnd:recentStart]
-	summary := co.buildCompactionSummary(middle)
+	summary := co.buildLLMCompactionSummary(middle)
 	if summary == "" {
 		return messages
 	}
@@ -225,7 +228,107 @@ func (co *ConversationOptimizer) adjustCompactionBoundary(messages []api.Message
 	return recentStart
 }
 
-func (co *ConversationOptimizer) buildCompactionSummary(messages []api.Message) string {
+// buildLLMCompactionSummary generates a compaction summary using the LLM.
+// It falls back to buildGoCompactionSummary if the LLM client is unavailable or the call fails.
+func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Message) string {
+	if co.client == nil {
+		return co.buildGoCompactionSummary(messages)
+	}
+
+	n := len(messages)
+
+	// Build compact text representation of the middle messages
+	var b strings.Builder
+	for _, msg := range messages {
+		switch msg.Role {
+		case "user":
+			b.WriteString("[user] ")
+			b.WriteString(msg.Content)
+			b.WriteString("\n")
+		case "assistant":
+			if len(msg.ToolCalls) > 0 {
+				b.WriteString("[assistant/tool_calls] ")
+				b.WriteString(summarizeAssistantToolCalls(msg))
+				b.WriteString("\n")
+				continue
+			}
+			content := strings.TrimSpace(msg.Content)
+			if content != "" {
+				b.WriteString("[assistant] ")
+				b.WriteString(content)
+				b.WriteString("\n")
+			}
+		case "tool":
+			summary, _ := summarizeToolMessage(msg)
+			if summary != "" {
+				b.WriteString("[tool] ")
+				b.WriteString(summary)
+				b.WriteString("\n")
+			}
+		}
+	}
+	compactText := b.String()
+	if compactText == "" {
+		return co.buildGoCompactionSummary(messages)
+	}
+
+	// Truncate very large compaction text to avoid excessive token usage
+	if len(compactText) > 8000 {
+		compactText = compactText[:8000] + "\n[...truncated...]"
+	}
+
+	if co.printLine != nil {
+		co.printLine(fmt.Sprintf("\n🔄 Compacting conversation context (%d messages → LLM summary)...", n))
+	}
+
+	systemMsg := api.Message{
+		Role: "system",
+		Content: "You are a conversation context summarizer. Summarize the following conversation segment concisely as a reference note for the AI agent continuing this session.\n\n" +
+			"Rules:\n" +
+			"- Preserve: what files were read/modified, what errors occurred, what the current state was\n" +
+			"- Do NOT add planning, suggestions, or \"next steps\"\n" +
+			"- Respond in English only\n" +
+			"- Keep under 400 words\n" +
+			"- Use a neutral, factual tone",
+	}
+	userMsg := api.Message{
+		Role:    "user",
+		Content: compactText,
+	}
+
+	resp, err := co.client.SendChatRequest([]api.Message{systemMsg, userMsg}, nil, "")
+	if err != nil {
+		if co.debug {
+			fmt.Printf("\n⚠️ LLM compaction summary failed: %v, falling back to Go summary\n", err)
+		}
+		if co.printLine != nil {
+			co.printLine(fmt.Sprintf("⚠️ LLM compaction failed (%v), using fallback summary", err))
+		}
+		return co.buildGoCompactionSummary(messages)
+	}
+
+	if len(resp.Choices) == 0 || strings.TrimSpace(resp.Choices[0].Message.Content) == "" {
+		if co.debug {
+			fmt.Printf("\n⚠️ LLM compaction returned empty response, falling back to Go summary\n")
+		}
+		return co.buildGoCompactionSummary(messages)
+	}
+
+	llmSummary := strings.TrimSpace(resp.Choices[0].Message.Content)
+
+	wordCount := len(strings.Fields(llmSummary))
+	if co.printLine != nil {
+		co.printLine(fmt.Sprintf("✅ Context compacted: %d messages → %d-word LLM summary", n, wordCount))
+	}
+
+	var result strings.Builder
+	result.WriteString("Compacted earlier conversation state:\n")
+	result.WriteString(llmSummary)
+	result.WriteString("\n\nUse newer messages for the exact current step-by-step state.")
+	return strings.TrimSpace(result.String())
+}
+
+func (co *ConversationOptimizer) buildGoCompactionSummary(messages []api.Message) string {
 	if len(messages) == 0 {
 		return ""
 	}
@@ -538,6 +641,14 @@ func (co *ConversationOptimizer) InvalidateFile(filePath string) {
 func (co *ConversationOptimizer) Reset() {
 	co.fileReads = make(map[string]*FileReadRecord)
 	co.shellCommands = make(map[string]*ShellCommandRecord)
+}
+
+// SetLLMClient configures the optimizer to use an LLM for compaction summaries.
+// If client is nil, the optimizer falls back to the Go-based summary builder.
+func (co *ConversationOptimizer) SetLLMClient(client api.ClientInterface, provider string, printLine func(string)) {
+	co.client = client
+	co.providerName = provider
+	co.printLine = printLine
 }
 
 // SetEnabled enables or disables optimization

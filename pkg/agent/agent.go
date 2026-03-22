@@ -244,6 +244,10 @@ func NewAgentWithModel(model string) (*Agent, error) {
 			activePersona:             "orchestrator",
 		}
 
+		agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
+			agent.PrintLineAsync(line)
+		})
+
 		// Load command history from configuration
 		agent.loadHistoryFromConfig()
 
@@ -389,6 +393,10 @@ func NewAgentWithModel(model string) (*Agent, error) {
 		historyIndex:              -1,
 		activePersona:             "orchestrator",
 	}
+
+	agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
+		agent.PrintLineAsync(line)
+	})
 
 	// Initialize debug log file if debug enabled
 	if debug {

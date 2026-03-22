@@ -44,26 +44,26 @@ func TestShouldPruneOnMinAvailableTokens(t *testing.T) {
 	pruner := NewConversationPruner(false)
 
 	// Test that percentage-based threshold works correctly
-	// 50k/56k is ~89% - should NOT trigger (below 90% threshold)
-	if pruner.ShouldPrune(50000, 56000, "anthropic", false) {
-		t.Fatalf("expected no prune at ~89%% usage (below 90%% threshold)")
+	// 48k/56k is ~85.7% - should NOT trigger (below 87% threshold)
+	if pruner.ShouldPrune(48000, 56000, "anthropic", false) {
+		t.Fatalf("expected no prune at ~85%% usage (below 87%% threshold)")
 	}
 
-	// 51k/56k is ~91% - should trigger (above 90% threshold)
-	if !pruner.ShouldPrune(51000, 56000, "anthropic", false) {
-		t.Fatalf("expected prune at ~91%% usage (above 90%% threshold)")
+	// 49k/56k is ~87.5% - should trigger (above 87% threshold)
+	if !pruner.ShouldPrune(49000, 56000, "anthropic", false) {
+		t.Fatalf("expected prune at ~87.5%% usage (above 87%% threshold)")
 	}
 }
 
 func TestShouldPruneAgenticHeadroom(t *testing.T) {
 	pruner := NewConversationPruner(false)
 
-	// At 89% usage - should NOT trigger (below 90% threshold)
-	if pruner.ShouldPrune(89000, 100000, "anthropic", false) {
-		t.Fatalf("did not expect prune at 89%% usage")
+	// At 86% usage - should NOT trigger (below 87% threshold)
+	if pruner.ShouldPrune(86000, 100000, "anthropic", false) {
+		t.Fatalf("did not expect prune at 86%% usage")
 	}
-	if pruner.ShouldPrune(89000, 100000, "anthropic", true) {
-		t.Fatalf("did not expect prune at 89%% usage (threshold is percentage-based, not agentic headroom)")
+	if pruner.ShouldPrune(86000, 100000, "anthropic", true) {
+		t.Fatalf("did not expect prune at 86%% usage (threshold is percentage-based, not agentic headroom)")
 	}
 
 	// At 91% usage - should trigger

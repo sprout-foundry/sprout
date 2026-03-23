@@ -150,7 +150,7 @@
 }
 
 .sidebar .rail-icon.active {
-  color: var(--text-primary);
+  color: var(--accent-fg);
   background: var(--sidebar-nav-btn-active-bg);
 }
 

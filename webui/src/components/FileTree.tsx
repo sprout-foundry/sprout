@@ -126,25 +126,36 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
 
   // Toggle directory expansion
   const toggleDir = async (dirPath: string) => {
-    const newExpanded = new Set(expandedDirs);
-    
-    if (newExpanded.has(dirPath)) {
-      // Collapse
-      newExpanded.delete(dirPath);
-      setExpandedDirs(newExpanded);
-    } else {
-      // Expand
-      newExpanded.add(dirPath);
-      setExpandedDirs(newExpanded);
-      
-      // Load children if not already loaded
-      const dir = findFileByPath(files, dirPath);
-      if (dir && (!dir.children || dir.children.length === 0)) {
-        const children = await loadDirectoryChildren(dirPath);
-        const updatedFiles = updateFileChildren(files, dirPath, children);
-        setFiles(updatedFiles);
+    const shouldExpand = !expandedDirs.has(dirPath);
+
+    setExpandedDirs((prev) => {
+      const next = new Set(prev);
+      if (next.has(dirPath)) {
+        next.delete(dirPath);
+      } else {
+        next.add(dirPath);
       }
+      return next;
+    });
+
+    if (!shouldExpand) {
+      return;
     }
+
+    // Load children if not already loaded, using latest file tree state to avoid stale closures.
+    let needsLoad = false;
+    setFiles((prev) => {
+      const dir = findFileByPath(prev, dirPath);
+      needsLoad = Boolean(dir && (!dir.children || dir.children.length === 0));
+      return prev;
+    });
+
+    if (!needsLoad) {
+      return;
+    }
+
+    const children = await loadDirectoryChildren(dirPath);
+    setFiles((prev) => updateFileChildren(prev, dirPath, children));
   };
 
   // Find a file by path in the tree
@@ -248,7 +259,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
     return fileList.map((file) => {
       const isExpanded = expandedDirs.has(file.path);
       const isSelected = selectedFile === file.path;
-      const hasChildren = file.isDir && file.children && file.children.length > 0;
+      const hasChildren = file.isDir && Array.isArray(file.children) && file.children.length > 0;
       
       return (
         <React.Fragment key={file.path}>
@@ -283,7 +294,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
           </div>
           
           {/* Render children if directory is expanded */}
-          {file.isDir && isExpanded && file.children && (
+          {file.isDir && isExpanded && Array.isArray(file.children) && (
             <div className="directory-children">
               {renderFileTree(file.children, depth + 1)}
             </div>

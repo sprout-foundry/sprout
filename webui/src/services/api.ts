@@ -396,6 +396,36 @@ class ApiService {
     }
   }
 
+  async getRevisionDetails(revisionId: string): Promise<{
+    message: string;
+    revision: {
+      revision_id: string;
+      timestamp: string;
+      description: string;
+      files: Array<{
+        file_revision_hash?: string;
+        path: string;
+        operation: string;
+        lines_added: number;
+        lines_deleted: number;
+        original_code: string;
+        new_code: string;
+        diff: string;
+      }>;
+    };
+  }> {
+    try {
+      const response = await fetch(`/api/history/revision?revision_id=${encodeURIComponent(revisionId)}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get revision details:', error);
+      throw error;
+    }
+  }
+
   async rollbackToRevision(revisionId: string): Promise<{ message: string; revision_id: string }> {
     try {
       const response = await fetch('/api/history/rollback', {
@@ -412,6 +442,183 @@ class ApiService {
       throw error;
     }
   }
+
+  // ── Settings API ─────────────────────────────────────────────────
+
+  async getSettings(): Promise<LeditSettings> {
+    try {
+      const response = await fetch('/api/settings');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get settings:', error);
+      throw error;
+    }
+  }
+
+  async updateSettings(settings: Record<string, any>): Promise<{ message: string }> {
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      throw error;
+    }
+  }
+
+  async getMCPSettings(): Promise<any> {
+    try {
+      const response = await fetch('/api/settings/mcp');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get MCP settings:', error);
+      throw error;
+    }
+  }
+
+  async updateMCPSettings(settings: any): Promise<{ message: string }> {
+    try {
+      const response = await fetch('/api/settings/mcp', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to update MCP settings:', error);
+      throw error;
+    }
+  }
+
+  async addMCPServer(server: any): Promise<{ message: string }> {
+    try {
+      const response = await fetch('/api/settings/mcp/servers/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(server),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to add MCP server:', error);
+      throw error;
+    }
+  }
+
+  async updateMCPServer(name: string, server: any): Promise<{ message: string }> {
+    try {
+      const response = await fetch(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(server),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to update MCP server:', error);
+      throw error;
+    }
+  }
+
+  async deleteMCPServer(name: string): Promise<{ message: string }> {
+    try {
+      const response = await fetch(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to delete MCP server:', error);
+      throw error;
+    }
+  }
+
+  async getCustomProviders(): Promise<any> {
+    try {
+      const response = await fetch('/api/settings/providers');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get custom providers:', error);
+      throw error;
+    }
+  }
+
+  async addCustomProvider(provider: any): Promise<{ message: string }> {
+    try {
+      const response = await fetch('/api/settings/providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(provider),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to add custom provider:', error);
+      throw error;
+    }
+  }
+
+  async updateCustomProvider(name: string, provider: any): Promise<{ message: string }> {
+    try {
+      const response = await fetch(`/api/settings/providers/${encodeURIComponent(name)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(provider),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to update custom provider:', error);
+      throw error;
+    }
+  }
+
+  async deleteCustomProvider(name: string): Promise<{ message: string }> {
+    try {
+      const response = await fetch(`/api/settings/providers/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to delete custom provider:', error);
+      throw error;
+    }
+  }
+
+  async getSkills(): Promise<any> {
+    try {
+      const response = await fetch('/api/settings/skills');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get skills:', error);
+      throw error;
+    }
+  }
+
+  async updateSkills(skills: any): Promise<{ message: string }> {
+    try {
+      const response = await fetch('/api/settings/skills', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(skills),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to update skills:', error);
+      throw error;
+    }
+  }
 }
 
 export { ApiService };
@@ -422,4 +629,41 @@ export interface ProvidersResponse {
     name: string;
     models: string[];
   }>;
+}
+
+// ── Settings interfaces ───────────────────────────────────────────
+
+export interface LeditSettings {
+  reasoning_effort: string;
+  skip_prompt: boolean;
+  enable_pre_write_validation: boolean;
+  enable_zsh_command_detection: boolean;
+  auto_execute_detected_commands: boolean;
+  enable_security_checks: boolean; // present in config but not functionally read (see SecurityValidation.Enabled)
+  security_validation: {
+    enabled: boolean;
+    threshold: number;
+  };
+  history_scope: string;
+  self_review_gate_mode: string;
+  subagent_provider: string;
+  subagent_model: string;
+  pdf_ocr_enabled: boolean;
+  pdf_ocr_provider: string;
+  pdf_ocr_model: string;
+  api_timeouts: {
+    connection_timeout_sec: number;
+    first_chunk_timeout_sec: number;
+    chunk_timeout_sec: number;
+    overall_timeout_sec: number;
+  } | null;
+  mcp: {
+    enabled: boolean;
+    auto_start: boolean;
+    auto_discover: boolean;
+    timeout: string;
+    servers: Record<string, any>;
+  };
+  custom_providers: Record<string, any>;
+  skills: Record<string, any>;
 }

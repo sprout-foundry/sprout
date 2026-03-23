@@ -12,13 +12,47 @@ export class LogsViewProvider implements ContentProvider {
   readonly viewType = 'logs';
   readonly name = 'Logs View Provider';
 
+  private extractFilePath(data: any): string | null {
+    let payload = data;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload);
+      } catch {
+        payload = {};
+      }
+    }
+    if (!payload || typeof payload !== 'object') {
+      return null;
+    }
+
+    const candidates = [
+      payload.path,
+      payload.file_path,
+      payload.filePath,
+      payload.target_path,
+      payload.targetPath,
+      payload.file?.path,
+      payload.file?.name,
+      payload.name
+    ];
+
+    for (const value of candidates) {
+      if (typeof value === 'string' && value.trim() !== '') {
+        return value;
+      }
+    }
+    return null;
+  }
+
   getSections(context: ProviderContext): SidebarSection[] {
     return [
       {
         id: 'system-logs',
         dataSource: {
           type: 'state',
-          transform: (data: ProviderContext) => data.recentLogs.slice(-10)
+          transform: (data: ProviderContext) => data.recentLogs
+            .filter((entry) => !(entry.type === 'file_changed' && !this.extractFilePath(entry.data)))
+            .slice(-10)
         },
         renderItem: (logs: any[]) => {
           if (logs.length === 0) {
@@ -43,7 +77,11 @@ export class LogsViewProvider implements ContentProvider {
                 case 'tool_execution':
                   return `${logEntry.data?.tool || 'Unknown'}: ${logEntry.data?.status || 'Unknown'}`;
                 case 'file_changed':
-                  return `File: ${logEntry.data?.path?.split('/').pop() || 'Unknown'}`;
+                  {
+                    const filePath = this.extractFilePath(logEntry.data);
+                    if (!filePath) return 'File changed';
+                    return `File: ${filePath.split('/').filter(Boolean).pop() || filePath}`;
+                  }
                 case 'stream_chunk':
                   return `Stream: ${logEntry.data?.chunk?.substring(0, 50) || 'No chunk'}...`;
                 case 'error':

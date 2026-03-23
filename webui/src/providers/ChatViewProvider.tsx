@@ -12,6 +12,38 @@ export class ChatViewProvider implements ContentProvider {
   readonly viewType = 'chat';
   readonly name = 'Chat View Provider';
 
+  private extractFilePath(data: any): string | null {
+    let payload = data;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload);
+      } catch {
+        payload = {};
+      }
+    }
+    if (!payload || typeof payload !== 'object') {
+      return null;
+    }
+
+    const candidates = [
+      payload.path,
+      payload.file_path,
+      payload.filePath,
+      payload.target_path,
+      payload.targetPath,
+      payload.file?.path,
+      payload.file?.name,
+      payload.name
+    ];
+
+    for (const value of candidates) {
+      if (typeof value === 'string' && value.trim() !== '') {
+        return value;
+      }
+    }
+    return null;
+  }
+
   getSections(context: ProviderContext): SidebarSection[] {
     return [
       {
@@ -37,58 +69,6 @@ export class ChatViewProvider implements ContentProvider {
         },
         title: (data: any) => `Chat Status`,
         order: 1
-      },
-      {
-        id: 'recent-files',
-        dataSource: {
-          type: 'state',
-          transform: (data: ProviderContext) => data.recentFiles
-        },
-        renderItem: (files: any[], ctx: ProviderContext) => {
-          if (files.length === 0) {
-            return <span className="empty">No files</span>;
-          }
-
-          return (
-            <div className="files-list">
-              {files.slice(0, 20).map((file: any, index: number) => {
-                const fileName = file.path.split('/').pop() || file.path;
-                const extension = fileName.split('.').pop()?.toLowerCase() || '';
-                const isDirectory = file.path.endsWith('/') || !fileName.includes('.');
-
-                const getFileIcon = (ext: string, isDir: boolean) => {
-                  if (isDir) return '>';
-                  return '';
-                };
-
-                return (
-                  <div
-                    key={index}
-                    className="file-item clickable"
-                    title={file.path}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => ctx.onFileClick?.(file.path)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        ctx.onFileClick?.(file.path);
-                      }
-                    }}
-                  >
-                    <span className="file-icon">{getFileIcon(extension, isDirectory)}</span>
-                    <span className={`file-path ${file.modified ? 'modified' : ''}`}>
-                      {fileName}
-                    </span>
-                    {file.modified && <span className="badge">✓</span>}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        },
-        title: (files: any[]) => `Files (${files.length})`,
-        order: 2
       },
       {
         id: 'chat-activity',
@@ -119,7 +99,11 @@ export class ChatViewProvider implements ContentProvider {
                 case 'tool_execution':
                   return `${logEntry.data?.tool || 'Unknown'}: ${logEntry.data?.status || 'Unknown'}`;
                 case 'file_changed':
-                  return `File: ${logEntry.data?.path?.split('/').pop() || 'Unknown'}`;
+                  {
+                    const filePath = this.extractFilePath(logEntry.data);
+                    if (!filePath) return 'File changed';
+                    return `File: ${filePath.split('/').filter(Boolean).pop() || filePath}`;
+                  }
                 case 'stream_chunk':
                   return `Stream: ${logEntry.data?.chunk?.substring(0, 30) || 'No chunk'}...`;
                 case 'error':
@@ -161,7 +145,7 @@ export class ChatViewProvider implements ContentProvider {
           );
         },
         title: () => `Activity`,
-        order: 3
+        order: 2
       }
     ];
   }

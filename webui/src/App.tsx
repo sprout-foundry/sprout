@@ -267,6 +267,16 @@ function App() {
           isProcessing: false,
           lastError: null,
           queryProgress: null,
+          toolExecutions: prev.toolExecutions.map((tool) => {
+            if (tool.status === 'started' || tool.status === 'running') {
+              return {
+                ...tool,
+                status: 'completed',
+                endTime: tool.endTime || new Date()
+              };
+            }
+            return tool;
+          }),
           logs: [...prev.logs, logEntry]
         }));
         debugLog('✅ Query completed');
@@ -274,32 +284,51 @@ function App() {
 
       case 'tool_execution':
         logEntry.category = 'tool';
-        logEntry.level = event.data.status === 'error' ? 'error' : 'info';
+        const rawStatus = (event.data?.status || event.data?.action || '').toString().toLowerCase();
+        const normalizedStatus: ToolExecution['status'] =
+          rawStatus === 'error' || rawStatus === 'failed'
+            ? 'error'
+            : rawStatus === 'completed' || rawStatus === 'complete' || rawStatus === 'done' || rawStatus === 'success'
+              ? 'completed'
+              : rawStatus === 'started' || rawStatus === 'start'
+                ? 'started'
+                : 'running';
+        const normalizedToolName = event.data?.tool || event.data?.tool_name || event.data?.name || 'unknown_tool';
+        const normalizedMessage = event.data?.message || event.data?.error || undefined;
+        const toolCallID = event.data?.tool_call_id || event.data?.id || undefined;
+        logEntry.level = normalizedStatus === 'error' ? 'error' : 'info';
         setState(prev => {
-          const existingExecution = prev.toolExecutions.find(t => t.tool === event.data.tool);
+          const existingExecution = prev.toolExecutions.find((t) => {
+            const existingCallID = t.details?.tool_call_id || t.details?.id;
+            if (toolCallID && existingCallID) {
+              return existingCallID === toolCallID;
+            }
+            return t.tool === normalizedToolName && !t.endTime;
+          });
           let updatedExecutions: ToolExecution[];
           
           if (existingExecution) {
             // Update existing execution
             updatedExecutions = prev.toolExecutions.map(t => 
-              t.tool === event.data.tool 
+              t.id === existingExecution.id
                 ? {
                     ...t,
-                    status: event.data.status,
-                    message: event.data.message,
-                    endTime: event.data.status === 'completed' || event.data.status === 'error' ? new Date() : undefined,
-                    details: event.data
+                    status: normalizedStatus,
+                    message: normalizedMessage,
+                    endTime: normalizedStatus === 'completed' || normalizedStatus === 'error' ? new Date() : undefined,
+                    details: event.data || t.details
                   }
                 : t
             );
           } else {
             // Add new execution
             const newExecution: ToolExecution = {
-              id: `${event.data.tool}-${Date.now()}`,
-              tool: event.data.tool,
-              status: event.data.status,
-              message: event.data.message,
+              id: toolCallID ? String(toolCallID) : `${normalizedToolName}-${Date.now()}`,
+              tool: normalizedToolName,
+              status: normalizedStatus,
+              message: normalizedMessage,
               startTime: new Date(),
+              endTime: normalizedStatus === 'completed' || normalizedStatus === 'error' ? new Date() : undefined,
               details: event.data
             };
             updatedExecutions = [...prev.toolExecutions, newExecution];
@@ -311,7 +340,7 @@ function App() {
             logs: [...prev.logs, logEntry]
           };
         });
-        debugLog('🔧 Tool execution:', event.data.tool, event.data.status);
+        debugLog('🔧 Tool execution:', normalizedToolName, normalizedStatus);
         break;
 
       case 'file_changed':

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import './Sidebar.css';
-import { ApiService, ProviderOption } from '../services/api';
+import { ApiService, ProviderOption, LeditInstance } from '../services/api';
 import { viewRegistry, ProviderContext, SidebarSection, ProviderLogEntry } from '../providers';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -65,9 +66,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   isMobile = false
 }) => {
+  const { theme, setTheme } = useTheme();
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
   const [providers, setProviders] = useState<ProviderOption[]>([]);
+  const [instances, setInstances] = useState<LeditInstance[]>([]);
+  const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
+  const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const [sectionsData, setSectionsData] = useState<Map<string, SectionData>>(new Map());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -252,6 +257,45 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [apiService, isConnected]);
 
   useEffect(() => {
+    if (!isConnected) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: NodeJS.Timeout | null = null;
+
+    const loadInstances = async () => {
+      try {
+        const data = await apiService.getInstances();
+        if (cancelled) {
+          return;
+        }
+        setInstances(data.instances || []);
+        if (data.desired_host_pid && data.desired_host_pid > 0) {
+          setSelectedInstancePID(data.desired_host_pid);
+        } else if (data.active_host_pid && data.active_host_pid > 0) {
+          setSelectedInstancePID(data.active_host_pid);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to fetch instances:', error);
+        }
+      }
+      if (!cancelled) {
+        timer = setTimeout(loadInstances, 2000);
+      }
+    };
+
+    loadInstances();
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [apiService, isConnected]);
+
+  useEffect(() => {
     if (!provider || provider === 'unknown') {
       return;
     }
@@ -306,6 +350,25 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (newModel !== finalSelectedModel) {
       setSelectedModelState(newModel);
       onModelChange?.(newModel);
+    }
+  };
+
+  const handleInstanceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const pid = Number(e.target.value);
+    if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
+      return;
+    }
+
+    setIsSwitchingInstance(true);
+    try {
+      await apiService.selectInstance(pid);
+      setSelectedInstancePID(pid);
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    } catch (error) {
+      console.error('Failed to switch instance:', error);
+      setIsSwitchingInstance(false);
     }
   };
 
@@ -434,43 +497,93 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          {/* Configuration Section */}
-          <div className="config-section">
-            <h4>Config</h4>
+          <div className="appearance-section">
+            <h4>Appearance</h4>
             <div className="config-item">
-              <label htmlFor="provider-select">Provider:</label>
+              <label htmlFor="theme-select">Theme:</label>
               <select
-                id="provider-select"
-                value={selectedProvider}
-                onChange={handleProviderChange}
-                disabled={!isConnected || isLoadingProviders}
+                id="theme-select"
+                value={theme}
+                onChange={(e) => setTheme(e.target.value as 'dark' | 'light')}
                 className="styled-select"
               >
-                {providers.length === 0 && (
-                  <option value="">
-                    {isLoadingProviders ? 'Loading providers...' : 'No providers available'}
-                  </option>
-                )}
-                {providers.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="config-item">
-              <label htmlFor="model-select">Model:</label>
-              <select
-                id="model-select"
-                value={finalSelectedModel}
-                onChange={handleModelChange}
-                disabled={!isConnected || finalAvailableModels.length === 0}
-                className="styled-select"
-              >
-                {finalAvailableModels.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
               </select>
             </div>
           </div>
+
+          <div className="config-section">
+            <h4>Instance</h4>
+            <div className="config-item">
+              <label htmlFor="instance-select">Active UI Host:</label>
+              <select
+                id="instance-select"
+                value={selectedInstancePID || ''}
+                onChange={handleInstanceChange}
+                disabled={!isConnected || instances.length === 0 || isSwitchingInstance}
+                className="styled-select"
+              >
+                {instances.length === 0 && (
+                  <option value="">No instances detected</option>
+                )}
+                {instances.map((instance) => {
+                  const suffix = [
+                    instance.is_host ? 'host' : '',
+                    instance.is_current ? 'this' : '',
+                  ].filter(Boolean).join(', ');
+                  const name = instance.working_dir.split('/').filter(Boolean).slice(-2).join('/');
+                  const label = suffix
+                    ? `${name} · pid:${instance.pid} (${suffix})`
+                    : `${name} · pid:${instance.pid}`;
+                  return (
+                    <option key={instance.id} value={instance.pid}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+
+          {currentView === 'chat' && (
+            <div className="config-section">
+              <h4>Config</h4>
+              <div className="config-item">
+                <label htmlFor="provider-select">Provider:</label>
+                <select
+                  id="provider-select"
+                  value={selectedProvider}
+                  onChange={handleProviderChange}
+                  disabled={!isConnected || isLoadingProviders}
+                  className="styled-select"
+                >
+                  {providers.length === 0 && (
+                    <option value="">
+                      {isLoadingProviders ? 'Loading providers...' : 'No providers available'}
+                    </option>
+                  )}
+                  {providers.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="config-item">
+                <label htmlFor="model-select">Model:</label>
+                <select
+                  id="model-select"
+                  value={finalSelectedModel}
+                  onChange={handleModelChange}
+                  disabled={!isConnected || finalAvailableModels.length === 0}
+                  className="styled-select"
+                >
+                  {finalAvailableModels.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           {/* Context-Aware Content Section (from Data-Driven Providers) */}
           <div className="context-content">

@@ -23,7 +23,7 @@ func (ch *ConversationHandler) logTurnSummary(turn TurnEvaluation) {
 		return
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("\n🔎 Turn %d summary (%s)\n", turn.Iteration, turn.Timestamp.Format("15:04:05")))
+	builder.WriteString(fmt.Sprintf("\n[search] Turn %d summary (%s)\n", turn.Iteration, turn.Timestamp.Format("15:04:05")))
 	builder.WriteString(fmt.Sprintf("  User: %s\n", abbreviate(turn.UserInput, 120)))
 	builder.WriteString(fmt.Sprintf("  Assistant: %s\n", abbreviate(turn.AssistantContent, 240)))
 	if turn.ReasoningSnippet != "" {

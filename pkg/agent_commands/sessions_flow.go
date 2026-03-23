@@ -24,7 +24,7 @@ func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error
 	}
 
 	var builder strings.Builder
-	builder.WriteString("📋 Saved Sessions (current directory, newest first):\n")
+	builder.WriteString("[list] Saved Sessions (current directory, newest first):\n")
 	builder.WriteString(strings.Repeat("-", 100))
 	builder.WriteString("\n")
 
@@ -36,7 +36,7 @@ func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error
 			preview = agent.GetSessionPreviewScoped(session.SessionID, session.WorkingDirectory)
 		}
 
-		// Format: #ID  [Name]  Timestamp  SessionID
+		// Format: #ID  [Name] Timestamp  SessionID
 		timeStr := session.LastUpdated.Format(time.RFC3339)
 		if name != "" {
 			builder.WriteString(fmt.Sprintf("#%d  [%s]\n", i+1, name))
@@ -114,7 +114,7 @@ func (f *SessionsFlow) ExecuteSessionLoad(chatAgent *agent.Agent, args []string)
 		confirm = "full context."
 	}
 
-	return fmt.Sprintf("✅ Session loaded (%s)", confirm), nil
+	return fmt.Sprintf("[OK] Session loaded (%s)", confirm), nil
 }
 
 // ExecuteSessionRename renames a session
@@ -155,7 +155,7 @@ func (f *SessionsFlow) ExecuteSessionRename(chatAgent *agent.Agent, args []strin
 		return "", fmt.Errorf("failed to rename session: %v", err)
 	}
 
-	return fmt.Sprintf("✅ Session renamed to: %s", newName), nil
+	return fmt.Sprintf("[OK] Session renamed to: %s", newName), nil
 }
 
 // ExecuteSessionDelete removes a session file
@@ -193,7 +193,7 @@ func (f *SessionsFlow) ExecuteSessionDelete(args []string) (string, error) {
 		return "", fmt.Errorf("failed to delete session: %v", err)
 	}
 
-	return fmt.Sprintf("✅ Session deleted: %s", selectedSession.SessionID), nil
+	return fmt.Sprintf("[OK] Session deleted: %s", selectedSession.SessionID), nil
 }
 
 // ExecuteSessionExport exports a session to a JSON file
@@ -243,7 +243,7 @@ func (f *SessionsFlow) ExecuteSessionExport(args []string) (string, error) {
 		return "", fmt.Errorf("failed to write export file: %v", err)
 	}
 
-	return fmt.Sprintf("✅ Session exported to: %s", filename), nil
+	return fmt.Sprintf("[OK] Session exported to: %s", filename), nil
 }
 
 // ExecuteSessionImport imports a session from a JSON file
@@ -259,5 +259,5 @@ func (f *SessionsFlow) ExecuteSessionImport(chatAgent *agent.Agent, args []strin
 	}
 
 	chatAgent.ApplyState(state)
-	return fmt.Sprintf("✅ Session imported from: %s", filename), nil
+	return fmt.Sprintf("[OK] Session imported from: %s", filename), nil
 }

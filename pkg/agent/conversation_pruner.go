@@ -157,7 +157,7 @@ func (cp *ConversationPruner) ShouldPrune(currentTokens, maxTokens int, provider
 	contextUsage := float64(currentTokens) / float64(maxTokens)
 	if contextUsage > standardThreshold {
 		if cp.debug {
-			fmt.Printf("\n🔄 Context usage exceeds threshold: %.1f%% > %.1f%%\n",
+			fmt.Printf("\n[~] Context usage exceeds threshold: %.1f%% > %.1f%%\n",
 				contextUsage*100, standardThreshold*100)
 		}
 		return true
@@ -174,7 +174,7 @@ func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentT
 
 	contextUsage := float64(currentTokens) / float64(maxTokens)
 	if cp.debug {
-		fmt.Printf("\n🔄 Auto-pruning triggered (%.1f%% context used, strategy: %s, provider: %s)\n", contextUsage*100, cp.strategy, provider)
+		fmt.Printf("\n[~] Auto-pruning triggered (%.1f%% context used, strategy: %s, provider: %s)\n", contextUsage*100, cp.strategy, provider)
 	}
 
 	var pruned []api.Message
@@ -217,7 +217,7 @@ func (cp *ConversationPruner) PruneConversation(messages []api.Message, currentT
 	if cp.debug {
 		oldTokens := cp.estimateTokens(messages)
 		newTokens := cp.estimateTokens(pruned)
-		fmt.Printf("\n✅ Pruning complete: %d → %d messages, ~%dK → ~%dK tokens\n",
+		fmt.Printf("\n[OK] Pruning complete: %d → %d messages, ~%dK → ~%dK tokens\n",
 			len(messages), len(pruned), oldTokens/1000, newTokens/1000)
 	}
 
@@ -306,7 +306,7 @@ func (cp *ConversationPruner) pruneByImportance(messages []api.Message, provider
 // This is critical for providers like Minimax and DeepSeek that require strict tool call format
 func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Message, provider string, maxTokens int) []api.Message {
 	if cp.debug {
-		fmt.Printf("🔧 Using tool-call aware pruning for %s\n", provider)
+		fmt.Printf("[tool] Using tool-call aware pruning for %s\n", provider)
 	}
 
 	// Step 1: Group messages into tool call groups
@@ -349,7 +349,7 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 			} else {
 				// Orphaned tool result - shouldn't happen but handle gracefully
 				if cp.debug {
-					fmt.Printf("\n⚠️ Found orphaned tool result at index %d with tool_call_id=%s\n", i, msg.ToolCallId)
+					fmt.Printf("\n[WARN] Found orphaned tool result at index %d with tool_call_id=%s\n", i, msg.ToolCallId)
 				}
 				// Add current group first if it's a tool group
 				if currentGroup != nil {
@@ -483,7 +483,7 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 	if cp.debug {
 		oldTokens := cp.estimateTokens(messages)
 		newTokens := cp.estimateTokens(pruned)
-		fmt.Printf("\n✅ Tool-call aware pruning: %d → %d messages, ~%dK → ~%dK tokens\n",
+		fmt.Printf("\n[OK] Tool-call aware pruning: %d → %d messages, ~%dK → ~%dK tokens\n",
 			len(messages), len(pruned), oldTokens/1000, newTokens/1000)
 	}
 
@@ -551,7 +551,7 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 	if contextUsage > PruningConfig.Default.AggressivePercent {
 		// Critical - use aggressive optimization
 		if cp.debug {
-			fmt.Printf("🚨 Critical context usage (%.1f%% >= %.1f%%), using aggressive optimization\n",
+			fmt.Printf("[!!] Critical context usage (%.1f%% >= %.1f%%), using aggressive optimization\n",
 				contextUsage*100, PruningConfig.Default.AggressivePercent*100)
 		}
 		if optimizer == nil {
@@ -561,13 +561,13 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 	} else if hasLongHistory && hasManyToolCalls && contextUsage > 0.80 {
 		// Long technical conversation - use hybrid approach (only above 80% context)
 		if cp.debug {
-			fmt.Printf("📊 Long technical conversation detected, using hybrid pruning\n")
+			fmt.Printf("[chart] Long technical conversation detected, using hybrid pruning\n")
 		}
 		return cp.pruneHybrid(messages, optimizer, provider, maxTokens)
 	} else if hasLargeFiles && contextUsage > 0.80 {
 		// File-heavy conversation - focus on deduplication (only above 80% context)
 		if cp.debug {
-			fmt.Printf("📄 File-heavy conversation detected, focusing on deduplication\n")
+			fmt.Printf("[doc] File-heavy conversation detected, focusing on deduplication\n")
 		}
 		if optimizer == nil {
 			return cp.pruneSlidingWindow(messages)
@@ -582,7 +582,7 @@ func (cp *ConversationPruner) pruneAdaptive(messages []api.Message, currentToken
 	} else {
 		// Default - importance-based pruning
 		if cp.debug {
-			fmt.Printf("\n⚖️ Using importance-based pruning\n")
+			fmt.Printf("\n[balance] Using importance-based pruning\n")
 		}
 		return cp.pruneByImportance(messages, provider, maxTokens)
 	}

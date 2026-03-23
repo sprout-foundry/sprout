@@ -99,7 +99,7 @@ func (c *MCPClient) Start(ctx context.Context) error {
 	go c.handleErrors()
 
 	if c.logger != nil {
-		c.logger.LogProcessStep(fmt.Sprintf("🚀 Started MCP server: %s", c.config.Name))
+		c.logger.LogProcessStep(fmt.Sprintf("[>>] Started MCP server: %s", c.config.Name))
 	}
 
 	return nil
@@ -145,7 +145,7 @@ func (c *MCPClient) Stop(ctx context.Context) error {
 			// Force kill after timeout
 			if err := c.cmd.Process.Kill(); err != nil {
 				if c.logger != nil {
-					c.logger.LogProcessStep(fmt.Sprintf("⚠️ Failed to kill MCP server %s: %v", c.config.Name, err))
+					c.logger.LogProcessStep(fmt.Sprintf("[WARN] Failed to kill MCP server %s: %v", c.config.Name, err))
 				}
 			}
 			<-done // Wait for the process to actually exit
@@ -156,7 +156,7 @@ func (c *MCPClient) Stop(ctx context.Context) error {
 	c.initialized = false
 
 	if c.logger != nil {
-		c.logger.LogProcessStep(fmt.Sprintf("🛑 Stopped MCP server: %s", c.config.Name))
+		c.logger.LogProcessStep(fmt.Sprintf("[STOP] Stopped MCP server: %s", c.config.Name))
 	}
 
 	return nil
@@ -215,7 +215,7 @@ func (c *MCPClient) Initialize(ctx context.Context) error {
 	c.mutex.Unlock()
 
 	if c.logger != nil {
-		c.logger.LogProcessStep(fmt.Sprintf("✅ Initialized MCP server: %s", c.config.Name))
+		c.logger.LogProcessStep(fmt.Sprintf("[OK] Initialized MCP server: %s", c.config.Name))
 	}
 
 	return nil
@@ -548,7 +548,7 @@ func (c *MCPClient) handleMessages() {
 		var message MCPMessage
 		if err := json.Unmarshal([]byte(line), &message); err != nil {
 			if c.logger != nil {
-				c.logger.LogProcessStep(fmt.Sprintf("⚠️ Failed to parse MCP message from %s: %v", c.config.Name, err))
+				c.logger.LogProcessStep(fmt.Sprintf("[WARN] Failed to parse MCP message from %s: %v", c.config.Name, err))
 			}
 			continue
 		}
@@ -578,7 +578,7 @@ func (c *MCPClient) handleErrors() {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line != "" && c.logger != nil {
-			c.logger.LogProcessStep(fmt.Sprintf("🔍 MCP server %s stderr: %s", c.config.Name, line))
+			c.logger.LogProcessStep(fmt.Sprintf("[search] MCP server %s stderr: %s", c.config.Name, line))
 		}
 	}
 }

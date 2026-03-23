@@ -23,6 +23,6 @@ func (c *ClearCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	chatAgent.ClearConversationHistory()
-	fmt.Println("🧹 Conversation history cleared.")
+	fmt.Println("[clean] Conversation history cleared.")
 	return nil
 }

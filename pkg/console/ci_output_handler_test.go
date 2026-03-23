@@ -260,7 +260,7 @@ func TestCIOutputHandler_NonInteractiveWrite(t *testing.T) {
 	handler := NewCIOutputHandler(buf)
 
 	// Write text with ANSI codes
-	input := "Processing\033[32m✓\033[0m Complete\n"
+	input := "Processing\033[32m[ok]\033[0m Complete\n"
 	handler.Write([]byte(input))
 
 	// In non-interactive mode (buffer), ANSI codes should be stripped
@@ -269,7 +269,7 @@ func TestCIOutputHandler_NonInteractiveWrite(t *testing.T) {
 		t.Errorf("ANSI codes not stripped in non-interactive mode: %q", output)
 	}
 
-	expected := "Processing✓ Complete\n"
+	expected := "Processing[ok] Complete\n"
 	if output != expected {
 		t.Errorf("Write() output = %q, want %q", output, expected)
 	}

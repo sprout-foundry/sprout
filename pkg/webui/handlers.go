@@ -87,14 +87,14 @@ func (ws *ReactWebServer) handleFavicon(w http.ResponseWriter, r *http.Request) 
 }
 
 func (ws *ReactWebServer) serveRootAsset(w http.ResponseWriter, r *http.Request, name string, contentType string) {
-	ws.serveEmbeddedFile(w, r, "static/"+name, contentType, false)
+	ws.serveEmbeddedFile(w, r, "static/"+name, contentType, false, false)
 }
 
 func (ws *ReactWebServer) serveRootAssetOptional(w http.ResponseWriter, r *http.Request, name string, contentType string) {
-	ws.serveEmbeddedFile(w, r, "static/"+name, contentType, true)
+	ws.serveEmbeddedFile(w, r, "static/"+name, contentType, true, false)
 }
 
-func (ws *ReactWebServer) serveEmbeddedFile(w http.ResponseWriter, r *http.Request, embeddedPath string, contentType string, optional bool) {
+func (ws *ReactWebServer) serveEmbeddedFile(w http.ResponseWriter, r *http.Request, embeddedPath string, contentType string, optional bool, cacheable bool) {
 	data, err := staticFiles.ReadFile(embeddedPath)
 	if err != nil {
 		if optional && errors.Is(err, fs.ErrNotExist) {
@@ -108,6 +108,10 @@ func (ws *ReactWebServer) serveEmbeddedFile(w http.ResponseWriter, r *http.Reque
 	if contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	if cacheable {
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+	} else {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	}
 	w.Write(data)
 }

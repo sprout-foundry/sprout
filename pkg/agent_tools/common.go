@@ -78,32 +78,32 @@ func formatTodoResponseForID(title, id string) string {
 
 // formatTodoSuccess formats a success message for adding a single todo.
 func formatTodoSuccess(title, id string) string {
-	return fmt.Sprintf("✅ Added todo: %s", formatTodoResponseForID(title, id))
+	return fmt.Sprintf("[OK] Added todo: %s", formatTodoResponseForID(title, id))
 }
 
 // formatBulkTodoSuccess formats a success message for adding multiple todos.
 func formatBulkTodoSuccess(count int, items []string, moreCount int) string {
 	itemsStr := strings.Join(items, ", ")
 	if moreCount > 0 {
-		return fmt.Sprintf("📝 Added %d todos: %s, +%d more", count, itemsStr, moreCount)
+		return fmt.Sprintf("[edit] Added %d todos: %s, +%d more", count, itemsStr, moreCount)
 	}
-	return fmt.Sprintf("📝 Added %d todos: %s", count, itemsStr)
+	return fmt.Sprintf("[edit] Added %d todos: %s", count, itemsStr)
 }
 
 // formatStatusUpdate formats a status update message for a todo.
 func formatStatusUpdate(status, title, id string, remaining int) string {
 	switch status {
 	case "in_progress":
-		return fmt.Sprintf("🔄 Started: %s", formatTodoResponseForID(title, id))
+		return fmt.Sprintf("[~] Started: %s", formatTodoResponseForID(title, id))
 	case "completed":
 		if remaining == 0 {
-			return fmt.Sprintf("🎉 Completed: %s - All todos done!", title)
+			return fmt.Sprintf("[done] Completed: %s - All todos done!", title)
 		}
-		return fmt.Sprintf("✅ Completed: %s (%d remaining)", formatTodoResponseForID(title, id), remaining)
+		return fmt.Sprintf("[OK] Completed: %s (%d remaining)", formatTodoResponseForID(title, id), remaining)
 	case "cancelled":
-		return fmt.Sprintf("❌ Cancelled: %s", formatTodoResponseForID(title, id))
+		return fmt.Sprintf("[FAIL] Cancelled: %s", formatTodoResponseForID(title, id))
 	default:
-		return fmt.Sprintf("📝 Updated: %s → %s", formatTodoResponseForID(title, id), status)
+		return fmt.Sprintf("[edit] Updated: %s → %s", formatTodoResponseForID(title, id), status)
 	}
 }
 
@@ -132,9 +132,9 @@ func getCompactStatusSymbol(status string) string {
 	case "in_progress":
 		return "►"
 	case "completed":
-		return "✓"
+		return "[ok]"
 	case "cancelled":
-		return "✗"
+		return "[fail]"
 	default:
 		return "·"
 	}

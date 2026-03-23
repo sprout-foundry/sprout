@@ -189,9 +189,9 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		logger.LogProcessStep("Code review completed successfully")
 	}
 
-	header := "📋 AI CODE REVIEW"
+	header := "[list] AI CODE REVIEW"
 	if deepReview {
-		header = "📋 AI CODE REVIEW (DEEP PASS)"
+		header = "[list] AI CODE REVIEW (DEEP PASS)"
 	}
 
 	// Build review output string for conversation history

@@ -243,10 +243,10 @@ func TestPrintConversationSummaryDoesNotPanicWithSingleMessage(t *testing.T) {
 		agent.PrintConversationSummary(true)
 	})
 
-	if !strings.Contains(output, "📊 Conversation Summary") {
+	if !strings.Contains(output, "[chart] Conversation Summary") {
 		t.Fatalf("expected summary header in output, got: %s", output)
 	}
-	if !strings.Contains(output, "👤 User msgs:        1") {
+	if !strings.Contains(output, "[you] User msgs:        1") {
 		t.Fatalf("expected user message count in output, got: %s", output)
 	}
 }
@@ -269,10 +269,10 @@ func TestPrintConversationSummaryShowsEstimatedTokenNote(t *testing.T) {
 	if !strings.Contains(output, "includes estimates for 2 response(s)") {
 		t.Fatalf("expected estimated usage note in output, got: %s", output)
 	}
-	if !strings.Contains(output, "📦 Total (estimated):") {
+	if !strings.Contains(output, "[pkg] Total (estimated):") {
 		t.Fatalf("expected estimated marker on total line, got: %s", output)
 	}
-	if !strings.Contains(output, "📝 Processed (estimated):") {
+	if !strings.Contains(output, "[edit] Processed (estimated):") {
 		t.Fatalf("expected estimated marker on processed line, got: %s", output)
 	}
 }

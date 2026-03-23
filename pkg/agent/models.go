@@ -103,7 +103,7 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 	providerFactory := providers.NewProviderFactory()
 	if err := providerFactory.LoadEmbeddedConfigs(); err != nil {
 		if a.debug {
-			a.debugLog("⚠️ Failed to load provider factory configs: %v\n", err)
+			a.debugLog("[WARN] Failed to load provider factory configs: %v\n", err)
 		}
 		return ""
 	}
@@ -112,7 +112,7 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 	config, err := providerFactory.GetProviderConfig(providerName)
 	if err != nil {
 		if a.debug {
-			a.debugLog("⚠️ No factory config found for provider %s: %v\n", providerName, err)
+			a.debugLog("[WARN] No factory config found for provider %s: %v\n", providerName, err)
 		}
 		return ""
 	}
@@ -138,7 +138,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 		if defaultModel := a.getDefaultModelFromFactory(provider); defaultModel != "" {
 			model = defaultModel
 			if a.debug {
-				a.debugLog("🔍 Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
+				a.debugLog("[search] Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
 			}
 		} else {
 			// If no factory default, try to get the first available model from the provider API
@@ -146,7 +146,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 				// Find a suitable default model
 				model = a.selectDefaultModel(availableModels, provider)
 				if a.debug {
-					a.debugLog("🔍 Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
+					a.debugLog("[search] Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
 				}
 			} else {
 				// No models available from API and no model specified
@@ -160,7 +160,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 		if fallbackModel == "" {
 			fallbackModel = availableModels[0].ID
 		}
-		fmt.Fprintf(os.Stderr, "ℹ️  Configured model %s is not available for %s. Using %s.\n", model, api.GetProviderName(provider), fallbackModel)
+		fmt.Fprintf(os.Stderr, "[info] Configured model %s is not available for %s. Using %s.\n", model, api.GetProviderName(provider), fallbackModel)
 		model = fallbackModel
 	}
 
@@ -200,11 +200,11 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 
 	// Notify user if model was different due to fallback
 	if actualModel != model {
-		fmt.Fprintf(os.Stderr, "ℹ️  Using model: %s (requested: %s)\n", actualModel, model)
+		fmt.Fprintf(os.Stderr, "[info] Using model: %s (requested: %s)\n", actualModel, model)
 	}
 
 	if a.debug {
-		a.debugLog("✅ Switched to provider %s with model %s\n", api.GetProviderName(provider), actualModel)
+		a.debugLog("[OK] Switched to provider %s with model %s\n", api.GetProviderName(provider), actualModel)
 	}
 
 	return nil
@@ -277,13 +277,13 @@ func (a *Agent) SetModel(model string) error {
 	if err := a.configManager.SetProvider(a.clientType); err != nil {
 		// Log warning but don't fail - this is not critical
 		if a.debug {
-			a.debugLog("⚠️  Failed to save provider: %v\n", err)
+			a.debugLog("[WARN] Failed to save provider: %v\n", err)
 		}
 	}
 	if err := a.configManager.SetModelForProvider(a.clientType, model); err != nil {
 		// Log warning but don't fail - this is not critical
 		if a.debug {
-			a.debugLog("⚠️  Failed to save model: %v\n", err)
+			a.debugLog("[WARN] Failed to save model: %v\n", err)
 		}
 	}
 

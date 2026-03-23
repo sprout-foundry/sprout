@@ -311,11 +311,11 @@ func (a *Agent) normalizeConversationForCurrentModelSyntax(fromProvider, fromMod
 			report.removedToolMessages, report.strippedAssistantToolCallBlocks, report.retainedRecentToolSummaries,
 		))
 		a.PrintLineAsync(fmt.Sprintf(
-			"🔄 Strict syntax normalization applied: removed %d tool result(s), stripped %d tool-call block(s), ~%d -> ~%d tokens",
+			"[~] Strict syntax normalization applied: removed %d tool result(s), stripped %d tool-call block(s), ~%d -> ~%d tokens",
 			report.removedToolMessages, report.strippedAssistantToolCallBlocks, report.beforeTokens, report.afterTokens,
 		))
 		if a.debug {
-			a.debugLog("🧹 Strict syntax switch normalization report: %+v\n", report)
+			a.debugLog("[clean] Strict syntax switch normalization report: %+v\n", report)
 		}
 	}
 }

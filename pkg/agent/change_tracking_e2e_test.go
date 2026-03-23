@@ -175,7 +175,7 @@ func TestChangeTrackingE2E(t *testing.T) {
 		t.Fatal("Should not be able to rollback reverted changes (no active changes)")
 	}
 
-	t.Log("✅ End-to-end change tracking and rollback test passed!")
+	t.Log("[OK] End-to-end change tracking and rollback test passed!")
 }
 
 func TestChangeTrackingSupportsIncrementalCommits(t *testing.T) {

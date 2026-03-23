@@ -158,7 +158,8 @@ func isNonTextFileExtension(filePath string) bool {
 	// Common non-text file extensions
 	nonTextExtensions := []string{
 		".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", // Images
-		".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", // Documents
+		// .pdf removed — handled by handleReadFileWithImages before reaching here
+		".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", // Documents
 		".zip", ".tar", ".gz", ".rar", ".7z", // Archives
 		".mp3", ".wav", ".ogg", ".flac", ".aac", // Audio
 		".mp4", ".avi", ".mov", ".wmv", ".mkv", // Video

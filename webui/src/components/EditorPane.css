@@ -55,8 +55,10 @@
 }
 
 .no-file-icon {
-  font-size: 48px;
   opacity: 0.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .no-file-text {

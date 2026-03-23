@@ -58,8 +58,10 @@
 }
 
 .tab-icon {
-  font-size: 16px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab-name {
@@ -122,7 +124,10 @@
 }
 
 .no-tabs-icon {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary, #888);
 }
 
 .tabs-actions {
@@ -181,7 +186,7 @@
   }
 
   .tab-icon {
-    font-size: 14px;
+    /* Slightly smaller on small screens */
   }
 
   .tab-count {

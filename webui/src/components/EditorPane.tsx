@@ -24,6 +24,11 @@ import { useTheme } from '../contexts/ThemeContext';
 import EditorToolbar from './EditorToolbar';
 import { readFileWithConsent } from '../services/fileAccess';
 import { getHotkeyPresetKeymap } from '../utils/editorHotkeys';
+import {
+  File,
+  Loader2,
+  AlertTriangle,
+} from 'lucide-react';
 import './EditorPane.css';
 
 interface EditorPaneProps {
@@ -374,7 +379,7 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
     return (
       <div className="editor-pane empty">
         <div className="no-file-selected">
-          <div className="no-file-icon">📄</div>
+          <div className="no-file-icon"><File size={40} /></div>
           <div className="no-file-text">Select a file to edit</div>
         </div>
       </div>
@@ -392,14 +397,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
 
       {loading && (
         <div className="loading-indicator">
-          <div className="spinner">⚡</div>
+          <Loader2 size={16} className="spinner" />
           <span>Loading file...</span>
         </div>
       )}
 
       {error && (
         <div className="error-message">
-          <span className="error-icon">⚠️</span>
+          <AlertTriangle size={16} className="error-icon" />
           <span className="error-text">{error}</span>
         </div>
       )}

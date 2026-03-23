@@ -4,7 +4,7 @@ import { ApiService, ProviderOption, LeditInstance } from '../services/api';
 import { viewRegistry, ProviderContext, SidebarSection, ProviderLogEntry } from '../providers';
 import { useTheme } from '../contexts/ThemeContext';
 import { HotkeyPreset, useHotkeys } from '../contexts/HotkeyContext';
-import { LayoutList, ScrollText, FolderCog, Settings, type LucideIcon } from 'lucide-react';
+import { LayoutList, ScrollText, FolderCog, Settings, CircleCheck, X, type LucideIcon } from 'lucide-react';
 import FileTree from './FileTree';
 
 type SectionTab = 'views' | 'logs' | 'files' | 'settings';
@@ -516,11 +516,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     const getLogIcon = (level: string) => {
       switch (level) {
-        case 'success': return '✓';
-        case 'error': return '✕';
-        case 'warning': return '!';
-        case 'info': return 'i';
-        default: return '•';
+        case 'success': return <CircleCheck size={12} />;
+        case 'error': return <X size={12} />;
+        case 'warning': return <span className="log-icon-text">!</span>;
+        case 'info': return <span className="log-icon-text">i</span>;
+        default: return <span className="log-icon-text">•</span>;
       }
     };
 
@@ -708,7 +708,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           onClick={finalOnMobileMenuToggle}
           aria-label="Close sidebar"
         >
-          ✕
+          <X size={14} />
         </button>
       )}
 

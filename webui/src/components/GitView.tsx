@@ -1,4 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import {
+  FileEdit,
+  Plus,
+  Trash2,
+  RefreshCw,
+  HelpCircle,
+  File,
+  XCircle,
+  CheckCircle2,
+  Sparkles,
+  GitBranch,
+  ArrowUp,
+  ArrowDown,
+  AlertTriangle,
+} from 'lucide-react';
 import './GitView.css';
 import { ApiService } from '../services/api';
 
@@ -240,14 +255,14 @@ const GitView: React.FC<GitViewProps> = ({
     runAction(() => onDiscard(discardablePaths), 'Failed to discard selected files');
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: string): React.ReactNode => {
     switch (status) {
-      case 'M': return '📝';
-      case 'A': return '➕';
-      case 'D': return '🗑️';
-      case 'R': return '🔄';
-      case '??': return '❓';
-      default: return '📄';
+      case 'M': return <FileEdit size={14} />;
+      case 'A': return <Plus size={14} />;
+      case 'D': return <Trash2 size={14} />;
+      case 'R': return <RefreshCw size={14} />;
+      case '??': return <HelpCircle size={14} />;
+      default: return <File size={14} />;
     }
   };
 
@@ -277,7 +292,7 @@ const GitView: React.FC<GitViewProps> = ({
     return (
       <div className="git-view">
         <div className="git-error">
-          <span className="error-icon">❌</span>
+          <span className="error-icon"><XCircle size={16} /></span>
           <p>{error}</p>
           <button onClick={() => loadGitStatus()}>Retry</button>
         </div>
@@ -289,7 +304,7 @@ const GitView: React.FC<GitViewProps> = ({
     return (
       <div className="git-view">
         <div className="git-empty">
-          <span className="empty-icon">🔀</span>
+          <span className="empty-icon"><GitBranch size={16} /></span>
           <p>No git repository found</p>
         </div>
       </div>
@@ -301,16 +316,16 @@ const GitView: React.FC<GitViewProps> = ({
       {/* Header */}
       <div className="git-header">
         <div className="git-branch">
-          <span className="branch-icon">🌿</span>
+          <span className="branch-icon"><GitBranch size={14} /></span>
           <span className="branch-name">{gitStatus.branch}</span>
-          {gitStatus.ahead > 0 && <span className="ahead">↑{gitStatus.ahead}</span>}
-          {gitStatus.behind > 0 && <span className="behind">↓{gitStatus.behind}</span>}
+          {gitStatus.ahead > 0 && <span className="ahead"><ArrowUp size={12} />{gitStatus.ahead}</span>}
+          {gitStatus.behind > 0 && <span className="behind"><ArrowDown size={12} />{gitStatus.behind}</span>}
         </div>
         <div className="git-status">
           {gitStatus.clean ? (
-            <span className="clean">✅ Clean</span>
+            <span className="clean"><CheckCircle2 size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Clean</span>
           ) : (
-            <span className="dirty">🔄 Changes</span>
+            <span className="dirty"><RefreshCw size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Changes</span>
           )}
         </div>
       </div>
@@ -352,7 +367,7 @@ const GitView: React.FC<GitViewProps> = ({
           </button>
         </div>
       </div>
-      {actionError && <div className="git-action-error">{actionError}</div>}
+      {actionError && <div className="git-action-error"><AlertTriangle size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} />{actionError}</div>}
 
       <div className="git-workspace">
         {/* File Sections */}
@@ -453,7 +468,7 @@ const GitView: React.FC<GitViewProps> = ({
         {/* No Changes */}
         {gitStatus.clean && (
           <div className="no-changes">
-            <span className="no-changes-icon">✨</span>
+            <span className="no-changes-icon"><Sparkles size={16} /></span>
             <p>Working directory clean</p>
           </div>
         )}

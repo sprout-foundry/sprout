@@ -275,7 +275,7 @@ function App() {
       return; // Don't process these events
     }
 
-    debugLog('📨 Received event:', event.type, event.data);
+    debugLog('[msg] Received event:', event.type, event.data);
 
     // Create log entry for all events
     const logEntry: LogEntry = {
@@ -313,7 +313,7 @@ function App() {
             }));
           }, 300); // Wait 300ms to confirm the connection state is stable
         }
-        debugLog('🔗 Connection status updated:', newConnectionState);
+        debugLog('[link] Connection status updated:', newConnectionState);
         break;
 
       case 'query_started':
@@ -336,7 +336,7 @@ function App() {
           queryProgress: null, // Clear previous progress
           logs: [...prev.logs, logEntry]
         }));
-        debugLog('🚀 Query started:', startedQuery);
+        debugLog('[>>] Query started:', startedQuery);
         break;
 
       case 'query_progress':
@@ -344,7 +344,7 @@ function App() {
           ...prev,
           queryProgress: event.data
         }));
-        debugLog('⏳ Query progress:', event.data);
+        debugLog('[>>] Query progress:', event.data);
         break;
 
       case 'stream_chunk':
@@ -405,7 +405,7 @@ function App() {
           }),
           logs: [...prev.logs, logEntry]
         }));
-        debugLog('✅ Query completed');
+        debugLog('[OK] Query completed');
         break;
 
       case 'tool_execution':
@@ -516,7 +516,7 @@ function App() {
             logs: [...prev.logs, logEntry]
           };
         });
-        debugLog('🔧 Tool execution:', normalizedToolName, normalizedStatus);
+        debugLog('[tool] Tool execution:', normalizedToolName, normalizedStatus);
         break;
 
       case 'file_changed':
@@ -539,7 +539,7 @@ function App() {
 
           return { ...prev, logs: newLogs, fileEdits: updatedFileEdits };
         });
-        debugLog('📝 File changed:', event.data.path);
+        debugLog('[edit] File changed:', event.data.path);
         break;
 
       case 'terminal_output':
@@ -550,7 +550,7 @@ function App() {
           ...prev,
           logs: [...prev.logs, logEntry]
         }));
-        debugLog('🖥️ Terminal output received:', event.data);
+        debugLog('[term] Terminal output received:', event.data);
         break;
 
       case 'error':
@@ -566,12 +566,12 @@ function App() {
           messages: [...prev.messages, {
             id: Date.now().toString(),
             type: 'assistant',
-            content: `❌ Error: ${errorMessage}`,
+            content: `[FAIL] Error: ${errorMessage}`,
             timestamp: new Date()
           }],
           logs: [...prev.logs, logEntry]
         }));
-        console.error('❌ Error event:', event.data);
+        console.error('[FAIL] Error event:', event.data);
         break;
 
       case 'metrics_update':
@@ -596,7 +596,7 @@ function App() {
           ...prev,
           logs: [...prev.logs, logEntry]
         }));
-        debugLog('❓ Unknown event type:', event.type, event.data);
+        debugLog('[?] Unknown event type:', event.type, event.data);
     }
   }, []);
 
@@ -671,7 +671,7 @@ function App() {
     viewRegistry.register(new GitViewProvider());
     viewRegistry.register(new LogsViewProvider());
 
-    debugLog('✅ Content providers registered');
+    debugLog('[OK] Content providers registered');
   }, []);
 
   const handleSendMessage = useCallback(async (message: string) => {
@@ -686,12 +686,12 @@ function App() {
     }));
 
     try {
-      debugLog('🚀 Sending message:', message);
+      debugLog('[>>] Sending message:', message);
       await apiService.sendQuery(message);
       setInputValue('');
-      debugLog('✅ Message sent successfully');
+      debugLog('[OK] Message sent successfully');
     } catch (error) {
-      console.error('❌ Failed to send message:', error);
+      console.error('[FAIL] Failed to send message:', error);
       isProcessingRef.current = false;
       const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
       setState(prev => ({
@@ -701,7 +701,7 @@ function App() {
         messages: [...prev.messages, {
           id: Date.now().toString(),
           type: 'assistant',
-          content: `❌ Error: ${errorMsg}`,
+          content: `[FAIL] Error: ${errorMsg}`,
           timestamp: new Date()
         }]
       }));
@@ -818,7 +818,7 @@ function App() {
 
   const handleTerminalOutput = useCallback((output: string) => {
     // You could handle terminal output here if needed
-    debugLog('🖥️ Terminal output:', output);
+    debugLog('[term] Terminal output:', output);
   }, []);
 
   const toggleSidebar = useCallback(() => {

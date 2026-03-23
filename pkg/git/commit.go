@@ -121,7 +121,7 @@ func CleanCommitMessage(message string) string {
 					if commitMsg, ok := params["commitMessageFormat"].(string); ok && commitMsg != "" {
 						return commitMsg
 					} else if originalRequest, ok := params["originalUserRequest"].(string); ok && originalRequest != "" {
-						return fmt.Sprintf("🚀 feat: %s\n\n- %s", strings.ToLower(strings.TrimSpace(originalRequest)), "Changes based on user request")
+						return fmt.Sprintf("[>>] feat: %s\n\n- %s", strings.ToLower(strings.TrimSpace(originalRequest)), "Changes based on user request")
 					}
 				}
 			}
@@ -131,23 +131,23 @@ func CleanCommitMessage(message string) string {
 				for title, desc := range jsonObj {
 					if descStr, ok := desc.(string); ok && title != "" && descStr != "" {
 						// Determine emoji based on title content
-						emoji := "🚀"
+						emoji := "[>>]"
 						prefix := "feat"
 						titleLower := strings.ToLower(title)
 						if strings.Contains(titleLower, "fix") || strings.Contains(titleLower, "bug") {
-							emoji = "🐛"
+							emoji = "[bug]"
 							prefix = "fix"
 						} else if strings.Contains(titleLower, "doc") {
-							emoji = "📝"
+							emoji = "[edit]"
 							prefix = "docs"
 						} else if strings.Contains(titleLower, "enhance") || strings.Contains(titleLower, "improve") {
-							emoji = "✨"
+							emoji = "[*]"
 							prefix = "enhance"
 						} else if strings.Contains(titleLower, "refactor") {
-							emoji = "♻️"
+							emoji = "[recycle]"
 							prefix = "refactor"
 						} else if strings.Contains(titleLower, "test") {
-							emoji = "🧪"
+							emoji = "[test]"
 							prefix = "test"
 						}
 
@@ -158,7 +158,7 @@ func CleanCommitMessage(message string) string {
 		}
 
 		// Fallback for JSON that couldn't be parsed properly
-		return "🚀 feat: Add new functionality\n\n- Enhanced codebase with new features\n- Improved system capabilities"
+		return "[>>] feat: Add new functionality\n\n- Enhanced codebase with new features\n- Improved system capabilities"
 	}
 
 	// Clean up the message: remove markdown fences if present

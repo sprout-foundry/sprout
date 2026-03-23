@@ -101,10 +101,10 @@ func formatSelfReviewResult(result *spec.ChangeReviewResult) string {
 		output += fmt.Sprintf("### Scope Validation\n\n")
 
 		if result.ScopeResult.InScope {
-			output += "✅ **Status**: IN_SCOPE\n\n"
+			output += "[OK] **Status**: IN_SCOPE\n\n"
 			output += "All changes align with the specification. No scope violations detected.\n\n"
 		} else {
-			output += "⚠️ **Status**: OUT_OF_SCOPE\n\n"
+			output += "[WARN] **Status**: OUT_OF_SCOPE\n\n"
 			output += fmt.Sprintf("%s\n\n", result.ScopeResult.Summary)
 
 			if len(result.ScopeResult.Violations) > 0 {
@@ -133,16 +133,16 @@ func formatSelfReviewResult(result *spec.ChangeReviewResult) string {
 
 	// Actionable recommendation
 	if result.ScopeResult != nil && !result.ScopeResult.InScope {
-		output += "### ⚠️ Recommendation\n\n"
+		output += "### [WARN] Recommendation\n\n"
 		output += "Scope violations were detected. Consider:\n"
 		output += "1. Removing out-of-scope changes\n"
 		output += "2. Updating the specification if these changes are intentional\n"
 		output += "3. Re-running the review after addressing violations\n\n"
 	} else if result.SpecResult != nil && result.SpecResult.Confidence < 0.7 {
-		output += "### ⚠️ Recommendation\n\n"
+		output += "### [WARN] Recommendation\n\n"
 		output += "Spec confidence is low. Consider clarifying the requirements before proceeding.\n\n"
 	} else {
-		output += "### ✅ Recommendation\n\n"
+		output += "### [OK] Recommendation\n\n"
 		output += "Changes are within scope and align with the specification. Ready to proceed.\n\n"
 	}
 

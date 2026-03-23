@@ -63,17 +63,17 @@ func parseFilenameFromStatusLine(line string) (string, bool) {
 
 // stageFiles stages a list of files and reports results.
 func stageFiles(c printlnPrintfHelper, files []string) {
-	c.println("\n📦 Staging files...")
+	c.println("\n[pkg] Staging files...")
 	for _, file := range files {
 		cmd := exec.Command("git", "add", file)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			c.printf("❌ Failed to stage %s: %v\n", file, err)
+			c.printf("[FAIL] Failed to stage %s: %v\n", file, err)
 			if len(output) > 0 {
 				c.printf("Output: %s\n", string(output))
 			}
 		} else {
-			c.printf("✅ Staged: %s\n", file)
+			c.printf("[OK] Staged: %s\n", file)
 		}
 	}
 }

@@ -69,7 +69,7 @@ func (v *ScopeValidator) ValidateScope(diff string, spec *CanonicalSpec) (*Scope
 		// Check for rate limiting or timeout errors
 		errStr := err.Error()
 		if strings.Contains(errStr, "429") || strings.Contains(errStr, "rate limit") {
-			v.logger.LogProcessStep("⚠️  Rate limited - scope validation unavailable")
+			v.logger.LogProcessStep("[WARN] Rate limited - scope validation unavailable")
 			// Fail closed to avoid silently approving out-of-scope changes.
 			return &ScopeReviewResult{
 				InScope: false,
@@ -118,9 +118,9 @@ func (v *ScopeValidator) ValidateScope(diff string, spec *CanonicalSpec) (*Scope
 	}
 
 	if result.InScope {
-		v.logger.LogProcessStep("✓ Changes are within scope")
+		v.logger.LogProcessStep("[ok] Changes are within scope")
 	} else {
-		v.logger.LogProcessStep(fmt.Sprintf("⚠ Found %d scope violations", len(result.Violations)))
+		v.logger.LogProcessStep(fmt.Sprintf("[WARN] Found %d scope violations", len(result.Violations)))
 	}
 
 	return &result, nil

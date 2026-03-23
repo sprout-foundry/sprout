@@ -303,7 +303,7 @@ func (ac *APIClient) printContextBreakdown(messages []api.Message, tools []api.T
 	}
 	totalChars := 0
 	totalMsgTokens := 0
-	ac.agent.debugLog("\n🔎 Context Breakdown (messages=%d, tools=%d)\n", len(messages), len(tools))
+	ac.agent.debugLog("\n[search] Context Breakdown (messages=%d, tools=%d)\n", len(messages), len(tools))
 	for i, m := range messages {
 		chars := len(m.Content) + len(m.ReasoningContent)
 		tokens := chars / 4 // rough estimate
@@ -363,13 +363,13 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 		if ac.agent.debug {
 			// Debug: Log raw content being written to streaming buffer
 			if strings.Contains(content, "\x1b[") || strings.Contains(content, "\x1b(") {
-				ac.agent.debugLog("🚨 ANSI DETECTED in streaming content: %q\n", content)
+				ac.agent.debugLog("[!!] ANSI DETECTED in streaming content: %q\n", content)
 			}
 		}
 		// Sanitize content before storing in streaming buffer
 		sanitizedContent := sanitizeStreamingContent(content)
 		if sanitizedContent != content && ac.agent.debug {
-			ac.agent.debugLog("🧹 Sanitized streaming content, removed ANSI codes\n")
+			ac.agent.debugLog("[clean] Sanitized streaming content, removed ANSI codes\n")
 		}
 		ac.agent.streamingBuffer.WriteString(sanitizedContent)
 
@@ -625,7 +625,7 @@ func (ac *APIClient) calculateBackoff(err error, attempt int, baseDelay time.Dur
 
 // showTokenTrackingMessage shows OpenAI token tracking message
 func (ac *APIClient) showTokenTrackingMessage() {
-	message := "📊 Using non-streaming mode for accurate token tracking..."
+	message := "[chart] Using non-streaming mode for accurate token tracking..."
 	ac.agent.PrintLine(message)
 	ac.agent.PrintLine("")
 }
@@ -698,7 +698,7 @@ func (ac *APIClient) deriveUsageMetrics(resp *api.ChatResponse, messages []api.M
 
 // displayTimeoutError shows a user-friendly timeout error
 func (ac *APIClient) displayTimeoutError(message string, timeout time.Duration) {
-	errorMsg := fmt.Sprintf("🔌 TIMEOUT ERROR: %s (waited %v)\n\nThis usually means the API is taking too long to respond.\nPossible causes:\n- High model latency (common with large models or complex queries)\n- Network issues\n- API overloaded\n\nThe request has been aborted. Try:\n- Using a faster model\n- Reducing query complexity\n- Checking your network connection", message, timeout)
+	errorMsg := fmt.Sprintf("[plug] TIMEOUT ERROR: %s (waited %v)\n\nThis usually means the API is taking too long to respond.\nPossible causes:\n- High model latency (common with large models or complex queries)\n- Network issues\n- API overloaded\n\nThe request has been aborted. Try:\n- Using a faster model\n- Reducing query complexity\n- Checking your network connection", message, timeout)
 	// Route through agent so interactive console places it in content area
 	ac.agent.PrintLine(errorMsg)
 }
@@ -706,7 +706,7 @@ func (ac *APIClient) displayTimeoutError(message string, timeout time.Duration) 
 // displayAPIError shows a user-friendly API error
 func (ac *APIClient) displayAPIError(err error) {
 	providerName := ac.agent.GetProvider()
-	errorMsg := fmt.Sprintf("🚨 %s API Error: %v", strings.Title(providerName), err)
+	errorMsg := fmt.Sprintf("[!!] %s API Error: %v", strings.Title(providerName), err)
 	// Route through agent so interactive console places it in content area
 	ac.agent.PrintLine(errorMsg)
 }

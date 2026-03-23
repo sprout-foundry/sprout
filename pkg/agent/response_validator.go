@@ -21,7 +21,7 @@ func NewResponseValidator(agent *Agent) *ResponseValidator {
 func (rv *ResponseValidator) IsIncomplete(content string) bool {
 	// Skip validation if content is empty (but still check even with streaming enabled)
 	if len(content) == 0 {
-		rv.agent.debugLog("🔍 IsIncomplete: content empty, returning false\n")
+		rv.agent.debugLog("[search] IsIncomplete: content empty, returning false\n")
 		return false
 	}
 
@@ -31,26 +31,26 @@ func (rv *ResponseValidator) IsIncomplete(content string) bool {
 
 	hasPatterns := rv.hasIncompletePatterns(content)
 	if hasPatterns {
-		rv.agent.debugLog("🔍 IsIncomplete: hasIncompletePatterns = true\n")
+		rv.agent.debugLog("[search] IsIncomplete: hasIncompletePatterns = true\n")
 	}
 
 	hasAbrupt := rv.hasAbruptEnding(content)
 	if hasAbrupt {
-		rv.agent.debugLog("🔍 IsIncomplete: hasAbruptEnding = true\n")
+		rv.agent.debugLog("[search] IsIncomplete: hasAbruptEnding = true\n")
 	}
 
 	isShort := rv.isUnusuallyShort(content)
 	if isShort {
-		rv.agent.debugLog("🔍 IsIncomplete: isUnusuallyShort = true\n")
+		rv.agent.debugLog("[search] IsIncomplete: isUnusuallyShort = true\n")
 	}
 
 	hasBadCode := rv.hasIncompleteCodeBlock(content)
 	if hasBadCode {
-		rv.agent.debugLog("🔍 IsIncomplete: hasIncompleteCodeBlock = true\n")
+		rv.agent.debugLog("[search] IsIncomplete: hasIncompleteCodeBlock = true\n")
 	}
 
 	result := hasPatterns || hasAbrupt || isShort || hasBadCode
-	rv.agent.debugLog("🔍 IsIncomplete: final result = %v (patterns=%v, abrupt=%v, short=%v, code=%v)\n",
+	rv.agent.debugLog("[search] IsIncomplete: final result = %v (patterns=%v, abrupt=%v, short=%v, code=%v)\n",
 		result, hasPatterns, hasAbrupt, isShort, hasBadCode)
 
 	return result
@@ -238,7 +238,7 @@ func (rv *ResponseValidator) hasIncompleteCodeBlock(content string) bool {
 func (rv *ResponseValidator) ValidateToolCalls(content string) bool {
 	// Check for malformed tool call attempts
 	if rv.containsAttemptedToolCalls(content) {
-		rv.agent.debugLog("⚠️ Detected attempted tool calls in message content\n")
+		rv.agent.debugLog("[WARN] Detected attempted tool calls in message content\n")
 		return false
 	}
 

@@ -224,17 +224,17 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 			{Label: "Skip", Value: "no"},
 		}
 
-		a.PrintLine(fmt.Sprintf("\n✨ %s\n", prompt))
+		a.PrintLine(fmt.Sprintf("\n[*] %s\n", prompt))
 
 		choice, promptErr := a.PromptChoice(prompt, choices)
 		if promptErr != nil {
-			a.PrintLine(fmt.Sprintf("⚠️ Could not prompt for choice: %v", promptErr))
+			a.PrintLine(fmt.Sprintf("[WARN] Could not prompt for choice: %v", promptErr))
 			return result, err
 		}
 
 		if choice == "yes" {
 			// The simplified PDF processing doesn't require model downloads
-			a.PrintLine("🔄 Processing PDF with simplified approach...")
+			a.PrintLine("[~] Processing PDF with simplified approach...")
 			result, err = tools.AnalyzeImage(imagePath, analysisPrompt, analysisMode)
 		}
 	}
@@ -275,7 +275,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	// For PDFs, use multimodal pipeline
 	lowerPath := strings.ToLower(imagePath)
 	if strings.HasSuffix(lowerPath, ".pdf") {
-		a.debugLog("📄 PDF detected, processing via multimodal pipeline\n")
+		a.debugLog("[doc] PDF detected, processing via multimodal pipeline\n")
 		return handleAnalyzePDFWithImages(ctx, a, imagePath, args)
 	}
 
@@ -335,7 +335,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	// Validate image via magic bytes
 	_, mimeType := console.DetectImageMagic(data)
 	if mimeType == "" {
-		a.debugLog("⚠️ File is not a valid image, falling back to OCR pipeline: %s\n", imagePath)
+		a.debugLog("[WARN] File is not a valid image, falling back to OCR pipeline: %s\n", imagePath)
 		result, err := handleAnalyzeImageContent(ctx, a, args)
 		return nil, result, err
 	}
@@ -343,7 +343,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	// Optimize/resize if needed
 	optimizedData, optimizedMIME, optErr := tools.OptimizeImageData(resolvedPath, data)
 	if optErr != nil {
-		a.debugLog("⚠️ Image optimization failed: %v, using original\n", optErr)
+		a.debugLog("[WARN] Image optimization failed: %v, using original\n", optErr)
 	} else if len(optimizedData) > 0 {
 		data = optimizedData
 		if optimizedMIME != "" {
@@ -353,7 +353,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 
 	// Check size after optimization
 	if len(data) > console.MaxPastedImageSize {
-		a.debugLog("⚠️ Optimized image still too large (%d bytes), falling back to OCR\n", len(data))
+		a.debugLog("[WARN] Optimized image still too large (%d bytes), falling back to OCR\n", len(data))
 		result, err := handleAnalyzeImageContent(ctx, a, args)
 		return nil, result, err
 	}
@@ -435,7 +435,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 	if strings.HasPrefix(strings.ToLower(path), "http://") || strings.HasPrefix(strings.ToLower(path), "https://") {
 		resolvedPath, resolvedCleanup, resolveErr := tools.ResolvePDFInputPath(path)
 		if resolveErr != nil || resolvedPath == "" {
-			a.debugLog("⚠️ Failed to resolve remote PDF: %v\n", resolveErr)
+			a.debugLog("[WARN] Failed to resolve remote PDF: %v\n", resolveErr)
 			// Fall back to text-only pipeline
 			result, err := handleAnalyzeImageContent(ctx, a, args)
 			return nil, result, err
@@ -459,7 +459,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 
 	if err != nil {
 		// Fall back to full OCR pipeline (existing behavior)
-		a.debugLog("⚠️ Multimodal PDF processing failed: %v, falling back to OCR pipeline\n", err)
+		a.debugLog("[WARN] Multimodal PDF processing failed: %v, falling back to OCR pipeline\n", err)
 		result, err := handleAnalyzeImageContent(ctx, a, args)
 		return nil, result, err
 	}

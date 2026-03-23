@@ -26,21 +26,21 @@ func (c *ChangesCommand) Description() string {
 func (c *ChangesCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
 		// Gracefully handle nil agent in tests or non-interactive contexts
-		fmt.Print("📝 Change tracking is not enabled for this session\r\n")
+		fmt.Print("[edit] Change tracking is not enabled for this session\r\n")
 		return nil
 	}
 	if !chatAgent.IsChangeTrackingEnabled() {
-		fmt.Print("📝 Change tracking is not enabled for this session\r\n")
+		fmt.Print("[edit] Change tracking is not enabled for this session\r\n")
 		return nil
 	}
 
 	changeCount := chatAgent.GetChangeCount()
 	if changeCount == 0 {
-		fmt.Print("📝 No file changes have been tracked in this session yet\r\n")
+		fmt.Print("[edit] No file changes have been tracked in this session yet\r\n")
 		return nil
 	}
 
-	fmt.Printf("📝 Session Changes (Revision: %s)\r\n", chatAgent.GetRevisionID())
+	fmt.Printf("[edit] Session Changes (Revision: %s)\r\n", chatAgent.GetRevisionID())
 	fmt.Print("=" + fmt.Sprintf("%*s", 50, "=") + "\r\n")
 
 	summary := chatAgent.GetChangesSummary()
@@ -65,13 +65,13 @@ func (s *StatusCommand) Description() string {
 // Execute shows the current status
 func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
-		fmt.Print("📊 Agent Session Status\n")
+		fmt.Print("[chart] Agent Session Status\n")
 		fmt.Println("========================")
-		fmt.Println("Change Tracking: ❌ Disabled")
+		fmt.Println("Change Tracking: [FAIL] Disabled")
 		return nil
 	}
 
-	fmt.Print("📊 Agent Session Status\n")
+	fmt.Print("[chart] Agent Session Status\n")
 	fmt.Println("========================")
 
 	// Provider and Model (critical)
@@ -79,9 +79,9 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Printf("Model: %s\n", chatAgent.GetModel())
 	fmt.Printf("Persona: %s\n", chatAgent.GetActivePersona())
 	if tools.HasVisionCapability() {
-		fmt.Println("Vision Capability: ✅ Available")
+		fmt.Println("Vision Capability: [OK] Available")
 	} else {
-		fmt.Println("Vision Capability: ❌ Not configured")
+		fmt.Println("Vision Capability: [FAIL] Not configured")
 	}
 
 	toolNames := chatAgent.GetAvailableToolNames()
@@ -99,7 +99,7 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	// Token usage
-	fmt.Println("\n📈 Token Usage:")
+	fmt.Println("\n[up] Token Usage:")
 	fmt.Printf("  Prompt Tokens: %d\n", chatAgent.GetPromptTokens())
 	fmt.Printf("  Completion Tokens: %d\n", chatAgent.GetCompletionTokens())
 	fmt.Printf("  Total Tokens: %d\n", chatAgent.GetTotalTokens())
@@ -107,12 +107,12 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	// Cost
 	cost := chatAgent.GetTotalCost()
-	fmt.Printf("\n💰 Cost: $%.6f\n", cost)
+	fmt.Printf("\n$ Cost: $%.6f\n", cost)
 
 	// Change tracking and files
-	fmt.Println("\n📝 Changes:")
+	fmt.Println("\n[edit] Changes:")
 	if chatAgent.IsChangeTrackingEnabled() {
-		fmt.Println("Tracking: ✅ Enabled")
+		fmt.Println("Tracking: [OK] Enabled")
 		fmt.Printf("Revision: %s\n", chatAgent.GetRevisionID())
 		fmt.Printf("Files Modified: %d\n", chatAgent.GetChangeCount())
 
@@ -124,11 +124,11 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			}
 		}
 	} else {
-		fmt.Println("Tracking: ❌ Disabled")
+		fmt.Println("Tracking: [FAIL] Disabled")
 	}
 
 	// Session
-	fmt.Printf("\n🔖 Session: %s\n", chatAgent.GetSessionID())
+	fmt.Printf("\n[tag] Session: %s\n", chatAgent.GetSessionID())
 
 	return nil
 }
@@ -169,21 +169,21 @@ func (r *RollbackCommand) Description() string {
 // Execute performs a rollback
 func (r *RollbackCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(args) == 0 {
-		fmt.Print("📜 Available revisions for rollback:\r\n")
+		fmt.Print("[doc] Available revisions for rollback:\r\n")
 		fmt.Print("Use /log to see the revision history, then use /rollback <revision-id>\r\n")
 		return nil
 	}
 
 	revisionID := args[0]
-	fmt.Printf("🔄 Attempting to rollback revision: %s\r\n", revisionID)
+	fmt.Printf("[~] Attempting to rollback revision: %s\r\n", revisionID)
 
 	err := history.RevertChangeByRevisionID(revisionID)
 	if err != nil {
 		return fmt.Errorf("rollback failed: %w", err)
 	}
 
-	fmt.Printf("✅ Successfully rolled back revision: %s\r\n", revisionID)
-	fmt.Print("💡 Tip: Use /changes to see if there are new changes in this session\r\n")
+	fmt.Printf("[OK] Successfully rolled back revision: %s\r\n", revisionID)
+	fmt.Print("[i] Tip: Use /changes to see if there are new changes in this session\r\n")
 
 	return nil
 }

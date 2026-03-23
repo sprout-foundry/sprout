@@ -111,7 +111,7 @@ description: Project-specific conventions for %s. Update this description.
 			os.Exit(1)
 		}
 		
-		fmt.Printf("✓ Created skill '%s' at %s\n", skillID, skillFile)
+		fmt.Printf("[ok] Created skill '%s' at %s\n", skillID, skillFile)
 		fmt.Printf("\nEdit the file to add your project-specific conventions.\n")
 		fmt.Printf("The skill will be automatically discovered when running ledit in this project.\n")
 	},

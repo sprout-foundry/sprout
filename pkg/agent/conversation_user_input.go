@@ -38,10 +38,10 @@ func (ch *ConversationHandler) prepareUserInputForModel(input string) string {
 
 	// Print warning to console when truncation occurs
 	if path != "" {
-		ch.agent.PrintLineAsync(fmt.Sprintf("⚠️  INPUT TRUNCATED: %d characters omitted from %s (limit: %d chars). Full input saved to %s\n",
+		ch.agent.PrintLineAsync(fmt.Sprintf("[WARN] INPUT TRUNCATED: %d characters omitted from %s (limit: %d chars). Full input saved to %s\n",
 			omitted, inputType, maxChars, path))
 	} else {
-		ch.agent.PrintLineAsync(fmt.Sprintf("⚠️  INPUT TRUNCATED: %d characters omitted from %s (limit: %d chars). Failed to save full input: %v\n",
+		ch.agent.PrintLineAsync(fmt.Sprintf("[WARN] INPUT TRUNCATED: %d characters omitted from %s (limit: %d chars). Failed to save full input: %v\n",
 			omitted, inputType, maxChars, saveErr))
 	}
 

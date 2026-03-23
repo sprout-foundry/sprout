@@ -156,6 +156,11 @@
   margin-bottom: 2px;
 }
 
+.terminal-stream {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
 .terminal-input-line {
   display: flex;
   align-items: center;

@@ -322,12 +322,12 @@ func handleFetchURLWithImages(ctx context.Context, a *Agent, args map[string]int
 		return nil, result, err
 	}
 
-	a.debugLog("🖼️ fetch_url detected binary content (%v), processing for multimodal: %s\n", kind, url)
+	a.debugLog("[img] fetch_url detected binary content (%v), processing for multimodal: %s\n", kind, url)
 
 	result, err := tools.FetchBinaryURL(url, kind)
 	if err != nil {
 		// Fall back to text handler on binary processing failure
-		a.debugLog("⚠️ Binary fetch failed: %v, falling back to text handler\n", err)
+		a.debugLog("[WARN] Binary fetch failed: %v, falling back to text handler\n", err)
 		result, ferr := handleFetchURL(ctx, a, args)
 		return nil, result, ferr
 	}

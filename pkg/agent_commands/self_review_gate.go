@@ -50,7 +50,7 @@ func (c *SelfReviewGateCommand) Execute(args []string, chatAgent *agent.Agent) e
 	}
 
 	mode := configManager.GetConfig().GetSelfReviewGateMode()
-	fmt.Printf("✅ Self-review gate mode set to: %s\n", mode)
+	fmt.Printf("[OK] Self-review gate mode set to: %s\n", mode)
 	switch mode {
 	case configuration.SelfReviewGateModeOff:
 		fmt.Println("Automatic self-review gate is disabled.")

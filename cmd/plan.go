@@ -107,14 +107,14 @@ func runPlanMode(args []string) error {
 				return fmt.Errorf("failed to load plan: %w", err)
 			}
 			query = fmt.Sprintf("Continue this planning session. Here is the current state:\n\n%s", string(planContent))
-			fmt.Printf("📄 Loaded existing plan from: %s\n\n", args[0])
+			fmt.Printf("[doc] Loaded existing plan from: %s\n\n", args[0])
 		} else if planOutputFile != "" && filesystem.FileExists(planOutputFile) {
 			planContent, err := os.ReadFile(planOutputFile)
 			if err != nil {
 				return fmt.Errorf("failed to load plan: %w", err)
 			}
 			query = fmt.Sprintf("Continue this planning session. Here is the current state:\n\n%s", string(planContent))
-			fmt.Printf("📄 Loaded existing plan from: %s\n\n", planOutputFile)
+			fmt.Printf("[doc] Loaded existing plan from: %s\n\n", planOutputFile)
 		} else {
 			return fmt.Errorf("no existing plan file found. Path specified but file doesn't exist.")
 		}
@@ -175,20 +175,20 @@ func createPlanningAgent() (*agent.Agent, error) {
 func runSeamlessPlanning(ctx context.Context, chatAgent *agent.Agent, initialQuery string) error {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Printf("🎯 Starting planning session: %s\n\n", initialQuery)
-	fmt.Println("💡 I'll collaborate with you to create a plan, then execute it once you approve.")
+	fmt.Printf("[*] Starting planning session: %s\n\n", initialQuery)
+	fmt.Println("[i] I'll collaborate with you to create a plan, then execute it once you approve.")
 	fmt.Println("   Just type your responses. When ready, I'll ask for your approval.")
 
 	currentQuery := initialQuery
 
 	for {
 		fmt.Println("\n" + strings.Repeat("─", 60))
-		fmt.Println("🤖 Processing...")
+		fmt.Println("[bot] Processing...")
 
 		// Process query using the agent (which handles tools, streaming, etc.)
 		_, err := chatAgent.ProcessQueryWithContinuity(currentQuery)
 		if err != nil {
-			fmt.Printf("\n⚠️  Agent error: %v\n", err)
+			fmt.Printf("\n[WARN] Agent error: %v\n", err)
 		}
 
 		// Print summary after response
@@ -199,7 +199,7 @@ func runSeamlessPlanning(ctx context.Context, chatAgent *agent.Agent, initialQue
 
 		// Get user input for next iteration
 		fmt.Println("\n" + strings.Repeat("─", 60))
-		fmt.Print("💬 Your response: ")
+		fmt.Print("[>] Your response: ")
 
 		userInput, _ := reader.ReadString('\n')
 		userInput = strings.TrimSpace(userInput)
@@ -207,7 +207,7 @@ func runSeamlessPlanning(ctx context.Context, chatAgent *agent.Agent, initialQue
 		// Handle special commands
 		switch strings.ToLower(userInput) {
 		case "exit", "quit", "q":
-			fmt.Println("\n👋 Planning session ended.")
+			fmt.Println("\n-- Planning session ended.")
 			return nil
 		case "":
 			// Continue without additional input - agent should decide next action

@@ -369,7 +369,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				"If you need additional work done, please complete your current task and return " +
 				"your results to the primary agent for further delegation."
 			if agent != nil && agent.debug {
-				agent.debugLog("🚫 Blocked subagent tool '%s' - nested subagents are not allowed\n", toolName)
+				agent.debugLog("[NO] Blocked subagent tool '%s' - nested subagents are not allowed\n", toolName)
 			}
 			return nil, "", fmt.Errorf("%s", errMsg)
 		}
@@ -410,7 +410,7 @@ func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string
 
 	// Unsafe mode bypasses most security checks
 	if agent.GetUnsafeMode() {
-		agent.debugLog("🔓 Unsafe mode enabled: skipping security validation for %s\n", toolName)
+		agent.debugLog("[UNLOCK] Unsafe mode enabled: skipping security validation for %s\n", toolName)
 		return nil
 	}
 
@@ -433,7 +433,7 @@ func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string
 			return nil // Fail open - don't block operations if validator fails to init
 		}
 		r.validator = validator
-		agent.debugLog("✓ Security validator initialized successfully\n")
+		agent.debugLog("[ok] Security validator initialized successfully\n")
 	}
 
 	// Perform validation
@@ -444,7 +444,7 @@ func (r *ToolRegistry) validateToolSecurity(ctx context.Context, toolName string
 	}
 
 	// Log the validation result
-	agent.debugLog("🔒 Security validation: %s (%s) - IsSoftBlock: %v, ShouldBlock: %v, ShouldConfirm: %v\n",
+	agent.debugLog("[LOCK] Security validation: %s (%s) - IsSoftBlock: %v, ShouldBlock: %v, ShouldConfirm: %v\n",
 		toolName, result.RiskLevel, result.IsSoftBlock, result.ShouldBlock, result.ShouldConfirm)
 
 	// Handle blocks (user rejected in interactive mode or hard block)
@@ -467,13 +467,13 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	if errors.Is(err, filesystem.ErrOutsideWorkingDirectory) || errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) {
 		// Unsafe mode bypasses filesystem security checks automatically
 		if agent.GetUnsafeMode() {
-			agent.debugLog("🔓 Unsafe mode: automatically allowing file access outside working directory: %s\n", filePath)
+			agent.debugLog("[UNLOCK] Unsafe mode: automatically allowing file access outside working directory: %s\n", filePath)
 			return filesystem.WithSecurityBypass(ctx)
 		}
 
 		// If user already approved filesystem access this session, skip re-prompting
 		if agent.IsSecurityBypassApproved() {
-			agent.debugLog("🔓 Session-level security bypass: allowing file access outside working directory: %s\n", filePath)
+			agent.debugLog("[UNLOCK] Session-level security bypass: allowing file access outside working directory: %s\n", filePath)
 			return filesystem.WithSecurityBypass(ctx)
 		}
 
@@ -490,7 +490,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		agentConfig := agent.GetConfig()
 		logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
 
-		prompt := fmt.Sprintf("⚠️  Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
+		prompt := fmt.Sprintf("[WARN] Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
 
 		if logger.AskForConfirmation(prompt, false, false) {
 			// User approved - enable security bypass for this operation and remember for the session

@@ -106,7 +106,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	// Main conversation loop
 	completed := false
 	for ch.agent.currentIteration = 0; ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
-		ch.agent.debugLog("🔄 Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.messages))
+		ch.agent.debugLog("[~] Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.messages))
 
 		// Record turn data if trace session is enabled
 		if ch.traceSession != nil {
@@ -119,14 +119,14 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 
 			switch interruptResponse {
 			case "STOP":
-				ch.agent.debugLog("⏹️ Conversation stopped by user\n")
+				ch.agent.debugLog("[STOP] Conversation stopped by user\n")
 				ch.agent.lastRunTerminationReason = RunTerminationInterrupted
 				break
 			case "CONTINUE":
-				ch.agent.debugLog("🔄 Continuing without changes\n")
+				ch.agent.debugLog("[~] Continuing without changes\n")
 				continue
 			default:
-				ch.agent.debugLog("⏹️ Conversation interrupted\n")
+				ch.agent.debugLog("[STOP] Conversation interrupted\n")
 				break
 			}
 
@@ -153,14 +153,14 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 				interruptResponse := ch.agent.HandleInterrupt()
 				switch interruptResponse {
 				case "STOP":
-					ch.agent.debugLog("⏹️ Conversation stopped by user\n")
+					ch.agent.debugLog("[STOP] Conversation stopped by user\n")
 					ch.agent.lastRunTerminationReason = RunTerminationInterrupted
 					break
 				case "CONTINUE":
-					ch.agent.debugLog("🔄 Continuing without changes\n")
+					ch.agent.debugLog("[~] Continuing without changes\n")
 					continue
 				default:
-					ch.agent.debugLog("⏹️ Conversation interrupted\n")
+					ch.agent.debugLog("[STOP] Conversation interrupted\n")
 					break
 				}
 				break
@@ -189,19 +189,19 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 
 		// Process response
 		if shouldStop := ch.processResponse(response); shouldStop {
-			ch.agent.debugLog("✅ Conversation complete\n")
+			ch.agent.debugLog("[OK] Conversation complete\n")
 			completed = true
 			ch.agent.lastRunTerminationReason = RunTerminationCompleted
 			break
 		} else {
-			ch.agent.debugLog("➡️ Continuing conversation...\n")
+			ch.agent.debugLog("-> Continuing conversation...\n")
 		}
 	}
 
-	ch.agent.debugLog("🏁 Exited conversation loop - Iteration: %d, Messages: %d\n", ch.agent.currentIteration, len(ch.agent.messages))
+	ch.agent.debugLog("[GO] Exited conversation loop - Iteration: %d, Messages: %d\n", ch.agent.currentIteration, len(ch.agent.messages))
 	if !completed && ch.agent.currentIteration >= ch.agent.maxIterations {
 		ch.agent.lastRunTerminationReason = RunTerminationMaxIterations
-		ch.agent.PrintLineAsync(fmt.Sprintf("⚠️ Reached maximum iterations (%d) before the task completed.", ch.agent.maxIterations))
+		ch.agent.PrintLineAsync(fmt.Sprintf("[WARN] Reached maximum iterations (%d) before the task completed.", ch.agent.maxIterations))
 	}
 
 	// Finalize conversation
@@ -213,11 +213,11 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 	// Check for context cancellation (new interrupt system) with blocking select
 	select {
 	case <-ch.agent.interruptCtx.Done():
-		ch.agent.debugLog("⏹️ Context cancelled, interrupt requested\n")
+		ch.agent.debugLog("[STOP] Context cancelled, interrupt requested\n")
 		return true
 	case input := <-ch.agent.GetInputInjectionContext():
 		// Input injection detected - inject as new user message
-		ch.agent.debugLog("💬 Input injection detected: %s\n", input)
+		ch.agent.debugLog("[>] Input injection detected: %s\n", input)
 		ch.agent.messages = append(ch.agent.messages, api.Message{
 			Role:    "user",
 			Content: ch.prepareUserInputForModel(input),
@@ -296,7 +296,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	fallbackOutput := ""
 
 	if len(resp.Choices) == 0 {
-		ch.agent.debugLog("⚠️ Response had no choices; asking model to continue\n")
+		ch.agent.debugLog("[WARN] Response had no choices; asking model to continue\n")
 		ch.handleIncompleteResponse()
 		turn.GuardrailTrigger = "empty choices response"
 
@@ -317,7 +317,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	if ch.agent.debug {
 		// Debug: Check for ANSI codes in content being added to conversation
 		if strings.Contains(contentUsed, "\x1b[") || strings.Contains(contentUsed, "\x1b(") {
-			ch.agent.debugLog("🚨 ANSI DETECTED in conversation content: %q\n", contentUsed)
+			ch.agent.debugLog("[!!] ANSI DETECTED in conversation content: %q\n", contentUsed)
 		}
 	}
 	// Sanitize content to remove ANSI codes that might have leaked in
@@ -338,7 +338,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 			if choice.Message.ToolCalls[i].ID == "" {
 				choice.Message.ToolCalls[i].ID = ch.toolExecutor.GenerateToolCallID(choice.Message.ToolCalls[i].Function.Name)
-				ch.agent.debugLog("🔧 Generated missing tool call ID: %s for tool: %s\n",
+				ch.agent.debugLog("[tool] Generated missing tool call ID: %s for tool: %s\n",
 					choice.Message.ToolCalls[i].ID, choice.Message.ToolCalls[i].Function.Name)
 			}
 		}
@@ -371,7 +371,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 				if len(sampleArgs) > 120 {
 					sampleArgs = sampleArgs[:117] + "..."
 				}
-				ch.agent.debugLog("♻️ Skipping duplicate tool call id=%s name=%s args=%s\n",
+				ch.agent.debugLog("[recycle] Skipping duplicate tool call id=%s name=%s args=%s\n",
 					tc.ID, tc.Function.Name, sampleArgs)
 				continue
 			}
@@ -379,7 +379,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			deduped = append(deduped, tc)
 		}
 		if len(deduped) != len(choice.Message.ToolCalls) {
-			ch.agent.debugLog("♻️ Deduplicated tool calls: kept %d of %d\n", len(deduped), len(choice.Message.ToolCalls))
+			ch.agent.debugLog("[recycle] Deduplicated tool calls: kept %d of %d\n", len(deduped), len(choice.Message.ToolCalls))
 		}
 		choice.Message.ToolCalls = deduped
 
@@ -390,7 +390,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			for _, tc := range malformedToolCalls {
 				names = append(names, tc.Function.Name)
 			}
-			ch.agent.debugLog("⚠️ Received %d malformed structured tool call(s): %s\n", len(malformedToolCalls), strings.Join(names, ", "))
+			ch.agent.debugLog("[WARN] Received %d malformed structured tool call(s): %s\n", len(malformedToolCalls), strings.Join(names, ", "))
 			ch.enqueueTransientMessage(api.Message{
 				Role: "user",
 				Content: "Your previous tool call arguments were incomplete or invalid JSON. " +
@@ -441,7 +441,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		for _, tc := range choice.Message.ToolCalls {
 			ch.agent.LogToolCall(tc, "received")
 		}
-		ch.agent.debugLog("🛠️ Executing %d tool calls\n", len(choice.Message.ToolCalls))
+		ch.agent.debugLog("[tool] Executing %d tool calls\n", len(choice.Message.ToolCalls))
 
 		// Flush any buffered streaming content before tool execution
 		// This ensures narrative text appears before tool calls for better flow
@@ -454,11 +454,11 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 		// Add tool results immediately after the assistant message with tool calls
 		ch.agent.messages = append(ch.agent.messages, toolResults...)
-		ch.agent.debugLog("✔️ Added %d tool results to conversation\n", len(toolResults))
+		ch.agent.debugLog("[ok] Added %d tool results to conversation\n", len(toolResults))
 
 		// Additional debugging for DeepSeek tool call format
 		if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
-			ch.agent.debugLog("🔍 DeepSeek conversation flow check:\n")
+			ch.agent.debugLog("[search] DeepSeek conversation flow check:\n")
 			for i, msg := range ch.agent.messages {
 				if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 					ch.agent.debugLog("  [%d] Assistant with %d tool_calls\n", i, len(msg.ToolCalls))
@@ -484,26 +484,26 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	// Handle finish reason FIRST to respect model's intent
 	// This must happen BEFORE blank/repetitive content checks to avoid forcing continuation
 	// when the model has explicitly signaled completion
-	ch.agent.debugLog("🔍 Finish reason received: '%s' (len=%d)\n", choice.FinishReason, len(choice.FinishReason))
+	ch.agent.debugLog("[search] Finish reason received: '%s' (len=%d)\n", choice.FinishReason, len(choice.FinishReason))
 	contentPreview := contentUsed
 	if len(contentPreview) > 200 {
 		contentPreview = contentPreview[:200] + "..."
 	}
-	ch.agent.debugLog("🔍 Content length: %d, preview: %q\n", len(contentUsed), contentPreview)
+	ch.agent.debugLog("[search] Content length: %d, preview: %q\n", len(contentUsed), contentPreview)
 
 	if choice.FinishReason == "" {
 		// No finish reason provided - model expects to continue working
 		// First check if this is a blank iteration - if so, fall through to blank iteration handling
 		// Blank responses should not be treated as "complete" just because they're not "incomplete"
 		if ch.isBlankIteration(contentUsed, choice.Message.ToolCalls) {
-			ch.agent.debugLog("🔍 Blank response with no finish reason - falling through to blank iteration handling\n")
+			ch.agent.debugLog("[search] Blank response with no finish reason - falling through to blank iteration handling\n")
 			// Fall through to blank iteration handling below
 		} else {
 			// Not a blank iteration - check if truly incomplete or just a streaming artifact
 			// Some providers don't send finish_reason in every chunk
 			// Only continue if the response actually appears incomplete
 			isIncomplete := ch.responseValidator.IsIncomplete(contentUsed)
-			ch.agent.debugLog("🔍 IsIncomplete() result: %v\n", isIncomplete)
+			ch.agent.debugLog("[search] IsIncomplete() result: %v\n", isIncomplete)
 
 			if !isIncomplete {
 				// Response looks complete despite no finish_reason - accept it
@@ -512,13 +512,13 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 					ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 					return ch.finalizeTurn(turn, stop)
 				}
-				ch.agent.debugLog("✅ No finish_reason but response appears complete - accepting\n")
+				ch.agent.debugLog("[OK] No finish_reason but response appears complete - accepting\n")
 				ch.displayFinalResponse(contentUsed)
 				// Update turn record before returning
 				ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 				return ch.finalizeTurn(turn, true)
 			}
-			ch.agent.debugLog("🔄 No finish reason and response appears incomplete - asking model to continue\n")
+			ch.agent.debugLog("[~] No finish reason and response appears incomplete - asking model to continue\n")
 			// Update turn record before returning
 			ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 			return ch.finalizeTurn(turn, false) // Continue conversation
@@ -552,14 +552,14 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	if isBlankIteration || isRepetitiveContent {
 		ch.consecutiveBlankIterations++
 		if isBlankIteration {
-			ch.agent.debugLog("⚠️ Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
+			ch.agent.debugLog("[WARN] Blank iteration detected (%d consecutive)\n", ch.consecutiveBlankIterations)
 		} else {
-			ch.agent.debugLog("⚠️ Repetitive content detected (%d consecutive)\n", ch.consecutiveBlankIterations)
+			ch.agent.debugLog("[WARN] Repetitive content detected (%d consecutive)\n", ch.consecutiveBlankIterations)
 		}
 
 		if ch.consecutiveBlankIterations == 1 {
 			// First blank/repetitive iteration - provide explicit, actionable reminder
-			ch.agent.debugLog("🔔 Sending reminder about next action\n")
+			ch.agent.debugLog("[bell] Sending reminder about next action\n")
 			var reminderContent string
 			if isRepetitiveContent {
 				reminderContent = "You appear to be stuck in a repetitive loop. Please break out of this pattern and either:\n" +
@@ -584,7 +584,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 			return ch.finalizeTurn(turn, false) // Continue conversation to get a proper response
 		} else if ch.consecutiveBlankIterations >= 2 {
 			// Two consecutive blank iterations - error out
-			ch.agent.debugLog("❌ Too many consecutive blank iterations, stopping with error\n")
+			ch.agent.debugLog("[FAIL] Too many consecutive blank iterations, stopping with error\n")
 			errorMessage := "Error: The agent provided two consecutive blank responses and appears to be stuck. Please try rephrasing your request or break it into smaller tasks."
 			ch.displayFinalResponse(errorMessage)
 			// Update turn record before returning
@@ -599,7 +599,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	// Final check for incomplete responses (only reached if not stopped and not blank/repetitive)
 	if ch.responseValidator.IsIncomplete(contentUsed) {
-		ch.agent.debugLog("⚠️ Response appears incomplete, asking model to continue\n")
+		ch.agent.debugLog("[WARN] Response appears incomplete, asking model to continue\n")
 		ch.handleIncompleteResponse()
 		turn.GuardrailTrigger = "incomplete response reminder"
 		// Update turn record before returning
@@ -609,7 +609,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	// Response doesn't look incomplete.
 	// Respect the model's judgment - continue conversation without reminders
-	ch.agent.debugLog("⏳ Model response continuing conversation\n")
+	ch.agent.debugLog("[...] Model response continuing conversation\n")
 	// Update turn record before returning
 	ch.updateTurnRecord(contentUsed, nil, parserErrors, fallbackUsed, fallbackOutput)
 	return ch.finalizeTurn(turn, false)
@@ -704,15 +704,15 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 
 func (ch *ConversationHandler) runSelfReviewGate() error {
 	if os.Getenv("LEDIT_SKIP_SELF_REVIEW_GATE") == "1" {
-		ch.agent.PrintLineAsync("⚠️ Self-review gate skipped (LEDIT_SKIP_SELF_REVIEW_GATE=1)")
+		ch.agent.PrintLineAsync("[WARN] Self-review gate skipped (LEDIT_SKIP_SELF_REVIEW_GATE=1)")
 		return nil
 	}
 	activePersona := ch.agent.GetActivePersona()
 	if !isSelfReviewGatePersonaEnabled(activePersona) {
 		if strings.TrimSpace(activePersona) == "" {
-			ch.agent.PrintLineAsync("ℹ️ Self-review gate skipped (persona=<none>)")
+			ch.agent.PrintLineAsync("[info] Self-review gate skipped (persona=<none>)")
 		} else {
-			ch.agent.PrintLineAsync(fmt.Sprintf("ℹ️ Self-review gate skipped (persona=%s)", activePersona))
+			ch.agent.PrintLineAsync(fmt.Sprintf("[info] Self-review gate skipped (persona=%s)", activePersona))
 		}
 		return nil
 	}
@@ -732,11 +732,11 @@ func (ch *ConversationHandler) runSelfReviewGate() error {
 	}
 	mode := cfg.GetSelfReviewGateMode()
 	if mode == configuration.SelfReviewGateModeOff {
-		ch.agent.PrintLineAsync("ℹ️ Self-review gate skipped (mode=off)")
+		ch.agent.PrintLineAsync("[info] Self-review gate skipped (mode=off)")
 		return nil
 	}
 	if mode == configuration.SelfReviewGateModeCode && !hasCodeLikeTrackedFiles(ch.agent.GetTrackedFiles()) {
-		ch.agent.PrintLineAsync("ℹ️ Self-review gate skipped (mode=code, no code files changed)")
+		ch.agent.PrintLineAsync("[info] Self-review gate skipped (mode=code, no code files changed)")
 		return nil
 	}
 
@@ -753,7 +753,7 @@ func (ch *ConversationHandler) runSelfReviewGate() error {
 		return fmt.Errorf("self-review gate blocked completion: %s", summary)
 	}
 
-	ch.agent.PrintLineAsync(fmt.Sprintf("✅ Self-review gate passed: revision %s is within scope", revisionID))
+	ch.agent.PrintLineAsync(fmt.Sprintf("[OK] Self-review gate passed: revision %s is within scope", revisionID))
 	return nil
 }
 
@@ -812,20 +812,20 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 		return false, ""
 	}
 
-	ch.agent.debugLog("🏁 Model finish reason: %s\n", finishReason)
+	ch.agent.debugLog("[GO] Model finish reason: %s\n", finishReason)
 
 	switch finishReason {
 	case "tool_calls":
 		return false, "model tool_calls finish"
 	case "stop":
 		if strings.TrimSpace(content) == "" {
-			ch.agent.debugLog("⚠️ WARNING: Model returned finish_reason='stop' with empty content\n")
-			ch.agent.debugLog("⚠️ Treating as incomplete and asking model to continue\n")
+			ch.agent.debugLog("[WARN] WARNING: Model returned finish_reason='stop' with empty content\n")
+			ch.agent.debugLog("[WARN] Treating as incomplete and asking model to continue\n")
 			ch.handleIncompleteResponse()
 			return false, "empty stop response"
 		}
 		if ch.responseValidator != nil && ch.responseValidator.IsIncomplete(content) {
-			ch.agent.debugLog("⚠️ Model returned finish_reason='stop' with incomplete content\n")
+			ch.agent.debugLog("[WARN] Model returned finish_reason='stop' with incomplete content\n")
 			ch.enqueueTransientMessage(api.Message{
 				Role: "user",
 				Content: "You indicated completion, but your answer appears incomplete. " +
@@ -839,11 +839,11 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 			if ch.tentativeRejectionCount >= 2 {
 				// Accept the response after 2 rejections to avoid loops
 				ch.tentativeRejectionCount = 0
-				ch.agent.debugLog("⚠️ Tentative post-tool rejection limit reached, accepting response\n")
+				ch.agent.debugLog("[WARN] Tentative post-tool rejection limit reached, accepting response\n")
 				ch.displayFinalResponse(content)
 				return true, "completion"
 			}
-			ch.agent.debugLog("⚠️ Model returned finish_reason='stop' immediately after tool results with tentative content (rejection %d/2)\n", ch.tentativeRejectionCount)
+			ch.agent.debugLog("[WARN] Model returned finish_reason='stop' immediately after tool results with tentative content (rejection %d/2)\n", ch.tentativeRejectionCount)
 			ch.enqueueTransientMessage(api.Message{
 				Role: "user",
 				Content: "You just received tool results. Do not stop with a planning note. " +
@@ -852,18 +852,18 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 			return false, "tentative post-tool stop response"
 		}
 		// Model explicitly signaled it's done with non-empty content - accept completion.
-		ch.agent.debugLog("🏁 Model signaled 'stop' - accepting response as complete\n")
+		ch.agent.debugLog("[GO] Model signaled 'stop' - accepting response as complete\n")
 		ch.displayFinalResponse(content)
 		return true, "completion"
 	case "length":
-		ch.agent.debugLog("⚠️ Model hit length limit, asking to continue\n")
+		ch.agent.debugLog("[WARN] Model hit length limit, asking to continue\n")
 		ch.handleIncompleteResponse()
 		return false, "model length limit"
 	case "content_filter":
-		ch.agent.debugLog("🚫 Model response was filtered\n")
+		ch.agent.debugLog("[NO] Model response was filtered\n")
 		return false, "content filtered"
 	default:
-		ch.agent.debugLog("❓ Unknown finish reason: %s\n", finishReason)
+		ch.agent.debugLog("[?] Unknown finish reason: %s\n", finishReason)
 		return false, "unknown finish reason: " + finishReason
 	}
 }
@@ -890,11 +890,11 @@ func (ch *ConversationHandler) followsRecentToolResults() bool {
 
 // handleMalformedToolCalls attempts to parse and execute tool calls from malformed content
 func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn TurnEvaluation, parserErrors []string) bool {
-	ch.agent.debugLog("🔧 Attempting to parse malformed tool calls from content\n")
+	ch.agent.debugLog("[tool] Attempting to parse malformed tool calls from content\n")
 
 	// Defensive nil check for fallbackParser
 	if ch.fallbackParser == nil {
-		ch.agent.debugLog("⚠️ Fallback parser is nil, cannot parse malformed tool calls\n")
+		ch.agent.debugLog("[WARN] Fallback parser is nil, cannot parse malformed tool calls\n")
 		turn.GuardrailTrigger = "fallback parser unavailable"
 
 		// Update turn record without fallback usage
@@ -904,7 +904,7 @@ func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn Tur
 
 	fallbackResult := ch.fallbackParser.Parse(content)
 	if fallbackResult == nil || len(fallbackResult.ToolCalls) == 0 {
-		ch.agent.debugLog("⚠️ Fallback parser could not extract valid tool calls\n")
+		ch.agent.debugLog("[WARN] Fallback parser could not extract valid tool calls\n")
 		turn.GuardrailTrigger = "fallback parser failed"
 
 		// Update turn record without fallback success
@@ -912,7 +912,7 @@ func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn Tur
 		return false // Continue conversation to allow model to issue proper tool_calls
 	}
 
-	ch.agent.debugLog("🔧 Successfully parsed %d tool calls from malformed content\n", len(fallbackResult.ToolCalls))
+	ch.agent.debugLog("[tool] Successfully parsed %d tool calls from malformed content\n", len(fallbackResult.ToolCalls))
 
 	// Generate IDs for parsed tool calls
 	for i := range fallbackResult.ToolCalls {
@@ -930,7 +930,7 @@ func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn Tur
 	// Execute the parsed tool calls
 	toolResults := ch.toolExecutor.ExecuteTools(fallbackResult.ToolCalls)
 	ch.agent.messages = append(ch.agent.messages, toolResults...)
-	ch.agent.debugLog("✔️ Executed %d fallback-parsed tool calls\n", len(toolResults))
+	ch.agent.debugLog("[ok] Executed %d fallback-parsed tool calls\n", len(toolResults))
 
 	turn.ToolCalls = append(turn.ToolCalls, fallbackResult.ToolCalls...)
 	turn.ToolResults = append(turn.ToolResults, toolResults...)

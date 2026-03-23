@@ -171,7 +171,7 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 	// Optimize/resize if needed (using existing vision_types.go function)
 	optimizedData, optimizedMIME, optErr := tools.OptimizeImageData(cleanPath, data)
 	if optErr != nil {
-		a.debugLog("⚠️ Image optimization failed for %s: %v, using original data\n", cleanPath, optErr)
+		a.debugLog("[WARN] Image optimization failed for %s: %v, using original data\n", cleanPath, optErr)
 		// Use original data if optimization fails
 	} else if optimizedData != nil && len(optimizedData) > 0 {
 		data = optimizedData
@@ -198,7 +198,7 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 // When the PDF contains extractable text, returns it directly. Otherwise renders
 // pages as images so the model can visually analyze them.
 func handleReadPDFFileMultimodal(ctx context.Context, a *Agent, filePath string) ([]api.ImageData, string, error) {
-	a.debugLog("📄 PDF detected, processing via multimodal pipeline: %s\n", filePath)
+	a.debugLog("[doc] PDF detected, processing via multimodal pipeline: %s\n", filePath)
 
 	result, err := tools.ProcessPDFForMultimodal(filePath)
 	if err != nil {

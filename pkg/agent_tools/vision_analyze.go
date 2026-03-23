@@ -17,7 +17,7 @@ import (
 // ProcessImagesInText detects images in text and processes them with vision models
 func (vp *VisionProcessor) ProcessImagesInText(text string) (string, []VisionAnalysis, error) {
 	if vp.debug {
-		fmt.Println("🔍 Scanning text for image references...")
+		fmt.Println("[search] Scanning text for image references...")
 	}
 
 	// Find image references in the text
@@ -27,7 +27,7 @@ func (vp *VisionProcessor) ProcessImagesInText(text string) (string, []VisionAna
 	}
 
 	if vp.debug {
-		fmt.Printf("📸 Found %d image references\n", len(images))
+		fmt.Printf("[photo] Found %d image references\n", len(images))
 	}
 
 	var analyses []VisionAnalysis
@@ -36,13 +36,13 @@ func (vp *VisionProcessor) ProcessImagesInText(text string) (string, []VisionAna
 	// Process each image
 	for i, imgPath := range images {
 		if vp.debug {
-			fmt.Printf("🔍 Analyzing image %d: %s\n", i+1, imgPath)
+			fmt.Printf("[search] Analyzing image %d: %s\n", i+1, imgPath)
 		}
 
 		analysis, err := vp.AnalyzeImage(imgPath)
 		if err != nil {
 			if vp.debug {
-				fmt.Printf("\n⚠️  Failed to analyze %s: %v\n", imgPath, err)
+				fmt.Printf("\n[WARN] Failed to analyze %s: %v\n", imgPath, err)
 			}
 			continue
 		}
@@ -54,7 +54,7 @@ func (vp *VisionProcessor) ProcessImagesInText(text string) (string, []VisionAna
 	}
 
 	if vp.debug && len(analyses) > 0 {
-		fmt.Printf("✅ Successfully analyzed %d images\n", len(analyses))
+		fmt.Printf("[OK] Successfully analyzed %d images\n", len(analyses))
 	}
 
 	return enhancedText, analyses, nil

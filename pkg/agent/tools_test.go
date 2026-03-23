@@ -62,7 +62,7 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 		}
 	}
 
-	t.Logf("✅ Agent has access to %d tools", len(tools))
+	t.Logf("[OK] Agent has access to %d tools", len(tools))
 
 	// Verify write_file is available
 	foundWriteFile := false

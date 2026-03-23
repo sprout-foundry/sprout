@@ -24,7 +24,7 @@ func (h *HelpCommand) Description() string {
 // Execute runs the help command
 func (h *HelpCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Print(`
-🤖 Ledit - AI Coding Agent
+[bot] Ledit - AI Coding Agent
 
 A command-line coding assistant that uses AI to help you build software.
 

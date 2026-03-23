@@ -81,7 +81,7 @@ Requirements:
 
 Generate the command/script now:`, description, envContext)
 
-	fmt.Printf("🤖 Generating shell script with environmental context...\n")
+	fmt.Printf("[bot] Generating shell script with environmental context...\n")
 
 	// Send chat request directly without tools
 	messages := []api.Message{
@@ -140,19 +140,19 @@ Example format: find . -name "*.go" | wc -l`, description)},
 	isSingleCommand := !strings.Contains(generatedScript, "\n") || !strings.HasPrefix(generatedScript, "#!")
 
 	if isSingleCommand {
-		fmt.Printf("\n📜 Generated Command:\n")
+		fmt.Printf("\n[doc] Generated Command:\n")
 		fmt.Println("─" + strings.Repeat("─", 60))
 		fmt.Printf("%s\n", generatedScript)
 		fmt.Println("─" + strings.Repeat("─", 60))
 	} else {
-		fmt.Printf("\n📜 Generated Shell Script:\n")
+		fmt.Printf("\n[doc] Generated Shell Script:\n")
 		fmt.Println("═" + strings.Repeat("═", 60))
 		fmt.Printf("%s\n", generatedScript)
 		fmt.Println("═" + strings.Repeat("═", 60))
 	}
 
 	// Ask user for confirmation
-	fmt.Printf("\n🤔 Do you want to execute this %s? (yes/no): ", c.getScriptType(isSingleCommand))
+	fmt.Printf("\n[?] Do you want to execute this %s? (yes/no): ", c.getScriptType(isSingleCommand))
 
 	reader := bufio.NewReader(os.Stdin)
 	userResponse, err := reader.ReadString('\n')
@@ -162,12 +162,12 @@ Example format: find . -name "*.go" | wc -l`, description)},
 
 	userResponse = strings.ToLower(strings.TrimSpace(userResponse))
 	if userResponse != "yes" && userResponse != "y" {
-		fmt.Printf("❌ Execution cancelled.\n")
+		fmt.Printf("[FAIL] Execution cancelled.\n")
 		return nil
 	}
 
 	// Execute the command/script
-	fmt.Printf("\n🚀 Executing %s...\n\n", c.getScriptType(isSingleCommand))
+	fmt.Printf("\n[>>] Executing %s...\n\n", c.getScriptType(isSingleCommand))
 
 	var execErr error
 
@@ -201,11 +201,11 @@ Example format: find . -name "*.go" | wc -l`, description)},
 
 	// Display results (output has been streamed in real-time)
 	if execErr != nil {
-		fmt.Printf("❌ Execution failed: %v\n", execErr)
+		fmt.Printf("[FAIL] Execution failed: %v\n", execErr)
 		return nil
 	}
 
-	fmt.Printf("✅ %s executed successfully!\n", c.getScriptType(isSingleCommand))
+	fmt.Printf("[OK] %s executed successfully!\n", c.getScriptType(isSingleCommand))
 
 	return nil
 }

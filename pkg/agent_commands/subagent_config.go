@@ -50,17 +50,17 @@ func (s *SubagentConfigCommand) showStatus(config *configuration.Config) error {
 	provider := config.GetSubagentProvider()
 	model := config.GetSubagentModel()
 
-	fmt.Println("\n🔧 Subagent Configuration:")
+	fmt.Println("\n[tool] Subagent Configuration:")
 	fmt.Println("========================")
-	fmt.Printf("📦 **Provider**: %s\n", formatValue(provider))
-	fmt.Printf("🤖 **Model**: %s\n", formatValue(model))
+	fmt.Printf("[pkg] **Provider**: %s\n", formatValue(provider))
+	fmt.Printf("[bot] **Model**: %s\n", formatValue(model))
 	fmt.Println()
-	fmt.Println("💡 Usage:")
+	fmt.Println("[i] Usage:")
 	fmt.Println("  /subagent-provider <provider>  - Set subagent provider")
 	fmt.Println("  /subagent-model <model>        - Set subagent model")
 	fmt.Println()
-	fmt.Println("💡 Subagents will use these settings instead of the parent agent's configuration.")
-	fmt.Println("💡 Leave empty to use the parent agent's provider/model.")
+	fmt.Println("[i] Subagents will use these settings instead of the parent agent's configuration.")
+	fmt.Println("[i] Leave empty to use the parent agent's provider/model.")
 	return nil
 }
 
@@ -77,8 +77,8 @@ func (s *SubagentConfigCommand) setProvider(provider string, configManager *conf
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("\n✅ Subagent provider set to: %s\n", provider)
-	fmt.Println("💡 Subagents will now use this provider for all executions.")
+	fmt.Printf("\n[OK] Subagent provider set to: %s\n", provider)
+	fmt.Println("[i] Subagents will now use this provider for all executions.")
 	return nil
 }
 
@@ -91,8 +91,8 @@ func (s *SubagentConfigCommand) setModel(model string, configManager *configurat
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("\n✅ Subagent model set to: %s\n", model)
-	fmt.Println("💡 Subagents will now use this model for all executions.")
+	fmt.Printf("\n[OK] Subagent model set to: %s\n", model)
+	fmt.Println("[i] Subagents will now use this model for all executions.")
 	return nil
 }
 

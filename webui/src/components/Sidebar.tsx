@@ -4,10 +4,10 @@ import { ApiService, ProviderOption, LeditInstance } from '../services/api';
 import { viewRegistry, ProviderContext, SidebarSection, ProviderLogEntry } from '../providers';
 import { useTheme } from '../contexts/ThemeContext';
 import { HotkeyPreset, useHotkeys } from '../contexts/HotkeyContext';
-import { LayoutList, Zap, FolderCog, Settings, type LucideIcon } from 'lucide-react';
+import { LayoutList, ScrollText, FolderCog, Settings, type LucideIcon } from 'lucide-react';
 import FileTree from './FileTree';
 
-type SectionTab = 'context' | 'activity' | 'files' | 'settings';
+type SectionTab = 'views' | 'logs' | 'files' | 'settings';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -48,8 +48,8 @@ interface SectionData {
 
 /** Section tab definitions */
 const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
-  { id: 'context', icon: LayoutList, label: 'Context' },
-  { id: 'activity', icon: Zap, label: 'Activity' },
+  { id: 'views', icon: LayoutList, label: 'Views' },
+  { id: 'logs', icon: ScrollText, label: 'Logs' },
   { id: 'files', icon: FolderCog, label: 'Files' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
@@ -91,7 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const [sectionsData, setSectionsData] = useState<Map<string, SectionData>>(new Map());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [selectedSection, setSelectedSection] = useState<SectionTab>('context');
+  const [selectedSection, setSelectedSection] = useState<SectionTab>('views');
   const apiService = ApiService.getInstance();
 
   const finalSelectedModel = selectedModel || selectedModelState;
@@ -108,11 +108,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const finalStats = useMemo(() =>
     stats || { queryCount: queryCount || 0, filesModified: files?.filter(f => f.modified).length || 0 },
     [stats, queryCount, files]
-  );
-
-  const finalRecentFiles = useMemo(() =>
-    recentFiles.length > 0 ? recentFiles : (files || []),
-    [recentFiles, files]
   );
 
   const finalRecentLogs = useMemo(() =>
@@ -135,13 +130,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       currentView,
       onFileClick,
       onModelChange,
-      recentFiles: finalRecentFiles,
+      recentFiles: recentFiles.length > 0 ? recentFiles : (files || []),
       recentLogs: normalizedRecentLogs,
       stats: finalStats
     };
 
     viewRegistry.setContext(context);
-  }, [isConnected, currentView, onFileClick, onModelChange, finalRecentFiles, normalizedRecentLogs, finalStats]);
+  }, [isConnected, currentView, onFileClick, onModelChange, recentFiles, files, normalizedRecentLogs, finalStats]);
 
   // Subscribe to provider updates for current view
   useEffect(() => {
@@ -416,10 +411,36 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // ─── Section Renderers ───────────────────────────────────────────────
 
-  /** Context section: view-specific data-driven provider content */
-  const renderContextSection = () => {
+  /** Views section: primary app mode switcher + view-specific provider content */
+  const renderViewsSection = () => {
+    const viewButtons: Array<{ id: 'chat' | 'editor' | 'git' | 'logs'; label: string }> = [
+      { id: 'chat', label: 'Chat' },
+      { id: 'editor', label: 'Editor' },
+      { id: 'git', label: 'Git' },
+      { id: 'logs', label: 'Logs' }
+    ];
+
     if (sectionsData.size === 0) {
-      return <div className="empty">No content available</div>;
+      return (
+        <>
+          <div className="section">
+            <h4>Views</h4>
+            <div className="view-switcher-grid">
+              {viewButtons.map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  className={`view-switch-btn ${currentView === view.id ? 'active' : ''}`}
+                  onClick={() => onViewChange?.(view.id)}
+                >
+                  {view.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="empty">No content available</div>
+        </>
+      );
     }
 
     // Sort sections by order
@@ -427,7 +448,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       (a.section.order || 0) - (b.section.order || 0)
     );
 
-    return sortedSections.map(({ section, data, loading, error }) => {
+    const renderedContext = sortedSections.map(({ section, data, loading, error }) => {
       if (loading) {
         return (
           <div key={section.id} className="section">
@@ -464,12 +485,33 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       );
     });
+
+    return (
+      <>
+        <div className="section">
+          <h4>Views</h4>
+          <div className="view-switcher-grid">
+            {viewButtons.map((view) => (
+              <button
+                key={view.id}
+                type="button"
+                className={`view-switch-btn ${currentView === view.id ? 'active' : ''}`}
+                onClick={() => onViewChange?.(view.id)}
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {renderedContext}
+      </>
+    );
   };
 
-  /** Activity section: event/log stream */
-  const renderActivitySection = () => {
+  /** Logs section: full event/log stream */
+  const renderLogsSection = () => {
     if (normalizedRecentLogs.length === 0) {
-      return <div className="empty">No activity yet</div>;
+      return <div className="empty">No logs yet</div>;
     }
 
     const getLogIcon = (level: string) => {
@@ -525,51 +567,33 @@ const Sidebar: React.FC<SidebarProps> = ({
       }
     };
 
-    const displayLogs = normalizedRecentLogs.slice(-20);
+    const displayLogs = [...normalizedRecentLogs].reverse();
 
     return (
       <div className="logs-list logs-expanded">
         {displayLogs.map((logEntry, index) => (
           <div key={logEntry.id || index} className="log-item">
             <span className="log-icon">{getLogIcon(logEntry.level)}</span>
-            <span className="log-text">{getLogSummary(logEntry)}</span>
+            <span className="log-text">
+              <strong>{logEntry.type}</strong>
+              <span className="log-meta">
+                {new Date(logEntry.timestamp).toLocaleTimeString()}
+              </span>
+              <span>{getLogSummary(logEntry)}</span>
+            </span>
           </div>
         ))}
       </div>
     );
   };
 
-  /** Files section: file tree for editor, recent files list otherwise */
+  /** Files section: unified file tree across all views */
   const renderFilesSection = () => {
-    if (currentView === 'editor') {
-      return (
-        <FileTree
-          rootPath="."
-          onFileSelect={(file) => onFileClick?.(file.path)}
-        />
-      );
-    }
-
-    // For non-editor views, show recent files list
-    if (finalRecentFiles.length === 0) {
-      return <div className="empty">No recent files</div>;
-    }
-
     return (
-      <div className="files-list">
-        {finalRecentFiles.map((file, index) => (
-          <div
-            key={`${file.path}-${index}`}
-            className={`file-item clickable ${file.modified ? 'modified' : ''}`}
-            onClick={() => onFileClick?.(file.path)}
-          >
-            <span className="file-icon">{file.modified ? 'M' : '📄'}</span>
-            <span className={`file-path ${file.modified ? 'modified' : ''}`}>
-              {file.path.split('/').filter(Boolean).pop() || file.path}
-            </span>
-          </div>
-        ))}
-      </div>
+      <FileTree
+        rootPath="."
+        onFileSelect={(file) => onFileClick?.(file.path)}
+      />
     );
   };
 
@@ -652,10 +676,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   /** Render the content pane based on selected section */
   const renderContentPane = () => {
     switch (selectedSection) {
-      case 'context':
-        return renderContextSection();
-      case 'activity':
-        return renderActivitySection();
+      case 'views':
+        return renderViewsSection();
+      case 'logs':
+        return renderLogsSection();
       case 'files':
         return renderFilesSection();
       case 'settings':
@@ -688,16 +712,13 @@ const Sidebar: React.FC<SidebarProps> = ({
         </button>
       )}
 
-      {/* Pinned global header: connection status + instance selector */}
+      {/* Pinned global header: status dot + instance selector */}
       <div className="sidebar-pinned-header">
-        <div className="connection-indicator">
-          <div className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`} />
-          {!sidebarCollapsed && (
-            <span className="status-text">
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </span>
-          )}
-        </div>
+        <div
+          className={`status-dot status-dot-floating ${isConnected ? 'connected' : 'disconnected'}`}
+          aria-label={isConnected ? 'Connected' : 'Disconnected'}
+          title={isConnected ? 'Connected' : 'Disconnected'}
+        />
         {!sidebarCollapsed && (
           <div className="instance-selector">
             <select

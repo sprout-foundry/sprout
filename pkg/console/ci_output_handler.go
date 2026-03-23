@@ -229,7 +229,7 @@ func (h *CIOutputHandler) PrintSummary() {
 			h.formatDuration(elapsed),
 			operationCount)
 	} else {
-		summary = fmt.Sprintf("\n💰 Session: %s tokens | %s | Duration: %s\n",
+		summary = fmt.Sprintf("\n$ Session: %s tokens | %s | Duration: %s\n",
 			h.formatTokensCompact(totalTokens),
 			h.formatCostCompact(totalCost),
 			h.formatDuration(elapsed))

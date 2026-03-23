@@ -23,6 +23,16 @@ interface GitFile {
   };
 }
 
+interface GitDiffResponse {
+  message: string;
+  path: string;
+  has_staged: boolean;
+  has_unstaged: boolean;
+  staged_diff: string;
+  unstaged_diff: string;
+  diff: string;
+}
+
 interface GitViewProps {
   refreshToken?: number;
   onCommit?: (message: string, files: string[]) => void | Promise<unknown>;
@@ -44,7 +54,8 @@ const GitView: React.FC<GitViewProps> = ({
   const [commitMessage, setCommitMessage] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [activeDiffPath, setActiveDiffPath] = useState<string | null>(selectedFilePath);
-  const [activeDiffContent, setActiveDiffContent] = useState<string>('');
+  const [activeDiff, setActiveDiff] = useState<GitDiffResponse | null>(null);
+  const [diffMode, setDiffMode] = useState<'combined' | 'staged' | 'unstaged'>('combined');
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -100,10 +111,17 @@ const GitView: React.FC<GitViewProps> = ({
     setDiffError(null);
     try {
       const response = await apiService.getGitDiff(filePath);
-      setActiveDiffContent(response.diff || '');
+      setActiveDiff(response);
+      if (response.has_staged && !response.has_unstaged) {
+        setDiffMode('staged');
+      } else if (!response.has_staged && response.has_unstaged) {
+        setDiffMode('unstaged');
+      } else {
+        setDiffMode('combined');
+      }
     } catch (err) {
       setDiffError(err instanceof Error ? err.message : 'Failed to load diff');
-      setActiveDiffContent('');
+      setActiveDiff(null);
     } finally {
       setIsDiffLoading(false);
     }
@@ -151,6 +169,22 @@ const GitView: React.FC<GitViewProps> = ({
     setActiveDiffPath(filePath);
     loadDiff(filePath);
   };
+
+  const getVisibleDiffText = () => {
+    if (!activeDiff) {
+      return '';
+    }
+    if (diffMode === 'staged') {
+      return activeDiff.staged_diff || 'No staged diff output.';
+    }
+    if (diffMode === 'unstaged') {
+      return activeDiff.unstaged_diff || 'No unstaged diff output.';
+    }
+    return activeDiff.diff || 'No diff output.';
+  };
+
+  const visibleDiff = getVisibleDiffText();
+  const diffLines = visibleDiff.split('\n');
 
   const selectedPaths = Array.from(selectedFiles);
   const stagedSet = new Set(gitStatus?.staged.map(f => f.path) || []);
@@ -320,25 +354,9 @@ const GitView: React.FC<GitViewProps> = ({
       </div>
       {actionError && <div className="git-action-error">{actionError}</div>}
 
-      {/* Diff Preview */}
-      <div className="git-diff-preview">
-        <div className="git-diff-preview-header">
-          <h3>Diff Preview</h3>
-          {activeDiffPath && <span className="git-diff-path">{activeDiffPath}</span>}
-        </div>
-        {isDiffLoading ? (
-          <div className="git-diff-loading">Loading diff...</div>
-        ) : diffError ? (
-          <div className="git-diff-error">{diffError}</div>
-        ) : activeDiffPath ? (
-          <pre className="git-diff-content">{activeDiffContent || 'No diff output.'}</pre>
-        ) : (
-          <div className="git-diff-empty">Select a file to preview its diff.</div>
-        )}
-      </div>
-
-      {/* File Sections */}
-      <div className="git-files">
+      <div className="git-workspace">
+        {/* File Sections */}
+        <div className="git-files">
         {/* Staged Files */}
         {gitStatus.staged.length > 0 && (
           <div className="file-section staged">
@@ -439,6 +457,67 @@ const GitView: React.FC<GitViewProps> = ({
             <p>Working directory clean</p>
           </div>
         )}
+        </div>
+
+        {/* Diff Preview */}
+        <div className="git-diff-preview">
+          <div className="git-diff-preview-header">
+            <h3>Diff Preview</h3>
+            {activeDiffPath && <span className="git-diff-path">{activeDiffPath}</span>}
+          </div>
+          {activeDiff && activeDiff.has_staged && activeDiff.has_unstaged && (
+            <div className="git-diff-mode-tabs">
+              <button
+                type="button"
+                className={`git-diff-mode-tab ${diffMode === 'combined' ? 'active' : ''}`}
+                onClick={() => setDiffMode('combined')}
+              >
+                Combined
+              </button>
+              <button
+                type="button"
+                className={`git-diff-mode-tab ${diffMode === 'staged' ? 'active' : ''}`}
+                onClick={() => setDiffMode('staged')}
+              >
+                Staged
+              </button>
+              <button
+                type="button"
+                className={`git-diff-mode-tab ${diffMode === 'unstaged' ? 'active' : ''}`}
+                onClick={() => setDiffMode('unstaged')}
+              >
+                Unstaged
+              </button>
+            </div>
+          )}
+          {isDiffLoading ? (
+            <div className="git-diff-loading">Loading diff...</div>
+          ) : diffError ? (
+            <div className="git-diff-error">{diffError}</div>
+          ) : activeDiffPath ? (
+            <pre className="git-diff-content">
+              {diffLines.map((line, index) => {
+                const className =
+                  line.startsWith('+++') || line.startsWith('---')
+                    ? 'diff-file'
+                    : line.startsWith('@@')
+                      ? 'diff-hunk'
+                      : line.startsWith('+')
+                        ? 'diff-add'
+                        : line.startsWith('-')
+                          ? 'diff-del'
+                          : 'diff-context';
+                return (
+                  <div key={index} className={`diff-line ${className}`}>
+                    {line || ' '}
+                  </div>
+                );
+              })}
+            </pre>
+          ) : (
+            <div className="git-diff-empty">Select a file to preview its diff.</div>
+          )}
+        </div>
       </div>
 
       {/* Commit Section */}

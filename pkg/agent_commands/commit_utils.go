@@ -64,7 +64,7 @@ Staged changes:
 Please generate only the commit message content, no additional commentary.`, string(diffOutput))
 	}
 
-	fmt.Println("🤖 Generating commit message with AI...")
+	fmt.Println("[bot] Generating commit message with AI...")
 	commitMessage, err := h.chatAgent.ProcessQuery(commitPrompt)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate commit message: %v", err)
@@ -77,16 +77,16 @@ Please generate only the commit message content, no additional commentary.`, str
 func (h *CommitMessageHandler) HandleCommitConfirmation(commitMessage string, filename string) (string, bool, error) {
 	for {
 		// Show preview
-		fmt.Println("\n📋 Commit message preview:")
+		fmt.Println("\n[list] Commit message preview:")
 		fmt.Println("=============================================")
 		fmt.Println(commitMessage)
 		fmt.Println("=============================================")
 
 		// Prompt for action
 		if filename != "" {
-			fmt.Printf("\n💡 Commit with this message for %s? (y)es/(n)o/(e)dit/(r)etry: ", filename)
+			fmt.Printf("\n[i] Commit with this message for %s? (y)es/(n)o/(e)dit/(r)etry: ", filename)
 		} else {
-			fmt.Println("\n💡 Commit with this message? (y)es/(n)o/(e)dit/(r)etry:")
+			fmt.Println("\n[i] Commit with this message? (y)es/(n)o/(e)dit/(r)etry:")
 		}
 
 		input, _ := h.reader.ReadString('\n')
@@ -96,20 +96,20 @@ func (h *CommitMessageHandler) HandleCommitConfirmation(commitMessage string, fi
 		case "y", "yes":
 			return commitMessage, true, nil
 		case "n", "no":
-			fmt.Println("❌ Commit cancelled")
+			fmt.Println("[FAIL] Commit cancelled")
 			return "", false, nil
 		case "e", "edit":
 			editedMessage, err := h.EditCommitMessage(commitMessage)
 			if err != nil {
-				fmt.Printf("❌ Failed to edit commit message: %v\n", err)
+				fmt.Printf("[FAIL] Failed to edit commit message: %v\n", err)
 				continue
 			}
 			commitMessage = editedMessage
 		case "r", "retry":
-			fmt.Println("🔄 Retrying commit message generation...")
+			fmt.Println("[~] Retrying commit message generation...")
 			return "", true, nil // Signal to retry generation
 		default:
-			fmt.Println("❌ Invalid input. Please enter y, n, e, or r")
+			fmt.Println("[FAIL] Invalid input. Please enter y, n, e, or r")
 		}
 	}
 }
@@ -136,8 +136,8 @@ func (h *CommitMessageHandler) EditCommitMessage(commitMessage string) (string, 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	fmt.Printf("📝 Opening %s to edit commit message...\n", editor)
-	fmt.Println("💡 Make your changes, save, and exit the editor to continue")
+	fmt.Printf("[edit] Opening %s to edit commit message...\n", editor)
+	fmt.Println("[i] Make your changes, save, and exit the editor to continue")
 
 	err = cmd.Run()
 	if err != nil {
@@ -155,7 +155,7 @@ func (h *CommitMessageHandler) EditCommitMessage(commitMessage string) (string, 
 		return "", fmt.Errorf("commit message cannot be empty")
 	}
 
-	fmt.Println("✅ Commit message edited successfully")
+	fmt.Println("[OK] Commit message edited successfully")
 	return editedMessage, nil
 }
 
@@ -169,14 +169,14 @@ func (h *CommitMessageHandler) CreateCommit(commitMessage string) error {
 	}
 	defer os.Remove(tempFile)
 
-	fmt.Println("\n💾 Creating commit...")
+	fmt.Println("\n[save] Creating commit...")
 	cmd := exec.Command("git", "commit", "-F", tempFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to create commit: %v", err)
 	}
 
-	fmt.Printf("✅ Commit created successfully!\n")
+	fmt.Printf("[OK] Commit created successfully!\n")
 	fmt.Printf("Output: %s\n", string(output))
 	return nil
 }

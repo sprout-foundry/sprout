@@ -93,10 +93,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				webServer,
 				port,
 				func(activePort int) {
-					fmt.Printf("\n🌐 Web UI available at http://localhost:%d\n", activePort)
+					fmt.Printf("\n[web] Web UI available at http://localhost:%d\n", activePort)
 				},
 				func(activePort int) {
-					fmt.Printf("\n🌐 Reusing active Web UI at http://localhost:%d\n", activePort)
+					fmt.Printf("\n[web] Reusing active Web UI at http://localhost:%d\n", activePort)
 				},
 			)
 			go webUISup.Run(ctx)
@@ -105,7 +105,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			go func() {
 				if err := webServer.Start(ctx); err != nil && ctx.Err() == nil {
 					// Only log error if not due to context cancellation
-					fmt.Fprintf(os.Stderr, "⚠️  Web UI failed to start: %v\n", err)
+					fmt.Fprintf(os.Stderr, "[WARN] Web UI failed to start: %v\n", err)
 				}
 			}()
 		}
@@ -113,7 +113,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// Give web server a moment to start
 		time.Sleep(100 * time.Millisecond)
 		if webServer.IsRunning() && webPort != 0 {
-			fmt.Printf("\n🌐 Web UI available at http://localhost:%d\n", webServer.GetPort())
+			fmt.Printf("\n[web] Web UI available at http://localhost:%d\n", webServer.GetPort())
 		}
 	}
 
@@ -133,18 +133,18 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					nowUnix := time.Now().UnixNano()
 					prev := atomic.LoadInt64(&lastInterruptAt)
 					if prev > 0 && time.Duration(nowUnix-prev) < 2*time.Second {
-						fmt.Printf("\n⚡ Force quitting immediately...\n")
+						fmt.Printf("\n[!] Force quitting immediately...\n")
 						os.Exit(1)
 					}
 
 					atomic.StoreInt64(&lastInterruptAt, nowUnix)
-					fmt.Printf("\n⏸️ Received signal %v, interrupting active task...\n", sig)
+					fmt.Printf("\n[||] Received signal %v, interrupting active task...\n", sig)
 					fmt.Printf("  (Press Ctrl+C again quickly to force quit)\n")
 					chatAgent.TriggerInterrupt()
 					continue
 				}
 
-				fmt.Printf("\n🛑 Received signal %v, shutting down gracefully...\n", sig)
+				fmt.Printf("\n[STOP] Received signal %v, shutting down gracefully...\n", sig)
 				fmt.Printf("  (Press Ctrl+C again to force quit)\n")
 
 				// Cancel the context which will stop all operations
@@ -156,7 +156,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				// Start a timeout goroutine for force quit
 				go func() {
 					time.Sleep(5 * time.Second)
-					fmt.Printf("\n⚡ Force quitting...\n")
+					fmt.Printf("\n[!] Force quitting...\n")
 					os.Exit(1)
 				}()
 
@@ -164,7 +164,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				for {
 					select {
 					case <-sigCh:
-						fmt.Printf("\n⚡ Force quitting immediately...\n")
+						fmt.Printf("\n[!] Force quitting immediately...\n")
 						os.Exit(1)
 					case <-ctx.Done():
 						return
@@ -229,14 +229,14 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			// No query provided - check if we should keep running (daemon mode)
 			if daemonMode && webServer != nil && webServer.IsRunning() {
 				// Daemon mode: keep web UI running
-				fmt.Printf("\n🌐 Web UI running at http://localhost:%d\n", webServer.GetPort())
+				fmt.Printf("\n[web] Web UI running at http://localhost:%d\n", webServer.GetPort())
 				fmt.Println("Press Ctrl+C to stop the server.")
 
 				// Wait for interrupt signal
 				<-ctx.Done()
 				return nil
 			}
-			fmt.Println("Welcome to ledit! 🤖")
+			fmt.Println("Welcome to ledit! [bot]")
 			fmt.Println("Agent initialized successfully.")
 			fmt.Println("Use 'ledit agent \"your query\"' to execute commands.")
 			return nil
@@ -318,12 +318,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		webUISup.cleanupHostRecordIfOwned()
 	}
 	if webServer != nil && webServer.IsRunning() {
-		fmt.Printf("🔄 Shutting down web server...\n")
+		fmt.Printf("[~] Shutting down web server...\n")
 
 		if webErr := webServer.Shutdown(); webErr != nil {
-			fmt.Fprintf(os.Stderr, "⚠️  Error shutting down web server: %v\n", webErr)
+			fmt.Fprintf(os.Stderr, "[WARN] Error shutting down web server: %v\n", webErr)
 		} else {
-			fmt.Printf("✅ Web server shut down successfully\n")
+			fmt.Printf("[OK] Web server shut down successfully\n")
 		}
 	}
 
@@ -332,9 +332,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	if ctx.Err() == context.Canceled {
 		select {
 		case <-shutdown:
-			fmt.Printf("👋 Shutdown complete\n")
+			fmt.Printf("-- Shutdown complete\n")
 		default:
-			fmt.Printf("👋 Goodbye!\n")
+			fmt.Printf("-- Goodbye!\n")
 		}
 		printContinuationHint(chatAgent)
 		continuationPrinted = true
@@ -359,8 +359,8 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus) {
 
 // runInteractiveMode handles interactive REPL mode
 func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus) error {
-	fmt.Printf("\n🤖 Welcome to ledit! Enhanced CLI with Web UI\n")
-	fmt.Printf("📊 Provider: %s | Model: %s\n\n",
+	fmt.Printf("\n[bot] Welcome to ledit! Enhanced CLI with Web UI\n")
+	fmt.Printf("[chart] Provider: %s | Model: %s\n\n",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
@@ -397,7 +397,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 			// Handle exit commands
 			if strings.ToLower(query) == "exit" || strings.ToLower(query) == "quit" {
-				fmt.Println("\n👋 Goodbye! Here's your session summary:")
+				fmt.Println("\n-- Goodbye! Here's your session summary:")
 				fmt.Println("=====================================")
 				chatAgent.PrintConversationSummary(true)
 				printContinuationHint(chatAgent)
@@ -408,22 +408,22 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			registry := agent_commands.NewCommandRegistry()
 			if registry.IsSlashCommand(query) {
 				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
-					fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+					fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 				}
 				continue
 			}
 
 			// Try zsh command detection first (fast path)
 			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
-				fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+				fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 			} else if !executed {
 				// Zsh detection didn't trigger, try LLM-based detection
 				if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
-					fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+					fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 				} else if !executed {
 					// Neither fast path triggered, process normally
 					if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
-						fmt.Fprintf(os.Stderr, "❌ Error: %v\n", err)
+						fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 					}
 				}
 			}
@@ -434,7 +434,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 // runDirectMode handles single query execution
 func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
 	if os.Getenv("LEDIT_SUBAGENT") != "1" {
-		fmt.Printf("🚀 Processing: %s\n", query)
+		fmt.Printf("[>>] Processing: %s\n", query)
 	}
 
 	// Slash/bang commands should bypass command-detection fast paths.

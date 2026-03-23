@@ -28,7 +28,7 @@ func resolveSpecAgentClient(cfg *configuration.Config, logger *utils.Logger, pur
 	}
 
 	if logger != nil {
-		logger.LogProcessStep(fmt.Sprintf("ℹ️ %s using provider/model: %s | %s", purpose, resolvedProvider, resolvedModel))
+		logger.LogProcessStep(fmt.Sprintf("[info] %s using provider/model: %s | %s", purpose, resolvedProvider, resolvedModel))
 	}
 
 	return agentClient, nil

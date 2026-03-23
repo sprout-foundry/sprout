@@ -39,7 +39,7 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 		}
 
 		// Should contain truncation warning
-		if !strings.Contains(result, "⚠️") {
+		if !strings.Contains(result, "[WARN]") {
 			t.Errorf("Expected truncation warning for full file read, got: %s", result[:min(200, len(result))])
 		}
 
@@ -66,7 +66,7 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 		}
 
 		// Should NOT contain truncation warning (file is only 300KB)
-		if strings.Contains(result, "⚠️") {
+		if strings.Contains(result, "[WARN]") {
 			t.Errorf("Should not truncate for 300KB file with line range, got: %s", result)
 		}
 
@@ -88,7 +88,7 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 		}
 
 		// Should succeed (no truncation with 10MB limit)
-		if strings.Contains(result, "⚠️") {
+		if strings.Contains(result, "[WARN]") {
 			t.Errorf("Should not truncate line ranges for 150KB file, got: %s", result)
 		}
 
@@ -138,7 +138,7 @@ func TestEditAfterTruncatedRead(t *testing.T) {
 	}
 
 	// Should have truncation warning
-	if !strings.Contains(fullRead, "⚠️") {
+	if !strings.Contains(fullRead, "[WARN]") {
 		t.Error("Expected truncation warning in full read")
 	}
 
@@ -160,7 +160,7 @@ func TestEditAfterTruncatedRead(t *testing.T) {
 	}
 
 	// Should NOT have truncation warning (10MB limit is sufficient)
-	if strings.Contains(lineRangeRead, "⚠️") {
+	if strings.Contains(lineRangeRead, "[WARN]") {
 		t.Error("Line range read should not truncate for this file size")
 	}
 

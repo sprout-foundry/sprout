@@ -162,7 +162,7 @@ func PromptForAPIKey(provider string) (string, error) {
 	providerName := getProviderDisplayName(provider)
 
 	// Provide specific guidance for getting API keys
-	fmt.Printf("🔑 Enter your %s API key\n", providerName)
+	fmt.Printf("[key] Enter your %s API key\n", providerName)
 	fmt.Printf("   (The key will be hidden as you type for security)\n")
 	fmt.Printf("   API key: ")
 
@@ -197,15 +197,15 @@ func PromptForAPIKey(provider string) (string, error) {
 	switch provider {
 	case "openai":
 		if !strings.HasPrefix(apiKey, "sk-") {
-			fmt.Println("⚠️  Warning: OpenAI API keys typically start with 'sk-'")
+			fmt.Println("[WARN] Warning: OpenAI API keys typically start with 'sk-'")
 		}
 	case "openrouter":
 		if !strings.HasPrefix(apiKey, "sk-or-") {
-			fmt.Println("⚠️  Warning: OpenRouter API keys typically start with 'sk-or-'")
+			fmt.Println("[WARN] Warning: OpenRouter API keys typically start with 'sk-or-'")
 		}
 	}
 
-	fmt.Printf("✅ API key accepted (%d characters)\n", len(apiKey))
+	fmt.Printf("[OK] API key accepted (%d characters)\n", len(apiKey))
 	return apiKey, nil
 }
 

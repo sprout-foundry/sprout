@@ -220,14 +220,14 @@ func main() {
 	fmt.Printf("Total tests run: %d\n", passed+failed)
 
 	if failed == 0 && passed > 0 {
-		fmt.Println("\n✅ All API functionality tests passed!")
+		fmt.Println("\n[OK] All API functionality tests passed!")
 		fmt.Println("The registry removal is working correctly.")
 		os.Exit(0)
 	} else if passed == 0 {
-		fmt.Println("\n⚠️  No tests were run. Set API keys to enable testing.")
+		fmt.Println("\n[WARN] No tests were run. Set API keys to enable testing.")
 		os.Exit(0)
 	} else {
-		fmt.Println("\n❌ Some tests failed.")
+		fmt.Println("\n[FAIL] Some tests failed.")
 		os.Exit(1)
 	}
 }

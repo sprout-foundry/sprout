@@ -52,7 +52,7 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	clientType := chatAgent.GetProviderType()
 	providerName := api.GetProviderName(clientType)
 
-	fmt.Printf("\n📋 Available Models (%s):\n", providerName)
+	fmt.Printf("\n[list] Available Models (%s):\n", providerName)
 	fmt.Println("====================")
 
 	models, err := api.GetModelsForProvider(clientType)
@@ -63,7 +63,7 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	if len(models) == 0 {
 		fmt.Printf("No models available for %s.\n", providerName)
 		fmt.Println()
-		fmt.Println("💡 Tip: Use '/provider select' to switch to a different provider")
+		fmt.Println("[i] Tip: Use '/provider select' to switch to a different provider")
 		return nil
 	}
 
@@ -109,7 +109,7 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 				}
 			}
 			if hasTools {
-				fmt.Printf("   🛠️  Supports tools: %s\n", strings.Join(model.Tags, ", "))
+				fmt.Printf("   [tool] Supports tools: %s\n", strings.Join(model.Tags, ", "))
 			} else {
 				fmt.Printf("   Features: %s\n", strings.Join(model.Tags, ", "))
 			}
@@ -119,7 +119,7 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 
 	// Display featured models section
 	if len(featuredIndices) > 0 {
-		fmt.Println("⭐ Featured Models (Popular & High Performance):")
+		fmt.Println("[*] Featured Models (Popular & High Performance):")
 		fmt.Println("================================================")
 		for _, idx := range featuredIndices {
 			model := models[idx]
@@ -171,7 +171,7 @@ func (m *ModelsCommand) selectModel(chatAgent *agent.Agent) error {
 	if len(models) == 0 {
 		fmt.Printf("No models available for %s.\n", providerName)
 		fmt.Println()
-		fmt.Println("💡 Tip: Use '/provider select' to switch to a different provider with available models")
+		fmt.Println("[i] Tip: Use '/provider select' to switch to a different provider with available models")
 		return nil
 	}
 
@@ -248,7 +248,7 @@ func (m *ModelsCommand) fallbackLineBasedInterface(models []api.ModelInfo, featu
 			matches := m.getCurrentMatches(currentInput, models)
 			if num >= 1 && num <= len(matches) {
 				selectedModel := matches[num-1]
-				fmt.Printf("✅ Selected: %s\n", selectedModel.ID)
+				fmt.Printf("[OK] Selected: %s\n", selectedModel.ID)
 				return m.setModel(selectedModel.ID, chatAgent)
 			}
 		}
@@ -260,7 +260,7 @@ func (m *ModelsCommand) fallbackLineBasedInterface(models []api.ModelInfo, featu
 
 		// Check for exact match
 		if exactModel := m.findExactModel(models, currentInput); exactModel != nil {
-			fmt.Printf("✅ Exact match found: %s\n", exactModel.ID)
+			fmt.Printf("[OK] Exact match found: %s\n", exactModel.ID)
 			return m.setModel(exactModel.ID, chatAgent)
 		}
 	}
@@ -281,12 +281,12 @@ func (m *ModelsCommand) displayLineBasedSearch(currentInput string, models []api
 	matches := m.getCurrentMatches(currentInput, models)
 
 	if len(matches) == 0 {
-		fmt.Printf("❌ No models found for '%s'\n", currentInput)
-		fmt.Println("💡 Try: 'gpt', 'claude', 'gemini', 'deepseek'")
+		fmt.Printf("[FAIL] No models found for '%s'\n", currentInput)
+		fmt.Println("[i] Try: 'gpt', 'claude', 'gemini', 'deepseek'")
 		return
 	}
 
-	fmt.Printf("📋 Found %d matches:\n\n", len(matches))
+	fmt.Printf("[list] Found %d matches:\n\n", len(matches))
 
 	// Calculate space for model name - reserve space for number, cost, context
 	// Format: "10. modelname $cost - context"
@@ -379,7 +379,7 @@ func (m *ModelsCommand) updateRealTimeDisplay(currentInput string, models []api.
 	if len(matches) == 0 {
 		fmt.Print("No matches found\r\n")
 		fmt.Print("\r\n")
-		fmt.Printf("🔍 Search: %s", currentInput)
+		fmt.Printf("[search] Search: %s", currentInput)
 		return
 	}
 
@@ -458,7 +458,7 @@ func (m *ModelsCommand) updateRealTimeDisplay(currentInput string, models []api.
 
 	// Search input at the bottom
 	fmt.Print("─────────────────────────────────────────────────\r\n")
-	fmt.Printf("🔍 Search: %s", currentInput)
+	fmt.Printf("[search] Search: %s", currentInput)
 
 	// Clear to end of line to remove any leftover text
 	fmt.Print("\033[K")
@@ -494,12 +494,12 @@ func (m *ModelsCommand) showModelInfo(model api.ModelInfo) {
 
 // showAllModels displays all available models in a compact format
 func (m *ModelsCommand) showAllModels(models []api.ModelInfo, featuredIndices []int) {
-	fmt.Println("\n📋 All Available Models:")
+	fmt.Println("\n[list] All Available Models:")
 	fmt.Println("========================")
 
 	// Show featured models first
 	if len(featuredIndices) > 0 {
-		fmt.Println("⭐ Featured Models:")
+		fmt.Println("[*] Featured Models:")
 		for _, idx := range featuredIndices {
 			model := models[idx]
 			fmt.Printf("  %s", model.ID)
@@ -572,7 +572,7 @@ func (m *ModelsCommand) commonPrefix(a, b string) string {
 
 // suggestAlternatives suggests similar models when no matches found
 func (m *ModelsCommand) suggestAlternatives(models []api.ModelInfo, input string) {
-	fmt.Println("💡 Did you mean:")
+	fmt.Println("[i] Did you mean:")
 
 	// Show featured models as suggestions
 	suggestions := []string{"gpt", "claude", "deepseek", "qwen", "gemini", "codestral"}
@@ -588,12 +588,12 @@ func (m *ModelsCommand) suggestAlternatives(models []api.ModelInfo, input string
 
 // displayAllModels shows the full model list with selection
 func (m *ModelsCommand) displayAllModels(models []api.ModelInfo, featuredIndices []int, chatAgent *agent.Agent) error {
-	fmt.Println("\n📋 All Available Models:")
+	fmt.Println("\n[list] All Available Models:")
 	fmt.Println("========================")
 
 	// Show featured models first if available
 	if len(featuredIndices) > 0 {
-		fmt.Println("⭐ Featured Models:")
+		fmt.Println("[*] Featured Models:")
 		for _, idx := range featuredIndices {
 			model := models[idx]
 			fmt.Printf("%d. %s", idx+1, model.ID)
@@ -740,7 +740,7 @@ func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 	fmt.Printf("Model set to: %s\n", finalModel)
 	fmt.Printf("Provider: %s\n", api.GetProviderName(finalProvider))
 	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {
-		fmt.Printf("\nℹ️  %s\n", note)
+		fmt.Printf("\n[info] %s\n", note)
 	}
 
 	// Publish model info event for UI

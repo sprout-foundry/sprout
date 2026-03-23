@@ -111,13 +111,13 @@ func TestShellCommandInvalidBinary(t *testing.T) {
 func TestBuildShellOutputWithStatus(t *testing.T) {
 	t.Run("EmptyOutputWithSuccess", func(t *testing.T) {
 		output := buildShellOutputWithStatus("", "echo test", 0, nil)
-		assert.Contains(t, output, "✅", "Should contain success icon")
+		assert.Contains(t, output, "[OK]", "Should contain success icon")
 		assert.Contains(t, output, "SUCCESS", "Should contain success status")
 	})
 
 	t.Run("EmptyOutputWithFailure", func(t *testing.T) {
 		output := buildShellOutputWithStatus("", "false", 1, nil)
-		assert.Contains(t, output, "❌", "Should contain failure icon")
+		assert.Contains(t, output, "[FAIL]", "Should contain failure icon")
 		assert.Contains(t, output, "FAILED", "Should contain failure status")
 	})
 

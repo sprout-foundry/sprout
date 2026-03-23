@@ -5,7 +5,7 @@ func (a *Agent) SetPruningStrategy(strategy PruningStrategy) {
 	if a.conversationPruner != nil {
 		a.conversationPruner.SetStrategy(strategy)
 		if a.debug {
-			a.debugLog("🔄 Pruning strategy set to: %s\n", strategy)
+			a.debugLog("[~] Pruning strategy set to: %s\n", strategy)
 		}
 	}
 }
@@ -16,7 +16,7 @@ func (a *Agent) SetPruningThreshold(threshold float64) {
 	if a.conversationPruner != nil {
 		a.conversationPruner.SetThreshold(threshold)
 		if a.debug {
-			a.debugLog("🔄 Pruning threshold set to: %.1f%%\n", threshold*100)
+			a.debugLog("[~] Pruning threshold set to: %.1f%%\n", threshold*100)
 		}
 	}
 }
@@ -26,7 +26,7 @@ func (a *Agent) SetRecentMessagesToKeep(count int) {
 	if a.conversationPruner != nil {
 		a.conversationPruner.SetRecentMessagesToKeep(count)
 		if a.debug {
-			a.debugLog("🔄 Recent messages to keep set to: %d\n", count)
+			a.debugLog("[~] Recent messages to keep set to: %d\n", count)
 		}
 	}
 }
@@ -36,7 +36,7 @@ func (a *Agent) SetPruningSlidingWindowSize(size int) {
 	if a.conversationPruner != nil {
 		a.conversationPruner.SetSlidingWindowSize(size)
 		if a.debug {
-			a.debugLog("🔄 Sliding window size set to: %d\n", size)
+			a.debugLog("[~] Sliding window size set to: %d\n", size)
 		}
 	}
 }
@@ -65,7 +65,7 @@ func (a *Agent) DisableAutoPruning() {
 	if a.conversationPruner != nil {
 		a.conversationPruner.SetStrategy(PruneStrategyNone)
 		if a.debug {
-			a.debugLog("🔄 Automatic pruning disabled\n")
+			a.debugLog("[~] Automatic pruning disabled\n")
 		}
 	}
 }
@@ -75,7 +75,7 @@ func (a *Agent) EnableAutoPruning() {
 	if a.conversationPruner != nil {
 		a.conversationPruner.SetStrategy(PruneStrategyAdaptive)
 		if a.debug {
-			a.debugLog("🔄 Automatic pruning enabled (adaptive strategy)\n")
+			a.debugLog("[~] Automatic pruning enabled (adaptive strategy)\n")
 		}
 	}
 }

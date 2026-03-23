@@ -118,7 +118,7 @@ func ShouldPromptGitHubSetup(workingDir string, cfg MCPConfig, dismissedPrompts 
 // Returns the configured server config on success, or an error.
 func RunGitHubMCPSetup(_ context.Context, repo *GitHubRepoInfo, reader *bufio.Reader) (*MCPServerConfig, error) {
 	fmt.Println()
-	fmt.Println("🐙 GitHub MCP Server Setup")
+	fmt.Println("[oct] GitHub MCP Server Setup")
 	fmt.Println("==========================")
 	fmt.Println()
 
@@ -152,7 +152,7 @@ func RunGitHubMCPSetup(_ context.Context, repo *GitHubRepoInfo, reader *bufio.Re
 	case "1", "":
 		// Remote OAuth server — no token needed
 		fmt.Println()
-		fmt.Println("ℹ️  Remote OAuth server selected.")
+		fmt.Println("[info] Remote OAuth server selected.")
 		fmt.Println("   Authentication will happen automatically via OAuth")
 		fmt.Println("   when the agent first connects to the server.")
 		fmt.Println()
@@ -215,7 +215,7 @@ func RunGitHubMCPSetup(_ context.Context, repo *GitHubRepoInfo, reader *bufio.Re
 		return nil, fmt.Errorf("invalid choice: %s", choice)
 	}
 
-	fmt.Println("✅ GitHub MCP server configured successfully!")
+	fmt.Println("[OK] GitHub MCP server configured successfully!")
 	return server, nil
 }
 
@@ -230,7 +230,7 @@ func promptForGitHubPAT(reader *bufio.Reader) (string, error) {
 	fmt.Println()
 
 	if err := openBrowser(gitHubPATHelpURL); err != nil {
-		fmt.Printf("⚠️  Could not open browser: %v\n", err)
+		fmt.Printf("[WARN] Could not open browser: %v\n", err)
 		fmt.Printf("   Please visit: %s\n", gitHubPATHelpURL)
 	}
 

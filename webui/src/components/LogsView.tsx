@@ -1,4 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, type ReactNode } from 'react';
+import {
+  CheckCircle2, XCircle, AlertTriangle, Info, FileEdit,
+  Rocket, Wrench, Settings, Radio, ClipboardList, Clipboard,
+  ChevronRight, ChevronDown, Trash2, Pin
+} from 'lucide-react';
 import './LogsView.css';
 
 interface LogEntry {
@@ -76,24 +81,24 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
     });
   };
 
-  const getLevelIcon = (level: string) => {
+  const getLevelIcon = (level: string): ReactNode => {
     switch (level) {
-      case 'success': return '✅';
-      case 'error': return '❌';
-      case 'warning': return '⚠️';
-      case 'info': return 'ℹ️';
-      default: return '📝';
+      case 'success': return <CheckCircle2 size={14} className="log-level-icon log-level-success" />;
+      case 'error': return <XCircle size={14} className="log-level-icon log-level-error" />;
+      case 'warning': return <AlertTriangle size={14} className="log-level-icon log-level-warning" />;
+      case 'info': return <Info size={14} className="log-level-icon log-level-info" />;
+      default: return <FileEdit size={14} className="log-level-icon" />;
     }
   };
 
-  const getCategoryIcon = (category: string) => {
+  const getCategoryIcon = (category: string): ReactNode => {
     switch (category) {
-      case 'query': return '🚀';
-      case 'tool': return '🔧';
-      case 'file': return '📝';
-      case 'system': return '⚙️';
-      case 'stream': return '📡';
-      default: return '📋';
+      case 'query': return <Rocket size={14} />;
+      case 'tool': return <Wrench size={14} />;
+      case 'file': return <FileEdit size={14} />;
+      case 'system': return <Settings size={14} />;
+      case 'stream': return <Radio size={14} />;
+      default: return <Clipboard size={14} />;
     }
   };
 
@@ -194,7 +199,7 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
   return (
     <div className="logs-view">
       <div className="logs-header">
-        <h2>📋 Event Logs</h2>
+        <h2><ClipboardList size={16} className="inline-icon" /> Event Logs</h2>
         <div className="logs-controls">
           <div className="filter-controls">
             <select
@@ -203,10 +208,10 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
               className="filter-select"
             >
               <option value="all">All Levels</option>
-              <option value="info">ℹ️ Info</option>
-              <option value="success">✅ Success</option>
-              <option value="warning">⚠️ Warning</option>
-              <option value="error">❌ Error</option>
+              <option value="info">Info</option>
+              <option value="success">Success</option>
+              <option value="warning">Warning</option>
+              <option value="error">Error</option>
             </select>
 
             <select
@@ -215,11 +220,11 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
               className="filter-select"
             >
               <option value="all">All Categories</option>
-              <option value="query">🚀 Query</option>
-              <option value="tool">🔧 Tool</option>
-              <option value="file">📝 File</option>
-              <option value="system">⚙️ System</option>
-              <option value="stream">📡 Stream</option>
+              <option value="query">Query</option>
+              <option value="tool">Tool</option>
+              <option value="file">File</option>
+              <option value="system">System</option>
+              <option value="stream">Stream</option>
             </select>
 
             <input
@@ -237,7 +242,7 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
               className={`control-btn ${autoScroll ? 'active' : ''}`}
               title={autoScroll ? 'Auto-scroll enabled' : 'Auto-scroll disabled'}
             >
-              {autoScroll ? '📍' : '📌'}
+              <Pin size={14} className={autoScroll ? 'text-blue-400' : 'text-gray-400'} />
             </button>
             
             <button
@@ -245,7 +250,7 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
               className="control-btn clear-btn"
               title="Clear all logs"
             >
-              🗑️ Clear
+              <Trash2 size={14} /> Clear
             </button>
           </div>
         </div>
@@ -277,7 +282,7 @@ const LogsView: React.FC<LogsViewProps> = ({ logs, onClearLogs }) => {
                 <span className="log-type">{log.type}</span>
                 <span className="log-message">{getLogSummary(log)}</span>
                 <span className="log-expand">
-                  {expandedLogs.has(log.id) ? '▼' : '▶'}
+                  {expandedLogs.has(log.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </span>
               </div>
               

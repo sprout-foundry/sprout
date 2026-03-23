@@ -41,7 +41,7 @@ func TestReadLargeFileWithLineRange(t *testing.T) {
 	if !strings.Contains(result, "Line 510:") {
 		t.Errorf("Expected result to contain 'Line 510:', got: %s", result)
 	}
-	if strings.Contains(result, "⚠️") {
+	if strings.Contains(result, "[WARN]") {
 		t.Errorf("Should not truncate for line range requests on 150KB file, got warning: %s", result)
 	}
 }

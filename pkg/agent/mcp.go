@@ -15,7 +15,7 @@ import (
 func (a *Agent) initializeMCP() error {
 	if a.configManager == nil {
 		if a.debug {
-			fmt.Println("🔧 Config manager is nil, skipping MCP initialization")
+			fmt.Println("[tool] Config manager is nil, skipping MCP initialization")
 		}
 		return nil
 	}
@@ -23,7 +23,7 @@ func (a *Agent) initializeMCP() error {
 	config := a.configManager.GetConfig()
 	if config == nil {
 		if a.debug {
-			fmt.Println("🔧 Config is nil, skipping MCP initialization")
+			fmt.Println("[tool] Config is nil, skipping MCP initialization")
 		}
 		return nil
 	}
@@ -53,10 +53,10 @@ func (a *Agent) initializeMCP() error {
 				}
 				if err := a.mcpManager.AddServer(mcpServer); err != nil {
 					if a.debug {
-						fmt.Printf("\n⚠️  Warning: Failed to add legacy MCP server %s: %v\n", name, err)
+						fmt.Printf("\n[WARN] Warning: Failed to add legacy MCP server %s: %v\n", name, err)
 					}
 				} else if a.debug {
-					fmt.Printf("🔧 Added legacy MCP server: %s\n", name)
+					fmt.Printf("[tool] Added legacy MCP server: %s\n", name)
 				}
 			}
 		}
@@ -66,7 +66,7 @@ func (a *Agent) initializeMCP() error {
 	mcpEnabled := config.MCP.Enabled || legacyEnabled
 	if !mcpEnabled {
 		if a.debug {
-			fmt.Println("🔧 MCP is disabled in configuration")
+			fmt.Println("[tool] MCP is disabled in configuration")
 		}
 		return nil
 	}
@@ -88,7 +88,7 @@ func (a *Agent) initializeMCP() error {
 
 		if err := a.mcpManager.AddServer(mcpServer); err != nil {
 			if a.debug {
-				fmt.Printf("\n⚠️  Warning: Failed to add MCP server %s: %v\n", name, err)
+				fmt.Printf("\n[WARN] Warning: Failed to add MCP server %s: %v\n", name, err)
 			}
 			continue
 		}
@@ -104,7 +104,7 @@ func (a *Agent) initializeMCP() error {
 
 		if a.debug {
 			tools, _ := a.mcpManager.GetAllTools(ctx)
-			fmt.Printf("\n✅ MCP initialized with %d tools available\n", len(tools))
+			fmt.Printf("\n[OK] MCP initialized with %d tools available\n", len(tools))
 		}
 	}
 
@@ -133,10 +133,10 @@ func (a *Agent) initializeMCP() error {
 					if config.MCP.AutoStart {
 						if err := a.mcpManager.StartAll(ctx); err != nil {
 							if a.debug {
-								fmt.Printf("\n⚠️  Failed to start GitHub MCP server (npx): %v\n", err)
+								fmt.Printf("\n[WARN] Failed to start GitHub MCP server (npx): %v\n", err)
 							}
 						} else if a.debug {
-							fmt.Println("✅ GitHub MCP server auto-discovered and started (npx)")
+							fmt.Println("[OK] GitHub MCP server auto-discovered and started (npx)")
 						}
 					}
 				}
@@ -157,7 +157,7 @@ func (a *Agent) RefreshMCPTools() error {
 
 	tools := a.getMCPTools()
 	if a.debug {
-		fmt.Printf("🔧 Refreshed MCP tools: %d available\n", len(tools))
+		fmt.Printf("[tool] Refreshed MCP tools: %d available\n", len(tools))
 	}
 	return nil
 }
@@ -166,7 +166,7 @@ func (a *Agent) RefreshMCPTools() error {
 func (a *Agent) getMCPTools() []api.Tool {
 	if a.mcpManager == nil {
 		if a.debug {
-			a.debugLog("⚠️  Warning: MCP manager is nil\n")
+			a.debugLog("[WARN] Warning: MCP manager is nil\n")
 		}
 		return nil
 	}
@@ -177,13 +177,13 @@ func (a *Agent) getMCPTools() []api.Tool {
 
 	if !a.mcpInitialized {
 		if a.debug {
-			a.debugLog("⚙️  Initializing MCP (first use)...\n")
+			a.debugLog("[cfg] Initializing MCP (first use)...\n")
 		}
 		if err := a.initializeMCP(); err != nil {
 			// Non-fatal - MCP is optional
 			a.mcpInitErr = err
 			if a.debug {
-				a.debugLog("⚠️  MCP initialization failed: %v\n", err)
+				a.debugLog("[WARN] MCP initialization failed: %v\n", err)
 			}
 			// Don't set mcpInitialized to allow retry
 			a.mcpInitialized = false
@@ -192,7 +192,7 @@ func (a *Agent) getMCPTools() []api.Tool {
 			a.mcpInitialized = true
 			a.mcpInitErr = nil
 			if a.debug {
-				a.debugLog("✅ MCP initialized\n")
+				a.debugLog("[OK] MCP initialized\n")
 			}
 		}
 	}
@@ -205,7 +205,7 @@ func (a *Agent) getMCPTools() []api.Tool {
 	// Return cached tools if available
 	if a.mcpToolsCache != nil {
 		if a.debug {
-			a.debugLog("🔧 Using cached MCP tools: %d\n", len(a.mcpToolsCache))
+			a.debugLog("[tool] Using cached MCP tools: %d\n", len(a.mcpToolsCache))
 		}
 		return a.mcpToolsCache
 	}
@@ -214,13 +214,13 @@ func (a *Agent) getMCPTools() []api.Tool {
 	mcpTools, err := a.mcpManager.GetAllTools(ctx)
 	if err != nil {
 		if a.debug {
-			a.debugLog("⚠️  Warning: Failed to get MCP tools: %v\n", err)
+			a.debugLog("[WARN] Warning: Failed to get MCP tools: %v\n", err)
 		}
 		return nil
 	}
 
 	if a.debug {
-		a.debugLog("🔧 Loading %d MCP tools from manager (first time)\n", len(mcpTools))
+		a.debugLog("[tool] Loading %d MCP tools from manager (first time)\n", len(mcpTools))
 	}
 
 	var agentTools []api.Tool

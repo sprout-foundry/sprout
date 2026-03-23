@@ -53,7 +53,7 @@ func (c *MCPHTTPClient) Start(ctx context.Context) error {
 
 	c.running = true
 	if c.logger != nil {
-		c.logger.LogProcessStep(fmt.Sprintf("🚀 HTTP MCP client started for %s", c.config.URL))
+		c.logger.LogProcessStep(fmt.Sprintf("[>>] HTTP MCP client started for %s", c.config.URL))
 	}
 	return nil
 }
@@ -67,7 +67,7 @@ func (c *MCPHTTPClient) Stop(ctx context.Context) error {
 	c.initialized = false
 	c.sessionID = "" // Clear session ID
 	if c.logger != nil {
-		c.logger.LogProcessStep(fmt.Sprintf("🛑 HTTP MCP client stopped for %s", c.config.URL))
+		c.logger.LogProcessStep(fmt.Sprintf("[STOP] HTTP MCP client stopped for %s", c.config.URL))
 	}
 	return nil
 }
@@ -129,11 +129,11 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 	c.mu.RUnlock()
 
 	if c.logger != nil {
-		c.logger.LogProcessStep(fmt.Sprintf("🔄 Sending MCP HTTP request: %s to %s", method, c.config.URL))
+		c.logger.LogProcessStep(fmt.Sprintf("[~] Sending MCP HTTP request: %s to %s", method, c.config.URL))
 	}
 
 	// Debug: Log detailed request information
-	// fmt.Printf("🔍 REQUEST DEBUG:\n")
+	// fmt.Printf("[search] REQUEST DEBUG:\n")
 	// fmt.Printf("  Method: %s\n", method)
 	// fmt.Printf("  URL: %s\n", req.URL.String())
 	// fmt.Printf("  Headers:\n")
@@ -148,7 +148,7 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		fmt.Printf("❌ REQUEST ERROR: %v\n", err)
+		fmt.Printf("[FAIL] REQUEST ERROR: %v\n", err)
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -159,7 +159,7 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 	}
 
 	// Debug: Log detailed response information
-	// fmt.Printf("🔍 RESPONSE DEBUG:\n")
+	// fmt.Printf("[search] RESPONSE DEBUG:\n")
 	// fmt.Printf("  Status: %d %s\n", resp.StatusCode, resp.Status)
 	// fmt.Printf("  Headers:\n")
 	// for k, v := range resp.Header {
@@ -173,12 +173,12 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 
 	var response MCPMessage
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		fmt.Printf("❌ JSON UNMARSHAL ERROR: %v\n", err)
+		fmt.Printf("[FAIL] JSON UNMARSHAL ERROR: %v\n", err)
 		fmt.Printf("Raw response: %s\n", string(responseBody))
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	// fmt.Printf("✅ PARSED RESPONSE: %+v\n", response)
+	// fmt.Printf("[OK] PARSED RESPONSE: %+v\n", response)
 
 	// Extract session ID from response header if this is an initialize request
 	if method == "initialize" {
@@ -187,9 +187,9 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 			c.sessionID = sessionID
 			c.mu.Unlock()
 			if c.logger != nil {
-				c.logger.LogProcessStep(fmt.Sprintf("🔑 Captured session ID: %s", sessionID))
+				c.logger.LogProcessStep(fmt.Sprintf("[key] Captured session ID: %s", sessionID))
 			}
-			fmt.Printf("🔑 Session ID captured: %s\n", sessionID)
+			fmt.Printf("[key] Session ID captured: %s\n", sessionID)
 		}
 	}
 
@@ -241,7 +241,7 @@ func (c *MCPHTTPClient) Initialize(ctx context.Context) error {
 	c.mu.Unlock()
 
 	if c.logger != nil {
-		c.logger.LogProcessStep(fmt.Sprintf("✅ HTTP MCP client initialized for %s", c.config.URL))
+		c.logger.LogProcessStep(fmt.Sprintf("[OK] HTTP MCP client initialized for %s", c.config.URL))
 	}
 	return nil
 }
@@ -296,7 +296,7 @@ func (c *MCPHTTPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 	}
 
 	if c.logger != nil {
-		c.logger.LogProcessStep(fmt.Sprintf("🔍 Listed %d tools from HTTP MCP server %s", len(tools), c.config.Name))
+		c.logger.LogProcessStep(fmt.Sprintf("[search] Listed %d tools from HTTP MCP server %s", len(tools), c.config.Name))
 	}
 	return tools, nil
 }
@@ -348,7 +348,7 @@ func (c *MCPHTTPClient) CallTool(ctx context.Context, request MCPToolCallRequest
 	}
 
 	if c.logger != nil {
-		c.logger.LogProcessStep(fmt.Sprintf("🔧 Called tool %s on HTTP MCP server %s", request.Name, c.config.Name))
+		c.logger.LogProcessStep(fmt.Sprintf("[tool] Called tool %s on HTTP MCP server %s", request.Name, c.config.Name))
 	}
 	return &result, nil
 }

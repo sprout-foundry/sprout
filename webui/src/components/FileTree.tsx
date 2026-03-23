@@ -1,4 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import {
+  FolderOpen,
+  Folder,
+  FileCode,
+  Code2,
+  Code,
+  Braces,
+  Globe,
+  Palette,
+  FileText,
+  Settings,
+  Terminal,
+  FileX,
+  File,
+  RotateCw,
+  ChevronRight,
+  ChevronDown,
+  Zap,
+  AlertTriangle,
+  FolderClosed,
+} from 'lucide-react';
 import './FileTree.css';
 
 interface FileInfo {
@@ -178,44 +199,47 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
     }
   };
 
-  // Get file icon based on extension or type
-  const getFileIcon = (file: FileInfo): string => {
+  // Get file icon based on extension or type — returns a React element
+  const getFileIcon = (file: FileInfo): React.ReactNode => {
     if (file.isDir) {
       const isExpanded = expandedDirs.has(file.path);
-      return isExpanded ? '📂' : '📁';
+      return isExpanded
+        ? <FolderOpen size={16} className="icon-folder icon-folder-open" />
+        : <Folder size={16} className="icon-folder" />;
     }
 
     const ext = file.ext?.toLowerCase();
     switch (ext) {
       case '.js':
       case '.jsx':
-        return '🟨'; // JavaScript
+        return <FileCode size={16} className="icon-file-code icon-js" style={{ color: '#f7df1e' }} />;
       case '.ts':
       case '.tsx':
-        return '🔷'; // TypeScript
+        return <Code2 size={16} className="icon-code icon-ts" style={{ color: '#3178c6' }} />;
       case '.go':
-        return '🐹'; // Go
+        return <Code2 size={16} className="icon-code icon-go" style={{ color: '#00add8' }} />;
       case '.py':
-        return '🐍'; // Python
+        return <Code size={16} className="icon-code icon-py" style={{ color: '#3776ab' }} />;
       case '.json':
-        return '📋'; // JSON
+        return <Braces size={16} className="icon-braces icon-json" />;
       case '.html':
-        return '🌐'; // HTML
+        return <Globe size={16} className="icon-globe icon-html" style={{ color: '#e34c26' }} />;
       case '.css':
-        return '🎨'; // CSS
+        return <Palette size={16} className="icon-palette icon-css" style={{ color: '#264de4' }} />;
       case '.md':
-        return '📝'; // Markdown
+        return <FileText size={16} className="icon-file-text icon-md" />;
       case '.txt':
-        return '📄'; // Text
+        return <FileText size={16} className="icon-file-text icon-txt" />;
       case '.yml':
       case '.yaml':
-        return '⚙️'; // YAML
+        return <Settings size={16} className="icon-settings icon-yaml" />;
       case '.sh':
-        return '🐚'; // Shell
+      case '.bash':
+        return <Terminal size={16} className="icon-terminal icon-sh" />;
       case '.gitignore':
-        return '🚫'; // Git ignore
+        return <FileX size={16} className="icon-file-x icon-gitignore" />;
       default:
-        return '📄'; // Default file
+        return <File size={16} className="icon-file" />;
     }
   };
 
@@ -249,7 +273,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
             </div>
             {file.isDir && (
               <span className="file-tree-expand">
-                {isExpanded ? '▼' : '▶'}
+                {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
               </span>
             )}
             <span className="file-tree-name">{file.name}</span>
@@ -272,7 +296,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
   return (
       <div className="file-tree">
         <div className="file-tree-header">
-          <h3>📁 File Explorer</h3>
+          <h3><FolderClosed size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} /> File Explorer</h3>
           <div className="file-tree-controls">
             <button
               onClick={refresh}
@@ -281,10 +305,10 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
               title="Refresh file tree"
               aria-label="Refresh file tree"
             >
-            🔄
-          </button>
+              <RotateCw size={16} />
+            </button>
+          </div>
         </div>
-      </div>
 
       <div className="current-path">
         <span className="path-label">Path:</span>
@@ -293,14 +317,14 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
 
       {loading && (
         <div className="loading-indicator">
-          <div className="spinner">⚡</div>
+          <div className="spinner"><Zap size={16} /></div>
           <span>Loading...</span>
         </div>
       )}
 
       {error && (
         <div className="error-message">
-          <span className="error-icon">⚠️</span>
+          <span className="error-icon"><AlertTriangle size={16} /></span>
           <span className="error-text">{error}</span>
         </div>
       )}
@@ -310,7 +334,7 @@ const FileTree: React.FC<FileTreeProps> = ({ onFileSelect, selectedFile, rootPat
 
         {files.length === 0 && !loading && !error && (
           <div className="empty-directory">
-            <span className="empty-icon">📂</span>
+            <span className="empty-icon"><FolderOpen size={16} /></span>
             <span className="empty-text">Empty directory</span>
           </div>
         )}

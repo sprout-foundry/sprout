@@ -32,7 +32,7 @@ func ReviewWithSpec(
 	}
 
 	spec := extractionResult.Spec
-	logger.LogProcessStep(fmt.Sprintf("✓ Spec extracted: %s", spec.Objective))
+	logger.LogProcessStep(fmt.Sprintf("[ok] Spec extracted: %s", spec.Objective))
 
 	// Step 2: Perform standard code review
 	logger.LogProcessStep("Performing standard code review...")
@@ -66,7 +66,7 @@ func ReviewWithSpec(
 
 	// Step 4: Merge scope violations into code review result
 	if !scopeResult.InScope && len(scopeResult.Violations) > 0 {
-		logger.LogProcessStep(fmt.Sprintf("⚠ Found %d scope violations", len(scopeResult.Violations)))
+		logger.LogProcessStep(fmt.Sprintf("[WARN] Found %d scope violations", len(scopeResult.Violations)))
 
 		// Add scope violations as CRITICAL issues in the review
 		for _, violation := range scopeResult.Violations {
@@ -113,7 +113,7 @@ func ReviewWithSpec(
 
 		codeReviewResult.Feedback += scopeFeedback
 	} else {
-		logger.LogProcessStep("✓ All changes are within scope")
+		logger.LogProcessStep("[ok] All changes are within scope")
 		codeReviewResult.Feedback += "\n\n## SCOPE COMPLIANCE\n**Status**: IN_SCOPE - All changes align with specification\n"
 	}
 

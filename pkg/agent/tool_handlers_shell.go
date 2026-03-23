@@ -123,7 +123,7 @@ func (a *gitApprovalPrompterAdapter) PromptForApproval(command string) (bool, er
 	}
 
 	// Show the command to be executed
-	fmt.Printf("\n🔒 Git Operation Requires Approval\n")
+	fmt.Printf("\n[LOCK] Git Operation Requires Approval\n")
 	fmt.Printf("Command: %s\n", command)
 	fmt.Printf("\n")
 

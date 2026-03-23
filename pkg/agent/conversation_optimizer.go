@@ -73,7 +73,7 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 			rewritten.Content = summary
 			optimized = append(optimized, rewritten)
 			if co.debug {
-				fmt.Printf("\n🔄 Optimized redundant file read: %s\n", co.extractFilePath(msg.Content))
+				fmt.Printf("\n[~] Optimized redundant file read: %s\n", co.extractFilePath(msg.Content))
 			}
 		} else if co.isRedundantShellCommand(msg, i) {
 			// Replace with summary
@@ -82,7 +82,7 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 			rewritten.Content = summary
 			optimized = append(optimized, rewritten)
 			if co.debug {
-				fmt.Printf("\n🔄 Optimized redundant shell command: %s\n", co.extractShellCommand(msg.Content))
+				fmt.Printf("\n[~] Optimized redundant shell command: %s\n", co.extractShellCommand(msg.Content))
 			}
 		} else {
 			optimized = append(optimized, msg)
@@ -278,7 +278,7 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 	}
 
 	if co.printLine != nil {
-		co.printLine(fmt.Sprintf("\n🔄 Compacting conversation context (%d messages → LLM summary)...", n))
+		co.printLine(fmt.Sprintf("\n[~] Compacting conversation context (%d messages → LLM summary)...", n))
 	}
 
 	systemMsg := api.Message{
@@ -299,17 +299,17 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 	resp, err := co.client.SendChatRequest([]api.Message{systemMsg, userMsg}, nil, "")
 	if err != nil {
 		if co.debug {
-			fmt.Printf("\n⚠️ LLM compaction summary failed: %v, falling back to Go summary\n", err)
+			fmt.Printf("\n[WARN] LLM compaction summary failed: %v, falling back to Go summary\n", err)
 		}
 		if co.printLine != nil {
-			co.printLine(fmt.Sprintf("⚠️ LLM compaction failed (%v), using fallback summary", err))
+			co.printLine(fmt.Sprintf("[WARN] LLM compaction failed (%v), using fallback summary", err))
 		}
 		return co.buildGoCompactionSummary(messages)
 	}
 
 	if len(resp.Choices) == 0 || strings.TrimSpace(resp.Choices[0].Message.Content) == "" {
 		if co.debug {
-			fmt.Printf("\n⚠️ LLM compaction returned empty response, falling back to Go summary\n")
+			fmt.Printf("\n[WARN] LLM compaction returned empty response, falling back to Go summary\n")
 		}
 		return co.buildGoCompactionSummary(messages)
 	}
@@ -318,7 +318,7 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 
 	wordCount := len(strings.Fields(llmSummary))
 	if co.printLine != nil {
-		co.printLine(fmt.Sprintf("✅ Context compacted: %d messages → %d-word LLM summary", n, wordCount))
+		co.printLine(fmt.Sprintf("[OK] Context compacted: %d messages → %d-word LLM summary", n, wordCount))
 	}
 
 	var result strings.Builder
@@ -632,7 +632,7 @@ func (co *ConversationOptimizer) InvalidateFile(filePath string) {
 		return
 	}
 	if co.debug {
-		fmt.Printf("\n🔄 Invalidating cached file data: %s\n", filePath)
+		fmt.Printf("\n[~] Invalidating cached file data: %s\n", filePath)
 	}
 	delete(co.fileReads, filePath)
 }

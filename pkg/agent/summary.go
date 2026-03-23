@@ -43,18 +43,18 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 		return
 	}
 
-	fmt.Println("\n📊 Conversation Summary")
+	fmt.Println("\n[chart] Conversation Summary")
 	fmt.Println("══════════════════════════════")
 
 	metrics := computeConversationSummaryMetrics(a.messages)
 
 	// Conversation metrics
-	fmt.Printf("🔄 Iterations:      %d\n", a.currentIteration)
-	fmt.Printf("👤 User msgs:        %d\n", metrics.userMessages)
-	fmt.Printf("🤖 Assistant msgs:   %d\n", metrics.assistantMessages)
-	fmt.Printf("⚙️  Tool calls:      %d\n", metrics.toolCalls)
-	fmt.Printf("🧰 Tool results:    %d\n", metrics.toolMessages)
-	fmt.Printf("📨 Total messages:   %d\n", len(a.messages))
+	fmt.Printf("[~] Iterations:      %d\n", a.currentIteration)
+	fmt.Printf("[you] User msgs:        %d\n", metrics.userMessages)
+	fmt.Printf("[bot] Assistant msgs:   %d\n", metrics.assistantMessages)
+	fmt.Printf("[cfg] Tool calls:      %d\n", metrics.toolCalls)
+	fmt.Printf("[tools] Tool results:    %d\n", metrics.toolMessages)
+	fmt.Printf("[msg] Total messages:   %d\n", len(a.messages))
 	fmt.Println()
 
 	// Calculate processed tokens (excluding cached ones)
@@ -72,31 +72,31 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	}
 
 	// Token usage section
-	fmt.Println("🔢 Token Usage")
+	fmt.Println("[num] Token Usage")
 	fmt.Println("──────────────────────────────")
 	estimateLabel := ""
 	if a.estimatedTokenResponses > 0 {
 		estimateLabel = " (estimated)"
 	}
-	fmt.Printf("📦 Total%s:            %s\n", estimateLabel, a.formatTokenCount(a.totalTokens))
-	fmt.Printf("📝 Processed%s:        %s (%d prompt + %d completion)\n", estimateLabel,
+	fmt.Printf("[pkg] Total%s:            %s\n", estimateLabel, a.formatTokenCount(a.totalTokens))
+	fmt.Printf("[edit] Processed%s:        %s (%d prompt + %d completion)\n", estimateLabel,
 		a.formatTokenCount(processedTokens), processedPromptTokens, a.completionTokens)
 
 	// Context window information
 	if a.maxContextTokens > 0 {
 		contextUsage := float64(a.currentContextTokens) / float64(a.maxContextTokens) * 100
-		fmt.Printf("🪟 Context window:     %s/%s (%.1f%% used)\n",
+		fmt.Printf("[win] Context window:     %s/%s (%.1f%% used)\n",
 			a.formatTokenCount(a.currentContextTokens),
 			a.formatTokenCount(a.maxContextTokens),
 			contextUsage)
 	} else {
-		fmt.Printf("🪟 Context window:     %s (limit unavailable)\n", a.formatTokenCount(a.currentContextTokens))
+		fmt.Printf("[win] Context window:     %s (limit unavailable)\n", a.formatTokenCount(a.currentContextTokens))
 	}
 
 	if a.estimatedTokenResponses > 0 {
-		fmt.Printf("ℹ️  Token usage includes estimates for %d response(s) where provider usage was unavailable.\n", a.estimatedTokenResponses)
+		fmt.Printf("[info] Token usage includes estimates for %d response(s) where provider usage was unavailable.\n", a.estimatedTokenResponses)
 	} else if a.totalTokens == 0 && a.currentContextTokens > 0 {
-		fmt.Println("ℹ️  Token usage from provider was unavailable for this run.")
+		fmt.Println("[info] Token usage from provider was unavailable for this run.")
 	}
 
 	if a.cachedTokens > 0 {
@@ -104,32 +104,32 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 		if a.totalTokens > 0 {
 			efficiency = float64(a.cachedTokens) / float64(a.totalTokens) * 100
 		}
-		fmt.Printf("♻️  Cached reused:     %s\n", a.formatTokenCount(a.cachedTokens))
-		fmt.Printf("💰 Cost savings:       $%.6f\n", a.cachedCostSavings)
-		fmt.Printf("📈 Efficiency:        %.1f%% tokens cached\n", efficiency)
+		fmt.Printf("[recycle] Cached reused:     %s\n", a.formatTokenCount(a.cachedTokens))
+		fmt.Printf("$ Cost savings:       $%.6f\n", a.cachedCostSavings)
+		fmt.Printf("[up] Efficiency:        %.1f%% tokens cached\n", efficiency)
 
 		// Add efficiency rating
 		var efficiencyRating string
 		switch {
 		case efficiency >= 50:
-			efficiencyRating = "🏆 Excellent"
+			efficiencyRating = "[cup] Excellent"
 		case efficiency >= 30:
-			efficiencyRating = "✅ Good"
+			efficiencyRating = "[OK] Good"
 		case efficiency >= 15:
-			efficiencyRating = "📊 Average"
+			efficiencyRating = "[chart] Average"
 		default:
-			efficiencyRating = "📉 Low"
+			efficiencyRating = "[down] Low"
 		}
-		fmt.Printf("🏅 Efficiency rating: %s\n", efficiencyRating)
+		fmt.Printf("[medal] Efficiency rating: %s\n", efficiencyRating)
 	}
 
 	fmt.Println()
-	fmt.Printf("💵 Total cost:        $%.6f\n", a.totalCost)
+	fmt.Printf("$ Total cost:        $%.6f\n", a.totalCost)
 
 	// Add cost per iteration
 	if a.currentIteration > 0 {
 		costPerIteration := a.totalCost / float64(a.currentIteration)
-		fmt.Printf("📋 Cost per iteration: $%.6f\n", costPerIteration)
+		fmt.Printf("[list] Cost per iteration: $%.6f\n", costPerIteration)
 	}
 
 	fmt.Println("══════════════════════════════")
@@ -151,7 +151,7 @@ func (a *Agent) PrintConciseSummary() {
 	}
 
 	costStr := fmt.Sprintf("$%.6f", a.totalCost)
-	fmt.Printf("\n💰 Session: %s total (%s processed + %s cached) | %s\n",
+	fmt.Printf("\n$ Session: %s total (%s processed + %s cached) | %s\n",
 		a.formatTokenCount(a.totalTokens),
 		a.formatTokenCount(processedTokens),
 		a.formatTokenCount(a.cachedTokens),
@@ -272,12 +272,12 @@ func (a *Agent) GenerateConversationSummary() string {
 	var summary strings.Builder
 
 	// Add conversation metrics
-	summary.WriteString("📊 CONVERSATION SUMMARY\n")
+	summary.WriteString("[chart] CONVERSATION SUMMARY\n")
 	summary.WriteString("══════════════════════════════\n\n")
 
 	// Add task actions summary
 	if len(a.taskActions) > 0 {
-		summary.WriteString("🎯 COMPLETED ACTIONS:\n")
+		summary.WriteString("[*] COMPLETED ACTIONS:\n")
 		summary.WriteString("──────────────────────────────\n")
 
 		// Group actions by type
@@ -301,7 +301,7 @@ func (a *Agent) GenerateConversationSummary() string {
 				completed++
 			}
 		}
-		summary.WriteString("📋 TASK PROGRESS:\n")
+		summary.WriteString("[list] TASK PROGRESS:\n")
 		summary.WriteString("──────────────────────────────\n")
 		summary.WriteString(fmt.Sprintf("• Completed: %d/%d tasks\n", completed, len(todos)))
 		summary.WriteString("\n")
@@ -311,7 +311,7 @@ func (a *Agent) GenerateConversationSummary() string {
 	if a.optimizer != nil {
 		stats := a.optimizer.GetOptimizationStats()
 		if trackedFiles, ok := stats["file_paths"].([]string); ok && len(trackedFiles) > 0 {
-			summary.WriteString("📂 KEY FILES EXPLORED:\n")
+			summary.WriteString("[dir/] KEY FILES EXPLORED:\n")
 			summary.WriteString("──────────────────────────────\n")
 			for _, file := range trackedFiles {
 				summary.WriteString(fmt.Sprintf("• %s\n", file))
@@ -321,7 +321,7 @@ func (a *Agent) GenerateConversationSummary() string {
 	}
 
 	// Add conversation metrics
-	summary.WriteString("📈 CONVERSATION METRICS:\n")
+	summary.WriteString("[up] CONVERSATION METRICS:\n")
 	summary.WriteString("──────────────────────────────\n")
 	summary.WriteString(fmt.Sprintf("• Iterations: %d\n", a.currentIteration))
 	summary.WriteString(fmt.Sprintf("• Total cost: $%.6f\n", a.totalCost))
@@ -342,13 +342,13 @@ func (a *Agent) GenerateCompactSummary() string {
 	var summary strings.Builder
 
 	// Start with a session continuity header
-	summary.WriteString("🔄 PREVIOUS SESSION CONTEXT\n")
+	summary.WriteString("[~] PREVIOUS SESSION CONTEXT\n")
 	summary.WriteString("════════════════════════════\n\n")
 
 	// Add accomplished todos
 	todos := tools.TodoRead()
 	if len(todos) > 0 {
-		summary.WriteString("✅ ACCOMPLISHED TASKS:\n")
+		summary.WriteString("[OK] ACCOMPLISHED TASKS:\n")
 		summary.WriteString("─────────────────────────────\n")
 		count := 0
 		for _, t := range todos {
@@ -365,7 +365,7 @@ func (a *Agent) GenerateCompactSummary() string {
 
 	// Add key technical changes (limited and focused)
 	if len(a.taskActions) > 0 {
-		summary.WriteString("🔧 KEY TECHNICAL CHANGES:\n")
+		summary.WriteString("[tool] KEY TECHNICAL CHANGES:\n")
 		summary.WriteString("─────────────────────────────\n")
 
 		// Focus on the most important actions, limit to save space
@@ -394,7 +394,7 @@ func (a *Agent) GenerateCompactSummary() string {
 	if a.optimizer != nil {
 		stats := a.optimizer.GetOptimizationStats()
 		if trackedFiles, ok := stats["file_paths"].([]string); ok && len(trackedFiles) > 0 {
-			summary.WriteString("📄 KEY FILES:\n")
+			summary.WriteString("[doc] KEY FILES:\n")
 			summary.WriteString("─────────────────────────────\n")
 
 			// Limit to 8 files to control summary size
@@ -415,7 +415,7 @@ func (a *Agent) GenerateCompactSummary() string {
 	}
 
 	// Add concise session metrics
-	summary.WriteString("📊 SESSION METRICS:\n")
+	summary.WriteString("[chart] SESSION METRICS:\n")
 	summary.WriteString("─────────────────────────────\n")
 	summary.WriteString(fmt.Sprintf("• Cost: $%.4f", a.totalCost))
 	if a.cachedTokens > 0 {

@@ -43,8 +43,8 @@ func TestSanitizeContent(t *testing.T) {
 		},
 		{
 			name:     "Think tag with ANSI",
-			input:    "\x1b[36m💭\x1b[0m \x1b[2mthinking...\x1b[0m",
-			expected: "💭 thinking...",
+			input:    "\x1b[36m[thought]\x1b[0m \x1b[2mthinking...\x1b[0m",
+			expected: "[thought] thinking...",
 		},
 		{
 			name:     "Complex ANSI sequences",
@@ -105,7 +105,7 @@ func TestZAIConversationHistory(t *testing.T) {
 	}
 
 	// Simulate streaming content with ANSI contamination
-	ansiContent := "\x1b[36m✨\x1b[0m \x1b[1mHere's the solution:\x1b[0m\n\x1b[33m1.\x1b[0m Check the logs\n\x1b[33m2.\x1b[0m Fix the bug"
+	ansiContent := "\x1b[36m[*]\x1b[0m \x1b[1mHere's the solution:\x1b[0m\n\x1b[33m1.\x1b[0m Check the logs\n\x1b[33m2.\x1b[0m Fix the bug"
 
 	// Test that sanitization removes ANSI codes
 	cleanContent := ch.sanitizeContent(ansiContent)
@@ -116,7 +116,7 @@ func TestZAIConversationHistory(t *testing.T) {
 	}
 
 	// Verify content structure is preserved
-	expectedClean := "✨ Here's the solution:\n1. Check the logs\n2. Fix the bug"
+	expectedClean := "[*] Here's the solution:\n1. Check the logs\n2. Fix the bug"
 	if cleanContent != expectedClean {
 		t.Errorf("Clean content mismatch. Got: %q, Expected: %q", cleanContent, expectedClean)
 	}

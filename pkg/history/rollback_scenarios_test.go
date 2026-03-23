@@ -146,12 +146,12 @@ func TestRollbackWithSpecialCharacters(t *testing.T) {
 		original string
 		modified string
 	}{
-		{"utf8.txt", "Hello 世界 👋", "Hello World 👋"},
+		{"utf8.txt", "Hello 世界 []", "Hello World []"},
 		{"tabs.go", "func\tmain()\t{\n\tprintln()\n}", "func test() {\nlog()\n}"},
 		{"mixed.js", "console.log(\"test\\nnewline\")", "console.log('changed')"},
 		{"quotes.py", "print(\"test 'quoted'\")", "print('other \"quoted\"')"},
 		{"null.bin", "\x00\x01\x02\x03", "\xFF\xFE\xFD\xFC"},
-		{"emoji.md", "# 😮 Title\nText **bold**", "# 🎉 Changed\nText **italic**"},
+		{"emoji.md", "# :O Title\nText **bold**", "# [done] Changed\nText **italic**"},
 	}
 
 	for _, tc := range testCases {

@@ -248,9 +248,9 @@ func buildReviewSummary(specResult *SpecExtractionResult, scopeResult *ScopeRevi
 	summary.WriteString(fmt.Sprintf("Spec confidence: %.0f%%\n", specResult.Confidence*100))
 
 	if scopeResult.InScope {
-		summary.WriteString("✓ All changes are within scope\n")
+		summary.WriteString("[ok] All changes are within scope\n")
 	} else {
-		summary.WriteString(fmt.Sprintf("⚠ %d scope violation(s) found\n", len(scopeResult.Violations)))
+		summary.WriteString(fmt.Sprintf("[WARN] %d scope violation(s) found\n", len(scopeResult.Violations)))
 	}
 
 	return summary.String()

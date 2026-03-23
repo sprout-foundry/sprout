@@ -86,18 +86,18 @@ func (s *SubagentPersonaCommand) Execute(args []string, chatAgent *agent.Agent) 
 
 // showAllPersonas displays all available subagent personas
 func showAllPersonas(config *configuration.Config) error {
-	fmt.Println("\n🎭 Subagent Personas:")
+	fmt.Println("\n[role] Subagent Personas:")
 	fmt.Println("====================")
 
 	if config.SubagentTypes == nil || len(config.SubagentTypes) == 0 {
-		fmt.Println("⚠️  No personas configured")
+		fmt.Println("[WARN] No personas configured")
 		return nil
 	}
 
 	for _, persona := range config.SubagentTypes {
-		status := "✅ Enabled"
+		status := "[OK] Enabled"
 		if !persona.Enabled {
-			status = "❌ Disabled"
+			status = "[FAIL] Disabled"
 		}
 		fmt.Printf("\n%s **%s** (%s)\n", status, persona.Name, persona.ID)
 		fmt.Printf("   %s\n", persona.Description)
@@ -111,10 +111,10 @@ func showAllPersonas(config *configuration.Config) error {
 		if model == "" {
 			model = "<default>"
 		}
-		fmt.Printf("   📦 Provider: %s | 🤖 Model: %s\n", provider, model)
+		fmt.Printf("   [pkg] Provider: %s | [bot] Model: %s\n", provider, model)
 	}
 
-	fmt.Println("\n💡 Usage:")
+	fmt.Println("\n[i] Usage:")
 	fmt.Println("  /subagent-personas                    - List all personas")
 	fmt.Println("  /subagent-persona <name>              - Show persona details")
 	fmt.Println("  /subagent-persona <name> enable       - Enable a persona")
@@ -122,7 +122,7 @@ func showAllPersonas(config *configuration.Config) error {
 	fmt.Println("  /subagent-persona <name> provider <p> - Set provider for persona")
 	fmt.Println("  /subagent-persona <name> model <m>     - Set model for persona")
 	fmt.Println()
-	fmt.Println("💡 Use personas with: run_subagent tool with persona parameter")
+	fmt.Println("[i] Use personas with: run_subagent tool with persona parameter")
 	fmt.Println("   Example: {\"tool\": \"run_subagent\", \"prompt\": \"...\", \"persona\": \"debugger\"}")
 
 	return nil
@@ -147,15 +147,15 @@ func showPersonaDetails(personaName string, config *configuration.Config) error 
 			personaName, getAvailablePersonaNames(config))
 	}
 
-	fmt.Printf("\n🎭 **%s** (%s)\n", persona.Name, personaID)
+	fmt.Printf("\n[role] **%s** (%s)\n", persona.Name, personaID)
 	fmt.Println(strings.Repeat("=", len(persona.Name)+len(personaID)+5))
-	fmt.Printf("📝 Description: %s\n", persona.Description)
+	fmt.Printf("[edit] Description: %s\n", persona.Description)
 
-	status := "✅ Enabled"
+	status := "[OK] Enabled"
 	if !persona.Enabled {
-		status = "❌ Disabled"
+		status = "[FAIL] Disabled"
 	}
-	fmt.Printf("🚦 Status: %s\n", status)
+	fmt.Printf("[signal] Status: %s\n", status)
 
 	// Configuration
 	provider := persona.Provider
@@ -167,12 +167,12 @@ func showPersonaDetails(personaName string, config *configuration.Config) error 
 		model = "<default> (uses subagent-model setting)"
 	}
 
-	fmt.Printf("\n⚙️  Configuration:\n")
-	fmt.Printf("   📦 Provider: %s\n", provider)
-	fmt.Printf("   🤖 Model: %s\n", model)
-	fmt.Printf("   📄 System Prompt: %s\n", persona.SystemPrompt)
+	fmt.Printf("\n[cfg] Configuration:\n")
+	fmt.Printf("   [pkg] Provider: %s\n", provider)
+	fmt.Printf("   [bot] Model: %s\n", model)
+	fmt.Printf("   [doc] System Prompt: %s\n", persona.SystemPrompt)
 
-	fmt.Println("\n💡 Configuration Commands:")
+	fmt.Println("\n[i] Configuration Commands:")
 	fmt.Printf("   /subagent-persona %s provider <provider>  - Set provider\n", persona.ID)
 	fmt.Printf("   /subagent-persona %s model <model>         - Set model\n", persona.ID)
 	fmt.Printf("   /subagent-persona %s enable               - Enable persona\n", persona.ID)
@@ -181,7 +181,7 @@ func showPersonaDetails(personaName string, config *configuration.Config) error 
 	// Check if system prompt file exists
 	if persona.SystemPrompt != "" {
 		if _, err := os.Stat(persona.SystemPrompt); os.IsNotExist(err) {
-			fmt.Printf("\n⚠️  Warning: System prompt file not found: %s\n", persona.SystemPrompt)
+			fmt.Printf("\n[WARN] Warning: System prompt file not found: %s\n", persona.SystemPrompt)
 		}
 	}
 
@@ -209,7 +209,7 @@ func setPersonaEnabled(personaName string, enabled bool, configManager *configur
 		action = "disabled"
 	}
 
-	fmt.Printf("\n✅ Persona '%s' (%s) %s\n", personaNameDisplay, personaID, action)
+	fmt.Printf("\n[OK] Persona '%s' (%s) %s\n", personaNameDisplay, personaID, action)
 	return nil
 }
 
@@ -232,9 +232,9 @@ func setPersonaProvider(personaName, provider string, configManager *configurati
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("\n✅ Provider for persona '%s' (%s) set to: %s\n",
+	fmt.Printf("\n[OK] Provider for persona '%s' (%s) set to: %s\n",
 		personaNameDisplay, personaID, provider)
-	fmt.Println("💡 This persona will now use the specified provider instead of the default subagent provider.")
+	fmt.Println("[i] This persona will now use the specified provider instead of the default subagent provider.")
 	return nil
 }
 
@@ -254,9 +254,9 @@ func setPersonaModel(personaName, model string, configManager *configuration.Man
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("\n✅ Model for persona '%s' (%s) set to: %s\n",
+	fmt.Printf("\n[OK] Model for persona '%s' (%s) set to: %s\n",
 		personaNameDisplay, personaID, model)
-	fmt.Println("💡 This persona will now use the specified model instead of the default subagent model.")
+	fmt.Println("[i] This persona will now use the specified model instead of the default subagent model.")
 	return nil
 }
 

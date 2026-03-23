@@ -28,7 +28,7 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 	// Count completed work
 	toolsExecuted := eh.countToolsExecuted(messages)
 
-	eh.agent.debugLog("⚠️ API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n",
+	eh.agent.debugLog("[WARN] API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n",
 		toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens))
 
 	// Check if this is a rate limit error - these should never be sent back to the model
@@ -66,10 +66,10 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 // buildInteractiveErrorResponse builds a user-friendly error response
 func (eh *ErrorHandler) buildInteractiveErrorResponse(apiErr error, toolsExecuted int) string {
 	// Include the debug message that's currently only in logs
-	response := fmt.Sprintf("⚠️ API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n\n",
+	response := fmt.Sprintf("[WARN] API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n\n",
 		toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens))
 
-	response += "🚨 **API Request Failed - Conversation Preserved**\n\n"
+	response += "[!!] **API Request Failed - Conversation Preserved**\n\n"
 
 	// Classify error type
 	errorMsg := apiErr.Error()
@@ -82,12 +82,12 @@ func (eh *ErrorHandler) buildInteractiveErrorResponse(apiErr error, toolsExecute
 	response += fmt.Sprintf("- Current iteration: %d/%d\n\n", eh.agent.currentIteration, eh.agent.maxIterations)
 
 	// Add recovery options
-	response += "🔄 **Your conversation context is preserved.** You can:\n"
+	response += "[~] **Your conversation context is preserved.** You can:\n"
 	response += "- Ask me to continue with your original request\n"
 	response += "- Ask a more specific question about what you wanted to know\n"
 	response += "- Ask me to summarize what I've learned so far\n"
 	response += "- Try a different approach to your question\n\n"
-	response += "💡 What would you like me to do next?"
+	response += "[i] What would you like me to do next?"
 
 	return response
 }
@@ -111,7 +111,7 @@ func (eh *ErrorHandler) buildRateLimitMessage(attempts int, lastErr error) strin
 		attemptLabel = fmt.Sprintf("%d retries", attempts)
 	}
 
-	message := fmt.Sprintf("🚦 %s hit a rate limit after %s.\n\n", provider, attemptLabel)
+	message := fmt.Sprintf("[signal] %s hit a rate limit after %s.\n\n", provider, attemptLabel)
 	message += "I already paused between attempts using exponential backoff, but the service is still reporting quota exhaustion.\n\n"
 
 	if lastErr != nil {
@@ -121,7 +121,7 @@ func (eh *ErrorHandler) buildRateLimitMessage(attempts int, lastErr error) strin
 		}
 	}
 
-	message += "✅ Your conversation context and any file changes are preserved.\n\n"
+	message += "[OK] Your conversation context and any file changes are preserved.\n\n"
 	message += "Next steps you can take right now:\n"
 	message += "- Wait 30–60 seconds and ask me to continue where we left off\n"
 	message += "- Switch to a different provider or model with more available quota\n"
@@ -193,7 +193,7 @@ func (eh *ErrorHandler) isRateLimitError(errStr string) bool {
 // logRateLimit logs rate limit information
 func (eh *ErrorHandler) logRateLimit(errorMsg string) {
 	logger := utils.GetLogger(false)
-	logger.LogProcessStep(fmt.Sprintf("🚨 RATE LIMIT HIT: %s | Total tokens: %s | Provider: %s | Model: %s",
+	logger.LogProcessStep(fmt.Sprintf("[!!] RATE LIMIT HIT: %s | Total tokens: %s | Provider: %s | Model: %s",
 		errorMsg, eh.formatTokenCount(eh.agent.totalTokens), eh.agent.GetProvider(), eh.agent.GetModel()))
 
 	if rl := utils.GetRunLogger(); rl != nil {

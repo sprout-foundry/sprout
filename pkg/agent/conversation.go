@@ -152,7 +152,7 @@ func (a *Agent) ClearConversationHistory() {
 	a.currentIteration = 0
 	a.previousSummary = ""
 
-	a.debugLog("🧹 Conversation history cleared\n")
+	a.debugLog("[clean] Conversation history cleared\n")
 }
 
 // SetConversationOptimization enables or disables conversation optimization
@@ -160,9 +160,9 @@ func (a *Agent) SetConversationOptimization(enabled bool) {
 	if a.optimizer != nil {
 		a.optimizer.SetEnabled(enabled)
 		if enabled {
-			a.debugLog("✨ Conversation optimization enabled\n")
+			a.debugLog("[*] Conversation optimization enabled\n")
 		} else {
-			a.debugLog("🔧 Conversation optimization disabled\n")
+			a.debugLog("[tool] Conversation optimization disabled\n")
 		}
 	}
 }
@@ -212,7 +212,7 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		a.debugLog("⚠️ Failed to get working directory for image resolution: %v\n", err)
+		a.debugLog("[WARN] Failed to get working directory for image resolution: %v\n", err)
 		return nil, query, nil
 	}
 
@@ -266,26 +266,26 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 		// matching the placeholder pattern.
 		relToExpected, err := filepath.Rel(expectedDir, filePath)
 		if err != nil || strings.HasPrefix(relToExpected, "..") {
-			a.debugLog("⚠️ Skipping image %s: not in pasted images directory\n", filePath)
+			a.debugLog("[WARN] Skipping image %s: not in pasted images directory\n", filePath)
 			continue
 		}
 
 		imgData, imgSize, err := readImageAsImageData(filePath)
 		if err != nil {
-			a.debugLog("⚠️ Skipping image %s: %v\n", filePath, err)
+			a.debugLog("[WARN] Skipping image %s: %v\n", filePath, err)
 			continue
 		}
 
 		// Enforce per-image size cap (should already be enforced by console, but be safe).
 		if imgSize > console.MaxPastedImageSize {
-			a.debugLog("⚠️ Skipping image %s: exceeds per-image size cap (%d > %d)\n",
+			a.debugLog("[WARN] Skipping image %s: exceeds per-image size cap (%d > %d)\n",
 				filePath, imgSize, console.MaxPastedImageSize)
 			continue
 		}
 
 		// Enforce total payload cap.
 		if totalBytes+imgSize > maxTotalImagePayloadBytes {
-			a.debugLog("⚠️ Skipping image %s: total payload would exceed cap (%d bytes)\n",
+			a.debugLog("[WARN] Skipping image %s: total payload would exceed cap (%d bytes)\n",
 				filePath, maxTotalImagePayloadBytes)
 			continue
 		}
@@ -295,7 +295,7 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	}
 
 	if len(images) > 0 {
-		a.debugLog("🖼️ Attached %d image(s) as multimodal content (%d bytes)\n", len(images), totalBytes)
+		a.debugLog("[img] Attached %d image(s) as multimodal content (%d bytes)\n", len(images), totalBytes)
 	}
 
 	return images, cleanedQuery, nil
@@ -336,7 +336,7 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 
 	// If images were processed, log the enhancement
 	if len(analyses) > 0 {
-		a.debugLog("🖼️ Processed %d image(s) and enhanced query with vision analysis\n", len(analyses))
+		a.debugLog("[img] Processed %d image(s) and enhanced query with vision analysis\n", len(analyses))
 		for _, analysis := range analyses {
 			a.debugLog("  - %s: %s\n", analysis.ImagePath, analysis.Description[:min(100, len(analysis.Description))])
 		}

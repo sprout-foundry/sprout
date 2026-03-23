@@ -141,8 +141,8 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 
 		// Model not found, fallback to first available model
 		if len(listResp.Models) > 0 {
-			fmt.Fprintf(os.Stderr, "⚠️  Model '%s' not found locally. Available models: %v\n", model, availableModels)
-			fmt.Fprintf(os.Stderr, "🔄 Falling back to first available model: %s\n", listResp.Models[0].Name)
+			fmt.Fprintf(os.Stderr, "[WARN] Model '%s' not found locally. Available models: %v\n", model, availableModels)
+			fmt.Fprintf(os.Stderr, "[~] Falling back to first available model: %s\n", listResp.Models[0].Name)
 			model = listResp.Models[0].Name
 		} else {
 			return nil, fmt.Errorf("model %s not found locally and no other models available. Available models: %v", model, availableModels)
@@ -479,8 +479,8 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 
 	// Model not found, fallback to first available model
 	if len(listResp.Models) > 0 {
-		fmt.Fprintf(os.Stderr, "⚠️  Model '%s' not found locally. Available models: %v\n", model, availableModels)
-		fmt.Fprintf(os.Stderr, "🔄 Falling back to first available model: %s\n", listResp.Models[0].Name)
+		fmt.Fprintf(os.Stderr, "[WARN] Model '%s' not found locally. Available models: %v\n", model, availableModels)
+		fmt.Fprintf(os.Stderr, "[~] Falling back to first available model: %s\n", listResp.Models[0].Name)
 		c.model = listResp.Models[0].Name
 		return nil
 	}

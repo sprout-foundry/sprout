@@ -39,7 +39,7 @@ func TestZAIProviderIsolated(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Connection test failed: %v", err)
 		}
-		t.Logf("✅ Connection test passed in %v", time.Since(start))
+		t.Logf("[OK] Connection test passed in %v", time.Since(start))
 	})
 
 	// Test 2: Simple non-streaming request
@@ -53,8 +53,8 @@ func TestZAIProviderIsolated(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Non-streaming request failed: %v", err)
 		}
-		t.Logf("✅ Non-streaming request completed in %v", time.Since(start))
-		t.Logf("📝 Response: %s", resp.Choices[0].Message.Content)
+		t.Logf("[OK] Non-streaming request completed in %v", time.Since(start))
+		t.Logf("[edit] Response: %s", resp.Choices[0].Message.Content)
 	})
 
 	// Test 3: Simple streaming request
@@ -67,13 +67,13 @@ func TestZAIProviderIsolated(t *testing.T) {
 		var streamContent string
 		_, err := provider.SendChatRequestStream(messages, nil, "", func(chunk string) {
 			streamContent += chunk
-			t.Logf("📦 Chunk: %q", chunk)
+			t.Logf("[pkg] Chunk: %q", chunk)
 		})
 		if err != nil {
 			t.Fatalf("Streaming request failed: %v", err)
 		}
-		t.Logf("✅ Streaming request completed in %v", time.Since(start))
-		t.Logf("📝 Stream response: %s", streamContent)
+		t.Logf("[OK] Streaming request completed in %v", time.Since(start))
+		t.Logf("[edit] Stream response: %s", streamContent)
 	})
 }
 
@@ -87,7 +87,7 @@ func TestZAIProviderDirect(t *testing.T) {
 		t.Skip("ZAI_API_KEY not set, skipping ZAI direct test")
 	}
 
-	fmt.Println("🔍 Testing ZAI provider directly...")
+	fmt.Println("[search] Testing ZAI provider directly...")
 
 	// Create provider using factory
 	factory := NewProviderFactory()
@@ -97,7 +97,7 @@ func TestZAIProviderDirect(t *testing.T) {
 
 	provider, err := factory.CreateProvider("zai")
 	if err != nil {
-		t.Fatalf("❌ Failed to create ZAI provider: %v", err)
+		t.Fatalf("[FAIL] Failed to create ZAI provider: %v", err)
 	}
 
 	provider.SetDebug(true)
@@ -107,32 +107,32 @@ func TestZAIProviderDirect(t *testing.T) {
 		{Role: "user", Content: "1+1=?"},
 	}
 
-	fmt.Println("📡 Sending simple request...")
+	fmt.Println("[signal] Sending simple request...")
 	start := time.Now()
 
 	// Test non-streaming first
 	resp, err := provider.SendChatRequest(messages, nil, "")
 	if err != nil {
-		t.Fatalf("❌ Non-streaming failed: %v", err)
+		t.Fatalf("[FAIL] Non-streaming failed: %v", err)
 	}
 
 	duration := time.Since(start)
-	fmt.Printf("✅ Non-streaming completed in %v\n", duration)
-	fmt.Printf("📝 Response: %q\n", resp.Choices[0].Message.Content)
+	fmt.Printf("[OK] Non-streaming completed in %v\n", duration)
+	fmt.Printf("[edit] Response: %q\n", resp.Choices[0].Message.Content)
 
 	// Test streaming
-	fmt.Println("🌊 Testing streaming...")
+	fmt.Println("[~] Testing streaming...")
 	start = time.Now()
 	var streamContent string
 	resp, err = provider.SendChatRequestStream(messages, nil, "", func(chunk string) {
 		streamContent += chunk
-		fmt.Printf("💭 %s", chunk)
+		fmt.Printf("[thought] %s", chunk)
 	})
 	if err != nil {
-		t.Fatalf("❌ Streaming failed: %v", err)
+		t.Fatalf("[FAIL] Streaming failed: %v", err)
 	}
 
 	duration = time.Since(start)
-	fmt.Printf("\n✅ Streaming completed in %v\n", duration)
-	fmt.Printf("📝 Stream response: %q\n", streamContent)
+	fmt.Printf("\n[OK] Streaming completed in %v\n", duration)
+	fmt.Printf("[edit] Stream response: %q\n", streamContent)
 }

@@ -164,7 +164,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("🌐 Web UI starting at http://localhost:%d", ws.port)
+		log.Printf("[web] Web UI starting at http://localhost:%d", ws.port)
 		if err := ws.server.Serve(listener); err != nil && !isExpectedServerCloseError(err) {
 			log.Printf("Web server error: %v", err)
 		}

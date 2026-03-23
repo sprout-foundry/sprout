@@ -5,29 +5,29 @@
 }
 
 :root {
-  --bg-primary: #040b16;
-  --bg-secondary: #081120;
-  --bg-tertiary: #0f172a;
-  --bg-elevated: #162136;
-  --bg-surface: #1f2d46;
+  --bg-primary: #282c34;
+  --bg-secondary: #21252b;
+  --bg-tertiary: #2c313a;
+  --bg-elevated: #303742;
+  --bg-surface: #3a404b;
 
-  --border-subtle: rgba(148, 163, 184, 0.12);
-  --border-default: rgba(148, 163, 184, 0.2);
-  --border-strong: rgba(148, 163, 184, 0.32);
-  --border-focus: rgba(56, 189, 248, 0.72);
+  --border-subtle: rgba(171, 178, 191, 0.14);
+  --border-default: rgba(171, 178, 191, 0.22);
+  --border-strong: rgba(171, 178, 191, 0.34);
+  --border-focus: rgba(97, 175, 239, 0.75);
 
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
-  --text-muted: #475569;
+  --text-primary: #abb2bf;
+  --text-secondary: #9aa3b2;
+  --text-tertiary: #7f8794;
+  --text-muted: #5c6370;
 
-  --accent-primary: #0ea5e9;
-  --accent-secondary: #14b8a6;
-  --accent-success: #10b981;
-  --accent-warning: #f59e0b;
-  --accent-error: #f43f5e;
-  --accent-cyan: #22d3ee;
-  --accent-primary-alpha: rgba(14, 165, 233, 0.18);
+  --accent-primary: #61afef;
+  --accent-secondary: #56b6c2;
+  --accent-success: #98c379;
+  --accent-warning: #e5c07b;
+  --accent-error: #e06c75;
+  --accent-cyan: #56b6c2;
+  --accent-primary-alpha: rgba(97, 175, 239, 0.2);
 
   --color-success-bg: rgba(16, 185, 129, 0.1);
   --color-warning-bg: rgba(245, 158, 11, 0.1);
@@ -103,14 +103,14 @@
   --editor-pane-inactive-overlay: rgba(0, 0, 0, 0.28);
   --editor-pane-inactive-overlay-hover: rgba(0, 0, 0, 0.18);
 
-  --app-shell-bg: linear-gradient(180deg, rgba(2, 6, 23, 0.92), rgba(7, 14, 29, 0.95));
-  --app-main-bg: rgba(8, 17, 32, 0.9);
-  --sidebar-bg: linear-gradient(180deg, rgba(8, 17, 35, 0.98), rgba(6, 13, 28, 0.98));
-  --sidebar-header-bg: rgba(9, 20, 40, 0.95);
-  --sidebar-nav-btn-bg: rgba(20, 34, 58, 0.85);
-  --sidebar-nav-btn-hover-bg: rgba(30, 48, 76, 0.9);
-  --sidebar-nav-btn-active-bg: linear-gradient(180deg, rgba(13, 34, 56, 0.96), rgba(10, 28, 48, 0.96));
-  --sidebar-select-bg: rgba(16, 29, 51, 0.96);
+  --app-shell-bg: linear-gradient(180deg, #262b33, #282c34);
+  --app-main-bg: #282c34;
+  --sidebar-bg: linear-gradient(180deg, #21252b, #1f2329);
+  --sidebar-header-bg: rgba(33, 37, 43, 0.95);
+  --sidebar-nav-btn-bg: #2c313a;
+  --sidebar-nav-btn-hover-bg: #353b45;
+  --sidebar-nav-btn-active-bg: linear-gradient(180deg, #3a404b, #343a45);
+  --sidebar-select-bg: #242932;
 
   /* Transitions */
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
@@ -258,11 +258,11 @@ html, body, #root {
 
 /* Selection */
 ::selection {
-  background: rgba(14, 165, 233, 0.3);
+  background: var(--accent-primary-alpha);
 }
 
 ::-moz-selection {
-  background: rgba(14, 165, 233, 0.3);
+  background: var(--accent-primary-alpha);
 }
 
 /* Editor View Layout */

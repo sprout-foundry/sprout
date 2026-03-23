@@ -139,7 +139,7 @@ const Chat: React.FC<ChatProps> = ({
   };
 
   return (
-    <>
+    <div className="chat-shell">
       <div className="chat-header">
         <h2><span className="header-icon">🤖</span>AI Assistant</h2>
         {isProcessing && (
@@ -150,118 +150,123 @@ const Chat: React.FC<ChatProps> = ({
         )}
       </div>
 
-      <div className="chat-container" ref={chatContainerRef}>
-        {messages.length === 0 ? (
-          <div className="welcome-message">
-            <div className="welcome-icon">🤖</div>
-            <div className="welcome-text">
-              Welcome to ledit! I'm ready to help you with code analysis, editing, and more.
-            </div>
-            <div className="welcome-hint">
-              Try asking: "Show me the project structure" or "Find the main function"
-            </div>
-          </div>
-        ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className={`message ${message.type}`}
-              role={message.type === 'user' ? 'user-message' : 'assistant-message'}
-              aria-label={`${message.type} message`}
-            >
-              <div className="message-bubble">
-                <button
-                  className="copy-button"
-                  onClick={() => copyToClipboard(message.content)}
-                  title="Copy message"
-                  aria-label="Copy message"
-                >
-                  📋
-                </button>
-                <div className="message-content">
-                  {renderContent(message.content)}
-                </div>
-                <div className="message-timestamp">
-                  {formatTime(message.timestamp)}
-                </div>
+      <div className="chat-main">
+        <div className="chat-container" ref={chatContainerRef}>
+          {messages.length === 0 ? (
+            <div className="welcome-message">
+              <div className="welcome-icon">🤖</div>
+              <div className="welcome-text">
+                Welcome to ledit! I'm ready to help you with code analysis, editing, and more.
+              </div>
+              <div className="welcome-hint">
+                Try asking: "Show me the project structure" or "Find the main function"
               </div>
             </div>
-          ))
-        )}
-
-        {/* Tool Execution Progress */}
-        {toolExecutions.length > 0 && (
-          <div className="tool-executions">
-            <div className="tool-executions-header">
-              <h4>🔧 Tool Executions</h4>
-              <span className="tool-count">
-                {activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} done`}
-              </span>
-            </div>
-            {toolExecutions.map((tool) => (
+          ) : (
+            messages.map((message) => (
               <div
-                key={tool.id}
-                className={`tool-execution tool-${tool.status}`}
-                onClick={() => toggleToolExpansion(tool.id)}
+                key={message.id}
+                className={`message ${message.type}`}
+                role={message.type === 'user' ? 'user-message' : 'assistant-message'}
+                aria-label={`${message.type} message`}
               >
-                <div className="tool-summary">
-                  <span className="tool-icon">{getToolIcon(tool.tool)}</span>
-                  <span className="tool-name">{tool.tool}</span>
-                  <span className="tool-status">{getStatusIcon(tool.status)}</span>
-                  <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
-                  <span className="tool-expand">
-                    {expandedTools.has(tool.id) ? '▼' : '▶'}
-                  </span>
-                </div>
-                
-                {tool.message && (
-                  <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
-                )}
-                
-                {expandedTools.has(tool.id) && tool.details && (
-                  <div className="tool-details">
-                    <pre>{JSON.stringify(tool.details, null, 2)}</pre>
+                <div className="message-bubble">
+                  <button
+                    className="copy-button"
+                    onClick={() => copyToClipboard(message.content)}
+                    title="Copy message"
+                    aria-label="Copy message"
+                  >
+                    📋
+                  </button>
+                  <div className="message-content">
+                    {renderContent(message.content)}
                   </div>
-                )}
+                  <div className="message-timestamp">
+                    {formatTime(message.timestamp)}
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
 
-        {/* Query Progress */}
-        {queryProgress && (
-          <div className="query-progress">
-            <div className="progress-header">
-              <span className="progress-icon">⚡</span>
-              <span className="progress-text">{queryProgress.message || 'Processing...'}</span>
-            </div>
-            {queryProgress.details && (
-              <div className="progress-details">
-                {queryProgress.details}
+          {/* Query Progress */}
+          {queryProgress && (
+            <div className="query-progress">
+              <div className="progress-header">
+                <span className="progress-icon">⚡</span>
+                <span className="progress-text">{queryProgress.message || 'Processing...'}</span>
               </div>
+              {queryProgress.details && (
+                <div className="progress-details">
+                  {queryProgress.details}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Processing Indicator */}
+          {isProcessing && toolExecutions.length === 0 && !queryProgress && (
+            <div className="processing-indicator">
+              <div className="processing-content">
+                <div className="processing-spinner">⚡</div>
+                <div className="processing-text">Processing your request...</div>
+              </div>
+            </div>
+          )}
+
+          {/* Error Display */}
+          {lastError && (
+            <div className="error-indicator">
+              <div className="error-content">
+                <div className="error-icon">⚠️</div>
+                <div className="error-text">{lastError}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <aside className="chat-tools-panel" aria-label="Tool executions panel">
+          <div className="tool-executions-header">
+            <h4>🔧 Tool Executions</h4>
+            <span className="tool-count">
+              {activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total`}
+            </span>
+          </div>
+          <div className="chat-tools-list">
+            {toolExecutions.length === 0 ? (
+              <div className="chat-tools-empty">Tool calls will appear here.</div>
+            ) : (
+              toolExecutions.map((tool) => (
+                <div
+                  key={tool.id}
+                  className={`tool-execution tool-${tool.status}`}
+                  onClick={() => toggleToolExpansion(tool.id)}
+                >
+                  <div className="tool-summary">
+                    <span className="tool-icon">{getToolIcon(tool.tool)}</span>
+                    <span className="tool-name">{tool.tool}</span>
+                    <span className="tool-status">{getStatusIcon(tool.status)}</span>
+                    <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
+                    <span className="tool-expand">
+                      {expandedTools.has(tool.id) ? '▼' : '▶'}
+                    </span>
+                  </div>
+
+                  {tool.message && (
+                    <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
+                  )}
+
+                  {expandedTools.has(tool.id) && tool.details && (
+                    <div className="tool-details">
+                      <pre>{JSON.stringify(tool.details, null, 2)}</pre>
+                    </div>
+                  )}
+                </div>
+              ))
             )}
           </div>
-        )}
-
-        {/* Processing Indicator */}
-        {isProcessing && toolExecutions.length === 0 && !queryProgress && (
-          <div className="processing-indicator">
-            <div className="processing-content">
-              <div className="processing-spinner">⚡</div>
-              <div className="processing-text">Processing your request...</div>
-            </div>
-          </div>
-        )}
-
-        {/* Error Display */}
-        {lastError && (
-          <div className="error-indicator">
-            <div className="error-content">
-              <div className="error-icon">⚠️</div>
-              <div className="error-text">{lastError}</div>
-            </div>
-          </div>
-        )}
+        </aside>
       </div>
 
       <div className="input-container">
@@ -274,7 +279,7 @@ const Chat: React.FC<ChatProps> = ({
           autoFocus={true}
         />
       </div>
-    </>
+    </div>
   );
 };
 

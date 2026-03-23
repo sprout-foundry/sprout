@@ -2,9 +2,9 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #1a1a1a;
-  color: #e0e0e0;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
   overflow: hidden;
 }
 
@@ -14,8 +14,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #2a2a3a 0%, #3a3a4a 100%);
-  border-bottom: 2px solid #4a4a5a;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
@@ -32,17 +32,17 @@
 }
 
 .branch-name {
-  color: #6366f1;
+  color: var(--accent-primary);
 }
 
 .ahead {
-  color: #10b981;
+  color: var(--accent-success);
   font-size: 12px;
   font-weight: 500;
 }
 
 .behind {
-  color: #f59e0b;
+  color: var(--accent-warning);
   font-size: 12px;
   font-weight: 500;
 }
@@ -50,14 +50,15 @@
 .git-status {
   font-size: 12px;
   font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .clean {
-  color: #10b981;
+  color: var(--accent-success);
 }
 
 .dirty {
-  color: #f59e0b;
+  color: var(--accent-warning);
 }
 
 /* Actions Bar */
@@ -66,8 +67,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
-  background: #252525;
-  border-bottom: 1px solid #3a3a4a;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
   flex-wrap: wrap;
   gap: 12px;
   flex-shrink: 0;
@@ -76,9 +77,9 @@
 .git-action-error {
   margin: 8px 20px 0;
   padding: 10px 12px;
-  border: 1px solid rgba(239, 68, 68, 0.5);
-  background: rgba(127, 29, 29, 0.35);
-  color: #fecaca;
+  border: 1px solid var(--accent-error);
+  background: var(--color-error-bg);
+  color: var(--accent-error);
   border-radius: 6px;
   font-size: 12px;
 }
@@ -91,7 +92,7 @@
 
 .selected-count {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   font-weight: 500;
 }
 
@@ -102,9 +103,9 @@
 }
 
 .action-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e0e0e0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
   padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
@@ -114,8 +115,8 @@
 }
 
 .action-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
 }
 
 .action-btn:disabled {
@@ -124,23 +125,23 @@
 }
 
 .action-btn.primary {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-color: #6366f1;
-  color: white;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--accent-fg);
 }
 
 .action-btn.primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #5558e3 0%, #7c4ce8 100%);
+  filter: brightness(0.95);
 }
 
 .action-btn.danger {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  border-color: #ef4444;
-  color: white;
+  background: var(--accent-error);
+  border-color: var(--accent-error);
+  color: #ffffff;
 }
 
 .action-btn.danger:hover:not(:disabled) {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  filter: brightness(0.92);
 }
 
 /* Files Section */
@@ -158,22 +159,22 @@
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .file-section.staged h3 {
-  color: #10b981;
+  color: var(--accent-success);
 }
 
 .file-section.modified h3 {
-  color: #f59e0b;
+  color: var(--accent-warning);
 }
 
 .file-section.untracked h3 {
-  color: #6366f1;
+  color: var(--accent-primary);
 }
 
 .file-list {
@@ -187,8 +188,8 @@
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -196,20 +197,20 @@
 }
 
 .file-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
 }
 
 .file-item.selected {
-  background: rgba(99, 102, 241, 0.1);
-  border-color: rgba(99, 102, 241, 0.3);
+  background: var(--accent-primary-alpha);
+  border-color: var(--border-focus);
 }
 
 .file-item input[type="checkbox"] {
   margin: 0;
   width: 14px;
   height: 14px;
-  accent-color: #6366f1;
+  accent-color: var(--accent-primary);
 }
 
 .file-icon {
@@ -220,9 +221,9 @@
 
 .file-path {
   flex: 1;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
-  color: #d1d5db;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -230,7 +231,7 @@
 
 .file-status {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   font-weight: 500;
   min-width: 70px;
   text-align: right;
@@ -246,11 +247,11 @@
 }
 
 .additions {
-  color: #10b981;
+  color: var(--accent-success);
 }
 
 .deletions {
-  color: #ef4444;
+  color: var(--accent-error);
 }
 
 /* No Changes */
@@ -261,13 +262,13 @@
   justify-content: center;
   padding: 48px 20px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .no-changes-icon {
   font-size: 48px;
   margin-bottom: 16px;
-  opacity: 0.5;
+  opacity: 0.6;
 }
 
 .no-changes p {
@@ -279,8 +280,8 @@
 /* Commit Section */
 .git-commit {
   padding: 20px;
-  background: #252525;
-  border-top: 1px solid #3a3a4a;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
@@ -288,7 +289,7 @@
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .commit-form {
@@ -298,12 +299,12 @@
 }
 
 .commit-input {
-  background: #1a1a1a;
-  border: 1px solid #3a3a4a;
-  color: #e0e0e0;
+  background: var(--input-bg);
+  border: 1px solid var(--border-default);
+  color: var(--input-fg);
   padding: 12px;
   border-radius: 6px;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   resize: vertical;
   min-height: 60px;
@@ -313,18 +314,18 @@
 
 .commit-input:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha);
 }
 
 .commit-input::placeholder {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .commit-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--accent-primary);
   border: none;
-  color: white;
+  color: var(--accent-fg);
   padding: 12px 20px;
   border-radius: 6px;
   cursor: pointer;
@@ -335,9 +336,9 @@
 }
 
 .commit-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #5558e3 0%, #7c4ce8 100%);
+  filter: brightness(0.95);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-subtle);
 }
 
 .commit-btn:disabled {
@@ -353,22 +354,26 @@
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid #3a3a4a;
-  border-top: 3px solid #6366f1;
+  border: 3px solid var(--border-default);
+  border-top: 3px solid var(--accent-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .git-loading p {
@@ -384,7 +389,7 @@
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #ef4444;
+  color: var(--accent-error);
   text-align: center;
 }
 
@@ -400,19 +405,19 @@
 }
 
 .git-error button {
-  background: #ef4444;
+  background: var(--accent-error);
   border: none;
-  color: white;
+  color: #ffffff;
   padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
-  transition: background 0.2s ease;
+  transition: filter 0.2s ease;
 }
 
 .git-error button:hover {
-  background: #dc2626;
+  filter: brightness(0.92);
 }
 
 /* Empty State */
@@ -422,14 +427,14 @@
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-align: center;
 }
 
 .empty-icon {
   font-size: 48px;
   margin-bottom: 16px;
-  opacity: 0.5;
+  opacity: 0.6;
 }
 
 .git-empty p {
@@ -446,36 +451,36 @@
     gap: 8px;
     align-items: flex-start;
   }
-  
+
   .git-actions {
     padding: 12px 16px;
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
   }
-  
+
   .selection-actions,
   .file-actions {
     justify-content: center;
   }
-  
+
   .git-files {
     padding: 12px 16px;
   }
-  
+
   .file-item {
     padding: 8px 10px;
     font-size: 12px;
   }
-  
+
   .file-path {
     font-size: 11px;
   }
-  
+
   .git-commit {
     padding: 16px;
   }
-  
+
   .commit-btn {
     width: 100%;
   }
@@ -485,30 +490,30 @@
   .git-header {
     padding: 10px 12px;
   }
-  
+
   .git-actions {
     padding: 10px 12px;
   }
-  
+
   .git-files {
     padding: 10px 12px;
   }
-  
+
   .file-item {
     padding: 6px 8px;
     gap: 8px;
   }
-  
+
   .file-status {
     min-width: 60px;
     font-size: 10px;
   }
-  
+
   .file-changes {
     min-width: 50px;
     font-size: 10px;
   }
-  
+
   .git-commit {
     padding: 12px;
   }

@@ -4,6 +4,7 @@ import AppContent from './components/AppContent';
 import UIManager from './components/UIManager';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { HotkeyProvider } from './contexts/HotkeyContext';
 import './App.css';
 import { WebSocketService } from './services/websocket';
 import { ApiService } from './services/api';
@@ -661,37 +662,39 @@ function App() {
       }}
     >
       <ThemeProvider>
-        <EditorManagerProvider>
-          <UIManager>
-            <AppContent
-              state={state}
-              inputValue={inputValue}
-              onInputChange={setInputValue}
-              isMobile={isMobile}
-              isSidebarOpen={isSidebarOpen}
-              sidebarCollapsed={sidebarCollapsed}
-              isTerminalExpanded={isTerminalExpanded}
-              stats={stats}
-              recentFiles={recentFiles}
-              recentLogs={recentLogs}
-              gitRefreshToken={gitRefreshToken}
-              onSidebarToggle={handleSidebarToggle}
-              onToggleSidebar={toggleSidebar}
-              onCloseSidebar={closeSidebar}
-              onViewChange={handleViewChange}
-              onModelChange={handleModelChange}
-              onProviderChange={handleProviderChange}
-              onSendMessage={handleSendMessage}
-              onGitCommit={handleGitCommit}
-              onGitStage={handleGitStage}
-              onGitUnstage={handleGitUnstage}
-              onGitDiscard={handleGitDiscard}
-              onClearLogs={() => setState(prev => ({ ...prev, logs: [] }))}
-              onTerminalOutput={handleTerminalOutput}
-              onTerminalExpandedChange={setIsTerminalExpanded}
-            />
-          </UIManager>
-        </EditorManagerProvider>
+        <HotkeyProvider>
+          <EditorManagerProvider>
+            <UIManager>
+              <AppContent
+                state={state}
+                inputValue={inputValue}
+                onInputChange={setInputValue}
+                isMobile={isMobile}
+                isSidebarOpen={isSidebarOpen}
+                sidebarCollapsed={sidebarCollapsed}
+                isTerminalExpanded={isTerminalExpanded}
+                stats={stats}
+                recentFiles={recentFiles}
+                recentLogs={recentLogs}
+                gitRefreshToken={gitRefreshToken}
+                onSidebarToggle={handleSidebarToggle}
+                onToggleSidebar={toggleSidebar}
+                onCloseSidebar={closeSidebar}
+                onViewChange={handleViewChange}
+                onModelChange={handleModelChange}
+                onProviderChange={handleProviderChange}
+                onSendMessage={handleSendMessage}
+                onGitCommit={handleGitCommit}
+                onGitStage={handleGitStage}
+                onGitUnstage={handleGitUnstage}
+                onGitDiscard={handleGitDiscard}
+                onClearLogs={() => setState(prev => ({ ...prev, logs: [] }))}
+                onTerminalOutput={handleTerminalOutput}
+                onTerminalExpandedChange={setIsTerminalExpanded}
+              />
+            </UIManager>
+          </EditorManagerProvider>
+        </HotkeyProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

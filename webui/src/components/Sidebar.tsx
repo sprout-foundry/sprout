@@ -3,6 +3,7 @@ import './Sidebar.css';
 import { ApiService, ProviderOption, LeditInstance } from '../services/api';
 import { viewRegistry, ProviderContext, SidebarSection, ProviderLogEntry } from '../providers';
 import { useTheme } from '../contexts/ThemeContext';
+import { HotkeyPreset, useHotkeys } from '../contexts/HotkeyContext';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -66,13 +67,15 @@ const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   isMobile = false
 }) => {
-  const { theme, setTheme } = useTheme();
+  const { themePack, availableThemePacks, setThemePack } = useTheme();
+  const { preset: hotkeyPreset, setPreset: setHotkeyPreset } = useHotkeys();
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
   const [providers, setProviders] = useState<ProviderOption[]>([]);
   const [instances, setInstances] = useState<LeditInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
+  const [instanceSwitchError, setInstanceSwitchError] = useState<string | null>(null);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const [sectionsData, setSectionsData] = useState<Map<string, SectionData>>(new Map());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -296,6 +299,16 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [apiService, isConnected]);
 
   useEffect(() => {
+    if (!isSwitchingInstance || selectedInstancePID <= 0) {
+      return;
+    }
+    const selected = instances.find((instance) => instance.pid === selectedInstancePID);
+    if (selected?.is_host) {
+      setIsSwitchingInstance(false);
+    }
+  }, [instances, isSwitchingInstance, selectedInstancePID]);
+
+  useEffect(() => {
     if (!provider || provider === 'unknown') {
       return;
     }
@@ -353,21 +366,24 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const handleHotkeyPresetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setHotkeyPreset(e.target.value as HotkeyPreset);
+  };
+
   const handleInstanceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const pid = Number(e.target.value);
     if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
       return;
     }
 
+    setInstanceSwitchError(null);
     setIsSwitchingInstance(true);
     try {
       await apiService.selectInstance(pid);
       setSelectedInstancePID(pid);
-      setTimeout(() => {
-        window.location.reload();
-      }, 1200);
     } catch (error) {
       console.error('Failed to switch instance:', error);
+      setInstanceSwitchError('Failed to switch instance');
       setIsSwitchingInstance(false);
     }
   };
@@ -500,15 +516,31 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="appearance-section">
             <h4>Appearance</h4>
             <div className="config-item">
-              <label htmlFor="theme-select">Theme:</label>
+              <label htmlFor="theme-select">Theme Pack:</label>
               <select
                 id="theme-select"
-                value={theme}
-                onChange={(e) => setTheme(e.target.value as 'dark' | 'light')}
+                value={themePack.id}
+                onChange={(e) => setThemePack(e.target.value)}
                 className="styled-select"
               >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
+                {availableThemePacks.map((pack) => (
+                  <option key={pack.id} value={pack.id}>
+                    {pack.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="config-item">
+              <label htmlFor="hotkey-preset-select">Editor Hotkeys:</label>
+              <select
+                id="hotkey-preset-select"
+                value={hotkeyPreset}
+                onChange={handleHotkeyPresetChange}
+                className="styled-select"
+              >
+                <option value="vscode">VS Code</option>
+                <option value="webstorm">WebStorm</option>
+                <option value="ledit">Ledit (Legacy)</option>
               </select>
             </div>
           </div>
@@ -543,6 +575,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                   );
                 })}
               </select>
+              {isSwitchingInstance && (
+                <div className="instance-switch-status">Switching UI host...</div>
+              )}
+              {instanceSwitchError && (
+                <div className="instance-switch-error">{instanceSwitchError}</div>
+              )}
             </div>
           </div>
 

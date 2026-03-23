@@ -21,7 +21,7 @@ var (
 
 func init() {
 	agentCmd.Flags().BoolVar(&disableWebUI, "no-web-ui", false, "Disable web UI")
-	agentCmd.Flags().IntVar(&webPort, "web-port", 0, "Port for web UI (default: 54321 single-port supervisor)")
+	agentCmd.Flags().IntVar(&webPort, "web-port", 0, "Port for web UI (default: 54421 single-port supervisor)")
 	agentCmd.Flags().BoolVarP(&daemonMode, "daemon", "d", false, "Run in daemon mode - keep web UI running without interactive prompt")
 }
 

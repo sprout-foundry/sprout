@@ -301,6 +301,14 @@ const EditorPane: React.FC<EditorPaneProps> = ({ paneId }) => {
           height: '100%'
         },
         '.cm-cursor': {
+          borderLeftColor: 'var(--cm-cursor)',
+          borderLeftWidth: '2px'
+        },
+        '&.cm-focused .cm-cursor': {
+          borderLeftColor: 'var(--cm-cursor)',
+          borderLeftWidth: '2px'
+        },
+        '.cm-dropCursor': {
           borderLeftColor: 'var(--cm-cursor)'
         },
         '.cm-selectionBackground, .cm-content ::selection': {

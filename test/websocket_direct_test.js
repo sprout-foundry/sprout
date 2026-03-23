@@ -13,7 +13,7 @@ function testWebSocketConnection() {
             if (!connected) {
                 ws.terminate();
                 reject(new Error('Connection timeout'));
-            }
+            } 
         }, 10000);
 
         ws.on('open', () => {

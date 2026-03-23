@@ -118,7 +118,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onTerminalOutput,
   onTerminalExpandedChange
 }) => {
-  const { panes, paneLayout, switchPane, splitPane, closeSplit, openFile, paneSizes, updatePaneSize } = useEditorManager();
+  const { panes, paneLayout, activePaneId, switchPane, splitPane, closeSplit, openFile, paneSizes, updatePaneSize } = useEditorManager();
 
   const canSplit = panes.length < 3;
   const canCloseSplit = panes.length > 1;
@@ -265,7 +265,7 @@ const AppContent: React.FC<AppContentProps> = ({
               )}
               {canSplit && (
                 <button
-                  onClick={() => panes.find(p => p.isActive) && splitPane(panes.find(p => p.isActive)!.id, 'vertical')}
+                  onClick={() => activePaneId && splitPane(activePaneId, 'vertical')}
                   className="pane-control-btn"
                   title="Split vertically"
                 >
@@ -274,7 +274,7 @@ const AppContent: React.FC<AppContentProps> = ({
               )}
               {canSplit && (
                 <button
-                  onClick={() => panes.find(p => p.isActive) && splitPane(panes.find(p => p.isActive)!.id, 'horizontal')}
+                  onClick={() => activePaneId && splitPane(activePaneId, 'horizontal')}
                   className="pane-control-btn"
                   title="Split horizontally"
                 >
@@ -299,10 +299,13 @@ const AppContent: React.FC<AppContentProps> = ({
                   return (
                     <React.Fragment key={pane.id}>
                       <PaneWrapper style={{ flex: `0 0 ${paneSize}%` }}>
-                        <EditorPaneWrapper>
+                        <EditorPaneWrapper
+                          isActive={pane.id === activePaneId}
+                          onClick={() => switchPane(pane.id)}
+                        >
                           <EditorPaneComponent
                             paneId={pane.id}
-                            isActive={pane.isActive}
+                            isActive={pane.id === activePaneId}
                             onClick={() => switchPane(pane.id)}
                           />
                         </EditorPaneWrapper>

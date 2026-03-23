@@ -78,7 +78,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// Connect agent to event bus for real-time UI updates
 		chatAgent.SetEventBus(eventBus)
 
-		// Determine port: fixed default on 54321, unless explicitly overridden.
+		// Determine port: fixed default on 54421, unless explicitly overridden.
 		port := webPort
 		if port == 0 {
 			port = defaultWebUIPort
@@ -87,7 +87,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		webServer = webui.NewReactWebServer(chatAgent, eventBus, port)
 		startInstanceTracker(ctx, port, chatAgent)
 
-		// Default mode uses single-port leadership/failover on 54321.
+		// Default mode uses single-port leadership/failover on 54421.
 		if webPort == 0 {
 			webUISup = newWebUISupervisor(
 				webServer,

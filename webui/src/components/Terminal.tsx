@@ -311,7 +311,7 @@ const Terminal: React.FC<TerminalProps> = ({
             />
             {!terminalConnected && (
               <div className="terminal-status-message">
-                ⚠️ Backend not connected. Start with: <code>./ledit agent --web-port 54321</code>
+                ⚠️ Backend not connected. Start with: <code>./ledit agent --web-port 54421</code>
               </div>
             )}
           </div>

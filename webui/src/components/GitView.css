@@ -438,6 +438,13 @@
   gap: 12px;
 }
 
+.commit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .commit-input {
   background: var(--input-bg);
   border: 1px solid var(--border-default);
@@ -473,6 +480,17 @@
   font-weight: 600;
   transition: all 0.2s ease;
   align-self: flex-end;
+}
+
+.commit-btn.ai {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+}
+
+.commit-btn.ai:hover:not(:disabled) {
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
 }
 
 .commit-btn:hover:not(:disabled) {

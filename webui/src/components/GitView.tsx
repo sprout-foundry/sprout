@@ -51,6 +51,7 @@ interface GitDiffResponse {
 interface GitViewProps {
   refreshToken?: number;
   onCommit?: (message: string, files: string[]) => void | Promise<unknown>;
+  onAICommit?: () => void | Promise<unknown>;
   onStage?: (files: string[]) => void | Promise<unknown>;
   onUnstage?: (files: string[]) => void | Promise<unknown>;
   onDiscard?: (files: string[]) => void | Promise<unknown>;
@@ -60,6 +61,7 @@ interface GitViewProps {
 const GitView: React.FC<GitViewProps> = ({
   refreshToken = 0,
   onCommit,
+  onAICommit,
   onStage,
   onUnstage,
   onDiscard,
@@ -162,6 +164,11 @@ const GitView: React.FC<GitViewProps> = ({
     });
   };
 
+  const handleFileRowClick = (filePath: string) => {
+    handleFileSelect(filePath);
+    handlePreviewFile(filePath);
+  };
+
   const handleSelectAll = () => {
     if (!gitStatus) return;
     
@@ -248,6 +255,13 @@ const GitView: React.FC<GitViewProps> = ({
       await onCommit(commitMessage, stagedFiles);
       setCommitMessage('');
     }, 'Failed to create commit');
+  };
+
+  const handleAICommit = () => {
+    if (!gitStatus?.staged.length || !onAICommit) return;
+    runAction(async () => {
+      await onAICommit();
+    }, 'Failed to run /commit workflow');
   };
 
   const handleDiscardSelected = () => {
@@ -381,6 +395,15 @@ const GitView: React.FC<GitViewProps> = ({
                 <div 
                   key={`staged-${index}`}
                   className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''} ${activeDiffPath === file.path ? 'active-diff' : ''}`}
+                  onClick={() => handleFileRowClick(file.path)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleFileRowClick(file.path);
+                    }
+                  }}
                 >
                   <input 
                     type="checkbox" 
@@ -389,9 +412,9 @@ const GitView: React.FC<GitViewProps> = ({
                     onChange={() => handleFileSelect(file.path)}
                   />
                   <span className="file-icon">{getStatusIcon(file.status)}</span>
-                  <button type="button" className="file-path file-path-btn" onClick={() => handlePreviewFile(file.path)}>
+                  <span className="file-path">
                     {file.path}
-                  </button>
+                  </span>
                   <span className="file-status">{getStatusText(file.status)}</span>
                   {file.changes && (
                     <span className="file-changes">
@@ -414,6 +437,15 @@ const GitView: React.FC<GitViewProps> = ({
                 <div 
                   key={`modified-${index}`}
                   className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''} ${activeDiffPath === file.path ? 'active-diff' : ''}`}
+                  onClick={() => handleFileRowClick(file.path)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleFileRowClick(file.path);
+                    }
+                  }}
                 >
                   <input 
                     type="checkbox" 
@@ -422,9 +454,9 @@ const GitView: React.FC<GitViewProps> = ({
                     onChange={() => handleFileSelect(file.path)}
                   />
                   <span className="file-icon">{getStatusIcon(file.status)}</span>
-                  <button type="button" className="file-path file-path-btn" onClick={() => handlePreviewFile(file.path)}>
+                  <span className="file-path">
                     {file.path}
-                  </button>
+                  </span>
                   <span className="file-status">{getStatusText(file.status)}</span>
                   {file.changes && (
                     <span className="file-changes">
@@ -447,6 +479,15 @@ const GitView: React.FC<GitViewProps> = ({
                 <div 
                   key={`untracked-${index}`}
                   className={`file-item ${selectedFiles.has(file.path) ? 'selected' : ''} ${activeDiffPath === file.path ? 'active-diff' : ''}`}
+                  onClick={() => handleFileRowClick(file.path)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleFileRowClick(file.path);
+                    }
+                  }}
                 >
                   <input 
                     type="checkbox" 
@@ -455,9 +496,9 @@ const GitView: React.FC<GitViewProps> = ({
                     onChange={() => handleFileSelect(file.path)}
                   />
                   <span className="file-icon">{getStatusIcon(file.status)}</span>
-                  <button type="button" className="file-path file-path-btn" onClick={() => handlePreviewFile(file.path)}>
+                  <span className="file-path">
                     {file.path}
-                  </button>
+                  </span>
                   <span className="file-status">{getStatusText(file.status)}</span>
                 </div>
               ))}
@@ -546,13 +587,23 @@ const GitView: React.FC<GitViewProps> = ({
             className="commit-input"
             rows={3}
           />
-          <button 
-            onClick={handleCommit}
-            disabled={!commitMessage.trim() || gitStatus.staged.length === 0 || isActing}
-            className="commit-btn primary"
-          >
-            Commit {gitStatus.staged.length} file{gitStatus.staged.length !== 1 ? 's' : ''}
-          </button>
+          <div className="commit-actions">
+            <button
+              onClick={handleAICommit}
+              disabled={gitStatus.staged.length === 0 || isActing}
+              className="commit-btn ai"
+            >
+              <Sparkles size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              AI Commit (/commit)
+            </button>
+            <button 
+              onClick={handleCommit}
+              disabled={!commitMessage.trim() || gitStatus.staged.length === 0 || isActing}
+              className="commit-btn primary"
+            >
+              Commit {gitStatus.staged.length} file{gitStatus.staged.length !== 1 ? 's' : ''}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,12 +1,9 @@
 import React, { useState } from 'react';
-import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   Hash,
   X,
   ArrowDownToLine,
-  Columns2,
-  Rows2,
   Sun,
   Moon,
 } from 'lucide-react';
@@ -20,27 +17,14 @@ interface EditorToolbarProps {
 }
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
-  paneId,
+  paneId: _paneId,
   showLineNumbers,
   onToggleLineNumbers,
   onGoToLine
 }) => {
-  const { splitPane, closeSplit, activePaneId, paneLayout } = useEditorManager();
   const { theme, themePack, toggleTheme } = useTheme();
   const [showGoToLine, setShowGoToLine] = useState(false);
   const [lineInput, setLineInput] = useState('');
-
-  const handleSplitVertical = () => {
-    splitPane(paneId, 'vertical');
-  };
-
-  const handleSplitHorizontal = () => {
-    splitPane(paneId, 'horizontal');
-  };
-
-  const handleCloseSplit = () => {
-    closeSplit();
-  };
 
   const handleGoToLineSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,9 +35,6 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       setLineInput('');
     }
   };
-
-  const canSplit = activePaneId === paneId && paneLayout !== 'split-grid';
-  const canCloseSplit = paneLayout !== 'single';
 
   return (
     <div className="editor-toolbar">
@@ -95,36 +76,6 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       </div>
 
       <div className="toolbar-group">
-        {/* Split View Buttons */}
-        {canSplit && (
-          <>
-            <button
-              className="toolbar-button"
-              onClick={handleSplitVertical}
-              title="Split vertically"
-            >
-              <span className="toolbar-icon"><Columns2 size={16} /></span>
-            </button>
-            <button
-              className="toolbar-button"
-              onClick={handleSplitHorizontal}
-              title="Split horizontally"
-            >
-              <span className="toolbar-icon"><Rows2 size={16} /></span>
-            </button>
-          </>
-        )}
-
-        {canCloseSplit && (
-          <button
-            className="toolbar-button"
-            onClick={handleCloseSplit}
-            title="Close split view"
-          >
-            <span className="toolbar-icon"><X size={16} /></span>
-          </button>
-        )}
-
         {/* Theme Toggle */}
         <button
           className="toolbar-button"

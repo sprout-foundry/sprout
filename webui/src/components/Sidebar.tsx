@@ -1,10 +1,25 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import './Sidebar.css';
-import { ApiService, ProviderOption, LeditInstance } from '../services/api';
+import { ApiService, ProviderOption, LeditInstance, LeditSettings } from '../services/api';
+import SettingsPanel from './SettingsPanel';
 import { viewRegistry, ProviderContext, SidebarSection, ProviderLogEntry } from '../providers';
 import { useTheme } from '../contexts/ThemeContext';
 import { HotkeyPreset, useHotkeys } from '../contexts/HotkeyContext';
-import { LayoutList, ScrollText, FolderCog, Settings, CircleCheck, X, type LucideIcon } from 'lucide-react';
+import {
+  LayoutList,
+  ScrollText,
+  FolderCog,
+  Settings,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Info,
+  Dot,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import FileTree from './FileTree';
 
 type SectionTab = 'views' | 'logs' | 'files' | 'settings';
@@ -92,7 +107,18 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [sectionsData, setSectionsData] = useState<Map<string, SectionData>>(new Map());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedSection, setSelectedSection] = useState<SectionTab>('views');
+  const [settings, setSettings] = useState<LeditSettings | null>(null);
   const apiService = ApiService.getInstance();
+
+  // Load settings on mount / connection
+  useEffect(() => {
+    if (!isConnected) return;
+    let cancelled = false;
+    apiService.getSettings().then((s) => {
+      if (!cancelled) setSettings(s);
+    }).catch(() => { /* silent */ });
+    return () => { cancelled = true; };
+  }, [isConnected]);
 
   const finalSelectedModel = selectedModel || selectedModelState;
   // Compute available models from providers and selectedProvider
@@ -516,11 +542,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     const getLogIcon = (level: string) => {
       switch (level) {
-        case 'success': return <CircleCheck size={12} />;
-        case 'error': return <X size={12} />;
-        case 'warning': return <span className="log-icon-text">!</span>;
-        case 'info': return <span className="log-icon-text">i</span>;
-        default: return <span className="log-icon-text">•</span>;
+        case 'success': return <CheckCircle2 size={12} />;
+        case 'error': return <XCircle size={12} />;
+        case 'warning': return <AlertTriangle size={12} />;
+        case 'info': return <Info size={12} />;
+        default: return <Dot size={12} />;
       }
     };
 
@@ -669,6 +695,11 @@ const Sidebar: React.FC<SidebarProps> = ({
             </select>
           </div>
         </div>
+
+        <SettingsPanel
+          settings={settings}
+          onSettingsChanged={(s) => setSettings(s)}
+        />
       </>
     );
   };
@@ -698,7 +729,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           onClick={onSidebarToggle}
           aria-label="Toggle sidebar"
         >
-          {sidebarCollapsed ? '→' : '←'}
+          {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
       )}
 

@@ -106,6 +106,7 @@ func (tm *TerminalManager) CreateSession(sessionID string) (*TerminalSession, er
 		"COLORTERM=truecolor",
 		"FORCE_COLOR=1",
 		"SHELL="+shell,
+		"LEDIT_WEB_TERMINAL=1",
 	)
 
 	// Set default terminal size

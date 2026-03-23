@@ -1,13 +1,16 @@
-import React, { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import {
   Terminal, BookOpen, FileEdit, Pencil, Search, Eye, FlaskConical,
   Globe, ArrowDown, ClipboardList, ScrollText, RotateCcw,
   Wrench, Rocket, Zap, CheckCircle2, XCircle, Hourglass,
   Bot, Copy, AlertTriangle, ChevronDown, ChevronRight,
-  BarChart3, FileText
+  BarChart3, FileText, PanelRightOpen, PanelRightClose, History
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import CommandInput from './CommandInput';
 import { stripAnsiCodes } from '../utils/ansi';
+import { ApiService } from '../services/api';
 import './Chat.css';
 
 interface Message {
@@ -31,6 +34,32 @@ interface ToolExecution {
   subagentType?: 'single' | 'parallel';
 }
 
+interface RevisionFile {
+  file_revision_hash?: string;
+  path: string;
+  operation: string;
+  lines_added: number;
+  lines_deleted: number;
+}
+
+interface Revision {
+  revision_id: string;
+  timestamp: string;
+  files: RevisionFile[];
+  description: string;
+}
+
+interface RevisionDetailFile {
+  file_revision_hash?: string;
+  path: string;
+  operation: string;
+  lines_added: number;
+  lines_deleted: number;
+  original_code: string;
+  new_code: string;
+  diff: string;
+}
+
 interface ChatProps {
   messages: Message[];
   onSendMessage: (message: string) => void;
@@ -42,6 +71,25 @@ interface ChatProps {
   queryProgress?: any;
 }
 
+const normalizeRevision = (raw: any): Revision => {
+  const files = Array.isArray(raw?.files)
+    ? raw.files.map((file: any) => ({
+        file_revision_hash: typeof file?.file_revision_hash === 'string' ? file.file_revision_hash : undefined,
+        path: typeof file?.path === 'string' ? file.path : 'Unknown',
+        operation: typeof file?.operation === 'string' ? file.operation : 'edited',
+        lines_added: Number(file?.lines_added || 0),
+        lines_deleted: Number(file?.lines_deleted || 0),
+      }))
+    : [];
+
+  return {
+    revision_id: typeof raw?.revision_id === 'string' ? raw.revision_id : 'unknown',
+    timestamp: typeof raw?.timestamp === 'string' ? raw.timestamp : new Date().toISOString(),
+    files,
+    description: typeof raw?.description === 'string' ? raw.description : '',
+  };
+};
+
 const Chat: React.FC<ChatProps> = ({
   messages,
   onSendMessage,
@@ -52,15 +100,116 @@ const Chat: React.FC<ChatProps> = ({
   toolExecutions = [],
   queryProgress = null
 }) => {
+  const apiService = ApiService.getInstance();
+  const SIDE_PANEL_MIN = 280;
+  const SIDE_PANEL_MAX = 760;
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
+  const [sidePanelWidth, setSidePanelWidth] = useState(360);
+  const [sidePanelTab, setSidePanelTab] = useState<'tools' | 'history'>('tools');
+  const [revisions, setRevisions] = useState<Revision[]>([]);
+  const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
+  const [expandedRevisionFileDiffs, setExpandedRevisionFileDiffs] = useState<Set<string>>(new Set());
+  const [revisionDetailsById, setRevisionDetailsById] = useState<Record<string, Record<string, string>>>({});
+  const [revisionDetailsLoading, setRevisionDetailsLoading] = useState<Record<string, boolean>>({});
+  const [revisionDetailsError, setRevisionDetailsError] = useState<Record<string, string>>({});
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const chatMainRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const resizingSidePanelRef = useRef(false);
 
-  // Auto-scroll to bottom when messages, tool executions, or progress updates
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages, toolExecutions, queryProgress, isProcessing]);
+
+  const loadRevisionHistory = useCallback(async () => {
+    setIsLoadingHistory(true);
+    setHistoryError(null);
+    try {
+      const response = await apiService.getChangelog();
+      const normalized = (response.revisions || []).map(normalizeRevision).sort((a, b) => {
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+      setRevisions(normalized);
+      if (normalized.length > 0) {
+        setExpandedRevisionIds(new Set([normalized[0].revision_id]));
+      } else {
+        setExpandedRevisionIds(new Set());
+      }
+    } catch (error) {
+      console.error('Failed to load revision history:', error);
+      setHistoryError('Failed to load revision history');
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [apiService]);
+
+  const buildRevisionFileKey = useCallback((file: RevisionFile | RevisionDetailFile, index: number) => {
+    return `${file.file_revision_hash || file.path}::${index}`;
+  }, []);
+
+  const loadRevisionDetails = useCallback(async (revisionId: string) => {
+    if (!revisionId) return;
+    if (revisionDetailsById[revisionId] || revisionDetailsLoading[revisionId]) return;
+
+    setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: true }));
+    setRevisionDetailsError((prev) => {
+      const next = { ...prev };
+      delete next[revisionId];
+      return next;
+    });
+
+    try {
+      const response = await apiService.getRevisionDetails(revisionId);
+      const detailsMap: Record<string, string> = {};
+      (response.revision?.files || []).forEach((file: RevisionDetailFile, index: number) => {
+        detailsMap[buildRevisionFileKey(file, index)] = file.diff || '';
+      });
+
+      setRevisionDetailsById((prev) => ({ ...prev, [revisionId]: detailsMap }));
+    } catch (error) {
+      setRevisionDetailsError((prev) => ({
+        ...prev,
+        [revisionId]: error instanceof Error ? error.message : 'Failed to load revision details',
+      }));
+    } finally {
+      setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: false }));
+    }
+  }, [apiService, buildRevisionFileKey, revisionDetailsById, revisionDetailsLoading]);
+
+  useEffect(() => {
+    if (sidePanelTab === 'history' && revisions.length === 0 && !isLoadingHistory) {
+      loadRevisionHistory();
+    }
+  }, [sidePanelTab, revisions.length, isLoadingHistory, loadRevisionHistory]);
+
+  useEffect(() => {
+    if (expandedRevisionIds.size === 0) {
+      return;
+    }
+
+    expandedRevisionIds.forEach((revisionId) => {
+      loadRevisionDetails(revisionId);
+    });
+  }, [expandedRevisionIds, loadRevisionDetails]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const openHistoryPanel = () => {
+      setSidePanelCollapsed(false);
+      setSidePanelTab('history');
+      loadRevisionHistory();
+    };
+
+    window.addEventListener('ledit:open-revision-history', openHistoryPanel);
+    return () => window.removeEventListener('ledit:open-revision-history', openHistoryPanel);
+  }, [loadRevisionHistory]);
 
   const toggleToolExpansion = (toolId: string) => {
     setExpandedTools(prev => {
@@ -73,6 +222,77 @@ const Chat: React.FC<ChatProps> = ({
       return newSet;
     });
   };
+
+  const toggleRevisionExpanded = (revisionId: string) => {
+    setExpandedRevisionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(revisionId)) {
+        next.delete(revisionId);
+      } else {
+        next.add(revisionId);
+        loadRevisionDetails(revisionId);
+      }
+      return next;
+    });
+  };
+
+  const toggleRevisionFileDiff = (diffKey: string) => {
+    setExpandedRevisionFileDiffs((prev) => {
+      const next = new Set(prev);
+      if (next.has(diffKey)) {
+        next.delete(diffKey);
+      } else {
+        next.add(diffKey);
+      }
+      return next;
+    });
+  };
+
+  const startSidePanelResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setSidePanelCollapsed(false);
+    resizingSidePanelRef.current = true;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizingSidePanelRef.current || !chatMainRef.current) return;
+      const rect = chatMainRef.current.getBoundingClientRect();
+      const rawWidth = rect.right - moveEvent.clientX;
+      const maxByLayout = Math.max(SIDE_PANEL_MIN, rect.width - 260);
+      const clamped = Math.max(SIDE_PANEL_MIN, Math.min(Math.min(SIDE_PANEL_MAX, maxByLayout), rawWidth));
+      setSidePanelWidth(clamped);
+    };
+
+    const onMouseUp = () => {
+      resizingSidePanelRef.current = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, []);
+
+  const handleRollback = useCallback(async (revisionId: string) => {
+    if (!window.confirm(`Rollback to revision ${revisionId}?\n\nThis will undo all changes after this revision.`)) {
+      return;
+    }
+
+    setIsLoadingHistory(true);
+    setHistoryError(null);
+    try {
+      await apiService.rollbackToRevision(revisionId);
+      window.location.reload();
+    } catch (error) {
+      console.error('Rollback failed:', error);
+      setHistoryError(error instanceof Error ? error.message : 'Rollback failed');
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [apiService]);
 
   const getToolIcon = (toolName: string): ReactNode => {
     const iconMap: { [key: string]: ReactNode } = {
@@ -139,6 +359,43 @@ const Chat: React.FC<ChatProps> = ({
     }
   };
 
+  const formatTime = (date: Date) => {
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatRelativeTime = (value: string) => {
+    const date = new Date(value);
+    const diffMs = Date.now() - date.getTime();
+    const diffSecs = Math.max(0, Math.floor(diffMs / 1000));
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffSecs < 60) return `${diffSecs}s ago`;
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const summarizeRevision = (revision: Revision) => {
+    let additions = 0;
+    let deletions = 0;
+    for (const file of revision.files) {
+      additions += Number(file.lines_added || 0);
+      deletions += Number(file.lines_deleted || 0);
+    }
+    return { fileCount: revision.files.length, additions, deletions };
+  };
+
+  const getOperationText = (operation: string) => {
+    switch (operation) {
+      case 'edited': return 'Modified';
+      case 'created': return 'Created';
+      case 'deleted': return 'Deleted';
+      case 'renamed': return 'Renamed';
+      default: return operation;
+    }
+  };
+
   const isSubagentTool = (tool: ToolExecution) =>
     tool.tool === 'run_subagent' || tool.tool === 'run_parallel_subagents';
 
@@ -152,10 +409,6 @@ const Chat: React.FC<ChatProps> = ({
     }
   };
 
-  const formatTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
   const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text);
   }, []);
@@ -164,26 +417,109 @@ const Chat: React.FC<ChatProps> = ({
     (tool) => tool.status === 'started' || tool.status === 'running'
   ).length;
 
-  const renderContent = (content: string) => {
-    const parts = content.split(/(```[\s\S]*?```)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('```') && part.endsWith('```')) {
-        const code = part.slice(3, -3).trim();
-        const firstNewline = code.indexOf('\n');
-        const language = firstNewline > 0 ? code.slice(0, firstNewline) : '';
-        const codeContent = firstNewline > 0 ? code.slice(firstNewline + 1) : code;
-        return (
-          <pre key={i} className="code-block">
-            {language && <span className="code-language">{language}</span>}
-            <code>{codeContent}</code>
-          </pre>
-        );
-      }
-      return stripAnsiCodes(part).split('\n').map((line, j) => (
-        <div key={`${i}-${j}`} className="message-line">{line || '\u00A0'}</div>
-      ));
-    });
+  const isLikelyToolTrace = (content: string): boolean => {
+    const text = stripAnsiCodes(content);
+    if (!text) return false;
+
+    return (
+      /\bexecuting tool\b/i.test(text) ||
+      /\btool[_ -]?call\b/i.test(text) ||
+      /\bTodoWrite\b/.test(text) ||
+      /\bTodoRead\b/.test(text) ||
+      /\brun_subagent\b/.test(text) ||
+      /\bsearch_files\b/.test(text) ||
+      /\bread_file\b/.test(text) ||
+      /\bshell_command\b/.test(text) ||
+      /\[\s*[-x~ ]\s*\]\s+/i.test(text)
+    );
   };
+
+  const renderContent = (content: string) => {
+    const cleaned = stripAnsiCodes(content);
+
+    if (isLikelyToolTrace(cleaned)) {
+      return <pre className="plain-text-block">{cleaned}</pre>;
+    }
+
+    return (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ inline, className, children, ...props }: any) {
+            const languageMatch = /language-(\w+)/.exec(className || '');
+            const language = languageMatch ? languageMatch[1] : '';
+
+            if (inline) {
+              return (
+                <code className="inline-code" {...props}>
+                  {children}
+                </code>
+              );
+            }
+
+            return (
+              <pre className="code-block">
+                <span className="code-language">{language || 'text'}</span>
+                <code className={className} {...props}>
+                  {children}
+                </code>
+              </pre>
+            );
+          },
+          a({ href, children, ...props }: any) {
+            return (
+              <a href={href} target="_blank" rel="noreferrer" {...props}>
+                {children}
+              </a>
+            );
+          },
+        }}
+      >
+        {cleaned}
+      </ReactMarkdown>
+    );
+  };
+
+  const renderDiff = (diff: string) => {
+    const lines = stripAnsiCodes(diff).split('\n');
+    return (
+      <div className="history-diff-view" role="region" aria-label="Revision file diff">
+        {lines.map((line, index) => {
+          let lineClass = 'context';
+          if (line.startsWith('@@')) lineClass = 'hunk';
+          else if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('FILE:')) lineClass = 'header';
+          else if (line.startsWith('+') && !line.startsWith('+++')) lineClass = 'add';
+          else if (line.startsWith('-') && !line.startsWith('---')) lineClass = 'del';
+          return (
+            <div key={`diff-line-${index}`} className={`history-diff-line ${lineClass}`}>
+              {line || ' '}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const historyCounts = useMemo(() => {
+    return revisions.length;
+  }, [revisions.length]);
+
+  const panelTabs: Array<{ id: 'tools' | 'history'; label: string; icon: ReactNode; count: string }> = [
+    {
+      id: 'tools',
+      label: 'Tool Executions',
+      icon: <Wrench size={14} />,
+      count: activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total`,
+    },
+    {
+      id: 'history',
+      label: 'Revision History',
+      icon: <History size={14} />,
+      count: `${historyCounts} revisions`,
+    },
+  ];
+
+  const activeTab = panelTabs.find((tab) => tab.id === sidePanelTab) || panelTabs[0];
 
   return (
     <div className="chat-shell">
@@ -197,7 +533,7 @@ const Chat: React.FC<ChatProps> = ({
         )}
       </div>
 
-      <div className="chat-main">
+      <div className="chat-main" ref={chatMainRef}>
         <div className="chat-container" ref={chatContainerRef}>
           {messages.length === 0 ? (
             <div className="welcome-message">
@@ -237,7 +573,6 @@ const Chat: React.FC<ChatProps> = ({
             ))
           )}
 
-          {/* Query Progress */}
           {queryProgress && (
             <div className="query-progress">
               <div className="progress-header">
@@ -252,7 +587,6 @@ const Chat: React.FC<ChatProps> = ({
             </div>
           )}
 
-          {/* Processing Indicator */}
           {isProcessing && toolExecutions.length === 0 && !queryProgress && (
             <div className="processing-indicator">
               <div className="processing-content">
@@ -262,7 +596,6 @@ const Chat: React.FC<ChatProps> = ({
             </div>
           )}
 
-          {/* Error Display */}
           {lastError && (
             <div className="error-indicator">
               <div className="error-content">
@@ -273,91 +606,232 @@ const Chat: React.FC<ChatProps> = ({
           )}
         </div>
 
-        <aside className="chat-tools-panel" aria-label="Tool executions panel">
-          <div className="tool-executions-header">
-            <h4><Wrench size={14} className="inline-icon" /> Tool Executions</h4>
-            <span className="tool-count">
-              {activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total`}
-            </span>
+        {!sidePanelCollapsed && (
+          <div
+            className="chat-side-resizer"
+            onMouseDown={startSidePanelResize}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize context panel"
+          />
+        )}
+        <aside
+          className={`chat-side-panel ${sidePanelCollapsed ? 'collapsed' : ''}`}
+          aria-label="Context side panel"
+          style={sidePanelCollapsed ? undefined : { width: `${sidePanelWidth}px` }}
+        >
+          <div className="side-panel-rail">
+            {panelTabs.map((tab) => (
+              <button
+                key={tab.id}
+                className={`side-rail-btn ${sidePanelTab === tab.id ? 'active' : ''}`}
+                onClick={() => {
+                  setSidePanelTab(tab.id);
+                  setSidePanelCollapsed(false);
+                  if (tab.id === 'history' && revisions.length === 0) {
+                    loadRevisionHistory();
+                  }
+                }}
+                title={tab.label}
+                aria-label={tab.label}
+                aria-pressed={sidePanelTab === tab.id}
+              >
+                {tab.icon}
+              </button>
+            ))}
+            <button
+              className="side-collapse-btn"
+              onClick={() => setSidePanelCollapsed((prev) => !prev)}
+              title={sidePanelCollapsed ? 'Expand side panel' : 'Collapse side panel'}
+            >
+              {sidePanelCollapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
+            </button>
           </div>
-          <div className="chat-tools-list">
-            {toolExecutions.length === 0 ? (
-              <div className="chat-tools-empty">Tool calls will appear here.</div>
-            ) : (
-              toolExecutions.map((tool) => {
-                const isSub = isSubagentTool(tool);
-                const subagentPrompt = isSub ? getSubagentPrompt(tool) : undefined;
 
-                return (
-                  <div
-                    key={tool.id}
-                    className={`tool-execution tool-${tool.status} ${isSub ? 'tool-subagent' : ''}`}
-                    onClick={() => toggleToolExpansion(tool.id)}
-                  >
-                    <div className="tool-summary">
-                      <span className="tool-icon">
-                        {isSub ? (
-                          <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
-                            <Bot size={14} />
-                          </span>
-                        ) : (
-                          getToolIcon(tool.tool)
-                        )}
-                      </span>
-                      <span className={`tool-name ${isSub ? 'tool-name-subagent' : ''}`}>
-                        {isSub
-                          ? (tool.persona ? `${tool.persona}` : (tool.subagentType === 'parallel' ? 'parallel subagents' : 'subagent'))
-                          : tool.tool}
-                        {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
-                      </span>
-                      <span className="tool-status">{getStatusIcon(tool.status)}</span>
-                      <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
-                      <span className="tool-expand">
-                        {expandedTools.has(tool.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                      </span>
-                    </div>
+          {!sidePanelCollapsed && (
+            <div className="side-panel-content">
+              <div className="side-panel-header">
+                <div className="side-panel-title">
+                  {activeTab.icon}
+                  <h4>{activeTab.label}</h4>
+                </div>
+                <span className="tool-count">{activeTab.count}</span>
+              </div>
+              <div className="side-panel-body">
+                {sidePanelTab === 'tools' ? (
+                <>
+                  <div className="chat-tools-list">
+                    {toolExecutions.length === 0 ? (
+                      <div className="chat-tools-empty">Tool calls will appear here.</div>
+                    ) : (
+                      toolExecutions.map((tool) => {
+                        const isSub = isSubagentTool(tool);
+                        const subagentPrompt = isSub ? getSubagentPrompt(tool) : undefined;
 
-                    {isSub && subagentPrompt && !expandedTools.has(tool.id) && (
-                      <div className="tool-message tool-subagent-prompt">{stripAnsiCodes(subagentPrompt)}</div>
-                    )}
+                        return (
+                          <div
+                            key={tool.id}
+                            className={`tool-execution tool-${tool.status} ${isSub ? 'tool-subagent' : ''}`}
+                            onClick={() => toggleToolExpansion(tool.id)}
+                          >
+                            <div className="tool-summary">
+                              <span className="tool-icon">
+                                {isSub ? (
+                                  <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
+                                    <Bot size={14} />
+                                  </span>
+                                ) : (
+                                  getToolIcon(tool.tool)
+                                )}
+                              </span>
+                              <span className={`tool-name ${isSub ? 'tool-name-subagent' : ''}`}>
+                                {isSub
+                                  ? (tool.persona ? `${tool.persona}` : (tool.subagentType === 'parallel' ? 'parallel subagents' : 'subagent'))
+                                  : tool.tool}
+                                {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
+                              </span>
+                              <span className="tool-status">{getStatusIcon(tool.status)}</span>
+                              <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
+                              <span className="tool-expand">
+                                {expandedTools.has(tool.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                              </span>
+                            </div>
 
-                    {tool.message && !(isSub && subagentPrompt) && (
-                      <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
-                    )}
+                            {isSub && subagentPrompt && !expandedTools.has(tool.id) && (
+                              <div className="tool-message tool-subagent-prompt">{stripAnsiCodes(subagentPrompt)}</div>
+                            )}
 
-                    {expandedTools.has(tool.id) && (tool.arguments || tool.result || tool.details) && (
-                      <div className="tool-details">
-                        {isSub && subagentPrompt && (
-                          <div className="tool-detail-section">
-                            <div className="tool-detail-label"><FileEdit size={12} className="inline-icon" /> Task</div>
-                            <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
+                            {tool.message && !(isSub && subagentPrompt) && (
+                              <div className="tool-message">{stripAnsiCodes(tool.message)}</div>
+                            )}
+
+                            {expandedTools.has(tool.id) && (tool.arguments || tool.result || tool.details) && (
+                              <div className="tool-details">
+                                {isSub && subagentPrompt && (
+                                  <div className="tool-detail-section">
+                                    <div className="tool-detail-label"><FileEdit size={12} className="inline-icon" /> Task</div>
+                                    <pre className="subagent-prompt-detail">{stripAnsiCodes(subagentPrompt)}</pre>
+                                  </div>
+                                )}
+                                {tool.arguments && !isSub && (
+                                  <div className="tool-detail-section">
+                                    <div className="tool-detail-label"><ClipboardList size={12} className="inline-icon" /> Call</div>
+                                    <pre>{formatToolDetail(tool.arguments)}</pre>
+                                  </div>
+                                )}
+                                {tool.result && (
+                                  <div className="tool-detail-section">
+                                    <div className="tool-detail-label">{isSub ? <><BarChart3 size={12} className="inline-icon" /> Summary</> : <><FileText size={12} className="inline-icon" /> Response</>}</div>
+                                    <pre>{formatToolDetail(tool.result)}</pre>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        )}
-                        {tool.arguments && !isSub && (
-                          <div className="tool-detail-section">
-                            <div className="tool-detail-label"><ClipboardList size={12} className="inline-icon" /> Call</div>
-                            <pre>{formatToolDetail(tool.arguments)}</pre>
-                          </div>
-                        )}
-                        {tool.result && (
-                          <div className="tool-detail-section">
-                            <div className="tool-detail-label">{isSub ? <><BarChart3 size={12} className="inline-icon" /> Summary</> : <><FileText size={12} className="inline-icon" /> Response</>}</div>
-                            <pre>{formatToolDetail(tool.result)}</pre>
-                          </div>
-                        )}
-                        {!tool.result && tool.arguments && isSub && (
-                          <div className="tool-detail-section">
-                            <div className="tool-detail-label"><ClipboardList size={12} className="inline-icon" /> Call</div>
-                            <pre>{formatToolDetail(tool.arguments)}</pre>
-                          </div>
-                        )}
-                      </div>
+                        );
+                      })
                     )}
                   </div>
-                );
-              })
-            )}
+                </>
+              ) : (
+                <>
+                  <div className="chat-tools-list">
+                    <div className="history-toolbar">
+                      <button className="history-refresh-btn" onClick={loadRevisionHistory} disabled={isLoadingHistory}>
+                        <RotateCcw size={12} /> Refresh
+                      </button>
+                    </div>
+
+                    {historyError && <div className="history-error-inline">{historyError}</div>}
+
+                    {isLoadingHistory ? (
+                      <div className="chat-tools-empty">Loading revision history...</div>
+                    ) : revisions.length === 0 ? (
+                      <div className="chat-tools-empty">No revisions found yet.</div>
+                    ) : (
+                      revisions.map((revision) => {
+                        const summary = summarizeRevision(revision);
+                        const isExpanded = expandedRevisionIds.has(revision.revision_id);
+                        return (
+                          <div key={revision.revision_id} className="history-item">
+                            <button
+                              className="history-summary"
+                              onClick={() => toggleRevisionExpanded(revision.revision_id)}
+                              aria-expanded={isExpanded}
+                            >
+                              <span className="history-expand">{isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
+                              <span className="history-main">
+                                <span className="history-id">{revision.revision_id}</span>
+                                <span className="history-time">{formatRelativeTime(revision.timestamp)}</span>
+                              </span>
+                              <span className="history-stats">
+                                <span>{summary.fileCount} files</span>
+                                {summary.additions > 0 && <span className="additions">+{summary.additions}</span>}
+                                {summary.deletions > 0 && <span className="deletions">-{summary.deletions}</span>}
+                              </span>
+                            </button>
+
+                            {isExpanded && (
+                              <div className="history-details">
+                                {revision.files.map((file, i) => {
+                                  const fileKey = buildRevisionFileKey(file, i);
+                                  const expandedDiffKey = `${revision.revision_id}::${fileKey}`;
+                                  const isDiffExpanded = expandedRevisionFileDiffs.has(expandedDiffKey);
+                                  const fileDiff = revisionDetailsById[revision.revision_id]?.[fileKey];
+
+                                  return (
+                                    <div key={`${revision.revision_id}-${file.path}-${i}`} className="history-file-entry">
+                                      <button
+                                        className="history-file-row history-file-row-interactive"
+                                        onClick={() => toggleRevisionFileDiff(expandedDiffKey)}
+                                        aria-expanded={isDiffExpanded}
+                                      >
+                                        <span className="history-expand">
+                                          {isDiffExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                        </span>
+                                        <span className="history-file-op">{getOperationText(file.operation)}</span>
+                                        <span className="history-file-path" title={file.path}>{file.path}</span>
+                                        <span className="history-file-diff">
+                                          {file.lines_added > 0 && <span className="additions">+{file.lines_added}</span>}
+                                          {file.lines_deleted > 0 && <span className="deletions">-{file.lines_deleted}</span>}
+                                        </span>
+                                      </button>
+
+                                      {isDiffExpanded && (
+                                        <div className="history-file-diff-panel">
+                                          {revisionDetailsLoading[revision.revision_id] && !fileDiff && (
+                                            <div className="chat-tools-empty">Loading file diff…</div>
+                                          )}
+                                          {revisionDetailsError[revision.revision_id] && (
+                                            <div className="history-error-inline">{revisionDetailsError[revision.revision_id]}</div>
+                                          )}
+                                          {!!fileDiff && (
+                                            <div className="history-diff-pre">{renderDiff(fileDiff)}</div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                <button
+                                  className="history-rollback-btn"
+                                  onClick={() => handleRollback(revision.revision_id)}
+                                  disabled={isLoadingHistory}
+                                >
+                                  <RotateCcw size={12} /> Rollback to this revision
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
+          )}
         </aside>
       </div>
 

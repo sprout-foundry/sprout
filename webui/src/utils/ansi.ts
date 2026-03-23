@@ -17,25 +17,32 @@ export function stripAnsiCodes(text: unknown): string {
           : String(text);
 
   // Normalize common line endings first.
-  let cleaned = normalized.replace(/\r\n/g, '\n').replace(/\r/g, '');
+  // Keep lone CR as line breaks so carriage-return updates don't smash text together.
+  let cleaned = normalized.replace(/\r\n/g, '\n').replace(/\r(?!\n)/g, '\n');
 
   // Remove OSC (Operating System Command) sequences:
   // ESC ] ... BEL   or   ESC ] ... ESC \
   // eslint-disable-next-line no-control-regex
   cleaned = cleaned.replace(/\x1B\][\s\S]*?(?:\x07|\x1B\\)/g, '');
+  // eslint-disable-next-line no-control-regex
+  cleaned = cleaned.replace(/\u009D[\s\S]*?(?:\u0007|\u009C)/g, '');
 
   // Remove CSI (Control Sequence Introducer) sequences:
   // ESC [ <params> <intermediates> <final>
   // eslint-disable-next-line no-control-regex
   cleaned = cleaned.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
+  cleaned = cleaned.replace(/\u009B[0-?]*[ -/]*[@-~]/g, '');
 
-  // Remove other 2-byte ESC sequences (e.g. ESC c, ESC 7, ESC 8, etc).
+  // Remove other 2-byte ESC sequences.
   // eslint-disable-next-line no-control-regex
-  cleaned = cleaned.replace(/\x1B[@-_]/g, '');
+  cleaned = cleaned.replace(/\x1B[ -~]/g, '');
+  cleaned = cleaned.replace(/\u009B|\u009D|\u009C/g, '');
+  // eslint-disable-next-line no-control-regex
+  cleaned = cleaned.replace(/\x1B/g, '');
 
   // Remove leftover non-printable C0 control chars except tab/newline.
   // eslint-disable-next-line no-control-regex
-  cleaned = cleaned.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, '');
+  cleaned = cleaned.replace(/[\x00-\x08\x0B-\x1F\x7F\u0080-\u009F]/g, '');
 
   return cleaned;
 }
@@ -184,24 +191,29 @@ export function ansiToHtml(text: unknown): string {
 
   let str = raw;
   // Normalize line endings
-  str = str.replace(/\r\n/g, '\n').replace(/\r/g, '');
+  str = str.replace(/\r\n/g, '\n').replace(/\r(?!\n)/g, '\n');
 
   // Strip OSC sequences (ESC ] … BEL / ESC \)
   // eslint-disable-next-line no-control-regex
   str = str.replace(/\x1B\][\s\S]*?(?:\x07|\x1B\\)/g, '');
-
-  // Remove other non-CSI ESC sequences
   // eslint-disable-next-line no-control-regex
-  str = str.replace(/\x1B[0x40-_]/g, '');
+  str = str.replace(/\u009D[\s\S]*?(?:\u0007|\u009C)/g, '');
 
-  // Strip non-printable control chars except \t (0x09) and \n (0x0A)
+  // Remove other 2-byte ESC sequences while preserving CSI (ESC [ ...),
+  // which we parse below.
   // eslint-disable-next-line no-control-regex
-  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  str = str.replace(/\x1B(?!\[|\])[ -~]/g, '');
+  str = str.replace(/\u009C/g, '');
+
+  // Strip non-printable control chars except tab/newline and ESC.
+  // Keep ESC so CSI parsing below can consume sequences like ESC[31m.
+  // eslint-disable-next-line no-control-regex
+  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1A\x1C-\x1F\x7F\u0080-\u009A\u009C-\u009F]/g, '');
 
   // Walk through CSI sequences. Only SGR (final byte 'm') affects styling;
   // every other CSI is silently stripped.
   // eslint-disable-next-line no-control-regex
-  const CSI_RE = /\x1B\[([0-?]*)([@-~])/g;
+  const CSI_RE = /(?:\x1B\[|\u009B)([0-?]*)([@-~])/g;
 
   let fgClass: string | null = null;
   let bgClass: string | null = null;
